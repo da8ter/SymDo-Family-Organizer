@@ -48,7 +48,11 @@ trait OAuthHelper
 
     private function OAuthGetDecryptedToken(string $Attribute, string $KeyPrefix): string
     {
-        return $this->OAuthDecryptToken($this->ReadAttributeString($Attribute), $KeyPrefix);
+        $encrypted = @$this->ReadAttributeString($Attribute);
+        if (!is_string($encrypted) || $encrypted === '') {
+            return '';
+        }
+        return $this->OAuthDecryptToken($encrypted, $KeyPrefix);
     }
 
     private function OAuthHttpRequest(string $Method, string $Url, array $Headers, mixed $Body = null, bool $UseAuth = true, string $DebugLabel = 'OAuth', ?string $BearerToken = null): ?string
