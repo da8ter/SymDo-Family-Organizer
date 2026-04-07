@@ -156,6 +156,6 @@ Die Zugangsdaten werden zentral im **ToDo Gateway** (Splitter-Modul) verwaltet. 
 
 Anleitungen zur Konfiguration:
 
-- [CalDAV Synchronisation](ToDoList/assets/Readme_CalDav_Sync.md)
-- [Google Tasks Synchronisation](ToDoList/assets/Readme_Google_Sync.md)
-- [Microsoft To Do Synchronisation](ToDoList/assets/Readme_Microsoft_Sync.md)
+- [CalDAV Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_CalDav_Sync.md)
+- [Google Tasks Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Google_Sync.md)
+- [Microsoft To Do Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Microsoft_Sync.md)
