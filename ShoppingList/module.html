@@ -1,0 +1,2334 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <script src="/icons.js"></script>
+  <style>
+:root {
+  --bg:     var(--card-color);
+  --card:   var(--card-color);
+  --text:   var(--content-color);
+  --muted:  color-mix(in srgb, var(--content-color) 30%, transparent);
+  --border: color-mix(in srgb, var(--accent-color) 30%, transparent);
+  --accent: var(--accent-color);
+  --radius: 14px;
+  --gap:    12px;
+  --nav-h:  56px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: transparent;
+}
+
+.wrap {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: clip;
+}
+
+/* ── Search bar ────────────────────────────────────────────────────────── */
+.search-bar {
+  position: relative;
+  flex-shrink: 0;
+  padding: 8px var(--gap) 0;
+  z-index: 100;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.search-input::placeholder { color: var(--muted); }
+.search-input:focus { border-color: var(--accent); }
+
+.btn-fav-lists {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .15s;
+}
+
+.btn-fav-lists:active { border-color: var(--accent); }
+
+/* ── Suggestions dropdown ──────────────────────────────────────────────── */
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: var(--gap);
+  right: var(--gap);
+  margin-top: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: none;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  z-index: 200;
+  padding: 8px;
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 12%, transparent);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+}
+
+.suggestions-dropdown.open { display: block; }
+
+.suggestions-dropdown::-webkit-scrollbar { width: 6px; }
+.suggestions-dropdown::-webkit-scrollbar-track { background: transparent; }
+.suggestions-dropdown::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
+}
+
+/* ── Chip row (suggestions) ────────────────────────────────────────────── */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+/* Custom "Hinzufügen:" chip — standalone button */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  user-select: none;
+  touch-action: manipulation;
+  transition: opacity .1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip:active { opacity: .7; }
+
+.chip.add-custom {
+  border-style: dashed;
+  font-weight: 600;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Pill: chip label + heart button grouped together */
+.chip-pill {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.chip-img {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.chip-label-btn {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 8px 8px 8px 14px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .1s ease;
+}
+
+.chip-label-btn:active { opacity: .7; }
+
+.chip-heart-btn {
+  border: none;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 12px 8px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .1s ease;
+  line-height: 1;
+}
+
+.chip-heart-btn.is-fav { color: var(--accent); }
+.chip-heart-btn:active { opacity: .7; }
+
+/* ── List area ─────────────────────────────────────────────────────────── */
+.list-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 10px;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+}
+
+.list-area::-webkit-scrollbar { width: 6px; }
+.list-area::-webkit-scrollbar-track { background: transparent; }
+.list-area::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
+}
+
+.section-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 10px 4px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0 4px;
+}
+
+/* ── Item grid ─────────────────────────────────────────────────────────── */
+.item-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.item-card {
+  flex: 1 0 auto;
+  width: fit-content;
+  min-width: 130px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--content-color) 8%, transparent);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .1s ease, transform .05s ease;
+}
+
+.item-card:hover {
+  background: color-mix(in srgb, var(--content-color) 15%, transparent);
+}
+
+.item-card.is-moving-to-cart {
+  pointer-events: none;
+  animation: moveToRecentlyUsed .34s cubic-bezier(.22,.61,.36,1) forwards;
+}
+
+.item-card.in-cart.is-moving-to-list {
+  pointer-events: none;
+  animation: moveBackToList .34s cubic-bezier(.22,.61,.36,1) forwards;
+}
+
+@keyframes moveToRecentlyUsed {
+  from { transform: translateX(0) scale(1); opacity: 1; }
+  to   { transform: translateX(22px) scale(.97); opacity: 0; }
+}
+
+@keyframes moveBackToList {
+  from { transform: translateX(0) scale(1); opacity: 1; }
+  to   { transform: translateX(-22px) scale(.97); opacity: 0; }
+}
+
+.item-card:active { transform: scale(.97); opacity: .8; }
+
+.item-card.in-cart { opacity: .45; }
+.item-card.in-cart .item-title { text-decoration: line-through; }
+
+.item-thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.item-thumb-letter {
+  font-size: 22px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--content-color) 70%, transparent);
+  line-height: 1;
+  user-select: none;
+  text-transform: uppercase;
+}
+.item-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.item-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-amount-prefix { color: var(--accent); }
+
+.item-notes {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-edit-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 8px;
+  line-height: 1;
+  transition: opacity .1s ease;
+  opacity: 0.5;
+}
+
+.item-edit-btn:active { opacity: 1; }
+
+.item-edit-btn:hover,
+.item-edit-btn:focus-visible {
+  opacity: 1;
+}
+
+/* ── Cart actions ──────────────────────────────────────────────────────── */
+.cart-actions {
+  padding: 4px 0 8px;
+}
+
+.active-actions {
+  padding: 2px 0 10px;
+}
+
+.btn-complete-all {
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .15s ease;
+}
+
+.btn-complete-all:active {
+  opacity: .75;
+}
+
+.btn-clear-cart {
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .15s, color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-clear-cart[data-armed="true"] {
+  background: #c0392b;
+  color: var(--content-color);
+  border-color: #c0392b;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────── */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 16px;
+  color: var(--muted);
+}
+
+.empty-icon { font-size: 36px; }
+.empty-text { font-size: 15px; }
+
+/* ── Overlays (edit + favorites) ───────────────────────────────────────── */
+.overlay {
+  position: absolute;
+  inset: 0 0 -3px 0;
+  box-sizing: border-box;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+  background: var(--bg);
+}
+
+.overlay.open { display: flex; }
+#favOverlay, #editOverlay { bottom: var(--nav-h); }
+#btnFavLists { display: none !important; }
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px var(--gap) 10px;
+  flex-shrink: 0;
+}
+
+.overlay-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btn-close-overlay {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  touch-action: manipulation;
+  padding: 4px 8px;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* + button in favorites overlay header */
+.btn-new-fav-list {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s;
+}
+
+.btn-new-fav-list:active {
+  background: var(--accent);
+  color: var(--content-color);
+}
+
+/* Rename pencil button in fav overlay header */
+.btn-fav-rename {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .1s ease;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.btn-fav-rename:active { opacity: 1; }
+
+.btn-fav-rename:hover,
+.btn-fav-rename:focus-visible {
+  opacity: 1;
+}
+
+/* Rename inline form */
+.fav-rename-form {
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--gap) 10px;
+  flex-shrink: 0;
+}
+
+/* Back button inside detail footer row */
+.btn-fav-detail-back {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.btn-fav-detail-back:active { opacity: .85; }
+
+/* Back footer */
+.fav-back-footer {
+  flex-shrink: 0;
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.btn-fav-back {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+.btn-fav-back:active { opacity: .85; }
+
+/* New list inline form */
+.new-list-form {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--gap) 10px;
+  flex-shrink: 0;
+}
+
+.new-list-form.visible { display: flex; }
+
+.new-list-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+}
+
+.new-list-input::placeholder { color: var(--muted); }
+.new-list-input:focus { border-color: var(--accent); }
+
+.btn-confirm-new-list {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Favorite list items */
+.fav-list-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px var(--gap) var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+}
+
+.fav-list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .1s ease;
+  gap: 12px;
+}
+
+.fav-list-item:active { opacity: .7; }
+
+.fav-list-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fav-list-count {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fav-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Favorite detail view — items with heart remove button */
+.fav-detail-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  gap: 12px;
+}
+
+.fav-detail-search {
+  padding: 0 0 2px;
+}
+
+.fav-detail-search .search-input {
+  border-radius: 12px;
+}
+
+.fav-detail-search .suggestions-dropdown {
+  left: 0;
+  right: 0;
+}
+
+.fav-detail-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+}
+.fav-detail-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.fav-detail-notes {
+  margin-left: 6px;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.fav-detail-heart {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
+  line-height: 1;
+  transition: opacity .1s ease;
+}
+
+.fav-detail-heart:active { opacity: .5; }
+
+/* Footer with "Artikel zur Einkaufsliste hinzufügen" button */
+.fav-detail-footer {
+  flex-shrink: 0;
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.fav-detail-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-delete-fav-list {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
+  background: transparent;
+  color: #c0392b;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s;
+}
+
+.btn-delete-fav-list:active {
+  background: #c0392b;
+  color: var(--content-color);
+}
+
+.btn-add-fav-to-cart {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+/* Edit item footer */
+.fav-edit-footer {
+  flex-shrink: 0;
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+
+.btn-delete-fav-item {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
+  background: transparent;
+  color: #c0392b;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s;
+}
+.btn-delete-fav-item:active {
+  background: #c0392b;
+  color: var(--content-color);
+}
+
+.btn-fav-edit-back {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-fav-edit-back:active { opacity: .85; }
+
+.btn-save-fav-edit {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+/* Pencil button in fav detail items */
+.fav-detail-pencil {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 8px;
+  line-height: 1;
+  transition: opacity .1s ease;
+  opacity: 0.5;
+}
+
+.fav-detail-pencil:active { opacity: 1; }
+
+.fav-detail-pencil:hover,
+.fav-detail-pencil:focus-visible {
+  opacity: 1;
+}
+
+/* Fav section inside edit overlay */
+.edit-fav-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-fav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-fav-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.btn-edit-fav-new {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .1s ease;
+}
+
+.btn-edit-fav-new:active { color: var(--accent); }
+
+/* Dropdown row in edit overlay fav section */
+.edit-fav-select-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-fav-select {
+  width: 100%;
+  padding: 10px 40px 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.edit-fav-select:focus { border-color: var(--accent); }
+
+.edit-fav-select-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.edit-fav-item-heart {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 6px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
+  line-height: 1;
+  transition: color .1s ease;
+}
+
+.edit-fav-item-heart.is-fav { color: var(--accent); }
+.edit-fav-item-heart:active { opacity: .6; }
+
+.edit-fav-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
+/* Edit form */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--gap);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+}
+
+.edit-form::-webkit-scrollbar { width: 6px; }
+.edit-form::-webkit-scrollbar-track { background: transparent; }
+.edit-form::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  resize: none;
+}
+
+.edit-input::placeholder { color: var(--muted); }
+.edit-input:focus { border-color: var(--accent); }
+textarea.edit-input { overflow: hidden; }
+
+/* Fav row: select + "+" button side by side */
+.edit-fav-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.edit-fav-row .edit-select-wrap { flex: 1; }
+
+/* Category select inside edit form */
+.edit-select-wrap {
+  position: relative;
+}
+.edit-select-wrap select.edit-input {
+  padding-right: 40px;
+  appearance: none;
+  cursor: pointer;
+}
+.edit-select-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Edit overlay footer */
+.edit-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.btn-edit-back {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+.btn-edit-back:active { opacity: .85; }
+
+.btn-save-edit {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--content-color);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+/* ── Bottom navigation bar ────────────────────────────────────────────── */
+#bottomNav {
+  flex-shrink: 0;
+  height: var(--nav-h);
+  display: flex;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1100;
+}
+.nav-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .15s;
+}
+.nav-tab svg { width: 26px; height: 26px; fill: currentColor; }
+.nav-tab.active { color: var(--accent); }
+.nav-tab:active { opacity: .7; }
+
+/* ── Print overlay ────────────────────────────────────────────────────── */
+#printOverlay { bottom: var(--nav-h); }
+.print-mode-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--gap);
+  overflow: auto;
+}
+.print-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--content-color) 6%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .15s, background .15s;
+}
+.print-mode-btn:active { border-color: var(--accent); opacity: .85; }
+.print-mode-icon { font-size: 28px; flex-shrink: 0; }
+.print-mode-label { font-size: 15px; font-weight: 600; display: block; }
+.print-mode-note {
+  margin-top: 4px;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.print-back-footer {
+  flex-shrink: 0;
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+}
+  </style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+
+    <!-- Persistent search bar -->
+    <div class="search-bar" id="searchBar">
+      <div class="search-row">
+        <input type="search" class="search-input" id="searchInput"
+               placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
+        <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
+      </div>
+      <div class="suggestions-dropdown" id="suggestionsDropdown">
+        <div class="chip-row" id="suggestionChips"></div>
+      </div>
+    </div>
+
+    <div class="list-area" id="listArea">
+      <div id="activeItems"></div>
+      <div class="active-actions" id="activeActions" style="display:none;">
+        <button class="btn-complete-all" id="btnCompleteAll">Alles erledigt</button>
+      </div>
+
+      <div id="cartSection" style="display:none;">
+        <div class="section-divider"></div>
+        <div class="section-header" id="cartHeader">Zuletzt benutzt</div>
+        <div class="item-grid" id="cartItems"></div>
+        <div class="cart-actions">
+          <button class="btn-clear-cart" id="btnClearCart">Wagen leeren</button>
+        </div>
+      </div>
+
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <span class="empty-icon">&#x1F6D2;</span>
+        <span class="empty-text">Liste ist leer</span>
+      </div>
+    </div>
+
+    <!-- Bottom navigation bar -->
+    <div id="bottomNav">
+      <button class="nav-tab active" id="navTabList" aria-label="Einkaufsliste">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M0 72C0 58.7 10.7 48 24 48L69.3 48C96.4 48 119.6 67.4 124.4 94L124.8 96L537.5 96C557.5 96 572.6 114.2 568.9 133.9L537.8 299.8C532.1 330.1 505.7 352 474.9 352L171.3 352L176.4 380.3C178.5 391.7 188.4 400 200 400L456 400C469.3 400 480 410.7 480 424C480 437.3 469.3 448 456 448L200.1 448C165.3 448 135.5 423.1 129.3 388.9L77.2 102.6C76.5 98.8 73.2 96 69.3 96L24 96C10.7 96 0 85.3 0 72zM160 528C160 501.5 181.5 480 208 480C234.5 480 256 501.5 256 528C256 554.5 234.5 576 208 576C181.5 576 160 554.5 160 528zM384 528C384 501.5 405.5 480 432 480C458.5 480 480 501.5 480 528C480 554.5 458.5 576 432 576C405.5 576 384 554.5 384 528zM336 142.4C322.7 142.4 312 153.1 312 166.4L312 200L278.4 200C265.1 200 254.4 210.7 254.4 224C254.4 237.3 265.1 248 278.4 248L312 248L312 281.6C312 294.9 322.7 305.6 336 305.6C349.3 305.6 360 294.9 360 281.6L360 248L393.6 248C406.9 248 417.6 237.3 417.6 224C417.6 210.7 406.9 200 393.6 200L360 200L360 166.4C360 153.1 349.3 142.4 336 142.4z"/></svg>
+      </button>
+      <button class="nav-tab" id="navTabFav" aria-label="Favoritenlisten">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M442.9 144C415.6 144 389.9 157.1 373.9 179.2L339.5 226.8C335 233 327.8 236.7 320.1 236.7C312.4 236.7 305.2 233 300.7 226.8L266.3 179.2C250.3 157.1 224.6 144 197.3 144C150.3 144 112.2 182.1 112.2 229.1C112.2 279 144.2 327.5 180.3 371.4C221.4 421.4 271.7 465.4 306.2 491.7C309.4 494.1 314.1 495.9 320.2 495.9C326.3 495.9 331 494.1 334.2 491.7C368.7 465.4 419 421.3 460.1 371.4C496.3 327.5 528.2 279 528.2 229.1C528.2 182.1 490.1 144 443.1 144zM335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1C576 297.7 533.1 358 496.9 401.9C452.8 455.5 399.6 502 363.1 529.8C350.8 539.2 335.6 543.9 320 543.9C304.4 543.9 289.2 539.2 276.9 529.8C240.4 502 187.2 455.5 143.1 402C106.9 358.1 64 297.7 64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1L320 171.8L335 151.1z"/></svg>
+      </button>
+      <button class="nav-tab" id="navTabPrint" aria-label="Drucken">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="26" height="26"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"></path><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"></path></svg>
+      </button>
+    </div>
+
+    <!-- Edit item overlay -->
+    <div class="overlay" id="editOverlay">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <span class="overlay-title" id="editOverlayTitle">Artikel bearbeiten</span>
+        </div>
+        <div class="edit-form">
+          <input type="text" class="edit-input" id="editName" placeholder="Name" autocomplete="off" />
+          <input type="text" class="edit-input" id="editAmount" placeholder="Anzahl / Menge" autocomplete="off" />
+          <textarea class="edit-input" id="editNotes" placeholder="Anmerkung" rows="3"></textarea>
+          <div class="edit-select-wrap">
+            <select class="edit-input" id="editCategory"></select>
+            <i class="fa-light fa-arrow-down-from-bracket edit-select-icon"></i>
+          </div>
+          <div id="editFavSection" style="display:none;">
+            <div class="edit-fav-row">
+              <div class="edit-select-wrap">
+                <select class="edit-input" id="editFavList"></select>
+                <i class="fa-light fa-arrow-down-from-bracket edit-select-icon"></i>
+              </div>
+              <button class="btn-new-fav-list" id="btnEditNewFavList" aria-label="Neue Liste">+</button>
+            </div>
+            <input type="text" class="edit-input" id="editNewFavInput" placeholder="Listenname&#x2026;" style="display:none;" autocomplete="off" />
+          </div>
+        </div>
+        <div class="edit-footer">
+          <button class="btn-edit-back" id="btnEditBack">Zur&#xFC;ck</button>
+          <button class="btn-save-edit" id="btnSaveEdit">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Favorite list picker overlay -->
+    <div class="overlay" id="favOverlay">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <span class="overlay-title" id="favOverlayTitle">Favoritenlisten</span>
+          <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
+          <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
+        </div>
+        <div class="fav-rename-form" id="favRenameForm" style="display:none;">
+          <input type="text" class="new-list-input" id="favRenameInput"
+                 placeholder="Listenname&#x2026;" autocomplete="off" />
+          <button class="btn-confirm-new-list" id="btnConfirmRename" aria-label="Speichern">&#x2713;</button>
+        </div>
+        <div class="new-list-form" id="newFavListForm">
+          <input type="text" class="new-list-input" id="newFavListInput"
+                 placeholder="Listenname&#x2026;" autocomplete="off" />
+          <button class="btn-confirm-new-list" id="btnConfirmNewList" aria-label="Erstellen">&#x2713;</button>
+        </div>
+        <div class="fav-list-body" id="favListBody"></div>
+        <div class="fav-detail-footer" id="favDetailFooter" style="display:none;">
+          <div class="fav-detail-footer-row">
+            <button class="btn-delete-fav-list" id="btnDeleteFavList" aria-label="Liste l&#xF6;schen"></button>
+            <button class="btn-fav-detail-back" id="btnFavDetailBack">Zur&#xFC;ck</button>
+            <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
+          </div>
+        </div>
+        <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
+          <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
+          <button class="btn-fav-edit-back" id="btnFavEditBack">Zur&#xFC;ck</button>
+          <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
+        </div>
+        <div class="fav-back-footer" id="favBackFooter" style="display:none;">
+          <button class="btn-fav-back" id="btnFavBack">Zur&#xFC;ck</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Print mode overlay -->
+    <div class="overlay" id="printOverlay">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <span class="overlay-title" id="printOverlayTitle">Drucklayout wählen</span>
+        </div>
+        <div class="print-mode-body">
+          <button class="print-mode-btn" id="btnPrintUltra">
+            <span class="print-mode-icon">&#x2261;</span>
+            <span class="print-mode-label" id="printUltraLabel">Ultra Kompakt</span>
+          </button>
+          <button class="print-mode-btn" id="btnPrintCompact">
+            <span class="print-mode-icon">&#x2610;</span>
+            <span class="print-mode-label" id="printCompactLabel">Kompakt</span>
+          </button>
+          <button class="print-mode-btn" id="btnPrintDetailed">
+            <span class="print-mode-icon"><svg viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns" fill="currentColor" width="28" height="28" aria-hidden="true"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><title>image-picture</title><desc>Created with Sketch Beta.</desc><defs></defs><g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" sketch:type="MSPage"><g id="Icon-Set" sketch:type="MSLayerGroup" transform="translate(-360.000000, -99.000000)" fill="currentColor"><path d="M368,109 C366.896,109 366,108.104 366,107 C366,105.896 366.896,105 368,105 C369.104,105 370,105.896 370,107 C370,108.104 369.104,109 368,109 L368,109 Z M368,103 C365.791,103 364,104.791 364,107 C364,109.209 365.791,111 368,111 C370.209,111 372,109.209 372,107 C372,104.791 370.209,103 368,103 L368,103 Z M390,116.128 L384,110 L374.059,120.111 L370,116 L362,123.337 L362,103 C362,101.896 362.896,101 364,101 L388,101 C389.104,101 390,101.896 390,103 L390,116.128 L390,116.128 Z M390,127 C390,128.104 389.104,129 388,129 L382.832,129 L375.464,121.535 L384,112.999 L390,118.999 L390,127 L390,127 Z M364,129 C362.896,129 362,128.104 362,127 L362,126.061 L369.945,118.945 L380.001,129 L364,129 L364,129 Z M388,99 L364,99 C361.791,99 360,100.791 360,103 L360,127 C360,129.209 361.791,131 364,131 L388,131 C390.209,131 392,129.209 392,127 L392,103 C392,100.791 390.209,99 388,99 L388,99 Z" id="image-picture" sketch:type="MSShapeGroup"></path></g></g></g></svg></span>
+            <span class="print-mode-label" id="printDetailedLabel">Detailliert</span>
+          </button>
+          <div class="print-mode-note" id="printModeNote">Für den WAF ;-)</div>
+        </div>
+        <div class="print-back-footer">
+          <button class="btn-fav-back" id="btnPrintBack">Zur&#xFC;ck</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+(function () {
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let state = { items: [], suggestions: [], categoryOrder: [], favoriteLists: [] };
+let clearCartTimer = null;
+let completeAllTimer = null;
+let favDetailDocClickHandler = null;
+let editingItemId  = null;
+let favOverlayMode = null; // 'load-list'
+let viewingListId    = null; // list ID when showing detail view
+let editingFavItem   = null; // {listId, originalName, category, amount} when editing a fav item
+
+// ── Icons ──────────────────────────────────────────────────────────────────
+const HEART_FILLED = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M305 151.1L320 171.8L335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1L576 231.7C576 343.9 436.1 474.2 363.1 529.9C350.7 539.3 335.5 544 320 544C304.5 544 289.2 539.4 276.9 529.9C203.9 474.2 64 343.9 64 231.7L64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1z"/></svg>';
+const TRASH_ICON   = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M232.7 69.9L224 96L128 96C110.3 96 96 110.3 96 128C96 145.7 110.3 160 128 160L512 160C529.7 160 544 145.7 544 128C544 110.3 529.7 96 512 96L416 96L407.3 69.9C402.9 56.8 390.7 48 376.9 48L263.1 48C249.3 48 237.1 56.8 232.7 69.9zM512 208L128 208L149.1 531.1C150.7 556.4 171.7 576 197 576L443 576C468.3 576 489.3 556.4 490.9 531.1L512 208z"/></svg>';
+const HEART_EMPTY  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M442.9 144C415.6 144 389.9 157.1 373.9 179.2L339.5 226.8C335 233 327.8 236.7 320.1 236.7C312.4 236.7 305.2 233 300.7 226.8L266.3 179.2C250.3 157.1 224.6 144 197.3 144C150.3 144 112.2 182.1 112.2 229.1C112.2 279 144.2 327.5 180.3 371.4C221.4 421.4 271.7 465.4 306.2 491.7C309.4 494.1 314.1 495.9 320.2 495.9C326.3 495.9 331 494.1 334.2 491.7C368.7 465.4 419 421.3 460.1 371.4C496.3 327.5 528.2 279 528.2 229.1C528.2 182.1 490.1 144 443.1 144zM335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1C576 297.7 533.1 358 496.9 401.9C452.8 455.5 399.6 502 363.1 529.8C350.8 539.2 335.6 543.9 320 543.9C304.4 543.9 289.2 539.2 276.9 529.8C240.4 502 187.2 455.5 143.1 402C106.9 358.1 64 297.7 64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1L320 171.8L335 151.1z"/></svg>';
+
+// ── Product images ────────────────────────────────────────────────────────
+let productImages = {};
+let _piKeys = [];
+function _rebuildPiKeys() {
+  _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort((a, b) => b.length - a.length);
+}
+function getProductImageUrl(name) {
+  const key = (name || '').toLowerCase();
+  if (!window.__imageHookUrl) return null;
+  // 1. Exact match
+  let file = productImages[key];
+  if (file) return window.__imageHookUrl + encodeURIComponent(file);
+  // 2. Fallback: longest known key contained in input (word-boundary aware)
+  for (const k of _piKeys) {
+    if (key.length > k.length && key.includes(k)) {
+      return window.__imageHookUrl + encodeURIComponent(productImages[k]);
+    }
+  }
+  return null;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const translate = (typeof window.translate === 'function')
+  ? window.translate
+  : (key) => String(key ?? '');
+
+const requestAction = (typeof window.requestAction === 'function')
+  ? window.requestAction
+  : (ident, value) => {
+      try { window.parent.postMessage(JSON.stringify({ type: 'requestAction', ident: String(ident), value }), '*'); } catch (e) {}
+      try { window.parent.postMessage({ type: 'requestAction', ident: String(ident), value }, '*'); } catch (e) {}
+    };
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+// Renders amount+name: "3x Milch" with amount in accent color; defaults to "1x"
+function buildTitleHtml(name, amount) {
+  const a = amount || '1';
+  const withX = /^\d+$/.test(a) ? a + 'x' : a;
+  return `<span class="item-amount-prefix">${escapeHtml(withX)}</span> ${escapeHtml(name)}`;
+}
+
+// Set of all favorited item names (lowercase) across all lists
+function getFavNames() {
+  const names = new Set();
+  for (const list of (state.favoriteLists || [])) {
+    for (const item of (list.items || [])) {
+      names.add(item.name.toLowerCase());
+    }
+  }
+  return names;
+}
+
+// ── Scroll containment ─────────────────────────────────────────────────────
+function bindScrollContainment(el) {
+  if (!el) return;
+  let startY = 0;
+  el.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    const delta = e.touches[0].clientY - startY;
+    const atTop    = el.scrollTop === 0;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    if ((delta > 0 && atTop) || (delta < 0 && atBottom)) e.preventDefault();
+  }, { passive: false });
+}
+
+// ── Item card ──────────────────────────────────────────────────────────────
+function buildItemCard(item, inCart) {
+  const cls    = inCart ? 'item-card in-cart' : 'item-card';
+  const letter = escapeHtml((item.name || '?').charAt(0).toUpperCase());
+  const imgUrl = getProductImageUrl(item.name);
+  const thumb  = imgUrl
+    ? `<img class="item-thumb-img" src="${escapeHtml(imgUrl)}" alt="" loading="lazy" />`
+    : `<span class="item-thumb-letter">${letter}</span>`;
+  const title  = buildTitleHtml(item.name, item.amount);
+  const notes  = item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : '';
+  return `<div class="${cls}" data-id="${escapeHtml(item.id)}">`
+    + `<div class="item-thumb">${thumb}</div>`
+    + `<div class="item-info"><div class="item-title">${title}</div>${notes}</div>`
+    + `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
+    + `</div>`;
+}
+
+function bindCardHandlers() {
+  document.querySelectorAll('.item-card[data-id]').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.getAttribute('data-id');
+      if (!id || card.dataset.animating === '1') return;
+      card.dataset.animating = '1';
+      if (card.classList.contains('in-cart')) {
+        card.classList.add('is-moving-to-list');
+      } else {
+        card.classList.add('is-moving-to-cart');
+      }
+      window.setTimeout(() => requestAction('ToggleCart', id), 300);
+    });
+  });
+  document.querySelectorAll('.item-edit-btn[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = (state.items || []).find(i => i.id === btn.getAttribute('data-edit-id'));
+      if (item) openEditOverlay(item);
+    });
+  });
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const items         = Array.isArray(state.items) ? state.items : [];
+  const categoryOrder = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
+
+  const activeItems = items.filter(i => !i.inCart);
+  const cartItems   = items.filter(i =>  i.inCart);
+
+  document.getElementById('emptyState').style.display =
+    (activeItems.length === 0 && cartItems.length === 0) ? 'flex' : 'none';
+
+  // Active items grouped by category
+  const grouped = {};
+  for (const item of activeItems) {
+    const cat = item.category || translate('Miscellaneous');
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(item);
+  }
+  const orderedCats = [];
+  for (const cat of categoryOrder) {
+    if (grouped[cat]?.length) orderedCats.push(cat);
+  }
+  for (const cat of Object.keys(grouped)) {
+    if (!orderedCats.includes(cat)) orderedCats.push(cat);
+  }
+
+  let activeHtml = '';
+  for (const cat of orderedCats) {
+    const catItems = grouped[cat] || [];
+    if (!catItems.length) continue;
+    catItems.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' }));
+    activeHtml += `<div class="section-header">${escapeHtml(cat)}</div><div class="item-grid">`;
+    for (const item of catItems) activeHtml += buildItemCard(item, false);
+    activeHtml += '</div>';
+  }
+  document.getElementById('activeItems').innerHTML = activeHtml;
+  document.getElementById('activeActions').style.display = activeItems.length ? '' : 'none';
+
+  // Zuletzt benutzt (cart) section
+  const cartSection = document.getElementById('cartSection');
+  if (!cartItems.length) {
+    cartSection.style.display = 'none';
+  } else {
+    cartSection.style.display = '';
+    let cartHtml = '';
+    for (const item of cartItems) cartHtml += buildItemCard(item, true);
+    document.getElementById('cartItems').innerHTML = cartHtml;
+    document.getElementById('cartHeader').textContent =
+      translate('Recently used') + ' (' + cartItems.length + ')';
+  }
+
+  bindCardHandlers();
+
+  // Refresh fav dropdown in edit overlay if open
+  if (document.getElementById('editOverlay').classList.contains('open')) {
+    const favSection = document.getElementById('editFavSection');
+    if (favSection.style.display !== 'none') populateEditFavList();
+  }
+
+  // Refresh fav overlay if open
+  if (document.getElementById('favOverlay').classList.contains('open')) {
+    if (editingFavItem) {
+      // Don't clobber the edit form
+    } else if (viewingListId) {
+      const list = (state.favoriteLists || []).find(l => l.id === viewingListId);
+      if (list) {
+        renderFavDetailBody(list);
+      } else {
+        showFavListView(); // list was deleted
+      }
+    } else {
+      renderFavListBody();
+    }
+  }
+}
+
+// ── Suggestions dropdown ───────────────────────────────────────────────────
+function openSuggestions() {
+  renderSuggestions();
+  document.getElementById('suggestionsDropdown').classList.add('open');
+}
+
+function closeSuggestions() {
+  document.getElementById('suggestionsDropdown').classList.remove('open');
+}
+
+function renderSuggestions() {
+  const query    = (document.getElementById('searchInput').value || '').trim();
+  const q        = query.toLowerCase();
+  const favNames = getFavNames();
+  const suggestions = Array.isArray(state.suggestions) ? state.suggestions : [];
+
+  const activeNames = new Set(
+    (state.items || []).filter(i => !i.inCart).map(i => i.name.toLowerCase())
+  );
+
+  let filtered = suggestions.filter(s => !activeNames.has(s.name.toLowerCase()));
+  if (q) filtered = filtered.filter(s => s.name.toLowerCase().includes(q));
+
+  // Favorited items first
+  filtered.sort((a, b) => {
+    const aF = favNames.has(a.name.toLowerCase()) ? 0 : 1;
+    const bF = favNames.has(b.name.toLowerCase()) ? 0 : 1;
+    return aF - bF;
+  });
+
+  const exactMatch = filtered.some(s => s.name.toLowerCase() === q);
+
+  let html = '';
+
+  if (q && !exactMatch) {
+    html += `<button class="chip add-custom" data-custom="${escapeHtml(query)}">`
+          + escapeHtml(translate('Add') + ': ' + query) + `</button>`;
+  }
+
+  for (const s of filtered) {
+    const isFav = favNames.has(s.name.toLowerCase());
+    const chipImgUrl = getProductImageUrl(s.name);
+    const chipImg = chipImgUrl ? `<img class="chip-img" src="${escapeHtml(chipImgUrl)}" alt="" loading="lazy" />` : '';
+    html += `<div class="chip-pill">`
+      + `<button class="chip-label-btn" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category)}">`
+      + chipImg + escapeHtml(s.name) + `</button>`
+      + `<button class="chip-heart-btn${isFav ? ' is-fav' : ''}" `
+      + `data-heart-name="${escapeHtml(s.name)}" data-heart-cat="${escapeHtml(s.category)}">`
+      + (isFav ? HEART_FILLED : HEART_EMPTY) + `</button>`
+      + `</div>`;
+  }
+
+  const container = document.getElementById('suggestionChips');
+  container.innerHTML = html;
+
+  container.querySelectorAll('.chip[data-custom]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      requestAction('AddItem', JSON.stringify({ name: btn.getAttribute('data-custom'), category: '', amount: '' }));
+      document.getElementById('searchInput').value = '';
+      closeSuggestions();
+    });
+  });
+
+  container.querySelectorAll('.chip-label-btn[data-name]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      requestAction('AddItem', JSON.stringify({ name: btn.getAttribute('data-name'), category: btn.getAttribute('data-category'), amount: '' }));
+      document.getElementById('searchInput').value = '';
+      closeSuggestions();
+    });
+  });
+
+  container.querySelectorAll('.chip-heart-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSuggestions();
+      openEditOverlay({ id: null, name: btn.getAttribute('data-heart-name'), category: btn.getAttribute('data-heart-cat'), amount: '', notes: '' }, true);
+    });
+  });
+}
+
+// ── Favorite list overlay ──────────────────────────────────────────────────
+function openFavOverlay() {
+  closePrintOverlay();
+  favOverlayMode = 'load-list';
+  viewingListId  = null;
+  editingFavItem = null;
+  document.getElementById('favOverlayTitle').textContent = translate('Favorite lists');
+  document.getElementById('newFavListForm').classList.remove('visible');
+  document.getElementById('newFavListInput').value = '';
+  document.getElementById('btnNewFavList').textContent = '+';
+  document.getElementById('btnNewFavList').style.display = '';
+  document.getElementById('btnFavRenameList').style.display = 'none';
+  document.getElementById('favRenameForm').style.display = 'none';
+  document.getElementById('favDetailFooter').style.display = 'none';
+  document.getElementById('favEditFooter').style.display = 'none';
+  document.getElementById('favBackFooter').style.display = '';
+  renderFavListBody();
+  document.getElementById('favOverlay').classList.add('open');
+  setActiveTab('fav');
+}
+
+function closeFavOverlay() {
+  document.getElementById('favOverlay').classList.remove('open');
+  setActiveTab('list');
+  favOverlayMode = null;
+  viewingListId  = null;
+  editingFavItem = null;
+}
+
+function showFavDetail(listId) {
+  viewingListId  = listId;
+  editingFavItem = null;
+  const list = (state.favoriteLists || []).find(l => l.id === listId);
+  if (!list) return;
+  document.getElementById('favOverlayTitle').textContent = list.name;
+  document.getElementById('btnNewFavList').style.display = 'none';
+  document.getElementById('btnFavRenameList').style.display = '';
+  document.getElementById('favRenameForm').style.display = 'none';
+  document.getElementById('newFavListForm').classList.remove('visible');
+  document.getElementById('favEditFooter').style.display = 'none';
+  document.getElementById('favBackFooter').style.display = 'none';
+  document.getElementById('favDetailFooter').style.display = '';
+  renderFavDetailBody(list);
+}
+
+function showFavListView() {
+  viewingListId = null;
+  document.getElementById('favOverlayTitle').textContent = translate('Favorite lists');
+  document.getElementById('btnNewFavList').textContent = '+';
+  document.getElementById('btnNewFavList').style.display = '';
+  document.getElementById('btnFavRenameList').style.display = 'none';
+  document.getElementById('favRenameForm').style.display = 'none';
+  document.getElementById('favDetailFooter').style.display = 'none';
+  document.getElementById('favEditFooter').style.display = 'none';
+  document.getElementById('favBackFooter').style.display = '';
+  renderFavListBody();
+}
+
+function openFavItemEdit(listId, item) {
+  editingFavItem = { listId, originalName: item.name, category: item.category || '' };
+  document.getElementById('favOverlayTitle').textContent = item.name;
+  document.getElementById('btnNewFavList').style.display = 'none';
+  document.getElementById('btnFavRenameList').style.display = 'none';
+  document.getElementById('favRenameForm').style.display = 'none';
+  document.getElementById('newFavListForm').classList.remove('visible');
+  document.getElementById('favDetailFooter').style.display = 'none';
+  document.getElementById('favBackFooter').style.display = 'none';
+  document.getElementById('favEditFooter').style.display = '';
+  const body = document.getElementById('favListBody');
+  body.innerHTML = '<div class="edit-form">'
+    + `<input type="text" class="edit-input" id="favEditName" placeholder="${escapeHtml(translate('Name'))}" autocomplete="off" />`
+    + `<input type="text" class="edit-input" id="favEditAmount" placeholder="${escapeHtml(translate('Quantity (e.g. 2x)'))}" autocomplete="off" />`
+    + `<textarea class="edit-input" id="favEditNotes" placeholder="${escapeHtml(translate('Note'))}" rows="3"></textarea>`
+    + '</div>';
+  document.getElementById('favEditName').value   = item.name   || '';
+  document.getElementById('favEditAmount').value = item.amount || '';
+  document.getElementById('favEditNotes').value  = item.notes  || '';
+  document.getElementById('favEditName').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
+  document.getElementById('favEditAmount').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
+  document.getElementById('favEditNotes').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveFavItemEdit(); }
+  });
+  document.getElementById('favEditName').focus({ preventScroll: true });
+}
+
+function closeFavItemEdit() {
+  editingFavItem = null;
+  if (viewingListId) {
+    showFavDetail(viewingListId);
+  } else {
+    showFavListView();
+  }
+}
+
+function saveFavItemEdit() {
+  if (!editingFavItem) return;
+  const newName = (document.getElementById('favEditName').value || '').trim();
+  const amount  = (document.getElementById('favEditAmount').value || '').trim();
+  const notes   = (document.getElementById('favEditNotes').value || '').trim();
+  if (!newName) return;
+  requestAction('UpdateFavoriteItem', JSON.stringify({
+    listId:   editingFavItem.listId,
+    oldName:  editingFavItem.originalName,
+    newName:  newName,
+    category: editingFavItem.category,
+    amount:   amount,
+    notes:    notes,
+  }));
+  closeFavItemEdit();
+}
+
+function renderFavListBody() {
+  const lists = Array.isArray(state.favoriteLists) ? state.favoriteLists : [];
+  const body  = document.getElementById('favListBody');
+
+  if (!lists.length) {
+    body.innerHTML = `<div class="fav-empty">${escapeHtml(translate('No lists available'))}</div>`;
+    return;
+  }
+
+  let html = '';
+  for (const list of lists) {
+    const count = Array.isArray(list.items) ? list.items.length : 0;
+    html += `<div class="fav-list-item" data-list-id="${escapeHtml(list.id)}">`
+      + `<span class="fav-list-name">${escapeHtml(list.name)}</span>`
+      + `<span class="fav-list-count">${count} ${escapeHtml(translate('Items'))}</span>`
+      + `</div>`;
+  }
+  body.innerHTML = html;
+
+  body.querySelectorAll('.fav-list-item[data-list-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const listId = el.getAttribute('data-list-id');
+      showFavDetail(listId);
+    });
+  });
+}
+
+function openFavRename() {
+  const list = (state.favoriteLists || []).find(l => l.id === viewingListId);
+  if (!list) return;
+  const form  = document.getElementById('favRenameForm');
+  const input = document.getElementById('favRenameInput');
+  input.value = list.name;
+  form.style.display = 'flex';
+  input.focus({ preventScroll: true });
+  input.select();
+}
+
+function confirmFavRename() {
+  const newName = (document.getElementById('favRenameInput').value || '').trim();
+  if (!newName || !viewingListId) return;
+  requestAction('RenameFavoriteList', JSON.stringify({ listId: viewingListId, newName }));
+  document.getElementById('favRenameForm').style.display = 'none';
+}
+
+function renderFavDetailBody(list) {
+  // Keep title in sync with current list name (e.g. after rename)
+  document.getElementById('favOverlayTitle').textContent = list.name;
+  const body  = document.getElementById('favListBody');
+  const items = Array.isArray(list.items) ? list.items : [];
+
+  let html = `<div class="search-bar fav-detail-search" id="favDetailSearchBar">`
+    + `<div class="search-row">`
+    + `<input type="search" class="search-input" id="favDetailSearchInput" `
+    + `placeholder="${escapeHtml(translate('Add item…'))}" autocomplete="off" />`
+    + `</div>`
+    + `<div class="suggestions-dropdown" id="favDetailSuggestionsDropdown">`
+    + `<div class="chip-row" id="favDetailSuggestionChips"></div>`
+    + `</div>`
+    + `</div>`;
+
+  if (!items.length) {
+    html += `<div class="fav-empty">${escapeHtml(translate('List is empty'))}</div>`;
+  }
+
+  for (const item of items) {
+    const nameHtml = buildTitleHtml(item.name, item.amount || '');
+    const notesHtml = (item.notes || '').trim() ? `<span class="fav-detail-notes">${escapeHtml(item.notes)}</span>` : '';
+    const favImgUrl = getProductImageUrl(item.name);
+    const favImg = favImgUrl ? `<img class="fav-detail-img" src="${escapeHtml(favImgUrl)}" alt="" loading="lazy" />` : '';
+    html += `<div class="fav-detail-item">`
+      + favImg
+      + `<span class="fav-detail-name">${nameHtml}${notesHtml}</span>`
+      + `<button class="fav-detail-pencil" data-edit-list="${escapeHtml(list.id)}" data-edit-name="${escapeHtml(item.name)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
+      + `<button class="fav-detail-heart" data-list-id="${escapeHtml(list.id)}" data-item-name="${escapeHtml(item.name)}" aria-label="Entfernen">${HEART_FILLED}</button>`
+      + `</div>`;
+  }
+  body.innerHTML = html;
+
+  const searchBar = document.getElementById('favDetailSearchBar');
+  const searchInput = document.getElementById('favDetailSearchInput');
+  const dropdown = document.getElementById('favDetailSuggestionsDropdown');
+  const chips = document.getElementById('favDetailSuggestionChips');
+
+  const addToFavoriteList = (name, category) => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return;
+    requestAction('AddItemToFavoriteList', JSON.stringify({
+      listId: list.id,
+      name: cleanName,
+      category: (category || '').trim(),
+      amount: '',
+      notes: ''
+    }));
+    searchInput.value = '';
+    dropdown.classList.remove('open');
+    searchInput.focus({ preventScroll: true });
+  };
+
+  const renderFavDetailSuggestions = () => {
+    const query = (searchInput.value || '').trim();
+    const q = query.toLowerCase();
+    const suggestions = Array.isArray(state.suggestions) ? state.suggestions : [];
+    const existingNames = new Set((list.items || []).map(i => (i.name || '').toLowerCase()));
+
+    let filtered = suggestions.filter(s => !existingNames.has((s.name || '').toLowerCase()));
+    if (q) {
+      filtered = filtered.filter(s => (s.name || '').toLowerCase().includes(q));
+    }
+
+    const exactMatch = filtered.some(s => (s.name || '').toLowerCase() === q);
+
+    let htmlChips = '';
+    if (q && !exactMatch) {
+      htmlChips += `<button class="chip add-custom" data-custom="${escapeHtml(query)}">`
+        + `${escapeHtml(translate('Add') + ': ' + query)}</button>`;
+    }
+
+    for (const s of filtered) {
+      const chipImgUrl = getProductImageUrl(s.name);
+      const chipImg = chipImgUrl ? `<img class="chip-img" src="${escapeHtml(chipImgUrl)}" alt="" loading="lazy" />` : '';
+      htmlChips += `<button class="chip" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category || '')}">`
+        + `${chipImg}${escapeHtml(s.name)}</button>`;
+    }
+
+    chips.innerHTML = htmlChips;
+
+    chips.querySelectorAll('.chip[data-custom]').forEach(btn => {
+      btn.addEventListener('click', () => addToFavoriteList(btn.getAttribute('data-custom') || '', ''));
+    });
+
+    chips.querySelectorAll('.chip[data-name]').forEach(btn => {
+      btn.addEventListener('click', () => addToFavoriteList(
+        btn.getAttribute('data-name') || '',
+        btn.getAttribute('data-category') || ''
+      ));
+    });
+  };
+
+  searchInput.addEventListener('focus', () => {
+    renderFavDetailSuggestions();
+    dropdown.classList.add('open');
+  });
+  searchInput.addEventListener('input', () => {
+    renderFavDetailSuggestions();
+    dropdown.classList.add('open');
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addToFavoriteList(searchInput.value || '', '');
+    }
+  });
+
+  if (favDetailDocClickHandler) {
+    document.removeEventListener('click', favDetailDocClickHandler);
+  }
+  favDetailDocClickHandler = (e) => {
+    if (!searchBar.contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  };
+  document.addEventListener('click', favDetailDocClickHandler);
+
+  body.querySelectorAll('.fav-detail-pencil').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const listId   = btn.getAttribute('data-edit-list');
+      const itemName = btn.getAttribute('data-edit-name');
+      const listObj  = (state.favoriteLists || []).find(l => l.id === listId);
+      if (!listObj) return;
+      const itemObj  = (listObj.items || []).find(i => i.name === itemName);
+      if (!itemObj) return;
+      openFavItemEdit(listId, itemObj);
+    });
+  });
+
+  body.querySelectorAll('.fav-detail-heart').forEach(btn => {
+    btn.addEventListener('click', () => {
+      requestAction('RemoveItemFromFavoriteList', JSON.stringify({
+        listId: btn.getAttribute('data-list-id'),
+        name:   btn.getAttribute('data-item-name'),
+      }));
+    });
+  });
+}
+
+function confirmNewFavList() {
+  const input = document.getElementById('newFavListInput');
+  const name  = input.value.trim();
+  if (!name) return;
+  requestAction('CreateFavoriteList', JSON.stringify({ name }));
+  input.value = '';
+  document.getElementById('newFavListForm').classList.remove('visible');
+}
+
+// ── Print overlay ─────────────────────────────────────────────────────────
+function openPrintOverlay() {
+  closeFavOverlay();
+  closeSuggestions();
+  document.getElementById('printOverlay').classList.add('open');
+  setActiveTab('print');
+}
+
+function closePrintOverlay() {
+  document.getElementById('printOverlay').classList.remove('open');
+  setActiveTab('list');
+}
+
+function getActiveItemsGrouped() {
+  const items = (state.items || []).filter(i => !i.inCart);
+  const categoryOrder = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
+  const grouped = {};
+  for (const item of items) {
+    const cat = item.category || translate('Miscellaneous');
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(item);
+  }
+  const ordered = [];
+  for (const cat of categoryOrder) {
+    if (grouped[cat]?.length) ordered.push({ cat, items: grouped[cat] });
+  }
+  for (const cat of Object.keys(grouped)) {
+    if (!ordered.some(o => o.cat === cat)) ordered.push({ cat, items: grouped[cat] });
+  }
+  return ordered;
+}
+
+function buildPrintHtml(mode) {
+  const groups = getActiveItemsGrouped();
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const baseUrl = window.location.origin || '';
+
+  let body = '';
+  if (mode === 'ultra') {
+    const allItems = groups.flatMap(g => g.items);
+    body += '<ul class="ultra">';
+    for (const item of allItems) {
+      const amt = item.amount || '1';
+      const amtStr = /^\d+$/.test(amt) ? amt + 'x' : amt;
+      body += `<li><span class="cb">&#x2610;</span> <strong>${esc(amtStr)}</strong> ${esc(item.name)}</li>`;
+    }
+    body += '</ul>';
+  } else {
+    for (const g of groups) {
+      body += `<h2>${esc(g.cat)}</h2>`;
+      if (mode === 'compact') {
+        body += '<ul class="compact">';
+        for (const item of g.items) {
+          const amt = item.amount || '1';
+          const amtStr = /^\d+$/.test(amt) ? amt + 'x' : amt;
+          const notes = item.notes ? ` <span class="notes">${esc(item.notes)}</span>` : '';
+          body += `<li><span class="cb">&#x2610;</span> <strong>${esc(amtStr)}</strong> ${esc(item.name)}${notes}</li>`;
+        }
+        body += '</ul>';
+      } else {
+        body += '<div class="detailed">';
+        for (const item of g.items) {
+          const amt = item.amount || '1';
+          const amtStr = /^\d+$/.test(amt) ? amt + 'x' : amt;
+          const imgUrl = getProductImageUrl(item.name);
+          const imgTag = imgUrl ? `<img class="d-img" src="${esc(baseUrl + imgUrl)}" />` : '';
+          const notes = item.notes ? `<div class="notes">${esc(item.notes)}</div>` : '';
+          body += `<div class="d-item"><span class="cb">&#x2610;</span>${imgTag}<div><strong>${esc(amtStr)}</strong> ${esc(item.name)}${notes}</div></div>`;
+        }
+        body += '</div>';
+      }
+    }
+  }
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(translate('Shopping List'))} – ${date}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;padding:20px;max-width:800px;margin:0 auto}
+h1{font-size:20px;margin-bottom:2px}
+.meta{font-size:12px;color:#888;margin-bottom:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:#666;border-bottom:1px solid #ccc;padding:6px 0 3px;margin-top:14px}
+ul.compact{list-style:none;columns:2;column-gap:24px;padding:4px 0}
+ul.compact li{break-inside:avoid;padding:3px 0;font-size:14px;line-height:1.5}
+ul.ultra{list-style:none;columns:3;column-gap:16px;padding:2px 0}
+ul.ultra li{break-inside:avoid;padding:1px 0;font-size:12px;line-height:1.3}
+.cb{font-size:16px;margin-right:2px}
+.notes{font-size:11px;color:#888;font-style:italic}
+.detailed{columns:2;column-gap:20px;padding:4px 0}
+.d-item{break-inside:avoid;display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #eee;font-size:14px}
+.d-img{width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0}
+.footer{margin-top:16px;font-size:11px;color:#aaa;text-align:center}
+@media print{body{padding:10px}h1{font-size:18px}ul.compact{columns:2}}
+@media (max-width:500px){ul.compact{columns:1}}
+</style></head><body>
+<h1>${esc(translate('Shopping List'))}</h1>
+<div class="meta">${date} &middot; ${total} ${esc(translate('Items'))}</div>
+${body}
+<div class="footer">${esc(translate('Shopping List'))} &middot; ${date}</div>
+</body></html>`;
+}
+
+function doPrint(mode) {
+  closePrintOverlay();
+  const html = buildPrintHtml(mode);
+  let frame = document.getElementById('printFrame');
+  if (frame) frame.remove();
+  frame = document.createElement('iframe');
+  frame.id = 'printFrame';
+  frame.style.cssText = 'position:fixed;width:0;height:0;border:none;left:-9999px';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument || frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  frame.onload = () => {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  };
+}
+
+// ── State message handler ─────────────────────────────────────────────────
+function handleMessage(data) {
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (e) { return; }
+  }
+  if (data && typeof data === 'object' && data.type === 'state') {
+    if (data.availableImages) { productImages = data.availableImages; _rebuildPiKeys(); }
+    state = data;
+    render();
+  }
+}
+
+window.handleMessage = handleMessage;
+window.updateState   = handleMessage;
+
+window.addEventListener('message', (event) => { if (event) handleMessage(event.data); });
+
+function requestState() { requestAction('GetState', 0); }
+
+// ── Edit overlay ──────────────────────────────────────────────────────────
+function populateEditFavList(selectId) {
+  const favSelect   = document.getElementById('editFavList');
+  const previousId  = selectId || favSelect.value;
+  favSelect.innerHTML = '';
+  const lists = Array.isArray(state.favoriteLists) ? state.favoriteLists : [];
+  if (lists.length === 0) {
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = translate('No lists available');
+    none.selected = true;
+    favSelect.appendChild(none);
+    return;
+  }
+  const effectiveId = previousId || (lists[0] && lists[0].id) || '';
+  for (const list of lists) {
+    const opt = document.createElement('option');
+    opt.value = list.id; opt.textContent = list.name;
+    if (list.id === effectiveId) opt.selected = true;
+    favSelect.appendChild(opt);
+  }
+}
+
+function openEditOverlay(item, showFavPicker) {
+  editingItemId = item.id || null;
+  document.getElementById('editName').value   = item.name   || '';
+  document.getElementById('editAmount').value = item.amount || '';
+  document.getElementById('editNotes').value  = item.notes  || '';
+
+  // Populate category dropdown
+  const select  = document.getElementById('editCategory');
+  const cats    = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
+  const curCat  = item.category || '';
+  select.innerHTML = '';
+  if (curCat && !cats.includes(curCat)) {
+    const opt = document.createElement('option');
+    opt.value = curCat; opt.textContent = curCat; opt.selected = true;
+    select.appendChild(opt);
+  }
+  for (const cat of cats) {
+    const opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    if (cat === curCat) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  // Favorite list picker (only for heart-triggered adds)
+  const favSection  = document.getElementById('editFavSection');
+  const catWrap     = document.getElementById('editCategory').closest('.edit-select-wrap');
+  if (showFavPicker) {
+    populateEditFavList();
+    favSection.style.display = '';
+    catWrap.style.display    = 'none';
+  } else {
+    favSection.style.display = 'none';
+    catWrap.style.display    = '';
+  }
+
+  document.getElementById('editOverlayTitle').textContent =
+    editingItemId ? translate('Edit item') : translate('Add');
+  document.getElementById('editOverlay').classList.add('open');
+  document.getElementById('editName').focus({ preventScroll: true });
+}
+
+function closeEditOverlay() {
+  document.getElementById('editOverlay').classList.remove('open');
+  editingItemId = null;
+}
+
+function saveEdit() {
+  const name     = document.getElementById('editName').value.trim();
+  const amount   = document.getElementById('editAmount').value.trim();
+  const notes    = document.getElementById('editNotes').value.trim();
+  const category = document.getElementById('editCategory').value;
+  if (!name) return;
+
+  if (editingItemId) {
+    requestAction('UpdateItem', JSON.stringify({ id: editingItemId, name, amount, notes, category }));
+  } else {
+    requestAction('AddItem', JSON.stringify({ name, category, amount }));
+    const favSection = document.getElementById('editFavSection');
+    if (favSection.style.display !== 'none') {
+      const listId = document.getElementById('editFavList').value;
+      if (listId) {
+        requestAction('AddItemToFavoriteList', JSON.stringify({ listId, name, category, amount, notes }));
+      }
+    }
+  }
+  closeEditOverlay();
+}
+
+
+// ── DOM ready ─────────────────────────────────────────────────────────────
+// ── Bottom nav tab switching ───────────────────────────────────────────────
+function setActiveTab(tab) {
+  document.getElementById('navTabList').classList.toggle('active', tab === 'list');
+  document.getElementById('navTabFav').classList.toggle('active',  tab === 'fav');
+  document.getElementById('navTabPrint').classList.toggle('active', tab === 'print');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bindScrollContainment(document.getElementById('listArea'));
+  bindScrollContainment(document.getElementById('suggestionsDropdown'));
+  bindScrollContainment(document.getElementById('favListBody'));
+
+  render();
+  requestState();
+
+  // Hide print tab in Symcon mobile app (iOS/Android WebView)
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+    document.getElementById('navTabPrint').style.display = 'none';
+  }
+
+  // Bottom nav
+  document.getElementById('navTabList').addEventListener('click', () => {
+    closeFavOverlay();
+    closePrintOverlay();
+    setActiveTab('list');
+  });
+  document.getElementById('navTabFav').addEventListener('click', () => {
+    closePrintOverlay();
+    openFavOverlay();
+    setActiveTab('fav');
+  });
+  document.getElementById('navTabPrint').addEventListener('click', () => {
+    openPrintOverlay();
+  });
+
+  // Apply translations to static elements
+  document.getElementById('searchInput').placeholder          = translate('Add item\u2026');
+  document.getElementById('editName').placeholder             = translate('Name');
+  document.getElementById('editAmount').placeholder           = translate('Quantity / Amount');
+  document.getElementById('editNotes').placeholder            = translate('Note');
+  document.getElementById('btnEditBack').textContent           = translate('Back');
+  document.getElementById('btnSaveEdit').textContent          = translate('Save');
+  document.getElementById('favRenameInput').placeholder       = translate('List name\u2026');
+  document.getElementById('newFavListInput').placeholder      = translate('List name\u2026');
+  document.getElementById('editNewFavInput').placeholder      = translate('List name\u2026');
+  document.getElementById('btnFavDetailBack').textContent     = translate('Back');
+  document.getElementById('btnAddFavToCart').textContent      = translate('Add to shopping list');
+  document.getElementById('btnFavEditBack').textContent        = translate('Back');
+  document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
+  document.getElementById('btnFavBack').textContent           = translate('Back');
+  document.getElementById('btnClearCart').textContent         = translate('Clear cart');
+  document.getElementById('btnCompleteAll').textContent       = translate('Everything done');
+  document.querySelector('.empty-text').textContent           = translate('List is empty');
+  document.getElementById('favOverlayTitle').textContent      = translate('Favorite lists');
+  document.getElementById('printOverlayTitle').textContent    = translate('Choose print layout');
+  document.getElementById('printUltraLabel').textContent      = translate('Ultra Compact');
+  document.getElementById('printCompactLabel').textContent    = translate('Compact');
+  document.getElementById('printDetailedLabel').textContent   = translate('Detailed');
+  document.getElementById('printModeNote').textContent        = translate('For the WAF ;-)');
+  document.getElementById('btnPrintBack').textContent         = translate('Back');
+
+  // Print overlay buttons
+  document.getElementById('btnPrintUltra').addEventListener('click', () => doPrint('ultra'));
+  document.getElementById('btnPrintCompact').addEventListener('click', () => doPrint('compact'));
+  document.getElementById('btnPrintDetailed').addEventListener('click', () => doPrint('detailed'));
+  document.getElementById('btnPrintBack').addEventListener('click', closePrintOverlay);
+
+  // Search
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('focus', () => openSuggestions());
+  searchInput.addEventListener('input', () => {
+    renderSuggestions();
+    document.getElementById('suggestionsDropdown').classList.add('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('searchBar').contains(e.target)) closeSuggestions();
+  });
+
+  // List icon → favorite list overlay
+  document.getElementById('btnFavLists').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeSuggestions();
+    openFavOverlay();
+  });
+
+  // Edit overlay
+  document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
+  document.getElementById('btnSaveEdit').addEventListener('click', saveEdit);
+  document.getElementById('btnEditNewFavList').addEventListener('click', () => {
+    const input = document.getElementById('editNewFavInput');
+    input.style.display = input.style.display === 'none' ? '' : 'none';
+    if (input.style.display !== 'none') input.focus({ preventScroll: true });
+  });
+  document.getElementById('editNewFavInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const input = document.getElementById('editNewFavInput');
+      const name  = input.value.trim();
+      if (name) {
+        requestAction('CreateFavoriteList', JSON.stringify({ name }));
+        input.value = '';
+      }
+      input.style.display = 'none';
+    } else if (e.key === 'Escape') {
+      const input = document.getElementById('editNewFavInput');
+      input.value = ''; input.style.display = 'none';
+    }
+  });
+  ['editName', 'editAmount'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(); })
+  );
+  document.getElementById('editNotes').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+  });
+
+  // Favorite list overlay
+  document.getElementById('btnFavBack').addEventListener('click', closeFavOverlay);
+  document.getElementById('favOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('favOverlay')) closeFavOverlay();
+  });
+  document.getElementById('btnNewFavList').addEventListener('click', () => {
+    if (editingFavItem) {
+      closeFavItemEdit();
+      return;
+    }
+    const form = document.getElementById('newFavListForm');
+    form.classList.toggle('visible');
+    if (form.classList.contains('visible')) {
+      document.getElementById('newFavListInput').focus({ preventScroll: true });
+    }
+  });
+  document.getElementById('btnFavRenameList').addEventListener('click', openFavRename);
+  document.getElementById('btnConfirmRename').addEventListener('click', confirmFavRename);
+  document.getElementById('favRenameInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmFavRename();
+    if (e.key === 'Escape') document.getElementById('favRenameForm').style.display = 'none';
+  });
+  document.getElementById('btnFavDetailBack').addEventListener('click', showFavListView);
+
+  document.getElementById('btnAddFavToCart').addEventListener('click', () => {
+    if (viewingListId) {
+      requestAction('AddFavoriteListToCart', viewingListId);
+      closeFavOverlay();
+    }
+  });
+  document.getElementById('btnDeleteFavList').innerHTML = TRASH_ICON;
+  document.getElementById('btnDeleteFavList').addEventListener('click', () => {
+    if (viewingListId) {
+      requestAction('DeleteFavoriteList', viewingListId);
+      closeFavOverlay();
+    }
+  });
+  document.getElementById('btnDeleteFavItem').innerHTML = TRASH_ICON;
+  document.getElementById('btnDeleteFavItem').addEventListener('click', () => {
+    if (editingFavItem && editingFavItem.listId && editingFavItem.originalName) {
+      requestAction('RemoveItemFromFavoriteList', JSON.stringify({ listId: editingFavItem.listId, name: editingFavItem.originalName }));
+      closeFavItemEdit();
+    }
+  });
+  document.getElementById('btnFavEditBack').addEventListener('click', closeFavItemEdit);
+  document.getElementById('btnSaveFavEdit').addEventListener('click', saveFavItemEdit);
+  document.getElementById('btnConfirmNewList').addEventListener('click', confirmNewFavList);
+  document.getElementById('newFavListInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmNewFavList();
+  });
+
+  // Wagen leeren (two-tap)
+  document.getElementById('btnClearCart').addEventListener('click', () => {
+    const btn = document.getElementById('btnClearCart');
+    if (btn.getAttribute('data-armed') === 'true') {
+      clearTimeout(clearCartTimer);
+      btn.removeAttribute('data-armed');
+      btn.textContent = translate('Clear cart');
+      requestAction('ClearCart', '');
+    } else {
+      btn.setAttribute('data-armed', 'true');
+      btn.textContent = translate('Sure?');
+      clearCartTimer = setTimeout(() => {
+        btn.removeAttribute('data-armed');
+        btn.textContent = translate('Clear cart');
+      }, 3000);
+    }
+  });
+
+  document.getElementById('btnCompleteAll').addEventListener('click', () => {
+    const btn = document.getElementById('btnCompleteAll');
+    if (btn.getAttribute('data-armed') === 'true') {
+      clearTimeout(completeAllTimer);
+      btn.removeAttribute('data-armed');
+      btn.textContent = translate('Everything done');
+      requestAction('MarkAllDone', '');
+    } else {
+      btn.setAttribute('data-armed', 'true');
+      btn.textContent = translate('Sure?');
+      completeAllTimer = setTimeout(() => {
+        btn.removeAttribute('data-armed');
+        btn.textContent = translate('Everything done');
+      }, 3000);
+    }
+  });
+});
+}());
+  </script>
+</body>
+</html>
