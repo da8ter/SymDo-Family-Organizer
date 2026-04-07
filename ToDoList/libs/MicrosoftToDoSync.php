@@ -4,137 +4,28 @@ declare(strict_types=1);
 
 trait MicrosoftToDoSync
 {
-    private function RegisterMicrosoftWebHook(): void
-    {
-        $this->OAuthRegisterWebHook('/hook/todolist_microsoft/');
-    }
-
     private function UpdateMicrosoftToDoTimer(): void
     {
-        $hasToken = $this->MicrosoftGetDecryptedToken('MicrosoftRefreshToken') !== '';
+        $gw = $this->GetGatewayID();
+        $hasToken = $gw > 0 && TGW_MicrosoftIsConnected($gw);
         $this->SyncUpdateTimer('microsoft', 'MicrosoftToDoSyncTimer', $this->ReadPropertyInteger('MicrosoftSyncInterval'), $hasToken);
-    }
-
-    private function MicrosoftSetEncryptedToken(string $Attribute, string $Token): void
-    {
-        $this->OAuthSetEncryptedToken($Attribute, $Token, 'MKey');
-    }
-
-    private function MicrosoftGetDecryptedToken(string $Attribute): string
-    {
-        return $this->OAuthGetDecryptedToken($Attribute, 'MKey');
-    }
-
-    private function MicrosoftGetTenant(): string
-    {
-        $tenant = trim($this->ReadPropertyString('MicrosoftTenant'));
-        return $tenant === '' ? 'common' : $tenant;
-    }
-
-    public function MicrosoftGetAuthUrl(): string
-    {
-        $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
-        if ($clientId === '') {
-            return $this->Translate('Please enter Client ID first.');
-        }
-
-        $tenant = $this->MicrosoftGetTenant();
-        $redirectUri = $this->OAuthGetRedirectUri('/hook/todolist_microsoft/');
-        $state = $this->InstanceID . '_' . bin2hex(random_bytes(8));
-
-        $params = [
-            'client_id' => $clientId,
-            'response_type' => 'code',
-            'redirect_uri' => $redirectUri,
-            'response_mode' => 'query',
-            'scope' => 'offline_access Tasks.ReadWrite',
-            'state' => $state
-        ];
-
-        return 'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/authorize?' . http_build_query($params);
-    }
-
-    public function MicrosoftHandleCallback(string $Code): bool
-    {
-        $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
-        $clientSecret = trim($this->ReadPropertyString('MicrosoftClientSecret'));
-        $tenant = $this->MicrosoftGetTenant();
-        $redirectUri = $this->OAuthGetRedirectUri('/hook/todolist_microsoft/');
-
-        if ($clientId === '' || $clientSecret === '' || $Code === '') {
-            $this->SendDebug('MicrosoftToDo', 'HandleCallback: Missing credentials or code', 0);
-            return false;
-        }
-
-        $postData = [
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'code' => $Code,
-            'redirect_uri' => $redirectUri,
-            'grant_type' => 'authorization_code',
-            'scope' => 'offline_access Tasks.ReadWrite'
-        ];
-
-        $success = $this->OAuthExchangeToken(
-            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
-            $postData, 'MKey',
-            'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
-            'MicrosoftToDo'
-        );
-
-        if ($success) {
-            $this->UpdateMicrosoftToDoTimer();
-            $this->MicrosoftFetchAndStoreListOptions();
-        }
-        return $success;
-    }
-
-    private function MicrosoftGetValidAccessToken(): string
-    {
-        $tenant = $this->MicrosoftGetTenant();
-        return $this->OAuthGetValidAccessToken(
-            'MKey',
-            'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
-            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
-            trim($this->ReadPropertyString('MicrosoftClientID')),
-            trim($this->ReadPropertyString('MicrosoftClientSecret')),
-            'MicrosoftToDo',
-            'offline_access Tasks.ReadWrite'
-        );
     }
 
     private function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
     {
-        $url = 'https://graph.microsoft.com/v1.0' . $Endpoint;
-        $token = $this->MicrosoftGetValidAccessToken();
-        $response = $this->OAuthHttpRequest($Method, $url, [], is_array($Body) ? json_encode($Body) : $Body, true, 'MicrosoftToDo', $token);
-        if ($response === null) {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            $this->SendDebug('MicrosoftToDo', 'No ToDoGateway connected', 0);
             return null;
         }
-
-        if (trim($response) === '') {
-            return [];
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
-            $this->SendDebug('MicrosoftToDo', 'Invalid JSON response', 0);
-            return null;
-        }
-
-        if (isset($data['error'])) {
-            $this->SendDebug('MicrosoftToDo', 'API error: ' . json_encode($data['error']), 0);
-            return null;
-        }
-
-        return $data;
+        return TGW_MicrosoftApiRequest($gw, $Method, $Endpoint, $Body);
     }
 
     public function MicrosoftRefreshListOptions(): void
     {
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
-            echo $this->Translate('Not connected. Please authorize first.');
+        $gw = $this->GetGatewayID();
+        if ($gw === 0 || !TGW_MicrosoftIsConnected($gw)) {
+            echo $this->Translate('Not connected to Microsoft. Please authorize first.');
             return;
         }
 
@@ -203,114 +94,12 @@ trait MicrosoftToDoSync
 
     public function MicrosoftTestConnection(): bool
     {
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
             echo $this->Translate('Not connected. Please authorize first.');
             return false;
         }
-
-        $data = $this->MicrosoftApiRequest('GET', '/me/todo/lists');
-        if ($data === null) {
-            echo $this->Translate('Connection failed.');
-            return false;
-        }
-
-        $count = count($data['value'] ?? []);
-        echo sprintf($this->Translate('Connection successful. Found %d task list(s).'), $count);
-        return true;
-    }
-
-    public function MicrosoftTestSortOptions(): string
-    {
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
-            return $this->Translate('Not connected to Microsoft. Please authorize first.');
-        }
-
-        $listId = trim($this->ReadPropertyString('MicrosoftListID'));
-        if ($listId === '') {
-            return $this->Translate('Please select a list first.');
-        }
-
-        $tests = [
-            '', 'createdDateTime asc', 'createdDateTime desc',
-            'lastModifiedDateTime asc', 'lastModifiedDateTime desc',
-            'dueDateTime/dateTime asc', 'dueDateTime/dateTime desc',
-            'importance asc', 'importance desc',
-            'status asc', 'status desc',
-            'title asc', 'title desc'
-        ];
-
-        $output = $this->Translate('Testing sort options...') . "\n";
-        $output .= $this->Translate('List ID') . ': ' . $listId . "\n\n";
-
-        foreach ($tests as $orderBy) {
-            $endpoint = '/me/todo/lists/' . urlencode($listId) . '/tasks?$top=5';
-            if ($orderBy !== '') {
-                $endpoint .= '&$orderby=' . rawurlencode($orderBy);
-            }
-            $url = 'https://graph.microsoft.com/v1.0' . $endpoint;
-
-            $msToken = $this->MicrosoftGetValidAccessToken();
-            $res = $this->OAuthHttpRequestMeta('GET', $url, [], null, true, 'MicrosoftToDo', $msToken);
-            if ($res === null) {
-                $line = ($orderBy === '' ? '(default)' : $orderBy) . ': ' . $this->Translate('No response.');
-                $this->SendDebug('MicrosoftToDo', $line, 0);
-                $output .= $line . "\n";
-                continue;
-            }
-
-            $status = (int)($res['status'] ?? 0);
-            $body = (string)($res['body'] ?? '');
-            $ok = ($status >= 200 && $status < 300);
-
-            $sample = '';
-            if ($ok) {
-                $data = json_decode($body, true);
-                if (is_array($data)) {
-                    $titles = [];
-                    foreach (($data['value'] ?? []) as $t) {
-                        if (is_array($t)) {
-                            $titles[] = (string)($t['title'] ?? '');
-                        }
-                        if (count($titles) >= 3) {
-                            break;
-                        }
-                    }
-                    $titles = array_filter($titles, fn($v) => $v !== '');
-                    if (!empty($titles)) {
-                        $sample = ' | ' . implode(' / ', $titles);
-                    }
-                }
-            } else {
-                $err = json_decode($body, true);
-                if (is_array($err) && isset($err['error']['message'])) {
-                    $msg = trim((string)$err['error']['message']);
-                    if ($msg !== '') {
-                        $sample = ' | ' . $msg;
-                    }
-                }
-            }
-
-            $label = $orderBy === '' ? '(default)' : $orderBy;
-            $resultTxt = $ok ? $this->Translate('OK') : $this->Translate('Failed');
-            $line = $label . ': ' . sprintf($this->Translate('HTTP %d'), $status) . ' ' . $resultTxt . $sample;
-            $this->SendDebug('MicrosoftToDo', $line, 0);
-            $output .= $line . "\n";
-        }
-
-        $output .= "\n" . sprintf($this->Translate('Tested %d sort option(s).'), count($tests));
-        return $output;
-    }
-
-    public function MicrosoftDisconnect(): void
-    {
-        $this->MicrosoftSetEncryptedToken('MicrosoftAccessToken', '');
-        $this->MicrosoftSetEncryptedToken('MicrosoftRefreshToken', '');
-        $this->WriteAttributeInteger('MicrosoftTokenExpires', 0);
-        $this->WriteAttributeInteger('MicrosoftLastSync', 0);
-        $this->UpdateMicrosoftToDoTimer();
-        echo $this->Translate('Disconnected from Microsoft.');
+        return TGW_MicrosoftTestConnection($gw);
     }
 
     public function MicrosoftToDoSync(): bool
@@ -352,8 +141,8 @@ trait MicrosoftToDoSync
             return false;
         }
 
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0 || !TGW_MicrosoftIsConnected($gw)) {
             $this->SendDebug('MicrosoftToDo', 'Sync skipped - not authenticated', 0);
             return false;
         }
@@ -440,26 +229,10 @@ trait MicrosoftToDoSync
 
     private function MicrosoftBuildDateTimeTimeZone(int $Timestamp): array
     {
-        $tz = $this->MicrosoftGetLocalWindowsTimeZone();
         return [
-            'dateTime' => $tz === 'UTC' ? gmdate('Y-m-d\TH:i:s', $Timestamp) : date('Y-m-d\TH:i:s', $Timestamp),
-            'timeZone' => $tz
+            'dateTime' => gmdate('Y-m-d\TH:i:s.0000000', $Timestamp),
+            'timeZone' => 'UTC'
         ];
-    }
-
-    private function MicrosoftGetLocalWindowsTimeZone(): string
-    {
-        $iana = (string)@date_default_timezone_get();
-        $map = [
-            'Europe/Berlin' => 'W. Europe Standard Time',
-            'Europe/Vienna' => 'W. Europe Standard Time',
-            'Europe/Zurich' => 'W. Europe Standard Time',
-            'Europe/Paris' => 'Romance Standard Time',
-            'Europe/Amsterdam' => 'W. Europe Standard Time',
-            'Europe/Rome' => 'W. Europe Standard Time',
-            'UTC' => 'UTC'
-        ];
-        return $map[$iana] ?? 'UTC';
     }
 
     private function MicrosoftParseDateTimeTimeZone(mixed $Value): int
@@ -472,21 +245,63 @@ trait MicrosoftToDoSync
             return 0;
         }
 
-        $tz = (string)($Value['timeZone'] ?? 'UTC');
-        $map = [
-            'UTC' => 'UTC',
-            'W. Europe Standard Time' => 'Europe/Berlin',
-            'Romance Standard Time' => 'Europe/Paris'
-        ];
-        $tz = $map[$tz] ?? $tz;
+        $tz = $this->MicrosoftWindowsToIana((string)($Value['timeZone'] ?? 'UTC'));
 
         try {
             $d = new DateTime($dt, new DateTimeZone($tz));
             return $d->getTimestamp();
         } catch (Exception $e) {
-            $ts = strtotime($dt);
-            return $ts === false ? 0 : $ts;
+            try {
+                $d = new DateTime($dt, new DateTimeZone('UTC'));
+                return $d->getTimestamp();
+            } catch (Exception $e2) {
+                return 0;
+            }
         }
+    }
+
+    private function MicrosoftWindowsToIana(string $WindowsTz): string
+    {
+        $map = [
+            'UTC'                          => 'UTC',
+            'W. Europe Standard Time'      => 'Europe/Berlin',
+            'Romance Standard Time'        => 'Europe/Paris',
+            'Central Europe Standard Time' => 'Europe/Budapest',
+            'Central European Standard Time' => 'Europe/Warsaw',
+            'E. Europe Standard Time'      => 'Europe/Chisinau',
+            'FLE Standard Time'            => 'Europe/Kiev',
+            'GTB Standard Time'            => 'Europe/Bucharest',
+            'GMT Standard Time'            => 'Europe/London',
+            'Greenwich Standard Time'      => 'Atlantic/Reykjavik',
+            'Russian Standard Time'        => 'Europe/Moscow',
+            'Eastern Standard Time'        => 'America/New_York',
+            'Central Standard Time'        => 'America/Chicago',
+            'Mountain Standard Time'       => 'America/Denver',
+            'Pacific Standard Time'        => 'America/Los_Angeles',
+            'China Standard Time'          => 'Asia/Shanghai',
+            'Tokyo Standard Time'          => 'Asia/Tokyo',
+            'AUS Eastern Standard Time'    => 'Australia/Sydney',
+            'India Standard Time'          => 'Asia/Kolkata',
+            'Arabian Standard Time'        => 'Asia/Dubai',
+            'Israel Standard Time'         => 'Asia/Jerusalem',
+            'Turkey Standard Time'         => 'Europe/Istanbul',
+            'South Africa Standard Time'   => 'Africa/Johannesburg',
+            'New Zealand Standard Time'    => 'Pacific/Auckland',
+            'Hawaiian Standard Time'       => 'Pacific/Honolulu',
+            'Alaskan Standard Time'        => 'America/Anchorage',
+            'Atlantic Standard Time'       => 'America/Halifax',
+            'SA Pacific Standard Time'     => 'America/Bogota',
+            'SA Eastern Standard Time'     => 'America/Cayenne',
+            'E. South America Standard Time' => 'America/Sao_Paulo',
+            'Argentina Standard Time'      => 'America/Buenos_Aires',
+            'Singapore Standard Time'      => 'Asia/Singapore',
+            'Korea Standard Time'          => 'Asia/Seoul',
+            'Taipei Standard Time'         => 'Asia/Taipei',
+            'SE Asia Standard Time'        => 'Asia/Bangkok',
+            'Samoa Standard Time'          => 'Pacific/Apia',
+            'Tonga Standard Time'          => 'Pacific/Tongatapu'
+        ];
+        return $map[$WindowsTz] ?? 'UTC';
     }
 
     private function MicrosoftMapPriorityToImportance(string $Priority): string
@@ -503,7 +318,7 @@ trait MicrosoftToDoSync
 
     private function MicrosoftGetWeekday(int $Timestamp): string
     {
-        $n = (int)date('N', $Timestamp);
+        $n = (int)gmdate('N', $Timestamp);
         return match ($n) {
             1 => 'monday', 2 => 'tuesday', 3 => 'wednesday',
             4 => 'thursday', 5 => 'friday', 6 => 'saturday',
@@ -540,12 +355,11 @@ trait MicrosoftToDoSync
             return null;
         }
 
-        $startDate = date('Y-m-d', $due);
-        $tz = $this->MicrosoftGetLocalWindowsTimeZone();
+        $startDate = gmdate('Y-m-d', $due);
         $range = [
             'type' => 'noEnd',
             'startDate' => $startDate,
-            'recurrenceTimeZone' => $tz
+            'recurrenceTimeZone' => 'UTC'
         ];
 
         $pattern = [];
@@ -560,14 +374,14 @@ trait MicrosoftToDoSync
             $pattern = [
                 'type' => 'absoluteMonthly',
                 'interval' => $rec === 'q1' ? 3 : 1,
-                'dayOfMonth' => (int)date('j', $due)
+                'dayOfMonth' => (int)gmdate('j', $due)
             ];
         } elseif ($rec === 'y1') {
             $pattern = [
                 'type' => 'absoluteYearly',
                 'interval' => 1,
-                'month' => (int)date('n', $due),
-                'dayOfMonth' => (int)date('j', $due)
+                'month' => (int)gmdate('n', $due),
+                'dayOfMonth' => (int)gmdate('j', $due)
             ];
         } elseif ($rec === 'custom') {
             $unit = $this->NormalizeRecurrenceCustomUnit($Item['recurrenceCustomUnit'] ?? null);
@@ -585,14 +399,14 @@ trait MicrosoftToDoSync
                 $pattern = [
                     'type' => 'absoluteMonthly',
                     'interval' => $val,
-                    'dayOfMonth' => (int)date('j', $due)
+                    'dayOfMonth' => (int)gmdate('j', $due)
                 ];
             } elseif ($unit === 'y') {
                 $pattern = [
                     'type' => 'absoluteYearly',
                     'interval' => $val,
-                    'month' => (int)date('n', $due),
-                    'dayOfMonth' => (int)date('j', $due)
+                    'month' => (int)gmdate('n', $due),
+                    'dayOfMonth' => (int)gmdate('j', $due)
                 ];
             } else {
                 return null;
@@ -655,8 +469,8 @@ trait MicrosoftToDoSync
     {
         $done = strtolower((string)($Task['status'] ?? '')) === 'completed';
         $doneAt = 0;
-        if ($done && isset($Task['completedDateTime']['dateTime'])) {
-            $doneAt = strtotime((string)$Task['completedDateTime']['dateTime']) ?: 0;
+        if ($done && isset($Task['completedDateTime'])) {
+            $doneAt = $this->MicrosoftParseDateTimeTimeZone($Task['completedDateTime']);
         }
 
         $due = $this->MicrosoftParseDateTimeTimeZone($Task['dueDateTime'] ?? null);
@@ -679,7 +493,13 @@ trait MicrosoftToDoSync
 
         $updated = 0;
         if (isset($Task['lastModifiedDateTime'])) {
-            $updated = strtotime((string)$Task['lastModifiedDateTime']) ?: 0;
+            $lm = (string)$Task['lastModifiedDateTime'];
+            try {
+                $d = new DateTime($lm, new DateTimeZone('UTC'));
+                $updated = $d->getTimestamp();
+            } catch (Exception $e) {
+                $updated = strtotime($lm) ?: 0;
+            }
         }
 
         return [
@@ -953,10 +773,8 @@ trait MicrosoftToDoSync
             return true;
         }
 
-        $url = 'https://graph.microsoft.com/v1.0/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($TaskId);
-        $token = $this->MicrosoftGetValidAccessToken();
-        $response = $this->OAuthHttpRequest('DELETE', $url, [], null, true, 'MicrosoftToDo', $token);
-        return $response !== null;
+        $data = $this->MicrosoftApiRequest('DELETE', '/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($TaskId));
+        return $data !== null;
     }
 
     private function AddMicrosoftPendingDelete(string $TaskId): void
@@ -966,9 +784,10 @@ trait MicrosoftToDoSync
 
     private function GetMicrosoftToDoStatusLabel(): string
     {
-        $refreshToken = $this->MicrosoftGetDecryptedToken('MicrosoftRefreshToken');
+        $gw = $this->GetGatewayID();
+        $connected = $gw > 0 && TGW_MicrosoftIsConnected($gw);
         $lastSync = $this->ReadAttributeInteger('MicrosoftLastSync');
-        return $this->SyncGetStatusLabel($refreshToken, $lastSync);
+        return $this->SyncGetStatusLabel($connected ? 'connected' : '', $lastSync);
     }
 
     private function GetMicrosoftToDoFormElements(string $SyncBackend): array
@@ -979,35 +798,10 @@ trait MicrosoftToDoSync
             'visible' => $SyncBackend === 'microsoft',
             'items' => [
                 [
-                    'type' => 'ValidationTextBox',
-                    'caption' => $this->Translate('Redirect URI'),
-                    'value' => $this->OAuthGetRedirectUri('/hook/todolist_microsoft/'),
-                    'width' => '550px',
-                    'enabled' => true
-                ],
-                [
                     'type' => 'CheckBox',
                     'name' => 'MicrosoftToDoEnabled',
                     'caption' => $this->Translate('Enabled'),
                     'visible' => false
-                ],
-                [
-                    'type' => 'ValidationTextBox',
-                    'name' => 'MicrosoftClientID',
-                    'caption' => $this->Translate('Client ID'),
-                    'width' => '400px'
-                ],
-                [
-                    'type' => 'PasswordTextBox',
-                    'name' => 'MicrosoftClientSecret',
-                    'caption' => $this->Translate('Client Secret'),
-                    'width' => '400px'
-                ],
-                [
-                    'type' => 'ValidationTextBox',
-                    'name' => 'MicrosoftTenant',
-                    'caption' => $this->Translate('Tenant'),
-                    'width' => '400px'
                 ],
                 [
                     'type' => 'Select',
@@ -1035,24 +829,9 @@ trait MicrosoftToDoSync
                     'items' => [
                         [
                             'type' => 'Button',
-                            'caption' => $this->Translate('Authorize with Microsoft'),
-                            'onClick' => 'echo TDL_MicrosoftGetAuthUrl($id);'
-                        ],
-                        [
-                            'type' => 'Button',
-                            'caption' => $this->Translate('Test Connection'),
-                            'onClick' => 'TDL_MicrosoftTestConnection($id);'
-                        ],
-                        [
-                            'type' => 'Button',
                             'caption' => $this->Translate('Refresh Lists'),
                             'onClick' => 'TDL_MicrosoftRefreshListOptions($id);'
-                        ]
-                    ]
-                ],
-                [
-                    'type' => 'RowLayout',
-                    'items' => [
+                        ],
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Sync Now'),
@@ -1062,11 +841,6 @@ trait MicrosoftToDoSync
                             'type' => 'Button',
                             'caption' => $this->Translate('Reset Sync'),
                             'onClick' => 'echo TDL_MicrosoftResetSync($id);'
-                        ],
-                        [
-                            'type' => 'Button',
-                            'caption' => $this->Translate('Disconnect'),
-                            'onClick' => 'TDL_MicrosoftDisconnect($id);'
                         ]
                     ]
                 ],

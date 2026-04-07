@@ -1,12 +1,12 @@
 {
   "id": "{1D5AA2E7-8C87-4E65-8F8C-8D4A0F8B735A}",
   "author": "Stephan Sprick",
-  "name": "ToDo Lists",
-  "url": "",
+  "name": "Lists",
+  "url": "https://github.com/da8ter/ToDo-List.git",
   "compatibility": {
     "version": "8.1"
   },
-  "version": "1.6",
-  "build": 6,
+  "version": "2.2",
+  "build": 9,
   "date": 0
 }

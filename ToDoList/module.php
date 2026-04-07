@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/SyncHelper.php';
 require_once __DIR__ . '/libs/CalDAVSync.php';
 require_once __DIR__ . '/libs/GoogleTasksSync.php';
@@ -10,11 +9,29 @@ require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
 
 class ToDoList extends IPSModuleStrict
 {
-    use OAuthHelper;
     use SyncHelper;
     use CalDAVSync;
     use GoogleTasksSync;
     use MicrosoftToDoSync;
+
+    public function GetCompatibleParents(): string
+    {
+        return json_encode([
+            'type'      => 'connect',
+            'moduleIDs' => ['{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}']
+        ]);
+    }
+
+    private function GetGatewayID(): int
+    {
+        $instance = @IPS_GetInstance($this->InstanceID);
+        $connId = (int)($instance['ConnectionID'] ?? 0);
+        if ($connId > 0) {
+            return $connId;
+        }
+        $gwIds = @IPS_GetInstanceListByModuleID('{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}');
+        return !empty($gwIds) ? (int)$gwIds[0] : 0;
+    }
 
     private function GetDefaultHtmlBoxCssBody(): string
     {
@@ -41,6 +58,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowEditButton', true);
         $this->RegisterPropertyBoolean('HideCompletedTasks', false);
         $this->RegisterPropertyBoolean('DeleteCompletedTasks', false);
+        $this->RegisterPropertyBoolean('EnableHtmlBox', false);
         $this->RegisterPropertyString('HtmlBoxCss', '');
 
         $this->RegisterPropertyString('SyncBackend', 'local');
@@ -111,7 +129,6 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterVariableInteger('OpenTasks', $this->Translate('Open Tasks'), '', 1);
         $this->RegisterVariableInteger('OverdueTasks', $this->Translate('Overdue'), '', 2);
         $this->RegisterVariableInteger('DueTodayTasks', $this->Translate('Due Today'), '', 3);
-        $this->RegisterVariableString('TaskListHtml', $this->Translate('Task list (HTML)'), '~HTMLBox', 4);
     }
 
     public function ApplyChanges(): void
@@ -128,9 +145,6 @@ class ToDoList extends IPSModuleStrict
         if ($this->EnforceSyncBackend()) {
             return;
         }
-
-        $this->RegisterGoogleWebHook();
-        $this->RegisterMicrosoftWebHook();
 
         $leadTime = $this->ReadPropertyInteger('NotificationLeadTime');
         $lastLeadTime = $this->ReadAttributeInteger('LastNotificationLeadTime');
@@ -163,6 +177,12 @@ class ToDoList extends IPSModuleStrict
             $this->SetTimerInterval('SyncOnChangeTimer', 2000);
         }
 
+        if ($this->ReadPropertyBoolean('EnableHtmlBox')) {
+            $this->RegisterVariableString('TaskListHtml', $this->Translate('Task list (HTML)'), '~HTMLBox', 4);
+        } else {
+            $this->UnregisterVariable('TaskListHtml');
+        }
+
         $itemsTable = $this->ReadPropertyString('ItemsTable');
         $hash = md5($itemsTable);
         $lastHash = $this->ReadAttributeString('LastItemsTableHash');
@@ -170,6 +190,7 @@ class ToDoList extends IPSModuleStrict
             $this->SyncItemsFromConfiguration();
             $this->WriteAttributeString('LastItemsTableHash', $hash);
         }
+
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml();
         $this->SendState();
@@ -453,6 +474,11 @@ class ToDoList extends IPSModuleStrict
                     'type' => 'ExpansionPanel',
                     'caption' => $this->Translate('HTMLBox layout'),
                     'items' => [
+                        [
+                            'type' => 'CheckBox',
+                            'name' => 'EnableHtmlBox',
+                            'caption' => $this->Translate('Enable HTMLBox variable')
+                        ],
                         [
                             'type' => 'ScriptEditor',
                             'name' => 'HtmlBoxCss',
@@ -1318,6 +1344,9 @@ class ToDoList extends IPSModuleStrict
 
     private function UpdateTaskListHtml(?array $Items = null): void
     {
+        if (!$this->ReadPropertyBoolean('EnableHtmlBox')) {
+            return;
+        }
         if ($Items === null) {
             $Items = $this->LoadItems();
         }
@@ -2414,38 +2443,6 @@ class ToDoList extends IPSModuleStrict
         return false;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // HTTP Helpers (used by CalDAV trait)
-    // ──────────────────────────────────────────────────────────────────────────
-
-    private function GetHttpHeaderValue(array $Headers, string $Name): string
-    {
-        $needle = strtolower($Name) . ':';
-        foreach ($Headers as $h) {
-            $lh = strtolower($h);
-            if (strpos($lh, $needle) === 0) {
-                return trim(substr($h, strlen($needle)));
-            }
-        }
-        return '';
-    }
-
-    private function GetHttpStatusCode(array $Headers): int
-    {
-        foreach ($Headers as $h) {
-            if (preg_match('/^HTTP\/\d+\.?\d*\s+(\d+)/', $h, $m)) {
-                return (int)$m[1];
-            }
-        }
-        return 0;
-    }
-
-    private function GetLastHttpError(): string
-    {
-        $err = error_get_last();
-        return is_array($err) && isset($err['message']) ? $err['message'] : '';
-    }
-
     private function GetNextItemID(): int
     {
         $nextId = $this->ReadAttributeInteger('NextID');
@@ -2453,33 +2450,4 @@ class ToDoList extends IPSModuleStrict
         return $nextId;
     }
 
-    public function ProcessHookData(): void
-    {
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
-        $isGoogle = strpos($uri, '/hook/todolist_google/') !== false;
-        $isMicrosoft = strpos($uri, '/hook/todolist_microsoft/') !== false;
-        if (!$isGoogle && !$isMicrosoft) {
-            return;
-        }
-
-        $code = $_GET['code'] ?? '';
-        $error = $_GET['error'] ?? '';
-
-        if ($error !== '') {
-            echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . htmlspecialchars($error) . '</p></body></html>';
-            return;
-        }
-
-        if ($code === '') {
-            echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . $this->Translate('Please try again.') . '</p></body></html>';
-            return;
-        }
-
-        $success = $isGoogle ? $this->GoogleHandleCallback($code) : $this->MicrosoftHandleCallback($code);
-        if ($success) {
-            echo '<html><body><h1>' . $this->Translate('Authorization successful') . '</h1><p>' . $this->Translate('You can close this window now.') . '</p><script>setTimeout(function(){window.close();},3000);</script></body></html>';
-        } else {
-            echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . $this->Translate('Please try again.') . '</p></body></html>';
-        }
-    }
 }

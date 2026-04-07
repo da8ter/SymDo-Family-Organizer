@@ -21,23 +21,23 @@
 
 ## Schritt 3: OAuth-Zustimmungsbildschirm einrichten
 
-1. Navigiere links im Menü zu ***OAuth-Zustimmungsbildschirm**
+1. Navigiere links im Menü zu **OAuth-Zustimmungsbildschirm**
 2. Wähle **Erste Schritte**
 3. Fülle aus:
-   - **Aanwendungsname**: z.B. `Symcon ToDoList`
+   - **Anwendungsname**: z.B. `Symcon ToDoList`
    - **E-Mail**: Deine E-Mail-Adresse
    - Rest kann leer bleiben
 4. **Weiter**
-5. **Zielgruppe** Extern
-5. **weiter**
-6. **Kontaktdaten** Emailadresse eintragen
-7. **weiter**
-8. **Erstellen**
-9. **Links im Menü auf Datenzugriff** 
-10.  **Bereiche hinzufügen oder entfernen**
-   - Suche nach `auth/tasks` und aktiviere `https://www.googleapis.com/auth/tasks`
-   - **Aktualisieren** → **Save**
-6. Bei **Zielgruppe** → **Testnutzer**: Deine Google-E-Mail-Adresse hinzufügen → **Speichern**
+5. **Zielgruppe** → Extern
+6. **Weiter**
+7. **Kontaktdaten** → E-Mail-Adresse eintragen
+8. **Weiter**
+9. **Erstellen**
+10. Links im Menü auf **Datenzugriff**
+11. **Bereiche hinzufügen oder entfernen**
+    - Suche nach `auth/tasks` und aktiviere `https://www.googleapis.com/auth/tasks`
+    - **Aktualisieren** → **Save**
+12. Bei **Zielgruppe** → **Testnutzer**: Deine Google-E-Mail-Adresse hinzufügen → **Speichern**
 
 > Solange die App im Status **„Testen"** ist, können nur die eingetragenen Testnutzer autorisieren. Das ist für den Privatgebrauch völlig ausreichend.
 
@@ -49,32 +49,35 @@
 4. **Name**: z.B. `Symcon`
 5. Unter **Autorisierte Weiterleitungs-URIs** klicke **URI hinzufügen**:
    ```
-   https://<dein-symcon-connect>/hook/todolist_google/<InstanzID> (die komplette Adresse findest du im Konfigurationsformular unter **Redirect URI** im Bereich Google Tasks Synchronisation)
+   Die komplette Redirect URI findest du im ToDo Gateway unter Google Tasks → Redirect URI
+   (Format: https://<dein-symcon-connect>/hook/todogateway_google)
    ```
 6. **Erstellen** klicken
-7. **Client-ID** und **Client-Secret** kopieren! (Wichtig! Kann nach dem schließen des Fensters nicht mehr angezeigt werden)
+7. **Client-ID** und **Client-Secret** kopieren! (Wichtig! Kann nach dem Schließen des Fensters nicht mehr angezeigt werden)
 
-## Schritt 5: In IP-Symcon konfigurieren
+## Schritt 5: ToDo Gateway konfigurieren
 
-1. Öffne die **ToDoList-Instanz**
-2. Wähle bei **Synchronization backend** → **Google Tasks**
-3. Trage ein:
+1. Öffne die **ToDo Gateway**-Instanz
+2. Im Bereich **Google Tasks** eintragen:
    - **Client ID**: Die kopierte Client-ID aus Schritt 4
    - **Client Secret**: Das kopierte Client-Secret aus Schritt 4
-4. Klicke auf **Übernehmen** (wichtig – erst danach werden die Buttons aktiv!)
+3. Klicke auf **Übernehmen** (wichtig – erst danach werden die Buttons aktiv!)
 
 ## Schritt 6: Mit Google verbinden
 
-1. Klicke auf **„Mit Google verbinden"**
-2. Eine URL wird geöffnet
+1. Klicke im **ToDo Gateway** auf **„Mit Google verbinden"**
+2. Eine URL wird angezeigt → im Browser öffnen
 3. Google-Konto auswählen und anmelden
 4. Berechtigungen bestätigen → **Zulassen**
 5. Du siehst **„Authorization successful"** → Fenster schließen
 
-## Schritt 7: Aufgabenliste auswählen
+## Schritt 7: ToDoList-Instanz konfigurieren
 
-1. Zurück in IP-Symcon: Klicke auf **„Aufgabenlisten suchen"**
-2. Die verfügbaren Listen werden danach im Dropdown "Aufgabenlisten" angezeigt.
+1. Öffne die **ToDoList-Instanz**
+2. Wähle bei **Synchronisations-Backend** → **Google Tasks**
+3. Klicke auf **„Aufgabenlisten suchen"**
+4. Wähle die gewünschte Aufgabenliste aus dem Dropdown
+5. Klicke auf **Übernehmen**
 
 ## Schritt 8: Synchronisation aktivieren
 
@@ -98,11 +101,18 @@
 
 ## PHP-Befehle
 
+### ToDo Gateway (Prefix: TGW)
+
 ```php
-TDL_GoogleGetAuthUrl($id);           // Autorisierungs-URL anzeigen
-TDL_GoogleTestConnection($id);       // Verbindung testen
-TDL_GoogleDiscoverTasklists($id);    // Aufgabenlisten suchen
-TDL_GoogleTasksSync($id);            // Manuell synchronisieren
-TDL_GoogleResetSync($id);            // Sync-Marker zurücksetzen
-TDL_GoogleDisconnect($id);           // Verbindung trennen
+TGW_GoogleGetAuthUrl($id);           // Autorisierungs-URL anzeigen
+TGW_GoogleTestConnection($id);       // Verbindung testen
+TGW_GoogleDisconnect($id);           // Verbindung trennen
+```
+
+### ToDoList (Prefix: TDL)
+
+```php
+TDL_GoogleRefreshTaskListOptions($id); // Aufgabenlisten aktualisieren
+TDL_GoogleTasksSync($id);             // Manuell synchronisieren
+TDL_GoogleResetSync($id);             // Sync-Marker zurücksetzen
 ```

@@ -30,47 +30,12 @@ trait CalDAVSync
 
     public function CalDAVTestConnection(): bool
     {
-        $url = trim($this->ReadPropertyString('CalDAVServerURL'));
-        $user = trim($this->ReadPropertyString('CalDAVUsername'));
-        $pass = trim($this->ReadPropertyString('CalDAVPassword'));
-
-        if ($url === '' || $user === '' || $pass === '') {
-            echo $this->Translate('Please fill in server URL, username and password.');
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            echo $this->Translate('Connection failed');
             return false;
         }
-
-        $testUrl = rtrim($url, '/') . '/';
-        $res = $this->CalDAVRequest(
-            'PROPFIND',
-            $testUrl,
-            $user,
-            $pass,
-            [
-                'Depth: 0',
-                'Content-Type: application/xml; charset=utf-8'
-            ],
-            '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>',
-            10
-        );
-
-        if (($res['status'] ?? 0) === 0) {
-            echo $this->Translate('Connection failed') . ': ' . ($this->GetLastHttpError() ?: 'Unknown error');
-            return false;
-        }
-
-        $statusCode = (int)($res['status'] ?? 0);
-        if ($statusCode === 207 || $statusCode === 200) {
-            echo $this->Translate('Connection successful');
-            return true;
-        }
-
-        if ($statusCode === 401) {
-            echo $this->Translate('Authentication failed');
-            return false;
-        }
-
-        echo $this->Translate('Connection failed') . ' (HTTP ' . $statusCode . ')';
-        return false;
+        return TGW_CalDAVTestConnection($gw);
     }
 
     public function CalDAVResetSync(): void
@@ -126,9 +91,16 @@ trait CalDAVSync
             return false;
         }
 
-        $url = trim($this->ReadPropertyString('CalDAVServerURL'));
-        $user = trim($this->ReadPropertyString('CalDAVUsername'));
-        $pass = trim($this->ReadPropertyString('CalDAVPassword'));
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            $this->SendDebug('CalDAV', 'Sync skipped - no ToDoGateway', 0);
+            return false;
+        }
+
+        $creds = TGW_CalDAVGetCredentials($gw);
+        $url = $creds['url'] ?? '';
+        $user = $creds['user'] ?? '';
+        $pass = $creds['pass'] ?? '';
         $calendarPath = trim($this->ReadPropertyString('CalDAVCalendarPath'));
 
         if ($url === '' || $user === '' || $pass === '' || $calendarPath === '') {
@@ -136,10 +108,13 @@ trait CalDAVSync
             return false;
         }
 
-        $this->SendDebug('CalDAV', 'Starting sync...', 0);
+        $this->SendDebug('CalDAV', 'Starting sync... GW=' . $gw, 0);
+        $this->SendDebug('CalDAV', 'ServerURL: ' . $url, 0);
+        $this->SendDebug('CalDAV', 'CalendarPath: ' . $calendarPath, 0);
 
         try {
             $calendarUrl = $this->CalDAVResolveUrl($url, $calendarPath);
+            $this->SendDebug('CalDAV', 'Calendar URL: ' . $calendarUrl, 0);
             $serverItems = $this->CalDAVFetchItems($calendarUrl, $user, $pass);
 
             if ($serverItems === null) {
@@ -219,20 +194,31 @@ trait CalDAVSync
             return;
         }
 
-        $url = trim($this->ReadPropertyString('CalDAVServerURL'));
-        $user = trim($this->ReadPropertyString('CalDAVUsername'));
-        $pass = trim($this->ReadPropertyString('CalDAVPassword'));
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            return;
+        }
+        $creds = TGW_CalDAVGetCredentials($gw);
         $calendarPath = trim($this->ReadPropertyString('CalDAVCalendarPath'));
-        if ($url === '' || $user === '' || $pass === '' || $calendarPath === '') {
+        if (($creds['url'] ?? '') === '' || ($creds['user'] ?? '') === '' || ($creds['pass'] ?? '') === '' || $calendarPath === '') {
             return;
         }
 
         $this->SetTimerInterval('CalDAVOnChangeTimer', 3000);
     }
 
+    private function CalDAVGatewayRequest(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
+    {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            return ['status' => 0, 'body' => '', 'headers' => [], 'url' => $Url];
+        }
+        return TGW_CalDAVRequest($gw, $Method, $Url, $User, $Pass, $Headers, $Body, $Timeout);
+    }
+
     private function CalDAVFetchItems(string $CalendarUrl, string $User, string $Pass): ?array
     {
-        $res = $this->CalDAVRequest(
+        $res = $this->CalDAVGatewayRequest(
             'REPORT',
             $CalendarUrl,
             $User,
@@ -249,12 +235,16 @@ trait CalDAVSync
             30
         );
 
-        if (($res['status'] ?? 0) === 0) {
+        $statusCode = (int)($res['status'] ?? 0);
+        $this->SendDebug('CalDAV Fetch', 'URL: ' . $CalendarUrl . ' | Status: ' . $statusCode, 0);
+
+        if ($statusCode === 0) {
+            $this->SendDebug('CalDAV Fetch', 'Request failed (status 0) - gateway returned: ' . json_encode(array_keys($res)), 0);
             return null;
         }
 
-        $statusCode = (int)($res['status'] ?? 0);
         if ($statusCode !== 207) {
+            $this->SendDebug('CalDAV Fetch', 'Unexpected status ' . $statusCode . ' | Body: ' . substr((string)($res['body'] ?? ''), 0, 500), 0);
             return null;
         }
 
@@ -318,6 +308,7 @@ trait CalDAVSync
 
         $inVTodo = false;
         $props = [];
+        $tzids = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -334,8 +325,14 @@ trait CalDAVSync
 
             if (str_contains($line, ':')) {
                 [$key, $value] = explode(':', $line, 2);
-                $key = strtoupper(explode(';', $key)[0]);
-                $props[$key] = $value;
+                $params = explode(';', $key);
+                $propName = strtoupper($params[0]);
+                $props[$propName] = $value;
+                for ($pi = 1; $pi < count($params); $pi++) {
+                    if (stripos($params[$pi], 'TZID=') === 0) {
+                        $tzids[$propName] = substr($params[$pi], 5);
+                    }
+                }
             }
         }
 
@@ -357,24 +354,45 @@ trait CalDAVSync
             'title' => $this->CalDAVUnescapeText($props['SUMMARY'] ?? ''),
             'info' => $this->CalDAVUnescapeText($props['DESCRIPTION'] ?? ''),
             'done' => $done,
-            'doneAt' => $done ? $this->CalDAVParseDateTime($props['COMPLETED'] ?? '') : 0,
-            'due' => $this->CalDAVParseDateTime($props['DUE'] ?? ''),
+            'doneAt' => $done ? $this->CalDAVParseDateTime($props['COMPLETED'] ?? '', $tzids['COMPLETED'] ?? '') : 0,
+            'due' => $this->CalDAVParseDateTime($props['DUE'] ?? '', $tzids['DUE'] ?? ''),
             'priority' => $priority,
-            'createdAt' => $this->CalDAVParseDateTime($props['CREATED'] ?? ''),
-            'caldavLastModified' => $this->CalDAVParseDateTime($props['LAST-MODIFIED'] ?? '')
+            'createdAt' => $this->CalDAVParseDateTime($props['CREATED'] ?? '', $tzids['CREATED'] ?? ''),
+            'caldavLastModified' => $this->CalDAVParseDateTime($props['LAST-MODIFIED'] ?? '', $tzids['LAST-MODIFIED'] ?? '')
         ];
     }
 
-    private function CalDAVParseDateTime(string $Value): int
+    private function CalDAVParseDateTime(string $Value, string $Tzid = ''): int
     {
         if ($Value === '') {
             return 0;
         }
         $Value = preg_replace('/[^0-9TZ]/', '', $Value) ?? $Value;
-        
-        $formats = ['Ymd\THis\Z', 'Ymd\THis', 'Ymd'];
+
+        $isUtc = str_ends_with($Value, 'Z');
+
+        if ($isUtc) {
+            $dt = DateTime::createFromFormat('Ymd\THis\Z', $Value, new DateTimeZone('UTC'));
+            if ($dt !== false) {
+                return $dt->getTimestamp();
+            }
+        }
+
+        $tz = 'UTC';
+        if (!$isUtc && $Tzid !== '') {
+            try {
+                new DateTimeZone($Tzid);
+                $tz = $Tzid;
+            } catch (Exception $e) {
+                $tz = date_default_timezone_get() ?: 'UTC';
+            }
+        } elseif (!$isUtc) {
+            $tz = date_default_timezone_get() ?: 'UTC';
+        }
+
+        $formats = ['Ymd\THis', 'Ymd'];
         foreach ($formats as $fmt) {
-            $dt = DateTime::createFromFormat($fmt, $Value, new DateTimeZone('UTC'));
+            $dt = DateTime::createFromFormat($fmt, $Value, new DateTimeZone($tz));
             if ($dt !== false) {
                 return $dt->getTimestamp();
             }
@@ -551,7 +569,7 @@ trait CalDAVSync
             $headers[] = 'If-Match: "' . $etag . '"';
         }
 
-        $res = $this->CalDAVRequest('PUT', $itemUrl, $User, $Pass, $headers, $vcal, 10);
+        $res = $this->CalDAVGatewayRequest('PUT', $itemUrl, $User, $Pass, $headers, $vcal, 10);
 
         $statusCode = (int)($res['status'] ?? 0);
         $this->SendDebug('CalDAV Upload', 'URL: ' . ($res['url'] ?? $itemUrl), 0);
@@ -570,7 +588,7 @@ trait CalDAVSync
             $itemUrl = rtrim($CalendarUrl, '/') . '/' . urlencode($Uid) . '.ics';
         }
 
-        $res = $this->CalDAVRequest('DELETE', $itemUrl, $User, $Pass, [], '', 10);
+        $res = $this->CalDAVGatewayRequest('DELETE', $itemUrl, $User, $Pass, [], '', 10);
         $statusCode = (int)($res['status'] ?? 0);
         return ($statusCode >= 200 && $statusCode < 300) || $statusCode === 404;
     }
@@ -603,7 +621,9 @@ trait CalDAVSync
         $titleText = $this->CalDAVMaybeUnescapeText((string)($Item['title'] ?? ''));
         $infoText = $this->CalDAVMaybeUnescapeText((string)($Item['info'] ?? ''));
 
-        $serverUrl = (string)$this->ReadPropertyString('CalDAVServerURL');
+        $gw = $this->GetGatewayID();
+        $gwCreds = $gw > 0 ? TGW_CalDAVGetCredentials($gw) : [];
+        $serverUrl = $gwCreds['url'] ?? '';
         $isICloud = stripos($serverUrl, 'icloud.com') !== false;
 
         $lines = [
@@ -638,7 +658,12 @@ trait CalDAVSync
         }
 
         if (($Item['due'] ?? 0) > 0) {
-            $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $Item['due']);
+            $tz = date_default_timezone_get() ?: 'UTC';
+            if ($tz === 'UTC') {
+                $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $Item['due']);
+            } else {
+                $lines[] = 'DUE;TZID=' . $tz . ':' . date('Ymd\THis', $Item['due']);
+            }
         }
 
         if ($Item['done'] && ($Item['doneAt'] ?? 0) > 0) {
@@ -678,57 +703,6 @@ trait CalDAVSync
         return $this->CalDAVUnescapeText($Text);
     }
 
-    private function CalDAVRequest(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
-    {
-        $maxRedirects = 5;
-        $currentUrl = $Url;
-
-        for ($i = 0; $i <= $maxRedirects; $i++) {
-            $reqHeaders = array_merge([
-                'Authorization: Basic ' . base64_encode($User . ':' . $Pass),
-                'User-Agent: IP-Symcon ToDoList'
-            ], $Headers);
-
-            $opts = [
-                'http' => [
-                    'method' => $Method,
-                    'header' => $reqHeaders,
-                    'content' => $Body,
-                    'ignore_errors' => true,
-                    'timeout' => $Timeout
-                ]
-            ];
-
-            $context = stream_context_create($opts);
-            $body = @file_get_contents($currentUrl, false, $context);
-            $respHeaders = $http_response_header ?? [];
-            $statusCode = $this->GetHttpStatusCode($respHeaders);
-
-            if (in_array($statusCode, [301, 302, 307, 308], true)) {
-                $location = $this->GetHttpHeaderValue($respHeaders, 'Location');
-                if ($location === '') {
-                    break;
-                }
-                $currentUrl = $this->CalDAVResolveUrl($currentUrl, $location);
-                continue;
-            }
-
-            return [
-                'status' => $statusCode,
-                'body' => ($body === false) ? '' : $body,
-                'headers' => $respHeaders,
-                'url' => $currentUrl
-            ];
-        }
-
-        return [
-            'status' => 0,
-            'body' => '',
-            'headers' => [],
-            'url' => $currentUrl
-        ];
-    }
-
     public function CalDAVRefreshCalendarOptions(): void
     {
         $stored = $this->CalDAVFetchAndStoreCalendarOptions();
@@ -756,31 +730,22 @@ trait CalDAVSync
 
     private function CalDAVFetchAndStoreCalendarOptions(): ?array
     {
-        $url = trim($this->ReadPropertyString('CalDAVServerURL'));
-        $user = trim($this->ReadPropertyString('CalDAVUsername'));
-        $pass = trim($this->ReadPropertyString('CalDAVPassword'));
-
-        if ($url === '' || $user === '' || $pass === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
             return null;
         }
 
-        $principal = $this->CalDAVGetPrincipal($url, $user, $pass);
-        if ($principal === null) {
-            return null;
+        $calendars = TGW_CalDAVDiscoverCalendars($gw);
+        if (!is_array($calendars) || empty($calendars)) {
+            return $calendars === false ? null : [];
         }
 
-        $calendarHome = $this->CalDAVGetCalendarHome($url, $principal, $user, $pass);
-        if ($calendarHome === null) {
-            return null;
-        }
-
-        $calendars = $this->CalDAVListCalendars($url, $calendarHome, $user, $pass);
         $stored = [];
         foreach ($calendars as $cal) {
             $stored[] = [
-                'name' => $cal['name'],
-                'path' => $cal['path'],
-                'supportsTodo' => $cal['supportsTodo']
+                'name' => $cal['name'] ?? '',
+                'path' => $cal['path'] ?? '',
+                'supportsTodo' => $cal['supportsTodo'] ?? false
             ];
         }
 
@@ -821,177 +786,6 @@ trait CalDAVSync
         }
 
         return $options;
-    }
-
-    private function CalDAVGetPrincipal(string $BaseUrl, string $User, string $Pass): ?string
-    {
-        $testUrl = rtrim($BaseUrl, '/') . '/';
-
-        $res = $this->CalDAVRequest(
-            'PROPFIND',
-            $testUrl,
-            $User,
-            $Pass,
-            [
-                'Depth: 0',
-                'Content-Type: application/xml; charset=utf-8'
-            ],
-            '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>',
-            15
-        );
-
-        if (($res['status'] ?? 0) !== 207 && ($res['status'] ?? 0) !== 200) {
-            return null;
-        }
-
-        $xml = @simplexml_load_string((string)($res['body'] ?? ''));
-        if ($xml === false) {
-            return null;
-        }
-
-        $xml->registerXPathNamespace('d', 'DAV:');
-        $principals = $xml->xpath('//d:current-user-principal/d:href');
-        
-        if (!empty($principals)) {
-            return (string)$principals[0];
-        }
-
-        return null;
-    }
-
-    private function CalDAVGetCalendarHome(string $BaseUrl, string $Principal, string $User, string $Pass): ?string
-    {
-        $principalUrl = $this->CalDAVResolveUrl($BaseUrl, $Principal);
-
-        $res = $this->CalDAVRequest(
-            'PROPFIND',
-            $principalUrl,
-            $User,
-            $Pass,
-            [
-                'Depth: 0',
-                'Content-Type: application/xml; charset=utf-8'
-            ],
-            '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>',
-            15
-        );
-
-        if (($res['status'] ?? 0) !== 207) {
-            return null;
-        }
-
-        $xml = @simplexml_load_string((string)($res['body'] ?? ''));
-        if ($xml === false) {
-            return null;
-        }
-
-        $xml->registerXPathNamespace('d', 'DAV:');
-        $xml->registerXPathNamespace('c', 'urn:ietf:params:xml:ns:caldav');
-        
-        $homes = $xml->xpath('//c:calendar-home-set/d:href');
-        
-        if (!empty($homes)) {
-            return (string)$homes[0];
-        }
-
-        return null;
-    }
-
-    private function CalDAVListCalendars(string $BaseUrl, string $CalendarHome, string $User, string $Pass): array
-    {
-        $homeUrl = $this->CalDAVResolveUrl($BaseUrl, $CalendarHome);
-
-        $res = $this->CalDAVRequest(
-            'PROPFIND',
-            $homeUrl,
-            $User,
-            $Pass,
-            [
-                'Depth: 1',
-                'Content-Type: application/xml; charset=utf-8'
-            ],
-            '<?xml version="1.0" encoding="utf-8"?>' .
-                '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/">' .
-                '<d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop>' .
-                '</d:propfind>',
-            15
-        );
-
-        $this->SendDebug('CalDAV Discovery', 'Home URL: ' . ($res['url'] ?? $homeUrl), 0);
-
-        if (($res['status'] ?? 0) !== 207) {
-            $this->SendDebug('CalDAV Discovery', 'Failed to fetch calendar list', 0);
-            return [];
-        }
-
-        $this->SendDebug('CalDAV Discovery', 'Response length: ' . strlen((string)($res['body'] ?? '')), 0);
-
-        $xml = @simplexml_load_string((string)($res['body'] ?? ''));
-        if ($xml === false) {
-            $this->SendDebug('CalDAV Discovery', 'Failed to parse XML', 0);
-            return [];
-        }
-
-        $xml->registerXPathNamespace('d', 'DAV:');
-        $xml->registerXPathNamespace('c', 'urn:ietf:params:xml:ns:caldav');
-
-        $calendars = [];
-        $responses = $xml->xpath('//d:response');
-        
-        $this->SendDebug('CalDAV Discovery', 'Found ' . count($responses) . ' responses', 0);
-
-        foreach ($responses as $response) {
-            $response->registerXPathNamespace('d', 'DAV:');
-            $response->registerXPathNamespace('c', 'urn:ietf:params:xml:ns:caldav');
-            
-            $hrefNodes = $response->xpath('d:href');
-            $href = !empty($hrefNodes) ? (string)$hrefNodes[0] : '';
-            
-            $displayNameNodes = $response->xpath('d:propstat/d:prop/d:displayname');
-            $displayName = !empty($displayNameNodes) ? (string)$displayNameNodes[0] : '';
-            
-            $this->SendDebug('CalDAV Discovery', 'Checking: ' . ($displayName ?: $href), 0);
-            
-            $resourceTypes = $response->xpath('d:propstat/d:prop/d:resourcetype/c:calendar');
-            if (empty($resourceTypes)) {
-                $this->SendDebug('CalDAV Discovery', '  -> Skipped (not a calendar)', 0);
-                continue;
-            }
-
-            $supportsTodo = false;
-            $components = $response->xpath('d:propstat/d:prop/c:supported-calendar-component-set/c:comp');
-            foreach ($components as $comp) {
-                $name = (string)($comp->attributes()['name'] ?? '');
-                if (strtoupper($name) === 'VTODO') {
-                    $supportsTodo = true;
-                    break;
-                }
-            }
-
-            $path = $href;
-            if (strpos($href, '://') !== false) {
-                $parsed = parse_url($href);
-                $path = $parsed['path'] ?? $href;
-            }
-
-            $baseParsed = parse_url($BaseUrl);
-            $basePath = rtrim($baseParsed['path'] ?? '', '/');
-            if ($basePath !== '' && strpos($path, $basePath) === 0) {
-                $path = substr($path, strlen($basePath));
-            }
-            $path = ltrim($path, '/');
-
-            $calendars[] = [
-                'name' => $displayName ?: basename($path),
-                'path' => $path,
-                'href' => $href,
-                'supportsTodo' => $supportsTodo
-            ];
-        }
-
-        usort($calendars, fn($a, $b) => ($b['supportsTodo'] <=> $a['supportsTodo']) ?: strcasecmp($a['name'], $b['name']));
-
-        return $calendars;
     }
 
     private function CalDAVResolveUrl(string $BaseUrl, string $Path): string
@@ -1040,24 +834,6 @@ trait CalDAVSync
                     'visible' => false
                 ],
                 [
-                    'type' => 'ValidationTextBox',
-                    'name' => 'CalDAVServerURL',
-                    'caption' => $this->Translate('Server URL'),
-                    'width' => '400px'
-                ],
-                [
-                    'type' => 'ValidationTextBox',
-                    'name' => 'CalDAVUsername',
-                    'caption' => $this->Translate('Username'),
-                    'width' => '250px'
-                ],
-                [
-                    'type' => 'PasswordTextBox',
-                    'name' => 'CalDAVPassword',
-                    'caption' => $this->Translate('Password'),
-                    'width' => '250px'
-                ],
-                [
                     'type' => 'Select',
                     'name' => 'CalDAVCalendarPath',
                     'caption' => $this->Translate('Calendar'),
@@ -1081,11 +857,6 @@ trait CalDAVSync
                 [
                     'type' => 'RowLayout',
                     'items' => [
-                        [
-                            'type' => 'Button',
-                            'caption' => $this->Translate('Test Connection'),
-                            'onClick' => 'TDL_CalDAVTestConnection($id);'
-                        ],
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Refresh Calendars'),

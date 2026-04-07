@@ -1,6 +1,6 @@
 # ToDo List
 
-Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit.
+Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV.
 
 ![ToDo List](https://github.com/da8ter/images/blob/main/todo.png)
 
@@ -43,8 +43,9 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit.
 
 ## 3. Installation
 
-1. Repository/Library installieren (Module Control)
-2. Instanz anlegen: **ToDo List**
+1. Repository/Library installieren über das Module Control (https://github.com/da8ter/ToDo-List.git)
+2. Instanz anlegen: **ToDo Gateway** (Zentrale Instanz für die Synchronisation. Bitte auch erstellen wenn keine Synchronisation verwendet wird)
+3. Instanz anlegen: **ToDo List** (Für jede Liste wird eine Instanz benötigt)
 
 ## 4. Konfiguration in IP-Symcon
 
@@ -81,10 +82,11 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit.
 
 ## 5. Visualisierung (Tile/HTML-SDK)
 
-Die Visualisierung wird über `module.html` bereitgestellt (HTML-SDK).
-
 - Die Instanz kann direkt als Kachel eingebunden werden.
-- Änderungen in den Instanz-Einstellungen werden per State-Update an die Visualisierung übertragen.
+- Die Taskliste scrollt innerhalb der Kachel selbst (internes Scrolling), ohne das übergeordnete Visualisierungsfenster mitzuscrollen.
+- Gleiches Verhalten gilt für Touch-Eingaben auf Smartphones (kein Scroll-Durchreichen am Listenrand).
+- Außerhalb der definierten Scrollbereiche (Liste/Overlays) werden Wheel- und Touch-Scroll-Events unterdrückt.
+- Bei kleiner Ansicht kann in der Listenansicht das Fälligkeits-Badge aus Platzgründen als Icon dargestellt werden; in der Detailansicht wird das Datum immer vollständig angezeigt.
 
 ## 6. Statusvariablen
 
@@ -148,10 +150,12 @@ Benachrichtigung:
 
 ## 9. Synchronisation
 
-Das Modul unterstützt die bidirektionale Synchronisation mit CalDAV-Servern (OwnCloud, Nextcloud, etc.), Microsoft ToDo und Google Tasks.
+Das Modul unterstützt die bidirektionale Synchronisation mit CalDAV-Servern (ownCloud, Nextcloud, etc.), Microsoft To Do und Google Tasks.
+
+Die Zugangsdaten werden zentral im **ToDo Gateway** (Splitter-Modul) verwaltet. In der ToDoList-Instanz wird nur das Backend, die Liste/der Kalender und die Sync-Einstellungen konfiguriert.
 
 Anleitungen zur Konfiguration:
 
-- [CalDAV Synchronisation](assets/Readme_CalDav_Sync.md)
-- [Google Tasks Synchronisation](assets/Readme_Google_Sync.md)
-- [Microsoft To Do Synchronisation](assets/Readme_Microsoft_Sync.md)
+- [CalDAV Synchronisation](ToDoList/assets/Readme_CalDav_Sync.md)
+- [Google Tasks Synchronisation](ToDoList/assets/Readme_Google_Sync.md)
+- [Microsoft To Do Synchronisation](ToDoList/assets/Readme_Microsoft_Sync.md)

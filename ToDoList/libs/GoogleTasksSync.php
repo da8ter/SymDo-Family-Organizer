@@ -4,123 +4,27 @@ declare(strict_types=1);
 
 trait GoogleTasksSync
 {
-    private function RegisterGoogleWebHook(): void
-    {
-        $this->OAuthRegisterWebHook('/hook/todolist_google/');
-    }
-
     private function UpdateGoogleTasksTimer(): void
     {
-        $hasToken = $this->GoogleGetDecryptedToken('GoogleRefreshToken') !== '';
+        $gw = $this->GetGatewayID();
+        $hasToken = $gw > 0 && TGW_GoogleIsConnected($gw);
         $this->SyncUpdateTimer('google', 'GoogleTasksSyncTimer', $this->ReadPropertyInteger('GoogleSyncInterval'), $hasToken);
-    }
-
-    private function GoogleSetEncryptedToken(string $Attribute, string $Token): void
-    {
-        $this->OAuthSetEncryptedToken($Attribute, $Token, 'GKey');
-    }
-
-    private function GoogleGetDecryptedToken(string $Attribute): string
-    {
-        return $this->OAuthGetDecryptedToken($Attribute, 'GKey');
-    }
-
-    public function GoogleGetAuthUrl(): string
-    {
-        $clientId = trim($this->ReadPropertyString('GoogleClientID'));
-        if ($clientId === '') {
-            return $this->Translate('Please enter Client ID first.');
-        }
-
-        $redirectUri = $this->OAuthGetRedirectUri('/hook/todolist_google/');
-        $state = $this->InstanceID . '_' . bin2hex(random_bytes(8));
-
-        $params = [
-            'client_id' => $clientId,
-            'redirect_uri' => $redirectUri,
-            'response_type' => 'code',
-            'scope' => 'https://www.googleapis.com/auth/tasks',
-            'access_type' => 'offline',
-            'prompt' => 'consent',
-            'state' => $state
-        ];
-
-        return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
-    }
-
-    public function GoogleHandleCallback(string $Code): bool
-    {
-        $clientId = trim($this->ReadPropertyString('GoogleClientID'));
-        $clientSecret = trim($this->ReadPropertyString('GoogleClientSecret'));
-        $redirectUri = $this->OAuthGetRedirectUri('/hook/todolist_google/');
-
-        if ($clientId === '' || $clientSecret === '' || $Code === '') {
-            $this->SendDebug('GoogleTasks', 'HandleCallback: Missing credentials or code', 0);
-            return false;
-        }
-
-        $postData = [
-            'code' => $Code,
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'redirect_uri' => $redirectUri,
-            'grant_type' => 'authorization_code'
-        ];
-
-        $success = $this->OAuthExchangeToken(
-            'https://oauth2.googleapis.com/token',
-            $postData, 'GKey',
-            'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
-            'GoogleTasks'
-        );
-
-        if ($success) {
-            $this->UpdateGoogleTasksTimer();
-            $this->GoogleFetchAndStoreTaskListOptions();
-        }
-        return $success;
-    }
-
-    private function GoogleGetValidAccessToken(): string
-    {
-        return $this->OAuthGetValidAccessToken(
-            'GKey',
-            'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
-            'https://oauth2.googleapis.com/token',
-            trim($this->ReadPropertyString('GoogleClientID')),
-            trim($this->ReadPropertyString('GoogleClientSecret')),
-            'GoogleTasks'
-        );
     }
 
     private function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
     {
-        $url = 'https://tasks.googleapis.com' . $Endpoint;
-        $token = $this->GoogleGetValidAccessToken();
-        $response = $this->OAuthHttpRequest($Method, $url, [], is_array($Body) ? json_encode($Body) : $Body, true, 'GoogleTasks', $token);
-
-        if ($response === null) {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            $this->SendDebug('GoogleTasks', 'No ToDoGateway connected', 0);
             return null;
         }
-
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
-            $this->SendDebug('GoogleTasks', 'Invalid JSON response', 0);
-            return null;
-        }
-
-        if (isset($data['error'])) {
-            $this->SendDebug('GoogleTasks', 'API error: ' . json_encode($data['error']), 0);
-            return null;
-        }
-
-        return $data;
+        return TGW_GoogleApiRequest($gw, $Method, $Endpoint, $Body);
     }
 
     public function GoogleRefreshTaskListOptions(): void
     {
-        $token = $this->GoogleGetValidAccessToken();
-        if ($token === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0 || !TGW_GoogleIsConnected($gw)) {
             echo $this->Translate('Not connected to Google. Please authorize first.');
             return;
         }
@@ -215,31 +119,12 @@ trait GoogleTasksSync
 
     public function GoogleTestConnection(): bool
     {
-        $token = $this->GoogleGetValidAccessToken();
-        if ($token === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
             echo $this->Translate('Not connected. Please authorize first.');
             return false;
         }
-
-        $data = $this->GoogleApiRequest('GET', '/tasks/v1/users/@me/lists');
-        if ($data === null) {
-            echo $this->Translate('Connection failed.');
-            return false;
-        }
-
-        $count = count($data['items'] ?? []);
-        echo sprintf($this->Translate('Connection successful. Found %d task list(s).'), $count);
-        return true;
-    }
-
-    public function GoogleDisconnect(): void
-    {
-        $this->GoogleSetEncryptedToken('GoogleAccessToken', '');
-        $this->GoogleSetEncryptedToken('GoogleRefreshToken', '');
-        $this->WriteAttributeInteger('GoogleTokenExpires', 0);
-        $this->WriteAttributeInteger('GoogleLastSync', 0);
-        $this->UpdateGoogleTasksTimer();
-        echo $this->Translate('Disconnected from Google.');
+        return TGW_GoogleTestConnection($gw);
     }
 
     public function GoogleTasksSync(): bool
@@ -281,8 +166,8 @@ trait GoogleTasksSync
             return false;
         }
 
-        $token = $this->GoogleGetValidAccessToken();
-        if ($token === '') {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0 || !TGW_GoogleIsConnected($gw)) {
             $this->SendDebug('GoogleTasks', 'Sync skipped - not authenticated', 0);
             return false;
         }
@@ -603,10 +488,8 @@ trait GoogleTasksSync
             return true;
         }
 
-        $url = 'https://tasks.googleapis.com/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($GoogleTaskId);
-        $token = $this->GoogleGetValidAccessToken();
-        $response = $this->OAuthHttpRequest('DELETE', $url, [], null, true, 'GoogleTasks', $token);
-        return $response !== null;
+        $data = $this->GoogleApiRequest('DELETE', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($GoogleTaskId));
+        return $data !== null;
     }
 
     private function AddGooglePendingDelete(string $GoogleTaskId): void
@@ -616,9 +499,10 @@ trait GoogleTasksSync
 
     private function GetGoogleTasksStatusLabel(): string
     {
-        $refreshToken = $this->GoogleGetDecryptedToken('GoogleRefreshToken');
+        $gw = $this->GetGatewayID();
+        $connected = $gw > 0 && TGW_GoogleIsConnected($gw);
         $lastSync = $this->ReadAttributeInteger('GoogleLastSync');
-        return $this->SyncGetStatusLabel($refreshToken, $lastSync);
+        return $this->SyncGetStatusLabel($connected ? 'connected' : '', $lastSync);
     }
 
     private function GetGoogleTasksFormElements(string $SyncBackend): array
@@ -633,29 +517,10 @@ trait GoogleTasksSync
                     'caption' => $this->Translate('Due time and recurrences are not supported by the Google API.')
                 ],
                 [
-                    'type' => 'ValidationTextBox',
-                    'caption' => $this->Translate('Redirect URI'),
-                    'value' => $this->OAuthGetRedirectUri('/hook/todolist_google/'),
-                    'width' => '550px',
-                    'enabled' => false
-                ],
-                [
                     'type' => 'CheckBox',
                     'name' => 'GoogleTasksEnabled',
                     'caption' => $this->Translate('Enabled'),
                     'visible' => false
-                ],
-                [
-                    'type' => 'ValidationTextBox',
-                    'name' => 'GoogleClientID',
-                    'caption' => $this->Translate('Client ID'),
-                    'width' => '400px'
-                ],
-                [
-                    'type' => 'PasswordTextBox',
-                    'name' => 'GoogleClientSecret',
-                    'caption' => $this->Translate('Client Secret'),
-                    'width' => '400px'
                 ],
                 [
                     'type' => 'Select',
@@ -683,24 +548,9 @@ trait GoogleTasksSync
                     'items' => [
                         [
                             'type' => 'Button',
-                            'caption' => $this->Translate('Authorize with Google'),
-                            'onClick' => 'echo TDL_GoogleGetAuthUrl($id);'
-                        ],
-                        [
-                            'type' => 'Button',
-                            'caption' => $this->Translate('Test Connection'),
-                            'onClick' => 'TDL_GoogleTestConnection($id);'
-                        ],
-                        [
-                            'type' => 'Button',
                             'caption' => $this->Translate('Refresh Task Lists'),
                             'onClick' => 'TDL_GoogleRefreshTaskListOptions($id);'
-                        ]
-                    ]
-                ],
-                [
-                    'type' => 'RowLayout',
-                    'items' => [
+                        ],
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Sync Now'),
@@ -710,11 +560,6 @@ trait GoogleTasksSync
                             'type' => 'Button',
                             'caption' => $this->Translate('Reset Sync'),
                             'onClick' => 'echo TDL_GoogleResetSync($id);'
-                        ],
-                        [
-                            'type' => 'Button',
-                            'caption' => $this->Translate('Disconnect'),
-                            'onClick' => 'TDL_GoogleDisconnect($id);'
                         ]
                     ]
                 ],

@@ -226,10 +226,14 @@
 
     .list {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 8px;
       overflow: auto;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
       scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
     }
@@ -445,8 +449,8 @@
     .badge.recur-badge { border-color: var(--accent); color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
     .badge .icon-svg { width: 14px; height: 14px; display: block; fill: currentColor; }
     @media (max-width: 420px) {
-      .badge.due-badge .due-text { display: none; }
-      .badge.due-badge .due-icon { display: inline-block; }
+      #list .badge.due-badge .due-text { display: none; }
+      #list .badge.due-badge .due-icon { display: inline-block; }
     }
     .badge.high, .badge.normal, .badge.low {
       display: inline-flex;
@@ -2021,6 +2025,110 @@
     document.addEventListener('DOMContentLoaded', () => {
       initTexts();
       applyUiVisibility();
+
+      const bindScrollContainment = (scrollEl) => {
+        if (!scrollEl) {
+          return;
+        }
+
+        let lastTouchY = null;
+
+        scrollEl.addEventListener('wheel', (e) => {
+          const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+          if (maxScrollTop <= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+
+          const deltaY = e.deltaY || 0;
+          if (deltaY === 0) {
+            e.stopPropagation();
+            return;
+          }
+
+          const atTop = scrollEl.scrollTop <= 0;
+          const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+          const scrollingUp = deltaY < 0;
+          const scrollingDown = deltaY > 0;
+
+          if ((scrollingUp && atTop) || (scrollingDown && atBottom)) {
+            e.preventDefault();
+          }
+          e.stopPropagation();
+        }, { passive: false });
+
+        scrollEl.addEventListener('touchstart', (e) => {
+          if (!e.touches || e.touches.length !== 1) {
+            lastTouchY = null;
+            return;
+          }
+          lastTouchY = e.touches[0].clientY;
+          e.stopPropagation();
+        }, { passive: true });
+
+        scrollEl.addEventListener('touchmove', (e) => {
+          if (!e.touches || e.touches.length !== 1) {
+            return;
+          }
+
+          const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+          if (maxScrollTop <= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+
+          const currentY = e.touches[0].clientY;
+          if (lastTouchY === null) {
+            lastTouchY = currentY;
+            e.stopPropagation();
+            return;
+          }
+
+          const deltaY = lastTouchY - currentY;
+          const atTop = scrollEl.scrollTop <= 0;
+          const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+          const swipingDown = deltaY < 0;
+          const swipingUp = deltaY > 0;
+
+          if ((swipingDown && atTop) || (swipingUp && atBottom)) {
+            e.preventDefault();
+          }
+
+          e.stopPropagation();
+          lastTouchY = currentY;
+        }, { passive: false });
+
+        scrollEl.addEventListener('touchend', () => {
+          lastTouchY = null;
+        }, { passive: true });
+
+        scrollEl.addEventListener('touchcancel', () => {
+          lastTouchY = null;
+        }, { passive: true });
+      };
+
+      bindScrollContainment(document.getElementById('list'));
+      bindScrollContainment(document.querySelector('#overlay .overlay-body'));
+      bindScrollContainment(document.querySelector('#detailOverlay .overlay-body'));
+
+      const allowedScrollAreaSelector = '#list, #overlay .overlay-body, #detailOverlay .overlay-body, .list.grid .item .main';
+      const isInsideAllowedScrollArea = (target) => {
+        return target instanceof Element && target.closest(allowedScrollAreaSelector) !== null;
+      };
+
+      document.addEventListener('wheel', (e) => {
+        if (!isInsideAllowedScrollArea(e.target)) {
+          e.preventDefault();
+        }
+      }, { passive: false, capture: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!isInsideAllowedScrollArea(e.target)) {
+          e.preventDefault();
+        }
+      }, { passive: false, capture: true });
 
       document.getElementById('sortSelect').addEventListener('change', () => {
         sortMode = document.getElementById('sortSelect').value || 'created';

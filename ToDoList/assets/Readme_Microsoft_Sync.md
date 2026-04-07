@@ -16,8 +16,8 @@
    - **Unterstützte Kontotypen**: `Alle Konten von Entra ID-Mandanten und persönliche Microsoft-Konten`
    - **Umleitungs-URI**:
      - Plattform wählen: **Web**
-     - URI: `https://<dein-symcon-connect>/hook/todolist_microsoft/<InstanzID>` (die komplette Adresse findest du im Konfigurationsformular unter **Redirect URI** im Bereich Microsoft To Do)
-
+     - URI: Die Redirect URI findest du im **ToDo Gateway** unter Microsoft To Do → Redirect URI
+       (Format: `https://<dein-symcon-connect>/hook/todogateway_microsoft`)
 4. Klicke auf **Registrieren**
 
 ## Schritt 2: Client-ID kopieren
@@ -48,15 +48,14 @@ Nach der Registrierung siehst du die **Übersicht** der App:
 
 > Bei einem Organisationskonto: Optional auf **Administratorzustimmung erteilen** klicken.
 
-## Schritt 5: In IP-Symcon konfigurieren
+## Schritt 5: ToDo Gateway konfigurieren
 
-1. Öffne die **ToDoList-Instanz**
-2. Wähle bei **Synchronizations-Backend** → **Microsoft To Do**
-3. Trage ein:
+1. Öffne die **ToDo Gateway**-Instanz (wird automatisch mit der ToDoList angelegt)
+2. Im Bereich **Microsoft To Do** eintragen:
    - **Client ID**: Die kopierte Anwendungs-ID aus Schritt 2
    - **Client Secret**: Der kopierte Wert aus Schritt 3
    - **Tenant**: `common` (Standard – passend für die meisten Fälle)
-4. Klicke auf **Übernehmen** (wichtig – erst danach werden die Buttons aktiv!)
+3. Klicke auf **Übernehmen** (wichtig – erst danach werden die Buttons aktiv!)
 
 ### Tenant-Werte
 
@@ -69,24 +68,26 @@ Nach der Registrierung siehst du die **Übersicht** der App:
 
 ## Schritt 6: Mit Microsoft verbinden
 
-1. Klicke auf **„Mit Microsoft verbinden"**
+1. Klicke im **ToDo Gateway** auf **„Mit Microsoft verbinden"**
 2. Eine URL wird angezeigt → im Browser öffnen
 3. Mit Microsoft-Konto anmelden
 4. Die angeforderten Berechtigungen bestätigen → **Akzeptieren**
 5. Du siehst **„Autorisierung erfolgreich"** → Fenster schließen
 
-## Schritt 7: Liste auswählen
+## Schritt 7: ToDoList-Instanz konfigurieren
 
-1. Zurück in IP-Symcon: Klicke auf den Button **„Listen Aktualisieren"**
-2. Die gefundenen Listen werden im Dropdown "Liste" angezeigt.
-3. wähle die Taskliste die synchronisert werden soll aus
+1. Öffne die **ToDoList-Instanz**
+2. Wähle bei **Synchronisations-Backend** → **Microsoft To Do**
+3. Klicke auf **„Listen aktualisieren"**
+4. Wähle die gewünschte Aufgabenliste aus dem Dropdown
+5. Klicke auf **Übernehmen**
 
 ## Schritt 8: Synchronisation aktivieren
 
-2. Wähle ein **Sync-Intervall** (z.B. 5 oder 15 Minuten)
-3. Wähle den **Konfliktmodus** (Standard: „Neuester gewinnt")
-4. Optional: **Auto sync after changes** aktivieren
-5. Klicke auf **Übernehmen**
+1. Wähle ein **Sync-Intervall** (z.B. 5 oder 15 Minuten)
+2. Wähle den **Konfliktmodus** (Standard: „Neuester gewinnt")
+3. Optional: **Auto sync after changes** aktivieren
+4. Klicke auf **Übernehmen**
 
 ## Synchronisierte Felder
 
@@ -100,17 +101,24 @@ Nach der Registrierung siehst du die **Übersicht** der App:
 | Benachrichtigung | `isReminderOn` + `reminderDateTime` | ✅ bidirektional |
 | Wiederholung | `recurrence` | ✅ täglich / wöchentlich / monatlich / jährlich |
 
-**Nicht synchronisiert bzw. nicht durch die API unterstützt:** Menge und Sortierung – wird nur lokal verwaltet. 
+**Nicht synchronisiert bzw. nicht durch die API unterstützt:** Menge und Sortierung – wird nur lokal verwaltet.
 
 > **Hinweis:** Microsoft To Do unterstützt keine stündlichen Wiederholungen. Die Einheit „Stunden" wird bei Microsoft-Sync automatisch ausgeblendet.
 
 ## PHP-Befehle
 
+### ToDo Gateway (Prefix: TGW)
+
 ```php
-TDL_MicrosoftGetAuthUrl($id);        // Autorisierungs-URL anzeigen
-TDL_MicrosoftTestConnection($id);    // Verbindung testen
-TDL_MicrosoftDiscoverLists($id);     // Listen aktualisieren
-TDL_MicrosoftToDoSync($id);          // Manuell synchronisieren
-TDL_MicrosoftResetSync($id);         // Sync-Marker zurücksetzen
-TDL_MicrosoftDisconnect($id);        // Verbindung trennen
+TGW_MicrosoftGetAuthUrl($id);        // Autorisierungs-URL anzeigen
+TGW_MicrosoftTestConnection($id);    // Verbindung testen
+TGW_MicrosoftDisconnect($id);        // Verbindung trennen
+```
+
+### ToDoList (Prefix: TDL)
+
+```php
+TDL_MicrosoftRefreshListOptions($id); // Listen aktualisieren
+TDL_MicrosoftToDoSync($id);           // Manuell synchronisieren
+TDL_MicrosoftResetSync($id);          // Sync-Marker zurücksetzen
 ```
