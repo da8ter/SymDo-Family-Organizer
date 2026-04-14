@@ -163,6 +163,7 @@ trait OAuthHelper
         $hookPath = rtrim($HookPath, '/');
         $ids = IPS_GetInstanceListByModuleID('{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}');
         if (count($ids) === 0) {
+            $this->SendDebug('OAuth', 'WebHook Control instance not found', 0);
             return;
         }
         $hookId = $ids[0];
@@ -170,14 +171,32 @@ trait OAuthHelper
         if (!is_array($hooks)) {
             $hooks = [];
         }
-        foreach ($hooks as $hook) {
-            if (($hook['Hook'] ?? '') === $hookPath) {
-                return;
+
+        $changed = false;
+        $found = false;
+        foreach ($hooks as &$hook) {
+            $existingPath = rtrim((string)($hook['Hook'] ?? ''), '/');
+            if ($existingPath === $hookPath) {
+                $found = true;
+                $targetId = (int)($hook['TargetID'] ?? 0);
+                if ($targetId !== $this->InstanceID) {
+                    $hook['Hook'] = $hookPath;
+                    $hook['TargetID'] = $this->InstanceID;
+                    $changed = true;
+                }
             }
         }
-        $hooks[] = ['Hook' => $hookPath, 'TargetID' => $this->InstanceID];
-        IPS_SetProperty($hookId, 'Hooks', json_encode($hooks));
-        IPS_ApplyChanges($hookId);
+        unset($hook);
+
+        if (!$found) {
+            $hooks[] = ['Hook' => $hookPath, 'TargetID' => $this->InstanceID];
+            $changed = true;
+        }
+
+        if ($changed) {
+            IPS_SetProperty($hookId, 'Hooks', json_encode($hooks));
+            IPS_ApplyChanges($hookId);
+        }
     }
 
     private function OAuthExchangeToken(string $TokenUrl, array $PostData, string $KeyPrefix, string $AccessAttr, string $RefreshAttr, string $ExpiresAttr, string $DebugLabel): bool
