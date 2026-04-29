@@ -1741,6 +1741,7 @@
     function updateStats() {
       const items = Array.isArray(state.items) ? state.items : [];
       const now = new Date();
+      const nowTs = now.getTime() / 1000;
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
       const todayEnd = todayStart + 86400;
 
@@ -1750,7 +1751,7 @@
         open++;
         const due = parseInt(it.due) || 0;
         if (due > 0) {
-          if (due < todayStart) overdue++;
+          if (due < nowTs) overdue++;
           else if (due >= todayStart && due < todayEnd) today++;
         }
       });
@@ -2005,10 +2006,11 @@
       if (!Number.isFinite(t) || t <= 0) return '';
 
       const now = new Date();
+      const nowTs = now.getTime() / 1000;
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
       const todayEnd = todayStart + 86400;
 
-      if (t < todayStart) return 'due-overdue';
+      if (t < nowTs) return 'due-overdue';
       if (t >= todayStart && t < todayEnd) return 'due-today';
       return '';
     }

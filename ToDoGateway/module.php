@@ -696,9 +696,10 @@ class ToDoGateway extends IPSModuleStrict
 
     public function ProcessHookData(): void
     {
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
-        $isGoogle = strpos($uri, '/hook/todogateway_google') !== false;
-        $isMicrosoft = strpos($uri, '/hook/todogateway_microsoft') !== false;
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $path = rtrim((string)(parse_url($uri, PHP_URL_PATH) ?? ''), '/');
+        $isGoogle = ($path === '/hook/todogateway_google');
+        $isMicrosoft = ($path === '/hook/todogateway_microsoft');
         if (!$isGoogle && !$isMicrosoft) {
             return;
         }
@@ -865,8 +866,8 @@ class ToDoGateway extends IPSModuleStrict
                     'type' => 'ValidationTextBox',
                     'caption' => $this->Translate('Redirect URI'),
                     'value' => $this->OAuthGetRedirectUri('/hook/todogateway_microsoft/'),
-                    'width' => '550px',
-                    'enabled' => false
+                    'width' => '750px',
+                    'enabled' => true
                 ],
                 [
                     'type' => 'ValidationTextBox',

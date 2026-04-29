@@ -178,6 +178,7 @@ trait SyncHelper
     {
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml();
+        $this->UpdateStatisticsTimer();
         $this->SendState();
     }
 

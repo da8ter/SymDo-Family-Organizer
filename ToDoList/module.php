@@ -125,6 +125,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterTimer('GoogleTasksSyncTimer', 0, 'TDL_GoogleTasksSync($_IPS[\'TARGET\']);');
         $this->RegisterTimer('MicrosoftToDoSyncTimer', 0, 'TDL_MicrosoftToDoSync($_IPS[\'TARGET\']);');
         $this->RegisterTimer('SyncOnChangeTimer', 0, 'TDL_SyncOnChange($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('StatisticsTimer', 0, 'TDL_RefreshStatistics($_IPS[\'TARGET\']);');
 
         $this->RegisterVariableInteger('OpenTasks', $this->Translate('Open Tasks'), '', 1);
         $this->RegisterVariableInteger('OverdueTasks', $this->Translate('Overdue'), '', 2);
@@ -138,6 +139,7 @@ class ToDoList extends IPSModuleStrict
         @$this->RegisterPropertyBoolean('AutoSyncOnChange', false);
         @$this->RegisterPropertyInteger('AutoSyncOnChangeDelay', 3);
         @$this->RegisterTimer('SyncOnChangeTimer', 0, 'TDL_SyncOnChange($_IPS[\'TARGET\']);');
+        @$this->RegisterTimer('StatisticsTimer', 0, 'TDL_RefreshStatistics($_IPS[\'TARGET\']);');
 
         @$this->RegisterAttributeString('CalDAVPendingDeletes', '{}');
         @$this->RegisterAttributeInteger('SyncBackendMigrationDone', 0);
@@ -161,6 +163,7 @@ class ToDoList extends IPSModuleStrict
         $microsoftChanged = $this->SyncHandleListChange('MicrosoftListID', 'LastMicrosoftListID', 'MicrosoftLastSync', 'MicrosoftPendingDeletes', 'MicrosoftToDo');
 
         $this->UpdateRecurrenceTimer();
+        $this->UpdateStatisticsTimer();
         $this->UpdateCalDAVTimer();
         $this->UpdateGoogleTasksTimer();
         $this->UpdateMicrosoftToDoTimer();
@@ -193,6 +196,7 @@ class ToDoList extends IPSModuleStrict
 
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml();
+        $this->UpdateStatisticsTimer();
         $this->SendState();
 
         $this->ProcessNotifications();
@@ -651,8 +655,9 @@ class ToDoList extends IPSModuleStrict
         return json_encode($debug, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    public function AddItem(array $Data): int
+    public function AddItem(mixed $Data): int
     {
+        $Data = $this->DecodeValue($Data);
         $items = $this->LoadItems();
 
         $title = trim((string)($Data['title'] ?? ''));
@@ -726,11 +731,12 @@ class ToDoList extends IPSModuleStrict
         return $id;
     }
 
-    public function UpdateItem(array $Data): void
+    public function UpdateItem(mixed $Data): void
     {
+        $Data = $this->DecodeValue($Data);
         $id = (int)($Data['id'] ?? 0);
         if ($id <= 0) {
-            throw new Exception($this->Translate('Invalid id'));
+            return;
         }
 
         $items = $this->LoadItems();
@@ -864,8 +870,9 @@ class ToDoList extends IPSModuleStrict
         $this->ScheduleSyncOnChange();
     }
 
-    public function ToggleDone(array $Data): void
+    public function ToggleDone(mixed $Data): void
     {
+        $Data = $this->DecodeValue($Data);
         $id = (int)($Data['id'] ?? 0);
         if ($id <= 0) {
             throw new Exception($this->Translate('Invalid id'));
@@ -946,8 +953,9 @@ class ToDoList extends IPSModuleStrict
         $this->ScheduleSyncOnChange();
     }
 
-    public function DeleteItem(array $Data): void
+    public function DeleteItem(mixed $Data): void
     {
+        $Data = $this->DecodeValue($Data);
         $id = (int)($Data['id'] ?? 0);
         if ($id <= 0) {
             throw new Exception($this->Translate('Invalid id'));
@@ -995,8 +1003,9 @@ class ToDoList extends IPSModuleStrict
         $this->ScheduleSyncOnChange();
     }
 
-    public function Reorder(array $Data): void
+    public function Reorder(mixed $Data): void
     {
+        $Data = $this->DecodeValue($Data);
         $order = $Data['order'] ?? [];
         if (!is_array($order)) {
             throw new Exception($this->Translate('Invalid order'));
@@ -1340,6 +1349,7 @@ class ToDoList extends IPSModuleStrict
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml($Items);
         $this->UpdateRecurrenceTimer($Items);
+        $this->UpdateStatisticsTimer($Items);
     }
 
     private function UpdateTaskListHtml(?array $Items = null): void
@@ -1385,13 +1395,14 @@ class ToDoList extends IPSModuleStrict
         $open = 0;
         $overdue = 0;
         $today = 0;
+        $now = time();
         $todayStart = strtotime('today');
         $todayEnd = $todayStart + 86400;
         foreach ($openItems as $it) {
             $open++;
             $due = (int)($it['due'] ?? 0);
             if ($due > 0) {
-                if ($due < $todayStart) {
+                if ($due < $now) {
                     $overdue++;
                 } elseif ($due >= $todayStart && $due < $todayEnd) {
                     $today++;
@@ -1427,13 +1438,13 @@ class ToDoList extends IPSModuleStrict
         $html .= '<div class="' . htmlspecialchars($listClass, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
 
         foreach ($openItems as $it) {
-            $html .= $this->BuildTaskRowHtml($it, false, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $todayStart, $todayEnd);
+            $html .= $this->BuildTaskRowHtml($it, false, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $now, $todayStart, $todayEnd);
         }
 
         if (count($doneItems) > 0) {
             $html .= '<div class="section-header">' . htmlspecialchars($this->Translate('Completed'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>';
             foreach ($doneItems as $it) {
-                $html .= $this->BuildTaskRowHtml($it, true, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $todayStart, $todayEnd);
+                $html .= $this->BuildTaskRowHtml($it, true, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $now, $todayStart, $todayEnd);
             }
         }
 
@@ -1441,7 +1452,7 @@ class ToDoList extends IPSModuleStrict
         return $html;
     }
 
-    private function BuildTaskRowHtml(array $Item, bool $Done, bool $ShowInfoBadges, bool $ShowLargeQty, bool $UseGridView, bool $ShoppingMode, int $TodayStart, int $TodayEnd): string
+    private function BuildTaskRowHtml(array $Item, bool $Done, bool $ShowInfoBadges, bool $ShowLargeQty, bool $UseGridView, bool $ShoppingMode, int $Now, int $TodayStart, int $TodayEnd): string
     {
         $title = htmlspecialchars((string)($Item['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $info = trim((string)($Item['info'] ?? ''));
@@ -1479,7 +1490,7 @@ class ToDoList extends IPSModuleStrict
 
         if ($ShowInfoBadges && $dueTs > 0) {
             $dueClass = '';
-            if ($dueTs < $TodayStart) {
+            if ($dueTs < $Now) {
                 $dueClass = ' due-overdue';
             } elseif ($dueTs >= $TodayStart && $dueTs < $TodayEnd) {
                 $dueClass = ' due-today';
@@ -1951,9 +1962,40 @@ class ToDoList extends IPSModuleStrict
         $this->UpdateFormField('ItemsTable', 'values', json_encode($this->BuildItemsTableValues($this->LoadItems())));
     }
 
+    public function RefreshStatistics(): void
+    {
+        $items = $this->LoadItems();
+        $this->UpdateStatistics();
+        $this->UpdateTaskListHtml($items);
+        $this->UpdateStatisticsTimer($items);
+        $this->SendState();
+    }
+
+    private function UpdateStatisticsTimer(?array $Items = null): void
+    {
+        if ($Items === null) {
+            $Items = $this->LoadItems();
+        }
+
+        $now = time();
+        $next = strtotime('tomorrow');
+        foreach ($Items as $item) {
+            if (!empty($item['done'])) {
+                continue;
+            }
+            $due = (int)($item['due'] ?? 0);
+            if ($due > $now && $due < $next) {
+                $next = $due;
+            }
+        }
+
+        $this->SetTimerInterval('StatisticsTimer', max(1000, ($next - $now + 1) * 1000));
+    }
+
     private function UpdateStatistics(): void
     {
         $items = $this->LoadItems();
+        $now = time();
         $todayStart = strtotime('today');
         $todayEnd = $todayStart + 86400;
 
@@ -1968,7 +2010,7 @@ class ToDoList extends IPSModuleStrict
             $open++;
             $due = (int)($item['due'] ?? 0);
             if ($due > 0) {
-                if ($due < $todayStart) {
+                if ($due < $now) {
                     $overdue++;
                 } elseif ($due >= $todayStart && $due < $todayEnd) {
                     $dueToday++;

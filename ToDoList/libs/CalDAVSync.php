@@ -180,7 +180,6 @@ trait CalDAVSync
             $this->SyncPostComplete();
 
             $this->SendDebug('CalDAV', 'Sync completed', 0);
-            echo $this->Translate('Synchronization completed');
             return true;
         } catch (Exception $e) {
             $this->SendDebug('CalDAV', 'Sync failed: ' . $e->getMessage(), 0);

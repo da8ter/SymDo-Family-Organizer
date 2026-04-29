@@ -98,6 +98,7 @@ Folgende Statusvariablen werden von der Instanz angelegt:
   - Anzahl überfälliger Tasks
 - **DueTodayTasks**
   - Anzahl heute fälliger Tasks
+  - Die Statistik wird bei Änderungen sowie automatisch zum nächsten relevanten Fälligkeitszeitpunkt aktualisiert.
 
 - **TaskListHtml** (`~HTMLBox`)
   - Read-only HTML-Ausgabe der Taskliste für IPSView (HTMLBox).
@@ -153,6 +154,8 @@ Benachrichtigung:
 Das Modul unterstützt die bidirektionale Synchronisation mit CalDAV-Servern (ownCloud, Nextcloud, etc.), Microsoft To Do und Google Tasks.
 
 Die Zugangsdaten werden zentral im **ToDo Gateway** (Splitter-Modul) verwaltet. In der ToDoList-Instanz wird nur das Backend, die Liste/der Kalender und die Sync-Einstellungen konfiguriert.
+
+Die OAuth-Webhook-Endpunkte (`/hook/todogateway_google` und `/hook/todogateway_microsoft`) werden durch das Gateway automatisch im WebHook-Control registriert und bei Bedarf auf die aktive Gateway-Instanz korrigiert.
 
 Anleitungen zur Konfiguration:
 
