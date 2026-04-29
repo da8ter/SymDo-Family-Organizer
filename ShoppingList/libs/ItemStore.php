@@ -109,6 +109,75 @@ trait ItemStore
         }
     }
 
+    private function AddScannedItemInternal(string $Name, string $Category, string $Amount, string $Price, string $ListingId = '', string $ImageUrl = ''): bool
+    {
+        $name = trim($Name);
+        if ($name === '') {
+            return false;
+        }
+        $category = trim($Category);
+        if ($category === '') {
+            $category = $this->LookupCategory($name);
+        }
+        $amount    = trim($Amount);
+        $price     = trim($Price);
+        $listingId = trim($ListingId);
+        $imageUrl  = trim($ImageUrl);
+
+        $semaphoreKey = 'SL_Items_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+            $this->SendDebug('ItemStore', 'Semaphore timeout on AddScannedItem', 0);
+            return false;
+        }
+        try {
+            $items = $this->LoadItems();
+            $nameLower = mb_strtolower($name);
+            foreach ($items as &$item) {
+                if ($item['inCart'] === false && mb_strtolower($item['name']) === $nameLower) {
+                    $item['amount'] = $this->IncrementAmount($item['amount']);
+                    if ($price !== '') {
+                        $item['price'] = $price;
+                    }
+                    // Backfill category on duplicate if the stored one is empty
+                    if ((trim((string)($item['category'] ?? '')) === '') && $category !== '') {
+                        $item['category'] = $category;
+                    }
+                    if ($listingId !== '') {
+                        $item['listingId'] = $listingId;
+                        $item['marketItem'] = true;
+                    }
+                    if ($imageUrl !== '' && empty($item['imageUrl'])) {
+                        $item['imageUrl'] = $imageUrl;
+                    }
+                    $this->SaveItems($items);
+                    return true;
+                }
+            }
+            unset($item);
+            $newItem = [
+                'id'       => $this->GenerateItemID(),
+                'name'     => $name,
+                'category' => $category,
+                'amount'   => $amount,
+                'notes'    => '',
+                'price'    => $price,
+                'imageUrl' => $imageUrl,
+                'inCart'   => false,
+                'addedAt'  => time(),
+            ];
+            if ($listingId !== '') {
+                $newItem['listingId']  = $listingId;
+                $newItem['marketItem'] = true;
+            }
+            $items[] = $newItem;
+            $this->SaveItems($items);
+            $this->TrackFrequency($name, $category);
+            return true;
+        } finally {
+            IPS_SemaphoreLeave($semaphoreKey);
+        }
+    }
+
     private function RemoveItemInternal(string $Name): bool
     {
         $name = trim($Name);
@@ -154,6 +223,25 @@ trait ItemStore
         }
     }
 
+    private function HasCartDuplicate(array $items, array $candidate): bool
+    {
+        $name   = mb_strtolower(trim($candidate['name'] ?? ''));
+        $amount = trim($candidate['amount'] ?? '');
+        $notes  = trim($candidate['notes'] ?? '');
+        foreach ($items as $item) {
+            if (($item['inCart'] ?? false) !== true) {
+                continue;
+            }
+            if (mb_strtolower(trim($item['name'] ?? '')) === $name
+                && trim($item['amount'] ?? '') === $amount
+                && trim($item['notes'] ?? '') === $notes
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function MarkAllDoneInternal(): void
     {
         $semaphoreKey = 'SL_Items_' . $this->InstanceID;
@@ -165,13 +253,24 @@ trait ItemStore
         try {
             $items = $this->LoadItems();
             $changed = false;
-            foreach ($items as &$item) {
-                if (($item['inCart'] ?? false) !== true) {
-                    $item['inCart'] = true;
-                    $changed = true;
+            $remove = [];
+            foreach ($items as $i => &$item) {
+                if (($item['inCart'] ?? false) === true) {
+                    continue;
                 }
+                if ($this->HasCartDuplicate($items, $item)) {
+                    $remove[] = $i;
+                } else {
+                    $item['inCart'] = true;
+                }
+                $changed = true;
             }
             unset($item);
+            if ($remove) {
+                foreach (array_reverse($remove) as $i) {
+                    array_splice($items, $i, 1);
+                }
+            }
             if ($changed) {
                 $this->SaveItems($items);
             }
@@ -190,14 +289,24 @@ trait ItemStore
         }
         try {
             $items = $this->LoadItems();
-            foreach ($items as &$item) {
+            $idx = null;
+            foreach ($items as $i => $item) {
                 if ($item['id'] === $Id) {
-                    $item['inCart'] = !$item['inCart'];
-                    $this->SaveItems($items);
-                    return true;
+                    $idx = $i;
+                    break;
                 }
             }
-            return false;
+            if ($idx === null) {
+                return false;
+            }
+            $movingToCart = !$items[$idx]['inCart'];
+            if ($movingToCart && $this->HasCartDuplicate($items, $items[$idx])) {
+                array_splice($items, $idx, 1);
+            } else {
+                $items[$idx]['inCart'] = !$items[$idx]['inCart'];
+            }
+            $this->SaveItems($items);
+            return true;
         } finally {
             IPS_SemaphoreLeave($semaphoreKey);
         }

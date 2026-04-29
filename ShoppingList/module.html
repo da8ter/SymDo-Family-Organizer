@@ -61,6 +61,8 @@ body {
   font-size: 15px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
 }
 
 .search-input::placeholder { color: var(--muted); }
@@ -86,6 +88,26 @@ body {
 
 .btn-fav-lists:active { border-color: var(--accent); }
 
+.btn-scanner {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .15s;
+}
+
+.btn-scanner:active { border-color: var(--accent); }
+
 /* ── Suggestions dropdown ──────────────────────────────────────────────── */
 .suggestions-dropdown {
   position: absolute;
@@ -102,7 +124,6 @@ body {
   overscroll-behavior: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
-  z-index: 200;
   padding: 8px;
   box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 12%, transparent);
   scrollbar-width: thin;
@@ -112,7 +133,10 @@ body {
 .suggestions-dropdown.open { display: block; }
 
 .suggestions-dropdown::-webkit-scrollbar { width: 6px; }
-.suggestions-dropdown::-webkit-scrollbar-track { background: transparent; }
+.suggestions-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 0;
+}
 .suggestions-dropdown::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 999px;
@@ -141,6 +165,10 @@ body {
   touch-action: manipulation;
   transition: opacity .1s ease;
   -webkit-tap-highlight-color: transparent;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .chip:active { opacity: .7; }
@@ -160,6 +188,8 @@ body {
   border: 1px solid var(--border);
   background: var(--card);
   overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .chip-img {
@@ -181,6 +211,17 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition: opacity .1s ease;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chip-label-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .chip-label-btn:active { opacity: .7; }
@@ -249,9 +290,10 @@ body {
 }
 
 .item-card {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   width: fit-content;
   min-width: 130px;
+  max-width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -319,6 +361,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  padding: 5px;
 }
 
 .item-info {
@@ -338,6 +381,12 @@ body {
 
 .item-amount-prefix { color: var(--accent); }
 
+.item-price {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
 .item-notes {
   font-size: 11px;
   color: var(--muted);
@@ -348,24 +397,38 @@ body {
 }
 
 .item-edit-btn {
+  position: relative;
   flex-shrink: 0;
   background: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   line-height: 1;
   transition: opacity .1s ease;
   opacity: 0.5;
+}
+
+/* Unsichtbarer, vergrößerter Hit-Bereich, damit knapp danebenliegende
+   Taps nicht versehentlich die Card (ToggleCart) auslösen. */
+.item-edit-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 14px;
+}
+
+.item-edit-btn > i {
+  pointer-events: none;
 }
 
 .item-edit-btn:active { opacity: 1; }
@@ -381,10 +444,14 @@ body {
 }
 
 .active-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 2px 0 10px;
 }
 
-.btn-complete-all {
+.btn-complete-all,
+.btn-cart-bulk {
   font-size: 13px;
   padding: 6px 14px;
   border-radius: 999px;
@@ -397,8 +464,27 @@ body {
   transition: opacity .15s ease;
 }
 
-.btn-complete-all:active {
+.btn-cart-bulk {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-complete-all:active,
+.btn-cart-bulk:active {
   opacity: .75;
+}
+
+.btn-cart-bulk:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.market-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: .7;
+  vertical-align: middle;
 }
 
 .btn-clear-cart {
@@ -611,6 +697,7 @@ body {
   font-size: 15px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
   font-family: inherit;
 }
 
@@ -1011,6 +1098,7 @@ body {
   font-size: 15px;
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
   font-family: inherit;
   resize: none;
 }
@@ -1115,6 +1203,100 @@ textarea.edit-input { overflow: hidden; }
 
 /* ── Print overlay ────────────────────────────────────────────────────── */
 #printOverlay { bottom: var(--nav-h); }
+.scanner-overlay {
+  bottom: var(--nav-h);
+}
+
+.scanner-body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.scanner-video-wrap {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #000;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scanner-scanline {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 24%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(0, 255, 195, 0) 0%, rgba(0, 255, 195, 1) 50%, rgba(0, 255, 195, 0) 100%);
+  box-shadow: 0 0 10px rgba(0, 255, 195, .65);
+  animation: scanner-line-move 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.scanner-result {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: min(92%, 560px);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .68);
+  color: #fff;
+  font-size: clamp(16px, 4.2vw, 21px);
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  min-height: 0;
+  opacity: 0;
+  transform: translate(-50%, -46%);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
+}
+
+.scanner-result.show {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.scanner-result.error {
+  background: rgba(192, 57, 43, .78);
+}
+
+@keyframes scanner-line-move {
+  0% { top: 24%; opacity: .95; }
+  50% { top: 76%; opacity: 1; }
+  100% { top: 24%; opacity: .95; }
+}
+
+.scanner-status {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 20px;
+  text-align: center;
+  padding: 6px 8px 0;
+  word-break: break-word;
+}
+
+.scanner-status:empty { display: none; }
+.scanner-status.success { color: #2e7d32; }
+.scanner-status.error { color: #c0392b; }
+
 .print-mode-body {
   flex: 1;
   display: flex;
@@ -1164,6 +1346,7 @@ textarea.edit-input { overflow: hidden; }
       <div class="search-row">
         <input type="search" class="search-input" id="searchInput"
                placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
+        <button class="btn-scanner" id="btnOpenScanner" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
         <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
       </div>
       <div class="suggestions-dropdown" id="suggestionsDropdown">
@@ -1175,6 +1358,7 @@ textarea.edit-input { overflow: hidden; }
       <div id="activeItems"></div>
       <div class="active-actions" id="activeActions" style="display:none;">
         <button class="btn-complete-all" id="btnCompleteAll">Alles erledigt</button>
+        <button class="btn-cart-bulk" id="btnCartBulk" style="display:none;">Zum Warenkorb hinzufügen</button>
       </div>
 
       <div id="cartSection" style="display:none;">
@@ -1203,6 +1387,24 @@ textarea.edit-input { overflow: hidden; }
       <button class="nav-tab" id="navTabPrint" aria-label="Drucken">
         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="26" height="26"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"></path><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"></path></svg>
       </button>
+    </div>
+
+    <!-- Barcode scanner overlay -->
+    <div class="overlay scanner-overlay" id="scannerOverlay">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <span class="overlay-title" id="scannerOverlayTitle">Barcode scannen</span>
+          <button class="btn-close-overlay" id="btnScannerClose" aria-label="Schließen"><i class="fa-light fa-xmark"></i></button>
+        </div>
+        <div class="scanner-body" id="scannerBody">
+          <div class="scanner-video-wrap" id="scannerVideoWrap">
+            <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
+            <div class="scanner-scanline" id="scannerScanline" aria-hidden="true"></div>
+            <div class="scanner-result" id="scannerResult"></div>
+          </div>
+          <div class="scanner-status" id="scannerStatus"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Edit item overlay -->
@@ -1315,6 +1517,17 @@ let editingItemId  = null;
 let favOverlayMode = null; // 'load-list'
 let viewingListId    = null; // list ID when showing detail view
 let editingFavItem   = null; // {listId, originalName, category, amount} when editing a fav item
+let scannerStream = null;
+let scannerDetector = null;
+let scannerAnimationFrame = 0;
+let scannerQuaggaTimer = 0;
+let scannerResumeTimer = 0;
+let scannerResultHideTimer = 0;
+let scannerQuaggaActive = false;
+let scannerSessionId = 0;
+let scannerWarmupUntil = 0;
+let lastCode = '';
+const scannerAddedNames = new Set();
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 const HEART_FILLED = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M305 151.1L320 171.8L335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1L576 231.7C576 343.9 436.1 474.2 363.1 529.9C350.7 539.3 335.5 544 320 544C304.5 544 289.2 539.4 276.9 529.9C203.9 474.2 64 343.9 64 231.7L64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1z"/></svg>';
@@ -1327,7 +1540,12 @@ let _piKeys = [];
 function _rebuildPiKeys() {
   _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort((a, b) => b.length - a.length);
 }
-function getProductImageUrl(name) {
+function getProductImageUrl(name, apiImageUrl) {
+  // Prefer API image (cached from provider) if available
+  if (apiImageUrl) {
+    return window.__imageHookUrl + encodeURIComponent(apiImageUrl);
+  }
+
   const key = (name || '').toLowerCase();
   if (!window.__imageHookUrl) return null;
   // 1. Exact match
@@ -1395,22 +1613,30 @@ function bindScrollContainment(el) {
 function buildItemCard(item, inCart) {
   const cls    = inCart ? 'item-card in-cart' : 'item-card';
   const letter = escapeHtml((item.name || '?').charAt(0).toUpperCase());
-  const imgUrl = getProductImageUrl(item.name);
+  const imgUrl = getProductImageUrl(item.name, item.imageUrl);
   const thumb  = imgUrl
     ? `<img class="item-thumb-img" src="${escapeHtml(imgUrl)}" alt="" loading="lazy" />`
     : `<span class="item-thumb-letter">${letter}</span>`;
   const title  = buildTitleHtml(item.name, item.amount);
-  const notes  = item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : '';
+  const showPrice = !!state.extApiShowPrice;
+  const priceHtml = (showPrice && item.price) ? `<span class="item-price">${escapeHtml(item.price)}</span>` : '';
+  const hasExtra = priceHtml || item.notes;
+  const notesHtml = item.notes ? escapeHtml(item.notes) : '';
+  const notes  = hasExtra ? `<div class="item-notes">${priceHtml}${notesHtml}</div>` : '';
+  const marketIcon = (!inCart && item.marketItem === true && state.extApiCartReady === true)
+    ? `<i class="fa-light fa-cart-shopping market-icon" aria-hidden="true"></i>`
+    : '';
   return `<div class="${cls}" data-id="${escapeHtml(item.id)}">`
     + `<div class="item-thumb">${thumb}</div>`
-    + `<div class="item-info"><div class="item-title">${title}</div>${notes}</div>`
+    + `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
     + `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
     + `</div>`;
 }
 
 function bindCardHandlers() {
   document.querySelectorAll('.item-card[data-id]').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      if (e.target && e.target.closest('.item-edit-btn')) return;
       const id = card.getAttribute('data-id');
       if (!id || card.dataset.animating === '1') return;
       card.dataset.animating = '1';
@@ -1435,6 +1661,11 @@ function bindCardHandlers() {
 function render() {
   const items         = Array.isArray(state.items) ? state.items : [];
   const categoryOrder = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
+
+  const scannerBtn = document.getElementById('btnOpenScanner');
+  if (scannerBtn) {
+    scannerBtn.style.display = (state.scannerEnabled === false) ? 'none' : '';
+  }
 
   const activeItems = items.filter(i => !i.inCart);
   const cartItems   = items.filter(i =>  i.inCart);
@@ -1468,6 +1699,14 @@ function render() {
   }
   document.getElementById('activeItems').innerHTML = activeHtml;
   document.getElementById('activeActions').style.display = activeItems.length ? '' : 'none';
+
+  // Cart bulk-add button: visible only when ext-API cart is ready and at least one open market item exists
+  const cartBtn = document.getElementById('btnCartBulk');
+  if (cartBtn) {
+    const hasMarketItem = activeItems.some(i => i.marketItem === true && i.listingId);
+    cartBtn.style.display = (state.extApiCartReady === true && hasMarketItem) ? '' : 'none';
+    if (!cartBtn.disabled) cartBtn.textContent = translate('Add to cart');
+  }
 
   // Zuletzt benutzt (cart) section
   const cartSection = document.getElementById('cartSection');
@@ -1548,11 +1787,11 @@ function renderSuggestions() {
 
   for (const s of filtered) {
     const isFav = favNames.has(s.name.toLowerCase());
-    const chipImgUrl = getProductImageUrl(s.name);
+    const chipImgUrl = getProductImageUrl(s.name, s.imageUrl);
     const chipImg = chipImgUrl ? `<img class="chip-img" src="${escapeHtml(chipImgUrl)}" alt="" loading="lazy" />` : '';
     html += `<div class="chip-pill">`
-      + `<button class="chip-label-btn" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category)}">`
-      + chipImg + escapeHtml(s.name) + `</button>`
+      + `<button class="chip-label-btn" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category)}" title="${escapeHtml(s.name)}">`
+      + chipImg + `<span class="chip-label-text">` + escapeHtml(s.name) + `</span></button>`
       + `<button class="chip-heart-btn${isFav ? ' is-fav' : ''}" `
       + `data-heart-name="${escapeHtml(s.name)}" data-heart-cat="${escapeHtml(s.category)}">`
       + (isFav ? HEART_FILLED : HEART_EMPTY) + `</button>`
@@ -1766,7 +2005,7 @@ function renderFavDetailBody(list) {
   for (const item of items) {
     const nameHtml = buildTitleHtml(item.name, item.amount || '');
     const notesHtml = (item.notes || '').trim() ? `<span class="fav-detail-notes">${escapeHtml(item.notes)}</span>` : '';
-    const favImgUrl = getProductImageUrl(item.name);
+    const favImgUrl = getProductImageUrl(item.name, item.imageUrl);
     const favImg = favImgUrl ? `<img class="fav-detail-img" src="${escapeHtml(favImgUrl)}" alt="" loading="lazy" />` : '';
     html += `<div class="fav-detail-item">`
       + favImg
@@ -1817,10 +2056,10 @@ function renderFavDetailBody(list) {
     }
 
     for (const s of filtered) {
-      const chipImgUrl = getProductImageUrl(s.name);
+      const chipImgUrl = getProductImageUrl(s.name, s.imageUrl);
       const chipImg = chipImgUrl ? `<img class="chip-img" src="${escapeHtml(chipImgUrl)}" alt="" loading="lazy" />` : '';
-      htmlChips += `<button class="chip" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category || '')}">`
-        + `${chipImg}${escapeHtml(s.name)}</button>`;
+      htmlChips += `<button class="chip" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category || '')}" title="${escapeHtml(s.name)}">`
+        + `${chipImg}<span class="chip-label-text">${escapeHtml(s.name)}</span></button>`;
     }
 
     chips.innerHTML = htmlChips;
@@ -1893,6 +2132,558 @@ function confirmNewFavList() {
   document.getElementById('newFavListForm').classList.remove('visible');
 }
 
+// ── Barcode scanner ────────────────────────────────────────────────────────
+function playBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+function validateBarcode(code) {
+  return /^\d{8,14}$/.test(String(code || '').trim());
+}
+
+function syncScannerAddedNames() {
+  if (!scannerAddedNames.size) return;
+  const activeNames = new Set(
+    (state.items || [])
+      .filter(i => !i.inCart && i.name)
+      .map(i => String(i.name).toLowerCase())
+  );
+  for (const name of Array.from(scannerAddedNames)) {
+    if (!activeNames.has(name)) {
+      scannerAddedNames.delete(name);
+    }
+  }
+}
+
+function showScannerResult(title, type, meta) {
+  const el = document.getElementById('scannerResult');
+  if (!el) return;
+  if (scannerResultHideTimer) {
+    clearTimeout(scannerResultHideTimer);
+    scannerResultHideTimer = 0;
+  }
+  const parts = [title || ''];
+  if (meta) parts.push(meta);
+  const text = parts.filter(Boolean).join(' · ');
+  el.textContent = text;
+  el.className = 'scanner-result';
+  if (!text) {
+    return;
+  }
+  if (type === 'error') {
+    el.classList.add('error');
+  }
+  el.classList.add('show');
+  scannerResultHideTimer = setTimeout(() => {
+    const current = document.getElementById('scannerResult');
+    if (!current) return;
+    current.textContent = '';
+    current.className = 'scanner-result';
+    scannerResultHideTimer = 0;
+  }, 3000);
+}
+
+function pauseScanning() {
+  if (scannerAnimationFrame) {
+    cancelAnimationFrame(scannerAnimationFrame);
+    scannerAnimationFrame = 0;
+  }
+  if (scannerQuaggaTimer) {
+    clearTimeout(scannerQuaggaTimer);
+    scannerQuaggaTimer = 0;
+  }
+  scannerQuaggaActive = false;
+}
+
+function stopScanner() {
+  if (scannerAnimationFrame) {
+    cancelAnimationFrame(scannerAnimationFrame);
+    scannerAnimationFrame = 0;
+  }
+  if (scannerQuaggaTimer) {
+    clearTimeout(scannerQuaggaTimer);
+    scannerQuaggaTimer = 0;
+  }
+  if (scannerResumeTimer) {
+    clearTimeout(scannerResumeTimer);
+    scannerResumeTimer = 0;
+  }
+  if (scannerResultHideTimer) {
+    clearTimeout(scannerResultHideTimer);
+    scannerResultHideTimer = 0;
+  }
+  scannerWarmupUntil = 0;
+  scannerQuaggaActive = false;
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(t => t.stop());
+    scannerStream = null;
+  }
+  const video = document.getElementById('scannerVideo');
+  if (video) video.srcObject = null;
+}
+
+function closeScannerOverlay() {
+  scannerSessionId += 1;
+  stopScanner();
+  scannerAddedNames.clear();
+  showScannerResult('', '', '');
+  document.getElementById('scannerOverlay').classList.remove('open');
+  setActiveTab('list');
+}
+
+function resumeScanning(delayMs) {
+  const sessionId = scannerSessionId;
+  if (scannerResumeTimer) {
+    clearTimeout(scannerResumeTimer);
+  }
+  scannerResumeTimer = setTimeout(() => {
+    if (sessionId !== scannerSessionId) return;
+    scannerResumeTimer = 0;
+    lastCode = '';
+    pauseScanning();
+    const status = document.getElementById('scannerStatus');
+    const video = document.getElementById('scannerVideo');
+    if (!scannerStream || !video) return;
+    showScannerResult('', '', '');
+    status.textContent = translate('Scanning…');
+    status.className = 'scanner-status';
+    if (scannerDetector) {
+      startNativeScanning(video, status, sessionId);
+    } else if (window.Quagga) {
+      startQuaggaFrameScanning(video, status, sessionId);
+    }
+  }, delayMs);
+}
+
+function onBarcodeDetected(code, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  if (Date.now() < scannerWarmupUntil) return;
+  if (!validateBarcode(code) || code === lastCode) return;
+  lastCode = code;
+  pauseScanning();
+  playBeep();
+  const status = document.getElementById('scannerStatus');
+  status.textContent = translate('Found') + ': ' + code;
+  status.className = 'scanner-status success';
+  showScannerResult(code, '', '');
+  lookupBarcode(code, sessionId);
+}
+
+function startNativeScanning(video, status, sessionId) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let detectErrorCount = 0;
+  const loop = () => {
+    if (sessionId !== scannerSessionId) return;
+    if (!scannerStream || !scannerDetector) return;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      scannerDetector.detect(canvas)
+        .then(codes => {
+          if (sessionId !== scannerSessionId) return;
+          if (!scannerStream) return;
+          detectErrorCount = 0;
+          if (codes && codes.length) {
+            const raw = String(codes[0].rawValue || '').trim();
+            onBarcodeDetected(raw, sessionId);
+          }
+        })
+        .catch((err) => {
+          detectErrorCount += 1;
+          console.warn('[scanner] BarcodeDetector.detect failed:', err);
+          // Auf Android schlägt detect() teils permanent fehl → Fallback auf Quagga
+          if (detectErrorCount >= 3 && sessionId === scannerSessionId) {
+            scannerDetector = null;
+            if (scannerAnimationFrame) {
+              cancelAnimationFrame(scannerAnimationFrame);
+              scannerAnimationFrame = 0;
+            }
+            status.textContent = translate('Loading decoder…');
+            ensureQuaggaLoaded()
+              .then(() => {
+                if (sessionId !== scannerSessionId || !scannerStream) return;
+                status.textContent = translate('Scanning…');
+                status.className = 'scanner-status';
+                startQuaggaFrameScanning(video, status, sessionId);
+              })
+              .catch(() => {
+                status.textContent = translate('Decoder could not be loaded');
+                status.className = 'scanner-status error';
+              });
+          }
+        });
+    }
+    scannerAnimationFrame = requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+function ensureQuaggaLoaded() {
+  if (window.Quagga) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-quagga="1"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('load failed')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js';
+    script.async = true;
+    script.setAttribute('data-quagga', '1');
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('load failed'));
+    document.head.appendChild(script);
+  });
+}
+
+function startQuaggaFrameScanning(video, status, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  if (!window.Quagga || !scannerStream) return;
+  scannerQuaggaActive = true;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const scanOnce = () => {
+    if (sessionId !== scannerSessionId) return;
+    if (!scannerQuaggaActive || !scannerStream) return;
+    if (video.readyState < 2) {
+      scannerQuaggaTimer = setTimeout(scanOnce, 200);
+      return;
+    }
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const SCAN_W = 800;
+    const scale = SCAN_W / vw;
+    canvas.width = SCAN_W;
+    canvas.height = Math.round(vh * scale);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      Quagga.decodeSingle({
+        src: canvas.toDataURL('image/jpeg', 0.8),
+        numOfWorkers: 0,
+        locate: true,
+        locator: { patchSize: 'medium', halfSample: true },
+        decoder: {
+          readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader', 'code_128_reader'],
+          multiple: false
+        }
+      }, (result) => {
+        if (sessionId !== scannerSessionId) return;
+        if (result && result.codeResult && result.codeResult.code) {
+          onBarcodeDetected(result.codeResult.code, sessionId);
+        }
+        if (scannerQuaggaActive) {
+          scannerQuaggaTimer = setTimeout(scanOnce, 400);
+        }
+      });
+    } catch (err) {
+      console.warn('[scanner] Quagga.decodeSingle threw:', err);
+      if (scannerQuaggaActive) {
+        scannerQuaggaTimer = setTimeout(scanOnce, 500);
+      }
+    }
+  };
+
+  status.textContent = translate('Scanning…');
+  status.className = 'scanner-status';
+  scanOnce();
+}
+
+function openScannerOverlay() {
+  closeSuggestions();
+  closeFavOverlay();
+  closePrintOverlay();
+  scannerSessionId += 1;
+  const sessionId = scannerSessionId;
+  const overlay = document.getElementById('scannerOverlay');
+  const status = document.getElementById('scannerStatus');
+  const result = document.getElementById('scannerResult');
+  const videoWrap = document.getElementById('scannerVideoWrap');
+  const video = document.getElementById('scannerVideo');
+  overlay.classList.add('open');
+  setActiveTab('list');
+  lastCode = '';
+  scannerWarmupUntil = 0;
+  scannerAddedNames.clear();
+  result.textContent = '';
+  result.className = 'scanner-result';
+  videoWrap.style.display = '';
+
+  status.textContent = translate('Scanning…');
+  status.className = 'scanner-status';
+
+  const canUseCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const canUseNative = !!window.BarcodeDetector;
+  const isSecure = !!window.isSecureContext;
+  const inIframe = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+  if (!canUseCamera) {
+    videoWrap.style.display = 'none';
+    if (!isSecure) {
+      status.textContent = translate('Camera requires HTTPS');
+    } else {
+      status.textContent = translate('Camera not available');
+    }
+    status.className = 'scanner-status error';
+    return;
+  }
+
+  const waitForVideoReady = (videoEl) => new Promise((resolve) => {
+    if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+      resolve();
+      return;
+    }
+    const onReady = () => {
+      videoEl.removeEventListener('loadedmetadata', onReady);
+      videoEl.removeEventListener('canplay', onReady);
+      resolve();
+    };
+    videoEl.addEventListener('loadedmetadata', onReady);
+    videoEl.addEventListener('canplay', onReady);
+  });
+
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  })
+    .then((stream) => {
+      scannerStream = stream;
+      video.srcObject = stream;
+      const playPromise = video.play();
+      return (playPromise && playPromise.catch) ? playPromise.catch(() => {}) : playPromise;
+    })
+    .then(() => waitForVideoReady(video))
+    .then(async () => {
+      scannerWarmupUntil = Date.now() + 900;
+      scannerDetector = null;
+      if (canUseNative) {
+        try {
+          let supported = [];
+          if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+            supported = await BarcodeDetector.getSupportedFormats();
+          }
+          const wanted = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'];
+          const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
+          if (formats.length) {
+            scannerDetector = new BarcodeDetector({ formats });
+          } else {
+            console.warn('[scanner] BarcodeDetector reports no supported formats – falling back to Quagga');
+          }
+        } catch (e) {
+          console.warn('[scanner] BarcodeDetector init failed:', e);
+          scannerDetector = null;
+        }
+      }
+
+      if (scannerDetector) {
+        startNativeScanning(video, status, sessionId);
+      } else {
+        status.textContent = translate('Loading decoder…');
+        ensureQuaggaLoaded()
+          .then(() => {
+            if (sessionId !== scannerSessionId) return;
+            if (!scannerStream) return;
+            status.textContent = translate('Scanning…');
+            status.className = 'scanner-status';
+            startQuaggaFrameScanning(video, status, sessionId);
+          })
+          .catch((err) => {
+            console.warn('[scanner] Quagga load failed:', err);
+            if (sessionId !== scannerSessionId) return;
+            status.textContent = translate('Decoder could not be loaded');
+            status.className = 'scanner-status error';
+          });
+      }
+    })
+    .catch((err) => {
+      console.warn('[scanner] camera init failed:', err);
+      videoWrap.style.display = 'none';
+      const name = (err && err.name) ? err.name : '';
+      let msg;
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        msg = inIframe
+          ? translate('Camera blocked by iframe policy')
+          : translate('Camera permission denied');
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        msg = translate('No camera found');
+      } else if (name === 'NotReadableError') {
+        msg = translate('Camera is used by another app');
+      } else {
+        msg = translate('Camera not available') + (name ? ' (' + name + ')' : '');
+      }
+      status.textContent = msg;
+      status.className = 'scanner-status error';
+    });
+}
+
+function applyBarcodeLookupResult(code, name, bestCat, sessionId, price, listingId, imageUrl) {
+  if (sessionId !== scannerSessionId) return;
+  const status = document.getElementById('scannerStatus');
+  const trimName = (name || code).trim();
+  const nameKey = trimName.toLowerCase();
+  const existing = (state.items || []).find(i => !i.inCart && i.name.toLowerCase() === nameKey);
+  const alreadyScanned = scannerAddedNames.has(nameKey);
+  // Still treat as duplicate unless we can enrich the existing item (backfill category/price/listingId/imageUrl)
+  const canEnrich = existing && ((!existing.category && bestCat) || (!existing.price && price) || (!existing.listingId && listingId) || (!existing.imageUrl && imageUrl));
+  if ((existing || alreadyScanned) && !canEnrich) {
+    status.textContent = '\u2713 ' + trimName + ' (' + translate('already in list') + ')';
+    status.className = 'scanner-status success';
+    showScannerResult('\u2713 ' + trimName, 'duplicate', translate('already in list'));
+    resumeScanning(1500);
+    return;
+  }
+  const label = price ? (price + '  ' + trimName) : trimName;
+  status.textContent = '\u2713 ' + label;
+  status.className = 'scanner-status success';
+  showScannerResult('\u2713 ' + label, '', bestCat);
+  addScannedProduct(trimName, bestCat, price || '', listingId || '', imageUrl || '');
+}
+
+function matchLocalCategory(offCats) {
+  const local = new Set();
+  for (const cat of (state.categoryOrder || [])) local.add(cat);
+  for (const item of (state.items || [])) {
+    if (item.category) local.add(item.category);
+  }
+  if (!local.size || !offCats.length) return offCats[0] || '';
+  for (const oc of offCats) {
+    const ocL = oc.toLowerCase();
+    for (const lc of local) {
+      if (lc.toLowerCase() === ocL) return lc;
+    }
+  }
+  for (const oc of offCats) {
+    const ocL = oc.toLowerCase();
+    for (const lc of local) {
+      const lcL = lc.toLowerCase();
+      if (ocL.includes(lcL) || lcL.includes(ocL)) return lc;
+    }
+  }
+  return '';
+}
+
+function lookupBarcodeOpenFoodFacts(code) {
+  return fetch('https://de.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?lc=de')
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.status !== 1 || !data.product) return null;
+      const p = data.product;
+      const name = p.product_name_de || p.product_name || p.brands || code;
+      const offCats = (p.categories || '').split(',').map(c => c.trim()).filter(Boolean);
+      return { name, bestCat: matchLocalCategory(offCats) };
+    });
+}
+
+function parseOpenGtinDbResponse(text) {
+  if (!text) return null;
+  const flat = text.replace(/\r?\n/g, ' ').replace(/---/g, ' ').trim();
+  const data = {};
+  const re = /([a-z_]+)=([\s\S]*?)(?=\s+[a-z_]+=|$)/gi;
+  let m;
+  while ((m = re.exec(flat)) !== null) {
+    data[m[1].toLowerCase()] = m[2].trim();
+  }
+  if (!Object.keys(data).length || data.error !== '0') return null;
+  return data;
+}
+
+function lookupBarcodeOpenGtinDb(code) {
+  const url = 'https://opengtindb.org/api.php?ean=' + encodeURIComponent(code) + '&cmd=query&queryid=400000000';
+  return fetch(url)
+    .then(r => r.text())
+    .then(text => {
+      const data = parseOpenGtinDbResponse(text);
+      if (!data) return null;
+      const name = data.detailname || data.name || code;
+      const cats = [data.maincat || '', data.subcat || ''].map(c => c.trim()).filter(Boolean);
+      return { name, bestCat: matchLocalCategory(cats) };
+    });
+}
+
+function lookupBarcodeExtApi(code) {
+  if (!state.extApiEnabled || !window.__extApiHookUrl) return Promise.resolve(null);
+  return fetch(window.__extApiHookUrl + encodeURIComponent(code))
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.error) return null;
+      const name = data.name || '';
+      if (!name) return null;
+      const cats = (data.category || '').split('/').map(c => c.trim()).filter(Boolean);
+      return {
+        name,
+        bestCat: matchLocalCategory(cats),
+        price: data.price || '',
+        listingId: data.listingId || '',
+        imageUrl: data.imageUrl || ''
+      };
+    })
+    .catch(() => null);
+}
+
+function lookupBarcode(code, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  const status = document.getElementById('scannerStatus');
+  status.textContent = translate('Looking up product…');
+  status.className = 'scanner-status';
+
+  lookupBarcodeExtApi(code)
+    .then(product => product || lookupBarcodeOpenFoodFacts(code).catch(() => null))
+    .then(product => product || lookupBarcodeOpenGtinDb(code).catch(() => null))
+    .then(product => {
+      if (sessionId !== scannerSessionId) return;
+      if (product) {
+        applyBarcodeLookupResult(code, product.name, product.bestCat, sessionId, product.price || '', product.listingId || '', product.imageUrl || '');
+      } else {
+        status.textContent = translate('Product not found') + ' (' + code + ')';
+        status.className = 'scanner-status error';
+        showScannerResult(translate('Product not found'), 'error', code);
+        resumeScanning(2000);
+      }
+    })
+    .catch(() => {
+      if (sessionId !== scannerSessionId) return;
+      status.textContent = translate('Lookup failed') + ' (' + code + ')';
+      status.className = 'scanner-status error';
+      showScannerResult(translate('Lookup failed'), 'error', code);
+      resumeScanning(2000);
+    });
+}
+
+function addScannedProduct(name, category, price, listingId, imageUrl) {
+  if (!name) return;
+  scannerAddedNames.add(name.toLowerCase());
+  requestAction('AddScannedItem', JSON.stringify({
+    name,
+    category,
+    amount: '1',
+    price: price || '',
+    listingId: listingId || '',
+    imageUrl: imageUrl || ''
+  }));
+  resumeScanning(1500);
+}
+
 // ── Print overlay ─────────────────────────────────────────────────────────
 function openPrintOverlay() {
   closeFavOverlay();
@@ -1959,7 +2750,7 @@ function buildPrintHtml(mode) {
         for (const item of g.items) {
           const amt = item.amount || '1';
           const amtStr = /^\d+$/.test(amt) ? amt + 'x' : amt;
-          const imgUrl = getProductImageUrl(item.name);
+          const imgUrl = getProductImageUrl(item.name, item.imageUrl);
           const imgTag = imgUrl ? `<img class="d-img" src="${esc(baseUrl + imgUrl)}" />` : '';
           const notes = item.notes ? `<div class="notes">${esc(item.notes)}</div>` : '';
           body += `<div class="d-item"><span class="cb">&#x2610;</span>${imgTag}<div><strong>${esc(amtStr)}</strong> ${esc(item.name)}${notes}</div></div>`;
@@ -2023,6 +2814,7 @@ function handleMessage(data) {
   if (data && typeof data === 'object' && data.type === 'state') {
     if (data.availableImages) { productImages = data.availableImages; _rebuildPiKeys(); }
     state = data;
+    syncScannerAddedNames();
     render();
   }
 }
@@ -2066,7 +2858,8 @@ function openEditOverlay(item, showFavPicker) {
   // Populate category dropdown
   const select  = document.getElementById('editCategory');
   const cats    = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
-  const curCat  = item.category || '';
+  // Default empty/unknown → Miscellaneous (matches list grouping fallback)
+  const curCat  = item.category || translate('Miscellaneous');
   select.innerHTML = '';
   if (curCat && !cats.includes(curCat)) {
     const opt = document.createElement('option');
@@ -2182,6 +2975,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnCompleteAll').textContent       = translate('Everything done');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
   document.getElementById('favOverlayTitle').textContent      = translate('Favorite lists');
+  document.getElementById('scannerOverlayTitle').textContent  = translate('Scan barcode');
   document.getElementById('printOverlayTitle').textContent    = translate('Choose print layout');
   document.getElementById('printUltraLabel').textContent      = translate('Ultra Compact');
   document.getElementById('printCompactLabel').textContent    = translate('Compact');
@@ -2212,6 +3006,13 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSuggestions();
     openFavOverlay();
   });
+
+  // Barcode scanner
+  document.getElementById('btnOpenScanner').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openScannerOverlay();
+  });
+  document.getElementById('btnScannerClose').addEventListener('click', closeScannerOverlay);
 
   // Edit overlay
   document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
@@ -2327,7 +3128,55 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 3000);
     }
   });
+
+  document.getElementById('btnCartBulk').addEventListener('click', bulkAddToCart);
 });
+
+function bulkAddToCart() {
+  if (!window.__extApiHookUrl) return;
+  const btn = document.getElementById('btnCartBulk');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const original = translate('Add to cart');
+  btn.textContent = translate('Sending…');
+
+  // Reuse the same hook URL prefix as the lookup, swap the action.
+  const url = window.__extApiHookUrl.replace(/&a=extapi&ean=$/, '&a=cart_bulk');
+  fetch(url, { method: 'POST' })
+    .then(r => r.json().catch(() => ({})))
+    .then(data => {
+      let msg;
+      if (data && typeof data.added === 'number') {
+        msg = data.added > 0
+          ? translate('%d items added to cart').replace('%d', String(data.added))
+          : translate('No items added');
+      } else if (data && data.error) {
+        const map = {
+          'login required':       translate('Login required'),
+          'cart not configured':  translate('Cart not configured'),
+          'certificates missing': translate('Certificates missing'),
+          'basket creation failed': translate('Basket creation failed'),
+        };
+        msg = map[data.error] || (translate('Cart error') + ': ' + data.error);
+        console.warn('[ShoppingList] cart_bulk error:', data);
+      } else {
+        msg = translate('Cart error') + ': unknown';
+        console.warn('[ShoppingList] cart_bulk unexpected response:', data);
+      }
+      btn.textContent = msg;
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = original;
+      }, 4000);
+    })
+    .catch(() => {
+      btn.textContent = translate('Cart not configured');
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = original;
+      }, 2500);
+    });
+}
 }());
   </script>
 </body>

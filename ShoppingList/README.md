@@ -12,11 +12,12 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
 ## Funktionsumfang
 
-- **Einkaufsliste** – Artikel anlegen, bearbeiten, löschen, in den Warenkorb legen
+- **Einkaufsliste** – Artikel anlegen, bearbeiten, löschen, abhaken
 - **Suchvorschläge** – Häufig verwendete Artikel werden automatisch vorgeschlagen
 - **Favoritenlisten** – Mehrere Favoritenlisten mit Artikeln verwalten, schnell zur Einkaufsliste hinzufügen
 - **Kategorien** – Artikel nach Kategorien sortieren, Kategorie-Reihenfolge im Backend konfigurierbar; Artikel innerhalb einer Kategorie werden alphabetisch sortiert
-- **Produktfotos** – Optionale Produktbilder in der Einkaufsliste, Suchvorschlägen und Favoritenlisten; im Backend deaktivierbar
+- **Produktfotos** – Optionale generische Produktbilder in der Einkaufsliste, Suchvorschlägen und Favoritenlisten; im Backend deaktivierbar
+- **Barcode-Scanner** – Live-Kamera-Scan mit animierter Scanline und Trefferanzeige direkt über dem Kamerabild; Produktabgleich über Open Food Facts und OpenGTINDB
 - **Drucken** – Einkaufsliste drucken in drei Layouts: Ultra Kompakt (3 Spalten, ohne Kategorien), Kompakt (Checkliste mit Kategorien) und Detailliert (mit Bildern und Notizen). Auf iOS/Android in der Symcon App aus technischen Gründen nicht verfügbar.
 ## Bedienung
 
@@ -75,6 +76,13 @@ Favoritenlisten ermöglichen es, häufig benötigte Artikelgruppen (z. B. „Woc
    - **Detailliert** — Mit Produktbildern und Notizen
 3. Der Druckdialog des Browsers öffnet sich automatisch
 
+### Barcode scannen
+
+1. In der Suchzeile auf das **Barcode-Symbol** tippen
+2. Den Barcode vor die Kamera halten
+3. Der erkannte Artikel wird als gut lesbares, zentriertes Overlay mittig im Kamerabild angezeigt, nach 3 Sekunden automatisch ausgeblendet und zur Liste hinzugefügt
+4. Die Duplikatprüfung berücksichtigt nur aktive Listenartikel; Artikel in „Zuletzt benutzt“ gelten nicht als Duplikat
+
 ## Konfiguration
 
 | Option | Beschreibung |
@@ -83,6 +91,8 @@ Favoritenlisten ermöglichen es, häufig benötigte Artikelgruppen (z. B. „Woc
 | **Produktbilder anzeigen** | Checkbox zum Aktivieren/Deaktivieren der Produktbilder |
 | **Suchvorschläge** | Liste der Artikel mit Kategorie-Zuordnung pflegen |
 | **Favoritenlisten** | Favoritenlisten und deren Artikel verwalten |
+
+**Lookup-Reihenfolge:** Open Food Facts → OpenGTINDB.
 
 ## Produktfotos
 
@@ -94,4 +104,4 @@ Favoritenlisten ermöglichen es, häufig benötigte Artikelgruppen (z. B. „Woc
 | Variable | Beschreibung |
 |---|---|
 | **ItemCount** | Anzahl der Artikel auf der Einkaufsliste |
-| **LastUsed** | Anzahl der Artikel im Warenkorb |
+| **LastUsed** | Anzahl der Artikel im Bereich „Zuletzt benutzt" |

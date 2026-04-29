@@ -306,6 +306,7 @@ trait SuggestionEngine
 
     private function LookupCategory(string $Name): string
     {
+        // 1) Explicit user overrides (highest priority)
         $raw       = $this->ReadAttributeString('CategoryOverrides');
         $overrides = json_decode($raw, true);
         if (is_array($overrides)) {
@@ -315,15 +316,82 @@ trait SuggestionEngine
             }
         }
 
+        // 2) Brand map (word-boundary match so 'Mars' does not hit 'Marshmallows')
+        $nameLc = mb_strtolower($Name);
+        foreach ($this->GetBrandCategoryMap() as $brand => $cat) {
+            $pattern = '/(?<![\\p{L}\\p{N}])' . preg_quote(mb_strtolower($brand), '/') . '(?![\\p{L}\\p{N}])/u';
+            if (preg_match($pattern, $nameLc) === 1) {
+                return $cat;
+            }
+        }
+
+        // 3) Base suggestions (skip empty categories from legacy history entries)
         $suggestions = $this->GetBaseSuggestions();
         $keys = array_keys($suggestions);
         usort($keys, fn($a, $b) => mb_strlen($b) <=> mb_strlen($a));
         foreach ($keys as $key) {
+            if (trim((string)$suggestions[$key]) === '') {
+                continue;
+            }
             if (mb_stripos($Name, $key) !== false) {
                 return $suggestions[$key];
             }
         }
+
         return $this->Translate('Miscellaneous');
+    }
+
+    private function GetBrandCategoryMap(): array
+    {
+        return [
+            // Snacks & Süßes
+            'Haribo'      => 'Snacks & Süßes',
+            'Katjes'      => 'Snacks & Süßes',
+            'Milka'       => 'Snacks & Süßes',
+            'Ritter Sport'=> 'Snacks & Süßes',
+            'Lindt'       => 'Snacks & Süßes',
+            'Ferrero'     => 'Snacks & Süßes',
+            'Nutella'     => 'Snacks & Süßes',
+            'Kinder'      => 'Snacks & Süßes',
+            'Storck'      => 'Snacks & Süßes',
+            'Toffifee'    => 'Snacks & Süßes',
+            'Merci'       => 'Snacks & Süßes',
+            'Duplo'       => 'Snacks & Süßes',
+            'Raffaello'   => 'Snacks & Süßes',
+            'Snickers'    => 'Snacks & Süßes',
+            'Mars'        => 'Snacks & Süßes',
+            'Twix'        => 'Snacks & Süßes',
+            'Bounty'      => 'Snacks & Süßes',
+            'M&M'         => 'Snacks & Süßes',
+            'Nimm2'       => 'Snacks & Süßes',
+            "Werther's"   => 'Snacks & Süßes',
+            'Hanuta'      => 'Snacks & Süßes',
+            'Oreo'        => 'Snacks & Süßes',
+            'Leibniz'     => 'Snacks & Süßes',
+            'Bahlsen'     => 'Snacks & Süßes',
+            'Pringles'    => 'Snacks & Süßes',
+            'Lorenz'      => 'Snacks & Süßes',
+            'Funny-frisch'=> 'Snacks & Süßes',
+            'Chio'        => 'Snacks & Süßes',
+            // Getränke
+            'Coca-Cola'   => 'Getränke',
+            'Coca Cola'   => 'Getränke',
+            'Pepsi'       => 'Getränke',
+            'Fanta'       => 'Getränke',
+            'Sprite'      => 'Getränke',
+            'Red Bull'    => 'Getränke',
+            'Rauch'       => 'Getränke',
+            'Granini'     => 'Getränke',
+            'Hohes C'     => 'Getränke',
+            // Milch & Käse
+            'Müller'      => 'Milch & Käse',
+            'Landliebe'   => 'Milch & Käse',
+            'Almighurt'   => 'Milch & Käse',
+            'Danone'      => 'Milch & Käse',
+            'Activia'     => 'Milch & Käse',
+            // Fleisch & Wurst
+            'Rügenwalder' => 'Fleisch & Wurst',
+        ];
     }
 
     private function SaveCategoryOverride(string $Name, string $Category): void

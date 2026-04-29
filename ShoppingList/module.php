@@ -25,9 +25,31 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('FavoriteLists', '[]');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
         $this->RegisterAttributeString('WebHookToken', '');
+        $this->RegisterAttributeString('ExtApiAccessToken', '');
+        $this->RegisterAttributeString('ExtApiRefreshToken', '');
+        $this->RegisterAttributeInteger('ExtApiTokenExpires', 0);
+        $this->RegisterAttributeString('ExtApiPkceVerifier', '');
+        $this->RegisterAttributeString('ExtApiPkceState', '');
+        $this->RegisterAttributeString('ExtApiBasketId', '');
+        $this->RegisterAttributeString('ExtApiGatewayToken', '');
+        $this->RegisterAttributeString('ExtApiSessionId', '');
+        $this->RegisterAttributeString('ExtApiInstanaId', '');
+        $this->RegisterAttributeString('ExtApiRdfaId', '');
+        $this->RegisterAttributeString('ExtApiDeviceId', '');
+        $this->RegisterAttributeString('ExtApiCartMarketId', '');
+        $this->RegisterAttributeString('ExtApiCartContextKey', '');
+        $this->RegisterAttributeString('ExtApiCookies', '{}');
         $this->RegisterPropertyString('FavoriteListsConfig', '[]');
         $this->RegisterPropertyString('SuggestionItemsConfig', '[]');
         $this->RegisterPropertyBoolean('ShowProductImages', true);
+        $this->RegisterPropertyBoolean('ScannerEnabled', true);
+        $this->RegisterPropertyBoolean('ExtApiEnabled', false);
+        $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
+        $this->RegisterPropertyString('ExtApiMarketId', '');
+        $this->RegisterPropertyString('ExtApiZipCode', '');
+        $this->RegisterPropertyString('ExtApiCertFile', '');
+        $this->RegisterPropertyString('ExtApiKeyFile', '');
+        $this->RegisterPropertyString('ExtApiConfig', '');
         $this->RegisterPropertyString('FavoriteItemsConfig', '[]');
         $this->RegisterPropertyString('CategoryOrder', json_encode([
             'Obst & Gemüse',
@@ -82,6 +104,9 @@ class ShoppingList extends IPSModuleStrict
         // Sync suggestions from config form
         $this->SyncSuggestionsFromConfig();
 
+        // Write external product API mTLS certificates to disk
+        $this->WriteExtApiCertFiles();
+
         // Sync counts and push updated state to tile
         $this->UpdateCounts($this->LoadItems());
         $this->SendState();
@@ -96,6 +121,7 @@ class ShoppingList extends IPSModuleStrict
 
     public function Destroy(): void
     {
+        $this->DeleteExtApiCertFiles();
         parent::Destroy();
     }
 
@@ -112,6 +138,19 @@ class ShoppingList extends IPSModuleStrict
                         (string)($data['name'] ?? ''),
                         (string)($data['category'] ?? ''),
                         (string)($data['amount'] ?? '')
+                    );
+                }
+                return;
+            case 'AddScannedItem':
+                $data = json_decode((string)$Value, true);
+                if (is_array($data) && isset($data['name'])) {
+                    $this->AddScannedItemInternal(
+                        (string)($data['name'] ?? ''),
+                        (string)($data['category'] ?? ''),
+                        (string)($data['amount'] ?? ''),
+                        (string)($data['price'] ?? ''),
+                        (string)($data['listingId'] ?? ''),
+                        (string)($data['imageUrl'] ?? '')
                     );
                 }
                 return;
@@ -299,8 +338,10 @@ class ShoppingList extends IPSModuleStrict
         if (strlen($html) < 200) {
             IPS_LogMessage('ShoppingList', 'GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80));
         }
-        $hookUrl = '/hook/shoppinglist/assets/?t=' . urlencode($this->ReadAttributeString('WebHookToken')) . '&f=';
-        return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl) . ';</script>';
+        $token = urlencode($this->ReadAttributeString('WebHookToken'));
+        $hookUrl = '/hook/shoppinglist/assets/?t=' . $token . '&f=';
+        $extApiHookUrl = '/hook/shoppinglist/assets/?t=' . $token . '&a=extapi&ean=';
+        return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl) . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';</script>';
     }
 
     public function AddItem(string $Name, string $Category, string $Amount): bool
@@ -417,7 +458,34 @@ class ShoppingList extends IPSModuleStrict
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
             'favoriteLists'   => $this->LoadFavoriteLists(),
             'availableImages' => $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [],
+            'extApiEnabled'   => $this->ReadPropertyBoolean('ExtApiEnabled')
+                                 && $this->ReadPropertyString('ExtApiMarketId') !== ''
+                                 && file_exists($this->GetExtApiCertPath())
+                                 && file_exists($this->GetExtApiKeyPath()),
+            'extApiShowPrice' => $this->ReadPropertyBoolean('ExtApiShowPrice'),
+            'extApiCartReady' => $this->IsExtApiCartReady(),
+            'scannerEnabled'  => $this->ReadPropertyBoolean('ScannerEnabled'),
         ];
+    }
+
+    private function IsExtApiCartReady(): bool
+    {
+        if (!$this->ReadPropertyBoolean('ExtApiEnabled')) {
+            return false;
+        }
+        if ($this->ReadAttributeString('ExtApiRefreshToken') === ''
+            && $this->ReadAttributeString('ExtApiAccessToken') === '') {
+            return false;
+        }
+        $config = $this->LoadExtApiConfig();
+        if (!is_array($config)) {
+            return false;
+        }
+        $cart = $config['cart'] ?? null;
+        if (!is_array($cart)) {
+            return false;
+        }
+        return !empty($cart['modifyUrl']);
     }
 
     private function GetAvailableProductImages(): array
@@ -551,6 +619,14 @@ class ShoppingList extends IPSModuleStrict
 
     protected function ProcessHookData(): void
     {
+        $action = $_GET['a'] ?? '';
+
+        // OAuth callback uses its own state-based protection (no token in redirect URI from REWE)
+        if ($action === 'oauth_callback') {
+            $this->HandleOAuthCallback();
+            return;
+        }
+
         // Validate token
         $token = $_GET['t'] ?? '';
         if ($token === '' || !hash_equals($this->ReadAttributeString('WebHookToken'), $token)) {
@@ -558,10 +634,24 @@ class ShoppingList extends IPSModuleStrict
             return;
         }
 
-        $file = basename(urldecode($_GET['f'] ?? ''));
-        $path     = __DIR__ . '/assets/' . $file;
+        // External product API barcode lookup
+        if ($action === 'extapi') {
+            $this->HandleExtApiHook();
+            return;
+        }
 
-        if ($file === '' || !file_exists($path)) {
+        // Bulk-add all marked items to external cart
+        if ($action === 'cart_bulk') {
+            $this->HandleCartBulkHook();
+            return;
+        }
+
+        $file = urldecode($_GET['f'] ?? '');
+        // Allow subdirectories (e.g., api-images/), but prevent directory traversal
+        $file = str_replace('..', '', $file);
+        $path = __DIR__ . '/assets/' . $file;
+
+        if ($file === '' || !file_exists($path) || is_dir($path)) {
             http_response_code(404);
             return;
         }
@@ -580,6 +670,1725 @@ class ShoppingList extends IPSModuleStrict
         header('Content-Type: ' . $mime);
         header('Cache-Control: public, max-age=86400');
         readfile($path);
+    }
+
+    private function HandleExtApiHook(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+
+        if (!$this->ReadPropertyBoolean('ExtApiEnabled')) {
+            echo json_encode(['error' => 'disabled']);
+            return;
+        }
+
+        $ean = trim($_GET['ean'] ?? '');
+        if ($ean === '' || !preg_match('/^\d{8,14}$/', $ean)) {
+            echo json_encode(['error' => 'invalid EAN']);
+            return;
+        }
+
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+        if (!file_exists($certPath) || !file_exists($keyPath)) {
+            $this->SendDebug('ExtAPI', 'Certificate files missing', 0);
+            echo json_encode(['error' => 'certificates missing']);
+            return;
+        }
+
+        $marketId = $this->ReadPropertyString('ExtApiMarketId');
+        $zip      = $this->ReadPropertyString('ExtApiZipCode');
+        if ($marketId === '' || $zip === '') {
+            echo json_encode(['error' => 'market not configured']);
+            return;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        if ($config === null) {
+            echo json_encode(['error' => 'invalid provider config']);
+            return;
+        }
+
+        $result = $this->ExtApiLookup($ean, $marketId, $zip, $certPath, $keyPath, $config);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function SearchMarkets(string $Zip): void
+    {
+        $zip = trim($Zip);
+        if ($zip === '') {
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('Please enter ZIP'));
+            return;
+        }
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+        if (!is_file($certPath) || !is_file($keyPath)) {
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('Certificates required for market search'));
+            return;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        if ($config === null) {
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('Invalid provider config'));
+            return;
+        }
+
+        $baseUrl    = (string)($config['baseUrl'] ?? '');
+        $marketPath = (string)($config['marketPath'] ?? '');
+        if ($baseUrl === '' || $marketPath === '') {
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('Invalid provider config'));
+            return;
+        }
+
+        $vars = ['zip' => $zip];
+        $queryTpl = $config['marketQuery'] ?? [];
+        $query    = $this->InterpolatePlaceholders($queryTpl, $vars);
+
+        $url = rtrim($baseUrl, '/') . $marketPath;
+        if (is_array($query) && count($query) > 0) {
+            $url .= '?' . http_build_query($query);
+        }
+
+        $result = $this->ExtApiHttpGet($url, [], $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('Lookup failed') . ': ' . $result['error']);
+            return;
+        }
+
+        $paths   = $config['responsePaths'] ?? [];
+        $markets = $this->ResolveJsonPath($result['data'], $paths['markets'] ?? []);
+        if (!is_array($markets)) {
+            $markets = [];
+        }
+
+        $options = [];
+        foreach ($markets as $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $id      = trim((string)$this->ResolveJsonPath($m, $paths['marketId'] ?? ''));
+            $name    = trim((string)$this->ResolveJsonPath($m, $paths['marketName'] ?? ''));
+            $street  = trim((string)$this->ResolveJsonPath($m, $paths['marketStreet'] ?? ''));
+            $zipCode = trim((string)$this->ResolveJsonPath($m, $paths['marketZip'] ?? ''));
+            $city    = trim((string)$this->ResolveJsonPath($m, $paths['marketCity'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $parts = array_filter([$name, $street, trim($zipCode . ' ' . $city)]);
+            $caption = $id . ' · ' . implode(' · ', $parts);
+            $options[] = ['caption' => $caption, 'value' => $id];
+        }
+
+        if (count($options) === 0) {
+            $this->UpdateFormField('ExtApiMarketSelect', 'options', json_encode([[
+                'caption' => $this->Translate('No markets found'),
+                'value'   => '',
+            ]], JSON_UNESCAPED_UNICODE));
+            $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', $this->Translate('No markets found'));
+            return;
+        }
+
+        array_unshift($options, ['caption' => $this->Translate('Select market'), 'value' => '']);
+        $this->UpdateFormField('ExtApiMarketSelect', 'options', json_encode($options, JSON_UNESCAPED_UNICODE));
+        $this->UpdateFormField('ExtApiMarketSearchInfo', 'caption', sprintf($this->Translate('%d markets found'), count($options) - 1));
+    }
+
+    public function ApplyMarketSelection(string $MarketId): void
+    {
+        $id = trim($MarketId);
+        if ($id === '') {
+            return;
+        }
+        $this->UpdateFormField('ExtApiMarketId', 'value', $id);
+    }
+
+    private function ExtApiHttpGet(string $url, array $extraHeaders, string $certPath, string $keyPath, array $config, array $vars = []): array
+    {
+        return $this->ExtApiHttpRequest('GET', $url, null, $extraHeaders, $certPath, $keyPath, $config, $vars);
+    }
+
+    private function ExtApiHttpRequest(string $method, string $url, $body, array $extraHeaders, string $certPath, string $keyPath, array $config, array $vars = []): array
+    {
+        $userAgents = $config['userAgents'] ?? [];
+        if (is_array($userAgents) && count($userAgents) > 0) {
+            $vars['ua'] = (string)$userAgents[array_rand($userAgents)];
+        } elseif (!isset($vars['ua'])) {
+            $vars['ua'] = '';
+        }
+        if (!isset($vars['correlationId'])) {
+            $vars['correlationId'] = bin2hex(random_bytes(16));
+        }
+        if (!isset($vars['rdfa']) || trim((string)$vars['rdfa']) === '') {
+            $vars['rdfa'] = $this->ResolveRdfaId($config);
+        }
+
+        $configHeaders = $config['headers'] ?? [];
+        $headers = [];
+        if (is_array($configHeaders)) {
+            foreach ($configHeaders as $name => $value) {
+                $value = $this->InterpolatePlaceholders($value, $vars);
+                $headers[] = $name . ': ' . (string)$value;
+            }
+        }
+        $headers = array_merge($headers, $extraHeaders);
+
+        // Inject rolling REWE gateway token (rd-gateway-token) if previously captured
+        $gwToken = $this->ReadAttributeString('ExtApiGatewayToken');
+        if ($gwToken !== '' && empty($vars['_skipGatewayToken'])) {
+            $hasGw = false;
+            foreach ($headers as $h) {
+                if (stripos($h, 'rd-gateway-token:') === 0) {
+                    $hasGw = true;
+                    break;
+                }
+            }
+            if (!$hasGw) {
+                $headers[] = 'rd-gateway-token: ' . $gwToken;
+            }
+        }
+
+        // Inject the optional auth-info-session-id context header unless the
+        // concrete request type opts out (REWE basket merge does).
+        if (empty($vars['_skipSessionHeaders'])) {
+            $sessionId = $this->ReadAttributeString('ExtApiSessionId');
+            if ($sessionId === '') {
+                $sessionId = $this->GenerateUuidV4();
+                $this->WriteAttributeString('ExtApiSessionId', $sessionId);
+            }
+            $hasSession = false;
+            foreach ($headers as $h) {
+                if (stripos($h, 'auth-info-session-id:') === 0) {
+                    $hasSession = true;
+                    break;
+                }
+            }
+            if (!$hasSession) {
+                $headers[] = 'auth-info-session-id: ' . $sessionId;
+            }
+        }
+
+        foreach ([
+            'x-instana-android' => $this->ReadOrCreateUuidAttribute('ExtApiInstanaId'),
+            'rdfa'              => (string)$vars['rdfa'],
+            'rdtga'             => 'payment-enable-google-pay,productlist-citrusad',
+        ] as $name => $value) {
+            $this->AppendHeaderIfMissing($headers, $name, $value);
+        }
+
+        // Inject optional device-id headers unless the concrete request type
+        // opts out. Prefer the customer_uuid claim where the gateway expects
+        // the "_deviceId" GraphQL context variable.
+        if (empty($vars['_skipDeviceHeaders'])) {
+            $deviceId = $this->ExtractAccessTokenClaim('customer_uuid');
+            if ($deviceId === '') {
+                $deviceId = $this->ReadAttributeString('ExtApiDeviceId');
+                if ($deviceId === '') {
+                    $deviceId = $this->GenerateUuidV4();
+                    $this->WriteAttributeString('ExtApiDeviceId', $deviceId);
+                }
+            }
+            foreach (['device-id', 'rd-device-id', 'x-device-id'] as $hdr) {
+                $exists = false;
+                foreach ($headers as $h) {
+                    if (stripos($h, $hdr . ':') === 0) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $headers[] = $hdr . ': ' . $deviceId;
+                }
+            }
+        }
+
+        $ch = curl_init($url);
+        if ($certPath !== '' && $keyPath !== '') {
+            curl_setopt($ch, CURLOPT_SSLCERT, $certPath);
+            curl_setopt($ch, CURLOPT_SSLKEY, $keyPath);
+        }
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+
+        // Send stored cookies (host-scoped jar)
+        $host = parse_url($url, PHP_URL_HOST) ?: '';
+        $cookieHeader = $this->BuildCookieHeader($host);
+        if ($cookieHeader !== '') {
+            $hasCookie = false;
+            foreach ($headers as $h) {
+                if (stripos($h, 'cookie:') === 0) {
+                    $hasCookie = true;
+                    break;
+                }
+            }
+            if (!$hasCookie) {
+                $headers[] = 'Cookie: ' . $cookieHeader;
+            }
+        }
+
+        // Capture set-rd-gateway-token + Set-Cookie from response
+        $capturedGwToken = '';
+        $capturedCookies = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $headerLine) use (&$capturedGwToken, &$capturedCookies) {
+            $len = strlen($headerLine);
+            if (stripos($headerLine, 'set-rd-gateway-token:') === 0) {
+                $capturedGwToken = trim(substr($headerLine, strlen('set-rd-gateway-token:')));
+            } elseif (stripos($headerLine, 'set-cookie:') === 0) {
+                $capturedCookies[] = trim(substr($headerLine, strlen('set-cookie:')));
+            }
+            return $len;
+        });
+
+        if ($body !== null) {
+            $payload = is_array($body) ? json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : (string)$body;
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            $hasContentType = false;
+            foreach ($headers as $h) {
+                if (stripos($h, 'content-type:') === 0) {
+                    $hasContentType = true;
+                    break;
+                }
+            }
+            if (!$hasContentType) {
+                $headers[] = 'Content-Type: application/json';
+            }
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        // Redact sensitive tokens before logging
+        $logHeaders = array_map(static function (string $h): string {
+            $h = preg_replace('/(Authorization:\s*Bearer\s+)\S+/i', '$1***redacted***', $h) ?? $h;
+            $h = preg_replace('/(rd-gateway-token:\s*)\S+/i', '$1***redacted***', $h) ?? $h;
+            return $h;
+        }, $headers);
+        $this->SendDebug('ExtAPI', strtoupper($method) . ' ' . $url . ' | headers: ' . implode(' | ', $logHeaders), 0);
+
+        $responseBody = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($capturedGwToken !== '') {
+            $this->WriteAttributeString('ExtApiGatewayToken', $capturedGwToken);
+            $this->SendDebug('ExtAPI', 'gateway token refreshed (' . strlen($capturedGwToken) . ' bytes)', 0);
+        }
+        if (!empty($capturedCookies) && $host !== '') {
+            $this->StoreCookies($host, $capturedCookies);
+        }
+
+        if ($responseBody === false) {
+            $this->SendDebug('ExtAPI', 'cURL error: ' . $error, 0);
+            return ['error' => 'request failed'];
+        }
+        if ($httpCode >= 400) {
+            $this->SendDebug('ExtAPI', 'HTTP ' . $httpCode . ': ' . $this->BuildResponseLogPreview($url, (string)$responseBody, 200), 0);
+            return ['error' => 'HTTP ' . $httpCode];
+        }
+        $this->SendDebug('ExtAPI', 'HTTP ' . $httpCode . ' OK (' . strlen($responseBody) . ' bytes): ' . $this->BuildResponseLogPreview($url, (string)$responseBody, 400), 0);
+        $data = json_decode($responseBody, true);
+        if (!is_array($data)) {
+            $this->SendDebug('ExtAPI', 'JSON decode failed', 0);
+            return ['error' => 'invalid response'];
+        }
+        if (!empty($data['errors']) && is_array($data['errors'])) {
+            $message = $this->SummarizeGraphQlError($data['errors']);
+            $this->SendDebug('ExtAPI', 'GraphQL error: ' . $message, 0);
+            return ['error' => $message, 'data' => $data];
+        }
+        return ['data' => $data];
+    }
+
+    private function AppendHeaderIfMissing(array &$headers, string $name, string $value): void
+    {
+        if ($value === '') {
+            return;
+        }
+        foreach ($headers as $h) {
+            if (stripos($h, $name . ':') === 0) {
+                return;
+            }
+        }
+        $headers[] = $name . ': ' . $value;
+    }
+
+    private function RemoveHeaders(array $headers, array $names): array
+    {
+        $omit = [];
+        foreach ($names as $name) {
+            $name = strtolower(trim((string)$name));
+            if ($name !== '') {
+                $omit[$name] = true;
+            }
+        }
+        if (empty($omit)) {
+            return $headers;
+        }
+
+        $filtered = [];
+        foreach ($headers as $header) {
+            $headerName = strtolower(trim(strtok((string)$header, ':') ?: ''));
+            if ($headerName === '' || !isset($omit[$headerName])) {
+                $filtered[] = $header;
+            }
+        }
+        return $filtered;
+    }
+
+    private function BuildResponseLogPreview(string $url, string $responseBody, int $maxLength): string
+    {
+        if ($this->ShouldRedactResponseBodyForDebug($url)) {
+            return '[redacted]';
+        }
+        return substr($responseBody, 0, $maxLength);
+    }
+
+    private function ShouldRedactResponseBodyForDebug(string $url): bool
+    {
+        $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?: ''));
+        return $path === '/api/customers' || strpos($path, '/api/customers/') === 0;
+    }
+
+    private function SummarizeGraphQlError(array $errors): string
+    {
+        $first = $errors[0] ?? null;
+        if (!is_array($first)) {
+            return 'GraphQL error';
+        }
+        $message = trim((string)($first['message'] ?? 'GraphQL error'));
+        if ($message === '') {
+            $message = 'GraphQL error';
+        }
+        $extensions = $first['extensions'] ?? [];
+        if (is_array($extensions)) {
+            if (!empty($extensions['statusCode'])) {
+                $message .= ' (HTTP ' . (string)$extensions['statusCode'] . ')';
+            } elseif (!empty($extensions['classification'])) {
+                $message .= ' (' . (string)$extensions['classification'] . ')';
+            }
+        }
+        return $message;
+    }
+
+    private function GenerateUuidV4(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
+    }
+
+    private function ReadOrCreateUuidAttribute(string $attribute): string
+    {
+        $value = trim($this->ReadAttributeString($attribute));
+        if ($value === '') {
+            $value = $this->GenerateUuidV4();
+            $this->WriteAttributeString($attribute, $value);
+        }
+        return $value;
+    }
+
+    private function BuildCookieHeader(string $host): string
+    {
+        $jar = json_decode($this->ReadAttributeString('ExtApiCookies'), true);
+        if (!is_array($jar) || !isset($jar[$host]) || !is_array($jar[$host])) {
+            return '';
+        }
+        $parts = [];
+        foreach ($jar[$host] as $name => $value) {
+            $parts[] = $name . '=' . $value;
+        }
+        return implode('; ', $parts);
+    }
+
+    private function StoreCookies(string $host, array $setCookieLines): void
+    {
+        $jar = json_decode($this->ReadAttributeString('ExtApiCookies'), true);
+        if (!is_array($jar)) {
+            $jar = [];
+        }
+        if (!isset($jar[$host]) || !is_array($jar[$host])) {
+            $jar[$host] = [];
+        }
+        foreach ($setCookieLines as $line) {
+            $first = explode(';', $line, 2)[0] ?? '';
+            $eq = strpos($first, '=');
+            if ($eq === false) {
+                continue;
+            }
+            $name  = trim(substr($first, 0, $eq));
+            $value = trim(substr($first, $eq + 1));
+            if ($name === '') {
+                continue;
+            }
+            $jar[$host][$name] = $value;
+        }
+        $this->WriteAttributeString('ExtApiCookies', json_encode($jar, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function ExtApiLookup(string $ean, string $marketId, string $zip, string $certPath, string $keyPath, array $config): array
+    {
+        $baseUrl     = (string)($config['baseUrl'] ?? '');
+        $productPath = (string)($config['productPath'] ?? '');
+        if ($baseUrl === '' || $productPath === '') {
+            return ['error' => 'invalid provider config'];
+        }
+
+        $vars = [
+            'ean'      => $ean,
+            'zip'      => $zip,
+            'marketId' => $marketId,
+        ];
+
+        $queryTpl = $config['productQuery'] ?? [];
+        $query    = $this->InterpolatePlaceholders($queryTpl, $vars);
+
+        $url = rtrim($baseUrl, '/') . $productPath;
+        if (is_array($query) && count($query) > 0) {
+            $url .= '?' . http_build_query($query);
+        }
+
+        $extraHeaders = [];
+        $productHeaders = $config['productHeaders'] ?? [];
+        if (is_array($productHeaders)) {
+            foreach ($productHeaders as $name => $value) {
+                $value = $this->InterpolatePlaceholders($value, $vars);
+                $extraHeaders[] = $name . ': ' . (string)$value;
+            }
+        }
+
+        $result = $this->ExtApiHttpGet($url, $extraHeaders, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            return $result;
+        }
+        $data = $result['data'];
+
+        $paths    = $config['responsePaths'] ?? [];
+        $products = $this->ResolveJsonPath($data, $paths['products'] ?? []);
+        if (!is_array($products) || count($products) === 0) {
+            return ['error' => 'not found'];
+        }
+
+        $product = $products[0];
+        if (!is_array($product)) {
+            return ['error' => 'not found'];
+        }
+
+        $name  = (string)$this->ResolveJsonPath($product, $paths['productName'] ?? '');
+        $brand = (string)$this->ResolveJsonPath($product, $paths['productBrand'] ?? '');
+
+        if ($name === '') {
+            return ['error' => 'not found'];
+        }
+
+        // Collect category hints from provider's own category metadata
+        $catHints = [];
+        $catFields = $paths['productCategoryFields'] ?? [];
+        if (is_string($catFields)) {
+            $catFields = [$catFields];
+        }
+        if (is_array($catFields)) {
+            foreach ($catFields as $field) {
+                if (!empty($product[$field]) && is_array($product[$field])) {
+                    array_walk_recursive($product[$field], function ($v) use (&$catHints) {
+                        if (is_string($v) && trim($v) !== '') {
+                            $catHints[] = $v;
+                        }
+                    });
+                }
+            }
+        }
+
+        // Category: derive from product name + brand + category hints via
+        // keyword/brand map. Return empty on Miscellaneous fallback so the
+        // client-side grouping takes over.
+        $misc     = $this->Translate('Miscellaneous');
+        $hint     = trim($name . ' ' . $brand . ' ' . implode(' ', $catHints));
+        $category = $this->LookupCategory($hint);
+        $this->SendDebug('ExtAPI', 'hint=' . $hint . ' => ' . $category, 0);
+        if ($category === $misc || $category === 'Miscellaneous') {
+            $category = '';
+        }
+
+        // Extract price if enabled
+        $price = '';
+        if ($this->ReadPropertyBoolean('ExtApiShowPrice')) {
+            $rawPrice = $this->ResolveJsonPath($product, $paths['productPriceCents'] ?? '');
+            if (is_numeric($rawPrice) && (float)$rawPrice > 0) {
+                $divisor  = (float)($config['priceDivisor'] ?? 1);
+                $decimals = (int)($config['priceDecimals'] ?? 2);
+                $decSep   = (string)($config['priceDecimalSeparator'] ?? '.');
+                $thouSep  = (string)($config['priceThousandsSeparator'] ?? ',');
+                $suffix   = (string)($config['priceSuffix'] ?? '');
+                $value    = $divisor > 0 ? ((float)$rawPrice / $divisor) : (float)$rawPrice;
+                $price    = number_format($value, $decimals, $decSep, $thouSep) . $suffix;
+            }
+        }
+
+        // Listing ID for cart operations (REWE uses listing.listingId)
+        $listingPath = $paths['productListingId'] ?? ['listing.listingId', 'listing.id', 'listingId'];
+        $listingId   = (string)$this->ResolveJsonPath($product, $listingPath);
+
+        $this->SendDebug('ExtAPI', 'Found: ' . $name . ' (cat: ' . $category . ', price: ' . $price . ', listingId: ' . $listingId . ')', 0);
+
+        // Download and cache product image if available
+        $imageUrl = (string)$this->ResolveJsonPath($product, $paths['productImageUrl'] ?? '');
+        $this->SendDebug('ExtAPI', 'Raw imageUrl from API: ' . $imageUrl, 0);
+        $localImagePath = '';
+        if ($imageUrl !== '') {
+            $localImagePath = $this->DownloadApiImage($imageUrl, $ean, $config);
+        }
+
+        return [
+            'name'      => $name,
+            'category'  => $category,
+            'price'     => $price,
+            'listingId' => $listingId,
+            'imageUrl'  => $localImagePath,
+        ];
+    }
+
+    private function LoadExtApiConfig(): ?array
+    {
+        $raw = trim($this->ReadPropertyString('ExtApiConfig'));
+        if ($raw === '') {
+            return null;
+        }
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $this->SendDebug('ExtAPI', 'Invalid provider config JSON', 0);
+            return null;
+        }
+        return $data;
+    }
+
+    private function DownloadApiImage(string $imageUrl, string $ean, array $config): string
+    {
+        if ($ean === '') {
+            return '';
+        }
+
+        $imageDir = __DIR__ . '/assets/api-images';
+        if (!is_dir($imageDir)) {
+            mkdir($imageDir, 0755, true);
+        }
+
+        $filename = $ean . '.webp';
+        $localPath = $imageDir . '/' . $filename;
+
+        if (file_exists($localPath)) {
+            $this->SendDebug('ExtAPI', 'Image already cached: api-images/' . $filename, 0);
+            return 'api-images/' . $filename;
+        }
+
+        // Check if local image already exists for this EAN (avoid unnecessary download)
+        $localImages = $this->GetAvailableProductImages();
+        if (isset($localImages[$ean])) {
+            $this->SendDebug('ExtAPI', 'Local image already exists for EAN ' . $ean . ': ' . $localImages[$ean], 0);
+            return ''; // Return empty to let frontend use local image
+        }
+
+        $template = (string)($config['imageUrlTemplate'] ?? '');
+        $format = (string)($config['imageFormat'] ?? 'webp');
+        $quality = (int)($config['imageQuality'] ?? 80);
+        $resize = (int)($config['imageResize'] ?? 100);
+
+        if ($template !== '') {
+            $imageUrl = str_replace(
+                ['{url}', '{format}', '{quality}', '{resize}'],
+                [$imageUrl, $format, $quality, $resize],
+                $template
+            );
+        }
+
+        $this->SendDebug('ExtAPI', 'Downloading image from: ' . $imageUrl, 0);
+
+        $ch = curl_init($imageUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+        $data = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($data !== false && $httpCode === 200 && strlen($data) > 0) {
+            file_put_contents($localPath, $data);
+            $this->SendDebug('ExtAPI', 'Image downloaded and cached: api-images/' . $filename, 0);
+            return 'api-images/' . $filename;
+        }
+
+        $this->SendDebug('ExtAPI', 'Image download failed: ' . ($error ?: 'HTTP ' . $httpCode), 0);
+        return '';
+    }
+
+    // ---------------------------------------------------------------------
+    //  OAuth2 PKCE Login + Cart bulk-add
+    // ---------------------------------------------------------------------
+
+    public function StartLogin(): string
+    {
+        $config = $this->LoadExtApiConfig();
+        if (!is_array($config)) {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('Invalid provider config'));
+            return '';
+        }
+        $auth = $config['auth'] ?? null;
+        $missing = [];
+        if (!is_array($auth)) {
+            $missing[] = 'auth';
+        } else {
+            foreach (['authorizationUrl', 'tokenUrl', 'clientId'] as $k) {
+                if (empty($auth[$k])) {
+                    $missing[] = 'auth.' . $k;
+                }
+            }
+        }
+        if (!empty($missing)) {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption',
+                $this->Translate('OAuth not configured') . ': ' . implode(', ', $missing));
+            return '';
+        }
+
+        [$verifier, $challenge] = $this->GeneratePkce();
+        $state = bin2hex(random_bytes(16));
+        $this->WriteAttributeString('ExtApiPkceVerifier', $verifier);
+        $this->WriteAttributeString('ExtApiPkceState', $state);
+
+        $redirectUri = $this->GetOAuthRedirectUri($config);
+        $params = [
+            'response_type'         => 'code',
+            'client_id'             => (string)$auth['clientId'],
+            'redirect_uri'          => $redirectUri,
+            'scope'                 => (string)($auth['scope'] ?? 'openid'),
+            'state'                 => $state,
+            'code_challenge'        => $challenge,
+            'code_challenge_method' => (string)($auth['codeChallengeMethod'] ?? 'S256'),
+        ];
+        $extra = $auth['extraAuthParams'] ?? [];
+        if (is_array($extra)) {
+            $params = array_merge($params, $extra);
+        }
+        $url = (string)$auth['authorizationUrl'];
+        $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
+
+        // Determine flow: HTTPS redirect → automatic, custom scheme → manual paste required
+        $isCustomScheme = !preg_match('/^https?:\/\//i', $redirectUri);
+        $info = $isCustomScheme
+            ? $this->Translate('Open URL in browser, log in, then copy the redirect URL (de.rewe.app://…) into the field below and click "Exchange code".')
+            : $this->Translate('Open URL in browser to log in. Redirect happens automatically.');
+
+        $this->UpdateFormField('ExtApiLoginInfo', 'caption', $info);
+        $this->UpdateFormField('ExtApiLoginUrl', 'caption', $url);
+        $this->UpdateFormField('ExtApiLoginUrl', 'visible', true);
+        $this->UpdateFormField('ExtApiRedirectPasteRow', 'visible', $isCustomScheme);
+        return $url;
+    }
+
+    public function ExchangeCode(string $RedirectUrl): void
+    {
+        $url = trim($RedirectUrl);
+        if ($url === '') {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('Redirect URL is empty'));
+            return;
+        }
+
+        $code  = '';
+        $state = '';
+        $query = '';
+        $qpos  = strpos($url, '?');
+        if ($qpos !== false) {
+            $query = substr($url, $qpos + 1);
+        } else {
+            $query = $url;
+        }
+        $parts = [];
+        parse_str($query, $parts);
+        $code  = (string)($parts['code']  ?? '');
+        $state = (string)($parts['state'] ?? '');
+
+        if ($code === '') {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('No "code" parameter found in URL'));
+            return;
+        }
+        $expectedState = $this->ReadAttributeString('ExtApiPkceState');
+        if ($state !== '' && $expectedState !== '' && !hash_equals($expectedState, $state)) {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('State mismatch – please start login again'));
+            return;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        $auth   = is_array($config) ? ($config['auth'] ?? null) : null;
+        if (!is_array($auth) || empty($auth['tokenUrl']) || empty($auth['clientId'])) {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('OAuth not configured'));
+            return;
+        }
+
+        $verifier = $this->ReadAttributeString('ExtApiPkceVerifier');
+        $body = http_build_query([
+            'grant_type'    => 'authorization_code',
+            'code'          => $code,
+            'redirect_uri'  => $this->GetOAuthRedirectUri($config),
+            'client_id'     => (string)$auth['clientId'],
+            'code_verifier' => $verifier,
+        ]);
+        $token = $this->TokenRequest((string)$auth['tokenUrl'], $body);
+        $this->WriteAttributeString('ExtApiPkceVerifier', '');
+        $this->WriteAttributeString('ExtApiPkceState', '');
+
+        if ($token === null) {
+            $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('Token exchange failed – check debug log'));
+            return;
+        }
+        $this->StoreTokens($token);
+        $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('Logged in'));
+        $this->UpdateFormField('ExtApiLoginUrl', 'visible', false);
+        $this->UpdateFormField('ExtApiRedirectPasteRow', 'visible', false);
+        $this->SendState();
+    }
+
+    /**
+     * Diagnostic helper for REWE: queries /api/service-portfolio/{zipCode}
+     * and reports which marketIDs are available for DELIVERY / PICKUP.
+     */
+    public function DiagnoseServicePortfolio(): void
+    {
+        $zip = trim($this->ReadPropertyString('ExtApiZipCode'));
+        if ($zip === '') {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $this->Translate('No ZIP configured'));
+            return;
+        }
+        $config = $this->LoadExtApiConfig();
+        if (!is_array($config)) {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $this->Translate('Invalid provider config'));
+            return;
+        }
+        $token = $this->EnsureAccessToken();
+        if ($token === null || $token === '') {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $this->Translate('Login required'));
+            return;
+        }
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+        if (!file_exists($certPath) || !file_exists($keyPath)) {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $this->Translate('Certificates missing'));
+            return;
+        }
+
+        $base = (string)($config['baseUrl'] ?? 'https://mobile-clients-api.rewe.de');
+        $url  = rtrim($base, '/') . '/api/service-portfolio/' . rawurlencode($zip);
+        $vars = ['zip' => $zip];
+        $headers = [
+            'Authorization: Bearer ' . $token,
+            'rd-postcode: ' . $zip,
+            'rd-service-types: PICKUP,DELIVERY',
+            'rd-is-pickup-station: false',
+            'rd-is-lsfk: false',
+            'rd-user-consent: {"conversionOptimization": 1}',
+            'Accept: application/json',
+        ];
+        $this->SendDebug('ExtAPI', 'Diagnose service-portfolio for ZIP ' . $zip, 0);
+        $result = $this->ExtApiHttpRequest('GET', $url, null, $headers, $certPath, $keyPath, $config, $vars);
+
+        if (isset($result['error'])) {
+            $msg = $this->Translate('Service portfolio request failed') . ': ' . $result['error'];
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $msg);
+            return;
+        }
+        $data = $result['data'] ?? [];
+        $portfolio = $this->ResolveJsonPath($data, ['data.servicePortfolio', 'servicePortfolio']);
+        $delivery  = is_array($portfolio) ? ($portfolio['deliveryMarket'] ?? null) : null;
+        $pickups   = is_array($portfolio) ? ($portfolio['pickupMarkets'] ?? []) : [];
+        $lsfk      = is_array($portfolio) ? ($portfolio['lsfkMarkets'] ?? []) : [];
+        $openLsfk  = is_array($portfolio) ? ($portfolio['openLsfkMarkets'] ?? []) : [];
+
+        $formatMarket = static function ($m): string {
+            if (!is_array($m)) {
+                return '?';
+            }
+            return sprintf('  - %s · %s · %s',
+                (string)($m['wwIdent'] ?? '?'),
+                (string)($m['displayName'] ?? $m['companyName'] ?? ''),
+                (string)($m['city'] ?? ''));
+        };
+
+        $lines = [];
+        $lines[] = sprintf('ZIP %s:', $zip);
+        if (is_array($delivery) && !empty($delivery['wwIdent'])) {
+            $lines[] = sprintf('Delivery: %s (%s)', (string)$delivery['wwIdent'], (string)($delivery['displayName'] ?? $delivery['city'] ?? ''));
+        } else {
+            $lines[] = $this->Translate('Delivery not available for this ZIP');
+        }
+        $allLsfk = [];
+        if (is_array($lsfk)) {
+            $allLsfk = array_merge($allLsfk, $lsfk);
+        }
+        if (is_array($openLsfk)) {
+            $allLsfk = array_merge($allLsfk, $openLsfk);
+        }
+        if (count($allLsfk) > 0) {
+            $lines[] = sprintf('LSFK markets (shop delivery): %d', count($allLsfk));
+            foreach (array_slice($allLsfk, 0, 5) as $m) {
+                $lines[] = $formatMarket($m);
+            }
+        }
+        if (is_array($pickups) && count($pickups) > 0) {
+            $lines[] = sprintf('Pickup markets: %d', count($pickups));
+            foreach (array_slice($pickups, 0, 5) as $m) {
+                $lines[] = $formatMarket($m);
+            }
+        } else {
+            $lines[] = $this->Translate('No pickup markets');
+        }
+
+        // Dump the full portfolio JSON for deeper inspection
+        $this->SendDebug('ExtAPI', 'service-portfolio raw: ' . json_encode($portfolio, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+
+        $caption = implode("\n", $lines);
+        $this->SendDebug('ExtAPI', 'service-portfolio result: ' . str_replace("\n", ' | ', $caption), 0);
+        $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $caption);
+    }
+
+    /**
+     * Decode the JWT access token and report its claims so we can see whether
+     * "device_id" / "deviceId" / similar is present.
+     */
+    public function DiagnoseAccessToken(): void
+    {
+        $token = $this->ReadAttributeString('ExtApiAccessToken');
+        if ($token === '') {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $this->Translate('Login required'));
+            return;
+        }
+        $parts = explode('.', $token);
+        if (count($parts) < 2) {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', 'Token is not a JWT');
+            return;
+        }
+        $b64 = strtr($parts[1], '-_', '+/');
+        $pad = strlen($b64) % 4;
+        if ($pad) {
+            $b64 .= str_repeat('=', 4 - $pad);
+        }
+        $payload = json_decode((string)base64_decode($b64, true), true);
+        if (!is_array($payload)) {
+            $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', 'Failed to decode JWT payload');
+            return;
+        }
+        // Redact obvious sensitive fields before showing
+        $safe = $payload;
+        foreach (['email', 'preferred_username', 'name', 'family_name', 'given_name'] as $k) {
+            if (isset($safe[$k])) {
+                $safe[$k] = '***';
+            }
+        }
+        $keys = implode(', ', array_keys($payload));
+        $caption = "Claims keys: " . $keys . "\n\n" . json_encode($safe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->SendDebug('ExtAPI', 'JWT claims: ' . json_encode($safe, JSON_UNESCAPED_SLASHES), 0);
+        $this->UpdateFormField('ExtApiPortfolioInfo', 'caption', $caption);
+    }
+
+    public function Logout(): void
+    {
+        $this->WriteAttributeString('ExtApiAccessToken', '');
+        $this->WriteAttributeString('ExtApiRefreshToken', '');
+        $this->WriteAttributeString('ExtApiGatewayToken', '');
+        $this->WriteAttributeString('ExtApiCookies', '{}');
+        $this->WriteAttributeInteger('ExtApiTokenExpires', 0);
+        $this->WriteAttributeString('ExtApiBasketId', '');
+        $this->WriteAttributeString('ExtApiCartMarketId', '');
+        $this->WriteAttributeString('ExtApiCartContextKey', '');
+        $this->UpdateFormField('ExtApiLoginInfo', 'caption', $this->Translate('Not logged in'));
+        $this->SendState();
+    }
+
+    private function HandleOAuthCallback(): void
+    {
+        header('Content-Type: text/html; charset=utf-8');
+        $code  = (string)($_GET['code'] ?? '');
+        $state = (string)($_GET['state'] ?? '');
+        $expectedState = $this->ReadAttributeString('ExtApiPkceState');
+        if ($code === '' || $state === '' || $expectedState === '' || !hash_equals($expectedState, $state)) {
+            http_response_code(400);
+            echo '<html><body><p>OAuth error: invalid state</p></body></html>';
+            return;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        $auth   = is_array($config) ? ($config['auth'] ?? null) : null;
+        if (!is_array($auth) || empty($auth['tokenUrl']) || empty($auth['clientId'])) {
+            http_response_code(500);
+            echo '<html><body><p>OAuth error: provider config missing</p></body></html>';
+            return;
+        }
+
+        $verifier = $this->ReadAttributeString('ExtApiPkceVerifier');
+        $body = http_build_query([
+            'grant_type'    => 'authorization_code',
+            'code'          => $code,
+            'redirect_uri'  => $this->GetOAuthRedirectUri($config),
+            'client_id'     => (string)$auth['clientId'],
+            'code_verifier' => $verifier,
+        ]);
+
+        $token = $this->TokenRequest((string)$auth['tokenUrl'], $body);
+        // Clear PKCE artifacts
+        $this->WriteAttributeString('ExtApiPkceVerifier', '');
+        $this->WriteAttributeString('ExtApiPkceState', '');
+
+        if ($token === null) {
+            http_response_code(500);
+            echo '<html><body><p>OAuth error: token exchange failed</p></body></html>';
+            return;
+        }
+        $this->StoreTokens($token);
+        $this->SendState();
+
+        $msg = $this->Translate('Login successful – you can close this tab');
+        echo '<html><head><meta charset="utf-8"><title>OK</title></head><body style="font-family:system-ui;padding:24px"><h2>' . htmlspecialchars($msg, ENT_QUOTES) . '</h2></body></html>';
+    }
+
+    private function EnsureAccessToken(): ?string
+    {
+        $access  = $this->ReadAttributeString('ExtApiAccessToken');
+        $expires = $this->ReadAttributeInteger('ExtApiTokenExpires');
+        if ($access !== '' && $expires - 30 > time()) {
+            return $access;
+        }
+        $refresh = $this->ReadAttributeString('ExtApiRefreshToken');
+        if ($refresh === '') {
+            return $access !== '' ? $access : null;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        $auth   = is_array($config) ? ($config['auth'] ?? null) : null;
+        if (!is_array($auth) || empty($auth['tokenUrl']) || empty($auth['clientId'])) {
+            return null;
+        }
+        $body = http_build_query([
+            'grant_type'    => 'refresh_token',
+            'refresh_token' => $refresh,
+            'client_id'     => (string)$auth['clientId'],
+        ]);
+        $token = $this->TokenRequest((string)$auth['tokenUrl'], $body);
+        if ($token === null) {
+            $this->SendDebug('ExtAPI', 'Token refresh failed', 0);
+            return null;
+        }
+        $this->StoreTokens($token);
+        return $this->ReadAttributeString('ExtApiAccessToken');
+    }
+
+    private function TokenRequest(string $url, string $body): ?array
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/x-www-form-urlencoded',
+            'Accept: application/json',
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false || $httpCode >= 400) {
+            $this->SendDebug('ExtAPI', 'Token endpoint HTTP ' . $httpCode, 0);
+            return null;
+        }
+        $data = json_decode((string)$response, true);
+        if (!is_array($data) || empty($data['access_token'])) {
+            return null;
+        }
+        return $data;
+    }
+
+    private function StoreTokens(array $token): void
+    {
+        $this->WriteAttributeString('ExtApiAccessToken', (string)$token['access_token']);
+        if (!empty($token['refresh_token'])) {
+            $this->WriteAttributeString('ExtApiRefreshToken', (string)$token['refresh_token']);
+        }
+        $expiresIn = (int)($token['expires_in'] ?? 300);
+        $this->WriteAttributeInteger('ExtApiTokenExpires', time() + $expiresIn);
+    }
+
+    private function GeneratePkce(): array
+    {
+        $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+        return [$verifier, $challenge];
+    }
+
+    private function GetOAuthRedirectUri(?array $config = null): string
+    {
+        if ($config === null) {
+            $config = $this->LoadExtApiConfig();
+        }
+        $auth = is_array($config) ? ($config['auth'] ?? []) : [];
+        if (is_array($auth) && !empty($auth['redirectUri'])) {
+            return (string)$auth['redirectUri'];
+        }
+        // The hook is registered as 'shoppinglist/assets', so callback URL is below it.
+        return 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/hook/shoppinglist/assets/?a=oauth_callback';
+    }
+
+    private function HandleCartBulkHook(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+
+        $config = $this->LoadExtApiConfig();
+        if (!is_array($config) || !isset($config['cart']) || !is_array($config['cart'])) {
+            echo json_encode(['error' => 'cart not configured']);
+            return;
+        }
+
+        $token = $this->EnsureAccessToken();
+        if ($token === null || $token === '') {
+            echo json_encode(['error' => 'login required']);
+            return;
+        }
+
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+        if (!file_exists($certPath) || !file_exists($keyPath)) {
+            echo json_encode(['error' => 'certificates missing']);
+            return;
+        }
+
+        $items = $this->LoadItems();
+        $marketItems = [];
+        foreach ($items as $idx => $item) {
+            if (!empty($item['inCart'])) {
+                continue;
+            }
+            if (empty($item['marketItem']) || empty($item['listingId'])) {
+                continue;
+            }
+            $marketItems[$idx] = $item;
+        }
+        if (count($marketItems) === 0) {
+            echo json_encode(['added' => 0, 'failed' => 0]);
+            return;
+        }
+
+        $added  = 0;
+        $failed = 0;
+        $changed = false;
+        // Read basket once before the loop; refresh ID+version after every successful add
+        $basket = $this->ExtApiBasketRead($config, $token, $certPath, $keyPath);
+        if ($basket === null) {
+            echo json_encode(['error' => 'basket creation failed']);
+            return;
+        }
+        foreach ($marketItems as $idx => $item) {
+            $qty = $this->ParseQuantity((string)($item['amount'] ?? ''));
+            $next = $this->ExtApiCartAdd(
+                (string)$item['listingId'], $qty,
+                (string)$basket['id'], (int)$basket['version'],
+                $config, $token, $certPath, $keyPath
+            );
+            if ($next !== null) {
+                $items[$idx]['inCart'] = true;
+                $added++;
+                $changed = true;
+                $basket = $next; // updated id+version for next iteration
+            } else {
+                $failed++;
+            }
+        }
+        if ($changed) {
+            $this->SaveItems($items);
+        }
+        // Persist last known basket id (informational)
+        if (is_array($basket) && !empty($basket['id'])) {
+            $this->WriteAttributeString('ExtApiBasketId', (string)$basket['id']);
+        }
+        if ($added > 0 && $this->ShouldMergeCartAfterAdd($config)) {
+            $merged = $this->ExtApiCartMerge($basket, $config, $token, $certPath, $keyPath);
+            if (is_array($merged) && !empty($merged['id'])) {
+                $basket = $merged;
+                $this->WriteAttributeString('ExtApiBasketId', (string)$merged['id']);
+            }
+        }
+
+        echo json_encode(['added' => $added, 'failed' => $failed]);
+    }
+
+    private function ParseQuantity(string $Amount): int
+    {
+        $a = trim($Amount);
+        if ($a === '') {
+            return 1;
+        }
+        if (preg_match('/^(\d+)/', $a, $m)) {
+            $n = (int)$m[1];
+            return $n > 0 ? $n : 1;
+        }
+        return 1;
+    }
+
+    /**
+     * Make sure we hold a valid REWE gateway token. The mobile API issues a
+     * rolling JWE via "set-rd-gateway-token" response header. The very first
+     * token has to be obtained from a seed endpoint (default: /api/customers).
+     */
+    private function EnsureGatewayToken(array $config, string $token, string $certPath, string $keyPath): bool
+    {
+        if ($this->ReadAttributeString('ExtApiGatewayToken') !== '') {
+            return true;
+        }
+        $cart = $config['cart'] ?? [];
+        $seedUrl = (string)($cart['gatewayTokenSeedUrl'] ?? '');
+        if ($seedUrl === '') {
+            // No seed configured – proceed without token; provider may still allow it.
+            return true;
+        }
+        $vars   = $this->BuildCartVars($config);
+        $url    = (string)$this->InterpolatePlaceholders($seedUrl, $vars);
+        $extra  = $this->BuildCartHeaders($config, $token, $vars);
+        $this->SendDebug('ExtAPI', 'Seeding gateway token via ' . $url, 0);
+        $result = $this->ExtApiHttpRequest('GET', $url, null, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Gateway token seed failed: ' . $result['error'], 0);
+            return false;
+        }
+        return $this->ReadAttributeString('ExtApiGatewayToken') !== '';
+    }
+
+    /**
+     * Tell the REWE backend which market the customer has selected for
+     * e-commerce. Newer basket calls also accept the market context via
+     * headers, so callers decide whether a failed selection is fatal.
+     */
+    private function EnsureMarketSelection(array $config, string $token, string $certPath, string $keyPath): bool
+    {
+        $cart = $config['cart'] ?? [];
+        $url  = (string)($cart['marketSelectionUrl'] ?? '');
+        if ($url === '') {
+            return true; // not configured – assume not needed
+        }
+        $vars = $this->BuildCartVars($config);
+        $url  = (string)$this->InterpolatePlaceholders($url, $vars);
+        $bodyTpl = $cart['marketSelectionBody'] ?? [
+            'customerZipCode' => '{zip}',
+            'serviceType'     => '{serviceType}',
+            'wwIdent'         => '{marketId}',
+            '_deviceId'       => '{deviceId}',
+        ];
+        $body = is_array($bodyTpl) ? $this->InterpolatePlaceholders($bodyTpl, $vars) : null;
+        if (is_array($body)) {
+            $deviceId = trim((string)($body['_deviceId'] ?? $body['deviceId'] ?? $vars['deviceId'] ?? ''));
+            if ($deviceId !== '' && !isset($body['_deviceId'])) {
+                $body['_deviceId'] = $deviceId;
+            }
+        }
+        $extra = $this->BuildCartHeaders($config, $token, $vars);
+        $this->SendDebug('ExtAPI', 'Setting customer-market-selection: ' . json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        $result = $this->ExtApiHttpRequest('POST', $url, $body, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Market selection failed: ' . $result['error'], 0);
+            return false;
+        }
+        $this->StoreSelectedCartMarket($result['data'] ?? [], $config);
+        return true;
+    }
+
+    private function StoreSelectedCartMarket(array $data, array $config): void
+    {
+        $selected = trim((string)$this->ResolveJsonPath($data, [
+            'data.customerMarketSelection.market.wwIdent',
+            'customerMarketSelection.market.wwIdent',
+        ]));
+        if ($selected === '') {
+            return;
+        }
+        $contextKey = $this->BuildCartContextKey($config);
+        $configured = trim($this->ReadPropertyString('ExtApiMarketId'));
+        $this->WriteAttributeString('ExtApiCartMarketId', $selected);
+        $this->WriteAttributeString('ExtApiCartContextKey', $contextKey);
+        if ($configured !== '' && $selected !== $configured) {
+            $this->SendDebug('ExtAPI', 'Using selected cart market ' . $selected . ' instead of configured market ' . $configured, 0);
+        }
+    }
+
+    private function BuildCartContextKey(array $config): string
+    {
+        $cart = $config['cart'] ?? [];
+        return implode('|', [
+            trim($this->ReadPropertyString('ExtApiMarketId')),
+            trim($this->ReadPropertyString('ExtApiZipCode')),
+            (string)($cart['serviceType'] ?? 'PICKUP'),
+        ]);
+    }
+
+    private function ExtApiBasketRead(array $config, string $token, string $certPath, string $keyPath): ?array
+    {
+        if (!$this->EnsureGatewayToken($config, $token, $certPath, $keyPath)) {
+            return null;
+        }
+        if (!$this->EnsureMarketSelection($config, $token, $certPath, $keyPath)) {
+            $required = !empty(($config['cart'] ?? [])['marketSelectionRequired']);
+            if ($required) {
+                return null;
+            }
+            $this->SendDebug('ExtAPI', 'Continuing without customer-market-selection; basket headers carry market context', 0);
+        }
+        $cart = $config['cart'] ?? [];
+        $createUrl = (string)($cart['createUrl'] ?? '');
+        if ($createUrl === '') {
+            return null;
+        }
+        $vars = $this->BuildCartVars($config);
+        $url    = (string)$this->InterpolatePlaceholders($createUrl, $vars);
+        $method = strtoupper((string)($cart['createMethod'] ?? 'POST'));
+        $publicBasket = $this->UsePublicBasketCalls($cart);
+        if ($publicBasket) {
+            $vars = $this->AddPublicBasketRequestFlags($vars);
+            $this->SendDebug('ExtAPI', 'Using public basket request headers', 0);
+        }
+        $extra  = $publicBasket
+            ? $this->BuildPublicBasketHeaders($config, $vars)
+            : $this->BuildCartHeaders($config, $token, $vars);
+
+        $bodyTpl = $cart['createBodyTemplate'] ?? null;
+        $body    = is_array($bodyTpl) ? $this->InterpolatePlaceholders($bodyTpl, $vars) : null;
+
+        $result = $this->ExtApiHttpRequest($method, $url, $body, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Basket read/create failed: ' . $result['error'], 0);
+            return null;
+        }
+        return $this->ExtractBasketIdVersion($result['data'] ?? [], $cart);
+    }
+
+    /**
+     * Add one listing to the basket and return the updated basket {id, version}
+     * (extracted from the response). null on failure.
+     */
+    private function ExtApiCartAdd(string $listingId, int $quantity, string $basketId, int $basketVersion, array $config, string $token, string $certPath, string $keyPath): ?array
+    {
+        $cart = $config['cart'] ?? [];
+        $modifyUrl = (string)($cart['modifyUrl'] ?? '');
+        if ($modifyUrl === '') {
+            return null;
+        }
+        $vars = $this->BuildCartVars($config, [
+            'basketId'      => $basketId,
+            'listingId'     => $listingId,
+            'quantity'      => (string)$quantity,
+            'basketVersion' => (string)$basketVersion,
+        ]);
+        $url    = (string)$this->InterpolatePlaceholders($modifyUrl, $vars);
+        $method = strtoupper((string)($cart['modifyMethod'] ?? 'POST'));
+        $publicBasket = $this->UsePublicBasketCalls($cart);
+        if ($publicBasket) {
+            $vars = $this->AddPublicBasketRequestFlags($vars);
+        }
+        $extra  = $publicBasket
+            ? $this->BuildPublicBasketHeaders($config, $vars)
+            : $this->BuildCartHeaders($config, $token, $vars);
+
+        $bodyTpl = $cart['addBodyTemplate'] ?? null;
+        $body    = is_array($bodyTpl) ? $this->InterpolatePlaceholders($bodyTpl, $vars) : null;
+        // Cast numeric placeholders to int where the template still has strings
+        if (is_array($body)) {
+            foreach (['quantity', 'basketVersion'] as $k) {
+                if (isset($body[$k]) && is_string($body[$k]) && ctype_digit($body[$k])) {
+                    $body[$k] = (int)$body[$k];
+                }
+            }
+        }
+
+        $result = $this->ExtApiHttpRequest($method, $url, $body, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Cart add failed (' . $listingId . '): ' . $result['error'], 0);
+            return null;
+        }
+        // Best effort: response carries updated basket; fall back to existing values
+        $next = $this->ExtractBasketIdVersion($result['data'] ?? [], $cart);
+        if ($next === null) {
+            $next = ['id' => $basketId, 'version' => $basketVersion + 1];
+        }
+        return $next;
+    }
+
+    private function ExtApiCartMerge(?array $basket, array $config, string $token, string $certPath, string $keyPath): ?array
+    {
+        $cart = $config['cart'] ?? [];
+        $mergeUrl = (string)($cart['mergeUrl'] ?? '');
+        if ($mergeUrl === '') {
+            $baseUrl = rtrim((string)($config['baseUrl'] ?? ''), '/');
+            $mergeUrl = $baseUrl !== '' ? $baseUrl . '/api/baskets/merge' : '';
+        }
+        if ($mergeUrl === '') {
+            return null;
+        }
+
+        $vars = $this->BuildCartVars($config, [
+            'basketId'      => is_array($basket) ? (string)($basket['id'] ?? '') : '',
+            'basketVersion' => is_array($basket) ? (string)($basket['version'] ?? '') : '',
+        ]);
+        $url = (string)$this->InterpolatePlaceholders($mergeUrl, $vars);
+        $method = strtoupper((string)($cart['mergeMethod'] ?? 'POST'));
+
+        $bodyTpl = $cart['mergeBodyTemplate'] ?? [
+            'serviceSelection' => [
+                'serviceType' => '{serviceType}',
+            ],
+        ];
+        $body = is_array($bodyTpl) ? $this->InterpolatePlaceholders($bodyTpl, $vars) : null;
+        if (!empty($cart['refreshGatewayTokenBeforeMerge'])) {
+            $this->RefreshGatewayToken($config, $token, $certPath, $keyPath, $vars);
+        }
+        $vars = $this->AddMergeBasketRequestFlags($cart, $vars);
+        $extra = $this->BuildMergeBasketHeaders($config, $token, $vars);
+        $this->SendDebug('ExtAPI', 'Merging public basket into account basket', 0);
+        if ($body !== null) {
+            $this->SendDebug('ExtAPI', 'Merge body: ' . json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0);
+        }
+
+        $result = $this->ExtApiHttpRequest($method, $url, $body, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Basket merge failed: ' . $result['error'], 0);
+            return null;
+        }
+
+        return $this->ExtractBasketIdVersion($result['data'] ?? [], $cart);
+    }
+
+    private function RefreshGatewayToken(array $config, string $token, string $certPath, string $keyPath, array $vars): void
+    {
+        $cart = $config['cart'] ?? [];
+        $seedUrl = (string)($cart['gatewayTokenSeedUrl'] ?? '');
+        if ($seedUrl === '') {
+            return;
+        }
+
+        $seedVars = $vars;
+        unset($seedVars['basketId'], $seedVars['basketVersion']);
+        $url = (string)$this->InterpolatePlaceholders($seedUrl, $seedVars);
+        $extra = $this->BuildCartHeaders($config, $token, $seedVars);
+        $this->SendDebug('ExtAPI', 'Refreshing gateway token before basket merge via ' . $url, 0);
+        $result = $this->ExtApiHttpRequest('GET', $url, null, $extra, $certPath, $keyPath, $config, $vars);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExtAPI', 'Gateway token refresh before merge failed: ' . $result['error'], 0);
+        }
+    }
+
+    private function BuildCartVars(array $config, array $extra = []): array
+    {
+        $cart = $config['cart'] ?? [];
+        // Prefer the customer_uuid claim from the JWT – the REWE gateway uses
+        // it as the "_deviceId" context variable. A locally generated UUID is
+        // unknown to the server and causes ValidationError.
+        $deviceId = $this->ExtractAccessTokenClaim('customer_uuid');
+        if ($deviceId === '') {
+            $deviceId = $this->ReadAttributeString('ExtApiDeviceId');
+            if ($deviceId === '') {
+                $deviceId = $this->GenerateUuidV4();
+                $this->WriteAttributeString('ExtApiDeviceId', $deviceId);
+            }
+        }
+        $configuredMarketId = $this->ReadPropertyString('ExtApiMarketId');
+        $marketId = $configuredMarketId;
+        $selectedMarketId = trim($this->ReadAttributeString('ExtApiCartMarketId'));
+        if ($selectedMarketId !== '' && $this->ReadAttributeString('ExtApiCartContextKey') === $this->BuildCartContextKey($config)) {
+            $marketId = $selectedMarketId;
+        }
+        $vars = [
+            'baseUrl'            => (string)($config['baseUrl'] ?? ''),
+            'marketId'           => $marketId,
+            'configuredMarketId' => $configuredMarketId,
+            'zip'                => $this->ReadPropertyString('ExtApiZipCode'),
+            'serviceType'        => (string)($cart['serviceType'] ?? 'PICKUP'),
+            'deviceId'           => $deviceId,
+            'rdfa'               => $this->ResolveRdfaId($config),
+        ];
+        return array_merge($vars, $extra);
+    }
+
+    private function ResolveRdfaId(array $config): string
+    {
+        $cart = $config['cart'] ?? [];
+        foreach ([
+            is_array($cart) ? ($cart['rdfa'] ?? '') : '',
+            $config['rdfa'] ?? '',
+        ] as $candidate) {
+            $candidate = trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return $this->ReadOrCreateUuidAttribute('ExtApiRdfaId');
+    }
+
+    /**
+     * Return a single claim from the current JWT access token (empty if
+     * not available or token not a valid JWT).
+     */
+    private function ExtractAccessTokenClaim(string $claim): string
+    {
+        $token = $this->ReadAttributeString('ExtApiAccessToken');
+        if ($token === '') {
+            return '';
+        }
+        $parts = explode('.', $token);
+        if (count($parts) < 2) {
+            return '';
+        }
+        $b64 = strtr($parts[1], '-_', '+/');
+        $pad = strlen($b64) % 4;
+        if ($pad) {
+            $b64 .= str_repeat('=', 4 - $pad);
+        }
+        $payload = json_decode((string)base64_decode($b64, true), true);
+        return is_array($payload) && isset($payload[$claim]) ? (string)$payload[$claim] : '';
+    }
+
+    private function BuildCartHeaders(array $config, string $token, array $vars): array
+    {
+        $headers = ['Authorization: Bearer ' . $token];
+        $cart = $config['cart'] ?? [];
+        $extraHeaders = $cart['headers'] ?? [];
+        if (is_array($extraHeaders)) {
+            foreach ($extraHeaders as $name => $value) {
+                $value = $this->InterpolatePlaceholders($value, $vars);
+                $headers[] = $name . ': ' . (string)$value;
+            }
+        }
+        $marketId    = (string)($vars['marketId'] ?? '');
+        $zip         = (string)($vars['zip'] ?? '');
+        $serviceType = (string)($vars['serviceType'] ?? '');
+        foreach ([
+            'rd-market-id'        => $marketId,
+            'x-rd-market-id'      => $marketId,
+            'rd-customer-zip'     => $zip,
+            'x-rd-customer-zip'   => $zip,
+            'rd-postcode'         => $zip,
+            'rd-service-types'    => $serviceType,
+            'x-rd-service-types'  => $serviceType,
+            'rd-is-lsfk'          => 'false',
+            'Accept'              => 'application/json',
+        ] as $name => $value) {
+            $this->AppendHeaderIfMissing($headers, $name, $value);
+        }
+        if (!empty($vars['basketId'])) {
+            $this->AppendHeaderIfMissing($headers, 'x-rd-basket-id', (string)$vars['basketId']);
+        }
+        return $headers;
+    }
+
+    private function BuildMergeBasketHeaders(array $config, string $token, array $vars): array
+    {
+        $cart = $config['cart'] ?? [];
+        $headers = $this->BuildCartHeaders($config, $token, $vars);
+        $this->AppendHeaderIfMissing($headers, 'Content-Type', 'application/json; charset=UTF-8');
+        if (!empty($vars['basketId'])) {
+            $this->AppendHeaderIfMissing($headers, 'rd-basket-id', (string)$vars['basketId']);
+            $this->AppendHeaderIfMissing($headers, 'x-rd-basket-id', (string)$vars['basketId']);
+            $consent = '{"conversionOptimization": 1}';
+            $this->AppendHeaderIfMissing($headers, 'rd-user-consent', $consent);
+            $this->AppendHeaderIfMissing($headers, 'x-rd-user-consent', $consent);
+            $this->AppendHeaderIfMissing($headers, 'rd-ecom-market-sync', '?1');
+        }
+        $omitHeaders = $cart['mergeOmitHeaders'] ?? ['Accept', 'rd-is-pickup-station'];
+        if (is_array($omitHeaders)) {
+            $headers = $this->RemoveHeaders($headers, array_map('strval', $omitHeaders));
+        }
+        return $headers;
+    }
+
+    private function UsePublicBasketCalls(array $cart): bool
+    {
+        if (array_key_exists('publicBasketCalls', $cart)) {
+            return !empty($cart['publicBasketCalls']);
+        }
+        $createUrl = (string)($cart['createUrl'] ?? '');
+        return stripos($createUrl, 'mobile-clients-api.rewe.de/api/baskets') !== false;
+    }
+
+    private function ShouldMergeCartAfterAdd(array $config): bool
+    {
+        $cart = $config['cart'] ?? [];
+        if (!is_array($cart)) {
+            return false;
+        }
+        if (array_key_exists('mergeAfterAdd', $cart)) {
+            return !empty($cart['mergeAfterAdd']);
+        }
+
+        return false;
+    }
+
+    private function AddPublicBasketRequestFlags(array $vars): array
+    {
+        $vars['_skipGatewayToken'] = true;
+        $vars['_skipSessionHeaders'] = true;
+        $vars['_skipDeviceHeaders'] = true;
+        return $vars;
+    }
+
+    private function AddMergeBasketRequestFlags(array $cart, array $vars): array
+    {
+        if (!array_key_exists('mergeSkipSessionHeaders', $cart) || !empty($cart['mergeSkipSessionHeaders'])) {
+            $vars['_skipSessionHeaders'] = true;
+        }
+        if (!array_key_exists('mergeSkipDeviceHeaders', $cart) || !empty($cart['mergeSkipDeviceHeaders'])) {
+            $vars['_skipDeviceHeaders'] = true;
+        }
+        return $vars;
+    }
+
+    private function BuildPublicBasketHeaders(array $config, array $vars): array
+    {
+        $headers = [];
+        foreach ([
+            'rd-market-id'       => (string)($vars['marketId'] ?? ''),
+            'x-rd-market-id'     => (string)($vars['marketId'] ?? ''),
+            'rd-customer-zip'    => (string)($vars['zip'] ?? ''),
+            'x-rd-customer-zip'  => (string)($vars['zip'] ?? ''),
+            'rd-postcode'        => (string)($vars['zip'] ?? ''),
+            'rd-service-types'   => (string)($vars['serviceType'] ?? ''),
+            'x-rd-service-types' => (string)($vars['serviceType'] ?? ''),
+            'rd-is-lsfk'         => 'false',
+            'Content-Type'       => 'application/json; charset=UTF-8',
+        ] as $name => $value) {
+            $this->AppendHeaderIfMissing($headers, $name, $value);
+        }
+        if (!empty($vars['basketId'])) {
+            $this->AppendHeaderIfMissing($headers, 'x-rd-basket-id', (string)$vars['basketId']);
+        }
+        return $headers;
+    }
+
+    private function ExtractBasketIdVersion($data, array $cart): ?array
+    {
+        $paths   = $cart['responsePaths'] ?? [];
+        $idPath  = $paths['basketId']      ?? ['data.basket.id', 'basket.id', 'id'];
+        $verPath = $paths['basketVersion'] ?? ['data.basket.version', 'basket.version', 'version'];
+        $id  = (string)$this->ResolveJsonPath($data, $idPath);
+        $ver = $this->ResolveJsonPath($data, $verPath);
+        if ($id === '') {
+            $idPathStr  = is_array($idPath)  ? implode('|', $idPath)  : (string)$idPath;
+            $topKeys = is_array($data) ? implode(',', array_keys($data)) : '(non-array)';
+            $this->SendDebug('ExtAPI', 'basketId not found via paths [' . $idPathStr . '] - top-level keys: ' . $topKeys, 0);
+            return null;
+        }
+        $this->SendDebug('ExtAPI', 'basket extracted: id=' . $id . ' version=' . (is_numeric($ver) ? (int)$ver : 'n/a'), 0);
+        return ['id' => $id, 'version' => is_numeric($ver) ? (int)$ver : 0];
+    }
+
+    /**
+     * Interpolate {key} placeholders in a scalar or (recursively) in an array
+     * of scalars. Non-string scalars are returned unchanged.
+     */
+    private function InterpolatePlaceholders($value, array $vars)
+    {
+        if (is_array($value)) {
+            $out = [];
+            foreach ($value as $k => $v) {
+                $out[$k] = $this->InterpolatePlaceholders($v, $vars);
+            }
+            return $out;
+        }
+        if (!is_string($value) || $value === '' || strpos($value, '{') === false) {
+            return $value;
+        }
+        return preg_replace_callback('/\{([a-zA-Z0-9_]+)\}/', function ($m) use ($vars) {
+            return array_key_exists($m[1], $vars) ? (string)$vars[$m[1]] : $m[0];
+        }, $value);
+    }
+
+    /**
+     * Resolve a dot-notation path against a nested array. $path may be a
+     * single string ("a.b.c") or an array of candidate paths (returns first hit).
+     * Returns null if no path matches.
+     */
+    private function ResolveJsonPath($data, $path)
+    {
+        if (is_array($path)) {
+            foreach ($path as $candidate) {
+                $val = $this->ResolveJsonPath($data, $candidate);
+                if ($val !== null) {
+                    return $val;
+                }
+            }
+            return null;
+        }
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+        $segments = explode('.', $path);
+        $cur = $data;
+        foreach ($segments as $seg) {
+            if (is_array($cur) && array_key_exists($seg, $cur)) {
+                $cur = $cur[$seg];
+            } else {
+                return null;
+            }
+        }
+        return $cur;
+    }
+
+    private function GetExtApiCertDir(): string
+    {
+        return IPS_GetKernelDir() . 'data/';
+    }
+
+    private function GetExtApiCertPath(): string
+    {
+        return $this->GetExtApiCertDir() . 'extapi_cert_' . $this->InstanceID . '.pem';
+    }
+
+    private function GetExtApiKeyPath(): string
+    {
+        return $this->GetExtApiCertDir() . 'extapi_key_' . $this->InstanceID . '.pem';
+    }
+
+    private function WriteExtApiCertFiles(): void
+    {
+        $certB64 = $this->ReadPropertyString('ExtApiCertFile');
+        $keyB64  = $this->ReadPropertyString('ExtApiKeyFile');
+
+        $dir = $this->GetExtApiCertDir();
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+
+        // Write or delete certificate
+        if ($certB64 !== '') {
+            $certData = base64_decode($certB64, true);
+            if ($certData !== false) {
+                file_put_contents($certPath, $certData);
+            }
+        } else {
+            @unlink($certPath);
+        }
+
+        // Write or delete key
+        if ($keyB64 !== '') {
+            $keyData = base64_decode($keyB64, true);
+            if ($keyData !== false) {
+                file_put_contents($keyPath, $keyData);
+            }
+        } else {
+            @unlink($keyPath);
+        }
+    }
+
+    private function DeleteExtApiCertFiles(): void
+    {
+        @unlink($this->GetExtApiCertPath());
+        @unlink($this->GetExtApiKeyPath());
     }
 
 
@@ -700,163 +2509,324 @@ class ShoppingList extends IPSModuleStrict
         $form = [
             'elements' => [
                 [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Shopping List Configuration'),
-                ],
-                [
-                    'type'        => 'List',
-                    'name'        => 'CategoryOrder',
-                    'caption'     => $this->Translate('Category Order'),
-                    'rowCount'    => 12,
-                    'add'         => true,
-                    'delete'      => true,
-                    'changeOrder' => true,
-                    'columns'     => [
-                        [
-                            'caption' => $this->Translate('Category'),
-                            'name'    => 'category',
-                            'width'   => 'auto',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
-                        ],
-                    ],
-                    'values' => $categoryValues,
-                ],
-                [
                     'type'    => 'CheckBox',
                     'name'    => 'ShowProductImages',
                     'caption' => $this->Translate('Show product images'),
                 ],
                 [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Search suggestions'),
-                ],
-                [
-                    'type'                        => 'List',
-                    'name'                        => 'SuggestionItemsConfig',
-                    'caption'                     => '',
-                    'rowCount'                    => 15,
-                    'add'                         => true,
-                    'delete'                      => true,
-                    'changeOrder'                 => false,
-                    'loadValuesFromConfiguration' => false,
-                    'columns'                     => [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Category Order'),
+                    'expanded' => false,
+                    'items'    => [
                         [
-                            'caption' => $this->Translate('Name'),
-                            'name'    => 'name',
-                            'width'   => 'auto',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
-                        ],
-                        [
-                            'caption' => $this->Translate('Category'),
-                            'name'    => 'category',
-                            'width'   => '250px',
-                            'save'    => true,
-                            'add'     => $this->Translate('Miscellaneous'),
-                            'edit'    => ['type' => 'Select', 'options' => $categorySelectOptions],
+                            'type'        => 'List',
+                            'name'        => 'CategoryOrder',
+                            'caption'     => '',
+                            'rowCount'    => 12,
+                            'add'         => true,
+                            'delete'      => true,
+                            'changeOrder' => true,
+                            'columns'     => [
+                                [
+                                    'caption' => $this->Translate('Category'),
+                                    'name'    => 'category',
+                                    'width'   => 'auto',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                            ],
+                            'values' => $categoryValues,
                         ],
                     ],
-                    'values' => $suggestionValues,
                 ],
                 [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Favorite lists'),
-                ],
-                [
-                    'type'                        => 'List',
-                    'name'                        => 'FavoriteListsConfig',
-                    'caption'                     => '',
-                    'rowCount'                    => 5,
-                    'add'                         => true,
-                    'delete'                      => true,
-                    'changeOrder'                 => false,
-                    'loadValuesFromConfiguration' => false,
-                    'columns'                     => [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Search suggestions'),
+                    'expanded' => false,
+                    'items'    => [
                         [
-                            'caption' => 'id',
-                            'name'    => 'id',
-                            'width'   => '0px',
-                            'visible' => false,
-                            'save'    => true,
-                            'add'     => '',
-                        ],
-                        [
-                            'caption' => $this->Translate('Name'),
-                            'name'    => 'name',
-                            'width'   => 'auto',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
-                        ],
-                        [
-                            'caption' => $this->Translate('Items'),
-                            'name'    => 'items',
-                            'width'   => '80px',
-                            'save'    => false,
-                            'add'     => 0,
+                            'type'                        => 'List',
+                            'name'                        => 'SuggestionItemsConfig',
+                            'caption'                     => '',
+                            'rowCount'                    => 15,
+                            'add'                         => true,
+                            'delete'                      => true,
+                            'changeOrder'                 => false,
+                            'loadValuesFromConfiguration' => false,
+                            'columns'                     => [
+                                [
+                                    'caption' => $this->Translate('Name'),
+                                    'name'    => 'name',
+                                    'width'   => 'auto',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Category'),
+                                    'name'    => 'category',
+                                    'width'   => '250px',
+                                    'save'    => true,
+                                    'add'     => $this->Translate('Miscellaneous'),
+                                    'edit'    => ['type' => 'Select', 'options' => $categorySelectOptions],
+                                ],
+                            ],
+                            'values' => $suggestionValues,
                         ],
                     ],
-                    'values' => $favValues,
                 ],
                 [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Edit favorite list items'),
-                ],
-                [
-                    'type'     => 'Select',
-                    'name'     => 'FavoriteListSelect',
-                    'caption'  => $this->Translate('Select favorite list'),
-                    'value'    => $selectedListId,
-                    'options'  => $favSelectOptions,
-                    'onChange'  => 'SL_SwitchFavoriteList($id, $FavoriteListSelect, json_encode($FavoriteItemsConfig));',
-                ],
-                [
-                    'type'                        => 'List',
-                    'name'                        => 'FavoriteItemsConfig',
-                    'caption'                     => '',
-                    'rowCount'                    => 8,
-                    'add'                         => true,
-                    'delete'                      => true,
-                    'changeOrder'                 => false,
-                    'loadValuesFromConfiguration' => false,
-                    'columns'                     => [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Favorite lists'),
+                    'expanded' => false,
+                    'items'    => [
                         [
-                            'caption' => $this->Translate('Name'),
-                            'name'    => 'name',
-                            'width'   => 'auto',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
+                            'type'                        => 'List',
+                            'name'                        => 'FavoriteListsConfig',
+                            'caption'                     => '',
+                            'rowCount'                    => 5,
+                            'add'                         => true,
+                            'delete'                      => true,
+                            'changeOrder'                 => false,
+                            'loadValuesFromConfiguration' => false,
+                            'columns'                     => [
+                                [
+                                    'caption' => 'id',
+                                    'name'    => 'id',
+                                    'width'   => '0px',
+                                    'visible' => false,
+                                    'save'    => true,
+                                    'add'     => '',
+                                ],
+                                [
+                                    'caption' => $this->Translate('Name'),
+                                    'name'    => 'name',
+                                    'width'   => 'auto',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Items'),
+                                    'name'    => 'items',
+                                    'width'   => '80px',
+                                    'save'    => false,
+                                    'add'     => 0,
+                                ],
+                            ],
+                            'values' => $favValues,
                         ],
                         [
-                            'caption' => $this->Translate('Category'),
-                            'name'    => 'category',
-                            'width'   => '200px',
-                            'save'    => true,
-                            'add'     => $this->Translate('Miscellaneous'),
-                            'edit'    => ['type' => 'Select', 'options' => $categorySelectOptions],
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('Edit favorite list items'),
                         ],
                         [
-                            'caption' => $this->Translate('Quantity / Amount'),
-                            'name'    => 'amount',
-                            'width'   => '120px',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
+                            'type'     => 'Select',
+                            'name'     => 'FavoriteListSelect',
+                            'caption'  => $this->Translate('Select favorite list'),
+                            'value'    => $selectedListId,
+                            'options'  => $favSelectOptions,
+                            'onChange' => 'SL_SwitchFavoriteList($id, $FavoriteListSelect, json_encode($FavoriteItemsConfig));',
                         ],
                         [
-                            'caption' => $this->Translate('Note'),
-                            'name'    => 'notes',
-                            'width'   => '200px',
-                            'save'    => true,
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox'],
+                            'type'                        => 'List',
+                            'name'                        => 'FavoriteItemsConfig',
+                            'caption'                     => '',
+                            'rowCount'                    => 8,
+                            'add'                         => true,
+                            'delete'                      => true,
+                            'changeOrder'                 => false,
+                            'loadValuesFromConfiguration' => false,
+                            'columns'                     => [
+                                [
+                                    'caption' => $this->Translate('Name'),
+                                    'name'    => 'name',
+                                    'width'   => 'auto',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Category'),
+                                    'name'    => 'category',
+                                    'width'   => '200px',
+                                    'save'    => true,
+                                    'add'     => $this->Translate('Miscellaneous'),
+                                    'edit'    => ['type' => 'Select', 'options' => $categorySelectOptions],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Quantity / Amount'),
+                                    'name'    => 'amount',
+                                    'width'   => '120px',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Note'),
+                                    'name'    => 'notes',
+                                    'width'   => '200px',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'ValidationTextBox'],
+                                ],
+                            ],
+                            'values' => $favItemValues,
                         ],
                     ],
-                    'values' => $favItemValues,
+                ],
+                [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Barcode scanner'),
+                    'expanded' => false,
+                    'items'    => [
+                        [
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('Barcode scanner info'),
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ScannerEnabled',
+                            'caption' => $this->Translate('Enable barcode scanner'),
+                        ],
+                        [
+                            'type'     => 'ExpansionPanel',
+                            'caption'  => $this->Translate('External product API'),
+                            'expanded' => false,
+                            'visible'  => false,
+                            'items'    => [
+                                [
+                                    'type'    => 'CheckBox',
+                                    'name'    => 'ExtApiEnabled',
+                                    'caption' => $this->Translate('Enable external product API'),
+                                ],
+                                [
+                                    'type'    => 'CheckBox',
+                                    'name'    => 'ExtApiShowPrice',
+                                    'caption' => $this->Translate('Show price on scanned items'),
+                                ],
+                                [
+                                    'type'    => 'ValidationTextBox',
+                                    'name'    => 'ExtApiZipCode',
+                                    'caption' => $this->Translate('ZIP code'),
+                                ],
+                                [
+                                    'type'    => 'Button',
+                                    'caption' => $this->Translate('Search markets'),
+                                    'onClick' => 'SL_SearchMarkets($id, $ExtApiZipCode);',
+                                ],
+                                [
+                                    'type'     => 'ValidationTextBox',
+                                    'name'     => 'ExtApiMarketId',
+                                    'caption'  => $this->Translate('Market ID'),
+                                ],
+                                [
+                                    'type'     => 'Select',
+                                    'name'     => 'ExtApiMarketSelect',
+                                    'caption'  => $this->Translate('Select market'),
+                                    'options'  => [
+                                        ['caption' => $this->Translate('Enter ZIP and search'), 'value' => ''],
+                                    ],
+                                    'onChange' => 'SL_ApplyMarketSelection($id, $ExtApiMarketSelect);',
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'name'    => 'ExtApiMarketSearchInfo',
+                                    'caption' => '',
+                                ],
+                                [
+                                    'type'       => 'SelectFile',
+                                    'name'       => 'ExtApiCertFile',
+                                    'caption'    => $this->Translate('Certificate (PEM)'),
+                                    'extensions' => '.pem',
+                                ],
+                                [
+                                    'type'       => 'SelectFile',
+                                    'name'       => 'ExtApiKeyFile',
+                                    'caption'    => $this->Translate('Private Key (PEM)'),
+                                    'extensions' => '.pem,.key',
+                                ],
+                                [
+                                    'type'    => 'ScriptEditor',
+                                    'name'    => 'ExtApiConfig',
+                                    'rowCount' => 20,
+                                    'caption' => $this->Translate('Provider Config (JSON)'),
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'caption' => $this->Translate('Cart login'),
+                                    'bold'    => true,
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'name'    => 'ExtApiLoginInfo',
+                                    'caption' => $this->ReadAttributeString('ExtApiAccessToken') !== ''
+                                        ? $this->Translate('Logged in')
+                                        : $this->Translate('Not logged in'),
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'name'    => 'ExtApiLoginUrl',
+                                    'caption' => '',
+                                    'visible' => false,
+                                ],
+                                [
+                                    'type'    => 'RowLayout',
+                                    'items'   => [
+                                        [
+                                            'type'    => 'Button',
+                                            'caption' => $this->Translate('Login'),
+                                            'onClick' => 'SL_StartLogin($id);',
+                                        ],
+                                        [
+                                            'type'    => 'Button',
+                                            'caption' => $this->Translate('Logout'),
+                                            'onClick' => 'SL_Logout($id);',
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'type'    => 'RowLayout',
+                                    'name'    => 'ExtApiRedirectPasteRow',
+                                    'visible' => false,
+                                    'items'   => [
+                                        [
+                                            'type'    => 'ValidationTextBox',
+                                            'name'    => 'ExtApiRedirectPaste',
+                                            'caption' => $this->Translate('Redirect URL'),
+                                            'width'   => '500px',
+                                        ],
+                                        [
+                                            'type'    => 'Button',
+                                            'caption' => $this->Translate('Exchange code'),
+                                            'onClick' => 'SL_ExchangeCode($id, $ExtApiRedirectPaste);',
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'caption' => $this->Translate('Diagnostics'),
+                                    'bold'    => true,
+                                ],
+                                [
+                                    'type'    => 'Button',
+                                    'caption' => $this->Translate('Check service portfolio'),
+                                    'onClick' => 'SL_DiagnoseServicePortfolio($id);',
+                                ],
+                                [
+                                    'type'    => 'Button',
+                                    'caption' => $this->Translate('Show access token claims'),
+                                    'onClick' => 'SL_DiagnoseAccessToken($id);',
+                                ],
+                                [
+                                    'type'    => 'Label',
+                                    'name'    => 'ExtApiPortfolioInfo',
+                                    'caption' => '',
+                                ],
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ];
