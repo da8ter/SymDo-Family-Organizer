@@ -16,7 +16,7 @@ class ShoppingList extends IPSModuleStrict
     {
         parent::Create();
         $this->SetVisualizationType(1);
-        $this->RegisterHook('shoppinglist/assets');
+        $this->RegisterHook($this->GetAssetHookPath());
         $this->RegisterAttributeString('Items', '[]');
         $this->RegisterAttributeString('Frequencies', '{}');
         $this->RegisterAttributeString('CategoryOverrides', '{}');
@@ -25,6 +25,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('FavoriteLists', '[]');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
         $this->RegisterAttributeString('WebHookToken', '');
+        $this->RegisterAttributeInteger('LastExternalScannerVariableID', 0);
         $this->RegisterAttributeString('ExtApiAccessToken', '');
         $this->RegisterAttributeString('ExtApiRefreshToken', '');
         $this->RegisterAttributeInteger('ExtApiTokenExpires', 0);
@@ -43,6 +44,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyString('SuggestionItemsConfig', '[]');
         $this->RegisterPropertyBoolean('ShowProductImages', true);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
+        $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
         $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
         $this->RegisterPropertyString('ExtApiMarketId', '');
@@ -91,6 +93,7 @@ class ShoppingList extends IPSModuleStrict
         if ($this->ReadAttributeString('WebHookToken') === '') {
             $this->WriteAttributeString('WebHookToken', bin2hex(random_bytes(16)));
         }
+        $this->RegisterHook($this->GetAssetHookPath());
 
         // Detect category renames and propagate to items
         $this->SyncCategoryRenames();
@@ -107,6 +110,8 @@ class ShoppingList extends IPSModuleStrict
         // Write external product API mTLS certificates to disk
         $this->WriteExtApiCertFiles();
 
+        $this->SyncExternalScannerVariable();
+
         // Sync counts and push updated state to tile
         $this->UpdateCounts($this->LoadItems());
         $this->SendState();
@@ -116,6 +121,11 @@ class ShoppingList extends IPSModuleStrict
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->ApplyChanges();
+            return;
+        }
+
+        if ($Message === VM_UPDATE && $SenderID === $this->ReadPropertyInteger('ExternalScannerVariableID')) {
+            $this->HandleExternalScannerUpdate($SenderID);
         }
     }
 
@@ -339,9 +349,15 @@ class ShoppingList extends IPSModuleStrict
             IPS_LogMessage('ShoppingList', 'GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80));
         }
         $token = urlencode($this->ReadAttributeString('WebHookToken'));
-        $hookUrl = '/hook/shoppinglist/assets/?t=' . $token . '&f=';
-        $extApiHookUrl = '/hook/shoppinglist/assets/?t=' . $token . '&a=extapi&ean=';
+        $hookPath = '/hook/' . $this->GetAssetHookPath() . '/';
+        $hookUrl = $hookPath . '?t=' . $token . '&f=';
+        $extApiHookUrl = $hookPath . '?t=' . $token . '&a=extapi&ean=';
         return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl) . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';</script>';
+    }
+
+    private function GetAssetHookPath(): string
+    {
+        return 'shoppinglist/assets/' . $this->InstanceID;
     }
 
     public function AddItem(string $Name, string $Category, string $Amount): bool
@@ -629,7 +645,9 @@ class ShoppingList extends IPSModuleStrict
 
         // Validate token
         $token = $_GET['t'] ?? '';
-        if ($token === '' || !hash_equals($this->ReadAttributeString('WebHookToken'), $token)) {
+        $expected = $this->ReadAttributeString('WebHookToken');
+        if ($token === '' || !hash_equals($expected, $token)) {
+            $this->SendDebug('Hook', 'Token mismatch. got=' . $token . ' expected=' . $expected . ' file=' . ($_GET['f'] ?? ''), 0);
             http_response_code(403);
             return;
         }
@@ -800,6 +818,290 @@ class ShoppingList extends IPSModuleStrict
             return;
         }
         $this->UpdateFormField('ExtApiMarketId', 'value', $id);
+    }
+
+    private function SyncExternalScannerVariable(): void
+    {
+        $current = $this->ReadPropertyInteger('ExternalScannerVariableID');
+        $valid = false;
+        if ($current > 0 && @IPS_VariableExists($current)) {
+            $variable = @IPS_GetVariable($current);
+            $valid = is_array($variable) && (int)($variable['VariableType'] ?? -1) === 3;
+        }
+
+        $previous = $this->ReadAttributeInteger('LastExternalScannerVariableID');
+        if ($previous > 0 && (!$valid || $previous !== $current)) {
+            @$this->UnregisterMessage($previous, VM_UPDATE);
+            @$this->UnregisterReference($previous);
+        }
+
+        if ($valid) {
+            $this->RegisterMessage($current, VM_UPDATE);
+            $this->RegisterReference($current);
+            $this->WriteAttributeInteger('LastExternalScannerVariableID', $current);
+            return;
+        }
+
+        if ($current > 0) {
+            $this->SendDebug('ExternalScanner', 'Configured variable is not a valid string variable: ' . $current, 0);
+        }
+        $this->WriteAttributeInteger('LastExternalScannerVariableID', 0);
+    }
+
+    private function HandleExternalScannerUpdate(int $SenderID): void
+    {
+        if ($SenderID <= 0 || !@IPS_VariableExists($SenderID)) {
+            return;
+        }
+
+        $ean = trim((string)GetValue($SenderID));
+        if ($ean === '') {
+            $this->SendDebug('ExternalScanner', 'Ignoring empty scanner value', 0);
+            return;
+        }
+        if (!preg_match('/^\d{8,14}$/', $ean)) {
+            $this->SendDebug('ExternalScanner', 'Ignoring invalid EAN: ' . $ean, 0);
+            return;
+        }
+
+        $this->SendDebug('ExternalScanner', 'Processing EAN: ' . $ean, 0);
+        $product = $this->LookupBarcodeProduct($ean);
+        if ($product === null) {
+            $this->SendDebug('ExternalScanner', 'Product not found for EAN: ' . $ean, 0);
+            return;
+        }
+
+        $added = $this->AddScannedItemInternal(
+            (string)($product['name'] ?? ''),
+            (string)($product['category'] ?? ''),
+            '1',
+            (string)($product['price'] ?? ''),
+            (string)($product['listingId'] ?? ''),
+            (string)($product['imageUrl'] ?? '')
+        );
+
+        $this->SendDebug(
+            'ExternalScanner',
+            ($added ? 'Added product for EAN ' : 'Could not add product for EAN ') . $ean . ': ' . (string)($product['name'] ?? ''),
+            0
+        );
+    }
+
+    private function LookupBarcodeProduct(string $ean): ?array
+    {
+        $product = $this->LookupBarcodeExtApi($ean);
+        if ($product !== null) {
+            return $product;
+        }
+
+        $product = $this->LookupBarcodeOpenFoodFacts($ean);
+        if ($product !== null) {
+            return $product;
+        }
+
+        return $this->LookupBarcodeOpenGtinDb($ean);
+    }
+
+    private function LookupBarcodeExtApi(string $ean): ?array
+    {
+        if (!$this->ReadPropertyBoolean('ExtApiEnabled')) {
+            return null;
+        }
+
+        $certPath = $this->GetExtApiCertPath();
+        $keyPath  = $this->GetExtApiKeyPath();
+        $marketId = $this->ReadPropertyString('ExtApiMarketId');
+        $zip      = $this->ReadPropertyString('ExtApiZipCode');
+        if ($marketId === '' || $zip === '' || !is_file($certPath) || !is_file($keyPath)) {
+            return null;
+        }
+
+        $config = $this->LoadExtApiConfig();
+        if ($config === null) {
+            return null;
+        }
+
+        $result = $this->ExtApiLookup($ean, $marketId, $zip, $certPath, $keyPath, $config);
+        if (isset($result['error'])) {
+            $this->SendDebug('ExternalScanner', 'External API lookup failed for ' . $ean . ': ' . $result['error'], 0);
+            return null;
+        }
+
+        $name = trim((string)($result['name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        return [
+            'name'      => $name,
+            'category'  => trim((string)($result['category'] ?? '')),
+            'price'     => trim((string)($result['price'] ?? '')),
+            'listingId' => trim((string)($result['listingId'] ?? '')),
+            'imageUrl'  => trim((string)($result['imageUrl'] ?? '')),
+        ];
+    }
+
+    private function LookupBarcodeOpenFoodFacts(string $ean): ?array
+    {
+        $url = 'https://de.openfoodfacts.org/api/v2/product/' . rawurlencode($ean) . '.json?lc=de';
+        $body = $this->FetchBarcodeLookupUrl($url, 'OpenFoodFacts');
+        if ($body === null) {
+            return null;
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data) || (int)($data['status'] ?? 0) !== 1 || !is_array($data['product'] ?? null)) {
+            return null;
+        }
+
+        $product = $data['product'];
+        $name = trim((string)($product['product_name_de'] ?? ''));
+        if ($name === '') {
+            $name = trim((string)($product['product_name'] ?? ''));
+        }
+        if ($name === '') {
+            $name = trim((string)($product['brands'] ?? ''));
+        }
+        if ($name === '') {
+            return null;
+        }
+
+        $categories = [];
+        foreach (explode(',', (string)($product['categories'] ?? '')) as $category) {
+            $category = trim($category);
+            if ($category !== '') {
+                $categories[] = $category;
+            }
+        }
+
+        return [
+            'name'      => $name,
+            'category'  => $this->MatchLocalCategory($categories),
+            'price'     => '',
+            'listingId' => '',
+            'imageUrl'  => '',
+        ];
+    }
+
+    private function LookupBarcodeOpenGtinDb(string $ean): ?array
+    {
+        $url = 'https://opengtindb.org/api.php?ean=' . rawurlencode($ean) . '&cmd=query&queryid=400000000';
+        $body = $this->FetchBarcodeLookupUrl($url, 'OpenGTINDB');
+        if ($body === null) {
+            return null;
+        }
+
+        $flat = trim(str_replace('---', ' ', preg_replace('/\r?\n/', ' ', $body) ?? $body));
+        if ($flat === '') {
+            return null;
+        }
+
+        $parsed = [];
+        if (preg_match_all('/([a-z_]+)=([\s\S]*?)(?=\s+[a-z_]+=|$)/i', $flat, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $parsed[mb_strtolower($match[1])] = trim($match[2]);
+            }
+        }
+
+        if (($parsed['error'] ?? '') !== '0') {
+            return null;
+        }
+
+        $name = trim((string)($parsed['detailname'] ?? ''));
+        if ($name === '') {
+            $name = trim((string)($parsed['name'] ?? ''));
+        }
+        if ($name === '') {
+            return null;
+        }
+
+        $categories = array_values(array_filter([
+            trim((string)($parsed['maincat'] ?? '')),
+            trim((string)($parsed['subcat'] ?? '')),
+        ], static fn(string $value): bool => $value !== ''));
+
+        return [
+            'name'      => $name,
+            'category'  => $this->MatchLocalCategory($categories),
+            'price'     => '',
+            'listingId' => '',
+            'imageUrl'  => '',
+        ];
+    }
+
+    private function FetchBarcodeLookupUrl(string $url, string $source): ?string
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_USERAGENT, 'ShoppingList IP-Symcon Barcode Lookup');
+
+        $body = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $httpCode >= 400) {
+            $this->SendDebug('ExternalScanner', $source . ' lookup failed: ' . ($error !== '' ? $error : 'HTTP ' . $httpCode), 0);
+            return null;
+        }
+
+        return (string)$body;
+    }
+
+    private function MatchLocalCategory(array $categoryHints): string
+    {
+        $hints = [];
+        foreach ($categoryHints as $hint) {
+            $hint = trim((string)$hint);
+            if ($hint !== '') {
+                $hints[] = $hint;
+            }
+        }
+        if (count($hints) === 0) {
+            return '';
+        }
+
+        $local = [];
+        foreach ($this->GetCategoryOrderFlat() as $category) {
+            $category = trim((string)$category);
+            if ($category !== '') {
+                $local[$category] = $category;
+            }
+        }
+        foreach ($this->LoadItems() as $item) {
+            $category = trim((string)($item['category'] ?? ''));
+            if ($category !== '') {
+                $local[$category] = $category;
+            }
+        }
+
+        if (count($local) === 0) {
+            return $hints[0];
+        }
+
+        foreach ($hints as $hint) {
+            $hintLower = mb_strtolower($hint);
+            foreach ($local as $category) {
+                if (mb_strtolower($category) === $hintLower) {
+                    return $category;
+                }
+            }
+        }
+
+        foreach ($hints as $hint) {
+            $hintLower = mb_strtolower($hint);
+            foreach ($local as $category) {
+                $categoryLower = mb_strtolower($category);
+                if (strpos($hintLower, $categoryLower) !== false || strpos($categoryLower, $hintLower) !== false) {
+                    return $category;
+                }
+            }
+        }
+
+        return '';
     }
 
     private function ExtApiHttpGet(string $url, array $extraHeaders, string $certPath, string $keyPath, array $config, array $vars = []): array
@@ -1733,7 +2035,7 @@ class ShoppingList extends IPSModuleStrict
             return (string)$auth['redirectUri'];
         }
         // The hook is registered as 'shoppinglist/assets', so callback URL is below it.
-        return 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/hook/shoppinglist/assets/?a=oauth_callback';
+        return 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/hook/' . $this->GetAssetHookPath() . '/?a=oauth_callback';
     }
 
     private function HandleCartBulkHook(): void
@@ -2689,6 +2991,13 @@ class ShoppingList extends IPSModuleStrict
                             'type'    => 'CheckBox',
                             'name'    => 'ScannerEnabled',
                             'caption' => $this->Translate('Enable barcode scanner'),
+                        ],
+                        [
+                            'type'               => 'SelectVariable',
+                            'name'               => 'ExternalScannerVariableID',
+                            'caption'            => $this->Translate('External scanner variable'),
+                            'validVariableTypes' => [3],
+                            'width'              => '500px',
                         ],
                         [
                             'type'     => 'ExpansionPanel',
