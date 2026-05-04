@@ -83,6 +83,8 @@ Favoritenlisten ermöglichen es, häufig benötigte Artikelgruppen (z. B. „Woc
 3. Der erkannte Artikel wird als gut lesbares, zentriertes Overlay mittig im Kamerabild angezeigt, nach 3 Sekunden automatisch ausgeblendet und zur Liste hinzugefügt
 4. Die Duplikatprüfung berücksichtigt nur aktive Listenartikel; Artikel in „Zuletzt benutzt“ gelten nicht als Duplikat
 
+Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle ausgewählt werden. Sobald diese Variable mit einer gültigen EAN (8–14 Ziffern) aktualisiert wird, verarbeitet das Modul den Barcode automatisch und fügt den gefundenen Artikel zur Einkaufsliste hinzu.
+
 ## Konfiguration
 
 | Option | Beschreibung |
@@ -91,8 +93,9 @@ Favoritenlisten ermöglichen es, häufig benötigte Artikelgruppen (z. B. „Woc
 | **Produktbilder anzeigen** | Checkbox zum Aktivieren/Deaktivieren der Produktbilder |
 | **Suchvorschläge** | Liste der Artikel mit Kategorie-Zuordnung pflegen |
 | **Favoritenlisten** | Favoritenlisten und deren Artikel verwalten |
+| **Externe Scanner-Variable** | Optionale String-Variable, deren Wert als Barcode/EAN verarbeitet wird |
 
-**Lookup-Reihenfolge:** Open Food Facts → OpenGTINDB.
+**Lookup-Reihenfolge:** Externer Produkt-API → Open Food Facts → OpenGTINDB.
 
 ## Produktfotos
 
