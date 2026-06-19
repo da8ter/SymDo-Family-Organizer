@@ -170,6 +170,9 @@ class ShoppingList extends IPSModuleStrict
             case 'RemoveItem':
                 $this->RemoveItem((string)$Value);
                 return;
+            case 'DeleteItem':
+                $this->DeleteItem((string)$Value);
+                return;
             case 'ClearCart':
                 $this->ClearCart();
                 return;
@@ -372,6 +375,11 @@ class ShoppingList extends IPSModuleStrict
     public function RemoveItem(string $Name): bool
     {
         return $this->RemoveItemInternal($Name);
+    }
+
+    public function DeleteItem(string $Id): bool
+    {
+        return $this->DeleteItemInternal($Id);
     }
 
     public function ClearCart(): void

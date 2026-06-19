@@ -294,23 +294,59 @@ body {
   width: fit-content;
   min-width: 130px;
   max-width: 100%;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  background: color-mix(in srgb, var(--content-color) 8%, transparent);
+  position: relative;
   border: 1px solid var(--accent);
   border-radius: 12px;
-  padding: 8px 10px;
-  cursor: pointer;
-  touch-action: manipulation;
+  overflow: hidden;
+  touch-action: pan-y;
   -webkit-tap-highlight-color: transparent;
   transition: opacity .1s ease, transform .05s ease;
 }
 
-.item-card:hover {
-  background: color-mix(in srgb, var(--content-color) 15%, transparent);
+/* Foreground layer – slides left on swipe. Opaque background so the
+   delete layer behind it stays hidden until swiped. */
+.item-card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  touch-action: pan-y;
+  background:
+    linear-gradient(color-mix(in srgb, var(--content-color) 8%, transparent),
+                    color-mix(in srgb, var(--content-color) 8%, transparent)),
+    var(--bg);
+  transition: transform .28s cubic-bezier(.22,.61,.36,1), opacity .12s ease;
 }
+.item-card-content.is-dragging { transition: none; }
+.item-card-content:active { opacity: .8; }
+
+.item-card:hover .item-card-content {
+  background:
+    linear-gradient(color-mix(in srgb, var(--content-color) 15%, transparent),
+                    color-mix(in srgb, var(--content-color) 15%, transparent)),
+    var(--bg);
+}
+
+/* Delete layer revealed by swiping the card to the left */
+.item-card-delete {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 16px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 20px;
+}
+.item-card.swipe-armed .item-card-delete { background: #e04434; }
+.item-card.is-deleting { pointer-events: none; }
+.item-card.is-deleting .item-card-content { opacity: .4; }
 
 .item-card.is-moving-to-cart {
   pointer-events: none;
@@ -331,8 +367,6 @@ body {
   from { transform: translateX(0) scale(1); opacity: 1; }
   to   { transform: translateX(-22px) scale(.97); opacity: 0; }
 }
-
-.item-card:active { transform: scale(.97); opacity: .8; }
 
 .item-card.in-cart { opacity: .45; }
 .item-card.in-cart .item-title { text-decoration: line-through; }
@@ -1160,6 +1194,28 @@ textarea.edit-input { overflow: hidden; }
 
 .btn-edit-back:active { opacity: .85; }
 
+.btn-edit-delete {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
+  background: transparent;
+  color: #c0392b;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s;
+}
+.btn-edit-delete:active {
+  background: #c0392b;
+  color: var(--content-color);
+}
+
 .btn-save-edit {
   flex: 1;
   padding: 12px;
@@ -1434,6 +1490,7 @@ textarea.edit-input { overflow: hidden; }
         </div>
         <div class="edit-footer">
           <button class="btn-edit-back" id="btnEditBack">Zur&#xFC;ck</button>
+          <button class="btn-edit-delete" id="btnEditDelete" aria-label="Artikel l&#xF6;schen" style="display:none;"></button>
           <button class="btn-save-edit" id="btnSaveEdit">Speichern</button>
         </div>
       </div>
@@ -1627,9 +1684,12 @@ function buildItemCard(item, inCart) {
     ? `<i class="fa-light fa-cart-shopping market-icon" aria-hidden="true"></i>`
     : '';
   return `<div class="${cls}" data-id="${escapeHtml(item.id)}">`
-    + `<div class="item-thumb">${thumb}</div>`
-    + `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
-    + `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
+    + `<div class="item-card-delete" aria-hidden="true">${TRASH_ICON}</div>`
+    + `<div class="item-card-content">`
+    +   `<div class="item-thumb">${thumb}</div>`
+    +   `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
+    +   `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
+    + `</div>`
     + `</div>`;
 }
 
@@ -1637,6 +1697,7 @@ function bindCardHandlers() {
   document.querySelectorAll('.item-card[data-id]').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target && e.target.closest('.item-edit-btn')) return;
+      if (card.dataset.swiped === '1') return; // swipe gesture, not a tap
       const id = card.getAttribute('data-id');
       if (!id || card.dataset.animating === '1') return;
       card.dataset.animating = '1';
@@ -1647,6 +1708,7 @@ function bindCardHandlers() {
       }
       window.setTimeout(() => requestAction('ToggleCart', id), 300);
     });
+    bindCardSwipe(card);
   });
   document.querySelectorAll('.item-edit-btn[data-edit-id]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1655,6 +1717,69 @@ function bindCardHandlers() {
       if (item) openEditOverlay(item);
     });
   });
+}
+
+// Swipe-left-to-delete on an item card
+function bindCardSwipe(card) {
+  const content = card.querySelector('.item-card-content');
+  if (!content) return;
+  const id = card.getAttribute('data-id');
+
+  let startX = 0, startY = 0, dx = 0;
+  let active = false, decided = false, pointerId = null;
+  const SLOP      = 8;   // px before a gesture direction is decided
+  const THRESHOLD = 64;  // px pull-left required to trigger delete
+
+  const onDown = (e) => {
+    if (e.target.closest('.item-edit-btn')) return;        // leave edit button alone
+    if (card.dataset.animating === '1') return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    active = true; decided = false;
+    startX = e.clientX; startY = e.clientY; dx = 0;
+    pointerId = e.pointerId;
+    content.classList.add('is-dragging');
+  };
+
+  const onMove = (e) => {
+    if (!active || e.pointerId !== pointerId) return;
+    const mx = e.clientX - startX;
+    const my = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
+      if (Math.abs(my) >= Math.abs(mx)) { active = false; content.classList.remove('is-dragging'); return; }
+      decided = true;
+      try { content.setPointerCapture(pointerId); } catch (_) {}
+    }
+    dx = Math.max(-content.offsetWidth, Math.min(0, mx)); // left only
+    content.style.transform = `translateX(${dx}px)`;
+    card.classList.toggle('swipe-armed', dx <= -THRESHOLD);
+  };
+
+  const onUp = (e) => {
+    if (!active) return;
+    const wasDecided = decided;
+    active = false; decided = false;
+    content.classList.remove('is-dragging');
+    try { content.releasePointerCapture(pointerId); } catch (_) {}
+    if (wasDecided && dx <= -THRESHOLD) {
+      card.dataset.animating = '1';
+      card.classList.add('is-deleting');
+      content.style.transform = 'translateX(-110%)';
+      window.setTimeout(() => requestAction('DeleteItem', id), 240);
+    } else {
+      content.style.transform = '';
+      card.classList.remove('swipe-armed');
+    }
+    if (wasDecided) { // suppress the click that follows a horizontal drag
+      card.dataset.swiped = '1';
+      window.setTimeout(() => { delete card.dataset.swiped; }, 60);
+    }
+  };
+
+  content.addEventListener('pointerdown', onDown);
+  content.addEventListener('pointermove', onMove);
+  content.addEventListener('pointerup', onUp);
+  content.addEventListener('pointercancel', onUp);
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
@@ -2887,6 +3012,8 @@ function openEditOverlay(item, showFavPicker) {
 
   document.getElementById('editOverlayTitle').textContent =
     editingItemId ? translate('Edit item') : translate('Add');
+  // Trash button only when editing an existing item (not when adding)
+  document.getElementById('btnEditDelete').style.display = editingItemId ? '' : 'none';
   document.getElementById('editOverlay').classList.add('open');
   document.getElementById('editName').focus({ preventScroll: true });
 }
@@ -3017,6 +3144,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Edit overlay
   document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
   document.getElementById('btnSaveEdit').addEventListener('click', saveEdit);
+  document.getElementById('btnEditDelete').innerHTML = TRASH_ICON;
+  document.getElementById('btnEditDelete').addEventListener('click', () => {
+    if (editingItemId) {
+      requestAction('DeleteItem', editingItemId);
+    }
+    closeEditOverlay();
+  });
   document.getElementById('btnEditNewFavList').addEventListener('click', () => {
     const input = document.getElementById('editNewFavInput');
     input.style.display = input.style.display === 'none' ? '' : 'none';

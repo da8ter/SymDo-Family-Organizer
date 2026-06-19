@@ -206,6 +206,46 @@ trait ItemStore
         }
     }
 
+    private function DeleteItemInternal(string $Id): bool
+    {
+        $id = trim($Id);
+        if ($id === '') {
+            return false;
+        }
+        $semaphoreKey = 'SL_Items_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+            $this->SendDebug('ItemStore', 'Semaphore timeout on DeleteItem', 0);
+            $this->LogMessage($this->Translate('Item operation skipped (concurrent access)'), KL_WARNING);
+            return false;
+        }
+        try {
+            $items = $this->LoadItems();
+            $nameLower = null;
+            foreach ($items as $item) {
+                if ((string)($item['id'] ?? '') === $id) {
+                    $nameLower = mb_strtolower(trim((string)($item['name'] ?? '')));
+                    break;
+                }
+            }
+            if ($nameLower === null) {
+                return false;
+            }
+            // Remove the article from the active list AND from the recently used
+            // (cart) list: drop every record sharing the same name.
+            $filtered = array_values(array_filter(
+                $items,
+                fn($item) => mb_strtolower(trim((string)($item['name'] ?? ''))) !== $nameLower
+            ));
+            if (count($filtered) === count($items)) {
+                return false;
+            }
+            $this->SaveItems($filtered);
+            return true;
+        } finally {
+            IPS_SemaphoreLeave($semaphoreKey);
+        }
+    }
+
     private function ClearCartInternal(): void
     {
         $semaphoreKey = 'SL_Items_' . $this->InstanceID;

@@ -257,15 +257,20 @@
     }
     .list.grid .section-header { grid-column: 1 / -1; }
     .list.grid .item {
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      text-align: center;
       aspect-ratio: 1 / 1;
       overflow: hidden;
       min-height: 0;
     }
-    .list.grid.shopping .item { padding: calc(var(--gap) / 2); }
+    .list.grid .item .item-swipe {
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      text-align: center;
+      height: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .list.grid.shopping .item .item-swipe { padding: calc(var(--gap) / 2); }
     .list.grid .item .main {
       flex-direction: column;
       align-items: center;
@@ -367,15 +372,44 @@
     .list.grid .quantity-large-wrap { margin-top: var(--gap); }
 
     .item {
+      position: relative;
+      flex-shrink: 0;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+    /* Foreground layer – slides left on swipe. Opaque so the delete layer
+       behind it stays hidden until swiped. */
+    .item-swipe {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--gap);
       padding: var(--gap);
-      border-radius: var(--radius);
       background: var(--card);
-      border: 1px solid var(--border);
+      touch-action: pan-y;
+      transition: transform .28s cubic-bezier(.22,.61,.36,1);
     }
+    .item-swipe.is-dragging { transition: none; }
+    /* Delete layer revealed by swiping the item to the left */
+    .item-delete-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 16px;
+      background: #c0392b;
+      color: #fff;
+      font-size: 20px;
+    }
+    .item.swipe-armed .item-delete-bg { background: #e04434; }
+    .item.is-deleting { pointer-events: none; }
+    .item.is-deleting .item-swipe { opacity: .4; }
     .item .main {
       display: flex;
       align-items: center;
@@ -466,11 +500,6 @@
     .badge.low { border-color: rgba(200,200,200,.25);  color: var(--text); background-color: rgb(200,200,200, 0.2);}
     .badge.normal { border-color: var(--accent-color); color: var(--text);  background-color: color-mix(in srgb, var(--accent-color) 30%, transparent);}
     .badge.quantity { border-color: var(--accent-color); font-weight: 700; color: var(--accent);}
-    .item .del {
-      flex-shrink: 0;
-      padding: 6px 10px;
-      font-size: 12px;
-    }
     .danger-btn {
       display: inline-flex;
       align-items: center;
@@ -513,9 +542,9 @@
       pointer-events: none;
     }
     .item.dragging {
-      background: var(--accent);
       z-index: 10;
     }
+    .item.dragging .item-swipe { background: var(--accent); }
     .item.drag-over {
       outline: 0px dashed var(--accent);
       outline-offset: 0px;
@@ -1444,7 +1473,6 @@
       const prioLabel = getPriorityLabel(prioKey);
       const group = done ? 'completed' : 'active';
       const showInfoBadges = state.showInfoBadges === true;
-      const showDeleteButton = state.showDeleteButton !== false;
       const showEditButton = state.showEditButton !== false;
       const useGridView = state.useGridView === true;
       const showLargeQuantity = useGridView && state.showLargeQuantity === true;
@@ -1483,8 +1511,7 @@
           : `<span class="badge ${prioKey}">${escapeHtml(prioLabel)}</span>`);
       }
 
-      const actionButtons = `${showDeleteButton ? `<button class="del icon-btn" title="${translate('Delete')}" aria-label="${translate('Delete')}"><i class="fa-light fa-trash-can"></i></button>` : ''}
-            ${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}
+      const actionButtons = `${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}
             <div class="drag-handle"><i class="fa-light fa-grip-dots-vertical"></i></div>`;
 
       const actionsHtml = useGridView
@@ -1493,16 +1520,19 @@
 
       return `
         <div class="item ${done ? 'done' : ''}" data-id="${id}" data-done="${done ? '1' : '0'}" data-group="${group}">
-          <div class="main">
-            <input type="checkbox" class="chk" ${done ? 'checked' : ''} />
-            <div class="content">
-              <div class="title">${title}</div>
-              ${info ? `<div class="info">${info}</div>` : ''}
-              ${shoppingMode ? qtyShoppingHtml : qtyLargeHtml}
+          <div class="item-delete-bg" aria-hidden="true"><i class="fa-light fa-trash-can"></i></div>
+          <div class="item-swipe">
+            <div class="main">
+              <input type="checkbox" class="chk" ${done ? 'checked' : ''} />
+              <div class="content">
+                <div class="title">${title}</div>
+                ${info ? `<div class="info">${info}</div>` : ''}
+                ${shoppingMode ? qtyShoppingHtml : qtyLargeHtml}
+              </div>
             </div>
-          </div>
-          <div class="actions">
-            ${actionsHtml}
+            <div class="actions">
+              ${actionsHtml}
+            </div>
           </div>
         </div>
       `;
@@ -1793,7 +1823,6 @@
       container.querySelectorAll('.item').forEach(el => {
         const id = parseInt(el.getAttribute('data-id'));
         const chk = el.querySelector('.chk');
-        const del = el.querySelector('.del');
         const edit = el.querySelector('.edit');
         const title = el.querySelector('.title');
         const info = el.querySelector('.info');
@@ -1802,13 +1831,6 @@
         if (!shoppingMode) {
           chk.addEventListener('change', () => {
             requestAction('ToggleDone', JSON.stringify({ id: id, done: chk.checked }));
-          });
-        }
-
-        if (del) {
-          del.addEventListener('click', (e) => {
-            e.stopPropagation();
-            requestAction('DeleteItem', JSON.stringify({ id: id }));
           });
         }
 
@@ -1821,6 +1843,7 @@
 
         if (!shoppingMode && title) {
           title.addEventListener('click', (e) => {
+            if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
             e.stopPropagation();
             openDetail(id);
           });
@@ -1828,6 +1851,7 @@
 
         if (!shoppingMode && info) {
           info.addEventListener('click', (e) => {
+            if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
             e.stopPropagation();
             openDetail(id);
           });
@@ -1853,9 +1877,70 @@
             e.stopPropagation();
           });
         }
+
+        bindItemSwipe(el, id);
       });
 
       bindDnd(container);
+    }
+
+    // Swipe-left-to-delete on a todo item
+    function bindItemSwipe(item, id) {
+      const swipe = item.querySelector('.item-swipe');
+      if (!swipe || !Number.isFinite(id)) return;
+
+      let startX = 0, startY = 0, dx = 0;
+      let active = false, decided = false, pointerId = null;
+      const SLOP = 8;        // px before a gesture direction is decided
+      const THRESHOLD = 70;  // px pull-left required to trigger delete
+
+      const onDown = (e) => {
+        if (e.target.closest('.drag-handle, .edit, .chk')) return; // leave controls alone
+        if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        active = true; decided = false;
+        startX = e.clientX; startY = e.clientY; dx = 0;
+        pointerId = e.pointerId;
+        swipe.classList.add('is-dragging');
+      };
+
+      const onMove = (e) => {
+        if (!active || e.pointerId !== pointerId) return;
+        const mx = e.clientX - startX;
+        const my = e.clientY - startY;
+        if (!decided) {
+          if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
+          if (Math.abs(my) >= Math.abs(mx)) { active = false; swipe.classList.remove('is-dragging'); return; }
+          decided = true;
+          try { swipe.setPointerCapture(pointerId); } catch (_) {}
+        }
+        dx = Math.max(-swipe.offsetWidth, Math.min(0, mx)); // left only
+        swipe.style.transform = `translateX(${dx}px)`;
+        item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
+      };
+
+      const onUp = () => {
+        if (!active) return;
+        const wasDecided = decided;
+        active = false; decided = false;
+        swipe.classList.remove('is-dragging');
+        try { swipe.releasePointerCapture(pointerId); } catch (_) {}
+        if (wasDecided && dx <= -THRESHOLD) {
+          item.classList.add('is-deleting');
+          swipe.style.transform = 'translateX(-110%)';
+          suppressClickUntil = Date.now() + 400;
+          window.setTimeout(() => requestAction('DeleteItem', JSON.stringify({ id: id })), 240);
+        } else {
+          swipe.style.transform = '';
+          item.classList.remove('swipe-armed');
+        }
+        if (wasDecided) suppressClickUntil = Date.now() + 300; // suppress the trailing click
+      };
+
+      swipe.addEventListener('pointerdown', onDown);
+      swipe.addEventListener('pointermove', onMove);
+      swipe.addEventListener('pointerup', onUp);
+      swipe.addEventListener('pointercancel', onUp);
     }
 
     function handleMessage(data) {
