@@ -20,6 +20,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 
 - **Tasks**
   - Anlegen, Bearbeiten, Löschen
+  - **Nach links wischen**, um einen Task direkt zu löschen — beim Wischen erscheint eine rote Lösch-Fläche mit Mülleimer-Symbol
   - Erledigt-Status
   - Titel / Info / Anzahl / Priorität / Fälligkeit
   - Wiederkehrend basierend auf Fälligkeit (Individuell: Stunden/Tage/Wochen/Monate/Jahre, sowie 1/2/3 Wochen, monatlich, quartalsweise, jährlich)
