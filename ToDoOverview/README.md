@@ -49,7 +49,7 @@ Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisi
   - Blendet den Wert **Überfällig** ein/aus (Standard: an).
 - **Heute anzeigen** (`ShowToday`)
   - Blendet den Wert **Heute** ein/aus (Standard: an).
-- **Roter Kachel-Hintergrund bei Überfälligen (kompakt)** (`OverdueRedBackground`)
+- **Roter Kachel-Hintergrund bei Überfälligen** (`OverdueRedBackground`)
   - Färbt die Kachel in der kompakten Ansicht rot, sobald überfällige Tasks vorhanden sind (Standard: aus).
 
 ## 5. Responsives Verhalten

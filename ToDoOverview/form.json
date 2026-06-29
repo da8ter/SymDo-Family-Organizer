@@ -29,7 +29,7 @@
     {
       "type": "CheckBox",
       "name": "OverdueRedBackground",
-      "caption": "Red tile background when overdue (compact)"
+      "caption": "Red tile background when overdue"
     }
   ]
 }
