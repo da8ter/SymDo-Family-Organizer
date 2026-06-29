@@ -500,6 +500,11 @@
     .badge.low { border-color: rgba(200,200,200,.25);  color: var(--text); background-color: rgb(200,200,200, 0.2);}
     .badge.normal { border-color: var(--accent-color); color: var(--text);  background-color: color-mix(in srgb, var(--accent-color) 30%, transparent);}
     .badge.quantity { border-color: var(--accent-color); font-weight: 700; color: var(--accent);}
+    .item .del {
+      flex-shrink: 0;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
     .danger-btn {
       display: inline-flex;
       align-items: center;
@@ -587,6 +592,35 @@
     .stat-open .label, .stat-open .value { color: var(--accent); }
     .stat-overdue .label, .stat-overdue .value { color: #ff5a5a; }
     .stat-today .label, .stat-today .value { color: #ffa500; }
+
+    /* Kompaktmodus: Statistik fuellt die Kachel, grosse zentrierte Zahlen */
+    .wrap.compact { justify-content: center; }
+    .wrap.compact .stats { flex: 1; margin: 0; gap: 8px; }
+    .wrap.compact .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+    }
+    .wrap.compact .stat-box .label {
+      font-size: clamp(9px, 3.2vw, 13px);
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.1;
+      margin-bottom: 1px;
+    }
+    .wrap.compact .stat-box .value { font-size: clamp(28px, 14vw, 64px); line-height: 1; }
+
+    /* L2 (150-240px): Offen + Ueberfaellig oben, Heute volle Breite darunter */
+    .wrap.compact.compact-two .stats { flex-wrap: wrap; align-content: stretch; }
+    .wrap.compact.compact-two .stat-open,
+    .wrap.compact.compact-two .stat-overdue { flex: 1 1 0; }
+    .wrap.compact.compact-two .stat-today { flex: 1 1 100%; }
+
+    /* Sonderfall: nur "Neuer Task"-Button, zentriert */
+    .wrap.compact.compact-newonly { align-items: center; }
+    .wrap.compact.compact-newonly #newBtn { max-width: 220px; }
     .toolbar {
       display: flex;
       align-items: center;
@@ -757,6 +791,19 @@
     let pointerDragMoved = false;
     let pointerDragContainer = null;
     let suppressClickUntil = 0;
+    let lastStats = { open: 0, overdue: 0, today: 0 };
+    let currentTileWidth = 0;
+
+    const FULL_MIN  = 320; // >= : volles Layout
+    const THREE_MIN = 240; // 3 Felder
+    const TWO_MIN   = 150; // 2 Felder; darunter 1 Feld
+
+    function computeCompactLevel(w) {
+      if (w >= FULL_MIN)  return 0;
+      if (w >= THREE_MIN) return 1;
+      if (w >= TWO_MIN)   return 2;
+      return 3;
+    }
 
     const translate = (typeof window.translate === 'function')
       ? window.translate
@@ -782,19 +829,66 @@
       requestAction('SetSortPrefs', JSON.stringify({ mode: sortMode, dir: sortDir }));
     }
 
-    function applyUiVisibility() {
+    function applyLayout() {
       const showOverview = state.showOverview !== false;
       const showCreateButton = state.showCreateButton !== false;
       const showSorting = state.showSorting !== false;
 
+      const level = computeCompactLevel(currentTileWidth);
+      const compact = level > 0;
+
+      const wrap = document.querySelector('.wrap');
       const stats = document.querySelector('.stats');
-      if (stats) stats.style.display = showOverview ? '' : 'none';
-
       const newBtn = document.getElementById('newBtn');
-      if (newBtn) newBtn.style.display = showCreateButton ? '' : 'none';
-
       const toolbar = document.querySelector('.toolbar');
-      if (toolbar) toolbar.style.display = showSorting ? '' : 'none';
+      const list = document.getElementById('list');
+      const boxOpen = document.querySelector('.stat-open');
+      const boxOverdue = document.querySelector('.stat-overdue');
+      const boxToday = document.querySelector('.stat-today');
+
+      // Im Kompaktmodus: nur Stats ODER nur Button (zentriert)
+      const compactStats = compact && showOverview;
+      const compactNewOnly = compact && !showOverview && showCreateButton;
+      const compactTwo = compactStats && level === 2;
+
+      if (wrap) {
+        wrap.classList.toggle('compact', compact);
+        wrap.classList.toggle('compact-newonly', compactNewOnly);
+        wrap.classList.toggle('compact-two', compactTwo);
+      }
+
+      if (!compact) {
+        // Volles Layout: bisheriges Verhalten
+        if (stats) stats.style.display = showOverview ? '' : 'none';
+        if (newBtn) newBtn.style.display = showCreateButton ? '' : 'none';
+        if (toolbar) toolbar.style.display = showSorting ? '' : 'none';
+        if (list) list.style.display = '';
+        if (boxOpen) boxOpen.style.display = '';
+        if (boxOverdue) boxOverdue.style.display = '';
+        if (boxToday) boxToday.style.display = '';
+        return;
+      }
+
+      // Kompaktmodus
+      if (toolbar) toolbar.style.display = 'none';
+      if (list) list.style.display = 'none';
+      if (stats) stats.style.display = compactStats ? '' : 'none';
+      if (newBtn) newBtn.style.display = compactNewOnly ? '' : 'none';
+
+      if (compactStats) {
+        if (level >= 3) {
+          // Level 3: nur ein Feld - Ueberfaellig wenn >0, sonst Offen; Heute weg
+          if (boxToday) boxToday.style.display = 'none';
+          const hasOverdue = lastStats.overdue > 0;
+          if (boxOverdue) boxOverdue.style.display = hasOverdue ? '' : 'none';
+          if (boxOpen) boxOpen.style.display = hasOverdue ? 'none' : '';
+        } else {
+          // Level 1 & 2: alle drei sichtbar (L2: Heute volle Breite darunter)
+          if (boxToday) boxToday.style.display = '';
+          if (boxOverdue) boxOverdue.style.display = '';
+          if (boxOpen) boxOpen.style.display = '';
+        }
+      }
     }
 
     function setManualSort() {
@@ -1473,6 +1567,7 @@
       const prioLabel = getPriorityLabel(prioKey);
       const group = done ? 'completed' : 'active';
       const showInfoBadges = state.showInfoBadges === true;
+      const showDeleteButton = state.showDeleteButton !== false;
       const showEditButton = state.showEditButton !== false;
       const useGridView = state.useGridView === true;
       const showLargeQuantity = useGridView && state.showLargeQuantity === true;
@@ -1511,7 +1606,8 @@
           : `<span class="badge ${prioKey}">${escapeHtml(prioLabel)}</span>`);
       }
 
-      const actionButtons = `${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}
+      const actionButtons = `${showDeleteButton ? `<button class="del icon-btn" title="${translate('Delete')}" aria-label="${translate('Delete')}"><i class="fa-light fa-trash-can"></i></button>` : ''}
+            ${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}
             <div class="drag-handle"><i class="fa-light fa-grip-dots-vertical"></i></div>`;
 
       const actionsHtml = useGridView
@@ -1789,6 +1885,8 @@
       document.getElementById('statOpenValue').textContent = open;
       document.getElementById('statOverdueValue').textContent = overdue;
       document.getElementById('statTodayValue').textContent = today;
+
+      lastStats = { open, overdue, today };
     }
 
     function render() {
@@ -1823,6 +1921,7 @@
       container.querySelectorAll('.item').forEach(el => {
         const id = parseInt(el.getAttribute('data-id'));
         const chk = el.querySelector('.chk');
+        const del = el.querySelector('.del');
         const edit = el.querySelector('.edit');
         const title = el.querySelector('.title');
         const info = el.querySelector('.info');
@@ -1831,6 +1930,13 @@
         if (!shoppingMode) {
           chk.addEventListener('change', () => {
             requestAction('ToggleDone', JSON.stringify({ id: id, done: chk.checked }));
+          });
+        }
+
+        if (del) {
+          del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            requestAction('DeleteItem', JSON.stringify({ id: id }));
           });
         }
 
@@ -1895,7 +2001,7 @@
       const THRESHOLD = 70;  // px pull-left required to trigger delete
 
       const onDown = (e) => {
-        if (e.target.closest('.drag-handle, .edit, .chk')) return; // leave controls alone
+        if (e.target.closest('.drag-handle, .edit, .del, .chk')) return; // leave controls alone
         if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         active = true; decided = false;
@@ -1971,8 +2077,8 @@
         }
         state = data;
         fillRecurrenceCustomUnitOptions();
-        applyUiVisibility();
-        render();
+        render();        // ruft updateStats() -> cached lastStats
+        applyLayout();   // nutzt frische Zaehlwerte
       }
     }
 
@@ -2111,7 +2217,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       initTexts();
-      applyUiVisibility();
+      applyLayout();
 
       const bindScrollContainment = (scrollEl) => {
         if (!scrollEl) {
@@ -2320,6 +2426,23 @@
         }
         closeOverlay();
       });
+
+      const wrapEl = document.querySelector('.wrap');
+      if (wrapEl && typeof ResizeObserver !== 'undefined') {
+        let rafPending = false;
+        const ro = new ResizeObserver(() => {
+          if (rafPending) return;
+          rafPending = true;
+          requestAnimationFrame(() => {
+            rafPending = false;
+            const w = Math.round(wrapEl.clientWidth);
+            if (w === currentTileWidth) return; // nur bei echter Breitenaenderung
+            currentTileWidth = w;
+            applyLayout();
+          });
+        });
+        ro.observe(wrapEl);
+      }
 
       requestState();
     });

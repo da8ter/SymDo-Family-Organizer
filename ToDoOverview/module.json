@@ -1,0 +1,12 @@
+{
+  "id": "{E28EE872-873E-4544-8D97-BE0BB4AAA597}",
+  "name": "ToDo Overview",
+  "type": 3,
+  "vendor": "",
+  "aliases": ["ToDo Overview", "ToDo Übersicht"],
+  "url": "https://github.com/da8ter/ToDo-List/tree/main/ToDoOverview",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "TDLO"
+}

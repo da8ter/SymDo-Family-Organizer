@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root {
+      --bg: var(--card-color);
+      --card: var(--card-color);
+      --text: var(--content-color);
+      --muted: color-mix(in srgb, var(--content-color) 30%, transparent);
+      --border: color-mix(in srgb, var(--accent-color) 30%, transparent);
+      --accent: var(--accent-color);
+      --radius: 14px;
+      --gap: 12px;
+    }
+
+    body {
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: transparent;
+    }
+
+    .wrap {
+      position: relative;
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .wrap.clickable { cursor: pointer; }
+
+    .stats {
+      display: flex;
+      gap: var(--gap);
+    }
+    .stat-box {
+      flex: 1;
+      padding: 12px 8px;
+      border-radius: var(--radius);
+      background: var(--card);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .stat-box .label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .stat-box .value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .stat-open .label, .stat-open .value { color: var(--accent); }
+    .stat-overdue .label, .stat-overdue .value { color: #ff5a5a; }
+    .stat-today .label, .stat-today .value { color: #ffa500; }
+
+    /* Fill-/Kompaktdarstellung: Felder fuellen die Kachel, grosse zentrierte Zahlen */
+    .wrap.compact { justify-content: center; }
+    .wrap.compact .stats { flex: 1; margin: 0; gap: 8px; }
+    .wrap.compact .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+    }
+    .wrap.compact .stat-box .label {
+      font-size: clamp(9px, 3.2vw, 13px);
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.1;
+      margin-bottom: 1px;
+    }
+    .wrap.compact .stat-box .value { font-size: clamp(28px, 14vw, 64px); line-height: 1; }
+
+    /* L2 (150-240px): Offen + Ueberfaellig oben, Heute volle Breite darunter */
+    .wrap.compact.compact-two .stats { flex-wrap: wrap; align-content: stretch; }
+    .wrap.compact.compact-two .stat-open,
+    .wrap.compact.compact-two .stat-overdue { flex: 1 1 0; }
+    .wrap.compact.compact-two .stat-today { flex: 1 1 100%; }
+
+    /* Roter Kachel-Hintergrund bei Ueberfaelligen (Level >= 2), per Schalter aktivierbar */
+    body.overdue-bg { background: #ff5a5a; }
+    .wrap.overdue-bg { background: #ff5a5a; }
+    .wrap.overdue-bg .stat-box { background: transparent; border-color: rgba(255, 255, 255, 0.45); }
+    .wrap.overdue-bg .stat-box .label,
+    .wrap.overdue-bg .stat-box .value { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <div class="stats">
+      <div class="stat-box stat-open">
+        <div class="label" id="statOpenLabel"></div>
+        <div class="value" id="statOpenValue">0</div>
+      </div>
+      <div class="stat-box stat-overdue">
+        <div class="label" id="statOverdueLabel"></div>
+        <div class="value" id="statOverdueValue">0</div>
+      </div>
+      <div class="stat-box stat-today">
+        <div class="label" id="statTodayLabel"></div>
+        <div class="value" id="statTodayValue">0</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      let state = { open: 0, overdue: 0, today: 0, openObjectId: 0, overdueRedBackground: false };
+      let lastStats = { open: 0, overdue: 0, today: 0 };
+      let currentTileWidth = 0;
+
+      const FULL_MIN  = 320; // >= : drei Felder
+      const THREE_MIN = 240; // drei Felder
+      const TWO_MIN   = 150; // zwei Felder (Heute volle Breite darunter); darunter ein Feld
+
+      function computeCompactLevel(w) {
+        if (w >= FULL_MIN)  return 0;
+        if (w >= THREE_MIN) return 1;
+        if (w >= TWO_MIN)   return 2;
+        return 3;
+      }
+
+      const translate = (typeof window.translate === 'function')
+        ? window.translate
+        : (key) => String(key ?? '');
+
+      function updateStats() {
+        const open    = parseInt(state.open)    || 0;
+        const overdue = parseInt(state.overdue) || 0;
+        const today   = parseInt(state.today)   || 0;
+        document.getElementById('statOpenValue').textContent    = open;
+        document.getElementById('statOverdueValue').textContent = overdue;
+        document.getElementById('statTodayValue').textContent   = today;
+        lastStats = { open, overdue, today };
+      }
+
+      // Bei < 150px nur ein Feld: das wichtigste aus der aktivierten Menge.
+      function pickSingleBox(eOpen, eOverdue, eToday, overdueCount) {
+        if (eOverdue && overdueCount > 0) return 'overdue';
+        if (eOpen) return 'open';
+        if (eOverdue) return 'overdue';
+        if (eToday) return 'today';
+        return null;
+      }
+
+      function applyLayout() {
+        const wrap = document.getElementById('wrap');
+        if (!wrap) return;
+
+        const level = computeCompactLevel(currentTileWidth);
+        const boxOpen    = document.querySelector('.stat-open');
+        const boxOverdue = document.querySelector('.stat-overdue');
+        const boxToday   = document.querySelector('.stat-today');
+
+        // Backend-Schalter: welche Werte sollen ueberhaupt angezeigt werden (Standard: an)
+        const eOpen    = state.showOpen    !== false;
+        const eOverdue = state.showOverdue !== false;
+        const eToday   = state.showToday   !== false;
+
+        // Sichtbarkeit = aktivierte Menge, bei < 150px auf ein Feld reduziert
+        let vOpen = eOpen, vOverdue = eOverdue, vToday = eToday;
+        if (level >= 3) {
+          const single = pickSingleBox(eOpen, eOverdue, eToday, lastStats.overdue);
+          vOpen    = single === 'open';
+          vOverdue = single === 'overdue';
+          vToday   = single === 'today';
+        }
+
+        const visibleCount = (vOpen ? 1 : 0) + (vOverdue ? 1 : 0) + (vToday ? 1 : 0);
+        const compactTwo = level === 2 && visibleCount === 3;
+        const overdueBg  = level >= 2 && eOverdue && lastStats.overdue > 0 && state.overdueRedBackground === true;
+
+        // Eigenstaendige Kachel: immer Fill-Darstellung
+        wrap.classList.add('compact');
+        wrap.classList.toggle('compact-two', compactTwo);
+        wrap.classList.toggle('overdue-bg', overdueBg);
+        document.body.classList.toggle('overdue-bg', overdueBg);
+
+        if (boxOpen)    boxOpen.style.display    = vOpen ? '' : 'none';
+        if (boxOverdue) boxOverdue.style.display = vOverdue ? '' : 'none';
+        if (boxToday)   boxToday.style.display   = vToday ? '' : 'none';
+      }
+
+      function applyClickTarget() {
+        const wrap = document.getElementById('wrap');
+        if (!wrap) return;
+        const id = parseInt(state.openObjectId) || 0;
+        wrap.classList.toggle('clickable', id > 0);
+      }
+
+      function handleMessage(data) {
+        if (typeof data === 'string') {
+          try { data = JSON.parse(data); } catch (e) { return; }
+        }
+        if (data && typeof data === 'object' && data.type === 'state') {
+          state = data;
+          updateStats();
+          applyLayout();
+          applyClickTarget();
+        }
+      }
+
+      window.handleMessage = handleMessage;
+      window.updateState = handleMessage;
+
+      window.addEventListener('message', (event) => {
+        if (!event) return;
+        handleMessage(event.data);
+      });
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('statOpenLabel').textContent    = translate('Open Tasks');
+        document.getElementById('statOverdueLabel').textContent = translate('Overdue');
+        document.getElementById('statTodayLabel').textContent   = translate('Due Today');
+
+        const wrap = document.getElementById('wrap');
+        if (wrap) {
+          wrap.addEventListener('click', () => {
+            const id = parseInt(state.openObjectId) || 0;
+            if (id > 0 && typeof openObject === 'function') {
+              openObject(id);
+            }
+          });
+
+          currentTileWidth = Math.round(wrap.clientWidth);
+
+          if (typeof ResizeObserver !== 'undefined') {
+            let rafPending = false;
+            const ro = new ResizeObserver(() => {
+              if (rafPending) return;
+              rafPending = true;
+              requestAnimationFrame(() => {
+                rafPending = false;
+                const w = Math.round(wrap.clientWidth);
+                if (w === currentTileWidth) return; // nur bei echter Breitenaenderung
+                currentTileWidth = w;
+                applyLayout();
+              });
+            });
+            ro.observe(wrap);
+          }
+        }
+
+        updateStats();
+        applyLayout();
+        applyClickTarget();
+      });
+    })();
+  </script>
+</body>
+</html>

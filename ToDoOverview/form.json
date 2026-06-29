@@ -1,0 +1,35 @@
+{
+  "elements": [
+    {
+      "type": "SelectInstance",
+      "name": "ToDoListInstanceID",
+      "caption": "ToDo List instance",
+      "moduleID": "{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}"
+    },
+    {
+      "type": "SelectObject",
+      "name": "OpenObjectID",
+      "caption": "Open object/category on click"
+    },
+    {
+      "type": "CheckBox",
+      "name": "ShowOpen",
+      "caption": "Show open count"
+    },
+    {
+      "type": "CheckBox",
+      "name": "ShowOverdue",
+      "caption": "Show overdue count"
+    },
+    {
+      "type": "CheckBox",
+      "name": "ShowToday",
+      "caption": "Show today count"
+    },
+    {
+      "type": "CheckBox",
+      "name": "OverdueRedBackground",
+      "caption": "Red tile background when overdue (compact)"
+    }
+  ]
+}

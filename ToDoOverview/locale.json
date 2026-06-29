@@ -1,0 +1,30 @@
+{
+  "translations": {
+    "de": {
+      "ToDo Overview": "ToDo Übersicht",
+      "ToDo List instance": "ToDo Liste Instanz",
+      "Open object/category on click": "Objekt/Kategorie bei Klick öffnen",
+      "Show open count": "Offen anzeigen",
+      "Show overdue count": "Überfällig anzeigen",
+      "Show today count": "Heute anzeigen",
+      "Red tile background when overdue (compact)": "Roter Kachel-Hintergrund bei Überfälligen (kompakt)",
+      "Open Tasks": "Offen",
+      "Overdue": "Überfällig",
+      "Due Today": "Heute",
+      "Invalid Ident": "Ungültiger Ident"
+    },
+    "en": {
+      "ToDo Overview": "ToDo Overview",
+      "ToDo List instance": "ToDo List instance",
+      "Open object/category on click": "Open object/category on click",
+      "Show open count": "Show open count",
+      "Show overdue count": "Show overdue count",
+      "Show today count": "Show today count",
+      "Red tile background when overdue (compact)": "Red tile background when overdue (compact)",
+      "Open Tasks": "Open",
+      "Overdue": "Overdue",
+      "Due Today": "Today",
+      "Invalid Ident": "Invalid Ident"
+    }
+  }
+}
