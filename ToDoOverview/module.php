@@ -26,6 +26,10 @@ class ToDoOverview extends IPSModule
         $this->RegisterPropertyBoolean('ShowOverdue', true);
         $this->RegisterPropertyBoolean('ShowToday', true);
 
+        // Schriftgroessen-Skalierung in Prozent (Standard 100)
+        $this->RegisterPropertyInteger('LabelFontScale', 100);
+        $this->RegisterPropertyInteger('ValueFontScale', 100);
+
         // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
 
@@ -135,6 +139,8 @@ class ToDoOverview extends IPSModule
             'showOpen'             => $this->ReadPropertyBoolean('ShowOpen'),
             'showOverdue'          => $this->ReadPropertyBoolean('ShowOverdue'),
             'showToday'            => $this->ReadPropertyBoolean('ShowToday'),
+            'labelFontScale'       => $this->ReadPropertyInteger('LabelFontScale'),
+            'valueFontScale'       => $this->ReadPropertyInteger('ValueFontScale'),
         ];
     }
 

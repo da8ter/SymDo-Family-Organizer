@@ -69,20 +69,24 @@
       justify-content: center;
       padding: 4px 8px;
     }
+    /* Eine einheitliche Schriftgroesse fuer ALLE Felder (per JS aus dem kleinsten Feld berechnet) */
     .wrap.compact .stat-box .label {
-      font-size: clamp(9px, 3.2vw, 13px);
-      white-space: normal;
-      word-break: break-word;
+      font-size: var(--label-fs, 12px);
+      white-space: nowrap;
+      overflow: hidden;
       line-height: 1.1;
       margin-bottom: 1px;
     }
-    .wrap.compact .stat-box .value { font-size: clamp(28px, 14vw, 64px); line-height: 1; }
+    .wrap.compact .stat-box .value { font-size: var(--value-fs, 40px); line-height: 1; }
 
-    /* L2 (150-240px): Offen + Ueberfaellig oben, Heute volle Breite darunter */
-    .wrap.compact.compact-two .stats { flex-wrap: wrap; align-content: stretch; }
-    .wrap.compact.compact-two .stat-open,
-    .wrap.compact.compact-two .stat-overdue { flex: 1 1 0; }
-    .wrap.compact.compact-two .stat-today { flex: 1 1 100%; }
+    /* Hochformat: alle Felder untereinander (gleich gross) */
+    .wrap.compact.stacked .stats { flex-direction: column; }
+
+    /* Quadratisch: 2 oben nebeneinander, 1 volle Breite darunter */
+    .wrap.compact.two .stats { flex-wrap: wrap; align-content: stretch; }
+    .wrap.compact.two .stat-open,
+    .wrap.compact.two .stat-overdue { flex: 1 1 0; }
+    .wrap.compact.two .stat-today { flex: 1 1 100%; }
 
     /* Roter Kachel-Hintergrund bei Ueberfaelligen (Level >= 2), per Schalter aktivierbar */
     body.overdue-bg { background: #ff5a5a; }
@@ -115,6 +119,7 @@
       let state = { open: 0, overdue: 0, today: 0, openObjectId: 0, overdueRedBackground: false };
       let lastStats = { open: 0, overdue: 0, today: 0 };
       let currentTileWidth = 0;
+      let currentTileHeight = 0;
 
       const FULL_MIN  = 320; // >= : drei Felder
       const THREE_MIN = 240; // drei Felder
@@ -150,11 +155,27 @@
         return null;
       }
 
+      // Groesste Label-Schriftgroesse (px), bei der `text` (Grossschreibung) einzeilig in innerW passt
+      let _lblCtx = null;
+      function maxLabelFont(text, innerW) {
+        const t = String(text || '').toUpperCase();
+        if (!t || innerW <= 0) return Infinity;
+        if (!_lblCtx) _lblCtx = document.createElement('canvas').getContext('2d');
+        _lblCtx.font = '600 100px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+        const glyph100 = _lblCtx.measureText(t).width;   // Breite bei 100px (ohne letter-spacing)
+        if (glyph100 <= 0) return Infinity;
+        const ls = t.length * 0.5;                       // letter-spacing 0.5px je Zeichen
+        return Math.max(6, (innerW - ls) * 100 / glyph100);
+      }
+
       function applyLayout() {
         const wrap = document.getElementById('wrap');
         if (!wrap) return;
 
-        const level = computeCompactLevel(currentTileWidth);
+        const W = currentTileWidth;
+        const H = currentTileHeight;
+        const level = computeCompactLevel(W);
+
         const boxOpen    = document.querySelector('.stat-open');
         const boxOverdue = document.querySelector('.stat-overdue');
         const boxToday   = document.querySelector('.stat-today');
@@ -163,23 +184,78 @@
         const eOpen    = state.showOpen    !== false;
         const eOverdue = state.showOverdue !== false;
         const eToday   = state.showToday   !== false;
+        const enabledCount = (eOpen ? 1 : 0) + (eOverdue ? 1 : 0) + (eToday ? 1 : 0);
 
-        // Sichtbarkeit = aktivierte Menge, bei < 150px auf ein Feld reduziert
-        let vOpen = eOpen, vOverdue = eOverdue, vToday = eToday;
-        if (level >= 3) {
-          const single = pickSingleBox(eOpen, eOverdue, eToday, lastStats.overdue);
-          vOpen    = single === 'open';
-          vOverdue = single === 'overdue';
-          vToday   = single === 'today';
+        // Layout-Modus nach Seitenverhaeltnis:
+        //   Querformat  -> Reihe nebeneinander
+        //   quadratisch -> 2 oben + 1 darunter (nur bei 3 Feldern)
+        //   Hochformat  -> alle untereinander
+        const r = H > 0 ? W / H : 1;
+        let mode; // 'row' | 'stack' | 'two'
+        if (enabledCount >= 3) {
+          if (r <= 0.8)      mode = 'stack';
+          else if (r >= 1.3) mode = 'row';
+          else               mode = 'two';
+        } else if (enabledCount === 2) {
+          mode = (r <= 1.0) ? 'stack' : 'row';
+        } else {
+          mode = 'row';
         }
 
-        const visibleCount = (vOpen ? 1 : 0) + (vOverdue ? 1 : 0) + (vToday ? 1 : 0);
-        const compactTwo = level === 2 && visibleCount === 3;
-        const overdueBg  = level >= 2 && eOverdue && lastStats.overdue > 0 && state.overdueRedBackground === true;
+        let vOpen = eOpen, vOverdue = eOverdue, vToday = eToday;
+
+        // Kleinste sichtbare Feld-Dimension fuer den Modus bestimmen (fuer einheitliche Schrift)
+        const GAP = 8;
+        const boxDims = (m, n) => {
+          if (m === 'stack') return [W, (H - GAP * (n - 1)) / n];
+          if (m === 'two')   return [(W - GAP) / 2, (H - GAP) / 2]; // obere Felder sind am kleinsten
+          return [(W - GAP * (n - 1)) / n, H];                      // row
+        };
+        let [bw, bh] = boxDims(mode, enabledCount);
+
+        // Zu klein fuer ein Mehrfach-Layout -> nur ein Feld (fuellt die Kachel)
+        const MIN_BOX = 50;
+        if (enabledCount >= 2 && Math.min(bw, bh) < MIN_BOX) {
+          const single = pickSingleBox(eOpen, eOverdue, eToday, lastStats.overdue);
+          vOpen = single === 'open'; vOverdue = single === 'overdue'; vToday = single === 'today';
+          mode = 'row';
+          bw = W; bh = H;
+        }
+
+        // EINE Schriftgroesse fuer ALLE Felder (identisch), aus der kleinsten Feld-Dimension + Prozent-Regler
+        const base = Math.max(0, Math.min(bw, bh));
+        const vScale = (parseInt(state.valueFontScale) || 100) / 100;
+        const lScale = (parseInt(state.labelFontScale) || 100) / 100;
+        const valuePx = Math.round(Math.min(240, Math.max(18, base * 0.45)) * vScale);
+
+        // Label darf NICHT umbrechen: Schriftgroesse so begrenzen, dass der laengste
+        // sichtbare Text einzeilig in sein Feld passt.
+        const nvis = (vOpen ? 1 : 0) + (vOverdue ? 1 : 0) + (vToday ? 1 : 0);
+        const PAD_X = 18; // stat-box Innenabstand (2*8) + Reserve
+        let colW;
+        if (mode === 'stack')    colW = W;
+        else if (mode === 'two') colW = (W - GAP) / 2;                          // schmalste Felder (oben)
+        else                     colW = (W - GAP * Math.max(0, nvis - 1)) / Math.max(1, nvis);
+        let labelCap = Infinity;
+        const capFor = (vis, id, w) => {
+          if (!vis) return;
+          const el = document.getElementById(id);
+          if (el) labelCap = Math.min(labelCap, maxLabelFont(el.textContent, w - PAD_X));
+        };
+        capFor(vOpen,    'statOpenLabel',    colW);
+        capFor(vOverdue, 'statOverdueLabel', colW);
+        capFor(vToday,   'statTodayLabel',   mode === 'two' ? W : colW);        // HEUTE im 2+1 volle Breite
+
+        const labelPx = Math.round(Math.min(Math.min(46, Math.max(8, base * 0.15)) * lScale, labelCap));
+        wrap.style.setProperty('--value-fs', valuePx + 'px');
+        wrap.style.setProperty('--label-fs', labelPx + 'px');
+
+        const overdueBg = level >= 2 && eOverdue && lastStats.overdue > 0 && state.overdueRedBackground === true;
 
         // Eigenstaendige Kachel: immer Fill-Darstellung
         wrap.classList.add('compact');
-        wrap.classList.toggle('compact-two', compactTwo);
+        wrap.classList.toggle('stacked', mode === 'stack');
+        wrap.classList.toggle('two', mode === 'two');
         wrap.classList.toggle('overdue-bg', overdueBg);
         document.body.classList.toggle('overdue-bg', overdueBg);
 
@@ -230,6 +306,7 @@
           });
 
           currentTileWidth = Math.round(wrap.clientWidth);
+          currentTileHeight = Math.round(wrap.clientHeight);
 
           if (typeof ResizeObserver !== 'undefined') {
             let rafPending = false;
@@ -239,8 +316,10 @@
               requestAnimationFrame(() => {
                 rafPending = false;
                 const w = Math.round(wrap.clientWidth);
-                if (w === currentTileWidth) return; // nur bei echter Breitenaenderung
+                const h = Math.round(wrap.clientHeight);
+                if (w === currentTileWidth && h === currentTileHeight) return; // nur bei echter Aenderung
                 currentTileWidth = w;
+                currentTileHeight = h;
                 applyLayout();
               });
             });

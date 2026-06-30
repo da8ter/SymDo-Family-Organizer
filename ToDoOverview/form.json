@@ -30,6 +30,22 @@
       "type": "CheckBox",
       "name": "OverdueRedBackground",
       "caption": "Red tile background when overdue"
+    },
+    {
+      "type": "NumberSpinner",
+      "name": "LabelFontScale",
+      "caption": "Heading font size",
+      "suffix": "%",
+      "minimum": 50,
+      "maximum": 300
+    },
+    {
+      "type": "NumberSpinner",
+      "name": "ValueFontScale",
+      "caption": "Number font size",
+      "suffix": "%",
+      "minimum": 50,
+      "maximum": 300
     }
   ]
 }
