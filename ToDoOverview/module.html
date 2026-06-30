@@ -55,9 +55,18 @@
       font-size: 28px;
       font-weight: 700;
     }
-    .stat-open .label, .stat-open .value { color: var(--accent); }
-    .stat-overdue .label, .stat-overdue .value { color: #ff5a5a; }
-    .stat-today .label, .stat-today .value { color: #ffa500; }
+    /* Pro Feld konfigurierbare Text-/Zahlenfarbe (Backend); transparent -> Systemfarbe.
+       Fallbacks entsprechen den Standardfarben, falls noch kein Payload gesetzt ist. */
+    .stat-open .label, .stat-open .value { color: var(--open-color, var(--accent)); }
+    .stat-overdue .label, .stat-overdue .value { color: var(--overdue-color, #ff5a5a); }
+    .stat-today .label, .stat-today .value { color: var(--today-color, #ffa500); }
+
+    /* Rahmenfarbe wie Text (Backend-Schalter): Rand je Feld in der jeweiligen Textfarbe.
+       Vor den overdue-bg-Regeln deklariert, damit der rote Hintergrund-Modus seinen
+       Kontrast-Rand behaelt. */
+    .wrap.frame-as-text .stat-open    { border-color: var(--open-color, var(--accent)); }
+    .wrap.frame-as-text .stat-overdue { border-color: var(--overdue-color, #ff5a5a); }
+    .wrap.frame-as-text .stat-today   { border-color: var(--today-color, #ffa500); }
 
     /* Fill-/Kompaktdarstellung: Felder fuellen die Kachel, grosse zentrierte Zahlen */
     .wrap.compact { justify-content: center; }
@@ -94,6 +103,11 @@
     .wrap.overdue-bg .stat-box { background: transparent; border-color: color-mix(in srgb, var(--overdue-text-color, #fff) 45%, transparent); }
     .wrap.overdue-bg .stat-box .label,
     .wrap.overdue-bg .stat-box .value { color: var(--overdue-text-color, #fff); }
+
+    /* Rahmen deaktivierbar (Backend-Schalter): ohne Rahmen kein Hintergrund/Rand je Feld.
+       Border bleibt transparent (statt entfernt), damit das Layout nicht springt.
+       Nach den overdue-bg-Regeln deklariert, damit es auch dort greift. */
+    .wrap.no-frames .stat-box { background: transparent; border-color: transparent; }
   </style>
 </head>
 <body>
@@ -120,17 +134,6 @@
       let lastStats = { open: 0, overdue: 0, today: 0 };
       let currentTileWidth = 0;
       let currentTileHeight = 0;
-
-      const FULL_MIN  = 320; // >= : drei Felder
-      const THREE_MIN = 240; // drei Felder
-      const TWO_MIN   = 150; // zwei Felder (Heute volle Breite darunter); darunter ein Feld
-
-      function computeCompactLevel(w) {
-        if (w >= FULL_MIN)  return 0;
-        if (w >= THREE_MIN) return 1;
-        if (w >= TWO_MIN)   return 2;
-        return 3;
-      }
 
       const translate = (typeof window.translate === 'function')
         ? window.translate
@@ -168,6 +171,22 @@
         return Math.max(6, (innerW - ls) * 100 / glyph100);
       }
 
+      // Feld-Textfarbe (Integer aus Backend) -> CSS-Farbe; -1/transparent -> Systemfarbe (--accent-color)
+      function frameColorCss(colorInt) {
+        let n = parseInt(colorInt);
+        if (!Number.isFinite(n) || n < 0) return 'var(--accent-color)';
+        n = n & 0xffffff;
+        return '#' + n.toString(16).padStart(6, '0');
+      }
+
+      // Setzt die pro-Feld Text-/Zahlenfarben aus dem aktuellen State
+      function applyColors() {
+        const root = document.documentElement;
+        root.style.setProperty('--open-color',    frameColorCss(state.openColor));
+        root.style.setProperty('--overdue-color', frameColorCss(state.overdueColor));
+        root.style.setProperty('--today-color',   frameColorCss(state.todayColor));
+      }
+
       // Hintergrundfarbe (Integer aus Backend) -> CSS-Farbe + kontrastreiche Textfarbe
       function overdueColors(rgbInt) {
         let n = parseInt(rgbInt);
@@ -185,7 +204,6 @@
 
         const W = currentTileWidth;
         const H = currentTileHeight;
-        const level = computeCompactLevel(W);
 
         const boxOpen    = document.querySelector('.stat-open');
         const boxOverdue = document.querySelector('.stat-overdue');
@@ -261,7 +279,8 @@
         wrap.style.setProperty('--value-fs', valuePx + 'px');
         wrap.style.setProperty('--label-fs', labelPx + 'px');
 
-        const overdueBg = level >= 2 && eOverdue && lastStats.overdue > 0 && state.overdueRedBackground === true;
+        // Roter Hintergrund bei Ueberfaelligen in ALLEN Kachelgroessen (kein Level-Limit mehr)
+        const overdueBg = eOverdue && lastStats.overdue > 0 && state.overdueRedBackground === true;
 
         // Eigenstaendige Kachel: immer Fill-Darstellung
         wrap.classList.add('compact');
@@ -272,6 +291,8 @@
         document.documentElement.style.setProperty('--overdue-text-color', oc.text);
         wrap.classList.toggle('overdue-bg', overdueBg);
         document.body.classList.toggle('overdue-bg', overdueBg);
+        wrap.classList.toggle('no-frames', state.showFrames === false);
+        wrap.classList.toggle('frame-as-text', state.showFrames !== false && state.frameColorLikeText === true);
 
         if (boxOpen)    boxOpen.style.display    = vOpen ? '' : 'none';
         if (boxOverdue) boxOverdue.style.display = vOverdue ? '' : 'none';
@@ -292,6 +313,7 @@
         if (data && typeof data === 'object' && data.type === 'state') {
           state = data;
           updateStats();
+          applyColors();
           applyLayout();
           applyClickTarget();
         }

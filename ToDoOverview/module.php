@@ -27,9 +27,21 @@ class ToDoOverview extends IPSModule
         $this->RegisterPropertyBoolean('ShowOverdue', true);
         $this->RegisterPropertyBoolean('ShowToday', true);
 
+        // Rahmen (Hintergrund + Rand) je Feld anzeigen (Standard: aktiviert)
+        $this->RegisterPropertyBoolean('ShowFrames', true);
+
+        // Rahmenfarbe in der jeweiligen Textfarbe des Feldes darstellen (Standard: aus)
+        $this->RegisterPropertyBoolean('FrameColorLikeText', false);
+
         // Schriftgroessen-Skalierung in Prozent (Standard 100)
         $this->RegisterPropertyInteger('LabelFontScale', 100);
         $this->RegisterPropertyInteger('ValueFontScale', 100);
+
+        // Farbe fuer Text und Zahl je Feld; -1 = transparent -> Systemfarbe (--accent-color).
+        // Standardwerte entsprechen den bisherigen Farben (offen = Systemfarbe, ueberfaellig = rot, heute = orange).
+        $this->RegisterPropertyInteger('OpenColor', -1);
+        $this->RegisterPropertyInteger('OverdueColor', 0xFF5A5A);
+        $this->RegisterPropertyInteger('TodayColor', 0xFFA500);
 
         // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
@@ -141,8 +153,13 @@ class ToDoOverview extends IPSModule
             'showOpen'             => $this->ReadPropertyBoolean('ShowOpen'),
             'showOverdue'          => $this->ReadPropertyBoolean('ShowOverdue'),
             'showToday'            => $this->ReadPropertyBoolean('ShowToday'),
+            'showFrames'           => $this->ReadPropertyBoolean('ShowFrames'),
+            'frameColorLikeText'   => $this->ReadPropertyBoolean('FrameColorLikeText'),
             'labelFontScale'       => $this->ReadPropertyInteger('LabelFontScale'),
             'valueFontScale'       => $this->ReadPropertyInteger('ValueFontScale'),
+            'openColor'            => $this->ReadPropertyInteger('OpenColor'),
+            'overdueColor'         => $this->ReadPropertyInteger('OverdueColor'),
+            'todayColor'           => $this->ReadPropertyInteger('TodayColor'),
         ];
     }
 
