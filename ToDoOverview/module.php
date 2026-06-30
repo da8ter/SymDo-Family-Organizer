@@ -20,6 +20,7 @@ class ToDoOverview extends IPSModule
         $this->RegisterPropertyInteger('ToDoListInstanceID', 0);
         $this->RegisterPropertyInteger('OpenObjectID', 0);
         $this->RegisterPropertyBoolean('OverdueRedBackground', false);
+        $this->RegisterPropertyInteger('OverdueBackgroundColor', 0xFF5A5A);
 
         // Welche Werte in der Uebersicht angezeigt werden (Standard: alle an)
         $this->RegisterPropertyBoolean('ShowOpen', true);
@@ -136,6 +137,7 @@ class ToDoOverview extends IPSModule
             'today'                => $this->ReadCounter('DueTodayTasks'),
             'openObjectId'         => $this->ReadPropertyInteger('OpenObjectID'),
             'overdueRedBackground' => $this->ReadPropertyBoolean('OverdueRedBackground'),
+            'overdueBackgroundColor' => $this->ReadPropertyInteger('OverdueBackgroundColor'),
             'showOpen'             => $this->ReadPropertyBoolean('ShowOpen'),
             'showOverdue'          => $this->ReadPropertyBoolean('ShowOverdue'),
             'showToday'            => $this->ReadPropertyBoolean('ShowToday'),

@@ -29,7 +29,12 @@
     {
       "type": "CheckBox",
       "name": "OverdueRedBackground",
-      "caption": "Red tile background when overdue"
+      "caption": "Coloured background when overdue"
+    },
+    {
+      "type": "SelectColor",
+      "name": "OverdueBackgroundColor",
+      "caption": "Overdue background color"
     },
     {
       "type": "NumberSpinner",

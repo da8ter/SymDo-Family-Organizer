@@ -89,11 +89,11 @@
     .wrap.compact.two .stat-today { flex: 1 1 100%; }
 
     /* Roter Kachel-Hintergrund bei Ueberfaelligen (Level >= 2), per Schalter aktivierbar */
-    body.overdue-bg { background: #ff5a5a; }
-    .wrap.overdue-bg { background: #ff5a5a; }
-    .wrap.overdue-bg .stat-box { background: transparent; border-color: rgba(255, 255, 255, 0.45); }
+    body.overdue-bg { background: var(--overdue-bg-color, #ff5a5a); }
+    .wrap.overdue-bg { background: var(--overdue-bg-color, #ff5a5a); }
+    .wrap.overdue-bg .stat-box { background: transparent; border-color: color-mix(in srgb, var(--overdue-text-color, #fff) 45%, transparent); }
     .wrap.overdue-bg .stat-box .label,
-    .wrap.overdue-bg .stat-box .value { color: #fff; }
+    .wrap.overdue-bg .stat-box .value { color: var(--overdue-text-color, #fff); }
   </style>
 </head>
 <body>
@@ -166,6 +166,17 @@
         if (glyph100 <= 0) return Infinity;
         const ls = t.length * 0.5;                       // letter-spacing 0.5px je Zeichen
         return Math.max(6, (innerW - ls) * 100 / glyph100);
+      }
+
+      // Hintergrundfarbe (Integer aus Backend) -> CSS-Farbe + kontrastreiche Textfarbe
+      function overdueColors(rgbInt) {
+        let n = parseInt(rgbInt);
+        if (!Number.isFinite(n) || n < 0) n = 0xff5a5a;
+        n = n & 0xffffff;
+        const rr = (n >> 16) & 0xff, gg = (n >> 8) & 0xff, bb = n & 0xff;
+        const hex = '#' + n.toString(16).padStart(6, '0');
+        const lum = (0.299 * rr + 0.587 * gg + 0.114 * bb) / 255; // 0..1
+        return { bg: hex, text: lum > 0.6 ? '#000' : '#fff' };
       }
 
       function applyLayout() {
@@ -256,6 +267,9 @@
         wrap.classList.add('compact');
         wrap.classList.toggle('stacked', mode === 'stack');
         wrap.classList.toggle('two', mode === 'two');
+        const oc = overdueColors(state.overdueBackgroundColor);
+        document.documentElement.style.setProperty('--overdue-bg-color', oc.bg);
+        document.documentElement.style.setProperty('--overdue-text-color', oc.text);
         wrap.classList.toggle('overdue-bg', overdueBg);
         document.body.classList.toggle('overdue-bg', overdueBg);
 
