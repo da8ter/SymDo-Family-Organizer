@@ -3,7 +3,7 @@
   "name": "ToDo Overview",
   "type": 3,
   "vendor": "",
-  "aliases": ["ToDo Overview", "ToDo Übersicht"],
+  "aliases": [],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/ToDoOverview",
   "parentRequirements": [],
   "childRequirements": [],
