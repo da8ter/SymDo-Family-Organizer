@@ -328,3 +328,15 @@ Alle Punkte der empfohlenen Reihenfolge sind umgesetzt (Syntax-Lint über alle D
 **Hinweis:** Bereits zuvor synchronisierte Tasks behalten ihre alte UTC-Z-Form auf dem Server, bis sie das nächste Mal geschrieben werden (lokale Änderung oder „Reset Sync"). Neue und geänderte Tasks nutzen sofort die TZID-Form.
 
 **Offen bleibt** D3 (`VALUE=DATE` für echte Ganztags-Aufgaben) — davon unberührt.
+
+---
+
+# Nachtrag 2026-07-03 — Microsoft Fälligkeit/Erinnerung in lokaler Zeitzone (B2 behoben)
+
+**Problem (B2):** MS To Do behandelt die Fälligkeit als reines Datum und speichert „Mitternacht des Datums in der gesendeten Zone". Das Modul sendete `dueDateTime`/`reminderDateTime` immer als UTC → eine Fälligkeit kurz nach lokaler Mitternacht (z. B. 00:30 Berlin = 22:30 UTC am Vortag) landete auf dem **Vortag** und wurde in MS To Do einen Tag zu früh angezeigt.
+
+**Fix (`MicrosoftBuildDateTimeTimeZone`):** Der Zeitpunkt wird in der Host-Zeitzone ausgedrückt (`dateTime` = lokale Wanduhrzeit, `timeZone` = IANA-Name — Graph akzeptiert IANA direkt, live verifiziert; kein Windows-TZ-Mapping nötig). Fällt der Host auf `UTC` oder ist die Zone nicht auflösbar, bleibt die UTC-Form (kein Regressionsrisiko). Begleitend `MergeDuePreferServerTime`: die „date-only"-Erkennung greift jetzt bei **lokaler** Mitternacht (neues Format) **und** UTC-Mitternacht (Altbestand), damit die lokale Uhrzeit beim Server→lokal-Merge erhalten bleibt.
+
+**Live verifiziert (MS-Konto):** Fälligkeit 11.07. 00:30 Berlin → Server-Datum 11.07. (vorher 10.07.); Tag-Fälligkeit + Erinnerung korrekt (Erinnerung 13:50 = 14:00 − 10 min); Round-Trip bewahrt die lokale Uhrzeit (00:30/14:00), kein Phantom-Change; Fremd-Edit auf dem Server → Titel übernommen und lokale Uhrzeit erhalten. Cleanup beidseitig sauber.
+
+**Hinweis:** Bereits synchronisierte Tasks behalten ihre alte UTC-Form auf dem Server, bis sie das nächste Mal geschrieben werden. Die Uhrzeit selbst zeigt MS To Do weiterhin nicht an (API-Grenze) — der Fix korrigiert das **Datum**.

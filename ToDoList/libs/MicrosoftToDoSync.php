@@ -359,6 +359,23 @@ trait MicrosoftToDoSync
 
     private function MicrosoftBuildDateTimeTimeZone(int $Timestamp): array
     {
+        // B2: express the instant in the host's local time zone (Graph accepts IANA names
+        // directly). Graph treats a task's due as date-only and keeps "midnight of the sent
+        // date IN THE SENT ZONE" — so sending UTC made a due at local 00:30 (= previous day
+        // in UTC) show up one day early. Sending the local zone anchors the correct calendar
+        // day. Reminders keep their time and are likewise correct in local time.
+        $tzid = date_default_timezone_get();
+        if ($tzid !== '' && strtoupper($tzid) !== 'UTC') {
+            try {
+                $dt = (new DateTime('@' . $Timestamp))->setTimezone(new DateTimeZone($tzid));
+                return [
+                    'dateTime' => $dt->format('Y-m-d\TH:i:s.0000000'),
+                    'timeZone' => $tzid
+                ];
+            } catch (Exception $e) {
+                // fall through to UTC
+            }
+        }
         return [
             'dateTime' => gmdate('Y-m-d\TH:i:s.0000000', $Timestamp),
             'timeZone' => 'UTC'
@@ -761,7 +778,10 @@ trait MicrosoftToDoSync
         if ($LocalDue === 0) {
             return $ServerDue;
         }
-        if (gmdate('H:i:s', $ServerDue) === '00:00:00') {
+        // A date-only due arrives as midnight in the server-echoed zone. New format anchors it
+        // to LOCAL midnight (date('H:i:s') == 00:00:00); the legacy UTC-format anchors it to
+        // UTC midnight (gmdate(...) == 00:00:00). Detect both so the local time-of-day is kept.
+        if (date('H:i:s', $ServerDue) === '00:00:00' || gmdate('H:i:s', $ServerDue) === '00:00:00') {
             return $this->MergeDueWithLocalTime($LocalDue, $ServerDue);
         }
         return $ServerDue;
