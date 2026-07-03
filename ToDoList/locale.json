@@ -201,7 +201,9 @@
       "Authorization failed": "Autorisierung fehlgeschlagen",
       "Please try again.": "Bitte erneut versuchen.",
       "Due time and recurrences are not supported by the Google API.": "Uhrzeit bei Fälligkeit und Wiederholungen werden nicht von der Google API unterstützt und funktionieren daher nur lokal in Symcon. Sub-Tasks werden ebenfalls nicht unterstützt.",
-      "Found %d task list(s).": "%d Aufgabenliste(n) gefunden."
+      "Found %d task list(s).": "%d Aufgabenliste(n) gefunden.",
+      "First sync: existing tasks from this list and from the server are merged – nothing is lost. Tasks with identical titles may appear twice or be combined.": "Erster Sync: Vorhandene Aufgaben aus dieser Liste und vom Server werden zusammengeführt – es geht nichts verloren. Gleichnamige Aufgaben können danach doppelt vorhanden sein oder zusammengeführt werden.",
+      "Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost.": "Beim Wechsel auf eine andere Liste bzw. einen anderen Kalender werden die lokalen Einträge durch die neue Liste ersetzt. Noch nicht synchronisierte Änderungen gehen dabei verloren."
     },
     "en": {
       "ToDo List": "ToDo List",
@@ -404,7 +406,9 @@
       "Authorization failed": "Authorization failed",
       "Please try again.": "Please try again.",
       "Due time and recurrences are not supported by the Google API.": "Due time and recurrences are not supported by the Google API.",
-      "Found %d task list(s).": "Found %d task list(s)."
+      "Found %d task list(s).": "Found %d task list(s).",
+      "First sync: existing tasks from this list and from the server are merged – nothing is lost. Tasks with identical titles may appear twice or be combined.": "First sync: existing tasks from this list and from the server are merged – nothing is lost. Tasks with identical titles may appear twice or be combined.",
+      "Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost.": "Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost."
     }
   }
 }

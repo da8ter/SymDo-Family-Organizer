@@ -332,6 +332,16 @@ class ToDoList extends IPSModuleStrict
                         ['caption' => $this->Translate('Microsoft To Do'), 'value' => 'microsoft']
                     ]
                 ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('First sync: existing tasks from this list and from the server are merged – nothing is lost. Tasks with identical titles may appear twice or be combined.'),
+                    'visible' => $syncBackend !== 'local'
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost.'),
+                    'visible' => $syncBackend !== 'local'
+                ],
 
                 [
                     'type' => 'CheckBox',
