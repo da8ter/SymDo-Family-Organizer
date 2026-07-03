@@ -44,7 +44,7 @@ trait SyncHelper
         echo sprintf($this->Translate('%d items reset for re-sync'), $count);
     }
 
-    private function SyncAddPendingDelete(string $TaskId, string $PendingPrefix, string $PendingDeletesAttr): void
+    private function SyncAddPendingDelete(string $TaskId, string $PendingPrefix, string $PendingDeletesAttr, string $Value = '1'): void
     {
         if ($TaskId === '' || strpos($TaskId, $PendingPrefix) === 0) {
             return;
@@ -53,16 +53,20 @@ trait SyncHelper
         if (!is_array($pending)) {
             $pending = [];
         }
-        $pending[$TaskId] = 1;
+        // The stored value is the item's ETag (for a conditional DELETE); '1' means "no ETag".
+        $pending[$TaskId] = ($Value !== '') ? $Value : '1';
         $this->WriteAttributeString($PendingDeletesAttr, json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     private function SyncProcessPendingDeletes(array &$PendingDeletes, callable $DeleteFn, string $DebugLabel): void
     {
-        foreach ($PendingDeletes as $taskId => $dummy) {
-            if ($DeleteFn($taskId)) {
+        foreach ($PendingDeletes as $taskId => $value) {
+            // $value is the stored ETag ('1' = none). The callback returns true to drop the
+            // tombstone (deleted, already gone, or a 412 we deliberately give up on) and false
+            // to keep it for a later retry (transient failure).
+            if ($DeleteFn((string)$taskId, (string)$value)) {
                 unset($PendingDeletes[$taskId]);
-                $this->SendDebug($DebugLabel, 'Deleted on server: ' . $taskId, 0);
+                $this->SendDebug($DebugLabel, 'Delete resolved: ' . $taskId, 0);
             }
         }
     }
@@ -123,14 +127,14 @@ trait SyncHelper
         if ($syncBackend === 'google' && ($Backend === 'google' || $Backend === 'all')) {
             $googleId = (string)($Item['googleTaskId'] ?? '');
             if ($googleId !== '' && (int)($Item['googleSynced'] ?? 0) > 0) {
-                $this->SyncAddPendingDelete($googleId, 'pending_', 'GooglePendingDeletes');
+                $this->SyncAddPendingDelete($googleId, 'pending_', 'GooglePendingDeletes', (string)($Item['googleEtag'] ?? ''));
             }
         }
 
         if ($syncBackend === 'microsoft' && ($Backend === 'microsoft' || $Backend === 'all')) {
             $msId = (string)($Item['microsoftTaskId'] ?? '');
             if ($msId !== '' && (int)($Item['microsoftSynced'] ?? 0) > 0) {
-                $this->SyncAddPendingDelete($msId, 'pending_', 'MicrosoftPendingDeletes');
+                $this->SyncAddPendingDelete($msId, 'pending_', 'MicrosoftPendingDeletes', (string)($Item['microsoftEtag'] ?? ''));
             }
         }
 
@@ -141,7 +145,7 @@ trait SyncHelper
                 if (!is_array($pending)) {
                     $pending = [];
                 }
-                $pending[$uid] = (string)($Item['caldavHref'] ?? '');
+                $pending[$uid] = json_encode(['href' => (string)($Item['caldavHref'] ?? ''), 'etag' => (string)($Item['caldavEtag'] ?? '')]);
                 $this->WriteAttributeString('CalDAVPendingDeletes', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             }
         }

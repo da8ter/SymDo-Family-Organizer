@@ -11,14 +11,23 @@ trait GoogleTasksSync
         $this->SyncUpdateTimer('google', 'GoogleTasksSyncTimer', $this->ReadPropertyInteger('GoogleSyncInterval'), $hasToken);
     }
 
-    private function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
+    private function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
             $this->SendDebug('GoogleTasks', 'No ToDoGateway connected', 0);
             return null;
         }
-        return TGW_GoogleApiRequest($gw, $Method, $Endpoint, $Body);
+        return TGW_GoogleApiRequest($gw, $Method, $Endpoint, $Body, $Headers);
+    }
+
+    private function GoogleApiStatus(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): int
+    {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            return 0;
+        }
+        return TGW_GoogleApiStatus($gw, $Method, $Endpoint, $Body, $Headers);
     }
 
     public function GoogleRefreshTaskListOptions(): void
@@ -151,6 +160,8 @@ trait GoogleTasksSync
             'GoogleLastSync',
             'GooglePendingDeletes'
         );
+        $this->WriteAttributeInteger('GoogleSyncCursor', 0); // A1: force a full re-fetch next sync
+        $this->WriteAttributeInteger('GoogleLastFullSync', 0);
     }
 
     private function GoogleTasksSyncInternal(): bool
@@ -174,17 +185,60 @@ trait GoogleTasksSync
 
         $this->SendDebug('GoogleTasks', 'Starting sync...', 0);
 
-        $pendingDeletes = json_decode((string)$this->ReadAttributeString('GooglePendingDeletes'), true);
-        if (!is_array($pendingDeletes)) {
-            $pendingDeletes = [];
+        // A1: incremental probe. When the server has no changes since our cursor and there is
+        // nothing local to push, skip the full fetch+merge. Any change on either side falls
+        // through to the full, deletion-safe fetch (never delete-by-absence on a partial list).
+        $cursor = $this->ReadAttributeInteger('GoogleSyncCursor');
+        $lastFull = $this->ReadAttributeInteger('GoogleLastFullSync');
+        if ($cursor > 0 && (time() - $lastFull) < 21600 && !$this->GoogleHasPendingWork()) {
+            // R6: probe strictly AFTER the cursor second — the task that defined the cursor
+            // always matches an inclusive updatedMin, so the idle-skip would otherwise never
+            // fire. The 6h bound forces a periodic full reconcile as a safety net for anything
+            // a second-granularity cursor could miss (sub-second edits, tombstone purges).
+            $probe = $this->GoogleFetchTasks($taskListId, $cursor + 1);
+            if ($probe === null) {
+                $this->SendDebug('GoogleTasks', 'Incremental probe failed', 0);
+                return false;
+            }
+            if (count($probe) === 0) {
+                $this->WriteAttributeInteger('GoogleLastSync', time());
+                $this->SendDebug('GoogleTasks', 'No changes since cursor and no local changes – skipping full sync', 0);
+                return true;
+            }
+            $this->SendDebug('GoogleTasks', count($probe) . ' change(s) since cursor – running full sync', 0);
         }
-        $this->SyncProcessPendingDeletes($pendingDeletes, fn($id) => $this->GoogleDeleteTask($taskListId, $id), 'GoogleTasks');
-        $this->WriteAttributeString('GooglePendingDeletes', json_encode($pendingDeletes, JSON_UNESCAPED_SLASHES));
 
         $serverTasks = $this->GoogleFetchTasks($taskListId);
         if ($serverTasks === null) {
             $this->SendDebug('GoogleTasks', 'Failed to fetch tasks from Google', 0);
             return false;
+        }
+
+        // A3/Fresh-ETag: process pending server-deletes AFTER the fetch and condition the
+        // DELETE on this run's etag. Stored tombstone etags go stale when Google bumps a
+        // task's etag on sibling inserts (position shift, 'updated' untouched) — the spurious
+        // 412 would drop the tombstone and resurrect the task locally.
+        $pendingDeletes = json_decode((string)$this->ReadAttributeString('GooglePendingDeletes'), true);
+        if (!is_array($pendingDeletes)) {
+            $pendingDeletes = [];
+        }
+        if (count($pendingDeletes) > 0) {
+            $etagByGid = [];
+            foreach ($serverTasks as $st) {
+                $gid = (string)($st['googleTaskId'] ?? '');
+                if ($gid !== '' && ($st['googleEtag'] ?? '') !== '') {
+                    $etagByGid[$gid] = (string)$st['googleEtag'];
+                }
+            }
+            $beforeKeys = array_keys($pendingDeletes);
+            $this->SyncProcessPendingDeletes($pendingDeletes, fn($id, $etag) => $this->GoogleDeleteTask($taskListId, $id, $etagByGid[$id] ?? $etag), 'GoogleTasks');
+            $this->WriteAttributeString('GooglePendingDeletes', json_encode($pendingDeletes, JSON_UNESCAPED_SLASHES));
+            // The fetch snapshot predates these deletes — drop resolved ones so the merge does
+            // not reimport what was just deleted (a 412-kept server version reimports next run).
+            $resolved = array_diff($beforeKeys, array_keys($pendingDeletes));
+            if (count($resolved) > 0) {
+                $serverTasks = array_values(array_filter($serverTasks, fn($st) => !in_array((string)($st['googleTaskId'] ?? ''), $resolved, true)));
+            }
         }
 
         $localItems = $this->LoadItems();
@@ -204,6 +258,7 @@ trait GoogleTasksSync
                         $items[$i]['googleTaskId'] = $newId;
                         $items[$i]['googleEtag'] = $uploadResult['etag'];
                         $items[$i]['googleSynced'] = $now;
+                        $items[$i]['googleServerSynced'] = (int)($uploadResult['updated'] ?? 0); // A5 baseline from write response
                         $items[$i]['localModified'] = 0;
                         break;
                     }
@@ -213,7 +268,9 @@ trait GoogleTasksSync
         }
 
         foreach ($items as &$item) {
-            if (!empty($item['googleTaskId']) && ($item['googleSynced'] ?? 0) === 0) {
+            $gid = (string)($item['googleTaskId'] ?? '');
+            // R4: never stamp a failed create (pending_) as synced — it still awaits upload.
+            if ($gid !== '' && strpos($gid, 'pending_') !== 0 && ($item['googleSynced'] ?? 0) === 0) {
                 $item['googleSynced'] = $now;
             }
         }
@@ -221,19 +278,48 @@ trait GoogleTasksSync
 
         $this->SaveItems($items);
         $this->WriteAttributeInteger('GoogleLastSync', $now);
+        // A1: advance the incremental cursor to the newest server-side 'updated' seen this run.
+        $maxUpdated = $this->ReadAttributeInteger('GoogleSyncCursor');
+        foreach ($serverTasks as $st) {
+            $maxUpdated = max($maxUpdated, (int)($st['googleUpdated'] ?? 0));
+        }
+        $this->WriteAttributeInteger('GoogleSyncCursor', $maxUpdated);
+        $this->WriteAttributeInteger('GoogleLastFullSync', $now); // R6: periodic-reconcile baseline
         $this->SyncPostComplete();
 
         $this->SendDebug('GoogleTasks', 'Sync completed', 0);
         return true;
     }
 
-    private function GoogleFetchTasks(string $TaskListId): ?array
+    private function GoogleHasPendingWork(): bool
+    {
+        $pending = json_decode((string)$this->ReadAttributeString('GooglePendingDeletes'), true);
+        if (is_array($pending) && count($pending) > 0) {
+            return true;
+        }
+        foreach ($this->LoadItems() as $it) {
+            $gid = (string)($it['googleTaskId'] ?? '');
+            if ($gid === '' || strpos($gid, 'pending_') === 0) {
+                return true; // new local item awaiting upload (or a create that failed, R4)
+            }
+            if ((int)($it['localModified'] ?? 0) >= (int)($it['googleSynced'] ?? 0) && (int)($it['localModified'] ?? 0) > 0) {
+                return true; // locally edited since last sync (>= catches same-second edits)
+            }
+        }
+        return false;
+    }
+
+    private function GoogleFetchTasks(string $TaskListId, int $UpdatedMin = 0): ?array
     {
         $allTasks = [];
         $pageToken = '';
 
         do {
             $endpoint = '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks?showCompleted=true&showHidden=true&showDeleted=true&maxResults=100';
+            if ($UpdatedMin > 0) {
+                // A1: incremental probe — only tasks changed at/after the cursor (server clock).
+                $endpoint .= '&updatedMin=' . urlencode(gmdate('Y-m-d\TH:i:s\Z', $UpdatedMin));
+            }
             if ($pageToken !== '') {
                 $endpoint .= '&pageToken=' . urlencode($pageToken);
             }
@@ -244,10 +330,9 @@ trait GoogleTasksSync
             }
 
             foreach ($data['items'] ?? [] as $task) {
-                if (!empty($task['deleted'])) {
-                    continue;
-                }
                 $this->SendDebug('GoogleTasksPayload', json_encode($task, JSON_UNESCAPED_SLASHES), 0);
+                // A6: keep deleted tasks (marked) so the merge acts on Google's authoritative
+                // deletion signal (deleted=true) rather than inferring deletion from absence.
                 $allTasks[] = $this->GoogleTaskToLocal($task);
             }
 
@@ -290,7 +375,8 @@ trait GoogleTasksSync
             'done' => $done,
             'doneAt' => $doneAt,
             'due' => $due,
-            'googleUpdated' => $updated
+            'googleUpdated' => $updated,
+            '_deleted' => !empty($Task['deleted'])
         ];
     }
 
@@ -304,8 +390,15 @@ trait GoogleTasksSync
 
         $due = (int)($Item['due'] ?? 0);
         if ($due > 0) {
-            $localDate = date('Y-m-d', $due);
-            $task['due'] = $localDate . 'T00:00:00.000Z';
+            $task['due'] = date('Y-m-d', $due) . 'T00:00:00.000Z';
+        } else {
+            $gid = (string)($Item['googleTaskId'] ?? '');
+            if ($gid !== '' && strpos($gid, 'pending_') !== 0) {
+                // C2: an existing task whose due date was removed locally → clear it explicitly
+                // (a PATCH that merely omits 'due' leaves the old server value, so it would
+                // silently reappear). New tasks just omit 'due' rather than sending null.
+                $task['due'] = null;
+            }
         }
 
         return $task;
@@ -354,7 +447,7 @@ trait GoogleTasksSync
             if (!isset($serverByGoogleId[$googleId])) {
                 $lastSynced = (int)($local['googleSynced'] ?? 0);
                 $localMod = (int)($local['localModified'] ?? 0);
-                $localChanged = $localMod > $lastSynced;
+                $localChanged = $localMod >= $lastSynced && $localMod > 0; // >= catches same-second edits
 
                 if (strpos($googleId, 'pending_') !== 0) {
                     if ($ConflictMode === 'local_wins' && $localChanged) {
@@ -365,27 +458,61 @@ trait GoogleTasksSync
                     } else {
                         $local['_googleDeleted'] = true;
                     }
+                } else {
+                    // R4: a create that failed earlier (throttle window, timeout, 5xx) left the
+                    // item stranded on its pending_ id — requeue the upload instead of skipping
+                    // it forever.
+                    $toUpload[] = $local;
                 }
                 continue;
             }
 
             $server = $serverByGoogleId[$googleId];
+            if (!empty($server['_deleted'])) {
+                $lastSynced = (int)($local['googleSynced'] ?? 0);
+                $localMod = (int)($local['localModified'] ?? 0);
+                $localChanged = $localMod >= $lastSynced && $localMod > 0;
+                if ($ConflictMode === 'local_wins' && $localChanged) {
+                    // R13: under "Local wins" a locally edited task beats the server tombstone —
+                    // recreate it (same as the delete-by-absence path below) instead of silently
+                    // discarding the local edit.
+                    $local['googleTaskId'] = 'pending_' . $this->InstanceID . '_' . ($local['id'] ?? uniqid());
+                    $local['localModified'] = time();
+                    $toUpload[] = $local;
+                } else {
+                    // A6: authoritative server-side deletion signal → remove the item locally.
+                    $local['_googleDeleted'] = true;
+                }
+                continue;
+            }
             $localMod = (int)($local['localModified'] ?? 0);
             $serverMod = (int)($server['googleUpdated'] ?? 0);
             $lastSynced = (int)($local['googleSynced'] ?? 0);
+            // A5: compare server-vs-server so a host/server clock offset can't hide an edit.
+            $serverSynced = (int)($local['googleServerSynced'] ?? $serverMod);
 
-            $localChanged = $localMod > $lastSynced;
-            $serverChanged = $serverMod > $lastSynced;
+            $localChanged = $localMod >= $lastSynced && $localMod > 0; // >= catches same-second edits
+            $serverChanged = $serverMod > $serverSynced;
 
             if ($localChanged && $serverChanged) {
                 $localWins = ($ConflictMode === 'local_wins') || ($ConflictMode === 'newest_wins' && $localMod > $serverMod);
 
                 if ($localWins) {
+                    // A3: adopt the server's current ETag so the intended overwrite matches
+                    // the If-Match precondition instead of being rejected as 412 forever.
+                    $local['googleEtag'] = $server['googleEtag'] ?? ($local['googleEtag'] ?? '');
                     $toUpload[] = $local;
                 } else {
                     $this->GoogleApplyServerToLocal($local, $server);
                 }
             } elseif ($localChanged) {
+                // Fresh-ETag: condition the PATCH on THIS run's fetch, not on the last sync's
+                // snapshot. Google bumps a task's etag when siblings are inserted (position
+                // shift) WITHOUT touching 'updated' — so the stored etag can be stale while
+                // serverChanged stays false, which would 412 on every sync forever.
+                if (($server['googleEtag'] ?? '') !== '') {
+                    $local['googleEtag'] = $server['googleEtag'];
+                }
                 $toUpload[] = $local;
             } else {
                 $this->GoogleApplyServerToLocal($local, $server);
@@ -416,6 +543,9 @@ trait GoogleTasksSync
             if (isset($pendingDeletes[$gid])) {
                 continue;
             }
+            if (!empty($server['_deleted'])) {
+                continue; // A6: never import a Google tombstone as a new local task
+            }
 
             $newItem = [
                 'id' => $this->GetNextItemID(),
@@ -432,6 +562,7 @@ trait GoogleTasksSync
                 'googleTaskId' => $gid,
                 'googleEtag' => $server['googleEtag'],
                 'googleSynced' => time(),
+                'googleServerSynced' => (int)($server['googleUpdated'] ?? 0), // A5 baseline
                 'localModified' => 0
             ];
             $LocalItems[] = $newItem;
@@ -451,6 +582,7 @@ trait GoogleTasksSync
         $Local['doneAt'] = $Server['doneAt'];
         $Local['due'] = $this->MergeDueWithLocalTime((int)($Local['due'] ?? 0), (int)($Server['due'] ?? 0));
         $Local['googleEtag'] = $Server['googleEtag'];
+        $Local['googleServerSynced'] = (int)($Server['googleUpdated'] ?? 0); // A5 baseline
         $Local['localModified'] = 0;
     }
 
@@ -462,39 +594,56 @@ trait GoogleTasksSync
         if ($googleId === '' || strpos($googleId, 'pending_') === 0) {
             $data = $this->GoogleApiRequest('POST', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks', $taskData);
             if ($data === null) {
-                return ['success' => false, 'oldId' => $googleId, 'newId' => '', 'etag' => ''];
+                return ['success' => false, 'oldId' => $googleId, 'newId' => '', 'etag' => '', 'updated' => 0];
             }
 
             return [
                 'success' => true,
                 'oldId' => $googleId,
                 'newId' => $data['id'] ?? '',
-                'etag' => $data['etag'] ?? ''
+                'etag' => $data['etag'] ?? '',
+                'updated' => isset($data['updated']) ? (strtotime((string)$data['updated']) ?: 0) : 0
             ];
         }
 
-        $data = $this->GoogleApiRequest('PATCH', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($googleId), $taskData);
+        // A3: optimistic concurrency via If-Match, so a task changed on the server since our
+        // last fetch is not silently overwritten (the write fails and is reconciled next sync).
+        $etag = (string)($Item['googleEtag'] ?? '');
+        $headers = $etag !== '' ? ['If-Match: ' . $etag] : [];
+        $data = $this->GoogleApiRequest('PATCH', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($googleId), $taskData, $headers);
         return [
             'success' => $data !== null,
             'oldId' => $googleId,
             'newId' => $googleId,
-            'etag' => $data['etag'] ?? ''
+            'etag' => $data['etag'] ?? '',
+            'updated' => isset($data['updated']) ? (strtotime((string)$data['updated']) ?: 0) : 0
         ];
     }
 
-    private function GoogleDeleteTask(string $TaskListId, string $GoogleTaskId): bool
+    private function GoogleDeleteTask(string $TaskListId, string $GoogleTaskId, string $Etag = ''): bool
     {
         if ($GoogleTaskId === '' || strpos($GoogleTaskId, 'pending_') === 0) {
-            return true;
+            return true; // never persisted on the server → tombstone is done
         }
 
-        $data = $this->GoogleApiRequest('DELETE', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($GoogleTaskId));
-        return $data !== null;
+        // R23: NO If-Match on Google deletes ($Etag is deliberately unused). Google bumps the
+        // etag of every remaining task whenever a sibling is inserted or DELETED (position
+        // shift), so during bulk deletes each successful DELETE invalidates all other prepared
+        // etags — conditional deletes then fail 412 almost deterministically (verified live)
+        // without indicating any real content change. Google-side etags carry no usable
+        // concurrency signal for deletes; MS/CalDAV keep If-Match (content-stable etags).
+        $status = $this->GoogleApiStatus('DELETE', '/tasks/v1/lists/' . urlencode($TaskListId) . '/tasks/' . urlencode($GoogleTaskId), null, []);
+
+        if (($status >= 200 && $status < 300) || $status === 404) {
+            return true; // deleted, or already gone
+        }
+        $this->SendDebug('GoogleTasks', 'Delete not confirmed (HTTP ' . $status . ') for ' . $GoogleTaskId . ' – will retry', 0);
+        return false;
     }
 
-    private function AddGooglePendingDelete(string $GoogleTaskId): void
+    private function AddGooglePendingDelete(string $GoogleTaskId, string $Etag = ''): void
     {
-        $this->SyncAddPendingDelete($GoogleTaskId, 'pending_', 'GooglePendingDeletes');
+        $this->SyncAddPendingDelete($GoogleTaskId, 'pending_', 'GooglePendingDeletes', $Etag);
     }
 
     private function GetGoogleTasksStatusLabel(): string

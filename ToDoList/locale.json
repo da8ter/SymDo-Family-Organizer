@@ -200,7 +200,8 @@
       "You can close this window now.": "Sie können dieses Fenster jetzt schließen.",
       "Authorization failed": "Autorisierung fehlgeschlagen",
       "Please try again.": "Bitte erneut versuchen.",
-      "Due time and recurrences are not supported by the Google API.": "Uhrzeit bei Fälligkeit und Wiederholungen werden nicht von der Google API unterstützt und funktionieren daher nur lokal in Symcon. Sub-Tasks werden ebenfalls nicht unterstützt."
+      "Due time and recurrences are not supported by the Google API.": "Uhrzeit bei Fälligkeit und Wiederholungen werden nicht von der Google API unterstützt und funktionieren daher nur lokal in Symcon. Sub-Tasks werden ebenfalls nicht unterstützt.",
+      "Found %d task list(s).": "%d Aufgabenliste(n) gefunden."
     },
     "en": {
       "ToDo List": "ToDo List",
@@ -402,7 +403,8 @@
       "You can close this window now.": "You can close this window now.",
       "Authorization failed": "Authorization failed",
       "Please try again.": "Please try again.",
-      "Due time and recurrences are not supported by the Google API.": "Due time and recurrences are not supported by the Google API."
+      "Due time and recurrences are not supported by the Google API.": "Due time and recurrences are not supported by the Google API.",
+      "Found %d task list(s).": "Found %d task list(s)."
     }
   }
 }

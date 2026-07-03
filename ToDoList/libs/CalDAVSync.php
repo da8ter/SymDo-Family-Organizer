@@ -115,6 +115,18 @@ trait CalDAVSync
         try {
             $calendarUrl = $this->CalDAVResolveUrl($url, $calendarPath);
             $this->SendDebug('CalDAV', 'Calendar URL: ' . $calendarUrl, 0);
+
+            // A1: skip the expensive full REPORT when the collection is unchanged (CTag) AND
+            // there is nothing local to push. Only the idle case is short-circuited; any real
+            // change on either side falls through to the full, deletion-safe merge below.
+            $serverCTag = $this->CalDAVGetCTag($calendarUrl, $user, $pass);
+            $storedCTag = $this->ReadAttributeString('CalDAVSyncToken');
+            if ($serverCTag !== null && $serverCTag !== '' && $serverCTag === $storedCTag && !$this->CalDAVHasPendingWork()) {
+                $this->SendDebug('CalDAV', 'Collection unchanged (CTag ' . $serverCTag . ') and no local changes – skipping full sync', 0);
+                $this->WriteAttributeInteger('CalDAVLastSync', time());
+                return true;
+            }
+
             $serverItems = $this->CalDAVFetchItems($calendarUrl, $user, $pass);
 
             if ($serverItems === null) {
@@ -132,13 +144,21 @@ trait CalDAVSync
                     return !in_array((string)($si['caldavUid'] ?? ''), $pendingUids, true);
                 }));
 
-                foreach ($pendingDeletes as $uid => $href) {
+                foreach ($pendingDeletes as $uid => $tombstone) {
                     $uid = (string)$uid;
                     if ($uid === '') {
                         unset($pendingDeletes[$uid]);
                         continue;
                     }
-                    $ok = $this->CalDAVDeleteItem($calendarUrl, $user, $pass, $uid, (string)$href);
+                    // Tombstone value is JSON {href, etag}; legacy tombstones stored a plain href.
+                    $href = (string)$tombstone;
+                    $etag = '';
+                    $decoded = json_decode((string)$tombstone, true);
+                    if (is_array($decoded)) {
+                        $href = (string)($decoded['href'] ?? '');
+                        $etag = (string)($decoded['etag'] ?? '');
+                    }
+                    $ok = $this->CalDAVDeleteItem($calendarUrl, $user, $pass, $uid, $href, $etag);
                     if ($ok) {
                         unset($pendingDeletes[$uid]);
                         $this->SendDebug('CalDAV', 'Deleted on server: ' . $uid, 0);
@@ -176,6 +196,18 @@ trait CalDAVSync
 
             $this->SaveItems($items);
             $this->WriteAttributeInteger('CalDAVLastSync', $now);
+
+            // A1 (TOCTOU-safe): only trust the CTag for a future skip when the collection tag
+            // did NOT change over the whole run — i.e. neither a third-party change raced in
+            // during/after our REPORT nor our own uploads bumped it. $serverCTag was read
+            // before the REPORT. If the tag changed since, our snapshot may be incomplete, so
+            // store '' to force a full REPORT next run (which reconciles whatever we missed).
+            $postCTag = $this->CalDAVGetCTag($calendarUrl, $user, $pass);
+            if ($postCTag !== null && $serverCTag !== null && $postCTag === $serverCTag) {
+                $this->WriteAttributeString('CalDAVSyncToken', $postCTag);
+            } else {
+                $this->WriteAttributeString('CalDAVSyncToken', '');
+            }
 
             $this->SyncPostComplete();
 
@@ -215,6 +247,57 @@ trait CalDAVSync
         return TGW_CalDAVRequest($gw, $Method, $Url, $User, $Pass, $Headers, $Body, $Timeout);
     }
 
+    /**
+     * A1: read the collection tag (CalendarServer getctag, or DAV:sync-token as a fallback)
+     * via a cheap Depth:0 PROPFIND. Returns null when the server does not expose one, in
+     * which case the caller falls back to a full REPORT every run (no regression).
+     */
+    private function CalDAVGetCTag(string $CalendarUrl, string $User, string $Pass): ?string
+    {
+        $body = '<?xml version="1.0" encoding="utf-8"?>'
+            . '<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">'
+            . '<d:prop><cs:getctag/><d:sync-token/></d:prop></d:propfind>';
+        $res = $this->CalDAVGatewayRequest('PROPFIND', $CalendarUrl, $User, $Pass, [
+            'Depth: 0',
+            'Content-Type: application/xml; charset=utf-8'
+        ], $body, 10);
+
+        $status = (int)($res['status'] ?? 0);
+        if ($status !== 207 && $status !== 200) {
+            return null;
+        }
+        $xml = (string)($res['body'] ?? '');
+        if (preg_match('/<[a-z0-9]*:?getctag[^>]*>([^<]+)<\/[a-z0-9]*:?getctag>/i', $xml, $m)) {
+            return trim($m[1]);
+        }
+        if (preg_match('/<[a-z0-9]*:?sync-token[^>]*>([^<]+)<\/[a-z0-9]*:?sync-token>/i', $xml, $m)) {
+            return trim($m[1]);
+        }
+        return null;
+    }
+
+    /**
+     * A1: true when there is something local to push (pending server-deletes, a locally
+     * edited item, or a not-yet-uploaded new item). Used to keep the CTag short-circuit
+     * from swallowing local changes.
+     */
+    private function CalDAVHasPendingWork(): bool
+    {
+        $pending = json_decode((string)$this->ReadAttributeString('CalDAVPendingDeletes'), true);
+        if (is_array($pending) && count($pending) > 0) {
+            return true;
+        }
+        foreach ($this->LoadItems() as $it) {
+            if (($it['caldavUid'] ?? '') === '') {
+                return true;
+            }
+            if ((int)($it['localModified'] ?? 0) >= (int)($it['caldavSynced'] ?? 0) && (int)($it['localModified'] ?? 0) > 0) {
+                return true; // >= catches same-second edits
+            }
+        }
+        return false;
+    }
+
     private function CalDAVFetchItems(string $CalendarUrl, string $User, string $Pass): ?array
     {
         $res = $this->CalDAVGatewayRequest(
@@ -250,13 +333,17 @@ trait CalDAVSync
         return $this->CalDAVParseMultiStatus((string)($res['body'] ?? ''));
     }
 
-    private function CalDAVParseMultiStatus(string $Xml): array
+    private function CalDAVParseMultiStatus(string $Xml): ?array
     {
         $items = [];
-        
+
+        // R2: a body we cannot parse must fail the whole fetch. Returning [] here would make
+        // the merge treat every synced local item as deleted on the server (mass local
+        // deletion from one malformed/truncated 207 response).
         $xml = @simplexml_load_string($Xml);
         if ($xml === false) {
-            return $items;
+            $this->SendDebug('CalDAV', 'Unparseable multistatus response – aborting fetch', 0);
+            return null;
         }
 
         $xml->registerXPathNamespace('d', 'DAV:');
@@ -280,7 +367,7 @@ trait CalDAVSync
                 $vtodo = $this->CalDAVParseVTodo($calData);
                 if ($vtodo !== null) {
                     $vtodo['caldavHref'] = $href;
-                    $vtodo['caldavEtag'] = trim($etag, '"');
+                    $vtodo['caldavEtag'] = $this->CalDAVNormalizeEtag($etag);
                     $items[] = $vtodo;
                 }
             }
@@ -306,6 +393,7 @@ trait CalDAVSync
         }
 
         $inVTodo = false;
+        $nestedDepth = 0;
         $props = [];
         $tzids = [];
 
@@ -315,10 +403,23 @@ trait CalDAVSync
                 $inVTodo = true;
                 continue;
             }
-            if ($line === 'END:VTODO') {
-                break;
-            }
             if (!$inVTodo) {
+                continue;
+            }
+            // R9: skip nested components (VALARM etc.) entirely — their DESCRIPTION/SUMMARY/UID
+            // lines must not overwrite the task's own properties.
+            if (strncmp($line, 'BEGIN:', 6) === 0) {
+                $nestedDepth++;
+                continue;
+            }
+            if (strncmp($line, 'END:', 4) === 0) {
+                if ($nestedDepth > 0) {
+                    $nestedDepth--;
+                    continue;
+                }
+                break; // END:VTODO
+            }
+            if ($nestedDepth > 0) {
                 continue;
             }
 
@@ -329,7 +430,8 @@ trait CalDAVSync
                 $props[$propName] = $value;
                 for ($pi = 1; $pi < count($params); $pi++) {
                     if (stripos($params[$pi], 'TZID=') === 0) {
-                        $tzids[$propName] = substr($params[$pi], 5);
+                        // TZID values may be quoted (TZID="America/New_York").
+                        $tzids[$propName] = trim(substr($params[$pi], 5), '"');
                     }
                 }
             }
@@ -389,7 +491,9 @@ trait CalDAVSync
             $tz = date_default_timezone_get() ?: 'UTC';
         }
 
-        $formats = ['Ymd\THis', 'Ymd'];
+        // R20: '!' resets unspecified fields — without it a date-only value ('Ymd') picks up
+        // the CURRENT wall-clock time, making the parsed timestamp nondeterministic.
+        $formats = ['!Ymd\THis', '!Ymd'];
         foreach ($formats as $fmt) {
             $dt = DateTime::createFromFormat($fmt, $Value, new DateTimeZone($tz));
             if ($dt !== false) {
@@ -451,14 +555,12 @@ trait CalDAVSync
                 $local['caldavHref'] = $server['caldavHref'];
             }
 
-            if ($serverEtag === $localEtag && $localModified <= $lastSynced) {
-                $local['title'] = $this->CalDAVMaybeUnescapeText((string)($local['title'] ?? ''));
-                $local['info'] = $this->CalDAVMaybeUnescapeText((string)($local['info'] ?? ''));
+            if ($serverEtag === $localEtag && $localModified < $lastSynced) {
                 $result[] = $local;
                 continue;
             }
 
-            if ($localModified > $lastSynced && $serverEtag !== $localEtag) {
+            if ($localModified >= $lastSynced && $localModified > 0 && $serverEtag !== $localEtag) {
                 $merged = $this->CalDAVResolveConflict($local, $server, $ConflictMode);
                 if ($merged['uploadLocal']) {
                     $toUpload[] = $merged['item'];
@@ -511,20 +613,36 @@ trait CalDAVSync
     {
         switch ($Mode) {
             case 'local_wins':
-                return ['item' => $Local, 'uploadLocal' => true];
-            
+                return ['item' => $this->CalDAVAdoptServerEtag($Local, $Server), 'uploadLocal' => true];
+
             case 'newest_wins':
                 $localMod = $Local['localModified'] ?? 0;
                 $serverMod = $Server['caldavLastModified'] ?? 0;
                 if ($localMod >= $serverMod) {
-                    return ['item' => $Local, 'uploadLocal' => true];
+                    return ['item' => $this->CalDAVAdoptServerEtag($Local, $Server), 'uploadLocal' => true];
                 }
                 return ['item' => $this->CalDAVApplyServerChanges($Local, $Server), 'uploadLocal' => false];
-            
+
             case 'server_wins':
             default:
                 return ['item' => $this->CalDAVApplyServerChanges($Local, $Server), 'uploadLocal' => false];
         }
+    }
+
+    /**
+     * R7/A3: an intended local-wins overwrite must carry the server's CURRENT ETag, so the
+     * conditional PUT (If-Match) succeeds. Keeping the stale local ETag would make every
+     * upload fail 412, retry the identical conflict next sync and never converge.
+     */
+    private function CalDAVAdoptServerEtag(array $Local, array $Server): array
+    {
+        if (($Server['caldavEtag'] ?? '') !== '') {
+            $Local['caldavEtag'] = $Server['caldavEtag'];
+        }
+        if (!empty($Server['caldavHref'])) {
+            $Local['caldavHref'] = $Server['caldavHref'];
+        }
+        return $Local;
     }
 
     private function CalDAVApplyServerChanges(array $Local, array $Server): array
@@ -565,7 +683,12 @@ trait CalDAVSync
 
         $etag = $Item['caldavEtag'] ?? '';
         if ($etag !== '') {
-            $headers[] = 'If-Match: "' . $etag . '"';
+            $headers[] = 'If-Match: ' . $this->CalDAVEtagHeaderValue($etag);
+        } else {
+            // A3/D1: creating a new resource — refuse to overwrite an existing one at this URL
+            // (out-of-band create, lost create response, UID/name collision). A 412 makes the
+            // create fail so the existing server copy is fetched and reconciled next sync.
+            $headers[] = 'If-None-Match: *';
         }
 
         $res = $this->CalDAVGatewayRequest('PUT', $itemUrl, $User, $Pass, $headers, $vcal, 10);
@@ -579,7 +702,7 @@ trait CalDAVSync
         return ($statusCode >= 200 && $statusCode < 300);
     }
 
-    private function CalDAVDeleteItem(string $CalendarUrl, string $User, string $Pass, string $Uid, string $Href = ''): bool
+    private function CalDAVDeleteItem(string $CalendarUrl, string $User, string $Pass, string $Uid, string $Href = '', string $Etag = ''): bool
     {
         if ($Href !== '') {
             $itemUrl = $this->CalDAVResolveUrl($CalendarUrl, $Href);
@@ -587,25 +710,36 @@ trait CalDAVSync
             $itemUrl = rtrim($CalendarUrl, '/') . '/' . urlencode($Uid) . '.ics';
         }
 
-        $res = $this->CalDAVGatewayRequest('DELETE', $itemUrl, $User, $Pass, [], '', 10);
+        // A3/DELETE: If-Match so a resource changed on the server since our last fetch is not
+        // blindly removed. '1' is the legacy tombstone value (no ETag) → unconditional delete.
+        $headers = ($Etag !== '' && $Etag !== '1') ? ['If-Match: ' . $this->CalDAVEtagHeaderValue($Etag)] : [];
+        $res = $this->CalDAVGatewayRequest('DELETE', $itemUrl, $User, $Pass, $headers, '', 10);
         $statusCode = (int)($res['status'] ?? 0);
-        return ($statusCode >= 200 && $statusCode < 300) || $statusCode === 404;
+
+        if (($statusCode >= 200 && $statusCode < 300) || $statusCode === 404) {
+            return true; // deleted, or already gone
+        }
+        if ($statusCode === 412) {
+            // Concurrent server edit — give up the delete (server version survives, re-imported
+            // next full sync). Drop the tombstone so we don't loop on a stale ETag.
+            $this->SendDebug('CalDAV', 'Delete conflict (412) for ' . $Uid . ' – keeping server version', 0);
+            return true;
+        }
+        return false; // transient (0/5xx) → keep tombstone, retry next sync
     }
 
     private function CalDAVBuildVTodo(array $Item): string
     {
-        $uid = $Item['caldavUid'] ?? '';
-        if ($uid === '' || strpos($uid, 'symcon-') === 0) {
-            $uid = sprintf(
-                '%08x-%04x-%04x-%04x-%012x',
-                $this->InstanceID,
-                $Item['id'] & 0xFFFF,
-                mt_rand(0, 0xFFFF),
-                mt_rand(0, 0x3FFF) | 0x8000,
-                mt_rand(0, 0xFFFFFFFFFFFF)
-            );
+        // R3: the .ics UID MUST be exactly the stored caldavUid. Writing a different UID than
+        // the one persisted locally makes the next full REPORT treat this item as deleted on
+        // the server (its UID is not in the response) and re-import the server copy as a brand
+        // new task — losing every local-only field.
+        $uid = (string)($Item['caldavUid'] ?? '');
+        if ($uid === '') {
+            // Defensive fallback only — the merge always assigns a UID before queueing uploads.
+            $uid = 'symcon-' . $this->InstanceID . '-' . (int)($Item['id'] ?? 0);
         }
-        
+
         $now = gmdate('Ymd\THis\Z');
         $created = ($Item['createdAt'] ?? 0) > 0 ? gmdate('Ymd\THis\Z', $Item['createdAt']) : $now;
         
@@ -617,24 +751,18 @@ trait CalDAVSync
             default => 0
         };
 
-        $titleText = $this->CalDAVMaybeUnescapeText((string)($Item['title'] ?? ''));
-        $infoText = $this->CalDAVMaybeUnescapeText((string)($Item['info'] ?? ''));
+        // R8: local values are plain text — they are escaped exactly once below.
+        $titleText = (string)($Item['title'] ?? '');
+        $infoText = (string)($Item['info'] ?? '');
 
-        $gw = $this->GetGatewayID();
-        $gwCreds = $gw > 0 ? TGW_CalDAVGetCredentials($gw) : [];
-        $serverUrl = $gwCreds['url'] ?? '';
-        $isICloud = stripos($serverUrl, 'icloud.com') !== false;
-
+        // R19: no METHOD property — RFC 4791 §4.1 forbids it in calendar object resources
+        // (it was previously injected for iCloud, which does not need it either).
         $lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
             'PRODID:-//Symcon//ToDoList//EN',
             'CALSCALE:GREGORIAN'
         ];
-
-        if ($isICloud) {
-            $lines[] = 'METHOD:PUBLISH';
-        }
 
         $lines = array_merge($lines, [
             'BEGIN:VTODO',
@@ -657,12 +785,10 @@ trait CalDAVSync
         }
 
         if (($Item['due'] ?? 0) > 0) {
-            $tz = date_default_timezone_get() ?: 'UTC';
-            if ($tz === 'UTC') {
-                $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $Item['due']);
-            } else {
-                $lines[] = 'DUE;TZID=' . $tz . ':' . date('Ymd\THis', $Item['due']);
-            }
+            // D2: always serialize DUE as a UTC instant (Z-form). Emitting DUE;TZID=<zone>
+            // without a matching VTIMEZONE component is invalid per RFC 5545 and strict
+            // servers/clients reject it or misread the time.
+            $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $Item['due']);
         }
 
         if ($Item['done'] && ($Item['doneAt'] ?? 0) > 0) {
@@ -677,7 +803,11 @@ trait CalDAVSync
 
     private function CalDAVEscapeText(string $Text): string
     {
-        return str_replace(["\r\n", "\n", "\r", ',', ';', '\\'], ['\\n', '\\n', '\\n', '\\,', '\\;', '\\\\'], $Text);
+        // R8: escape the backslash FIRST — otherwise the backslashes just inserted for
+        // \n \, \; get doubled and the wire format becomes RFC-5545-invalid (other clients
+        // then display a literal "\n" instead of a line break).
+        $Text = str_replace('\\', '\\\\', $Text);
+        return str_replace(["\r\n", "\n", "\r", ',', ';'], ['\\n', '\\n', '\\n', '\\,', '\\;'], $Text);
     }
 
     private function CalDAVUnescapeText(string $Text): string
@@ -685,21 +815,33 @@ trait CalDAVSync
         if ($Text === '') {
             return '';
         }
-        $Text = str_replace('\\\\', '\\', $Text);
-        $Text = str_replace(['\\n', '\\N'], "\n", $Text);
-        $Text = str_replace(['\\,', '\\;'], [',', ';'], $Text);
-
-        $Text = preg_replace('/\\\\+,/', ',', $Text) ?? $Text;
-        $Text = preg_replace('/\\\\+;/', ';', $Text) ?? $Text;
-        return $Text;
+        // R8: one left-to-right pass per RFC 5545 §3.3.11 — "\\" is a literal backslash and
+        // must not be collapsed before "\n"/"\,"/"\;" are resolved (or vice versa).
+        return preg_replace_callback('/\\\\([\\\\;,nN])/', static function (array $m): string {
+            return ($m[1] === 'n' || $m[1] === 'N') ? "\n" : $m[1];
+        }, $Text) ?? $Text;
     }
 
-    private function CalDAVMaybeUnescapeText(string $Text): string
+    /**
+     * R16: normalize an ETag for storage/comparison. Strong ETags are stored without their
+     * surrounding quotes (matches legacy stored values); a weak ETag (W/"...") is kept
+     * verbatim so the If-Match header can be reconstructed instead of being mangled.
+     */
+    private function CalDAVNormalizeEtag(string $Etag): string
     {
-        if ($Text === '' || strpos($Text, '\\') === false) {
-            return $Text;
+        $Etag = trim($Etag);
+        if (strncmp($Etag, 'W/', 2) === 0) {
+            return $Etag;
         }
-        return $this->CalDAVUnescapeText($Text);
+        return trim($Etag, '"');
+    }
+
+    private function CalDAVEtagHeaderValue(string $Etag): string
+    {
+        if (strncmp($Etag, 'W/', 2) === 0 || (strlen($Etag) >= 2 && $Etag[0] === '"')) {
+            return $Etag; // already a complete entity-tag
+        }
+        return '"' . $Etag . '"';
     }
 
     public function CalDAVRefreshCalendarOptions(): void

@@ -44,7 +44,6 @@ class ToDoList extends IPSModuleStrict
     {
         parent::Create();
         $this->SetVisualizationType(1);
-        $this->RegisterPropertyString('ItemsTable', '[]');
         $this->RegisterPropertyInteger('VisualizationInstanceID', 0);
         $this->RegisterPropertyInteger('NotificationLeadTime', 600);
         $this->RegisterPropertyBoolean('ShowOverview', true);
@@ -90,6 +89,8 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('GoogleRefreshToken', '');
         $this->RegisterAttributeInteger('GoogleTokenExpires', 0);
         $this->RegisterAttributeInteger('GoogleLastSync', 0);
+        $this->RegisterAttributeInteger('GoogleSyncCursor', 0); // A1: server-clock incremental cursor (max task 'updated')
+        $this->RegisterAttributeInteger('GoogleLastFullSync', 0); // R6: last full fetch+merge (periodic reconcile)
         $this->RegisterAttributeString('GooglePendingDeletes', '{}');
         $this->RegisterAttributeString('GoogleTaskListOptions', '[]');
         $this->RegisterAttributeString('LastGoogleTaskListID', '');
@@ -105,14 +106,13 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('MicrosoftRefreshToken', '');
         $this->RegisterAttributeInteger('MicrosoftTokenExpires', 0);
         $this->RegisterAttributeInteger('MicrosoftLastSync', 0);
+        $this->RegisterAttributeString('MicrosoftDeltaLink', ''); // A1: Graph delta cursor
         $this->RegisterAttributeString('MicrosoftPendingDeletes', '{}');
         $this->RegisterAttributeString('MicrosoftListOptions', '[]');
         $this->RegisterAttributeString('LastMicrosoftListID', '');
 
         $this->RegisterAttributeString('Items', '[]');
         $this->RegisterAttributeInteger('NextID', 1);
-        $this->RegisterAttributeInteger('LastConfigFormRequest', 0);
-        $this->RegisterAttributeString('LastItemsTableHash', '');
         $this->RegisterAttributeInteger('OrderVersion', 0);
         $this->RegisterAttributeInteger('LastNotificationLeadTime', 600);
         $this->RegisterAttributeString('SortMode', 'created');
@@ -143,6 +143,16 @@ class ToDoList extends IPSModuleStrict
 
         @$this->RegisterAttributeString('CalDAVPendingDeletes', '{}');
         @$this->RegisterAttributeInteger('SyncBackendMigrationDone', 0);
+        @$this->RegisterAttributeInteger('GoogleLastFullSync', 0);
+
+        // R22: pre-gateway OAuth tokens lived in these child attributes (XOR-obfuscated) and
+        // are unused since the gateway split — clear leftovers so refresh tokens no longer
+        // linger in instance settings/backups.
+        foreach (['GoogleAccessToken', 'GoogleRefreshToken', 'MicrosoftAccessToken', 'MicrosoftRefreshToken'] as $legacyTokenAttr) {
+            if ($this->ReadAttributeString($legacyTokenAttr) !== '') {
+                $this->WriteAttributeString($legacyTokenAttr, '');
+            }
+        }
 
         if ($this->EnforceSyncBackend()) {
             return;
@@ -159,8 +169,8 @@ class ToDoList extends IPSModuleStrict
         $this->SetTimerInterval('NotificationTimer', $visuID > 0 ? 60000 : 0);
 
         $caldavChanged = $this->SyncHandleListChange('CalDAVCalendarPath', 'LastCalDAVCalendarPath', 'CalDAVLastSync', 'CalDAVPendingDeletes', 'CalDAV', ['CalDAVSyncToken' => '']);
-        $googleChanged = $this->SyncHandleListChange('GoogleTaskListID', 'LastGoogleTaskListID', 'GoogleLastSync', 'GooglePendingDeletes', 'GoogleTasks');
-        $microsoftChanged = $this->SyncHandleListChange('MicrosoftListID', 'LastMicrosoftListID', 'MicrosoftLastSync', 'MicrosoftPendingDeletes', 'MicrosoftToDo');
+        $googleChanged = $this->SyncHandleListChange('GoogleTaskListID', 'LastGoogleTaskListID', 'GoogleLastSync', 'GooglePendingDeletes', 'GoogleTasks', ['GoogleSyncCursor' => 0, 'GoogleLastFullSync' => 0]);
+        $microsoftChanged = $this->SyncHandleListChange('MicrosoftListID', 'LastMicrosoftListID', 'MicrosoftLastSync', 'MicrosoftPendingDeletes', 'MicrosoftToDo', ['MicrosoftDeltaLink' => '']);
 
         $this->UpdateRecurrenceTimer();
         $this->UpdateStatisticsTimer();
@@ -186,14 +196,6 @@ class ToDoList extends IPSModuleStrict
             $this->UnregisterVariable('TaskListHtml');
         }
 
-        $itemsTable = $this->ReadPropertyString('ItemsTable');
-        $hash = md5($itemsTable);
-        $lastHash = $this->ReadAttributeString('LastItemsTableHash');
-        if ($hash !== $lastHash) {
-            $this->SyncItemsFromConfiguration();
-            $this->WriteAttributeString('LastItemsTableHash', $hash);
-        }
-
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml();
         $this->UpdateStatisticsTimer();
@@ -205,9 +207,6 @@ class ToDoList extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-        $this->WriteAttributeInteger('LastConfigFormRequest', time());
-        $items = $this->LoadItems();
-        $values = $this->BuildItemsTableValues($items);
 
         $prefill = [];
         $css = trim((string)$this->ReadPropertyString('HtmlBoxCss'));
@@ -304,177 +303,6 @@ class ToDoList extends IPSModuleStrict
                     'caption' => $this->Translate('Delete completed tasks')
                 ],
                 [
-                    'type' => 'List',
-                    'name' => 'ItemsTable',
-                    'caption' => $this->Translate('Items'),
-                    'rowCount' => 10,
-                    'changeOrder' => true,
-                    'add' => true,
-                    'delete' => true,
-                    'columns' => [
-                        [
-                            'caption' => $this->Translate('ID'),
-                            'name' => 'id',
-                            'width' => '60px',
-                            'add' => 0,
-                            'save' => true
-                        ],
-                        [
-                            'caption' => $this->Translate('Done'),
-                            'name' => 'done',
-                            'width' => '90px',
-                            'add' => false,
-                            'edit' => [
-                                'type' => 'CheckBox'
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Title'),
-                            'name' => 'title',
-                            'width' => '350px',
-                            'add' => '',
-                            'edit' => [
-                                'type' => 'ValidationTextBox'
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Info'),
-                            'name' => 'info',
-                            'width' => 'auto',
-                            'add' => '',
-                            'edit' => [
-                                'type' => 'ValidationTextBox'
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Notification'),
-                            'name' => 'notification',
-                            'width' => '120px',
-                            'visible' => false,
-                            'add' => false,
-                            'edit' => [
-                                'type' => 'CheckBox'
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Notification Lead Time'),
-                            'name' => 'notificationLeadTime',
-                            'width' => '200px',
-                            'visible' => false,
-                            'add' => 0,
-                            'edit' => [
-                                'type' => 'Select',
-                                'options' => $this->GetNotificationLeadTimeOptions()
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Quantity'),
-                            'name' => 'quantity',
-                            'width' => '90px',
-                            'visible' => false,
-                            'add' => 0,
-                            'edit' => [
-                                'type' => 'NumberSpinner',
-                                'minimum' => 0
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Due'),
-                            'name' => 'due',
-                            'width' => '140px',
-                            'visible' => false,
-                            'add' => json_encode($this->EmptySelectDateTime()),
-                            'edit' => [
-                                'type' => 'SelectDateTime'
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Repeat'),
-                            'name' => 'recurrence',
-                            'width' => '140px',
-                            'visible' => false,
-                            'add' => 'none',
-                            'edit' => [
-                                'type' => 'Select',
-                                'options' => [
-                                    ['caption' => $this->Translate('No repeat'), 'value' => 'none'],
-                                    ['caption' => $this->Translate('Custom'), 'value' => 'custom'],
-                                    ['caption' => $this->Translate('Every week'), 'value' => 'w1'],
-                                    ['caption' => $this->Translate('Every 2 weeks'), 'value' => 'w2'],
-                                    ['caption' => $this->Translate('Every 3 weeks'), 'value' => 'w3'],
-                                    ['caption' => $this->Translate('Monthly'), 'value' => 'm1'],
-                                    ['caption' => $this->Translate('Quarterly'), 'value' => 'q1'],
-                                    ['caption' => $this->Translate('Yearly'), 'value' => 'y1']
-                                ]
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Unit'),
-                            'name' => 'recurrenceCustomUnit',
-                            'width' => '120px',
-                            'visible' => false,
-                            'add' => 'w',
-                            'edit' => [
-                                'type' => 'Select',
-                                'options' => $recurrenceUnitOptions
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Interval'),
-                            'name' => 'recurrenceCustomValue',
-                            'width' => '90px',
-                            'visible' => false,
-                            'add' => 1,
-                            'edit' => [
-                                'type' => 'NumberSpinner',
-                                'minimum' => 1
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Reopen'),
-                            'name' => 'recurrenceResetLeadTime',
-                            'width' => '140px',
-                            'visible' => false,
-                            'add' => 172800,
-                            'edit' => [
-                                'type' => 'Select',
-                                'options' => [
-                                    ['caption' => $this->Translate('Disabled'), 'value' => 0],
-                                    ['caption' => $this->Translate('30 minutes'), 'value' => 1800],
-                                    ['caption' => $this->Translate('1 hour'), 'value' => 3600],
-                                    ['caption' => $this->Translate('6 hours'), 'value' => 21600],
-                                    ['caption' => $this->Translate('12 hours'), 'value' => 43200],
-                                    ['caption' => $this->Translate('1 day before'), 'value' => 86400],
-                                    ['caption' => $this->Translate('2 days before'), 'value' => 172800],
-                                    ['caption' => $this->Translate('3 days before'), 'value' => 259200],
-                                    ['caption' => $this->Translate('1 week before'), 'value' => 604800],
-                                    ['caption' => $this->Translate('2 weeks before'), 'value' => 1209600],
-                                    ['caption' => $this->Translate('1 month before'), 'value' => 2592000]
-                                ]
-                            ]
-                        ],
-                        [
-                            'caption' => $this->Translate('Priority'),
-                            'name' => 'priority',
-                            'width' => '120px',
-                            'visible' => false,
-                            'add' => 'normal',
-                            'edit' => [
-                                'type' => 'Select',
-                                'options' => [
-                                    ['caption' => $this->Translate('Low'), 'value' => 'low'],
-                                    ['caption' => $this->Translate('Normal'), 'value' => 'normal'],
-                                    ['caption' => $this->Translate('High'), 'value' => 'high']
-                                ]
-                            ]
-                        ]
-                    ],
-                    'form' => $this->GetItemsTableEditFormScript(),
-                    'values' => $values,
-                    'loadValuesFromConfiguration' => false
-                ],
-                
-                [
                     'type' => 'ExpansionPanel',
                     'caption' => $this->Translate('HTMLBox layout'),
                     'items' => [
@@ -560,9 +388,6 @@ class ToDoList extends IPSModuleStrict
             case 'Reorder':
                 $this->Reorder($this->DecodeValue($Value));
                 $this->SendState();
-                return;
-            case 'ItemsTableRecurrenceChanged':
-                $this->UpdateItemsTableRecurrenceVisibility($Value);
                 return;
             default:
                 throw new Exception($this->Translate('Invalid Ident'));
@@ -751,14 +576,25 @@ class ToDoList extends IPSModuleStrict
                 if ($this->GetSyncBackend() === 'google') {
                     $googleId = (string)($items[$i]['googleTaskId'] ?? '');
                     if ($googleId !== '' && (int)($items[$i]['googleSynced'] ?? 0) > 0) {
-                        $this->AddGooglePendingDelete($googleId);
+                        $this->AddGooglePendingDelete($googleId, (string)($items[$i]['googleEtag'] ?? ''));
                     }
                 }
                 if ($this->GetSyncBackend() === 'microsoft') {
                     $msId = (string)($items[$i]['microsoftTaskId'] ?? '');
                     if ($msId !== '' && (int)($items[$i]['microsoftSynced'] ?? 0) > 0) {
-                        $this->AddMicrosoftPendingDelete($msId);
+                        $this->AddMicrosoftPendingDelete($msId, (string)($items[$i]['microsoftEtag'] ?? ''));
                     }
+                }
+                // R10: same CalDAV tombstone as in ToggleDone/DeleteItem — without it the
+                // server VTODO survives and the task resurrects on the next sync.
+                $uid = (string)($items[$i]['caldavUid'] ?? '');
+                if ($uid !== '' && (int)($items[$i]['caldavSynced'] ?? 0) > 0) {
+                    $pending = json_decode((string)$this->ReadAttributeString('CalDAVPendingDeletes'), true);
+                    if (!is_array($pending)) {
+                        $pending = [];
+                    }
+                    $pending[$uid] = json_encode(['href' => (string)($items[$i]['caldavHref'] ?? ''), 'etag' => (string)($items[$i]['caldavEtag'] ?? '')]);
+                    $this->WriteAttributeString('CalDAVPendingDeletes', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 }
                 unset($items[$i]);
                 $this->SaveItems(array_values($items));
@@ -898,13 +734,13 @@ class ToDoList extends IPSModuleStrict
                 if ($this->GetSyncBackend() === 'google') {
                     $googleId = (string)($items[$i]['googleTaskId'] ?? '');
                     if ($googleId !== '' && (int)($items[$i]['googleSynced'] ?? 0) > 0) {
-                        $this->AddGooglePendingDelete($googleId);
+                        $this->AddGooglePendingDelete($googleId, (string)($items[$i]['googleEtag'] ?? ''));
                     }
                 }
                 if ($this->GetSyncBackend() === 'microsoft') {
                     $msId = (string)($items[$i]['microsoftTaskId'] ?? '');
                     if ($msId !== '' && (int)($items[$i]['microsoftSynced'] ?? 0) > 0) {
-                        $this->AddMicrosoftPendingDelete($msId);
+                        $this->AddMicrosoftPendingDelete($msId, (string)($items[$i]['microsoftEtag'] ?? ''));
                     }
                 }
                 $uid = (string)($items[$i]['caldavUid'] ?? '');
@@ -913,7 +749,7 @@ class ToDoList extends IPSModuleStrict
                     if (!is_array($pending)) {
                         $pending = [];
                     }
-                    $pending[$uid] = (string)($items[$i]['caldavHref'] ?? '');
+                    $pending[$uid] = json_encode(['href' => (string)($items[$i]['caldavHref'] ?? ''), 'etag' => (string)($items[$i]['caldavEtag'] ?? '')]);
                     $this->WriteAttributeString('CalDAVPendingDeletes', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 }
                 unset($items[$i]);
@@ -979,21 +815,21 @@ class ToDoList extends IPSModuleStrict
                 if (!is_array($pending)) {
                     $pending = [];
                 }
-                $pending[$uid] = (string)($deleted['caldavHref'] ?? '');
+                $pending[$uid] = json_encode(['href' => (string)($deleted['caldavHref'] ?? ''), 'etag' => (string)($deleted['caldavEtag'] ?? '')]);
                 $this->WriteAttributeString('CalDAVPendingDeletes', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             }
 
             if ($this->GetSyncBackend() === 'google') {
                 $googleId = (string)($deleted['googleTaskId'] ?? '');
                 if ($googleId !== '' && (int)($deleted['googleSynced'] ?? 0) > 0) {
-                    $this->AddGooglePendingDelete($googleId);
+                    $this->AddGooglePendingDelete($googleId, (string)($deleted['googleEtag'] ?? ''));
                 }
             }
 
             if ($this->GetSyncBackend() === 'microsoft') {
                 $msId = (string)($deleted['microsoftTaskId'] ?? '');
                 if ($msId !== '' && (int)($deleted['microsoftSynced'] ?? 0) > 0) {
-                    $this->AddMicrosoftPendingDelete($msId);
+                    $this->AddMicrosoftPendingDelete($msId, (string)($deleted['microsoftEtag'] ?? ''));
                 }
             }
         }
@@ -1043,174 +879,6 @@ class ToDoList extends IPSModuleStrict
         $this->SaveItems($newItems);
     }
 
-    private function SyncItemsFromConfiguration(): void
-    {
-        $last = $this->ReadAttributeInteger('LastConfigFormRequest');
-        if ($last <= 0 || (time() - $last) > 3600) {
-            return;
-        }
-
-        $rows = json_decode($this->ReadPropertyString('ItemsTable'), true);
-        if (!is_array($rows)) {
-            return;
-        }
-
-        $itemsBefore = $this->LoadItems();
-        $beforeIds = array_map(fn($it) => (int)($it['id'] ?? 0), $itemsBefore);
-
-        $existing = [];
-        foreach ($itemsBefore as $it) {
-            $existing[(int)($it['id'] ?? 0)] = $it;
-        }
-
-        $nextID = $this->ReadAttributeInteger('NextID');
-        $now = time();
-        $items = [];
-        $newItems = [];
-        $deleteCompleted = $this->ReadPropertyBoolean('DeleteCompletedTasks');
-
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            if ($deleteCompleted && !empty($row['done'])) {
-                continue;
-            }
-
-            $id = (int)($row['id'] ?? 0);
-            if ($id <= 0) {
-                $id = $nextID++;
-            } else {
-                $nextID = max($nextID, $id + 1);
-            }
-
-            $title = trim((string)($row['title'] ?? ''));
-            if ($title === '') {
-                continue;
-            }
-
-            $prio = (string)($row['priority'] ?? 'normal');
-            if (!in_array($prio, ['low', 'normal', 'high'], true)) {
-                $prio = 'normal';
-            }
-
-            $createdAt = $now;
-            if (isset($existing[$id]) && isset($existing[$id]['createdAt'])) {
-                $createdAt = (int)$existing[$id]['createdAt'];
-            }
-
-            $old = $existing[$id] ?? [];
-            $dueTs = $this->SelectDateTimeToTimestamp($row['due'] ?? null);
-            $recurrence = $this->NormalizeRecurrence($row['recurrence'] ?? ($old['recurrence'] ?? 'none'), $dueTs);
-            $recurrenceCustomUnit = (string)($old['recurrenceCustomUnit'] ?? 'w');
-            $recurrenceCustomValue = (int)($old['recurrenceCustomValue'] ?? 1);
-            if ($recurrence === 'custom') {
-                $recurrenceCustomUnit = $this->NormalizeRecurrenceCustomUnit($row['recurrenceCustomUnit'] ?? $recurrenceCustomUnit);
-                $recurrenceCustomValue = $this->NormalizeRecurrenceCustomValue($row['recurrenceCustomValue'] ?? $recurrenceCustomValue);
-            }
-            $notification = (bool)($row['notification'] ?? false);
-            $defaultLeadTime = $this->NormalizeNotificationLeadTimeDefault((int)$this->ReadPropertyInteger('NotificationLeadTime'));
-            $notificationLeadTime = (int)($old['notificationLeadTime'] ?? $defaultLeadTime);
-            if ($notification && array_key_exists('notificationLeadTime', $row) && is_numeric($row['notificationLeadTime'])) {
-                $notificationLeadTime = $this->NormalizeNotificationLeadTime($row['notificationLeadTime'], $defaultLeadTime);
-            } else {
-                $notificationLeadTime = $this->NormalizeNotificationLeadTime($notificationLeadTime, $defaultLeadTime);
-            }
-
-            $recurrenceResetLeadTime = $row['recurrenceResetLeadTime'] ?? ($old['recurrenceResetLeadTime'] ?? null);
-            $recurrenceResetLeadTime = $this->NormalizeRecurrenceResetLeadTime($recurrenceResetLeadTime, $recurrence);
-            $notifiedFor = (int)($old['notifiedFor'] ?? 0);
-            if ((int)($old['due'] ?? 0) !== $dueTs || (bool)($old['notification'] ?? false) !== $notification || (int)($old['notificationLeadTime'] ?? $notificationLeadTime) !== $notificationLeadTime) {
-                $notifiedFor = 0;
-            }
-
-            if ($dueTs > 0) {
-                $limit = $this->GetLeadTimeLimitSeconds($dueTs, $now, $recurrence, $recurrenceCustomUnit, $recurrenceCustomValue);
-                $notificationLeadTime = $this->ClampLeadTimeToLimit($notificationLeadTime, $limit, [0, 300, 600, 1800, 3600, 18000, 43200]);
-            }
-
-            if ($dueTs > 0 && $recurrence !== 'none') {
-                $interval = $this->GetRecurrenceIntervalSeconds($dueTs, $recurrence, $recurrenceCustomUnit, $recurrenceCustomValue);
-                $recurrenceResetLeadTime = $this->ClampLeadTimeToInterval($recurrenceResetLeadTime, $interval, [1800, 3600, 21600, 43200, 86400, 172800, 259200, 604800, 1209600, 2592000]);
-            }
-
-            if ($dueTs <= 0) {
-                $notification = false;
-                $recurrence = 'none';
-                $recurrenceResetLeadTime = 0;
-                $recurrenceCustomUnit = 'w';
-                $recurrenceCustomValue = 1;
-                $notifiedFor = 0;
-            }
-
-            $items[] = [
-                'id'        => $id,
-                'title'     => $title,
-                'info'      => (string)($row['info'] ?? ''),
-                'done'      => (bool)($row['done'] ?? false),
-                'quantity'  => (int)($row['quantity'] ?? 0),
-                'notification' => $notification,
-                'notificationLeadTime' => $notificationLeadTime,
-                'notifiedFor'  => $notifiedFor,
-                'due'       => $dueTs,
-                'recurrence' => $recurrence,
-                'recurrenceCustomUnit' => $recurrenceCustomUnit,
-                'recurrenceCustomValue' => $recurrenceCustomValue,
-                'recurrenceResetLeadTime' => $recurrenceResetLeadTime,
-                'priority'  => $prio,
-                'createdAt' => $createdAt,
-                'updatedAt' => $now
-            ];
-        }
-
-        foreach ($items as $it) {
-            $id = (int)($it['id'] ?? 0);
-            if (isset($existing[$id])) {
-                continue;
-            }
-            $newItems[] = $it;
-        }
-        if (count($newItems) > 0) {
-            $existingItems = array_values(array_filter($items, fn($it) => isset($existing[(int)($it['id'] ?? 0)])));
-            $items = array_merge($newItems, $existingItems);
-        }
-
-        $afterIds = array_map(fn($it) => (int)($it['id'] ?? 0), $items);
-        $beforeSet = $beforeIds;
-        $afterSet = $afterIds;
-        sort($beforeSet);
-        sort($afterSet);
-        if ($beforeSet === $afterSet && $beforeIds !== $afterIds) {
-            $this->WriteAttributeInteger('OrderVersion', $this->ReadAttributeInteger('OrderVersion') + 1);
-        }
-
-        $this->WriteAttributeInteger('NextID', $nextID);
-
-        $beforeMap = [];
-        foreach ($itemsBefore as $it) {
-            $beforeMap[(int)($it['id'] ?? 0)] = $it;
-        }
-        $afterSet = array_fill_keys($afterIds, true);
-        $pending = json_decode((string)$this->ReadAttributeString('CalDAVPendingDeletes'), true);
-        if (!is_array($pending)) {
-            $pending = [];
-        }
-        foreach ($beforeMap as $bid => $bit) {
-            if (isset($afterSet[$bid])) {
-                continue;
-            }
-            $uid = (string)($bit['caldavUid'] ?? '');
-            if ($uid !== '' && (int)($bit['caldavSynced'] ?? 0) > 0) {
-                $pending[$uid] = (string)($bit['caldavHref'] ?? '');
-            }
-        }
-        $this->WriteAttributeString('CalDAVPendingDeletes', json_encode($pending, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-        $this->SaveItems($items);
-        $this->ScheduleSyncOnChange();
-    }
-
     private function ScheduleSyncOnChange(): void
     {
         if (!$this->ReadPropertyBoolean('AutoSyncOnChange')) {
@@ -1239,13 +907,35 @@ class ToDoList extends IPSModuleStrict
     {
         $this->SetTimerInterval('SyncOnChangeTimer', 0);
 
+        // R14: when a sync is already running (semaphore busy), re-arm the timer instead of
+        // dropping the change — otherwise an edit made during a running sync would strand
+        // until the next interval tick (or forever with "Manual only"). Mirrors the CalDAV
+        // on-change handler.
         $backend = $this->GetSyncBackend();
         if ($backend === 'google') {
-            $this->GoogleTasksSync();
+            $sem = 'TDL_GoogleSync_' . $this->InstanceID;
+            if (!IPS_SemaphoreEnter($sem, 0)) {
+                $this->SetTimerInterval('SyncOnChangeTimer', 3000);
+                return;
+            }
+            try {
+                $this->GoogleTasksSyncInternal();
+            } finally {
+                IPS_SemaphoreLeave($sem);
+            }
             return;
         }
         if ($backend === 'microsoft') {
-            $this->MicrosoftToDoSync();
+            $sem = 'TDL_MicrosoftSync_' . $this->InstanceID;
+            if (!IPS_SemaphoreEnter($sem, 0)) {
+                $this->SetTimerInterval('SyncOnChangeTimer', 3000);
+                return;
+            }
+            try {
+                $this->MicrosoftToDoSyncInternal();
+            } finally {
+                IPS_SemaphoreLeave($sem);
+            }
             return;
         }
     }
@@ -1701,161 +1391,6 @@ class ToDoList extends IPSModuleStrict
         return ['mode' => $mode, 'dir' => $dir];
     }
 
-    private function BuildItemsTableValues(array $Items): array
-    {
-        $values = [];
-        foreach ($Items as $it) {
-            $due = (int)($it['due'] ?? 0);
-            $notification = (bool)($it['notification'] ?? false);
-            $values[] = [
-                'id'       => (int)($it['id'] ?? 0),
-                'done'     => (bool)($it['done'] ?? false),
-                'title'    => (string)($it['title'] ?? ''),
-                'info'     => (string)($it['info'] ?? ''),
-                'notification' => $notification,
-                'notificationLeadTime' => (int)($it['notificationLeadTime'] ?? 0),
-                'quantity' => (int)($it['quantity'] ?? 0),
-                'due'      => json_encode($this->TimestampToSelectDateTime($due)),
-                'recurrence' => (string)($it['recurrence'] ?? 'none'),
-                'recurrenceCustomUnit' => (string)($it['recurrenceCustomUnit'] ?? 'w'),
-                'recurrenceCustomValue' => (int)($it['recurrenceCustomValue'] ?? 1),
-                'recurrenceResetLeadTime' => (int)($it['recurrenceResetLeadTime'] ?? 172800),
-                'priority' => (string)($it['priority'] ?? 'normal')
-            ];
-        }
-        return $values;
-    }
-
-    private function GetItemsTableEditFormScript(): string
-    {
-        $tID = json_encode($this->Translate('ID'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tDone = json_encode($this->Translate('Done'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tTitle = json_encode($this->Translate('Title'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tInfo = json_encode($this->Translate('Info'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tNotification = json_encode($this->Translate('Notification'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tNotificationLeadTime = json_encode($this->Translate('Notification Lead Time'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tQuantity = json_encode($this->Translate('Quantity'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tDue = json_encode($this->Translate('Due'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tRepeat = json_encode($this->Translate('Repeat'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tReopen = json_encode($this->Translate('Reopen'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tPriority = json_encode($this->Translate('Priority'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $tNoRepeat = json_encode($this->Translate('No repeat'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tCustom = json_encode($this->Translate('Custom'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tEveryWeek = json_encode($this->Translate('Every week'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tEvery2Weeks = json_encode($this->Translate('Every 2 weeks'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tEvery3Weeks = json_encode($this->Translate('Every 3 weeks'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tMonthly = json_encode($this->Translate('Monthly'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tQuarterly = json_encode($this->Translate('Quarterly'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tYearly = json_encode($this->Translate('Yearly'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $tUnit = json_encode($this->Translate('Unit'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tInterval = json_encode($this->Translate('Interval'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tHours = json_encode($this->Translate('Hours'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tDays = json_encode($this->Translate('Days'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tWeeks = json_encode($this->Translate('Weeks'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tMonths = json_encode($this->Translate('Months'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tYears = json_encode($this->Translate('Years'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $tDisabled = json_encode($this->Translate('Disabled'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tImmediate = json_encode($this->Translate('Immediate'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t1DayBefore = json_encode($this->Translate('1 day before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t2DaysBefore = json_encode($this->Translate('2 days before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t3DaysBefore = json_encode($this->Translate('3 days before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t1WeekBefore = json_encode($this->Translate('1 week before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t2WeeksBefore = json_encode($this->Translate('2 weeks before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t1MonthBefore = json_encode($this->Translate('1 month before'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $tLow = json_encode($this->Translate('Low'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tNormal = json_encode($this->Translate('Normal'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $tHigh = json_encode($this->Translate('High'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        $t0Min = json_encode($this->Translate('0 minutes'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t5Min = json_encode($this->Translate('5 minutes'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t10Min = json_encode($this->Translate('10 minutes'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t30Min = json_encode($this->Translate('30 minutes'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t1H = json_encode($this->Translate('1 hour'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t5H = json_encode($this->Translate('5 hours'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t6H = json_encode($this->Translate('6 hours'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $t12H = json_encode($this->Translate('12 hours'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        return '$recurrenceValue = (string)($ItemsTable[\'recurrence\'] ?? \'none\');' . PHP_EOL .
-            '$showReopen = $recurrenceValue !== \'none\';' . PHP_EOL .
-            '$showCustom = $recurrenceValue === \'custom\';' . PHP_EOL .
-            'return [' . PHP_EOL .
-            '  [\'type\' => \'NumberSpinner\', \'name\' => \'id\', \'caption\' => ' . $tID . ', \'visible\' => false, \'enabled\' => false],' . PHP_EOL .
-            '  [\'type\' => \'CheckBox\', \'name\' => \'done\', \'caption\' => ' . $tDone . '],' . PHP_EOL .
-            '  [\'type\' => \'ValidationTextBox\', \'name\' => \'title\', \'caption\' => ' . $tTitle . '],' . PHP_EOL .
-            '  [\'type\' => \'ValidationTextBox\', \'name\' => \'info\', \'caption\' => ' . $tInfo . '],' . PHP_EOL .
-            '  [\'type\' => \'NumberSpinner\', \'name\' => \'quantity\', \'caption\' => ' . $tQuantity . ', \'minimum\' => 0],' . PHP_EOL .
-            '  [\'type\' => \'Select\', \'name\' => \'priority\', \'caption\' => ' . $tPriority . ', \'options\' => [' . PHP_EOL .
-            '    [\'caption\' => ' . $tLow . ', \'value\' => \'low\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tNormal . ', \'value\' => \'normal\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tHigh . ', \'value\' => \'high\']' . PHP_EOL .
-            '  ]],' . PHP_EOL .
-            '  [\'type\' => \'SelectDateTime\', \'name\' => \'due\', \'caption\' => ' . $tDue . '],' . PHP_EOL .
-            '  [\'type\' => \'Select\', \'name\' => \'recurrence\', \'caption\' => ' . $tRepeat . ', \'onChange\' => \'IPS_RequestAction(' . $this->InstanceID . ', "ItemsTableRecurrenceChanged", $recurrence);\', \'options\' => [' . PHP_EOL .
-            '    [\'caption\' => ' . $tNoRepeat . ', \'value\' => \'none\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tCustom . ', \'value\' => \'custom\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tEveryWeek . ', \'value\' => \'w1\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tEvery2Weeks . ', \'value\' => \'w2\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tEvery3Weeks . ', \'value\' => \'w3\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tMonthly . ', \'value\' => \'m1\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tQuarterly . ', \'value\' => \'q1\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tYearly . ', \'value\' => \'y1\']' . PHP_EOL .
-            '  ]],' . PHP_EOL .
-            '  [\'type\' => \'Select\', \'name\' => \'recurrenceCustomUnit\', \'caption\' => ' . $tUnit . ', \'visible\' => $showCustom, \'options\' => [' . PHP_EOL .
-            '    [\'caption\' => ' . $tHours . ', \'value\' => \'h\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tDays . ', \'value\' => \'d\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tWeeks . ', \'value\' => \'w\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tMonths . ', \'value\' => \'m\'],' . PHP_EOL .
-            '    [\'caption\' => ' . $tYears . ', \'value\' => \'y\']' . PHP_EOL .
-            '  ]],' . PHP_EOL .
-            '  [\'type\' => \'NumberSpinner\', \'name\' => \'recurrenceCustomValue\', \'caption\' => ' . $tInterval . ', \'visible\' => $showCustom, \'minimum\' => 1],' . PHP_EOL .
-            '  [\'type\' => \'Select\', \'name\' => \'recurrenceResetLeadTime\', \'caption\' => ' . $tReopen . ', \'visible\' => $showReopen, \'options\' => [' . PHP_EOL .
-            '    [\'caption\' => ' . $tDisabled . ', \'value\' => 0],' . PHP_EOL .
-            '    [\'caption\' => ' . $tImmediate . ', \'value\' => -1],' . PHP_EOL .
-            '    [\'caption\' => ' . $t30Min . ', \'value\' => 1800],' . PHP_EOL .
-            '    [\'caption\' => ' . $t1H . ', \'value\' => 3600],' . PHP_EOL .
-            '    [\'caption\' => ' . $t6H . ', \'value\' => 21600],' . PHP_EOL .
-            '    [\'caption\' => ' . $t12H . ', \'value\' => 43200],' . PHP_EOL .
-            '    [\'caption\' => ' . $t1DayBefore . ', \'value\' => 86400],' . PHP_EOL .
-            '    [\'caption\' => ' . $t2DaysBefore . ', \'value\' => 172800],' . PHP_EOL .
-            '    [\'caption\' => ' . $t3DaysBefore . ', \'value\' => 259200],' . PHP_EOL .
-            '    [\'caption\' => ' . $t1WeekBefore . ', \'value\' => 604800],' . PHP_EOL .
-            '    [\'caption\' => ' . $t2WeeksBefore . ', \'value\' => 1209600],' . PHP_EOL .
-            '    [\'caption\' => ' . $t1MonthBefore . ', \'value\' => 2592000]' . PHP_EOL .
-            '  ]],' . PHP_EOL .
-            '  [\'type\' => \'CheckBox\', \'name\' => \'notification\', \'caption\' => ' . $tNotification . '],' . PHP_EOL .
-            '  [\'type\' => \'Select\', \'name\' => \'notificationLeadTime\', \'caption\' => ' . $tNotificationLeadTime . ', \'options\' => [' . PHP_EOL .
-            '    [\'caption\' => ' . $t0Min . ', \'value\' => 0],' . PHP_EOL .
-            '    [\'caption\' => ' . $t5Min . ', \'value\' => 300],' . PHP_EOL .
-            '    [\'caption\' => ' . $t10Min . ', \'value\' => 600],' . PHP_EOL .
-            '    [\'caption\' => ' . $t30Min . ', \'value\' => 1800],' . PHP_EOL .
-            '    [\'caption\' => ' . $t1H . ', \'value\' => 3600],' . PHP_EOL .
-            '    [\'caption\' => ' . $t5H . ', \'value\' => 18000],' . PHP_EOL .
-            '    [\'caption\' => ' . $t12H . ', \'value\' => 43200]' . PHP_EOL .
-            '  ]]' . PHP_EOL .
-            '];';
-    }
-
-    private function UpdateItemsTableRecurrenceVisibility(mixed $RecurrenceValue): void
-    {
-        $recurrence = (string)$RecurrenceValue;
-        $showReopen = $recurrence !== 'none';
-        $showCustom = $recurrence === 'custom';
-        $this->UpdateFormField('recurrenceResetLeadTime', 'visible', $showReopen);
-        $this->UpdateFormField('recurrenceCustomUnit', 'visible', $showCustom);
-        $this->UpdateFormField('recurrenceCustomValue', 'visible', $showCustom);
-        if (!$showReopen) {
-            $this->UpdateFormField('recurrenceResetLeadTime', 'value', 0);
-        }
-        if (!$showCustom) {
-            $this->UpdateFormField('recurrenceCustomUnit', 'value', 'w');
-            $this->UpdateFormField('recurrenceCustomValue', 'value', 1);
-        }
-    }
-
     private function FormatLeadTime(int $Seconds): string
     {
         $Seconds = max(0, $Seconds);
@@ -1950,16 +1485,6 @@ class ToDoList extends IPSModuleStrict
         if ($changed) {
             $this->SaveItems($items);
         }
-    }
-
-    private function SyncItemsTableFormValues(): void
-    {
-        $last = $this->ReadAttributeInteger('LastConfigFormRequest');
-        if ($last <= 0 || (time() - $last) > 3600) {
-            return;
-        }
-
-        $this->UpdateFormField('ItemsTable', 'values', json_encode($this->BuildItemsTableValues($this->LoadItems())));
     }
 
     public function RefreshStatistics(): void

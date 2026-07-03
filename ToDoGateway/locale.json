@@ -28,12 +28,14 @@
       "Connection successful. Found %d list(s).": "Verbindung erfolgreich. %d Liste(n) gefunden.",
       "Disconnected from Google.": "Verbindung zu Google getrennt.",
       "Disconnected from Microsoft.": "Verbindung zu Microsoft getrennt.",
+      "The ToDo authorization has expired. Please reconnect the account in the ToDo gateway.": "Die ToDo-Autorisierung ist abgelaufen. Bitte das Konto im ToDo-Gateway neu verbinden.",
       "Please enter Client ID first.": "Bitte zuerst Client ID eingeben.",
       "Please fill in server URL, username and password.": "Bitte Server URL, Benutzername und Passwort ausfüllen.",
       "Authorization successful": "Autorisierung erfolgreich",
       "You can close this window now.": "Sie können dieses Fenster jetzt schließen.",
       "Authorization failed": "Autorisierung fehlgeschlagen",
-      "Please try again.": "Bitte erneut versuchen."
+      "Please try again.": "Bitte erneut versuchen.",
+      "Invalid or expired authorization state. Please start the authorization again from the gateway form.": "Ungültiger oder abgelaufener Autorisierungs-State. Bitte die Autorisierung erneut über das Gateway-Formular starten."
     },
     "en": {
       "ToDo Gateway": "ToDo Gateway",
@@ -68,7 +70,8 @@
       "Authorization successful": "Authorization successful",
       "You can close this window now.": "You can close this window now.",
       "Authorization failed": "Authorization failed",
-      "Please try again.": "Please try again."
+      "Please try again.": "Please try again.",
+      "Invalid or expired authorization state. Please start the authorization again from the gateway form.": "Invalid or expired authorization state. Please start the authorization again from the gateway form."
     }
   }
 }

@@ -27,6 +27,15 @@ class ToDoGateway extends IPSModuleStrict
         $this->RegisterAttributeString('MicrosoftRefreshToken', '');
         $this->RegisterAttributeInteger('MicrosoftTokenExpires', 0);
 
+        // Throttling back-off windows (A2): "do not call before" timestamps per backend
+        $this->RegisterAttributeInteger('GoogleRetryAfter', 0);
+        $this->RegisterAttributeInteger('MicrosoftRetryAfter', 0);
+        $this->RegisterAttributeInteger('CalDAVRetryAfter', 0);
+
+        // R5: pending OAuth state parameters (one-time, validated in ProcessHookData)
+        $this->RegisterAttributeString('GoogleOAuthState', '');
+        $this->RegisterAttributeString('MicrosoftOAuthState', '');
+
         // CalDAV
         $this->RegisterPropertyString('CalDAVServerURL', '');
         $this->RegisterPropertyString('CalDAVUsername', '');
@@ -81,7 +90,9 @@ class ToDoGateway extends IPSModuleStrict
         }
 
         $redirectUri = $this->OAuthGetRedirectUri('/hook/todogateway_google/');
-        $state = $this->InstanceID . '_' . bin2hex(random_bytes(8));
+        $state = $this->InstanceID . '_' . bin2hex(random_bytes(16));
+        // R5: persist for one-time validation in ProcessHookData (login-CSRF protection).
+        $this->WriteAttributeString('GoogleOAuthState', json_encode(['state' => $state, 'expires' => time() + 600]));
 
         $params = [
             'client_id' => $clientId,
@@ -142,20 +153,15 @@ class ToDoGateway extends IPSModuleStrict
 
     public function GoogleTestConnection(): bool
     {
-        $token = $this->GoogleGetValidAccessToken();
-        if ($token === '') {
+        if (!$this->GoogleIsConnected()) {
             echo $this->Translate('Not connected to Google. Please authorize first.');
             return false;
         }
 
-        $response = $this->OAuthHttpRequest('GET', 'https://tasks.googleapis.com/tasks/v1/users/@me/lists', [], null, true, 'GoogleTasks', $token);
-        if ($response === null) {
-            echo $this->Translate('Connection failed');
-            return false;
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data) || isset($data['error'])) {
+        // R18: routed through GoogleApiRequest so the 401-retry and the back-off window
+        // apply here too (the raw helper bypassed both).
+        $data = $this->GoogleApiRequest('GET', '/tasks/v1/users/@me/lists');
+        if ($data === null) {
             echo $this->Translate('Connection failed');
             return false;
         }
@@ -173,16 +179,22 @@ class ToDoGateway extends IPSModuleStrict
         echo $this->Translate('Disconnected from Google.');
     }
 
-    public function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
+    public function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
         $url = 'https://tasks.googleapis.com' . $Endpoint;
-        $token = $this->GoogleGetValidAccessToken();
-        $response = $this->OAuthHttpRequest($Method, $url, [], is_array($Body) ? json_encode($Body) : $Body, true, 'GoogleTasks', $token);
-
-        if ($response === null) {
+        $meta = $this->OAuthAuthorizedRequest(
+            $Method, $url, $Body,
+            'GKey', 'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
+            'https://oauth2.googleapis.com/token',
+            trim($this->ReadPropertyString('GoogleClientID')),
+            trim($this->ReadPropertyString('GoogleClientSecret')),
+            'GoogleTasks', '', $Headers, 'GoogleRetryAfter'
+        );
+        if ($meta === null) {
             return null;
         }
 
+        $response = (string)($meta['body'] ?? '');
         $data = json_decode($response, true);
         if (!is_array($data)) {
             $this->SendDebug('GoogleTasks', 'Invalid JSON response', 0);
@@ -197,20 +209,32 @@ class ToDoGateway extends IPSModuleStrict
         return $data;
     }
 
+    /**
+     * Perform a request and return only the HTTP status code (0 on transport failure / active
+     * back-off). Used by the delete path so a 412 (concurrent server edit) can be distinguished
+     * from a transient failure instead of being retried forever with a stale ETag.
+     */
+    public function GoogleApiStatus(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): int
+    {
+        $url = (strncmp($Endpoint, 'https://', 8) === 0 || strncmp($Endpoint, 'http://', 7) === 0)
+            ? $Endpoint
+            : 'https://tasks.googleapis.com' . $Endpoint;
+        $meta = $this->OAuthAuthorizedRequest(
+            $Method, $url, $Body,
+            'GKey', 'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
+            'https://oauth2.googleapis.com/token',
+            trim($this->ReadPropertyString('GoogleClientID')),
+            trim($this->ReadPropertyString('GoogleClientSecret')),
+            'GoogleTasks', '', $Headers, 'GoogleRetryAfter'
+        );
+        return $meta === null ? 0 : (int)($meta['status'] ?? 0);
+    }
+
     public function GoogleFetchTaskLists(): array
     {
-        $token = $this->GoogleGetValidAccessToken();
-        if ($token === '') {
-            return [];
-        }
-
-        $response = $this->OAuthHttpRequest('GET', 'https://tasks.googleapis.com/tasks/v1/users/@me/lists', [], null, true, 'GoogleTasks', $token);
-        if ($response === null) {
-            return [];
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
+        // R18: routed through GoogleApiRequest (401-retry + back-off window).
+        $data = $this->GoogleApiRequest('GET', '/tasks/v1/users/@me/lists');
+        if ($data === null) {
             return [];
         }
 
@@ -258,7 +282,9 @@ class ToDoGateway extends IPSModuleStrict
 
         $tenant = $this->MicrosoftGetTenant();
         $redirectUri = $this->OAuthGetRedirectUri('/hook/todogateway_microsoft/');
-        $state = $this->InstanceID . '_' . bin2hex(random_bytes(8));
+        $state = $this->InstanceID . '_' . bin2hex(random_bytes(16));
+        // R5: persist for one-time validation in ProcessHookData (login-CSRF protection).
+        $this->WriteAttributeString('MicrosoftOAuthState', json_encode(['state' => $state, 'expires' => time() + 600]));
 
         $params = [
             'client_id' => $clientId,
@@ -322,20 +348,15 @@ class ToDoGateway extends IPSModuleStrict
 
     public function MicrosoftTestConnection(): bool
     {
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
+        if (!$this->MicrosoftIsConnected()) {
             echo $this->Translate('Not connected to Microsoft. Please authorize first.');
             return false;
         }
 
-        $response = $this->OAuthHttpRequest('GET', 'https://graph.microsoft.com/v1.0/me/todo/lists', [], null, true, 'MicrosoftToDo', $token);
-        if ($response === null) {
-            echo $this->Translate('Connection failed');
-            return false;
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data) || isset($data['error'])) {
+        // R18: routed through MicrosoftApiRequest so the 401-retry and the back-off window
+        // apply here too (the raw helper bypassed both).
+        $data = $this->MicrosoftApiRequest('GET', '/me/todo/lists');
+        if ($data === null) {
             echo $this->Translate('Connection failed');
             return false;
         }
@@ -353,15 +374,28 @@ class ToDoGateway extends IPSModuleStrict
         echo $this->Translate('Disconnected from Microsoft.');
     }
 
-    public function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
+    public function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
-        $url = 'https://graph.microsoft.com/v1.0' . $Endpoint;
-        $token = $this->MicrosoftGetValidAccessToken();
-        $response = $this->OAuthHttpRequest($Method, $url, [], is_array($Body) ? json_encode($Body) : $Body, true, 'MicrosoftToDo', $token);
-        if ($response === null) {
+        $tenant = $this->MicrosoftGetTenant();
+        // Follow opaque absolute Graph URLs (@odata.nextLink / @odata.deltaLink) verbatim;
+        // otherwise treat $Endpoint as a path relative to the v1.0 base.
+        $url = (strncmp($Endpoint, 'https://', 8) === 0 || strncmp($Endpoint, 'http://', 7) === 0)
+            ? $Endpoint
+            : 'https://graph.microsoft.com/v1.0' . $Endpoint;
+        $meta = $this->OAuthAuthorizedRequest(
+            $Method, $url, $Body,
+            'MKey', 'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
+            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
+            trim($this->ReadPropertyString('MicrosoftClientID')),
+            trim($this->ReadPropertyString('MicrosoftClientSecret')),
+            'MicrosoftToDo',
+            'offline_access Tasks.ReadWrite', $Headers, 'MicrosoftRetryAfter'
+        );
+        if ($meta === null) {
             return null;
         }
 
+        $response = (string)($meta['body'] ?? '');
         if (trim($response) === '') {
             return [];
         }
@@ -380,20 +414,29 @@ class ToDoGateway extends IPSModuleStrict
         return $data;
     }
 
+    public function MicrosoftApiStatus(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): int
+    {
+        $tenant = $this->MicrosoftGetTenant();
+        $url = (strncmp($Endpoint, 'https://', 8) === 0 || strncmp($Endpoint, 'http://', 7) === 0)
+            ? $Endpoint
+            : 'https://graph.microsoft.com/v1.0' . $Endpoint;
+        $meta = $this->OAuthAuthorizedRequest(
+            $Method, $url, $Body,
+            'MKey', 'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
+            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
+            trim($this->ReadPropertyString('MicrosoftClientID')),
+            trim($this->ReadPropertyString('MicrosoftClientSecret')),
+            'MicrosoftToDo',
+            'offline_access Tasks.ReadWrite', $Headers, 'MicrosoftRetryAfter'
+        );
+        return $meta === null ? 0 : (int)($meta['status'] ?? 0);
+    }
+
     public function MicrosoftFetchLists(): array
     {
-        $token = $this->MicrosoftGetValidAccessToken();
-        if ($token === '') {
-            return [];
-        }
-
-        $response = $this->OAuthHttpRequest('GET', 'https://graph.microsoft.com/v1.0/me/todo/lists', [], null, true, 'MicrosoftToDo', $token);
-        if ($response === null) {
-            return [];
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
+        // R18: routed through MicrosoftApiRequest (401-retry + back-off window).
+        $data = $this->MicrosoftApiRequest('GET', '/me/todo/lists');
+        if ($data === null) {
             return [];
         }
 
@@ -462,6 +505,12 @@ class ToDoGateway extends IPSModuleStrict
 
     public function CalDAVRequest(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
     {
+        // A2: honor an active back-off window without hitting the server.
+        if ($this->OAuthIsThrottled('CalDAVRetryAfter')) {
+            $this->SendDebug('CalDAV', 'Skipped – backing off until ' . date('H:i:s', $this->ReadAttributeInteger('CalDAVRetryAfter')), 0);
+            return ['status' => 429, 'body' => '', 'headers' => [], 'url' => $Url];
+        }
+
         $maxRedirects = 5;
         $currentUrl = $Url;
 
@@ -477,6 +526,10 @@ class ToDoGateway extends IPSModuleStrict
                     'header' => $reqHeaders,
                     'content' => $Body,
                     'ignore_errors' => true,
+                    // R15: PHP's wrapper must not auto-follow — otherwise a redirected
+                    // PUT/DELETE executes twice (auto-follow + this manual loop) and the
+                    // parsed status belongs to the first response of the chain.
+                    'follow_location' => 0,
                     'timeout' => $Timeout
                 ]
             ];
@@ -491,8 +544,18 @@ class ToDoGateway extends IPSModuleStrict
                 if ($location === '') {
                     break;
                 }
-                $currentUrl = $this->ResolveUrl($currentUrl, $location);
+                $nextUrl = $this->ResolveUrl($currentUrl, $location);
+                // R15: never follow to a different host — the Basic credentials would leak.
+                if ((parse_url($nextUrl, PHP_URL_HOST) ?: '') !== (parse_url($currentUrl, PHP_URL_HOST) ?: '')) {
+                    $this->SendDebug('CalDAV', 'Refusing cross-host redirect to ' . $nextUrl, 0);
+                    break;
+                }
+                $currentUrl = $nextUrl;
                 continue;
+            }
+
+            if (in_array($statusCode, [429, 503, 504], true)) {
+                $this->OAuthNoteThrottle('CalDAVRetryAfter', $respHeaders, 'CalDAV');
             }
 
             return [
@@ -706,6 +769,7 @@ class ToDoGateway extends IPSModuleStrict
 
         $code = $_GET['code'] ?? '';
         $error = $_GET['error'] ?? '';
+        $state = (string)($_GET['state'] ?? '');
 
         if ($error !== '') {
             echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . htmlspecialchars($error) . '</p></body></html>';
@@ -714,6 +778,20 @@ class ToDoGateway extends IPSModuleStrict
 
         if ($code === '') {
             echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . $this->Translate('Please try again.') . '</p></body></html>';
+            return;
+        }
+
+        // R5: one-time state validation (RFC 6749 §10.12). Without it a forged callback could
+        // bind an attacker's account to this gateway (login CSRF) and all local items would
+        // silently sync into the attacker's list.
+        $stateAttr = $isGoogle ? 'GoogleOAuthState' : 'MicrosoftOAuthState';
+        $stored = json_decode((string)$this->ReadAttributeString($stateAttr), true);
+        $storedState = is_array($stored) ? (string)($stored['state'] ?? '') : '';
+        $storedExpires = is_array($stored) ? (int)($stored['expires'] ?? 0) : 0;
+        $this->WriteAttributeString($stateAttr, ''); // consume — a state is valid exactly once
+        if ($storedState === '' || $state === '' || !hash_equals($storedState, $state) || time() > $storedExpires) {
+            $this->SendDebug('OAuth', 'Callback rejected: state missing/mismatched/expired', 0);
+            echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . $this->Translate('Invalid or expired authorization state. Please start the authorization again from the gateway form.') . '</p></body></html>';
             return;
         }
 

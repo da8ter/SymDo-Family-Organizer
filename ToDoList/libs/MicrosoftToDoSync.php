@@ -11,14 +11,23 @@ trait MicrosoftToDoSync
         $this->SyncUpdateTimer('microsoft', 'MicrosoftToDoSyncTimer', $this->ReadPropertyInteger('MicrosoftSyncInterval'), $hasToken);
     }
 
-    private function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null): ?array
+    private function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
             $this->SendDebug('MicrosoftToDo', 'No ToDoGateway connected', 0);
             return null;
         }
-        return TGW_MicrosoftApiRequest($gw, $Method, $Endpoint, $Body);
+        return TGW_MicrosoftApiRequest($gw, $Method, $Endpoint, $Body, $Headers);
+    }
+
+    private function MicrosoftApiStatus(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): int
+    {
+        $gw = $this->GetGatewayID();
+        if ($gw === 0) {
+            return 0;
+        }
+        return TGW_MicrosoftApiStatus($gw, $Method, $Endpoint, $Body, $Headers);
     }
 
     public function MicrosoftRefreshListOptions(): void
@@ -126,6 +135,7 @@ trait MicrosoftToDoSync
             'MicrosoftLastSync',
             'MicrosoftPendingDeletes'
         );
+        $this->WriteAttributeString('MicrosoftDeltaLink', ''); // A1: force a fresh full delta next sync
     }
 
     private function MicrosoftToDoSyncInternal(): bool
@@ -149,17 +159,52 @@ trait MicrosoftToDoSync
 
         $this->SendDebug('MicrosoftToDo', 'Starting sync...', 0);
 
-        $pendingDeletes = json_decode((string)$this->ReadAttributeString('MicrosoftPendingDeletes'), true);
-        if (!is_array($pendingDeletes)) {
-            $pendingDeletes = [];
+        // A1: use a Graph delta probe to detect whether anything changed on the server since
+        // our stored cursor. When the server is idle and there is nothing local to push, skip
+        // the full fetch+merge. Any change — or a probe error — falls through to the full,
+        // deletion-safe fetch below (delta is only ever used as a change signal here, never to
+        // drive a partial merge, so it cannot delete or duplicate tasks).
+        $deltaLink = $this->ReadAttributeString('MicrosoftDeltaLink');
+        $probe = $this->MicrosoftDeltaProbe($listId, $deltaLink);
+        if ($probe !== null && $probe['deltaLink'] !== '' && $deltaLink !== '' && !$probe['hasChanges'] && !$this->MicrosoftHasPendingWork()) {
+            if ($probe['deltaLink'] !== '') {
+                $this->WriteAttributeString('MicrosoftDeltaLink', $probe['deltaLink']);
+            }
+            $this->WriteAttributeInteger('MicrosoftLastSync', time());
+            $this->SendDebug('MicrosoftToDo', 'No server changes and nothing local – skipping full sync', 0);
+            return true;
         }
-        $this->SyncProcessPendingDeletes($pendingDeletes, fn($id) => $this->MicrosoftDeleteTask($listId, $id), 'MicrosoftToDo');
-        $this->WriteAttributeString('MicrosoftPendingDeletes', json_encode($pendingDeletes, JSON_UNESCAPED_SLASHES));
 
         $serverTasks = $this->MicrosoftFetchTasks($listId);
         if ($serverTasks === null) {
             $this->SendDebug('MicrosoftToDo', 'Failed to fetch tasks from Microsoft', 0);
             return false;
+        }
+
+        // A3/Fresh-ETag: process pending server-deletes AFTER the fetch and condition the
+        // DELETE on this run's etag instead of the (possibly stale) tombstone etag — a
+        // spurious 412 would drop the tombstone and resurrect the task locally.
+        $pendingDeletes = json_decode((string)$this->ReadAttributeString('MicrosoftPendingDeletes'), true);
+        if (!is_array($pendingDeletes)) {
+            $pendingDeletes = [];
+        }
+        if (count($pendingDeletes) > 0) {
+            $etagById = [];
+            foreach ($serverTasks as $st) {
+                $tid = (string)($st['microsoftTaskId'] ?? '');
+                if ($tid !== '' && ($st['microsoftEtag'] ?? '') !== '') {
+                    $etagById[$tid] = (string)$st['microsoftEtag'];
+                }
+            }
+            $beforeKeys = array_keys($pendingDeletes);
+            $this->SyncProcessPendingDeletes($pendingDeletes, fn($id, $etag) => $this->MicrosoftDeleteTask($listId, $id, $etagById[$id] ?? $etag), 'MicrosoftToDo');
+            $this->WriteAttributeString('MicrosoftPendingDeletes', json_encode($pendingDeletes, JSON_UNESCAPED_SLASHES));
+            // The fetch snapshot predates these deletes — drop resolved ones so the merge does
+            // not reimport what was just deleted (a 412-kept server version reimports next run).
+            $resolved = array_diff($beforeKeys, array_keys($pendingDeletes));
+            if (count($resolved) > 0) {
+                $serverTasks = array_values(array_filter($serverTasks, fn($st) => !in_array((string)($st['microsoftTaskId'] ?? ''), $resolved, true)));
+            }
         }
 
         $localItems = $this->LoadItems();
@@ -179,16 +224,24 @@ trait MicrosoftToDoSync
                         $items[$i]['microsoftTaskId'] = $newId;
                         $items[$i]['microsoftEtag'] = $uploadResult['etag'];
                         $items[$i]['microsoftSynced'] = $now;
+                        $items[$i]['microsoftServerSynced'] = (int)($uploadResult['updated'] ?? 0); // A5 baseline from write response
                         $items[$i]['localModified'] = 0;
                         break;
                     }
                 }
+                // Persist the freshly assigned server id immediately. If a later upload
+                // in this loop throws, the next run must not re-POST this item (which
+                // would create a server-side duplicate). Lightweight write only — the
+                // full SaveItems() with side effects still runs once at the end.
+                $this->WriteAttributeString('Items', json_encode($items));
                 $this->SendDebug('MicrosoftToDo', 'Uploaded: ' . ($uploadItem['title'] ?? $newId), 0);
             }
         }
 
         foreach ($items as &$item) {
-            if (!empty($item['microsoftTaskId']) && ($item['microsoftSynced'] ?? 0) === 0) {
+            $mid = (string)($item['microsoftTaskId'] ?? '');
+            // R4: never stamp a failed create (pending_) as synced — it still awaits upload.
+            if ($mid !== '' && strpos($mid, 'pending_') !== 0 && ($item['microsoftSynced'] ?? 0) === 0) {
                 $item['microsoftSynced'] = $now;
             }
         }
@@ -196,10 +249,83 @@ trait MicrosoftToDoSync
 
         $this->SaveItems($items);
         $this->WriteAttributeInteger('MicrosoftLastSync', $now);
+        // A1: store the delta cursor captured by the probe. (It predates this run's uploads,
+        // so the next run may still do one full fetch before idle-skips resume — harmless, as
+        // A5's server-timestamp baseline stops our own writes from being seen as conflicts.)
+        if ($probe !== null && $probe['deltaLink'] !== '') {
+            $this->WriteAttributeString('MicrosoftDeltaLink', $probe['deltaLink']);
+        }
         $this->SyncPostComplete();
 
         $this->SendDebug('MicrosoftToDo', 'Sync completed', 0);
         return true;
+    }
+
+    /**
+     * A1: traverse the Graph delta collection only to count how many entries changed and to
+     * capture the next @odata.deltaLink. Used purely as a change-probe — the actual sync still
+     * runs the full fetch + deletion-safe merge. Returns ['hasChanges'=>bool,'deltaLink'=>str]
+     * or null on transport failure. A stored deltaLink that the server rejects (e.g. expired,
+     * HTTP 410) transparently restarts from a full delta.
+     */
+    private function MicrosoftDeltaProbe(string $ListId, string $DeltaLink): ?array
+    {
+        $fullEndpoint = '/me/todo/lists/' . urlencode($ListId) . '/tasks/delta';
+        $endpoint = $DeltaLink !== '' ? $DeltaLink : $fullEndpoint;
+        $changes = 0;
+        $newDeltaLink = '';
+        $triedFallback = false;
+
+        for ($page = 0; $page < 2000; $page++) {
+            $data = $this->MicrosoftApiRequest('GET', $endpoint);
+            if ($data === null) {
+                if (!$triedFallback && $endpoint !== $fullEndpoint) {
+                    // Stored delta link no longer accepted (typically 410 Gone) → start over
+                    // from a fresh full delta so we still get a valid cursor.
+                    $this->SendDebug('MicrosoftToDo', 'Delta link rejected – restarting full delta', 0);
+                    $triedFallback = true;
+                    $endpoint = $fullEndpoint;
+                    $changes = 0;
+                    continue;
+                }
+                return null;
+            }
+
+            $changes += count($data['value'] ?? []);
+
+            $next = (string)($data['@odata.nextLink'] ?? '');
+            if ($next !== '') {
+                $endpoint = $next; // opaque absolute URL, followed verbatim by the gateway
+                continue;
+            }
+            $newDeltaLink = (string)($data['@odata.deltaLink'] ?? '');
+            break;
+        }
+
+        // After a full-delta fallback we cannot trust the incremental change count, so force a
+        // full sync by reporting changes.
+        return [
+            'hasChanges' => $triedFallback ? true : ($changes > 0),
+            'deltaLink' => $newDeltaLink
+        ];
+    }
+
+    private function MicrosoftHasPendingWork(): bool
+    {
+        $pending = json_decode((string)$this->ReadAttributeString('MicrosoftPendingDeletes'), true);
+        if (is_array($pending) && count($pending) > 0) {
+            return true;
+        }
+        foreach ($this->LoadItems() as $it) {
+            $id = (string)($it['microsoftTaskId'] ?? '');
+            if ($id === '' || strpos($id, 'pending_') === 0) {
+                return true; // new/unsynced local item awaiting upload
+            }
+            if ((int)($it['localModified'] ?? 0) >= (int)($it['microsoftSynced'] ?? 0) && (int)($it['localModified'] ?? 0) > 0) {
+                return true; // locally edited since last sync (>= catches same-second edits)
+            }
+        }
+        return false;
     }
 
     private function MicrosoftFetchTasks(string $ListId): ?array
@@ -214,15 +340,19 @@ trait MicrosoftToDoSync
             foreach ($data['value'] ?? [] as $task) {
                 $all[] = $this->MicrosoftTaskToLocal($task);
             }
-            $next = $data['@odata.nextLink'] ?? '';
+            $next = (string)($data['@odata.nextLink'] ?? '');
             if ($next === '') {
                 break;
             }
-            $pos = strpos($next, '/v1.0');
-            if ($pos === false) {
-                break;
+            // R1: nextLink is an opaque absolute URL — follow it verbatim (the gateway passes
+            // absolute URLs through unchanged, same as the delta probe). Never return a partial
+            // list on an unusable link: the absence-based merge would treat every task beyond
+            // the fetched pages as deleted on the server.
+            if (strncmp($next, 'https://', 8) !== 0 && strncmp($next, 'http://', 7) !== 0) {
+                $this->SendDebug('MicrosoftToDo', 'Unusable nextLink – aborting fetch', 0);
+                return null;
             }
-            $endpoint = substr($next, $pos + 4);
+            $endpoint = $next;
         }
         return $all;
     }
@@ -343,11 +473,65 @@ trait MicrosoftToDoSync
         return $best ?? $Default;
     }
 
+    /**
+     * B3: true when the item's local recurrence is semantically the same pattern as the raw
+     * server recurrence (ignoring the due-date/startDate, which moves on every completion of
+     * the series). Used to OMIT 'recurrence' from PATCH bodies — Graph rejects recurrence
+     * writes on update, and omitting preserves the server pattern including details the
+     * local model cannot represent ("Mo+We+Fr", "2nd Tuesday", series end).
+     */
+    private function MicrosoftRecurrencePatternUnchanged(array $Item): bool
+    {
+        $raw = $Item['microsoftRecurrenceRaw'] ?? null;
+        if (!is_array($raw)) {
+            return false;
+        }
+        $due = (int)($Item['due'] ?? 0);
+        if ($due <= 0) {
+            return false;
+        }
+        $parsed = $this->MicrosoftParseRecurrence($raw, $due);
+        $itemRec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
+        $sameRec = $this->NormalizeRecurrence($parsed['recurrence'], $due) === $itemRec;
+        $sameCustom = $itemRec !== 'custom'
+            || (($parsed['recurrenceCustomUnit'] ?? 'w') === ($Item['recurrenceCustomUnit'] ?? 'w')
+                && (int)($parsed['recurrenceCustomValue'] ?? 1) === (int)($Item['recurrenceCustomValue'] ?? 1));
+        return $sameRec && $sameCustom;
+    }
+
     private function MicrosoftBuildRecurrence(array $Item): ?array
     {
         $due = (int)($Item['due'] ?? 0);
         if ($due <= 0) {
             return null;
+        }
+
+        // B1: if this recurrence came from the server and the user has NOT changed it locally,
+        // re-send the original server pattern verbatim. This preserves patterns the local model
+        // cannot represent (multi-day weekly, "2nd Tuesday", …) instead of overwriting them with
+        // a lossy rebuild. Only when the user actually edited the recurrence do we rebuild.
+        $raw = $Item['microsoftRecurrenceRaw'] ?? null;
+        if (is_array($raw)) {
+            $rawStart = (string)($raw['range']['startDate'] ?? '');
+            // R21: startDate is expressed in range.recurrenceTimeZone — compare the due date
+            // in THAT zone, not in UTC, or a due near midnight makes an unchanged recurrence
+            // look edited and triggers the lossy rebuild below.
+            $rawTz = $this->MicrosoftWindowsToIana((string)($raw['range']['recurrenceTimeZone'] ?? 'UTC'));
+            try {
+                $dueDateInZone = (new DateTime('@' . $due))->setTimezone(new DateTimeZone($rawTz))->format('Y-m-d');
+            } catch (Exception $e) {
+                $dueDateInZone = gmdate('Y-m-d', $due);
+            }
+            $dueMatches = ($rawStart === '' || $rawStart === $dueDateInZone); // due not moved
+            $parsed = $this->MicrosoftParseRecurrence($raw, $due);
+            $itemRec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
+            $sameRec = $this->NormalizeRecurrence($parsed['recurrence'], $due) === $itemRec;
+            $sameCustom = $itemRec !== 'custom'
+                || (($parsed['recurrenceCustomUnit'] ?? 'w') === ($Item['recurrenceCustomUnit'] ?? 'w')
+                    && (int)($parsed['recurrenceCustomValue'] ?? 1) === (int)($Item['recurrenceCustomValue'] ?? 1));
+            if ($dueMatches && $sameRec && $sameCustom) {
+                return $raw;
+            }
         }
 
         $rec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
@@ -461,6 +645,15 @@ trait MicrosoftToDoSync
             }
             return ['recurrence' => 'custom', 'recurrenceCustomUnit' => 'y', 'recurrenceCustomValue' => $interval];
         }
+        // B1: relative patterns ("2nd Tuesday of the month") cannot be represented exactly by
+        // the local model — approximate them to monthly/quarterly/yearly for display. The exact
+        // pattern is preserved on the server via the raw-recurrence round-trip in build.
+        if ($type === 'relativemonthly') {
+            return ['recurrence' => $interval === 3 ? 'q1' : 'm1', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
+        if ($type === 'relativeyearly') {
+            return ['recurrence' => 'y1', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
 
         return $default;
     }
@@ -516,7 +709,8 @@ trait MicrosoftToDoSync
             'notificationLeadTime' => $notificationLeadTime,
             'recurrence' => $recurrence,
             'recurrenceCustomUnit' => $recurrenceCustomUnit,
-            'recurrenceCustomValue' => $recurrenceCustomValue
+            'recurrenceCustomValue' => $recurrenceCustomValue,
+            'microsoftRecurrenceRaw' => is_array($Task['recurrence'] ?? null) ? $Task['recurrence'] : null // B1
         ];
     }
 
@@ -586,7 +780,9 @@ trait MicrosoftToDoSync
         $Local['recurrence'] = $Server['recurrence'] ?? ($Local['recurrence'] ?? 'none');
         $Local['recurrenceCustomUnit'] = $Server['recurrenceCustomUnit'] ?? ($Local['recurrenceCustomUnit'] ?? 'w');
         $Local['recurrenceCustomValue'] = $Server['recurrenceCustomValue'] ?? ($Local['recurrenceCustomValue'] ?? 1);
+        $Local['microsoftRecurrenceRaw'] = $Server['microsoftRecurrenceRaw'] ?? null; // B1: keep raw server pattern
         $Local['microsoftEtag'] = $Server['microsoftEtag'];
+        $Local['microsoftServerSynced'] = (int)($Server['microsoftUpdated'] ?? 0); // A5 baseline
         $Local['localModified'] = 0;
     }
 
@@ -603,10 +799,42 @@ trait MicrosoftToDoSync
 
         $processedIds = [];
 
+        // IDs already owned by a local item via a real (non-pending) mapping.
+        // These must never be adopted by the title-based self-healing below.
+        $localOwnedIds = [];
+        foreach ($LocalItems as $li) {
+            $lid = (string)($li['microsoftTaskId'] ?? '');
+            if ($lid !== '' && strpos($lid, 'pending_') !== 0) {
+                $localOwnedIds[$lid] = true;
+            }
+        }
+
         foreach ($LocalItems as &$local) {
             $taskId = $local['microsoftTaskId'] ?? '';
 
             if ($taskId === '') {
+                // Self-healing: an item without a Microsoft mapping is normally uploaded
+                // as a new task. But if it lost its mapping (e.g. legacy data), that would
+                // create a duplicate. First try to re-link it to an existing server task
+                // with the same title. Only adopts on a single, unambiguous match.
+                $adoptId = $this->MicrosoftFindServerMatchByTitle($local, $serverById, $processedIds, $localOwnedIds);
+                if ($adoptId !== null) {
+                    $processedIds[$adoptId] = true;
+                    $local['microsoftTaskId'] = $adoptId;
+                    $server = $serverById[$adoptId];
+                    $localMod = (int)($local['localModified'] ?? 0);
+                    $lastSynced = (int)($local['microsoftSynced'] ?? 0);
+                    if ($localMod >= $lastSynced && $localMod > 0) { // >= catches same-second edits
+                        // Local has genuine unsynced edits: push them to the existing task.
+                        $toUpload[] = $local;
+                    } else {
+                        // Otherwise take the server state as source of truth.
+                        $this->MicrosoftApplyServerToLocal($local, $server);
+                    }
+                    $this->SendDebug('MicrosoftToDo', 'Re-linked by title: ' . ($local['title'] ?? $adoptId), 0);
+                    continue;
+                }
+
                 $newId = 'pending_' . $this->InstanceID . '_' . ($local['id'] ?? uniqid());
                 $local['microsoftTaskId'] = $newId;
                 $local['localModified'] = time();
@@ -619,7 +847,7 @@ trait MicrosoftToDoSync
             if (!isset($serverById[$taskId])) {
                 $lastSynced = (int)($local['microsoftSynced'] ?? 0);
                 $localMod = (int)($local['localModified'] ?? 0);
-                $localChanged = $localMod > $lastSynced;
+                $localChanged = $localMod >= $lastSynced && $localMod > 0; // >= catches same-second edits
 
                 if (strpos($taskId, 'pending_') !== 0) {
                     if ($ConflictMode === 'local_wins' && $localChanged) {
@@ -630,6 +858,11 @@ trait MicrosoftToDoSync
                     } else {
                         $local['_microsoftDeleted'] = true;
                     }
+                } else {
+                    // R4: a create that failed earlier (throttle window, timeout, 5xx) left the
+                    // item stranded on its pending_ id — requeue the upload instead of skipping
+                    // it forever.
+                    $toUpload[] = $local;
                 }
                 continue;
             }
@@ -638,19 +871,32 @@ trait MicrosoftToDoSync
             $localMod = (int)($local['localModified'] ?? 0);
             $serverMod = (int)($server['microsoftUpdated'] ?? 0);
             $lastSynced = (int)($local['microsoftSynced'] ?? 0);
+            // A5: detect a server change by comparing the server timestamp against the server
+            // timestamp we last stored (server-vs-server). Comparing it against our local
+            // last-sync time would let a host/server clock offset hide a real server edit.
+            $serverSynced = (int)($local['microsoftServerSynced'] ?? $serverMod);
 
-            $localChanged = $localMod > $lastSynced;
-            $serverChanged = $serverMod > $lastSynced;
+            $localChanged = $localMod >= $lastSynced && $localMod > 0; // >= catches same-second edits
+            $serverChanged = $serverMod > $serverSynced;
 
             if ($localChanged && $serverChanged) {
                 $localWins = ($ConflictMode === 'local_wins') || ($ConflictMode === 'newest_wins' && $localMod > $serverMod);
 
                 if ($localWins) {
+                    // A3: adopt the server's current ETag so the intended overwrite matches
+                    // the If-Match precondition instead of being rejected as 412 forever.
+                    $local['microsoftEtag'] = $server['microsoftEtag'] ?? ($local['microsoftEtag'] ?? '');
                     $toUpload[] = $local;
                 } else {
                     $this->MicrosoftApplyServerToLocal($local, $server);
                 }
             } elseif ($localChanged) {
+                // Fresh-ETag: condition the PATCH on THIS run's fetch, not on the last sync's
+                // snapshot — a stored etag can go stale without a server content change (at
+                // Google sibling inserts bump etags; defensive parity here for Graph).
+                if (($server['microsoftEtag'] ?? '') !== '') {
+                    $local['microsoftEtag'] = $server['microsoftEtag'];
+                }
                 $toUpload[] = $local;
             } else {
                 $this->MicrosoftApplyServerToLocal($local, $server);
@@ -711,9 +957,11 @@ trait MicrosoftToDoSync
                 'recurrenceCustomUnit' => $recurrenceCustomUnit,
                 'recurrenceCustomValue' => $recurrenceCustomValue,
                 'recurrenceResetLeadTime' => $recurrenceResetLeadTime,
+                'microsoftRecurrenceRaw' => $server['microsoftRecurrenceRaw'] ?? null, // B1
                 'microsoftTaskId' => $gid,
                 'microsoftEtag' => $server['microsoftEtag'],
                 'microsoftSynced' => time(),
+                'microsoftServerSynced' => (int)($server['microsoftUpdated'] ?? 0), // A5 baseline
                 'localModified' => 0
             ];
             $LocalItems[] = $newItem;
@@ -725,6 +973,54 @@ trait MicrosoftToDoSync
         ];
     }
 
+    /**
+     * Find a server task that matches the given local item by title, used to
+     * re-link items that lost their Microsoft mapping instead of creating a
+     * duplicate. Returns the matching microsoftTaskId, or null when there is no
+     * match or the match is ambiguous (more than one candidate with that title).
+     */
+    private function MicrosoftFindServerMatchByTitle(array $Local, array $ServerById, array $ProcessedIds, array $OwnedIds): ?string
+    {
+        $title = $this->MicrosoftNormalizeTitle((string)($Local['title'] ?? ''));
+        if ($title === '') {
+            return null;
+        }
+
+        $match = null;
+        foreach ($ServerById as $gid => $server) {
+            if (isset($ProcessedIds[$gid]) || isset($OwnedIds[$gid])) {
+                continue;
+            }
+            if ($this->MicrosoftNormalizeTitle((string)($server['title'] ?? '')) !== $title) {
+                continue;
+            }
+            if ($match !== null) {
+                return null; // ambiguous — do not guess
+            }
+            $match = $gid;
+        }
+        return $match;
+    }
+
+    private function MicrosoftNormalizeTitle(string $Title): string
+    {
+        $t = trim($Title);
+        return function_exists('mb_strtolower') ? mb_strtolower($t) : strtolower($t);
+    }
+
+    private function MicrosoftParseLastModified(mixed $Value): int
+    {
+        $s = (string)($Value ?? '');
+        if ($s === '') {
+            return 0;
+        }
+        try {
+            return (new DateTime($s, new DateTimeZone('UTC')))->getTimestamp();
+        } catch (Exception $e) {
+            return strtotime($s) ?: 0;
+        }
+    }
+
     private function MicrosoftUploadTask(string $ListId, array $Item): array
     {
         $taskId = $Item['microsoftTaskId'] ?? '';
@@ -733,53 +1029,112 @@ trait MicrosoftToDoSync
         if ($taskId === '' || strpos($taskId, 'pending_') === 0) {
             $res = $this->MicrosoftApiRequest('POST', '/me/todo/lists/' . urlencode($ListId) . '/tasks', $data);
             if ($res === null) {
-                return ['success' => false, 'oldId' => $taskId, 'newId' => '', 'etag' => ''];
+                return ['success' => false, 'oldId' => $taskId, 'newId' => '', 'etag' => '', 'updated' => 0];
             }
             return [
                 'success' => true,
                 'oldId' => $taskId,
                 'newId' => $res['id'] ?? '',
-                'etag' => $res['@odata.etag'] ?? ''
+                'etag' => $res['@odata.etag'] ?? '',
+                'updated' => $this->MicrosoftParseLastModified($res['lastModifiedDateTime'] ?? null)
             ];
         }
 
         $due = (int)($Item['due'] ?? 0);
+        $rec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
+        $hadServerRecurrence = is_array($Item['microsoftRecurrenceRaw'] ?? null);
         if ($due <= 0) {
             $data['dueDateTime'] = null;
-            $data['recurrence'] = null;
             $data['isReminderOn'] = false;
             $data['reminderDateTime'] = null;
+            if ($hadServerRecurrence) {
+                $data['recurrence'] = null; // recurrence removed together with the due date
+            } else {
+                unset($data['recurrence']);
+            }
         } else {
             if (empty($Item['notification'])) {
                 $data['isReminderOn'] = false;
                 $data['reminderDateTime'] = null;
             }
-            $rec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
-            $data['recurrence'] = $rec === 'none' ? null : $this->MicrosoftBuildRecurrence($Item);
+            // B3: Graph rejects ANY 'recurrence' object in a PATCH with 400 (verified live —
+            // even re-sending the server's own pattern verbatim fails). Omitting the property
+            // preserves the server-side pattern by PATCH semantics, which also covers the B1
+            // raw-round-trip goal. Only a genuine local pattern change is sent, with a
+            // recurrence-less retry below so the remaining fields still arrive.
+            if ($rec === 'none') {
+                if ($hadServerRecurrence) {
+                    $data['recurrence'] = null; // user removed the recurrence locally
+                } else {
+                    unset($data['recurrence']);
+                }
+            } elseif ($this->MicrosoftRecurrencePatternUnchanged($Item)) {
+                unset($data['recurrence']);
+            } else {
+                $data['recurrence'] = $this->MicrosoftBuildRecurrence($Item);
+            }
         }
 
-        $res = $this->MicrosoftApiRequest('PATCH', '/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($taskId), $data);
+        // B3: completing a recurring task locally advances the due date (the series rolls
+        // forward). Microsoft's native model for the same event is "task stays open at the
+        // next occurrence" — PATCHing status=completed would make Graph roll the series a
+        // second time. Represent the local roll as notStarted + the new due date.
+        if ($rec !== 'none' && !empty($Item['done'])) {
+            $data['status'] = 'notStarted';
+        }
+
+        // A3: optimistic concurrency — send If-Match so a task changed on the server since
+        // our last fetch yields a 412 (write fails, item stays dirty) instead of a silent
+        // lost update. The conflict is then reconciled on the next sync.
+        $etag = (string)($Item['microsoftEtag'] ?? '');
+        $headers = $etag !== '' ? ['If-Match: ' . $etag] : [];
+        $url = '/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($taskId);
+        $res = $this->MicrosoftApiRequest('PATCH', $url, $data, $headers);
+        if ($res === null && array_key_exists('recurrence', $data)) {
+            // B3 fallback: deliver the remaining fields even when Graph refuses the
+            // recurrence write; the server-side pattern stays authoritative and the local
+            // pattern is reconciled from the next fetch.
+            $this->SendDebug('MicrosoftToDo', 'PATCH with recurrence failed – retrying without recurrence', 0);
+            unset($data['recurrence']);
+            $res = $this->MicrosoftApiRequest('PATCH', $url, $data, $headers);
+        }
         return [
             'success' => $res !== null,
             'oldId' => $taskId,
             'newId' => $taskId,
-            'etag' => $res['@odata.etag'] ?? ''
+            'etag' => $res['@odata.etag'] ?? '',
+            'updated' => $this->MicrosoftParseLastModified($res['lastModifiedDateTime'] ?? null)
         ];
     }
 
-    private function MicrosoftDeleteTask(string $ListId, string $TaskId): bool
+    private function MicrosoftDeleteTask(string $ListId, string $TaskId, string $Etag = ''): bool
     {
         if ($TaskId === '' || strpos($TaskId, 'pending_') === 0) {
-            return true;
+            return true; // never persisted on the server → tombstone is done
         }
 
-        $data = $this->MicrosoftApiRequest('DELETE', '/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($TaskId));
-        return $data !== null;
+        // A3/DELETE: send If-Match so a task edited on the server since our last fetch is not
+        // blindly removed. '1' is the legacy tombstone value (no ETag) → unconditional delete.
+        $headers = ($Etag !== '' && $Etag !== '1') ? ['If-Match: ' . $Etag] : [];
+        $status = $this->MicrosoftApiStatus('DELETE', '/me/todo/lists/' . urlencode($ListId) . '/tasks/' . urlencode($TaskId), null, $headers);
+
+        if (($status >= 200 && $status < 300) || $status === 404) {
+            return true; // deleted, or already gone
+        }
+        if ($status === 412) {
+            // Concurrent server edit — give up the delete; the server version survives and is
+            // re-imported on the next full sync. Drop the tombstone so we don't loop on a stale ETag.
+            $this->SendDebug('MicrosoftToDo', 'Delete conflict (412) for ' . $TaskId . ' – keeping server version', 0);
+            return true;
+        }
+        // 0 (transport/throttle) or 5xx → transient, keep the tombstone and retry next sync.
+        $this->SendDebug('MicrosoftToDo', 'Delete not confirmed (HTTP ' . $status . ') for ' . $TaskId . ' – will retry', 0);
+        return false;
     }
 
-    private function AddMicrosoftPendingDelete(string $TaskId): void
+    private function AddMicrosoftPendingDelete(string $TaskId, string $Etag = ''): void
     {
-        $this->SyncAddPendingDelete($TaskId, 'pending_', 'MicrosoftPendingDeletes');
+        $this->SyncAddPendingDelete($TaskId, 'pending_', 'MicrosoftPendingDeletes', $Etag);
     }
 
     private function GetMicrosoftToDoStatusLabel(): string
