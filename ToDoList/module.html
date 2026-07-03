@@ -2000,6 +2000,15 @@
       const SLOP = 8;        // px before a gesture direction is decided
       const THRESHOLD = 70;  // px pull-left required to trigger delete
 
+      // Release the document-level listeners and reset gesture state.
+      const cleanup = () => {
+        active = false; decided = false; pointerId = null;
+        swipe.classList.remove('is-dragging');
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+      };
+
       const onDown = (e) => {
         if (e.target.closest('.drag-handle, .edit, .del, .chk')) return; // leave controls alone
         if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return;
@@ -2008,6 +2017,12 @@
         startX = e.clientX; startY = e.clientY; dx = 0;
         pointerId = e.pointerId;
         swipe.classList.add('is-dragging');
+        // Bind on document (not the element) so the release is caught even after the
+        // element has translated out from under the finger, and without relying on
+        // setPointerCapture() which is unreliable in some Symcon webviews.
+        document.addEventListener('pointermove', onMove, { passive: false });
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
       };
 
       const onMove = (e) => {
@@ -2016,10 +2031,16 @@
         const my = e.clientY - startY;
         if (!decided) {
           if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
-          if (Math.abs(my) >= Math.abs(mx)) { active = false; swipe.classList.remove('is-dragging'); return; }
+          if (Math.abs(my) >= Math.abs(mx) || mx > 0) {
+            // vertical scroll or rightward move — not a delete swipe, hand back to browser
+            swipe.style.transform = '';
+            item.classList.remove('swipe-armed');
+            cleanup();
+            return;
+          }
           decided = true;
-          try { swipe.setPointerCapture(pointerId); } catch (_) {}
         }
+        if (e.cancelable) e.preventDefault(); // keep the list from scrolling mid-swipe
         dx = Math.max(-swipe.offsetWidth, Math.min(0, mx)); // left only
         swipe.style.transform = `translateX(${dx}px)`;
         item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
@@ -2028,10 +2049,9 @@
       const onUp = () => {
         if (!active) return;
         const wasDecided = decided;
-        active = false; decided = false;
-        swipe.classList.remove('is-dragging');
-        try { swipe.releasePointerCapture(pointerId); } catch (_) {}
-        if (wasDecided && dx <= -THRESHOLD) {
+        const finalDx = dx;
+        cleanup();
+        if (wasDecided && finalDx <= -THRESHOLD) {
           item.classList.add('is-deleting');
           swipe.style.transform = 'translateX(-110%)';
           suppressClickUntil = Date.now() + 400;
@@ -2044,9 +2064,6 @@
       };
 
       swipe.addEventListener('pointerdown', onDown);
-      swipe.addEventListener('pointermove', onMove);
-      swipe.addEventListener('pointerup', onUp);
-      swipe.addEventListener('pointercancel', onUp);
     }
 
     function handleMessage(data) {
