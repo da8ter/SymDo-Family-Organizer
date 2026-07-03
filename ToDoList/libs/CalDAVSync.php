@@ -178,13 +178,20 @@ trait CalDAVSync
             $now = time();
 
             foreach ($result['toUpload'] as $uploadItem) {
-                $success = $this->CalDAVUploadItem($calendarUrl, $user, $pass, $uploadItem);
-                if ($success) {
+                $up = $this->CalDAVUploadItem($calendarUrl, $user, $pass, $uploadItem);
+                if ($up['ok']) {
                     $uid = $uploadItem['caldavUid'] ?? '';
                     for ($i = 0; $i < count($items); $i++) {
                         if (($items[$i]['caldavUid'] ?? '') === $uid) {
                             $items[$i]['caldavSynced'] = $now;
                             $items[$i]['localModified'] = 0;
+                            // Adopt the new ETag + the just-uploaded body as the in-sync base,
+                            // so the next merge builds on it and no phantom "server changed"
+                            // pass (or data-losing conflict) is triggered by a stale ETag.
+                            if ($up['etag'] !== '') {
+                                $items[$i]['caldavEtag'] = $up['etag'];
+                            }
+                            $items[$i]['caldavRaw'] = $up['vcal'];
                             break;
                         }
                     }
@@ -388,9 +395,11 @@ trait CalDAVSync
         // Two-way VALARM: capture the first relative DISPLAY alarm's lead time so an alarm set
         // in another client (Apple Reminders, Tasks.org, …) becomes a Symcon reminder.
         $valarmLead = null;
+        $markedLead = null; // lead from our own (marked) alarm — preferred, keeps round-trips stable
         $inValarm = false;
         $valarmTrigger = '';
         $valarmAction = '';
+        $valarmMarked = false;
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -403,12 +412,13 @@ trait CalDAVSync
             }
             // R9: nested components (VALARM etc.) must not have their DESCRIPTION/SUMMARY/UID
             // overwrite the task's own properties — they are skipped for the property map, but
-            // the first VALARM's TRIGGER is captured for the notification mapping.
+            // a DISPLAY VALARM's TRIGGER is captured for the notification mapping.
             if (strncmp($line, 'BEGIN:', 6) === 0) {
                 if ($nestedDepth === 0 && strcasecmp($line, 'BEGIN:VALARM') === 0) {
                     $inValarm = true;
                     $valarmTrigger = '';
                     $valarmAction = '';
+                    $valarmMarked = false;
                 }
                 $nestedDepth++;
                 continue;
@@ -419,10 +429,15 @@ trait CalDAVSync
                     if ($nestedDepth === 0 && $inValarm) {
                         // Only a DISPLAY alarm maps to a Symcon (display) notification — an
                         // EMAIL/AUDIO alarm is preserved but must not create a display reminder.
-                        if ($valarmLead === null && $valarmTrigger !== '' && strcasecmp($valarmAction, 'DISPLAY') === 0) {
+                        if ($valarmTrigger !== '' && strcasecmp($valarmAction, 'DISPLAY') === 0) {
                             $lead = $this->CalDAVTriggerToLead($valarmTrigger);
                             if ($lead !== null) {
-                                $valarmLead = $lead;
+                                if ($valarmMarked && $markedLead === null) {
+                                    $markedLead = $lead; // our own alarm wins
+                                }
+                                if ($valarmLead === null) {
+                                    $valarmLead = $lead; // first display alarm (marked or foreign)
+                                }
                             }
                         }
                         $inValarm = false;
@@ -437,6 +452,8 @@ trait CalDAVSync
                         $valarmTrigger = $line;
                     } elseif (stripos($line, 'ACTION:') === 0) {
                         $valarmAction = trim(substr($line, 7));
+                    } elseif (stripos($line, 'X-SYMCON-ALARM') === 0) {
+                        $valarmMarked = true;
                     }
                 }
                 continue;
@@ -469,7 +486,10 @@ trait CalDAVSync
             $priority = 'low';
         }
 
-        $notification = $valarmLead !== null;
+        // Prefer our own marked alarm's lead over a foreign one, so a Symcon-created reminder
+        // round-trips to the exact same lead time regardless of any additional foreign alarms.
+        $effectiveLead = $markedLead ?? $valarmLead;
+        $notification = $effectiveLead !== null;
 
         return [
             'caldavUid' => $props['UID'],
@@ -480,7 +500,7 @@ trait CalDAVSync
             'due' => $this->CalDAVParseDateTime($props['DUE'] ?? '', $tzids['DUE'] ?? ''),
             'priority' => $priority,
             'notification' => $notification,
-            'notificationLeadTime' => $notification ? $this->CalDAVNearestLeadTime($valarmLead) : 0,
+            'notificationLeadTime' => $notification ? $this->CalDAVNearestLeadTime($effectiveLead) : 0,
             'createdAt' => $this->CalDAVParseDateTime($props['CREATED'] ?? '', $tzids['CREATED'] ?? ''),
             'caldavLastModified' => $this->CalDAVParseDateTime($props['LAST-MODIFIED'] ?? '', $tzids['LAST-MODIFIED'] ?? ''),
             // Property-Preserving Merge: keep the full raw object so an upload replaces only the
@@ -713,11 +733,15 @@ trait CalDAVSync
         return $Local;
     }
 
-    private function CalDAVUploadItem(string $CalendarUrl, string $User, string $Pass, array $Item): bool
+    /**
+     * Uploads the item and returns ['ok'=>bool, 'etag'=>string, 'vcal'=>string]. The new ETag
+     * (from the PUT response) and the uploaded body let the caller record an in-sync base.
+     */
+    private function CalDAVUploadItem(string $CalendarUrl, string $User, string $Pass, array $Item): array
     {
         $uid = $Item['caldavUid'] ?? '';
         if ($uid === '') {
-            return false;
+            return ['ok' => false, 'etag' => '', 'vcal' => ''];
         }
 
         // Property-Preserving Merge: if we hold the raw server object, edit only the
@@ -725,6 +749,7 @@ trait CalDAVSync
         // (a locally created task) build a fresh VTODO.
         $raw = (string)($Item['caldavRaw'] ?? '');
         $vcal = $raw !== '' ? $this->CalDAVMergeVTodo($raw, $Item) : $this->CalDAVBuildVTodo($Item);
+        $fail = ['ok' => false, 'etag' => '', 'vcal' => $vcal];
         $href = $Item['caldavHref'] ?? '';
         if ($href !== '') {
             $itemUrl = $this->CalDAVResolveUrl($CalendarUrl, $href);
@@ -753,8 +778,45 @@ trait CalDAVSync
         $this->SendDebug('CalDAV Upload', 'Status: ' . $statusCode, 0);
         if ($statusCode < 200 || $statusCode >= 300) {
             $this->SendDebug('CalDAV Upload', 'Response: ' . (($res['body'] ?? '') ?: 'empty'), 0);
+            return $fail;
         }
-        return ($statusCode >= 200 && $statusCode < 300);
+        // Capture the new ETag so the next sync recognizes our own write instead of misreading
+        // a stale ETag as a foreign change (which under server_wins would overwrite a concurrent
+        // local edit → data loss, and otherwise causes churn). Prefer the PUT-response header;
+        // some servers omit it, so fall back to a targeted PROPFIND for the item's ETag.
+        $newEtag = $this->CalDAVExtractEtag($res['headers'] ?? []);
+        if ($newEtag === '') {
+            $newEtag = $this->CalDAVFetchItemEtag($itemUrl, $User, $Pass);
+        }
+        return ['ok' => true, 'etag' => $newEtag, 'vcal' => $vcal];
+    }
+
+    private function CalDAVExtractEtag(array $Headers): string
+    {
+        foreach ($Headers as $h) {
+            if (stripos((string)$h, 'ETag:') === 0) {
+                return $this->CalDAVNormalizeEtag(trim(substr((string)$h, 5)));
+            }
+        }
+        return '';
+    }
+
+    private function CalDAVFetchItemEtag(string $Url, string $User, string $Pass): string
+    {
+        $body = '<' . '?xml version="1.0" encoding="utf-8"?' . '>'
+            . '<d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>';
+        $res = $this->CalDAVGatewayRequest('PROPFIND', $Url, $User, $Pass, [
+            'Depth: 0',
+            'Content-Type: application/xml; charset=utf-8'
+        ], $body, 10);
+        $status = (int)($res['status'] ?? 0);
+        if ($status !== 207 && $status !== 200) {
+            return '';
+        }
+        if (preg_match('/<[a-z0-9]*:?getetag[^>]*>([^<]+)<\/[a-z0-9]*:?getetag>/i', (string)($res['body'] ?? ''), $m) === 1) {
+            return $this->CalDAVNormalizeEtag(trim($m[1]));
+        }
+        return '';
     }
 
     private function CalDAVDeleteItem(string $CalendarUrl, string $User, string $Pass, string $Uid, string $Href = '', string $Etag = ''): bool
@@ -944,12 +1006,23 @@ trait CalDAVSync
         $targets = [];
         $vtzToAdd = [];
 
+        // Per managed property: $valueOnly keeps SUMMARY/DESCRIPTION values whose parameters
+        // (LANGUAGE/ALTREP) are preserved from the original line; $targets holds full
+        // replacement lines (null = remove the property).
+        $valueOnly = [];
+        $targets = [];
+        $vtzToAdd = [];
+
         if ((string)($Item['title'] ?? '') !== (string)($snap['title'] ?? '')) {
-            $targets['SUMMARY'] = 'SUMMARY:' . $this->CalDAVEscapeText((string)($Item['title'] ?? ''));
+            $valueOnly['SUMMARY'] = $this->CalDAVEscapeText((string)($Item['title'] ?? ''));
         }
         if ((string)($Item['info'] ?? '') !== (string)($snap['info'] ?? '')) {
             $info = (string)($Item['info'] ?? '');
-            $targets['DESCRIPTION'] = $info === '' ? null : 'DESCRIPTION:' . $this->CalDAVEscapeText($info);
+            if ($info === '') {
+                $targets['DESCRIPTION'] = null;
+            } else {
+                $valueOnly['DESCRIPTION'] = $this->CalDAVEscapeText($info);
+            }
         }
         if ((bool)($Item['done'] ?? false) !== (bool)($snap['done'] ?? false)) {
             $done = (bool)($Item['done'] ?? false);
@@ -980,91 +1053,112 @@ trait CalDAVSync
             || ((int)($Item['notificationLeadTime'] ?? 0) !== (int)($snap['notificationLeadTime'] ?? 0));
 
         $tokens = $this->CalDAVTokenizeBody($body);
-        $out = [];
+        $props = []; // property lines — emitted BEFORE all components (RFC 5545 §3.6.2)
+        $comps = []; // component blocks (VALARM etc.), each an array of lines
         $seen = [];
-        $moduleAlarmHandled = false;
+        $ownAlarmSeen = false;
 
         foreach ($tokens as $tok) {
             if ($tok['type'] === 'prop') {
                 $name = $this->CalDAVPropName($tok['line']);
-                if ($name === 'DTSTAMP') {
-                    $out[] = 'DTSTAMP:' . $now;
-                    $seen['DTSTAMP'] = true;
-                    continue;
-                }
-                if ($name === 'LAST-MODIFIED') {
-                    $out[] = 'LAST-MODIFIED:' . $now;
-                    $seen['LAST-MODIFIED'] = true;
+                if ($name === 'DTSTAMP' || $name === 'LAST-MODIFIED') {
+                    if (empty($seen[$name])) {
+                        $props[] = $name . ':' . $now;
+                        $seen[$name] = true;
+                    }
                     continue;
                 }
                 if ($name === 'SEQUENCE') {
-                    $seq = (int)trim(substr($tok['line'], strpos($tok['line'], ':') + 1));
-                    $out[] = 'SEQUENCE:' . ($seq + 1);
-                    $seen['SEQUENCE'] = true;
+                    if (empty($seen['SEQUENCE'])) {
+                        $seq = (int)trim(substr($tok['line'], strpos($tok['line'], ':') + 1));
+                        $props[] = 'SEQUENCE:' . ($seq + 1);
+                        $seen['SEQUENCE'] = true;
+                    }
                     continue;
+                }
+                if (isset($valueOnly[$name])) {
+                    // Changed SUMMARY/DESCRIPTION → keep the original line's parameters.
+                    if (empty($seen[$name])) {
+                        $props[] = $this->CalDAVReplaceValue($tok['line'], $valueOnly[$name]);
+                        $seen[$name] = true;
+                    }
+                    continue; // duplicate occurrence in the raw → drop
                 }
                 if (array_key_exists($name, $targets)) {
-                    $seen[$name] = true;
-                    if ($targets[$name] !== null) {
-                        $out[] = $targets[$name];
-                    }
-                    continue;
-                }
-                $out[] = $tok['line']; // unmanaged, or unchanged-managed → preserve verbatim
-            } else {
-                if (strcasecmp($tok['name'], 'VALARM') === 0 && $notifChanged && $this->CalDAVIsModuleStyleAlarm($tok['lines'])) {
-                    // The reminder was changed locally → replace the module-style alarm once,
-                    // preserve any non-module alarms (EMAIL, absolute triggers).
-                    if (!$moduleAlarmHandled) {
-                        $moduleAlarmHandled = true;
-                        if ((bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
-                            $out = array_merge($out, $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? '')));
+                    if (empty($seen[$name])) {
+                        if ($targets[$name] !== null) {
+                            $props[] = $targets[$name];
                         }
+                        $seen[$name] = true;
                     }
-                    continue; // drop this (and any further) module-style alarm
+                    continue; // removed, or duplicate occurrence dropped
                 }
-                $out = array_merge($out, $tok['lines']); // preserve component verbatim
+                $props[] = $tok['line']; // unmanaged, or unchanged-managed → preserve verbatim
+            } else {
+                if (strcasecmp($tok['name'], 'VALARM') === 0 && $this->CalDAVIsOwnAlarm($tok['lines'])) {
+                    // Our own (marked) alarm — replace/remove only when the reminder changed;
+                    // foreign alarms fall through and are always preserved.
+                    if ($notifChanged) {
+                        if (!$ownAlarmSeen) {
+                            $ownAlarmSeen = true;
+                            if ((bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
+                                $comps[] = $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? ''));
+                            }
+                        }
+                        continue; // drop this (and any further) own alarm
+                    }
+                    $ownAlarmSeen = true; // unchanged → keep it (falls through to preserve)
+                }
+                $comps[] = $tok['lines'];
             }
         }
 
-        // Managed properties that changed but were not present in the raw → append.
+        // Managed values that changed but were not present in the raw → append.
+        foreach ($valueOnly as $name => $val) {
+            if (empty($seen[$name])) {
+                $props[] = $name . ':' . $val;
+            }
+        }
         foreach ($targets as $name => $line) {
             if ($line !== null && empty($seen[$name])) {
-                $out[] = $line;
+                $props[] = $line;
             }
         }
         if (empty($seen['DTSTAMP'])) {
-            $out[] = 'DTSTAMP:' . $now;
+            $props[] = 'DTSTAMP:' . $now;
         }
         if (empty($seen['LAST-MODIFIED'])) {
-            $out[] = 'LAST-MODIFIED:' . $now;
+            $props[] = 'LAST-MODIFIED:' . $now;
         }
         if (empty($seen['SEQUENCE'])) {
-            $out[] = 'SEQUENCE:1';
+            $props[] = 'SEQUENCE:1';
         }
-        // Reminder turned ON but there was no module-style alarm to replace → add one.
-        if ($notifChanged && !$moduleAlarmHandled && (bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
-            $out = array_merge($out, $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? '')));
+        // Reminder turned ON but there was no own alarm to replace → add one.
+        if ($notifChanged && !$ownAlarmSeen && (bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
+            $comps[] = $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? ''));
         }
 
-        // Ensure a VTIMEZONE for a newly written DUE;TZID exists at VCALENDAR level.
+        // Ensure a VTIMEZONE for a newly written DUE;TZID exists. Compare by the TZID VALUE so a
+        // parameterized identifier ('TZID;X-LIC-LOCATION=…:Europe/Berlin') counts as present and
+        // no duplicate (RFC 5545 §3.6.5) is appended — searching the whole document (head+tail).
         if (count($vtzToAdd) > 0) {
-            $tzLine = '';
+            $wantZone = '';
             foreach ($vtzToAdd as $l) {
                 if (strncmp($l, 'TZID:', 5) === 0) {
-                    $tzLine = trim($l);
+                    $wantZone = trim(substr($l, 5));
                     break;
                 }
             }
-            // Search the WHOLE document (head + tail), not just $head — a foreign object may
-            // place its VTIMEZONE after the VTODO. Two VTIMEZONEs with the same TZID violate
-            // RFC 5545 §3.6.5 and strict servers reject the PUT.
             $present = false;
-            if ($tzLine !== '') {
+            if ($wantZone !== '') {
                 foreach (array_merge($head, $tail) as $hl) {
-                    if (trim($hl) === $tzLine) {
-                        $present = true;
-                        break;
+                    $ht = trim($hl);
+                    if ($this->CalDAVPropName($ht) === 'TZID') {
+                        $c = strpos($ht, ':');
+                        if ($c !== false && trim(substr($ht, $c + 1)) === $wantZone) {
+                            $present = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -1073,8 +1167,21 @@ trait CalDAVSync
             }
         }
 
+        // RFC 5545 §3.6.2: all properties precede all sub-components inside the VTODO.
+        $out = $props;
+        foreach ($comps as $block) {
+            $out = array_merge($out, $block);
+        }
+
         $all = array_merge($head, ['BEGIN:VTODO'], $out, ['END:VTODO'], $tail);
         return $this->CalDAVFoldLines($all);
+    }
+
+    private function CalDAVReplaceValue(string $OrigLine, string $NewRawValue): string
+    {
+        $c = strpos($OrigLine, ':');
+        $prefix = $c !== false ? substr($OrigLine, 0, $c) : $OrigLine; // keeps "NAME;params"
+        return $prefix . ':' . $NewRawValue;
     }
 
     private function CalDAVTokenizeBody(array $Body): array
@@ -1122,20 +1229,19 @@ trait CalDAVSync
         return strtoupper(trim(substr($Line, 0, $end)));
     }
 
-    private function CalDAVIsModuleStyleAlarm(array $Lines): bool
+    /**
+     * A VALARM is "module-owned" only when it carries our marker. Foreign alarms (from Apple
+     * Reminders, DAVx5, …) never match and are therefore always preserved byte-for-byte — the
+     * previous heuristic (any DISPLAY + relative trigger) misclassified and destroyed them.
+     */
+    private function CalDAVIsOwnAlarm(array $Lines): bool
     {
-        $isDisplay = false;
-        $relBefore = false;
         foreach ($Lines as $l) {
-            $t = trim($l);
-            if (stripos($t, 'ACTION:') === 0 && stripos($t, 'DISPLAY') !== false) {
-                $isDisplay = true;
-            }
-            if (stripos($t, 'TRIGGER') === 0 && $this->CalDAVTriggerToLead($t) !== null) {
-                $relBefore = true;
+            if (stripos(trim($l), 'X-SYMCON-ALARM') === 0) {
+                return true;
             }
         }
-        return $isDisplay && $relBefore;
+        return false;
     }
 
     private function CalDAVBuildValarm(int $LeadSeconds, string $Title): array
@@ -1145,6 +1251,9 @@ trait CalDAVSync
         $desc = $Title !== '' ? $Title : 'Reminder';
         return [
             'BEGIN:VALARM',
+            // Marker: identifies THIS alarm as module-owned. Only marked alarms are ever
+            // rewritten/removed on a reminder change — foreign alarms are always preserved.
+            'X-SYMCON-ALARM:1',
             'ACTION:DISPLAY',
             'DESCRIPTION:' . $this->CalDAVEscapeText($desc),
             // RELATED=END anchors the relative trigger to DUE. A VTODO has no DTSTART, so a
