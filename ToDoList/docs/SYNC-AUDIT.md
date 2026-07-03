@@ -340,3 +340,19 @@ Alle Punkte der empfohlenen Reihenfolge sind umgesetzt (Syntax-Lint über alle D
 **Live verifiziert (MS-Konto):** Fälligkeit 11.07. 00:30 Berlin → Server-Datum 11.07. (vorher 10.07.); Tag-Fälligkeit + Erinnerung korrekt (Erinnerung 13:50 = 14:00 − 10 min); Round-Trip bewahrt die lokale Uhrzeit (00:30/14:00), kein Phantom-Change; Fremd-Edit auf dem Server → Titel übernommen und lokale Uhrzeit erhalten. Cleanup beidseitig sauber.
 
 **Hinweis:** Bereits synchronisierte Tasks behalten ihre alte UTC-Form auf dem Server, bis sie das nächste Mal geschrieben werden. Die Uhrzeit selbst zeigt MS To Do weiterhin nicht an (API-Grenze) — der Fix korrigiert das **Datum**.
+
+---
+
+# Nachtrag 2026-07-03 — CalDAV Property-Preserving Merge + VALARM-Zwei-Wege
+
+**Problem:** Beim Upload baute `CalDAVBuildVTodo` das VTODO komplett neu — aus dem schmalen lokalen Modell. Jede lokale Bearbeitung (auch nur der Titel) zerstörte damit alles, was reichere Clients (Apple Erinnerungen, Tasks.org, ownCloud-Web) zusätzlich gespeichert hatten: VALARM, RRULE, CATEGORIES, ATTACH, X-*, `VALUE=DATE`, feine PRIORITY.
+
+**Fix — In-Place-Merge (`CalDAVMergeVTodo`):** Das rohe Server-VTODO wird pro Item gespeichert (`caldavRaw`); beim Upload werden nur die modul-verwalteten Properties ersetzt — und zwar **nur wenn sich der lokale Wert gegenüber dem Import unterscheidet**. Alles andere bleibt byte-genau erhalten. Da unveränderte Felder ihre exakte Server-Form behalten, sind **D3** (`VALUE=DATE`), **D5** (STATUS/PERCENT-COMPLETE inkl. IN-PROCESS) und **D6** (PRIORITY 1-9) automatisch mit behoben. **D4** (Zeilenfaltung nach 75 Oktett, UTF-8-sicher) ist jetzt umgesetzt (`CalDAVFold`). Neu angelegte lokale Tasks bauen weiterhin frisch (`CalDAVBuildVTodo`).
+
+**VALARM-Zwei-Wege:** Import — die erste relative DISPLAY-VALARM wird in `notification` + Vorlaufzeit übersetzt (auf lokale Stufen gerundet); die Alarm-`DESCRIPTION` verschmutzt dank R9 nicht die Task-Beschreibung. Export — eine lokale Erinnerung wird als DISPLAY-VALARM mit relativem Trigger geschrieben. Ändert der Nutzer die Erinnerung lokal, wird nur die modul-artige VALARM ersetzt/entfernt; fremde Alarme (EMAIL, absolute Trigger) bleiben erhalten.
+
+**Verifiziert:** 34 Unit-Tests (Erhaltung VALARM/RRULE/CATEGORIES/X/PRIO2/VALUE=DATE bei Titeländerung; STATUS/PERCENT/COMPLETED bei Abhaken; DUE-TZID bei Fälligkeitsänderung; Reminder an/aus/geändert; Faltung >75 Oktett + Entfaltungs-Round-Trip). Live gegen ownCloud: derselbe Fremd-Task, der zuvor zerstört wurde, bleibt nach einer Symcon-Titeländerung vollständig erhalten; Symcon-Reminder erzeugt serverseitig eine VALARM (`TRIGGER:-PT1H`).
+
+**Hinweis:** Eine importierte Server-Erinnerung treibt jetzt auch Symcons eigenes Benachrichtigungssystem (gewünschter Zwei-Wege-Effekt). `caldavRaw` vergrößert das Items-Attribut (~1-3 KB/Task). Offen bleibt nur noch die Subtask-Abbildung (`RELATED-TO`).
+
+**Adversariales Review (2026-07-03) — behoben:** (1) HOCH — VALARM-Trigger jetzt `TRIGGER;RELATED=END:` (im VTODO ohne DTSTART wäre ein Default-Trigger unverankert → Apple/Tasks.org feuern ihn nicht). (2) MITTEL — VTIMEZONE-Dedup prüft jetzt das ganze Objekt (head+tail), nicht nur vor dem VTODO, sonst Duplikat bei nachgestelltem VTIMEZONE → PUT-Reject. (3) NIEDRIG — nur DISPLAY-Alarme werden zur Symcon-Benachrichtigung (EMAIL/AUDIO bleiben erhalten, erzeugen aber keine Anzeige). (4) NIEDRIG — Abschluss-CRLF nach `END:VCALENDAR` (RFC 5545 §3.1). Alle live gegen ownCloud verifiziert.

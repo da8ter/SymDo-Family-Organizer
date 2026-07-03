@@ -16,9 +16,9 @@
 | **Erledigt-Zeitpunkt** | ✅ `completed` (lesen) | ✅ `completedDateTime` (lesen) | ✅ `COMPLETED` |
 | **Fälligkeit (Datum)** | ✅ `due` | ✅ `dueDateTime` | ✅ `DUE` |
 | **Fälligkeit (Uhrzeit)** | ❌ API verwirft die Uhrzeit („time portion discarded") — Modul sendet Mitternacht, bewahrt die lokale Uhrzeit über `MergeDueWithLocalTime` | ⚠️ MS To Do zeigt nur das Datum (keine Uhrzeit). Fälligkeit + Erinnerung werden jetzt in lokaler Zeitzone gesendet (Graph akzeptiert IANA-Namen) → korrektes Kalenderdatum auch bei mitternachtsnahen Zeiten (B2 behoben); lokale Uhrzeit wird beim Round-Trip bewahrt | ✅ volle Uhrzeit als `DUE;TZID=<lokale Zone>` mit eingebettetem VTIMEZONE (Option 2, umgesetzt) → naive Web-UIs (ownCloud/Nextcloud) zeigen die lokale Uhrzeit; echte Ganztags-Aufgaben (`VALUE=DATE`) werden weiterhin nicht erzeugt (D3) |
-| **Priorität** (hoch/normal/niedrig) | ❌ API kennt keine Priorität | ✅ `importance` (high/normal/low — 1:1) | ⚠️ `PRIORITY`: hoch→1, niedrig→9, normal→weggelassen; lesen 1–4→hoch, 6–9→niedrig → Feinabstufung anderer Clients (3, 5, …) geht verloren (D6) |
-| **Erinnerung + Vorlauf** | ❌ API bietet keine Reminder → bleibt lokal erhalten (Server-Wins fasst `notification` nicht an) | ⚠️ `isReminderOn` + `reminderDateTime`; Vorlauf auf nächsten lokalen Wert gerundet (0/5/10/30 min, 1/5/12 h) | ➖ `VALARM` wird weder gelesen noch geschrieben; ⚠️ fremde Alarme werden bei local-wins-Upload entfernt |
-| **Wiederholung** | ❌ API stellt keine Recurrence bereit (auch Googles UI-Wiederholungen sind API-unsichtbar) → läuft rein lokal, neue Fälligkeit wird nach Abhaken hochgeladen | ✅/⚠️ `recurrence` — Details in Abschnitt 2 | ➖ `RRULE` wird nicht geschrieben/gelesen; ⚠️ fremde RRULEs gehen bei local-wins-Upload verloren |
+| **Priorität** (hoch/normal/niedrig) | ❌ API kennt keine Priorität | ✅ `importance` (high/normal/low — 1:1) | ✅ `PRIORITY` bleibt beim Property-Preserving Merge byte-genau erhalten, wenn lokal unverändert (feine Werte 3/5 gehen nicht mehr verloren, D6 behoben); nur bei lokaler Änderung wird hoch→1/niedrig→9 geschrieben |
+| **Erinnerung + Vorlauf** | ❌ API bietet keine Reminder → bleibt lokal erhalten (Server-Wins fasst `notification` nicht an) | ⚠️ `isReminderOn` + `reminderDateTime`; Vorlauf auf nächsten lokalen Wert gerundet (0/5/10/30 min, 1/5/12 h) | ✅ `VALARM` Zwei-Wege: relative DISPLAY-Alarme werden als `notification`+Vorlauf importiert und aus lokalen Erinnerungen als `TRIGGER:-PT…` geschrieben; fremde/andersartige Alarme bleiben beim Merge erhalten |
+| **Wiederholung** | ❌ API stellt keine Recurrence bereit (auch Googles UI-Wiederholungen sind API-unsichtbar) → läuft rein lokal, neue Fälligkeit wird nach Abhaken hochgeladen | ✅/⚠️ `recurrence` — Details in Abschnitt 2 | ✅ fremde `RRULE` bleibt beim Property-Preserving Merge erhalten (wird nicht mehr zerstört); das Modul erzeugt weiterhin keine eigene RRULE (lokale Wiederholung läuft lokal) |
 | **Menge (quantity)** | ➖ | ➖ | ➖ |
 | **Wiedereröffnungs-Vorlauf** (recurrenceResetLeadTime) | ➖ | ➖ | ➖ |
 | **Subtasks** | ❌ nicht gemappt (API hätte `parent`/`position`) | ❌ nicht gemappt (API hätte `checklistItems`) | ❌ nicht gemappt (RFC hätte `RELATED-TO`) |
@@ -114,14 +114,12 @@ Die Tasks-API kennt **weder** Uhrzeit, Priorität, Erinnerung **noch** Wiederhol
 
 ### 4.5 Priorisierung & Aufwand
 
-| # | Paket | Nutzen | Aufwand |
+| # | Paket | Nutzen | Status |
 |---|---|---|---|
-| 1 | **CalDAV Property-Preserving Merge** (4.1 Punkte 1–3) + Zeilenfaltung | Beendet jede Fremddaten-Zerstörung (VALARM/RRULE/CATEGORIES/X-Props), erledigt D4/D5/D6 | mittel |
-| 2 | **CalDAV VALARM** lesen/schreiben | Erinnerungs-Pflicht für CalDAV erfüllt | klein (auf Basis von #1) |
-| 3 | **MS Raw-Erhalt** für Reminder, Status, Body-Typ | Erinnerungs-/Status-/Notiz-Treue bei Fremd-Edits | klein (B1-Muster kopieren) |
-| 4 | **MS lokale Zeitzone** für due/reminder (B2) | korrekte Datumsanzeige in MS To Do | klein |
-| 5 | **CalDAV RRULE** schreiben/lesen | Wiederholungen erstmals serverseitig sichtbar (inkl. stündlich) | mittel |
-| 6 | **CalDAV VALUE=DATE** (D3) | echte Ganztags-Aufgaben | klein (auf Basis von #1) |
-| 7 | Google-Erhalt-Garantien testen + dokumentieren | Erinnerungs-Pflicht für Google abgesichert | minimal |
-
-> Hinweis: Pakete 1–2 ändern das CalDAV-Wire-Format erneut — sinnvollerweise **nach** dem noch ausstehenden Live-Test der R-Fixes umsetzen, nicht gleichzeitig.
+| 1 | **CalDAV Property-Preserving Merge** + Zeilenfaltung | Beendet jede Fremddaten-Zerstörung (VALARM/RRULE/CATEGORIES/X-Props), erledigt D4/D5/D6 | ✅ umgesetzt (v2.7) |
+| 2 | **CalDAV VALARM** lesen/schreiben (Zwei-Wege) | Erinnerungs-Pflicht für CalDAV erfüllt | ✅ umgesetzt (v2.7) |
+| 3 | **MS Raw-Erhalt** für Reminder, Status, Body-Typ | Erinnerungs-/Status-/Notiz-Treue bei Fremd-Edits | offen (klein, B1-Muster) |
+| 4 | **MS lokale Zeitzone** für due/reminder (B2) | korrekte Datumsanzeige in MS To Do | ✅ umgesetzt (v2.6) |
+| 5 | **CalDAV RRULE** schreiben/lesen | eigene Wiederholungen serverseitig sichtbar (inkl. stündlich); fremde bleiben schon jetzt erhalten | offen (mittel) |
+| 6 | **CalDAV VALUE=DATE** (D3) | echte Ganztags-Aufgaben erzeugen; fremde bleiben schon jetzt erhalten | teilweise (Erhalt via #1; Neuanlage offen) |
+| 7 | Google-Erhalt-Garantien testen + dokumentieren | Erinnerungs-Pflicht für Google abgesichert | offen (minimal) |

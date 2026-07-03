@@ -378,24 +378,19 @@ trait CalDAVSync
 
     private function CalDAVParseVTodo(string $ICalData): ?array
     {
-        $rawLines = preg_split('/\r?\n/', $ICalData);
-        if ($rawLines === false) {
-            return null;
-        }
-
-        $lines = [];
-        foreach ($rawLines as $line) {
-            if ($line !== '' && ($line[0] === ' ' || $line[0] === "\t") && count($lines) > 0) {
-                $lines[count($lines) - 1] .= substr($line, 1);
-            } else {
-                $lines[] = $line;
-            }
-        }
+        $lines = $this->CalDAVUnfold($ICalData);
 
         $inVTodo = false;
         $nestedDepth = 0;
         $props = [];
         $tzids = [];
+
+        // Two-way VALARM: capture the first relative DISPLAY alarm's lead time so an alarm set
+        // in another client (Apple Reminders, Tasks.org, …) becomes a Symcon reminder.
+        $valarmLead = null;
+        $inValarm = false;
+        $valarmTrigger = '';
+        $valarmAction = '';
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -406,20 +401,44 @@ trait CalDAVSync
             if (!$inVTodo) {
                 continue;
             }
-            // R9: skip nested components (VALARM etc.) entirely — their DESCRIPTION/SUMMARY/UID
-            // lines must not overwrite the task's own properties.
+            // R9: nested components (VALARM etc.) must not have their DESCRIPTION/SUMMARY/UID
+            // overwrite the task's own properties — they are skipped for the property map, but
+            // the first VALARM's TRIGGER is captured for the notification mapping.
             if (strncmp($line, 'BEGIN:', 6) === 0) {
+                if ($nestedDepth === 0 && strcasecmp($line, 'BEGIN:VALARM') === 0) {
+                    $inValarm = true;
+                    $valarmTrigger = '';
+                    $valarmAction = '';
+                }
                 $nestedDepth++;
                 continue;
             }
             if (strncmp($line, 'END:', 4) === 0) {
                 if ($nestedDepth > 0) {
                     $nestedDepth--;
+                    if ($nestedDepth === 0 && $inValarm) {
+                        // Only a DISPLAY alarm maps to a Symcon (display) notification — an
+                        // EMAIL/AUDIO alarm is preserved but must not create a display reminder.
+                        if ($valarmLead === null && $valarmTrigger !== '' && strcasecmp($valarmAction, 'DISPLAY') === 0) {
+                            $lead = $this->CalDAVTriggerToLead($valarmTrigger);
+                            if ($lead !== null) {
+                                $valarmLead = $lead;
+                            }
+                        }
+                        $inValarm = false;
+                    }
                     continue;
                 }
                 break; // END:VTODO
             }
             if ($nestedDepth > 0) {
+                if ($inValarm && $nestedDepth === 1) {
+                    if (stripos($line, 'TRIGGER') === 0) {
+                        $valarmTrigger = $line;
+                    } elseif (stripos($line, 'ACTION:') === 0) {
+                        $valarmAction = trim(substr($line, 7));
+                    }
+                }
                 continue;
             }
 
@@ -450,6 +469,8 @@ trait CalDAVSync
             $priority = 'low';
         }
 
+        $notification = $valarmLead !== null;
+
         return [
             'caldavUid' => $props['UID'],
             'title' => $this->CalDAVUnescapeText($props['SUMMARY'] ?? ''),
@@ -458,9 +479,31 @@ trait CalDAVSync
             'doneAt' => $done ? $this->CalDAVParseDateTime($props['COMPLETED'] ?? '', $tzids['COMPLETED'] ?? '') : 0,
             'due' => $this->CalDAVParseDateTime($props['DUE'] ?? '', $tzids['DUE'] ?? ''),
             'priority' => $priority,
+            'notification' => $notification,
+            'notificationLeadTime' => $notification ? $this->CalDAVNearestLeadTime($valarmLead) : 0,
             'createdAt' => $this->CalDAVParseDateTime($props['CREATED'] ?? '', $tzids['CREATED'] ?? ''),
-            'caldavLastModified' => $this->CalDAVParseDateTime($props['LAST-MODIFIED'] ?? '', $tzids['LAST-MODIFIED'] ?? '')
+            'caldavLastModified' => $this->CalDAVParseDateTime($props['LAST-MODIFIED'] ?? '', $tzids['LAST-MODIFIED'] ?? ''),
+            // Property-Preserving Merge: keep the full raw object so an upload replaces only the
+            // module-managed properties and leaves VALARM/RRULE/CATEGORIES/X-*/… untouched.
+            'caldavRaw' => $ICalData
         ];
+    }
+
+    private function CalDAVUnfold(string $Data): array
+    {
+        $rawLines = preg_split('/\r?\n/', $Data);
+        if ($rawLines === false) {
+            return [];
+        }
+        $lines = [];
+        foreach ($rawLines as $line) {
+            if ($line !== '' && ($line[0] === ' ' || $line[0] === "\t") && count($lines) > 0) {
+                $lines[count($lines) - 1] .= substr($line, 1);
+            } else {
+                $lines[] = $line;
+            }
+        }
+        return $lines;
     }
 
     private function CalDAVParseDateTime(string $Value, string $Tzid = ''): int
@@ -589,15 +632,15 @@ trait CalDAVSync
                 'caldavEtag' => $server['caldavEtag'],
                 'caldavHref' => $server['caldavHref'] ?? '',
                 'caldavSynced' => time(),
+                'caldavRaw' => $server['caldavRaw'] ?? '',
                 'localModified' => 0,
-                'notification' => false,
-                'notificationLeadTime' => 0,
-                'notified' => false,
+                'notification' => $server['notification'] ?? false,
+                'notificationLeadTime' => $server['notificationLeadTime'] ?? 0,
+                'notifiedFor' => 0,
                 'quantity' => 1,
                 'recurrence' => 'none',
-                'recurrenceCustomUnit' => '',
-                'recurrenceCustomValue' => 0,
-                'recurrenceReopenDays' => 0
+                'recurrenceCustomUnit' => 'w',
+                'recurrenceCustomValue' => 1
             ];
             $result[] = $newItem;
         }
@@ -642,6 +685,11 @@ trait CalDAVSync
         if (!empty($Server['caldavHref'])) {
             $Local['caldavHref'] = $Server['caldavHref'];
         }
+        // Merge the local field changes onto the server's CURRENT raw object, so a concurrent
+        // foreign addition (alarm, category, …) is not clobbered by a local-wins upload.
+        if (isset($Server['caldavRaw'])) {
+            $Local['caldavRaw'] = $Server['caldavRaw'];
+        }
         return $Local;
     }
 
@@ -653,10 +701,13 @@ trait CalDAVSync
         $Local['doneAt'] = $Server['doneAt'];
         $Local['due'] = $Server['due'];
         $Local['priority'] = $Server['priority'];
+        $Local['notification'] = $Server['notification'] ?? ($Local['notification'] ?? false);
+        $Local['notificationLeadTime'] = $Server['notificationLeadTime'] ?? ($Local['notificationLeadTime'] ?? 0);
         $Local['caldavEtag'] = $Server['caldavEtag'];
         if (!empty($Server['caldavHref'])) {
             $Local['caldavHref'] = $Server['caldavHref'];
         }
+        $Local['caldavRaw'] = $Server['caldavRaw'] ?? '';
         $Local['caldavSynced'] = time();
         $Local['localModified'] = 0;
         return $Local;
@@ -669,7 +720,11 @@ trait CalDAVSync
             return false;
         }
 
-        $vcal = $this->CalDAVBuildVTodo($Item);
+        // Property-Preserving Merge: if we hold the raw server object, edit only the
+        // module-managed properties in place (keeps VALARM/RRULE/CATEGORIES/X-*); otherwise
+        // (a locally created task) build a fresh VTODO.
+        $raw = (string)($Item['caldavRaw'] ?? '');
+        $vcal = $raw !== '' ? $this->CalDAVMergeVTodo($raw, $Item) : $this->CalDAVBuildVTodo($Item);
         $href = $Item['caldavHref'] ?? '';
         if ($href !== '') {
             $itemUrl = $this->CalDAVResolveUrl($CalendarUrl, $href);
@@ -786,32 +841,18 @@ trait CalDAVSync
 
         $vtimezone = [];
         if (($Item['due'] ?? 0) > 0) {
-            $due = (int)$Item['due'];
-            $tzid = date_default_timezone_get();
-            $vtimezone = ($tzid !== '' && strtoupper($tzid) !== 'UTC')
-                ? $this->CalDAVBuildVTimezone($tzid)
-                : [];
-            if (count($vtimezone) > 0) {
-                // Write DUE in the host's local time with an explicit VTIMEZONE. This is
-                // RFC-5545-valid (the referenced TZID is defined by the emitted VTIMEZONE) and
-                // makes naive web UIs (ownCloud/Nextcloud tasks apps) show the user's
-                // wall-clock time instead of the raw UTC instant. Clients with their own tz
-                // database still resolve the identical instant.
-                try {
-                    $wall = (new DateTime('@' . $due))->setTimezone(new DateTimeZone($tzid))->format('Ymd\THis');
-                    $lines[] = 'DUE;TZID=' . $tzid . ':' . $wall;
-                } catch (Exception $e) {
-                    $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $due);
-                    $vtimezone = [];
-                }
-            } else {
-                // Fixed-UTC host or unresolvable zone → keep the RFC-safe UTC instant (D2).
-                $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $due);
-            }
+            [$dueLine, $vtimezone] = $this->CalDAVDueLine((int)$Item['due']);
+            $lines[] = $dueLine;
         }
 
         if ($Item['done'] && ($Item['doneAt'] ?? 0) > 0) {
             $lines[] = 'COMPLETED:' . gmdate('Ymd\THis\Z', $Item['doneAt']);
+        }
+
+        // Two-way VALARM: a local reminder becomes a DISPLAY alarm with a relative trigger, so
+        // other CalDAV clients (Apple Reminders, Tasks.org, …) surface it too.
+        if (!empty($Item['notification']) && ($Item['due'] ?? 0) > 0) {
+            $lines = array_merge($lines, $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), $titleText));
         }
 
         $lines[] = 'END:VTODO';
@@ -825,7 +866,422 @@ trait CalDAVSync
             }
         }
 
-        return implode("\r\n", $lines);
+        return $this->CalDAVFoldLines($lines);
+    }
+
+    /**
+     * Serialize a DUE property. In a non-UTC host zone it is written as local wall-clock with a
+     * TZID and the matching VTIMEZONE lines are returned as the second element; on a UTC host or
+     * an unresolvable/transition-less zone it falls back to the RFC-safe UTC Z-form (D2).
+     * Returns [dueLine, vtimezoneLines].
+     */
+    private function CalDAVDueLine(int $Due): array
+    {
+        $tzid = date_default_timezone_get();
+        if ($tzid !== '' && strtoupper($tzid) !== 'UTC') {
+            $vtz = $this->CalDAVBuildVTimezone($tzid);
+            if (count($vtz) > 0) {
+                try {
+                    $wall = (new DateTime('@' . $Due))->setTimezone(new DateTimeZone($tzid))->format('Ymd\THis');
+                    return ['DUE;TZID=' . $tzid . ':' . $wall, $vtz];
+                } catch (Exception $e) {
+                    // fall through to UTC
+                }
+            }
+        }
+        return ['DUE:' . gmdate('Ymd\THis\Z', $Due), []];
+    }
+
+    /**
+     * Property-Preserving Merge: rewrite ONLY the module-managed properties of the stored raw
+     * VTODO and leave everything else (VALARM, RRULE, CATEGORIES, ATTACH, X-*, foreign
+     * VTIMEZONE, recurrence overrides) byte-for-byte intact. A property is only rewritten when
+     * the local value actually differs from the imported one — so unchanged fields keep their
+     * exact server form (this also preserves date-only DUE, IN-PROCESS/partial STATUS and the
+     * precise PRIORITY, i.e. D3/D5/D6). Falls back to a fresh build if the raw has no VTODO.
+     */
+    private function CalDAVMergeVTodo(string $RawVCal, array $Item): string
+    {
+        $lines = $this->CalDAVUnfold($RawVCal);
+
+        $vs = -1;
+        for ($i = 0; $i < count($lines); $i++) {
+            if (trim($lines[$i]) === 'BEGIN:VTODO') {
+                $vs = $i;
+                break;
+            }
+        }
+        if ($vs === -1) {
+            return $this->CalDAVBuildVTodo($Item);
+        }
+        $ve = -1;
+        $d = 0;
+        for ($i = $vs; $i < count($lines); $i++) {
+            $t = trim($lines[$i]);
+            if (strncmp($t, 'BEGIN:', 6) === 0) {
+                $d++;
+            } elseif (strncmp($t, 'END:', 4) === 0) {
+                $d--;
+                if ($d === 0) {
+                    $ve = $i;
+                    break;
+                }
+            }
+        }
+        if ($ve === -1) {
+            return $this->CalDAVBuildVTodo($Item);
+        }
+
+        $head = array_slice($lines, 0, $vs);
+        $body = array_slice($lines, $vs + 1, $ve - $vs - 1);
+        $tail = array_slice($lines, $ve + 1);
+
+        $snap = $this->CalDAVParseVTodo($RawVCal) ?? [];
+        $now = gmdate('Ymd\THis\Z');
+
+        // Decide, per managed property, whether the user changed it (→ rewrite) or not (→ keep
+        // the raw line). null value = remove the property.
+        $targets = [];
+        $vtzToAdd = [];
+
+        if ((string)($Item['title'] ?? '') !== (string)($snap['title'] ?? '')) {
+            $targets['SUMMARY'] = 'SUMMARY:' . $this->CalDAVEscapeText((string)($Item['title'] ?? ''));
+        }
+        if ((string)($Item['info'] ?? '') !== (string)($snap['info'] ?? '')) {
+            $info = (string)($Item['info'] ?? '');
+            $targets['DESCRIPTION'] = $info === '' ? null : 'DESCRIPTION:' . $this->CalDAVEscapeText($info);
+        }
+        if ((bool)($Item['done'] ?? false) !== (bool)($snap['done'] ?? false)) {
+            $done = (bool)($Item['done'] ?? false);
+            $targets['STATUS'] = 'STATUS:' . ($done ? 'COMPLETED' : 'NEEDS-ACTION');
+            $targets['PERCENT-COMPLETE'] = 'PERCENT-COMPLETE:' . ($done ? '100' : '0');
+            $targets['COMPLETED'] = ($done && ($Item['doneAt'] ?? 0) > 0)
+                ? 'COMPLETED:' . gmdate('Ymd\THis\Z', (int)$Item['doneAt'])
+                : null;
+        }
+        if ((int)($Item['due'] ?? 0) !== (int)($snap['due'] ?? 0)) {
+            $due = (int)($Item['due'] ?? 0);
+            if ($due > 0) {
+                [$dueLine, $vtzToAdd] = $this->CalDAVDueLine($due);
+                $targets['DUE'] = $dueLine;
+            } else {
+                $targets['DUE'] = null;
+            }
+        }
+        if ((string)($Item['priority'] ?? 'normal') !== (string)($snap['priority'] ?? 'normal')) {
+            $pv = match ($Item['priority'] ?? 'normal') {
+                'high' => 1,
+                'low' => 9,
+                default => 0
+            };
+            $targets['PRIORITY'] = $pv > 0 ? 'PRIORITY:' . $pv : null;
+        }
+        $notifChanged = ((bool)($Item['notification'] ?? false) !== (bool)($snap['notification'] ?? false))
+            || ((int)($Item['notificationLeadTime'] ?? 0) !== (int)($snap['notificationLeadTime'] ?? 0));
+
+        $tokens = $this->CalDAVTokenizeBody($body);
+        $out = [];
+        $seen = [];
+        $moduleAlarmHandled = false;
+
+        foreach ($tokens as $tok) {
+            if ($tok['type'] === 'prop') {
+                $name = $this->CalDAVPropName($tok['line']);
+                if ($name === 'DTSTAMP') {
+                    $out[] = 'DTSTAMP:' . $now;
+                    $seen['DTSTAMP'] = true;
+                    continue;
+                }
+                if ($name === 'LAST-MODIFIED') {
+                    $out[] = 'LAST-MODIFIED:' . $now;
+                    $seen['LAST-MODIFIED'] = true;
+                    continue;
+                }
+                if ($name === 'SEQUENCE') {
+                    $seq = (int)trim(substr($tok['line'], strpos($tok['line'], ':') + 1));
+                    $out[] = 'SEQUENCE:' . ($seq + 1);
+                    $seen['SEQUENCE'] = true;
+                    continue;
+                }
+                if (array_key_exists($name, $targets)) {
+                    $seen[$name] = true;
+                    if ($targets[$name] !== null) {
+                        $out[] = $targets[$name];
+                    }
+                    continue;
+                }
+                $out[] = $tok['line']; // unmanaged, or unchanged-managed → preserve verbatim
+            } else {
+                if (strcasecmp($tok['name'], 'VALARM') === 0 && $notifChanged && $this->CalDAVIsModuleStyleAlarm($tok['lines'])) {
+                    // The reminder was changed locally → replace the module-style alarm once,
+                    // preserve any non-module alarms (EMAIL, absolute triggers).
+                    if (!$moduleAlarmHandled) {
+                        $moduleAlarmHandled = true;
+                        if ((bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
+                            $out = array_merge($out, $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? '')));
+                        }
+                    }
+                    continue; // drop this (and any further) module-style alarm
+                }
+                $out = array_merge($out, $tok['lines']); // preserve component verbatim
+            }
+        }
+
+        // Managed properties that changed but were not present in the raw → append.
+        foreach ($targets as $name => $line) {
+            if ($line !== null && empty($seen[$name])) {
+                $out[] = $line;
+            }
+        }
+        if (empty($seen['DTSTAMP'])) {
+            $out[] = 'DTSTAMP:' . $now;
+        }
+        if (empty($seen['LAST-MODIFIED'])) {
+            $out[] = 'LAST-MODIFIED:' . $now;
+        }
+        if (empty($seen['SEQUENCE'])) {
+            $out[] = 'SEQUENCE:1';
+        }
+        // Reminder turned ON but there was no module-style alarm to replace → add one.
+        if ($notifChanged && !$moduleAlarmHandled && (bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
+            $out = array_merge($out, $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? '')));
+        }
+
+        // Ensure a VTIMEZONE for a newly written DUE;TZID exists at VCALENDAR level.
+        if (count($vtzToAdd) > 0) {
+            $tzLine = '';
+            foreach ($vtzToAdd as $l) {
+                if (strncmp($l, 'TZID:', 5) === 0) {
+                    $tzLine = trim($l);
+                    break;
+                }
+            }
+            // Search the WHOLE document (head + tail), not just $head — a foreign object may
+            // place its VTIMEZONE after the VTODO. Two VTIMEZONEs with the same TZID violate
+            // RFC 5545 §3.6.5 and strict servers reject the PUT.
+            $present = false;
+            if ($tzLine !== '') {
+                foreach (array_merge($head, $tail) as $hl) {
+                    if (trim($hl) === $tzLine) {
+                        $present = true;
+                        break;
+                    }
+                }
+            }
+            if (!$present) {
+                $head = array_merge($head, $vtzToAdd);
+            }
+        }
+
+        $all = array_merge($head, ['BEGIN:VTODO'], $out, ['END:VTODO'], $tail);
+        return $this->CalDAVFoldLines($all);
+    }
+
+    private function CalDAVTokenizeBody(array $Body): array
+    {
+        $tokens = [];
+        $n = count($Body);
+        $i = 0;
+        while ($i < $n) {
+            $t = trim($Body[$i]);
+            if (strncmp($t, 'BEGIN:', 6) === 0) {
+                $name = substr($t, 6);
+                $block = [$Body[$i]];
+                $depth = 1;
+                $i++;
+                while ($i < $n && $depth > 0) {
+                    $bt = trim($Body[$i]);
+                    if (strncmp($bt, 'BEGIN:', 6) === 0) {
+                        $depth++;
+                    } elseif (strncmp($bt, 'END:', 4) === 0) {
+                        $depth--;
+                    }
+                    $block[] = $Body[$i];
+                    $i++;
+                }
+                $tokens[] = ['type' => 'comp', 'name' => $name, 'lines' => $block];
+            } else {
+                $tokens[] = ['type' => 'prop', 'line' => $Body[$i]];
+                $i++;
+            }
+        }
+        return $tokens;
+    }
+
+    private function CalDAVPropName(string $Line): string
+    {
+        $end = strlen($Line);
+        $c = strpos($Line, ':');
+        if ($c !== false) {
+            $end = min($end, $c);
+        }
+        $s = strpos($Line, ';');
+        if ($s !== false) {
+            $end = min($end, $s);
+        }
+        return strtoupper(trim(substr($Line, 0, $end)));
+    }
+
+    private function CalDAVIsModuleStyleAlarm(array $Lines): bool
+    {
+        $isDisplay = false;
+        $relBefore = false;
+        foreach ($Lines as $l) {
+            $t = trim($l);
+            if (stripos($t, 'ACTION:') === 0 && stripos($t, 'DISPLAY') !== false) {
+                $isDisplay = true;
+            }
+            if (stripos($t, 'TRIGGER') === 0 && $this->CalDAVTriggerToLead($t) !== null) {
+                $relBefore = true;
+            }
+        }
+        return $isDisplay && $relBefore;
+    }
+
+    private function CalDAVBuildValarm(int $LeadSeconds, string $Title): array
+    {
+        $lead = max(0, $LeadSeconds);
+        $trigger = $lead === 0 ? 'PT0S' : '-' . $this->CalDAVSecondsToDuration($lead);
+        $desc = $Title !== '' ? $Title : 'Reminder';
+        return [
+            'BEGIN:VALARM',
+            'ACTION:DISPLAY',
+            'DESCRIPTION:' . $this->CalDAVEscapeText($desc),
+            // RELATED=END anchors the relative trigger to DUE. A VTODO has no DTSTART, so a
+            // default (RELATED=START) trigger would be unanchored and strict clients (Apple
+            // Reminders, DAVx5/Tasks.org) would not fire the alarm at all.
+            'TRIGGER;RELATED=END:' . $trigger,
+            'END:VALARM'
+        ];
+    }
+
+    private function CalDAVSecondsToDuration(int $Sec): string
+    {
+        $Sec = max(1, $Sec);
+        $days = intdiv($Sec, 86400);
+        $Sec %= 86400;
+        $hours = intdiv($Sec, 3600);
+        $Sec %= 3600;
+        $mins = intdiv($Sec, 60);
+        $secs = $Sec % 60;
+        $out = 'P';
+        if ($days > 0) {
+            $out .= $days . 'D';
+        }
+        $time = '';
+        if ($hours > 0) {
+            $time .= $hours . 'H';
+        }
+        if ($mins > 0) {
+            $time .= $mins . 'M';
+        }
+        if ($secs > 0) {
+            $time .= $secs . 'S';
+        }
+        if ($time !== '') {
+            $out .= 'T' . $time;
+        }
+        return $out === 'P' ? 'PT0S' : $out;
+    }
+
+    /**
+     * Map an iCalendar alarm TRIGGER line to a "minutes/seconds before due" lead time. Returns
+     * the positive lead in seconds for a relative "before" trigger, 0 for at/after, or null for
+     * an absolute (date-time) trigger that cannot be expressed as a lead.
+     */
+    private function CalDAVTriggerToLead(string $TriggerLine): ?int
+    {
+        $pos = strpos($TriggerLine, ':');
+        if ($pos === false) {
+            return null;
+        }
+        $params = substr($TriggerLine, 0, $pos);
+        $val = trim(substr($TriggerLine, $pos + 1));
+        if ($val === '') {
+            return null;
+        }
+        // Absolute date-time trigger → not a lead time.
+        if (stripos($params, 'VALUE=DATE-TIME') !== false || preg_match('/^\d{8}T/', $val) === 1) {
+            return null;
+        }
+        $before = $val[0] === '-';
+        $dur = ltrim($val, '+-');
+        $sec = $this->CalDAVDurationToSeconds($dur);
+        if ($sec === null) {
+            return null;
+        }
+        return $before ? $sec : 0;
+    }
+
+    private function CalDAVDurationToSeconds(string $Dur): ?int
+    {
+        if (preg_match('/^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/', $Dur, $m) !== 1) {
+            return null;
+        }
+        return ((int)($m[1] ?? 0)) * 604800
+            + ((int)($m[2] ?? 0)) * 86400
+            + ((int)($m[3] ?? 0)) * 3600
+            + ((int)($m[4] ?? 0)) * 60
+            + ((int)($m[5] ?? 0));
+    }
+
+    private function CalDAVNearestLeadTime(int $Seconds): int
+    {
+        $allowed = [0, 300, 600, 1800, 3600, 18000, 43200];
+        $best = 0;
+        $bestDiff = PHP_INT_MAX;
+        foreach ($allowed as $v) {
+            $diff = abs($v - $Seconds);
+            if ($diff < $bestDiff) {
+                $bestDiff = $diff;
+                $best = $v;
+            }
+        }
+        return $best;
+    }
+
+    private function CalDAVFoldLines(array $Lines): string
+    {
+        $out = [];
+        foreach ($Lines as $l) {
+            $out[] = $this->CalDAVFold((string)$l);
+        }
+        // RFC 5545 §3.1: every content line ends with CRLF, including the last. Normalize to
+        // exactly one trailing CRLF regardless of whether the source raw carried one.
+        return rtrim(implode("\r\n", $out), "\r\n") . "\r\n";
+    }
+
+    /**
+     * RFC 5545 §3.1 content-line folding at 75 octets, UTF-8-safe (never splits a multi-byte
+     * character). Continuation lines begin with a single space.
+     */
+    private function CalDAVFold(string $Line): string
+    {
+        if (strlen($Line) <= 75) {
+            return $Line;
+        }
+        $chars = preg_split('//u', $Line, -1, PREG_SPLIT_NO_EMPTY);
+        if ($chars === false) {
+            return $Line;
+        }
+        $result = '';
+        $cur = '';
+        $curLen = 0;
+        $first = true;
+        foreach ($chars as $ch) {
+            $chLen = strlen($ch);
+            $limit = $first ? 75 : 74; // continuation lines carry a leading space
+            if ($curLen + $chLen > $limit) {
+                $result .= ($first ? '' : ' ') . $cur . "\r\n";
+                $first = false;
+                $cur = $ch;
+                $curLen = $chLen;
+            } else {
+                $cur .= $ch;
+                $curLen += $chLen;
+            }
+        }
+        return $result . ($first ? '' : ' ') . $cur;
     }
 
     /**
