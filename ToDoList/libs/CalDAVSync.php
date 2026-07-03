@@ -391,6 +391,7 @@ trait CalDAVSync
         $nestedDepth = 0;
         $props = [];
         $tzids = [];
+        $valueDate = []; // propName => true when the property carries a VALUE=DATE parameter
 
         // Two-way VALARM: capture the first relative DISPLAY alarm's lead time so an alarm set
         // in another client (Apple Reminders, Tasks.org, …) becomes a Symcon reminder.
@@ -468,6 +469,8 @@ trait CalDAVSync
                     if (stripos($params[$pi], 'TZID=') === 0) {
                         // TZID values may be quoted (TZID="America/New_York").
                         $tzids[$propName] = trim(substr($params[$pi], 5), '"');
+                    } elseif (strcasecmp(trim($params[$pi]), 'VALUE=DATE') === 0) {
+                        $valueDate[$propName] = true; // all-day (date-only) property
                     }
                 }
             }
@@ -491,6 +494,10 @@ trait CalDAVSync
         $effectiveLead = $markedLead ?? $valarmLead;
         $notification = $effectiveLead !== null;
 
+        // Package 2: map the RRULE to the local recurrence model (approximate for complex rules;
+        // the exact RRULE is preserved by the merge while the local recurrence is unchanged).
+        $rrule = $this->CalDAVParseRRule((string)($props['RRULE'] ?? ''));
+
         return [
             'caldavUid' => $props['UID'],
             'title' => $this->CalDAVUnescapeText($props['SUMMARY'] ?? ''),
@@ -498,6 +505,10 @@ trait CalDAVSync
             'done' => $done,
             'doneAt' => $done ? $this->CalDAVParseDateTime($props['COMPLETED'] ?? '', $tzids['COMPLETED'] ?? '') : 0,
             'due' => $this->CalDAVParseDateTime($props['DUE'] ?? '', $tzids['DUE'] ?? ''),
+            'dueAllDay' => !empty($valueDate['DUE']) && !empty($props['DUE']), // package 3: VALUE=DATE
+            'recurrence' => $rrule['recurrence'],                             // package 2: RRULE
+            'recurrenceCustomUnit' => $rrule['recurrenceCustomUnit'],
+            'recurrenceCustomValue' => $rrule['recurrenceCustomValue'],
             'priority' => $priority,
             'notification' => $notification,
             'notificationLeadTime' => $notification ? $this->CalDAVNearestLeadTime($effectiveLead) : 0,
@@ -646,6 +657,7 @@ trait CalDAVSync
                 'done' => $server['done'],
                 'doneAt' => $server['doneAt'],
                 'due' => $server['due'],
+                'dueAllDay' => $server['dueAllDay'] ?? false, // package 3
                 'priority' => $server['priority'],
                 'createdAt' => $server['createdAt'] ?: time(),
                 'caldavUid' => $uid,
@@ -658,9 +670,10 @@ trait CalDAVSync
                 'notificationLeadTime' => $server['notificationLeadTime'] ?? 0,
                 'notifiedFor' => 0,
                 'quantity' => 1,
-                'recurrence' => 'none',
-                'recurrenceCustomUnit' => 'w',
-                'recurrenceCustomValue' => 1
+                'recurrence' => $server['recurrence'] ?? 'none',           // package 2: from RRULE
+                'recurrenceCustomUnit' => $server['recurrenceCustomUnit'] ?? 'w',
+                'recurrenceCustomValue' => $server['recurrenceCustomValue'] ?? 1,
+                'recurrenceResetLeadTime' => $this->NormalizeRecurrenceResetLeadTime(null, $server['recurrence'] ?? 'none')
             ];
             $result[] = $newItem;
         }
@@ -720,6 +733,11 @@ trait CalDAVSync
         $Local['done'] = $Server['done'];
         $Local['doneAt'] = $Server['doneAt'];
         $Local['due'] = $Server['due'];
+        $Local['dueAllDay'] = $Server['dueAllDay'] ?? false; // package 3
+        // Package 2: adopt the server's recurrence (parsed from RRULE).
+        $Local['recurrence'] = $Server['recurrence'] ?? ($Local['recurrence'] ?? 'none');
+        $Local['recurrenceCustomUnit'] = $Server['recurrenceCustomUnit'] ?? ($Local['recurrenceCustomUnit'] ?? 'w');
+        $Local['recurrenceCustomValue'] = $Server['recurrenceCustomValue'] ?? ($Local['recurrenceCustomValue'] ?? 1);
         $Local['priority'] = $Server['priority'];
         $Local['notification'] = $Server['notification'] ?? ($Local['notification'] ?? false);
         $Local['notificationLeadTime'] = $Server['notificationLeadTime'] ?? ($Local['notificationLeadTime'] ?? 0);
@@ -859,9 +877,14 @@ trait CalDAVSync
 
         $now = gmdate('Ymd\THis\Z');
         $created = ($Item['createdAt'] ?? 0) > 0 ? gmdate('Ymd\THis\Z', $Item['createdAt']) : $now;
-        
-        $status = ($Item['done'] ?? false) ? 'COMPLETED' : 'NEEDS-ACTION';
-        $percentComplete = ($Item['done'] ?? false) ? 100 : 0;
+
+        // Package 2: emit the local recurrence as an RRULE. A recurring task is never written as
+        // COMPLETED (B3 safety — the module advances the DUE locally and keeps it open).
+        $rrule = $this->CalDAVBuildRRule($Item);
+        $recurring = $rrule !== null;
+        $completed = (bool)($Item['done'] ?? false) && !$recurring;
+        $status = $completed ? 'COMPLETED' : 'NEEDS-ACTION';
+        $percentComplete = $completed ? 100 : 0;
         $priority = match($Item['priority'] ?? 'normal') {
             'high' => 1,
             'low' => 9,
@@ -903,11 +926,15 @@ trait CalDAVSync
 
         $vtimezone = [];
         if (($Item['due'] ?? 0) > 0) {
-            [$dueLine, $vtimezone] = $this->CalDAVDueLine((int)$Item['due']);
+            [$dueLine, $vtimezone] = $this->CalDAVDueLine((int)$Item['due'], (bool)($Item['dueAllDay'] ?? false));
             $lines[] = $dueLine;
         }
 
-        if ($Item['done'] && ($Item['doneAt'] ?? 0) > 0) {
+        if ($rrule !== null) {
+            $lines[] = 'RRULE:' . $rrule;
+        }
+
+        if ($completed && ($Item['doneAt'] ?? 0) > 0) {
             $lines[] = 'COMPLETED:' . gmdate('Ymd\THis\Z', $Item['doneAt']);
         }
 
@@ -937,8 +964,13 @@ trait CalDAVSync
      * an unresolvable/transition-less zone it falls back to the RFC-safe UTC Z-form (D2).
      * Returns [dueLine, vtimezoneLines].
      */
-    private function CalDAVDueLine(int $Due): array
+    private function CalDAVDueLine(int $Due, bool $AllDay = false): array
     {
+        // Package 3: a true all-day task is serialized as DUE;VALUE=DATE (no time, no zone),
+        // so other clients show it as an all-day item instead of a task due at 00:00.
+        if ($AllDay) {
+            return ['DUE;VALUE=DATE:' . date('Ymd', $Due), []];
+        }
         $tzid = date_default_timezone_get();
         if ($tzid !== '' && strtoupper($tzid) !== 'UTC') {
             $vtz = $this->CalDAVBuildVTimezone($tzid);
@@ -1002,16 +1034,18 @@ trait CalDAVSync
         $now = gmdate('Ymd\THis\Z');
 
         // Decide, per managed property, whether the user changed it (→ rewrite) or not (→ keep
-        // the raw line). null value = remove the property.
-        $targets = [];
-        $vtzToAdd = [];
-
-        // Per managed property: $valueOnly keeps SUMMARY/DESCRIPTION values whose parameters
+        // the raw line). $valueOnly keeps SUMMARY/DESCRIPTION values whose parameters
         // (LANGUAGE/ALTREP) are preserved from the original line; $targets holds full
         // replacement lines (null = remove the property).
         $valueOnly = [];
         $targets = [];
         $vtzToAdd = [];
+        // The recurring-completion safety must key on the ACTUAL recurrence (local or the raw's
+        // parsed one), NOT on the due: NormalizeRecurrence(...,$due) returns 'none' whenever
+        // due<=0, so an imported recurring task without a parseable DUE would otherwise be
+        // written COMPLETED + RRULE — exactly the double-roll this guard prevents.
+        $isRecurring = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', 1) !== 'none'
+            || (string)($snap['recurrence'] ?? 'none') !== 'none';
 
         if ((string)($Item['title'] ?? '') !== (string)($snap['title'] ?? '')) {
             $valueOnly['SUMMARY'] = $this->CalDAVEscapeText((string)($Item['title'] ?? ''));
@@ -1025,17 +1059,21 @@ trait CalDAVSync
             }
         }
         if ((bool)($Item['done'] ?? false) !== (bool)($snap['done'] ?? false)) {
-            $done = (bool)($Item['done'] ?? false);
+            // Package 2 safety: a recurring task is never written as COMPLETED — that would make
+            // some clients roll the series a second time (the B3 problem). The module advances
+            // the DUE locally and keeps the occurrence open (NEEDS-ACTION).
+            $done = (bool)($Item['done'] ?? false) && !$isRecurring;
             $targets['STATUS'] = 'STATUS:' . ($done ? 'COMPLETED' : 'NEEDS-ACTION');
             $targets['PERCENT-COMPLETE'] = 'PERCENT-COMPLETE:' . ($done ? '100' : '0');
             $targets['COMPLETED'] = ($done && ($Item['doneAt'] ?? 0) > 0)
                 ? 'COMPLETED:' . gmdate('Ymd\THis\Z', (int)$Item['doneAt'])
                 : null;
         }
-        if ((int)($Item['due'] ?? 0) !== (int)($snap['due'] ?? 0)) {
+        if ((int)($Item['due'] ?? 0) !== (int)($snap['due'] ?? 0)
+            || (bool)($Item['dueAllDay'] ?? false) !== (bool)($snap['dueAllDay'] ?? false)) {
             $due = (int)($Item['due'] ?? 0);
             if ($due > 0) {
-                [$dueLine, $vtzToAdd] = $this->CalDAVDueLine($due);
+                [$dueLine, $vtzToAdd] = $this->CalDAVDueLine($due, (bool)($Item['dueAllDay'] ?? false));
                 $targets['DUE'] = $dueLine;
             } else {
                 $targets['DUE'] = null;
@@ -1048,6 +1086,17 @@ trait CalDAVSync
                 default => 0
             };
             $targets['PRIORITY'] = $pv > 0 ? 'PRIORITY:' . $pv : null;
+        }
+        // Package 2 — RRULE is managed: rewrite it only when the local recurrence actually
+        // differs from the imported one; otherwise the raw RRULE (incl. complex BYDAY/COUNT/
+        // UNTIL that the local model only approximates) is preserved verbatim.
+        $recChanged = (string)($Item['recurrence'] ?? 'none') !== (string)($snap['recurrence'] ?? 'none')
+            || ((string)($Item['recurrence'] ?? '') === 'custom'
+                && ((string)($Item['recurrenceCustomUnit'] ?? 'w') !== (string)($snap['recurrenceCustomUnit'] ?? 'w')
+                    || (int)($Item['recurrenceCustomValue'] ?? 1) !== (int)($snap['recurrenceCustomValue'] ?? 1)));
+        if ($recChanged) {
+            $rr = $this->CalDAVBuildRRule($Item);
+            $targets['RRULE'] = $rr !== null ? 'RRULE:' . $rr : null;
         }
         $notifChanged = ((bool)($Item['notification'] ?? false) !== (bool)($snap['notification'] ?? false))
             || ((int)($Item['notificationLeadTime'] ?? 0) !== (int)($snap['notificationLeadTime'] ?? 0));
@@ -1479,6 +1528,81 @@ trait CalDAVSync
             $mkComp('STANDARD', $standard),
             ['END:VTIMEZONE']
         );
+    }
+
+    /**
+     * Package 2 — translate the local recurrence model to an RRULE value (without the "RRULE:"
+     * prefix), or null for a non-recurring task. CalDAV is the only backend that can express the
+     * hourly custom interval.
+     */
+    private function CalDAVBuildRRule(array $Item): ?string
+    {
+        $due = (int)($Item['due'] ?? 0);
+        $rec = $this->NormalizeRecurrence($Item['recurrence'] ?? 'none', $due);
+        switch ($rec) {
+            case 'w1': return 'FREQ=WEEKLY';
+            case 'w2': return 'FREQ=WEEKLY;INTERVAL=2';
+            case 'w3': return 'FREQ=WEEKLY;INTERVAL=3';
+            case 'm1': return 'FREQ=MONTHLY';
+            case 'q1': return 'FREQ=MONTHLY;INTERVAL=3';
+            case 'y1': return 'FREQ=YEARLY';
+            case 'custom':
+                $unit = $this->NormalizeRecurrenceCustomUnit($Item['recurrenceCustomUnit'] ?? null);
+                $val = max(1, $this->NormalizeRecurrenceCustomValue($Item['recurrenceCustomValue'] ?? null));
+                $freq = ['h' => 'HOURLY', 'd' => 'DAILY', 'w' => 'WEEKLY', 'm' => 'MONTHLY', 'y' => 'YEARLY'][$unit] ?? null;
+                if ($freq === null) {
+                    return null;
+                }
+                return $val > 1 ? 'FREQ=' . $freq . ';INTERVAL=' . $val : 'FREQ=' . $freq;
+        }
+        return null;
+    }
+
+    /**
+     * Package 2 — map an RRULE value to the local recurrence model. Only simple FREQ+INTERVAL
+     * rules map exactly; anything with BYDAY lists / BYMONTHDAY / COUNT / UNTIL is approximated
+     * to the closest local recurrence for display (the exact RRULE is preserved verbatim by the
+     * merge as long as the local recurrence is not changed).
+     */
+    private function CalDAVParseRRule(string $Rrule): array
+    {
+        $default = ['recurrence' => 'none', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        if (trim($Rrule) === '') {
+            return $default;
+        }
+        $parts = [];
+        foreach (explode(';', $Rrule) as $p) {
+            $kv = explode('=', $p, 2);
+            if (count($kv) === 2) {
+                $parts[strtoupper(trim($kv[0]))] = strtoupper(trim($kv[1]));
+            }
+        }
+        $freq = $parts['FREQ'] ?? '';
+        $interval = max(1, (int)($parts['INTERVAL'] ?? 1));
+        $freqMap = ['HOURLY' => 'h', 'DAILY' => 'd', 'WEEKLY' => 'w', 'MONTHLY' => 'm', 'YEARLY' => 'y'];
+        if (!isset($freqMap[$freq])) {
+            return $default;
+        }
+        // A bounded series (COUNT/UNTIL) is NOT mapped to a local recurrence: the local engine
+        // has no notion of a series end and would roll it forever past its limit. It stays
+        // 'none' locally (the module never rolls it) while the exact RRULE is preserved on the
+        // server by the merge (recurrence unchanged → raw RRULE kept verbatim).
+        if (isset($parts['COUNT']) || isset($parts['UNTIL'])) {
+            return $default;
+        }
+        if ($freq === 'WEEKLY' && in_array($interval, [1, 2, 3], true)) {
+            return ['recurrence' => 'w' . $interval, 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
+        if ($freq === 'MONTHLY' && $interval === 1) {
+            return ['recurrence' => 'm1', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
+        if ($freq === 'MONTHLY' && $interval === 3) {
+            return ['recurrence' => 'q1', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
+        if ($freq === 'YEARLY' && $interval === 1) {
+            return ['recurrence' => 'y1', 'recurrenceCustomUnit' => 'w', 'recurrenceCustomValue' => 1];
+        }
+        return ['recurrence' => 'custom', 'recurrenceCustomUnit' => $freqMap[$freq], 'recurrenceCustomValue' => $interval];
     }
 
     private function CalDAVEscapeText(string $Text): string

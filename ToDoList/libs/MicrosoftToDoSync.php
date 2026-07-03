@@ -712,12 +712,20 @@ trait MicrosoftToDoSync
             }
         }
 
+        // Package 1/finding: an HTML body (Outlook/Exchange) is shown/edited as readable text;
+        // the raw HTML is kept in microsoftBodyRaw and re-sent verbatim while unchanged, so the
+        // first genuine note edit produces clean text instead of dumping raw HTML as plaintext.
+        $bodyContent = (string)($Task['body']['content'] ?? '');
+        $info = strtolower((string)($Task['body']['contentType'] ?? 'text')) === 'html'
+            ? $this->MicrosoftHtmlToText($bodyContent)
+            : $bodyContent;
+
         return [
             'microsoftTaskId' => $Task['id'] ?? '',
             'microsoftEtag' => $Task['@odata.etag'] ?? '',
             'microsoftUpdated' => $updated,
             'title' => $Task['title'] ?? '',
-            'info' => $Task['body']['content'] ?? '',
+            'info' => $info,
             'done' => $done,
             'doneAt' => $doneAt,
             'due' => $due,
@@ -727,21 +735,52 @@ trait MicrosoftToDoSync
             'recurrence' => $recurrence,
             'recurrenceCustomUnit' => $recurrenceCustomUnit,
             'recurrenceCustomValue' => $recurrenceCustomValue,
-            'microsoftRecurrenceRaw' => is_array($Task['recurrence'] ?? null) ? $Task['recurrence'] : null // B1
+            'microsoftRecurrenceRaw' => is_array($Task['recurrence'] ?? null) ? $Task['recurrence'] : null, // B1
+            // Package 1 — raw-field preservation: keep the exact server body/status/reminder so
+            // an upload that leaves those fields unchanged does not flatten them (HTML body →
+            // text, inProgress/waitingOnOthers → notStarted, exact reminder → rounded lead). The
+            // snapshot is the imported baseline the upload diffs the local values against.
+            'microsoftBodyRaw' => is_array($Task['body'] ?? null) ? $Task['body'] : null,
+            'microsoftStatusRaw' => (string)($Task['status'] ?? ''),
+            'microsoftReminderRaw' => is_array($Task['reminderDateTime'] ?? null) ? $Task['reminderDateTime'] : null,
+            'microsoftSnapshot' => [
+                'info' => $info,
+                'done' => $done,
+                'due' => $due,
+                'notification' => $notification,
+                'notificationLeadTime' => $notificationLeadTime
+            ]
         ];
+    }
+
+    private function MicrosoftHtmlToText(string $Html): string
+    {
+        $t = preg_replace('/<\s*br\s*\/?\s*>/i', "\n", $Html) ?? $Html;
+        $t = preg_replace('/<\/\s*(p|div|li|tr|h[1-6])\s*>/i', "\n", $t) ?? $t;
+        $t = strip_tags($t);
+        $t = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // collapse the runs of blank lines HTML block tags leave behind
+        $t = preg_replace("/[ \t]+\n/", "\n", $t) ?? $t;
+        $t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;
+        return trim($t);
     }
 
     private function LocalToMicrosoftTask(array $Item): array
     {
-        $task = [
-            'title' => $Item['title'] ?? '',
-            'body' => [
-                'contentType' => 'text',
-                'content' => $Item['info'] ?? ''
-            ]
-        ];
-
+        $snap = is_array($Item['microsoftSnapshot'] ?? null) ? $Item['microsoftSnapshot'] : null;
         $due = (int)($Item['due'] ?? 0);
+
+        $task = ['title' => $Item['title'] ?? ''];
+
+        // Package 1 — body: re-send the exact server body (preserves an HTML note) while the
+        // local text is unchanged; only a real local edit downgrades it to a plain-text body.
+        $bodyRaw = $Item['microsoftBodyRaw'] ?? null;
+        if ($snap !== null && is_array($bodyRaw) && (string)($Item['info'] ?? '') === (string)($snap['info'] ?? '')) {
+            $task['body'] = $bodyRaw;
+        } else {
+            $task['body'] = ['contentType' => 'text', 'content' => $Item['info'] ?? ''];
+        }
+
         if ($due > 0) {
             $task['dueDateTime'] = $this->MicrosoftBuildDateTimeTimeZone($due);
         }
@@ -750,11 +789,22 @@ trait MicrosoftToDoSync
 
         $notification = !empty($Item['notification']);
         if ($due > 0 && $notification) {
-            $lead = $this->NormalizeNotificationLeadTime($Item['notificationLeadTime'] ?? null, $this->NormalizeNotificationLeadTimeDefault((int)$this->ReadPropertyInteger('NotificationLeadTime')));
-            $remTs = max(0, $due - $lead);
             $task['isReminderOn'] = true;
-            if ($remTs > 0) {
-                $task['reminderDateTime'] = $this->MicrosoftBuildDateTimeTimeZone($remTs);
+            // Package 1 — reminder: keep the exact server reminder time while notification/lead/
+            // due are unchanged, so a foreign non-standard offset is not rounded to a local step.
+            $remRaw = $Item['microsoftReminderRaw'] ?? null;
+            $remUnchanged = $snap !== null && is_array($remRaw)
+                && (bool)($snap['notification'] ?? false) === true
+                && (int)($snap['notificationLeadTime'] ?? -1) === (int)($Item['notificationLeadTime'] ?? -2)
+                && (int)($snap['due'] ?? 0) === $due;
+            if ($remUnchanged) {
+                $task['reminderDateTime'] = $remRaw;
+            } else {
+                $lead = $this->NormalizeNotificationLeadTime($Item['notificationLeadTime'] ?? null, $this->NormalizeNotificationLeadTimeDefault((int)$this->ReadPropertyInteger('NotificationLeadTime')));
+                $remTs = max(0, $due - $lead);
+                if ($remTs > 0) {
+                    $task['reminderDateTime'] = $this->MicrosoftBuildDateTimeTimeZone($remTs);
+                }
             }
         } else {
             $task['isReminderOn'] = false;
@@ -765,7 +815,15 @@ trait MicrosoftToDoSync
             $task['recurrence'] = $recurrence;
         }
 
-        $task['status'] = !empty($Item['done']) ? 'completed' : 'notStarted';
+        // Package 1 — status: keep the exact server status (IN-PROGRESS/waitingOnOthers/deferred)
+        // while the local done-state is unchanged; only a real local toggle writes completed/
+        // notStarted. (A recurring task's completion is still re-derived in MicrosoftUploadTask, B3.)
+        $statusRaw = (string)($Item['microsoftStatusRaw'] ?? '');
+        if ($snap !== null && $statusRaw !== '' && (bool)($Item['done'] ?? false) === (bool)($snap['done'] ?? false)) {
+            $task['status'] = $statusRaw;
+        } else {
+            $task['status'] = !empty($Item['done']) ? 'completed' : 'notStarted';
+        }
 
         return $task;
     }
@@ -801,6 +859,11 @@ trait MicrosoftToDoSync
         $Local['recurrenceCustomUnit'] = $Server['recurrenceCustomUnit'] ?? ($Local['recurrenceCustomUnit'] ?? 'w');
         $Local['recurrenceCustomValue'] = $Server['recurrenceCustomValue'] ?? ($Local['recurrenceCustomValue'] ?? 1);
         $Local['microsoftRecurrenceRaw'] = $Server['microsoftRecurrenceRaw'] ?? null; // B1: keep raw server pattern
+        // Package 1: refresh the raw-field baseline from the server state.
+        $Local['microsoftBodyRaw'] = $Server['microsoftBodyRaw'] ?? null;
+        $Local['microsoftStatusRaw'] = $Server['microsoftStatusRaw'] ?? '';
+        $Local['microsoftReminderRaw'] = $Server['microsoftReminderRaw'] ?? null;
+        $Local['microsoftSnapshot'] = $Server['microsoftSnapshot'] ?? null;
         $Local['microsoftEtag'] = $Server['microsoftEtag'];
         $Local['microsoftServerSynced'] = (int)($Server['microsoftUpdated'] ?? 0); // A5 baseline
         $Local['localModified'] = 0;
@@ -978,6 +1041,10 @@ trait MicrosoftToDoSync
                 'recurrenceCustomValue' => $recurrenceCustomValue,
                 'recurrenceResetLeadTime' => $recurrenceResetLeadTime,
                 'microsoftRecurrenceRaw' => $server['microsoftRecurrenceRaw'] ?? null, // B1
+                'microsoftBodyRaw' => $server['microsoftBodyRaw'] ?? null,             // Package 1
+                'microsoftStatusRaw' => $server['microsoftStatusRaw'] ?? '',
+                'microsoftReminderRaw' => $server['microsoftReminderRaw'] ?? null,
+                'microsoftSnapshot' => $server['microsoftSnapshot'] ?? null,
                 'microsoftTaskId' => $gid,
                 'microsoftEtag' => $server['microsoftEtag'],
                 'microsoftSynced' => time(),

@@ -365,3 +365,24 @@ Alle Punkte der empfohlenen Reihenfolge sind umgesetzt (Syntax-Lint über alle D
 - **Bekannte, dokumentierte Grenze:** Ein aus einem Fremd-Alarm importierter Reminder, der lokal ausgeschaltet wird, kommt beim nächsten Import wieder (der Fremd-Alarm wird bewusst nie gelöscht — Vorrang: kein Datenverlust).
 
 **Abschluss-Testlauf (2026-07-03):** CalDAV-Regression 23/23 (Fremddaten-Erhalt inkl. D3/D5/D6, RFC-Reihenfolge, Alarm-Lifecycle mit Marker, churn-frei über Mehrfach-Syncs, Löschen) + Microsoft/Google-Smoke 8/8 (Anlegen ohne pending_-Strandung, Edit/Abhaken/Löschen). Alle grün. MS/Google-Sync-Code ist seit v2.6 unverändert (nur `CalDAVSync.php` geändert), daher dort nur Sanity-Smoke statt voller Batterie.
+
+---
+
+# Nachtrag 2026-07-03 — Feature-Pakete 7/1/3/2 (FEATURE-MATRIX) + adversariales Review
+
+Vier offene FEATURE-MATRIX-Pakete umgesetzt und live gegen echte Server verifiziert:
+
+- **Paket 7 — Google-Erhalt-Garantien:** `GaogleApplyServerToLocal` fasst nur Titel/Notiz/Status/Fälligkeit an; Priorität/Erinnerung/Wiederholung/Menge sind lokal-only und überleben jeden Sync (als Garantie-Kommentar verankert). Live 8/8 (Fremd-Edit auf Google → lokale Felder erhalten).
+- **Paket 1 — MS-Raw-Erhalt:** `LocalToMicrosoftTask` sendet body/status/reminder nur dann in Modul-Form, wenn der lokale Wert sich ggü. dem Import-Snapshot geändert hat; sonst verbatim (B1-Muster). Realer Gewinn ist der **Status-Erhalt** (IN-PROGRESS/waitingOnOthers/deferred) — live verifiziert. Body ist auf MS To Do ein No-Op (MS normalisiert zu Text); HTML-Bodies (Outlook/Exchange) werden beim Import zu lesbarem Text konvertiert (`MicrosoftHtmlToText`), Raw bleibt erhalten.
+- **Paket 3 — VALUE=DATE (Ganztag):** neues Feld `dueAllDay`; Import erkennt `DUE;VALUE=DATE`, Export schreibt es (ohne TZID/VTIMEZONE), Merge-Änderungserkennung vergleicht `dueAllDay`; `AddItem`/`UpdateItem` floors auf lokale Mitternacht; UI-Checkbox „Ganztägig" im Bearbeiten-Dialog. Backend live 8/8.
+- **Paket 2 — CalDAV-RRULE:** lokale Wiederholung → RRULE (inkl. **stündlich**, CalDAV-exklusiv); RRULE→lokal (einfache FREQ+INTERVAL exakt, komplexe genähert, Raw erhalten). RRULE ist managed (nur bei echter lokaler Änderung neu geschrieben). Serien-Abschluss schreibt **nie** COMPLETED (B3-Doppelroll-Schutz). 27 Unit + 9 live + Regression 23/23.
+
+**Adversariales Review (13 Agenten, alle Befunde gegenverifiziert) — behoben:**
+- **HOCH:** Die Serien-NEEDS-ACTION-Sicherung hing an `NormalizeRecurrence(rec, due)`, das bei `due<=0` immer 'none' liefert → ein importierter Serien-Task ohne parsebares DUE (RRULE per DTSTART) wurde als COMPLETED+RRULE hochgeladen. Fix: Sicherung an der tatsächlichen Recurrence (lokal **oder** geparste Raw-RRULE), unabhängig von `due`.
+- **MITTEL:** COUNT/UNTIL-Serien wurden als unendlich behandelt (ewiges Rollen). Fix: Rules mit COUNT/UNTIL importieren als „nicht wiederkehrend" (Modul rollt nicht), Raw-RRULE bleibt auf dem Server erhalten.
+- **MITTEL:** Ganztags-Serien driften über DST von Mitternacht weg (feste Sekunden-Addition). Fix: `GetNextDue` flooret All-Day-Ergebnisse zurück auf lokale Mitternacht.
+- **MITTEL:** `ProcessRecurrences` setzte kein `localModified` → automatischer Vorschub/Reopen wurde nie zum CalDAV-Server gepusht. Fix: `localModified` an allen drei Änderungspunkten gesetzt.
+- **NIEDRIG:** Sticky `dueAllDay` verwarf eine neu gesetzte Uhrzeit; HTML-Body → Text (s. Paket 1). Behoben.
+- **NIEDRIG (belassen):** verwaiste VTIMEZONE beim Umschalten timed→all-day (gültiges, ungenutztes iCal — harmlos; Entfernen risikoreicher als Nutzen).
+
+Verifiziert: 9 zusätzliche Fix-Unit-Tests + Live (Paket 2: 9/9, Regression: 23/23, Fixes: 6/6, MS/Google isoliert je grün).

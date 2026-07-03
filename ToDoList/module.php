@@ -505,6 +505,12 @@ class ToDoList extends IPSModuleStrict
 
         $now = time();
         $due = (int)($Data['due'] ?? 0);
+        // Package 3: an all-day task carries no time-of-day — normalize the due to local
+        // midnight so it serializes cleanly as DUE;VALUE=DATE for CalDAV.
+        $dueAllDay = ($due > 0) && (bool)($Data['dueAllDay'] ?? false);
+        if ($dueAllDay) {
+            $due = (int)strtotime(date('Y-m-d 00:00:00', $due));
+        }
         $recurrence = $this->NormalizeRecurrence($Data['recurrence'] ?? 'none', $due);
         $recurrenceResetLeadTime = $this->NormalizeRecurrenceResetLeadTime($Data['recurrenceResetLeadTime'] ?? 0, $recurrence);
         $recurrenceCustomUnit = 'w';
@@ -542,6 +548,7 @@ class ToDoList extends IPSModuleStrict
             'info'      => (string)($Data['info'] ?? ''),
             'done'      => (bool)($Data['done'] ?? false),
             'due'       => $due,
+            'dueAllDay' => $dueAllDay,
             'recurrence' => $recurrence,
             'recurrenceCustomUnit' => $recurrenceCustomUnit,
             'recurrenceCustomValue' => $recurrenceCustomValue,
@@ -620,8 +627,29 @@ class ToDoList extends IPSModuleStrict
                 $items[$i]['info'] = (string)$Data['info'];
             }
             if (array_key_exists('due', $Data)) {
-                $resetNotify = $resetNotify || ((int)($items[$i]['due'] ?? 0) !== (int)$Data['due']);
-                $items[$i]['due'] = (int)$Data['due'];
+                $newDue = (int)$Data['due'];
+                // Package 3: honor an explicit all-day flag. When the payload omits it, stay
+                // all-day ONLY if the new due is still at local midnight — a new due carrying a
+                // time-of-day means the user set a specific time, so all-day is turned off.
+                if (array_key_exists('dueAllDay', $Data)) {
+                    $allDay = ($newDue > 0) && (bool)$Data['dueAllDay'];
+                } else {
+                    $allDay = ($newDue > 0) && (bool)($items[$i]['dueAllDay'] ?? false)
+                        && date('H:i:s', $newDue) === '00:00:00';
+                }
+                if ($allDay) {
+                    $newDue = (int)strtotime(date('Y-m-d 00:00:00', $newDue));
+                }
+                $resetNotify = $resetNotify || ((int)($items[$i]['due'] ?? 0) !== $newDue) || ((bool)($items[$i]['dueAllDay'] ?? false) !== $allDay);
+                $items[$i]['due'] = $newDue;
+                $items[$i]['dueAllDay'] = $allDay;
+            } elseif (array_key_exists('dueAllDay', $Data) && ($items[$i]['due'] ?? 0) > 0) {
+                // Toggling all-day without changing the date.
+                $allDay = (bool)$Data['dueAllDay'];
+                $newDue = $allDay ? (int)strtotime(date('Y-m-d 00:00:00', (int)$items[$i]['due'])) : (int)$items[$i]['due'];
+                $resetNotify = $resetNotify || ((bool)($items[$i]['dueAllDay'] ?? false) !== $allDay);
+                $items[$i]['due'] = $newDue;
+                $items[$i]['dueAllDay'] = $allDay;
             }
 
             if (array_key_exists('recurrence', $Data) || array_key_exists('due', $Data)) {
@@ -774,7 +802,7 @@ class ToDoList extends IPSModuleStrict
                 if ($due > 0) {
                     $unit = (string)($items[$i]['recurrenceCustomUnit'] ?? 'w');
                     $val = (int)($items[$i]['recurrenceCustomValue'] ?? 1);
-                    $items[$i]['due'] = $this->GetNextDue($due, $recurrence, $unit, $val);
+                    $items[$i]['due'] = $this->GetNextDue($due, $recurrence, $unit, $val, (bool)($items[$i]['dueAllDay'] ?? false));
                     $items[$i]['notifiedFor'] = 0;
                 }
 
@@ -1587,15 +1615,16 @@ class ToDoList extends IPSModuleStrict
                 continue;
             }
 
+            $allDay = (bool)($item['dueAllDay'] ?? false);
             $leadTime = $this->NormalizeRecurrenceResetLeadTime($item['recurrenceResetLeadTime'] ?? null, $recurrence);
             if ($leadTime === -1) {
                 if ($due <= $now) {
                     $unit = (string)($item['recurrenceCustomUnit'] ?? 'w');
                     $val = (int)($item['recurrenceCustomValue'] ?? 1);
-                    $newDue = $this->GetNextDue($due, $recurrence, $unit, $val);
+                    $newDue = $this->GetNextDue($due, $recurrence, $unit, $val, $allDay);
                     $guard = 0;
                     while ($newDue > 0 && $newDue <= $now && $guard < 24) {
-                        $newDue = $this->GetNextDue($newDue, $recurrence, $unit, $val);
+                        $newDue = $this->GetNextDue($newDue, $recurrence, $unit, $val, $allDay);
                         $guard++;
                     }
                     if ($newDue !== $due) {
@@ -1605,6 +1634,9 @@ class ToDoList extends IPSModuleStrict
                 $item['done'] = false;
                 $item['notifiedFor'] = 0;
                 $item['updatedAt'] = $now;
+                // Package 2/finding: mark dirty so the reopened/advanced occurrence is pushed to
+                // the CalDAV server (ToggleDone already does this; the timer path must too).
+                $item['localModified'] = $now;
                 $changed = true;
                 continue;
             }
@@ -1618,6 +1650,7 @@ class ToDoList extends IPSModuleStrict
                 $item['done'] = false;
                 $item['notifiedFor'] = 0;
                 $item['updatedAt'] = $now;
+                $item['localModified'] = $now;
                 $changed = true;
                 continue;
             }
@@ -1625,16 +1658,17 @@ class ToDoList extends IPSModuleStrict
             if ($left < $windowStart) {
                 $unit = (string)($item['recurrenceCustomUnit'] ?? 'w');
                 $val = (int)($item['recurrenceCustomValue'] ?? 1);
-                $newDue = $this->GetNextDue($due, $recurrence, $unit, $val);
+                $newDue = $this->GetNextDue($due, $recurrence, $unit, $val, $allDay);
                 $guard = 0;
                 while ($newDue > 0 && $newDue <= $now && $guard < 24) {
-                    $newDue = $this->GetNextDue($newDue, $recurrence, $unit, $val);
+                    $newDue = $this->GetNextDue($newDue, $recurrence, $unit, $val, $allDay);
                     $guard++;
                 }
                 if ($newDue !== $due) {
                     $item['due'] = $newDue;
                     $item['notifiedFor'] = 0;
                     $item['updatedAt'] = $now;
+                    $item['localModified'] = $now;
                     $changed = true;
                 }
             }
@@ -1863,45 +1897,39 @@ class ToDoList extends IPSModuleStrict
         return $best;
     }
 
-    private function GetNextDue(int $Due, string $Recurrence, string $CustomUnit = '', int $CustomValue = 0): int
+    private function GetNextDue(int $Due, string $Recurrence, string $CustomUnit = '', int $CustomValue = 0, bool $AllDay = false): int
     {
         if ($Due <= 0) {
             return 0;
         }
         $r = $this->NormalizeRecurrence($Recurrence, $Due);
+        $next = $Due;
         switch ($r) {
             case 'custom':
                 $u = $this->NormalizeRecurrenceCustomUnit($CustomUnit);
                 $v = $this->NormalizeRecurrenceCustomValue($CustomValue);
                 switch ($u) {
-                    case 'h':
-                        return $Due + (3600 * $v);
-                    case 'd':
-                        return $Due + (86400 * $v);
-                    case 'w':
-                        return $Due + (604800 * $v);
-                    case 'm':
-                        return $this->AddMonthsClamped($Due, $v);
-                    case 'y':
-                        return $this->AddMonthsClamped($Due, 12 * $v);
-                    default:
-                        return $Due;
+                    case 'h': $next = $Due + (3600 * $v); break;
+                    case 'd': $next = $Due + (86400 * $v); break;
+                    case 'w': $next = $Due + (604800 * $v); break;
+                    case 'm': $next = $this->AddMonthsClamped($Due, $v); break;
+                    case 'y': $next = $this->AddMonthsClamped($Due, 12 * $v); break;
                 }
-            case 'w1':
-                return $Due + 604800;
-            case 'w2':
-                return $Due + 1209600;
-            case 'w3':
-                return $Due + 1814400;
-            case 'm1':
-                return $this->AddMonthsClamped($Due, 1);
-            case 'q1':
-                return $this->AddMonthsClamped($Due, 3);
-            case 'y1':
-                return $this->AddMonthsClamped($Due, 12);
-            default:
-                return $Due;
+                break;
+            case 'w1': $next = $Due + 604800; break;
+            case 'w2': $next = $Due + 1209600; break;
+            case 'w3': $next = $Due + 1814400; break;
+            case 'm1': $next = $this->AddMonthsClamped($Due, 1); break;
+            case 'q1': $next = $this->AddMonthsClamped($Due, 3); break;
+            case 'y1': $next = $this->AddMonthsClamped($Due, 12); break;
         }
+        // Re-floor an all-day due to local midnight: the fixed-seconds advance (e.g. +604800 for
+        // a week) shifts the wall-clock by an hour across a DST boundary, which would move the
+        // calendar day of a midnight-anchored all-day task.
+        if ($AllDay && $next > 0) {
+            $next = (int)strtotime(date('Y-m-d 00:00:00', $next));
+        }
+        return $next;
     }
 
     private function AddMonthsClamped(int $Due, int $Months): int

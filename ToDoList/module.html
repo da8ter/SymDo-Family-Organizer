@@ -729,6 +729,7 @@
               <div id="duePlaceholder" class="date-placeholder"></div>
               <i class="fa-light fa-calendar cal-icon"></i>
             </div>
+            <div class="full checkrow"><label><input id="dueAllDay" type="checkbox" /><span id="dueAllDayLabel"></span></label></div>
             <div id="notificationFieldLabel" class="full field-label"></div>
             <div class="full checkrow"><label><input id="notification" type="checkbox" /><span id="notificationLabel"></span></label><div class="select-wrap"><select id="notificationLeadTime"></select><i class="fa-light fa-arrow-down-from-bracket select-icon"></i></div></div>
             <div id="notificationLeadTimeInfo" class="full hint"></div>
@@ -919,6 +920,7 @@
       document.getElementById('recurrenceCustomValue').placeholder = translate('Interval');
       document.getElementById('due').title = translate('Due');
       document.getElementById('duePlaceholder').textContent = translate('Due placeholder');
+      document.getElementById('dueAllDayLabel').textContent = translate('All day');
       document.getElementById('notificationFieldLabel').textContent = translate('Notification');
 
       document.getElementById('recurrenceFieldLabel').textContent = translate('Repeat');
@@ -1496,6 +1498,7 @@
       document.getElementById('notification').checked = false;
       document.getElementById('notificationLeadTime').value = String(getDefaultNotificationLeadTime());
       document.getElementById('due').value = '';
+      document.getElementById('dueAllDay').checked = false;
       document.getElementById('prio').value = 'normal';
       document.getElementById('recurrence').value = 'none';
       document.getElementById('recurrenceResetLeadTime').value = '604800';
@@ -1535,6 +1538,7 @@
       }
       document.getElementById('prio').value = String(it.priority ?? 'normal');
       document.getElementById('due').value = timestampToLocalInput(it.due ?? 0);
+      document.getElementById('dueAllDay').checked = !!it.dueAllDay;
       document.getElementById('recurrence').value = String(it.recurrence ?? 'none');
       document.getElementById('recurrenceCustomUnit').value = String(it.recurrenceCustomUnit ?? 'w');
       document.getElementById('recurrenceCustomValue').value = String(parseInt(it.recurrenceCustomValue) || 1);
@@ -2412,6 +2416,7 @@
           return Number.isFinite(lt) ? lt : getDefaultNotificationLeadTime();
         })();
         const dueStr = document.getElementById('due').value || '';
+        const dueAllDay = !!document.getElementById('dueAllDay').checked;
         const prio = document.getElementById('prio').value || 'normal';
         const quantity = parseInt(document.getElementById('quantity').value) || 0;
         const recurrence = (dueStr !== '') ? (document.getElementById('recurrence').value || 'none') : 'none';
@@ -2437,9 +2442,9 @@
         resetForm();
 
         if (editingId > 0) {
-          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime }));
+          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
         } else {
-          requestAction('AddItem', JSON.stringify({ title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime }));
+          requestAction('AddItem', JSON.stringify({ title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
         }
         closeOverlay();
       });

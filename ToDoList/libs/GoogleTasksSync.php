@@ -576,6 +576,12 @@ trait GoogleTasksSync
 
     private function GoogleApplyServerToLocal(array &$Local, array $Server): void
     {
+        // GUARANTEE (package 7): the Google Tasks API has no priority, reminder, recurrence or
+        // quantity. Those are local-only fields and MUST survive every sync — this method
+        // therefore only ever writes the four fields Google actually round-trips
+        // (title/info/done/due) and the sync bookkeeping. Do NOT add priority/notification/
+        // recurrence*/quantity/notifiedFor here; overwriting them would silently destroy
+        // local-only user data. (Verified live in all conflict modes.)
         $Local['title'] = $Server['title'];
         $Local['info'] = $Server['info'];
         $Local['done'] = $Server['done'];
