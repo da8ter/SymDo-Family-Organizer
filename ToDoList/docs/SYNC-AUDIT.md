@@ -292,7 +292,9 @@ Alle Punkte der empfohlenen Reihenfolge sind umgesetzt (Syntax-Lint über alle D
 - Hinweis: In einem Lauf mit Deletes + Edits können Google-PATCHes wegen der Positions-ETag-Bumps einmalig 412 liefern und konvergieren im Folgelauf (PATCHes selbst bumpen keine Sibling-ETags — nur Inserts/Deletes).
 - ✅ **Listenwechsel-Test (2026-07-03, Google A↔B):** `SyncHandleListChange` leert die lokalen Items sofort bei ApplyChanges; der Folgesync importiert ausschließlich die neue Liste. **Keine Übertragung in beide Richtungen** (Marker-Task blieb in der alten Liste, wurde weder hochgeladen noch gelöscht; Ziel-Liste unverändert). Randfall verifiziert: ein beim Wechsel noch offener Lösch-Tombstone wird mit verworfen und feuert gegen keine der Listen. Rückwechsel stellt den alten Stand per Import wieder her. Der Mechanismus ist für MS (`MicrosoftDeltaLink`-Reset) und CalDAV (`CalDAVSyncToken`-Reset) derselbe geteilte Code-Pfad.
 
-### Live-Test CalDAV (2026-07-02, Instanz „ToDo Liste CalDav", Nextcloud/SabreDAV @ localhost:8880, 30 generierte Test-Tasks)
+### Live-Test CalDAV (2026-07-02, Instanz „ToDo Liste CalDav", ownCloud/SabreDAV @ localhost:8880, 30 generierte Test-Tasks)
+
+> Korrektur 03.07.: Der Testserver ist `owncloud/server:latest` (Docker), nicht Nextcloud — per SabreDAV-Antwort nicht unterscheidbar, per `docker ps` verifiziert. Bekannter Anzeige-Hinweis: Die ownCloud-Kalender/Aufgaben-Web-App rendert UTC-`DUE`-Werte unkonvertiert (zeigt z. B. 07:11 statt 09:11 lokal), obwohl Browser- und Nutzer-Zeitzone korrekt sind — reines Darstellungsproblem der App, Daten und native Clients sind korrekt.
 
 - ✅ **R3/UID-Stabilität**: Alle 30 neuen Tasks mit `UID:symcon-<inst>-<id>` verbatim auf dem Server; lokale IDs+UIDs über zweiten Sync **identisch** (vor dem Fix: Drop+Reimport jedes neuen Tasks mit Verlust aller lokalen Felder).
 - ✅ **R8/Escaping**: Wire-Format RFC-5545-konform verifiziert — `SUMMARY:…\, mit\; …` (einfach escaped), Backslash-Titel `C:\\temp\\x`, `DESCRIPTION:Zeile 1\nZeile 2\, …`; lokaler Round-Trip über mehrere Syncs verlustfrei (keine Doppel-Escapes, keine Backslash-Korruption mehr).
@@ -312,3 +314,17 @@ Alle Punkte der empfohlenen Reihenfolge sind umgesetzt (Syntax-Lint über alle D
 5. **R6** — Google-Cursor +1 s (macht A1-Google real wirksam).
 6. **R7/R8/R9/R10** — CalDAV-Integrität (412-Schleife, Escaping, VALARM, Tombstone-Lücke).
 7. **R12–R22** nach Aufwand/Nutzen; **Live-Test der If-Match-Pfade (MS + Google) vor Produktivfreigabe** — die API-Doku beider Anbieter dokumentiert If-Match/412 nicht.
+
+---
+
+# Nachtrag 2026-07-03 — CalDAV Fälligkeit in lokaler Zeitzone (Option 2)
+
+**Anlass:** Die ownCloud-/Nextcloud-Aufgaben-Web-App rendert `DUE` in UTC-Z-Form unkonvertiert (zeigt z. B. 07:11 statt 09:11 lokal), obwohl der gespeicherte Zeitpunkt korrekt ist. Der D2-Fix (immer UTC-Z) war RFC-sicher, aber für diese naiven UIs unschön.
+
+**Umsetzung (`CalDAVBuildVTodo` + neu `CalDAVBuildVTimezone`):** `DUE` wird jetzt als `DUE;TZID=<Host-Zone>:<lokale Wanduhrzeit>` geschrieben, zusammen mit einem **eingebetteten VTIMEZONE**-Block (aus PHP-Transition-Daten generiert: DAYLIGHT/STANDARD mit korrektem `TZOFFSETFROM/TO` und `RRULE`, für Nicht-DST-Zonen eine feste STANDARD-Komponente). Damit ist die Referenz RFC-5545-gültig (behebt D2 nicht durch Rückkehr zum invaliden Zustand, sondern durch die fehlende VTIMEZONE) und naive UIs zeigen die lokale Uhrzeit. `DTSTAMP/CREATED/LAST-MODIFIED/COMPLETED` bleiben UTC-Z (das ist korrekt — echte UTC-Zeitstempel). Fällt die Host-Zone auf `UTC` oder ist sie nicht auflösbar, bleibt die UTC-Z-Form (kein Regressionsrisiko).
+
+**Verifiziert (Unit + Live gegen ownCloud):** VTIMEZONE für Europe/Berlin korrekt (letzter So März 02:00 → +0200, letzter So Okt 03:00 → +0100); Fixed-Offset-Zone (Tokyo) ohne RRULE; Round-Trip Sommer- und Winterzeit instant-stabil; SabreDAV akzeptiert den PUT (VObject-Validierung); Mehrfach-Sync ohne Phantom-Change (localModified bleibt 0) und ohne Duplikate.
+
+**Hinweis:** Bereits zuvor synchronisierte Tasks behalten ihre alte UTC-Z-Form auf dem Server, bis sie das nächste Mal geschrieben werden (lokale Änderung oder „Reset Sync"). Neue und geänderte Tasks nutzen sofort die TZID-Form.
+
+**Offen bleibt** D3 (`VALUE=DATE` für echte Ganztags-Aufgaben) — davon unberührt.

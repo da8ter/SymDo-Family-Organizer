@@ -784,11 +784,30 @@ trait CalDAVSync
             $lines[] = 'DESCRIPTION:' . $this->CalDAVEscapeText($infoText);
         }
 
+        $vtimezone = [];
         if (($Item['due'] ?? 0) > 0) {
-            // D2: always serialize DUE as a UTC instant (Z-form). Emitting DUE;TZID=<zone>
-            // without a matching VTIMEZONE component is invalid per RFC 5545 and strict
-            // servers/clients reject it or misread the time.
-            $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $Item['due']);
+            $due = (int)$Item['due'];
+            $tzid = date_default_timezone_get();
+            $vtimezone = ($tzid !== '' && strtoupper($tzid) !== 'UTC')
+                ? $this->CalDAVBuildVTimezone($tzid)
+                : [];
+            if (count($vtimezone) > 0) {
+                // Write DUE in the host's local time with an explicit VTIMEZONE. This is
+                // RFC-5545-valid (the referenced TZID is defined by the emitted VTIMEZONE) and
+                // makes naive web UIs (ownCloud/Nextcloud tasks apps) show the user's
+                // wall-clock time instead of the raw UTC instant. Clients with their own tz
+                // database still resolve the identical instant.
+                try {
+                    $wall = (new DateTime('@' . $due))->setTimezone(new DateTimeZone($tzid))->format('Ymd\THis');
+                    $lines[] = 'DUE;TZID=' . $tzid . ':' . $wall;
+                } catch (Exception $e) {
+                    $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $due);
+                    $vtimezone = [];
+                }
+            } else {
+                // Fixed-UTC host or unresolvable zone → keep the RFC-safe UTC instant (D2).
+                $lines[] = 'DUE:' . gmdate('Ymd\THis\Z', $due);
+            }
         }
 
         if ($Item['done'] && ($Item['doneAt'] ?? 0) > 0) {
@@ -798,7 +817,103 @@ trait CalDAVSync
         $lines[] = 'END:VTODO';
         $lines[] = 'END:VCALENDAR';
 
+        if (count($vtimezone) > 0) {
+            // VTIMEZONE must precede the VTODO that references its TZID.
+            $pos = array_search('BEGIN:VTODO', $lines, true);
+            if ($pos !== false) {
+                array_splice($lines, $pos, 0, $vtimezone);
+            }
+        }
+
         return implode("\r\n", $lines);
+    }
+
+    /**
+     * Build a VTIMEZONE component for the given IANA zone from PHP transition data, so DUE can
+     * be serialized as local wall-clock time with a valid TZID reference (Option 2). Returns []
+     * for UTC or when the zone yields no usable transitions (caller keeps the UTC Z-form).
+     */
+    private function CalDAVBuildVTimezone(string $Tzid): array
+    {
+        if ($Tzid === '' || strtoupper($Tzid) === 'UTC') {
+            return [];
+        }
+        try {
+            $tz = new DateTimeZone($Tzid);
+        } catch (Exception $e) {
+            return [];
+        }
+
+        $now = time();
+        $window = 5 * 366 * 86400; // ±5 years captures the current DST rule
+        $transitions = $tz->getTransitions($now - $window, $now + $window);
+        if (!is_array($transitions) || count($transitions) === 0) {
+            return [];
+        }
+
+        $fmt = static function (int $sec): string {
+            $sign = $sec < 0 ? '-' : '+';
+            $sec = abs($sec);
+            return sprintf('%s%02d%02d', $sign, intdiv($sec, 3600), intdiv($sec % 3600, 60));
+        };
+
+        // Keep the most recent DAYLIGHT and STANDARD onset (with its preceding offset).
+        $daylight = null;
+        $standard = null;
+        for ($i = 1; $i < count($transitions); $i++) {
+            $comp = [
+                'from' => (int)$transitions[$i - 1]['offset'],
+                'to'   => (int)$transitions[$i]['offset'],
+                'ts'   => (int)$transitions[$i]['ts'],
+                'abbr' => (string)($transitions[$i]['abbr'] ?? '')
+            ];
+            if (!empty($transitions[$i]['isdst'])) {
+                $daylight = $comp;
+            } else {
+                $standard = $comp;
+            }
+        }
+
+        $mkComp = static function (string $type, array $c) use ($fmt): array {
+            $localTs = $c['ts'] + $c['from']; // onset in TZOFFSETFROM local time
+            $days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+            $dom = (int)gmdate('j', $localTs);
+            $dim = (int)gmdate('t', $localTs);
+            $ord = ($dom > $dim - 7) ? -1 : (int)ceil($dom / 7); // -1 = last, else nth weekday
+            $lines = ['BEGIN:' . $type];
+            $lines[] = 'TZOFFSETFROM:' . $fmt($c['from']);
+            $lines[] = 'TZOFFSETTO:' . $fmt($c['to']);
+            if ($c['abbr'] !== '') {
+                $lines[] = 'TZNAME:' . $c['abbr'];
+            }
+            $lines[] = 'DTSTART:' . gmdate('Ymd\THis', $localTs);
+            $lines[] = 'RRULE:FREQ=YEARLY;BYMONTH=' . (int)gmdate('n', $localTs)
+                . ';BYDAY=' . $ord . $days[(int)gmdate('w', $localTs)];
+            $lines[] = 'END:' . $type;
+            return $lines;
+        };
+
+        if ($daylight === null || $standard === null) {
+            // Fixed-offset zone (no DST): a single STANDARD observance, no RRULE.
+            $off = (int)$transitions[count($transitions) - 1]['offset'];
+            return [
+                'BEGIN:VTIMEZONE',
+                'TZID:' . $Tzid,
+                'BEGIN:STANDARD',
+                'TZOFFSETFROM:' . $fmt($off),
+                'TZOFFSETTO:' . $fmt($off),
+                'DTSTART:19700101T000000',
+                'END:STANDARD',
+                'END:VTIMEZONE'
+            ];
+        }
+
+        return array_merge(
+            ['BEGIN:VTIMEZONE', 'TZID:' . $Tzid],
+            $mkComp('DAYLIGHT', $daylight),
+            $mkComp('STANDARD', $standard),
+            ['END:VTIMEZONE']
+        );
     }
 
     private function CalDAVEscapeText(string $Text): string
