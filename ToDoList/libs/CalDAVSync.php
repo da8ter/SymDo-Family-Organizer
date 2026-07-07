@@ -629,6 +629,26 @@ trait CalDAVSync
                 $local['caldavHref'] = $server['caldavHref'];
             }
 
+            // Migration back-fill (pre-v2.7/v2.9 items): items synced before the
+            // property-preserving merge lack the raw object and the parse-derived fields.
+            // Adopt them from the fetched server copy so the next local edit merges in-place
+            // instead of rebuilding — otherwise the first edit after the upgrade would destroy
+            // foreign VALARM/RRULE/… , and the stale local defaults (recurrence 'none',
+            // dueAllDay false) would register as "local changes" that strip the server's
+            // RRULE / VALUE=DATE. Local non-default values are kept (user intent).
+            if (($local['caldavRaw'] ?? '') === '' && ($server['caldavRaw'] ?? '') !== '') {
+                $local['caldavRaw'] = $server['caldavRaw'];
+                if (!empty($server['dueAllDay']) && empty($local['dueAllDay'])) {
+                    $local['dueAllDay'] = true;
+                }
+                if ((string)($local['recurrence'] ?? 'none') === 'none'
+                    && (string)($server['recurrence'] ?? 'none') !== 'none') {
+                    $local['recurrence'] = $server['recurrence'];
+                    $local['recurrenceCustomUnit'] = $server['recurrenceCustomUnit'] ?? 'w';
+                    $local['recurrenceCustomValue'] = $server['recurrenceCustomValue'] ?? 1;
+                }
+            }
+
             if ($serverEtag === $localEtag && $localModified < $lastSynced) {
                 $result[] = $local;
                 continue;
@@ -1100,6 +1120,12 @@ trait CalDAVSync
         }
         $notifChanged = ((bool)($Item['notification'] ?? false) !== (bool)($snap['notification'] ?? false))
             || ((int)($Item['notificationLeadTime'] ?? 0) !== (int)($snap['notificationLeadTime'] ?? 0));
+        // Option B — "off is authoritative": ONLY the explicit on→off transition governs
+        // foreign reminder-typed alarms. Lead changes and turning ON never touch foreign
+        // alarms (they only manage the own, marked alarm).
+        $reminderOff = $notifChanged
+            && !(bool)($Item['notification'] ?? false)
+            && (bool)($snap['notification'] ?? false);
 
         $tokens = $this->CalDAVTokenizeBody($body);
         $props = []; // property lines — emitted BEFORE all components (RFC 5545 §3.6.2)
@@ -1144,19 +1170,28 @@ trait CalDAVSync
                 }
                 $props[] = $tok['line']; // unmanaged, or unchanged-managed → preserve verbatim
             } else {
-                if (strcasecmp($tok['name'], 'VALARM') === 0 && $this->CalDAVIsOwnAlarm($tok['lines'])) {
-                    // Our own (marked) alarm — replace/remove only when the reminder changed;
-                    // foreign alarms fall through and are always preserved.
-                    if ($notifChanged) {
-                        if (!$ownAlarmSeen) {
-                            $ownAlarmSeen = true;
-                            if ((bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
-                                $comps[] = $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? ''));
+                if (strcasecmp($tok['name'], 'VALARM') === 0) {
+                    if ($this->CalDAVIsOwnAlarm($tok['lines'])) {
+                        // Our own (marked) alarm — replace/remove only when the reminder changed.
+                        if ($notifChanged) {
+                            if (!$ownAlarmSeen) {
+                                $ownAlarmSeen = true;
+                                if ((bool)($Item['notification'] ?? false) && (int)($Item['due'] ?? 0) > 0) {
+                                    $comps[] = $this->CalDAVBuildValarm((int)($Item['notificationLeadTime'] ?? 0), (string)($Item['title'] ?? ''));
+                                }
                             }
+                            continue; // drop this (and any further) own alarm
                         }
-                        continue; // drop this (and any further) own alarm
+                        $ownAlarmSeen = true; // unchanged → keep it (falls through to preserve)
+                    } elseif ($reminderOff && $this->CalDAVIsRelativeDisplayAlarm($tok['lines'])) {
+                        // Option B — the user explicitly turned the reminder OFF, and this
+                        // foreign relative DISPLAY alarm is exactly what the imported reminder
+                        // state was derived from. Keeping it would (a) keep ringing in every
+                        // other client despite the off-switch and (b) re-import as ON on the
+                        // next server change (flip-flop). EMAIL/AUDIO and absolute-trigger
+                        // alarms are never touched; unrelated edits still preserve everything.
+                        continue;
                     }
-                    $ownAlarmSeen = true; // unchanged → keep it (falls through to preserve)
                 }
                 $comps[] = $tok['lines'];
             }
@@ -1291,6 +1326,27 @@ trait CalDAVSync
             }
         }
         return false;
+    }
+
+    /**
+     * Option B: a relative DISPLAY alarm is "reminder-typed" — it is what the imported
+     * notification state is derived from, so an explicit reminder-off removes it (foreign or
+     * not). EMAIL/AUDIO alarms and absolute (date-time) triggers never match.
+     */
+    private function CalDAVIsRelativeDisplayAlarm(array $Lines): bool
+    {
+        $isDisplay = false;
+        $relative = false;
+        foreach ($Lines as $l) {
+            $t = trim($l);
+            if (stripos($t, 'ACTION:') === 0 && stripos($t, 'DISPLAY') !== false) {
+                $isDisplay = true;
+            }
+            if (stripos($t, 'TRIGGER') === 0 && $this->CalDAVTriggerToLead($t) !== null) {
+                $relative = true;
+            }
+        }
+        return $isDisplay && $relative;
     }
 
     private function CalDAVBuildValarm(int $LeadSeconds, string $Title): array

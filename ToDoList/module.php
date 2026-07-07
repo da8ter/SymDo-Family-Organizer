@@ -711,7 +711,11 @@ class ToDoList extends IPSModuleStrict
                 $items[$i]['recurrenceResetLeadTime'] = $newReopen;
             }
 
-            if ($due > 0 && array_key_exists('notificationLeadTime', $items[$i])) {
+            // Clamp the lead only when the user actually touched reminder or due fields. On an
+            // unrelated edit (title/info) a silent re-clamp would register as a reminder change
+            // in the CalDAV merge and needlessly rewrite alarms (confirmed review finding).
+            if ($due > 0 && array_key_exists('notificationLeadTime', $items[$i])
+                && (array_key_exists('notificationLeadTime', $Data) || array_key_exists('notification', $Data) || array_key_exists('due', $Data))) {
                 $unit = (string)($items[$i]['recurrenceCustomUnit'] ?? 'w');
                 $val = (int)($items[$i]['recurrenceCustomValue'] ?? 1);
                 $limit = $this->GetLeadTimeLimitSeconds($due, $now, $recurrence, $unit, $val);

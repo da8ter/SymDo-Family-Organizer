@@ -17,7 +17,7 @@
 | **Fälligkeit (Datum)** | ✅ `due` | ✅ `dueDateTime` | ✅ `DUE` |
 | **Fälligkeit (Uhrzeit)** | ❌ API verwirft die Uhrzeit („time portion discarded") — Modul sendet Mitternacht, bewahrt die lokale Uhrzeit über `MergeDueWithLocalTime` | ⚠️ MS To Do zeigt nur das Datum (keine Uhrzeit). Fälligkeit + Erinnerung werden jetzt in lokaler Zeitzone gesendet (Graph akzeptiert IANA-Namen) → korrektes Kalenderdatum auch bei mitternachtsnahen Zeiten (B2 behoben); lokale Uhrzeit wird beim Round-Trip bewahrt | ✅ volle Uhrzeit als `DUE;TZID=<lokale Zone>` mit eingebettetem VTIMEZONE (Option 2, umgesetzt) → naive Web-UIs (ownCloud/Nextcloud) zeigen die lokale Uhrzeit; echte Ganztags-Aufgaben werden als `DUE;VALUE=DATE` erzeugt und round-trippen (Paket 3, D3 behoben) |
 | **Priorität** (hoch/normal/niedrig) | ❌ API kennt keine Priorität | ✅ `importance` (high/normal/low — 1:1) | ✅ `PRIORITY` bleibt beim Property-Preserving Merge byte-genau erhalten, wenn lokal unverändert (feine Werte 3/5 gehen nicht mehr verloren, D6 behoben); nur bei lokaler Änderung wird hoch→1/niedrig→9 geschrieben |
-| **Erinnerung + Vorlauf** | ❌ API bietet keine Reminder → bleibt lokal erhalten (Server-Wins fasst `notification` nicht an) | ⚠️ `isReminderOn` + `reminderDateTime`; Vorlauf auf nächsten lokalen Wert gerundet (0/5/10/30 min, 1/5/12 h) | ✅ `VALARM` Zwei-Wege: relative DISPLAY-Alarme werden als `notification`+Vorlauf importiert und aus lokalen Erinnerungen als `TRIGGER:-PT…` geschrieben; fremde/andersartige Alarme bleiben beim Merge erhalten |
+| **Erinnerung + Vorlauf** | ❌ API bietet keine Reminder → bleibt lokal erhalten (Server-Wins fasst `notification` nicht an) | ⚠️ `isReminderOn` + `reminderDateTime`; Vorlauf auf nächsten lokalen Wert gerundet (0/5/10/30 min, 1/5/12 h) | ✅ `VALARM` Zwei-Wege: relative DISPLAY-Alarme werden als `notification`+Vorlauf importiert und aus lokalen Erinnerungen als `TRIGGER;RELATED=END:-PT…` geschrieben. „Aus" ist autoritativ: das Ausschalten entfernt auch fremde relative DISPLAY-Alarme (kein Flip-Flop, kein Weiterklingeln); EMAIL-/absolute Alarme und unbeteiligte Edits bleiben unangetastet |
 | **Wiederholung** | ❌ API stellt keine Recurrence bereit (auch Googles UI-Wiederholungen sind API-unsichtbar) → läuft rein lokal, neue Fälligkeit wird nach Abhaken hochgeladen | ✅/⚠️ `recurrence` — Details in Abschnitt 2 | ✅ fremde `RRULE` bleibt beim Property-Preserving Merge erhalten (wird nicht mehr zerstört); das Modul erzeugt jetzt auch eine eigene `RRULE` (inkl. stündlich, Paket 2) — serverseitig für andere Clients sichtbar |
 | **Menge (quantity)** | ➖ | ➖ | ➖ |
 | **Wiedereröffnungs-Vorlauf** (recurrenceResetLeadTime) | ➖ | ➖ | ➖ |
@@ -32,13 +32,13 @@ Lokales Modell: `w1/w2/w3` (1/2/3-wöchentlich), `m1` (monatlich), `q1` (quartal
 
 | Lokal | → Microsoft | ← Microsoft | Google / CalDAV |
 |---|---|---|---|
-| w1/w2/w3 | `weekly` interval 1/2/3 (Wochentag der Fälligkeit) | `weekly` 1/2/3 → w1/w2/w3 | nur lokal |
-| m1 / q1 | `absoluteMonthly` interval 1 / 3 | `absoluteMonthly` 1/3 → m1/q1 | nur lokal |
-| y1 | `absoluteYearly` | `absoluteYearly` 1 → y1 | nur lokal |
-| custom d/w/m/y × n | `daily`/`weekly`/`absoluteMonthly`/`absoluteYearly` × n | umgekehrt → custom × n | nur lokal |
-| custom **h** (stündlich) | ⚠️ nicht abbildbar (Graph-Minimum: daily) — Task wird ohne Recurrence geschrieben, Serie läuft nur lokal | — | nur lokal (CalDAV könnte: `FREQ=HOURLY`) |
+| w1/w2/w3 | `weekly` interval 1/2/3 (Wochentag der Fälligkeit) | `weekly` 1/2/3 → w1/w2/w3 | Google: nur lokal · CalDAV: `RRULE:FREQ=WEEKLY[;INTERVAL=n]` ⇄ |
+| m1 / q1 | `absoluteMonthly` interval 1 / 3 | `absoluteMonthly` 1/3 → m1/q1 | Google: nur lokal · CalDAV: `FREQ=MONTHLY[;INTERVAL=3]` ⇄ |
+| y1 | `absoluteYearly` | `absoluteYearly` 1 → y1 | Google: nur lokal · CalDAV: `FREQ=YEARLY` ⇄ |
+| custom d/w/m/y × n | `daily`/`weekly`/`absoluteMonthly`/`absoluteYearly` × n | umgekehrt → custom × n | Google: nur lokal · CalDAV: `FREQ=DAILY/WEEKLY/MONTHLY/YEARLY;INTERVAL=n` ⇄ |
+| custom **h** (stündlich) | ⚠️ nicht abbildbar (Graph-Minimum: daily) — Task wird ohne Recurrence geschrieben, Serie läuft nur lokal | — | Google: nur lokal · CalDAV: `FREQ=HOURLY;INTERVAL=n` ⇄ (einziges Backend) |
 | — | — | ⚠️ `relativeMonthly`/`relativeYearly` („2. Dienstag") → lokal als m1/q1/y1 genähert; ⚠️ mehrtägige `weekly` (Mo+Mi+Fr) → als Einzel-Wochentag genähert. **Beides bleibt serverseitig exakt erhalten**, solange Fälligkeit/Muster lokal nicht geändert werden (B1-Raw-Round-Trip) | — |
-| Serien-Ende | ⚠️ Modul schreibt immer `noEnd`; serverseitiges `endDate`/`numbered` wird lokal ignoriert, via Raw-Round-Trip aber bewahrt | | — |
+| Serien-Ende | ⚠️ Modul schreibt immer `noEnd`; serverseitiges `endDate`/`numbered` wird lokal ignoriert, via Raw-Round-Trip aber bewahrt | | CalDAV: `COUNT`/`UNTIL`-Serien werden bewusst NICHT lokal gerollt (Import als „keine Wiederholung"), die Raw-RRULE bleibt serverseitig erhalten |
 
 > ⚠️ **Live-Befund (02.07.2026, B3):** Graph akzeptiert `recurrence` nur beim **Anlegen** (POST) — jeder PATCH mit einem recurrence-Objekt wird mit 400 abgelehnt (getestet mit MSA-Konto, sogar beim unveränderten Server-Muster). Das Modul lässt das Feld daher bei unverändertem Muster im PATCH weg (PATCH-Semantik erhält das Server-Muster — erfüllt das B1-Ziel besser als Raw-Zurücksenden). **Lokale Muster-Änderungen an bestehenden MS-Tasks erreichen den Server nicht** (Retry ohne recurrence liefert die übrigen Felder; das Server-Muster bleibt maßgeblich und wird reimportiert). Abgeschlossene Serien werden MS-nativ als `notStarted` + nächste Fälligkeit übertragen. Details: [SYNC-AUDIT.md](SYNC-AUDIT.md), Release-Testrunde.
 
