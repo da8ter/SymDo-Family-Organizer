@@ -1198,8 +1198,8 @@
       document.getElementById('detailTaskInfo').textContent = String(it.info ?? '');
 
       const dueTs = parseInt(it.due) || 0;
-      const due = formatDue(dueTs);
-      const dueClass = getDueBadgeClass(dueTs);
+      const due = formatDue(dueTs, !!it.dueAllDay, it.dueDay);
+      const dueClass = getDueBadgeClass(dueTs, !!it.dueAllDay, it.dueDay);
       const quantity = parseInt(it.quantity) || 0;
       const notification = !!it.notification;
       const recurrence = String(it.recurrence ?? 'none');
@@ -1566,7 +1566,9 @@
         document.getElementById('notificationLeadTime').value = String(Number.isFinite(lt) ? lt : getDefaultNotificationLeadTime());
       }
       document.getElementById('prio').value = String(it.priority ?? 'normal');
-      document.getElementById('due').value = timestampToLocalInput(it.due ?? 0);
+      document.getElementById('due').value = (!!it.dueAllDay && /^\d{4}-\d{2}-\d{2}$/.test(String(it.dueDay ?? '')))
+        ? String(it.dueDay) + 'T00:00'
+        : timestampToLocalInput(it.due ?? 0);
       document.getElementById('dueAllDay').checked = !!it.dueAllDay;
       document.getElementById('recurrence').value = String(it.recurrence ?? 'none');
       document.getElementById('recurrenceCustomUnit').value = String(it.recurrenceCustomUnit ?? 'w');
@@ -1588,8 +1590,8 @@
       const info = escapeHtml(it.info ?? '');
       const done = !!it.done;
       const dueTs = parseInt(it.due) || 0;
-      const due = formatDue(dueTs);
-      const dueClass = getDueBadgeClass(dueTs);
+      const due = formatDue(dueTs, !!it.dueAllDay, it.dueDay);
+      const dueClass = getDueBadgeClass(dueTs, !!it.dueAllDay, it.dueDay);
       const rawQty = parseInt(it.quantity);
       const notification = !!it.notification;
       const recurrence = String(it.recurrence ?? 'none');
@@ -1899,10 +1901,6 @@
 
     function updateStats() {
       const items = Array.isArray(state.items) ? state.items : [];
-      const now = new Date();
-      const nowTs = now.getTime() / 1000;
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-      const todayEnd = todayStart + 86400;
 
       let open = 0, overdue = 0, today = 0;
       items.forEach(it => {
@@ -1910,8 +1908,9 @@
         open++;
         const due = parseInt(it.due) || 0;
         if (due > 0) {
-          if (due < nowTs) overdue++;
-          else if (due >= todayStart && due < todayEnd) today++;
+          const cls = getDueBadgeClass(due, !!it.dueAllDay, it.dueDay);
+          if (cls === 'due-overdue') overdue++;
+          else if (cls === 'due-today') today++;
         }
       });
 
@@ -2233,24 +2232,49 @@
       }
     }
 
-    function formatDue(ts) {
+    function localDayStr(d) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    function formatDue(ts, allDay, dueDay) {
+      if (allDay) {
+        // dueDay is the server's TZ-neutral 'Y-m-d' calendar day — the epoch would
+        // render as the previous day when browser and server timezones differ
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dueDay ?? ''));
+        if (m) {
+          const day = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+          return day.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+        }
+      }
       const t = parseInt(ts);
       if (!Number.isFinite(t) || t <= 0) return '';
       const d = new Date(t * 1000);
       const date = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+      if (allDay) return date;
       const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       return `${date} ${time}`;
     }
 
-    function getDueBadgeClass(ts) {
+    function getDueBadgeClass(ts, allDay, dueDay) {
       const t = parseInt(ts);
       if (!Number.isFinite(t) || t <= 0) return '';
 
       const now = new Date();
+
+      if (allDay) {
+        // All-day: compare calendar days — due-today for the whole day, overdue from
+        // the next day on. 'Y-m-d' strings compare correctly lexicographically.
+        const s = String(dueDay ?? '');
+        const due = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : localDayStr(new Date(t * 1000));
+        const today = localDayStr(now);
+        if (due < today) return 'due-overdue';
+        if (due === today) return 'due-today';
+        return '';
+      }
       const nowTs = now.getTime() / 1000;
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-      const todayEnd = todayStart + 86400;
-
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() / 1000;
       if (t < nowTs) return 'due-overdue';
       if (t >= todayStart && t < todayEnd) return 'due-today';
       return '';
@@ -2467,13 +2491,16 @@
             due = Math.floor(d.getTime() / 1000);
           }
         }
+        // datetime-local values are 'YYYY-MM-DDTHH:MM' — the date part is the picked
+        // calendar day, TZ-neutral; the server prefers it over the epoch for all-day items
+        const dueDay = (dueAllDay && due > 0) ? dueStr.slice(0, 10) : '';
 
         resetForm();
 
         if (editingId > 0) {
-          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
+          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
         } else {
-          requestAction('AddItem', JSON.stringify({ title, info, due, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
+          requestAction('AddItem', JSON.stringify({ title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
         }
         closeOverlay();
       });

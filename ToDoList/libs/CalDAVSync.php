@@ -544,6 +544,14 @@ trait CalDAVSync
         }
         $Value = preg_replace('/[^0-9TZ]/', '', $Value) ?? $Value;
 
+        // A pure DATE value is a calendar day, not an instant. RFC 5545 forbids TZID on
+        // VALUE=DATE, so a bogus TZID must not shift the day into a foreign zone — always
+        // anchor date-only values at local (server) midnight.
+        if (preg_match('/^\d{8}$/', $Value) === 1) {
+            $dt = DateTime::createFromFormat('!Ymd', $Value, new DateTimeZone(date_default_timezone_get() ?: 'UTC'));
+            return $dt !== false ? $dt->getTimestamp() : 0;
+        }
+
         $isUtc = str_ends_with($Value, 'Z');
 
         if ($isUtc) {

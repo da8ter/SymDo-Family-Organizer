@@ -509,7 +509,7 @@ class ToDoList extends IPSModuleStrict
         // midnight so it serializes cleanly as DUE;VALUE=DATE for CalDAV.
         $dueAllDay = ($due > 0) && (bool)($Data['dueAllDay'] ?? false);
         if ($dueAllDay) {
-            $due = (int)strtotime(date('Y-m-d 00:00:00', $due));
+            $due = $this->AllDayDueFromPayload($due, $Data);
         }
         $recurrence = $this->NormalizeRecurrence($Data['recurrence'] ?? 'none', $due);
         $recurrenceResetLeadTime = $this->NormalizeRecurrenceResetLeadTime($Data['recurrenceResetLeadTime'] ?? 0, $recurrence);
@@ -638,15 +638,16 @@ class ToDoList extends IPSModuleStrict
                         && date('H:i:s', $newDue) === '00:00:00';
                 }
                 if ($allDay) {
-                    $newDue = (int)strtotime(date('Y-m-d 00:00:00', $newDue));
+                    $newDue = $this->AllDayDueFromPayload($newDue, $Data);
                 }
                 $resetNotify = $resetNotify || ((int)($items[$i]['due'] ?? 0) !== $newDue) || ((bool)($items[$i]['dueAllDay'] ?? false) !== $allDay);
                 $items[$i]['due'] = $newDue;
                 $items[$i]['dueAllDay'] = $allDay;
             } elseif (array_key_exists('dueAllDay', $Data) && ($items[$i]['due'] ?? 0) > 0) {
-                // Toggling all-day without changing the date.
+                // Toggling all-day without changing the date — a stray payload dueDay
+                // must not shift the stored day, so only the stored due is floored.
                 $allDay = (bool)$Data['dueAllDay'];
-                $newDue = $allDay ? (int)strtotime(date('Y-m-d 00:00:00', (int)$items[$i]['due'])) : (int)$items[$i]['due'];
+                $newDue = $allDay ? $this->AllDayDueFromPayload((int)$items[$i]['due'], []) : (int)$items[$i]['due'];
                 $resetNotify = $resetNotify || ((bool)($items[$i]['dueAllDay'] ?? false) !== $allDay);
                 $items[$i]['due'] = $newDue;
                 $items[$i]['dueAllDay'] = $allDay;
@@ -1129,12 +1130,18 @@ class ToDoList extends IPSModuleStrict
         $today = 0;
         $now = time();
         $todayStart = strtotime('today');
-        $todayEnd = $todayStart + 86400;
+        $todayEnd = strtotime('tomorrow');
         foreach ($openItems as $it) {
             $open++;
             $due = (int)($it['due'] ?? 0);
             if ($due > 0) {
-                if ($due < $now) {
+                if ((bool)($it['dueAllDay'] ?? false)) {
+                    if ($due < $todayStart) {
+                        $overdue++;
+                    } elseif ($due < $todayEnd) {
+                        $today++;
+                    }
+                } elseif ($due < $now) {
                     $overdue++;
                 } elseif ($due >= $todayStart && $due < $todayEnd) {
                     $today++;
@@ -1221,13 +1228,21 @@ class ToDoList extends IPSModuleStrict
         }
 
         if ($ShowInfoBadges && $dueTs > 0) {
+            $allDay = (bool)($Item['dueAllDay'] ?? false);
             $dueClass = '';
-            if ($dueTs < $Now) {
+            if ($allDay) {
+                // All-day: due-today for the whole day, overdue from the next day on
+                if ($dueTs < $TodayStart) {
+                    $dueClass = ' due-overdue';
+                } elseif ($dueTs < $TodayEnd) {
+                    $dueClass = ' due-today';
+                }
+            } elseif ($dueTs < $Now) {
                 $dueClass = ' due-overdue';
             } elseif ($dueTs >= $TodayStart && $dueTs < $TodayEnd) {
                 $dueClass = ' due-today';
             }
-            $dueText = htmlspecialchars(date('d.m.Y H:i', $dueTs), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $dueText = htmlspecialchars(date($allDay ? 'd.m.Y' : 'd.m.Y H:i', $dueTs), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $meta[] = '<span class="badge due-badge' . $dueClass . '" title="' . $dueText . '">' . $dueText . '</span>';
         }
         if ($ShowInfoBadges && $notification) {
@@ -1564,7 +1579,7 @@ class ToDoList extends IPSModuleStrict
         $items = $this->LoadItems();
         $now = time();
         $todayStart = strtotime('today');
-        $todayEnd = $todayStart + 86400;
+        $todayEnd = strtotime('tomorrow');
 
         $open = 0;
         $overdue = 0;
@@ -1577,7 +1592,13 @@ class ToDoList extends IPSModuleStrict
             $open++;
             $due = (int)($item['due'] ?? 0);
             if ($due > 0) {
-                if ($due < $now) {
+                if ((bool)($item['dueAllDay'] ?? false)) {
+                    if ($due < $todayStart) {
+                        $overdue++;
+                    } elseif ($due < $todayEnd) {
+                        $dueToday++;
+                    }
+                } elseif ($due < $now) {
                     $overdue++;
                 } elseif ($due >= $todayStart && $due < $todayEnd) {
                     $dueToday++;
@@ -1699,6 +1720,21 @@ class ToDoList extends IPSModuleStrict
             }
         }
         $this->SetTimerInterval('RecurrenceTimer', $has ? 60000 : 0);
+    }
+
+    // An all-day due is a calendar day, not an instant. A client in another timezone
+    // cannot express "July 7th" reliably as an epoch, so payloads may carry the picked
+    // day as a TZ-neutral 'Y-m-d' string which wins over the epoch when present.
+    private function AllDayDueFromPayload(int $Due, array $Data): int
+    {
+        $day = (string)($Data['dueDay'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) === 1) {
+            $ts = strtotime($day . ' 00:00:00');
+            if ($ts !== false) {
+                return $ts;
+            }
+        }
+        return (int)strtotime(date('Y-m-d 00:00:00', $Due));
     }
 
     private function NormalizeRecurrence(mixed $Value, int $Due): string
@@ -1958,9 +1994,18 @@ class ToDoList extends IPSModuleStrict
     private function SendState(): void
     {
         $sort = $this->GetSortPrefs();
+        $items = $this->LoadItems();
+        foreach ($items as &$it) {
+            // All-day dues encode server-local midnight; ship the calendar day TZ-neutral
+            // so a client in another timezone renders the intended day.
+            if (!empty($it['dueAllDay']) && (int)($it['due'] ?? 0) > 0) {
+                $it['dueDay'] = date('Y-m-d', (int)$it['due']);
+            }
+        }
+        unset($it);
         $this->UpdateVisualizationValue(json_encode([
             'type'  => 'state',
-            'items' => $this->LoadItems(),
+            'items' => $items,
             'notificationLeadTimeDefault' => $this->ReadPropertyInteger('NotificationLeadTime'),
             'syncBackend' => $this->GetSyncBackend(),
             'sortMode' => $sort['mode'],
