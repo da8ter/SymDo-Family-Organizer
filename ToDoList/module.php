@@ -365,7 +365,34 @@ class ToDoList extends IPSModuleStrict
             ]
         ];
 
+        $form['elements'] = array_merge($form['elements'], $this->GetDonationFormElements());
+
         return json_encode($form);
+    }
+
+    private function GetDonationFormElements(): array
+    {
+        $formPath = dirname(__DIR__) . '/ToDoOverview/form.json';
+        if (!is_readable($formPath)) {
+            return [];
+        }
+
+        $form = json_decode((string)file_get_contents($formPath), true);
+        if (!is_array($form) || !isset($form['elements']) || !is_array($form['elements'])) {
+            return [];
+        }
+
+        foreach ($form['elements'] as $index => $element) {
+            if (!is_array($element)) {
+                continue;
+            }
+
+            if (($element['type'] ?? '') === 'Label' && ($element['caption'] ?? '') === 'Spenden / Schenkung') {
+                return array_slice($form['elements'], max(0, $index - 1));
+            }
+        }
+
+        return [];
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
