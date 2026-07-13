@@ -69,7 +69,9 @@
             "No ZIP configured": "No ZIP configured",
             "Service portfolio request failed": "Service portfolio request failed",
             "Delivery not available for this ZIP": "Delivery not available for this ZIP",
-            "No pickup markets": "No pickup markets"
+            "No pickup markets": "No pickup markets",
+            "Donation / Gift": "Donation / Gift",
+            "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:"
         },
         "de": {
             "Shopping List": "Einkaufsliste",
@@ -180,7 +182,9 @@
             "No ZIP configured": "Keine PLZ konfiguriert",
             "Service portfolio request failed": "Service-Portfolio-Abfrage fehlgeschlagen",
             "Delivery not available for this ZIP": "Lieferung für diese PLZ nicht verfügbar",
-            "No pickup markets": "Keine Abholmärkte"
+            "No pickup markets": "Keine Abholmärkte",
+            "Donation / Gift": "Spenden / Schenkung",
+            "Say thanks and support the developer of this module:": "Sag Danke und unterstütze den Entwickler dieses Moduls:"
         }
     }
 }

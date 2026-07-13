@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-class ToDoOverview extends IPSModule
+class ToDoOverview extends IPSModuleStrict
 {
     // GUID des Quell-Moduls ToDoList (Filter im SelectInstance des Formulars)
     private const TODOLIST_MODULE_GUID = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
@@ -100,9 +100,7 @@ class ToDoOverview extends IPSModule
         $this->PushState();
     }
 
-    // Signatur ohne Typen: IPSModule::MessageSink ist in der Basisklasse untypisiert,
-    // daher muss der Override kompatibel (ebenfalls untypisiert) sein.
-    public function MessageSink($TimeStamp, $SenderID, $Message, $Data)
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         switch ($Message) {
             case IPS_KERNELSTARTED:
@@ -119,7 +117,7 @@ class ToDoOverview extends IPSModule
         $path = __DIR__ . '/module.html';
         $html = @file_get_contents($path);
         if (!is_string($html)) {
-            IPS_LogMessage('ToDoOverview', 'GetVisualizationTile: module.html could not be loaded. path=' . $path);
+            $this->LogMessage('GetVisualizationTile: module.html could not be loaded. path=' . $path, KL_WARNING);
             return '';
         }
 

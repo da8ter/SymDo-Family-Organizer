@@ -90,11 +90,12 @@
     },
     {
       "type": "Label",
-      "caption": "Spenden / Schenkung"
+      "name": "DonationHeader",
+      "caption": "Donation / Gift"
     },
     {
       "type": "Label",
-      "caption": "Sag Danke und unterstütze den Entwickler dieses Moduls:"
+      "caption": "Say thanks and support the developer of this module:"
     },
     {
       "type": "RowLayout",

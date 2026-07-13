@@ -40,14 +40,15 @@ class ToDoGateway extends IPSModuleStrict
         $this->RegisterPropertyString('CalDAVServerURL', '');
         $this->RegisterPropertyString('CalDAVUsername', '');
         $this->RegisterPropertyString('CalDAVPassword', '');
+
+        // OAuth redirect endpoints (volatile, re-registered on every start)
+        $this->RegisterHook('todogateway_google');
+        $this->RegisterHook('todogateway_microsoft');
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
-
-        $this->RegisterGoogleWebHook();
-        $this->RegisterMicrosoftWebHook();
     }
 
     public function GetConfigurationForm(): string
@@ -83,7 +84,7 @@ class ToDoGateway extends IPSModuleStrict
                 continue;
             }
 
-            if (($element['type'] ?? '') === 'Label' && ($element['caption'] ?? '') === 'Spenden / Schenkung') {
+            if (($element['name'] ?? '') === 'DonationHeader') {
                 return array_slice($form['elements'], max(0, $index - 1));
             }
         }
@@ -94,11 +95,6 @@ class ToDoGateway extends IPSModuleStrict
     // ──────────────────────────────────────────────────────────────────────────
     // Google Tasks
     // ──────────────────────────────────────────────────────────────────────────
-
-    private function RegisterGoogleWebHook(): void
-    {
-        $this->OAuthRegisterWebHook('/hook/todogateway_google/');
-    }
 
     private function GoogleSetEncryptedToken(string $Attribute, string $Token): void
     {
@@ -279,11 +275,6 @@ class ToDoGateway extends IPSModuleStrict
     // ──────────────────────────────────────────────────────────────────────────
     // Microsoft To Do
     // ──────────────────────────────────────────────────────────────────────────
-
-    private function RegisterMicrosoftWebHook(): void
-    {
-        $this->OAuthRegisterWebHook('/hook/todogateway_microsoft/');
-    }
 
     private function MicrosoftGetTenant(): string
     {

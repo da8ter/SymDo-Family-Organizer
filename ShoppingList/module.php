@@ -93,7 +93,6 @@ class ShoppingList extends IPSModuleStrict
         if ($this->ReadAttributeString('WebHookToken') === '') {
             $this->WriteAttributeString('WebHookToken', bin2hex(random_bytes(16)));
         }
-        $this->RegisterHook($this->GetAssetHookPath());
 
         // Detect category renames and propagate to items
         $this->SyncCategoryRenames();
@@ -345,11 +344,11 @@ class ShoppingList extends IPSModuleStrict
             $size     = file_exists($path) ? (string)@filesize($path) : 'n/a';
             $err      = error_get_last();
             $errMsg   = is_array($err) && isset($err['message']) ? (string)$err['message'] : '';
-            IPS_LogMessage('ShoppingList', 'GetVisualizationTile: module.html could not be loaded. path=' . $path . ' exists=' . $exists . ' readable=' . $readable . ' size=' . $size . ' err=' . $errMsg);
+            $this->LogMessage('GetVisualizationTile: module.html could not be loaded. path=' . $path . ' exists=' . $exists . ' readable=' . $readable . ' size=' . $size . ' err=' . $errMsg, KL_WARNING);
             return '';
         }
         if (strlen($html) < 200) {
-            IPS_LogMessage('ShoppingList', 'GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80));
+            $this->LogMessage('GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
         $token = urlencode($this->ReadAttributeString('WebHookToken'));
         $hookPath = '/hook/' . $this->GetAssetHookPath() . '/';
