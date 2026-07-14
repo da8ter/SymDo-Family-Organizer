@@ -2,6 +2,18 @@
 
 Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
+- Artikel anlegen, bearbeiten, abhaken und löschen
+- Suchvorschläge auf Basis häufig verwendeter Artikel
+- Automatische Mengenerhöhung, wenn ein Artikel bereits auf der Liste steht
+- Gruppierung nach Kategorien; Reihenfolge der Kategorien frei konfigurierbar
+- Barcode-Scanner über die Gerätekamera mit automatischer Produkterkennung; alternativ Anbindung eines externen Scanners über eine Variable
+- Favoritenlisten (z. B. Wocheneinkauf) — komplette Artikelgruppen mit einem Klick übernehmen
+- Abgehakte Artikel wandern in den Bereich „Zuletzt benutzt" und lassen sich von dort wieder auf die Liste setzen
+- Funktionen „Alles erledigt" und „Benutzte Artikel löschen" für die ganze Liste
+- Optionale Produktbilder, im Backend abschaltbar
+- Druckfunktion mit drei Layouts (kompakt bis detailliert mit Bildern und Notizen)
+- Artikelanzahl als Variable für eigene Automationen
+
 ## Installation
 
 1. Bibliothek über das Module Control installieren:

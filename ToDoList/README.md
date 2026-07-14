@@ -2,6 +2,18 @@
 
 Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV.
 
+- Aufgaben direkt in der Visualisierung anlegen, bearbeiten und abhaken
+- Zwei-Wege-Synchronisation mit Google Tasks, Microsoft To Do und CalDAV (z. B. Nextcloud)
+- Push-Benachrichtigungen vor Fälligkeit, Vorlaufzeit pro Aufgabe einstellbar
+- Wiederkehrende Aufgaben (wöchentlich bis jährlich oder eigenes Intervall); erledigte Aufgaben werden zum nächsten Termin automatisch wieder geöffnet
+- Aufgaben mit Notiz, Priorität, Menge und Fälligkeit — mit Uhrzeit oder ganztägig
+- Übersicht über offene, heute fällige und überfällige Aufgaben; optional als separate Übersichtskachel
+- Sortierung nach Fälligkeit, Priorität, Datum oder Titel; manuelle Reihenfolge per Drag & Drop
+- Löschen per Wischgeste; optional automatisches Entfernen erledigter Aufgaben
+- Mehrere Listen über separate Instanzen
+- Zählerwerte (offen/überfällig/heute fällig) als Variablen für eigene Automationen; alle Funktionen per PHP-Skript nutzbar
+- Zusätzliche HTML-Ausgabe für IPSView
+
 ![ToDo List](https://github.com/da8ter/images/blob/main/todo.png)
 
 ## Inhalt
