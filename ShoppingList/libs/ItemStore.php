@@ -38,6 +38,12 @@ trait ItemStore
 
     private function SendState(): void
     {
+        $this->BumpAppRevision();
+        $this->PushCurrentState();
+    }
+
+    private function PushCurrentState(): void
+    {
         $this->UpdateVisualizationValue(
             json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
         );
@@ -319,7 +325,7 @@ trait ItemStore
         }
     }
 
-    private function ToggleItemCart(string $Id): bool
+    private function ToggleItemCart(string $Id, ?bool $Target = null): bool
     {
         $semaphoreKey = 'SL_Items_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
@@ -339,11 +345,17 @@ trait ItemStore
             if ($idx === null) {
                 return false;
             }
-            $movingToCart = !$items[$idx]['inCart'];
-            if ($movingToCart && $this->HasCartDuplicate($items, $items[$idx])) {
+            $current = (bool)$items[$idx]['inCart'];
+            $new = $Target ?? !$current;
+            if ($new === $current) {
+                // Idempotent no-op: a replayed request with explicit target must
+                // not flip the state back (or delete via the duplicate branch).
+                return true;
+            }
+            if ($new && $this->HasCartDuplicate($items, $items[$idx])) {
                 array_splice($items, $idx, 1);
             } else {
-                $items[$idx]['inCart'] = !$items[$idx]['inCart'];
+                $items[$idx]['inCart'] = $new;
             }
             $this->SaveItems($items);
             return true;

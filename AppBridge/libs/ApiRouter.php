@@ -1,0 +1,418 @@
+<?php
+
+declare(strict_types=1);
+
+trait ApiRouter
+{
+    private function HandleApiRequest(): void
+    {
+        $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $route  = $this->ResolveRoute();
+
+        if (($route[0] ?? '') !== 'v1') {
+            $this->SendApiError('unknown_route', 'Unknown API route', 404);
+            return;
+        }
+        $resource = $route[1] ?? '';
+
+        // Pairing is the only unauthenticated endpoint
+        if ($resource === 'pair' && $method === 'POST') {
+            $this->HandlePair();
+            return;
+        }
+
+        // The token is only accepted as ?t= query parameter for the assets route
+        // (image loaders); everywhere else it must travel in a header so the
+        // long-lived token does not end up in proxy/access logs.
+        $device = $this->AuthenticateRequest($resource === 'assets');
+        if ($device === null) {
+            $this->SendApiError('unauthorized', 'Missing or invalid token', 401);
+            return;
+        }
+        if (($device['revoked'] ?? false) === true) {
+            $this->SendApiError('token_revoked', 'This device pairing has been revoked', 401);
+            return;
+        }
+
+        switch ($resource) {
+            case 'pair':
+                if ($method === 'DELETE') {
+                    $this->HandleUnpair($device);
+                    return;
+                }
+                break;
+            case 'unpair': // POST alias in case DELETE does not survive a proxy
+                if ($method === 'POST') {
+                    $this->HandleUnpair($device);
+                    return;
+                }
+                break;
+            case 'discovery':
+                if ($method === 'GET') {
+                    $this->HandleDiscovery();
+                    return;
+                }
+                break;
+            case 'revisions':
+                if ($method === 'GET') {
+                    $this->HandleRevisions();
+                    return;
+                }
+                break;
+            case 'instances':
+                $this->RouteInstance($method, $route);
+                return;
+            case 'assets':
+                if ($method === 'GET') {
+                    $this->HandleAsset(array_slice($route, 2));
+                    return;
+                }
+                break;
+        }
+        $this->SendApiError('unknown_route', 'Unknown API route', 404);
+    }
+
+    private function ResolveRoute(): array
+    {
+        if (isset($_GET['r'])) {
+            $path = (string)$_GET['r'];
+        } else {
+            $uri  = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $path = (string)(parse_url($uri, PHP_URL_PATH) ?? '');
+            $prefix = '/hook/' . self::HOOK_PATH;
+            if (str_starts_with($path, $prefix)) {
+                $path = substr($path, strlen($prefix));
+            }
+        }
+        $segments = explode('/', trim($path, '/'));
+        return array_values(array_filter($segments, static fn(string $s): bool => $s !== ''));
+    }
+
+    private function RouteInstance(string $method, array $route): void
+    {
+        $id   = (int)($route[2] ?? 0);
+        $kind = $this->GetInstanceKind($id);
+        if ($kind === null) {
+            $this->SendApiError('unknown_instance', 'Unknown instance: ' . $id, 404);
+            return;
+        }
+        $sub = $route[3] ?? '';
+        if ($sub === 'state' && $method === 'GET') {
+            $this->HandleState($id, $kind);
+            return;
+        }
+        if ($sub === 'actions' && $method === 'POST') {
+            $this->HandleActions($id, $kind);
+            return;
+        }
+        if ($sub === 'barcode' && $method === 'GET') {
+            $ean = (string)($route[4] ?? ($_GET['ean'] ?? ''));
+            $this->HandleBarcode($id, $kind, $ean);
+            return;
+        }
+        $this->SendApiError('unknown_route', 'Unknown API route', 404);
+    }
+
+    private function HandlePair(): void
+    {
+        $body = $this->ReadJsonBody();
+        $code = strtoupper(trim((string)($body['code'] ?? '')));
+        if ($code === '' || !$this->ConsumePairingCode($code)) {
+            $this->SendApiError('pairing_invalid', 'Pairing code invalid or expired', 403);
+            return;
+        }
+        $token = $this->RegisterPairedDevice([
+            'deviceName' => trim((string)($body['deviceName'] ?? '')),
+            'model'      => trim((string)($body['model'] ?? '')),
+            'platform'   => trim((string)($body['platform'] ?? '')),
+            'appVersion' => trim((string)($body['appVersion'] ?? '')),
+        ]);
+        if ($token === null) {
+            // Device was not persisted — the code stays valid within its grace
+            // window, so the app can simply retry.
+            $this->SendApiError('internal', 'Device could not be stored, please retry', 500);
+            return;
+        }
+        $this->SendJson([
+            'ok'         => true,
+            'token'      => $token,
+            'apiVersion' => self::API_VERSION,
+            'server'     => $this->BuildServerInfo(),
+        ]);
+    }
+
+    private function HandleUnpair(array $device): void
+    {
+        $this->RemoveDevice((string)($device['id'] ?? ''));
+        $this->SendJson(['ok' => true]);
+    }
+
+    private function HandleDiscovery(): void
+    {
+        $instances = [];
+        foreach ($this->GetListInstances() as $instance) {
+            $instances[] = $this->DescribeInstance((int)$instance['id'], (string)$instance['kind']);
+        }
+        $this->SendJson([
+            'ok'           => true,
+            'apiVersion'   => self::API_VERSION,
+            'server'       => $this->BuildServerInfo(),
+            'capabilities' => ['barcode' => true, 'images' => true, 'websocket' => false],
+            'instances'    => $instances,
+        ]);
+    }
+
+    private function HandleRevisions(): void
+    {
+        $revisions = [];
+        foreach ($this->GetListInstances() as $instance) {
+            $revisions[(string)$instance['id']] = $this->GetInstanceRevision((int)$instance['id'], (string)$instance['kind']);
+        }
+        $this->SendJson([
+            'ok'         => true,
+            'revisions'  => $revisions === [] ? new \stdClass() : $revisions,
+            'serverTime' => time(),
+        ]);
+    }
+
+    private function HandleState(int $id, string $kind): void
+    {
+        $stateJson = $this->CallInstanceGetAppState($id, $kind);
+        $data = json_decode((string)$stateJson, true);
+        if (!is_array($data)) {
+            $this->SendApiError('internal', 'Instance returned no state', 500);
+            return;
+        }
+        $revision = (int)($data['revision'] ?? 0);
+        header('ETag: "' . $revision . '"');
+        if ($this->GetIfNoneMatchRevision() === $revision) {
+            http_response_code(304);
+            return;
+        }
+        $this->SendJson(['ok' => true] + $data);
+    }
+
+    private function HandleActions(int $id, string $kind): void
+    {
+        $body   = $this->ReadJsonBody();
+        $action = trim((string)($body['action'] ?? ''));
+        if ($action === '') {
+            $this->SendApiError('invalid_payload', 'Missing action', 400);
+            return;
+        }
+        $payload = $body['payload'] ?? '';
+        if (!is_string($payload)) {
+            $payload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if (!is_string($payload)) {
+                $this->SendApiError('invalid_payload', 'Payload not encodable', 400);
+                return;
+            }
+        }
+
+        // Idempotency: a clientActionId already executed successfully is not
+        // dispatched again (app outbox replays after lost responses) — the
+        // client just gets the current state back.
+        $clientActionId = trim((string)($body['clientActionId'] ?? ''));
+        $dedupKey = $clientActionId !== '' ? $id . '|' . $clientActionId : '';
+        if ($dedupKey !== '' && $this->WasActionExecuted($dedupKey)) {
+            $stateData = json_decode((string)$this->CallInstanceGetAppState($id, $kind), true);
+            $data = is_array($stateData) ? $stateData : [];
+            $data = ['ok' => true, 'replayed' => true] + $data;
+            $data['clientActionId'] = $clientActionId;
+            header('ETag: "' . (int)($data['revision'] ?? 0) . '"');
+            $this->SendJson($data);
+            return;
+        }
+
+        $resultJson = $this->CallInstanceAppCall($id, $kind, $action, $payload);
+        $data = json_decode((string)$resultJson, true);
+        if (!is_array($data)) {
+            $this->SendApiError('internal', 'Instance returned no result', 500);
+            return;
+        }
+        if (($data['ok'] ?? false) === true && $dedupKey !== '') {
+            $this->MarkActionExecuted($dedupKey);
+        }
+        if ($clientActionId !== '') {
+            $data['clientActionId'] = $clientActionId;
+        }
+        header('ETag: "' . (int)($data['revision'] ?? 0) . '"');
+        // Instance-level failures surface as 4xx so a single status check on the
+        // client covers router and instance errors alike; the body still carries
+        // revision + state for reconciliation.
+        $status = 200;
+        if (($data['ok'] ?? false) !== true) {
+            $status = (($data['error']['code'] ?? '') === 'unknown_action') ? 400 : 422;
+        }
+        $this->SendJson($data, $status);
+    }
+
+    private function WasActionExecuted(string $key): bool
+    {
+        $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
+        return is_array($dedup) && isset($dedup[$key]);
+    }
+
+    private function MarkActionExecuted(string $key): void
+    {
+        $semaphoreKey = 'LAB_Dedup_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+            return; // dedup is best-effort; the action itself already succeeded
+        }
+        try {
+            $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
+            if (!is_array($dedup)) {
+                $dedup = [];
+            }
+            $now = time();
+            $dedup = array_filter($dedup, static fn($ts): bool => is_int($ts) && $now - $ts < self::ACTION_DEDUP_TTL);
+            $dedup[$key] = $now;
+            if (count($dedup) > self::ACTION_DEDUP_MAX) {
+                asort($dedup);
+                $dedup = array_slice($dedup, count($dedup) - self::ACTION_DEDUP_MAX, null, true);
+            }
+            $this->WriteAttributeString('ActionDedup', json_encode($dedup));
+        } finally {
+            IPS_SemaphoreLeave($semaphoreKey);
+        }
+    }
+
+    private function HandleBarcode(int $id, string $kind, string $ean): void
+    {
+        if ($kind !== 'shopping') {
+            $this->SendApiError('unknown_route', 'Barcode lookup is only available for shopping lists', 404);
+            return;
+        }
+        $ean = trim($ean);
+        if (!preg_match('/^\d{8,14}$/', $ean)) {
+            $this->SendApiError('invalid_payload', 'Invalid EAN', 400);
+            return;
+        }
+        if (!function_exists('SL_LookupBarcode')) {
+            $this->SendApiError('internal', 'Shopping List module is outdated', 500);
+            return;
+        }
+        $data = json_decode((string)SL_LookupBarcode($id, $ean), true);
+        if (!is_array($data)) {
+            $this->SendApiError('internal', 'Barcode lookup failed', 500);
+            return;
+        }
+        $this->SendJson(['ok' => true] + $data);
+    }
+
+    private function HandleAsset(array $segments): void
+    {
+        // Path segments come from the raw REQUEST_URI and need decoding;
+        // $_GET['f'] is already decoded by PHP — decoding it again would break
+        // filenames containing '%' or '+'.
+        $file = rawurldecode(implode('/', $segments));
+        if ($file === '') {
+            $file = (string)($_GET['f'] ?? '');
+        }
+        $base = realpath(dirname(__DIR__, 2) . '/ShoppingList/assets');
+        if ($file === '' || $base === false) {
+            $this->SendApiError('asset_not_found', 'Asset not found', 404);
+            return;
+        }
+        $path = realpath($base . '/' . $file);
+        if ($path === false || !str_starts_with($path, $base . DIRECTORY_SEPARATOR) || is_dir($path)) {
+            $this->SendApiError('asset_not_found', 'Asset not found', 404);
+            return;
+        }
+
+        $etag = '"' . md5($path . '|' . (string)@filemtime($path) . '|' . (string)@filesize($path)) . '"';
+        header('ETag: ' . $etag);
+        header('Cache-Control: public, max-age=2592000');
+        if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+            http_response_code(304);
+            return;
+        }
+
+        $mimeMap = [
+            'png'  => 'image/png',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'svg'  => 'image/svg+xml',
+        ];
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        header('Content-Type: ' . ($mimeMap[$ext] ?? 'application/octet-stream'));
+        readfile($path);
+    }
+
+    private function CallInstanceGetAppState(int $id, string $kind): string
+    {
+        if ($kind === 'shopping' && function_exists('SL_GetAppState')) {
+            return SL_GetAppState($id);
+        }
+        if ($kind === 'todo' && function_exists('TDL_GetAppState')) {
+            return TDL_GetAppState($id);
+        }
+        return '';
+    }
+
+    private function CallInstanceAppCall(int $id, string $kind, string $action, string $payload): string
+    {
+        if ($kind === 'shopping' && function_exists('SL_AppCall')) {
+            return SL_AppCall($id, $action, $payload);
+        }
+        if ($kind === 'todo' && function_exists('TDL_AppCall')) {
+            return TDL_AppCall($id, $action, $payload);
+        }
+        return '';
+    }
+
+    private function GetIfNoneMatchRevision(): ?int
+    {
+        $raw = trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+        if ($raw === '' && isset($_GET['rev'])) {
+            $raw = (string)$_GET['rev'];
+        }
+        // Proxies may downgrade to weak ETags (W/"5") — accept those as well
+        if (preg_match('~^W/~i', $raw)) {
+            $raw = substr($raw, 2);
+        }
+        $raw = trim($raw, " \t\"");
+        if ($raw === '' || !preg_match('/^\d+$/', $raw)) {
+            return null;
+        }
+        return (int)$raw;
+    }
+
+    private function GetBearerToken(bool $allowQuery): string
+    {
+        $auth = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        if (preg_match('/^Bearer\s+(\S+)$/i', $auth, $matches)) {
+            return $matches[1];
+        }
+        $header = (string)($_SERVER['HTTP_X_SYMDO_TOKEN'] ?? '');
+        if ($header !== '') {
+            return $header;
+        }
+        return $allowQuery ? (string)($_GET['t'] ?? '') : '';
+    }
+
+    private function ReadJsonBody(): array
+    {
+        $raw = file_get_contents('php://input');
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : [];
+    }
+
+    private function SendJson(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function SendApiError(string $code, string $message, int $status): void
+    {
+        $this->SendJson(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], $status);
+    }
+}

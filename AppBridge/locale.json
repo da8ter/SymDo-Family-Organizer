@@ -1,0 +1,28 @@
+{
+    "translations": {
+        "en": {
+        },
+        "de": {
+            "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app.": "Koppelt die SymDo Smartphone-App mit diesem Symcon-System. Geräte verbinden sich über Symcon Connect mit einem eigenen Zugriffstoken — es werden keine Lizenz-Zugangsdaten in der App gespeichert.",
+            "Pair new device": "Neues Gerät koppeln",
+            "Paired devices": "Gekoppelte Geräte",
+            "ID": "ID",
+            "Name": "Name",
+            "Model": "Modell",
+            "Platform": "Plattform",
+            "App version": "App-Version",
+            "Paired": "Gekoppelt",
+            "Last seen": "Zuletzt gesehen",
+            "Status": "Status",
+            "Revoke selected device": "Ausgewähltes Gerät widerrufen",
+            "Remove revoked entries": "Widerrufene Einträge entfernen",
+            "Only one SymDo Bridge instance is allowed per system.": "Pro System ist nur eine SymDo Bridge Instanz erlaubt.",
+            "Pairing code: %s (valid for 10 minutes)": "Kopplungscode: %s (10 Minuten gültig)",
+            "Warning: No Symcon Connect URL found. Enter the server address manually in the app.": "Achtung: Keine Symcon-Connect-URL gefunden. Bitte die Serveradresse manuell in der App eingeben.",
+            "Symcon Connect: %s": "Symcon Connect: %s",
+            "No Symcon Connect instance found — remote access for the app is unavailable.": "Keine Symcon-Connect-Instanz gefunden — Fernzugriff für die App ist nicht verfügbar.",
+            "Active": "Aktiv",
+            "Revoked": "Widerrufen"
+        }
+    }
+}

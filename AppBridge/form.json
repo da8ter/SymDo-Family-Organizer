@@ -1,0 +1,78 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app."
+        },
+        {
+            "type": "Label",
+            "name": "ConnectInfo",
+            "caption": ""
+        },
+        {
+            "type": "Button",
+            "caption": "Pair new device",
+            "onClick": "LAB_CreatePairing($id);"
+        },
+        {
+            "type": "Image",
+            "name": "PairingQrImage",
+            "image": "",
+            "visible": false
+        },
+        {
+            "type": "Label",
+            "name": "PairingCodeLabel",
+            "caption": "",
+            "visible": false
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Paired devices",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "List",
+                    "name": "PairedDevicesList",
+                    "rowCount": 6,
+                    "add": false,
+                    "delete": false,
+                    "columns": [
+                        { "caption": "ID", "name": "deviceId", "width": "90px" },
+                        { "caption": "Name", "name": "deviceName", "width": "auto" },
+                        { "caption": "Model", "name": "model", "width": "140px" },
+                        { "caption": "Platform", "name": "platform", "width": "100px" },
+                        { "caption": "App version", "name": "appVersion", "width": "110px" },
+                        { "caption": "Paired", "name": "createdAt", "width": "140px" },
+                        { "caption": "Last seen", "name": "lastSeenAt", "width": "140px" },
+                        { "caption": "Status", "name": "status", "width": "110px" }
+                    ],
+                    "values": []
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "Button",
+                            "caption": "Revoke selected device",
+                            "onClick": "if (is_array($PairedDevicesList)) { LAB_RevokeDevice($id, (string)$PairedDevicesList['deviceId']); }"
+                        },
+                        {
+                            "type": "Button",
+                            "caption": "Remove revoked entries",
+                            "onClick": "LAB_RemoveRevokedDevices($id);"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "actions": [],
+    "status": [
+        {
+            "code": 201,
+            "icon": "error",
+            "caption": "Only one SymDo Bridge instance is allowed per system."
+        }
+    ]
+}

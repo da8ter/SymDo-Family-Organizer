@@ -114,6 +114,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('Items', '[]');
         $this->RegisterAttributeInteger('NextID', 1);
         $this->RegisterAttributeInteger('OrderVersion', 0);
+        $this->RegisterAttributeInteger('AppRevision', 0);
         $this->RegisterAttributeInteger('LastNotificationLeadTime', 600);
         $this->RegisterAttributeString('SortMode', 'created');
         $this->RegisterAttributeString('SortDir', 'desc');
@@ -399,7 +400,9 @@ class ToDoList extends IPSModuleStrict
     {
         switch ($Ident) {
             case 'GetState':
-                $this->SendState();
+                // Read-only push to the tile — must not bump AppRevision, otherwise
+                // every tile open would invalidate the app clients' state caches.
+                $this->PushCurrentState();
                 return;
             case 'SetSortPrefs':
                 $this->SetSortPrefs($this->DecodeValue($Value));
@@ -453,6 +456,53 @@ class ToDoList extends IPSModuleStrict
     public function Export(): string
     {
         return json_encode($this->LoadItems(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function GetAppRevision(): int
+    {
+        return $this->ReadAttributeInteger('AppRevision');
+    }
+
+    public function GetAppState(): string
+    {
+        // Read the revision before building the state: a concurrent mutation in
+        // between yields a state newer than the revision, which the next poll
+        // corrects; the reverse order would let clients miss an update.
+        $revision = $this->ReadAttributeInteger('AppRevision');
+        return json_encode([
+            'revision' => $revision,
+            'kind'     => 'todo',
+            'state'    => $this->BuildStatePayload(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    public function AppCall(string $Action, string $Payload): string
+    {
+        $allowed = ['AddItem', 'UpdateItem', 'ToggleDone', 'DeleteItem', 'Reorder', 'SetSortPrefs'];
+        $ok    = true;
+        $error = null;
+        if (!in_array($Action, $allowed, true)) {
+            $ok    = false;
+            $error = ['code' => 'unknown_action', 'message' => 'Unknown action: ' . $Action];
+        } else {
+            try {
+                $this->RequestAction($Action, $Payload);
+            } catch (\Throwable $e) {
+                $ok    = false;
+                $error = ['code' => 'invalid_payload', 'message' => $e->getMessage()];
+                $this->SendDebug('AppCall', $Action . ' failed: ' . $e->getMessage(), 0);
+            }
+        }
+        $result = [
+            'ok'       => $ok,
+            'revision' => $this->ReadAttributeInteger('AppRevision'),
+            'kind'     => 'todo',
+            'state'    => $this->BuildStatePayload(),
+        ];
+        if ($error !== null) {
+            $result['error'] = $error;
+        }
+        return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     public function DebugRecurrence(): string
@@ -829,7 +879,9 @@ class ToDoList extends IPSModuleStrict
             }
 
             $items[$i]['done'] = $newDone;
-            if ($newDone && $recurrence !== 'none') {
+            // Advance recurrence only on a real false→true transition, so replayed
+            // requests (app outbox retry) cannot push the due date twice.
+            if ($newDone && !$oldDone && $recurrence !== 'none') {
                 $due = (int)($items[$i]['due'] ?? 0);
                 if ($due > 0) {
                     $unit = (string)($items[$i]['recurrenceCustomUnit'] ?? 'w');
@@ -849,7 +901,7 @@ class ToDoList extends IPSModuleStrict
             $now = time();
             $items[$i]['updatedAt'] = $now;
             $items[$i]['localModified'] = $now;
-            if ($newDone) {
+            if ($newDone && !$oldDone) {
                 $items[$i]['doneAt'] = $now;
             }
             break;
@@ -1106,6 +1158,9 @@ class ToDoList extends IPSModuleStrict
     private function SaveItems(array $Items): void
     {
         $this->WriteAttributeString('Items', json_encode($Items));
+        // Bump here as well so item mutations that bypass SendState (direct TDL_*
+        // calls, sync backends) still invalidate app-side caches.
+        $this->WriteAttributeInteger('AppRevision', $this->ReadAttributeInteger('AppRevision') + 1);
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml($Items);
         $this->UpdateRecurrenceTimer($Items);
@@ -2018,7 +2073,7 @@ class ToDoList extends IPSModuleStrict
         return (int)mktime($hour, $minute, $second, $month, $day, $year);
     }
 
-    private function SendState(): void
+    private function BuildStatePayload(): array
     {
         $sort = $this->GetSortPrefs();
         $items = $this->LoadItems();
@@ -2030,7 +2085,7 @@ class ToDoList extends IPSModuleStrict
             }
         }
         unset($it);
-        $this->UpdateVisualizationValue(json_encode([
+        return [
             'type'  => 'state',
             'items' => $items,
             'notificationLeadTimeDefault' => $this->ReadPropertyInteger('NotificationLeadTime'),
@@ -2049,7 +2104,18 @@ class ToDoList extends IPSModuleStrict
             'showEditButton' => $this->ReadPropertyBoolean('ShowEditButton'),
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
             'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        ];
+    }
+
+    private function SendState(): void
+    {
+        $this->WriteAttributeInteger('AppRevision', $this->ReadAttributeInteger('AppRevision') + 1);
+        $this->PushCurrentState();
+    }
+
+    private function PushCurrentState(): void
+    {
+        $this->UpdateVisualizationValue(json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('FavoriteLists', '[]');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
         $this->RegisterAttributeString('WebHookToken', '');
+        $this->RegisterAttributeInteger('AppRevision', 0);
         $this->RegisterAttributeInteger('LastExternalScannerVariableID', 0);
         $this->RegisterAttributeString('ExtApiAccessToken', '');
         $this->RegisterAttributeString('ExtApiRefreshToken', '');
@@ -138,38 +139,67 @@ class ShoppingList extends IPSModuleStrict
     {
         switch ($Ident) {
             case 'GetState':
-                $this->SendState();
+                // Read-only push to the tile — must not bump AppRevision, otherwise
+                // every tile open would invalidate the app clients' state caches.
+                $this->PushCurrentState();
                 return;
             case 'AddItem':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['name'])) {
-                    $this->AddItem(
-                        (string)($data['name'] ?? ''),
-                        (string)($data['category'] ?? ''),
-                        (string)($data['amount'] ?? '')
-                    );
+                if (!is_array($data) || trim((string)($data['name'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                if (!$this->AddItem(
+                    (string)($data['name'] ?? ''),
+                    (string)($data['category'] ?? ''),
+                    (string)($data['amount'] ?? '')
+                )) {
+                    throw new \Exception($this->Translate('Item operation failed'));
                 }
                 return;
             case 'AddScannedItem':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['name'])) {
-                    $this->AddScannedItemInternal(
-                        (string)($data['name'] ?? ''),
-                        (string)($data['category'] ?? ''),
-                        (string)($data['amount'] ?? ''),
-                        (string)($data['price'] ?? ''),
-                        (string)($data['listingId'] ?? ''),
-                        (string)($data['imageUrl'] ?? '')
-                    );
+                if (!is_array($data) || trim((string)($data['name'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                if (!$this->AddScannedItemInternal(
+                    (string)($data['name'] ?? ''),
+                    (string)($data['category'] ?? ''),
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['price'] ?? ''),
+                    (string)($data['listingId'] ?? ''),
+                    (string)($data['imageUrl'] ?? '')
+                )) {
+                    throw new \Exception($this->Translate('Item operation failed'));
                 }
                 return;
             case 'ToggleCart':
-                $this->ToggleItemCart((string)$Value);
+                // Accepts the raw item id (tile) or JSON {id, inCart} with an explicit
+                // target state, which makes replayed app requests idempotent.
+                $data = json_decode((string)$Value, true);
+                if (is_array($data) && isset($data['id'])) {
+                    $result = $this->ToggleItemCart(
+                        (string)$data['id'],
+                        array_key_exists('inCart', $data) ? (bool)$data['inCart'] : null
+                    );
+                } else {
+                    $result = $this->ToggleItemCart((string)$Value);
+                }
+                if (!$result) {
+                    throw new \Exception($this->Translate('Unknown item id'));
+                }
                 return;
             case 'RemoveItem':
+                if (trim((string)$Value) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                // Not-found is treated as success: removing an already removed
+                // item is an idempotent no-op for retrying clients.
                 $this->RemoveItem((string)$Value);
                 return;
             case 'DeleteItem':
+                if (trim((string)$Value) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
                 $this->DeleteItem((string)$Value);
                 return;
             case 'ClearCart':
@@ -180,70 +210,84 @@ class ShoppingList extends IPSModuleStrict
                 return;
             case 'UpdateItem':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['id'])) {
-                    $this->UpdateItemInternal(
-                        (string)($data['id'] ?? ''),
-                        (string)($data['name'] ?? ''),
-                        (string)($data['amount'] ?? ''),
-                        (string)($data['notes'] ?? ''),
-                        (string)($data['category'] ?? '')
-                    );
+                if (!is_array($data) || trim((string)($data['id'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                if (!$this->UpdateItemInternal(
+                    (string)($data['id'] ?? ''),
+                    (string)($data['name'] ?? ''),
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['notes'] ?? ''),
+                    (string)($data['category'] ?? '')
+                )) {
+                    throw new \Exception($this->Translate('Unknown item id'));
                 }
                 return;
             case 'CreateFavoriteList':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['name'])) {
-                    $this->CreateFavoriteListInternal((string)($data['name'] ?? ''));
+                if (!is_array($data) || trim((string)($data['name'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
                 }
+                $this->CreateFavoriteListInternal((string)($data['name'] ?? ''));
                 return;
             case 'AddItemToFavoriteList':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['listId'], $data['name'])) {
-                    $this->AddItemToFavoriteListInternal(
-                        (string)($data['listId'] ?? ''),
-                        (string)($data['name'] ?? ''),
-                        (string)($data['category'] ?? ''),
-                        (string)($data['amount'] ?? ''),
-                        (string)($data['notes'] ?? '')
-                    );
+                if (!is_array($data) || !isset($data['listId'], $data['name'])) {
+                    throw new \Exception($this->Translate('Invalid payload'));
                 }
+                $this->AddItemToFavoriteListInternal(
+                    (string)($data['listId'] ?? ''),
+                    (string)($data['name'] ?? ''),
+                    (string)($data['category'] ?? ''),
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['notes'] ?? '')
+                );
                 return;
             case 'RemoveItemFromFavoriteList':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['listId'], $data['name'])) {
-                    $this->RemoveItemFromFavoriteListInternal(
-                        (string)($data['listId'] ?? ''),
-                        (string)($data['name'] ?? '')
-                    );
+                if (!is_array($data) || !isset($data['listId'], $data['name'])) {
+                    throw new \Exception($this->Translate('Invalid payload'));
                 }
+                $this->RemoveItemFromFavoriteListInternal(
+                    (string)($data['listId'] ?? ''),
+                    (string)($data['name'] ?? '')
+                );
                 return;
             case 'AddFavoriteListToCart':
+                if (trim((string)$Value) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
                 $this->AddFavoriteListToCartInternal((string)$Value);
                 return;
             case 'RenameFavoriteList':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['listId'], $data['newName'])) {
-                    $this->RenameFavoriteListInternal(
-                        (string)($data['listId'] ?? ''),
-                        (string)($data['newName'] ?? '')
-                    );
+                if (!is_array($data) || !isset($data['listId'], $data['newName'])) {
+                    throw new \Exception($this->Translate('Invalid payload'));
                 }
+                $this->RenameFavoriteListInternal(
+                    (string)($data['listId'] ?? ''),
+                    (string)($data['newName'] ?? '')
+                );
                 return;
             case 'DeleteFavoriteList':
+                if (trim((string)$Value) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
                 $this->DeleteFavoriteListInternal((string)$Value);
                 return;
             case 'UpdateFavoriteItem':
                 $data = json_decode((string)$Value, true);
-                if (is_array($data) && isset($data['listId'], $data['oldName'], $data['newName'])) {
-                    $this->UpdateFavoriteItemInternal(
-                        (string)($data['listId'] ?? ''),
-                        (string)($data['oldName'] ?? ''),
-                        (string)($data['newName'] ?? ''),
-                        (string)($data['category'] ?? ''),
-                        (string)($data['amount'] ?? ''),
-                        (string)($data['notes'] ?? '')
-                    );
+                if (!is_array($data) || !isset($data['listId'], $data['oldName'], $data['newName'])) {
+                    throw new \Exception($this->Translate('Invalid payload'));
                 }
+                $this->UpdateFavoriteItemInternal(
+                    (string)($data['listId'] ?? ''),
+                    (string)($data['oldName'] ?? ''),
+                    (string)($data['newName'] ?? ''),
+                    (string)($data['category'] ?? ''),
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['notes'] ?? '')
+                );
                 return;
             default:
                 throw new \Exception($this->Translate('Invalid Ident'));
@@ -389,6 +433,86 @@ class ShoppingList extends IPSModuleStrict
     public function GetItems(): string
     {
         return json_encode($this->LoadItems(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    public function GetAppRevision(): int
+    {
+        return $this->ReadAttributeInteger('AppRevision');
+    }
+
+    public function GetAppState(): string
+    {
+        // Read the revision before building the state: a concurrent mutation in
+        // between yields a state newer than the revision, which the next poll
+        // corrects; the reverse order would let clients miss an update.
+        $revision = $this->ReadAttributeInteger('AppRevision');
+        return json_encode([
+            'revision' => $revision,
+            'kind'     => 'shopping',
+            'state'    => $this->BuildStatePayload(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    public function AppCall(string $Action, string $Payload): string
+    {
+        $allowed = [
+            'AddItem', 'AddScannedItem', 'ToggleCart', 'RemoveItem', 'DeleteItem',
+            'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
+            'AddItemToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
+            'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
+        ];
+        $ok    = true;
+        $error = null;
+        if (!in_array($Action, $allowed, true)) {
+            $ok    = false;
+            $error = ['code' => 'unknown_action', 'message' => 'Unknown action: ' . $Action];
+        } else {
+            try {
+                $this->RequestAction($Action, $Payload);
+            } catch (\Throwable $e) {
+                $ok    = false;
+                $error = ['code' => 'invalid_payload', 'message' => $e->getMessage()];
+                $this->SendDebug('AppCall', $Action . ' failed: ' . $e->getMessage(), 0);
+            }
+        }
+        $result = [
+            'ok'       => $ok,
+            'revision' => $this->ReadAttributeInteger('AppRevision'),
+            'kind'     => 'shopping',
+            'state'    => $this->BuildStatePayload(),
+        ];
+        if ($error !== null) {
+            $result['error'] = $error;
+        }
+        return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    public function LookupBarcode(string $EAN): string
+    {
+        $ean = trim($EAN);
+        if (!preg_match('/^\d{8,14}$/', $ean)) {
+            return json_encode(['found' => false, 'error' => 'invalid_ean']);
+        }
+        $product = $this->LookupBarcodeExtApi($ean);
+        $source  = 'extapi';
+        if ($product === null) {
+            $product = $this->LookupBarcodeOpenFoodFacts($ean);
+            $source  = 'off';
+        }
+        if ($product === null) {
+            $product = $this->LookupBarcodeOpenGtinDb($ean);
+            $source  = 'opengtindb';
+        }
+        if ($product === null) {
+            return json_encode(['found' => false]);
+        }
+        $product['source'] = $source;
+        return json_encode(['found' => true, 'product' => $product], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function BumpAppRevision(): void
+    {
+        $this->WriteAttributeInteger('AppRevision', $this->ReadAttributeInteger('AppRevision') + 1);
     }
 
     private function GetCategoryOrderFlat(): array
@@ -654,7 +778,7 @@ class ShoppingList extends IPSModuleStrict
         $token = $_GET['t'] ?? '';
         $expected = $this->ReadAttributeString('WebHookToken');
         if ($token === '' || !hash_equals($expected, $token)) {
-            $this->SendDebug('Hook', 'Token mismatch. got=' . $token . ' expected=' . $expected . ' file=' . ($_GET['f'] ?? ''), 0);
+            $this->SendDebug('Hook', 'Token mismatch. file=' . ($_GET['f'] ?? ''), 0);
             http_response_code(403);
             return;
         }
@@ -996,6 +1120,11 @@ class ShoppingList extends IPSModuleStrict
         $body = $this->FetchBarcodeLookupUrl($url, 'OpenGTINDB');
         if ($body === null) {
             return null;
+        }
+        // OpenGTINDB answers in ISO-8859-1; without conversion json_encode of
+        // umlaut product names fails downstream.
+        if (!mb_check_encoding($body, 'UTF-8')) {
+            $body = mb_convert_encoding($body, 'UTF-8', 'ISO-8859-1');
         }
 
         $flat = trim(str_replace('---', ' ', preg_replace('/\r?\n/', ' ', $body) ?? $body));

@@ -96,9 +96,9 @@
             "Back": "Zurück",
             "Save": "Speichern",
             "Add to shopping list": "Artikel zur Einkaufsliste hinzufügen",
-            "Add item\u2026": "Artikel hinzufügen\u2026",
+            "Add item…": "Artikel hinzufügen…",
             "Edit item": "Artikel bearbeiten",
-            "List name\u2026": "Listenname\u2026",
+            "List name…": "Listenname…",
             "Name": "Name",
             "Quantity / Amount": "Anzahl / Menge",
             "Note": "Anmerkung",
@@ -184,7 +184,11 @@
             "Delivery not available for this ZIP": "Lieferung für diese PLZ nicht verfügbar",
             "No pickup markets": "Keine Abholmärkte",
             "Donation / Gift": "Spenden / Schenkung",
-            "Say thanks and support the developer of this module:": "Sag Danke und unterstütze den Entwickler dieses Moduls:"
+            "Say thanks and support the developer of this module:": "Sag Danke und unterstütze den Entwickler dieses Moduls:",
+            "Invalid payload": "Ungültige Daten",
+            "Item operation failed": "Artikel-Aktion fehlgeschlagen",
+            "Unknown item id": "Unbekannte Artikel-ID",
+            "Invalid Ident": "Ungültiger Ident"
         }
     }
 }
