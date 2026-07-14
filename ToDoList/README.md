@@ -39,7 +39,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 
 ## 2. Voraussetzungen
 
-- IP-Symcon ab Version **8.0**
+- IP-Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
 
 ## 3. Installation
@@ -131,6 +131,486 @@ Die folgenden Funktionen stehen in der Instanz zur Verfügung:
 - **`ProcessRecurrences()`**
   - Verarbeitet wiederkehrende Tasks (5-Tage-Regel und Terminfortschreibung).
 
+### Beispielskripte
+
+Die folgenden Skripte zeigen die typischen Aufgaben mit den `TDL_`-Funktionen.
+In jedem Skript muss `$instanzID` durch die Objekt-ID der eigenen ToDoList-Instanz
+ersetzt werden. Alle Funktionen akzeptieren die Daten wahlweise als Array oder
+als JSON-String.
+
+#### Alle Tasks auslesen
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: ALLE Tasks auslesen
+ * ============================================================================
+ *
+ *  Funktion: TDL_Export(int $InstanzID): string
+ *
+ *  TDL_Export liefert die komplette Aufgabenliste als JSON-String zurück.
+ *  Nach json_decode() erhält man ein Array von Task-Objekten. Jeder Task
+ *  hat u.a. folgende Felder:
+ *
+ *  ┌──────────────────────┬─────────┬───────────────────────────────────────┐
+ *  │ Feld                 │ Typ     │ Bedeutung                             │
+ *  ├──────────────────────┼─────────┼───────────────────────────────────────┤
+ *  │ id                   │ int     │ Eindeutige Task-ID (vom Modul vergeben)│
+ *  │ title                │ string  │ Titel des Tasks                       │
+ *  │ info                 │ string  │ Zusatz-/Notiztext                     │
+ *  │ done                 │ bool    │ true = erledigt                       │
+ *  │ due                  │ int     │ Fälligkeit als Unix-Timestamp         │
+ *  │                      │         │ (0 = keine Fälligkeit gesetzt)        │
+ *  │ dueAllDay            │ bool    │ true = ganztägig (ohne Uhrzeit)       │
+ *  │ priority             │ string  │ 'low' | 'normal' | 'high'             │
+ *  │ quantity             │ int     │ Anzahl/Menge (0 = nicht gesetzt)      │
+ *  │ notification         │ bool    │ Benachrichtigung aktiv                │
+ *  │ notificationLeadTime │ int     │ Vorlaufzeit in Sekunden               │
+ *  │ recurrence           │ string  │ 'none','w1','w2','w3','m1','q1','y1', │
+ *  │                      │         │ 'custom' (siehe "Task erstellen")     │
+ *  │ createdAt/updatedAt  │ int     │ Unix-Timestamps (angelegt/geändert)   │
+ *  │ doneAt               │ int     │ Zeitpunkt der Erledigung              │
+ *  └──────────────────────┴─────────┴───────────────────────────────────────┘
+ *
+ *  Hinweis: Die Liste enthält offene UND erledigte Tasks (sofern erledigte
+ *  nicht per Instanz-Option "Erledigte Tasks löschen" entfernt werden).
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN: Objekt-ID der ToDo-Liste-Instanz (aus dem Objektbaum) <<<
+$instanzID = 12345;
+
+// Komplette Liste als JSON-String abholen und in ein PHP-Array wandeln
+$json  = TDL_Export($instanzID);
+$tasks = json_decode($json, true);
+
+if (!is_array($tasks)) {
+    echo "Fehler: Export konnte nicht gelesen werden.\n";
+    return;
+}
+
+echo count($tasks) . " Task(s) in der Liste:\n\n";
+
+foreach ($tasks as $task) {
+    // Fälligkeit hübsch formatieren (0 = keine gesetzt)
+    $due = ((int)$task['due'] > 0)
+        ? date($task['dueAllDay'] ? 'd.m.Y' : 'd.m.Y H:i', (int)$task['due'])
+        : '—';
+
+    printf(
+        "[%s] #%d  %-30s  Fällig: %-16s  Priorität: %-6s  %s\n",
+        $task['done'] ? 'x' : ' ',          // [x] = erledigt, [ ] = offen
+        $task['id'],
+        mb_substr($task['title'], 0, 30),
+        $due,
+        $task['priority'] ?? 'normal',
+        ($task['info'] ?? '') !== '' ? 'Info: ' . $task['info'] : ''
+    );
+}
+
+// ── Typische Auswertungen ───────────────────────────────────────────────────
+
+// Nur offene Tasks
+$offene = array_filter($tasks, fn(array $t): bool => empty($t['done']));
+echo "\nDavon offen: " . count($offene) . "\n";
+
+// Nur überfällige Tasks (Fälligkeit gesetzt, in der Vergangenheit, nicht erledigt)
+$ueberfaellig = array_filter($tasks, fn(array $t): bool =>
+    empty($t['done']) && (int)$t['due'] > 0 && (int)$t['due'] < time());
+echo "Davon überfällig: " . count($ueberfaellig) . "\n";
+```
+
+#### Einzelnen Task auslesen
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: EINZELNEN Task auslesen
+ * ============================================================================
+ *
+ *  Funktion: TDL_Export(int $InstanzID): string
+ *
+ *  Das Modul hat bewusst keine eigene "GetItem"-Funktion — man holt die
+ *  Liste per TDL_Export() und filtert nach der Task-ID (oder nach dem Titel).
+ *  Die Task-ID sieht man z.B. in der Ausgabe von "Alle Tasks auslesen" oder
+ *  als Rückgabewert von TDL_AddItem() beim Anlegen.
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN <<<
+$instanzID = 12345;   // Objekt-ID der ToDo-Liste-Instanz
+$taskID    = 7;       // ID des gesuchten Tasks
+
+// ── Variante A: Task über seine ID finden ───────────────────────────────────
+$tasks = json_decode(TDL_Export($instanzID), true) ?: [];
+
+$gefunden = null;
+foreach ($tasks as $task) {
+    if ((int)$task['id'] === $taskID) {
+        $gefunden = $task;
+        break;
+    }
+}
+
+if ($gefunden === null) {
+    echo "Task #{$taskID} existiert nicht (mehr).\n";
+    return;
+}
+
+// Einzelne Felder gezielt verwenden …
+echo "Titel     : " . $gefunden['title'] . "\n";
+echo "Status    : " . ($gefunden['done'] ? 'erledigt' : 'offen') . "\n";
+echo "Fällig    : " . ((int)$gefunden['due'] > 0
+        ? date('d.m.Y H:i', (int)$gefunden['due'])
+        : 'keine Fälligkeit') . "\n";
+echo "Priorität : " . ($gefunden['priority'] ?? 'normal') . "\n";
+echo "Info      : " . (($gefunden['info'] ?? '') !== '' ? $gefunden['info'] : '—') . "\n";
+
+// … oder den kompletten Task als lesbares JSON ausgeben (alle Felder)
+echo "\nAlle Felder:\n";
+echo json_encode($gefunden, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
+
+// ── Variante B: Task über den Titel finden ──────────────────────────────────
+// Praktisch, wenn die ID nicht bekannt ist. Achtung: Titel sind nicht
+// zwingend eindeutig — hier wird der erste Treffer verwendet.
+$suchTitel = 'Milch kaufen';
+
+foreach ($tasks as $task) {
+    if (mb_strtolower($task['title']) === mb_strtolower($suchTitel)) {
+        echo "\nTreffer über Titel: Task #" . $task['id'] . " („" . $task['title'] . "“)\n";
+        break;
+    }
+}
+```
+
+#### Task erstellen
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: Task ERSTELLEN
+ * ============================================================================
+ *
+ *  Funktion: TDL_AddItem(int $InstanzID, mixed $Data): int
+ *
+ *  $Data ist ein assoziatives Array (alternativ auch ein JSON-String).
+ *  Rückgabewert ist die ID des neu angelegten Tasks — diese ID braucht man
+ *  später zum Bearbeiten, Erledigen oder Löschen.
+ *
+ *  Mögliche Felder in $Data (alle optional außer 'title'):
+ *
+ *  ┌──────────────────────┬──────────────────────────────────────────────────┐
+ *  │ title  (PFLICHT)     │ Titel; leerer Titel wirft eine Exception         │
+ *  │ info                 │ Zusatz-/Notiztext                                │
+ *  │ due                  │ Fälligkeit als Unix-Timestamp (0 = keine).       │
+ *  │                      │ Bequem per strtotime('...') erzeugen.            │
+ *  │ dueAllDay            │ true = ganztägiger Task (Uhrzeit wird auf        │
+ *  │                      │ 00:00 normalisiert); wirkt nur mit due > 0       │
+ *  │ priority             │ 'low' | 'normal' | 'high'   (Standard: normal)   │
+ *  │ quantity             │ Anzahl/Menge als int (Einkaufslisten-Modus)      │
+ *  │ done                 │ true = direkt als erledigt anlegen               │
+ *  │ notification         │ true = Benachrichtigung bei Fälligkeit           │
+ *  │                      │ (erfordert due > 0)                              │
+ *  │ notificationLeadTime │ Vorlaufzeit in Sekunden: 0, 300, 600, 1800,      │
+ *  │                      │ 3600, 18000 oder 43200 (0 Min … 12 Std vorher)   │
+ *  │ recurrence           │ Wiederholung (erfordert due > 0):                │
+ *  │                      │   'none' = keine        'w1' = wöchentlich       │
+ *  │                      │   'w2' = alle 2 Wochen  'w3' = alle 3 Wochen     │
+ *  │                      │   'm1' = monatlich      'q1' = quartalsweise     │
+ *  │                      │   'y1' = jährlich       'custom' = individuell   │
+ *  │ recurrenceCustomUnit │ nur bei 'custom': 'h','d','w','m','y'            │
+ *  │                      │ (Stunden/Tage/Wochen/Monate/Jahre)               │
+ *  │ recurrenceCustomValue│ nur bei 'custom': Intervall als int (z.B. 2)     │
+ *  └──────────────────────┴──────────────────────────────────────────────────┘
+ *
+ *  Hinweise:
+ *  - Ohne Fälligkeit (due = 0) werden notification und recurrence
+ *    automatisch deaktiviert — das Modul räumt unplausible Kombis selbst auf.
+ *  - Ist die Instanz mit CalDAV / Google Tasks / Microsoft To Do gekoppelt,
+ *    wird der neue Task automatisch zum Server synchronisiert.
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN <<<
+$instanzID = 12345;   // Objekt-ID der ToDo-Liste-Instanz
+
+// ── Beispiel 1: Minimaler Task (nur Titel) ──────────────────────────────────
+$neueID = TDL_AddItem($instanzID, [
+    'title' => 'Milch kaufen',
+]);
+echo "Task angelegt, ID = {$neueID}\n";
+
+// ── Beispiel 2: Task mit Fälligkeit, Priorität und Benachrichtigung ─────────
+$neueID = TDL_AddItem($instanzID, [
+    'title'                => 'Heizungswartung beauftragen',
+    'info'                 => 'Firma Müller anrufen, Tel. 01234/56789',
+    'due'                  => strtotime('next friday 09:00'), // Unix-Timestamp
+    'priority'             => 'high',
+    'notification'         => true,   // Benachrichtigung aktivieren …
+    'notificationLeadTime' => 3600,   // … 1 Stunde vor Fälligkeit
+]);
+echo "Task angelegt, ID = {$neueID}\n";
+
+// ── Beispiel 3: Ganztägiger, jährlich wiederkehrender Task ──────────────────
+$neueID = TDL_AddItem($instanzID, [
+    'title'      => 'Rauchmelder testen',
+    'due'        => strtotime('1 december'), // Datum reicht — Uhrzeit wird
+    'dueAllDay'  => true,                    // bei dueAllDay auf 00:00 gesetzt
+    'recurrence' => 'y1',                    // jährlich wiederholen
+]);
+echo "Task angelegt, ID = {$neueID}\n";
+
+// ── Beispiel 4: Individuelle Wiederholung (alle 2 Tage) ─────────────────────
+$neueID = TDL_AddItem($instanzID, [
+    'title'                 => 'Blumen gießen',
+    'due'                   => strtotime('tomorrow 18:00'),
+    'recurrence'            => 'custom',
+    'recurrenceCustomUnit'  => 'd',   // Einheit: Tage
+    'recurrenceCustomValue' => 2,     // alle 2 Tage
+]);
+echo "Task angelegt, ID = {$neueID}\n";
+
+// ── Fehlerbehandlung: leerer Titel wirft eine Exception ─────────────────────
+try {
+    TDL_AddItem($instanzID, ['title' => '']);
+} catch (Exception $e) {
+    echo 'Erwarteter Fehler: ' . $e->getMessage() . "\n"; // "Ungültiger Titel"
+}
+```
+
+#### Task bearbeiten (Update)
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: Task BEARBEITEN (Update)
+ * ============================================================================
+ *
+ *  Funktion: TDL_UpdateItem(int $InstanzID, mixed $Data): void
+ *
+ *  WICHTIG — Teil-Update-Prinzip:
+ *  $Data muss die 'id' des Tasks enthalten. Geändert werden NUR die Felder,
+ *  die im Array vorkommen — alles andere bleibt unangetastet. Man schickt
+ *  also nie den kompletten Task, sondern nur die gewünschten Änderungen.
+ *
+ *  Erlaubte Felder: title, info, due, dueAllDay, priority, quantity, done,
+ *  notification, notificationLeadTime, recurrence, recurrenceCustomUnit,
+ *  recurrenceCustomValue  (Bedeutung und Wertebereiche: siehe "Task erstellen").
+ *
+ *  Verhalten, das man kennen sollte:
+ *  - Existiert die ID nicht, passiert schlicht nichts (kein Fehler).
+ *  - due = 0 entfernt die Fälligkeit; Benachrichtigung und Wiederholung
+ *    werden dann automatisch mit abgeschaltet.
+ *  - Ist in der Instanz "Erledigte Tasks löschen" aktiviert, führt ein
+ *    Update mit done = true zum sofortigen LÖSCHEN des Tasks!
+ *  - Zum reinen Erledigen/Wiedereröffnen ist TDL_ToggleDone die bessere
+ *    Wahl, weil es Wiederholungen korrekt weiterschaltet.
+ *  - Änderungen werden automatisch zum Sync-Backend übertragen
+ *    (CalDAV / Google Tasks / Microsoft To Do, falls konfiguriert).
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN <<<
+$instanzID = 12345;   // Objekt-ID der ToDo-Liste-Instanz
+$taskID    = 7;       // ID des zu bearbeitenden Tasks
+
+// ── Beispiel 1: Nur den Titel ändern ────────────────────────────────────────
+TDL_UpdateItem($instanzID, [
+    'id'    => $taskID,
+    'title' => 'Milch und Butter kaufen',
+]);
+
+// ── Beispiel 2: Fälligkeit verschieben und Priorität anheben ────────────────
+TDL_UpdateItem($instanzID, [
+    'id'       => $taskID,
+    'due'      => strtotime('+2 days 08:00'),
+    'priority' => 'high',
+]);
+
+// ── Beispiel 3: Notiz ergänzen und Benachrichtigung einschalten ─────────────
+TDL_UpdateItem($instanzID, [
+    'id'                   => $taskID,
+    'info'                 => 'Angebot nur bis Samstag gültig',
+    'notification'         => true,
+    'notificationLeadTime' => 1800,   // 30 Minuten vorher erinnern
+]);
+
+// ── Beispiel 4: Fälligkeit komplett entfernen ───────────────────────────────
+// (deaktiviert automatisch auch Benachrichtigung und Wiederholung)
+TDL_UpdateItem($instanzID, [
+    'id'  => $taskID,
+    'due' => 0,
+]);
+
+// ── Kontrolle: geänderten Task auslesen ─────────────────────────────────────
+$tasks = json_decode(TDL_Export($instanzID), true) ?: [];
+foreach ($tasks as $task) {
+    if ((int)$task['id'] === $taskID) {
+        echo "Task nach Update:\n";
+        echo json_encode($task, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
+        break;
+    }
+}
+```
+
+#### Task als erledigt markieren (bzw. wieder öffnen)
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: Task als ERLEDIGT markieren (bzw. wieder öffnen)
+ * ============================================================================
+ *
+ *  Funktion: TDL_ToggleDone(int $InstanzID, mixed $Data): void
+ *
+ *  $Data enthält die 'id' des Tasks und optional 'done':
+ *  - MIT  'done' => true/false : Status wird gezielt GESETZT (idempotent —
+ *    empfohlen für Skripte/Automationen, mehrfacher Aufruf schadet nicht).
+ *  - OHNE 'done'               : Status wird UMGESCHALTET (toggle),
+ *    wie ein Klick auf die Checkbox in der Visualisierung.
+ *
+ *  Warum TDL_ToggleDone statt TDL_UpdateItem(done=true)?
+ *  ToggleDone enthält die komplette Erledigen-Logik der Kachel:
+ *  - Bei WIEDERKEHRENDEN Tasks (recurrence != 'none') wird der Task nicht
+ *    einfach abgehakt, sondern die Fälligkeit auf den nächsten Termin
+ *    weitergeschaltet (z.B. 'w1' -> +1 Woche) und ggf. direkt wieder
+ *    geöffnet — genau wie beim Abhaken in der Visualisierung.
+ *  - Ist in der Instanz "Erledigte Tasks löschen" aktiv, wird ein (nicht
+ *    wiederkehrender) Task beim Erledigen direkt aus der Liste entfernt.
+ *  - Der Erledigt-Zeitpunkt wird in 'doneAt' festgehalten.
+ *
+ *  Fehlerverhalten: Eine ungültige/fehlende ID wirft eine Exception
+ *  ("Ungültige ID") — bei Bedarf mit try/catch absichern.
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN <<<
+$instanzID = 12345;   // Objekt-ID der ToDo-Liste-Instanz
+$taskID    = 7;       // ID des Tasks
+
+// ── Beispiel 1: Task gezielt als erledigt markieren (empfohlen) ─────────────
+TDL_ToggleDone($instanzID, [
+    'id'   => $taskID,
+    'done' => true,
+]);
+echo "Task #{$taskID} als erledigt markiert.\n";
+
+// ── Beispiel 2: Task wieder öffnen ──────────────────────────────────────────
+TDL_ToggleDone($instanzID, [
+    'id'   => $taskID,
+    'done' => false,
+]);
+echo "Task #{$taskID} wieder geöffnet.\n";
+
+// ── Beispiel 3: Status umschalten (Toggle wie in der Visualisierung) ────────
+TDL_ToggleDone($instanzID, [
+    'id' => $taskID,
+]);
+
+// ── Beispiel 4: Task anhand des Titels erledigen ────────────────────────────
+// Erst die ID über den Titel suchen, dann erledigen.
+$suchTitel = 'Milch kaufen';
+$tasks = json_decode(TDL_Export($instanzID), true) ?: [];
+
+foreach ($tasks as $task) {
+    if (empty($task['done']) && mb_strtolower($task['title']) === mb_strtolower($suchTitel)) {
+        TDL_ToggleDone($instanzID, ['id' => (int)$task['id'], 'done' => true]);
+        echo "„{$task['title']}“ (#" . $task['id'] . ") erledigt.\n";
+        break;
+    }
+}
+```
+
+#### Task löschen
+
+```php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ============================================================================
+ *  ToDo-Liste: Task LÖSCHEN
+ * ============================================================================
+ *
+ *  Funktion: TDL_DeleteItem(int $InstanzID, mixed $Data): void
+ *
+ *  $Data enthält die 'id' des zu löschenden Tasks. Der Task wird endgültig
+ *  aus der Liste entfernt — es gibt KEINEN Papierkorb.
+ *
+ *  Sync-Verhalten: Ist die Instanz mit CalDAV, Google Tasks oder
+ *  Microsoft To Do gekoppelt, merkt sich das Modul die Löschung und
+ *  entfernt den Task beim nächsten Sync auch auf dem Server. Er taucht
+ *  also nicht beim nächsten Abgleich wieder auf.
+ *
+ *  Fehlerverhalten:
+ *  - id <= 0 oder fehlend  -> Exception "Ungültige ID"
+ *  - unbekannte (positive) ID -> kein Fehler, es wird nichts gelöscht
+ * ============================================================================
+ */
+
+// >>> HIER ANPASSEN <<<
+$instanzID = 12345;   // Objekt-ID der ToDo-Liste-Instanz
+$taskID    = 7;       // ID des zu löschenden Tasks
+
+// ── Beispiel 1: Einzelnen Task löschen ──────────────────────────────────────
+TDL_DeleteItem($instanzID, [
+    'id' => $taskID,
+]);
+echo "Task #{$taskID} gelöscht.\n";
+
+// ── Beispiel 2: Löschen mit vorheriger Existenz-Prüfung ─────────────────────
+// (sinnvoll, wenn das Skript wiederholt laufen kann)
+$tasks   = json_decode(TDL_Export($instanzID), true) ?: [];
+$vorhanden = false;
+foreach ($tasks as $task) {
+    if ((int)$task['id'] === $taskID) {
+        $vorhanden = true;
+        break;
+    }
+}
+
+if ($vorhanden) {
+    TDL_DeleteItem($instanzID, ['id' => $taskID]);
+    echo "Task #{$taskID} gelöscht.\n";
+} else {
+    echo "Task #{$taskID} existiert nicht (mehr) — nichts zu tun.\n";
+}
+
+// ── Beispiel 3: Alle ERLEDIGTEN Tasks aufräumen ─────────────────────────────
+// Liste holen, erledigte Tasks herausfiltern und einzeln löschen.
+$tasks = json_decode(TDL_Export($instanzID), true) ?: [];
+$geloescht = 0;
+
+foreach ($tasks as $task) {
+    if (!empty($task['done'])) {
+        TDL_DeleteItem($instanzID, ['id' => (int)$task['id']]);
+        $geloescht++;
+    }
+}
+echo "{$geloescht} erledigte(r) Task(s) entfernt.\n";
+```
+
 ## 8. Benachrichtigungen
 
 Pro Task kann über die Checkbox **"Benachrichtigung"** festgelegt werden, ob eine Push-Benachrichtigung verschickt werden soll.
@@ -156,7 +636,7 @@ Das Modul unterstützt die bidirektionale Synchronisation mit CalDAV-Servern (ow
 
 Die Zugangsdaten werden zentral im **ToDo Gateway** (Splitter-Modul) verwaltet. In der ToDoList-Instanz wird nur das Backend, die Liste/der Kalender und die Sync-Einstellungen konfiguriert.
 
-Die OAuth-Webhook-Endpunkte (`/hook/todogateway_google` und `/hook/todogateway_microsoft`) werden durch das Gateway automatisch im WebHook-Control registriert und bei Bedarf auf die aktive Gateway-Instanz korrigiert.
+Die OAuth-Webhook-Endpunkte (`/hook/todogateway_google` und `/hook/todogateway_microsoft`) registriert das Gateway automatisch bei jedem Start über die native `RegisterHook`-Methode.
 
 Anleitungen zur Konfiguration:
 
