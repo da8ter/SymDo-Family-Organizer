@@ -129,7 +129,23 @@ trait ApiRouter
             $this->HandleBarcode($id, $kind, $ean);
             return;
         }
+        if ($sub === 'visibility' && $method === 'POST') {
+            $this->HandleVisibility($id);
+            return;
+        }
         $this->SendApiError('unknown_route', 'Unknown API route', 404);
+    }
+
+    /** Blendet eine Liste haushaltsweit aus/ein — wirkt auf alle gekoppelten Geräte. */
+    private function HandleVisibility(int $id): void
+    {
+        $body = $this->ReadJsonBody();
+        if (!array_key_exists('hidden', $body) || !is_bool($body['hidden'])) {
+            $this->SendApiError('invalid_payload', 'Expected boolean field: hidden', 422);
+            return;
+        }
+        $this->SetInstanceHidden($id, (bool)$body['hidden']);
+        $this->SendJson(['ok' => true, 'hidden' => (bool)$body['hidden']]);
     }
 
     private function HandlePair(): void

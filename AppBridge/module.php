@@ -32,6 +32,7 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('PendingPairings', '[]');
         $this->RegisterAttributeString('ActionDedup', '{}');
         $this->RegisterAttributeString('AvatarCache', '{}');
+        $this->RegisterAttributeString('HiddenInstances', '[]');
         $this->RegisterPropertyString('Users', '[]');
     }
 
@@ -347,6 +348,26 @@ class SymDoBridge extends IPSModuleStrict
             'location' => IPS_GetLocation($id),
             'revision' => $this->GetInstanceRevision($id, $kind),
             'features' => $features,
+            'hidden'   => in_array($id, $this->GetHiddenInstances(), true),
         ];
+    }
+
+    /** @return int[] Instanz-IDs, die in der App ausgeblendet sind (haushaltsweit) */
+    private function GetHiddenInstances(): array
+    {
+        $decoded = json_decode($this->ReadAttributeString('HiddenInstances'), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        return array_values(array_map('intval', $decoded));
+    }
+
+    private function SetInstanceHidden(int $id, bool $hidden): void
+    {
+        $list = array_values(array_diff($this->GetHiddenInstances(), [$id]));
+        if ($hidden) {
+            $list[] = $id;
+        }
+        $this->WriteAttributeString('HiddenInstances', json_encode($list));
     }
 }
