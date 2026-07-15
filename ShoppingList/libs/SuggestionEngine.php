@@ -228,6 +228,8 @@ trait SuggestionEngine
             ['name' => 'Binden',           'category' => 'Hygiene & Pflege'],
             ['name' => 'Geschirrspültabs', 'category' => 'Haushalt & Reinigung'],
             ['name' => 'Toilettenpapier',  'category' => 'Haushalt & Reinigung'],
+            ['name' => 'Klopapier',        'category' => 'Haushalt & Reinigung'],
+            ['name' => 'WC-Papier',        'category' => 'Haushalt & Reinigung'],
             ['name' => 'Küchenrolle',      'category' => 'Haushalt & Reinigung'],
             ['name' => 'Spülmittel',       'category' => 'Haushalt & Reinigung'],
             ['name' => 'Waschmittel',      'category' => 'Haushalt & Reinigung'],
