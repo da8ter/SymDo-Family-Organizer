@@ -28,6 +28,50 @@
         },
         {
             "type": "ExpansionPanel",
+            "caption": "Users",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Household members for task assignment. The photo is a Symcon media object (image)."
+                },
+                {
+                    "type": "List",
+                    "name": "Users",
+                    "rowCount": 6,
+                    "add": true,
+                    "delete": true,
+                    "columns": [
+                        {
+                            "caption": "Name",
+                            "name": "name",
+                            "width": "auto",
+                            "add": "",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "caption": "Photo",
+                            "name": "photo",
+                            "width": "220px",
+                            "add": 0,
+                            "edit": {
+                                "type": "SelectMedia"
+                            }
+                        },
+                        {
+                            "caption": "ID",
+                            "name": "id",
+                            "width": "110px",
+                            "add": ""
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
             "caption": "Paired devices",
             "expanded": true,
             "items": [
@@ -38,14 +82,46 @@
                     "add": false,
                     "delete": false,
                     "columns": [
-                        { "caption": "ID", "name": "deviceId", "width": "90px" },
-                        { "caption": "Name", "name": "deviceName", "width": "auto" },
-                        { "caption": "Model", "name": "model", "width": "140px" },
-                        { "caption": "Platform", "name": "platform", "width": "100px" },
-                        { "caption": "App version", "name": "appVersion", "width": "110px" },
-                        { "caption": "Paired", "name": "createdAt", "width": "140px" },
-                        { "caption": "Last seen", "name": "lastSeenAt", "width": "140px" },
-                        { "caption": "Status", "name": "status", "width": "110px" }
+                        {
+                            "caption": "ID",
+                            "name": "deviceId",
+                            "width": "90px"
+                        },
+                        {
+                            "caption": "Name",
+                            "name": "deviceName",
+                            "width": "auto"
+                        },
+                        {
+                            "caption": "Model",
+                            "name": "model",
+                            "width": "140px"
+                        },
+                        {
+                            "caption": "Platform",
+                            "name": "platform",
+                            "width": "100px"
+                        },
+                        {
+                            "caption": "App version",
+                            "name": "appVersion",
+                            "width": "110px"
+                        },
+                        {
+                            "caption": "Paired",
+                            "name": "createdAt",
+                            "width": "140px"
+                        },
+                        {
+                            "caption": "Last seen",
+                            "name": "lastSeenAt",
+                            "width": "140px"
+                        },
+                        {
+                            "caption": "Status",
+                            "name": "status",
+                            "width": "110px"
+                        }
                     ],
                     "values": []
                 },

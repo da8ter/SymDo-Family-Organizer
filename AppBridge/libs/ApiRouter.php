@@ -24,7 +24,7 @@ trait ApiRouter
         // The token is only accepted as ?t= query parameter for the assets route
         // (image loaders); everywhere else it must travel in a header so the
         // long-lived token does not end up in proxy/access logs.
-        $device = $this->AuthenticateRequest($resource === 'assets');
+        $device = $this->AuthenticateRequest($resource === 'assets' || $resource === 'users');
         if ($device === null) {
             $this->SendApiError('unauthorized', 'Missing or invalid token', 401);
             return;
@@ -65,6 +65,16 @@ trait ApiRouter
             case 'assets':
                 if ($method === 'GET') {
                     $this->HandleAsset(array_slice($route, 2));
+                    return;
+                }
+                break;
+            case 'users':
+                if ($method === 'GET' && ($route[3] ?? '') === 'avatar') {
+                    $this->HandleUserAvatar((string)($route[2] ?? ''));
+                    return;
+                }
+                if ($method === 'GET') {
+                    $this->SendJson(['ok' => true, 'users' => json_decode($this->GetUsers(), true)]);
                     return;
                 }
                 break;
@@ -158,6 +168,7 @@ trait ApiRouter
             'apiVersion'   => self::API_VERSION,
             'server'       => $this->BuildServerInfo(),
             'capabilities' => ['barcode' => true, 'images' => true, 'websocket' => false],
+            'users'        => json_decode($this->GetUsers(), true),
             'instances'    => $instances,
         ]);
     }
@@ -339,6 +350,39 @@ trait ApiRouter
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         header('Content-Type: ' . ($mimeMap[$ext] ?? 'application/octet-stream'));
         readfile($path);
+    }
+
+    private function HandleUserAvatar(string $userID): void
+    {
+        $user = null;
+        foreach ($this->LoadUsers() as $candidate) {
+            if ($candidate['id'] === $userID) {
+                $user = $candidate;
+                break;
+            }
+        }
+        if ($user === null || !$user['hasAvatar']) {
+            $this->SendApiError('asset_not_found', 'Avatar not found', 404);
+            return;
+        }
+        $media = IPS_GetMedia($user['mediaID']);
+        $etag  = '"' . md5($user['mediaID'] . '|' . (string)($media['MediaUpdated'] ?? 0)) . '"';
+        header('ETag: ' . $etag);
+        header('Cache-Control: public, max-age=86400');
+        if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+            http_response_code(304);
+            return;
+        }
+        $content = base64_decode(IPS_GetMediaContent($user['mediaID']), true);
+        if ($content === false || $content === '') {
+            $this->SendApiError('asset_not_found', 'Avatar not readable', 404);
+            return;
+        }
+        $ext = strtolower(pathinfo((string)($media['MediaFile'] ?? ''), PATHINFO_EXTENSION));
+        $mimeMap = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+                    'gif' => 'image/gif', 'webp' => 'image/webp'];
+        header('Content-Type: ' . ($mimeMap[$ext] ?? 'image/jpeg'));
+        echo $content;
     }
 
     private function CallInstanceGetAppState(int $id, string $kind): string

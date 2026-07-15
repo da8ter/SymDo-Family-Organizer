@@ -31,6 +31,7 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('PairedDevices', '[]');
         $this->RegisterAttributeString('PendingPairings', '[]');
         $this->RegisterAttributeString('ActionDedup', '{}');
+        $this->RegisterPropertyString('Users', '[]');
     }
 
     public function ApplyChanges(): void
@@ -49,7 +50,69 @@ class SymDoBridge extends IPSModuleStrict
             return;
         }
 
+        $this->EnsureUserIDs();
         $this->SetStatus(IS_ACTIVE);
+    }
+
+    /** Assigns stable ids to user rows created in the form (runs once per new row). */
+    private function EnsureUserIDs(): void
+    {
+        $users = json_decode($this->ReadPropertyString('Users'), true);
+        if (!is_array($users)) {
+            return;
+        }
+        $changed = false;
+        foreach ($users as &$user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            if (trim((string)($user['id'] ?? '')) === '') {
+                $user['id'] = bin2hex(random_bytes(4));
+                $changed = true;
+            }
+        }
+        unset($user);
+        if ($changed) {
+            IPS_SetProperty($this->InstanceID, 'Users', json_encode($users, JSON_UNESCAPED_UNICODE));
+            IPS_ApplyChanges($this->InstanceID); // re-runs once, then stable
+        }
+    }
+
+    private function LoadUsers(): array
+    {
+        $users = json_decode($this->ReadPropertyString('Users'), true);
+        if (!is_array($users)) {
+            return [];
+        }
+        $result = [];
+        foreach ($users as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            $name = trim((string)($user['name'] ?? ''));
+            $id   = trim((string)($user['id'] ?? ''));
+            if ($name === '' || $id === '') {
+                continue;
+            }
+            $mediaID = (int)($user['photo'] ?? 0);
+            $result[] = [
+                'id'        => $id,
+                'name'      => $name,
+                'mediaID'   => $mediaID,
+                'hasAvatar' => $mediaID > 0 && IPS_MediaExists($mediaID),
+            ];
+        }
+        return $result;
+    }
+
+    /** Users as JSON for other modules (e.g. the tile visualization). */
+    public function GetUsers(): string
+    {
+        $users = array_map(
+            static fn(array $u): array => ['id' => $u['id'], 'name' => $u['name'], 'hasAvatar' => $u['hasAvatar']],
+            $this->LoadUsers()
+        );
+        return json_encode($users, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void

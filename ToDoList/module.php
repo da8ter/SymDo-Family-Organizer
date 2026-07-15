@@ -631,6 +631,7 @@ class ToDoList extends IPSModuleStrict
             'recurrenceCustomValue' => $recurrenceCustomValue,
             'recurrenceResetLeadTime' => $recurrenceResetLeadTime,
             'priority'  => (string)($Data['priority'] ?? 'normal'),
+            'assignedTo' => $this->NormalizeAssignedTo($Data['assignedTo'] ?? []),
             'quantity'  => (int)($Data['quantity'] ?? 0),
             'notification' => $notification,
             'notificationLeadTime' => $itemLeadTime,
@@ -758,6 +759,9 @@ class ToDoList extends IPSModuleStrict
             }
             if (array_key_exists('priority', $Data)) {
                 $items[$i]['priority'] = (string)$Data['priority'];
+            }
+            if (array_key_exists('assignedTo', $Data)) {
+                $items[$i]['assignedTo'] = $this->NormalizeAssignedTo($Data['assignedTo']);
             }
             if (array_key_exists('done', $Data)) {
                 $items[$i]['done'] = (bool)$Data['done'];
@@ -2105,6 +2109,25 @@ class ToDoList extends IPSModuleStrict
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
             'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
         ];
+    }
+
+    /** Bridge user ids this task is assigned to (deduped, capped). */
+    private function NormalizeAssignedTo(mixed $Value): array
+    {
+        if (!is_array($Value)) {
+            return [];
+        }
+        $result = [];
+        foreach ($Value as $entry) {
+            $id = trim((string)$entry);
+            if ($id !== '' && !in_array($id, $result, true)) {
+                $result[] = $id;
+            }
+            if (count($result) >= 16) {
+                break;
+            }
+        }
+        return $result;
     }
 
     private function SendState(): void

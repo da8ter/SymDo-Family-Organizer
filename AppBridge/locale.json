@@ -1,7 +1,6 @@
 {
     "translations": {
-        "en": {
-        },
+        "en": {},
         "de": {
             "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app.": "Koppelt die SymDo Smartphone-App mit diesem Symcon-System. Geräte verbinden sich über Symcon Connect mit einem eigenen Zugriffstoken — es werden keine Lizenz-Zugangsdaten in der App gespeichert.",
             "Pair new device": "Neues Gerät koppeln",
@@ -22,7 +21,10 @@
             "Symcon Connect: %s": "Symcon Connect: %s",
             "No Symcon Connect instance found — remote access for the app is unavailable.": "Keine Symcon-Connect-Instanz gefunden — Fernzugriff für die App ist nicht verfügbar.",
             "Active": "Aktiv",
-            "Revoked": "Widerrufen"
+            "Revoked": "Widerrufen",
+            "Users": "Benutzer",
+            "Household members for task assignment. The photo is a Symcon media object (image).": "Haushaltsmitglieder für die Aufgaben-Zuweisung. Das Foto ist ein Symcon-Medienobjekt (Bild).",
+            "Photo": "Foto"
         }
     }
 }
