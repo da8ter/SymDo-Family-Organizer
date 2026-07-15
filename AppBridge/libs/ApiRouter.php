@@ -366,9 +366,12 @@ trait ApiRouter
             return;
         }
         $media = IPS_GetMedia($user['mediaID']);
-        $etag  = '"' . md5($user['mediaID'] . '|' . (string)($media['MediaUpdated'] ?? 0)) . '"';
+        // v2 salt: forces clients that cached the pre-scaling response to refetch.
+        $etag  = '"' . md5($user['mediaID'] . '|' . (string)($media['MediaUpdated'] ?? 0) . '|v2') . '"';
         header('ETag: ' . $etag);
-        header('Cache-Control: public, max-age=86400');
+        // no-cache = always revalidate via ETag (cheap 304); avatars change rarely
+        // but we must never serve a stale copy again.
+        header('Cache-Control: no-cache');
         if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
             http_response_code(304);
             return;
@@ -378,11 +381,49 @@ trait ApiRouter
             $this->SendApiError('asset_not_found', 'Avatar not readable', 404);
             return;
         }
+        // Symcon caps WebHook output at 1 MB; user photos are often multiple MB,
+        // so downscale to a small square thumbnail (avatars render as tiny circles).
+        $thumb = $this->ScaleAvatar($content, 256);
+        if ($thumb !== null) {
+            header('Content-Type: image/jpeg');
+            echo $thumb;
+            return;
+        }
+        // GD unavailable: only serve the original if it fits under the limit.
+        if (strlen($content) > 900000) {
+            $this->SendApiError('avatar_too_large', 'Avatar exceeds the 1 MB limit and could not be scaled', 500);
+            return;
+        }
         $ext = strtolower(pathinfo((string)($media['MediaFile'] ?? ''), PATHINFO_EXTENSION));
         $mimeMap = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
                     'gif' => 'image/gif', 'webp' => 'image/webp'];
         header('Content-Type: ' . ($mimeMap[$ext] ?? 'image/jpeg'));
         echo $content;
+    }
+
+    /** Center-crops to a square and scales to $size px; returns JPEG bytes or null. */
+    private function ScaleAvatar(string $binary, int $size): ?string
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return null;
+        }
+        $src = @imagecreatefromstring($binary);
+        if ($src === false) {
+            return null;
+        }
+        $w = imagesx($src);
+        $h = imagesy($src);
+        $side = max(1, min($w, $h));
+        $srcX = (int)(($w - $side) / 2);
+        $srcY = (int)(($h - $side) / 2);
+        $dst = imagecreatetruecolor($size, $size);
+        imagecopyresampled($dst, $src, 0, 0, $srcX, $srcY, $size, $size, $side, $side);
+        ob_start();
+        imagejpeg($dst, null, 85);
+        $out = (string)ob_get_clean();
+        imagedestroy($src);
+        imagedestroy($dst);
+        return $out === '' ? null : $out;
     }
 
     private function CallInstanceGetAppState(int $id, string $kind): string
