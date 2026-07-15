@@ -24,7 +24,9 @@
             "Revoked": "Widerrufen",
             "Users": "Benutzer",
             "Household members for task assignment. The photo is a Symcon media object (image).": "Haushaltsmitglieder für die Aufgaben-Zuweisung. Das Foto ist ein Symcon-Medienobjekt (Bild).",
-            "Photo": "Foto"
+            "Photo": "Foto",
+            "Push visualization": "Push-Visualisierung",
+            "New task assigned": "Neue Aufgabe zugewiesen"
         }
     }
 }

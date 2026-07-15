@@ -647,6 +647,7 @@ class ToDoList extends IPSModuleStrict
         array_unshift($items, $newItem);
         $this->SaveItems($items);
         $this->ScheduleSyncOnChange();
+        $this->NotifyAssignedUsers($newItem['assignedTo'], $title, (string)($Data['actorUserId'] ?? ''));
 
         return $id;
     }
@@ -761,7 +762,13 @@ class ToDoList extends IPSModuleStrict
                 $items[$i]['priority'] = (string)$Data['priority'];
             }
             if (array_key_exists('assignedTo', $Data)) {
+                $previous = is_array($items[$i]['assignedTo'] ?? null) ? $items[$i]['assignedTo'] : [];
                 $items[$i]['assignedTo'] = $this->NormalizeAssignedTo($Data['assignedTo']);
+                $this->NotifyAssignedUsers(
+                    array_values(array_diff($items[$i]['assignedTo'], $previous)),
+                    (string)($items[$i]['title'] ?? ''),
+                    (string)($Data['actorUserId'] ?? '')
+                );
             }
             if (array_key_exists('done', $Data)) {
                 $items[$i]['done'] = (bool)$Data['done'];
@@ -2128,6 +2135,17 @@ class ToDoList extends IPSModuleStrict
             }
         }
         return $result;
+    }
+
+    private function NotifyAssignedUsers(array $UserIDs, string $Title, string $Actor): void
+    {
+        if ($UserIDs === [] || !function_exists('LAB_NotifyAssignment')) {
+            return;
+        }
+        $bridges = IPS_GetInstanceListByModuleID('{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}');
+        if ($bridges !== []) {
+            @LAB_NotifyAssignment($bridges[0], json_encode(array_values($UserIDs)), $Title, $Actor);
+        }
     }
 
     private function SendState(): void

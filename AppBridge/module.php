@@ -99,6 +99,7 @@ class SymDoBridge extends IPSModuleStrict
                 'id'        => $id,
                 'name'      => $name,
                 'mediaID'   => $mediaID,
+                'visuID'    => (int)($user['visu'] ?? 0),
                 'hasAvatar' => $mediaID > 0 && IPS_MediaExists($mediaID),
             ];
         }
@@ -113,6 +114,24 @@ class SymDoBridge extends IPSModuleStrict
             $this->LoadUsers()
         );
         return json_encode($users, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Pushes an assignment notice to each user's visualization (official Symcon app). */
+    public function NotifyAssignment(string $UserIDs, string $Title, string $ActorUserID): void
+    {
+        $ids = json_decode($UserIDs, true);
+        if (!is_array($ids) || !function_exists('VISU_PostNotification')) {
+            return;
+        }
+        foreach ($this->LoadUsers() as $user) {
+            if (!in_array($user['id'], $ids, true) || $user['id'] === $ActorUserID) {
+                continue;
+            }
+            $visuID = $user['visuID'];
+            if ($visuID > 0 && IPS_InstanceExists($visuID)) {
+                @VISU_PostNotification($visuID, $this->Translate('New task assigned'), $Title, 'Talk', 0);
+            }
+        }
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void

@@ -61,6 +61,15 @@
                             }
                         },
                         {
+                            "caption": "Push visualization",
+                            "name": "visu",
+                            "width": "220px",
+                            "add": 0,
+                            "edit": {
+                                "type": "SelectInstance"
+                            }
+                        },
+                        {
                             "caption": "ID",
                             "name": "id",
                             "width": "110px",
