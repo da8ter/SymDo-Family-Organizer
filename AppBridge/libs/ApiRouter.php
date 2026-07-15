@@ -15,9 +15,18 @@ trait ApiRouter
         }
         $resource = $route[1] ?? '';
 
-        // Pairing is the only unauthenticated endpoint
+        // Unauthenticated endpoints: pairing and a lightweight reachability ping
+        // (the app validates a manually entered address before pairing).
         if ($resource === 'pair' && $method === 'POST') {
             $this->HandlePair();
+            return;
+        }
+        if ($resource === 'ping' && $method === 'GET') {
+            $this->SendJson([
+                'ok'         => true,
+                'apiVersion' => self::API_VERSION,
+                'server'     => $this->BuildServerInfo(),
+            ]);
             return;
         }
 

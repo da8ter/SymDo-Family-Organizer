@@ -23,8 +23,11 @@ trait DeviceRegistry
         }
 
         $connectUrl = $this->GetConnectUrl();
-        $qrPayload = 'symdo://pair?v=1'
-            . '&u=' . rtrim(strtr(base64_encode($connectUrl), '+/', '-_'), '=')
+        $localUrls  = $this->GetLocalUrls();
+        $b64url     = static fn(string $s): string => rtrim(strtr(base64_encode($s), '+/', '-_'), '=');
+        $qrPayload  = 'symdo://pair?v=1'
+            . '&u=' . $b64url($connectUrl)
+            . ($localUrls !== [] ? '&l=' . $b64url($localUrls[0]) : '')
             . '&c=' . $code
             . '&n=' . rawurlencode($this->GetSystemName());
 

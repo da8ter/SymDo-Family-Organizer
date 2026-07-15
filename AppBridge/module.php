@@ -247,6 +247,32 @@ class SymDoBridge extends IPSModuleStrict
         return $name !== '' ? $name : 'IP-Symcon';
     }
 
+    /**
+     * LAN base URLs (http://<ip>:3777) so the app can reach the bridge on the
+     * home network when Symcon Connect is unavailable. Best effort — assumes
+     * the default web server port.
+     */
+    private function GetLocalUrls(): array
+    {
+        if (!function_exists('net_get_interfaces')) {
+            return [];
+        }
+        $urls = [];
+        foreach (net_get_interfaces() as $iface) {
+            foreach (($iface['unicast'] ?? []) as $addr) {
+                $ip = (string)($addr['address'] ?? '');
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+                    continue;
+                }
+                if (str_starts_with($ip, '127.') || str_starts_with($ip, '169.254.')) {
+                    continue;
+                }
+                $urls[] = 'http://' . $ip . ':3777';
+            }
+        }
+        return array_values(array_unique($urls));
+    }
+
     private function BuildServerInfo(): array
     {
         return [
@@ -255,6 +281,7 @@ class SymDoBridge extends IPSModuleStrict
             'libraryVersion' => $this->GetLibraryVersion(),
             'apiVersion'     => self::API_VERSION,
             'connectUrl'     => $this->GetConnectUrl(),
+            'localUrls'      => $this->GetLocalUrls(),
             'hookPath'       => '/hook/' . self::HOOK_PATH,
         ];
     }
