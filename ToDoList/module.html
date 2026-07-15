@@ -511,6 +511,27 @@
     .badge.notify-badge { border-color: var(--accent); color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
     .badge.recur-badge { border-color: var(--accent); color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
     .badge .icon-svg { width: 14px; height: 14px; display: block; fill: currentColor; }
+    .avatar-stack { display: inline-flex; align-items: center; }
+    .avatar-stack .avatar {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1.5px solid var(--bg); margin-left: -8px;
+      object-fit: cover; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600; color: #fff; overflow: hidden;
+    }
+    .avatar-stack .avatar:first-child { margin-left: 0; }
+    .avatar-stack .avatar-more { background: var(--muted); }
+    .assignees { display: flex; flex-wrap: wrap; gap: 8px; }
+    .assignee-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px 6px 6px; border-radius: 999px;
+      border: 1px solid var(--border); cursor: pointer; user-select: none;
+    }
+    .assignee-chip.selected { border-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
+    .assignee-chip .avatar {
+      width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; color: #fff;
+    }
     @media (max-width: 420px) {
       #list .badge.due-badge .due-text { display: none; }
       #list .badge.due-badge .due-icon { display: inline-block; }
@@ -717,6 +738,8 @@
             <input id="title" type="text" class="full" />
             <input id="info" type="text" class="full" />
             <input id="quantity" type="number" min="0" class="full" />
+            <div id="assigneeFieldLabel" class="full field-label" style="display:none;"></div>
+            <div id="assigneePicker" class="full assignees" style="display:none;"></div>
             <div class="full select-wrap">
               <select id="prio">
                 <option value="low"></option>
@@ -780,6 +803,7 @@
     (() => {
     let state = { items: [] };
     let editingId = 0;
+    let selectedAssignees = [];
     let dragItem = null;
     let dragGroup = '';
     let dragItemPrevPointerEvents = null;
@@ -869,6 +893,7 @@
       document.getElementById('due').title = translate('Due');
       document.getElementById('duePlaceholder').textContent = translate('Due placeholder');
       document.getElementById('dueAllDayLabel').textContent = translate('All day');
+      document.getElementById('assigneeFieldLabel').textContent = translate('Assigned to');
       document.getElementById('notificationFieldLabel').textContent = translate('Notification');
 
       document.getElementById('recurrenceFieldLabel').textContent = translate('Repeat');
@@ -1439,6 +1464,37 @@
       ph.style.display = (!hasValue && !isFocused) ? '' : 'none';
     }
 
+    function renderAssigneePicker() {
+      const users = Array.isArray(state.users) ? state.users : [];
+      const label = document.getElementById('assigneeFieldLabel');
+      const picker = document.getElementById('assigneePicker');
+      if (!picker || !label) return;
+      if (users.length === 0) {
+        label.style.display = 'none';
+        picker.style.display = 'none';
+        picker.innerHTML = '';
+        return;
+      }
+      label.style.display = '';
+      picker.style.display = '';
+      picker.innerHTML = users.map(u => {
+        const sel = selectedAssignees.includes(u.id);
+        const av = u.avatar
+          ? `<img class="avatar" src="${u.avatar}" alt="" />`
+          : `<span class="avatar" style="background:${avatarTint(u.name)}">${escapeHtml(String(u.name || '?').charAt(0).toUpperCase())}</span>`;
+        return `<div class="assignee-chip ${sel ? 'selected' : ''}" data-uid="${escapeHtml(u.id)}">${av}<span>${escapeHtml(u.name)}</span></div>`;
+      }).join('');
+      picker.querySelectorAll('.assignee-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const uid = chip.getAttribute('data-uid');
+          const idx = selectedAssignees.indexOf(uid);
+          if (idx >= 0) selectedAssignees.splice(idx, 1);
+          else selectedAssignees.push(uid);
+          chip.classList.toggle('selected');
+        });
+      });
+    }
+
     function resetForm() {
       document.getElementById('title').value = '';
       document.getElementById('info').value = '';
@@ -1452,6 +1508,8 @@
       document.getElementById('recurrenceResetLeadTime').value = '604800';
       document.getElementById('recurrenceCustomUnit').value = 'w';
       document.getElementById('recurrenceCustomValue').value = '1';
+      selectedAssignees = [];
+      renderAssigneePicker();
       updateNotificationAvailability();
     }
 
@@ -1477,6 +1535,8 @@
       if (!it) return;
 
       editingId = parseInt(it.id);
+      selectedAssignees = Array.isArray(it.assignedTo) ? it.assignedTo.slice() : [];
+      renderAssigneePicker();
       document.getElementById('title').value = String(it.title ?? '');
       document.getElementById('info').value = String(it.info ?? '');
       document.getElementById('notification').checked = !!it.notification;
@@ -1501,6 +1561,40 @@
       updateReopenLeadTimeValidity();
       updateNotificationLeadTimeValidity();
       openOverlay('edit');
+    }
+
+    function avatarTint(name) {
+      const palette = ['#3498fa', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#5ac8fa', '#5856d6', '#00c7be'];
+      let h = 5381;
+      for (const ch of String(name || '')) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
+      return palette[Math.abs(h) % palette.length];
+    }
+
+    function usersById() {
+      const map = {};
+      (Array.isArray(state.users) ? state.users : []).forEach(u => { map[u.id] = u; });
+      return map;
+    }
+
+    function renderAvatarStack(ids) {
+      const byId = usersById();
+      const resolved = (Array.isArray(ids) ? ids : []).map(id => byId[id]).filter(Boolean);
+      if (resolved.length === 0) return '';
+      const max = 3;
+      let html = '<div class="avatar-stack">';
+      resolved.slice(0, max).forEach(u => {
+        if (u.avatar) {
+          html += `<img class="avatar" src="${u.avatar}" alt="" title="${escapeHtml(u.name)}" />`;
+        } else {
+          const initial = escapeHtml(String(u.name || '?').charAt(0).toUpperCase());
+          html += `<span class="avatar" title="${escapeHtml(u.name)}" style="background:${avatarTint(u.name)}">${initial}</span>`;
+        }
+      });
+      if (resolved.length > max) {
+        html += `<span class="avatar avatar-more">+${resolved.length - max}</span>`;
+      }
+      html += '</div>';
+      return html;
     }
 
     function renderItem(it) {
@@ -1540,6 +1634,10 @@
         : '';
 
       const meta = [];
+      const avatarHtml = renderAvatarStack(it.assignedTo);
+      if (avatarHtml) {
+        meta.push(avatarHtml);
+      }
       if (!shoppingMode && quantity > 0 && (!useGridView || !showLargeQuantity)) {
         meta.push(`<span class="badge quantity${showLargeQuantity ? ' large-qty' : ''}">${quantity}×</span>`);
       }
@@ -2412,12 +2510,14 @@
         // calendar day, TZ-neutral; the server prefers it over the epoch for all-day items
         const dueDay = (dueAllDay && due > 0) ? dueStr.slice(0, 10) : '';
 
+        const assignedTo = selectedAssignees.slice();
+
         resetForm();
 
         if (editingId > 0) {
-          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
+          requestAction('UpdateItem', JSON.stringify({ id: editingId, title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay, assignedTo }));
         } else {
-          requestAction('AddItem', JSON.stringify({ title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay }));
+          requestAction('AddItem', JSON.stringify({ title, info, due, dueDay, recurrence, recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime, priority: prio, quantity, notification, notificationLeadTime, dueAllDay, assignedTo }));
         }
         closeOverlay();
       });

@@ -2114,8 +2114,23 @@ class ToDoList extends IPSModuleStrict
             'showDeleteButton' => $this->ReadPropertyBoolean('ShowDeleteButton'),
             'showEditButton' => $this->ReadPropertyBoolean('ShowEditButton'),
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
-            'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
+            'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks'),
+            'users' => $this->GetTileUsers()
         ];
+    }
+
+    /** Household users (with scaled avatar data URIs) from the SymDo Bridge. */
+    private function GetTileUsers(): array
+    {
+        if (!function_exists('LAB_GetUsersForTile')) {
+            return [];
+        }
+        $bridges = IPS_GetInstanceListByModuleID('{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}');
+        if ($bridges === []) {
+            return [];
+        }
+        $data = json_decode((string)@LAB_GetUsersForTile($bridges[0]), true);
+        return is_array($data) ? $data : [];
     }
 
     /** Bridge user ids this task is assigned to (deduped, capped). */

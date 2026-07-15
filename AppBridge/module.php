@@ -31,6 +31,7 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('PairedDevices', '[]');
         $this->RegisterAttributeString('PendingPairings', '[]');
         $this->RegisterAttributeString('ActionDedup', '{}');
+        $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterPropertyString('Users', '[]');
     }
 
@@ -114,6 +115,44 @@ class SymDoBridge extends IPSModuleStrict
             $this->LoadUsers()
         );
         return json_encode($users, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Users with a scaled avatar as a data URI, for embedding in a tile state
+     * payload (the tile cannot authenticate against the app hook). The scaled
+     * thumbnail is cached per media object + update time, so the expensive
+     * decode/resize only runs when a photo actually changes.
+     */
+    public function GetUsersForTile(): string
+    {
+        $cache    = json_decode($this->ReadAttributeString('AvatarCache'), true);
+        $cache    = is_array($cache) ? $cache : [];
+        $newCache = [];
+        $result   = [];
+        foreach ($this->LoadUsers() as $u) {
+            $entry = ['id' => $u['id'], 'name' => $u['name'], 'avatar' => ''];
+            if ($u['hasAvatar']) {
+                $media = IPS_GetMedia($u['mediaID']);
+                $key   = $u['mediaID'] . ':' . (string)($media['MediaUpdated'] ?? 0);
+                if (isset($cache[$key]) && is_string($cache[$key]) && $cache[$key] !== '') {
+                    $entry['avatar'] = $cache[$key];
+                } else {
+                    $binary = base64_decode(IPS_GetMediaContent($u['mediaID']), true);
+                    $thumb  = $binary !== false ? $this->ScaleAvatar($binary, 128) : null;
+                    if ($thumb !== null) {
+                        $entry['avatar'] = 'data:image/jpeg;base64,' . base64_encode($thumb);
+                    }
+                }
+                if ($entry['avatar'] !== '') {
+                    $newCache[$key] = $entry['avatar'];
+                }
+            }
+            $result[] = $entry;
+        }
+        if ($newCache !== $cache) {
+            $this->WriteAttributeString('AvatarCache', json_encode($newCache));
+        }
+        return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** Pushes an assignment notice to each user's visualization (official Symcon app). */
