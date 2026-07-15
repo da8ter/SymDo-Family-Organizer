@@ -1592,29 +1592,80 @@ const TRASH_ICON   = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 6
 const HEART_EMPTY  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M442.9 144C415.6 144 389.9 157.1 373.9 179.2L339.5 226.8C335 233 327.8 236.7 320.1 236.7C312.4 236.7 305.2 233 300.7 226.8L266.3 179.2C250.3 157.1 224.6 144 197.3 144C150.3 144 112.2 182.1 112.2 229.1C112.2 279 144.2 327.5 180.3 371.4C221.4 421.4 271.7 465.4 306.2 491.7C309.4 494.1 314.1 495.9 320.2 495.9C326.3 495.9 331 494.1 334.2 491.7C368.7 465.4 419 421.3 460.1 371.4C496.3 327.5 528.2 279 528.2 229.1C528.2 182.1 490.1 144 443.1 144zM335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1C576 297.7 533.1 358 496.9 401.9C452.8 455.5 399.6 502 363.1 529.8C350.8 539.2 335.6 543.9 320 543.9C304.4 543.9 289.2 539.2 276.9 529.8C240.4 502 187.2 455.5 143.1 402C106.9 358.1 64 297.7 64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1L320 171.8L335 151.1z"/></svg>';
 
 // ── Product images ────────────────────────────────────────────────────────
+// Lookup mirrored in the SymDo app (ProductImageLibrary) — keep both in sync.
 let productImages = {};
 let _piKeys = [];
+const _piCache = new Map();
 function _rebuildPiKeys() {
-  _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort((a, b) => b.length - a.length);
+  _piKeys = Object.keys(productImages)
+    .filter(k => k.length > 1)
+    .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+  _piCache.clear();
+}
+const _piIsLetter = (ch) => /\p{L}/u.test(ch);
+const _piFold = (s) => s.replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue').replaceAll('ß', 'ss');
+const _piUnfold = (s) => s.replaceAll('ae', 'ä').replaceAll('oe', 'ö').replaceAll('ue', 'ü').replaceAll('ss', 'ß');
+// The canonical query plus umlaut-folded/-unfolded forms and every
+// single-suffix plural stem ("melonen" needs -n although -en matches first)
+function _piCandidates(key) {
+  const out = [];
+  const push = (v) => { if (v && !out.includes(v)) out.push(v); };
+  push(key); push(_piFold(key)); push(_piUnfold(key));
+  for (const suffix of ['nen', 'en', 'er', 'es', 'se', 'n', 'e', 's']) {
+    if (key.length > suffix.length + 2 && key.endsWith(suffix)) {
+      const stem = key.slice(0, -suffix.length);
+      push(stem); push(_piFold(stem)); push(_piUnfold(stem));
+    }
+  }
+  return out;
+}
+// Whether word occurs in text with non-letter (or edge) boundaries
+function _piWholeWord(text, word) {
+  let idx = text.indexOf(word);
+  while (idx !== -1) {
+    const before = idx === 0 || !_piIsLetter(text[idx - 1]);
+    const after = idx + word.length >= text.length || !_piIsLetter(text[idx + word.length]);
+    if (before && after) return true;
+    idx = text.indexOf(word, idx + 1);
+  }
+  return false;
+}
+function _piResolve(key) {
+  const candidates = _piCandidates(key);
+  // 1. Exact match (incl. umlaut/plural variants of the input)
+  for (const c of candidates) {
+    if (productImages[c]) return productImages[c];
+  }
+  // 2. Compound head: the last element of a German compound names the thing
+  //    ("Buttermilch" → Milch, "Eistee" → Tee)
+  for (const k of _piKeys) {
+    for (const c of candidates) {
+      if (c.length > k.length && c.endsWith(k)) return productImages[k];
+    }
+  }
+  // 3. Longest key contained as a whole word — "Milch 3,5%" matches,
+  //    "Kaffeefilter" no longer turns into coffee
+  for (const k of _piKeys) {
+    for (const c of candidates) {
+      if (c.length > k.length && _piWholeWord(c, k)) return productImages[k];
+    }
+  }
+  return null;
 }
 function getProductImageUrl(name, apiImageUrl) {
   // Prefer API image (cached from provider) if available
   if (apiImageUrl) {
     return window.__imageHookUrl + encodeURIComponent(apiImageUrl);
   }
-
-  const key = (name || '').toLowerCase();
   if (!window.__imageHookUrl) return null;
-  // 1. Exact match
-  let file = productImages[key];
-  if (file) return window.__imageHookUrl + encodeURIComponent(file);
-  // 2. Fallback: longest known key contained in input (word-boundary aware)
-  for (const k of _piKeys) {
-    if (key.length > k.length && key.includes(k)) {
-      return window.__imageHookUrl + encodeURIComponent(productImages[k]);
-    }
+  const key = (name || '').normalize().toLowerCase();
+  if (!key) return null;
+  let file = _piCache.get(key);
+  if (file === undefined) {
+    file = _piResolve(key);
+    _piCache.set(key, file);
   }
-  return null;
+  return file ? window.__imageHookUrl + encodeURIComponent(file) : null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
