@@ -95,6 +95,50 @@ class ShoppingListOverview extends IPSModuleStrict
         }
     }
 
+    public function GetConfigurationForm(): string
+    {
+        $form = json_decode((string) @file_get_contents(__DIR__ . '/form.json'), true);
+        if (!is_array($form)) {
+            return '{}';
+        }
+
+        // Vorhandene Einkaufslisten suchen und als Dropdown anbieten
+        $lists = [];
+        foreach (IPS_GetInstanceListByModuleID(self::SHOPPINGLIST_MODULE_GUID) as $id) {
+            $name = IPS_GetName($id);
+            $lists[] = [
+                'caption' => ($name !== '' ? $name : $this->Translate('Shopping list')) . ' (#' . $id . ')',
+                'value'   => $id,
+            ];
+        }
+        usort($lists, static fn(array $a, array $b): int => strcasecmp($a['caption'], $b['caption']));
+
+        // Gespeicherte, aber nicht mehr auffindbare Auswahl sichtbar halten
+        $current = $this->ReadPropertyInteger('ShoppingListInstanceID');
+        if ($current > 0 && !in_array($current, array_column($lists, 'value'), true)) {
+            $lists[] = ['caption' => '#' . $current . ' (' . $this->Translate('not found') . ')', 'value' => $current];
+        }
+
+        $options = array_merge(
+            [['caption' => $this->Translate('Please select'), 'value' => 0]],
+            $lists
+        );
+
+        foreach ($form['elements'] as &$element) {
+            if (($element['name'] ?? '') === 'ShoppingListInstanceID') {
+                $element = [
+                    'type'    => 'Select',
+                    'name'    => 'ShoppingListInstanceID',
+                    'caption' => $this->Translate('Shopping list instance'),
+                    'options' => $options,
+                ];
+            }
+        }
+        unset($element);
+
+        return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     public function GetVisualizationTile(): string
     {
         $path = __DIR__ . '/module.html';

@@ -6,7 +6,10 @@
             "Open on tap": "Beim Antippen öffnen",
             "Image height": "Bildhöhe",
             "Font size": "Schriftgröße",
-            "List is empty": "Liste ist leer"
+            "List is empty": "Liste ist leer",
+            "Please select": "Bitte wählen",
+            "not found": "nicht gefunden",
+            "Shopping list": "Einkaufsliste"
         }
     }
 }
