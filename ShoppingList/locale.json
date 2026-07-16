@@ -188,7 +188,8 @@
             "Invalid payload": "Ungültige Daten",
             "Item operation failed": "Artikel-Aktion fehlgeschlagen",
             "Unknown item id": "Unbekannte Artikel-ID",
-            "Invalid Ident": "Ungültiger Ident"
+            "Invalid Ident": "Ungültiger Ident",
+            "Use product API for barcode scans": "Produkt-API für Barcode-Scans verwenden"
         }
     }
 }

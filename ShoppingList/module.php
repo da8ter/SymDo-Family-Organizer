@@ -48,6 +48,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
         $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
+        $this->RegisterPropertyBoolean('ExtApiBarcodeEnabled', true);
         $this->RegisterPropertyString('ExtApiMarketId', '');
         $this->RegisterPropertyString('ExtApiZipCode', '');
         $this->RegisterPropertyString('ExtApiCertFile', '');
@@ -1035,7 +1036,10 @@ class ShoppingList extends IPSModuleStrict
 
     private function LookupBarcodeExtApi(string $ean): ?array
     {
-        if (!$this->ReadPropertyBoolean('ExtApiEnabled')) {
+        // Barcode lookups can skip the product API while the rest of the
+        // ExtApi features (images, market) stay active.
+        if (!$this->ReadPropertyBoolean('ExtApiEnabled')
+            || !$this->ReadPropertyBoolean('ExtApiBarcodeEnabled')) {
             return null;
         }
 
@@ -3150,6 +3154,11 @@ class ShoppingList extends IPSModuleStrict
                                     'type'    => 'CheckBox',
                                     'name'    => 'ExtApiShowPrice',
                                     'caption' => $this->Translate('Show price on scanned items'),
+                                ],
+                                [
+                                    'type'    => 'CheckBox',
+                                    'name'    => 'ExtApiBarcodeEnabled',
+                                    'caption' => $this->Translate('Use product API for barcode scans'),
                                 ],
                                 [
                                     'type'    => 'ValidationTextBox',
