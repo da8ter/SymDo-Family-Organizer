@@ -1,0 +1,12 @@
+{
+    "translations": {
+        "de": {
+            "Shopping List Overview": "Einkaufslisten Übersicht",
+            "Shopping list instance": "Einkaufslisten-Instanz",
+            "Open on tap": "Beim Antippen öffnen",
+            "Image height": "Bildhöhe",
+            "Font size": "Schriftgröße",
+            "List is empty": "Liste ist leer"
+        }
+    }
+}

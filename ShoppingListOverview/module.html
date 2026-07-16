@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  #wrap {
+    width: 100%; height: 100%;
+    display: flex; align-items: center;
+    box-sizing: border-box;
+  }
+  #wrap.clickable { cursor: pointer; }
+  #strip {
+    display: flex; align-items: flex-start; gap: 10px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 6px 12px;
+    width: 100%; box-sizing: border-box;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  #strip::-webkit-scrollbar { display: none; }
+  .item { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .thumb {
+    border-radius: 50%; overflow: hidden; flex: none;
+    background: rgba(127,127,127,0.15);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .thumb .initial { font-weight: 700; color: #fff; }
+  .iname {
+    color: var(--content-color, #8e8e93); opacity: 0.85;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: center;
+  }
+  #empty {
+    width: 100%; text-align: center;
+    color: var(--content-color, #8e8e93); opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+  <div id="wrap"><div id="strip"></div></div>
+
+  <script>
+    // ── Bild-Lookup: Spiegel von ShoppingList/module.html (getProductImageUrl)
+    //    und der App (ProductImageLibrary) — alle drei synchron halten! ──────
+    let productImages = {};
+    let _piKeys = [];
+    const _piCache = new Map();
+    function _rebuildPiKeys() {
+      _piKeys = Object.keys(productImages)
+        .filter(k => k.length > 1)
+        .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+      _piCache.clear();
+    }
+    const _piIsLetter = (ch) => /\p{L}/u.test(ch);
+    const _piFold = (s) => s.replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue').replaceAll('ß', 'ss');
+    const _piUnfold = (s) => s.replaceAll('ae', 'ä').replaceAll('oe', 'ö').replaceAll('ue', 'ü').replaceAll('ss', 'ß');
+    function _piCandidates(key) {
+      const out = [];
+      const push = (v) => { if (v && !out.includes(v)) out.push(v); };
+      push(key); push(_piFold(key)); push(_piUnfold(key));
+      for (const suffix of ['nen', 'en', 'er', 'es', 'se', 'n', 'e', 's']) {
+        if (key.length > suffix.length + 2 && key.endsWith(suffix)) {
+          const stem = key.slice(0, -suffix.length);
+          push(stem); push(_piFold(stem)); push(_piUnfold(stem));
+        }
+      }
+      return out;
+    }
+    function _piWholeWord(text, word) {
+      let idx = text.indexOf(word);
+      while (idx !== -1) {
+        const before = idx === 0 || !_piIsLetter(text[idx - 1]);
+        const after = idx + word.length >= text.length || !_piIsLetter(text[idx + word.length]);
+        if (before && after) return true;
+        idx = text.indexOf(word, idx + 1);
+      }
+      return false;
+    }
+    function _piResolve(key) {
+      const candidates = _piCandidates(key);
+      for (const c of candidates) {
+        if (productImages[c]) return productImages[c];
+      }
+      for (const k of _piKeys) {
+        for (const c of candidates) {
+          if (c.length > k.length && c.endsWith(k)) return productImages[k];
+        }
+      }
+      for (const k of _piKeys) {
+        for (const c of candidates) {
+          if (c.length > k.length && _piWholeWord(c, k)) return productImages[k];
+        }
+      }
+      return null;
+    }
+    function imageUrlFor(item) {
+      if (!state.imageBase) return null;
+      if (item.imageUrl) return state.imageBase + encodeURIComponent(item.imageUrl);
+      const key = (item.name || '').normalize().toLowerCase();
+      if (!key) return null;
+      let file = _piCache.get(key);
+      if (file === undefined) {
+        file = _piResolve(key);
+        _piCache.set(key, file);
+      }
+      return file ? state.imageBase + encodeURIComponent(file) : null;
+    }
+
+    // ── Kachel ────────────────────────────────────────────────────────────
+    let state = { items: [], imageBase: '', openObjectId: 0, imageHeight: 48, fontSize: 11, emptyText: 'Liste ist leer' };
+
+    const PALETTE = ['#e7743d', '#4a6cf7', '#28a745', '#c957c9', '#e6a817', '#2aa8a8', '#d9534f', '#7a68c9'];
+    function tintFor(name) {
+      let hash = 0;
+      for (const ch of String(name)) hash = ((hash << 5) - hash + ch.codePointAt(0)) | 0;
+      return PALETTE[Math.abs(hash) % PALETTE.length];
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+    }
+
+    function render() {
+      const strip = document.getElementById('strip');
+      const size = Math.max(24, parseInt(state.imageHeight) || 48);
+      const font = Math.max(7, parseInt(state.fontSize) || 11);
+      const nameWidth = Math.max(size, 40);
+
+      if (!Array.isArray(state.items) || state.items.length === 0) {
+        strip.innerHTML = '<div id="empty" style="font-size:' + (font + 2) + 'px;">'
+          + escapeHtml(state.emptyText) + '</div>';
+        return;
+      }
+
+      let html = '';
+      for (const item of state.items) {
+        const url = imageUrlFor(item);
+        const initial = escapeHtml(String(item.name || '?').trim().charAt(0).toUpperCase());
+        const inner = url
+          ? '<img src="' + escapeHtml(url) + '" loading="lazy" '
+            + 'onerror="this.parentNode.innerHTML=\'<span class=&quot;initial&quot; '
+            + 'style=&quot;font-size:' + Math.round(size * 0.42) + 'px&quot;>' + initial + '</span>\';'
+            + 'this.parentNode.style.background=\'' + tintFor(item.name) + '\';">'
+          : '<span class="initial" style="font-size:' + Math.round(size * 0.42) + 'px">' + initial + '</span>';
+        const bg = url ? '' : ' style="background:' + tintFor(item.name) + '"';
+        html += '<div class="item" style="width:' + nameWidth + 'px">'
+          + '<div class="thumb" style="width:' + size + 'px;height:' + size + 'px"' + (url ? '' : bg) + '>'
+          + inner + '</div>'
+          + '<div class="iname" style="font-size:' + font + 'px;max-width:' + nameWidth + 'px">'
+          + escapeHtml(item.name) + '</div>'
+          + '</div>';
+      }
+      strip.innerHTML = html;
+    }
+
+    function handleMessage(data) {
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (e) { return; }
+      }
+      if (!data || data.type !== 'state') return;
+      state = Object.assign(state, data);
+      productImages = (data.productImages && typeof data.productImages === 'object') ? data.productImages : {};
+      _rebuildPiKeys();
+      const wrap = document.getElementById('wrap');
+      wrap.classList.toggle('clickable', (parseInt(state.openObjectId) || 0) > 0);
+      render();
+    }
+
+    document.getElementById('wrap').addEventListener('click', () => {
+      const id = parseInt(state.openObjectId) || 0;
+      if (id > 0 && typeof openObject === 'function') {
+        openObject(id);
+      }
+    });
+  </script>
+</body>
+</html>

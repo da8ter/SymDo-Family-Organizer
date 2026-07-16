@@ -1,0 +1,12 @@
+{
+  "id": "{87AA918E-2FDA-4A20-87E3-189BF88BF127}",
+  "name": "Shopping List Overview",
+  "type": 3,
+  "vendor": "",
+  "aliases": ["Einkaufslisten Übersicht"],
+  "url": "https://github.com/da8ter/ToDo-List/tree/main/ShoppingListOverview",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "SLLO"
+}

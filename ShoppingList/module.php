@@ -378,6 +378,13 @@ class ShoppingList extends IPSModuleStrict
         }
     }
 
+    /** Bild-Basis-URL (Hook + Token) für Companion-Kacheln wie ShoppingListOverview. */
+    public function GetTileImageBase(): string
+    {
+        $token = urlencode($this->ReadAttributeString('WebHookToken'));
+        return '/hook/' . $this->GetAssetHookPath() . '/?t=' . $token . '&f=';
+    }
+
     public function GetVisualizationTile(): string
     {
         $path = __DIR__ . '/module.html';

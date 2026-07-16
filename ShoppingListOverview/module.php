@@ -1,0 +1,192 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Kompakte Kachel: die offenen Artikel einer Einkaufsliste als horizontal
+ * scrollbare Bild-Leiste — Nachbildung der Einkaufsvorschau aus dem
+ * SymDo-App-Dashboard (ohne Buttons). Klick öffnet ein konfigurierbares Ziel.
+ */
+class ShoppingListOverview extends IPSModuleStrict
+{
+    // GUID des Quell-Moduls Shopping List (Filter/Validierung)
+    private const SHOPPINGLIST_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
+
+    // Diese Variablen der Quell-Instanz werden bei jeder Änderung gesetzt und
+    // dienen als Update-Trigger für die Kachel
+    private const SRC_IDENTS = ['ItemCount', 'LastUsed'];
+
+    public function Create(): void
+    {
+        parent::Create();
+
+        // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert
+        $this->SetVisualizationType(1);
+
+        $this->RegisterPropertyInteger('ShoppingListInstanceID', 0);
+        $this->RegisterPropertyInteger('OpenObjectID', 0);
+        $this->RegisterPropertyInteger('ImageHeight', 48);
+        $this->RegisterPropertyInteger('FontSize', 11);
+
+        // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
+        $this->RegisterAttributeString('SubscribedVarIDs', '[]');
+    }
+
+    public function ApplyChanges(): void
+    {
+        parent::ApplyChanges();
+
+        // Kernel-Check: Kein Heavy Work vor KR_READY
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->RegisterMessage(0, IPS_KERNELSTARTED);
+            return;
+        }
+
+        // 1. Alte Abos/Referenzen sauber lösen (kein Leak bei Instanzwechsel)
+        $previous = json_decode($this->ReadAttributeString('SubscribedVarIDs'), true);
+        if (is_array($previous)) {
+            foreach ($previous as $oldID) {
+                $oldID = (int) $oldID;
+                if ($oldID > 0) {
+                    $this->UnregisterMessage($oldID, VM_UPDATE);
+                }
+            }
+        }
+        foreach ($this->GetReferenceList() as $refID) {
+            $this->UnregisterReference($refID);
+        }
+
+        // 2. Trigger-Variablen der Quell-Instanz abonnieren
+        $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
+        $subscribed = [];
+
+        if ($instanceID > 0 && IPS_InstanceExists($instanceID)) {
+            $this->RegisterReference($instanceID);
+            foreach (self::SRC_IDENTS as $ident) {
+                $varID = @IPS_GetObjectIDByIdent($ident, $instanceID);
+                if ($varID > 0 && IPS_VariableExists($varID)) {
+                    $this->RegisterMessage($varID, VM_UPDATE);
+                    $subscribed[] = $varID;
+                }
+            }
+        }
+
+        // Klick-Ziel referenzieren, damit es nicht unbemerkt gelöscht wird
+        $openID = $this->ReadPropertyInteger('OpenObjectID');
+        if ($openID > 0 && @IPS_ObjectExists($openID)) {
+            $this->RegisterReference($openID);
+        }
+
+        $this->WriteAttributeString('SubscribedVarIDs', json_encode($subscribed));
+
+        // 3. Initialwerte an die Kachel senden
+        $this->PushState();
+    }
+
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        switch ($Message) {
+            case IPS_KERNELSTARTED:
+                $this->ApplyChanges();
+                return;
+            case VM_UPDATE:
+                $this->PushState();
+                return;
+        }
+    }
+
+    public function GetVisualizationTile(): string
+    {
+        $path = __DIR__ . '/module.html';
+        $html = @file_get_contents($path);
+        if (!is_string($html)) {
+            $this->LogMessage('GetVisualizationTile: module.html could not be loaded. path=' . $path, KL_WARNING);
+            return '';
+        }
+
+        // Initial-Payload inline mitgeben, damit die Kachel sofort rendert
+        $payload = json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $html .= '<script>handleMessage(' . $payload . ');</script>';
+
+        return $html;
+    }
+
+    private function PushState(): void
+    {
+        $this->UpdateVisualizationValue(
+            json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    private function BuildPayload(): array
+    {
+        $payload = [
+            'type'          => 'state',
+            'items'         => [],
+            'productImages' => new \stdClass(),
+            'imageBase'     => '',
+            'openObjectId'  => $this->ReadPropertyInteger('OpenObjectID'),
+            'imageHeight'   => max(24, $this->ReadPropertyInteger('ImageHeight')),
+            'fontSize'      => max(7, $this->ReadPropertyInteger('FontSize')),
+            'emptyText'     => $this->Translate('List is empty'),
+        ];
+
+        $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
+        if ($instanceID <= 0 || !IPS_InstanceExists($instanceID)) {
+            return $payload;
+        }
+
+        try {
+            $raw = json_decode((string) SL_GetAppState($instanceID), true);
+            $state = is_array($raw) ? ($raw['state'] ?? []) : [];
+            $payload['items'] = $this->OpenItemsInCategoryOrder(is_array($state) ? $state : []);
+            $images = $state['availableImages'] ?? [];
+            $payload['productImages'] = (is_array($images) && $images !== []) ? $images : new \stdClass();
+            $payload['imageBase'] = (string) SL_GetTileImageBase($instanceID);
+        } catch (\Throwable $e) {
+            $this->SendDebug('BuildPayload', $e->getMessage(), 0);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Offene Artikel in der Reihenfolge der Kategorien-Sortierung — identisch
+     * zur Einkaufslisten-Kachel und zur App.
+     *
+     * @return array<int, array{name: string, amount: string, imageUrl: string}>
+     */
+    private function OpenItemsInCategoryOrder(array $state): array
+    {
+        $items = [];
+        foreach (($state['items'] ?? []) as $item) {
+            if (!is_array($item) || !empty($item['inCart'])) {
+                continue;
+            }
+            $category = trim((string) ($item['category'] ?? ''));
+            $items[$category === '' ? 'Sonstiges' : $category][] = [
+                'name'     => (string) ($item['name'] ?? ''),
+                'amount'   => (string) ($item['amount'] ?? ''),
+                'imageUrl' => (string) ($item['imageUrl'] ?? ''),
+            ];
+        }
+
+        $order = [];
+        foreach (($state['categoryOrder'] ?? []) as $category) {
+            $order[] = (string) $category;
+        }
+        foreach (array_keys($items) as $category) {
+            if (!in_array($category, $order, true)) {
+                $order[] = $category;
+            }
+        }
+
+        $sorted = [];
+        foreach ($order as $category) {
+            foreach ($items[$category] ?? [] as $item) {
+                $sorted[] = $item;
+            }
+        }
+        return $sorted;
+    }
+}
