@@ -82,6 +82,14 @@ trait ApiRouter
                     $this->HandleUserAvatar((string)($route[2] ?? ''));
                     return;
                 }
+                if ($method === 'POST' && ($route[2] ?? '') === '') {
+                    $this->HandleUserCreate();
+                    return;
+                }
+                if ($method === 'POST' && ($route[3] ?? '') === '') {
+                    $this->HandleUserUpdate((string)$route[2]);
+                    return;
+                }
                 if ($method === 'GET') {
                     $this->SendJson(['ok' => true, 'users' => json_decode($this->GetUsers(), true)]);
                     return;
@@ -375,6 +383,39 @@ trait ApiRouter
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         header('Content-Type: ' . ($mimeMap[$ext] ?? 'application/octet-stream'));
         readfile($path);
+    }
+
+    /** POST /v1/users — Benutzer anlegen (Name + optionaler Avatar als Base64-JPEG). */
+    private function HandleUserCreate(): void
+    {
+        $body = $this->ReadJsonBody();
+        $name = trim((string)($body['name'] ?? ''));
+        if ($name === '') {
+            $this->SendApiError('invalid_payload', 'Expected field: name', 422);
+            return;
+        }
+        $user = json_decode($this->CreateAppUser($name, (string)($body['avatar'] ?? '')), true);
+        if (!is_array($user)) {
+            $this->SendApiError('internal', 'User could not be stored', 500);
+            return;
+        }
+        $this->SendJson(['ok' => true, 'user' => $user]);
+    }
+
+    /** POST /v1/users/{id} — Name/Avatar eines Benutzers ändern. */
+    private function HandleUserUpdate(string $userID): void
+    {
+        $body = $this->ReadJsonBody();
+        $user = json_decode($this->UpdateAppUser(
+            $userID,
+            (string)($body['name'] ?? ''),
+            (string)($body['avatar'] ?? '')
+        ), true);
+        if (!is_array($user)) {
+            $this->SendApiError('unknown_user', 'Unknown user: ' . $userID, 404);
+            return;
+        }
+        $this->SendJson(['ok' => true, 'user' => $user]);
     }
 
     private function HandleUserAvatar(string $userID): void

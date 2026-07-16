@@ -156,6 +156,89 @@ class SymDoBridge extends IPSModuleStrict
         return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
+    /** Legt einen Benutzer über die App-API an; Avatar optional als Base64-JPEG. */
+    public function CreateAppUser(string $Name, string $AvatarBase64): string
+    {
+        $name = trim($Name);
+        if ($name === '') {
+            return json_encode(null);
+        }
+        $users = json_decode($this->ReadPropertyString('Users'), true);
+        if (!is_array($users)) {
+            $users = [];
+        }
+        $id      = bin2hex(random_bytes(4));
+        $mediaID = $AvatarBase64 !== '' ? $this->SaveAvatarMedia(0, $id, $name, $AvatarBase64) : 0;
+        $users[] = ['name' => $name, 'id' => $id, 'photo' => $mediaID, 'visu' => 0];
+        IPS_SetProperty($this->InstanceID, 'Users', json_encode($users, JSON_UNESCAPED_UNICODE));
+        IPS_ApplyChanges($this->InstanceID);
+        return json_encode(['id' => $id, 'name' => $name, 'hasAvatar' => $mediaID > 0], JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Ändert Name und/oder Avatar eines Benutzers (App-API: nur das eigene Profil). */
+    public function UpdateAppUser(string $UserID, string $Name, string $AvatarBase64): string
+    {
+        $users = json_decode($this->ReadPropertyString('Users'), true);
+        if (!is_array($users)) {
+            return json_encode(null);
+        }
+        $found = null;
+        $propertyChanged = false;
+        foreach ($users as &$user) {
+            if (!is_array($user) || trim((string)($user['id'] ?? '')) !== $UserID) {
+                continue;
+            }
+            $name = trim($Name);
+            if ($name !== '' && $name !== (string)($user['name'] ?? '')) {
+                $user['name'] = $name;
+                $propertyChanged = true;
+            }
+            if ($AvatarBase64 !== '') {
+                $mediaID = $this->SaveAvatarMedia(
+                    (int)($user['photo'] ?? 0), $UserID, (string)($user['name'] ?? ''), $AvatarBase64
+                );
+                if ($mediaID > 0 && $mediaID !== (int)($user['photo'] ?? 0)) {
+                    $user['photo'] = $mediaID;
+                    $propertyChanged = true;
+                }
+            }
+            $found = $user;
+            break;
+        }
+        unset($user);
+        if ($found === null) {
+            return json_encode(null);
+        }
+        if ($propertyChanged) {
+            IPS_SetProperty($this->InstanceID, 'Users', json_encode($users, JSON_UNESCAPED_UNICODE));
+            IPS_ApplyChanges($this->InstanceID);
+        }
+        $mediaID = (int)($found['photo'] ?? 0);
+        return json_encode([
+            'id'        => $UserID,
+            'name'      => (string)($found['name'] ?? ''),
+            'hasAvatar' => $mediaID > 0 && IPS_MediaExists($mediaID),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Speichert einen Avatar als Medienobjekt unterhalb der Bridge (erstellt bei Bedarf). */
+    private function SaveAvatarMedia(int $mediaID, string $userID, string $name, string $base64): int
+    {
+        $binary = base64_decode($base64, true);
+        // Obergrenze großzügig; die App liefert bereits 256px-JPEGs (~15 KB)
+        if ($binary === false || strlen($binary) < 100 || strlen($binary) > 1024 * 1024) {
+            return 0;
+        }
+        if ($mediaID <= 0 || !IPS_MediaExists($mediaID)) {
+            $mediaID = IPS_CreateMedia(MEDIATYPE_IMAGE);
+            IPS_SetParent($mediaID, $this->InstanceID);
+            IPS_SetName($mediaID, 'Avatar ' . ($name !== '' ? $name : $userID));
+            IPS_SetMediaFile($mediaID, 'media/symdo_avatar_' . $userID . '.jpg', false);
+        }
+        IPS_SetMediaContent($mediaID, base64_encode($binary));
+        return $mediaID;
+    }
+
     /** Pushes an assignment notice to each user's visualization (official Symcon app). */
     public function NotifyAssignment(string $UserIDs, string $Title, string $ActorUserID): void
     {
