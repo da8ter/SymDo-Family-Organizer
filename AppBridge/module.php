@@ -82,7 +82,9 @@ class SymDoBridge extends IPSModuleStrict
 
     private function LoadUsers(): array
     {
-        $users = json_decode($this->ReadPropertyString('Users'), true);
+        // IPS_GetProperty statt ReadPropertyString: sieht per API gestagte
+        // Benutzer sofort — ApplyChanges läuft im Hook-Kontext erst verzögert.
+        $users = json_decode((string) IPS_GetProperty($this->InstanceID, 'Users'), true);
         if (!is_array($users)) {
             return [];
         }
@@ -163,7 +165,7 @@ class SymDoBridge extends IPSModuleStrict
         if ($name === '') {
             return json_encode(null);
         }
-        $users = json_decode($this->ReadPropertyString('Users'), true);
+        $users = json_decode((string) IPS_GetProperty($this->InstanceID, 'Users'), true);
         if (!is_array($users)) {
             $users = [];
         }
@@ -178,7 +180,7 @@ class SymDoBridge extends IPSModuleStrict
     /** Ändert Name und/oder Avatar eines Benutzers (App-API: nur das eigene Profil). */
     public function UpdateAppUser(string $UserID, string $Name, string $AvatarBase64): string
     {
-        $users = json_decode($this->ReadPropertyString('Users'), true);
+        $users = json_decode((string) IPS_GetProperty($this->InstanceID, 'Users'), true);
         if (!is_array($users)) {
             return json_encode(null);
         }
