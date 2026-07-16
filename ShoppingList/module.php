@@ -48,7 +48,6 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
         $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
-        $this->RegisterPropertyBoolean('ExtApiBarcodeEnabled', true);
         $this->RegisterPropertyString('ExtApiMarketId', '');
         $this->RegisterPropertyString('ExtApiZipCode', '');
         $this->RegisterPropertyString('ExtApiCertFile', '');
@@ -494,12 +493,8 @@ class ShoppingList extends IPSModuleStrict
         if (!preg_match('/^\d{8,14}$/', $ean)) {
             return json_encode(['found' => false, 'error' => 'invalid_ean']);
         }
-        $product = $this->LookupBarcodeExtApi($ean);
-        $source  = 'extapi';
-        if ($product === null) {
-            $product = $this->LookupBarcodeOpenFoodFacts($ean);
-            $source  = 'off';
-        }
+        $product = $this->LookupBarcodeOpenFoodFacts($ean);
+        $source  = 'off';
         if ($product === null) {
             $product = $this->LookupBarcodeOpenGtinDb($ean);
             $source  = 'opengtindb';
@@ -1021,59 +1016,12 @@ class ShoppingList extends IPSModuleStrict
 
     private function LookupBarcodeProduct(string $ean): ?array
     {
-        $product = $this->LookupBarcodeExtApi($ean);
-        if ($product !== null) {
-            return $product;
-        }
-
         $product = $this->LookupBarcodeOpenFoodFacts($ean);
         if ($product !== null) {
             return $product;
         }
 
         return $this->LookupBarcodeOpenGtinDb($ean);
-    }
-
-    private function LookupBarcodeExtApi(string $ean): ?array
-    {
-        // Barcode lookups can skip the product API while the rest of the
-        // ExtApi features (images, market) stay active.
-        if (!$this->ReadPropertyBoolean('ExtApiEnabled')
-            || !$this->ReadPropertyBoolean('ExtApiBarcodeEnabled')) {
-            return null;
-        }
-
-        $certPath = $this->GetExtApiCertPath();
-        $keyPath  = $this->GetExtApiKeyPath();
-        $marketId = $this->ReadPropertyString('ExtApiMarketId');
-        $zip      = $this->ReadPropertyString('ExtApiZipCode');
-        if ($marketId === '' || $zip === '' || !is_file($certPath) || !is_file($keyPath)) {
-            return null;
-        }
-
-        $config = $this->LoadExtApiConfig();
-        if ($config === null) {
-            return null;
-        }
-
-        $result = $this->ExtApiLookup($ean, $marketId, $zip, $certPath, $keyPath, $config);
-        if (isset($result['error'])) {
-            $this->SendDebug('ExternalScanner', 'External API lookup failed for ' . $ean . ': ' . $result['error'], 0);
-            return null;
-        }
-
-        $name = trim((string)($result['name'] ?? ''));
-        if ($name === '') {
-            return null;
-        }
-
-        return [
-            'name'      => $name,
-            'category'  => trim((string)($result['category'] ?? '')),
-            'price'     => trim((string)($result['price'] ?? '')),
-            'listingId' => trim((string)($result['listingId'] ?? '')),
-            'imageUrl'  => trim((string)($result['imageUrl'] ?? '')),
-        ];
     }
 
     private function LookupBarcodeOpenFoodFacts(string $ean): ?array
@@ -3154,11 +3102,6 @@ class ShoppingList extends IPSModuleStrict
                                     'type'    => 'CheckBox',
                                     'name'    => 'ExtApiShowPrice',
                                     'caption' => $this->Translate('Show price on scanned items'),
-                                ],
-                                [
-                                    'type'    => 'CheckBox',
-                                    'name'    => 'ExtApiBarcodeEnabled',
-                                    'caption' => $this->Translate('Use product API for barcode scans'),
                                 ],
                                 [
                                     'type'    => 'ValidationTextBox',
