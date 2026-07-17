@@ -602,14 +602,17 @@ class ShoppingList extends IPSModuleStrict
 
     protected function BuildStatePayload(): array
     {
+        // Einmal bauen (Verzeichnis-Scan + Alias-Parse) — Marken-Map leitet
+        // sich daraus ab statt erneut zu scannen.
+        $productImages = $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [];
         return [
             'type'            => 'state',
             'items'           => $this->LoadItems(),
             'suggestions'     => $this->BuildSuggestionsPayload(),
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
             'favoriteLists'   => $this->LoadFavoriteLists(),
-            'availableImages' => $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [],
-            'availableBrands' => $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableBrandImages() : [],
+            'availableImages' => $productImages,
+            'availableBrands' => $productImages === [] ? [] : $this->GetAvailableBrandImages($productImages),
             'extApiEnabled'   => $this->ReadPropertyBoolean('ExtApiEnabled')
                                  && $this->ReadPropertyString('ExtApiMarketId') !== ''
                                  && file_exists($this->GetExtApiCertPath())
@@ -722,7 +725,7 @@ class ShoppingList extends IPSModuleStrict
      * Marke bestimmt das Produktbild unabhängig von den übrigen Wörtern
      * ("Pringles Sweet Paprika" → chips). Spiegel: ProductImageLibrary (App).
      */
-    private function GetAvailableBrandImages(): array
+    private function GetAvailableBrandImages(array $images): array
     {
         $aliasPath = __DIR__ . '/assets/image-aliases.json';
         if (!file_exists($aliasPath)) {
@@ -733,7 +736,6 @@ class ShoppingList extends IPSModuleStrict
         if (!is_array($brands) || $brands === []) {
             return [];
         }
-        $images = $this->GetAvailableProductImages();
         $result = [];
         foreach ($brands as $brand => $target) {
             $brand = mb_strtolower(trim((string)$brand));
