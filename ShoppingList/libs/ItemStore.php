@@ -104,7 +104,7 @@ trait ItemStore
                 'name'     => $name,
                 'category' => $category,
                 'amount'   => $amount,
-                'notes'    => '',
+                'notes'    => $notes,
                 'inCart'   => false,
                 'addedAt'  => time(),
             ];
@@ -115,7 +115,7 @@ trait ItemStore
         }
     }
 
-    private function AddScannedItemInternal(string $Name, string $Category, string $Amount, string $Price, string $ListingId = '', string $ImageUrl = ''): bool
+    private function AddScannedItemInternal(string $Name, string $Category, string $Amount, string $Price, string $ListingId = '', string $ImageUrl = '', string $Notes = ''): bool
     {
         $name = trim($Name);
         if ($name === '') {
@@ -129,6 +129,7 @@ trait ItemStore
         $price     = trim($Price);
         $listingId = trim($ListingId);
         $imageUrl  = trim($ImageUrl);
+        $notes     = trim($Notes);
 
         $semaphoreKey = 'SL_Items_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
@@ -155,6 +156,9 @@ trait ItemStore
                     if ($imageUrl !== '' && empty($item['imageUrl'])) {
                         $item['imageUrl'] = $imageUrl;
                     }
+                    if ($notes !== '' && trim((string)($item['notes'] ?? '')) === '') {
+                        $item['notes'] = $notes;
+                    }
                     $this->SaveItems($items);
                     return true;
                 }
@@ -165,7 +169,7 @@ trait ItemStore
                 'name'     => $name,
                 'category' => $category,
                 'amount'   => $amount,
-                'notes'    => '',
+                'notes'    => $notes,
                 'price'    => $price,
                 'imageUrl' => $imageUrl,
                 'inCart'   => false,

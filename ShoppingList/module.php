@@ -167,7 +167,8 @@ class ShoppingList extends IPSModuleStrict
                     (string)($data['amount'] ?? ''),
                     (string)($data['price'] ?? ''),
                     (string)($data['listingId'] ?? ''),
-                    (string)($data['imageUrl'] ?? '')
+                    (string)($data['imageUrl'] ?? ''),
+                    (string)($data['notes'] ?? '')
                 )) {
                     throw new \Exception($this->Translate('Item operation failed'));
                 }
@@ -1011,7 +1012,8 @@ class ShoppingList extends IPSModuleStrict
             '1',
             (string)($product['price'] ?? ''),
             (string)($product['listingId'] ?? ''),
-            (string)($product['imageUrl'] ?? '')
+            (string)($product['imageUrl'] ?? ''),
+            (string)($product['genericName'] ?? '')
         );
 
         $this->SendDebug(
@@ -1056,21 +1058,109 @@ class ShoppingList extends IPSModuleStrict
             return null;
         }
 
-        $categories = [];
-        foreach (explode(',', (string)($product['categories'] ?? '')) as $category) {
-            $category = trim($category);
-            if ($category !== '') {
-                $categories[] = $category;
+        // 1) Kanonische Taxonomie-Tags (sprachunabhängig, spezifischster zuletzt)
+        $tags = is_array($product['categories_tags'] ?? null) ? $product['categories_tags'] : [];
+        $category = $this->MapOffCategoryTags($tags);
+
+        // 2) Fallback: Freitext-Kategorien gegen lokale Namen
+        if ($category === '') {
+            $categories = [];
+            foreach (explode(',', (string)($product['categories'] ?? '')) as $hint) {
+                $hint = trim($hint);
+                if ($hint !== '') {
+                    $categories[] = $hint;
+                }
             }
+            $category = $this->MatchLocalCategory($categories);
+        }
+
+        $generic = trim((string)($product['generic_name_de'] ?? ''));
+        if ($generic === '') {
+            $generic = trim((string)($product['generic_name'] ?? ''));
         }
 
         return [
-            'name'      => $name,
-            'category'  => $this->MatchLocalCategory($categories),
-            'price'     => '',
-            'listingId' => '',
-            'imageUrl'  => '',
+            'name'        => $name,
+            'category'    => $category,
+            'price'       => '',
+            'listingId'   => '',
+            'imageUrl'    => '',
+            'genericName' => $generic,
         ];
+    }
+
+    /**
+     * Open-Food-Facts-Taxonomie-Tags (categories_tags) auf lokale Kategorien
+     * mappen — spezifischster Tag gewinnt, alles Gefrorene geht in Tiefkühl.
+     * Spiegel von OFFCategoryMapper in der SymDo-App — synchron halten!
+     */
+    private function MapOffCategoryTags(array $tags): string
+    {
+        $map = [
+            'en:dairies' => 'Milch & Käse', 'en:milks' => 'Milch & Käse',
+            'en:cheeses' => 'Milch & Käse', 'en:butters' => 'Milch & Käse',
+            'en:salted-butters' => 'Milch & Käse', 'en:unsalted-butters' => 'Milch & Käse',
+            'en:yogurts' => 'Milch & Käse', 'en:creams' => 'Milch & Käse',
+            'en:quarks' => 'Milch & Käse', 'en:margarines' => 'Milch & Käse',
+            'en:eggs' => 'Milch & Käse', 'en:fermented-milk-products' => 'Milch & Käse',
+            'en:desserts' => 'Milch & Käse', 'en:dairy-desserts' => 'Milch & Käse',
+            'en:plant-based-milk-alternatives' => 'Milch & Käse',
+            'en:fruits' => 'Obst & Gemüse', 'en:vegetables' => 'Obst & Gemüse',
+            'en:fresh-fruits' => 'Obst & Gemüse', 'en:fresh-vegetables' => 'Obst & Gemüse',
+            'en:fruits-and-vegetables-based-foods' => 'Obst & Gemüse',
+            'en:salads' => 'Obst & Gemüse', 'en:mushrooms' => 'Obst & Gemüse',
+            'en:herbs' => 'Obst & Gemüse', 'en:potatoes' => 'Obst & Gemüse',
+            'en:breads' => 'Backwaren', 'en:pastries' => 'Backwaren',
+            'en:viennoiseries' => 'Backwaren', 'en:cakes' => 'Backwaren',
+            'en:buns' => 'Backwaren', 'en:flours' => 'Backwaren',
+            'en:crispbreads' => 'Backwaren', 'en:rusks' => 'Backwaren',
+            'en:meats' => 'Fleisch & Wurst', 'en:sausages' => 'Fleisch & Wurst',
+            'en:poultries' => 'Fleisch & Wurst', 'en:hams' => 'Fleisch & Wurst',
+            'en:cold-cuts' => 'Fleisch & Wurst', 'en:fishes' => 'Fleisch & Wurst',
+            'en:seafood' => 'Fleisch & Wurst', 'en:fish-and-meat-and-eggs' => 'Fleisch & Wurst',
+            'en:meat-alternatives' => 'Fleisch & Wurst', 'en:tofu' => 'Fleisch & Wurst',
+            'en:ice-creams-and-sorbets' => 'Tiefkühl', 'en:ice-creams' => 'Tiefkühl',
+            'en:beverages' => 'Getränke', 'en:waters' => 'Getränke',
+            'en:sodas' => 'Getränke', 'en:juices' => 'Getränke',
+            'en:fruit-juices' => 'Getränke', 'en:carbonated-drinks' => 'Getränke',
+            'en:beers' => 'Getränke', 'en:wines' => 'Getränke',
+            'en:coffees' => 'Getränke', 'en:teas' => 'Getränke',
+            'en:iced-teas' => 'Getränke', 'en:energy-drinks' => 'Getränke',
+            'en:plant-based-beverages' => 'Getränke', 'en:syrups' => 'Getränke',
+            'en:alcoholic-beverages' => 'Getränke', 'en:hot-beverages' => 'Getränke',
+            'en:snacks' => 'Snacks & Süßes', 'en:sweet-snacks' => 'Snacks & Süßes',
+            'en:salty-snacks' => 'Snacks & Süßes', 'en:chocolates' => 'Snacks & Süßes',
+            'en:candies' => 'Snacks & Süßes', 'en:biscuits' => 'Snacks & Süßes',
+            'en:biscuits-and-cakes' => 'Snacks & Süßes', 'en:crisps' => 'Snacks & Süßes',
+            'en:chips-and-fries' => 'Snacks & Süßes', 'en:confectioneries' => 'Snacks & Süßes',
+            'en:chewing-gum' => 'Snacks & Süßes', 'en:nuts' => 'Snacks & Süßes',
+            'en:bars' => 'Snacks & Süßes',
+            'en:canned-foods' => 'Konserven & Trocken', 'en:pastas' => 'Konserven & Trocken',
+            'en:rices' => 'Konserven & Trocken', 'en:cereals-and-potatoes' => 'Konserven & Trocken',
+            'en:breakfast-cereals' => 'Konserven & Trocken', 'en:cereals-and-their-products' => 'Konserven & Trocken',
+            'en:sauces' => 'Konserven & Trocken', 'en:condiments' => 'Konserven & Trocken',
+            'en:spices' => 'Konserven & Trocken', 'en:spreads' => 'Konserven & Trocken',
+            'en:sweet-spreads' => 'Konserven & Trocken', 'en:honeys' => 'Konserven & Trocken',
+            'en:jams' => 'Konserven & Trocken', 'en:vinegars' => 'Konserven & Trocken',
+            'en:oils' => 'Konserven & Trocken', 'en:vegetable-oils' => 'Konserven & Trocken',
+            'en:legumes' => 'Konserven & Trocken', 'en:soups' => 'Konserven & Trocken',
+            'en:mustards' => 'Konserven & Trocken', 'en:ketchup' => 'Konserven & Trocken',
+            'en:mayonnaises' => 'Konserven & Trocken', 'en:sugars' => 'Konserven & Trocken',
+            'en:baking-supplies' => 'Konserven & Trocken',
+            'en:baby-foods' => 'Baby & Tier', 'en:infant-formulas' => 'Baby & Tier',
+            'en:pet-food' => 'Baby & Tier', 'en:dog-food' => 'Baby & Tier',
+            'en:cat-food' => 'Baby & Tier',
+        ];
+        foreach (array_reverse($tags) as $tag) {
+            $key = mb_strtolower(trim((string)$tag));
+            if (str_starts_with($key, 'en:frozen')) {
+                return 'Tiefkühl';
+            }
+            if (isset($map[$key])) {
+                return $map[$key];
+            }
+        }
+        return '';
     }
 
     private function LookupBarcodeOpenGtinDb(string $ean): ?array
