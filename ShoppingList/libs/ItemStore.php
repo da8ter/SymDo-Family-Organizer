@@ -11,7 +11,15 @@ trait ItemStore
         if (!is_array($data)) {
             return [];
         }
-        return array_values(array_filter($data, fn($item) => is_array($item)));
+        $items = array_values(array_filter($data, fn($item) => is_array($item)));
+        // Normalisierung: notes muss immer String sein — ein einzelnes null
+        // (Altbestand eines Bugs) ließ das strikte App-Decoding der gesamten
+        // Liste scheitern.
+        foreach ($items as &$item) {
+            $item['notes'] = (string)($item['notes'] ?? '');
+        }
+        unset($item);
+        return $items;
     }
 
     private function SaveItems(array $Items): void
@@ -104,7 +112,7 @@ trait ItemStore
                 'name'     => $name,
                 'category' => $category,
                 'amount'   => $amount,
-                'notes'    => $notes,
+                'notes'    => '',
                 'inCart'   => false,
                 'addedAt'  => time(),
             ];
