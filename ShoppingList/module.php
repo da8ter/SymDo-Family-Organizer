@@ -1087,6 +1087,14 @@ class ShoppingList extends IPSModuleStrict
             return null;
         }
 
+        // Marke voranstellen, wenn sie nicht schon im Titel steht ("Bunte
+        // Schnecken" + brands "Haribo" → "Haribo Bunte Schnecken"): so greifen
+        // Marken-Bild und Marken-Vokabular. Spiegel: OpenFoodFactsLookup (App).
+        $brand = trim((string)explode(',', (string)($product['brands'] ?? ''))[0]);
+        if ($brand !== '' && mb_stripos($name, $brand) === false) {
+            $name = $brand . ' ' . $name;
+        }
+
         // 1) Kanonische Taxonomie-Tags (sprachunabhängig, spezifischster zuletzt)
         $tags = is_array($product['categories_tags'] ?? null) ? $product['categories_tags'] : [];
         $category = $this->MapOffCategoryTags($tags);
