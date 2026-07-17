@@ -186,6 +186,8 @@ class ShoppingListOverview extends IPSModuleStrict
             $payload['items'] = $this->OpenItemsInCategoryOrder(is_array($state) ? $state : []);
             $images = $state['availableImages'] ?? [];
             $payload['productImages'] = (is_array($images) && $images !== []) ? $images : new \stdClass();
+            $brands = $state['availableBrands'] ?? [];
+            $payload['productBrands'] = (is_array($brands) && $brands !== []) ? $brands : new \stdClass();
             $payload['imageBase'] = (string) SL_GetTileImageBase($instanceID);
         } catch (\Throwable $e) {
             $this->SendDebug('BuildPayload', $e->getMessage(), 0);

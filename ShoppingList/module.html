@@ -1594,12 +1594,14 @@ const HEART_EMPTY  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 6
 // ── Product images ────────────────────────────────────────────────────────
 // Lookup mirrored in the SymDo app (ProductImageLibrary) — keep both in sync.
 let productImages = {};
+let productBrands = {};
 let _piKeys = [];
+let _piBrandKeys = [];
 const _piCache = new Map();
 function _rebuildPiKeys() {
-  _piKeys = Object.keys(productImages)
-    .filter(k => k.length > 1)
-    .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+  const byLength = (a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0);
+  _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort(byLength);
+  _piBrandKeys = Object.keys(productBrands).filter(k => k.length > 1).sort(byLength);
   _piCache.clear();
 }
 const _piIsLetter = (ch) => /\p{L}/u.test(ch);
@@ -1635,6 +1637,13 @@ function _piResolve(key) {
   // 1. Exact match (incl. umlaut/plural variants of the input)
   for (const c of candidates) {
     if (productImages[c]) return productImages[c];
+  }
+  // 1.5 Brand match — a known brand pins the product regardless of the
+  //     remaining words ("Pringles Sweet Paprika" is chips, not paprika)
+  for (const k of _piBrandKeys) {
+    for (const c of candidates) {
+      if (_piWholeWord(c, k)) return productBrands[k];
+    }
   }
   // 2. Compound head: the last element of a German compound names the thing
   //    ("Buttermilch" → Milch, "Eistee" → Tee)
@@ -2988,7 +2997,11 @@ function handleMessage(data) {
     try { data = JSON.parse(data); } catch (e) { return; }
   }
   if (data && typeof data === 'object' && data.type === 'state') {
-    if (data.availableImages) { productImages = data.availableImages; _rebuildPiKeys(); }
+    if (data.availableImages) {
+      productImages = data.availableImages;
+      productBrands = data.availableBrands || {};
+      _rebuildPiKeys();
+    }
     state = data;
     syncScannerAddedNames();
     render();

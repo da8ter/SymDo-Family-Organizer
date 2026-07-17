@@ -609,6 +609,7 @@ class ShoppingList extends IPSModuleStrict
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
             'favoriteLists'   => $this->LoadFavoriteLists(),
             'availableImages' => $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [],
+            'availableBrands' => $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableBrandImages() : [],
             'extApiEnabled'   => $this->ReadPropertyBoolean('ExtApiEnabled')
                                  && $this->ReadPropertyString('ExtApiMarketId') !== ''
                                  && file_exists($this->GetExtApiCertPath())
@@ -714,6 +715,34 @@ class ShoppingList extends IPSModuleStrict
         }
 
         return $images;
+    }
+
+    /**
+     * "_brands" aus image-aliases.json: Marke => Bild-Basisname. Eine erkannte
+     * Marke bestimmt das Produktbild unabhängig von den übrigen Wörtern
+     * ("Pringles Sweet Paprika" → chips). Spiegel: ProductImageLibrary (App).
+     */
+    private function GetAvailableBrandImages(): array
+    {
+        $aliasPath = __DIR__ . '/assets/image-aliases.json';
+        if (!file_exists($aliasPath)) {
+            return [];
+        }
+        $aliasData = json_decode((string)file_get_contents($aliasPath), true);
+        $brands = is_array($aliasData) ? ($aliasData['_brands'] ?? []) : [];
+        if (!is_array($brands) || $brands === []) {
+            return [];
+        }
+        $images = $this->GetAvailableProductImages();
+        $result = [];
+        foreach ($brands as $brand => $target) {
+            $brand = mb_strtolower(trim((string)$brand));
+            $file = $images[mb_strtolower(trim((string)$target))] ?? null;
+            if ($brand !== '' && $file !== null) {
+                $result[$brand] = $file;
+            }
+        }
+        return $result;
     }
 
     private function NormalizeProductName(string $name): array

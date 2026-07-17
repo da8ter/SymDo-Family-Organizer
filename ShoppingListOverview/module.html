@@ -49,12 +49,14 @@
     // ── Bild-Lookup: Spiegel von ShoppingList/module.html (getProductImageUrl)
     //    und der App (ProductImageLibrary) — alle drei synchron halten! ──────
     let productImages = {};
+    let productBrands = {};
     let _piKeys = [];
+    let _piBrandKeys = [];
     const _piCache = new Map();
     function _rebuildPiKeys() {
-      _piKeys = Object.keys(productImages)
-        .filter(k => k.length > 1)
-        .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+      const byLength = (a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0);
+      _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort(byLength);
+      _piBrandKeys = Object.keys(productBrands).filter(k => k.length > 1).sort(byLength);
       _piCache.clear();
     }
     const _piIsLetter = (ch) => /\p{L}/u.test(ch);
@@ -86,6 +88,11 @@
       const candidates = _piCandidates(key);
       for (const c of candidates) {
         if (productImages[c]) return productImages[c];
+      }
+      for (const k of _piBrandKeys) {
+        for (const c of candidates) {
+          if (_piWholeWord(c, k)) return productBrands[k];
+        }
       }
       for (const k of _piKeys) {
         for (const c of candidates) {
@@ -168,6 +175,7 @@
       if (!data || data.type !== 'state') return;
       state = Object.assign(state, data);
       productImages = (data.productImages && typeof data.productImages === 'object') ? data.productImages : {};
+      productBrands = (data.productBrands && typeof data.productBrands === 'object') ? data.productBrands : {};
       _rebuildPiKeys();
       const wrap = document.getElementById('wrap');
       wrap.classList.toggle('clickable', (parseInt(state.openObjectId) || 0) > 0);
