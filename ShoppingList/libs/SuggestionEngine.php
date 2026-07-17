@@ -46,6 +46,7 @@ trait SuggestionEngine
             ['name' => 'Butterkäse',       'category' => 'Milch & Käse'],
             ['name' => 'Camembert',        'category' => 'Milch & Käse'],
             ['name' => 'Frischkäse',       'category' => 'Milch & Käse'],
+            ['name' => 'Schmelzkäse', 'category' => 'Milch & Käse'],
             ['name' => 'Parmesan',         'category' => 'Milch & Käse'],
             ['name' => 'Feta',             'category' => 'Milch & Käse'],
             ['name' => 'Brie',             'category' => 'Milch & Käse'],
