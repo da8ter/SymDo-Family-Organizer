@@ -1,260 +1,1672 @@
 {
     "_comment": "Key = Bild-Dateiname (ohne Extension, lowercase). Value = alternative Artikelnamen (lowercase).",
-
-    "apfel": ["äpfel", "apfel rot", "apfel grün", "apfel pink lady", "apfel braeburn", "apfel elstar", "apfel gala", "pink lady", "braeburn", "elstar", "gala", "granny smith", "jonagold", "boskoop", "apple", "apples"],
-    "banane": ["bananen", "banana", "bananas"],
-    "orange": ["orangen", "apfelsine", "apfelsinen", "oranges"],
-    "zitrone": ["zitronen", "lemon", "lemons"],
-    "erdbeeren": ["erdbeere", "strawberry", "strawberries"],
-    "trauben": ["traube", "weintrauben", "weintraube", "grapes", "grape"],
-    "tomate": ["tomaten", "cherrytomaten", "cherrytomate", "strauchtomaten", "strauchtomate", "cocktailtomaten", "cocktailtomate", "rispentomaten", "rispentomate", "tomato", "tomatoes", "cherry tomatoes"],
-    "karotte": ["karotten", "möhre", "möhren", "mohrrübe", "mohrrüben", "rüebli", "gelbe rübe", "gelbe rüben", "carrot", "carrots"],
-    "gurke": ["gurken", "salatgurke", "salatgurken", "schlangengurke", "schlangengurken", "minigurke", "minigurken", "cucumber", "cucumbers"],
-    "paprika": ["paprikas", "paprikaschote", "paprikaschoten", "peperoni", "bell pepper", "bell peppers", "pepper"],
-    "zwiebel": ["zwiebeln", "gemüsezwiebel", "gemüsezwiebeln", "rote zwiebel", "rote zwiebeln", "schalotte", "schalotten", "onion", "onions", "shallot", "shallots"],
-    "knoblauch": ["knoblauchzehe", "knoblauchzehen", "knoblauchknolle", "knoblauchknollen", "garlic"],
-    "salat": ["salate", "blattsalat", "salad", "lettuce"],
-    "kopfsalat": ["kopfsalate", "butterhead lettuce", "head lettuce"],
-    "eisbergsalat": ["eisbergsalate", "eissalat", "iceberg lettuce"],
-    "romana": ["romanasalat", "römersalat", "romaine", "romaine lettuce"],
-    "feldsalat": ["feldsalate", "rapunzel", "rapunzelsalat", "nüsslisalat", "lamb's lettuce", "corn salad"],
-    "rucola": ["rauke", "ruccola", "rukola", "arugula", "rocket"],
-    "chicorée": ["chicoree", "chicory", "endive"],
-    "endivie": ["endivien", "endiviensalat", "escarole"],
-    "radicchio": ["radiccio"],
-    "mangold": ["krautstiel", "swiss chard", "chard"],
-    "brokkoli": ["broccoli", "brokoli"],
-    "spinat": ["blattspinat", "spinach"],
-
-    "milch": ["vollmilch", "frischmilch", "h-milch", "haltbare milch", "fettarme milch", "milk", "whole milk", "skimmed milk"],
-    "butter": ["süßrahmbutter", "sauerrahmbutter", "irische butter", "butter"],
-    "joghurt": ["jogurt", "yoghurt", "naturjoghurt", "fruchtjoghurt", "joghurtbecher", "danone", "activia", "müller milchreis", "yogurt", "yoghurt"],
-    "quark": ["magerquark", "speisequark", "curd cheese", "quark cheese"],
-    "sahne": ["schlagsahne", "kochsahne", "schmand", "crème fraîche", "creme fraiche", "rama cremefine", "obers", "rahm", "cream", "whipping cream", "sour cream"],
-    "käse": ["scheibenkäse", "reibekäse", "streukäse", "cheese", "sliced cheese", "shredded cheese"],
-    "gouda": ["jung gouda", "alter gouda", "mittelalt gouda"],
-    "mozzarella": ["mozzarela", "burrata", "büffelmozzarella"],
-    "eier": ["ei", "hühnereier", "freilandeier", "bio-eier", "10er eier", "6er eier", "eggs", "egg"],
-    "edamer": ["edammer"],
-    "emmentaler": ["emmenthaler"],
-    "cheddar": ["chedar"],
-    "butterkäse": ["butterkaese"],
-    "camembert": ["camenbert", "camenbär"],
-    "frischkäse": ["frischkaese", "philadelphia", "philly", "brotaufstrich", "kräuterfrischkäse", "cream cheese"],
-    "parmesan": ["parmigiano", "grana padano"],
-    "feta": ["fetakäse", "schafskäse", "hirtenkäse", "feta cheese"],
-    "brie": ["brie de meaux"],
-    "bergkäse": ["allgäuer bergkäse", "alpkäse", "mountain cheese", "alpine cheese"],
-    "ziegenkäse": ["ziegenfrischkäse", "goat cheese"],
-    "ricotta": ["ricottakäse"],
-    "mascarpone": ["mascarponecreme", "mascarpone cheese"],
-
-    "babymilch": ["anfangsmilch", "folgemilch", "säuglingsmilch", "aptamil", "milupa", "bebivita", "baby milk", "infant formula", "baby formula"],
-
-    "toastbrot": ["toast", "toastscheiben", "sandwichtoast", "toast bread", "sliced bread"],
-    "vollkornbrot": ["vollkornbrote", "whole grain bread", "wholemeal bread"],
-    "brot": ["brote", "laib brot", "stulle", "bread", "loaf"],
-    "brötchen": ["semmeln", "schrippen", "weck", "rundstück", "rundstücke", "wecken", "weckle", "aufbackbrötchen", "sonntagsbrötchen", "bread roll", "bread rolls", "bun", "buns"],
-    "baguette": ["baguettes", "stangenweißbrot"],
-    "croissant": ["croissants", "gipfeli", "hörnchen", "kipferl"],
-    "mehl": ["weizenmehl", "dinkelmehl", "roggenmehl", "vollkornmehl", "type 405", "type 550", "flour", "wheat flour", "all-purpose flour"],
-    "hefe": ["backhefe", "trockenhefe", "frischhefe", "yeast", "dry yeast", "fresh yeast"],
-    "tortilla": ["tortillas", "wraps", "wrap"],
-    "schrippe": ["schrippen"],
-    "semmel": ["semmeln"],
-    "weizenbrötchen": ["weizenbrötchen"],
-    "körnerbrötchen": ["körnerbrötchen", "mehrkornbrötchen"],
-    "laugenbrötchen": ["laugensemmel", "laugengebäck", "brezel", "brezn", "laugenbrezel", "pretzel roll", "pretzel"],
-    "laugenstange": ["laugenstangen"],
-    "schokocroissant": ["schokocroissants", "pain au chocolat", "schokobrötchen", "chocolate croissant"],
-    "milchbrötchen": ["milchbrötchen", "milchweck"],
-    "rosinenbrötchen": ["rosinenweck", "rosinensemmel"],
-    "franzbrötchen": ["franzbrötchen"],
-    "plunder": ["plunderstück", "plunderteilchen"],
-    "streuseltaler": ["streuselkuchen", "streuselschnecke"],
-    "baguettebrötchen": ["baguettesemmel"],
-    "kaiserbrötchen": ["kaisersemmel"],
-    "mohnbrötchen": ["mohnsemmel"],
-    "sesambrötchen": ["sesamsemmel"],
-    "käsebrötchen": ["käsesemmel", "käsebrötchen überbacken"],
-    "weißbrot": ["weissbrot", "weißbrote", "white bread"],
-    "mischbrot": ["mischbrote", "graubrot"],
-    "roggenbrot": ["roggenbrote", "rye bread"],
-    "dinkelbrot": ["dinkelbrote", "spelt bread"],
-    "sauerteigbrot": ["sauerteigbrote", "sourdough bread", "sourdough"],
-    "bauernbrot": ["bauernbrote", "landbrot"],
-    "schwarzbrot": ["schwarzbrote", "dark bread", "black bread"],
-    "pumpernickel": ["pumpernickelbrot"],
-    "körnerbrot": ["körnerbrote", "mehrkornbrot"],
-    "kartoffelbrot": ["kartoffelbrote"],
-    "ciabatta": ["ciabattabrot", "ciabattabrötchen"],
-    "brioche": ["briochebrot", "briochebrötchen"],
-    "fladenbrot": ["fladenbrote", "pita", "pitabrot", "naan", "naanbrot", "chapati", "lavash", "flatbread", "pita bread"],
-    "knäckebrot": ["knäckebrote", "knäcke", "crispbread"],
-
-    "hähnchenfilet": ["hähnchenfilets", "hähnchenbrustfilet", "hähnchenbrustfilets", "hühnchenbrust", "hähnchenbrust", "chicken breast", "chicken fillet"],
-    "hackfleisch": ["gehacktes", "mett", "rinderhack", "schweinehack", "gemischtes hack", "hackfleisch gemischt", "hack", "faschiertes", "bulettenfleisch", "ground meat", "minced meat", "ground beef"],
-    "schweinefilet": ["schweinefilets", "schweinemedaillons", "pork fillet", "pork tenderloin"],
-    "rindfleisch": ["rinderbraten", "rindersteak", "rinderfilet", "rinderhüftsteak", "beef", "beef steak"],
-    "lachs": ["lachsfilet", "lachsfilets", "räucherlachs", "wildlachs", "zuchtlachs", "salmon", "smoked salmon"],
-    "thunfisch": ["thunfischfilet", "thunfischdose", "tunfisch", "tuna", "canned tuna"],
-    "salami": ["salamischeiben", "minisalami", "salami slices"],
-    "schinken": ["vorderschinken", "hinterschinken", "ham"],
-    "würstchen": ["wiener würstchen", "bockwurst", "bockwürstchen", "wiener", "frankfurter", "wurst", "bratwurst", "grillwurst", "knacker", "sausage", "sausages", "hot dog", "hot dogs"],
-    "aufschnitt": ["wurstaufschnitt", "frühstücksaufschnitt", "cold cuts", "deli meat", "deli meats"],
-    "kochschinken": ["gekochter schinken", "cooked ham"],
-    "rohschinken": ["parmaschinken", "seranoschinken", "serranoschinken", "cured ham", "prosciutto"],
-    "putenschinken": ["truthahnschinken"],
-    "hähnchenbrustaufschnitt": ["hähnchenaufschnitt", "geflügelaufschnitt"],
-    "mortadella": ["mortadela"],
-    "fleischwurst": ["lyoner", "stadtwurst"],
-    "leberwurst": ["leberwurstfein", "leberwurst grob", "kalbsleberwurst"],
-    "teewurst": ["teewurst fein", "rügenwalder"],
-    "geflügelwurst": ["geflügelfleischwurst", "geflügelmortadella", "geflügelsalami"],
-    "schinkenwurst": ["bierschinken"],
-    "bierwurst": ["bierwurstscheiben"],
-    "putenbrust": ["putenbrustaufschnitt", "putenbrustfilet", "turkey breast"],
-
-    "tiefkühlpizza": ["tk-pizza", "pizza", "tiefkühlpizzen", "wagner pizza", "dr. oetker pizza", "ristorante pizza", "frozen pizza"],
-    "tiefkühlgemüse": ["tk-gemüse", "frozen vegetables"],
-    "tiefkühlfisch": ["tk-fisch", "frozen fish"],
-    "fischstäbchen": ["fischstaebchen", "fischfinger", "fish sticks", "fish fingers"],
-    "eis": ["eiscreme", "speiseeis", "vanilleeis", "schokoeis", "eis am stiel", "magnum", "langnese", "häagen-dazs", "ben & jerrys", "ben and jerrys", "cornetto", "ice cream", "popsicle"],
-    "pommes": ["pommes frites", "fritten", "tiefkühlpommes", "pommes mccain", "french fries", "fries", "frozen fries"],
-    "erbsen": ["erbse", "tiefkühlerbsen", "peas", "frozen peas"],
-
-    "mineralwasser": ["wasser", "sprudel", "sprudelwasser", "stilles wasser", "medium wasser", "selters", "gerolsteiner", "volvic", "evian", "mineral water", "sparkling water", "still water"],
-    "orangensaft": ["o-saft", "osaft", "hohes c", "valensina", "granini orange", "orange juice"],
-    "apfelsaft": ["apfelschorle", "apple juice", "apple spritzer"],
-    "milchgetränk": ["milchgetränke", "kakao", "trinkschokolade", "chocomel", "nesquik", "actimel", "yakult", "joghurtdrink", "müllermilch", "kaba", "milk drink", "cocoa", "hot chocolate"],
-    "limonade": ["limo", "brause", "fassbrause", "fanta", "sprite", "schweppes", "bionade", "7up", "mezzo mix", "lemonade", "soda", "soft drink"],
-    "cola": ["coca cola", "coca-cola", "pepsi", "fritz cola", "afri cola", "vita cola", "coke"],
-    "bier": ["pils", "pilsner", "weizen", "weizenbier", "helles", "radler", "alkoholfrei bier", "beer", "lager", "ale"],
-    "wein": ["rotwein", "weißwein", "weisswein", "rosé", "rose", "wine", "red wine", "white wine"],
-    "kaffee": ["kaffeebohnen", "filterkaffee", "espresso", "kaffeepads", "kaffeekapseln", "nescafé", "nescafe", "jacobs", "melitta", "dallmayr", "tchibo", "senseo", "tassimo", "nespresso", "dolce gusto", "coffee", "coffee beans", "coffee pods"],
-    "tee": ["teebeutel", "schwarztee", "grüntee", "kräutertee", "früchtetee", "pfefferminztee", "kamillentee", "teekanne", "meßmer", "messmer", "tea", "tea bags", "green tea", "black tea", "herbal tea"],
-
-    "milchschokolade": ["vollmilchschokolade", "kinderschokolade", "kinder schokolade", "milk chocolate"],
-    "schokolade": ["zartbitterschokolade", "weiße schokolade", "tafelschokolade", "schokoladentafel", "schoki", "milka", "ritter sport", "lindt", "merci", "chocolate", "dark chocolate", "white chocolate"],
-    "gummibärchen": ["gummibären", "goldbären", "haribo", "haribo goldbären", "katjes", "gummy bears"],
-    "chips": ["kartoffelchips", "stapelchips", "pringles", "funny-frisch", "chio", "lorenz", "knabbereien", "crisps", "potato chips", "snacks"],
-    "kekse": ["keks", "plätzchen", "guetzli", "guetzle", "cookies", "cookie", "biscuits", "biscuit"],
-    "nüsse": ["nussmischung", "erdnüsse", "cashews", "cashewkerne", "mandeln", "walnüsse", "haselnüsse", "pistazien", "macadamia", "studentenfutter", "knabberkerne", "nuts", "peanuts", "almonds", "walnuts", "hazelnuts", "trail mix"],
-    "popcorn": ["mikrowellenpopcorn", "karamellpopcorn"],
-    "bonbons": ["bonbon", "hustenbonbons", "wick", "ricola", "fishermans friend", "fisherman's friend", "em-eukal", "candy", "candies", "sweets", "cough drops"],
-    "waffeln": ["waffel", "eiswaffeln", "hanuta", "knoppers", "waffles", "wafer", "wafers"],
-    "riegel": ["müsliriegel", "energieriegel", "proteinriegel"],
-    "cracker": ["salzcracker", "reiswaffeln", "tuc", "tuc cracker", "grissini", "salzstangen", "crackers", "rice cakes", "breadsticks"],
-    "pralinen": ["praline", "trüffel", "konfekt", "pralines", "truffles", "chocolates"],
-    "schokoriegel": ["schokoladenriegel", "mars", "snickers", "twix", "bounty", "duplo", "kinder bueno", "kitkat", "kit kat", "lion", "balisto", "chocolate bar", "candy bar"],
-    "keksriegel": ["keksriegel"],
-    "doppelkekse": ["doppelkeks", "oreo", "oreos", "prinzenrolle", "sandwich cookies"],
-    "butterkekse": ["butterkeks", "leibniz", "leibniz butterkeks", "butter cookies", "shortbread"],
-    "gebäckmischung": ["keksmischung"],
-    "fruchtgummi": ["fruchtgummis", "weingummis", "fruit gums", "gummies"],
-    "weingummi": ["weingummis"],
-    "lakritz": ["lakritze", "lakritzschnecken", "liquorice", "licorice"],
-    "kaubonbons": ["kaubonbon", "maoam", "starburst", "mentos", "hi-chew", "chewy candy", "chews"],
-    "toffees": ["toffee", "karamell", "karamellen", "caramel"],
-    "karamellbonbons": ["karamellbonbon", "werthers"],
-    "lutscher": ["lolli", "lollis", "lollipop", "lollipops"],
-    "marshmallows": ["marshmallow", "schaumzucker"],
-    "kaugummi": ["kaugummis", "chewing gum", "gum"],
-    "dragees": ["dragee", "schokolinsen"],
-    "schokoerdnüsse": ["schokoerdnuss"],
-    "schokolinsen": ["schokolinse", "smarties", "m&ms", "m und ms"],
-    "nougat": ["nougatpralinen", "gianduja", "nougat"],
-    "marzipan": ["marzipankartoffeln", "marzipanbrot"],
-    "geleefrüchte": ["geleefrucht", "fruchtgelee"],
-    "puffreisriegel": ["puffreis"],
-
-    "tomatenmark": ["tomatenkonzentrat", "tomatenpaste", "tomato paste", "tomato puree"],
-    "dosentomaten": ["dosentomate", "gehackte tomaten", "geschälte tomaten", "passierte tomaten", "passata", "canned tomatoes", "chopped tomatoes", "crushed tomatoes"],
-    "kichererbsen": ["kichererbse", "hummus", "chickpeas", "garbanzo beans"],
-    "mais": ["dosenmais", "maiskörner", "zuckermais", "corn", "sweet corn", "canned corn"],
-    "nudeln": ["nudel", "pasta", "penne", "fusilli", "rigatoni", "farfalle", "tagliatelle", "makkaroni", "barilla", "miracoli", "noodles", "macaroni"],
-    "spaghetti": ["spagetti", "spaghettini", "barilla spaghetti"],
-    "reis": ["basmatireis", "jasminreis", "langkornreis", "rundkornreis", "milchreis", "risottoreis", "rice", "basmati rice", "jasmine rice"],
-    "linsen": ["linse", "rote linsen", "gelbe linsen", "berglinsen", "belugalinsen", "lentils", "red lentils"],
-    "bohnen": ["bohne", "kidneybohnen", "weiße bohnen", "schwarze bohnen", "brechbohnen", "beans", "kidney beans", "black beans", "white beans"],
-    "müsli": ["müslimischung", "früchtemüsli", "knuspermüsli", "granola", "dr. oetker vitalis", "kölln müsli", "seitenbacher", "muesli", "cereal"],
-    "haferflocken": ["haferflocke", "kernige haferflocken", "zarte haferflocken", "porridge", "flocken", "kölln flocken", "oats", "oatmeal", "rolled oats"],
-    "cornflakes": ["corn flakes", "maisflocken"],
-    "zucker": ["haushaltszucker", "kristallzucker", "rohrzucker", "puderzucker", "sugar", "cane sugar", "powdered sugar", "icing sugar"],
-    "salz": ["meersalz", "speisesalz", "jodsalz", "fleur de sel", "salt", "sea salt", "table salt"],
-    "pfeffer": ["pfefferkörner", "schwarzer pfeffer", "weißer pfeffer", "pfeffermühle", "pepper", "black pepper", "peppercorns"],
-    "paprikapulver edelsüß": ["paprika edelsüß", "edelsüßpaprika", "sweet paprika"],
-    "paprikapulver rosenscharf": ["paprika rosenscharf", "rosenscharfpaprika", "scharfes paprikapulver", "hot paprika"],
-    "curry": ["currypulver", "currygewürz", "garam masala", "curry powder"],
-    "kreuzkümmel": ["cumin", "kumin", "ground cumin"],
-    "oregano": ["oreganoblätter", "wilder majoran"],
-    "basilikum": ["basilikumblätter", "basil"],
-    "thymian": ["thymiankraut", "thyme"],
-    "rosmarin": ["rosmarinzweige", "rosemary"],
-    "majoran": ["majorankraut", "marjoram"],
-    "zimt": ["zimtstange", "zimtstangen", "zimtpulver", "cinnamon", "cinnamon sticks"],
-    "muskat": ["muskatnuss", "muskatpulver", "nutmeg"],
-    "knoblauchpulver": ["knoblauchgranulat", "garlic powder"],
-    "zwiebelpulver": ["zwiebelgranulat", "onion powder"],
-    "chiliflocken": ["chilipulver", "chili", "chili flakes", "red pepper flakes"],
-    "cayennepfeffer": ["cayenne", "cayenne pepper"],
-    "kurkuma": ["kurkumapulver", "gelbwurz", "turmeric"],
-    "ingwer": ["ingwerpulver", "ingwerwurzel", "ginger"],
-    "lorbeerblätter": ["lorbeerblatt", "lorbeer", "bay leaves", "bay leaf"],
-    "marmelade": ["marmeladen", "erdbeermarmelade", "aprikosenmarmelade", "jam", "marmalade", "strawberry jam"],
-    "konfitüre": ["konfitüren", "preserve", "preserves"],
-    "fruchtaufstrich": ["fruchtaufstriche", "fruit spread"],
-    "honig": ["blütenhonig", "waldhonig", "akazienhonig", "imkerhonig", "honey"],
-    "nuss-nougat-creme": ["nutella", "nussnougatcreme", "nougatcreme", "schoko-aufstrich", "nusspli", "nudossi", "chocolate spread", "hazelnut spread"],
-    "erdnussbutter": ["erdnusscreme", "erdnussmus", "peanut butter"],
-    "mandelcreme": ["mandelmus", "mandelbutter", "almond butter"],
-    "schokocreme": ["schokoaufstrich", "schokoladencreme", "ovomaltine crunchy cream"],
-    "karamellcreme": ["karamellaufstrich", "dulce de leche"],
-    "zuckerrübensirup": ["rübensirup", "rübenkraut", "grafschafter"],
-    "ahornsirup": ["maple syrup"],
-    "pflaumenmus": ["powidl", "zwetschgenmus", "plum butter"],
-    "lemon curd": ["zitronencreme", "lemoncurd"],
-    "maronencreme": ["maronenaufstrich", "kastaniencreme", "chestnut cream", "chestnut spread"],
-
-    "sonnencreme": ["sonnenschutz", "sonnenmilch", "lsf", "nivea sun", "ladival", "sunscreen", "sunblock", "sun cream"],
-    "wattestäbchen": ["q-tips", "ohrstäbchen", "cotton swabs", "cotton buds"],
-    "taschentücher": ["taschentuch", "tempo", "tempos", "papiertaschentücher", "softies", "tissues", "tissue", "paper tissues"],
-    "zahnbürste": ["zahnbürsten", "oral-b", "oral b", "toothbrush", "toothbrushes"],
-    "handcreme": ["handcréme", "handlotion", "nivea creme", "nivea", "penaten", "hand cream", "hand lotion"],
-    "zahnpasta": ["zahncreme", "zahnpaste", "elmex", "signal", "odol", "colgate", "sensodyne", "blend-a-med", "toothpaste"],
-    "deodorant": ["deo", "deoroller", "deospray", "antitranspirant", "rexona", "nivea deo", "axe", "old spice", "dove deo", "antiperspirant"],
-    "rasierer": ["rasierklinge", "rasierklingen", "einwegrasierer", "gillette", "wilkinson", "razor", "razors", "razor blades"],
-    "duschgel": ["duschgels", "duschbad", "showergel", "nivea dusche", "dove dusche", "duschdas", "fa", "shower gel", "body wash"],
-    "shampoo": ["haarshampoo", "haarwaschmittel", "head & shoulders", "head and shoulders", "schauma", "garnier", "pantene", "elvital", "hair shampoo"],
-    "tampons": ["tampon", "ob", "o.b.", "tampon"],
-    "binden": ["binde", "damenbinden", "slipeinlagen", "always", "carefree", "pads", "sanitary pads", "panty liners"],
-
-    "geschirrspültabs": ["geschirrspültab", "spülmaschinentabs", "spülmaschinentab", "somat", "finish", "fairy tabs", "dishwasher tabs", "dishwasher tablets"],
-    "toilettenpapier": ["klopapier", "wc-papier", "charmin", "hakle", "zewa toilettenpapier", "toilet paper", "toilet roll", "loo roll"],
-    "küchenrolle": ["küchenrollen", "küchentücher", "küchenkrepp", "zewa", "zewa wisch und weg", "plenty", "paper towels", "kitchen roll", "kitchen paper"],
-    "spülmittel": ["handspülmittel", "geschirrspülmittel", "spüli", "pril", "fairy", "dish soap", "washing up liquid"],
-    "waschmittel": ["vollwaschmittel", "colorwaschmittel", "feinwaschmittel", "persil", "ariel", "spee", "laundry detergent", "detergent"],
-    "müllbeutel": ["müllbeutl", "müllsack", "müllsäcke", "müllbeutel", "mülltüte", "mülltüten", "abfallbeutel", "trash bags", "bin bags", "garbage bags"],
-    "backpapier": ["backfolie", "baking paper", "parchment paper"],
-    "alufolie": ["aluminiumfolie", "alu-folie", "aluminum foil", "aluminium foil", "tin foil"],
-    "schwamm": ["schwämme", "spülschwamm", "spülschwämme", "küchenschwamm", "sponge", "sponges"],
-    "glasreiniger": ["fensterreiniger", "scheibenreiniger", "glass cleaner", "window cleaner"],
-    "allzweckreiniger": ["universalreiniger", "allesreiniger", "meister proper", "mr. proper", "sagrotan", "ajax", "all-purpose cleaner"],
-    "badreiniger": ["badezimmerreiniger", "cillit bang"],
-    "wc-reiniger": ["toilettenreiniger", "kloreiniger", "domestos", "wc-ente", "bref", "toilet cleaner"],
-    "bodenreiniger": ["fußbodenreiniger", "wischreiniger", "floor cleaner"],
-    "entkalker": ["kalkentferner", "kalklöser", "calgon", "durgol", "descaler", "limescale remover"],
-    "fettlöser": ["fettloeser", "küchenreiniger", "degreaser"],
-    "flüssigwaschmittel": ["flüssigwaschmittel"],
-    "weichspüler": ["wäscheweichspüler", "lenor", "fabric softener"],
-    "fleckenentferner": ["fleckenmittel", "vanish", "stain remover"],
-    "pulverwaschmittel": ["waschpulver", "washing powder"],
-
-    "babynahrung": ["babybrei", "babygläschen", "hipp", "alete", "baby food"],
-    "windeln": ["windel", "pampers", "babywindeln", "lillydoo", "dm windeln", "diapers", "nappies"],
-    "hundefutter": ["hundenahrung", "trockenfutter hund", "nassfutter hund", "pedigree", "rinti", "cesar", "dog food"],
-    "katzenfutter": ["katzennahrung", "trockenfutter katze", "nassfutter katze", "whiskas", "sheba", "felix", "kitekat", "cat food"],
-    "katzenstreu": ["katzensand", "catsan", "cat litter"],
-    "hundesnacks": ["hundesnack", "hundeknochen", "hundeleckerli", "leckerlis", "frolic", "dreamies hund", "dog treats"],
-    "tiernahrung": ["tierfutter", "pet food"]
+    "apfel": [
+        "äpfel",
+        "apfel rot",
+        "apfel grün",
+        "apfel pink lady",
+        "apfel braeburn",
+        "apfel elstar",
+        "apfel gala",
+        "pink lady",
+        "braeburn",
+        "elstar",
+        "gala",
+        "granny smith",
+        "jonagold",
+        "boskoop",
+        "apple",
+        "apples"
+    ],
+    "banane": [
+        "bananen",
+        "banana",
+        "bananas"
+    ],
+    "orange": [
+        "orangen",
+        "apfelsine",
+        "apfelsinen",
+        "oranges"
+    ],
+    "zitrone": [
+        "zitronen",
+        "lemon",
+        "lemons"
+    ],
+    "erdbeeren": [
+        "erdbeere",
+        "strawberry",
+        "strawberries"
+    ],
+    "trauben": [
+        "traube",
+        "weintrauben",
+        "weintraube",
+        "grapes",
+        "grape"
+    ],
+    "tomate": [
+        "tomaten",
+        "cherrytomaten",
+        "cherrytomate",
+        "strauchtomaten",
+        "strauchtomate",
+        "cocktailtomaten",
+        "cocktailtomate",
+        "rispentomaten",
+        "rispentomate",
+        "tomato",
+        "tomatoes",
+        "cherry tomatoes"
+    ],
+    "karotte": [
+        "karotten",
+        "möhre",
+        "möhren",
+        "mohrrübe",
+        "mohrrüben",
+        "rüebli",
+        "gelbe rübe",
+        "gelbe rüben",
+        "carrot",
+        "carrots"
+    ],
+    "gurke": [
+        "gurken",
+        "salatgurke",
+        "salatgurken",
+        "schlangengurke",
+        "schlangengurken",
+        "minigurke",
+        "minigurken",
+        "cucumber",
+        "cucumbers"
+    ],
+    "paprika": [
+        "paprikas",
+        "paprikaschote",
+        "paprikaschoten",
+        "peperoni",
+        "bell pepper",
+        "bell peppers",
+        "pepper"
+    ],
+    "zwiebel": [
+        "zwiebeln",
+        "gemüsezwiebel",
+        "gemüsezwiebeln",
+        "rote zwiebel",
+        "rote zwiebeln",
+        "schalotte",
+        "schalotten",
+        "onion",
+        "onions",
+        "shallot",
+        "shallots"
+    ],
+    "knoblauch": [
+        "knoblauchzehe",
+        "knoblauchzehen",
+        "knoblauchknolle",
+        "knoblauchknollen",
+        "garlic"
+    ],
+    "salat": [
+        "salate",
+        "blattsalat",
+        "salad",
+        "lettuce"
+    ],
+    "kopfsalat": [
+        "kopfsalate",
+        "butterhead lettuce",
+        "head lettuce"
+    ],
+    "eisbergsalat": [
+        "eisbergsalate",
+        "eissalat",
+        "iceberg lettuce"
+    ],
+    "romana": [
+        "romanasalat",
+        "römersalat",
+        "romaine",
+        "romaine lettuce"
+    ],
+    "feldsalat": [
+        "feldsalate",
+        "rapunzel",
+        "rapunzelsalat",
+        "nüsslisalat",
+        "lamb's lettuce",
+        "corn salad"
+    ],
+    "rucola": [
+        "rauke",
+        "ruccola",
+        "rukola",
+        "arugula",
+        "rocket"
+    ],
+    "chicorée": [
+        "chicoree",
+        "chicory",
+        "endive"
+    ],
+    "endivie": [
+        "endivien",
+        "endiviensalat",
+        "escarole"
+    ],
+    "radicchio": [
+        "radiccio"
+    ],
+    "mangold": [
+        "krautstiel",
+        "swiss chard",
+        "chard"
+    ],
+    "brokkoli": [
+        "broccoli",
+        "brokoli"
+    ],
+    "spinat": [
+        "blattspinat",
+        "spinach"
+    ],
+    "milch": [
+        "vollmilch",
+        "frischmilch",
+        "h-milch",
+        "haltbare milch",
+        "fettarme milch",
+        "milk",
+        "whole milk",
+        "skimmed milk"
+    ],
+    "butter": [
+        "süßrahmbutter",
+        "sauerrahmbutter",
+        "irische butter",
+        "butter"
+    ],
+    "joghurt": [
+        "jogurt",
+        "yoghurt",
+        "naturjoghurt",
+        "fruchtjoghurt",
+        "joghurtbecher",
+        "danone",
+        "activia",
+        "müller milchreis",
+        "yogurt",
+        "yoghurt"
+    ],
+    "quark": [
+        "magerquark",
+        "speisequark",
+        "curd cheese",
+        "quark cheese"
+    ],
+    "sahne": [
+        "schlagsahne",
+        "kochsahne",
+        "schmand",
+        "crème fraîche",
+        "creme fraiche",
+        "rama cremefine",
+        "obers",
+        "rahm",
+        "cream",
+        "whipping cream",
+        "sour cream"
+    ],
+    "käse": [
+        "scheibenkäse",
+        "reibekäse",
+        "streukäse",
+        "cheese",
+        "sliced cheese",
+        "shredded cheese"
+    ],
+    "gouda": [
+        "jung gouda",
+        "alter gouda",
+        "mittelalt gouda"
+    ],
+    "mozzarella": [
+        "mozzarela",
+        "burrata",
+        "büffelmozzarella"
+    ],
+    "eier": [
+        "ei",
+        "hühnereier",
+        "freilandeier",
+        "bio-eier",
+        "10er eier",
+        "6er eier",
+        "eggs",
+        "egg"
+    ],
+    "edamer": [
+        "edammer"
+    ],
+    "emmentaler": [
+        "emmenthaler"
+    ],
+    "cheddar": [
+        "chedar"
+    ],
+    "butterkäse": [
+        "butterkaese"
+    ],
+    "camembert": [
+        "camenbert",
+        "camenbär"
+    ],
+    "frischkäse": [
+        "frischkaese",
+        "philadelphia",
+        "philly",
+        "brotaufstrich",
+        "kräuterfrischkäse",
+        "cream cheese"
+    ],
+    "parmesan": [
+        "parmigiano",
+        "grana padano"
+    ],
+    "feta": [
+        "fetakäse",
+        "schafskäse",
+        "hirtenkäse",
+        "feta cheese"
+    ],
+    "brie": [
+        "brie de meaux"
+    ],
+    "bergkäse": [
+        "allgäuer bergkäse",
+        "alpkäse",
+        "mountain cheese",
+        "alpine cheese"
+    ],
+    "ziegenkäse": [
+        "ziegenfrischkäse",
+        "goat cheese"
+    ],
+    "ricotta": [
+        "ricottakäse"
+    ],
+    "mascarpone": [
+        "mascarponecreme",
+        "mascarpone cheese"
+    ],
+    "babymilch": [
+        "anfangsmilch",
+        "folgemilch",
+        "säuglingsmilch",
+        "aptamil",
+        "milupa",
+        "bebivita",
+        "baby milk",
+        "infant formula",
+        "baby formula"
+    ],
+    "toastbrot": [
+        "toast",
+        "toastscheiben",
+        "sandwichtoast",
+        "toast bread",
+        "sliced bread"
+    ],
+    "vollkornbrot": [
+        "vollkornbrote",
+        "whole grain bread",
+        "wholemeal bread"
+    ],
+    "brot": [
+        "brote",
+        "laib brot",
+        "stulle",
+        "bread",
+        "loaf"
+    ],
+    "brötchen": [
+        "semmeln",
+        "schrippen",
+        "weck",
+        "rundstück",
+        "rundstücke",
+        "wecken",
+        "weckle",
+        "aufbackbrötchen",
+        "sonntagsbrötchen",
+        "bread roll",
+        "bread rolls",
+        "bun",
+        "buns"
+    ],
+    "baguette": [
+        "baguettes",
+        "stangenweißbrot"
+    ],
+    "croissant": [
+        "croissants",
+        "gipfeli",
+        "hörnchen",
+        "kipferl"
+    ],
+    "mehl": [
+        "weizenmehl",
+        "dinkelmehl",
+        "roggenmehl",
+        "vollkornmehl",
+        "type 405",
+        "type 550",
+        "flour",
+        "wheat flour",
+        "all-purpose flour"
+    ],
+    "hefe": [
+        "backhefe",
+        "trockenhefe",
+        "frischhefe",
+        "yeast",
+        "dry yeast",
+        "fresh yeast"
+    ],
+    "tortilla": [
+        "tortillas",
+        "wraps",
+        "wrap"
+    ],
+    "schrippe": [
+        "schrippen"
+    ],
+    "semmel": [
+        "semmeln"
+    ],
+    "weizenbrötchen": [
+        "weizenbrötchen"
+    ],
+    "körnerbrötchen": [
+        "körnerbrötchen",
+        "mehrkornbrötchen"
+    ],
+    "laugenbrötchen": [
+        "laugensemmel",
+        "laugengebäck",
+        "brezel",
+        "brezn",
+        "laugenbrezel",
+        "pretzel roll",
+        "pretzel"
+    ],
+    "laugenstange": [
+        "laugenstangen"
+    ],
+    "schokocroissant": [
+        "schokocroissants",
+        "pain au chocolat",
+        "schokobrötchen",
+        "chocolate croissant"
+    ],
+    "milchbrötchen": [
+        "milchbrötchen",
+        "milchweck"
+    ],
+    "rosinenbrötchen": [
+        "rosinenweck",
+        "rosinensemmel"
+    ],
+    "franzbrötchen": [
+        "franzbrötchen"
+    ],
+    "plunder": [
+        "plunderstück",
+        "plunderteilchen"
+    ],
+    "streuseltaler": [
+        "streuselkuchen",
+        "streuselschnecke"
+    ],
+    "baguettebrötchen": [
+        "baguettesemmel"
+    ],
+    "kaiserbrötchen": [
+        "kaisersemmel"
+    ],
+    "mohnbrötchen": [
+        "mohnsemmel"
+    ],
+    "sesambrötchen": [
+        "sesamsemmel"
+    ],
+    "käsebrötchen": [
+        "käsesemmel",
+        "käsebrötchen überbacken"
+    ],
+    "weißbrot": [
+        "weissbrot",
+        "weißbrote",
+        "white bread",
+        "stuten",
+        "feiner stuten",
+        "rosinenstuten"
+    ],
+    "mischbrot": [
+        "mischbrote",
+        "graubrot"
+    ],
+    "roggenbrot": [
+        "roggenbrote",
+        "rye bread"
+    ],
+    "dinkelbrot": [
+        "dinkelbrote",
+        "spelt bread"
+    ],
+    "sauerteigbrot": [
+        "sauerteigbrote",
+        "sourdough bread",
+        "sourdough"
+    ],
+    "bauernbrot": [
+        "bauernbrote",
+        "landbrot"
+    ],
+    "schwarzbrot": [
+        "schwarzbrote",
+        "dark bread",
+        "black bread"
+    ],
+    "pumpernickel": [
+        "pumpernickelbrot"
+    ],
+    "körnerbrot": [
+        "körnerbrote",
+        "mehrkornbrot"
+    ],
+    "kartoffelbrot": [
+        "kartoffelbrote"
+    ],
+    "ciabatta": [
+        "ciabattabrot",
+        "ciabattabrötchen"
+    ],
+    "brioche": [
+        "briochebrot",
+        "briochebrötchen"
+    ],
+    "fladenbrot": [
+        "fladenbrote",
+        "pita",
+        "pitabrot",
+        "naan",
+        "naanbrot",
+        "chapati",
+        "lavash",
+        "flatbread",
+        "pita bread"
+    ],
+    "knäckebrot": [
+        "knäckebrote",
+        "knäcke",
+        "crispbread"
+    ],
+    "hähnchenfilet": [
+        "hähnchenfilets",
+        "hähnchenbrustfilet",
+        "hähnchenbrustfilets",
+        "hühnchenbrust",
+        "hähnchenbrust",
+        "chicken breast",
+        "chicken fillet"
+    ],
+    "hackfleisch": [
+        "gehacktes",
+        "mett",
+        "rinderhack",
+        "schweinehack",
+        "gemischtes hack",
+        "hackfleisch gemischt",
+        "hack",
+        "faschiertes",
+        "bulettenfleisch",
+        "ground meat",
+        "minced meat",
+        "ground beef"
+    ],
+    "schweinefilet": [
+        "schweinefilets",
+        "schweinemedaillons",
+        "pork fillet",
+        "pork tenderloin"
+    ],
+    "rindfleisch": [
+        "rinderbraten",
+        "rindersteak",
+        "rinderfilet",
+        "rinderhüftsteak",
+        "beef",
+        "beef steak"
+    ],
+    "lachs": [
+        "lachsfilet",
+        "lachsfilets",
+        "räucherlachs",
+        "wildlachs",
+        "zuchtlachs",
+        "salmon",
+        "smoked salmon"
+    ],
+    "thunfisch": [
+        "thunfischfilet",
+        "thunfischdose",
+        "tunfisch",
+        "tuna",
+        "canned tuna"
+    ],
+    "salami": [
+        "salamischeiben",
+        "minisalami",
+        "salami slices"
+    ],
+    "schinken": [
+        "vorderschinken",
+        "hinterschinken",
+        "ham"
+    ],
+    "würstchen": [
+        "wiener würstchen",
+        "bockwurst",
+        "bockwürstchen",
+        "wiener",
+        "frankfurter",
+        "wurst",
+        "bratwurst",
+        "grillwurst",
+        "knacker",
+        "sausage",
+        "sausages",
+        "hot dog",
+        "hot dogs"
+    ],
+    "aufschnitt": [
+        "wurstaufschnitt",
+        "frühstücksaufschnitt",
+        "cold cuts",
+        "deli meat",
+        "deli meats"
+    ],
+    "kochschinken": [
+        "gekochter schinken",
+        "cooked ham"
+    ],
+    "rohschinken": [
+        "parmaschinken",
+        "seranoschinken",
+        "serranoschinken",
+        "cured ham",
+        "prosciutto"
+    ],
+    "putenschinken": [
+        "truthahnschinken"
+    ],
+    "hähnchenbrustaufschnitt": [
+        "hähnchenaufschnitt",
+        "geflügelaufschnitt"
+    ],
+    "mortadella": [
+        "mortadela"
+    ],
+    "fleischwurst": [
+        "lyoner",
+        "stadtwurst"
+    ],
+    "leberwurst": [
+        "leberwurstfein",
+        "leberwurst grob",
+        "kalbsleberwurst"
+    ],
+    "teewurst": [
+        "teewurst fein",
+        "rügenwalder"
+    ],
+    "geflügelwurst": [
+        "geflügelfleischwurst",
+        "geflügelmortadella",
+        "geflügelsalami"
+    ],
+    "schinkenwurst": [
+        "bierschinken"
+    ],
+    "bierwurst": [
+        "bierwurstscheiben"
+    ],
+    "putenbrust": [
+        "putenbrustaufschnitt",
+        "putenbrustfilet",
+        "turkey breast"
+    ],
+    "tiefkühlpizza": [
+        "tk-pizza",
+        "pizza",
+        "tiefkühlpizzen",
+        "wagner pizza",
+        "dr. oetker pizza",
+        "ristorante pizza",
+        "frozen pizza"
+    ],
+    "tiefkühlgemüse": [
+        "tk-gemüse",
+        "frozen vegetables"
+    ],
+    "tiefkühlfisch": [
+        "tk-fisch",
+        "frozen fish"
+    ],
+    "fischstäbchen": [
+        "fischstaebchen",
+        "fischfinger",
+        "fish sticks",
+        "fish fingers"
+    ],
+    "eis": [
+        "eiscreme",
+        "speiseeis",
+        "vanilleeis",
+        "schokoeis",
+        "eis am stiel",
+        "magnum",
+        "langnese",
+        "häagen-dazs",
+        "ben & jerrys",
+        "ben and jerrys",
+        "cornetto",
+        "ice cream",
+        "popsicle"
+    ],
+    "pommes": [
+        "pommes frites",
+        "fritten",
+        "tiefkühlpommes",
+        "pommes mccain",
+        "french fries",
+        "fries",
+        "frozen fries"
+    ],
+    "erbsen": [
+        "erbse",
+        "tiefkühlerbsen",
+        "peas",
+        "frozen peas"
+    ],
+    "mineralwasser": [
+        "wasser",
+        "sprudel",
+        "sprudelwasser",
+        "stilles wasser",
+        "medium wasser",
+        "selters",
+        "gerolsteiner",
+        "volvic",
+        "evian",
+        "mineral water",
+        "sparkling water",
+        "still water"
+    ],
+    "orangensaft": [
+        "o-saft",
+        "osaft",
+        "hohes c",
+        "valensina",
+        "granini orange",
+        "orange juice"
+    ],
+    "apfelsaft": [
+        "apfelschorle",
+        "apple juice",
+        "apple spritzer"
+    ],
+    "milchgetränk": [
+        "milchgetränke",
+        "kakao",
+        "trinkschokolade",
+        "chocomel",
+        "nesquik",
+        "actimel",
+        "yakult",
+        "joghurtdrink",
+        "müllermilch",
+        "kaba",
+        "milk drink",
+        "cocoa",
+        "hot chocolate"
+    ],
+    "limonade": [
+        "limo",
+        "brause",
+        "fassbrause",
+        "fanta",
+        "sprite",
+        "schweppes",
+        "bionade",
+        "7up",
+        "mezzo mix",
+        "lemonade",
+        "soda",
+        "soft drink"
+    ],
+    "cola": [
+        "coca cola",
+        "coca-cola",
+        "pepsi",
+        "fritz cola",
+        "afri cola",
+        "vita cola",
+        "coke"
+    ],
+    "bier": [
+        "pils",
+        "pilsner",
+        "weizen",
+        "weizenbier",
+        "helles",
+        "radler",
+        "alkoholfrei bier",
+        "beer",
+        "lager",
+        "ale"
+    ],
+    "wein": [
+        "rotwein",
+        "weißwein",
+        "weisswein",
+        "rosé",
+        "rose",
+        "wine",
+        "red wine",
+        "white wine"
+    ],
+    "kaffee": [
+        "kaffeebohnen",
+        "filterkaffee",
+        "espresso",
+        "kaffeepads",
+        "kaffeekapseln",
+        "nescafé",
+        "nescafe",
+        "jacobs",
+        "melitta",
+        "dallmayr",
+        "tchibo",
+        "senseo",
+        "tassimo",
+        "nespresso",
+        "dolce gusto",
+        "coffee",
+        "coffee beans",
+        "coffee pods"
+    ],
+    "tee": [
+        "teebeutel",
+        "schwarztee",
+        "grüntee",
+        "kräutertee",
+        "früchtetee",
+        "pfefferminztee",
+        "kamillentee",
+        "teekanne",
+        "meßmer",
+        "messmer",
+        "tea",
+        "tea bags",
+        "green tea",
+        "black tea",
+        "herbal tea"
+    ],
+    "milchschokolade": [
+        "vollmilchschokolade",
+        "kinderschokolade",
+        "kinder schokolade",
+        "milk chocolate"
+    ],
+    "schokolade": [
+        "zartbitterschokolade",
+        "weiße schokolade",
+        "tafelschokolade",
+        "schokoladentafel",
+        "schoki",
+        "milka",
+        "ritter sport",
+        "lindt",
+        "merci",
+        "chocolate",
+        "dark chocolate",
+        "white chocolate"
+    ],
+    "gummibärchen": [
+        "gummibären",
+        "goldbären",
+        "haribo",
+        "haribo goldbären",
+        "katjes",
+        "gummy bears"
+    ],
+    "chips": [
+        "kartoffelchips",
+        "stapelchips",
+        "pringles",
+        "funny-frisch",
+        "chio",
+        "lorenz",
+        "knabbereien",
+        "crisps",
+        "potato chips",
+        "snacks"
+    ],
+    "kekse": [
+        "keks",
+        "plätzchen",
+        "guetzli",
+        "guetzle",
+        "cookies",
+        "cookie",
+        "biscuits",
+        "biscuit"
+    ],
+    "nüsse": [
+        "nussmischung",
+        "erdnüsse",
+        "cashews",
+        "cashewkerne",
+        "mandeln",
+        "walnüsse",
+        "haselnüsse",
+        "pistazien",
+        "macadamia",
+        "studentenfutter",
+        "knabberkerne",
+        "nuts",
+        "peanuts",
+        "almonds",
+        "walnuts",
+        "hazelnuts",
+        "trail mix"
+    ],
+    "popcorn": [
+        "mikrowellenpopcorn",
+        "karamellpopcorn"
+    ],
+    "bonbons": [
+        "bonbon",
+        "hustenbonbons",
+        "wick",
+        "ricola",
+        "fishermans friend",
+        "fisherman's friend",
+        "em-eukal",
+        "candy",
+        "candies",
+        "sweets",
+        "cough drops"
+    ],
+    "waffeln": [
+        "waffel",
+        "eiswaffeln",
+        "hanuta",
+        "knoppers",
+        "waffles",
+        "wafer",
+        "wafers"
+    ],
+    "riegel": [
+        "müsliriegel",
+        "energieriegel",
+        "proteinriegel"
+    ],
+    "cracker": [
+        "salzcracker",
+        "reiswaffeln",
+        "tuc",
+        "tuc cracker",
+        "grissini",
+        "salzstangen",
+        "crackers",
+        "rice cakes",
+        "breadsticks"
+    ],
+    "pralinen": [
+        "praline",
+        "trüffel",
+        "konfekt",
+        "pralines",
+        "truffles",
+        "chocolates"
+    ],
+    "schokoriegel": [
+        "schokoladenriegel",
+        "mars",
+        "snickers",
+        "twix",
+        "bounty",
+        "duplo",
+        "kinder bueno",
+        "kitkat",
+        "kit kat",
+        "lion",
+        "balisto",
+        "chocolate bar",
+        "candy bar"
+    ],
+    "keksriegel": [
+        "keksriegel"
+    ],
+    "doppelkekse": [
+        "doppelkeks",
+        "oreo",
+        "oreos",
+        "prinzenrolle",
+        "sandwich cookies"
+    ],
+    "butterkekse": [
+        "butterkeks",
+        "leibniz",
+        "leibniz butterkeks",
+        "butter cookies",
+        "shortbread"
+    ],
+    "gebäckmischung": [
+        "keksmischung"
+    ],
+    "fruchtgummi": [
+        "fruchtgummis",
+        "weingummis",
+        "fruit gums",
+        "gummies"
+    ],
+    "weingummi": [
+        "weingummis"
+    ],
+    "lakritz": [
+        "lakritze",
+        "lakritzschnecken",
+        "liquorice",
+        "licorice"
+    ],
+    "kaubonbons": [
+        "kaubonbon",
+        "maoam",
+        "starburst",
+        "mentos",
+        "hi-chew",
+        "chewy candy",
+        "chews"
+    ],
+    "toffees": [
+        "toffee",
+        "karamell",
+        "karamellen",
+        "caramel"
+    ],
+    "karamellbonbons": [
+        "karamellbonbon",
+        "werthers"
+    ],
+    "lutscher": [
+        "lolli",
+        "lollis",
+        "lollipop",
+        "lollipops"
+    ],
+    "marshmallows": [
+        "marshmallow",
+        "schaumzucker"
+    ],
+    "kaugummi": [
+        "kaugummis",
+        "chewing gum",
+        "gum"
+    ],
+    "dragees": [
+        "dragee",
+        "schokolinsen"
+    ],
+    "schokoerdnüsse": [
+        "schokoerdnuss"
+    ],
+    "schokolinsen": [
+        "schokolinse",
+        "smarties",
+        "m&ms",
+        "m und ms"
+    ],
+    "nougat": [
+        "nougatpralinen",
+        "gianduja",
+        "nougat"
+    ],
+    "marzipan": [
+        "marzipankartoffeln",
+        "marzipanbrot"
+    ],
+    "geleefrüchte": [
+        "geleefrucht",
+        "fruchtgelee"
+    ],
+    "puffreisriegel": [
+        "puffreis"
+    ],
+    "tomatenmark": [
+        "tomatenkonzentrat",
+        "tomatenpaste",
+        "tomato paste",
+        "tomato puree"
+    ],
+    "dosentomaten": [
+        "dosentomate",
+        "gehackte tomaten",
+        "geschälte tomaten",
+        "passierte tomaten",
+        "passata",
+        "canned tomatoes",
+        "chopped tomatoes",
+        "crushed tomatoes"
+    ],
+    "kichererbsen": [
+        "kichererbse",
+        "hummus",
+        "chickpeas",
+        "garbanzo beans"
+    ],
+    "mais": [
+        "dosenmais",
+        "maiskörner",
+        "zuckermais",
+        "corn",
+        "sweet corn",
+        "canned corn"
+    ],
+    "nudeln": [
+        "nudel",
+        "pasta",
+        "penne",
+        "fusilli",
+        "rigatoni",
+        "farfalle",
+        "tagliatelle",
+        "makkaroni",
+        "barilla",
+        "miracoli",
+        "noodles",
+        "macaroni"
+    ],
+    "spaghetti": [
+        "spagetti",
+        "spaghettini",
+        "barilla spaghetti"
+    ],
+    "reis": [
+        "basmatireis",
+        "jasminreis",
+        "langkornreis",
+        "rundkornreis",
+        "milchreis",
+        "risottoreis",
+        "rice",
+        "basmati rice",
+        "jasmine rice"
+    ],
+    "linsen": [
+        "linse",
+        "rote linsen",
+        "gelbe linsen",
+        "berglinsen",
+        "belugalinsen",
+        "lentils",
+        "red lentils"
+    ],
+    "bohnen": [
+        "bohne",
+        "kidneybohnen",
+        "weiße bohnen",
+        "schwarze bohnen",
+        "brechbohnen",
+        "beans",
+        "kidney beans",
+        "black beans",
+        "white beans"
+    ],
+    "müsli": [
+        "müslimischung",
+        "früchtemüsli",
+        "knuspermüsli",
+        "granola",
+        "dr. oetker vitalis",
+        "kölln müsli",
+        "seitenbacher",
+        "muesli",
+        "cereal"
+    ],
+    "haferflocken": [
+        "haferflocke",
+        "kernige haferflocken",
+        "zarte haferflocken",
+        "porridge",
+        "flocken",
+        "kölln flocken",
+        "oats",
+        "oatmeal",
+        "rolled oats"
+    ],
+    "cornflakes": [
+        "corn flakes",
+        "maisflocken"
+    ],
+    "zucker": [
+        "haushaltszucker",
+        "kristallzucker",
+        "rohrzucker",
+        "puderzucker",
+        "sugar",
+        "cane sugar",
+        "powdered sugar",
+        "icing sugar"
+    ],
+    "salz": [
+        "meersalz",
+        "speisesalz",
+        "jodsalz",
+        "fleur de sel",
+        "salt",
+        "sea salt",
+        "table salt"
+    ],
+    "pfeffer": [
+        "pfefferkörner",
+        "schwarzer pfeffer",
+        "weißer pfeffer",
+        "pfeffermühle",
+        "pepper",
+        "black pepper",
+        "peppercorns"
+    ],
+    "paprikapulver edelsüß": [
+        "paprika edelsüß",
+        "edelsüßpaprika",
+        "sweet paprika"
+    ],
+    "paprikapulver rosenscharf": [
+        "paprika rosenscharf",
+        "rosenscharfpaprika",
+        "scharfes paprikapulver",
+        "hot paprika"
+    ],
+    "curry": [
+        "currypulver",
+        "currygewürz",
+        "garam masala",
+        "curry powder"
+    ],
+    "kreuzkümmel": [
+        "cumin",
+        "kumin",
+        "ground cumin"
+    ],
+    "oregano": [
+        "oreganoblätter",
+        "wilder majoran"
+    ],
+    "basilikum": [
+        "basilikumblätter",
+        "basil"
+    ],
+    "thymian": [
+        "thymiankraut",
+        "thyme"
+    ],
+    "rosmarin": [
+        "rosmarinzweige",
+        "rosemary"
+    ],
+    "majoran": [
+        "majorankraut",
+        "marjoram"
+    ],
+    "zimt": [
+        "zimtstange",
+        "zimtstangen",
+        "zimtpulver",
+        "cinnamon",
+        "cinnamon sticks"
+    ],
+    "muskat": [
+        "muskatnuss",
+        "muskatpulver",
+        "nutmeg"
+    ],
+    "knoblauchpulver": [
+        "knoblauchgranulat",
+        "garlic powder"
+    ],
+    "zwiebelpulver": [
+        "zwiebelgranulat",
+        "onion powder"
+    ],
+    "chiliflocken": [
+        "chilipulver",
+        "chili",
+        "chili flakes",
+        "red pepper flakes"
+    ],
+    "cayennepfeffer": [
+        "cayenne",
+        "cayenne pepper"
+    ],
+    "kurkuma": [
+        "kurkumapulver",
+        "gelbwurz",
+        "turmeric"
+    ],
+    "ingwer": [
+        "ingwerpulver",
+        "ingwerwurzel",
+        "ginger"
+    ],
+    "lorbeerblätter": [
+        "lorbeerblatt",
+        "lorbeer",
+        "bay leaves",
+        "bay leaf"
+    ],
+    "marmelade": [
+        "marmeladen",
+        "erdbeermarmelade",
+        "aprikosenmarmelade",
+        "jam",
+        "marmalade",
+        "strawberry jam"
+    ],
+    "konfitüre": [
+        "konfitüren",
+        "preserve",
+        "preserves"
+    ],
+    "fruchtaufstrich": [
+        "fruchtaufstriche",
+        "fruit spread"
+    ],
+    "honig": [
+        "blütenhonig",
+        "waldhonig",
+        "akazienhonig",
+        "imkerhonig",
+        "honey"
+    ],
+    "nuss-nougat-creme": [
+        "nutella",
+        "nussnougatcreme",
+        "nougatcreme",
+        "schoko-aufstrich",
+        "nusspli",
+        "nudossi",
+        "chocolate spread",
+        "hazelnut spread"
+    ],
+    "erdnussbutter": [
+        "erdnusscreme",
+        "erdnussmus",
+        "peanut butter"
+    ],
+    "mandelcreme": [
+        "mandelmus",
+        "mandelbutter",
+        "almond butter"
+    ],
+    "schokocreme": [
+        "schokoaufstrich",
+        "schokoladencreme",
+        "ovomaltine crunchy cream"
+    ],
+    "karamellcreme": [
+        "karamellaufstrich",
+        "dulce de leche"
+    ],
+    "zuckerrübensirup": [
+        "rübensirup",
+        "rübenkraut",
+        "grafschafter"
+    ],
+    "ahornsirup": [
+        "maple syrup"
+    ],
+    "pflaumenmus": [
+        "powidl",
+        "zwetschgenmus",
+        "plum butter"
+    ],
+    "lemon curd": [
+        "zitronencreme",
+        "lemoncurd"
+    ],
+    "maronencreme": [
+        "maronenaufstrich",
+        "kastaniencreme",
+        "chestnut cream",
+        "chestnut spread"
+    ],
+    "sonnencreme": [
+        "sonnenschutz",
+        "sonnenmilch",
+        "lsf",
+        "nivea sun",
+        "ladival",
+        "sunscreen",
+        "sunblock",
+        "sun cream"
+    ],
+    "wattestäbchen": [
+        "q-tips",
+        "ohrstäbchen",
+        "cotton swabs",
+        "cotton buds"
+    ],
+    "taschentücher": [
+        "taschentuch",
+        "tempo",
+        "tempos",
+        "papiertaschentücher",
+        "softies",
+        "tissues",
+        "tissue",
+        "paper tissues"
+    ],
+    "zahnbürste": [
+        "zahnbürsten",
+        "oral-b",
+        "oral b",
+        "toothbrush",
+        "toothbrushes"
+    ],
+    "handcreme": [
+        "handcréme",
+        "handlotion",
+        "nivea creme",
+        "nivea",
+        "penaten",
+        "hand cream",
+        "hand lotion"
+    ],
+    "zahnpasta": [
+        "zahncreme",
+        "zahnpaste",
+        "elmex",
+        "signal",
+        "odol",
+        "colgate",
+        "sensodyne",
+        "blend-a-med",
+        "toothpaste"
+    ],
+    "deodorant": [
+        "deo",
+        "deoroller",
+        "deospray",
+        "antitranspirant",
+        "rexona",
+        "nivea deo",
+        "axe",
+        "old spice",
+        "dove deo",
+        "antiperspirant"
+    ],
+    "rasierer": [
+        "rasierklinge",
+        "rasierklingen",
+        "einwegrasierer",
+        "gillette",
+        "wilkinson",
+        "razor",
+        "razors",
+        "razor blades"
+    ],
+    "duschgel": [
+        "duschgels",
+        "duschbad",
+        "showergel",
+        "nivea dusche",
+        "dove dusche",
+        "duschdas",
+        "fa",
+        "shower gel",
+        "body wash"
+    ],
+    "shampoo": [
+        "haarshampoo",
+        "haarwaschmittel",
+        "head & shoulders",
+        "head and shoulders",
+        "schauma",
+        "garnier",
+        "pantene",
+        "elvital",
+        "hair shampoo"
+    ],
+    "tampons": [
+        "tampon",
+        "ob",
+        "o.b.",
+        "tampon"
+    ],
+    "binden": [
+        "binde",
+        "damenbinden",
+        "slipeinlagen",
+        "always",
+        "carefree",
+        "pads",
+        "sanitary pads",
+        "panty liners"
+    ],
+    "geschirrspültabs": [
+        "geschirrspültab",
+        "spülmaschinentabs",
+        "spülmaschinentab",
+        "somat",
+        "finish",
+        "fairy tabs",
+        "dishwasher tabs",
+        "dishwasher tablets"
+    ],
+    "toilettenpapier": [
+        "klopapier",
+        "wc-papier",
+        "charmin",
+        "hakle",
+        "zewa toilettenpapier",
+        "toilet paper",
+        "toilet roll",
+        "loo roll"
+    ],
+    "küchenrolle": [
+        "küchenrollen",
+        "küchentücher",
+        "küchenkrepp",
+        "zewa",
+        "zewa wisch und weg",
+        "plenty",
+        "paper towels",
+        "kitchen roll",
+        "kitchen paper"
+    ],
+    "spülmittel": [
+        "handspülmittel",
+        "geschirrspülmittel",
+        "spüli",
+        "pril",
+        "fairy",
+        "dish soap",
+        "washing up liquid"
+    ],
+    "waschmittel": [
+        "vollwaschmittel",
+        "colorwaschmittel",
+        "feinwaschmittel",
+        "persil",
+        "ariel",
+        "spee",
+        "laundry detergent",
+        "detergent"
+    ],
+    "müllbeutel": [
+        "müllbeutl",
+        "müllsack",
+        "müllsäcke",
+        "müllbeutel",
+        "mülltüte",
+        "mülltüten",
+        "abfallbeutel",
+        "trash bags",
+        "bin bags",
+        "garbage bags"
+    ],
+    "backpapier": [
+        "backfolie",
+        "baking paper",
+        "parchment paper"
+    ],
+    "alufolie": [
+        "aluminiumfolie",
+        "alu-folie",
+        "aluminum foil",
+        "aluminium foil",
+        "tin foil"
+    ],
+    "schwamm": [
+        "schwämme",
+        "spülschwamm",
+        "spülschwämme",
+        "küchenschwamm",
+        "sponge",
+        "sponges"
+    ],
+    "glasreiniger": [
+        "fensterreiniger",
+        "scheibenreiniger",
+        "glass cleaner",
+        "window cleaner"
+    ],
+    "allzweckreiniger": [
+        "universalreiniger",
+        "allesreiniger",
+        "meister proper",
+        "mr. proper",
+        "sagrotan",
+        "ajax",
+        "all-purpose cleaner"
+    ],
+    "badreiniger": [
+        "badezimmerreiniger",
+        "cillit bang"
+    ],
+    "wc-reiniger": [
+        "toilettenreiniger",
+        "kloreiniger",
+        "domestos",
+        "wc-ente",
+        "bref",
+        "toilet cleaner"
+    ],
+    "bodenreiniger": [
+        "fußbodenreiniger",
+        "wischreiniger",
+        "floor cleaner"
+    ],
+    "entkalker": [
+        "kalkentferner",
+        "kalklöser",
+        "calgon",
+        "durgol",
+        "descaler",
+        "limescale remover"
+    ],
+    "fettlöser": [
+        "fettloeser",
+        "küchenreiniger",
+        "degreaser"
+    ],
+    "flüssigwaschmittel": [
+        "flüssigwaschmittel"
+    ],
+    "weichspüler": [
+        "wäscheweichspüler",
+        "lenor",
+        "fabric softener"
+    ],
+    "fleckenentferner": [
+        "fleckenmittel",
+        "vanish",
+        "stain remover"
+    ],
+    "pulverwaschmittel": [
+        "waschpulver",
+        "washing powder"
+    ],
+    "babynahrung": [
+        "babybrei",
+        "babygläschen",
+        "hipp",
+        "alete",
+        "baby food"
+    ],
+    "windeln": [
+        "windel",
+        "pampers",
+        "babywindeln",
+        "lillydoo",
+        "dm windeln",
+        "diapers",
+        "nappies"
+    ],
+    "hundefutter": [
+        "hundenahrung",
+        "trockenfutter hund",
+        "nassfutter hund",
+        "pedigree",
+        "rinti",
+        "cesar",
+        "dog food"
+    ],
+    "katzenfutter": [
+        "katzennahrung",
+        "trockenfutter katze",
+        "nassfutter katze",
+        "whiskas",
+        "sheba",
+        "felix",
+        "kitekat",
+        "cat food"
+    ],
+    "katzenstreu": [
+        "katzensand",
+        "catsan",
+        "cat litter"
+    ],
+    "hundesnacks": [
+        "hundesnack",
+        "hundeknochen",
+        "hundeleckerli",
+        "leckerlis",
+        "frolic",
+        "dreamies hund",
+        "dog treats"
+    ],
+    "tiernahrung": [
+        "tierfutter",
+        "pet food"
+    ]
 }
