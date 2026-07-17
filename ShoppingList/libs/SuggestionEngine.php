@@ -343,6 +343,7 @@ trait SuggestionEngine
             ['name' => 'Muffins', 'category' => 'Backwaren'],
             ['name' => 'Brezel', 'category' => 'Backwaren'],
             ['name' => 'Zwieback', 'category' => 'Backwaren'],
+            ['name' => 'Stuten', 'category' => 'Backwaren'],
             ['name' => 'Wraps', 'category' => 'Backwaren'],
             ['name' => 'Berliner', 'category' => 'Backwaren'],
             ['name' => 'Hefezopf', 'category' => 'Backwaren'],
@@ -470,7 +471,9 @@ trait SuggestionEngine
         $raw  = $this->ReadAttributeString('SuggestionItems');
         $data = json_decode($raw, true);
         if (is_array($data) && count($data) > 0) {
-            return $data;
+            // Defaults nachmergen: sonst erreichen Vokabular-Erweiterungen
+            // Bestandsinstanzen nie (das Attribut friert den Erststand ein)
+            return $this->MergeDefaultSuggestions($data);
         }
         // Lazy-init: write defaults + migrate any existing ItemHistory
         $items = $this->GetDefaultSuggestions();
@@ -499,6 +502,29 @@ trait SuggestionEngine
             'SuggestionItems',
             json_encode(array_values($items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
         );
+    }
+
+    /** Ergänzt neue Default-Einträge, ohne gelernte/angepasste zu überschreiben. */
+    private function MergeDefaultSuggestions(array $items): array
+    {
+        $seen = [];
+        foreach ($items as $item) {
+            if (is_array($item) && isset($item['name'])) {
+                $seen[mb_strtolower(trim((string)$item['name']))] = true;
+            }
+        }
+        $added = false;
+        foreach ($this->GetDefaultSuggestions() as $default) {
+            if (!isset($seen[mb_strtolower(trim($default['name']))])) {
+                $items[] = $default;
+                $added   = true;
+            }
+        }
+        if ($added) {
+            // Einmalig persistieren, damit der Merge nicht bei jedem Lookup läuft
+            $this->SaveSuggestionItems($items);
+        }
+        return $items;
     }
 
     private function GetBaseSuggestions(): array
