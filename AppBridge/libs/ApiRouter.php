@@ -193,8 +193,16 @@ trait ApiRouter
     private function HandleDiscovery(): void
     {
         $instances = [];
+        $theme = null;
         foreach ($this->GetListInstances() as $instance) {
             $instances[] = $this->DescribeInstance((int)$instance['id'], (string)$instance['kind']);
+            // Visu-Farben: von der ersten Einkaufsliste, deren Kachel gemeldet hat
+            if ($theme === null && $instance['kind'] === 'shopping') {
+                $reported = json_decode((string)@SL_GetVisuTheme((int)$instance['id']), true);
+                if (is_array($reported) && $reported !== []) {
+                    $theme = $reported;
+                }
+            }
         }
         $this->SendJson([
             'ok'           => true,
@@ -203,6 +211,7 @@ trait ApiRouter
             'capabilities' => ['barcode' => true, 'images' => true, 'websocket' => false],
             'users'        => json_decode($this->GetUsers(), true),
             'instances'    => $instances,
+            'theme'        => $theme,
         ]);
     }
 

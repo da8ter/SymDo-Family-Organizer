@@ -23,6 +23,8 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('ItemHistory', '{}');
         $this->RegisterAttributeString('SuggestionItems', '[]');
         $this->RegisterAttributeString('FavoriteLists', '[]');
+        // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme)
+        $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
         $this->RegisterAttributeString('WebHookToken', '');
         $this->RegisterAttributeInteger('AppRevision', 0);
@@ -290,6 +292,31 @@ class ShoppingList extends IPSModuleStrict
                     (string)($data['notes'] ?? '')
                 );
                 return;
+            case 'ReportVisuTheme':
+                // Stiller Speicher (kein SendState): Die Kachel meldet die
+                // CSS-Variablen der Visu, die SymDo-App holt sie über die
+                // AppBridge-Discovery ab.
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data)) {
+                    return;
+                }
+                $scheme = ($data['scheme'] ?? '') === 'dark' ? 'dark' : 'light';
+                $colors = [];
+                foreach (['accent', 'content', 'card'] as $key) {
+                    $color = strtolower(trim((string)($data[$key] ?? '')));
+                    if (preg_match('/^#[0-9a-f]{6}$/', $color)) {
+                        $colors[$key] = $color;
+                    }
+                }
+                if (count($colors) === 3) {
+                    $theme = json_decode($this->ReadAttributeString('VisuTheme'), true);
+                    if (!is_array($theme)) {
+                        $theme = [];
+                    }
+                    $theme[$scheme] = $colors;
+                    $this->WriteAttributeString('VisuTheme', json_encode($theme));
+                }
+                return;
             default:
                 throw new \Exception($this->Translate('Invalid Ident'));
         }
@@ -446,6 +473,15 @@ class ShoppingList extends IPSModuleStrict
     public function GetAppRevision(): int
     {
         return $this->ReadAttributeInteger('AppRevision');
+    }
+
+    /**
+     * Von der Kachel gemeldete Visu-Farben ({"dark":{accent,content,card},
+     * "light":{...}}) — von der AppBridge in der Discovery ausgeliefert.
+     */
+    public function GetVisuTheme(): string
+    {
+        return $this->ReadAttributeString('VisuTheme');
     }
 
     public function GetAppState(): string
