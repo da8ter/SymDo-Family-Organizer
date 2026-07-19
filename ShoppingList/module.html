@@ -1766,16 +1766,55 @@ function getFavNames() {
 }
 
 // ── Scroll containment ─────────────────────────────────────────────────────
-function bindScrollContainment(el) {
-  if (!el) return;
-  let startY = 0;
-  el.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
-  el.addEventListener('touchmove', (e) => {
-    const delta = e.touches[0].clientY - startY;
-    const atTop    = el.scrollTop === 0;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-    if ((delta > 0 && atTop) || (delta < 0 && atBottom)) e.preventDefault();
+// Scroll-Containment (wheel + touch, mit stopPropagation), damit beim Scrollen
+// nicht die ganze Kachel/Visu mitscrollt — an den Rändern wird die Geste
+// abgefangen und die Weiterleitung unterbunden.
+function bindScrollContainment(scrollEl) {
+  if (!scrollEl) return;
+  let lastTouchY = null;
+
+  scrollEl.addEventListener('wheel', (e) => {
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
+    const deltaY = e.deltaY || 0;
+    if (deltaY === 0) { e.stopPropagation(); return; }
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
+    e.stopPropagation();
   }, { passive: false });
+
+  scrollEl.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1) { lastTouchY = null; return; }
+    lastTouchY = e.touches[0].clientY;
+    e.stopPropagation();
+  }, { passive: true });
+
+  scrollEl.addEventListener('touchmove', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
+    const currentY = e.touches[0].clientY;
+    if (lastTouchY === null) { lastTouchY = currentY; e.stopPropagation(); return; }
+    const deltaY = lastTouchY - currentY;
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
+    e.stopPropagation();
+    lastTouchY = currentY;
+  }, { passive: false });
+
+  scrollEl.addEventListener('touchend', () => { lastTouchY = null; }, { passive: true });
+  scrollEl.addEventListener('touchcancel', () => { lastTouchY = null; }, { passive: true });
+}
+
+// Dokument-weit jede Scroll-Geste außerhalb erlaubter Bereiche unterbinden.
+const SL_SCROLL_AREA_SELECTOR = '.list-area, .suggestions-dropdown, .fav-list-body, .edit-form, .scanner-body, .print-mode-body';
+function setupScrollContainment() {
+  document.querySelectorAll(SL_SCROLL_AREA_SELECTOR).forEach(bindScrollContainment);
+  const outside = (t) => !(t instanceof Element) || t.closest(SL_SCROLL_AREA_SELECTOR) === null;
+  document.addEventListener('wheel', (e) => { if (outside(e.target)) e.preventDefault(); }, { passive: false, capture: true });
+  document.addEventListener('touchmove', (e) => { if (outside(e.target)) e.preventDefault(); }, { passive: false, capture: true });
 }
 
 // ── Item card ──────────────────────────────────────────────────────────────
@@ -3171,9 +3210,7 @@ function setActiveTab(tab) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  bindScrollContainment(document.getElementById('listArea'));
-  bindScrollContainment(document.getElementById('suggestionsDropdown'));
-  bindScrollContainment(document.getElementById('favListBody'));
+  setupScrollContainment();
 
   render();
   requestState();

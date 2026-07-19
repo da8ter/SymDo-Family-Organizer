@@ -3301,8 +3301,74 @@ function initCaptions() {
   document.getElementById('scannerOverlayTitle').textContent = translate('Scan barcode');
 }
 
+// ── Scroll-Containment (wie im ToDoList-Modul) ─────────────────────────────
+// Verhindert, dass beim Scrollen die ganze Kachel/Visu mitscrollt: pro
+// Scrollbereich werden wheel/touch-Gesten an den Rändern abgefangen und die
+// Weiterleitung (stopPropagation) unterbunden; zusätzlich blockt ein
+// dokument-weiter Handler jede Scroll-Geste außerhalb erlaubter Bereiche.
+const SCROLL_AREA_SELECTOR = '.screen, .suggestions, .overlay-body, .scanner-body, .shop-strip, .menu-pop';
+
+function bindScrollContainment(scrollEl) {
+  if (!scrollEl) return;
+  let lastTouchY = null;
+
+  scrollEl.addEventListener('wheel', (e) => {
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
+    const deltaY = e.deltaY || 0;
+    if (deltaY === 0) { e.stopPropagation(); return; }
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
+    e.stopPropagation();
+  }, { passive: false });
+
+  scrollEl.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1) { lastTouchY = null; return; }
+    lastTouchY = e.touches[0].clientY;
+    e.stopPropagation();
+  }, { passive: true });
+
+  scrollEl.addEventListener('touchmove', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
+    const currentY = e.touches[0].clientY;
+    if (lastTouchY === null) { lastTouchY = currentY; e.stopPropagation(); return; }
+    const deltaY = lastTouchY - currentY;
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
+    e.stopPropagation();
+    lastTouchY = currentY;
+  }, { passive: false });
+
+  scrollEl.addEventListener('touchend', () => { lastTouchY = null; }, { passive: true });
+  scrollEl.addEventListener('touchcancel', () => { lastTouchY = null; }, { passive: true });
+}
+
+function setupScrollContainment() {
+  // Vertikale Scrollbereiche einzeln absichern (die Container sind statisch;
+  // ihr Inhalt wird per innerHTML erneuert, die Elemente bleiben bestehen)
+  document.querySelectorAll('.screen, .suggestions, .overlay-body, .scanner-body')
+    .forEach(bindScrollContainment);
+
+  // Dokument-weit: jede Scroll-Geste außerhalb eines erlaubten Bereichs
+  // unterbinden, damit die Kachel als Ganzes nicht mitscrollt. Über closest()
+  // funktioniert das auch für später neu gerenderte Bereiche (z. B. .shop-strip).
+  const outside = (target) =>
+    !(target instanceof Element) || target.closest(SCROLL_AREA_SELECTOR) === null;
+  document.addEventListener('wheel', (e) => {
+    if (outside(e.target)) e.preventDefault();
+  }, { passive: false, capture: true });
+  document.addEventListener('touchmove', (e) => {
+    if (outside(e.target)) e.preventDefault();
+  }, { passive: false, capture: true });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initCaptions();
+  setupScrollContainment();
 
   for (const t of TABS) {
     document.getElementById('tab-' + t).addEventListener('click', () => setTab(t));
