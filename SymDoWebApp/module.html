@@ -1,0 +1,3342 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <script src="/icons.js"></script>
+  <style>
+:root {
+  --bg:      var(--card-color);
+  --card:    var(--card-color);
+  --text:    var(--content-color);
+  --muted:   color-mix(in srgb, var(--content-color) 45%, transparent);
+  --faint:   color-mix(in srgb, var(--content-color) 30%, transparent);
+  --surface: color-mix(in srgb, var(--content-color) 7%, transparent);
+  --surface2:color-mix(in srgb, var(--content-color) 12%, transparent);
+  /* Deckende Zeilenfläche: liegt über dem roten Wisch-Hintergrund, darf NICHT
+     durchscheinen (color-mix zweier deckender Farben bleibt deckend) */
+  --row:     color-mix(in srgb, var(--card-color) 86%, var(--content-color) 14%);
+  --border:  color-mix(in srgb, var(--content-color) 14%, transparent);
+  --accent:  var(--accent-color);
+  --red:     #ff4d4d;
+  --orange:  #ff9500;
+  --green:   #34c759;
+  --radius:  14px;
+  --gap:     12px;
+  --nav-h:   58px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: transparent;
+  overflow: hidden;
+}
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, select, textarea {
+  font: inherit; color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { color: #111; background: #fff; }
+
+.app { height: 100vh; display: flex; flex-direction: column; }
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: none;
+  padding: 12px 12px calc(var(--nav-h) + 12px);
+}
+.screen.active { display: block; }
+.content { max-width: 720px; margin: 0 auto; }
+
+/* ── Bottom-Tab-Bar (wie die App) ─────────────────────────────────────────── */
+.tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: var(--nav-h);
+  display: flex;
+  background: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 4%);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  z-index: 40;
+}
+.tabbar button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 4px;
+}
+.tabbar button i { font-size: 19px; }
+.tabbar button.active { color: var(--accent); }
+
+/* ── Screen-Header ─────────────────────────────────────────────────────────── */
+.screen-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.screen-head h2 { font-size: 22px; font-weight: 800; flex: 1; min-width: 0; }
+.screen-head select.list-switcher {
+  width: auto;
+  max-width: 55%;
+  font-weight: 700;
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  flex: 1;
+}
+.icon-btn {
+  width: 38px; height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 16px;
+  flex: none;
+}
+.icon-btn:active { border-color: var(--accent); }
+
+/* ── Karten ────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: var(--gap);
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.card-head h3 { font-size: 16px; font-weight: 700; }
+.card-head .link { color: var(--accent); font-size: 14px; font-weight: 600; }
+
+/* ── Dashboard ─────────────────────────────────────────────────────────────── */
+.dash-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.dash-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.member-bar { display: flex; gap: 6px; }
+.member-bar .avatar-btn {
+  width: 36px; height: 36px;
+  border-radius: 999px;
+  padding: 0;
+  position: relative;
+  opacity: 1;
+  transition: opacity .15s ease;
+  flex: none;
+}
+.member-bar.has-selection .avatar-btn { opacity: .4; }
+.member-bar.has-selection .avatar-btn.selected { opacity: 1; }
+.member-bar .avatar-btn.selected::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+}
+.member-bar .avatar-btn img,
+.member-bar .avatar-btn span {
+  width: 100%; height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  font-size: 15px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.kpi {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: #fff;
+  padding: 14px;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
+}
+.kpi .kpi-label { font-size: 13px; font-weight: 600; opacity: .92; position: relative; z-index: 1; }
+.kpi .kpi-value { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
+.kpi .kpi-glyph {
+  position: absolute;
+  right: -8px; bottom: -14px;
+  font-size: 74px;
+  opacity: .18;
+  z-index: 0;
+}
+.kpi:active { filter: brightness(1.08); }
+
+.week-card { display: flex; align-items: center; gap: 16px; }
+.week-ring { flex: none; }
+.week-ring svg { display: block; }
+.week-ring .ring-track { stroke: var(--surface2); }
+.week-ring .ring-value { stroke: var(--accent); transition: stroke-dashoffset .4s ease; }
+.week-ring text { fill: var(--text); font-weight: 800; font-size: 20px; }
+.week-info h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.week-info p { font-size: 13px; color: var(--muted); }
+
+.segmented {
+  display: flex;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: var(--gap);
+}
+.segmented button {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.segmented button.active {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* Dashboard-Aufgabenzeilen */
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.task-row:last-child { border-bottom: none; }
+.task-check {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: transparent;
+}
+.task-check.prio-high { border-color: var(--red); }
+.task-check.prio-low  { border-color: var(--faint); }
+.task-row .task-main { flex: 1; min-width: 0; }
+.task-row .task-title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-row .task-sub { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+.task-row .task-sub .seg-overdue { color: var(--red); }
+.task-row .task-sub .seg-today { color: var(--orange); }
+.empty-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.empty-row i { color: var(--green); font-size: 18px; }
+.more-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 2px;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* Einkaufsvorschau */
+.shop-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.shop-strip .strip-item {
+  flex: none;
+  width: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.strip-thumb {
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+}
+.strip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.strip-name {
+  width: 100%;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.strip-name .marquee-inner { display: inline-block; }
+.strip-name.marquee .marquee-inner { animation: marquee-pingpong 6s ease-in-out infinite; }
+@keyframes marquee-pingpong {
+  0%, 15%  { transform: translateX(0); }
+  45%, 55% { transform: translateX(var(--marquee-shift, -30px)); }
+  85%, 100%{ transform: translateX(0); }
+}
+.preview-actions { display: flex; gap: 10px; margin-top: 8px; }
+.preview-actions button {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── Listen-Zeilen (Einkaufen / Favoriten) ────────────────────────────────── */
+.cat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 2px 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.item-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.item-card .swipe-under {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--red);
+  color: #fff;
+  font-size: 17px;
+}
+.item-card-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--row);
+  transition: transform .18s ease;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+.item-card-content.is-dragging { transition: none; }
+.item-card.is-deleting .item-card-content { transition: transform .22s ease; }
+.item-thumb {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface2);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  font-size: 15px;
+}
+.item-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.item-main { flex: 1; min-width: 0; }
+.item-name {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-notes {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-side { display: flex; align-items: center; gap: 8px; flex: none; }
+.item-price { font-size: 12.5px; color: var(--muted); }
+.heart-btn { font-size: 16px; color: var(--muted); padding: 4px; }
+.heart-btn.faved { color: #ff2d55; }
+.amount-badge {
+  min-width: 30px;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface2);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.stepper { display: flex; flex-direction: column; }
+.stepper button { padding: 0 6px; font-size: 12px; color: var(--accent); line-height: 1.2; }
+.stepper .amount-badge { padding: 1px 8px; }
+.item-card.in-cart .item-name { text-decoration: line-through; color: var(--muted); }
+.item-card.in-cart .item-card-content { opacity: .75; }
+
+.section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 2px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.section-toggle .count { margin-left: auto; font-weight: 600; }
+.section-toggle i.chev { transition: transform .18s ease; }
+.section-toggle.open i.chev { transform: rotate(90deg); }
+
+/* ── Eingabeleisten ────────────────────────────────────────────────────────── */
+.inputbar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 2px;
+  background: linear-gradient(to top, var(--card-color) 65%, transparent);
+}
+.inputbar input { flex: 1; border-radius: 999px; }
+.inputbar .round-btn {
+  width: 42px; height: 42px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.inputbar .round-btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.inputbar .round-btn:disabled { opacity: .4; }
+
+.suggestions {
+  max-height: calc(3 * 34px + 16px);
+  overflow-y: auto;
+  display: none;
+  padding: 6px 0;
+}
+.suggestions.open { display: block; }
+.suggestions .chip-flow { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface2);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── ToDo-Zeilen ───────────────────────────────────────────────────────────── */
+.todo-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.todo-card .swipe-under {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--red); color: #fff; font-size: 17px;
+}
+.todo-content {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--row);
+  transition: transform .18s ease;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+.todo-content.is-dragging { transition: none; }
+.todo-check {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  flex: none;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 13px;
+}
+.todo-check.prio-high { border-color: var(--red); }
+.todo-check.prio-low  { border-color: var(--faint); }
+.todo-check.done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.todo-main { flex: 1; min-width: 0; }
+.todo-title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-card.done-row .todo-title { text-decoration: line-through; color: var(--muted); }
+.todo-info {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.todo-icons { display: flex; gap: 8px; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.todo-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex: none;
+}
+.due-chip {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--accent);
+  white-space: nowrap;
+}
+.due-chip.overdue { background: var(--red); }
+.todo-card.drag-over { outline: 2px dashed var(--accent); }
+
+/* Avatare */
+.avatar-stack { display: flex; }
+.avatar-stack .avatar {
+  width: 24px; height: 24px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1.5px solid var(--card-color);
+  margin-left: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.avatar-stack .avatar:first-child { margin-left: 0; }
+.avatar-stack .avatar-more { background: var(--surface2); color: var(--text); }
+
+/* ── Favoriten ─────────────────────────────────────────────────────────────── */
+.fav-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.fav-badge {
+  width: 38px; height: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ff2d55 18%, transparent);
+  color: #ff2d55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.fav-main { flex: 1; min-width: 0; }
+.fav-name { font-size: 15px; font-weight: 600; }
+.fav-count { font-size: 12.5px; color: var(--muted); }
+.fav-cart-btn { font-size: 17px; color: var(--accent); padding: 6px; }
+.fav-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.fav-actions button {
+  padding: 11px;
+  border-radius: 12px;
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--accent);
+}
+.fav-actions button.destructive { color: var(--red); }
+
+/* ── Overlays / Sheets ─────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, .45);
+}
+.overlay.open { display: flex; }
+.overlay-card {
+  background: var(--card-color);
+  border-radius: 18px 18px 0 0;
+  max-height: 88%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+.overlay-title { font-size: 17px; font-weight: 700; }
+.btn-close-overlay { font-size: 18px; color: var(--muted); padding: 4px 8px; }
+.overlay-body {
+  padding: 8px 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.form-row label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.form-row.inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.form-row.inline label { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--text); }
+.form-row.inline input[type="date"],
+.form-row.inline input[type="datetime-local"],
+.form-row.inline select { width: auto; max-width: 60%; }
+.switch { position: relative; width: 46px; height: 28px; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch .knob {
+  position: absolute; inset: 0;
+  border-radius: 999px;
+  background: var(--surface2);
+  transition: background .15s ease;
+  pointer-events: none;
+}
+.switch .knob::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform .15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.switch input:checked + .knob { background: var(--accent); }
+.switch input:checked + .knob::after { transform: translateX(18px); }
+.assign-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.assign-row .avatar {
+  width: 30px; height: 30px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+}
+.assign-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 15px; }
+.assign-row.selected .check { opacity: 1; }
+.overlay-footer {
+  display: flex;
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+.overlay-footer button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  background: var(--surface);
+}
+.overlay-footer button.primary { background: var(--accent); color: #fff; }
+.overlay-footer button.destructive { color: var(--red); }
+.overlay-footer button:disabled { opacity: .4; }
+
+/* Menü-Popover */
+.menu-pop {
+  position: fixed;
+  z-index: 70;
+  min-width: 230px;
+  background: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 5%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  overflow: hidden;
+  display: none;
+}
+.menu-pop.open { display: block; }
+.menu-pop button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  font-size: 14.5px;
+  white-space: normal;
+  word-break: break-word;
+}
+.menu-pop button:active { background: var(--surface); }
+.menu-pop button.destructive { color: var(--red); }
+.menu-pop .menu-sep { height: 1px; background: var(--border); }
+.menu-pop .menu-label { padding: 8px 14px 2px; font-size: 12px; color: var(--muted); font-weight: 700; }
+.menu-pop button .check { margin-left: auto; color: var(--accent); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + 14px);
+  transform: translateX(-50%) translateY(8px);
+  background: rgba(0,0,0,.78);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+  z-index: 80;
+  max-width: 90%;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 44px 16px;
+}
+.empty-state i { font-size: 34px; margin-bottom: 10px; display: block; }
+
+/* ── Scanner (aus dem ShoppingList-Modul übernommen) ──────────────────────── */
+.scanner-body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+.scanner-video-wrap {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #000;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.scanner-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanner-scanline {
+  position: absolute;
+  left: 8%; right: 8%; top: 24%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(0,255,195,0) 0%, rgba(0,255,195,1) 50%, rgba(0,255,195,0) 100%);
+  box-shadow: 0 0 10px rgba(0,255,195,.65);
+  animation: scanner-line-move 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+.scanner-result {
+  position: absolute;
+  left: 50%; top: 50%;
+  z-index: 2;
+  width: min(92%, 560px);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.68);
+  color: #fff;
+  font-size: clamp(16px, 4.2vw, 21px);
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  min-height: 0;
+  opacity: 0;
+  transform: translate(-50%, -46%);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
+}
+.scanner-result.show { opacity: 1; transform: translate(-50%, -50%); }
+.scanner-result.error { background: rgba(192,57,43,.78); }
+@keyframes scanner-line-move {
+  0% { top: 24%; opacity: .95; }
+  50% { top: 76%; opacity: 1; }
+  100% { top: 24%; opacity: .95; }
+}
+.scanner-status {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 20px;
+  text-align: center;
+  padding: 6px 8px 0;
+  word-break: break-word;
+}
+.scanner-status:empty { display: none; }
+.scanner-status.success { color: #2e7d32; }
+.scanner-status.error { color: #c0392b; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <main style="display:flex; flex-direction:column; flex:1; min-height:0;">
+
+    <section id="screen-dashboard" class="screen active">
+      <div class="content" id="dashboardContent"></div>
+    </section>
+
+    <section id="screen-shopping" class="screen">
+      <div class="content">
+        <div class="screen-head">
+          <select id="shoppingSwitcher" class="list-switcher" style="display:none;"></select>
+          <h2 id="shoppingTitle"></h2>
+          <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
+        </div>
+        <div id="shoppingListArea"></div>
+        <div id="suggestions" class="suggestions"><div class="chip-flow" id="suggestionChips"></div></div>
+        <div class="inputbar">
+          <input id="shoppingInput" type="text" autocomplete="off" />
+          <button id="btnOpenScanner" class="round-btn secondary" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
+          <button id="btnShoppingAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-todos" class="screen">
+      <div class="content">
+        <div class="screen-head">
+          <select id="todoSwitcher" class="list-switcher" style="display:none;"></select>
+          <h2 id="todoTitle"></h2>
+          <button id="btnTodoMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
+        </div>
+        <div id="todoListArea"></div>
+        <div class="inputbar">
+          <input id="todoInput" type="text" autocomplete="off" />
+          <button id="btnTodoAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-favorites" class="screen">
+      <div class="content" id="favoritesContent"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
+    <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
+    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
+    <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
+  </nav>
+</div>
+
+<!-- Artikel bearbeiten / anlegen -->
+<div class="overlay" id="editOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="editOverlayTitle"></span>
+      <button class="btn-close-overlay" data-close="editOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div class="form-row"><label id="lblEditName"></label><input id="editName" type="text" /></div>
+      <div class="form-row"><label id="lblEditAmount"></label><input id="editAmount" type="text" /></div>
+      <div class="form-row"><label id="lblEditNotes"></label><input id="editNotes" type="text" /></div>
+      <div class="form-row"><label id="lblEditCategory"></label><select id="editCategory"></select></div>
+    </div>
+    <div class="overlay-footer">
+      <button data-close="editOverlay" id="btnEditCancel"></button>
+      <button class="primary" id="btnEditSave"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ToDo-Editor -->
+<div class="overlay" id="todoOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="todoOverlayTitle"></span>
+      <button class="btn-close-overlay" data-close="todoOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div class="form-row"><label id="lblTodoTitle"></label><input id="tdTitle" type="text" /></div>
+      <div class="form-row"><label id="lblTodoInfo"></label><textarea id="tdInfo" rows="2"></textarea></div>
+      <div class="form-row inline">
+        <label id="lblTodoDue"></label>
+        <span class="switch"><input type="checkbox" id="tdHasDue" /><span class="knob"></span></span>
+      </div>
+      <div id="tdDueSection" style="display:none; flex-direction:column; gap:12px;">
+        <div class="form-row inline">
+          <label id="lblTodoAllDay"></label>
+          <span class="switch"><input type="checkbox" id="tdAllDay" /><span class="knob"></span></span>
+        </div>
+        <div class="form-row inline">
+          <label id="lblTodoDate"></label>
+          <input id="tdDueDate" type="datetime-local" />
+        </div>
+        <div class="form-row inline">
+          <label id="lblTodoRecurrence"></label>
+          <select id="tdRecurrence"></select>
+        </div>
+        <div id="tdCustomSection" class="form-row inline" style="display:none;">
+          <label id="lblTodoCustom"></label>
+          <span style="display:flex; gap:8px;">
+            <input id="tdCustomValue" type="number" min="1" max="99" style="width:72px;" />
+            <select id="tdCustomUnit" style="width:auto;"></select>
+          </span>
+        </div>
+        <div class="form-row inline">
+          <label id="lblTodoNotification"></label>
+          <span class="switch"><input type="checkbox" id="tdNotification" /><span class="knob"></span></span>
+        </div>
+        <div id="tdLeadSection" class="form-row inline" style="display:none;">
+          <label id="lblTodoLead"></label>
+          <select id="tdLeadTime"></select>
+        </div>
+      </div>
+      <div class="form-row"><label id="lblTodoAssign"></label><div id="tdAssignList"></div></div>
+      <div class="form-row inline">
+        <label id="lblTodoPriority"></label>
+        <div class="segmented" id="tdPrioritySeg" style="margin:0; width:60%;"></div>
+      </div>
+      <div class="form-row inline">
+        <label id="lblTodoQuantity"></label>
+        <span style="display:flex; align-items:center; gap:10px;">
+          <button class="icon-btn" id="tdQtyMinus"><i class="fa-light fa-minus"></i></button>
+          <span id="tdQtyValue" style="min-width:28px; text-align:center; font-weight:700;"></span>
+          <button class="icon-btn" id="tdQtyPlus"><i class="fa-light fa-plus"></i></button>
+        </span>
+      </div>
+    </div>
+    <div class="overlay-footer">
+      <button data-close="todoOverlay" id="btnTodoCancel"></button>
+      <button class="primary" id="btnTodoSave"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Favoriten-Zugehörigkeit (Herz) -->
+<div class="overlay" id="favPickOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="favPickTitle"></span>
+      <button class="btn-close-overlay" data-close="favPickOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="favPickBody"></div>
+  </div>
+</div>
+
+<!-- Eingabe-Dialog (Favoritenliste anlegen/umbenennen) -->
+<div class="overlay" id="promptOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="promptTitle"></span>
+      <button class="btn-close-overlay" data-close="promptOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <input id="promptInput" type="text" />
+    </div>
+    <div class="overlay-footer">
+      <button data-close="promptOverlay" id="btnPromptCancel"></button>
+      <button class="primary" id="btnPromptOk"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Bestätigung -->
+<div class="overlay" id="confirmOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="confirmTitle"></span>
+      <button class="btn-close-overlay" data-close="confirmOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-footer" style="padding-top:6px;">
+      <button data-close="confirmOverlay" id="btnConfirmCancel"></button>
+      <button class="primary" id="btnConfirmOk"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Barcode-Scanner (aus dem ShoppingList-Modul übernommen) -->
+<div class="overlay" id="scannerOverlay">
+  <div class="overlay-card" style="max-height:94%;">
+    <div class="overlay-head">
+      <span class="overlay-title" id="scannerOverlayTitle">Barcode scannen</span>
+      <button class="btn-close-overlay" id="btnScannerClose" aria-label="Schließen"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="scanner-body" id="scannerBody">
+      <div class="scanner-video-wrap" id="scannerVideoWrap">
+        <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
+        <div class="scanner-scanline" id="scannerScanline" aria-hidden="true"></div>
+        <div class="scanner-result" id="scannerResult"></div>
+      </div>
+      <div class="scanner-status" id="scannerStatus"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Shims (Symcon injiziert translate/requestAction; Fallback postMessage) ──
+const translate = (typeof window.translate === 'function')
+  ? window.translate
+  : (key) => String(key ?? '');
+
+const requestAction = (typeof window.requestAction === 'function')
+  ? window.requestAction
+  : (ident, value) => {
+      try { window.parent.postMessage(JSON.stringify({ type: 'requestAction', ident: String(ident), value }), '*'); } catch (e) {}
+      try { window.parent.postMessage({ type: 'requestAction', ident: String(ident), value }, '*'); } catch (e) {}
+    };
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+// ── Store: Aggregat aller Listen (Schema siehe module.php BuildFullPayload) ─
+const store = {
+  users: [],
+  defaultUserID: '',
+  bridgeAvailable: false,
+  hiddenIDs: [],
+  instances: [],
+  states: {},        // "<id>" → {kind, revision, state}
+  images: {},
+  brands: {},
+  shoppingExtras: {} // "<id>" → {imageBase, extApiBase}
+};
+
+// Kompat-Schicht für die aus dem ShoppingList-Modul übernommenen Blöcke
+// (Scanner, Bild-Resolver): globales `state` = State der GEWÄHLTEN Einkaufsliste.
+let state = {};
+
+let activeTab = localStorage.getItem('symdo.tab') || 'dashboard';
+let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
+let dashPriority = localStorage.getItem('symdo.dashboardPriority') || '';
+let dashMemberId = '';
+let completedExpanded = localStorage.getItem('symdo.completedExpanded') === '1';
+// „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
+let cartExpanded = false;
+
+function visibleInstances(kind) {
+  return store.instances.filter(i => i.kind === kind && !i.hidden);
+}
+function instState(id) {
+  const entry = store.states[String(id)];
+  return entry && entry.state ? entry.state : null;
+}
+function selectedShoppingID() {
+  const vis = visibleInstances('shopping');
+  const saved = parseInt(localStorage.getItem('symdo.selectedShoppingID')) || 0;
+  if (vis.some(i => i.id === saved)) return saved;
+  return vis.length ? vis[0].id : 0;
+}
+function selectedTodoID() {
+  const vis = visibleInstances('todo');
+  const saved = parseInt(localStorage.getItem('symdo.selectedTodoID')) || 0;
+  if (vis.some(i => i.id === saved)) return saved;
+  return vis.length ? vis[0].id : 0;
+}
+function currentUserID() { return String(store.defaultUserID || ''); }
+
+// `state`, Hook-URLs und Bild-Maps auf die gewählte Einkaufsliste ausrichten
+function syncCompat() {
+  const id = selectedShoppingID();
+  state = instState(id) || {};
+  const extras = store.shoppingExtras[String(id)] || {};
+  // Bilder nur, wenn DIESE Liste ShowProductImages aktiv hat (imagesEnabled) —
+  // sonst kein Hook → getProductImageUrl liefert null → Initialen
+  window.__imageHookUrl = extras.imagesEnabled ? (extras.imageBase || '') : '';
+  window.__extApiHookUrl = extras.extApiBase || '';
+  if (productImages !== store.images) {
+    productImages = store.images || {};
+    productBrands = store.brands || {};
+    _rebuildPiKeys();
+  }
+  // Duplikat-Erkennung des Scanners mit dem frischen State abgleichen
+  if (typeof syncScannerAddedNames === 'function') syncScannerAddedNames();
+}
+
+// ── Produktbilder (aus dem ShoppingList-Modul übernommen; Lookup gespiegelt
+//    in App + Kacheln — alle Stellen synchron halten) ────────────────────────
+let productImages = {};
+let productBrands = {};
+let _piKeys = [];
+let _piBrandKeys = [];
+const _piCache = new Map();
+function _rebuildPiKeys() {
+  const byLength = (a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0);
+  _piKeys = Object.keys(productImages).filter(k => k.length > 1).sort(byLength);
+  _piBrandKeys = Object.keys(productBrands).filter(k => k.length > 1).sort(byLength);
+  _piCache.clear();
+}
+const _piIsLetter = (ch) => /\p{L}/u.test(ch);
+const _piFold = (s) => s.replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue').replaceAll('ß', 'ss');
+const _piUnfold = (s) => s.replaceAll('ae', 'ä').replaceAll('oe', 'ö').replaceAll('ue', 'ü').replaceAll('ss', 'ß');
+function _piCandidates(key) {
+  const out = [];
+  const push = (v) => { if (v && !out.includes(v)) out.push(v); };
+  push(key); push(_piFold(key)); push(_piUnfold(key));
+  for (const suffix of ['nen', 'en', 'er', 'es', 'se', 'n', 'e', 's']) {
+    if (key.length > suffix.length + 2 && key.endsWith(suffix)) {
+      const stem = key.slice(0, -suffix.length);
+      push(stem); push(_piFold(stem)); push(_piUnfold(stem));
+    }
+  }
+  return out;
+}
+function _piWholeWord(text, word) {
+  let idx = text.indexOf(word);
+  while (idx !== -1) {
+    const before = idx === 0 || !_piIsLetter(text[idx - 1]);
+    const after = idx + word.length >= text.length || !_piIsLetter(text[idx + word.length]);
+    if (before && after) return true;
+    idx = text.indexOf(word, idx + 1);
+  }
+  return false;
+}
+function _piResolve(key) {
+  const candidates = _piCandidates(key);
+  for (const c of candidates) {
+    if (productImages[c]) return productImages[c];
+  }
+  for (const k of _piBrandKeys) {
+    for (const c of candidates) {
+      if (_piWholeWord(c, k)) return productBrands[k];
+    }
+  }
+  for (const k of _piKeys) {
+    for (const c of candidates) {
+      if (c.length > k.length && c.endsWith(k)) return productImages[k];
+    }
+  }
+  for (const k of _piKeys) {
+    for (const c of candidates) {
+      if (c.length > k.length && _piWholeWord(c, k)) return productImages[k];
+    }
+  }
+  return null;
+}
+function getProductImageUrl(name, apiImageUrl) {
+  if (apiImageUrl) {
+    return window.__imageHookUrl + encodeURIComponent(apiImageUrl);
+  }
+  if (!window.__imageHookUrl) return null;
+  const key = (name || '').normalize().toLowerCase();
+  if (!key) return null;
+  let file = _piCache.get(key);
+  if (file === undefined) {
+    file = _piResolve(key);
+    _piCache.set(key, file);
+  }
+  return file ? window.__imageHookUrl + encodeURIComponent(file) : null;
+}
+// Bildauflösung wie in der App: Scan-Bild → Name → Notiz → Initial-Fallback
+function resolveItemImage(item) {
+  if (item.imageUrl) return getProductImageUrl('', item.imageUrl);
+  return getProductImageUrl(item.name) || getProductImageUrl(item.notes || '');
+}
+
+// ── Kategorie-Stile (Port von ListsDesign/CategoryStyle.swift) ─────────────
+const CATEGORY_STYLES = {
+  'obst & gemüse':        { icon: 'fa-carrot',          tint: '#34c759' },
+  'milch & käse':         { icon: 'fa-cheese',          tint: '#5ac8fa' },
+  'backwaren':            { icon: 'fa-croissant',       tint: '#a2845e' },
+  'fleisch & wurst':      { icon: 'fa-utensils',        tint: '#ff4d4d' },
+  'tiefkühl':             { icon: 'fa-snowflake',       tint: '#40c8e0' },
+  'getränke':             { icon: 'fa-glass-water',     tint: '#3498fa' },
+  'snacks & süßes':       { icon: 'fa-popcorn',         tint: '#ff2d55' },
+  'konserven & trocken':  { icon: 'fa-box',             tint: '#ff9500' },
+  'hygiene & pflege':     { icon: 'fa-shower',          tint: '#00c7be' },
+  'haushalt & reinigung': { icon: 'fa-soap',            tint: '#5856d6' },
+  'baby & tier':          { icon: 'fa-paw',             tint: '#af52de' },
+  'sonstiges':            { icon: 'fa-grid-2',          tint: '#8e8e93' }
+};
+const HASH_PALETTE = ['#3498fa', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#40c8e0', '#5856d6', '#00c7be'];
+function hashedTint(name) {
+  let h = 5381;
+  for (const ch of String(name || '')) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
+  return HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length];
+}
+function categoryStyle(category) {
+  const key = String(category || '').toLowerCase();
+  return CATEGORY_STYLES[key] || { icon: 'fa-basket-shopping', tint: hashedTint(key) };
+}
+
+// ── Avatare (aus dem ToDoList-Modul übernommen, Quelle = store.users) ──────
+function avatarTint(name) {
+  return hashedTint(name);
+}
+function usersById() {
+  const map = {};
+  (Array.isArray(store.users) ? store.users : []).forEach(u => { map[u.id] = u; });
+  return map;
+}
+function avatarHtml(u, cls) {
+  if (u.avatar) {
+    return `<img class="${cls}" src="${escapeHtml(u.avatar)}" alt="" title="${escapeHtml(u.name)}" />`;
+  }
+  const initial = escapeHtml(String(u.name || '?').charAt(0).toUpperCase());
+  return `<span class="${cls}" title="${escapeHtml(u.name)}" style="background:${avatarTint(u.name)}">${initial}</span>`;
+}
+function renderAvatarStack(ids) {
+  const byId = usersById();
+  const resolved = (Array.isArray(ids) ? ids : []).map(id => byId[id]).filter(Boolean);
+  if (resolved.length === 0) return '';
+  const max = 3;
+  let html = '<div class="avatar-stack">';
+  resolved.slice(0, max).forEach(u => { html += avatarHtml(u, 'avatar'); });
+  if (resolved.length > max) {
+    html += `<span class="avatar avatar-more">+${resolved.length - max}</span>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── Fälligkeit (Ports: DueClassifier aus der App, formatDue aus ToDoList) ──
+function localDayStr(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function todayStr() { return localDayStr(new Date()); }
+// dueDay ('Y-m-d', TZ-neutral) gewinnt über den due-Timestamp — exakt wie
+// DueClassifier in der App
+function classifyDue(item) {
+  const dueDay = String(item.dueDay || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dueDay)) {
+    const t = todayStr();
+    if (dueDay < t) return 'overdue';
+    if (dueDay === t) return 'today';
+    return 'upcoming';
+  }
+  const due = parseInt(item.due) || 0;
+  if (due <= 0) return 'none';
+  if (due < Math.floor(Date.now() / 1000)) return 'overdue';
+  if (localDayStr(new Date(due * 1000)) === todayStr()) return 'today';
+  return 'upcoming';
+}
+function dueDateOf(item) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(item.dueDay || ''));
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  const due = parseInt(item.due) || 0;
+  return due > 0 ? new Date(due * 1000) : null;
+}
+function dayDiff(from, to) {
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((b - a) / 86400000);
+}
+// Farbige Untertitel-Segmente wie auf dem App-Dashboard: nur der Zeit-Teil
+// ist rot/orange, der Listenname bleibt sekundär
+function dueSubtitleSegments(item, listName, showListName) {
+  const segs = [];
+  const cls = classifyDue(item);
+  const d = dueDateOf(item);
+  if (cls === 'overdue' && d) {
+    const days = dayDiff(d, new Date());
+    let text;
+    if (days <= 0) text = translate('Was due today');
+    else if (days === 1) text = translate('Due yesterday');
+    else text = translate('Overdue for %1 days').replace('%1', String(days));
+    segs.push({ text, cls: 'seg-overdue' });
+  } else if (cls === 'today') {
+    const due = parseInt(item.due) || 0;
+    if (due > 0 && item.dueAllDay !== true) {
+      const t = new Date(due * 1000);
+      const hh = String(t.getHours()).padStart(2, '0');
+      const mm = String(t.getMinutes()).padStart(2, '0');
+      segs.push({ text: `${translate('Today')}, ${hh}:${mm}`, cls: 'seg-today' });
+    } else {
+      segs.push({ text: translate('Today'), cls: 'seg-today' });
+    }
+  } else if (cls === 'upcoming' && d) {
+    const days = dayDiff(new Date(), d);
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+    segs.push({ text: rtf.format(days, 'day'), cls: '' });
+  }
+  if (showListName && listName) {
+    segs.push({ text: (segs.length ? ' · ' : '') + listName, cls: '' });
+  }
+  return segs;
+}
+// Due-Chip der ToDo-Zeile (Semantik aus dem ToDoList-Modul: ganztägig über
+// dueDay, sonst relative Kurzform)
+function formatDueChip(item) {
+  const due = parseInt(item.due) || 0;
+  if (due <= 0) return null;
+  if (item.dueAllDay) {
+    const d = dueDateOf(item);
+    if (!d) return null;
+    if (localDayStr(d) === todayStr()) return translate('Today');
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+  const diffSec = due - Math.floor(Date.now() / 1000);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+  const abs = Math.abs(diffSec);
+  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
+  if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour');
+  return rtf.format(Math.round(diffSec / 86400), 'day');
+}
+
+// ── Prioritäten / Wiederholungen (Codes wie im ToDoList-Modul) ─────────────
+function priorityClass(prio) {
+  const p = String(prio || 'normal');
+  return p === 'high' ? 'prio-high' : (p === 'low' ? 'prio-low' : '');
+}
+function recurrenceLabel(r, unit, val) {
+  if (String(r) === 'custom') {
+    const v = parseInt(val) || 1;
+    const unitLabel = { h: translate('Hours'), d: translate('Days'), m: translate('Months'), y: translate('Years') }[String(unit || 'w')] || translate('Weeks');
+    return `${translate('Custom')}: ${v} ${unitLabel}`;
+  }
+  switch (String(r)) {
+    case 'w1': return translate('Every week');
+    case 'w2': return translate('Every 2 weeks');
+    case 'w3': return translate('Every 3 weeks');
+    case 'm1': return translate('Monthly');
+    case 'q1': return translate('Quarterly');
+    case 'y1': return translate('Yearly');
+    default: return translate('No repeat');
+  }
+}
+
+// ── Protokoll: Call/GetState/CheckRevisions ────────────────────────────────
+let txnCounter = 0;
+function sdCall(instanceID, action, payload) {
+  const txn = 'tx' + (++txnCounter);
+  requestAction('Call', JSON.stringify({ instanceID, action, payload, txn }));
+}
+function requestState() { requestAction('GetState', 0); }
+function checkRevisions() {
+  const revisions = {};
+  for (const inst of store.instances) {
+    if (inst.hidden) continue;
+    const entry = store.states[String(inst.id)];
+    revisions[String(inst.id)] = entry ? entry.revision : -1;
+  }
+  if (Object.keys(revisions).length > 0) {
+    requestAction('CheckRevisions', JSON.stringify({ revisions }));
+  } else {
+    requestState();
+  }
+}
+
+// ── Nachrichten vom Modul ──────────────────────────────────────────────────
+function handleMessage(data) {
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (e) { return; }
+  }
+  if (!data || typeof data !== 'object') return;
+  if (data.type === 'state') {
+    store.users = data.users || [];
+    store.defaultUserID = data.defaultUserID || '';
+    store.bridgeAvailable = !!data.bridgeAvailable;
+    store.hiddenIDs = data.hiddenIDs || [];
+    store.instances = data.instances || [];
+    store.states = data.states || {};
+    store.images = data.images || {};
+    store.brands = data.brands || {};
+    store.shoppingExtras = data.shoppingExtras || {};
+    productImages = {}; // Kennung: Maps im nächsten syncCompat neu übernehmen
+    syncCompat();
+    renderAll();
+  } else if (data.type === 'instanceState') {
+    if (data.ok === false) {
+      showToast(translate('Action failed'));
+    }
+    if (data.state && data.instanceID) {
+      store.states[String(data.instanceID)] = {
+        kind: data.kind,
+        revision: data.revision,
+        state: data.state
+      };
+      syncCompat();
+      renderAll();
+      // Offene Overlays, die nicht Teil eines Tab-Containers sind, aus dem
+      // frischen State neu zeichnen (korrigiert auch verworfene Aktionen)
+      if (document.getElementById('favPickOverlay').classList.contains('open')) renderFavPicker();
+    }
+  } else if (data.type === 'meta') {
+    store.instances = data.instances || [];
+    store.hiddenIDs = data.hiddenIDs || [];
+    store.bridgeAvailable = !!data.bridgeAvailable;
+    for (const key of Object.keys(store.states)) {
+      const inst = store.instances.find(i => String(i.id) === key);
+      if (!inst || inst.hidden) delete store.states[key];
+    }
+    syncCompat();
+    renderAll();
+    checkRevisions(); // fehlende States neu eingeblendeter Listen nachladen
+  }
+}
+window.handleMessage = handleMessage;
+window.updateState = handleMessage;
+window.addEventListener('message', (event) => { if (event) handleMessage(event.data); });
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+const TABS = ['dashboard', 'shopping', 'todos', 'favorites'];
+function setTab(tab) {
+  if (!TABS.includes(tab)) tab = 'dashboard';
+  activeTab = tab;
+  localStorage.setItem('symdo.tab', tab);
+  for (const t of TABS) {
+    document.getElementById('screen-' + t).classList.toggle('active', t === tab);
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  }
+  renderAll();
+}
+
+// ── UI-Helfer: Toast, Bestätigung, Eingabe, Menü, Overlays ────────────────
+let toastTimer = 0;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+function openOverlay(id) { document.getElementById(id).classList.add('open'); }
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+let confirmCb = null;
+function showConfirm(title, okLabel, cb) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('btnConfirmOk').textContent = okLabel;
+  confirmCb = cb;
+  openOverlay('confirmOverlay');
+}
+let promptCb = null;
+function showPrompt(title, initial, okLabel, cb) {
+  document.getElementById('promptTitle').textContent = title;
+  const input = document.getElementById('promptInput');
+  input.value = initial || '';
+  document.getElementById('btnPromptOk').textContent = okLabel;
+  promptCb = cb;
+  openOverlay('promptOverlay');
+  input.focus();
+}
+
+let menuCloser = null;
+function closeMenu() {
+  const pop = document.getElementById('menuPop');
+  if (pop) pop.remove();
+  if (menuCloser) { document.removeEventListener('pointerdown', menuCloser, true); menuCloser = null; }
+}
+function openMenu(anchor, entries) {
+  closeMenu();
+  const pop = document.createElement('div');
+  pop.id = 'menuPop';
+  pop.className = 'menu-pop open';
+  for (const entry of entries) {
+    if (entry.sep) {
+      const sep = document.createElement('div');
+      sep.className = 'menu-sep';
+      pop.appendChild(sep);
+      continue;
+    }
+    if (entry.header) {
+      const label = document.createElement('div');
+      label.className = 'menu-label';
+      label.textContent = entry.label;
+      pop.appendChild(label);
+      continue;
+    }
+    const btn = document.createElement('button');
+    if (entry.destructive) btn.classList.add('destructive');
+    btn.innerHTML = (entry.icon ? `<i class="fa-light ${entry.icon}"></i>` : '') +
+      escapeHtml(entry.label) +
+      (entry.checked ? '<i class="fa-light fa-check check"></i>' : '');
+    btn.addEventListener('click', () => { closeMenu(); entry.onClick(); });
+    pop.appendChild(btn);
+  }
+  document.body.appendChild(pop);
+  const rect = anchor.getBoundingClientRect();
+  // Breite auf den Viewport begrenzen, sonst schieben lange Einträge
+  // (z. B. „<langer Favoritenname> hinzufügen“) das Popover aus dem Bild
+  pop.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
+  pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+  pop.style.left = Math.max(8, Math.min(rect.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  menuCloser = (e) => { if (!pop.contains(e.target)) closeMenu(); };
+  setTimeout(() => document.addEventListener('pointerdown', menuCloser, true), 0);
+}
+
+// Marquee für abgeschnittene Namen (Ping-Pong wie in der App)
+function applyMarquees(container) {
+  container.querySelectorAll('.strip-name').forEach(el => {
+    const inner = el.querySelector('.marquee-inner');
+    if (!inner) return;
+    const overflow = inner.scrollWidth - el.clientWidth;
+    if (overflow > 4) {
+      el.style.setProperty('--marquee-shift', `-${overflow}px`);
+      el.classList.add('marquee');
+    } else {
+      el.classList.remove('marquee');
+    }
+  });
+}
+
+// Wisch-Geste (aus dem ShoppingList-Modul übernommen, Callback statt Action)
+function bindCardSwipe(card, contentSel, onDelete) {
+  const content = card.querySelector(contentSel);
+  if (!content) return;
+  let startX = 0, startY = 0, dx = 0;
+  let active = false, decided = false, pointerId = null;
+  const SLOP = 8, THRESHOLD = 64;
+  const onDown = (e) => {
+    if (e.target.closest('button')) return;
+    if (card.dataset.animating === '1') return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    active = true; decided = false;
+    startX = e.clientX; startY = e.clientY; dx = 0;
+    pointerId = e.pointerId;
+    content.classList.add('is-dragging');
+  };
+  const onMove = (e) => {
+    if (!active || e.pointerId !== pointerId) return;
+    const mx = e.clientX - startX;
+    const my = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
+      if (Math.abs(my) >= Math.abs(mx)) { active = false; content.classList.remove('is-dragging'); return; }
+      decided = true;
+      try { content.setPointerCapture(pointerId); } catch (_) {}
+    }
+    dx = Math.max(-content.offsetWidth, Math.min(0, mx));
+    content.style.transform = `translateX(${dx}px)`;
+  };
+  const onUp = () => {
+    if (!active) return;
+    const wasDecided = decided;
+    active = false; decided = false;
+    content.classList.remove('is-dragging');
+    try { content.releasePointerCapture(pointerId); } catch (_) {}
+    if (wasDecided && dx <= -THRESHOLD) {
+      card.dataset.animating = '1';
+      card.classList.add('is-deleting');
+      content.style.transform = 'translateX(-110%)';
+      window.setTimeout(onDelete, 240);
+    } else {
+      content.style.transform = '';
+    }
+    if (wasDecided) {
+      card.dataset.swiped = '1';
+      window.setTimeout(() => { delete card.dataset.swiped; }, 60);
+    }
+  };
+  content.addEventListener('pointerdown', onDown);
+  content.addEventListener('pointermove', onMove);
+  content.addEventListener('pointerup', onUp);
+  content.addEventListener('pointercancel', onUp);
+}
+
+// ── Aggregationen (Port der Dashboard-Logik aus DashboardScreen.swift) ─────
+function allTodoTasks() {
+  const tasks = [];
+  for (const inst of visibleInstances('todo')) {
+    const st = instState(inst.id);
+    if (!st) continue;
+    for (const item of (Array.isArray(st.items) ? st.items : [])) {
+      tasks.push({ item, instanceID: inst.id, listName: inst.name, key: inst.id + '-' + item.id });
+    }
+  }
+  return tasks;
+}
+function memberFiltered(tasks) {
+  if (!dashMemberId) return tasks;
+  return tasks.filter(t => Array.isArray(t.item.assignedTo) && t.item.assignedTo.includes(dashMemberId));
+}
+function mondayOf(d) {
+  const y = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  y.setDate(y.getDate() - ((y.getDay() + 6) % 7));
+  return y.getTime();
+}
+function isThisWeek(ts) {
+  if (!ts) return false;
+  return mondayOf(new Date(ts * 1000)) === mondayOf(new Date());
+}
+function openShoppingCount() {
+  let n = 0;
+  for (const inst of visibleInstances('shopping')) {
+    const st = instState(inst.id);
+    if (st && Array.isArray(st.items)) n += st.items.filter(i => !i.inCart).length;
+  }
+  return n;
+}
+// Offene Artikel der Liste in Kategorie-Reihenfolge, alphabetisch je Kategorie
+function openSections(st) {
+  const items = (Array.isArray(st.items) ? st.items : []).filter(i => !i.inCart);
+  const misc = translate('Miscellaneous');
+  const byCat = new Map();
+  for (const it of items) {
+    const cat = it.category || misc;
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(it);
+  }
+  const order = Array.isArray(st.categoryOrder) ? st.categoryOrder.slice() : [];
+  for (const cat of byCat.keys()) {
+    if (!order.includes(cat)) order.push(cat);
+  }
+  const sections = [];
+  for (const cat of order) {
+    const list = byCat.get(cat);
+    if (!list) continue;
+    list.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+    sections.push({ category: cat, items: list });
+  }
+  return sections;
+}
+
+// ── Render-Einstieg ────────────────────────────────────────────────────────
+function renderAll() {
+  if (activeTab === 'dashboard') renderDashboard();
+  if (activeTab === 'shopping') renderShopping();
+  if (activeTab === 'todos') renderTodos();
+  if (activeTab === 'favorites') renderFavorites();
+}
+
+// ── Übersicht (Dashboard) ──────────────────────────────────────────────────
+function renderDashboard() {
+  const el = document.getElementById('dashboardContent');
+  const open = allTodoTasks().filter(t => !t.item.done);
+  const memberTasks = memberFiltered(open);
+  const prio = dashPriority;
+  const filteredOpen = prio
+    ? memberTasks.filter(t => String(t.item.priority || 'normal') === prio)
+    : memberTasks;
+  const overdue = [];
+  const today = [];
+  for (const t of filteredOpen) {
+    const cls = classifyDue(t.item);
+    if (cls === 'overdue') overdue.push(t);
+    else if (cls === 'today') today.push(t);
+  }
+  const dueSort = (a, b) => ((parseInt(a.item.due) || Infinity) - (parseInt(b.item.due) || Infinity));
+  overdue.sort(dueSort);
+  today.sort(dueSort);
+  const dueNow = overdue.concat(today);
+  const todayRows = dueNow.slice(0, 6);
+  const todayKeys = new Set(todayRows.map(t => t.key));
+  const myUpcoming = filteredOpen.filter(t => !todayKeys.has(t.key)).sort(dueSort);
+  const overdueCount = memberFiltered(open).filter(t => classifyDue(t.item) === 'overdue').length;
+  const todayCount = memberFiltered(open).filter(t => classifyDue(t.item) === 'today').length;
+
+  const doneTasks = allTodoTasks().filter(t => t.item.done && isThisWeek(parseInt(t.item.updatedAt) || 0));
+  const completedThisWeek = memberFiltered(doneTasks).length;
+
+  const multiTodo = visibleInstances('todo').length > 1;
+  const byId = usersById();
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  let html = '';
+  // Kopf: Datum + Mitglieder-Filter
+  html += '<div class="dash-top">';
+  html += `<div class="dash-date">${escapeHtml(dateStr)}</div>`;
+  if (store.users.length > 0) {
+    html += `<div class="member-bar${dashMemberId ? ' has-selection' : ''}">`;
+    for (const u of store.users) {
+      html += `<button class="avatar-btn${u.id === dashMemberId ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+        avatarHtml(u, '') + '</button>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // KPI-Kacheln
+  const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
+  const zeroOverdue = overdueCount === 0;
+  html += '<div class="kpi-grid">';
+  html += `<button class="kpi" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
+    `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
+    `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
+  html += `<button class="kpi" data-goto="todos" style="${kpiTint('#ff9500')}">` +
+    `<span class="kpi-label">${translate('Due today')}</span><span class="kpi-value">${todayCount}</span>` +
+    `<i class="fa-light fa-calendar kpi-glyph"></i></button>`;
+  html += `<button class="kpi" data-goto="todos" style="${kpiTint(zeroOverdue ? '#8e8e93' : '#ff4d4d')}">` +
+    `<span class="kpi-label">${translate('Overdue')}</span><span class="kpi-value">${overdueCount}</span>` +
+    `<i class="fa-light ${zeroOverdue ? 'fa-check' : 'fa-triangle-exclamation'} kpi-glyph"></i></button>`;
+  html += `<button class="kpi" data-goto="shopping" style="${kpiTint('#34c759')}">` +
+    `<span class="kpi-label">${translate('Items on the list')}</span><span class="kpi-value">${openShoppingCount()}</span>` +
+    `<i class="fa-light fa-basket-shopping kpi-glyph"></i></button>`;
+  html += '</div>';
+
+  // Wochenring
+  const total = completedThisWeek + memberTasks.length;
+  const frac = total > 0 ? completedThisWeek / total : 0;
+  const C = 2 * Math.PI * 30;
+  html += '<div class="card week-card">' +
+    `<div class="week-ring"><svg width="76" height="76" viewBox="0 0 76 76">` +
+    `<circle class="ring-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>` +
+    `<circle class="ring-value" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" ` +
+    `stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 38 38)"/>` +
+    `<text x="38" y="45" text-anchor="middle">${completedThisWeek}</text></svg></div>` +
+    `<div class="week-info"><h3>${translate('Done this week')}</h3>` +
+    `<p>${translate('%1 of %2 tasks done').replace('%1', String(completedThisWeek)).replace('%2', String(total))}</p></div></div>`;
+
+  // Prioritäts-Filter
+  const prios = [['', translate('All')], ['high', translate('High')], ['normal', translate('Normal')], ['low', translate('Low')]];
+  html += '<div class="segmented" id="dashPrio">';
+  for (const [val, label] of prios) {
+    html += `<button data-prio="${val}" class="${val === prio ? 'active' : ''}">${label}</button>`;
+  }
+  html += '</div>';
+
+  // Heute-Karte
+  html += `<div class="card"><div class="card-head"><h3>${translate('Today')}</h3>` +
+    `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
+  if (todayRows.length === 0) {
+    const msg = (overdueCount + todayCount === 0)
+      ? translate('Nothing due — all under control.')
+      : translate('No matches for this filter.');
+    html += `<div class="empty-row"><i class="fa-light fa-badge-check"></i>${escapeHtml(msg)}</div>`;
+  } else {
+    for (const t of todayRows) html += taskRowHtml(t, multiTodo);
+  }
+  html += '</div>';
+
+  // Meine Aufgaben / Aufgaben von X
+  if (myUpcoming.length > 0) {
+    let title = translate('Tasks');
+    if (dashMemberId === currentUserID() && dashMemberId) title = translate('My tasks');
+    // Wie mySectionTitle in der App: ist ein anderes Mitglied gewählt, immer
+    // „Aufgaben von X" (Platzhalter „…" wenn der Name gerade nicht auflösbar)
+    else if (dashMemberId) title = translate('Tasks of %1').replace('%1', byId[dashMemberId] ? byId[dashMemberId].name : '…');
+    html += `<div class="card"><div class="card-head"><h3>${escapeHtml(title)}</h3></div>`;
+    for (const t of myUpcoming.slice(0, 5)) html += taskRowHtml(t, multiTodo);
+    const remaining = myUpcoming.length - 5;
+    if (remaining > 0) {
+      const moreLabel = remaining === 1
+        ? translate('1 more task')
+        : translate('%1 more tasks').replace('%1', String(remaining));
+      html += `<button class="more-row" data-goto="todos"><span>${escapeHtml(moreLabel)}</span><i class="fa-light fa-chevron-right"></i></button>`;
+    }
+    html += '</div>';
+  }
+
+  // Einkaufsvorschau — wie in der App nur, wenn es eine sichtbare Einkaufsliste
+  // gibt (kein Platzhalter-Card, wenn keine existiert/alle ausgeblendet sind)
+  const shopId = selectedShoppingID();
+  const shopState = shopId ? instState(shopId) : null;
+  if (shopState) {
+    html += `<div class="card"><div class="card-head"><h3>${translate('Shopping list')}</h3>` +
+      `<button class="link" data-goto="shopping">${translate('Open')}</button></div>`;
+    const openItems = openSections(shopState).flatMap(s => s.items);
+    if (openItems.length === 0) {
+      html += `<div class="empty-row"><i class="fa-light fa-basket-shopping"></i>${translate('The list is empty.')}</div>`;
+    } else {
+      html += '<div class="shop-strip">';
+      for (const it of openItems) {
+        const img = resolveItemImage(it);
+        const tint = categoryStyle(it.category).tint;
+        html += `<div class="strip-item"><button class="strip-thumb" data-check="${escapeHtml(String(it.id))}" ` +
+          `style="background:${img ? 'var(--surface2)' : tint}">` +
+          (img ? `<img src="${img}" alt="" loading="lazy" />`
+               : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
+          `</button><div class="strip-name"><span class="marquee-inner">${escapeHtml(it.name)}</span></div></div>`;
+      }
+      html += '</div>';
+    }
+    html += `<div class="preview-actions"><button data-preview-add="1"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button></div>`;
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+
+  // Interaktionen
+  el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
+  el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dashMemberId = dashMemberId === b.dataset.member ? '' : b.dataset.member;
+    renderDashboard();
+  }));
+  el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
+    dashPriority = b.dataset.prio;
+    localStorage.setItem('symdo.dashboardPriority', dashPriority);
+    renderDashboard();
+  }));
+  el.querySelectorAll('[data-check]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sdCall(shopId, 'ToggleCart', { id: b.dataset.check, inCart: true });
+  }));
+  const previewAdd = el.querySelector('[data-preview-add]');
+  if (previewAdd) previewAdd.addEventListener('click', () => {
+    setTab('shopping');
+    setTimeout(() => document.getElementById('shoppingInput').focus(), 50);
+  });
+  el.querySelectorAll('.task-row').forEach(row => {
+    const instanceID = parseInt(row.dataset.inst);
+    const itemID = parseInt(row.dataset.item);
+    row.querySelector('.task-check').addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdCall(instanceID, 'ToggleDone', { id: itemID, done: true });
+    });
+    row.addEventListener('click', () => {
+      const st = instState(instanceID);
+      const item = st && st.items.find(i => i.id === itemID);
+      if (item) openTodoEditor(instanceID, item);
+    });
+  });
+  applyMarquees(el);
+}
+
+function taskRowHtml(t, showListName) {
+  const segs = dueSubtitleSegments(t.item, t.listName, showListName)
+    .map(s => `<span class="${s.cls}">${escapeHtml(s.text)}</span>`).join('');
+  return `<div class="task-row" data-inst="${t.instanceID}" data-item="${t.item.id}">` +
+    `<button class="task-check ${priorityClass(t.item.priority)}" aria-label="${translate('Done')}"><i class="fa-light fa-check"></i></button>` +
+    `<div class="task-main"><div class="task-title">${escapeHtml(t.item.title)}</div>` +
+    (segs ? `<div class="task-sub">${segs}</div>` : '') +
+    '</div>' + renderAvatarStack(t.item.assignedTo) + '</div>';
+}
+
+// ── Einkaufen ──────────────────────────────────────────────────────────────
+function renderShopping() {
+  syncCompat();
+  const vis = visibleInstances('shopping');
+  const id = selectedShoppingID();
+  const st = id ? instState(id) : null;
+  updateSwitcher('shoppingSwitcher', 'shoppingTitle', vis, id, 'symdo.selectedShoppingID');
+
+  const area = document.getElementById('shoppingListArea');
+  const scannerBtn = document.getElementById('btnOpenScanner');
+  scannerBtn.style.display = (st && st.scannerEnabled !== false) ? '' : 'none';
+
+  if (!st) {
+    area.innerHTML = `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('No shopping list found')}</div>`;
+    return;
+  }
+  const sections = openSections(st);
+  const cart = (Array.isArray(st.items) ? st.items : []).filter(i => i.inCart);
+  const favLists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const favNames = new Set();
+  for (const fl of favLists) {
+    for (const fi of (fl.items || [])) favNames.add(String(fi.name || '').trim().toLowerCase());
+  }
+
+  let html = '';
+  if (sections.length === 0 && cart.length === 0) {
+    html += `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('The list is empty.')}</div>`;
+  }
+  for (const sec of sections) {
+    const style = categoryStyle(sec.category);
+    html += `<div class="cat-header" style="color:${style.tint}"><i class="fa-light ${style.icon}"></i>${escapeHtml(sec.category)}</div>`;
+    for (const it of sec.items) html += shoppingRowHtml(it, favNames, st, false);
+  }
+  // Wie cartExpanded (@State) in der App: nur In-Memory, startet eingeklappt
+  const collapsed = !cartExpanded;
+  if (cart.length > 0) {
+    html += `<button class="section-toggle${collapsed ? '' : ' open'}" id="cartToggle">` +
+      `<i class="fa-light fa-cart-shopping"></i>${translate('Recently used')}` +
+      `<span class="count">${cart.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
+    if (!collapsed) {
+      for (const it of cart) html += shoppingRowHtml(it, favNames, st, true);
+    }
+  }
+  area.innerHTML = html;
+
+  const cartToggle = document.getElementById('cartToggle');
+  if (cartToggle) cartToggle.addEventListener('click', () => {
+    cartExpanded = !cartExpanded;
+    renderShopping();
+  });
+
+  area.querySelectorAll('.item-card').forEach(card => {
+    const itemId = card.dataset.id;
+    const inCart = card.classList.contains('in-cart');
+    bindCardSwipe(card, '.item-card-content', () => sdCall(id, 'DeleteItem', itemId));
+    card.querySelector('.item-card-content').addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      sdCall(id, 'ToggleCart', { id: itemId, inCart: !inCart });
+    });
+    const editBtn = card.querySelector('[data-edit]');
+    if (editBtn) editBtn.addEventListener('click', () => {
+      const item = (st.items || []).find(i => String(i.id) === itemId);
+      if (item) openItemEditor(id, item);
+    });
+    const heartBtn = card.querySelector('[data-heart]');
+    if (heartBtn) heartBtn.addEventListener('click', () => {
+      const item = (st.items || []).find(i => String(i.id) === itemId);
+      if (item) openFavPicker(id, item);
+    });
+    card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => {
+      const item = (st.items || []).find(i => String(i.id) === itemId);
+      if (!item) return;
+      const next = Math.max(1, (parseInt(item.amount) || 1) + parseInt(btn.dataset.step));
+      sdCall(id, 'UpdateItem', { id: item.id, name: item.name, amount: String(next), notes: item.notes || '', category: item.category || '' });
+    }));
+  });
+
+  renderSuggestions();
+}
+
+function shoppingRowHtml(it, favNames, st, inCart) {
+  const img = resolveItemImage(it);
+  const tint = categoryStyle(it.category).tint;
+  // Wie ItemRow.numericAmount in der App: leer = 1 (Stepper), führende Nullen
+  // sind KEINE Zahl (Badge). '' → Stepper mit '1'
+  const amountRaw = String(it.amount || '').trim();
+  const numeric = amountRaw === '' || /^[1-9]\d*$/.test(amountRaw);
+  const amount = amountRaw === '' ? '1' : amountRaw;
+  const faved = favNames.has(String(it.name || '').trim().toLowerCase());
+  let side = '';
+  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit"><i class="${faved ? 'fa-solid' : 'fa-light'} fa-heart"></i></button>`;
+  if (it.price && st.extApiShowPrice !== false) {
+    side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
+  }
+  if (!inCart && numeric) {
+    side += `<span class="stepper"><button data-step="1" aria-label="+"><i class="fa-light fa-chevron-up"></i></button>` +
+      `<span class="amount-badge">${escapeHtml(amount)}</span>` +
+      (parseInt(amount) > 1 ? `<button data-step="-1" aria-label="−"><i class="fa-light fa-chevron-down"></i></button>` : '') +
+      '</span>';
+  } else {
+    side += `<span class="amount-badge">${escapeHtml(amount || '1')}</span>`;
+  }
+  side += `<button class="heart-btn" data-edit="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>`;
+  return `<div class="item-card${inCart ? ' in-cart' : ''}" data-id="${escapeHtml(String(it.id))}">` +
+    `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+    `<div class="item-card-content">` +
+    `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+    (img ? `<img src="${img}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
+    `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
+    (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
+    `</span><span class="item-side">${side}</span></div></div>`;
+}
+
+function renderSuggestions() {
+  const id = selectedShoppingID();
+  const st = id ? instState(id) : null;
+  const input = document.getElementById('shoppingInput');
+  const panel = document.getElementById('suggestions');
+  const chips = document.getElementById('suggestionChips');
+  if (!st || document.activeElement !== input) {
+    panel.classList.remove('open');
+    return;
+  }
+  const query = input.value.trim().toLowerCase();
+  const openNames = new Set((st.items || []).filter(i => !i.inCart).map(i => String(i.name).toLowerCase()));
+  const list = (Array.isArray(st.suggestions) ? st.suggestions : [])
+    .filter(s => !openNames.has(String(s.name).toLowerCase()))
+    .filter(s => !query || String(s.name).toLowerCase().includes(query))
+    .sort((a, b) => (b.frequency || 0) - (a.frequency || 0) || String(a.name).localeCompare(String(b.name)))
+    .slice(0, 30);
+  if (list.length === 0) {
+    panel.classList.remove('open');
+    return;
+  }
+  chips.innerHTML = list.map(s =>
+    `<button class="chip" data-name="${escapeHtml(s.name)}" data-cat="${escapeHtml(s.category || '')}">${escapeHtml(s.name)}</button>`
+  ).join('');
+  chips.querySelectorAll('.chip').forEach(chip => {
+    // pointerdown vor dem blur des Inputs, sonst schließt das Panel vor dem Klick
+    chip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      sdCall(id, 'AddItem', { name: chip.dataset.name, category: chip.dataset.cat, amount: '1' });
+      input.value = '';
+    });
+  });
+  panel.classList.add('open');
+}
+
+// Listen-Umschalter (gemeinsam für Einkaufen/ToDos)
+function updateSwitcher(selectId, titleId, vis, currentId, storageKey) {
+  const select = document.getElementById(selectId);
+  const title = document.getElementById(titleId);
+  if (vis.length > 1) {
+    select.style.display = '';
+    title.style.display = 'none';
+    select.innerHTML = vis.map(i =>
+      `<option value="${i.id}"${i.id === currentId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`
+    ).join('');
+    select.onchange = () => {
+      localStorage.setItem(storageKey, select.value);
+      syncCompat();
+      renderAll();
+    };
+  } else {
+    select.style.display = 'none';
+    title.style.display = '';
+    title.textContent = vis.length ? vis[0].name : '';
+  }
+}
+
+// ── ToDos ──────────────────────────────────────────────────────────────────
+// Sortierung 1:1 aus dem ToDoList-Modul übernommen (inkl. title/desc-Quirk)
+function sortTodoItems(items, sortMode, sortDir) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (sortMode === 'manual') return list;
+  const compareDue = (a, b) => {
+    const da = parseInt(a.due) || 0;
+    const db = parseInt(b.due) || 0;
+    if (da <= 0 && db <= 0) return 0;
+    if (da <= 0) return 1;
+    if (db <= 0) return -1;
+    return sortDir === 'asc' ? (da - db) : (db - da);
+  };
+  const prioRankLowFirst = (p) => {
+    const v = String(p ?? 'normal');
+    if (v === 'low') return 0;
+    if (v === 'normal') return 1;
+    return 2;
+  };
+  list.sort((a, b) => {
+    if (sortMode === 'due') {
+      const c = compareDue(a, b);
+      if (c !== 0) return c;
+      return (parseInt(a.id) || 0) - (parseInt(b.id) || 0);
+    }
+    if (sortMode === 'priority') {
+      const pa = prioRankLowFirst(a.priority);
+      const pb = prioRankLowFirst(b.priority);
+      if (pa !== pb) return sortDir === 'asc' ? (pa - pb) : (pb - pa);
+      const c = compareDue(a, b);
+      if (c !== 0) return c;
+      return (parseInt(a.id) || 0) - (parseInt(b.id) || 0);
+    }
+    if (sortMode === 'title') {
+      const c = String(a.title ?? '').localeCompare(String(b.title ?? ''), undefined, { sensitivity: 'base' });
+      if (c !== 0) return c;
+      return (parseInt(a.id) || 0) - (parseInt(b.id) || 0);
+    }
+    const ca = parseInt(a.createdAt) || 0;
+    const cb = parseInt(b.createdAt) || 0;
+    if (ca !== cb) return sortDir === 'asc' ? (ca - cb) : (cb - ca);
+    return (parseInt(a.id) || 0) - (parseInt(b.id) || 0);
+  });
+  if (sortMode === 'title' && sortDir === 'desc') list.reverse();
+  return list;
+}
+
+function renderTodos() {
+  const vis = visibleInstances('todo');
+  const id = selectedTodoID();
+  const st = id ? instState(id) : null;
+  updateSwitcher('todoSwitcher', 'todoTitle', vis, id, 'symdo.selectedTodoID');
+
+  const area = document.getElementById('todoListArea');
+  if (!st) {
+    area.innerHTML = `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}</div>`;
+    return;
+  }
+  const sortMode = String(st.sortMode || 'created');
+  const sortDir = String(st.sortDir || 'asc');
+  const sorted = sortTodoItems(st.items || [], sortMode, sortDir);
+  const open = sorted.filter(i => !i.done);
+  const done = sorted.filter(i => i.done);
+
+  let html = '';
+  if (open.length === 0 && done.length === 0) {
+    html += `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No tasks')}</div>`;
+  }
+  for (const it of open) html += todoRowHtml(it, sortMode === 'manual');
+  if (done.length > 0 && st.hideCompletedTasks !== true) {
+    html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" id="doneToggle">` +
+      `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
+      `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
+    if (completedExpanded) {
+      for (const it of done) html += todoRowHtml(it, false);
+    }
+  }
+  area.innerHTML = html;
+
+  const doneToggle = document.getElementById('doneToggle');
+  if (doneToggle) doneToggle.addEventListener('click', () => {
+    completedExpanded = !completedExpanded;
+    localStorage.setItem('symdo.completedExpanded', completedExpanded ? '1' : '0');
+    renderTodos();
+  });
+
+  area.querySelectorAll('.todo-card').forEach(card => {
+    const itemId = parseInt(card.dataset.id);
+    const item = (st.items || []).find(i => i.id === itemId);
+    if (!item) return;
+    bindCardSwipe(card, '.todo-content', () => sdCall(id, 'DeleteItem', { id: itemId }));
+    card.querySelector('.todo-check').addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdCall(id, 'ToggleDone', { id: itemId, done: !item.done });
+    });
+    card.querySelector('.todo-content').addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      openTodoEditor(id, item);
+    });
+  });
+
+  bindTodoDnd(area, id, open, done, sortMode === 'manual');
+}
+
+function todoRowHtml(it, draggable) {
+  const icons = [];
+  if (it.recurrence && it.recurrence !== 'none') {
+    icons.push(`<span title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>`);
+  }
+  if ((parseInt(it.quantity) || 0) > 1) icons.push(`<span>×${parseInt(it.quantity)}</span>`);
+  if (it.notification === true) icons.push('<span><i class="fa-light fa-bell"></i></span>');
+  const chip = formatDueChip(it);
+  const overdue = classifyDue(it) === 'overdue' && !it.done;
+  return `<div class="todo-card${it.done ? ' done-row' : ''}" data-id="${it.id}"${draggable ? ' draggable="true"' : ''}>` +
+    `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+    `<div class="todo-content">` +
+    `<button class="todo-check ${it.done ? 'done' : priorityClass(it.priority)}" aria-label="${translate('Done')}"><i class="fa-light fa-check"></i></button>` +
+    `<span class="todo-main"><span class="todo-title">${escapeHtml(it.title)}</span>` +
+    (it.info ? `<span class="todo-info">${escapeHtml(it.info)}</span>` : '') +
+    (icons.length ? `<span class="todo-icons">${icons.join('')}</span>` : '') +
+    `</span><span class="todo-meta">` +
+    renderAvatarStack(it.assignedTo) +
+    (chip ? `<span class="due-chip${overdue ? ' overdue' : ''}">${escapeHtml(chip)}</span>` : '') +
+    `</span></div></div>`;
+}
+
+// Drag-Reorder nur im manuellen Modus: offene zuerst (neue Reihenfolge),
+// erledigte hinten angehängt — wie in App und ToDoList-Kachel
+let dndDragId = null;
+function bindTodoDnd(area, instanceID, open, done, enabled) {
+  if (!enabled) return;
+  area.querySelectorAll('.todo-card[draggable="true"]').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      dndDragId = parseInt(card.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const targetId = parseInt(card.dataset.id);
+      if (dndDragId === null || dndDragId === targetId) return;
+      const ids = open.map(i => i.id);
+      const from = ids.indexOf(dndDragId);
+      const to = ids.indexOf(targetId);
+      if (from === -1 || to === -1) return;
+      ids.splice(to, 0, ids.splice(from, 1)[0]);
+      sdCall(instanceID, 'Reorder', { order: ids.concat(done.map(i => i.id)) });
+      dndDragId = null;
+    });
+  });
+}
+
+// ── Favoriten ──────────────────────────────────────────────────────────────
+function renderFavorites() {
+  const el = document.getElementById('favoritesContent');
+  const id = selectedShoppingID();
+  const st = id ? instState(id) : null;
+  if (!st) {
+    el.innerHTML = `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}</div>`;
+    return;
+  }
+  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const detail = favDetailListId ? lists.find(l => l.id === favDetailListId) : null;
+  if (favDetailListId && !detail) favDetailListId = null;
+
+  if (!detail) {
+    let html = `<div class="screen-head"><h2>${translate('Favorites')}</h2>` +
+      `<button class="icon-btn" id="btnFavCreate" aria-label="${translate('New favorite list')}"><i class="fa-light fa-plus"></i></button></div>`;
+    if (lists.length === 0) {
+      html += `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No favorite lists')}</div>`;
+    }
+    for (const list of lists) {
+      const count = (list.items || []).length;
+      html += `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
+        `<span class="fav-badge"><i class="fa-solid fa-heart"></i></span>` +
+        `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
+        `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
+        `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
+        '</div>';
+    }
+    el.innerHTML = html;
+    document.getElementById('btnFavCreate').addEventListener('click', () => {
+      showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
+        if (name.trim()) sdCall(id, 'CreateFavoriteList', { name: name.trim() });
+      });
+    });
+    el.querySelectorAll('[data-addall]').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addFavListToCart(id, lists.find(l => l.id === btn.dataset.addall));
+    }));
+    el.querySelectorAll('.fav-row').forEach(row => row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      favDetailListId = row.dataset.list;
+      renderFavorites();
+    }));
+    return;
+  }
+
+  // Detailansicht
+  let html = `<div class="screen-head">` +
+    `<button class="icon-btn" id="btnFavBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
+    `<h2>${escapeHtml(detail.name)}</h2>` +
+    `<button class="icon-btn" id="btnFavMenu" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button></div>`;
+  const items = detail.items || [];
+  if (items.length === 0) {
+    html += `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No items yet')}</div>`;
+  }
+  for (const it of items) {
+    const img = getProductImageUrl(it.name) || getProductImageUrl(it.notes || '');
+    const tint = categoryStyle(it.category).tint;
+    html += `<div class="item-card" data-name="${escapeHtml(it.name)}">` +
+      `<div class="swipe-under"><i class="fa-light fa-heart-crack"></i></div>` +
+      `<div class="item-card-content">` +
+      `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+      (img ? `<img src="${img}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
+      `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
+      (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
+      `</span><span class="item-side"><span class="amount-badge">${escapeHtml(String(it.amount || '1'))}</span>` +
+      `<button class="heart-btn" data-editfav="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>` +
+      `</span></div></div>`;
+  }
+  html += `<div class="fav-actions">` +
+    `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
+    `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
+    `</div>`;
+  el.innerHTML = html;
+
+  document.getElementById('btnFavBack').addEventListener('click', () => { favDetailListId = null; renderFavorites(); });
+  document.getElementById('btnFavMenu').addEventListener('click', (e) => {
+    // Nur „Löschen" — die App bietet für Favoritenlisten kein Umbenennen (1:1)
+    openMenu(e.currentTarget, [
+      { label: translate('Delete list'), icon: 'fa-trash', destructive: true, onClick: () => {
+          showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+            favDetailListId = null;
+            sdCall(id, 'DeleteFavoriteList', detail.id);
+          });
+        } }
+    ]);
+  });
+  document.getElementById('btnFavAddAll').addEventListener('click', () => addFavListToCart(id, detail));
+  document.getElementById('btnFavAddItem').addEventListener('click', () => openFavItemEditor(id, detail.id, null));
+  el.querySelectorAll('.item-card').forEach(card => {
+    const name = card.dataset.name;
+    const item = items.find(i => i.name === name);
+    bindCardSwipe(card, '.item-card-content', () => sdCall(id, 'RemoveItemFromFavoriteList', { listId: detail.id, name }));
+    const editBtn = card.querySelector('[data-editfav]');
+    if (editBtn) editBtn.addEventListener('click', () => openFavItemEditor(id, detail.id, item));
+  });
+}
+
+function addFavListToCart(instanceID, list) {
+  if (!list) return;
+  const n = (list.items || []).length;
+  if (n === 0) {
+    // Wie addAll() in der App: leere Liste bekommt eine eigene Meldung
+    showToast(translate('"%1" contains no items').replace('%1', list.name));
+    return;
+  }
+  sdCall(instanceID, 'AddFavoriteListToCart', list.id);
+  showToast(translate('"%1": %2 items added').replace('%1', list.name).replace('%2', String(n)));
+}
+
+// ── Artikel-Editor (Einkaufsliste + Favoriten) ─────────────────────────────
+let editorCtx = null; // {type:'shopping'|'fav-edit'|'fav-add', instanceID, listId?, item?}
+function fillCategorySelect(select, current) {
+  const st = instState(selectedShoppingID()) || {};
+  const cats = Array.isArray(st.categoryOrder) ? st.categoryOrder : [];
+  const cur = current || translate('Miscellaneous');
+  select.innerHTML = '';
+  if (cur && !cats.includes(cur)) {
+    const opt = document.createElement('option');
+    opt.value = cur; opt.textContent = cur; opt.selected = true;
+    select.appendChild(opt);
+  }
+  for (const cat of cats) {
+    const opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    if (cat === cur) opt.selected = true;
+    select.appendChild(opt);
+  }
+}
+function openItemEditor(instanceID, item) {
+  editorCtx = { type: 'shopping', instanceID, item };
+  document.getElementById('editOverlayTitle').textContent = translate('Edit item');
+  document.getElementById('editName').value = item.name || '';
+  document.getElementById('editAmount').value = item.amount || '';
+  document.getElementById('editNotes').value = item.notes || '';
+  fillCategorySelect(document.getElementById('editCategory'), item.category);
+  openOverlay('editOverlay');
+}
+function openFavItemEditor(instanceID, listId, item) {
+  editorCtx = { type: item ? 'fav-edit' : 'fav-add', instanceID, listId, item };
+  document.getElementById('editOverlayTitle').textContent = item ? translate('Edit item') : translate('New item');
+  document.getElementById('editName').value = item ? (item.name || '') : '';
+  document.getElementById('editAmount').value = item ? (item.amount || '') : '';
+  document.getElementById('editNotes').value = item ? (item.notes || '') : '';
+  fillCategorySelect(document.getElementById('editCategory'), item ? item.category : '');
+  openOverlay('editOverlay');
+}
+function saveItemEditor() {
+  if (!editorCtx) return;
+  const name = document.getElementById('editName').value.trim();
+  const amount = document.getElementById('editAmount').value.trim();
+  const notes = document.getElementById('editNotes').value.trim();
+  const category = document.getElementById('editCategory').value;
+  if (!name) return;
+  const ctx = editorCtx;
+  if (ctx.type === 'shopping') {
+    sdCall(ctx.instanceID, 'UpdateItem', { id: ctx.item.id, name, amount, notes, category });
+  } else if (ctx.type === 'fav-edit') {
+    sdCall(ctx.instanceID, 'UpdateFavoriteItem', { listId: ctx.listId, oldName: ctx.item.name, newName: name, category, amount, notes });
+  } else if (ctx.type === 'fav-add') {
+    sdCall(ctx.instanceID, 'AddItemToFavoriteList', { listId: ctx.listId, name, category, amount, notes });
+  }
+  closeOverlay('editOverlay');
+  editorCtx = null;
+}
+
+// Herz: Zugehörigkeit zu Favoritenlisten (Multi-Select wie in der App)
+let favPickCtx = null; // {instanceID, itemName, category, amount, notes}
+function openFavPicker(instanceID, item) {
+  favPickCtx = { instanceID, itemName: item.name, category: item.category || '', amount: item.amount || '', notes: item.notes || '' };
+  document.getElementById('favPickTitle').textContent = translate('Favorite lists');
+  renderFavPicker();
+  openOverlay('favPickOverlay');
+}
+function renderFavPicker() {
+  if (!favPickCtx) return;
+  const st = instState(favPickCtx.instanceID) || {};
+  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const body = document.getElementById('favPickBody');
+  const norm = String(favPickCtx.itemName || '').trim().toLowerCase();
+  if (lists.length === 0) {
+    body.innerHTML = `<div class="empty-row">${translate('No favorite lists')}</div>`;
+    return;
+  }
+  body.innerHTML = lists.map(l => {
+    const inList = (l.items || []).some(i => String(i.name || '').trim().toLowerCase() === norm);
+    return `<div class="assign-row${inList ? ' selected' : ''}" data-list="${escapeHtml(l.id)}">` +
+      `<span class="fav-badge" style="width:30px;height:30px;font-size:13px;"><i class="fa-solid fa-heart"></i></span>` +
+      `<span>${escapeHtml(l.name)}</span><i class="fa-light fa-check check"></i></div>`;
+  }).join('');
+  body.querySelectorAll('.assign-row').forEach(row => row.addEventListener('click', () => {
+    const listId = row.dataset.list;
+    const selected = row.classList.contains('selected');
+    if (selected) {
+      sdCall(favPickCtx.instanceID, 'RemoveItemFromFavoriteList', { listId, name: favPickCtx.itemName });
+    } else {
+      sdCall(favPickCtx.instanceID, 'AddItemToFavoriteList', {
+        listId, name: favPickCtx.itemName,
+        category: favPickCtx.category, amount: favPickCtx.amount, notes: favPickCtx.notes
+      });
+    }
+    row.classList.toggle('selected');
+  }));
+}
+
+// ── ToDo-Editor ────────────────────────────────────────────────────────────
+const LEAD_TIMES = [0, 300, 600, 1800, 3600, 18000, 43200];
+let todoCtx = null; // {instanceID, itemId|null}
+let tdAssigned = [];
+let tdPriority = 'normal';
+let tdQuantity = 0;
+
+function leadTimeLabel(sec) {
+  switch (sec) {
+    case 0: return translate('At due time');
+    case 300: return translate('5 minutes before');
+    case 600: return translate('10 minutes before');
+    case 1800: return translate('30 minutes before');
+    case 3600: return translate('1 hour before');
+    case 18000: return translate('5 hours before');
+    case 43200: return translate('12 hours before');
+    default: return String(sec) + 's';
+  }
+}
+function toLocalInputValue(d, dateOnly) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return dateOnly ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openTodoEditor(instanceID, item) {
+  todoCtx = { instanceID, itemId: item ? item.id : null };
+  document.getElementById('todoOverlayTitle').textContent = item ? translate('Edit') : translate('New task');
+  document.getElementById('tdTitle').value = item ? (item.title || '') : '';
+  document.getElementById('tdInfo').value = item ? (item.info || '') : '';
+
+  const hasDue = !!(item && (parseInt(item.due) || 0) > 0);
+  document.getElementById('tdHasDue').checked = hasDue;
+  const allDay = !!(item && item.dueAllDay === true);
+  document.getElementById('tdAllDay').checked = allDay;
+  const dueDate = item ? dueDateOf(item) : null;
+  const base = dueDate || new Date(Date.now() + 3600000);
+  if (!allDay && item && (parseInt(item.due) || 0) > 0) {
+    base.setTime((parseInt(item.due) || 0) * 1000);
+  }
+  updateTodoDueInput(allDay, base);
+
+  const rec = document.getElementById('tdRecurrence');
+  rec.innerHTML = ['none', 'w1', 'w2', 'w3', 'm1', 'q1', 'y1', 'custom'].map(r =>
+    `<option value="${r}">${escapeHtml(recurrenceLabel(r === 'custom' ? 'custom-label' : r).replace('custom-label', ''))}</option>`
+  ).join('');
+  // Eigene Beschriftung für custom (recurrenceLabel braucht unit/value)
+  rec.querySelector('option[value="custom"]').textContent = translate('Custom interval');
+  rec.querySelector('option[value="none"]').textContent = translate('No repeat');
+  rec.value = item && item.recurrence ? String(item.recurrence) : 'none';
+
+  const unitSel = document.getElementById('tdCustomUnit');
+  unitSel.innerHTML = [['h', translate('Hours')], ['d', translate('Days')], ['w', translate('Weeks')], ['m', translate('Months')], ['y', translate('Years')]]
+    .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  unitSel.value = item && item.recurrenceCustomUnit ? String(item.recurrenceCustomUnit) : 'w';
+  document.getElementById('tdCustomValue').value = item && item.recurrenceCustomValue ? String(item.recurrenceCustomValue) : '1';
+
+  document.getElementById('tdNotification').checked = !!(item && item.notification === true);
+  const leadSel = document.getElementById('tdLeadTime');
+  leadSel.innerHTML = LEAD_TIMES.map(s => `<option value="${s}">${leadTimeLabel(s)}</option>`).join('');
+  const lead = item && item.notificationLeadTime !== undefined ? parseInt(item.notificationLeadTime) : 0;
+  leadSel.value = String(LEAD_TIMES.includes(lead) ? lead : 0);
+
+  tdAssigned = item && Array.isArray(item.assignedTo) ? item.assignedTo.slice() : (currentUserID() ? [currentUserID()] : []);
+  renderAssignList();
+  tdPriority = item && item.priority ? String(item.priority) : 'normal';
+  renderPrioritySeg();
+  tdQuantity = item ? (parseInt(item.quantity) || 0) : 0;
+  document.getElementById('tdQtyValue').textContent = tdQuantity > 0 ? String(tdQuantity) : '–';
+
+  syncTodoEditorVisibility();
+  openOverlay('todoOverlay');
+}
+function updateTodoDueInput(allDay, date) {
+  const input = document.getElementById('tdDueDate');
+  input.type = allDay ? 'date' : 'datetime-local';
+  input.value = toLocalInputValue(date, allDay);
+}
+function syncTodoEditorVisibility() {
+  const hasDue = document.getElementById('tdHasDue').checked;
+  document.getElementById('tdDueSection').style.display = hasDue ? 'flex' : 'none';
+  document.getElementById('tdCustomSection').style.display =
+    (hasDue && document.getElementById('tdRecurrence').value === 'custom') ? 'flex' : 'none';
+  document.getElementById('tdLeadSection').style.display =
+    (hasDue && document.getElementById('tdNotification').checked) ? 'flex' : 'none';
+}
+function renderAssignList() {
+  const el = document.getElementById('tdAssignList');
+  if (store.users.length === 0) {
+    el.innerHTML = '';
+    el.parentElement.style.display = 'none';
+    return;
+  }
+  el.parentElement.style.display = '';
+  el.innerHTML = store.users.map(u =>
+    `<div class="assign-row${tdAssigned.includes(u.id) ? ' selected' : ''}" data-user="${escapeHtml(u.id)}">` +
+    avatarHtml(u, 'avatar') + `<span>${escapeHtml(u.name)}</span><i class="fa-light fa-check check"></i></div>`
+  ).join('');
+  el.querySelectorAll('.assign-row').forEach(row => row.addEventListener('click', () => {
+    const uid = row.dataset.user;
+    const idx = tdAssigned.indexOf(uid);
+    if (idx === -1) tdAssigned.push(uid); else tdAssigned.splice(idx, 1);
+    row.classList.toggle('selected');
+  }));
+}
+function renderPrioritySeg() {
+  const seg = document.getElementById('tdPrioritySeg');
+  seg.innerHTML = [['low', translate('Low')], ['normal', translate('Normal')], ['high', translate('High')]]
+    .map(([v, l]) => `<button data-prio="${v}" class="${v === tdPriority ? 'active' : ''}">${l}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    tdPriority = b.dataset.prio;
+    renderPrioritySeg();
+  }));
+}
+// Payload exakt wie TodoDraft.fields() in der App (+ actorUserId)
+function saveTodoEditor() {
+  if (!todoCtx) return;
+  const title = document.getElementById('tdTitle').value.trim();
+  if (!title) return;
+  const fields = {
+    title,
+    info: document.getElementById('tdInfo').value.trim(),
+    priority: tdPriority,
+    quantity: tdQuantity,
+    assignedTo: tdAssigned.slice()
+  };
+  if (document.getElementById('tdHasDue').checked) {
+    const allDay = document.getElementById('tdAllDay').checked;
+    const raw = document.getElementById('tdDueDate').value;
+    let due = 0;
+    let dueDay = '';
+    if (allDay) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+      if (m) {
+        dueDay = `${m[1]}-${m[2]}-${m[3]}`;
+        due = Math.floor(new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])).getTime() / 1000);
+      }
+    } else {
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) due = Math.floor(d.getTime() / 1000);
+    }
+    fields.due = due;
+    fields.dueAllDay = allDay;
+    if (allDay && dueDay) fields.dueDay = dueDay;
+    fields.recurrence = document.getElementById('tdRecurrence').value;
+    if (fields.recurrence === 'custom') {
+      fields.recurrenceCustomUnit = document.getElementById('tdCustomUnit').value;
+      fields.recurrenceCustomValue = Math.max(1, Math.min(99, parseInt(document.getElementById('tdCustomValue').value) || 1));
+    }
+    fields.notification = document.getElementById('tdNotification').checked;
+    fields.notificationLeadTime = parseInt(document.getElementById('tdLeadTime').value) || 0;
+  } else {
+    fields.due = 0;
+    fields.dueAllDay = false;
+    fields.recurrence = 'none';
+    fields.notification = false;
+  }
+  if (currentUserID()) fields.actorUserId = currentUserID();
+  if (todoCtx.itemId !== null) {
+    sdCall(todoCtx.instanceID, 'UpdateItem', Object.assign({ id: todoCtx.itemId }, fields));
+  } else {
+    sdCall(todoCtx.instanceID, 'AddItem', fields);
+  }
+  closeOverlay('todoOverlay');
+  todoCtx = null;
+}
+
+// ── Menüs ──────────────────────────────────────────────────────────────────
+function openShoppingMenu(anchor) {
+  const id = selectedShoppingID();
+  const st = id ? instState(id) : null;
+  if (!st) return;
+  const entries = [
+    { label: translate('Everything done'), icon: 'fa-badge-check', onClick: () => sdCall(id, 'MarkAllDone', '') },
+    { label: translate('Delete used items'), icon: 'fa-trash', destructive: true, onClick: () => {
+        showConfirm(translate('Delete all used items?'), translate('Delete'), () => sdCall(id, 'ClearCart', ''));
+      } }
+  ];
+  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  if (lists.length > 0) {
+    entries.push({ sep: true });
+    for (const list of lists) {
+      entries.push({ label: translate('Add "%1"').replace('%1', list.name), icon: 'fa-heart', onClick: () => addFavListToCart(id, list) });
+    }
+  }
+  openMenu(anchor, entries);
+}
+function openTodoMenu(anchor) {
+  const id = selectedTodoID();
+  const st = id ? instState(id) : null;
+  if (!st) return;
+  const sortMode = String(st.sortMode || 'created');
+  const sortDir = String(st.sortDir || 'asc');
+  const setPrefs = (mode, dir) => sdCall(id, 'SetSortPrefs', { mode, dir });
+  const modes = [['manual', translate('Manual')], ['created', translate('Created')], ['due', translate('Due')], ['priority', translate('Priority')], ['title', translate('Title')]];
+  const entries = [
+    { label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) },
+    { sep: true },
+    { header: true, label: translate('Sorting') }
+  ];
+  for (const [mode, label] of modes) {
+    entries.push({ label, checked: sortMode === mode, onClick: () => setPrefs(mode, sortDir) });
+  }
+  entries.push({ sep: true });
+  entries.push({ header: true, label: translate('Direction') });
+  entries.push({ label: translate('Ascending'), checked: sortDir === 'asc', onClick: () => setPrefs(sortMode, 'asc') });
+  entries.push({ label: translate('Descending'), checked: sortDir === 'desc', onClick: () => setPrefs(sortMode, 'desc') });
+  openMenu(anchor, entries);
+}
+
+// ── Barcode-Scanner (aus dem ShoppingList-Modul uebernommen; angepasst:
+//    AddScannedItem laeuft ueber sdCall auf die gewaehlte Einkaufsliste,
+//    __extApiHookUrl/state kommen aus der Kompat-Schicht in syncCompat) ─────
+let scannerStream = null;
+let scannerDetector = null;
+let scannerAnimationFrame = 0;
+let scannerQuaggaTimer = 0;
+let scannerResumeTimer = 0;
+let scannerResultHideTimer = 0;
+let scannerQuaggaActive = false;
+let scannerSessionId = 0;
+let scannerWarmupUntil = 0;
+let lastCode = '';
+const scannerAddedNames = new Set();
+
+function playBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+function validateBarcode(code) {
+  return /^\d{8,14}$/.test(String(code || '').trim());
+}
+
+function syncScannerAddedNames() {
+  if (!scannerAddedNames.size) return;
+  const activeNames = new Set(
+    (state.items || [])
+      .filter(i => !i.inCart && i.name)
+      .map(i => String(i.name).toLowerCase())
+  );
+  for (const name of Array.from(scannerAddedNames)) {
+    if (!activeNames.has(name)) {
+      scannerAddedNames.delete(name);
+    }
+  }
+}
+
+function showScannerResult(title, type, meta) {
+  const el = document.getElementById('scannerResult');
+  if (!el) return;
+  if (scannerResultHideTimer) {
+    clearTimeout(scannerResultHideTimer);
+    scannerResultHideTimer = 0;
+  }
+  const parts = [title || ''];
+  if (meta) parts.push(meta);
+  const text = parts.filter(Boolean).join(' · ');
+  el.textContent = text;
+  el.className = 'scanner-result';
+  if (!text) {
+    return;
+  }
+  if (type === 'error') {
+    el.classList.add('error');
+  }
+  el.classList.add('show');
+  scannerResultHideTimer = setTimeout(() => {
+    const current = document.getElementById('scannerResult');
+    if (!current) return;
+    current.textContent = '';
+    current.className = 'scanner-result';
+    scannerResultHideTimer = 0;
+  }, 3000);
+}
+
+function pauseScanning() {
+  if (scannerAnimationFrame) {
+    cancelAnimationFrame(scannerAnimationFrame);
+    scannerAnimationFrame = 0;
+  }
+  if (scannerQuaggaTimer) {
+    clearTimeout(scannerQuaggaTimer);
+    scannerQuaggaTimer = 0;
+  }
+  scannerQuaggaActive = false;
+}
+
+function stopScanner() {
+  if (scannerAnimationFrame) {
+    cancelAnimationFrame(scannerAnimationFrame);
+    scannerAnimationFrame = 0;
+  }
+  if (scannerQuaggaTimer) {
+    clearTimeout(scannerQuaggaTimer);
+    scannerQuaggaTimer = 0;
+  }
+  if (scannerResumeTimer) {
+    clearTimeout(scannerResumeTimer);
+    scannerResumeTimer = 0;
+  }
+  if (scannerResultHideTimer) {
+    clearTimeout(scannerResultHideTimer);
+    scannerResultHideTimer = 0;
+  }
+  scannerWarmupUntil = 0;
+  scannerQuaggaActive = false;
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(t => t.stop());
+    scannerStream = null;
+  }
+  const video = document.getElementById('scannerVideo');
+  if (video) video.srcObject = null;
+}
+
+function closeScannerOverlay() {
+  scannerSessionId += 1;
+  stopScanner();
+  scannerAddedNames.clear();
+  showScannerResult('', '', '');
+  document.getElementById('scannerOverlay').classList.remove('open');
+}
+
+function resumeScanning(delayMs) {
+  const sessionId = scannerSessionId;
+  if (scannerResumeTimer) {
+    clearTimeout(scannerResumeTimer);
+  }
+  scannerResumeTimer = setTimeout(() => {
+    if (sessionId !== scannerSessionId) return;
+    scannerResumeTimer = 0;
+    lastCode = '';
+    pauseScanning();
+    const status = document.getElementById('scannerStatus');
+    const video = document.getElementById('scannerVideo');
+    if (!scannerStream || !video) return;
+    showScannerResult('', '', '');
+    status.textContent = translate('Scanning…');
+    status.className = 'scanner-status';
+    if (scannerDetector) {
+      startNativeScanning(video, status, sessionId);
+    } else if (window.Quagga) {
+      startQuaggaFrameScanning(video, status, sessionId);
+    }
+  }, delayMs);
+}
+
+function onBarcodeDetected(code, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  if (Date.now() < scannerWarmupUntil) return;
+  if (!validateBarcode(code) || code === lastCode) return;
+  lastCode = code;
+  pauseScanning();
+  playBeep();
+  const status = document.getElementById('scannerStatus');
+  status.textContent = translate('Found') + ': ' + code;
+  status.className = 'scanner-status success';
+  showScannerResult(code, '', '');
+  lookupBarcode(code, sessionId);
+}
+
+function startNativeScanning(video, status, sessionId) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let detectErrorCount = 0;
+  const loop = () => {
+    if (sessionId !== scannerSessionId) return;
+    if (!scannerStream || !scannerDetector) return;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      scannerDetector.detect(canvas)
+        .then(codes => {
+          if (sessionId !== scannerSessionId) return;
+          if (!scannerStream) return;
+          detectErrorCount = 0;
+          if (codes && codes.length) {
+            const raw = String(codes[0].rawValue || '').trim();
+            onBarcodeDetected(raw, sessionId);
+          }
+        })
+        .catch((err) => {
+          detectErrorCount += 1;
+          console.warn('[scanner] BarcodeDetector.detect failed:', err);
+          // Auf Android schlägt detect() teils permanent fehl → Fallback auf Quagga
+          if (detectErrorCount >= 3 && sessionId === scannerSessionId) {
+            scannerDetector = null;
+            if (scannerAnimationFrame) {
+              cancelAnimationFrame(scannerAnimationFrame);
+              scannerAnimationFrame = 0;
+            }
+            status.textContent = translate('Loading decoder…');
+            ensureQuaggaLoaded()
+              .then(() => {
+                if (sessionId !== scannerSessionId || !scannerStream) return;
+                status.textContent = translate('Scanning…');
+                status.className = 'scanner-status';
+                startQuaggaFrameScanning(video, status, sessionId);
+              })
+              .catch(() => {
+                status.textContent = translate('Decoder could not be loaded');
+                status.className = 'scanner-status error';
+              });
+          }
+        });
+    }
+    scannerAnimationFrame = requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+function ensureQuaggaLoaded() {
+  if (window.Quagga) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-quagga="1"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('load failed')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js';
+    script.async = true;
+    script.setAttribute('data-quagga', '1');
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('load failed'));
+    document.head.appendChild(script);
+  });
+}
+
+function startQuaggaFrameScanning(video, status, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  if (!window.Quagga || !scannerStream) return;
+  scannerQuaggaActive = true;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const scanOnce = () => {
+    if (sessionId !== scannerSessionId) return;
+    if (!scannerQuaggaActive || !scannerStream) return;
+    if (video.readyState < 2) {
+      scannerQuaggaTimer = setTimeout(scanOnce, 200);
+      return;
+    }
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const SCAN_W = 800;
+    const scale = SCAN_W / vw;
+    canvas.width = SCAN_W;
+    canvas.height = Math.round(vh * scale);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      Quagga.decodeSingle({
+        src: canvas.toDataURL('image/jpeg', 0.8),
+        numOfWorkers: 0,
+        locate: true,
+        locator: { patchSize: 'medium', halfSample: true },
+        decoder: {
+          readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader', 'code_128_reader'],
+          multiple: false
+        }
+      }, (result) => {
+        if (sessionId !== scannerSessionId) return;
+        if (result && result.codeResult && result.codeResult.code) {
+          onBarcodeDetected(result.codeResult.code, sessionId);
+        }
+        if (scannerQuaggaActive) {
+          scannerQuaggaTimer = setTimeout(scanOnce, 400);
+        }
+      });
+    } catch (err) {
+      console.warn('[scanner] Quagga.decodeSingle threw:', err);
+      if (scannerQuaggaActive) {
+        scannerQuaggaTimer = setTimeout(scanOnce, 500);
+      }
+    }
+  };
+
+  status.textContent = translate('Scanning…');
+  status.className = 'scanner-status';
+  scanOnce();
+}
+
+function openScannerOverlay() {
+  document.getElementById('suggestions').classList.remove('open');
+  scannerSessionId += 1;
+  const sessionId = scannerSessionId;
+  const overlay = document.getElementById('scannerOverlay');
+  const status = document.getElementById('scannerStatus');
+  const result = document.getElementById('scannerResult');
+  const videoWrap = document.getElementById('scannerVideoWrap');
+  const video = document.getElementById('scannerVideo');
+  overlay.classList.add('open');
+  lastCode = '';
+  scannerWarmupUntil = 0;
+  scannerAddedNames.clear();
+  result.textContent = '';
+  result.className = 'scanner-result';
+  videoWrap.style.display = '';
+
+  status.textContent = translate('Scanning…');
+  status.className = 'scanner-status';
+
+  const canUseCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const canUseNative = !!window.BarcodeDetector;
+  const isSecure = !!window.isSecureContext;
+  const inIframe = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+  if (!canUseCamera) {
+    videoWrap.style.display = 'none';
+    if (!isSecure) {
+      status.textContent = translate('Camera requires HTTPS');
+    } else {
+      status.textContent = translate('Camera not available');
+    }
+    status.className = 'scanner-status error';
+    return;
+  }
+
+  const waitForVideoReady = (videoEl) => new Promise((resolve) => {
+    if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+      resolve();
+      return;
+    }
+    const onReady = () => {
+      videoEl.removeEventListener('loadedmetadata', onReady);
+      videoEl.removeEventListener('canplay', onReady);
+      resolve();
+    };
+    videoEl.addEventListener('loadedmetadata', onReady);
+    videoEl.addEventListener('canplay', onReady);
+  });
+
+  navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  })
+    .then((stream) => {
+      scannerStream = stream;
+      video.srcObject = stream;
+      const playPromise = video.play();
+      return (playPromise && playPromise.catch) ? playPromise.catch(() => {}) : playPromise;
+    })
+    .then(() => waitForVideoReady(video))
+    .then(async () => {
+      scannerWarmupUntil = Date.now() + 900;
+      scannerDetector = null;
+      if (canUseNative) {
+        try {
+          let supported = [];
+          if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+            supported = await BarcodeDetector.getSupportedFormats();
+          }
+          const wanted = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'];
+          const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
+          if (formats.length) {
+            scannerDetector = new BarcodeDetector({ formats });
+          } else {
+            console.warn('[scanner] BarcodeDetector reports no supported formats – falling back to Quagga');
+          }
+        } catch (e) {
+          console.warn('[scanner] BarcodeDetector init failed:', e);
+          scannerDetector = null;
+        }
+      }
+
+      if (scannerDetector) {
+        startNativeScanning(video, status, sessionId);
+      } else {
+        status.textContent = translate('Loading decoder…');
+        ensureQuaggaLoaded()
+          .then(() => {
+            if (sessionId !== scannerSessionId) return;
+            if (!scannerStream) return;
+            status.textContent = translate('Scanning…');
+            status.className = 'scanner-status';
+            startQuaggaFrameScanning(video, status, sessionId);
+          })
+          .catch((err) => {
+            console.warn('[scanner] Quagga load failed:', err);
+            if (sessionId !== scannerSessionId) return;
+            status.textContent = translate('Decoder could not be loaded');
+            status.className = 'scanner-status error';
+          });
+      }
+    })
+    .catch((err) => {
+      console.warn('[scanner] camera init failed:', err);
+      videoWrap.style.display = 'none';
+      const name = (err && err.name) ? err.name : '';
+      let msg;
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        msg = inIframe
+          ? translate('Camera blocked by iframe policy')
+          : translate('Camera permission denied');
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        msg = translate('No camera found');
+      } else if (name === 'NotReadableError') {
+        msg = translate('Camera is used by another app');
+      } else {
+        msg = translate('Camera not available') + (name ? ' (' + name + ')' : '');
+      }
+      status.textContent = msg;
+      status.className = 'scanner-status error';
+    });
+}
+
+function applyBarcodeLookupResult(code, name, bestCat, sessionId, price, listingId, imageUrl) {
+  if (sessionId !== scannerSessionId) return;
+  const status = document.getElementById('scannerStatus');
+  const trimName = (name || code).trim();
+  const nameKey = trimName.toLowerCase();
+  const existing = (state.items || []).find(i => !i.inCart && i.name.toLowerCase() === nameKey);
+  const alreadyScanned = scannerAddedNames.has(nameKey);
+  // Still treat as duplicate unless we can enrich the existing item (backfill category/price/listingId/imageUrl)
+  const canEnrich = existing && ((!existing.category && bestCat) || (!existing.price && price) || (!existing.listingId && listingId) || (!existing.imageUrl && imageUrl));
+  if ((existing || alreadyScanned) && !canEnrich) {
+    status.textContent = '\u2713 ' + trimName + ' (' + translate('already in list') + ')';
+    status.className = 'scanner-status success';
+    showScannerResult('\u2713 ' + trimName, 'duplicate', translate('already in list'));
+    resumeScanning(1500);
+    return;
+  }
+  const label = price ? (price + '  ' + trimName) : trimName;
+  status.textContent = '\u2713 ' + label;
+  status.className = 'scanner-status success';
+  showScannerResult('\u2713 ' + label, '', bestCat);
+  addScannedProduct(trimName, bestCat, price || '', listingId || '', imageUrl || '');
+}
+
+function matchLocalCategory(offCats) {
+  const local = new Set();
+  for (const cat of (state.categoryOrder || [])) local.add(cat);
+  for (const item of (state.items || [])) {
+    if (item.category) local.add(item.category);
+  }
+  if (!local.size || !offCats.length) return offCats[0] || '';
+  for (const oc of offCats) {
+    const ocL = oc.toLowerCase();
+    for (const lc of local) {
+      if (lc.toLowerCase() === ocL) return lc;
+    }
+  }
+  for (const oc of offCats) {
+    const ocL = oc.toLowerCase();
+    for (const lc of local) {
+      const lcL = lc.toLowerCase();
+      if (ocL.includes(lcL) || lcL.includes(ocL)) return lc;
+    }
+  }
+  return '';
+}
+
+function lookupBarcodeOpenFoodFacts(code) {
+  return fetch('https://de.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?lc=de')
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.status !== 1 || !data.product) return null;
+      const p = data.product;
+      const name = p.product_name_de || p.product_name || p.brands || code;
+      const offCats = (p.categories || '').split(',').map(c => c.trim()).filter(Boolean);
+      return { name, bestCat: matchLocalCategory(offCats) };
+    });
+}
+
+function parseOpenGtinDbResponse(text) {
+  if (!text) return null;
+  const flat = text.replace(/\r?\n/g, ' ').replace(/---/g, ' ').trim();
+  const data = {};
+  const re = /([a-z_]+)=([\s\S]*?)(?=\s+[a-z_]+=|$)/gi;
+  let m;
+  while ((m = re.exec(flat)) !== null) {
+    data[m[1].toLowerCase()] = m[2].trim();
+  }
+  if (!Object.keys(data).length || data.error !== '0') return null;
+  return data;
+}
+
+function lookupBarcodeOpenGtinDb(code) {
+  const url = 'https://opengtindb.org/api.php?ean=' + encodeURIComponent(code) + '&cmd=query&queryid=400000000';
+  return fetch(url)
+    .then(r => r.text())
+    .then(text => {
+      const data = parseOpenGtinDbResponse(text);
+      if (!data) return null;
+      const name = data.detailname || data.name || code;
+      const cats = [data.maincat || '', data.subcat || ''].map(c => c.trim()).filter(Boolean);
+      return { name, bestCat: matchLocalCategory(cats) };
+    });
+}
+
+function lookupBarcodeExtApi(code) {
+  if (!state.extApiEnabled || !window.__extApiHookUrl) return Promise.resolve(null);
+  return fetch(window.__extApiHookUrl + encodeURIComponent(code))
+    .then(r => r.json())
+    .then(data => {
+      if (!data || data.error) return null;
+      const name = data.name || '';
+      if (!name) return null;
+      const cats = (data.category || '').split('/').map(c => c.trim()).filter(Boolean);
+      return {
+        name,
+        bestCat: matchLocalCategory(cats),
+        price: data.price || '',
+        listingId: data.listingId || '',
+        imageUrl: data.imageUrl || ''
+      };
+    })
+    .catch(() => null);
+}
+
+function lookupBarcode(code, sessionId) {
+  if (sessionId !== scannerSessionId) return;
+  const status = document.getElementById('scannerStatus');
+  status.textContent = translate('Looking up product…');
+  status.className = 'scanner-status';
+
+  lookupBarcodeExtApi(code)
+    .then(product => product || lookupBarcodeOpenFoodFacts(code).catch(() => null))
+    .then(product => product || lookupBarcodeOpenGtinDb(code).catch(() => null))
+    .then(product => {
+      if (sessionId !== scannerSessionId) return;
+      if (product) {
+        applyBarcodeLookupResult(code, product.name, product.bestCat, sessionId, product.price || '', product.listingId || '', product.imageUrl || '');
+      } else {
+        status.textContent = translate('Product not found') + ' (' + code + ')';
+        status.className = 'scanner-status error';
+        showScannerResult(translate('Product not found'), 'error', code);
+        resumeScanning(2000);
+      }
+    })
+    .catch(() => {
+      if (sessionId !== scannerSessionId) return;
+      status.textContent = translate('Lookup failed') + ' (' + code + ')';
+      status.className = 'scanner-status error';
+      showScannerResult(translate('Lookup failed'), 'error', code);
+      resumeScanning(2000);
+    });
+}
+
+function addScannedProduct(name, category, price, listingId, imageUrl) {
+  if (!name) return;
+  scannerAddedNames.add(name.toLowerCase());
+  sdCall(selectedShoppingID(), 'AddScannedItem', ({
+    name,
+    category,
+    amount: '1',
+    price: price || '',
+    listingId: listingId || '',
+    imageUrl: imageUrl || ''
+  }));
+  resumeScanning(1500);
+}
+
+
+// ── Statische Beschriftungen + Boot ────────────────────────────────────────
+function initCaptions() {
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  document.querySelector('#tab-dashboard span').textContent = translate('Overview');
+  document.querySelector('#tab-shopping span').textContent = translate('Shopping');
+  document.querySelector('#tab-todos span').textContent = translate('ToDos');
+  document.querySelector('#tab-favorites span').textContent = translate('Favorites');
+  document.getElementById('shoppingInput').placeholder = translate('Add item …');
+  document.getElementById('todoInput').placeholder = translate('New task …');
+  set('lblEditName', translate('Name'));
+  set('lblEditAmount', translate('Amount'));
+  set('lblEditNotes', translate('Note'));
+  set('lblEditCategory', translate('Category'));
+  set('btnEditCancel', translate('Cancel'));
+  set('btnEditSave', translate('Save'));
+  set('lblTodoTitle', translate('Title'));
+  set('lblTodoInfo', translate('Note'));
+  set('lblTodoDue', translate('Due on'));
+  set('lblTodoAllDay', translate('All day'));
+  set('lblTodoDate', translate('Date'));
+  set('lblTodoRecurrence', translate('Repeat'));
+  set('lblTodoCustom', translate('Every'));
+  set('lblTodoNotification', translate('Notification'));
+  set('lblTodoLead', translate('Lead time'));
+  set('lblTodoAssign', translate('Assigned to'));
+  set('lblTodoPriority', translate('Priority'));
+  set('lblTodoQuantity', translate('Quantity'));
+  set('btnTodoCancel', translate('Cancel'));
+  set('btnTodoSave', translate('Save'));
+  set('btnPromptCancel', translate('Cancel'));
+  set('btnConfirmCancel', translate('Cancel'));
+  document.getElementById('scannerOverlayTitle').textContent = translate('Scan barcode');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initCaptions();
+
+  for (const t of TABS) {
+    document.getElementById('tab-' + t).addEventListener('click', () => setTab(t));
+  }
+  document.querySelectorAll('[data-close]').forEach(btn =>
+    btn.addEventListener('click', () => closeOverlay(btn.dataset.close)));
+
+  document.getElementById('btnConfirmOk').addEventListener('click', () => {
+    closeOverlay('confirmOverlay');
+    if (confirmCb) { const cb = confirmCb; confirmCb = null; cb(); }
+  });
+  document.getElementById('btnPromptOk').addEventListener('click', () => {
+    closeOverlay('promptOverlay');
+    if (promptCb) { const cb = promptCb; promptCb = null; cb(document.getElementById('promptInput').value); }
+  });
+  document.getElementById('btnEditSave').addEventListener('click', saveItemEditor);
+  document.getElementById('btnTodoSave').addEventListener('click', saveTodoEditor);
+
+  // Einkaufen: Eingabe + Vorschläge
+  const shopInput = document.getElementById('shoppingInput');
+  const shopAdd = document.getElementById('btnShoppingAdd');
+  const addFromInput = () => {
+    const name = shopInput.value.trim();
+    if (!name) return;
+    sdCall(selectedShoppingID(), 'AddItem', { name, category: '', amount: '1' });
+    shopInput.value = '';
+    shopAdd.disabled = true;
+    renderSuggestions();
+  };
+  shopInput.addEventListener('input', () => {
+    shopAdd.disabled = shopInput.value.trim() === '';
+    renderSuggestions();
+  });
+  shopInput.addEventListener('focus', renderSuggestions);
+  shopInput.addEventListener('blur', () => setTimeout(renderSuggestions, 150));
+  shopInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(); });
+  shopAdd.addEventListener('click', addFromInput);
+  document.getElementById('btnShoppingMenu').addEventListener('click', (e) => openShoppingMenu(e.currentTarget));
+
+  // ToDos: Quick-Add (auto-zugewiesen an den Standard-Benutzer, wie die App)
+  const todoInput = document.getElementById('todoInput');
+  const todoAdd = document.getElementById('btnTodoAdd');
+  const quickAdd = () => {
+    const title = todoInput.value.trim();
+    if (!title) return;
+    const me = currentUserID();
+    const fields = {
+      title, info: '', priority: 'normal', quantity: 0,
+      assignedTo: me ? [me] : [],
+      due: 0, dueAllDay: false, recurrence: 'none', notification: false
+    };
+    if (me) fields.actorUserId = me;
+    sdCall(selectedTodoID(), 'AddItem', fields);
+    todoInput.value = '';
+    todoAdd.disabled = true;
+  };
+  todoInput.addEventListener('input', () => { todoAdd.disabled = todoInput.value.trim() === ''; });
+  todoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') quickAdd(); });
+  todoAdd.addEventListener('click', quickAdd);
+  document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
+
+  // ToDo-Editor: Sichtbarkeits-Logik
+  document.getElementById('tdHasDue').addEventListener('change', syncTodoEditorVisibility);
+  document.getElementById('tdRecurrence').addEventListener('change', syncTodoEditorVisibility);
+  document.getElementById('tdNotification').addEventListener('change', syncTodoEditorVisibility);
+  document.getElementById('tdAllDay').addEventListener('change', () => {
+    const input = document.getElementById('tdDueDate');
+    const allDay = document.getElementById('tdAllDay').checked;
+    // input.type ist hier noch der ALTE Typ: ein 'date'-Wert (YYYY-MM-DD) würde
+    // von new Date() als UTC interpretiert (Tagesversatz) — lokal parsen
+    const raw = input.value;
+    let current = new Date();
+    const dOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (dOnly) {
+      current = new Date(parseInt(dOnly[1]), parseInt(dOnly[2]) - 1, parseInt(dOnly[3]));
+    } else if (raw) {
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) current = parsed;
+    }
+    updateTodoDueInput(allDay, current);
+  });
+  document.getElementById('tdQtyMinus').addEventListener('click', () => {
+    tdQuantity = Math.max(0, tdQuantity - 1);
+    document.getElementById('tdQtyValue').textContent = tdQuantity > 0 ? String(tdQuantity) : '–';
+  });
+  document.getElementById('tdQtyPlus').addEventListener('click', () => {
+    tdQuantity = Math.min(99, tdQuantity + 1);
+    document.getElementById('tdQtyValue').textContent = tdQuantity > 0 ? String(tdQuantity) : '–';
+  });
+
+  // Scanner
+  document.getElementById('btnOpenScanner').addEventListener('click', () => {
+    if (typeof openScannerOverlay === 'function') openScannerOverlay();
+  });
+  document.getElementById('btnScannerClose').addEventListener('click', () => {
+    if (typeof closeScannerOverlay === 'function') closeScannerOverlay();
+  });
+
+  setTab(activeTab);
+  if (store.instances.length === 0) requestState();
+
+  // Revision-Poll (15 s, nur bei sichtbarem Dokument) + Minuten-Tick für
+  // zeitabhängige Anzeigen (Fälligkeits-Chips, Dashboard)
+  setInterval(() => {
+    if (document.visibilityState === 'visible') checkRevisions();
+  }, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkRevisions();
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') renderAll();
+  }, 60000);
+});
+</script>
+</body>
+</html>

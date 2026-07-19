@@ -455,4 +455,10 @@ class SymDoBridge extends IPSModuleStrict
         }
         $this->WriteAttributeString('HiddenInstances', json_encode($list));
     }
+
+    /** JSON-Array der haushaltsweit ausgeblendeten Listen-Instanz-IDs (für Companion-Kacheln). */
+    public function GetHiddenLists(): string
+    {
+        return json_encode($this->GetHiddenInstances());
+    }
 }

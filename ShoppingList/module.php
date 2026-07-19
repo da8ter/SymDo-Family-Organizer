@@ -413,6 +413,13 @@ class ShoppingList extends IPSModuleStrict
         return '/hook/' . $this->GetAssetHookPath() . '/?t=' . $token . '&f=';
     }
 
+    /** ExtApi-Barcode-Lookup-Basis-URL (Hook + Token) für Companion-Kacheln. */
+    public function GetTileExtApiBase(): string
+    {
+        $token = urlencode($this->ReadAttributeString('WebHookToken'));
+        return '/hook/' . $this->GetAssetHookPath() . '/?t=' . $token . '&a=extapi&ean=';
+    }
+
     public function GetVisualizationTile(): string
     {
         $path = __DIR__ . '/module.html';

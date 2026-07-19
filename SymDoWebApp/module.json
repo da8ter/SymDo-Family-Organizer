@@ -1,0 +1,16 @@
+{
+    "id": "{6703A24A-E9E9-44D3-AB21-27176BF224AA}",
+    "name": "SymDoWebApp",
+    "type": 3,
+    "vendor": "",
+    "aliases": [
+        "SymDo WebApp",
+        "SymDo Kachel",
+        "SymDo Web App"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "SDWA",
+    "url": "https://github.com/da8ter/ToDo-List"
+}
