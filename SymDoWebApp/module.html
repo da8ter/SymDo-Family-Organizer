@@ -1066,6 +1066,12 @@ select option { color: #111; background: #fff; }
 <div class="toast" id="toast"></div>
 
 <script>
+// In einer IIFE gekapselt: die Symcon-Tile-Visu injiziert selbst globale
+// Bindungen (const translate, const requestAction …). Ohne Kapselung würden
+// unsere gleichnamigen Top-Level-Deklarationen mit „Identifier already
+// declared“ kollidieren und das gesamte Script abbrechen (handleMessage
+// wäre nie definiert). Genau wie das ShoppingList-Modul.
+(function () {
 'use strict';
 
 // ── Shims (Symcon injiziert translate/requestAction; Fallback postMessage) ──
@@ -3337,6 +3343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.visibilityState === 'visible') renderAll();
   }, 60000);
 });
+})();
 </script>
 </body>
 </html>
