@@ -49,7 +49,9 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 select option { color: #111; background: #fff; }
 
-.app { height: 100vh; display: flex; flex-direction: column; }
+/* height:100% (nicht 100vh) respektiert ein evtl. von der Visu gesetztes
+   Body-Padding aus margintop/marginbottom — sonst läuft die Nav unten heraus */
+.app { height: 100%; display: flex; flex-direction: column; }
 
 .screen {
   flex: 1;
@@ -73,10 +75,15 @@ select option { color: #111; background: #fff; }
 .content { max-width: 720px; margin: 0 auto; }
 
 /* ── Bottom-Tab-Bar (im Flex-Fluss, damit scrollbarer Inhalt nicht dahinter
-      verschwindet — sie ist immer die unterste Zeile unter dem Scrollbereich) ── */
+      verschwindet — sie ist immer die unterste Zeile unter dem Scrollbereich).
+      Full-Bleed: 100% der KACHELBREITE, auch wenn die Visu seitliches
+      Body-Padding (marginside) setzt — der Viewport-Breiten-Trick bricht aus
+      dem Padding aus (funktioniert auch ohne Padding: margin-left wird 0). ── */
 .tabbar {
   flex: none;
   height: var(--nav-h);
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
   display: flex;
   background: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 4%);
   border-top: 1px solid var(--border);
