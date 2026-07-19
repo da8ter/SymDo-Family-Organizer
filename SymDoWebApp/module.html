@@ -23,6 +23,12 @@
   --radius:  14px;
   --gap:     12px;
   --nav-h:   58px;
+  /* Vom System vorgegebene Kachel-Ränder (aus den URL-Parametern margintop/
+     marginside/marginbottom, per JS gesetzt). Default 0, damit Vollbild ohne
+     Ränder korrekt bleibt. */
+  --sym-mt:  0px;
+  --sym-ms:  0px;
+  --sym-mb:  0px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,6 +40,10 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   background: transparent;
   overflow: hidden;
+  /* Eventuelles vom System gesetztes Body-Padding neutralisieren — die Ränder
+     werden deterministisch selbst über --sym-* angewandt (kein doppelter Rand) */
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
@@ -49,9 +59,15 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 select option { color: #111; background: #fff; }
 
-/* height:100% (nicht 100vh) respektiert ein evtl. von der Visu gesetztes
-   Body-Padding aus margintop/marginbottom — sonst läuft die Nav unten heraus */
-.app { height: 100%; display: flex; flex-direction: column; }
+/* height:100% + eigenes System-Rand-Padding oben/seitlich, damit der Inhalt
+   nicht unter die vom System überlagerten Kachel-Steuerelemente rutscht.
+   Unten kein Rand: die Tab-Leiste sitzt an der Kachel-Unterkante. */
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sym-mt) var(--sym-ms) 0 var(--sym-ms);
+}
 
 .screen {
   flex: 1;
@@ -1111,6 +1127,25 @@ select option { color: #111; background: #fff; }
 // wäre nie definiert). Genau wie das ShoppingList-Modul.
 (function () {
 'use strict';
+
+// ── System-Kachelränder aus den URL-Parametern übernehmen ──────────────────
+// Die Tile-Visu übergibt margintop/marginside/marginbottom in der Query. Wir
+// wenden sie selbst als Padding an (siehe .app), damit der Inhalt nicht unter
+// die vom System überlagerten Steuerelemente oben rutscht. So früh wie möglich
+// setzen, damit die Variablen vor dem ersten Paint greifen.
+(function applySystemMargins() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const px = (name) => {
+      const v = parseInt(p.get(name), 10);
+      return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+    };
+    const root = document.documentElement.style;
+    const mt = px('margintop');   if (mt !== null) root.setProperty('--sym-mt', mt);
+    const ms = px('marginside');  if (ms !== null) root.setProperty('--sym-ms', ms);
+    const mb = px('marginbottom'); if (mb !== null) root.setProperty('--sym-mb', mb);
+  } catch (e) { /* ohne Query: Defaults (0) greifen */ }
+})();
 
 // ── Shims (Symcon injiziert translate/requestAction; Fallback postMessage) ──
 const translate = (typeof window.translate === 'function')
