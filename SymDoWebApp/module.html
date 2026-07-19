@@ -55,17 +55,27 @@ select option { color: #111; background: #fff; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* Scrollleiste wie im ToDoList-Modul: dünn, Akzentfarbe, transparente Spur */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: none;
-  padding: 12px 12px calc(var(--nav-h) + 12px);
+  padding: 12px;
+}
+.screen::-webkit-scrollbar { width: 6px; height: 6px; }
+.screen::-webkit-scrollbar-track { background: transparent; }
+.screen::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
 }
 .screen.active { display: block; }
 .content { max-width: 720px; margin: 0 auto; }
 
-/* ── Bottom-Tab-Bar (wie die App) ─────────────────────────────────────────── */
+/* ── Bottom-Tab-Bar (im Flex-Fluss, damit scrollbarer Inhalt nicht dahinter
+      verschwindet — sie ist immer die unterste Zeile unter dem Scrollbereich) ── */
 .tabbar {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
+  flex: none;
   height: var(--nav-h);
   display: flex;
   background: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 4%);
@@ -300,7 +310,10 @@ select option { color: #111; background: #fff; }
   overflow-x: auto;
   padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
+  /* Horizontal wischbar, aber ohne sichtbare Scrollleiste (wie in der App) */
+  scrollbar-width: none;
 }
+.shop-strip::-webkit-scrollbar { display: none; }
 .shop-strip .strip-item {
   flex: none;
   width: 58px;
@@ -478,8 +491,17 @@ select option { color: #111; background: #fff; }
 .suggestions {
   max-height: calc(3 * 34px + 16px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: none;
   padding: 6px 0;
+}
+.suggestions::-webkit-scrollbar { width: 6px; height: 6px; }
+.suggestions::-webkit-scrollbar-track { background: transparent; }
+.suggestions::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
 }
 .suggestions.open { display: block; }
 .suggestions .chip-flow { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -660,9 +682,18 @@ select option { color: #111; background: #fff; }
 .overlay-body {
   padding: 8px 16px 18px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.overlay-body::-webkit-scrollbar { width: 6px; height: 6px; }
+.overlay-body::-webkit-scrollbar-track { background: transparent; }
+.overlay-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
 }
 .form-row label {
   display: block;
