@@ -193,7 +193,9 @@ class SymDoWebApp extends IPSModuleStrict
 
     private function GetInstanceKind(int $id): ?string
     {
-        if ($id <= 0 || !IPS_InstanceExists($id)) {
+        // Bounds prüfen bevor IPS_InstanceExists — sonst warnt Symcon bei
+        // einer aus der Kachel gesendeten Fantasie-ID (> 60000)
+        if ($id <= 0 || $id > 60000 || !IPS_InstanceExists($id)) {
             return null;
         }
         $moduleID = IPS_GetInstance($id)['ModuleInfo']['ModuleID'] ?? '';
