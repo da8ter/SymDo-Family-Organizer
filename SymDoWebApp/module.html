@@ -107,14 +107,15 @@ select option { color: #111; background: #fff; }
 
 /* ── Bottom-Tab-Bar (im Flex-Fluss, damit scrollbarer Inhalt nicht dahinter
       verschwindet — sie ist immer die unterste Zeile unter dem Scrollbereich).
-      Full-Bleed: 100% der KACHELBREITE, auch wenn die Visu seitliches
-      Body-Padding (marginside) setzt — der Viewport-Breiten-Trick bricht aus
-      dem Padding aus (funktioniert auch ohne Padding: margin-left wird 0). ── */
+      Full-Bleed: 100% der KACHELBREITE. margin-left hebt exakt das linke
+      .app-Padding (marginside) auf → linke Kante bei 0; width:100vw erreicht die
+      rechte Kante. (Kein 50%-50vw-Trick, weil .app-Padding asymmetrisch ist –
+      links marginside, rechts nur der schmale Scrollbalken-Rand.) ── */
 .tabbar {
   flex: none;
   height: var(--nav-h);
   width: 100vw;
-  margin-left: calc(50% - 50vw);
+  margin-left: calc(-1 * var(--sym-ms));
   display: flex;
   background: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 4%);
   border-top: 1px solid var(--border);
