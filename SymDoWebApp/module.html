@@ -29,6 +29,11 @@
   --sym-mt:  0px;
   --sym-ms:  0px;
   --sym-mb:  0px;
+  --sbw:     6px;   /* Scrollbalken-Breite (muss ::-webkit-scrollbar width entsprechen) */
+  /* Rechter Innenabstand, der den Scrollbalken mittig ins rechte Body-Padding
+     legt: Scrollbereich endet um (marginside - Balken)/2 vor der Kante, der
+     Balken (Breite --sbw) sitzt dann zentriert im marginside-Streifen. */
+  --sb-pad:  max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -66,7 +71,10 @@ select option { color: #111; background: #fff; }
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--sym-mt) var(--sym-ms) 0 var(--sym-ms);
+  /* Rechts nur --sb-pad statt marginside, damit der Scrollbereich in den
+     rechten Rand hineinreicht und der Scrollbalken mittig darin liegt. Der
+     fehlende Rest des Inhaltsabstands sitzt als padding-right auf .screen. */
+  padding: var(--sym-mt) var(--sb-pad) 0 var(--sym-ms);
 }
 
 .screen {
@@ -79,10 +87,10 @@ select option { color: #111; background: #fff; }
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: none;
-  /* Nur vertikaler Gutter — der seitliche Abstand kommt allein aus dem
-     System-Rand (.app padding = marginside), sonst wäre er größer als das
-     vorgegebene Body-Padding */
-  padding: 12px 0;
+  /* Vertikaler Gutter; rechts --sb-pad, damit der Inhalt trotz des nach rechts
+     verschobenen Scrollbereichs bündig bei marginside endet (linker Abstand
+     kommt aus .app padding-left = marginside). */
+  padding: 12px var(--sb-pad) 12px 0;
 }
 .screen::-webkit-scrollbar { width: 6px; height: 6px; }
 .screen::-webkit-scrollbar-track { background: transparent; }
@@ -3314,8 +3322,12 @@ const SCROLL_AREA_SELECTOR = '.screen, .suggestions, .overlay-body, .scanner-bod
 function bindScrollContainment(scrollEl) {
   if (!scrollEl) return;
   let lastTouchY = null;
+  let startX = 0, startY = 0;
+  let axis = null; // 'x' = horizontale Geste (z. B. Einkaufsvorschau) → durchlassen
 
   scrollEl.addEventListener('wheel', (e) => {
+    // Horizontales Wheel/Trackpad (z. B. auf der Artikelleiste) NICHT abfangen
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
     if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
     const deltaY = e.deltaY || 0;
@@ -3328,15 +3340,29 @@ function bindScrollContainment(scrollEl) {
 
   scrollEl.addEventListener('touchstart', (e) => {
     if (!e.touches || e.touches.length !== 1) { lastTouchY = null; return; }
-    lastTouchY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    lastTouchY = startY;
+    axis = null;
     e.stopPropagation();
   }, { passive: true });
 
   scrollEl.addEventListener('touchmove', (e) => {
     if (!e.touches || e.touches.length !== 1) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    // Achse einmalig festlegen, sobald die Bewegung eindeutig ist
+    if (axis === null) {
+      const dx = Math.abs(currentX - startX);
+      const dy = Math.abs(currentY - startY);
+      if (dx > 8 || dy > 8) axis = dx > dy ? 'x' : 'y';
+    }
+    // Horizontale Geste (Einkaufsvorschau u. Ä.) unangetastet lassen — sonst
+    // würde die vertikale Eindämmung das horizontale Scrollen blockieren
+    if (axis === 'x') { lastTouchY = currentY; return; }
+
     const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
     if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
-    const currentY = e.touches[0].clientY;
     if (lastTouchY === null) { lastTouchY = currentY; e.stopPropagation(); return; }
     const deltaY = lastTouchY - currentY;
     const atTop = scrollEl.scrollTop <= 0;
@@ -3346,8 +3372,8 @@ function bindScrollContainment(scrollEl) {
     lastTouchY = currentY;
   }, { passive: false });
 
-  scrollEl.addEventListener('touchend', () => { lastTouchY = null; }, { passive: true });
-  scrollEl.addEventListener('touchcancel', () => { lastTouchY = null; }, { passive: true });
+  scrollEl.addEventListener('touchend', () => { lastTouchY = null; axis = null; }, { passive: true });
+  scrollEl.addEventListener('touchcancel', () => { lastTouchY = null; axis = null; }, { passive: true });
 }
 
 function setupScrollContainment() {
