@@ -189,11 +189,12 @@ select option { color: #111; background: #fff; }
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .4px;
-}
-.dash-date {
   min-height: 44px;
   display: flex;
   align-items: center;
+  /* Abstand der Kopf-/Avatar-Zeile zum ersten Seiteninhalt (KPI-Grid) beim
+     initialen Laden */
+  margin-bottom: 16px;
 }
 /* Avatar-Menü: nur DIESES ist sticky (oben rechts), mit halbtransparentem
    Pillen-Hintergrund. Das Datum scrollt normal weiter. Rechtsbündig via
@@ -203,7 +204,7 @@ select option { color: #111; background: #fff; }
   display: flex;
   gap: 6px;
   position: sticky;
-  top: 6px;
+  top: 0px;
   z-index: 20;
   width: fit-content;
   margin-left: auto;
