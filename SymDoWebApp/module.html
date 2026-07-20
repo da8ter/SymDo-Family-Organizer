@@ -195,7 +195,15 @@ select option { color: #111; background: #fff; }
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  /* Kopfzeile (Datum + Avatar-Menü oben rechts) beim Scrollen angepinnt lassen;
+     App-Hintergrund (Kartenfarbe), damit Inhalt sauber dahinter verschwindet.
+     top: negativer Screen-Gutter, damit sie bündig an der Oberkante klebt. */
+  position: sticky;
+  top: -12px;
+  z-index: 20;
+  background: var(--card-color);
+  padding: 12px 0 10px;
+  margin: -12px 0 6px;
 }
 .member-bar { display: flex; gap: 6px; }
 .member-bar .avatar-btn {
