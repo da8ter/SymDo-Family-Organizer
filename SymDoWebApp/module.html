@@ -79,7 +79,10 @@ select option { color: #111; background: #fff; }
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: none;
-  padding: 12px;
+  /* Nur vertikaler Gutter — der seitliche Abstand kommt allein aus dem
+     System-Rand (.app padding = marginside), sonst wäre er größer als das
+     vorgegebene Body-Padding */
+  padding: 12px 0;
 }
 .screen::-webkit-scrollbar { width: 6px; height: 6px; }
 .screen::-webkit-scrollbar-track { background: transparent; }
