@@ -980,6 +980,7 @@ select option { color: #111; background: #fff; }
 
     <section id="screen-todos" class="screen">
       <div class="content">
+        <div id="todoMembers" class="member-bar todo-members" style="display:none;"></div>
         <div class="screen-head">
           <select id="todoSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="todoTitle"></h2>
@@ -2246,6 +2247,26 @@ function sortTodoItems(items, sortMode, sortDir) {
   return list;
 }
 
+// Füllt die eigenständige sticky Avatar-Pille des ToDo-Tabs (#todoMembers).
+function renderTodoMembers() {
+  const el = document.getElementById('todoMembers');
+  if (!el) return;
+  if (store.users.length === 0) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.classList.toggle('has-selection', todoMemberIds.size > 0);
+  el.innerHTML = store.users.map(u =>
+    `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+    avatarHtml(u, '') + '</button>'
+  ).join('');
+  el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const mid = b.dataset.member;
+    if (todoMemberIds.has(mid)) todoMemberIds.delete(mid);
+    else todoMemberIds.add(mid);
+    renderTodos();
+  }));
+}
+
 function renderTodos() {
   const vis = visibleInstances('todo');
   const id = selectedTodoID();
@@ -2271,16 +2292,12 @@ function renderTodos() {
   // gefilterten Teilmenge die Gesamtreihenfolge verfälschen.
   const canReorder = sortMode === 'manual' && todoMemberIds.size === 0;
 
+  // Member-Menü: eigenständige sticky Pille ganz oben (vor dem Header), wie im
+  // Dashboard. Wird in den statischen #todoMembers-Container gerendert, damit
+  // sein sticky-Bezug .content (die volle Höhe) ist und es dauerhaft pinnt.
+  renderTodoMembers();
+
   let html = '';
-  // Member-Menü (sticky Avatar-Pille oben rechts), nur wenn Benutzer existieren
-  if (store.users.length > 0) {
-    html += `<div class="member-bar todo-members${todoMemberIds.size ? ' has-selection' : ''}">`;
-    for (const u of store.users) {
-      html += `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
-        avatarHtml(u, '') + '</button>';
-    }
-    html += '</div>';
-  }
   if (open.length === 0 && done.length === 0) {
     const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
     html += `<div class="empty-state"><i class="fa-light fa-list-check"></i>${msg}</div>`;
@@ -2295,15 +2312,6 @@ function renderTodos() {
     }
   }
   area.innerHTML = html;
-
-  // Member-Menü: Auswahl umschalten (Vereinigung), dann neu rendern
-  area.querySelectorAll('.member-bar [data-member]').forEach(b => b.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const mid = b.dataset.member;
-    if (todoMemberIds.has(mid)) todoMemberIds.delete(mid);
-    else todoMemberIds.add(mid);
-    renderTodos();
-  }));
 
   const doneToggle = document.getElementById('doneToggle');
   if (doneToggle) doneToggle.addEventListener('click', () => {
