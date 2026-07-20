@@ -1234,7 +1234,7 @@ let state = {};
 let activeTab = localStorage.getItem('symdo.tab') || 'dashboard';
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = localStorage.getItem('symdo.dashboardPriority') || '';
-let dashMemberId = '';
+let dashMemberIds = new Set(); // Mehrfachauswahl im Member-Menü
 let completedExpanded = localStorage.getItem('symdo.completedExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
@@ -1763,8 +1763,9 @@ function allTodoTasks() {
   return tasks;
 }
 function memberFiltered(tasks) {
-  if (!dashMemberId) return tasks;
-  return tasks.filter(t => Array.isArray(t.item.assignedTo) && t.item.assignedTo.includes(dashMemberId));
+  if (dashMemberIds.size === 0) return tasks;
+  // Aufgaben, die einem der gewählten Mitglieder zugewiesen sind (Vereinigung)
+  return tasks.filter(t => Array.isArray(t.item.assignedTo) && t.item.assignedTo.some(id => dashMemberIds.has(id)));
 }
 function mondayOf(d) {
   const y = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -1852,9 +1853,9 @@ function renderDashboard() {
   // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Das Datum folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
   if (store.users.length > 0) {
-    html += `<div class="member-bar${dashMemberId ? ' has-selection' : ''}">`;
+    html += `<div class="member-bar${dashMemberIds.size ? ' has-selection' : ''}">`;
     for (const u of store.users) {
-      html += `<button class="avatar-btn${u.id === dashMemberId ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+      html += `<button class="avatar-btn${dashMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
         avatarHtml(u, '') + '</button>';
     }
     html += '</div>';
@@ -1916,10 +1917,13 @@ function renderDashboard() {
   // Meine Aufgaben / Aufgaben von X
   if (myUpcoming.length > 0) {
     let title = translate('Tasks');
-    if (dashMemberId === currentUserID() && dashMemberId) title = translate('My tasks');
-    // Wie mySectionTitle in der App: ist ein anderes Mitglied gewählt, immer
-    // „Aufgaben von X" (Platzhalter „…" wenn der Name gerade nicht auflösbar)
-    else if (dashMemberId) title = translate('Tasks of %1').replace('%1', byId[dashMemberId] ? byId[dashMemberId].name : '…');
+    // Wie mySectionTitle in der App: nur bei GENAU EINEM gewählten Mitglied ein
+    // personalisierter Titel; bei 0 oder mehreren das generische „Aufgaben".
+    if (dashMemberIds.size === 1) {
+      const only = [...dashMemberIds][0];
+      if (only === currentUserID()) title = translate('My tasks');
+      else title = translate('Tasks of %1').replace('%1', byId[only] ? byId[only].name : '…');
+    }
     html += `<div class="card"><div class="card-head"><h3>${escapeHtml(title)}</h3></div>`;
     for (const t of myUpcoming.slice(0, 5)) html += taskRowHtml(t, multiTodo);
     const remaining = myUpcoming.length - 5;
@@ -1969,7 +1973,9 @@ function renderDashboard() {
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    dashMemberId = dashMemberId === b.dataset.member ? '' : b.dataset.member;
+    const id = b.dataset.member;
+    if (dashMemberIds.has(id)) dashMemberIds.delete(id);
+    else dashMemberIds.add(id);
     renderDashboard();
   }));
   el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
