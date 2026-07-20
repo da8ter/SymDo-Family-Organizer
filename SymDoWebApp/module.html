@@ -213,6 +213,9 @@ select option { color: #111; background: #fff; }
   border-radius: 999px;
   background: color-mix(in srgb, var(--card-color) 50%, transparent);
 }
+/* Im ToDo-Tab gibt es kein Datum, das hochgezogen werden muss → normaler
+   Abstand nach unten statt des negativen Zugs. */
+.member-bar.todo-members { margin-bottom: 10px; }
 .member-bar .avatar-btn {
   width: 36px; height: 36px;
   border-radius: 999px;
@@ -1234,7 +1237,8 @@ let state = {};
 let activeTab = localStorage.getItem('symdo.tab') || 'dashboard';
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = localStorage.getItem('symdo.dashboardPriority') || '';
-let dashMemberIds = new Set(); // Mehrfachauswahl im Member-Menü
+let dashMemberIds = new Set(); // Mehrfachauswahl im Dashboard-Member-Menü
+let todoMemberIds = new Set(); // Mehrfachauswahl im ToDo-Tab-Member-Menü
 let completedExpanded = localStorage.getItem('symdo.completedExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
@@ -2254,15 +2258,33 @@ function renderTodos() {
   }
   const sortMode = String(st.sortMode || 'created');
   const sortDir = String(st.sortDir || 'asc');
-  const sorted = sortTodoItems(st.items || [], sortMode, sortDir);
+  // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied
+  let items = st.items || [];
+  if (todoMemberIds.size > 0) {
+    items = items.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+  }
+  const sorted = sortTodoItems(items, sortMode, sortDir);
   const open = sorted.filter(i => !i.done);
   const done = sorted.filter(i => i.done);
+  // Bei aktivem Filter kein Drag-Reorder — sonst würde ein Reorder der
+  // gefilterten Teilmenge die Gesamtreihenfolge verfälschen.
+  const canReorder = sortMode === 'manual' && todoMemberIds.size === 0;
 
   let html = '';
-  if (open.length === 0 && done.length === 0) {
-    html += `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No tasks')}</div>`;
+  // Member-Menü (sticky Avatar-Pille oben rechts), nur wenn Benutzer existieren
+  if (store.users.length > 0) {
+    html += `<div class="member-bar todo-members${todoMemberIds.size ? ' has-selection' : ''}">`;
+    for (const u of store.users) {
+      html += `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+        avatarHtml(u, '') + '</button>';
+    }
+    html += '</div>';
   }
-  for (const it of open) html += todoRowHtml(it, sortMode === 'manual');
+  if (open.length === 0 && done.length === 0) {
+    const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
+    html += `<div class="empty-state"><i class="fa-light fa-list-check"></i>${msg}</div>`;
+  }
+  for (const it of open) html += todoRowHtml(it, canReorder);
   if (done.length > 0 && st.hideCompletedTasks !== true) {
     html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" id="doneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
@@ -2272,6 +2294,15 @@ function renderTodos() {
     }
   }
   area.innerHTML = html;
+
+  // Member-Menü: Auswahl umschalten (Vereinigung), dann neu rendern
+  area.querySelectorAll('.member-bar [data-member]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const mid = b.dataset.member;
+    if (todoMemberIds.has(mid)) todoMemberIds.delete(mid);
+    else todoMemberIds.add(mid);
+    renderTodos();
+  }));
 
   const doneToggle = document.getElementById('doneToggle');
   if (doneToggle) doneToggle.addEventListener('click', () => {
@@ -2296,7 +2327,7 @@ function renderTodos() {
     });
   });
 
-  bindTodoDnd(area, id, open, done, sortMode === 'manual');
+  bindTodoDnd(area, id, open, done, canReorder);
 }
 
 function todoRowHtml(it, draggable) {
