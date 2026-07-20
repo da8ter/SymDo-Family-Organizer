@@ -80,7 +80,11 @@ select option { color: #111; background: #fff; }
 .screen {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* overflow-y: scroll (statt auto): der 6px-Scrollstreifen ist IMMER
+     reserviert — so ist der rechte Abstand mit und ohne sichtbaren Balken
+     gleich (leerer Track ist transparent, der Thumb erscheint nur bei Bedarf).
+     KEIN scrollbar-gutter zusätzlich — das würde doppelt reservieren. */
+  overflow-y: scroll;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   /* Scrollleiste wie im ToDoList-Modul: dünn, Akzentfarbe, transparente Spur */
@@ -1158,6 +1162,25 @@ select option { color: #111; background: #fff; }
   } catch (e) { /* ohne Query: Defaults (0) greifen */ }
 })();
 
+// ── Echte Scrollbalken-Breite messen und --sbw setzen ──────────────────────
+// Die reservierte Breite variiert je Plattform (Desktop-Webkit ~6–15px). Wir
+// messen sie an einem .screen-Probe (bekommt dieselbe ::-webkit-scrollbar-
+// Regel), damit Inhaltsabstand und Balken-Zentrierung exakt stimmen.
+(function measureScrollbar() {
+  try {
+    const probe = document.createElement('div');
+    probe.className = 'screen';
+    probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;display:block;width:100px;height:100px;padding:0;';
+    probe.innerHTML = '<div style="height:200px"></div>';
+    document.body.appendChild(probe);
+    const w = probe.offsetWidth - probe.clientWidth;
+    probe.remove();
+    if (Number.isFinite(w) && w >= 0) {
+      document.documentElement.style.setProperty('--sbw', w + 'px');
+    }
+  } catch (e) { /* Default --sbw (6px) greift */ }
+})();
+
 // ── Shims (Symcon injiziert translate/requestAction; Fallback postMessage) ──
 const translate = (typeof window.translate === 'function')
   ? window.translate
@@ -1918,7 +1941,11 @@ function renderDashboard() {
       }
       html += '</div>';
     }
-    html += `<div class="preview-actions"><button data-preview-add="1"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button></div>`;
+    let actions = `<button data-preview-add="1"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>`;
+    if (shopState.scannerEnabled !== false) {
+      actions += `<button data-preview-scan="1"><i class="fa-light fa-barcode"></i> ${translate('Scan barcode')}</button>`;
+    }
+    html += `<div class="preview-actions">${actions}</div>`;
     html += '</div>';
   }
 
@@ -1944,6 +1971,11 @@ function renderDashboard() {
   if (previewAdd) previewAdd.addEventListener('click', () => {
     setTab('shopping');
     setTimeout(() => document.getElementById('shoppingInput').focus(), 50);
+  });
+  const previewScan = el.querySelector('[data-preview-scan]');
+  if (previewScan) previewScan.addEventListener('click', () => {
+    setTab('shopping');
+    setTimeout(() => { if (typeof openScannerOverlay === 'function') openScannerOverlay(); }, 60);
   });
   el.querySelectorAll('.task-row').forEach(row => {
     const instanceID = parseInt(row.dataset.inst);
