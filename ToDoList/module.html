@@ -13,18 +13,30 @@
       --accent: var(--accent-color);
       --radius: 14px;
       --gap: 12px;
+      /* System-Kachelränder (per JS aus den URL-Parametern) + Scrollbalken-
+         Breite, um den Listen-Scrollbalken mittig ins rechte Body-Padding zu legen. */
+      --sym-mt: 0px;
+      --sym-ms: 0px;
+      --sym-mb: 0px;
+      --sbw: 6px;
+      --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
     }
 
     body {
       color: var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       background: transparent;
+      /* Body-Padding der Visu neutralisieren; Ränder selbst auf .wrap anwenden,
+         damit der Listen-Scrollbalken kontrolliert ins rechte Body-Padding wandert. */
+      padding: 0 !important;
+      margin: 0 !important;
     }
     .wrap {
       position: relative;
       height: 100%;
       min-height: 0;
-      padding: 0;
+      /* Ränder wie zuvor das Body-Padding; unten 0 */
+      padding: var(--sym-mt) var(--sym-ms) 0 var(--sym-ms);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
@@ -259,7 +271,13 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      overflow: auto;
+      /* In den rechten Rand ziehen → Scrollbalken mittig im Body-Padding;
+         padding-right hält den Inhalt bündig bei marginside; overflow-y: scroll
+         reserviert den Balken immer (konstanter Abstand mit/ohne Balken). */
+      margin-right: calc(-1 * (var(--sym-ms) - var(--sb-pad)));
+      padding-right: var(--sb-pad);
+      overflow-x: hidden;
+      overflow-y: scroll;
       overscroll-behavior: contain;
       touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
@@ -801,6 +819,32 @@
 
   <script>
     (() => {
+    // ── System-Kachelränder + Scrollbalken-Breite ─────────────────────────
+    // margintop/marginside/marginbottom aus der Tile-URL übernehmen (.wrap) und
+    // die echte Scrollbalken-Breite messen, damit der Listen-Scrollbalken mittig
+    // ins rechte Body-Padding fällt und der Inhalt bündig bei marginside bleibt.
+    (function applySystemMargins() {
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const px = (name) => {
+          const v = parseInt(p.get(name), 10);
+          return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+        };
+        const root = document.documentElement.style;
+        const mt = px('margintop');   if (mt !== null) root.setProperty('--sym-mt', mt);
+        const ms = px('marginside');  if (ms !== null) root.setProperty('--sym-ms', ms);
+        const mb = px('marginbottom'); if (mb !== null) root.setProperty('--sym-mb', mb);
+        const probe = document.createElement('div');
+        probe.className = 'list';
+        probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:100px;height:100px;padding:0;margin:0;';
+        probe.innerHTML = '<div style="height:200px"></div>';
+        document.body.appendChild(probe);
+        const w = probe.offsetWidth - probe.clientWidth;
+        probe.remove();
+        if (Number.isFinite(w) && w >= 0) root.setProperty('--sbw', w + 'px');
+      } catch (e) { /* Defaults greifen */ }
+    })();
+
     let state = { items: [] };
     let editingId = 0;
     let selectedAssignees = [];
