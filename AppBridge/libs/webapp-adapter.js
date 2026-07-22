@@ -184,9 +184,14 @@
           if (kind === 'shopping') {
             if (Object.keys(images).length === 0 && st.availableImages && Object.keys(st.availableImages).length) { images = st.availableImages; }
             if (Object.keys(brands).length === 0 && st.availableBrands && Object.keys(st.availableBrands).length) { brands = st.availableBrands; }
-            // Bilder folgen in Phase E über die Bridge-Asset-Endpoints; bis dahin
-            // rendert die Einkaufsliste mit Initialen/Namen (imagesEnabled:false).
-            shoppingExtras[String(r.inst.id)] = { imageBase: '', extApiBase: '', imagesEnabled: false };
+            // Produktbilder über den Bridge-Asset-Endpoint (same-origin, Token als
+            // Query erlaubt). Die UI hängt encodeURIComponent(datei) an imageBase an
+            // → …/assets?t=<token>&f=<datei>; HandleAsset liest $_GET['f'].
+            shoppingExtras[String(r.inst.id)] = {
+              imageBase: API + '/assets?t=' + encodeURIComponent(token()) + '&f=',
+              extApiBase: '',
+              imagesEnabled: true
+            };
           }
           states[String(r.inst.id)] = { kind: kind, revision: r.data.revision || 0, state: stripState(kind, st) };
         });
@@ -260,4 +265,16 @@
       return;
     }
   };
+
+  // Web-only: die geteilte UI hat kein onerror an Produktbildern. Fällt ein Bild
+  // aus (fehlendes Asset oder externe Scan-URL, die der Asset-Endpoint nicht
+  // liefert), blenden wir das kaputte Bild aus und zeigen einen neutralen Kreis
+  // statt eines Broken-Image-Icons. 'error' bubbelt nicht → Capture-Phase.
+  document.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'IMG' && typeof t.closest === 'function' && t.closest('.item-thumb, .strip-thumb')) {
+      if (t.parentNode) { t.parentNode.style.background = 'var(--surface2)'; }
+      t.style.display = 'none';
+    }
+  }, true);
 })();
