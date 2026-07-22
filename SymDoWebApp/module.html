@@ -643,7 +643,6 @@ select option { color: #111; background: #fff; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.todo-icons { display: flex; gap: 8px; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 /* Alle Chips (und künftige Buttons) einer Aufgabe in EINER Zeile nebeneinander,
    wie in der ToDoList: Avatare, Menge, Fälligkeit, Priorität, dann Buttons.
    Immer am unteren Rand der Zeile ausgerichtet (auch bei mehrzeiligem Titel/Notiz). */
@@ -684,7 +683,10 @@ select option { color: #111; background: #fff; }
 .badge.high   { color: var(--text); background-color: rgba(255, 0, 0, 0.2); }
 .badge.low    { color: var(--text); background-color: rgba(200, 200, 200, 0.2); }
 .badge.normal { color: var(--text); background-color: color-mix(in srgb, var(--accent) 30%, transparent); }
-.badge.quantity { font-weight: 700; color: var(--accent); }
+/* Menge sowie Wiederholung/Benachrichtigung: gleicher Chip-Stil (neutraler
+   Hintergrund, Akzentfarbe). */
+.badge.quantity, .badge.attr { font-weight: 700; color: var(--accent); }
+.badge.attr { display: inline-flex; align-items: center; }
 /* Fälligkeits-Badge — Optik identisch zur ToDoList-Kachel (neutral umrandet,
    überfällig rot, heute orange; Kalender-Icon nur auf schmalen Kacheln) */
 .badge.due-badge { display: inline-flex; align-items: center; gap: 6px; }
@@ -2426,13 +2428,9 @@ function ensureTodoMetaObserver() {
 }
 
 function todoRowHtml(it, draggable, showBadges) {
-  const icons = [];
-  if (it.recurrence && it.recurrence !== 'none') {
-    icons.push(`<span title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>`);
-  }
-  if (it.notification === true) icons.push('<span><i class="fa-light fa-bell"></i></span>');
   const chip = formatDueChip(it);
   const qty = parseInt(it.quantity) || 0;
+  const recurs = it.recurrence && it.recurrence !== 'none';
   // Fälligkeits-Zustand wie in der ToDoList-Kachel: überfällig rot, heute orange,
   // sonst neutral. Erledigte Aufgaben bleiben neutral (nicht rot/orange).
   const dueState = it.done ? '' : classifyDue(it);
@@ -2443,10 +2441,11 @@ function todoRowHtml(it, draggable, showBadges) {
     `<input type="checkbox" class="chk"${it.done ? ' checked' : ''} aria-label="${translate('Done')}" />` +
     `<span class="todo-main"><span class="todo-title">${escapeHtml(it.title)}</span>` +
     (it.info ? `<span class="todo-info">${escapeHtml(it.info)}</span>` : '') +
-    (icons.length ? `<span class="todo-icons">${icons.join('')}</span>` : '') +
     `</span><span class="todo-meta">` +
     renderAvatarStack(it.assignedTo) +
     (qty > 1 ? `<span class="badge quantity">${qty}×</span>` : '') +
+    (recurs ? `<span class="badge attr" title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>` : '') +
+    (it.notification === true ? `<span class="badge attr" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
     (showBadges ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
     `</span></div></div>`;
