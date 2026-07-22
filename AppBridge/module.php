@@ -346,7 +346,23 @@ class SymDoBridge extends IPSModuleStrict
         $theme = '<style>:root{'
             . '--card-color:#2b2c30;--content-color:#ffffff;--accent-color:#00cdab;'
             . '}html,body{background:#1c1c1e;}</style>';
-        return $theme;
+
+        // Übersetzungen aus der geteilten UI-Quelle einbetten (kein Extra-Request).
+        $translations = '{}';
+        $dec = json_decode((string)@file_get_contents(__DIR__ . '/../SymDoWebApp/locale.json'), true);
+        if (is_array($dec) && isset($dec['translations'])) {
+            $translations = json_encode($dec['translations'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        $config = '<script>window.__SYMDO__=' . json_encode(
+            ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION],
+            JSON_UNESCAPED_SLASHES
+        ) . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
+
+        $adapterJs = (string)@file_get_contents(__DIR__ . '/libs/webapp-adapter.js');
+        $adapter = '<script>' . $adapterJs . '</script>';
+
+        return $theme . $config . $adapter;
     }
 
     private function SetFormElementProperty(array &$elements, string $name, string $property, mixed $value): void
