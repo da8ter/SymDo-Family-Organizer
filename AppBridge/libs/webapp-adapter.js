@@ -234,6 +234,16 @@
 
   function deliver(payload) { if (typeof window.handleMessage === 'function') { window.handleMessage(payload); } }
 
+  // Global eindeutige Idempotenz-ID je Aktion. NICHT das UI-txn nehmen: das ist
+  // ein pro Seitenladung zurückgesetzter Zähler (tx1, tx2, …) und würde nach einem
+  // Reload mit bereits ausgeführten IDs kollidieren — die Bridge-Idempotenz hielte
+  // die Aktion dann für einen Replay und würde sie STILL nicht ausführen (genau das
+  // ließ Hinzufügen/Mengenänderung nach einem Reload scheitern).
+  var actionSeq = 0;
+  function uniqueActionId() {
+    return 'web-' + Date.now().toString(36) + '-' + (++actionSeq) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
   // Todo-States tragen die (autoritativen) Bridge-User schon top-level; Einkaufs-
   // States tragen availableImages/availableBrands, die einmalig gehoistet werden.
   function stripState(kind, state) {
@@ -322,7 +332,7 @@
     if (ident === 'Call') {
       var d; try { d = JSON.parse(value); } catch (e) { return; }
       var id = d.instanceID, kind = kindOf[String(id)] || '';
-      apiPost('/instances/' + id + '/actions', { action: d.action, payload: d.payload, clientActionId: d.txn })
+      apiPost('/instances/' + id + '/actions', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
         .then(function (res) {
           var j = res.json || {};
           deliver({
