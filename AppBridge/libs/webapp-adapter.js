@@ -18,6 +18,16 @@
 (function () {
   'use strict';
 
+  // Standalone-Browser: ohne Viewport-Meta rendert iOS Safari mit ~980px Layout-
+  // breite und skaliert die ganze Seite winzig herunter. In der Visu-Kachel setzt
+  // das der Host — hier fehlt es. Der Adapter läuft im <head> vor dem Body, also
+  // greift das Meta noch fürs initiale Layout.
+  (function ensureViewport() {
+    var m = document.querySelector('meta[name="viewport"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'viewport'); (document.head || document.documentElement).appendChild(m); }
+    m.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
+  })();
+
   var CFG  = window.__SYMDO__ || {};
   var I18N = window.__SYMDO_I18N__ || {};
   var API  = CFG.apiBase || '/hook/lists/app/v1';
