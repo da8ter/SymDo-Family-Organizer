@@ -101,9 +101,22 @@
       appVersion: 'web'
     }).then(function (res) {
       var j = res.json || {};
-      if (res.status === 200 && j.ok === true && j.token) { setToken(j.token); return true; }
+      if (res.status === 200 && j.ok === true && j.token) { setToken(j.token); return j.token; }
       throw new Error((j.error && j.error.message) || 'pairing failed');
     });
+  }
+  // iOS: ein vom Home-Bildschirm gestartetes Lesezeichen läuft in einem eigenen
+  // (Speicher-)Kontext — das in Safari gespeicherte Token ist dort nicht sichtbar.
+  // Deshalb das Token zusätzlich ins URL-Fragment spiegeln: "Zum Home-Bildschirm"
+  // nimmt es mit, und der Home-Screen-Start liest es und legt es lokal ab. Das
+  // Fragment erreicht den Server nicht.
+  function ensureTokenInUrl(t) {
+    if (!t || parseHash().t === t) { return; }
+    try { history.replaceState(null, '', location.pathname + location.search + '#t=' + encodeURIComponent(t)); } catch (e) {}
+  }
+  function startApp() {
+    pairing = false;
+    if (typeof window.requestAction === 'function') { window.requestAction('GetState', 0); }
   }
   window.__symdoUnauthorized = function () {
     clearToken();
@@ -111,17 +124,23 @@
   };
   (function bootstrapPairing() {
     var hp = parseHash();
-    if (hp.logout !== undefined) { clearToken(); stripHash(); }
-    // Ein bereits gespeichertes Token hat Vorrang. Der QR-Code ist einmalig; beim
-    // erneuten Öffnen/Scannen ist er längst verbraucht — dann darf das Einlösen NICHT
-    // die laufende Sitzung überschreiben. Ist das Token ungültig/entzogen, liefert
-    // die erste API-Antwort 401 und wir landen sauber wieder im Pair-Screen.
-    if (token()) { if (hp.c) { stripHash(); } return; }
+    if (hp.logout !== undefined) {
+      clearToken(); stripHash();
+      showPairScreen('Abgemeldet. Erstelle in der SymDo Bridge einen neuen Browser-Zugang, um dich wieder zu verbinden.');
+      return;
+    }
+    // Token direkt aus dem Fragment (Home-Screen-Lesezeichen mit #t=…). Fragment
+    // NICHT entfernen, damit der nächste Start im isolierten Speicher wieder
+    // daran kommt. Ist das Token entzogen, liefert die API 401 -> Pair-Screen.
+    if (hp.t) { setToken(hp.t); return; }
+    // Bereits gekoppelt (Token im lokalen Speicher): fürs "Zum Home-Bildschirm"
+    // ins Fragment spiegeln, sonst startet das Home-Screen-Lesezeichen ohne Token.
+    if (token()) { ensureTokenInUrl(token()); return; }
+    // Erstkopplung über den einmaligen QR-Code (#c=…).
     if (hp.c) {
-      // Erstkopplung: Code einlösen, dann sauber neu laden, damit die UI mit Token startet.
       pairing = true;
       pairWithCode(hp.c)
-        .then(function () { stripHash(); location.reload(); })
+        .then(function (t) { ensureTokenInUrl(t); startApp(); })
         .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte in der Bridge einen neuen Browser-Zugang erstellen.'); });
       return;
     }
