@@ -11,6 +11,11 @@
       --muted: color-mix(in srgb, var(--content-color) 30%, transparent);
       --border: color-mix(in srgb, var(--accent-color) 30%, transparent);
       --accent: var(--accent-color);
+      /* Deckende Zeilenfläche einer Aufgabe: leicht aufgehellte Kartenfarbe,
+         identisch zur SymDoWebApp-Kachel. Deckend, damit der rote Wisch-
+         Hintergrund nicht durchscheint (color-mix zweier deckender Farben
+         bleibt deckend). */
+      --row: color-mix(in srgb, var(--card-color) 86%, var(--content-color) 14%);
       --radius: 14px;
       --gap: 12px;
       /* System-Kachelränder (per JS aus den URL-Parametern) + Scrollbalken-
@@ -436,7 +441,7 @@
       align-items: center;
       gap: var(--gap);
       padding: var(--gap);
-      background: var(--card);
+      background: var(--row);
       touch-action: pan-y;
       transition: transform .28s cubic-bezier(.22,.61,.36,1);
     }
