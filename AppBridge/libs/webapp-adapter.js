@@ -52,6 +52,47 @@
     (document.head || document.documentElement).appendChild(s);
   })();
 
+  // ---- Theme -------------------------------------------------------------------
+  // In der Kachel injiziert Symcon --card-color/--content-color/--accent-color;
+  // standalone fehlen sie. Wir setzen sie nach der Geräte-Präferenz (hell/dunkel)
+  // und verfeinern sie mit den ECHTEN Visu-Farben aus /discovery.theme (die die
+  // ShoppingList-Kachel pro Schema meldet). So sieht die Web-App aus wie die Visu.
+  var THEME_DEFAULTS = {
+    dark:  { card: '#2b2c30', content: '#ffffff', accent: '#00cdab' },
+    light: { card: '#ffffff', content: '#1c1c1e', accent: '#00cdab' }
+  };
+  var discoveryTheme = null;
+  function prefersDark() {
+    try { return !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches; }
+    catch (e) { return true; }
+  }
+  function setColors(c) {
+    var r = document.documentElement.style;
+    if (c && c.card)    { r.setProperty('--card-color', c.card); }
+    if (c && c.content) { r.setProperty('--content-color', c.content); }
+    if (c && c.accent)  { r.setProperty('--accent-color', c.accent); }
+  }
+  function applyTheme() {
+    var scheme = prefersDark() ? 'dark' : 'light';
+    var visu = discoveryTheme && (discoveryTheme[scheme] || discoveryTheme.dark || discoveryTheme.light);
+    setColors((visu && visu.card && visu.content && visu.accent) ? visu : THEME_DEFAULTS[scheme]);
+  }
+  // Canvas-Hintergrund (Overscroll/Safe-Areas) folgt der Kartenfarbe. Zuletzt
+  // eingefügt → gewinnt über das statische Default aus BuildWebHead.
+  (function () {
+    var s = document.createElement('style');
+    // !important, da die geteilte UI body{background:transparent} setzt (in der
+    // Kachel liefert der Visu-Host den Hintergrund; standalone brauchen wir ihn).
+    s.textContent = 'html,body{background:var(--card-color)!important}';
+    (document.head || document.documentElement).appendChild(s);
+  })();
+  applyTheme(); // Sofort-Default (kein Flash); /discovery verfeinert gleich.
+  try {
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+    }
+  } catch (e) {}
+
   var CFG  = window.__SYMDO__ || {};
   var I18N = window.__SYMDO_I18N__ || {};
   var API  = CFG.apiBase || '/hook/lists/app/v1';
@@ -199,6 +240,9 @@
   function loadFullState() {
     return apiGet('/discovery').then(function (disc) {
       if (!disc || disc.ok !== true) { throw new Error('discovery failed'); }
+      // Echte Visu-Farben übernehmen (falls die ShoppingList-Kachel welche gemeldet hat).
+      discoveryTheme = disc.theme || null;
+      applyTheme();
       var instances = [], hiddenIDs = [], visible = [];
       (disc.instances || []).forEach(function (inst) {
         kindOf[String(inst.id)] = inst.kind;
