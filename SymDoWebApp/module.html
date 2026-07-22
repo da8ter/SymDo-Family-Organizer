@@ -320,19 +320,43 @@ select option { color: #111; background: #fff; }
   cursor: pointer;
 }
 .task-row:last-child { border-bottom: none; }
-.task-check {
-  width: 26px; height: 26px;
-  border-radius: 999px;
-  border: 2px solid var(--accent);
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: transparent;
+/* Aufgaben-Checkbox: identisch zur ToDoList-Kachel (native, gestylte Checkbox).
+   Klassen-gescopt auf .chk, damit die iOS-Switch-Toggles im Editor
+   (.switch > input[type=checkbox]) unberührt bleiben. Unchecked-Fläche =
+   Task-Hintergrund (var(--row)). */
+.chk {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background-color: var(--row);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 13px 13px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row) 45%, transparent);
+  cursor: pointer;
+  vertical-align: middle;
+  accent-color: var(--accent);
+  transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease, transform .04s ease;
 }
-.task-check.prio-high { border-color: var(--red); }
-.task-check.prio-low  { border-color: var(--faint); }
+.chk:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.4 8.2 6.6 11.4 12.8 4.8' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
+}
+.chk:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+.chk:active { transform: scale(.94); }
+.chk:disabled { cursor: not-allowed; opacity: .45; }
 .task-row .task-main { flex: 1; min-width: 0; }
 .task-row .task-title {
   font-size: 15px;
@@ -600,25 +624,6 @@ select option { color: #111; background: #fff; }
   cursor: pointer;
 }
 .todo-content.is-dragging { transition: none; }
-.todo-check {
-  width: 26px; height: 26px;
-  border-radius: 999px;
-  border: 2px solid var(--accent);
-  flex: none;
-  margin-top: 1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: transparent;
-  font-size: 13px;
-}
-.todo-check.prio-high { border-color: var(--red); }
-.todo-check.prio-low  { border-color: var(--faint); }
-.todo-check.done {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
 .todo-main { flex: 1; min-width: 0; }
 .todo-title {
   font-size: 15px;
@@ -1510,10 +1515,6 @@ function formatDueChip(item) {
 }
 
 // ── Prioritäten / Wiederholungen (Codes wie im ToDoList-Modul) ─────────────
-function priorityClass(prio) {
-  const p = String(prio || 'normal');
-  return p === 'high' ? 'prio-high' : (p === 'low' ? 'prio-low' : '');
-}
 function recurrenceLabel(r, unit, val) {
   if (String(r) === 'custom') {
     const v = parseInt(val) || 1;
@@ -2010,10 +2011,9 @@ function renderDashboard() {
   el.querySelectorAll('.task-row').forEach(row => {
     const instanceID = parseInt(row.dataset.inst);
     const itemID = parseInt(row.dataset.item);
-    row.querySelector('.task-check').addEventListener('click', (e) => {
-      e.stopPropagation();
-      sdCall(instanceID, 'ToggleDone', { id: itemID, done: true });
-    });
+    const chk = row.querySelector('.chk');
+    chk.addEventListener('click', (e) => e.stopPropagation());
+    chk.addEventListener('change', () => sdCall(instanceID, 'ToggleDone', { id: itemID, done: chk.checked }));
     row.addEventListener('click', () => {
       const st = instState(instanceID);
       const item = st && st.items.find(i => i.id === itemID);
@@ -2027,7 +2027,7 @@ function taskRowHtml(t, showListName) {
   const segs = dueSubtitleSegments(t.item, t.listName, showListName)
     .map(s => `<span class="${s.cls}">${escapeHtml(s.text)}</span>`).join('');
   return `<div class="task-row" data-inst="${t.instanceID}" data-item="${t.item.id}">` +
-    `<button class="task-check ${priorityClass(t.item.priority)}" aria-label="${translate('Done')}"><i class="fa-light fa-check"></i></button>` +
+    `<input type="checkbox" class="chk" aria-label="${translate('Done')}" />` +
     `<div class="task-main"><div class="task-title">${escapeHtml(t.item.title)}</div>` +
     (segs ? `<div class="task-sub">${segs}</div>` : '') +
     '</div>' + renderAvatarStack(t.item.assignedTo) + '</div>';
@@ -2332,13 +2332,12 @@ function renderTodos() {
     const item = (st.items || []).find(i => i.id === itemId);
     if (!item) return;
     bindCardSwipe(card, '.todo-content', () => sdCall(id, 'DeleteItem', { id: itemId }));
-    card.querySelector('.todo-check').addEventListener('click', (e) => {
-      e.stopPropagation();
-      sdCall(id, 'ToggleDone', { id: itemId, done: !item.done });
-    });
+    const chk = card.querySelector('.chk');
+    chk.addEventListener('click', (e) => e.stopPropagation());
+    chk.addEventListener('change', () => sdCall(id, 'ToggleDone', { id: itemId, done: chk.checked }));
     card.querySelector('.todo-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button, .chk')) return;
       openTodoEditor(id, item);
     });
   });
@@ -2358,7 +2357,7 @@ function todoRowHtml(it, draggable) {
   return `<div class="todo-card${it.done ? ' done-row' : ''}" data-id="${it.id}"${draggable ? ' draggable="true"' : ''}>` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="todo-content">` +
-    `<button class="todo-check ${it.done ? 'done' : priorityClass(it.priority)}" aria-label="${translate('Done')}"><i class="fa-light fa-check"></i></button>` +
+    `<input type="checkbox" class="chk"${it.done ? ' checked' : ''} aria-label="${translate('Done')}" />` +
     `<span class="todo-main"><span class="todo-title">${escapeHtml(it.title)}</span>` +
     (it.info ? `<span class="todo-info">${escapeHtml(it.info)}</span>` : '') +
     (icons.length ? `<span class="todo-icons">${icons.join('')}</span>` : '') +
