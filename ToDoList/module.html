@@ -518,7 +518,7 @@
       font-size: 11px;
       padding: 3px 8px;
       border-radius: 999px;
-      border: 1px solid var(--border);
+      background-color: color-mix(in srgb, var(--content-color) 12%, transparent);
       color: var(--muted);
     }
     .badge.due-badge {
@@ -528,10 +528,10 @@
     }
     .badge.due-badge .due-icon { color: inherit; }
     .badge.due-badge .due-icon { display: none; }
-    .badge.due-badge.due-overdue { border-color: rgb(255, 0, 0); color: var(--text); background-color: rgb(255, 0, 0, 0.2); }
-    .badge.due-badge.due-today { border-color: #ffa500; color: var(--text); background-color: rgb(255, 165, 0, 0.2); }
-    .badge.notify-badge { border-color: var(--accent); color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
-    .badge.recur-badge { border-color: var(--accent); color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
+    .badge.due-badge.due-overdue { color: var(--text); background-color: rgb(255, 0, 0, 0.2); }
+    .badge.due-badge.due-today { color: var(--text); background-color: rgb(255, 165, 0, 0.2); }
+    .badge.notify-badge { color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
+    .badge.recur-badge { color: var(--text); background-color: color-mix(in srgb, var(--accent) 20%, var(--bg)); }
     .badge .icon-svg { width: 14px; height: 14px; display: block; fill: currentColor; }
     .avatar-stack { display: inline-flex; align-items: center; }
     .avatar-stack .avatar {
@@ -546,9 +546,9 @@
     .assignee-chip {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 6px 12px 6px 6px; border-radius: 999px;
-      border: 1px solid var(--border); cursor: pointer; user-select: none;
+      cursor: pointer; user-select: none;
     }
-    .assignee-chip.selected { border-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
+    .assignee-chip.selected { background-color: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
     .assignee-chip .avatar {
       width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
       display: inline-flex; align-items: center; justify-content: center;
@@ -568,10 +568,10 @@
     .badge.icon-only.low {
       min-width: 24px;
     }
-    .badge.high { border-color: rgb(255, 0, 0); color: var(--text); background-color: rgb(255, 0, 0, 0.2);}
-    .badge.low { border-color: rgba(200,200,200,.25);  color: var(--text); background-color: rgb(200,200,200, 0.2);}
-    .badge.normal { border-color: var(--accent-color); color: var(--text);  background-color: color-mix(in srgb, var(--accent-color) 30%, transparent);}
-    .badge.quantity { border-color: var(--accent-color); font-weight: 700; color: var(--accent);}
+    .badge.high { color: var(--text); background-color: rgb(255, 0, 0, 0.2);}
+    .badge.low { color: var(--text); background-color: rgb(200,200,200, 0.2);}
+    .badge.normal { color: var(--text);  background-color: color-mix(in srgb, var(--accent-color) 30%, transparent);}
+    .badge.quantity { font-weight: 700; color: var(--accent);}
     .item .del {
       flex-shrink: 0;
       padding: 6px 10px;
