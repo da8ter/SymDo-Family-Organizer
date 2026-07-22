@@ -28,6 +28,18 @@
     m.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
   })();
 
+  // Seitlicher Rand zum Bildschirmrand: in der Visu liefert Symcon 'marginside'
+  // (→ --sym-ms); standalone fehlt er, sonst klebt der scrollbare Inhalt an den
+  // Kanten. applySystemMargins überschreibt --sym-ms nur bei vorhandenem URL-
+  // Parameter, daher hier gefahrlos vorbelegen. env(): Notch/Home-Indikator im
+  // Querformat respektieren, aber mind. 16px.
+  try {
+    document.documentElement.style.setProperty(
+      '--sym-ms',
+      'max(16px, env(safe-area-inset-left), env(safe-area-inset-right))'
+    );
+  } catch (e) {}
+
   var CFG  = window.__SYMDO__ || {};
   var I18N = window.__SYMDO_I18N__ || {};
   var API  = CFG.apiBase || '/hook/lists/app/v1';
