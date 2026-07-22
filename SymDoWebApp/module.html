@@ -655,6 +655,16 @@ select option { color: #111; background: #fff; }
   gap: 6px;
   flex: none;
 }
+/* Belegt die Chip-/Button-Zeile mehr als ein Drittel der Task-Breite (per JS
+   gemessen, Klasse .stacked), rutscht sie als eigene Zeile unter den restlichen
+   Inhalt und richtet sich rechtsbündig aus. */
+.todo-content.stacked { flex-wrap: wrap; }
+.todo-content.stacked .todo-meta {
+  flex-basis: 100%;
+  justify-content: flex-end;
+  align-self: flex-start;
+  margin-top: 6px;
+}
 /* Prioritäts-Chip — identisch zur ToDoList-Kachel (.badge.high/normal/low) */
 .badge {
   font-size: 11px;
@@ -2378,6 +2388,41 @@ function renderTodos() {
   });
 
   bindTodoDnd(area, id, open, done, canReorder);
+  ensureTodoMetaObserver();
+  requestAnimationFrame(layoutTodoMeta);
+}
+
+// Chip-/Button-Zeile einer Aufgabe: belegt sie mehr als ein Drittel der
+// Task-Breite, rutscht sie als eigene Zeile unter den restlichen Inhalt.
+let todoMetaRO = null;
+let todoMetaLastW = -1;
+function layoutTodoMeta() {
+  const area = document.getElementById('todoListArea');
+  if (!area) return;
+  todoMetaLastW = area.clientWidth;
+  const cards = area.querySelectorAll('.todo-card');
+  // Erst überall zurücksetzen, damit die natürliche (nicht gestapelte)
+  // Chip-Breite gemessen wird, dann pro Zeile entscheiden.
+  cards.forEach(card => { const c = card.querySelector('.todo-content'); if (c) c.classList.remove('stacked'); });
+  cards.forEach(card => {
+    const c = card.querySelector('.todo-content');
+    const m = card.querySelector('.todo-meta');
+    if (!c || !m) return;
+    if (m.offsetWidth > c.clientWidth / 3) c.classList.add('stacked');
+  });
+}
+function ensureTodoMetaObserver() {
+  if (todoMetaRO || typeof ResizeObserver === 'undefined') return;
+  const area = document.getElementById('todoListArea');
+  if (!area) return;
+  // Auf Breitenänderung reagieren (Kachel-Resize, Sichtbarwerden beim Tab-
+  // Wechsel). Höhenänderungen durchs Stapeln selbst ignorieren → keine Schleife.
+  todoMetaRO = new ResizeObserver(() => {
+    const a = document.getElementById('todoListArea');
+    if (!a || a.clientWidth === todoMetaLastW) return;
+    layoutTodoMeta();
+  });
+  todoMetaRO.observe(area);
 }
 
 function todoRowHtml(it, draggable, showBadges) {
