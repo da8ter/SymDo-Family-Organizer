@@ -299,7 +299,7 @@ class SymDoBridge extends IPSModuleStrict
             // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
             // Seite authentifiziert sich danach selbst gegen die JSON-API).
             if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
-                $this->ServeWebApp($path);
+                $this->ServeWebApp();
                 return;
             }
             $this->HandleApiRequest();
@@ -317,7 +317,7 @@ class SymDoBridge extends IPSModuleStrict
      * der `window.requestAction`/`window.translate` auf die REST-API umbiegt und
      * das Theme/die Icons bereitstellt.
      */
-    private function ServeWebApp(string $path): void
+    private function ServeWebApp(): void
     {
         $uiPath = __DIR__ . '/../SymDoWebApp/module.html';
         $html   = @file_get_contents($uiPath);
@@ -327,7 +327,15 @@ class SymDoBridge extends IPSModuleStrict
             echo 'SymDo Web-App: UI source not found.';
             return;
         }
-        $html = str_replace('<script src="/icons.js"></script>', $this->BuildWebHead(), $html);
+        // /icons.js beibehalten: liegt an der Host-Wurzel und ist über denselben
+        // Connect-Host erreichbar (root-absolut). Nur den Web-Kopf ANHÄNGEN, statt
+        // den Icon-Kit zu ersetzen. (Sollte /icons.js über Connect wider Erwarten
+        // nicht erreichbar sein, wird hier später ein gebündeltes Icon-Set ergänzt.)
+        $html = str_replace(
+            '<script src="/icons.js"></script>',
+            '<script src="/icons.js"></script>' . $this->BuildWebHead(),
+            $html
+        );
         http_response_code(200);
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store');
