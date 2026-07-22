@@ -333,9 +333,28 @@ class SymDoWebApp extends IPSModuleStrict
         ];
     }
 
+    /**
+     * Nur voll erstellte Instanzen (IS_ACTIVE) dürfen per SL_/TDL_ abgefragt
+     * werden. Trifft ein Aufruf eine Instanz, die gerade erstellt wird oder
+     * deren Interface (noch) nicht bereit ist, emittiert Symcon
+     * „InstanceInterface is not available"/„Attribut … nicht gefunden" als
+     * PHP-WARNING — das fängt kein try/catch (Warning ≠ Throwable). Deshalb
+     * hier vorab gaten, damit ein nicht-bereites Geschwister still übersprungen
+     * wird statt das Log zu fluten.
+     */
+    private function IsInstanceReady(int $id): bool
+    {
+        return $id > 0
+            && IPS_InstanceExists($id)
+            && (IPS_GetInstance($id)['InstanceStatus'] ?? 0) === IS_ACTIVE;
+    }
+
     /** @return array{revision: int, state: array<string, mixed>}|null */
     private function GetInstanceStateParsed(int $id, string $kind): ?array
     {
+        if (!$this->IsInstanceReady($id)) {
+            return null;
+        }
         try {
             if ($kind === 'shopping' && function_exists('SL_GetAppState')) {
                 $json = SL_GetAppState($id);
@@ -383,6 +402,9 @@ class SymDoWebApp extends IPSModuleStrict
 
     private function GetInstanceRevision(int $id, string $kind): int
     {
+        if (!$this->IsInstanceReady($id)) {
+            return 0;
+        }
         try {
             if ($kind === 'shopping' && function_exists('SL_GetAppRevision')) {
                 return (int)SL_GetAppRevision($id);
@@ -465,7 +487,7 @@ class SymDoWebApp extends IPSModuleStrict
         $action     = (string)($data['action'] ?? '');
         $txn        = (string)($data['txn'] ?? '');
         $kind       = $this->GetInstanceKind($instanceID);
-        if ($kind === null || $action === '') {
+        if ($kind === null || $action === '' || !$this->IsInstanceReady($instanceID)) {
             // Fehler als Push beantworten statt werfen: IPS_RequestAction schluckt
             // Exceptions, die Kachel würde sonst ewig auf die txn warten
             $this->Push([
