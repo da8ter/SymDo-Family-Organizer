@@ -112,17 +112,20 @@
   (function bootstrapPairing() {
     var hp = parseHash();
     if (hp.logout !== undefined) { clearToken(); stripHash(); }
+    // Ein bereits gespeichertes Token hat Vorrang. Der QR-Code ist einmalig; beim
+    // erneuten Öffnen/Scannen ist er längst verbraucht — dann darf das Einlösen NICHT
+    // die laufende Sitzung überschreiben. Ist das Token ungültig/entzogen, liefert
+    // die erste API-Antwort 401 und wir landen sauber wieder im Pair-Screen.
+    if (token()) { if (hp.c) { stripHash(); } return; }
     if (hp.c) {
-      // Code einlösen, dann sauber neu laden, damit die UI mit Token startet.
+      // Erstkopplung: Code einlösen, dann sauber neu laden, damit die UI mit Token startet.
       pairing = true;
       pairWithCode(hp.c)
         .then(function () { stripHash(); location.reload(); })
         .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte in der Bridge einen neuen Browser-Zugang erstellen.'); });
       return;
     }
-    if (!token()) {
-      showPairScreen('Nicht gekoppelt. Erstelle in der SymDo Bridge einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
-    }
+    showPairScreen('Nicht gekoppelt. Erstelle in der SymDo Bridge einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
   })();
 
   // Instanz-Art aus der letzten discovery (für Call/CheckRevisions ohne Roundtrip)
