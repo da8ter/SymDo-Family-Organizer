@@ -133,7 +133,11 @@ select option { color: #111; background: #fff; }
   color: var(--muted);
   padding-top: 4px;
 }
-.tabbar button i { font-size: 50px; }
+/* /icons.js (Font Awesome SVG+JS) ersetzt <i> durch <svg class="svg-inline--fa">
+   mit height:1em → deshalb MUSS die Icon-Größe auch das <svg> treffen, sonst
+   erbt es nur die Button-Schriftgröße (Label) und wächst nicht mit. */
+.tabbar button i,
+.tabbar button svg { font-size: 50px; }
 .tabbar button.active { color: var(--accent); }
 
 /* ── Screen-Header ─────────────────────────────────────────────────────────── */
