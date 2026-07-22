@@ -645,11 +645,13 @@ select option { color: #111; background: #fff; }
 }
 .todo-icons { display: flex; gap: 8px; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 /* Alle Chips (und künftige Buttons) einer Aufgabe in EINER Zeile nebeneinander,
-   wie in der ToDoList: Avatare, Menge, Fälligkeit, Priorität, dann Buttons. */
+   wie in der ToDoList: Avatare, Menge, Fälligkeit, Priorität, dann Buttons.
+   Immer am unteren Rand der Zeile ausgerichtet (auch bei mehrzeiligem Titel/Notiz). */
 .todo-meta {
   display: flex;
   flex-direction: row;
   align-items: center;
+  align-self: flex-end;
   gap: 6px;
   flex: none;
 }
