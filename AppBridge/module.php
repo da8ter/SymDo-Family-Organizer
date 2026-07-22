@@ -17,6 +17,7 @@ class SymDoBridge extends IPSModuleStrict
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
     private const CONNECT_MODULE_GUID  = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
     private const HOOK_PATH            = 'lists/app';
+    private const WEBAPP_HOOK_PATH     = 'lists/webapp';
     private const API_VERSION          = 1;
     private const PAIRING_TTL          = 600;
     private const ACTION_DEDUP_TTL     = 86400;
@@ -28,6 +29,9 @@ class SymDoBridge extends IPSModuleStrict
     {
         parent::Create();
         $this->RegisterHook(self::HOOK_PATH);
+        // Zweiter Hook: liefert die SymDo-Web-App als eigenständige Browser-Seite
+        // (dieselbe UI wie die Kachel; Daten holt sie über die /hook/lists/app-API).
+        $this->RegisterHook(self::WEBAPP_HOOK_PATH);
         $this->RegisterAttributeString('PairedDevices', '[]');
         $this->RegisterAttributeString('PendingPairings', '[]');
         $this->RegisterAttributeString('ActionDedup', '{}');
@@ -291,12 +295,58 @@ class SymDoBridge extends IPSModuleStrict
     protected function ProcessHookData(): void
     {
         try {
+            $path = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+            // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
+            // Seite authentifiziert sich danach selbst gegen die JSON-API).
+            if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
+                $this->ServeWebApp($path);
+                return;
+            }
             $this->HandleApiRequest();
         } catch (\Throwable $e) {
             $this->SendDebug('Hook', 'Unhandled error: ' . $e->getMessage(), 0);
             $this->LogMessage($e->getMessage(), KL_ERROR);
             $this->SendApiError('internal', 'Internal server error', 500);
         }
+    }
+
+    /**
+     * Liefert die SymDo-Web-App aus. UI-Quelle ist unverändert die Kachel-Datei
+     * (`SymDoWebApp/module.html`) — eine gemeinsame Quelle, keine Divergenz. Nur
+     * der host-spezifische Kopf (`/icons.js`) wird durch den Web-Adapter ersetzt,
+     * der `window.requestAction`/`window.translate` auf die REST-API umbiegt und
+     * das Theme/die Icons bereitstellt.
+     */
+    private function ServeWebApp(string $path): void
+    {
+        $uiPath = __DIR__ . '/../SymDoWebApp/module.html';
+        $html   = @file_get_contents($uiPath);
+        if (!is_string($html)) {
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'SymDo Web-App: UI source not found.';
+            return;
+        }
+        $html = str_replace('<script src="/icons.js"></script>', $this->BuildWebHead(), $html);
+        http_response_code(200);
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo $html;
+    }
+
+    /**
+     * Host-Kopf für den Browser-Betrieb. Ersetzt die visu-spezifische
+     * `/icons.js`-Zeile. (Phase A: Theme-Defaults; der REST-Adapter + Icons +
+     * i18n folgen in den nächsten Phasen.)
+     */
+    private function BuildWebHead(): string
+    {
+        // Konkrete Theme-Werte, da die Visu-Variablen (--card-color etc.) außerhalb
+        // der Visualisierung fehlen. Dunkles Standard-Theme wie in der App.
+        $theme = '<style>:root{'
+            . '--card-color:#2b2c30;--content-color:#ffffff;--accent-color:#00cdab;'
+            . '}html,body{background:#1c1c1e;}</style>';
+        return $theme;
     }
 
     private function SetFormElementProperty(array &$elements, string $name, string $property, mixed $value): void
