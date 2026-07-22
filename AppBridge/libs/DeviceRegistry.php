@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 trait DeviceRegistry
 {
-    public function CreatePairing(): string
+    /**
+     * Erzeugt einen Einmal-Code (10 min gültig) und legt ihn als einzige
+     * ausstehende Kopplung ab. Von App- und Browser-Pairing gemeinsam genutzt.
+     * @return array{code: string, expiresAt: int}
+     */
+    private function MintPairingCode(): array
     {
         $code      = strtoupper(bin2hex(random_bytes(6)));
         $expiresAt = time() + self::PAIRING_TTL;
@@ -21,6 +26,14 @@ trait DeviceRegistry
                 IPS_SemaphoreLeave($semaphoreKey);
             }
         }
+        return ['code' => $code, 'expiresAt' => $expiresAt];
+    }
+
+    public function CreatePairing(): string
+    {
+        $minted    = $this->MintPairingCode();
+        $code      = $minted['code'];
+        $expiresAt = $minted['expiresAt'];
 
         $connectUrl = $this->GetConnectUrl();
         $localUrls  = $this->GetLocalUrls();
@@ -49,6 +62,42 @@ trait DeviceRegistry
             'expiresAt'  => $expiresAt,
             'connectUrl' => $connectUrl,
             'qrPayload'  => $qrPayload,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Browser-Zugang: erzeugt einen Einmal-Code und einen HTTPS-QR-Code, der die
+     * Web-App-Seite mit dem Code im URL-Fragment öffnet. Die Seite löst den Code
+     * gegen ein Token ein (localStorage) — derselbe Pairing-Pfad wie die App,
+     * nur öffnet der QR eine URL im Browser statt des symdo://-Deep-Links.
+     */
+    public function CreateWebAccess(): string
+    {
+        $minted     = $this->MintPairingCode();
+        $code       = $minted['code'];
+        $connectUrl = $this->GetConnectUrl();
+        $localUrls  = $this->GetLocalUrls();
+        $base       = $connectUrl !== '' ? $connectUrl : (string)($localUrls[0] ?? '');
+        // Code im Fragment (#): erreicht den Server nicht (keine Logs), nur das JS.
+        $webUrl     = $base !== '' ? $base . '/hook/' . self::WEBAPP_HOOK_PATH . '#c=' . $code : '';
+
+        if ($webUrl !== '') {
+            $dataUri = $this->RenderQrDataUri($webUrl);
+            if ($dataUri !== '') {
+                $this->UpdateFormField('WebAccessQrImage', 'image', $dataUri);
+                $this->UpdateFormField('WebAccessQrImage', 'visible', true);
+            }
+            $caption = sprintf($this->Translate('Scan with the phone camera to open the web app (valid for 10 minutes). Link: %s'), $webUrl);
+        } else {
+            $caption = $this->Translate('Warning: No Symcon Connect URL found. Enable Symcon Connect to reach the web app over the internet.');
+        }
+        $this->UpdateFormField('WebAccessLabel', 'caption', $caption);
+        $this->UpdateFormField('WebAccessLabel', 'visible', true);
+
+        return json_encode([
+            'code'      => $code,
+            'expiresAt' => $minted['expiresAt'],
+            'url'       => $webUrl,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 

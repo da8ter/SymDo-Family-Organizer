@@ -28,6 +28,34 @@
         },
         {
             "type": "ExpansionPanel",
+            "caption": "Browser access (web app)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Opens the SymDo app as a website over Symcon Connect — no app install needed. Create an access, then scan the QR code with the phone camera; the browser opens the app already paired. The one-time code is valid for 10 minutes; the browser then keeps its own access token."
+                },
+                {
+                    "type": "Button",
+                    "caption": "Create browser access",
+                    "onClick": "LAB_CreateWebAccess($id);"
+                },
+                {
+                    "type": "Image",
+                    "name": "WebAccessQrImage",
+                    "image": "",
+                    "visible": false
+                },
+                {
+                    "type": "Label",
+                    "name": "WebAccessLabel",
+                    "caption": "",
+                    "visible": false
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
             "caption": "Users",
             "expanded": true,
             "items": [

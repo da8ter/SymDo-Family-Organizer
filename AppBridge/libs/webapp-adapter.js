@@ -58,6 +58,73 @@
       });
   }
 
+  // ---- Pairing (Browser-Zugang) -----------------------------------------------
+  // Der in der Bridge erzeugte QR öffnet https://<connect>/hook/lists/webapp#c=<code>.
+  // Der Einmal-Code steht im URL-Fragment (nicht in Server-Logs); wir tauschen ihn
+  // gegen ein Device-Token, das wir per-Origin in localStorage ablegen.
+  var pairing = false;
+  function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+  function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+  function parseHash() {
+    var out = {};
+    String(location.hash || '').replace(/^#/, '').split('&').forEach(function (kv) {
+      if (!kv) { return; }
+      var p = kv.split('=');
+      out[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+    });
+    return out;
+  }
+  function stripHash() {
+    try { history.replaceState(null, '', location.pathname + location.search); }
+    catch (e) { try { location.hash = ''; } catch (e2) {} }
+  }
+  function whenBody(fn) { if (document.body) { fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+  function showPairScreen(msg) {
+    whenBody(function () {
+      var el = document.getElementById('symdo-pair-screen');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'symdo-pair-screen';
+        el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;background:#1c1c1e;color:#fff;font:500 16px/1.55 -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+        document.body.appendChild(el);
+      }
+      el.innerHTML = '<div style="max-width:340px"><div style="font-size:44px;margin-bottom:14px">🔗</div><div>' + msg + '</div></div>';
+    });
+  }
+  function hidePairScreen() { var el = document.getElementById('symdo-pair-screen'); if (el && el.parentNode) { el.parentNode.removeChild(el); } }
+  function pairWithCode(code) {
+    return apiPost('/pair', {
+      code: code,
+      deviceName: 'Browser',
+      model: String(navigator.userAgent || '').slice(0, 80),
+      platform: 'browser',
+      appVersion: 'web'
+    }).then(function (res) {
+      var j = res.json || {};
+      if (res.status === 200 && j.ok === true && j.token) { setToken(j.token); return true; }
+      throw new Error((j.error && j.error.message) || 'pairing failed');
+    });
+  }
+  window.__symdoUnauthorized = function () {
+    clearToken();
+    showPairScreen('Sitzung abgelaufen. Erstelle in der SymDo Bridge einen neuen Browser-Zugang und scanne den QR-Code.');
+  };
+  (function bootstrapPairing() {
+    var hp = parseHash();
+    if (hp.logout !== undefined) { clearToken(); stripHash(); }
+    if (hp.c) {
+      // Code einlösen, dann sauber neu laden, damit die UI mit Token startet.
+      pairing = true;
+      pairWithCode(hp.c)
+        .then(function () { stripHash(); location.reload(); })
+        .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte in der Bridge einen neuen Browser-Zugang erstellen.'); });
+      return;
+    }
+    if (!token()) {
+      showPairScreen('Nicht gekoppelt. Erstelle in der SymDo Bridge einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
+    }
+  })();
+
   // Instanz-Art aus der letzten discovery (für Call/CheckRevisions ohne Roundtrip)
   var kindOf = {};
 
@@ -120,7 +187,9 @@
   // ---- Nahtstelle: window.requestAction (identisch zur Visu-Signatur) ----------
   window.requestAction = function (ident, value) {
     if (ident === 'GetState') {
-      loadFullState().then(deliver).catch(function (e) { if (String(e && e.message) !== 'unauthorized') { console.warn('SymDo GetState:', e); } });
+      if (pairing) { return; }
+      loadFullState().then(function (p) { hidePairScreen(); deliver(p); })
+                     .catch(function (e) { if (String(e && e.message) !== 'unauthorized') { console.warn('SymDo GetState:', e); } });
       return;
     }
     if (ident === 'Call') {
