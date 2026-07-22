@@ -1209,6 +1209,26 @@ select option { color: #111; background: #fff; }
 (function () {
 'use strict';
 
+// Hell-Theme: Kachelfläche aufhellen wie in der Web-App. Hell/Dunkel aus der
+// Luminanz der Kartenfarbe (in der Visu injiziert; im Browser vom Web-Adapter
+// gesetzt). Der Web-Adapter setzt --row zusätzlich inline — konsistenter Wert.
+(function symdoLightTiles(){
+  try { var st = document.createElement('style');
+    st.textContent = 'html[data-symdo-theme="light"]{--row:color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%)}';
+    (document.head || document.documentElement).appendChild(st); } catch (e) {}
+  function apply(){ try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+    (document.body || document.documentElement).appendChild(p);
+    var c = getComputedStyle(p).color; p.remove();
+    var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+    var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+    document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+  } catch (e) {} }
+  apply();
+  try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply); } catch (e) {}
+})();
+
 // ── System-Kachelränder aus den URL-Parametern übernehmen ──────────────────
 // Die Tile-Visu übergibt margintop/marginside/marginbottom in der Query. Wir
 // wenden sie selbst als Padding an (siehe .app), damit der Inhalt nicht unter

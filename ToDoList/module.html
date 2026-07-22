@@ -823,6 +823,24 @@
 
   <script>
     (() => {
+    // Hell-Theme: Kachelfläche aufhellen wie in der Web-App. Hell/Dunkel aus der
+    // Luminanz der von der Visu injizierten Kartenfarbe (dunkel = Dark Mode).
+    (function symdoLightTiles(){
+      try { var st = document.createElement('style');
+        st.textContent = 'html[data-symdo-theme="light"]{--row:color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%)}';
+        (document.head || document.documentElement).appendChild(st); } catch (e) {}
+      function apply(){ try {
+        var p = document.createElement('span');
+        p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+        (document.body || document.documentElement).appendChild(p);
+        var c = getComputedStyle(p).color; p.remove();
+        var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+        var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+        document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+      } catch (e) {} }
+      apply();
+      try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply); } catch (e) {}
+    })();
     // ── System-Kachelränder + Scrollbalken-Breite ─────────────────────────
     // margintop/marginside/marginbottom aus der Tile-URL übernehmen (.wrap) und
     // die echte Scrollbalken-Breite messen, damit der Listen-Scrollbalken mittig

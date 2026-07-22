@@ -1582,6 +1582,24 @@ textarea.edit-input { overflow: hidden; }
   <script>
 (function () {
 'use strict';
+// Hell-Theme: Artikelkachel-Fläche aufhellen wie in der Web-App. Hell/Dunkel aus
+// der Luminanz der von der Visu injizierten Kartenfarbe (dunkel = Dark Mode).
+(function symdoLightTiles(){
+  try { var st = document.createElement('style');
+    st.textContent = 'html[data-symdo-theme="light"] .item-card-content{background:linear-gradient(color-mix(in srgb, var(--content-color) 5%, transparent),color-mix(in srgb, var(--content-color) 5%, transparent)),var(--bg)}';
+    (document.head || document.documentElement).appendChild(st); } catch (e) {}
+  function apply(){ try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+    (document.body || document.documentElement).appendChild(p);
+    var c = getComputedStyle(p).color; p.remove();
+    var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+    var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+    document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+  } catch (e) {} }
+  apply();
+  try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply); } catch (e) {}
+})();
 
 // ── System-Kachelränder + Scrollbalken-Breite ─────────────────────────────
 // margintop/marginside/marginbottom aus der Tile-URL übernehmen (siehe .wrap)
