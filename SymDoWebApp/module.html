@@ -654,7 +654,7 @@ select option { color: #111; background: #fff; }
   gap: 6px;
   flex: none;
 }
-/* Belegt die Chip-/Button-Zeile mehr als ein Drittel der Task-Breite (per JS
+/* Belegt die Chip-/Button-Zeile mehr als die Hälfte der Task-Breite (per JS
    gemessen, Klasse .stacked), rutscht sie als eigene Zeile unter den restlichen
    Inhalt und richtet sich rechtsbündig aus. */
 .todo-content.stacked { flex-wrap: wrap; }
@@ -2394,7 +2394,7 @@ function renderTodos() {
   requestAnimationFrame(layoutTodoMeta);
 }
 
-// Chip-/Button-Zeile einer Aufgabe: belegt sie mehr als ein Drittel der
+// Chip-/Button-Zeile einer Aufgabe: belegt sie mehr als die Hälfte der
 // Task-Breite, rutscht sie als eigene Zeile unter den restlichen Inhalt.
 let todoMetaRO = null;
 let todoMetaLastW = -1;
@@ -2410,7 +2410,7 @@ function layoutTodoMeta() {
     const c = card.querySelector('.todo-content');
     const m = card.querySelector('.todo-meta');
     if (!c || !m) return;
-    if (m.offsetWidth > c.clientWidth / 3) c.classList.add('stacked');
+    if (m.offsetWidth > c.clientWidth / 2) c.classList.add('stacked');
   });
 }
 function ensureTodoMetaObserver() {
