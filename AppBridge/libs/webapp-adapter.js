@@ -40,6 +40,18 @@
     );
   } catch (e) {}
 
+  // Scrollbalken ausblenden — auf dem Smartphone unnötig. Nur web-seitig (die
+  // Kachel-CSS bleibt unberührt). Läuft im <head> vor measureScrollbar, sodass
+  // die Breite als 0 gemessen wird und die Randberechnung stimmt. Gescrollt wird
+  // weiterhin (overflow bleibt).
+  (function hideScrollbars() {
+    var s = document.createElement('style');
+    s.textContent =
+      '::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;background:transparent!important}'
+      + '*{scrollbar-width:none!important;-ms-overflow-style:none!important}';
+    (document.head || document.documentElement).appendChild(s);
+  })();
+
   var CFG  = window.__SYMDO__ || {};
   var I18N = window.__SYMDO_I18N__ || {};
   var API  = CFG.apiBase || '/hook/lists/app/v1';
