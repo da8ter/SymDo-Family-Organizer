@@ -76,6 +76,13 @@
     var scheme = prefersDark() ? 'dark' : 'light';
     var visu = discoveryTheme && (discoveryTheme[scheme] || discoveryTheme.dark || discoveryTheme.light);
     setColors((visu && visu.card && visu.content && visu.accent) ? visu : THEME_DEFAULTS[scheme]);
+    // Zeilenfläche der Kacheln (--row): im Hellmodus dezenter, sonst wirken die
+    // Kacheln zu dunkel; im Dunkelmodus wie in der Visu-Kachel. Bleibt DECKEND
+    // (kein 50 %-Transparent), da hinter den Kacheln der rote Wisch-zum-Löschen-
+    // Layer liegt und sonst durchscheinen würde.
+    document.documentElement.style.setProperty('--row', scheme === 'light'
+      ? 'color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%)'
+      : 'color-mix(in srgb, var(--card-color) 86%, var(--content-color) 14%)');
   }
   // Canvas-Hintergrund (Overscroll/Safe-Areas) folgt der Kartenfarbe. Zuletzt
   // eingefügt → gewinnt über das statische Default aus BuildWebHead.
@@ -236,6 +243,21 @@
     return s;
   }
 
+  // discovery liefert nur {id,name,hasAvatar} (keine Bilddaten wie die Kachel-
+  // Data-URI). Avatar-Foto daher über den token-gesicherten Bridge-Endpoint laden
+  // (Query-Token für die 'users'-Route erlaubt). Der Browser cached es per ETag.
+  function mapUsers(list) {
+    return (list || []).map(function (u) {
+      return {
+        id: u.id,
+        name: u.name,
+        avatar: u.hasAvatar
+          ? (API + '/users/' + encodeURIComponent(u.id) + '/avatar?t=' + encodeURIComponent(token()))
+          : ''
+      };
+    });
+  }
+
   // ---- Aggregation: discovery + per-Instanz-state -> Kachel-'state' ------------
   function loadFullState() {
     return apiGet('/discovery').then(function (disc) {
@@ -275,7 +297,7 @@
         });
         return {
           type: 'state',
-          users: disc.users || [],
+          users: mapUsers(disc.users),
           defaultUserID: '',
           bridgeAvailable: true,
           hiddenIDs: hiddenIDs,
