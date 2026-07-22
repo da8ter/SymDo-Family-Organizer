@@ -499,6 +499,7 @@ select option { color: #111; background: #fff; }
 .item-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .item-main { flex: 1; min-width: 0; }
 .item-name {
+  display: block;
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
@@ -506,6 +507,7 @@ select option { color: #111; background: #fff; }
   text-overflow: ellipsis;
 }
 .item-notes {
+  display: block;
   font-size: 12.5px;
   color: var(--muted);
   white-space: nowrap;
@@ -739,7 +741,7 @@ select option { color: #111; background: #fff; }
   justify-content: center;
   font-size: 16px;
 }
-.fav-main { flex: 1; min-width: 0; }
+.fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fav-name { font-size: 15px; font-weight: 600; }
 .fav-count { font-size: 12.5px; color: var(--muted); }
 .fav-cart-btn { font-size: 17px; color: var(--accent); padding: 6px; }
@@ -2179,6 +2181,9 @@ function renderShopping() {
   renderSuggestions();
 }
 
+// Ausgefülltes Herz als Inline-SVG (das fa-solid-Icon ist im Icon-Kit nicht
+// enthalten und rendert sonst als leerer Kasten). Füllt sich über currentColor.
+const HEART_SOLID_SVG = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="display:block"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
 function shoppingRowHtml(it, favNames, st, inCart) {
   const img = resolveItemImage(it);
   const tint = categoryStyle(it.category).tint;
@@ -2189,7 +2194,7 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   const amount = amountRaw === '' ? '1' : amountRaw;
   const faved = favNames.has(String(it.name || '').trim().toLowerCase());
   let side = '';
-  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit"><i class="${faved ? 'fa-solid' : 'fa-light'} fa-heart"></i></button>`;
+  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
   if (it.price && st.extApiShowPrice !== false) {
     side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
   }
@@ -2524,7 +2529,7 @@ function renderFavorites() {
     for (const list of lists) {
       const count = (list.items || []).length;
       html += `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
-        `<span class="fav-badge"><i class="fa-solid fa-heart"></i></span>` +
+        `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
         `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
         `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
         `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
@@ -2689,7 +2694,7 @@ function renderFavPicker() {
   body.innerHTML = lists.map(l => {
     const inList = (l.items || []).some(i => String(i.name || '').trim().toLowerCase() === norm);
     return `<div class="assign-row${inList ? ' selected' : ''}" data-list="${escapeHtml(l.id)}">` +
-      `<span class="fav-badge" style="width:30px;height:30px;font-size:13px;"><i class="fa-solid fa-heart"></i></span>` +
+      `<span class="fav-badge" style="width:30px;height:30px;font-size:13px;">${HEART_SOLID_SVG}</span>` +
       `<span>${escapeHtml(l.name)}</span><i class="fa-light fa-check check"></i></div>`;
   }).join('');
   body.querySelectorAll('.assign-row').forEach(row => row.addEventListener('click', () => {
