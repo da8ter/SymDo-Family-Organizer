@@ -166,7 +166,11 @@
             "Quantity ×%1": "Menge ×%1",
             "Open recipe": "Rezept öffnen",
             "Please enter a name.": "Bitte einen Namen eingeben.",
-            "%1 items saved to favorites": "%1 Artikel in Favoriten gespeichert"
+            "%1 items saved to favorites": "%1 Artikel in Favoriten gespeichert",
+            "Save recipe photo": "Rezeptfoto speichern",
+            "Save recipe link": "Rezept-Link speichern",
+            "Recipe photo": "Rezeptfoto",
+            "Could not load the image.": "Bild konnte nicht geladen werden."
         }
     }
 }

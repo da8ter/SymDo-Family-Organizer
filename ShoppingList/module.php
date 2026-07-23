@@ -255,7 +255,8 @@ class ShoppingList extends IPSModuleStrict
                     (string)($data['listId'] ?? ''),
                     (string)($data['name'] ?? ''),
                     $data['items'],
-                    (string)($data['url'] ?? '')
+                    (string)($data['url'] ?? ''),
+                    (string)($data['mediaId'] ?? '')
                 );
                 return;
             case 'RemoveItemFromFavoriteList':

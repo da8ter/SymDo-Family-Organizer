@@ -39,6 +39,7 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('ActionDedup', '{}');
         $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterAttributeString('HiddenInstances', '[]');
+        $this->RegisterAttributeString('RecipePhotoCategory', ''); // Kategorie-ID für „Rezeptfotos"
         $this->RegisterPropertyString('Users', '[]');
         // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.

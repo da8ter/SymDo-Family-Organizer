@@ -71,10 +71,11 @@ trait FavoriteStore
      * Fügt mehrere Artikel in einem Rutsch hinzu — entweder in eine bestehende Liste
      * ($listId) oder in eine neu anzulegende ($newListName). Ein Aufruf, ein State-Push.
      * Gibt die (ggf. neue) Listen-ID zurück, '' bei Fehler.
-     * @param array  $items Liste von {name, category?, amount?, notes?}
-     * @param string $url   optionale Rezept-URL, die auf der Liste gespeichert wird
+     * @param array  $items   Liste von {name, category?, amount?, notes?}
+     * @param string $url      optionale Rezept-URL, die auf der Liste gespeichert wird
+     * @param string $mediaId  optionale Rezeptfoto-Medienobjekt-ID (Alternative zur URL)
      */
-    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = ''): string
+    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = '', string $mediaId = ''): string
     {
         $lists       = $this->LoadFavoriteLists();
         $targetIndex = -1;
@@ -98,10 +99,15 @@ trait FavoriteStore
         if (!isset($lists[$targetIndex]['items']) || !is_array($lists[$targetIndex]['items'])) {
             $lists[$targetIndex]['items'] = [];
         }
-        // Rezept-URL auf der Liste hinterlegen (nur setzen/aktualisieren, wenn geliefert).
+        // Rezept-Quelle auf der Liste hinterlegen (URL oder Rezeptfoto-Medien-ID),
+        // nur setzen, wenn geliefert.
         $url = trim($url);
         if ($url !== '') {
             $lists[$targetIndex]['url'] = $url;
+        }
+        $mediaId = trim($mediaId);
+        if ($mediaId !== '') {
+            $lists[$targetIndex]['mediaId'] = (int)$mediaId;
         }
 
         foreach ($items as $it) {

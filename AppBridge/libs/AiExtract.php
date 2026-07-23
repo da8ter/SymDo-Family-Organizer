@@ -98,6 +98,20 @@ trait AiExtract
         ]);
     }
 
+    /** REST: Rezeptfoto als Medienobjekt speichern → {ok, mediaId}. */
+    private function HandleAiSavePhoto(array $device): void
+    {
+        $r = json_decode($this->AiRelayBody('/savephoto', json_encode($this->ReadJsonBody())), true);
+        $this->SendJson(is_array($r) ? $r : ['ok' => false, 'error' => ['code' => 'ai_error', 'message' => 'error']]);
+    }
+
+    /** REST: Rezeptfoto als data:-URL liefern → {ok, dataUrl}. */
+    private function HandleAiGetMedia(array $device): void
+    {
+        $r = json_decode($this->AiRelayBody('/media', json_encode($this->ReadJsonBody())), true);
+        $this->SendJson(is_array($r) ? $r : ['ok' => false, 'error' => ['code' => 'ai_error', 'message' => 'error']]);
+    }
+
     /**
      * Relay für die Visu-Kachel: dieselbe KI-Extraktion wie der REST-Endpoint,
      * aber als Rückgabewert statt HTTP-Antwort (die Kachel hat keinen Token). Wird
@@ -108,9 +122,6 @@ trait AiExtract
      */
     private function AiRelayBody(string $path, string $payloadJson): string
     {
-        if (!$this->ReadPropertyBoolean('AiEnabled')) {
-            return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
-        }
         $body = json_decode($payloadJson, true);
         if (!is_array($body)) {
             $body = [];
@@ -118,6 +129,19 @@ trait AiExtract
         $image = $this->AiStripImage((string)($body['image'] ?? ''));
         if ($image !== '' && strlen($image) > 12 * 1024 * 1024) {
             return $this->AiRelayError('invalid_payload', $this->Translate('Image too large.'));
+        }
+
+        // Medien-Operationen laufen unabhängig vom KI-Schalter (auch zum Öffnen
+        // bereits gespeicherter Rezeptfotos).
+        if (str_ends_with($path, 'savephoto')) {
+            return json_encode($this->AiSavePhoto($image, (string)($body['name'] ?? '')), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        if (str_ends_with($path, 'media')) {
+            return json_encode($this->AiGetMedia((int)($body['mediaId'] ?? 0)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        if (!$this->ReadPropertyBoolean('AiEnabled')) {
+            return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }
 
         if (str_ends_with($path, 'ingredients')) {
@@ -161,6 +185,72 @@ trait AiExtract
             $image = substr($image, $comma + 7);
         }
         return trim($image);
+    }
+
+    // ────────────────────────────── Rezeptfotos (Medienobjekte) ──────────────────────────────
+
+    private const AI_SDWA_GUID = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
+
+    /** Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz (einmal anlegen, dann gecached). */
+    private function AiRecipePhotoCategory(): int
+    {
+        $catId = (int)$this->ReadAttributeString('RecipePhotoCategory');
+        if ($catId > 0 && IPS_CategoryExists($catId)) {
+            return $catId;
+        }
+        $sdwa   = IPS_GetInstanceListByModuleID(self::AI_SDWA_GUID);
+        $parent = (is_array($sdwa) && count($sdwa) > 0) ? (int)$sdwa[0] : 0;
+        if ($parent <= 0) {
+            return 0;
+        }
+        foreach (IPS_GetChildrenIDs($parent) as $child) {
+            if (IPS_CategoryExists($child) && IPS_GetName($child) === 'Rezeptfotos') {
+                $this->WriteAttributeString('RecipePhotoCategory', (string)$child);
+                return $child;
+            }
+        }
+        $catId = IPS_CreateCategory();
+        IPS_SetParent($catId, $parent);
+        IPS_SetName($catId, 'Rezeptfotos');
+        $this->WriteAttributeString('RecipePhotoCategory', (string)$catId);
+        return $catId;
+    }
+
+    /** Speichert das (JPEG-)Foto als Medienobjekt unter „Rezeptfotos". @return array ok+mediaId | ok:false+error */
+    private function AiSavePhoto(string $imageBase64, string $name): array
+    {
+        if ($imageBase64 === '') {
+            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('No image provided.')]];
+        }
+        $cat = $this->AiRecipePhotoCategory();
+        if ($cat <= 0) {
+            return ['ok' => false, 'error' => ['code' => 'no_category', 'message' => 'Rezeptfotos category unavailable']];
+        }
+        $mid  = IPS_CreateMedia(MEDIATYPE_IMAGE);
+        IPS_SetParent($mid, $cat);
+        $name = trim($name);
+        IPS_SetName($mid, $name !== '' ? $name : $this->Translate('Recipe photo'));
+        // Ein Medienobjekt braucht erst eine Datei, bevor Content gesetzt werden kann.
+        IPS_SetMediaFile($mid, 'media/recipe_' . $mid . '.jpg', false);
+        IPS_SetMediaContent($mid, $imageBase64);
+        return ['ok' => true, 'mediaId' => $mid];
+    }
+
+    /** Liefert ein Rezeptfoto als data:-URL — nur Objekte unter „Rezeptfotos". */
+    private function AiGetMedia(int $mediaId): array
+    {
+        if ($mediaId <= 0 || !IPS_MediaExists($mediaId)) {
+            return ['ok' => false, 'error' => ['code' => 'not_found', 'message' => 'Media not found']];
+        }
+        $cat = (int)$this->ReadAttributeString('RecipePhotoCategory');
+        if ($cat <= 0 || IPS_GetParent($mediaId) !== $cat) {
+            return ['ok' => false, 'error' => ['code' => 'forbidden', 'message' => 'Not a recipe photo']];
+        }
+        $content = @IPS_GetMediaContent($mediaId);
+        if (!is_string($content) || $content === '') {
+            return ['ok' => false, 'error' => ['code' => 'empty', 'message' => 'Empty media']];
+        }
+        return ['ok' => true, 'dataUrl' => 'data:image/jpeg;base64,' . $content];
     }
 
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */

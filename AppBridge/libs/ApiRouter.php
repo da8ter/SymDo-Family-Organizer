@@ -94,6 +94,14 @@ trait ApiRouter
                     $this->HandleAiIngredients($device);
                     return;
                 }
+                if ($method === 'POST' && ($route[2] ?? '') === 'savephoto') {
+                    $this->HandleAiSavePhoto($device);
+                    return;
+                }
+                if ($method === 'POST' && ($route[2] ?? '') === 'media') {
+                    $this->HandleAiGetMedia($device);
+                    return;
+                }
                 break;
             case 'assets':
                 if ($method === 'GET') {

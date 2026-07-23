@@ -1006,6 +1006,8 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-fav-section:first-child { margin-top: 2px; }
 .ai-fav-new { display: flex; gap: 8px; align-items: center; }
 .ai-fav-new input { flex: 1; }
+.ai-fav-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0 2px; cursor: pointer; }
+.ai-fav-toggle input { width: 18px; height: 18px; }
 /* KI-Quelle wählen (Foto / URL) */
 .ai-source-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -1366,6 +1368,19 @@ html[data-symdo-theme="dark"] .member-bar {
   </div>
 </div>
 
+<!-- Rezeptfoto anzeigen (Medienobjekt) -->
+<div class="overlay" id="recipeImgOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="recipeImgTitle">Rezeptfoto</span>
+      <button class="btn-close-overlay" data-close="recipeImgOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" style="text-align:center;">
+      <img id="recipeImg" alt="" style="max-width:100%;border-radius:12px;" />
+    </div>
+  </div>
+</div>
+
 <!-- KI: Quelle wählen — Foto analysieren oder Rezept-URL analysieren -->
 <div class="overlay" id="aiSourceOverlay">
   <div class="overlay-card">
@@ -1546,6 +1561,19 @@ function computeAiEnabled() {
 function applyAiEnabled() {
   const on = computeAiEnabled();
   ['btnShopScan', 'btnTodoScan'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
+}
+// Rezeptfoto (Medienobjekt) über den KI-Transport laden und im Overlay anzeigen.
+function openRecipePhoto(mediaId) {
+  aiPost('/ai/media', { mediaId: mediaId }).then(res => {
+    const j = res && res.json;
+    if (j && j.ok && j.dataUrl) {
+      document.getElementById('recipeImgTitle').textContent = translate('Recipe photo');
+      document.getElementById('recipeImg').src = j.dataUrl;
+      openOverlay('recipeImgOverlay');
+    } else {
+      showToast(translate('Could not load the image.'));
+    }
+  }).catch(() => showToast(translate('Could not load the image.')));
 }
 
 // Kompat-Schicht für die aus dem ShoppingList-Modul übernommenen Blöcke
@@ -3091,7 +3119,7 @@ function renderFavorites() {
       `</span><span class="item-side">${side}</span></div></div>`;
   }
   html += `<div class="fav-actions">` +
-    (detail.url ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
+    ((detail.url || detail.mediaId) ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
     `</div>`;
@@ -3110,7 +3138,10 @@ function renderFavorites() {
     ]);
   });
   const btnFavOpenRecipe = document.getElementById('btnFavOpenRecipe');
-  if (btnFavOpenRecipe) btnFavOpenRecipe.addEventListener('click', () => { if (detail.url) { try { window.open(detail.url, '_blank'); } catch (e) {} } });
+  if (btnFavOpenRecipe) btnFavOpenRecipe.addEventListener('click', () => {
+    if (detail.url) { try { window.open(detail.url, '_blank'); } catch (e) {} }
+    else if (detail.mediaId) { openRecipePhoto(detail.mediaId); }
+  });
   document.getElementById('btnFavAddAll').addEventListener('click', () => addFavListToCart(id, detail));
   document.getElementById('btnFavAddItem').addEventListener('click', () => openFavItemEditor(id, detail.id, null));
   el.querySelectorAll('.item-card').forEach(card => {
@@ -4291,6 +4322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
     const srcUrl = (payload && payload.url) ? String(payload.url) : '';
+    const srcImage = (payload && payload.image) ? String(payload.image) : '';
     const done = (res) => {
       const j = res && res.json;
       if (!res || res.status !== 200 || !j || j.ok !== true) {
@@ -4298,7 +4330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         aiStatus(escapeHtml(msg));
         return;
       }
-      renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl });
+      renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl, image: srcImage });
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     aiPost('/ai/ingredients', payload).then(done).catch(fail);
@@ -4370,7 +4402,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const servings = (typeof data.servings === 'number' && data.servings >= 1) ? Math.round(data.servings) : null;
     const title = data.title ? String(data.title) : '';
     // servings bekannt → freie Portionszahl (Start = servings, min 1); sonst ganzzahliger Mengen-Faktor.
-    aiRecipe = { title: title, servings: servings, url: data.url || '', portions: servings, factor: 1 };
+    aiRecipe = { title: title, servings: servings, url: data.url || '', image: data.image || '', portions: servings, factor: 1 };
     document.getElementById('aiReviewTitle').textContent = translate('Detected items');
     if (aiFav) { aiFav.style.display = ''; aiFav.disabled = items.length === 0; }
     if (!items.length) { aiStatus(translate('No items detected.')); aiAdd.disabled = true; return; }
@@ -4509,6 +4541,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefill = (aiRecipe && aiRecipe.title) ? aiRecipe.title : '';
     const body = document.getElementById('aiFavBody');
     let h = '';
+    // Schalter: Rezeptquelle mitspeichern (Foto → Medienobjekt, URL → Link).
+    if (aiRecipe && (aiRecipe.image || aiRecipe.url)) {
+      const lbl = aiRecipe.image ? translate('Save recipe photo') : translate('Save recipe link');
+      h += '<label class="ai-fav-toggle"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
+    }
     if (lists.length) {
       h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
       h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-chevron-right check" style="opacity:.5"></i></div>').join('');
@@ -4526,14 +4563,30 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveAiFav(target) {
     const items = aiFavItems || selectedAiItems();
     if (!items.length) return;
-    const payload = { items: items };
-    if (target.listId) payload.listId = target.listId;
-    if (target.name) payload.name = target.name;
-    if (aiRecipe && aiRecipe.url) payload.url = String(aiRecipe.url);
-    sdCall(selectedShoppingID(), 'AddItemsToFavoriteList', payload);
-    closeOverlay('aiFavOverlay');
-    closeOverlay('aiReviewOverlay');
-    showToast(translate('%1 items saved to favorites').replace('%1', String(items.length)));
+    const id = selectedShoppingID();
+    const srcEl = document.getElementById('aiFavSaveSource');
+    const saveSrc = !srcEl || srcEl.checked;
+    const base = { items: items };
+    if (target.listId) base.listId = target.listId;
+    if (target.name) base.name = target.name;
+    const finish = (extra) => {
+      sdCall(id, 'AddItemsToFavoriteList', Object.assign({}, base, extra || {}));
+      closeOverlay('aiFavOverlay');
+      closeOverlay('aiReviewOverlay');
+      showToast(translate('%1 items saved to favorites').replace('%1', String(items.length)));
+    };
+    if (saveSrc && aiRecipe && aiRecipe.image) {
+      // Foto als Medienobjekt speichern → Medien-ID auf der Liste hinterlegen
+      aiPost('/ai/savephoto', { image: aiRecipe.image, name: (aiRecipe.title || translate('Recipe photo')) }).then(res => {
+        const j = res && res.json;
+        const mediaId = (j && j.ok && j.mediaId) ? j.mediaId : 0;
+        finish(mediaId ? { mediaId: String(mediaId) } : {});
+      }).catch(() => finish({}));
+    } else if (saveSrc && aiRecipe && aiRecipe.url) {
+      finish({ url: String(aiRecipe.url) });
+    } else {
+      finish({});
+    }
   }
 
   // ToDo-Editor: Sichtbarkeits-Logik
