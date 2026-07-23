@@ -178,6 +178,9 @@
       });
     });
   }
+  // Für die UI: authentifizierter POST über dieselbe lokal-zuerst-Basis (z. B.
+  // der KI-Foto-Upload), damit auch dieser daheim lokal statt über Connect läuft.
+  window.__symdoApiPost = apiPost;
 
   // ---- Pairing (Browser-Zugang) -----------------------------------------------
   // Der in der Bridge erzeugte QR öffnet https://<connect>/hook/lists/webapp#c=<code>.

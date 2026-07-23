@@ -4141,22 +4141,31 @@ document.addEventListener('DOMContentLoaded', () => {
     aiAdd.disabled = true;
     aiStatus('<div class="ai-spinner"></div>' + translate('Analyzing photo…'));
     openOverlay('aiReviewOverlay');
-    const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
-    let token = '';
-    try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    fetch(base + '/ai/extract', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify({ image: dataUrl }) })
-      .then(r => r.json().then(j => ({ ok: r.ok, j: j })).catch(() => ({ ok: false, j: null })))
-      .then(res => {
-        if (!res.ok || !res.j || res.j.ok !== true) {
-          const msg = (res.j && res.j.error && res.j.error.message) || translate('AI request failed.');
-          aiStatus(escapeHtml(msg));
-          return;
-        }
-        renderAiReview(Array.isArray(res.j.todos) ? res.j.todos : []);
-      })
-      .catch(() => aiStatus(translate('Could not reach the AI service.')));
+    const done = (res) => {
+      const j = res && res.json;
+      if (!res || res.status !== 200 || !j || j.ok !== true) {
+        const msg = (j && j.error && j.error.message) || translate('AI request failed.');
+        aiStatus(escapeHtml(msg));
+        return;
+      }
+      renderAiReview(Array.isArray(j.todos) ? j.todos : []);
+    };
+    const fail = () => aiStatus(translate('Could not reach the AI service.'));
+    // Über die Adapter-Transportfunktion → dieselbe lokal-zuerst-Basis wie alle
+    // anderen Aufrufe (daheim lokal, unterwegs Connect, mit Fallback).
+    if (typeof window.__symdoApiPost === 'function') {
+      window.__symdoApiPost('/ai/extract', { image: dataUrl }).then(done).catch(fail);
+    } else {
+      // Fallback (falls kein Adapter, z. B. außerhalb der Standalone-App)
+      const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
+      let token = '';
+      try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      fetch(base + '/ai/extract', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify({ image: dataUrl }) })
+        .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })))
+        .then(done).catch(fail);
+    }
   }
 
   function renderAiReview(todos) {
