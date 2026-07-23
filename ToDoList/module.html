@@ -1916,33 +1916,10 @@
           document.removeEventListener('touchcancel', onTouchEnd);
         };
 
-        container.addEventListener('pointerdown', (e) => {
-          const handle = e.target.closest('.drag-handle');
-          if (!handle) return;
-
-          const item = handle.closest('.item');
-          if (!item) return;
-
-          pointerDragActive = true;
-          pointerDragPointerId = (typeof e.pointerId === 'number') ? e.pointerId : null;
-          pointerDragStartY = e.clientY;
-          pointerDragMoved = false;
-          pointerDragContainer = container;
-
-          dragItem = item;
-          dragGroup = item.getAttribute('data-group') || '';
-          item.classList.add('dragging');
-          dragItemPrevPointerEvents = item.style.pointerEvents;
-          item.style.pointerEvents = 'none';
-
-          e.preventDefault();
-          e.stopPropagation();
-
-          document.addEventListener('pointermove', onPointerMove, { passive: false });
-          document.addEventListener('pointerup', onPointerUp, { passive: false });
-          document.addEventListener('pointercancel', onPointerUp, { passive: false });
-        }, { passive: false });
-
+        // NOTE: no Pointer Events path here on purpose. On iOS, setting the
+        // dragged item's pointer-events:none breaks implicit pointer capture and
+        // pointermove stops firing (drag dies); the desktop webview delivers no
+        // pointer events at all. Mouse (desktop) + touch (mobile) cover both.
         container.addEventListener('mousedown', (e) => {
           if (pointerDragActive) return;
           const handle = e.target.closest('.drag-handle');
@@ -2133,60 +2110,61 @@
       if (!swipe || !Number.isFinite(id)) return;
 
       let startX = 0, startY = 0, dx = 0;
-      let active = false, decided = false, pointerId = null;
+      let active = false, decided = false, usingTouch = false;
       const SLOP = 8;        // px before a gesture direction is decided
-      const THRESHOLD = 70;  // px pull-left required to trigger delete
+      const THRESHOLD = 70;  // px pull required to trigger delete (left) / edit (right)
+
+      const clearArm = () => item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
 
       // Release the document-level listeners and reset gesture state.
       const cleanup = () => {
-        active = false; decided = false; pointerId = null;
+        active = false; decided = false;
         swipe.classList.remove('is-dragging');
-        document.removeEventListener('pointermove', onMove);
-        document.removeEventListener('pointerup', onUp);
-        document.removeEventListener('pointercancel', onUp);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.removeEventListener('touchmove', onTouchMove);
+        document.removeEventListener('touchend', onTouchEnd);
+        document.removeEventListener('touchcancel', onTouchEnd);
       };
 
-      const onDown = (e) => {
-        if (e.target.closest('.drag-handle, .edit, .del, .chk')) return; // leave controls alone
-        if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return;
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // Shared gesture core (Pointer Events are unreliable across the Symcon
+      // webviews — desktop delivers no pointer events, and on iOS the drag
+      // reorder's pointer-events:none breaks implicit pointer capture — so this
+      // uses mouse + touch events, mirroring the drag-and-drop handlers).
+      const begin = (target, x, y) => {
+        if (target.closest('.drag-handle, .edit, .del, .chk')) return false; // leave controls alone
+        if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return false;
         active = true; decided = false;
-        startX = e.clientX; startY = e.clientY; dx = 0;
-        pointerId = e.pointerId;
+        startX = x; startY = y; dx = 0;
         swipe.classList.add('is-dragging');
-        // Bind on document (not the element) so the release is caught even after the
-        // element has translated out from under the finger, and without relying on
-        // setPointerCapture() which is unreliable in some Symcon webviews.
-        document.addEventListener('pointermove', onMove, { passive: false });
-        document.addEventListener('pointerup', onUp);
-        document.addEventListener('pointercancel', onUp);
+        return true;
       };
 
-      const onMove = (e) => {
-        if (!active || e.pointerId !== pointerId) return;
-        const mx = e.clientX - startX;
-        const my = e.clientY - startY;
+      // Returns true when the horizontal swipe consumed the move.
+      const move = (x, y) => {
+        if (!active) return false;
+        const mx = x - startX;
+        const my = y - startY;
         if (!decided) {
-          if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
-          if (Math.abs(my) >= Math.abs(mx)) {
-            // vertical scroll — not a horizontal swipe, hand back to browser
+          if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
+          if (Math.abs(my) >= Math.abs(mx)) { // vertical — hand back to the browser (scroll)
             swipe.style.transform = '';
-            item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+            clearArm();
             cleanup();
-            return;
+            return false;
           }
           decided = true;
         }
-        if (e.cancelable) e.preventDefault(); // keep the list from scrolling mid-swipe
         dx = Math.max(-swipe.offsetWidth, Math.min(swipe.offsetWidth, mx)); // both directions
         swipe.style.transform = `translateX(${dx}px)`;
         item.classList.toggle('dragging-left', dx < 0);
         item.classList.toggle('dragging-right', dx > 0);
         item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
         item.classList.toggle('edit-armed', dx >= THRESHOLD);
+        return true;
       };
 
-      const onUp = () => {
+      const end = () => {
         if (!active) return;
         const wasDecided = decided;
         const finalDx = dx;
@@ -2199,16 +2177,40 @@
           window.setTimeout(() => requestAction('DeleteItem', JSON.stringify({ id: id })), 240);
         } else if (wasDecided && finalDx >= THRESHOLD) {
           swipe.style.transform = '';
-          item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+          clearArm();
           openEdit(id);
         } else {
           swipe.style.transform = '';
-          item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+          clearArm();
         }
         if (wasDecided) suppressClickUntil = Date.now() + 300; // suppress the trailing click
       };
 
-      swipe.addEventListener('pointerdown', onDown);
+      // ── Mouse (desktop) ──
+      const onMouseMove = (e) => { if (move(e.clientX, e.clientY)) e.preventDefault(); };
+      const onMouseUp = () => end();
+      swipe.addEventListener('mousedown', (e) => {
+        if (usingTouch) return;            // ignore the synthetic mouse event after a touch
+        if (e.button !== 0) return;
+        if (!begin(e.target, e.clientX, e.clientY)) return;
+        document.addEventListener('mousemove', onMouseMove, { passive: false });
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
+      // ── Touch (mobile) ──
+      const onTouchMove = (e) => {
+        const t = e.touches && e.touches[0]; if (!t) return;
+        if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); // block scroll mid-swipe
+      };
+      const onTouchEnd = () => { end(); window.setTimeout(() => { usingTouch = false; }, 400); };
+      swipe.addEventListener('touchstart', (e) => {
+        const t = e.touches && e.touches[0]; if (!t) return;
+        usingTouch = true;
+        if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
+        document.addEventListener('touchcancel', onTouchEnd);
+      }, { passive: true });
     }
 
     function handleMessage(data) {
