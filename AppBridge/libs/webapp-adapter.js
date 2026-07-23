@@ -110,6 +110,28 @@
   var API  = CFG.apiBase || '/hook/lists/app/v1';
   var TOKEN_KEY = 'symdo.token';
 
+  // Lokal-zuerst: die Seite lädt immer über Connect (überall erreichbar), prüft
+  // aber beim ersten API-Call die konfigurierte lokale HTTPS-Basis und schaltet
+  // im Heimnetz darauf um (schneller, kein Cloud-Umweg). Unterwegs bleibt Connect.
+  var LOCAL = CFG.localBase ? String(CFG.localBase).replace(/\/+$/, '') : '';
+  var EP = API;      // aktuell genutzte API-Basis
+  var probe = null;  // einmalige Erreichbarkeitsprüfung der lokalen URL
+  function ensureBase() {
+    if (probe) { return probe; }
+    if (!LOCAL) { probe = Promise.resolve(); return probe; }
+    probe = new Promise(function (resolve) {
+      var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var to = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (e) {} } resolve(); }, 1200);
+      // no-cors: reine Erreichbarkeitsprüfung (opaque genügt) → braucht keine CORS-Header
+      var opt = { mode: 'no-cors', cache: 'no-store' };
+      if (ctl) { opt.signal = ctl.signal; }
+      fetch(LOCAL + '/ping', opt)
+        .then(function () { clearTimeout(to); EP = LOCAL; resolve(); })
+        .catch(function () { clearTimeout(to); resolve(); });
+    });
+    return probe;
+  }
+
   // ---- i18n: Sprache aus dem Browser, Fallback de -> en -> Schlüssel ----------
   var lang = String(navigator.language || 'de').slice(0, 2).toLowerCase();
   var dict = I18N[lang] || I18N.de || I18N.en || {};
@@ -130,19 +152,31 @@
     if (window.__symdoUnauthorized) { window.__symdoUnauthorized(); }
   }
 
+  // Netzwerkfehler auf der lokalen Basis (z. B. Heimnetz verlassen) → einmal auf
+  // Connect zurückfallen und dort bleiben.
+  function fetchEP(path, opt) {
+    return fetch(EP + path, opt).catch(function (e) {
+      if (EP !== API) { EP = API; return fetch(EP + path, opt); }
+      throw e;
+    });
+  }
   function apiGet(path) {
-    return fetch(API + path, { headers: baseHeaders(), credentials: 'omit' }).then(function (r) {
-      if (r.status === 401) { onUnauthorized(); throw new Error('unauthorized'); }
-      return r.json();
+    return ensureBase().then(function () {
+      return fetchEP(path, { headers: baseHeaders(), credentials: 'omit' }).then(function (r) {
+        if (r.status === 401) { onUnauthorized(); throw new Error('unauthorized'); }
+        return r.json();
+      });
     });
   }
   function apiPost(path, body) {
     var h = baseHeaders(); h['Content-Type'] = 'application/json';
-    return fetch(API + path, { method: 'POST', headers: h, credentials: 'omit', body: JSON.stringify(body || {}) })
-      .then(function (r) {
+    var opt = { method: 'POST', headers: h, credentials: 'omit', body: JSON.stringify(body || {}) };
+    return ensureBase().then(function () {
+      return fetchEP(path, opt).then(function (r) {
         if (r.status === 401) { onUnauthorized(); throw new Error('unauthorized'); }
         return r.json().then(function (j) { return { status: r.status, json: j }; });
       });
+    });
   }
 
   // ---- Pairing (Browser-Zugang) -----------------------------------------------

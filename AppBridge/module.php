@@ -40,6 +40,9 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterAttributeString('HiddenInstances', '[]');
         $this->RegisterPropertyString('Users', '[]');
+        // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
+        // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
+        $this->RegisterPropertyString('LocalHttpsUrl', '');
         // KI „Foto → Aufgaben" (Web-App schickt das Foto, die Bridge ruft die KI).
         $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
         $this->RegisterPropertyString('AiAnthropicKey', '');
@@ -396,10 +399,15 @@ class SymDoBridge extends IPSModuleStrict
             $translations = json_encode($dec['translations'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
-        $config = '<script>window.__SYMDO__=' . json_encode(
-            ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION],
-            JSON_UNESCAPED_SLASHES
-        ) . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
+        // Lokale HTTPS-Basis (optional): die Web-App probt sie und schaltet im
+        // Heimnetz auf die lokale API um (Connect bleibt Fallback unterwegs).
+        $localBase = rtrim(trim($this->ReadPropertyString('LocalHttpsUrl')), '/');
+        $symdo = ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION];
+        if ($localBase !== '') {
+            $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
+        }
+        $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
+            . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
 
         $adapterJs = (string)@file_get_contents(__DIR__ . '/libs/webapp-adapter.js');
         $adapter = '<script>' . $adapterJs . '</script>';

@@ -7,6 +7,20 @@ trait ApiRouter
     private function HandleApiRequest(): void
     {
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
+        // CORS: die über Connect (HTTPS) geladene Web-App darf im Heimnetz die
+        // lokale HTTPS-API cross-origin aufrufen. Der Token (Bearer) ist die
+        // Sicherheitsgrenze, nicht der Origin → "*" ist unbedenklich (kein Cookie,
+        // credentials:'omit'). Preflight (OPTIONS) ohne Auth vor allem anderen.
+        header('Access-Control-Allow-Origin: *');
+        if ($method === 'OPTIONS') {
+            header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
+            header('Access-Control-Allow-Headers: Authorization, Content-Type');
+            header('Access-Control-Max-Age: 600');
+            http_response_code(204);
+            return;
+        }
+
         $route  = $this->ResolveRoute();
 
         if (($route[0] ?? '') !== 'v1') {
