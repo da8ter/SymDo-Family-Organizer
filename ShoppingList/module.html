@@ -583,6 +583,10 @@ body {
   overflow: hidden;
   z-index: 1000;
   background: var(--bg);
+  /* abspos positioniert an der Padding-Box-Kante (= Kachel-Oberkante) und ignoriert
+     das --sym-mt-Padding von .wrap → sonst rutscht der Overlay-Header unter die vom
+     System überlagerten Kachel-Steuerelemente. Daher hier selbst oben abstand halten. */
+  padding-top: var(--sym-mt);
 }
 
 .overlay.open { display: flex; }
