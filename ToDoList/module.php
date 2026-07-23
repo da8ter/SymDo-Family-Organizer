@@ -112,6 +112,9 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('LastMicrosoftListID', '');
 
         $this->RegisterAttributeString('Items', '[]');
+        // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
+        // die AppBridge liefert sie der SymDo-App/Web-App über die Discovery aus.
+        $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeInteger('NextID', 1);
         $this->RegisterAttributeInteger('OrderVersion', 0);
         $this->RegisterAttributeInteger('AppRevision', 0);
@@ -429,9 +432,42 @@ class ToDoList extends IPSModuleStrict
                 $this->Reorder($this->DecodeValue($Value));
                 $this->SendState();
                 return;
+            case 'ReportVisuTheme':
+                // Stiller Speicher (kein SendState): die Kachel meldet die
+                // CSS-Variablen der Visu, die AppBridge liefert sie der App/Web-App aus.
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data)) {
+                    return;
+                }
+                $scheme = ($data['scheme'] ?? '') === 'dark' ? 'dark' : 'light';
+                $colors = [];
+                foreach (['accent', 'content', 'card'] as $key) {
+                    $color = strtolower(trim((string)($data[$key] ?? '')));
+                    if (preg_match('/^#[0-9a-f]{6}$/', $color)) {
+                        $colors[$key] = $color;
+                    }
+                }
+                if (count($colors) === 3) {
+                    $theme = json_decode($this->ReadAttributeString('VisuTheme'), true);
+                    if (!is_array($theme)) {
+                        $theme = [];
+                    }
+                    $theme[$scheme] = $colors;
+                    $this->WriteAttributeString('VisuTheme', json_encode($theme));
+                }
+                return;
             default:
                 throw new Exception($this->Translate('Invalid Ident'));
         }
+    }
+
+    /**
+     * Von der Kachel gemeldete Visu-Farben ({"dark":{accent,content,card},
+     * "light":{...}}) — von der AppBridge in der Discovery ausgeliefert.
+     */
+    public function GetVisuTheme(): string
+    {
+        return $this->ReadAttributeString('VisuTheme');
     }
 
     public function GetVisualizationTile(): string

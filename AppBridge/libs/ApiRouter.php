@@ -193,17 +193,10 @@ trait ApiRouter
     private function HandleDiscovery(): void
     {
         $instances = [];
-        $theme = null;
         foreach ($this->GetListInstances() as $instance) {
             $instances[] = $this->DescribeInstance((int)$instance['id'], (string)$instance['kind']);
-            // Visu-Farben: von der ersten Einkaufsliste, deren Kachel gemeldet hat
-            if ($theme === null && $instance['kind'] === 'shopping') {
-                $reported = json_decode((string)@SL_GetVisuTheme((int)$instance['id']), true);
-                if (is_array($reported) && $reported !== []) {
-                    $theme = $reported;
-                }
-            }
         }
+        $theme = $this->ReadReportedTheme();
         $this->SendJson([
             'ok'           => true,
             'apiVersion'   => self::API_VERSION,
@@ -213,6 +206,39 @@ trait ApiRouter
             'instances'    => $instances,
             'theme'        => $theme,
         ]);
+    }
+
+    /**
+     * Visu-Farben von der ERSTEN Kachel, die sie gemeldet hat — egal welcher Typ.
+     * Reihenfolge: Einkaufs-/ToDo-Listen (GetListInstances), dann die SymDo-App-
+     * Kachel selbst. So genügt IRGENDEINE platzierte List-Kachel in der Visu; es
+     * muss nicht mehr zwingend eine ShoppingList-Kachel geben. Kein Reporter
+     * platziert → null → der Web-Adapter nutzt seine THEME_DEFAULTS.
+     */
+    private function ReadReportedTheme(): ?array
+    {
+        foreach ($this->GetListInstances() as $instance) {
+            $id = (int)$instance['id'];
+            $reported = null;
+            if ($instance['kind'] === 'shopping' && function_exists('SL_GetVisuTheme')) {
+                $reported = json_decode((string)@SL_GetVisuTheme($id), true);
+            } elseif ($instance['kind'] === 'todo' && function_exists('TDL_GetVisuTheme')) {
+                $reported = json_decode((string)@TDL_GetVisuTheme($id), true);
+            }
+            if (is_array($reported) && $reported !== []) {
+                return $reported;
+            }
+        }
+        // Zusätzlich die SymDoWebApp-Kachel(n) selbst
+        if (function_exists('SDWA_GetVisuTheme')) {
+            foreach (IPS_GetInstanceListByModuleID('{6703A24A-E9E9-44D3-AB21-27176BF224AA}') as $id) {
+                $reported = json_decode((string)@SDWA_GetVisuTheme((int)$id), true);
+                if (is_array($reported) && $reported !== []) {
+                    return $reported;
+                }
+            }
+        }
+        return null;
     }
 
     private function HandleRevisions(): void
