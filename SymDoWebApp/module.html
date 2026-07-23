@@ -22,7 +22,7 @@
   --green:   #34c759;
   --radius:  14px;
   --gap:     12px;
-  --nav-h:   56px;
+  --nav-h:   68px;
   /* Vom System vorgegebene Kachel-Ränder (aus den URL-Parametern margintop/
      marginside/marginbottom, per JS gesetzt). Default 0, damit Vollbild ohne
      Ränder korrekt bleibt. */
@@ -115,6 +115,7 @@ select option { color: #111; background: #fff; }
   width: 100vw;
   margin-left: calc(-1 * var(--sym-ms));
   display: flex;
+  padding: 8px 16px;
   background: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 4%);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(10px);
