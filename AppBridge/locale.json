@@ -33,7 +33,7 @@
             "Push visualization": "Push-Visualisierung",
             "New task assigned": "Neue Aufgabe zugewiesen",
             "AI (photo to tasks)": "KI (Foto zu Aufgaben)",
-            "Lets the web app photograph a document and extract to-do tasks from it via AI. The photo is sent from the browser to this bridge, which forwards it to the chosen AI. The API key stays here on the server and never reaches the browser.": "Ermöglicht der Web-App, ein Dokument zu fotografieren und per KI Aufgaben daraus zu extrahieren. Das Foto wird vom Browser an diese Bridge geschickt, die es an die gewählte KI weiterleitet. Der API-Key bleibt hier auf dem Server und gelangt nie in den Browser.",
+            "Photograph documents and let AI turn them into to-do tasks — e.g. notices from school, daycare or the sports club, parent letters, letters from authorities or the doctor, appointment slips, invitations. Saves tedious retyping. The photo goes from the browser to this bridge, which forwards it to the chosen AI; the API key stays here on the server.": "Fotografiere Dokumente und lass die KI daraus Aufgaben erstellen — z. B. Aushänge aus Schule, Kita oder Sportverein, Elternbriefe, Schreiben von Behörden oder Arzt, Terminzettel, Einladungen. Spart lästiges Abtippen. Das Foto geht vom Browser an diese Bridge, die es an die gewählte KI weiterleitet; der API-Key bleibt hier auf dem Server.",
             "Provider": "Anbieter",
             "Anthropic (Claude)": "Anthropic (Claude)",
             "OpenAI (GPT)": "OpenAI (GPT)",

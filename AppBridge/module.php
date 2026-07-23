@@ -298,7 +298,32 @@ class SymDoBridge extends IPSModuleStrict
         $this->SetFormElementProperty($form['elements'], 'ConnectInfo', 'caption', $info);
         $this->SetFormElementProperty($form['elements'], 'PairedDevicesList', 'values', $this->BuildDeviceRows());
 
+        // KI-Formular: nur die Felder des gewählten Anbieters zeigen (Anfangszustand).
+        foreach ($this->AiFieldVisibility($this->ReadPropertyString('AiProvider')) as $name => $visible) {
+            $this->SetFormElementProperty($form['elements'], $name, 'visible', $visible);
+        }
+
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Welche KI-Felder je Anbieter sichtbar sind. */
+    private function AiFieldVisibility(string $provider): array
+    {
+        return [
+            'AiAnthropicKey' => $provider === 'anthropic',
+            'AiOpenAIKey'    => $provider === 'openai',
+            'AiLocalBaseUrl' => $provider === 'local',
+            'AiLocalModel'   => $provider === 'local',
+            'AiLocalKey'     => $provider === 'local',
+        ];
+    }
+
+    /** Vom Select onChange aufgerufen: blendet die Felder des gewählten Anbieters ein/aus. */
+    public function UpdateAiFormVisibility(string $Provider): void
+    {
+        foreach ($this->AiFieldVisibility($Provider) as $name => $visible) {
+            $this->UpdateFormField($name, 'visible', $visible);
+        }
     }
 
     protected function ProcessHookData(): void
