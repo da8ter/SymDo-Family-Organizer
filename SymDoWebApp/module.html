@@ -994,6 +994,19 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* KI-Quelle wählen (Foto / URL) */
+.ai-source-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  font-size: 15px; font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--content-color) 16%, transparent);
+  background: color-mix(in srgb, var(--content-color) 6%, transparent);
+  color: var(--content-color);
+}
+.ai-source-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ai-or { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--muted); font-size: 13px; }
+.ai-or::before, .ai-or::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--content-color) 12%, transparent); }
+#aiUrlInput { width: 100%; margin-bottom: 10px; }
 .overlay-footer {
   display: flex;
   gap: 10px;
@@ -1158,9 +1171,11 @@ html[data-symdo-theme="dark"] .member-bar {
           <div id="suggestions" class="suggestions"><div class="chip-flow" id="suggestionChips"></div></div>
           <div class="inputbar">
             <input id="shoppingInput" type="text" autocomplete="off" />
+            <button id="btnShopScan" class="round-btn secondary" aria-label="Foto/URL analysieren"><i class="fa-light fa-camera"></i></button>
             <button id="btnOpenScanner" class="round-btn secondary" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
             <button id="btnShoppingAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
           </div>
+          <input id="shopScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
         </div>
       </div>
     </section>
@@ -1320,6 +1335,22 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-footer">
       <button data-close="aiReviewOverlay" id="btnAiCancel"></button>
       <button class="primary" id="btnAiAdd" disabled></button>
+    </div>
+  </div>
+</div>
+
+<!-- KI: Quelle wählen — Foto analysieren oder Rezept-URL analysieren -->
+<div class="overlay" id="aiSourceOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="aiSourceTitle">Rezept oder Foto scannen</span>
+      <button class="btn-close-overlay" data-close="aiSourceOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <button class="ai-source-btn" id="btnAiFromPhoto"><i class="fa-light fa-camera"></i><span id="aiFromPhotoLabel">Foto analysieren</span></button>
+      <div class="ai-or"><span id="aiOrLabel">oder</span></div>
+      <input id="aiUrlInput" type="url" inputmode="url" autocomplete="off" placeholder="Rezept-URL einfügen" />
+      <button class="ai-source-btn primary" id="btnAiFromUrl"><i class="fa-light fa-link"></i><span id="aiFromUrlLabel">URL analysieren</span></button>
     </div>
   </div>
 </div>
@@ -4116,6 +4147,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (file) aiDownscale(file, 1280, 0.7).then(runAiExtract).catch(() => showToast(translate('Could not read the photo.')));
   });
 
+  // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Bridge-KI + Review-Overlay wie ToDo. ──
+  // Auch hier nur in der Standalone-Web-App (REST-Token); in der Visu-Kachel ausgeblendet.
+  const shopScan = document.getElementById('btnShopScan');
+  const shopScanInput = document.getElementById('shopScanInput');
+  if (!window.__SYMDO__) { if (shopScan) shopScan.style.display = 'none'; }
+  document.getElementById('aiSourceTitle').textContent = translate('Scan recipe or photo');
+  document.getElementById('aiFromPhotoLabel').textContent = translate('Analyze photo');
+  document.getElementById('aiFromUrlLabel').textContent = translate('Analyze URL');
+  document.getElementById('aiOrLabel').textContent = translate('or');
+  document.getElementById('aiUrlInput').placeholder = translate('Paste a recipe URL');
+  if (shopScan) shopScan.addEventListener('click', () => { document.getElementById('aiUrlInput').value = ''; openOverlay('aiSourceOverlay'); });
+  document.getElementById('btnAiFromPhoto').addEventListener('click', () => {
+    closeOverlay('aiSourceOverlay');
+    shopScanInput.value = '';
+    shopScanInput.click();
+  });
+  shopScanInput.addEventListener('change', () => {
+    const file = shopScanInput.files && shopScanInput.files[0];
+    if (file) aiDownscale(file, 1280, 0.7).then(d => runAiIngredients({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
+  });
+  document.getElementById('btnAiFromUrl').addEventListener('click', () => {
+    const url = document.getElementById('aiUrlInput').value.trim();
+    if (!url) { showToast(translate('Please enter a URL.')); return; }
+    closeOverlay('aiSourceOverlay');
+    runAiIngredients({ url: url });
+  });
+
   function aiDownscale(file, maxEdge, quality) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -4168,19 +4226,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderAiReview(todos) {
-    if (!todos.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
+  function runAiIngredients(payload) {
+    aiAdd.disabled = true;
+    const statusMsg = (payload && payload.url) ? translate('Reading recipe…') : translate('Analyzing photo…');
+    aiStatus('<div class="ai-spinner"></div>' + statusMsg);
+    openOverlay('aiReviewOverlay');
+    const done = (res) => {
+      const j = res && res.json;
+      if (!res || res.status !== 200 || !j || j.ok !== true) {
+        const msg = (j && j.error && j.error.message) || translate('AI request failed.');
+        aiStatus(escapeHtml(msg));
+        return;
+      }
+      renderAiReview(Array.isArray(j.items) ? j.items : [], 'shopping');
+    };
+    const fail = () => aiStatus(translate('Could not reach the AI service.'));
+    if (typeof window.__symdoApiPost === 'function') {
+      window.__symdoApiPost('/ai/ingredients', payload).then(done).catch(fail);
+    } else {
+      const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
+      let token = '';
+      try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      fetch(base + '/ai/ingredients', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
+        .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })))
+        .then(done).catch(fail);
+    }
+  }
+
+  // Review-Overlay wird für ToDos und Einkaufs-Artikel geteilt; der Modus steuert Zeilen + Übernahme.
+  let aiReviewMode = 'todos';
+  function renderAiReview(rows, mode) {
+    aiReviewMode = mode || 'todos';
+    const isShop = aiReviewMode === 'shopping';
+    document.getElementById('aiReviewTitle').textContent = translate(isShop ? 'Detected items' : 'Detected tasks');
+    if (!rows.length) { aiStatus(translate(isShop ? 'No items detected.' : 'No tasks detected.')); aiAdd.disabled = true; return; }
     aiBody.innerHTML = '';
-    todos.forEach(t => {
+    rows.forEach(it => {
       const row = document.createElement('div');
       row.className = 'ai-row selected';
-      const dueChip = t.due ? '<span class="badge due-badge">' + escapeHtml(String(t.due)) + '</span>' : '';
-      const prioChip = '<span class="badge ' + priorityKey(t.priority || 'normal') + '">' + escapeHtml(priorityLabel(t.priority || 'normal')) + '</span>';
-      const info = t.info ? '<div class="todo-info">' + escapeHtml(String(t.info)) + '</div>' : '';
-      row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-        '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(t.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
-      row.__todo = t;
+      if (isShop) {
+        const amtChip = it.amount ? '<span class="badge">' + escapeHtml(String(it.amount)) + '</span>' : '';
+        const catChip = it.category ? '<span class="badge">' + escapeHtml(String(it.category)) + '</span>' : '';
+        const meta = (amtChip || catChip) ? '<div class="ai-meta">' + amtChip + catChip + '</div>' : '';
+        row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
+          '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div>';
+        row.__item = it;
+      } else {
+        const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due)) + '</span>' : '';
+        const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
+        const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
+        row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
+          '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
+          '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
+        row.__todo = it;
+      }
       row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
       aiBody.appendChild(row);
     });
@@ -4203,6 +4304,20 @@ document.addEventListener('DOMContentLoaded', () => {
   aiAdd.addEventListener('click', () => {
     const rows = aiBody.querySelectorAll('.ai-row.selected');
     if (!rows.length) return;
+    if (aiReviewMode === 'shopping') {
+      const target = selectedShoppingID();
+      rows.forEach(row => {
+        const it = row.__item || {};
+        sdCall(target, 'AddItem', {
+          name: String(it.name || ''),
+          category: String(it.category || ''),
+          amount: (String(it.amount || '').trim() || '1')
+        });
+      });
+      closeOverlay('aiReviewOverlay');
+      showToast(translate('%1 items added').replace('%1', String(rows.length)));
+      return;
+    }
     const me = currentUserID();
     const target = selectedTodoID();
     rows.forEach(row => {

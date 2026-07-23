@@ -90,6 +90,10 @@ trait ApiRouter
                     $this->HandleAiExtract($device);
                     return;
                 }
+                if ($method === 'POST' && ($route[2] ?? '') === 'ingredients') {
+                    $this->HandleAiIngredients($device);
+                    return;
+                }
                 break;
             case 'assets':
                 if ($method === 'GET') {

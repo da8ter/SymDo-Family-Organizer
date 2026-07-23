@@ -149,7 +149,17 @@
             "AI request failed.": "KI-Anfrage fehlgeschlagen.",
             "Could not reach the AI service.": "KI-Dienst nicht erreichbar.",
             "No tasks detected.": "Keine Aufgaben erkannt.",
-            "%1 tasks added": "%1 Aufgaben hinzugefügt"
+            "%1 tasks added": "%1 Aufgaben hinzugefügt",
+            "Scan recipe or photo": "Rezept oder Foto scannen",
+            "Analyze photo": "Foto analysieren",
+            "Analyze URL": "URL analysieren",
+            "Paste a recipe URL": "Rezept-URL einfügen",
+            "or": "oder",
+            "Reading recipe…": "Rezept wird gelesen…",
+            "Detected items": "Erkannte Artikel",
+            "No items detected.": "Keine Artikel erkannt.",
+            "Please enter a URL.": "Bitte eine URL eingeben.",
+            "%1 items added": "%1 Artikel hinzugefügt"
         }
     }
 }
