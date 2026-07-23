@@ -787,6 +787,13 @@ html[data-symdo-theme="dark"] .member-bar {
    Hintergrund, Akzentfarbe). */
 .badge.quantity, .badge.attr { font-weight: 700; color: var(--accent); }
 .badge.attr { display: inline-flex; align-items: center; }
+/* Im Hellmodus die Chips für Anzahl/Wiederholung/Erinnerung wie den
+   Prioritäts-Chip "Normal" darstellen (accent-getönter Pill + Textfarbe). */
+html[data-symdo-theme="light"] .badge.quantity,
+html[data-symdo-theme="light"] .badge.attr {
+  color: var(--text);
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
 /* Fälligkeits-Badge — Optik identisch zur ToDoList-Kachel (neutral umrandet,
    überfällig rot, heute orange; Kalender-Icon nur auf schmalen Kacheln) */
 .badge.due-badge { display: inline-flex; align-items: center; gap: 6px; }
