@@ -461,6 +461,21 @@ body {
 .item-amount-prefix { color: var(--accent); }
 /* Mengen-Stepper wie in der WebApp-Kachel */
 .item-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* Favoriten-Herz links neben der Menge (wie in der WebApp) */
+.item-fav-heart {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  padding: 2px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.item-fav-heart.is-fav { color: var(--accent); }
+.item-fav-heart:active { opacity: .6; }
 .amount-badge {
   min-width: 26px; text-align: center; padding: 3px 8px; border-radius: 999px;
   background: color-mix(in srgb, var(--content-color) 12%, transparent);
@@ -1953,13 +1968,15 @@ function buildItemCard(item, inCart) {
   const marketIcon = (!inCart && item.marketItem === true && state.extApiCartReady === true)
     ? `<i class="fa-light fa-cart-shopping market-icon" aria-hidden="true"></i>`
     : '';
+  const isFav = getFavNames().has(String(item.name || '').trim().toLowerCase());
+  const heartHtml = `<button class="item-fav-heart${isFav ? ' is-fav' : ''}" data-fav-id="${escapeHtml(item.id)}" aria-label="Favorit">${isFav ? HEART_FILLED : HEART_EMPTY}</button>`;
   return `<div class="${cls}" data-id="${escapeHtml(item.id)}">`
     + `<div class="item-card-delete" aria-hidden="true">${TRASH_ICON}</div>`
     + `<div class="item-card-edit" aria-hidden="true">${PENCIL_ICON}</div>`
     + `<div class="item-card-content">`
     +   `<div class="item-thumb">${thumb}</div>`
     +   `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
-    +   `<span class="item-side">${sideHtml}</span>`
+    +   `<span class="item-side">${heartHtml}${sideHtml}</span>`
     +   `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
     + `</div>`
     + `</div>`;
@@ -1987,6 +2004,13 @@ function bindCardHandlers() {
       e.stopPropagation();
       const item = (state.items || []).find(i => i.id === btn.getAttribute('data-edit-id'));
       if (item) openEditOverlay(item);
+    });
+  });
+  document.querySelectorAll('.item-card .item-fav-heart[data-fav-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = (state.items || []).find(i => i.id === btn.getAttribute('data-fav-id'));
+      if (item) openEditOverlay(item, true);
     });
   });
   document.querySelectorAll('.item-card [data-step]').forEach(btn => {
