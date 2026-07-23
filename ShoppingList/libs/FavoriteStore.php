@@ -79,6 +79,7 @@ trait FavoriteStore
     {
         $lists       = $this->LoadFavoriteLists();
         $targetIndex = -1;
+        $isNew       = false;
         if ($listId !== '') {
             foreach ($lists as $i => $list) {
                 if (($list['id'] ?? '') === $listId) {
@@ -95,19 +96,22 @@ trait FavoriteStore
             $listId      = bin2hex(random_bytes(8));
             $lists[]     = ['id' => $listId, 'name' => $name, 'items' => []];
             $targetIndex = count($lists) - 1;
+            $isNew       = true;
         }
         if (!isset($lists[$targetIndex]['items']) || !is_array($lists[$targetIndex]['items'])) {
             $lists[$targetIndex]['items'] = [];
         }
-        // Rezept-Quelle auf der Liste hinterlegen (URL oder Rezeptfoto-Medien-ID),
-        // nur setzen, wenn geliefert.
-        $url = trim($url);
-        if ($url !== '') {
-            $lists[$targetIndex]['url'] = $url;
-        }
-        $mediaId = trim($mediaId);
-        if ($mediaId !== '') {
-            $lists[$targetIndex]['mediaId'] = (int)$mediaId;
+        // Rezept-Quelle (URL oder Rezeptfoto-Medien-ID) nur bei NEU angelegten Listen
+        // hinterlegen — bestehende Listen behalten ihre Quelle.
+        if ($isNew) {
+            $url = trim($url);
+            if ($url !== '') {
+                $lists[$targetIndex]['url'] = $url;
+            }
+            $mediaId = trim($mediaId);
+            if ($mediaId !== '') {
+                $lists[$targetIndex]['mediaId'] = (int)$mediaId;
+            }
         }
 
         foreach ($items as $it) {
@@ -261,9 +265,28 @@ trait FavoriteStore
             return;
         }
         $lists = $this->LoadFavoriteLists();
+        // Zugehöriges Rezeptfoto-Medienobjekt mitlöschen.
+        foreach ($lists as $l) {
+            if (($l['id'] ?? '') === $listId) {
+                $this->DeleteRecipePhoto((int)($l['mediaId'] ?? 0));
+                break;
+            }
+        }
         $lists = array_values(array_filter($lists, fn($l) => $l['id'] !== $listId));
         $this->SaveFavoriteLists($lists);
         $this->SendState();
+    }
+
+    /** Löscht ein Rezeptfoto-Medienobjekt — nur wenn es unter einer „Rezeptfotos"-Kategorie liegt. */
+    private function DeleteRecipePhoto(int $mediaId): void
+    {
+        if ($mediaId <= 0 || !IPS_MediaExists($mediaId)) {
+            return;
+        }
+        $parent = IPS_GetParent($mediaId);
+        if ($parent > 0 && IPS_CategoryExists($parent) && IPS_GetName($parent) === 'Rezeptfotos') {
+            IPS_DeleteMedia($mediaId, true);
+        }
     }
 
     private function UpdateFavoriteItemInternal(string $listId, string $oldName, string $newName, string $category, string $amount, string $notes = ''): bool

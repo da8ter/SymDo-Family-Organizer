@@ -4541,16 +4541,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefill = (aiRecipe && aiRecipe.title) ? aiRecipe.title : '';
     const body = document.getElementById('aiFavBody');
     let h = '';
-    // Schalter: Rezeptquelle mitspeichern (Foto → Medienobjekt, URL → Link).
-    if (aiRecipe && (aiRecipe.image || aiRecipe.url)) {
-      const lbl = aiRecipe.image ? translate('Save recipe photo') : translate('Save recipe link');
-      h += '<label class="ai-fav-toggle"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
-    }
     if (lists.length) {
       h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
       h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-chevron-right check" style="opacity:.5"></i></div>').join('');
     }
     h += '<div class="ai-fav-section">' + escapeHtml(translate('New favorite list')) + '</div>';
+    // Rezeptquelle (Foto → Medienobjekt, URL → Link) ist nur bei einer NEUEN Liste speicherbar.
+    if (aiRecipe && (aiRecipe.image || aiRecipe.url)) {
+      const lbl = aiRecipe.image ? translate('Save recipe photo') : translate('Save recipe link');
+      h += '<label class="ai-fav-toggle"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
+    }
     h += '<div class="ai-fav-new"><input id="aiFavNewName" type="text" value="' + escapeHtml(prefill) + '" /><button class="primary" id="aiFavCreate">' + escapeHtml(translate('Create')) + '</button></div>';
     body.innerHTML = h;
     body.querySelectorAll('.assign-row[data-list]').forEach(row => row.addEventListener('click', () => saveAiFav({ listId: row.dataset.list })));
@@ -4564,8 +4564,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const items = aiFavItems || selectedAiItems();
     if (!items.length) return;
     const id = selectedShoppingID();
+    const isNew = !target.listId;   // Quelle (URL/Bild) nur bei neuer Liste
     const srcEl = document.getElementById('aiFavSaveSource');
-    const saveSrc = !srcEl || srcEl.checked;
+    const saveSrc = isNew && (!srcEl || srcEl.checked);
     const base = { items: items };
     if (target.listId) base.listId = target.listId;
     if (target.name) base.name = target.name;
