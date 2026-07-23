@@ -366,12 +366,31 @@ body {
   opacity: 0;
   transition: opacity .12s ease;
 }
-.item-card:has(> .item-card-content.is-dragging) .item-card-delete,
+.item-card.dragging-left .item-card-delete,
 .item-card.swipe-armed .item-card-delete,
 .item-card.is-deleting .item-card-delete { opacity: 1; }
 .item-card.swipe-armed .item-card-delete { background: #e04434; }
 .item-card.is-deleting { pointer-events: none; }
 .item-card.is-deleting .item-card-content { opacity: .4; }
+
+/* Blauer Bearbeiten-Layer: wird beim Wischen nach rechts sichtbar (Stift links). */
+.item-card-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 16px;
+  background: #2f6fd4;
+  color: #fff;
+  font-size: 20px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.item-card.dragging-right .item-card-edit,
+.item-card.edit-armed .item-card-edit { opacity: 1; }
+.item-card.edit-armed .item-card-edit { background: #3f83ee; }
 
 .item-card.is-moving-to-cart {
   pointer-events: none;
@@ -1674,6 +1693,7 @@ const scannerAddedNames = new Set();
 // ── Icons ──────────────────────────────────────────────────────────────────
 const HEART_FILLED = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M305 151.1L320 171.8L335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1L576 231.7C576 343.9 436.1 474.2 363.1 529.9C350.7 539.3 335.5 544 320 544C304.5 544 289.2 539.4 276.9 529.9C203.9 474.2 64 343.9 64 231.7L64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1z"/></svg>';
 const TRASH_ICON   = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M232.7 69.9L224 96L128 96C110.3 96 96 110.3 96 128C96 145.7 110.3 160 128 160L512 160C529.7 160 544 145.7 544 128C544 110.3 529.7 96 512 96L416 96L407.3 69.9C402.9 56.8 390.7 48 376.9 48L263.1 48C249.3 48 237.1 56.8 232.7 69.9zM512 208L128 208L149.1 531.1C150.7 556.4 171.7 576 197 576L443 576C468.3 576 489.3 556.4 490.9 531.1L512 208z"/></svg>';
+const PENCIL_ICON  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M416.9 85.2L372 130.1L509.9 268 554.8 223.1C578.2 199.7 578.2 161.8 554.8 138.4L501.6 85.2C478.2 61.8 440.3 61.8 416.9 85.2zM338.1 164L122.9 379.1C112.2 389.8 104.4 403.2 100.3 417.9L64.9 545.8C62.6 554.1 64.9 562.9 71 569C77.1 575.1 85.9 577.4 94.1 575.1L222 539.7C236.7 535.6 250.1 527.8 260.8 517.1L476 301.9L338.1 164z"/></svg>';
 const HEART_EMPTY  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="1em" height="1em" fill="currentColor" style="vertical-align:-0.1em" aria-hidden="true"><path d="M442.9 144C415.6 144 389.9 157.1 373.9 179.2L339.5 226.8C335 233 327.8 236.7 320.1 236.7C312.4 236.7 305.2 233 300.7 226.8L266.3 179.2C250.3 157.1 224.6 144 197.3 144C150.3 144 112.2 182.1 112.2 229.1C112.2 279 144.2 327.5 180.3 371.4C221.4 421.4 271.7 465.4 306.2 491.7C309.4 494.1 314.1 495.9 320.2 495.9C326.3 495.9 331 494.1 334.2 491.7C368.7 465.4 419 421.3 460.1 371.4C496.3 327.5 528.2 279 528.2 229.1C528.2 182.1 490.1 144 443.1 144zM335 151.1C360 116.5 400.2 96 442.9 96C516.4 96 576 155.6 576 229.1C576 297.7 533.1 358 496.9 401.9C452.8 455.5 399.6 502 363.1 529.8C350.8 539.2 335.6 543.9 320 543.9C304.4 543.9 289.2 539.2 276.9 529.8C240.4 502 187.2 455.5 143.1 402C106.9 358.1 64 297.7 64 229.1C64 155.6 123.6 96 197.1 96C239.8 96 280 116.5 305 151.1L320 171.8L335 151.1z"/></svg>';
 
 // ── Product images ────────────────────────────────────────────────────────
@@ -1935,6 +1955,7 @@ function buildItemCard(item, inCart) {
     : '';
   return `<div class="${cls}" data-id="${escapeHtml(item.id)}">`
     + `<div class="item-card-delete" aria-hidden="true">${TRASH_ICON}</div>`
+    + `<div class="item-card-edit" aria-hidden="true">${PENCIL_ICON}</div>`
     + `<div class="item-card-content">`
     +   `<div class="item-thumb">${thumb}</div>`
     +   `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
@@ -2012,9 +2033,12 @@ function bindCardSwipe(card) {
       decided = true;
       try { content.setPointerCapture(pointerId); } catch (_) {}
     }
-    dx = Math.max(-content.offsetWidth, Math.min(0, mx)); // left only
+    dx = Math.max(-content.offsetWidth, Math.min(content.offsetWidth, mx)); // both directions
     content.style.transform = `translateX(${dx}px)`;
+    card.classList.toggle('dragging-left', dx < 0);
+    card.classList.toggle('dragging-right', dx > 0);
     card.classList.toggle('swipe-armed', dx <= -THRESHOLD);
+    card.classList.toggle('edit-armed', dx >= THRESHOLD);
   };
 
   const onUp = (e) => {
@@ -2024,13 +2048,19 @@ function bindCardSwipe(card) {
     content.classList.remove('is-dragging');
     try { content.releasePointerCapture(pointerId); } catch (_) {}
     if (wasDecided && dx <= -THRESHOLD) {
+      card.classList.remove('dragging-left', 'dragging-right', 'edit-armed');
       card.dataset.animating = '1';
       card.classList.add('is-deleting');
       content.style.transform = 'translateX(-110%)';
       window.setTimeout(() => requestAction('DeleteItem', id), 240);
+    } else if (wasDecided && dx >= THRESHOLD) {
+      content.style.transform = '';
+      card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+      const item = (state.items || []).find(i => i.id === id);
+      if (item) openEditOverlay(item);
     } else {
       content.style.transform = '';
-      card.classList.remove('swipe-armed');
+      card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
     }
     if (wasDecided) { // suppress the click that follows a horizontal drag
       card.dataset.swiped = '1';

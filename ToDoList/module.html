@@ -457,10 +457,33 @@
       background: #c0392b;
       color: #fff;
       font-size: 20px;
+      opacity: 0;
+      transition: opacity .12s ease;
     }
+    .item.dragging-left .item-delete-bg,
+    .item.swipe-armed .item-delete-bg,
+    .item.is-deleting .item-delete-bg { opacity: 1; }
     .item.swipe-armed .item-delete-bg { background: #e04434; }
     .item.is-deleting { pointer-events: none; }
     .item.is-deleting .item-swipe { opacity: .4; }
+    /* Blauer Bearbeiten-Layer: wird beim Wischen nach rechts sichtbar (Stift links). */
+    .item-edit-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding-left: 16px;
+      background: #2f6fd4;
+      color: #fff;
+      font-size: 20px;
+      opacity: 0;
+      transition: opacity .12s ease;
+    }
+    .item.dragging-right .item-edit-bg,
+    .item.edit-armed .item-edit-bg { opacity: 1; }
+    .item.edit-armed .item-edit-bg { background: #3f83ee; }
     .item .main {
       display: flex;
       align-items: center;
@@ -1735,6 +1758,7 @@
       return `
         <div class="item ${done ? 'done' : ''}" data-id="${id}" data-done="${done ? '1' : '0'}" data-group="${group}">
           <div class="item-delete-bg" aria-hidden="true"><i class="fa-light fa-trash-can"></i></div>
+          <div class="item-edit-bg" aria-hidden="true"><i class="fa-light fa-pencil"></i></div>
           <div class="item-swipe">
             <div class="main">
               <input type="checkbox" class="chk" ${done ? 'checked' : ''} />
@@ -2144,19 +2168,22 @@
         const my = e.clientY - startY;
         if (!decided) {
           if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;
-          if (Math.abs(my) >= Math.abs(mx) || mx > 0) {
-            // vertical scroll or rightward move — not a delete swipe, hand back to browser
+          if (Math.abs(my) >= Math.abs(mx)) {
+            // vertical scroll — not a horizontal swipe, hand back to browser
             swipe.style.transform = '';
-            item.classList.remove('swipe-armed');
+            item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
             cleanup();
             return;
           }
           decided = true;
         }
         if (e.cancelable) e.preventDefault(); // keep the list from scrolling mid-swipe
-        dx = Math.max(-swipe.offsetWidth, Math.min(0, mx)); // left only
+        dx = Math.max(-swipe.offsetWidth, Math.min(swipe.offsetWidth, mx)); // both directions
         swipe.style.transform = `translateX(${dx}px)`;
+        item.classList.toggle('dragging-left', dx < 0);
+        item.classList.toggle('dragging-right', dx > 0);
         item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
+        item.classList.toggle('edit-armed', dx >= THRESHOLD);
       };
 
       const onUp = () => {
@@ -2165,13 +2192,18 @@
         const finalDx = dx;
         cleanup();
         if (wasDecided && finalDx <= -THRESHOLD) {
+          item.classList.remove('dragging-left', 'dragging-right', 'edit-armed');
           item.classList.add('is-deleting');
           swipe.style.transform = 'translateX(-110%)';
           suppressClickUntil = Date.now() + 400;
           window.setTimeout(() => requestAction('DeleteItem', JSON.stringify({ id: id })), 240);
+        } else if (wasDecided && finalDx >= THRESHOLD) {
+          swipe.style.transform = '';
+          item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+          openEdit(id);
         } else {
           swipe.style.transform = '';
-          item.classList.remove('swipe-armed');
+          item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
         }
         if (wasDecided) suppressClickUntil = Date.now() + 300; // suppress the trailing click
       };
