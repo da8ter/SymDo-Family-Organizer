@@ -659,9 +659,12 @@ select option { color: #111; background: #fff; }
 .todo-card.dragging-left .swipe-under,
 .todo-card.is-deleting .swipe-under { opacity: 1; }
 .todo-card.dragging-right .swipe-under-edit { opacity: 1; }
-/* Angehobene Karte während des Long-Press-Reorderns */
-.todo-card.todo-dragging { opacity: .9; }
-.todo-card.todo-dragging .todo-content { box-shadow: 0 6px 16px rgba(0,0,0,.32); }
+/* Angehobene Karte während des Long-Press-Reorderns: in Accent-Farbe getönt */
+.todo-card.todo-dragging .todo-content {
+  box-shadow: 0 6px 16px rgba(0,0,0,.32);
+  background: color-mix(in srgb, var(--accent) 22%, var(--row));
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
 .todo-content {
   position: relative;
   display: flex;
