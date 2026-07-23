@@ -647,6 +647,13 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .suggestions.open { display: block; }
 .suggestions .chip-flow { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Vorschläge + Eingabe als EIN sticky Block: so klebt das Vorschlags-Fenster
+   beim Tippen direkt über der Eingabe, statt in der langen Liste zu verschwinden.
+   (Die Eingabe selbst wird dann vom Composer sticky gehalten, nicht mehr selbst.) */
+.composer { position: sticky; bottom: 0; z-index: 5; }
+.composer .inputbar { position: static; }
+/* Bei offenen Vorschlägen deckend hinterlegen, sonst scheint die Liste durch. */
+.composer:has(.suggestions.open) { background: var(--card-color); }
 .chip {
   padding: 6px 12px;
   border-radius: 999px;
@@ -1108,11 +1115,13 @@ html[data-symdo-theme="dark"] .member-bar {
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
         <div id="shoppingListArea"></div>
-        <div id="suggestions" class="suggestions"><div class="chip-flow" id="suggestionChips"></div></div>
-        <div class="inputbar">
-          <input id="shoppingInput" type="text" autocomplete="off" />
-          <button id="btnOpenScanner" class="round-btn secondary" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
-          <button id="btnShoppingAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        <div class="composer">
+          <div id="suggestions" class="suggestions"><div class="chip-flow" id="suggestionChips"></div></div>
+          <div class="inputbar">
+            <input id="shoppingInput" type="text" autocomplete="off" />
+            <button id="btnOpenScanner" class="round-btn secondary" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
+            <button id="btnShoppingAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+          </div>
         </div>
       </div>
     </section>
