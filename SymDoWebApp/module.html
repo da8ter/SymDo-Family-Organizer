@@ -4351,9 +4351,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAiShopping(data) {
     aiReviewMode = 'shopping';
     const items = Array.isArray(data.items) ? data.items : [];
-    const servings = (typeof data.servings === 'number' && data.servings >= 1) ? data.servings : null;
+    const servings = (typeof data.servings === 'number' && data.servings >= 1) ? Math.round(data.servings) : null;
     const title = data.title ? String(data.title) : '';
-    aiRecipe = { title: title, servings: servings, url: data.url || '', factor: 1 };
+    // servings bekannt → freie Portionszahl (Start = servings, min 1); sonst ganzzahliger Mengen-Faktor.
+    aiRecipe = { title: title, servings: servings, url: data.url || '', portions: servings, factor: 1 };
     document.getElementById('aiReviewTitle').textContent = translate('Detected items');
     if (aiFav) { aiFav.style.display = ''; aiFav.disabled = items.length === 0; }
     if (!items.length) { aiStatus(translate('No items detected.')); aiAdd.disabled = true; return; }
@@ -4370,8 +4371,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '<button type="button" class="ai-step" id="aiStepPlus" aria-label="plus">+</button></div>';
       head.innerHTML = hh;
       aiBody.appendChild(head);
-      document.getElementById('aiStepMinus').addEventListener('click', () => setAiFactor(aiRecipe.factor - 1));
-      document.getElementById('aiStepPlus').addEventListener('click', () => setAiFactor(aiRecipe.factor + 1));
+      document.getElementById('aiStepMinus').addEventListener('click', () => stepAi(-1));
+      document.getElementById('aiStepPlus').addEventListener('click', () => stepAi(1));
     }
     items.forEach(it => {
       const row = document.createElement('div');
@@ -4384,29 +4385,39 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAiPortions();
     updateAiAdd();
   }
-  function setAiFactor(f) {
+  // Skalierungsfaktor: bei bekannter Portionszahl portions/servings (frei), sonst ganzzahliger Faktor.
+  function aiCurrentFactor() {
+    if (!aiRecipe) return 1;
+    if (aiRecipe.servings) return aiRecipe.portions / aiRecipe.servings;
+    return aiRecipe.factor;
+  }
+  function stepAi(delta) {
     if (!aiRecipe) return;
-    aiRecipe.factor = Math.max(1, Math.round(f || 1));
+    if (aiRecipe.servings) {
+      aiRecipe.portions = Math.max(1, aiRecipe.portions + delta);   // freie Portionszahl, min 1
+    } else {
+      aiRecipe.factor = Math.max(1, Math.round(aiRecipe.factor + delta));
+    }
+    const f = aiCurrentFactor();
     aiBody.querySelectorAll('.ai-row').forEach(row => {
       const it = row.__item || {};
       const chip = row.querySelector('.ai-amt');
-      if (chip) chip.textContent = scaleAmount(String(it.amount || ''), aiRecipe.factor);
+      if (chip) chip.textContent = scaleAmount(String(it.amount || ''), f);
     });
     updateAiPortions();
   }
   function updateAiPortions() {
     const lbl = document.getElementById('aiPortionsLabel');
     if (!lbl || !aiRecipe) return;
-    const f = aiRecipe.factor;
     lbl.textContent = aiRecipe.servings
-      ? translate('%1 servings').replace('%1', String(aiRecipe.servings * f))
-      : translate('Quantity ×%1').replace('%1', String(f));
+      ? translate('%1 servings').replace('%1', String(aiRecipe.portions))
+      : translate('Quantity ×%1').replace('%1', String(aiRecipe.factor));
     const minus = document.getElementById('aiStepMinus');
-    if (minus) minus.disabled = f <= 1;
+    if (minus) minus.disabled = aiRecipe.servings ? (aiRecipe.portions <= 1) : (aiRecipe.factor <= 1);
   }
   // Ausgewählte Zutaten mit skalierten Mengen (für Warenkorb + Favoriten).
   function selectedAiItems() {
-    const factor = (aiRecipe && aiRecipe.factor) || 1;
+    const factor = aiCurrentFactor();
     return Array.prototype.map.call(aiBody.querySelectorAll('.ai-row.selected'), row => {
       const it = row.__item || {};
       return {
