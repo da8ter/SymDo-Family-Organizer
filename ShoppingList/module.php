@@ -254,7 +254,8 @@ class ShoppingList extends IPSModuleStrict
                 $this->AddItemsToFavoriteListInternal(
                     (string)($data['listId'] ?? ''),
                     (string)($data['name'] ?? ''),
-                    $data['items']
+                    $data['items'],
+                    (string)($data['url'] ?? '')
                 );
                 return;
             case 'RemoveItemFromFavoriteList':

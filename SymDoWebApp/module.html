@@ -1362,7 +1362,6 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body" id="aiFavBody"></div>
     <div class="overlay-footer">
       <button data-close="aiFavOverlay" id="btnAiFavCancel"></button>
-      <button id="btnAiFavOpenUrl" style="display:none"><i class="fa-light fa-arrow-up-right-from-square"></i> <span id="btnAiFavOpenUrlLabel"></span></button>
     </div>
   </div>
 </div>
@@ -3051,6 +3050,7 @@ function renderFavorites() {
       `</span><span class="item-side">${side}</span></div></div>`;
   }
   html += `<div class="fav-actions">` +
+    (detail.url ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
     `</div>`;
@@ -3068,6 +3068,8 @@ function renderFavorites() {
         } }
     ]);
   });
+  const btnFavOpenRecipe = document.getElementById('btnFavOpenRecipe');
+  if (btnFavOpenRecipe) btnFavOpenRecipe.addEventListener('click', () => { if (detail.url) { try { window.open(detail.url, '_blank'); } catch (e) {} } });
   document.getElementById('btnFavAddAll').addEventListener('click', () => addFavListToCart(id, detail));
   document.getElementById('btnFavAddItem').addEventListener('click', () => openFavItemEditor(id, detail.id, null));
   el.querySelectorAll('.item-card').forEach(card => {
@@ -4478,17 +4480,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Favoriten-Speichern (Rezept → Favoritenliste) ──
   if (aiFav) aiFav.addEventListener('click', () => { if (!aiFav.disabled) openAiFav(); });
-  document.getElementById('btnAiFavOpenUrl').addEventListener('click', () => {
-    if (aiRecipe && aiRecipe.url) { try { window.open(aiRecipe.url, '_blank'); } catch (e) {} }
-  });
   function openAiFav() {
     const items = selectedAiItems();
     if (!items.length) return;
     aiFavItems = items;
     document.getElementById('aiFavTitle').textContent = translate('Save to favorites');
     document.getElementById('btnAiFavCancel').textContent = translate('Cancel');
-    document.getElementById('btnAiFavOpenUrlLabel').textContent = translate('Open recipe');
-    document.getElementById('btnAiFavOpenUrl').style.display = (aiRecipe && aiRecipe.url) ? '' : 'none';
     renderAiFav();
     openOverlay('aiFavOverlay');
   }
@@ -4518,6 +4515,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = { items: items };
     if (target.listId) payload.listId = target.listId;
     if (target.name) payload.name = target.name;
+    if (aiRecipe && aiRecipe.url) payload.url = String(aiRecipe.url);
     sdCall(selectedShoppingID(), 'AddItemsToFavoriteList', payload);
     closeOverlay('aiFavOverlay');
     closeOverlay('aiReviewOverlay');

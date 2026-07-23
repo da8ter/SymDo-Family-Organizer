@@ -71,9 +71,10 @@ trait FavoriteStore
      * Fügt mehrere Artikel in einem Rutsch hinzu — entweder in eine bestehende Liste
      * ($listId) oder in eine neu anzulegende ($newListName). Ein Aufruf, ein State-Push.
      * Gibt die (ggf. neue) Listen-ID zurück, '' bei Fehler.
-     * @param array $items Liste von {name, category?, amount?, notes?}
+     * @param array  $items Liste von {name, category?, amount?, notes?}
+     * @param string $url   optionale Rezept-URL, die auf der Liste gespeichert wird
      */
-    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items): string
+    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = ''): string
     {
         $lists       = $this->LoadFavoriteLists();
         $targetIndex = -1;
@@ -96,6 +97,11 @@ trait FavoriteStore
         }
         if (!isset($lists[$targetIndex]['items']) || !is_array($lists[$targetIndex]['items'])) {
             $lists[$targetIndex]['items'] = [];
+        }
+        // Rezept-URL auf der Liste hinterlegen (nur setzen/aktualisieren, wenn geliefert).
+        $url = trim($url);
+        if ($url !== '') {
+            $lists[$targetIndex]['url'] = $url;
         }
 
         foreach ($items as $it) {
