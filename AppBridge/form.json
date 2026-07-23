@@ -56,7 +56,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "AI (photo to tasks)",
+            "caption": "AI Photo Analysis → Extracts tasks from documents",
             "expanded": false,
             "items": [
                 {
@@ -101,7 +101,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Note: cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
+                    "caption": "Note: this feature needs your own API key from the provider. Cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
                 }
             ]
         },

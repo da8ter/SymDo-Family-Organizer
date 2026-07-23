@@ -63,6 +63,8 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 select option { color: #111; background: #fff; }
+/* Notizen im Todo-Editor wachsen automatisch mit dem Text (kein Scrollbalken/Griff) */
+#tdInfo { resize: none; overflow: hidden; min-height: 54px; }
 
 /* height:100% + eigenes System-Rand-Padding oben/seitlich, damit der Inhalt
    nicht unter die vom System überlagerten Kachel-Steuerelemente rutscht.
@@ -3203,6 +3205,16 @@ function openTodoEditor(instanceID, item) {
 
   syncTodoEditorVisibility();
   openOverlay('todoOverlay');
+
+  // Notizfeld an die Textmenge anpassen (einmalig binden, dann initial messen)
+  const info = document.getElementById('tdInfo');
+  if (!info.__autogrow) {
+    info.__autogrow = () => { info.style.height = 'auto'; info.style.height = info.scrollHeight + 'px'; };
+    info.addEventListener('input', info.__autogrow);
+  }
+  // Nach Layout/Öffnungsanimation messen (rAF greift zu früh, solange das
+  // Overlay noch einblendet), damit die Höhe schon beim Öffnen zum Text passt.
+  window.setTimeout(info.__autogrow, 80);
 }
 function updateTodoDueInput(allDay, date) {
   const input = document.getElementById('tdDueDate');
