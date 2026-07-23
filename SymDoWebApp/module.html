@@ -1008,6 +1008,10 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-fav-new input { flex: 1; }
 .ai-fav-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0 2px; cursor: pointer; }
 .ai-fav-toggle input { width: 18px; height: 18px; }
+/* Bei gewählter Bestandsliste: „Neue Liste"-Bedienelemente ausgegraut + deaktiviert */
+.ai-fav-section.disabled, .ai-fav-toggle.disabled, .ai-fav-new.disabled { opacity: .4; }
+.ai-fav-toggle.disabled { cursor: default; }
+.ai-fav-new input:disabled, .ai-fav-toggle input:disabled { cursor: not-allowed; }
 /* KI-Quelle wählen (Foto / URL) */
 .ai-source-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -1364,6 +1368,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body" id="aiFavBody"></div>
     <div class="overlay-footer">
       <button data-close="aiFavOverlay" id="btnAiFavCancel"></button>
+      <button class="primary" id="btnAiFavSave"></button>
     </div>
   </div>
 </div>
@@ -4340,6 +4345,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let aiReviewMode = 'todos';
   let aiRecipe = null;    // { title, servings, url, factor } — für die Einkaufs-/Rezeptansicht
   let aiFavItems = null;  // zwischengespeicherte Auswahl fürs Favoriten-Speichern
+  let aiFavSelectedList = ''; // gewählte bestehende Favoritenliste ('' = neue Liste)
 
   // ── ToDo-Review ──
   function renderAiReview(rows) {
@@ -4526,12 +4532,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Favoriten-Speichern (Rezept → Favoritenliste) ──
   if (aiFav) aiFav.addEventListener('click', () => { if (!aiFav.disabled) openAiFav(); });
+  document.getElementById('btnAiFavSave').addEventListener('click', doSaveAiFav);
   function openAiFav() {
     const items = selectedAiItems();
     if (!items.length) return;
     aiFavItems = items;
+    aiFavSelectedList = '';
     document.getElementById('aiFavTitle').textContent = translate('Save to favorites');
     document.getElementById('btnAiFavCancel').textContent = translate('Cancel');
+    document.getElementById('btnAiFavSave').textContent = translate('Save');
     renderAiFav();
     openOverlay('aiFavOverlay');
   }
@@ -4543,22 +4552,42 @@ document.addEventListener('DOMContentLoaded', () => {
     let h = '';
     if (lists.length) {
       h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
-      h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-chevron-right check" style="opacity:.5"></i></div>').join('');
+      h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-check check"></i></div>').join('');
     }
-    h += '<div class="ai-fav-section">' + escapeHtml(translate('New favorite list')) + '</div>';
+    h += '<div class="ai-fav-section" id="aiFavNewHead">' + escapeHtml(translate('New favorite list')) + '</div>';
     // Rezeptquelle (Foto → Medienobjekt, URL → Link) ist nur bei einer NEUEN Liste speicherbar.
     if (aiRecipe && (aiRecipe.image || aiRecipe.url)) {
       const lbl = aiRecipe.image ? translate('Save recipe photo') : translate('Save recipe link');
-      h += '<label class="ai-fav-toggle"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
+      h += '<label class="ai-fav-toggle" id="aiFavToggleWrap"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
     }
-    h += '<div class="ai-fav-new"><input id="aiFavNewName" type="text" value="' + escapeHtml(prefill) + '" /><button class="primary" id="aiFavCreate">' + escapeHtml(translate('Create')) + '</button></div>';
+    h += '<div class="ai-fav-new" id="aiFavNewWrap"><input id="aiFavNewName" type="text" value="' + escapeHtml(prefill) + '" placeholder="' + escapeHtml(translate('New list name')) + '" /></div>';
     body.innerHTML = h;
-    body.querySelectorAll('.assign-row[data-list]').forEach(row => row.addEventListener('click', () => saveAiFav({ listId: row.dataset.list })));
-    document.getElementById('aiFavCreate').addEventListener('click', () => {
-      const name = document.getElementById('aiFavNewName').value.trim();
-      if (!name) { showToast(translate('Please enter a name.')); return; }
-      saveAiFav({ name: name });
+    body.querySelectorAll('.assign-row[data-list]').forEach(row => row.addEventListener('click', () => {
+      // Einzelauswahl mit Haken; erneuter Klick hebt die Auswahl wieder auf.
+      aiFavSelectedList = (aiFavSelectedList === row.dataset.list) ? '' : row.dataset.list;
+      updateAiFavControls();
+    }));
+    updateAiFavControls();
+  }
+  // Auswahl markieren; bei gewählter Bestandsliste die „Neue Liste"-Bedienelemente + Quelle-Schalter ausgrauen/deaktivieren.
+  function updateAiFavControls() {
+    const hasSel = !!aiFavSelectedList;
+    document.querySelectorAll('#aiFavBody .assign-row[data-list]').forEach(row => {
+      row.classList.toggle('selected', row.dataset.list === aiFavSelectedList);
     });
+    const nameEl = document.getElementById('aiFavNewName');
+    const srcEl = document.getElementById('aiFavSaveSource');
+    if (nameEl) nameEl.disabled = hasSel;
+    if (srcEl) srcEl.disabled = hasSel;
+    ['aiFavNewHead', 'aiFavToggleWrap', 'aiFavNewWrap'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle('disabled', hasSel); });
+  }
+  // „Speichern": gewählte Bestandsliste ODER (keine Auswahl + Name) neue Liste.
+  function doSaveAiFav() {
+    if (aiFavSelectedList) { saveAiFav({ listId: aiFavSelectedList }); return; }
+    const nameEl = document.getElementById('aiFavNewName');
+    const name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { showToast(translate('Select a list or enter a name.')); return; }
+    saveAiFav({ name: name });
   }
   function saveAiFav(target) {
     const items = aiFavItems || selectedAiItems();
