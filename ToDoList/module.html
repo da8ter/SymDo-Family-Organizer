@@ -484,6 +484,12 @@
     .item.dragging-right .item-edit-bg,
     .item.edit-armed .item-edit-bg { opacity: 1; }
     .item.edit-armed .item-edit-bg { background: #3f83ee; }
+    /* Long-Press-Reorder: aufgenommene Zeile in Accent-Farbe tönen (wie WebApp) */
+    .item.dragging .item-swipe {
+      background: color-mix(in srgb, var(--accent) 22%, var(--row));
+      box-shadow: 0 6px 16px rgba(0,0,0,.32);
+      outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    }
     .item .main {
       display: flex;
       align-items: center;
@@ -644,7 +650,6 @@
     .item.dragging {
       z-index: 10;
     }
-    .item.dragging .item-swipe { background: var(--accent); }
     .item.drag-over {
       outline: 0px dashed var(--accent);
       outline-offset: 0px;
@@ -1748,8 +1753,7 @@
       }
 
       const actionButtons = `${showDeleteButton ? `<button class="del icon-btn" title="${translate('Delete')}" aria-label="${translate('Delete')}"><i class="fa-light fa-trash-can"></i></button>` : ''}
-            ${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}
-            <div class="drag-handle"><i class="fa-light fa-grip-dots-vertical"></i></div>`;
+            ${showEditButton ? `<button class="edit icon-btn" title="${translate('Edit')}" aria-label="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : ''}`;
 
       const actionsHtml = useGridView
         ? `<div class="meta">${meta.join('')}</div><div class="grid-actions">${actionButtons}</div>`
@@ -2098,27 +2102,27 @@
           });
         }
 
-        bindItemSwipe(el, id);
+        bindItemGesture(el, id, container);
       });
-
-      bindDnd(container);
     }
 
-    // Swipe-left-to-delete on a todo item
-    function bindItemSwipe(item, id) {
+    // Todo item gesture (same behaviour as the SymDoWebApp): a long press starts
+    // a reorder drag with the row tinted in the accent color; an earlier
+    // horizontal move is a swipe (left = delete, right = edit); a vertical move
+    // scrolls. Mouse + touch only (no Pointer Events / native drag / handle).
+    function bindItemGesture(item, id, container) {
       const swipe = item.querySelector('.item-swipe');
       if (!swipe || !Number.isFinite(id)) return;
 
       let startX = 0, startY = 0, dx = 0;
-      let active = false, decided = false, usingTouch = false;
-      const SLOP = 8;        // px before a gesture direction is decided
-      const THRESHOLD = 70;  // px pull required to trigger delete (left) / edit (right)
+      let mode = 'idle';            // idle | pending | swipe | drag
+      let usingTouch = false, longTimer = null, dragGroup = '', dragMoved = false;
+      const SLOP = 8, THRESHOLD = 70, HOLD = 350;
 
       const clearArm = () => item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
-
-      // Release the document-level listeners and reset gesture state.
       const cleanup = () => {
-        active = false; decided = false;
+        if (longTimer) { clearTimeout(longTimer); longTimer = null; }
+        mode = 'idle';
         swipe.classList.remove('is-dragging');
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
@@ -2127,63 +2131,97 @@
         document.removeEventListener('touchcancel', onTouchEnd);
       };
 
-      // Shared gesture core (Pointer Events are unreliable across the Symcon
-      // webviews — desktop delivers no pointer events, and on iOS the drag
-      // reorder's pointer-events:none breaks implicit pointer capture — so this
-      // uses mouse + touch events, mirroring the drag-and-drop handlers).
+      const enterDrag = () => {
+        if (mode !== 'pending') return;
+        mode = 'drag';
+        dragGroup = item.getAttribute('data-group') || '';
+        dragMoved = false;
+        item.classList.add('dragging');   // accent tint via CSS
+        try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+      };
+
       const begin = (target, x, y) => {
-        if (target.closest('.drag-handle, .edit, .del, .chk')) return false; // leave controls alone
+        if (target.closest('button, .chk')) return false;   // leave controls alone
         if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return false;
-        active = true; decided = false;
-        startX = x; startY = y; dx = 0;
-        swipe.classList.add('is-dragging');
+        startX = x; startY = y; dx = 0; mode = 'pending';
+        longTimer = window.setTimeout(enterDrag, HOLD);
         return true;
       };
 
-      // Returns true when the horizontal swipe consumed the move.
+      const reorderTo = (x, y) => {
+        const prev = item.style.pointerEvents;
+        item.style.pointerEvents = 'none';            // look past the dragged row
+        const el = document.elementFromPoint(x, y);
+        item.style.pointerEvents = prev;
+        const over = (el && el.closest) ? el.closest('.item') : null;
+        if (!over || over === item) return;
+        if ((over.getAttribute('data-group') || '') !== dragGroup) return; // reorder within group
+        const r = over.getBoundingClientRect();
+        if (y < r.top + r.height / 2) container.insertBefore(item, over);
+        else container.insertBefore(item, over.nextSibling);
+        dragMoved = true;
+      };
+
       const move = (x, y) => {
-        if (!active) return false;
-        const mx = x - startX;
-        const my = y - startY;
-        if (!decided) {
+        const mx = x - startX, my = y - startY;
+        if (mode === 'pending') {
           if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
-          if (Math.abs(my) >= Math.abs(mx)) { // vertical — hand back to the browser (scroll)
-            swipe.style.transform = '';
-            clearArm();
-            cleanup();
-            return false;
-          }
-          decided = true;
+          if (longTimer) { clearTimeout(longTimer); longTimer = null; } // moved before the hold fired
+          if (Math.abs(mx) > Math.abs(my)) { mode = 'swipe'; swipe.classList.add('is-dragging'); }
+          else { cleanup(); return false; }                            // vertical → scroll
         }
-        dx = Math.max(-swipe.offsetWidth, Math.min(swipe.offsetWidth, mx)); // both directions
-        swipe.style.transform = `translateX(${dx}px)`;
-        item.classList.toggle('dragging-left', dx < 0);
-        item.classList.toggle('dragging-right', dx > 0);
-        item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
-        item.classList.toggle('edit-armed', dx >= THRESHOLD);
-        return true;
+        if (mode === 'swipe') {
+          dx = Math.max(-swipe.offsetWidth, Math.min(swipe.offsetWidth, mx));
+          swipe.style.transform = `translateX(${dx}px)`;
+          item.classList.toggle('dragging-left', dx < 0);
+          item.classList.toggle('dragging-right', dx > 0);
+          item.classList.toggle('swipe-armed', dx <= -THRESHOLD);
+          item.classList.toggle('edit-armed', dx >= THRESHOLD);
+          return true;
+        }
+        if (mode === 'drag') { reorderTo(x, y); return true; }
+        return false;
+      };
+
+      const commitReorder = () => {
+        const activeIds = Array.from(container.querySelectorAll('.item[data-group="active"]'))
+          .map(el => parseInt(el.getAttribute('data-id'))).filter(n => Number.isFinite(n));
+        let completedIds = Array.from(container.querySelectorAll('.item[data-group="completed"]'))
+          .map(el => parseInt(el.getAttribute('data-id'))).filter(n => Number.isFinite(n));
+        if (state.hideCompletedTasks === true) {
+          completedIds = (Array.isArray(state.items) ? state.items : [])
+            .filter(it => !!it.done).map(it => parseInt(it.id)).filter(n => Number.isFinite(n));
+        }
+        setManualSort();
+        requestAction('Reorder', JSON.stringify({ order: activeIds.concat(completedIds) }));
       };
 
       const end = () => {
-        if (!active) return;
-        const wasDecided = decided;
-        const finalDx = dx;
-        cleanup();
-        if (wasDecided && finalDx <= -THRESHOLD) {
-          item.classList.remove('dragging-left', 'dragging-right', 'edit-armed');
-          item.classList.add('is-deleting');
-          swipe.style.transform = 'translateX(-110%)';
-          suppressClickUntil = Date.now() + 400;
-          window.setTimeout(() => requestAction('DeleteItem', JSON.stringify({ id: id })), 240);
-        } else if (wasDecided && finalDx >= THRESHOLD) {
-          swipe.style.transform = '';
-          clearArm();
-          openEdit(id);
+        const m = mode;
+        if (m === 'swipe') {
+          const finalDx = dx;
+          cleanup();
+          if (finalDx <= -THRESHOLD) {
+            item.classList.remove('dragging-left', 'dragging-right', 'edit-armed');
+            item.classList.add('is-deleting');
+            swipe.style.transform = 'translateX(-110%)';
+            suppressClickUntil = Date.now() + 400;
+            window.setTimeout(() => requestAction('DeleteItem', JSON.stringify({ id: id })), 240);
+          } else if (finalDx >= THRESHOLD) {
+            swipe.style.transform = ''; clearArm(); openEdit(id);
+          } else {
+            swipe.style.transform = ''; clearArm();
+          }
+          suppressClickUntil = Date.now() + 300;
+        } else if (m === 'drag') {
+          const moved = dragMoved;
+          item.classList.remove('dragging');
+          cleanup();
+          if (moved) commitReorder();
+          suppressClickUntil = Date.now() + 300; // long press should not open detail
         } else {
-          swipe.style.transform = '';
-          clearArm();
+          cleanup(); // tap / vertical — let the click handlers run
         }
-        if (wasDecided) suppressClickUntil = Date.now() + 300; // suppress the trailing click
       };
 
       // ── Mouse (desktop) ──
@@ -2200,7 +2238,7 @@
       // ── Touch (mobile) ──
       const onTouchMove = (e) => {
         const t = e.touches && e.touches[0]; if (!t) return;
-        if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); // block scroll mid-swipe
+        if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); // block scroll mid-gesture
       };
       const onTouchEnd = () => { end(); window.setTimeout(() => { usingTouch = false; }, 400); };
       swipe.addEventListener('touchstart', (e) => {
