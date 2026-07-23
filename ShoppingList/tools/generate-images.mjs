@@ -87,6 +87,18 @@ const repeatedSmallItems = new Set([
 ]);
 
 const itemSpecificPromptAdditions = {
+  Schokoladenpudding:
+    "show a creamy chocolate pudding dessert, dark glossy brown, a small portion served as a smooth dollop or in a small clear dessert glass, appetizing, no plate, no spoon",
+  Vanillepudding:
+    "show a creamy vanilla pudding dessert, pale yellow and glossy, a small portion served as a smooth dollop or in a small clear dessert glass, appetizing, no plate, no spoon",
+  Vla:
+    "show Dutch vla: a thick pourable pale-yellow vanilla dairy custard served in a small clear glass, creamy and smooth, appetizing, no spoon",
+  Milchreis:
+    "show creamy rice pudding (Milchreis): soft white short-grain rice cooked in milk, a small appetizing portion dusted with cinnamon sugar, served as a dollop or in a small bowl, no spoon",
+  "Grießbrei":
+    "show creamy semolina pudding (Grießbrei): a smooth pale porridge-like dessert, a small appetizing portion served as a dollop or in a small bowl, a light hint of cinnamon, no spoon",
+  "Götterspeise":
+    "show fruit jelly dessert (Götterspeise, Wackelpudding): glossy translucent red wobbly jelly, a small molded portion, appetizing, no plate",
   Calamari:
     "show a small appetizing portion of golden-brown deep-fried calamari rings (breaded squid rings), several rings arranged in a tidy little pile as a finished dish, no plate, no bowl",
   Gulasch:
