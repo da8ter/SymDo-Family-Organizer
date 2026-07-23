@@ -4,6 +4,7 @@
         "de": {
             "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app.": "Koppelt die SymDo Smartphone-App mit diesem Symcon-System. Geräte verbinden sich über Symcon Connect mit einem eigenen Zugriffstoken — es werden keine Lizenz-Zugangsdaten in der App gespeichert.",
             "Pair new device": "Neues Gerät koppeln",
+            "Connect iOS app": "iOS App verbinden",
             "Paired devices": "Gekoppelte Geräte",
             "ID": "ID",
             "Name": "Name",
@@ -22,10 +23,6 @@
             "Opens the SymDo app as a website over Symcon Connect — no app install needed. Create an access, then scan the QR code with the phone camera; the browser opens the app already paired. The one-time code is valid for 10 minutes; the browser then keeps its own access token.": "Öffnet die SymDo-App als Webseite über Symcon Connect — ohne App-Installation. Zugang erstellen, dann den QR-Code mit der Handykamera scannen; der Browser öffnet die App bereits gekoppelt. Der Einmal-Code ist 10 Minuten gültig; der Browser behält danach ein eigenes Zugriffstoken.",
             "Create browser access": "Browser-Zugang erstellen",
             "Local HTTPS URL (optional, e.g. https://symcon.mydomain.de) — on the home network the web app switches to this local address; Symcon Connect stays the fallback when away. Requires a browser-trusted certificate.": "Lokale HTTPS-URL (optional, z. B. https://symcon.meinedomain.de) — im Heimnetz schaltet die Web-App auf diese lokale Adresse um; unterwegs bleibt Symcon Connect der Fallback. Erfordert ein browservertrautes Zertifikat.",
-            "Detect local URL": "Lokale URL erkennen",
-            "Detected and filled in: %s — if your certificate is issued for a domain name, enter that domain instead.": "Erkannt und eingetragen: %s — falls dein Zertifikat auf einen Domainnamen ausgestellt ist, trage stattdessen diese Domain ein.",
-            "No local network address found.": "Keine lokale Netzwerkadresse gefunden.",
-            "No local HTTPS endpoint reached. Local addresses: %s. Enter your HTTPS address (a domain with a browser-trusted certificate) manually.": "Kein lokaler HTTPS-Endpunkt erreichbar. Lokale Adressen: %s. Bitte deine HTTPS-Adresse (eine Domain mit browservertrautem Zertifikat) manuell eintragen.",
             "Scan with the phone camera to open the web app (valid for 10 minutes). Link: %s": "Mit der Handykamera scannen, um die Web-App zu öffnen (10 Minuten gültig). Link: %s",
             "Warning: No Symcon Connect URL found. Enable Symcon Connect to reach the web app over the internet.": "Achtung: Keine Symcon-Connect-URL gefunden. Aktiviere Symcon Connect, um die Web-App über das Internet zu erreichen.",
             "Symcon Connect: %s": "Symcon Connect: %s",

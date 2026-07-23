@@ -2,29 +2,36 @@
     "elements": [
         {
             "type": "Label",
-            "caption": "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app."
-        },
-        {
-            "type": "Label",
             "name": "ConnectInfo",
             "caption": ""
         },
         {
-            "type": "Button",
-            "caption": "Pair new device",
-            "onClick": "LAB_CreatePairing($id);"
-        },
-        {
-            "type": "Image",
-            "name": "PairingQrImage",
-            "image": "",
-            "visible": false
-        },
-        {
-            "type": "Label",
-            "name": "PairingCodeLabel",
-            "caption": "",
-            "visible": false
+            "type": "ExpansionPanel",
+            "caption": "Connect iOS app",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app."
+                },
+                {
+                    "type": "Button",
+                    "caption": "Pair new device",
+                    "onClick": "LAB_CreatePairing($id);"
+                },
+                {
+                    "type": "Image",
+                    "name": "PairingQrImage",
+                    "image": "",
+                    "visible": false
+                },
+                {
+                    "type": "Label",
+                    "name": "PairingCodeLabel",
+                    "caption": "",
+                    "visible": false
+                }
+            ]
         },
         {
             "type": "ExpansionPanel",
