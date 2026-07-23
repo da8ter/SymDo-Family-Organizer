@@ -407,6 +407,8 @@ body {
   justify-content: center;
   overflow: hidden;
 }
+/* Echte Artikelbilder ohne farbigen Hintergrund (nur der Buchstaben-Platzhalter behält den Farbkreis) */
+.item-thumb:has(.item-thumb-img) { background: none; }
 
 .item-thumb-letter {
   font-size: 22px;
@@ -420,7 +422,6 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  padding: 3px;
 }
 
 .item-info {
