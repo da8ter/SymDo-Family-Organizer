@@ -87,6 +87,10 @@ const repeatedSmallItems = new Set([
 ]);
 
 const itemSpecificPromptAdditions = {
+  "Brauner Zucker":
+    "show brown sugar: a small tidy mound of moist soft brown sugar crystals, warm caramel-brown color, appetizing, no packaging, no spoon",
+  Rohrzucker:
+    "show raw cane sugar (Rohrzucker): a small tidy mound of coarse amber-brown cane sugar crystals, appetizing, no packaging, no spoon",
   Schokoladenpudding:
     "show a creamy chocolate pudding dessert, dark glossy brown, a small portion served as a smooth dollop or in a small clear dessert glass, appetizing, no plate, no spoon",
   Vanillepudding:

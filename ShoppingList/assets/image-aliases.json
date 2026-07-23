@@ -1214,10 +1214,8 @@
     "zucker": [
         "haushaltszucker",
         "kristallzucker",
-        "rohrzucker",
         "puderzucker",
         "sugar",
-        "cane sugar",
         "powdered sugar",
         "icing sugar"
     ],
@@ -1790,5 +1788,14 @@
     "haarspülung": [
         "conditioner",
         "spülung"
+    ],
+    "brauner zucker": [
+        "braunzucker",
+        "brown sugar"
+    ],
+    "rohrzucker": [
+        "rohrohrzucker",
+        "vollrohrzucker",
+        "cane sugar"
     ]
 }
