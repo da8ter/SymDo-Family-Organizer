@@ -86,8 +86,8 @@
     // (kein 50 %-Transparent), da hinter den Kacheln der rote Wisch-zum-Löschen-
     // Layer liegt und sonst durchscheinen würde.
     document.documentElement.style.setProperty('--row', scheme === 'light'
-      ? 'color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%)'
-      : 'color-mix(in srgb, var(--card-color) 86%, var(--content-color) 14%)');
+      ? 'color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)'
+      : 'color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%)');
   }
   // Canvas-Hintergrund (Overscroll/Safe-Areas) folgt der Kartenfarbe. Zuletzt
   // eingefügt → gewinnt über das statische Default aus BuildWebHead.

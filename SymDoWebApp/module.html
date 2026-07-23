@@ -14,7 +14,7 @@
   --surface2:color-mix(in srgb, var(--content-color) 12%, transparent);
   /* Deckende Zeilenfläche: liegt über dem roten Wisch-Hintergrund, darf NICHT
      durchscheinen (color-mix zweier deckender Farben bleibt deckend) */
-  --row:     color-mix(in srgb, var(--card-color) 86%, var(--content-color) 14%);
+  --row:     color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
   --border:  color-mix(in srgb, var(--content-color) 14%, transparent);
   --accent:  var(--accent-color);
   --red:     #ff4d4d;
@@ -804,15 +804,11 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .badge.attr { display: inline-flex; align-items: center; }
 /* Fälligkeits-Badge — Optik identisch zur ToDoList-Kachel (neutral umrandet,
-   überfällig rot, heute orange; Kalender-Icon nur auf schmalen Kacheln) */
+   überfällig rot, heute orange). Immer mit Text — nie nur das Kalender-Icon. */
 .badge.due-badge { display: inline-flex; align-items: center; gap: 6px; }
 .badge.due-badge .due-icon { display: none; }
 .badge.due-badge.due-overdue { color: var(--text); background-color: rgba(255, 0, 0, 0.2); }
 .badge.due-badge.due-today   { color: var(--text); background-color: rgba(255, 165, 0, 0.2); }
-@media (max-width: 420px) {
-  .badge.due-badge .due-text { display: none; }
-  .badge.due-badge .due-icon { display: inline-block; }
-}
 .todo-card.drag-over { outline: 2px dashed var(--accent); }
 
 /* Avatare */
@@ -1332,7 +1328,7 @@ html[data-symdo-theme="dark"] .member-bar {
 // gesetzt). Der Web-Adapter setzt --row zusätzlich inline — konsistenter Wert.
 (function symdoLightTiles(){
   try { var st = document.createElement('style');
-    st.textContent = 'html[data-symdo-theme="light"]{--row:color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%)}';
+    st.textContent = 'html[data-symdo-theme="light"]{--row:color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)}';
     (document.head || document.documentElement).appendChild(st); } catch (e) {}
   function apply(){ try {
     var p = document.createElement('span');
