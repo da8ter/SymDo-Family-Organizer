@@ -85,9 +85,7 @@ select option { color: #111; background: #fff; }
      gleich (leerer Track ist transparent, der Thumb erscheint nur bei Bedarf).
      KEIN scrollbar-gutter zusätzlich — das würde doppelt reservieren. */
   overflow-y: scroll;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  /* Scrollleiste wie im ToDoList-Modul: dünn, Akzentfarbe, transparente Spur */
+  overscroll-behavior: contain;  /* Scrollleiste wie im ToDoList-Modul: dünn, Akzentfarbe, transparente Spur */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: none;
@@ -397,9 +395,7 @@ select option { color: #111; background: #fff; }
   display: flex;
   gap: 14px;
   overflow-x: auto;
-  padding: 4px 2px 8px;
-  -webkit-overflow-scrolling: touch;
-  /* Horizontal wischbar, aber ohne sichtbare Scrollleiste (wie in der App) */
+  padding: 4px 2px 8px;  /* Horizontal wischbar, aber ohne sichtbare Scrollleiste (wie in der App) */
   scrollbar-width: none;
 }
 .shop-strip::-webkit-scrollbar { display: none; }

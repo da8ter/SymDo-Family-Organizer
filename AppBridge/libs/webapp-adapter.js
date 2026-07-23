@@ -48,7 +48,12 @@
     var s = document.createElement('style');
     s.textContent =
       '::-webkit-scrollbar{width:0!important;height:0!important;display:none!important;background:transparent!important}'
-      + '*{scrollbar-width:none!important;-ms-overflow-style:none!important}';
+      + '*{scrollbar-width:none!important;-ms-overflow-style:none!important}'
+      // Standalone-Fix (nur Web-App, nicht Kachel): body als fixen, nicht
+      // scrollenden Rahmen verankern. Sonst fängt auf iOS die Dokument-/Bounce-
+      // Ebene die ERSTE Wischgeste ab (Scrollen ging „erst beim zweiten Mal");
+      // der innere .screen-Scroller übernimmt dann ab der ersten Berührung.
+      + 'html,body{position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden;overscroll-behavior:none;}';
     (document.head || document.documentElement).appendChild(s);
   })();
 
