@@ -235,9 +235,16 @@ html[data-symdo-theme="light"] .member-bar {
   padding: 0;
   position: relative;
   opacity: 1;
-  transition: opacity .15s ease;
+  transition: opacity .15s ease, margin-left .2s ease, box-shadow .2s ease;
   flex: none;
 }
+/* Eingeklappt (beim Scrollen, wenn nicht oben): Avatare schieben sich
+   übereinander, von den hinteren bleibt ~1/3 sichtbar (36px → 12px). Ein Tipp
+   auf die Leiste klappt sie wieder aus (siehe setupMemberCollapse). */
+.member-bar { transition: gap .2s ease; }
+.member-bar.collapsed { gap: 0; cursor: pointer; }
+.member-bar.collapsed .avatar-btn:not(:first-child) { margin-left: -24px; }
+.member-bar.collapsed .avatar-btn { box-shadow: 0 0 0 2px var(--card-color); }
 .member-bar.has-selection .avatar-btn { opacity: .4; }
 .member-bar.has-selection .avatar-btn.selected { opacity: 1; }
 .member-bar .avatar-btn.selected::after {
@@ -2172,6 +2179,34 @@ function renderAll() {
   if (activeTab === 'shopping') renderShopping();
   if (activeTab === 'todos') renderTodos();
   if (activeTab === 'favorites') renderFavorites();
+  const active = document.querySelector('.screen.active');
+  if (active) applyMemberCollapse(active);
+}
+
+// Member-Leiste einklappen, sobald der Screen nicht mehr oben steht: die Avatare
+// überlappen (hintere ~1/3 sichtbar). Ein Tipp klappt sie aus (memberUserExpanded),
+// das nächste Scroll-Event klappt sie wieder ein. Oben immer ausgeklappt.
+let memberUserExpanded = false;
+function applyMemberCollapse(scrollEl) {
+  if (!scrollEl) return;
+  const atTop = scrollEl.scrollTop <= 4;
+  if (atTop) memberUserExpanded = false;
+  const collapsed = !atTop && !memberUserExpanded;
+  scrollEl.querySelectorAll('.member-bar').forEach(mb => mb.classList.toggle('collapsed', collapsed));
+}
+function setupMemberCollapse() {
+  document.querySelectorAll('.screen').forEach(sc => {
+    sc.addEventListener('scroll', () => { memberUserExpanded = false; applyMemberCollapse(sc); }, { passive: true });
+  });
+  // Erster Tipp auf die eingeklappte Leiste klappt sie aus (statt Member zu wählen)
+  document.addEventListener('click', (e) => {
+    const bar = (e.target && e.target.closest) ? e.target.closest('.member-bar.collapsed') : null;
+    if (!bar) return;
+    memberUserExpanded = true;
+    bar.classList.remove('collapsed');
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
 }
 
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
@@ -3914,6 +3949,7 @@ function setupScrollContainment() {
 document.addEventListener('DOMContentLoaded', () => {
   initCaptions();
   setupScrollContainment();
+  setupMemberCollapse();
 
   for (const t of TABS) {
     document.getElementById('tab-' + t).addEventListener('click', () => setTab(t));
