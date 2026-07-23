@@ -42,6 +42,17 @@
                 },
                 {
                     "type": "Button",
+                    "caption": "Detect local URL",
+                    "onClick": "LAB_DetectLocalUrl($id);"
+                },
+                {
+                    "type": "Label",
+                    "name": "LocalUrlDetectInfo",
+                    "caption": "",
+                    "visible": false
+                },
+                {
+                    "type": "Button",
                     "caption": "Create browser access",
                     "onClick": "LAB_CreateWebAccess($id);"
                 },
