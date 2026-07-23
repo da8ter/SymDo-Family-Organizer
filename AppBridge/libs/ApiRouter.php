@@ -71,6 +71,12 @@ trait ApiRouter
             case 'instances':
                 $this->RouteInstance($method, $route);
                 return;
+            case 'ai':
+                if ($method === 'POST' && ($route[2] ?? '') === 'extract') {
+                    $this->HandleAiExtract($device);
+                    return;
+                }
+                break;
             case 'assets':
                 if ($method === 'GET') {
                     $this->HandleAsset(array_slice($route, 2));

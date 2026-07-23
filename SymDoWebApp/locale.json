@@ -141,7 +141,15 @@
             "Yearly": "Jährlich",
             "Years": "Jahre",
             "already in list": "bereits in der Liste",
-            "hidden in the app": "in der App ausgeblendet"
+            "hidden in the app": "in der App ausgeblendet",
+            "Add": "Hinzufügen",
+            "Detected tasks": "Erkannte Aufgaben",
+            "Analyzing photo…": "Foto wird analysiert…",
+            "Could not read the photo.": "Foto konnte nicht gelesen werden.",
+            "AI request failed.": "KI-Anfrage fehlgeschlagen.",
+            "Could not reach the AI service.": "KI-Dienst nicht erreichbar.",
+            "No tasks detected.": "Keine Aufgaben erkannt.",
+            "%1 tasks added": "%1 Aufgaben hinzugefügt"
         }
     }
 }

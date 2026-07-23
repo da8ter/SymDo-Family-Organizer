@@ -5,12 +5,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/libs/ApiRouter.php';
 require_once __DIR__ . '/libs/DeviceRegistry.php';
 require_once __DIR__ . '/libs/QrRenderer.php';
+require_once __DIR__ . '/libs/AiExtract.php';
 
 class SymDoBridge extends IPSModuleStrict
 {
     use ApiRouter;
     use DeviceRegistry;
     use QrRenderer;
+    use AiExtract;
 
     private const MODULE_GUID          = '{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}';
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
@@ -38,6 +40,13 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterAttributeString('HiddenInstances', '[]');
         $this->RegisterPropertyString('Users', '[]');
+        // KI „Foto → Aufgaben" (Web-App schickt das Foto, die Bridge ruft die KI).
+        $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
+        $this->RegisterPropertyString('AiAnthropicKey', '');
+        $this->RegisterPropertyString('AiOpenAIKey', '');
+        $this->RegisterPropertyString('AiLocalBaseUrl', '');
+        $this->RegisterPropertyString('AiLocalModel', '');
+        $this->RegisterPropertyString('AiLocalKey', '');
     }
 
     public function ApplyChanges(): void

@@ -56,6 +56,56 @@
         },
         {
             "type": "ExpansionPanel",
+            "caption": "AI (photo to tasks)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Lets the web app photograph a document and extract to-do tasks from it via AI. The photo is sent from the browser to this bridge, which forwards it to the chosen AI. The API key stays here on the server and never reaches the browser."
+                },
+                {
+                    "type": "Select",
+                    "name": "AiProvider",
+                    "caption": "Provider",
+                    "options": [
+                        { "caption": "Anthropic (Claude)", "value": "anthropic" },
+                        { "caption": "OpenAI (GPT)", "value": "openai" },
+                        { "caption": "Local server (OpenAI-compatible)", "value": "local" }
+                    ]
+                },
+                {
+                    "type": "PasswordTextBox",
+                    "name": "AiAnthropicKey",
+                    "caption": "Anthropic API key (sk-ant-…)"
+                },
+                {
+                    "type": "PasswordTextBox",
+                    "name": "AiOpenAIKey",
+                    "caption": "OpenAI API key (sk-…)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "AiLocalBaseUrl",
+                    "caption": "Local base URL (e.g. http://192.168.1.50:11434/v1)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "AiLocalModel",
+                    "caption": "Local model (a vision model, e.g. llama3.2-vision)"
+                },
+                {
+                    "type": "PasswordTextBox",
+                    "name": "AiLocalKey",
+                    "caption": "Local API key (optional)"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Note: cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
             "caption": "Users",
             "expanded": true,
             "items": [

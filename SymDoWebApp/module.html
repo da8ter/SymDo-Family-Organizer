@@ -967,6 +967,31 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .assign-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 15px; }
 .assign-row.selected .check { opacity: 1; }
+/* KI-Review: erkannte Aufgaben mit Häkchen */
+.ai-status { padding: 24px 4px; text-align: center; color: var(--muted); font-size: 14px; }
+.ai-spinner {
+  width: 28px; height: 28px; margin: 0 auto 12px; border-radius: 999px;
+  border: 3px solid color-mix(in srgb, var(--content-color) 18%, transparent);
+  border-top-color: var(--accent); animation: ai-spin .8s linear infinite;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+.ai-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--content-color) 8%, transparent);
+}
+.ai-row .ai-box {
+  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 6px;
+  border: 2px solid color-mix(in srgb, var(--content-color) 30%, transparent);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px;
+}
+.ai-row.selected .ai-box { background: var(--accent); border-color: var(--accent); }
+.ai-row .ai-box i { opacity: 0; }
+.ai-row.selected .ai-box i { opacity: 1; }
+.ai-main { flex: 1; min-width: 0; }
+.ai-title { font-size: 15px; font-weight: 600; }
+.ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .overlay-footer {
   display: flex;
   gap: 10px;
@@ -1149,8 +1174,10 @@ html[data-symdo-theme="dark"] .member-bar {
         <div id="todoListArea"></div>
         <div class="inputbar">
           <input id="todoInput" type="text" autocomplete="off" />
+          <button id="btnTodoScan" class="round-btn secondary" aria-label="Foto scannen"><i class="fa-light fa-camera"></i></button>
           <button id="btnTodoAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
         </div>
+        <input id="todoScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
       </div>
     </section>
 
@@ -1276,6 +1303,21 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-footer">
       <button data-close="promptOverlay" id="btnPromptCancel"></button>
       <button class="primary" id="btnPromptOk"></button>
+    </div>
+  </div>
+</div>
+
+<!-- KI: erkannte Aufgaben aus einem Foto prüfen und übernehmen -->
+<div class="overlay" id="aiReviewOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="aiReviewTitle">Erkannte Aufgaben</span>
+      <button class="btn-close-overlay" data-close="aiReviewOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="aiReviewBody"></div>
+    <div class="overlay-footer">
+      <button data-close="aiReviewOverlay" id="btnAiCancel"></button>
+      <button class="primary" id="btnAiAdd" disabled></button>
     </div>
   </div>
 </div>
@@ -4043,6 +4085,118 @@ document.addEventListener('DOMContentLoaded', () => {
   todoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') quickAdd(); });
   todoAdd.addEventListener('click', quickAdd);
   document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
+
+  // ── KI: Foto → Aufgaben (Bridge leitet das Foto an die konfigurierte KI weiter) ──
+  // Nur in der Standalone-Web-App (window.__SYMDO__): dort gibt es den REST-Token.
+  // In der Visu-Kachel läuft alles über Symcon (kein Token) → Button ausblenden.
+  const todoScan = document.getElementById('btnTodoScan');
+  const todoScanInput = document.getElementById('todoScanInput');
+  if (!window.__SYMDO__) { if (todoScan) todoScan.style.display = 'none'; }
+  const aiBody = document.getElementById('aiReviewBody');
+  const aiAdd = document.getElementById('btnAiAdd');
+  document.getElementById('aiReviewTitle').textContent = translate('Detected tasks');
+  document.getElementById('btnAiCancel').textContent = translate('Cancel');
+  aiAdd.textContent = translate('Add');
+
+  todoScan.addEventListener('click', () => { todoScanInput.value = ''; todoScanInput.click(); });
+  todoScanInput.addEventListener('change', () => {
+    const file = todoScanInput.files && todoScanInput.files[0];
+    if (file) aiDownscale(file, 1280, 0.7).then(runAiExtract).catch(() => showToast(translate('Could not read the photo.')));
+  });
+
+  function aiDownscale(file, maxEdge, quality) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        const w = Math.max(1, Math.round((img.naturalWidth || 1) * scale));
+        const h = Math.max(1, Math.round((img.naturalHeight || 1) * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img')); };
+      img.src = url;
+    });
+  }
+
+  function aiStatus(html) { aiBody.innerHTML = '<div class="ai-status">' + html + '</div>'; }
+
+  function runAiExtract(dataUrl) {
+    aiAdd.disabled = true;
+    aiStatus('<div class="ai-spinner"></div>' + translate('Analyzing photo…'));
+    openOverlay('aiReviewOverlay');
+    const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
+    let token = '';
+    try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    fetch(base + '/ai/extract', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify({ image: dataUrl }) })
+      .then(r => r.json().then(j => ({ ok: r.ok, j: j })).catch(() => ({ ok: false, j: null })))
+      .then(res => {
+        if (!res.ok || !res.j || res.j.ok !== true) {
+          const msg = (res.j && res.j.error && res.j.error.message) || translate('AI request failed.');
+          aiStatus(escapeHtml(msg));
+          return;
+        }
+        renderAiReview(Array.isArray(res.j.todos) ? res.j.todos : []);
+      })
+      .catch(() => aiStatus(translate('Could not reach the AI service.')));
+  }
+
+  function renderAiReview(todos) {
+    if (!todos.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
+    aiBody.innerHTML = '';
+    todos.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'ai-row selected';
+      const dueChip = t.due ? '<span class="badge due-badge">' + escapeHtml(String(t.due)) + '</span>' : '';
+      const prioChip = '<span class="badge ' + priorityKey(t.priority || 'normal') + '">' + escapeHtml(priorityLabel(t.priority || 'normal')) + '</span>';
+      const info = t.info ? '<div class="todo-info">' + escapeHtml(String(t.info)) + '</div>' : '';
+      row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
+        '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(t.title || '')) + '</div>' + info +
+        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
+      row.__todo = t;
+      row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
+      aiBody.appendChild(row);
+    });
+    updateAiAdd();
+  }
+
+  function updateAiAdd() {
+    const n = aiBody.querySelectorAll('.ai-row.selected').length;
+    aiAdd.disabled = n === 0;
+    aiAdd.textContent = n > 0 ? translate('Add') + ' (' + n + ')' : translate('Add');
+  }
+
+  function aiDueFields(due) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due || ''));
+    if (!m) return { due: 0, dueAllDay: false };
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return { due: Math.floor(d.getTime() / 1000), dueAllDay: true, dueDay: m[0] };
+  }
+
+  aiAdd.addEventListener('click', () => {
+    const rows = aiBody.querySelectorAll('.ai-row.selected');
+    if (!rows.length) return;
+    const me = currentUserID();
+    const target = selectedTodoID();
+    rows.forEach(row => {
+      const t = row.__todo || {};
+      const fields = Object.assign({
+        title: String(t.title || ''), info: t.info ? String(t.info) : '',
+        priority: t.priority || 'normal', quantity: 0,
+        assignedTo: me ? [me] : [], recurrence: 'none', notification: false
+      }, aiDueFields(t.due));
+      if (me) fields.actorUserId = me;
+      sdCall(target, 'AddItem', fields);
+    });
+    closeOverlay('aiReviewOverlay');
+    showToast(translate('%1 tasks added').replace('%1', String(rows.length)));
+  });
 
   // ToDo-Editor: Sichtbarkeits-Logik
   document.getElementById('tdHasDue').addEventListener('change', syncTodoEditorVisibility);

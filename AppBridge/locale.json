@@ -31,7 +31,30 @@
             "Household members for task assignment. The photo is a Symcon media object (image).": "Haushaltsmitglieder für die Aufgaben-Zuweisung. Das Foto ist ein Symcon-Medienobjekt (Bild).",
             "Photo": "Foto",
             "Push visualization": "Push-Visualisierung",
-            "New task assigned": "Neue Aufgabe zugewiesen"
+            "New task assigned": "Neue Aufgabe zugewiesen",
+            "AI (photo to tasks)": "KI (Foto zu Aufgaben)",
+            "Lets the web app photograph a document and extract to-do tasks from it via AI. The photo is sent from the browser to this bridge, which forwards it to the chosen AI. The API key stays here on the server and never reaches the browser.": "Ermöglicht der Web-App, ein Dokument zu fotografieren und per KI Aufgaben daraus zu extrahieren. Das Foto wird vom Browser an diese Bridge geschickt, die es an die gewählte KI weiterleitet. Der API-Key bleibt hier auf dem Server und gelangt nie in den Browser.",
+            "Provider": "Anbieter",
+            "Anthropic (Claude)": "Anthropic (Claude)",
+            "OpenAI (GPT)": "OpenAI (GPT)",
+            "Local server (OpenAI-compatible)": "Lokaler Server (OpenAI-kompatibel)",
+            "Anthropic API key (sk-ant-…)": "Anthropic API-Key (sk-ant-…)",
+            "OpenAI API key (sk-…)": "OpenAI API-Key (sk-…)",
+            "Local base URL (e.g. http://192.168.1.50:11434/v1)": "Lokale Basis-URL (z. B. http://192.168.1.50:11434/v1)",
+            "Local model (a vision model, e.g. llama3.2-vision)": "Lokales Modell (ein Vision-Modell, z. B. llama3.2-vision)",
+            "Local API key (optional)": "Lokaler API-Key (optional)",
+            "Note: cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server.": "Hinweis: Cloud-Anbieter (Anthropic/OpenAI) kosten wenige Cent pro Scan und senden das Foto in deren Cloud; ein lokaler Server behält alles im eigenen Netz, braucht aber ein Vision-fähiges Modell. Keys unter console.anthropic.com / platform.openai.com erstellen. Der Key wird in der Konfiguration dieser Instanz auf deinem Server gespeichert.",
+            "No image provided.": "Kein Bild übermittelt.",
+            "Image too large.": "Bild zu groß.",
+            "No Anthropic API key configured.": "Kein Anthropic-API-Key konfiguriert.",
+            "No OpenAI API key configured.": "Kein OpenAI-API-Key konfiguriert.",
+            "Local server URL and model must be configured.": "Basis-URL und Modell des lokalen Servers müssen konfiguriert sein.",
+            "No AI provider configured.": "Kein KI-Anbieter konfiguriert.",
+            "Could not reach the AI service.": "KI-Dienst nicht erreichbar.",
+            "AI rejected the API key.": "KI hat den API-Key abgelehnt.",
+            "AI rate limit reached — try again later.": "KI-Ratenlimit erreicht — später erneut versuchen.",
+            "AI request failed.": "KI-Anfrage fehlgeschlagen.",
+            "Unexpected AI response.": "Unerwartete KI-Antwort."
         }
     }
 }
