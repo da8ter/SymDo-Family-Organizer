@@ -442,6 +442,10 @@
       padding: var(--gap);
       background: var(--row);
       touch-action: pan-y;
+      /* Long-Press auf dem iPhone soll keinen Text markieren / keinen Callout öffnen */
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
       transition: transform .28s cubic-bezier(.22,.61,.36,1);
     }
     .item-swipe.is-dragging { transition: none; }
