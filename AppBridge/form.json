@@ -113,7 +113,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Users",
-            "expanded": true,
+            "expanded": false,
             "items": [
                 {
                     "type": "Label",
@@ -166,7 +166,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Paired devices",
-            "expanded": true,
+            "expanded": false,
             "items": [
                 {
                     "type": "List",
