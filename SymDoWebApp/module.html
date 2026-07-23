@@ -226,6 +226,10 @@ select option { color: #111; background: #fff; }
 html[data-symdo-theme="light"] .member-bar {
   background: color-mix(in srgb, color-mix(in srgb, var(--content-color) 14%, var(--card-color)) 55%, transparent);
 }
+/* Im Dunkelmodus etwas dunkler als die reine Kartenfarbe (Transparenz bleibt). */
+html[data-symdo-theme="dark"] .member-bar {
+  background: color-mix(in srgb, color-mix(in srgb, #000 22%, var(--card-color)) 55%, transparent);
+}
 /* Im ToDo-Tab gibt es kein Datum, das hochgezogen werden muss → normaler
    Abstand nach unten statt des negativen Zugs. */
 .member-bar.todo-members { margin-bottom: 10px; }
