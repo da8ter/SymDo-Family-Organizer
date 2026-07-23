@@ -98,6 +98,71 @@ trait AiExtract
         ]);
     }
 
+    /**
+     * Relay für die Visu-Kachel: dieselbe KI-Extraktion wie der REST-Endpoint,
+     * aber als Rückgabewert statt HTTP-Antwort (die Kachel hat keinen Token). Wird
+     * von der AppBridge-RequestAction('AiTileRequest') aufgerufen. $path ist der
+     * REST-Pfad ('…/ingredients' oder '…/extract'); $payloadJson enthält {image}
+     * bzw. {url}. Rückgabe: JSON-Body wie ihn die Web-App erwartet
+     * ({ok:true,…} oder {ok:false,error:{code,message}}).
+     */
+    private function AiRelayBody(string $path, string $payloadJson): string
+    {
+        if (!$this->ReadPropertyBoolean('AiEnabled')) {
+            return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
+        }
+        $body = json_decode($payloadJson, true);
+        if (!is_array($body)) {
+            $body = [];
+        }
+        $image = $this->AiStripImage((string)($body['image'] ?? ''));
+        if ($image !== '' && strlen($image) > 12 * 1024 * 1024) {
+            return $this->AiRelayError('invalid_payload', $this->Translate('Image too large.'));
+        }
+
+        if (str_ends_with($path, 'ingredients')) {
+            $url = trim((string)($body['url'] ?? ''));
+            if ($image !== '') {
+                $r = $this->AiExtractIngredientsFromImage($image);
+            } elseif ($url !== '') {
+                $r = $this->AiExtractIngredientsFromUrl($url);
+            } else {
+                return $this->AiRelayError('invalid_payload', $this->Translate('No image or URL provided.'));
+            }
+            if (($r['ok'] ?? false) !== true) {
+                return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
+            }
+            return json_encode(['ok' => true, 'title' => $r['title'] ?? null, 'servings' => $r['servings'] ?? null, 'items' => $r['items']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        if (str_ends_with($path, 'extract')) {
+            if ($image === '') {
+                return $this->AiRelayError('invalid_payload', $this->Translate('No image provided.'));
+            }
+            $r = $this->AiExtractTodos($image);
+            if (($r['ok'] ?? false) !== true) {
+                return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
+            }
+            return json_encode(['ok' => true, 'todos' => $r['todos']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        return $this->AiRelayError('unknown_route', 'Unknown AI route');
+    }
+
+    private function AiRelayError(string $code, string $message): string
+    {
+        return json_encode(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function AiStripImage(string $image): string
+    {
+        $comma = strpos($image, 'base64,');
+        if ($comma !== false) {
+            $image = substr($image, $comma + 7);
+        }
+        return trim($image);
+    }
+
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
     private function AiExtractIngredientsFromImage(string $imageBase64): array
     {

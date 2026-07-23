@@ -1506,6 +1506,7 @@ const store = {
   users: [],
   defaultUserID: '',
   bridgeAvailable: false,
+  aiEnabled: false,
   hiddenIDs: [],
   instances: [],
   states: {},        // "<id>" → {kind, revision, state}
@@ -1513,6 +1514,39 @@ const store = {
   brands: {},
   shoppingExtras: {} // "<id>" → {imageBase, extApiBase}
 };
+
+// ── KI-Transport: Standalone nutzt REST/Adapter, die Visu-Kachel relayt über requestAction ──
+let __aiTxn = 0;
+const __aiPending = {};
+function aiPost(path, payload) {
+  if (typeof window.__symdoApiPost === 'function') {
+    return window.__symdoApiPost(path, payload);
+  }
+  if (window.__SYMDO__) {
+    const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
+    let token = ''; try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return fetch(base + path, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
+      .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })));
+  }
+  // Visu-Kachel (kein Token): über requestAction relayen; Antwort kommt via handleMessage('aiResult').
+  const txn = 'ai' + (++__aiTxn);
+  return new Promise((resolve) => {
+    __aiPending[txn] = resolve;
+    requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
+    setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
+  });
+}
+// KI-Buttons sichtbar, wenn aktiviert — Quelle: Standalone window.__SYMDO__, Kachel: State.
+function computeAiEnabled() {
+  if (window.__SYMDO__) return window.__SYMDO__.aiEnabled !== false;
+  return !!store.aiEnabled;
+}
+function applyAiEnabled() {
+  const on = computeAiEnabled();
+  ['btnShopScan', 'btnTodoScan'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
+}
 
 // Kompat-Schicht für die aus dem ShoppingList-Modul übernommenen Blöcke
 // (Scanner, Bild-Resolver): globales `state` = State der GEWÄHLTEN Einkaufsliste.
@@ -1840,10 +1874,16 @@ function handleMessage(data) {
     try { data = JSON.parse(data); } catch (e) { return; }
   }
   if (!data || typeof data !== 'object') return;
+  if (data.type === 'aiResult') {
+    const cb = __aiPending[data.txn];
+    if (cb) { delete __aiPending[data.txn]; cb({ status: data.status || 200, json: data.json || null }); }
+    return;
+  }
   if (data.type === 'state') {
     store.users = data.users || [];
     store.defaultUserID = data.defaultUserID || '';
     store.bridgeAvailable = !!data.bridgeAvailable;
+    store.aiEnabled = !!data.aiEnabled;
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];
     store.states = data.states || {};
@@ -1853,6 +1893,7 @@ function handleMessage(data) {
     productImages = {}; // Kennung: Maps im nächsten syncCompat neu übernehmen
     syncCompat();
     renderAll();
+    applyAiEnabled();
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
@@ -4160,13 +4201,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
 
   // ── KI: Foto → Aufgaben (Bridge leitet das Foto an die konfigurierte KI weiter) ──
-  // Nur in der Standalone-Web-App (window.__SYMDO__): dort gibt es den REST-Token.
-  // In der Visu-Kachel läuft alles über Symcon (kein Token) → Button ausblenden.
-  // KI-Buttons nur zeigen, wenn Standalone-Web-App UND der Bridge-Schalter „aiEnabled" an ist.
-  const aiEnabled = !!window.__SYMDO__ && window.__SYMDO__.aiEnabled !== false;
+  // KI-Buttons zeigen, wenn der Bridge-Schalter „aiEnabled" an ist — Standalone
+  // (window.__SYMDO__) UND Visu-Kachel (Flag im State). applyAiEnabled() blendet
+  // beide Scan-Buttons je nach Quelle ein/aus (in der Kachel nach dem State-Push).
   const todoScan = document.getElementById('btnTodoScan');
   const todoScanInput = document.getElementById('todoScanInput');
-  if (!aiEnabled) { if (todoScan) todoScan.style.display = 'none'; }
+  applyAiEnabled();
   const aiBody = document.getElementById('aiReviewBody');
   const aiAdd = document.getElementById('btnAiAdd');
   const aiFav = document.getElementById('btnAiFav');
@@ -4181,10 +4221,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Bridge-KI + Review-Overlay wie ToDo. ──
-  // Auch hier nur in der Standalone-Web-App (REST-Token); in der Visu-Kachel ausgeblendet.
   const shopScan = document.getElementById('btnShopScan');
   const shopScanInput = document.getElementById('shopScanInput');
-  if (!aiEnabled) { if (shopScan) shopScan.style.display = 'none'; }
   document.getElementById('aiSourceTitle').textContent = translate('Scan recipe or photo');
   document.getElementById('aiFromPhotoLabel').textContent = translate('Analyze photo');
   document.getElementById('aiFromUrlLabel').textContent = translate('Analyze URL');
@@ -4242,21 +4280,8 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAiReview(Array.isArray(j.todos) ? j.todos : []);
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
-    // Über die Adapter-Transportfunktion → dieselbe lokal-zuerst-Basis wie alle
-    // anderen Aufrufe (daheim lokal, unterwegs Connect, mit Fallback).
-    if (typeof window.__symdoApiPost === 'function') {
-      window.__symdoApiPost('/ai/extract', { image: dataUrl }).then(done).catch(fail);
-    } else {
-      // Fallback (falls kein Adapter, z. B. außerhalb der Standalone-App)
-      const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
-      let token = '';
-      try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = 'Bearer ' + token;
-      fetch(base + '/ai/extract', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify({ image: dataUrl }) })
-        .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })))
-        .then(done).catch(fail);
-    }
+    // aiPost wählt den Transport: Standalone REST/Adapter, Visu-Kachel requestAction-Relay.
+    aiPost('/ai/extract', { image: dataUrl }).then(done).catch(fail);
   }
 
   function runAiIngredients(payload) {
@@ -4276,18 +4301,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl });
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
-    if (typeof window.__symdoApiPost === 'function') {
-      window.__symdoApiPost('/ai/ingredients', payload).then(done).catch(fail);
-    } else {
-      const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
-      let token = '';
-      try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = 'Bearer ' + token;
-      fetch(base + '/ai/ingredients', { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
-        .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })))
-        .then(done).catch(fail);
-    }
+    aiPost('/ai/ingredients', payload).then(done).catch(fail);
   }
 
   // Review-Overlay wird für ToDos und Einkaufs-/Rezept-Zutaten geteilt; der Modus steuert Zeilen + Übernahme.

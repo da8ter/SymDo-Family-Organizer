@@ -95,6 +95,21 @@ class SymDoWebApp extends IPSModuleStrict
             case 'Call':
                 $this->HandleCall($this->DecodeValue($value));
                 return;
+            case 'AiCall':
+                $this->HandleAiCall((string)$value);
+                return;
+            case 'AiResult':
+                // Rückkanal von der AppBridge → an die Kachel weiterreichen
+                $r = json_decode((string)$value, true);
+                if (is_array($r)) {
+                    $this->Push([
+                        'type'   => 'aiResult',
+                        'txn'    => (string)($r['txn'] ?? ''),
+                        'status' => (int)($r['status'] ?? 200),
+                        'json'   => $r['json'] ?? null,
+                    ]);
+                }
+                return;
             case 'CheckRevisions':
                 $this->HandleCheckRevisions($this->DecodeValue($value));
                 return;
@@ -360,6 +375,7 @@ class SymDoWebApp extends IPSModuleStrict
             'users'           => $this->GetUsers(),
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
             'bridgeAvailable' => $bridgeID > 0,
+            'aiEnabled'       => ($bridgeID > 0 ? (bool)@IPS_GetProperty($bridgeID, 'AiEnabled') : false),
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
             'states'          => (object)$states,
@@ -558,6 +574,38 @@ class SymDoWebApp extends IPSModuleStrict
             $decoded = ['ok' => false, 'error' => 'invalid_response'];
         }
         $this->PushInstanceState($instanceID, $kind, $decoded, $txn);
+    }
+
+    /**
+     * KI-Relay für die Kachel: leitet {path,payload,txn} an die AppBridge weiter
+     * (LAB_AiRelay) und schickt das Ergebnis als 'aiResult'-Nachricht zur Kachel
+     * zurück. So funktioniert die KI-Analyse auch ohne REST-Token.
+     */
+    private function HandleAiCall(string $json): void
+    {
+        $req = json_decode($json, true);
+        if (!is_array($req)) {
+            return;
+        }
+        $txn      = (string)($req['txn'] ?? '');
+        $bridgeID = $this->GetBridgeID();
+        if ($bridgeID > 0) {
+            try {
+                // Bridge extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
+                IPS_RequestAction($bridgeID, 'AiTileRequest', json_encode([
+                    'path'    => (string)($req['path'] ?? ''),
+                    'payload' => $req['payload'] ?? [],
+                    'txn'     => $txn,
+                    'sdwa'    => $this->InstanceID,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                return;
+            } catch (Throwable $e) {
+                // fällt unten in die Fehlerantwort
+            }
+        }
+        $this->Push(['type' => 'aiResult', 'txn' => $txn, 'status' => 200, 'json' => [
+            'ok' => false, 'error' => ['code' => 'ai_unavailable', 'message' => $this->Translate('Could not reach the AI service.')],
+        ]]);
     }
 
     /** @param array<string, mixed> $data */

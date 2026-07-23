@@ -330,6 +330,35 @@ class SymDoBridge extends IPSModuleStrict
         }
     }
 
+    /**
+     * KI-Relay für die Visu-Kachel (kein REST-Token): SymDoWebApp ruft dies per
+     * IPS_RequestAction, die Bridge extrahiert und schickt das Ergebnis per
+     * IPS_RequestAction('AiResult') an die Kachel zurück. Bewusst über
+     * RequestAction statt einer neuen public LAB_-Methode, damit ein einfacher
+     * Modul-Reload (ohne Kernel-Neustart) genügt.
+     */
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        if ($Ident === 'AiTileRequest') {
+            $req = json_decode((string)$Value, true);
+            if (!is_array($req)) {
+                return;
+            }
+            $sdwa        = (int)($req['sdwa'] ?? 0);
+            $payload     = $req['payload'] ?? [];
+            $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''), (string)$payloadJson), true);
+            if ($sdwa > 0) {
+                @IPS_RequestAction($sdwa, 'AiResult', json_encode([
+                    'txn'    => (string)($req['txn'] ?? ''),
+                    'status' => 200,
+                    'json'   => $body,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            }
+            return;
+        }
+    }
+
     protected function ProcessHookData(): void
     {
         try {
