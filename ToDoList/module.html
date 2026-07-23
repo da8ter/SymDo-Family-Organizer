@@ -2121,11 +2121,23 @@
       let startX = 0, startY = 0, dx = 0;
       let mode = 'idle';            // idle | pending | swipe | drag
       let usingTouch = false, longTimer = null, dragGroup = '', dragMoved = false;
+      let prevOverflow = null;      // frozen scroll while dragging on touch
       const SLOP = 8, THRESHOLD = 70, HOLD = 350;
 
       const clearArm = () => item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
+      // Freeze the list scroll while a touch drag is active: touch-action:pan-y
+      // otherwise hands vertical movement to the browser (it scrolls instead of
+      // reordering). With the container non-scrollable the finger drag reorders.
+      const freezeScroll = () => {
+        if (container && prevOverflow === null) { prevOverflow = container.style.overflowY; container.style.overflowY = 'hidden'; }
+      };
+      const unfreezeScroll = () => {
+        if (container && prevOverflow !== null) { container.style.overflowY = prevOverflow; prevOverflow = null; }
+      };
       const cleanup = () => {
         if (longTimer) { clearTimeout(longTimer); longTimer = null; }
+        unfreezeScroll();
+        swipe.style.touchAction = '';
         mode = 'idle';
         swipe.classList.remove('is-dragging');
         document.removeEventListener('mousemove', onMouseMove);
@@ -2141,6 +2153,7 @@
         dragGroup = item.getAttribute('data-group') || '';
         dragMoved = false;
         item.classList.add('dragging');   // accent tint via CSS
+        if (usingTouch) { freezeScroll(); swipe.style.touchAction = 'none'; }
         try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
       };
 

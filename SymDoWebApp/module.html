@@ -1927,11 +1927,22 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
   if (!content) return;
   let startX = 0, startY = 0, dx = 0;
   let mode = 'idle';        // idle | pending | swipe | drag
-  let usingTouch = false, longTimer = null;
+  let usingTouch = false, longTimer = null, prevOverflow = null;
+  const scroller = card.closest('.screen');
   const SLOP = 8, THRESHOLD = 64, HOLD = 350;
   const clearDir = () => card.classList.remove('dragging-left', 'dragging-right');
+  // Freeze the screen scroll while a touch drag is active — touch-action:pan-y
+  // otherwise scrolls instead of reordering on a vertical drag.
+  const freezeScroll = () => {
+    if (scroller && prevOverflow === null) { prevOverflow = scroller.style.overflowY; scroller.style.overflowY = 'hidden'; }
+  };
+  const unfreezeScroll = () => {
+    if (scroller && prevOverflow !== null) { scroller.style.overflowY = prevOverflow; prevOverflow = null; }
+  };
   const cleanup = () => {
     if (longTimer) { clearTimeout(longTimer); longTimer = null; }
+    unfreezeScroll();
+    content.style.touchAction = '';
     mode = 'idle';
     content.classList.remove('is-dragging');
     document.removeEventListener('mousemove', onMouseMove);
@@ -1944,6 +1955,7 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
     if (mode !== 'pending') return;
     mode = 'drag';
     card.classList.add('todo-dragging');
+    if (usingTouch) { freezeScroll(); content.style.touchAction = 'none'; }
     try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
   };
   const begin = (target, x, y) => {
