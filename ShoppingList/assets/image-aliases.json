@@ -1714,5 +1714,23 @@
     "tiernahrung": [
         "tierfutter",
         "pet food"
+    ],
+    "olivenöl": [
+        "öl",
+        "speiseöl",
+        "sonnenblumenöl",
+        "rapsöl",
+        "pflanzenöl",
+        "bratöl",
+        "salatöl"
+    ],
+    "gemüsebrühe": [
+        "brühe",
+        "gemüsefond",
+        "brühwürfel",
+        "bouillon",
+        "instantbrühe",
+        "suppenbrühe",
+        "brühepulver"
     ]
 }
