@@ -90,10 +90,15 @@ trait AiExtract
             $this->SendAiErrorResult($result);
             return;
         }
-        $this->SendJson(['ok' => true, 'items' => $result['items']]);
+        $this->SendJson([
+            'ok'       => true,
+            'title'    => $result['title'] ?? null,
+            'servings' => $result['servings'] ?? null,
+            'items'    => $result['items'],
+        ]);
     }
 
-    /** @return array ok:true+items | ok:false+code+message+status */
+    /** @return array ok:true+title+servings+items | ok:false+code+message+status */
     private function AiExtractIngredientsFromImage(string $imageBase64): array
     {
         $r = $this->AiRunCompletion(
@@ -104,10 +109,10 @@ trait AiExtract
         if (($r['ok'] ?? false) !== true) {
             return $r;
         }
-        return ['ok' => true, 'items' => $this->AiParseIngredients((string)$r['text'])];
+        return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
     }
 
-    /** @return array ok:true+items | ok:false+code+message+status */
+    /** @return array ok:true+title+servings+items | ok:false+code+message+status */
     private function AiExtractIngredientsFromUrl(string $url): array
     {
         $page = $this->AiFetchPublicPage($url);
@@ -120,13 +125,13 @@ trait AiExtract
         }
         $r = $this->AiRunCompletion(
             $this->AiRecipeSystemPrompt(),
-            "Extrahiere die Zutatenliste aus diesem Rezept:\n\n" . $text,
+            "Extrahiere Titel, Portionen und die Zutatenliste aus diesem Rezept:\n\n" . $text,
             null
         );
         if (($r['ok'] ?? false) !== true) {
             return $r;
         }
-        return ['ok' => true, 'items' => $this->AiParseIngredients((string)$r['text'])];
+        return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
     }
 
     // ────────────────────────────── Gemeinsame Provider-Logik ──────────────────────────────
@@ -279,11 +284,32 @@ trait AiExtract
         return $out;
     }
 
-    /** Toleranter Parser für Zutaten/Artikel: {name, amount, category}. */
-    private function AiParseIngredients(string $text): array
+    /**
+     * Toleranter Rezept-Parser: erwartet ein Objekt {title, servings, items:[…]},
+     * verkraftet aber auch eine blanke Liste (dann title/servings = null).
+     * @return array{title: ?string, servings: ?int, items: array}
+     */
+    private function AiParseRecipe(string $text): array
     {
-        $rows = $this->AiDecodeJsonArray($text);
-        $out  = [];
+        $data = $this->AiDecodeJsonObject($text);
+        if ($data !== null && array_key_exists('items', $data)) {
+            $rows     = is_array($data['items']) ? $data['items'] : [];
+            $title    = trim((string)($data['title'] ?? ''));
+            $title    = ($title === '' || strcasecmp($title, 'null') === 0) ? null : $title;
+            $servings = $this->AiParseServings($data['servings'] ?? null);
+        } else {
+            // Fallback: blanke Liste (altes Format / Modell ignorierte das Objekt)
+            $rows     = $this->AiDecodeJsonArray($text);
+            $title    = null;
+            $servings = null;
+        }
+        return ['title' => $title, 'servings' => $servings, 'items' => $this->AiValidateItems($rows)];
+    }
+
+    /** Validiert eine Zutaten-/Artikelliste: {name, amount, category}. */
+    private function AiValidateItems(array $rows): array
+    {
+        $out = [];
         foreach ($rows as $row) {
             if (!is_array($row)) {
                 continue;
@@ -304,6 +330,31 @@ trait AiExtract
             }
         }
         return $out;
+    }
+
+    /** Portionen tolerant lesen: int/float direkt, String wie „4 Portionen" → 4. Sonst null. */
+    private function AiParseServings($value): ?int
+    {
+        if (is_int($value) || is_float($value)) {
+            $n = (int)$value;
+        } elseif (is_string($value) && preg_match('/\d+/', $value, $m)) {
+            $n = (int)$m[0];
+        } else {
+            return null;
+        }
+        return ($n >= 1 && $n <= 999) ? $n : null;
+    }
+
+    /** Schneidet das erste JSON-Objekt aus dem Text und dekodiert es. */
+    private function AiDecodeJsonObject(string $text): ?array
+    {
+        $start = strpos($text, '{');
+        $end   = strrpos($text, '}');
+        if ($start === false || $end === false || $end < $start) {
+            return null;
+        }
+        $data = json_decode(substr($text, $start, $end - $start + 1), true);
+        return is_array($data) ? $data : null;
     }
 
     /** Schneidet das erste JSON-Array aus dem Text und dekodiert es. */
@@ -594,26 +645,34 @@ trait AiExtract
     private function AiIngredientsSystemPrompt(): string
     {
         return 'Du extrahierst Einkaufs-Artikel bzw. Zutaten aus einem Bild: Rezept- oder Kochbuchseiten, '
-            . 'handschriftliche Einkaufslisten, Aushänge, Notizzettel oder Produktverpackungen. Gib die '
-            . 'benötigten Artikel/Zutaten zurück. "name" = der Artikel bzw. die Zutat, kurz und ohne Menge '
-            . '(z.B. „Mehl“, „Tomaten“, „Milch“). "amount" = die Menge samt Einheit als kurzer Text '
+            . 'handschriftliche Einkaufslisten, Aushänge, Notizzettel oder Produktverpackungen. "items" ist '
+            . 'die Liste der benötigten Artikel/Zutaten. "name" = der Artikel bzw. die Zutat, kurz und ohne '
+            . 'Menge (z.B. „Mehl“, „Tomaten“, „Milch“). "amount" = die Menge samt Einheit als kurzer Text '
             . '(z.B. „500 g“, „2“, „1 Bund“), leer wenn keine Menge angegeben ist. "category" = grobe '
             . 'Lebensmittel-Kategorie (z.B. „Obst & Gemüse“, „Molkerei“, „Backwaren“, „Fleisch“) oder leer. '
-            . 'Fasse Dubletten zusammen. Antworte AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und '
-            . 'ohne Markdown. Jedes Element hat exakt diese Felder: {"name": string, "amount": string, '
-            . '"category": string}. Wenn keinerlei Artikel erkennbar sind, antworte mit [].';
+            . 'Fasse Dubletten zusammen. "title" = der Rezepttitel, WENN es sich um ein Rezept handelt, sonst '
+            . 'null. "servings" = die Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl, wenn '
+            . 'angegeben, sonst null (bei reinen Einkaufslisten immer null). Antworte AUSSCHLIESSLICH mit '
+            . 'einem JSON-Objekt, ohne Erklärungen und ohne Markdown, mit exakt diesen Feldern: '
+            . '{"title": string oder null, "servings": Zahl oder null, "items": [{"name": string, '
+            . '"amount": string, "category": string}]}. Wenn keinerlei Artikel erkennbar sind, gib '
+            . '{"title": null, "servings": null, "items": []} zurück.';
     }
 
     private function AiRecipeSystemPrompt(): string
     {
-        return 'Du erhältst den Textinhalt einer Rezept-Webseite. Extrahiere daraus die vollständige '
-            . 'Zutatenliste des Rezepts. Ignoriere Navigation, Werbung, Kommentare, Nährwerte und '
-            . 'Zubereitungsschritte. "name" = die Zutat, kurz und ohne Menge (z.B. „Mehl“, „Zwiebeln“). '
-            . '"amount" = die Menge samt Einheit als kurzer Text (z.B. „500 g“, „2“, „1 EL“), leer wenn '
-            . 'keine Menge angegeben ist. "category" = grobe Lebensmittel-Kategorie (z.B. „Obst & Gemüse“, '
-            . '„Molkerei“, „Backwaren“, „Fleisch“) oder leer. Rechne Mengen NICHT um. Antworte '
-            . 'AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und ohne Markdown. Jedes Element hat '
-            . 'exakt diese Felder: {"name": string, "amount": string, "category": string}. Wenn keine '
-            . 'Zutaten erkennbar sind, antworte mit [].';
+        return 'Du erhältst den Textinhalt einer Rezept-Webseite. Extrahiere daraus Titel, Portionsangabe '
+            . 'und die vollständige Zutatenliste des Rezepts. Ignoriere Navigation, Werbung, Kommentare, '
+            . 'Nährwerte und Zubereitungsschritte. "title" = der Titel/Name des Rezepts. "servings" = die '
+            . 'Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl (z.B. bei „für 4 Personen“ → 4; '
+            . 'bei „12 Muffins“ → 12); null, wenn nicht angegeben. "items" ist die Zutatenliste: "name" = '
+            . 'die Zutat, kurz und ohne Menge (z.B. „Mehl“, „Zwiebeln“). "amount" = die Menge samt Einheit '
+            . 'als kurzer Text (z.B. „500 g“, „2“, „1 EL“), leer wenn keine Menge angegeben ist. "category" '
+            . '= grobe Lebensmittel-Kategorie (z.B. „Obst & Gemüse“, „Molkerei“, „Backwaren“, „Fleisch“) '
+            . 'oder leer. Rechne Mengen NICHT um (Originalmengen für die angegebenen Portionen). Antworte '
+            . 'AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärungen und ohne Markdown, mit exakt diesen '
+            . 'Feldern: {"title": string oder null, "servings": Zahl oder null, "items": [{"name": string, '
+            . '"amount": string, "category": string}]}. Wenn keine Zutaten erkennbar sind, gib '
+            . '{"title": null, "servings": null, "items": []} zurück.';
     }
 }

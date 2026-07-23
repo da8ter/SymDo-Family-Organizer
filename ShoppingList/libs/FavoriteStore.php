@@ -67,6 +67,72 @@ trait FavoriteStore
         return false;
     }
 
+    /**
+     * Fügt mehrere Artikel in einem Rutsch hinzu — entweder in eine bestehende Liste
+     * ($listId) oder in eine neu anzulegende ($newListName). Ein Aufruf, ein State-Push.
+     * Gibt die (ggf. neue) Listen-ID zurück, '' bei Fehler.
+     * @param array $items Liste von {name, category?, amount?, notes?}
+     */
+    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items): string
+    {
+        $lists       = $this->LoadFavoriteLists();
+        $targetIndex = -1;
+        if ($listId !== '') {
+            foreach ($lists as $i => $list) {
+                if (($list['id'] ?? '') === $listId) {
+                    $targetIndex = $i;
+                    break;
+                }
+            }
+        }
+        if ($targetIndex === -1) {
+            $name = trim($newListName);
+            if ($name === '') {
+                return '';
+            }
+            $listId      = bin2hex(random_bytes(8));
+            $lists[]     = ['id' => $listId, 'name' => $name, 'items' => []];
+            $targetIndex = count($lists) - 1;
+        }
+        if (!isset($lists[$targetIndex]['items']) || !is_array($lists[$targetIndex]['items'])) {
+            $lists[$targetIndex]['items'] = [];
+        }
+
+        foreach ($items as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $name = trim((string)($it['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $amount = trim((string)($it['amount'] ?? ''));
+            if ($amount === '') {
+                $amount = '1';
+            }
+            $category  = trim((string)($it['category'] ?? ''));
+            $notes     = trim((string)($it['notes'] ?? ''));
+            $nameLower = mb_strtolower($name);
+            $found     = false;
+            foreach ($lists[$targetIndex]['items'] as &$item) {
+                if (mb_strtolower((string)($item['name'] ?? '')) === $nameLower) {
+                    $item['amount'] = $amount;
+                    $item['notes']  = $notes;
+                    $found          = true;
+                    break;
+                }
+            }
+            unset($item);
+            if (!$found) {
+                $lists[$targetIndex]['items'][] = ['name' => $name, 'category' => $category, 'amount' => $amount, 'notes' => $notes];
+            }
+        }
+
+        $this->SaveFavoriteLists($lists);
+        $this->SendState();
+        return $listId;
+    }
+
     private function RemoveItemFromFavoriteListInternal(string $listId, string $itemName): bool
     {
         $name = trim($itemName);

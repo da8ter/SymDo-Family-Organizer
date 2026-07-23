@@ -246,6 +246,17 @@ class ShoppingList extends IPSModuleStrict
                     (string)($data['notes'] ?? '')
                 );
                 return;
+            case 'AddItemsToFavoriteList':
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data) || !is_array($data['items'] ?? null)) {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                $this->AddItemsToFavoriteListInternal(
+                    (string)($data['listId'] ?? ''),
+                    (string)($data['name'] ?? ''),
+                    $data['items']
+                );
+                return;
             case 'RemoveItemFromFavoriteList':
                 $data = json_decode((string)$Value, true);
                 if (!is_array($data) || !isset($data['listId'], $data['name'])) {
@@ -509,7 +520,7 @@ class ShoppingList extends IPSModuleStrict
         $allowed = [
             'AddItem', 'AddScannedItem', 'ToggleCart', 'RemoveItem', 'DeleteItem',
             'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
-            'AddItemToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
+            'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
             'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
         ];
         $ok    = true;

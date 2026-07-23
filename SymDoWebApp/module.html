@@ -994,6 +994,18 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* KI-Rezeptkopf: Titel + Portionen mit Mengen-Stepper */
+.ai-recipe-head { padding: 2px 0 12px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent); }
+.ai-recipe-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.ai-portions { display: flex; align-items: center; gap: 12px; }
+.ai-portions-label { font-size: 14px; color: var(--muted); }
+.ai-step { flex: none; width: 30px; height: 30px; border-radius: 999px; font-size: 18px; line-height: 1; cursor: pointer; color: var(--content-color); border: 1px solid color-mix(in srgb, var(--content-color) 22%, transparent); background: color-mix(in srgb, var(--content-color) 6%, transparent); }
+.ai-step:disabled { opacity: .35; cursor: default; }
+/* KI: in Favoritenliste speichern */
+.ai-fav-section { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+.ai-fav-section:first-child { margin-top: 2px; }
+.ai-fav-new { display: flex; gap: 8px; align-items: center; }
+.ai-fav-new input { flex: 1; }
 /* KI-Quelle wählen (Foto / URL) */
 .ai-source-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -1334,7 +1346,23 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body" id="aiReviewBody"></div>
     <div class="overlay-footer">
       <button data-close="aiReviewOverlay" id="btnAiCancel"></button>
+      <button id="btnAiFav" style="display:none" aria-label="In Favoritenliste speichern"><i class="fa-light fa-heart"></i></button>
       <button class="primary" id="btnAiAdd" disabled></button>
+    </div>
+  </div>
+</div>
+
+<!-- KI: erkannte Zutaten in eine Favoritenliste speichern -->
+<div class="overlay" id="aiFavOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="aiFavTitle">In Favoritenliste speichern</span>
+      <button class="btn-close-overlay" data-close="aiFavOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="aiFavBody"></div>
+    <div class="overlay-footer">
+      <button data-close="aiFavOverlay" id="btnAiFavCancel"></button>
+      <button id="btnAiFavOpenUrl" style="display:none"><i class="fa-light fa-arrow-up-right-from-square"></i> <span id="btnAiFavOpenUrlLabel"></span></button>
     </div>
   </div>
 </div>
@@ -4139,6 +4167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!aiEnabled) { if (todoScan) todoScan.style.display = 'none'; }
   const aiBody = document.getElementById('aiReviewBody');
   const aiAdd = document.getElementById('btnAiAdd');
+  const aiFav = document.getElementById('btnAiFav');
   document.getElementById('aiReviewTitle').textContent = translate('Detected tasks');
   document.getElementById('btnAiCancel').textContent = translate('Cancel');
   aiAdd.textContent = translate('Add');
@@ -4230,9 +4259,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function runAiIngredients(payload) {
     aiAdd.disabled = true;
+    if (aiFav) { aiFav.style.display = 'none'; aiFav.disabled = true; }
     const statusMsg = (payload && payload.url) ? translate('Reading recipe…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
+    const srcUrl = (payload && payload.url) ? String(payload.url) : '';
     const done = (res) => {
       const j = res && res.json;
       if (!res || res.status !== 200 || !j || j.ok !== true) {
@@ -4240,7 +4271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         aiStatus(escapeHtml(msg));
         return;
       }
-      renderAiReview(Array.isArray(j.items) ? j.items : [], 'shopping');
+      renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl });
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     if (typeof window.__symdoApiPost === 'function') {
@@ -4257,43 +4288,145 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Review-Overlay wird für ToDos und Einkaufs-Artikel geteilt; der Modus steuert Zeilen + Übernahme.
+  // Review-Overlay wird für ToDos und Einkaufs-/Rezept-Zutaten geteilt; der Modus steuert Zeilen + Übernahme.
   let aiReviewMode = 'todos';
-  function renderAiReview(rows, mode) {
-    aiReviewMode = mode || 'todos';
-    const isShop = aiReviewMode === 'shopping';
-    document.getElementById('aiReviewTitle').textContent = translate(isShop ? 'Detected items' : 'Detected tasks');
-    if (!rows.length) { aiStatus(translate(isShop ? 'No items detected.' : 'No tasks detected.')); aiAdd.disabled = true; return; }
+  let aiRecipe = null;    // { title, servings, url, factor } — für die Einkaufs-/Rezeptansicht
+  let aiFavItems = null;  // zwischengespeicherte Auswahl fürs Favoriten-Speichern
+
+  // ── ToDo-Review ──
+  function renderAiReview(rows) {
+    aiReviewMode = 'todos';
+    if (aiFav) aiFav.style.display = 'none';
+    document.getElementById('aiReviewTitle').textContent = translate('Detected tasks');
+    if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
     aiBody.innerHTML = '';
     rows.forEach(it => {
       const row = document.createElement('div');
       row.className = 'ai-row selected';
-      if (isShop) {
-        const amtChip = it.amount ? '<span class="badge">' + escapeHtml(String(it.amount)) + '</span>' : '';
-        const catChip = it.category ? '<span class="badge">' + escapeHtml(String(it.category)) + '</span>' : '';
-        const meta = (amtChip || catChip) ? '<div class="ai-meta">' + amtChip + catChip + '</div>' : '';
-        row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-          '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div>';
-        row.__item = it;
-      } else {
-        const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due)) + '</span>' : '';
-        const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
-        const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
-        row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-          '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-          '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
-        row.__todo = it;
-      }
+      const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due)) + '</span>' : '';
+      const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
+      const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
+      row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
+        '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
+        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
+      row.__todo = it;
       row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
       aiBody.appendChild(row);
     });
     updateAiAdd();
   }
 
+  // ── Einkaufs-/Rezept-Review ──
+  function fmtNum(n) {
+    const r = Math.round(n * 100) / 100;
+    const s = Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+    return s.replace('.', ',');
+  }
+  // Skaliert eine Mengenangabe (z.B. „500 g", „1,5 EL", „½ TL", „2-3", „1/2 Bund") um den Faktor.
+  function scaleAmount(str, factor) {
+    const s = String(str == null ? '' : str).trim();
+    if (!s || factor === 1) return s;
+    const FR = { '½': 0.5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 0.25, '¾': 0.75, '⅕': 0.2, '⅛': 0.125 };
+    let m = s.match(/^([½⅓⅔¼¾⅕⅛])\s*(.*)$/);
+    if (m) return fmtNum(FR[m[1]] * factor) + (m[2] ? ' ' + m[2] : '');
+    m = s.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+    if (m) return fmtNum((parseInt(m[1], 10) / parseInt(m[2], 10)) * factor) + (m[3] ? ' ' + m[3] : '');
+    m = s.match(/^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
+    if (m) {
+      const toN = x => parseFloat(x.replace(',', '.'));
+      let out = fmtNum(toN(m[1]) * factor);
+      if (m[2] != null) out += '–' + fmtNum(toN(m[2]) * factor);
+      return out + (m[3] ? ' ' + m[3] : '');
+    }
+    return s;
+  }
+  function aiShopRowInner(it, factor) {
+    const amt = scaleAmount(String(it.amount || ''), factor);
+    const amtChip = amt ? '<span class="badge ai-amt">' + escapeHtml(amt) + '</span>' : '';
+    const catChip = it.category ? '<span class="badge">' + escapeHtml(String(it.category)) + '</span>' : '';
+    const meta = (amtChip || catChip) ? '<div class="ai-meta">' + amtChip + catChip + '</div>' : '';
+    return '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
+      '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div>';
+  }
+  function renderAiShopping(data) {
+    aiReviewMode = 'shopping';
+    const items = Array.isArray(data.items) ? data.items : [];
+    const servings = (typeof data.servings === 'number' && data.servings >= 1) ? data.servings : null;
+    const title = data.title ? String(data.title) : '';
+    aiRecipe = { title: title, servings: servings, url: data.url || '', factor: 1 };
+    document.getElementById('aiReviewTitle').textContent = translate('Detected items');
+    if (aiFav) { aiFav.style.display = ''; aiFav.disabled = items.length === 0; }
+    if (!items.length) { aiStatus(translate('No items detected.')); aiAdd.disabled = true; return; }
+    aiBody.innerHTML = '';
+    // Rezeptkopf: Titel + Portionen mit Mengen-Stepper (nur wenn es ein Rezept ist)
+    if (title || servings) {
+      const head = document.createElement('div');
+      head.className = 'ai-recipe-head';
+      let hh = '';
+      if (title) hh += '<div class="ai-recipe-title">' + escapeHtml(title) + '</div>';
+      hh += '<div class="ai-portions">' +
+        '<button type="button" class="ai-step" id="aiStepMinus" aria-label="minus">–</button>' +
+        '<span class="ai-portions-label" id="aiPortionsLabel"></span>' +
+        '<button type="button" class="ai-step" id="aiStepPlus" aria-label="plus">+</button></div>';
+      head.innerHTML = hh;
+      aiBody.appendChild(head);
+      document.getElementById('aiStepMinus').addEventListener('click', () => setAiFactor(aiRecipe.factor - 1));
+      document.getElementById('aiStepPlus').addEventListener('click', () => setAiFactor(aiRecipe.factor + 1));
+    }
+    items.forEach(it => {
+      const row = document.createElement('div');
+      row.className = 'ai-row selected';
+      row.__item = it;
+      row.innerHTML = aiShopRowInner(it, 1);
+      row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
+      aiBody.appendChild(row);
+    });
+    updateAiPortions();
+    updateAiAdd();
+  }
+  function setAiFactor(f) {
+    if (!aiRecipe) return;
+    aiRecipe.factor = Math.max(1, Math.round(f || 1));
+    aiBody.querySelectorAll('.ai-row').forEach(row => {
+      const it = row.__item || {};
+      const chip = row.querySelector('.ai-amt');
+      if (chip) chip.textContent = scaleAmount(String(it.amount || ''), aiRecipe.factor);
+    });
+    updateAiPortions();
+  }
+  function updateAiPortions() {
+    const lbl = document.getElementById('aiPortionsLabel');
+    if (!lbl || !aiRecipe) return;
+    const f = aiRecipe.factor;
+    lbl.textContent = aiRecipe.servings
+      ? translate('%1 servings').replace('%1', String(aiRecipe.servings * f))
+      : translate('Quantity ×%1').replace('%1', String(f));
+    const minus = document.getElementById('aiStepMinus');
+    if (minus) minus.disabled = f <= 1;
+  }
+  // Ausgewählte Zutaten mit skalierten Mengen (für Warenkorb + Favoriten).
+  function selectedAiItems() {
+    const factor = (aiRecipe && aiRecipe.factor) || 1;
+    return Array.prototype.map.call(aiBody.querySelectorAll('.ai-row.selected'), row => {
+      const it = row.__item || {};
+      return {
+        name: String(it.name || ''),
+        category: String(it.category || ''),
+        amount: (scaleAmount(String(it.amount || ''), factor).trim() || '1'),
+        notes: ''
+      };
+    });
+  }
+
   function updateAiAdd() {
     const n = aiBody.querySelectorAll('.ai-row.selected').length;
     aiAdd.disabled = n === 0;
-    aiAdd.textContent = n > 0 ? translate('Add') + ' (' + n + ')' : translate('Add');
+    if (aiReviewMode === 'shopping') {
+      aiAdd.innerHTML = '<i class="fa-light fa-cart-plus"></i>';
+      if (aiFav) aiFav.disabled = n === 0;
+    } else {
+      aiAdd.textContent = n > 0 ? translate('Add') + ' (' + n + ')' : translate('Add');
+    }
   }
 
   function aiDueFields(due) {
@@ -4303,23 +4436,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return { due: Math.floor(d.getTime() / 1000), dueAllDay: true, dueDay: m[0] };
   }
 
+  // Übernehmen: Einkauf → Warenkorb (skalierte Mengen); ToDo → Aufgaben.
   aiAdd.addEventListener('click', () => {
-    const rows = aiBody.querySelectorAll('.ai-row.selected');
-    if (!rows.length) return;
     if (aiReviewMode === 'shopping') {
+      const items = selectedAiItems();
+      if (!items.length) return;
       const target = selectedShoppingID();
-      rows.forEach(row => {
-        const it = row.__item || {};
-        sdCall(target, 'AddItem', {
-          name: String(it.name || ''),
-          category: String(it.category || ''),
-          amount: (String(it.amount || '').trim() || '1')
-        });
-      });
+      items.forEach(it => sdCall(target, 'AddItem', { name: it.name, category: it.category, amount: it.amount }));
       closeOverlay('aiReviewOverlay');
-      showToast(translate('%1 items added').replace('%1', String(rows.length)));
+      showToast(translate('%1 items added').replace('%1', String(items.length)));
       return;
     }
+    const rows = aiBody.querySelectorAll('.ai-row.selected');
+    if (!rows.length) return;
     const me = currentUserID();
     const target = selectedTodoID();
     rows.forEach(row => {
@@ -4335,6 +4464,54 @@ document.addEventListener('DOMContentLoaded', () => {
     closeOverlay('aiReviewOverlay');
     showToast(translate('%1 tasks added').replace('%1', String(rows.length)));
   });
+
+  // ── Favoriten-Speichern (Rezept → Favoritenliste) ──
+  if (aiFav) aiFav.addEventListener('click', () => { if (!aiFav.disabled) openAiFav(); });
+  document.getElementById('btnAiFavOpenUrl').addEventListener('click', () => {
+    if (aiRecipe && aiRecipe.url) { try { window.open(aiRecipe.url, '_blank'); } catch (e) {} }
+  });
+  function openAiFav() {
+    const items = selectedAiItems();
+    if (!items.length) return;
+    aiFavItems = items;
+    document.getElementById('aiFavTitle').textContent = translate('Save to favorites');
+    document.getElementById('btnAiFavCancel').textContent = translate('Cancel');
+    document.getElementById('btnAiFavOpenUrlLabel').textContent = translate('Open recipe');
+    document.getElementById('btnAiFavOpenUrl').style.display = (aiRecipe && aiRecipe.url) ? '' : 'none';
+    renderAiFav();
+    openOverlay('aiFavOverlay');
+  }
+  function renderAiFav() {
+    const st = instState(selectedShoppingID()) || {};
+    const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+    const prefill = (aiRecipe && aiRecipe.title) ? aiRecipe.title : '';
+    const body = document.getElementById('aiFavBody');
+    let h = '';
+    if (lists.length) {
+      h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
+      h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-chevron-right check" style="opacity:.5"></i></div>').join('');
+    }
+    h += '<div class="ai-fav-section">' + escapeHtml(translate('New favorite list')) + '</div>';
+    h += '<div class="ai-fav-new"><input id="aiFavNewName" type="text" value="' + escapeHtml(prefill) + '" /><button class="primary" id="aiFavCreate">' + escapeHtml(translate('Create')) + '</button></div>';
+    body.innerHTML = h;
+    body.querySelectorAll('.assign-row[data-list]').forEach(row => row.addEventListener('click', () => saveAiFav({ listId: row.dataset.list })));
+    document.getElementById('aiFavCreate').addEventListener('click', () => {
+      const name = document.getElementById('aiFavNewName').value.trim();
+      if (!name) { showToast(translate('Please enter a name.')); return; }
+      saveAiFav({ name: name });
+    });
+  }
+  function saveAiFav(target) {
+    const items = aiFavItems || selectedAiItems();
+    if (!items.length) return;
+    const payload = { items: items };
+    if (target.listId) payload.listId = target.listId;
+    if (target.name) payload.name = target.name;
+    sdCall(selectedShoppingID(), 'AddItemsToFavoriteList', payload);
+    closeOverlay('aiFavOverlay');
+    closeOverlay('aiReviewOverlay');
+    showToast(translate('%1 items saved to favorites').replace('%1', String(items.length)));
+  }
 
   // ToDo-Editor: Sichtbarkeits-Logik
   document.getElementById('tdHasDue').addEventListener('change', syncTodoEditorVisibility);
