@@ -676,16 +676,29 @@ select option { color: #111; background: #fff; }
   padding: 10px 12px;
   background: var(--row);
   transition: transform .18s ease;
-  /* touch-action:none → die Zeile steuert Wischen/Scrollen/Reorder selbst
-     (pan-y würde vertikales Ziehen dem Browser geben und den Long-Press-Reorder
-     verhindern). Vertikales Scrollen macht die Geste manuell. */
-  touch-action: none;
+  /* pan-y → natives vertikales Scrollen (mit Schwung) bleibt erhalten; der
+     horizontale Swipe wird per JS behandelt. Reorder läuft über den Griff
+     (touch-action:none nur dort). */
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   cursor: pointer;
 }
 .todo-content.is-dragging { transition: none; }
+.todo-handle {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 2px 0 6px;
+  margin-left: 2px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;              /* dragging the handle never scrolls */
+  -webkit-touch-callout: none;
+}
+.todo-handle:active { cursor: grabbing; }
 .todo-main { flex: 1; min-width: 0; }
 .todo-title {
   display: block;
@@ -1921,133 +1934,163 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit) {
   }, { passive: true });
 }
 
-// Todo cards combine two gestures on one press: a long press starts a reorder
-// drag, any earlier horizontal move is a swipe (left = delete, right = edit),
-// a vertical move scrolls. Mouse + touch only (no Pointer Events / native HTML5
-// drag) so it works in the desktop webview and on iOS alike.
+// Todo card gestures: the row body swipes (left = delete, right = edit) via
+// mouse + touch while vertical touch stays native scroll (touch-action:pan-y);
+// reorder is a drag from the grip handle only (touch-action:none on the handle),
+// so dragging the handle reorders while the rest of the list scrolls natively.
 function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelete, onEdit) {
   const content = card.querySelector('.todo-content');
   if (!content) return;
-  let startX = 0, startY = 0, dx = 0, lastY = 0;
-  let mode = 'idle';        // idle | pending | swipe | scroll | drag
-  let usingTouch = false, longTimer = null;
-  const scroller = card.closest('.screen');
-  const SLOP = 8, THRESHOLD = 64, HOLD = 500;
-  const clearDir = () => card.classList.remove('dragging-left', 'dragging-right');
-  const cleanup = () => {
-    if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-    mode = 'idle';
-    content.classList.remove('is-dragging');
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onTouchEnd);
-    document.removeEventListener('touchcancel', onTouchEnd);
-  };
-  const enterDrag = () => {
-    if (mode !== 'pending') return;
-    mode = 'drag';
-    card.classList.add('todo-dragging');
-    try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
-  };
-  const begin = (target, x, y) => {
-    if (target.closest('button, .chk')) return false;
-    if (card.dataset.animating === '1') return false;
-    startX = x; startY = y; lastY = y; dx = 0; mode = 'pending';
-    if (canReorder) longTimer = window.setTimeout(enterDrag, HOLD);
-    return true;
-  };
-  const reorderTo = (x, y) => {
-    const prev = card.style.pointerEvents;
-    card.style.pointerEvents = 'none';            // look past the dragged card
-    const el = document.elementFromPoint(x, y);
-    card.style.pointerEvents = prev;
-    const over = (el && el.closest) ? el.closest('.todo-card') : null;
-    if (!over || over === card || over.dataset.animating === '1') return;
-    if (over.classList.contains('done-row')) return; // reorder among open items only
-    const r = over.getBoundingClientRect();
-    if (y < r.top + r.height / 2) area.insertBefore(card, over);
-    else area.insertBefore(card, over.nextSibling);
-  };
-  const move = (x, y) => {
-    const mx = x - startX, my = y - startY;
-    if (mode === 'pending') {
-      if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
-      if (longTimer) { clearTimeout(longTimer); longTimer = null; } // moved before hold fired
-      if (Math.abs(mx) > Math.abs(my)) { mode = 'swipe'; content.classList.add('is-dragging'); }
-      else { mode = 'scroll'; lastY = y; }                         // vertical → scroll the screen ourselves
-    }
-    if (mode === 'scroll') {
-      if (scroller) scroller.scrollTop -= (y - lastY);
-      lastY = y;
+
+  // ── Horizontal swipe on the row body (vertical is left to native scroll) ──
+  (function bindSwipe() {
+    let startX = 0, startY = 0, dx = 0;
+    let active = false, decided = false, usingTouch = false;
+    const SLOP = 8, THRESHOLD = 64;
+    const clearDir = () => card.classList.remove('dragging-left', 'dragging-right');
+    const cleanup = () => {
+      active = false; decided = false;
+      content.classList.remove('is-dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+    };
+    const begin = (target, x, y) => {
+      if (target.closest('.todo-handle, button, .chk')) return false;
+      if (card.dataset.animating === '1') return false;
+      active = true; decided = false; startX = x; startY = y; dx = 0;
       return true;
-    }
-    if (mode === 'swipe') {
+    };
+    const move = (x, y) => {
+      if (!active) return false;
+      const mx = x - startX, my = y - startY;
+      if (!decided) {
+        if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
+        if (Math.abs(my) >= Math.abs(mx)) { cleanup(); return false; } // vertical → native scroll
+        decided = true; content.classList.add('is-dragging');
+      }
       const maxRight = onEdit ? content.offsetWidth : 0;
       dx = Math.max(-content.offsetWidth, Math.min(maxRight, mx));
       content.style.transform = `translateX(${dx}px)`;
       card.classList.toggle('dragging-left', dx < 0);
       card.classList.toggle('dragging-right', dx > 0);
       return true;
-    }
-    if (mode === 'drag') { reorderTo(x, y); return true; }
-    return false;
-  };
-  const markSwiped = () => { card.dataset.swiped = '1'; window.setTimeout(() => { delete card.dataset.swiped; }, 60); };
-  const end = () => {
-    const m = mode;
-    if (m === 'swipe') {
+    };
+    const markSwiped = () => { card.dataset.swiped = '1'; window.setTimeout(() => { delete card.dataset.swiped; }, 60); };
+    const end = () => {
+      if (!active) return;
+      const wasDecided = decided, finalDx = dx;
       cleanup();
-      if (dx <= -THRESHOLD) {
+      if (wasDecided && finalDx <= -THRESHOLD) {
         clearDir();
         card.dataset.animating = '1';
         card.classList.add('is-deleting');
         content.style.transform = 'translateX(-110%)';
         window.setTimeout(onDelete, 240);
-      } else if (onEdit && dx >= THRESHOLD) {
+      } else if (wasDecided && onEdit && finalDx >= THRESHOLD) {
         content.style.transform = ''; clearDir(); onEdit();
       } else {
         content.style.transform = ''; clearDir();
       }
-      markSwiped();
-    } else if (m === 'drag') {
+      if (wasDecided) markSwiped();
+    };
+    const onMouseMove = (e) => { if (move(e.clientX, e.clientY)) e.preventDefault(); };
+    const onMouseUp = () => end();
+    content.addEventListener('mousedown', (e) => {
+      if (usingTouch) return;
+      if (e.button !== 0) return;
+      if (!begin(e.target, e.clientX, e.clientY)) return;
+      document.addEventListener('mousemove', onMouseMove, { passive: false });
+      document.addEventListener('mouseup', onMouseUp);
+    });
+    const onTouchMove = (e) => {
+      const t = e.touches && e.touches[0]; if (!t) return;
+      if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
+    };
+    const onTouchEnd = () => { end(); window.setTimeout(() => { usingTouch = false; }, 400); };
+    content.addEventListener('touchstart', (e) => {
+      const t = e.touches && e.touches[0]; if (!t) return;
+      usingTouch = true;
+      if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+      document.addEventListener('touchcancel', onTouchEnd);
+    }, { passive: true });
+  })();
+
+  // ── Reorder drag from the grip handle (accent tint while dragging) ──
+  const handle = card.querySelector('.todo-handle');
+  if (handle && canReorder) (function bindDrag() {
+    let dragging = false, dragMoved = false, usingTouch = false;
+    const cleanup = () => {
+      dragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+    };
+    const start = () => {
+      if (card.dataset.animating === '1') return false;
+      dragging = true; dragMoved = false;
+      card.classList.add('todo-dragging');
+      try { if (navigator.vibrate) navigator.vibrate(8); } catch (_) {}
+      return true;
+    };
+    const reorderTo = (x, y) => {
+      const prev = card.style.pointerEvents;
+      card.style.pointerEvents = 'none';            // look past the dragged card
+      const el = document.elementFromPoint(x, y);
+      card.style.pointerEvents = prev;
+      const over = (el && el.closest) ? el.closest('.todo-card') : null;
+      if (!over || over === card || over.dataset.animating === '1') return;
+      if (over.classList.contains('done-row')) return; // reorder among open items only
+      const r = over.getBoundingClientRect();
+      if (y < r.top + r.height / 2) area.insertBefore(card, over);
+      else area.insertBefore(card, over.nextSibling);
+      dragMoved = true;
+    };
+    const markSwiped = () => { card.dataset.swiped = '1'; window.setTimeout(() => { delete card.dataset.swiped; }, 60); };
+    const end = () => {
+      if (!dragging) return;
+      const moved = dragMoved;
       card.classList.remove('todo-dragging');
       cleanup();
-      const openSet = new Set(open.map(i => i.id));
-      const ids = Array.from(area.querySelectorAll('.todo-card'))
-        .map(c => parseInt(c.dataset.id))
-        .filter(n => openSet.has(n));
-      sdCall(instanceID, 'Reorder', { order: ids.concat(done.map(i => i.id)) });
+      if (moved) {
+        const openSet = new Set(open.map(i => i.id));
+        const ids = Array.from(area.querySelectorAll('.todo-card'))
+          .map(c => parseInt(c.dataset.id))
+          .filter(n => openSet.has(n));
+        sdCall(instanceID, 'Reorder', { order: ids.concat(done.map(i => i.id)) });
+      }
       markSwiped();
-    } else if (m === 'scroll') {
-      cleanup();
-      markSwiped(); // a scroll should not open the editor
-    } else {
-      cleanup(); // tap — let the click handler run
-    }
-  };
-  const onMouseMove = (e) => { if (move(e.clientX, e.clientY)) e.preventDefault(); };
-  const onMouseUp = () => end();
-  content.addEventListener('mousedown', (e) => {
-    if (usingTouch) return;
-    if (e.button !== 0) return;
-    if (!begin(e.target, e.clientX, e.clientY)) return;
-    document.addEventListener('mousemove', onMouseMove, { passive: false });
-    document.addEventListener('mouseup', onMouseUp);
-  });
-  const onTouchMove = (e) => {
-    const t = e.touches && e.touches[0]; if (!t) return;
-    if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
-  };
-  const onTouchEnd = () => { end(); window.setTimeout(() => { usingTouch = false; }, 400); };
-  content.addEventListener('touchstart', (e) => {
-    const t = e.touches && e.touches[0]; if (!t) return;
-    usingTouch = true;
-    if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd);
-    document.addEventListener('touchcancel', onTouchEnd);
-  }, { passive: true });
+    };
+    const onMouseMove = (e) => { if (dragging) { reorderTo(e.clientX, e.clientY); e.preventDefault(); } };
+    const onMouseUp = () => end();
+    handle.addEventListener('mousedown', (e) => {
+      if (usingTouch) return;
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      if (!start()) return;
+      document.addEventListener('mousemove', onMouseMove, { passive: false });
+      document.addEventListener('mouseup', onMouseUp);
+    });
+    const onTouchMove = (e) => {
+      const t = e.touches && e.touches[0]; if (!t) return;
+      if (dragging) { reorderTo(t.clientX, t.clientY); if (e.cancelable) e.preventDefault(); }
+    };
+    const onTouchEnd = () => { end(); window.setTimeout(() => { usingTouch = false; }, 400); };
+    handle.addEventListener('touchstart', (e) => {
+      const t = e.touches && e.touches[0]; if (!t) return;
+      usingTouch = true; e.stopPropagation();
+      if (!start()) { usingTouch = false; return; }
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+      document.addEventListener('touchcancel', onTouchEnd);
+    }, { passive: false });
+  })();
 }
 
 // ── Aggregationen (Port der Dashboard-Logik aus DashboardScreen.swift) ─────
@@ -2701,7 +2744,9 @@ function todoRowHtml(it, draggable, showBadges) {
     (it.notification === true ? `<span class="badge attr" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
     (showBadges ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
-    `</span></div></div>`;
+    `</span>` +
+    (draggable ? `<span class="todo-handle" aria-label="${translate('Reorder')}" title="${translate('Reorder')}"><i class="fa-light fa-grip-dots-vertical"></i></span>` : '') +
+    `</div></div>`;
 }
 
 // Drag-Reorder nur im manuellen Modus: offene zuerst (neue Reihenfolge),
