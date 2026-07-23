@@ -1732,5 +1732,36 @@
         "instantbrühe",
         "suppenbrühe",
         "brühepulver"
+    ],
+    "couscous": [
+        "kuskus"
+    ],
+    "grapefruit": [
+        "pampelmuse"
+    ],
+    "frischhaltefolie": [
+        "klarsichtfolie"
+    ],
+    "bodylotion": [
+        "körperlotion",
+        "körpermilch"
+    ],
+    "sojasauce": [
+        "sojasoße",
+        "soja sauce"
+    ],
+    "speisestärke": [
+        "maisstärke",
+        "kartoffelstärke",
+        "stärke"
+    ],
+    "gefrierbeutel": [
+        "gefriertüte",
+        "gefriertüten",
+        "tiefkühlbeutel"
+    ],
+    "vogelfutter": [
+        "vogelnahrung",
+        "meisenknödel"
     ]
 }
