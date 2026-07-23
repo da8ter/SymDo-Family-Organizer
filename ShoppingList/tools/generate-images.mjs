@@ -79,9 +79,32 @@ const repeatedSmallItems = new Set([
   "Reis",
   "Spaghetti",
   "Nudeln",
+  "Sonnenblumenkerne",
+  "Trockenfutter",
+  "Cranberrys",
+  "Datteln",
+  "Erdnussflips",
 ]);
 
 const itemSpecificPromptAdditions = {
+  Calamari:
+    "show a small appetizing portion of golden-brown deep-fried calamari rings (breaded squid rings), several rings arranged in a tidy little pile as a finished dish, no plate, no bowl",
+  Gulasch:
+    "show a hearty goulash as a small appetizing portion: chunks of braised beef in a thick reddish-brown sauce, glossy and stew-like, no bowl, no plate",
+  Entenbrust:
+    "show a single raw duck breast fillet with its skin on, pink-red meat, realistic butcher presentation, no plate",
+  Austernsauce:
+    "show the oyster sauce in a typical sauce bottle filled with dark glossy brown sauce, with a clean stylized label design and no text; the label clearly depicts oysters; place one or two oysters in the half-shell beside the bottle",
+  Insektenspray:
+    "show the insect spray in a typical aerosol spray can with a clean stylized label design and no text; the label clearly depicts a mosquito",
+  Kirschsaft:
+    "show the cherry juice in a typical clear juice bottle filled with deep red juice, with a clean stylized label design and no text; the label clearly depicts cherries; place a few fresh cherries beside the bottle",
+  Traubensaft:
+    "show the grape juice in a typical clear juice bottle filled with purple juice, with a clean stylized label design and no text; the label clearly depicts grapes; place a small bunch of grapes beside the bottle",
+  Tomatensaft:
+    "show the tomato juice in a typical clear juice bottle filled with red juice, with a clean stylized label design and no text; the label clearly depicts tomatoes; place a couple of tomatoes beside the bottle",
+  "Tonic Water":
+    "show the tonic water in a typical clear glass bottle with clear sparkling liquid and a clean stylized label design and no text; the label depicts a lime; place a lime slice beside the bottle",
   Salz:
     "show the salt in a typical spice container or salt shaker with a clean stylized packaging design and no text, place a small pile of coarse salt crystals in front of or beside the container",
   Pfeffer:
