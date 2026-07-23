@@ -456,16 +456,10 @@ class SymDoBridge extends IPSModuleStrict
      */
     private function GetLocalUrls(): array
     {
-        return array_map(static fn(string $ip): string => 'http://' . $ip . ':3777', $this->GetLocalIPv4s());
-    }
-
-    /** Nicht-loopback LAN-IPv4-Adressen dieses Systems. */
-    private function GetLocalIPv4s(): array
-    {
         if (!function_exists('net_get_interfaces')) {
             return [];
         }
-        $ips = [];
+        $urls = [];
         foreach (net_get_interfaces() as $iface) {
             foreach (($iface['unicast'] ?? []) as $addr) {
                 $ip = (string)($addr['address'] ?? '');
@@ -475,66 +469,10 @@ class SymDoBridge extends IPSModuleStrict
                 if (str_starts_with($ip, '127.') || str_starts_with($ip, '169.254.')) {
                     continue;
                 }
-                $ips[] = $ip;
+                $urls[] = 'http://' . $ip . ':3777';
             }
         }
-        return array_values(array_unique($ips));
-    }
-
-    /**
-     * „Erkennen"-Button: sucht eine lokal per HTTPS erreichbare Bridge-API und
-     * trägt sie ins Feld ein. Die konkrete, browservertraute URL (z. B. eine
-     * Domain) kann NICHT sicher erraten werden — daher Best-Effort + Hinweis.
-     */
-    public function DetectLocalUrl(): void
-    {
-        $ips   = array_slice($this->GetLocalIPv4s(), 0, 4);
-        $found = '';
-        foreach ($ips as $ip) {
-            foreach (['https://' . $ip, 'https://' . $ip . ':3777'] as $base) {
-                if ($this->ProbeBridgePing($base)) {
-                    $found = $base;
-                    break 2;
-                }
-            }
-        }
-        if ($found !== '') {
-            $this->UpdateFormField('LocalHttpsUrl', 'value', $found);
-            $this->UpdateFormField('LocalUrlDetectInfo', 'caption', sprintf(
-                $this->Translate('Detected and filled in: %s — if your certificate is issued for a domain name, enter that domain instead.'),
-                $found
-            ));
-        } elseif ($ips === []) {
-            $this->UpdateFormField('LocalUrlDetectInfo', 'caption', $this->Translate('No local network address found.'));
-        } else {
-            $this->UpdateFormField('LocalUrlDetectInfo', 'caption', sprintf(
-                $this->Translate('No local HTTPS endpoint reached. Local addresses: %s. Enter your HTTPS address (a domain with a browser-trusted certificate) manually.'),
-                implode(', ', $ips)
-            ));
-        }
-        $this->UpdateFormField('LocalUrlDetectInfo', 'visible', true);
-    }
-
-    /** Prüft, ob die Bridge-API unter $base per (unauth.) /ping erreichbar ist. */
-    private function ProbeBridgePing(string $base): bool
-    {
-        $url = rtrim($base, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/ping';
-        $ch  = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 2,
-            CURLOPT_TIMEOUT        => 3,
-            CURLOPT_SSL_VERIFYPEER => false, // Erreichbarkeit zählt; Zertifikat prüft der Browser
-            CURLOPT_SSL_VERIFYHOST => 0,
-        ]);
-        $body = curl_exec($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($code !== 200 || !is_string($body)) {
-            return false;
-        }
-        $j = json_decode($body, true);
-        return is_array($j) && ($j['ok'] ?? false) === true;
+        return array_values(array_unique($urls));
     }
 
     private function BuildServerInfo(): array
