@@ -313,7 +313,6 @@ body {
   min-width: 130px;
   max-width: 100%;
   position: relative;
-  border: 1px solid var(--accent);
   border-radius: 12px;
   overflow: hidden;
   touch-action: pan-y;
@@ -432,6 +431,16 @@ body {
 }
 
 .item-amount-prefix { color: var(--accent); }
+/* Mengen-Stepper wie in der WebApp-Kachel */
+.item-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.amount-badge {
+  min-width: 26px; text-align: center; padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--content-color) 12%, transparent);
+  font-size: 12px; font-weight: 700; color: var(--text);
+}
+.stepper { display: flex; flex-direction: column; }
+.stepper button { padding: 0 6px; font-size: 12px; color: var(--accent); line-height: 1.2; background: none; border: none; cursor: pointer; }
+.stepper .amount-badge { padding: 1px 8px; }
 
 .item-price {
   color: var(--accent);
@@ -1892,7 +1901,21 @@ function buildItemCard(item, inCart) {
   const thumb  = imgUrl
     ? `<img class="item-thumb-img" src="${escapeHtml(imgUrl)}" alt="" loading="lazy" />`
     : `<span class="item-thumb-letter">${letter}</span>`;
-  const title  = buildTitleHtml(item.name, item.amount);
+  const title  = escapeHtml(item.name || '');
+  // Mengen-Stepper wie in der WebApp-Kachel: nur offene, numerische Mengen; sonst
+  // Mengen-Badge. Runter-Pfeil bei Menge 1 unsichtbar (Platz bleibt reserviert).
+  const amountRaw = String(item.amount || '').trim();
+  const numeric   = amountRaw === '' || /^[1-9]\d*$/.test(amountRaw);
+  const amount    = amountRaw === '' ? '1' : amountRaw;
+  let sideHtml;
+  if (!inCart && numeric) {
+    const canDec = parseInt(amount) > 1;
+    sideHtml = `<span class="stepper"><button data-step="1" aria-label="+"><i class="fa-light fa-chevron-up"></i></button>`
+      + `<span class="amount-badge">${escapeHtml(amount)}</span>`
+      + `<button data-step="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button></span>`;
+  } else {
+    sideHtml = `<span class="amount-badge">${escapeHtml(amount)}</span>`;
+  }
   const showPrice = !!state.extApiShowPrice;
   const priceHtml = (showPrice && item.price) ? `<span class="item-price">${escapeHtml(item.price)}</span>` : '';
   const hasExtra = priceHtml || item.notes;
@@ -1906,6 +1929,7 @@ function buildItemCard(item, inCart) {
     + `<div class="item-card-content">`
     +   `<div class="item-thumb">${thumb}</div>`
     +   `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
+    +   `<span class="item-side">${sideHtml}</span>`
     +   `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
     + `</div>`
     + `</div>`;
@@ -1914,7 +1938,7 @@ function buildItemCard(item, inCart) {
 function bindCardHandlers() {
   document.querySelectorAll('.item-card[data-id]').forEach(card => {
     card.addEventListener('click', (e) => {
-      if (e.target && e.target.closest('.item-edit-btn')) return;
+      if (e.target && e.target.closest('.item-edit-btn, .item-side')) return;
       if (card.dataset.swiped === '1') return; // swipe gesture, not a tap
       const id = card.getAttribute('data-id');
       if (!id || card.dataset.animating === '1') return;
@@ -1933,6 +1957,17 @@ function bindCardHandlers() {
       e.stopPropagation();
       const item = (state.items || []).find(i => i.id === btn.getAttribute('data-edit-id'));
       if (item) openEditOverlay(item);
+    });
+  });
+  document.querySelectorAll('.item-card [data-step]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.item-card');
+      const id = card && card.getAttribute('data-id');
+      const item = (state.items || []).find(i => i.id === id);
+      if (!item) return;
+      const next = Math.max(1, (parseInt(item.amount) || 1) + parseInt(btn.dataset.step, 10));
+      requestAction('UpdateItem', JSON.stringify({ id: item.id, name: item.name, amount: String(next), notes: item.notes || '', category: item.category || '' }));
     });
   });
 }
