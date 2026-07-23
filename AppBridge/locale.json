@@ -46,6 +46,8 @@
             "Local model (a vision model, e.g. llama3.2-vision)": "Lokales Modell (ein Vision-Modell, z. B. llama3.2-vision)",
             "Local API key (optional)": "Lokaler API-Key (optional)",
             "Note: this feature needs your own API key from the provider. Cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server.": "Hinweis: Für diese Funktion wird ein eigener API-Key des Anbieters benötigt. Cloud-Anbieter (Anthropic/OpenAI) kosten wenige Cent pro Scan und senden das Foto in deren Cloud; ein lokaler Server behält alles im eigenen Netz, braucht aber ein Vision-fähiges Modell. Keys unter console.anthropic.com / platform.openai.com erstellen. Der Key wird in der Konfiguration dieser Instanz auf deinem Server gespeichert.",
+            "Enable AI analysis (shows the AI buttons in the web app)": "KI-Analyse aktivieren (zeigt die KI-Buttons in der Web-App)",
+            "AI analysis is disabled.": "Die KI-Analyse ist deaktiviert.",
             "No image provided.": "Kein Bild übermittelt.",
             "No image or URL provided.": "Kein Bild und keine URL übermittelt.",
             "Invalid or non-public URL.": "Ungültige oder nicht öffentlich erreichbare URL.",

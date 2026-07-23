@@ -44,6 +44,7 @@ class SymDoBridge extends IPSModuleStrict
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
         $this->RegisterPropertyString('LocalHttpsUrl', '');
         // KI „Foto → Aufgaben" (Web-App schickt das Foto, die Bridge ruft die KI).
+        $this->RegisterPropertyBoolean('AiEnabled', true); // Master-Schalter für die KI-Analyse
         $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
         $this->RegisterPropertyString('AiAnthropicKey', '');
         $this->RegisterPropertyString('AiOpenAIKey', '');
@@ -403,6 +404,8 @@ class SymDoBridge extends IPSModuleStrict
         // Heimnetz auf die lokale API um (Connect bleibt Fallback unterwegs).
         $localBase = rtrim(trim($this->ReadPropertyString('LocalHttpsUrl')), '/');
         $symdo = ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION];
+        // KI-Schalter: die Web-App blendet die KI-Buttons aus, wenn deaktiviert.
+        $symdo['aiEnabled'] = $this->ReadPropertyBoolean('AiEnabled');
         if ($localBase !== '') {
             $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
         }

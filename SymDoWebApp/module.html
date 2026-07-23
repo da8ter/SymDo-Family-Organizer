@@ -4132,9 +4132,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── KI: Foto → Aufgaben (Bridge leitet das Foto an die konfigurierte KI weiter) ──
   // Nur in der Standalone-Web-App (window.__SYMDO__): dort gibt es den REST-Token.
   // In der Visu-Kachel läuft alles über Symcon (kein Token) → Button ausblenden.
+  // KI-Buttons nur zeigen, wenn Standalone-Web-App UND der Bridge-Schalter „aiEnabled" an ist.
+  const aiEnabled = !!window.__SYMDO__ && window.__SYMDO__.aiEnabled !== false;
   const todoScan = document.getElementById('btnTodoScan');
   const todoScanInput = document.getElementById('todoScanInput');
-  if (!window.__SYMDO__) { if (todoScan) todoScan.style.display = 'none'; }
+  if (!aiEnabled) { if (todoScan) todoScan.style.display = 'none'; }
   const aiBody = document.getElementById('aiReviewBody');
   const aiAdd = document.getElementById('btnAiAdd');
   document.getElementById('aiReviewTitle').textContent = translate('Detected tasks');
@@ -4151,7 +4153,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auch hier nur in der Standalone-Web-App (REST-Token); in der Visu-Kachel ausgeblendet.
   const shopScan = document.getElementById('btnShopScan');
   const shopScanInput = document.getElementById('shopScanInput');
-  if (!window.__SYMDO__) { if (shopScan) shopScan.style.display = 'none'; }
+  if (!aiEnabled) { if (shopScan) shopScan.style.display = 'none'; }
   document.getElementById('aiSourceTitle').textContent = translate('Scan recipe or photo');
   document.getElementById('aiFromPhotoLabel').textContent = translate('Analyze photo');
   document.getElementById('aiFromUrlLabel').textContent = translate('Analyze URL');

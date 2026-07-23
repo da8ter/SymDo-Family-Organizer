@@ -76,6 +76,11 @@
                     "caption": "Photograph documents and let AI turn them into to-do tasks — e.g. notices from school, daycare or the sports club, parent letters, letters from authorities or the doctor, appointment slips, invitations. Saves tedious retyping. The photo goes from the browser to this bridge, which forwards it to the chosen AI; the API key stays here on the server."
                 },
                 {
+                    "type": "CheckBox",
+                    "name": "AiEnabled",
+                    "caption": "Enable AI analysis (shows the AI buttons in the web app)"
+                },
+                {
                     "type": "Select",
                     "name": "AiProvider",
                     "caption": "Provider",

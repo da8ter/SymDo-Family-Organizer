@@ -33,6 +33,9 @@ trait AiExtract
 
     private function HandleAiExtract(array $device): void
     {
+        if (!$this->AiIsEnabled()) {
+            return;
+        }
         $body  = $this->ReadJsonBody();
         $image = $this->AiReadImage($body);
         if ($image === null) {
@@ -64,6 +67,9 @@ trait AiExtract
 
     private function HandleAiIngredients(array $device): void
     {
+        if (!$this->AiIsEnabled()) {
+            return;
+        }
         $body = $this->ReadJsonBody();
         $url  = trim((string)($body['url'] ?? ''));
 
@@ -525,6 +531,16 @@ trait AiExtract
     }
 
     // ────────────────────────────── Helfer ──────────────────────────────
+
+    /** Master-Schalter: bei deaktivierter KI wird der Endpunkt abgelehnt (403). */
+    private function AiIsEnabled(): bool
+    {
+        if ($this->ReadPropertyBoolean('AiEnabled')) {
+            return true;
+        }
+        $this->SendApiError('ai_disabled', $this->Translate('AI analysis is disabled.'), 403);
+        return false;
+    }
 
     /** Liest das Bild aus dem Body (data:-Prefix strippen, Größen-Guard). null = Fehler gesendet. */
     private function AiReadImage(array $body): ?string
