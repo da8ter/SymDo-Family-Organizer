@@ -2151,6 +2151,19 @@ function openSections(st) {
   return sections;
 }
 
+// Schreibt Markup nur, wenn es sich wirklich geändert hat, und meldet das
+// zurück. So überspringt der periodische Refresh / Revisions-Poll das teure
+// innerHTML-Neuzeichnen bei unverändertem Inhalt → kein Flackern, kein
+// Scroll-Abbruch. Die aufrufende Render-Funktion kehrt bei false früh zurück,
+// damit auch keine doppelten Event-Handler gebunden werden.
+function renderInto(el, html) {
+  if (!el) return false;
+  if (el._lastHtml === html) return false;
+  el._lastHtml = html;
+  el.innerHTML = html;
+  return true;
+}
+
 // ── Render-Einstieg ────────────────────────────────────────────────────────
 function renderAll() {
   if (activeTab === 'dashboard') renderDashboard();
@@ -2310,7 +2323,7 @@ function renderDashboard() {
     html += '</div>';
   }
 
-  el.innerHTML = html;
+  if (!renderInto(el, html)) return;
 
   // Interaktionen
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
@@ -2378,7 +2391,7 @@ function renderShopping() {
   scannerBtn.style.display = (st && st.scannerEnabled !== false) ? '' : 'none';
 
   if (!st) {
-    area.innerHTML = `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('No shopping list found')}</div>`;
+    renderInto(area, `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('No shopping list found')}</div>`);
     return;
   }
   const sections = openSections(st);
@@ -2408,7 +2421,7 @@ function renderShopping() {
       for (const it of cart) html += shoppingRowHtml(it, favNames, st, true);
     }
   }
-  area.innerHTML = html;
+  if (!renderInto(area, html)) return;
 
   const cartToggle = document.getElementById('cartToggle');
   if (cartToggle) cartToggle.addEventListener('click', () => {
@@ -2597,13 +2610,14 @@ function sortTodoItems(items, sortMode, sortDir) {
 function renderTodoMembers() {
   const el = document.getElementById('todoMembers');
   if (!el) return;
-  if (store.users.length === 0) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (store.users.length === 0) { el.style.display = 'none'; renderInto(el, ''); return; }
   el.style.display = '';
   el.classList.toggle('has-selection', todoMemberIds.size > 0);
-  el.innerHTML = store.users.map(u =>
+  const membersHtml = store.users.map(u =>
     `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
   ).join('');
+  if (!renderInto(el, membersHtml)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const mid = b.dataset.member;
@@ -2621,7 +2635,7 @@ function renderTodos() {
 
   const area = document.getElementById('todoListArea');
   if (!st) {
-    area.innerHTML = `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}</div>`;
+    renderInto(area, `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}</div>`);
     return;
   }
   const sortMode = String(st.sortMode || 'created');
@@ -2659,7 +2673,7 @@ function renderTodos() {
       for (const it of done) html += todoRowHtml(it, false, showBadges);
     }
   }
-  area.innerHTML = html;
+  if (!renderInto(area, html)) return;
 
   const doneToggle = document.getElementById('doneToggle');
   if (doneToggle) doneToggle.addEventListener('click', () => {
@@ -2786,7 +2800,7 @@ function renderFavorites() {
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
   if (!st) {
-    el.innerHTML = `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}</div>`;
+    renderInto(el, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}</div>`);
     return;
   }
   const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
@@ -2808,7 +2822,7 @@ function renderFavorites() {
         `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
         '</div>';
     }
-    el.innerHTML = html;
+    if (!renderInto(el, html)) return;
     document.getElementById('btnFavCreate').addEventListener('click', () => {
       showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
         if (name.trim()) sdCall(id, 'CreateFavoriteList', { name: name.trim() });
@@ -2867,7 +2881,7 @@ function renderFavorites() {
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
     `</div>`;
-  el.innerHTML = html;
+  if (!renderInto(el, html)) return;
 
   document.getElementById('btnFavBack').addEventListener('click', () => { favDetailListId = null; renderFavorites(); });
   document.getElementById('btnFavMenu').addEventListener('click', (e) => {
