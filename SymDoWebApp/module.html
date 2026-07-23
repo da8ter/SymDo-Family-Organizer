@@ -245,6 +245,10 @@ html[data-symdo-theme="light"] .member-bar {
 .member-bar.collapsed { gap: 0; cursor: pointer; }
 .member-bar.collapsed .avatar-btn:not(:first-child) { margin-left: -24px; }
 .member-bar.collapsed .avatar-btn { box-shadow: 0 0 0 2px var(--card-color); }
+/* Maus-Hover klappt die eingeklappte Leiste (optisch) wieder auf */
+.member-bar.collapsed:hover { gap: 6px; }
+.member-bar.collapsed:hover .avatar-btn:not(:first-child) { margin-left: 0; }
+.member-bar.collapsed:hover .avatar-btn { box-shadow: none; }
 .member-bar.has-selection .avatar-btn { opacity: .4; }
 .member-bar.has-selection .avatar-btn.selected { opacity: 1; }
 .member-bar .avatar-btn.selected::after {
@@ -2198,12 +2202,15 @@ function setupMemberCollapse() {
   document.querySelectorAll('.screen').forEach(sc => {
     sc.addEventListener('scroll', () => { memberUserExpanded = false; applyMemberCollapse(sc); }, { passive: true });
   });
-  // Erster Tipp auf die eingeklappte Leiste klappt sie aus (statt Member zu wählen)
+  // Erster Tipp auf die eingeklappte Leiste klappt sie aus (statt Member zu wählen).
+  // Auf Maus-Geräten ist sie beim Klick schon per :hover offen → Klick wählt direkt.
+  const canHover = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
   document.addEventListener('click', (e) => {
     const bar = (e.target && e.target.closest) ? e.target.closest('.member-bar.collapsed') : null;
     if (!bar) return;
     memberUserExpanded = true;
     bar.classList.remove('collapsed');
+    if (canHover && bar.matches(':hover')) return; // Maus: durchlassen → Member wird gewählt
     e.stopPropagation();
     e.preventDefault();
   }, true);
