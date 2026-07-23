@@ -1,0 +1,6 @@
+# Never commit generated output or API keys
+output/
+output-gemini/
+*.key
+.env
+node_modules/
