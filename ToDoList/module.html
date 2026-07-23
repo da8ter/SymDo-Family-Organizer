@@ -441,7 +441,11 @@
       gap: var(--gap);
       padding: var(--gap);
       background: var(--row);
-      touch-action: pan-y;
+      /* touch-action:none → die Zeile steuert Wischen/Scrollen/Reorder selbst
+         (pan-y würde vertikales Ziehen dem Browser-Scroll geben und den
+         Long-Press-Reorder verhindern). Vertikales Scrollen macht die Geste
+         manuell. Long-Press startet den Reorder. */
+      touch-action: none;
       /* Long-Press auf dem iPhone soll keinen Text markieren / keinen Callout öffnen */
       user-select: none;
       -webkit-user-select: none;
@@ -2118,26 +2122,14 @@
       const swipe = item.querySelector('.item-swipe');
       if (!swipe || !Number.isFinite(id)) return;
 
-      let startX = 0, startY = 0, dx = 0;
-      let mode = 'idle';            // idle | pending | swipe | drag
+      let startX = 0, startY = 0, dx = 0, lastY = 0;
+      let mode = 'idle';            // idle | pending | swipe | scroll | drag
       let usingTouch = false, longTimer = null, dragGroup = '', dragMoved = false;
-      let prevOverflow = null;      // frozen scroll while dragging on touch
-      const SLOP = 8, THRESHOLD = 70, HOLD = 350;
+      const SLOP = 8, THRESHOLD = 70, HOLD = 500;
 
       const clearArm = () => item.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
-      // Freeze the list scroll while a touch drag is active: touch-action:pan-y
-      // otherwise hands vertical movement to the browser (it scrolls instead of
-      // reordering). With the container non-scrollable the finger drag reorders.
-      const freezeScroll = () => {
-        if (container && prevOverflow === null) { prevOverflow = container.style.overflowY; container.style.overflowY = 'hidden'; }
-      };
-      const unfreezeScroll = () => {
-        if (container && prevOverflow !== null) { container.style.overflowY = prevOverflow; prevOverflow = null; }
-      };
       const cleanup = () => {
         if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-        unfreezeScroll();
-        swipe.style.touchAction = '';
         mode = 'idle';
         swipe.classList.remove('is-dragging');
         document.removeEventListener('mousemove', onMouseMove);
@@ -2153,14 +2145,13 @@
         dragGroup = item.getAttribute('data-group') || '';
         dragMoved = false;
         item.classList.add('dragging');   // accent tint via CSS
-        if (usingTouch) { freezeScroll(); swipe.style.touchAction = 'none'; }
         try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
       };
 
       const begin = (target, x, y) => {
         if (target.closest('button, .chk')) return false;   // leave controls alone
         if (item.classList.contains('dragging') || item.classList.contains('is-deleting')) return false;
-        startX = x; startY = y; dx = 0; mode = 'pending';
+        startX = x; startY = y; lastY = y; dx = 0; mode = 'pending';
         longTimer = window.setTimeout(enterDrag, HOLD);
         return true;
       };
@@ -2185,7 +2176,12 @@
           if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
           if (longTimer) { clearTimeout(longTimer); longTimer = null; } // moved before the hold fired
           if (Math.abs(mx) > Math.abs(my)) { mode = 'swipe'; swipe.classList.add('is-dragging'); }
-          else { cleanup(); return false; }                            // vertical → scroll
+          else { mode = 'scroll'; lastY = y; }                         // vertical → scroll the list ourselves
+        }
+        if (mode === 'scroll') {
+          if (container) container.scrollTop -= (y - lastY);
+          lastY = y;
+          return true;
         }
         if (mode === 'swipe') {
           dx = Math.max(-swipe.offsetWidth, Math.min(swipe.offsetWidth, mx));
@@ -2236,8 +2232,11 @@
           cleanup();
           if (moved) commitReorder();
           suppressClickUntil = Date.now() + 300; // long press should not open detail
+        } else if (m === 'scroll') {
+          cleanup();
+          suppressClickUntil = Date.now() + 200; // a scroll should not open detail
         } else {
-          cleanup(); // tap / vertical — let the click handlers run
+          cleanup(); // tap — let the click handlers run
         }
       };
 

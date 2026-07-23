@@ -676,7 +676,10 @@ select option { color: #111; background: #fff; }
   padding: 10px 12px;
   background: var(--row);
   transition: transform .18s ease;
-  touch-action: pan-y;
+  /* touch-action:none → die Zeile steuert Wischen/Scrollen/Reorder selbst
+     (pan-y würde vertikales Ziehen dem Browser geben und den Long-Press-Reorder
+     verhindern). Vertikales Scrollen macht die Geste manuell. */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1925,24 +1928,14 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit) {
 function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelete, onEdit) {
   const content = card.querySelector('.todo-content');
   if (!content) return;
-  let startX = 0, startY = 0, dx = 0;
-  let mode = 'idle';        // idle | pending | swipe | drag
-  let usingTouch = false, longTimer = null, prevOverflow = null;
+  let startX = 0, startY = 0, dx = 0, lastY = 0;
+  let mode = 'idle';        // idle | pending | swipe | scroll | drag
+  let usingTouch = false, longTimer = null;
   const scroller = card.closest('.screen');
-  const SLOP = 8, THRESHOLD = 64, HOLD = 350;
+  const SLOP = 8, THRESHOLD = 64, HOLD = 500;
   const clearDir = () => card.classList.remove('dragging-left', 'dragging-right');
-  // Freeze the screen scroll while a touch drag is active — touch-action:pan-y
-  // otherwise scrolls instead of reordering on a vertical drag.
-  const freezeScroll = () => {
-    if (scroller && prevOverflow === null) { prevOverflow = scroller.style.overflowY; scroller.style.overflowY = 'hidden'; }
-  };
-  const unfreezeScroll = () => {
-    if (scroller && prevOverflow !== null) { scroller.style.overflowY = prevOverflow; prevOverflow = null; }
-  };
   const cleanup = () => {
     if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-    unfreezeScroll();
-    content.style.touchAction = '';
     mode = 'idle';
     content.classList.remove('is-dragging');
     document.removeEventListener('mousemove', onMouseMove);
@@ -1955,13 +1948,12 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
     if (mode !== 'pending') return;
     mode = 'drag';
     card.classList.add('todo-dragging');
-    if (usingTouch) { freezeScroll(); content.style.touchAction = 'none'; }
     try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
   };
   const begin = (target, x, y) => {
     if (target.closest('button, .chk')) return false;
     if (card.dataset.animating === '1') return false;
-    startX = x; startY = y; dx = 0; mode = 'pending';
+    startX = x; startY = y; lastY = y; dx = 0; mode = 'pending';
     if (canReorder) longTimer = window.setTimeout(enterDrag, HOLD);
     return true;
   };
@@ -1983,7 +1975,12 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return false;
       if (longTimer) { clearTimeout(longTimer); longTimer = null; } // moved before hold fired
       if (Math.abs(mx) > Math.abs(my)) { mode = 'swipe'; content.classList.add('is-dragging'); }
-      else { cleanup(); return false; }                            // vertical → scroll
+      else { mode = 'scroll'; lastY = y; }                         // vertical → scroll the screen ourselves
+    }
+    if (mode === 'scroll') {
+      if (scroller) scroller.scrollTop -= (y - lastY);
+      lastY = y;
+      return true;
     }
     if (mode === 'swipe') {
       const maxRight = onEdit ? content.offsetWidth : 0;
@@ -2022,8 +2019,11 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
         .filter(n => openSet.has(n));
       sdCall(instanceID, 'Reorder', { order: ids.concat(done.map(i => i.id)) });
       markSwiped();
+    } else if (m === 'scroll') {
+      cleanup();
+      markSwiped(); // a scroll should not open the editor
     } else {
-      cleanup(); // tap / vertical — let the click handler run
+      cleanup(); // tap — let the click handler run
     }
   };
   const onMouseMove = (e) => { if (move(e.clientX, e.clientY)) e.preventDefault(); };
