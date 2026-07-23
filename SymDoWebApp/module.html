@@ -220,6 +220,11 @@ select option { color: #111; background: #fff; }
   border-radius: 999px;
   background: color-mix(in srgb, var(--card-color) 50%, transparent);
 }
+/* Im Hellmodus ist die halbtransparente Kartenfarbe auf weißem Grund kaum
+   sichtbar → dezent grau hinterlegen, damit die Member-Pille abgesetzt ist. */
+html[data-symdo-theme="light"] .member-bar {
+  background: color-mix(in srgb, var(--content-color) 8%, var(--card-color));
+}
 /* Im ToDo-Tab gibt es kein Datum, das hochgezogen werden muss → normaler
    Abstand nach unten statt des negativen Zugs. */
 .member-bar.todo-members { margin-bottom: 10px; }
