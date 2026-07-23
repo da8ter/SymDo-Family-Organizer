@@ -339,7 +339,6 @@ body {
   transition: transform .28s cubic-bezier(.22,.61,.36,1), opacity .12s ease;
 }
 .item-card-content.is-dragging { transition: none; }
-.item-card-content:active { opacity: .8; }
 
 .item-card:hover .item-card-content {
   background:
@@ -360,7 +359,16 @@ body {
   background: #c0392b;
   color: #fff;
   font-size: 20px;
+  /* Standardmäßig unsichtbar: so scheint die rote Fläche NICHT durch transparente
+     bzw. animierte Inhalte (Tap, Move-in-den-Wagen-Animation) und auch nicht an
+     den gerundeten Ecken (Subpixel bei grober Auflösung) durch. Nur beim Wischen
+     oder Löschen wird sie eingeblendet — dort clippt sie die Kachel-Rundung sauber. */
+  opacity: 0;
+  transition: opacity .12s ease;
 }
+.item-card:has(> .item-card-content.is-dragging) .item-card-delete,
+.item-card.swipe-armed .item-card-delete,
+.item-card.is-deleting .item-card-delete { opacity: 1; }
 .item-card.swipe-armed .item-card-delete { background: #e04434; }
 .item-card.is-deleting { pointer-events: none; }
 .item-card.is-deleting .item-card-content { opacity: .4; }
