@@ -1863,9 +1863,9 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit) {
     content.classList.remove('is-dragging');
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onTouchEnd);
-    document.removeEventListener('touchcancel', onTouchEnd);
+    document.removeEventListener('touchmove', onTouchMove, true);
+    document.removeEventListener('touchend', onTouchEnd, true);
+    document.removeEventListener('touchcancel', onTouchEnd, true);
   };
   const begin = (target, x, y) => {
     if (target.closest('button')) return false;
@@ -1928,9 +1928,9 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit) {
     const t = e.touches && e.touches[0]; if (!t) return;
     usingTouch = true;
     if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd);
-    document.addEventListener('touchcancel', onTouchEnd);
+    document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+    document.addEventListener('touchend', onTouchEnd, true);
+    document.addEventListener('touchcancel', onTouchEnd, true);
   }, { passive: true });
 }
 
@@ -1953,9 +1953,9 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       content.classList.remove('is-dragging');
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
-      document.removeEventListener('touchcancel', onTouchEnd);
+      document.removeEventListener('touchmove', onTouchMove, true);
+      document.removeEventListener('touchend', onTouchEnd, true);
+      document.removeEventListener('touchcancel', onTouchEnd, true);
     };
     const begin = (target, x, y) => {
       if (target.closest('.todo-handle, button, .chk')) return false;
@@ -2014,9 +2014,9 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       const t = e.touches && e.touches[0]; if (!t) return;
       usingTouch = true;
       if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('touchend', onTouchEnd);
-      document.addEventListener('touchcancel', onTouchEnd);
+      document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+      document.addEventListener('touchend', onTouchEnd, true);
+      document.addEventListener('touchcancel', onTouchEnd, true);
     }, { passive: true });
   })();
 
@@ -2028,9 +2028,9 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       dragging = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
-      document.removeEventListener('touchcancel', onTouchEnd);
+      document.removeEventListener('touchmove', onTouchMove, true);
+      document.removeEventListener('touchend', onTouchEnd, true);
+      document.removeEventListener('touchcancel', onTouchEnd, true);
     };
     const start = () => {
       if (card.dataset.animating === '1') return false;
@@ -2086,9 +2086,9 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       const t = e.touches && e.touches[0]; if (!t) return;
       usingTouch = true; e.stopPropagation();
       if (!start()) { usingTouch = false; return; }
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('touchend', onTouchEnd);
-      document.addEventListener('touchcancel', onTouchEnd);
+      document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+      document.addEventListener('touchend', onTouchEnd, true);
+      document.addEventListener('touchcancel', onTouchEnd, true);
     }, { passive: false });
   })();
 }

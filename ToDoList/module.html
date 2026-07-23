@@ -1923,9 +1923,9 @@
           if (!pointerDragActive) return;
           e.preventDefault();
           finishPointerDrag(true);
-          document.removeEventListener('touchmove', onTouchMove);
-          document.removeEventListener('touchend', onTouchEnd);
-          document.removeEventListener('touchcancel', onTouchEnd);
+          document.removeEventListener('touchmove', onTouchMove, true);
+          document.removeEventListener('touchend', onTouchEnd, true);
+          document.removeEventListener('touchcancel', onTouchEnd, true);
         };
 
         // NOTE: no Pointer Events path here on purpose. On iOS, setting the
@@ -1986,7 +1986,7 @@
           e.preventDefault();
           e.stopPropagation();
 
-          document.addEventListener('touchmove', onTouchMove, { passive: false });
+          document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
           document.addEventListener('touchend', onTouchEnd, { passive: false });
           document.addEventListener('touchcancel', onTouchEnd, { passive: false });
         }, { passive: false });
@@ -2132,9 +2132,9 @@
           swipe.classList.remove('is-dragging');
           document.removeEventListener('mousemove', onMouseMove);
           document.removeEventListener('mouseup', onMouseUp);
-          document.removeEventListener('touchmove', onTouchMove);
-          document.removeEventListener('touchend', onTouchEnd);
-          document.removeEventListener('touchcancel', onTouchEnd);
+          document.removeEventListener('touchmove', onTouchMove, true);
+          document.removeEventListener('touchend', onTouchEnd, true);
+          document.removeEventListener('touchcancel', onTouchEnd, true);
         };
         const begin = (target, x, y) => {
           if (target.closest('.drag-handle, button, .chk')) return false; // handle/controls
@@ -2193,9 +2193,9 @@
           const t = e.touches && e.touches[0]; if (!t) return;
           usingTouch = true;
           if (!begin(e.target, t.clientX, t.clientY)) { usingTouch = false; return; }
-          document.addEventListener('touchmove', onTouchMove, { passive: false });
-          document.addEventListener('touchend', onTouchEnd);
-          document.addEventListener('touchcancel', onTouchEnd);
+          document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+          document.addEventListener('touchend', onTouchEnd, true);
+          document.addEventListener('touchcancel', onTouchEnd, true);
         }, { passive: true });
       })();
 
@@ -2207,9 +2207,9 @@
           dragging = false;
           document.removeEventListener('mousemove', onMouseMove);
           document.removeEventListener('mouseup', onMouseUp);
-          document.removeEventListener('touchmove', onTouchMove);
-          document.removeEventListener('touchend', onTouchEnd);
-          document.removeEventListener('touchcancel', onTouchEnd);
+          document.removeEventListener('touchmove', onTouchMove, true);
+          document.removeEventListener('touchend', onTouchEnd, true);
+          document.removeEventListener('touchcancel', onTouchEnd, true);
         };
         const start = () => {
           if (item.classList.contains('is-deleting')) return false;
@@ -2272,9 +2272,9 @@
           const t = e.touches && e.touches[0]; if (!t) return;
           usingTouch = true; e.stopPropagation();
           if (!start()) { usingTouch = false; return; }
-          document.addEventListener('touchmove', onTouchMove, { passive: false });
-          document.addEventListener('touchend', onTouchEnd);
-          document.addEventListener('touchcancel', onTouchEnd);
+          document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+          document.addEventListener('touchend', onTouchEnd, true);
+          document.addEventListener('touchcancel', onTouchEnd, true);
         }, { passive: false });
       })();
     }
