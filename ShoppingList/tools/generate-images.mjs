@@ -84,6 +84,11 @@ const repeatedSmallItems = new Set([
   "Cranberrys",
   "Datteln",
   "Erdnussflips",
+  "Blaubeeren",
+  "Brombeeren",
+  "Johannisbeeren",
+  "Stachelbeeren",
+  "Preiselbeeren",
 ]);
 
 const itemSpecificPromptAdditions = {

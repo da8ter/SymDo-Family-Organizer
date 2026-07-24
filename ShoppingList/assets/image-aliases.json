@@ -820,10 +820,8 @@
         "pilsner",
         "weizen",
         "weizenbier",
-        "helles",
         "radler",
         "alkoholfrei bier",
-        "beer",
         "lager",
         "ale"
     ],
@@ -1784,6 +1782,48 @@
     "cranberrys": [
         "cranberries",
         "cranberry"
+    ],
+    "blaubeeren": [
+        "blaubeere",
+        "heidelbeere",
+        "heidelbeeren",
+        "blueberry",
+        "blueberries"
+    ],
+    "brombeeren": [
+        "brombeere",
+        "blackberry",
+        "blackberries"
+    ],
+    "johannisbeeren": [
+        "johannisbeere",
+        "rote johannisbeere",
+        "schwarze johannisbeere",
+        "ribisel",
+        "currant",
+        "currants"
+    ],
+    "stachelbeeren": [
+        "stachelbeere",
+        "gooseberry",
+        "gooseberries"
+    ],
+    "preiselbeeren": [
+        "preiselbeere",
+        "lingonberry",
+        "lingonberries"
+    ],
+    "limette": [
+        "limetten",
+        "lime",
+        "limes"
+    ],
+    "essig": [
+        "balsamessig",
+        "balsamico",
+        "aceto balsamico",
+        "weinessig",
+        "apfelessig"
     ],
     "haarspülung": [
         "conditioner",
