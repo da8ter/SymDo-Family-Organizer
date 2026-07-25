@@ -1892,10 +1892,15 @@ function renderAvatarStack(ids) {
   const byId = usersById();
   const resolved = (Array.isArray(ids) ? ids : []).map(id => byId[id]).filter(Boolean);
   if (resolved.length === 0) return '';
+  // Der Zähler-Kreis ist genauso groß wie ein Avatar (.avatar-more erbt .avatar),
+  // ein „+1" würde also eine Person verstecken, ohne einen Pixel zu sparen.
+  // Deshalb erst ab Überlauf 2 zusammenfassen: 4 Zugewiesene → 4 Avatare,
+  // 5 → 3 Avatare + „+2". Die Stack-Breite bleibt so oder so bei 4 Kreisen.
   const max = 3;
+  const showAll = resolved.length <= max + 1;
   let html = '<div class="avatar-stack">';
-  resolved.slice(0, max).forEach(u => { html += avatarHtml(u, 'avatar'); });
-  if (resolved.length > max) {
+  (showAll ? resolved : resolved.slice(0, max)).forEach(u => { html += avatarHtml(u, 'avatar'); });
+  if (!showAll) {
     html += `<span class="avatar avatar-more">+${resolved.length - max}</span>`;
   }
   html += '</div>';
