@@ -4,3 +4,6 @@ output-gemini/
 *.key
 .env
 node_modules/
+# Einmalige Regenerierungs-Skripte/Logs (Wegwerf, nicht Teil des Moduls)
+regen*.sh
+regen*.log

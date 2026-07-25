@@ -321,7 +321,9 @@
     ],
     "parmesan": [
         "parmigiano",
-        "grana padano"
+        "grana padano",
+        "hartkäse ital. art",
+        "hartkäse"
     ],
     "feta": [
         "fetakäse",
@@ -1725,7 +1727,8 @@
         "bouillon",
         "instantbrühe",
         "suppenbrühe",
-        "brühepulver"
+        "brühepulver",
+        "gemüsebrühpulver"
     ],
     "couscous": [
         "kuskus"

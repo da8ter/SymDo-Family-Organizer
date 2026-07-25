@@ -1,18 +1,20 @@
 # Produktbild-Generator (ShoppingList)
 
-Interne Wartungs-Skripte für die Produktbild-Bibliothek in `../assets/`. Erzeugen
-transparente PNGs (1024×1024) über die OpenAI Images API (`gpt-image-1`) bzw.
-Gemini. **Kein Laufzeit-Bestandteil des Moduls** — nur zum Nachpflegen fehlender
+Internes Wartungs-Skript für die Produktbild-Bibliothek in `../assets/`. Erzeugt
+transparente PNGs (1024×1024) über die OpenAI Images API (`gpt-image-1`).
+**Kein Laufzeit-Bestandteil des Moduls** — nur zum Nachpflegen fehlender
 Artikelbilder.
 
-> Der API-Key wird **ausschließlich** aus der Umgebung gelesen
-> (`OPENAI_API_KEY` bzw. `GEMINI_API_KEY`). Niemals einen Key in diese Dateien
-> oder ins Repo schreiben. `output/`-Ordner und Key-Dateien sind ge-`.gitignore`-t.
+> Der API-Key wird **ausschließlich** aus der Umgebung gelesen (`OPENAI_API_KEY`).
+> Niemals einen Key in dieses Skript oder ins Repo schreiben. Dafür lokal eine
+> `.env` mit `OPENAI_API_KEY=…` anlegen — die Datei ist ge-`.gitignore`-t und
+> liegt bewusst nicht im Repo. Auch die `output/`-Ordner sind ge-`.gitignore`-t —
+> nur das fertige 100×100-Asset + der Alias kommen ins Repo.
 
 ## Bilder erzeugen
 
 ```bash
-export OPENAI_API_KEY="sk-..."
+set -a; source .env; set +a        # lädt OPENAI_API_KEY aus .env
 node generate-images.mjs --items="Olivenöl,Gemüsebrühe" --category="Konserven & Trocken"
 ```
 
@@ -23,9 +25,6 @@ Sample je Kategorie), `--model="gpt-image-1"`. Ausgabe → `./output`.
 Prompt-Templates je Kategorie: `Obst & Gemüse`, `Milch & Käse`, `Backwaren`,
 `Fleisch & Wurst`, `Tiefkühl`, `Getränke`, `Konserven & Trocken`,
 `Hygiene & Pflege`, `Haushalt & Reinigung`, `Baby & Tier`.
-
-Gemini-Variante: `GEMINI_API_KEY` setzen, `node generate-images-gemini.mjs …`,
-Ausgabe → `./output-gemini`.
 
 ## In das Modul übernehmen
 
