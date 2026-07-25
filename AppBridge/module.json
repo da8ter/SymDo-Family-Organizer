@@ -2,7 +2,7 @@
     "id": "{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}",
     "name": "SymDo Bridge",
     "type": 3,
-    "vendor": "",
+    "vendor": "da8ter",
     "aliases": ["SymDo App", "App Bridge", "Smartphone App"],
     "parentRequirements": [],
     "childRequirements": [],

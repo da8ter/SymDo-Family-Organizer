@@ -22,26 +22,51 @@ trait AiExtract
     // Vision-fähige Default-Modelle der Cloud-Anbieter (wie die iOS-App).
     private const AI_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
     private const AI_OPENAI_MODEL    = 'gpt-4o';
+    // OpenAI-Modell für PDF-Dateien (nimmt PDF-file-Input an; gpt-4o kann kein PDF).
+    private const AI_OPENAI_PDF_MODEL = 'gpt-5.6-terra';
     private const AI_MAX_TOKENS      = 2000;
-    private const AI_TIMEOUT         = 120;
+    // Größeres Budget für PDF: bei Reasoning-Modellen zählt das versteckte
+    // Reasoning mit, ein zu kleiner Cap liefert sonst eine leere Antwort.
+    private const AI_MAX_TOKENS_PDF  = 32000;
+    private const AI_TIMEOUT         = 45;
+    private const AI_CONNECT_TIMEOUT = 5;
+    // Missbrauchsschutz: pro Gerät N KI-Aufrufe je Zeitfenster; zusätzlich darf
+    // immer nur EIN Anbieter-Aufruf gleichzeitig laufen (sonst blockieren
+    // parallele Requests den Symcon-Webserver).
+    private const AI_RATE_MAX        = 60;
+    private const AI_RATE_WINDOW     = 3600;
     // Rezept-URL-Analyse
     private const AI_MAX_INGREDIENTS  = 100;
     private const AI_HTTP_GET_TIMEOUT = 15;
     private const AI_RECIPE_TEXT_MAX  = 12000;
+    // PDF-Upload: base64-Größenlimit (Datei ~3/4 davon).
+    private const AI_MAX_PDF_B64      = 20 * 1024 * 1024;
+    private const AI_MAX_IMAGE_B64    = 12 * 1024 * 1024;
+    // Obergrenze für gespeicherte Rezeptfotos/-dateien unter „Rezeptfotos".
+    private const AI_MEDIA_MAX        = 200;
 
     // ────────────────────────────── ToDo (Foto → Aufgaben) ──────────────────────────────
 
     private function HandleAiExtract(array $device): void
     {
-        if (!$this->AiIsEnabled()) {
+        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device)) {
             return;
         }
-        $body  = $this->ReadJsonBody();
-        $image = $this->AiReadImage($body);
-        if ($image === null) {
-            return; // Fehler wurde bereits gesendet
+        $body = $this->ReadJsonBody();
+        $pdf  = $this->AiStripImage($this->BodyStr($body, 'pdf'));
+        if ($pdf !== '') {
+            if (strlen($pdf) > self::AI_MAX_PDF_B64) {
+                $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
+                return;
+            }
+            $result = $this->AiExtractTodos('', $pdf);
+        } else {
+            $image = $this->AiReadImage($body);
+            if ($image === null) {
+                return; // Fehler wurde bereits gesendet
+            }
+            $result = $this->AiExtractTodos($image);
         }
-        $result = $this->AiExtractTodos($image);
         if (($result['ok'] ?? false) !== true) {
             $this->SendAiErrorResult($result);
             return;
@@ -50,12 +75,13 @@ trait AiExtract
     }
 
     /** @return array ok:true+todos | ok:false+code+message+status */
-    private function AiExtractTodos(string $imageBase64): array
+    private function AiExtractTodos(string $imageBase64 = '', string $pdfBase64 = ''): array
     {
         $r = $this->AiRunCompletion(
             $this->AiSystemPrompt(date('Y-m-d')),
-            'Extrahiere die Aufgaben aus diesem Dokument.',
-            $imageBase64
+            $pdfBase64 !== '' ? 'Extrahiere die Aufgaben aus dieser Datei.' : 'Extrahiere die Aufgaben aus diesem Dokument.',
+            $imageBase64 !== '' ? $imageBase64 : null,
+            $pdfBase64 !== '' ? $pdfBase64 : null
         );
         if (($r['ok'] ?? false) !== true) {
             return $r;
@@ -67,13 +93,20 @@ trait AiExtract
 
     private function HandleAiIngredients(array $device): void
     {
-        if (!$this->AiIsEnabled()) {
+        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device)) {
             return;
         }
         $body = $this->ReadJsonBody();
-        $url  = trim((string)($body['url'] ?? ''));
+        $url  = trim($this->BodyStr($body, 'url'));
+        $pdf  = $this->AiStripImage($this->BodyStr($body, 'pdf'));
 
-        if (($body['image'] ?? '') !== '') {
+        if ($pdf !== '') {
+            if (strlen($pdf) > self::AI_MAX_PDF_B64) {
+                $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
+                return;
+            }
+            $result = $this->AiExtractIngredientsFromPdf($pdf);
+        } elseif (($body['image'] ?? '') !== '') {
             $image = $this->AiReadImage($body);
             if ($image === null) {
                 return;
@@ -101,6 +134,9 @@ trait AiExtract
     /** REST: Rezeptfoto als Medienobjekt speichern → {ok, mediaId}. */
     private function HandleAiSavePhoto(array $device): void
     {
+        if (!$this->AiRateLimitOk($device)) {
+            return;
+        }
         $r = json_decode($this->AiRelayBody('/savephoto', json_encode($this->ReadJsonBody())), true);
         $this->SendJson(is_array($r) ? $r : ['ok' => false, 'error' => ['code' => 'ai_error', 'message' => 'error']]);
     }
@@ -126,18 +162,28 @@ trait AiExtract
         if (!is_array($body)) {
             $body = [];
         }
-        $image = $this->AiStripImage((string)($body['image'] ?? ''));
-        if ($image !== '' && strlen($image) > 12 * 1024 * 1024) {
+        $image = $this->AiStripImage($this->BodyStr($body, 'image'));
+        if ($image !== '' && strlen($image) > self::AI_MAX_IMAGE_B64) {
             return $this->AiRelayError('invalid_payload', $this->Translate('Image too large.'));
+        }
+        $pdf = $this->AiStripImage($this->BodyStr($body, 'pdf'));
+        if ($pdf !== '' && strlen($pdf) > self::AI_MAX_PDF_B64) {
+            return $this->AiRelayError('invalid_payload', $this->Translate('File too large.'));
         }
 
         // Medien-Operationen laufen unabhängig vom KI-Schalter (auch zum Öffnen
-        // bereits gespeicherter Rezeptfotos).
+        // bereits gespeicherter Rezeptfotos/-dateien).
         if (str_ends_with($path, 'savephoto')) {
-            return json_encode($this->AiSavePhoto($image, (string)($body['name'] ?? '')), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $result = ($pdf !== '')
+                ? $this->AiSaveMedia($pdf, $this->BodyStr($body, 'name'), true)
+                : $this->AiSaveMedia($image, $this->BodyStr($body, 'name'), false);
+            return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
         if (str_ends_with($path, 'media')) {
-            return json_encode($this->AiGetMedia((int)($body['mediaId'] ?? 0)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            return json_encode(
+                $this->AiGetMedia((int)($body['mediaId'] ?? 0), ($body['meta'] ?? false) === true),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            );
         }
 
         if (!$this->ReadPropertyBoolean('AiEnabled')) {
@@ -145,8 +191,10 @@ trait AiExtract
         }
 
         if (str_ends_with($path, 'ingredients')) {
-            $url = trim((string)($body['url'] ?? ''));
-            if ($image !== '') {
+            $url = trim($this->BodyStr($body, 'url'));
+            if ($pdf !== '') {
+                $r = $this->AiExtractIngredientsFromPdf($pdf);
+            } elseif ($image !== '') {
                 $r = $this->AiExtractIngredientsFromImage($image);
             } elseif ($url !== '') {
                 $r = $this->AiExtractIngredientsFromUrl($url);
@@ -160,10 +208,13 @@ trait AiExtract
         }
 
         if (str_ends_with($path, 'extract')) {
-            if ($image === '') {
+            if ($pdf !== '') {
+                $r = $this->AiExtractTodos('', $pdf);
+            } elseif ($image !== '') {
+                $r = $this->AiExtractTodos($image);
+            } else {
                 return $this->AiRelayError('invalid_payload', $this->Translate('No image provided.'));
             }
-            $r = $this->AiExtractTodos($image);
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
             }
@@ -189,8 +240,6 @@ trait AiExtract
 
     // ────────────────────────────── Rezeptfotos (Medienobjekte) ──────────────────────────────
 
-    private const AI_SDWA_GUID = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
-
     /** Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz (einmal anlegen, dann gecached). */
     private function AiRecipePhotoCategory(): int
     {
@@ -198,7 +247,7 @@ trait AiExtract
         if ($catId > 0 && IPS_CategoryExists($catId)) {
             return $catId;
         }
-        $sdwa   = IPS_GetInstanceListByModuleID(self::AI_SDWA_GUID);
+        $sdwa   = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
         $parent = (is_array($sdwa) && count($sdwa) > 0) ? (int)$sdwa[0] : 0;
         if ($parent <= 0) {
             return 0;
@@ -216,28 +265,46 @@ trait AiExtract
         return $catId;
     }
 
-    /** Speichert das (JPEG-)Foto als Medienobjekt unter „Rezeptfotos". @return array ok+mediaId | ok:false+error */
-    private function AiSavePhoto(string $imageBase64, string $name): array
+    /** Speichert Foto (JPEG) ODER PDF als Medienobjekt unter „Rezeptfotos". @return array ok+mediaId | ok:false+error */
+    private function AiSaveMedia(string $base64, string $name, bool $isPdf): array
     {
-        if ($imageBase64 === '') {
-            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('No image provided.')]];
+        if ($base64 === '') {
+            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate($isPdf ? 'No file provided.' : 'No image provided.')]];
+        }
+        // Inhalt prüfen, bevor irgendetwas angelegt wird: nur echte JPEG/PDF-Daten
+        // dürfen in den Objektbaum. base64_decode(strict) fängt Müll-Payloads ab.
+        $raw = base64_decode($base64, true);
+        if ($raw === false || $raw === '') {
+            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate($isPdf ? 'No file provided.' : 'No image provided.')]];
+        }
+        $magicOk = $isPdf ? str_starts_with($raw, '%PDF-') : str_starts_with($raw, "\xFF\xD8\xFF");
+        if (!$magicOk) {
+            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unsupported file type.')]];
         }
         $cat = $this->AiRecipePhotoCategory();
         if ($cat <= 0) {
             return ['ok' => false, 'error' => ['code' => 'no_category', 'message' => 'Rezeptfotos category unavailable']];
         }
-        $mid  = IPS_CreateMedia(MEDIATYPE_IMAGE);
+        // Mengen-Quota: verhindert, dass eine Schleife Platte und Objektbaum füllt.
+        if (count(IPS_GetChildrenIDs($cat)) >= self::AI_MEDIA_MAX) {
+            return ['ok' => false, 'error' => ['code' => 'quota_exceeded', 'message' => $this->Translate('Too many stored recipe files — please delete some first.')]];
+        }
+        $mid = IPS_CreateMedia($isPdf ? MEDIATYPE_DOCUMENT : MEDIATYPE_IMAGE);
         IPS_SetParent($mid, $cat);
         $name = trim($name);
-        IPS_SetName($mid, $name !== '' ? $name : $this->Translate('Recipe photo'));
+        IPS_SetName($mid, $name !== '' ? $name : $this->Translate($isPdf ? 'Recipe file' : 'Recipe photo'));
         // Ein Medienobjekt braucht erst eine Datei, bevor Content gesetzt werden kann.
-        IPS_SetMediaFile($mid, 'media/recipe_' . $mid . '.jpg', false);
-        IPS_SetMediaContent($mid, $imageBase64);
+        IPS_SetMediaFile($mid, 'media/recipe_' . $mid . ($isPdf ? '.pdf' : '.jpg'), false);
+        IPS_SetMediaContent($mid, $base64);
         return ['ok' => true, 'mediaId' => $mid];
     }
 
-    /** Liefert ein Rezeptfoto als data:-URL — nur Objekte unter „Rezeptfotos". */
-    private function AiGetMedia(int $mediaId): array
+    /**
+     * Prüft ein Rezept-Medienobjekt und liefert Typ (+ optional Base64-Inhalt).
+     * Gemeinsame Basis für die JSON-Antwort (data:-URL) und die Rohdatei-Route.
+     * Ohne $withContent bleibt der Plattenzugriff aus — für reine Typabfragen.
+     */
+    private function AiReadMedia(int $mediaId, bool $withContent = true): array
     {
         if ($mediaId <= 0 || !IPS_MediaExists($mediaId)) {
             return ['ok' => false, 'error' => ['code' => 'not_found', 'message' => 'Media not found']];
@@ -246,11 +313,93 @@ trait AiExtract
         if ($cat <= 0 || IPS_GetParent($mediaId) !== $cat) {
             return ['ok' => false, 'error' => ['code' => 'forbidden', 'message' => 'Not a recipe photo']];
         }
-        $content = @IPS_GetMediaContent($mediaId);
-        if (!is_string($content) || $content === '') {
-            return ['ok' => false, 'error' => ['code' => 'empty', 'message' => 'Empty media']];
+        $media   = @IPS_GetMedia($mediaId);
+        $content = '';
+        if ($withContent) {
+            $content = @IPS_GetMediaContent($mediaId);
+            if (!is_string($content) || $content === '') {
+                return ['ok' => false, 'error' => ['code' => 'empty', 'message' => 'Empty media']];
+            }
         }
-        return ['ok' => true, 'dataUrl' => 'data:image/jpeg;base64,' . $content];
+        return [
+            'ok'      => true,
+            'base64'  => $content,
+            'isPdf'   => is_array($media) && ((int)($media['MediaType'] ?? MEDIATYPE_IMAGE) === MEDIATYPE_DOCUMENT),
+            'updated' => is_array($media) ? (int)($media['MediaUpdated'] ?? 0) : 0,
+        ];
+    }
+
+    /**
+     * Liefert ein Rezept-Medienobjekt als data:-URL (Bild oder PDF) — nur Objekte
+     * unter „Rezeptfotos". Mit $metaOnly nur den Typ, damit die App vor dem Klick
+     * weiß, ob sie den System-PDF-Viewer öffnen muss (ohne 1 MB zu übertragen).
+     */
+    private function AiGetMedia(int $mediaId, bool $metaOnly = false): array
+    {
+        $m = $this->AiReadMedia($mediaId, !$metaOnly);
+        if (($m['ok'] ?? false) !== true) {
+            return $m;
+        }
+        if ($metaOnly) {
+            return ['ok' => true, 'isPdf' => $m['isPdf']];
+        }
+        return [
+            'ok'      => true,
+            'isPdf'   => $m['isPdf'],
+            'dataUrl' => 'data:' . ($m['isPdf'] ? 'application/pdf' : 'image/jpeg') . ';base64,' . $m['base64'],
+        ];
+    }
+
+    /**
+     * GET /v1/ai/media/{id} — Rezeptdatei als Rohdatei mit korrektem Content-Type.
+     * Nötig für mehrseitige PDFs: WebKit rendert ein PDF in einem <iframe> nur als
+     * erste, nicht scrollbare Seite. Über diese URL übernimmt der System-Viewer
+     * (Safari/Quick Look) und blättert alle Seiten inkl. Zoom, Teilen und Drucken.
+     */
+    private function HandleAiMediaFile(int $mediaId): void
+    {
+        $m = $this->AiReadMedia($mediaId);
+        if (($m['ok'] ?? false) !== true) {
+            $err = is_array($m['error'] ?? null) ? $m['error'] : ['code' => 'not_found', 'message' => 'Media not found'];
+            $this->SendApiError((string)$err['code'], (string)$err['message'], $err['code'] === 'forbidden' ? 403 : 404);
+            return;
+        }
+        $raw = base64_decode((string)$m['base64'], true);
+        if (!is_string($raw) || $raw === '') {
+            $this->SendApiError('empty', 'Media not readable', 404);
+            return;
+        }
+        $etag = '"' . md5($mediaId . '|' . $m['updated'] . '|' . strlen($raw)) . '"';
+        header('ETag: ' . $etag);
+        header('Cache-Control: private, no-cache');
+        if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+            http_response_code(304);
+            return;
+        }
+        header('Content-Type: ' . ($m['isPdf'] ? 'application/pdf' : 'image/jpeg'));
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Disposition: inline; ' . $this->AiFileNameParams((string)@IPS_GetName($mediaId), (bool)$m['isPdf']));
+        echo $raw;
+    }
+
+    /**
+     * Dateiname-Parameter für Content-Disposition. Der Objektname ist frei wählbar,
+     * darf also niemals ungefiltert in einen Header — die Whitelist entfernt
+     * insbesondere CR/LF und Anführungszeichen (Header-Injection).
+     */
+    private function AiFileNameParams(string $name, bool $isPdf): string
+    {
+        $ext   = $isPdf ? '.pdf' : '.jpg';
+        $clean = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/[^\p{L}\p{N} ._-]+/u', ' ', $name)));
+        if ($clean === '') {
+            $clean = 'Rezept';
+        }
+        $clean = mb_substr($clean, 0, 80);
+        $ascii = trim((string)preg_replace('/_+/', '_', (string)preg_replace('/[^A-Za-z0-9._-]+/', '_', $clean)), '_');
+        if ($ascii === '') {
+            $ascii = 'recipe';
+        }
+        return 'filename="' . $ascii . $ext . '"; filename*=UTF-8\'\'' . rawurlencode($clean . $ext);
     }
 
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
@@ -289,6 +438,21 @@ trait AiExtract
         return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
     }
 
+    /** PDF-Datei → Zutaten (Anthropic nativ, OpenAI via PDF-Modell). @return array */
+    private function AiExtractIngredientsFromPdf(string $pdfBase64): array
+    {
+        $r = $this->AiRunCompletion(
+            $this->AiIngredientsSystemPrompt(),
+            'Extrahiere die Artikel bzw. Zutaten aus dieser Datei.',
+            null,
+            $pdfBase64
+        );
+        if (($r['ok'] ?? false) !== true) {
+            return $r;
+        }
+        return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
+    }
+
     // ────────────────────────────── Gemeinsame Provider-Logik ──────────────────────────────
 
     /**
@@ -297,16 +461,39 @@ trait AiExtract
      * vorangestellt (Foto).
      * @return array ok:true+text | ok:false+code+message+status
      */
-    private function AiRunCompletion(string $system, string $userText, ?string $imageBase64): array
+    private function AiRunCompletion(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
+    {
+        // Nur EIN Anbieter-Aufruf gleichzeitig. Ein Aufruf belegt bis zu
+        // AI_TIMEOUT Sekunden einen Webhook-Worker bzw. einen Kernel-Thread;
+        // parallele Aufrufe würden den gesamten Symcon-Webserver blockieren.
+        $lock = 'LAB_Ai_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 0)) {
+            return ['ok' => false, 'code' => 'ai_busy', 'message' => $this->Translate('Another AI request is already running.'), 'status' => 429];
+        }
+        try {
+            return $this->AiRunProviderCall($system, $userText, $imageBase64, $pdfBase64);
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /** @return array ok:true+text | ok:false+code+message+status */
+    private function AiRunProviderCall(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
     {
         $provider = $this->ReadPropertyString('AiProvider');
+        $maxTokens = ($pdfBase64 !== null) ? self::AI_MAX_TOKENS_PDF : self::AI_MAX_TOKENS;
 
         if ($provider === 'anthropic') {
             $key = trim($this->ReadPropertyString('AiAnthropicKey'));
             if ($key === '') {
                 return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No Anthropic API key configured.'), 'status' => 400];
             }
-            if ($imageBase64 !== null) {
+            if ($pdfBase64 !== null) {
+                $content = [
+                    ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => $pdfBase64]],
+                    ['type' => 'text', 'text' => $userText],
+                ];
+            } elseif ($imageBase64 !== null) {
                 $content = [
                     ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => $imageBase64]],
                     ['type' => 'text', 'text' => $userText],
@@ -316,7 +503,7 @@ trait AiExtract
             }
             $bodyArr = [
                 'model'      => self::AI_ANTHROPIC_MODEL,
-                'max_tokens' => self::AI_MAX_TOKENS,
+                'max_tokens' => $maxTokens,
                 'system'     => $system,
                 'messages'   => [['role' => 'user', 'content' => $content]],
             ];
@@ -334,10 +521,14 @@ trait AiExtract
         }
 
         if ($provider === 'openai' || $provider === 'local') {
+            if ($provider === 'local' && $pdfBase64 !== null) {
+                return ['ok' => false, 'code' => 'ai_pdf_unsupported', 'message' => $this->Translate('PDF is not supported by this AI provider.'), 'status' => 400];
+            }
             if ($provider === 'openai') {
                 $key   = trim($this->ReadPropertyString('AiOpenAIKey'));
                 $url   = 'https://api.openai.com/v1/chat/completions';
-                $model = self::AI_OPENAI_MODEL;
+                // PDF braucht ein Modell mit Datei-Input; gpt-4o kann kein PDF.
+                $model = ($pdfBase64 !== null) ? self::AI_OPENAI_PDF_MODEL : self::AI_OPENAI_MODEL;
                 if ($key === '') {
                     return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 400];
                 }
@@ -350,7 +541,12 @@ trait AiExtract
                 }
                 $url = $baseUrl . '/chat/completions';
             }
-            if ($imageBase64 !== null) {
+            if ($pdfBase64 !== null) {
+                $userContent = [
+                    ['type' => 'file', 'file' => ['filename' => 'rezept.pdf', 'file_data' => 'data:application/pdf;base64,' . $pdfBase64]],
+                    ['type' => 'text', 'text' => $userText],
+                ];
+            } elseif ($imageBase64 !== null) {
                 $userContent = [
                     ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . $imageBase64]],
                     ['type' => 'text', 'text' => $userText],
@@ -358,10 +554,12 @@ trait AiExtract
             } else {
                 $userContent = $userText;
             }
+            // Neuere OpenAI-Modelle (PDF) erwarten max_completion_tokens statt max_tokens.
+            $tokenKey = ($provider === 'openai' && $pdfBase64 !== null) ? 'max_completion_tokens' : 'max_tokens';
             $bodyArr = [
-                'model'      => $model,
-                'max_tokens' => self::AI_MAX_TOKENS,
-                'messages'   => [
+                'model'    => $model,
+                $tokenKey  => $maxTokens,
+                'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user', 'content' => $userContent],
                 ],
@@ -399,7 +597,18 @@ trait AiExtract
         if (!is_array($data)) {
             return ['ok' => false, 'code' => 'ai_bad_response', 'message' => $this->Translate('Unexpected AI response.'), 'status' => 502];
         }
-        return ['ok' => true, 'text' => $extractText($data)];
+        // Abgeschnittene Antwort erkennen: sonst degradiert eine am Token-Limit
+        // gekappte Ausgabe still zu einer leeren/halben Liste („nichts erkannt"),
+        // obwohl Tokens abgerechnet wurden.
+        $stop = (string)($data['stop_reason'] ?? ($data['choices'][0]['finish_reason'] ?? ''));
+        if ($stop === 'max_tokens' || $stop === 'length') {
+            return ['ok' => false, 'code' => 'ai_truncated', 'message' => $this->Translate('The AI answer was cut off — try a smaller document.'), 'status' => 502];
+        }
+        $text = $extractText($data);
+        if (trim($text) === '') {
+            return ['ok' => false, 'code' => 'ai_empty', 'message' => $this->Translate('The AI returned an empty answer.'), 'status' => 502];
+        }
+        return ['ok' => true, 'text' => $text];
     }
 
     // ────────────────────────────── Parser ──────────────────────────────
@@ -531,6 +740,7 @@ trait AiExtract
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, self::AI_TIMEOUT);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::AI_CONNECT_TIMEOUT);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $bodyJson);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -551,10 +761,13 @@ trait AiExtract
     {
         $urlErr = ['ok' => false, 'code' => 'invalid_url', 'message' => $this->Translate('Invalid or non-public URL.'), 'status' => 422];
         for ($hop = 0; $hop < 4; $hop++) {
-            if (!$this->AiIsPublicUrl($url)) {
+            $validIps = [];
+            if (!$this->AiIsPublicUrl($url, $validIps)) {
                 return $urlErr;
             }
-            $resp   = $this->AiHttpGet($url);
+            // Die geprüfte IP wird an cURL gebunden: sonst löst cURL den Namen ein
+            // zweites Mal auf und ein 0-TTL-Rebinding könnte auf 127.0.0.1 zeigen.
+            $resp   = $this->AiHttpGet($url, $validIps);
             $status = (int)$resp['status'];
             if (($resp['err'] ?? '') !== '') {
                 return ['ok' => false, 'code' => 'ai_url_fetch', 'message' => $this->Translate('Could not load the page.'), 'status' => 502];
@@ -572,8 +785,9 @@ trait AiExtract
     }
 
     /** Schema + öffentlicher (nicht privater/reservierter) Host? */
-    private function AiIsPublicUrl(string $url): bool
+    private function AiIsPublicUrl(string $url, ?array &$resolvedIps = null): bool
     {
+        $resolvedIps = [];
         if (filter_var($url, FILTER_VALIDATE_URL) === false) {
             return false;
         }
@@ -581,6 +795,15 @@ trait AiExtract
         $scheme = strtolower((string)($parts['scheme'] ?? ''));
         $host   = (string)($parts['host'] ?? '');
         if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return false;
+        }
+        // Credentials in der URL (http://user:pass@host) ablehnen und nur die
+        // Standard-Ports zulassen — sonst wird die Bridge zum Port-Scanner.
+        if (isset($parts['user']) || isset($parts['pass'])) {
+            return false;
+        }
+        $port = (int)($parts['port'] ?? 0);
+        if ($port !== 0 && $port !== 80 && $port !== 443) {
             return false;
         }
         $host = trim($host, '[]'); // IPv6-Literale
@@ -608,8 +831,42 @@ trait AiExtract
             if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
                 return false; // privat / loopback / link-local / reserviert
             }
+            // PHPs Filter lässt diese durch, sie sind aber nicht „öffentlich":
+            // 100.64.0.0/10 (CGNAT), 198.18.0.0/15 (Benchmark), 64:ff9b::/96 (NAT64,
+            // mappt u.a. 127.0.0.1) und IPv4-mapped IPv6.
+            if ($this->AiIsBlockedIp($ip)) {
+                return false;
+            }
         }
+        $resolvedIps = array_values(array_unique($ips));
         return true;
+    }
+
+    /** Zusätzliche Deny-Liste für Bereiche, die FILTER_FLAG_NO_PRIV_RANGE nicht erfasst. */
+    private function AiIsBlockedIp(string $ip): bool
+    {
+        $blocked = ['100.64.0.0/10', '198.18.0.0/15', '64:ff9b::/96', '::ffff:0:0/96'];
+        foreach ($blocked as $cidr) {
+            [$net, $bits] = explode('/', $cidr);
+            $ipBin  = @inet_pton($ip);
+            $netBin = @inet_pton($net);
+            if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
+                continue;
+            }
+            $bytes = intdiv((int)$bits, 8);
+            $rest  = (int)$bits % 8;
+            if ($bytes > 0 && strncmp($ipBin, $netBin, $bytes) !== 0) {
+                continue;
+            }
+            if ($rest === 0) {
+                return true;
+            }
+            $mask = chr((0xFF << (8 - $rest)) & 0xFF);
+            if ((($ipBin[$bytes] ?? "\0") & $mask) === (($netBin[$bytes] ?? "\0") & $mask)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function AiResolveRedirect(string $base, string $location): string
@@ -633,12 +890,20 @@ trait AiExtract
         return $scheme . '://' . $host . $port . $dir . $location;
     }
 
-    private function AiHttpGet(string $url): array
+    private function AiHttpGet(string $url, array $pinnedIps = []): array
     {
         $body     = '';
         $location = '';
         $max      = 2 * 1024 * 1024;
         $ch = curl_init($url);
+        if ($pinnedIps !== []) {
+            $parts = parse_url($url);
+            $host  = (string)($parts['host'] ?? '');
+            $port  = (int)($parts['port'] ?? (strtolower((string)($parts['scheme'] ?? '')) === 'https' ? 443 : 80));
+            if ($host !== '') {
+                curl_setopt($ch, CURLOPT_RESOLVE, [$host . ':' . $port . ':' . implode(',', $pinnedIps)]);
+            }
+        }
         curl_setopt_array($ch, [
             CURLOPT_TIMEOUT        => self::AI_HTTP_GET_TIMEOUT,
             CURLOPT_CONNECTTIMEOUT => 5,
@@ -739,6 +1004,20 @@ trait AiExtract
     // ────────────────────────────── Helfer ──────────────────────────────
 
     /** Master-Schalter: bei deaktivierter KI wird der Endpunkt abgelehnt (403). */
+    /**
+     * Rate-Limit-Gate für die KI-/Medien-Endpunkte. false = 429 wurde gesendet.
+     * Schützt den KI-Key (Kosten) und die Platte (Medienobjekte) vor einer
+     * Schleife mit einem gültigen Token.
+     */
+    private function AiRateLimitOk(array $device): bool
+    {
+        if ($this->AiRateLimitAllows((string)($device['id'] ?? ''), self::AI_RATE_MAX, self::AI_RATE_WINDOW)) {
+            return true;
+        }
+        $this->SendApiError('ai_quota', $this->Translate('Too many AI requests — please wait a moment.'), 429);
+        return false;
+    }
+
     private function AiIsEnabled(): bool
     {
         if ($this->ReadPropertyBoolean('AiEnabled')) {
@@ -751,7 +1030,7 @@ trait AiExtract
     /** Liest das Bild aus dem Body (data:-Prefix strippen, Größen-Guard). null = Fehler gesendet. */
     private function AiReadImage(array $body): ?string
     {
-        $image = (string)($body['image'] ?? '');
+        $image = $this->BodyStr($body, 'image');
         $comma = strpos($image, 'base64,');
         if ($comma !== false) {
             $image = substr($image, $comma + 7);
@@ -762,7 +1041,7 @@ trait AiExtract
             return null;
         }
         // grobe Größenbegrenzung (base64 ~ 4/3 der Bytes); die Web-App skaliert vorher runter
-        if (strlen($image) > 12 * 1024 * 1024) {
+        if (strlen($image) > self::AI_MAX_IMAGE_B64) {
             $this->SendApiError('invalid_payload', $this->Translate('Image too large.'), 413);
             return null;
         }
@@ -789,8 +1068,13 @@ trait AiExtract
             . 'einen Termin“. Leite daraus die Aufgabe ab, die der Empfänger erledigen muss, aus dessen '
             . 'Sicht formuliert (kurzer, prägnanter deutscher Titel, z.B. „Daten bei der Commerzbank '
             . 'bestätigen“). Drohende Konsequenzen (Sperrung, Mahnung, Frist) → priority "high". Nutze '
-            . '"info" für den wichtigsten Kontext (Absender, Referenz, Konsequenz, geforderter Weg). Ein '
-            . 'Termin oder eine Frist im Dokument gehört in "due". Heute ist der ' . $today . '. Antworte '
+            . '"info" für den wichtigsten Kontext (Absender, Referenz, Konsequenz, geforderter Weg). '
+            . 'WICHTIG für "due": Enthält das Dokument eine Frist, ein Fälligkeits- oder Zahlungsdatum, '
+            . 'einen Termin oder ein Datum, bis zu dem der Empfänger etwas erledigen muss, trage es IMMER '
+            . 'in "due" ein (Format YYYY-MM-DD). Rechne relative Angaben ausgehend von heute (' . $today . ') '
+            . 'in ein konkretes Datum um — z.B. „innerhalb von 14 Tagen“, „bis Freitag“, „bis Monatsende“, '
+            . '„nächste Woche“, „zum 15.03.“; bei einem Zeitraum bzw. einer Frist nimm den letztmöglichen Tag. '
+            . 'Nur wenn wirklich kein Datum und keine Frist erkennbar ist, setze "due" auf null. Antworte '
             . 'AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und ohne Markdown. Jedes Element hat '
             . 'exakt diese Felder: {"title": string, "info": string oder null, "due": "YYYY-MM-DD" oder '
             . 'null, "priority": "high" oder "normal" oder "low"}. Nur wenn wirklich keinerlei Handlung für '

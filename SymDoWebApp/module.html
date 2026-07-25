@@ -212,7 +212,11 @@ select option { color: #111; background: #fff; }
    Datum auf dieselbe Zeile. */
 .member-bar {
   display: flex;
-  gap: 6px;
+  /* --mc (0..1): 0 = oben/ausgeklappt, 1 = voll eingeklappt. Wird per rAF aus
+     scrollTop geschrieben und treibt gap/Überlappung/Ring/Scale STUFENLOS →
+     die Avatare gleiten frame-genau mit dem Finger zusammen (siehe JS). */
+  --mc: 0;
+  gap: calc(6px - 6px * var(--mc));
   position: sticky;
   top: 0px;
   z-index: 20;
@@ -236,26 +240,58 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Im ToDo-Tab gibt es kein Datum, das hochgezogen werden muss → normaler
    Abstand nach unten statt des negativen Zugs. */
 .member-bar.todo-members { margin-bottom: 10px; }
+/* Klasse .collapsed steuert nur noch Cursor + Tap-Routing; das Aussehen kommt
+   stufenlos aus --mc. Kein CSS-Übergang auf den gekoppelten Props → der Scroll
+   treibt sie direkt (kein Nachziehen). Das Aufklappen federt JS über --mc. */
+.member-bar.collapsed { cursor: pointer; }
 .member-bar .avatar-btn {
   width: 36px; height: 36px;
   border-radius: 999px;
   padding: 0;
   position: relative;
   opacity: 1;
-  transition: opacity .15s ease, margin-left .2s ease, box-shadow .2s ease;
   flex: none;
+  transition: opacity .15s ease;               /* nur Selektions-Dimmen animiert */
+  box-shadow: 0 0 0 max(0px, calc(2px * var(--mc))) var(--card-color);
+  transform: scale(calc(1 - 0.05 * var(--mc)));
+  transform-origin: center;
 }
-/* Eingeklappt (beim Scrollen, wenn nicht oben): Avatare schieben sich
-   übereinander, von den hinteren bleibt ~1/3 sichtbar (36px → 12px). Ein Tipp
-   auf die Leiste klappt sie wieder aus (siehe setupMemberCollapse). */
-.member-bar { transition: gap .2s ease; }
-.member-bar.collapsed { gap: 0; cursor: pointer; }
-.member-bar.collapsed .avatar-btn:not(:first-child) { margin-left: -24px; }
-.member-bar.collapsed .avatar-btn { box-shadow: 0 0 0 2px var(--card-color); }
-/* Maus-Hover klappt die eingeklappte Leiste (optisch) wieder auf */
-.member-bar.collapsed:hover { gap: 6px; }
-.member-bar.collapsed:hover .avatar-btn:not(:first-child) { margin-left: 0; }
-.member-bar.collapsed:hover .avatar-btn { box-shadow: none; }
+/* Eingeklappt: hintere Avatare schieben sich über die vorderen (~1/3 sichtbar). */
+.member-bar .avatar-btn:not(:first-child) {
+  margin-left: calc(-24px * var(--mc));
+}
+/* Maus: Hover fächert die eingeklappte Leiste federnd + gestaffelt auf. Der
+   Übergang liegt NUR auf :hover → beim Verlassen sofortiges Zurückkoppeln an
+   --mc (kein Nachziehen beim Wheel-Scroll). Rein CSS. */
+@media (hover: hover) {
+  .member-bar.collapsed:hover {
+    gap: 6px;
+    transition: gap .34s cubic-bezier(.34, 1.4, .64, 1);
+  }
+  .member-bar.collapsed:hover .avatar-btn {
+    box-shadow: none;
+    transform: none;
+    transition:
+      opacity .15s ease,
+      box-shadow .28s ease var(--mb-d, 0ms),
+      transform .34s cubic-bezier(.34, 1.4, .64, 1) var(--mb-d, 0ms),
+      margin-left .34s cubic-bezier(.34, 1.4, .64, 1) var(--mb-d, 0ms);
+  }
+  .member-bar.collapsed:hover .avatar-btn:not(:first-child) { margin-left: 0; }
+  /* Subtiler Stagger: vordere Avatare zuerst, hintere leicht verzögert;
+     ab dem 6. teilen sie sich den letzten Delay (robust bei vielen Avataren). */
+  .member-bar .avatar-btn:nth-child(1)   { --mb-d: 0ms;   }
+  .member-bar .avatar-btn:nth-child(2)   { --mb-d: 22ms;  }
+  .member-bar .avatar-btn:nth-child(3)   { --mb-d: 44ms;  }
+  .member-bar .avatar-btn:nth-child(4)   { --mb-d: 66ms;  }
+  .member-bar .avatar-btn:nth-child(5)   { --mb-d: 88ms;  }
+  .member-bar .avatar-btn:nth-child(n+6) { --mb-d: 110ms; }
+}
+/* Bewegungsreduziert: keine weichen Übergänge (JS snappt --mc binär 0/1). */
+@media (prefers-reduced-motion: reduce) {
+  .member-bar.collapsed:hover,
+  .member-bar.collapsed:hover .avatar-btn { transition: opacity .15s ease; }
+}
 .member-bar.has-selection .avatar-btn { opacity: .4; }
 .member-bar.has-selection .avatar-btn.selected { opacity: 1; }
 .member-bar .avatar-btn.selected::after {
@@ -843,29 +879,38 @@ html[data-symdo-theme="dark"] .member-bar {
   cursor: pointer;
 }
 .fav-badge {
-  width: 38px; height: 38px;
   flex: none;
-  border-radius: 10px;
-  background: color-mix(in srgb, #ff2d55 18%, transparent);
   color: #ff2d55;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 20px;
 }
 .fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fav-name { font-size: 15px; font-weight: 600; }
 .fav-count { font-size: 12.5px; color: var(--muted); }
 .fav-cart-btn { font-size: 17px; color: var(--accent); padding: 6px; }
+/* Swipebare Favoritenlisten-Zeile: links = löschen (rot), rechts = alles auf die Einkaufsliste (grün). */
+.fav-card { position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 6px; }
+.fav-card .fav-row { margin-bottom: 0; position: relative; background: var(--row); transition: transform .18s ease; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.fav-card .fav-row.is-dragging { transition: none; }
+.fav-card.is-deleting .fav-row { transition: transform .22s ease; }
+.fav-card .swipe-under, .fav-card .swipe-under-edit {
+  position: absolute; inset: 0; display: flex; align-items: center; color: #fff; font-size: 17px; opacity: 0; transition: opacity .12s ease;
+}
+.fav-card .swipe-under { justify-content: flex-end; padding-right: 18px; background: var(--red); }
+.fav-card .swipe-under-edit { justify-content: flex-start; padding-left: 18px; background: #34c759; }
+.fav-card.dragging-left .swipe-under, .fav-card.is-deleting .swipe-under { opacity: 1; }
+.fav-card.dragging-right .swipe-under-edit { opacity: 1; }
 .fav-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .fav-actions button {
   padding: 11px;
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--accent);
   font-weight: 600;
-  color: var(--accent);
+  color: #fff;
 }
-.fav-actions button.destructive { color: var(--red); }
+.fav-actions button.destructive { background: var(--red); color: #fff; }
 
 /* ── Overlays / Sheets ─────────────────────────────────────────────────────── */
 .overlay {
@@ -1012,6 +1057,10 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-fav-section.disabled, .ai-fav-toggle.disabled, .ai-fav-new.disabled { opacity: .4; }
 .ai-fav-toggle.disabled { cursor: default; }
 .ai-fav-new input:disabled, .ai-fav-toggle input:disabled { cursor: not-allowed; }
+/* „In Favoritenliste speichern"-Dialog: bestehende Listen wie in der Favoriten-Tab-Ansicht (.fav-row). */
+#aiFavBody .fav-row .check, #favPickBody .fav-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 16px; flex: none; }
+#aiFavBody .fav-row.selected .check, #favPickBody .fav-row.selected .check { opacity: 1; }
+#aiFavBody .fav-row.selected, #favPickBody .fav-row.selected { box-shadow: inset 0 0 0 2px var(--accent); }
 /* KI-Quelle wählen (Foto / URL) */
 .ai-source-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -1189,11 +1238,12 @@ html[data-symdo-theme="dark"] .member-bar {
           <div id="suggestions" class="suggestions"><div class="chip-flow" id="suggestionChips"></div></div>
           <div class="inputbar">
             <input id="shoppingInput" type="text" autocomplete="off" />
-            <button id="btnShopScan" class="round-btn secondary" aria-label="Foto/URL analysieren"><i class="fa-light fa-wand-magic-sparkles"></i></button>
-            <button id="btnOpenScanner" class="round-btn secondary" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
+            <button id="btnShopScan" class="round-btn" aria-label="Foto/URL analysieren"><i class="fa-light fa-wand-magic-sparkles"></i></button>
+            <button id="btnOpenScanner" class="round-btn" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
             <button id="btnShoppingAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
           </div>
           <input id="shopScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
+          <input id="shopFileInput" type="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" style="display:none" />
         </div>
       </div>
     </section>
@@ -1209,10 +1259,11 @@ html[data-symdo-theme="dark"] .member-bar {
         <div id="todoListArea"></div>
         <div class="inputbar">
           <input id="todoInput" type="text" autocomplete="off" />
-          <button id="btnTodoScan" class="round-btn secondary" aria-label="Foto scannen"><i class="fa-light fa-camera"></i></button>
+          <button id="btnTodoScan" class="round-btn" aria-label="Aufgaben mit KI erkennen"><i class="fa-light fa-wand-magic-sparkles"></i></button>
           <button id="btnTodoAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
         </div>
         <input id="todoScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
+        <input id="todoFileInput" type="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" style="display:none" />
       </div>
     </section>
 
@@ -1382,6 +1433,21 @@ html[data-symdo-theme="dark"] .member-bar {
     </div>
     <div class="overlay-body" style="text-align:center;">
       <img id="recipeImg" alt="" style="max-width:100%;border-radius:12px;" />
+      <iframe id="recipePdf" title="PDF" style="display:none;width:100%;height:75vh;border:0;border-radius:12px;"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- KI (ToDo): Quelle wählen — Foto analysieren oder Datei analysieren -->
+<div class="overlay" id="todoSourceOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="todoSourceTitle">Aufgaben erkennen</span>
+      <button class="btn-close-overlay" data-close="todoSourceOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <button class="ai-source-btn primary" id="btnTodoFromPhoto"><i class="fa-light fa-camera"></i><span id="todoFromPhotoLabel">Foto analysieren</span></button>
+      <button class="ai-source-btn primary" id="btnTodoFromFile"><i class="fa-light fa-file-arrow-up"></i><span id="todoFromFileLabel">Datei analysieren</span></button>
     </div>
   </div>
 </div>
@@ -1394,7 +1460,8 @@ html[data-symdo-theme="dark"] .member-bar {
       <button class="btn-close-overlay" data-close="aiSourceOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
-      <button class="ai-source-btn" id="btnAiFromPhoto"><i class="fa-light fa-camera"></i><span id="aiFromPhotoLabel">Foto analysieren</span></button>
+      <button class="ai-source-btn primary" id="btnAiFromPhoto"><i class="fa-light fa-camera"></i><span id="aiFromPhotoLabel">Foto analysieren</span></button>
+      <button class="ai-source-btn primary" id="btnAiFromFile"><i class="fa-light fa-file-arrow-up"></i><span id="aiFromFileLabel">Datei analysieren</span></button>
       <div class="ai-or"><span id="aiOrLabel">oder</span></div>
       <input id="aiUrlInput" type="url" inputmode="url" autocomplete="off" placeholder="Rezept-URL einfügen" />
       <button class="ai-source-btn primary" id="btnAiFromUrl"><i class="fa-light fa-link"></i><span id="aiFromUrlLabel">URL analysieren</span></button>
@@ -1544,7 +1611,7 @@ function aiPost(path, payload) {
   }
   if (window.__SYMDO__) {
     const base = (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
-    let token = ''; try { token = localStorage.getItem('symdo.token') || ''; } catch (e) {}
+    let token = ''; try { token = ls.get('symdo.token') || ''; } catch (e) {}
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
     return fetch(base + path, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
@@ -1567,17 +1634,75 @@ function applyAiEnabled() {
   const on = computeAiEnabled();
   ['btnShopScan', 'btnTodoScan'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
 }
-// Rezeptfoto (Medienobjekt) über den KI-Transport laden und im Overlay anzeigen.
-function openRecipePhoto(mediaId) {
+// Wandelt eine data:-URL in ein Blob (für PDF-Anzeige im iframe — robuster als eine
+// riesige data:-URL, die manche Browser blockieren).
+function dataUrlToBlob(dataUrl) {
+  const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(dataUrl || ''));
+  const mime = (m && m[1]) || 'application/octet-stream';
+  const raw = m ? (m[2] ? atob(m[3]) : decodeURIComponent(m[3])) : '';
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+// Direkte Datei-URL eines Rezept-Medienobjekts. Nur Standalone: die Visu-Kachel hat
+// keinen Token und kann daher keine URL bauen — dort bleibt es beim iframe unten.
+function mediaFileUrl(mediaId) {
+  if (!window.__SYMDO__) return '';
+  let token = ''; try { token = ls.get('symdo.token') || ''; } catch (e) {}
+  if (!token) return '';
+  const base = window.__SYMDO__.apiBase || '/hook/lists/app/v1';
+  return base + '/ai/media/' + encodeURIComponent(String(mediaId)) + '?t=' + encodeURIComponent(token);
+}
+// Typ eines Rezept-Medienobjekts vorab holen (nur {isPdf}, keine Nutzdaten). Der Klick
+// auf „Rezept öffnen" muss synchron entscheiden können: window.open() erst nach einem
+// await wertet Safari als Popup und blockt es.
+const mediaTypeCache = {};
+function prefetchMediaType(mediaId) {
+  const key = String(mediaId || '');
+  if (key === '' || key === '0' || mediaTypeCache[key]) return;
+  mediaTypeCache[key] = { state: 'pending' };
+  aiPost('/ai/media', { mediaId: mediaId, meta: true }).then(res => {
+    const j = res && res.json;
+    mediaTypeCache[key] = (j && j.ok === true) ? { state: 'ok', isPdf: j.isPdf === true } : { state: 'fail' };
+  }).catch(() => { mediaTypeCache[key] = { state: 'fail' }; });
+}
+// Übergibt ein PDF an den System-Viewer — nur der blättert mehrseitige Dokumente.
+// Bewusst OHNE 'noopener': damit gibt window.open() das Fenster-Handle zurück und ein
+// blockiertes Popup ist als null erkennbar (die URL ist unsere eigene, same-origin).
+function openMediaExternally(mediaId) {
+  const fileUrl = mediaFileUrl(mediaId);
+  if (!fileUrl) return false;
+  try { return window.open(fileUrl, '_blank') !== null; } catch (e) { return false; }
+}
+// Rezept-Medienobjekt (Foto ODER PDF) über den KI-Transport laden und im Overlay
+// anzeigen. $triedExternally = im selben Klick wurde der System-Viewer schon versucht
+// und blockiert; dann hier nicht erneut anklopfen (sonst zwei Popup-Warnungen).
+function openRecipePhoto(mediaId, triedExternally) {
   aiPost('/ai/media', { mediaId: mediaId }).then(res => {
     const j = res && res.json;
-    if (j && j.ok && j.dataUrl) {
-      document.getElementById('recipeImgTitle').textContent = translate('Recipe photo');
-      document.getElementById('recipeImg').src = j.dataUrl;
-      openOverlay('recipeImgOverlay');
+    if (!(j && j.ok && j.dataUrl)) { showToast(translate('Could not load the image.')); return; }
+    const img = document.getElementById('recipeImg');
+    const pdf = document.getElementById('recipePdf');
+    if (/^data:application\/pdf/i.test(j.dataUrl)) {
+      mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: true };
+      // Zweite Chance für den System-Viewer, falls der Typ beim Klick noch unbekannt
+      // war. Klappt nur, wenn der Popup-Blocker diesen späten Aufruf durchlässt —
+      // sonst bleibt der iframe unten, der aber nur Seite 1 zeigt.
+      if (!triedExternally && openMediaExternally(mediaId)) return;
+      img.style.display = 'none'; img.removeAttribute('src');
+      try {
+        if (pdf.dataset.blob) { URL.revokeObjectURL(pdf.dataset.blob); }
+        const url = URL.createObjectURL(dataUrlToBlob(j.dataUrl));
+        pdf.dataset.blob = url; pdf.src = url; pdf.style.display = '';
+      } catch (e) { showToast(translate('Could not load the file.')); return; }
+      document.getElementById('recipeImgTitle').textContent = translate('Recipe file');
     } else {
-      showToast(translate('Could not load the image.'));
+      mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: false };
+      pdf.style.display = 'none'; pdf.removeAttribute('src');
+      img.src = j.dataUrl; img.style.display = '';
+      document.getElementById('recipeImgTitle').textContent = translate('Recipe photo');
     }
+    openOverlay('recipeImgOverlay');
   }).catch(() => showToast(translate('Could not load the image.')));
 }
 
@@ -1585,12 +1710,20 @@ function openRecipePhoto(mediaId) {
 // (Scanner, Bild-Resolver): globales `state` = State der GEWÄHLTEN Einkaufsliste.
 let state = {};
 
-let activeTab = localStorage.getItem('symdo.tab') || 'dashboard';
+// localStorage kann WERFEN (sandboxed iframe, Safari „alle Cookies blockieren").
+// Ein ungeschützter Zugriff auf Modulebene würde die ganze IIFE abbrechen und
+// handleMessage nie definieren → dauerhaft leere Kachel. Daher immer über ls.*.
+const ls = {
+  get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+};
+
+let activeTab = ls.get('symdo.tab') || 'dashboard';
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
-let dashPriority = localStorage.getItem('symdo.dashboardPriority') || '';
+let dashPriority = ls.get('symdo.dashboardPriority') || '';
 let dashMemberIds = new Set(); // Mehrfachauswahl im Dashboard-Member-Menü
 let todoMemberIds = new Set(); // Mehrfachauswahl im ToDo-Tab-Member-Menü
-let completedExpanded = localStorage.getItem('symdo.completedExpanded') === '1';
+let completedExpanded = ls.get('symdo.completedExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
 
@@ -1603,13 +1736,13 @@ function instState(id) {
 }
 function selectedShoppingID() {
   const vis = visibleInstances('shopping');
-  const saved = parseInt(localStorage.getItem('symdo.selectedShoppingID')) || 0;
+  const saved = parseInt(ls.get('symdo.selectedShoppingID')) || 0;
   if (vis.some(i => i.id === saved)) return saved;
   return vis.length ? vis[0].id : 0;
 }
 function selectedTodoID() {
   const vis = visibleInstances('todo');
-  const saved = parseInt(localStorage.getItem('symdo.selectedTodoID')) || 0;
+  const saved = parseInt(ls.get('symdo.selectedTodoID')) || 0;
   if (vis.some(i => i.id === saved)) return saved;
   return vis.length ? vis[0].id : 0;
 }
@@ -1902,6 +2035,22 @@ function checkRevisions() {
 }
 
 // ── Nachrichten vom Modul ──────────────────────────────────────────────────
+// Verwirft die Markup-Caches von renderInto() und setzt hängende Swipe-/Lösch-
+// Animationen zurück, damit ein Re-Render nach einer abgelehnten Aktion wirklich
+// neu zeichnet.
+function invalidateRenderCache() {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favoritesContent', 'todoMembers'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el._lastHtml = null;
+  });
+  document.querySelectorAll('.item-card, .todo-card, .fav-card').forEach(card => {
+    card.classList.remove('is-deleting', 'dragging-left', 'dragging-right');
+    delete card.dataset.animating;
+    const content = card.querySelector('.item-card-content, .todo-content, .fav-row');
+    if (content) content.style.transform = '';
+  });
+}
+
 function handleMessage(data) {
   if (typeof data === 'string') {
     try { data = JSON.parse(data); } catch (e) { return; }
@@ -1930,6 +2079,11 @@ function handleMessage(data) {
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
+      // Abgelehnte Aktion: die optimistische Darstellung MUSS zurückgenommen
+      // werden. renderInto() bricht bei unverändertem Markup ab, deshalb erst die
+      // Markup-Caches verwerfen — sonst bliebe z.B. eine weggewischte Zeile
+      // dauerhaft bei translateX(-110%) unsichtbar und tot stehen.
+      invalidateRenderCache();
     }
     if (data.state && data.instanceID) {
       store.states[String(data.instanceID)] = {
@@ -1958,14 +2112,20 @@ function handleMessage(data) {
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;
-window.addEventListener('message', (event) => { if (event) handleMessage(event.data); });
+// Nur Nachrichten vom eigenen Fenster oder dem einbettenden Parent annehmen:
+// ohne Prüfung könnte ein fremder Frame einen kompletten State injizieren.
+window.addEventListener('message', (event) => {
+  if (!event) return;
+  if (event.source !== window && event.source !== window.parent) return;
+  handleMessage(event.data);
+});
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = ['dashboard', 'shopping', 'todos', 'favorites'];
 function setTab(tab) {
   if (!TABS.includes(tab)) tab = 'dashboard';
   activeTab = tab;
-  localStorage.setItem('symdo.tab', tab);
+  ls.set('symdo.tab', tab);
   for (const t of TABS) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
@@ -2007,7 +2167,11 @@ let menuCloser = null;
 function closeMenu() {
   const pop = document.getElementById('menuPop');
   if (pop) pop.remove();
-  if (menuCloser) { document.removeEventListener('pointerdown', menuCloser, true); menuCloser = null; }
+  if (menuCloser) {
+    document.removeEventListener('mousedown', menuCloser, true);
+    document.removeEventListener('touchstart', menuCloser, true);
+    menuCloser = null;
+  }
 }
 function openMenu(anchor, entries) {
   closeMenu();
@@ -2044,7 +2208,10 @@ function openMenu(anchor, entries) {
   pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
   pop.style.left = Math.max(8, Math.min(rect.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
   menuCloser = (e) => { if (!pop.contains(e.target)) closeMenu(); };
-  setTimeout(() => document.addEventListener('pointerdown', menuCloser, true), 0);
+  setTimeout(() => {
+    document.addEventListener('mousedown', menuCloser, true);
+    document.addEventListener('touchstart', menuCloser, true);
+  }, 0);
 }
 
 // Marquee für abgeschnittene Namen (Ping-Pong wie in der App)
@@ -2371,11 +2538,18 @@ function openSections(st) {
 // innerHTML-Neuzeichnen bei unverändertem Inhalt → kein Flackern, kein
 // Scroll-Abbruch. Die aufrufende Render-Funktion kehrt bei false früh zurück,
 // damit auch keine doppelten Event-Handler gebunden werden.
+// Bis zu diesem Zeitpunkt (performance.now) ausgelöste Scroll-Events stammen von
+// einem Re-Render (Layout-Clamp/Reflow) und dürfen die per Tipp ausgeklappte
+// Member-Leiste NICHT einklappen — nur echtes Nutzer-Scrollen klappt wieder ein.
+let mbRenderScrollGuard = 0;
 function renderInto(el, html) {
   if (!el) return false;
   if (el._lastHtml === html) return false;
   el._lastHtml = html;
   el.innerHTML = html;
+  // Ein Re-Render kann scrollTop clampen (kürzerer Inhalt) → Scroll-Event. Kurz
+  // markieren, damit dieses NICHT die ausgeklappte Member-Leiste einklappt.
+  mbRenderScrollGuard = performance.now() + 200;
   return true;
 }
 
@@ -2389,20 +2563,142 @@ function renderAll() {
   if (active) applyMemberCollapse(active);
 }
 
-// Member-Leiste einklappen, sobald der Screen nicht mehr oben steht: die Avatare
-// überlappen (hintere ~1/3 sichtbar). Ein Tipp klappt sie aus (memberUserExpanded),
-// das nächste Scroll-Event klappt sie wieder ein. Oben immer ausgeklappt.
+// Member-Leiste: scroll-gekoppelter, stufenloser Kollaps via --mc (0..1).
+// Oben immer ausgeklappt (--mc 0). Beim Scrollen gleiten die Avatare über die
+// ersten ~72px stufenlos zusammen (--mc → 1, smoothstep, frame-genau am Finger).
+// SOBALD --mc einen Endpunkt ERREICHT (voll eingeklappt 1 ODER voll ausgeklappt
+// 0), federt EINE gedämpfte Sinuswelle dezent über den Endpunkt hinaus und setzt
+// sich exakt zurück (Bounce) — direkt beim Erreichen, NICHT erst wenn das
+// Scrollen stoppt. Scharfgestellt durchs Überqueren der Mitte (0.5): echte
+// Bewegung löst aus, Endpunkt-Jitter nicht. Wird weiter über den Endpunkt
+// gescrollt, läuft der Bounce ungestört zu Ende.
 let memberUserExpanded = false;
+const MC_RANGE = 72;   // px Scroll bis voll eingeklappt (--mc 1)
+const MC_SNAP  = 4;    // ab hier gilt die Leiste als eingeklappt (Klasse/Tap/Cursor)
+
+// Bounce-Parameter.
+const MC_BOUNCE_A   = 0.18; // Overshoot-Amplitude (Peak ~0.11 → --mc ~1.11 / ~-0.11)
+const MC_BOUNCE_K   = 2;    // Halbwellen: 1 Overshoot + kleiner Gegenschwinger
+const MC_BOUNCE_DUR = 500;  // ms
+
+function mbReduceMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function mbClamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function mbSetVar(bar, v) { bar.style.setProperty('--mc', v.toFixed(4)); }
+
+// Zielwert 0..1 aus scrollTop; smoothstep für ein lebendigeres Zusammengleiten.
+// Bei prefers-reduced-motion binär (0/1) statt stufenlos.
+function mbProgress(scrollEl) {
+  if (memberUserExpanded) return 0;
+  const top = scrollEl.scrollTop;
+  if (top <= MC_SNAP) return 0;
+  if (mbReduceMotion()) return 1;
+  const raw = mbClamp01(top / MC_RANGE);
+  return raw * raw * (3 - 2 * raw); // smoothstep
+}
+
+// Scroll-gekoppelt: schreibt --mc frame-genau aus scrollTop. In der Zwischenzone
+// (0<--mc<1) folgt --mc 1:1 dem Finger (kein Tween). ERREICHT --mc einen Endpunkt
+// (0/1) nach echter Bewegung (Mitte 0.5 überquert → _mcArmed), startet EINMALIG
+// der Bounce; solange weiter über denselben Endpunkt gescrollt wird, läuft er
+// ungestört (kein Cancel/Überschreiben). Scrollen zurück in die Zwischenzone
+// bricht den Bounce ab und koppelt wieder an den Finger. Wird auch von
+// renderAll() aufgerufen → frische Leisten (--mc 0, _mcLast/_mcArmed undefined)
+// halten 0 und bouncen NICHT.
 function applyMemberCollapse(scrollEl) {
   if (!scrollEl) return;
-  const atTop = scrollEl.scrollTop <= 4;
+  const atTop = scrollEl.scrollTop <= MC_SNAP;
   if (atTop) memberUserExpanded = false;
   const collapsed = !atTop && !memberUserExpanded;
-  scrollEl.querySelectorAll('.member-bar').forEach(mb => mb.classList.toggle('collapsed', collapsed));
+  const target = mbClamp01(mbProgress(scrollEl));
+  const endpoint = target <= 0.0001 ? 0 : target >= 0.9999 ? 1 : null;
+  const reduce = mbReduceMotion();
+  scrollEl.querySelectorAll('.member-bar').forEach(bar => {
+    bar.classList.toggle('collapsed', collapsed);
+    // Bounce scharfstellen, sobald --mc die Mitte überquert (echte Bewegung in
+    // beide Richtungen). Robust bei schnellem Flick (ein 0→1-Frame überquert 0.5
+    // ebenfalls) und immun gegen Endpunkt-Jitter, der 0.5 nie erreicht.
+    const prev = (bar._mcLast === undefined) ? target : bar._mcLast;
+    if ((prev - 0.5) * (target - 0.5) < 0) bar._mcArmed = true;
+    bar._mcLast = target;
+
+    if (endpoint === null) {
+      // Zwischenzone: an den Finger koppeln, laufenden Bounce abbrechen.
+      if (bar._mcTween) { cancelAnimationFrame(bar._mcTween); bar._mcTween = 0; }
+      mbSetVar(bar, target);
+    } else if (bar._mcArmed) {
+      // Endpunkt gerade nach echter Bewegung erreicht → Bounce auslösen.
+      bar._mcArmed = false;
+      if (reduce) {
+        if (bar._mcTween) { cancelAnimationFrame(bar._mcTween); bar._mcTween = 0; }
+        mbSetVar(bar, endpoint);
+      } else {
+        mbBounce(bar, endpoint);
+      }
+    } else if (!bar._mcTween) {
+      // schon am Endpunkt (oder frisch gerendert) → exakt halten.
+      mbSetVar(bar, endpoint);
+    }
+    // sonst: Bounce läuft am Endpunkt, während weiter gescrollt wird → zu Ende laufen lassen.
+  });
 }
+
+// Touch: federndes Aufklappen (--mc → 0). easeOutBack schwingt kurz über 1,
+// dadurch geht --mc minimal unter 0 → gap/Abstand federn leicht auseinander
+// und setzen sich (Pop). box-shadow ist per max(0px, ...) gegen negativen
+// Spread abgesichert, daher flackert der Ring beim Overshoot nicht.
+function mbExpandBar(bar) {
+  bar.classList.remove('collapsed');
+  if (bar._mcTween) { cancelAnimationFrame(bar._mcTween); bar._mcTween = 0; }
+  const from = parseFloat(bar.style.getPropertyValue('--mc')) || 0;
+  if (mbReduceMotion() || from <= 0.001) { mbSetVar(bar, 0); return; }
+  const t0 = performance.now();
+  const dur = 320;
+  const c1 = 1.70158, c3 = c1 + 1;
+  const ease = p => 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); // easeOutBack
+  const run = now => {
+    const p = (now - t0) / dur;
+    if (p >= 1) { mbSetVar(bar, 0); bar._mcTween = 0; return; }
+    mbSetVar(bar, from * (1 - ease(p)));
+    bar._mcTween = requestAnimationFrame(run);
+  };
+  bar._mcTween = requestAnimationFrame(run);
+}
+
+// Gedämpfte Sinus-Feder am Endpunkt. offset = A*sin(p*PI*k)*(1-p)^2 ist bei p=0
+// UND p=1 exakt 0 → startet und landet EXAKT auf dem Endpunkt (kein Drift, kein
+// Clamp nötig). Richtungsabhängig: eingeklappt (1) schwingt ÜBER 1 (Squeeze),
+// ausgeklappt (0) UNTER 0 (Fan-out). Nutzt bar._mcTween → ein erneutes
+// Scroll-Frame (applyMemberCollapse) bricht den Bounce ab und koppelt zurück.
+// --mc darf hier [0,1] verlassen (das IST der Overshoot); CSS ist abgesichert:
+// box-shadow max(0px,..) → kein negativer Spread; gap clamped auf >=0.
+function mbBounce(bar, endpoint) {
+  if (bar._mcTween) { cancelAnimationFrame(bar._mcTween); bar._mcTween = 0; }
+  const sign = endpoint === 1 ? 1 : -1;
+  const t0 = performance.now();
+  const run = now => {
+    const p = (now - t0) / MC_BOUNCE_DUR;
+    if (p >= 1) { mbSetVar(bar, endpoint); bar._mcTween = 0; return; } // exakt landen
+    const decay  = (1 - p) * (1 - p);
+    const offset = MC_BOUNCE_A * Math.sin(p * Math.PI * MC_BOUNCE_K) * decay;
+    mbSetVar(bar, endpoint + sign * offset); // 1 Write pro Frame
+    bar._mcTween = requestAnimationFrame(run);
+  };
+  bar._mcTween = requestAnimationFrame(run);
+}
+
 function setupMemberCollapse() {
   document.querySelectorAll('.screen').forEach(sc => {
-    sc.addEventListener('scroll', () => { memberUserExpanded = false; applyMemberCollapse(sc); }, { passive: true });
+    let ticking = false;
+    sc.addEventListener('scroll', () => {
+      // Nur echtes Nutzer-Scrollen hebt den Tipp-Ausklapp-Zustand auf; von einem
+      // Re-Render ausgelöste Scroll-Events (Layout-Clamp) werden übersprungen.
+      if (performance.now() >= mbRenderScrollGuard) memberUserExpanded = false;
+      if (ticking) return;                 // rAF-gedrosselt: max. 1 --mc-Write pro Frame
+      ticking = true;
+      requestAnimationFrame(() => { ticking = false; applyMemberCollapse(sc); });
+    }, { passive: true });
   });
   // Erster Tipp auf die eingeklappte Leiste klappt sie aus (statt Member zu wählen).
   // Auf Maus-Geräten ist sie beim Klick schon per :hover offen → Klick wählt direkt.
@@ -2411,8 +2707,15 @@ function setupMemberCollapse() {
     const bar = (e.target && e.target.closest) ? e.target.closest('.member-bar.collapsed') : null;
     if (!bar) return;
     memberUserExpanded = true;
-    bar.classList.remove('collapsed');
-    if (canHover && bar.matches(':hover')) return; // Maus: durchlassen → Member wird gewählt
+    if (canHover && bar.matches(':hover')) {
+      // Maus: bereits per :hover offen → --mc nahtlos auf 0 übernehmen (kein
+      // Flackern) und Klick DURCHLASSEN → data-member-Handler wählt Member.
+      if (bar._mcTween) { cancelAnimationFrame(bar._mcTween); bar._mcTween = 0; }
+      bar.classList.remove('collapsed');
+      mbSetVar(bar, 0);
+      return;
+    }
+    mbExpandBar(bar);                    // Touch: federndes Aufklappen, KEINE Auswahl
     e.stopPropagation();
     e.preventDefault();
   }, true);
@@ -2555,7 +2858,7 @@ function renderDashboard() {
         const tint = categoryStyle(it.category).tint;
         html += `<div class="strip-item"><button class="strip-thumb" data-check="${escapeHtml(String(it.id))}" ` +
           `style="background:${img ? 'var(--surface2)' : tint}">` +
-          (img ? `<img src="${img}" alt="" loading="lazy" />`
+          (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
                : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
           `</button><div class="strip-name"><span class="marquee-inner">${escapeHtml(it.name)}</span></div></div>`;
       }
@@ -2582,7 +2885,7 @@ function renderDashboard() {
   }));
   el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
     dashPriority = b.dataset.prio;
-    localStorage.setItem('symdo.dashboardPriority', dashPriority);
+    ls.set('symdo.dashboardPriority', dashPriority);
     renderDashboard();
   }));
   el.querySelectorAll('[data-check]').forEach(b => b.addEventListener('click', (e) => {
@@ -2721,10 +3024,7 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   const amount = amountRaw === '' ? '1' : amountRaw;
   const faved = favNames.has(String(it.name || '').trim().toLowerCase());
   let side = '';
-  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
-  if (it.price && st.extApiShowPrice !== false) {
-    side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
-  }
+  // Menge/Stepper und Herz getauscht: erst die Menge, dann (Preis), dann das Herz.
   if (!inCart && numeric) {
     // Runter-Pfeil bei Menge=1 nur unsichtbar (Platz bleibt reserviert), damit
     // das Badge seine vertikale Position behält und nicht springt.
@@ -2736,13 +3036,17 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   } else {
     side += `<span class="amount-badge">${escapeHtml(amount || '1')}</span>`;
   }
+  if (it.price && st.extApiShowPrice !== false) {
+    side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
+  }
+  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
   side += `<button class="heart-btn" data-edit="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>`;
   return `<div class="item-card${inCart ? ' in-cart' : ''}" data-id="${escapeHtml(String(it.id))}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
     `<div class="item-card-content">` +
     `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
-    (img ? `<img src="${img}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
+    (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
     `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
     (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
     `</span><span class="item-side">${side}</span></div></div>`;
@@ -2773,12 +3077,19 @@ function renderSuggestions() {
     `<button class="chip" data-name="${escapeHtml(s.name)}" data-cat="${escapeHtml(s.category || '')}">${escapeHtml(s.name)}</button>`
   ).join('');
   chips.querySelectorAll('.chip').forEach(chip => {
-    // pointerdown vor dem blur des Inputs, sonst schließt das Panel vor dem Klick
-    chip.addEventListener('pointerdown', (e) => {
+    // mousedown/touchstart statt pointerdown: die Symcon-Desktop-Visu liefert
+    // KEINE Pointer Events (siehe bindCardSwipe) — dort wären die Chips sonst
+    // gar nicht klickbar. Beide feuern wie pointerdown vor dem blur des Inputs,
+    // sonst schließt das Panel vor dem Klick. lastTouch verhindert, dass das vom
+    // Browser nachgeschobene mousedown den Artikel doppelt hinzufügt.
+    let lastTouch = 0;
+    const activate = (e) => {
       e.preventDefault();
       sdCall(id, 'AddItem', { name: chip.dataset.name, category: chip.dataset.cat, amount: '1' });
       input.value = '';
-    });
+    };
+    chip.addEventListener('touchstart', (e) => { lastTouch = Date.now(); activate(e); }, { passive: false });
+    chip.addEventListener('mousedown', (e) => { if (Date.now() - lastTouch < 600) return; activate(e); });
   });
   panel.classList.add('open');
 }
@@ -2794,7 +3105,7 @@ function updateSwitcher(selectId, titleId, vis, currentId, storageKey) {
       `<option value="${i.id}"${i.id === currentId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`
     ).join('');
     select.onchange = () => {
-      localStorage.setItem(storageKey, select.value);
+      ls.set(storageKey, select.value);
       syncCompat();
       renderAll();
     };
@@ -2924,7 +3235,7 @@ function renderTodos() {
   const doneToggle = document.getElementById('doneToggle');
   if (doneToggle) doneToggle.addEventListener('click', () => {
     completedExpanded = !completedExpanded;
-    localStorage.setItem('symdo.completedExpanded', completedExpanded ? '1' : '0');
+    ls.set('symdo.completedExpanded', completedExpanded ? '1' : '0');
     renderTodos();
   });
 
@@ -3049,9 +3360,12 @@ function renderFavorites() {
     renderInto(el, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}</div>`);
     return;
   }
-  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
   const detail = favDetailListId ? lists.find(l => l.id === favDetailListId) : null;
   if (favDetailListId && !detail) favDetailListId = null;
+  // Typ der Rezeptdatei früh besorgen, damit „Rezept öffnen" beim Klick sofort
+  // weiß, ob es ein PDF an den System-Viewer übergeben muss.
+  if (detail && detail.mediaId) prefetchMediaType(detail.mediaId);
 
   if (!detail) {
     let html = `<div class="screen-head"><h2>${translate('Favorites')}</h2>` +
@@ -3061,12 +3375,15 @@ function renderFavorites() {
     }
     for (const list of lists) {
       const count = (list.items || []).length;
-      html += `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
+      html += `<div class="fav-card">` +
+        `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+        `<div class="swipe-under-edit"><i class="fa-light fa-cart-plus"></i></div>` +
+        `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
         `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
         `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
         `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
         `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
-        '</div>';
+        '</div></div>';
     }
     if (!renderInto(el, html)) return;
     document.getElementById('btnFavCreate').addEventListener('click', () => {
@@ -3078,19 +3395,37 @@ function renderFavorites() {
       e.stopPropagation();
       addFavListToCart(id, lists.find(l => l.id === btn.dataset.addall));
     }));
-    el.querySelectorAll('.fav-row').forEach(row => row.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return;
-      favDetailListId = row.dataset.list;
-      renderFavorites();
-    }));
+    el.querySelectorAll('.fav-card').forEach(card => {
+      const row = card.querySelector('.fav-row');
+      const listId = row.dataset.list;
+      const list = lists.find(l => l.id === listId);
+      // Swipe links = Liste löschen (mit Bestätigung wie im Menü), rechts = alles auf die Einkaufsliste.
+      bindCardSwipe(card, '.fav-row',
+        () => {
+          // Slide-out zurücknehmen (bei Abbruch bleibt die Zeile erhalten), dann bestätigen.
+          card.classList.remove('is-deleting'); delete card.dataset.animating;
+          row.style.transform = '';
+          showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+            if (favDetailListId === listId) favDetailListId = null;
+            sdCall(id, 'DeleteFavoriteList', listId);
+          });
+        },
+        () => { addFavListToCart(id, list); }
+      );
+      row.addEventListener('click', (e) => {
+        if (card.dataset.swiped === '1') return;
+        if (e.target.closest('button')) return;
+        favDetailListId = listId;
+        renderFavorites();
+      });
+    });
     return;
   }
 
   // Detailansicht
   let html = `<div class="screen-head">` +
     `<button class="icon-btn" id="btnFavBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
-    `<h2>${escapeHtml(detail.name)}</h2>` +
-    `<button class="icon-btn" id="btnFavMenu" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button></div>`;
+    `<h2>${escapeHtml(detail.name)}</h2></div>`;
   const items = detail.items || [];
   if (items.length === 0) {
     html += `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No items yet')}</div>`;
@@ -3118,7 +3453,7 @@ function renderFavorites() {
       `<div class="swipe-under"><i class="fa-light fa-heart-crack"></i></div>` +
       `<div class="item-card-content">` +
       `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
-      (img ? `<img src="${img}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
+      (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
       `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
       (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
       `</span><span class="item-side">${side}</span></div></div>`;
@@ -3127,25 +3462,32 @@ function renderFavorites() {
     ((detail.url || detail.mediaId) ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
+    `<button id="btnFavDelete" class="destructive"><i class="fa-light fa-trash"></i> ${translate('Delete list')}</button>` +
     `</div>`;
   if (!renderInto(el, html)) return;
 
   document.getElementById('btnFavBack').addEventListener('click', () => { favDetailListId = null; renderFavorites(); });
-  document.getElementById('btnFavMenu').addEventListener('click', (e) => {
-    // Nur „Löschen" — die App bietet für Favoritenlisten kein Umbenennen (1:1)
-    openMenu(e.currentTarget, [
-      { label: translate('Delete list'), icon: 'fa-trash', destructive: true, onClick: () => {
-          showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
-            favDetailListId = null;
-            sdCall(id, 'DeleteFavoriteList', detail.id);
-          });
-        } }
-    ]);
+  document.getElementById('btnFavDelete').addEventListener('click', () => {
+    showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+      favDetailListId = null;
+      sdCall(id, 'DeleteFavoriteList', detail.id);
+    });
   });
   const btnFavOpenRecipe = document.getElementById('btnFavOpenRecipe');
   if (btnFavOpenRecipe) btnFavOpenRecipe.addEventListener('click', () => {
-    if (detail.url) { try { window.open(detail.url, '_blank'); } catch (e) {} }
-    else if (detail.mediaId) { openRecipePhoto(detail.mediaId); }
+    // Nur http(s): detail.url stammt aus KI-Extraktion bzw. gespeicherten Listen —
+    // javascript:/data:-URLs dürfen hier nicht ausgeführt werden.
+    if (detail.url && /^https?:\/\//i.test(String(detail.url))) {
+      try { window.open(String(detail.url), '_blank', 'noopener'); } catch (e) {}
+      return;
+    }
+    if (!detail.mediaId) return;
+    // PDF an den System-Viewer geben, der alle Seiten blättert. Der Typ kommt aus dem
+    // Prefetch beim Öffnen der Liste, damit dieser Aufruf synchron im Klick bleibt.
+    const meta = mediaTypeCache[String(detail.mediaId)];
+    const knownPdf = !!(meta && meta.state === 'ok' && meta.isPdf);
+    if (knownPdf && openMediaExternally(detail.mediaId)) return;
+    openRecipePhoto(detail.mediaId, knownPdf);
   });
   document.getElementById('btnFavAddAll').addEventListener('click', () => addFavListToCart(id, detail));
   document.getElementById('btnFavAddItem').addEventListener('click', () => openFavItemEditor(id, detail.id, null));
@@ -3243,7 +3585,7 @@ function openFavPicker(instanceID, item) {
 function renderFavPicker() {
   if (!favPickCtx) return;
   const st = instState(favPickCtx.instanceID) || {};
-  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
   const body = document.getElementById('favPickBody');
   const norm = String(favPickCtx.itemName || '').trim().toLowerCase();
   if (lists.length === 0) {
@@ -3252,11 +3594,15 @@ function renderFavPicker() {
   }
   body.innerHTML = lists.map(l => {
     const inList = (l.items || []).some(i => String(i.name || '').trim().toLowerCase() === norm);
-    return `<div class="assign-row${inList ? ' selected' : ''}" data-list="${escapeHtml(l.id)}">` +
-      `<span class="fav-badge" style="width:30px;height:30px;font-size:13px;">${HEART_SOLID_SVG}</span>` +
-      `<span>${escapeHtml(l.name)}</span><i class="fa-light fa-check check"></i></div>`;
+    const count = (l.items || []).length;
+    const cnt = count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count));
+    return `<div class="fav-row${inList ? ' selected' : ''}" data-list="${escapeHtml(l.id)}">` +
+      `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
+      `<span class="fav-main"><span class="fav-name">${escapeHtml(l.name)}</span>` +
+      `<span class="fav-count">${cnt}</span></span>` +
+      `<i class="fa-light fa-check check"></i></div>`;
   }).join('');
-  body.querySelectorAll('.assign-row').forEach(row => row.addEventListener('click', () => {
+  body.querySelectorAll('.fav-row').forEach(row => row.addEventListener('click', () => {
     const listId = row.dataset.list;
     const selected = row.classList.contains('selected');
     if (selected) {
@@ -3459,7 +3805,7 @@ function openShoppingMenu(anchor) {
         showConfirm(translate('Delete all used items?'), translate('Delete'), () => sdCall(id, 'ClearCart', ''));
       } }
   ];
-  const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+  const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
   if (lists.length > 0) {
     entries.push({ sep: true });
     for (const list of lists) {
@@ -4250,21 +4596,58 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnAiCancel').textContent = translate('Cancel');
   aiAdd.textContent = translate('Add');
 
-  todoScan.addEventListener('click', () => { todoScanInput.value = ''; todoScanInput.click(); });
+  // ToDo-KI: Quelle wählen (Foto aufnehmen ODER Datei hochladen: JPG/PNG/PDF).
+  document.getElementById('todoFromPhotoLabel').textContent = translate('Analyze photo');
+  document.getElementById('todoFromFileLabel').textContent = translate('Analyze file');
+  const todoFileInput = document.getElementById('todoFileInput');
+  todoScan.addEventListener('click', () => openOverlay('todoSourceOverlay'));
+  document.getElementById('btnTodoFromPhoto').addEventListener('click', () => {
+    closeOverlay('todoSourceOverlay'); todoScanInput.value = ''; todoScanInput.click();
+  });
+  document.getElementById('btnTodoFromFile').addEventListener('click', () => {
+    closeOverlay('todoSourceOverlay'); todoFileInput.value = ''; todoFileInput.click();
+  });
   todoScanInput.addEventListener('change', () => {
     const file = todoScanInput.files && todoScanInput.files[0];
-    if (file) aiDownscale(file, 1280, 0.7).then(runAiExtract).catch(() => showToast(translate('Could not read the photo.')));
+    if (file) aiDownscale(file, 1280, 0.7).then(d => runAiExtract({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
   });
+  todoFileInput.addEventListener('change', () => {
+    const file = todoFileInput.files && todoFileInput.files[0];
+    if (!file) return;
+    const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+    if (isPdf) {
+      aiReadFileB64(file).then(b64 => runAiExtract({ pdf: b64 })).catch(() => showToast(translate('Could not read the file.')));
+    } else {
+      aiDownscale(file, 1280, 0.7).then(d => runAiExtract({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
+    }
+  });
+  // Desktop-Kachel: „Foto analysieren" (Kamera) ausblenden — <input capture> öffnet dort keine Kamera.
+  const todoInTile = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  const todoIsDesktop = !(('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
+  if (todoInTile && todoIsDesktop) {
+    const bp = document.getElementById('btnTodoFromPhoto');
+    if (bp) bp.style.display = 'none';
+  }
 
   // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Bridge-KI + Review-Overlay wie ToDo. ──
   const shopScan = document.getElementById('btnShopScan');
   const shopScanInput = document.getElementById('shopScanInput');
   document.getElementById('aiSourceTitle').textContent = translate('Scan recipe or photo');
+  document.getElementById('todoSourceTitle').textContent = translate('Detect tasks');
   document.getElementById('aiFromPhotoLabel').textContent = translate('Analyze photo');
   document.getElementById('aiFromUrlLabel').textContent = translate('Analyze URL');
   document.getElementById('aiOrLabel').textContent = translate('or');
   document.getElementById('aiUrlInput').placeholder = translate('Paste a recipe URL');
   if (shopScan) shopScan.addEventListener('click', () => { document.getElementById('aiUrlInput').value = ''; openOverlay('aiSourceOverlay'); });
+  // „Foto analysieren" nutzt <input capture>, das am Desktop ignoriert wird (nur
+  // Dateidialog). In der Kachel (iframe) am Desktop gibt es keine native Kamera →
+  // Button dort ausblenden; „Datei analysieren"/URL bleiben. (Standalone-Handy: bleibt.)
+  const aiInTile = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  const aiIsDesktop = !(('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
+  if (aiInTile && aiIsDesktop) {
+    const bPhoto = document.getElementById('btnAiFromPhoto');
+    if (bPhoto) bPhoto.style.display = 'none';
+  }
   document.getElementById('btnAiFromPhoto').addEventListener('click', () => {
     closeOverlay('aiSourceOverlay');
     shopScanInput.value = '';
@@ -4273,6 +4656,25 @@ document.addEventListener('DOMContentLoaded', () => {
   shopScanInput.addEventListener('change', () => {
     const file = shopScanInput.files && shopScanInput.files[0];
     if (file) aiDownscale(file, 1280, 0.7).then(d => runAiIngredients({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
+  });
+  // „Datei analysieren": JPG/PNG/PDF hochladen (kein capture → Datei-Dialog). Bilder
+  // werden wie das Foto verkleinert; PDF wird roh (base64) an die KI geschickt.
+  document.getElementById('aiFromFileLabel').textContent = translate('Analyze file');
+  const shopFileInput = document.getElementById('shopFileInput');
+  document.getElementById('btnAiFromFile').addEventListener('click', () => {
+    closeOverlay('aiSourceOverlay');
+    shopFileInput.value = '';
+    shopFileInput.click();
+  });
+  shopFileInput.addEventListener('change', () => {
+    const file = shopFileInput.files && shopFileInput.files[0];
+    if (!file) return;
+    const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+    if (isPdf) {
+      aiReadFileB64(file).then(b64 => runAiIngredients({ pdf: b64, pdfName: file.name || '' })).catch(() => showToast(translate('Could not read the file.')));
+    } else {
+      aiDownscale(file, 1280, 0.7).then(d => runAiIngredients({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
+    }
   });
   document.getElementById('btnAiFromUrl').addEventListener('click', () => {
     const url = document.getElementById('aiUrlInput').value.trim();
@@ -4300,11 +4702,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Liest eine Datei (z.B. PDF) als data:-URL (base64). Der Backend-Endpoint strippt den Prefix.
+  function aiReadFileB64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ''));
+      r.onerror = () => reject(new Error('read'));
+      r.readAsDataURL(file);
+    });
+  }
+
   function aiStatus(html) { aiBody.innerHTML = '<div class="ai-status">' + html + '</div>'; }
 
-  function runAiExtract(dataUrl) {
+  function runAiExtract(payload) {
     aiAdd.disabled = true;
-    aiStatus('<div class="ai-spinner"></div>' + translate('Analyzing photo…'));
+    const statusMsg = (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
+    aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
     const done = (res) => {
       const j = res && res.json;
@@ -4317,17 +4730,20 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     // aiPost wählt den Transport: Standalone REST/Adapter, Visu-Kachel requestAction-Relay.
-    aiPost('/ai/extract', { image: dataUrl }).then(done).catch(fail);
+    aiPost('/ai/extract', payload).then(done).catch(fail);
   }
 
   function runAiIngredients(payload) {
     aiAdd.disabled = true;
     if (aiFav) { aiFav.style.display = 'none'; aiFav.disabled = true; }
-    const statusMsg = (payload && payload.url) ? translate('Reading recipe…') : translate('Analyzing photo…');
+    const statusMsg = (payload && payload.url) ? translate('Reading recipe…')
+      : (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
     const srcUrl = (payload && payload.url) ? String(payload.url) : '';
     const srcImage = (payload && payload.image) ? String(payload.image) : '';
+    const srcPdf = (payload && payload.pdf) ? String(payload.pdf) : '';
+    const srcPdfName = (payload && payload.pdfName) ? String(payload.pdfName) : '';
     const done = (res) => {
       const j = res && res.json;
       if (!res || res.status !== 200 || !j || j.ok !== true) {
@@ -4335,7 +4751,7 @@ document.addEventListener('DOMContentLoaded', () => {
         aiStatus(escapeHtml(msg));
         return;
       }
-      renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl, image: srcImage });
+      renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl, image: srcImage, pdf: srcPdf, pdfName: srcPdfName });
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     aiPost('/ai/ingredients', payload).then(done).catch(fail);
@@ -4408,7 +4824,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const servings = (typeof data.servings === 'number' && data.servings >= 1) ? Math.round(data.servings) : null;
     const title = data.title ? String(data.title) : '';
     // servings bekannt → freie Portionszahl (Start = servings, min 1); sonst ganzzahliger Mengen-Faktor.
-    aiRecipe = { title: title, servings: servings, url: data.url || '', image: data.image || '', portions: servings, factor: 1 };
+    aiRecipe = { title: title, servings: servings, url: data.url || '', image: data.image || '', pdf: data.pdf || '', pdfName: data.pdfName || '', portions: servings, factor: 1 };
     document.getElementById('aiReviewTitle').textContent = translate('Detected items');
     if (aiFav) { aiFav.style.display = ''; aiFav.disabled = items.length === 0; }
     if (!items.length) { aiStatus(translate('No items detected.')); aiAdd.disabled = true; return; }
@@ -4546,23 +4962,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function renderAiFav() {
     const st = instState(selectedShoppingID()) || {};
-    const lists = Array.isArray(st.favoriteLists) ? st.favoriteLists : [];
+    const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
     const prefill = (aiRecipe && aiRecipe.title) ? aiRecipe.title : '';
     const body = document.getElementById('aiFavBody');
     let h = '';
-    if (lists.length) {
-      h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
-      h += lists.map(l => '<div class="assign-row" data-list="' + escapeHtml(String(l.id)) + '"><span>' + escapeHtml(String(l.name || '')) + '</span><i class="fa-light fa-check check"></i></div>').join('');
-    }
+    // Zuerst „Neue Liste" (Name + Rezeptquelle), darunter die bestehenden Listen.
     h += '<div class="ai-fav-section" id="aiFavNewHead">' + escapeHtml(translate('New favorite list')) + '</div>';
-    // Rezeptquelle (Foto → Medienobjekt, URL → Link) ist nur bei einer NEUEN Liste speicherbar.
-    if (aiRecipe && (aiRecipe.image || aiRecipe.url)) {
-      const lbl = aiRecipe.image ? translate('Save recipe photo') : translate('Save recipe link');
+    // Rezeptquelle (Foto/Datei → Medienobjekt, URL → Link) ist nur bei einer NEUEN Liste speicherbar.
+    if (aiRecipe && (aiRecipe.image || aiRecipe.pdf || aiRecipe.url)) {
+      const lbl = aiRecipe.image ? translate('Save recipe photo')
+        : aiRecipe.pdf ? translate('Save recipe file') : translate('Save recipe link');
       h += '<label class="ai-fav-toggle" id="aiFavToggleWrap"><input type="checkbox" id="aiFavSaveSource" checked /> ' + escapeHtml(lbl) + '</label>';
     }
     h += '<div class="ai-fav-new" id="aiFavNewWrap"><input id="aiFavNewName" type="text" value="' + escapeHtml(prefill) + '" placeholder="' + escapeHtml(translate('New list name')) + '" /></div>';
+    if (lists.length) {
+      h += '<div class="ai-fav-section">' + escapeHtml(translate('Add to existing list')) + '</div>';
+      h += lists.map(l => {
+        const count = (l.items || []).length;
+        const cnt = count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count));
+        return '<div class="fav-row" data-list="' + escapeHtml(String(l.id)) + '">' +
+          '<span class="fav-badge">' + HEART_SOLID_SVG + '</span>' +
+          '<span class="fav-main"><span class="fav-name">' + escapeHtml(String(l.name || '')) + '</span>' +
+          '<span class="fav-count">' + escapeHtml(cnt) + '</span></span>' +
+          '<i class="fa-light fa-check check"></i></div>';
+      }).join('');
+    }
     body.innerHTML = h;
-    body.querySelectorAll('.assign-row[data-list]').forEach(row => row.addEventListener('click', () => {
+    body.querySelectorAll('.fav-row[data-list]').forEach(row => row.addEventListener('click', () => {
       // Einzelauswahl mit Haken; erneuter Klick hebt die Auswahl wieder auf.
       aiFavSelectedList = (aiFavSelectedList === row.dataset.list) ? '' : row.dataset.list;
       updateAiFavControls();
@@ -4572,7 +4998,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auswahl markieren; bei gewählter Bestandsliste die „Neue Liste"-Bedienelemente + Quelle-Schalter ausgrauen/deaktivieren.
   function updateAiFavControls() {
     const hasSel = !!aiFavSelectedList;
-    document.querySelectorAll('#aiFavBody .assign-row[data-list]').forEach(row => {
+    document.querySelectorAll('#aiFavBody .fav-row[data-list]').forEach(row => {
       row.classList.toggle('selected', row.dataset.list === aiFavSelectedList);
     });
     const nameEl = document.getElementById('aiFavNewName');
@@ -4605,13 +5031,19 @@ document.addEventListener('DOMContentLoaded', () => {
       closeOverlay('aiReviewOverlay');
       showToast(translate('%1 items saved to favorites').replace('%1', String(items.length)));
     };
-    if (saveSrc && aiRecipe && aiRecipe.image) {
-      // Foto als Medienobjekt speichern → Medien-ID auf der Liste hinterlegen
-      aiPost('/ai/savephoto', { image: aiRecipe.image, name: (aiRecipe.title || translate('Recipe photo')) }).then(res => {
+    const saveMedia = (payload) => {
+      aiPost('/ai/savephoto', payload).then(res => {
         const j = res && res.json;
         const mediaId = (j && j.ok && j.mediaId) ? j.mediaId : 0;
         finish(mediaId ? { mediaId: String(mediaId) } : {});
       }).catch(() => finish({}));
+    };
+    if (saveSrc && aiRecipe && aiRecipe.image) {
+      // Foto als Medienobjekt speichern → Medien-ID auf der Liste hinterlegen
+      saveMedia({ image: aiRecipe.image, name: (aiRecipe.title || translate('Recipe photo')) });
+    } else if (saveSrc && aiRecipe && aiRecipe.pdf) {
+      // PDF als Medienobjekt speichern → Medien-ID auf der Liste hinterlegen
+      saveMedia({ pdf: aiRecipe.pdf, name: (aiRecipe.title || aiRecipe.pdfName || translate('Recipe file')) });
     } else if (saveSrc && aiRecipe && aiRecipe.url) {
       finish({ url: String(aiRecipe.url) });
     } else {
@@ -4691,7 +5123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const scheme = (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128 ? 'dark' : 'light';
         const payload = JSON.stringify({ scheme, accent, content, card });
         const guard = 'symdoVisuTheme:' + scheme;
-        try { if (!force && localStorage.getItem(guard) === payload) return; localStorage.setItem(guard, payload); } catch (e) {}
+        try { if (!force && ls.get(guard) === payload) return; ls.set(guard, payload); } catch (e) {}
         requestAction('ReportVisuTheme', payload);
       } catch (e) {}
     };

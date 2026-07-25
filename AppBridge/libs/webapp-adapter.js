@@ -234,8 +234,19 @@
   // Deshalb das Token zusätzlich ins URL-Fragment spiegeln: "Zum Home-Bildschirm"
   // nimmt es mit, und der Home-Screen-Start liest es und legt es lokal ab. Das
   // Fragment erreicht den Server nicht.
+  // Läuft die Seite als Home-Screen-App (eigenes Fenster, keine Adressleiste)?
+  // Dann ist das Token schon im Lesezeichen gespeichert und muss zur Laufzeit
+  // NICHT in der URL stehen — history.replaceState ändert das Lesezeichen nicht.
+  function isStandalone() {
+    try {
+      if (window.navigator && window.navigator.standalone === true) { return true; }
+      return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    } catch (e) { return false; }
+  }
   function ensureTokenInUrl(t) {
-    if (!t || parseHash().t === t) { return; }
+    // In der Home-Screen-App das Token NICHT spiegeln (unnötig) — im normalen Tab
+    // dagegen schon, sonst nimmt „Zum Home-Bildschirm" kein Token mit.
+    if (!t || isStandalone() || parseHash().t === t) { return; }
     try { history.replaceState(null, '', location.pathname + location.search + '#t=' + encodeURIComponent(t)); } catch (e) {}
   }
   function startApp() {
@@ -253,10 +264,17 @@
       showPairScreen('Abgemeldet. Erstelle in der SymDo Bridge einen neuen Browser-Zugang, um dich wieder zu verbinden.');
       return;
     }
-    // Token direkt aus dem Fragment (Home-Screen-Lesezeichen mit #t=…). Fragment
-    // NICHT entfernen, damit der nächste Start im isolierten Speicher wieder
-    // daran kommt. Ist das Token entzogen, liefert die API 401 -> Pair-Screen.
-    if (hp.t) { setToken(hp.t); return; }
+    // Token direkt aus dem Fragment (Home-Screen-Lesezeichen mit #t=…). In der
+    // Home-Screen-App danach aus der URL entfernen: das Lesezeichen behält seine
+    // eigene Kopie (replaceState ändert es nicht), zur Laufzeit ist das Token also
+    // entbehrlich — und steht dann nicht mehr in einer teilbaren URL. Im normalen
+    // Tab bleibt es stehen, weil „Zum Home-Bildschirm" es sonst nicht mitnimmt.
+    // Ist das Token entzogen, liefert die API 401 -> Pair-Screen.
+    if (hp.t) {
+      setToken(hp.t);
+      if (isStandalone() && token() === hp.t) { stripHash(); }
+      return;
+    }
     // Bereits gekoppelt (Token im lokalen Speicher): fürs "Zum Home-Bildschirm"
     // ins Fragment spiegeln, sonst startet das Home-Screen-Lesezeichen ohne Token.
     if (token()) { ensureTokenInUrl(token()); return; }

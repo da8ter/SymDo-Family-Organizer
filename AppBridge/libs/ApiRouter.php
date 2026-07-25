@@ -13,6 +13,8 @@ trait ApiRouter
         // Sicherheitsgrenze, nicht der Origin → "*" ist unbedenklich (kein Cookie,
         // credentials:'omit'). Preflight (OPTIONS) ohne Auth vor allem anderen.
         header('Access-Control-Allow-Origin: *');
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: no-referrer');
         if ($method === 'OPTIONS') {
             header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
             header('Access-Control-Allow-Headers: Authorization, Content-Type');
@@ -36,18 +38,27 @@ trait ApiRouter
             return;
         }
         if ($resource === 'ping' && $method === 'GET') {
+            // Bewusst OHNE BuildServerInfo(): dieser Endpoint ist unauthentifiziert
+            // und über die öffentliche Connect-URL erreichbar. Systemname, Symcon-
+            // Version, LAN-IPs und Connect-URL liefern nur die authentifizierten
+            // Antworten von /pair und /discovery.
             $this->SendJson([
                 'ok'         => true,
                 'apiVersion' => self::API_VERSION,
-                'server'     => $this->BuildServerInfo(),
             ]);
             return;
         }
 
-        // The token is only accepted as ?t= query parameter for the assets route
-        // (image loaders); everywhere else it must travel in a header so the
-        // long-lived token does not end up in proxy/access logs.
-        $device = $this->AuthenticateRequest($resource === 'assets' || $resource === 'users');
+        // Der Token darf nur dort als ?t=-Query stehen, wo ein einfacher Bild-Loader
+        // keine Header setzen kann: GET /assets/… und GET /users/{id}/avatar.
+        // Überall sonst muss er im Header reisen, damit der langlebige Token nicht
+        // in Proxy-/Access-Logs landet — insbesondere NICHT bei schreibenden POSTs.
+        $queryTokenOk = ($resource === 'assets' && $method === 'GET')
+            || ($resource === 'users' && $method === 'GET' && ($route[3] ?? '') === 'avatar')
+            // GET /ai/media/{id} lädt der System-PDF-Viewer bzw. ein neuer Tab direkt,
+            // ganz ohne unser JavaScript — dort kann kein Header gesetzt werden.
+            || ($resource === 'ai' && $method === 'GET' && ($route[2] ?? '') === 'media');
+        $device = $this->AuthenticateRequest($queryTokenOk);
         if ($device === null) {
             $this->SendApiError('unauthorized', 'Missing or invalid token', 401);
             return;
@@ -100,6 +111,10 @@ trait ApiRouter
                 }
                 if ($method === 'POST' && ($route[2] ?? '') === 'media') {
                     $this->HandleAiGetMedia($device);
+                    return;
+                }
+                if ($method === 'GET' && ($route[2] ?? '') === 'media') {
+                    $this->HandleAiMediaFile((int)($route[3] ?? 0));
                     return;
                 }
                 break;
@@ -263,7 +278,7 @@ trait ApiRouter
         }
         // Zusätzlich die SymDoWebApp-Kachel(n) selbst
         if (function_exists('SDWA_GetVisuTheme')) {
-            foreach (IPS_GetInstanceListByModuleID('{6703A24A-E9E9-44D3-AB21-27176BF224AA}') as $id) {
+            foreach (IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID) as $id) {
                 $reported = json_decode((string)@SDWA_GetVisuTheme((int)$id), true);
                 if (is_array($reported) && $reported !== []) {
                     return $reported;
@@ -323,9 +338,22 @@ trait ApiRouter
         // Idempotency: a clientActionId already executed successfully is not
         // dispatched again (app outbox replays after lost responses) — the
         // client just gets the current state back.
-        $clientActionId = trim((string)($body['clientActionId'] ?? ''));
+        $rawActionId = $body['clientActionId'] ?? '';
+        if (!is_string($rawActionId) && !is_int($rawActionId)) {
+            $this->SendApiError('invalid_payload', 'clientActionId must be a string', 422);
+            return;
+        }
+        $clientActionId = trim((string)$rawActionId);
+        // Längen-Cap: der Wert landet als Array-Key im ActionDedup-Attribut. Ohne
+        // Cap bläht eine Schleife mit langen IDs das Attribut auf Megabytes auf,
+        // das dann bei JEDER weiteren Aktion dekodiert wird.
+        if (strlen($clientActionId) > self::ACTION_ID_MAX_LEN) {
+            $this->SendApiError('invalid_payload', 'clientActionId too long', 422);
+            return;
+        }
         $dedupKey = $clientActionId !== '' ? $id . '|' . $clientActionId : '';
-        if ($dedupKey !== '' && $this->WasActionExecuted($dedupKey)) {
+        // Prüfen und reservieren atomar (siehe ReserveAction).
+        if ($dedupKey !== '' && !$this->ReserveAction($dedupKey)) {
             $stateData = json_decode((string)$this->CallInstanceGetAppState($id, $kind), true);
             $data = is_array($stateData) ? $stateData : [];
             $data = ['ok' => true, 'replayed' => true] + $data;
@@ -341,8 +369,10 @@ trait ApiRouter
             $this->SendApiError('internal', 'Instance returned no result', 500);
             return;
         }
-        if (($data['ok'] ?? false) === true && $dedupKey !== '') {
-            $this->MarkActionExecuted($dedupKey);
+        if (($data['ok'] ?? false) !== true && $dedupKey !== '') {
+            // Fehlgeschlagen → Reservierung zurücknehmen, sonst wäre ein Retry
+            // desselben clientActionId für immer als „schon erledigt" abgetan.
+            $this->ReleaseAction($dedupKey);
         }
         if ($clientActionId !== '') {
             $data['clientActionId'] = $clientActionId;
@@ -358,34 +388,63 @@ trait ApiRouter
         $this->SendJson($data, $status);
     }
 
-    private function WasActionExecuted(string $key): bool
-    {
-        $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
-        return is_array($dedup) && isset($dedup[$key]);
-    }
-
-    private function MarkActionExecuted(string $key): void
+    /**
+     * Prüfen UND reservieren in einem Schritt unter derselben Semaphore, mit der
+     * die Dedup-Tabelle geschrieben wird. Vorher war das ein Read ohne Sperre: zwei
+     * parallele Retries desselben clientActionId kamen beide durch und führten die
+     * Aktion doppelt aus — genau das, was der Dedup verhindern soll.
+     * @return bool true = frisch reserviert (ausführen), false = schon bekannt (Replay)
+     */
+    private function ReserveAction(string $key): bool
     {
         $semaphoreKey = 'LAB_Dedup_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
-            return; // dedup is best-effort; the action itself already succeeded
+            return true; // best effort: im Zweifel ausführen (wie bisher)
         }
         try {
             $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
             if (!is_array($dedup)) {
                 $dedup = [];
             }
-            $now = time();
-            $dedup = array_filter($dedup, static fn($ts): bool => is_int($ts) && $now - $ts < self::ACTION_DEDUP_TTL);
-            $dedup[$key] = $now;
-            if (count($dedup) > self::ACTION_DEDUP_MAX) {
-                asort($dedup);
-                $dedup = array_slice($dedup, count($dedup) - self::ACTION_DEDUP_MAX, null, true);
+            if (isset($dedup[$key])) {
+                return false;
             }
-            $this->WriteAttributeString('ActionDedup', json_encode($dedup));
+            $dedup[$key] = time();
+            $this->WriteAttributeString('ActionDedup', json_encode($this->PruneDedup($dedup)));
+            return true;
         } finally {
             IPS_SemaphoreLeave($semaphoreKey);
         }
+    }
+
+    /** Entfernt eine Reservierung, deren Aktion fehlgeschlagen ist (Retry erlauben). */
+    private function ReleaseAction(string $key): void
+    {
+        $semaphoreKey = 'LAB_Dedup_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+            return;
+        }
+        try {
+            $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
+            if (is_array($dedup) && isset($dedup[$key])) {
+                unset($dedup[$key]);
+                $this->WriteAttributeString('ActionDedup', json_encode($dedup));
+            }
+        } finally {
+            IPS_SemaphoreLeave($semaphoreKey);
+        }
+    }
+
+    /** TTL-Ablauf + Mengen-Cap für die Dedup-Tabelle. */
+    private function PruneDedup(array $dedup): array
+    {
+        $now   = time();
+        $dedup = array_filter($dedup, static fn($ts): bool => is_int($ts) && $now - $ts < self::ACTION_DEDUP_TTL);
+        if (count($dedup) > self::ACTION_DEDUP_MAX) {
+            asort($dedup);
+            $dedup = array_slice($dedup, count($dedup) - self::ACTION_DEDUP_MAX, null, true);
+        }
+        return $dedup;
     }
 
     private function HandleBarcode(int $id, string $kind, string $ean): void
@@ -433,7 +492,7 @@ trait ApiRouter
 
         $etag = '"' . md5($path . '|' . (string)@filemtime($path) . '|' . (string)@filesize($path)) . '"';
         header('ETag: ' . $etag);
-        header('Cache-Control: public, max-age=2592000');
+        header('Cache-Control: private, max-age=2592000');
         if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
             http_response_code(304);
             return;
@@ -456,12 +515,12 @@ trait ApiRouter
     private function HandleUserCreate(): void
     {
         $body = $this->ReadJsonBody();
-        $name = trim((string)($body['name'] ?? ''));
+        $name = trim($this->BodyStr($body, 'name'));
         if ($name === '') {
             $this->SendApiError('invalid_payload', 'Expected field: name', 422);
             return;
         }
-        $user = json_decode($this->CreateAppUser($name, (string)($body['avatar'] ?? '')), true);
+        $user = json_decode($this->CreateAppUser($name, $this->BodyStr($body, 'avatar')), true);
         if (!is_array($user)) {
             $this->SendApiError('internal', 'User could not be stored', 500);
             return;
@@ -476,7 +535,7 @@ trait ApiRouter
         $user = json_decode($this->UpdateAppUser(
             $userID,
             (string)($body['name'] ?? ''),
-            (string)($body['avatar'] ?? '')
+            $this->BodyStr($body, 'avatar')
         ), true);
         if (!is_array($user)) {
             $this->SendApiError('unknown_user', 'Unknown user: ' . $userID, 404);
@@ -609,6 +668,17 @@ trait ApiRouter
             return $header;
         }
         return $allowQuery ? (string)($_GET['t'] ?? '') : '';
+    }
+
+    /**
+     * Liest einen String aus einem JSON-Body. Nicht-Skalare (Array/Objekt) ergeben
+     * '' statt des Literals "Array" — ein (string)-Cast auf ein Array löst sonst
+     * eine PHP-Warning aus und schickt "Array" an die KI bzw. in ein Medienobjekt.
+     */
+    private function BodyStr(array $body, string $key): string
+    {
+        $value = $body[$key] ?? '';
+        return is_scalar($value) ? (string)$value : '';
     }
 
     private function ReadJsonBody(): array

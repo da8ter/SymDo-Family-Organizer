@@ -18,12 +18,14 @@ class SymDoBridge extends IPSModuleStrict
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
     private const CONNECT_MODULE_GUID  = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
+    private const SDWA_MODULE_GUID     = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
     private const HOOK_PATH            = 'lists/app';
     private const WEBAPP_HOOK_PATH     = 'lists/webapp';
     private const API_VERSION          = 1;
     private const PAIRING_TTL          = 600;
     private const ACTION_DEDUP_TTL     = 86400;
     private const ACTION_DEDUP_MAX     = 200;
+    private const ACTION_ID_MAX_LEN    = 64;
 
     private const STATUS_DUPLICATE_INSTANCE = 201;
 
@@ -345,19 +347,42 @@ class SymDoBridge extends IPSModuleStrict
             if (!is_array($req)) {
                 return;
             }
-            $sdwa        = (int)($req['sdwa'] ?? 0);
-            $payload     = $req['payload'] ?? [];
-            $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''), (string)$payloadJson), true);
-            if ($sdwa > 0) {
+            $sdwa = (int)($req['sdwa'] ?? 0);
+            $txn  = (string)($req['txn'] ?? '');
+            // Die Kachel wartet synchron auf ein AiResult. Wirft hier irgendetwas
+            // (IPS_CreateMedia & Co. können das), darf die Antwort NICHT ausfallen —
+            // sonst hängt das txn-Promise der Web-App bis zum Timeout.
+            try {
+                $payload     = $req['payload'] ?? [];
+                $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''), (string)$payloadJson), true);
+            } catch (\Throwable $e) {
+                $this->LogMessage('AI relay failed: ' . $e->getMessage(), KL_ERROR);
+                $body = ['ok' => false, 'error' => ['code' => 'internal', 'message' => $this->Translate('AI request failed.')]];
+            }
+            if (!is_array($body)) {
+                $body = ['ok' => false, 'error' => ['code' => 'internal', 'message' => $this->Translate('AI request failed.')]];
+            }
+            if ($sdwa > 0 && $this->IsSymDoWebAppInstance($sdwa)) {
                 @IPS_RequestAction($sdwa, 'AiResult', json_encode([
-                    'txn'    => (string)($req['txn'] ?? ''),
-                    'status' => 200,
+                    'txn' => $txn,
+                    // Status spiegelt das Ergebnis, statt immer 200 zu behaupten.
+                    'status' => (($body['ok'] ?? false) === true) ? 200 : 502,
                     'json'   => $body,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             }
             return;
         }
+        parent::RequestAction($Ident, $Value);
+    }
+
+    /** Rückkanal nur an echte SymDoWebApp-Instanzen (Ident kommt von außen). */
+    private function IsSymDoWebAppInstance(int $instanceID): bool
+    {
+        if (!IPS_InstanceExists($instanceID)) {
+            return false;
+        }
+        return (IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '') === self::SDWA_MODULE_GUID;
     }
 
     protected function ProcessHookData(): void

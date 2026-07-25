@@ -24,6 +24,9 @@ class SymDoWebApp extends IPSModuleStrict
     /** Revisionen des zuletzt gebauten Payloads (BuildFullPayload → PushFullState, gleicher Aufruf). */
     private array $lastBuiltRevisions = [];
 
+    /** Wird im 'AiResult'-Branch gesetzt; HandleAiCall erkennt daran eine ausgefallene Antwort. */
+    private bool $aiResultSeen = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -49,6 +52,11 @@ class SymDoWebApp extends IPSModuleStrict
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
         // die AppBridge liefert sie der SymDo-App/Web-App über die Discovery aus.
         $this->RegisterAttributeString('VisuTheme', '{}');
+
+        // Entprellt VM_UPDATE: die Quell-Module schreiben 2-3 Stat-Variablen pro
+        // Mutation (und der ToDo-Timer für jede Liste). Ohne Coalescing liefe für
+        // jeden Write ein kompletter Discovery+Revisions-Durchlauf.
+        $this->RegisterTimer('Coalesce', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'CoalescedPush\', 0);');
 
         // Keine eigenen Variablen: dieses Modul liest ausschließlich Fremddaten.
     }
@@ -79,8 +87,15 @@ class SymDoWebApp extends IPSModuleStrict
                 $this->ApplyChanges();
                 return;
             case VM_UPDATE:
-                $this->PushChangedInstanceStates();
-                return;
+                // Nicht direkt pushen: 250 ms Fenster sammeln, damit die mehreren
+                // Stat-Variablen-Writes einer Mutation EINEN Push ergeben. Fällt der
+                // Timer aus (z.B. Modul-Reload ohne Kernel-Neustart → noch nicht
+                // registriert), direkt pushen statt die Updates zu verlieren.
+                try {
+                    $this->SetTimerInterval('Coalesce', 250);
+                } catch (Throwable $e) {
+                    $this->PushChangedInstanceStates();
+                }
                 return;
         }
     }
@@ -100,6 +115,7 @@ class SymDoWebApp extends IPSModuleStrict
                 return;
             case 'AiResult':
                 // Rückkanal von der AppBridge → an die Kachel weiterreichen
+                $this->aiResultSeen = true;
                 $r = json_decode((string)$value, true);
                 if (is_array($r)) {
                     $this->Push([
@@ -109,6 +125,10 @@ class SymDoWebApp extends IPSModuleStrict
                         'json'   => $r['json'] ?? null,
                     ]);
                 }
+                return;
+            case 'CoalescedPush':
+                try { $this->SetTimerInterval('Coalesce', 0); } catch (Throwable $e) {}
+                $this->PushChangedInstanceStates();
                 return;
             case 'CheckRevisions':
                 $this->HandleCheckRevisions($this->DecodeValue($value));
@@ -589,7 +609,11 @@ class SymDoWebApp extends IPSModuleStrict
         }
         $txn      = (string)($req['txn'] ?? '');
         $bridgeID = $this->GetBridgeID();
-        if ($bridgeID > 0) {
+        // IsInstanceReady prüfen: bei inaktiver/veralteter Bridge gibt
+        // IPS_RequestAction nur eine PHP-Warning aus (keine Throwable), es käme
+        // also nie ein AiResult und das txn-Promise der Kachel würde ewig warten.
+        if ($bridgeID > 0 && $this->IsInstanceReady($bridgeID)) {
+            $this->aiResultSeen = false;
             try {
                 // Bridge extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
                 IPS_RequestAction($bridgeID, 'AiTileRequest', json_encode([
@@ -598,7 +622,11 @@ class SymDoWebApp extends IPSModuleStrict
                     'txn'     => $txn,
                     'sdwa'    => $this->InstanceID,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                return;
+                // Das Relay ist synchron: die Bridge pusht ihr AiResult im selben
+                // Aufruf. Kam keins, ist die Antwort ausgefallen → Fehler melden.
+                if ($this->aiResultSeen) {
+                    return;
+                }
             } catch (Throwable $e) {
                 // fällt unten in die Fehlerantwort
             }

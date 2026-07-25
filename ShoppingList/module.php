@@ -26,6 +26,9 @@ class ShoppingList extends IPSModuleStrict
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme)
         $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
+        // Cache der Produktbild-Map: der Scan über ~500 Asset-Dateien plus
+        // Alias-Parsing lief bisher bei JEDEM State-Bau (also auch bei jedem Push).
+        $this->RegisterAttributeString('ImageMapCache', '{}');
         $this->RegisterAttributeString('WebHookToken', '');
         $this->RegisterAttributeInteger('AppRevision', 0);
         $this->RegisterAttributeInteger('LastExternalScannerVariableID', 0);
@@ -706,6 +709,19 @@ class ShoppingList extends IPSModuleStrict
             return [];
         }
 
+        // Cache-Key aus den mtimes von Asset-Ordner und Alias-Datei: neue/entfernte
+        // Bilder und Alias-Änderungen invalidieren ihn, sonst wird der komplette
+        // Verzeichnis-Scan übersprungen.
+        $cacheKey = (string)@filemtime($dir) . ':' . (string)@filemtime($dir . '/image-aliases.json');
+        // Defensiv: nach einem Modul-Reload ohne Kernel-Neustart ist das Attribut
+        // noch nicht registriert (ReadAttributeString liefert dann false). Der Cache
+        // darf in diesem Fall nur entfallen — niemals den State-Bau abbrechen.
+        $cachedRaw = @$this->ReadAttributeString('ImageMapCache');
+        $cached    = is_string($cachedRaw) ? json_decode($cachedRaw, true) : null;
+        if (is_array($cached) && (string)($cached['key'] ?? '') === $cacheKey && is_array($cached['map'] ?? null)) {
+            return $cached['map'];
+        }
+
         // Helper: normalize NFD → NFC (macOS uses NFD for filenames)
         $toNFC = function (string $s): string {
             if (class_exists('Normalizer')) {
@@ -773,6 +789,11 @@ class ShoppingList extends IPSModuleStrict
             }
         }
 
+        try {
+            $this->WriteAttributeString('ImageMapCache', json_encode(['key' => $cacheKey, 'map' => $images], JSON_UNESCAPED_UNICODE));
+        } catch (\Throwable $e) {
+            // Attribut (noch) nicht vorhanden → ohne Cache weiterarbeiten.
+        }
         return $images;
     }
 

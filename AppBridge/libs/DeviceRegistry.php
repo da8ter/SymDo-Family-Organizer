@@ -262,6 +262,45 @@ trait DeviceRegistry
         });
     }
 
+    /**
+     * Zählt einen KI-Aufruf für das Gerät und meldet, ob das Limit noch frei war.
+     * Gleitendes Fenster je Gerät; ohne Geräte-ID (Kachel-Relay) greift nur der
+     * Concurrency-Guard. Fail-open bei Semaphore-Timeout — wie beim Dedup ist das
+     * Limit „best effort" und darf legitime Nutzung nicht blockieren.
+     */
+    private function AiRateLimitAllows(string $deviceId, int $max, int $window): bool
+    {
+        if ($deviceId === '') {
+            return true;
+        }
+        $allowed = true;
+        $this->ModifyPairedDevices(static function (array $devices) use ($deviceId, $max, $window, &$allowed): array {
+            $now = time();
+            foreach ($devices as &$device) {
+                if (($device['id'] ?? '') !== $deviceId) {
+                    continue;
+                }
+                $start = (int)($device['aiWindowStart'] ?? 0);
+                $count = (int)($device['aiCount'] ?? 0);
+                if ($now - $start >= $window) {
+                    $start = $now;
+                    $count = 0;
+                }
+                if ($count >= $max) {
+                    $allowed = false;
+                } else {
+                    $count++;
+                }
+                $device['aiWindowStart'] = $start;
+                $device['aiCount']       = $count;
+                break;
+            }
+            unset($device);
+            return $devices;
+        });
+        return $allowed;
+    }
+
     private function LoadPairedDevices(): array
     {
         $data = json_decode($this->ReadAttributeString('PairedDevices'), true);
