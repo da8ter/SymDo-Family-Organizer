@@ -392,6 +392,9 @@ class SymDoBridge extends IPSModuleStrict
             // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
             // Seite authentifiziert sich danach selbst gegen die JSON-API).
             if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
+                if ($this->ServeWebAppIcon($path)) {
+                    return;
+                }
                 $this->ServeWebApp();
                 return;
             }
@@ -436,6 +439,44 @@ class SymDoBridge extends IPSModuleStrict
     }
 
     /**
+     * App-Icon für Browser-Tab und iOS-Homescreen. Bewusst ohne Token: Favicon-
+     * und apple-touch-icon-Anfragen stellt der Browser selbst, ganz ohne unser
+     * JavaScript und damit ohne Authorization-Header. Der Inhalt ist lediglich
+     * das öffentliche App-Icon, also nichts Schützenswertes.
+     *
+     * Der Dateiname wird gegen eine feste Whitelist geprüft (nach basename()),
+     * damit über diesen Pfad kein anderes Modulverzeichnis lesbar wird.
+     *
+     * @return bool true, wenn die Anfrage ein Icon war und beantwortet wurde
+     */
+    private function ServeWebAppIcon(string $path): bool
+    {
+        $name = basename($path);
+        if (!in_array($name, ['appicon-32.png', 'appicon-180.png'], true)) {
+            return false;
+        }
+        $raw = @file_get_contents(__DIR__ . '/../SymDoWebApp/assets/' . $name);
+        if (!is_string($raw) || $raw === '') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Icon not found.';
+            return true;
+        }
+        $etag = '"' . md5($raw) . '"';
+        header('ETag: ' . $etag);
+        header('Cache-Control: public, max-age=604800');
+        if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+            http_response_code(304);
+            return true;
+        }
+        http_response_code(200);
+        header('Content-Type: image/png');
+        header('X-Content-Type-Options: nosniff');
+        echo $raw;
+        return true;
+    }
+
+    /**
      * Host-Kopf für den Browser-Betrieb. Ersetzt die visu-spezifische
      * `/icons.js`-Zeile. (Phase A: Theme-Defaults; der REST-Adapter + Icons +
      * i18n folgen in den nächsten Phasen.)
@@ -467,10 +508,19 @@ class SymDoBridge extends IPSModuleStrict
         $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
             . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
 
+        // App-Icon wie in der iOS-App: 32 px für den Browser-Tab, 180 px für den
+        // iOS-Homescreen. Root-absolut wie /icons.js, damit die URL auch über
+        // Connect trägt. rel="apple-touch-icon" ohne -precomposed, denn iOS
+        // maskiert die Ecken selbst — sonst gäbe es doppelte Rundungen.
+        $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
+        $icons = '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png">'
+            . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
+            . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">';
+
         $adapterJs = (string)@file_get_contents(__DIR__ . '/libs/webapp-adapter.js');
         $adapter = '<script>' . $adapterJs . '</script>';
 
-        return $theme . $config . $adapter;
+        return $theme . $icons . $config . $adapter;
     }
 
     private function SetFormElementProperty(array &$elements, string $name, string $property, mixed $value): void
