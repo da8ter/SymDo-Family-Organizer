@@ -94,6 +94,8 @@ const repeatedSmallItems = new Set([
 const itemSpecificPromptAdditions = {
   "Kaisergemüse":
     "show Kaisergemüse: a mixed vegetable medley of orange carrot slices, white cauliflower florets and green broccoli florets in roughly equal parts, a small tidy appetizing portion loosely piled together, fresh and colorful, no plate, no bowl",
+  "Schmelzkäse":
+    "show Schmelzkäse (processed cheese): a small open round foil-wrapped portion pack with the foil peeled halfway back, revealing the soft creamy pale-yellow cheese inside, plus one folded triangle wedge next to it, appetizing, no branding, no text, no plate",
   "Brauner Zucker":
     "show brown sugar: a small tidy mound of moist soft brown sugar crystals, warm caramel-brown color, appetizing, no packaging, no spoon",
   Rohrzucker:

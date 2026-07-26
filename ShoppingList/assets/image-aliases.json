@@ -271,9 +271,14 @@
         "streukäse",
         "cheese",
         "sliced cheese",
-        "shredded cheese",
-        "schmelzkäse",
-        "schmelzkäse kräuter"
+        "shredded cheese"
+    ],
+    "schmelzkäse": [
+        "streichkäse",
+        "schmelzkäse kräuter",
+        "käseecken",
+        "processed cheese",
+        "cheese spread"
     ],
     "gouda": [
         "jung gouda",
