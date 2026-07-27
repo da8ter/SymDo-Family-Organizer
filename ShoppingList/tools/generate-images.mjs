@@ -96,6 +96,12 @@ const itemSpecificPromptAdditions = {
     "show Kaisergemüse: a mixed vegetable medley of orange carrot slices, white cauliflower florets and green broccoli florets in roughly equal parts, a small tidy appetizing portion loosely piled together, fresh and colorful, no plate, no bowl",
   "Schmelzkäse":
     "show Schmelzkäse (processed cheese): a small open round foil-wrapped portion pack with the foil peeled halfway back, revealing the soft creamy pale-yellow cheese inside, plus one folded triangle wedge next to it, appetizing, no branding, no text, no plate",
+  "Berliner":
+    "show a Berliner (German jam doughnut): one round deep-fried yeast doughnut without a hole, golden-brown with a pale ring around the middle, dusted with icing sugar on top, appetizing, no plate, no filling visible",
+  "Hähnchenkeule":
+    "show two raw chicken drumsticks with skin and bone, pale pink meat, exposed clean bone end, lying next to each other, fresh and appetizing, no packaging, no plate, no herbs, no marinade",
+  "Sambal Oelek":
+    "show a small clear glass jar filled with coarse bright red chilli paste, lid off and lying beside it, thick visible chilli seeds and pieces in the paste, no label, no text, no spoon",
   "Brauner Zucker":
     "show brown sugar: a small tidy mound of moist soft brown sugar crystals, warm caramel-brown color, appetizing, no packaging, no spoon",
   Rohrzucker:
