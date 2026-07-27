@@ -884,7 +884,28 @@
         "wagner pizza",
         "dr. oetker pizza",
         "ristorante pizza",
-        "frozen pizza"
+        "frozen pizza",
+        "pizza salami",
+        "salamipizza",
+        "pizza peperoni",
+        "pizza paprika",
+        "pizza zwiebeln",
+        "pizza ei",
+        "pizza mozzarella",
+        "pizza tomate",
+        "pizza rucola",
+        "pizza mais",
+        "pizza pilze",
+        "pizza champignons",
+        "pizza oliven",
+        "pizza speck",
+        "pizza diavola",
+        "pizza funghi",
+        "pizza vier käse",
+        "vier käse pizza",
+        "pizza quattro formaggi",
+        "pizza spinat",
+        "spinatpizza"
     ],
     "tiefkühlgemüse": [
         "tk-gemüse",
@@ -2116,5 +2137,39 @@
         "weihenstephan": "milch",
         "whiskas": "katzenfutter",
         "zott": "joghurt"
-    }
+    },
+    "pizza margherita": [
+        "margherita",
+        "pizza margherita",
+        "käsepizza",
+        "pizza käse"
+    ],
+    "pizza hawaii": [
+        "hawaii",
+        "hawaiipizza",
+        "pizza ananas schinken"
+    ],
+    "pizza vegetarisch": [
+        "pizza gemüse",
+        "gemüsepizza",
+        "vegetarische pizza",
+        "veggie pizza"
+    ],
+    "pizza thunfisch": [
+        "thunfischpizza",
+        "pizza tonno",
+        "tonno pizza"
+    ],
+    "pizza schinken": [
+        "pizza prosciutto",
+        "schinkenpizza",
+        "prosciuttopizza"
+    ],
+    "kondome": [
+        "kondom",
+        "präservativ",
+        "präservative",
+        "condoms",
+        "condom"
+    ]
 }

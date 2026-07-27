@@ -102,6 +102,18 @@ const itemSpecificPromptAdditions = {
     "show two raw chicken drumsticks with skin and bone, pale pink meat, exposed clean bone end, lying next to each other, fresh and appetizing, no packaging, no plate, no herbs, no marinade",
   "Sambal Oelek":
     "show a small clear glass jar filled with coarse bright red chilli paste, lid off and lying beside it, thick visible chilli seeds and pieces in the paste, no label, no text, no spoon",
+  "Pizza Margherita":
+    "show a single round baked frozen pizza, thin crust, red tomato sauce visible at the rim, melted mozzarella cheese covering the top with light golden-brown spots, a few small basil leaf flecks, no meat, no toppings other than cheese and basil, appetizing, no box, no plate",
+  "Pizza Hawaii":
+    "show a single round baked frozen pizza, melted cheese topped with visible diced ham pieces and yellow pineapple chunks evenly distributed, golden-brown crust edge, appetizing, no box, no plate",
+  "Pizza Vegetarisch":
+    "show a single round baked frozen pizza topped with colorful mixed vegetables on melted cheese: red bell pepper strips, mushroom slices, black olive rings and red onion pieces, no meat, golden-brown crust edge, appetizing, no box, no plate",
+  "Pizza Thunfisch":
+    "show a single round baked frozen pizza topped with flaked tuna chunks and thin red onion rings on melted cheese, golden-brown crust edge, appetizing, no box, no plate",
+  "Pizza Schinken":
+    "show a single round baked frozen pizza topped with diced cooked ham pieces evenly spread on melted cheese, no pepperoni, no salami, golden-brown crust edge, appetizing, no box, no plate",
+  "Kondome":
+    "show two objects side by side: one small sealed square matte foil packet with no print or text, and beside it one unrolled condom shown as a simple thin translucent ring lying flat, both neutrally lit, plain clinical product photography like a pharmacy item, no text, no branding, no packaging box",
   "Brauner Zucker":
     "show brown sugar: a small tidy mound of moist soft brown sugar crystals, warm caramel-brown color, appetizing, no packaging, no spoon",
   Rohrzucker:
