@@ -499,7 +499,12 @@ html[data-symdo-theme="dark"] .member-bar {
   flex: 1;
   padding: 9px 10px;
   border-radius: 10px;
-  background: var(--surface2);
+  /* Gefüllt in der Akzentfarbe mit weißem Text — die beiden Aktionen sind das,
+     was man auf dem Dashboard am häufigsten anstößt. Weiß ist bewusst fest und
+     nicht --content-color: die Fläche ist immer die Akzentfarbe, unabhängig
+     vom hellen oder dunklen Schema. Das Icon erbt die Farbe über currentColor. */
+  background: var(--accent);
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
 }
