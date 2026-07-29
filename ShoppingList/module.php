@@ -425,8 +425,56 @@ class ShoppingList extends IPSModuleStrict
     /** Bild-Basis-URL (Hook + Token) für Companion-Kacheln wie ShoppingListOverview. */
     public function GetTileImageBase(): string
     {
+        return $this->GetAssetHookBase() . '&f=';
+    }
+
+    /**
+     * Gemeinsame Basis für Asset-Aufrufe: Hook, Token und ein Versionsstempel.
+     *
+     * Der Stempel (`&v=`) ist nötig, weil der Asset-Hook mit
+     * `Cache-Control: max-age=86400` und ohne ETag antwortet. Wird ein
+     * Bestandsbild ersetzt, bleibt der Dateiname gleich — der Browser hätte also
+     * keinen Anlass, seine bis zu einen Tag alte Kopie zu verwerfen, und zeigte
+     * weiter das alte Bild. Ändert sich ein Asset, ändert sich der Stempel und
+     * damit jede Bild-URL genau einmal.
+     */
+    private function GetAssetHookBase(): string
+    {
         $token = urlencode($this->ReadAttributeString('WebHookToken'));
-        return '/hook/' . $this->GetAssetHookPath() . '/?t=' . $token . '&f=';
+        return '/hook/' . $this->GetAssetHookPath() . '/?t=' . $token
+            . '&v=' . $this->GetAssetsVersion();
+    }
+
+    /**
+     * Jüngste Änderungszeit im Asset-Ordner, als Cache-Version.
+     *
+     * Bewusst das Maximum über die DATEIEN und nicht die mtime des Ordners: die
+     * bleibt beim reinen Überschreiben einer Datei unverändert (gemessen — nur
+     * ein Ersetzen per rename bumpt sie). Genau dieser Fall — gleicher Name,
+     * neuer Inhalt — ist der, den der Stempel abfangen soll.
+     *
+     * Kostet bei ~520 Dateien rund 13 ms und läuft einmal pro Render, nicht pro
+     * Bild; das Ergebnis wird für die Dauer der Anfrage gemerkt.
+     */
+    private ?int $assetsVersion = null;
+
+    private function GetAssetsVersion(): int
+    {
+        if ($this->assetsVersion !== null) {
+            return $this->assetsVersion;
+        }
+        $dir = __DIR__ . '/assets';
+        $max = (int)@filemtime($dir);
+        foreach (@scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $mtime = @filemtime($dir . '/' . $entry);
+            if ($mtime !== false && $mtime > $max) {
+                $max = $mtime;
+            }
+        }
+        return $this->assetsVersion = $max;
     }
 
     /** ExtApi-Barcode-Lookup-Basis-URL (Hook + Token) für Companion-Kacheln. */
@@ -452,10 +500,11 @@ class ShoppingList extends IPSModuleStrict
         if (strlen($html) < 200) {
             $this->LogMessage('GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
-        $token = urlencode($this->ReadAttributeString('WebHookToken'));
-        $hookPath = '/hook/' . $this->GetAssetHookPath() . '/';
-        $hookUrl = $hookPath . '?t=' . $token . '&f=';
-        $extApiHookUrl = $hookPath . '?t=' . $token . '&a=extapi&ean=';
+        // Dieselbe Basis wie GetTileImageBase(), inklusive Versionsstempel — sonst
+        // zeigte die Kachel nach einem Bildersatz weiter die zwischengespeicherte
+        // alte Fassung.
+        $hookUrl = $this->GetTileImageBase();
+        $extApiHookUrl = $this->GetTileExtApiBase();
         return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl) . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';</script>';
     }
 
