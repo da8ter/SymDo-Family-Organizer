@@ -59,6 +59,21 @@ for name in fehlend:
         shutil.copy2(quelle, ziel)
     kopiert += 1
 
+# Auch inhaltlich geänderte Bilder übertragen, nicht nur fehlende. Wird ein
+# Bestandsbild ersetzt (gleicher Name, neuer Inhalt), behielt das Bundle sonst
+# still die alte Fassung — der Abgleich meldete „0 kopiert" und wirkte erledigt.
+aktualisiert = 0
+for name in sorted(set(modul) & set(app)):
+    quelle = os.path.join(module_dir, modul[name])
+    ziel   = os.path.join(app_dir, app[name])
+    if os.path.getsize(quelle) == os.path.getsize(ziel):
+        # Gleiche Größe: erst dann den Inhalt vergleichen (spart 500 Hashes).
+        if open(quelle, 'rb').read() == open(ziel, 'rb').read():
+            continue
+    if not dry:
+        shutil.copy2(quelle, ziel)
+    aktualisiert += 1
+
 # Alias-Tabelle 1:1 übernehmen — die App-Datei ist eine Teilmenge, kein Eigenleben.
 alias_quelle = os.path.join(module_dir, 'image-aliases.json')
 alias_ziel   = os.path.join(app_dir, 'image-aliases.json')
@@ -72,6 +87,7 @@ if os.path.exists(alias_quelle):
             shutil.copy2(alias_quelle, alias_ziel)
 
 print(f"Bilder kopiert: {kopiert}")
+print(f"Bilder aktualisiert: {aktualisiert}")
 print(f"Alias-Tabelle: {'aktualisiert' if alias_geaendert else 'unverändert'}")
 if nur_app:
     # Nicht löschen: könnten App-eigene Ergänzungen sein. Nur melden.
