@@ -496,6 +496,13 @@ const itemSpecificPromptAdditions = {
     "show the pet food in a typical bag or can with a clean stylized packaging design and no text",
   Lorbeerblätter:
     "show the bay leaves in a typical spice jar with a clean stylized packaging design and no text, place several dried bay leaves in front of the jar",
+  // "Nudeln" steht als Sammelbegriff auch für penne, fusilli, rigatoni, farfalle,
+  // makkaroni und die Marken Barilla/Miracoli (siehe image-aliases.json) — deshalb
+  // ein Sortenmix statt einer einzelnen Röhre. Spaghetti, Hörnchen, Tortellini und
+  // Lasagne bleiben bewusst draußen: die haben ihr eigenes Bild und sollen davon
+  // unterscheidbar bleiben.
+  "Nudeln":
+    "show a small tidy arrangement of five different kinds of dry uncooked pasta grouped closely together in one loose pile: a few short ridged penne tubes, a few corkscrew fusilli spirals, a few bow-shaped farfalle, a few wide ridged rigatoni tubes and one small nest of rolled tagliatelle ribbons, all in natural pale golden semolina yellow, clearly distinguishable shapes, no spaghetti, appetizing, no packaging, no bowl, no plate",
 };
 
 const items = [
