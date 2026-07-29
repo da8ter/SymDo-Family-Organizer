@@ -439,11 +439,17 @@
     ],
     "käse": [
         "scheibenkäse",
+        "cheese",
+        "sliced cheese"
+    ],
+    "geriebener käse": [
         "reibekäse",
         "streukäse",
-        "cheese",
-        "sliced cheese",
-        "shredded cheese"
+        "shredded cheese",
+        "käse gerieben",
+        "grated cheese",
+        "pizzakäse",
+        "gratinkäse"
     ],
     "schmelzkäse": [
         "streichkäse",

@@ -96,6 +96,8 @@ const itemSpecificPromptAdditions = {
     "show Kaisergemüse: a mixed vegetable medley of orange carrot slices, white cauliflower florets and green broccoli florets in roughly equal parts, a small tidy appetizing portion loosely piled together, fresh and colorful, no plate, no bowl",
   "Schmelzkäse":
     "show Schmelzkäse (processed cheese): a small open round foil-wrapped portion pack with the foil peeled halfway back, revealing the soft creamy pale-yellow cheese inside, plus one folded triangle wedge next to it, appetizing, no branding, no text, no plate",
+  "Geriebener Käse":
+    "show geriebener Käse (grated cheese): one opened plain plastic pouch standing slightly tilted with its top torn open, pale-yellow finely shredded cheese strands spilling out of the opening into a small tidy loose pile in front of the pouch, the pouch itself completely blank, no label, no print, no text, no branding, appetizing, no plate, no bowl",
   "Berliner":
     "show a Berliner (German jam doughnut): one round deep-fried yeast doughnut without a hole, golden-brown with a pale ring around the middle, dusted with icing sugar on top, appetizing, no plate, no filling visible",
   "Hähnchenkeule":
