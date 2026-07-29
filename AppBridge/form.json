@@ -48,6 +48,22 @@
                     "caption": "Local HTTPS URL (optional, e.g. https://symcon.mydomain.de) — on the home network the web app switches to this local address; Symcon Connect stays the fallback when away. Requires a browser-trusted certificate."
                 },
                 {
+                    "type": "Label",
+                    "name": "LocalUrlHint",
+                    "caption": ""
+                },
+                {
+                    "type": "Button",
+                    "caption": "Test local URL",
+                    "onClick": "IPS_RequestAction($id, 'TestLocalUrl', $LocalHttpsUrl);"
+                },
+                {
+                    "type": "Label",
+                    "name": "LocalUrlResult",
+                    "caption": "",
+                    "visible": false
+                },
+                {
                     "type": "Button",
                     "caption": "Create browser access",
                     "onClick": "LAB_CreateWebAccess($id);"
@@ -68,17 +84,62 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "AI Photo Analysis → Extracts tasks from documents",
+            "caption": "AI analysis → tasks from documents, ingredients from recipes",
             "expanded": false,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "Photograph documents and let AI turn them into to-do tasks — e.g. notices from school, daycare or the sports club, parent letters, letters from authorities or the doctor, appointment slips, invitations. Saves tedious retyping. The photo goes from the browser to this bridge, which forwards it to the chosen AI; the API key stays here on the server."
+                    "caption": "TO-DO LISTS — tasks from documents\nNotices from school or daycare, parent letters, letters from authorities or the doctor, appointment slips, invitations. Deadlines and appointments found in the text become due dates.\n\nSHOPPING LISTS — ingredients from recipes\nThe ingredients arrive as articles with quantity and category. Before adding them you can change the number of servings; every amount scales along."
+                },
+                {
+                    "type": "Label",
+                    "caption": "SOURCES\nLink — paste a recipe address; the bridge loads the page and reads the ingredients from it. Recipes only.\nPhoto — camera shot of a cookbook page, a handwritten note, a package or a document.\nFile — JPG, PNG or PDF from storage. A multi-page PDF is analysed as a whole, so a two-page recipe or a long letter works too."
+                },
+                {
+                    "type": "Label",
+                    "caption": "SAVING RECIPES\nRecognised ingredients can be stored as a favorite list under a name of your choice — together with their source: the link, or the photo respectively the PDF as a media object below \"Rezeptfotos\". \"Open recipe\" later shows that original again."
+                },
+                {
+                    "type": "Label",
+                    "name": "AiPrivacyStatus",
+                    "caption": "Consent required: open the privacy notice and agree — until then the AI analysis cannot be switched on."
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "PopupButton",
+                            "caption": "Privacy notice",
+                            "popup": {
+                                "caption": "Privacy notice for the AI analysis",
+                                "items": [
+                                    {
+                                        "type": "Label",
+                                        "caption": "WHAT IS TRANSMITTED\nOnly what you hand over for one analysis: the photo, the PDF, or — for a recipe link — the text of that page. Documents you photograph for the to-do list are transmitted as an image and may contain names, addresses or health data; check before scanning whether that is acceptable to you.\n\nWHO RECEIVES IT\nThe provider selected below. Anthropic and OpenAI process the data on their servers, outside your home network and possibly outside the EU; their API terms apply. A local server (e.g. Ollama) receives everything inside your own network — nothing leaves the house.\n\nWHAT IS STORED\nThis bridge does not keep the analysed photos or PDFs; they exist only for the duration of the request. Exception: if you save a recipe as a favorite list, the photo respectively the PDF is stored deliberately as a media object below \"Rezeptfotos\" and stays until you delete that list. The API key is stored in this instance's configuration on your server and never reaches the apps.\n\nYOUR RESPONSIBILITY\nYou operate this system. If you have documents of other people analysed — family members, letters from third parties — you are the controller under the GDPR. Consent can be withdrawn at any time; the AI analysis is switched off with it."
+                                    },
+                                    {
+                                        "type": "Button",
+                                        "name": "AiPrivacyAccept",
+                                        "caption": "I have read this and agree",
+                                        "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', true);"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Button",
+                            "name": "AiPrivacyRevoke",
+                            "caption": "Withdraw consent (switches the AI analysis off)",
+                            "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', false);",
+                            "visible": false
+                        }
+                    ]
                 },
                 {
                     "type": "CheckBox",
                     "name": "AiEnabled",
-                    "caption": "Enable AI analysis (shows the AI buttons in the web app)"
+                    "caption": "Enable AI analysis (when off, the web app hides the AI buttons and every request is refused)",
+                    "enabled": false
                 },
                 {
                     "type": "Select",
@@ -86,9 +147,18 @@
                     "caption": "Provider",
                     "onChange": "LAB_UpdateAiFormVisibility($id, $AiProvider);",
                     "options": [
-                        { "caption": "Anthropic (Claude)", "value": "anthropic" },
-                        { "caption": "OpenAI (GPT)", "value": "openai" },
-                        { "caption": "Local server (OpenAI-compatible)", "value": "local" }
+                        {
+                            "caption": "Anthropic (Claude)",
+                            "value": "anthropic"
+                        },
+                        {
+                            "caption": "OpenAI (GPT)",
+                            "value": "openai"
+                        },
+                        {
+                            "caption": "Local server (OpenAI-compatible)",
+                            "value": "local"
+                        }
                     ]
                 },
                 {
@@ -118,7 +188,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Note: this feature needs your own API key from the provider. Cloud providers (Anthropic/OpenAI) cost a few cents per scan and send the photo to their cloud; a local server keeps everything in your network but needs a vision-capable model. Create keys at console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
+                    "caption": "REQUIREMENTS AND COSTS\nYour own API key is required. Anthropic and OpenAI charge a few cents per analysis and receive the photo, the PDF or the recipe text. A local server (e.g. Ollama) keeps everything inside your network, but needs a vision-capable model — and one that accepts documents if you want to analyse PDFs. Keys: console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
                 }
             ]
         },

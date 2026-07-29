@@ -291,8 +291,61 @@
 
   // Instanz-Art aus der letzten discovery (für Call/CheckRevisions ohne Roundtrip)
   var kindOf = {};
+  // Zuletzt an die UI gelieferte Revision je Instanz. Der Push-Kanal signalisiert
+  // nur „etwas hat sich geändert" (ohne IDs), also braucht der Adapter selbst
+  // einen Vergleichsstand — die UI reicht ihn nur beim Poll mit.
+  var lastRev = {};
 
-  function deliver(payload) { if (typeof window.handleMessage === 'function') { window.handleMessage(payload); } }
+  function deliver(payload) {
+    // Revisionen mitschreiben, egal ob Voll-State oder Einzel-Instanz.
+    if (payload && payload.type === 'instanceState' && payload.instanceID) {
+      lastRev[String(payload.instanceID)] = String(payload.revision || 0);
+    } else if (payload && payload.state && payload.state.states) {
+      Object.keys(payload.state.states).forEach(function (id) {
+        lastRev[String(id)] = String(payload.state.states[id].revision || 0);
+      });
+    }
+    if (typeof window.handleMessage === 'function') { window.handleMessage(payload); }
+  }
+
+  // Laufende eigene Aktionen. Solange eine offen ist (plus kurze Nachlaufzeit für
+  // die Antwort, die schon unterwegs sein kann), unterdrückt der Push-Kanal seinen
+  // Abgleich — die Antwort der Aktion liefert denselben Zustand ohnehin.
+  var callsInFlight = 0;
+  var callQuietUntil = 0;
+  function releaseCall() {
+    callsInFlight = Math.max(0, callsInFlight - 1);
+    callQuietUntil = Date.now() + 400;
+  }
+  function ownActionPending() {
+    return callsInFlight > 0 || Date.now() < callQuietUntil;
+  }
+
+  // Holt die Server-Revisionen und liefert nur die Instanzen nach, deren Revision
+  // vom übergebenen Stand abweicht. Gemeinsamer Kern von Poll (CheckRevisions) und
+  // Push-Signal — ein Codepfad, damit beide sich nicht auseinanderentwickeln.
+  function syncChanged(clientRevs) {
+    return apiGet('/revisions').then(function (rv) {
+      var server = (rv && rv.revisions) || {};
+      Object.keys(server).forEach(function (id) {
+        if (String(server[id]) === String(clientRevs[id])) { return; }
+        apiGet('/instances/' + id + '/state').then(function (s) {
+          if (!s || s.ok !== true) { return; }
+          var kind = s.kind || kindOf[String(id)] || '';
+          deliver({
+            type: 'instanceState',
+            instanceID: parseInt(id, 10),
+            kind: kind,
+            revision: s.revision || 0,
+            state: stripState(kind, s.state || {}),
+            ok: true,
+            error: null,
+            txn: ''
+          });
+        }).catch(function () {});
+      });
+    }).catch(function () {});
+  }
 
   // Global eindeutige Idempotenz-ID je Aktion. NICHT das UI-txn nehmen: das ist
   // ein pro Seitenladung zurückgesetzter Zähler (tx1, tx2, …) und würde nach einem
@@ -392,9 +445,17 @@
     if (ident === 'Call') {
       var d; try { d = JSON.parse(value); } catch (e) { return; }
       var id = d.instanceID, kind = kindOf[String(id)] || '';
+      // Eigene Aktion: die Antwort bringt den maßgeblichen Zustand selbst mit.
+      // Der Push, den dieselbe Mutation serverseitig auslöst, würde sonst — je
+      // nachdem, was zuerst eintrifft — einen ZWEITEN Zustandsabruf und damit
+      // einen zweiten kompletten Neuaufbau der Liste anstoßen. Sichtbar wird das
+      // als Flackern aller Produktbilder. Solange ein Call läuft, ignorieren wir
+      // die Türklingel; fremde Änderungen kommen weiter sofort durch.
+      callsInFlight++;
       apiPost('/instances/' + id + '/actions', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
         .then(function (res) {
           var j = res.json || {};
+          releaseCall();
           deliver({
             type: 'instanceState',
             instanceID: id,
@@ -406,35 +467,82 @@
             txn: d.txn
           });
         })
-        .catch(function (e) { if (String(e && e.message) !== 'unauthorized') { console.warn('SymDo Call:', e); } });
+        .catch(function (e) {
+          releaseCall();
+          if (String(e && e.message) !== 'unauthorized') { console.warn('SymDo Call:', e); }
+        });
       return;
     }
     if (ident === 'CheckRevisions') {
       var cd; try { cd = JSON.parse(value); } catch (e) { return; }
-      var client = cd.revisions || {};
-      apiGet('/revisions').then(function (rv) {
-        var server = (rv && rv.revisions) || {};
-        Object.keys(server).forEach(function (id) {
-          if (String(server[id]) === String(client[id])) { return; }
-          apiGet('/instances/' + id + '/state').then(function (s) {
-            if (!s || s.ok !== true) { return; }
-            var kind = s.kind || kindOf[String(id)] || '';
-            deliver({
-              type: 'instanceState',
-              instanceID: parseInt(id, 10),
-              kind: kind,
-              revision: s.revision || 0,
-              state: stripState(kind, s.state || {}),
-              ok: true,
-              error: null,
-              txn: ''
-            });
-          }).catch(function () {});
-        });
-      }).catch(function () {});
+      syncChanged(cd.revisions || {});
       return;
     }
   };
+
+  // ---- Push-Kanal: WebSocket auf dem Bridge-Hook ------------------------------
+  // Symcon zieht auf einem Hook-Pfad selbst einen WebSocket hoch (WebHook Control
+  // ab 5.2) und sendet darüber per WC_PushMessage. Wir empfangen nur ein
+  // inhaltsloses „dirty" und holen den Inhalt danach über die token-gesicherte
+  // REST-API — auf dem Socket liegen also nie Nutzdaten. Deshalb braucht er auch
+  // keine Authentifizierung: Symcon akzeptiert den Upgrade, bevor eigener Code
+  // läuft, ein Broadcast erreicht damit auch fremde Zuhörer.
+  //
+  // Der 15-s-Poll der geteilten UI bleibt unangetastet und ist das Sicherheitsnetz:
+  // fällt der Socket aus, verhält sich die App genau wie bisher. Die Kachel hält
+  // ihren Poll neben dem eigenen Push ebenso.
+  (function initPushChannel() {
+    // Bewusst OHNE Prüfung auf 'pairing': der Kanal trägt keine Daten und braucht
+    // keinen Token, ein Verbindungsaufbau vor der Kopplung ist also harmlos. Würde
+    // hier auf die Kopplung gewartet, bliebe die Web-App nach einer ERSTMALIGEN
+    // Kopplung bis zum nächsten Reload ohne Push (der Kopplungsablauf lädt die
+    // Seite nicht neu) — genau der Moment, in dem man es zuerst ausprobiert.
+    if (typeof window.WebSocket !== 'function') { return; }
+    var url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/hook/lists/ws';
+    var sock = null;
+    var backoff = 2000;   // 2s, verdoppelnd bis 60s
+    var debounce = null;
+
+    // Nicht ohne Backoff neu verbinden: die Connect-nginx antwortet bei vielen
+    // gleichzeitigen Handshakes mit 503.
+    function connect() {
+      if (sock || document.visibilityState !== 'visible') { return; }
+      try { sock = new WebSocket(url); } catch (e) { sock = null; retry(); return; }
+
+      sock.onopen = function () { backoff = 2000; };
+      sock.onmessage = function () {
+        // Mehrere Signale kurz hintereinander zu einem Abgleich zusammenfassen.
+        if (debounce) { return; }
+        debounce = window.setTimeout(function () {
+          debounce = null;
+          if (document.visibilityState !== 'visible') { return; }
+          // Läuft gerade eine eigene Aktion, bringt deren Antwort den Zustand mit —
+          // ein zusätzlicher Abgleich wäre nur ein zweiter Neuaufbau der Liste.
+          if (ownActionPending()) { return; }
+          syncChanged(lastRev);
+        }, 150);
+      };
+      sock.onclose = function () { sock = null; retry(); };
+      sock.onerror = function () { /* onclose folgt und übernimmt den Reconnect */ };
+    }
+
+    function retry() {
+      window.setTimeout(function () {
+        backoff = Math.min(backoff * 2, 60000);
+        connect();
+      }, backoff);
+    }
+
+    // Mobile Browser kappen Sockets im Hintergrund — beim Zurückkehren neu
+    // aufbauen und einmal sofort abgleichen, damit die Wartezeit nicht am Poll hängt.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible') { return; }
+      if (!sock || sock.readyState > 1) { sock = null; backoff = 2000; connect(); }
+      syncChanged(lastRev);
+    });
+
+    connect();
+  })();
 
   // Web-only: die geteilte UI hat kein onerror an Produktbildern. Fällt ein Bild
   // aus (fehlendes Asset oder externe Scan-URL, die der Asset-Endpoint nicht

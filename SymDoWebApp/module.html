@@ -841,6 +841,37 @@ html[data-symdo-theme="dark"] .member-bar {
   background-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .badge.attr { display: inline-flex; align-items: center; }
+/* ── Meta-Zeile verdichten, wenn der Platz nicht reicht (Stufen in layoutTodoMeta) ──
+   Stufe 1 (.meta-tight): Wiederholung, Erinnerung und Anzahl wandern aus ihren
+   Einzel-Chips in einen gemeinsamen — das sparen vor allem die doppelten
+   Innenabstände und Lücken.
+   Stufe 2 (.meta-tighter): zwei Avatare weichen einem Zähler; die Vorlagen dafür
+   stecken schon im Markup (renderAvatarStack), damit hier nichts neu gebaut
+   werden muss und das Zurückschalten verlustfrei bleibt. */
+.badge.meta-combined { display: none; gap: 5px; }
+.todo-content.meta-tight .badge.meta-split { display: none; }
+.todo-content.meta-tight .badge.meta-combined { display: inline-flex; align-items: center; }
+/* Mit `.avatar` im Selektor, sonst gewinnt das später notierte
+   `.avatar-stack .avatar { display: inline-flex }` bei gleicher Spezifität und
+   der Zähler wäre auch im vollen Zustand sichtbar. */
+/* In der eigenen Zeile dürfen die Chips grundsätzlich umbrechen. Das ist eine
+   STRUKTURELLE Garantie gegen den abgeschnittenen Drag-Griff: sie hängt an
+   keiner JS-Messung, greift also auch bei anderer Schriftmetrik oder wenn mein
+   Überlauf-Kriterium daneben liegt. Ohne `flex: 1 1 auto; min-width: 0` bliebe
+   .todo-meta auf max-content stehen und `flex-wrap` wirkungslos. Die Zeile wird
+   dann höher statt beschnitten; die Verdichtungsstufen sparen genau diese
+   zusätzlichen Zeilen ein. */
+.todo-content.stacked .todo-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+}
+.avatar-stack .avatar.tight-more { display: none; }
+.todo-content.meta-tighter .avatar-stack .tight-hide { display: none; }
+.todo-content.meta-tighter .avatar-stack .avatar-more:not(.tight-more) { display: none; }
+.todo-content.meta-tighter .avatar-stack .tight-more { display: inline-flex; }
 /* Fälligkeits-Badge — Optik identisch zur ToDoList-Kachel (neutral umrandet,
    überfällig rot, heute orange). Immer mit Text — nie nur das Kalender-Icon. */
 .badge.due-badge { display: inline-flex; align-items: center; gap: 6px; }
@@ -1898,10 +1929,22 @@ function renderAvatarStack(ids) {
   // 5 → 3 Avatare + „+2". Die Stack-Breite bleibt so oder so bei 4 Kreisen.
   const max = 3;
   const showAll = resolved.length <= max + 1;
+  const shown = showAll ? resolved : resolved.slice(0, max);
+  // Stufe 2 der Meta-Verdichtung (nur ToDo-Liste, per .meta-tighter): die beiden
+  // letzten Avatare weichen einem Zähler. Beide Varianten stehen fertig im
+  // Markup, das Umschalten ist dann reines CSS — und verlustfrei umkehrbar.
+  // Nur ab drei Avataren sinnvoll: darunter bliebe nichts übrig.
+  const tight = resolved.length >= 3;
+  const tightShown = tight ? Math.max(1, shown.length - 2) : shown.length;
   let html = '<div class="avatar-stack">';
-  (showAll ? resolved : resolved.slice(0, max)).forEach(u => { html += avatarHtml(u, 'avatar'); });
+  shown.forEach((u, i) => {
+    html += avatarHtml(u, 'avatar' + (tight && i >= tightShown ? ' tight-hide' : ''));
+  });
   if (!showAll) {
     html += `<span class="avatar avatar-more">+${resolved.length - max}</span>`;
+  }
+  if (tight) {
+    html += `<span class="avatar avatar-more tight-more">+${resolved.length - tightShown}</span>`;
   }
   html += '</div>';
   return html;
@@ -2169,9 +2212,11 @@ function showPrompt(title, initial, okLabel, cb) {
 }
 
 let menuCloser = null;
+let menuAnchor = null;
 function closeMenu() {
   const pop = document.getElementById('menuPop');
   if (pop) pop.remove();
+  menuAnchor = null;
   if (menuCloser) {
     document.removeEventListener('mousedown', menuCloser, true);
     document.removeEventListener('touchstart', menuCloser, true);
@@ -2179,6 +2224,15 @@ function closeMenu() {
   }
 }
 function openMenu(anchor, entries) {
+  // Zweiter Klick auf denselben Knopf schließt das Menü wieder. Damit das geht,
+  // behandelt der Außenklick-Wächter weiter unten den Knopf selbst NICHT als
+  // „außerhalb": sonst hätte mousedown das Menü längst entfernt, bevor click
+  // hier ankommt — und es ginge sofort wieder auf, sähe also aus, als reagiere
+  // der Knopf nicht.
+  if (menuAnchor === anchor && document.getElementById('menuPop')) {
+    closeMenu();
+    return;
+  }
   closeMenu();
   const pop = document.createElement('div');
   pop.id = 'menuPop';
@@ -2212,7 +2266,12 @@ function openMenu(anchor, entries) {
   pop.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
   pop.style.top = Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
   pop.style.left = Math.max(8, Math.min(rect.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
-  menuCloser = (e) => { if (!pop.contains(e.target)) closeMenu(); };
+  menuAnchor = anchor;
+  menuCloser = (e) => {
+    if (pop.contains(e.target)) return;
+    if (anchor && anchor.contains(e.target)) return;  // Umschalten macht der Klick
+    closeMenu();
+  };
   setTimeout(() => {
     document.addEventListener('mousedown', menuCloser, true);
     document.addEventListener('touchstart', menuCloser, true);
@@ -2446,11 +2505,15 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       card.classList.remove('todo-dragging');
       cleanup();
       if (moved) {
-        const openSet = new Set(open.map(i => i.id));
+        // Erst JETZT auflösen: seit renderRows() überleben Karten mehrere
+        // Zustände, eine beim Binden festgehaltene Liste wäre veraltet.
+        const openNow = (typeof open === 'function') ? open() : open;
+        const doneNow = (typeof done === 'function') ? done() : done;
+        const openSet = new Set(openNow.map(i => i.id));
         const ids = Array.from(area.querySelectorAll('.todo-card'))
           .map(c => parseInt(c.dataset.id))
           .filter(n => openSet.has(n));
-        sdCall(instanceID, 'Reorder', { order: ids.concat(done.map(i => i.id)) });
+        sdCall(instanceID, 'Reorder', { order: ids.concat(doneNow.map(i => i.id)) });
       }
       markSwiped();
     };
@@ -2556,6 +2619,75 @@ function renderInto(el, html) {
   // markieren, damit dieses NICHT die ausgeklappte Member-Leiste einklappt.
   mbRenderScrollGuard = performance.now() + 200;
   return true;
+}
+
+/**
+ * Wie renderInto, aber zeilenweise: ersetzt nur die Kinder, deren Markup sich
+ * geändert hat, und lässt alle übrigen DOM-Knoten unangetastet stehen.
+ *
+ * Warum das nötig ist: `innerHTML = html` verwirft die GESAMTE Liste. Bei einer
+ * Mengenänderung an einem einzigen Artikel werden dadurch auch alle anderen
+ * Karten samt ihrer <img>-Elemente neu erzeugt. Die Bilddaten kommen zwar aus
+ * dem Cache, jedes Bild muss aber erneut dekodiert und gemalt werden — sichtbar
+ * als Flackern der ganzen Liste.
+ *
+ * Zuordnung alt→neu über einen Schlüssel: `data-id` (Artikel-/Aufgabenkarten),
+ * sonst `data-key` (Überschriften, Umschalter), sonst das Markup selbst. Knoten
+ * ohne Schlüssel und mit geändertem Markup werden schlicht ersetzt — der
+ * Abgleich ist damit nie „falscher" als das bisherige Komplett-Ersetzen.
+ *
+ * Rückgabe: `false`, wenn sich nichts geändert hat (wie renderInto), sonst die
+ * Liste der NEU eingefügten Elemente. Ereignisse dürfen nur an diese gebunden
+ * werden — wiederverwendete Knoten tragen ihre Handler ja noch.
+ */
+function renderRows(el, html) {
+  if (!el) return false;
+  if (el._lastHtml === html) return false;
+  el._lastHtml = html;
+
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const incoming = Array.from(tpl.content.children);
+
+  // Bestand nach Schlüssel indizieren. Mehrfach vorkommende Schlüssel (gleiches
+  // Markup, z.B. zwei identische Überschriften) landen in einer Queue.
+  const keyOf = (node) => node.dataset && node.dataset.id !== undefined
+    ? 'id:' + node.dataset.id
+    : (node.dataset && node.dataset.key !== undefined ? 'key:' + node.dataset.key : 'html:' + node.outerHTML);
+  const pool = new Map();
+  for (const node of Array.from(el.children)) {
+    const k = keyOf(node);
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(node);
+  }
+
+  const fresh = [];
+  const result = [];
+  for (const next of incoming) {
+    const bucket = pool.get(keyOf(next));
+    const old = bucket && bucket.length ? bucket.shift() : null;
+    if (old && old.outerHTML === next.outerHTML) {
+      result.push(old);            // unverändert → DOM-Knoten behalten
+    } else {
+      if (old && old.parentNode === el) el.removeChild(old);
+      result.push(next);
+      fresh.push(next);
+    }
+  }
+
+  // Übrig gebliebene Altknoten entfernen, dann die Zielreihenfolge herstellen.
+  for (const bucket of pool.values()) {
+    for (const node of bucket) { if (node.parentNode === el) el.removeChild(node); }
+  }
+  let ref = el.firstChild;
+  for (const node of result) {
+    if (ref === node) { ref = node.nextSibling; continue; }
+    el.insertBefore(node, ref);
+  }
+  while (ref) { const nx = ref.nextSibling; el.removeChild(ref); ref = nx; }
+
+  mbRenderScrollGuard = performance.now() + 200;
+  return fresh;
 }
 
 // ── Render-Einstieg ────────────────────────────────────────────────────────
@@ -2956,60 +3088,76 @@ function renderShopping() {
     for (const fi of (fl.items || [])) favNames.add(String(fi.name || '').trim().toLowerCase());
   }
 
+  // data-key auf allen Knoten ohne data-id: damit kann renderRows() sie über
+  // einen Re-Render hinweg wiedererkennen und stehen lassen.
   let html = '';
   if (sections.length === 0 && cart.length === 0) {
-    html += `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('The list is empty.')}</div>`;
+    html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-basket-shopping"></i>${translate('The list is empty.')}</div>`;
   }
   for (const sec of sections) {
     const style = categoryStyle(sec.category);
-    html += `<div class="cat-header" style="color:${style.tint}"><i class="fa-light ${style.icon}"></i>${escapeHtml(sec.category)}</div>`;
+    html += `<div class="cat-header" data-key="cat:${escapeHtml(sec.category)}" style="color:${style.tint}"><i class="fa-light ${style.icon}"></i>${escapeHtml(sec.category)}</div>`;
     for (const it of sec.items) html += shoppingRowHtml(it, favNames, st, false);
   }
   // Wie cartExpanded (@State) in der App: nur In-Memory, startet eingeklappt
   const collapsed = !cartExpanded;
   if (cart.length > 0) {
-    html += `<button class="section-toggle${collapsed ? '' : ' open'}" id="cartToggle">` +
+    html += `<button class="section-toggle${collapsed ? '' : ' open'}" data-key="cartToggle" id="cartToggle">` +
       `<i class="fa-light fa-cart-shopping"></i>${translate('Recently used')}` +
       `<span class="count">${cart.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (!collapsed) {
       for (const it of cart) html += shoppingRowHtml(it, favNames, st, true);
     }
   }
-  if (!renderInto(area, html)) return;
+  const freshNodes = renderRows(area, html);
+  if (freshNodes === false) return;
 
-  const cartToggle = document.getElementById('cartToggle');
+  // Nur an NEUE Knoten binden — wiederverwendete tragen ihre Handler noch.
+  const cartToggle = freshNodes.find(n => n.id === 'cartToggle');
   if (cartToggle) cartToggle.addEventListener('click', () => {
     cartExpanded = !cartExpanded;
     renderShopping();
   });
 
-  area.querySelectorAll('.item-card').forEach(card => {
+  // Wiederverwendete Karten überleben jetzt mehrere Zustände. Ihre Handler dürfen
+  // deshalb NICHTS aus dem Render-Zeitpunkt festhalten (st, inCart, id) — sonst
+  // arbeiten sie später mit veralteten Daten. Alles wird beim Klick frisch geholt.
+  const curId = () => selectedShoppingID();
+  const curState = () => instState(curId()) || {};
+  freshNodes.filter(n => n.classList && n.classList.contains('item-card')).forEach(card => {
     const itemId = card.dataset.id;
-    const inCart = card.classList.contains('in-cart');
-    bindCardSwipe(card, '.item-card-content', () => sdCall(id, 'DeleteItem', itemId), () => {
-      const item = (st.items || []).find(i => String(i.id) === itemId);
-      if (item) openItemEditor(id, item);
+    const curItem = () => (curState().items || []).find(i => String(i.id) === itemId);
+    bindCardSwipe(card, '.item-card-content', () => sdCall(curId(), 'DeleteItem', itemId), () => {
+      const item = curItem();
+      if (item) openItemEditor(curId(), item);
     });
     card.querySelector('.item-card-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button')) return;
-      sdCall(id, 'ToggleCart', { id: itemId, inCart: !inCart });
+      const item = curItem();
+      sdCall(curId(), 'ToggleCart', { id: itemId, inCart: !(item && item.inCart) });
     });
     const editBtn = card.querySelector('[data-edit]');
     if (editBtn) editBtn.addEventListener('click', () => {
-      const item = (st.items || []).find(i => String(i.id) === itemId);
-      if (item) openItemEditor(id, item);
+      const item = curItem();
+      if (item) openItemEditor(curId(), item);
     });
     const heartBtn = card.querySelector('[data-heart]');
     if (heartBtn) heartBtn.addEventListener('click', () => {
-      const item = (st.items || []).find(i => String(i.id) === itemId);
-      if (item) openFavPicker(id, item);
+      const item = curItem();
+      if (item) openFavPicker(curId(), item);
     });
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => {
-      const item = (st.items || []).find(i => String(i.id) === itemId);
+      const item = curItem();
       if (!item) return;
       const next = Math.max(1, (parseInt(item.amount) || 1) + parseInt(btn.dataset.step));
-      sdCall(id, 'UpdateItem', { id: item.id, name: item.name, amount: String(next), notes: item.notes || '', category: item.category || '' });
+      // Sofort lokal übernehmen und neu zeichnen: der Stepper reagiert damit
+      // ohne Wartezeit auf den Server. Dank renderRows() betrifft das exakt
+      // diese eine Karte. Die Antwort der Aktion bringt den maßgeblichen Zustand
+      // nach und korrigiert die Anzeige, falls der Server sie ablehnt.
+      item.amount = String(next);
+      renderShopping();
+      sdCall(curId(), 'UpdateItem', { id: item.id, name: item.name, amount: String(next), notes: item.notes || '', category: item.category || '' });
     }));
   });
 
@@ -3221,43 +3369,65 @@ function renderTodos() {
   // sein sticky-Bezug .content (die volle Höhe) ist und es dauerhaft pinnt.
   renderTodoMembers();
 
+  // data-key auf allen Knoten ohne data-id (siehe renderRows)
   let html = '';
   if (open.length === 0 && done.length === 0) {
     const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
-    html += `<div class="empty-state"><i class="fa-light fa-list-check"></i>${msg}</div>`;
+    html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
   }
   for (const it of open) html += todoRowHtml(it, canReorder, showBadges);
   if (done.length > 0 && st.hideCompletedTasks !== true) {
-    html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" id="doneToggle">` +
+    html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" data-key="doneToggle" id="doneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
       `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (completedExpanded) {
       for (const it of done) html += todoRowHtml(it, false, showBadges);
     }
   }
-  if (!renderInto(area, html)) return;
+  const freshNodes = renderRows(area, html);
+  if (freshNodes === false) return;
 
-  const doneToggle = document.getElementById('doneToggle');
+  const doneToggle = freshNodes.find(n => n.id === 'doneToggle');
   if (doneToggle) doneToggle.addEventListener('click', () => {
     completedExpanded = !completedExpanded;
     ls.set('symdo.completedExpanded', completedExpanded ? '1' : '0');
     renderTodos();
   });
 
-  area.querySelectorAll('.todo-card').forEach(card => {
+  // Wie bei der Einkaufsliste: nur neue Karten binden, und die Handler holen
+  // ihre Daten beim Ereignis statt sie beim Rendern festzuhalten.
+  const curId = () => selectedTodoID();
+  const curItem = (iid) => ((instState(curId()) || {}).items || []).find(i => i.id === iid);
+  const openNow = () => {
+    const s = instState(curId()) || {};
+    let list = s.items || [];
+    if (todoMemberIds.size > 0) {
+      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+    }
+    return sortTodoItems(list, String(s.sortMode || 'created'), String(s.sortDir || 'asc')).filter(i => !i.done);
+  };
+  const doneNow = () => {
+    const s = instState(curId()) || {};
+    let list = s.items || [];
+    if (todoMemberIds.size > 0) {
+      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+    }
+    return sortTodoItems(list, String(s.sortMode || 'created'), String(s.sortDir || 'asc')).filter(i => i.done);
+  };
+  freshNodes.filter(n => n.classList && n.classList.contains('todo-card')).forEach(card => {
     const itemId = parseInt(card.dataset.id);
-    const item = (st.items || []).find(i => i.id === itemId);
-    if (!item) return;
-    bindTodoGesture(card, id, area, open, done, canReorder,
-      () => sdCall(id, 'DeleteItem', { id: itemId }),
-      () => openTodoEditor(id, item));
+    if (!curItem(itemId)) return;
+    bindTodoGesture(card, id, area, openNow, doneNow, canReorder,
+      () => sdCall(curId(), 'DeleteItem', { id: itemId }),
+      () => { const it = curItem(itemId); if (it) openTodoEditor(curId(), it); });
     const chk = card.querySelector('.chk');
     chk.addEventListener('click', (e) => e.stopPropagation());
-    chk.addEventListener('change', () => sdCall(id, 'ToggleDone', { id: itemId, done: chk.checked }));
+    chk.addEventListener('change', () => sdCall(curId(), 'ToggleDone', { id: itemId, done: chk.checked }));
     card.querySelector('.todo-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button, .chk')) return;
-      openTodoEditor(id, item);
+      const it = curItem(itemId);
+      if (it) openTodoEditor(curId(), it);
     });
   });
 
@@ -3269,22 +3439,87 @@ function renderTodos() {
 // Task-Breite, rutscht sie als eigene Zeile unter den restlichen Inhalt.
 let todoMetaRO = null;
 let todoMetaLastW = -1;
+let todoMetaMO = null;
+let todoMetaLateTimer = 0;
+
+/**
+ * Nachmessen, wenn die Chips erst später ihre endgültige Breite bekommen.
+ * Zwei Quellen dafür:
+ *  - /icons.js (Font Awesome SVG+JS) ersetzt jedes <i> NACHTRÄGLICH durch ein
+ *    <svg>. Vorher sind die Icon-Chips fast leer; die Messung im
+ *    requestAnimationFrame direkt nach dem Rendern sieht also eine zu schmale
+ *    Zeile — die Verdichtung greift dann nie, und die Zeile bricht später um.
+ *  - Webfont-Metrik (document.fonts.ready).
+ * Klassenwechsel aus layoutTodoMeta lösen das NICHT erneut aus: das sind
+ * Attribut-, keine childList-Änderungen — also keine Rückkopplung.
+ */
+function ensureTodoMetaLateObserver() {
+  const area = document.getElementById('todoListArea');
+  if (!area) return;
+  if (!todoMetaMO && typeof MutationObserver !== 'undefined') {
+    todoMetaMO = new MutationObserver(() => {
+      clearTimeout(todoMetaLateTimer);
+      todoMetaLateTimer = setTimeout(layoutTodoMeta, 60);
+    });
+    todoMetaMO.observe(area, { childList: true, subtree: true });
+  }
+  if (document.fonts && document.fonts.ready && !ensureTodoMetaLateObserver.fontsHooked) {
+    ensureTodoMetaLateObserver.fontsHooked = true;
+    document.fonts.ready.then(() => layoutTodoMeta()).catch(() => {});
+  }
+}
 function layoutTodoMeta() {
   const area = document.getElementById('todoListArea');
   if (!area) return;
   todoMetaLastW = area.clientWidth;
   const cards = area.querySelectorAll('.todo-card');
-  // Erst überall zurücksetzen, damit die natürliche (nicht gestapelte)
-  // Chip-Breite gemessen wird, dann pro Zeile entscheiden.
-  cards.forEach(card => { const c = card.querySelector('.todo-content'); if (c) c.classList.remove('stacked'); });
+  // Erst überall zurücksetzen, damit die natürliche (nicht verdichtete)
+  // Chip-Breite gemessen wird, dann pro Zeile stufenweise entscheiden.
+  cards.forEach(card => {
+    const c = card.querySelector('.todo-content');
+    if (c) c.classList.remove('stacked', 'meta-tight', 'meta-tighter');
+  });
   cards.forEach(card => {
     const c = card.querySelector('.todo-content');
     const m = card.querySelector('.todo-side') || card.querySelector('.todo-meta');
     if (!c || !m) return;
-    if (m.offsetWidth > c.clientWidth / 2) c.classList.add('stacked');
+    // Unveränderte Grenze: belegt die Chip-Zeile mehr als die halbe Kartenbreite,
+    // rutscht sie als eigene Zeile unter den Inhalt.
+    if (m.offsetWidth <= c.clientWidth / 2) return;
+    c.classList.add('stacked');
+
+    // Verdichtet wird ausschließlich HIER, in der eigenen Zeile — und nur, wenn
+    // selbst deren volle Breite nicht reicht. Ohne diese Prüfung ragt die Zeile
+    // heraus und schneidet den Drag-Griff rechts ab.
+    // Referenz ist die KARTE, nicht .todo-side: dessen `flex: none` (also
+    // flex-shrink: 0) lässt die Box trotz flex-basis:100% auf Inhaltsbreite
+    // stehen und aus der Karte herausragen — gemessen 307 px in 289 px. Die
+    // Kinder gegen die eigene Box zu prüfen wäre blind, denn die wächst mit ihnen.
+    // Kriterium ist der UMBRUCH, nicht eine gerechnete Breite: die Chips dürfen
+    // in der eigenen Zeile umbrechen (siehe CSS), also überschreiten sie nie eine
+    // Breite — sie werden höher. „Platz reicht nicht" heißt damit genau: die
+    // Chips bräuchten eine zweite Zeile. Das misst den tatsächlichen Zustand und
+    // hängt nicht an Innenabständen, Schriftmetrik oder Flex-Feinheiten.
+    const meta = c.querySelector('.todo-meta');
+    const wraps = () => {
+      if (!meta || !meta.firstElementChild) return false;
+      let tallest = 0;
+      for (const el of meta.children) {
+        tallest = Math.max(tallest, el.getBoundingClientRect().height);
+      }
+      return meta.getBoundingClientRect().height > tallest + 2;
+    };
+    if (!wraps()) return;
+    // Stufe 1: Wiederholung + Erinnerung + Anzahl in einen Chip
+    c.classList.add('meta-tight');
+    if (!wraps()) return;
+    // Stufe 2: zwei Avatare weichen einem Zähler (nur ab drei Avataren — sonst
+    // fehlt die Vorlage im Markup und die Klasse bleibt wirkungslos)
+    c.classList.add('meta-tighter');
   });
 }
 function ensureTodoMetaObserver() {
+  ensureTodoMetaLateObserver();
   if (todoMetaRO || typeof ResizeObserver === 'undefined') return;
   const area = document.getElementById('todoListArea');
   if (!area) return;
@@ -3306,6 +3541,23 @@ function todoRowHtml(it, draggable, showBadges) {
   // sonst neutral. Erledigte Aufgaben bleiben neutral (nicht rot/orange).
   const dueState = it.done ? '' : classifyDue(it);
   const dueBadgeClass = dueState === 'overdue' ? 'due-overdue' : (dueState === 'today' ? 'due-today' : '');
+  const notifies = it.notification === true;
+  // Stufe 1 der Meta-Verdichtung: Wiederholung, Erinnerung und Anzahl in EINEM
+  // Chip. Erst ab zwei dieser Angaben lohnt es sich — ein Chip durch einen Chip
+  // zu ersetzen spart nichts. Beide Varianten stehen im Markup, layoutTodoMeta
+  // schaltet per Klasse um (kein Neu-Rendern beim Messen).
+  const metaCount = (recurs ? 1 : 0) + (notifies ? 1 : 0) + (qty > 1 ? 1 : 0);
+  const combined = metaCount >= 2
+    ? `<span class="badge attr meta-combined" title="${escapeHtml([
+        recurs ? recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue) : '',
+        notifies ? translate('Notification') : '',
+        qty > 1 ? qty + '×' : '',
+      ].filter(Boolean).join(' · '))}">` +
+      (recurs ? '<i class="fa-light fa-repeat"></i>' : '') +
+      (notifies ? '<i class="fa-light fa-bell"></i>' : '') +
+      (qty > 1 ? `<span>${qty}×</span>` : '') +
+      '</span>'
+    : '';
   return `<div class="todo-card${it.done ? ' done-row' : ''}" data-id="${it.id}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
@@ -3315,9 +3567,10 @@ function todoRowHtml(it, draggable, showBadges) {
     (it.info ? `<span class="todo-info">${escapeHtml(it.info)}</span>` : '') +
     `</span><span class="todo-side"><span class="todo-meta">` +
     renderAvatarStack(it.assignedTo) +
-    (qty > 1 ? `<span class="badge quantity">${qty}×</span>` : '') +
-    (recurs ? `<span class="badge attr" title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>` : '') +
-    (it.notification === true ? `<span class="badge attr" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
+    (qty > 1 ? `<span class="badge quantity${combined ? ' meta-split' : ''}">${qty}×</span>` : '') +
+    (recurs ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>` : '') +
+    (notifies ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
+    combined +
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
     (showBadges ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
     `</span>` +
@@ -3373,14 +3626,14 @@ function renderFavorites() {
   if (detail && detail.mediaId) prefetchMediaType(detail.mediaId);
 
   if (!detail) {
-    let html = `<div class="screen-head"><h2>${translate('Favorites')}</h2>` +
+    let html = `<div class="screen-head" data-key="head"><h2>${translate('Favorites')}</h2>` +
       `<button class="icon-btn" id="btnFavCreate" aria-label="${translate('New favorite list')}"><i class="fa-light fa-plus"></i></button></div>`;
     if (lists.length === 0) {
-      html += `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No favorite lists')}</div>`;
+      html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-heart"></i>${translate('No favorite lists')}</div>`;
     }
     for (const list of lists) {
       const count = (list.items || []).length;
-      html += `<div class="fav-card">` +
+      html += `<div class="fav-card" data-key="fav:${escapeHtml(list.id)}">` +
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-cart-plus"></i></div>` +
         `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
@@ -3390,20 +3643,26 @@ function renderFavorites() {
         `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
         '</div></div>';
     }
-    if (!renderInto(el, html)) return;
-    document.getElementById('btnFavCreate').addEventListener('click', () => {
+    const freshFav = renderRows(el, html);
+    if (freshFav === false) return;
+    const curLists = () => {
+      const s = instState(selectedShoppingID()) || {};
+      return Array.isArray(s.favoriteLists) ? s.favoriteLists : [];
+    };
+    const headNode = freshFav.find(n => n.querySelector && n.querySelector('#btnFavCreate'));
+    if (headNode) headNode.querySelector('#btnFavCreate').addEventListener('click', () => {
       showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
-        if (name.trim()) sdCall(id, 'CreateFavoriteList', { name: name.trim() });
+        if (name.trim()) sdCall(selectedShoppingID(), 'CreateFavoriteList', { name: name.trim() });
       });
     });
-    el.querySelectorAll('[data-addall]').forEach(btn => btn.addEventListener('click', (e) => {
+    freshFav.forEach(node => (node.querySelectorAll ? node.querySelectorAll('[data-addall]') : []).forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      addFavListToCart(id, lists.find(l => l.id === btn.dataset.addall));
-    }));
-    el.querySelectorAll('.fav-card').forEach(card => {
+      addFavListToCart(selectedShoppingID(), curLists().find(l => l.id === btn.dataset.addall));
+    })));
+    freshFav.filter(n => n.classList && n.classList.contains('fav-card')).forEach(card => {
       const row = card.querySelector('.fav-row');
       const listId = row.dataset.list;
-      const list = lists.find(l => l.id === listId);
+      const list = () => curLists().find(l => l.id === listId);
       // Swipe links = Liste löschen (mit Bestätigung wie im Menü), rechts = alles auf die Einkaufsliste.
       bindCardSwipe(card, '.fav-row',
         () => {
@@ -3412,10 +3671,10 @@ function renderFavorites() {
           row.style.transform = '';
           showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
             if (favDetailListId === listId) favDetailListId = null;
-            sdCall(id, 'DeleteFavoriteList', listId);
+            sdCall(selectedShoppingID(), 'DeleteFavoriteList', listId);
           });
         },
-        () => { addFavListToCart(id, list); }
+        () => { addFavListToCart(selectedShoppingID(), list()); }
       );
       row.addEventListener('click', (e) => {
         if (card.dataset.swiped === '1') return;
@@ -3428,12 +3687,12 @@ function renderFavorites() {
   }
 
   // Detailansicht
-  let html = `<div class="screen-head">` +
+  let html = `<div class="screen-head" data-key="detailhead">` +
     `<button class="icon-btn" id="btnFavBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
     `<h2>${escapeHtml(detail.name)}</h2></div>`;
   const items = detail.items || [];
   if (items.length === 0) {
-    html += `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No items yet')}</div>`;
+    html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-heart"></i>${translate('No items yet')}</div>`;
   }
   for (const it of items) {
     const img = getProductImageUrl(it.name) || getProductImageUrl(it.notes || '');
@@ -3454,7 +3713,7 @@ function renderFavorites() {
       side += `<span class="amount-badge">${escapeHtml(amount)}</span>`;
     }
     side += `<button class="heart-btn" data-editfav="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>`;
-    html += `<div class="item-card" data-name="${escapeHtml(it.name)}">` +
+    html += `<div class="item-card" data-key="favitem:${escapeHtml(it.name)}" data-name="${escapeHtml(it.name)}">` +
       `<div class="swipe-under"><i class="fa-light fa-heart-crack"></i></div>` +
       `<div class="item-card-content">` +
       `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
@@ -3463,22 +3722,39 @@ function renderFavorites() {
       (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
       `</span><span class="item-side">${side}</span></div></div>`;
   }
-  html += `<div class="fav-actions">` +
+  html += `<div class="fav-actions" data-key="favactions">` +
     ((detail.url || detail.mediaId) ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
     `<button id="btnFavDelete" class="destructive"><i class="fa-light fa-trash"></i> ${translate('Delete list')}</button>` +
     `</div>`;
-  if (!renderInto(el, html)) return;
+  const freshDetail = renderRows(el, html);
+  if (freshDetail === false) return;
 
-  document.getElementById('btnFavBack').addEventListener('click', () => { favDetailListId = null; renderFavorites(); });
-  document.getElementById('btnFavDelete').addEventListener('click', () => {
+  // Aktuelle Detail-Liste beim Ereignis auflösen, nicht beim Rendern festhalten.
+  const curDetail = () => {
+    const s = instState(selectedShoppingID()) || {};
+    return (Array.isArray(s.favoriteLists) ? s.favoriteLists : []).find(l => l.id === favDetailListId) || detail;
+  };
+  const pick = (sel) => {
+    for (const n of freshDetail) {
+      if (n.id === sel.slice(1)) return n;
+      if (n.querySelector) { const hit = n.querySelector(sel); if (hit) return hit; }
+    }
+    return null;
+  };
+
+  const btnBack = pick('#btnFavBack');
+  if (btnBack) btnBack.addEventListener('click', () => { favDetailListId = null; renderFavorites(); });
+  const btnDelete = pick('#btnFavDelete');
+  if (btnDelete) btnDelete.addEventListener('click', () => {
     showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+      const listId = favDetailListId;
       favDetailListId = null;
-      sdCall(id, 'DeleteFavoriteList', detail.id);
+      sdCall(selectedShoppingID(), 'DeleteFavoriteList', listId);
     });
   });
-  const btnFavOpenRecipe = document.getElementById('btnFavOpenRecipe');
+  const btnFavOpenRecipe = pick('#btnFavOpenRecipe');
   if (btnFavOpenRecipe) btnFavOpenRecipe.addEventListener('click', () => {
     // Nur http(s): detail.url stammt aus KI-Extraktion bzw. gespeicherten Listen —
     // javascript:/data:-URLs dürfen hier nicht ausgeführt werden.
@@ -3494,19 +3770,28 @@ function renderFavorites() {
     if (knownPdf && openMediaExternally(detail.mediaId)) return;
     openRecipePhoto(detail.mediaId, knownPdf);
   });
-  document.getElementById('btnFavAddAll').addEventListener('click', () => addFavListToCart(id, detail));
-  document.getElementById('btnFavAddItem').addEventListener('click', () => openFavItemEditor(id, detail.id, null));
-  el.querySelectorAll('.item-card').forEach(card => {
+  const btnAddAll = pick('#btnFavAddAll');
+  if (btnAddAll) btnAddAll.addEventListener('click', () => addFavListToCart(selectedShoppingID(), curDetail()));
+  const btnAddItem = pick('#btnFavAddItem');
+  if (btnAddItem) btnAddItem.addEventListener('click', () => openFavItemEditor(selectedShoppingID(), curDetail().id, null));
+
+  freshDetail.filter(n => n.classList && n.classList.contains('item-card')).forEach(card => {
     const name = card.dataset.name;
-    const item = items.find(i => i.name === name);
-    bindCardSwipe(card, '.item-card-content', () => sdCall(id, 'RemoveItemFromFavoriteList', { listId: detail.id, name }));
+    const curFavItem = () => (curDetail().items || []).find(i => i.name === name);
+    bindCardSwipe(card, '.item-card-content',
+      () => sdCall(selectedShoppingID(), 'RemoveItemFromFavoriteList', { listId: curDetail().id, name }));
     const editBtn = card.querySelector('[data-editfav]');
-    if (editBtn) editBtn.addEventListener('click', () => openFavItemEditor(id, detail.id, item));
+    if (editBtn) editBtn.addEventListener('click', () => openFavItemEditor(selectedShoppingID(), curDetail().id, curFavItem()));
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      const item = curFavItem();
       if (!item) return;
       const next = Math.max(1, (parseInt(item.amount) || 1) + parseInt(btn.dataset.step));
-      sdCall(id, 'UpdateFavoriteItem', { listId: detail.id, oldName: item.name, newName: item.name, category: item.category || '', amount: String(next), notes: item.notes || '' });
+      // Sofort lokal übernehmen wie in der Einkaufsliste — renderRows() fasst
+      // dabei nur diese eine Zeile an.
+      item.amount = String(next);
+      renderFavorites();
+      sdCall(selectedShoppingID(), 'UpdateFavoriteItem', { listId: curDetail().id, oldName: item.name, newName: item.name, category: item.category || '', amount: String(next), notes: item.notes || '' });
     }));
   });
 }

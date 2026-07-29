@@ -21,6 +21,11 @@ class SymDoBridge extends IPSModuleStrict
     private const SDWA_MODULE_GUID     = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
     private const HOOK_PATH            = 'lists/app';
     private const WEBAPP_HOOK_PATH     = 'lists/webapp';
+    // Eigener Pfad für den Push-WebSocket. Bewusst getrennt von HOOK_PATH, damit
+    // WebSocket-Frames gar nicht erst in den REST-Router geraten (Symcon ruft das
+    // Hook-Ziel pro Frame mit REQUEST_METHOD=GET und Body in php://input auf).
+    private const WS_HOOK_PATH         = 'lists/ws';
+    private const WEBHOOK_CONTROL_GUID = '{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}';
     private const API_VERSION          = 1;
     private const PAIRING_TTL          = 600;
     private const ACTION_DEDUP_TTL     = 86400;
@@ -42,6 +47,11 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterAttributeString('HiddenInstances', '[]');
         $this->RegisterAttributeString('RecipePhotoCategory', ''); // Kategorie-ID für „Rezeptfotos"
+        // Einwilligung in die Datenschutzerklärung der KI-Analyse. Attribut statt
+        // Property: kein Zustand, den man im Formular „mal eben" umschaltet, und
+        // er wird ohne Übernehmen sofort wirksam.
+        $this->RegisterAttributeBoolean('AiPrivacyAccepted', false);
+        $this->RegisterAttributeString('AiPrivacyAcceptedAt', '');
         $this->RegisterPropertyString('Users', '[]');
         // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
@@ -73,7 +83,78 @@ class SymDoBridge extends IPSModuleStrict
         }
 
         $this->EnsureUserIDs();
+
+        // Push-Kanal verdrahten. Die Hook-Registrierung steht bewusst HIER und
+        // nicht in Create() wie die beiden anderen Hooks: sie ist flüchtig, und
+        // Create() läuft bei einem Modul-Reload ohne Kernel-Neustart nicht erneut
+        // — der Pfad lieferte dann bis zum nächsten Neustart 404 (gemessen).
+        // ApplyChanges läuft in beiden Fällen, die Registrierung ist idempotent.
+        $this->RegisterHook(self::WS_HOOK_PATH);
+        $this->WsResubscribe();
+
         $this->SetStatus(IS_ACTIVE);
+    }
+
+    /**
+     * Abonniert die Stat-Variablen aller Listen-Instanzen, damit Änderungen den
+     * Push-Kanal auslösen. Gleiches Muster wie in der Kachel (SymDoWebApp), aber
+     * absichtlich eigenständig: die Bridge ist die API für Web- und iOS-App und
+     * darf nicht davon abhängen, dass eine SymDoWebApp-Instanz existiert.
+     *
+     * Der Abo-Stand wird NICHT in einem Attribut gemerkt, sondern jedes Mal aus der
+     * Instanzliste neu abgeleitet. Grund: ein in Create() registriertes Attribut
+     * existiert nach einem reinen Modul-Reload noch nicht, ReadAttributeString
+     * liefert dann `false` — das hat ApplyChanges zerlegt. Ohne Attribut ist die
+     * Methode nach jedem Reload sofort funktionsfähig. Preis: das Abo einer
+     * Variablen, deren Instanz gelöscht wurde, bleibt bis zum nächsten
+     * Kernel-Neustart bestehen (harmlos, sie feuert nicht mehr).
+     */
+    private function WsResubscribe(): void
+    {
+        foreach ($this->WsTriggerVariables() as $varID) {
+            // Erst abmelden, dann neu anmelden — hält das Abo bei mehrfachem
+            // ApplyChanges eindeutig, ohne einen gespeicherten Stand zu brauchen.
+            $this->UnregisterMessage($varID, VM_UPDATE);
+            $this->RegisterMessage($varID, VM_UPDATE);
+        }
+    }
+
+    /** @return list<int> Stat-Variablen aller Listen-Instanzen, die eine Änderung anzeigen. */
+    private function WsTriggerVariables(): array
+    {
+        $result = [];
+        foreach ($this->GetListInstances() as $inst) {
+            $idents = $inst['kind'] === 'shopping'
+                ? ['ItemCount', 'LastUsed']
+                : ['OpenTasks', 'OverdueTasks', 'DueTodayTasks'];
+            foreach ($idents as $ident) {
+                $varID = @IPS_GetObjectIDByIdent($ident, (int)$inst['id']);
+                if (is_int($varID) && $varID > 0 && IPS_VariableExists($varID)) {
+                    $result[] = $varID;
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Sendet die „Türklingel" an alle auf dem WS-Hook verbundenen Clients.
+     *
+     * Bewusst OHNE Nutzdaten: der Upgrade wird von Symcon akzeptiert, bevor eigener
+     * Code läuft — es gibt also keine Authentifizierung beim Verbindungsaufbau und
+     * kein Disconnect-Ereignis. Ein Broadcast erreicht damit auch nicht angemeldete
+     * Clients. Deshalb enthält er nur „irgendetwas hat sich geändert"; den Inhalt
+     * holt der Client danach über die token-authentifizierte REST-API.
+     */
+    private function WsPushDirty(): void
+    {
+        $controls = IPS_GetInstanceListByModuleID(self::WEBHOOK_CONTROL_GUID);
+        if ($controls === []) {
+            return;
+        }
+        // Der Pfad MUSS mit '/hook/' beginnen — andere Schreibweisen liefern true,
+        // senden aber nichts. Der Rückgabewert ist ohnehin kein Zustellnachweis.
+        @WC_PushMessage($controls[0], '/hook/' . self::WS_HOOK_PATH, json_encode(['t' => 'dirty']));
     }
 
     /** Assigns stable ids to user rows created in the form (runs once per new row). */
@@ -283,6 +364,18 @@ class SymDoBridge extends IPSModuleStrict
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->ApplyChanges();
+            return;
+        }
+        if ($Message === VM_UPDATE) {
+            // Direkt senden, ohne Entprell-Timer. Eine Mutation schreibt 2-3
+            // Stat-Variablen, ergibt also 2-3 Signale — das ist gewollt billig:
+            // ein Signal ist ein leerer WebSocket-Frame (kernelseitig ~0,03 ms),
+            // und der Client fasst sie mit 150 ms Entprellung ohnehin zu EINEM
+            // Abgleich zusammen. Ein serverseitiger Timer wäre nur Frame-Kosmetik,
+            // müsste aber in Create() registriert werden — und existiert damit
+            // nach einem reinen Modul-Reload nicht, was hier still Signale
+            // verschluckt hätte.
+            $this->WsPushDirty();
         }
     }
 
@@ -303,6 +396,7 @@ class SymDoBridge extends IPSModuleStrict
             ? sprintf($this->Translate('Symcon Connect: %s'), $connectUrl)
             : $this->Translate('No Symcon Connect instance found — remote access for the app is unavailable.');
         $this->SetFormElementProperty($form['elements'], 'ConnectInfo', 'caption', $info);
+        $this->SetFormElementProperty($form['elements'], 'LocalUrlHint', 'caption', $this->LocalUrlHint());
         $this->SetFormElementProperty($form['elements'], 'PairedDevicesList', 'values', $this->BuildDeviceRows());
 
         // KI-Formular: nur die Felder des gewählten Anbieters zeigen (Anfangszustand).
@@ -310,7 +404,74 @@ class SymDoBridge extends IPSModuleStrict
             $this->SetFormElementProperty($form['elements'], $name, 'visible', $visible);
         }
 
+        // Ohne Einwilligung bleibt der KI-Schalter gesperrt — außer der Speicher
+        // dafür existiert noch gar nicht (Modul aktualisiert, Kernel noch nicht
+        // neu gestartet). Dann wäre die Sperre eine Falle: zustimmen ginge nicht,
+        // abschalten auch nicht. Bis dahin bleibt alles bedienbar.
+        $accepted = $this->AiPrivacyAccepted();
+        $storable = $this->AiPrivacyStorable();
+        $this->SetFormElementProperty($form['elements'], 'AiEnabled', 'enabled', $accepted || !$storable);
+        $this->SetFormElementProperty($form['elements'], 'AiPrivacyStatus', 'caption', $this->AiPrivacyStatusText());
+        $this->SetFormElementProperty($form['elements'], 'AiPrivacyRevoke', 'visible', $accepted);
+        $this->SetFormElementProperty($form['elements'], 'AiPrivacyAccept', 'enabled', !$accepted);
+
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Einwilligung in die Datenschutzerklärung der KI-Analyse.
+     *
+     * Defensiv gelesen: Ein Modul-Reload führt `Create()` nicht erneut aus, das
+     * Attribut fehlt also bis zum nächsten Kernel-Neustart. Ohne diesen Schutz
+     * würde das Konfigurationsformular dort mit einem Fehler abbrechen.
+     */
+    private function AiPrivacyAccepted(): bool
+    {
+        try {
+            return (bool)@$this->ReadAttributeBoolean('AiPrivacyAccepted');
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Kann die Einwilligung überhaupt gespeichert werden?
+     *
+     * `WriteAttribute*` auf ein Attribut, das es noch nicht gibt, **wirft nicht** —
+     * es tut still nichts (dieselbe Falle wie beim Bild-Cache: `ReadAttribute*`
+     * liefert dann `false` statt zu scheitern). Deshalb wird hier wirklich
+     * geschrieben und zurückgelesen; der vorherige Wert wird danach restauriert.
+     */
+    private function AiPrivacyStorable(): bool
+    {
+        $previous = @$this->ReadAttributeString('AiPrivacyAcceptedAt');
+        $probe    = 'probe-' . uniqid('', true);
+        @$this->WriteAttributeString('AiPrivacyAcceptedAt', $probe);
+        $ok = (@$this->ReadAttributeString('AiPrivacyAcceptedAt') === $probe);
+        if ($ok) {
+            @$this->WriteAttributeString('AiPrivacyAcceptedAt', is_string($previous) ? $previous : '');
+        }
+        return $ok;
+    }
+
+    private function AiPrivacyStatusText(): string
+    {
+        if (!$this->AiPrivacyStorable()) {
+            return $this->Translate('The consent cannot be stored until the Symcon kernel has been restarted once after this module update. Until then the AI analysis stays switched on as configured.');
+        }
+        if (!$this->AiPrivacyAccepted()) {
+            return $this->Translate('Consent required: open the privacy notice and agree — until then the AI analysis cannot be switched on.');
+        }
+        $at = '';
+        try {
+            $at = (string)@$this->ReadAttributeString('AiPrivacyAcceptedAt');
+        } catch (\Throwable $e) {
+            $at = '';
+        }
+        $when = $at !== '' ? date('d.m.Y H:i', (int)strtotime($at)) : '';
+        return $when !== ''
+            ? sprintf($this->Translate('Consent given on %s.'), $when)
+            : $this->Translate('Consent given.');
     }
 
     /** Welche KI-Felder je Anbieter sichtbar sind. */
@@ -342,6 +503,56 @@ class SymDoBridge extends IPSModuleStrict
      */
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        if ($Ident === 'TestLocalUrl') {
+            $this->TestLocalUrl(trim((string)$Value));
+            return;
+        }
+
+        // Einwilligung aus dem Konfigurationsformular (Popup-Knopf bzw. Widerruf).
+        if ($Ident === 'AiPrivacyConsent') {
+            $accepted = ($Value === true || $Value === 1 || $Value === '1' || $Value === 'true');
+            // Zuerst prüfen, OB gespeichert werden kann. Beim Widerruf sähen
+            // „gewünscht = false" und „gelesen = false" sonst gleich aus — die
+            // Rücklese-Prüfung unten liefe ins Leere und der Widerruf würde die
+            // KI abschalten, obwohl die Zustimmung nie gespeichert werden konnte.
+            if (!$this->AiPrivacyStorable()) {
+                $this->UpdateFormField(
+                    'AiPrivacyStatus',
+                    'caption',
+                    $this->Translate('The consent cannot be stored until the Symcon kernel has been restarted once after this module update. Until then the AI analysis stays switched on as configured.')
+                );
+                return;
+            }
+            @$this->WriteAttributeBoolean('AiPrivacyAccepted', $accepted);
+            @$this->WriteAttributeString('AiPrivacyAcceptedAt', $accepted ? date('c') : '');
+            // Schreiben und zurücklesen: fehlt das Attribut (Kernel seit dem
+            // Modul-Update nicht neu gestartet), schlägt das Schreiben STILL fehl.
+            // Ohne diese Prüfung bliebe der Schalter gesperrt und niemand wüsste
+            // warum — und ein Widerruf würde die KI abschalten, ohne dass sich
+            // die Zustimmung je wieder erteilen ließe.
+            if ($this->AiPrivacyAccepted() !== $accepted) {
+                $this->UpdateFormField(
+                    'AiPrivacyStatus',
+                    'caption',
+                    $this->Translate('The consent cannot be stored until the Symcon kernel has been restarted once after this module update. Until then the AI analysis stays switched on as configured.')
+                );
+                return;
+            }
+            // Widerruf schaltet die KI ab: sie ohne Einwilligung weiterlaufen zu
+            // lassen wäre genau das, was die Sperre verhindern soll.
+            if (!$accepted && $this->ReadPropertyBoolean('AiEnabled')) {
+                IPS_SetProperty($this->InstanceID, 'AiEnabled', false);
+                IPS_ApplyChanges($this->InstanceID);
+            }
+            $this->UpdateFormField('AiEnabled', 'enabled', $accepted);
+            if (!$accepted) {
+                $this->UpdateFormField('AiEnabled', 'value', false);
+            }
+            $this->UpdateFormField('AiPrivacyStatus', 'caption', $this->AiPrivacyStatusText());
+            $this->UpdateFormField('AiPrivacyRevoke', 'visible', $accepted);
+            $this->UpdateFormField('AiPrivacyAccept', 'enabled', !$accepted);
+            return;
+        }
         if ($Ident === 'AiTileRequest') {
             $req = json_decode((string)$Value, true);
             if (!is_array($req)) {
@@ -389,6 +600,18 @@ class SymDoBridge extends IPSModuleStrict
     {
         try {
             $path = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+
+            // Push-Kanal: reiner Ausgangskanal. Symcon ruft das Hook-Ziel bei JEDEM
+            // eingehenden Frame auf — erkennbar an HTTP_UPGRADE (dann ist
+            // REQUEST_METHOD=GET, aber php://input trägt den Frame). Der Client
+            // sendet nichts; alles hier Eintreffende wird verworfen, damit ein
+            // Frame nie als REST-Aufruf fehlinterpretiert wird. `echo` erreicht
+            // einen WebSocket-Client ohnehin nicht.
+            $isWebSocket = strtolower((string)($_SERVER['HTTP_UPGRADE'] ?? '')) === 'websocket';
+            if ($isWebSocket || str_starts_with($path, '/hook/' . self::WS_HOOK_PATH)) {
+                return;
+            }
+
             // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
             // Seite authentifiziert sich danach selbst gegen die JSON-API).
             if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
@@ -562,6 +785,98 @@ class SymDoBridge extends IPSModuleStrict
      * home network when Symcon Connect is unavailable. Best effort — assumes
      * the default web server port.
      */
+    /**
+     * Prüft die eingetragene lokale URL und schreibt das Ergebnis ins Formular.
+     *
+     * Der wichtigste Fall ist die Warnung bei `http://`: der Browser blockiert
+     * einen solchen Aufruf aus der über Connect geladenen Seite als Mixed Content,
+     * und zwar OHNE Fehlermeldung. Ohne diesen Hinweis würde man endlos suchen,
+     * warum die Umschaltung nicht greift.
+     *
+     * Die Erreichbarkeitsprüfung erfolgt vom Server aus. Sie beweist nicht, dass
+     * der BROWSER dem Zertifikat vertraut — das kann nur er selbst entscheiden.
+     * Deshalb wird auch ein Zertifikatsfehler nur berichtet, nicht übergangen.
+     */
+    private function TestLocalUrl(string $url): void
+    {
+        $show = function (string $text): void {
+            $this->UpdateFormField('LocalUrlResult', 'visible', true);
+            $this->UpdateFormField('LocalUrlResult', 'caption', $text);
+        };
+
+        if ($url === '') {
+            $show($this->Translate('No local URL configured — the web app always uses Symcon Connect.'));
+            return;
+        }
+        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        if ($scheme === 'http') {
+            $show($this->Translate('This URL uses http://. A page loaded over Symcon Connect may not call it — the browser blocks it silently as mixed content. HTTPS is required.'));
+            return;
+        }
+        if ($scheme !== 'https') {
+            $show($this->Translate('Please enter a full URL starting with https://.'));
+            return;
+        }
+
+        $probe = rtrim($url, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/ping';
+        $ch = curl_init($probe);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+        $body   = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err    = curl_error($ch);
+        $errNo  = curl_errno($ch);
+        curl_close($ch);
+
+        if ($errNo === CURLE_SSL_CACERT || $errNo === CURLE_PEER_FAILED_VERIFICATION) {
+            $show(sprintf($this->Translate('Reachable, but the certificate is not trusted: %s — a browser would refuse it too.'), $err));
+            return;
+        }
+        if ($body === false) {
+            $show(sprintf($this->Translate('Not reachable from Symcon: %s'), $err));
+            return;
+        }
+        $decoded = json_decode((string)$body, true);
+        if ($status === 200 && is_array($decoded) && ($decoded['ok'] ?? false) === true) {
+            $show($this->Translate('Works: SymDo Bridge reached over the local URL with a valid certificate. On the home network the web app will use it from now on.'));
+            return;
+        }
+        $show(sprintf($this->Translate('Answered with HTTP %d, but this is not a SymDo Bridge endpoint. Does the URL point at this Symcon installation?'), $status));
+    }
+
+    /**
+     * Hinweistext unter dem Feld: nennt die erkannten LAN-Adressen dieses Servers
+     * und sagt, was daran noch fehlt.
+     *
+     * Ein automatischer Eintrag ist bewusst NICHT möglich: der Browser lädt die
+     * Seite über Connect per HTTPS und verweigert danach jeden `http://`-Aufruf
+     * (Mixed Content, stillschweigend). Nötig ist also ein HTTPS-Endpunkt mit
+     * browservertrautem Zertifikat — und für eine private IP stellt keine CA ein
+     * solches Zertifikat aus. Die Adressen taugen daher nur als Ausgangspunkt für
+     * einen Reverse Proxy bzw. eine WebServer-Instanz mit eigenem Zertifikat.
+     */
+    private function LocalUrlHint(): string
+    {
+        $ips = [];
+        foreach ($this->GetLocalUrls() as $url) {
+            $host = parse_url($url, PHP_URL_HOST);
+            if (is_string($host) && $host !== '') {
+                $ips[] = $host;
+            }
+        }
+        if ($ips === []) {
+            return $this->Translate('No local network address detected.');
+        }
+        return sprintf(
+            $this->Translate('Detected local addresses of this server: %s — the iOS app uses these directly. The browser needs HTTPS with a trusted certificate, so enter the host name of a reverse proxy or a WebServer instance here, not the bare IP address.'),
+            implode(', ', $ips)
+        );
+    }
+
     private function GetLocalUrls(): array
     {
         if (!function_exists('net_get_interfaces')) {
