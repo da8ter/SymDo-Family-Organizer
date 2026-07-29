@@ -292,8 +292,8 @@ html[data-symdo-theme="dark"] .member-bar {
   .member-bar.collapsed:hover,
   .member-bar.collapsed:hover .avatar-btn { transition: opacity .15s ease; }
 }
-.member-bar.has-selection .avatar-btn { opacity: .4; }
-.member-bar.has-selection .avatar-btn.selected { opacity: 1; }
+/* Nicht gewählte Mitglieder werden NICHT abgedunkelt: die Gesichter bleiben
+   erkennbar, die Auswahl markiert allein der Ring unten (.selected::after). */
 .member-bar .avatar-btn.selected::after {
   content: '';
   position: absolute;
@@ -2895,7 +2895,7 @@ function renderDashboard() {
   // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Das Datum folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
   if (store.users.length > 0) {
-    html += `<div class="member-bar${dashMemberIds.size ? ' has-selection' : ''}">`;
+    html += '<div class="member-bar">';
     for (const u of store.users) {
       html += `<button class="avatar-btn${dashMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
         avatarHtml(u, '') + '</button>';
@@ -3322,7 +3322,6 @@ function renderTodoMembers() {
   if (!el) return;
   if (store.users.length === 0) { el.style.display = 'none'; renderInto(el, ''); return; }
   el.style.display = '';
-  el.classList.toggle('has-selection', todoMemberIds.size > 0);
   const membersHtml = store.users.map(u =>
     `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
