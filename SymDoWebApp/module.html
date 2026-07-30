@@ -1186,8 +1186,12 @@ html[data-symdo-theme="dark"] .member-bar {
    .tabbar) — ohne den svg-Selektor verschwindet Größe UND Abstand, sobald das
    Icon nachgeladen ist: display fällt auf inline-block zurück, margin-bottom
    greift gar nicht mehr, Icon und Text rücken zusammen. */
+/* Als Block-Box braucht das Icon margin:auto, um zu zentrieren — text-align auf
+   dem Elternelement wirkt nur auf INLINE-Inhalt, nicht auf Block-Boxen. Bisher
+   klebte es links am Padding-Rand: gemessen 0px seitlicher Margin bei 38px
+   Breite, Icon-Mitte bei 35px gegen eine Container-Mitte bei 245px. */
 .empty-state i,
-.empty-state svg { font-size: 34px; margin-bottom: 10px; display: block; }
+.empty-state svg { font-size: 34px; margin: 0 auto 10px; display: block; }
 .empty-state .empty-hint {
   display: block;
   font-size: 13px;
