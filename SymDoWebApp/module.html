@@ -1182,7 +1182,12 @@ html[data-symdo-theme="dark"] .member-bar {
   color: var(--muted);
   padding: 44px 16px;
 }
-.empty-state i { font-size: 34px; margin-bottom: 10px; display: block; }
+/* /icons.js ersetzt <i> durch <svg class="svg-inline--fa"> (siehe Kommentar bei
+   .tabbar) — ohne den svg-Selektor verschwindet Größe UND Abstand, sobald das
+   Icon nachgeladen ist: display fällt auf inline-block zurück, margin-bottom
+   greift gar nicht mehr, Icon und Text rücken zusammen. */
+.empty-state i,
+.empty-state svg { font-size: 34px; margin-bottom: 10px; display: block; }
 
 /* ── Scanner (aus dem ShoppingList-Modul übernommen) ──────────────────────── */
 .scanner-body {
