@@ -1188,6 +1188,14 @@ html[data-symdo-theme="dark"] .member-bar {
    greift gar nicht mehr, Icon und Text rücken zusammen. */
 .empty-state i,
 .empty-state svg { font-size: 34px; margin-bottom: 10px; display: block; }
+.empty-state .empty-hint {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 8px auto 0;
+  max-width: 260px;
+  opacity: .75;
+}
 
 /* ── Scanner (aus dem ShoppingList-Modul übernommen) ──────────────────────── */
 .scanner-body {
@@ -1770,6 +1778,20 @@ let cartExpanded = false;
 
 function visibleInstances(kind) {
   return store.instances.filter(i => i.kind === kind && !i.hidden);
+}
+/**
+ * Zusatzzeile für den "keine Liste"-Zustand: nur, wenn WIRKLICH keine Instanz
+ * dieser Art existiert (store.instances enthält auch ausgeblendete, siehe
+ * BuildFullPayload). Existiert eine, ist sie nur ausgeblendet — dann wäre der
+ * Rat "Instanz anlegen" falsch, die Liste ist ja schon da.
+ */
+function noInstanceHint(kind) {
+  const total = store.instances.filter(i => i.kind === kind).length;
+  if (total > 0) return '';
+  const key = kind === 'shopping'
+    ? 'Create a Shopping List instance in Symcon so it appears here.'
+    : 'Create a ToDo List instance in Symcon so it appears here.';
+  return `<div class="empty-hint">${translate(key)}</div>`;
 }
 function instState(id) {
   const entry = store.states[String(id)];
@@ -3087,7 +3109,7 @@ function renderShopping() {
   scannerBtn.style.display = (st && st.scannerEnabled !== false) ? '' : 'none';
 
   if (!st) {
-    renderInto(area, `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('No shopping list found')}</div>`);
+    renderInto(area, `<div class="empty-state"><i class="fa-light fa-basket-shopping"></i>${translate('No shopping list found')}${noInstanceHint('shopping')}</div>`);
     return;
   }
   const sections = openSections(st);
@@ -3354,7 +3376,7 @@ function renderTodos() {
 
   const area = document.getElementById('todoListArea');
   if (!st) {
-    renderInto(area, `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}</div>`);
+    renderInto(area, `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}${noInstanceHint('todo')}</div>`);
     return;
   }
   const sortMode = String(st.sortMode || 'created');
@@ -3624,7 +3646,7 @@ function renderFavorites() {
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
   if (!st) {
-    renderInto(el, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}</div>`);
+    renderInto(el, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}${noInstanceHint('shopping')}</div>`);
     return;
   }
   const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));

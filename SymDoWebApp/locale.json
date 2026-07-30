@@ -179,7 +179,9 @@
             "Reorder": "Neu anordnen",
             "Detect tasks": "Aufgaben erkennen",
             "Recipe file": "Rezeptdatei",
-            "Could not load the image.": "Bild konnte nicht geladen werden."
+            "Could not load the image.": "Bild konnte nicht geladen werden.",
+            "Create a Shopping List instance in Symcon so it appears here.": "Lege in Symcon eine Instanz vom Typ Shopping List (Einkaufsliste) an, damit sie hier erscheint.",
+            "Create a ToDo List instance in Symcon so it appears here.": "Lege in Symcon eine Instanz vom Typ ToDo List an, damit sie hier erscheint."
         }
     }
 }
