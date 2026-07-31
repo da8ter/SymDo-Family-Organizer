@@ -157,48 +157,76 @@ select option { color: #111; background: #fff; }
    Spezifitäten gleich und die späteren Basisregeln würden gewinnen. */
 html {
   --tab-gap:   10px;
-  --tab-inset: 12px;
-  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2);
+  /* --sym-mb MUSS mit hinein: die Leiste sitzt bei bottom: --tab-gap + --sym-mb,
+     rückt mit einem Kachel-Randmaß also nach oben. Ohne diesen Summanden blieb das
+     Polster gleich und die Leiste wanderte in die Eingabezeile — bei
+     marginbottom=24 gemessen: Eingabefeld 12px HINTER der Leiste. Mit dem
+     Summanden bleibt der Abstand zwischen Zeile und Leiste konstant --tab-gap,
+     unabhängig vom eingestellten Rand. */
+  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
+  /* Luft zwischen Eingabezeile und Leiste, zusätzlich zu --tab-gap. Ohne das lag
+     das Eingabefeld nur 12px über der Kapsel und wirkte angeklebt — die Leiste
+     selbst hat 10px zum Fensterrand. */
+  --input-gap: 12px;
+  /* Leiste und Eingabezeile 10 % schmaler als der Inhalt. Beide Werte sind die HALBE
+     Ersparnis, weil sie links und rechts gleichzeitig anliegen und die Elemente
+     mittig bleiben sollen.
+     Zwei verschiedene Größen, weil die Bezugsgrößen verschieden sind: die Leiste ist
+     fixiert, dort zählen nur Fensterkoordinaten — die Inhaltsbreite muss aus 100vw
+     minus der Einrückungen gerechnet werden. Die Eingabezeile steht im Inhaltsblock,
+     dort ist ein Prozentwert bereits auf dessen Breite bezogen. */
+  --tab-narrow:   calc((100vw - var(--sym-ms) - var(--sb-pad) * 2 - var(--sbw)) * 0.05);
+  --input-narrow: 5%;
   /* Glas-Optik an EINER Stelle: Leiste und Eingabezeile müssen denselben Wert
      benutzen, sonst driften Transparenz und Weichzeichnung beim nächsten
      Nachjustieren auseinander. */
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
-  --glass-blur: blur(18px) saturate(180%);
+  /* 14.4px = 18px minus 20 %. Der Wert steht an EINER Stelle, deshalb gilt die
+     Absenkung für alle Glasflächen zugleich: Leiste, Eingabefeld, Vorschläge. */
+  --glass-blur: blur(14.4px) saturate(180%);
 }
 html .tabbar {
   position: fixed;
-  left: var(--tab-inset);
-  right: var(--tab-inset);
+  /* Genau so breit wie der übrige Inhalt (Karten, Eingabefeld samt Knöpfen). Weil
+     die Leiste fixiert ist, zählen die Einrückungen der Vorfahren nicht mehr — die
+     Inhaltskanten müssen in Fensterkoordinaten nachgebaut werden:
+       links  --sym-ms                 (padding-left der .app, .screen hat links 0)
+       rechts --sb-pad * 2 + --sbw     (--sb-pad liegt ZWEIMAL an: einmal .app,
+                                        einmal .screen — plus der dauerhaft
+                                        reservierte Scrollstreifen)
+     Der doppelte --sb-pad ist der Kern: die Variable ist als (--sym-ms - --sbw) / 2
+     definiert, damit die Summe genau --sym-ms ergibt und der Inhalt trotz des nach
+     rechts verschobenen Scrollbereichs mittig sitzt. Mit nur einem --sb-pad saß die
+     Leiste 3,3px zu weit rechts (gemessen bei 1000px Fensterbreite, marginside 24)
+     — richtige Breite, falsche Mitte.
+     max-width plus beidseitiges margin: auto zentriert die Leiste in diesem Kasten
+     und deckelt sie bei denselben 720px wie .content. Über left/right allein ginge
+     das nicht: die Kanten stimmten, auf breiten Fenstern liefe die Leiste aber
+     weiter als der Inhalt.
+
+     Davon dann 10 % ab: --tab-narrow ist die halbe Ersparnis und wandert auf BEIDE
+     Einrückungen, damit die Leiste mittig bleibt. Der Deckel muss mit (0.9 * 720px),
+     sonst bliebe sie auf breiten Fenstern bei voller Inhaltsbreite stehen — dort
+     begrenzt max-width, nicht left/right. --input-narrow hält die Eingabezeile auf
+     demselben Maß (Prozent des Inhaltsblocks, siehe html .inputbar). */
+  left: calc(var(--sym-ms) + var(--tab-narrow));
+  right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
   bottom: calc(var(--tab-gap) + var(--sym-mb));
   width: auto;
-  margin-left: 0;
+  max-width: calc(720px * 0.9);
+  margin-left: auto;
+  margin-right: auto;
   border: 1px solid var(--border);
   border-radius: 999px;
-  /* KEIN eigener backdrop-filter und keine Kartenfarbe: die Leiste liegt komplett
-     im Band unten (gemessen: Leiste 521..589 innerhalb Band 511..599). Beides
-     doppelt angewandt ergab effektiv ~80 % Deckkraft statt 55 % und doppelten
-     Blur — die Leiste wirkte dichter als die Eingabezeile, obwohl die Werte
-     identisch waren. Den Hintergrund liefert jetzt allein das Band; die Kapsel
-     bleibt durch Rahmen, Schatten und eine minimale Aufhellung erkennbar.
-     --content-color statt eines festen Weiß, damit es im Hellmodus abdunkelt
-     statt aufzuhellen. */
-  background: color-mix(in srgb, var(--content-color) 5%, transparent);
-  /* Ausdrücklich abschalten: die Basisregel für alle Oberflächen setzt
-     backdrop-filter: blur(10px). Es genügt NICHT, hier nur keinen eigenen Wert zu
-     setzen — der Basiswert bliebe wirksam und die Leiste hätte weiter eine zweite
-     Blur-Schicht (gemessen: blur(10px) trotz vermeintlicher Abschaltung). */
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .10);
-}
-/* Ohne Band (Dashboard, Favoriten — dort gibt es keine Eingabezeile) hätte die
-   Leiste sonst überhaupt keinen Hintergrund mehr, ihr eigener Blur ist ja ins Band
-   gewandert. Dann übernimmt sie ihn wieder selbst. So bleibt es in JEDEM Fall
-   genau eine Glasschicht: mit Eingabezeile das Band, ohne sie die Leiste. */
-html .app:not(:has(.screen.active .inputbar)) .tabbar {
+  /* Eigene Glasschicht. Sie stammte vorher aus einem Band am unteren Fensterrand,
+     das gleichzeitig die Eingabezeile hinterlegte — deshalb musste der Blur hier
+     abgeschaltet sein, sonst lag er doppelt (gemessen: ~80 % Deckkraft statt 55 %).
+     Seit die Eingabezeile keinen Flächenhintergrund mehr hat, ist das Band weg und
+     die Leiste bringt ihr Glas wieder selbst mit: eine Schicht, in jedem Tab. */
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .10);
 }
 /* Scrollbereich: Polster in Höhe der Leiste, damit die letzte Zeile erreichbar
    bleibt und nicht dauerhaft darunter liegt. */
@@ -217,124 +245,97 @@ html .screen {
    zusätzliches bottom: var(--tab-clear) zählte den Abstand doppelt und riss eine
    Lücke von einer Leistenhöhe zwischen Eingabe und Leiste (gemessen). */
 
-/* Eingabezeile in derselben Glas-Optik wie die Leiste: gleiche Transparenz,
-   gleiche Weichzeichnung. Der Verlauf des randlosen Aufbaus (deckend nach unten,
-   transparent nach oben) muss dafür weichen — er würde die Fläche unten deckend
-   machen und den Blur wirkungslos erscheinen lassen. */
+/* Die Eingabezeile ist eine reine Trägerfläche OHNE eigenen Hintergrund: Glas hat
+   nur noch das Eingabefeld selbst (Regel weiter unten) und die runden Knöpfe. Der
+   Listeninhalt scrollt damit sichtbar an der Zeile vorbei und wird nur hinter dem
+   Feld weichgezeichnet.
+   background: none ist Pflicht, kein Aufräumen: die Basisregel .inputbar setzt einen
+   Verlauf aus --card-color: ohne ausdrückliches Abschalten bliebe der wirksam. */
 html .inputbar {
-  /* Hintergrund bis an die Fensterkanten, obwohl die Zeile im zentrierten
-     Inhaltsblock steckt (.content, max-width 720px). Die negativen Ränder ziehen
-     die Box bis an den Rand des Scrollbereichs, das Innenabstand-Gegenstück hält
-     die Bedienelemente auf ihrer bisherigen Position — sonst würden Eingabefeld
-     und Knöpfe auf breiten Fenstern bis in die Ecken auseinanderlaufen.
-     Rechts kommt --sbw dazu: der Scrollbalken liegt AUSSERHALB des Scrollports
-     und lässt sich von innen nicht überdecken; ohne diesen Abzug entstünde
-     stattdessen ein waagerechter Scrollbalken (.screen hat overflow-x: auto).
-     Auf Touch-Geräten ist --sbw 0, dort reicht es damit exakt bis zur Kante.
-
-     Die Seiten werden GETRENNT gerechnet, weil die Einrückungen asymmetrisch
-     sind: links das Kachel-Randmaß --sym-ms, rechts --sb-pad plus der
-     Scrollbalken --sbw. Ein symmetrischer Wert landet dann mittig und verfehlt
-     beide Kanten — mit marginside=10 gemessen: 5px links, 6px rechts übrig.
-     Basis ist 50% (halbe Breite des Inhaltsblocks) minus 50vw (halbe
-     Fensterbreite), korrigiert um die halbe Differenz der beiden Einrückungen.
-     Bei --sym-ms 0 und ohne sichtbaren Balken ergibt das links genau 0.
-
-     Die 2px Überlänge fangen Rundungsreste der Zentrierung auf (bei 1000px
-     Fensterbreite blieben sonst 1,3px übrig). Sichtbar wird davon nichts:
-     overflow-x: hidden auf .screen beschneidet den Überschuss, und weil Rand und
-     Innenabstand sich genau aufheben, bleiben die Bedienelemente an ihrem Platz. */
-  --bleed-l: calc(50% - 50vw + (var(--sb-pad) + var(--sbw) - var(--sym-ms)) / 2 - 2px);
-  --bleed-r: calc(50% - 50vw + (var(--sym-ms) - var(--sb-pad) - var(--sbw)) / 2 - 2px);
-  margin-left: var(--bleed-l);
-  margin-right: var(--bleed-r);
-  padding: 24px calc(-1 * var(--bleed-r)) 2px calc(-1 * var(--bleed-l));
-  /* Die ToDo-Zeile ist sticky, hat aber KEINEN z-index (auto) — anders als die
-     Einkaufsliste, wo der .composer mit 5 darüberliegt. Ohne diesen Wert malte das
-     Band (4) über die ToDo-Zeile, sobald die Liste lang genug ist, dass die Zeile
-     unten klebt. Bei kurzer Liste fiel es nicht auf, weil sie dann weit über dem
-     Band steht. Für die Einkaufsliste ist der Wert wirkungslos (dort ist die Zeile
-     static, sticky übernimmt der Composer). */
+  background: none;
+  /* 10 % schmaler, mittig — dasselbe Maß wie die Tab-Leiste. Prozent im Rand bezieht
+     sich auf die Breite des Inhaltsblocks, also genau auf die Kartenbreite. */
+  margin-left: var(--input-narrow);
+  margin-right: var(--input-narrow);
+  /* Oben 24px, damit die letzte Karte nicht am Feld klebt; unten 2px Grundmaß plus
+     --input-gap. Der Kasten ist am unteren Rand des Inhaltsbereichs festgeklemmt,
+     das Innenmaß hebt daher das Eingabefeld an, ohne die Leiste oder das
+     Scroll-Polster zu verschieben.
+     Die Seitenwerte sind 0: die randlose Geometrie (negative Ränder bis an die
+     Fensterkanten, per Innenabstand wieder ausgeglichen) trug ausschließlich den
+     Flächenhintergrund. Ohne den ist sie zwecklos. */
+  padding: 24px 0 calc(2px + var(--input-gap));
+  /* Über dem scrollenden Inhalt: die Liste läuft jetzt sichtbar hinter der Zeile
+     durch, Feld und Knöpfe müssen davor liegen und bedienbar bleiben. */
   z-index: 5;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  /* Nach oben auf VOLLE Transparenz auslaufen, wie beim bisherigen Verlauf. Ein
-     Verlauf im background allein genügt nicht: backdrop-filter wirkt immer auf die
-     ganze Box und hinterließe oben eine harte Blur-Kante. Die Maske blendet
-     deshalb Tönung UND Weichzeichnung gemeinsam aus.
-     Die Maskenfläche ist absichtlich um --tab-clear höher als die Box und dort
-     deckend — sonst würde sie das ::after darunter wegschneiden (Masken clippen
-     Kindelemente, und außerhalb der Maskenfläche gilt „unsichtbar"). */
-  mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
-  mask-size: 100% calc(100% + var(--tab-clear));
-  mask-position: 0 0;
-  mask-repeat: no-repeat;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
-  -webkit-mask-size: 100% calc(100% + var(--tab-clear));
-  -webkit-mask-position: 0 0;
-  -webkit-mask-repeat: no-repeat;
 }
-/* Der Hintergrund muss bis an den unteren Fensterrand reichen. Das übernimmt ein
-   fixiertes Band statt des bisherigen ::after an der Eingabezeile: dessen Bezug
-   war unzuverlässig, weil eine Basisregel .inputbar im Einkaufs-Tab auf static
-   setzt (sticky übernimmt dort der .composer) und das ::after dadurch am Composer
-   hing statt an der Zeile — der Streifen saß nicht unter der Eingabe.
-   Das Band geht über die volle Breite bis zur Unterkante und nimmt keine Klicks
-   an; zur Einordnung in die Stapelreihenfolge siehe den z-index weiter unten. */
+/* Der 12px-Streifen der Basisregel bleibt aus: er ist deckend in --card-color und
+   wäre genau der Flächenhintergrund, der hier nicht mehr sein soll. */
 html .inputbar::after { content: none; }
-/* Nur zeigen, wenn der aktive Tab überhaupt eine Eingabezeile hat: auf Dashboard
-   und Favoriten gibt es keine, dort wäre das Band ein Hintergrund ohne Anlass.
-   Über :has() an die Zeile gekoppelt statt die Tabs aufzuzählen — so stimmt es
-   auch, wenn später ein Tab eine Eingabe bekommt oder verliert. */
-html .app:has(.screen.active .inputbar)::after {
-  content: '';
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* Etwas höher als --tab-clear und oben ausgeblendet. Grund: zwischen der
-     Unterkante der Eingabezeile und der Bandoberkante blieben sonst 11px roher
-     Inhalt (gemessen). Die Herkunft dieser 11px hängt am Innenabstand des
-     Scrollbereichs und kann je nach Tab abweichen — statt sie fest einzurechnen,
-     überdeckt das Band sie mit einem Auslauf. Dadurch gibt es auch keine harte
-     Oberkante, und auf Tabs ohne Eingabezeile fällt der Auslauf nicht auf. */
-  height: calc(var(--tab-clear) + 16px);
+
+/* Das fixierte Band am unteren Fensterrand ist entfallen. Es hatte den Hintergrund
+   der Eingabezeile bis zur Fensterkante verlängert UND der Tab-Leiste ihr Glas
+   geliefert — beides ist mit dem Flächenhintergrund weggefallen, die Leiste bringt
+   ihren Blur seither selbst mit (siehe html .tabbar). */
+
+/* Glas jetzt auf dem Eingabefeld selbst. Es kommt aus der allgemeinen Feldregel mit
+   deckendem --surface; hier dieselbe Tönung und Weichzeichnung wie bei der Leiste,
+   damit Feld und Kapsel als eine Materialfamilie lesbar bleiben. Rahmen bleibt: bei
+   35 % Tönung ist die Feldkante sonst kaum auszumachen. */
+html .inputbar input {
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
-  /* Über dem scrollenden Inhalt (z-index auto), aber UNTER der Eingabezeile: der
-     .composer liegt auf 5. Mit einem höheren Wert malte das Band über die Zeile
-     und verschleierte deren unteren Rand samt Knöpfen (gemessen: 5px der Zeile,
-     3px des Hinzufügen-Knopfs) — ein Dekor-Layer darf kein Bedienelement
-     überdecken. Die Leiste bleibt mit 40 darüber. */
-  z-index: 4;
-  pointer-events: none;
 }
-/* Beim Tippen hinterlegt .composer die offene Vorschlagsliste deckend, damit sie
-   nicht durchscheint. Dieser Kasten liegt HINTER der Eingabezeile — bliebe er
-   deckend, wäre die Zeile genau beim Tippen die einzige Stelle ohne Glas-Optik.
-   Also dieselbe Transparenz, aber BEWUSST OHNE eigenen backdrop-filter: ein
-   Element mit backdrop-filter wird zum Backdrop-Root und nimmt seinen Kindern
-   die Sicht nach hinten — die Zeile und ihr ::after würden dann nur noch den
-   Composer weichzeichnen statt den Listeninhalt. Den Blur liefern die Kinder. */
+/* Die durchlässigen Knöpfe der Eingabezeile brauchen dieselbe Weichzeichnung wie
+   Feld und Leiste. Solange die Zeile eine Glasfläche hatte, fiel das nicht auf — sie
+   lag darauf. Ohne Trägerfläche scheint der Listeninhalt ungefiltert durch.
+   Wirksam ist derzeit nur der abgeblendete Hinzufügen-Knopf: .secondary steht zwar
+   auf --surface (nur 7 % Deckkraft), kommt im Markup aber NICHT vor — die Regel ist
+   Vorsorge, damit ein später ergänzter Sekundärknopf nicht ohne Filter dasteht. */
+html .inputbar .round-btn.secondary,
+html .inputbar .round-btn:disabled {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+/* Beim abgeblendeten Knopf muss die Dämpfung von opacity auf die Farbe umziehen,
+   sonst bleibt die Weichzeichnung wirkungslos: opacity dämpft das FERTIGE Element
+   samt seiner gefilterten Rückseite und blendet es über den UNGEFILTERTEN Hintergrund
+   — bei .4 blieben 60 % scharfer Inhalt sichtbar. Mit voller Deckkraft und
+   durchlässiger Farbe wirkt der Filter vollständig, die Dämpfung bleibt gleich. */
+html .inputbar .round-btn:disabled {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: color-mix(in srgb, #fff 55%, transparent);
+}
+/* Beim Tippen darf der Composer die Zeile NICHT hinterlegen — die Basisregel setzt
+   dort deckendes --card-color, was den gerade entfernten Flächenhintergrund wieder
+   einführen würde, nur eben ausgerechnet beim Tippen. Die offene Vorschlagsliste
+   bringt ihre Unterlage selbst mit (Regel direkt darunter). */
 html .composer:has(.suggestions.open) {
-  background: var(--glass-bg);
+  background: none;
 }
-/* Die Vorschlagsliste braucht eine eigene, deutlich deckendere Unterlage. Sie
-   hatte nämlich GAR KEINEN eigenen Hintergrund (gemessen: rgba(0,0,0,0)) und lag
-   allein auf dem Composer — dessen Glaswert ist inzwischen sehr durchlässig, und
-   die Chips bringen nur 12 % Weiß mit. Die Artikelliste schien dadurch durch.
-   Sie wird NICHT von der Liste überlagert; das war per Treffertest widerlegt, die
-   Vorschläge liegen korrekt oben.
-   Deshalb ein eigener Wert statt --glass-bg: Leisten dürfen transparent sein,
-   lesbare Vorschläge nicht. */
+/* Vorschlagsliste in derselben Glasfläche wie das Eingabefeld — ausdrücklich so
+   gewünscht. Sie stand vorher bei 92 % Deckkraft, weil sie eigenen Hintergrund
+   braucht (gemessen: ohne diese Regel rgba(0,0,0,0)) und die Chips nur 12 % Weiß
+   mitbringen; bei 35 % scheint die Artikelliste hinter den Vorschlägen also
+   deutlich durch. Die Liste liegt korrekt oben, das war per Treffertest belegt —
+   was durchscheint, ist eine Frage der Deckkraft, nicht der Stapelreihenfolge. */
 html .suggestions.open {
-  background: color-mix(in srgb, var(--card-color) 92%, transparent);
+  background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  /* Erst seit die Fläche sichtbar ist, braucht sie eine Form: --radius ist derselbe
+     Wert wie bei den Karten. Kein Pillenradius wie beim Eingabefeld — die Fläche ist
+     mehrzeilig, da würde er die Ecken der Chip-Reihen abschneiden. */
+  border-radius: var(--radius);
+  /* Ringsum Abstand statt nur oben/unten (Basisregel: 6px 0). Die Chips lagen sonst
+     direkt an der Kante der Glasfläche. */
+  padding: 10px;
+  /* Höhe mitwachsen lassen: die Basis rechnet mit 3 Zeilen plus 16px Zugabe für das
+     alte Innenmaß. Mit 10px ringsum sind es 20px — ohne die Anpassung bliebe von der
+     dritten Chip-Reihe ein Streifen sichtbar. */
+  max-height: calc(3 * 34px + 24px);
 }
 html .toast { bottom: calc(var(--tab-clear) + 14px); }
 
