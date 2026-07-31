@@ -410,8 +410,14 @@
             // Produktbilder über den Bridge-Asset-Endpoint (same-origin, Token als
             // Query erlaubt). Die UI hängt encodeURIComponent(datei) an imageBase an
             // → …/assets?t=<token>&f=<datei>; HandleAsset liest $_GET['f'].
+            // &v=<assetsVersion>: der Asset-Endpoint antwortet mit
+            // Cache-Control max-age=2592000 (30 Tage). Wird ein Bestandsbild
+            // ersetzt, bleibt der Dateiname gleich — ohne den Stempel zeigte die
+            // Web-App bis zu 30 Tage die alte Fassung, ohne je nachzufragen (der
+            // ETag greift erst, wenn der Eintrag nicht mehr frisch ist).
             shoppingExtras[String(r.inst.id)] = {
-              imageBase: API + '/assets?t=' + encodeURIComponent(token()) + '&f=',
+              imageBase: API + '/assets?t=' + encodeURIComponent(token()) +
+                         '&v=' + encodeURIComponent(String((disc.server && disc.server.assetsVersion) || 0)) + '&f=',
               extApiBase: '',
               imagesEnabled: true
             };

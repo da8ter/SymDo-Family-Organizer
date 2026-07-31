@@ -830,9 +830,14 @@ class SymDoBridge extends IPSModuleStrict
         $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err    = curl_error($ch);
         $errNo  = curl_errno($ch);
-        curl_close($ch);
 
-        if ($errNo === CURLE_SSL_CACERT || $errNo === CURLE_PEER_FAILED_VERIFICATION) {
+        // Zertifikatsfehler an den nackten libcurl-Nummern erkennen, nicht über
+        // benannte Konstanten: CURLE_PEER_FAILED_VERIFICATION existiert in diesem
+        // PHP (8.5.5) NICHT, und eine undefinierte Konstante ist seit PHP 8 ein
+        // Fatal — die Funktion starb dadurch bei jeder HTTPS-URL, noch bevor sie
+        // ein Ergebnis anzeigen konnte. 60 ist die heutige Nummer, 51 die alte
+        // (früher CURLE_SSL_PEER_CERTIFICATE).
+        if (in_array($errNo, [51, 60], true)) {
             $show(sprintf($this->Translate('Reachable, but the certificate is not trusted: %s — a browser would refuse it too.'), $err));
             return;
         }
@@ -908,7 +913,38 @@ class SymDoBridge extends IPSModuleStrict
             'connectUrl'     => $this->GetConnectUrl(),
             'localUrls'      => $this->GetLocalUrls(),
             'hookPath'       => '/hook/' . self::HOOK_PATH,
+            'assetsVersion'  => $this->GetAssetsVersion(),
         ];
+    }
+
+    /**
+     * Jüngste Änderungszeit im Produktbild-Ordner, als Cache-Version für die
+     * Bild-URLs der Web-App.
+     *
+     * Nötig, weil HandleAsset mit `Cache-Control: private, max-age=2592000`
+     * antwortet — 30 Tage. Der ETag dort hilft nicht: solange der Eintrag frisch
+     * ist, fragt der Browser gar nicht nach. Wird ein Bestandsbild ersetzt, bleibt
+     * der Dateiname gleich, und die Web-App zeigte weiter die alte Fassung (genau
+     * so beim neuen Nudeln-Bild passiert).
+     *
+     * Maximum über die DATEIEN, nicht die mtime des Ordners: die bleibt beim
+     * reinen Überschreiben einer Datei unverändert. Gleiche Begründung wie in
+     * ShoppingList::GetAssetsVersion() — dort für die Kachel, hier für die App.
+     */
+    private function GetAssetsVersion(): int
+    {
+        $dir = dirname(__DIR__) . '/ShoppingList/assets';
+        $max = (int)@filemtime($dir);
+        foreach (@scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $mtime = @filemtime($dir . '/' . $entry);
+            if ($mtime !== false && $mtime > $max) {
+                $max = $mtime;
+            }
+        }
+        return $max;
     }
 
     private function GetLibraryVersion(): string
