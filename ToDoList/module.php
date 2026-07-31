@@ -207,6 +207,16 @@ class ToDoList extends IPSModuleStrict
 
         $this->ProcessNotifications();
         $this->ProcessRecurrences();
+
+        // Instanz ausdrücklich als aktiv melden. Ohne das blieb sie dauerhaft auf
+        // IS_CREATING (gemessen: alle fünf Listen auf 101, obwohl ApplyChanges
+        // fehlerfrei durchläuft, das Gateway aktiv ist und TDL_GetAppState Daten
+        // liefert). Sichtbar wurde das erst, seit SymDoWebApp jede Geschwister-
+        // Abfrage auf IS_ACTIVE prüft, um Warnungen halbfertiger Instanzen zu
+        // vermeiden: die Kachel übersprang seither JEDE ToDo-Liste und zeigte
+        // keine Aufgaben mehr. Die iOS-App und die Standalone-Web-App waren nicht
+        // betroffen, weil die AppBridge diesen Status nicht auswertet.
+        $this->SetStatus(IS_ACTIVE);
     }
 
     public function GetConfigurationForm(): string
