@@ -3363,6 +3363,8 @@ function renderShopping() {
   freshNodes.filter(n => n.classList && n.classList.contains('item-card')).forEach(card => {
     const itemId = card.dataset.id;
     const curItem = () => (curState().items || []).find(i => String(i.id) === itemId);
+    // Wischen nach rechts ist der einzige Weg zum Artikel-Editor, seit die Karte
+    // keinen Stift-Knopf mehr hat.
     bindCardSwipe(card, '.item-card-content', () => sdCall(curId(), 'DeleteItem', itemId), () => {
       const item = curItem();
       if (item) openItemEditor(curId(), item);
@@ -3372,11 +3374,6 @@ function renderShopping() {
       if (e.target.closest('button')) return;
       const item = curItem();
       sdCall(curId(), 'ToggleCart', { id: itemId, inCart: !(item && item.inCart) });
-    });
-    const editBtn = card.querySelector('[data-edit]');
-    if (editBtn) editBtn.addEventListener('click', () => {
-      const item = curItem();
-      if (item) openItemEditor(curId(), item);
     });
     const heartBtn = card.querySelector('[data-heart]');
     if (heartBtn) heartBtn.addEventListener('click', () => {
@@ -3429,7 +3426,7 @@ function shoppingRowHtml(it, favNames, st, inCart) {
     side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
   }
   side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
-  side += `<button class="heart-btn" data-edit="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>`;
+  // Kein Stift-Knopf: der Editor öffnet über Wischen nach rechts (swipe-under-edit).
   return `<div class="item-card${inCart ? ' in-cart' : ''}" data-id="${escapeHtml(String(it.id))}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
@@ -3658,6 +3655,8 @@ function renderTodos() {
     const chk = card.querySelector('.chk');
     chk.addEventListener('click', (e) => e.stopPropagation());
     chk.addEventListener('change', () => sdCall(curId(), 'ToggleDone', { id: itemId, done: chk.checked }));
+    // Tipp auf die Karte öffnet den Editor. ToDo-Karten hatten nie einen
+    // Stift-Knopf, hier ändert sich dadurch nichts.
     card.querySelector('.todo-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button, .chk')) return;
