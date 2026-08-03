@@ -665,6 +665,9 @@ html[data-symdo-theme="dark"] .member-bar {
   align-items: center;
   gap: 5px;
 }
+/* Trägt das Mengen-Abzeichen; ohne overflow: hidden, damit es über den Rand des
+   Knopfs hinausragen darf. Die Breite kommt vom Knopf. */
+.strip-thumb-wrap { position: relative; display: inline-flex; }
 .strip-thumb {
   width: 44px; height: 44px;
   border-radius: 999px;
@@ -676,7 +679,42 @@ html[data-symdo-theme="dark"] .member-bar {
   font-weight: 700;
   color: #fff;
 }
-.strip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Mit Produktbild keine runde Fläche: weder Tönung noch Kreisbeschneidung. Beides
+   muss weg — allein den Hintergrund zu entfernen ließe das Bild weiter als Kreis
+   erscheinen, weil overflow: hidden es an der Rundung abschneidet. */
+.strip-thumb.has-img {
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.strip-thumb img { width: 100%; height: 100%; object-fit: contain; }
+/* Menge am unteren Rand des Bildes. Unterlage ist --row (deckend): über einem
+   Produktbild wäre --surface2 mit 12 % zu schwach zum Lesen. Der Ring in
+   --card-color trennt das Abzeichen vom Bild dahinter. */
+.strip-amount {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--row);
+  border: 1px solid var(--card-color);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  /* Nicht umbrechen: „2 Zehe/n" wurde sonst zweizeilig, das Abzeichen wuchs nach
+     unten in den Artikelnamen hinein (gemessen). Deckel bei 54px — der Artikel im
+     Streifen ist 58px breit, breitere Mengen werden lieber gekürzt als dass sie
+     den Nachbarn berühren. */
+  white-space: nowrap;
+  max-width: 54px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;  /* Der Knopf darunter schaltet „im Wagen" — nicht blockieren */
+}
 .strip-name {
   width: 100%;
   font-size: 10.5px;
@@ -3230,11 +3268,25 @@ function renderDashboard() {
       for (const it of openItems) {
         const img = resolveItemImage(it);
         const tint = categoryStyle(it.category).tint;
-        html += `<div class="strip-item"><button class="strip-thumb" data-check="${escapeHtml(String(it.id))}" ` +
-          `style="background:${img ? 'var(--surface2)' : tint}">` +
+        // Menge wie in der Artikelzeile ableiten: leer bedeutet 1 (siehe
+        // shoppingRowHtml). Nicht-numerische Angaben wie „500 g" bleiben unverändert
+        // — hier gibt es keinen Stepper, das Abzeichen zeigt beides gleich an.
+        const amount = String(it.amount || '').trim() || '1';
+        html += `<div class="strip-item">` +
+          // Der Wrapper trägt die Positionierung des Abzeichens. Er darf die
+          // Beschneidung des Knopfs NICHT erben, sonst wäre das Abzeichen an der
+          // Ecke abgeschnitten.
+          `<div class="strip-thumb-wrap">` +
+          // Klasse statt Inline-Hintergrund: bei vorhandenem Bild entfällt die runde
+          // Fläche vollständig — Hintergrund UND kreisförmige Beschneidung, sonst
+          // bliebe das Produkt weiter in Kreisform. Ohne Bild bleibt der getönte
+          // Kreis mit dem Anfangsbuchstaben.
+          `<button class="strip-thumb${img ? ' has-img' : ''}" data-check="${escapeHtml(String(it.id))}"` +
+          (img ? '' : ` style="background:${tint}"`) + `>` +
           (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
                : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
-          `</button><div class="strip-name"><span class="marquee-inner">${escapeHtml(it.name)}</span></div></div>`;
+          `</button><span class="strip-amount">${escapeHtml(amount)}</span></div>` +
+          `<div class="strip-name"><span class="marquee-inner">${escapeHtml(it.name)}</span></div></div>`;
       }
       html += '</div>';
     }
