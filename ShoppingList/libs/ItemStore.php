@@ -312,18 +312,26 @@ trait ItemStore
             $items = $this->LoadItems();
             $changed = false;
             $remove = [];
+            // Käufe sammeln und EINMAL nach der Schleife wegschreiben — je Artikel
+            // zu schreiben träfe das Attribut hier dutzendfach.
+            $purchased = [];
             foreach ($items as $i => &$item) {
                 if (($item['inCart'] ?? false) === true) {
                     continue;
+                }
+                if (!isset($item['boughtAt'])) {
+                    $purchased[] = $item;
                 }
                 if ($this->HasCartDuplicate($items, $item)) {
                     $remove[] = $i;
                 } else {
                     $item['inCart'] = true;
+                    $item['boughtAt'] = time();
                 }
                 $changed = true;
             }
             unset($item);
+            $this->TrackPurchases($purchased);
             if ($remove) {
                 foreach (array_reverse($remove) as $i) {
                     array_splice($items, $i, 1);
@@ -364,11 +372,24 @@ trait ItemStore
                 // not flip the state back (or delete via the duplicate branch).
                 return true;
             }
+            // Kauf verbuchen, bevor die Zeile ggf. verschwindet. Die Markierung
+            // boughtAt sitzt auf der ZEILE, nicht auf dem Übergang: „zurück auf die
+            // Liste" ist ein normaler Arbeitsablauf, kein Fehlklick — ohne die
+            // Markierung zählte jedes Aus/An erneut. Die Zeile stirbt beim Leeren des
+            // Wagens, der nächste Einkauf ist dann eine neue Zeile.
+            $purchased = [];
+            if ($new && !isset($items[$idx]['boughtAt'])) {
+                $purchased[] = $items[$idx];
+            }
             if ($new && $this->HasCartDuplicate($items, $items[$idx])) {
                 array_splice($items, $idx, 1);
             } else {
                 $items[$idx]['inCart'] = $new;
+                if ($new) {
+                    $items[$idx]['boughtAt'] = time();
+                }
             }
+            $this->TrackPurchases($purchased);
             $this->SaveItems($items);
             return true;
         } finally {

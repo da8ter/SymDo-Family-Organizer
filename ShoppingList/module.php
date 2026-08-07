@@ -5,12 +5,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/libs/ItemStore.php';
 require_once __DIR__ . '/libs/SuggestionEngine.php';
 require_once __DIR__ . '/libs/FavoriteStore.php';
+require_once __DIR__ . '/libs/PurchaseStore.php';
 
 class ShoppingList extends IPSModuleStrict
 {
     use ItemStore;
     use SuggestionEngine;
     use FavoriteStore;
+    use PurchaseStore;
 
     public function Create(): void
     {
@@ -23,6 +25,9 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('ItemHistory', '{}');
         $this->RegisterAttributeString('SuggestionItems', '[]');
         $this->RegisterAttributeString('FavoriteLists', '[]');
+        // Kaufhistorie: Map normalisierter Name → {name, category, count, last}.
+        // Getrennt von Frequencies, weil das Hinzufügen zählt, nicht das Abhaken.
+        $this->RegisterAttributeString('PurchaseHistory', '{}');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme)
         $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
@@ -277,6 +282,20 @@ class ShoppingList extends IPSModuleStrict
                     throw new \Exception($this->Translate('Invalid payload'));
                 }
                 $this->AddFavoriteListToCartInternal((string)$Value);
+                return;
+            case 'ForgetPurchase':
+                // Einen Eintrag aus der Kaufhistorie streichen (Fehlkauf, Tippfehler).
+                // Der Name ist der Schlüssel — Kaufeinträge haben keine ID.
+                $data = json_decode((string)$Value, true);
+                $name = is_array($data) ? (string)($data['name'] ?? '') : trim((string)$Value);
+                if (trim($name) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                if ($this->ForgetPurchaseInternal($name)) {
+                    // Kein SaveItems im Spiel, der Push muss also selbst angestoßen
+                    // werden — sonst sähe die Oberfläche den Eintrag weiter.
+                    $this->SendState();
+                }
                 return;
             case 'RenameFavoriteList':
                 $data = json_decode((string)$Value, true);
@@ -576,6 +595,7 @@ class ShoppingList extends IPSModuleStrict
             'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
             'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
             'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
+            'ForgetPurchase',
         ];
         $ok    = true;
         $error = null;
@@ -719,6 +739,13 @@ class ShoppingList extends IPSModuleStrict
             'suggestions'     => $this->BuildSuggestionsPayload(),
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
             'favoriteLists'   => $this->LoadFavoriteLists(),
+            // Schon einmal abgehakte Artikel. BEWUSST ein eigener Schlüssel und kein
+            // Eintrag in favoriteLists: die Herz-Anzeige an jeder Einkaufszeile leitet
+            // sich aus den Namen ALLER Favoritenlisten ab (SymDoWebApp getFavNames,
+            // iOS membership) — jeder je gekaufte Artikel bekäme sonst ein gefülltes
+            // Herz. Dazu käme die Liste in Auswahldialoge und Mutationspfade, die sie
+            // nur ablehnen könnten.
+            'purchased'       => $this->BuildPurchasedPayload(),
             'availableImages' => $productImages,
             'availableBrands' => $productImages === [] ? [] : $this->GetAvailableBrandImages($productImages),
             'extApiEnabled'   => $this->ReadPropertyBoolean('ExtApiEnabled')
