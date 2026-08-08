@@ -1175,7 +1175,10 @@ html[data-symdo-theme="dark"] .member-bar {
    Hinweis, dass ein Tipp den Artikel auf die Einkaufsliste setzt. */
 .bought-row .bought-add { color: var(--accent); font-size: 17px; padding: 0 4px; }
 .bought-row .bought-on-list { color: var(--green); font-size: 15px; padding: 0 4px; }
-.bought-row.on-list .item-card-content { opacity: .55; }
+/* Schon gelistete Zeilen sind nur zurückgenommen, NICHT abgeblendet: sie bleiben
+   bedienbar, ein weiterer Tipp erhöht die Menge. Ein Wert wie .55 hätte sie wie
+   deaktiviert aussehen lassen — genau dieser Eindruck war der Fehler. */
+.bought-row.on-list .item-name { color: var(--muted); }
 /* Wisch-Hintergrund fürs Vergessen: neutral statt rot — es wird nichts gelöscht,
    was der Nutzer besitzt, nur eine Beobachtung verworfen. */
 .bought-forget { background: var(--surface2); color: var(--text); }
@@ -4022,8 +4025,10 @@ function renderFavorites() {
     for (const b of bought) {
       const img = getProductImageUrl(b.name);
       const tint = categoryStyle(b.category).tint;
-      // Schon auf der Liste? Dann abgeblendet und ohne Plus — ein zweiter Tipp
-      // erzeugte sonst stillschweigend eine Dublette.
+      // Steht der Artikel schon offen auf der Liste, wird das mit einem Haken
+      // angezeigt — die Zeile bleibt aber bedienbar: AddItemInternal legt KEINE
+      // Dublette an, sondern erhöht die Menge (IncrementAmount). Ein zweiter Tipp
+      // bedeutet also „noch eins davon" und ist eine sinnvolle Aktion.
       const onList = openNames.has(String(b.name || '').trim().toLowerCase());
       bhtml += `<div class="item-card bought-row${onList ? ' on-list' : ''}" data-key="bought:${escapeHtml(b.name)}" data-name="${escapeHtml(b.name)}" data-cat="${escapeHtml(b.category || '')}">` +
         `<div class="swipe-under bought-forget"><i class="fa-light fa-clock-rotate-left"></i></div>` +
@@ -4048,9 +4053,12 @@ function renderFavorites() {
       const cat  = card.dataset.cat || '';
       card.querySelector('.item-card-content').addEventListener('click', () => {
         if (card.dataset.swiped === '1') return;
-        if (card.classList.contains('on-list')) return;
         sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: '1' });
-        showToast(translate('Added to the shopping list'));
+        // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder
+        // die Menge des schon gelisteten Artikels erhöhen.
+        showToast(card.classList.contains('on-list')
+          ? translate('Quantity increased')
+          : translate('Added to the shopping list'));
       });
       // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
       // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
@@ -4086,7 +4094,10 @@ function renderFavorites() {
     } else {
       side += `<span class="amount-badge">${escapeHtml(amount)}</span>`;
     }
-    side += `<button class="heart-btn" data-editfav="1" aria-label="${translate('Edit')}"><i class="fa-light fa-pen"></i></button>`;
+    // Warenkorb statt Stift: einen EINZELNEN Artikel auf die Einkaufsliste zu setzen
+    // war bisher gar nicht möglich — es gab nur „alles in den Einkauf" für die ganze
+    // Liste. Bearbeiten bleibt über Wischen nach rechts erreichbar.
+    side += `<button class="heart-btn" data-addone="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
     html += `<div class="item-card" data-key="favitem:${escapeHtml(it.name)}" data-name="${escapeHtml(it.name)}">` +
       `<div class="swipe-under"><i class="fa-light fa-heart-crack"></i></div>` +
       // Rechtswischen = bearbeiten, wie in der Einkaufsliste. Die Optik kommt
@@ -4159,8 +4170,20 @@ function renderFavorites() {
       () => sdCall(selectedShoppingID(), 'RemoveItemFromFavoriteList', { listId: curDetail().id, name }),
       // Rechtswischen öffnet denselben Editor wie der Stift-Knopf.
       () => { const it = curFavItem(); if (it) openFavItemEditor(selectedShoppingID(), curDetail().id, it); });
-    const editBtn = card.querySelector('[data-editfav]');
-    if (editBtn) editBtn.addEventListener('click', () => openFavItemEditor(selectedShoppingID(), curDetail().id, curFavItem()));
+    const addBtn = card.querySelector('[data-addone]');
+    if (addBtn) addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = curFavItem();
+      if (!item) return;
+      // Menge des Favoriteneintrags mitnehmen. Steht der Artikel schon offen auf der
+      // Liste, erhöht der Server die Menge, statt eine Dublette anzulegen.
+      sdCall(selectedShoppingID(), 'AddItem', {
+        name: item.name,
+        category: item.category || '',
+        amount: String(item.amount || '1')
+      });
+      showToast(translate('Added to the shopping list'));
+    });
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const item = curFavItem();
