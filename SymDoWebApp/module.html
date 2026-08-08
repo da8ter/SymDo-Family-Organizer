@@ -1173,8 +1173,10 @@ html[data-symdo-theme="dark"] .member-bar {
 .fav-chevron { color: var(--faint); margin-left: auto; padding-left: 8px; }
 /* Zeile der Kaufhistorie. Nur lesen: kein Stepper, kein Stift, nur ein Plus als
    Hinweis, dass ein Tipp den Artikel auf die Einkaufsliste setzt. */
-.bought-row .bought-add { color: var(--accent); font-size: 17px; padding: 0 4px; }
-.bought-row .bought-on-list { color: var(--green); font-size: 15px; padding: 0 4px; }
+/* Warenkorb-Knopf in Favoriten- UND Kaufliste. Eigene Klasse statt .heart-btn zu
+   ändern: die Basis steht bewusst auf --muted (Herz und Stift sind Nebensachen),
+   der Warenkorb ist hier aber die Hauptaktion der Zeile. */
+.cart-btn { color: var(--accent); }
 /* Schon gelistete Zeilen sind nur zurückgenommen, NICHT abgeblendet: sie bleiben
    bedienbar, ein weiterer Tipp erhöht die Menge. Ein Wert wie .55 hätte sie wie
    deaktiviert aussehen lassen — genau dieser Eindruck war der Fehler. */
@@ -4037,8 +4039,11 @@ function renderFavorites() {
         (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
              : escapeHtml(String(b.name || '?').charAt(0).toUpperCase())) +
         `</span><span class="item-main"><span class="item-name">${escapeHtml(b.name)}</span></span>` +
+        // Derselbe Warenkorb-Knopf wie in den Favoritenlisten, auch wenn der Artikel
+        // schon auf der Liste steht — dann erhöht er die Menge. Dass er dort liegt,
+        // zeigt die zurückgenommene Namensfarbe.
         `<span class="item-side">` +
-        (onList ? `<i class="fa-light fa-check bought-on-list"></i>` : `<i class="fa-light fa-plus bought-add"></i>`) +
+        `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
         `</span></div></div>`;
     }
     const freshBought = renderRows(el, bhtml);
@@ -4051,14 +4056,24 @@ function renderFavorites() {
     freshBought.filter(n => n.classList && n.classList.contains('bought-row')).forEach(card => {
       const name = card.dataset.name;
       const cat  = card.dataset.cat || '';
-      card.querySelector('.item-card-content').addEventListener('click', () => {
-        if (card.dataset.swiped === '1') return;
+      // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder die
+      // Menge des schon gelisteten Artikels erhöhen.
+      const addOne = () => {
         sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: '1' });
-        // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder
-        // die Menge des schon gelisteten Artikels erhöhen.
         showToast(card.classList.contains('on-list')
           ? translate('Quantity increased')
           : translate('Added to the shopping list'));
+      };
+      card.querySelector('[data-boughtadd]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        addOne();
+      });
+      card.querySelector('.item-card-content').addEventListener('click', (e) => {
+        if (card.dataset.swiped === '1') return;
+        // Klicks auf den Knopf laufen über dessen eigenen Handler — ohne diesen
+        // Riegel zählte ein Knopfdruck doppelt (Knopf plus Zeile).
+        if (e.target.closest('button')) return;
+        addOne();
       });
       // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
       // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
@@ -4097,7 +4112,7 @@ function renderFavorites() {
     // Warenkorb statt Stift: einen EINZELNEN Artikel auf die Einkaufsliste zu setzen
     // war bisher gar nicht möglich — es gab nur „alles in den Einkauf" für die ganze
     // Liste. Bearbeiten bleibt über Wischen nach rechts erreichbar.
-    side += `<button class="heart-btn" data-addone="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
+    side += `<button class="heart-btn cart-btn" data-addone="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
     html += `<div class="item-card" data-key="favitem:${escapeHtml(it.name)}" data-name="${escapeHtml(it.name)}">` +
       `<div class="swipe-under"><i class="fa-light fa-heart-crack"></i></div>` +
       // Rechtswischen = bearbeiten, wie in der Einkaufsliste. Die Optik kommt
