@@ -4032,8 +4032,25 @@ function renderFavorites() {
       // Dublette an, sondern erhöht die Menge (IncrementAmount). Ein zweiter Tipp
       // bedeutet also „noch eins davon" und ist eine sinnvolle Aktion.
       const onList = openNames.has(String(b.name || '').trim().toLowerCase());
+      // Mengenregler wie in den Favoritenlisten: numerische Mengen bekommen den
+      // Stepper, alles andere („500 g") bleibt ein reines Abzeichen.
+      const amountRaw = String(b.amount || '').trim();
+      const numeric = amountRaw === '' || /^[1-9]\d*$/.test(amountRaw);
+      const amount = amountRaw === '' ? '1' : amountRaw;
+      let side = '';
+      if (numeric) {
+        const canDec = parseInt(amount) > 1;
+        side += `<span class="stepper"><button data-bstep="1" aria-label="+"><i class="fa-light fa-chevron-up"></i></button>` +
+          `<span class="amount-badge">${escapeHtml(amount)}</span>` +
+          `<button data-bstep="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
+          '</span>';
+      } else {
+        side += `<span class="amount-badge">${escapeHtml(amount)}</span>`;
+      }
+      side += `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
       bhtml += `<div class="item-card bought-row${onList ? ' on-list' : ''}" data-key="bought:${escapeHtml(b.name)}" data-name="${escapeHtml(b.name)}" data-cat="${escapeHtml(b.category || '')}">` +
         `<div class="swipe-under bought-forget"><i class="fa-light fa-clock-rotate-left"></i></div>` +
+        `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
         `<div class="item-card-content">` +
         `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
         (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
@@ -4042,9 +4059,7 @@ function renderFavorites() {
         // Derselbe Warenkorb-Knopf wie in den Favoritenlisten, auch wenn der Artikel
         // schon auf der Liste steht — dann erhöht er die Menge. Dass er dort liegt,
         // zeigt die zurückgenommene Namensfarbe.
-        `<span class="item-side">` +
-        `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
-        `</span></div></div>`;
+        `<span class="item-side">${side}</span></div></div>`;
     }
     const freshBought = renderRows(el, bhtml);
     if (freshBought === false) return;
@@ -4058,8 +4073,13 @@ function renderFavorites() {
       const cat  = card.dataset.cat || '';
       // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder die
       // Menge des schon gelisteten Artikels erhöhen.
+      // Zustand IMMER frisch auflösen: zwischen Rendern und Klick kann sich die
+      // Historie geändert haben (Stepper, Vergessen, ein neuer Kauf).
+      const curBought = () => (Array.isArray((instState(selectedShoppingID()) || {}).purchased)
+        ? instState(selectedShoppingID()).purchased : []).find(x => String(x.name) === name);
       const addOne = () => {
-        sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: '1' });
+        const it = curBought();
+        sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: String((it && it.amount) || '1') });
         // Mit Artikelnamen wie in der iOS-App: bei einer langen Liste ist sonst nicht
         // erkennbar, welche Zeile die Meldung ausgelöst hat.
         showToast((card.classList.contains('on-list')
@@ -4079,8 +4099,24 @@ function renderFavorites() {
       });
       // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
       // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
+      card.querySelectorAll('[data-bstep]').forEach(btn => btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const it = curBought();
+        if (!it) return;
+        const next = Math.max(1, (parseInt(it.amount) || 1) + parseInt(btn.dataset.bstep));
+        // Optimistisch anzeigen wie beim Favoriten-Stepper; die Serverantwort
+        // korrigiert es, falls sie abweicht.
+        it.amount = String(next);
+        renderFavorites();
+        sdCall(selectedShoppingID(), 'UpdatePurchase', {
+          oldName: it.name, name: it.name, category: it.category || '',
+          amount: String(next), notes: it.notes || ''
+        });
+      }));
+      // Links vergessen, rechts bearbeiten — wie in den Favoritenlisten.
       bindCardSwipe(card, '.item-card-content',
-        () => sdCall(selectedShoppingID(), 'ForgetPurchase', { name: name }), null);
+        () => sdCall(selectedShoppingID(), 'ForgetPurchase', { name: name }),
+        () => { const it = curBought(); if (it) openPurchaseEditor(selectedShoppingID(), it); });
     });
     return;
   }
@@ -4261,6 +4297,17 @@ function openItemEditor(instanceID, item) {
   fillCategorySelect(document.getElementById('editCategory'), item.category);
   openOverlay('editOverlay');
 }
+/** Editor für einen Eintrag der Kaufhistorie — gleiche Maske, anderer Empfänger. */
+function openPurchaseEditor(instanceID, item) {
+  editorCtx = { type: 'purchase', instanceID, item };
+  document.getElementById('editOverlayTitle').textContent = translate('Edit item');
+  document.getElementById('editName').value = item.name || '';
+  document.getElementById('editAmount').value = item.amount || '';
+  document.getElementById('editNotes').value = item.notes || '';
+  fillCategorySelect(document.getElementById('editCategory'), item.category || '');
+  openOverlay('editOverlay');
+}
+
 function openFavItemEditor(instanceID, listId, item) {
   editorCtx = { type: item ? 'fav-edit' : 'fav-add', instanceID, listId, item };
   document.getElementById('editOverlayTitle').textContent = item ? translate('Edit item') : translate('New item');
@@ -4284,6 +4331,10 @@ function saveItemEditor() {
     sdCall(ctx.instanceID, 'UpdateFavoriteItem', { listId: ctx.listId, oldName: ctx.item.name, newName: name, category, amount, notes });
   } else if (ctx.type === 'fav-add') {
     sdCall(ctx.instanceID, 'AddItemToFavoriteList', { listId: ctx.listId, name, category, amount, notes });
+  } else if (ctx.type === 'purchase') {
+    // Kaufhistorie: oldName ist der Schlüssel. Ein geänderter Name zieht ihn mit,
+    // das erledigt der Server.
+    sdCall(ctx.instanceID, 'UpdatePurchase', { oldName: ctx.item.name, name, category, amount, notes });
   }
   closeOverlay('editOverlay');
   editorCtx = null;

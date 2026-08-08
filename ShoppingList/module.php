@@ -283,6 +283,23 @@ class ShoppingList extends IPSModuleStrict
                 }
                 $this->AddFavoriteListToCartInternal((string)$Value);
                 return;
+            case 'UpdatePurchase':
+                // Eintrag der Kaufhistorie ändern. oldName ist der Schlüssel, der
+                // Rest ersetzt den Eintrag — ein neuer Name zieht den Schlüssel mit.
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data) || trim((string)($data['oldName'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                if ($this->UpdatePurchaseInternal(
+                    (string)$data['oldName'],
+                    (string)($data['name'] ?? ''),
+                    (string)($data['category'] ?? ''),
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['notes'] ?? '')
+                )) {
+                    $this->SendState();
+                }
+                return;
             case 'ForgetPurchase':
                 // Einen Eintrag aus der Kaufhistorie streichen (Fehlkauf, Tippfehler).
                 // Der Name ist der Schlüssel — Kaufeinträge haben keine ID.
@@ -595,7 +612,7 @@ class ShoppingList extends IPSModuleStrict
             'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
             'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
             'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
-            'ForgetPurchase',
+            'ForgetPurchase', 'UpdatePurchase',
         ];
         $ok    = true;
         $error = null;

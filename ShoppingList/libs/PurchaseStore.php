@@ -100,11 +100,20 @@ trait PurchaseStore
                     $category = (string)$this->LookupCategory($name);
                 }
                 $existing = is_array($history[$key] ?? null) ? $history[$key] : null;
+                // Menge und Notiz des gekauften Artikels übernehmen — beim nächsten
+                // Mal ist das der Vorschlag. Eine von Hand gesetzte Menge überschreibt
+                // der Kauf allerdings; das ist gewollt, „zuletzt so gekauft" ist die
+                // brauchbarere Vorbelegung als ein alter Wunschwert.
+                $amount = trim((string)($row['amount'] ?? ''));
                 $history[$key] = [
                     // Letzte Schreibweise gewinnt: wer „Vollmilch" statt „vollmilch"
                     // tippt, soll das auch in der Liste sehen.
                     'name'     => $name,
                     'category' => $category !== '' ? $category : (string)($existing['category'] ?? ''),
+                    'amount'   => $amount !== '' ? $amount : (string)($existing['amount'] ?? '1'),
+                    'notes'    => trim((string)($row['notes'] ?? '')) !== ''
+                                  ? trim((string)$row['notes'])
+                                  : (string)($existing['notes'] ?? ''),
                     'count'    => (int)($existing['count'] ?? 0) + 1,
                     'last'     => $now,
                 ];
@@ -161,10 +170,61 @@ trait PurchaseStore
             }
             // count und last bleiben im Attribut: die Oberflächen zeigen sie nicht,
             // und jedes Feld geht nach jeder Mutation erneut über die Leitung.
-            $out[] = ['name' => $name, 'category' => (string)($entry['category'] ?? '')];
+            // amount und notes gehen mit, weil die Zeile einen Mengenregler hat und
+            // der Editor beides bearbeitet.
+            $out[] = [
+                'name'     => $name,
+                'category' => (string)($entry['category'] ?? ''),
+                'amount'   => (string)($entry['amount'] ?? '1'),
+                'notes'    => (string)($entry['notes'] ?? ''),
+            ];
         }
         usort($out, static fn(array $a, array $b): int => strcoll($a['name'], $b['name']));
         return $out;
+    }
+
+    /**
+     * Einen Eintrag ändern. Ein geänderter Name zieht den Schlüssel mit — sonst
+     * stünden Alt und Neu nebeneinander in der Liste.
+     *
+     * Trifft der neue Name einen bestehenden Eintrag, werden beide zusammengeführt
+     * (höherer Zähler, jüngeres Datum gewinnen); zwei Zeilen mit demselben Namen
+     * wären in allen drei Oberflächen ein Problem, iOS führt seine Zeilen sogar über
+     * den Namen (ForEach id: \.name).
+     */
+    private function UpdatePurchaseInternal(string $OldName, string $Name, string $Category, string $Amount, string $Notes): bool
+    {
+        $oldKey = mb_strtolower(trim($OldName));
+        $name   = trim($Name) !== '' ? trim($Name) : trim($OldName);
+        $newKey = mb_strtolower($name);
+        if ($oldKey === '' || $newKey === '') {
+            return false;
+        }
+        $semaphoreKey = 'SL_Purchases_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+            $this->SendDebug('PurchaseStore', 'Semaphore timeout on UpdatePurchase', 0);
+            return false;
+        }
+        try {
+            $history = $this->LoadPurchaseHistory();
+            if (!isset($history[$oldKey])) {
+                return false;
+            }
+            $entry = $history[$oldKey];
+            $merge = ($newKey !== $oldKey && isset($history[$newKey])) ? $history[$newKey] : null;
+            unset($history[$oldKey]);
+            $history[$newKey] = [
+                'name'     => $name,
+                'category' => trim($Category),
+                'amount'   => trim($Amount) !== '' ? trim($Amount) : '1',
+                'notes'    => trim($Notes),
+                'count'    => max((int)($entry['count'] ?? 1), (int)($merge['count'] ?? 0)),
+                'last'     => max((int)($entry['last'] ?? 0), (int)($merge['last'] ?? 0)),
+            ];
+            return $this->WritePurchaseAttribute($history);
+        } finally {
+            IPS_SemaphoreLeave($semaphoreKey);
+        }
     }
 
     /** Einen Eintrag vergessen (Fehlkauf, Tippfehler). */
