@@ -3614,8 +3614,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnAddFavToCart').addEventListener('click', () => {
     if (viewingListId) {
+      // Anzahl VOR dem Schließen bestimmen — danach ist viewingListId weg.
+      const listObj = (state.favoriteLists || []).find(l => l.id === viewingListId);
+      const n = listObj ? (listObj.items || []).length : 0;
       requestAction('AddFavoriteListToCart', viewingListId);
       closeFavOverlay();
+      // Wortlaut wie in der iOS-App: aus der Detailansicht heraus ohne Listenname.
+      // Die Meldung hängt an <body> und übersteht das Schließen der Überlagerung.
+      showFavToast(n > 0
+        ? `${n} Artikel zur Einkaufsliste hinzugefügt`
+        : 'Liste enthält keine Artikel');
     }
   });
   document.getElementById('btnDeleteFavList').innerHTML = TRASH_ICON;
