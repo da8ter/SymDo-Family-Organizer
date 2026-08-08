@@ -941,6 +941,48 @@ body {
 
 .fav-detail-heart:active { opacity: .5; }
 
+/* Warenkorb neben dem Stift: gleicher Aufbau wie das Herz, damit die drei Knöpfe
+   der Zeile eine Reihe bilden. */
+.fav-detail-cart {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
+  line-height: 1;
+  transition: opacity .1s ease;
+}
+.fav-detail-cart:active { opacity: .5; }
+
+/* Kurze Rückmeldung. Diese Kachel hatte bisher gar keine — ohne sie bliebe ein
+   Druck auf den Warenkorb folgenlos sichtbar, weil die Einkaufsliste in einer
+   anderen Ansicht liegt. */
+.fav-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%) translateY(8px);
+  max-width: 86%;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card-color) 92%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+  z-index: 60;
+}
+.fav-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* Footer with "Artikel zur Einkaufsliste hinzufügen" button */
 .fav-detail-footer {
   flex-shrink: 0;
@@ -2454,6 +2496,11 @@ function renderFavDetailBody(list) {
     html += `<div class="fav-detail-item">`
       + favImg
       + `<span class="fav-detail-name">${nameHtml}${notesHtml}</span>`
+      // Einen EINZELNEN Artikel auf die Einkaufsliste setzen — bisher gab es hier
+      // nur „alles in den Einkauf" für die ganze Liste. Der Stift bleibt: anders als
+      // in der Web-App gibt es in dieser Kachel keine Wischgeste als zweiten Weg zum
+      // Bearbeiten, ein Ersetzen würde die Funktion also verschlucken.
+      + `<button class="fav-detail-cart" data-add-name="${escapeHtml(item.name)}" data-add-cat="${escapeHtml(item.category || '')}" data-add-amount="${escapeHtml(String(item.amount || '1'))}" aria-label="Auf die Einkaufsliste"><i class="fa-light fa-cart-plus"></i></button>`
       + `<button class="fav-detail-pencil" data-edit-list="${escapeHtml(list.id)}" data-edit-name="${escapeHtml(item.name)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
       + `<button class="fav-detail-heart" data-list-id="${escapeHtml(list.id)}" data-item-name="${escapeHtml(item.name)}" aria-label="Entfernen">${HEART_FILLED}</button>`
       + `</div>`;
@@ -2557,6 +2604,25 @@ function renderFavDetailBody(list) {
     });
   });
 
+  body.querySelectorAll('.fav-detail-cart').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.getAttribute('data-add-name');
+      requestAction('AddItem', JSON.stringify({
+        name:     name,
+        category: btn.getAttribute('data-add-cat') || '',
+        amount:   btn.getAttribute('data-add-amount') || '1',
+      }));
+      // Steht der Artikel schon offen auf der Liste, führt der Server zusammen und
+      // erhöht die Menge, statt eine Dublette anzulegen — die Meldung sagt das.
+      const open = (state.items || [])
+        .filter(i => !i.inCart)
+        .map(i => String(i.name || '').trim().toLowerCase());
+      showFavToast(open.indexOf(String(name).trim().toLowerCase()) >= 0
+        ? `„${name}“: Menge erhöht`
+        : `„${name}“ auf die Einkaufsliste gesetzt`);
+    });
+  });
+
   body.querySelectorAll('.fav-detail-heart').forEach(btn => {
     btn.addEventListener('click', () => {
       requestAction('RemoveItemFromFavoriteList', JSON.stringify({
@@ -2565,6 +2631,30 @@ function renderFavDetailBody(list) {
       }));
     });
   });
+}
+
+/**
+ * Kurze Rückmeldung am unteren Rand. Ein einzelnes, wiederverwendetes Element mit
+ * eigenem Zeitgeber — bei schnellem Nacheinander soll die neue Meldung die alte
+ * ersetzen, statt dass sich Elemente stapeln.
+ */
+let favToastTimer = null;
+function showFavToast(text) {
+  let el = document.getElementById('favToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'favToast';
+    el.className = 'fav-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  // Neustart der Einblendung erzwingen, sonst bleibt .show bei Folgemeldungen stehen
+  // und die Bewegung fällt aus.
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  if (favToastTimer) clearTimeout(favToastTimer);
+  favToastTimer = setTimeout(() => { el.classList.remove('show'); }, 2200);
 }
 
 function confirmNewFavList() {

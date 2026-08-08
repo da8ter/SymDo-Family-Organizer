@@ -183,9 +183,9 @@
             "Create a Shopping List instance in Symcon so it appears here.": "Lege in Symcon eine Instanz vom Typ Shopping List (Einkaufsliste) an, damit sie hier erscheint.",
             "Create a ToDo List instance in Symcon so it appears here.": "Lege in Symcon eine Instanz vom Typ ToDo List an, damit sie hier erscheint.",
             "Already bought": "Schon gekauft",
-            "Added to the shopping list": "Auf die Einkaufsliste gesetzt",
-            "Quantity increased": "Menge erhöht",
-            "Add to shopping list": "Auf die Einkaufsliste"
+            "Add to shopping list": "Auf die Einkaufsliste",
+            "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
+            "„%1“: quantity increased": "„%1“: Menge erhöht"
         }
     }
 }

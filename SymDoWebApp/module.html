@@ -4060,9 +4060,11 @@ function renderFavorites() {
       // Menge des schon gelisteten Artikels erhöhen.
       const addOne = () => {
         sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: '1' });
-        showToast(card.classList.contains('on-list')
-          ? translate('Quantity increased')
-          : translate('Added to the shopping list'));
+        // Mit Artikelnamen wie in der iOS-App: bei einer langen Liste ist sonst nicht
+        // erkennbar, welche Zeile die Meldung ausgelöst hat.
+        showToast((card.classList.contains('on-list')
+          ? translate('„%1“: quantity increased')
+          : translate('„%1“ added to the shopping list')).replace('%1', name));
       };
       card.querySelector('[data-boughtadd]').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4197,7 +4199,13 @@ function renderFavorites() {
         category: item.category || '',
         amount: String(item.amount || '1')
       });
-      showToast(translate('Added to the shopping list'));
+      // Steht der Artikel schon offen auf der Liste, erhöht der Server nur die Menge
+      // — die Meldung muss das sagen, sonst wirkt sie wie ein zweiter Eintrag.
+      const open = new Set(((instState(selectedShoppingID()) || {}).items || [])
+        .filter(i => !i.inCart).map(i => String(i.name || '').trim().toLowerCase()));
+      showToast((open.has(String(item.name || '').trim().toLowerCase())
+        ? translate('„%1“: quantity increased')
+        : translate('„%1“ added to the shopping list')).replace('%1', item.name));
     });
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
