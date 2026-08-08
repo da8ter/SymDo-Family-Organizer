@@ -185,7 +185,8 @@
             "Already bought": "Schon gekauft",
             "Add to shopping list": "Auf die Einkaufsliste",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Hide (all devices)": "Ausblenden (alle Geräte)"
         }
     }
 }

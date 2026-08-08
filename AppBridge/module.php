@@ -1036,4 +1036,21 @@ class SymDoBridge extends IPSModuleStrict
     {
         return json_encode($this->GetHiddenInstances());
     }
+
+    /**
+     * Sichtbarkeit einer Liste haushaltsweit setzen — Gegenstück zur REST-Route
+     * für die Symcon-Konfiguration.
+     *
+     * Bisher ließ sich das Ausblenden ausschließlich aus der App heraus ändern (die
+     * Route verlangt ein Gerätetoken). Die SymDoWebApp-Kachel hat dafür ein
+     * Häkchen im Formular, konnte es aber nur lokal auswerten; über diese Funktion
+     * reicht sie es an die maßgebliche Stelle durch.
+     */
+    public function SetListHidden(int $ListID, bool $Hidden): void
+    {
+        if ($ListID <= 0) {
+            return;
+        }
+        $this->SetInstanceHidden($ListID, $Hidden);
+    }
 }

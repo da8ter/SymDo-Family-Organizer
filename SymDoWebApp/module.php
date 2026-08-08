@@ -76,8 +76,71 @@ class SymDoWebApp extends IPSModuleStrict
         // KEIN systemweites IM_CREATE/IM_DELETE-Abo auf Objekt 0 (das würde bei
         // jeder Objektänderung im GESAMTEN System feuern).
 
+        $this->SyncListVisibility();
         $this->ResubscribeAll();
         $this->PushFullState();
+    }
+
+    /**
+     * Repariert die Zeilen der Formular-Liste und trägt die Ausblendungen in die
+     * Bridge nach.
+     *
+     * Hintergrund: Die Symcon-Formularoberfläche schreibt beim Speichern nur Spalten
+     * zurück, die eine `edit`-Definition haben — bei dieser Liste also allein `hide`.
+     * Die `instanceID` ging dadurch verloren, und GetTileHiddenIDs() konnte keine
+     * Zeile mehr zuordnen: das Häkchen war wirkungslos (gemessen: die gespeicherte
+     * Eigenschaft war [{"hide":false} × 7]). Die Eigenschaft SELBST kann die IDs
+     * halten — über IPS_SetProperty geschrieben überstehen sie ApplyChanges —, es
+     * fehlt also nur der Rückweg aus dem Formular.
+     *
+     * Deshalb hier: fehlende IDs über die Position nachtragen. Das Formular baut die
+     * Zeilen aus DiscoverInstances() in genau dieser Reihenfolge, und gespeichert
+     * wird dieselbe Zeilenzahl. Bei abweichender Zahl (Liste kam dazu oder fiel weg,
+     * während der Dialog offen war) wird NICHT geraten, sondern nur das übernommen,
+     * was schon eine ID trägt.
+     */
+    private function SyncListVisibility(): void
+    {
+        $rows = json_decode($this->ReadPropertyString('Lists'), true);
+        if (!is_array($rows) || $rows === []) {
+            return;
+        }
+        $discovered = $this->DiscoverInstances();
+        $repaired   = [];
+        $changed    = false;
+        foreach ($rows as $i => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int)($row['instanceID'] ?? 0);
+            if ($id <= 0 && count($rows) === count($discovered) && isset($discovered[$i]['id'])) {
+                $id      = (int)$discovered[$i]['id'];
+                $changed = true;
+            }
+            if ($id <= 0) {
+                continue;
+            }
+            $repaired[] = ['instanceID' => $id, 'hide' => (bool)($row['hide'] ?? false)];
+        }
+        if ($changed && $repaired !== []) {
+            // Ohne Rückschreiben wäre die Reparatur bei jedem Aufruf nötig — und der
+            // nächste Formular-Aufbau zeigte die Häkchen wieder falsch.
+            IPS_SetProperty($this->InstanceID, 'Lists', json_encode($repaired));
+            IPS_ApplyChanges($this->InstanceID);
+            return;   // ApplyChanges läuft gleich erneut, dann mit gültigen IDs
+        }
+
+        // Haushaltsweit durchreichen: das Häkchen soll überall wirken, nicht nur in
+        // dieser Kachel. Die Bridge ist die maßgebliche Quelle (ihr Attribut steuert
+        // App und Web-App). Neue public-Funktionen gibt es erst nach einem
+        // Kernel-Neustart — bis dahin bleibt es bei der lokalen Wirkung.
+        $bridgeID = $this->GetBridgeID();
+        if ($bridgeID <= 0 || !function_exists('LAB_SetListHidden')) {
+            return;
+        }
+        foreach ($repaired as $row) {
+            @LAB_SetListHidden($bridgeID, $row['instanceID'], $row['hide']);
+        }
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
