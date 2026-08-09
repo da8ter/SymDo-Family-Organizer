@@ -857,6 +857,13 @@ html[data-symdo-theme="dark"] .member-bar {
 .stepper { display: flex; flex-direction: column; }
 .stepper button { padding: 0 6px; font-size: 12px; color: var(--accent); line-height: 1.2; }
 .stepper .amount-badge { padding: 1px 8px; }
+/* Abzeichen ohne Pfeile: antippbar, nimmt die Menge per Dialog entgegen. Der
+   Akzentrand ist der einzige Hinweis darauf — ohne ihn wirkt es wie reine Anzeige. */
+.amount-badge[data-amount-edit] {
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.amount-badge[data-amount-edit]:active { opacity: .6; }
 .item-card.in-cart .item-name { text-decoration: line-through; color: var(--muted); }
 .item-card.in-cart .item-card-content { opacity: .75; }
 
@@ -3581,6 +3588,19 @@ function renderShopping() {
       const item = curItem();
       sdCall(curId(), 'ToggleCart', { id: itemId, inCart: !(item && item.inCart) });
     });
+    const amountBtn = card.querySelector('[data-amount-edit]');
+    if (amountBtn) amountBtn.addEventListener('click', (e) => {
+      // Ohne stopPropagation legte der Klick den Artikel zugleich in den Wagen.
+      e.stopPropagation();
+      const item = curItem();
+      if (!item) return;
+      showPrompt(translate('Change quantity'), String(item.amount || ''), translate('Save'), (val) => {
+        sdCall(curId(), 'UpdateItem', {
+          id: item.id, name: item.name, amount: val.trim(),
+          notes: item.notes || '', category: item.category || ''
+        });
+      });
+    });
     const heartBtn = card.querySelector('[data-heart]');
     if (heartBtn) heartBtn.addEventListener('click', () => {
       const item = curItem();
@@ -3629,7 +3649,9 @@ function shoppingRowHtml(it, favNames, st, inCart) {
       `<button data-step="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
       '</span>';
   } else {
-    side += `<span class="amount-badge">${escapeHtml(amount || '1')}</span>`;
+    // Ohne Pfeile (nicht-numerische Menge wie „500 g", oder Artikel im Wagen)
+    // ist das Abzeichen antippbar und nimmt die Menge per Dialog entgegen.
+    side += `<span class="amount-badge" data-amount-edit="1" role="button" tabindex="0" title="${translate('Change quantity')}">${escapeHtml(amount || '1')}</span>`;
   }
   if (it.price && st.extApiShowPrice !== false) {
     side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
@@ -4183,7 +4205,7 @@ function renderFavorites() {
           `<button data-bstep="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
           '</span>';
       } else {
-        side += `<span class="amount-badge">${escapeHtml(amount)}</span>`;
+        side += `<span class="amount-badge" data-amount-edit="1" role="button" tabindex="0" title="${translate('Change quantity')}">${escapeHtml(amount)}</span>`;
       }
       side += `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
       bhtml += `<div class="item-card bought-row${onList ? ' on-list' : ''}" data-key="bought:${escapeHtml(b.name)}" data-name="${escapeHtml(b.name)}" data-cat="${escapeHtml(b.category || '')}">` +
@@ -4238,6 +4260,18 @@ function renderFavorites() {
       });
       // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
       // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
+      const bAmount = card.querySelector('[data-amount-edit]');
+      if (bAmount) bAmount.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const it = curBought();
+        if (!it) return;
+        showPrompt(translate('Change quantity'), String(it.amount || ''), translate('Save'), (val) => {
+          sdCall(selectedShoppingID(), 'UpdatePurchase', {
+            oldName: it.name, name: it.name, category: it.category || '',
+            amount: val.trim(), notes: it.notes || ''
+          });
+        });
+      });
       card.querySelectorAll('[data-bstep]').forEach(btn => btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const it = curBought();
@@ -4284,7 +4318,7 @@ function renderFavorites() {
         `<button data-step="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
         '</span>';
     } else {
-      side += `<span class="amount-badge">${escapeHtml(amount)}</span>`;
+      side += `<span class="amount-badge" data-amount-edit="1" role="button" tabindex="0" title="${translate('Change quantity')}">${escapeHtml(amount)}</span>`;
     }
     // Warenkorb statt Stift: einen EINZELNEN Artikel auf die Einkaufsliste zu setzen
     // war bisher gar nicht möglich — es gab nur „alles in den Einkauf" für die ganze
@@ -4362,6 +4396,18 @@ function renderFavorites() {
       () => sdCall(selectedShoppingID(), 'RemoveItemFromFavoriteList', { listId: curDetail().id, name }),
       // Rechtswischen öffnet denselben Editor wie der Stift-Knopf.
       () => { const it = curFavItem(); if (it) openFavItemEditor(selectedShoppingID(), curDetail().id, it); });
+    const favAmount = card.querySelector('[data-amount-edit]');
+    if (favAmount) favAmount.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = curFavItem();
+      if (!item) return;
+      showPrompt(translate('Change quantity'), String(item.amount || ''), translate('Save'), (val) => {
+        sdCall(selectedShoppingID(), 'UpdateFavoriteItem', {
+          listId: curDetail().id, oldName: item.name, newName: item.name,
+          category: item.category || '', amount: val.trim(), notes: item.notes || ''
+        });
+      });
+    });
     const addBtn = card.querySelector('[data-addone]');
     if (addBtn) addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
