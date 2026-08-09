@@ -3616,7 +3616,10 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   const amount = amountRaw === '' ? '1' : amountRaw;
   const faved = favNames.has(String(it.name || '').trim().toLowerCase());
   let side = '';
-  // Menge/Stepper und Herz getauscht: erst die Menge, dann (Preis), dann das Herz.
+  // Herz zuerst, dann Menge und Preis. So halten es die ShoppingList-Kachel
+  // (item-side: Herz vor sideHtml) und die iOS-Zeile bereits — diese Oberfläche
+  // war die einzige mit umgekehrter Reihenfolge.
+  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
   if (!inCart && numeric) {
     // Runter-Pfeil bei Menge=1 nur unsichtbar (Platz bleibt reserviert), damit
     // das Badge seine vertikale Position behält und nicht springt.
@@ -3631,7 +3634,6 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   if (it.price && st.extApiShowPrice !== false) {
     side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
   }
-  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
   // Kein Stift-Knopf: der Editor öffnet über Wischen nach rechts (swipe-under-edit).
   return `<div class="item-card${inCart ? ' in-cart' : ''}" data-id="${escapeHtml(String(it.id))}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
