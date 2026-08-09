@@ -1189,6 +1189,20 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Wisch-Hintergrund fürs Vergessen: neutral statt rot — es wird nichts gelöscht,
    was der Nutzer besitzt, nur eine Beobachtung verworfen. */
 .bought-forget { background: var(--surface2); color: var(--text); }
+/* Flieger der Hinzufuegen-Animation: Klon des Produktbildes, ueber allem (Tab-Leiste
+   liegt auf 40) und ohne Klickflaeche, damit er nichts abfaengt. */
+.fly-ghost {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+}
+.fly-ghost img { width: 100%; height: 100%; object-fit: contain; }
 .fav-card .fav-row { margin-bottom: 0; position: relative; background: var(--row); transition: transform .18s ease; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .fav-card .fav-row.is-dragging { transition: none; }
 .fav-card.is-deleting .fav-row { transition: transform .22s ease; }
@@ -2524,6 +2538,64 @@ function setTab(tab) {
 
 // ── UI-Helfer: Toast, Bestätigung, Eingabe, Menü, Overlays ────────────────
 let toastTimer = 0;
+/**
+ * Laesst das Produktbild einer Zeile kurz aufhuepfen und dann zum Einkaufen-Tab
+ * fliegen. Rein visuell — der Server-Aufruf ist zu diesem Zeitpunkt schon raus, die
+ * Animation darf also jederzeit ausfallen, ohne dass etwas verloren geht.
+ *
+ * Der Flieger ist ein Klon des Bildes an fixer Position ueber allem (die Tab-Leiste
+ * liegt auf 40). Er haengt an <body>, nicht an der Zeile: die Liste wird beim
+ * naechsten State-Push neu aufgebaut, ein Kind der Zeile waere dann mittendrin weg.
+ */
+function flyToShoppingTab(thumbEl) {
+  if (!thumbEl || typeof thumbEl.animate !== 'function') return;
+  // Bewegungsreduziert: keine Flugbahn. Dieselbe Ruecksicht wie bei der Mitgliederleiste.
+  if (mbReduceMotion()) return;
+  const target = document.getElementById('tab-shopping');
+  // Ohne sichtbaren Einkaufen-Tab gibt es kein Ziel (der Bereich laesst sich
+  // abschalten) — dann unterbleibt die Animation ganz.
+  if (!target || getComputedStyle(target).display === 'none') return;
+
+  const from = thumbEl.getBoundingClientRect();
+  if (from.width === 0 || from.height === 0) return;
+  const icon = target.querySelector('svg, i') || target;
+  const to = icon.getBoundingClientRect();
+
+  const ghost = thumbEl.cloneNode(true);
+  ghost.classList.add('fly-ghost');
+  ghost.style.left = from.left + 'px';
+  ghost.style.top = from.top + 'px';
+  ghost.style.width = from.width + 'px';
+  ghost.style.height = from.height + 'px';
+  document.body.appendChild(ghost);
+
+  const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+  const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+
+  const anim = ghost.animate([
+    { transform: 'translate(0px, 0px) scale(1)', opacity: 1, offset: 0 },
+    // Huepfer: kurz gross und nach oben, bevor es losgeht
+    { transform: 'translate(0px, -14px) scale(1.28)', opacity: 1, offset: 0.22 },
+    { transform: 'translate(0px, 0px) scale(1.06)', opacity: 1, offset: 0.34 },
+    // Flug in einem Bogen: erst seitlich, dann nach unten ins Ziel
+    { transform: 'translate(' + (dx * 0.55) + 'px, ' + (dy * 0.28) + 'px) scale(0.8)', opacity: 0.95, offset: 0.7 },
+    { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(0.22)', opacity: 0.15, offset: 1 }
+  ], { duration: 720, easing: 'cubic-bezier(.4,.05,.3,1)' });
+
+  // Netz gegen Karteileichen: loest anim.finished nicht aus (abgebrochene Animation,
+  // Umgebung ohne laufende Animationsuhr), bliebe der Klon sonst dauerhaft im DOM.
+  const cleanup = setTimeout(function () { ghost.remove(); }, 1400);
+  anim.finished.then(function () {
+    clearTimeout(cleanup);
+    ghost.remove();
+    // Kurzer Stups am Ziel, damit die Ankunft sichtbar wird
+    if (typeof icon.animate === 'function') {
+      icon.animate([
+        { transform: 'scale(1)' }, { transform: 'scale(1.35)' }, { transform: 'scale(1)' }
+      ], { duration: 260, easing: 'ease-out' });
+    }
+  }).catch(function () { clearTimeout(cleanup); ghost.remove(); });
+}
 function showToast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -4144,6 +4216,7 @@ function renderFavorites() {
       const addOne = () => {
         const it = curBought();
         sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: String((it && it.amount) || '1') });
+        flyToShoppingTab(card.querySelector('.item-thumb'));
         // Mit Artikelnamen wie in der iOS-App: bei einer langen Liste ist sonst nicht
         // erkennbar, welche Zeile die Meldung ausgelöst hat.
         showToast((card.classList.contains('on-list')
@@ -4299,6 +4372,7 @@ function renderFavorites() {
         category: item.category || '',
         amount: String(item.amount || '1')
       });
+      flyToShoppingTab(card.querySelector('.item-thumb'));
       // Steht der Artikel schon offen auf der Liste, erhöht der Server nur die Menge
       // — die Meldung muss das sagen, sonst wirkt sie wie ein zweiter Eintrag.
       const open = new Set(((instState(selectedShoppingID()) || {}).items || [])
