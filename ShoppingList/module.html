@@ -487,6 +487,13 @@ body {
 .stepper { display: flex; flex-direction: column; }
 .stepper button { padding: 0 6px; font-size: 12px; color: var(--accent); line-height: 1.2; background: none; border: none; cursor: pointer; }
 .stepper .amount-badge { padding: 1px 8px; }
+/* Abzeichen ohne Pfeile: antippbar. Der Akzentrand ist der einzige Hinweis darauf
+   — ohne ihn wirkt es wie reine Anzeige. */
+.amount-badge[data-amount-edit] {
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.amount-badge[data-amount-edit]:active { opacity: .6; }
 
 .item-price {
   color: var(--accent);
@@ -2016,7 +2023,9 @@ function buildItemCard(item, inCart) {
       + `<span class="amount-badge">${escapeHtml(amount)}</span>`
       + `<button data-step="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button></span>`;
   } else {
-    sideHtml = `<span class="amount-badge">${escapeHtml(amount)}</span>`;
+    // Ohne Pfeile (nicht-numerische Menge wie „500 g", oder Artikel im Wagen) ist
+    // das Abzeichen antippbar und oeffnet den Editor mit dem Mengenfeld.
+    sideHtml = `<span class="amount-badge" data-amount-edit="${escapeHtml(item.id)}" role="button" tabindex="0" title="Menge ändern">${escapeHtml(amount)}</span>`;
   }
   const showPrice = !!state.extApiShowPrice;
   const priceHtml = (showPrice && item.price) ? `<span class="item-price">${escapeHtml(item.price)}</span>` : '';
@@ -2069,6 +2078,17 @@ function bindCardHandlers() {
       e.stopPropagation();
       const item = (state.items || []).find(i => i.id === btn.getAttribute('data-fav-id'));
       if (item) openEditOverlay(item, true);
+    });
+  });
+  document.querySelectorAll('.item-card [data-amount-edit]').forEach(badge => {
+    badge.addEventListener('click', (e) => {
+      // Ohne stopPropagation legte der Klick den Artikel zugleich in den Wagen.
+      e.stopPropagation();
+      const item = (state.items || []).find(i => String(i.id) === badge.getAttribute('data-amount-edit'));
+      if (!item) return;
+      openEditOverlay(item, false);
+      var field = document.getElementById('editAmount');
+      if (field) { field.focus(); field.select(); }
     });
   });
   document.querySelectorAll('.item-card [data-step]').forEach(btn => {
