@@ -2049,6 +2049,36 @@ function buildItemCard(item, inCart) {
     + `</div>`;
 }
 
+// Aufloesen beim Loeschen: die Zeile verblasst, wird weichgezeichnet und faellt
+// zusammen, damit die Nachbarn weich nachruecken statt zu springen. Der
+// Loesch-Aufruf geht erst danach raus; der naechste Render entfernt den Knoten
+// dann unsichtbar.
+const DISSOLVE_MS = 300;
+function dissolveCard(card, done) {
+  const finish = () => { if (done) done(); };
+  if (!card) { finish(); return; }
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    card.style.display = 'none'; finish(); return;
+  }
+  const size = card.offsetWidth;
+  card.style.flex = '0 0 auto';
+  card.style.minWidth = '0';
+  card.style.width = size + 'px';
+  card.style.overflow = 'hidden';
+  void card.offsetHeight; // Reflow erzwingen, sonst faellt die Zeile ohne Uebergang zusammen
+  card.style.transition = `width ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` margin-right ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` opacity ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
+    + ` filter ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
+    + ` transform ${Math.round(DISSOLVE_MS * 0.8)}ms ease`;
+  card.style.opacity = '0';
+  card.style.filter = 'blur(7px)';
+  card.style.transform = 'scale(.96)';
+  card.style.width = '0px';
+  card.style.marginRight = '-8px'; // gap der Nachbarn schlucken
+  window.setTimeout(finish, DISSOLVE_MS);
+}
+
 function bindCardHandlers() {
   document.querySelectorAll('.item-card[data-id]').forEach(card => {
     card.addEventListener('click', (e) => {
@@ -2154,7 +2184,7 @@ function bindCardSwipe(card) {
       card.dataset.animating = '1';
       card.classList.add('is-deleting');
       content.style.transform = 'translateX(-110%)';
-      window.setTimeout(() => requestAction('DeleteItem', id), 240);
+      dissolveCard(card, () => requestAction('DeleteItem', id));
     } else if (wasDecided && dx >= THRESHOLD) {
       content.style.transform = '';
       card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
@@ -3646,7 +3676,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnEditDelete').innerHTML = TRASH_ICON;
   document.getElementById('btnEditDelete').addEventListener('click', () => {
     if (editingItemId) {
-      requestAction('DeleteItem', editingItemId);
+      const id = editingItemId;
+      const card = document.querySelector(`.item-card[data-id="${CSS.escape(id)}"]`);
+      closeEditOverlay();
+      // Erst schliessen, dann aufloesen — sonst liegt das Overlay noch darueber.
+      dissolveCard(card, () => requestAction('DeleteItem', id));
+      return;
     }
     closeEditOverlay();
   });

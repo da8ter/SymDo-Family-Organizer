@@ -2713,11 +2713,47 @@ function applyMarquees(container) {
   });
 }
 
+// Aufloesen beim Loeschen: die Karte verblasst, wird weichgezeichnet und ihre
+// Hoehe faehrt auf null, damit die Zeilen darunter weich nachruecken statt zu
+// springen. Der Loesch-Aufruf geht erst danach raus — der naechste Render
+// entfernt den Knoten dann unsichtbar. Bleibt der Knoten stehen (Aufruf schlug
+// fehl), heilt renderRows ihn beim naechsten Push, weil die Inline-Stile das
+// outerHTML veraendern und der Knoten dadurch ersetzt wird.
+const DISSOLVE_MS = 300;
+function dissolveCard(card, done) {
+  const finish = () => { if (done) done(); };
+  if (!card) { finish(); return; }
+  if (mbReduceMotion()) { card.style.display = 'none'; finish(); return; }
+  const h = card.offsetHeight;
+  card.style.height = h + 'px';
+  card.style.marginBottom = window.getComputedStyle(card).marginBottom;
+  card.style.overflow = 'hidden';
+  void card.offsetHeight; // Reflow erzwingen, sonst springt die Hoehe ohne Uebergang
+  card.style.transition = `height ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` margin-bottom ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` opacity ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
+    + ` filter ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
+    + ` transform ${Math.round(DISSOLVE_MS * 0.8)}ms ease`;
+  card.style.opacity = '0';
+  card.style.filter = 'blur(7px)';
+  card.style.transform = 'scale(.96)';
+  card.style.height = '0px';
+  card.style.marginBottom = '0px';
+  window.setTimeout(finish, DISSOLVE_MS);
+}
+// Gegenstueck fuer Wege, die nach dem Wischen noch nachfragen und abbrechen koennen.
+function restoreCard(card) {
+  if (!card) return;
+  card.style.transition = '';
+  ['height', 'marginBottom', 'overflow', 'opacity', 'filter', 'transform', 'display']
+    .forEach(p => { card.style[p] = ''; });
+}
+
 // Wisch-Geste (aus dem ShoppingList-Modul übernommen, Callback statt Action)
 // Swipe on a card: left = delete, right = edit (when onEdit is given).
 // Mouse + touch events (no Pointer Events): the Symcon desktop webview delivers
 // no pointer events, so a pointer-only swipe is dead there.
-function bindCardSwipe(card, contentSel, onDelete, onEdit) {
+function bindCardSwipe(card, contentSel, onDelete, onEdit, opts) {
   const content = card.querySelector(contentSel);
   if (!content) return;
   let startX = 0, startY = 0, dx = 0;
@@ -2765,7 +2801,10 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit) {
       card.dataset.animating = '1';
       card.classList.add('is-deleting');
       content.style.transform = 'translateX(-110%)';
-      window.setTimeout(onDelete, 240);
+      // Ohne Aufloesen dort, wo noch eine Rueckfrage folgt: eine bereits
+      // zusammengefallene Zeile muesste bei Abbruch wieder aufgehen.
+      if (opts && opts.dissolve === false) window.setTimeout(onDelete, 240);
+      else dissolveCard(card, onDelete);
     } else if (wasDecided && onEdit && dx >= THRESHOLD) {
       content.style.transform = ''; clearDir(); onEdit();
     } else {
@@ -2854,7 +2893,7 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
         card.dataset.animating = '1';
         card.classList.add('is-deleting');
         content.style.transform = 'translateX(-110%)';
-        window.setTimeout(onDelete, 240);
+        dissolveCard(card, onDelete);
       } else if (wasDecided && onEdit && finalDx >= THRESHOLD) {
         content.style.transform = ''; clearDir(); onEdit();
       } else {
@@ -4158,13 +4197,14 @@ function renderFavorites() {
         () => {
           // Slide-out zurücknehmen (bei Abbruch bleibt die Zeile erhalten), dann bestätigen.
           card.classList.remove('is-deleting'); delete card.dataset.animating;
-          row.style.transform = '';
+          row.style.transform = ''; restoreCard(card);
           showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
             if (favDetailListId === listId) favDetailListId = null;
             sdCall(selectedShoppingID(), 'DeleteFavoriteList', listId);
           });
         },
-        () => { addFavListToCart(selectedShoppingID(), list()); }
+        () => { addFavListToCart(selectedShoppingID(), list()); },
+        { dissolve: false }
       );
       row.addEventListener('click', (e) => {
         if (card.dataset.swiped === '1') return;
