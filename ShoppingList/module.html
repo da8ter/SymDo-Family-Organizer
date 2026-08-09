@@ -958,6 +958,19 @@ body {
 }
 .fav-detail-cart:active { opacity: .5; }
 
+/* Flieger der Hinzufuegen-Animation: Klon des Produktbildes. Muss ueber der
+   Favoriten-Ueberlagerung UND der unteren Leiste liegen (beide 1100), deshalb 1200.
+   Ohne Klickflaeche, damit er nichts abfaengt. */
+.fly-ghost {
+  position: fixed;
+  z-index: 1200;
+  pointer-events: none;
+  border-radius: 8px;
+  overflow: hidden;
+  will-change: transform, opacity;
+}
+.fly-ghost img { width: 100%; height: 100%; object-fit: contain; }
+
 /* Kurze Rückmeldung. Diese Kachel hatte bisher gar keine — ohne sie bliebe ein
    Druck auf den Warenkorb folgenlos sichtbar, weil die Einkaufsliste in einer
    anderen Ansicht liegt. */
@@ -2612,6 +2625,9 @@ function renderFavDetailBody(list) {
         category: btn.getAttribute('data-add-cat') || '',
         amount:   btn.getAttribute('data-add-amount') || '1',
       }));
+      // Zeilenbild suchen: es steht als Geschwister vor dem Knopf.
+      flyToListTab(btn.closest('.fav-detail-item') ?
+        btn.closest('.fav-detail-item').querySelector('.fav-detail-img') : null);
       // Steht der Artikel schon offen auf der Liste, führt der Server zusammen und
       // erhöht die Menge, statt eine Dublette anzulegen — die Meldung sagt das.
       const open = (state.items || [])
@@ -2631,6 +2647,58 @@ function renderFavDetailBody(list) {
       }));
     });
   });
+}
+
+/**
+ * Laesst das Produktbild kurz aufhuepfen und dann zur Einkaufsliste in der unteren
+ * Leiste fliegen. Rein visuell — der requestAction ist da schon raus.
+ *
+ * Anders als in der SymDo-Oberflaeche gibt es hier keinen Einkaufen-Tab: Ziel ist
+ * #navTabList, hinter dem die Liste liegt, die gerade befuellt wird.
+ *
+ * Der Klon haengt an <body>, nicht an der Zeile: die Favoritenansicht wird beim
+ * naechsten State-Push neu gebaut, ein Kind der Zeile waere mittendrin weg.
+ */
+function flyToListTab(imgEl) {
+  if (!imgEl || typeof imgEl.animate !== 'function') return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var target = document.getElementById('navTabList');
+  if (!target) return;
+
+  var from = imgEl.getBoundingClientRect();
+  if (from.width === 0 || from.height === 0) return;
+  var to = target.getBoundingClientRect();
+
+  var ghost = imgEl.cloneNode(true);
+  ghost.className = 'fly-ghost';
+  ghost.style.left = from.left + 'px';
+  ghost.style.top = from.top + 'px';
+  ghost.style.width = from.width + 'px';
+  ghost.style.height = from.height + 'px';
+  document.body.appendChild(ghost);
+
+  var dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+  var dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+
+  var anim = ghost.animate([
+    { transform: 'translate(0px, 0px) scale(1)', opacity: 1, offset: 0 },
+    { transform: 'translate(0px, -12px) scale(1.3)', opacity: 1, offset: 0.22 },
+    { transform: 'translate(0px, 0px) scale(1.05)', opacity: 1, offset: 0.34 },
+    { transform: 'translate(' + (dx * 0.55) + 'px, ' + (dy * 0.28) + 'px) scale(0.8)', opacity: 0.95, offset: 0.7 },
+    { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(0.22)', opacity: 0.15, offset: 1 }
+  ], { duration: 700, easing: 'cubic-bezier(.4,.05,.3,1)' });
+
+  // Netz gegen Karteileichen, falls die Animation abgebrochen wird.
+  var cleanup = setTimeout(function () { ghost.remove(); }, 1400);
+  anim.finished.then(function () {
+    clearTimeout(cleanup);
+    ghost.remove();
+    if (typeof target.animate === 'function') {
+      target.animate([
+        { transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }
+      ], { duration: 260, easing: 'ease-out' });
+    }
+  }).catch(function () { clearTimeout(cleanup); ghost.remove(); });
 }
 
 /**
