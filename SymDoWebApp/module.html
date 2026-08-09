@@ -230,6 +230,11 @@ html .tabbar {
 }
 /* Scrollbereich: Polster in Höhe der Leiste, damit die letzte Zeile erreichbar
    bleibt und nicht dauerhaft darunter liegt. */
+/* Bleibt nur ein Bereich übrig, wäre die Leiste ein Knopf ohne Wahl. Dann fällt sie
+   weg — und mit ihr das Bodenpolster, sonst bliebe unten eine leere Fläche in
+   Leistenhöhe stehen. --tab-clear steuert auch Eingabezeile und Meldungen mit. */
+html.no-tabs { --tab-clear: 0px; }
+html.no-tabs .tabbar { display: none; }
 html .screen {
   padding-bottom: var(--tab-clear);
   /* Waagerechtes Scrollen unterbinden. Der konkrete Auslöser (width: 100% plus
@@ -1903,6 +1908,9 @@ const store = {
   defaultUserID: '',
   bridgeAvailable: false,
   aiEnabled: false,
+  // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
+  // nichts verschwinden.
+  tabs: { dashboard: true, shopping: true, todos: true },
   hiddenIDs: [],
   instances: [],
   states: {},        // "<id>" → {kind, revision, state}
@@ -1933,6 +1941,40 @@ function aiPost(path, payload) {
     requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
     setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
   });
+}
+// Sichtbare Bereiche — Quelle wie bei aiEnabled: Standalone window.__SYMDO__,
+// Kachel der State. Fehlende Felder bedeuten „sichtbar", nie umgekehrt.
+function normalizeTabs(raw) {
+  const t = (raw && typeof raw === 'object') ? raw : {};
+  return {
+    dashboard: t.dashboard !== false,
+    shopping:  t.shopping  !== false,
+    todos:     t.todos     !== false
+  };
+}
+/** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
+function visibleTabs() {
+  const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
+  const out = [];
+  if (t.dashboard) out.push('dashboard');
+  // Favoriten hängen an den Einkaufslisten: der Tab zeigt deren Favoritenlisten und
+  // die Kaufhistorie — ohne Einkauf hätte er keinen Inhalt.
+  if (t.shopping) { out.push('shopping'); }
+  if (t.todos) out.push('todos');
+  if (t.shopping) out.push('favorites');
+  // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
+  return out.length ? out : ['dashboard'];
+}
+function applyTabVisibility() {
+  const vis = visibleTabs();
+  for (const t of TABS) {
+    const btn = document.getElementById('tab-' + t);
+    if (btn) btn.style.display = vis.includes(t) ? '' : 'none';
+  }
+  // Ein einziger Bereich: die Leiste wäre ein Knopf ohne Wahl. Dann fällt sie weg und
+  // der Inhalt bekommt die volle Höhe (siehe html.no-tabs im Stil).
+  document.documentElement.classList.toggle('no-tabs', vis.length <= 1);
+  if (!vis.includes(activeTab)) setTab(vis[0]);
 }
 // KI-Buttons sichtbar, wenn aktiviert — Quelle: Standalone window.__SYMDO__, Kachel: State.
 function computeAiEnabled() {
@@ -2406,6 +2448,7 @@ function handleMessage(data) {
     store.defaultUserID = data.defaultUserID || '';
     store.bridgeAvailable = !!data.bridgeAvailable;
     store.aiEnabled = !!data.aiEnabled;
+    store.tabs = normalizeTabs(data.tabs);
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];
     store.states = data.states || {};
@@ -2414,6 +2457,7 @@ function handleMessage(data) {
     store.shoppingExtras = data.shoppingExtras || {};
     productImages = {}; // Kennung: Maps im nächsten syncCompat neu übernehmen
     syncCompat();
+    applyTabVisibility();
     renderAll();
     applyAiEnabled();
   } else if (data.type === 'instanceState') {
@@ -2441,6 +2485,8 @@ function handleMessage(data) {
     store.instances = data.instances || [];
     store.hiddenIDs = data.hiddenIDs || [];
     store.bridgeAvailable = !!data.bridgeAvailable;
+    store.tabs = normalizeTabs(data.tabs);
+    applyTabVisibility();
     for (const key of Object.keys(store.states)) {
       const inst = store.instances.find(i => String(i.id) === key);
       if (!inst || inst.hidden) delete store.states[key];
@@ -2463,7 +2509,10 @@ window.addEventListener('message', (event) => {
 // ── Tabs ───────────────────────────────────────────────────────────────────
 const TABS = ['dashboard', 'shopping', 'todos', 'favorites'];
 function setTab(tab) {
-  if (!TABS.includes(tab)) tab = 'dashboard';
+  // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
+  // kann auf einen inzwischen abgeschalteten Bereich zeigen.
+  const vis = visibleTabs();
+  if (!vis.includes(tab)) tab = vis[0];
   activeTab = tab;
   ls.set('symdo.tab', tab);
   for (const t of TABS) {
@@ -3183,10 +3232,17 @@ function renderDashboard() {
   const byId = usersById();
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
+  // Abgeschaltete Bereiche verschwinden auch aus der Übersicht — sonst zeigte sie
+  // Zahlen und Sprungziele, die es nicht mehr gibt.
+  const vis = visibleTabs();
+  const withTodos = vis.includes('todos');
+  const withShop  = vis.includes('shopping');
+
   let html = '';
   // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Das Datum folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
-  if (store.users.length > 0) {
+  // Die Mitglieder-Leiste filtert ausschließlich Aufgaben.
+  if (withTodos && store.users.length > 0) {
     html += '<div class="member-bar">';
     for (const u of store.users) {
       html += `<button class="avatar-btn${dashMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
@@ -3200,81 +3256,89 @@ function renderDashboard() {
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
   const zeroOverdue = overdueCount === 0;
   html += '<div class="kpi-grid">';
-  html += `<button class="kpi" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
-    `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
-    `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
-  html += `<button class="kpi" data-goto="todos" style="${kpiTint('#ff9500')}">` +
-    `<span class="kpi-label">${translate('Due today')}</span><span class="kpi-value">${todayCount}</span>` +
-    `<i class="fa-light fa-calendar kpi-glyph"></i></button>`;
-  html += `<button class="kpi" data-goto="todos" style="${kpiTint(zeroOverdue ? '#8e8e93' : '#ff4d4d')}">` +
-    `<span class="kpi-label">${translate('Overdue')}</span><span class="kpi-value">${overdueCount}</span>` +
-    `<i class="fa-light ${zeroOverdue ? 'fa-check' : 'fa-triangle-exclamation'} kpi-glyph"></i></button>`;
-  html += `<button class="kpi" data-goto="shopping" style="${kpiTint('#34c759')}">` +
-    `<span class="kpi-label">${translate('Items on the list')}</span><span class="kpi-value">${openShoppingCount()}</span>` +
-    `<i class="fa-light fa-basket-shopping kpi-glyph"></i></button>`;
-  html += '</div>';
-
-  // Wochenring
-  const total = completedThisWeek + memberTasks.length;
-  const frac = total > 0 ? completedThisWeek / total : 0;
-  const C = 2 * Math.PI * 30;
-  html += '<div class="card week-card">' +
-    `<div class="week-ring"><svg width="76" height="76" viewBox="0 0 76 76">` +
-    `<circle class="ring-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>` +
-    `<circle class="ring-value" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" ` +
-    `stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 38 38)"/>` +
-    `<text x="38" y="45" text-anchor="middle">${completedThisWeek}</text></svg></div>` +
-    `<div class="week-info"><h3>${translate('Done this week')}</h3>` +
-    `<p>${translate('%1 of %2 tasks done').replace('%1', String(completedThisWeek)).replace('%2', String(total))}</p></div></div>`;
-
-  // Prioritäts-Filter
-  const prios = [['', translate('All')], ['high', translate('High')], ['normal', translate('Normal')], ['low', translate('Low')]];
-  html += '<div class="segmented" id="dashPrio">';
-  for (const [val, label] of prios) {
-    html += `<button data-prio="${val}" class="${val === prio ? 'active' : ''}">${label}</button>`;
+  if (withTodos) {
+    html += `<button class="kpi" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
+      `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
+      `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
+    html += `<button class="kpi" data-goto="todos" style="${kpiTint('#ff9500')}">` +
+      `<span class="kpi-label">${translate('Due today')}</span><span class="kpi-value">${todayCount}</span>` +
+      `<i class="fa-light fa-calendar kpi-glyph"></i></button>`;
+    html += `<button class="kpi" data-goto="todos" style="${kpiTint(zeroOverdue ? '#8e8e93' : '#ff4d4d')}">` +
+      `<span class="kpi-label">${translate('Overdue')}</span><span class="kpi-value">${overdueCount}</span>` +
+      `<i class="fa-light ${zeroOverdue ? 'fa-check' : 'fa-triangle-exclamation'} kpi-glyph"></i></button>`;
+  }
+  if (withShop) {
+    html += `<button class="kpi" data-goto="shopping" style="${kpiTint('#34c759')}">` +
+      `<span class="kpi-label">${translate('Items on the list')}</span><span class="kpi-value">${openShoppingCount()}</span>` +
+      `<i class="fa-light fa-basket-shopping kpi-glyph"></i></button>`;
   }
   html += '</div>';
 
-  // Heute-Karte
-  html += `<div class="card"><div class="card-head"><h3>${translate('Today')}</h3>` +
-    `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
-  if (todayRows.length === 0) {
-    const msg = (overdueCount + todayCount === 0)
-      ? translate('Nothing due — all under control.')
-      : translate('No matches for this filter.');
-    html += `<div class="empty-row"><i class="fa-light fa-badge-check"></i>${escapeHtml(msg)}</div>`;
-  } else {
-    for (const t of todayRows) html += taskRowHtml(t, multiTodo);
-  }
-  html += '</div>';
+  // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
+  // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.
+  if (withTodos) {
+    // Wochenring
+    const total = completedThisWeek + memberTasks.length;
+    const frac = total > 0 ? completedThisWeek / total : 0;
+    const C = 2 * Math.PI * 30;
+    html += '<div class="card week-card">' +
+      `<div class="week-ring"><svg width="76" height="76" viewBox="0 0 76 76">` +
+      `<circle class="ring-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>` +
+      `<circle class="ring-value" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" ` +
+      `stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 38 38)"/>` +
+      `<text x="38" y="45" text-anchor="middle">${completedThisWeek}</text></svg></div>` +
+      `<div class="week-info"><h3>${translate('Done this week')}</h3>` +
+      `<p>${translate('%1 of %2 tasks done').replace('%1', String(completedThisWeek)).replace('%2', String(total))}</p></div></div>`;
 
-  // Meine Aufgaben / Aufgaben von X
-  if (myUpcoming.length > 0) {
-    let title = translate('Tasks');
-    // Wie mySectionTitle in der App: nur bei GENAU EINEM gewählten Mitglied ein
-    // personalisierter Titel; bei 0 oder mehreren das generische „Aufgaben".
-    if (dashMemberIds.size === 1) {
-      const only = [...dashMemberIds][0];
-      if (only === currentUserID()) title = translate('My tasks');
-      else title = translate('Tasks of %1').replace('%1', byId[only] ? byId[only].name : '…');
-    }
-    html += `<div class="card"><div class="card-head"><h3>${escapeHtml(title)}</h3></div>`;
-    for (const t of myUpcoming.slice(0, 5)) html += taskRowHtml(t, multiTodo);
-    const remaining = myUpcoming.length - 5;
-    if (remaining > 0) {
-      const moreLabel = remaining === 1
-        ? translate('1 more task')
-        : translate('%1 more tasks').replace('%1', String(remaining));
-      html += `<button class="more-row" data-goto="todos"><span>${escapeHtml(moreLabel)}</span><i class="fa-light fa-chevron-right"></i></button>`;
+    // Prioritäts-Filter
+    const prios = [['', translate('All')], ['high', translate('High')], ['normal', translate('Normal')], ['low', translate('Low')]];
+    html += '<div class="segmented" id="dashPrio">';
+    for (const [val, label] of prios) {
+      html += `<button data-prio="${val}" class="${val === prio ? 'active' : ''}">${label}</button>`;
     }
     html += '</div>';
+
+    // Heute-Karte
+    html += `<div class="card"><div class="card-head"><h3>${translate('Today')}</h3>` +
+      `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
+    if (todayRows.length === 0) {
+      const msg = (overdueCount + todayCount === 0)
+        ? translate('Nothing due — all under control.')
+        : translate('No matches for this filter.');
+      html += `<div class="empty-row"><i class="fa-light fa-badge-check"></i>${escapeHtml(msg)}</div>`;
+    } else {
+      for (const t of todayRows) html += taskRowHtml(t, multiTodo);
+    }
+    html += '</div>';
+
+    // Meine Aufgaben / Aufgaben von X
+    if (myUpcoming.length > 0) {
+      let title = translate('Tasks');
+      // Wie mySectionTitle in der App: nur bei GENAU EINEM gewählten Mitglied ein
+      // personalisierter Titel; bei 0 oder mehreren das generische „Aufgaben".
+      if (dashMemberIds.size === 1) {
+        const only = [...dashMemberIds][0];
+        if (only === currentUserID()) title = translate('My tasks');
+        else title = translate('Tasks of %1').replace('%1', byId[only] ? byId[only].name : '…');
+      }
+      html += `<div class="card"><div class="card-head"><h3>${escapeHtml(title)}</h3></div>`;
+      for (const t of myUpcoming.slice(0, 5)) html += taskRowHtml(t, multiTodo);
+      const remaining = myUpcoming.length - 5;
+      if (remaining > 0) {
+        const moreLabel = remaining === 1
+          ? translate('1 more task')
+          : translate('%1 more tasks').replace('%1', String(remaining));
+        html += `<button class="more-row" data-goto="todos"><span>${escapeHtml(moreLabel)}</span><i class="fa-light fa-chevron-right"></i></button>`;
+      }
+      html += '</div>';
+    }
   }
 
   // Einkaufsvorschau — wie in der App nur, wenn es eine sichtbare Einkaufsliste
   // gibt (kein Platzhalter-Card, wenn keine existiert/alle ausgeblendet sind)
   const shopId = selectedShoppingID();
   const shopState = shopId ? instState(shopId) : null;
-  if (shopState) {
+  if (withShop && shopState) {
     html += `<div class="card"><div class="card-head"><h3>${translate('Shopping list')}</h3>` +
       `<button class="link" data-goto="shopping">${translate('Open')}</button></div>`;
     const openItems = openSections(shopState).flatMap(s => s.items);
@@ -5355,6 +5419,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const todoScan = document.getElementById('btnTodoScan');
   const todoScanInput = document.getElementById('todoScanInput');
   applyAiEnabled();
+  // Bereiche gleich beim Start anwenden: der gespeicherte symdo.tab kann auf einen
+  // inzwischen abgeschalteten Bereich zeigen.
+  applyTabVisibility();
   const aiBody = document.getElementById('aiReviewBody');
   const aiAdd = document.getElementById('btnAiAdd');
   const aiFav = document.getElementById('btnAiFav');

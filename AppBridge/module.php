@@ -725,6 +725,11 @@ class SymDoBridge extends IPSModuleStrict
         $symdo = ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION];
         // KI-Schalter: die Web-App blendet die KI-Buttons aus, wenn deaktiviert.
         $symdo['aiEnabled'] = $this->ReadPropertyBoolean('AiEnabled');
+        // Sichtbare Bereiche. Die Schalter stehen im Formular der SymDoWebApp-Kachel,
+        // weil sie deren Oberfläche betreffen — diese Seite hier IST diese Oberfläche.
+        // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",
+        // die Bridge hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
+        $symdo['tabs'] = $this->GetWebAppTabs();
         if ($localBase !== '') {
             $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
         }
@@ -1029,6 +1034,40 @@ class SymDoBridge extends IPSModuleStrict
             $list[] = $id;
         }
         $this->WriteAttributeString('HiddenInstances', json_encode($list));
+    }
+
+    /**
+     * Sichtbare Bereiche aus der SymDoWebApp-Instanz.
+     *
+     * IPS_GetConfiguration statt IPS_GetProperty: die drei Eigenschaften entstehen in
+     * deren Create() und existieren vor dem nächsten Kernel-Start nicht.
+     * IPS_GetProperty liefert dann `false` plus eine PHP-Warnung (gemessen), und eine
+     * Warnung fängt kein try/catch — die Bereiche wären ausgeblendet, bevor sich der
+     * Schalter bedienen lässt. Ein fehlender Schlüssel ist hier eindeutig von einem
+     * gesetzten false unterscheidbar.
+     *
+     * Ohne Kachel-Instanz: alles sichtbar. Bei mehreren entscheidet die erste — es
+     * gibt nur eine Standalone-Web-App, eine Zuordnung je Kachel gäbe es also nicht.
+     *
+     * @return array{dashboard:bool,shopping:bool,todos:bool}
+     */
+    private function GetWebAppTabs(): array
+    {
+        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true];
+        $ids = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
+        if (!$ids) {
+            return $all;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($ids[0]), true);
+        if (!is_array($cfg)) {
+            return $all;
+        }
+        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos'] as $key => $prop) {
+            if (array_key_exists($prop, $cfg)) {
+                $all[$key] = (bool)$cfg[$prop];
+            }
+        }
+        return $all;
     }
 
     /** JSON-Array der haushaltsweit ausgeblendeten Listen-Instanz-IDs (für Companion-Kacheln). */

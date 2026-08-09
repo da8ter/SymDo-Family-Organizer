@@ -39,6 +39,12 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyString('DefaultUserID', '');
         // Formular-Liste: pro entdeckter Listen-Instanz eine Zeile mit Ausblenden-Flag
         $this->RegisterPropertyString('Lists', '[]');
+        // Sichtbare Bereiche. Favoriten hängen an den Einkaufslisten: der Tab zeigt
+        // deren Favoritenlisten und die Kaufhistorie, ohne Einkauf hätte er keinen
+        // Inhalt. Standard überall true — abschalten ist die Ausnahme.
+        $this->RegisterPropertyBoolean('ShowDashboard', true);
+        $this->RegisterPropertyBoolean('ShowShopping', true);
+        $this->RegisterPropertyBoolean('ShowTodos', true);
 
         // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
@@ -459,6 +465,7 @@ class SymDoWebApp extends IPSModuleStrict
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
             'bridgeAvailable' => $bridgeID > 0,
             'aiEnabled'       => ($bridgeID > 0 ? (bool)@IPS_GetProperty($bridgeID, 'AiEnabled') : false),
+            'tabs'            => $this->GetVisibleTabs(),
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
             'states'          => (object)$states,
@@ -556,6 +563,31 @@ class SymDoWebApp extends IPSModuleStrict
     // ---------------------------------------------------------------------
     // Bridge (Benutzer, haushaltsweites Hidden-Flag) — tolerant bei Abwesenheit
     // ---------------------------------------------------------------------
+
+    /**
+     * Sichtbare Bereiche als Payload-Block.
+     *
+     * Gelesen wird über IPS_GetConfiguration statt IPS_GetProperty, weil die drei
+     * Eigenschaften in Create() entstehen und erst beim nächsten Kernel-Start
+     * existieren. IPS_GetProperty liefert bis dahin `false` PLUS eine PHP-Warnung
+     * (gemessen) — und eine Warnung fängt kein try/catch. Der Standard hier ist
+     * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
+     * überhaupt bedienen lässt.
+     *
+     * @return array{dashboard:bool,shopping:bool,todos:bool}
+     */
+    private function GetVisibleTabs(): array
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $read = static function (string $name) use ($cfg): bool {
+            return (is_array($cfg) && array_key_exists($name, $cfg)) ? (bool)$cfg[$name] : true;
+        };
+        return [
+            'dashboard' => $read('ShowDashboard'),
+            'shopping'  => $read('ShowShopping'),
+            'todos'     => $read('ShowTodos'),
+        ];
+    }
 
     private function GetBridgeID(): int
     {
@@ -797,6 +829,9 @@ class SymDoWebApp extends IPSModuleStrict
             'instances'       => $instances,
             'hiddenIDs'       => $hiddenIDs,
             'bridgeAvailable' => $this->GetBridgeID() > 0,
+            // Muss mit: ein Meta-Push ist der einzige Push nach einer reinen
+            // Sichtbarkeits-Änderung, sonst zöge die offene Kachel nicht nach.
+            'tabs'            => $this->GetVisibleTabs(),
         ]);
     }
 
