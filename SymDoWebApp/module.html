@@ -2237,6 +2237,8 @@ const ls = {
 };
 
 let activeTab = ls.get('symdo.tab') || 'dashboard';
+// Fortschrittskarte auf der Uebersicht. Auf true setzen, um sie zurueckzuholen.
+const SHOW_PROGRESS_CARD = false;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = ls.get('symdo.dashboardPriority') || '';
 let dashMemberIds = new Set(); // Mehrfachauswahl im Dashboard-Member-Menü
@@ -3574,45 +3576,49 @@ function renderDashboard() {
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
   // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.
   if (withTodos) {
-    // Wochenring
-    // Vier Ringe mit ABSICHTLICH gemischtem Bezug: die Woche, der Gesamtstand und
-    // zwei tagesaktuelle Werte. Jeder Ring beantwortet genau eine Frage; deshalb
-    // heisst die Karte neutral „Fortschritt" und nicht mehr „Diese Woche erledigt".
-    // Alle vier laufen ueber denselben Mitglieder-Filter wie der fruehere Ring.
-    const tasksAll    = memberFiltered(allTodoTasks());
-    const allDone     = tasksAll.filter(t => t.item.done).length;
-    // classifyDue() schaut NICHT auf done — genau richtig: die Menge ist „war heute
-    // faellig" bzw. „war vor heute faellig", unabhaengig vom Erledigungsstand.
-    const dueToday    = tasksAll.filter(t => classifyDue(t.item) === 'today');
-    const dueTodayOk  = dueToday.filter(t => t.item.done).length;
-    const overdueAll  = tasksAll.filter(t => classifyDue(t.item) === 'overdue');
-    const overdueOpen = overdueAll.filter(t => !t.item.done).length;
-    const total = completedThisWeek + memberTasks.length;
-    const vonBis = (a, b) => translate('%1 of %2').replace('%1', String(a)).replace('%2', String(b));
-    // Ohne Nenner steht ein Gedankenstrich statt „0 %": bei den heute faelligen
-    // Aufgaben ist das der Normalfall, und 0 % laese sich wie ein Versaeumnis.
-    const anteilText = (a, b) => b > 0 ? Math.round(100 * a / b) + '%' : '—';
+    // Fortschrittskarte ausgeblendet (Wunsch vom 2026-08-10: „vorerst komplett
+    // ausblenden"). Der Schalter statt geloeschtem Code, damit das Zurueckholen eine
+    // Zeile ist; ringSvg()/ringTile() und die Uebersetzungen bleiben ebenfalls liegen.
+    if (SHOW_PROGRESS_CARD) {
+      // Vier Ringe mit ABSICHTLICH gemischtem Bezug: die Woche, der Gesamtstand und
+      // zwei tagesaktuelle Werte. Jeder Ring beantwortet genau eine Frage; deshalb
+      // heisst die Karte neutral „Fortschritt" und nicht mehr „Diese Woche erledigt".
+      // Alle vier laufen ueber denselben Mitglieder-Filter wie der fruehere Ring.
+      const tasksAll    = memberFiltered(allTodoTasks());
+      const allDone     = tasksAll.filter(t => t.item.done).length;
+      // classifyDue() schaut NICHT auf done — genau richtig: die Menge ist „war heute
+      // faellig" bzw. „war vor heute faellig", unabhaengig vom Erledigungsstand.
+      const dueToday    = tasksAll.filter(t => classifyDue(t.item) === 'today');
+      const dueTodayOk  = dueToday.filter(t => t.item.done).length;
+      const overdueAll  = tasksAll.filter(t => classifyDue(t.item) === 'overdue');
+      const overdueOpen = overdueAll.filter(t => !t.item.done).length;
+      const total = completedThisWeek + memberTasks.length;
+      const vonBis = (a, b) => translate('%1 of %2').replace('%1', String(a)).replace('%2', String(b));
+      // Ohne Nenner steht ein Gedankenstrich statt „0 %": bei den heute faelligen
+      // Aufgaben ist das der Normalfall, und 0 % laese sich wie ein Versaeumnis.
+      const anteilText = (a, b) => b > 0 ? Math.round(100 * a / b) + '%' : '—';
 
-    html += '<div class="card week-card">' +
-      `<h3>${translate('Progress')}</h3><div class="ring-row">` +
-      ringTile(completedThisWeek, total > 0 ? completedThisWeek / total : 0,
-               translate('This week'), vonBis(completedThisWeek, total), false) +
-      ringTile(anteilText(allDone, tasksAll.length), tasksAll.length > 0 ? allDone / tasksAll.length : 0,
-               translate('All tasks'), vonBis(allDone, tasksAll.length), false) +
-      ringTile(anteilText(dueTodayOk, dueToday.length), dueToday.length > 0 ? dueTodayOk / dueToday.length : 0,
-               translate('Due today'),
-               dueToday.length > 0 ? vonBis(dueTodayOk, dueToday.length) : translate('Nothing due'), false) +
-      // Warnring: er fuellt sich, wenn ueberfaellige Aufgaben liegen bleiben, und
-      // ist leer, wenn alles abgearbeitet ist. In der Mitte steht die Anzahl der
-      // offenen — bei 1 von 26 ist der Bogen nur ein Strich, die Zahl traegt die
-      // Aussage, deshalb zusaetzlich rot.
-      ringTile(overdueOpen, overdueAll.length > 0 ? overdueOpen / overdueAll.length : 0,
-               translate('Overdue'),
-               overdueAll.length > 0
-                 ? translate('%1 of %2 open').replace('%1', String(overdueOpen)).replace('%2', String(overdueAll.length))
-                 : translate('Nothing overdue'),
-               overdueOpen > 0) +
-      '</div></div>';
+      html += '<div class="card week-card">' +
+        `<h3>${translate('Progress')}</h3><div class="ring-row">` +
+        ringTile(completedThisWeek, total > 0 ? completedThisWeek / total : 0,
+                 translate('This week'), vonBis(completedThisWeek, total), false) +
+        ringTile(anteilText(allDone, tasksAll.length), tasksAll.length > 0 ? allDone / tasksAll.length : 0,
+                 translate('All tasks'), vonBis(allDone, tasksAll.length), false) +
+        ringTile(anteilText(dueTodayOk, dueToday.length), dueToday.length > 0 ? dueTodayOk / dueToday.length : 0,
+                 translate('Due today'),
+                 dueToday.length > 0 ? vonBis(dueTodayOk, dueToday.length) : translate('Nothing due'), false) +
+        // Warnring: er fuellt sich, wenn ueberfaellige Aufgaben liegen bleiben, und
+        // ist leer, wenn alles abgearbeitet ist. In der Mitte steht die Anzahl der
+        // offenen — bei 1 von 26 ist der Bogen nur ein Strich, die Zahl traegt die
+        // Aussage, deshalb zusaetzlich rot.
+        ringTile(overdueOpen, overdueAll.length > 0 ? overdueOpen / overdueAll.length : 0,
+                 translate('Overdue'),
+                 overdueAll.length > 0
+                   ? translate('%1 of %2 open').replace('%1', String(overdueOpen)).replace('%2', String(overdueAll.length))
+                   : translate('Nothing overdue'),
+                 overdueOpen > 0) +
+        '</div></div>';
+    }
 
     // Prioritäts-Filter
     const prios = [['', translate('All')], ['high', translate('High')], ['normal', translate('Normal')], ['low', translate('Low')]];
