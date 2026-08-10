@@ -2043,7 +2043,7 @@ function buildItemCard(item, inCart) {
     + `<div class="item-card-content">`
     +   `<div class="item-thumb">${thumb}</div>`
     +   `<div class="item-info"><div class="item-title">${title}${marketIcon}</div>${notes}</div>`
-    +   `<span class="item-side">${heartHtml}${sideHtml}</span>`
+    +   `<span class="item-side">${sideHtml}${heartHtml}</span>` // Menge links, Herz rechts
     +   `<button class="item-edit-btn" data-edit-id="${escapeHtml(item.id)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
     + `</div>`
     + `</div>`;
