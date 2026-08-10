@@ -2807,8 +2807,56 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
-function openOverlay(id) { document.getElementById(id).classList.add('open'); }
-function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+// Overlays sind Blaetter am unteren Rand (.overlay: justify-content: flex-end). Sie
+// gleiten jetzt von unten herein und wieder hinaus, statt zu erscheinen.
+//
+// Beim Schliessen darf die Klasse ERST nach der Animation weg: .overlay ohne .open
+// steht auf display: none, das Blatt waere sonst sofort verschwunden. Deshalb haelt
+// der Knoten seine laufende Schliess-Animation in _closeAnim — ein erneutes Oeffnen
+// bricht sie ab, sonst raeumte ihr onfinish das gerade geoeffnete Blatt wieder weg.
+//
+// Verdunkelung ueber background-color statt opacity: opacity auf .overlay wuerde das
+// Blatt mit verblassen lassen, es soll aber deckend hereinfahren.
+const OVERLAY_MS = 260;
+const OVERLAY_DIM = 'rgba(0, 0, 0, .45)';
+function openOverlay(id) {
+  const ov = document.getElementById(id);
+  if (!ov) return;
+  if (ov._closeAnim) {
+    ov._closeAnim.onfinish = null;
+    ov._closeAnim.oncancel = null;
+    ov._closeAnim.cancel();
+    ov._closeAnim = null;
+  }
+  ov.classList.add('open');
+  if (mbReduceMotion()) return;
+  const card = ov.querySelector('.overlay-card');
+  ov.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: OVERLAY_DIM }],
+             { duration: OVERLAY_MS, easing: 'ease-out' });
+  if (card) {
+    card.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }],
+                 { duration: OVERLAY_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  }
+}
+function closeOverlay(id) {
+  const ov = document.getElementById(id);
+  if (!ov) return;
+  if (mbReduceMotion() || !ov.classList.contains('open')) {
+    ov.classList.remove('open');
+    return;
+  }
+  const card = ov.querySelector('.overlay-card');
+  ov.animate([{ backgroundColor: OVERLAY_DIM }, { backgroundColor: 'rgba(0, 0, 0, 0)' }],
+             { duration: OVERLAY_MS, easing: 'ease-in' });
+  const fertig = () => { ov.classList.remove('open'); ov._closeAnim = null; };
+  if (!card) { window.setTimeout(fertig, OVERLAY_MS); return; }
+  ov._closeAnim = card.animate(
+    [{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }],
+    { duration: OVERLAY_MS, easing: 'cubic-bezier(.4, 0, 1, 1)' }
+  );
+  ov._closeAnim.onfinish = fertig;
+  ov._closeAnim.oncancel = fertig;
+}
 
 let confirmCb = null;
 function showConfirm(title, okLabel, cb) {
@@ -5303,7 +5351,7 @@ function closeScannerOverlay() {
   stopScanner();
   scannerAddedNames.clear();
   showScannerResult('', '', '');
-  document.getElementById('scannerOverlay').classList.remove('open');
+  closeOverlay('scannerOverlay');
 }
 
 function resumeScanning(delayMs) {
@@ -5477,7 +5525,7 @@ function openScannerOverlay() {
   const result = document.getElementById('scannerResult');
   const videoWrap = document.getElementById('scannerVideoWrap');
   const video = document.getElementById('scannerVideo');
-  overlay.classList.add('open');
+  openOverlay('scannerOverlay');
   lastCode = '';
   scannerWarmupUntil = 0;
   scannerAddedNames.clear();
