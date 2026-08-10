@@ -751,9 +751,16 @@ html[data-symdo-theme="dark"] .member-bar {
   45%, 55% { transform: translateX(var(--marquee-shift, -30px)); }
   85%, 100%{ transform: translateX(0); }
 }
-.preview-actions { display: flex; gap: 10px; margin-top: 8px; }
+/* Zentriert, jeder Knopf hoechstens 300 px breit. Ohne den Deckel liefen die
+   beiden auf breiten Schirmen ueber die volle Kartenbreite (bei 1800 px Inhalt je
+   ~890 px) — fuer zwei kurze Beschriftungen viel zu breit.
+   flex-basis 0 plus max-width statt nur max-width: so teilen sie sich den Platz
+   gleichmaessig und bleiben untereinander gleich breit, auch bei
+   unterschiedlich langen Texten. */
+.preview-actions { display: flex; gap: 10px; margin-top: 8px; justify-content: center; }
 .preview-actions button {
-  flex: 1;
+  flex: 1 1 0;
+  max-width: 300px;
   padding: 9px 10px;
   border-radius: 10px;
   /* Gefüllt in der Akzentfarbe mit weißem Text — die beiden Aktionen sind das,
