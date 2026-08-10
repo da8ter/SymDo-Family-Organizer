@@ -1698,7 +1698,9 @@ html[data-symdo-theme="dark"] .member-bar {
   #favoritesContent {
     display: grid;
     grid-template-columns: minmax(300px, 360px) 1fr;
-    column-gap: var(--gap);
+    /* Doppelter Abstand: die beiden Spalten sind zwei getrennte Ansichten, kein
+       zusammengehoeriges Kartenraster — der uebliche --gap las sich zu eng. */
+    column-gap: calc(var(--gap) * 2);
     align-items: start;
   }
   /* Beide Spalten immer sichtbar. Dieselben Selektoren wie die schmalen Regeln
