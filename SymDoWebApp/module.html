@@ -1605,6 +1605,26 @@ html[data-symdo-theme="dark"] .member-bar {
   .dash-date, .member-bar, .kpi-grid, .segmented, .fav-actions,
   .suggestions, .composer { grid-column: 1 / -1; }
 
+  /* Wochenring und Einkaufsvorschau bekommen im Raster jeweils eine eigene
+     Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
+     Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
+     in einer schmalen Rasterspalte gequetscht. */
+  .week-card, .shop-card, .dash-tasks { grid-column: 1 / -1; }
+
+  /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
+     unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
+     (der Standard, hier gegen das start des aeusseren Rasters gesetzt) gibt
+     beiden Karten dieselbe Hoehe. */
+  .dash-tasks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--gap);
+    align-items: stretch;
+  }
+  /* Fehlt „Meine Aufgaben" (keine anstehenden Aufgaben), nimmt „Heute" die
+     ganze Breite statt eine halb leere Reihe zu bilden. */
+  .dash-tasks > .card:only-child { grid-column: 1 / -1; }
+
   /* KPI-Kacheln in EINE Reihe, gleich breit, genau so viele Spalten wie Kacheln.
      Mit repeat(auto-fit, …) entstanden bei 1400px acht Spuren fuer vier Kacheln —
      die Kacheln waren dann nur 150 px breit und die Reihe rechts halb leer. */
@@ -3523,6 +3543,13 @@ function renderDashboard() {
     }
     html += '</div>';
 
+    // Heute-Karte und „Meine Aufgaben" stecken in einem eigenen Behaelter: er
+    // spannt im breiten Raster ueber alle Spalten und teilt sich INTERN in
+    // hoechstens zwei. Ohne ihn folgten die beiden dem aeusseren Raster und
+    // standen dort zu dritt bzw. zu viert nebeneinander. Der Behaelter ist unter
+    // 820 px ein gewoehnliches div, die Karten stapeln also wie bisher.
+    html += '<div class="dash-tasks">';
+
     // Heute-Karte
     html += `<div class="card"><div class="card-head"><h3>${translate('Today')}</h3>` +
       `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
@@ -3557,6 +3584,7 @@ function renderDashboard() {
       }
       html += '</div>';
     }
+    html += '</div>';   // .dash-tasks
   }
 
   // Einkaufsvorschau — wie in der App nur, wenn es eine sichtbare Einkaufsliste
@@ -3564,7 +3592,7 @@ function renderDashboard() {
   const shopId = selectedShoppingID();
   const shopState = shopId ? instState(shopId) : null;
   if (withShop && shopState) {
-    html += `<div class="card"><div class="card-head"><h3>${translate('Shopping list')}</h3>` +
+    html += `<div class="card shop-card"><div class="card-head"><h3>${translate('Shopping list')}</h3>` +
       `<button class="link" data-goto="shopping">${translate('Open')}</button></div>`;
     const openItems = openSections(shopState).flatMap(s => s.items);
     if (openItems.length === 0) {
