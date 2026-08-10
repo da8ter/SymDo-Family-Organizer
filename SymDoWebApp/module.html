@@ -2907,6 +2907,42 @@ function dissolveCard(card, done) {
   card.style.marginBottom = '0px';
   window.setTimeout(finish, DISSOLVE_MS);
 }
+// Umsortieren sichtbar machen (FLIP): Positionen VOR dem Umhaengen merken, danach
+// die Differenz als transform setzen und weganimieren. Die Nachbarn gleiten damit an
+// ihren neuen Platz statt zu springen — in einer Spalte wie im mehrspaltigen Raster,
+// weil x UND y animiert werden.
+//
+// WAAPI statt CSS-Transition: eine Animation hinterlaesst keine Inline-Stile, die
+// spaeter mit dissolveCard() kollidieren koennten (das setzt height/transform selbst).
+const REORDER_MS = 180;
+function flipReorder(area, dragged, mutate) {
+  if (mbReduceMotion()) { mutate(); return; }
+  const nodes = Array.from(area.querySelectorAll('.todo-card'));
+  // Laufende Animationen zuerst abbrechen: getBoundingClientRect() liefert sonst die
+  // MOMENTANE, noch verschobene Position, und die Differenz waere um den offenen Rest
+  // daneben. cancel() setzt den Knoten sofort auf seinen Layout-Platz.
+  for (const n of nodes) { if (n._flip) { n._flip.cancel(); n._flip = null; } }
+  const vorher = new Map();
+  for (const n of nodes) { const r = n.getBoundingClientRect(); vorher.set(n, { x: r.left, y: r.top }); }
+
+  mutate();
+
+  for (const n of nodes) {
+    // Die gezogene Karte springt bewusst sofort: sie sitzt unter dem Finger.
+    if (n === dragged) continue;
+    const v = vorher.get(n);
+    if (!v) continue;
+    const r = n.getBoundingClientRect();
+    const dx = v.x - r.left, dy = v.y - r.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+    n._flip = n.animate(
+      [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+      { duration: REORDER_MS, easing: 'cubic-bezier(.2,.7,.3,1)' }
+    );
+    n._flip.onfinish = () => { n._flip = null; };
+  }
+}
+
 // Gegenstueck fuer Wege, die nach dem Wischen noch nachfragen und abbrechen koennen.
 function restoreCard(card) {
   if (!card) return;
@@ -3127,8 +3163,10 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       const eigen = card.getBoundingClientRect();
       const gleicheReihe = Math.abs(r.top - eigen.top) < r.height / 2;
       const davor = gleicheReihe ? (x < r.left + r.width / 2) : (y < r.top + r.height / 2);
-      if (davor) area.insertBefore(card, over);
-      else area.insertBefore(card, over.nextSibling);
+      flipReorder(area, card, () => {
+        if (davor) area.insertBefore(card, over);
+        else area.insertBefore(card, over.nextSibling);
+      });
       dragMoved = true;
     };
     const markSwiped = () => { card.dataset.swiped = '1'; window.setTimeout(() => { delete card.dataset.swiped; }, 60); };
