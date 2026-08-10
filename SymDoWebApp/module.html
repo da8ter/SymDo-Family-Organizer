@@ -1817,8 +1817,8 @@ html[data-symdo-theme="dark"] .member-bar {
   <nav class="tabbar">
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
-    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
     <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
+    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
   </nav>
 </div>
 
@@ -2185,10 +2185,11 @@ function visibleTabs() {
   const out = [];
   if (t.dashboard) out.push('dashboard');
   // Favoriten hängen an den Einkaufslisten: der Tab zeigt deren Favoritenlisten und
-  // die Kaufhistorie — ohne Einkauf hätte er keinen Inhalt.
-  if (t.shopping) { out.push('shopping'); }
+  // die Kaufhistorie — ohne Einkauf hätte er keinen Inhalt. Deshalb stehen sie auch in
+  // der Leiste direkt hinter „Einkaufen"; die Reihenfolge hier ist zugleich die des
+  // Rückfalls, wenn der gespeicherte Tab abgeschaltet wurde (vis[0] in setTab).
+  if (t.shopping) { out.push('shopping'); out.push('favorites'); }
   if (t.todos) out.push('todos');
-  if (t.shopping) out.push('favorites');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -2736,7 +2737,7 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'shopping', 'todos', 'favorites'];
+const TABS = ['dashboard', 'shopping', 'favorites', 'todos'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
