@@ -4848,9 +4848,10 @@ function renderFavList(el, st, detail) {
         });
       });
     });
-    const addBtn = card.querySelector('[data-addone]');
-    if (addBtn) addBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    // Auf die Einkaufsliste setzen — an ZWEI Wegen: der Warenkorb-Knopf und die Zeile
+    // selbst. Bisher hing es nur am Knopf, in der Kaufliste war die ganze Zeile
+    // anklickbar; dieselbe Zeile verhielt sich also je nach Liste anders.
+    const addOne = () => {
       const item = curFavItem();
       if (!item) return;
       // Menge des Favoriteneintrags mitnehmen. Steht der Artikel schon offen auf der
@@ -4868,6 +4869,20 @@ function renderFavList(el, st, detail) {
       showToast((open.has(String(item.name || '').trim().toLowerCase())
         ? translate('„%1“: quantity increased')
         : translate('„%1“ added to the shopping list')).replace('%1', item.name));
+    };
+    const addBtn = card.querySelector('[data-addone]');
+    if (addBtn) addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addOne();
+    });
+    card.querySelector('.item-card-content').addEventListener('click', (e) => {
+      // Nach einem Wischen kommt noch ein Klick — der darf nicht zaehlen.
+      if (card.dataset.swiped === '1') return;
+      // Klicks auf Knoepfe (Warenkorb, Mengen-Abzeichen, Stepper) laufen ueber deren
+      // eigene Handler; ohne diesen Riegel zaehlte ein Knopfdruck doppelt.
+      if (e.target.closest('button')) return;
+      if (e.target.closest('[data-amount-edit]')) return;
+      addOne();
     });
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
