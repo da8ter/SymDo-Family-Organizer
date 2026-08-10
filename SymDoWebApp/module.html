@@ -709,9 +709,11 @@ html[data-symdo-theme="dark"] .member-bar {
   overflow: visible;
 }
 .strip-thumb img { width: 100%; height: 100%; object-fit: contain; }
-/* Menge am unteren Rand des Bildes. Unterlage ist --row (deckend): über einem
-   Produktbild wäre --surface2 mit 12 % zu schwach zum Lesen. Der Ring in
-   --card-color trennt das Abzeichen vom Bild dahinter. */
+/* Menge am unteren Rand des Bildes. Unterlage ist die Kachelhintergrundfarbe und
+   ohne Ring (so gewuenscht). Vorher war es --row (etwas heller) mit einem
+   1-px-Ring in --card-color, der das Abzeichen vom Bild dahinter trennte —
+   deckend ist auch --card-color, ueber einem Produktbild bleibt die Zahl also
+   lesbar; sie hebt sich nur nicht mehr von der Karte ab. */
 .strip-amount {
   position: absolute;
   right: -4px;
@@ -719,8 +721,7 @@ html[data-symdo-theme="dark"] .member-bar {
   min-width: 16px;
   padding: 1px 4px;
   border-radius: 999px;
-  background: var(--row);
-  border: 1px solid var(--card-color);
+  background: var(--card-color);
   color: var(--text);
   font-size: 10px;
   font-weight: 700;
