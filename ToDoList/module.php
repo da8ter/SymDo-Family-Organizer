@@ -140,6 +140,16 @@ class ToDoList extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
+        // Status GANZ VORN melden, nicht am Ende: weiter unten steigt ApplyChanges
+        // bei EnforceSyncBackend() vorzeitig aus, und die Sync-/Benachrichtigungs-
+        // Arbeit dahinter kann werfen — beides ließ die Instanz auf IS_CREATING
+        // (101) stehen. Zusätzlich nach IPS_KERNELSTARTED erneut melden: im
+        // Hochlauf gesetzt hält der Wert nicht (gemessen 2026-08-10 — nach dem
+        // Neustart standen alle fünf Listen wieder auf 101, obwohl
+        // TDL_GetAppState einwandfrei Aufgaben lieferte).
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
+        $this->SetStatus(IS_ACTIVE);
+
         @$this->RegisterPropertyBoolean('AutoSyncOnChange', false);
         @$this->RegisterPropertyInteger('AutoSyncOnChangeDelay', 3);
         @$this->RegisterTimer('SyncOnChangeTimer', 0, 'TDL_SyncOnChange($_IPS[\'TARGET\']);');
@@ -207,16 +217,18 @@ class ToDoList extends IPSModuleStrict
 
         $this->ProcessNotifications();
         $this->ProcessRecurrences();
+    }
 
-        // Instanz ausdrücklich als aktiv melden. Ohne das blieb sie dauerhaft auf
-        // IS_CREATING (gemessen: alle fünf Listen auf 101, obwohl ApplyChanges
-        // fehlerfrei durchläuft, das Gateway aktiv ist und TDL_GetAppState Daten
-        // liefert). Sichtbar wurde das erst, seit SymDoWebApp jede Geschwister-
-        // Abfrage auf IS_ACTIVE prüft, um Warnungen halbfertiger Instanzen zu
-        // vermeiden: die Kachel übersprang seither JEDE ToDo-Liste und zeigte
-        // keine Aufgaben mehr. Die iOS-App und die Standalone-Web-App waren nicht
-        // betroffen, weil die AppBridge diesen Status nicht auswertet.
-        $this->SetStatus(IS_ACTIVE);
+    /**
+     * Nur für den Statusnachtrag: der im Hochlauf gesetzte IS_ACTIVE hält nicht,
+     * nach KR_READY hält er. Absichtlich NICHT das ganze ApplyChanges erneut —
+     * das würde Sync und Benachrichtigungen ein zweites Mal anstoßen.
+     */
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        if ($Message === IPS_KERNELSTARTED) {
+            $this->SetStatus(IS_ACTIVE);
+        }
     }
 
     public function GetConfigurationForm(): string
