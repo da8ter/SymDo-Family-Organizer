@@ -1665,6 +1665,22 @@ html[data-symdo-theme="dark"] .member-bar {
   /* Zeigt, welche Liste rechts steht */
   .fav-card.is-open { outline: 2px solid var(--accent); outline-offset: -2px; }
 }
+
+/* Grosse Schirme (1920 x 1080 und breiter): vier Spalten bei Artikeln und
+   Aufgaben. Der Haltepunkt liegt bei 1700 px, damit ein 1600er Fenster bei drei
+   Spalten bleibt. Mit dem 1400er Deckel waeren vier gar nicht moeglich:
+   4 x 360 + 3 x 12 = 1476 px Mindestbreite.
+
+   Die Spaltenzahl steht hier AUSDRUECKLICH auf 4 statt auf auto-fill. Mit
+   auto-fill haengt sie am Rundungsverhalten (1800 px ergaeben 4, ein etwas
+   breiterer Inhalt schon 5) — gewuenscht sind genau vier. Favoriten und
+   Dashboard bleiben bei auto-fill/auto-fit. */
+@media (min-width: 1700px) {
+  :root { --content-max: 1800px; }
+  #shoppingListArea, #todoListArea {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
   </style>
 </head>
 <body>
