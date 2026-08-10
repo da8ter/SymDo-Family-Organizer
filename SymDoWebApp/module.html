@@ -1691,8 +1691,13 @@ html[data-symdo-theme="dark"] .member-bar {
   #screen-favorites.detail-open #favMaster { display: block; }
   /* Zurück-Pfeile haben nebeneinander keinen Sinn: die Auswahl steht ja links */
   #btnFavBack, #btnBoughtBack { display: none; }
-  /* Zeigt, welche Liste rechts steht */
-  .fav-card.is-open { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* Zeigt, welche Liste rechts steht. Als innerer Schatten auf der ZEILE, NICHT als
+     outline auf der Karte: die Zeile ist positioniert und wird ueber dem Umriss der
+     Karte gezeichnet, deckte ihn auf den Geraden also ab. Sichtbar blieben nur vier
+     Akzent-Boegen in den Ecken — dort liegt die 12-px-Rundung der Zeile weiter innen
+     als der um 2 px eingerueckte Umriss (dessen Radius auf 10 px sinkt), er schaute
+     also hervor. Der innere Schatten folgt der Rundung der Zeile exakt. */
+  .fav-card.is-open .fav-row { box-shadow: inset 0 0 0 2px var(--accent); }
 }
 
 /* Grosse Schirme (1920 x 1080 und breiter): vier Spalten bei Artikeln und
