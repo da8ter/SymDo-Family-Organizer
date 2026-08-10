@@ -1253,6 +1253,14 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .fav-actions button.destructive { background: var(--red); color: #fff; }
 
+/* Beide Favoriten-Spalten beginnen auf derselben Hoehe. Die linke Kopfzeile enthaelt
+   den Plus-Knopf (.icon-btn, 38 px), die rechte ab 1100 px keinen — der Zurueck-Pfeil
+   ist dort ausgeblendet, weil die Auswahl daneben steht. Gemessen: Kopf 38 gegen
+   26 px, dadurch standen die Ueberschriften 6 px und der erste Inhalt 12 px versetzt.
+   min-height in Hoehe von .icon-btn macht beide Koepfe gleich hoch, unabhaengig
+   davon, ob ein Knopf drinsteht. */
+#favMaster .screen-head, #favDetail .screen-head { min-height: 38px; }
+
 /* ── Overlays / Sheets ─────────────────────────────────────────────────────── */
 .overlay {
   position: fixed;
