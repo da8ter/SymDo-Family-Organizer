@@ -678,6 +678,10 @@ html[data-symdo-theme="dark"] .member-bar {
   scrollbar-width: none;
 }
 .shop-strip::-webkit-scrollbar { display: none; }
+/* Ziehen mit der Maus (bindDragScroll): grab/grabbing als Hinweis, und waehrend des
+   Ziehens keine Textauswahl. */
+.shop-strip { cursor: grab; }
+.shop-strip.is-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
 .shop-strip .strip-item {
   flex: none;
   width: 58px;
@@ -718,14 +722,20 @@ html[data-symdo-theme="dark"] .member-bar {
   position: absolute;
   right: -4px;
   bottom: -3px;
+  /* Mindestens rund: Hoehe FEST auf 16px und dieselbe Zahl als Mindestbreite. Vorher
+     ergab sich die Hoehe aus line-height 1.4 plus Polster und traf 16px nur zufaellig
+     — an einer anderen Schriftgroesse oder Zeilenhoehe waere die Pille zum Oval
+     geworden. line-height gleich der Inhaltshoehe (16 minus 2x1px Polster) haelt die
+     Zahl senkrecht mittig, und text-overflow: ellipsis bleibt anwendbar (kein Flex). */
   min-width: 16px;
+  height: 16px;
   padding: 1px 4px;
   border-radius: 999px;
   background: var(--card-color);
   color: var(--text);
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 14px;
   text-align: center;
   /* Nicht umbrechen: „2 Zehe/n" wurde sonst zweizeilig, das Abzeichen wuchs nach
      unten in den Artikelnamen hinein (gemessen). Deckel bei 54px — der Artikel im
@@ -3638,6 +3648,50 @@ function ringTile(text, frac, label, sub, warn) {
     `<div class="ring-sub">${escapeHtml(sub)}</div></div>`;
 }
 
+// Artikelstreifen mit der Maus ziehen. Mit dem Finger scrollt der Streifen schon
+// nativ (overflow-x), am Zeigergeraet gab es nur Rad und Scrollbalken — und die ist
+// hier ausgeblendet. Maus-Events, keine Pointer-Events: die Symcon-Desktop-Webview
+// liefert keine (dieselbe Begruendung wie bei bindCardSwipe).
+function bindDragScroll(el) {
+  if (!el || el._dragScroll) return;
+  el._dragScroll = true;
+  const SLOP = 6;                        // erst ab hier ist es ein Ziehen, kein Klick
+  let startX = 0, startLeft = 0, active = false, decided = false;
+  const cleanup = () => {
+    active = false; decided = false;
+    el.classList.remove('is-dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+  const onMove = (e) => {
+    if (!active) return;
+    const dx = e.clientX - startX;
+    if (!decided) {
+      if (Math.abs(dx) < SLOP) return;
+      decided = true;
+      el.classList.add('is-dragging');
+    }
+    el.scrollLeft = startLeft - dx;
+    e.preventDefault();                  // sonst startet die Textauswahl
+  };
+  const onUp = () => {
+    const gezogen = decided;
+    cleanup();
+    if (!gezogen) return;
+    // Nach dem Ziehen folgt ein Klick auf die getroffene Kachel — der darf den
+    // Artikel nicht abhaken (gleiche Sperre wie dataset.swiped bei den Wischgesten).
+    el.dataset.dragged = '1';
+    window.setTimeout(() => { delete el.dataset.dragged; }, 60);
+  };
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    active = true; decided = false;
+    startX = e.clientX; startLeft = el.scrollLeft;
+    document.addEventListener('mousemove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
@@ -3877,8 +3931,12 @@ function renderDashboard() {
     ls.set('symdo.dashboardPriority', dashPriority);
     renderDashboard();
   }));
+  const strip = el.querySelector('.shop-strip');
+  bindDragScroll(strip);
   el.querySelectorAll('[data-check]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Nach einem Ziehen des Streifens kommt noch ein Klick — der darf nicht abhaken.
+    if (strip && strip.dataset.dragged === '1') return;
     sdCall(shopId, 'ToggleCart', { id: b.dataset.check, inCart: true });
   }));
   const previewAdd = el.querySelector('[data-preview-add]');
