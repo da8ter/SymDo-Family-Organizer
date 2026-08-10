@@ -23,6 +23,12 @@
   --radius:  14px;
   --gap:     12px;
   --nav-h:   68px;
+  /* Inhaltsbreite. Die beiden Haltepunkte weiter unten heben sie an; alles andere
+     rechnet gegen diese Variable, damit der Deckel nur an EINER Stelle steht.
+     --bar-max wächst absichtlich NICHT mit: Tableiste und Eingabezeile sollen auf
+     breiten Schirmen schmal und mittig bleiben (0,9 × 720 = die heutige Breite). */
+  --content-max: 720px;
+  --bar-max:     calc(720px * 0.9);
   /* Vom System vorgegebene Kachel-Ränder (aus den URL-Parametern margintop/
      marginside/marginbottom, per JS gesetzt). Default 0, damit Vollbild ohne
      Ränder korrekt bleibt. */
@@ -103,7 +109,7 @@ select option { color: #111; background: #fff; }
   border-radius: 999px;
 }
 .screen.active { display: block; }
-.content { max-width: 720px; margin: 0 auto; }
+.content { max-width: var(--content-max); margin: 0 auto; }
 
 /* ── Bottom-Tab-Bar (im Flex-Fluss, damit scrollbarer Inhalt nicht dahinter
       verschwindet — sie ist immer die unterste Zeile unter dem Scrollbereich).
@@ -213,7 +219,9 @@ html .tabbar {
   right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
   bottom: calc(var(--tab-gap) + var(--sym-mb));
   width: auto;
-  max-width: calc(720px * 0.9);
+  /* --bar-max, NICHT --content-max: die Leiste bleibt auf breiten Schirmen schmal
+     (siehe :root). Sonst stünde sie dort in voller Inhaltsbreite. */
+  max-width: var(--bar-max);
   margin-left: auto;
   margin-right: auto;
   border: 1px solid var(--border);
@@ -1248,7 +1256,9 @@ html[data-symdo-theme="dark"] .member-bar {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 720px;
+  /* Bei 900px gedeckelt: ein Formular über die volle Inhaltsbreite (bis 1400px)
+     wäre auf breiten Schirmen unlesbar weit. */
+  max-width: min(var(--content-max), 900px);
   margin: 0 auto;
 }
 .overlay-head {
@@ -1551,6 +1561,90 @@ html[data-symdo-theme="dark"] .member-bar {
 .scanner-status:empty { display: none; }
 .scanner-status.success { color: #2e7d32; }
 .scanner-status.error { color: #c0392b; }
+
+/* ── Breite Bildschirme ─────────────────────────────────────────────────────
+   Bis hierher ist die Oberfläche mobil-first und einspaltig. Ab hier nutzt sie
+   die Fläche. ALLES steht in Media Queries, damit sich auf dem Telefon nichts
+   verschiebt — die einzige Änderung an einer Basisregel ist der Deckel als
+   Variable (--content-max, Default 720px = unverändert).
+
+   Media Query, nicht Container Query: die Kachel ist ein eigenes Dokument mit
+   eigenem Viewport (siehe .tabbar, die mit 100vw die Kachelbreite trifft). Eine
+   SCHMALE Kachel in einem breiten Fenster bleibt damit korrekt einspaltig. */
+@media (min-width: 820px)  { :root { --content-max: 1000px; } }
+@media (min-width: 1250px) { :root { --content-max: 1400px; } }
+
+/* Favoriten schmal: genau eine der beiden Spalten ist sichtbar — dasselbe
+   Verhalten wie vor der Aufteilung in #favMaster/#favDetail. */
+#screen-favorites:not(.detail-open) #favDetail { display: none; }
+#screen-favorites.detail-open #favMaster { display: none; }
+
+@media (min-width: 820px) {
+  /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
+     der verfügbaren Breite (2 bei 1000px, 3–4 bei 1400px) — deshalb genügt EIN
+     Haltepunkt für das Raster.
+     row-gap MUSS 0 bleiben: die Abstände kommen weiter aus margin-bottom der
+     Zeilen. Mit einem row-gap bliebe beim Löschen eine Lücke stehen, weil
+     dissolveCard() Höhe und margin-bottom zusammenfährt, den gap aber nicht. */
+  #shoppingListArea, #todoListArea, #favMaster, #favDetail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    column-gap: var(--gap);
+    row-gap: 0;
+    align-items: start;
+  }
+  #dashboardContent {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    column-gap: var(--gap);
+    row-gap: 0;
+    align-items: start;
+  }
+  /* Überschriften, Filter, Aktionen und die Eingabezeile spannen über alle Spalten */
+  .cat-header, .section-toggle, .empty-state, .screen-head,
+  .dash-date, .member-bar, .kpi-grid, .segmented, .fav-actions,
+  .suggestions, .composer { grid-column: 1 / -1; }
+
+  /* KPI-Kacheln in EINE Reihe, gleich breit, genau so viele Spalten wie Kacheln.
+     Mit repeat(auto-fit, …) entstanden bei 1400px acht Spuren fuer vier Kacheln —
+     die Kacheln waren dann nur 150 px breit und die Reihe rechts halb leer. */
+  .kpi-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  /* Eingabezeile auf dasselbe Maß wie die Tableiste. Die 5%-Ränder der Basisregel
+     entsprechen ihr nur bei genau 720px Inhaltsbreite — darüber liefen die
+     beiden auseinander. */
+  html .inputbar {
+    max-width: var(--bar-max);
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Ab hier stehen Auswahl und Inhalt der Favoriten NEBENEINANDER. 1100px, weil
+   340px Auswahl + ~740px Inhalt bequem passen — bei 1000px wäre der Inhalt für
+   die Artikelzeilen zu schmal. */
+@media (min-width: 1100px) {
+  #favoritesContent {
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) 1fr;
+    column-gap: var(--gap);
+    align-items: start;
+  }
+  /* Beide Spalten immer sichtbar. Dieselben Selektoren wie die schmalen Regeln
+     weiter oben, nur spaeter im Stylesheet — mit schwaecheren Selektoren
+     (#screen-favorites #favDetail) gewann dort das display:none, weil das :not()
+     eine Klasse mitbringt. Gemessen: rechte Spalte blieb 0 px breit. */
+  #screen-favorites:not(.detail-open) #favDetail,
+  #screen-favorites.detail-open #favMaster { display: block; }
+  /* Zurück-Pfeile haben nebeneinander keinen Sinn: die Auswahl steht ja links */
+  #btnFavBack, #btnBoughtBack { display: none; }
+  /* Zeigt, welche Liste rechts steht */
+  .fav-card.is-open { outline: 2px solid var(--accent); outline-offset: -2px; }
+}
   </style>
 </head>
 <body>
@@ -1603,7 +1697,12 @@ html[data-symdo-theme="dark"] .member-bar {
     </section>
 
     <section id="screen-favorites" class="screen">
-      <div class="content" id="favoritesContent"></div>
+      <!-- Zwei Spalten: links die Auswahl, rechts der Inhalt. Schmal ist immer nur
+           eine sichtbar (siehe #screen-favorites.detail-open), ab 1100px beide. -->
+      <div class="content" id="favoritesContent">
+        <div id="favMaster"></div>
+        <div id="favDetail"></div>
+      </div>
     </section>
 
   </main>
@@ -2953,7 +3052,15 @@ function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelet
       if (!over || over === card || over.dataset.animating === '1') return;
       if (over.classList.contains('done-row')) return; // reorder among open items only
       const r = over.getBoundingClientRect();
-      if (y < r.top + r.height / 2) area.insertBefore(card, over);
+      // Auf breiten Schirmen ist die Liste mehrspaltig, Nachbarn liegen dann
+      // NEBENEINANDER — dort entscheidet die senkrechte Mitte nichts Sinnvolles.
+      // Liegt die Zielkarte in derselben Reihe, zählt die waagerechte Mitte;
+      // sonst wie bisher die senkrechte. Die endgültige Reihenfolge liest `end()`
+      // ohnehin aus der DOM-Ordnung, die im Raster zeilenweise läuft.
+      const eigen = card.getBoundingClientRect();
+      const gleicheReihe = Math.abs(r.top - eigen.top) < r.height / 2;
+      const davor = gleicheReihe ? (x < r.left + r.width / 2) : (y < r.top + r.height / 2);
+      if (davor) area.insertBefore(card, over);
       else area.insertBefore(card, over.nextSibling);
       dragMoved = true;
     };
@@ -4116,12 +4223,20 @@ function bindTodoDnd(area, instanceID, open, done, enabled) {
 // Detailansicht von „Schon gekauft". Eigener Schalter statt favDetailListId, weil
 // die Liste keine ID im Favoritenbestand hat.
 let favBoughtOpen = false;
+// Favoriten. Uebersicht und Detail rendern in ZWEI Container (#favMaster,
+// #favDetail): schmal ist immer nur einer sichtbar (Verhalten wie bisher), ab
+// 1100px stehen sie nebeneinander. Deshalb sind die drei fruehreren Zweige
+// eigene Funktionen mit dem Ziel-Element als Parameter — renderRows() erkennt
+// Knoten pro Container wieder, jeder Zweig MUSS also in seinen eigenen schreiben.
 function renderFavorites() {
-  const el = document.getElementById('favoritesContent');
+  const elMaster = document.getElementById('favMaster');
+  const elDetail = document.getElementById('favDetail');
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
   if (!st) {
-    renderInto(el, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}${noInstanceHint('shopping')}</div>`);
+    renderInto(elMaster, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}${noInstanceHint('shopping')}</div>`);
+    renderInto(elDetail, '');
+    document.getElementById('screen-favorites').classList.remove('detail-open');
     return;
   }
   const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
@@ -4136,204 +4251,233 @@ function renderFavorites() {
   // weiß, ob es ein PDF an den System-Viewer übergeben muss.
   if (detail && detail.mediaId) prefetchMediaType(detail.mediaId);
 
-  if (!detail && !favBoughtOpen) {
-    let html = `<div class="screen-head" data-key="head"><h2>${translate('Favorites')}</h2>` +
-      `<button class="icon-btn" id="btnFavCreate" aria-label="${translate('New favorite list')}"><i class="fa-light fa-plus"></i></button></div>`;
-    // „Schon gekauft" steht VOR der Schleife, sonst würde sie alphabetisch
-    // einsortiert. Bewusst ohne .swipe-under, ohne Warenkorb-Knopf: das Markup muss
-    // sich von einer normalen Karte unterscheiden, sonst könnte renderRows einen
-    // Knoten samt seiner alten Wisch- und Lösch-Handler wiederverwenden.
-    if (bought.length > 0) {
-      html += `<div class="fav-card bought-card" data-key="boughtcard">` +
-        `<div class="fav-row" data-bought="1">` +
-        `<span class="fav-badge bought-badge"><i class="fa-light fa-basket-shopping"></i></span>` +
-        `<span class="fav-main"><span class="fav-name">${translate('Already bought')}</span>` +
-        `<span class="fav-count">${bought.length === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(bought.length))}</span></span>` +
-        `<i class="fa-light fa-chevron-right fav-chevron"></i>` +
-        '</div></div>';
-    }
-    if (lists.length === 0 && bought.length === 0) {
-      html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-heart"></i>${translate('No favorite lists')}</div>`;
-    }
-    for (const list of lists) {
-      const count = (list.items || []).length;
-      html += `<div class="fav-card" data-key="fav:${escapeHtml(list.id)}">` +
-        `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
-        `<div class="swipe-under-edit"><i class="fa-light fa-cart-plus"></i></div>` +
-        `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
-        `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
-        `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
-        `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
-        `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
-        '</div></div>';
-    }
-    const freshFav = renderRows(el, html);
-    if (freshFav === false) return;
-    const curLists = () => {
-      const s = instState(selectedShoppingID()) || {};
-      return Array.isArray(s.favoriteLists) ? s.favoriteLists : [];
-    };
-    const boughtNode = freshFav.find(n => n.querySelector && n.querySelector('[data-bought]'));
-    if (boughtNode) boughtNode.querySelector('[data-bought]').addEventListener('click', () => {
-      favBoughtOpen = true;
+  renderFavMaster(elMaster, st, lists, bought, detail);
+  renderFavPane(elDetail, st, lists, bought, detail);
+  // Eine Stelle entscheidet, ob ein Detail offen ist — die CSS-Regeln haengen
+  // daran (schmal: genau eine Spalte sichtbar).
+  document.getElementById('screen-favorites')
+    .classList.toggle('detail-open', !!detail || favBoughtOpen);
+}
+
+// Uebersicht der Favoritenlisten. Wird jetzt IMMER gerendert, auch wenn rechts
+// ein Detail steht — nebeneinander ist sie die Auswahlspalte.
+function renderFavMaster(el, st, lists, bought, detail) {
+  let html = `<div class="screen-head" data-key="head"><h2>${translate('Favorites')}</h2>` +
+    `<button class="icon-btn" id="btnFavCreate" aria-label="${translate('New favorite list')}"><i class="fa-light fa-plus"></i></button></div>`;
+  // „Schon gekauft" steht VOR der Schleife, sonst würde sie alphabetisch
+  // einsortiert. Bewusst ohne .swipe-under, ohne Warenkorb-Knopf: das Markup muss
+  // sich von einer normalen Karte unterscheiden, sonst könnte renderRows einen
+  // Knoten samt seiner alten Wisch- und Lösch-Handler wiederverwenden.
+  if (bought.length > 0) {
+    html += `<div class="fav-card bought-card${favBoughtOpen ? ' is-open' : ''}" data-key="boughtcard">` +
+      `<div class="fav-row" data-bought="1">` +
+      `<span class="fav-badge bought-badge"><i class="fa-light fa-basket-shopping"></i></span>` +
+      `<span class="fav-main"><span class="fav-name">${translate('Already bought')}</span>` +
+      `<span class="fav-count">${bought.length === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(bought.length))}</span></span>` +
+      `<i class="fa-light fa-chevron-right fav-chevron"></i>` +
+      '</div></div>';
+  }
+  if (lists.length === 0 && bought.length === 0) {
+    html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-heart"></i>${translate('No favorite lists')}</div>`;
+  }
+  for (const list of lists) {
+    const count = (list.items || []).length;
+    html += `<div class="fav-card${detail && detail.id === list.id ? ' is-open' : ''}" data-key="fav:${escapeHtml(list.id)}">` +
+      `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+      `<div class="swipe-under-edit"><i class="fa-light fa-cart-plus"></i></div>` +
+      `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
+      `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
+      `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
+      `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
+      `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
+      '</div></div>';
+  }
+  const freshFav = renderRows(el, html);
+  if (freshFav === false) return;
+  const curLists = () => {
+    const s = instState(selectedShoppingID()) || {};
+    return Array.isArray(s.favoriteLists) ? s.favoriteLists : [];
+  };
+  const boughtNode = freshFav.find(n => n.querySelector && n.querySelector('[data-bought]'));
+  if (boughtNode) boughtNode.querySelector('[data-bought]').addEventListener('click', () => {
+    favBoughtOpen = true;
+    favDetailListId = null;   // die beiden Auswahlen schliessen sich aus
+    renderFavorites();
+  });
+  const headNode = freshFav.find(n => n.querySelector && n.querySelector('#btnFavCreate'));
+  if (headNode) headNode.querySelector('#btnFavCreate').addEventListener('click', () => {
+    showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
+      if (name.trim()) sdCall(selectedShoppingID(), 'CreateFavoriteList', { name: name.trim() });
+    });
+  });
+  freshFav.forEach(node => (node.querySelectorAll ? node.querySelectorAll('[data-addall]') : []).forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    addFavListToCart(selectedShoppingID(), curLists().find(l => l.id === btn.dataset.addall));
+  })));
+  // Die Kaufliste ist zwar eine .fav-card, aber KEINE Favoritenliste: sie hat keine
+  // data-list-ID. Ohne den Ausschluss bekam sie zusaetzlich zu ihrem eigenen Handler
+  // die Auswahl- und Wisch-Handler der Listen. Der Auswahl-Handler lief als zweiter
+  // und setzte favDetailListId auf undefined — dass „Schon gekauft" trotzdem aufging,
+  // lag nur daran, dass undefined falsy ist. Wischen nach links haette ausserdem
+  // DeleteFavoriteList mit undefined aufgerufen.
+  freshFav.filter(n => n.classList && n.classList.contains('fav-card')
+                       && !n.classList.contains('bought-card')).forEach(card => {
+    const row = card.querySelector('.fav-row');
+    const listId = row.dataset.list;
+    const list = () => curLists().find(l => l.id === listId);
+    // Swipe links = Liste löschen (mit Bestätigung wie im Menü), rechts = alles auf die Einkaufsliste.
+    bindCardSwipe(card, '.fav-row',
+      () => {
+        // Slide-out zurücknehmen (bei Abbruch bleibt die Zeile erhalten), dann bestätigen.
+        card.classList.remove('is-deleting'); delete card.dataset.animating;
+        row.style.transform = ''; restoreCard(card);
+        showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+          if (favDetailListId === listId) favDetailListId = null;
+          sdCall(selectedShoppingID(), 'DeleteFavoriteList', listId);
+        });
+      },
+      () => { addFavListToCart(selectedShoppingID(), list()); },
+      { dissolve: false }
+    );
+    row.addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      favDetailListId = listId;
+      favBoughtOpen = false;   // sonst blieb nebeneinander die Kaufliste stehen
       renderFavorites();
     });
-    const headNode = freshFav.find(n => n.querySelector && n.querySelector('#btnFavCreate'));
-    if (headNode) headNode.querySelector('#btnFavCreate').addEventListener('click', () => {
-      showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
-        if (name.trim()) sdCall(selectedShoppingID(), 'CreateFavoriteList', { name: name.trim() });
-      });
-    });
-    freshFav.forEach(node => (node.querySelectorAll ? node.querySelectorAll('[data-addall]') : []).forEach(btn => btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      addFavListToCart(selectedShoppingID(), curLists().find(l => l.id === btn.dataset.addall));
-    })));
-    freshFav.filter(n => n.classList && n.classList.contains('fav-card')).forEach(card => {
-      const row = card.querySelector('.fav-row');
-      const listId = row.dataset.list;
-      const list = () => curLists().find(l => l.id === listId);
-      // Swipe links = Liste löschen (mit Bestätigung wie im Menü), rechts = alles auf die Einkaufsliste.
-      bindCardSwipe(card, '.fav-row',
-        () => {
-          // Slide-out zurücknehmen (bei Abbruch bleibt die Zeile erhalten), dann bestätigen.
-          card.classList.remove('is-deleting'); delete card.dataset.animating;
-          row.style.transform = ''; restoreCard(card);
-          showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
-            if (favDetailListId === listId) favDetailListId = null;
-            sdCall(selectedShoppingID(), 'DeleteFavoriteList', listId);
-          });
-        },
-        () => { addFavListToCart(selectedShoppingID(), list()); },
-        { dissolve: false }
-      );
-      row.addEventListener('click', (e) => {
-        if (card.dataset.swiped === '1') return;
-        if (e.target.closest('button')) return;
-        favDetailListId = listId;
-        renderFavorites();
-      });
-    });
-    return;
-  }
+  });
+  return;
+}
+
+// Rechte Spalte: Kaufliste, Listendetail oder — ohne Auswahl — ein Hinweis,
+// damit die Spalte auf breiten Schirmen nicht leer klafft.
+function renderFavPane(el, st, lists, bought, detail) {
+  if (favBoughtOpen) { renderFavBought(el, st, bought); return; }
+  if (detail) { renderFavList(el, st, detail); return; }
+  renderRows(el, `<div class="empty-state" data-key="pick"><i class="fa-light fa-hand-pointer"></i>${translate('Select a list')}</div>`);
+}
 
   // Detailansicht von „Schon gekauft": nur lesen, kein Bearbeiten, kein Löschen der
   // Liste, kein „Alles in den Einkauf" (das wären je nach Bestand hunderte Artikel).
   // Antippen setzt den Artikel auf die Einkaufsliste, Wischen nach links vergisst ihn.
-  if (favBoughtOpen) {
-    let bhtml = `<div class="screen-head" data-key="boughthead">` +
-      `<button class="icon-btn" id="btnBoughtBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
-      `<h2>${translate('Already bought')}</h2></div>`;
-    const openNames = new Set((st.items || []).filter(i => !i.inCart).map(i => String(i.name || '').trim().toLowerCase()));
-    for (const b of bought) {
-      const img = getProductImageUrl(b.name);
-      const tint = categoryStyle(b.category).tint;
-      // Steht der Artikel schon offen auf der Liste, wird das mit einem Haken
-      // angezeigt — die Zeile bleibt aber bedienbar: AddItemInternal legt KEINE
-      // Dublette an, sondern erhöht die Menge (IncrementAmount). Ein zweiter Tipp
-      // bedeutet also „noch eins davon" und ist eine sinnvolle Aktion.
-      const onList = openNames.has(String(b.name || '').trim().toLowerCase());
-      // Mengenregler wie in den Favoritenlisten: numerische Mengen bekommen den
-      // Stepper, alles andere („500 g") bleibt ein reines Abzeichen.
-      const amountRaw = String(b.amount || '').trim();
-      const numeric = amountRaw === '' || /^[1-9]\d*$/.test(amountRaw);
-      const amount = amountRaw === '' ? '1' : amountRaw;
-      let side = '';
-      if (numeric) {
-        const canDec = parseInt(amount) > 1;
-        side += `<span class="stepper"><button data-bstep="1" aria-label="+"><i class="fa-light fa-chevron-up"></i></button>` +
-          `<span class="amount-badge">${escapeHtml(amount)}</span>` +
-          `<button data-bstep="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
-          '</span>';
-      } else {
-        side += `<span class="amount-badge" data-amount-edit="1" role="button" tabindex="0" title="${translate('Change quantity')}">${escapeHtml(amount)}</span>`;
-      }
-      side += `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
-      bhtml += `<div class="item-card bought-row${onList ? ' on-list' : ''}" data-key="bought:${escapeHtml(b.name)}" data-name="${escapeHtml(b.name)}" data-cat="${escapeHtml(b.category || '')}">` +
-        `<div class="swipe-under bought-forget"><i class="fa-light fa-clock-rotate-left"></i></div>` +
-        `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
-        `<div class="item-card-content">` +
-        `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
-        (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
-             : escapeHtml(String(b.name || '?').charAt(0).toUpperCase())) +
-        `</span><span class="item-main"><span class="item-name">${escapeHtml(b.name)}</span></span>` +
-        // Derselbe Warenkorb-Knopf wie in den Favoritenlisten, auch wenn der Artikel
-        // schon auf der Liste steht — dann erhöht er die Menge. Dass er dort liegt,
-        // zeigt die zurückgenommene Namensfarbe.
-        `<span class="item-side">${side}</span></div></div>`;
+function renderFavBought(el, st, bought) {
+  let bhtml = `<div class="screen-head" data-key="boughthead">` +
+    `<button class="icon-btn" id="btnBoughtBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
+    `<h2>${translate('Already bought')}</h2></div>`;
+  const openNames = new Set((st.items || []).filter(i => !i.inCart).map(i => String(i.name || '').trim().toLowerCase()));
+  for (const b of bought) {
+    const img = getProductImageUrl(b.name);
+    const tint = categoryStyle(b.category).tint;
+    // Steht der Artikel schon offen auf der Liste, wird das mit einem Haken
+    // angezeigt — die Zeile bleibt aber bedienbar: AddItemInternal legt KEINE
+    // Dublette an, sondern erhöht die Menge (IncrementAmount). Ein zweiter Tipp
+    // bedeutet also „noch eins davon" und ist eine sinnvolle Aktion.
+    const onList = openNames.has(String(b.name || '').trim().toLowerCase());
+    // Mengenregler wie in den Favoritenlisten: numerische Mengen bekommen den
+    // Stepper, alles andere („500 g") bleibt ein reines Abzeichen.
+    const amountRaw = String(b.amount || '').trim();
+    const numeric = amountRaw === '' || /^[1-9]\d*$/.test(amountRaw);
+    const amount = amountRaw === '' ? '1' : amountRaw;
+    let side = '';
+    if (numeric) {
+      const canDec = parseInt(amount) > 1;
+      side += `<span class="stepper"><button data-bstep="1" aria-label="+"><i class="fa-light fa-chevron-up"></i></button>` +
+        `<span class="amount-badge">${escapeHtml(amount)}</span>` +
+        `<button data-bstep="-1" aria-label="−"${canDec ? '' : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'}><i class="fa-light fa-chevron-down"></i></button>` +
+        '</span>';
+    } else {
+      side += `<span class="amount-badge" data-amount-edit="1" role="button" tabindex="0" title="${translate('Change quantity')}">${escapeHtml(amount)}</span>`;
     }
-    const freshBought = renderRows(el, bhtml);
-    if (freshBought === false) return;
-    const backNode = freshBought.find(n => n.querySelector && n.querySelector('#btnBoughtBack'));
-    if (backNode) backNode.querySelector('#btnBoughtBack').addEventListener('click', () => {
-      favBoughtOpen = false;
-      renderFavorites();
+    side += `<button class="heart-btn cart-btn" data-boughtadd="1" aria-label="${translate('Add to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>`;
+    bhtml += `<div class="item-card bought-row${onList ? ' on-list' : ''}" data-key="bought:${escapeHtml(b.name)}" data-name="${escapeHtml(b.name)}" data-cat="${escapeHtml(b.category || '')}">` +
+      `<div class="swipe-under bought-forget"><i class="fa-light fa-clock-rotate-left"></i></div>` +
+      `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
+      `<div class="item-card-content">` +
+      `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+      (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
+           : escapeHtml(String(b.name || '?').charAt(0).toUpperCase())) +
+      `</span><span class="item-main"><span class="item-name">${escapeHtml(b.name)}</span></span>` +
+      // Derselbe Warenkorb-Knopf wie in den Favoritenlisten, auch wenn der Artikel
+      // schon auf der Liste steht — dann erhöht er die Menge. Dass er dort liegt,
+      // zeigt die zurückgenommene Namensfarbe.
+      `<span class="item-side">${side}</span></div></div>`;
+  }
+  const freshBought = renderRows(el, bhtml);
+  if (freshBought === false) return;
+  const backNode = freshBought.find(n => n.querySelector && n.querySelector('#btnBoughtBack'));
+  if (backNode) backNode.querySelector('#btnBoughtBack').addEventListener('click', () => {
+    favBoughtOpen = false;
+    renderFavorites();
+  });
+  freshBought.filter(n => n.classList && n.classList.contains('bought-row')).forEach(card => {
+    const name = card.dataset.name;
+    const cat  = card.dataset.cat || '';
+    // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder die
+    // Menge des schon gelisteten Artikels erhöhen.
+    // Zustand IMMER frisch auflösen: zwischen Rendern und Klick kann sich die
+    // Historie geändert haben (Stepper, Vergessen, ein neuer Kauf).
+    const curBought = () => (Array.isArray((instState(selectedShoppingID()) || {}).purchased)
+      ? instState(selectedShoppingID()).purchased : []).find(x => String(x.name) === name);
+    const addOne = () => {
+      const it = curBought();
+      sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: String((it && it.amount) || '1') });
+      flyToShoppingTab(card.querySelector('.item-thumb'));
+      // Mit Artikelnamen wie in der iOS-App: bei einer langen Liste ist sonst nicht
+      // erkennbar, welche Zeile die Meldung ausgelöst hat.
+      showToast((card.classList.contains('on-list')
+        ? translate('„%1“: quantity increased')
+        : translate('„%1“ added to the shopping list')).replace('%1', name));
+    };
+    card.querySelector('[data-boughtadd]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      addOne();
     });
-    freshBought.filter(n => n.classList && n.classList.contains('bought-row')).forEach(card => {
-      const name = card.dataset.name;
-      const cat  = card.dataset.cat || '';
-      // Zwei Rückmeldungen, weil zwei Dinge passieren können: neu aufnehmen oder die
-      // Menge des schon gelisteten Artikels erhöhen.
-      // Zustand IMMER frisch auflösen: zwischen Rendern und Klick kann sich die
-      // Historie geändert haben (Stepper, Vergessen, ein neuer Kauf).
-      const curBought = () => (Array.isArray((instState(selectedShoppingID()) || {}).purchased)
-        ? instState(selectedShoppingID()).purchased : []).find(x => String(x.name) === name);
-      const addOne = () => {
-        const it = curBought();
-        sdCall(selectedShoppingID(), 'AddItem', { name: name, category: cat, amount: String((it && it.amount) || '1') });
-        flyToShoppingTab(card.querySelector('.item-thumb'));
-        // Mit Artikelnamen wie in der iOS-App: bei einer langen Liste ist sonst nicht
-        // erkennbar, welche Zeile die Meldung ausgelöst hat.
-        showToast((card.classList.contains('on-list')
-          ? translate('„%1“: quantity increased')
-          : translate('„%1“ added to the shopping list')).replace('%1', name));
-      };
-      card.querySelector('[data-boughtadd]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        addOne();
-      });
-      card.querySelector('.item-card-content').addEventListener('click', (e) => {
-        if (card.dataset.swiped === '1') return;
-        // Klicks auf den Knopf laufen über dessen eigenen Handler — ohne diesen
-        // Riegel zählte ein Knopfdruck doppelt (Knopf plus Zeile).
-        if (e.target.closest('button')) return;
-        addOne();
-      });
-      // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
-      // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
-      const bAmount = card.querySelector('[data-amount-edit]');
-      if (bAmount) bAmount.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const it = curBought();
-        if (!it) return;
-        showPrompt(translate('Change quantity'), String(it.amount || ''), translate('Save'), (val) => {
-          sdCall(selectedShoppingID(), 'UpdatePurchase', {
-            oldName: it.name, name: it.name, category: it.category || '',
-            amount: val.trim(), notes: it.notes || ''
-          });
-        });
-      });
-      card.querySelectorAll('[data-bstep]').forEach(btn => btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const it = curBought();
-        if (!it) return;
-        const next = Math.max(1, (parseInt(it.amount) || 1) + parseInt(btn.dataset.bstep));
-        // Optimistisch anzeigen wie beim Favoriten-Stepper; die Serverantwort
-        // korrigiert es, falls sie abweicht.
-        it.amount = String(next);
-        renderFavorites();
+    card.querySelector('.item-card-content').addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      // Klicks auf den Knopf laufen über dessen eigenen Handler — ohne diesen
+      // Riegel zählte ein Knopfdruck doppelt (Knopf plus Zeile).
+      if (e.target.closest('button')) return;
+      addOne();
+    });
+    // Nur Wischen nach links (vergessen) — kein onEdit, damit der Rechtsweg
+    // gesperrt bleibt (bindCardSwipe setzt maxRight dann auf 0).
+    const bAmount = card.querySelector('[data-amount-edit]');
+    if (bAmount) bAmount.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const it = curBought();
+      if (!it) return;
+      showPrompt(translate('Change quantity'), String(it.amount || ''), translate('Save'), (val) => {
         sdCall(selectedShoppingID(), 'UpdatePurchase', {
           oldName: it.name, name: it.name, category: it.category || '',
-          amount: String(next), notes: it.notes || ''
+          amount: val.trim(), notes: it.notes || ''
         });
-      }));
-      // Links vergessen, rechts bearbeiten — wie in den Favoritenlisten.
-      bindCardSwipe(card, '.item-card-content',
-        () => sdCall(selectedShoppingID(), 'ForgetPurchase', { name: name }),
-        () => { const it = curBought(); if (it) openPurchaseEditor(selectedShoppingID(), it); });
+      });
     });
-    return;
-  }
+    card.querySelectorAll('[data-bstep]').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const it = curBought();
+      if (!it) return;
+      const next = Math.max(1, (parseInt(it.amount) || 1) + parseInt(btn.dataset.bstep));
+      // Optimistisch anzeigen wie beim Favoriten-Stepper; die Serverantwort
+      // korrigiert es, falls sie abweicht.
+      it.amount = String(next);
+      renderFavorites();
+      sdCall(selectedShoppingID(), 'UpdatePurchase', {
+        oldName: it.name, name: it.name, category: it.category || '',
+        amount: String(next), notes: it.notes || ''
+      });
+    }));
+    // Links vergessen, rechts bearbeiten — wie in den Favoritenlisten.
+    bindCardSwipe(card, '.item-card-content',
+      () => sdCall(selectedShoppingID(), 'ForgetPurchase', { name: name }),
+      () => { const it = curBought(); if (it) openPurchaseEditor(selectedShoppingID(), it); });
+  });
+  return;
+}
 
+// Inhalt einer Favoritenliste.
+function renderFavList(el, st, detail) {
   // Detailansicht
   let html = `<div class="screen-head" data-key="detailhead">` +
     `<button class="icon-btn" id="btnFavBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
