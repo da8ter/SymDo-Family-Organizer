@@ -476,19 +476,27 @@ class SymDoWebApp extends IPSModuleStrict
     }
 
     /**
-     * Nur voll erstellte Instanzen (IS_ACTIVE) dürfen per SL_/TDL_ abgefragt
-     * werden. Trifft ein Aufruf eine Instanz, die gerade erstellt wird oder
-     * deren Interface (noch) nicht bereit ist, emittiert Symcon
-     * „InstanceInterface is not available"/„Attribut … nicht gefunden" als
-     * PHP-WARNING — das fängt kein try/catch (Warning ≠ Throwable). Deshalb
-     * hier vorab gaten, damit ein nicht-bereites Geschwister still übersprungen
-     * wird statt das Log zu fluten.
+     * Trifft ein Aufruf eine Instanz, deren Interface (noch) nicht bereit ist,
+     * emittiert Symcon „InstanceInterface is not available"/„Attribut … nicht
+     * gefunden" als PHP-WARNING — das fängt kein try/catch (Warning ≠
+     * Throwable). Deshalb vorab gaten, damit ein nicht-bereites Geschwister
+     * still übersprungen wird statt das Log zu fluten.
+     *
+     * Gegatet wird der KERNEL-Runlevel, NICHT der Instanzstatus. Der Status ist
+     * hier unbrauchbar: Symcon setzt ihn bei der Erzeugung und berechnet ihn nie
+     * neu, und ein `SetStatus(IS_ACTIVE)` aus `ApplyChanges` überlebt den
+     * Hochlauf nicht. Gemessen 2026-08-10 nach einem Kernel-Neustart: alle fünf
+     * ToDo-Listen auf IS_CREATING (101), während `TDL_GetAppState` einwandfrei
+     * 4/0/39/47/10 Aufgaben lieferte. Die alte Abfrage auf IS_ACTIVE hat
+     * deshalb nach JEDEM Neustart sämtliche ToDo-Listen aus dem Payload
+     * geworfen — die Kachel zeigte keine Aufgaben mehr. Der Runlevel trifft
+     * genau den Fall, um den es oben geht: die Warnungen entstehen im Hochlauf.
      */
     private function IsInstanceReady(int $id): bool
     {
         return $id > 0
             && IPS_InstanceExists($id)
-            && (IPS_GetInstance($id)['InstanceStatus'] ?? 0) === IS_ACTIVE;
+            && IPS_GetKernelRunlevel() === KR_READY;
     }
 
     /** @return array{revision: int, state: array<string, mixed>}|null */
