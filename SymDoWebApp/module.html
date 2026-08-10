@@ -2914,7 +2914,11 @@ function dissolveCard(card, done) {
 //
 // WAAPI statt CSS-Transition: eine Animation hinterlaesst keine Inline-Stile, die
 // spaeter mit dissolveCard() kollidieren koennten (das setzt height/transform selbst).
-const REORDER_MS = 180;
+// 340 ms, nicht 180: bei 180 war die Bewegung kaum zu sehen — auf einer Strecke von
+// wenigen Zeilenhoehen ist sie nach drei Bildern vorbei. Laenger darf es nicht werden,
+// sonst haengt sie beim schnellen Ziehen hinter dem Finger her (mehrere Zuege in Folge
+// brechen einander ab, siehe cancel() unten).
+const REORDER_MS = 340;
 function flipReorder(area, dragged, mutate) {
   if (mbReduceMotion()) { mutate(); return; }
   const nodes = Array.from(area.querySelectorAll('.todo-card'));
@@ -2937,7 +2941,11 @@ function flipReorder(area, dragged, mutate) {
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
     n._flip = n.animate(
       [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
-      { duration: REORDER_MS, easing: 'cubic-bezier(.2,.7,.3,1)' }
+      // Symmetrische Kurve, KEIN starkes ease-out: mit cubic-bezier(.2,.8,.2,1) lagen
+      // nach 80 ms schon 70 % der Strecke hinter uns und der Rest kroch — die Dauer
+      // stand auf 340 ms, sichtbar war die Bewegung trotzdem kaum. So liegt die halbe
+      // Strecke in der halben Zeit, das Gleiten ist erkennbar.
+      { duration: REORDER_MS, easing: 'cubic-bezier(.45,.05,.55,.95)' }
     );
     n._flip.onfinish = () => { n._flip = null; };
   }
