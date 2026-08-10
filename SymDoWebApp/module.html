@@ -1652,6 +1652,17 @@ html[data-symdo-theme="dark"] .member-bar {
   /* Vier Ringe in einer Reihe (Telefon: 2 x 2, siehe .ring-row) */
   .ring-row { grid-template-columns: repeat(4, 1fr); }
 
+  /* Aufgaben nebeneinander: alle Karten EINER Reihe gleich hoch. align-items:
+     stretch hebt fuer diesen Container das start des Rasters auf, jede Karte waechst
+     also auf die Hoehe der hoechsten ihrer Reihe.
+     Der Inhalt MUSS mitwachsen: .swipe-under/.swipe-under-edit liegen mit inset: 0
+     in der Karte, .todo-content ist die deckende Schicht darueber. Bliebe sie auf
+     Texthoehe, schaute der rote Loesch-Hintergrund unten hervor. Deshalb wird die
+     Karte eine Flex-Spalte und der Inhalt nimmt den Rest. */
+  #todoListArea { align-items: stretch; }
+  #todoListArea .todo-card { display: flex; flex-direction: column; }
+  #todoListArea .todo-content { flex: 1; }
+
   /* Eingabezeile auf dasselbe Maß wie die Tableiste. Die 5%-Ränder der Basisregel
      entsprechen ihr nur bei genau 720px Inhaltsbreite — darüber liefen die
      beiden auseinander. */
