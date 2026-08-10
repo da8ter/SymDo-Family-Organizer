@@ -1659,6 +1659,16 @@ html[data-symdo-theme="dark"] .member-bar {
      in der Karte, .todo-content ist die deckende Schicht darueber. Bliebe sie auf
      Texthoehe, schaute der rote Loesch-Hintergrund unten hervor. Deshalb wird die
      Karte eine Flex-Spalte und der Inhalt nimmt den Rest. */
+  /* Aktionen im Favoriten-Detail nebeneinander statt jeweils ueber die volle Breite:
+     zwei pro Reihe. Umbrechendes Flex statt Raster, weil die Zahl der Knoepfe schwankt
+     (ohne Rezept sind es drei) — flex-grow teilt eine unvollstaendige Reihe dann
+     gleichmaessig auf. Im Raster waere der letzte Knopf entweder doppelt so breit
+     oder es blieb eine Luecke; die Zahl der Knoepfe laesst sich in CSS nur mit :has()
+     abfragen, und darauf will ich mich in der Symcon-Webview nicht stuetzen.
+     45 % Basis: zwei passen in eine Reihe (90 % + gap), der dritte bricht um. */
+  .fav-actions { flex-direction: row; flex-wrap: wrap; }
+  .fav-actions button { flex: 1 1 45%; }
+
   #todoListArea { align-items: stretch; }
   #todoListArea .todo-card { display: flex; flex-direction: column; }
   #todoListArea .todo-content { flex: 1; }
@@ -1711,6 +1721,12 @@ html[data-symdo-theme="dark"] .member-bar {
    Dashboard bleiben bei auto-fill/auto-fit. */
 @media (min-width: 1700px) {
   :root { --content-max: 1800px; }
+  /* Vier Aktionen in EINER Reihe. Erst hier, nicht schon ab 1100 px: die
+     Detailspalte ist Inhalt minus Auswahlspalte (360 px) minus gap, bei 1600 px
+     also nur 1028 px — vier Knoepfe waeren dort je 250 px breit und „Alles auf die
+     Einkaufsliste" wuerde umbrechen. Bei 1920 px sind es 1428 px, also je ~350 px.
+     22 % Basis: vier passen in eine Reihe, drei teilen sie sich zu je einem Drittel. */
+  .fav-actions button { flex-basis: 22%; }
   #shoppingListArea, #todoListArea {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
