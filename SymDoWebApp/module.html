@@ -554,14 +554,22 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .kpi:active { filter: brightness(1.08); }
 
-.week-card { display: flex; align-items: center; gap: 16px; }
-.week-ring { flex: none; }
-.week-ring svg { display: block; }
-.week-ring .ring-track { stroke: var(--surface2); }
-.week-ring .ring-value { stroke: var(--accent); transition: stroke-dashoffset .4s ease; }
-.week-ring text { fill: var(--text); font-weight: 800; font-size: 20px; }
-.week-info h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-.week-info p { font-size: 13px; color: var(--muted); }
+/* Fortschrittskarte: Titel, darunter eine Reihe Ringe. Auf dem Telefon 2 x 2,
+   ab 820 px vier in einer Reihe (Media-Block am Ende). Bewusst feste Spaltenzahlen
+   statt auto-fit: bei 489 px Inhaltsbreite ergaebe auto-fit drei Spalten und damit
+   eine 3+1-Reihe. */
+.week-card { display: block; }
+.week-card > h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.ring-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 8px; }
+.stat-ring { text-align: center; min-width: 0; }
+.stat-ring svg { display: block; margin: 0 auto; }
+.ring-track { stroke: var(--surface2); }
+.ring-value { stroke: var(--accent); transition: stroke-dashoffset .4s ease; }
+/* Liegengebliebene ueberfaellige Aufgaben */
+.ring-value.warn { stroke: var(--red); }
+.stat-ring text { fill: var(--text); font-weight: 800; font-size: 20px; }
+.ring-label { font-size: 13px; font-weight: 700; margin-top: 6px; }
+.ring-sub { font-size: 12px; color: var(--muted); }
 
 .segmented {
   display: flex;
@@ -1633,6 +1641,9 @@ html[data-symdo-theme="dark"] .member-bar {
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
   }
+
+  /* Vier Ringe in einer Reihe (Telefon: 2 x 2, siehe .ring-row) */
+  .ring-row { grid-template-columns: repeat(4, 1fr); }
 
   /* Eingabezeile auf dasselbe Maß wie die Tableiste. Die 5%-Ränder der Basisregel
      entsprechen ihr nur bei genau 720px Inhaltsbreite — darüber liefen die
@@ -3460,6 +3471,27 @@ function setupMemberCollapse() {
   }, true);
 }
 
+// Ring-Grafik der Fortschrittskarte. Geometrie unveraendert aus dem frueheren
+// Wochenring: r=30 in einem 76er Feld, Anteil ueber stroke-dashoffset, um -90 Grad
+// gedreht, damit der Bogen oben beginnt. Farben kommen aus .ring-track/.ring-value;
+// warn faerbt den Bogen rot (liegengebliebene ueberfaellige Aufgaben).
+function ringSvg(text, frac, warn) {
+  const C = 2 * Math.PI * 30;
+  const f = Math.max(0, Math.min(1, Number(frac) || 0));
+  return `<svg width="76" height="76" viewBox="0 0 76 76">` +
+    `<circle class="ring-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>` +
+    `<circle class="ring-value${warn ? ' warn' : ''}" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" ` +
+    `stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - f)).toFixed(1)}" transform="rotate(-90 38 38)"/>` +
+    `<text x="38" y="45" text-anchor="middle">${escapeHtml(String(text))}</text></svg>`;
+}
+
+// Eine Ring-Kachel: Grafik, Beschriftung, Unterzeile.
+function ringTile(text, frac, label, sub, warn) {
+  return `<div class="stat-ring">${ringSvg(text, frac, warn)}` +
+    `<div class="ring-label">${escapeHtml(label)}</div>` +
+    `<div class="ring-sub">${escapeHtml(sub)}</div></div>`;
+}
+
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
@@ -3486,7 +3518,11 @@ function renderDashboard() {
   const overdueCount = memberFiltered(open).filter(t => classifyDue(t.item) === 'overdue').length;
   const todayCount = memberFiltered(open).filter(t => classifyDue(t.item) === 'today').length;
 
-  const doneTasks = allTodoTasks().filter(t => t.item.done && isThisWeek(parseInt(t.item.updatedAt) || 0));
+  // doneAt, NICHT updatedAt: updatedAt aendert sich bei jeder Bearbeitung, eine
+  // letzte Woche erledigte und diese Woche bearbeitete Aufgabe zaehlte deshalb
+  // falsch mit (gemessen: 8 von 92 erledigten Aufgaben weichen um mehr als eine
+  // Stunde ab). doneAt ist bei allen erledigten Aufgaben gesetzt.
+  const doneTasks = allTodoTasks().filter(t => t.item.done && isThisWeek(parseInt(t.item.doneAt) || 0));
   const completedThisWeek = memberFiltered(doneTasks).length;
 
   const multiTodo = visibleInstances('todo').length > 1;
@@ -3539,17 +3575,44 @@ function renderDashboard() {
   // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.
   if (withTodos) {
     // Wochenring
+    // Vier Ringe mit ABSICHTLICH gemischtem Bezug: die Woche, der Gesamtstand und
+    // zwei tagesaktuelle Werte. Jeder Ring beantwortet genau eine Frage; deshalb
+    // heisst die Karte neutral „Fortschritt" und nicht mehr „Diese Woche erledigt".
+    // Alle vier laufen ueber denselben Mitglieder-Filter wie der fruehere Ring.
+    const tasksAll    = memberFiltered(allTodoTasks());
+    const allDone     = tasksAll.filter(t => t.item.done).length;
+    // classifyDue() schaut NICHT auf done — genau richtig: die Menge ist „war heute
+    // faellig" bzw. „war vor heute faellig", unabhaengig vom Erledigungsstand.
+    const dueToday    = tasksAll.filter(t => classifyDue(t.item) === 'today');
+    const dueTodayOk  = dueToday.filter(t => t.item.done).length;
+    const overdueAll  = tasksAll.filter(t => classifyDue(t.item) === 'overdue');
+    const overdueOpen = overdueAll.filter(t => !t.item.done).length;
     const total = completedThisWeek + memberTasks.length;
-    const frac = total > 0 ? completedThisWeek / total : 0;
-    const C = 2 * Math.PI * 30;
+    const vonBis = (a, b) => translate('%1 of %2').replace('%1', String(a)).replace('%2', String(b));
+    // Ohne Nenner steht ein Gedankenstrich statt „0 %": bei den heute faelligen
+    // Aufgaben ist das der Normalfall, und 0 % laese sich wie ein Versaeumnis.
+    const anteilText = (a, b) => b > 0 ? Math.round(100 * a / b) + '%' : '—';
+
     html += '<div class="card week-card">' +
-      `<div class="week-ring"><svg width="76" height="76" viewBox="0 0 76 76">` +
-      `<circle class="ring-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>` +
-      `<circle class="ring-value" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" ` +
-      `stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 38 38)"/>` +
-      `<text x="38" y="45" text-anchor="middle">${completedThisWeek}</text></svg></div>` +
-      `<div class="week-info"><h3>${translate('Done this week')}</h3>` +
-      `<p>${translate('%1 of %2 tasks done').replace('%1', String(completedThisWeek)).replace('%2', String(total))}</p></div></div>`;
+      `<h3>${translate('Progress')}</h3><div class="ring-row">` +
+      ringTile(completedThisWeek, total > 0 ? completedThisWeek / total : 0,
+               translate('This week'), vonBis(completedThisWeek, total), false) +
+      ringTile(anteilText(allDone, tasksAll.length), tasksAll.length > 0 ? allDone / tasksAll.length : 0,
+               translate('All tasks'), vonBis(allDone, tasksAll.length), false) +
+      ringTile(anteilText(dueTodayOk, dueToday.length), dueToday.length > 0 ? dueTodayOk / dueToday.length : 0,
+               translate('Due today'),
+               dueToday.length > 0 ? vonBis(dueTodayOk, dueToday.length) : translate('Nothing due'), false) +
+      // Warnring: er fuellt sich, wenn ueberfaellige Aufgaben liegen bleiben, und
+      // ist leer, wenn alles abgearbeitet ist. In der Mitte steht die Anzahl der
+      // offenen — bei 1 von 26 ist der Bogen nur ein Strich, die Zahl traegt die
+      // Aussage, deshalb zusaetzlich rot.
+      ringTile(overdueOpen, overdueAll.length > 0 ? overdueOpen / overdueAll.length : 0,
+               translate('Overdue'),
+               overdueAll.length > 0
+                 ? translate('%1 of %2 open').replace('%1', String(overdueOpen)).replace('%2', String(overdueAll.length))
+                 : translate('Nothing overdue'),
+               overdueOpen > 0) +
+      '</div></div>';
 
     // Prioritäts-Filter
     const prios = [['', translate('All')], ['high', translate('High')], ['normal', translate('Normal')], ['low', translate('Low')]];

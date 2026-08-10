@@ -2,6 +2,13 @@
     "translations": {
         "en": {},
         "de": {
+            "%1 of %2": "%1 von %2",
+            "%1 of %2 open": "%1 von %2 offen",
+            "All tasks": "Alle Aufgaben",
+            "Nothing due": "Nichts fällig",
+            "Nothing overdue": "Nichts überfällig",
+            "Progress": "Fortschritt",
+            "This week": "Diese Woche",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
             "%1 items": "%1 Artikel",
