@@ -2977,26 +2977,69 @@ function applyMarquees(container) {
 // fehl), heilt renderRows ihn beim naechsten Push, weil die Inline-Stile das
 // outerHTML veraendern und der Knoten dadurch ersetzt wird.
 const DISSOLVE_MS = 300;
-function dissolveCard(card, done) {
+/**
+ * Zeile verschwinden lassen und die Luecke schliessen. Zwei Ausdruecke derselben
+ * Mechanik, damit sich Loeschen und Abhaken nicht verwechseln lassen:
+ *   dissolveCard  — loest sich auf (weichzeichnen, leicht schrumpfen)
+ *   checkOffCard  — schiebt zur Seite (rechts = abgehakt, links = zurueck)
+ * Beides faehrt Hoehe und unteren Rand auf null, damit die Nachbarn weich nachruecken.
+ */
+function collapseCard(card, done, opts) {
   const finish = () => { if (done) done(); };
   if (!card) { finish(); return; }
   if (mbReduceMotion()) { card.style.display = 'none'; finish(); return; }
+  const o = opts || {};
+  const ms = o.ms || DISSOLVE_MS;
   const h = card.offsetHeight;
   card.style.height = h + 'px';
   card.style.marginBottom = window.getComputedStyle(card).marginBottom;
   card.style.overflow = 'hidden';
   void card.offsetHeight; // Reflow erzwingen, sonst springt die Hoehe ohne Uebergang
-  card.style.transition = `height ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
-    + ` margin-bottom ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
-    + ` opacity ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
-    + ` filter ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
-    + ` transform ${Math.round(DISSOLVE_MS * 0.8)}ms ease`;
+  card.style.transition = `height ${ms}ms cubic-bezier(.4,0,.2,1),`
+    + ` margin-bottom ${ms}ms cubic-bezier(.4,0,.2,1),`
+    + ` opacity ${Math.round(ms * 0.8)}ms ease,`
+    + ` filter ${Math.round(ms * 0.8)}ms ease,`
+    + ` transform ${Math.round(ms * 0.8)}ms ease`;
   card.style.opacity = '0';
-  card.style.filter = 'blur(7px)';
-  card.style.transform = 'scale(.96)';
+  if (o.blur) card.style.filter = 'blur(' + o.blur + 'px)';
+  card.style.transform = 'translateX(' + (o.dx || 0) + 'px) scale(' + (o.scale || 1) + ')';
   card.style.height = '0px';
   card.style.marginBottom = '0px';
-  window.setTimeout(finish, DISSOLVE_MS);
+  window.setTimeout(finish, ms);
+}
+function dissolveCard(card, done) {
+  collapseCard(card, done, { blur: 7, scale: 0.96 });
+}
+/**
+ * Abhaken: die Zeile schiebt sich zur Seite und verblasst, dann folgt der Aufruf.
+ * Richtung als Bedeutung — nach rechts heisst „erledigt/in den Wagen", nach links
+ * „zurueck in die Liste". Genauso macht es die ShoppingList-Kachel
+ * (@keyframes moveToRecentlyUsed / moveBackToList), 22px bei 340ms.
+ */
+const CHECKOFF_MS = 340;
+// Streifen-Kachel abhaken: derselbe Ausdruck, aber die Breite faellt zusammen —
+// der Streifen ist waagerecht, eine schrumpfende Hoehe wuerde dort nichts schliessen.
+function stripCheckOff(el, done) {
+  const finish = () => { if (done) done(); };
+  if (!el) { finish(); return; }
+  if (mbReduceMotion()) { el.style.display = 'none'; finish(); return; }
+  const w = el.offsetWidth;
+  el.style.flex = '0 0 auto';
+  el.style.width = w + 'px';
+  el.style.overflow = 'hidden';
+  void el.offsetWidth;
+  el.style.transition = `width ${CHECKOFF_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` margin-right ${CHECKOFF_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` opacity ${Math.round(CHECKOFF_MS * 0.8)}ms ease,`
+    + ` transform ${Math.round(CHECKOFF_MS * 0.8)}ms ease`;
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(-10px) scale(.94)';
+  el.style.width = '0px';
+  el.style.marginRight = '-14px';   // gap des Streifens schlucken
+  window.setTimeout(finish, CHECKOFF_MS);
+}
+function checkOffCard(card, zurueck, done) {
+  collapseCard(card, done, { dx: zurueck ? -22 : 22, scale: 0.97, ms: CHECKOFF_MS });
 }
 // Umsortieren sichtbar machen (FLIP): Positionen VOR dem Umhaengen merken, danach
 // die Differenz als transform setzen und weganimieren. Die Nachbarn gleiten damit an
@@ -3938,7 +3981,12 @@ function renderDashboard() {
     e.stopPropagation();
     // Nach einem Ziehen des Streifens kommt noch ein Klick — der darf nicht abhaken.
     if (strip && strip.dataset.dragged === '1') return;
-    sdCall(shopId, 'ToggleCart', { id: b.dataset.check, inCart: true });
+    // Im Streifen liegen die Artikel NEBENeinander: hier faellt die Kachel in der
+    // Breite zusammen, sonst blieb eine Luecke im Streifen stehen.
+    const kachel = b.closest('.strip-item') || b;
+    if (kachel.dataset.animating === '1') return;
+    kachel.dataset.animating = '1';
+    stripCheckOff(kachel, () => sdCall(shopId, 'ToggleCart', { id: b.dataset.check, inCart: true }));
   }));
   const previewAdd = el.querySelector('[data-preview-add]');
   if (previewAdd) previewAdd.addEventListener('click', () => {
@@ -3955,7 +4003,12 @@ function renderDashboard() {
     const itemID = parseInt(row.dataset.item);
     const chk = row.querySelector('.chk');
     chk.addEventListener('click', (e) => e.stopPropagation());
-    chk.addEventListener('change', () => sdCall(instanceID, 'ToggleDone', { id: itemID, done: chk.checked }));
+    chk.addEventListener('change', () => {
+      if (row.dataset.animating === '1') return;
+      row.dataset.animating = '1';
+      const done = chk.checked;
+      checkOffCard(row, !done, () => sdCall(instanceID, 'ToggleDone', { id: itemID, done: done }));
+    });
     row.addEventListener('click', () => {
       const st = instState(instanceID);
       const item = st && st.items.find(i => i.id === itemID);
@@ -4047,8 +4100,13 @@ function renderShopping() {
     card.querySelector('.item-card-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button')) return;
+      if (card.dataset.animating === '1') return;   // zweiter Klick waehrend der Bewegung
       const item = curItem();
-      sdCall(curId(), 'ToggleCart', { id: itemId, inCart: !(item && item.inCart) });
+      const inCart = !!(item && item.inCart);
+      card.dataset.animating = '1';
+      // Erst die Bewegung, dann der Aufruf — der Zustand kommt ohnehin erst mit dem
+      // naechsten Push zurueck und entfernt den Knoten dann unsichtbar.
+      checkOffCard(card, inCart, () => sdCall(curId(), 'ToggleCart', { id: itemId, inCart: !inCart }));
     });
     const amountBtn = card.querySelector('[data-amount-edit]');
     if (amountBtn) amountBtn.addEventListener('click', (e) => {
@@ -4346,7 +4404,13 @@ function renderTodos() {
       () => { const it = curItem(itemId); if (it) openTodoEditor(curId(), it); });
     const chk = card.querySelector('.chk');
     chk.addEventListener('click', (e) => e.stopPropagation());
-    chk.addEventListener('change', () => sdCall(curId(), 'ToggleDone', { id: itemId, done: chk.checked }));
+    chk.addEventListener('change', () => {
+      if (card.dataset.animating === '1') return;
+      card.dataset.animating = '1';
+      const done = chk.checked;
+      // Abgehakt schiebt nach rechts, wieder geoeffnet nach links — wie bei den Artikeln.
+      checkOffCard(card, !done, () => sdCall(curId(), 'ToggleDone', { id: itemId, done: done }));
+    });
     // Tipp auf die Karte öffnet den Editor. ToDo-Karten hatten nie einen
     // Stift-Knopf, hier ändert sich dadurch nichts.
     card.querySelector('.todo-content').addEventListener('click', (e) => {

@@ -944,28 +944,43 @@
     // Loesch-Aufruf geht erst danach raus; der naechste Render entfernt den Knoten
     // dann unsichtbar.
     const DISSOLVE_MS = 300;
-    function dissolveCard(card, done) {
+    const CHECKOFF_MS = 340;
+    /**
+     * Zeile verschwinden lassen und die Luecke schliessen. Zwei Ausdruecke derselben
+     * Mechanik: dissolveCard loest sich auf (Loeschen), checkOffCard schiebt zur Seite
+     * (Abhaken — rechts = erledigt, links = wieder offen). Wie in der
+     * ShoppingList-Kachel und in der Web-App.
+     */
+    function collapseRow(card, done, opts) {
       const finish = () => { if (done) done(); };
       if (!card) { finish(); return; }
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         card.style.display = 'none'; finish(); return;
       }
+      const o = opts || {};
+      const ms = o.ms || DISSOLVE_MS;
       const size = card.offsetHeight;
       card.style.flexShrink = '1';
       card.style.height = size + 'px';
       card.style.overflow = 'hidden';
       void card.offsetHeight; // Reflow erzwingen, sonst faellt die Zeile ohne Uebergang zusammen
-      card.style.transition = `height ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
-        + ` margin-bottom ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
-        + ` opacity ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
-        + ` filter ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
-        + ` transform ${Math.round(DISSOLVE_MS * 0.8)}ms ease`;
+      card.style.transition = `height ${ms}ms cubic-bezier(.4,0,.2,1),`
+        + ` margin-bottom ${ms}ms cubic-bezier(.4,0,.2,1),`
+        + ` opacity ${Math.round(ms * 0.8)}ms ease,`
+        + ` filter ${Math.round(ms * 0.8)}ms ease,`
+        + ` transform ${Math.round(ms * 0.8)}ms ease`;
       card.style.opacity = '0';
-      card.style.filter = 'blur(7px)';
-      card.style.transform = 'scale(.96)';
+      if (o.blur) card.style.filter = 'blur(' + o.blur + 'px)';
+      card.style.transform = 'translateX(' + (o.dx || 0) + 'px) scale(' + (o.scale || 1) + ')';
       card.style.height = '0px';
       card.style.marginBottom = '-8px'; // gap der Nachbarn schlucken
-      window.setTimeout(finish, DISSOLVE_MS);
+      window.setTimeout(finish, ms);
+    }
+    function dissolveCard(card, done) {
+      collapseRow(card, done, { blur: 7, scale: 0.96 });
+    }
+    function checkOffCard(card, zurueck, done) {
+      collapseRow(card, done, { dx: zurueck ? -22 : 22, scale: 0.97, ms: CHECKOFF_MS });
     }
 
     function persistSortPrefs() {
@@ -2083,7 +2098,14 @@
 
         if (!shoppingMode) {
           chk.addEventListener('change', () => {
-            requestAction('ToggleDone', JSON.stringify({ id: id, done: chk.checked }));
+            if (el.dataset.animating === '1') return;
+            el.dataset.animating = '1';
+            const done = chk.checked;
+            // Erst die Bewegung, dann der Aufruf: der Zustand kommt mit dem naechsten
+            // Push zurueck und entfernt die Zeile dann unsichtbar.
+            checkOffCard(el, !done, () => {
+              requestAction('ToggleDone', JSON.stringify({ id: id, done: done }));
+            });
           });
         }
 
@@ -2125,7 +2147,11 @@
               return;
             }
             const currentDone = (el.getAttribute('data-done') || '0') === '1';
-            requestAction('ToggleDone', JSON.stringify({ id: id, done: !currentDone }));
+            if (el.dataset.animating === '1') return;
+            el.dataset.animating = '1';
+            checkOffCard(el, currentDone, () => {
+              requestAction('ToggleDone', JSON.stringify({ id: id, done: !currentDone }));
+            });
           });
         }
 
