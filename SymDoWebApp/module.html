@@ -174,6 +174,17 @@ html {
      das Eingabefeld nur 12px über der Kapsel und wirkte angeklebt — die Leiste
      selbst hat 10px zum Fensterrand. */
   --input-gap: 12px;
+  /* Vorschlagsfenster (aus der Einkaufslisten-Kachel uebernommen): Unterkante fest
+     50px ueber der Eingabezeile, Hoehe nach Inhalt, oben mindestens 80px frei.
+     --sug-bottom rechnet vom Fensterboden hoch: Tab-Leiste, deren Abstand, die Luft
+     zur Eingabezeile und die Zeile selbst. */
+  --sug-gap:    50px;
+  --sug-top:    80px;
+  --input-h:    42px;
+  /* Der letzte Summand vor --sug-gap ist das UNTERE Innenmass der Eingabezeile, und
+     das ist calc(2px + --input-gap) und nicht --input-gap allein (Regel html .inputbar).
+     Mit dem falschen Term lag das Fenster 48px statt 50px ueber dem Feld — gemessen. */
+  --sug-bottom: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb) + 2px + var(--input-gap) + var(--input-h) + var(--sug-gap));
   /* Leiste und Eingabezeile 10 % schmaler als der Inhalt. Beide Werte sind die HALBE
      Ersparnis, weil sie links und rechts gleichzeitig anliegen und die Elemente
      mittig bleiben sollen.
@@ -320,35 +331,6 @@ html .inputbar .round-btn:disabled {
   opacity: 1;
   background: color-mix(in srgb, var(--accent) 40%, transparent);
   color: color-mix(in srgb, #fff 55%, transparent);
-}
-/* Beim Tippen darf der Composer die Zeile NICHT hinterlegen — die Basisregel setzt
-   dort deckendes --card-color, was den gerade entfernten Flächenhintergrund wieder
-   einführen würde, nur eben ausgerechnet beim Tippen. Die offene Vorschlagsliste
-   bringt ihre Unterlage selbst mit (Regel direkt darunter). */
-html .composer:has(.suggestions.open) {
-  background: none;
-}
-/* Vorschlagsliste in derselben Glasfläche wie das Eingabefeld — ausdrücklich so
-   gewünscht. Sie stand vorher bei 92 % Deckkraft, weil sie eigenen Hintergrund
-   braucht (gemessen: ohne diese Regel rgba(0,0,0,0)) und die Chips nur 12 % Weiß
-   mitbringen; bei 35 % scheint die Artikelliste hinter den Vorschlägen also
-   deutlich durch. Die Liste liegt korrekt oben, das war per Treffertest belegt —
-   was durchscheint, ist eine Frage der Deckkraft, nicht der Stapelreihenfolge. */
-html .suggestions.open {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  /* Erst seit die Fläche sichtbar ist, braucht sie eine Form: --radius ist derselbe
-     Wert wie bei den Karten. Kein Pillenradius wie beim Eingabefeld — die Fläche ist
-     mehrzeilig, da würde er die Ecken der Chip-Reihen abschneiden. */
-  border-radius: var(--radius);
-  /* Ringsum Abstand statt nur oben/unten (Basisregel: 6px 0). Die Chips lagen sonst
-     direkt an der Kante der Glasfläche. */
-  padding: 10px;
-  /* Höhe mitwachsen lassen: die Basis rechnet mit 3 Zeilen plus 16px Zugabe für das
-     alte Innenmaß. Mit 10px ringsum sind es 20px — ohne die Anpassung bliebe von der
-     dritten Chip-Reihe ein Streifen sichtbar. */
-  max-height: calc(3 * 34px + 24px);
 }
 html .toast { bottom: calc(var(--tab-clear) + 14px); }
 
@@ -958,21 +940,39 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .inputbar .round-btn:disabled { opacity: .4; }
 
+/* Vorschlagsfenster, Darstellung aus der Einkaufslisten-Kachel uebernommen: eigenes
+   schwebendes Fenster statt eines Blocks im Komponisten.
+     fixiert und an der Tab-Leiste ausgerichtet — dieselbe Rechnung fuer links/rechts
+       und derselbe Deckel --bar-max, damit Fenster, Eingabezeile und Leiste eine
+       Kante haben
+     Unterkante fest --sug-gap ueber der Eingabezeile, Hoehe nach INHALT (kein top),
+       gedeckelt so dass oben mindestens --sug-top frei bleibt
+     Glas wie Leiste und Feld, runde Ecken, 1px in der vollen Akzentfarbe
+     Scrollbalken ausgeblendet, Scrollen bleibt */
 .suggestions {
-  max-height: calc(3 * 34px + 16px);
+  position: fixed;
+  left: calc(var(--sym-ms) + var(--tab-narrow));
+  right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
+  max-width: var(--bar-max);
+  margin-left: auto;
+  margin-right: auto;
+  bottom: var(--sug-bottom);
+  height: auto;
+  max-height: calc(100dvh - var(--sug-bottom) - var(--sug-top));
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   display: none;
-  padding: 6px 0;
+  z-index: 45;
 }
-.suggestions::-webkit-scrollbar { width: 6px; height: 6px; }
-.suggestions::-webkit-scrollbar-track { background: transparent; }
-.suggestions::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 70%, transparent);
-  border-radius: 999px;
-}
+.suggestions::-webkit-scrollbar { display: none; }
 .suggestions.open { display: block; }
 .suggestions .chip-flow { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Vorschläge + Eingabe als EIN sticky Block: so klebt das Vorschlags-Fenster
@@ -980,8 +980,8 @@ html[data-symdo-theme="dark"] .member-bar {
    (Die Eingabe selbst wird dann vom Composer sticky gehalten, nicht mehr selbst.) */
 .composer { position: sticky; bottom: 0; z-index: 5; }
 .composer .inputbar { position: static; }
-/* Bei offenen Vorschlägen deckend hinterlegen, sonst scheint die Liste durch. */
-.composer:has(.suggestions.open) { background: var(--card-color); }
+/* Keine Unterlage mehr: das Vorschlagsfenster ist ein eigenes schwebendes Fenster
+   mit eigener Glasschicht (Regel bei .suggestions). */
 .chip {
   padding: 6px 12px;
   border-radius: 999px;
@@ -4199,11 +4199,32 @@ function renderSuggestions() {
     return;
   }
   const query = input.value.trim().toLowerCase();
+  // Erst ab dem ERSTEN Zeichen. Vorher zeigte der Fokus allein die 30 haeufigsten und
+  // verdeckte die Liste, bevor jemand etwas gesucht hat.
+  if (!query) {
+    panel.classList.remove('open');
+    return;
+  }
   const openNames = new Set((st.items || []).filter(i => !i.inCart).map(i => String(i.name).toLowerCase()));
+  // Gefiltert wird nach Teilzeichenfolge — sonst fielen sinnvolle Treffer weg
+  // („Babymilch" bei „mi") —, aber die REIHENFOLGE stellt das Passende nach vorn:
+  //   0  der Name BEGINNT mit der Eingabe        „mi"   -> Milch
+  //   1  ein WORT im Namen beginnt damit         „kaese" -> geriebener Kaese
+  //   2  die Eingabe steckt irgendwo drin        „app"  -> Putzlappen
+  // Gemessen an 540 Vorschlaegen: „a" trifft 257 per Teilzeichenfolge, aber nur 17
+  // beginnen damit; „app" trifft ausschliesslich „Putzlappen".
+  const rang = (name) => {
+    const n = String(name).toLowerCase();
+    if (n.startsWith(query)) return 0;
+    if (n.replace(/[-/(),.]/g, ' ').split(' ').some(w => w.startsWith(query))) return 1;
+    return 2;
+  };
   const list = (Array.isArray(st.suggestions) ? st.suggestions : [])
     .filter(s => !openNames.has(String(s.name).toLowerCase()))
-    .filter(s => !query || String(s.name).toLowerCase().includes(query))
-    .sort((a, b) => (b.frequency || 0) - (a.frequency || 0) || String(a.name).localeCompare(String(b.name)))
+    .filter(s => String(s.name).toLowerCase().includes(query))
+    .sort((a, b) => rang(a.name) - rang(b.name)
+      || (b.frequency || 0) - (a.frequency || 0)
+      || String(a.name).localeCompare(String(b.name)))
     .slice(0, 30);
   if (list.length === 0) {
     panel.classList.remove('open');
