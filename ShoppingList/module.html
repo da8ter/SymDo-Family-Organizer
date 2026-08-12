@@ -449,6 +449,9 @@ body {
 .section-header {
   font-size: 11px;
   font-weight: 700;
+  /* Die tatsächliche Farbe kommt als Inline-Stil aus categoryTint() — je Kategorie
+     dieselbe wie in der Web-App. Das Grau bleibt als Rückfall stehen, falls eine
+     Überschrift einmal ohne Farbe gebaut wird. */
   color: var(--muted);
   padding: 10px 4px 4px;
   text-transform: uppercase;
@@ -2053,6 +2056,35 @@ let state = { items: [], suggestions: [], categoryOrder: [], favoriteLists: [] }
 let cartExpanded = false;
 /* Wie viele Vorschlaege hoechstens gebaut werden — Wert der Web-App. */
 const SUGGESTION_LIMIT = 30;
+
+/* Farbe der Kategorie-Überschriften — Tabelle, Palette und Streuung wie in der
+   Web-App (CATEGORY_STYLES/HASH_PALETTE/hashedTint), damit dieselbe Kategorie in
+   Kachel und Web-App dieselbe Farbe trägt. Die Kachel braucht nur die Farbe, nicht
+   die Icons der Web-App-Tabelle. Schlüssel sind kleingeschrieben.
+   Eigene Kategorien des Nutzers stehen nicht in der Tabelle; für sie streut
+   categoryTint() über den Namen in die Palette — gleicher Name, gleiche Farbe. */
+const CATEGORY_TINTS = {
+  'obst & gemüse':        '#34c759',
+  'milch & käse':         '#5ac8fa',
+  'backwaren':            '#a2845e',
+  'fleisch & wurst':      '#ff4d4d',
+  'tiefkühl':             '#40c8e0',
+  'getränke':             '#3498fa',
+  'snacks & süßes':       '#ff2d55',
+  'konserven & trocken':  '#ff9500',
+  'hygiene & pflege':     '#00c7be',
+  'haushalt & reinigung': '#5856d6',
+  'baby & tier':          '#af52de',
+  'sonstiges':            '#8e8e93'
+};
+const HASH_PALETTE = ['#3498fa', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#40c8e0', '#5856d6', '#00c7be'];
+function categoryTint(category) {
+  const key = String(category || '').toLowerCase();
+  if (CATEGORY_TINTS[key]) return CATEGORY_TINTS[key];
+  let h = 5381;
+  for (const ch of key) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
+  return HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length];
+}
 let favDetailDocClickHandler = null;
 let editingItemId  = null;
 let favOverlayMode = null; // 'load-list'
@@ -2547,7 +2579,7 @@ function render() {
     const catItems = grouped[cat] || [];
     if (!catItems.length) continue;
     catItems.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' }));
-    activeHtml += `<div class="section-header">${escapeHtml(cat)}</div><div class="item-grid">`;
+    activeHtml += `<div class="section-header" style="color:${categoryTint(cat)}">${escapeHtml(cat)}</div><div class="item-grid">`;
     for (const item of catItems) activeHtml += buildItemCard(item, false);
     activeHtml += '</div>';
   }
