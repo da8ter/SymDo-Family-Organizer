@@ -54,6 +54,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyString('FavoriteListsConfig', '[]');
         $this->RegisterPropertyString('SuggestionItemsConfig', '[]');
         $this->RegisterPropertyBoolean('ShowProductImages', true);
+        $this->RegisterPropertyBoolean('ShowEditButton', true);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
@@ -745,6 +746,30 @@ class ShoppingList extends IPSModuleStrict
         $this->WriteAttributeString('PreviousCategoryOrder', json_encode($newOrder, JSON_UNESCAPED_UNICODE));
     }
 
+    /**
+     * Boolesche Eigenschaft lesen, die es in älteren Instanzen noch nicht gibt.
+     *
+     * Eine neu in `Create()` registrierte Eigenschaft existiert erst, nachdem das Modul
+     * neu geladen wurde. Vorher liefert `ReadPropertyBoolean` **false** — nicht den
+     * registrierten Standard und auch keinen Fehler. Für einen Schalter mit Standard
+     * `true` heißt das: zwischen Modul-Update und nächstem Neustart wäre das Merkmal bei
+     * jedem bestehenden Nutzer stillschweigend abgeschaltet.
+     *
+     * Gemessen am 12.08. an Instanz 28025: `IPS_GetConfiguration` listet alle
+     * registrierten Eigenschaften (14 Stück, `ShowProductImages` dabei), die neue
+     * `ShowEditButton` fehlte dort — und `IPS_SetProperty` meldete Erfolg, ohne dass der
+     * Wert hielt. Diese Liste ist also die verlässliche Auskunft darüber, ob die
+     * Eigenschaft schon existiert.
+     */
+    private function ReadBooleanPropertyOrDefault(string $name, bool $default): bool
+    {
+        $config = json_decode(IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($config) || !array_key_exists($name, $config)) {
+            return $default;
+        }
+        return $this->ReadPropertyBoolean($name);
+    }
+
     protected function BuildStatePayload(): array
     {
         // Einmal bauen (Verzeichnis-Scan + Alias-Parse) — Marken-Map leitet
@@ -772,6 +797,7 @@ class ShoppingList extends IPSModuleStrict
             'extApiShowPrice' => $this->ReadPropertyBoolean('ExtApiShowPrice'),
             'extApiCartReady' => $this->IsExtApiCartReady(),
             'scannerEnabled'  => $this->ReadPropertyBoolean('ScannerEnabled'),
+            'showEditButton'  => $this->ReadBooleanPropertyOrDefault('ShowEditButton', true),
         ];
     }
 
@@ -3205,9 +3231,25 @@ class ShoppingList extends IPSModuleStrict
         $form = [
             'elements' => [
                 [
-                    'type'    => 'CheckBox',
-                    'name'    => 'ShowProductImages',
-                    'caption' => $this->Translate('Show product images'),
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Layout'),
+                    'expanded' => false,
+                    'items'    => [
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ShowProductImages',
+                            'caption' => $this->Translate('Show product images'),
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ShowEditButton',
+                            'caption' => $this->Translate('Show edit button'),
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('Edit button hint'),
+                        ],
+                    ],
                 ],
                 [
                     'type'     => 'ExpansionPanel',
