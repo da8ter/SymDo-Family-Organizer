@@ -905,46 +905,80 @@ body {
 .empty-icon { font-size: 36px; }
 .empty-text { font-size: 15px; }
 
-/* ── Overlays (edit + favorites) ───────────────────────────────────────── */
+/* ── Dialoge: Blätter, die von unten hereinfahren ──────────────────────────
+   Aufbau, Maße und Bewegung wie in der Web-App (.overlay/.overlay-card dort):
+   verdunkelter Grund, das Blatt sitzt unten, oben abgerundet, Höhe nach Inhalt und
+   bei 88% gedeckelt. Vorher waren es deckende Tafeln über die ganze Kachel, ohne
+   Bewegung.
+
+   Der Grund verdunkelt über background-color und NICHT über opacity: mit opacity auf
+   .overlay würde das Blatt mitverblassen, es soll aber deckend hereinfahren. Die
+   Bewegung selbst macht openOverlay()/closeOverlay() im Skript.
+
+   Bis zum unteren Rand (kein bottom: var(--tab-clear) mehr): das Blatt kommt von der
+   Kachelkante und legt sich über die Tab-Leiste — sonst schwebte es über einem
+   Streifen Liste und käme sichtbar zu früh zum Stehen. */
 .overlay {
   position: absolute;
   inset: 0 0 -3px 0;
   box-sizing: border-box;
   display: none;
   flex-direction: column;
+  justify-content: flex-end;
   overflow: hidden;
-  z-index: 1000;
-  background: var(--bg);
+  /* Ueber #bottomNav (1100) und damit ueber der Tab-Leiste, wie .overlay (60) in der
+     Web-App ueber deren .tabbar (40). Mit 1000 lag die Leiste OBEN auf dem Blatt und
+     ihr Glas (backdrop-filter mit saturate 1.8) faerbte sich daran grell gruen —
+     im Bild sofort zu sehen. Unter .fly-ghost (1200), damit das fliegende
+     Produktbild weiter obenauf bleibt. */
+  z-index: 1150;
+  background: rgba(0, 0, 0, .45);
   /* abspos positioniert an der Padding-Box-Kante (= Kachel-Oberkante) und ignoriert
-     das --sym-mt-Padding von .wrap → sonst rutscht der Overlay-Header unter die vom
-     System überlagerten Kachel-Steuerelemente. Daher hier selbst oben abstand halten. */
+     das --sym-mt-Padding von .wrap → ohne diesen Abstand könnte ein hohes Blatt unter
+     die vom System überlagerten Kachel-Steuerelemente reichen. */
   padding-top: var(--sym-mt);
 }
 
 .overlay.open { display: flex; }
-#favOverlay, #editOverlay { bottom: var(--tab-clear); }
 #btnFavLists { display: none !important; }
 
 .overlay-card {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  /* Höhe nach Inhalt statt 100%: ein kurzer Dialog (Drucklayout) wird dann auch ein
+     kurzes Blatt. Deshalb dürfen die Inhaltsbereiche NICHT flex: 1 tragen — in einem
+     Behälter mit height: auto ist deren hypothetische Höhe 0 und das Blatt fiele auf
+     Kopf plus Fuß zusammen. Sie stehen auf flex: 0 1 auto und schrumpfen erst, wenn
+     der Deckel erreicht ist; dann greift ihr overflow. */
+  height: auto;
+  max-height: 88%;
+  /* Wie in der Web-App bei 900px gedeckelt und mittig. Breiter als die Tab-Leiste
+     (--bar-max, 648px) — auch das ist dort so. */
+  max-width: min(100%, 900px);
+  margin: 0 auto;
+  background: var(--card);
+  border-radius: 18px 18px 0 0;
   overflow: hidden;
+  /* Der Systemrand unten (Home-Indikator o.ae., von Symcon als marginbottom
+     uebergeben) muss frei bleiben: das Blatt reicht jetzt bis zur Kachelkante, sein
+     Fuss lag sonst unter den Systemelementen. Die Tab-Leiste rechnet ihn genauso ein.
+     Als Polster und nicht als Abstand, damit die Blattfarbe die Kante weiter deckt. */
+  padding-bottom: var(--sym-mb);
 }
 
 .overlay-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px var(--gap) 10px;
+  padding: 14px var(--gap) 8px;
   flex-shrink: 0;
 }
 
 .overlay-title {
   flex: 1;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -1111,7 +1145,9 @@ body {
 
 /* Favorite list items */
 .fav-list-body {
-  flex: 1;
+  /* flex: 0 1 auto und nicht flex: 1 — siehe .overlay-card */
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -1518,7 +1554,8 @@ body {
   gap: 12px;
   padding: var(--gap);
   overflow-y: auto;
-  flex: 1;
+  /* flex: 0 1 auto und nicht flex: 1 — siehe .overlay-card */
+  flex: 0 1 auto;
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
@@ -1688,13 +1725,10 @@ textarea.edit-input { overflow: hidden; }
 .nav-tab:active { opacity: .7; }
 
 /* ── Print overlay ────────────────────────────────────────────────────── */
-#printOverlay { bottom: var(--tab-clear); }
-.scanner-overlay {
-  bottom: var(--tab-clear);
-}
-
 .scanner-body {
-  flex: 1;
+  /* flex: 0 1 auto und nicht flex: 1 — siehe .overlay-card: im Blatt mit height: auto
+     waere die hypothetische Hoehe eines flex: 1-Kindes null. */
+  flex: 0 1 auto;
   min-height: 0;
   padding: var(--gap);
   display: flex;
@@ -1784,7 +1818,9 @@ textarea.edit-input { overflow: hidden; }
 .scanner-status.error { color: #c0392b; }
 
 .print-mode-body {
-  flex: 1;
+  /* flex: 0 1 auto und nicht flex: 1 — siehe .overlay-card */
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2385,6 +2421,62 @@ function buildItemCard(item, inCart) {
     + `</div>`;
 }
 
+/**
+ * Dialoge oeffnen und schliessen: das Blatt fahrt von unten herein, der Grund
+ * verdunkelt dazu. Uebernommen aus der Web-App (SymDoWebApp openOverlay/closeOverlay)
+ * samt der beiden Fallen, die dort gelernt wurden:
+ *
+ * 1. Beim Schliessen darf .open ERST nach der Bewegung weg — .overlay ohne .open steht
+ *    auf display: none, das Blatt waere sonst sofort verschwunden. Der Knoten haelt
+ *    seine laufende Schliess-Bewegung in _closeAnim; ein erneutes Oeffnen bricht sie
+ *    ab, sonst raeumte ihr onfinish das gerade geoeffnete Blatt wieder weg.
+ * 2. Verdunkelt wird ueber background-color und nicht ueber opacity: opacity auf
+ *    .overlay liesse das Blatt mitverblassen, es soll aber deckend hereinfahren.
+ */
+const OVERLAY_MS = 260;
+const OVERLAY_DIM = 'rgba(0, 0, 0, .45)';
+function reduceMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function openOverlay(id) {
+  const ov = document.getElementById(id);
+  if (!ov) return;
+  if (ov._closeAnim) {
+    ov._closeAnim.onfinish = null;
+    ov._closeAnim.oncancel = null;
+    ov._closeAnim.cancel();
+    ov._closeAnim = null;
+  }
+  ov.classList.add('open');
+  if (reduceMotion() || !ov.animate) return;
+  const card = ov.querySelector('.overlay-card');
+  ov.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: OVERLAY_DIM }],
+             { duration: OVERLAY_MS, easing: 'ease-out' });
+  if (card) {
+    card.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }],
+                 { duration: OVERLAY_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  }
+}
+function closeOverlay(id) {
+  const ov = document.getElementById(id);
+  if (!ov) return;
+  if (reduceMotion() || !ov.animate || !ov.classList.contains('open')) {
+    ov.classList.remove('open');
+    return;
+  }
+  const card = ov.querySelector('.overlay-card');
+  ov.animate([{ backgroundColor: OVERLAY_DIM }, { backgroundColor: 'rgba(0, 0, 0, 0)' }],
+             { duration: OVERLAY_MS, easing: 'ease-in' });
+  const fertig = () => { ov.classList.remove('open'); ov._closeAnim = null; };
+  if (!card) { window.setTimeout(fertig, OVERLAY_MS); return; }
+  ov._closeAnim = card.animate(
+    [{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }],
+    { duration: OVERLAY_MS, easing: 'cubic-bezier(.4, 0, 1, 1)' }
+  );
+  ov._closeAnim.onfinish = fertig;
+  ov._closeAnim.oncancel = fertig;
+}
+
 // Aufloesen beim Loeschen: die Zeile verblasst, wird weichgezeichnet und faellt
 // zusammen, damit die Nachbarn weich nachruecken statt zu springen. Der
 // Loesch-Aufruf geht erst danach raus; der naechste Render entfernt den Knoten
@@ -2771,12 +2863,12 @@ function openFavOverlay() {
   document.getElementById('favEditFooter').style.display = 'none';
   document.getElementById('favBackFooter').style.display = '';
   renderFavListBody();
-  document.getElementById('favOverlay').classList.add('open');
+  openOverlay('favOverlay');
   setActiveTab('fav');
 }
 
 function closeFavOverlay() {
-  document.getElementById('favOverlay').classList.remove('open');
+  closeOverlay('favOverlay');
   setActiveTab('list');
   favOverlayMode = null;
   viewingListId  = null;
@@ -3271,7 +3363,7 @@ function closeScannerOverlay() {
   stopScanner();
   scannerAddedNames.clear();
   showScannerResult('', '', '');
-  document.getElementById('scannerOverlay').classList.remove('open');
+  closeOverlay('scannerOverlay');
   setActiveTab('list');
 }
 
@@ -3448,7 +3540,7 @@ function openScannerOverlay() {
   const result = document.getElementById('scannerResult');
   const videoWrap = document.getElementById('scannerVideoWrap');
   const video = document.getElementById('scannerVideo');
-  overlay.classList.add('open');
+  openOverlay('scannerOverlay');
   setActiveTab('list');
   lastCode = '';
   scannerWarmupUntil = 0;
@@ -3719,12 +3811,12 @@ function addScannedProduct(name, category, price, listingId, imageUrl) {
 function openPrintOverlay() {
   closeFavOverlay();
   closeSuggestions();
-  document.getElementById('printOverlay').classList.add('open');
+  openOverlay('printOverlay');
   setActiveTab('print');
 }
 
 function closePrintOverlay() {
-  document.getElementById('printOverlay').classList.remove('open');
+  closeOverlay('printOverlay');
   setActiveTab('list');
 }
 
@@ -3924,12 +4016,12 @@ function openEditOverlay(item, showFavPicker) {
     editingItemId ? translate('Edit item') : translate('Add');
   // Trash button only when editing an existing item (not when adding)
   document.getElementById('btnEditDelete').style.display = editingItemId ? '' : 'none';
-  document.getElementById('editOverlay').classList.add('open');
+  openOverlay('editOverlay');
   document.getElementById('editName').focus({ preventScroll: true });
 }
 
 function closeEditOverlay() {
-  document.getElementById('editOverlay').classList.remove('open');
+  closeOverlay('editOverlay');
   editingItemId = null;
 }
 
