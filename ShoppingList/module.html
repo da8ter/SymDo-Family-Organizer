@@ -44,6 +44,10 @@
      Nur Polster, keine Begrenzung — der Inhalt läuft bis zur Kachelkante und unter
      dem Glas hindurch, die letzte Zeile bleibt trotzdem erreichbar. */
   --content-clear: calc(var(--tab-clear) + var(--input-gap) + var(--input-h));
+  /* Freiraum oben fuer den schwebenden Menue-Knopf — dieselbe Bauart wie unten:
+     der Inhalt laeuft beim Scrollen darunter hindurch, liegt im Ruhezustand aber
+     nicht dahinter. */
+  --menu-clear: calc(var(--input-h) + 8px);
   --tab-inset:  5%;
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
@@ -363,7 +367,8 @@ body {
   flex: 1;
   min-height: 0;
   /* Damit die letzte Zeile über Eingabezeile und Leiste hinausgescrollt werden kann,
-     obwohl der Inhalt darunter hindurchläuft. */
+     obwohl der Inhalt darunter hindurchläuft. Oben dasselbe für den Menue-Knopf. */
+  padding-top: var(--menu-clear);
   padding-bottom: var(--content-clear);
   /* In den rechten Rand hineinziehen, damit der Scrollbalken mittig im
      Body-Padding sitzt; padding-right hält den Inhalt bündig bei marginside.
@@ -422,7 +427,8 @@ body {
 /* Zweitrangiger runder Knopf (Menü): gedeckte Fläche statt Akzent, wie in der
    Web-App. Die Weichzeichnung braucht er selbst, weil unter ihm der Listeninhalt
    durchläuft. */
-.inputbar .round-btn.secondary {
+/* Der Menue-Knopf steht nicht mehr in der Eingabezeile, deshalb ohne .inputbar davor. */
+.round-btn.secondary {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--glass-border);
@@ -430,6 +436,12 @@ body {
   -webkit-backdrop-filter: var(--glass-blur);
   font-size: 19px;
   line-height: 1;
+}
+#btnListMenu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 200;
 }
 
 /* Menü als Popover am Knopf — Maße und Farben der Web-App. */
@@ -473,6 +485,32 @@ body {
    dissolveCard. Die Abhaken-Bewegungen sind reine Verschiebungen und bleiben. */
 .item-grid {
   padding: 4px 0 8px;
+}
+
+/* ── Mehrspaltig auf breiten Kacheln — Haltepunkt und Rasterwerte der Web-App ──
+   Media Query und nicht Container Query, weil eine Visu-Kachel ein eigenes Dokument
+   mit eigenem Viewport ist: eine SCHMALE Kachel in einem breiten Fenster bleibt damit
+   richtig einspaltig.
+
+   Die Spaltenzahl regelt auto-fill nach der verfügbaren Breite, ein Haltepunkt genügt
+   also für 2, 3 oder 4 Spalten. Das Raster sitzt hier auf dem KATEGORIE-Behälter und
+   nicht auf der ganzen Liste: die Kachel gruppiert schon je Kategorie in ein eigenes
+   .item-grid, die Überschriften stehen als Geschwister daneben und spannen von sich
+   aus über die volle Breite.
+
+   row-gap MUSS 0 bleiben: die Abstände kommen aus margin-bottom der Zeilen. Mit einem
+   row-gap bliebe beim Löschen eine Lücke stehen, weil dissolveCard() Höhe und
+   margin-bottom zusammenfährt, den gap aber nicht. */
+@media (min-width: 820px) {
+  .item-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    column-gap: var(--gap);
+    row-gap: 0;
+    align-items: start;
+  }
+  /* Einzelner Artikel in einer Kategorie: volle Breite statt einer halb leeren Reihe. */
+  .item-grid > .item-card:only-child { grid-column: 1 / -1; }
 }
 
 .item-card {
@@ -1721,6 +1759,11 @@ textarea.edit-input { overflow: hidden; }
   <div class="wrap" id="wrap">
 
 
+    <!-- Menue oben rechts in der Ecke: schwebt ueber der Liste wie die Leiste unten,
+         mit derselben Glasoptik. Den Platz haelt .list-area oben frei (--menu-clear),
+         damit die erste Zeile im Ruhezustand nicht darunter liegt. -->
+    <button class="round-btn secondary" id="btnListMenu" aria-label="Men&#xFC;">&#x22EF;</button>
+
     <div class="list-area" id="listArea">
       <div id="activeItems"></div>
       <div class="active-actions" id="activeActions" style="display:none;">
@@ -1755,7 +1798,6 @@ textarea.edit-input { overflow: hidden; }
       <div class="inputbar search-row">
         <input type="search" class="search-input" id="searchInput"
                placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
-        <button class="round-btn secondary" id="btnListMenu" aria-label="Men&#xFC;">&#x22EF;</button>
         <button class="round-btn" id="btnOpenScanner" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
         <button class="round-btn" id="btnAddItem" aria-label="Hinzuf&#xFC;gen" disabled><i class="fa-light fa-plus"></i></button>
         <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
