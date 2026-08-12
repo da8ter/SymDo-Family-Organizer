@@ -44,10 +44,6 @@
      Nur Polster, keine Begrenzung — der Inhalt läuft bis zur Kachelkante und unter
      dem Glas hindurch, die letzte Zeile bleibt trotzdem erreichbar. */
   --content-clear: calc(var(--tab-clear) + var(--input-gap) + var(--input-h));
-  /* Freiraum oben fuer den schwebenden Menue-Knopf — dieselbe Bauart wie unten:
-     der Inhalt laeuft beim Scrollen darunter hindurch, liegt im Ruhezustand aber
-     nicht dahinter. */
-  --menu-clear: calc(var(--input-h) + 8px);
   /* Vorschlagsfenster: Unterkante FEST, Höhe nach Inhalt.
        --sug-gap    Abstand der Unterkante zur Eingabezeile
        --sug-bottom daraus der Abstand zur Kachelunterkante (die Oberkante der
@@ -416,8 +412,7 @@ body {
   flex: 1;
   min-height: 0;
   /* Damit die letzte Zeile über Eingabezeile und Leiste hinausgescrollt werden kann,
-     obwohl der Inhalt darunter hindurchläuft. Oben dasselbe für den Menue-Knopf. */
-  padding-top: var(--menu-clear);
+     obwohl der Inhalt darunter hindurchläuft. */
   padding-bottom: var(--content-clear);
   /* In den rechten Rand hineinziehen, damit der Scrollbalken mittig im
      Body-Padding sitzt; padding-right hält den Inhalt bündig bei marginside.
@@ -476,8 +471,8 @@ body {
 /* Zweitrangiger runder Knopf (Menü): gedeckte Fläche statt Akzent, wie in der
    Web-App. Die Weichzeichnung braucht er selbst, weil unter ihm der Listeninhalt
    durchläuft. */
-/* Der Menue-Knopf steht nicht mehr in der Eingabezeile, deshalb ohne .inputbar davor. */
-.round-btn.secondary {
+/* Zweitrangiger runder Knopf (Menü) in der Eingabezeile. */
+.inputbar .round-btn.secondary {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--glass-border);
@@ -485,12 +480,6 @@ body {
   -webkit-backdrop-filter: var(--glass-blur);
   font-size: 19px;
   line-height: 1;
-}
-#btnListMenu {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 200;
 }
 
 /* Menü als Popover am Knopf — Maße und Farben der Web-App. */
@@ -1808,11 +1797,6 @@ textarea.edit-input { overflow: hidden; }
   <div class="wrap" id="wrap">
 
 
-    <!-- Menue oben rechts in der Ecke: schwebt ueber der Liste wie die Leiste unten,
-         mit derselben Glasoptik. Den Platz haelt .list-area oben frei (--menu-clear),
-         damit die erste Zeile im Ruhezustand nicht darunter liegt. -->
-    <button class="round-btn secondary" id="btnListMenu" aria-label="Men&#xFC;">&#x22EF;</button>
-
     <div class="list-area" id="listArea">
       <div id="activeItems"></div>
       <div class="active-actions" id="activeActions" style="display:none;">
@@ -1853,6 +1837,9 @@ textarea.edit-input { overflow: hidden; }
                placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
         <button class="round-btn" id="btnOpenScanner" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
         <button class="round-btn" id="btnAddItem" aria-label="Hinzuf&#xFC;gen" disabled><i class="fa-light fa-plus"></i></button>
+        <!-- Menue ganz rechts in der Zeile. Das Popover oeffnet nach OBEN (openMenu),
+             weil der Knopf am unteren Kachelrand sitzt. -->
+        <button class="round-btn secondary" id="btnListMenu" aria-label="Men&#xFC;">&#x22EF;</button>
         <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
       </div>
     </div>
