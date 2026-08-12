@@ -48,6 +48,10 @@
      der Inhalt laeuft beim Scrollen darunter hindurch, liegt im Ruhezustand aber
      nicht dahinter. */
   --menu-clear: calc(var(--input-h) + 8px);
+  /* Vorschlagsfenster: fester Abstand oben und zur Eingabezeile. Es waechst also nicht
+     mit der Zahl der Vorschlaege, sondern hat immer dieselbe Groesse. */
+  --sug-top: 80px;
+  --sug-gap: 50px;
   --tab-inset:  5%;
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
@@ -228,21 +232,37 @@ body {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
 }
-/* Im Komponisten liegen die Vorschlaege im Fluss UEBER der Zeile und ohne eigenen
-   Kasten — nach unten ist kein Platz, dort sitzt die Tab-Leiste. Statt einer eigenen
-   Flaeche wird der Komponist deckend, solange sie offen sind (Vorgehen der Web-App):
-   sonst scheint die Liste durch die Glasflaeche hinter den Chips durch. Deckel wie
-   dort: drei Reihen a 34px plus Polster. */
-.composer .suggestions-dropdown {
-  position: static;
-  margin: 0 0 6px;
-  background: none;
+/* Vorschlagsfenster in der Kachel: eigenes, verankertes Fenster statt eines Blocks,
+   der mit der Zahl der Vorschlaege waechst.
+     oben     --sug-top vom Kachelrand
+     unten    --sug-gap ueber der Eingabezeile — deren Oberkante liegt bei
+              --tab-clear minus --tab-gap plus --input-gap plus --input-h
+     Breite   dieselbe Einrueckung wie die Tab-Leiste (--tab-inset)
+   Glas wie Leiste und Feld, runde Ecken, KEIN Rand. Die Ecken brauchen eine Flaeche,
+   sonst waere die Rundung unsichtbar — das ist die Glasschicht, nicht die deckende
+   Kartenflaeche, die vorher hier stand. Weil das Fenster die Weichzeichnung mitbringt,
+   brauchen die Chips sie nicht mehr einzeln (das waren bei langen Listen hunderte
+   Blur-Ebenen). */
+.wrap > .suggestions-dropdown {
+  position: absolute;
+  left: var(--tab-inset);
+  right: var(--tab-inset);
+  top: var(--sug-top);
+  bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap) + var(--input-h) + var(--sug-gap));
+  margin: 0;
+  max-height: none;
+  padding: 12px;
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: none;
-  max-height: calc(3 * 34px + 16px);
-  padding: 6px 0;
+  z-index: 150;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.wrap > .suggestions-dropdown::-webkit-scrollbar { display: none; }
 
 .suggestions-dropdown.open { display: block; }
 /* KEINE deckende Fläche hinter den Vorschlägen. Die Web-App legt dort den
@@ -253,14 +273,8 @@ body {
    Weichzeichnung selbst mit (Regel bei .chip/.chip-pill) — das ist eine Filterung,
    keine Fläche. */
 
-/* Scrollbalken der Vorschläge ausblenden, Scrollen bleibt. Nur im Komponisten: die
-   Favoriten-Detailansicht behält ihren Balken, dort ist die Liste länger und der
-   Balken die einzige Anzeige, dass es weitergeht. */
-.composer .suggestions-dropdown {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.composer .suggestions-dropdown::-webkit-scrollbar { display: none; }
+/* Der Balken ist an der Fenster-Regel ausgeblendet; die Favoriten-Detailansicht
+   behält ihren, dort ist er die einzige Anzeige, dass die Liste weitergeht. */
 
 .suggestions-dropdown::-webkit-scrollbar { width: 6px; }
 .suggestions-dropdown::-webkit-scrollbar-track {
@@ -290,8 +304,6 @@ body {
   border-radius: 999px;
   border: none;
   background: var(--surface2);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text);
   cursor: pointer;
   font-size: 13.5px;
@@ -324,8 +336,6 @@ body {
   border-radius: 999px;
   border: none;
   background: var(--surface2);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   overflow: hidden;
   max-width: 100%;
   min-width: 0;
@@ -1816,10 +1826,14 @@ textarea.edit-input { overflow: hidden; }
     </div>
 
     <!-- Eingabe unten, im Aufbau der Web-App: Vorschlaege ueber der Zeile -->
+    <!-- Vorschlagsfenster: eigenes, verankertes Fenster (80px von oben, 50px ueber der
+         Eingabezeile, Breite der Tab-Leiste). Deshalb NICHT im Komponisten, sonst
+         bezoege sich seine Verankerung auf dessen Kasten. -->
+    <div class="suggestions-dropdown" id="suggestionsDropdown">
+      <div class="chip-row" id="suggestionChips"></div>
+    </div>
+
     <div class="composer" id="searchBar">
-      <div class="suggestions-dropdown" id="suggestionsDropdown">
-        <div class="chip-row" id="suggestionChips"></div>
-      </div>
       <div class="inputbar search-row">
         <input type="search" class="search-input" id="searchInput"
                placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
@@ -3942,7 +3956,12 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (e.key === 'Escape') { searchInput.value = ''; btnAdd.disabled = true; closeSuggestions(); }
   });
   document.addEventListener('click', (e) => {
-    if (!document.getElementById('searchBar').contains(e.target)) closeSuggestions();
+    // Das Vorschlagsfenster liegt NICHT mehr im Komponisten (eigene Verankerung),
+    // muss hier aber als „innerhalb" gelten — sonst schliesst ein Klick oder ein
+    // Wischen darin die Vorschlaege sofort.
+    const drin = document.getElementById('searchBar').contains(e.target)
+              || document.getElementById('suggestionsDropdown').contains(e.target);
+    if (!drin) closeSuggestions();
   });
 
   // List icon → favorite list overlay
