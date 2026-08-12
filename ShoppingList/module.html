@@ -330,6 +330,8 @@ body {
 
 .chip:active { opacity: .7; }
 
+/* Nur noch in der Favoriten-Detailansicht: die Einkaufs-Vorschlaege haben keinen
+   „Hinzufügen: …"-Chip mehr, dort erledigen das Plus-Knopf und Eingabetaste. */
 .chip.add-custom {
   /* Breite MUSS mitgesetzt werden: .chip steht auf `border: none`, das ist
      border-style: none PLUS border-width: medium. Nur den Stil auf dashed zu setzen
@@ -2651,14 +2653,10 @@ function renderSuggestions() {
   // Vorschlaege in den Baum, sichtbar sind rund 40.
   filtered = filtered.slice(0, SUGGESTION_LIMIT);
 
-  const exactMatch = filtered.some(s => s.name.toLowerCase() === q);
-
+  // Kein „Hinzufügen: …"-Chip mehr. Er war der einzige Weg, den getippten Text auf die
+  // Liste zu setzen — seit es den Plus-Knopf und die Eingabetaste gibt, ist er doppelt.
+  // Die Web-App hat an dieser Stelle ebenfalls keinen.
   let html = '';
-
-  if (q && !exactMatch) {
-    html += `<button class="chip add-custom" data-custom="${escapeHtml(query)}">`
-          + escapeHtml(translate('Add') + ': ' + query) + `</button>`;
-  }
 
   for (const s of filtered) {
     const isFav = favNames.has(s.name.toLowerCase());
@@ -2675,19 +2673,9 @@ function renderSuggestions() {
 
   const container = document.getElementById('suggestionChips');
   container.innerHTML = html;
-  // NUR echte Vorschlaege zaehlen, nicht den „Add: …"-Chip: sonst stuende bei einer
-  // Eingabe ohne Treffer ein 651px hohes Fenster mit einem einzigen Chip offen. Die
-  // Web-App schliesst in dem Fall ebenfalls. Hinzufuegen geht dann ueber den
-  // Plus-Knopf oder die Eingabetaste.
+  // Passt die Eingabe zu nichts, bleibt das Fenster zu (openSuggestions entscheidet
+  // danach). Hinzufuegen geht dann ueber den Plus-Knopf oder die Eingabetaste.
   const treffer = container.querySelectorAll('.chip-pill').length;
-
-  container.querySelectorAll('.chip[data-custom]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      requestAction('AddItem', JSON.stringify({ name: btn.getAttribute('data-custom'), category: '', amount: '' }));
-      document.getElementById('searchInput').value = '';
-      closeSuggestions();
-    });
-  });
 
   container.querySelectorAll('.chip-label-btn[data-name]').forEach(btn => {
     btn.addEventListener('click', () => {
