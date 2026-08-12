@@ -252,7 +252,9 @@ body {
   margin: 0;
   max-height: none;
   padding: 12px;
-  border: none;
+  /* 1px in der VOLLEN Akzentfarbe — ausdruecklich so gewuenscht. Nicht --border
+     (Akzent mit 30 %), das ist der gedaempfte Ton der uebrigen Kachel. */
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -2029,6 +2031,8 @@ let state = { items: [], suggestions: [], categoryOrder: [], favoriteLists: [] }
 /* Wagen ein- oder ausgeklappt: nur im Speicher, Start eingeklappt — wie cartExpanded
    in der Web-App. */
 let cartExpanded = false;
+/* Wie viele Vorschlaege hoechstens gebaut werden — Wert der Web-App. */
+const SUGGESTION_LIMIT = 30;
 let favDetailDocClickHandler = null;
 let editingItemId  = null;
 let favOverlayMode = null; // 'load-list'
@@ -2584,9 +2588,18 @@ function render() {
 }
 
 // ── Suggestions dropdown ───────────────────────────────────────────────────
+/* Das Fenster erscheint erst ab dem ERSTEN Zeichen — bei leerem Feld gar nicht.
+   Vorher zeigte der Fokus allein schon die haeufigsten Vorschlaege; das verdeckte die
+   Liste, bevor der Nutzer etwas gesucht hat.
+   Die Entscheidung faellt an EINER Stelle: renderSuggestions() baut die Chips und
+   meldet, ob etwas uebrig blieb — leer heisst zu, auch wenn die Eingabe nur nicht
+   passt. */
 function openSuggestions() {
-  renderSuggestions();
-  document.getElementById('suggestionsDropdown').classList.add('open');
+  const treffer = renderSuggestions();
+  const feld = document.getElementById('searchInput');
+  const hatEingabe = (feld.value || '').trim().length > 0;
+  document.getElementById('suggestionsDropdown')
+    .classList.toggle('open', hatEingabe && treffer > 0);
 }
 
 function closeSuggestions() {
@@ -2606,12 +2619,38 @@ function renderSuggestions() {
   let filtered = suggestions.filter(s => !activeNames.has(s.name.toLowerCase()));
   if (q) filtered = filtered.filter(s => s.name.toLowerCase().includes(q));
 
-  // Favorited items first
+  // Rangfolge der Treffer. Gefiltert wird weiter nach Teilzeichenfolge — sonst fielen
+  // sinnvolle Treffer weg („Babymilch" bei „mi") —, aber die Reihenfolge stellt das
+  // Passende nach vorn:
+  //   0  der Name BEGINNT mit der Eingabe          „mi" -> Milch
+  //   1  ein WORT im Namen beginnt damit           „käse" -> geriebener Käse
+  //   2  die Eingabe steckt irgendwo drin          „app" -> Putzlappen
+  // Gemessen an 540 Vorschlaegen: „a" trifft 257 per Teilzeichenfolge, aber nur 17
+  // beginnen damit; „app" trifft ausschliesslich „Putzlappen". Ohne Rangfolge stand
+  // genau das oben.
+  const rang = (name) => {
+    if (!q) return 0;
+    const n = name.toLowerCase();
+    if (n.startsWith(q)) return 0;
+    if (n.replace(/[-/(),.]/g, ' ').split(' ').some(w => w.startsWith(q))) return 1;
+    return 2;
+  };
   filtered.sort((a, b) => {
-    const aF = favNames.has(a.name.toLowerCase()) ? 0 : 1;
-    const bF = favNames.has(b.name.toLowerCase()) ? 0 : 1;
-    return aF - bF;
+    const ra = rang(a.name), rb = rang(b.name);
+    if (ra !== rb) return ra - rb;
+    // Favoriten vor dem Rest (Verhalten der Kachel)
+    const fa = favNames.has(a.name.toLowerCase()) ? 0 : 1;
+    const fb = favNames.has(b.name.toLowerCase()) ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+    // Haeufigkeit wie in der Web-App: was oft gekauft wird, steht vorn
+    const ha = a.frequency || 0, hb = b.frequency || 0;
+    if (ha !== hb) return hb - ha;
+    return String(a.name).localeCompare(String(b.name), 'de', { sensitivity: 'base' });
   });
+
+  // Deckel wie in der Web-App. Ohne ihn baute die Kachel bei leerem Feld alle 540
+  // Vorschlaege in den Baum, sichtbar sind rund 40.
+  filtered = filtered.slice(0, SUGGESTION_LIMIT);
 
   const exactMatch = filtered.some(s => s.name.toLowerCase() === q);
 
@@ -2637,6 +2676,11 @@ function renderSuggestions() {
 
   const container = document.getElementById('suggestionChips');
   container.innerHTML = html;
+  // NUR echte Vorschlaege zaehlen, nicht den „Add: …"-Chip: sonst stuende bei einer
+  // Eingabe ohne Treffer ein 651px hohes Fenster mit einem einzigen Chip offen. Die
+  // Web-App schliesst in dem Fall ebenfalls. Hinzufuegen geht dann ueber den
+  // Plus-Knopf oder die Eingabetaste.
+  const treffer = container.querySelectorAll('.chip-pill').length;
 
   container.querySelectorAll('.chip[data-custom]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2661,6 +2705,8 @@ function renderSuggestions() {
       openEditOverlay({ id: null, name: btn.getAttribute('data-heart-name'), category: btn.getAttribute('data-heart-cat'), amount: '', notes: '' }, true);
     });
   });
+
+  return treffer;
 }
 
 // ── Favorite list overlay ──────────────────────────────────────────────────
@@ -3948,8 +3994,9 @@ document.addEventListener('DOMContentLoaded', () => {
   searchInput.addEventListener('focus', () => openSuggestions());
   searchInput.addEventListener('input', () => {
     btnAdd.disabled = (searchInput.value || '').trim() === '';
-    renderSuggestions();
-    document.getElementById('suggestionsDropdown').classList.add('open');
+    // Nicht selbst oeffnen: openSuggestions() entscheidet anhand von Eingabe und
+    // Trefferzahl, sonst stuende bei geleertem Feld ein leeres Fenster offen.
+    openSuggestions();
   });
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
