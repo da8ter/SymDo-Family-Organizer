@@ -560,6 +560,13 @@ body {
   }
   /* Einzelner Artikel in einer Kategorie: volle Breite statt einer halb leeren Reihe. */
   .item-grid > .item-card:only-child { grid-column: 1 / -1; }
+  /* Genau zwei Artikel: beide teilen sich die Reihe, statt eine Spalte leer zu lassen.
+     Hier genügt die Spaltenzahl des Behälters — in der Web-App braucht dasselbe
+     Verhalten halbe Spalten (span-half), weil die Liste dort flach ist und die Zeilen
+     Geschwister der Überschriften sind. */
+  .item-grid:has(> .item-card:nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .item-card {

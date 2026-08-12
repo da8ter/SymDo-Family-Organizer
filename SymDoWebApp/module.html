@@ -781,6 +781,14 @@ html[data-symdo-theme="dark"] .member-bar {
   overflow: hidden;
   margin-bottom: 6px;
 }
+/* Eine Kategorie mit nur einem Artikel nimmt die ganze Rasterbreite ein, statt
+   eine Reihe mit zwei leeren Spalten zu bilden (zwei Artikel teilen sie sich zu je
+   einer Hälfte, siehe .span-half beim Raster). Gesetzt wird die Klasse in
+   renderShopping(), weil die Liste FLACH ist: die Zeilen sind Geschwister der
+   Überschriften, ein :only-child gibt es hier also nicht (in der Kachel schon,
+   dort liegt jede Kategorie in ihrem eigenen .item-grid).
+   Außerhalb jeder Media Query: einspaltig ist grid-column: 1 / -1 wirkungslos. */
+.item-card.span-all { grid-column: 1 / -1; }
 .item-card .swipe-under {
   position: absolute;
   inset: 0;
@@ -1643,6 +1651,25 @@ html[data-symdo-theme="dark"] .member-bar {
     row-gap: 0;
     align-items: start;
   }
+
+  /* Die Einkaufsliste rechnet in HALBEN Spalten, damit eine Kategorie mit zwei
+     Artikeln die Reihe zu je einer Hälfte füllen kann (bei drei Spalten wären das
+     1,5 Spalten — als Spur-Spanne nicht ausdrückbar). Also doppelt so viele Spuren
+     wie Spalten; eine normale Karte nimmt zwei.
+     Die Abstände gehen dabei exakt auf: bei 2N Spuren ist eine Karte über zwei
+     Spuren 2t+g = (W-2g)/N, also genau die alte Spaltenbreite, und ein Paarling
+     über N Spuren (W-g)/2 — zwei davon plus ein Abstand ergeben W.
+     Feste Spaltenzahl statt auto-fill: gemessen liefert auto-fill 2 Spalten ab
+     820px, 3 ab 1250px und 4 ab 1700px — genau die Stufen von --content-max, weil
+     die Inhaltsbreite dazwischen nie über die nächste 360px-Schwelle kommt. Die
+     Zahlen unten geben das eins zu eins wieder. Aufgaben und Favoriten bleiben auf
+     auto-fill, sie brauchen die halben Spalten nicht. */
+  #shoppingListArea { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #shoppingListArea > .item-card { grid-column: span 2; }
+  /* Zwei Artikel in der Kategorie: bei zwei Spalten ist die halbe Reihe schon eine
+     normale Karte — die Spanne bleibt hier also gleich. */
+  #shoppingListArea > .item-card.span-half { grid-column: span 2; }
+  #shoppingListArea > .item-card.span-all { grid-column: 1 / -1; }
   #dashboardContent {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -1721,6 +1748,15 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Ab hier stehen Auswahl und Inhalt der Favoriten NEBENEINANDER. 1100px, weil
    340px Auswahl + ~740px Inhalt bequem passen — bei 1000px wäre der Inhalt für
    die Artikelzeilen zu schmal. */
+/* Drei Spalten (sechs Spuren): ein Paarling nimmt drei Spuren = die halbe Reihe.
+   MUSS hinter dem 820er-Block stehen — der setzt #shoppingListArea auf vier Spuren,
+   und bei gleicher Spezifität gewinnt die spätere Regel. Davor gemessen: 1250px und
+   1500px fielen auf zwei Spalten zurück. */
+@media (min-width: 1250px) {
+  #shoppingListArea { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  #shoppingListArea > .item-card.span-half { grid-column: span 3; }
+}
+
 @media (min-width: 1100px) {
   #favoritesContent {
     display: grid;
@@ -1764,9 +1800,12 @@ html[data-symdo-theme="dark"] .member-bar {
      Einkaufsliste" wuerde umbrechen. Bei 1920 px sind es 1428 px, also je ~350 px.
      22 % Basis: vier passen in eine Reihe, drei teilen sie sich zu je einem Drittel. */
   .fav-actions button { flex-basis: 22%; }
-  #shoppingListArea, #todoListArea {
+  #todoListArea {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+  /* Vier Spalten (acht Spuren): ein Paarling nimmt vier Spuren = die halbe Reihe */
+  #shoppingListArea { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  #shoppingListArea > .item-card.span-half { grid-column: span 4; }
 }
   </style>
 </head>
@@ -4077,7 +4116,11 @@ function renderShopping() {
   for (const sec of sections) {
     const style = categoryStyle(sec.category);
     html += `<div class="cat-header" data-key="cat:${escapeHtml(sec.category)}" style="color:${style.tint}"><i class="fa-light ${style.icon}"></i>${escapeHtml(sec.category)}</div>`;
-    for (const it of sec.items) html += shoppingRowHtml(it, favNames, st, false);
+    // Kleine Kategorien füllen die Reihe statt sie halb leer zu lassen:
+    // einer über die ganze Breite, zwei zu je einer Hälfte (siehe CSS).
+    const spanne = sec.items.length === 1 ? 'span-all'
+                 : sec.items.length === 2 ? 'span-half' : '';
+    for (const it of sec.items) html += shoppingRowHtml(it, favNames, st, false, spanne);
   }
   // Wie cartExpanded (@State) in der App: nur In-Memory, startet eingeklappt
   const collapsed = !cartExpanded;
@@ -4086,7 +4129,11 @@ function renderShopping() {
       `<i class="fa-light fa-cart-shopping"></i>${translate('Recently used')}` +
       `<span class="count">${cart.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (!collapsed) {
-      for (const it of cart) html += shoppingRowHtml(it, favNames, st, true);
+      // Gleiche Regel wie für die Kategorien: in der Kachel ist der Wagen ein
+      // .item-grid wie jede Kategorie, also gilt sie dort ohnehin schon.
+      const spanneWagen = cart.length === 1 ? 'span-all'
+                        : cart.length === 2 ? 'span-half' : '';
+      for (const it of cart) html += shoppingRowHtml(it, favNames, st, true, spanneWagen);
     }
   }
   const freshNodes = renderRows(area, html);
@@ -4162,7 +4209,7 @@ function renderShopping() {
 // Ausgefülltes Herz als Inline-SVG (das fa-solid-Icon ist im Icon-Kit nicht
 // enthalten und rendert sonst als leerer Kasten). Füllt sich über currentColor.
 const HEART_SOLID_SVG = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="display:block"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
-function shoppingRowHtml(it, favNames, st, inCart) {
+function shoppingRowHtml(it, favNames, st, inCart, spanne) {
   const img = resolveItemImage(it);
   const tint = categoryStyle(it.category).tint;
   // Wie ItemRow.numericAmount in der App: leer = 1 (Stepper), führende Nullen
@@ -4193,7 +4240,7 @@ function shoppingRowHtml(it, favNames, st, inCart) {
   }
   side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
   // Kein Stift-Knopf: der Editor öffnet über Wischen nach rechts (swipe-under-edit).
-  return `<div class="item-card${inCart ? ' in-cart' : ''}" data-id="${escapeHtml(String(it.id))}">` +
+  return `<div class="item-card${inCart ? ' in-cart' : ''}${spanne ? ' ' + spanne : ''}" data-id="${escapeHtml(String(it.id))}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
     `<div class="item-card-content">` +
