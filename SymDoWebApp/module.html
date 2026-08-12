@@ -6377,7 +6377,16 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAiShopping({ title: j.title, servings: j.servings, items: Array.isArray(j.items) ? j.items : [], url: srcUrl, image: srcImage, pdf: srcPdf, pdfName: srcPdfName });
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
-    aiPost('/ai/ingredients', payload).then(done).catch(fail);
+    // Die Kategorien der GEWAEHLTEN Liste mitschicken: nur hier ist bekannt, wohin
+    // die Artikel danach wandern. Die Bruecke haelt das Modell darauf fest, sonst
+    // erfindet es Kategorien, die es in der Liste nicht gibt (siehe
+    // AiAllowedCategories). Ohne diesen Schluessel nimmt sie die Vereinigung aller
+    // Einkaufslisten — richtig, aber unschaerfer.
+    const kategorien = (instState(selectedShoppingID()) || {}).categoryOrder;
+    const anfrage = Array.isArray(kategorien) && kategorien.length
+      ? Object.assign({}, payload, { categories: kategorien })
+      : payload;
+    aiPost('/ai/ingredients', anfrage).then(done).catch(fail);
   }
 
   // Review-Overlay wird für ToDos und Einkaufs-/Rezept-Zutaten geteilt; der Modus steuert Zeilen + Übernahme.

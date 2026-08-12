@@ -100,20 +100,23 @@ trait AiExtract
         $url  = trim($this->BodyStr($body, 'url'));
         $pdf  = $this->AiStripImage($this->BodyStr($body, 'pdf'));
 
+        // Kategorien, aus denen das Modell waehlen darf — siehe AiAllowedCategories().
+        $kategorien = $this->AiAllowedCategories($body);
+
         if ($pdf !== '') {
             if (strlen($pdf) > self::AI_MAX_PDF_B64) {
                 $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
                 return;
             }
-            $result = $this->AiExtractIngredientsFromPdf($pdf);
+            $result = $this->AiExtractIngredientsFromPdf($pdf, $kategorien);
         } elseif (($body['image'] ?? '') !== '') {
             $image = $this->AiReadImage($body);
             if ($image === null) {
                 return;
             }
-            $result = $this->AiExtractIngredientsFromImage($image);
+            $result = $this->AiExtractIngredientsFromImage($image, $kategorien);
         } elseif ($url !== '') {
-            $result = $this->AiExtractIngredientsFromUrl($url);
+            $result = $this->AiExtractIngredientsFromUrl($url, $kategorien);
         } else {
             $this->SendApiError('invalid_payload', $this->Translate('No image or URL provided.'), 422);
             return;
@@ -191,13 +194,14 @@ trait AiExtract
         }
 
         if (str_ends_with($path, 'ingredients')) {
-            $url = trim($this->BodyStr($body, 'url'));
+            $url        = trim($this->BodyStr($body, 'url'));
+            $kategorien = $this->AiAllowedCategories($body);
             if ($pdf !== '') {
-                $r = $this->AiExtractIngredientsFromPdf($pdf);
+                $r = $this->AiExtractIngredientsFromPdf($pdf, $kategorien);
             } elseif ($image !== '') {
-                $r = $this->AiExtractIngredientsFromImage($image);
+                $r = $this->AiExtractIngredientsFromImage($image, $kategorien);
             } elseif ($url !== '') {
-                $r = $this->AiExtractIngredientsFromUrl($url);
+                $r = $this->AiExtractIngredientsFromUrl($url, $kategorien);
             } else {
                 return $this->AiRelayError('invalid_payload', $this->Translate('No image or URL provided.'));
             }
@@ -403,10 +407,10 @@ trait AiExtract
     }
 
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
-    private function AiExtractIngredientsFromImage(string $imageBase64): array
+    private function AiExtractIngredientsFromImage(string $imageBase64, array $erlaubteKategorien = []): array
     {
         $r = $this->AiRunCompletion(
-            $this->AiIngredientsSystemPrompt(),
+            $this->AiIngredientsSystemPrompt($erlaubteKategorien),
             'Extrahiere die Artikel bzw. Zutaten aus diesem Bild.',
             $imageBase64
         );
@@ -417,7 +421,7 @@ trait AiExtract
     }
 
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
-    private function AiExtractIngredientsFromUrl(string $url): array
+    private function AiExtractIngredientsFromUrl(string $url, array $erlaubteKategorien = []): array
     {
         $page = $this->AiFetchPublicPage($url);
         if (($page['ok'] ?? false) !== true) {
@@ -428,7 +432,7 @@ trait AiExtract
             return ['ok' => false, 'code' => 'ai_url_empty', 'message' => $this->Translate('Could not load the page.'), 'status' => 502];
         }
         $r = $this->AiRunCompletion(
-            $this->AiRecipeSystemPrompt(),
+            $this->AiRecipeSystemPrompt($erlaubteKategorien),
             "Extrahiere Titel, Portionen und die Zutatenliste aus diesem Rezept:\n\n" . $text,
             null
         );
@@ -439,10 +443,10 @@ trait AiExtract
     }
 
     /** PDF-Datei → Zutaten (Anthropic nativ, OpenAI via PDF-Modell). @return array */
-    private function AiExtractIngredientsFromPdf(string $pdfBase64): array
+    private function AiExtractIngredientsFromPdf(string $pdfBase64, array $erlaubteKategorien = []): array
     {
         $r = $this->AiRunCompletion(
-            $this->AiIngredientsSystemPrompt(),
+            $this->AiIngredientsSystemPrompt($erlaubteKategorien),
             'Extrahiere die Artikel bzw. Zutaten aus dieser Datei.',
             null,
             $pdfBase64
@@ -1081,14 +1085,75 @@ trait AiExtract
             . 'den Empfänger erkennbar ist, antworte mit [].';
     }
 
-    private function AiIngredientsSystemPrompt(): string
+    /**
+     * Die Kategorien, aus denen das Modell waehlen darf.
+     *
+     * Ohne diese Schranke erfindet es welche: gemessen an einer echten Liste standen
+     * 16 von 78 Artikeln in Kategorien, die es in der Instanz nicht gibt ("Molkerei",
+     * "Gewuerze", "Saucen & Dressings"). Solche Artikel landen in der Anzeige hinten
+     * in eigenen Abschnitten und ohne passendes Icon. Zwei der vier Beispiele, die
+     * frueher im Prompt standen, waren selbst nicht in der Standardtabelle — der
+     * Prompt hat den Fehler also aktiv erzeugt.
+     *
+     * Vorrang hat, was der Client mitschickt: nur er weiss, in welche Liste die
+     * Artikel danach wandern. Ohne Angabe wird die Vereinigung ueber die
+     * Einkaufslisten gebildet, die diese Bruecke bedient.
+     *
+     * @return string[]
+     */
+    private function AiAllowedCategories(array $body): array
+    {
+        $namen = [];
+        $vom_client = $body['categories'] ?? null;
+        if (is_array($vom_client)) {
+            foreach ($vom_client as $eintrag) {
+                $name = trim((string)$eintrag);
+                if ($name !== '' && mb_strlen($name) <= 60) {
+                    $namen[$name] = true;
+                }
+            }
+        }
+        if ($namen === []) {
+            foreach ($this->GetListInstances() as $inst) {
+                if (($inst['kind'] ?? '') !== 'shopping' || !function_exists('SL_GetAppState')) {
+                    continue;
+                }
+                $state = json_decode((string)SL_GetAppState((int)$inst['id']), true);
+                foreach ((array)($state['state']['categoryOrder'] ?? []) as $name) {
+                    $name = trim((string)$name);
+                    if ($name !== '') {
+                        $namen[$name] = true;
+                    }
+                }
+            }
+        }
+        // Deckel gegen einen ueberlangen Prompt (und gegen viele Listen auf einmal).
+        return array_slice(array_keys($namen), 0, 40);
+    }
+
+    /** Der Satz im Prompt, der die Kategorie beschreibt — mit oder ohne Schranke. */
+    private function AiCategoryRule(array $erlaubt): string
+    {
+        if ($erlaubt === []) {
+            // Kein Modul erreichbar: dann lieber gar keine Beispiele nennen, als
+            // welche zu erfinden.
+            return '"category" = grobe Lebensmittel-Kategorie oder leer. ';
+        }
+        return '"category" = GENAU EINE dieser Kategorien, unverändert abgeschrieben: '
+            . implode(', ', array_map(static function (string $c): string {
+                return '„' . $c . '“';
+            }, $erlaubt))
+            . '. Passt keine davon, gib "" zurück — erfinde KEINE eigenen Kategorien. ';
+    }
+
+    private function AiIngredientsSystemPrompt(array $erlaubteKategorien = []): string
     {
         return 'Du extrahierst Einkaufs-Artikel bzw. Zutaten aus einem Bild: Rezept- oder Kochbuchseiten, '
             . 'handschriftliche Einkaufslisten, Aushänge, Notizzettel oder Produktverpackungen. "items" ist '
             . 'die Liste der benötigten Artikel/Zutaten. "name" = der Artikel bzw. die Zutat, kurz und ohne '
             . 'Menge (z.B. „Mehl“, „Tomaten“, „Milch“). "amount" = die Menge samt Einheit als kurzer Text '
-            . '(z.B. „500 g“, „2“, „1 Bund“), leer wenn keine Menge angegeben ist. "category" = grobe '
-            . 'Lebensmittel-Kategorie (z.B. „Obst & Gemüse“, „Molkerei“, „Backwaren“, „Fleisch“) oder leer. '
+            . '(z.B. „500 g“, „2“, „1 Bund“), leer wenn keine Menge angegeben ist. '
+            . $this->AiCategoryRule($erlaubteKategorien)
             . 'Fasse Dubletten zusammen. "title" = der Rezepttitel, WENN es sich um ein Rezept handelt, sonst '
             . 'null. "servings" = die Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl, wenn '
             . 'angegeben, sonst null (bei reinen Einkaufslisten immer null). Antworte AUSSCHLIESSLICH mit '
@@ -1098,7 +1163,7 @@ trait AiExtract
             . '{"title": null, "servings": null, "items": []} zurück.';
     }
 
-    private function AiRecipeSystemPrompt(): string
+    private function AiRecipeSystemPrompt(array $erlaubteKategorien = []): string
     {
         return 'Du erhältst den Textinhalt einer Rezept-Webseite. Extrahiere daraus Titel, Portionsangabe '
             . 'und die vollständige Zutatenliste des Rezepts. Ignoriere Navigation, Werbung, Kommentare, '
@@ -1106,9 +1171,9 @@ trait AiExtract
             . 'Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl (z.B. bei „für 4 Personen“ → 4; '
             . 'bei „12 Muffins“ → 12); null, wenn nicht angegeben. "items" ist die Zutatenliste: "name" = '
             . 'die Zutat, kurz und ohne Menge (z.B. „Mehl“, „Zwiebeln“). "amount" = die Menge samt Einheit '
-            . 'als kurzer Text (z.B. „500 g“, „2“, „1 EL“), leer wenn keine Menge angegeben ist. "category" '
-            . '= grobe Lebensmittel-Kategorie (z.B. „Obst & Gemüse“, „Molkerei“, „Backwaren“, „Fleisch“) '
-            . 'oder leer. Rechne Mengen NICHT um (Originalmengen für die angegebenen Portionen). Antworte '
+            . 'als kurzer Text (z.B. „500 g“, „2“, „1 EL“), leer wenn keine Menge angegeben ist. '
+            . $this->AiCategoryRule($erlaubteKategorien)
+            . 'Rechne Mengen NICHT um (Originalmengen für die angegebenen Portionen). Antworte '
             . 'AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärungen und ohne Markdown, mit exakt diesen '
             . 'Feldern: {"title": string oder null, "servings": Zahl oder null, "items": [{"name": string, '
             . '"amount": string, "category": string}]}. Wenn keine Zutaten erkennbar sind, gib '
