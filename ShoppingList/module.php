@@ -682,6 +682,48 @@ class ShoppingList extends IPSModuleStrict
         return $result;
     }
 
+    /**
+     * Vom Nutzer konfigurierte Darstellung je Kategorie: Name => [icon, color].
+     * Nur gesetzte Werte kommen vor — leeres Icon und Farbe -1 heissen "automatisch",
+     * dann entscheidet die Tabelle im Frontend (bzw. der Rueckfall aus dem Namen).
+     *
+     * Das Icon ist ein Font-Awesome-Name aus dem SelectIcon-Waehler; das 'fa-' davor
+     * ergaenzt das Frontend, wenn es fehlt. Die Farbe kommt von SelectColor als
+     * Ganzzahl und geht als '#rrggbb' hinaus, damit die Oberflaechen sie direkt in
+     * CSS setzen koennen.
+     */
+    private function GetCategoryStyleMap(): array
+    {
+        $raw     = $this->ReadPropertyString('CategoryOrder');
+        $decoded = json_decode($raw, true);
+        $result  = [];
+        if (!is_array($decoded)) {
+            return $result;
+        }
+        foreach ($decoded as $entry) {
+            if (!is_array($entry)) {
+                continue;   // reiner Name aus der Voreinstellung: nichts konfiguriert
+            }
+            $name = trim((string)($entry['category'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $style = [];
+            $icon  = trim((string)($entry['icon'] ?? ''));
+            if ($icon !== '' && strcasecmp($icon, 'Transparent') !== 0) {
+                $style['icon'] = $icon;
+            }
+            $color = array_key_exists('color', $entry) ? (int)$entry['color'] : -1;
+            if ($color >= 0) {
+                $style['color'] = sprintf('#%06X', $color & 0xFFFFFF);
+            }
+            if ($style !== []) {
+                $result[$name] = $style;
+            }
+        }
+        return $result;
+    }
+
     private function SyncCategoryRenames(): void
     {
         $newOrder = $this->GetCategoryOrderFlat();
@@ -780,6 +822,10 @@ class ShoppingList extends IPSModuleStrict
             'items'           => $this->LoadItems(),
             'suggestions'     => $this->BuildSuggestionsPayload(),
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
+            // Zusaetzlicher Schluessel und KEINE Aenderung an categoryOrder: dessen
+            // flache Namensliste lesen Kachel, Web-App und die iOS-App: eine andere
+            // Form dort wuerde alle drei brechen.
+            'categoryStyles'  => $this->GetCategoryStyleMap(),
             'favoriteLists'   => $this->LoadFavoriteLists(),
             // Schon einmal abgehakte Artikel. BEWUSST ein eigener Schlüssel und kein
             // Eintrag in favoriteLists: die Herz-Anzeige an jeder Einkaufszeile leitet
@@ -3163,9 +3209,17 @@ class ShoppingList extends IPSModuleStrict
         $categoryValues = [];
         foreach ($decoded as $entry) {
             if (is_string($entry)) {
-                $categoryValues[] = ['category' => $entry];
+                $categoryValues[] = ['category' => $entry, 'icon' => '', 'color' => -1];
             } elseif (is_array($entry) && isset($entry['category'])) {
-                $categoryValues[] = ['category' => $entry['category']];
+                $categoryValues[] = [
+                    'category' => $entry['category'],
+                    'icon'     => (string)($entry['icon'] ?? ''),
+                    // -1 ist der Wert von SelectColor fuer "keine Farbe" und hier
+                    // "automatisch". Zeilen aus aelteren Fassungen haben keinen
+                    // Schluessel; isset() wuerde 0 (Schwarz) nicht von "fehlt"
+                    // trennen, deshalb array_key_exists.
+                    'color'    => array_key_exists('color', $entry) ? (int)$entry['color'] : -1,
+                ];
             }
         }
 
@@ -3273,8 +3327,28 @@ class ShoppingList extends IPSModuleStrict
                                     'add'     => '',
                                     'edit'    => ['type' => 'ValidationTextBox'],
                                 ],
+                                [
+                                    'caption' => $this->Translate('Icon'),
+                                    'name'    => 'icon',
+                                    'width'   => '110px',
+                                    'save'    => true,
+                                    'add'     => '',
+                                    'edit'    => ['type' => 'SelectIcon'],
+                                ],
+                                [
+                                    'caption' => $this->Translate('Color'),
+                                    'name'    => 'color',
+                                    'width'   => '110px',
+                                    'save'    => true,
+                                    'add'     => -1,
+                                    'edit'    => ['type' => 'SelectColor'],
+                                ],
                             ],
                             'values' => $categoryValues,
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => $this->Translate('Icon and color are optional: left empty, the known categories keep their built-in look and own categories get a shopping basket in a color derived from their name.'),
                         ],
                     ],
                 ],

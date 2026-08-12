@@ -2517,9 +2517,30 @@ function hashedTint(name) {
   for (const ch of String(name || '')) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
   return HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length];
 }
+/* Im Backend eingestellte Darstellung der Kategorie (Instanz-Eigenschaft
+   CategoryOrder, Spalten Icon und Farbe) — sie geht der Tabelle oben vor.
+   Kategorien gehoeren zur Einkaufsliste, also wird die ausgewaehlte gefragt.
+   Der Waehler in Symcon liefert Font-Awesome-Namen; das 'fa-' davor fehlt dort,
+   deshalb wird es ergaenzt, wenn es nicht schon steht. */
+function configuredCategoryStyle(category) {
+  const name = String(category || '').trim();
+  if (name === '') return null;
+  const styles = (instState(selectedShoppingID()) || {}).categoryStyles;
+  const entry = styles && styles[name];
+  if (!entry) return null;
+  const icon = String(entry.icon || '').trim();
+  return {
+    icon: icon === '' ? '' : (icon.startsWith('fa-') ? icon : 'fa-' + icon),
+    tint: String(entry.color || '').trim()
+  };
+}
 function categoryStyle(category) {
   const key = String(category || '').toLowerCase();
-  return CATEGORY_STYLES[key] || { icon: 'fa-basket-shopping', tint: hashedTint(key) };
+  const base = CATEGORY_STYLES[key] || { icon: 'fa-basket-shopping', tint: hashedTint(key) };
+  const conf = configuredCategoryStyle(category);
+  if (!conf) return base;
+  // Icon und Farbe sind einzeln einstellbar: was leer bleibt, kommt weiter aus base.
+  return { icon: conf.icon || base.icon, tint: conf.tint || base.tint };
 }
 
 // ── Avatare (aus dem ToDoList-Modul übernommen, Quelle = store.users) ──────
