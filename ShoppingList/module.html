@@ -263,7 +263,7 @@ body {
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   padding: 2px 0 4px;
 }
 
@@ -271,13 +271,16 @@ body {
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 8px 14px;
+  /* Maße und Fläche der Web-App: gefüllt auf --surface2 statt umrandet auf --card.
+     Der akzentgetönte Rand der Kachel ließ die Vorschläge grün gesäumt wirken. */
+  padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  border: none;
+  background: var(--surface2);
   color: var(--text);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
   user-select: none;
   touch-action: manipulation;
   transition: opacity .1s ease;
@@ -291,10 +294,12 @@ body {
 .chip:active { opacity: .7; }
 
 .chip.add-custom {
-  border-style: dashed;
+  /* Breite MUSS mitgesetzt werden: .chip steht auf `border: none`, das ist
+     border-style: none PLUS border-width: medium. Nur den Stil auf dashed zu setzen
+     weckt die 3px wieder auf (gemessen). */
+  border: 1px dashed var(--accent);
   font-weight: 600;
   color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* Pill: chip label + heart button grouped together */
@@ -302,8 +307,8 @@ body {
   display: inline-flex;
   align-items: stretch;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  border: none;
+  background: var(--surface2);
   overflow: hidden;
   max-width: 100%;
   min-width: 0;
@@ -321,8 +326,9 @@ body {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 14px;
-  padding: 8px 8px 8px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 6px 6px 6px 12px;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
@@ -345,11 +351,13 @@ body {
 
 .chip-heart-btn {
   border: none;
-  border-left: 1px solid var(--border);
+  /* Neutrale Trennlinie: --border ist in der Kachel akzentgetönt und zog einen
+     grünen Strich mitten durch die Pille. */
+  border-left: 1px solid var(--glass-border);
   background: transparent;
   color: var(--muted);
   font-size: 13px;
-  padding: 8px 12px 8px 8px;
+  padding: 6px 10px 6px 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
