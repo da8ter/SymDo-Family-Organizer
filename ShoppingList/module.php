@@ -14,6 +14,43 @@ class ShoppingList extends IPSModuleStrict
     use FavoriteStore;
     use PurchaseStore;
 
+    /**
+     * Das eingebaute Aussehen der Standardkategorien: Symbol und Farbe.
+     *
+     * Symbolnamen sind Font-Awesome-Namen OHNE 'fa-' davor — genau die Schreibweise,
+     * die der Waehler von Symcon speichert (an einer echten Konfiguration abgelesen:
+     * 'apple-whole', 'cheese-swiss', 'can-food'). Die Oberflaechen ergaenzen das
+     * 'fa-'. Farben sind Ganzzahlen wie von SelectColor, in RGB-Reihenfolge.
+     *
+     * Spiegel der Tabelle CATEGORY_STYLES in ShoppingList/module.html und
+     * SymDoWebApp/module.html — synchron halten. Dort bleibt sie der Rueckfall fuer
+     * Instanzen, die nichts konfiguriert haben.
+     */
+    private const CATEGORY_DEFAULT_STYLES = [
+        'Obst & Gemüse'        => ['icon' => 'carrot',          'color' => 0x34C759],
+        'Milch & Käse'         => ['icon' => 'cheese',          'color' => 0x5AC8FA],
+        'Backwaren'            => ['icon' => 'croissant',       'color' => 0xA2845E],
+        'Fleisch & Wurst'      => ['icon' => 'utensils',        'color' => 0xFF4D4D],
+        'Tiefkühl'             => ['icon' => 'snowflake',       'color' => 0x40C8E0],
+        'Getränke'             => ['icon' => 'glass-water',     'color' => 0x3498FA],
+        'Snacks & Süßes'       => ['icon' => 'popcorn',         'color' => 0xFF2D55],
+        'Konserven & Trocken'  => ['icon' => 'box',             'color' => 0xFF9500],
+        'Hygiene & Pflege'     => ['icon' => 'shower',          'color' => 0x00C7BE],
+        'Haushalt & Reinigung' => ['icon' => 'soap',            'color' => 0x5856D6],
+        'Baby & Tier'          => ['icon' => 'paw',             'color' => 0xAF52DE],
+        'Sonstiges'            => ['icon' => 'grid-2',          'color' => 0x8E8E93],
+    ];
+
+    /** Zeilen fuer die Voreinstellung von CategoryOrder: Name, Symbol, Farbe. */
+    private static function DefaultCategoryRows(): array
+    {
+        $rows = [];
+        foreach (self::CATEGORY_DEFAULT_STYLES as $name => $stil) {
+            $rows[] = ['category' => $name, 'icon' => $stil['icon'], 'color' => $stil['color']];
+        }
+        return $rows;
+    }
+
     public function Create(): void
     {
         parent::Create();
@@ -65,20 +102,13 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyString('ExtApiKeyFile', '');
         $this->RegisterPropertyString('ExtApiConfig', '');
         $this->RegisterPropertyString('FavoriteItemsConfig', '[]');
-        $this->RegisterPropertyString('CategoryOrder', json_encode([
-            'Obst & Gemüse',
-            'Milch & Käse',
-            'Backwaren',
-            'Fleisch & Wurst',
-            'Tiefkühl',
-            'Getränke',
-            'Snacks & Süßes',
-            'Konserven & Trocken',
-            'Hygiene & Pflege',
-            'Haushalt & Reinigung',
-            'Baby & Tier',
-            'Sonstiges',
-        ], JSON_UNESCAPED_UNICODE));
+        // Zeilen statt reiner Namen, damit Symbol und Farbe von Anfang an in der
+        // Tabelle stehen und dort nur noch geaendert werden muessen. Reine Namen
+        // bleiben lesbar (GetCategoryOrderFlat), Bestandsinstanzen aendern sich nicht.
+        $this->RegisterPropertyString('CategoryOrder', json_encode(
+            self::DefaultCategoryRows(),
+            JSON_UNESCAPED_UNICODE
+        ));
 
         $this->RegisterVariableInteger('ItemCount', $this->Translate('Item Count'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
@@ -3197,30 +3227,36 @@ class ShoppingList extends IPSModuleStrict
 
         // Defensive fallback: if property is missing or malformed, use aisle-order default.
         if (!is_array($decoded) || count($decoded) === 0) {
-            $decoded = [
-                'Obst & Gemüse', 'Milch & Käse', 'Backwaren', 'Fleisch & Wurst',
-                'Tiefkühl', 'Getränke', 'Snacks & Süßes', 'Konserven & Trocken',
-                'Hygiene & Pflege', 'Haushalt & Reinigung', 'Baby & Tier', 'Sonstiges',
-            ];
+            $decoded = self::DefaultCategoryRows();
         }
 
         // Symcon saves List rows as [{"category": "..."}, ...]; support both flat strings
         // (default from Create()) and row objects (written back by Symcon after form save).
+        //
+        // Symbol und Farbe fuellt CATEGORY_DEFAULT_STYLES auf, wo nichts gesetzt ist:
+        // die Tabelle zeigt damit das eingebaute Aussehen der Standardkategorien statt
+        // leerer Felder, und es ist von dort aus aenderbar. Nur die STANDARD-Kategorien
+        // stehen in der Tabelle — eigene bleiben leer und heissen weiter "automatisch"
+        // (Einkaufskorb, Farbe aus dem Namen gestreut).
         $categoryValues = [];
         foreach ($decoded as $entry) {
-            if (is_string($entry)) {
-                $categoryValues[] = ['category' => $entry, 'icon' => '', 'color' => -1];
-            } elseif (is_array($entry) && isset($entry['category'])) {
-                $categoryValues[] = [
-                    'category' => $entry['category'],
-                    'icon'     => (string)($entry['icon'] ?? ''),
-                    // -1 ist der Wert von SelectColor fuer "keine Farbe" und hier
-                    // "automatisch". Zeilen aus aelteren Fassungen haben keinen
-                    // Schluessel; isset() wuerde 0 (Schwarz) nicht von "fehlt"
-                    // trennen, deshalb array_key_exists.
-                    'color'    => array_key_exists('color', $entry) ? (int)$entry['color'] : -1,
-                ];
+            $name  = is_string($entry) ? $entry : (string)($entry['category'] ?? '');
+            $name  = trim($name);
+            if ($name === '') {
+                continue;
             }
+            $vorgabe = self::CATEGORY_DEFAULT_STYLES[$name] ?? ['icon' => '', 'color' => -1];
+            $icon    = is_array($entry) ? trim((string)($entry['icon'] ?? '')) : '';
+            // -1 ist der Wert von SelectColor fuer "keine Farbe" und hier
+            // "automatisch". Zeilen aus aelteren Fassungen haben keinen Schluessel;
+            // isset() wuerde 0 (Schwarz) nicht von "fehlt" trennen, deshalb
+            // array_key_exists.
+            $color = (is_array($entry) && array_key_exists('color', $entry)) ? (int)$entry['color'] : -1;
+            $categoryValues[] = [
+                'category' => $name,
+                'icon'     => $icon !== '' ? $icon : $vorgabe['icon'],
+                'color'    => $color >= 0 ? $color : $vorgabe['color'],
+            ];
         }
 
         // Build category select options for suggestion items editor
@@ -3348,7 +3384,7 @@ class ShoppingList extends IPSModuleStrict
                         ],
                         [
                             'type'    => 'Label',
-                            'caption' => $this->Translate('Icon and color are optional: left empty, the known categories keep their built-in look and own categories get a shopping basket in a color derived from their name.'),
+                            'caption' => $this->Translate('The standard categories arrive with their built-in icon and color and can be changed here. Own categories stay empty: they get a shopping basket in a color derived from their name.'),
                         ],
                     ],
                 ],

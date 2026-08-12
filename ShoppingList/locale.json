@@ -81,7 +81,7 @@
             "Miscellaneous": "Sonstiges",
             "Shopping List Configuration": "Einkaufslisten-Konfiguration",
             "Category Order": "Kategorienreihenfolge",
-                "Icon and color are optional: left empty, the known categories keep their built-in look and own categories get a shopping basket in a color derived from their name.": "Symbol und Farbe sind freiwillig: bleiben sie leer, behalten die bekannten Kategorien ihr eingebautes Aussehen, und eigene Kategorien bekommen einen Einkaufskorb in einer aus dem Namen abgeleiteten Farbe.",
+                "The standard categories arrive with their built-in icon and color and can be changed here. Own categories stay empty: they get a shopping basket in a color derived from their name.": "Die Standardkategorien kommen mit ihrem eingebauten Symbol und ihrer Farbe und lassen sich hier ändern. Eigene Kategorien bleiben leer: sie bekommen einen Einkaufskorb in einer aus dem Namen abgeleiteten Farbe.",
             "Category": "Kategorie",
                 "Icon": "Symbol",
                 "Color": "Farbe",
