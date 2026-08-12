@@ -2064,55 +2064,26 @@ let cartExpanded = false;
 /* Wie viele Vorschlaege hoechstens gebaut werden — Wert der Web-App. */
 const SUGGESTION_LIMIT = 30;
 
-/* Icon und Farbe der Kategorie-Überschriften — Tabelle, Palette und Streuung wie in
-   der Web-App (CATEGORY_STYLES/HASH_PALETTE/hashedTint), damit dieselbe Kategorie in
-   Kachel und Web-App gleich aussieht. Schlüssel sind kleingeschrieben.
-   Eigene Kategorien des Nutzers stehen nicht in der Tabelle; sie bekommen das
-   Korb-Icon, und die Farbe streut über den Namen in die Palette — gleicher Name,
-   gleiche Farbe. Acht Farben: eigene Kategorien treffen deshalb auch mal die Farbe
-   einer Tabellenkategorie. In der Web-App ist das genauso. */
-const CATEGORY_STYLES = {
-  'obst & gemüse':        { icon: 'fa-carrot',      tint: '#34c759' },
-  'milch & käse':         { icon: 'fa-cheese',      tint: '#5ac8fa' },
-  'backwaren':            { icon: 'fa-croissant',   tint: '#a2845e' },
-  'fleisch & wurst':      { icon: 'fa-utensils',    tint: '#ff4d4d' },
-  'tiefkühl':             { icon: 'fa-snowflake',   tint: '#40c8e0' },
-  'getränke':             { icon: 'fa-glass-water', tint: '#3498fa' },
-  'snacks & süßes':       { icon: 'fa-popcorn',     tint: '#ff2d55' },
-  'konserven & trocken':  { icon: 'fa-box',         tint: '#ff9500' },
-  'hygiene & pflege':     { icon: 'fa-shower',      tint: '#00c7be' },
-  'haushalt & reinigung': { icon: 'fa-soap',        tint: '#5856d6' },
-  'baby & tier':          { icon: 'fa-paw',         tint: '#af52de' },
-  'sonstiges':            { icon: 'fa-grid-2',      tint: '#8e8e93' }
-};
-const HASH_PALETTE = ['#3498fa', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#40c8e0', '#5856d6', '#00c7be'];
-/* Im Backend eingestellte Darstellung der Kategorie (Instanz-Eigenschaft
-   CategoryOrder, Spalten Icon und Farbe) — sie geht der Tabelle oben vor. Der
-   Waehler in Symcon liefert Font-Awesome-Namen; das 'fa-' davor fehlt dort,
-   deshalb wird es ergaenzt, wenn es nicht schon steht. */
-function configuredCategoryStyle(category) {
-  const name = String(category || '').trim();
-  if (name === '') return null;
-  const entry = (state.categoryStyles || {})[name];
-  if (!entry) return null;
-  const icon = String(entry.icon || '').trim();
+/* Icon und Farbe der Kategorie-Überschriften kommen VOLLSTÄNDIG aus dem Payload
+   (Instanz-Eigenschaft CategoryOrder, Spalten Symbol und Farbe; siehe
+   GetCategoryStyleMap in module.php). Die Kachel hält dazu bewusst keine eigene
+   Tabelle mehr: sie war ein dritter Abzug derselben Werte neben PHP und der Web-App
+   und wäre irgendwann auseinandergelaufen. Der Server liefert einen Eintrag für JEDE
+   vorkommende Kategorie — auch für eigene, samt gestreuter Farbe.
+
+   Fehlt der Schlüssel (ältere Modulfassung im Zusammenspiel mit dieser Kachel), bleibt
+   die Überschrift ohne Symbol und in der gedämpften Farbe aus dem CSS. Bewusst kein
+   Rückfall auf eine Ersatztabelle — das wäre genau die Doppelung, die hier weg soll.
+
+   Der Wähler in Symcon liefert Font-Awesome-Namen ohne 'fa-' davor; das wird hier
+   ergänzt, wenn es nicht schon steht. */
+function categoryStyle(category) {
+  const entry = (state.categoryStyles || {})[String(category || '').trim()];
+  const icon = String((entry && entry.icon) || '').trim();
   return {
     icon: icon === '' ? '' : (icon.startsWith('fa-') ? icon : 'fa-' + icon),
-    tint: String(entry.color || '').trim()
+    tint: String((entry && entry.color) || '').trim()
   };
-}
-function categoryStyle(category) {
-  const key = String(category || '').toLowerCase();
-  let base = CATEGORY_STYLES[key];
-  if (!base) {
-    let h = 5381;
-    for (const ch of key) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
-    base = { icon: 'fa-basket-shopping', tint: HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length] };
-  }
-  const conf = configuredCategoryStyle(category);
-  if (!conf) return base;
-  // Icon und Farbe sind einzeln einstellbar: was leer bleibt, kommt weiter aus base.
-  return { icon: conf.icon || base.icon, tint: conf.tint || base.tint };
 }
 let favDetailDocClickHandler = null;
 let editingItemId  = null;
@@ -2608,9 +2579,13 @@ function render() {
     const catItems = grouped[cat] || [];
     if (!catItems.length) continue;
     catItems.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' }));
+    // Fehlt Symbol oder Farbe (Payload ohne categoryStyles), bleibt das Element bzw.
+    // das Attribut ganz weg: mit style="color:" ohne Wert oder einem <i> ohne Klasse
+    // stünde sonst ein leerer Kasten in der Zeile.
     const catStyle = categoryStyle(cat);
-    activeHtml += `<div class="section-header" style="color:${catStyle.tint}">`
-      + `<i class="fa-light ${catStyle.icon}" aria-hidden="true"></i>${escapeHtml(cat)}</div>`
+    activeHtml += `<div class="section-header"${catStyle.tint ? ` style="color:${catStyle.tint}"` : ''}>`
+      + (catStyle.icon ? `<i class="fa-light ${catStyle.icon}" aria-hidden="true"></i>` : '')
+      + `${escapeHtml(cat)}</div>`
       + `<div class="item-grid">`;
     for (const item of catItems) activeHtml += buildItemCard(item, false);
     activeHtml += '</div>';

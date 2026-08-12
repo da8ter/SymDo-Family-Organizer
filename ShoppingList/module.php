@@ -41,6 +41,43 @@ class ShoppingList extends IPSModuleStrict
         'Sonstiges'            => ['icon' => 'grid-2',          'color' => 0x8E8E93],
     ];
 
+    /**
+     * Farbtopf fuer Kategorien, die nicht in der Tabelle stehen — eigene also.
+     * Gleiche Werte und gleiche Reihenfolge wie die Oberflaechen sie hatten, damit
+     * sich durch den Umzug hierher keine Farbe aendert.
+     */
+    private const CATEGORY_HASH_PALETTE = [
+        '#3498FA', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#40C8E0', '#5856D6', '#00C7BE',
+    ];
+
+    /** JS-Semantik von `x | 0`: auf 32 Bit mit Vorzeichen kuerzen. */
+    private static function ToInt32(int $wert): int
+    {
+        $wert &= 0xFFFFFFFF;
+        return ($wert & 0x80000000) ? $wert - 0x100000000 : $wert;
+    }
+
+    /**
+     * djb2 ueber den kleingeschriebenen Namen, gleiche Farbe fuer gleichen Namen.
+     *
+     * Muss die Rechnung von JavaScript nachbilden, sonst kaeme eine andere Farbe
+     * heraus als bisher: dort kuerzt `<< 5` schon auf 32 Bit mit Vorzeichen, die
+     * Summe rechnet als Fliesskomma weiter und `| 0` kuerzt erneut. PHP hat
+     * 64-Bit-Ganzzahlen, also wird an denselben zwei Stellen gekuerzt.
+     */
+    private static function CategoryHashColor(string $name): string
+    {
+        $h     = 5381;
+        $klein = mb_strtolower(trim($name));
+        $laenge = mb_strlen($klein);
+        for ($i = 0; $i < $laenge; $i++) {
+            $code = mb_ord(mb_substr($klein, $i, 1)) ?: 0;
+            $h    = self::ToInt32(self::ToInt32($h << 5) + $h + $code);
+        }
+        $topf = self::CATEGORY_HASH_PALETTE;
+        return $topf[abs($h) % count($topf)];
+    }
+
     /** Zeilen fuer die Voreinstellung von CategoryOrder: Name, Symbol, Farbe. */
     private static function DefaultCategoryRows(): array
     {
@@ -713,43 +750,66 @@ class ShoppingList extends IPSModuleStrict
     }
 
     /**
-     * Vom Nutzer konfigurierte Darstellung je Kategorie: Name => [icon, color].
-     * Nur gesetzte Werte kommen vor — leeres Icon und Farbe -1 heissen "automatisch",
-     * dann entscheidet die Tabelle im Frontend (bzw. der Rueckfall aus dem Namen).
+     * Darstellung JEDER vorkommenden Kategorie: Name => [icon, color].
      *
-     * Das Icon ist ein Font-Awesome-Name aus dem SelectIcon-Waehler; das 'fa-' davor
-     * ergaenzt das Frontend, wenn es fehlt. Die Farbe kommt von SelectColor als
-     * Ganzzahl und geht als '#rrggbb' hinaus, damit die Oberflaechen sie direkt in
-     * CSS setzen koennen.
+     * Vollstaendig und nicht nur das Konfigurierte: die Oberflaechen halten keine
+     * eigene Tabelle mehr, der Payload ist die einzige Quelle. Wer hier fehlt,
+     * bekommt dort nichts — deshalb sind auch die Kategorien dabei, die nur an
+     * Artikeln, Favoriten oder Vorschlaegen haengen und nicht in der Tabelle stehen.
+     *
+     * Reihenfolge der Entscheidung:
+     *   1. im Backend eingestellt  -> dieser Wert
+     *   2. Standardkategorie       -> eingebautes Aussehen
+     *   3. eigene Kategorie        -> Einkaufskorb, Farbe aus dem Namen gestreut
+     *
+     * Symbolnamen gehen OHNE 'fa-' hinaus, so wie der Waehler sie speichert; das
+     * 'fa-' ergaenzen die Oberflaechen. Farben als '#rrggbb', direkt in CSS setzbar.
+     *
+     * @param string[] $weitere Kategorienamen aus Artikeln, Favoriten, Vorschlaegen
      */
-    private function GetCategoryStyleMap(): array
+    private function GetCategoryStyleMap(array $weitere = []): array
     {
-        $raw     = $this->ReadPropertyString('CategoryOrder');
-        $decoded = json_decode($raw, true);
-        $result  = [];
-        if (!is_array($decoded)) {
-            return $result;
-        }
-        foreach ($decoded as $entry) {
-            if (!is_array($entry)) {
-                continue;   // reiner Name aus der Voreinstellung: nichts konfiguriert
-            }
-            $name = trim((string)($entry['category'] ?? ''));
+        // 1. Eingestelltes einsammeln, dabei die Reihenfolge der Tabelle behalten
+        $konfiguriert = [];
+        $namen        = [];
+        $decoded      = json_decode($this->ReadPropertyString('CategoryOrder'), true);
+        foreach ((array)$decoded as $entry) {
+            $name = trim(is_string($entry) ? $entry : (string)($entry['category'] ?? ''));
             if ($name === '') {
                 continue;
             }
-            $style = [];
-            $icon  = trim((string)($entry['icon'] ?? ''));
+            $namen[$name] = true;
+            if (!is_array($entry)) {
+                continue;
+            }
+            $icon = trim((string)($entry['icon'] ?? ''));
             if ($icon !== '' && strcasecmp($icon, 'Transparent') !== 0) {
-                $style['icon'] = $icon;
+                $konfiguriert[$name]['icon'] = $icon;
             }
             $color = array_key_exists('color', $entry) ? (int)$entry['color'] : -1;
             if ($color >= 0) {
-                $style['color'] = sprintf('#%06X', $color & 0xFFFFFF);
+                $konfiguriert[$name]['color'] = sprintf('#%06X', $color & 0xFFFFFF);
             }
-            if ($style !== []) {
-                $result[$name] = $style;
+        }
+        foreach ($weitere as $name) {
+            $name = trim((string)$name);
+            if ($name !== '') {
+                $namen[$name] = true;
             }
+        }
+
+        // 2. Aufloesen
+        $result = [];
+        foreach (array_keys($namen) as $name) {
+            $vorgabe = self::CATEGORY_DEFAULT_STYLES[$name] ?? null;
+            $result[$name] = [
+                'icon'  => $konfiguriert[$name]['icon']
+                    ?? ($vorgabe !== null ? $vorgabe['icon'] : 'basket-shopping'),
+                'color' => $konfiguriert[$name]['color']
+                    ?? ($vorgabe !== null
+                        ? sprintf('#%06X', $vorgabe['color'] & 0xFFFFFF)
+                        : self::CategoryHashColor($name)),
+            ];
         }
         return $result;
     }
@@ -847,16 +907,36 @@ class ShoppingList extends IPSModuleStrict
         // Einmal bauen (Verzeichnis-Scan + Alias-Parse) — Marken-Map leitet
         // sich daraus ab statt erneut zu scannen.
         $productImages = $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [];
+
+        // Einmal laden und weiterverwenden: aus denselben Daten leiten sich die
+        // Kategorienamen ab, die in der Stil-Karte vorkommen muessen (die Oberflaechen
+        // haben keine eigene Tabelle mehr, siehe GetCategoryStyleMap).
+        $items       = $this->LoadItems();
+        $suggestions = $this->BuildSuggestionsPayload();
+        $favorites   = $this->LoadFavoriteLists();
+        $benutzt     = [];
+        foreach ($items as $it) {
+            $benutzt[] = (string)($it['category'] ?? '');
+        }
+        foreach ($suggestions as $sg) {
+            $benutzt[] = (string)($sg['category'] ?? '');
+        }
+        foreach ($favorites as $fl) {
+            foreach ((array)($fl['items'] ?? []) as $fi) {
+                $benutzt[] = (string)($fi['category'] ?? '');
+            }
+        }
+
         return [
             'type'            => 'state',
-            'items'           => $this->LoadItems(),
-            'suggestions'     => $this->BuildSuggestionsPayload(),
+            'items'           => $items,
+            'suggestions'     => $suggestions,
             'categoryOrder'   => $this->GetCategoryOrderFlat(),
             // Zusaetzlicher Schluessel und KEINE Aenderung an categoryOrder: dessen
             // flache Namensliste lesen Kachel, Web-App und die iOS-App: eine andere
             // Form dort wuerde alle drei brechen.
-            'categoryStyles'  => $this->GetCategoryStyleMap(),
-            'favoriteLists'   => $this->LoadFavoriteLists(),
+            'categoryStyles'  => $this->GetCategoryStyleMap($benutzt),
+            'favoriteLists'   => $favorites,
             // Schon einmal abgehakte Artikel. BEWUSST ein eigener Schlüssel und kein
             // Eintrag in favoriteLists: die Herz-Anzeige an jeder Einkaufszeile leitet
             // sich aus den Namen ALLER Favoritenlisten ab (SymDoWebApp getFavNames,

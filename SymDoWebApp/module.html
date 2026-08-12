@@ -2496,51 +2496,37 @@ function resolveItemImage(item) {
   return getProductImageUrl(item.name) || getProductImageUrl(item.notes || '');
 }
 
-// ── Kategorie-Stile (Port von ListsDesign/CategoryStyle.swift) ─────────────
-const CATEGORY_STYLES = {
-  'obst & gemüse':        { icon: 'fa-carrot',          tint: '#34c759' },
-  'milch & käse':         { icon: 'fa-cheese',          tint: '#5ac8fa' },
-  'backwaren':            { icon: 'fa-croissant',       tint: '#a2845e' },
-  'fleisch & wurst':      { icon: 'fa-utensils',        tint: '#ff4d4d' },
-  'tiefkühl':             { icon: 'fa-snowflake',       tint: '#40c8e0' },
-  'getränke':             { icon: 'fa-glass-water',     tint: '#3498fa' },
-  'snacks & süßes':       { icon: 'fa-popcorn',         tint: '#ff2d55' },
-  'konserven & trocken':  { icon: 'fa-box',             tint: '#ff9500' },
-  'hygiene & pflege':     { icon: 'fa-shower',          tint: '#00c7be' },
-  'haushalt & reinigung': { icon: 'fa-soap',            tint: '#5856d6' },
-  'baby & tier':          { icon: 'fa-paw',             tint: '#af52de' },
-  'sonstiges':            { icon: 'fa-grid-2',          tint: '#8e8e93' }
-};
+// ── Kategorie-Stile: Symbol und Farbe kommen VOLLSTÄNDIG aus dem Payload ────
+/* Quelle ist die Instanz-Eigenschaft CategoryOrder mit den Spalten Symbol und Farbe
+   (siehe GetCategoryStyleMap in ShoppingList/module.php). Die frühere Tabelle hier —
+   ein Port von ListsDesign/CategoryStyle.swift — ist absichtlich weg: sie war ein
+   dritter Abzug derselben Werte neben PHP und der Kachel. Der Server liefert einen
+   Eintrag für JEDE vorkommende Kategorie, auch für eigene samt gestreuter Farbe.
+
+   Fehlt der Schlüssel (ältere Modulfassung), bleibt die Kategorie ohne Symbol und ohne
+   Farbe. Bewusst kein Rückfall auf eine Ersatztabelle — das wäre die Doppelung, die
+   hier weg soll.
+
+   Kategorien gehören zur Einkaufsliste, also wird die ausgewählte gefragt. Der Wähler
+   in Symcon liefert Font-Awesome-Namen ohne 'fa-' davor; das wird ergänzt. */
+function categoryStyle(category) {
+  const styles = (instState(selectedShoppingID()) || {}).categoryStyles;
+  const entry = styles && styles[String(category || '').trim()];
+  const icon = String((entry && entry.icon) || '').trim();
+  return {
+    icon: icon === '' ? '' : (icon.startsWith('fa-') ? icon : 'fa-' + icon),
+    tint: String((entry && entry.color) || '').trim()
+  };
+}
+
+/* Streufarbe für Avatare — dieselbe Rechnung, die der Server jetzt für eigene
+   Kategorien anstellt (CategoryHashColor). Bleibt hier, weil Avatare nicht aus dem
+   Einkaufslisten-Payload kommen. */
 const HASH_PALETTE = ['#3498fa', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#40c8e0', '#5856d6', '#00c7be'];
 function hashedTint(name) {
   let h = 5381;
   for (const ch of String(name || '')) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
   return HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length];
-}
-/* Im Backend eingestellte Darstellung der Kategorie (Instanz-Eigenschaft
-   CategoryOrder, Spalten Icon und Farbe) — sie geht der Tabelle oben vor.
-   Kategorien gehoeren zur Einkaufsliste, also wird die ausgewaehlte gefragt.
-   Der Waehler in Symcon liefert Font-Awesome-Namen; das 'fa-' davor fehlt dort,
-   deshalb wird es ergaenzt, wenn es nicht schon steht. */
-function configuredCategoryStyle(category) {
-  const name = String(category || '').trim();
-  if (name === '') return null;
-  const styles = (instState(selectedShoppingID()) || {}).categoryStyles;
-  const entry = styles && styles[name];
-  if (!entry) return null;
-  const icon = String(entry.icon || '').trim();
-  return {
-    icon: icon === '' ? '' : (icon.startsWith('fa-') ? icon : 'fa-' + icon),
-    tint: String(entry.color || '').trim()
-  };
-}
-function categoryStyle(category) {
-  const key = String(category || '').toLowerCase();
-  const base = CATEGORY_STYLES[key] || { icon: 'fa-basket-shopping', tint: hashedTint(key) };
-  const conf = configuredCategoryStyle(category);
-  if (!conf) return base;
-  // Icon und Farbe sind einzeln einstellbar: was leer bleibt, kommt weiter aus base.
-  return { icon: conf.icon || base.icon, tint: conf.tint || base.tint };
 }
 
 // ── Avatare (aus dem ToDoList-Modul übernommen, Quelle = store.users) ──────
@@ -4019,7 +4005,7 @@ function renderDashboard() {
           // bliebe das Produkt weiter in Kreisform. Ohne Bild bleibt der getönte
           // Kreis mit dem Anfangsbuchstaben.
           `<button class="strip-thumb${img ? ' has-img' : ''}" data-check="${escapeHtml(String(it.id))}"` +
-          (img ? '' : ` style="background:${tint}"`) + `>` +
+          ((img || !tint) ? '' : ` style="background:${tint}"`) + `>` +
           (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
                : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
           `</button><span class="strip-amount">${escapeHtml(amount)}</span></div>` +
@@ -4136,7 +4122,12 @@ function renderShopping() {
   }
   for (const sec of sections) {
     const style = categoryStyle(sec.category);
-    html += `<div class="cat-header" data-key="cat:${escapeHtml(sec.category)}" style="color:${style.tint}"><i class="fa-light ${style.icon}"></i>${escapeHtml(sec.category)}</div>`;
+    // Symbol und Farbe nur setzen, wenn der Payload sie liefert: ein <i> ohne Klasse
+    // wäre ein leerer Kasten, style="color:" ohne Wert ungültiger CSS.
+    html += `<div class="cat-header" data-key="cat:${escapeHtml(sec.category)}"`
+      + (style.tint ? ` style="color:${style.tint}"` : '') + `>`
+      + (style.icon ? `<i class="fa-light ${style.icon}"></i>` : '')
+      + `${escapeHtml(sec.category)}</div>`;
     // Kleine Kategorien füllen die Reihe statt sie halb leer zu lassen:
     // einer über die ganze Breite, zwei zu je einer Hälfte (siehe CSS).
     const spanne = sec.items.length === 1 ? 'span-all'
@@ -4265,7 +4256,9 @@ function shoppingRowHtml(it, favNames, st, inCart, spanne) {
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
     `<div class="item-card-content">` +
-    `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+    // Ohne Farbe (Payload ohne categoryStyles) bleibt das Attribut weg — dann gilt
+      // background: var(--surface2) aus dem CSS statt eines leeren background:.
+      `<span class="item-thumb"${(img || tint) ? ` style="background:${img ? 'transparent' : tint}"` : ''}>` +
     (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
     `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
     (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
@@ -4884,7 +4877,9 @@ function renderFavBought(el, st, bought) {
       `<div class="swipe-under bought-forget"><i class="fa-light fa-clock-rotate-left"></i></div>` +
       `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
       `<div class="item-card-content">` +
-      `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+      // Ohne Farbe (Payload ohne categoryStyles) bleibt das Attribut weg — dann gilt
+      // background: var(--surface2) aus dem CSS statt eines leeren background:.
+      `<span class="item-thumb"${(img || tint) ? ` style="background:${img ? 'transparent' : tint}"` : ''}>` +
       (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />`
            : escapeHtml(String(b.name || '?').charAt(0).toUpperCase())) +
       `</span><span class="item-main"><span class="item-name">${escapeHtml(b.name)}</span></span>` +
@@ -5004,7 +4999,9 @@ function renderFavList(el, st, detail) {
       // aus .item-card .swipe-under-edit, gilt also hier ohne neues CSS.
       `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
       `<div class="item-card-content">` +
-      `<span class="item-thumb" style="background:${img ? 'transparent' : tint}">` +
+      // Ohne Farbe (Payload ohne categoryStyles) bleibt das Attribut weg — dann gilt
+      // background: var(--surface2) aus dem CSS statt eines leeren background:.
+      `<span class="item-thumb"${(img || tint) ? ` style="background:${img ? 'transparent' : tint}"` : ''}>` +
       (img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />` : escapeHtml(String(it.name || '?').charAt(0).toUpperCase())) +
       `</span><span class="item-main"><span class="item-name">${escapeHtml(it.name)}</span>` +
       (it.notes ? `<span class="item-notes">${escapeHtml(it.notes)}</span>` : '') +
