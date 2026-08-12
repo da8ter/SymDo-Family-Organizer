@@ -1057,14 +1057,14 @@ body {
 
 /* Back button inside detail footer row */
 .btn-fav-detail-back {
-  flex-shrink: 0;
-  padding: 12px 14px;
+  flex: 1;
+  padding: 12px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--content-color);
+  border: none;
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1077,19 +1077,18 @@ body {
 /* Back footer */
 .fav-back-footer {
   flex-shrink: 0;
-  padding: var(--gap);
-  border-top: 1px solid var(--border);
+  padding: 0 var(--gap) var(--gap);
 }
 
 .btn-fav-back {
   width: 100%;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--content-color);
+  border: none;
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1312,8 +1311,7 @@ body {
 /* Footer with "Artikel zur Einkaufsliste hinzufügen" button */
 .fav-detail-footer {
   flex-shrink: 0;
-  padding: var(--gap);
-  border-top: 1px solid var(--border);
+  padding: 0 var(--gap) var(--gap);
 }
 
 .fav-detail-footer-row {
@@ -1327,8 +1325,8 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
-  background: transparent;
+  border: none;
+  background: var(--surface);
   color: #c0392b;
   font-size: 18px;
   cursor: pointer;
@@ -1353,7 +1351,7 @@ body {
   background: var(--accent);
   color: var(--content-color);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1363,10 +1361,9 @@ body {
 /* Edit item footer */
 .fav-edit-footer {
   flex-shrink: 0;
-  padding: var(--gap);
-  border-top: 1px solid var(--border);
+  padding: 0 var(--gap) var(--gap);
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .btn-delete-fav-item {
@@ -1374,8 +1371,8 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
-  background: transparent;
+  border: none;
+  background: var(--surface);
   color: #c0392b;
   font-size: 18px;
   cursor: pointer;
@@ -1392,14 +1389,14 @@ body {
 }
 
 .btn-fav-edit-back {
-  flex-shrink: 0;
-  padding: 12px 14px;
+  flex: 1;
+  padding: 12px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--content-color);
+  border: none;
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1416,7 +1413,7 @@ body {
   background: var(--accent);
   color: var(--content-color);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1568,6 +1565,17 @@ body {
   border-radius: 999px;
 }
 
+/* Beschriftung ueber dem Feld statt Platzhalter im Feld — Aufbau und Werte wie
+   .form-row label in der Web-App. Ein Platzhalter verschwindet beim Tippen und laesst
+   den Nutzer raten, was in der Zeile stand. */
+.form-row label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
 .edit-input {
   width: 100%;
   padding: 10px 14px;
@@ -1615,23 +1623,28 @@ textarea.edit-input { overflow: hidden; }
 }
 
 /* Edit overlay footer */
+/* Ohne oberen Trennstrich und mit den Maßen der Web-App (.overlay-footer):
+   gap 10, Polster nur unten und an den Seiten. */
 .edit-footer {
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
-  padding: var(--gap);
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  padding: 0 var(--gap) var(--gap);
 }
 
+/* Rangfolge wie in der Web-App (.overlay-footer button / .primary / .destructive):
+   nur die Hauptaktion liegt auf dem Akzent, "Zurueck" auf var(--surface) und Loeschen
+   als roter Text darauf. Vorher waren "Zurueck" und "Speichern" beide gefuellt gruen —
+   die zweitrangige Aktion sah aus wie die erstrangige. */
 .btn-edit-back {
-  flex-shrink: 0;
-  padding: 12px 20px;
+  flex: 1;
+  padding: 12px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--content-color);
+  border: none;
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1645,8 +1658,8 @@ textarea.edit-input { overflow: hidden; }
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, #c0392b 50%, transparent);
-  background: transparent;
+  border: none;
+  background: var(--surface);
   color: #c0392b;
   font-size: 18px;
   cursor: pointer;
@@ -1670,7 +1683,7 @@ textarea.edit-input { overflow: hidden; }
   background: var(--accent);
   color: var(--content-color);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -1855,8 +1868,7 @@ textarea.edit-input { overflow: hidden; }
 }
 .print-back-footer {
   flex-shrink: 0;
-  padding: var(--gap);
-  border-top: 1px solid var(--border);
+  padding: 0 var(--gap) var(--gap);
 }
   </style>
 </head>
@@ -1929,7 +1941,9 @@ textarea.edit-input { overflow: hidden; }
 
     <!-- Barcode scanner overlay -->
     <div class="overlay scanner-overlay" id="scannerOverlay">
-      <div class="overlay-card">
+      <!-- 94% wie in der Web-App: das Videobild braucht mehr Hoehe als der 88er
+           Standarddeckel der Blaetter hergibt. -->
+      <div class="overlay-card" style="max-height:94%;">
         <div class="overlay-header">
           <span class="overlay-title" id="scannerOverlayTitle">Barcode scannen</span>
           <button class="btn-close-overlay" id="btnScannerClose" aria-label="Schließen"><i class="fa-light fa-xmark"></i></button>
@@ -1950,14 +1964,20 @@ textarea.edit-input { overflow: hidden; }
       <div class="overlay-card">
         <div class="overlay-header">
           <span class="overlay-title" id="editOverlayTitle">Artikel bearbeiten</span>
+          <button class="btn-close-overlay" id="btnEditClose" aria-label="Schlie&#xDF;en"><i class="fa-light fa-xmark"></i></button>
         </div>
         <div class="edit-form">
-          <input type="text" class="edit-input" id="editName" placeholder="Name" autocomplete="off" />
-          <input type="text" class="edit-input" id="editAmount" placeholder="Anzahl / Menge" autocomplete="off" />
-          <textarea class="edit-input" id="editNotes" placeholder="Anmerkung" rows="3"></textarea>
-          <div class="edit-select-wrap">
-            <select class="edit-input" id="editCategory"></select>
-            <i class="fa-light fa-arrow-down-from-bracket edit-select-icon"></i>
+          <div class="form-row"><label id="lblEditName">Name</label>
+            <input type="text" class="edit-input" id="editName" autocomplete="off" /></div>
+          <div class="form-row"><label id="lblEditAmount">Anzahl / Menge</label>
+            <input type="text" class="edit-input" id="editAmount" autocomplete="off" /></div>
+          <div class="form-row"><label id="lblEditNotes">Anmerkung</label>
+            <textarea class="edit-input" id="editNotes" rows="3"></textarea></div>
+          <div class="form-row"><label id="lblEditCategory">Kategorie</label>
+            <div class="edit-select-wrap">
+              <select class="edit-input" id="editCategory"></select>
+              <i class="fa-light fa-arrow-down-from-bracket edit-select-icon"></i>
+            </div>
           </div>
           <div id="editFavSection" style="display:none;">
             <div class="edit-fav-row">
@@ -1983,6 +2003,7 @@ textarea.edit-input { overflow: hidden; }
       <div class="overlay-card">
         <div class="overlay-header">
           <span class="overlay-title" id="favOverlayTitle">Favoritenlisten</span>
+          <button class="btn-close-overlay" id="btnFavClose" aria-label="Schlie&#xDF;en"><i class="fa-light fa-xmark"></i></button>
           <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
           <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
         </div>
@@ -2020,6 +2041,7 @@ textarea.edit-input { overflow: hidden; }
       <div class="overlay-card">
         <div class="overlay-header">
           <span class="overlay-title" id="printOverlayTitle">Drucklayout wählen</span>
+          <button class="btn-close-overlay" id="btnPrintClose" aria-label="Schlie&#xDF;en"><i class="fa-light fa-xmark"></i></button>
         </div>
         <div class="print-mode-body">
           <button class="print-mode-btn" id="btnPrintUltra">
@@ -4002,7 +4024,9 @@ function openEditOverlay(item, showFavPicker) {
 
   // Favorite list picker (only for heart-triggered adds)
   const favSection  = document.getElementById('editFavSection');
-  const catWrap     = document.getElementById('editCategory').closest('.edit-select-wrap');
+  // Die ganze .form-row und nicht nur das Auswahlfeld: seit die Felder eine
+  // Beschriftung darueber tragen, waere sonst "Kategorie" ohne Feld stehen geblieben.
+  const catWrap     = document.getElementById('editCategory').closest('.form-row');
   if (showFavPicker) {
     populateEditFavList();
     favSection.style.display = '';
@@ -4085,9 +4109,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Apply translations to static elements
   document.getElementById('searchInput').placeholder          = translate('Add item\u2026');
-  document.getElementById('editName').placeholder             = translate('Name');
-  document.getElementById('editAmount').placeholder           = translate('Quantity / Amount');
-  document.getElementById('editNotes').placeholder            = translate('Note');
+  document.getElementById('lblEditName').textContent           = translate('Name');
+  document.getElementById('lblEditAmount').textContent        = translate('Quantity / Amount');
+  document.getElementById('lblEditNotes').textContent         = translate('Note');
+  document.getElementById('lblEditCategory').textContent      = translate('Category');
   document.getElementById('btnEditBack').textContent           = translate('Back');
   document.getElementById('btnSaveEdit').textContent          = translate('Save');
   document.getElementById('favRenameInput').placeholder       = translate('List name\u2026');
@@ -4161,6 +4186,13 @@ document.addEventListener('DOMContentLoaded', () => {
     openScannerOverlay();
   });
   document.getElementById('btnScannerClose').addEventListener('click', closeScannerOverlay);
+
+  // Schliessen im Kopf jedes Blattes, wie in der Web-App. Sie rufen dieselben
+  // Funktionen wie die Zurueck-Knoepfe in den Fusszeilen, damit auch aufgeraeumt wird
+  // (Scanner anhalten, Favoriten-Ansicht zuruecksetzen, Tab wieder auf "Liste").
+  document.getElementById('btnEditClose').addEventListener('click', closeEditOverlay);
+  document.getElementById('btnFavClose').addEventListener('click', closeFavOverlay);
+  document.getElementById('btnPrintClose').addEventListener('click', closePrintOverlay);
 
   // Edit overlay
   document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
