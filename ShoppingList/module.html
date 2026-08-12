@@ -48,10 +48,17 @@
      der Inhalt laeuft beim Scrollen darunter hindurch, liegt im Ruhezustand aber
      nicht dahinter. */
   --menu-clear: calc(var(--input-h) + 8px);
-  /* Vorschlagsfenster: fester Abstand oben und zur Eingabezeile. Es waechst also nicht
-     mit der Zahl der Vorschlaege, sondern hat immer dieselbe Groesse. */
-  --sug-top: 80px;
-  --sug-gap: 50px;
+  /* Vorschlagsfenster: Unterkante FEST, Höhe nach Inhalt.
+       --sug-gap    Abstand der Unterkante zur Eingabezeile
+       --sug-bottom daraus der Abstand zur Kachelunterkante (die Oberkante der
+                    Eingabezeile liegt bei --tab-clear minus --tab-gap plus
+                    --input-gap plus --input-h)
+       --sug-top    MINDESTabstand zum oberen Kachelrand; er begrenzt die Höhe, ist
+                    aber keine Verankerung mehr — bei wenigen Vorschlägen bleibt das
+                    Fenster flach und wächst nur nach oben, wenn es mehr werden. */
+  --sug-gap:    50px;
+  --sug-top:    80px;
+  --sug-bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap) + var(--input-h) + var(--sug-gap));
   --tab-inset:  5%;
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
@@ -247,10 +254,15 @@ body {
   position: absolute;
   left: var(--tab-inset);
   right: var(--tab-inset);
-  top: var(--sug-top);
-  bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap) + var(--input-h) + var(--sug-gap));
+  /* KEIN top: nur so richtet sich die Höhe nach dem Inhalt. Mit top UND bottom wäre
+     sie festgenagelt, und ein einzelner Vorschlag stünde in einem hohen leeren
+     Fenster. Der Deckel lässt oben mindestens --sug-top frei; die Prozentangabe
+     bezieht sich auf den Polsterkasten von .wrap, also auf die Kachelhöhe. */
+  top: auto;
+  bottom: var(--sug-bottom);
   margin: 0;
-  max-height: none;
+  height: auto;
+  max-height: calc(100% - var(--sug-bottom) - var(--sug-top));
   padding: 12px;
   /* 1px in der VOLLEN Akzentfarbe — ausdruecklich so gewuenscht. Nicht --border
      (Akzent mit 30 %), das ist der gedaempfte Ton der uebrigen Kachel. */
