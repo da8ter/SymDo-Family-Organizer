@@ -11,6 +11,12 @@
   --muted:  color-mix(in srgb, var(--content-color) 30%, transparent);
   --border: color-mix(in srgb, var(--accent-color) 30%, transparent);
   --accent: var(--accent-color);
+  /* Flächen der Web-App (SymDoWebApp), damit Zeilen, Miniaturen und Mengen-Abzeichen
+     dort und hier dieselben Töne haben. --row ist die Zeilenfläche, --surface2 das
+     eingesenkte Feld darin (Miniatur, Abzeichen). */
+  --surface:  color-mix(in srgb, var(--content-color) 7%, transparent);
+  --surface2: color-mix(in srgb, var(--content-color) 12%, transparent);
+  --row:      color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
   --radius: 14px;
   --gap:    12px;
   /* 68px wie in der Web-App: Zeichen 25px, darunter die Beschriftung mit 10px.
@@ -28,6 +34,9 @@
      Kachel hat keine gedeckelte Inhaltsbreite, eine auf 648px begrenzte Leiste
      stünde in einer breiten Kachel verloren. */
   --tab-gap:    10px;
+  /* Luft zwischen Eingabezeile und Tab-Leiste, zusätzlich zum Schwebe-Abstand der
+     Leiste — sonst wirkt das Feld an die Kapsel geklebt (Wert der Web-App). */
+  --input-gap:  12px;
   --tab-inset:  5%;
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
@@ -59,7 +68,10 @@ body {
   height: 100%;
   min-height: 0;
   /* Ränder wie zuvor das Body-Padding; unten 0 (Nav sitzt an der Kante) */
-  padding: var(--sym-mt) var(--sym-ms) 0 var(--sym-ms);
+  /* Unten der Freiraum für die schwebende Tab-Leiste (siehe #bottomNav). Er sitzt an
+     .wrap und nicht an der Liste, weil darunter der Komponist steht — der muss
+     genauso über der Kapsel bleiben. */
+  padding: var(--sym-mt) var(--sym-ms) var(--tab-clear) var(--sym-ms);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -68,11 +80,33 @@ body {
 }
 
 /* ── Search bar ────────────────────────────────────────────────────────── */
+/* ── Eingabe unten: Komponist im Aufbau der Web-App (SymDoWebApp) ───────────
+   Vorher eine Suchleiste am oberen Rand mit einer absolut darunter aufklappenden
+   Vorschlagsliste. Jetzt steht die Eingabe unter der Liste, die Vorschläge liegen
+   darüber im Fluss, und Feld wie Knöpfe tragen dieselbe Glasoptik wie die
+   Tab-Leiste — eine Glasschicht, dieselben Marken (--glass-bg/--glass-blur).
+   Der Abstand zur Kapsel ist --input-gap, wie dort. */
+/* Traegerkasten mit Eingabe und Vorschlaegen. Wird an ZWEI Stellen benutzt: hier
+   fuer den Komponisten unten, und von der Favoriten-Detailansicht
+   (.fav-detail-search) fuer ihr Feld am oberen Rand. Deshalb bleibt die Regel
+   allgemein, und alles Komponisten-Eigene steht unter .composer. */
 .search-bar {
   position: relative;
   flex-shrink: 0;
   padding: 8px var(--gap) 0;
   z-index: 100;
+}
+.composer {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0 var(--gap);
+  margin-bottom: var(--input-gap);
+  z-index: 100;
+}
+.inputbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .search-row {
@@ -87,7 +121,9 @@ body {
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text);
   font-size: 15px;
   outline: none;
@@ -119,28 +155,38 @@ body {
 
 .btn-fav-lists:active { border-color: var(--accent); }
 
-.btn-scanner {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
-  font-size: 16px;
+/* Runde Knöpfe der Eingabezeile, Maße und Farben der Web-App. Sie brauchen dieselbe
+   Weichzeichnung wie Feld und Leiste — ohne Trägerfläche scheint der Listeninhalt
+   sonst ungefiltert durch den abgeblendeten Knopf. */
+.inputbar .round-btn {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color .15s;
 }
+.inputbar .round-btn:disabled {
+  opacity: .4;
+  cursor: default;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.inputbar .round-btn:active { opacity: .8; }
 
-.btn-scanner:active { border-color: var(--accent); }
 
 /* ── Suggestions dropdown ──────────────────────────────────────────────── */
 .suggestions-dropdown {
+  /* Aufklappendes Panel unter dem Feld — so braucht es die Favoriten-Detailansicht,
+     deren Feld am oberen Rand sitzt. Der Komponist unten dreht das um, siehe unten. */
   position: absolute;
   top: 100%;
   left: var(--gap);
@@ -160,8 +206,26 @@ body {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
 }
+/* Im Komponisten liegen die Vorschlaege im Fluss UEBER der Zeile und ohne eigenen
+   Kasten — nach unten ist kein Platz, dort sitzt die Tab-Leiste. Statt einer eigenen
+   Flaeche wird der Komponist deckend, solange sie offen sind (Vorgehen der Web-App):
+   sonst scheint die Liste durch die Glasflaeche hinter den Chips durch. Deckel wie
+   dort: drei Reihen a 34px plus Polster. */
+.composer .suggestions-dropdown {
+  position: static;
+  margin: 0 0 6px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: calc(3 * 34px + 16px);
+  padding: 6px 0;
+}
 
 .suggestions-dropdown.open { display: block; }
+/* Deckende Fläche nur solange Vorschläge offen sind: sonst scheint die Liste durch
+   die Glasfläche des Feldes hinter den Chips durch. */
+.composer:has(.suggestions-dropdown.open) { background: var(--card-color); }
 
 .suggestions-dropdown::-webkit-scrollbar { width: 6px; }
 .suggestions-dropdown::-webkit-scrollbar-track {
@@ -280,9 +344,6 @@ body {
 .list-area {
   flex: 1;
   min-height: 0;
-  /* Die Leiste schwebt über dem Inhalt (siehe #bottomNav), der Platz muss deshalb
-     hier freigehalten werden — sonst bleibt die letzte Zeile darunter liegen. */
-  padding-bottom: var(--tab-clear);
   /* In den rechten Rand hineinziehen, damit der Scrollbalken mittig im
      Body-Padding sitzt; padding-right hält den Inhalt bündig bei marginside.
      overflow-y: scroll reserviert den Balken immer → konstanter Abstand. */
@@ -319,23 +380,24 @@ body {
   margin: 12px 0 4px;
 }
 
-/* ── Item grid ─────────────────────────────────────────────────────────── */
+/* ── Artikelliste ──────────────────────────────────────────────────────────
+   Zeilen über die volle Breite, gestapelt — wie die Einkaufsliste der Web-App
+   (SymDoWebApp). Vorher waren es Pillen in einem umbrechenden Fließraster
+   (`width: fit-content`, `min-width: 130px`, `flex-wrap`). Daran hing mehr als die
+   Optik: das Auflösen beim Löschen klappte die BREITE ein und schluckte den
+   Raster-Abstand nach rechts. Mit Zeilen klappt es die Höhe ein — siehe
+   dissolveCard. Die Abhaken-Bewegungen sind reine Verschiebungen und bleiben. */
 .item-grid {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px;
   padding: 4px 0 8px;
 }
 
 .item-card {
-  flex: 1 1 auto;
-  width: fit-content;
-  min-width: 130px;
-  max-width: 100%;
   position: relative;
   border-radius: 12px;
   overflow: hidden;
+  /* Abstand zur nächsten Zeile am Element, nicht als gap am Behälter: das
+     Einklappen beim Löschen muss ihn mitnehmen können. */
+  margin-bottom: 6px;
   touch-action: pan-y;
   -webkit-tap-highlight-color: transparent;
   transition: opacity .1s ease, transform .05s ease;
@@ -350,25 +412,21 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 9px 12px;
   cursor: pointer;
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  background:
-    linear-gradient(color-mix(in srgb, var(--content-color) 8%, transparent),
-                    color-mix(in srgb, var(--content-color) 8%, transparent)),
-    var(--bg);
+  /* Deckende Zeilenfläche der Web-App. Sie MUSS deckend bleiben, sonst scheint die
+     rote Löschfläche dahinter durch. */
+  background: var(--row);
   transition: transform .28s cubic-bezier(.22,.61,.36,1), opacity .12s ease;
 }
 .item-card-content.is-dragging { transition: none; }
 
 .item-card:hover .item-card-content {
-  background:
-    linear-gradient(color-mix(in srgb, var(--content-color) 15%, transparent),
-                    color-mix(in srgb, var(--content-color) 15%, transparent)),
-    var(--bg);
+  background: color-mix(in srgb, var(--row) 92%, var(--content-color) 8%);
 }
 
 /* Delete layer revealed by swiping the card to the left */
@@ -440,11 +498,14 @@ body {
 .item-card.in-cart .item-title { text-decoration: line-through; }
 
 .item-thumb {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--accent);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--surface2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -484,7 +545,7 @@ body {
 
 .item-amount-prefix { color: var(--accent); }
 /* Mengen-Stepper wie in der WebApp-Kachel */
-.item-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.item-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 /* Favoriten-Herz links neben der Menge (wie in der WebApp) */
 .item-fav-heart {
   flex-shrink: 0;
@@ -501,9 +562,9 @@ body {
 .item-fav-heart.is-fav { color: var(--accent); }
 .item-fav-heart:active { opacity: .6; }
 .amount-badge {
-  min-width: 26px; text-align: center; padding: 3px 8px; border-radius: 999px;
-  background: color-mix(in srgb, var(--content-color) 12%, transparent);
-  font-size: 12px; font-weight: 700; color: var(--text);
+  min-width: 30px; text-align: center; padding: 3px 8px; border-radius: 999px;
+  background: var(--surface2);
+  font-size: 12.5px; font-weight: 700; color: var(--text);
 }
 .stepper { display: flex; flex-direction: column; }
 .stepper button { padding: 0 6px; font-size: 12px; color: var(--accent); line-height: 1.2; background: none; border: none; cursor: pointer; }
@@ -1575,18 +1636,6 @@ textarea.edit-input { overflow: hidden; }
 <body>
   <div class="wrap" id="wrap">
 
-    <!-- Persistent search bar -->
-    <div class="search-bar" id="searchBar">
-      <div class="search-row">
-        <input type="search" class="search-input" id="searchInput"
-               placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
-        <button class="btn-scanner" id="btnOpenScanner" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
-        <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
-      </div>
-      <div class="suggestions-dropdown" id="suggestionsDropdown">
-        <div class="chip-row" id="suggestionChips"></div>
-      </div>
-    </div>
 
     <div class="list-area" id="listArea">
       <div id="activeItems"></div>
@@ -1607,6 +1656,20 @@ textarea.edit-input { overflow: hidden; }
       <div class="empty-state" id="emptyState" style="display:none;">
         <span class="empty-icon">&#x1F6D2;</span>
         <span class="empty-text">Liste ist leer</span>
+      </div>
+    </div>
+
+    <!-- Eingabe unten, im Aufbau der Web-App: Vorschlaege ueber der Zeile -->
+    <div class="composer" id="searchBar">
+      <div class="suggestions-dropdown" id="suggestionsDropdown">
+        <div class="chip-row" id="suggestionChips"></div>
+      </div>
+      <div class="inputbar search-row">
+        <input type="search" class="search-input" id="searchInput"
+               placeholder="Artikel hinzuf&#xFC;gen&#x2026;" autocomplete="off" />
+        <button class="round-btn" id="btnOpenScanner" aria-label="Barcode scannen"><i class="fa-light fa-barcode"></i></button>
+        <button class="round-btn" id="btnAddItem" aria-label="Hinzuf&#xFC;gen" disabled><i class="fa-light fa-plus"></i></button>
+        <button class="btn-fav-lists" id="btnFavLists" aria-label="Favoritenlisten">&#x2630;</button>
       </div>
     </div>
 
@@ -2106,22 +2169,23 @@ function dissolveCard(card, done) {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     card.style.display = 'none'; finish(); return;
   }
-  const size = card.offsetWidth;
-  card.style.flex = '0 0 auto';
-  card.style.minWidth = '0';
-  card.style.width = size + 'px';
+  // HÖHE einklappen, nicht Breite: die Artikel stehen als Zeilen untereinander
+  // (früher Pillen in einem umbrechenden Raster, da war die Breite richtig).
+  // margin-bottom mit auf 0, sonst bliebe der Zeilenabstand als Lücke stehen.
+  const size = card.offsetHeight;
+  card.style.height = size + 'px';
   card.style.overflow = 'hidden';
   void card.offsetHeight; // Reflow erzwingen, sonst faellt die Zeile ohne Uebergang zusammen
-  card.style.transition = `width ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
-    + ` margin-right ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+  card.style.transition = `height ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
+    + ` margin-bottom ${DISSOLVE_MS}ms cubic-bezier(.4,0,.2,1),`
     + ` opacity ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
     + ` filter ${Math.round(DISSOLVE_MS * 0.8)}ms ease,`
     + ` transform ${Math.round(DISSOLVE_MS * 0.8)}ms ease`;
   card.style.opacity = '0';
   card.style.filter = 'blur(7px)';
   card.style.transform = 'scale(.96)';
-  card.style.width = '0px';
-  card.style.marginRight = '-8px'; // gap der Nachbarn schlucken
+  card.style.height = '0px';
+  card.style.marginBottom = '0px';
   window.setTimeout(finish, DISSOLVE_MS);
 }
 
@@ -3691,12 +3755,29 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnPrintDetailed').addEventListener('click', () => doPrint('detailed'));
   document.getElementById('btnPrintBack').addEventListener('click', closePrintOverlay);
 
-  // Search
+  // Eingabe: suchen UND hinzufuegen. Der Plus-Knopf und die Eingabetaste legen den
+  // getippten Text direkt auf die Liste — vorher ging das nur ueber den Chip
+  // „eigener Eintrag", der Knopf fehlte in der Kachel ganz (Web-App hat beides).
   const searchInput = document.getElementById('searchInput');
+  const btnAdd = document.getElementById('btnAddItem');
+  function addTyped() {
+    const name = (searchInput.value || '').trim();
+    if (!name) return;
+    requestAction('AddItem', JSON.stringify({ name, category: '', amount: '' }));
+    searchInput.value = '';
+    btnAdd.disabled = true;
+    closeSuggestions();
+  }
+  btnAdd.addEventListener('click', (e) => { e.stopPropagation(); addTyped(); });
   searchInput.addEventListener('focus', () => openSuggestions());
   searchInput.addEventListener('input', () => {
+    btnAdd.disabled = (searchInput.value || '').trim() === '';
     renderSuggestions();
     document.getElementById('suggestionsDropdown').classList.add('open');
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addTyped(); }
+    else if (e.key === 'Escape') { searchInput.value = ''; btnAdd.disabled = true; closeSuggestions(); }
   });
   document.addEventListener('click', (e) => {
     if (!document.getElementById('searchBar').contains(e.target)) closeSuggestions();
