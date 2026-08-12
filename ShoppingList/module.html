@@ -9,7 +9,11 @@
   --card:   var(--card-color);
   --text:   var(--content-color);
   --muted:  color-mix(in srgb, var(--content-color) 30%, transparent);
-  --border: color-mix(in srgb, var(--accent-color) 30%, transparent);
+  /* Neutral und NICHT akzentgetoent — derselbe Wert wie --border in der Web-App.
+     Vorher lag hier accent-color 30%: damit trug jedes Feld und jede Karte in der
+     Kachel einen gruenlichen Rand, den es dort nicht gibt. Der Akzent bleibt dem
+     Fokus vorbehalten (.edit-input:focus). */
+  --border: color-mix(in srgb, var(--content-color) 14%, transparent);
   --accent: var(--accent-color);
   /* Flächen der Web-App (SymDoWebApp), damit Zeilen, Miniaturen und Mengen-Abzeichen
      dort und hier dieselben Töne haben. --row ist die Zeilenfläche, --surface2 das
@@ -69,7 +73,6 @@
      neutral sind (#212125). In der Web-App ist --border durchgehend
      content-color 14 %; hier bleibt es beim akzentgetoenten Ton, damit nicht die ganze
      Kachel umfaerbt, und nur Leiste und Feld bekommen den neutralen. */
-  --glass-border: color-mix(in srgb, var(--content-color) 14%, transparent);
   --glass-blur: blur(14.4px) saturate(180%);
   /* System-Kachelränder (per JS aus den URL-Parametern gesetzt) + Scrollbalken-
      Breite, um den Listen-Scrollbalken mittig ins rechte Body-Padding zu legen. */
@@ -157,7 +160,7 @@ body {
   min-width: 0;
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -401,7 +404,7 @@ body {
   border: none;
   /* Neutrale Trennlinie: --border ist in der Kachel akzentgetönt und zog einen
      grünen Strich mitten durch die Pille. */
-  border-left: 1px solid var(--glass-border);
+  border-left: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   font-size: 13px;
@@ -496,7 +499,7 @@ body {
 .inputbar .round-btn.secondary {
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   font-size: 19px;
@@ -509,7 +512,7 @@ body {
   z-index: 2000;
   min-width: 200px;
   padding: 6px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);
   box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
@@ -533,7 +536,7 @@ body {
 }
 .menu-pop button:active { background: var(--surface); }
 .menu-pop button.destructive { color: #e04434; }
-.menu-pop .menu-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
+.menu-pop .menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 
 /* ── Artikelliste ──────────────────────────────────────────────────────────
    Zeilen über die volle Breite, gestapelt — wie die Einkaufsliste der Web-App
@@ -1110,10 +1113,10 @@ body {
 
 .new-list-input {
   flex: 1;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--surface);
   color: var(--text);
   font-size: 15px;
   outline: none;
@@ -1578,10 +1581,10 @@ body {
 
 .edit-input {
   width: 100%;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--surface);
   color: var(--text);
   font-size: 15px;
   outline: none;
@@ -1704,7 +1707,7 @@ textarea.edit-input { overflow: hidden; }
   display: flex;
   padding: 8px 16px;
   box-sizing: border-box;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -4037,7 +4040,7 @@ function openEditOverlay(item, showFavPicker) {
   }
 
   document.getElementById('editOverlayTitle').textContent =
-    editingItemId ? translate('Edit item') : translate('Add');
+    editingItemId ? translate('Edit item') : translate('New item');
   // Trash button only when editing an existing item (not when adding)
   document.getElementById('btnEditDelete').style.display = editingItemId ? '' : 'none';
   openOverlay('editOverlay');
@@ -4110,17 +4113,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Apply translations to static elements
   document.getElementById('searchInput').placeholder          = translate('Add item\u2026');
   document.getElementById('lblEditName').textContent           = translate('Name');
-  document.getElementById('lblEditAmount').textContent        = translate('Quantity / Amount');
+  document.getElementById('lblEditAmount').textContent        = translate('Amount');
   document.getElementById('lblEditNotes').textContent         = translate('Note');
   document.getElementById('lblEditCategory').textContent      = translate('Category');
-  document.getElementById('btnEditBack').textContent           = translate('Back');
+  document.getElementById('btnEditBack').textContent           = translate('Cancel');
   document.getElementById('btnSaveEdit').textContent          = translate('Save');
   document.getElementById('favRenameInput').placeholder       = translate('List name\u2026');
   document.getElementById('newFavListInput').placeholder      = translate('List name\u2026');
   document.getElementById('editNewFavInput').placeholder      = translate('List name\u2026');
   document.getElementById('btnFavDetailBack').textContent     = translate('Back');
   document.getElementById('btnAddFavToCart').textContent      = translate('Add to shopping list');
-  document.getElementById('btnFavEditBack').textContent        = translate('Back');
+  document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
   document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
   document.getElementById('btnFavBack').textContent           = translate('Back');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
