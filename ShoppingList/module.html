@@ -37,9 +37,23 @@
   /* Luft zwischen Eingabezeile und Tab-Leiste, zusätzlich zum Schwebe-Abstand der
      Leiste — sonst wirkt das Feld an die Kapsel geklebt (Wert der Web-App). */
   --input-gap:  12px;
+  /* Höhe der Eingabezeile (die runden Knöpfe geben sie vor). Sie steckt im Freiraum,
+     den der Scrollbereich unten frei hält. */
+  --input-h:    42px;
+  /* Freiraum am Fuß des SCROLLBEREICHS: Tab-Leiste plus Eingabezeile plus deren Luft.
+     Nur Polster, keine Begrenzung — der Inhalt läuft bis zur Kachelkante und unter
+     dem Glas hindurch, die letzte Zeile bleibt trotzdem erreichbar. */
+  --content-clear: calc(var(--tab-clear) + var(--input-gap) + var(--input-h));
   --tab-inset:  5%;
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
+  /* Rahmen der Glasflaechen NEUTRAL, Wert der Web-App. Das allgemeine --border der
+     Kachel ist akzentgetoent (accent 30 %) — auf der runden Kapsel und dem Eingabefeld
+     ergab das einen gruenen Saum (gemessen #17554d), waehrend die Flaechen selbst
+     neutral sind (#212125). In der Web-App ist --border durchgehend
+     content-color 14 %; hier bleibt es beim akzentgetoenten Ton, damit nicht die ganze
+     Kachel umfaerbt, und nur Leiste und Feld bekommen den neutralen. */
+  --glass-border: color-mix(in srgb, var(--content-color) 14%, transparent);
   --glass-blur: blur(14.4px) saturate(180%);
   /* System-Kachelränder (per JS aus den URL-Parametern gesetzt) + Scrollbalken-
      Breite, um den Listen-Scrollbalken mittig ins rechte Body-Padding zu legen. */
@@ -68,10 +82,11 @@ body {
   height: 100%;
   min-height: 0;
   /* Ränder wie zuvor das Body-Padding; unten 0 (Nav sitzt an der Kante) */
-  /* Unten der Freiraum für die schwebende Tab-Leiste (siehe #bottomNav). Er sitzt an
-     .wrap und nicht an der Liste, weil darunter der Komponist steht — der muss
-     genauso über der Kapsel bleiben. */
-  padding: var(--sym-mt) var(--sym-ms) var(--tab-clear) var(--sym-ms);
+  /* Unten KEIN Polster: der scrollbare Inhalt soll bis zur Kachelkante laufen und
+     hinter Eingabezeile und Tab-Leiste hindurch — nur so haben deren Glasflächen
+     etwas zu weichzeichnen. Den Freiraum hält allein das Scroll-Polster der Liste
+     (--content-clear). */
+  padding: var(--sym-mt) var(--sym-ms) 0 var(--sym-ms);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -96,11 +111,14 @@ body {
   padding: 8px var(--gap) 0;
   z-index: 100;
 }
+/* Schwebt wie die Tab-Leiste über dem Inhalt, mit DERSELBEN Einrückung — Feld und
+   Knöpfe stehen damit genau so breit wie die Kapsel darunter. Der Abstand zur Kapsel
+   ist --input-gap. */
 .composer {
-  position: relative;
-  flex-shrink: 0;
-  padding: 0 var(--gap);
-  margin-bottom: var(--input-gap);
+  position: absolute;
+  left: var(--tab-inset);
+  right: var(--tab-inset);
+  bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap));
   z-index: 100;
 }
 .inputbar {
@@ -120,7 +138,7 @@ body {
   min-width: 0;
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -344,6 +362,9 @@ body {
 .list-area {
   flex: 1;
   min-height: 0;
+  /* Damit die letzte Zeile über Eingabezeile und Leiste hinausgescrollt werden kann,
+     obwohl der Inhalt darunter hindurchläuft. */
+  padding-bottom: var(--content-clear);
   /* In den rechten Rand hineinziehen, damit der Scrollbalken mittig im
      Body-Padding sitzt; padding-right hält den Inhalt bündig bei marginside.
      overflow-y: scroll reserviert den Balken immer → konstanter Abstand. */
@@ -1463,7 +1484,7 @@ textarea.edit-input { overflow: hidden; }
   display: flex;
   padding: 8px 16px;
   box-sizing: border-box;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
