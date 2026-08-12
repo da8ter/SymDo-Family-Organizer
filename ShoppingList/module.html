@@ -56,6 +56,11 @@
   --sug-top:    80px;
   --sug-bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap) + var(--input-h) + var(--sug-gap));
   --tab-inset:  5%;
+  /* Deckel für die schwebenden Elemente, Wert der Web-App: 0,9 × 720 = 648px. Er
+     waechst dort absichtlich NICHT mit der Inhaltsbreite — Leiste und Eingabezeile
+     sollen auf breiten Flaechen schmal und mittig bleiben. Die 5 % Einrueckung greift
+     weiter auf schmalen Kacheln, der Deckel erst darueber. */
+  --bar-max:    calc(720px * 0.9);
   --tab-clear:  calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   --glass-bg:   color-mix(in srgb, var(--card-color) 35%, transparent);
   /* Rahmen der Glasflaechen NEUTRAL, Wert der Web-App. Das allgemeine --border der
@@ -129,6 +134,9 @@ body {
   position: absolute;
   left: var(--tab-inset);
   right: var(--tab-inset);
+  max-width: var(--bar-max);
+  margin-left: auto;
+  margin-right: auto;
   bottom: calc(var(--tab-clear) - var(--tab-gap) + var(--input-gap));
   z-index: 100;
 }
@@ -250,13 +258,14 @@ body {
   position: absolute;
   left: var(--tab-inset);
   right: var(--tab-inset);
+  max-width: var(--bar-max);
   /* KEIN top: nur so richtet sich die Höhe nach dem Inhalt. Mit top UND bottom wäre
      sie festgenagelt, und ein einzelner Vorschlag stünde in einem hohen leeren
      Fenster. Der Deckel lässt oben mindestens --sug-top frei; die Prozentangabe
      bezieht sich auf den Polsterkasten von .wrap, also auf die Kachelhöhe. */
   top: auto;
   bottom: var(--sug-bottom);
-  margin: 0;
+  margin: 0 auto;
   height: auto;
   max-height: calc(100% - var(--sug-bottom) - var(--sug-top));
   padding: 12px;
@@ -1620,6 +1629,9 @@ textarea.edit-input { overflow: hidden; }
   position: absolute;
   left: var(--tab-inset);
   right: var(--tab-inset);
+  max-width: var(--bar-max);
+  margin-left: auto;
+  margin-right: auto;
   bottom: calc(var(--tab-gap) + var(--sym-mb));
   height: var(--nav-h);
   display: flex;
