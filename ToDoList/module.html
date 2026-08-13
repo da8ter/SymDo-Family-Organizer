@@ -55,43 +55,33 @@
     }
     .add .full { grid-column: 1 / -1; }
 
+    /* ── Overlays als Blätter, die von unten hereinfahren ──────────────────────
+       Aufbau wie in der Einkaufslisten-Kachel: über der ganzen Fläche fixiert, der
+       Hintergrund verdunkelt, das Blatt sitzt unten und lässt oben Luft. Damit ist
+       auch der Kopfbereich der Visualisierung frei, ohne dass das Blatt ihn
+       überdecken müsste. */
     .overlay {
-      position: absolute;
+      position: fixed;
       inset: 0;
-      padding: 0;
-      box-sizing: border-box;
+      z-index: 1000;
       display: none;
       flex-direction: column;
-      gap: var(--gap);
-      overflow: hidden;
-      align-items: stretch;
-      justify-content: flex-start;
-      z-index: 1000;
+      justify-content: flex-end;
+      background: rgba(0, 0, 0, .45);
     }
     .overlay::-webkit-scrollbar { display: none; }
-    #overlay {
-      background: var(--bg);
-      backdrop-filter: none;
-      /* Abstand nach oben, damit das Formular nicht unter den Kopfelementen der
-         Visualisierung klebt. Nötig, weil ein absolut positioniertes Element sich an
-         der Padding-Box orientiert und das --sym-mt von .wrap deshalb überdeckt. */
-      top: 80px;
-    }
-    #detailOverlay {
-      background: var(--bg);
-      backdrop-filter: none;
-    }
     .overlay.open { display: flex; }
     .overlay-card {
       background: var(--card);
-      border: 0px solid var(--border);
-      border-radius: 0;
+      border-radius: 18px 18px 0 0;
+      /* 88 % wie in der Einkaufsliste, zusätzlich 80 px für die Kopfelemente der
+         Visualisierung freihalten — auf niedrigen Kacheln greift der zweite Wert. */
+      max-height: min(88%, calc(100% - 80px));
       display: flex;
       flex-direction: column;
       width: 100%;
-      height: 100%;
-      min-height: 100%;
-      max-height: 100%;
+      max-width: 900px;
+      margin: 0 auto;
       overflow: hidden;
     }
     .overlay-card::-webkit-scrollbar { display: none; }
@@ -101,10 +91,12 @@
       gap: 10px;
       flex: 1 1 auto;
       min-height: 0;
-      overflow: auto;
+      overflow-y: auto;
+      /* Damit das Wischen im Blatt nicht die Liste dahinter mitzieht. */
+      overscroll-behavior: contain;
       scrollbar-width: thin;
       scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
-      padding: var(--gap);
+      padding: 8px var(--gap) 18px;
     }
     .overlay-body::-webkit-scrollbar { width: 6px; height: 6px; }
     .overlay-body::-webkit-scrollbar-track { background: transparent; }
@@ -112,8 +104,10 @@
       background: color-mix(in srgb, var(--accent) 70%, transparent);
       border-radius: 999px;
     }
+    /* Kein eigenes max-height: der Deckel von .overlay-card gilt auch hier — sonst
+       hebt die gleiche Spezifität bei später stehender Regel den Deckel auf und das
+       Blatt wächst über den Kopfbereich hinaus. */
     .detail-card {
-      max-height: 100%;
       overflow: hidden;
     }
     .detail-title {
@@ -133,19 +127,38 @@
       gap: 6px;
       align-items: center;
     }
-    .overlay-title {
-      font-weight: 700;
-    }
-    .overlay-actions {
+    .overlay-head {
       display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 8px;
-      background: var(--card);
-      padding: 10px var(--gap) var(--gap);
-      border-top: 1px solid var(--border);
-      border-radius: 0 0 var(--radius) var(--radius);
+      padding: 14px var(--gap) 8px;
       flex: 0 0 auto;
     }
-    .overlay-actions button { flex: 1; }
+    .overlay-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .btn-close-overlay {
+      font-size: 18px;
+      color: var(--muted);
+      padding: 4px 8px;
+      background: transparent;
+      border: 0;
+      line-height: 1;
+    }
+    .overlay-footer {
+      display: flex;
+      gap: 10px;
+      padding: 0 var(--gap) var(--gap);
+      flex: 0 0 auto;
+    }
+    .overlay-footer button {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
     .checkrow {
       display: flex;
       align-items: center;
@@ -793,7 +806,10 @@
 
     <div id="overlay" class="overlay">
       <div class="overlay-card">
-        <div id="formTitle" class="overlay-title"></div>
+        <div class="overlay-head">
+          <div id="formTitle" class="overlay-title"></div>
+          <button id="formCloseBtn" class="btn-close-overlay" type="button" aria-label="Close"><i class="fa-light fa-xmark"></i></button>
+        </div>
         <div class="overlay-body">
           <div class="add">
             <input id="title" type="text" class="full" />
@@ -837,7 +853,7 @@
             </div>
           </div>
         </div>
-        <div class="overlay-actions">
+        <div class="overlay-footer">
           <button id="deleteBtn" class="danger danger-btn" type="button"><i class="fa-light fa-trash-can"></i><span id="deleteBtnText"></span></button>
           <button id="cancelBtn" type="button"></button>
           <button id="addBtn" class="primary"></button>
@@ -847,13 +863,16 @@
 
     <div id="detailOverlay" class="overlay">
       <div class="overlay-card detail-card">
-        <div class="overlay-body">
+        <div class="overlay-head">
           <div id="detailHeader" class="overlay-title"></div>
+          <button id="detailCloseX" class="btn-close-overlay" type="button" aria-label="Close"><i class="fa-light fa-xmark"></i></button>
+        </div>
+        <div class="overlay-body">
           <div id="detailTaskTitle" class="detail-title"></div>
           <div id="detailTaskInfo" class="detail-info"></div>
           <div id="detailMeta" class="detail-meta"></div>
         </div>
-        <div class="overlay-actions">
+        <div class="overlay-footer">
           <button id="detailCloseBtn" class="primary"></button>
         </div>
       </div>
@@ -1258,6 +1277,60 @@
       return list;
     }
 
+    /**
+     * Blätter fahren von unten herein, wie in der Einkaufslisten-Kachel.
+     *
+     * Die Verdunkelung läuft über background-color und nicht über opacity: opacity
+     * auf dem Overlay würde das Blatt mit verblassen lassen, es soll aber deckend
+     * hereinfahren. Die Schließen-Animation wird in _closeAnim gemerkt, damit ein
+     * erneutes Öffnen sie abbrechen kann, ohne dass das onfinish den offenen
+     * Zustand nachträglich wieder wegnimmt.
+     */
+    const OVERLAY_MS = 260;
+    const OVERLAY_DIM = 'rgba(0, 0, 0, .45)';
+
+    function reduceMotion() {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function slideOverlayIn(ov) {
+      if (!ov) return;
+      if (ov._closeAnim) {
+        ov._closeAnim.onfinish = null;
+        ov._closeAnim.oncancel = null;
+        ov._closeAnim.cancel();
+        ov._closeAnim = null;
+      }
+      ov.classList.add('open');
+      if (reduceMotion()) return;
+      const card = ov.querySelector('.overlay-card');
+      ov.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: OVERLAY_DIM }],
+                 { duration: OVERLAY_MS, easing: 'ease-out' });
+      if (card) {
+        card.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }],
+                     { duration: OVERLAY_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      }
+    }
+
+    function slideOverlayOut(ov) {
+      if (!ov) return;
+      if (reduceMotion() || !ov.classList.contains('open')) {
+        ov.classList.remove('open');
+        return;
+      }
+      const card = ov.querySelector('.overlay-card');
+      ov.animate([{ backgroundColor: OVERLAY_DIM }, { backgroundColor: 'rgba(0, 0, 0, 0)' }],
+                 { duration: OVERLAY_MS, easing: 'ease-in' });
+      const fertig = () => { ov.classList.remove('open'); ov._closeAnim = null; };
+      if (!card) { window.setTimeout(fertig, OVERLAY_MS); return; }
+      ov._closeAnim = card.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }],
+        { duration: OVERLAY_MS, easing: 'cubic-bezier(.4, 0, 1, 1)' }
+      );
+      ov._closeAnim.onfinish = fertig;
+      ov._closeAnim.oncancel = fertig;
+    }
+
     function openOverlay(mode) {
       const overlay = document.getElementById('overlay');
       const title = document.getElementById('formTitle');
@@ -1274,12 +1347,12 @@
         if (delBtn) delBtn.style.display = 'none';
       }
 
-      overlay.classList.add('open');
+      slideOverlayIn(overlay);
       document.getElementById('title').focus();
     }
 
     function closeOverlay() {
-      document.getElementById('overlay').classList.remove('open');
+      slideOverlayOut(document.getElementById('overlay'));
       editingId = 0;
     }
 
@@ -1311,11 +1384,11 @@
       if (showInfoBadges) meta.push(`<span class="badge ${prioKey}">${escapeHtml(prioLabel)}</span>`);
       document.getElementById('detailMeta').innerHTML = meta.join('');
 
-      document.getElementById('detailOverlay').classList.add('open');
+      slideOverlayIn(document.getElementById('detailOverlay'));
     }
 
     function closeDetail() {
-      document.getElementById('detailOverlay').classList.remove('open');
+      slideOverlayOut(document.getElementById('detailOverlay'));
     }
 
     function getDefaultNotificationLeadTime() {
@@ -2738,6 +2811,11 @@
         closeOverlay();
       });
 
+      // Das X in der Kopfzeile des Blattes verwirft wie „Abbrechen".
+      document.getElementById('formCloseBtn').addEventListener('click', () => {
+        closeOverlay();
+      });
+
       document.getElementById('deleteBtn').addEventListener('click', () => {
         if (editingId > 0) {
           requestAction('DeleteItem', JSON.stringify({ id: editingId }));
@@ -2746,6 +2824,10 @@
       });
 
       document.getElementById('detailCloseBtn').addEventListener('click', () => {
+        closeDetail();
+      });
+
+      document.getElementById('detailCloseX').addEventListener('click', () => {
         closeDetail();
       });
 
