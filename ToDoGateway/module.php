@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
-require_once __DIR__ . '/AppCore.php';
+require_once __DIR__ . '/libs/AppCore.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.

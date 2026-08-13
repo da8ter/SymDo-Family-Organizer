@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/libs/ApiRouter.php';
-require_once __DIR__ . '/libs/DeviceRegistry.php';
-require_once __DIR__ . '/libs/QrRenderer.php';
-require_once __DIR__ . '/libs/AiExtract.php';
+require_once __DIR__ . '/ApiRouter.php';
+require_once __DIR__ . '/DeviceRegistry.php';
+require_once __DIR__ . '/QrRenderer.php';
+require_once __DIR__ . '/AiExtract.php';
 
 /**
  * Die App-Seite des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
  * Push-Kanal und KI-Analyse.
  *
- * Liegt im Modulwurzelverzeichnis und nicht in libs/, weil die Pfade hier drin auf
- * Nachbarmodule zeigen: __DIR__ . '/../SymDoWebApp/…' und dirname(__DIR__) . '/ShoppingList/assets'
- * lösen nur aus dieser Ebene richtig auf.
- *
  * Der Lebenszyklus liegt in der Fassade (module.php); die Anteile, die von dort
  * hereingerufen werden, tragen das Präfix App…, damit sie sich nicht mit der
  * Sync-Seite beißen.
+ *
+ * Die Web-App wird aus Nachbarmodulen zusammengesetzt (SymDoWebApp liefert HTML,
+ * Übersetzungen und Icons, ShoppingList die Produktbilder). Aus libs/ heraus sind
+ * das zwei Ebenen: dirname(__DIR__, 2) — dieselbe Rechnung wie in ApiRouter.
  */
 trait AppCore
 {
@@ -621,7 +621,7 @@ trait AppCore
      */
     private function ServeWebApp(): void
     {
-        $uiPath = __DIR__ . '/../SymDoWebApp/module.html';
+        $uiPath = dirname(__DIR__, 2) . '/SymDoWebApp/module.html';
         $html   = @file_get_contents($uiPath);
         if (!is_string($html)) {
             http_response_code(500);
@@ -661,7 +661,7 @@ trait AppCore
         if (!in_array($name, ['appicon-32.png', 'appicon-180.png'], true)) {
             return false;
         }
-        $raw = @file_get_contents(__DIR__ . '/../SymDoWebApp/assets/' . $name);
+        $raw = @file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/assets/' . $name);
         if (!is_string($raw) || $raw === '') {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
@@ -697,7 +697,7 @@ trait AppCore
 
         // Übersetzungen aus der geteilten UI-Quelle einbetten (kein Extra-Request).
         $translations = '{}';
-        $dec = json_decode((string)@file_get_contents(__DIR__ . '/../SymDoWebApp/locale.json'), true);
+        $dec = json_decode((string)@file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/locale.json'), true);
         if (is_array($dec) && isset($dec['translations'])) {
             $translations = json_encode($dec['translations'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
@@ -728,7 +728,7 @@ trait AppCore
             . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
             . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">';
 
-        $adapterJs = (string)@file_get_contents(__DIR__ . '/libs/webapp-adapter.js');
+        $adapterJs = (string)@file_get_contents(__DIR__ . '/webapp-adapter.js');
         $adapter = '<script>' . $adapterJs . '</script>';
 
         return $theme . $icons . $config . $adapter;
@@ -926,7 +926,7 @@ trait AppCore
      */
     private function GetAssetsVersion(): int
     {
-        $dir = dirname(__DIR__) . '/ShoppingList/assets';
+        $dir = dirname(__DIR__, 2) . '/ShoppingList/assets';
         $max = (int)@filemtime($dir);
         foreach (@scandir($dir) ?: [] as $entry) {
             if ($entry === '.' || $entry === '..') {
@@ -942,7 +942,7 @@ trait AppCore
 
     private function GetLibraryVersion(): string
     {
-        $library = json_decode((string)@file_get_contents(dirname(__DIR__) . '/library.json'), true);
+        $library = json_decode((string)@file_get_contents(dirname(__DIR__, 2) . '/library.json'), true);
         return is_array($library) ? (string)($library['version'] ?? '0') : '0';
     }
 
