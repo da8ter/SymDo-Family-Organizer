@@ -573,6 +573,20 @@ body {
   }
   /* Einzelner Artikel in einer Kategorie: volle Breite statt einer halb leeren Reihe. */
   .item-grid > .item-card:only-child { grid-column: 1 / -1; }
+
+  /* Favoriten fliessen genauso in Spalten. In der Web-App stehen #favMaster und
+     #favDetail in derselben Rasterregel wie die Einkaufsliste — hier tut es dieser
+     eine Behaelter, weil Uebersicht UND Detail in ihn rendern. Suchzeile und
+     Leermeldung spannen ueber alle Spalten. */
+  .fav-list-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    column-gap: var(--gap);
+    row-gap: 0;
+    align-items: start;
+  }
+  .fav-list-body > .fav-detail-search,
+  .fav-list-body > .fav-empty { grid-column: 1 / -1; }
   /* Genau zwei Artikel: beide teilen sich die Reihe, statt eine Spalte leer zu lassen.
      Hier genügt die Spaltenzahl des Behälters — in der Web-App braucht dasselbe
      Verhalten halbe Spalten (span-half), weil die Liste dort flach ist und die Zeilen
@@ -1155,41 +1169,56 @@ body {
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   padding: 4px var(--gap) var(--gap);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  /* Kein Flex mit gap mehr: die Abstaende kommen aus margin-bottom der Karten (6px),
+     wie in der Liste. Mit beidem zusammen waeren es 14px, und beim Aufloesen einer
+     Zeile bliebe der gap als Luecke stehen. */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
 }
 
-.fav-list-item {
+/* Karte einer Favoritenliste — Aufbau und Werte der Web-App (.fav-row/.fav-badge/
+   .fav-main/.fav-count/.fav-cart-btn). Vorher war es eine Zeile mit Rahmen, Name
+   links und Anzahl rechts; jetzt Herz-Abzeichen, Name mit Anzahl darunter und der
+   Warenkorb rechts. Das Herz ist BEWUSST pink (#ff2d55) und nicht in der
+   Akzentfarbe — genau wie dort. */
+.fav-row {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 11px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--surface);
+  margin-bottom: 6px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: opacity .1s ease;
-  gap: 12px;
+}
+.fav-row:active { background: var(--surface2); }
+.fav-badge {
+  flex: none;
+  color: #ff2d55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+.fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fav-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.fav-count { font-size: 12.5px; color: var(--muted); }
+.fav-cart-btn {
+  flex: none;
+  background: none;
+  border: none;
+  font-size: 17px;
+  color: var(--accent);
+  padding: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.fav-list-item:active { opacity: .7; }
 
-.fav-list-name {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
 
-.fav-list-count {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
 
 .fav-empty {
   padding: 32px 16px;
@@ -1199,15 +1228,9 @@ body {
 }
 
 /* Favorite detail view — items with heart remove button */
-.fav-detail-item {
-  display: flex;
-  align-items: center;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  gap: 12px;
-}
+/* Die Zeile traegt jetzt .item-card und holt ihre Optik von dort — dieselben Zeilen
+   wie in der Einkaufsliste und damit wie in der Web-App. .fav-detail-item bleibt als
+   Kennzeichnung stehen: die Flug-Animation sucht darueber die Miniatur. */
 
 .fav-detail-search {
   padding: 0 0 2px;
@@ -1222,23 +1245,6 @@ body {
   right: 0;
 }
 
-.fav-detail-name {
-  flex: 1;
-  font-size: 14px;
-  color: var(--text);
-}
-.fav-detail-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.fav-detail-notes {
-  margin-left: 6px;
-  font-size: 12px;
-  font-style: italic;
-}
 
 .fav-detail-heart {
   background: none;
@@ -2961,28 +2967,53 @@ function saveFavItemEdit() {
 }
 
 function renderFavListBody() {
-  const lists = Array.isArray(state.favoriteLists) ? state.favoriteLists : [];
+  // Aufbau der Karte wie in der Web-App (renderFavMaster): Herz-Abzeichen, Name mit
+  // Anzahl darunter, Warenkorb-Knopf rechts. Alphabetisch sortiert — auch das macht
+  // sie so, vorher stand hier die Reihenfolge des Bestands.
+  const lists = (Array.isArray(state.favoriteLists) ? state.favoriteLists.slice() : [])
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'de', { sensitivity: 'base' }));
   const body  = document.getElementById('favListBody');
 
   if (!lists.length) {
-    body.innerHTML = `<div class="fav-empty">${escapeHtml(translate('No lists available'))}</div>`;
+    body.innerHTML = `<div class="fav-empty">${escapeHtml(translate('No favorite lists'))}</div>`;
     return;
   }
 
   let html = '';
   for (const list of lists) {
-    const count = Array.isArray(list.items) ? list.items.length : 0;
-    html += `<div class="fav-list-item" data-list-id="${escapeHtml(list.id)}">`
-      + `<span class="fav-list-name">${escapeHtml(list.name)}</span>`
-      + `<span class="fav-list-count">${count} ${escapeHtml(translate('Items'))}</span>`
+    const count  = Array.isArray(list.items) ? list.items.length : 0;
+    const anzahl = count === 1
+      ? translate('1 item')
+      : translate('%1 items').replace('%1', String(count));
+    html += `<div class="fav-row" data-list-id="${escapeHtml(list.id)}">`
+      + `<span class="fav-badge">${HEART_FILLED}</span>`
+      + `<span class="fav-main">`
+      +   `<span class="fav-name">${escapeHtml(list.name)}</span>`
+      +   `<span class="fav-count">${escapeHtml(anzahl)}</span>`
+      + `</span>`
+      + `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" `
+      +   `aria-label="${escapeHtml(translate('Add all to shopping list'))}">`
+      +   `<i class="fa-light fa-cart-plus"></i></button>`
       + `</div>`;
   }
   body.innerHTML = html;
 
-  body.querySelectorAll('.fav-list-item[data-list-id]').forEach(el => {
-    el.addEventListener('click', () => {
-      const listId = el.getAttribute('data-list-id');
-      showFavDetail(listId);
+  body.querySelectorAll('.fav-row[data-list-id]').forEach(el => {
+    el.addEventListener('click', () => showFavDetail(el.getAttribute('data-list-id')));
+  });
+  // Der Warenkorb liegt IN der Karte: ohne stopPropagation wuerde derselbe Tipp
+  // zugleich die Detailansicht oeffnen.
+  body.querySelectorAll('[data-addall]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-addall');
+      const listObj = (state.favoriteLists || []).find(l => l.id === id);
+      const n = listObj ? (listObj.items || []).length : 0;
+      requestAction('AddFavoriteListToCart', id);
+      closeFavOverlay();
+      showFavToast(n > 0
+        ? `${n} Artikel zur Einkaufsliste hinzugefügt`
+        : 'Liste enthält keine Artikel');
     });
   });
 }
@@ -3026,13 +3057,24 @@ function renderFavDetailBody(list) {
   }
 
   for (const item of items) {
-    const nameHtml = buildTitleHtml(item.name, item.amount || '');
-    const notesHtml = (item.notes || '').trim() ? `<span class="fav-detail-notes">${escapeHtml(item.notes)}</span>` : '';
+    // Dieselbe Zeilen-Anatomie wie in der Einkaufsliste (buildItemCard) und damit wie
+    // in der Web-App, die ihre Favoriten-Artikel ebenfalls als .item-card zeigt:
+    // Miniatur mit Bild ODER Anfangsbuchstabe, Name mit Notiz darunter, Menge als
+    // Abzeichen rechts. Vorher war es eine eigene, flachere Zeile ohne Miniatur-
+    // Rueckfall, und die Menge stand im Namen.
     const favImgUrl = getProductImageUrl(item.name, item.imageUrl);
-    const favImg = favImgUrl ? `<img class="fav-detail-img" src="${escapeHtml(favImgUrl)}" alt="" loading="lazy" />` : '';
-    html += `<div class="fav-detail-item">`
-      + favImg
-      + `<span class="fav-detail-name">${nameHtml}${notesHtml}</span>`
+    const thumb = favImgUrl
+      ? `<img class="item-thumb-img" src="${escapeHtml(favImgUrl)}" alt="" loading="lazy" />`
+      : `<span class="item-thumb-letter">${escapeHtml((item.name || '?').charAt(0).toUpperCase())}</span>`;
+    const notesHtml = (item.notes || '').trim()
+      ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : '';
+    const menge = String(item.amount || '').trim();
+    const mengeHtml = menge ? `<span class="amount-badge">${escapeHtml(menge)}</span>` : '';
+    html += `<div class="item-card fav-detail-item">`
+      + `<div class="item-card-content">`
+      + `<div class="item-thumb">${thumb}</div>`
+      + `<div class="item-info"><div class="item-title">${escapeHtml(item.name || '')}</div>${notesHtml}</div>`
+      + `<span class="item-side">${mengeHtml}`
       // Einen EINZELNEN Artikel auf die Einkaufsliste setzen — bisher gab es hier
       // nur „alles in den Einkauf" für die ganze Liste. Der Stift bleibt: anders als
       // in der Web-App gibt es in dieser Kachel keine Wischgeste als zweiten Weg zum
@@ -3040,6 +3082,8 @@ function renderFavDetailBody(list) {
       + `<button class="fav-detail-cart" data-add-name="${escapeHtml(item.name)}" data-add-cat="${escapeHtml(item.category || '')}" data-add-amount="${escapeHtml(String(item.amount || '1'))}" aria-label="Auf die Einkaufsliste"><i class="fa-light fa-cart-plus"></i></button>`
       + `<button class="fav-detail-pencil" data-edit-list="${escapeHtml(list.id)}" data-edit-name="${escapeHtml(item.name)}" aria-label="Bearbeiten"><i class="fa-light fa-pencil"></i></button>`
       + `<button class="fav-detail-heart" data-list-id="${escapeHtml(list.id)}" data-item-name="${escapeHtml(item.name)}" aria-label="Entfernen">${HEART_FILLED}</button>`
+      + `</span>`
+      + `</div>`
       + `</div>`;
   }
   body.innerHTML = html;
@@ -3150,8 +3194,10 @@ function renderFavDetailBody(list) {
         amount:   btn.getAttribute('data-add-amount') || '1',
       }));
       // Zeilenbild suchen: es steht als Geschwister vor dem Knopf.
+      // .item-thumb-img und nicht mehr .fav-detail-img: die Zeile nutzt jetzt die
+      // Miniatur der Einkaufsliste. Ohne diese Anpassung fluege nichts mehr.
       flyToListTab(btn.closest('.fav-detail-item') ?
-        btn.closest('.fav-detail-item').querySelector('.fav-detail-img') : null);
+        btn.closest('.fav-detail-item').querySelector('.item-thumb-img') : null);
       // Steht der Artikel schon offen auf der Liste, führt der Server zusammen und
       // erhöht die Menge, statt eine Dublette anzulegen — die Meldung sagt das.
       const open = (state.items || [])
