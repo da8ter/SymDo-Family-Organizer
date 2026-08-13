@@ -592,7 +592,6 @@ body {
     align-items: start;
     align-content: start;
   }
-  .fav-detail-body > .fav-detail-search,
   .fav-list-body > .fav-empty,
   .fav-detail-body > .fav-empty { grid-column: 1 / -1; }
   /* Genau zwei Artikel: beide teilen sich die Reihe, statt eine Spalte leer zu lassen.
@@ -1310,18 +1309,8 @@ body {
    wie in der Einkaufsliste und damit wie in der Web-App. .fav-detail-item bleibt als
    Kennzeichnung stehen: die Flug-Animation sucht darueber die Miniatur. */
 
-.fav-detail-search {
-  padding: 0 0 2px;
-}
 
-.fav-detail-search .search-input {
-  border-radius: 12px;
-}
 
-.fav-detail-search .suggestions-dropdown {
-  left: 0;
-  right: 0;
-}
 
 
 .fav-detail-heart {
@@ -2100,6 +2089,7 @@ textarea.edit-input { overflow: hidden; }
         <div class="fav-detail-body" id="favDetailBody"></div>
         <div class="fav-actions" id="favDetailFooter" style="display:none;">
           <button class="btn-add-fav-to-cart" id="btnAddFavToCart"><i class="fa-light fa-cart-plus"></i> Alles auf die Einkaufsliste</button>
+          <button class="btn-fav-add-item" id="btnFavAddItem"><i class="fa-light fa-plus"></i> Artikel hinzuf&#xFC;gen</button>
           <button class="btn-delete-fav-list destructive" id="btnDeleteFavList"><i class="fa-light fa-trash"></i> Liste l&#xF6;schen</button>
         </div>
         <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
@@ -2218,7 +2208,6 @@ function categoryStyle(category) {
     tint: String((entry && entry.color) || '').trim()
   };
 }
-let favDetailDocClickHandler = null;
 let editingItemId  = null;
 let favOverlayMode = null; // 'load-list'
 let viewingListId    = null; // list ID when showing detail view
@@ -3040,9 +3029,20 @@ function showFavListView() {
   setDetailOpen(false);
 }
 
+/**
+ * Artikel einer Favoritenliste bearbeiten — oder mit item = null einen neuen anlegen.
+ * Dieselbe Aufteilung wie openFavItemEditor(instanz, liste, null) in der Web-App, wo
+ * der Knopf "Artikel hinzufuegen" genau das tut.
+ */
 function openFavItemEdit(listId, item) {
-  editingFavItem = { listId, originalName: item.name, category: item.category || '' };
-  document.getElementById('favDetailTitle').textContent = item.name;
+  const neu = !item;
+  editingFavItem = {
+    listId,
+    originalName: neu ? '' : item.name,
+    category: neu ? '' : (item.category || ''),
+    neu: neu,
+  };
+  document.getElementById('favDetailTitle').textContent = neu ? translate('Add item') : item.name;
   document.getElementById('btnFavRenameList').style.display = 'none';
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
@@ -3056,9 +3056,9 @@ function openFavItemEdit(listId, item) {
     + `<input type="text" class="edit-input" id="favEditAmount" placeholder="${escapeHtml(translate('Quantity (e.g. 2x)'))}" autocomplete="off" />`
     + `<textarea class="edit-input" id="favEditNotes" placeholder="${escapeHtml(translate('Note'))}" rows="3"></textarea>`
     + '</div>';
-  document.getElementById('favEditName').value   = item.name   || '';
-  document.getElementById('favEditAmount').value = item.amount || '';
-  document.getElementById('favEditNotes').value  = item.notes  || '';
+  document.getElementById('favEditName').value   = neu ? '' : (item.name   || '');
+  document.getElementById('favEditAmount').value = neu ? '' : (item.amount || '');
+  document.getElementById('favEditNotes').value  = neu ? '' : (item.notes  || '');
   document.getElementById('favEditName').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
   document.getElementById('favEditAmount').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
   document.getElementById('favEditNotes').addEventListener('keydown', (e) => {
@@ -3082,14 +3082,24 @@ function saveFavItemEdit() {
   const amount  = (document.getElementById('favEditAmount').value || '').trim();
   const notes   = (document.getElementById('favEditNotes').value || '').trim();
   if (!newName) return;
-  requestAction('UpdateFavoriteItem', JSON.stringify({
-    listId:   editingFavItem.listId,
-    oldName:  editingFavItem.originalName,
-    newName:  newName,
-    category: editingFavItem.category,
-    amount:   amount,
-    notes:    notes,
-  }));
+  if (editingFavItem.neu) {
+    requestAction('AddItemToFavoriteList', JSON.stringify({
+      listId:   editingFavItem.listId,
+      name:     newName,
+      category: editingFavItem.category,
+      amount:   amount,
+      notes:    notes,
+    }));
+  } else {
+    requestAction('UpdateFavoriteItem', JSON.stringify({
+      listId:   editingFavItem.listId,
+      oldName:  editingFavItem.originalName,
+      newName:  newName,
+      category: editingFavItem.category,
+      amount:   amount,
+      notes:    notes,
+    }));
+  }
   closeFavItemEdit();
 }
 
@@ -3169,15 +3179,9 @@ function renderFavDetailBody(list) {
   const body  = document.getElementById('favDetailBody');
   const items = Array.isArray(list.items) ? list.items : [];
 
-  let html = `<div class="search-bar fav-detail-search" id="favDetailSearchBar">`
-    + `<div class="search-row">`
-    + `<input type="search" class="search-input" id="favDetailSearchInput" `
-    + `placeholder="${escapeHtml(translate('Add item…'))}" autocomplete="off" />`
-    + `</div>`
-    + `<div class="suggestions-dropdown" id="favDetailSuggestionsDropdown">`
-    + `<div class="chip-row" id="favDetailSuggestionChips"></div>`
-    + `</div>`
-    + `</div>`;
+  // Kein Eingabefeld mehr oben: Artikel kommen ueber den Knopf "Artikel hinzufuegen"
+  // in den Aktionen dazu — wie in der Web-App, die dieses Feld nicht hat.
+  let html = '';
 
   if (!items.length) {
     html += `<div class="fav-empty">${escapeHtml(translate('No items yet'))}</div>`;
@@ -3214,91 +3218,6 @@ function renderFavDetailBody(list) {
       + `</div>`;
   }
   body.innerHTML = html;
-
-  const searchBar = document.getElementById('favDetailSearchBar');
-  const searchInput = document.getElementById('favDetailSearchInput');
-  const dropdown = document.getElementById('favDetailSuggestionsDropdown');
-  const chips = document.getElementById('favDetailSuggestionChips');
-
-  const addToFavoriteList = (name, category) => {
-    const cleanName = (name || '').trim();
-    if (!cleanName) return;
-    requestAction('AddItemToFavoriteList', JSON.stringify({
-      listId: list.id,
-      name: cleanName,
-      category: (category || '').trim(),
-      amount: '',
-      notes: ''
-    }));
-    searchInput.value = '';
-    dropdown.classList.remove('open');
-    searchInput.focus({ preventScroll: true });
-  };
-
-  const renderFavDetailSuggestions = () => {
-    const query = (searchInput.value || '').trim();
-    const q = query.toLowerCase();
-    const suggestions = Array.isArray(state.suggestions) ? state.suggestions : [];
-    const existingNames = new Set((list.items || []).map(i => (i.name || '').toLowerCase()));
-
-    let filtered = suggestions.filter(s => !existingNames.has((s.name || '').toLowerCase()));
-    if (q) {
-      filtered = filtered.filter(s => (s.name || '').toLowerCase().includes(q));
-    }
-
-    const exactMatch = filtered.some(s => (s.name || '').toLowerCase() === q);
-
-    let htmlChips = '';
-    if (q && !exactMatch) {
-      htmlChips += `<button class="chip add-custom" data-custom="${escapeHtml(query)}">`
-        + `${escapeHtml(translate('Add') + ': ' + query)}</button>`;
-    }
-
-    for (const s of filtered) {
-      const chipImgUrl = getProductImageUrl(s.name, s.imageUrl);
-      const chipImg = chipImgUrl ? `<img class="chip-img" src="${escapeHtml(chipImgUrl)}" alt="" loading="lazy" />` : '';
-      htmlChips += `<button class="chip" data-name="${escapeHtml(s.name)}" data-category="${escapeHtml(s.category || '')}" title="${escapeHtml(s.name)}">`
-        + `${chipImg}<span class="chip-label-text">${escapeHtml(s.name)}</span></button>`;
-    }
-
-    chips.innerHTML = htmlChips;
-
-    chips.querySelectorAll('.chip[data-custom]').forEach(btn => {
-      btn.addEventListener('click', () => addToFavoriteList(btn.getAttribute('data-custom') || '', ''));
-    });
-
-    chips.querySelectorAll('.chip[data-name]').forEach(btn => {
-      btn.addEventListener('click', () => addToFavoriteList(
-        btn.getAttribute('data-name') || '',
-        btn.getAttribute('data-category') || ''
-      ));
-    });
-  };
-
-  searchInput.addEventListener('focus', () => {
-    renderFavDetailSuggestions();
-    dropdown.classList.add('open');
-  });
-  searchInput.addEventListener('input', () => {
-    renderFavDetailSuggestions();
-    dropdown.classList.add('open');
-  });
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addToFavoriteList(searchInput.value || '', '');
-    }
-  });
-
-  if (favDetailDocClickHandler) {
-    document.removeEventListener('click', favDetailDocClickHandler);
-  }
-  favDetailDocClickHandler = (e) => {
-    if (!searchBar.contains(e.target)) {
-      dropdown.classList.remove('open');
-    }
-  };
-  document.addEventListener('click', favDetailDocClickHandler);
 
   body.querySelectorAll('.fav-detail-pencil').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4272,6 +4191,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('editNewFavInput').placeholder      = translate('List name\u2026');
   // innerHTML und nicht textContent: die beiden Aktionen tragen ein Icon vor dem Text
   // (wie .fav-actions in der Web-App), textContent haette es geloescht.
+  document.getElementById('btnFavAddItem').innerHTML =
+    '<i class="fa-light fa-plus"></i> ' + escapeHtml(translate('Add item'));
   document.getElementById('btnAddFavToCart').innerHTML =
     '<i class="fa-light fa-cart-plus"></i> ' + escapeHtml(translate('Everything to the shopping list'));
   document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
@@ -4413,6 +4334,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // TRASH_ICON: dort steht an dieser Stelle <i class="fa-light fa-trash">. Die
   // mitgelieferte SVG bleibt den reinen Icon-Knoepfen (Wisch-Hintergrund, Favoriten-
   // Artikel) — die haben in der Web-App keine Entsprechung.
+  document.getElementById('btnFavAddItem').addEventListener('click', () => {
+    // null = neuer Artikel, wie openFavItemEditor(..., null) in der Web-App
+    if (viewingListId) openFavItemEdit(viewingListId, null);
+  });
   document.getElementById('btnDeleteFavList').innerHTML =
     '<i class="fa-light fa-trash"></i> ' + escapeHtml(translate('Delete list'));
   document.getElementById('btnDeleteFavList').addEventListener('click', () => {
