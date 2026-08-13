@@ -2075,8 +2075,8 @@ textarea.edit-input { overflow: hidden; }
 
       <div id="favMaster">
         <div class="fav-head">
-          <span class="fav-title" id="favMasterTitle">Favoritenlisten</span>
-          <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
+          <span class="fav-title" id="favMasterTitle">Favoriten</span>
+          <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Favoritenliste"><i class="fa-light fa-plus"></i></button>
         </div>
         <div class="new-list-form" id="newFavListForm">
           <input type="text" class="new-list-input" id="newFavListInput"
@@ -2099,8 +2099,8 @@ textarea.edit-input { overflow: hidden; }
         </div>
         <div class="fav-detail-body" id="favDetailBody"></div>
         <div class="fav-actions" id="favDetailFooter" style="display:none;">
-          <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
-          <button class="btn-delete-fav-list destructive" id="btnDeleteFavList">Liste l&#xF6;schen</button>
+          <button class="btn-add-fav-to-cart" id="btnAddFavToCart"><i class="fa-light fa-cart-plus"></i> Alles auf die Einkaufsliste</button>
+          <button class="btn-delete-fav-list destructive" id="btnDeleteFavList"><i class="fa-light fa-trash"></i> Liste l&#xF6;schen</button>
         </div>
         <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
           <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
@@ -2970,7 +2970,6 @@ function openFavOverlay() {
   editingFavItem = null;
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('newFavListInput').value = '';
-  document.getElementById('btnNewFavList').textContent = '+';
   document.getElementById('btnNewFavList').style.display = '';
   document.getElementById('btnFavRenameList').style.display = 'none';
   document.getElementById('favRenameForm').style.display = 'none';
@@ -3035,7 +3034,6 @@ function markSelectedFavRow(listId) {
 
 function showFavListView() {
   viewingListId = null;
-  document.getElementById('btnNewFavList').textContent = '+';
   document.getElementById('btnNewFavList').style.display = '';
   renderFavListBody();
   showFavDetailPlaceholder();
@@ -3182,7 +3180,7 @@ function renderFavDetailBody(list) {
     + `</div>`;
 
   if (!items.length) {
-    html += `<div class="fav-empty">${escapeHtml(translate('List is empty'))}</div>`;
+    html += `<div class="fav-empty">${escapeHtml(translate('No items yet'))}</div>`;
   }
 
   for (const item of items) {
@@ -4272,11 +4270,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('favRenameInput').placeholder       = translate('List name\u2026');
   document.getElementById('newFavListInput').placeholder      = translate('List name\u2026');
   document.getElementById('editNewFavInput').placeholder      = translate('List name\u2026');
-  document.getElementById('btnAddFavToCart').textContent      = translate('Add to shopping list');
+  // innerHTML und nicht textContent: die beiden Aktionen tragen ein Icon vor dem Text
+  // (wie .fav-actions in der Web-App), textContent haette es geloescht.
+  document.getElementById('btnAddFavToCart').innerHTML =
+    '<i class="fa-light fa-cart-plus"></i> ' + escapeHtml(translate('Everything to the shopping list'));
   document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
   document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
-  document.getElementById('favMasterTitle').textContent       = translate('Favorite lists');
+  document.getElementById('favMasterTitle').textContent       = translate('Favorites');
   document.getElementById('scannerOverlayTitle').textContent  = translate('Scan barcode');
   document.getElementById('printOverlayTitle').textContent    = translate('Choose print layout');
   document.getElementById('printUltraLabel').textContent      = translate('Ultra Compact');
@@ -4408,10 +4409,12 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'Liste enthält keine Artikel');
     }
   });
-  // Symbol UND Text, wie .fav-actions in der Web-App ("Liste loeschen"). Vorher war
-  // es ein reiner Icon-Knopf in der Fusszeile.
+  // Symbol UND Text, wie .fav-actions in der Web-App. Das fa-light-Icon und nicht
+  // TRASH_ICON: dort steht an dieser Stelle <i class="fa-light fa-trash">. Die
+  // mitgelieferte SVG bleibt den reinen Icon-Knoepfen (Wisch-Hintergrund, Favoriten-
+  // Artikel) — die haben in der Web-App keine Entsprechung.
   document.getElementById('btnDeleteFavList').innerHTML =
-    TRASH_ICON + ' ' + escapeHtml(translate('Delete list'));
+    '<i class="fa-light fa-trash"></i> ' + escapeHtml(translate('Delete list'));
   document.getElementById('btnDeleteFavList').addEventListener('click', () => {
     if (viewingListId) {
       requestAction('DeleteFavoriteList', viewingListId);
