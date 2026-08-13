@@ -944,6 +944,14 @@ class ShoppingList extends IPSModuleStrict
             // Herz. Dazu käme die Liste in Auswahldialoge und Mutationspfade, die sie
             // nur ablehnen könnten.
             'purchased'       => $this->BuildPurchasedPayload(),
+            // Basis-URLs IM Zustand und nicht nur als injiziertes Skript: die Kachel
+            // bekommt den ersten Zustand moeglicherweise, bevor das an das HTML
+            // angehaengte <script> gelaufen ist. Dann war window.__imageHookUrl noch
+            // leer, und weil die Oberflaeche diese Variable selbst setzt, blieb sie
+            // leer — die Kachel zeigte bis zum naechsten Push keine Produktbilder.
+            // Mit dem Wert im Zustand haengt nichts mehr an der Reihenfolge.
+            'imageBase'       => $this->GetTileImageBase(),
+            'extApiBase'      => $this->GetTileExtApiBase(),
             'availableImages' => $productImages,
             'availableBrands' => $productImages === [] ? [] : $this->GetAvailableBrandImages($productImages),
             'extApiEnabled'   => $this->ReadPropertyBoolean('ExtApiEnabled')

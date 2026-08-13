@@ -2300,13 +2300,17 @@ function kachelZustand(daten) {
     states: { [SELF_ID]: { kind: 'shopping', revision: 0, state: daten } },
     images: bilder,
     brands: daten.availableBrands || {},
-    // Die Basis-URLs injiziert das Modul in die Kachel (window.__imageHookUrl /
-    // __extApiHookUrl). imagesEnabled leitet sich aus dem Bestand ab: ist
-    // "Produktbilder anzeigen" aus, kommt eine leere Bildliste.
+    // Die Basis-URLs kommen AUS DEM ZUSTAND. Das injizierte window.__imageHookUrl ist
+    // nur noch Rueckfall fuer aeltere Modulfassungen: syncCompat() setzt diese
+    // Variable selbst, und traf der erste Zustand ein, bevor das an das HTML
+    // angehaengte <script> gelaufen war, schrieb sie sich dauerhaft leer — die Kachel
+    // zeigte dann bis zum naechsten Push keine Produktbilder.
+    // imagesEnabled leitet sich aus dem Bestand ab: ist "Produktbilder anzeigen" aus,
+    // kommt eine leere Bildliste.
     shoppingExtras: { [SELF_ID]: {
       imagesEnabled: Object.keys(bilder).length > 0,
-      imageBase: window.__imageHookUrl || '',
-      extApiBase: window.__extApiHookUrl || '',
+      imageBase: daten.imageBase || window.__imageHookUrl || '',
+      extApiBase: daten.extApiBase || window.__extApiHookUrl || '',
     } },
   };
 }
