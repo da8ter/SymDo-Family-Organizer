@@ -9,18 +9,19 @@ declare(strict_types=1);
  * Handarbeit ins Gateway umzieht, und darf entfallen, sobald niemand mehr von einer
  * Bridge-Version aktualisiert.
  *
- * Zwei Dinge wandern, und nur diese zwei:
+ * Drei Dinge wandern:
  *
- *  - Die neun Properties. Sie sind von außen lesbar (IPS_GetConfiguration), Attribute
- *    dagegen nicht — es gibt kein IPS_GetAttribute. Gerätetokens, versteckte Listen und
- *    die KI-Einwilligung liegen in Attributen und bleiben deshalb bewusst zurück.
+ *  - Die neun Properties (Nutzer, lokale URL, KI-Einstellungen).
+ *  - Die Attribute, allen voran die gekoppelten Geräte. Ihr `tokenHash` ist ein
+ *    ungesalzener SHA-256 des Tokens und hängt nicht an der Instanz — die Kopplung
+ *    gilt nach dem Umzug also unverändert weiter, App und Browser merken nichts.
  *  - Die Avatar-Medienobjekte. Sie hängen als Kinder an der Bridge-Instanz und würden
  *    mit ihr gelöscht; die photo-Spalte der Nutzerliste zeigt auf genau diese IDs.
  *    Umhängen statt kopieren hält die IDs stabil, damit die Zuordnung überlebt.
  *
- * Der Import läuft, solange die Bridge noch vollständig installiert ist. Auf einer
- * verwaisten Instanz (Modul bereits entfernt) ist nicht verlässlich, ob Symcon die
- * gespeicherte Konfiguration noch herausgibt.
+ * Zu den Quellen siehe ReadBridgeSnapshot(): Für die Konfiguration ist
+ * IPS_GetConfiguration der Weg, für die Attribute gibt es gar keine API, und sobald
+ * das Bridge-Modul entfernt ist, liefert auch IPS_GetConfiguration nichts mehr.
  */
 trait BridgeImport
 {
@@ -37,6 +38,20 @@ trait BridgeImport
         'AiLocalBaseUrl',
         'AiLocalModel',
         'AiLocalKey',
+    ];
+
+    /**
+     * Attribute, die mitwandern. `PendingPairings` fehlt bewusst: ein halb
+     * abgeschlossener Kopplungsvorgang der alten Instanz ist wertlos und sein Code
+     * längst abgelaufen. `AvatarCache` fehlt, weil er sich von selbst neu aufbaut.
+     */
+    private const BRIDGE_ATTRIBUTES = [
+        'PairedDevices'       => 'string',
+        'HiddenInstances'     => 'string',
+        'RecipePhotoCategory' => 'string',
+        'ActionDedup'         => 'string',
+        'AiPrivacyAccepted'   => 'bool',
+        'AiPrivacyAcceptedAt' => 'string',
     ];
 
     /** Übernahme per Formular-Knopf. Gibt das Ergebnis im Formular aus. */
@@ -104,8 +119,9 @@ trait BridgeImport
         }
         $bridgeID = (int) $bridges[0];
 
-        $config = json_decode((string) @IPS_GetConfiguration($bridgeID), true);
-        if (!is_array($config)) {
+        $snapshot = $this->ReadBridgeSnapshot($bridgeID);
+        $config   = $snapshot['configuration'];
+        if ($config === []) {
             return sprintf(
                 $this->Translate('Configuration of instance #%d could not be read — import aborted.'),
                 $bridgeID
@@ -132,14 +148,78 @@ trait BridgeImport
             IPS_ApplyChanges($this->InstanceID);
         }
 
-        $moved = $this->ReparentBridgeMedia($bridgeID);
+        $devices = $this->ImportBridgeAttributes($snapshot['attributes']);
+        $moved   = $this->ReparentBridgeMedia($bridgeID);
 
         return sprintf(
-            $this->Translate('Imported from instance #%1$d: %2$d settings, %3$d avatars. Paired devices are not transferred — please pair the app and browser again, then delete instance #%1$d.'),
+            $this->Translate('Imported from instance #%1$d: %2$d settings, %3$d avatars, %4$d paired devices. Instance #%1$d can now be deleted.'),
             $bridgeID,
             count($copied),
-            $moved
+            $moved,
+            $devices
         );
+    }
+
+    /**
+     * Liest Konfiguration und Attribute der alten Instanz.
+     *
+     * Für die Konfiguration ist IPS_GetConfiguration der Weg — aber nur, solange das
+     * Bridge-Modul installiert ist. Fehlt es, liefert die Funktion `false` statt zu
+     * werfen (auf diesem System gemessen), obwohl die Instanz mit allen Daten
+     * weiterlebt. Dann bleibt die Einstellungsdatei des Kernels als Quelle.
+     *
+     * Für die Attribute gibt es überhaupt keine API — kein IPS_GetAttribute —, sie
+     * kommen also immer von der Platte. Das ist verlässlich, weil eine modullose
+     * Instanz nichts mehr schreibt: die Datei ist der maßgebliche Stand.
+     *
+     * @return array{configuration: array<string,mixed>, attributes: array<string,mixed>}
+     */
+    private function ReadBridgeSnapshot(int $BridgeID): array
+    {
+        $configuration = [];
+        $raw = @IPS_GetConfiguration($BridgeID);
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $configuration = $decoded;
+            }
+        }
+
+        $attributes = [];
+        $settings = json_decode((string) @file_get_contents(IPS_GetKernelDir() . 'settings.json'), true);
+        $node = $settings['objects']['ID' . $BridgeID]['data'] ?? null;
+        if (is_array($node)) {
+            if ($configuration === [] && isset($node['configuration']) && is_array($node['configuration'])) {
+                $configuration = $node['configuration'];
+            }
+            if (isset($node['attributes']) && is_array($node['attributes'])) {
+                $attributes = $node['attributes'];
+            }
+        }
+
+        return ['configuration' => $configuration, 'attributes' => $attributes];
+    }
+
+    /** @return int Anzahl übernommener gekoppelter Geräte (0, wenn keine gefunden). */
+    private function ImportBridgeAttributes(array $Attributes): int
+    {
+        foreach (self::BRIDGE_ATTRIBUTES as $name => $type) {
+            if (!array_key_exists($name, $Attributes)) {
+                continue;
+            }
+            try {
+                if ($type === 'bool') {
+                    $this->WriteAttributeBoolean($name, (bool) $Attributes[$name]);
+                } else {
+                    $this->WriteAttributeString($name, (string) $Attributes[$name]);
+                }
+            } catch (\Throwable $e) {
+                $this->SendDebug('BridgeImport', $name . ': ' . $e->getMessage(), 0);
+            }
+        }
+
+        $devices = json_decode((string) ($Attributes['PairedDevices'] ?? '[]'), true);
+        return is_array($devices) ? count($devices) : 0;
     }
 
     /**
@@ -186,7 +266,7 @@ trait BridgeImport
                 [
                     'type'    => 'Label',
                     'caption' => sprintf(
-                        $this->Translate('SymDo Bridge instance #%d found. Import takes over users, avatars and AI settings. Paired devices stay behind and have to be paired again afterwards.'),
+                        $this->Translate('SymDo Bridge instance #%d found. Import takes over users, avatars, AI settings and paired devices.'),
                         (int) $bridges[0]
                     ),
                 ],

@@ -4,13 +4,11 @@
       "ToDo Gateway": "ToDo Gateway",
       "Takeover from SymDo Bridge": "Bestand aus SymDo Bridge",
       "Import inventory": "Bestand übernehmen",
-      "SymDo Bridge instance #%d found. Import takes over users, avatars and AI settings. Paired devices stay behind and have to be paired again afterwards.": "SymDo-Bridge-Instanz #%d gefunden. Die Übernahme holt Nutzer, Avatare und KI-Einstellungen herüber. Gekoppelte Geräte bleiben zurück und müssen danach neu gekoppelt werden.",
       "Inventory from instance #%s has been imported.": "Der Bestand aus Instanz #%s wurde übernommen.",
       "Inventory from instance #%s has been imported. The old SymDo Bridge instance can now be deleted.": "Der Bestand aus Instanz #%s wurde übernommen. Die alte SymDo-Bridge-Instanz kann jetzt gelöscht werden.",
       "Already imported from instance #%s.": "Bereits aus Instanz #%s übernommen.",
       "No SymDo Bridge instance found — nothing to import.": "Keine SymDo-Bridge-Instanz gefunden — es gibt nichts zu übernehmen.",
       "Configuration of instance #%d could not be read — import aborted.": "Die Konfiguration von Instanz #%d ließ sich nicht lesen — Übernahme abgebrochen.",
-      "Imported from instance #%1$d: %2$d settings, %3$d avatars. Paired devices are not transferred — please pair the app and browser again, then delete instance #%1$d.": "Aus Instanz #%1$d übernommen: %2$d Einstellungen, %3$d Avatare. Gekoppelte Geräte wandern nicht mit — bitte App und Browser neu koppeln und danach Instanz #%1$d löschen.",
       "Google Tasks": "Google Tasks",
       "Microsoft To Do": "Microsoft To Do",
       "CalDAV": "CalDAV",
@@ -137,7 +135,9 @@
       "Not reachable from Symcon: %s": "Von Symcon aus nicht erreichbar: %s",
       "Works: SymDo Bridge reached over the local URL with a valid certificate. On the home network the web app will use it from now on.": "Funktioniert: SymDo Bridge über die lokale URL mit gültigem Zertifikat erreicht. Im Heimnetz nutzt die Web-App sie ab jetzt.",
       "Answered with HTTP %d, but this is not a SymDo Bridge endpoint. Does the URL point at this Symcon installation?": "Antwortet mit HTTP %d, ist aber kein SymDo-Bridge-Endpunkt. Zeigt die URL auf diese Symcon-Installation?",
-      "SymDo Gateway": "SymDo Gateway"
+      "SymDo Gateway": "SymDo Gateway",
+      "Imported from instance #%1$d: %2$d settings, %3$d avatars, %4$d paired devices. Instance #%1$d can now be deleted.": "Aus Instanz #%1$d übernommen: %2$d Einstellungen, %3$d Avatare, %4$d gekoppelte Geräte. Instanz #%1$d kann jetzt gelöscht werden.",
+      "SymDo Bridge instance #%d found. Import takes over users, avatars, AI settings and paired devices.": "SymDo-Bridge-Instanz #%d gefunden. Die Übernahme holt Nutzer, Avatare, KI-Einstellungen und die gekoppelten Geräte herüber."
     },
     "en": {
       "ToDo Gateway": "ToDo Gateway",
