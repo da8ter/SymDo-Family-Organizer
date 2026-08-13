@@ -3,7 +3,7 @@
     "name": "Shopping List",
     "type": 3,
     "vendor": "",
-    "aliases": ["Shopping List", "Einkaufsliste"],
+    "aliases": ["Shopping List"],
     "parentRequirements": [],
     "childRequirements": [],
     "implemented": [],

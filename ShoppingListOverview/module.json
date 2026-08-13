@@ -3,7 +3,7 @@
   "name": "Shopping List Overview",
   "type": 3,
   "vendor": "",
-  "aliases": ["Einkaufslisten Übersicht"],
+  "aliases": [],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/ShoppingListOverview",
   "parentRequirements": [],
   "childRequirements": [],
