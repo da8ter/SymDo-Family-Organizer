@@ -89,7 +89,14 @@ class SymDoGateway extends IPSModuleStrict
 
         // Verzögert: IPS_ApplyChanges darf nicht aus ApplyChanges heraus laufen.
         if ($this->BridgeImportPending()) {
-            $this->SetTimerInterval('BridgeImport', 1000);
+            try {
+                $this->SetTimerInterval('BridgeImport', 1000);
+            } catch (Throwable $e) {
+                // Timer noch nicht registriert (Modul-Reload ohne Kernel-Neustart, der
+                // Runlevel bleibt dabei KR_READY). Bewusst kein Ersatzpfad: die Übernahme
+                // wartet auf den Neustart, der Knopf im Formular bleibt der Weg.
+                $this->SendDebug('ApplyChanges', 'BridgeImport-Timer fehlt, Uebernahme wartet auf Kernel-Neustart', 0);
+            }
         }
     }
 
@@ -253,18 +260,6 @@ class SymDoGateway extends IPSModuleStrict
             'https://oauth2.googleapis.com/token',
             $postData, 'GKey',
             'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
-            'GoogleTasks'
-        );
-    }
-
-    private function GoogleGetValidAccessToken(): string
-    {
-        return $this->OAuthGetValidAccessToken(
-            'GKey',
-            'GoogleAccessToken', 'GoogleRefreshToken', 'GoogleTokenExpires',
-            'https://oauth2.googleapis.com/token',
-            trim($this->ReadPropertyString('GoogleClientID')),
-            trim($this->ReadPropertyString('GoogleClientSecret')),
             'GoogleTasks'
         );
     }
@@ -442,20 +437,6 @@ class SymDoGateway extends IPSModuleStrict
             $postData, 'MKey',
             'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
             'MicrosoftToDo'
-        );
-    }
-
-    private function MicrosoftGetValidAccessToken(): string
-    {
-        $tenant = $this->MicrosoftGetTenant();
-        return $this->OAuthGetValidAccessToken(
-            'MKey',
-            'MicrosoftAccessToken', 'MicrosoftRefreshToken', 'MicrosoftTokenExpires',
-            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
-            trim($this->ReadPropertyString('MicrosoftClientID')),
-            trim($this->ReadPropertyString('MicrosoftClientSecret')),
-            'MicrosoftToDo',
-            'offline_access Tasks.ReadWrite'
         );
     }
 

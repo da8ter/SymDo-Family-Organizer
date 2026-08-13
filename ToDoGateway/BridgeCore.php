@@ -745,6 +745,11 @@ trait BridgeCore
             if (isset($element['items']) && is_array($element['items'])) {
                 $this->SetFormElementProperty($element['items'], $name, $property, $value);
             }
+            // Auch in Popups absteigen: der Einwilligungsknopf AiPrivacyAccept liegt unter
+            // popup.items eines PopupButton und war ohne diesen Zweig nicht erreichbar.
+            if (isset($element['popup']['items']) && is_array($element['popup']['items'])) {
+                $this->SetFormElementProperty($element['popup']['items'], $name, $property, $value);
+            }
         }
         unset($element);
     }

@@ -247,7 +247,7 @@ trait BridgeImport
     /** Panel für das Konfigurationsformular; leer, sobald nichts mehr zu holen ist. */
     private function GetBridgeImportFormElements(): array
     {
-        $done    = $this->ReadAttributeString('BridgeImportDone');
+        $done    = $this->ReadBridgeImportDone();
         $bridges = $this->LegacyBridgeInstances();
         if ($done === '' && $bridges === []) {
             return [];
