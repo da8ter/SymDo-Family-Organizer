@@ -27,6 +27,14 @@ class SymDoWebApp extends IPSModuleStrict
     /** Wird im 'AiResult'-Branch gesetzt; HandleAiCall erkennt daran eine ausgefallene Antwort. */
     private bool $aiResultSeen = false;
 
+    /**
+     * Gesetzt, wenn ApplyChanges vom Kernelstart kommt und nicht von einem Übernehmen.
+     * Dann darf die gespeicherte Ausblende-Liste NICHT ans Gateway durchgereicht werden:
+     * dort kann inzwischen die App etwas ausgeblendet haben, wovon diese Property nichts
+     * weiß — Durchreichen hieße überschreiben.
+     */
+    private bool $applyFromKernelStart = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -155,9 +163,18 @@ class SymDoWebApp extends IPSModuleStrict
         }
 
         // Haushaltsweit durchreichen: das Häkchen soll überall wirken, nicht nur in
-        // dieser Kachel. Die Bridge ist die maßgebliche Quelle (ihr Attribut steuert
-        // App und Web-App). Neue public-Funktionen gibt es erst nach einem
-        // Kernel-Neustart — bis dahin bleibt es bei der lokalen Wirkung.
+        // dieser Kachel. Das Gateway ist die maßgebliche Quelle (sein Attribut steuert
+        // App und Web-App), deshalb gilt das Durchreichen NUR für ein echtes Übernehmen
+        // im Formular. Beim Kernelstart würde dieselbe Schleife einen inzwischen in der
+        // App gesetzten Zustand mit einer alten Property überschreiben.
+        // Rest: der Reparaturpfad oben ruft IPS_ApplyChanges erneut, und der läuft in
+        // einem neuen Objekt — dort ist das Kennzeichen wieder false. Trifft nur zu,
+        // wenn gleichzeitig ungültige Instanz-IDs in der Property stehen. Eine echte
+        // Delta-Erkennung bräuchte ein eigenes Attribut (Muster LastHiddenIDs) und damit
+        // einen Kernel-Neustart.
+        if ($this->applyFromKernelStart) {
+            return;
+        }
         $gatewayID = $this->GetAppGatewayID();
         if ($gatewayID <= 0 || !function_exists('TGW_SetListHidden')) {
             return;
@@ -171,7 +188,9 @@ class SymDoWebApp extends IPSModuleStrict
     {
         switch ($Message) {
             case IPS_KERNELSTARTED:
+                $this->applyFromKernelStart = true;
                 $this->ApplyChanges();
+                $this->applyFromKernelStart = false;
                 return;
             case VM_UPDATE:
                 // Nicht direkt pushen: 250 ms Fenster sammeln, damit die mehreren
@@ -304,7 +323,13 @@ class SymDoWebApp extends IPSModuleStrict
                 'instanceID' => $inst['id'],
                 'name'       => IPS_GetName($inst['id']) . $suffix,
                 'kind'       => $this->Translate($inst['kind'] === 'shopping' ? 'Shopping list' : 'ToDo list'),
-                'hide'       => $savedHide[$inst['id']] ?? false,
+                // Aus dem ZUSAMMENGEFÜHRTEN Zustand vorbelegen, nicht nur aus der eigenen
+                // Property: beim Übernehmen wird jede Zeile ans Gateway geschrieben, und
+                // ein ungesetztes Häkchen hätte das haushaltsweite Ausblenden stumm
+                // aufgehoben. So entspricht das, was der Nutzer sieht, dem, was
+                // zurückgeschrieben wird.
+                'hide'       => ($savedHide[$inst['id']] ?? false)
+                                || in_array($inst['id'], $gatewayHidden, true),
             ];
         }
 
