@@ -14,6 +14,8 @@
      Kachel einen gruenlichen Rand, den es dort nicht gibt. Der Akzent bleibt dem
      Fokus vorbehalten (.edit-input:focus). */
   --border: color-mix(in srgb, var(--content-color) 14%, transparent);
+  /* Wert der Web-App (--red) — sie faerbt zerstoerende Aktionen damit. */
+  --red:    #ff4d4d;
   --accent: var(--accent-color);
   /* Flächen der Web-App (SymDoWebApp), damit Zeilen, Miniaturen und Mengen-Abzeichen
      dort und hier dieselben Töne haben. --row ist die Zeilenfläche, --surface2 das
@@ -578,19 +580,21 @@ body {
      #favDetail in derselben Rasterregel wie die Einkaufsliste — hier tut es dieser
      eine Behaelter, weil Uebersicht UND Detail in ihn rendern. Suchzeile und
      Leermeldung spannen ueber alle Spalten. */
-  .fav-list-body {
+  /* Beide Favoriten-Bereiche sind Kartenraster — in der Web-App stehen #favMaster
+     und #favDetail in genau dieser Regel neben der Einkaufsliste.
+     align-content: start ist noetig, sonst verteilt das Raster freie Hoehe auf die
+     Zeilen (gemessen: 244px Zeilenhoehe fuer 55px hohe Karten). */
+  .fav-list-body, .fav-detail-body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     column-gap: var(--gap);
     row-gap: 0;
     align-items: start;
-    /* align-content MUSS start sein: seit die Favoriten ein Bereich mit bekannter
-       Hoehe sind, verteilt das Raster sonst die freie Hoehe auf die Zeilen. Gemessen
-       waren es 244/226/226px Zeilenhoehe fuer 55px hohe Karten — riesige Luecken. */
     align-content: start;
   }
-  .fav-list-body > .fav-detail-search,
-  .fav-list-body > .fav-empty { grid-column: 1 / -1; }
+  .fav-detail-body > .fav-detail-search,
+  .fav-list-body > .fav-empty,
+  .fav-detail-body > .fav-empty { grid-column: 1 / -1; }
   /* Genau zwei Artikel: beide teilen sich die Reihe, statt eine Spalte leer zu lassen.
      Hier genügt die Spaltenzahl des Behälters — in der Web-App braucht dasselbe
      Verhalten halbe Spalten (span-half), weil die Liste dort flach ist und die Zeilen
@@ -599,6 +603,7 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
 
 .item-card {
   position: relative;
@@ -935,17 +940,71 @@ body {
    bleiben. .wrap hat unten bewusst kein Polster, damit der Listeninhalt hinter dem
    Glas hindurchlaeuft; dieser Bereich braucht es aber, weil seine Knoepfe sonst
    unter der Leiste laegen. */
+/* Zwei Bereiche wie #favoritesContent in der Web-App: links die Auswahl, rechts der
+   Inhalt. Der Bereich selbst ist der Scroller (wie .list-area) — die Panes sind
+   einfache Blöcke, damit sie nebeneinander gemeinsam scrollen, genau wie dort.
+
+   padding-bottom: var(--content-clear) statt --tab-clear: der Inhalt soll hinter
+   Tab-Leiste und Glas hindurchlaufen und trotzdem vollständig scrollbar sein — das
+   ist die Regel der Liste. Die Knöpfe der Detailansicht liegen jetzt IM Pane und
+   scrollen mit (in der Web-App genauso, .fav-actions). */
 .fav-area {
   display: none;
   flex: 1;
   min-height: 0;
-  flex-direction: column;
-  padding-bottom: var(--tab-clear);
+  padding-bottom: var(--content-clear);
+  margin-right: calc(-1 * (var(--sym-ms) - var(--sb-pad)));
+  padding-right: var(--sb-pad);
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   box-sizing: border-box;
 }
-.fav-area.is-active { display: flex; }
+.fav-area.is-active { display: block; }
 
-/* Kopfzeile des Bereichs — Maße wie die der Blaetter (.overlay-header). */
+/* Schmal ist genau EINER der beiden Bereiche sichtbar — dieselben Selektoren wie
+   #screen-favorites:not(.detail-open) #favDetail in der Web-App. */
+.fav-area:not(.detail-open) #favDetail { display: none; }
+.fav-area.detail-open #favMaster { display: none; }
+
+/* Knöpfe der Detailansicht: gestapelt wie .fav-actions dort. */
+.fav-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0 var(--gap);
+}
+/* Werte der Web-App (.fav-actions button / .destructive): die Hauptaktion auf dem
+   Akzent, die zerstoerende GEFUELLT rot — nicht nur roter Text. */
+.fav-actions button {
+  padding: 11px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.fav-actions button.destructive { background: var(--red); color: #fff; }
+.fav-actions button:active { opacity: .85; }
+
+/* Kopfzeile je Bereich — Maße wie die der Blaetter (.overlay-header). */
+.fav-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
 .fav-head {
   display: flex;
   align-items: center;
@@ -1188,21 +1247,11 @@ body {
 }
 
 /* Favorite list items */
-.fav-list-body {
-  /* flex: 1 — anders als in einem Blatt (dort height: auto) hat .fav-area eine
-     bekannte Hoehe, der Rest gehoert der Liste. */
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
+/* Kein eigener Scroller mehr: das uebernimmt .fav-area, damit die beiden Spalten
+   nebeneinander GEMEINSAM scrollen — wie die Panes in der Web-App, die im Scroller
+   des Bildschirms liegen. Vorher war es ein Kasten mit eigenem overflow. */
+.fav-list-body, .fav-detail-body {
   padding: 4px var(--gap) var(--gap);
-  /* Kein Flex mit gap mehr: die Abstaende kommen aus margin-bottom der Karten (6px),
-     wie in der Liste. Mit beidem zusammen waeren es 14px, und beim Aufloesen einer
-     Zeile bliebe der gap als Luecke stehen. */
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
 }
 
 /* Karte einer Favoritenliste — Aufbau und Werte der Web-App (.fav-row/.fav-badge/
@@ -1358,43 +1407,8 @@ body {
   gap: 8px;
 }
 
-.btn-delete-fav-list {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  border: none;
-  background: var(--surface);
-  color: #c0392b;
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .15s, color .15s;
-}
 
-.btn-delete-fav-list:active {
-  background: #c0392b;
-  color: var(--content-color);
-}
 
-.btn-add-fav-to-cart {
-  flex: 1;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  background: var(--accent);
-  color: var(--content-color);
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  font-family: inherit;
-}
 
 /* Edit item footer */
 .fav-edit-footer {
@@ -1887,6 +1901,46 @@ textarea.edit-input { overflow: hidden; }
   flex-shrink: 0;
   padding: 0 var(--gap) var(--gap);
 }
+
+/* Aktionen der Detailansicht nebeneinander statt gestapelt — wie .fav-actions in der
+   Web-App ab 820px. MUSS wie der Block darunter am Ende des Stylesheets stehen: die
+   Grundregel .fav-actions { flex-direction: column } kommt weiter oben und hat
+   dieselbe Spezifitaet. Im 820er-Block weiter oben blieb sie deshalb wirkungslos —
+   die beiden Knoepfe standen gemessen weiter uebereinander. */
+@media (min-width: 820px) {
+  .fav-actions { flex-direction: row; flex-wrap: wrap; }
+  .fav-actions button { flex: 1 1 45%; }
+}
+
+/* ── Favoriten nebeneinander: Auswahl links, Inhalt rechts ──────────────────
+   Haltepunkt und Werte der Web-App (#favoritesContent bei 1100px).
+
+   MUSS am Ende des Stylesheets stehen: die Grundregeln von .fav-area kommen weiter
+   oben und haben dieselbe Spezifitaet — stand dieser Block davor, gewann dort
+   display: block und die zweite Spalte blieb aus. Gemessen: grid-template-columns
+   war gesetzt, display trotzdem block. Genau davor warnt auch der Kommentar in der
+   Web-App an derselben Regel. */
+@media (min-width: 1100px) {
+  .fav-area.is-active {
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) 1fr;
+    /* Doppelter Spaltenabstand: das sind zwei getrennte Ansichten, kein
+       zusammengehoeriges Kartenraster — der uebliche --gap las sich zu eng. */
+    column-gap: calc(var(--gap) * 2);
+    align-items: start;
+  }
+  /* Beide Spalten immer sichtbar. Dieselben Selektoren wie die schmalen Regeln
+     weiter oben, nur spaeter im Stylesheet — mit schwaecheren gewaenne dort das
+     display: none, weil das :not() eine Klasse mitbringt. */
+  .fav-area:not(.detail-open) #favDetail,
+  .fav-area.detail-open #favMaster { display: block; }
+  /* Ein Zurueck-Pfeil hat nebeneinander keinen Sinn: die Auswahl steht ja links. */
+  #btnFavBack { display: none; }
+  /* Zeigt, welche Liste rechts steht. Als innerer Schatten auf der ZEILE und nicht
+     als outline: die Zeile ist positioniert und wuerde einen Umriss auf den Geraden
+     abdecken — sichtbar blieben nur vier Boegen in den Ecken. */
+  .fav-row.is-open { box-shadow: inset 0 0 0 2px var(--accent); }
+}
   </style>
 </head>
 <body>
@@ -2014,37 +2068,47 @@ textarea.edit-input { overflow: hidden; }
       </div>
     </div>
 
-    <!-- Favoriten: eigener Inhaltsbereich, den die Tab-Leiste umschaltet — kein
-         Dialog mehr. Vorbild ist #screen-favorites in der Web-App. -->
+    <!-- Favoriten: zwei Bereiche wie #favoritesContent in der Web-App — links die
+         Auswahl, rechts der Inhalt. Schmal ist genau einer sichtbar (Zustandsklasse
+         detail-open auf .fav-area), ab 1100px stehen beide nebeneinander. -->
     <div class="fav-area" id="favArea">
-      <div class="fav-head">
-      <span class="overlay-title" id="favOverlayTitle">Favoritenlisten</span>
-      <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
-      <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
-    </div>
-    <div class="fav-rename-form" id="favRenameForm" style="display:none;">
-      <input type="text" class="new-list-input" id="favRenameInput"
-             placeholder="Listenname&#x2026;" autocomplete="off" />
-      <button class="btn-confirm-new-list" id="btnConfirmRename" aria-label="Speichern">&#x2713;</button>
-    </div>
-    <div class="new-list-form" id="newFavListForm">
-      <input type="text" class="new-list-input" id="newFavListInput"
-             placeholder="Listenname&#x2026;" autocomplete="off" />
-      <button class="btn-confirm-new-list" id="btnConfirmNewList" aria-label="Erstellen">&#x2713;</button>
-    </div>
-    <div class="fav-list-body" id="favListBody"></div>
-    <div class="fav-detail-footer" id="favDetailFooter" style="display:none;">
-      <div class="fav-detail-footer-row">
-        <button class="btn-delete-fav-list" id="btnDeleteFavList" aria-label="Liste l&#xF6;schen"></button>
-        <button class="btn-fav-detail-back" id="btnFavDetailBack">Zur&#xFC;ck</button>
-        <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
+
+      <div id="favMaster">
+        <div class="fav-head">
+          <span class="fav-title" id="favMasterTitle">Favoritenlisten</span>
+          <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
+        </div>
+        <div class="new-list-form" id="newFavListForm">
+          <input type="text" class="new-list-input" id="newFavListInput"
+                 placeholder="Listenname&#x2026;" autocomplete="off" />
+          <button class="btn-confirm-new-list" id="btnConfirmNewList" aria-label="Erstellen">&#x2713;</button>
+        </div>
+        <div class="fav-list-body" id="favListBody"></div>
       </div>
-    </div>
-    <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
-      <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
-      <button class="btn-fav-edit-back" id="btnFavEditBack">Zur&#xFC;ck</button>
-      <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
-    </div>
+
+      <div id="favDetail">
+        <div class="fav-head">
+          <button class="btn-fav-detail-back" id="btnFavBack" aria-label="Zur&#xFC;ck"><i class="fa-light fa-chevron-left"></i></button>
+          <span class="fav-title" id="favDetailTitle"></span>
+          <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
+        </div>
+        <div class="fav-rename-form" id="favRenameForm" style="display:none;">
+          <input type="text" class="new-list-input" id="favRenameInput"
+                 placeholder="Listenname&#x2026;" autocomplete="off" />
+          <button class="btn-confirm-new-list" id="btnConfirmRename" aria-label="Speichern">&#x2713;</button>
+        </div>
+        <div class="fav-detail-body" id="favDetailBody"></div>
+        <div class="fav-actions" id="favDetailFooter" style="display:none;">
+          <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
+          <button class="btn-delete-fav-list destructive" id="btnDeleteFavList">Liste l&#xF6;schen</button>
+        </div>
+        <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
+          <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
+          <button class="btn-fav-edit-back" id="btnFavEditBack">Abbrechen</button>
+          <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
+        </div>
+      </div>
+
     </div>
 
     <!-- Print mode overlay -->
@@ -2904,7 +2968,6 @@ function openFavOverlay() {
   favOverlayMode = 'load-list';
   viewingListId  = null;
   editingFavItem = null;
-  document.getElementById('favOverlayTitle').textContent = translate('Favorite lists');
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('newFavListInput').value = '';
   document.getElementById('btnNewFavList').textContent = '+';
@@ -2914,7 +2977,30 @@ function openFavOverlay() {
   document.getElementById('favDetailFooter').style.display = 'none';
   document.getElementById('favEditFooter').style.display = 'none';
   renderFavListBody();
+  showFavDetailPlaceholder();
+  setDetailOpen(false);
   setArea('fav');
+}
+
+/**
+ * Welcher der beiden Bereiche gilt: schmal ist genau einer sichtbar, ab 1100px
+ * stehen beide nebeneinander und die Klasse markiert nur noch, welche Karte gewaehlt
+ * ist. Eine Stelle entscheidet das — die CSS-Regeln haengen daran (wie
+ * #screen-favorites.detail-open in der Web-App).
+ */
+function setDetailOpen(offen) {
+  document.getElementById('favArea').classList.toggle('detail-open', !!offen);
+}
+
+/** Rechte Spalte, solange nichts gewaehlt ist — wie renderFavPane dort. */
+function showFavDetailPlaceholder() {
+  document.getElementById('favDetailTitle').textContent = '';
+  document.getElementById('favDetailBody').innerHTML =
+    `<div class="fav-empty">${escapeHtml(translate('Select a list'))}</div>`;
+  document.getElementById('favDetailFooter').style.display = 'none';
+  document.getElementById('favEditFooter').style.display = 'none';
+  document.getElementById('btnFavRenameList').style.display = 'none';
+  document.getElementById('favRenameForm').style.display = 'none';
 }
 
 function closeFavOverlay() {
@@ -2929,38 +3015,44 @@ function showFavDetail(listId) {
   editingFavItem = null;
   const list = (state.favoriteLists || []).find(l => l.id === listId);
   if (!list) return;
-  document.getElementById('favOverlayTitle').textContent = list.name;
-  document.getElementById('btnNewFavList').style.display = 'none';
+  document.getElementById('favDetailTitle').textContent = list.name;
   document.getElementById('btnFavRenameList').style.display = '';
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('favEditFooter').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = '';
   renderFavDetailBody(list);
+  setDetailOpen(true);
+  markSelectedFavRow(listId);
+}
+
+/** Nebeneinander zeigt ein innerer Akzent-Rahmen, welche Liste rechts steht. */
+function markSelectedFavRow(listId) {
+  document.querySelectorAll('#favListBody .fav-row').forEach(el => {
+    el.classList.toggle('is-open', el.getAttribute('data-list-id') === listId);
+  });
 }
 
 function showFavListView() {
   viewingListId = null;
-  document.getElementById('favOverlayTitle').textContent = translate('Favorite lists');
   document.getElementById('btnNewFavList').textContent = '+';
   document.getElementById('btnNewFavList').style.display = '';
-  document.getElementById('btnFavRenameList').style.display = 'none';
-  document.getElementById('favRenameForm').style.display = 'none';
-  document.getElementById('favDetailFooter').style.display = 'none';
-  document.getElementById('favEditFooter').style.display = 'none';
   renderFavListBody();
+  showFavDetailPlaceholder();
+  setDetailOpen(false);
 }
 
 function openFavItemEdit(listId, item) {
   editingFavItem = { listId, originalName: item.name, category: item.category || '' };
-  document.getElementById('favOverlayTitle').textContent = item.name;
-  document.getElementById('btnNewFavList').style.display = 'none';
+  document.getElementById('favDetailTitle').textContent = item.name;
   document.getElementById('btnFavRenameList').style.display = 'none';
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('favDetailFooter').style.display = 'none';
   document.getElementById('favEditFooter').style.display = '';
-  const body = document.getElementById('favListBody');
+  // Das Formular gehoert in den DETAILbereich — nebeneinander bleibt die Auswahl
+  // links stehen, waehrend rechts bearbeitet wird.
+  const body = document.getElementById('favDetailBody');
   body.innerHTML = '<div class="edit-form">'
     + `<input type="text" class="edit-input" id="favEditName" placeholder="${escapeHtml(translate('Name'))}" autocomplete="off" />`
     + `<input type="text" class="edit-input" id="favEditAmount" placeholder="${escapeHtml(translate('Quantity (e.g. 2x)'))}" autocomplete="off" />`
@@ -3075,8 +3167,8 @@ function confirmFavRename() {
 
 function renderFavDetailBody(list) {
   // Keep title in sync with current list name (e.g. after rename)
-  document.getElementById('favOverlayTitle').textContent = list.name;
-  const body  = document.getElementById('favListBody');
+  document.getElementById('favDetailTitle').textContent = list.name;
+  const body  = document.getElementById('favDetailBody');
   const items = Array.isArray(list.items) ? list.items : [];
 
   let html = `<div class="search-bar fav-detail-search" id="favDetailSearchBar">`
@@ -4180,12 +4272,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('favRenameInput').placeholder       = translate('List name\u2026');
   document.getElementById('newFavListInput').placeholder      = translate('List name\u2026');
   document.getElementById('editNewFavInput').placeholder      = translate('List name\u2026');
-  document.getElementById('btnFavDetailBack').textContent     = translate('Back');
   document.getElementById('btnAddFavToCart').textContent      = translate('Add to shopping list');
   document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
   document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
-  document.getElementById('favOverlayTitle').textContent      = translate('Favorite lists');
+  document.getElementById('favMasterTitle').textContent       = translate('Favorite lists');
   document.getElementById('scannerOverlayTitle').textContent  = translate('Scan barcode');
   document.getElementById('printOverlayTitle').textContent    = translate('Choose print layout');
   document.getElementById('printUltraLabel').textContent      = translate('Ultra Compact');
@@ -4301,7 +4392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') confirmFavRename();
     if (e.key === 'Escape') document.getElementById('favRenameForm').style.display = 'none';
   });
-  document.getElementById('btnFavDetailBack').addEventListener('click', showFavListView);
+  document.getElementById('btnFavBack').addEventListener('click', showFavListView);
 
   document.getElementById('btnAddFavToCart').addEventListener('click', () => {
     if (viewingListId) {
@@ -4317,7 +4408,10 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'Liste enthält keine Artikel');
     }
   });
-  document.getElementById('btnDeleteFavList').innerHTML = TRASH_ICON;
+  // Symbol UND Text, wie .fav-actions in der Web-App ("Liste loeschen"). Vorher war
+  // es ein reiner Icon-Knopf in der Fusszeile.
+  document.getElementById('btnDeleteFavList').innerHTML =
+    TRASH_ICON + ' ' + escapeHtml(translate('Delete list'));
   document.getElementById('btnDeleteFavList').addEventListener('click', () => {
     if (viewingListId) {
       requestAction('DeleteFavoriteList', viewingListId);
