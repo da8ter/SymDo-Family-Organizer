@@ -91,6 +91,12 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeInteger('GoogleLastSync', 0);
         $this->RegisterAttributeInteger('GoogleSyncCursor', 0); // A1: server-clock incremental cursor (max task 'updated')
         $this->RegisterAttributeInteger('GoogleLastFullSync', 0); // R6: last full fetch+merge (periodic reconcile)
+        // Beide standen bisher NUR in ApplyChanges (mit @ stummgeschaltet). Dort ist
+        // RegisterAttribute* wirkungslos: Symcon nimmt Attribute ausschliesslich in
+        // Create() an. Folge war "Attribut ... nicht gefunden" bei jedem Reload und —
+        // schlimmer — eine Migration, die sich nie merken konnte, dass sie gelaufen ist.
+        $this->RegisterAttributeString('CalDAVPendingDeletes', '{}');
+        $this->RegisterAttributeInteger('SyncBackendMigrationDone', 0);
         $this->RegisterAttributeString('GooglePendingDeletes', '{}');
         $this->RegisterAttributeString('GoogleTaskListOptions', '[]');
         $this->RegisterAttributeString('LastGoogleTaskListID', '');
@@ -150,14 +156,10 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->SetStatus(IS_ACTIVE);
 
-        @$this->RegisterPropertyBoolean('AutoSyncOnChange', false);
-        @$this->RegisterPropertyInteger('AutoSyncOnChangeDelay', 3);
-        @$this->RegisterTimer('SyncOnChangeTimer', 0, 'TDL_SyncOnChange($_IPS[\'TARGET\']);');
-        @$this->RegisterTimer('StatisticsTimer', 0, 'TDL_RefreshStatistics($_IPS[\'TARGET\']);');
-
-        @$this->RegisterAttributeString('CalDAVPendingDeletes', '{}');
-        @$this->RegisterAttributeInteger('SyncBackendMigrationDone', 0);
-        @$this->RegisterAttributeInteger('GoogleLastFullSync', 0);
+        // Hier standen sieben Register-Aufrufe mit @ davor — der Versuch, neue
+        // Eigenschaften, Timer und Attribute ohne Kernel-Neustart nachzuruesten. Das
+        // geht nicht: Symcon nimmt sie nur in Create() an, in ApplyChanges warnen sie
+        // und tun nichts. Alle sieben stehen dort, die beiden Attribute seit heute.
 
         // R22: pre-gateway OAuth tokens lived in these child attributes (XOR-obfuscated) and
         // are unused since the gateway split — clear leftovers so refresh tokens no longer
@@ -2258,7 +2260,13 @@ class ToDoList extends IPSModuleStrict
         $googleEnabled = $this->ReadPropertyBoolean('GoogleTasksEnabled');
         $msEnabled = $this->ReadPropertyBoolean('MicrosoftToDoEnabled');
 
-        $migrationDone = (int)$this->ReadAttributeInteger('SyncBackendMigrationDone');
+        // Bis zum naechsten Kernel-Neustart kann das Attribut in bestehenden Instanzen
+        // fehlen; ReadAttribute* liefert dann false. Das darf NICHT als "Migration noch
+        // offen" gelten: sie schriebe sonst bei jedem ApplyChanges Eigenschaften um,
+        // koennte sich das Ergebnis nicht merken und stiesse ueber IPS_ApplyChanges das
+        // naechste ApplyChanges an.
+        $rohwert = @$this->ReadAttributeInteger('SyncBackendMigrationDone');
+        $migrationDone = ($rohwert === false) ? 1 : (int)$rohwert;
         if ($migrationDone === 0) {
             if ($backend === 'local' && ($calEnabled || $googleEnabled || $msEnabled)) {
                 if ($googleEnabled) {
@@ -2269,7 +2277,7 @@ class ToDoList extends IPSModuleStrict
                     $backend = 'caldav';
                 }
             }
-            $this->WriteAttributeInteger('SyncBackendMigrationDone', 1);
+            @$this->WriteAttributeInteger('SyncBackendMigrationDone', 1);
         }
         $wantCalDAV = $backend === 'caldav';
         $wantGoogle = $backend === 'google';

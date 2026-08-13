@@ -985,13 +985,38 @@ class SymDoBridge extends IPSModuleStrict
         return null;
     }
 
+    /**
+     * Ist diese Instanz ansprechbar? Gegatet wird der KERNEL-Runlevel, nicht der
+     * Instanzstatus — derselbe Grund wie in SymDoWebApp::IsInstanceReady(): Symcon
+     * setzt den Status bei der Erzeugung und berechnet ihn nie neu, nach einem
+     * Neustart stehen einwandfrei arbeitende Listen auf IS_CREATING.
+     *
+     * Ohne diese Pruefung rief die Bruecke waehrend eines Modul-Reloads oder im
+     * Hochlauf in Instanzen hinein, deren Schnittstelle noch nicht stand. Im Log stand
+     * dann "Kann Schnittstellen-Instanz nicht erstellen" samt "InstanceInterface is
+     * not available" aus dem angerufenen Modul.
+     */
+    private function IsInstanceReady(int $id): bool
+    {
+        return $id > 0
+            && IPS_InstanceExists($id)
+            && IPS_GetKernelRunlevel() === KR_READY;
+    }
+
     private function GetInstanceRevision(int $id, string $kind): int
     {
-        if ($kind === 'shopping' && function_exists('SL_GetAppRevision')) {
-            return SL_GetAppRevision($id);
+        if (!$this->IsInstanceReady($id)) {
+            return 0;
         }
-        if ($kind === 'todo' && function_exists('TDL_GetAppRevision')) {
-            return TDL_GetAppRevision($id);
+        try {
+            if ($kind === 'shopping' && function_exists('SL_GetAppRevision')) {
+                return SL_GetAppRevision($id);
+            }
+            if ($kind === 'todo' && function_exists('TDL_GetAppRevision')) {
+                return TDL_GetAppRevision($id);
+            }
+        } catch (Throwable $e) {
+            $this->SendDebug('GetAppRevision', $id . ': ' . $e->getMessage(), 0);
         }
         return 0;
     }
