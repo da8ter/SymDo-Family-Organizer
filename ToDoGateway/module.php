@@ -18,7 +18,7 @@ require_once __DIR__ . '/BridgeCore.php';
  * App-Hälfte nicht — die Hook-Pfade sind fest. Deshalb bedient nur die Instanz mit
  * der niedrigsten ID die App; siehe OwnsAppApi().
  */
-class ToDoGateway extends IPSModuleStrict
+class SymDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
     use BridgeImport;
