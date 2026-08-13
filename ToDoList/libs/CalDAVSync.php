@@ -93,7 +93,7 @@ trait CalDAVSync
 
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            $this->SendDebug('CalDAV', 'Sync skipped - no ToDoGateway', 0);
+            $this->SendDebug('CalDAV', 'Sync skipped - no SymDo Gateway', 0);
             return false;
         }
 

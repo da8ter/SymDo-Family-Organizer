@@ -1,7 +1,7 @@
 # ToDoList — Sync-Audit (Microsoft To Do, Google Tasks, CalDAV)
 
 **Stand:** 2026-07-01 · **Re-Audit:** 2026-07-02 (siehe Abschnitt „Re-Audit 2026-07-02" am Ende — enthält Korrekturen zu B5/A6/A3-CalDAV und neue kritische Befunde)
-**Umfang:** `libs/MicrosoftToDoSync.php`, `libs/GoogleTasksSync.php`, `libs/CalDAVSync.php`, `libs/SyncHelper.php`, `libs/OAuthHelper.php`, sync-relevante Teile von `module.php` sowie `ToDoGateway/module.php` + `ToDoGateway/libs/OAuthHelper.php`.
+**Umfang:** `libs/MicrosoftToDoSync.php`, `libs/GoogleTasksSync.php`, `libs/CalDAVSync.php`, `libs/SyncHelper.php`, `libs/OAuthHelper.php`, sync-relevante Teile von `module.php` sowie `SymDoGateway/module.php` + `SymDoGateway/libs/OAuthHelper.php`.
 **Methodik:** Implementierung kartiert → gegen offizielle APIs/RFCs abgeglichen (Microsoft Graph v1.0 To Do, Google Tasks API v1, RFC 4791/6578/5545/4918, OAuth 2.0 RFC 6749) → jeder Befund adversarial gegen den aktuellen Code verifiziert. 44 verifizierte Befunde.
 
 > Google-Befunde: gegen den Code verifiziert + bekanntes API-Verhalten; im Recherche-Log wurden dort keine URLs erfasst. Microsoft/CalDAV/OAuth: gegen live abgerufene Docs/RFCs geprüft.
@@ -24,7 +24,7 @@ Jeder Timer-Tick (bis zu alle 5 Min) lädt/parst die komplette Liste.
 - **Fix:** MS `/tasks/delta` + deltaLink persistieren (+ `@removed`); Google `updatedMin` + periodischer Voll-Reconcile; CalDAV `sync-collection` (RFC 6578) oder mind. `getctag`-Vorabprüfung. **Voraussetzung: A6 zuerst.**
 
 ### A2 — Kein 429/Retry-After/Backoff · KRITISCH (MS/Google), HOCH
-`OAuthHttpRequest` (`ToDoGateway/libs/OAuthHelper.php:58`) gibt nur den Body zurück, verwirft Status + `Retry-After`. 429 → `null` → Lauf bricht ab, fester Timer hämmert im nächsten Tick erneut → verlängert Throttling. Das status-fähige `OAuthHttpRequestMeta` (`:101`) existiert, wird auf API-Pfaden aber nicht genutzt.
+`OAuthHttpRequest` (`SymDoGateway/libs/OAuthHelper.php:58`) gibt nur den Body zurück, verwirft Status + `Retry-After`. 429 → `null` → Lauf bricht ab, fester Timer hämmert im nächsten Tick erneut → verlängert Throttling. Das status-fähige `OAuthHttpRequestMeta` (`:101`) existiert, wird auf API-Pfaden aber nicht genutzt.
 - **Fix:** API-Pfade auf `OAuthHttpRequestMeta` umstellen; bei 429/503/504 `Retry-After` respektieren, Timer auf `max(Retry-After, Intervall)` setzen, transiente vs. permanente Fehler unterscheiden.
 
 ### A3 — Keine ETag/If-Match-Nebenläufigkeitskontrolle (Lost Updates) · HOCH
@@ -35,7 +35,7 @@ ETags werden gespeichert, aber nie als `If-Match` gesendet:
 - **Fix:** Header-Parameter durch den Transport, `If-Match:{etag}` bei PATCH/DELETE, `412` als Konflikt über `ConflictMode`.
 
 ### A4 — OAuth: 401 löst keinen Refresh+Retry aus · KRITISCH
-`OAuthGetValidAccessToken` (`ToDoGateway/libs/OAuthHelper.php:266`) refresht nur zeitbasiert. Vor Ablauf serverseitig invalidiertes Token → jeder Call still `null` bis zum Ablauf (~1 h), ohne Fehler und ohne Erholung im Lauf.
+`OAuthGetValidAccessToken` (`SymDoGateway/libs/OAuthHelper.php:266`) refresht nur zeitbasiert. Vor Ablauf serverseitig invalidiertes Token → jeder Call still `null` bis zum Ablauf (~1 h), ohne Fehler und ohne Erholung im Lauf.
 - Zusatz (HOCH): `invalid_grant` beim Refresh (`:227`) nicht von transienten Fehlern unterschieden; Tokens nicht gelöscht, `IsConnected` prüft nur „Refresh-Token nicht leer" → UI zeigt dauerhaft „Connected" trotz toter Verbindung.
 - Zusatz (MITTEL): `expires == 0`-Guard (`:269` `$expires > 0 && time() >= $expires`) deaktiviert Refresh bei frischem/migriertem Zustand.
 - **Fix:** Bei 401 erzwungener Refresh + 1 Retry; `invalid_grant` → Tokens löschen + `ReauthorizationRequired`-Flag (sichtbar in `IsConnected`/Formular); Refresh auch bei `expires <= 0`.
@@ -93,7 +93,7 @@ Google/MS markieren ein Item als serverseitig gelöscht, sobald die ID in der Li
 
 ## E. Sicherheit & Sonstiges
 
-- **Token-„Verschlüsselung" ist nur XOR** (`ToDoGateway/libs/OAuthHelper.php:7`): `base64(token)` XOR `'TDL_'+InstanceID+prefix`. Schlüssel nicht geheim → jeder mit Datei-/Backup-Zugriff kann live Refresh-Tokens extrahieren. Empfehlung: Klartext in Attributen (IPS-Store als Trust-Boundary dokumentieren) **oder** echte AEAD (OpenSSL/libsodium) mit nicht-ableitbarem Schlüssel.
+- **Token-„Verschlüsselung" ist nur XOR** (`SymDoGateway/libs/OAuthHelper.php:7`): `base64(token)` XOR `'TDL_'+InstanceID+prefix`. Schlüssel nicht geheim → jeder mit Datei-/Backup-Zugriff kann live Refresh-Tokens extrahieren. Empfehlung: Klartext in Attributen (IPS-Store als Trust-Boundary dokumentieren) **oder** echte AEAD (OpenSSL/libsodium) mit nicht-ableitbarem Schlüssel.
 - **Timeouts:** fester 30s/15s-Read-Timeout, kein Connect-Timeout, kein Retry (`OAuthHelper.php:80`).
 - **On-Change-Debounce:** Änderung während laufendem MS/Google-Sync kann bis zum nächsten Intervall stranden (kein Trailing-Re-Arm wie bei CalDAV) (`module.php` SyncOnChange).
 
@@ -112,7 +112,7 @@ Google/MS markieren ein Item als serverseitig gelöscht, sobald die ID in der Li
 
 ## Umsetzungsstatus
 
-- [x] **A4 — OAuth-Refresh-Robustheit** (2026-07-01, `ToDoGateway`)
+- [x] **A4 — OAuth-Refresh-Robustheit** (2026-07-01, `SymDoGateway`)
   - `OAuthGetValidAccessToken`: refresht auch bei `expires<=0` (wenn Refresh-Token vorhanden).
   - `OAuthRefreshToken`: nutzt `OAuthHttpRequestMeta`; `invalid_grant` (HTTP 400/401) → Tokens löschen (→ `IsConnected` = false) + Warnung ins Meldungs-Log; 5xx/Netz = transient, Tokens bleiben; `invalid_client`/`unauthorized_client` löschen NICHT (Secret-Problem).
   - Neu `OAuthAuthorizedRequest`: 401 → erzwungener Refresh → **ein** Retry. `Google-/MicrosoftApiRequest` nutzen es.
@@ -185,7 +185,7 @@ Google/MS markieren ein Item als serverseitig gelöscht, sobald die ID in der Li
 | # | Backend | Befund | Ort |
 |---|---|---|---|
 | R4 | MS + Google | **`pending_`-Strandung:** Schlägt der POST eines neuen Tasks fehl (Throttle-Fenster, Timeout, 5xx), bleibt die im Merge per Referenz zugewiesene `pending_…`-ID persistiert. Der nächste Merge queued sie **nie wieder**: der `''`-Zweig matcht nicht mehr, der Absence-Zweig schließt `pending_` explizit aus → `continue` ohne Aktion. Task erreicht den Server nie; zudem hält das Item `HasPendingWork` dauerhaft `true` → der A1-Idle-Skip ist permanent tot. Unabhängig für beide Backends gefunden. Fix: `pending_`-Items im Merge erneut in `toUpload` | MS `:787-802`, GO `:407-432` |
-| R5 | Gateway | **OAuth-`state` wird nie validiert:** `state` wird beim Authorize erzeugt (GW:89/293), aber `ProcessHookData` liest nur `code`/`error` → Login-CSRF/Session-Fixation (RFC 6749 §10.12): per untergeschobenem Callback bindet ein Angreifer SEIN Konto ans Gateway; alle lokalen Items syncen ab dann in die Liste des Angreifers. Fix: `state` persistieren, im Callback einmalig + zeitbegrenzt prüfen | `ToDoGateway/module.php:770-799` |
+| R5 | Gateway | **OAuth-`state` wird nie validiert:** `state` wird beim Authorize erzeugt (GW:89/293), aber `ProcessHookData` liest nur `code`/`error` → Login-CSRF/Session-Fixation (RFC 6749 §10.12): per untergeschobenem Callback bindet ein Angreifer SEIN Konto ans Gateway; alle lokalen Items syncen ab dann in die Liste des Angreifers. Fix: `state` persistieren, im Callback einmalig + zeitbegrenzt prüfen | `SymDoGateway/module.php:770-799` |
 | R6 | Google | **A1-Boundary-Echo — Idle-Skip feuert nie:** Cursor = Sekunden-Floor von max(`updated`); `updatedMin` ist inklusiv (Code-Annahme selbst) → der Cursor-Task matcht die Probe **immer** → nie `count === 0` → jeder Tick = Probe **plus** Voll-Fetch = mehr Requests als vor A1 (Netto-Regression, kein Datenrisiko). Fix: `updatedMin = Cursor + 1s` (+ periodischer Voll-Reconcile) | GO `:197-210, 253-258, 288-292, 335-338` |
 | R7 | CalDAV | **Konfliktpfad übernimmt Server-ETag nicht:** `local_wins`/`newest_wins`-lokal gibt `$Local` mit altem ETag zurück → PUT `If-Match` → 412 → Upload scheitert → `localModified` bleibt → identischer Konflikt im nächsten Lauf → **Endlos-412, lokale Änderung erreicht den Server nie** (dauerhafte Divergenz). Fix: wie bei MS/Google den Server-ETag bei beabsichtigtem Overwrite übernehmen | `libs/CalDAVSync.php:593-611, 649-651` |
 | R8 | CalDAV | **Escaping doppelt + Unescape auf Rohtext:** `CalDAVEscapeText` ersetzt `\` **zuletzt** → `\n`/`\,`/`\;` werden zu `\\n`/`\\,`/`\\;` (RFC-5545-invalide; Apple Reminders/Tasks.org/Thunderbird zeigen literale `\n`). Gegenstück: `CalDAVMaybeUnescapeText` läuft bei Merge (`:538-539`) und Upload (`:721-722`) auf **nie escapten lokalen** Texten → `C:\notes` wird zu `C:` + Zeilenumbruch + `otes`. Empirisch verifiziert. Fix: `\` zuerst escapen; Unescape nur auf Wire-Daten | `libs/CalDAVSync.php:777-802` |

@@ -15,7 +15,7 @@ trait GoogleTasksSync
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            $this->SendDebug('GoogleTasks', 'No ToDoGateway connected', 0);
+            $this->SendDebug('GoogleTasks', 'No SymDo Gateway connected', 0);
             return null;
         }
         return TGW_GoogleApiRequest($gw, $Method, $Endpoint, $Body, $Headers);

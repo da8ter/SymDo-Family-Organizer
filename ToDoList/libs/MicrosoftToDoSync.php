@@ -15,7 +15,7 @@ trait MicrosoftToDoSync
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            $this->SendDebug('MicrosoftToDo', 'No ToDoGateway connected', 0);
+            $this->SendDebug('MicrosoftToDo', 'No SymDo Gateway connected', 0);
             return null;
         }
         return TGW_MicrosoftApiRequest($gw, $Method, $Endpoint, $Body, $Headers);
