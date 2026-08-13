@@ -532,7 +532,8 @@ class ToDoList extends IPSModuleStrict
         return json_encode([
             'revision' => $revision,
             'kind'     => 'todo',
-            'state'    => $this->BuildStatePayload(),
+            // Ohne Avatare: die REST-Clients holen die Nutzer aus /v1/discovery.
+            'state'    => $this->BuildStatePayload(false),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
@@ -557,7 +558,7 @@ class ToDoList extends IPSModuleStrict
             'ok'       => $ok,
             'revision' => $this->ReadAttributeInteger('AppRevision'),
             'kind'     => 'todo',
-            'state'    => $this->BuildStatePayload(),
+            'state'    => $this->BuildStatePayload(false),
         ];
         if ($error !== null) {
             $result['error'] = $error;
@@ -2144,7 +2145,14 @@ class ToDoList extends IPSModuleStrict
         return (int)mktime($hour, $minute, $second, $month, $day, $year);
     }
 
-    private function BuildStatePayload(): array
+    /**
+     * @param bool $WithUsers Avatare mitliefern. Nur die Symcon-Kachel liest sie; über die
+     *                        REST-API holt sich jeder Client die Nutzer aus /v1/discovery
+     *                        (iOS cacht sie im SyncCoordinator, die Web-App verwirft das
+     *                        Feld). Gemessen sind die Avatare 28 KB pro Antwort — bei einer
+     *                        kurzen Liste über 98 % der Nutzlast.
+     */
+    private function BuildStatePayload(bool $WithUsers = true): array
     {
         $sort = $this->GetSortPrefs();
         $items = $this->LoadItems();
@@ -2156,7 +2164,7 @@ class ToDoList extends IPSModuleStrict
             }
         }
         unset($it);
-        return [
+        $payload = [
             'type'  => 'state',
             'items' => $items,
             'notificationLeadTimeDefault' => $this->ReadPropertyInteger('NotificationLeadTime'),
@@ -2174,9 +2182,12 @@ class ToDoList extends IPSModuleStrict
             'showDeleteButton' => $this->ReadPropertyBoolean('ShowDeleteButton'),
             'showEditButton' => $this->ReadPropertyBoolean('ShowEditButton'),
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
-            'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks'),
-            'users' => $this->GetTileUsers()
+            'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
         ];
+        if ($WithUsers) {
+            $payload['users'] = $this->GetTileUsers();
+        }
+        return $payload;
     }
 
     /**
