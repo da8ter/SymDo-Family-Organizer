@@ -1656,27 +1656,6 @@ textarea.edit-input { overflow: hidden; }
 
 .btn-edit-back:active { opacity: .85; }
 
-.btn-edit-delete {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  border: none;
-  background: var(--surface);
-  color: #c0392b;
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .15s, color .15s;
-}
-.btn-edit-delete:active {
-  background: #c0392b;
-  color: var(--content-color);
-}
 
 .btn-save-edit {
   flex: 1;
@@ -1995,7 +1974,6 @@ textarea.edit-input { overflow: hidden; }
         </div>
         <div class="edit-footer">
           <button class="btn-edit-back" id="btnEditBack">Zur&#xFC;ck</button>
-          <button class="btn-edit-delete" id="btnEditDelete" aria-label="Artikel l&#xF6;schen" style="display:none;"></button>
           <button class="btn-save-edit" id="btnSaveEdit">Speichern</button>
         </div>
       </div>
@@ -4041,8 +4019,6 @@ function openEditOverlay(item, showFavPicker) {
 
   document.getElementById('editOverlayTitle').textContent =
     editingItemId ? translate('Edit item') : translate('New item');
-  // Trash button only when editing an existing item (not when adding)
-  document.getElementById('btnEditDelete').style.display = editingItemId ? '' : 'none';
   openOverlay('editOverlay');
   document.getElementById('editName').focus({ preventScroll: true });
 }
@@ -4200,18 +4176,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Edit overlay
   document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
   document.getElementById('btnSaveEdit').addEventListener('click', saveEdit);
-  document.getElementById('btnEditDelete').innerHTML = TRASH_ICON;
-  document.getElementById('btnEditDelete').addEventListener('click', () => {
-    if (editingItemId) {
-      const id = editingItemId;
-      const card = document.querySelector(`.item-card[data-id="${CSS.escape(id)}"]`);
-      closeEditOverlay();
-      // Erst schliessen, dann aufloesen — sonst liegt das Overlay noch darueber.
-      dissolveCard(card, () => requestAction('DeleteItem', id));
-      return;
-    }
-    closeEditOverlay();
-  });
   document.getElementById('btnEditNewFavList').addEventListener('click', () => {
     const input = document.getElementById('editNewFavInput');
     input.style.display = input.style.display === 'none' ? '' : 'none';
