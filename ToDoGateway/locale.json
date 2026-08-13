@@ -137,7 +137,8 @@
       "Answered with HTTP %d, but this is not a SymDo Bridge endpoint. Does the URL point at this Symcon installation?": "Antwortet mit HTTP %d, ist aber kein SymDo-Bridge-Endpunkt. Zeigt die URL auf diese Symcon-Installation?",
       "SymDo Gateway": "SymDo Gateway",
       "Imported from instance #%1$d: %2$d settings, %3$d avatars, %4$d paired devices. Instance #%1$d can now be deleted.": "Aus Instanz #%1$d übernommen: %2$d Einstellungen, %3$d Avatare, %4$d gekoppelte Geräte. Instanz #%1$d kann jetzt gelöscht werden.",
-      "SymDo Bridge instance #%d found. Import takes over users, avatars, AI settings and paired devices.": "SymDo-Bridge-Instanz #%d gefunden. Die Übernahme holt Nutzer, Avatare, KI-Einstellungen und die gekoppelten Geräte herüber."
+      "SymDo Bridge instance #%d found. Import takes over users, avatars, AI settings and paired devices.": "SymDo-Bridge-Instanz #%d gefunden. Die Übernahme holt Nutzer, Avatare, KI-Einstellungen und die gekoppelten Geräte herüber.",
+      "This instance only works as a sync broker. The app API — pairing, users and AI analysis — runs on instance #%d.": "Diese Instanz arbeitet nur als Sync-Broker. Die App-API — Kopplung, Nutzer und KI-Analyse — läuft auf Instanz #%d."
     },
     "en": {
       "ToDo Gateway": "ToDo Gateway",

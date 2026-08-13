@@ -81,9 +81,16 @@ trait BridgeImport
         return $ids;
     }
 
+    /**
+     * Deckt beide Aufrufer ab — ApplyChanges und den öffentlichen Timer-Einstieg. Der
+     * Eigentums-Test steht bewusst hier: ein zweites Gateway darf den Bestand nicht an
+     * sich ziehen, sonst landen Nutzer und Geräte auf einer Instanz, die die App nicht
+     * bedient.
+     */
     private function BridgeImportPending(): bool
     {
-        return $this->ReadBridgeImportDone() === ''
+        return $this->AppApiOwnerID() === $this->InstanceID
+            && $this->ReadBridgeImportDone() === ''
             && $this->LegacyBridgeInstances() !== [];
     }
 

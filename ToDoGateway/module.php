@@ -130,9 +130,15 @@ class SymDoGateway extends IPSModuleStrict
      */
     private function OwnsAppApi(): bool
     {
+        return $this->AppApiOwnerID() === $this->InstanceID;
+    }
+
+    /** @return int Instanz, die die App bedient; 0, wenn keine ermittelbar ist. */
+    private function AppApiOwnerID(): int
+    {
         $ids = IPS_GetInstanceListByModuleID(self::MODULE_GUID);
         sort($ids);
-        return ((int)($ids[0] ?? 0)) === $this->InstanceID;
+        return (int)($ids[0] ?? 0);
     }
 
     protected function ProcessHookData(): void
@@ -152,13 +158,30 @@ class SymDoGateway extends IPSModuleStrict
         // form.json traegt die App-Haelfte. Symcon mergt NICHT: ist
         // GetConfigurationForm ueberschrieben, gewinnt die Methode vollstaendig —
         // die Datei muss also selbst gelesen werden.
-        $app = json_decode((string)@file_get_contents(__DIR__ . '/form.json'), true);
-        $appElements = (is_array($app) && isset($app['elements']) && is_array($app['elements']))
-            ? $app['elements']
-            : [];
+        $owner   = $this->AppApiOwnerID();
+        $isOwner = ($owner === 0 || $owner === $this->InstanceID);
+        if (!$isOwner) {
+            // Zweites Gateway: die App-Panels gehören hier nicht hin. Kopplung, Nutzer
+            // und KI wirken ausschließlich auf der bedienenden Instanz — Knöpfe, die
+            // hier ins Leere griffen, sind schlimmer als keine.
+            $appElements = [[
+                'type'    => 'Label',
+                'caption' => sprintf(
+                    $this->Translate('This instance only works as a sync broker. The app API — pairing, users and AI analysis — runs on instance #%d.'),
+                    $owner
+                ),
+            ]];
+            $importElements = [];
+        } else {
+            $app = json_decode((string)@file_get_contents(__DIR__ . '/form.json'), true);
+            $appElements = (is_array($app) && isset($app['elements']) && is_array($app['elements']))
+                ? $app['elements']
+                : [];
+            $importElements = $this->GetBridgeImportFormElements();
+        }
 
         $elements = array_merge(
-            $this->GetBridgeImportFormElements(),
+            $importElements,
             $appElements,
             [
                 $this->GetGoogleFormElements(),
@@ -168,7 +191,11 @@ class SymDoGateway extends IPSModuleStrict
             $this->GetDonationFormElements()
         );
 
-        $this->BridgeFormOverrides($elements);
+        // Nur auf der bedienenden Instanz: die Überschreibungen fassen Felder an, die
+        // hier gar nicht stehen, und AiPrivacyStorable() prüft mit einer Schreibsonde.
+        if ($isOwner) {
+            $this->BridgeFormOverrides($elements);
+        }
 
         return json_encode(['elements' => $elements], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
