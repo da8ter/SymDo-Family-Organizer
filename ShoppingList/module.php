@@ -415,7 +415,7 @@ class ShoppingList extends IPSModuleStrict
             case 'ReportVisuTheme':
                 // Stiller Speicher (kein SendState): Die Kachel meldet die
                 // CSS-Variablen der Visu, die SymDo-App holt sie über die
-                // AppBridge-Discovery ab.
+                // Gateway-Discovery ab.
                 $data = json_decode((string)$Value, true);
                 if (!is_array($data)) {
                     return;
@@ -653,7 +653,7 @@ class ShoppingList extends IPSModuleStrict
 
     /**
      * Von der Kachel gemeldete Visu-Farben ({"dark":{accent,content,card},
-     * "light":{...}}) — von der AppBridge in der Discovery ausgeliefert.
+     * "light":{...}}) — vom Gateway in der Discovery ausgeliefert.
      */
     public function GetVisuTheme(): string
     {

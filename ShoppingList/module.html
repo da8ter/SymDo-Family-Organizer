@@ -2257,7 +2257,7 @@ function escapeHtml(s) {
 const store = {
   users: [],
   defaultUserID: '',
-  bridgeAvailable: false,
+  gatewayAvailable: false,
   aiEnabled: false,
   // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
   // nichts verschwinden.
@@ -2273,7 +2273,7 @@ const store = {
 /* ── Kachel-Adapter ────────────────────────────────────────────────────────────
    Diese Datei IST die Web-App, wortgleich uebernommen — damit die Einkaufsliste in
    der Kachel genauso aussieht und sich genauso verhaelt. Sie laeuft hier aber in der
-   Kachel EINER ShoppingList-Instanz statt an der Bruecke:
+   Kachel EINER ShoppingList-Instanz statt am Gateway:
 
    - kein Payload mit mehreren Instanzen, sondern der Zustand dieser einen Liste,
    - kein Call-Relay mit instanceID, sondern requestAction direkt an diese Instanz,
@@ -2291,8 +2291,8 @@ function kachelZustand(daten) {
   const bilder = daten.availableImages || {};
   return {
     type: 'state',
-    users: [], defaultUserID: '', bridgeAvailable: false,
-    // Keine KI in der Kachel: sie lief in der Web-App ueber die Bruecke.
+    users: [], defaultUserID: '', gatewayAvailable: false,
+    // Keine KI in der Kachel: sie lief in der Web-App ueber das Gateway.
     aiEnabled: false,
     tabs: { dashboard: false, shopping: true, todos: false },
     hiddenIDs: [],
@@ -2330,7 +2330,7 @@ function aiPost(path, payload) {
     return fetch(base + path, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
       .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })));
   }
-  // In DIESER Kachel gibt es keine Bruecke: das ShoppingList-Modul kennt den Ident
+  // In DIESER Kachel gibt es kein Gateway: das ShoppingList-Modul kennt den Ident
   // 'AiCall' nicht und wirft "Ungueltiger Ident" — gemeldet beim Auswaehlen einer
   // Favoritenliste MIT Rezeptbild, weil die Web-App dort die Medienart vorab holt
   // (prefetchMediaType). Deshalb hier still scheitern statt zu relayen; die Aufrufer
@@ -2853,7 +2853,7 @@ function handleMessage(data) {
   }
   if (!data || typeof data !== 'object') return;
   // Die Kachel bekommt den Zustand ihrer Liste flach (items, favoriteLists, …), die
-  // Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: die Bruecke
+  // Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: das Gateway
   // schickt an dieser Stelle instances/states.
   if (data.type === 'state' && Array.isArray(data.items)) {
     data = kachelZustand(data);
@@ -2866,7 +2866,7 @@ function handleMessage(data) {
   if (data.type === 'state') {
     store.users = data.users || [];
     store.defaultUserID = data.defaultUserID || '';
-    store.bridgeAvailable = !!data.bridgeAvailable;
+    store.gatewayAvailable = !!data.gatewayAvailable;
     store.aiEnabled = !!data.aiEnabled;
     store.tabs = normalizeTabs(data.tabs);
     store.hiddenIDs = data.hiddenIDs || [];
@@ -2904,7 +2904,7 @@ function handleMessage(data) {
   } else if (data.type === 'meta') {
     store.instances = data.instances || [];
     store.hiddenIDs = data.hiddenIDs || [];
-    store.bridgeAvailable = !!data.bridgeAvailable;
+    store.gatewayAvailable = !!data.gatewayAvailable;
     store.tabs = normalizeTabs(data.tabs);
     applyTabVisibility();
     for (const key of Object.keys(store.states)) {
@@ -5137,7 +5137,7 @@ function renderFavList(el, st, detail) {
   }
   html += `<div class="fav-actions" data-key="favactions">` +
     // "Rezept oeffnen" bleibt der Web-App vorbehalten (so gewuenscht). Es braucht fuer
-    // Bilder und PDFs ausserdem die Medien-Route der Bruecke, die diese Kachel nicht
+    // Bilder und PDFs ausserdem die Medien-Route des Gateways, die diese Kachel nicht
     // hat. Wollte man ihn hier haben, ginge nur der Fall detail.url (ein normaler
     // Link) — der mediaId-Fall nicht.
     '' +
@@ -6490,8 +6490,8 @@ document.addEventListener('DOMContentLoaded', () => {
   todoAdd.addEventListener('click', quickAdd);
   document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
 
-  // ── KI: Foto → Aufgaben (Bridge leitet das Foto an die konfigurierte KI weiter) ──
-  // KI-Buttons zeigen, wenn der Bridge-Schalter „aiEnabled" an ist — Standalone
+  // ── KI: Foto → Aufgaben (das Gateway leitet das Foto an die konfigurierte KI weiter) ──
+  // KI-Buttons zeigen, wenn der Gateway-Schalter „aiEnabled" an ist — Standalone
   // (window.__SYMDO__) UND Visu-Kachel (Flag im State). applyAiEnabled() blendet
   // beide Scan-Buttons je nach Quelle ein/aus (in der Kachel nach dem State-Push).
   const todoScan = document.getElementById('btnTodoScan');
@@ -6540,7 +6540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bp) bp.style.display = 'none';
   }
 
-  // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Bridge-KI + Review-Overlay wie ToDo. ──
+  // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Gateway-KI + Review-Overlay wie ToDo. ──
   const shopScan = document.getElementById('btnShopScan');
   const shopScanInput = document.getElementById('shopScanInput');
   document.getElementById('aiSourceTitle').textContent = translate('Scan recipe or photo');
@@ -6666,7 +6666,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     // Die Kategorien der GEWAEHLTEN Liste mitschicken: nur hier ist bekannt, wohin
-    // die Artikel danach wandern. Die Bruecke haelt das Modell darauf fest, sonst
+    // die Artikel danach wandern. Das Gateway haelt das Modell darauf fest, sonst
     // erfindet es Kategorien, die es in der Liste nicht gibt (siehe
     // AiAllowedCategories). Ohne diesen Schluessel nimmt sie die Vereinigung aller
     // Einkaufslisten — richtig, aber unschaerfer.
@@ -7014,7 +7014,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Visu-Theme-Reporter (NUR als Kachel in der Visu, nicht als Web-App) ──
   // Die Visu injiziert --accent-color/--content-color/--card-color; serverseitig
   // gibt es dafür keine API. Als Kachel liest die UI sie aus und meldet sie still
-  // (ReportVisuTheme) — die AppBridge liefert sie App/Web-App via Discovery aus.
+  // (ReportVisuTheme) — das Gateway liefert sie App/Web-App via Discovery aus.
   // window.__SYMDO__ existiert nur im Web-App-Kontext (Adapter) → dann NICHT melden.
   if (!window.__SYMDO__) {
     const themeToHex = (value) => {

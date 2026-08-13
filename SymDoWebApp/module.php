@@ -64,7 +64,7 @@ class SymDoWebApp extends IPSModuleStrict
         // Zuletzt gemeldete Hidden-IDs: erkennt Sichtbarkeits-Änderungen im Poll
         $this->RegisterAttributeString('LastHiddenIDs', '[]');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
-        // die AppBridge liefert sie der SymDo-App/Web-App über die Discovery aus.
+        // das Gateway liefert sie der SymDo-App/Web-App über die Discovery aus.
         $this->RegisterAttributeString('VisuTheme', '{}');
 
         // Entprellt VM_UPDATE: die Quell-Module schreiben 2-3 Stat-Variablen pro
@@ -115,7 +115,7 @@ class SymDoWebApp extends IPSModuleStrict
 
     /**
      * Repariert die Zeilen der Formular-Liste und trägt die Ausblendungen in die
-     * Bridge nach.
+     * Gateway nach.
      *
      * Hintergrund: Die Symcon-Formularoberfläche schreibt beim Speichern nur Spalten
      * zurück, die eine `edit`-Definition haben — bei dieser Liste also allein `hide`.
@@ -220,7 +220,7 @@ class SymDoWebApp extends IPSModuleStrict
                 $this->HandleAiCall((string)$value);
                 return;
             case 'AiResult':
-                // Rückkanal von der AppBridge → an die Kachel weiterreichen
+                // Rückkanal vom Gateway → an die Kachel weiterreichen
                 $this->aiResultSeen = true;
                 $r = json_decode((string)$value, true);
                 if (is_array($r)) {
@@ -246,7 +246,7 @@ class SymDoWebApp extends IPSModuleStrict
                 return;
             case 'ReportVisuTheme':
                 // Stiller Speicher: die Kachel meldet die CSS-Variablen der Visu,
-                // die AppBridge liefert sie der App/Web-App über die Discovery aus.
+                // das Gateway liefert sie der App/Web-App über die Discovery aus.
                 $data = json_decode((string)$value, true);
                 if (!is_array($data)) {
                     return;
@@ -274,7 +274,7 @@ class SymDoWebApp extends IPSModuleStrict
 
     /**
      * Von der Kachel gemeldete Visu-Farben ({"dark":{accent,content,card},
-     * "light":{...}}) — von der AppBridge in der Discovery ausgeliefert.
+     * "light":{...}}) — vom Gateway in der Discovery ausgeliefert.
      */
     public function GetVisuTheme(): string
     {
@@ -288,7 +288,7 @@ class SymDoWebApp extends IPSModuleStrict
             $form = ['elements' => []];
         }
 
-        // Benutzer-Optionen aus der SymDo Bridge
+        // Benutzer-Optionen aus dem SymDo Gateway
         $options  = [['caption' => $this->Translate('No user'), 'value' => '']];
         $gatewayID = $this->GetAppGatewayID();
         if ($gatewayID > 0 && function_exists('TGW_GetUsers')) {
@@ -336,7 +336,7 @@ class SymDoWebApp extends IPSModuleStrict
         $this->SetFormValues($form['elements'], 'DefaultUserID', 'options', $options);
         $this->SetFormValues($form['elements'], 'Lists', 'values', $values);
         if ($gatewayID <= 0) {
-            $this->SetFormValues($form['elements'], 'BridgeHint', 'visible', true);
+            $this->SetFormValues($form['elements'], 'GatewayHint', 'visible', true);
         }
 
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -511,7 +511,7 @@ class SymDoWebApp extends IPSModuleStrict
             'type'            => 'state',
             'users'           => $this->GetUsers(),
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
-            'bridgeAvailable' => $gatewayID > 0,
+            'gatewayAvailable' => $gatewayID > 0,
             'aiEnabled'       => ($gatewayID > 0 ? (bool)@IPS_GetProperty($gatewayID, 'AiEnabled') : false),
             'tabs'            => $this->GetVisibleTabs(),
             'hiddenIDs'       => $hiddenIDs,
@@ -575,7 +575,7 @@ class SymDoWebApp extends IPSModuleStrict
     /**
      * Entschlackt einen Instanz-State fürs Aggregat: Bild-Maps werden EINMAL
      * top-level gehoisted (identische Asset-Basis aller Einkaufslisten), die
-     * Todo-Benutzerliste kommt autoritativ von der Bridge.
+     * Todo-Benutzerliste kommt autoritativ vom Gateway.
      *
      * @param array<string, mixed> $state
      * @param array<string, mixed> $images
@@ -617,7 +617,7 @@ class SymDoWebApp extends IPSModuleStrict
     }
 
     // ---------------------------------------------------------------------
-    // Bridge (Benutzer, haushaltsweites Hidden-Flag) — tolerant bei Abwesenheit
+    // Gateway (Benutzer, haushaltsweites Hidden-Flag) — tolerant bei Abwesenheit
     // ---------------------------------------------------------------------
 
     /**
@@ -693,7 +693,7 @@ class SymDoWebApp extends IPSModuleStrict
         return $result;
     }
 
-    /** @return int[] Bridge-Ausblendungen (App, haushaltsweit) ∪ Kachel-Ausblendungen */
+    /** @return int[] Gateway-Ausblendungen (App, haushaltsweit) ∪ Kachel-Ausblendungen */
     private function GetAllHiddenIDs(): array
     {
         return array_values(array_unique(array_merge($this->GetGatewayHiddenIDs(), $this->GetTileHiddenIDs())));
@@ -748,7 +748,7 @@ class SymDoWebApp extends IPSModuleStrict
     }
 
     /**
-     * KI-Relay für die Kachel: leitet {path,payload,txn} an die AppBridge weiter
+     * KI-Relay für die Kachel: leitet {path,payload,txn} an das Gateway weiter
      * (TGW_AiRelay) und schickt das Ergebnis als 'aiResult'-Nachricht zur Kachel
      * zurück. So funktioniert die KI-Analyse auch ohne REST-Token.
      */
@@ -760,20 +760,20 @@ class SymDoWebApp extends IPSModuleStrict
         }
         $txn      = (string)($req['txn'] ?? '');
         $gatewayID = $this->GetAppGatewayID();
-        // IsInstanceReady prüfen: bei inaktiver/veralteter Bridge gibt
+        // IsInstanceReady prüfen: bei inaktivem/veraltetem Gateway gibt
         // IPS_RequestAction nur eine PHP-Warning aus (keine Throwable), es käme
         // also nie ein AiResult und das txn-Promise der Kachel würde ewig warten.
         if ($gatewayID > 0 && $this->IsInstanceReady($gatewayID)) {
             $this->aiResultSeen = false;
             try {
-                // Bridge extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
+                // Das Gateway extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
                 IPS_RequestAction($gatewayID, 'AiTileRequest', json_encode([
                     'path'    => (string)($req['path'] ?? ''),
                     'payload' => $req['payload'] ?? [],
                     'txn'     => $txn,
                     'sdwa'    => $this->InstanceID,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                // Das Relay ist synchron: die Bridge pusht ihr AiResult im selben
+                // Das Relay ist synchron: das Gateway pusht sein AiResult im selben
                 // Aufruf. Kam keins, ist die Antwort ausgefallen → Fehler melden.
                 if ($this->aiResultSeen) {
                     return;
@@ -884,7 +884,7 @@ class SymDoWebApp extends IPSModuleStrict
             'type'            => 'meta',
             'instances'       => $instances,
             'hiddenIDs'       => $hiddenIDs,
-            'bridgeAvailable' => $this->GetAppGatewayID() > 0,
+            'gatewayAvailable' => $this->GetAppGatewayID() > 0,
             // Muss mit: ein Meta-Push ist der einzige Push nach einer reinen
             // Sichtbarkeits-Änderung, sonst zöge die offene Kachel nicht nach.
             'tabs'            => $this->GetVisibleTabs(),

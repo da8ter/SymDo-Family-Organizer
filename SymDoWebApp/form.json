@@ -17,9 +17,9 @@
         },
         {
             "type": "Label",
-            "name": "BridgeHint",
+            "name": "GatewayHint",
             "visible": false,
-            "caption": "No SymDo Bridge instance found — users and household-wide hidden lists are unavailable."
+            "caption": "No SymDo Gateway instance found — users and household-wide hidden lists are unavailable."
         },
         {
             "type": "List",
@@ -57,7 +57,7 @@
         },
         {
             "type": "Label",
-            "caption": "Users are managed in the SymDo Bridge instance."
+            "caption": "Users are managed in the SymDo Gateway instance."
         },
         {
             "type": "ExpansionPanel",

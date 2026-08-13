@@ -119,7 +119,7 @@ class ToDoList extends IPSModuleStrict
 
         $this->RegisterAttributeString('Items', '[]');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
-        // die AppBridge liefert sie der SymDo-App/Web-App über die Discovery aus.
+        // das Gateway liefert sie der SymDo-App/Web-App über die Discovery aus.
         $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeInteger('NextID', 1);
         $this->RegisterAttributeInteger('OrderVersion', 0);
@@ -458,7 +458,7 @@ class ToDoList extends IPSModuleStrict
                 return;
             case 'ReportVisuTheme':
                 // Stiller Speicher (kein SendState): die Kachel meldet die
-                // CSS-Variablen der Visu, die AppBridge liefert sie der App/Web-App aus.
+                // CSS-Variablen der Visu, das Gateway liefert sie der App/Web-App aus.
                 $data = json_decode((string)$Value, true);
                 if (!is_array($data)) {
                     return;
@@ -487,7 +487,7 @@ class ToDoList extends IPSModuleStrict
 
     /**
      * Von der Kachel gemeldete Visu-Farben ({"dark":{accent,content,card},
-     * "light":{...}}) — von der AppBridge in der Discovery ausgeliefert.
+     * "light":{...}}) — vom Gateway in der Discovery ausgeliefert.
      */
     public function GetVisuTheme(): string
     {
@@ -2218,7 +2218,7 @@ class ToDoList extends IPSModuleStrict
         return is_array($data) ? $data : [];
     }
 
-    /** Bridge user ids this task is assigned to (deduped, capped). */
+    /** Gateway user ids this task is assigned to (deduped, capped). */
     private function NormalizeAssignedTo(mixed $Value): array
     {
         if (!is_array($Value)) {

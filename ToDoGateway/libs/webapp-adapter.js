@@ -1,7 +1,7 @@
 /*
  * SymDo Web-App — Browser-Transport-Adapter.
  *
- * Wird von der Bridge (ServeWebApp/BuildWebHead) in den <head> der geteilten
+ * Wird vom Gateway (ServeWebApp/BuildWebHead) in den <head> der geteilten
  * UI-Quelle (SymDoWebApp/module.html) injiziert, VOR deren IIFE. Er stellt die
  * beiden Nahtstellen bereit, die die UI sonst von der Tile-Visualisierung bekommt:
  *   - window.translate(key)              (i18n)
@@ -10,7 +10,7 @@
  * zurück. Die UI bleibt unverändert; sie merkt nicht, ob sie in der Kachel oder
  * als Webseite läuft.
  *
- * Datenquelle ist die bestehende, token-gesicherte Bridge-REST-API
+ * Datenquelle ist die bestehende, token-gesicherte REST-API des Gateways
  * (/hook/lists/app/v1). Der Aggregat-Zustand (Kachel-Form 'state') wird hier
  * clientseitig aus /discovery + /instances/{id}/state zusammengebaut — die
  * Web-App ist damit ein reiner API-Client wie die iOS-App.
@@ -183,7 +183,7 @@
   window.__symdoApiPost = apiPost;
 
   // ---- Pairing (Browser-Zugang) -----------------------------------------------
-  // Der in der Bridge erzeugte QR öffnet https://<connect>/hook/lists/webapp#c=<code>.
+  // Der im Gateway erzeugte QR öffnet https://<connect>/hook/lists/webapp#c=<code>.
   // Der Einmal-Code steht im URL-Fragment (nicht in Server-Logs); wir tauschen ihn
   // gegen ein Device-Token, das wir per-Origin in localStorage ablegen.
   var pairing = false;
@@ -255,13 +255,13 @@
   }
   window.__symdoUnauthorized = function () {
     clearToken();
-    showPairScreen('Sitzung abgelaufen. Erstelle in der SymDo Bridge einen neuen Browser-Zugang und scanne den QR-Code.');
+    showPairScreen('Sitzung abgelaufen. Erstelle im SymDo Gateway einen neuen Browser-Zugang und scanne den QR-Code.');
   };
   (function bootstrapPairing() {
     var hp = parseHash();
     if (hp.logout !== undefined) {
       clearToken(); stripHash();
-      showPairScreen('Abgemeldet. Erstelle in der SymDo Bridge einen neuen Browser-Zugang, um dich wieder zu verbinden.');
+      showPairScreen('Abgemeldet. Erstelle im SymDo Gateway einen neuen Browser-Zugang, um dich wieder zu verbinden.');
       return;
     }
     // Token direkt aus dem Fragment (Home-Screen-Lesezeichen mit #t=…). In der
@@ -283,10 +283,10 @@
       pairing = true;
       pairWithCode(hp.c)
         .then(function (t) { ensureTokenInUrl(t); startApp(); })
-        .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte in der Bridge einen neuen Browser-Zugang erstellen.'); });
+        .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte im Gateway einen neuen Browser-Zugang erstellen.'); });
       return;
     }
-    showPairScreen('Nicht gekoppelt. Erstelle in der SymDo Bridge einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
+    showPairScreen('Nicht gekoppelt. Erstelle im SymDo Gateway einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
   })();
 
   // Instanz-Art aus der letzten discovery (für Call/CheckRevisions ohne Roundtrip)
@@ -349,7 +349,7 @@
 
   // Global eindeutige Idempotenz-ID je Aktion. NICHT das UI-txn nehmen: das ist
   // ein pro Seitenladung zurückgesetzter Zähler (tx1, tx2, …) und würde nach einem
-  // Reload mit bereits ausgeführten IDs kollidieren — die Bridge-Idempotenz hielte
+  // Reload mit bereits ausgeführten IDs kollidieren — die Idempotenz des Gateways hielte
   // die Aktion dann für einen Replay und würde sie STILL nicht ausführen (genau das
   // ließ Hinzufügen/Mengenänderung nach einem Reload scheitern).
   var actionSeq = 0;
@@ -357,7 +357,7 @@
     return 'web-' + Date.now().toString(36) + '-' + (++actionSeq) + '-' + Math.random().toString(36).slice(2, 8);
   }
 
-  // Todo-States tragen die (autoritativen) Bridge-User schon top-level; Einkaufs-
+  // Todo-States tragen die (autoritativen) Gateway-User schon top-level; Einkaufs-
   // States tragen availableImages/availableBrands, die einmalig gehoistet werden.
   function stripState(kind, state) {
     var s = Object.assign({}, state || {});
@@ -367,7 +367,7 @@
   }
 
   // discovery liefert nur {id,name,hasAvatar} (keine Bilddaten wie die Kachel-
-  // Data-URI). Avatar-Foto daher über den token-gesicherten Bridge-Endpoint laden
+  // Data-URI). Avatar-Foto daher über den token-gesicherten Gateway-Endpoint laden
   // (Query-Token für die 'users'-Route erlaubt). Der Browser cached es per ETag.
   function mapUsers(list) {
     return (list || []).map(function (u) {
@@ -407,7 +407,7 @@
           if (kind === 'shopping') {
             if (Object.keys(images).length === 0 && st.availableImages && Object.keys(st.availableImages).length) { images = st.availableImages; }
             if (Object.keys(brands).length === 0 && st.availableBrands && Object.keys(st.availableBrands).length) { brands = st.availableBrands; }
-            // Produktbilder über den Bridge-Asset-Endpoint (same-origin, Token als
+            // Produktbilder über den Asset-Endpoint des Gateways (same-origin, Token als
             // Query erlaubt). Die UI hängt encodeURIComponent(datei) an imageBase an
             // → …/assets?t=<token>&f=<datei>; HandleAsset liest $_GET['f'].
             // &v=<assetsVersion>: der Asset-Endpoint antwortet mit
@@ -428,7 +428,7 @@
           type: 'state',
           users: mapUsers(disc.users),
           defaultUserID: '',
-          bridgeAvailable: true,
+          gatewayAvailable: true,
           hiddenIDs: hiddenIDs,
           instances: instances,
           states: states,
@@ -486,7 +486,7 @@
     }
   };
 
-  // ---- Push-Kanal: WebSocket auf dem Bridge-Hook ------------------------------
+  // ---- Push-Kanal: WebSocket auf dem Gateway-Hook ------------------------------
   // Symcon zieht auf einem Hook-Pfad selbst einen WebSocket hoch (WebHook Control
   // ab 5.2) und sendet darüber per WC_PushMessage. Wir empfangen nur ein
   // inhaltsloses „dirty" und holen den Inhalt danach über die token-gesicherte

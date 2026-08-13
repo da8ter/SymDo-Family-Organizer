@@ -7,10 +7,9 @@ trait QrRenderer
     private function RenderQrDataUri(string $payload): string
     {
         // Erst hier laden, nicht auf Dateiebene: das Vendor-Paket sind ~49 KB PHP, und
-        // gebraucht werden sie von genau zwei Formularknöpfen. Seit die App-Hälfte im
-        // Gateway sitzt, hinge es sonst an jedem TGW_-Sync-Aufruf und am Fünf-Sekunden-
-        // Poll der App. Nebeneffekt: eine fehlende Datei kostet nur den QR-Code, nicht
-        // das ganze Modul.
+        // gebraucht werden sie von genau zwei Formularknöpfen. Auf Dateiebene hinge es
+        // an jedem TGW_-Aufruf, also auch am Sync der Listen und am Poll der App.
+        // Nebeneffekt: eine fehlende Datei kostet nur den QR-Code, nicht das Modul.
         require_once __DIR__ . '/vendor/qrcode.php';
         try {
             $qr = \da8ter\SymDo\QRCode::getMinimumQRCode($payload, QR_ERROR_CORRECT_LEVEL_M);

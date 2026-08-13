@@ -100,7 +100,6 @@
             "New task": "Neue Aufgabe",
             "New task with details": "Neue Aufgabe mit Details",
             "New task …": "Neue Aufgabe …",
-            "No SymDo Bridge instance found — users and household-wide hidden lists are unavailable.": "Keine SymDo Bridge-Instanz gefunden — Benutzer und app-weit ausgeblendete Listen stehen nicht zur Verfügung.",
             "No ToDo list found": "Keine ToDo-Liste gefunden",
             "No camera found": "Keine Kamera gefunden",
             "No favorite lists": "Keine Favoritenlisten",
@@ -143,7 +142,6 @@
             "ToDos": "ToDos",
             "Today": "Heute",
             "Type": "Typ",
-            "Users are managed in the SymDo Bridge instance.": "Benutzer werden in der SymDo Bridge-Instanz verwaltet.",
             "Was due today": "Heute fällig gewesen",
             "Weeks": "Wochen",
             "Yearly": "Jährlich",
@@ -201,7 +199,9 @@
             "Show shopping lists (tabs Shopping and Favorites)": "Einkaufslisten anzeigen (Tabs Einkaufen und Favoriten)",
             "Show to-dos": "ToDos anzeigen",
             "Controls the tabs of this tile and of the SymDo web app. Favorites belong to the shopping lists — that tab shows their favorite lists and the purchase history, so it follows the shopping switch. If all three are off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately.": "Steuert die Tabs dieser Kachel und der SymDo Web-App. Favoriten gehören zu den Einkaufslisten — dieser Tab zeigt deren Favoritenlisten und die Kaufhistorie und folgt deshalb dem Einkaufs-Schalter. Sind alle drei aus, erscheint die Übersicht, damit die Oberfläche nie leer ist. Bleibt nur ein Bereich, entfällt die Tab-Leiste und der Inhalt bekommt die volle Höhe. Die Web-App übernimmt eine Änderung nach dem Neuladen, die Kachel sofort.",
-            "Change quantity": "Menge ändern"
+            "Change quantity": "Menge ändern",
+            "No SymDo Gateway instance found — users and household-wide hidden lists are unavailable.": "Keine SymDo-Gateway-Instanz gefunden — Benutzer und app-weit ausgeblendete Listen stehen nicht zur Verfügung.",
+            "Users are managed in the SymDo Gateway instance.": "Benutzer werden in der SymDo-Gateway-Instanz verwaltet."
         }
     }
 }

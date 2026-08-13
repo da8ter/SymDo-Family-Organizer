@@ -8,16 +8,18 @@ require_once __DIR__ . '/libs/QrRenderer.php';
 require_once __DIR__ . '/libs/AiExtract.php';
 
 /**
- * Die App-Hälfte des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
- * Push-Kanal und KI-Analyse. Früher das eigenständige Modul „SymDo Bridge".
+ * Die App-Seite des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
+ * Push-Kanal und KI-Analyse.
  *
- * Liegt bewusst im Modulwurzelverzeichnis und nicht in libs/: jedes __DIR__ und
- * dirname(__DIR__) hier drin löst dadurch auf dieselben Pfade auf wie zuvor.
+ * Liegt im Modulwurzelverzeichnis und nicht in libs/, weil die Pfade hier drin auf
+ * Nachbarmodule zeigen: __DIR__ . '/../SymDoWebApp/…' und dirname(__DIR__) . '/ShoppingList/assets'
+ * lösen nur aus dieser Ebene richtig auf.
  *
- * Der Lebenszyklus liegt in der Fassade (module.php). Was hier davon übrig ist,
- * trägt das Präfix Bridge…, damit es sich nicht mit der Gateway-Hälfte beißt.
+ * Der Lebenszyklus liegt in der Fassade (module.php); die Anteile, die von dort
+ * hereingerufen werden, tragen das Präfix App…, damit sie sich nicht mit der
+ * Sync-Seite beißen.
  */
-trait BridgeCore
+trait AppCore
 {
     use ApiRouter;
     use DeviceRegistry;
@@ -42,10 +44,10 @@ trait BridgeCore
     private const ACTION_ID_MAX_LEN    = 64;
 
     /**
-     * Properties und Attribute der App-Hälfte. Die Hooks fehlen hier bewusst: welche
+     * Properties und Attribute der App-Seite. Die Hooks fehlen hier bewusst: welche
      * Instanz die App bedient, entscheidet die Fassade in ApplyChanges.
      */
-    private function BridgeCreate(): void
+    private function AppCreate(): void
     {
         $this->RegisterAttributeString('PairedDevices', '[]');
         $this->RegisterAttributeString('PendingPairings', '[]');
@@ -62,7 +64,7 @@ trait BridgeCore
         // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
         $this->RegisterPropertyString('LocalHttpsUrl', '');
-        // KI „Foto → Aufgaben" (Web-App schickt das Foto, die Bridge ruft die KI).
+        // KI „Foto → Aufgaben" (Web-App schickt das Foto, das Gateway ruft die KI).
         $this->RegisterPropertyBoolean('AiEnabled', true); // Master-Schalter für die KI-Analyse
         $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
         $this->RegisterPropertyString('AiAnthropicKey', '');
@@ -78,7 +80,7 @@ trait BridgeCore
      * sind flüchtig, und Create() läuft bei einem Modul-Reload ohne Kernel-Neustart
      * nicht erneut; der Pfad lieferte dann bis zum nächsten Neustart 404 (gemessen).
      */
-    private function BridgeApplyChanges(): void
+    private function AppApplyChanges(): void
     {
         $this->EnsureUserIDs();
         $this->WsResubscribe();
@@ -87,7 +89,7 @@ trait BridgeCore
     /**
      * Abonniert die Stat-Variablen aller Listen-Instanzen, damit Änderungen den
      * Push-Kanal auslösen. Gleiches Muster wie in der Kachel (SymDoWebApp), aber
-     * absichtlich eigenständig: die Bridge ist die API für Web- und iOS-App und
+     * absichtlich eigenständig: das Gateway ist die API für Web- und iOS-App und
      * darf nicht davon abhängen, dass eine SymDoWebApp-Instanz existiert.
      *
      * Der Abo-Stand wird NICHT in einem Attribut gemerkt, sondern jedes Mal aus der
@@ -313,7 +315,7 @@ trait BridgeCore
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    /** Speichert einen Avatar als Medienobjekt unterhalb der Bridge (erstellt bei Bedarf). */
+    /** Speichert einen Avatar als Medienobjekt unterhalb der Instanz (erstellt bei Bedarf). */
     private function SaveAvatarMedia(int $mediaID, string $userID, string $name, string $base64): int
     {
         $binary = base64_decode($base64, true);
@@ -350,7 +352,7 @@ trait BridgeCore
     }
 
     /** IPS_KERNELSTARTED behandelt die Fassade; hier bleibt nur der Push-Auslöser. */
-    private function BridgeMessageSink(int $Message): void
+    private function AppMessageSink(int $Message): void
     {
         if ($Message === VM_UPDATE) {
             // Direkt senden, ohne Entprell-Timer. Eine Mutation schreibt 2-3
@@ -369,7 +371,7 @@ trait BridgeCore
      * Laufzeit-Anpassungen an den Formularelementen der App-Hälfte. Die Fassade
      * liefert die bereits zusammengesetzte Elementliste und kodiert danach selbst.
      */
-    private function BridgeFormOverrides(array &$elements): void
+    private function AppFormOverrides(array &$elements): void
     {
         $form = ['elements' => &$elements];
 
@@ -476,12 +478,12 @@ trait BridgeCore
 
     /**
      * KI-Relay für die Visu-Kachel (kein REST-Token): SymDoWebApp ruft dies per
-     * IPS_RequestAction, die Bridge extrahiert und schickt das Ergebnis per
+     * IPS_RequestAction, das Gateway extrahiert und schickt das Ergebnis per
      * IPS_RequestAction('AiResult') an die Kachel zurück. Bewusst über
      * RequestAction statt einer neuen public TGW_-Methode, damit ein einfacher
      * Modul-Reload (ohne Kernel-Neustart) genügt.
      */
-    private function BridgeRequestAction(string $Ident, mixed $Value): bool
+    private function AppRequestAction(string $Ident, mixed $Value): bool
     {
         if ($Ident === 'TestLocalUrl') {
             $this->TestLocalUrl(trim((string)$Value));
@@ -577,7 +579,7 @@ trait BridgeCore
     }
 
     /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */
-    private function BridgeProcessHook(): void
+    private function AppProcessHook(): void
     {
         try {
             $path = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
@@ -709,7 +711,7 @@ trait BridgeCore
         // Sichtbare Bereiche. Die Schalter stehen im Formular der SymDoWebApp-Kachel,
         // weil sie deren Oberfläche betreffen — diese Seite hier IST diese Oberfläche.
         // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",
-        // die Bridge hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
+        // das Gateway hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
         $symdo['tabs'] = $this->GetWebAppTabs();
         if ($localBase !== '') {
             $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
@@ -772,7 +774,7 @@ trait BridgeCore
     }
 
     /**
-     * LAN base URLs (http://<ip>:3777) so the app can reach the bridge on the
+     * LAN base URLs (http://<ip>:3777) so the app can reach the gateway on the
      * home network when Symcon Connect is unavailable. Best effort — assumes
      * the default web server port.
      */
@@ -838,10 +840,10 @@ trait BridgeCore
         }
         $decoded = json_decode((string)$body, true);
         if ($status === 200 && is_array($decoded) && ($decoded['ok'] ?? false) === true) {
-            $show($this->Translate('Works: SymDo Bridge reached over the local URL with a valid certificate. On the home network the web app will use it from now on.'));
+            $show($this->Translate('Works: SymDo Gateway reached over the local URL with a valid certificate. On the home network the web app will use it from now on.'));
             return;
         }
-        $show(sprintf($this->Translate('Answered with HTTP %d, but this is not a SymDo Bridge endpoint. Does the URL point at this Symcon installation?'), $status));
+        $show(sprintf($this->Translate('Answered with HTTP %d, but this is not a SymDo Gateway endpoint. Does the URL point at this Symcon installation?'), $status));
     }
 
     /**
@@ -977,7 +979,7 @@ trait BridgeCore
      * setzt den Status bei der Erzeugung und berechnet ihn nie neu, nach einem
      * Neustart stehen einwandfrei arbeitende Listen auf IS_CREATING.
      *
-     * Ohne diese Pruefung rief die Bruecke waehrend eines Modul-Reloads oder im
+     * Ohne diese Pruefung rief das Gateway waehrend eines Modul-Reloads oder im
      * Hochlauf in Instanzen hinein, deren Schnittstelle noch nicht stand. Im Log stand
      * dann "Kann Schnittstellen-Instanz nicht erstellen" samt "InstanceInterface is
      * not available" aus dem angerufenen Modul.

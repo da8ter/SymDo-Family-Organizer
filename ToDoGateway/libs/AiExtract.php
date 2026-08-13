@@ -10,10 +10,10 @@ declare(strict_types=1);
  *     das daraus ToDo-Aufgaben ableitet.
  *  2. „Foto/URL → Zutaten" (Einkaufsliste): entweder ein Foto (Rezeptseite,
  *     handschriftliche Liste, Aushang, Verpackung) an ein Vision-LLM, oder eine
- *     Rezept-URL — die Bridge holt die Seite serverseitig (SSRF-geschützt),
+ *     Rezept-URL — das Gateway holt die Seite serverseitig (SSRF-geschützt),
  *     macht daraus Text und lässt das LLM die Zutatenliste extrahieren.
  *
- * Der API-Key bleibt in beiden Fällen serverseitig in der Bridge-Config. Es wird
+ * Der API-Key bleibt in beiden Fällen serverseitig in der Gateway-Config. Es wird
  * nichts automatisch angelegt — die Vorschläge gehen zur Bestätigung an die
  * Web-App (Review-Overlay).
  */
@@ -154,7 +154,7 @@ trait AiExtract
     /**
      * Relay für die Visu-Kachel: dieselbe KI-Extraktion wie der REST-Endpoint,
      * aber als Rückgabewert statt HTTP-Antwort (die Kachel hat keinen Token). Wird
-     * von der AppBridge-RequestAction('AiTileRequest') aufgerufen. $path ist der
+     * von der RequestAction('AiTileRequest') des Gateways aufgerufen. $path ist der
      * REST-Pfad ('…/ingredients' oder '…/extract'); $payloadJson enthält {image}
      * bzw. {url}. Rückgabe: JSON-Body wie ihn die Web-App erwartet
      * ({ok:true,…} oder {ok:false,error:{code,message}}).
@@ -802,7 +802,7 @@ trait AiExtract
             return false;
         }
         // Credentials in der URL (http://user:pass@host) ablehnen und nur die
-        // Standard-Ports zulassen — sonst wird die Bridge zum Port-Scanner.
+        // Standard-Ports zulassen — sonst wird das Gateway zum Port-Scanner.
         if (isset($parts['user']) || isset($parts['pass'])) {
             return false;
         }
@@ -913,7 +913,7 @@ trait AiExtract
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_ENCODING       => '',
-            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; SymDoBridge/1.0)',
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; SymDoGateway/1.0)',
             CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$location): int {
                 if (stripos($line, 'location:') === 0) {
@@ -1097,7 +1097,7 @@ trait AiExtract
      *
      * Vorrang hat, was der Client mitschickt: nur er weiss, in welche Liste die
      * Artikel danach wandern. Ohne Angabe wird die Vereinigung ueber die
-     * Einkaufslisten gebildet, die diese Bruecke bedient.
+     * Einkaufslisten gebildet, die dieses Gateway bedient.
      *
      * @return string[]
      */

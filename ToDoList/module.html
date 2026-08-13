@@ -2383,7 +2383,7 @@
     // Die Visu injiziert --accent-color/--content-color/--card-color als CSS-
     // Variablen; serverseitig gibt es dafür keine API. Die Kachel liest sie zur
     // Laufzeit aus und meldet sie still ans Modul (ReportVisuTheme) — die
-    // AppBridge liefert sie der SymDo-App/Web-App über die Discovery weiter.
+    // Das Gateway liefert sie der SymDo-App/Web-App über die Discovery weiter.
     function _themeToHex(value) {
       const v = String(value || '').trim();
       if (!v) return null;

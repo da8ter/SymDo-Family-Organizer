@@ -3,26 +3,25 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
-require_once __DIR__ . '/libs/BridgeImport.php';
-require_once __DIR__ . '/BridgeCore.php';
+require_once __DIR__ . '/AppCore.php';
 
 /**
- * SymDo Gateway — eine zentrale Dienst-Instanz für die ganze Listen-Familie.
+ * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
  *
- * Zwei Hälften unter einem Dach:
- *  - Gateway: Anmeldedaten und HTTP-Broker für Google Tasks, Microsoft To Do, CalDAV.
+ * Zwei Aufgaben unter einem Dach:
+ *  - Sync: Anmeldedaten und HTTP-Broker für Google Tasks, Microsoft To Do und CalDAV.
  *    Die ToDo-Listen rufen sie direkt als TGW_… auf.
- *  - App (trait BridgeCore): REST-API, Web-App, Push und KI für iOS- und Web-App.
+ *  - App (trait AppCore): REST-API, Web-App, Push-Kanal und KI-Analyse für die
+ *    iOS- und die Web-App.
  *
- * Die Gateway-Hälfte darf mehrfach existieren (ein Instanzsatz pro Konto), die
- * App-Hälfte nicht — die Hook-Pfade sind fest. Deshalb bedient nur die Instanz mit
- * der niedrigsten ID die App; siehe OwnsAppApi().
+ * Die Sync-Seite darf mehrfach existieren (ein Instanzsatz pro Konto), die App-Seite
+ * nicht — ihre Hook-Pfade sind fest. Deshalb bedient nur die Instanz mit der
+ * niedrigsten ID die App; siehe OwnsAppApi().
  */
 class SymDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
-    use BridgeImport;
-    use BridgeCore;
+    use AppCore;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -63,10 +62,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->RegisterHook('todogateway_google');
         $this->RegisterHook('todogateway_microsoft');
 
-        // App-Hälfte
-        $this->BridgeCreate();
-        $this->RegisterAttributeString('BridgeImportDone', '');
-        $this->RegisterTimer('BridgeImport', 0, 'TGW_RunPendingBridgeImport($_IPS[\'TARGET\']);');
+        // App-Seite
+        $this->AppCreate();
     }
 
     public function ApplyChanges(): void
@@ -84,19 +81,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::HOOK_PATH);
             $this->RegisterHook(self::WEBAPP_HOOK_PATH);
             $this->RegisterHook(self::WS_HOOK_PATH);
-            $this->BridgeApplyChanges();
-        }
-
-        // Verzögert: IPS_ApplyChanges darf nicht aus ApplyChanges heraus laufen.
-        if ($this->BridgeImportPending()) {
-            try {
-                $this->SetTimerInterval('BridgeImport', 1000);
-            } catch (Throwable $e) {
-                // Timer noch nicht registriert (Modul-Reload ohne Kernel-Neustart, der
-                // Runlevel bleibt dabei KR_READY). Bewusst kein Ersatzpfad: die Übernahme
-                // wartet auf den Neustart, der Knopf im Formular bleibt der Weg.
-                $this->SendDebug('ApplyChanges', 'BridgeImport-Timer fehlt, Uebernahme wartet auf Kernel-Neustart', 0);
-            }
+            $this->AppApplyChanges();
         }
     }
 
@@ -111,20 +96,20 @@ class SymDoGateway extends IPSModuleStrict
             $this->ApplyChanges();
             return;
         }
-        $this->BridgeMessageSink($Message);
+        $this->AppMessageSink($Message);
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
     {
-        if ($this->BridgeRequestAction($Ident, $Value)) {
+        if ($this->AppRequestAction($Ident, $Value)) {
             return;
         }
         parent::RequestAction($Ident, $Value);
     }
 
     /**
-     * Die App-Hälfte hängt an festen Hook-Pfaden, kann also nur einmal im System
-     * laufen — die Gateway-Hälfte dagegen beliebig oft. Es gewinnt die niedrigste
+     * Die App-Seite hängt an festen Hook-Pfaden, kann also nur einmal im System
+     * laufen — die Sync-Seite dagegen beliebig oft. Es gewinnt die niedrigste
      * Instanz-ID. Bewusst kein Blick auf den Status einer Geschwister-Instanz: der
      * klebt in Symcon und taugt nicht als Wahrheit.
      */
@@ -150,12 +135,12 @@ class SymDoGateway extends IPSModuleStrict
             $this->ProcessOAuthHookData($path === '/hook/todogateway_google');
             return;
         }
-        $this->BridgeProcessHook();
+        $this->AppProcessHook();
     }
 
     public function GetConfigurationForm(): string
     {
-        // form.json traegt die App-Haelfte. Symcon mergt NICHT: ist
+        // form.json traegt die App-Seite. Symcon mergt NICHT: ist
         // GetConfigurationForm ueberschrieben, gewinnt die Methode vollstaendig —
         // die Datei muss also selbst gelesen werden.
         $owner   = $this->AppApiOwnerID();
@@ -171,17 +156,14 @@ class SymDoGateway extends IPSModuleStrict
                     $owner
                 ),
             ]];
-            $importElements = [];
         } else {
             $app = json_decode((string)@file_get_contents(__DIR__ . '/form.json'), true);
             $appElements = (is_array($app) && isset($app['elements']) && is_array($app['elements']))
                 ? $app['elements']
                 : [];
-            $importElements = $this->GetBridgeImportFormElements();
         }
 
         $elements = array_merge(
-            $importElements,
             $appElements,
             [
                 $this->GetGoogleFormElements(),
@@ -194,7 +176,7 @@ class SymDoGateway extends IPSModuleStrict
         // Nur auf der bedienenden Instanz: die Überschreibungen fassen Felder an, die
         // hier gar nicht stehen, und AiPrivacyStorable() prüft mit einer Schreibsonde.
         if ($isOwner) {
-            $this->BridgeFormOverrides($elements);
+            $this->AppFormOverrides($elements);
         }
 
         return json_encode(['elements' => $elements], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
