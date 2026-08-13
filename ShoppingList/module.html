@@ -661,12 +661,19 @@ body {
   opacity: 0;
   transition: opacity .12s ease;
 }
+/* Auch fuer die Favoritenkarten (.fav-card): dort wischt man links die Liste weg und
+   rechts alles in den Einkauf — dieselben Schichten, dieselbe Optik. */
 .item-card.dragging-left .item-card-delete,
 .item-card.swipe-armed .item-card-delete,
-.item-card.is-deleting .item-card-delete { opacity: 1; }
-.item-card.swipe-armed .item-card-delete { background: #e04434; }
-.item-card.is-deleting { pointer-events: none; }
+.item-card.is-deleting .item-card-delete,
+.fav-card.dragging-left .item-card-delete,
+.fav-card.swipe-armed .item-card-delete,
+.fav-card.is-deleting .item-card-delete { opacity: 1; }
+.item-card.swipe-armed .item-card-delete,
+.fav-card.swipe-armed .item-card-delete { background: #e04434; }
+.item-card.is-deleting, .fav-card.is-deleting { pointer-events: none; }
 .item-card.is-deleting .item-card-content { opacity: .4; }
+.fav-card.is-deleting .fav-row { opacity: .4; }
 
 /* Blauer Bearbeiten-Layer: wird beim Wischen nach rechts sichtbar (Stift links). */
 .item-card-edit {
@@ -684,8 +691,11 @@ body {
   transition: opacity .12s ease;
 }
 .item-card.dragging-right .item-card-edit,
-.item-card.edit-armed .item-card-edit { opacity: 1; }
-.item-card.edit-armed .item-card-edit { background: #3f83ee; }
+.item-card.edit-armed .item-card-edit,
+.fav-card.dragging-right .item-card-edit,
+.fav-card.edit-armed .item-card-edit { opacity: 1; }
+.item-card.edit-armed .item-card-edit,
+.fav-card.edit-armed .item-card-edit { background: #3f83ee; }
 
 .item-card.is-moving-to-cart {
   pointer-events: none;
@@ -1258,6 +1268,16 @@ body {
    links und Anzahl rechts; jetzt Herz-Abzeichen, Name mit Anzahl darunter und der
    Warenkorb rechts. Das Herz ist BEWUSST pink (#ff2d55) und nicht in der
    Akzentfarbe — genau wie dort. */
+/* Rahmen um die Zeile, damit die Wisch-Schichten dahinter liegen koennen — wie
+   .fav-card in der Web-App. Der Abstand nach unten wandert hierher, sonst zaehlte er
+   doppelt. */
+.fav-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.fav-card > .fav-row { margin-bottom: 0; }
 .fav-row {
   display: flex;
   align-items: center;
@@ -1400,66 +1420,9 @@ body {
 
 
 /* Edit item footer */
-.fav-edit-footer {
-  flex-shrink: 0;
-  padding: 0 var(--gap) var(--gap);
-  display: flex;
-  gap: 10px;
-}
 
-.btn-delete-fav-item {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  border: none;
-  background: var(--surface);
-  color: #c0392b;
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .15s, color .15s;
-}
-.btn-delete-fav-item:active {
-  background: #c0392b;
-  color: var(--content-color);
-}
 
-.btn-fav-edit-back {
-  flex: 1;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  font-family: inherit;
-  white-space: nowrap;
-}
-.btn-fav-edit-back:active { opacity: .85; }
 
-.btn-save-fav-edit {
-  flex: 1;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  background: var(--accent);
-  color: var(--content-color);
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  font-family: inherit;
-}
 
 /* Pencil button in fav detail items */
 .fav-detail-pencil {
@@ -2092,11 +2055,6 @@ textarea.edit-input { overflow: hidden; }
           <button class="btn-fav-add-item" id="btnFavAddItem"><i class="fa-light fa-plus"></i> Artikel hinzuf&#xFC;gen</button>
           <button class="btn-delete-fav-list destructive" id="btnDeleteFavList"><i class="fa-light fa-trash"></i> Liste l&#xF6;schen</button>
         </div>
-        <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
-          <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
-          <button class="btn-fav-edit-back" id="btnFavEditBack">Abbrechen</button>
-          <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
-        </div>
       </div>
 
     </div>
@@ -2609,7 +2567,13 @@ function bindCardHandlers() {
       }
       window.setTimeout(() => requestAction('ToggleCart', id), 300);
     });
-    bindCardSwipe(card);
+    const swipeId = card.getAttribute('data-id');
+    bindCardSwipe(card, '.item-card-content',
+      () => requestAction('DeleteItem', swipeId),
+      () => {
+        const item = (state.items || []).find(i => i.id === swipeId);
+        if (item) openEditOverlay(item);
+      });
   });
   document.querySelectorAll('.item-edit-btn[data-edit-id]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2650,10 +2614,18 @@ function bindCardHandlers() {
 }
 
 // Swipe-left-to-delete on an item card
-function bindCardSwipe(card) {
-  const content = card.querySelector('.item-card-content');
+/**
+ * Wischen an einer Karte: nach links die zerstoerende, nach rechts die bearbeitende
+ * Aktion. Nimmt jetzt Rueckrufe und den Waehler des bewegten Teils — Signatur wie
+ * bindCardSwipe(card, '.item-card-content', onLeft, onRight) in der Web-App. Vorher
+ * war es fest auf die Einkaufsliste verdrahtet (DeleteItem + openEditOverlay), die
+ * Favoriten konnten es deshalb nicht mitbenutzen.
+ *
+ * onLeft laeuft NACH dem Aufloesen der Zeile (die Karte verschwindet), onRight sofort.
+ */
+function bindCardSwipe(card, contentSelector, onLeft, onRight) {
+  const content = card.querySelector(contentSelector || '.item-card-content');
   if (!content) return;
-  const id = card.getAttribute('data-id');
 
   let startX = 0, startY = 0, dx = 0;
   let active = false, decided = false, pointerId = null;
@@ -2699,12 +2671,11 @@ function bindCardSwipe(card) {
       card.dataset.animating = '1';
       card.classList.add('is-deleting');
       content.style.transform = 'translateX(-110%)';
-      dissolveCard(card, () => requestAction('DeleteItem', id));
+      dissolveCard(card, () => { if (onLeft) onLeft(); });
     } else if (wasDecided && dx >= THRESHOLD) {
       content.style.transform = '';
       card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
-      const item = (state.items || []).find(i => i.id === id);
-      if (item) openEditOverlay(item);
+      if (onRight) onRight();
     } else {
       content.style.transform = '';
       card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
@@ -2963,7 +2934,6 @@ function openFavOverlay() {
   document.getElementById('btnFavRenameList').style.display = 'none';
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = 'none';
-  document.getElementById('favEditFooter').style.display = 'none';
   renderFavListBody();
   showFavDetailPlaceholder();
   setDetailOpen(false);
@@ -2986,7 +2956,6 @@ function showFavDetailPlaceholder() {
   document.getElementById('favDetailBody').innerHTML =
     `<div class="fav-empty">${escapeHtml(translate('Select a list'))}</div>`;
   document.getElementById('favDetailFooter').style.display = 'none';
-  document.getElementById('favEditFooter').style.display = 'none';
   document.getElementById('btnFavRenameList').style.display = 'none';
   document.getElementById('favRenameForm').style.display = 'none';
 }
@@ -3007,7 +2976,6 @@ function showFavDetail(listId) {
   document.getElementById('btnFavRenameList').style.display = '';
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
-  document.getElementById('favEditFooter').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = '';
   renderFavDetailBody(list);
   setDetailOpen(true);
@@ -3031,76 +2999,32 @@ function showFavListView() {
 
 /**
  * Artikel einer Favoritenliste bearbeiten — oder mit item = null einen neuen anlegen.
- * Dieselbe Aufteilung wie openFavItemEditor(instanz, liste, null) in der Web-App, wo
- * der Knopf "Artikel hinzufuegen" genau das tut.
+ *
+ * Nutzt DASSELBE Editor-Blatt wie die Einkaufsliste, so wie openFavItemEditor in der
+ * Web-App: dort entscheidet ein Kontext (fav-edit / fav-add / shopping), welche Aktion
+ * das Speichern schickt. Hier ist editingFavItem dieser Kontext. Vorher war es ein
+ * eigenes Formular im Detailbereich mit eigener Fusszeile.
  */
 function openFavItemEdit(listId, item) {
   const neu = !item;
   editingFavItem = {
     listId,
     originalName: neu ? '' : item.name,
-    category: neu ? '' : (item.category || ''),
     neu: neu,
   };
-  document.getElementById('favDetailTitle').textContent = neu ? translate('Add item') : item.name;
-  document.getElementById('btnFavRenameList').style.display = 'none';
-  document.getElementById('favRenameForm').style.display = 'none';
-  document.getElementById('newFavListForm').classList.remove('visible');
-  document.getElementById('favDetailFooter').style.display = 'none';
-  document.getElementById('favEditFooter').style.display = '';
-  // Das Formular gehoert in den DETAILbereich — nebeneinander bleibt die Auswahl
-  // links stehen, waehrend rechts bearbeitet wird.
-  const body = document.getElementById('favDetailBody');
-  body.innerHTML = '<div class="edit-form">'
-    + `<input type="text" class="edit-input" id="favEditName" placeholder="${escapeHtml(translate('Name'))}" autocomplete="off" />`
-    + `<input type="text" class="edit-input" id="favEditAmount" placeholder="${escapeHtml(translate('Quantity (e.g. 2x)'))}" autocomplete="off" />`
-    + `<textarea class="edit-input" id="favEditNotes" placeholder="${escapeHtml(translate('Note'))}" rows="3"></textarea>`
-    + '</div>';
-  document.getElementById('favEditName').value   = neu ? '' : (item.name   || '');
-  document.getElementById('favEditAmount').value = neu ? '' : (item.amount || '');
-  document.getElementById('favEditNotes').value  = neu ? '' : (item.notes  || '');
-  document.getElementById('favEditName').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
-  document.getElementById('favEditAmount').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveFavItemEdit(); });
-  document.getElementById('favEditNotes').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveFavItemEdit(); }
-  });
-  document.getElementById('favEditName').focus({ preventScroll: true });
-}
-
-function closeFavItemEdit() {
-  editingFavItem = null;
-  if (viewingListId) {
-    showFavDetail(viewingListId);
-  } else {
-    showFavListView();
-  }
-}
-
-function saveFavItemEdit() {
-  if (!editingFavItem) return;
-  const newName = (document.getElementById('favEditName').value || '').trim();
-  const amount  = (document.getElementById('favEditAmount').value || '').trim();
-  const notes   = (document.getElementById('favEditNotes').value || '').trim();
-  if (!newName) return;
-  if (editingFavItem.neu) {
-    requestAction('AddItemToFavoriteList', JSON.stringify({
-      listId:   editingFavItem.listId,
-      name:     newName,
-      category: editingFavItem.category,
-      amount:   amount,
-      notes:    notes,
-    }));
-  } else {
-    requestAction('UpdateFavoriteItem', JSON.stringify({
-      listId:   editingFavItem.listId,
-      oldName:  editingFavItem.originalName,
-      newName:  newName,
-      category: editingFavItem.category,
-      amount:   amount,
-      notes:    notes,
-    }));
-  }
-  closeFavItemEdit();
+  editingItemId = null;
+  document.getElementById('editName').value   = neu ? '' : (item.name   || '');
+  document.getElementById('editAmount').value = neu ? '' : (item.amount || '');
+  document.getElementById('editNotes').value  = neu ? '' : (item.notes  || '');
+  fillCategorySelect(neu ? '' : (item.category || ''));
+  // Der Favoritenlisten-Waehler gehoert dem Weg "Artikel per Herz merken" — hier
+  // waehlt man keine Liste, man ist schon in einer.
+  document.getElementById('editFavSection').style.display = 'none';
+  document.getElementById('editCategory').closest('.form-row').style.display = '';
+  document.getElementById('editOverlayTitle').textContent =
+    neu ? translate('New item') : translate('Edit item');
+  openOverlay('editOverlay');
+  document.getElementById('editName').focus({ preventScroll: true });
 }
 
 function renderFavListBody() {
@@ -3122,7 +3046,10 @@ function renderFavListBody() {
     const anzahl = count === 1
       ? translate('1 item')
       : translate('%1 items').replace('%1', String(count));
-    html += `<div class="fav-row" data-list-id="${escapeHtml(list.id)}">`
+    html += `<div class="fav-card" data-list-id="${escapeHtml(list.id)}">`
+      + `<div class="item-card-delete" aria-hidden="true">${TRASH_ICON}</div>`
+      + `<div class="item-card-edit" aria-hidden="true"><i class="fa-light fa-cart-plus"></i></div>`
+      + `<div class="fav-row">`
       + `<span class="fav-badge">${HEART_FILLED}</span>`
       + `<span class="fav-main">`
       +   `<span class="fav-name">${escapeHtml(list.name)}</span>`
@@ -3131,12 +3058,31 @@ function renderFavListBody() {
       + `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" `
       +   `aria-label="${escapeHtml(translate('Add all to shopping list'))}">`
       +   `<i class="fa-light fa-cart-plus"></i></button>`
+      + `</div>`
       + `</div>`;
   }
   body.innerHTML = html;
 
-  body.querySelectorAll('.fav-row[data-list-id]').forEach(el => {
-    el.addEventListener('click', () => showFavDetail(el.getAttribute('data-list-id')));
+  body.querySelectorAll('.fav-card[data-list-id]').forEach(karte => {
+    const listId = karte.getAttribute('data-list-id');
+    const zeile = karte.querySelector('.fav-row');
+    zeile.addEventListener('click', () => {
+      if (karte.dataset.swiped === '1') return;   // nach einem Wischen kein Oeffnen
+      showFavDetail(listId);
+    });
+    // Links: Liste loeschen. Rechts: alles in den Einkauf — die beiden Aktionen, die
+    // in der Web-App unter der Karte liegen (fa-trash / fa-cart-plus).
+    bindCardSwipe(karte, '.fav-row',
+      () => requestAction('DeleteFavoriteList', listId),
+      () => {
+        const listObj = (state.favoriteLists || []).find(l => l.id === listId);
+        const n = listObj ? (listObj.items || []).length : 0;
+        requestAction('AddFavoriteListToCart', listId);
+        closeFavOverlay();
+        showFavToast(n > 0
+          ? `${n} Artikel zur Einkaufsliste hinzugefügt`
+          : 'Liste enthält keine Artikel');
+      });
   });
   // Der Warenkorb liegt IN der Karte: ohne stopPropagation wuerde derselbe Tipp
   // zugleich die Detailansicht oeffnen.
@@ -3201,7 +3147,12 @@ function renderFavDetailBody(list) {
       ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : '';
     const menge = String(item.amount || '').trim();
     const mengeHtml = menge ? `<span class="amount-badge">${escapeHtml(menge)}</span>` : '';
-    html += `<div class="item-card fav-detail-item">`
+    html += `<div class="item-card fav-detail-item" data-item-name="${escapeHtml(item.name)}">`
+      // Links entfernt den Artikel aus der Liste, rechts oeffnet den Editor — in der
+      // Web-App liegen genau diese beiden Schichten unter der Zeile (fa-heart-crack
+      // und fa-pencil).
+      + `<div class="item-card-delete" aria-hidden="true"><i class="fa-light fa-heart-crack"></i></div>`
+      + `<div class="item-card-edit" aria-hidden="true">${PENCIL_ICON}</div>`
       + `<div class="item-card-content">`
       + `<div class="item-thumb">${thumb}</div>`
       + `<div class="item-info"><div class="item-title">${escapeHtml(item.name || '')}</div>${notesHtml}</div>`
@@ -3218,6 +3169,20 @@ function renderFavDetailBody(list) {
       + `</div>`;
   }
   body.innerHTML = html;
+
+  // Wischen an der Zeile: links aus der Liste entfernen, rechts bearbeiten — dieselben
+  // beiden Aktionen wie in der Web-App (RemoveItemFromFavoriteList / Editor).
+  body.querySelectorAll('.item-card.fav-detail-item').forEach(karte => {
+    const itemName = karte.getAttribute('data-item-name');
+    bindCardSwipe(karte, '.item-card-content',
+      () => requestAction('RemoveItemFromFavoriteList', JSON.stringify({ listId: list.id, name: itemName })),
+      () => {
+        // Den Artikel beim Ereignis frisch auflösen, nicht beim Rendern festhalten.
+        const listObj = (state.favoriteLists || []).find(l => l.id === list.id);
+        const itemObj = listObj ? (listObj.items || []).find(i => i.name === itemName) : null;
+        if (itemObj) openFavItemEdit(list.id, itemObj);
+      });
+  });
 
   body.querySelectorAll('.fav-detail-pencil').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4071,17 +4036,12 @@ function populateEditFavList(selectId) {
   }
 }
 
-function openEditOverlay(item, showFavPicker) {
-  editingItemId = item.id || null;
-  document.getElementById('editName').value   = item.name   || '';
-  document.getElementById('editAmount').value = item.amount || '';
-  document.getElementById('editNotes').value  = item.notes  || '';
-
-  // Populate category dropdown
-  const select  = document.getElementById('editCategory');
-  const cats    = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
-  // Default empty/unknown → Miscellaneous (matches list grouping fallback)
-  const curCat  = item.category || translate('Miscellaneous');
+/** Kategorien in die Auswahl des Editors — von der Liste UND von den Favoriten. */
+function fillCategorySelect(category) {
+  const select = document.getElementById('editCategory');
+  const cats   = Array.isArray(state.categoryOrder) ? state.categoryOrder : [];
+  // Leer/unbekannt → Sonstiges, wie die Gruppierung der Liste
+  const curCat = category || translate('Miscellaneous');
   select.innerHTML = '';
   if (curCat && !cats.includes(curCat)) {
     const opt = document.createElement('option');
@@ -4094,6 +4054,16 @@ function openEditOverlay(item, showFavPicker) {
     if (cat === curCat) opt.selected = true;
     select.appendChild(opt);
   }
+}
+
+function openEditOverlay(item, showFavPicker) {
+  editingFavItem = null;      // Kontext: Einkaufsliste
+  editingItemId = item.id || null;
+  document.getElementById('editName').value   = item.name   || '';
+  document.getElementById('editAmount').value = item.amount || '';
+  document.getElementById('editNotes').value  = item.notes  || '';
+
+  fillCategorySelect(item.category);
 
   // Favorite list picker (only for heart-triggered adds)
   const favSection  = document.getElementById('editFavSection');
@@ -4118,6 +4088,7 @@ function openEditOverlay(item, showFavPicker) {
 function closeEditOverlay() {
   closeOverlay('editOverlay');
   editingItemId = null;
+  editingFavItem = null;
 }
 
 function saveEdit() {
@@ -4127,7 +4098,19 @@ function saveEdit() {
   const category = document.getElementById('editCategory').value;
   if (!name) return;
 
-  if (editingItemId) {
+  // Kontext entscheidet die Aktion, wie saveItemEditor in der Web-App
+  if (editingFavItem) {
+    if (editingFavItem.neu) {
+      requestAction('AddItemToFavoriteList', JSON.stringify({
+        listId: editingFavItem.listId, name, category, amount, notes,
+      }));
+    } else {
+      requestAction('UpdateFavoriteItem', JSON.stringify({
+        listId: editingFavItem.listId, oldName: editingFavItem.originalName,
+        newName: name, category, amount, notes,
+      }));
+    }
+  } else if (editingItemId) {
     requestAction('UpdateItem', JSON.stringify({ id: editingItemId, name, amount, notes, category }));
   } else {
     requestAction('AddItem', JSON.stringify({ name, category, amount }));
@@ -4195,8 +4178,6 @@ document.addEventListener('DOMContentLoaded', () => {
     '<i class="fa-light fa-plus"></i> ' + escapeHtml(translate('Add item'));
   document.getElementById('btnAddFavToCart').innerHTML =
     '<i class="fa-light fa-cart-plus"></i> ' + escapeHtml(translate('Everything to the shopping list'));
-  document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
-  document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
   document.getElementById('favMasterTitle').textContent       = translate('Favorites');
   document.getElementById('scannerOverlayTitle').textContent  = translate('Scan barcode');
@@ -4298,10 +4279,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Favorite list overlay
   document.getElementById('btnNewFavList').addEventListener('click', () => {
-    if (editingFavItem) {
-      closeFavItemEdit();
-      return;
-    }
     const form = document.getElementById('newFavListForm');
     form.classList.toggle('visible');
     if (form.classList.contains('visible')) {
@@ -4346,15 +4323,6 @@ document.addEventListener('DOMContentLoaded', () => {
       closeFavOverlay();
     }
   });
-  document.getElementById('btnDeleteFavItem').innerHTML = TRASH_ICON;
-  document.getElementById('btnDeleteFavItem').addEventListener('click', () => {
-    if (editingFavItem && editingFavItem.listId && editingFavItem.originalName) {
-      requestAction('RemoveItemFromFavoriteList', JSON.stringify({ listId: editingFavItem.listId, name: editingFavItem.originalName }));
-      closeFavItemEdit();
-    }
-  });
-  document.getElementById('btnFavEditBack').addEventListener('click', closeFavItemEdit);
-  document.getElementById('btnSaveFavEdit').addEventListener('click', saveFavItemEdit);
   document.getElementById('btnConfirmNewList').addEventListener('click', confirmNewFavList);
   document.getElementById('newFavListInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') confirmNewFavList();
