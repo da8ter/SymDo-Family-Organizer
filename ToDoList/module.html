@@ -72,6 +72,10 @@
     #overlay {
       background: var(--bg);
       backdrop-filter: none;
+      /* Abstand nach oben, damit das Formular nicht unter den Kopfelementen der
+         Visualisierung klebt. Nötig, weil ein absolut positioniertes Element sich an
+         der Padding-Box orientiert und das --sym-mt von .wrap deshalb überdeckt. */
+      top: 80px;
     }
     #detailOverlay {
       background: var(--bg);
