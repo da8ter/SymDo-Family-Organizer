@@ -1277,7 +1277,16 @@ body {
   overflow: hidden;
   margin-bottom: 6px;
 }
-.fav-card > .fav-row { margin-bottom: 0; }
+/* MUSS positioniert sein und ueber den Wisch-Schichten liegen: die sind absolute mit
+   z-index 0 und wuerden sonst UEBER der statischen Zeile liegen — unsichtbar
+   (opacity 0), aber klickfangend. Gemessen: elementFromPoint auf der Zeilenmitte gab
+   DIV.item-card-edit, die Liste liess sich nicht mehr oeffnen. Genau dagegen tragen
+   auch die Zeilen der Einkaufsliste position: relative; z-index: 1. */
+.fav-card > .fav-row {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0;
+}
 .fav-row {
   display: flex;
   align-items: center;
