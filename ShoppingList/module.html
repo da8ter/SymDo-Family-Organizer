@@ -1281,12 +1281,37 @@ body {
    z-index 0 und wuerden sonst UEBER der statischen Zeile liegen — unsichtbar
    (opacity 0), aber klickfangend. Gemessen: elementFromPoint auf der Zeilenmitte gab
    DIV.item-card-edit, die Liste liess sich nicht mehr oeffnen. Genau dagegen tragen
-   auch die Zeilen der Einkaufsliste position: relative; z-index: 1. */
+   auch die Zeilen der Einkaufsliste position: relative; z-index: 1.
+
+   background: var(--row) und NICHT var(--surface): --surface ist durchscheinend
+   (7% Weiss). Ohne etwas dahinter ist das gleich, mit den Wisch-Schichten schien die
+   rote bzw. gruene Flaeche durch die Zeile — sie wirkte beim Wischen durchsichtig.
+   Die Web-App ueberschreibt an derselben Stelle aus demselben Grund auf --row, und
+   die Zeilen der Einkaufsliste tragen einen Kommentar dazu.
+
+   Der Uebergang laesst die Zeile zurueckfedern; beim Ziehen selbst muss er weg,
+   sonst haengt sie dem Finger nach. */
 .fav-card > .fav-row {
   position: relative;
   z-index: 1;
   margin-bottom: 0;
+  background: var(--row);
+  transition: transform .18s ease;
 }
+.fav-card > .fav-row.is-dragging { transition: none; }
+
+/* Farben und Maße der Schichten wie in der Web-App (.fav-card .swipe-under /
+   .swipe-under-edit): links rot loeschen, rechts GRUEN in den Einkauf — nicht das
+   Blau der Einkaufsliste, dort bedeutet rechts "bearbeiten". */
+.fav-card .item-card-delete,
+.fav-card .item-card-edit {
+  font-size: 17px;
+  color: #fff;
+}
+.fav-card .item-card-delete { background: var(--red); padding-right: 18px; }
+.fav-card .item-card-edit   { background: #34c759; padding-left: 18px; }
+.fav-card.swipe-armed .item-card-delete { background: #ff6b6b; }
+.fav-card.edit-armed .item-card-edit    { background: #4cd964; }
 .fav-row {
   display: flex;
   align-items: center;
@@ -2068,6 +2093,22 @@ textarea.edit-input { overflow: hidden; }
 
     </div>
 
+    <!-- Bestaetigung: Aufbau wie confirmOverlay in der Web-App (Titel, Kreuz,
+         Abbrechen/Bestaetigen). Die Kachel hatte bisher keinen solchen Dialog und
+         loeschte sofort — bei einer ganzen Favoritenliste, auch per Wischen. -->
+    <div class="overlay" id="confirmOverlay">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <span class="overlay-title" id="confirmTitle"></span>
+          <button class="btn-close-overlay" id="btnConfirmClose" aria-label="Schlie&#xDF;en"><i class="fa-light fa-xmark"></i></button>
+        </div>
+        <div class="edit-footer">
+          <button class="btn-edit-back" id="btnConfirmCancel">Abbrechen</button>
+          <button class="btn-save-edit" id="btnConfirmOk">L&#xF6;schen</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Print mode overlay -->
     <div class="overlay" id="printOverlay">
       <div class="overlay-card">
@@ -2474,6 +2515,19 @@ function buildItemCard(item, inCart) {
     + `</div>`;
 }
 
+/** Bestaetigung wie showConfirm in der Web-App: Titel, Knopftext, Rueckruf. */
+let confirmCb = null;
+function showConfirm(title, okLabel, cb) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('btnConfirmOk').textContent = okLabel;
+  confirmCb = cb;
+  openOverlay('confirmOverlay');
+}
+function closeConfirm() {
+  closeOverlay('confirmOverlay');
+  confirmCb = null;
+}
+
 /**
  * Dialoge oeffnen und schliessen: das Blatt fahrt von unten herein, der Grund
  * verdunkelt dazu. Uebernommen aus der Web-App (SymDoWebApp openOverlay/closeOverlay)
@@ -2632,7 +2686,7 @@ function bindCardHandlers() {
  *
  * onLeft laeuft NACH dem Aufloesen der Zeile (die Karte verschwindet), onRight sofort.
  */
-function bindCardSwipe(card, contentSelector, onLeft, onRight) {
+function bindCardSwipe(card, contentSelector, onLeft, onRight, opts) {
   const content = card.querySelector(contentSelector || '.item-card-content');
   if (!content) return;
 
@@ -2677,10 +2731,19 @@ function bindCardSwipe(card, contentSelector, onLeft, onRight) {
     try { content.releasePointerCapture(pointerId); } catch (_) {}
     if (wasDecided && dx <= -THRESHOLD) {
       card.classList.remove('dragging-left', 'dragging-right', 'edit-armed');
-      card.dataset.animating = '1';
-      card.classList.add('is-deleting');
-      content.style.transform = 'translateX(-110%)';
-      dissolveCard(card, () => { if (onLeft) onLeft(); });
+      // dissolve: false — die Karte federt zurueck, statt sich aufzuloesen. Fuer
+      // Aktionen, die erst noch bestaetigt werden: bei Abbruch muss die Zeile stehen
+      // bleiben. Genau so macht es die Web-App beim Loeschen einer Favoritenliste.
+      if (opts && opts.dissolve === false) {
+        content.style.transform = '';
+        card.classList.remove('swipe-armed');
+        if (onLeft) onLeft();
+      } else {
+        card.dataset.animating = '1';
+        card.classList.add('is-deleting');
+        content.style.transform = 'translateX(-110%)';
+        dissolveCard(card, () => { if (onLeft) onLeft(); });
+      }
     } else if (wasDecided && dx >= THRESHOLD) {
       content.style.transform = '';
       card.classList.remove('swipe-armed', 'edit-armed', 'dragging-left', 'dragging-right');
@@ -3082,7 +3145,10 @@ function renderFavListBody() {
     // Links: Liste loeschen. Rechts: alles in den Einkauf — die beiden Aktionen, die
     // in der Web-App unter der Karte liegen (fa-trash / fa-cart-plus).
     bindCardSwipe(karte, '.fav-row',
-      () => requestAction('DeleteFavoriteList', listId),
+      () => showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+        if (viewingListId === listId) showFavListView();
+        requestAction('DeleteFavoriteList', listId);
+      }),
       () => {
         const listObj = (state.favoriteLists || []).find(l => l.id === listId);
         const n = listObj ? (listObj.items || []).length : 0;
@@ -3091,7 +3157,8 @@ function renderFavListBody() {
         showFavToast(n > 0
           ? `${n} Artikel zur Einkaufsliste hinzugefügt`
           : 'Liste enthält keine Artikel');
-      });
+      },
+      { dissolve: false });
   });
   // Der Warenkorb liegt IN der Karte: ohne stopPropagation wuerde derselbe Tipp
   // zugleich die Detailansicht oeffnen.
@@ -4256,6 +4323,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // (Scanner anhalten, Favoriten-Ansicht zuruecksetzen, Tab wieder auf "Liste").
   document.getElementById('btnEditClose').addEventListener('click', closeEditOverlay);
   document.getElementById('btnPrintClose').addEventListener('click', closePrintOverlay);
+  document.getElementById('btnConfirmClose').addEventListener('click', closeConfirm);
+  document.getElementById('btnConfirmCancel').addEventListener('click', closeConfirm);
+  document.getElementById('btnConfirmOk').addEventListener('click', () => {
+    const cb = confirmCb;
+    closeConfirm();
+    if (cb) cb();
+  });
 
   // Edit overlay
   document.getElementById('btnEditBack').addEventListener('click', closeEditOverlay);
@@ -4327,10 +4401,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnDeleteFavList').innerHTML =
     '<i class="fa-light fa-trash"></i> ' + escapeHtml(translate('Delete list'));
   document.getElementById('btnDeleteFavList').addEventListener('click', () => {
-    if (viewingListId) {
-      requestAction('DeleteFavoriteList', viewingListId);
-      closeFavOverlay();
-    }
+    if (!viewingListId) return;
+    const listId = viewingListId;
+    showConfirm(translate('Delete this favorite list?'), translate('Delete'), () => {
+      showFavListView();
+      requestAction('DeleteFavoriteList', listId);
+    });
   });
   document.getElementById('btnConfirmNewList').addEventListener('click', confirmNewFavList);
   document.getElementById('newFavListInput').addEventListener('keydown', (e) => {
