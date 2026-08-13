@@ -63,6 +63,8 @@ class SymDoWebApp extends IPSModuleStrict
         // Mutation (und der ToDo-Timer für jede Liste). Ohne Coalescing liefe für
         // jeden Write ein kompletter Discovery+Revisions-Durchlauf.
         $this->RegisterTimer('Coalesce', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'CoalescedPush\', 0);');
+        // Voller Push, verzoegert — siehe ApplyChanges: dort darf er nicht direkt laufen.
+        $this->RegisterTimer('DeferredPush', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'DeferredPush\', 0);');
 
         // Keine eigenen Variablen: dieses Modul liest ausschließlich Fremddaten.
     }
@@ -84,7 +86,23 @@ class SymDoWebApp extends IPSModuleStrict
 
         $this->SyncListVisibility();
         $this->ResubscribeAll();
-        $this->PushFullState();
+
+        // Den vollen Push NICHT hier ausfuehren, sondern verzoegert: bei einem
+        // Modul-Reload laeuft ApplyChanges, WAEHREND die Schnittstellen der
+        // Listen-Instanzen neu entstehen. TDL_GetAppState/SL_GetAppState trafen sie
+        // dann im Rohbau — im Log stand "InstanceInterface is not available" aus dem
+        // angerufenen Modul, und der InstanceManager meldete "Kann
+        // Schnittstellen-Instanz nicht erstellen". Der Kernel-Check oben greift dabei
+        // NICHT: bei einem Reload bleibt der Runlevel auf KR_READY.
+        try {
+            $this->SetTimerInterval('DeferredPush', 1500);
+        } catch (Throwable $e) {
+            // Timer noch nicht registriert (Reload ohne Kernel-Neustart). Dann
+            // BEWUSST kein Ersatz-Push von hier — genau der war das Problem. Die
+            // Kachel holt den Zustand beim naechsten Revisionsabgleich (15 s) oder
+            // beim Oeffnen.
+            $this->SendDebug('ApplyChanges', 'DeferredPush-Timer fehlt, Push entfaellt', 0);
+        }
     }
 
     /**
@@ -198,6 +216,11 @@ class SymDoWebApp extends IPSModuleStrict
             case 'CoalescedPush':
                 try { $this->SetTimerInterval('Coalesce', 0); } catch (Throwable $e) {}
                 $this->PushChangedInstanceStates();
+                return;
+            // Verzoegerter voller Push (siehe ApplyChanges).
+            case 'DeferredPush':
+                try { $this->SetTimerInterval('DeferredPush', 0); } catch (Throwable $e) {}
+                $this->PushFullState();
                 return;
             case 'CheckRevisions':
                 $this->HandleCheckRevisions($this->DecodeValue($value));
