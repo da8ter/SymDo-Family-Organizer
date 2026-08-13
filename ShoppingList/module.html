@@ -5139,6 +5139,7 @@ function renderFavList(el, st, detail) {
     '' +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
+    `<button id="btnFavRename"><i class="fa-light fa-pencil"></i> ${translate('Rename list')}</button>` +
     `<button id="btnFavDelete" class="destructive"><i class="fa-light fa-trash"></i> ${translate('Delete list')}</button>` +
     `</div>`;
   const freshDetail = renderRows(el, html);
@@ -5182,6 +5183,17 @@ function renderFavList(el, st, detail) {
     const knownPdf = !!(meta && meta.state === 'ok' && meta.isPdf);
     if (knownPdf && openMediaExternally(detail.mediaId)) return;
     openRecipePhoto(detail.mediaId, knownPdf);
+  });
+  const btnFavRename = pick('#btnFavRename');
+  if (btnFavRename) btnFavRename.addEventListener('click', () => {
+    // Der Name kommt beim Klick frisch aus dem Bestand, nicht aus dem Render-Moment.
+    const liste = curDetail();
+    showPrompt(translate('Rename list'), liste.name || '', translate('Save'), (name) => {
+      const neu = name.trim();
+      if (neu && neu !== liste.name) {
+        sdCall(selectedShoppingID(), 'RenameFavoriteList', { listId: liste.id, newName: neu });
+      }
+    });
   });
   const btnAddAll = pick('#btnFavAddAll');
   if (btnAddAll) btnAddAll.addEventListener('click', () => addFavListToCart(selectedShoppingID(), curDetail()));
