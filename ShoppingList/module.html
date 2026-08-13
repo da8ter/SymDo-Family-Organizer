@@ -584,6 +584,10 @@ body {
     column-gap: var(--gap);
     row-gap: 0;
     align-items: start;
+    /* align-content MUSS start sein: seit die Favoriten ein Bereich mit bekannter
+       Hoehe sind, verteilt das Raster sonst die freie Hoehe auf die Zeilen. Gemessen
+       waren es 244/226/226px Zeilenhoehe fuer 55px hohe Karten — riesige Luecken. */
+    align-content: start;
   }
   .fav-list-body > .fav-detail-search,
   .fav-list-body > .fav-empty { grid-column: 1 / -1; }
@@ -922,6 +926,34 @@ body {
 .empty-icon { font-size: 36px; }
 .empty-text { font-size: 15px; }
 
+/* ── Favoriten: eigener Inhaltsbereich, kein Dialog ─────────────────────────
+   Liegt als Geschwister von .list-area im Flex-Aufbau von .wrap und wird von der
+   Tab-Leiste umgeschaltet (setArea). Vorbild ist #screen-favorites in der Web-App:
+   Tab-Leiste bleibt stehen, nichts wird verdunkelt, es gibt nichts wegzutippen.
+
+   padding-bottom: var(--tab-clear) — die Fusszeilen muessen ueber der Tab-Leiste
+   bleiben. .wrap hat unten bewusst kein Polster, damit der Listeninhalt hinter dem
+   Glas hindurchlaeuft; dieser Bereich braucht es aber, weil seine Knoepfe sonst
+   unter der Leiste laegen. */
+.fav-area {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: var(--tab-clear);
+  box-sizing: border-box;
+}
+.fav-area.is-active { display: flex; }
+
+/* Kopfzeile des Bereichs — Maße wie die der Blaetter (.overlay-header). */
+.fav-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px var(--gap) 8px;
+  flex-shrink: 0;
+}
+
 /* ── Dialoge: Blätter, die von unten hereinfahren ──────────────────────────
    Aufbau, Maße und Bewegung wie in der Web-App (.overlay/.overlay-card dort):
    verdunkelter Grund, das Blatt sitzt unten, oben abgerundet, Höhe nach Inhalt und
@@ -1092,10 +1124,6 @@ body {
 .btn-fav-detail-back:active { opacity: .85; }
 
 /* Back footer */
-.fav-back-footer {
-  flex-shrink: 0;
-  padding: 0 var(--gap) var(--gap);
-}
 
 .btn-fav-back {
   width: 100%;
@@ -1161,8 +1189,9 @@ body {
 
 /* Favorite list items */
 .fav-list-body {
-  /* flex: 0 1 auto und nicht flex: 1 — siehe .overlay-card */
-  flex: 0 1 auto;
+  /* flex: 1 — anders als in einem Blatt (dort height: auto) hat .fav-area eine
+     bekannte Hoehe, der Rest gehoert der Liste. */
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1985,42 +2014,37 @@ textarea.edit-input { overflow: hidden; }
       </div>
     </div>
 
-    <!-- Favorite list picker overlay -->
-    <div class="overlay" id="favOverlay">
-      <div class="overlay-card">
-        <div class="overlay-header">
-          <span class="overlay-title" id="favOverlayTitle">Favoritenlisten</span>
-          <button class="btn-close-overlay" id="btnFavClose" aria-label="Schlie&#xDF;en"><i class="fa-light fa-xmark"></i></button>
-          <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
-          <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
-        </div>
-        <div class="fav-rename-form" id="favRenameForm" style="display:none;">
-          <input type="text" class="new-list-input" id="favRenameInput"
-                 placeholder="Listenname&#x2026;" autocomplete="off" />
-          <button class="btn-confirm-new-list" id="btnConfirmRename" aria-label="Speichern">&#x2713;</button>
-        </div>
-        <div class="new-list-form" id="newFavListForm">
-          <input type="text" class="new-list-input" id="newFavListInput"
-                 placeholder="Listenname&#x2026;" autocomplete="off" />
-          <button class="btn-confirm-new-list" id="btnConfirmNewList" aria-label="Erstellen">&#x2713;</button>
-        </div>
-        <div class="fav-list-body" id="favListBody"></div>
-        <div class="fav-detail-footer" id="favDetailFooter" style="display:none;">
-          <div class="fav-detail-footer-row">
-            <button class="btn-delete-fav-list" id="btnDeleteFavList" aria-label="Liste l&#xF6;schen"></button>
-            <button class="btn-fav-detail-back" id="btnFavDetailBack">Zur&#xFC;ck</button>
-            <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
-          </div>
-        </div>
-        <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
-          <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
-          <button class="btn-fav-edit-back" id="btnFavEditBack">Zur&#xFC;ck</button>
-          <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
-        </div>
-        <div class="fav-back-footer" id="favBackFooter" style="display:none;">
-          <button class="btn-fav-back" id="btnFavBack">Zur&#xFC;ck</button>
-        </div>
+    <!-- Favoriten: eigener Inhaltsbereich, den die Tab-Leiste umschaltet — kein
+         Dialog mehr. Vorbild ist #screen-favorites in der Web-App. -->
+    <div class="fav-area" id="favArea">
+      <div class="fav-head">
+      <span class="overlay-title" id="favOverlayTitle">Favoritenlisten</span>
+      <button class="btn-fav-rename" id="btnFavRenameList" style="display:none;" aria-label="Liste umbenennen"><i class="fa-light fa-pencil"></i></button>
+      <button class="btn-new-fav-list" id="btnNewFavList" aria-label="Neue Liste">+</button>
+    </div>
+    <div class="fav-rename-form" id="favRenameForm" style="display:none;">
+      <input type="text" class="new-list-input" id="favRenameInput"
+             placeholder="Listenname&#x2026;" autocomplete="off" />
+      <button class="btn-confirm-new-list" id="btnConfirmRename" aria-label="Speichern">&#x2713;</button>
+    </div>
+    <div class="new-list-form" id="newFavListForm">
+      <input type="text" class="new-list-input" id="newFavListInput"
+             placeholder="Listenname&#x2026;" autocomplete="off" />
+      <button class="btn-confirm-new-list" id="btnConfirmNewList" aria-label="Erstellen">&#x2713;</button>
+    </div>
+    <div class="fav-list-body" id="favListBody"></div>
+    <div class="fav-detail-footer" id="favDetailFooter" style="display:none;">
+      <div class="fav-detail-footer-row">
+        <button class="btn-delete-fav-list" id="btnDeleteFavList" aria-label="Liste l&#xF6;schen"></button>
+        <button class="btn-fav-detail-back" id="btnFavDetailBack">Zur&#xFC;ck</button>
+        <button class="btn-add-fav-to-cart" id="btnAddFavToCart">Artikel zur Einkaufsliste hinzuf&#xFC;gen</button>
       </div>
+    </div>
+    <div class="fav-edit-footer" id="favEditFooter" style="display:none;">
+      <button class="btn-delete-fav-item" id="btnDeleteFavItem" aria-label="Artikel entfernen"></button>
+      <button class="btn-fav-edit-back" id="btnFavEditBack">Zur&#xFC;ck</button>
+      <button class="btn-save-fav-edit" id="btnSaveFavEdit">Speichern</button>
+    </div>
     </div>
 
     <!-- Print mode overlay -->
@@ -2730,8 +2754,8 @@ function render() {
     if (favSection.style.display !== 'none') populateEditFavList();
   }
 
-  // Refresh fav overlay if open
-  if (document.getElementById('favOverlay').classList.contains('open')) {
+  // Favoriten nur neu zeichnen, wenn ihr Bereich gerade sichtbar ist
+  if (document.getElementById('favArea').classList.contains('is-active')) {
     if (editingFavItem) {
       // Don't clobber the edit form
     } else if (viewingListId) {
@@ -2855,7 +2879,26 @@ function renderSuggestions() {
   return treffer;
 }
 
-// ── Favorite list overlay ──────────────────────────────────────────────────
+/**
+ * Zwischen Liste und Favoriten umschalten — die Kachel hat jetzt zwei
+ * Inhaltsbereiche statt einem plus Dialog.
+ *
+ * Die Eingabezeile gehoert zur LISTE (sie legt Artikel auf die Einkaufsliste) und
+ * verschwindet deshalb mit ihr; das Vorschlagsfenster haengt an ihr und wird
+ * mitgeschlossen, sonst blieb es beim Umschalten offen stehen.
+ */
+function setArea(bereich) {
+  const favoriten = bereich === 'fav';
+  document.getElementById('listArea').style.display = favoriten ? 'none' : '';
+  document.getElementById('favArea').classList.toggle('is-active', favoriten);
+  const zeile = document.getElementById('searchBar');
+  if (zeile) zeile.style.display = favoriten ? 'none' : '';
+  const vorschlaege = document.getElementById('suggestionsDropdown');
+  if (vorschlaege) vorschlaege.classList.remove('open');
+  setActiveTab(favoriten ? 'fav' : 'list');
+}
+
+// ── Favoriten-Bereich ──────────────────────────────────────────────────────
 function openFavOverlay() {
   closePrintOverlay();
   favOverlayMode = 'load-list';
@@ -2870,15 +2913,12 @@ function openFavOverlay() {
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = 'none';
   document.getElementById('favEditFooter').style.display = 'none';
-  document.getElementById('favBackFooter').style.display = '';
   renderFavListBody();
-  openOverlay('favOverlay');
-  setActiveTab('fav');
+  setArea('fav');
 }
 
 function closeFavOverlay() {
-  closeOverlay('favOverlay');
-  setActiveTab('list');
+  setArea('list');
   favOverlayMode = null;
   viewingListId  = null;
   editingFavItem = null;
@@ -2895,7 +2935,6 @@ function showFavDetail(listId) {
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('favEditFooter').style.display = 'none';
-  document.getElementById('favBackFooter').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = '';
   renderFavDetailBody(list);
 }
@@ -2909,7 +2948,6 @@ function showFavListView() {
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('favDetailFooter').style.display = 'none';
   document.getElementById('favEditFooter').style.display = 'none';
-  document.getElementById('favBackFooter').style.display = '';
   renderFavListBody();
 }
 
@@ -2921,7 +2959,6 @@ function openFavItemEdit(listId, item) {
   document.getElementById('favRenameForm').style.display = 'none';
   document.getElementById('newFavListForm').classList.remove('visible');
   document.getElementById('favDetailFooter').style.display = 'none';
-  document.getElementById('favBackFooter').style.display = 'none';
   document.getElementById('favEditFooter').style.display = '';
   const body = document.getElementById('favListBody');
   body.innerHTML = '<div class="edit-form">'
@@ -4147,7 +4184,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnAddFavToCart').textContent      = translate('Add to shopping list');
   document.getElementById('btnFavEditBack').textContent        = translate('Cancel');
   document.getElementById('btnSaveFavEdit').textContent       = translate('Save');
-  document.getElementById('btnFavBack').textContent           = translate('Back');
   document.querySelector('.empty-text').textContent           = translate('List is empty');
   document.getElementById('favOverlayTitle').textContent      = translate('Favorite lists');
   document.getElementById('scannerOverlayTitle').textContent  = translate('Scan barcode');
@@ -4216,7 +4252,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Funktionen wie die Zurueck-Knoepfe in den Fusszeilen, damit auch aufgeraeumt wird
   // (Scanner anhalten, Favoriten-Ansicht zuruecksetzen, Tab wieder auf "Liste").
   document.getElementById('btnEditClose').addEventListener('click', closeEditOverlay);
-  document.getElementById('btnFavClose').addEventListener('click', closeFavOverlay);
   document.getElementById('btnPrintClose').addEventListener('click', closePrintOverlay);
 
   // Edit overlay
@@ -4249,10 +4284,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Favorite list overlay
-  document.getElementById('btnFavBack').addEventListener('click', closeFavOverlay);
-  document.getElementById('favOverlay').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('favOverlay')) closeFavOverlay();
-  });
   document.getElementById('btnNewFavList').addEventListener('click', () => {
     if (editingFavItem) {
       closeFavItemEdit();
