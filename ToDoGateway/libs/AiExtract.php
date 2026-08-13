@@ -470,7 +470,7 @@ trait AiExtract
         // Nur EIN Anbieter-Aufruf gleichzeitig. Ein Aufruf belegt bis zu
         // AI_TIMEOUT Sekunden einen Webhook-Worker bzw. einen Kernel-Thread;
         // parallele Aufrufe würden den gesamten Symcon-Webserver blockieren.
-        $lock = 'LAB_Ai_' . $this->InstanceID;
+        $lock = 'TGW_Ai_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($lock, 0)) {
             return ['ok' => false, 'code' => 'ai_busy', 'message' => $this->Translate('Another AI request is already running.'), 'status' => 429];
         }

@@ -15,7 +15,7 @@ trait DeviceRegistry
         $expiresAt = time() + self::PAIRING_TTL;
         // Single pending pairing at a time; a new code replaces the previous one.
         // Same semaphore as ConsumePairingCode to avoid interleaved writes.
-        $semaphoreKey = 'LAB_Pairing_' . $this->InstanceID;
+        $semaphoreKey = 'TGW_Pairing_' . $this->InstanceID;
         if (IPS_SemaphoreEnter($semaphoreKey, 500)) {
             try {
                 $this->WriteAttributeString('PendingPairings', json_encode([[
@@ -144,7 +144,7 @@ trait DeviceRegistry
 
     private function ConsumePairingCode(string $code): bool
     {
-        $semaphoreKey = 'LAB_Pairing_' . $this->InstanceID;
+        $semaphoreKey = 'TGW_Pairing_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
             return false;
         }
@@ -312,7 +312,7 @@ trait DeviceRegistry
 
     private function ModifyPairedDevices(callable $modifier): bool
     {
-        $semaphoreKey = 'LAB_Devices_' . $this->InstanceID;
+        $semaphoreKey = 'TGW_Devices_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
             $this->SendDebug('DeviceRegistry', 'Semaphore timeout on device modification', 0);
             return false;

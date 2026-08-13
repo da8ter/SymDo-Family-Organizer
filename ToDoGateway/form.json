@@ -17,7 +17,7 @@
                 {
                     "type": "Button",
                     "caption": "Pair new device",
-                    "onClick": "LAB_CreatePairing($id);"
+                    "onClick": "TGW_CreatePairing($id);"
                 },
                 {
                     "type": "Image",
@@ -66,7 +66,7 @@
                 {
                     "type": "Button",
                     "caption": "Create browser access",
-                    "onClick": "LAB_CreateWebAccess($id);"
+                    "onClick": "TGW_CreateWebAccess($id);"
                 },
                 {
                     "type": "Image",
@@ -145,7 +145,7 @@
                     "type": "Select",
                     "name": "AiProvider",
                     "caption": "Provider",
-                    "onChange": "LAB_UpdateAiFormVisibility($id, $AiProvider);",
+                    "onChange": "TGW_UpdateAiFormVisibility($id, $AiProvider);",
                     "options": [
                         {
                             "caption": "Anthropic (Claude)",
@@ -306,24 +306,17 @@
                         {
                             "type": "Button",
                             "caption": "Revoke selected device",
-                            "onClick": "LAB_RevokeDevice($id, (string)$PairedDevicesList['deviceId']);"
+                            "onClick": "TGW_RevokeDevice($id, (string)$PairedDevicesList['deviceId']);"
                         },
                         {
                             "type": "Button",
                             "caption": "Remove revoked entries",
-                            "onClick": "LAB_RemoveRevokedDevices($id);"
+                            "onClick": "TGW_RemoveRevokedDevices($id);"
                         }
                     ]
                 }
             ]
         }
     ],
-    "actions": [],
-    "status": [
-        {
-            "code": 201,
-            "icon": "error",
-            "caption": "Only one SymDo Bridge instance is allowed per system."
-        }
-    ]
+    "actions": []
 }

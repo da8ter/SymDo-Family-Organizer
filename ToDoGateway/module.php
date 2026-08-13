@@ -4,11 +4,27 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/BridgeImport.php';
+require_once __DIR__ . '/BridgeCore.php';
 
+/**
+ * SymDo Gateway — eine zentrale Dienst-Instanz für die ganze Listen-Familie.
+ *
+ * Zwei Hälften unter einem Dach:
+ *  - Gateway: Anmeldedaten und HTTP-Broker für Google Tasks, Microsoft To Do, CalDAV.
+ *    Die ToDo-Listen rufen sie direkt als TGW_… auf.
+ *  - App (trait BridgeCore): REST-API, Web-App, Push und KI für iOS- und Web-App.
+ *
+ * Die Gateway-Hälfte darf mehrfach existieren (ein Instanzsatz pro Konto), die
+ * App-Hälfte nicht — die Hook-Pfade sind fest. Deshalb bedient nur die Instanz mit
+ * der niedrigsten ID die App; siehe OwnsAppApi().
+ */
 class ToDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
     use BridgeImport;
+    use BridgeCore;
+
+    private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     public function Create(): void
     {
@@ -47,18 +63,8 @@ class ToDoGateway extends IPSModuleStrict
         $this->RegisterHook('todogateway_google');
         $this->RegisterHook('todogateway_microsoft');
 
-        // App-Hälfte: Bestand aus dem abgelösten Modul „SymDo Bridge". Die Properties
-        // werden hier bereits angelegt, damit der Import sie befüllen kann, bevor der
-        // zugehörige Code einzieht.
-        $this->RegisterPropertyString('Users', '[]');
-        $this->RegisterPropertyString('LocalHttpsUrl', '');
-        $this->RegisterPropertyBoolean('AiEnabled', true);
-        $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
-        $this->RegisterPropertyString('AiAnthropicKey', '');
-        $this->RegisterPropertyString('AiOpenAIKey', '');
-        $this->RegisterPropertyString('AiLocalBaseUrl', '');
-        $this->RegisterPropertyString('AiLocalModel', '');
-        $this->RegisterPropertyString('AiLocalKey', '');
+        // App-Hälfte
+        $this->BridgeCreate();
         $this->RegisterAttributeString('BridgeImportDone', '');
         $this->RegisterTimer('BridgeImport', 0, 'TGW_RunPendingBridgeImport($_IPS[\'TARGET\']);');
     }
@@ -72,34 +78,92 @@ class ToDoGateway extends IPSModuleStrict
             return;
         }
 
+        if ($this->OwnsAppApi()) {
+            // Flüchtig, deshalb hier und nicht in Create(): ein Modul-Reload ohne
+            // Kernel-Neustart führt Create() nicht erneut aus.
+            $this->RegisterHook(self::HOOK_PATH);
+            $this->RegisterHook(self::WEBAPP_HOOK_PATH);
+            $this->RegisterHook(self::WS_HOOK_PATH);
+            $this->BridgeApplyChanges();
+        }
+
         // Verzögert: IPS_ApplyChanges darf nicht aus ApplyChanges heraus laufen.
         if ($this->BridgeImportPending()) {
             $this->SetTimerInterval('BridgeImport', 1000);
         }
     }
 
+    public function Destroy(): void
+    {
+        parent::Destroy();
+    }
+
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->ApplyChanges();
+            return;
         }
+        $this->BridgeMessageSink($Message);
+    }
+
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        if ($this->BridgeRequestAction($Ident, $Value)) {
+            return;
+        }
+        parent::RequestAction($Ident, $Value);
+    }
+
+    /**
+     * Die App-Hälfte hängt an festen Hook-Pfaden, kann also nur einmal im System
+     * laufen — die Gateway-Hälfte dagegen beliebig oft. Es gewinnt die niedrigste
+     * Instanz-ID. Bewusst kein Blick auf den Status einer Geschwister-Instanz: der
+     * klebt in Symcon und taugt nicht als Wahrheit.
+     */
+    private function OwnsAppApi(): bool
+    {
+        $ids = IPS_GetInstanceListByModuleID(self::MODULE_GUID);
+        sort($ids);
+        return ((int)($ids[0] ?? 0)) === $this->InstanceID;
+    }
+
+    protected function ProcessHookData(): void
+    {
+        // rtrim, weil die Redirect-URI auf einen Schraegstrich endet.
+        $uri  = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $path = rtrim((string)(parse_url($uri, PHP_URL_PATH) ?? ''), '/');
+        if ($path === '/hook/todogateway_google' || $path === '/hook/todogateway_microsoft') {
+            $this->ProcessOAuthHookData($path === '/hook/todogateway_google');
+            return;
+        }
+        $this->BridgeProcessHook();
     }
 
     public function GetConfigurationForm(): string
     {
-        $form = [
-            'elements' => array_merge(
-                $this->GetBridgeImportFormElements(),
-                [
-                    $this->GetGoogleFormElements(),
-                    $this->GetMicrosoftFormElements(),
-                    $this->GetCalDAVFormElements()
-                ],
-                $this->GetDonationFormElements()
-            )
-        ];
+        // form.json traegt die App-Haelfte. Symcon mergt NICHT: ist
+        // GetConfigurationForm ueberschrieben, gewinnt die Methode vollstaendig —
+        // die Datei muss also selbst gelesen werden.
+        $app = json_decode((string)@file_get_contents(__DIR__ . '/form.json'), true);
+        $appElements = (is_array($app) && isset($app['elements']) && is_array($app['elements']))
+            ? $app['elements']
+            : [];
 
-        return json_encode($form);
+        $elements = array_merge(
+            $this->GetBridgeImportFormElements(),
+            $appElements,
+            [
+                $this->GetGoogleFormElements(),
+                $this->GetMicrosoftFormElements(),
+                $this->GetCalDAVFormElements()
+            ],
+            $this->GetDonationFormElements()
+        );
+
+        $this->BridgeFormOverrides($elements);
+
+        return json_encode(['elements' => $elements], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     private function GetDonationFormElements(): array
@@ -811,16 +875,9 @@ class ToDoGateway extends IPSModuleStrict
     // OAuth Webhook Handler
     // ──────────────────────────────────────────────────────────────────────────
 
-    public function ProcessHookData(): void
+    /** OAuth-Rueckleitung von Google bzw. Microsoft. Weiche siehe ProcessHookData(). */
+    private function ProcessOAuthHookData(bool $isGoogle): void
     {
-        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
-        $path = rtrim((string)(parse_url($uri, PHP_URL_PATH) ?? ''), '/');
-        $isGoogle = ($path === '/hook/todogateway_google');
-        $isMicrosoft = ($path === '/hook/todogateway_microsoft');
-        if (!$isGoogle && !$isMicrosoft) {
-            return;
-        }
-
         $code = $_GET['code'] ?? '';
         $error = $_GET['error'] ?? '';
         $state = (string)($_GET['state'] ?? '');

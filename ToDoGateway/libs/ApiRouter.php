@@ -397,7 +397,7 @@ trait ApiRouter
      */
     private function ReserveAction(string $key): bool
     {
-        $semaphoreKey = 'LAB_Dedup_' . $this->InstanceID;
+        $semaphoreKey = 'TGW_Dedup_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
             return true; // best effort: im Zweifel ausführen (wie bisher)
         }
@@ -420,7 +420,7 @@ trait ApiRouter
     /** Entfernt eine Reservierung, deren Aktion fehlgeschlagen ist (Retry erlauben). */
     private function ReleaseAction(string $key): void
     {
-        $semaphoreKey = 'LAB_Dedup_' . $this->InstanceID;
+        $semaphoreKey = 'TGW_Dedup_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
             return;
         }

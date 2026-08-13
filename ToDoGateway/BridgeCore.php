@@ -7,14 +7,23 @@ require_once __DIR__ . '/libs/DeviceRegistry.php';
 require_once __DIR__ . '/libs/QrRenderer.php';
 require_once __DIR__ . '/libs/AiExtract.php';
 
-class SymDoBridge extends IPSModuleStrict
+/**
+ * Die App-Hälfte des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
+ * Push-Kanal und KI-Analyse. Früher das eigenständige Modul „SymDo Bridge".
+ *
+ * Liegt bewusst im Modulwurzelverzeichnis und nicht in libs/: jedes __DIR__ und
+ * dirname(__DIR__) hier drin löst dadurch auf dieselben Pfade auf wie zuvor.
+ *
+ * Der Lebenszyklus liegt in der Fassade (module.php). Was hier davon übrig ist,
+ * trägt das Präfix Bridge…, damit es sich nicht mit der Gateway-Hälfte beißt.
+ */
+trait BridgeCore
 {
     use ApiRouter;
     use DeviceRegistry;
     use QrRenderer;
     use AiExtract;
 
-    private const MODULE_GUID          = '{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}';
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
     private const CONNECT_MODULE_GUID  = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
@@ -32,15 +41,12 @@ class SymDoBridge extends IPSModuleStrict
     private const ACTION_DEDUP_MAX     = 200;
     private const ACTION_ID_MAX_LEN    = 64;
 
-    private const STATUS_DUPLICATE_INSTANCE = 201;
-
-    public function Create(): void
+    /**
+     * Properties und Attribute der App-Hälfte. Die Hooks fehlen hier bewusst: welche
+     * Instanz die App bedient, entscheidet die Fassade in ApplyChanges.
+     */
+    private function BridgeCreate(): void
     {
-        parent::Create();
-        $this->RegisterHook(self::HOOK_PATH);
-        // Zweiter Hook: liefert die SymDo-Web-App als eigenständige Browser-Seite
-        // (dieselbe UI wie die Kachel; Daten holt sie über die /hook/lists/app-API).
-        $this->RegisterHook(self::WEBAPP_HOOK_PATH);
         $this->RegisterAttributeString('PairedDevices', '[]');
         $this->RegisterAttributeString('PendingPairings', '[]');
         $this->RegisterAttributeString('ActionDedup', '{}');
@@ -66,33 +72,16 @@ class SymDoBridge extends IPSModuleStrict
         $this->RegisterPropertyString('AiLocalKey', '');
     }
 
-    public function ApplyChanges(): void
+    /**
+     * Läuft nur auf der Instanz, die die App bedient. Die drei Hooks registriert die
+     * Fassade unmittelbar davor — bewusst in ApplyChanges und nicht in Create(): sie
+     * sind flüchtig, und Create() läuft bei einem Modul-Reload ohne Kernel-Neustart
+     * nicht erneut; der Pfad lieferte dann bis zum nächsten Neustart 404 (gemessen).
+     */
+    private function BridgeApplyChanges(): void
     {
-        parent::ApplyChanges();
-        if (IPS_GetKernelRunlevel() !== KR_READY) {
-            $this->RegisterMessage(0, IPS_KERNELSTARTED);
-            return;
-        }
-
-        // The hook path is fixed, so a second instance would shadow the first one
-        $instances = IPS_GetInstanceListByModuleID(self::MODULE_GUID);
-        sort($instances);
-        if (count($instances) > 1 && $instances[0] !== $this->InstanceID) {
-            $this->SetStatus(self::STATUS_DUPLICATE_INSTANCE);
-            return;
-        }
-
         $this->EnsureUserIDs();
-
-        // Push-Kanal verdrahten. Die Hook-Registrierung steht bewusst HIER und
-        // nicht in Create() wie die beiden anderen Hooks: sie ist flüchtig, und
-        // Create() läuft bei einem Modul-Reload ohne Kernel-Neustart nicht erneut
-        // — der Pfad lieferte dann bis zum nächsten Neustart 404 (gemessen).
-        // ApplyChanges läuft in beiden Fällen, die Registrierung ist idempotent.
-        $this->RegisterHook(self::WS_HOOK_PATH);
         $this->WsResubscribe();
-
-        $this->SetStatus(IS_ACTIVE);
     }
 
     /**
@@ -360,12 +349,9 @@ class SymDoBridge extends IPSModuleStrict
         }
     }
 
-    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    /** IPS_KERNELSTARTED behandelt die Fassade; hier bleibt nur der Push-Auslöser. */
+    private function BridgeMessageSink(int $Message): void
     {
-        if ($Message === IPS_KERNELSTARTED) {
-            $this->ApplyChanges();
-            return;
-        }
         if ($Message === VM_UPDATE) {
             // Direkt senden, ohne Entprell-Timer. Eine Mutation schreibt 2-3
             // Stat-Variablen, ergibt also 2-3 Signale — das ist gewollt billig:
@@ -379,17 +365,13 @@ class SymDoBridge extends IPSModuleStrict
         }
     }
 
-    public function Destroy(): void
+    /**
+     * Laufzeit-Anpassungen an den Formularelementen der App-Hälfte. Die Fassade
+     * liefert die bereits zusammengesetzte Elementliste und kodiert danach selbst.
+     */
+    private function BridgeFormOverrides(array &$elements): void
     {
-        parent::Destroy();
-    }
-
-    public function GetConfigurationForm(): string
-    {
-        $form = json_decode((string)@file_get_contents(__DIR__ . '/form.json'), true);
-        if (!is_array($form) || !isset($form['elements'])) {
-            return '{}';
-        }
+        $form = ['elements' => &$elements];
 
         $connectUrl = $this->GetConnectUrl();
         $info = $connectUrl !== ''
@@ -414,8 +396,6 @@ class SymDoBridge extends IPSModuleStrict
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyStatus', 'caption', $this->AiPrivacyStatusText());
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyRevoke', 'visible', $accepted);
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyAccept', 'enabled', !$accepted);
-
-        return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**
@@ -498,14 +478,14 @@ class SymDoBridge extends IPSModuleStrict
      * KI-Relay für die Visu-Kachel (kein REST-Token): SymDoWebApp ruft dies per
      * IPS_RequestAction, die Bridge extrahiert und schickt das Ergebnis per
      * IPS_RequestAction('AiResult') an die Kachel zurück. Bewusst über
-     * RequestAction statt einer neuen public LAB_-Methode, damit ein einfacher
+     * RequestAction statt einer neuen public TGW_-Methode, damit ein einfacher
      * Modul-Reload (ohne Kernel-Neustart) genügt.
      */
-    public function RequestAction(string $Ident, mixed $Value): void
+    private function BridgeRequestAction(string $Ident, mixed $Value): bool
     {
         if ($Ident === 'TestLocalUrl') {
             $this->TestLocalUrl(trim((string)$Value));
-            return;
+            return true;
         }
 
         // Einwilligung aus dem Konfigurationsformular (Popup-Knopf bzw. Widerruf).
@@ -521,7 +501,7 @@ class SymDoBridge extends IPSModuleStrict
                     'caption',
                     $this->Translate('The consent cannot be stored until the Symcon kernel has been restarted once after this module update. Until then the AI analysis stays switched on as configured.')
                 );
-                return;
+                return true;
             }
             @$this->WriteAttributeBoolean('AiPrivacyAccepted', $accepted);
             @$this->WriteAttributeString('AiPrivacyAcceptedAt', $accepted ? date('c') : '');
@@ -536,7 +516,7 @@ class SymDoBridge extends IPSModuleStrict
                     'caption',
                     $this->Translate('The consent cannot be stored until the Symcon kernel has been restarted once after this module update. Until then the AI analysis stays switched on as configured.')
                 );
-                return;
+                return true;
             }
             // Widerruf schaltet die KI ab: sie ohne Einwilligung weiterlaufen zu
             // lassen wäre genau das, was die Sperre verhindern soll.
@@ -551,12 +531,12 @@ class SymDoBridge extends IPSModuleStrict
             $this->UpdateFormField('AiPrivacyStatus', 'caption', $this->AiPrivacyStatusText());
             $this->UpdateFormField('AiPrivacyRevoke', 'visible', $accepted);
             $this->UpdateFormField('AiPrivacyAccept', 'enabled', !$accepted);
-            return;
+            return true;
         }
         if ($Ident === 'AiTileRequest') {
             $req = json_decode((string)$Value, true);
             if (!is_array($req)) {
-                return;
+                return true;
             }
             $sdwa = (int)($req['sdwa'] ?? 0);
             $txn  = (string)($req['txn'] ?? '');
@@ -582,9 +562,9 @@ class SymDoBridge extends IPSModuleStrict
                     'json'   => $body,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             }
-            return;
+            return true;
         }
-        parent::RequestAction($Ident, $Value);
+        return false;
     }
 
     /** Rückkanal nur an echte SymDoWebApp-Instanzen (Ident kommt von außen). */
@@ -596,7 +576,8 @@ class SymDoBridge extends IPSModuleStrict
         return (IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '') === self::SDWA_MODULE_GUID;
     }
 
-    protected function ProcessHookData(): void
+    /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */
+    private function BridgeProcessHook(): void
     {
         try {
             $path = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);

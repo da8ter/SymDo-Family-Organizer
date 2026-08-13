@@ -1,12 +1,15 @@
 {
   "id": "{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}",
-  "name": "ToDo Gateway",
+  "name": "SymDo Gateway",
   "type": 2,
   "vendor": "",
   "aliases": [
-    "ToDo Gateway"
+    "ToDo Gateway",
+    "SymDo Bridge",
+    "App Bridge",
+    "Smartphone App"
   ],
-  "url": "",
+  "url": "https://github.com/da8ter/ToDo-List/tree/main/ToDoGateway",
   "parentRequirements": [],
   "childRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
   "implemented": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],

@@ -2179,17 +2179,31 @@ class ToDoList extends IPSModuleStrict
         ];
     }
 
-    /** Household users (with scaled avatar data URIs) from the SymDo Bridge. */
+    /**
+     * Die App-Hälfte läuft auf dem Gateway mit der niedrigsten Instanz-ID — nicht
+     * zwingend auf dem eigenen Eltern-Gateway, falls jemand mehrere Konten fährt.
+     */
+    private function GetAppGatewayID(): int
+    {
+        $ids = @IPS_GetInstanceListByModuleID('{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}');
+        if (!is_array($ids) || $ids === []) {
+            return 0;
+        }
+        sort($ids);
+        return (int)$ids[0];
+    }
+
+    /** Household users (with scaled avatar data URIs) from the SymDo Gateway. */
     private function GetTileUsers(): array
     {
-        if (!function_exists('LAB_GetUsersForTile')) {
+        if (!function_exists('TGW_GetUsersForTile')) {
             return [];
         }
-        $bridges = IPS_GetInstanceListByModuleID('{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}');
-        if ($bridges === []) {
+        $gateway = $this->GetAppGatewayID();
+        if ($gateway === 0) {
             return [];
         }
-        $data = json_decode((string)@LAB_GetUsersForTile($bridges[0]), true);
+        $data = json_decode((string)@TGW_GetUsersForTile($gateway), true);
         return is_array($data) ? $data : [];
     }
 
@@ -2214,12 +2228,12 @@ class ToDoList extends IPSModuleStrict
 
     private function NotifyAssignedUsers(array $UserIDs, string $Title, string $Actor): void
     {
-        if ($UserIDs === [] || !function_exists('LAB_NotifyAssignment')) {
+        if ($UserIDs === [] || !function_exists('TGW_NotifyAssignment')) {
             return;
         }
-        $bridges = IPS_GetInstanceListByModuleID('{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}');
-        if ($bridges !== []) {
-            @LAB_NotifyAssignment($bridges[0], json_encode(array_values($UserIDs)), $Title, $Actor);
+        $gateway = $this->GetAppGatewayID();
+        if ($gateway > 0) {
+            @TGW_NotifyAssignment($gateway, json_encode(array_values($UserIDs)), $Title, $Actor);
         }
     }
 

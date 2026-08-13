@@ -14,7 +14,7 @@ class SymDoWebApp extends IPSModuleStrict
 {
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
-    private const BRIDGE_MODULE_GUID   = '{F9B31B2B-ED34-4E88-B96D-D115E39F0B44}';
+    private const GATEWAY_MODULE_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     // Stat-Variablen der Quell-Module: jede Mutation läuft durch SendState und
     // aktualisiert mindestens eine davon — unser Änderungs-Trigger ohne Polling.
@@ -158,12 +158,12 @@ class SymDoWebApp extends IPSModuleStrict
         // dieser Kachel. Die Bridge ist die maßgebliche Quelle (ihr Attribut steuert
         // App und Web-App). Neue public-Funktionen gibt es erst nach einem
         // Kernel-Neustart — bis dahin bleibt es bei der lokalen Wirkung.
-        $bridgeID = $this->GetBridgeID();
-        if ($bridgeID <= 0 || !function_exists('LAB_SetListHidden')) {
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0 || !function_exists('TGW_SetListHidden')) {
             return;
         }
         foreach ($repaired as $row) {
-            @LAB_SetListHidden($bridgeID, $row['instanceID'], $row['hide']);
+            @TGW_SetListHidden($gatewayID, $row['instanceID'], $row['hide']);
         }
     }
 
@@ -271,9 +271,9 @@ class SymDoWebApp extends IPSModuleStrict
 
         // Benutzer-Optionen aus der SymDo Bridge
         $options  = [['caption' => $this->Translate('No user'), 'value' => '']];
-        $bridgeID = $this->GetBridgeID();
-        if ($bridgeID > 0 && function_exists('LAB_GetUsers')) {
-            $users = json_decode((string)@LAB_GetUsers($bridgeID), true);
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID > 0 && function_exists('TGW_GetUsers')) {
+            $users = json_decode((string)@TGW_GetUsers($gatewayID), true);
             if (is_array($users)) {
                 foreach ($users as $user) {
                     if (!is_array($user) || !isset($user['id'], $user['name'])) {
@@ -294,10 +294,10 @@ class SymDoWebApp extends IPSModuleStrict
                 }
             }
         }
-        $bridgeHidden = $this->GetBridgeHiddenIDs();
+        $gatewayHidden = $this->GetGatewayHiddenIDs();
         $values       = [];
         foreach ($this->DiscoverInstances() as $inst) {
-            $suffix   = in_array($inst['id'], $bridgeHidden, true)
+            $suffix   = in_array($inst['id'], $gatewayHidden, true)
                 ? ' (' . $this->Translate('hidden in the app') . ')'
                 : '';
             $values[] = [
@@ -310,7 +310,7 @@ class SymDoWebApp extends IPSModuleStrict
 
         $this->SetFormValues($form['elements'], 'DefaultUserID', 'options', $options);
         $this->SetFormValues($form['elements'], 'Lists', 'values', $values);
-        if ($bridgeID <= 0) {
+        if ($gatewayID <= 0) {
             $this->SetFormValues($form['elements'], 'BridgeHint', 'visible', true);
         }
 
@@ -427,7 +427,7 @@ class SymDoWebApp extends IPSModuleStrict
 
     private function BuildFullPayload(): array
     {
-        $bridgeID  = $this->GetBridgeID();
+        $gatewayID  = $this->GetAppGatewayID();
         $hiddenIDs = $this->GetAllHiddenIDs();
 
         $instances      = [];
@@ -486,8 +486,8 @@ class SymDoWebApp extends IPSModuleStrict
             'type'            => 'state',
             'users'           => $this->GetUsers(),
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
-            'bridgeAvailable' => $bridgeID > 0,
-            'aiEnabled'       => ($bridgeID > 0 ? (bool)@IPS_GetProperty($bridgeID, 'AiEnabled') : false),
+            'bridgeAvailable' => $gatewayID > 0,
+            'aiEnabled'       => ($gatewayID > 0 ? (bool)@IPS_GetProperty($gatewayID, 'AiEnabled') : false),
             'tabs'            => $this->GetVisibleTabs(),
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
@@ -620,9 +620,9 @@ class SymDoWebApp extends IPSModuleStrict
         ];
     }
 
-    private function GetBridgeID(): int
+    private function GetAppGatewayID(): int
     {
-        $ids = IPS_GetInstanceListByModuleID(self::BRIDGE_MODULE_GUID);
+        $ids = IPS_GetInstanceListByModuleID(self::GATEWAY_MODULE_GUID);
         if (!is_array($ids) || count($ids) === 0) {
             return 0;
         }
@@ -633,22 +633,22 @@ class SymDoWebApp extends IPSModuleStrict
     /** @return array<int, array{id: string, name: string, avatar: string}> */
     private function GetUsers(): array
     {
-        $bridgeID = $this->GetBridgeID();
-        if ($bridgeID <= 0 || !function_exists('LAB_GetUsersForTile')) {
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0 || !function_exists('TGW_GetUsersForTile')) {
             return [];
         }
-        $decoded = json_decode((string)@LAB_GetUsersForTile($bridgeID), true);
+        $decoded = json_decode((string)@TGW_GetUsersForTile($gatewayID), true);
         return is_array($decoded) ? $decoded : [];
     }
 
     /** @return int[] */
-    private function GetBridgeHiddenIDs(): array
+    private function GetGatewayHiddenIDs(): array
     {
-        $bridgeID = $this->GetBridgeID();
-        if ($bridgeID <= 0 || !function_exists('LAB_GetHiddenLists')) {
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0 || !function_exists('TGW_GetHiddenLists')) {
             return [];
         }
-        $decoded = json_decode((string)@LAB_GetHiddenLists($bridgeID), true);
+        $decoded = json_decode((string)@TGW_GetHiddenLists($gatewayID), true);
         return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
     }
 
@@ -671,7 +671,7 @@ class SymDoWebApp extends IPSModuleStrict
     /** @return int[] Bridge-Ausblendungen (App, haushaltsweit) ∪ Kachel-Ausblendungen */
     private function GetAllHiddenIDs(): array
     {
-        return array_values(array_unique(array_merge($this->GetBridgeHiddenIDs(), $this->GetTileHiddenIDs())));
+        return array_values(array_unique(array_merge($this->GetGatewayHiddenIDs(), $this->GetTileHiddenIDs())));
     }
 
     // ---------------------------------------------------------------------
@@ -724,7 +724,7 @@ class SymDoWebApp extends IPSModuleStrict
 
     /**
      * KI-Relay für die Kachel: leitet {path,payload,txn} an die AppBridge weiter
-     * (LAB_AiRelay) und schickt das Ergebnis als 'aiResult'-Nachricht zur Kachel
+     * (TGW_AiRelay) und schickt das Ergebnis als 'aiResult'-Nachricht zur Kachel
      * zurück. So funktioniert die KI-Analyse auch ohne REST-Token.
      */
     private function HandleAiCall(string $json): void
@@ -734,15 +734,15 @@ class SymDoWebApp extends IPSModuleStrict
             return;
         }
         $txn      = (string)($req['txn'] ?? '');
-        $bridgeID = $this->GetBridgeID();
+        $gatewayID = $this->GetAppGatewayID();
         // IsInstanceReady prüfen: bei inaktiver/veralteter Bridge gibt
         // IPS_RequestAction nur eine PHP-Warning aus (keine Throwable), es käme
         // also nie ein AiResult und das txn-Promise der Kachel würde ewig warten.
-        if ($bridgeID > 0 && $this->IsInstanceReady($bridgeID)) {
+        if ($gatewayID > 0 && $this->IsInstanceReady($gatewayID)) {
             $this->aiResultSeen = false;
             try {
                 // Bridge extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
-                IPS_RequestAction($bridgeID, 'AiTileRequest', json_encode([
+                IPS_RequestAction($gatewayID, 'AiTileRequest', json_encode([
                     'path'    => (string)($req['path'] ?? ''),
                     'payload' => $req['payload'] ?? [],
                     'txn'     => $txn,
@@ -859,7 +859,7 @@ class SymDoWebApp extends IPSModuleStrict
             'type'            => 'meta',
             'instances'       => $instances,
             'hiddenIDs'       => $hiddenIDs,
-            'bridgeAvailable' => $this->GetBridgeID() > 0,
+            'bridgeAvailable' => $this->GetAppGatewayID() > 0,
             // Muss mit: ein Meta-Push ist der einzige Push nach einer reinen
             // Sichtbarkeits-Änderung, sonst zöge die offene Kachel nicht nach.
             'tabs'            => $this->GetVisibleTabs(),
