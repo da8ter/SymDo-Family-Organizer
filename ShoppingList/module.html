@@ -2326,7 +2326,14 @@ function aiPost(path, payload) {
     return fetch(base + path, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(payload) })
       .then(r => r.json().then(j => ({ status: r.status, json: j })).catch(() => ({ status: r.status, json: null })));
   }
-  // Visu-Kachel (kein Token): über requestAction relayen; Antwort kommt via handleMessage('aiResult').
+  // In DIESER Kachel gibt es keine Bruecke: das ShoppingList-Modul kennt den Ident
+  // 'AiCall' nicht und wirft "Ungueltiger Ident" — gemeldet beim Auswaehlen einer
+  // Favoritenliste MIT Rezeptbild, weil die Web-App dort die Medienart vorab holt
+  // (prefetchMediaType). Deshalb hier still scheitern statt zu relayen; die Aufrufer
+  // behandeln ein leeres Ergebnis schon (status 0 -> fail).
+  if (!window.__symdoApiPost && !window.__SYMDO__) {
+    return Promise.resolve({ status: 0, json: null });
+  }
   const txn = 'ai' + (++__aiTxn);
   return new Promise((resolve) => {
     __aiPending[txn] = resolve;
@@ -5125,7 +5132,11 @@ function renderFavList(el, st, detail) {
       `</span><span class="item-side">${side}</span></div></div>`;
   }
   html += `<div class="fav-actions" data-key="favactions">` +
-    ((detail.url || detail.mediaId) ? `<button id="btnFavOpenRecipe"><i class="fa-light fa-arrow-up-right-from-square"></i> ${translate('Open recipe')}</button>` : '') +
+    // "Rezept oeffnen" bleibt der Web-App vorbehalten (so gewuenscht). Es braucht fuer
+    // Bilder und PDFs ausserdem die Medien-Route der Bruecke, die diese Kachel nicht
+    // hat. Wollte man ihn hier haben, ginge nur der Fall detail.url (ein normaler
+    // Link) — der mediaId-Fall nicht.
+    '' +
     `<button id="btnFavAddAll"><i class="fa-light fa-cart-plus"></i> ${translate('Everything to the shopping list')}</button>` +
     `<button id="btnFavAddItem"><i class="fa-light fa-plus"></i> ${translate('Add item')}</button>` +
     `<button id="btnFavDelete" class="destructive"><i class="fa-light fa-trash"></i> ${translate('Delete list')}</button>` +
