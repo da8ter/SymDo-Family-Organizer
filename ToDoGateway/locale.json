@@ -2,6 +2,15 @@
   "translations": {
     "de": {
       "ToDo Gateway": "ToDo Gateway",
+      "Takeover from SymDo Bridge": "Bestand aus SymDo Bridge",
+      "Import inventory": "Bestand übernehmen",
+      "SymDo Bridge instance #%d found. Import takes over users, avatars and AI settings. Paired devices stay behind and have to be paired again afterwards.": "SymDo-Bridge-Instanz #%d gefunden. Die Übernahme holt Nutzer, Avatare und KI-Einstellungen herüber. Gekoppelte Geräte bleiben zurück und müssen danach neu gekoppelt werden.",
+      "Inventory from instance #%s has been imported.": "Der Bestand aus Instanz #%s wurde übernommen.",
+      "Inventory from instance #%s has been imported. The old SymDo Bridge instance can now be deleted.": "Der Bestand aus Instanz #%s wurde übernommen. Die alte SymDo-Bridge-Instanz kann jetzt gelöscht werden.",
+      "Already imported from instance #%s.": "Bereits aus Instanz #%s übernommen.",
+      "No SymDo Bridge instance found — nothing to import.": "Keine SymDo-Bridge-Instanz gefunden — es gibt nichts zu übernehmen.",
+      "Configuration of instance #%d could not be read — import aborted.": "Die Konfiguration von Instanz #%d ließ sich nicht lesen — Übernahme abgebrochen.",
+      "Imported from instance #%1$d: %2$d settings, %3$d avatars. Paired devices are not transferred — please pair the app and browser again, then delete instance #%1$d.": "Aus Instanz #%1$d übernommen: %2$d Einstellungen, %3$d Avatare. Gekoppelte Geräte wandern nicht mit — bitte App und Browser neu koppeln und danach Instanz #%1$d löschen.",
       "Google Tasks": "Google Tasks",
       "Microsoft To Do": "Microsoft To Do",
       "CalDAV": "CalDAV",

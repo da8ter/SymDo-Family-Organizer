@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
+require_once __DIR__ . '/libs/BridgeImport.php';
 
 class ToDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
+    use BridgeImport;
 
     public function Create(): void
     {
@@ -44,17 +46,50 @@ class ToDoGateway extends IPSModuleStrict
         // OAuth redirect endpoints (volatile, re-registered on every start)
         $this->RegisterHook('todogateway_google');
         $this->RegisterHook('todogateway_microsoft');
+
+        // App-Hälfte: Bestand aus dem abgelösten Modul „SymDo Bridge". Die Properties
+        // werden hier bereits angelegt, damit der Import sie befüllen kann, bevor der
+        // zugehörige Code einzieht.
+        $this->RegisterPropertyString('Users', '[]');
+        $this->RegisterPropertyString('LocalHttpsUrl', '');
+        $this->RegisterPropertyBoolean('AiEnabled', true);
+        $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
+        $this->RegisterPropertyString('AiAnthropicKey', '');
+        $this->RegisterPropertyString('AiOpenAIKey', '');
+        $this->RegisterPropertyString('AiLocalBaseUrl', '');
+        $this->RegisterPropertyString('AiLocalModel', '');
+        $this->RegisterPropertyString('AiLocalKey', '');
+        $this->RegisterAttributeString('BridgeImportDone', '');
+        $this->RegisterTimer('BridgeImport', 0, 'TGW_RunPendingBridgeImport($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->RegisterMessage(0, IPS_KERNELSTARTED);
+            return;
+        }
+
+        // Verzögert: IPS_ApplyChanges darf nicht aus ApplyChanges heraus laufen.
+        if ($this->BridgeImportPending()) {
+            $this->SetTimerInterval('BridgeImport', 1000);
+        }
+    }
+
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        if ($Message === IPS_KERNELSTARTED) {
+            $this->ApplyChanges();
+        }
     }
 
     public function GetConfigurationForm(): string
     {
         $form = [
             'elements' => array_merge(
+                $this->GetBridgeImportFormElements(),
                 [
                     $this->GetGoogleFormElements(),
                     $this->GetMicrosoftFormElements(),
