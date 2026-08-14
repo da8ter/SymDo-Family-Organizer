@@ -184,7 +184,23 @@
     .form-row textarea { resize: none; overflow: hidden; }
 
     .switch { position: relative; width: 46px; height: 28px; flex: none; }
-    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    /* Mit [type="checkbox"] notiert, sonst gewinnt die spätere Regel input[type="checkbox"]
+       bei gleicher Spezifität und schrumpft die Trefferfläche auf 18x18 — der Schalter
+       sähe richtig aus, reagierte aber nur in seiner linken Ecke (gemessen). */
+    .switch input[type="checkbox"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      box-shadow: none;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
     .switch .knob {
       position: absolute; inset: 0;
       border-radius: 999px;
@@ -1829,12 +1845,15 @@
       const label = document.getElementById('assigneeFieldLabel');
       const picker = document.getElementById('assigneePicker');
       if (!picker || !label) return;
+      // Die ganze Zeile ausblenden, nicht nur ihren Inhalt — sonst bleibt im Blatt
+      // eine leere .form-row mit ihrem Abstand stehen.
+      const row = picker.closest('.form-row');
       if (users.length === 0) {
-        label.style.display = 'none';
-        picker.style.display = 'none';
+        if (row) row.style.display = 'none';
         picker.innerHTML = '';
         return;
       }
+      if (row) row.style.display = '';
       label.style.display = '';
       picker.style.display = '';
       // Darstellung wie im Web-App-Dialog: Zeile mit Avatar, Name und Haken rechts.
