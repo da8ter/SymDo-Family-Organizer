@@ -25,6 +25,9 @@
       --sym-mb: 0px;
       --sbw: 6px;
       --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
+      /* Flächen des Bearbeiten-Blattes, wie in der Web-App */
+      --surface: color-mix(in srgb, var(--content-color) 7%, transparent);
+      --surface2: color-mix(in srgb, var(--content-color) 12%, transparent);
     }
 
     body {
@@ -159,6 +162,105 @@
       border-radius: 12px;
       font-weight: 700;
     }
+
+    /* ── Felder des Bearbeiten-Blattes, 1:1 aus der Web-App ────────────────── */
+    .form-row label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .form-row.inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .form-row.inline label { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--text); }
+    .form-row.inline select { width: auto; max-width: 60%; }
+    .form-row input[type="text"],
+    .form-row textarea { width: 100%; box-sizing: border-box; }
+    .form-row textarea { resize: none; overflow: hidden; }
+
+    .switch { position: relative; width: 46px; height: 28px; flex: none; }
+    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    .switch .knob {
+      position: absolute; inset: 0;
+      border-radius: 999px;
+      background: var(--surface2);
+      transition: background .15s ease;
+      pointer-events: none;
+    }
+    .switch .knob::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 22px; height: 22px;
+      border-radius: 999px;
+      background: #fff;
+      transition: transform .15s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+    }
+    .switch input:checked + .knob { background: var(--accent); }
+    .switch input:checked + .knob::after { transform: translateX(18px); }
+
+    .segmented {
+      display: flex;
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .segmented button {
+      flex: 1;
+      padding: 7px 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+    }
+    .segmented button.active {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    /* Freistehend — die Kachel hat nur .item .icon-btn, das greift hier nicht. */
+    .qty-stepper .icon-btn {
+      width: 38px; height: 38px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 16px;
+      flex: none;
+      padding: 0;
+    }
+    .qty-stepper { display: flex; align-items: center; gap: 10px; }
+    .qty-stepper .qty-value { min-width: 28px; text-align: center; font-weight: 700; }
+
+    .assign-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      cursor: pointer;
+    }
+    .assign-row .avatar {
+      width: 30px; height: 30px;
+      border-radius: 999px;
+      object-fit: cover;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+    }
+    .assign-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 15px; }
+    .assign-row.selected .check { opacity: 1; }
     .checkrow {
       display: flex;
       align-items: center;
@@ -230,40 +332,8 @@
       cursor: not-allowed;
       opacity: .45;
     }
-    .date-input {
-      position: relative;
-      width: 100%;
-      color: var(--text);
-    }
-    .date-input input {
-      padding-right: 40px;
-      position: relative;
-      z-index: 1;
-    }
-    .date-input:not(.has-value):not(.is-focused) input {
-      color: transparent;
-    }
-    .date-input .date-placeholder {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      pointer-events: none;
-      color: var(--muted);
-      font-size: 13px;
-      z-index: 2;
-    }
-    .date-input .cal-icon {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      pointer-events: none;
-      color: inherit;
-      z-index: 3;
-    }
     #due::-webkit-calendar-picker-indicator { opacity: 0; }
-    input:not([type="checkbox"]), select {
+    input:not([type="checkbox"]), select, textarea {
       width: 100%;
       box-sizing: border-box;
       border-radius: 10px;
@@ -272,6 +342,7 @@
       background: var(--bg);
       color: var(--text);
       outline: none;
+      font: inherit;
     }
     button {
       border-radius: 10px;
@@ -810,48 +881,66 @@
           <div id="formTitle" class="overlay-title"></div>
           <button id="formCloseBtn" class="btn-close-overlay" type="button" aria-label="Close"><i class="fa-light fa-xmark"></i></button>
         </div>
+        <!-- Aufbau 1:1 aus der Web-App (#todoOverlay). prio und quantity bleiben als
+             versteckte Felder bestehen: die neuen Bedienelemente schreiben hinein,
+             und resetForm/openEdit/Speichern greifen unverändert darauf zu. -->
         <div class="overlay-body">
-          <div class="add">
-            <input id="title" type="text" class="full" />
-            <input id="info" type="text" class="full" />
-            <input id="quantity" type="number" min="0" class="full" />
-            <div id="assigneeFieldLabel" class="full field-label" style="display:none;"></div>
-            <div id="assigneePicker" class="full assignees" style="display:none;"></div>
-            <div class="full select-wrap">
-              <select id="prio">
-                <option value="low"></option>
-                <option value="normal" selected></option>
-                <option value="high"></option>
-              </select>
-              <i class="fa-light fa-arrow-down-from-bracket select-icon"></i>
+          <div class="form-row"><label id="lblTodoTitle"></label><input id="title" type="text" /></div>
+          <div class="form-row"><label id="lblTodoInfo"></label><textarea id="info" rows="2"></textarea></div>
+          <div class="form-row inline">
+            <label id="lblTodoDue"></label>
+            <span class="switch"><input type="checkbox" id="tdHasDue" /><span class="knob"></span></span>
+          </div>
+          <div id="tdDueSection" style="display:none; flex-direction:column; gap:12px;">
+            <div class="form-row inline">
+              <label id="dueAllDayLabel"></label>
+              <span class="switch"><input type="checkbox" id="dueAllDay" /><span class="knob"></span></span>
             </div>
-            <div class="full date-input">
+            <div class="form-row inline">
+              <label id="lblTodoDate"></label>
               <input id="due" type="datetime-local" />
-              <div id="duePlaceholder" class="date-placeholder"></div>
-              <i class="fa-light fa-calendar cal-icon"></i>
             </div>
-            <div class="full checkrow"><label><input id="dueAllDay" type="checkbox" /><span id="dueAllDayLabel"></span></label></div>
-            <div id="notificationFieldLabel" class="full field-label"></div>
-            <div class="full checkrow"><label><input id="notification" type="checkbox" /><span id="notificationLabel"></span></label><div class="select-wrap"><select id="notificationLeadTime"></select><i class="fa-light fa-arrow-down-from-bracket select-icon"></i></div></div>
-            <div id="notificationLeadTimeInfo" class="full hint"></div>
-            <div id="recurrenceFieldLabel" class="full field-label"></div>
-            <div id="recurrenceWrap" class="full select-wrap">
+            <div id="recurrenceWrap" class="form-row inline">
+              <label id="recurrenceFieldLabel"></label>
               <select id="recurrence"></select>
-              <i class="fa-light fa-arrow-down-from-bracket select-icon"></i>
             </div>
-            <div id="recurrenceCustomWrap" class="full" style="display:none; gap: 8px; align-items: center;">
-              <div class="select-wrap" style="flex: 1 1 auto; min-width: 0;">
-                <select id="recurrenceCustomUnit"></select>
-                <i class="fa-light fa-arrow-down-from-bracket select-icon"></i>
-              </div>
-              <input id="recurrenceCustomValue" type="number" min="1" style="width: 90px;" />
+            <div id="recurrenceCustomWrap" class="form-row inline" style="display:none;">
+              <label id="lblTodoCustom"></label>
+              <span style="display:flex; gap:8px;">
+                <input id="recurrenceCustomValue" type="number" min="1" max="99" style="width:72px;" />
+                <select id="recurrenceCustomUnit" style="width:auto;"></select>
+              </span>
             </div>
-            <div id="recurrenceResetFieldLabel" class="full field-label"></div>
-            <div id="recurrenceResetWrap" class="full select-wrap">
+            <div class="form-row inline">
+              <label id="notificationFieldLabel"></label>
+              <span class="switch"><input type="checkbox" id="notification" /><span class="knob"></span></span>
+            </div>
+            <div id="tdLeadSection" class="form-row inline" style="display:none;">
+              <label id="lblTodoLead"></label>
+              <select id="notificationLeadTime"></select>
+            </div>
+            <!-- Zusatz der Kachel: in der Web-App gibt es dafür kein Gegenstück. -->
+            <div id="recurrenceResetWrap" class="form-row inline" style="display:none;">
+              <label id="recurrenceResetFieldLabel"></label>
               <select id="recurrenceResetLeadTime"></select>
-              <i class="fa-light fa-arrow-down-from-bracket select-icon"></i>
             </div>
           </div>
+          <div class="form-row"><label id="assigneeFieldLabel"></label><div id="assigneePicker"></div></div>
+          <div class="form-row inline">
+            <label id="lblTodoPriority"></label>
+            <div class="segmented" id="tdPrioritySeg" style="margin:0; width:60%;"></div>
+          </div>
+          <div class="form-row inline">
+            <label id="lblTodoQuantity"></label>
+            <span class="qty-stepper">
+              <button class="icon-btn" id="tdQtyMinus" type="button"><i class="fa-light fa-minus"></i></button>
+              <span id="tdQtyValue" class="qty-value"></span>
+              <button class="icon-btn" id="tdQtyPlus" type="button"><i class="fa-light fa-plus"></i></button>
+            </span>
+          </div>
+          <input type="hidden" id="prio" value="normal" />
+          <input type="hidden" id="quantity" value="" />
+          <div id="notificationLeadTimeInfo" class="hint"></div>
         </div>
         <div class="overlay-footer">
           <button id="deleteBtn" class="danger danger-btn" type="button"><i class="fa-light fa-trash-can"></i><span id="deleteBtnText"></span></button>
@@ -1059,10 +1148,18 @@
       document.getElementById('recurrenceCustomValue').title = translate('Interval');
       document.getElementById('recurrenceCustomValue').placeholder = translate('Interval');
       document.getElementById('due').title = translate('Due');
-      document.getElementById('duePlaceholder').textContent = translate('Due placeholder');
       document.getElementById('dueAllDayLabel').textContent = translate('All day');
       document.getElementById('assigneeFieldLabel').textContent = translate('Assigned to');
       document.getElementById('notificationFieldLabel').textContent = translate('Notification');
+      // Beschriftungen des Blattes, gleiche Schlüssel wie im Web-App-Dialog.
+      document.getElementById('lblTodoTitle').textContent = translate('Title');
+      document.getElementById('lblTodoInfo').textContent = translate('Note');
+      document.getElementById('lblTodoDue').textContent = translate('Due on');
+      document.getElementById('lblTodoDate').textContent = translate('Date');
+      document.getElementById('lblTodoCustom').textContent = translate('Every');
+      document.getElementById('lblTodoLead').textContent = translate('Lead time');
+      document.getElementById('lblTodoPriority').textContent = translate('Priority');
+      document.getElementById('lblTodoQuantity').textContent = translate('Quantity');
 
       document.getElementById('recurrenceFieldLabel').textContent = translate('Repeat');
       document.getElementById('recurrenceResetFieldLabel').textContent = translate('Reopen');
@@ -1152,10 +1249,8 @@
         lt.appendChild(el);
       }
 
-      const prio = document.getElementById('prio');
-      prio.querySelector('option[value="low"]').textContent = translate('Priority low');
-      prio.querySelector('option[value="normal"]').textContent = translate('Priority normal');
-      prio.querySelector('option[value="high"]').textContent = translate('Priority high');
+      // Die Priorität ist jetzt ein segmentiertes Feld; es beschriftet sich in
+      // renderPrioritySeg() selbst. #prio hält nur noch den Wert.
 
       document.getElementById('newBtn').textContent = translate('New Task');
       document.getElementById('cancelBtn').textContent = translate('Cancel');
@@ -1347,8 +1442,16 @@
         if (delBtn) delBtn.style.display = 'none';
       }
 
+      // Der Fälligkeits-Umschalter leitet sich aus dem Datum ab, nicht umgekehrt.
+      document.getElementById('tdHasDue').checked = (document.getElementById('due').value || '') !== '';
+      renderPrioritySeg();
+      renderQty();
+      syncSheetVisibility();
+
       slideOverlayIn(overlay);
       document.getElementById('title').focus();
+      // Erst nach dem Layout messen, sonst ist scrollHeight noch 0.
+      window.setTimeout(autogrowInfo, OVERLAY_MS);
     }
 
     function closeOverlay() {
@@ -1481,12 +1584,62 @@
       const chk = document.getElementById('notification');
       const enabled = dueStr !== '';
       chk.disabled = !enabled;
-      updateDuePlaceholder();
       if (!enabled) {
         chk.checked = false;
       }
       updateNotificationLeadTimeUI();
       updateRecurrenceAvailability();
+      syncSheetVisibility();
+    }
+
+    /**
+     * Die aufklappenden Bereiche des Blattes. Die Kachel steuert Wiederholung,
+     * Zurücksetzen und eigenes Intervall bereits über die Kaskade an #due; hier kommen
+     * nur die beiden Abschnitte dazu, die es in der Kachel bisher nicht gab.
+     */
+    function syncSheetVisibility() {
+      const hasDue = document.getElementById('tdHasDue').checked;
+      const sec = document.getElementById('tdDueSection');
+      if (sec) sec.style.display = hasDue ? 'flex' : 'none';
+      const lead = document.getElementById('tdLeadSection');
+      const chk = document.getElementById('notification');
+      if (lead) lead.style.display = (hasDue && chk && chk.checked && !chk.disabled) ? 'flex' : 'none';
+    }
+
+    /** Priorität als segmentierte Auswahl; der Wert lebt weiter im versteckten #prio. */
+    function renderPrioritySeg() {
+      const seg = document.getElementById('tdPrioritySeg');
+      if (!seg) return;
+      const current = document.getElementById('prio').value || 'normal';
+      seg.innerHTML = [['low', translate('Low')], ['normal', translate('Normal')], ['high', translate('High')]]
+        .map(([v, l]) => `<button type="button" data-prio="${v}" class="${v === current ? 'active' : ''}">${escapeHtml(l)}</button>`).join('');
+      seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        document.getElementById('prio').value = b.dataset.prio;
+        renderPrioritySeg();
+      }));
+    }
+
+    /** Menge als Zähler; der Wert lebt weiter im versteckten #quantity. */
+    function renderQty() {
+      const out = document.getElementById('tdQtyValue');
+      if (!out) return;
+      const n = parseInt(document.getElementById('quantity').value) || 0;
+      out.textContent = n > 0 ? String(n) : '–';
+    }
+
+    function changeQty(delta) {
+      const el = document.getElementById('quantity');
+      const n = Math.max(0, (parseInt(el.value) || 0) + delta);
+      el.value = n > 0 ? String(n) : '';
+      renderQty();
+    }
+
+    /** Notizfeld wächst mit dem Text, wie in der Web-App. */
+    function autogrowInfo() {
+      const info = document.getElementById('info');
+      if (!info) return;
+      info.style.height = 'auto';
+      info.style.height = info.scrollHeight + 'px';
     }
 
     function updateRecurrenceAvailability() {
@@ -1670,21 +1823,6 @@
       }
     }
 
-    function updateDuePlaceholder() {
-      const due = document.getElementById('due');
-      const ph = document.getElementById('duePlaceholder');
-      if (!due || !ph) {
-        return;
-      }
-      const hasValue = (due.value || '') !== '';
-      const isFocused = document.activeElement === due;
-      const wrap = due.closest('.date-input');
-      if (wrap) {
-        wrap.classList.toggle('has-value', hasValue);
-        wrap.classList.toggle('is-focused', isFocused);
-      }
-      ph.style.display = (!hasValue && !isFocused) ? '' : 'none';
-    }
 
     function renderAssigneePicker() {
       const users = Array.isArray(state.users) ? state.users : [];
@@ -1699,20 +1837,22 @@
       }
       label.style.display = '';
       picker.style.display = '';
+      // Darstellung wie im Web-App-Dialog: Zeile mit Avatar, Name und Haken rechts.
       picker.innerHTML = users.map(u => {
         const sel = selectedAssignees.includes(u.id);
         const av = u.avatar
           ? `<img class="avatar" src="${u.avatar}" alt="" />`
           : `<span class="avatar" style="background:${avatarTint(u.name)}">${escapeHtml(String(u.name || '?').charAt(0).toUpperCase())}</span>`;
-        return `<div class="assignee-chip ${sel ? 'selected' : ''}" data-uid="${escapeHtml(u.id)}">${av}<span>${escapeHtml(u.name)}</span></div>`;
+        return `<div class="assign-row${sel ? ' selected' : ''}" data-uid="${escapeHtml(u.id)}">${av}` +
+               `<span>${escapeHtml(u.name)}</span><i class="fa-light fa-check check"></i></div>`;
       }).join('');
-      picker.querySelectorAll('.assignee-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-          const uid = chip.getAttribute('data-uid');
+      picker.querySelectorAll('.assign-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const uid = row.getAttribute('data-uid');
           const idx = selectedAssignees.indexOf(uid);
           if (idx >= 0) selectedAssignees.splice(idx, 1);
           else selectedAssignees.push(uid);
-          chip.classList.toggle('selected');
+          row.classList.toggle('selected');
         });
       });
     }
@@ -2783,8 +2923,28 @@
 
       document.getElementById('due').addEventListener('input', updateNotificationAvailability);
       document.getElementById('due').addEventListener('change', updateNotificationAvailability);
-      document.getElementById('due').addEventListener('focus', updateDuePlaceholder);
-      document.getElementById('due').addEventListener('blur', updateDuePlaceholder);
+
+      // Fälligkeit an/aus: aus heißt kein Datum, den Rest erledigt die Kaskade.
+      document.getElementById('tdHasDue').addEventListener('change', (e) => {
+        if (!e.target.checked) {
+          document.getElementById('due').value = '';
+        }
+        updateNotificationAvailability();
+      });
+      document.getElementById('notification').addEventListener('change', syncSheetVisibility);
+      // Ganztägig schaltet das Eingabefeld zwischen Datum und Datum+Zeit, wie in der Web-App.
+      document.getElementById('dueAllDay').addEventListener('change', (e) => {
+        const due = document.getElementById('due');
+        const raw = due.value || '';
+        due.type = e.target.checked ? 'date' : 'datetime-local';
+        if (raw) {
+          due.value = e.target.checked ? raw.slice(0, 10) : (raw.length === 10 ? raw + 'T12:00' : raw);
+        }
+        updateNotificationAvailability();
+      });
+      document.getElementById('tdQtyMinus').addEventListener('click', () => changeQty(-1));
+      document.getElementById('tdQtyPlus').addEventListener('click', () => changeQty(1));
+      document.getElementById('info').addEventListener('input', autogrowInfo);
       document.getElementById('notification').addEventListener('change', updateNotificationLeadTimeUI);
       document.getElementById('recurrence').addEventListener('change', () => {
         updateRecurrenceResetAvailability();
