@@ -605,14 +605,6 @@ trait AppCore
                 if ($this->ServeWebAppIcon($path)) {
                     return;
                 }
-                // Messseite fuer die Kopfhoerer-Tasten. Nur unter genau diesem Pfad,
-                // liefert reines HTML ohne Zugriff auf Daten. Sie wird gebraucht, weil
-                // sich das Verhalten der Media Session mit AirPods nur am Geraet
-                // messen laesst; nach der Messung kann sie wieder verschwinden.
-                if (rtrim($path, '/') === '/hook/' . self::WEBAPP_HOOK_PATH . '/mediatest') {
-                    $this->ServeMediaSessionTest();
-                    return;
-                }
                 $this->ServeWebApp();
                 return;
             }
@@ -653,26 +645,6 @@ trait AppCore
         http_response_code(200);
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store');
-        echo $html;
-    }
-
-    /**
-     * Messseite fuer die Kopfhoerer-Tasten (siehe Aufrufstelle). Reines HTML aus einer
-     * festen Datei, kein Datenzugriff — deshalb wie die Web-App selbst ohne Token.
-     */
-    private function ServeMediaSessionTest(): void
-    {
-        $html = @file_get_contents(__DIR__ . '/../tools/mediasession-test.html');
-        if (!is_string($html) || $html === '') {
-            http_response_code(404);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Media-session test page not found.';
-            return;
-        }
-        http_response_code(200);
-        header('Content-Type: text/html; charset=utf-8');
-        header('Cache-Control: no-store');
-        header('X-Content-Type-Options: nosniff');
         echo $html;
     }
 
