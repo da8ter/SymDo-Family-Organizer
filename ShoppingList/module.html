@@ -869,6 +869,18 @@ html[data-symdo-theme="dark"] .member-bar {
 .item-price { font-size: 12.5px; color: var(--muted); }
 .heart-btn { font-size: 16px; color: var(--muted); padding: 4px; }
 .heart-btn.faved { color: var(--accent); }
+/* Zuschaltbare Zeilenknoepfe (Stift, Papierkorb) — gleiche Anmutung wie das Herz,
+   damit die Zeile nicht auseinanderfaellt, wenn beide eingeblendet sind. */
+.row-btn {
+  font-size: 16px;
+  color: var(--muted);
+  padding: 4px;
+  background: none;
+  border: 0;
+  flex: none;
+  cursor: pointer;
+}
+.row-btn.destructive { color: var(--red); }
 .amount-badge {
   min-width: 30px;
   text-align: center;
@@ -4329,6 +4341,18 @@ function renderShopping() {
       const item = curItem();
       if (item) openFavPicker(curId(), item);
     });
+    // Stift und Papierkorb rufen dieselben Wege wie die Wischgesten.
+    const editBtn = card.querySelector('[data-edit]');
+    if (editBtn) editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = curItem();
+      if (item) openItemEditor(curId(), item);
+    });
+    const delBtn = card.querySelector('[data-del]');
+    if (delBtn) delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdCall(curId(), 'DeleteItem', itemId);
+    });
     card.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => {
       const item = curItem();
       if (!item) return;
@@ -4378,8 +4402,18 @@ function shoppingRowHtml(it, favNames, st, inCart, spanne) {
   if (it.price && st.extApiShowPrice !== false) {
     side += `<span class="item-price">${escapeHtml(it.price)}</span>`;
   }
-  side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
-  // Kein Stift-Knopf: der Editor öffnet über Wischen nach rechts (swipe-under-edit).
+  // Die drei Knöpfe sind je Liste abschaltbar. Herz ist von jeher sichtbar, also
+  // opt-out; Stift und Papierkorb sind neu und deshalb opt-in. Die Wischgesten
+  // bleiben in jedem Fall aktiv — sie sind der Weg, wenn kein Knopf da ist.
+  if (st.showFavoriteHeart !== false) {
+    side += `<button class="heart-btn${faved ? ' faved' : ''}" data-heart="1" aria-label="Favorit">${faved ? HEART_SOLID_SVG : '<i class="fa-light fa-heart"></i>'}</button>`;
+  }
+  if (st.showEditButton === true) {
+    side += `<button class="row-btn" data-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>`;
+  }
+  if (st.showDeleteButton === true) {
+    side += `<button class="row-btn destructive" data-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>`;
+  }
   return `<div class="item-card${inCart ? ' in-cart' : ''}${spanne ? ' ' + spanne : ''}" data-id="${escapeHtml(String(it.id))}">` +
     `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
     `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` +
@@ -4575,7 +4609,12 @@ function renderTodos() {
   const done = sorted.filter(i => i.done);
   // Bei aktivem Filter kein Drag-Reorder — sonst würde ein Reorder der
   // gefilterten Teilmenge die Gesamtreihenfolge verfälschen.
-  const canReorder = sortMode === 'manual' && todoMemberIds.size === 0;
+  // Der Griff ist zudem je Liste abschaltbar; mit ihm faellt auch das Ziehen weg,
+  // denn er IST die Anfassstelle der Geste.
+  const canReorder = sortMode === 'manual' && todoMemberIds.size === 0
+    && st.showReorderHandle !== false;
+  const showEdit = st.showEditButton === true;
+  const showDelete = st.showDeleteButton === true;
 
   // Member-Menü: eigenständige sticky Pille ganz oben (vor dem Header), wie im
   // Dashboard. Wird in den statischen #todoMembers-Container gerendert, damit
@@ -4588,13 +4627,13 @@ function renderTodos() {
     const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
     html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
   }
-  for (const it of open) html += todoRowHtml(it, canReorder, showBadges);
+  for (const it of open) html += todoRowHtml(it, canReorder, showBadges, showEdit, showDelete);
   if (done.length > 0 && st.hideCompletedTasks !== true) {
     html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" data-key="doneToggle" id="doneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
       `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (completedExpanded) {
-      for (const it of done) html += todoRowHtml(it, false, showBadges);
+      for (const it of done) html += todoRowHtml(it, false, showBadges, showEdit, showDelete);
     }
   }
   const freshNodes = renderRows(area, html);
@@ -4642,13 +4681,24 @@ function renderTodos() {
       // Abgehakt schiebt nach rechts, wieder geoeffnet nach links — wie bei den Artikeln.
       checkOffCard(card, !done, () => sdCall(curId(), 'ToggleDone', { id: itemId, done: done }));
     });
-    // Tipp auf die Karte öffnet den Editor. ToDo-Karten hatten nie einen
-    // Stift-Knopf, hier ändert sich dadurch nichts.
+    // Tipp auf die Karte öffnet den Editor — unabhaengig davon, ob der Stift-Knopf
+    // eingeblendet ist. Der Knopf ist ein zusaetzlicher Weg, kein Ersatz.
     card.querySelector('.todo-content').addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button, .chk')) return;
       const it = curItem(itemId);
       if (it) openTodoEditor(curId(), it);
+    });
+    const editBtn = card.querySelector('[data-edit]');
+    if (editBtn) editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const it = curItem(itemId);
+      if (it) openTodoEditor(curId(), it);
+    });
+    const delBtn = card.querySelector('[data-del]');
+    if (delBtn) delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdCall(curId(), 'DeleteItem', { id: itemId });
     });
   });
 
@@ -4754,7 +4804,7 @@ function ensureTodoMetaObserver() {
   todoMetaRO.observe(area);
 }
 
-function todoRowHtml(it, draggable, showBadges) {
+function todoRowHtml(it, draggable, showBadges, showEdit, showDelete) {
   const chip = formatDueChip(it);
   const qty = parseInt(it.quantity) || 0;
   const recurs = it.recurrence && it.recurrence !== 'none';
@@ -4795,6 +4845,8 @@ function todoRowHtml(it, draggable, showBadges) {
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
     (showBadges ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
     `</span>` +
+    (showEdit ? `<button class="row-btn" data-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
+    (showDelete ? `<button class="row-btn destructive" data-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '') +
     (draggable ? `<span class="todo-handle" aria-label="${translate('Reorder')}" title="${translate('Reorder')}"><i class="fa-light fa-grip-dots-vertical"></i></span>` : '') +
     `</span></div></div>`;
 }
