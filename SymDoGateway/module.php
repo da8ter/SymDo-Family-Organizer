@@ -62,6 +62,14 @@ class SymDoGateway extends IPSModuleStrict
         $this->RegisterHook('todogateway_google');
         $this->RegisterHook('todogateway_microsoft');
 
+        // Zeilenknoepfe der Listen, zentral uebersteuerbar. Wirken erst, wenn
+        // OverrideListSettings an ist; sonst gelten die Werte der einzelnen Listen.
+        $this->RegisterPropertyBoolean('OverrideListSettings', false);
+        $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
+        $this->RegisterPropertyBoolean('ShowRowEditButton', false);
+        $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
+        $this->RegisterPropertyBoolean('ShowReorderHandle', true);
+
         // App-Seite
         $this->AppCreate();
     }
@@ -166,6 +174,7 @@ class SymDoGateway extends IPSModuleStrict
         $elements = array_merge(
             $appElements,
             [
+                $this->GetListButtonFormElements(),
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),
                 $this->GetCalDAVFormElements()
@@ -180,6 +189,66 @@ class SymDoGateway extends IPSModuleStrict
         }
 
         return json_encode(['elements' => $elements], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+
+    /**
+     * Zentrale Uebersteuerung der Zeilenknoepfe. Die vier Schalter sind nur bedienbar,
+     * wenn der Hauptschalter an ist — sonst gaukelten sie eine Wirkung vor, die sie
+     * nicht haben, denn dann gelten die Einstellungen der einzelnen Listen.
+     */
+    private function GetListButtonFormElements(): array
+    {
+        $an = $this->ReadBooleanPropertyOrDefault('OverrideListSettings', false);
+        $schalter = static function (string $name, string $caption, bool $enabled): array {
+            return ['type' => 'CheckBox', 'name' => $name, 'caption' => $caption, 'enabled' => $enabled];
+        };
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Row buttons of the lists'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'OverrideListSettings',
+                    'caption' => $this->Translate('Override list settings'),
+                    'onChange' => 'TGW_UpdateListButtonForm($id, $OverrideListSettings);',
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Override list settings hint'),
+                ],
+                $schalter('ShowFavoriteHeart', $this->Translate('Show favorite heart'), $an),
+                $schalter('ShowRowEditButton', $this->Translate('Show edit button'), $an),
+                $schalter('ShowRowDeleteButton', $this->Translate('Show delete button'), $an),
+                $schalter('ShowReorderHandle', $this->Translate('Show reorder handle'), $an),
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Row buttons hint'),
+                ],
+            ],
+        ];
+    }
+
+    /** Vom Hauptschalter aufgerufen: gibt die vier Schalter frei oder sperrt sie. */
+    public function UpdateListButtonForm(bool $Override): void
+    {
+        foreach (['ShowFavoriteHeart', 'ShowRowEditButton', 'ShowRowDeleteButton', 'ShowReorderHandle'] as $name) {
+            $this->UpdateFormField($name, 'enabled', $Override);
+        }
+    }
+
+    /**
+     * Wie in den Listen-Modulen: eine frisch registrierte Property liefert vor dem
+     * ersten Kernel-Neustart `false` statt ihrer Vorgabe.
+     */
+    private function ReadBooleanPropertyOrDefault(string $Name, bool $Default): bool
+    {
+        $config = json_decode((string)IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($config) || !array_key_exists($Name, $config)) {
+            return $Default;
+        }
+        return $this->ReadPropertyBoolean($Name);
     }
 
     private function GetDonationFormElements(): array

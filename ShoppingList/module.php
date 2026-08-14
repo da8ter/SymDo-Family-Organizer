@@ -9,6 +9,8 @@ require_once __DIR__ . '/libs/PurchaseStore.php';
 
 class ShoppingList extends IPSModuleStrict
 {
+    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+
     use ItemStore;
     use SuggestionEngine;
     use FavoriteStore;
@@ -128,7 +130,12 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyString('FavoriteListsConfig', '[]');
         $this->RegisterPropertyString('SuggestionItemsConfig', '[]');
         $this->RegisterPropertyBoolean('ShowProductImages', true);
-        $this->RegisterPropertyBoolean('ShowEditButton', true);
+        // Zeilenknoepfe. Bewusst neue Namen: das alte ShowEditButton steuerte nichts
+        // und steht bei Bestandsinstanzen ueberwiegend auf true — es zu honorieren
+        // haette allen ungefragt einen Knopf in die Zeile gesetzt.
+        $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
+        $this->RegisterPropertyBoolean('ShowRowEditButton', false);
+        $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
@@ -893,6 +900,45 @@ class ShoppingList extends IPSModuleStrict
      * Wert hielt. Diese Liste ist also die verlässliche Auskunft darüber, ob die
      * Eigenschaft schon existiert.
      */
+
+    /**
+     * Sichtbarkeit der Zeilenknoepfe. Das Gateway darf uebersteuern: steht dort
+     * "Instanzeinstellungen ueberschreiben", gelten seine Werte fuer alle Listen.
+     *
+     * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
+     * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
+     *
+     * @return array{showFavoriteHeart: bool, showEditButton: bool, showDeleteButton: bool}
+     */
+    private function ResolveButtonFlags(): array
+    {
+        $eigene = [
+            'showFavoriteHeart' => $this->ReadBooleanPropertyOrDefault('ShowFavoriteHeart', true),
+            'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
+            'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
+        ];
+
+        $gateways = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
+        if (!is_array($gateways) || $gateways === []) {
+            return $eigene;
+        }
+        sort($gateways);
+        $cfg = json_decode((string)@IPS_GetConfiguration((int)$gateways[0]), true);
+        if (!is_array($cfg) || ($cfg['OverrideListSettings'] ?? false) !== true) {
+            return $eigene;
+        }
+        // Dieselbe Vorgabe-Falle wie in ReadBooleanPropertyOrDefault, nur fuer eine
+        // fremde Instanz: fehlt die Property dort noch, gilt die Vorgabe.
+        $vomGateway = static function (string $name, bool $default) use ($cfg): bool {
+            return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
+        };
+        return [
+            'showFavoriteHeart' => $vomGateway('ShowFavoriteHeart', true),
+            'showEditButton'    => $vomGateway('ShowRowEditButton', false),
+            'showDeleteButton'  => $vomGateway('ShowRowDeleteButton', false),
+        ];
+    }
+
     private function ReadBooleanPropertyOrDefault(string $name, bool $default): bool
     {
         $config = json_decode(IPS_GetConfiguration($this->InstanceID), true);
@@ -906,6 +952,7 @@ class ShoppingList extends IPSModuleStrict
     {
         // Einmal bauen (Verzeichnis-Scan + Alias-Parse) — Marken-Map leitet
         // sich daraus ab statt erneut zu scannen.
+        $knoepfe = $this->ResolveButtonFlags();
         $productImages = $this->ReadPropertyBoolean('ShowProductImages') ? $this->GetAvailableProductImages() : [];
 
         // Einmal laden und weiterverwenden: aus denselben Daten leiten sich die
@@ -961,7 +1008,9 @@ class ShoppingList extends IPSModuleStrict
             'extApiShowPrice' => $this->ReadPropertyBoolean('ExtApiShowPrice'),
             'extApiCartReady' => $this->IsExtApiCartReady(),
             'scannerEnabled'  => $this->ReadPropertyBoolean('ScannerEnabled'),
-            'showEditButton'  => $this->ReadBooleanPropertyOrDefault('ShowEditButton', true),
+            'showFavoriteHeart' => $knoepfe['showFavoriteHeart'],
+            'showEditButton'    => $knoepfe['showEditButton'],
+            'showDeleteButton'  => $knoepfe['showDeleteButton'],
         ];
     }
 
@@ -3420,12 +3469,22 @@ class ShoppingList extends IPSModuleStrict
                         ],
                         [
                             'type'    => 'CheckBox',
-                            'name'    => 'ShowEditButton',
+                            'name'    => 'ShowFavoriteHeart',
+                            'caption' => $this->Translate('Show favorite heart'),
+                        ],
+                        [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ShowRowEditButton',
                             'caption' => $this->Translate('Show edit button'),
                         ],
                         [
+                            'type'    => 'CheckBox',
+                            'name'    => 'ShowRowDeleteButton',
+                            'caption' => $this->Translate('Show delete button'),
+                        ],
+                        [
                             'type'    => 'Label',
-                            'caption' => $this->Translate('Edit button hint'),
+                            'caption' => $this->Translate('Row buttons hint'),
                         ],
                     ],
                 ],

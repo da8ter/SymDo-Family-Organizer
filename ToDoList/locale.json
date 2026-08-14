@@ -368,7 +368,9 @@
       "Do not reopen": "Nicht wieder öffnen",
       "minutes before": "Minuten vorher",
       "hours before": "Stunden vorher",
-      "days before": "Tage vorher"
+      "days before": "Tage vorher",
+      "Show reorder handle": "Verschieben-Griff anzeigen",
+      "Row buttons hint": "Ohne diese Knöpfe bleiben Bearbeiten und Löschen über die Wischgesten erreichbar. Wird der Verschieben-Griff ausgeblendet, entfällt auch das Ziehen — er ist die Anfassstelle der Geste."
     },
     "en": {
       "ToDo List": "ToDo List",

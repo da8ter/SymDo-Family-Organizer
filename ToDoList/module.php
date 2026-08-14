@@ -9,6 +9,8 @@ require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
 
 class ToDoList extends IPSModuleStrict
 {
+    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+
     use SyncHelper;
     use CalDAVSync;
     use GoogleTasksSync;
@@ -51,8 +53,12 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowLargeQuantity', false);
         $this->RegisterPropertyBoolean('ShowInfoBadges', true);
-        $this->RegisterPropertyBoolean('ShowDeleteButton', true);
-        $this->RegisterPropertyBoolean('ShowEditButton', true);
+        // Zeilenknoepfe. Bewusst neue Namen: die alten ShowEditButton/ShowDeleteButton
+        // steuerten nichts und stehen bei Bestandsinstanzen ueberwiegend auf true —
+        // sie zu honorieren haette allen ungefragt zwei Knoepfe in die Zeile gesetzt.
+        $this->RegisterPropertyBoolean('ShowRowEditButton', false);
+        $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
+        $this->RegisterPropertyBoolean('ShowReorderHandle', true);
         $this->RegisterPropertyBoolean('HideCompletedTasks', false);
         $this->RegisterPropertyBoolean('DeleteCompletedTasks', false);
         $this->RegisterPropertyBoolean('EnableHtmlBox', false);
@@ -298,13 +304,22 @@ class ToDoList extends IPSModuleStrict
                 ],
                 [
                     'type' => 'CheckBox',
-                    'name' => 'ShowDeleteButton',
+                    'name' => 'ShowRowEditButton',
+                    'caption' => $this->Translate('Show edit button')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowRowDeleteButton',
                     'caption' => $this->Translate('Show delete button')
                 ],
                 [
                     'type' => 'CheckBox',
-                    'name' => 'ShowEditButton',
-                    'caption' => $this->Translate('Show edit button')
+                    'name' => 'ShowReorderHandle',
+                    'caption' => $this->Translate('Show reorder handle')
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Row buttons hint')
                 ],
                 [
                     'type' => 'CheckBox',
@@ -2133,9 +2148,65 @@ class ToDoList extends IPSModuleStrict
      *                        Feld). Gemessen sind die Avatare 28 KB pro Antwort — bei einer
      *                        kurzen Liste über 98 % der Nutzlast.
      */
+
+    /**
+     * Liest eine eigene Boolean-Property, faellt aber auf die Vorgabe zurueck, solange
+     * sie in der Instanzkonfiguration fehlt.
+     *
+     * Notwendig, weil eine frisch registrierte Property vor dem ersten Kernel-Neustart
+     * `false` liefert statt ihres Vorgabewerts — ein "an"-Schalter waere fuer
+     * Bestandsnutzer nach dem Update also still aus.
+     */
+    private function ReadBooleanPropertyOrDefault(string $Name, bool $Default): bool
+    {
+        $config = json_decode((string)IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($config) || !array_key_exists($Name, $config)) {
+            return $Default;
+        }
+        return $this->ReadPropertyBoolean($Name);
+    }
+
+    /**
+     * Sichtbarkeit der Zeilenknoepfe. Das Gateway darf uebersteuern: steht dort
+     * "Instanzeinstellungen ueberschreiben", gelten seine Werte fuer alle Listen.
+     *
+     * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
+     * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
+     *
+     * @return array{showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
+     */
+    private function ResolveButtonFlags(): array
+    {
+        $eigene = [
+            'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
+            'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
+            'showReorderHandle' => $this->ReadBooleanPropertyOrDefault('ShowReorderHandle', true),
+        ];
+
+        $gateways = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
+        if (!is_array($gateways) || $gateways === []) {
+            return $eigene;
+        }
+        sort($gateways);
+        $cfg = json_decode((string)@IPS_GetConfiguration((int)$gateways[0]), true);
+        if (!is_array($cfg) || ($cfg['OverrideListSettings'] ?? false) !== true) {
+            return $eigene;
+        }
+        // Dieselbe Vorgabe-Falle wie oben, nur fuer eine fremde Instanz.
+        $vomGateway = static function (string $name, bool $default) use ($cfg): bool {
+            return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
+        };
+        return [
+            'showEditButton'    => $vomGateway('ShowRowEditButton', false),
+            'showDeleteButton'  => $vomGateway('ShowRowDeleteButton', false),
+            'showReorderHandle' => $vomGateway('ShowReorderHandle', true),
+        ];
+    }
+
     private function BuildStatePayload(bool $WithUsers = true): array
     {
         $sort = $this->GetSortPrefs();
+        $knoepfe = $this->ResolveButtonFlags();
         $items = $this->LoadItems();
         foreach ($items as &$it) {
             // All-day dues encode server-local midnight; ship the calendar day TZ-neutral
@@ -2158,8 +2229,9 @@ class ToDoList extends IPSModuleStrict
             'showSorting' => $this->ReadPropertyBoolean('ShowSorting'),
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),
             'showInfoBadges' => $this->ReadPropertyBoolean('ShowInfoBadges'),
-            'showDeleteButton' => $this->ReadPropertyBoolean('ShowDeleteButton'),
-            'showEditButton' => $this->ReadPropertyBoolean('ShowEditButton'),
+            'showEditButton' => $knoepfe['showEditButton'],
+            'showDeleteButton' => $knoepfe['showDeleteButton'],
+            'showReorderHandle' => $knoepfe['showReorderHandle'],
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
             'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
         ];
