@@ -93,9 +93,7 @@ select option { color: #111; background: #fff; }
      gleich (leerer Track ist transparent, der Thumb erscheint nur bei Bedarf).
      KEIN scrollbar-gutter zusätzlich — das würde doppelt reservieren. */
   overflow-y: scroll;
-  overscroll-behavior: contain;  /* Scrollleiste wie im ToDoList-Modul: dünn, Akzentfarbe, transparente Spur */
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+  overscroll-behavior: contain;
   display: none;
   /* Vertikaler Gutter; rechts --sb-pad, damit der Inhalt trotz des nach rechts
      verschobenen Scrollbereichs bündig bei marginside endet (linker Abstand
@@ -107,6 +105,18 @@ select option { color: #111; background: #fff; }
 .screen::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 999px;
+}
+/* scrollbar-color/-width und ::-webkit-scrollbar schliessen sich gegenseitig aus:
+   ist der Standard gesetzt, ignoriert WebKit die Pseudoelemente (gemessen: 11px
+   statt der vorgesehenen 6px, und die transparente Spur greift nicht — in Safari
+   wird sie dann hell gemalt und ist wegen overflow-y: scroll immer zu sehen).
+   Deshalb bekommt WebKit die Pseudoelemente und der Standard gilt nur dort, wo es
+   sie nicht gibt. */
+@supports not selector(::-webkit-scrollbar) {
+  .screen {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+  }
 }
 .screen.active { display: block; }
 .content { max-width: var(--content-max); margin: 0 auto; }
@@ -1369,8 +1379,6 @@ html[data-symdo-theme="dark"] .member-bar {
   padding: 8px 16px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1380,6 +1388,12 @@ html[data-symdo-theme="dark"] .member-bar {
 .overlay-body::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .overlay-body {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+  }
 }
 .form-row label {
   display: block;
