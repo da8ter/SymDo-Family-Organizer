@@ -867,6 +867,32 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .item-side { display: flex; align-items: center; gap: 8px; flex: none; }
 .item-price { font-size: 12.5px; color: var(--muted); }
+/* Uebersicht ueber der Aufgabenliste — drei Zahlen, wie in der fruheren
+   ToDoList-Kachel. Je Liste abschaltbar ueber showOverview. */
+.todo-stats { display: flex; gap: var(--gap); margin-bottom: var(--gap); }
+.stat-box {
+  flex: 1;
+  padding: 12px 8px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: center;
+  min-width: 0;
+}
+.stat-box .stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-box .stat-value { font-size: 22px; font-weight: 800; line-height: 1.2; }
+.stat-open .stat-label, .stat-open .stat-value { color: var(--accent); }
+.stat-overdue .stat-label, .stat-overdue .stat-value { color: #ff5a5a; }
+.stat-today .stat-label, .stat-today .stat-value { color: #ffa500; }
+
 .heart-btn { font-size: 16px; color: var(--muted); padding: 4px; }
 .heart-btn.faved { color: var(--accent); }
 /* Zuschaltbare Zeilenknoepfe (Stift, Papierkorb) — gleiche Anmutung wie das Herz,
@@ -1868,6 +1894,11 @@ html[data-symdo-theme="dark"] .member-bar {
           <select id="todoSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="todoTitle"></h2>
           <button id="btnTodoMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
+        </div>
+        <div id="todoStats" class="todo-stats" style="display:none;">
+          <div class="stat-box stat-open"><div class="stat-label" id="statOpenLabel"></div><div class="stat-value" id="statOpenValue">0</div></div>
+          <div class="stat-box stat-overdue"><div class="stat-label" id="statOverdueLabel"></div><div class="stat-value" id="statOverdueValue">0</div></div>
+          <div class="stat-box stat-today"><div class="stat-label" id="statTodayLabel"></div><div class="stat-value" id="statTodayValue">0</div></div>
         </div>
         <div id="todoListArea"></div>
         <div class="inputbar" id="todoInputbar">
@@ -4547,6 +4578,25 @@ function renderTodos() {
   let items = st.items || [];
   if (todoMemberIds.size > 0) {
     items = items.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+  }
+  // Uebersicht: Zahlen aus denselben Aufgaben, die die Liste zeigt. classifyDue
+  // ist dieselbe Einstufung wie bei den Faelligkeits-Marken der Zeilen.
+  const stats = document.getElementById('todoStats');
+  if (stats) {
+    if (st.showOverview !== false) {
+      const offen = items.filter(i => !i.done);
+      document.getElementById('statOpenLabel').textContent = translate('Open Tasks');
+      document.getElementById('statOverdueLabel').textContent = translate('Overdue');
+      document.getElementById('statTodayLabel').textContent = translate('Due today');
+      document.getElementById('statOpenValue').textContent = String(offen.length);
+      document.getElementById('statOverdueValue').textContent =
+        String(offen.filter(i => classifyDue(i) === 'overdue').length);
+      document.getElementById('statTodayValue').textContent =
+        String(offen.filter(i => classifyDue(i) === 'today').length);
+      stats.style.display = '';
+    } else {
+      stats.style.display = 'none';
+    }
   }
   const sorted = sortTodoItems(items, sortMode, sortDir);
   const open = sorted.filter(i => !i.done);

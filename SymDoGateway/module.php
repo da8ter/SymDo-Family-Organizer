@@ -65,6 +65,7 @@ class SymDoGateway extends IPSModuleStrict
         // Zeilenknoepfe der Listen, zentral uebersteuerbar. Wirken erst, wenn
         // OverrideListSettings an ist; sonst gelten die Werte der einzelnen Listen.
         $this->RegisterPropertyBoolean('OverrideListSettings', false);
+        $this->RegisterPropertyBoolean('ShowOverview', true);
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
@@ -220,6 +221,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Label',
                     'caption' => $this->Translate('Override list settings hint'),
                 ],
+                $schalter('ShowOverview', $this->Translate('Show overview'), $an),
                 $schalter('ShowCreateButton', $this->Translate('Show create button'), $an),
                 $schalter('ShowSorting', $this->Translate('Show sorting'), $an),
                 $schalter('ShowFavoriteHeart', $this->Translate('Show favorite heart'), $an),
@@ -237,7 +239,7 @@ class SymDoGateway extends IPSModuleStrict
     /** Vom Hauptschalter aufgerufen: gibt die vier Schalter frei oder sperrt sie. */
     public function UpdateListButtonForm(bool $Override): void
     {
-        foreach (['ShowCreateButton', 'ShowSorting', 'ShowFavoriteHeart',
+        foreach (['ShowOverview', 'ShowCreateButton', 'ShowSorting', 'ShowFavoriteHeart',
                   'ShowRowEditButton', 'ShowRowDeleteButton', 'ShowReorderHandle'] as $name) {
             $this->UpdateFormField($name, 'enabled', $Override);
         }

@@ -2173,11 +2173,12 @@ class ToDoList extends IPSModuleStrict
      * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
      * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
      *
-     * @return array{showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
+     * @return array{showOverview: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
      */
     private function ResolveButtonFlags(): array
     {
         $eigene = [
+            'showOverview'      => $this->ReadBooleanPropertyOrDefault('ShowOverview', true),
             'showCreateButton'  => $this->ReadBooleanPropertyOrDefault('ShowCreateButton', true),
             'showSorting'       => $this->ReadBooleanPropertyOrDefault('ShowSorting', true),
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
@@ -2199,6 +2200,7 @@ class ToDoList extends IPSModuleStrict
             return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
         };
         return [
+            'showOverview'      => $vomGateway('ShowOverview', true),
             'showCreateButton'  => $vomGateway('ShowCreateButton', true),
             'showSorting'       => $vomGateway('ShowSorting', true),
             'showEditButton'    => $vomGateway('ShowRowEditButton', false),
@@ -2228,7 +2230,7 @@ class ToDoList extends IPSModuleStrict
             'sortMode' => $sort['mode'],
             'sortDir'  => $sort['dir'],
             'orderVersion' => $this->ReadAttributeInteger('OrderVersion'),
-            'showOverview' => $this->ReadPropertyBoolean('ShowOverview'),
+            'showOverview' => $knoepfe['showOverview'],
             'showCreateButton' => $knoepfe['showCreateButton'],
             'showSorting' => $knoepfe['showSorting'],
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),

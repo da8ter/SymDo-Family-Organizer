@@ -367,7 +367,8 @@
       "Users are managed in the SymDo Gateway instance.": "Benutzer werden in der SymDo-Gateway-Instanz verwaltet.",
       "Show favorite heart": "Favoriten-Herz anzeigen",
       "Show delete button": "Löschen-Knopf anzeigen",
-      "Row buttons hint": "Ohne diese Knöpfe bleiben Bearbeiten und Löschen über die Wischgesten erreichbar. Wird der Verschieben-Griff ausgeblendet, entfällt auch das Ziehen — er ist die Anfassstelle der Geste."
+      "Row buttons hint": "Ohne diese Knöpfe bleiben Bearbeiten und Löschen über die Wischgesten erreichbar. Wird der Verschieben-Griff ausgeblendet, entfällt auch das Ziehen — er ist die Anfassstelle der Geste.",
+      "Open Tasks": "Offene Aufgaben"
     }
   }
 }
