@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AirPods-Tasten messen</title>
+<style>
+  :root {
+    --bg: #0b0b0c; --card: #1c1c1e; --text: #f2f2f7; --dim: #8e8e93;
+    --accent: #0a84ff; --ok: #30d158; --warn: #ff9f0a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 16px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, system-ui, sans-serif;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+  .karte { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .karte h2 { font-size: 15px; margin: 0 0 8px; }
+  ol { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  button {
+    appearance: none; border: 0; border-radius: 11px; padding: 14px 16px;
+    font: 600 16px/1 -apple-system, system-ui, sans-serif; color: #fff;
+    background: var(--accent); width: 100%; margin-bottom: 8px;
+  }
+  button.zweit { background: #3a3a3c; }
+  button:disabled { opacity: .4; }
+  .zustand { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .pille {
+    background: #2c2c2e; border-radius: 999px; padding: 5px 11px;
+    font-size: 12px; color: var(--dim);
+  }
+  .pille b { color: var(--text); font-weight: 600; }
+  #log {
+    font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap;
+    word-break: break-word; background: #000; border-radius: 10px;
+    padding: 10px; max-height: 45vh; overflow-y: auto; margin: 0;
+  }
+  .treffer { color: var(--ok); }
+  .hinweis { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<h1>AirPods-Tasten messen</h1>
+<div class="sub">Diese Seite baut nichts ein — sie protokolliert nur, welche Aktion ein
+Tastendruck am Kopfhörer auslöst. Das Ergebnis legt die Bedienung der Einkaufs-Ansage fest.</div>
+
+<div class="karte">
+  <h2>So geht’s</h2>
+  <ol>
+    <li>AirPods verbinden, dann <b>Test A</b> starten.</li>
+    <li><b>Während</b> der Ton läuft: <b>einmal</b> tippen.</li>
+    <li>Nach dem Ton <b>einmal</b> tippen — sofort.</li>
+    <li>Dann <b>nach etwa 30 Sekunden</b> noch einmal tippen.</li>
+    <li>Dann <b>nach etwa 2 Minuten</b> noch einmal. Das ist der wichtigste Wert:
+      im Laden vergeht zwischen Ansage und Bestätigung genau so viel Zeit.</li>
+    <li>Am Ende <b>Protokoll kopieren</b> und mir schicken.</li>
+  </ol>
+  <div class="sub" style="margin-top:8px">Test B ist schon gemessen — es geht jetzt nur
+    noch um <b>Test A</b>. Die Zeit seit dem Ende der Ansage steht in jeder Zeile.</div>
+</div>
+
+<div class="karte">
+  <h2>Test A — mit stiller Endlosspur</h2>
+  <div class="sub" style="margin:0 0 10px">Nach dem Ton läuft unhörbar weiter Ton, die
+    Wiedergabe meldet sich aber als pausiert. Die Fragen: Hält das die Fernbedienung
+    länger bei uns — und kommt ein Tipp dann als <b>play</b> an oder als <b>pause</b>?</div>
+  <button id="startA">Test A starten</button>
+
+  <h2 style="margin-top:14px">Test B — ohne stille Spur</h2>
+  <div class="sub" style="margin:0 0 10px">Bereits gemessen: Tipp während der Ansage
+    kommt als <b>pause</b>, danach als <b>play</b>. Offen ist nur, wie lange das hält —
+    dafür hier ebenfalls die Zeit seit dem Ende mitlaufen lassen.</div>
+  <button id="startB" class="zweit">Test B starten</button>
+</div>
+
+<div class="karte">
+  <h2>Zustand</h2>
+  <div class="zustand">
+    <span class="pille">Test <b id="zTest">–</b></span>
+    <span class="pille">Audio <b id="zAudio">–</b></span>
+    <span class="pille">Media Session <b id="zSession">–</b></span>
+    <span class="pille">Ereignisse <b id="zAnzahl">0</b></span>
+  </div>
+  <button id="kopieren" class="zweit">Protokoll kopieren</button>
+  <pre id="log">Noch nichts gemessen.</pre>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Ton selbst erzeugen: keine externen Dateien, damit die Seite überall lädt ──
+  function wavBlobUrl(sekunden, frequenz, lautstaerke) {
+    const rate = 22050;
+    const n = Math.floor(rate * sekunden);
+    const buf = new ArrayBuffer(44 + n * 2);
+    const dv = new DataView(buf);
+    const schreibe = (pos, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos + i, s.charCodeAt(i)); };
+    schreibe(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); schreibe(8, 'WAVE');
+    schreibe(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+    dv.setUint16(22, 1, true); dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true);
+    dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    schreibe(36, 'data'); dv.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      // Weiche Hüllkurve, damit es nicht knackt
+      const t = i / rate;
+      const huelle = Math.min(1, t * 8, (sekunden - t) * 8);
+      const wert = Math.sin(2 * Math.PI * frequenz * t) * lautstaerke * Math.max(0, huelle);
+      dv.setInt16(44 + i * 2, Math.max(-1, Math.min(1, wert)) * 32767, true);
+    }
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  // Ansage-Ersatz: 6 Sekunden hörbar. Stille Spur: fast lautlos, aber nicht digital
+  // null — echte Null halten manche Systeme nicht für Wiedergabe.
+  const TON    = wavBlobUrl(6, 440, 0.25);
+  const STILLE = wavBlobUrl(2, 30, 0.0004);
+
+  const audio = new Audio();
+  audio.preload = 'auto';
+  const stille = new Audio(STILLE);
+  stille.loop = true;
+  stille.preload = 'auto';
+
+  let test = '–';
+  let stilleAn = false;
+  let zaehler = 0;
+  let endeZeit = 0;   // wann die Ansage fertig war
+  const zeilen = [];
+  const t0 = Date.now();
+
+  const el = (id) => document.getElementById(id);
+
+  function audioZustand() {
+    if (audio.ended) return 'beendet';
+    if (audio.paused) return audio.currentTime > 0 ? 'pausiert' : 'bereit';
+    return 'spielt';
+  }
+
+  function malen() {
+    el('zTest').textContent = test;
+    el('zAudio').textContent = audioZustand() + (stilleAn ? ' + stille Spur' : '');
+    el('zSession').textContent = ('mediaSession' in navigator)
+      ? (navigator.mediaSession.playbackState || 'none') : 'nicht verfügbar';
+    el('zAnzahl').textContent = String(zaehler);
+  }
+
+  function notiere(text, klasse) {
+    const ms = String(Date.now() - t0).padStart(6, ' ');
+    const zeile = ms + ' ms  ' + text;
+    zeilen.push(zeile);
+    const pre = el('log');
+    if (zeilen.length === 1) pre.textContent = '';
+    const span = document.createElement('span');
+    if (klasse) span.className = klasse;
+    span.textContent = zeile + '\n';
+    pre.appendChild(span);
+    pre.scrollTop = pre.scrollHeight;
+    malen();
+  }
+
+  function aktion(name) {
+    zaehler++;
+    const seit = endeZeit ? '  ←  ' + ((Date.now() - endeZeit) / 1000).toFixed(1) +
+      ' s nach dem Ende der Ansage' : '';
+    notiere('>>> AKTION "' + name + '"   [Test ' + test + ' | Audio: ' + audioZustand() +
+            (stilleAn ? ' + stille Spur' : '') +
+            ' | Position: ' + audio.currentTime.toFixed(1) + 's' +
+            ' | playbackState: ' + (navigator.mediaSession.playbackState || 'none') + ']' + seit, 'treffer');
+  }
+
+  if ('mediaSession' in navigator) {
+    ['play', 'pause', 'stop', 'nexttrack', 'previoustrack', 'seekforward', 'seekbackward']
+      .forEach((name) => {
+        try {
+          navigator.mediaSession.setActionHandler(name, () => aktion(name));
+        } catch (e) {
+          notiere('Handler "' + name + '" nicht unterstützt', 'hinweis');
+        }
+      });
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'Messung: 2 Kilo Äpfel',
+      artist: 'SymDo Einkaufsliste',
+      album: 'Tastentest',
+    });
+  } else {
+    notiere('mediaSession gibt es in diesem Browser NICHT — Test sinnlos.', 'hinweis');
+  }
+
+  ['play', 'pause', 'ended', 'stalled', 'waiting'].forEach((ev) => {
+    audio.addEventListener(ev, () => {
+      notiere('audio: ' + ev + '  (Position ' + audio.currentTime.toFixed(1) + 's)');
+      if (ev === 'ended') {
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        endeZeit = Date.now();
+        if (test === 'A') {
+          stille.play().then(() => {
+            stilleAn = true;
+            // Bewusst NACH dem Start setzen: die stille Spur laeuft, wir melden der
+            // Fernbedienung aber 'pausiert'. Genau das ist die offene Frage — sendet
+            // ein Tipp dann play (wie gewuenscht) oder pause?
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            notiere('stille Spur läuft, Status \'paused\' — jetzt tippen: sofort, nach 30 s, nach 2 min', 'hinweis');
+            malen();
+          }).catch((e) => notiere('stille Spur startet nicht: ' + e.message, 'hinweis'));
+        } else {
+          notiere('alles steht still — jetzt tippen: sofort, nach 30 s, nach 2 min', 'hinweis');
+        }
+      }
+      malen();
+    });
+  });
+
+  function starte(welcher) {
+    test = welcher;
+    zeilen.length = 0;
+    el('log').textContent = '';
+    zaehler = 0;
+    stilleAn = false;
+    endeZeit = 0;
+    stille.pause();
+    stille.currentTime = 0;
+    audio.src = TON;
+    audio.currentTime = 0;
+    notiere('— Test ' + welcher + ' gestartet —');
+    audio.play().then(() => {
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      notiere('Ton läuft (6 s) — jetzt EINMAL tippen', 'hinweis');
+      malen();
+    }).catch((e) => notiere('Ton startet nicht: ' + e.message, 'hinweis'));
+  }
+
+  el('startA').addEventListener('click', () => starte('A'));
+  el('startB').addEventListener('click', () => starte('B'));
+
+  el('kopieren').addEventListener('click', () => {
+    const text = 'AirPods-Messung\n' + navigator.userAgent + '\n\n' + zeilen.join('\n');
+    const fertig = () => notiere('(Protokoll kopiert)');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(fertig).catch(() => {
+        el('log').textContent = text;
+        notiere('(Kopieren ging nicht — Text oben markieren)', 'hinweis');
+      });
+    } else {
+      el('log').textContent = text;
+    }
+  });
+
+  malen();
+})();
+</script>
+</body>
+</html>

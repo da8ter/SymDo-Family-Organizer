@@ -85,6 +85,34 @@ select option { color: #111; background: #fff; }
   padding: var(--sym-mt) var(--sb-pad) 0 var(--sym-ms);
 }
 
+/* Laufleiste der Einkaufs-Ansage: sitzt zwischen Kopfzeile und Liste und
+   bleibt beim Scrollen oben stehen — man soll jederzeit sehen, wo man ist. */
+.ansage-leiste {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 10px; padding: 10px 12px; border-radius: 12px;
+  background: var(--glass-bg); backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.ansage-leiste[hidden] { display: none; }
+.ansage-symbol { color: var(--accent-color); font-size: 17px; flex: 0 0 auto; }
+.ansage-symbol.pausiert { opacity: .45; }
+.ansage-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+#ansageArtikel {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#ansageFortschritt { font-size: 12px; opacity: .6; }
+.ansage-btn {
+  flex: 0 0 auto; width: 34px; height: 34px; border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--content-color) 12%, transparent);
+  color: var(--content-color); font-size: 14px; cursor: pointer;
+}
+.ansage-btn:disabled { opacity: .3; }
+/* Der gerade angesagte Artikel in der Liste */
+.item-card.ansage-aktiv, .todo-card.ansage-aktiv {
+  outline: 2px solid var(--accent-color); outline-offset: -2px;
+}
+
 .screen {
   flex: 1;
   min-height: 0;
@@ -1885,6 +1913,16 @@ html[data-symdo-theme="dark"] .member-bar {
           <select id="shoppingSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="shoppingTitle"></h2>
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
+        </div>
+        <div id="ansageLeiste" class="ansage-leiste" hidden>
+          <i id="ansageSymbol" class="fa-light fa-volume-high ansage-symbol"></i>
+          <div class="ansage-text">
+            <span id="ansageArtikel"></span>
+            <span id="ansageFortschritt"></span>
+          </div>
+          <button id="ansageZurueck" class="ansage-btn" aria-label="Rückgängig"><i class="fa-light fa-rotate-left"></i></button>
+          <button id="ansageWeiter" class="ansage-btn" aria-label="Weiter"><i class="fa-light fa-forward-step"></i></button>
+          <button id="ansageEnde" class="ansage-btn" aria-label="Beenden"><i class="fa-light fa-xmark"></i></button>
         </div>
         <div id="shoppingListArea"></div>
         <div class="composer">
@@ -4580,8 +4618,19 @@ function renderTodos() {
   }
   const sortMode = String(st.sortMode || 'created');
   const sortDir = String(st.sortDir || 'asc');
-  // Prio-Chip nur, wenn die Liste Info-Badges zeigt (wie in der ToDoList-Kachel)
-  const showBadges = st.showInfoBadges === true;
+  // Abzeichen der Aufgabenzeile. showInfoBadges ist der Hauptschalter ueber ALLE
+  // Abzeichen — dieselbe Bedeutung wie im serverseitigen Renderer der ToDoList
+  // (BuildTaskRowHtml gated dort Faelligkeit, Erinnerung, Wiederholung und Prio
+  // gemeinsam damit). Darunter ist jede Sorte einzeln abschaltbar; die Prioritaet
+  // hat keinen eigenen Schalter und haengt allein am Hauptschalter.
+  // Opt-out: fehlt ein Schlüssel, ist das Abzeichen an.
+  const badges = {
+    master:       st.showInfoBadges === true,
+    quantity:     st.showQuantityBadge !== false,
+    recurrence:   st.showRecurrenceBadge !== false,
+    due:          st.showDueBadge !== false,
+    notification: st.showNotificationBadge !== false,
+  };
   // Anlegen und Sortieren sind je Liste abschaltbar (opt-out). Die Eingabezeile ist
   // der eine Weg zum Anlegen, der Menueeintrag "mit Details" der andere — beide
   // haengen am selben Schalter, sonst waere "Erstellen aus" nur halb wirksam.
@@ -4644,13 +4693,13 @@ function renderTodos() {
     const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
     html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
   }
-  for (const it of open) html += todoRowHtml(it, canReorder, showBadges, showEdit, showDelete);
+  for (const it of open) html += todoRowHtml(it, canReorder, badges, showEdit, showDelete);
   if (done.length > 0 && st.hideCompletedTasks !== true) {
     html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" data-key="doneToggle" id="doneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
       `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (completedExpanded) {
-      for (const it of done) html += todoRowHtml(it, false, showBadges, showEdit, showDelete);
+      for (const it of done) html += todoRowHtml(it, false, badges, showEdit, showDelete);
     }
   }
   const freshNodes = renderRows(area, html);
@@ -4821,15 +4870,17 @@ function ensureTodoMetaObserver() {
   todoMetaRO.observe(area);
 }
 
-function todoRowHtml(it, draggable, showBadges, showEdit, showDelete) {
-  const chip = formatDueChip(it);
-  const qty = parseInt(it.quantity) || 0;
-  const recurs = it.recurrence && it.recurrence !== 'none';
+function todoRowHtml(it, draggable, badges, showEdit, showDelete) {
+  // Jede Sorte muss den Hauptschalter UND ihren eigenen passieren.
+  const zeige = (sorte) => badges.master && badges[sorte];
+  const chip = zeige('due') ? formatDueChip(it) : '';
+  const qty = zeige('quantity') ? (parseInt(it.quantity) || 0) : 0;
+  const recurs = zeige('recurrence') && it.recurrence && it.recurrence !== 'none';
   // Fälligkeits-Zustand wie in der ToDoList-Kachel: überfällig rot, heute orange,
   // sonst neutral. Erledigte Aufgaben bleiben neutral (nicht rot/orange).
   const dueState = it.done ? '' : classifyDue(it);
   const dueBadgeClass = dueState === 'overdue' ? 'due-overdue' : (dueState === 'today' ? 'due-today' : '');
-  const notifies = it.notification === true;
+  const notifies = zeige('notification') && it.notification === true;
   // Stufe 1 der Meta-Verdichtung: Wiederholung, Erinnerung und Anzahl in EINEM
   // Chip. Erst ab zwei dieser Angaben lohnt es sich — ein Chip durch einen Chip
   // zu ersetzen spart nichts. Beide Varianten stehen im Markup, layoutTodoMeta
@@ -4860,7 +4911,7 @@ function todoRowHtml(it, draggable, showBadges, showEdit, showDelete) {
     (notifies ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
     combined +
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
-    (showBadges ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
+    (badges.master ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
     `</span>` +
     (showEdit ? `<button class="row-btn" data-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
     (showDelete ? `<button class="row-btn destructive" data-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '') +
@@ -5665,12 +5716,21 @@ function openShoppingMenu(anchor) {
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
   if (!st) return;
-  const entries = [
+  const entries = [];
+  // Nur in der ausgelieferten Web-App: die Visu-Kachel erreicht die Gateway-API
+  // nicht, dort gaebe es nichts vorzulesen.
+  if (ansageMoeglich()) {
+    entries.push(ansage.aktiv
+      ? { label: translate('Stop announcements'), icon: 'fa-circle-stop', onClick: () => ansageBeenden() }
+      : { label: translate('Start shopping'), icon: 'fa-headphones', onClick: () => ansageStarten() });
+    entries.push({ sep: true });
+  }
+  entries.push(
     { label: translate('Everything done'), icon: 'fa-badge-check', onClick: () => sdCall(id, 'MarkAllDone', '') },
     { label: translate('Delete used items'), icon: 'fa-trash', destructive: true, onClick: () => {
         showConfirm(translate('Delete all used items?'), translate('Delete'), () => sdCall(id, 'ClearCart', ''));
       } }
-  ];
+  );
   const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
   if (lists.length > 0) {
     entries.push({ sep: true });
@@ -6319,8 +6379,14 @@ function bindScrollContainment(scrollEl) {
   let axis = null; // 'x' = horizontale Geste (z. B. Einkaufsvorschau) → durchlassen
 
   scrollEl.addEventListener('wheel', (e) => {
-    // Horizontales Wheel/Trackpad (z. B. auf der Artikelleiste) NICHT abfangen
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    // Horizontales Wheel/Trackpad (z. B. auf der Artikelleiste) NICHT abfangen —
+    // die Weitergabe aber trotzdem stoppen. In der Symcon-Kachel haengt an window
+    // ein von html-sdk.js gesetztes onwheel, das jedes deltaY an die Visualisierung
+    // meldet; die scrollt daraufhin. Eine Magic Mouse liefert nie reines deltaY,
+    // deshalb landete hier ein Teil jeder Wischgeste — gemessen 6 von 22 Ereignissen —
+    // und die ganze Visu scrollte mit. Das default-Verhalten bleibt unberuehrt,
+    // waagerechtes Scrollen funktioniert also weiter.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { e.stopPropagation(); return; }
     const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
     if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
     const deltaY = e.deltaY || 0;
@@ -6351,8 +6417,10 @@ function bindScrollContainment(scrollEl) {
       if (dx > 8 || dy > 8) axis = dx > dy ? 'x' : 'y';
     }
     // Horizontale Geste (Einkaufsvorschau u. Ä.) unangetastet lassen — sonst
-    // würde die vertikale Eindämmung das horizontale Scrollen blockieren
-    if (axis === 'x') { lastTouchY = currentY; return; }
+    // würde die vertikale Eindämmung das horizontale Scrollen blockieren.
+    // Die Weitergabe wird dennoch gestoppt: html-sdk.js meldet touchmove an die
+    // Visualisierung (postPosition), was dieselbe Mitscroll-Wirkung hat wie beim Rad.
+    if (axis === 'x') { lastTouchY = currentY; e.stopPropagation(); return; }
 
     const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
     if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
@@ -6380,12 +6448,344 @@ function setupScrollContainment() {
   // funktioniert das auch für später neu gerenderte Bereiche (z. B. .shop-strip).
   const outside = (target) =>
     !(target instanceof Element) || target.closest(SCROLL_AREA_SELECTOR) === null;
+  // stopPropagation MUSS mit: preventDefault allein unterbindet nur das Scrollen
+  // des Browsers, nicht die Meldung an die Visualisierung. html-sdk.js hoert dafuer
+  // an window (onwheel / touchmove) — erst das Anhalten der Weitergabe verhindert,
+  // dass die Symcon-Visu mitscrollt. Beide Handler greifen nur AUSSERHALB der
+  // Scrollbereiche, die Wischgesten auf den Zeilen bleiben also unberuehrt (die
+  // haengen ohnehin in der Capture-Phase an document und laufen vorher).
   document.addEventListener('wheel', (e) => {
-    if (outside(e.target)) e.preventDefault();
+    if (outside(e.target)) { e.preventDefault(); e.stopPropagation(); }
   }, { passive: false, capture: true });
   document.addEventListener('touchmove', (e) => {
-    if (outside(e.target)) e.preventDefault();
+    if (outside(e.target)) { e.preventDefault(); e.stopPropagation(); }
   }, { passive: false, capture: true });
+}
+
+// ── Einkaufs-Ansage: Liste vorlesen, per Kopfhörer bedienen ────────────────
+/* Am Geraet gemessen (iPhone, iOS 18.7 / Safari 26.6, AirPods):
+   1. Eine STILLE ENDLOSSPUR haelt die Fernbedienung bei uns — Tastendruecke kamen
+      noch 154 s nach der Ansage an. Ohne sie war nur der Bereich weniger Sekunden
+      belegt; im Laden liegt zwischen Ansage und Bestaetigung deutlich mehr.
+   2. Mit laufender stiller Spur kommt JEDER Tastendruck als 'pause' an. Ein von
+      uns gesetztes playbackState='paused' ueberschreibt iOS wieder auf 'playing'
+      — darauf ist also kein Verlass.
+   Deshalb haengt die Bedienung NICHT daran, welche Aktion ankommt: 'play' und
+   'pause' laufen beide in ansageTaste(), entschieden wird nach unserem eigenen
+   Zustand. Ein Tipp tut damit immer das Naheliegende:
+      spricht   → anhalten
+      pausiert  → fortsetzen
+      beendet   → abhaken und naechster Artikel                                */
+
+const ansage = {
+  aktiv: false,
+  instanz: null,
+  schritte: [],        // [{ art:'kategorie'|'artikel', text, itemId, name }]
+  index: -1,
+  zustand: 'beendet',  // 'spricht' | 'pausiert' | 'beendet'
+  clips: [],           // je Schritt-Position eine Blob-URL (NICHT nach Text:
+                       // das Gateway normalisiert die Texte und schickt eine
+                       // andere Fassung zurueck als die hingeschickte)
+  zuletzt: null,       // { itemId } fuer Rueckgaengig
+};
+let ansageAudio = null;
+let ansageStille = null;
+
+/** Kurzer, fast lautloser Ton als Endlosspur — echte digitale Null halten
+ *  manche Systeme nicht fuer Wiedergabe und geben die Fernbedienung frei. */
+function ansageStilleUrl() {
+  const rate = 22050, sek = 2, n = rate * sek;
+  const buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+  const s = (p, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(p + i, t.charCodeAt(i)); };
+  s(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); s(8, 'WAVE'); s(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  s(36, 'data'); dv.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    dv.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 30 * i / rate) * 12), true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+/** Steht die Sprachausgabe zur Verfuegung? Nur in der ausgelieferten Web-App —
+ *  die Visu-Kachel erreicht die Gateway-API nicht. */
+function ansageMoeglich() {
+  return !!window.__SYMDO__ && 'mediaSession' in navigator;
+}
+
+function apiBasis() {
+  return (window.__SYMDO__ && window.__SYMDO__.apiBase) || '/hook/lists/app/v1';
+}
+function apiToken() {
+  try { return ls.get('symdo.token') || ''; } catch (e) { return ''; }
+}
+
+/** Holt einen erzeugten Schnipsel als Blob-URL. */
+function ansageClipHolen(hash) {
+  const headers = {};
+  const token = apiToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch(apiBasis() + '/tts/' + hash, { headers: headers, credentials: 'omit' })
+    .then(r => (r.ok ? r.blob() : null))
+    .then(b => (b ? URL.createObjectURL(b) : null))
+    .catch(() => null);
+}
+
+/** Warteschlange aus der Einkaufsansicht — exakt die sichtbare Reihenfolge,
+ *  also der Laufweg aus der Kategorie-Reihenfolge. Beim Wechsel der Abteilung
+ *  geht eine eigene Ansage voran. */
+function ansageSchritteBauen(st) {
+  const schritte = [];
+  for (const sec of openSections(st)) {
+    schritte.push({ art: 'kategorie', text: translate('Section') + ' ' + sec.category, name: sec.category });
+    for (const it of sec.items) {
+      const menge = String(it.amount || '').trim();
+      const name  = String(it.name || '').trim();
+      // Notiz als Nachsatz, durch Komma abgesetzt — „500 Gramm Butter, salzig."
+      // Deckt sie nur den Artikelnamen noch einmal ab, bleibt sie weg.
+      const notiz = String(it.notes || '').trim();
+      const doppelt = notiz !== '' &&
+        (notiz.toLowerCase() === name.toLowerCase() || name.toLowerCase().includes(notiz.toLowerCase()));
+      schritte.push({
+        art: 'artikel',
+        text: (menge ? menge + ' ' : '') + name + (notiz && !doppelt ? ', ' + notiz : ''),
+        itemId: it.id,
+        name: name,
+        kategorie: sec.category,
+      });
+    }
+  }
+  // Abschluss-Ansage, sobald mindestens ein Artikel dabei ist. Sie haakt nichts ab
+  // und wartet nicht auf einen weiteren Tipp — nach ihr endet der Einkauf von selbst.
+  if (schritte.some(s => s.art === 'artikel')) {
+    schritte.push({ art: 'abschluss', text: translate('Shopping complete. All items are in your cart.') });
+  }
+  return schritte;
+}
+
+/** Anzeigename der laufenden Liste — steht im Store, nicht im Zustand. */
+function ansageListenName() {
+  const inst = (store.instances || []).find(i => String(i.id) === String(ansage.instanz));
+  return inst ? String(inst.name || '') : '';
+}
+
+function ansageMediaSession(schritt) {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: schritt ? schritt.text : translate('Shopping'),
+      artist: ansageListenName() || translate('Shopping list'),
+      album: translate('Shopping'),
+    });
+  } catch (e) { /* Metadaten sind Beiwerk */ }
+}
+
+/** Alle Tastendruecke landen hier — siehe Messung im Kopf dieses Blocks. */
+function ansageTaste() {
+  if (!ansage.aktiv) return;
+  if (ansage.zustand === 'spricht') {
+    ansageAudio.pause();
+    ansage.zustand = 'pausiert';
+    ansageLeisteZeichnen();
+    return;
+  }
+  if (ansage.zustand === 'pausiert') {
+    ansage.zustand = 'spricht';
+    ansageAudio.play().catch(() => { ansage.zustand = 'beendet'; ansageLeisteZeichnen(); });
+    ansageLeisteZeichnen();
+    return;
+  }
+  ansageBestaetigen();
+}
+
+/** Aktuellen Artikel abhaken und weitergehen. Kategorie-Ansagen haben nichts
+ *  zum Abhaken — dort wird nur weitergeschaltet. */
+function ansageBestaetigen() {
+  const jetzt = ansage.schritte[ansage.index];
+  if (jetzt && jetzt.art === 'artikel') {
+    sdCall(ansage.instanz, 'ToggleCart', { id: jetzt.itemId, inCart: true });
+    ansage.zuletzt = { itemId: jetzt.itemId, index: ansage.index };
+  }
+  ansageSpielen(ansage.index + 1);
+}
+
+/** Letzte Buchung zuruecknehmen und den Artikel erneut ansagen. */
+function ansageRueckgaengig() {
+  if (!ansage.zuletzt) return;
+  sdCall(ansage.instanz, 'ToggleCart', { id: ansage.zuletzt.itemId, inCart: false });
+  const ziel = ansage.zuletzt.index;
+  ansage.zuletzt = null;
+  ansageSpielen(ziel);
+}
+
+function ansageSpielen(index) {
+  if (index >= ansage.schritte.length) {
+    ansageFertig();
+    return;
+  }
+  ansage.index = index;
+  const schritt = ansage.schritte[index];
+  const url = ansage.clips[index];
+  ansageMediaSession(schritt);
+  ansageLeisteZeichnen();
+  if (!url) {
+    // Kein Ton fuer diesen Schritt (Erzeugung fehlgeschlagen): nicht haengen
+    // bleiben, sondern als bereits gesprochen behandeln. Beim Abschluss gibt es
+    // nichts mehr zu tippen — also gleich sauber beenden.
+    if (schritt.art === 'abschluss') { ansageFertig(); return; }
+    ansage.zustand = 'beendet';
+    ansageLeisteZeichnen();
+    return;
+  }
+  ansage.zustand = 'spricht';
+  ansageAudio.src = url;
+  ansageAudio.play().catch(() => { ansage.zustand = 'beendet'; ansageLeisteZeichnen(); });
+}
+
+function ansageFertig() {
+  // Kann aus mehreren Wegen kommen (ended-Handler, fehlender Ton, Weiterschalten
+  // ueber das Ende): nur einmal aufraeumen.
+  if (!ansage.aktiv) return;
+  ansage.zustand = 'beendet';
+  ansage.index = ansage.schritte.length;
+  ansageLeisteZeichnen();
+  showToast(translate('Shopping finished'));
+  ansageBeenden();
+}
+
+function ansageBeenden() {
+  ansage.aktiv = false;
+  ansage.zustand = 'beendet';
+  ansage.schritte = [];
+  ansage.index = -1;
+  ansage.zuletzt = null;
+  for (const url of ansage.clips) { if (url) { try { URL.revokeObjectURL(url); } catch (e) {} } }
+  ansage.clips = [];
+  if (ansageAudio) { ansageAudio.pause(); ansageAudio.removeAttribute('src'); }
+  if (ansageStille) { ansageStille.pause(); }
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.metadata = null; } catch (e) {}
+  }
+  ansageLeisteZeichnen();
+  renderShopping();
+}
+
+/** Laufleiste auffrischen. Ohne Argument steht der laufende Schritt drin,
+ *  mit Text (z. B. beim Vorbereiten) dieser stattdessen. */
+function ansageLeisteZeichnen(text) {
+  const leiste = document.getElementById('ansageLeiste');
+  if (!leiste) return;
+  if (!ansage.aktiv) { leiste.hidden = true; ansageHervorheben(null); return; }
+  leiste.hidden = false;
+
+  const schritt = ansage.schritte[ansage.index] || null;
+  const symbol = document.getElementById('ansageSymbol');
+  symbol.classList.toggle('pausiert', ansage.zustand !== 'spricht');
+
+  document.getElementById('ansageArtikel').textContent =
+    text || (schritt ? schritt.text : translate('Shopping'));
+
+  // Fortschritt zaehlt nur Artikel — Abteilungs-Ansagen sind kein Einkauf.
+  const artikel = ansage.schritte.filter(x => x.art === 'artikel');
+  const erledigt = ansage.schritte
+    .slice(0, Math.max(0, ansage.index))
+    .filter(x => x.art === 'artikel').length;
+  document.getElementById('ansageFortschritt').textContent = text
+    ? ''
+    : (erledigt + ' / ' + artikel.length + ' · ' + (
+        ansage.zustand === 'spricht'  ? translate('Speaking')
+      : ansage.zustand === 'pausiert' ? translate('Paused')
+      : translate('Tap to continue')));
+
+  document.getElementById('ansageZurueck').disabled = !ansage.zuletzt;
+  ansageHervorheben(schritt && schritt.art === 'artikel' ? schritt.itemId : null);
+}
+
+/** Den gerade angesagten Artikel in der Liste markieren. */
+function ansageHervorheben(itemId) {
+  const bereich = document.getElementById('shoppingListArea');
+  if (!bereich) return;
+  bereich.querySelectorAll('.ansage-aktiv').forEach(n => n.classList.remove('ansage-aktiv'));
+  if (itemId === null || itemId === undefined) return;
+  const karte = bereich.querySelector('[data-id="' + CSS.escape(String(itemId)) + '"]');
+  if (karte) karte.classList.add('ansage-aktiv');
+}
+
+async function ansageStarten() {
+  const id = selectedShoppingID();
+  const st = id ? instState(id) : null;
+  if (!st) return;
+
+  const schritte = ansageSchritteBauen(st);
+  if (schritte.length === 0) { showToast(translate('The list is empty.')); return; }
+
+  // Tonspuren SYNCHRON in der Nutzergeste anstossen: danach darf das Element
+  // auch ohne weitere Geste abspielen. Ohne diesen Schritt verweigert iOS die
+  // erste Ansage, weil bis dahin Netzwerkaufrufe dazwischenliegen.
+  if (!ansageAudio) {
+    ansageAudio = new Audio();
+    ansageAudio.preload = 'auto';
+    ansageAudio.addEventListener('ended', () => {
+      ansage.zustand = 'beendet';
+      ansageLeisteZeichnen();
+      // Die Abschluss-Ansage laeuft ohne weiteren Tipp aus: sobald sie fertig ist,
+      // ist der Einkauf vorbei.
+      const jetzt = ansage.schritte[ansage.index];
+      if (jetzt && jetzt.art === 'abschluss') ansageFertig();
+    });
+    ansageStille = new Audio(ansageStilleUrl());
+    ansageStille.loop = true;
+    ansageStille.preload = 'auto';
+    for (const name of ['play', 'pause', 'stop', 'nexttrack', 'previoustrack']) {
+      try {
+        navigator.mediaSession.setActionHandler(name,
+          name === 'previoustrack' ? () => ansageRueckgaengig()
+          : name === 'stop' ? () => ansageBeenden()
+          : () => ansageTaste());
+      } catch (e) { /* nicht jede Aktion gibt es ueberall */ }
+    }
+  }
+  const stilleUrl = ansageStille.src;
+  ansageAudio.src = stilleUrl;
+  ansageAudio.play().catch(() => {});
+  ansageStille.play().catch(() => {});
+
+  ansage.aktiv = true;
+  ansage.instanz = id;
+  ansage.schritte = schritte;
+  ansage.index = -1;
+  ansage.zustand = 'beendet';
+  ansage.zuletzt = null;
+  ansageLeisteZeichnen(translate('Preparing announcements…'));
+
+  const texte = schritte.map(s => s.text);
+  const antwort = await aiPost('/tts', { texts: texte });
+  if (!antwort || antwort.status !== 200 || !antwort.json || !Array.isArray(antwort.json.clips)) {
+    const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
+    showToast(code === 'tts_restart_required'
+      ? translate('Speech output was just installed — restart IP-Symcon once.')
+      : translate('Speech output is not available.'));
+    ansageBeenden();
+    return;
+  }
+
+  // Alle Schnipsel vor dem Losgehen holen: im Laden ist der Empfang oft schlecht.
+  // Zugeordnet wird ueber c.i — die Position im hingeschickten Feld.
+  ansage.clips = new Array(schritte.length).fill(null);
+  const offen = antwort.json.clips.filter(c => c && c.ok && c.hash);
+  for (let i = 0; i < offen.length; i += 4) {
+    const teil = offen.slice(i, i + 4);
+    const urls = await Promise.all(teil.map(c => ansageClipHolen(c.hash)));
+    teil.forEach((c, k) => {
+      const pos = Number.isInteger(c.i) ? c.i : -1;
+      if (urls[k] && pos >= 0 && pos < ansage.clips.length) ansage.clips[pos] = urls[k];
+    });
+    if (!ansage.aktiv) return;   // zwischendurch beendet
+    ansageLeisteZeichnen(translate('Preparing announcements…') +
+      ' ' + Math.min(i + teil.length, offen.length) + '/' + offen.length);
+  }
+  ansageSpielen(0);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -6430,6 +6830,11 @@ document.addEventListener('DOMContentLoaded', () => {
   shopInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(); });
   shopAdd.addEventListener('click', addFromInput);
   document.getElementById('btnShoppingMenu').addEventListener('click', (e) => openShoppingMenu(e.currentTarget));
+  // Knoepfe der Ansage-Leiste: dieselben Wege wie ueber den Kopfhoerer, fuer die
+  // Faelle in denen man doch aufs Telefon sieht.
+  document.getElementById('ansageWeiter').addEventListener('click', () => ansageTaste());
+  document.getElementById('ansageZurueck').addEventListener('click', () => ansageRueckgaengig());
+  document.getElementById('ansageEnde').addEventListener('click', () => ansageBeenden());
 
   // ToDos: Quick-Add (auto-zugewiesen an den Standard-Benutzer, wie die App)
   const todoInput = document.getElementById('todoInput');

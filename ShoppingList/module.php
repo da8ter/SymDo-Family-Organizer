@@ -9,7 +9,6 @@ require_once __DIR__ . '/libs/PurchaseStore.php';
 
 class ShoppingList extends IPSModuleStrict
 {
-    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     use ItemStore;
     use SuggestionEngine;
@@ -902,40 +901,23 @@ class ShoppingList extends IPSModuleStrict
      */
 
     /**
-     * Sichtbarkeit der Zeilenknoepfe. Das Gateway darf uebersteuern: steht dort
-     * "Instanzeinstellungen ueberschreiben", gelten seine Werte fuer alle Listen.
+     * Sichtbarkeit der Bedienelemente dieser Liste — ausschliesslich aus den eigenen
+     * Eigenschaften. Es gibt keine Uebersteuerung von aussen mehr.
      *
-     * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
-     * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
+     * Diese Werte gelten fuer die KACHEL dieser Liste. Die Web-App verwirft sie und
+     * setzt ihre eigenen, appweiten Schalter (SymDoWebApp) — sie zeigt alle Listen in
+     * einer Oberflaeche, dort waere ein Wechsel des Erscheinungsbilds von Liste zu
+     * Liste stoerend. Ueberschrieben wird nicht hier, sondern beim Zusammensetzen der
+     * Nutzlast: SymDoWebApp::StripState() und im Gateway ApplyWebAppButtonFlags().
      *
      * @return array{showFavoriteHeart: bool, showEditButton: bool, showDeleteButton: bool}
      */
     private function ResolveButtonFlags(): array
     {
-        $eigene = [
+        return [
             'showFavoriteHeart' => $this->ReadBooleanPropertyOrDefault('ShowFavoriteHeart', true),
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
             'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
-        ];
-
-        $gateways = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
-        if (!is_array($gateways) || $gateways === []) {
-            return $eigene;
-        }
-        sort($gateways);
-        $cfg = json_decode((string)@IPS_GetConfiguration((int)$gateways[0]), true);
-        if (!is_array($cfg) || ($cfg['OverrideListSettings'] ?? false) !== true) {
-            return $eigene;
-        }
-        // Dieselbe Vorgabe-Falle wie in ReadBooleanPropertyOrDefault, nur fuer eine
-        // fremde Instanz: fehlt die Property dort noch, gilt die Vorgabe.
-        $vomGateway = static function (string $name, bool $default) use ($cfg): bool {
-            return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
-        };
-        return [
-            'showFavoriteHeart' => $vomGateway('ShowFavoriteHeart', true),
-            'showEditButton'    => $vomGateway('ShowRowEditButton', false),
-            'showDeleteButton'  => $vomGateway('ShowRowDeleteButton', false),
         ];
     }
 

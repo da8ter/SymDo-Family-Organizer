@@ -9,7 +9,6 @@ require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
 
 class ToDoList extends IPSModuleStrict
 {
-    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     use SyncHelper;
     use CalDAVSync;
@@ -54,6 +53,13 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowLargeQuantity', false);
         $this->RegisterPropertyBoolean('ShowInfoBadges', true);
+        // Einzeln abschaltbare Abzeichen. ShowInfoBadges bleibt der Hauptschalter
+        // ueber alle; diese vier wirken nur, solange er an ist. Vorgabe an, damit
+        // sich am Erscheinungsbild zunaechst nichts aendert.
+        $this->RegisterPropertyBoolean('ShowQuantityBadge', true);
+        $this->RegisterPropertyBoolean('ShowRecurrenceBadge', true);
+        $this->RegisterPropertyBoolean('ShowDueBadge', true);
+        $this->RegisterPropertyBoolean('ShowNotificationBadge', true);
         // Zeilenknoepfe. Bewusst neue Namen: die alten ShowEditButton/ShowDeleteButton
         // steuerten nichts und stehen bei Bestandsinstanzen ueberwiegend auf true —
         // sie zu honorieren haette allen ungefragt zwei Knoepfe in die Zeile gesetzt.
@@ -307,6 +313,30 @@ class ToDoList extends IPSModuleStrict
                     'type' => 'CheckBox',
                     'name' => 'ShowInfoBadges',
                     'caption' => $this->Translate('Show info badges')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowQuantityBadge',
+                    'caption' => $this->Translate('Badge: quantity')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowRecurrenceBadge',
+                    'caption' => $this->Translate('Badge: repeat')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowDueBadge',
+                    'caption' => $this->Translate('Badge: due date')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowNotificationBadge',
+                    'caption' => $this->Translate('Badge: notification')
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Badge switches hint')
                 ],
                 [
                     'type' => 'CheckBox',
@@ -1261,8 +1291,16 @@ class ToDoList extends IPSModuleStrict
     {
         $hideCompleted = $this->ReadPropertyBoolean('HideCompletedTasks');
         $showOverview = $this->ReadPropertyBoolean('ShowOverview');
-        $showInfoBadges = $this->ReadPropertyBoolean('ShowInfoBadges');
         $showLargeQty = $this->ReadPropertyBoolean('ShowLargeQuantity');
+        // Hauptschalter plus die vier Einzelschalter. Gleiche Regel wie in der
+        // Weboberflaeche: eine Sorte erscheint nur, wenn BEIDE Schalter an sind.
+        $badges = [
+            'master'       => $this->ReadPropertyBoolean('ShowInfoBadges'),
+            'quantity'     => $this->ReadBooleanPropertyOrDefault('ShowQuantityBadge', true),
+            'recurrence'   => $this->ReadBooleanPropertyOrDefault('ShowRecurrenceBadge', true),
+            'due'          => $this->ReadBooleanPropertyOrDefault('ShowDueBadge', true),
+            'notification' => $this->ReadBooleanPropertyOrDefault('ShowNotificationBadge', true),
+        ];
 
         $openItems = [];
         $doneItems = [];
@@ -1336,13 +1374,13 @@ class ToDoList extends IPSModuleStrict
         $html .= '<div class="' . htmlspecialchars($listClass, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
 
         foreach ($openItems as $it) {
-            $html .= $this->BuildTaskRowHtml($it, false, $showInfoBadges, $showLargeQty, $now, $todayStart, $todayEnd);
+            $html .= $this->BuildTaskRowHtml($it, false, $badges, $showLargeQty, $now, $todayStart, $todayEnd);
         }
 
         if (count($doneItems) > 0) {
             $html .= '<div class="section-header">' . htmlspecialchars($this->Translate('Completed'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>';
             foreach ($doneItems as $it) {
-                $html .= $this->BuildTaskRowHtml($it, true, $showInfoBadges, $showLargeQty, $now, $todayStart, $todayEnd);
+                $html .= $this->BuildTaskRowHtml($it, true, $badges, $showLargeQty, $now, $todayStart, $todayEnd);
             }
         }
 
@@ -1350,8 +1388,12 @@ class ToDoList extends IPSModuleStrict
         return $html;
     }
 
-    private function BuildTaskRowHtml(array $Item, bool $Done, bool $ShowInfoBadges, bool $ShowLargeQty, int $Now, int $TodayStart, int $TodayEnd): string
+    /** @param array<string, bool> $Badges master + quantity/recurrence/due/notification */
+    private function BuildTaskRowHtml(array $Item, bool $Done, array $Badges, bool $ShowLargeQty, int $Now, int $TodayStart, int $TodayEnd): string
     {
+        $zeige = static function (string $sorte) use ($Badges): bool {
+            return ($Badges['master'] ?? true) && ($Badges[$sorte] ?? true);
+        };
         $title = htmlspecialchars((string)($Item['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $info = trim((string)($Item['info'] ?? ''));
         $infoHtml = '';
@@ -1379,11 +1421,11 @@ class ToDoList extends IPSModuleStrict
         }
 
         $meta = [];
-        if ($qty > 0 && !$ShowLargeQty) {
+        if ($qty > 0 && !$ShowLargeQty && $zeige('quantity')) {
             $meta[] = '<span class="badge quantity">' . $qty . '×</span>';
         }
 
-        if ($ShowInfoBadges && $dueTs > 0) {
+        if ($zeige('due') && $dueTs > 0) {
             $allDay = (bool)($Item['dueAllDay'] ?? false);
             $dueClass = '';
             if ($allDay) {
@@ -1401,16 +1443,17 @@ class ToDoList extends IPSModuleStrict
             $dueText = htmlspecialchars(date($allDay ? 'd.m.Y' : 'd.m.Y H:i', $dueTs), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $meta[] = '<span class="badge due-badge' . $dueClass . '" title="' . $dueText . '">' . $dueText . '</span>';
         }
-        if ($ShowInfoBadges && $notification) {
+        if ($zeige('notification') && $notification) {
             $bellSvg = '<svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 64C306.7 64 296 74.7 296 88L296 97.7C214.6 109.3 152 179.4 152 264L152 278.5C152 316.2 142 353.2 123 385.8L101.1 423.2C97.8 429 96 435.5 96 442.2C96 463.1 112.9 480 133.8 480L506.2 480C527.1 480 544 463.1 544 442.2C544 435.5 542.2 428.9 538.9 423.2L517 385.7C498 353.1 488 316.1 488 278.4L488 263.9C488 179.3 425.4 109.2 344 97.6L344 87.9C344 74.6 333.3 63.9 320 63.9zM488.4 432L151.5 432L164.4 409.9C187.7 370 200 324.6 200 278.5L200 264C200 197.7 253.7 144 320 144C386.3 144 440 197.7 440 264L440 278.5C440 324.7 452.3 370 475.5 409.9L488.4 432zM252.1 528C262 556 288.7 576 320 576C351.3 576 378 556 387.9 528L252.1 528z"/></svg>';
             $meta[] = '<span class="badge notify-badge" title="' . htmlspecialchars($this->Translate('Notification'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . $bellSvg . '</span>';
         }
-        if ($ShowInfoBadges && $recurrence !== 'none') {
+        if ($zeige('recurrence') && $recurrence !== 'none') {
             $rLabel = $this->GetRecurrenceLabel($recurrence, $recurrenceUnit, $recurrenceValue);
             $repeatSvg = '<svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M544.1 256L552 256C565.3 256 576 245.3 576 232L576 88C576 78.3 570.2 69.5 561.2 65.8C552.2 62.1 541.9 64.2 535 71L483.3 122.8C439 86.1 382 64 320 64C191 64 84.3 159.4 66.6 283.5C64.1 301 76.2 317.2 93.7 319.7C111.2 322.2 127.4 310 129.9 292.6C143.2 199.5 223.3 128 320 128C364.4 128 405.2 143 437.7 168.3L391 215C384.1 221.9 382.1 232.2 385.8 241.2C389.5 250.2 398.3 256 408 256L544.1 256zM573.5 356.5C576 339 563.8 322.8 546.4 320.3C529 317.8 512.7 330 510.2 347.4C496.9 440.4 416.8 511.9 320.1 511.9C275.7 511.9 234.9 496.9 202.4 471.6L249 425C255.9 418.1 257.9 407.8 254.2 398.8C250.5 389.8 241.7 384 232 384L88 384C74.7 384 64 394.7 64 408L64 552C64 561.7 69.8 570.5 78.8 574.2C87.8 577.9 98.1 575.8 105 569L156.8 517.2C201 553.9 258 576 320 576C449 576 555.7 480.6 573.4 356.5z"/></svg>';
             $meta[] = '<span class="badge recur-badge" title="' . htmlspecialchars($rLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . $repeatSvg . '</span>';
         }
-        if ($ShowInfoBadges) {
+        // Prioritaet: kein eigener Schalter, haengt allein am Hauptschalter.
+        if ($Badges['master'] ?? true) {
             $meta[] = '<span class="badge ' . htmlspecialchars($prio, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . htmlspecialchars($this->GetPriorityLabel($prio), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>';
         }
 
@@ -2173,17 +2216,20 @@ class ToDoList extends IPSModuleStrict
     }
 
     /**
-     * Sichtbarkeit der Zeilenknoepfe. Das Gateway darf uebersteuern: steht dort
-     * "Instanzeinstellungen ueberschreiben", gelten seine Werte fuer alle Listen.
+     * Sichtbarkeit der Bedienelemente dieser Liste — ausschliesslich aus den eigenen
+     * Eigenschaften. Es gibt keine Uebersteuerung von aussen mehr.
      *
-     * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
-     * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
+     * Diese Werte gelten fuer die KACHEL dieser Liste. Die Web-App verwirft sie und
+     * setzt ihre eigenen, appweiten Schalter (SymDoWebApp) — sie zeigt alle Listen in
+     * einer Oberflaeche, dort waere ein Wechsel des Erscheinungsbilds von Liste zu
+     * Liste stoerend. Ueberschrieben wird nicht hier, sondern beim Zusammensetzen der
+     * Nutzlast: SymDoWebApp::StripState() und im Gateway ApplyWebAppButtonFlags().
      *
      * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
      */
     private function ResolveButtonFlags(): array
     {
-        $eigene = [
+        return [
             'showOverview'      => $this->ReadBooleanPropertyOrDefault('ShowOverview', true),
             'showMemberBar'     => $this->ReadBooleanPropertyOrDefault('ShowMemberBar', true),
             'showCreateButton'  => $this->ReadBooleanPropertyOrDefault('ShowCreateButton', true),
@@ -2191,29 +2237,6 @@ class ToDoList extends IPSModuleStrict
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
             'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
             'showReorderHandle' => $this->ReadBooleanPropertyOrDefault('ShowReorderHandle', true),
-        ];
-
-        $gateways = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
-        if (!is_array($gateways) || $gateways === []) {
-            return $eigene;
-        }
-        sort($gateways);
-        $cfg = json_decode((string)@IPS_GetConfiguration((int)$gateways[0]), true);
-        if (!is_array($cfg) || ($cfg['OverrideListSettings'] ?? false) !== true) {
-            return $eigene;
-        }
-        // Dieselbe Vorgabe-Falle wie oben, nur fuer eine fremde Instanz.
-        $vomGateway = static function (string $name, bool $default) use ($cfg): bool {
-            return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
-        };
-        return [
-            'showOverview'      => $vomGateway('ShowOverview', true),
-            'showMemberBar'     => $vomGateway('ShowMemberBar', true),
-            'showCreateButton'  => $vomGateway('ShowCreateButton', true),
-            'showSorting'       => $vomGateway('ShowSorting', true),
-            'showEditButton'    => $vomGateway('ShowRowEditButton', false),
-            'showDeleteButton'  => $vomGateway('ShowRowDeleteButton', false),
-            'showReorderHandle' => $vomGateway('ShowReorderHandle', true),
         ];
     }
 
@@ -2247,6 +2270,10 @@ class ToDoList extends IPSModuleStrict
             'showSorting' => $knoepfe['showSorting'],
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),
             'showInfoBadges' => $this->ReadPropertyBoolean('ShowInfoBadges'),
+            'showQuantityBadge' => $this->ReadBooleanPropertyOrDefault('ShowQuantityBadge', true),
+            'showRecurrenceBadge' => $this->ReadBooleanPropertyOrDefault('ShowRecurrenceBadge', true),
+            'showDueBadge' => $this->ReadBooleanPropertyOrDefault('ShowDueBadge', true),
+            'showNotificationBadge' => $this->ReadBooleanPropertyOrDefault('ShowNotificationBadge', true),
             'showEditButton' => $knoepfe['showEditButton'],
             'showDeleteButton' => $knoepfe['showDeleteButton'],
             'showReorderHandle' => $knoepfe['showReorderHandle'],

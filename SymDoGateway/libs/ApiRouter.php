@@ -118,6 +118,18 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'tts':
+                // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
+                // GET  /v1/tts/{hash} → die fertige Tondatei
+                if ($method === 'POST' && ($route[2] ?? '') === '') {
+                    $this->HandleTtsPrepare();
+                    return;
+                }
+                if ($method === 'GET' && ($route[2] ?? '') !== '') {
+                    $this->HandleTtsAudio((string)$route[2]);
+                    return;
+                }
+                break;
             case 'assets':
                 if ($method === 'GET') {
                     $this->HandleAsset(array_slice($route, 2));
@@ -621,10 +633,10 @@ trait ApiRouter
     private function CallInstanceGetAppState(int $id, string $kind): string
     {
         if ($kind === 'shopping' && function_exists('SL_GetAppState')) {
-            return SL_GetAppState($id);
+            return $this->ApplyWebAppButtonFlags(SL_GetAppState($id), $kind);
         }
         if ($kind === 'todo' && function_exists('TDL_GetAppState')) {
-            return TDL_GetAppState($id);
+            return $this->ApplyWebAppButtonFlags(TDL_GetAppState($id), $kind);
         }
         return '';
     }
@@ -632,12 +644,45 @@ trait ApiRouter
     private function CallInstanceAppCall(int $id, string $kind, string $action, string $payload): string
     {
         if ($kind === 'shopping' && function_exists('SL_AppCall')) {
-            return SL_AppCall($id, $action, $payload);
+            return $this->ApplyWebAppButtonFlags(SL_AppCall($id, $action, $payload), $kind);
         }
         if ($kind === 'todo' && function_exists('TDL_AppCall')) {
-            return TDL_AppCall($id, $action, $payload);
+            return $this->ApplyWebAppButtonFlags(TDL_AppCall($id, $action, $payload), $kind);
         }
         return '';
+    }
+
+    /**
+     * Praegt die appweiten Bedienelemente der Web-App auf einen Listen-Zustand auf.
+     *
+     * Beide Trichter laufen hierdurch — GetAppState UND AppCall. Ohne den zweiten
+     * fielen die Flags nach jeder Aktion auf die Werte der Liste zurueck, weil eine
+     * Aktionsantwort den neuen Zustand mitliefert.
+     *
+     * Gesetzt wird nur, was die jeweilige Ansicht liest (wie in SymDoWebApp), und
+     * nur, wenn eine Web-App-Instanz existiert. Ohne sie bleibt alles unberuehrt —
+     * dann bedient nur die SymDo-App die API, und die liest diese Flags nicht.
+     */
+    private function ApplyWebAppButtonFlags(string $json, string $kind): string
+    {
+        $flags = $this->ResolveWebAppButtonFlags();
+        if ($flags === null || $json === '') {
+            return $json;
+        }
+        $data = json_decode($json, true);
+        if (!is_array($data) || !is_array($data['state'] ?? null)) {
+            return $json;
+        }
+        $relevant = $kind === 'shopping'
+            ? ['showFavoriteHeart', 'showEditButton', 'showDeleteButton']
+            : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
+               'showInfoBadges', 'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
+               'showNotificationBadge', 'showEditButton', 'showDeleteButton', 'showReorderHandle'];
+        foreach ($relevant as $name) {
+            $data['state'][$name] = $flags[$name];
+        }
+        $neu = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return is_string($neu) ? $neu : $json;
     }
 
     private function GetIfNoneMatchRevision(): ?int

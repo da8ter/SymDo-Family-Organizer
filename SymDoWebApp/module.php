@@ -24,6 +24,13 @@ class SymDoWebApp extends IPSModuleStrict
     /** Revisionen des zuletzt gebauten Payloads (BuildFullPayload → PushFullState, gleicher Aufruf). */
     private array $lastBuiltRevisions = [];
 
+    /**
+     * Appweite Bedienelemente, einmal je PHP-Aufruf gelesen (StripState läuft je
+     * Liste). Bewusst ein Objekt-Feld und kein static: Symcon baut das Modulobjekt
+     * pro Aufruf neu, ein static im Worker könnte nach einem Übernehmen veralten.
+     */
+    private ?array $buttonFlagsCache = null;
+
     /** Wird im 'AiResult'-Branch gesetzt; HandleAiCall erkennt daran eine ausgefallene Antwort. */
     private bool $aiResultSeen = false;
 
@@ -53,6 +60,28 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowDashboard', true);
         $this->RegisterPropertyBoolean('ShowShopping', true);
         $this->RegisterPropertyBoolean('ShowTodos', true);
+
+        // Bedienelemente der Web-App. Sie gelten APPWEIT für alle Listen: die
+        // gleichnamigen Schalter der ToDo- und Einkaufslisten-Instanzen werden hier
+        // bewusst ignoriert, weil die Web-App alle Listen in einer Oberfläche zeigt
+        // und ein Wechsel des Erscheinungsbilds von Liste zu Liste dort nur störte.
+        // In der KACHEL der jeweiligen Liste gelten weiterhin deren eigene Schalter.
+        // Vorgaben wie bisher: sichtbare Elemente bleiben an, die beiden neueren
+        // Zeilenknöpfe bleiben aus.
+        $this->RegisterPropertyBoolean('ShowOverview', true);
+        $this->RegisterPropertyBoolean('ShowMemberBar', true);
+        $this->RegisterPropertyBoolean('ShowCreateButton', true);
+        $this->RegisterPropertyBoolean('ShowSorting', true);
+        $this->RegisterPropertyBoolean('ShowInfoBadges', true);
+        // Einzeln abschaltbare Abzeichen; wirken nur, solange ShowInfoBadges an ist.
+        $this->RegisterPropertyBoolean('ShowQuantityBadge', true);
+        $this->RegisterPropertyBoolean('ShowRecurrenceBadge', true);
+        $this->RegisterPropertyBoolean('ShowDueBadge', true);
+        $this->RegisterPropertyBoolean('ShowNotificationBadge', true);
+        $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
+        $this->RegisterPropertyBoolean('ShowRowEditButton', false);
+        $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
+        $this->RegisterPropertyBoolean('ShowReorderHandle', true);
 
         // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
@@ -595,6 +624,31 @@ class SymDoWebApp extends IPSModuleStrict
         } else {
             unset($state['users']);
         }
+        return $this->OverrideButtonFlags($kind, $state);
+    }
+
+    /**
+     * Überschreibt die Bedienelement-Flags der Liste mit den appweiten dieser
+     * Web-App. Die Listen schicken ihre eigenen Werte weiterhin mit — die gelten
+     * für ihre eigene Kachel; hier werden sie verworfen.
+     *
+     * Gesetzt wird nur, was die jeweilige Oberfläche auch liest: die ToDo-Ansicht
+     * kennt kein Favoritenherz, die Einkaufsansicht keine Mitglieder-Leiste.
+     *
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function OverrideButtonFlags(string $kind, array $state): array
+    {
+        $flags = $this->ResolveButtonFlags();
+        $relevant = $kind === 'shopping'
+            ? ['showFavoriteHeart', 'showEditButton', 'showDeleteButton']
+            : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
+               'showInfoBadges', 'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
+               'showNotificationBadge', 'showEditButton', 'showDeleteButton', 'showReorderHandle'];
+        foreach ($relevant as $name) {
+            $state[$name] = $flags[$name];
+        }
         return $state;
     }
 
@@ -643,6 +697,49 @@ class SymDoWebApp extends IPSModuleStrict
             'shopping'  => $read('ShowShopping'),
             'todos'     => $read('ShowTodos'),
         ];
+    }
+
+    /**
+     * Appweite Bedienelemente dieser Web-App.
+     *
+     * Einziger Auflösungspunkt. Die gleichnamigen Schalter der Listen-Instanzen
+     * werden NICHT gelesen — die Web-App zeigt alle Listen in einer Oberfläche,
+     * dort gilt ein einheitliches Erscheinungsbild. Die Werte überschreiben in
+     * StripState() das, was die Listen im Zustand mitschicken.
+     *
+     * Gelesen wird wie bei GetVisibleTabs() über IPS_GetConfiguration: die
+     * Eigenschaften entstehen in Create() und existieren erst beim nächsten
+     * Kernel-Start. IPS_GetProperty liefert bis dahin `false` PLUS eine PHP-Warnung,
+     * die kein try/catch fängt — und ein „an"-Schalter wäre für Bestandsnutzer
+     * still aus, bevor er sich überhaupt bedienen lässt.
+     *
+     * @return array<string, bool>
+     */
+    private function ResolveButtonFlags(): array
+    {
+        if ($this->buttonFlagsCache !== null) {
+            return $this->buttonFlagsCache;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $read = static function (string $name, bool $default) use ($cfg): bool {
+            return (is_array($cfg) && array_key_exists($name, $cfg)) ? (bool)$cfg[$name] : $default;
+        };
+        $this->buttonFlagsCache = [
+            'showOverview'      => $read('ShowOverview', true),
+            'showMemberBar'     => $read('ShowMemberBar', true),
+            'showCreateButton'  => $read('ShowCreateButton', true),
+            'showSorting'       => $read('ShowSorting', true),
+            'showInfoBadges'    => $read('ShowInfoBadges', true),
+            'showQuantityBadge' => $read('ShowQuantityBadge', true),
+            'showRecurrenceBadge' => $read('ShowRecurrenceBadge', true),
+            'showDueBadge'      => $read('ShowDueBadge', true),
+            'showNotificationBadge' => $read('ShowNotificationBadge', true),
+            'showFavoriteHeart' => $read('ShowFavoriteHeart', true),
+            'showEditButton'    => $read('ShowRowEditButton', false),
+            'showDeleteButton'  => $read('ShowRowDeleteButton', false),
+            'showReorderHandle' => $read('ShowReorderHandle', true),
+        ];
+        return $this->buttonFlagsCache;
     }
 
     private function GetAppGatewayID(): int

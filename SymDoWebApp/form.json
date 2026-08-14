@@ -86,6 +86,86 @@
             ]
         },
         {
+            "type": "ExpansionPanel",
+            "caption": "Controls",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "ShowOverview",
+                    "caption": "Show overview above the to-do list"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowMemberBar",
+                    "caption": "Show member bar"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowCreateButton",
+                    "caption": "Show create button"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowSorting",
+                    "caption": "Show sorting"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowInfoBadges",
+                    "caption": "Show info badges (to-dos) — master switch"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowQuantityBadge",
+                    "caption": "Badge: quantity"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowRecurrenceBadge",
+                    "caption": "Badge: repeat"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowDueBadge",
+                    "caption": "Badge: due date"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowNotificationBadge",
+                    "caption": "Badge: notification"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Badge switches hint"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowFavoriteHeart",
+                    "caption": "Show favorite heart (shopping lists)"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowRowEditButton",
+                    "caption": "Show edit button on each row"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowRowDeleteButton",
+                    "caption": "Show delete button on each row"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowReorderHandle",
+                    "caption": "Show reorder handle"
+                },
+                {
+                    "type": "Label",
+                    "caption": "These settings apply to ALL lists of this web app and of this tile. The identically named switches in the individual to-do and shopping list instances are ignored here — those keep applying to each list's own tile. Swipe gestures always stay active, hiding a button never removes the function; the reorder handle is the exception, without it dragging is off. The web app applies a change after a reload, the tile immediately."
+                }
+            ]
+        },
+        {
             "type": "Label",
             "caption": ""
         },

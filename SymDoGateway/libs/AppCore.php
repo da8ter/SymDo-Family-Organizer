@@ -6,6 +6,7 @@ require_once __DIR__ . '/ApiRouter.php';
 require_once __DIR__ . '/DeviceRegistry.php';
 require_once __DIR__ . '/QrRenderer.php';
 require_once __DIR__ . '/AiExtract.php';
+require_once __DIR__ . '/Tts.php';
 
 /**
  * Die App-Seite des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
@@ -25,6 +26,7 @@ trait AppCore
     use DeviceRegistry;
     use QrRenderer;
     use AiExtract;
+    use Tts;
 
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
@@ -67,6 +69,8 @@ trait AppCore
         // KI „Foto → Aufgaben" (Web-App schickt das Foto, das Gateway ruft die KI).
         $this->RegisterPropertyBoolean('AiEnabled', true); // Master-Schalter für die KI-Analyse
         $this->RegisterPropertyString('AiProvider', 'anthropic'); // anthropic | openai | local
+        // Sprachausgabe der Einkaufs-Ansage (eigener Trait, gleiche Zugangsdaten)
+        $this->TtsCreate();
         $this->RegisterPropertyString('AiAnthropicKey', '');
         $this->RegisterPropertyString('AiOpenAIKey', '');
         $this->RegisterPropertyString('AiLocalBaseUrl', '');
@@ -601,6 +605,14 @@ trait AppCore
                 if ($this->ServeWebAppIcon($path)) {
                     return;
                 }
+                // Messseite fuer die Kopfhoerer-Tasten. Nur unter genau diesem Pfad,
+                // liefert reines HTML ohne Zugriff auf Daten. Sie wird gebraucht, weil
+                // sich das Verhalten der Media Session mit AirPods nur am Geraet
+                // messen laesst; nach der Messung kann sie wieder verschwinden.
+                if (rtrim($path, '/') === '/hook/' . self::WEBAPP_HOOK_PATH . '/mediatest') {
+                    $this->ServeMediaSessionTest();
+                    return;
+                }
                 $this->ServeWebApp();
                 return;
             }
@@ -641,6 +653,26 @@ trait AppCore
         http_response_code(200);
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store');
+        echo $html;
+    }
+
+    /**
+     * Messseite fuer die Kopfhoerer-Tasten (siehe Aufrufstelle). Reines HTML aus einer
+     * festen Datei, kein Datenzugriff — deshalb wie die Web-App selbst ohne Token.
+     */
+    private function ServeMediaSessionTest(): void
+    {
+        $html = @file_get_contents(__DIR__ . '/../tools/mediasession-test.html');
+        if (!is_string($html) || $html === '') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Media-session test page not found.';
+            return;
+        }
+        http_response_code(200);
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store');
+        header('X-Content-Type-Options: nosniff');
         echo $html;
     }
 

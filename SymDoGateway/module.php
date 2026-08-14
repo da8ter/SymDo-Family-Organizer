@@ -25,6 +25,17 @@ class SymDoGateway extends IPSModuleStrict
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
+    /** SymDoWebApp — dort stehen die appweiten Bedienelemente der Oberflaeche. */
+    private const WEBAPP_MODULE_GUID = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
+
+    /**
+     * Appweite Bedienelemente, einmal je PHP-Aufruf aufgeloest. Zwei Felder, weil
+     * `null` ein gueltiges Ergebnis ist (keine Web-App-Instanz vorhanden) und sonst
+     * bei jedem Aufruf erneut gesucht wuerde.
+     */
+    private ?array $webAppFlagsCache = null;
+    private bool $webAppFlagsResolved = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -62,17 +73,10 @@ class SymDoGateway extends IPSModuleStrict
         $this->RegisterHook('todogateway_google');
         $this->RegisterHook('todogateway_microsoft');
 
-        // Zeilenknoepfe der Listen, zentral uebersteuerbar. Wirken erst, wenn
-        // OverrideListSettings an ist; sonst gelten die Werte der einzelnen Listen.
-        $this->RegisterPropertyBoolean('OverrideListSettings', false);
-        $this->RegisterPropertyBoolean('ShowOverview', true);
-        $this->RegisterPropertyBoolean('ShowMemberBar', true);
-        $this->RegisterPropertyBoolean('ShowCreateButton', true);
-        $this->RegisterPropertyBoolean('ShowSorting', true);
-        $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
-        $this->RegisterPropertyBoolean('ShowRowEditButton', false);
-        $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
-        $this->RegisterPropertyBoolean('ShowReorderHandle', true);
+        // Die Bedienelemente der Oberflaeche stehen NICHT mehr hier, sondern in der
+        // SymDoWebApp-Instanz — dort, wo die Oberflaeche zusammengesetzt wird. Sie
+        // gelten appweit fuer alle Listen; das Gateway reicht sie im ApiRouter nur
+        // noch an die ausgelieferte Web-App durch.
 
         // App-Seite
         $this->AppCreate();
@@ -178,7 +182,6 @@ class SymDoGateway extends IPSModuleStrict
         $elements = array_merge(
             $appElements,
             [
-                $this->GetListButtonFormElements(),
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),
                 $this->GetCalDAVFormElements()
@@ -197,67 +200,58 @@ class SymDoGateway extends IPSModuleStrict
 
 
     /**
-     * Zentrale Uebersteuerung der Zeilenknoepfe. Die vier Schalter sind nur bedienbar,
-     * wenn der Hauptschalter an ist — sonst gaukelten sie eine Wirkung vor, die sie
-     * nicht haben, denn dann gelten die Einstellungen der einzelnen Listen.
+     * Appweite Bedienelemente der Oberflaeche, gelesen aus der SymDoWebApp-Instanz.
+     *
+     * Sie standen bis zuletzt hier im Gateway. Verschoben, weil die Web-App die
+     * Oberflaeche zusammensetzt und die Einstellung dort hingehoert, wo sie wirkt.
+     * Das Gateway liefert unter /hook/lists/webapp dieselbe Oberflaeche aus, bezieht
+     * den Zustand aber ueber den ApiRouter direkt aus den Listen — deshalb muss es
+     * die Flags hier nachtraeglich aufpraegen.
+     *
+     * Gibt null zurueck, wenn es keine SymDoWebApp-Instanz gibt; dann bleiben die
+     * Werte der einzelnen Listen stehen. Bei mehreren Instanzen gewinnt die mit der
+     * niedrigsten ID — dieselbe Regel wie bei der bedienenden App-Instanz.
+     *
+     * @return array<string, bool>|null
      */
-    private function GetListButtonFormElements(): array
+    private function ResolveWebAppButtonFlags(): ?array
     {
-        $an = $this->ReadBooleanPropertyOrDefault('OverrideListSettings', false);
-        $schalter = static function (string $name, string $caption, bool $enabled): array {
-            return ['type' => 'CheckBox', 'name' => $name, 'caption' => $caption, 'enabled' => $enabled];
+        if ($this->webAppFlagsResolved) {
+            return $this->webAppFlagsCache;
+        }
+        $this->webAppFlagsResolved = true;
+
+        $ids = @IPS_GetInstanceListByModuleID(self::WEBAPP_MODULE_GUID);
+        if (!is_array($ids) || $ids === []) {
+            return null;
+        }
+        sort($ids);
+        // IPS_GetConfiguration statt IPS_GetProperty: die Eigenschaften entstehen in
+        // Create() der Web-App und existieren erst beim naechsten Kernel-Start; bis
+        // dahin liefert das Lesen `false` statt der Vorgabe.
+        $cfg = json_decode((string)@IPS_GetConfiguration((int)$ids[0]), true);
+        if (!is_array($cfg)) {
+            return null;
+        }
+        $read = static function (string $name, bool $default) use ($cfg): bool {
+            return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
         };
-        return [
-            'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Row buttons of the lists'),
-            'expanded' => false,
-            'items'    => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'OverrideListSettings',
-                    'caption' => $this->Translate('Override list settings'),
-                    'onChange' => 'TGW_UpdateListButtonForm($id, $OverrideListSettings);',
-                ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Override list settings hint'),
-                ],
-                $schalter('ShowOverview', $this->Translate('Show overview'), $an),
-                $schalter('ShowMemberBar', $this->Translate('Show member bar'), $an),
-                $schalter('ShowCreateButton', $this->Translate('Show create button'), $an),
-                $schalter('ShowSorting', $this->Translate('Show sorting'), $an),
-                $schalter('ShowFavoriteHeart', $this->Translate('Show favorite heart'), $an),
-                $schalter('ShowRowEditButton', $this->Translate('Show edit button'), $an),
-                $schalter('ShowRowDeleteButton', $this->Translate('Show delete button'), $an),
-                $schalter('ShowReorderHandle', $this->Translate('Show reorder handle'), $an),
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Row buttons hint'),
-                ],
-            ],
+        $this->webAppFlagsCache = [
+            'showOverview'      => $read('ShowOverview', true),
+            'showMemberBar'     => $read('ShowMemberBar', true),
+            'showCreateButton'  => $read('ShowCreateButton', true),
+            'showSorting'       => $read('ShowSorting', true),
+            'showInfoBadges'    => $read('ShowInfoBadges', true),
+            'showQuantityBadge' => $read('ShowQuantityBadge', true),
+            'showRecurrenceBadge' => $read('ShowRecurrenceBadge', true),
+            'showDueBadge'      => $read('ShowDueBadge', true),
+            'showNotificationBadge' => $read('ShowNotificationBadge', true),
+            'showFavoriteHeart' => $read('ShowFavoriteHeart', true),
+            'showEditButton'    => $read('ShowRowEditButton', false),
+            'showDeleteButton'  => $read('ShowRowDeleteButton', false),
+            'showReorderHandle' => $read('ShowReorderHandle', true),
         ];
-    }
-
-    /** Vom Hauptschalter aufgerufen: gibt die vier Schalter frei oder sperrt sie. */
-    public function UpdateListButtonForm(bool $Override): void
-    {
-        foreach (['ShowOverview', 'ShowMemberBar', 'ShowCreateButton', 'ShowSorting', 'ShowFavoriteHeart',
-                  'ShowRowEditButton', 'ShowRowDeleteButton', 'ShowReorderHandle'] as $name) {
-            $this->UpdateFormField($name, 'enabled', $Override);
-        }
-    }
-
-    /**
-     * Wie in den Listen-Modulen: eine frisch registrierte Property liefert vor dem
-     * ersten Kernel-Neustart `false` statt ihrer Vorgabe.
-     */
-    private function ReadBooleanPropertyOrDefault(string $Name, bool $Default): bool
-    {
-        $config = json_decode((string)IPS_GetConfiguration($this->InstanceID), true);
-        if (!is_array($config) || !array_key_exists($Name, $config)) {
-            return $Default;
-        }
-        return $this->ReadPropertyBoolean($Name);
+        return $this->webAppFlagsCache;
     }
 
     private function GetDonationFormElements(): array
