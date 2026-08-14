@@ -137,7 +137,9 @@
       "Row buttons hint": "Ohne diese Knöpfe bleiben Bearbeiten und Löschen über die Wischgesten erreichbar. Wird der Verschieben-Griff ausgeblendet, entfällt auch das Ziehen — er ist die Anfassstelle der Geste.",
       "Row buttons of the lists": "Zeilenknöpfe der Listen",
       "Override list settings": "Instanzeinstellungen überschreiben",
-      "Override list settings hint": "Ist dies aktiv, gelten die Schalter unten für ALLE Listen; die Einstellungen der einzelnen Listen werden ignoriert."
+      "Override list settings hint": "Ist dies aktiv, gelten die Schalter unten für ALLE Listen; die Einstellungen der einzelnen Listen werden ignoriert.",
+      "Show create button": "Erstellen-Knopf anzeigen",
+      "Show sorting": "Sortierung anzeigen"
     },
     "en": {
       "ToDo Gateway": "ToDo Gateway",

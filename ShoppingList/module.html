@@ -1902,7 +1902,7 @@ html[data-symdo-theme="dark"] .member-bar {
           <button id="btnTodoMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
         <div id="todoListArea"></div>
-        <div class="inputbar">
+        <div class="inputbar" id="todoInputbar">
           <input id="todoInput" type="text" autocomplete="off" />
           <button id="btnTodoScan" class="round-btn" aria-label="Aufgaben mit KI erkennen"><i class="fa-light fa-wand-magic-sparkles"></i></button>
           <button id="btnTodoAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
@@ -4599,6 +4599,16 @@ function renderTodos() {
   const sortDir = String(st.sortDir || 'asc');
   // Prio-Chip nur, wenn die Liste Info-Badges zeigt (wie in der ToDoList-Kachel)
   const showBadges = st.showInfoBadges === true;
+  // Anlegen und Sortieren sind je Liste abschaltbar (opt-out). Die Eingabezeile ist
+  // der eine Weg zum Anlegen, der Menueeintrag "mit Details" der andere — beide
+  // haengen am selben Schalter, sonst waere "Erstellen aus" nur halb wirksam.
+  const showCreate = st.showCreateButton !== false;
+  const showSorting = st.showSorting !== false;
+  const inputbar = document.getElementById('todoInputbar');
+  if (inputbar) inputbar.style.display = showCreate ? '' : 'none';
+  // Ohne Anlegen und ohne Sortieren bleibt kein Menueeintrag uebrig.
+  const menuBtn = document.getElementById('btnTodoMenu');
+  if (menuBtn) menuBtn.style.display = (showCreate || showSorting) ? '' : 'none';
   // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied
   let items = st.items || [];
   if (todoMemberIds.size > 0) {
@@ -5772,18 +5782,22 @@ function openTodoMenu(anchor) {
   const sortDir = String(st.sortDir || 'asc');
   const setPrefs = (mode, dir) => sdCall(id, 'SetSortPrefs', { mode, dir });
   const modes = [['manual', translate('Manual')], ['created', translate('Created')], ['due', translate('Due')], ['priority', translate('Priority')], ['title', translate('Title')]];
-  const entries = [
-    { label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) },
-    { sep: true },
-    { header: true, label: translate('Sorting') }
-  ];
-  for (const [mode, label] of modes) {
-    entries.push({ label, checked: sortMode === mode, onClick: () => setPrefs(mode, sortDir) });
+  const entries = [];
+  if (st.showCreateButton !== false) {
+    entries.push({ label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) });
   }
-  entries.push({ sep: true });
-  entries.push({ header: true, label: translate('Direction') });
-  entries.push({ label: translate('Ascending'), checked: sortDir === 'asc', onClick: () => setPrefs(sortMode, 'asc') });
-  entries.push({ label: translate('Descending'), checked: sortDir === 'desc', onClick: () => setPrefs(sortMode, 'desc') });
+  if (st.showSorting !== false) {
+    if (entries.length > 0) entries.push({ sep: true });
+    entries.push({ header: true, label: translate('Sorting') });
+    for (const [mode, label] of modes) {
+      entries.push({ label, checked: sortMode === mode, onClick: () => setPrefs(mode, sortDir) });
+    }
+    entries.push({ sep: true });
+    entries.push({ header: true, label: translate('Direction') });
+    entries.push({ label: translate('Ascending'), checked: sortDir === 'asc', onClick: () => setPrefs(sortMode, 'asc') });
+    entries.push({ label: translate('Descending'), checked: sortDir === 'desc', onClick: () => setPrefs(sortMode, 'desc') });
+  }
+  if (entries.length === 0) return;
   openMenu(anchor, entries);
 }
 

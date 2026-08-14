@@ -2173,11 +2173,13 @@ class ToDoList extends IPSModuleStrict
      * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
      * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
      *
-     * @return array{showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
+     * @return array{showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
      */
     private function ResolveButtonFlags(): array
     {
         $eigene = [
+            'showCreateButton'  => $this->ReadBooleanPropertyOrDefault('ShowCreateButton', true),
+            'showSorting'       => $this->ReadBooleanPropertyOrDefault('ShowSorting', true),
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
             'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
             'showReorderHandle' => $this->ReadBooleanPropertyOrDefault('ShowReorderHandle', true),
@@ -2197,6 +2199,8 @@ class ToDoList extends IPSModuleStrict
             return array_key_exists($name, $cfg) ? (bool)$cfg[$name] : $default;
         };
         return [
+            'showCreateButton'  => $vomGateway('ShowCreateButton', true),
+            'showSorting'       => $vomGateway('ShowSorting', true),
             'showEditButton'    => $vomGateway('ShowRowEditButton', false),
             'showDeleteButton'  => $vomGateway('ShowRowDeleteButton', false),
             'showReorderHandle' => $vomGateway('ShowReorderHandle', true),
@@ -2225,8 +2229,8 @@ class ToDoList extends IPSModuleStrict
             'sortDir'  => $sort['dir'],
             'orderVersion' => $this->ReadAttributeInteger('OrderVersion'),
             'showOverview' => $this->ReadPropertyBoolean('ShowOverview'),
-            'showCreateButton' => $this->ReadPropertyBoolean('ShowCreateButton'),
-            'showSorting' => $this->ReadPropertyBoolean('ShowSorting'),
+            'showCreateButton' => $knoepfe['showCreateButton'],
+            'showSorting' => $knoepfe['showSorting'],
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),
             'showInfoBadges' => $this->ReadPropertyBoolean('ShowInfoBadges'),
             'showEditButton' => $knoepfe['showEditButton'],
