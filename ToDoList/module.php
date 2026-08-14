@@ -49,6 +49,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyInteger('VisualizationInstanceID', 0);
         $this->RegisterPropertyInteger('NotificationLeadTime', 600);
         $this->RegisterPropertyBoolean('ShowOverview', true);
+        $this->RegisterPropertyBoolean('ShowMemberBar', true);
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowLargeQuantity', false);
@@ -280,6 +281,11 @@ class ToDoList extends IPSModuleStrict
                     'type' => 'CheckBox',
                     'name' => 'ShowOverview',
                     'caption' => $this->Translate('Show overview')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowMemberBar',
+                    'caption' => $this->Translate('Show member bar')
                 ],
                 [
                     'type' => 'CheckBox',
@@ -2173,12 +2179,13 @@ class ToDoList extends IPSModuleStrict
      * Bewusst die einzige Aufloesungsstelle des Moduls — Kachel und Web-App holen
      * beide diesen Zustand, es gibt also keinen zweiten Pfad, der abweichen koennte.
      *
-     * @return array{showOverview: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
+     * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
      */
     private function ResolveButtonFlags(): array
     {
         $eigene = [
             'showOverview'      => $this->ReadBooleanPropertyOrDefault('ShowOverview', true),
+            'showMemberBar'     => $this->ReadBooleanPropertyOrDefault('ShowMemberBar', true),
             'showCreateButton'  => $this->ReadBooleanPropertyOrDefault('ShowCreateButton', true),
             'showSorting'       => $this->ReadBooleanPropertyOrDefault('ShowSorting', true),
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
@@ -2201,6 +2208,7 @@ class ToDoList extends IPSModuleStrict
         };
         return [
             'showOverview'      => $vomGateway('ShowOverview', true),
+            'showMemberBar'     => $vomGateway('ShowMemberBar', true),
             'showCreateButton'  => $vomGateway('ShowCreateButton', true),
             'showSorting'       => $vomGateway('ShowSorting', true),
             'showEditButton'    => $vomGateway('ShowRowEditButton', false),
@@ -2231,6 +2239,7 @@ class ToDoList extends IPSModuleStrict
             'sortDir'  => $sort['dir'],
             'orderVersion' => $this->ReadAttributeInteger('OrderVersion'),
             'showOverview' => $knoepfe['showOverview'],
+            'showMemberBar' => $knoepfe['showMemberBar'],
             'showCreateButton' => $knoepfe['showCreateButton'],
             'showSorting' => $knoepfe['showSorting'],
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),

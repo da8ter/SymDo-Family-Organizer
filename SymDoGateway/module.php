@@ -66,6 +66,7 @@ class SymDoGateway extends IPSModuleStrict
         // OverrideListSettings an ist; sonst gelten die Werte der einzelnen Listen.
         $this->RegisterPropertyBoolean('OverrideListSettings', false);
         $this->RegisterPropertyBoolean('ShowOverview', true);
+        $this->RegisterPropertyBoolean('ShowMemberBar', true);
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
@@ -222,6 +223,7 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('Override list settings hint'),
                 ],
                 $schalter('ShowOverview', $this->Translate('Show overview'), $an),
+                $schalter('ShowMemberBar', $this->Translate('Show member bar'), $an),
                 $schalter('ShowCreateButton', $this->Translate('Show create button'), $an),
                 $schalter('ShowSorting', $this->Translate('Show sorting'), $an),
                 $schalter('ShowFavoriteHeart', $this->Translate('Show favorite heart'), $an),
@@ -239,7 +241,7 @@ class SymDoGateway extends IPSModuleStrict
     /** Vom Hauptschalter aufgerufen: gibt die vier Schalter frei oder sperrt sie. */
     public function UpdateListButtonForm(bool $Override): void
     {
-        foreach (['ShowOverview', 'ShowCreateButton', 'ShowSorting', 'ShowFavoriteHeart',
+        foreach (['ShowOverview', 'ShowMemberBar', 'ShowCreateButton', 'ShowSorting', 'ShowFavoriteHeart',
                   'ShowRowEditButton', 'ShowRowDeleteButton', 'ShowReorderHandle'] as $name) {
             $this->UpdateFormField($name, 'enabled', $Override);
         }

@@ -140,7 +140,8 @@
       "Override list settings hint": "Ist dies aktiv, gelten die Schalter unten für ALLE Listen; die Einstellungen der einzelnen Listen werden ignoriert.",
       "Show create button": "Erstellen-Knopf anzeigen",
       "Show sorting": "Sortierung anzeigen",
-      "Show overview": "Übersicht anzeigen"
+      "Show overview": "Übersicht anzeigen",
+      "Show member bar": "Mitgliederleiste anzeigen"
     },
     "en": {
       "ToDo Gateway": "ToDo Gateway",

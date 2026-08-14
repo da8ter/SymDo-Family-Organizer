@@ -4533,7 +4533,11 @@ function sortTodoItems(items, sortMode, sortDir) {
 function renderTodoMembers() {
   const el = document.getElementById('todoMembers');
   if (!el) return;
-  if (store.users.length === 0) { el.style.display = 'none'; renderInto(el, ''); return; }
+  const st = instState(selectedTodoID());
+  // Je Liste abschaltbar. Ohne Nutzer gibt es ohnehin nichts zu zeigen.
+  if (!st || st.showMemberBar === false || store.users.length === 0) {
+    el.style.display = 'none'; renderInto(el, ''); return;
+  }
   el.style.display = '';
   const membersHtml = store.users.map(u =>
     `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
@@ -4578,6 +4582,9 @@ function renderTodos() {
   if (menuBtn) menuBtn.style.display = showSorting ? '' : 'none';
   // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied
   let items = st.items || [];
+  // Ist die Leiste aus, darf keine alte Auswahl nachwirken — sie waere unsichtbar
+  // und die Liste bliebe ohne Bedienelement gefiltert.
+  if (st.showMemberBar === false) todoMemberIds.clear();
   if (todoMemberIds.size > 0) {
     items = items.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
   }
