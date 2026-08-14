@@ -1381,25 +1381,35 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .switch input:checked + .knob { background: var(--accent); }
 .switch input:checked + .knob::after { transform: translateX(18px); }
-.assign-row {
-  display: flex;
+.assign-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.assign-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid transparent;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.assign-row .avatar {
-  width: 30px; height: 30px;
+.assign-chip.selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+.assign-chip .avatar {
+  width: 24px; height: 24px;
   border-radius: 999px;
   object-fit: cover;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #fff;
+  font-size: 11px;
   font-weight: 700;
+  flex: none;
 }
-.assign-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 15px; }
-.assign-row.selected .check { opacity: 1; }
 /* KI-Review: erkannte Aufgaben mit Häkchen */
 .ai-status { padding: 24px 4px; text-align: center; color: var(--muted); font-size: 14px; }
 .ai-spinner {
@@ -1940,7 +1950,7 @@ html[data-symdo-theme="dark"] .member-bar {
           <select id="tdLeadTime"></select>
         </div>
       </div>
-      <div class="form-row"><label id="lblTodoAssign"></label><div id="tdAssignList"></div></div>
+      <div class="form-row"><label id="lblTodoAssign"></label><div id="tdAssignList" class="assign-list"></div></div>
       <div class="form-row inline">
         <label id="lblTodoPriority"></label>
         <div class="segmented" id="tdPrioritySeg" style="margin:0; width:60%;"></div>
@@ -5372,10 +5382,10 @@ function renderAssignList() {
   }
   el.parentElement.style.display = '';
   el.innerHTML = store.users.map(u =>
-    `<div class="assign-row${tdAssigned.includes(u.id) ? ' selected' : ''}" data-user="${escapeHtml(u.id)}">` +
-    avatarHtml(u, 'avatar') + `<span>${escapeHtml(u.name)}</span><i class="fa-light fa-check check"></i></div>`
+    `<div class="assign-chip${tdAssigned.includes(u.id) ? ' selected' : ''}" data-user="${escapeHtml(u.id)}">` +
+    avatarHtml(u, 'avatar') + `<span>${escapeHtml(u.name)}</span></div>`
   ).join('');
-  el.querySelectorAll('.assign-row').forEach(row => row.addEventListener('click', () => {
+  el.querySelectorAll('.assign-chip').forEach(row => row.addEventListener('click', () => {
     const uid = row.dataset.user;
     const idx = tdAssigned.indexOf(uid);
     if (idx === -1) tdAssigned.push(uid); else tdAssigned.splice(idx, 1);

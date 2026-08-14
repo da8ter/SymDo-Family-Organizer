@@ -258,25 +258,35 @@
     .qty-stepper { display: flex; align-items: center; gap: 10px; }
     .qty-stepper .qty-value { min-width: 28px; text-align: center; font-weight: 700; }
 
-    .assign-row {
-      display: flex;
+    .assign-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .assign-chip {
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      padding: 8px 0;
+      gap: 8px;
+      padding: 6px 12px 6px 6px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid transparent;
       cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    .assign-row .avatar {
-      width: 30px; height: 30px;
+    .assign-chip.selected {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+      border-color: var(--accent);
+    }
+    .assign-chip .avatar {
+      width: 24px; height: 24px;
       border-radius: 999px;
       object-fit: cover;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       color: #fff;
+      font-size: 11px;
       font-weight: 700;
+      flex: none;
     }
-    .assign-row .check { margin-left: auto; color: var(--accent); opacity: 0; font-size: 15px; }
-    .assign-row.selected .check { opacity: 1; }
     .checkrow {
       display: flex;
       align-items: center;
@@ -682,18 +692,6 @@
     }
     .avatar-stack .avatar:first-child { margin-left: 0; }
     .avatar-stack .avatar-more { background: var(--muted); }
-    .assignees { display: flex; flex-wrap: wrap; gap: 8px; }
-    .assignee-chip {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 12px 6px 6px; border-radius: 999px;
-      cursor: pointer; user-select: none;
-    }
-    .assignee-chip.selected { background-color: color-mix(in srgb, var(--accent) 18%, var(--bg)); }
-    .assignee-chip .avatar {
-      width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 600; color: #fff;
-    }
     @media (max-width: 420px) {
       #list .badge.due-badge .due-text { display: none; }
       #list .badge.due-badge .due-icon { display: inline-block; }
@@ -941,7 +939,7 @@
               <select id="recurrenceResetLeadTime"></select>
             </div>
           </div>
-          <div class="form-row"><label id="assigneeFieldLabel"></label><div id="assigneePicker"></div></div>
+          <div class="form-row"><label id="assigneeFieldLabel"></label><div id="assigneePicker" class="assign-list"></div></div>
           <div class="form-row inline">
             <label id="lblTodoPriority"></label>
             <div class="segmented" id="tdPrioritySeg" style="margin:0; width:60%;"></div>
@@ -1862,10 +1860,10 @@
         const av = u.avatar
           ? `<img class="avatar" src="${u.avatar}" alt="" />`
           : `<span class="avatar" style="background:${avatarTint(u.name)}">${escapeHtml(String(u.name || '?').charAt(0).toUpperCase())}</span>`;
-        return `<div class="assign-row${sel ? ' selected' : ''}" data-uid="${escapeHtml(u.id)}">${av}` +
-               `<span>${escapeHtml(u.name)}</span><i class="fa-light fa-check check"></i></div>`;
+        return `<div class="assign-chip${sel ? ' selected' : ''}" data-uid="${escapeHtml(u.id)}">${av}` +
+               `<span>${escapeHtml(u.name)}</span></div>`;
       }).join('');
-      picker.querySelectorAll('.assign-row').forEach(row => {
+      picker.querySelectorAll('.assign-chip').forEach(row => {
         row.addEventListener('click', () => {
           const uid = row.getAttribute('data-uid');
           const idx = selectedAssignees.indexOf(uid);
