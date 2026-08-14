@@ -4519,9 +4519,11 @@ function renderTodos() {
   const showSorting = st.showSorting !== false;
   const inputbar = document.getElementById('todoInputbar');
   if (inputbar) inputbar.style.display = showCreate ? '' : 'none';
-  // Ohne Anlegen und ohne Sortieren bleibt kein Menueeintrag uebrig.
+  // Der "..."-Knopf ist der Sortier-Knopf: ohne Sortierung verschwindet er, auch
+  // wenn Anlegen an ist. Angelegt wird dann ueber die Eingabezeile; der Weg
+  // "Neue Aufgabe mit Details" ueber das Menue entfaellt damit bewusst.
   const menuBtn = document.getElementById('btnTodoMenu');
-  if (menuBtn) menuBtn.style.display = (showCreate || showSorting) ? '' : 'none';
+  if (menuBtn) menuBtn.style.display = showSorting ? '' : 'none';
   // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied
   let items = st.items || [];
   if (todoMemberIds.size > 0) {
