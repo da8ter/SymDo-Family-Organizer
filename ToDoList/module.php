@@ -49,9 +49,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowOverview', true);
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
-        $this->RegisterPropertyBoolean('UseGridView', false);
         $this->RegisterPropertyBoolean('ShowLargeQuantity', false);
-        $this->RegisterPropertyBoolean('GridShoppingListMode', false);
         $this->RegisterPropertyBoolean('ShowInfoBadges', true);
         $this->RegisterPropertyBoolean('ShowDeleteButton', true);
         $this->RegisterPropertyBoolean('ShowEditButton', true);
@@ -289,20 +287,8 @@ class ToDoList extends IPSModuleStrict
                 ],
                 [
                     'type' => 'CheckBox',
-                    'name' => 'UseGridView',
-                    'caption' => $this->Translate('Use grid view'),
-                    'visible' => false
-                ],
-                [
-                    'type' => 'CheckBox',
                     'name' => 'ShowLargeQuantity',
                     'caption' => $this->Translate('Show large quantity'),
-                    'visible' => false
-                ],
-                [
-                    'type' => 'CheckBox',
-                    'name' => 'GridShoppingListMode',
-                    'caption' => $this->Translate('Grid shopping list mode'),
                     'visible' => false
                 ],
                 [
@@ -1256,8 +1242,6 @@ class ToDoList extends IPSModuleStrict
         $showOverview = $this->ReadPropertyBoolean('ShowOverview');
         $showInfoBadges = $this->ReadPropertyBoolean('ShowInfoBadges');
         $showLargeQty = $this->ReadPropertyBoolean('ShowLargeQuantity');
-        $useGridView = $this->ReadPropertyBoolean('UseGridView');
-        $shoppingMode = $useGridView && $this->ReadPropertyBoolean('GridShoppingListMode');
 
         $openItems = [];
         $doneItems = [];
@@ -1323,7 +1307,7 @@ class ToDoList extends IPSModuleStrict
                 '</div>';
         }
 
-        $listClass = 'list' . ($useGridView ? ' grid' : '') . ($shoppingMode ? ' shopping' : '');
+        $listClass = 'list';
 
         $html = $cssBlock . '<div class="tdl-htmlbox wrap">';
 
@@ -1331,13 +1315,13 @@ class ToDoList extends IPSModuleStrict
         $html .= '<div class="' . htmlspecialchars($listClass, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
 
         foreach ($openItems as $it) {
-            $html .= $this->BuildTaskRowHtml($it, false, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $now, $todayStart, $todayEnd);
+            $html .= $this->BuildTaskRowHtml($it, false, $showInfoBadges, $showLargeQty, $now, $todayStart, $todayEnd);
         }
 
         if (count($doneItems) > 0) {
             $html .= '<div class="section-header">' . htmlspecialchars($this->Translate('Completed'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</div>';
             foreach ($doneItems as $it) {
-                $html .= $this->BuildTaskRowHtml($it, true, $showInfoBadges, $showLargeQty, $useGridView, $shoppingMode, $now, $todayStart, $todayEnd);
+                $html .= $this->BuildTaskRowHtml($it, true, $showInfoBadges, $showLargeQty, $now, $todayStart, $todayEnd);
             }
         }
 
@@ -1345,7 +1329,7 @@ class ToDoList extends IPSModuleStrict
         return $html;
     }
 
-    private function BuildTaskRowHtml(array $Item, bool $Done, bool $ShowInfoBadges, bool $ShowLargeQty, bool $UseGridView, bool $ShoppingMode, int $Now, int $TodayStart, int $TodayEnd): string
+    private function BuildTaskRowHtml(array $Item, bool $Done, bool $ShowInfoBadges, bool $ShowLargeQty, int $Now, int $TodayStart, int $TodayEnd): string
     {
         $title = htmlspecialchars((string)($Item['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $info = trim((string)($Item['info'] ?? ''));
@@ -1366,18 +1350,15 @@ class ToDoList extends IPSModuleStrict
         $recurrenceUnit = (string)($Item['recurrenceCustomUnit'] ?? 'w');
         $recurrenceValue = (int)($Item['recurrenceCustomValue'] ?? 1);
 
+        // Nur die grosse Menge wird im Inhaltsbereich gezeigt; die kleine Variante
+        // hing am Einkaufslisten-Modus und war damit schon vorher unerreichbar.
         $qtyLargeHtml = '';
-        $qtyShoppingHtml = '';
-        if ($qty > 0) {
-            if ($ShowLargeQty) {
-                $qtyLargeHtml = '<div class="quantity-large-wrap"><span class="badge quantity large-qty">' . $qty . '×</span></div>';
-            } else {
-                $qtyShoppingHtml = '<div class="quantity-large-wrap"><span class="badge quantity">' . $qty . '×</span></div>';
-            }
+        if ($qty > 0 && $ShowLargeQty) {
+            $qtyLargeHtml = '<div class="quantity-large-wrap"><span class="badge quantity large-qty">' . $qty . '×</span></div>';
         }
 
         $meta = [];
-        if ($qty > 0 && (!$ShowLargeQty || $ShoppingMode)) {
+        if ($qty > 0 && !$ShowLargeQty) {
             $meta[] = '<span class="badge quantity">' . $qty . '×</span>';
         }
 
@@ -1408,7 +1389,7 @@ class ToDoList extends IPSModuleStrict
             $repeatSvg = '<svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M544.1 256L552 256C565.3 256 576 245.3 576 232L576 88C576 78.3 570.2 69.5 561.2 65.8C552.2 62.1 541.9 64.2 535 71L483.3 122.8C439 86.1 382 64 320 64C191 64 84.3 159.4 66.6 283.5C64.1 301 76.2 317.2 93.7 319.7C111.2 322.2 127.4 310 129.9 292.6C143.2 199.5 223.3 128 320 128C364.4 128 405.2 143 437.7 168.3L391 215C384.1 221.9 382.1 232.2 385.8 241.2C389.5 250.2 398.3 256 408 256L544.1 256zM573.5 356.5C576 339 563.8 322.8 546.4 320.3C529 317.8 512.7 330 510.2 347.4C496.9 440.4 416.8 511.9 320.1 511.9C275.7 511.9 234.9 496.9 202.4 471.6L249 425C255.9 418.1 257.9 407.8 254.2 398.8C250.5 389.8 241.7 384 232 384L88 384C74.7 384 64 394.7 64 408L64 552C64 561.7 69.8 570.5 78.8 574.2C87.8 577.9 98.1 575.8 105 569L156.8 517.2C201 553.9 258 576 320 576C449 576 555.7 480.6 573.4 356.5z"/></svg>';
             $meta[] = '<span class="badge recur-badge" title="' . htmlspecialchars($rLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . $repeatSvg . '</span>';
         }
-        if ($ShowInfoBadges && !$ShoppingMode) {
+        if ($ShowInfoBadges) {
             $meta[] = '<span class="badge ' . htmlspecialchars($prio, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . htmlspecialchars($this->GetPriorityLabel($prio), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>';
         }
 
@@ -1420,7 +1401,7 @@ class ToDoList extends IPSModuleStrict
                 '<div class="content">' .
                     '<div class="title">' . $title . '</div>' .
                     $infoHtml .
-                    ($ShoppingMode ? $qtyShoppingHtml : $qtyLargeHtml) .
+                    $qtyLargeHtml .
                 '</div>' .
             '</div>' .
             '<div class="actions">' .
@@ -2175,9 +2156,7 @@ class ToDoList extends IPSModuleStrict
             'showOverview' => $this->ReadPropertyBoolean('ShowOverview'),
             'showCreateButton' => $this->ReadPropertyBoolean('ShowCreateButton'),
             'showSorting' => $this->ReadPropertyBoolean('ShowSorting'),
-            'useGridView' => $this->ReadPropertyBoolean('UseGridView'),
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),
-            'gridShoppingListMode' => $this->ReadPropertyBoolean('GridShoppingListMode'),
             'showInfoBadges' => $this->ReadPropertyBoolean('ShowInfoBadges'),
             'showDeleteButton' => $this->ReadPropertyBoolean('ShowDeleteButton'),
             'showEditButton' => $this->ReadPropertyBoolean('ShowEditButton'),
