@@ -2276,7 +2276,7 @@ function kachelZustand(daten) {
     aiEnabled: false,
     tabs: { dashboard: false, shopping: false, todos: true },
     hiddenIDs: [],
-    instances: [{ id: SELF_ID, kind: 'todo', name: '' }],
+    instances: [{ id: SELF_ID, kind: 'todo', name: daten.listName || '' }],
     states: { [SELF_ID]: { kind: 'todo', revision: 0, state: daten } },
     images: {},
     brands: {},

@@ -2233,6 +2233,9 @@ class ToDoList extends IPSModuleStrict
         $payload = [
             'type'  => 'state',
             'items' => $items,
+            // Der Kachel-Adapter setzt daraus den Titel der Kopfzeile; ueber die
+            // Web-App liefert das Gateway den Namen ohnehin selbst.
+            'listName' => IPS_GetName($this->InstanceID),
             'notificationLeadTimeDefault' => $this->ReadPropertyInteger('NotificationLeadTime'),
             'syncBackend' => $this->GetSyncBackend(),
             'sortMode' => $sort['mode'],
