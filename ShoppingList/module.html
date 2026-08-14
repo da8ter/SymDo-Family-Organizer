@@ -85,6 +85,23 @@ select option { color: #111; background: #fff; }
   padding: var(--sym-mt) var(--sb-pad) 0 var(--sym-ms);
 }
 
+/* Sprechblase mit rotem Ausrufezeichen, sobald ein Hinweis hinterlegt ist */
+.hint-btn { position: relative; }
+.hint-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: #ff3b30; color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 16px; text-align: center;
+  pointer-events: none;
+}
+.hint-badge[hidden] { display: none; }
+#hintInput {
+  width: 100%; min-height: 96px; resize: vertical;
+  font: inherit; line-height: 1.4;
+}
+.hint-note { margin-top: 8px; font-size: 12px; opacity: .6; }
+#btnHintDelete.destructive { color: #ff453a; }
+
 /* Laufleiste der Einkaufs-Ansage: sitzt zwischen Kopfzeile und Liste und
    bleibt beim Scrollen oben stehen — man soll jederzeit sehen, wo man ist. */
 .ansage-leiste {
@@ -1944,6 +1961,7 @@ html[data-symdo-theme="dark"] .member-bar {
         <div class="screen-head">
           <select id="shoppingSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="shoppingTitle"></h2>
+          <button id="btnShoppingHint" class="icon-btn hint-btn" aria-label="Hinweis für den Einkauf"><i class="fa-light fa-comment"></i><span class="hint-badge" hidden>!</span></button>
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
         <div id="ansageLeiste" class="ansage-leiste" hidden>
@@ -2203,6 +2221,24 @@ html[data-symdo-theme="dark"] .member-bar {
 </div>
 
 <!-- Bestätigung -->
+<!-- Hinweis für den Einkauf: wird von der Ansage als Erstes vorgelesen -->
+<div class="overlay" id="hintOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="hintTitle"></span>
+      <button class="btn-close-overlay" data-close="hintOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <textarea id="hintInput" rows="4"></textarea>
+      <div class="hint-note" id="hintNote"></div>
+    </div>
+    <div class="overlay-footer">
+      <button id="btnHintDelete" class="destructive"><i class="fa-light fa-xmark"></i> <span id="btnHintDeleteText"></span></button>
+      <button class="primary" id="btnHintSave"></button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="confirmOverlay">
   <div class="overlay-card">
     <div class="overlay-head">
@@ -4316,6 +4352,7 @@ function taskRowHtml(t, showListName) {
 // ── Einkaufen ──────────────────────────────────────────────────────────────
 function renderShopping() {
   syncCompat();
+  hinweisAbzeichenAuffrischen();
   const vis = visibleInstances('shopping');
   const id = selectedShoppingID();
   const st = id ? instState(id) : null;
@@ -6529,6 +6566,8 @@ function initCaptions() {
   set('btnTodoCancel', translate('Cancel'));
   set('btnTodoSave', translate('Save'));
   set('btnPromptCancel', translate('Cancel'));
+  set('btnHintSave', translate('Save'));
+  set('btnHintDeleteText', translate('Delete'));
   set('btnConfirmCancel', translate('Cancel'));
   document.getElementById('scannerOverlayTitle').textContent = translate('Scan barcode');
 }
@@ -6622,6 +6661,41 @@ function setupScrollContainment() {
   }, { passive: false, capture: true });
 }
 
+// ── Hinweis für den Einkauf ────────────────────────────────────────────────
+/* Ein freier Text, der zur Liste gehoert (nicht zum Geraet) und den die Ansage als
+   Erstes vorliest. Gespeichert wird er im ShoppingList-Modul, App und Web-App
+   teilen ihn sich also. */
+
+function aktuellerHinweis() {
+  const st = instState(selectedShoppingID());
+  return st ? String(st.hint || '').trim() : '';
+}
+
+/** Rotes Ausrufezeichen an der Sprechblase, sobald ein Hinweis hinterlegt ist. */
+function hinweisAbzeichenAuffrischen() {
+  const badge = document.querySelector('#btnShoppingHint .hint-badge');
+  if (badge) badge.hidden = aktuellerHinweis() === '';
+}
+
+function hinweisOeffnen() {
+  const id = selectedShoppingID();
+  if (!id) return;
+  const vorhanden = aktuellerHinweis();
+  document.getElementById('hintTitle').textContent = translate('Note for this shopping trip');
+  document.getElementById('hintNote').textContent = translate('Is read out first when the list is announced.');
+  document.getElementById('hintInput').value = vorhanden;
+  document.getElementById('btnHintDelete').style.display = vorhanden ? '' : 'none';
+  openOverlay('hintOverlay');
+  setTimeout(() => document.getElementById('hintInput').focus(), 60);
+}
+
+function hinweisSpeichern(text) {
+  const id = selectedShoppingID();
+  if (!id) return;
+  sdCall(id, 'SetHint', { text: String(text || '') });
+  closeOverlay('hintOverlay');
+}
+
 // ── Einkaufs-Ansage: Liste vorlesen, per Kopfhörer bedienen ────────────────
 /* Am Geraet gemessen (iPhone, iOS 18.7 / Safari 26.6, AirPods):
    1. Eine STILLE ENDLOSSPUR haelt die Fernbedienung bei uns — Tastendruecke kamen
@@ -6697,6 +6771,11 @@ function ansageClipHolen(hash) {
  *  geht eine eigene Ansage voran. */
 function ansageSchritteBauen(st) {
   const schritte = [];
+  // Der Hinweis kommt vor allem anderen — er gilt fuer den ganzen Einkauf.
+  const hinweis = String(st.hint || '').trim();
+  if (hinweis) {
+    schritte.push({ art: 'hinweis', text: hinweis });
+  }
   for (const sec of openSections(st)) {
     schritte.push({ art: 'kategorie', text: translate('Section') + ' ' + sec.category, name: sec.category });
     for (const it of sec.items) {
@@ -6995,6 +7074,11 @@ document.addEventListener('DOMContentLoaded', () => {
   shopInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(); });
   shopAdd.addEventListener('click', addFromInput);
   document.getElementById('btnShoppingMenu').addEventListener('click', (e) => openShoppingMenu(e.currentTarget));
+  document.getElementById('btnShoppingHint').addEventListener('click', () => hinweisOeffnen());
+  document.getElementById('btnHintSave').addEventListener('click', () => {
+    hinweisSpeichern(document.getElementById('hintInput').value);
+  });
+  document.getElementById('btnHintDelete').addEventListener('click', () => hinweisSpeichern(''));
   document.getElementById('ansageWeiter').addEventListener('click', () => ansageTaste());
   document.getElementById('ansageZurueck').addEventListener('click', () => ansageRueckgaengig());
   document.getElementById('ansageEnde').addEventListener('click', () => ansageBeenden());

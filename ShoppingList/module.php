@@ -100,6 +100,9 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterAttributeString('ItemHistory', '{}');
         $this->RegisterAttributeString('SuggestionItems', '[]');
         $this->RegisterAttributeString('FavoriteLists', '[]');
+        // Freier Hinweis fuer den Einkauf, den die Ansage als Erstes vorliest.
+        // Gehoert zur Liste und nicht zum Geraet: App, Web-App und Kachel teilen ihn.
+        $this->RegisterAttributeString('ShoppingHint', '');
         // Kaufhistorie: Map normalisierter Name → {name, category, count, last}.
         // Getrennt von Frequencies, weil das Hinzufügen zählt, nicht das Abhaken.
         $this->RegisterAttributeString('PurchaseHistory', '{}');
@@ -226,6 +229,11 @@ class ShoppingList extends IPSModuleStrict
                 // Read-only push to the tile — must not bump AppRevision, otherwise
                 // every tile open would invalidate the app clients' state caches.
                 $this->PushCurrentState();
+                return;
+            case 'SetHint':
+                // Leerer Text loescht den Hinweis — das ist das X in der Oberflaeche.
+                $daten = json_decode((string)$Value, true);
+                $this->SetHint(is_array($daten) ? (string)($daten['text'] ?? '') : (string)$Value);
                 return;
             case 'AddItem':
                 $data = json_decode((string)$Value, true);
@@ -687,6 +695,7 @@ class ShoppingList extends IPSModuleStrict
             'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
             'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
             'ForgetPurchase', 'UpdatePurchase',
+            'SetHint',
         ];
         $ok    = true;
         $error = null;
@@ -731,6 +740,44 @@ class ShoppingList extends IPSModuleStrict
         }
         $product['source'] = $source;
         return json_encode(['found' => true, 'product' => $product], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Freier Hinweis fuer den Einkauf. Die gesprochene Einkaufsliste liest ihn als
+     * Erstes vor; am Bildschirm haengt er an der Sprechblase in der Kopfzeile.
+     *
+     * ReadAttributeString kann vor dem ersten Kernel-Start fehlschlagen, deshalb
+     * abgesichert — ein fehlender Hinweis ist einfach keiner.
+     */
+    private function ReadHint(): string
+    {
+        try {
+            return trim((string)$this->ReadAttributeString('ShoppingHint'));
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    /** Leerer Text loescht den Hinweis. */
+    private function SetHint(string $Text): void
+    {
+        $sauber = trim(preg_replace('/[ \t]+/u', ' ', $Text) ?? '');
+        // Deckel wie bei den Ansagen: laenger als das spricht niemand vor.
+        if (mb_strlen($sauber) > 400) {
+            $sauber = rtrim(mb_substr($sauber, 0, 400));
+        }
+        if ($sauber === $this->ReadHint()) {
+            return;
+        }
+        $this->WriteAttributeString('ShoppingHint', $sauber);
+        // Zurueckgelesen, weil WriteAttributeString ein Attribut, das der laufende
+        // Kernel noch nicht kennt, STILL verschluckt (gemessen: AppCall meldete
+        // trotzdem Erfolg). Ohne diese Probe verlaere der Nutzer seinen Text
+        // kommentarlos; so bekommt der Client eine klare Meldung.
+        if ($this->ReadHint() !== $sauber) {
+            throw new \Exception($this->Translate('Hint could not be saved — please restart IP-Symcon once.'));
+        }
+        $this->SendState();
     }
 
     private function BumpAppRevision(): void
@@ -966,6 +1013,7 @@ class ShoppingList extends IPSModuleStrict
             // Form dort wuerde alle drei brechen.
             'categoryStyles'  => $this->GetCategoryStyleMap($benutzt),
             'favoriteLists'   => $favorites,
+            'hint'            => $this->ReadHint(),
             // Schon einmal abgehakte Artikel. BEWUSST ein eigener Schlüssel und kein
             // Eintrag in favoriteLists: die Herz-Anzeige an jeder Einkaufszeile leitet
             // sich aus den Namen ALLER Favoritenlisten ab (SymDoWebApp getFavNames,
