@@ -1989,7 +1989,7 @@ html[data-symdo-theme="dark"] .member-bar {
           <button id="ansageZurueck" class="ansage-btn" aria-label="Rückgängig"><i class="fa-light fa-rotate-left"></i></button>
           <button id="ansageWeiter" class="ansage-btn" aria-label="Weiter">
             <i data-akt="pause" class="fa-light fa-pause"></i>
-            <i data-akt="weiter" class="fa-light fa-forward-step" hidden></i>
+            <i data-akt="weiter" class="fa-light fa-play" hidden></i>
           </button>
           <button id="ansageEnde" class="ansage-btn" aria-label="Beenden"><i class="fa-light fa-xmark"></i></button>
           </span>
@@ -6979,7 +6979,9 @@ function ansageLeisteZeichnen(text) {
       : ansage.zustand === 'pausiert' ? translate('Paused')
       : translate('Tap to continue')));
 
-  document.getElementById('ansageZurueck').disabled = !ansage.zuletzt;
+  // Ausblenden statt abblenden: ein dauerhaft blasser Knopf sieht aus wie ein
+  // Gestaltungsfehler, und am Anfang gibt es nie etwas zurueckzunehmen.
+  zeige(document.getElementById('ansageZurueck'), !!ansage.zuletzt);
   ansageHervorheben(schritt && schritt.art === 'artikel' ? schritt.itemId : null);
 }
 
