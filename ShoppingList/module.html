@@ -116,7 +116,10 @@ select option { color: #111; background: #fff; }
   color: var(--accent-color); font-size: 17px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center; width: 22px;
 }
-.ansage-symbol i[hidden], .ansage-btn i[hidden] { display: none; }
+/* Ohne Tag-Namen und mit !important: icons.js macht aus den <i> echte <svg>,
+   und Font Awesomes eigene Regel svg.svg-inline--fa { display: inline-block }
+   schlaegt sonst das hidden-Attribut — dann standen alle Varianten uebereinander. */
+.ansage-symbol [hidden], .ansage-btn [hidden] { display: none !important; }
 .ansage-symbol.pausiert { opacity: .45; }
 .ansage-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 #ansageArtikel {
