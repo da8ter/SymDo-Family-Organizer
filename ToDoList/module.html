@@ -1959,6 +1959,7 @@ html[data-symdo-theme="dark"] .member-bar {
             <i data-akt="pause" class="fa-light fa-pause"></i>
             <i data-akt="weiter" class="fa-light fa-play" hidden></i>
           </button>
+          <button id="ansageUeberspringen" class="ansage-btn" aria-label="Artikel überspringen"><i class="fa-light fa-forward-step"></i></button>
           <button id="ansageEnde" class="ansage-btn" aria-label="Beenden"><i class="fa-light fa-xmark"></i></button>
           </span>
         </div>
@@ -6698,6 +6699,14 @@ function ansageTaste() {
   ansageBestaetigen();
 }
 
+/** Weiter zum naechsten Schritt, OHNE den Artikel abzuhaken. Auf einem Knopf und
+ *  nicht auf einer Kopfhoerer-Geste: ein Doppeltipp schickt play und nextTrack mit
+ *  unvorhersagbarem Abstand, das war nicht verlaesslich zu bekommen. */
+function ansageUeberspringen() {
+  if (!ansage.aktiv) return;
+  ansageSpielen(ansage.index + 1);
+}
+
 /** Aktuellen Artikel abhaken und weitergehen. Kategorie-Ansagen haben nichts
  *  zum Abhaken — dort wird nur weitergeschaltet. */
 function ansageBestaetigen() {
@@ -6963,6 +6972,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Faelle in denen man doch aufs Telefon sieht.
   document.getElementById('ansageWeiter').addEventListener('click', () => ansageTaste());
   document.getElementById('ansageZurueck').addEventListener('click', () => ansageRueckgaengig());
+  document.getElementById('ansageUeberspringen').addEventListener('click', () => ansageUeberspringen());
   document.getElementById('ansageEnde').addEventListener('click', () => ansageBeenden());
 
   // ToDos: Quick-Add (auto-zugewiesen an den Standard-Benutzer, wie die App)
