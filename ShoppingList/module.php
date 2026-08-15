@@ -758,6 +758,23 @@ class ShoppingList extends IPSModuleStrict
         }
     }
 
+    /**
+     * Leert den Hinweis nach abgeschlossenem Einkauf. Bewusst OHNE die
+     * Rueckleseprobe aus SetHint: hier hat niemand etwas eingetippt, das verloren
+     * gehen koennte — und ein Fehlschlag darf das Abhaken nicht aufhalten.
+     */
+    private function ClearHint(): void
+    {
+        if ($this->ReadHint() === '') {
+            return;
+        }
+        try {
+            $this->WriteAttributeString('ShoppingHint', '');
+        } catch (\Throwable $e) {
+            $this->SendDebug('Hint', 'konnte nicht geleert werden: ' . $e->getMessage(), 0);
+        }
+    }
+
     /** Leerer Text loescht den Hinweis. */
     private function SetHint(string $Text): void
     {

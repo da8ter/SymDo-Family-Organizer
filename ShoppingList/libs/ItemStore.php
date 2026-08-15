@@ -24,8 +24,27 @@ trait ItemStore
 
     private function SaveItems(array $Items): void
     {
+        // Stand VOR dem Schreiben: die Variable traegt die Zahl der offenen Artikel
+        // aus dem letzten Speichern — billiger als die Liste erneut zu laden.
+        $offenVorher = (int)@$this->GetValue('ItemCount');
+
         $this->WriteAttributeString('Items', json_encode(array_values($Items), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         $this->UpdateCounts($Items);
+
+        // Einkauf abgeschlossen: der Hinweis galt fuer genau diesen Einkauf. Bewusst
+        // am UEBERGANG festgemacht (vorher offen, jetzt keine) und nicht an "Liste
+        // leer" — sonst wuerde ein im Voraus gesetzter Hinweis beim naechsten
+        // Speichern verschwinden, bevor ueberhaupt eingekauft wurde.
+        $offenJetzt = 0;
+        foreach ($Items as $item) {
+            if (($item['inCart'] ?? false) !== true) {
+                $offenJetzt++;
+            }
+        }
+        if ($offenVorher > 0 && $offenJetzt === 0) {
+            $this->ClearHint();
+        }
+
         $this->SendState();
     }
 
