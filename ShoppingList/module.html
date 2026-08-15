@@ -6940,13 +6940,20 @@ function ansageLeisteZeichnen(text) {
   // frisch eingefuegtes bliebe leer. Alle Varianten stehen im Markup.
   const zustandFuerSymbol = ansage.zustand === 'spricht' ? 'spricht'
                           : ansage.zustand === 'pausiert' ? 'pausiert' : 'wartet';
+  // setAttribute statt el.hidden: icons.js hat aus den <i> echte <svg> gemacht,
+  // und `hidden` ist eine Eigenschaft von HTMLElement — auf einem SVGElement legt
+  // die Zuweisung nur eine wirkungslose JS-Eigenschaft an (gemessen: Attribut
+  // bleibt aus, display bleibt block). Dann blieb immer das Start-Symbol stehen.
+  const zeige = (el, sichtbar) => {
+    if (sichtbar) { el.removeAttribute('hidden'); } else { el.setAttribute('hidden', ''); }
+  };
   leiste.querySelectorAll('.ansage-symbol [data-sym]').forEach((el) => {
-    el.hidden = el.dataset.sym !== zustandFuerSymbol;
+    zeige(el, el.dataset.sym === zustandFuerSymbol);
   });
   // Waehrend des Sprechens haelt ein Tipp an, sonst geht er weiter.
   const aktion = ansage.zustand === 'spricht' ? 'pause' : 'weiter';
   leiste.querySelectorAll('#ansageWeiter [data-akt]').forEach((el) => {
-    el.hidden = el.dataset.akt !== aktion;
+    zeige(el, el.dataset.akt === aktion);
   });
   document.getElementById('ansageWeiter').setAttribute(
     'aria-label', aktion === 'pause' ? translate('Pause') : translate('Next'));
