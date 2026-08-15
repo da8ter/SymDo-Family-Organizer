@@ -126,6 +126,10 @@ select option { color: #111; background: #fff; }
   font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #ansageFortschritt { font-size: 12px; opacity: .6; }
+/* Die Wiedergabe-Knoepfe ruecken eng zusammen; der Abstand der Leiste (gap: 10px)
+   gilt weiter zwischen Symbol, Text und dieser Gruppe. Die Knopfflaeche bleibt
+   unveraendert — enger heisst hier weniger Luft dazwischen, nicht kleinere Ziele. */
+.ansage-aktionen { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .ansage-btn {
   flex: 0 0 auto; width: 34px; height: 34px; border: 0; border-radius: 999px;
   background: color-mix(in srgb, var(--content-color) 12%, transparent);
@@ -1949,12 +1953,14 @@ html[data-symdo-theme="dark"] .member-bar {
             <span id="ansageArtikel"></span>
             <span id="ansageFortschritt"></span>
           </div>
+          <span class="ansage-aktionen">
           <button id="ansageZurueck" class="ansage-btn" aria-label="Rückgängig"><i class="fa-light fa-rotate-left"></i></button>
           <button id="ansageWeiter" class="ansage-btn" aria-label="Weiter">
             <i data-akt="pause" class="fa-light fa-pause"></i>
             <i data-akt="weiter" class="fa-light fa-forward-step" hidden></i>
           </button>
           <button id="ansageEnde" class="ansage-btn" aria-label="Beenden"><i class="fa-light fa-xmark"></i></button>
+          </span>
         </div>
         <div id="shoppingListArea"></div>
         <div class="composer">
