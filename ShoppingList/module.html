@@ -112,7 +112,11 @@ select option { color: #111; background: #fff; }
   -webkit-backdrop-filter: var(--glass-blur);
 }
 .ansage-leiste[hidden] { display: none; }
-.ansage-symbol { color: var(--accent-color); font-size: 17px; flex: 0 0 auto; }
+.ansage-symbol {
+  color: var(--accent-color); font-size: 17px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; width: 22px;
+}
+.ansage-symbol i[hidden], .ansage-btn i[hidden] { display: none; }
 .ansage-symbol.pausiert { opacity: .45; }
 .ansage-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 #ansageArtikel {
@@ -1965,13 +1969,20 @@ html[data-symdo-theme="dark"] .member-bar {
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
         <div id="ansageLeiste" class="ansage-leiste" hidden>
-          <i id="ansageSymbol" class="fa-light fa-volume-high ansage-symbol"></i>
+          <span class="ansage-symbol">
+            <i data-sym="spricht" class="fa-light fa-volume-high"></i>
+            <i data-sym="pausiert" class="fa-light fa-circle-pause" hidden></i>
+            <i data-sym="wartet" class="fa-light fa-headphones" hidden></i>
+          </span>
           <div class="ansage-text">
             <span id="ansageArtikel"></span>
             <span id="ansageFortschritt"></span>
           </div>
           <button id="ansageZurueck" class="ansage-btn" aria-label="Rückgängig"><i class="fa-light fa-rotate-left"></i></button>
-          <button id="ansageWeiter" class="ansage-btn" aria-label="Weiter"><i class="fa-light fa-forward-step"></i></button>
+          <button id="ansageWeiter" class="ansage-btn" aria-label="Weiter">
+            <i data-akt="pause" class="fa-light fa-pause"></i>
+            <i data-akt="weiter" class="fa-light fa-forward-step" hidden></i>
+          </button>
           <button id="ansageEnde" class="ansage-btn" aria-label="Beenden"><i class="fa-light fa-xmark"></i></button>
         </div>
         <div id="shoppingListArea"></div>
@@ -6878,6 +6889,9 @@ function ansageSpielen(index) {
     return;
   }
   ansage.zustand = 'spricht';
+  // NACH dem Setzen erneut zeichnen: die Leiste oben wurde noch mit dem alten
+  // Zustand gemalt, sonst blieb waehrend der Ansage das Warte-Symbol stehen.
+  ansageLeisteZeichnen();
   ansageAudio.src = url;
   ansageAudio.play().catch(() => { ansage.zustand = 'beendet'; ansageLeisteZeichnen(); });
 }
@@ -6919,8 +6933,20 @@ function ansageLeisteZeichnen(text) {
   leiste.hidden = false;
 
   const schritt = ansage.schritte[ansage.index] || null;
-  const symbol = document.getElementById('ansageSymbol');
-  symbol.classList.toggle('pausiert', ansage.zustand !== 'spricht');
+  // Umschalten statt Neu-Erzeugen: icons.js hat die <i> beim Laden ersetzt, ein
+  // frisch eingefuegtes bliebe leer. Alle Varianten stehen im Markup.
+  const zustandFuerSymbol = ansage.zustand === 'spricht' ? 'spricht'
+                          : ansage.zustand === 'pausiert' ? 'pausiert' : 'wartet';
+  leiste.querySelectorAll('.ansage-symbol [data-sym]').forEach((el) => {
+    el.hidden = el.dataset.sym !== zustandFuerSymbol;
+  });
+  // Waehrend des Sprechens haelt ein Tipp an, sonst geht er weiter.
+  const aktion = ansage.zustand === 'spricht' ? 'pause' : 'weiter';
+  leiste.querySelectorAll('#ansageWeiter [data-akt]').forEach((el) => {
+    el.hidden = el.dataset.akt !== aktion;
+  });
+  document.getElementById('ansageWeiter').setAttribute(
+    'aria-label', aktion === 'pause' ? translate('Pause') : translate('Next'));
 
   document.getElementById('ansageArtikel').textContent =
     text || (schritt ? schritt.text : translate('Shopping'));
