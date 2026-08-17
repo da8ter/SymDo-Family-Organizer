@@ -189,6 +189,13 @@ trait AiExtract
             );
         }
 
+        // Mail-Vorschlaege verwalten: bewusst VOR dem KI-Schalter. Vorhandene
+        // Vorschlaege ansehen, uebernehmen und verwerfen muss auch dann gehen, wenn
+        // die Analyse inzwischen abgeschaltet wurde.
+        if (str_ends_with($path, 'mail/proposals')) {
+            return json_encode($this->MailHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         if (!$this->ReadPropertyBoolean('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }
@@ -547,7 +554,7 @@ trait AiExtract
             }
             if ($pdfBase64 !== null) {
                 $userContent = [
-                    ['type' => 'file', 'file' => ['filename' => 'rezept.pdf', 'file_data' => 'data:application/pdf;base64,' . $pdfBase64]],
+                    ['type' => 'file', 'file' => ['filename' => 'dokument.pdf', 'file_data' => 'data:application/pdf;base64,' . $pdfBase64]],
                     ['type' => 'text', 'text' => $userText],
                 ];
             } elseif ($imageBase64 !== null) {
@@ -644,7 +651,16 @@ trait AiExtract
             if (!in_array($priority, ['high', 'normal', 'low'], true)) {
                 $priority = 'normal';
             }
-            $out[] = ['title' => $title, 'info' => $info, 'due' => $due, 'priority' => $priority];
+
+            // Uhrzeit nur, wenn auch ein Datum steht — eine Zeit ohne Tag ist
+            // wertlos. Liefert das Modell keine (Foto-Scan), bleibt alles wie bisher
+            // und die Aufgabe wird ganztaegig.
+            $time = trim((string)($row['time'] ?? ''));
+            if ($due === null || preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $time) !== 1) {
+                $time = null;
+            }
+
+            $out[] = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time, 'priority' => $priority];
             if (count($out) >= 50) {
                 break;
             }
@@ -1101,6 +1117,47 @@ trait AiExtract
      *
      * @return string[]
      */
+    /**
+     * Systemprompt fuer weitergeleitete E-Mails.
+     *
+     * Baut auf AiSystemPrompt auf und ergaenzt drei Dinge, die nur bei Mail auftreten:
+     * eine Uhrzeit zum Termin, der Hinweis auf den Weiterleitungs-Rahmen (Absender
+     * der Mail ist der Weiterleitende, die Quelle steht im Zitat) und die Regel,
+     * einen fehlenden Anhang nicht zu erfinden — das Kernmodul liefert ihn nicht mit.
+     */
+    private function AiMailSystemPrompt(string $today, bool $mitAnhang = false): string
+    {
+        if ($mitAnhang) {
+            return $this->AiSystemPrompt($today)
+                . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
+                . 'eigentliche Absender steht dann im zitierten Kopf innerhalb des Textes, '
+                . 'nicht in der Betreffzeile. Nenne diese Quelle in "info". Die beigefuegte '
+                . 'Datei liegt dir VOR und ist Teil derselben Nachricht: lies Mailtext und '
+                . 'Anhang zusammen. Meist steht die Aufforderung in der Mail und die Einzelheiten '
+                . '(Termine, Fristen, Betraege, Formularfelder) im Anhang — uebernimm sie von '
+                . 'dort. Stehen im Anhang mehrere eigenstaendige Termine oder Aufgaben, gib sie '
+                . 'als eigene Eintraege zurueck. Nennt die Mail oder der Anhang einen Termin mit '
+                . 'Uhrzeit, gib zusaetzlich das Feld "time" im Format "HH:MM" an; ohne Uhrzeit '
+                . 'lass "time" weg oder setze es auf null.';
+        }
+        return $this->AiSystemPrompt($today)
+            . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
+            . 'eigentliche Absender steht dann im zitierten Kopf innerhalb des Textes, '
+            . 'nicht in der Betreffzeile. Nenne diese Quelle in "info". Nennt die Mail '
+            . 'einen konkreten Termin mit Uhrzeit (Elternabend, Sprechstunde, Abgabe um '
+            . 'eine bestimmte Zeit), gib zusaetzlich das Feld "time" im Format "HH:MM" '
+            . 'an; ohne Uhrzeit lass "time" weg oder setze es auf null. WICHTIG zum Anhang: '
+            . 'Anhaenge liegen dir NICHT vor. Ein Verweis darauf („siehe Anhang“, „im '
+            . 'beigefuegten Formular“) hebt die Aufgabe aber NICHT auf — er ist selbst die '
+            . 'Handlungsaufforderung. Nennt die Mail ein Formular, eine Abfrage, eine Liste '
+            . 'oder ein Dokument, das ausgefuellt, beachtet, unterschrieben oder '
+            . 'zurueckgeschickt werden soll, erzeuge dafuer eine Aufgabe — z.B. '
+            . '„Ferienabfrage Herbstferien ausfuellen und zurueckschicken“ — und vermerke in '
+            . '"info", dass die Details im Anhang stehen. Erfinde lediglich keine Angaben, '
+            . 'die nur im Anhang stehen koennen: keine Fristen, Betraege, Uhrzeiten oder '
+            . 'Namen, die im Mailtext nicht vorkommen.';
+    }
+
     private function AiAllowedCategories(array $body): array
     {
         $namen = [];

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
+require_once __DIR__ . '/libs/MailScan.php';
+require_once __DIR__ . '/libs/MailFetch.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -22,11 +24,16 @@ class SymDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
     use AppCore;
+    use MailScan;
+    use MailFetch;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     /** SymDoWebApp — dort stehen die appweiten Bedienelemente der Oberflaeche. */
     private const WEBAPP_MODULE_GUID = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
+
+    /** Symcon-Kernmodul „E-Mail, Empfangen (IMAP)" — Quelle der weitergeleiteten Post. */
+    private const IMAP_MODULE_GUID = '{CABFCCA1-FBFF-4AB7-B11B-9879E67E152F}';
 
     /**
      * Appweite Bedienelemente, einmal je PHP-Aufruf aufgeloest. Zwei Felder, weil
@@ -80,6 +87,8 @@ class SymDoGateway extends IPSModuleStrict
 
         // App-Seite
         $this->AppCreate();
+        // Aufgaben aus weitergeleiteten E-Mails (eigener Trait, nutzt die KI der App-Seite)
+        $this->MailCreate();
     }
 
     public function ApplyChanges(): void
@@ -98,6 +107,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::WEBAPP_HOOK_PATH);
             $this->RegisterHook(self::WS_HOOK_PATH);
             $this->AppApplyChanges();
+            $this->MailApplyChanges();
         }
     }
 
@@ -112,11 +122,19 @@ class SymDoGateway extends IPSModuleStrict
             $this->ApplyChanges();
             return;
         }
+        // Zuerst die Postfach-Variablen: sie loesen einen Mail-Lauf aus, nicht das
+        // „irgendetwas hat sich geaendert" der Listen.
+        if ($this->MailMessageSink($Message, $SenderID)) {
+            return;
+        }
         $this->AppMessageSink($Message);
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        if ($this->MailRequestAction($Ident, $Value)) {
+            return;
+        }
         if ($this->AppRequestAction($Ident, $Value)) {
             return;
         }
@@ -181,6 +199,7 @@ class SymDoGateway extends IPSModuleStrict
 
         $elements = array_merge(
             $appElements,
+            $isOwner ? [$this->GetMailFormElements()] : [],
             [
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),
@@ -1161,6 +1180,126 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type' => 'Label',
                     'caption' => $this->GetMicrosoftStatusLabel()
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Panel „Aufgaben aus E-Mails".
+     *
+     * Bewusst in PHP gebaut und nicht in form.json: die Mitglieder-Spalte der
+     * Adresstabelle braucht die Nutzer als Auswahloptionen, und die stehen erst zur
+     * Laufzeit fest.
+     */
+    private function GetMailFormElements(): array
+    {
+        $optionen = [['caption' => $this->Translate('— no member —'), 'value' => '']];
+        foreach ($this->LoadUsers() as $u) {
+            $optionen[] = ['caption' => $u['name'], 'value' => $u['id']];
+        }
+
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Tasks from e-mails'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.")
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailEnabled',
+                    'caption' => $this->Translate('Analyze incoming mail')
+                ],
+                [
+                    'type'    => 'List',
+                    'name'    => 'MailBoxes',
+                    'caption' => $this->Translate('Mailboxes'),
+                    'rowCount' => 3,
+                    'add'     => true,
+                    'delete'  => true,
+                    'columns' => [
+                        [
+                            'caption' => $this->Translate('IMAP instance'),
+                            'name'    => 'InstanceID',
+                            'width'   => 'auto',
+                            'add'     => 0,
+                            'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
+                        ]
+                    ]
+                ],
+                [
+                    'type'    => 'List',
+                    'name'    => 'MailAddresses',
+                    'caption' => $this->Translate('Recipient address → member'),
+                    'rowCount' => 5,
+                    'add'     => true,
+                    'delete'  => true,
+                    'columns' => [
+                        [
+                            'caption' => $this->Translate('Recipient address'),
+                            'name'    => 'Address',
+                            'width'   => '280px',
+                            'add'     => '',
+                            'edit'    => ['type' => 'ValidationTextBox']
+                        ],
+                        [
+                            'caption' => $this->Translate('Member'),
+                            'name'    => 'UserID',
+                            'width'   => 'auto',
+                            'add'     => '',
+                            'edit'    => ['type' => 'Select', 'options' => $optionen]
+                        ]
+                    ]
+                ],
+                [
+                    'type'      => 'ValidationTextBox',
+                    'name'      => 'MailSenderAllow',
+                    'caption'   => $this->Translate('Allowed senders (one per line, "@domain.tld" for a whole domain; empty = all)'),
+                    'multiline' => true,
+                    'width'     => '400px'
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('A forwarded mail carries YOUR address as the sender, not the original one — so entering your own addresses here is the strongest filter: only mail forwarded from the household is ever analysed.')
+                ],
+                [
+                    'type'    => 'NumberSpinner',
+                    'name'    => 'MailDailyLimit',
+                    'caption' => $this->Translate('Maximum AI calls per day (0 = no limit)'),
+                    'minimum' => 0,
+                    'width'   => '120px'
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailReadAttachments',
+                    'caption' => $this->Translate('Also read PDF and image attachments')
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailDeleteAfter',
+                    'caption' => $this->Translate('Delete mail after analysis')
+                ],
+                [
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        [
+                            'type'    => 'Button',
+                            'caption' => $this->Translate('Fetch and analyze now'),
+                            'onClick' => 'IPS_RequestAction($id, \'MailScanNow\', 0);'
+                        ],
+                        [
+                            'type'    => 'Button',
+                            'caption' => $this->Translate('Forget processed mail'),
+                            'onClick' => 'IPS_RequestAction($id, \'MailForget\', 0);'
+                        ]
+                    ]
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Analysed mail stays in the mailbox but is not looked at again. "Forget processed mail" clears that memory — use it after fixing an address or sender list, then everything still in the mailbox is analysed once more.')
                 ]
             ]
         ];

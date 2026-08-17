@@ -118,6 +118,31 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'mail':
+                // Vorschlaege aus weitergeleiteten E-Mails. Angelegt wird die Aufgabe
+                // NICHT hier — dafuer ruft die Oberflaeche wie bisher AppCall/AddItem
+                // der Zielliste; hier wird nur der Vorschlag verwaltet.
+                //
+                // EIN Pfad mit „action" im Body statt verschachtelter Routen: die
+                // Visu-Kachel kann nur POSTs auf einen Pfad relayen (AiRelayBody),
+                // und so trifft dieselbe Anfrage Browser, App und Kachel.
+                if (($route[2] ?? '') === 'proposals') {
+                    if ($method === 'GET') {
+                        $this->SendJson(['ok' => true, 'proposals' => $this->MailProposalsPublic()]);
+                        return;
+                    }
+                    if ($method === 'POST') {
+                        $this->SendJson($this->MailHandleAction($this->ReadJsonBody()));
+                        return;
+                    }
+                }
+                break;
+                // Mail-Vorschlaegen, damit Browser, App und Visu-Kachel denselben
+                // Aufruf benutzen koennen.
+                if ($method === 'GET') {
+                    return;
+                }
+                break;
             case 'tts':
                 // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
                 // GET  /v1/tts/{hash} → die fertige Tondatei

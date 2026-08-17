@@ -212,6 +212,25 @@ select option { color: #111; background: #fff; }
 .tabbar button i,
 .tabbar button svg { font-size: 25px; }
 .tabbar button.active { color: var(--accent); }
+/* Zaehler offener Mail-Vorschlaege. Der Knopf braucht dafuer position:relative —
+   ohne das saesse das Abzeichen an der Leiste, nicht am Symbol. */
+.tabbar button { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  margin-left: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 
 /* ── Schwebende, runde Tab-Leiste (Web-App UND Visu-Kachel) ─────────────────
    Nachbau der iOS-26-Optik: die App selbst hat dafür keinen Code, das ist dort
@@ -933,6 +952,40 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .item-side { display: flex; align-items: center; gap: 8px; flex: none; }
 .item-price { font-size: 12.5px; color: var(--muted); }
+/* Vorschlaege aus weitergeleiteten E-Mails. Steht ueber der Aufgabenliste, weil es
+   Post ist, die auf eine Entscheidung wartet — und verschwindet restlos, sobald
+   nichts mehr offen ist. */
+.mail-ai { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: var(--gap); }
+.mail-card {
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  overflow: hidden;
+}
+.mail-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.mail-head .avatar { width: 26px; height: 26px; font-size: 12px; flex: 0 0 auto; }
+.mail-who { flex: 1 1 auto; min-width: 0; }
+.mail-subject {
+  font-size: 13.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mail-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-head .icon-btn { flex: 0 0 auto; }
+.mail-rows { display: flex; flex-direction: column; }
+.mail-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+.mail-row-body { flex: 1 1 auto; min-width: 0; }
+.mail-row-title { font-size: 13.5px; }
+.mail-row-info { font-size: 11.5px; color: var(--muted); }
+.mail-row-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.mail-row .round-btn { width: 30px; height: 30px; flex: 0 0 auto; }
 /* Uebersicht ueber der Aufgabenliste — drei Zahlen, wie in der fruheren
    ToDoList-Kachel. Je Liste abschaltbar ueber showOverview. */
 .todo-stats { display: flex; gap: var(--gap); margin-bottom: var(--gap); }
@@ -1991,6 +2044,7 @@ html[data-symdo-theme="dark"] .member-bar {
           <div class="stat-box stat-overdue"><div class="stat-label" id="statOverdueLabel"></div><div class="stat-value" id="statOverdueValue">0</div></div>
           <div class="stat-box stat-today"><div class="stat-label" id="statTodayLabel"></div><div class="stat-value" id="statTodayValue">0</div></div>
         </div>
+        <div id="mailAiArea" class="mail-ai" style="display:none;"></div>
         <div id="todoListArea"></div>
         <div class="inputbar" id="todoInputbar">
           <input id="todoInput" type="text" autocomplete="off" />
@@ -2017,7 +2071,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
-    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
+    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
   </nav>
 </div>
 
@@ -2966,6 +3020,9 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
+    // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
+    // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
+    loadMailProposals();
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
@@ -4678,6 +4735,163 @@ function renderTodoMembers() {
     else todoMemberIds.add(mid);
     renderTodos();
   }));
+}
+
+// ── Aufgaben aus weitergeleiteten E-Mails ────────────────────────────────────
+// Das Gateway analysiert eingehende Post und legt Vorschlaege ab; hier stehen sie
+// ueber der Aufgabenliste und warten auf eine Entscheidung. Angelegt wird die
+// Aufgabe auf dem normalen Weg (AddItem der Zielliste) — die Vorschlagsliste
+// erfaehrt danach nur, dass der Eintrag erledigt ist.
+let mailProposals = [];
+let mailLoading = false;
+
+/** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
+function mailAiAvailable() {
+  if (window.__SYMDO__) return true;
+  return !!store.gatewayAvailable;
+}
+
+function loadMailProposals() {
+  if (mailLoading) return;
+  // Kein Gateway mehr: was noch auf dem Schirm steht, MUSS weg. Ein Vorschlag,
+  // den niemand mehr uebernehmen oder verwerfen kann, ist eine Sackgasse.
+  if (!mailAiAvailable()) {
+    if (mailProposals.length > 0) { mailProposals = []; renderMailAi(); }
+    return;
+  }
+  mailLoading = true;
+  aiPost('/mail/proposals', {}).then(r => {
+    mailLoading = false;
+    const j = r && r.json;
+    // Kein Gateway, alte Version, KI-Route unbekannt: still nichts anzeigen.
+    if (!j || j.ok !== true || !Array.isArray(j.proposals)) return;
+    mailProposals = j.proposals;
+    renderMailAi();
+  }).catch(() => { mailLoading = false; });
+}
+
+/** Faelligkeit fuer AddItem. Mit Uhrzeit wird der Termin punktgenau, ohne ganztaegig. */
+function mailDueFields(due, time) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due || ''));
+  if (!m) return { due: 0, dueAllDay: false };
+  const t = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(time || ''));
+  const d = t
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(t[1]), Number(t[2]))
+    : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return { due: Math.floor(d.getTime() / 1000), dueAllDay: !t, dueDay: m[0] };
+}
+
+function mailWhenText(due, time) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due || ''));
+  if (!m) return '';
+  const txt = m[3] + '.' + m[2] + '.' + m[1];
+  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(time || '')) ? txt + ' ' + time : txt;
+}
+
+function renderMailAi() {
+  const area = document.getElementById('mailAiArea');
+  const badge = document.getElementById('tabTodoBadge');
+  if (!area) return;
+  const offen = mailProposals.reduce((n, p) => n + (Array.isArray(p.items) ? p.items.length : 0), 0);
+  if (badge) {
+    badge.textContent = String(offen);
+    badge.style.display = offen > 0 ? '' : 'none';
+  }
+  if (offen === 0) {
+    area.style.display = 'none';
+    area.innerHTML = '';
+    return;
+  }
+  const byId = usersById();
+  area.style.display = '';
+  renderInto(area, mailProposals.map(p => {
+    const u = byId[String(p.userId || '')];
+    const kopf = u ? avatarHtml(u, 'avatar') : '<i class="fa-light fa-envelope"></i>';
+    const von = String(p.fromName || p.from || '');
+    const zeilen = (Array.isArray(p.items) ? p.items : []).map(it => {
+      const wann = mailWhenText(it.due, it.time);
+      const chips =
+        (wann ? `<span class="badge due-badge"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(wann)}</span></span>` : '') +
+        (it.priority && it.priority !== 'normal' ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '');
+      return `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
+        `<div class="mail-row-body">` +
+          `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
+          (it.info ? `<div class="mail-row-info">${escapeHtml(String(it.info))}</div>` : '') +
+          (chips ? `<div class="mail-row-chips">${chips}</div>` : '') +
+        `</div>` +
+        `<button class="round-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
+        `<button class="round-btn" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>` +
+      `</div>`;
+    }).join('');
+    return `<div class="mail-card">` +
+      `<div class="mail-head">${kopf}` +
+        `<div class="mail-who">` +
+          `<div class="mail-subject">${escapeHtml(String(p.subject || translate('E-mail')))}</div>` +
+          `<div class="mail-meta">${escapeHtml(von)}</div>` +
+        `</div>` +
+        `<button class="icon-btn" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
+      `</div>` +
+      `<div class="mail-rows">${zeilen}</div>` +
+    `</div>`;
+  }).join(''));
+}
+
+/** Eintrag lokal entfernen und neu zeichnen — die Liste kommt sonst erst beim naechsten Laden. */
+function mailForget(id, index) {
+  mailProposals = mailProposals.map(p => {
+    if (String(p.id) !== String(id)) return p;
+    return Object.assign({}, p, { items: (p.items || []).filter(it => String(it.i) !== String(index)) });
+  }).filter(p => (p.items || []).length > 0);
+  renderMailAi();
+}
+
+function initMailAi() {
+  const area = document.getElementById('mailAiArea');
+  if (!area) return;
+  area.addEventListener('click', (e) => {
+    const knopf = e.target.closest('[data-mail]');
+    if (!knopf) return;
+    const art = knopf.getAttribute('data-mail');
+    if (art === 'dismiss') {
+      const id = knopf.getAttribute('data-id') || '';
+      aiPost('/mail/proposals', { action: 'dismiss', id: id });
+      mailProposals = mailProposals.filter(p => String(p.id) !== String(id));
+      renderMailAi();
+      return;
+    }
+    const zeile = knopf.closest('.mail-row');
+    if (!zeile) return;
+    const id = zeile.getAttribute('data-id') || '';
+    const i = zeile.getAttribute('data-i') || '';
+    if (art === 'drop') {
+      aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
+      mailForget(id, i);
+      return;
+    }
+    if (art !== 'add') return;
+
+    const ziel = selectedTodoID();
+    if (!ziel) { showToast(translate('No ToDo list found')); return; }
+    const vorschlag = mailProposals.find(p => String(p.id) === String(id));
+    const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
+    if (!eintrag) return;
+    // Zuordnung aus der Empfaengeradresse; ohne Treffer der Standardnutzer der Kachel.
+    const wem = String(vorschlag.userId || '') || currentUserID();
+    const felder = Object.assign({
+      title: String(eintrag.title || ''),
+      info: eintrag.info ? String(eintrag.info) : '',
+      priority: eintrag.priority || 'normal',
+      quantity: 0,
+      assignedTo: wem ? [wem] : [],
+      recurrence: 'none',
+      notification: false
+    }, mailDueFields(eintrag.due, eintrag.time));
+    if (currentUserID()) felder.actorUserId = currentUserID();
+    sdCall(ziel, 'AddItem', felder);
+    aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
+    mailForget(id, i);
+    showToast(translate('%1 tasks added').replace('%1', '1'));
+  });
 }
 
 function renderTodos() {
@@ -7017,6 +7231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const todoScan = document.getElementById('btnTodoScan');
   const todoScanInput = document.getElementById('todoScanInput');
   applyAiEnabled();
+  initMailAi();
   // Bereiche gleich beim Start anwenden: der gespeicherte symdo.tab kann auf einen
   // inzwischen abgeschalteten Bereich zeigen.
   applyTabVisibility();
