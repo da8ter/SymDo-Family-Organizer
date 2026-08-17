@@ -93,22 +93,46 @@
                 {
                     "type": "CheckBox",
                     "name": "ShowOverview",
-                    "caption": "Show overview above the to-do list"
+                    "caption": "Task overview"
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowMemberBar",
-                    "caption": "Show member bar"
+                    "caption": "Member bar"
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowCreateButton",
-                    "caption": "Show create button"
+                    "caption": "Add"
                 },
                 {
                     "type": "CheckBox",
                     "name": "ShowSorting",
-                    "caption": "Show sorting"
+                    "caption": "Sort"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowFavoriteHeart",
+                    "caption": "Favorite heart"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowRowEditButton",
+                    "caption": "Edit button"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowRowDeleteButton",
+                    "caption": "Delete button"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowReorderHandle",
+                    "caption": "Reorder handle"
+                },
+                {
+                    "type": "Label",
+                    "caption": ""
                 },
                 {
                     "type": "Label",
@@ -138,26 +162,6 @@
                     "type": "CheckBox",
                     "name": "ShowPriorityBadge",
                     "caption": "Badge: priority"
-                },
-                {
-                    "type": "CheckBox",
-                    "name": "ShowFavoriteHeart",
-                    "caption": "Show favorite heart (shopping lists)"
-                },
-                {
-                    "type": "CheckBox",
-                    "name": "ShowRowEditButton",
-                    "caption": "Show edit button on each row"
-                },
-                {
-                    "type": "CheckBox",
-                    "name": "ShowRowDeleteButton",
-                    "caption": "Show delete button on each row"
-                },
-                {
-                    "type": "CheckBox",
-                    "name": "ShowReorderHandle",
-                    "caption": "Show reorder handle"
                 },
                 {
                     "type": "Label",

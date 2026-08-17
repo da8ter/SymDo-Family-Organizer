@@ -200,10 +200,7 @@
             "Shopping list": "Einkaufsliste",
             "Show all": "Alle anzeigen",
             "Show overview": "Übersicht anzeigen",
-            "Show overview above the to-do list": "Übersicht über der Aufgabenliste anzeigen",
-            "Show reorder handle": "Verschieben-Griff anzeigen",
             "Show shopping lists (tabs Shopping and Favorites)": "Einkaufslisten anzeigen (Tabs Einkaufen und Favoriten)",
-            "Show sorting": "Sortieren-Knopf anzeigen",
             "Show to-dos": "ToDos anzeigen",
             "Sorting": "Sortierung",
             "Speaking": "spricht",
@@ -234,7 +231,14 @@
             "hidden in the app": "in der App ausgeblendet",
             "or": "oder",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Task overview": "Aufgaben-Übersicht",
+            "Member bar": "Mitglieder-Leiste",
+            "Sort": "Sortieren",
+            "Favorite heart": "Favoritenherz",
+            "Edit button": "Bearbeiten Button",
+            "Delete button": "Löschen Button",
+            "Reorder handle": "Verschieben-Griff"
         }
     }
 }

@@ -285,28 +285,51 @@ class ToDoList extends IPSModuleStrict
                 [
                     'type' => 'CheckBox',
                     'name' => 'ShowOverview',
-                    'caption' => $this->Translate('Show overview')
+                    'caption' => $this->Translate('Task overview')
                 ],
                 [
                     'type' => 'CheckBox',
                     'name' => 'ShowMemberBar',
-                    'caption' => $this->Translate('Show member bar')
+                    'caption' => $this->Translate('Member bar')
                 ],
                 [
                     'type' => 'CheckBox',
                     'name' => 'ShowCreateButton',
-                    'caption' => $this->Translate('Show create button')
+                    'caption' => $this->Translate('Add')
                 ],
                 [
                     'type' => 'CheckBox',
                     'name' => 'ShowSorting',
-                    'caption' => $this->Translate('Show sorting')
+                    'caption' => $this->Translate('Sort')
                 ],
                 [
                     'type' => 'CheckBox',
                     'name' => 'ShowLargeQuantity',
                     'caption' => $this->Translate('Show large quantity'),
                     'visible' => false
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowRowEditButton',
+                    'caption' => $this->Translate('Edit button')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowRowDeleteButton',
+                    'caption' => $this->Translate('Delete button')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'ShowReorderHandle',
+                    'caption' => $this->Translate('Reorder handle')
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Row buttons hint')
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => ''
                 ],
                 [
                     'type' => 'Label',
@@ -336,25 +359,6 @@ class ToDoList extends IPSModuleStrict
                     'type' => 'CheckBox',
                     'name' => 'ShowPriorityBadge',
                     'caption' => $this->Translate('Badge: priority')
-                ],
-                [
-                    'type' => 'CheckBox',
-                    'name' => 'ShowRowEditButton',
-                    'caption' => $this->Translate('Show edit button')
-                ],
-                [
-                    'type' => 'CheckBox',
-                    'name' => 'ShowRowDeleteButton',
-                    'caption' => $this->Translate('Show delete button')
-                ],
-                [
-                    'type' => 'CheckBox',
-                    'name' => 'ShowReorderHandle',
-                    'caption' => $this->Translate('Show reorder handle')
-                ],
-                [
-                    'type' => 'Label',
-                    'caption' => $this->Translate('Row buttons hint')
                 ],
                 [
                     'type' => 'CheckBox',
