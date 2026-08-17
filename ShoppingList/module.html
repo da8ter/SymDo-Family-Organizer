@@ -4081,6 +4081,11 @@ function bindDragScroll(el) {
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
+  // ZUERST: ist die Mitglieder-Leiste abgeschaltet, faellt auch ihre Auswahl weg.
+  // Muss vor der ersten Filterung stehen — die Kennzahlen unten rechnen sonst
+  // noch mit dem alten Filter, obwohl die Leiste schon verschwunden ist.
+  const zeigeMitglieder = mitgliederLeisteSichtbar();
+  if (!zeigeMitglieder && dashMemberIds.size > 0) dashMemberIds.clear();
   const open = allTodoTasks().filter(t => !t.item.done);
   const memberTasks = memberFiltered(open);
   const prio = dashPriority;
@@ -4125,7 +4130,7 @@ function renderDashboard() {
   // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Das Datum folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
   // Die Mitglieder-Leiste filtert ausschließlich Aufgaben.
-  if (withTodos && store.users.length > 0) {
+  if (withTodos && store.users.length > 0 && zeigeMitglieder) {
     html += '<div class="member-bar">';
     for (const u of store.users) {
       html += `<button class="avatar-btn${dashMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
@@ -4703,6 +4708,16 @@ function sortTodoItems(items, sortMode, sortDir) {
   });
   if (sortMode === 'title' && sortDir === 'desc') list.reverse();
   return list;
+}
+
+/** Gilt die Mitglieder-Leiste als sichtbar? Das Dashboard fasst ALLE Aufgaben-
+ *  listen zusammen und hat deshalb keinen eigenen Zustand. In der Web-App ist der
+ *  Schalter appweit, alle Listen antworten also gleich; sind sie sich doch einmal
+ *  uneins, genuegt eine, die sie zeigt. */
+function mitgliederLeisteSichtbar() {
+  const listen = visibleInstances('todo');
+  if (listen.length === 0) return false;
+  return listen.some(i => (instState(i.id) || {}).showMemberBar !== false);
 }
 
 // Füllt die eigenständige sticky Avatar-Pille des ToDo-Tabs (#todoMembers).
