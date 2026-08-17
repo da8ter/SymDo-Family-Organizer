@@ -238,7 +238,26 @@
             "Favorite heart": "Favoritenherz",
             "Edit button": "Bearbeiten Button",
             "Delete button": "Löschen Button",
-            "Reorder handle": "Verschieben-Griff"
+            "Reorder handle": "Verschieben-Griff",
+            "%1 days": "%1 Tage",
+            "Appointment": "Termin",
+            "Calendar": "Kalender",
+            "Could not load appointments.": "Termine konnten nicht geladen werden.",
+            "Discard": "Verwerfen",
+            "Discard mail": "Mail verwerfen",
+            "E-mail": "E-Mail",
+            "Fri": "Fr",
+            "Mon": "Mo",
+            "No appointments in this period": "Keine Termine in diesem Zeitraum",
+            "Only the first appointments are shown.": "Es werden nur die ersten Termine gezeigt.",
+            "Sat": "Sa",
+            "Sun": "So",
+            "This calendar has not been synchronised yet.": "Dieser Kalender wurde noch nicht synchronisiert.",
+            "Thu": "Do",
+            "Tomorrow": "Morgen",
+            "Tue": "Di",
+            "Wed": "Mi",
+            "all day": "ganztägig"
         }
     }
 }

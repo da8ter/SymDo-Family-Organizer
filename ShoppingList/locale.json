@@ -369,7 +369,22 @@
             "hidden in the app": "in der App ausgeblendet",
             "or": "oder",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Is read out first when the list is announced.": "Wird beim Vorlesen als Erstes angesagt.",
+            "Next": "Weiter",
+            "Note for this shopping trip": "Hinweis für diesen Einkauf",
+            "Pause": "Anhalten",
+            "Paused": "angehalten",
+            "Preparing announcements…": "Ansagen werden vorbereitet …",
+            "Section": "Abteilung",
+            "Shopping complete. All items are in your cart.": "Einkauf komplett. Alle Artikel sind im Einkaufswagen.",
+            "Shopping finished": "Einkauf abgeschlossen",
+            "Speaking": "spricht",
+            "Speech output is not available.": "Die Sprachausgabe steht nicht zur Verfügung.",
+            "Speech output was just installed — restart IP-Symcon once.": "Die Sprachausgabe ist neu — bitte IP-Symcon einmal neu starten.",
+            "Start shopping": "Einkauf starten",
+            "Stop announcements": "Ansage beenden",
+            "Tap to continue": "tippen für weiter"
         }
     }
 }
