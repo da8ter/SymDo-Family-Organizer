@@ -72,12 +72,12 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowMemberBar', true);
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
-        $this->RegisterPropertyBoolean('ShowInfoBadges', true);
-        // Einzeln abschaltbare Abzeichen; wirken nur, solange ShowInfoBadges an ist.
+        // Fuenf gleichrangige Abzeichen-Schalter, kein Hauptschalter.
         $this->RegisterPropertyBoolean('ShowQuantityBadge', true);
         $this->RegisterPropertyBoolean('ShowRecurrenceBadge', true);
         $this->RegisterPropertyBoolean('ShowDueBadge', true);
         $this->RegisterPropertyBoolean('ShowNotificationBadge', true);
+        $this->RegisterPropertyBoolean('ShowPriorityBadge', true);
         $this->RegisterPropertyBoolean('ShowFavoriteHeart', true);
         $this->RegisterPropertyBoolean('ShowRowEditButton', false);
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
@@ -644,8 +644,9 @@ class SymDoWebApp extends IPSModuleStrict
         $relevant = $kind === 'shopping'
             ? ['showFavoriteHeart', 'showEditButton', 'showDeleteButton']
             : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
-               'showInfoBadges', 'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
-               'showNotificationBadge', 'showEditButton', 'showDeleteButton', 'showReorderHandle'];
+               'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
+               'showNotificationBadge', 'showPriorityBadge',
+               'showEditButton', 'showDeleteButton', 'showReorderHandle'];
         foreach ($relevant as $name) {
             $state[$name] = $flags[$name];
         }
@@ -729,11 +730,11 @@ class SymDoWebApp extends IPSModuleStrict
             'showMemberBar'     => $read('ShowMemberBar', true),
             'showCreateButton'  => $read('ShowCreateButton', true),
             'showSorting'       => $read('ShowSorting', true),
-            'showInfoBadges'    => $read('ShowInfoBadges', true),
             'showQuantityBadge' => $read('ShowQuantityBadge', true),
             'showRecurrenceBadge' => $read('ShowRecurrenceBadge', true),
             'showDueBadge'      => $read('ShowDueBadge', true),
             'showNotificationBadge' => $read('ShowNotificationBadge', true),
+            'showPriorityBadge' => $read('ShowPriorityBadge', true),
             'showFavoriteHeart' => $read('ShowFavoriteHeart', true),
             'showEditButton'    => $read('ShowRowEditButton', false),
             'showDeleteButton'  => $read('ShowRowDeleteButton', false),

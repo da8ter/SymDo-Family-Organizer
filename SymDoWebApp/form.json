@@ -111,9 +111,8 @@
                     "caption": "Show sorting"
                 },
                 {
-                    "type": "CheckBox",
-                    "name": "ShowInfoBadges",
-                    "caption": "Show info badges (to-dos) — master switch"
+                    "type": "Label",
+                    "caption": "Info badges"
                 },
                 {
                     "type": "CheckBox",
@@ -136,8 +135,9 @@
                     "caption": "Badge: notification"
                 },
                 {
-                    "type": "Label",
-                    "caption": "Badge switches hint"
+                    "type": "CheckBox",
+                    "name": "ShowPriorityBadge",
+                    "caption": "Badge: priority"
                 },
                 {
                     "type": "CheckBox",

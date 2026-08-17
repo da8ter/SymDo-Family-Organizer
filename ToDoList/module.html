@@ -4693,18 +4693,14 @@ function renderTodos() {
   }
   const sortMode = String(st.sortMode || 'created');
   const sortDir = String(st.sortDir || 'asc');
-  // Abzeichen der Aufgabenzeile. showInfoBadges ist der Hauptschalter ueber ALLE
-  // Abzeichen — dieselbe Bedeutung wie im serverseitigen Renderer der ToDoList
-  // (BuildTaskRowHtml gated dort Faelligkeit, Erinnerung, Wiederholung und Prio
-  // gemeinsam damit). Darunter ist jede Sorte einzeln abschaltbar; die Prioritaet
-  // hat keinen eigenen Schalter und haengt allein am Hauptschalter.
-  // Opt-out: fehlt ein Schlüssel, ist das Abzeichen an.
+  // Abzeichen der Aufgabenzeile: fuenf gleichrangige Schalter, kein Hauptschalter
+  // mehr. Opt-out — fehlt ein Schluessel, ist das Abzeichen an.
   const badges = {
-    master:       st.showInfoBadges === true,
     quantity:     st.showQuantityBadge !== false,
     recurrence:   st.showRecurrenceBadge !== false,
     due:          st.showDueBadge !== false,
     notification: st.showNotificationBadge !== false,
+    priority:     st.showPriorityBadge !== false,
   };
   // Anlegen und Sortieren sind je Liste abschaltbar (opt-out). Die Eingabezeile ist
   // der eine Weg zum Anlegen, der Menueeintrag "mit Details" der andere — beide
@@ -4946,8 +4942,8 @@ function ensureTodoMetaObserver() {
 }
 
 function todoRowHtml(it, draggable, badges, showEdit, showDelete) {
-  // Jede Sorte muss den Hauptschalter UND ihren eigenen passieren.
-  const zeige = (sorte) => badges.master && badges[sorte];
+  // Jede Sorte hat ihren eigenen Schalter — auch die Prioritaet.
+  const zeige = (sorte) => badges[sorte] !== false;
   const chip = zeige('due') ? formatDueChip(it) : '';
   const qty = zeige('quantity') ? (parseInt(it.quantity) || 0) : 0;
   const recurs = zeige('recurrence') && it.recurrence && it.recurrence !== 'none';
@@ -4986,7 +4982,7 @@ function todoRowHtml(it, draggable, badges, showEdit, showDelete) {
     (notifies ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
     combined +
     (chip ? `<span class="badge due-badge ${dueBadgeClass}" title="${escapeHtml(chip)}"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(chip)}</span></span>` : '') +
-    (badges.master ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
+    (zeige('priority') ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '') +
     `</span>` +
     (showEdit ? `<button class="row-btn" data-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
     (showDelete ? `<button class="row-btn destructive" data-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '') +

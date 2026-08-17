@@ -52,14 +52,13 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowCreateButton', true);
         $this->RegisterPropertyBoolean('ShowSorting', true);
         $this->RegisterPropertyBoolean('ShowLargeQuantity', false);
-        $this->RegisterPropertyBoolean('ShowInfoBadges', true);
-        // Einzeln abschaltbare Abzeichen. ShowInfoBadges bleibt der Hauptschalter
-        // ueber alle; diese vier wirken nur, solange er an ist. Vorgabe an, damit
-        // sich am Erscheinungsbild zunaechst nichts aendert.
+        // Fuenf gleichrangige Abzeichen-Schalter, kein Hauptschalter darueber.
+        // Vorgabe an, damit sich am Erscheinungsbild zunaechst nichts aendert.
         $this->RegisterPropertyBoolean('ShowQuantityBadge', true);
         $this->RegisterPropertyBoolean('ShowRecurrenceBadge', true);
         $this->RegisterPropertyBoolean('ShowDueBadge', true);
         $this->RegisterPropertyBoolean('ShowNotificationBadge', true);
+        $this->RegisterPropertyBoolean('ShowPriorityBadge', true);
         // Zeilenknoepfe. Bewusst neue Namen: die alten ShowEditButton/ShowDeleteButton
         // steuerten nichts und stehen bei Bestandsinstanzen ueberwiegend auf true —
         // sie zu honorieren haette allen ungefragt zwei Knoepfe in die Zeile gesetzt.
@@ -310,9 +309,8 @@ class ToDoList extends IPSModuleStrict
                     'visible' => false
                 ],
                 [
-                    'type' => 'CheckBox',
-                    'name' => 'ShowInfoBadges',
-                    'caption' => $this->Translate('Show info badges')
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Info badges')
                 ],
                 [
                     'type' => 'CheckBox',
@@ -335,8 +333,9 @@ class ToDoList extends IPSModuleStrict
                     'caption' => $this->Translate('Badge: notification')
                 ],
                 [
-                    'type' => 'Label',
-                    'caption' => $this->Translate('Badge switches hint')
+                    'type' => 'CheckBox',
+                    'name' => 'ShowPriorityBadge',
+                    'caption' => $this->Translate('Badge: priority')
                 ],
                 [
                     'type' => 'CheckBox',
@@ -1292,14 +1291,13 @@ class ToDoList extends IPSModuleStrict
         $hideCompleted = $this->ReadPropertyBoolean('HideCompletedTasks');
         $showOverview = $this->ReadPropertyBoolean('ShowOverview');
         $showLargeQty = $this->ReadPropertyBoolean('ShowLargeQuantity');
-        // Hauptschalter plus die vier Einzelschalter. Gleiche Regel wie in der
-        // Weboberflaeche: eine Sorte erscheint nur, wenn BEIDE Schalter an sind.
+        // Fuenf gleichrangige Schalter, gleiche Regel wie in der Weboberflaeche.
         $badges = [
-            'master'       => $this->ReadPropertyBoolean('ShowInfoBadges'),
             'quantity'     => $this->ReadBooleanPropertyOrDefault('ShowQuantityBadge', true),
             'recurrence'   => $this->ReadBooleanPropertyOrDefault('ShowRecurrenceBadge', true),
             'due'          => $this->ReadBooleanPropertyOrDefault('ShowDueBadge', true),
             'notification' => $this->ReadBooleanPropertyOrDefault('ShowNotificationBadge', true),
+            'priority'     => $this->ReadBooleanPropertyOrDefault('ShowPriorityBadge', true),
         ];
 
         $openItems = [];
@@ -1388,11 +1386,11 @@ class ToDoList extends IPSModuleStrict
         return $html;
     }
 
-    /** @param array<string, bool> $Badges master + quantity/recurrence/due/notification */
+    /** @param array<string, bool> $Badges quantity/recurrence/due/notification/priority */
     private function BuildTaskRowHtml(array $Item, bool $Done, array $Badges, bool $ShowLargeQty, int $Now, int $TodayStart, int $TodayEnd): string
     {
         $zeige = static function (string $sorte) use ($Badges): bool {
-            return ($Badges['master'] ?? true) && ($Badges[$sorte] ?? true);
+            return $Badges[$sorte] ?? true;
         };
         $title = htmlspecialchars((string)($Item['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $info = trim((string)($Item['info'] ?? ''));
@@ -1452,8 +1450,7 @@ class ToDoList extends IPSModuleStrict
             $repeatSvg = '<svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M544.1 256L552 256C565.3 256 576 245.3 576 232L576 88C576 78.3 570.2 69.5 561.2 65.8C552.2 62.1 541.9 64.2 535 71L483.3 122.8C439 86.1 382 64 320 64C191 64 84.3 159.4 66.6 283.5C64.1 301 76.2 317.2 93.7 319.7C111.2 322.2 127.4 310 129.9 292.6C143.2 199.5 223.3 128 320 128C364.4 128 405.2 143 437.7 168.3L391 215C384.1 221.9 382.1 232.2 385.8 241.2C389.5 250.2 398.3 256 408 256L544.1 256zM573.5 356.5C576 339 563.8 322.8 546.4 320.3C529 317.8 512.7 330 510.2 347.4C496.9 440.4 416.8 511.9 320.1 511.9C275.7 511.9 234.9 496.9 202.4 471.6L249 425C255.9 418.1 257.9 407.8 254.2 398.8C250.5 389.8 241.7 384 232 384L88 384C74.7 384 64 394.7 64 408L64 552C64 561.7 69.8 570.5 78.8 574.2C87.8 577.9 98.1 575.8 105 569L156.8 517.2C201 553.9 258 576 320 576C449 576 555.7 480.6 573.4 356.5z"/></svg>';
             $meta[] = '<span class="badge recur-badge" title="' . htmlspecialchars($rLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . $repeatSvg . '</span>';
         }
-        // Prioritaet: kein eigener Schalter, haengt allein am Hauptschalter.
-        if ($Badges['master'] ?? true) {
+        if ($zeige('priority')) {
             $meta[] = '<span class="badge ' . htmlspecialchars($prio, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . htmlspecialchars($this->GetPriorityLabel($prio), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>';
         }
 
@@ -2269,11 +2266,11 @@ class ToDoList extends IPSModuleStrict
             'showCreateButton' => $knoepfe['showCreateButton'],
             'showSorting' => $knoepfe['showSorting'],
             'showLargeQuantity' => $this->ReadPropertyBoolean('ShowLargeQuantity'),
-            'showInfoBadges' => $this->ReadPropertyBoolean('ShowInfoBadges'),
             'showQuantityBadge' => $this->ReadBooleanPropertyOrDefault('ShowQuantityBadge', true),
             'showRecurrenceBadge' => $this->ReadBooleanPropertyOrDefault('ShowRecurrenceBadge', true),
             'showDueBadge' => $this->ReadBooleanPropertyOrDefault('ShowDueBadge', true),
             'showNotificationBadge' => $this->ReadBooleanPropertyOrDefault('ShowNotificationBadge', true),
+            'showPriorityBadge' => $this->ReadBooleanPropertyOrDefault('ShowPriorityBadge', true),
             'showEditButton' => $knoepfe['showEditButton'],
             'showDeleteButton' => $knoepfe['showDeleteButton'],
             'showReorderHandle' => $knoepfe['showReorderHandle'],

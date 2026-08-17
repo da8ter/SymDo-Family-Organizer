@@ -676,8 +676,9 @@ trait ApiRouter
         $relevant = $kind === 'shopping'
             ? ['showFavoriteHeart', 'showEditButton', 'showDeleteButton']
             : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
-               'showInfoBadges', 'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
-               'showNotificationBadge', 'showEditButton', 'showDeleteButton', 'showReorderHandle'];
+               'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
+               'showNotificationBadge', 'showPriorityBadge',
+               'showEditButton', 'showDeleteButton', 'showReorderHandle'];
         foreach ($relevant as $name) {
             $data['state'][$name] = $flags[$name];
         }

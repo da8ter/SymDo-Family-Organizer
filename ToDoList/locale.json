@@ -65,11 +65,12 @@
             "Auto sync after changes": "Automatisch nach Änderungen synchronisieren",
             "Auto sync delay (seconds)": "Auto-Sync Verzögerung (Sekunden)",
             "Back": "Zurück",
-            "Badge switches hint": "Die vier Abzeichen wirken nur, solange der Hauptschalter „Info-Abzeichen anzeigen“ an ist. Die Priorität hat keinen eigenen Schalter und hängt allein am Hauptschalter. Sind Wiederholung, Erinnerung und Anzahl zugleich sichtbar, fasst die Oberfläche sie platzsparend in einem Chip zusammen — abgeschaltete Sorten fehlen auch dort.",
-            "Badge: due date": "Abzeichen: Fälligkeit",
-            "Badge: notification": "Abzeichen: Benachrichtigung",
-            "Badge: quantity": "Abzeichen: Anzahl",
-            "Badge: repeat": "Abzeichen: Wiederholung",
+            "Badge: due date": "Fälligkeit",
+            "Badge: priority": "Priorität",
+            "Badge: notification": "Benachrichtigung",
+            "Info badges": "Info-Badges",
+            "Badge: quantity": "Anzahl",
+            "Badge: repeat": "Wiederholung",
             "CalDAV": "CalDAV",
             "CalDAV Synchronization": "CalDAV Synchronisation",
             "Calendar": "Kalender",
@@ -582,7 +583,12 @@
             "Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost.": "Switching to another list or calendar replaces the local entries with the new list. Changes that have not been synchronized yet are lost.",
             "All day": "All day",
             "Donation / Gift": "Donation / Gift",
-            "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:"
+            "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:",
+            "Badge: quantity": "Quantity",
+            "Badge: repeat": "Repeat",
+            "Badge: due date": "Due date",
+            "Badge: notification": "Notification",
+            "Badge: priority": "Priority"
         }
     }
 }
