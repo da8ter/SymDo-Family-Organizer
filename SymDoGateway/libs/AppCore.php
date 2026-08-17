@@ -1070,7 +1070,7 @@ trait AppCore
      */
     private function GetWebAppTabs(): array
     {
-        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true];
+        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true, 'calendar' => true];
         $ids = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
         if (!$ids) {
             return $all;
@@ -1079,7 +1079,7 @@ trait AppCore
         if (!is_array($cfg)) {
             return $all;
         }
-        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos'] as $key => $prop) {
+        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos', 'calendar' => 'ShowCalendar'] as $key => $prop) {
             if (array_key_exists($prop, $cfg)) {
                 $all[$key] = (bool)$cfg[$prop];
             }

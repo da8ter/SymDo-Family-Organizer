@@ -137,9 +137,16 @@ trait ApiRouter
                     }
                 }
                 break;
+            case 'calendar':
+                // Termine aus OpenCalendar. Ein Pfad, Aktion im Rumpf — wie bei den
                 // Mail-Vorschlaegen, damit Browser, App und Visu-Kachel denselben
                 // Aufruf benutzen koennen.
                 if ($method === 'GET') {
+                    $this->SendJson($this->CalHandleAction(['action' => 'calendars']));
+                    return;
+                }
+                if ($method === 'POST') {
+                    $this->SendJson($this->CalHandleAction($this->ReadJsonBody()));
                     return;
                 }
                 break;

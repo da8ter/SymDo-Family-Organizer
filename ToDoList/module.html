@@ -986,6 +986,36 @@ html[data-symdo-theme="dark"] .member-bar {
 .mail-row-info { font-size: 11.5px; color: var(--muted); }
 .mail-row-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .mail-row .round-btn { width: 30px; height: 30px; flex: 0 0 auto; }
+/* Kalender: Agenda nach Tagen. Bewusst keine Wochen-Gitter — auf einem Telefon ist
+   eine Liste lesbar, ein Raster nicht. Die Farbe kommt je Termin aus OpenCalendar. */
+.cal-day { margin-bottom: var(--gap); }
+.cal-day-head {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 0 2px 5px;
+  font-size: 12.5px; color: var(--muted);
+}
+.cal-day-head .cal-weekday { font-weight: 700; color: var(--content); }
+.cal-day.is-today .cal-day-head .cal-weekday { color: var(--accent); }
+.cal-events { display: flex; flex-direction: column; gap: 6px; }
+.cal-event {
+  display: flex; align-items: stretch; gap: 9px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.cal-bar { width: 4px; border-radius: 2px; flex: 0 0 auto; background: var(--accent); }
+.cal-when { flex: 0 0 auto; width: 44px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-body { flex: 1 1 auto; min-width: 0; }
+.cal-title { font-size: 14px; }
+.cal-sub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-status {
+  padding: 9px 10px; margin-bottom: var(--gap);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid #d92d20;
+  font-size: 12.5px;
+}
 /* Uebersicht ueber der Aufgabenliste — drei Zahlen, wie in der fruheren
    ToDoList-Kachel. Je Liste abschaltbar ueber showOverview. */
 .todo-stats { display: flex; gap: var(--gap); margin-bottom: var(--gap); }
@@ -2031,6 +2061,18 @@ html[data-symdo-theme="dark"] .member-bar {
       </div>
     </section>
 
+    <section id="screen-calendar" class="screen">
+      <div class="content">
+        <div class="screen-head">
+          <select id="calSwitcher" class="list-switcher" style="display:none;"></select>
+          <h2 id="calTitle"></h2>
+          <select id="calRange" class="list-switcher"></select>
+        </div>
+        <div id="calStatus" class="cal-status" style="display:none;"></div>
+        <div id="calArea"></div>
+      </div>
+    </section>
+
     <section id="screen-todos" class="screen">
       <div class="content">
         <div id="todoMembers" class="member-bar todo-members" style="display:none;"></div>
@@ -2072,6 +2114,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
+    <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
   </nav>
 </div>
 
@@ -2499,7 +2542,11 @@ function normalizeTabs(raw) {
   return {
     dashboard: t.dashboard !== false,
     shopping:  t.shopping  !== false,
-    todos:     t.todos     !== false
+    todos:     t.todos     !== false,
+    // Kalender: NUR bei ausdruecklichem true. Anders als die anderen Bereiche
+    // haengt er an einem fremden Modul (OpenCalendar) — ein fehlender Schluessel
+    // bedeutet hier „nicht vorhanden", nicht „sichtbar".
+    calendar:  t.calendar   === true
   };
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
@@ -2513,6 +2560,9 @@ function visibleTabs() {
   // Rückfalls, wenn der gespeicherte Tab abgeschaltet wurde (vis[0] in setTab).
   if (t.shopping) { out.push('shopping'); out.push('favorites'); }
   if (t.todos) out.push('todos');
+  // Kalender ganz hinten und nur, wenn OpenCalendar wirklich Kalender liefert:
+  // ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist schlimmer als keiner.
+  if (t.calendar && calCalendars.length > 0) out.push('calendar');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -3023,6 +3073,7 @@ function handleMessage(data) {
     // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();
+    loadCalendars();
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
@@ -3070,7 +3121,7 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'shopping', 'favorites', 'todos'];
+const TABS = ['dashboard', 'shopping', 'favorites', 'todos', 'calendar'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -3842,6 +3893,12 @@ function renderAll() {
   if (activeTab === 'shopping') renderShopping();
   if (activeTab === 'todos') renderTodos();
   if (activeTab === 'favorites') renderFavorites();
+  if (activeTab === 'calendar') {
+    // Termine erst beim Betreten holen: der Bereich ist selten offen, und jeder
+    // Abruf laeuft ueber mehrere Seiten durch OpenCalendar.
+    if (calEvents.length === 0 && !calLoading) loadCalendarEvents();
+    renderCalendar();
+  }
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
 }
@@ -4891,6 +4948,191 @@ function initMailAi() {
     aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
     mailForget(id, i);
     showToast(translate('%1 tasks added').replace('%1', '1'));
+  });
+}
+
+// ── Kalenderbereich (OpenCalendar) ───────────────────────────────────────────
+// Gelesen wird ausschliesslich; die gesamte Anbieter-Synchronisation bleibt im
+// Store-Modul OpenCalendar. Ist es nicht installiert oder kein Kalender
+// eingerichtet, liefert das Gateway eine leere Liste und der Tab verschwindet.
+let calCalendars = [];
+let calEvents = [];
+let calLoading = false;
+let calError = '';
+const CAL_RANGES = [7, 30, 90];
+
+function calAvailable() {
+  if (window.__SYMDO__) return true;
+  return !!store.gatewayAvailable;
+}
+
+function calSelectedRange() {
+  const v = parseInt(ls.get('symdo.calRange') || '30', 10);
+  return CAL_RANGES.includes(v) ? v : 30;
+}
+
+function calSelectedID() {
+  const gespeichert = String(ls.get('symdo.calID') || '');
+  if (calCalendars.some(c => String(c.id) === gespeichert)) return gespeichert;
+  return calCalendars.length ? String(calCalendars[0].id) : '';
+}
+
+/** Kalenderliste holen. Erst danach steht fest, ob der Tab ueberhaupt erscheint. */
+function loadCalendars() {
+  if (!calAvailable()) {
+    if (calCalendars.length) { calCalendars = []; calEvents = []; renderCalendar(); applyTabVisibility(); }
+    return;
+  }
+  aiPost('/calendar', { action: 'calendars' }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true || !Array.isArray(j.calendars)) return;
+    const vorher = calCalendars.length;
+    calCalendars = j.calendars;
+    // Keine Kalender mehr: alte Termine MUESSEN weg. Ein Bereich, der Termine einer
+    // verschwundenen Quelle zeigt, behauptet etwas Falsches.
+    if (calCalendars.length === 0) calEvents = [];
+    // Sichtbarkeit haengt an der Anzahl — nur neu anwenden, wenn sie sich aendert.
+    if ((vorher > 0) !== (calCalendars.length > 0)) applyTabVisibility();
+    if (activeTab === 'calendar') loadCalendarEvents();
+    else renderCalendar();
+  }).catch(() => {});
+}
+
+function loadCalendarEvents() {
+  if (calLoading || !calAvailable() || calCalendars.length === 0) return;
+  const id = calSelectedID();
+  const von = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
+  calLoading = true;
+  aiPost('/calendar', {
+    action: 'events', from: von, to: von + calSelectedRange() * 86400,
+    ids: id ? [Number(id)] : []
+  }).then(r => {
+    calLoading = false;
+    const j = r && r.json;
+    if (!j || j.ok !== true || !Array.isArray(j.events)) { calError = translate('Could not load appointments.'); renderCalendar(); return; }
+    calError = '';
+    calEvents = j.events;
+    calTruncated = j.truncated === true;
+    renderCalendar();
+  }).catch(() => { calLoading = false; });
+}
+let calTruncated = false;
+
+/** Tagesschlüssel in der Zeitzone des Geraets — nicht UTC, sonst rutschen Termine. */
+function calDayKey(ts) {
+  const d = new Date(ts * 1000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function calDayLabel(ts) {
+  const d = new Date(ts * 1000);
+  const heute = new Date(); heute.setHours(0, 0, 0, 0);
+  const morgen = new Date(heute.getTime() + 86400000);
+  const tag = new Date(d); tag.setHours(0, 0, 0, 0);
+  if (tag.getTime() === heute.getTime()) return translate('Today');
+  if (tag.getTime() === morgen.getTime()) return translate('Tomorrow');
+  const wochentage = [translate('Sun'), translate('Mon'), translate('Tue'), translate('Wed'), translate('Thu'), translate('Fri'), translate('Sat')];
+  return wochentage[d.getDay()];
+}
+
+function calDateLabel(ts) {
+  const d = new Date(ts * 1000);
+  return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+}
+
+function renderCalendar() {
+  const bereich = document.getElementById('calArea');
+  if (!bereich) return;
+  const titel = document.getElementById('calTitle');
+  const schalter = document.getElementById('calSwitcher');
+  const spanne = document.getElementById('calRange');
+  const status = document.getElementById('calStatus');
+
+  const gewaehlt = calSelectedID();
+  const aktuell = calCalendars.find(c => String(c.id) === gewaehlt) || null;
+  if (titel) titel.textContent = aktuell ? aktuell.name : translate('Calendar');
+
+  // Umschalter nur bei mehreren Kalendern — sonst ein Feld ohne Wahl.
+  if (schalter) {
+    if (calCalendars.length > 1) {
+      schalter.style.display = '';
+      schalter.innerHTML = calCalendars.map(c =>
+        `<option value="${escapeHtml(String(c.id))}"${String(c.id) === gewaehlt ? ' selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+      if (titel) titel.style.display = 'none';
+    } else {
+      schalter.style.display = 'none';
+      if (titel) titel.style.display = '';
+    }
+  }
+  if (spanne && spanne.options.length !== CAL_RANGES.length) {
+    spanne.innerHTML = CAL_RANGES.map(t =>
+      `<option value="${t}"${t === calSelectedRange() ? ' selected' : ''}>${translate('%1 days').replace('%1', String(t))}</option>`).join('');
+  }
+
+  // Synchronisationsfehler des Kalenders sichtbar machen: eine Quelle, die still
+  // nicht mehr aktualisiert, ist gefaehrlicher als eine sichtbare Meldung.
+  const meldungen = [];
+  if (calError !== '') meldungen.push(calError);
+  if (aktuell && aktuell.lastError) meldungen.push(aktuell.lastError);
+  if (aktuell && !aktuell.lastSync) meldungen.push(translate('This calendar has not been synchronised yet.'));
+  if (calTruncated) meldungen.push(translate('Only the first appointments are shown.'));
+  if (status) {
+    status.style.display = meldungen.length ? '' : 'none';
+    status.textContent = meldungen.join(' · ');
+  }
+
+  if (calEvents.length === 0) {
+    renderInto(bereich, `<div class="empty-state"><i class="fa-light fa-calendar-days"></i>${translate('No appointments in this period')}</div>`);
+    return;
+  }
+
+  const farben = {};
+  calCalendars.forEach(c => { farben[String(c.id)] = c.color || ''; });
+  const tage = [];
+  const nachTag = {};
+  calEvents.forEach(e => {
+    const k = calDayKey(e.start);
+    if (!nachTag[k]) { nachTag[k] = []; tage.push(k); }
+    nachTag[k].push(e);
+  });
+  const heuteKey = calDayKey(Math.floor(Date.now() / 1000));
+
+  renderInto(bereich, tage.map(k => {
+    const liste = nachTag[k];
+    const ts = liste[0].start;
+    const zeilen = liste.map(e => {
+      const farbe = farben[String(e.calendarID)] || '';
+      const wann = e.allDay
+        ? translate('all day')
+        : new Date(e.start * 1000).toTimeString().slice(0, 5);
+      const unten = [e.location, e.info].filter(Boolean).join(' · ');
+      return `<div class="cal-event">` +
+        `<span class="cal-bar"${farbe ? ` style="background:${escapeHtml(farbe)}"` : ''}></span>` +
+        `<span class="cal-when">${escapeHtml(wann)}</span>` +
+        `<span class="cal-body">` +
+          `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
+          (unten ? `<div class="cal-sub">${escapeHtml(unten)}</div>` : '') +
+        `</span>` +
+      `</div>`;
+    }).join('');
+    return `<div class="cal-day${k === heuteKey ? ' is-today' : ''}">` +
+      `<div class="cal-day-head"><span class="cal-weekday">${escapeHtml(calDayLabel(ts))}</span>` +
+      `<span>${escapeHtml(calDateLabel(ts))}</span></div>` +
+      `<div class="cal-events">${zeilen}</div>` +
+    `</div>`;
+  }).join(''));
+}
+
+function initCalendar() {
+  const schalter = document.getElementById('calSwitcher');
+  if (schalter) schalter.addEventListener('change', () => {
+    ls.set('symdo.calID', schalter.value);
+    loadCalendarEvents();
+  });
+  const spanne = document.getElementById('calRange');
+  if (spanne) spanne.addEventListener('change', () => {
+    ls.set('symdo.calRange', spanne.value);
+    loadCalendarEvents();
   });
 }
 
@@ -6622,6 +6864,7 @@ function initCaptions() {
   document.querySelector('#tab-shopping span').textContent = translate('Shopping');
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
   document.querySelector('#tab-favorites span').textContent = translate('Favorites');
+  document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
   document.getElementById('todoInput').placeholder = translate('New task …');
   set('lblEditName', translate('Name'));
@@ -7232,6 +7475,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const todoScanInput = document.getElementById('todoScanInput');
   applyAiEnabled();
   initMailAi();
+  initCalendar();
   // Bereiche gleich beim Start anwenden: der gespeicherte symdo.tab kann auf einen
   // inzwischen abgeschalteten Bereich zeigen.
   applyTabVisibility();

@@ -196,6 +196,12 @@ trait AiExtract
             return json_encode($this->MailHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
+        // Kalender lesen: hat mit der KI nichts zu tun, reist aber ueber denselben
+        // Relay-Pfad, weil die Visu-Kachel nur diesen einen Weg nach draussen hat.
+        if (str_ends_with($path, 'calendar')) {
+            return json_encode($this->CalHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         if (!$this->ReadPropertyBoolean('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }

@@ -6,6 +6,7 @@ require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
+require_once __DIR__ . '/libs/CalendarBridge.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -26,6 +27,7 @@ class SymDoGateway extends IPSModuleStrict
     use AppCore;
     use MailScan;
     use MailFetch;
+    use CalendarBridge;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 

@@ -60,6 +60,9 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowDashboard', true);
         $this->RegisterPropertyBoolean('ShowShopping', true);
         $this->RegisterPropertyBoolean('ShowTodos', true);
+        // Kalender: haengt am Store-Modul OpenCalendar. Vorgabe an — ist es nicht
+        // installiert, blendet die Oberflaeche den Bereich ohnehin selbst aus.
+        $this->RegisterPropertyBoolean('ShowCalendar', true);
 
         // Bedienelemente der Web-App. Sie gelten APPWEIT für alle Listen: die
         // gleichnamigen Schalter der ToDo- und Einkaufslisten-Instanzen werden hier
@@ -685,7 +688,7 @@ class SymDoWebApp extends IPSModuleStrict
      * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
      * überhaupt bedienen lässt.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool}
+     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool}
      */
     private function GetVisibleTabs(): array
     {
@@ -697,6 +700,7 @@ class SymDoWebApp extends IPSModuleStrict
             'dashboard' => $read('ShowDashboard'),
             'shopping'  => $read('ShowShopping'),
             'todos'     => $read('ShowTodos'),
+            'calendar'  => $read('ShowCalendar'),
         ];
     }
 
