@@ -45,6 +45,13 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body { height: 100%; }
+/* Kein Antipp-Schleier von WebKit. Der Standardwert rgba(0,0,0,0.18) legt beim
+   Beruehren ein halbtransparentes schwarzes RECHTECK ueber das Element — bei den
+   runden Knoepfen und dem Vorschlags-Chip schauen dabei an den Ecken graue
+   Flaechen heraus (gemessen am Klapp-Chip: sah wie ein Hover-Effekt aus, war
+   aber die Beruehrung). Die Oberflaeche gibt ihre Rueckmeldung selbst — ueber
+   :active-Regeln und die Animationen. Vererbt sich auf alle Elemente. */
+html { -webkit-tap-highlight-color: transparent; }
 
 body {
   color: var(--text);
