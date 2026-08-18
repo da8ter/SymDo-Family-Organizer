@@ -39,6 +39,15 @@ trait MailScan
     private const MAIL_PROPOSALS_MAX = 50;
     private const MAIL_RETENTION_DAYS = 21;
     private const MAIL_SEEN_MAX      = 500;
+    /** Nach so vielen fehlgeschlagenen Analysen gilt eine Mail als erledigt —
+     *  sonst blockiert eine dauerhaft scheiternde Mail alle neueren und kostet
+     *  bei jedem Lauf erneut Geld beim Anbieter. */
+    private const MAIL_FAIL_MAX      = 3;
+    /** Wartezeit vor dem naechsten Versuch nach einem Fehlschlag; waechst je Versuch. */
+    private const MAIL_RETRY_MS      = 120000;
+    /** Schluessel der Fehlversuchs-Zaehler im MailSeenUIDs-Attribut ("imapID:uid" → Anzahl).
+     *  Kollidiert nie mit einer Instanz-ID, weil die immer numerisch ist. */
+    private const MAIL_FAIL_KEY      = '#fehl';
     /** So viele Zeilen weit wird nach dem zitierten Kopf gesucht (siehe MailDetectOrigin). */
     private const MAIL_ORIGIN_LINES  = 40;
 
@@ -150,10 +159,10 @@ trait MailScan
     }
 
     /** Setzt den One-Shot-Timer. Die Arbeit gehoert nicht in den Nachrichten-Thread. */
-    private function MailArm(): void
+    private function MailArm(int $ms = self::MAIL_TIMER_MS): void
     {
         try {
-            $this->SetTimerInterval('MailScan', self::MAIL_TIMER_MS);
+            $this->SetTimerInterval('MailScan', $ms);
         } catch (Throwable $e) {
             // Timer nach einem Modul-Reload ohne Kernel-Neustart noch nicht
             // registriert. Bewusst kein Ersatzlauf von hier: ein 45-s-Anbieteraufruf
@@ -236,10 +245,29 @@ trait MailScan
                 }
                 // Nur eine ABGESCHLOSSENE Analyse verbraucht die Mail. Ein
                 // voruebergehender Anbieter-Fehler darf sie nicht verbrennen —
-                // sonst ist die Aufgabe fuer immer verloren.
+                // sonst ist die Aufgabe fuer immer verloren. Nach MAIL_FAIL_MAX
+                // Fehlversuchen gilt sie trotzdem als erledigt: eine dauerhaft
+                // scheiternde Mail (zu grosses PDF, kaputter Inhalt) darf nicht
+                // alle neueren blockieren.
                 if ($this->MailAnalyse($imapID, $mail, $urteil['userId'])) {
                     $this->MailRemember($imapID, $uid);
                     $offen = true;
+                } else {
+                    $versuche = $this->MailCountFailure($imapID, $uid);
+                    if ($versuche >= self::MAIL_FAIL_MAX) {
+                        $this->MailRemember($imapID, $uid);
+                        $betreff = trim((string)($mail['Subject'] ?? ''));
+                        $this->LogMessage(sprintf(
+                            'SymDo: E-Mail „%s" nach %d fehlgeschlagenen Analysen uebersprungen — sie bleibt im Postfach, wird aber nicht mehr versucht',
+                            $betreff !== '' ? $betreff : 'UID ' . $uid,
+                            $versuche
+                        ), KL_ERROR);
+                        $offen = true; // die naechste Mail ist jetzt frei
+                    } else {
+                        // Mit wachsendem Abstand erneut versuchen, statt auf das
+                        // naechste Postfach-Ereignis zu warten.
+                        $this->MailArm(self::MAIL_RETRY_MS * $versuche);
+                    }
                 }
                 break 2; // eine Mail pro Lauf
             }
@@ -408,14 +436,14 @@ trait MailScan
             $r = $this->AiRunCompletion($this->AiMailSystemPrompt(date('Y-m-d')), $eingabe, null);
         }
         $this->MailCountDay();
+        if ($speicherVorher !== '') {
+            @ini_set('memory_limit', $speicherVorher);
+        }
         if (($r['ok'] ?? false) !== true) {
             $meldung = (string)($r['message'] ?? $r['code'] ?? '?');
             $this->SendDebug('MailScan', 'KI-Fehler: ' . $meldung, 0);
             $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
             return false;
-        }
-        if ($speicherVorher !== '') {
-            @ini_set('memory_limit', $speicherVorher);
         }
         $aufgaben = $this->AiParseTodos((string)$r['text']);
         // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
@@ -545,6 +573,19 @@ trait MailScan
         if ($text === '') {
             return '';
         }
+        // Der Text muss gueltiges UTF-8 sein, bevor er zum Anbieter geht — sonst
+        // liefert json_encode dort `false` und der Aufruf bricht mit TypeError ab.
+        // Das Kernmodul dekodiert meist selbst nach UTF-8, traegt aber den
+        // urspruenglichen Zeichensatz in `CharSet`; darauf verlassen wir uns nicht.
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            $charset = strtoupper(trim((string)($voll['CharSet'] ?? '')));
+            try {
+                $text = mb_convert_encoding($text, 'UTF-8', ($charset !== '' && $charset !== 'UTF-8') ? $charset : 'ISO-8859-1');
+            } catch (Throwable $e) {
+                // Unbekannter Zeichensatz: ISO-8859-1 bildet jedes Byte ab.
+                $text = mb_convert_encoding($text, 'UTF-8', 'ISO-8859-1');
+            }
+        }
         $typ = strtolower((string)($voll['ContentType'] ?? ''));
         if (str_contains($typ, 'html') || preg_match('/<(html|body|div|table)\b/i', $text) === 1) {
             $text = $this->AiHtmlToText($text);
@@ -558,7 +599,9 @@ trait MailScan
         $text = preg_replace("/\n{3,}/", "\n\n", implode("\n", $sauber)) ?? '';
         $text = trim($text);
         if (strlen($text) > self::MAIL_TEXT_MAX) {
-            $text = substr($text, 0, self::MAIL_TEXT_MAX);
+            // mb_strcut statt substr: ein byteweiser Schnitt mitten durch eine
+            // UTF-8-Sequenz macht den Text fuer json_encode unbrauchbar.
+            $text = mb_strcut($text, 0, self::MAIL_TEXT_MAX, 'UTF-8');
         }
         return $text;
     }
@@ -798,7 +841,33 @@ trait MailScan
             $liste = array_slice($liste, -self::MAIL_SEEN_MAX);
         }
         $karte[(string)$imapID] = array_values(array_unique($liste));
+        // Eine erledigte Mail braucht ihren Fehlversuchs-Zaehler nicht mehr.
+        if (isset($karte[self::MAIL_FAIL_KEY][$imapID . ':' . $uid])) {
+            unset($karte[self::MAIL_FAIL_KEY][$imapID . ':' . $uid]);
+            if ($karte[self::MAIL_FAIL_KEY] === []) {
+                unset($karte[self::MAIL_FAIL_KEY]);
+            }
+        }
         $this->MailWriteAttr('MailSeenUIDs', json_encode($karte, JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Fehlversuch einer Mail vermerken; liefert den neuen Stand des Zaehlers. */
+    private function MailCountFailure(int $imapID, string $uid): int
+    {
+        $karte = json_decode($this->MailAttr('MailSeenUIDs', '{}'), true);
+        $karte = is_array($karte) ? $karte : [];
+        $fehl = is_array($karte[self::MAIL_FAIL_KEY] ?? null) ? $karte[self::MAIL_FAIL_KEY] : [];
+        $schluessel = $imapID . ':' . $uid;
+        $n = (int)($fehl[$schluessel] ?? 0) + 1;
+        $fehl[$schluessel] = $n;
+        // Der Zaehlerbestand bleibt klein: mehr als 50 gleichzeitig scheiternde
+        // Mails gibt es nicht, ohne dass laengst etwas Groesseres kaputt ist.
+        if (count($fehl) > 50) {
+            $fehl = array_slice($fehl, -50, null, true);
+        }
+        $karte[self::MAIL_FAIL_KEY] = $fehl;
+        $this->MailWriteAttr('MailSeenUIDs', json_encode($karte, JSON_UNESCAPED_UNICODE));
+        return $n;
     }
 
     private function MailDayLimitReached(): bool

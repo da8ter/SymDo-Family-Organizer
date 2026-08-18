@@ -525,7 +525,10 @@ trait AiExtract
                 'messages'   => [['role' => 'user', 'content' => $content]],
             ];
             $headers = ['Content-Type: application/json', 'x-api-key: ' . $key, 'anthropic-version: 2023-06-01'];
-            $resp = $this->AiHttpPost('https://api.anthropic.com/v1/messages', $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            // JSON_INVALID_UTF8_SUBSTITUTE: ein einzelnes kaputtes Byte im Text
+            // (byteweise gekuerzte oder falsch deklarierte Mail) darf den Aufruf
+            // nicht in `false` und damit einen TypeError kippen.
+            $resp = $this->AiHttpPost('https://api.anthropic.com/v1/messages', $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
             return $this->AiFinishText($resp, static function (array $data): string {
                 $text = '';
                 foreach (($data['content'] ?? []) as $block) {
@@ -585,7 +588,8 @@ trait AiExtract
             if ($key !== '') {
                 $headers[] = 'Authorization: Bearer ' . $key;
             }
-            $resp = $this->AiHttpPost($url, $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            // Siehe Anthropic-Zweig: kaputte UTF-8-Bytes ersetzen statt scheitern.
+            $resp = $this->AiHttpPost($url, $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
             return $this->AiFinishText($resp, static function (array $data): string {
                 return (string)($data['choices'][0]['message']['content'] ?? '');
             });
