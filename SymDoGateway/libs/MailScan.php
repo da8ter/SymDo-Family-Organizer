@@ -39,6 +39,8 @@ trait MailScan
     private const MAIL_PROPOSALS_MAX = 50;
     private const MAIL_RETENTION_DAYS = 21;
     private const MAIL_SEEN_MAX      = 500;
+    /** So viele Zeilen weit wird nach dem zitierten Kopf gesucht (siehe MailDetectOrigin). */
+    private const MAIL_ORIGIN_LINES  = 40;
 
     private function MailCreate(): void
     {
@@ -174,6 +176,27 @@ trait MailScan
         if (!$this->MailIsEnabled()) {
             return;
         }
+
+        // Nur EIN Lauf gleichzeitig. Ohne das greifen sich zwei ueberlappende Laeufe
+        // dieselbe Mail, bevor der erste sie vermerkt hat — gemessen an zwei
+        // Handanstoessen kurz hintereinander: dieselbe Mail zweimal analysiert, also
+        // zweimal beim Anbieter bezahlt. Der KI-Riegel verhindert nur den
+        // gleichzeitigen Aufruf, nicht die Doppelarbeit.
+        $riegel = 'SymDo_MailScan_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($riegel, 0)) {
+            $this->SendDebug('MailScan', 'Lauf laeuft bereits, dieser entfaellt', 0);
+            return;
+        }
+        try {
+            $this->MailScanSchritt();
+        } finally {
+            IPS_SemaphoreLeave($riegel);
+        }
+    }
+
+    /** Der eigentliche Lauf; von MailScanRun gegen Ueberlappung geschuetzt. */
+    private function MailScanSchritt(): void
+    {
         // Erst pruefen, ob das Ergebnis ueberhaupt ablegbar ist. Ein Anbieter-Aufruf
         // ins Leere kostet Geld und laesst den Vorschlag verschwinden.
         if (!$this->MailWriteAttr('MailSeenUIDs', $this->MailAttr('MailSeenUIDs', '{}'))) {
@@ -401,18 +424,26 @@ trait MailScan
         // Mit Datumsangabe: daran erkennt man, ob der Anhang wirklich ausgewertet
         // wurde — Fristen und Termine stehen fast immer nur dort. Bewusst nur
         // Zahlen, keine Aufgabentitel: das Protokoll ist kein Ort fuer Inhalte.
+        // Aufgaben und Termine getrennt zaehlen, dazu wie viele ein Datum tragen.
+        // Daran erkennt man ohne Blick in die App, ob der Anhang ausgewertet wurde
+        // und ob die Unterscheidung greift. Bewusst nur Zahlen, keine Titel.
         $mitDatum = 0;
+        $termine = 0;
         foreach ($aufgaben as $a) {
             if (($a['due'] ?? null) !== null) {
                 $mitDatum++;
             }
+            if (($a['kind'] ?? 'task') === 'event') {
+                $termine++;
+            }
         }
         $this->LogMessage(sprintf(
-            'SymDo: E-Mail „%s" von %s analysiert%s → %d Aufgabe(n), davon %d mit Datum',
+            'SymDo: E-Mail „%s" von %s analysiert%s → %d Aufgabe(n), %d Termin(e), davon %d mit Datum',
             $betreff !== '' ? $betreff : '(ohne Betreff)',
             (string)($kopf['SenderAddress'] ?? '?'),
             $anhang !== null ? ' (mit Anhang ' . ($anhang['name'] !== '' ? $anhang['name'] : $anhang['kind']) . ')' : '',
-            count($aufgaben),
+            count($aufgaben) - $termine,
+            $termine,
             $mitDatum
         ), KL_NOTIFY);
         if ($aufgaben === []) {
@@ -427,6 +458,10 @@ trait MailScan
             'subject'   => $betreff,
             'recipient' => (string)($kopf['Recipient'] ?? ''),
             'userId'    => $userId,
+            // Wer die Mail urspruenglich geschrieben hat und wie sie damals hiess.
+            // Der aeussere Kopf nennt immer nur den weiterleitenden Haushalt und ein
+            // „Fwd:" davor — beides sagt dem Nutzer nichts.
+            'origin'    => $this->MailDetectOrigin($text),
             'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
         ]);
 
@@ -434,6 +469,69 @@ trait MailScan
             @IMAP_DeleteMail($imapID, $uid);
         }
         return true;
+    }
+
+    /**
+     * Absender und Betreff der WEITERGELEITETEN Mail aus dem zitierten Kopf lesen.
+     *
+     * Bei einer Weiterleitung steht im aeusseren Kopf nur, wer sie weitergeleitet hat
+     * — im Haushalt also immer dieselbe Person — und im Betreff ein „Fwd:" davor. Wer
+     * die Mail geschrieben hat und wie sie hiess, steht im zitierten Kopf im Text:
+     *
+     *     Von: "Michailidou, Sofia" <Sofia.Michailidou@awo-duesseldorf.de>
+     *     Betreff: Ferienabfrage Herbstferien
+     *     Datum: 5. August 2026 um 14:09:25 MESZ
+     *
+     * Gelesen wird nur der Anfang: weiter unten im Verlauf koennen aeltere Kopfzeilen
+     * derselben Bauart stehen, und die aelteste waere die falsche. Findet sich nichts,
+     * bleiben die Felder leer und die Oberflaeche zeigt weiter den aeusseren Kopf —
+     * lieber der weiterleitende Absender als ein geratener.
+     *
+     * @return array{name: string, address: string, subject: string}
+     */
+    private function MailDetectOrigin(string $text): array
+    {
+        $raus = ['name' => '', 'address' => '', 'subject' => ''];
+        $zeilen = preg_split('/\r\n|\r|\n/', $text) ?: [];
+        foreach (array_slice($zeilen, 0, self::MAIL_ORIGIN_LINES) as $zeile) {
+            // Zitatzeichen entfernt MailPrepareText bereits; bei Text aus anderen
+            // Quellen hier noch einmal, damit „> Von:" ebenfalls trifft.
+            $zeile = trim((string)preg_replace('/^(\s*>)+\s?/', '', $zeile));
+            if ($zeile === '') {
+                continue;
+            }
+            if ($raus['address'] === '' && $raus['name'] === ''
+                && preg_match('/^(?:Von|From)\s*:\s*(.+)$/iu', $zeile, $m) === 1) {
+                $wert = trim($m[1]);
+                if (preg_match('/^(.*?)\s*<([^>]+)>\s*$/u', $wert, $mm) === 1) {
+                    $raus['name']    = trim($mm[1], " \t\"'");
+                    $raus['address'] = trim($mm[2]);
+                } elseif (filter_var($wert, FILTER_VALIDATE_EMAIL) !== false) {
+                    $raus['address'] = $wert;
+                } else {
+                    $raus['name'] = trim($wert, " \t\"'");
+                }
+                continue;
+            }
+            if ($raus['subject'] === ''
+                && preg_match('/^(?:Betreff|Subject)\s*:\s*(.+)$/iu', $zeile, $m) === 1) {
+                // Auch der zitierte Betreff kann ein „Fwd:" tragen, wenn die Mail
+                // mehrfach gereist ist — Praefixe deshalb abschneiden.
+                $raus['subject'] = $this->MailStripReplyPrefix(trim($m[1]));
+            }
+        }
+        return $raus;
+    }
+
+    /** „Fwd: WG: Titel“ → „Titel“. Auch mehrfach und in beiden Sprachen. */
+    private function MailStripReplyPrefix(string $betreff): string
+    {
+        $vorher = '';
+        while ($vorher !== $betreff) {
+            $vorher = $betreff;
+            $betreff = trim((string)preg_replace('/^\s*(?:fwd?|wg|aw|re|antw)\s*:\s*/iu', '', $betreff));
+        }
+        return $betreff;
     }
 
     /**
