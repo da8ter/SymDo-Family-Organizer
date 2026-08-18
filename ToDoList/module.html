@@ -1000,11 +1000,14 @@ html[data-symdo-theme="dark"] .member-bar {
    ungelesen ist. Die Zahl steht im Titel statt rechts in .count, den Pfeil nach
    rechts schiebt deshalb der Pfeil selbst.
 
-   Bewusst KEIN width: 100% (siehe Grundregel .section-toggle): zusammen mit den
-   2px Seitenrand ergaebe das 100% + 4px und liesse den Inhalt waagerecht
-   scrollen. Als Flex-Container auf Blockebene fuellt der Chip die Breite ohnehin. */
+   Bewusst KEIN width: 100% (siehe Grundregel .section-toggle): als Flex-Container
+   auf Blockebene fuellt der Chip die Breite ohnehin.
+
+   Und bewusst KEIN Seitenrand: der Chip muss geschlossen exakt so breit sein wie
+   aufgeklappt (dort heben -8px Rand die 8px Seitenpolster der Flaeche auf) —
+   schon 2px Unterschied liessen ihn beim Umschalten sichtbar springen. */
 .mail-ai .section-toggle {
-  margin: 0 2px;
+  margin: 0;
   padding: 10px 14px;
   /* Fester Radius statt 999px, und die Mindesthoehe ist sein Doppeltes.
      Grund: bei 999px begrenzt der Browser jede Ecke auf die halbe Hoehe, weil die
