@@ -666,12 +666,85 @@ trait AiExtract
                 $time = null;
             }
 
-            $out[] = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time, 'priority' => $priority];
+            // Aufgabe oder Termin? Eine Aufgabe muss man TUN, ein Termin FINDET STATT.
+            // Fehlt das Feld (Foto-Scan, aeltere Antworten), bleibt es eine Aufgabe —
+            // damit aendert sich fuer die vorhandenen Wege nichts.
+            $kind = strtolower(trim((string)($row['kind'] ?? 'task')));
+            if (!in_array($kind, ['task', 'event'], true)) {
+                $kind = 'task';
+            }
+
+            // Ende nur bei Terminen und nur mit Beginn. Es darf nicht vor dem Beginn
+            // liegen; ein einzelner Tag braucht kein Ende.
+            $end = trim((string)($row['end'] ?? ''));
+            if ($kind !== 'event' || $due === null
+                || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $end, $me) !== 1
+                || !checkdate((int)$me[2], (int)$me[3], (int)$me[1])
+                || $end < $due) {
+                $end = null;
+            }
+
+            // Ganztaegig: ausdrueckliche Angabe, sonst abgeleitet — ohne Uhrzeit ist
+            // ein Termin ganztaegig, mit Uhrzeit nicht.
+            if (array_key_exists('allDay', $row)) {
+                $allDay = ($row['allDay'] === true || $row['allDay'] === 'true' || $row['allDay'] === 1);
+            } else {
+                $allDay = ($kind === 'event' && $time === null);
+            }
+            if ($time !== null) {
+                $allDay = false;
+            }
+
+            // Reihe (Kurs) statt Dauertermin. Beides zugleich ergibt keinen Sinn: die
+            // Wiederholung gewinnt, sonst entstuende aus einem Kurs zusaetzlich ein
+            // wochenlanger Klotz (siehe AiSeriesRule).
+            $recurrence = $this->AiParseRecurrence($row['recurrence'] ?? null, $kind, $due);
+            if ($recurrence !== null) {
+                $end = null;
+            }
+
+            $out[] = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time,
+                      'priority' => $priority, 'kind' => $kind, 'end' => $end, 'allDay' => $allDay,
+                      'recurrence' => $recurrence];
             if (count($out) >= 50) {
                 break;
             }
         }
         return $out;
+    }
+
+    /**
+     * Wiederholung eines Vorschlags pruefen.
+     *
+     * Streng, weil daraus spaeter echte Kalendereintraege entstehen: nur die drei
+     * bekannten Takte, und entweder eine Anzahl ODER ein Enddatum. Alles andere
+     * faellt weg und der Vorschlag bleibt ein einzelner Termin — lieber ein Termin
+     * zu wenig als eine erfundene Reihe.
+     *
+     * @return array{freq: string, count?: int, until?: string}|null
+     */
+    private function AiParseRecurrence(mixed $roh, string $kind, ?string $due): ?array
+    {
+        if ($kind !== 'event' || $due === null || !is_array($roh)) {
+            return null;
+        }
+        $freq = strtolower(trim((string)($roh['freq'] ?? '')));
+        if (!in_array($freq, ['weekly', 'biweekly', 'monthly'], true)) {
+            return null;
+        }
+        $count = (int)($roh['count'] ?? 0);
+        if ($count > 1) {
+            // Deckel wie bei den Vorschlaegen selbst: eine Reihe, die laenger laeuft,
+            // ist im Kalender des Anbieters besser als Serie von Hand gepflegt.
+            return ['freq' => $freq, 'count' => min($count, self::CAL_SERIES_MAX)];
+        }
+        $until = trim((string)($roh['until'] ?? ''));
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $until, $m) === 1
+            && checkdate((int)$m[2], (int)$m[3], (int)$m[1])
+            && $until > $due) {
+            return ['freq' => $freq, 'until' => $until];
+        }
+        return null;
     }
 
     /**
@@ -1131,6 +1204,60 @@ trait AiExtract
      * der Mail ist der Weiterleitende, die Quelle steht im Zitat) und die Regel,
      * einen fehlenden Anhang nicht zu erfinden — das Kernmodul liefert ihn nicht mit.
      */
+    /**
+     * Aufgabe oder Termin — die Unterscheidung steht an EINER Stelle, damit beide
+     * Prompt-Fassungen (mit und ohne Anhang) sie wortgleich tragen.
+     *
+     * Die Trennlinie ist bewusst die Handlung, nicht das Datum: eine Aufgabe muss
+     * der Empfaenger TUN, ein Termin FINDET STATT. „Formular bis Freitag
+     * zurueckschicken" ist eine Aufgabe mit Frist, „Elternabend am 12.03. um 19:30"
+     * ein Termin. Verlangt ein Termin zusaetzlich eine Vorbereitung, sind das ZWEI
+     * Eintraege — sonst verschwindet die Handlung hinter dem Datum.
+     */
+    private function AiKindRule(): string
+    {
+        return ' UNTERSCHEIDE AUFGABE UND TERMIN. Setze in jedem Eintrag das Feld "kind": '
+            . '"task" fuer etwas, das der Empfaenger TUN muss (Formular ausfuellen, '
+            . 'ueberweisen, anmelden, zurueckschicken, Betreuung organisieren) — das '
+            . 'Datum in "due" ist dann die FRIST. "event" fuer etwas, das STATTFINDET '
+            . 'und im Kalender stehen wuerde (Elternabend, Sprechstunde, Ausflug, '
+            . 'Schliesstag, Ferienzeitraum, Feiertag) — "due" ist dann der TAG des '
+            . 'Termins. Bei "event" mit Uhrzeit gib "time" als "HH:MM" an und setze '
+            . '"allDay" auf false; ohne Uhrzeit lass "time" weg und setze "allDay" auf '
+            . 'true. Dauert ein Termin mehrere Tage (Ferien, Schliesszeit), gib in "end" '
+            . 'den LETZTEN Tag im Format YYYY-MM-DD an, sonst lass "end" weg. Fordert '
+            . 'ein Termin zusaetzlich eine Handlung (anmelden, Betreuung organisieren, '
+            . 'etwas mitbringen), gib BEIDES zurueck: den Termin als "event" und die '
+            . 'Handlung als "task" mit ihrer eigenen Frist.'
+            . $this->AiSeriesRule();
+    }
+
+    /**
+     * Reihen (Kurse) sind KEINE mehrtaegigen Termine.
+     *
+     * Ohne diese Regel presste das Modell einen 15-mal dienstags stattfindenden Kurs
+     * in „due 01.09., end 15.12., 18:45" — im Kalender ein durchgehender Klotz von
+     * dreieinhalb Monaten statt 15 Abenden. Den Takt hatte es dabei sogar erkannt und
+     * in "info" geschrieben; es fehlte nur das Feld dafuer.
+     *
+     * Ausgerechnet werden die Einzeltermine NICHT vom Modell, sondern in CalExpandSeries
+     * aus dem ersten Termin — Sprachmodelle zaehlen Kalenderwochen unzuverlaessig, und
+     * eine falsche Reihe faellt im Kalender erst Wochen spaeter auf.
+     */
+    private function AiSeriesRule(): string
+    {
+        return ' REIHEN (Kurse, wiederkehrende Gruppen): Findet ein Termin MEHRFACH in '
+            . 'gleichem Abstand statt („dienstags", „jeden zweiten Mittwoch", „15 Termine"), '
+            . 'dann gib in "due" und "time" den ERSTEN Termin an, LASS "end" WEG und '
+            . 'beschreibe die Wiederholung im Feld "recurrence": '
+            . '{"freq": "weekly" | "biweekly" | "monthly", "count": Anzahl der Termine} — '
+            . 'ist die Anzahl nicht genannt, aber das Datum des letzten Termins, gib statt '
+            . '"count" das Feld "until": "YYYY-MM-DD". Rechne die einzelnen Termine NICHT '
+            . 'selbst aus und gib sie nicht als mehrere Eintraege zurueck. "end" bleibt '
+            . 'ausschliesslich fuer einen Termin, der ohne Unterbrechung mehrere Tage '
+            . 'DAUERT (Ferien, Schliesszeit) — ein Kurs dauert nicht, er wiederholt sich.';
+    }
+
     private function AiMailSystemPrompt(string $today, bool $mitAnhang = false): string
     {
         if ($mitAnhang) {
@@ -1142,9 +1269,8 @@ trait AiExtract
                 . 'Anhang zusammen. Meist steht die Aufforderung in der Mail und die Einzelheiten '
                 . '(Termine, Fristen, Betraege, Formularfelder) im Anhang — uebernimm sie von '
                 . 'dort. Stehen im Anhang mehrere eigenstaendige Termine oder Aufgaben, gib sie '
-                . 'als eigene Eintraege zurueck. Nennt die Mail oder der Anhang einen Termin mit '
-                . 'Uhrzeit, gib zusaetzlich das Feld "time" im Format "HH:MM" an; ohne Uhrzeit '
-                . 'lass "time" weg oder setze es auf null.';
+                . 'als eigene Eintraege zurueck.'
+                . $this->AiKindRule();
         }
         return $this->AiSystemPrompt($today)
             . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
@@ -1152,7 +1278,7 @@ trait AiExtract
             . 'nicht in der Betreffzeile. Nenne diese Quelle in "info". Nennt die Mail '
             . 'einen konkreten Termin mit Uhrzeit (Elternabend, Sprechstunde, Abgabe um '
             . 'eine bestimmte Zeit), gib zusaetzlich das Feld "time" im Format "HH:MM" '
-            . 'an; ohne Uhrzeit lass "time" weg oder setze es auf null. WICHTIG zum Anhang: '
+            . 'an.' . $this->AiKindRule() . ' WICHTIG zum Anhang: '
             . 'Anhaenge liegen dir NICHT vor. Ein Verweis darauf („siehe Anhang“, „im '
             . 'beigefuegten Formular“) hebt die Aufgabe aber NICHT auf — er ist selbst die '
             . 'Handlungsaufforderung. Nennt die Mail ein Formular, eine Abfrage, eine Liste '
