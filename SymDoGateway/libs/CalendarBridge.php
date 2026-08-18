@@ -279,13 +279,10 @@ trait CalendarBridge
                 'name'      => (string)@IPS_GetName($id),
                 'color'     => (string)($status['calendarColor'] ?? ''),
                 'canWrite'  => (bool)($status['canWrite'] ?? false),
-                // Darf ein EINZELNES Vorkommen einer Serie geaendert/geloescht
-                // werden? Haengt am Anbieter (am 18.08.2026 gemessen: iCloud/CalDAV
-                // meldet beides false, obwohl canWrite true ist). Die Oberflaeche
-                // sperrt damit Bearbeiten/Loeschen von Serienterminen, statt den
-                // Anbieter-Fehler zu ernten.
-                'canUpdateOccurrence' => (bool)($status['canUpdateOccurrence'] ?? false),
-                'canDeleteOccurrence' => (bool)($status['canDeleteOccurrence'] ?? false),
+                // BEWUSST keine canUpdateOccurrence/canDeleteOccurrence von hier:
+                // die Instanz-Statusabfrage meldet false, obwohl der Schreibzugriff
+                // geht — massgeblich ist das Flag AM TERMIN-Datensatz (am 18.08.2026
+                // live gemessen). Siehe CalNormalize.
                 'count'     => (int)($status['eventCount'] ?? 0),
                 'today'     => (int)($status['todayEventCount'] ?? 0),
                 'lastSync'  => (int)($status['lastSynchronization'] ?? 0),
@@ -423,9 +420,12 @@ trait CalendarBridge
             // die Erinnerung stillschweigend auf „keine" gesetzt.
             'reminder'   => (int)($erinnerungen[$calendarID . ':' . (string)($e['uid'] ?? '')]['lead'] ?? -1),
             // Teil einer Serie? Die Oberflaeche sperrt damit Bearbeiten/Loeschen,
-            // wenn der Kalender kein einzelnes Vorkommen aendern kann (siehe
-            // canUpdateOccurrence/canDeleteOccurrence in CalCalendars).
+            // wenn dieses Vorkommen nicht einzeln beschreibbar ist. Massgeblich
+            // sind die Flags AM DATENSATZ — die Instanz-Statusabfrage meldet false,
+            // obwohl der Schreibzugriff geht (am 18.08.2026 live gemessen).
             'recurring'  => $this->CalIsOccurrence($e),
+            'canUpdateOccurrence' => ($e['canUpdateOccurrence'] ?? false) === true,
+            'canDeleteOccurrence' => ($e['canDeleteOccurrence'] ?? false) === true,
         ];
     }
 
@@ -916,18 +916,22 @@ trait CalendarBridge
             // Vorkommen einer Serie: Die ganze Serie ist nie in Gefahr — ohne
             // ausdruecklichen writeScope=series ruehrt OpenCalendar den Serienkopf
             // nicht an (am 18.08.2026 im Quelltext von Build 588 verifiziert, Google
-            // wie CalDAV). Aber: Ob ein EINZELNES Vorkommen geaendert werden darf,
-            // meldet der Kalender selbst (canUpdateOccurrence; iCloud: nein). Ohne
-            // die Faehigkeit hier klar ablehnen statt den rohen Anbieter-Fehler samt
-            // sinnlosem Sync-Wiederholungslauf zu ernten; mit ihr den Scope explizit
-            // setzen — der CalDAV-Zweig verlangt ihn, Google waehlt ihn ohnehin.
+            // wie CalDAV). Ob DIESES Vorkommen geaendert werden darf, steht am
+            // Datensatz selbst (canUpdateOccurrence; die Instanz-Statusabfrage sagt
+            // dazu nichts Belastbares — live gemessen: dort false, am Termin true).
+            // Ohne die Faehigkeit klar ablehnen statt den rohen Anbieter-Fehler samt
+            // sinnlosem Sync-Wiederholungslauf zu ernten; der writeScope kommt mit
+            // dem Rohdatensatz mit und wird nur gesetzt, falls er fehlt (der
+            // CalDAV-Zweig verlangt ihn).
             if ($this->CalIsOccurrence($roh)) {
-                if (($wache['calendar']['canUpdateOccurrence'] ?? false) !== true) {
+                if (($roh['canUpdateOccurrence'] ?? false) !== true) {
                     return $fehler('series_locked', $this->Translate(
                         'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'
                     ));
                 }
-                $ereignis['writeScope'] = 'occurrence';
+                if (trim((string)($ereignis['writeScope'] ?? '')) === '') {
+                    $ereignis['writeScope'] = 'occurrence';
+                }
             }
             try {
                 $antwort = json_decode((string)IPSKAL_UpdateEvent(
@@ -1032,14 +1036,17 @@ trait CalendarBridge
             if ($roh === null) {
                 continue;
             }
-            // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent).
+            // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent),
+            // massgeblich ist das Flag am Datensatz.
             if ($this->CalIsOccurrence($roh)) {
-                if (($wache['calendar']['canDeleteOccurrence'] ?? false) !== true) {
+                if (($roh['canDeleteOccurrence'] ?? false) !== true) {
                     return $fehler('series_locked', $this->Translate(
                         'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
                     ));
                 }
-                $roh['writeScope'] = 'occurrence';
+                if (trim((string)($roh['writeScope'] ?? '')) === '') {
+                    $roh['writeScope'] = 'occurrence';
+                }
             }
             try {
                 $erfolg = IPSKAL_DeleteEvent(

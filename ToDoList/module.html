@@ -5656,16 +5656,11 @@ function renderCalendar() {
 
   // Bedienbar ist nur, was der Anbieter auch schreiben laesst: in einem
   // abonnierten Fremdkalender waere jede Wischgeste ein Versprechen, das der
-  // Anbieter danach bricht. Bei Serien-Vorkommen gilt dasselbe je Faehigkeit:
-  // iCloud etwa laesst einzelne Vorkommen weder aendern noch loeschen.
+  // Anbieter danach bricht. Bei Serien-Vorkommen entscheiden die Flags AM
+  // TERMIN (canUpdateOccurrence/canDeleteOccurrence aus dem Gateway) — nicht
+  // der Kalenderstatus, der dazu nichts Belastbares sagt.
   const schreibbar = {};
-  const vkAendern = {};
-  const vkLoeschen = {};
-  calCalendars.forEach(c => {
-    schreibbar[String(c.id)] = c.canWrite === true;
-    vkAendern[String(c.id)] = c.canUpdateOccurrence === true;
-    vkLoeschen[String(c.id)] = c.canDeleteOccurrence === true;
-  });
+  calCalendars.forEach(c => { schreibbar[String(c.id)] = c.canWrite === true; });
   const knopfSchalter = rowButtonFlags();
   const zeigeBearbeiten = knopfSchalter.showEditButton === true;
   const zeigeLoeschen   = knopfSchalter.showDeleteButton === true;
@@ -5696,8 +5691,8 @@ function renderCalendar() {
         (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
           ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
       const serie = e.recurring === true;
-      const kannBearbeiten = schreibbar[String(e.calendarID)] === true && (!serie || vkAendern[String(e.calendarID)] === true);
-      const kannLoeschen   = schreibbar[String(e.calendarID)] === true && (!serie || vkLoeschen[String(e.calendarID)] === true);
+      const kannBearbeiten = schreibbar[String(e.calendarID)] === true && (!serie || e.canUpdateOccurrence === true);
+      const kannLoeschen   = schreibbar[String(e.calendarID)] === true && (!serie || e.canDeleteOccurrence === true);
       const darf = kannBearbeiten || kannLoeschen;
       // Die Wisch-Untergruende nur dort, wo auch gewischt werden kann — sonst
       // blitzte beim Ziehen ein rotes Feld auf, das nichts tut.
@@ -5761,14 +5756,14 @@ function bindCalRows(knoten) {
     const zeile = card.querySelector('.cal-event');
     const finde = () => calEvents.find(e => String(e.id) === String(card.dataset.id));
 
-    // Serien-Vorkommen nur, wenn der Kalender das kann (canUpdateOccurrence /
-    // canDeleteOccurrence) — sonst mit demselben Hinweis ablehnen, den auch das
-    // Gateway gaebe. Die Wache steht an der AKTION und nicht nur am Markup, weil
-    // eine Zeile mit nur einer erlaubten Richtung trotzdem beide Wischwege hat.
+    // Serien-Vorkommen nur, wenn DIESES Vorkommen es erlaubt (Flags am Termin,
+    // canUpdateOccurrence/canDeleteOccurrence) — sonst mit demselben Hinweis
+    // ablehnen, den auch das Gateway gaebe. Die Wache steht an der AKTION und
+    // nicht nur am Markup, weil eine Zeile mit nur einer erlaubten Richtung
+    // trotzdem beide Wischwege hat.
     const serieErlaubt = (e, art) => {
       if (e.recurring !== true) return true;
-      const c = calCalendars.find(k => String(k.id) === String(e.calendarID)) || {};
-      if (art === 'del' ? c.canDeleteOccurrence === true : c.canUpdateOccurrence === true) return true;
+      if (art === 'del' ? e.canDeleteOccurrence === true : e.canUpdateOccurrence === true) return true;
       showToast(translate(art === 'del'
         ? 'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
         : 'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'));
