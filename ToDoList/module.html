@@ -517,7 +517,9 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 /* Im ToDo-Tab gibt es kein Datum, das hochgezogen werden muss → normaler
    Abstand nach unten statt des negativen Zugs. */
-.member-bar.todo-members { margin-bottom: 10px; }
+/* Eigenständige Pille über der Liste — im ToDo- wie im Kalender-Tab dasselbe Maß. */
+.member-bar.todo-members,
+.member-bar.cal-members { margin-bottom: 10px; }
 /* Klasse .collapsed steuert nur noch Cursor + Tap-Routing; das Aussehen kommt
    stufenlos aus --mc. Kein CSS-Übergang auf den gekoppelten Props → der Scroll
    treibt sie direkt (kein Nachziehen). Das Aufklappen federt JS über --mc. */
@@ -954,71 +956,250 @@ html[data-symdo-theme="dark"] .member-bar {
 .item-price { font-size: 12.5px; color: var(--muted); }
 /* Vorschlaege aus weitergeleiteten E-Mails. Steht ueber der Aufgabenliste, weil es
    Post ist, die auf eine Entscheidung wartet — und verschwindet restlos, sobald
-   nichts mehr offen ist. */
-.mail-ai { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: var(--gap); }
-.mail-card {
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  overflow: hidden;
+   nichts mehr offen ist.
+
+   Optik wie der Rest der Liste: jeder Vorschlag ist eine Zeile auf --row mit 12px
+   Radius und 6px Abstand (wie .todo-content und .item-card), die Mail darueber nur
+   eine Ueberschrift wie .cat-header oder .cal-day-head. Bewusst KEIN Rahmen und
+   keine getoente Kopfzeile — ein umrandeter Kasten mitten in einer rahmenlosen
+   Liste liest sich als Fremdkoerper und nicht als deren oberster Eintrag.
+
+   Eingeklappt ist der Normalzustand: ein Halbjahresplaner liefert zwei Dutzend
+   Termine, und die schoben die eigentliche Liste sonst aus dem Bild. Sichtbar
+   bleibt nur die Zeile „N neue Termine gefunden". */
+.mail-ai { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--gap); }
+/* Derselbe Umschalter wie bei „Erledigt" und „Zuletzt benutzt" (.section-toggle),
+   hier aber als Chip in der Akzentfarbe ueber die volle Inhaltsbreite: der Fund
+   ist eine MELDUNG und kein Listenabschnitt — er soll auffallen, solange er
+   ungelesen ist. Die Zahl steht im Titel statt rechts in .count, den Pfeil nach
+   rechts schiebt deshalb der Pfeil selbst.
+
+   Bewusst KEIN width: 100% (siehe Grundregel .section-toggle): zusammen mit den
+   2px Seitenrand ergaebe das 100% + 4px und liesse den Inhalt waagerecht
+   scrollen. Als Flex-Container auf Blockebene fuellt der Chip die Breite ohnehin. */
+.mail-ai .section-toggle {
+  margin: 0 2px;
+  padding: 10px 14px;
+  /* Fester Radius statt 999px, und die Mindesthoehe ist sein Doppeltes.
+     Grund: bei 999px begrenzt der Browser jede Ecke auf die halbe Hoehe, weil die
+     Radien einer Kante zusammen nicht groesser sein duerfen als das Element. Fallen
+     die unteren Radien aufgeklappt auf 0, verschwindet diese Konkurrenz und die
+     OBEREN Ecken wachsen auf die volle Hoehe — der Chip wurde beim Aufklappen
+     sichtbar runder. Mit festem Wert ist die Rundung in beiden Zustaenden dieselbe,
+     und geschlossen bleibt es dank der Mindesthoehe eine echte Pille. */
+  --chip-r: 18px;
+  min-height: calc(var(--chip-r) * 2);
+  border-radius: var(--chip-r);
+  background: var(--accent);
+  color: #fff;
 }
+.mail-ai .section-toggle i.chev, .mail-ai .section-toggle svg.chev { margin-left: auto; }
+/* Aufgeklappt verliert der Chip seine unteren Rundungen: er gehoert dann zu dem,
+   was darunter aufgeht, und soll nicht als abgeschlossene Pille darueber schweben. */
+.mail-ai .section-toggle.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* FLACHE Liste, aus demselben Grund wie in der Agenda: renderRows() erkennt
+   unveraenderte Knoten nur unter den DIREKTEN Kindern. In .mail-card/.mail-rows
+   verpackt wurde bei jedem Neuzeichnen die ganze Mail ersetzt — also auch die Zeile
+   unter dem Finger, und die Wischgeste ruckelte. Mailkopf und Zeilen sind deshalb
+   Geschwister mit Schluessel, wie Kategorie-Ueberschrift und Artikelzeile. */
 .mail-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 9px 10px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  margin: 12px 2px 6px;
 }
-.mail-head .avatar { width: 26px; height: 26px; font-size: 12px; flex: 0 0 auto; }
+.mail-ai > .mail-head:first-of-type { margin-top: 2px; }
+/* Rund, nicht eckig: es gibt KEINE allgemeine .avatar-Regel in dieser Datei —
+   jede Umgebung bringt ihre eigene mit (.avatar-stack .avatar, .assign-chip .avatar,
+   .member-bar .avatar-btn img). Hier fehlte sie, deshalb blieb ein Foto ein Quadrat.
+   object-fit: cover, damit ein nicht quadratisches Foto beschnitten wird statt
+   gestaucht; die Zentrierung gilt dem Buchstaben-Ersatz ohne Foto. */
+.mail-head .avatar {
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
-  font-size: 13.5px; font-weight: 600;
+  font-size: 13px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mail-meta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mail-head .icon-btn { flex: 0 0 auto; }
-.mail-rows { display: flex; flex-direction: column; }
-.mail-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px;
-  border-top: 1px solid var(--border);
+/* Wischen wie in den Listen: links verwerfen (rot, Papierkorb), rechts uebernehmen
+   (gruen, Plus — dieselbe Farbwahl wie „auf die Einkaufsliste" bei den Favoriten).
+   Der Behaelter traegt Rundung und overflow, die Zeile darin wird verschoben; ihre
+   Flaeche ist mit --row deckend, sonst schienen beide Untergruende durch. */
+.mail-item { position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 6px; }
+.mail-item .swipe-under {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--red); color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
 }
+.mail-item .swipe-under-edit {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 18px;
+  background: #34c759; color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.mail-item.dragging-left .swipe-under,
+.mail-item.is-deleting .swipe-under { opacity: 1; }
+.mail-item.dragging-right .swipe-under-edit { opacity: 1; }
+.mail-row {
+  position: relative;
+  transition: transform .18s ease;
+  /* pan-y: senkrecht bleibt natives Scrollen, waagerecht uebernimmt bindCardSwipe */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--row);
+}
+/* WAEHREND des Ziehens keine Uebergangszeit. Ohne diese Zeile lief die 180-ms-
+   Animation bei JEDER Fingerbewegung neu an: die Zeile lief dem Finger nach statt
+   mit ihm — das war das Ruckeln. bindCardSwipe setzt dafuer .is-dragging, jede
+   andere Wischflaeche hat dieselbe Regel (.item-card-content, .todo-content,
+   .cal-event, .fav-row). Der Uebergang bleibt fuer das Zurueckfedern nach dem
+   Loslassen erhalten, denn dann ist die Klasse wieder weg. */
+.mail-row.is-dragging { transition: none; }
 .mail-row-body { flex: 1 1 auto; min-width: 0; }
-.mail-row-title { font-size: 13.5px; }
-.mail-row-info { font-size: 11.5px; color: var(--muted); }
-.mail-row-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-.mail-row .round-btn { width: 30px; height: 30px; flex: 0 0 auto; }
-/* Art des Vorschlags. Termin bekommt die Akzentfarbe, Aufgabe bleibt neutral —
-   die Farbe soll die Ausnahme markieren, nicht den Normalfall. */
-.badge.mail-kind-event { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--content); }
-.badge.mail-kind-task { background: var(--surface); color: var(--muted); }
+/* Chips und Avatare der Vorschlagszeile: dieselbe Aufteilung wie in der
+   Aufgabenzeile (.todo-side/.todo-meta) — Werte absichtlich gleich, damit beide
+   Listen im selben Raster stehen. Gestapelt wird von layoutRowMeta() gemessen,
+   die Regeln dafuer stehen bei .todo-content.stacked. */
+.mail-side {
+  display: flex; flex-direction: row; align-items: center; align-self: center;
+  gap: 6px; flex: none;
+}
+.mail-chips {
+  display: flex; flex-direction: row; align-items: center; align-self: center;
+  gap: 6px; flex: none;
+}
+/* Titel und Zusatz genau wie in einer Aufgabenzeile (.todo-title/.todo-info) —
+   ein Vorschlag soll lesbar sein wie das, was aus ihm wird. */
+.mail-row-title { font-size: 15px; font-weight: 600; }
+.mail-row-info { font-size: 12.5px; color: var(--muted); }
+.mail-row .row-btn { font-size: 17px; padding: 4px 5px; }
 /* Kalender: Agenda nach Tagen. Bewusst keine Wochen-Gitter — auf einem Telefon ist
    eine Liste lesbar, ein Raster nicht. Die Farbe kommt je Termin aus OpenCalendar. */
-.cal-day { margin-bottom: var(--gap); }
+/* FLACHE Liste: Tagesueberschriften und Terminzeilen sind Geschwister, keine
+   verschachtelten Tagesgruppen. Grund ist nicht die Optik, sondern das Wischen —
+   renderRows() erkennt unveraenderte Knoten nur unter den DIREKTEN Kindern und
+   behaelt sie dann. In Gruppen verpackt wurde bei jedem Neuzeichnen die ganze
+   Gruppe ersetzt, also auch die Zeile unter dem Finger: das Ruckeln beim Schieben.
+   Artikel- und Aufgabenliste sind aus demselben Grund flach. */
 .cal-day-head {
   display: flex; align-items: baseline; gap: 6px;
-  padding: 0 2px 5px;
+  margin: 14px 2px 6px;
   font-size: 12.5px; color: var(--muted);
 }
+#calArea > .cal-day-head:first-child { margin-top: 0; }
 .cal-day-head .cal-weekday { font-weight: 700; color: var(--content); }
-.cal-day.is-today .cal-day-head .cal-weekday { color: var(--accent); }
-.cal-events { display: flex; flex-direction: column; gap: 6px; }
+.cal-day-head.is-today .cal-weekday { color: var(--accent); }
+/* Ohne Rahmen, wie die Aufgabenzeilen und die Vorschlaege: die Flaeche allein
+   trennt die Zeile vom Hintergrund. Ein Rahmen zusaetzlich zur Flaeche zeichnet
+   dieselbe Kante zweimal. */
 .cal-event {
   display: flex; align-items: stretch; gap: 9px;
   padding: 9px 10px;
   border-radius: var(--radius);
   background: var(--surface);
-  border: 1px solid var(--border);
 }
+/* Wischen wie in den Listen: die Zeile liegt ueber zwei Untergruenden (links
+   loeschen, rechts bearbeiten) und wird darueber verschoben. Der Behaelter traegt
+   deshalb position und overflow, die Zeile eine DECKENDE Flaeche — mit dem
+   durchscheinenden --surface waeren beide Untergruende von Anfang an sichtbar
+   (derselbe Grund wie bei .todo-content, siehe --row). */
+.cal-card { position: relative; border-radius: var(--radius); overflow: hidden; margin-bottom: 6px; }
+.cal-card .swipe-under {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--red); color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.cal-card .swipe-under-edit {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 18px;
+  background: #2f6fd4; color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.cal-card.dragging-left .swipe-under,
+.cal-card.is-deleting .swipe-under { opacity: 1; }
+.cal-card.dragging-right .swipe-under-edit { opacity: 1; }
+.cal-card .cal-event {
+  position: relative;
+  background: var(--row);
+  transition: transform .18s ease;
+  /* pan-y: das senkrechte Scrollen bleibt nativ, waagerecht uebernimmt die Geste
+     (bindCardSwipe) — wie bei .todo-content. */
+  touch-action: pan-y;
+}
+/* Nur wo die Geste greift: antippbar, und ohne Textauswahl — mit der Maus haette
+   das Ziehen sonst den Titel markiert statt die Zeile verschoben. */
+.cal-card:not(.cal-readonly) .cal-event {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.cal-card .cal-event.is-dragging { transition: none; }
+.cal-card .row-btn { font-size: 16px; padding: 4px 5px; flex: 0 0 auto; align-self: center; }
 .cal-bar { width: 4px; border-radius: 2px; flex: 0 0 auto; background: var(--accent); }
-.cal-when { flex: 0 0 auto; width: 44px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Uhrzeit als eigene Zeile UEBER dem Titel (siehe Markup in renderCalendar).
+   Vorher stand sie in einer 44px-Spalte links — dort passte „ganztaegig" nicht
+   hinein. Tabellenziffern, damit die Zeiten untereinander auf gleicher Breite
+   stehen. */
+.cal-when { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cal-body { flex: 1 1 auto; min-width: 0; }
-.cal-title { font-size: 14px; }
-.cal-sub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Beginn und Ende nebeneinander, auf schmalen Geraeten untereinander. */
-.cal-who { flex: 0 0 auto; display: flex; align-items: center; }
-.cal-span { display: flex; gap: 10px; }
-.cal-span-part { flex: 1 1 0; min-width: 0; display: block; }
-.cal-span-part input { width: 100%; }
-@media (max-width: 340px) { .cal-span { flex-direction: column; } }
+/* Schriftgrade wie in einer Aufgabenzeile (.todo-title/.todo-info): 15px/600 fuer
+   den Titel, 12,5px in --muted fuer die Zusatzzeile. Termine und Aufgaben stehen
+   in derselben App untereinander — zwei Groessenstaffeln waeren als Unterschied
+   ohne Bedeutung lesbar. Einzeilig bleibt die Zusatzzeile trotzdem: hier stehen Ort
+   und Notiz mit „ · " verbunden, das darf keine halbe Karte fuellen. */
+/* Eine Zeile mit Auslassungspunkten, genau wie .todo-title: ein langer
+   Terminname („Psychomotorik fuer Kinder ab 4 Jahren") brach sonst um und die
+   Zeile wurde hoeher als ihre Nachbarn. */
+.cal-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-sub { font-size: 12.5px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Info-Abzeichen (Serie, Erinnerung) zwischen Inhalt und Avataren — gleiche
+   Reihenfolge wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
+   ist, dann die Knoepfe. */
+/* Chips, Avatare und Knoepfe der Terminzeile in EINER Spalte — dieselben Werte wie
+   .todo-side/.todo-meta und .mail-side/.mail-chips. Gestapelt und verdichtet wird von
+   layoutRowMeta(), die Regeln dazu stehen bei .todo-content.stacked. */
+.cal-side {
+  display: flex; flex-direction: row; align-items: center; align-self: center;
+  gap: 6px; flex: none;
+}
+.cal-chips {
+  display: flex; flex-direction: row; align-items: center; align-self: center;
+  gap: 6px; flex: none;
+}
+/* Reihen-Hinweis im Termin-Editor: Text wie ein Feldwert, nicht wie ein Eingabefeld
+   — er ist Auskunft und nichts zum Ausfuellen. */
+.cal-series-note { font-size: 14.5px; padding: 2px 0; }
 .cal-status {
   padding: 9px 10px; margin-bottom: var(--gap);
   border-radius: var(--radius);
@@ -1066,6 +1247,9 @@ html[data-symdo-theme="dark"] .member-bar {
   cursor: pointer;
 }
 .row-btn.destructive { color: var(--red); }
+/* Bejahender Zeilenknopf (Vorschlag uebernehmen) — dieselbe Rolle wie die Pfeile
+   des Steppers, deshalb dieselbe Akzentfarbe. */
+.row-btn.accent { color: var(--accent); }
 .amount-badge {
   min-width: 30px;
   text-align: center;
@@ -1102,8 +1286,14 @@ html[data-symdo-theme="dark"] .member-bar {
   color: var(--muted);
 }
 .section-toggle .count { margin-left: auto; font-weight: 600; }
-.section-toggle i.chev { transition: transform .18s ease; }
-.section-toggle.open i.chev { transform: rotate(90deg); }
+/* /icons.js (Font Awesome SVG+JS) ersetzt jedes <i> NACHTRAEGLICH durch ein <svg>
+   und uebernimmt dabei die Klassen. Mit „i.chev" allein traf die Drehung deshalb
+   nur die ersten Millisekunden nach dem Zeichnen — im laufenden Betrieb zeigte der
+   Pfeil IMMER nach rechts, auch aufgeklappt. Beide Elementarten nennen (wie bei
+   .tabbar button i, .tabbar button svg weiter oben). */
+.section-toggle i.chev, .section-toggle svg.chev { transition: transform .18s ease; }
+/* Aufgeklappt zeigt der Pfeil nach UNTEN: 90 Grad im Uhrzeigersinn aus „rechts". */
+.section-toggle.open i.chev, .section-toggle.open svg.chev { transform: rotate(90deg); }
 
 /* ── Eingabeleisten ────────────────────────────────────────────────────────── */
 .inputbar {
@@ -1316,8 +1506,12 @@ html[data-symdo-theme="dark"] .member-bar {
   gap: 6px;
   flex: none;
 }
-.todo-content.stacked { flex-wrap: wrap; }
-.todo-content.stacked .todo-side {
+.todo-content.stacked,
+.mail-row.stacked,
+.cal-event.stacked { flex-wrap: wrap; }
+.todo-content.stacked .todo-side,
+.mail-row.stacked .mail-side,
+.cal-event.stacked .cal-side {
   flex-basis: 100%;
   justify-content: flex-end;
   align-self: flex-start;
@@ -1351,7 +1545,10 @@ html[data-symdo-theme="dark"] .member-bar {
   color: var(--text);
   background-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
-.badge.attr { display: inline-flex; align-items: center; }
+/* gap wie beim Faelligkeits-Chip (.badge.due-badge): die Abzeichen mit Symbol UND
+   Text — etwa die Wiederholung eines Vorschlags („15") — klebten sonst zusammen.
+   Bei den Abzeichen aus nur einem Symbol bleibt der Wert wirkungslos. */
+.badge.attr { display: inline-flex; align-items: center; gap: 6px; }
 /* ── Meta-Zeile verdichten, wenn der Platz nicht reicht (Stufen in layoutTodoMeta) ──
    Stufe 1 (.meta-tight): Wiederholung, Erinnerung und Anzahl wandern aus ihren
    Einzel-Chips in einen gemeinsamen — das sparen vor allem die doppelten
@@ -1360,8 +1557,12 @@ html[data-symdo-theme="dark"] .member-bar {
    stecken schon im Markup (renderAvatarStack), damit hier nichts neu gebaut
    werden muss und das Zurückschalten verlustfrei bleibt. */
 .badge.meta-combined { display: none; gap: 5px; }
-.todo-content.meta-tight .badge.meta-split { display: none; }
-.todo-content.meta-tight .badge.meta-combined { display: inline-flex; align-items: center; }
+.todo-content.meta-tight .badge.meta-split,
+.mail-row.meta-tight .badge.meta-split,
+.cal-event.meta-tight .badge.meta-split { display: none; }
+.todo-content.meta-tight .badge.meta-combined,
+.mail-row.meta-tight .badge.meta-combined,
+.cal-event.meta-tight .badge.meta-combined { display: inline-flex; align-items: center; }
 /* Mit `.avatar` im Selektor, sonst gewinnt das später notierte
    `.avatar-stack .avatar { display: inline-flex }` bei gleicher Spezifität und
    der Zähler wäre auch im vollen Zustand sichtbar. */
@@ -1372,7 +1573,9 @@ html[data-symdo-theme="dark"] .member-bar {
    .todo-meta auf max-content stehen und `flex-wrap` wirkungslos. Die Zeile wird
    dann höher statt beschnitten; die Verdichtungsstufen sparen genau diese
    zusätzlichen Zeilen ein. */
-.todo-content.stacked .todo-meta {
+.todo-content.stacked .todo-meta,
+.mail-row.stacked .mail-chips,
+.cal-event.stacked .cal-chips {
   flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
@@ -1380,9 +1583,15 @@ html[data-symdo-theme="dark"] .member-bar {
   row-gap: 4px;
 }
 .avatar-stack .avatar.tight-more { display: none; }
-.todo-content.meta-tighter .avatar-stack .tight-hide { display: none; }
-.todo-content.meta-tighter .avatar-stack .avatar-more:not(.tight-more) { display: none; }
-.todo-content.meta-tighter .avatar-stack .tight-more { display: inline-flex; }
+.todo-content.meta-tighter .avatar-stack .tight-hide,
+.mail-row.meta-tighter .avatar-stack .tight-hide,
+.cal-event.meta-tighter .avatar-stack .tight-hide { display: none; }
+.todo-content.meta-tighter .avatar-stack .avatar-more:not(.tight-more),
+.mail-row.meta-tighter .avatar-stack .avatar-more:not(.tight-more),
+.cal-event.meta-tighter .avatar-stack .avatar-more:not(.tight-more) { display: none; }
+.todo-content.meta-tighter .avatar-stack .tight-more,
+.mail-row.meta-tighter .avatar-stack .tight-more,
+.cal-event.meta-tighter .avatar-stack .tight-more { display: inline-flex; }
 /* Fälligkeits-Badge — Optik identisch zur ToDoList-Kachel (neutral umrandet,
    überfällig rot, heute orange). Immer mit Text — nie nur das Kalender-Icon. */
 .badge.due-badge { display: inline-flex; align-items: center; gap: 6px; }
@@ -1561,6 +1770,11 @@ html[data-symdo-theme="dark"] .member-bar {
 .form-row.inline input[type="date"],
 .form-row.inline input[type="datetime-local"],
 .form-row.inline select { width: auto; max-width: 60%; }
+/* Beginn und Ende im Termin-Editor stehen untereinander, also je in einer eigenen
+   .form-row — die volle Breite (Grundregel fuer input) waere fuer „05.03.2027,
+   16:30" aber sinnlos weit. Inhaltsbreit wie in der inline-Zeile darueber, mit
+   max-width als Wache fuer schmale Geraete. */
+#ceStart, #ceEnd { width: auto; max-width: 100%; }
 .switch { position: relative; width: 46px; height: 28px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .switch .knob {
@@ -2073,6 +2287,10 @@ html[data-symdo-theme="dark"] .member-bar {
 
     <section id="screen-calendar" class="screen">
       <div class="content">
+        <!-- Avatar-Pille wie im ToDo-Tab: an derselben Stelle (erstes Kind des
+             Inhalts), damit das Einklappen beim Scrollen greift — applyMemberCollapse
+             sucht .member-bar im aktiven Screen. -->
+        <div id="calMembers" class="member-bar cal-members" style="display:none;"></div>
         <div class="screen-head">
           <select id="calSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="calTitle"></h2>
@@ -2125,7 +2343,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
-    <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
+    <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span><span id="tabCalendarBadge" class="tab-badge" style="display:none;"></span></button>
   </nav>
 </div>
 
@@ -2256,19 +2474,26 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body">
       <div class="form-row"><label id="calEditTitleLabel"></label>
         <input id="ceTitle" type="text" /></div>
+      <!-- Notiz direkt unter dem Titel, wie im ToDo-Editor (tdTitle/tdInfo): beides
+           gehoert zum Was, alles Weitere regelt das Wann und Wo. -->
+      <div class="form-row"><label id="calEditInfoLabel"></label>
+        <textarea id="ceInfo" rows="3"></textarea></div>
       <div class="form-row"><label id="calEditCalendarLabel"></label>
         <select id="ceCalendar"></select></div>
       <div class="form-row inline">
         <label id="calEditAllDayLabel"></label>
         <span class="switch"><input type="checkbox" id="ceAllDay" /><span class="knob"></span></span>
       </div>
-      <!-- Beginn und Ende nebeneinander: der Zeitraum ist EINE Angabe und liest sich
-           untereinander wie zwei unabhaengige Felder. -->
-      <div class="form-row cal-span">
-        <span class="cal-span-part"><label id="calEditStartLabel"></label>
-          <input id="ceStart" type="datetime-local" /></span>
-        <span class="cal-span-part"><label id="calEditEndLabel"></label>
-          <input id="ceEnd" type="datetime-local" /></span>
+      <div class="form-row"><label id="calEditStartLabel"></label>
+        <input id="ceStart" type="datetime-local" /></div>
+      <div class="form-row"><label id="calEditEndLabel"></label>
+        <input id="ceEnd" type="datetime-local" /></div>
+      <!-- Reihe aus einem erkannten Kurs: nur Anzeige. Der Takt kommt aus der
+           Analyse, die Einzeltermine rechnet das Gateway aus (CalExpandSeries) —
+           hier steht, was das Speichern anlegen wird. -->
+      <div class="form-row" id="ceSeriesRow" style="display:none;">
+        <label id="calEditSeriesLabel"></label>
+        <div id="ceSeries" class="cal-series-note"></div>
       </div>
       <div class="form-row inline">
         <label id="calEditNotifyLabel"></label>
@@ -2282,12 +2507,10 @@ html[data-symdo-theme="dark"] .member-bar {
         <div id="ceAssignList" class="assign-list"></div></div>
       <div class="form-row"><label id="calEditLocationLabel"></label>
         <input id="ceLocation" type="text" /></div>
-      <div class="form-row"><label id="calEditInfoLabel"></label>
-        <textarea id="ceInfo" rows="3"></textarea></div>
     </div>
     <div class="overlay-footer">
-      <button data-close="calEditOverlay" id="btnCalEditCancel"><i class="fa-light fa-xmark"></i></button>
-      <button class="primary" id="btnCalEditSave"><i class="fa-light fa-check"></i></button>
+      <button data-close="calEditOverlay" id="btnCalEditCancel"></button>
+      <button class="primary" id="btnCalEditSave"></button>
     </div>
   </div>
 </div>
@@ -2734,6 +2957,7 @@ let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = ls.get('symdo.dashboardPriority') || '';
 let dashMemberIds = new Set(); // Mehrfachauswahl im Dashboard-Member-Menü
 let todoMemberIds = new Set(); // Mehrfachauswahl im ToDo-Tab-Member-Menü
+let calMemberIds = new Set();  // dasselbe im Kalender-Tab, eigene Auswahl
 let completedExpanded = ls.get('symdo.completedExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
@@ -2758,6 +2982,20 @@ function noInstanceHint(kind) {
 function instState(id) {
   const entry = store.states[String(id)];
   return entry && entry.state ? entry.state : null;
+}
+/**
+ * Die appweiten Schalter fuer Bearbeiten- und Loeschen-Knopf.
+ *
+ * Sie stehen in JEDEM Instanz-Zustand, weil module.php (OverrideButtonFlags) sie
+ * appweit ueberschreibt. Der Kalender hat keine eigene Listeninstanz, nimmt also
+ * den erstbesten Zustand — welcher, ist gleichgueltig, die Werte sind dieselben.
+ */
+function rowButtonFlags() {
+  for (const id of Object.keys(store.states)) {
+    const s = instState(id);
+    if (s) return s;
+  }
+  return {};
 }
 function selectedShoppingID() {
   const vis = visibleInstances('shopping');
@@ -3082,14 +3320,14 @@ function checkRevisions() {
 // Animationen zurück, damit ein Re-Render nach einer abgelehnten Aktion wirklich
 // neu zeichnet.
 function invalidateRenderCache() {
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favoritesContent', 'todoMembers'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favoritesContent', 'todoMembers', 'calMembers', 'calArea', 'mailAiArea', 'calAiArea'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
-  document.querySelectorAll('.item-card, .todo-card, .fav-card').forEach(card => {
+  document.querySelectorAll('.item-card, .todo-card, .fav-card, .cal-card, .mail-item').forEach(card => {
     card.classList.remove('is-deleting', 'dragging-left', 'dragging-right');
     delete card.dataset.animating;
-    const content = card.querySelector('.item-card-content, .todo-content, .fav-row');
+    const content = card.querySelector('.item-card-content, .todo-content, .fav-row, .cal-event, .mail-row');
     if (content) content.style.transform = '';
   });
 }
@@ -4851,6 +5089,40 @@ function renderTodoMembers() {
   }));
 }
 
+/**
+ * Dieselbe Avatar-Pille im Kalender-Tab (#calMembers).
+ *
+ * Zweck wie bei den Aufgaben: nach Mitglied filtern. Die Zuordnung eines Termins
+ * kommt aus der Ablage des Gateways (CalMembers) und nicht aus dem Kalender — ein
+ * Termin, der nicht über diese App angelegt wurde, hat deshalb kein Mitglied und
+ * verschwindet, sobald gefiltert wird. Das ist beim Filtern richtig so, erklärt
+ * aber, warum die Liste dann kürzer ausfällt als man erwartet.
+ */
+function renderCalMembers() {
+  const el = document.getElementById('calMembers');
+  if (!el) return;
+  // Derselbe appweite Schalter wie im ToDo-Tab; ohne Nutzer gibt es nichts zu zeigen.
+  if (rowButtonFlags().showMemberBar === false || store.users.length === 0) {
+    calMemberIds.clear();
+    el.style.display = 'none';
+    renderInto(el, '');
+    return;
+  }
+  el.style.display = '';
+  const html = store.users.map(u =>
+    `<button class="avatar-btn${calMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+    avatarHtml(u, '') + '</button>'
+  ).join('');
+  if (!renderInto(el, html)) return;
+  el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const mid = b.dataset.member;
+    if (calMemberIds.has(mid)) calMemberIds.delete(mid);
+    else calMemberIds.add(mid);
+    renderCalendar();
+  }));
+}
+
 // ── Aufgaben aus weitergeleiteten E-Mails ────────────────────────────────────
 // Das Gateway analysiert eingehende Post und legt Vorschlaege ab; hier stehen sie
 // ueber der Aufgabenliste und warten auf eine Entscheidung. Angelegt wird die
@@ -4858,6 +5130,9 @@ function renderTodoMembers() {
 // erfaehrt danach nur, dass der Eintrag erledigt ist.
 let mailProposals = [];
 let mailLoading = false;
+// Aufgeklappt oder nicht, je Sorte. Wie cartExpanded nur im Speicher: jeder
+// Neustart beginnt eingeklappt, damit die Vorschlaege die Liste nicht ueberdecken.
+const mailOpen = { task: false, event: false };
 
 /** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
 function mailAiAvailable() {
@@ -4916,6 +5191,28 @@ function mailWhenText(due, time, end) {
 }
 
 /**
+ * Zaehler an den Tabs: offene Aufgaben-Vorschlaege am ToDo-Tab, offene
+ * Termin-Vorschlaege am Kalender-Tab. Beide werden bei jedem Lauf gesetzt,
+ * egal welche Sorte gerade gezeichnet wird — sonst bliebe der Zaehler der
+ * anderen Sorte stehen, wenn nur ihre Liste leer wird.
+ */
+function setMailBadges() {
+  let aufgaben = 0;
+  let termine = 0;
+  mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
+    if (it.kind === 'event') termine++; else aufgaben++;
+  }));
+  const setzen = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = String(n);
+    el.style.display = n > 0 ? '' : 'none';
+  };
+  setzen('tabTodoBadge', aufgaben);
+  setzen('tabCalendarBadge', termine);
+}
+
+/**
  * Vorschlagsband einer Sorte.
  *
  * Getrennte Bereiche, getrennte Sorten: Aufgaben stehen ueber der Aufgabenliste,
@@ -4926,6 +5223,13 @@ function mailWhenText(due, time, end) {
  */
 function renderMailAi(sorte) {
   const istTermin = sorte === 'event';
+  // Jede Sorte zaehlt an ihrem eigenen Tab: Aufgaben am ToDo-Tab, Termine am
+  // Kalender-Tab. Eine Summe ueber beide log — ein Halbjahresplaner mit 19
+  // Terminen liess das ToDo-Tab „20" melden, obwohl dort ein Vorschlag stand.
+  // Vor dem Ausstieg unten: die Zaehler haengen an der Tab-Leiste, nicht am
+  // Vorschlagsband, und muessen auch stimmen, wenn dessen Behaelter fehlt.
+  setMailBadges();
+
   const area = document.getElementById(istTermin ? 'calAiArea' : 'mailAiArea');
   if (!area) return;
 
@@ -4934,60 +5238,125 @@ function renderMailAi(sorte) {
     items: (Array.isArray(p.items) ? p.items : []).filter(it => (it.kind === 'event') === istTermin)
   })).filter(p => p.items.length > 0);
 
-  // Das Tab-Abzeichen zaehlt ALLE offenen Vorschlaege, nicht nur die eigene Sorte —
-  // es sitzt am ToDo-Tab und meldet „es liegt Post".
-  const badge = document.getElementById('tabTodoBadge');
-  if (badge) {
-    const offenGesamt = mailProposals.reduce((n, p) => n + (Array.isArray(p.items) ? p.items.length : 0), 0);
-    badge.textContent = String(offenGesamt);
-    badge.style.display = offenGesamt > 0 ? '' : 'none';
-  }
-
   if (gefiltert.length === 0) {
     area.style.display = 'none';
     area.innerHTML = '';
+    // renderInto vergleicht gegen _lastHtml. Ohne das Zuruecksetzen bliebe der
+    // Bereich leer, wenn spaeter genau dasselbe Markup wieder ansteht.
+    area._lastHtml = null;
     return;
   }
   const byId = usersById();
   area.style.display = '';
-  renderInto(area, gefiltert.map(p => {
+
+  // Eingeklappt sichtbar ist nur diese Zeile — mit der Zahl IM Titel, weil sie
+  // dort die Aussage ist und nicht eine Beschriftung dazu.
+  const anzahl = gefiltert.reduce((n, p) => n + p.items.length, 0);
+  const auf = mailOpen[sorte] === true;
+  const titel = anzahl === 1
+    ? translate(istTermin ? '1 new appointment found' : '1 new task found')
+    : translate(istTermin ? '%1 new appointments found' : '%1 new tasks found').replace('%1', String(anzahl));
+  const umschalter =
+    `<button class="section-toggle${auf ? ' open' : ''}" data-mail="toggle" data-key="mailToggle" aria-expanded="${auf ? 'true' : 'false'}">` +
+      `<i class="fa-light fa-envelope"></i>${escapeHtml(titel)}` +
+      `<i class="fa-light fa-chevron-right chev"></i>` +
+    `</button>`;
+
+  const karten = !auf ? '' : gefiltert.map(p => {
     const u = byId[String(p.userId || '')];
     const kopf = u ? avatarHtml(u, 'avatar') : '<i class="fa-light fa-envelope"></i>';
-    const von = String(p.fromName || p.from || '');
+    // Eine weitergeleitete Mail nennt im aeusseren Kopf immer nur den Haushalt, der
+    // sie weitergeleitet hat, und traegt ein „Fwd:" im Betreff. Wer sie geschrieben
+    // hat und wie sie hiess, liest das Gateway aus dem zitierten Kopf (MailDetectOrigin)
+    // und liefert es als `origin` mit. Fehlt es (aeltere Vorschlaege, Mail ohne
+    // zitierten Kopf), bleibt der aeussere Kopf stehen — nur ohne „Fwd:".
+    const quelleObj = (p.origin && typeof p.origin === 'object') ? p.origin : {};
+    const weiter = String(p.fromName || p.from || '');
+    const quelle = String(quelleObj.name || quelleObj.address || '');
+    const titelText = String(quelleObj.subject || mailPlainSubject(p.subject) || translate('E-mail'));
+    // Nur die Quelle, ohne Hinweis auf die Weiterleitung: weitergeleitet hat immer
+    // jemand aus dem Haushalt, das ist keine Auskunft. Ohne erkannte Quelle bleibt
+    // der aeussere Absender stehen, damit die Zeile nicht leer ist.
+    // „Von: " gehoert MIT in den Uebersetzungsschluessel — im Englischen steht dort
+    // „From: ", und ein festes Praefix im Code waere nicht uebersetzbar.
+    const absender = quelle || weiter;
+    const von = absender ? translate('From: %1').replace('%1', absender) : '';
     const zeilen = (Array.isArray(p.items) ? p.items : []).map(it => {
       const wann = mailWhenText(it.due, it.time, it.end);
-      // Termin oder Aufgabe? Ein Termin findet statt, eine Aufgabe muss man tun —
-      // das Abzeichen sagt es, und beim Datum heisst es dann Tag statt Frist.
-      const istTermin = it.kind === 'event';
+      // Kein Abzeichen fuer die Art: Aufgaben und Termine stehen in getrennten
+      // Bereichen, und die Klappzeile darueber nennt sie beim Namen. „Termin" an
+      // einer Zeile in der Agenda sagt nichts, was nicht schon dasteht.
+      // Verdichtung wie bei den Aufgaben: Wiederholung und „ganztaegig" stecken
+      // zusaetzlich in EINEM kombinierten Chip (.meta-combined). Stufe 1 blendet die
+      // Einzel-Chips (.meta-split) aus und den kombinierten ein — dieselben Klassen,
+      // dieselben Regeln, gemessen von layoutRowMeta().
+      const reiheKurz = calSeriesText(it.recurrence);
+      const kombiniert = (reiheKurz && it.allDay === true)
+        ? `<span class="badge attr meta-combined" title="${escapeHtml([reiheKurz, translate('all day')].join(' · '))}">` +
+            `<i class="fa-light fa-repeat"></i><i class="fa-light fa-sun"></i>` +
+          `</span>`
+        : '';
       const chips =
-        `<span class="badge ${istTermin ? 'mail-kind-event' : 'mail-kind-task'}">` +
-          `<i class="fa-light ${istTermin ? 'fa-calendar-days' : 'fa-list-check'}"></i>` +
-          `<span>${escapeHtml(translate(istTermin ? 'Appointment' : 'Task'))}</span>` +
-        `</span>` +
         (wann ? `<span class="badge due-badge"><i class="fa-light fa-calendar due-icon"></i><span class="due-text">${escapeHtml(wann)}</span></span>` : '') +
-        (it.allDay === true ? `<span class="badge">${escapeHtml(translate('all day'))}</span>` : '') +
+        // Reihe: der Vorschlag wird zu mehreren Terminen. Kurz im Chip (Takt bzw.
+        // Anzahl), ausfuehrlich im Titel — sonst sprengt „zweiwoechentlich · bis
+        // 03.12.2026" die Zeile.
+        (reiheKurz
+          ? `<span class="badge attr${kombiniert ? ' meta-split' : ''}" title="${escapeHtml(reiheKurz)}">` +
+            `<i class="fa-light fa-repeat"></i>` +
+            `<span>${escapeHtml(String(parseInt(it.recurrence.count) || '') || translate('Series'))}</span>` +
+            `</span>`
+          : '') +
+        (it.allDay === true ? `<span class="badge${kombiniert ? ' meta-split' : ''}">${escapeHtml(translate('all day'))}</span>` : '') +
+        kombiniert +
         (it.priority && it.priority !== 'normal' ? `<span class="badge ${priorityKey(it.priority)}">${escapeHtml(priorityLabel(it.priority))}</span>` : '');
-      return `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
+      // Wisch-Behaelter um die Zeile: links verwerfen, rechts uebernehmen. Die
+      // Erkennungsfelder bleiben an der ZEILE — der Klick-Verteiler des Bereichs
+      // sucht sie ueber closest('.mail-row').
+      // data-id am BEHAELTER ist der Schluessel fuer renderRows: „<Mail>:<Nummer>"
+      // ist je Vorschlag eindeutig. Die Erkennungsfelder bleiben zusaetzlich an der
+      // Zeile, weil der Klick-Verteiler sie ueber closest('.mail-row') sucht.
+      return `<div class="mail-item" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
+        `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+        `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
+        `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
         `<div class="mail-row-body">` +
           `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
           (it.info ? `<div class="mail-row-info">${escapeHtml(String(it.info))}</div>` : '') +
-          (chips ? `<div class="mail-row-chips">${chips}</div>` : '') +
         `</div>` +
-        `<button class="round-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
-        `<button class="round-btn" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>` +
+        // Aufbau wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
+        // waere, dann die Knoepfe — alles in EINER Spalte, die layoutRowMeta() bei
+        // Platznot als eigene Zeile unter den Inhalt schiebt.
+        `<span class="mail-side"><span class="mail-chips">` +
+          chips +
+          renderAvatarStack(p.userId ? [String(p.userId)] : []) +
+        `</span>` +
+        `<button class="row-btn" data-mail="drop" aria-label="${translate('Discard')}" title="${translate('Discard')}"><i class="fa-light fa-xmark"></i></button>` +
+        `<button class="row-btn accent" data-mail="add" aria-label="${translate('Add')}" title="${translate('Add')}"><i class="fa-light fa-plus"></i></button>` +
+        `</span>` +
+        `</div>` +
       `</div>`;
     }).join('');
-    return `<div class="mail-card">` +
-      `<div class="mail-head">${kopf}` +
+    return `<div class="mail-head" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
         `<div class="mail-who">` +
-          `<div class="mail-subject">${escapeHtml(String(p.subject || translate('E-mail')))}</div>` +
+          `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
           `<div class="mail-meta">${escapeHtml(von)}</div>` +
         `</div>` +
-        `<button class="icon-btn" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
+        `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
       `</div>` +
-      `<div class="mail-rows">${zeilen}</div>` +
-    `</div>`;
-  }).join(''));
+      zeilen;
+  }).join('');
+
+  // renderRows liefert NUR die neu erzeugten Knoten: die behalten ihre Gesten nicht,
+  // alle uebrigen schon — samt laufender Wischgeste. Bei unveraendertem Markup kommt
+  // false, dann wird gar nicht gebunden (ein zweiter Satz Handler wuerde jede
+  // Wischgeste doppelt ausfuehren).
+  const frische = renderRows(area, umschalter + karten);
+  if (frische !== false) bindMailRows(frische);
+
+  // Messen wie am Ende von renderTodos: erst nach dem Zeichnen steht die Breite.
+  ensureTodoMetaObserver();
+  requestAnimationFrame(layoutTodoMeta);
 }
 
 /** Eintrag lokal entfernen und neu zeichnen — die Liste kommt sonst erst beim naechsten Laden. */
@@ -5010,6 +5379,14 @@ function mailAiBind(area) {
     const knopf = e.target.closest('[data-mail]');
     if (!knopf) return;
     const art = knopf.getAttribute('data-mail');
+    // Der Umschalter gehoert dem Bereich, in dem er sitzt — die Aufgaben duerfen
+    // offen stehen, waehrend die Termine eingeklappt bleiben.
+    if (art === 'toggle') {
+      const sorte = area.id === 'calAiArea' ? 'event' : 'task';
+      mailOpen[sorte] = !mailOpen[sorte];
+      renderMailAi(sorte);
+      return;
+    }
     if (art === 'dismiss') {
       const id = knopf.getAttribute('data-id') || '';
       aiPost('/mail/proposals', { action: 'dismiss', id: id });
@@ -5023,12 +5400,28 @@ function mailAiBind(area) {
     const id = zeile.getAttribute('data-id') || '';
     const i = zeile.getAttribute('data-i') || '';
     if (art === 'drop') {
-      aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
-      mailForget(id, i);
+      mailDrop(id, i);
       return;
     }
     if (art !== 'add') return;
+    mailAccept(id, i);
+  });
+}
 
+/** Vorschlag verwerfen — derselbe Weg fuer den ✕-Knopf und das Wischen nach links. */
+function mailDrop(id, i) {
+  aiPost('/mail/proposals', { action: 'taken', id: id, i: Number(i) });
+  mailForget(id, i);
+}
+
+/**
+ * Vorschlag uebernehmen — fuer den +-Knopf und das Wischen nach rechts.
+ *
+ * Angelegt wird NICHT sofort: der Vorschlag kommt von einem Sprachmodell und ist
+ * ein Entwurf. Der uebliche Dialog oeffnet vorbelegt, damit vor dem Speichern noch
+ * etwas geaendert werden kann. Erst nach dem Speichern gilt er als erledigt.
+ */
+function mailAccept(id, i) {
     const vorschlag = mailProposals.find(p => String(p.id) === String(id));
     const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
     if (!eintrag) return;
@@ -5060,6 +5453,33 @@ function mailAiBind(area) {
     // eine Bearbeitung, hier ist es ein Entwurf.
     document.getElementById('todoOverlayTitle').textContent = translate('New task');
     todoCtx.proposal = { id: id, i: i };
+}
+
+/**
+ * Wischgesten der Vorschlagszeilen — dieselbe Geste wie in den Listen: links
+ * verwerfen, rechts uebernehmen. Der Vorschlag ist dabei nur ein Zettel: Wischen
+ * nach links loescht keinen Termin und keine Aufgabe, es raeumt den Zettel weg.
+ * Deshalb ohne Rueckfrage, anders als beim Loeschen eines echten Termins.
+ */
+function bindMailRows(knoten) {
+  knoten.forEach(behaelter => {
+    if (!behaelter.classList || !behaelter.classList.contains('mail-item')) return;  // Kopf/Umschalter
+    const zeile = behaelter.querySelector('.mail-row');
+    if (!zeile) return;
+    const id = zeile.getAttribute('data-id') || '';
+    const i  = zeile.getAttribute('data-i') || '';
+    bindCardSwipe(
+      behaelter,
+      '.mail-row',
+      () => mailDrop(id, i),
+      () => {
+        // Nach rechts oeffnet den Dialog: die Zeile bleibt stehen, bis wirklich
+        // gespeichert ist — sonst waere sie weg und der Entwurf noch offen.
+        zeile.style.transform = '';
+        behaelter.classList.remove('dragging-right');
+        mailAccept(id, i);
+      }
+    );
   });
 }
 
@@ -5197,10 +5617,23 @@ function renderCalendar() {
   // darueber — wie die erkannten Aufgaben ueber der Aufgabenliste. Erst nach dem
   // Uebernehmen sind sie echte Kalendereintraege und erscheinen unten.
   renderMailAi('event');
-  const alle = calEvents.slice();
+
+  // Avatar-Pille zeichnen, BEVOR gefiltert wird: der Filter kommt aus ihr, und
+  // ohne Nutzer oder mit abgeschaltetem Schalter leert sie die Auswahl selbst.
+  renderCalMembers();
+  let alle = calEvents.slice();
+  const gefiltert = calMemberIds.size > 0;
+  if (gefiltert) {
+    alle = alle.filter(e => Array.isArray(e.members) && e.members.some(mid => calMemberIds.has(mid)));
+  }
 
   if (alle.length === 0) {
-    renderInto(bereich, `<div class="empty-state"><i class="fa-light fa-calendar-days"></i>${translate('No appointments in this period')}</div>`);
+    const meldung = gefiltert
+      ? translate('No matches for this filter.')
+      : translate('No appointments in this period');
+    // Auch der Leerzustand ueber renderRows, damit derselbe Knotenabgleich gilt und
+    // nicht zwei Renderwege denselben Behaelter mit unterschiedlichen Annahmen fuellen.
+    renderRows(bereich, `<div class="empty-state" data-key="leer"><i class="fa-light fa-calendar-days"></i>${meldung}</div>`);
     return;
   }
 
@@ -5215,7 +5648,20 @@ function renderCalendar() {
   });
   const heuteKey = calDayKey(Math.floor(Date.now() / 1000));
 
-  renderInto(bereich, tage.map(k => {
+  // Bedienbar ist nur, was der Anbieter auch schreiben laesst: in einem
+  // abonnierten Fremdkalender waere jede Wischgeste ein Versprechen, das der
+  // Anbieter danach bricht.
+  const schreibbar = {};
+  calCalendars.forEach(c => { schreibbar[String(c.id)] = c.canWrite === true; });
+  const knopfSchalter = rowButtonFlags();
+  const zeigeBearbeiten = knopfSchalter.showEditButton === true;
+  const zeigeLoeschen   = knopfSchalter.showDeleteButton === true;
+  // Die Info-Abzeichen folgen denselben appweiten Schaltern wie bei den Aufgaben —
+  // wer die Glocke dort nicht sehen will, will sie hier auch nicht.
+  const zeigeWiederholung = knopfSchalter.showRecurrenceBadge !== false;
+  const zeigeGlocke       = knopfSchalter.showNotificationBadge !== false;
+
+  const frische = renderRows(bereich, tage.map(k => {
     const liste = nachTag[k];
     const ts = liste[0].start;
     const zeilen = liste.map(e => {
@@ -5226,22 +5672,129 @@ function renderCalendar() {
       const unten = [e.location, e.info].filter(Boolean).join(' · ');
       // Zugewiesene Mitglieder als Avatare, wie in der Aufgabenzeile.
       const wer = Array.isArray(e.members) && e.members.length ? renderAvatarStack(e.members) : '';
-      return `<div class="cal-event">` +
-        `<span class="cal-bar"${farbe ? ` style="background:${escapeHtml(farbe)}"` : ''}></span>` +
-        `<span class="cal-when">${escapeHtml(wann)}</span>` +
-        `<span class="cal-body">` +
-          `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
-          (unten ? `<div class="cal-sub">${escapeHtml(unten)}</div>` : '') +
-        `</span>` +
-        (wer ? `<span class="cal-who">${wer}</span>` : '') +
+      // Wiederholung und Erinnerung als Abzeichen wie in der Aufgabenzeile
+      // (.badge.attr, dieselben Symbole). Beim Termin sagt das Wiederholungs-
+      // Abzeichen bewusst „Teil einer Serie" und nicht den Takt: den kennt nur der
+      // Serienkopf, das einzelne Vorkommen traegt die Regel nicht.
+      const vorlauf = Number(e.reminder);
+      const abzeichen =
+        (zeigeWiederholung && e.recurring === true
+          ? `<span class="badge attr" title="${escapeHtml(translate('Part of a series'))}"><i class="fa-light fa-repeat"></i></span>` : '') +
+        (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
+          ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
+      const darf = schreibbar[String(e.calendarID)] === true;
+      // Die Wisch-Untergruende nur dort, wo auch gewischt werden kann — sonst
+      // blitzte beim Ziehen ein rotes Feld auf, das nichts tut.
+      const unter = darf
+        ? `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+          `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>`
+        : '';
+      const knoepfe = !darf ? '' :
+        (zeigeBearbeiten ? `<button class="row-btn" data-cal-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
+        (zeigeLoeschen ? `<button class="row-btn destructive" data-cal-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '');
+      return `<div class="cal-card${darf ? '' : ' cal-readonly'}" data-cal="${escapeHtml(String(e.calendarID))}" data-id="${escapeHtml(String(e.id || ''))}">` +
+        unter +
+        `<div class="cal-event">` +
+          `<span class="cal-bar"${farbe ? ` style="background:${escapeHtml(farbe)}"` : ''}></span>` +
+          // Uhrzeit ueber dem Titel, nicht in einer eigenen Spalte davor: „ganztaegig"
+          // sprengte die 44px-Spalte, und die Zeile liest sich von oben nach unten
+          // wie eine Aufgabe — wann, was, wo.
+          `<span class="cal-body">` +
+            `<div class="cal-when">${escapeHtml(wann)}</div>` +
+            `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
+            (unten ? `<div class="cal-sub">${escapeHtml(unten)}</div>` : '') +
+          `</span>` +
+          // Merkmale, Zustaendigkeit und Knoepfe in EINER Spalte — wie in der
+          // Aufgaben- und der Vorschlagszeile. layoutRowMeta() schiebt sie bei
+          // Platznot als eigene Zeile unter den Inhalt.
+          `<span class="cal-side"><span class="cal-chips">${abzeichen}${wer}</span>${knoepfe}</span>` +
+        `</div>` +
       `</div>`;
     }).join('');
-    return `<div class="cal-day${k === heuteKey ? ' is-today' : ''}">` +
-      `<div class="cal-day-head"><span class="cal-weekday">${escapeHtml(calDayLabel(ts))}</span>` +
+    // Ueberschrift und Zeilen als GESCHWISTER, mit Schluessel je Tag — so behaelt
+    // renderRows() die unveraenderten Knoten (siehe CSS-Kommentar bei .cal-day-head).
+    return `<div class="cal-day-head${k === heuteKey ? ' is-today' : ''}" data-key="tag:${escapeHtml(k)}">` +
+      `<span class="cal-weekday">${escapeHtml(calDayLabel(ts))}</span>` +
       `<span>${escapeHtml(calDateLabel(ts))}</span></div>` +
-      `<div class="cal-events">${zeilen}</div>` +
-    `</div>`;
+      zeilen;
   }).join(''));
+
+  // renderRows liefert NUR die neu erzeugten Knoten. Genau die brauchen eine
+  // Bindung — die uebrigen behalten ihre, samt laufender Wischgeste.
+  if (frische !== false) bindCalRows(frische);
+
+  // Messen wie am Ende von renderTodos und renderMailAi.
+  ensureTodoMetaObserver();
+  requestAnimationFrame(layoutTodoMeta);
+}
+
+/**
+ * Wischgesten, Zeilenknoepfe und Tipp der Agenda — dieselben wie bei den Aufgaben:
+ * links loeschen, rechts bearbeiten (bindCardSwipe), Tipp auf die Zeile oeffnet den
+ * Editor. Der Stift-Knopf ist damit ein zusaetzlicher Weg, kein Ersatz.
+ *
+ * Ein Unterschied bleibt: geloescht wird erst nach Rueckfrage. Ein Termin liegt
+ * beim Anbieter und ist fuer alle sichtbar, die den Kalender teilen — ein
+ * Fehlwischer ist dort nicht zurueckzuholen. Deshalb `dissolve: false` und der
+ * Weg ueber showConfirm, wie beim Loeschen einer Favoritenliste.
+ */
+function bindCalRows(knoten) {
+  knoten.forEach(card => {
+    if (!card.classList || !card.classList.contains('cal-card')) return;   // Tagesueberschrift
+    if (card.classList.contains('cal-readonly')) return;
+    const zeile = card.querySelector('.cal-event');
+    const finde = () => calEvents.find(e => String(e.id) === String(card.dataset.id));
+
+    const loeschen = () => {
+      // Slide-out zuruecknehmen, damit die Zeile bei Abbruch stehen bleibt.
+      card.classList.remove('is-deleting'); delete card.dataset.animating;
+      if (zeile) zeile.style.transform = '';
+      restoreCard(card);
+      const e = finde();
+      if (!e) return;
+      showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
+    };
+    const bearbeiten = () => { const e = finde(); if (e) openCalEditor(e, null, e); };
+
+    bindCardSwipe(card, '.cal-event', loeschen, bearbeiten, { dissolve: false });
+
+    // Tipp auf die Zeile — wie bei einer Aufgabe. Nach einer Wischgeste NICHT:
+    // bindCardSwipe setzt dafuer 60 ms lang dataset.swiped, sonst oeffnete jedes
+    // Wischen zum Bearbeiten den Dialog zweimal.
+    if (zeile) zeile.addEventListener('click', (ev) => {
+      if (card.dataset.swiped === '1') return;
+      if (ev.target.closest('button')) return;
+      bearbeiten();
+    });
+
+    const bBtn = card.querySelector('[data-cal-edit]');
+    if (bBtn) bBtn.addEventListener('click', (ev) => { ev.stopPropagation(); bearbeiten(); });
+    const lBtn = card.querySelector('[data-cal-del]');
+    if (lBtn) lBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const e = finde();
+      if (e) showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
+    });
+  });
+}
+
+/** Termin beim Anbieter loeschen. Die Rueckfrage ist an dieser Stelle bereits gefallen. */
+function calDelete(e) {
+  aiPost('/calendar', {
+    action: 'delete',
+    calendarID: e.calendarID,
+    event: { id: e.id, uid: e.uid, startTimestamp: e.start }
+  }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) {
+      showToast((j && j.error && j.error.message) || translate('The calendar rejected the deletion.'));
+      return;
+    }
+    showToast(translate('Appointment deleted'));
+    // Der Anbieter ist die Wahrheit: neu holen statt lokal zu raten.
+    calEvents = [];
+    loadCalendarEvents();
+  }).catch(() => showToast(translate('The calendar rejected the deletion.')));
 }
 
 // ── Termin anlegen ───────────────────────────────────────────────────────────
@@ -5264,18 +5817,94 @@ function calLocalInput(datum, zeit, ganztags) {
   return m[0] + 'T' + (t ? t[0] : '09:00');
 }
 
-/** @param entwurf {title,info,due,time,end,allDay} — auch von Hand aufrufbar (entwurf=null) */
-function openCalEditor(entwurf, vorschlag) {
+/**
+ * „Fwd: WG: Halbjahresplaner" → „Halbjahresplaner".
+ *
+ * Gegenstueck zu MailStripReplyPrefix im Gateway, hier fuer den AEUSSEREN Betreff:
+ * er wird gebraucht, wenn der zitierte Kopf keinen Betreff hergab oder der Vorschlag
+ * noch aus der Zeit vor `origin` stammt.
+ */
+function mailPlainSubject(betreff) {
+  let text = String(betreff || '').trim();
+  let vorher = '';
+  while (vorher !== text) {
+    vorher = text;
+    text = text.replace(/^\s*(?:fwd?|wg|aw|re|antw)\s*:\s*/i, '').trim();
+  }
+  return text;
+}
+
+/**
+ * Wiederholung eines Vorschlags in Worte fassen: „wöchentlich · 15 Termine" bzw.
+ * „wöchentlich · bis 03.12.2026". Gibt '' zurueck, wenn keine gueltige Reihe
+ * vorliegt — dieselben drei Takte, die das Gateway kennt (CalSeriesRule).
+ */
+function calSeriesText(r) {
+  if (!r || typeof r !== 'object') return '';
+  const takt = { weekly: 'weekly', biweekly: 'biweekly', monthly: 'monthly' }[String(r.freq || '')];
+  if (!takt) return '';
+  const teile = [translate(takt)];
+  const anzahl = parseInt(r.count) || 0;
+  if (anzahl > 1) {
+    teile.push(translate('%1 appointments').replace('%1', String(anzahl)));
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(r.until || ''))) {
+    const m = String(r.until).split('-');
+    teile.push(translate('until %1').replace('%1', `${m[2]}.${m[1]}.${m[0]}`));
+  }
+  return teile.join(' · ');
+}
+
+/**
+ * Titel des Glocken-Abzeichens. Die Vorlaufzeit steht in der Ablage des Gateways,
+ * also kann hier stehen WANN erinnert wird und nicht bloss DASS erinnert wird.
+ */
+function calReminderTitle(sekunden) {
+  const n = Number(sekunden);
+  if (!LEAD_TIMES.includes(n)) return translate('Reminder');
+  // Vorlauf 0 heisst bei einer Aufgabe „zur Faelligkeit" — ein Termin hat keine
+  // Frist, sondern findet statt. Deshalb hier eigene Worte statt leadTimeLabel().
+  const wann = n === 0 ? translate('At the appointment') : leadTimeLabel(n);
+  return translate('Reminder') + ': ' + wann;
+}
+
+/** Unix-Zeit in den Wert eines date- bzw. datetime-local-Feldes (Ortszeit). */
+function calInputFromTs(ts, ganztags) {
+  const d = new Date(ts * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  const tag = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return ganztags ? tag : `${tag}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * @param entwurf {title,info,due,time,end,allDay} — auch von Hand aufrufbar (entwurf=null)
+ * @param vorschlag {id,i}|null — Mail-Vorschlag, der nach dem Speichern erledigt ist
+ * @param bestand   Termin aus calEvents; gesetzt heisst AENDERN statt Anlegen
+ */
+function openCalEditor(entwurf, vorschlag, bestand) {
   const schreibbar = calWritable();
   if (schreibbar.length === 0) {
     showToast(translate('No writable calendar available.'));
     return;
   }
-  calCtx = { proposal: vorschlag || null };
-  const e = entwurf || {};
+  calCtx = {
+    proposal: vorschlag || null,
+    // Reihe nur beim Anlegen aus einem Vorschlag: ein bestehender Termin ist immer
+    // ein einzelnes Vorkommen (gemessen — Aendern trifft nie die ganze Serie).
+    recurrence: (!bestand && entwurf && entwurf.recurrence) ? entwurf.recurrence : null,
+    // Erkennungsfelder festhalten: die Liste kann sich waehrend des Dialogs neu
+    // laden, der Termin unter der Zeile bleibt aber derselbe.
+    edit: bestand ? {
+      calendarID: bestand.calendarID,
+      id: String(bestand.id || ''),
+      uid: String(bestand.uid || ''),
+      startTimestamp: bestand.start || 0
+    } : null
+  };
+  const e = bestand || entwurf || {};
   const ganztags = e.allDay === true;
 
-  document.getElementById('calEditTitle').textContent = translate('New appointment');
+  document.getElementById('calEditTitle').textContent =
+    translate(bestand ? 'Edit appointment' : 'New appointment');
   document.getElementById('ceTitle').value = String(e.title || '');
   document.getElementById('ceInfo').value = String(e.info || '');
   document.getElementById('ceLocation').value = String(e.location || '');
@@ -5284,29 +5913,69 @@ function openCalEditor(entwurf, vorschlag) {
   const auswahl = document.getElementById('ceCalendar');
   auswahl.innerHTML = schreibbar.map(c =>
     `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`).join('');
-  // Zuletzt benutzter Kalender, falls er noch beschreibbar ist.
-  const gemerkt = String(ls.get('symdo.calWrite') || '');
-  if (schreibbar.some(c => String(c.id) === gemerkt)) auswahl.value = gemerkt;
+  if (bestand) {
+    // Beim Aendern steht der Kalender fest: OpenCalendar aendert innerhalb SEINER
+    // Instanz, ein Umhaengen waere loeschen und neu anlegen — das ist ein anderer
+    // Vorgang und soll nicht als Nebenwirkung eines Speichern passieren.
+    auswahl.value = String(bestand.calendarID);
+    auswahl.disabled = true;
+  } else {
+    auswahl.disabled = false;
+    // Zuletzt benutzter Kalender, falls er noch beschreibbar ist.
+    const gemerkt = String(ls.get('symdo.calWrite') || '');
+    if (schreibbar.some(c => String(c.id) === gemerkt)) auswahl.value = gemerkt;
+  }
 
   // Mitglieder: aus dem Vorschlag das Mitglied der Empfaengeradresse, sonst der
-  // Standardnutzer — genau wie bei einer Aufgabe.
+  // Standardnutzer — genau wie bei einer Aufgabe. Beim Aendern gilt, was am Termin
+  // steht, auch wenn das niemand ist.
   ceAssigned = Array.isArray(e.members) && e.members.length ? e.members.slice()
-    : (e.userId ? [e.userId] : (currentUserID() ? [currentUserID()] : []));
+    : (bestand ? [] : (e.userId ? [e.userId] : (currentUserID() ? [currentUserID()] : [])));
   renderAssignList('ceAssignList', ceAssigned);
 
   // Erinnerung: bei einem Termin mit Uhrzeit sinnvoll voreingestellt, ganztaegig
-  // ausgeschaltet — eine Erinnerung „30 Minuten vor 00:00" hilft niemandem.
+  // ausgeschaltet — eine Erinnerung „30 Minuten vor 00:00" hilft niemandem. Beim
+  // Aendern kommt die eingestellte Vorlaufzeit aus der Ablage des Gateways mit.
   const lead = document.getElementById('ceLeadTime');
   lead.innerHTML = LEAD_TIMES.map(x => `<option value="${x}">${leadTimeLabel(x)}</option>`).join('');
-  lead.value = '1800';
-  document.getElementById('ceNotify').checked = false;
+  const vorlauf = bestand ? Number(bestand.reminder) : -1;
+  const hatVorlauf = Number.isFinite(vorlauf) && vorlauf >= 0;
+  lead.value = String(hatVorlauf && LEAD_TIMES.includes(vorlauf) ? vorlauf : 1800);
+  document.getElementById('ceNotify').checked = hatVorlauf;
   calSyncNotify();
 
   calSyncEditor(ganztags);
-  document.getElementById('ceStart').value = calLocalInput(e.due, e.time, ganztags);
-  // Ende nur, wenn der Vorschlag eines nennt — sonst leer lassen und OpenCalendar
-  // die Vorgabe waehlen (eine Stunde bzw. ein Tag).
-  document.getElementById('ceEnd').value = e.end ? calLocalInput(e.end, null, ganztags) : '';
+  if (bestand) {
+    document.getElementById('ceStart').value = calInputFromTs(bestand.start, ganztags);
+    // Ganztaegig ist das Ende beim Anbieter EXKLUSIV (siehe CalCreateEvent) — im
+    // Feld muss der letzte Tag stehen, sonst waechst der Termin bei jedem
+    // Speichern um einen Tag.
+    const ende = ganztags ? bestand.end - 86400 : bestand.end;
+    document.getElementById('ceEnd').value =
+      ende > bestand.start ? calInputFromTs(ende, ganztags) : calInputFromTs(bestand.start, ganztags);
+  } else {
+    document.getElementById('ceStart').value = calLocalInput(e.due, e.time, ganztags);
+    // Ende nur, wenn der Vorschlag eines nennt — sonst leer lassen und OpenCalendar
+    // die Vorgabe waehlen (eine Stunde bzw. ein Tag).
+    document.getElementById('ceEnd').value = e.end ? calLocalInput(e.end, null, ganztags) : '';
+  }
+
+  // Reihe sichtbar machen, damit vor dem Speichern klar ist, dass daraus mehrere
+  // Termine werden — und wie viele.
+  const reiheText = calSeriesText(calCtx.recurrence);
+  const reiheZeile = document.getElementById('ceSeriesRow');
+  if (reiheZeile) {
+    reiheZeile.style.display = reiheText ? '' : 'none';
+    const feld = document.getElementById('ceSeries');
+    if (feld) feld.textContent = reiheText;
+  }
+  // Bei einer Reihe ist das Ende-Feld ohne Bedeutung: jeder Termin der Reihe
+  // bekommt die Dauer des Anbieters, ein Ende in drei Monaten waere der alte Klotz.
+  const endeZeile = document.getElementById('ceEnd');
+  if (endeZeile && endeZeile.parentElement) {
+    endeZeile.parentElement.style.display = reiheText ? 'none' : '';
+    if (reiheText) endeZeile.value = '';
+  }
   openOverlay('calEditOverlay');
 }
 
@@ -5338,19 +6007,35 @@ function saveCalEditor() {
   const ende = document.getElementById('ceEnd').value;
   if (!start) { showToast(translate('The appointment start is invalid.')); return; }
 
+  // Aendern oder anlegen: derselbe Dialog, dieselben Pruefungen, nur die Aktion und
+  // die Erkennungsfelder unterscheiden sich.
+  const bestand = calCtx.edit;
+  const ereignis = {
+    title: titel, allDay: ganztags, start: start, end: ende,
+    location: document.getElementById('ceLocation').value.trim(),
+    info: document.getElementById('ceInfo').value.trim(),
+    members: ceAssigned.slice(),
+    // -1 = keine Erinnerung. 0 ist eine gueltige Vorlaufzeit („zum Termin").
+    reminder: document.getElementById('ceNotify').checked
+      ? (parseInt(document.getElementById('ceLeadTime').value) || 0) : -1
+  };
+  if (bestand) {
+    ereignis.id = bestand.id;
+    ereignis.uid = bestand.uid;
+    ereignis.startTimestamp = bestand.startTimestamp;
+  } else if (calCtx.recurrence) {
+    // Das Gateway rechnet daraus die Einzeltermine (CalExpandSeries) und legt sie
+    // der Reihe nach an. Ein Ende geht bei einer Reihe NICHT mit.
+    ereignis.recurrence = calCtx.recurrence;
+    delete ereignis.end;
+  }
+
   const knopf = document.getElementById('btnCalEditSave');
   knopf.disabled = true;
   aiPost('/calendar', {
-    action: 'create', calendarID: kalenderID,
-    event: {
-      title: titel, allDay: ganztags, start: start, end: ende,
-      location: document.getElementById('ceLocation').value.trim(),
-      info: document.getElementById('ceInfo').value.trim(),
-      members: ceAssigned.slice(),
-      // -1 = keine Erinnerung. 0 ist eine gueltige Vorlaufzeit („zum Termin").
-      reminder: document.getElementById('ceNotify').checked
-        ? (parseInt(document.getElementById('ceLeadTime').value) || 0) : -1
-    }
+    action: bestand ? 'update' : 'create',
+    calendarID: bestand ? bestand.calendarID : kalenderID,
+    event: ereignis
   }).then(r => {
     knopf.disabled = false;
     const j = r && r.json;
@@ -5360,15 +6045,28 @@ function saveCalEditor() {
       showToast((j && j.error && j.error.message) || translate('The calendar rejected the appointment.'));
       return;
     }
-    ls.set('symdo.calWrite', String(kalenderID));
-    if (calCtx && calCtx.proposal) {
-      aiPost('/mail/proposals', { action: 'taken', id: calCtx.proposal.id, i: Number(calCtx.proposal.i) });
-      mailForget(calCtx.proposal.id, calCtx.proposal.i);
+    if (!bestand) {
+      ls.set('symdo.calWrite', String(kalenderID));
+      if (calCtx && calCtx.proposal) {
+        aiPost('/mail/proposals', { action: 'taken', id: calCtx.proposal.id, i: Number(calCtx.proposal.i) });
+        mailForget(calCtx.proposal.id, calCtx.proposal.i);
+      }
     }
     closeOverlay('calEditOverlay');
     calCtx = null;
-    showToast(translate('Appointment added'));
-    // Der neue Eintrag kommt erst nach dem naechsten Abruf aus OpenCalendar.
+    // Bei einer Reihe zaehlt die Rueckmeldung: 15 Termine sind ein anderes Ergebnis
+    // als einer. Blieb es bei einem Teil, sagt der Hinweis das ausdruecklich — sonst
+    // haette niemand Anlass, im Kalender nachzuzaehlen.
+    const angelegt = parseInt(j.created) || 0;
+    if (j.partial) {
+      showToast(translate('Only %1 of %2 appointments were created.')
+        .replace('%1', String(angelegt)).replace('%2', String(parseInt(j.planned) || angelegt)));
+    } else if (angelegt > 1) {
+      showToast(translate('%1 appointments added').replace('%1', String(angelegt)));
+    } else {
+      showToast(translate(bestand ? 'Appointment updated' : 'Appointment added'));
+    }
+    // Der neue Stand kommt erst nach dem naechsten Abruf aus OpenCalendar.
     calEvents = [];
     loadCalendarEvents();
   }).catch(() => { knopf.disabled = false; });
@@ -5393,6 +6091,11 @@ function initCalEditor() {
   t('calEditAssignLabel', 'Assigned to');
   t('calEditNotifyLabel', 'Reminder');
   t('calEditLeadLabel', 'Remind');
+  t('calEditSeriesLabel', 'Recurrence');
+  // Beschriftet wie im ToDo-Editor („Abbrechen"/„Speichern") statt nur ✕ und ✓ —
+  // dieselben Schluessel, damit beide Dialoge nicht auseinanderlaufen.
+  t('btnCalEditCancel', 'Cancel');
+  t('btnCalEditSave', 'Save');
 }
 
 function initCalendar() {
@@ -5590,34 +6293,55 @@ let todoMetaLateTimer = 0;
  * Attribut-, keine childList-Änderungen — also keine Rückkopplung.
  */
 function ensureTodoMetaLateObserver() {
-  const area = document.getElementById('todoListArea');
-  if (!area) return;
+  const bereiche = META_BEREICHE
+    .map(cfg => document.getElementById(cfg.area))
+    .filter(Boolean);
+  if (bereiche.length === 0) return;
   if (!todoMetaMO && typeof MutationObserver !== 'undefined') {
+    // /icons.js liefert die <svg> NACHTRAEGLICH — vorher sind die Icon-Chips fast
+    // leer und die Messung sieht eine zu schmale Zeile. Das gilt in der
+    // Vorschlagsliste genauso wie in der Aufgabenliste.
     todoMetaMO = new MutationObserver(() => {
       clearTimeout(todoMetaLateTimer);
       todoMetaLateTimer = setTimeout(layoutTodoMeta, 60);
     });
-    todoMetaMO.observe(area, { childList: true, subtree: true });
+    bereiche.forEach(a => todoMetaMO.observe(a, { childList: true, subtree: true }));
   }
   if (document.fonts && document.fonts.ready && !ensureTodoMetaLateObserver.fontsHooked) {
     ensureTodoMetaLateObserver.fontsHooked = true;
     document.fonts.ready.then(() => layoutTodoMeta()).catch(() => {});
   }
 }
+/**
+ * Die Bereiche, deren Chip-Zeilen gemessen werden. Aufgabenliste und
+ * Vorschlagsbaender teilen sich die Logik UND die CSS-Regeln — eine Zeile, die in
+ * beiden Listen gleich aussehen soll, darf nicht zwei Messungen haben.
+ */
+const META_BEREICHE = [
+  { area: 'todoListArea', card: '.todo-card', content: '.todo-content', side: '.todo-side', meta: '.todo-meta' },
+  { area: 'mailAiArea',   card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'calAiArea',    card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'calArea',      card: '.cal-card',  content: '.cal-event',    side: '.cal-side',  meta: '.cal-chips'  },
+];
+
 function layoutTodoMeta() {
-  const area = document.getElementById('todoListArea');
+  META_BEREICHE.forEach(layoutRowMeta);
+}
+
+function layoutRowMeta(cfg) {
+  const area = document.getElementById(cfg.area);
   if (!area) return;
-  todoMetaLastW = area.clientWidth;
-  const cards = area.querySelectorAll('.todo-card');
+  if (cfg.area === 'todoListArea') todoMetaLastW = area.clientWidth;
+  const cards = area.querySelectorAll(cfg.card);
   // Erst überall zurücksetzen, damit die natürliche (nicht verdichtete)
   // Chip-Breite gemessen wird, dann pro Zeile stufenweise entscheiden.
   cards.forEach(card => {
-    const c = card.querySelector('.todo-content');
+    const c = card.querySelector(cfg.content);
     if (c) c.classList.remove('stacked', 'meta-tight', 'meta-tighter');
   });
   cards.forEach(card => {
-    const c = card.querySelector('.todo-content');
-    const m = card.querySelector('.todo-side') || card.querySelector('.todo-meta');
+    const c = card.querySelector(cfg.content);
+    const m = card.querySelector(cfg.side) || card.querySelector(cfg.meta);
     if (!c || !m) return;
     // Unveränderte Grenze: belegt die Chip-Zeile mehr als die halbe Kartenbreite,
     // rutscht sie als eigene Zeile unter den Inhalt.
@@ -5636,7 +6360,7 @@ function layoutTodoMeta() {
     // Breite — sie werden höher. „Platz reicht nicht" heißt damit genau: die
     // Chips bräuchten eine zweite Zeile. Das misst den tatsächlichen Zustand und
     // hängt nicht an Innenabständen, Schriftmetrik oder Flex-Feinheiten.
-    const meta = c.querySelector('.todo-meta');
+    const meta = c.querySelector(cfg.meta);
     const wraps = () => {
       if (!meta || !meta.firstElementChild) return false;
       let tallest = 0;
@@ -5657,16 +6381,23 @@ function layoutTodoMeta() {
 function ensureTodoMetaObserver() {
   ensureTodoMetaLateObserver();
   if (todoMetaRO || typeof ResizeObserver === 'undefined') return;
-  const area = document.getElementById('todoListArea');
-  if (!area) return;
-  // Auf Breitenänderung reagieren (Kachel-Resize, Sichtbarwerden beim Tab-
-  // Wechsel). Höhenänderungen durchs Stapeln selbst ignorieren → keine Schleife.
+  // Alle Meta-Bereiche beobachten, nicht nur die Aufgabenliste: das Vorschlagsband
+  // im Kalender-Tab aendert seine Breite unabhaengig davon (anderer Tab, anderes
+  // Kachelmass) und muesste sonst auf den naechsten Render warten.
+  const bereiche = META_BEREICHE
+    .map(cfg => document.getElementById(cfg.area))
+    .filter(Boolean);
+  if (bereiche.length === 0) return;
   todoMetaRO = new ResizeObserver(() => {
-    const a = document.getElementById('todoListArea');
-    if (!a || a.clientWidth === todoMetaLastW) return;
-    layoutTodoMeta();
+    // Nur bei Breitenaenderung neu rechnen. Hoehenaenderungen entstehen durch das
+    // Stapeln selbst — darauf zu reagieren waere eine Schleife.
+    let breiter = false;
+    for (const a of bereiche) {
+      if (a.clientWidth !== a._metaLastW) { a._metaLastW = a.clientWidth; breiter = true; }
+    }
+    if (breiter) layoutTodoMeta();
   });
-  todoMetaRO.observe(area);
+  bereiche.forEach(a => { a._metaLastW = a.clientWidth; todoMetaRO.observe(a); });
 }
 
 function todoRowHtml(it, draggable, badges, showEdit, showDelete) {
