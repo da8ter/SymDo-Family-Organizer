@@ -979,6 +979,10 @@ html[data-symdo-theme="dark"] .member-bar {
   border-radius: var(--chip-r);
   padding: 0 8px 8px;
 }
+/* Die graue Flaeche blendet weich ein und aus; die HOEHE gleitet per Skript
+   (mailToggleAnimieren), weil „auto" nicht animierbar ist und der Inhalt beim
+   Zuklappen erst NACH dem Schrumpfen verschwinden darf. */
+.mail-ai { transition: background-color .28s ease; }
 /* Auf der Flaeche traegt die Zeile den Seitengrundton statt --row: --row (~8 %
    Inhaltston) laege fast auf dem Grau der Flaeche (9 %) und die Karten
    verschwaenden darin. Deckend bleibt sie (var(--bg) = card-color), sonst
@@ -5338,6 +5342,57 @@ function renderMailAi(sorte) {
   requestAnimationFrame(layoutTodoMeta);
 }
 
+/**
+ * Auf- und Zuklappen des Vorschlagsbands gleiten lassen.
+ *
+ * „height: auto" ist nicht animierbar, deshalb misst das Skript: Aufklappen
+ * zeichnet ERST neu und gleitet dann von der alten zur neuen Hoehe (der Inhalt
+ * wird aufgedeckt). Zuklappen schrumpft ERST auf die Chip-Hoehe und zeichnet
+ * dann — sonst verschwaenden die Zeilen schlagartig, bevor sich die Flaeche
+ * schliesst. Bei reduzierter Bewegung schaltet es ohne Uebergang um.
+ */
+function mailToggleAnimieren(area, umschalten, schliesst) {
+  // Waehrend einer laufenden Animation hart umschalten: zwei ueberlappende
+  // Hoehen-Uebergaenge wuerden sich die Inline-Stile zerschreiben.
+  if (!area || area._mailAnim === true || mbReduceMotion()) { umschalten(); return; }
+  const von = area.offsetHeight;
+  let getan = false;
+  let notAus = 0;
+  const gleiten = (nach, danach) => {
+    if (nach === von) { if (danach) danach(); return; }
+    area._mailAnim = true;
+    area.style.height = von + 'px';
+    area.style.overflow = 'hidden';
+    void area.offsetHeight; // Reflow — erst dadurch wird die Starthoehe wirksam
+    area.style.transition = 'height .28s ease';
+    area.style.height = nach + 'px';
+    const fertig = (e) => {
+      // transitionend blubbert (Chip, Chevron) und feuert je Eigenschaft — nur
+      // die eigene Hoehe zaehlt. Ohne e kommt der Aufruf vom Sicherheitsnetz.
+      if (e && (e.target !== area || e.propertyName !== 'height')) return;
+      if (getan) return;
+      getan = true;
+      clearTimeout(notAus);
+      area.removeEventListener('transitionend', fertig);
+      area._mailAnim = false;
+      if (danach) danach();
+      area.style.height = '';
+      area.style.overflow = '';
+      area.style.transition = '';
+    };
+    area.addEventListener('transitionend', fertig);
+    // Sicherheitsnetz: transitionend kann ausbleiben (Tab im Hintergrund).
+    notAus = setTimeout(fertig, 400);
+  };
+  if (schliesst) {
+    const chip = area.querySelector('.section-toggle');
+    gleiten(chip ? chip.offsetHeight : 0, umschalten);
+  } else {
+    umschalten();
+    gleiten(area.offsetHeight, null);
+  }
+}
+
 /** Eintrag lokal entfernen und neu zeichnen — die Liste kommt sonst erst beim naechsten Laden. */
 function mailForget(id, index) {
   mailProposals = mailProposals.map(p => {
@@ -5362,8 +5417,11 @@ function mailAiBind(area) {
     // offen stehen, waehrend die Termine eingeklappt bleiben.
     if (art === 'toggle') {
       const sorte = area.id === 'calAiArea' ? 'event' : 'task';
-      mailOpen[sorte] = !mailOpen[sorte];
-      renderMailAi(sorte);
+      const schliesst = mailOpen[sorte] === true;
+      mailToggleAnimieren(area, () => {
+        mailOpen[sorte] = !mailOpen[sorte];
+        renderMailAi(sorte);
+      }, schliesst);
       return;
     }
     if (art === 'dismiss') {
