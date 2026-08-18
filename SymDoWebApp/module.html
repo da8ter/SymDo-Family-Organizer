@@ -967,7 +967,21 @@ html[data-symdo-theme="dark"] .member-bar {
    Eingeklappt ist der Normalzustand: ein Halbjahresplaner liefert zwei Dutzend
    Termine, und die schoben die eigentliche Liste sonst aus dem Bild. Sichtbar
    bleibt nur die Zeile „N neue Termine gefunden". */
-.mail-ai { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--gap); }
+.mail-ai { --chip-r: 18px; display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--gap); }
+/* Aufgeklappt fasst eine leicht graue FLAECHE Meldung und Fundstuecke zu einem
+   Block zusammen: der Chip ist ihr Kopf, die Zeilen ihr Inhalt — vorher schwebten
+   sie unverbunden auf dem Seitenhintergrund. Bewusst eine Flaeche und keine
+   Kontur: 5 % Inhaltston bleibt in beiden Themes ein leises Grau, und die Zeilen
+   (--row, ~8 %) heben sich als Karten davon ab. Die Klasse setzt renderMailAi,
+   weil der offene Zustand am Knopf haengt und CSS den Elternknoten nicht sieht. */
+.mail-ai.open {
+  background: color-mix(in srgb, var(--content-color) 5%, transparent);
+  border-radius: var(--chip-r);
+  padding: 0 8px 8px;
+}
+/* Der Chip bleibt buendig: die Seitenpolster der Flaeche hebt er mit negativem
+   Rand wieder auf, seine oberen Ecken sind ihre unteren Grenzen der Rundung. */
+.mail-ai.open .section-toggle { margin: 0 -8px; }
 /* Derselbe Umschalter wie bei „Erledigt" und „Zuletzt benutzt" (.section-toggle),
    hier aber als Chip in der Akzentfarbe ueber die volle Inhaltsbreite: der Fund
    ist eine MELDUNG und kein Listenabschnitt — er soll auffallen, solange er
@@ -987,7 +1001,8 @@ html[data-symdo-theme="dark"] .member-bar {
      OBEREN Ecken wachsen auf die volle Hoehe — der Chip wurde beim Aufklappen
      sichtbar runder. Mit festem Wert ist die Rundung in beiden Zustaenden dieselbe,
      und geschlossen bleibt es dank der Mindesthoehe eine echte Pille. */
-  --chip-r: 18px;
+  /* --chip-r steht am Behaelter (.mail-ai): die aufgeklappte Flaeche teilt sich
+     die Rundung mit dem Chip, sonst staenden zwei verschiedene Radien uebereinander. */
   min-height: calc(var(--chip-r) * 2);
   border-radius: var(--chip-r);
   background: var(--accent);
@@ -5189,6 +5204,7 @@ function renderMailAi(sorte) {
   if (gefiltert.length === 0) {
     area.style.display = 'none';
     area.innerHTML = '';
+    area.classList.remove('open');
     // renderInto vergleicht gegen _lastHtml. Ohne das Zuruecksetzen bliebe der
     // Bereich leer, wenn spaeter genau dasselbe Markup wieder ansteht.
     area._lastHtml = null;
@@ -5201,6 +5217,9 @@ function renderMailAi(sorte) {
   // dort die Aussage ist und nicht eine Beschriftung dazu.
   const anzahl = gefiltert.reduce((n, p) => n + p.items.length, 0);
   const auf = mailOpen[sorte] === true;
+  // Die graue Sammel-Flaeche (.mail-ai.open) haengt am Behaelter, der offene
+  // Zustand am Knopf darin — CSS sieht den Elternknoten nicht, also hier.
+  area.classList.toggle('open', auf);
   const titel = anzahl === 1
     ? translate(istTermin ? '1 new appointment found' : '1 new task found')
     : translate(istTermin ? '%1 new appointments found' : '%1 new tasks found').replace('%1', String(anzahl));
