@@ -279,6 +279,13 @@ trait CalendarBridge
                 'name'      => (string)@IPS_GetName($id),
                 'color'     => (string)($status['calendarColor'] ?? ''),
                 'canWrite'  => (bool)($status['canWrite'] ?? false),
+                // Darf ein EINZELNES Vorkommen einer Serie geaendert/geloescht
+                // werden? Haengt am Anbieter (am 18.08.2026 gemessen: iCloud/CalDAV
+                // meldet beides false, obwohl canWrite true ist). Die Oberflaeche
+                // sperrt damit Bearbeiten/Loeschen von Serienterminen, statt den
+                // Anbieter-Fehler zu ernten.
+                'canUpdateOccurrence' => (bool)($status['canUpdateOccurrence'] ?? false),
+                'canDeleteOccurrence' => (bool)($status['canDeleteOccurrence'] ?? false),
                 'count'     => (int)($status['eventCount'] ?? 0),
                 'today'     => (int)($status['todayEventCount'] ?? 0),
                 'lastSync'  => (int)($status['lastSynchronization'] ?? 0),
@@ -415,15 +422,24 @@ trait CalendarBridge
             // Bearbeiten-Dialog sie vorbelegen kann — sonst haette ein Speichern
             // die Erinnerung stillschweigend auf „keine" gesetzt.
             'reminder'   => (int)($erinnerungen[$calendarID . ':' . (string)($e['uid'] ?? '')]['lead'] ?? -1),
-            // Teil einer Serie? Nur zur Anzeige. Die Regel selbst steht beim
-            // Serienkopf, ein ausgerechnetes Vorkommen traegt sie nicht — deshalb
-            // hilfsweise auch die recurrenceId, die jedes Vorkommen fuehrt.
-            // Wichtig fuer die Oberflaeche, weil Aendern und Loeschen immer nur
-            // dieses eine Vorkommen treffen und niemand eine serienweite Wirkung
-            // erwarten soll.
-            'recurring'  => ($e['recurring'] ?? false) === true
-                || trim((string)($e['recurrenceId'] ?? '')) !== '',
+            // Teil einer Serie? Die Oberflaeche sperrt damit Bearbeiten/Loeschen,
+            // wenn der Kalender kein einzelnes Vorkommen aendern kann (siehe
+            // canUpdateOccurrence/canDeleteOccurrence in CalCalendars).
+            'recurring'  => $this->CalIsOccurrence($e),
         ];
+    }
+
+    /**
+     * Gehoert der Rohdatensatz zu einer Serie? Das `recurring`-Flag traegt der
+     * Serienkopf, ein ausgerechnetes Vorkommen hilfsweise die recurrenceId.
+     *
+     * @param array<string, mixed> $e
+     */
+    private function CalIsOccurrence(array $e): bool
+    {
+        return ($e['recurring'] ?? false) === true
+            || trim((string)($e['recurrenceId'] ?? '')) !== ''
+            || trim((string)($e['occurrenceId'] ?? '')) !== '';
     }
 
     /**
@@ -513,21 +529,26 @@ trait CalendarBridge
             return $this->CalCreateSeries($calendarID, $daten, $reihe);
         }
 
-        if (!$this->CalAvailable() || !function_exists('IPSKAL_CreateEvent')) {
-            return $fehler('calendar_unavailable', $this->Translate('No calendar available.'));
+        $wache = $this->CalWritableOne($calendarID, 'IPSKAL_CreateEvent');
+        if (($wache['ok'] ?? false) !== true) {
+            return $fehler((string)$wache['code'], (string)$wache['message']);
         }
-        if (!in_array($calendarID, $this->CalInstanceIDs(), true)) {
-            return $fehler('unknown_calendar', $this->Translate('Unknown calendar.'));
-        }
-        $kalender = null;
-        foreach ($this->CalCalendars() as $k) {
-            if ((int)$k['id'] === $calendarID) {
-                $kalender = $k;
-            }
-        }
-        if ($kalender === null || $kalender['canWrite'] !== true) {
-            return $fehler('read_only', $this->Translate('This calendar is read-only.'));
-        }
+        return $this->CalCreateEventChecked($calendarID, $daten, $wache['calendar']);
+    }
+
+    /**
+     * Anlegen OHNE die Kalender-Wache — die hat der Aufrufer bereits erledigt.
+     * Getrennt, damit eine Reihe die Statusabfrage aller Kalender nicht je Termin
+     * wiederholt (bis zu 60 Termine in EINEM Hook-Aufruf).
+     *
+     * @param array<string, mixed> $daten
+     * @param array<string, mixed> $kalender Zeile aus CalCalendars
+     * @return array<string, mixed>
+     */
+    private function CalCreateEventChecked(int $calendarID, array $daten, array $kalender): array
+    {
+        $fehler = static fn(string $code, string $text): array =>
+            ['ok' => false, 'error' => ['code' => $code, 'message' => $text]];
 
         $geprueft = $this->CalInputFields($daten);
         if (($geprueft['ok'] ?? false) !== true) {
@@ -618,7 +639,10 @@ trait CalendarBridge
             return ['freq' => $freq, 'count' => min($count, self::CAL_SERIES_MAX)];
         }
         $until = trim((string)($roh['until'] ?? ''));
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $until) === 1) {
+        // checkdate wie in AiParseRecurrence: die Regex allein liesse 2026-13-45
+        // durch, und strtotime macht daraus stillschweigend einen anderen Tag.
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $until, $m) === 1
+            && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
             return ['freq' => $freq, 'until' => $until];
         }
         return null;
@@ -640,7 +664,9 @@ trait CalendarBridge
      * 31.01. wird der 28.02. und im Maerz wieder der 31.
      *
      * @param array{freq: string, count?: int, until?: string} $reihe
-     * @return list<string> Tage im Format Y-m-d, mindestens der erste
+     * @return array{days: list<string>, capped: bool} Tage im Format Y-m-d (mindestens
+     *         der erste); capped = das Bis-Datum haette mehr Termine ergeben als der
+     *         Deckel CAL_SERIES_MAX erlaubt.
      */
     private function CalExpandSeries(string $ersterTag, array $reihe): array
     {
@@ -648,7 +674,7 @@ trait CalendarBridge
         // Tag kippen kann.
         $basis = strtotime($ersterTag . ' 12:00');
         if ($basis === false) {
-            return [$ersterTag];
+            return ['days' => [$ersterTag], 'capped' => false];
         }
         $anzahl = isset($reihe['count']) ? min((int)$reihe['count'], self::CAL_SERIES_MAX) : self::CAL_SERIES_MAX;
         $bis    = isset($reihe['until']) ? (string)$reihe['until'] : '';
@@ -660,7 +686,10 @@ trait CalendarBridge
         $tageSchritt = $reihe['freq'] === 'biweekly' ? 14 : 7;
 
         $tage = [];
-        for ($n = 0; $n < $anzahl; $n++) {
+        $gekappt = false;
+        // Eine Runde ueber den Deckel hinaus rechnen: nur so ist unterscheidbar, ob
+        // eine Nur-bis-Reihe am Bis-Datum endet oder still am Deckel gekappt wurde.
+        for ($n = 0; $n <= $anzahl; $n++) {
             if ($monatlich) {
                 $lauf    = $monat0 - 1 + $n;
                 $jahr    = $jahr0 + intdiv($lauf, 12);
@@ -674,9 +703,16 @@ trait CalendarBridge
             if ($bis !== '' && $tag > $bis) {
                 break;
             }
+            if ($n === $anzahl) {
+                // Der Termin haette noch ins Bis-Datum gepasst, faellt aber dem
+                // Deckel zum Opfer. Nur bei Nur-bis-Reihen moeglich: mit count ist
+                // $anzahl bereits auf den Deckel begrenzt.
+                $gekappt = $bis !== '';
+                break;
+            }
             $tage[] = $tag;
         }
-        return $tage === [] ? [$ersterTag] : $tage;
+        return ['days' => $tage === [] ? [$ersterTag] : $tage, 'capped' => $gekappt];
     }
 
     /**
@@ -693,14 +729,20 @@ trait CalendarBridge
      */
     private function CalCreateSeries(int $calendarID, array $daten, array $reihe): array
     {
-        // Einmal vorab pruefen, damit ein Tippfehler nicht erst nach dem ersten
-        // geschriebenen Termin auffaellt.
+        // Kalender-Wache und Eingabepruefung einmal VOR der Schleife: ein Tippfehler
+        // soll nicht erst nach dem ersten geschriebenen Termin auffallen, und die
+        // Statusabfrage aller Kalender nicht 60-mal laufen.
+        $wache = $this->CalWritableOne($calendarID, 'IPSKAL_CreateEvent');
+        if (($wache['ok'] ?? false) !== true) {
+            return ['ok' => false, 'error' => ['code' => (string)$wache['code'], 'message' => (string)$wache['message']]];
+        }
         $geprueft = $this->CalInputFields($daten);
         if (($geprueft['ok'] ?? false) !== true) {
             return ['ok' => false, 'error' => ['code' => (string)$geprueft['code'], 'message' => (string)$geprueft['message']]];
         }
         $start = (string)$geprueft['fields']['start'];
-        $tage  = $this->CalExpandSeries(substr($start, 0, 10), $reihe);
+        $reihenPlan = $this->CalExpandSeries(substr($start, 0, 10), $reihe);
+        $tage = $reihenPlan['days'];
         $uhr   = strlen($start) > 10 ? substr($start, 10) : '';   // „T18:45“ bleibt gleich
 
         $angelegt = 0;
@@ -712,7 +754,7 @@ trait CalendarBridge
             $einzel = $daten;
             unset($einzel['recurrence'], $einzel['end']);
             $einzel['start'] = $tag . $uhr;
-            $antwort = $this->CalCreateEvent($calendarID, $einzel);
+            $antwort = $this->CalCreateEventChecked($calendarID, $einzel, $wache['calendar']);
             if (($antwort['ok'] ?? false) === true) {
                 $angelegt++;
                 $erster = $erster ?? ($antwort['event'] ?? null);
@@ -745,6 +787,9 @@ trait CalendarBridge
             // Nur gesetzt, wenn wirklich etwas schiefging — die Oberflaeche macht
             // daraus einen sichtbaren Hinweis statt einer Erfolgsmeldung.
             'partial' => $angelegt < count($tage) ? ($letzterFehler !== '' ? $letzterFehler : true) : null,
+            // Eine Nur-bis-Reihe endet still am Deckel (CAL_SERIES_MAX), lange vor
+            // ihrem Bis-Datum — das gehoert gesagt, sonst zaehlt niemand nach.
+            'capped'  => $reihenPlan['capped'] ? self::CAL_SERIES_MAX : null,
         ];
     }
 
@@ -803,15 +848,23 @@ trait CalendarBridge
             $von = (int)(strtotime('-30 days') ?: time());
             $bis = $von + self::CAL_MAX_RANGE_DAYS * 86400;
         }
+        // Vorsicht beim UID-Rueckfall: alle Vorkommen einer Serie teilen sich die
+        // UID, und im ±2-Tage-Fenster einer dichten Serie liegen mehrere. Deshalb
+        // gewinnt der Treffer mit passendem Beginn; ohne einen solchen wird ein
+        // UID-Treffer nur genommen, wenn er im Fenster eindeutig ist.
+        $uidTreffer = [];
         foreach ($this->CalRawItems($calendarID, $von, $bis) as $e) {
             if ($id !== '' && (string)($e['id'] ?? '') === $id) {
                 return $e;
             }
             if ($uid !== '' && (string)($e['uid'] ?? '') === $uid) {
-                return $e;
+                if ($start > 0 && (int)($e['startTimestamp'] ?? 0) === $start) {
+                    return $e;
+                }
+                $uidTreffer[] = $e;
             }
         }
-        return null;
+        return count($uidTreffer) === 1 ? $uidTreffer[0] : null;
     }
 
     /**
@@ -860,6 +913,22 @@ trait CalendarBridge
 
             $ereignis = array_merge($roh, $geprueft['fields']);
             unset($ereignis['startTimestamp'], $ereignis['endTimestamp']);
+            // Vorkommen einer Serie: Die ganze Serie ist nie in Gefahr — ohne
+            // ausdruecklichen writeScope=series ruehrt OpenCalendar den Serienkopf
+            // nicht an (am 18.08.2026 im Quelltext von Build 588 verifiziert, Google
+            // wie CalDAV). Aber: Ob ein EINZELNES Vorkommen geaendert werden darf,
+            // meldet der Kalender selbst (canUpdateOccurrence; iCloud: nein). Ohne
+            // die Faehigkeit hier klar ablehnen statt den rohen Anbieter-Fehler samt
+            // sinnlosem Sync-Wiederholungslauf zu ernten; mit ihr den Scope explizit
+            // setzen — der CalDAV-Zweig verlangt ihn, Google waehlt ihn ohnehin.
+            if ($this->CalIsOccurrence($roh)) {
+                if (($wache['calendar']['canUpdateOccurrence'] ?? false) !== true) {
+                    return $fehler('series_locked', $this->Translate(
+                        'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'
+                    ));
+                }
+                $ereignis['writeScope'] = 'occurrence';
+            }
             try {
                 $antwort = json_decode((string)IPSKAL_UpdateEvent(
                     $calendarID,
@@ -962,6 +1031,15 @@ trait CalendarBridge
             $roh = $this->CalFindRaw($calendarID, $id, $uidIn, $startTs);
             if ($roh === null) {
                 continue;
+            }
+            // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent).
+            if ($this->CalIsOccurrence($roh)) {
+                if (($wache['calendar']['canDeleteOccurrence'] ?? false) !== true) {
+                    return $fehler('series_locked', $this->Translate(
+                        'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
+                    ));
+                }
+                $roh['writeScope'] = 'occurrence';
             }
             try {
                 $erfolg = IPSKAL_DeleteEvent(
