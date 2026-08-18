@@ -86,7 +86,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Controls the tabs of this tile and of the SymDo web app. Favorites belong to the shopping lists — that tab shows their favorite lists and the purchase history, so it follows the shopping switch. If all three are off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
+                    "caption": "Controls the tabs of this tile and of the SymDo web app. Favorites belong to the shopping lists — that tab shows their favorite lists and the purchase history, so it follows the shopping switch. The calendar tab additionally requires at least one configured OpenCalendar calendar. If all sections are off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
                 }
             ]
         },
