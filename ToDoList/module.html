@@ -975,10 +975,15 @@ html[data-symdo-theme="dark"] .member-bar {
    (--row, ~8 %) heben sich als Karten davon ab. Die Klasse setzt renderMailAi,
    weil der offene Zustand am Knopf haengt und CSS den Elternknoten nicht sieht. */
 .mail-ai.open {
-  background: color-mix(in srgb, var(--content-color) 5%, transparent);
+  background: color-mix(in srgb, var(--content-color) 9%, transparent);
   border-radius: var(--chip-r);
   padding: 0 8px 8px;
 }
+/* Auf der Flaeche traegt die Zeile den Seitengrundton statt --row: --row (~8 %
+   Inhaltston) laege fast auf dem Grau der Flaeche (9 %) und die Karten
+   verschwaenden darin. Deckend bleibt sie (var(--bg) = card-color), sonst
+   schienen die Wisch-Untergruende durch. */
+.mail-ai.open .mail-row { background: var(--bg); }
 /* Der Chip bleibt buendig: die Seitenpolster der Flaeche hebt er mit negativem
    Rand wieder auf, seine oberen Ecken sind ihre unteren Grenzen der Rundung. */
 .mail-ai.open .section-toggle { margin: 0 -8px; }
