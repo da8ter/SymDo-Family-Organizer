@@ -183,16 +183,24 @@ trait CalendarBridge
             if ($jetzt < $wann || $start <= 0) {
                 continue;
             }
-            if ($visuID <= 0) {
-                continue; // kein Ziel eingestellt: liegen lassen, nicht verwerfen
+            if ($visuID <= 0 || !function_exists('VISU_PostNotification')) {
+                continue; // kein Ziel eingestellt bzw. keine Kachel-Visu installiert: liegen lassen, nicht verwerfen
             }
             $titel = $this->Translate('Appointment');
             $lead = max(0, (int)($eintrag['lead'] ?? 0));
             if ($lead > 0) {
                 $titel = sprintf($this->Translate('Appointment in %s'), $this->CalLeadText($lead));
             }
-            $ergebnis = @VISU_PostNotification($visuID, mb_substr($titel, 0, 32),
-                mb_substr((string)($eintrag['title'] ?? ''), 0, 256), 'Info', $this->InstanceID);
+            // try/catch zwingend: eine geloeschte oder falsch gewaehlte Instanz
+            // laesst den Aufruf werfen — ungefangen braeche der Minutentimer hier
+            // jede Minute ab und keine weitere Erinnerung wuerde zugestellt.
+            try {
+                $ergebnis = @VISU_PostNotification($visuID, mb_substr($titel, 0, 32),
+                    mb_substr((string)($eintrag['title'] ?? ''), 0, 256), 'Info', $this->InstanceID);
+            } catch (Throwable $e) {
+                $this->SendDebug('CalNotify', sprintf('Zustellung an #%d fehlgeschlagen: %s', $visuID, $e->getMessage()), 0);
+                continue;
+            }
             if ($ergebnis !== false) {
                 $liste[$schluessel]['sent'] = true;
                 $geaendert = true;

@@ -1294,6 +1294,9 @@ class SymDoGateway extends IPSModuleStrict
                     'type'     => 'SelectInstance',
                     'name'     => 'CalNotifyVisuID',
                     'width'    => '400px',
+                    // Nur die Kachel-Visualisierung versteht VISU_PostNotification;
+                    // jede andere Instanz liesse den Erinnerungs-Timer werfen.
+                    'validModules' => ['{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}'],
                     'caption'  => $this->Translate('Visualization instance for appointment reminders')
                 ],
                 [
