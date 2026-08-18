@@ -2975,9 +2975,12 @@ let activeTab = ls.get('symdo.tab') || 'dashboard';
 const SHOW_PROGRESS_CARD = false;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = ls.get('symdo.dashboardPriority') || '';
-let dashMemberIds = new Set(); // Mehrfachauswahl im Dashboard-Member-Menü
-let todoMemberIds = new Set(); // Mehrfachauswahl im ToDo-Tab-Member-Menü
-let calMemberIds = new Set();  // dasselbe im Kalender-Tab, eigene Auswahl
+// EINE Mitglieder-Auswahl fuer alle Bereiche: wer im Dashboard eine Person
+// waehlt, sieht auch im Aufgaben- und im Kalender-Tab nur deren Eintraege.
+// Vorher hatte jeder Tab sein eigenes Set, und der Tab-Wechsel wirkte wie ein
+// Zuruecksetzen des Filters. Ein Tab OHNE sichtbare Leiste filtert nicht,
+// loescht die Auswahl aber auch nicht mehr — sie gehoert allen Bereichen.
+const memberFilterIds = new Set();
 let completedExpanded = ls.get('symdo.completedExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
@@ -4068,9 +4071,11 @@ function allTodoTasks() {
   return tasks;
 }
 function memberFiltered(tasks) {
-  if (dashMemberIds.size === 0) return tasks;
+  // Ohne sichtbare Leiste filtert die Uebersicht nicht — die Auswahl bleibt aber
+  // bestehen, denn sie ist bereichsuebergreifend und gehoert auch den anderen Tabs.
+  if (!mitgliederLeisteSichtbar() || memberFilterIds.size === 0) return tasks;
   // Aufgaben, die einem der gewählten Mitglieder zugewiesen sind (Vereinigung)
-  return tasks.filter(t => Array.isArray(t.item.assignedTo) && t.item.assignedTo.some(id => dashMemberIds.has(id)));
+  return tasks.filter(t => Array.isArray(t.item.assignedTo) && t.item.assignedTo.some(id => memberFilterIds.has(id)));
 }
 function mondayOf(d) {
   const y = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -4444,11 +4449,10 @@ function bindDragScroll(el) {
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
-  // ZUERST: ist die Mitglieder-Leiste abgeschaltet, faellt auch ihre Auswahl weg.
-  // Muss vor der ersten Filterung stehen — die Kennzahlen unten rechnen sonst
-  // noch mit dem alten Filter, obwohl die Leiste schon verschwunden ist.
+  // Ist die Mitglieder-Leiste abgeschaltet, filtert die Uebersicht nicht (die
+  // Wache sitzt in memberFiltered). Die Auswahl selbst bleibt bestehen — sie ist
+  // bereichsuebergreifend und darf hier nicht fuer alle Tabs geloescht werden.
   const zeigeMitglieder = mitgliederLeisteSichtbar();
-  if (!zeigeMitglieder && dashMemberIds.size > 0) dashMemberIds.clear();
   const open = allTodoTasks().filter(t => !t.item.done);
   const memberTasks = memberFiltered(open);
   const prio = dashPriority;
@@ -4498,7 +4502,7 @@ function renderDashboard() {
   if (withTodos && store.users.length > 0 && zeigeMitglieder) {
     html += '<div class="member-bar">';
     for (const u of store.users) {
-      html += `<button class="avatar-btn${dashMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+      html += `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
         avatarHtml(u, '') + '</button>';
     }
     html += '</div>';
@@ -4607,8 +4611,10 @@ function renderDashboard() {
       let title = translate('Tasks');
       // Wie mySectionTitle in der App: nur bei GENAU EINEM gewählten Mitglied ein
       // personalisierter Titel; bei 0 oder mehreren das generische „Aufgaben".
-      if (dashMemberIds.size === 1) {
-        const only = [...dashMemberIds][0];
+      // Nur mit sichtbarer Leiste: ohne sie ist die Liste ungefiltert, und ein
+      // Titel „Aufgaben von X" waere eine falsche Behauptung.
+      if (zeigeMitglieder && memberFilterIds.size === 1) {
+        const only = [...memberFilterIds][0];
         if (only === currentUserID()) title = translate('My tasks');
         else title = translate('Tasks of %1').replace('%1', byId[only] ? byId[only].name : '…');
       }
@@ -4678,8 +4684,8 @@ function renderDashboard() {
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const id = b.dataset.member;
-    if (dashMemberIds.has(id)) dashMemberIds.delete(id);
-    else dashMemberIds.add(id);
+    if (memberFilterIds.has(id)) memberFilterIds.delete(id);
+    else memberFilterIds.add(id);
     renderDashboard();
   }));
   el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
@@ -5096,15 +5102,15 @@ function renderTodoMembers() {
   }
   el.style.display = '';
   const membersHtml = store.users.map(u =>
-    `<button class="avatar-btn${todoMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
   ).join('');
   if (!renderInto(el, membersHtml)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const mid = b.dataset.member;
-    if (todoMemberIds.has(mid)) todoMemberIds.delete(mid);
-    else todoMemberIds.add(mid);
+    if (memberFilterIds.has(mid)) memberFilterIds.delete(mid);
+    else memberFilterIds.add(mid);
     renderTodos();
   }));
 }
@@ -5122,23 +5128,24 @@ function renderCalMembers() {
   const el = document.getElementById('calMembers');
   if (!el) return;
   // Derselbe appweite Schalter wie im ToDo-Tab; ohne Nutzer gibt es nichts zu zeigen.
+  // Die Auswahl bleibt dabei stehen (bereichsuebergreifend) — gefiltert wird ohne
+  // Leiste ohnehin nicht, siehe renderCalendar.
   if (rowButtonFlags().showMemberBar === false || store.users.length === 0) {
-    calMemberIds.clear();
     el.style.display = 'none';
     renderInto(el, '');
     return;
   }
   el.style.display = '';
   const html = store.users.map(u =>
-    `<button class="avatar-btn${calMemberIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
   ).join('');
   if (!renderInto(el, html)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const mid = b.dataset.member;
-    if (calMemberIds.has(mid)) calMemberIds.delete(mid);
-    else calMemberIds.add(mid);
+    if (memberFilterIds.has(mid)) memberFilterIds.delete(mid);
+    else memberFilterIds.add(mid);
     renderCalendar();
   }));
 }
@@ -5648,13 +5655,15 @@ function renderCalendar() {
   // Uebernehmen sind sie echte Kalendereintraege und erscheinen unten.
   renderMailAi('event');
 
-  // Avatar-Pille zeichnen, BEVOR gefiltert wird: der Filter kommt aus ihr, und
-  // ohne Nutzer oder mit abgeschaltetem Schalter leert sie die Auswahl selbst.
+  // Avatar-Pille zeichnen, bevor gefiltert wird: der Filter kommt aus ihr.
+  // Gefiltert wird nur mit sichtbarer Leiste — die (bereichsuebergreifende)
+  // Auswahl darf ohne Bedienelement nicht unsichtbar weiterwirken.
   renderCalMembers();
   let alle = calEvents.slice();
-  const gefiltert = calMemberIds.size > 0;
+  const gefiltert = rowButtonFlags().showMemberBar !== false
+    && store.users.length > 0 && memberFilterIds.size > 0;
   if (gefiltert) {
-    alle = alle.filter(e => Array.isArray(e.members) && e.members.some(mid => calMemberIds.has(mid)));
+    alle = alle.filter(e => Array.isArray(e.members) && e.members.some(mid => memberFilterIds.has(mid)));
   }
 
   if (alle.length === 0) {
@@ -6198,13 +6207,14 @@ function renderTodos() {
   // "Neue Aufgabe mit Details" ueber das Menue entfaellt damit bewusst.
   const menuBtn = document.getElementById('btnTodoMenu');
   if (menuBtn) menuBtn.style.display = showSorting ? '' : 'none';
-  // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied
+  // Member-Filter (Vereinigung): nur Aufgaben mit mindestens einem gewählten Mitglied.
+  // Ist die Leiste dieser Liste aus, filtert der Tab nicht — die Auswahl waere
+  // unsichtbar. Geloescht wird sie aber nicht mehr: sie ist bereichsuebergreifend
+  // und gehoert auch der Uebersicht und dem Kalender.
   let items = st.items || [];
-  // Ist die Leiste aus, darf keine alte Auswahl nachwirken — sie waere unsichtbar
-  // und die Liste bliebe ohne Bedienelement gefiltert.
-  if (st.showMemberBar === false) todoMemberIds.clear();
-  if (todoMemberIds.size > 0) {
-    items = items.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+  const todoFilter = st.showMemberBar === false ? new Set() : memberFilterIds;
+  if (todoFilter.size > 0) {
+    items = items.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoFilter.has(mid)));
   }
   // Uebersicht: Zahlen aus denselben Aufgaben, die die Liste zeigt. classifyDue
   // ist dieselbe Einstufung wie bei den Faelligkeits-Marken der Zeilen.
@@ -6232,7 +6242,7 @@ function renderTodos() {
   // gefilterten Teilmenge die Gesamtreihenfolge verfälschen.
   // Der Griff ist zudem je Liste abschaltbar; mit ihm faellt auch das Ziehen weg,
   // denn er IST die Anfassstelle der Geste.
-  const canReorder = sortMode === 'manual' && todoMemberIds.size === 0
+  const canReorder = sortMode === 'manual' && todoFilter.size === 0
     && st.showReorderHandle !== false;
   const showEdit = st.showEditButton === true;
   const showDelete = st.showDeleteButton === true;
@@ -6245,7 +6255,7 @@ function renderTodos() {
   // data-key auf allen Knoten ohne data-id (siehe renderRows)
   let html = '';
   if (open.length === 0 && done.length === 0) {
-    const msg = todoMemberIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
+    const msg = todoFilter.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
     html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
   }
   for (const it of open) html += todoRowHtml(it, canReorder, badges, showEdit, showDelete);
@@ -6274,16 +6284,16 @@ function renderTodos() {
   const openNow = () => {
     const s = instState(curId()) || {};
     let list = s.items || [];
-    if (todoMemberIds.size > 0) {
-      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+    if (todoFilter.size > 0) {
+      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoFilter.has(mid)));
     }
     return sortTodoItems(list, String(s.sortMode || 'created'), String(s.sortDir || 'asc')).filter(i => !i.done);
   };
   const doneNow = () => {
     const s = instState(curId()) || {};
     let list = s.items || [];
-    if (todoMemberIds.size > 0) {
-      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoMemberIds.has(mid)));
+    if (todoFilter.size > 0) {
+      list = list.filter(it => Array.isArray(it.assignedTo) && it.assignedTo.some(mid => todoFilter.has(mid)));
     }
     return sortTodoItems(list, String(s.sortMode || 'created'), String(s.sortDir || 'asc')).filter(i => i.done);
   };
