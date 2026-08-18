@@ -163,7 +163,9 @@
             "Reminders for appointments are delivered the same way as task reminders: as a notification to this visualization instance. Without an instance a reminder stays pending instead of being lost.": "Erinnerungen an Termine gehen denselben Weg wie die der Aufgaben: als Benachrichtigung an diese Visualisierungsinstanz. Ohne Instanz bleibt eine Erinnerung liegen, statt verloren zu gehen.",
             "%d d": "%d T",
             "%d h": "%d Std",
-            "%d min": "%d Min"
+            "%d min": "%d Min",
+            "This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu ändern — bitte im Kalender-Programm bearbeiten.",
+            "This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu löschen — bitte im Kalender-Programm löschen."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

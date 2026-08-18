@@ -5546,7 +5546,13 @@ function loadCalendarEvents() {
     calEvents = j.events;
     calTruncated = j.truncated === true;
     renderCalendar();
-  }).catch(() => { calLoading = false; });
+  }).catch(() => {
+    // Auch der Netzwerkfehler braucht den Hinweis — sonst steht still ein alter
+    // Stand da, als waere alles gut.
+    calLoading = false;
+    calError = translate('Could not load appointments.');
+    renderCalendar();
+  });
 }
 let calTruncated = false;
 
@@ -5650,9 +5656,16 @@ function renderCalendar() {
 
   // Bedienbar ist nur, was der Anbieter auch schreiben laesst: in einem
   // abonnierten Fremdkalender waere jede Wischgeste ein Versprechen, das der
-  // Anbieter danach bricht.
+  // Anbieter danach bricht. Bei Serien-Vorkommen gilt dasselbe je Faehigkeit:
+  // iCloud etwa laesst einzelne Vorkommen weder aendern noch loeschen.
   const schreibbar = {};
-  calCalendars.forEach(c => { schreibbar[String(c.id)] = c.canWrite === true; });
+  const vkAendern = {};
+  const vkLoeschen = {};
+  calCalendars.forEach(c => {
+    schreibbar[String(c.id)] = c.canWrite === true;
+    vkAendern[String(c.id)] = c.canUpdateOccurrence === true;
+    vkLoeschen[String(c.id)] = c.canDeleteOccurrence === true;
+  });
   const knopfSchalter = rowButtonFlags();
   const zeigeBearbeiten = knopfSchalter.showEditButton === true;
   const zeigeLoeschen   = knopfSchalter.showDeleteButton === true;
@@ -5682,16 +5695,19 @@ function renderCalendar() {
           ? `<span class="badge attr" title="${escapeHtml(translate('Part of a series'))}"><i class="fa-light fa-repeat"></i></span>` : '') +
         (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
           ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
-      const darf = schreibbar[String(e.calendarID)] === true;
+      const serie = e.recurring === true;
+      const kannBearbeiten = schreibbar[String(e.calendarID)] === true && (!serie || vkAendern[String(e.calendarID)] === true);
+      const kannLoeschen   = schreibbar[String(e.calendarID)] === true && (!serie || vkLoeschen[String(e.calendarID)] === true);
+      const darf = kannBearbeiten || kannLoeschen;
       // Die Wisch-Untergruende nur dort, wo auch gewischt werden kann — sonst
       // blitzte beim Ziehen ein rotes Feld auf, das nichts tut.
       const unter = darf
-        ? `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
-          `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>`
+        ? (kannLoeschen ? `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` : '') +
+          (kannBearbeiten ? `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>` : '')
         : '';
       const knoepfe = !darf ? '' :
-        (zeigeBearbeiten ? `<button class="row-btn" data-cal-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
-        (zeigeLoeschen ? `<button class="row-btn destructive" data-cal-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '');
+        (zeigeBearbeiten && kannBearbeiten ? `<button class="row-btn" data-cal-edit="1" aria-label="${translate('Edit')}" title="${translate('Edit')}"><i class="fa-light fa-pencil"></i></button>` : '') +
+        (zeigeLoeschen && kannLoeschen ? `<button class="row-btn destructive" data-cal-del="1" aria-label="${translate('Delete')}" title="${translate('Delete')}"><i class="fa-light fa-trash"></i></button>` : '');
       return `<div class="cal-card${darf ? '' : ' cal-readonly'}" data-cal="${escapeHtml(String(e.calendarID))}" data-id="${escapeHtml(String(e.id || ''))}">` +
         unter +
         `<div class="cal-event">` +
@@ -5745,16 +5761,30 @@ function bindCalRows(knoten) {
     const zeile = card.querySelector('.cal-event');
     const finde = () => calEvents.find(e => String(e.id) === String(card.dataset.id));
 
+    // Serien-Vorkommen nur, wenn der Kalender das kann (canUpdateOccurrence /
+    // canDeleteOccurrence) — sonst mit demselben Hinweis ablehnen, den auch das
+    // Gateway gaebe. Die Wache steht an der AKTION und nicht nur am Markup, weil
+    // eine Zeile mit nur einer erlaubten Richtung trotzdem beide Wischwege hat.
+    const serieErlaubt = (e, art) => {
+      if (e.recurring !== true) return true;
+      const c = calCalendars.find(k => String(k.id) === String(e.calendarID)) || {};
+      if (art === 'del' ? c.canDeleteOccurrence === true : c.canUpdateOccurrence === true) return true;
+      showToast(translate(art === 'del'
+        ? 'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
+        : 'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'));
+      return false;
+    };
+
     const loeschen = () => {
       // Slide-out zuruecknehmen, damit die Zeile bei Abbruch stehen bleibt.
       card.classList.remove('is-deleting'); delete card.dataset.animating;
       if (zeile) zeile.style.transform = '';
       restoreCard(card);
       const e = finde();
-      if (!e) return;
+      if (!e || !serieErlaubt(e, 'del')) return;
       showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
     };
-    const bearbeiten = () => { const e = finde(); if (e) openCalEditor(e, null, e); };
+    const bearbeiten = () => { const e = finde(); if (e && serieErlaubt(e, 'edit')) openCalEditor(e, null, e); };
 
     bindCardSwipe(card, '.cal-event', loeschen, bearbeiten, { dissolve: false });
 
@@ -5773,7 +5803,7 @@ function bindCalRows(knoten) {
     if (lBtn) lBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const e = finde();
-      if (e) showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
+      if (e && serieErlaubt(e, 'del')) showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
     });
   });
 }
@@ -6061,6 +6091,10 @@ function saveCalEditor() {
     if (j.partial) {
       showToast(translate('Only %1 of %2 appointments were created.')
         .replace('%1', String(angelegt)).replace('%2', String(parseInt(j.planned) || angelegt)));
+    } else if (j.capped) {
+      // Nur-bis-Reihe am 60er-Deckel gekappt: alles Geplante ist da, aber das
+      // Bis-Datum haette mehr ergeben — das gehoert gesagt.
+      showToast(translate('The series was capped at %1 appointments.').replace('%1', String(parseInt(j.capped) || 0)));
     } else if (angelegt > 1) {
       showToast(translate('%1 appointments added').replace('%1', String(angelegt)));
     } else {
