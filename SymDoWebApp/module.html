@@ -979,10 +979,13 @@ html[data-symdo-theme="dark"] .member-bar {
   border-radius: var(--chip-r);
   padding: 0 8px 8px;
 }
-/* Die graue Flaeche blendet weich ein und aus; die HOEHE gleitet per Skript
-   (mailToggleAnimieren), weil „auto" nicht animierbar ist und der Inhalt beim
-   Zuklappen erst NACH dem Schrumpfen verschwinden darf. */
-.mail-ai { transition: background-color .28s ease; }
+/* Die graue Flaeche blendet nur beim OEFFNEN weich ein; die HOEHE gleitet per
+   Skript (mailToggleAnimieren), weil „auto" nicht animierbar ist und der Inhalt
+   beim Zuklappen erst NACH dem Schrumpfen verschwinden darf.
+   Der Uebergang steht bewusst NUR am .open-Zustand: stuende er an .mail-ai,
+   blendete die Flaeche auch beim Schliessen nach — Rundung und Polster sind da
+   aber schon weg, und der Rest flackerte als eckiges Grau hinter der Pille. */
+.mail-ai.open { transition: background-color .28s ease; }
 /* Auf der Flaeche traegt die Zeile den Seitengrundton statt --row: --row (~8 %
    Inhaltston) laege fast auf dem Grau der Flaeche (9 %) und die Karten
    verschwaenden darin. Deckend bleibt sie (var(--bg) = card-color), sonst
