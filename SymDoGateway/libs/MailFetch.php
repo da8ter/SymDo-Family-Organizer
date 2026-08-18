@@ -58,6 +58,14 @@ trait MailFetch
         if ($cfg === null) {
             return null;
         }
+        // Ohne SSL ginge das Passwort im Klartext ueber die Leitung — STARTTLS
+        // handelt dieser schmale Zugriff nicht aus. Dann lieber ohne Anhang
+        // analysieren (wie bei MailReadAttachments=false), statt die Zugangsdaten
+        // preiszugeben, nur weil die IMAP-Instanz unverschluesselt eingestellt ist.
+        if ($cfg['auth'] && !$cfg['ssl']) {
+            $this->SendDebug('MailFetch', 'IMAP-Instanz ohne SSL — Anhang-Abruf entfaellt, Analyse nur mit Mailtext', 0);
+            return null;
+        }
         $fh = $this->MailImapOpen($cfg);
         if ($fh === null) {
             return null;
@@ -65,6 +73,13 @@ trait MailFetch
         try {
             $nr = 0;
             if ($cfg['auth']) {
+                // Zeilenumbrueche in Zugangsdaten wuerden als eigene IMAP-Befehle
+                // gelesen (Injektion in die eigene Sitzung) — solche Daten sind
+                // ohnehin kaputt, also gar nicht erst senden.
+                if (preg_match('/[\r\n]/', $cfg['user'] . $cfg['pass']) === 1) {
+                    $this->SendDebug('MailFetch', 'Zugangsdaten enthalten Zeilenumbrueche — Anhang-Abruf entfaellt', 0);
+                    return null;
+                }
                 $login = $this->MailImapCmd($fh, $nr, sprintf(
                     'LOGIN "%s" "%s"',
                     $this->MailImapQuote($cfg['user']),
@@ -217,6 +232,17 @@ trait MailFetch
             if ($zeile === false) {
                 break;
             }
+            // fgets kappt bei 8191 Bytes mitten in der Zeile — eine sehr lange
+            // BODYSTRUCTURE-Zeile koennte sonst den {n}-Literal-Marker zerteilen
+            // und die Antwort wuerde als Zeilenfolge fehlgeparst. Bis zum echten
+            // Zeilenende weiterlesen, mit Deckel gegen entartete Antworten.
+            while (!str_ends_with($zeile, "\n") && strlen($zeile) < 512 * 1024 && time() < $ende) {
+                $mehr = fgets($fh, 8192);
+                if ($mehr === false) {
+                    break;
+                }
+                $zeile .= $mehr;
+            }
             if (preg_match('/\{(\d+)\}\r?\n$/', $zeile, $m) === 1) {
                 $daten .= substr($zeile, 0, -strlen($m[0]));
                 $laenge = (int)$m[1];
@@ -225,7 +251,10 @@ trait MailFetch
                 }
                 $puffer = '';
                 $rest   = $laenge;
-                while ($rest > 0) {
+                // Auch hier gegen die Frist pruefen: ein troepfelnder Server haelt
+                // sonst den Timer-Thread weit ueber MAIL_IMAP_TIMEOUT hinaus fest
+                // (der Stream-Timeout greift nur je fread, nicht insgesamt).
+                while ($rest > 0 && time() < $ende) {
                     $stueck = fread($fh, min(65536, $rest));
                     if ($stueck === false || $stueck === '') {
                         break;
