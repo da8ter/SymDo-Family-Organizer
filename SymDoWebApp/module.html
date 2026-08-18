@@ -1171,7 +1171,17 @@ html[data-symdo-theme="dark"] .member-bar {
    in derselben App untereinander — zwei Groessenstaffeln waeren als Unterschied
    ohne Bedeutung lesbar. Einzeilig bleibt die Zusatzzeile trotzdem: hier stehen Ort
    und Notiz mit „ · " verbunden, das darf keine halbe Karte fuellen. */
-.cal-title { font-size: 15px; font-weight: 600; }
+/* Eine Zeile mit Auslassungspunkten, genau wie .todo-title: ein langer
+   Terminname („Psychomotorik fuer Kinder ab 4 Jahren") brach sonst um und die
+   Zeile wurde hoeher als ihre Nachbarn. */
+.cal-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cal-sub { font-size: 12.5px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Info-Abzeichen (Serie, Erinnerung) zwischen Inhalt und Avataren — gleiche
    Reihenfolge wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
