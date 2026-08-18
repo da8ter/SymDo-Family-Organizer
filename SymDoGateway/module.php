@@ -91,6 +91,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->AppCreate();
         // Aufgaben aus weitergeleiteten E-Mails (eigener Trait, nutzt die KI der App-Seite)
         $this->MailCreate();
+        // Kalender: Zuordnung, Erinnerungen und ihr Timer
+        $this->CalCreateProps();
     }
 
     public function ApplyChanges(): void
@@ -110,6 +112,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::WS_HOOK_PATH);
             $this->AppApplyChanges();
             $this->MailApplyChanges();
+            $this->CalApplyChanges();
         }
     }
 
@@ -135,6 +138,9 @@ class SymDoGateway extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         if ($this->MailRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->CalRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->AppRequestAction($Ident, $Value)) {
@@ -1283,6 +1289,16 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'CheckBox',
                     'name'    => 'MailDeleteAfter',
                     'caption' => $this->Translate('Delete mail after analysis')
+                ],
+                [
+                    'type'     => 'SelectInstance',
+                    'name'     => 'CalNotifyVisuID',
+                    'width'    => '400px',
+                    'caption'  => $this->Translate('Visualization instance for appointment reminders')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Reminders for appointments are delivered the same way as task reminders: as a notification to this visualization instance. Without an instance a reminder stays pending instead of being lost.')
                 ],
                 [
                     'type'  => 'RowLayout',
