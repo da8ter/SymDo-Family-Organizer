@@ -979,13 +979,19 @@ html[data-symdo-theme="dark"] .member-bar {
   border-radius: var(--chip-r);
   padding: 0 8px 8px;
 }
-/* Die graue Flaeche blendet nur beim OEFFNEN weich ein; die HOEHE gleitet per
-   Skript (mailToggleAnimieren), weil „auto" nicht animierbar ist und der Inhalt
-   beim Zuklappen erst NACH dem Schrumpfen verschwinden darf.
-   Der Uebergang steht bewusst NUR am .open-Zustand: stuende er an .mail-ai,
-   blendete die Flaeche auch beim Schliessen nach — Rundung und Polster sind da
-   aber schon weg, und der Rest flackerte als eckiges Grau hinter der Pille. */
-.mail-ai.open { transition: background-color .28s ease; }
+/* Die HOEHE gleitet per Skript (mailToggleAnimieren), weil „auto" nicht
+   animierbar ist und der Inhalt beim Zuklappen erst NACH dem Schrumpfen
+   verschwinden darf. Das Grau wechselt bewusst OHNE Uebergang: es gehoert zum
+   aufgeklappten Zustand, und ein Nachblenden beim Schliessen zeigte sich als
+   eckiges Grau hinter der wieder runden Pille (Rundung und Polster sind da
+   schon weg).
+
+   flex: 0 0 auto ist hier keine Kosmetik: .mail-ai ist ein Flex-Container, und
+   waehrend die Hoehe animiert wird, ist sie KLEINER als der Inhalt. Ohne diese
+   Zeile stauchen die Flex-Kinder auf fast null, statt unten beschnitten zu
+   werden — sichtbar als grauer Streifen unter dem Chip, aus dem die Zeilen erst
+   hervorwachsen. Mit ihr behalten sie ihre Hoehe und werden aufgedeckt. */
+.mail-ai > * { flex: 0 0 auto; }
 /* Auf der Flaeche traegt die Zeile den Seitengrundton statt --row: --row (~8 %
    Inhaltston) laege fast auf dem Grau der Flaeche (9 %) und die Karten
    verschwaenden darin. Deckend bleibt sie (var(--bg) = card-color), sonst
