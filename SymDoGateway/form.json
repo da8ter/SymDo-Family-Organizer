@@ -7,7 +7,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Connect SymDo iOS app",
+            "caption": "Connect iOS app",
             "expanded": false,
             "items": [
                 {
@@ -35,7 +35,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Connect SymDo web app",
+            "caption": "Connect web app",
             "expanded": false,
             "items": [
                 {
@@ -156,7 +156,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "AI analysis → tasks from documents, ingredients from recipes",
+            "caption": "AI features",
             "expanded": false,
             "items": [
                 {
@@ -266,7 +266,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Users for to-do lists",
+            "caption": "Family members",
             "expanded": false,
             "items": [
                 {
