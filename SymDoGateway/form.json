@@ -161,7 +161,7 @@
             "items": [
                 {
                     "type": "Label",
-                    "caption": "TO-DO LISTS — tasks from documents\nNotices from school or daycare, parent letters, letters from authorities or the doctor, appointment slips, invitations. Deadlines and appointments found in the text become due dates.\n\nSHOPPING LISTS — ingredients from recipes\nThe ingredients arrive as articles with quantity and category. Before adding them you can change the number of servings; every amount scales along."
+                    "caption": "The AI reads documents for you and saves the typing: a photo or a PDF is enough, and the text turns into ready-made entries — deadlines and dates included. Nothing is ever created on its own: you see every suggestion and add it with one tap.\n\nTASKS\nParent letters, notices from school or daycare, letters from authorities, invoices, appointment slips. Whatever has to be done becomes a task — a date found in the text becomes its due date, a looming penalty or reminder makes it high priority.\n\nSHOPPING LISTS\nRecipes become articles with quantity and category. You can change the number of servings before adding them, and every amount scales along. A handwritten note or a photographed label works just as well.\n\nDATES\nWhatever takes place instead of being done — a parents' evening, a course, an outing, a closing day — becomes an appointment in the calendar, with its time and multi-day periods. This needs the OpenCalendar module set up."
                 },
                 {
                     "type": "Label",
