@@ -1420,23 +1420,16 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $teile['hinweis']
                 ],
                 [
-                    // Kopierbar statt nur lesbar: aus einer Beschriftung laesst sich
-                    // nichts markieren, und beides muss ins Mailgun-Formular.
-                    'type'    => 'ValidationTextBox',
-                    'name'    => 'MailHookExpression',
-                    'caption' => $this->Translate('Expression (copy to Mailgun)'),
-                    'width'   => '600px',
-                    'enabled' => false,
-                    'value'   => $teile['ausdruck']
-                ],
-                [
+                    // Bewusst ein normales Eingabefeld: aus einer Beschriftung laesst
+                    // sich nichts markieren, und ein ausgegrautes Feld ebenso wenig.
+                    // Aenderungen daran sind folgenlos — der Inhalt wird bei jedem
+                    // Aufbau neu berechnet und gehoert zu keiner Eigenschaft.
                     'type'      => 'ValidationTextBox',
-                    'name'      => 'MailHookAction',
-                    'caption'   => $this->Translate('Action (copy to Mailgun)'),
+                    'name'      => 'MailHookNotifyUrl',
+                    'caption'   => $this->Translate('Address for Mailgun ("Store and notify" → Notify) — select and copy'),
                     'width'     => '600px',
                     'multiline' => true,
-                    'enabled'   => false,
-                    'value'     => $teile['aktion']
+                    'value'     => $teile['url']
                 ],
                 [
                     'type'     => 'List',
