@@ -399,6 +399,10 @@ trait AppCore
         $accepted = $this->AiPrivacyAccepted();
         $storable = $this->AiPrivacyStorable();
         $this->SetFormElementProperty($form['elements'], 'AiEnabled', 'enabled', $accepted || !$storable);
+        // Fehlt die Einwilligung, steht der Grund im Datenschutz-Bereich — der darf
+        // dann nicht zugeklappt sein, sonst ist der gesperrte Schalter unerklaerlich.
+        // Liegt sie vor, bleibt der Bereich eingeklappt und macht Platz.
+        $this->SetFormElementProperty($form['elements'], 'AiPrivacyPanel', 'expanded', !$accepted && $storable);
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyStatus', 'caption', $this->AiPrivacyStatusText());
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyRevoke', 'visible', $accepted);
         $this->SetFormElementProperty($form['elements'], 'AiPrivacyAccept', 'enabled', !$accepted);

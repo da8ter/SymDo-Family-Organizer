@@ -164,95 +164,110 @@
                     "caption": "The AI reads documents for you and saves the typing: a photo or a PDF is enough, and the text turns into ready-made entries — deadlines and dates included. Nothing is ever created on its own: you see every suggestion and add it with one tap.\n\nTASKS\nParent letters, notices from school or daycare, letters from authorities, invoices, appointment slips. Whatever has to be done becomes a task — a date found in the text becomes its due date, a looming penalty or reminder makes it high priority.\n\nSHOPPING LISTS\nRecipes become articles with quantity and category. You can change the number of servings before adding them, and every amount scales along. A handwritten note or a photographed label works just as well. Recognised ingredients can be kept as a favorite list under a name of your choice — together with their source: the link, or the photo respectively the PDF as a media object below \"Rezeptfotos\". \"Open recipe\" shows that original again later.\n\nDATES\nWhatever takes place instead of being done — a parents' evening, a course, an outing, a closing day — becomes an appointment in the calendar, with its time and multi-day periods. This needs the OpenCalendar module set up."
                 },
                 {
-                    "type": "Label",
-                    "name": "AiPrivacyStatus",
-                    "caption": "Consent required: open the privacy notice and agree — until then the AI analysis cannot be switched on."
-                },
-                {
-                    "type": "RowLayout",
-                    "items": [
-                        {
-                            "type": "PopupButton",
-                            "caption": "Privacy notice",
-                            "popup": {
-                                "caption": "Privacy notice for the AI analysis",
-                                "items": [
-                                    {
-                                        "type": "Label",
-                                        "caption": "WHAT IS TRANSMITTED\nOnly what you hand over for one analysis: the photo, the PDF, or — for a recipe link — the text of that page. Documents you photograph for the to-do list are transmitted as an image and may contain names, addresses or health data; check before scanning whether that is acceptable to you.\n\nWHO RECEIVES IT\nThe provider selected below. Anthropic and OpenAI process the data on their servers, outside your home network and possibly outside the EU; their API terms apply. A local server (e.g. Ollama) receives everything inside your own network — nothing leaves the house.\n\nWHAT IS STORED\nThis gateway does not keep the analysed photos or PDFs; they exist only for the duration of the request. Exception: if you save a recipe as a favorite list, the photo respectively the PDF is stored deliberately as a media object below \"Rezeptfotos\" and stays until you delete that list. The API key is stored in this instance's configuration on your server and never reaches the apps.\n\nYOUR RESPONSIBILITY\nYou operate this system. If you have documents of other people analysed — family members, letters from third parties — you are the controller under the GDPR. Consent can be withdrawn at any time; the AI analysis is switched off with it."
-                                    },
-                                    {
-                                        "type": "Button",
-                                        "name": "AiPrivacyAccept",
-                                        "caption": "I have read this and agree",
-                                        "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', true);"
-                                    }
-                                ]
-                            }
-                        },
-                        {
-                            "type": "Button",
-                            "name": "AiPrivacyRevoke",
-                            "caption": "Withdraw consent (switches the AI analysis off)",
-                            "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', false);",
-                            "visible": false
-                        }
-                    ]
-                },
-                {
                     "type": "CheckBox",
                     "name": "AiEnabled",
                     "caption": "Enable AI analysis (when off, the web app hides the AI buttons and every request is refused)",
                     "enabled": false
                 },
                 {
-                    "type": "Select",
-                    "name": "AiProvider",
-                    "caption": "Provider",
-                    "onChange": "TGW_UpdateAiFormVisibility($id, $AiProvider);",
-                    "options": [
+                    "type": "ExpansionPanel",
+                    "name": "AiPrivacyPanel",
+                    "caption": "Privacy",
+                    "expanded": false,
+                    "items": [
                         {
-                            "caption": "Anthropic (Claude)",
-                            "value": "anthropic"
+                            "type": "Label",
+                            "name": "AiPrivacyStatus",
+                            "caption": "Consent required: open the privacy notice and agree — until then the AI analysis cannot be switched on."
                         },
                         {
-                            "caption": "OpenAI (GPT)",
-                            "value": "openai"
-                        },
-                        {
-                            "caption": "Local server (OpenAI-compatible)",
-                            "value": "local"
+                            "type": "RowLayout",
+                            "items": [
+                                {
+                                    "type": "PopupButton",
+                                    "caption": "Privacy notice",
+                                    "popup": {
+                                        "caption": "Privacy notice for the AI analysis",
+                                        "items": [
+                                            {
+                                                "type": "Label",
+                                                "caption": "WHAT IS TRANSMITTED\nOnly what you hand over for one analysis: the photo, the PDF, or — for a recipe link — the text of that page. Documents you photograph for the to-do list are transmitted as an image and may contain names, addresses or health data; check before scanning whether that is acceptable to you.\n\nWHO RECEIVES IT\nThe provider selected below. Anthropic and OpenAI process the data on their servers, outside your home network and possibly outside the EU; their API terms apply. A local server (e.g. Ollama) receives everything inside your own network — nothing leaves the house.\n\nWHAT IS STORED\nThis gateway does not keep the analysed photos or PDFs; they exist only for the duration of the request. Exception: if you save a recipe as a favorite list, the photo respectively the PDF is stored deliberately as a media object below \"Rezeptfotos\" and stays until you delete that list. The API key is stored in this instance's configuration on your server and never reaches the apps.\n\nYOUR RESPONSIBILITY\nYou operate this system. If you have documents of other people analysed — family members, letters from third parties — you are the controller under the GDPR. Consent can be withdrawn at any time; the AI analysis is switched off with it."
+                                            },
+                                            {
+                                                "type": "Button",
+                                                "name": "AiPrivacyAccept",
+                                                "caption": "I have read this and agree",
+                                                "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', true);"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "type": "Button",
+                                    "name": "AiPrivacyRevoke",
+                                    "caption": "Withdraw consent (switches the AI analysis off)",
+                                    "onClick": "IPS_RequestAction($id, 'AiPrivacyConsent', false);",
+                                    "visible": false
+                                }
+                            ]
                         }
                     ]
                 },
                 {
-                    "type": "PasswordTextBox",
-                    "name": "AiAnthropicKey",
-                    "caption": "Anthropic API key (sk-ant-…)"
-                },
-                {
-                    "type": "PasswordTextBox",
-                    "name": "AiOpenAIKey",
-                    "caption": "OpenAI API key (sk-…)"
-                },
-                {
-                    "type": "ValidationTextBox",
-                    "name": "AiLocalBaseUrl",
-                    "caption": "Local base URL (e.g. http://192.168.1.50:11434/v1)"
-                },
-                {
-                    "type": "ValidationTextBox",
-                    "name": "AiLocalModel",
-                    "caption": "Local model (a vision model, e.g. llama3.2-vision)"
-                },
-                {
-                    "type": "PasswordTextBox",
-                    "name": "AiLocalKey",
-                    "caption": "Local API key (optional)"
-                },
-                {
-                    "type": "Label",
-                    "caption": "REQUIREMENTS AND COSTS\nYour own API key is required. Anthropic and OpenAI charge a few cents per analysis and receive the photo, the PDF or the recipe text. A local server (e.g. Ollama) keeps everything inside your network, but needs a vision-capable model — and one that accepts documents if you want to analyse PDFs. Keys: console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
+                    "type": "ExpansionPanel",
+                    "caption": "AI provider",
+                    "expanded": false,
+                    "items": [
+                        {
+                            "type": "Select",
+                            "name": "AiProvider",
+                            "caption": "Provider",
+                            "onChange": "TGW_UpdateAiFormVisibility($id, $AiProvider);",
+                            "options": [
+                                {
+                                    "caption": "Anthropic (Claude)",
+                                    "value": "anthropic"
+                                },
+                                {
+                                    "caption": "OpenAI (GPT)",
+                                    "value": "openai"
+                                },
+                                {
+                                    "caption": "Local server (OpenAI-compatible)",
+                                    "value": "local"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "PasswordTextBox",
+                            "name": "AiAnthropicKey",
+                            "caption": "Anthropic API key (sk-ant-…)"
+                        },
+                        {
+                            "type": "PasswordTextBox",
+                            "name": "AiOpenAIKey",
+                            "caption": "OpenAI API key (sk-…)"
+                        },
+                        {
+                            "type": "ValidationTextBox",
+                            "name": "AiLocalBaseUrl",
+                            "caption": "Local base URL (e.g. http://192.168.1.50:11434/v1)"
+                        },
+                        {
+                            "type": "ValidationTextBox",
+                            "name": "AiLocalModel",
+                            "caption": "Local model (a vision model, e.g. llama3.2-vision)"
+                        },
+                        {
+                            "type": "PasswordTextBox",
+                            "name": "AiLocalKey",
+                            "caption": "Local API key (optional)"
+                        },
+                        {
+                            "type": "Label",
+                            "caption": "REQUIREMENTS AND COSTS\nYour own API key is required. Anthropic and OpenAI charge a few cents per analysis and receive the photo, the PDF or the recipe text. A local server (e.g. Ollama) keeps everything inside your network, but needs a vision-capable model — and one that accepts documents if you want to analyse PDFs. Keys: console.anthropic.com / platform.openai.com. The key is stored in this instance's configuration on your server."
+                        }
+                    ]
                 }
             ]
         },
