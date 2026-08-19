@@ -244,7 +244,7 @@ trait ApiRouter
         $this->SendApiError('unknown_route', 'Unknown API route', 404);
     }
 
-    /** Blendet eine Liste haushaltsweit aus/ein — wirkt auf alle gekoppelten Geräte. */
+    /** Blendet eine Liste familienweit aus/ein — wirkt auf alle gekoppelten Geräte. */
     private function HandleVisibility(int $id): void
     {
         $body = $this->ReadJsonBody();

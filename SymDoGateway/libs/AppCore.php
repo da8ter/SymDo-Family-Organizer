@@ -1034,7 +1034,7 @@ trait AppCore
         ];
     }
 
-    /** @return int[] Instanz-IDs, die in der App ausgeblendet sind (haushaltsweit) */
+    /** @return int[] Instanz-IDs, die in der App ausgeblendet sind (familienweit) */
     private function GetHiddenInstances(): array
     {
         $decoded = json_decode($this->ReadAttributeString('HiddenInstances'), true);
@@ -1087,14 +1087,14 @@ trait AppCore
         return $all;
     }
 
-    /** JSON-Array der haushaltsweit ausgeblendeten Listen-Instanz-IDs (für Companion-Kacheln). */
+    /** JSON-Array der familienweit ausgeblendeten Listen-Instanz-IDs (für Companion-Kacheln). */
     public function GetHiddenLists(): string
     {
         return json_encode($this->GetHiddenInstances());
     }
 
     /**
-     * Sichtbarkeit einer Liste haushaltsweit setzen — Gegenstück zur REST-Route
+     * Sichtbarkeit einer Liste familienweit setzen — Gegenstück zur REST-Route
      * für die Symcon-Konfiguration.
      *
      * Bisher ließ sich das Ausblenden ausschließlich aus der App heraus ändern (die

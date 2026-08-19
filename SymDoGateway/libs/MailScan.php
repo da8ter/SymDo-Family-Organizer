@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Aufgaben aus weitergeleiteten E-Mails.
  *
- * Der Nutzer leitet Post an ein Postfach weiter — je Haushaltsmitglied eine
+ * Der Nutzer leitet Post an ein Postfach weiter — je Familienmitglied eine
  * Adresse. Symcon liest die Mail über das Kernmodul „E-Mail, Empfangen (IMAP)",
  * laesst dieselbe KI wie beim Foto-Scan Aufgaben daraus ableiten und legt die
  * Vorschlaege ab. Angelegt wird NICHTS von allein: die Web-App zeigt sie ueber
@@ -88,8 +88,8 @@ trait MailScan
         $this->RegisterPropertyString('MailHookSecret', '');
         // Mailguns „HTTP webhook signing key" — damit wird die Signatur geprueft.
         $this->RegisterPropertyString('MailHookSigningKey', '');
-        // Eigene Freigabeliste: hier schreibt die Schule DIREKT, nicht der eigene
-        // Haushalt wie beim Weiterleiten. Leer = alle (die Plus-Tags sind geheim).
+        // Eigene Freigabeliste: hier schreibt die Schule DIREKT, nicht die eigene
+        // Familie wie beim Weiterleiten. Leer = alle (die Plus-Tags sind geheim).
         $this->RegisterPropertyString('MailHookSenderAllow', '');
         // Basisadresse bei Mailgun, nur fuer die Anzeige und den Eintrag-Knopf.
         $this->RegisterPropertyString('MailHookBase', '');
@@ -259,7 +259,7 @@ trait MailScan
     }
 
     /**
-     * Traegt fuer jedes Haushaltsmitglied eine Plus-Adresse in die Zuordnungsliste ein.
+     * Traegt fuer jedes Familienmitglied eine Plus-Adresse in die Zuordnungsliste ein.
      *
      * Rein oertlich: Bei Mailgun muss keine Adresse angelegt werden, die eine
      * Auffang-Route nimmt ohnehin jede an. Der Knopf erspart nur das Abtippen —
@@ -509,7 +509,7 @@ trait MailScan
     /**
      * @param ?string $liste Eigene Freigabeliste; null = die des IMAP-Wegs.
      *        Der Webhook braucht eine eigene, weil dort die Schule DIREKT schreibt,
-     *        waehrend beim Weiterleiten der eigene Haushalt der Absender ist.
+     *        waehrend beim Weiterleiten die eigene Familie der Absender ist.
      */
     private function MailSenderAllowed(string $absender, ?string $liste = null): bool
     {
@@ -699,7 +699,7 @@ trait MailScan
                 'recipient' => (string)($kopf['Recipient'] ?? ''),
                 'userId'    => $userId,
                 // Wer die Mail urspruenglich geschrieben hat und wie sie damals hiess.
-                // Der aeussere Kopf nennt immer nur den weiterleitenden Haushalt und ein
+                // Der aeussere Kopf nennt immer nur das weiterleitende Familienmitglied und ein
                 // „Fwd:" davor — beides sagt dem Nutzer nichts.
                 'origin'    => $this->MailDetectOrigin($text),
                 'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
@@ -717,7 +717,7 @@ trait MailScan
      * Absender und Betreff der WEITERGELEITETEN Mail aus dem zitierten Kopf lesen.
      *
      * Bei einer Weiterleitung steht im aeusseren Kopf nur, wer sie weitergeleitet hat
-     * — im Haushalt also immer dieselbe Person — und im Betreff ein „Fwd:" davor. Wer
+     * — in der Familie also immer dieselbe Person — und im Betreff ein „Fwd:" davor. Wer
      * die Mail geschrieben hat und wie sie hiess, steht im zitierten Kopf im Text:
      *
      *     Von: "Michailidou, Sofia" <Sofia.Michailidou@awo-duesseldorf.de>
