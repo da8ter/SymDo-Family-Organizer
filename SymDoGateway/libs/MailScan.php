@@ -252,7 +252,7 @@ trait MailScan
             ];
         }
         return [
-            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Store and notify" and paste the address below into its "Notify" field. Turn ON "Stop" as well. Leave "Forward" OFF and Priority at 0. Both keys are under API Security: the signing key as "HTTP webhook signing key", the API key under "Mailgun API keys" (Create key — the value is shown only once, the Key ID in the list is not it). The "Verification public key" is not needed.'),
+            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Forward" and paste the address below into its "Destination" field — that way attachments come along. Turn ON "Stop" as well. Leave "Store and notify" OFF: for sandbox domains Mailgun refuses to hand out stored messages, so attachments would be lost. Priority stays 0. The signing key is under API Security → "HTTP webhook signing key"; an API key is not needed on this path.'),
             'url'     => rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim,
             'bereit'  => true,
         ];
@@ -865,11 +865,18 @@ trait MailScan
             return;
         }
 
-        // Groesse VOR dem Lesen pruefen — die einzige Wache, die keinen Speicher kostet.
-        $maxBytes = max(64, (int)$this->MailProp('MailHookMaxKB', 1024)) * 1024;
-        $laenge = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        // Groesse pruefen, so gut es geht: Symcons Webserver reicht CONTENT_LENGTH
+        // NICHT durch (gemessen — der Wert fehlt im $_SERVER-Feld), deshalb zaehlt
+        // hier die Summe der hochgeladenen Dateien und weiter unten die Laenge des
+        // gelesenen Rumpfs.
+        $maxBytes = max(64, (int)$this->MailProp('MailHookMaxKB', 8192)) * 1024;
+        $hochgeladen = 0;
+        foreach ($_FILES as $f) {
+            $hochgeladen += (int)($f['size'] ?? 0);
+        }
+        $laenge = max((int)($_SERVER['CONTENT_LENGTH'] ?? 0), $hochgeladen);
         if ($laenge > $maxBytes) {
-            $this->SendDebug('MailHook', sprintf('Rumpf zu gross: %d kB', (int)round($laenge / 1024)), 0);
+            $this->SendDebug('MailHook', sprintf('Zustellung zu gross: %d kB', (int)round($laenge / 1024)), 0);
             $antwort(406, 'payload too large');
             return;
         }
@@ -1080,6 +1087,16 @@ trait MailScan
         if ((bool)$this->MailProp('MailReadAttachments', true) !== true) {
             return null;
         }
+        // Zwei Wege, je nach Mailgun-Route:
+        //  - „forward" liefert die Datei mit; sie liegt dann in $_FILES und muss
+        //    SOFORT gelesen werden, denn nach dem Request ist sie weg.
+        //  - „store and notify" nennt nur Kopfdaten und eine Abrufadresse. Bei
+        //    Sandbox-Domains laeuft der Abruf allerdings ins Leere („Message
+        //    retrieval disabled for domain", am 19.08.2026 gemessen) — deshalb ist
+        //    „forward" der empfohlene Weg.
+        if ($_FILES !== []) {
+            return $this->MailHookPickUploaded();
+        }
         $liste = $daten['attachments'] ?? null;
         if (is_string($liste)) {
             $liste = json_decode($liste, true);   // Mailgun schickt das Feld als JSON-Text
@@ -1122,6 +1139,77 @@ trait MailScan
             return null;
         }
         return ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'url' => $url];
+    }
+
+    /**
+     * Den brauchbarsten der mitgelieferten Anhaenge waehlen und einlesen.
+     *
+     * Die Auswahl trifft dasselbe MailPickAttachment wie beim Postfach-Weg, damit
+     * Signaturlogos und zu kleine Bilder auch hier fallen. Gelesen wird nur der
+     * Gewinner — und zwar gleich hier, weil Symcons Ablage der hochgeladenen Datei
+     * nach dieser Anfrage verschwindet.
+     *
+     * @return array{kind: string, name: string, base64: string}|null
+     */
+    private function MailHookPickUploaded(): ?array
+    {
+        $teile = [];
+        $pfade = [];
+        $nr = 0;
+        foreach ($_FILES as $f) {
+            if (!is_array($f) || (int)($f['error'] ?? 1) !== 0) {
+                continue;
+            }
+            $nr++;
+            $name = trim((string)($f['name'] ?? ''));
+            $typRoh = strtolower(trim((string)($f['type'] ?? '')));
+            $stueck = explode('/', $typRoh);
+            $teile[] = [
+                'part'       => (string)$nr,
+                'type'       => trim($stueck[0] ?? ''),
+                'subtype'    => trim($stueck[1] ?? ''),
+                'encoding'   => 'base64',
+                'size'       => (int)($f['size'] ?? 0),
+                'name'       => $name,
+                // Mailgun liefert Inline-Bilder ueber content-id-map; ohne die
+                // Zuordnung gilt eine mitgelieferte Datei als echter Anhang. Die
+                // uebrigen Wachen (Groesse, Name, Pixel) tragen den Rest.
+                'attachment' => true,
+                'inline'     => false,
+                'cid'        => '',
+            ];
+            $pfade[(string)$nr] = (string)($f['tmp_name'] ?? '');
+        }
+        if ($teile === []) {
+            return null;
+        }
+        $wahl = $this->MailPickAttachment($teile);
+        if ($wahl === null) {
+            return null;
+        }
+        $pfad = $pfade[$wahl['part']] ?? '';
+        if ($pfad === '' || !is_file($pfad)) {
+            $this->SendDebug('MailHook', 'Anhang liegt nicht mehr vor', 0);
+            return null;
+        }
+        $roh = (string)@file_get_contents($pfad);
+        if ($roh === '') {
+            return null;
+        }
+        // Der Absender bestimmt den gemeldeten Typ — die Bytes entscheiden.
+        $istPdf  = str_starts_with($roh, '%PDF-');
+        $istBild = str_starts_with($roh, "\xFF\xD8\xFF") || str_starts_with($roh, "\x89PNG\r\n\x1a\n");
+        if (($wahl['kind'] === 'pdf' && !$istPdf) || ($wahl['kind'] === 'image' && !$istBild)) {
+            $this->SendDebug('MailHook', 'Anhang ' . $wahl['name'] . ' passt nicht zum gemeldeten Typ', 0);
+            return null;
+        }
+        $base64 = base64_encode($roh);
+        unset($roh);
+        if ($wahl['kind'] === 'image' && !$this->MailImageUsable($base64, $wahl['name'])) {
+            return null;
+        }
+        $this->SendDebug('MailHook', sprintf('Anhang %s uebernommen (%d kB base64)', $wahl['name'], (int)round(strlen($base64) / 1024)), 0);
+        return ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'base64' => $base64];
     }
 
     // ─────────────────────────── Warteschlange ───────────────────────────
@@ -1174,6 +1262,19 @@ trait MailScan
             return false;
         }
         $datei = $dir . sprintf('%d_%s.json', time(), $satz['key']);
+        // Liegt der Anhang schon vor (Weg „forward"), wandert er in eine eigene
+        // Datei: im JSON zusammen mit dem Text laege er beim Kodieren doppelt im
+        // Speicher, und der Timer soll ihn getrennt lesen koennen.
+        if (isset($satz['anhang']['base64'])) {
+            $attDatei = substr($datei, 0, -5) . '.att';
+            if (@file_put_contents($attDatei, $satz['anhang']['base64'], LOCK_EX) === false) {
+                $this->LogMessage('SymDo: Anhang konnte nicht in die Warteschlange geschrieben werden', KL_ERROR);
+                return false;
+            }
+            @chmod($attDatei, 0600);
+            $satz['anhang']['datei'] = basename($attDatei);
+            unset($satz['anhang']['base64']);
+        }
         $json = json_encode($satz, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($json) || @file_put_contents($datei, $json, LOCK_EX) === false) {
             $this->LogMessage('SymDo: Mail konnte nicht in die Warteschlange geschrieben werden', KL_ERROR);
@@ -1196,6 +1297,7 @@ trait MailScan
         foreach ($treffer as $datei) {
             if ((int)@filemtime($datei) < $grenze) {
                 @unlink($datei);
+                @unlink(substr($datei, 0, -5) . '.att');
                 continue;
             }
             $raus[] = $datei;
@@ -1235,7 +1337,16 @@ trait MailScan
         $anhang = null;
         $besch = is_array($satz['anhang'] ?? null) ? $satz['anhang'] : null;
         if ($besch !== null) {
-            $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
+            $base64 = null;
+            if (($besch['datei'] ?? '') !== '') {
+                // Weg „forward": liegt schon neben der Warteschlange.
+                $base64 = (string)@file_get_contents($this->MailHookDir() . basename((string)$besch['datei']));
+                if ($base64 === '') {
+                    $base64 = null;
+                }
+            } elseif (($besch['url'] ?? '') !== '') {
+                $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
+            }
             if ($base64 !== null) {
                 $anhang = ['kind' => (string)$besch['kind'], 'base64' => $base64, 'name' => (string)$besch['name']];
             }
@@ -1251,6 +1362,7 @@ trait MailScan
         );
         if ($fertig) {
             @unlink($datei);
+            @unlink(substr($datei, 0, -5) . '.att');
             $this->MailRemember(self::MAIL_HOOK_KEY, $key);
             return true;
         }
@@ -1258,6 +1370,7 @@ trait MailScan
         $versuche = $this->MailCountFailure(self::MAIL_HOOK_KEY, $key);
         if ($versuche >= self::MAIL_FAIL_MAX) {
             @unlink($datei);
+            @unlink(substr($datei, 0, -5) . '.att');
             $this->MailRemember(self::MAIL_HOOK_KEY, $key);
             $this->LogMessage(sprintf(
                 'SymDo: E-Mail „%s" aus dem Webhook nach %d fehlgeschlagenen Analysen uebersprungen',

@@ -1412,7 +1412,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookApiKey',
                     'width'   => '400px',
-                    'caption' => $this->Translate('Mailgun API key (only needed to fetch attachments)')
+                    'caption' => $this->Translate('Mailgun API key (only for the "Store and notify" path — not needed with Forward)')
                 ],
                 [
                     'type'    => 'Label',
@@ -1426,7 +1426,7 @@ class SymDoGateway extends IPSModuleStrict
                     // Aufbau neu berechnet und gehoert zu keiner Eigenschaft.
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailHookNotifyUrl',
-                    'caption'   => $this->Translate('Address for Mailgun ("Store and notify" → Notify) — select and copy'),
+                    'caption'   => $this->Translate('Address for Mailgun ("Forward" → Destination) — select and copy'),
                     'width'     => '600px',
                     'multiline' => true,
                     'value'     => $teile['url']
@@ -1469,7 +1469,7 @@ class SymDoGateway extends IPSModuleStrict
                     'name'    => 'MailHookMaxKB',
                     'minimum' => 64,
                     'width'   => '120px',
-                    'caption' => $this->Translate('Maximum size per delivery (KB)')
+                    'caption' => $this->Translate('Maximum size per delivery (KB) — attachments come along, so allow a few MB')
                 ],
                 [
                     'type'    => 'Label',
