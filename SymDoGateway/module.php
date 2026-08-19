@@ -1384,7 +1384,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'ValidationTextBox',
                     'name'    => 'MailHookBase',
                     'width'   => '400px',
-                    'caption' => $this->Translate('Base address at Mailgun (e.g. abc123@sandbox….mailgun.org)')
+                    'caption' => $this->Translate('Mailgun domain (e.g. sandbox….mailgun.org) — or a fixed address if you prefer plus tags')
                 ],
                 [
                     'type'  => 'RowLayout',

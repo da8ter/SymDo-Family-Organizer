@@ -209,6 +209,24 @@ trait MailScan
      * Aufbau des Panels und direkt nach dem Erzeugen eines neuen Geheimnisses.
      */
     /**
+     * Die Mailgun-Domain aus dem Feld lesen — egal, wie der Nutzer es gefuellt hat.
+     *
+     * Mailgun zeigt im Dashboard die DOMAIN (sandbox….mailgun.org), und genau die
+     * traegt man ab; eine feste Postfachadresse gibt es dort nicht, weil eine eigene
+     * Domain jede Adresse annimmt. Wer trotzdem eine volle Adresse eintraegt, soll
+     * aber nicht auflaufen — deshalb hier beides.
+     */
+    private function MailHookDomain(): string
+    {
+        $basis = trim((string)$this->MailProp('MailHookBase', ''));
+        if ($basis === '') {
+            return '';
+        }
+        $domain = str_contains($basis, '@') ? (string)(explode('@', $basis, 2)[1] ?? '') : $basis;
+        return trim(strtolower($domain), " \t<>");
+    }
+
+    /**
      * Die Einzelteile der Mailgun-Einrichtung.
      *
      * Mailgun fuehrt durch ein Formular mit Schaltern — dort gibt es kein Feld
@@ -250,13 +268,17 @@ trait MailScan
      */
     private function MailHookFillAddresses(): void
     {
-        $basis = trim((string)$this->MailProp('MailHookBase', ''));
-        if (!str_contains($basis, '@')) {
-            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter the base address at Mailgun first and press Apply.'));
+        $basis  = trim((string)$this->MailProp('MailHookBase', ''));
+        $domain = $this->MailHookDomain();
+        if ($domain === '') {
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
             return;
         }
-        [$lokal, $domain] = explode('@', $basis, 2);
-        $lokal = trim(explode('+', $lokal)[0]);
+        // Zwei Schreibweisen, beide sinnvoll: Wer nur die Domain eintraegt, bekommt
+        // je Mitglied eine eigene Adresse (lena@…) — eine eigene Domain nimmt ohnehin
+        // jede an, und das liest sich besser. Wer einen festen lokalen Teil vorgibt
+        // (post@…), bekommt Plus-Adressen darunter (post+lena@…).
+        $lokal = str_contains($basis, '@') ? trim(explode('+', explode('@', $basis, 2)[0])[0]) : '';
 
         $zeilen = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
         $zeilen = is_array($zeilen) ? $zeilen : [];
@@ -279,7 +301,8 @@ trait MailScan
             if ($tag === '') {
                 $tag = substr($id, 0, 6);
             }
-            $zeilen[] = ['Address' => $lokal . '+' . $tag . '@' . $domain, 'UserID' => $id];
+            $adresse = $lokal === '' ? $tag . '@' . $domain : $lokal . '+' . $tag . '@' . $domain;
+            $zeilen[] = ['Address' => $adresse, 'UserID' => $id];
             $neu++;
         }
         if ($neu === 0) {

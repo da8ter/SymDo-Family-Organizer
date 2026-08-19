@@ -169,7 +169,6 @@
             "Mail via webhook (Mailgun) — no mailbox needed": "E-Mail per Webhook (Mailgun) — ohne Postfach",
             "Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: members are told apart by plus addresses (base+lena@…), and the assignment happens in the list above. Both ways run side by side; the mailbox settings above stay untouched.": "Mailgun nimmt Post für Sie an und stellt sie sofort hier zu — ohne Postfach und ohne eigene Domain. Eine einzige Auffang-Route genügt: Die Mitglieder werden über Plus-Adressen unterschieden (basis+lena@…), zugeordnet wird in der Liste oben. Beide Wege laufen nebeneinander; an den Postfach-Einstellungen darüber ändert sich nichts.",
             "Accept mail via webhook": "E-Mail per Webhook annehmen",
-            "Base address at Mailgun (e.g. abc123@sandbox….mailgun.org)": "Basisadresse bei Mailgun (z. B. abc123@sandbox….mailgun.org)",
             "Secret in the address": "Geheimnis in der Adresse",
             "Create new secret": "Neues Geheimnis erzeugen",
             "Mailgun API key (only needed to fetch attachments)": "Mailgun-API-Schlüssel (nur zum Nachladen der Anhänge nötig)",
@@ -179,7 +178,6 @@
             "— no address yet —": "— noch keine Adresse —",
             "(no member)": "(kein Mitglied)",
             "Fill in plus addresses for all members": "Plus-Adressen für alle Mitglieder eintragen",
-            "Please enter the base address at Mailgun first and press Apply.": "Bitte zuerst die Basisadresse bei Mailgun eintragen und Übernehmen drücken.",
             "Every member already has an address.": "Jedes Mitglied hat bereits eine Adresse.",
             "%d address(es) added — press Apply to save.": "%d Adresse(n) eingetragen — zum Speichern bitte Übernehmen drücken.",
             "Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.": "Freigegebene Absender für den Webhook (einer pro Zeile; leer = alle). Achtung: Hier schreibt die Schule DIREKT — die eigenen Adressen gehören also nicht in diese Liste.",
@@ -191,7 +189,9 @@
             "Address for Mailgun (\"Store and notify\" → Notify) — select and copy": "Adresse für Mailgun („Store and notify\" → Notify) — markieren und kopieren",
             "Press \"Create new secret\" and then Apply — the address for Mailgun appears here afterwards.": "Bitte „Neues Geheimnis erzeugen\" und danach Übernehmen drücken — anschließend steht hier die Adresse für Mailgun.",
             "In Mailgun: Receiving → Create Route. Leave \"Expression type\" on \"Catch all\". Turn ON \"Store and notify\" and paste the address below into its \"Notify\" field. Turn ON \"Stop\" as well. Leave \"Forward\" OFF and Priority at 0. Both keys are under API Security: the signing key as \"HTTP webhook signing key\", the API key under \"Mailgun API keys\" (Create key — the value is shown only once, the Key ID in the list is not it). The \"Verification public key\" is not needed.": "In Mailgun: Receiving → Create Route. „Expression type\" auf „Catch all\" stehen lassen. Den Schalter „Store and notify\" EINschalten und die Adresse unten in dessen Feld „Notify\" einfügen. „Stop\" ebenfalls einschalten. „Forward\" bleibt aus, Priority auf 0. Beide Schlüssel stehen unter API Security: der Signaturschlüssel als „HTTP webhook signing key\", der API-Schlüssel unter „Mailgun API keys\" (Create key — der Wert wird nur einmal angezeigt, die Key ID in der Liste ist nicht der Schlüssel). Den „Verification public key\" brauchen wir nicht.",
-            "Mailgun HTTP webhook signing key (verifies every delivery)": "Mailgun „HTTP webhook signing key\" (prüft jede Zustellung)"
+            "Mailgun HTTP webhook signing key (verifies every delivery)": "Mailgun „HTTP webhook signing key\" (prüft jede Zustellung)",
+            "Mailgun domain (e.g. sandbox….mailgun.org) — or a fixed address if you prefer plus tags": "Mailgun-Domain (z. B. sandbox….mailgun.org) — oder eine feste Adresse, wenn Sie Plus-Adressen bevorzugen",
+            "Please enter your Mailgun domain above first and press Apply.": "Bitte zuerst oben die Mailgun-Domain eintragen und Übernehmen drücken."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
