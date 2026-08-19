@@ -497,10 +497,13 @@ trait MailFetch
             } elseif ($t['type'] === 'application' && preg_match('/\.pdf$/i', $t['name']) === 1) {
                 // Manche Absender schicken PDFs als application/octet-stream.
                 $kind = 'pdf';
-            } elseif ($t['type'] === 'image' && in_array($t['subtype'], ['jpeg', 'jpg'], true)) {
-                // Bewusst NUR JPEG: der gemeinsame KI-Pfad deklariert Bilder hart als
-                // image/jpeg (AiRunProviderCall). Ein PNG dort einzureichen waere eine
-                // falsche Etikettierung, die Anthropic zurueckweist.
+            } elseif ($t['type'] === 'image' && in_array($t['subtype'], ['jpeg', 'jpg', 'png'], true)) {
+                // JPEG und PNG: viele Scanner und Handy-Apps legen Seiten als PNG ab.
+                // Der KI-Pfad deklariert den Typ nicht mehr blind als image/jpeg,
+                // sondern liest ihn aus den Magic Bytes (AiImageMime) — eine falsche
+                // Etikettierung, die die Anbieter zurueckweisen wuerden, ist damit
+                // ausgeschlossen. GIF und WEBP bleiben aussen vor: als Anhang sind
+                // das praktisch immer Logos oder Animationen, keine Dokumente.
                 $kind = 'image';
             }
             if ($kind === null) {

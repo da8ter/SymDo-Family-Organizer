@@ -533,7 +533,7 @@ trait AiExtract
                 ];
             } elseif ($imageBase64 !== null) {
                 $content = [
-                    ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => $imageBase64]],
+                    ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $this->AiImageMime($imageBase64), 'data' => $imageBase64]],
                     ['type' => 'text', 'text' => $userText],
                 ];
             } else {
@@ -621,7 +621,7 @@ trait AiExtract
                 ];
             } elseif ($imageBase64 !== null) {
                 $userContent = [
-                    ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . $imageBase64]],
+                    ['type' => 'image_url', 'image_url' => ['url' => 'data:' . $this->AiImageMime($imageBase64) . ';base64,' . $imageBase64]],
                     ['type' => 'text', 'text' => $userText],
                 ];
             } else {
@@ -701,6 +701,11 @@ trait AiExtract
     private function AiParseTodos(string $text): array
     {
         $rows = $this->AiDecodeJsonArray($text);
+        if ($rows === []) {
+            // „[]" (das Modell sieht nichts) und unlesbares Geschwafel sehen von
+            // aussen gleich aus — der Rohtext im Debug unterscheidet beides.
+            $this->SendDebug('AI', 'Antwort ohne Eintraege, Rohtext: ' . mb_substr($text, 0, 300), 0);
+        }
         $out  = [];
         foreach ($rows as $row) {
             if (!is_array($row)) {
@@ -897,6 +902,33 @@ trait AiExtract
         }
         $rows = json_decode(substr($text, $start, $end - $start + 1), true);
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * Bildtyp aus den Daten selbst bestimmen.
+     *
+     * Bewusst an den Magic Bytes und nicht am Dateinamen oder an einer
+     * durchgereichten Angabe: Das Bild kommt aus drei Richtungen (Kamera der App,
+     * Mailanhang, Kachel-Relay), und nur die Bytes wissen sicher, was es ist. Eine
+     * falsche Etikettierung weisen die Anbieter zurueck.
+     *
+     * @return string image/jpeg, image/png, image/gif oder image/webp — im Zweifel
+     *                JPEG, denn das war bis dahin die einzige Annahme im Modul.
+     */
+    private function AiImageMime(string $base64): string
+    {
+        // 24 base64-Zeichen (Vielfaches von 4) ergeben 18 Bytes — genug für jede Signatur.
+        $kopf = (string)base64_decode(substr($base64, 0, 24), false);
+        if (str_starts_with($kopf, "\x89PNG\r\n\x1a\n")) {
+            return 'image/png';
+        }
+        if (str_starts_with($kopf, 'GIF87a') || str_starts_with($kopf, 'GIF89a')) {
+            return 'image/gif';
+        }
+        if (str_starts_with($kopf, 'RIFF') && substr($kopf, 8, 4) === 'WEBP') {
+            return 'image/webp';
+        }
+        return 'image/jpeg';
     }
 
     // ────────────────────────────── PDF für lokale Server ──────────────────────────────
@@ -1367,8 +1399,18 @@ trait AiExtract
             . 'Nur wenn wirklich kein Datum und keine Frist erkennbar ist, setze "due" auf null. Antworte '
             . 'AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und ohne Markdown. Jedes Element hat '
             . 'exakt diese Felder: {"title": string, "info": string oder null, "due": "YYYY-MM-DD" oder '
-            . 'null, "priority": "high" oder "normal" oder "low"}. Nur wenn wirklich keinerlei Handlung für '
-            . 'den Empfänger erkennbar ist, antworte mit [].';
+            . 'null, "priority": "high" oder "normal" oder "low"}. '
+            // Ohne diesen Satz liefert ein kleines Modell bei einer freundlichen
+            // Einladung eine leere Liste: Es sucht die Aufforderung („bitte
+            // zurücksenden") und findet keine (gemessen an „Angebot Segelboot bauen
+            // am 27.06." — 0 Einträge, obwohl Datum, Kosten und Anmeldung dastanden).
+            . 'EINLADUNGEN UND ANGEBOTE ZÄHLEN MIT: Ein Kurs, Workshop, Ausflug, Fest oder '
+            . 'Mitmachangebot mit konkretem Datum gehört IMMER in die Liste — auch wenn der '
+            . 'Text nur einlädt, erinnert oder „aufmerksam macht" und niemanden ausdrücklich '
+            . 'auffordert; das Datum kommt dann in "due". Ist eine Anmeldung nötig oder ein '
+            . 'Beitrag zu zahlen, gib das als eigenen Eintrag zurück. Antworte nur dann mit [], '
+            . 'wenn WEDER ein Datum NOCH eine Handlung vorkommt — reine Werbung, Newsletter, '
+            . 'Danksagungen, Rückblicke.';
     }
 
     /**
@@ -1419,7 +1461,20 @@ trait AiExtract
             . 'den LETZTEN Tag im Format YYYY-MM-DD an, sonst lass "end" weg. Fordert '
             . 'ein Termin zusaetzlich eine Handlung (anmelden, Betreuung organisieren, '
             . 'etwas mitbringen), gib BEIDES zurueck: den Termin als "event" und die '
-            . 'Handlung als "task" mit ihrer eigenen Frist.'
+            . 'Handlung als "task" mit ihrer eigenen Frist. '
+            // Ohne diesen Absatz liefert ein kleines Modell bei einer freundlichen
+            // Einladung eine leere Liste: Es sucht die Aufforderung („bitte
+            // zurueckschicken“) und findet keine (gemessen an „Angebot Segelboot
+            // bauen am 27.06.“ — 0 Eintraege, obwohl Datum, Kosten und Anmeldung
+            // im Text stehen).
+            . 'EINLADUNGEN UND ANGEBOTE ZAEHLEN: Ein Kurs, Workshop, Ausflug, Fest '
+            . 'oder Mitmachangebot mit konkretem Datum ist IMMER ein "event" — auch '
+            . 'wenn der Text nur einlaedt, erinnert oder „aufmerksam macht“ und '
+            . 'niemanden ausdruecklich auffordert. Der Empfaenger will es im '
+            . 'Kalender sehen. Ist dafuer eine Anmeldung noetig oder ein Beitrag zu '
+            . 'zahlen, gib zusaetzlich eine "task" dafuer zurueck. Eine leere Liste '
+            . 'ist nur richtig, wenn WEDER ein Datum NOCH eine Handlung vorkommt — '
+            . 'reine Werbung, Newsletter, Danksagungen, Rueckblicke.'
             . $this->AiSeriesRule();
     }
 
