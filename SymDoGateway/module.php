@@ -1196,9 +1196,11 @@ class SymDoGateway extends IPSModuleStrict
     /**
      * Panel „KI E-Mail Analyse".
      *
-     * Bewusst in PHP gebaut und nicht in form.json: die Mitglieder-Spalte der
-     * Adresstabelle braucht die Nutzer als Auswahloptionen, und die stehen erst zur
-     * Laufzeit fest.
+     * Aufbau: Einleitung ueber die volle Breite, darunter die beiden Wege
+     * nebeneinander — links die Postfaecher, rechts Mailgun — und unten, was
+     * fuer beide gilt. Bewusst in PHP gebaut und nicht in form.json: die
+     * Mitglieder-Spalten brauchen die Nutzer als Auswahloptionen, und die
+     * stehen erst zur Laufzeit fest.
      */
     private function GetMailFormElements(): array
     {
@@ -1214,65 +1216,18 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")
-                ],
+                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
                 [
-                    'type'    => 'CheckBox',
-                    'name'    => 'MailEnabled',
-                    'caption' => $this->Translate('Analyze incoming mail')
-                ],
-                [
-                    'type'    => 'List',
-                    'name'    => 'MailBoxes',
-                    'caption' => $this->Translate('Mailboxes'),
-                    'rowCount' => 3,
-                    'add'     => true,
-                    'delete'  => true,
-                    'columns' => [
-                        [
-                            'caption' => $this->Translate('IMAP instance'),
-                            'name'    => 'InstanceID',
-                            'width'   => 'auto',
-                            'add'     => 0,
-                            'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
-                        ]
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        $this->GetMailBoxColumn($optionen),
+                        $this->GetMailHookColumn($optionen)
                     ]
-                ],
-                [
-                    'type'    => 'List',
-                    'name'    => 'MailAddresses',
-                    'caption' => $this->Translate('Recipient address → member'),
-                    'rowCount' => 5,
-                    'add'     => true,
-                    'delete'  => true,
-                    'columns' => [
-                        [
-                            'caption' => $this->Translate('Recipient address'),
-                            'name'    => 'Address',
-                            'width'   => '280px',
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox']
-                        ],
-                        [
-                            'caption' => $this->Translate('Member'),
-                            'name'    => 'UserID',
-                            'width'   => 'auto',
-                            'add'     => '',
-                            'edit'    => ['type' => 'Select', 'options' => $optionen]
-                        ]
-                    ]
-                ],
-                $this->GetMailHookPanel(),
-                [
-                    'type'      => 'ValidationTextBox',
-                    'name'      => 'MailSenderAllow',
-                    'caption'   => $this->Translate('Allowed senders (one per line, "@domain.tld" for a whole domain; empty = all)'),
-                    'multiline' => true,
-                    'width'     => '400px'
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('A forwarded mail carries YOUR address as the sender, not the original one — so entering your own addresses here is the strongest filter: only mail forwarded from the household is ever analysed.')
+                    'bold'    => true,
+                    'caption' => $this->Translate('Applies to both ways')
                 ],
                 [
                     'type'    => 'NumberSpinner',
@@ -1285,11 +1240,6 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'CheckBox',
                     'name'    => 'MailReadAttachments',
                     'caption' => $this->Translate('Also read PDF and image attachments')
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'MailDeleteAfter',
-                    'caption' => $this->Translate('Delete mail after analysis (mailbox only)')
                 ],
                 [
                     'type'     => 'SelectInstance',
@@ -1328,52 +1278,129 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     /**
-     * Zweiter Eingang: Mail per Webhook (Mailgun).
+     * Linke Spalte: die Postfaecher.
      *
-     * Bewusst ein eigenes Panel und nicht zwischen die Postfach-Felder gemischt —
-     * es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll beim
-     * Suchen eines Fehlers wissen, welcher davon gemeint ist.
+     * Zugeordnet wird hier ueber das POSTFACH, nicht ueber die Empfaengeradresse:
+     * Wer ein eigenes Postfach hat, ist damit erkannt, und im Haushalts-Postfach
+     * ist ohnehin niemand bestimmter gemeint. Eine Adressliste braucht dieser Weg
+     * deshalb nicht mehr — sie steht rechts, wo sie fuer Mailgun gebraucht wird.
+     *
+     * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
+     */
+    private function GetMailBoxColumn(array $optionen): array
+    {
+        // Ein Formularfeld auf eine Eigenschaft zu setzen, die es noch nicht gibt,
+        // laesst „Uebernehmen" scheitern: Eigenschaften entstehen in Create() und
+        // damit erst beim naechsten Kernel-Start. Bis dahin lieber ein Hinweis
+        // als ein Feld, das die Eingabe schluckt.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $allgemein = is_array($cfg) && array_key_exists('MailBoxGeneral', $cfg)
+            ? [
+                'type'         => 'SelectInstance',
+                'name'         => 'MailBoxGeneral',
+                'width'        => '460px',
+                'validModules' => [self::IMAP_MODULE_GUID],
+                'caption'      => $this->Translate('Household mailbox (no member assignment)')
+            ]
+            : [
+                'type'    => 'Label',
+                'width'   => '460px',
+                'caption' => $this->Translate('The field for the household mailbox appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
+            ];
+
+        return [
+            'type'  => 'ColumnLayout',
+            'items' => [
+                [
+                    'type'    => 'Label',
+                    'bold'    => true,
+                    'caption' => $this->Translate('IMAP mailboxes')
+                ],
+                [
+                    'type'    => 'Label',
+                    'width'   => '460px',
+                    'caption' => $this->Translate("Symcon reads the mailboxes set up here — forward mail to them, or let a member's own mailbox be read directly. A mailbox that belongs to one member hands its mail to that member; the household mailbox produces suggestions without a member.")
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailEnabled',
+                    'caption' => $this->Translate('Analyze incoming mail')
+                ],
+                $allgemein,
+                [
+                    'type'     => 'List',
+                    'name'     => 'MailBoxes',
+                    'caption'  => $this->Translate('Member → own mailbox'),
+                    'rowCount' => 4,
+                    'add'      => true,
+                    'delete'   => true,
+                    'columns'  => [
+                        [
+                            'caption' => $this->Translate('Member'),
+                            'name'    => 'UserID',
+                            'width'   => '160px',
+                            'add'     => '',
+                            'edit'    => ['type' => 'Select', 'options' => $optionen]
+                        ],
+                        [
+                            'caption' => $this->Translate('IMAP instance'),
+                            'name'    => 'InstanceID',
+                            'width'   => 'auto',
+                            'add'     => 0,
+                            'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
+                        ]
+                    ]
+                ],
+                [
+                    'type'      => 'ValidationTextBox',
+                    'name'      => 'MailSenderAllow',
+                    'caption'   => $this->Translate('Allowed senders (one per line, "@domain.tld" for a whole domain; empty = all)'),
+                    'multiline' => true,
+                    'width'     => '460px'
+                ],
+                [
+                    'type'    => 'Label',
+                    'width'   => '460px',
+                    'caption' => $this->Translate('A forwarded mail carries YOUR address as the sender, not the original one — so entering your own addresses here is the strongest filter: only mail forwarded from the household is ever analysed.')
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailDeleteAfter',
+                    'caption' => $this->Translate('Delete mail after analysis (mailbox only)')
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Rechte Spalte: Mail per Webhook (Mailgun).
+     *
+     * Bewusst neben und nicht zwischen den Postfach-Feldern: es sind zwei
+     * getrennte Wege in dieselbe Analyse, und der Nutzer soll beim Suchen eines
+     * Fehlers wissen, welcher davon gemeint ist.
      *
      * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
      * nirgends, und ein falsch abgetipptes Geheimnis kostet eine Stunde Suche.
+     *
+     * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
      */
-    private function GetMailHookPanel(): array
+    private function GetMailHookColumn(array $optionen): array
     {
-        $teile = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
-
-        // Ueberblick: welches Mitglied hat welche Adresse — und wer noch keine.
-        $zeilen = [];
-        $karte = [];
-        $roh = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
-        foreach (is_array($roh) ? $roh : [] as $z) {
-            $adresse = trim((string)($z['Address'] ?? ''));
-            if ($adresse !== '') {
-                $karte[trim((string)($z['UserID'] ?? ''))][] = $adresse;
-            }
-        }
-        foreach ($this->LoadUsers() as $u) {
-            $id = (string)($u['id'] ?? '');
-            foreach ($karte[$id] ?? [] as $adresse) {
-                $zeilen[] = ['Member' => (string)($u['name'] ?? ''), 'Address' => $adresse];
-            }
-            if (($karte[$id] ?? []) === []) {
-                $zeilen[] = ['Member' => (string)($u['name'] ?? ''), 'Address' => $this->Translate('— no address yet —')];
-            }
-        }
-        foreach ($karte[''] ?? [] as $adresse) {
-            $zeilen[] = ['Member' => $this->Translate('(no member)'), 'Address' => $adresse];
-        }
-
+        $teile   = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
         $wartend = count($this->MailHookQueueFiles());
 
         return [
-            'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed'),
-            'expanded' => false,
-            'items'    => [
+            'type'  => 'ColumnLayout',
+            'items' => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: members are told apart by plus addresses (base+lena@…), and the assignment happens in the list above. Both ways run side by side; the mailbox settings above stay untouched. Every mail addressed here — attachments included — passes through the servers of that service and is then analysed by the configured AI provider; this runs only with the consent given under "AI features" (see the privacy notice there).')
+                    'bold'    => true,
+                    'caption' => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed')
+                ],
+                [
+                    'type'    => 'Label',
+                    'width'   => '460px',
+                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: everything arrives on the same domain, so the plus tag in the address says who is meant (base+lena@…) — that is what the address list below assigns. Every mail addressed here, attachments included, passes through that service\'s servers first.')
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -1383,7 +1410,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'ValidationTextBox',
                     'name'    => 'MailHookBase',
-                    'width'   => '400px',
+                    'width'   => '460px',
                     'caption' => $this->Translate('Mailgun domain (e.g. sandbox….mailgun.org) — or a fixed address if you prefer plus tags')
                 ],
                 [
@@ -1392,7 +1419,7 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'type'    => 'PasswordTextBox',
                             'name'    => 'MailHookSecret',
-                            'width'   => '380px',
+                            'width'   => '320px',
                             'caption' => $this->Translate('Secret in the address')
                         ],
                         [
@@ -1405,18 +1432,19 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookSigningKey',
-                    'width'   => '400px',
+                    'width'   => '460px',
                     'caption' => $this->Translate('Mailgun HTTP webhook signing key (verifies every delivery)')
                 ],
                 [
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookApiKey',
-                    'width'   => '400px',
+                    'width'   => '460px',
                     'caption' => $this->Translate('Mailgun API key (only for the "Store and notify" path — not needed with Forward)')
                 ],
                 [
                     'type'    => 'Label',
                     'name'    => 'MailHookSetup',
+                    'width'   => '460px',
                     'caption' => $teile['hinweis']
                 ],
                 [
@@ -1427,22 +1455,33 @@ class SymDoGateway extends IPSModuleStrict
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailHookNotifyUrl',
                     'caption'   => $this->Translate('Address for Mailgun ("Forward" → Destination) — select and copy'),
-                    'width'     => '600px',
+                    'width'     => '460px',
                     'multiline' => true,
                     'value'     => $teile['url']
                 ],
                 [
                     'type'     => 'List',
-                    'name'     => 'MailHookAddresses',
-                    'caption'  => $this->Translate('Addresses per member (from the list above)'),
+                    'name'     => 'MailAddresses',
+                    'caption'  => $this->Translate('Recipient address → member'),
                     'rowCount' => 5,
-                    'add'      => false,
-                    'delete'   => false,
+                    'add'      => true,
+                    'delete'   => true,
                     'columns'  => [
-                        ['caption' => $this->Translate('Member'),  'name' => 'Member',  'width' => '200px'],
-                        ['caption' => $this->Translate('Address'), 'name' => 'Address', 'width' => 'auto']
-                    ],
-                    'values'   => $zeilen
+                        [
+                            'caption' => $this->Translate('Recipient address'),
+                            'name'    => 'Address',
+                            'width'   => '280px',
+                            'add'     => '',
+                            'edit'    => ['type' => 'ValidationTextBox']
+                        ],
+                        [
+                            'caption' => $this->Translate('Member'),
+                            'name'    => 'UserID',
+                            'width'   => 'auto',
+                            'add'     => '',
+                            'edit'    => ['type' => 'Select', 'options' => $optionen]
+                        ]
+                    ]
                 ],
                 [
                     'type'    => 'Button',
@@ -1461,7 +1500,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailHookSenderAllow',
                     'multiline' => true,
-                    'width'     => '400px',
+                    'width'     => '460px',
                     'caption'   => $this->Translate('Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.')
                 ],
                 [

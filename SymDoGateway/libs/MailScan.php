@@ -65,11 +65,16 @@ trait MailScan
     private function MailCreate(): void
     {
         $this->RegisterPropertyBoolean('MailEnabled', false);
-        // Liste: je Zeile eine IMAP-Instanz.
+        // Das Haushalts-Postfach: was hier liegt, gehoert niemandem bestimmten und
+        // wird ohne Mitglied vorgeschlagen.
+        $this->RegisterPropertyInteger('MailBoxGeneral', 0);
+        // Liste: je Zeile ein Postfach EINES Mitglieds — darueber laeuft die
+        // Zuordnung des IMAP-Weges. Wer sein eigenes Postfach hat, braucht dafuer
+        // keine Adressliste.
         $this->RegisterPropertyString('MailBoxes', '[]');
-        // Liste: Empfaengeradresse → Mitglied. Bewusst eine Tabelle und kein Feld
-        // am Nutzer: es gibt Adressen ohne eigenes Mitglied (die allgemeine) und
-        // mehrere Adressen pro Mitglied.
+        // Liste: Empfaengeradresse → Mitglied. Gilt nur fuer den Webhook-Weg: dort
+        // kommt alles auf derselben Domain an und nur der Plus-Tag verraet, wer
+        // gemeint ist. Zugleich die Wache des oeffentlichen Endpunkts.
         $this->RegisterPropertyString('MailAddresses', '[]');
         // Freigegebene Absender, einer pro Zeile; auch „@domain.tld". Leer = alle.
         $this->RegisterPropertyString('MailSenderAllow', '');
@@ -409,7 +414,7 @@ trait MailScan
                 if ($uid === '' || $this->MailSeen((string)$imapID, $uid)) {
                     continue;
                 }
-                $urteil = $this->MailJudge($mail);
+                $urteil = $this->MailJudge($mail, null, $this->MailBoxMember($imapID));
                 if ($urteil['skip']) {
                     // Verworfene Mail trotzdem vermerken, sonst wird sie bei jedem
                     // Signal erneut geprueft.
@@ -459,29 +464,37 @@ trait MailScan
     }
 
     /**
-     * Darf diese Mail analysiert werden? Liefert zugleich das Mitglied, dem die
-     * Empfaengeradresse gehoert.
+     * Darf diese Mail analysiert werden? Liefert zugleich das zustaendige Mitglied.
+     *
+     * @param ?string $userId Bereits bekanntes Mitglied ('' = keines). Der IMAP-Weg
+     *        gibt es mit, weil dort das POSTFACH zuordnet; nur der Webhook laesst es
+     *        offen und sucht die Empfaengeradresse in der Zuordnungsliste. Diese
+     *        Liste ist dort zugleich die Wache: der Endpunkt ist oeffentlich, also
+     *        wird nur angenommen, was einer eingetragenen Adresse gilt. Beim
+     *        Postfach braucht es diese Wache nicht — dort ist schon das Einrichten
+     *        des Kontos die Entscheidung, und die Absenderliste filtert weiter.
      *
      * @return array{skip: bool, reason: string, userId: string}
      */
-    private function MailJudge(array $mail, ?string $senderAllow = null): array
+    private function MailJudge(array $mail, ?string $senderAllow = null, ?string $userId = null): array
     {
         $nein = static fn(string $grund): array => ['skip' => true, 'reason' => $grund, 'userId' => ''];
 
-        $empfaenger = strtolower(trim((string)($mail['Recipient'] ?? '')));
-        $karte      = $this->MailAddressMap();
-        if ($karte === []) {
-            return $nein('keine Adress-Zuordnung konfiguriert');
-        }
-        $userId = null;
-        foreach ($this->MailRecipientCandidates($empfaenger) as $kandidat) {
-            if (array_key_exists($kandidat, $karte)) {
-                $userId = $karte[$kandidat];
-                break;
-            }
-        }
         if ($userId === null) {
-            return $nein('Empfaenger ' . $empfaenger . ' nicht zugeordnet');
+            $empfaenger = strtolower(trim((string)($mail['Recipient'] ?? '')));
+            $karte      = $this->MailAddressMap();
+            if ($karte === []) {
+                return $nein('keine Adress-Zuordnung konfiguriert');
+            }
+            foreach ($this->MailRecipientCandidates($empfaenger) as $kandidat) {
+                if (array_key_exists($kandidat, $karte)) {
+                    $userId = $karte[$kandidat];
+                    break;
+                }
+            }
+            if ($userId === null) {
+                return $nein('Empfaenger ' . $empfaenger . ' nicht zugeordnet');
+            }
         }
 
         $absender = strtolower(trim((string)($mail['SenderAddress'] ?? '')));
@@ -1668,11 +1681,15 @@ trait MailScan
             && $this->AiPrivacyAccepted();
     }
 
-    /** @return list<int> */
+    /** @return list<int> Allgemeines Postfach zuerst, dann die der Mitglieder. */
     private function MailBoxIDs(): array
     {
-        $zeilen = json_decode((string)$this->MailProp('MailBoxes', '[]'), true);
         $raus = [];
+        $allgemein = (int)$this->MailProp('MailBoxGeneral', 0);
+        if ($allgemein > 0 && IPS_InstanceExists($allgemein)) {
+            $raus[] = $allgemein;
+        }
+        $zeilen = json_decode((string)$this->MailProp('MailBoxes', '[]'), true);
         foreach (is_array($zeilen) ? $zeilen : [] as $zeile) {
             $id = (int)($zeile['InstanceID'] ?? 0);
             if ($id > 0 && IPS_InstanceExists($id)) {
@@ -1680,6 +1697,25 @@ trait MailScan
             }
         }
         return array_values(array_unique($raus));
+    }
+
+    /**
+     * Mitglied eines Postfachs — die Zuordnung des IMAP-Weges.
+     *
+     * Das Postfach entscheidet, nicht die Empfaengeradresse: wer ein eigenes
+     * Postfach hat, ist damit erkannt, und im Haushalts-Postfach ist ohnehin
+     * niemand bestimmter gemeint. Ein Postfach ohne Mitglied liefert '' — die
+     * Vorschlaege erscheinen dann ohne Zuordnung.
+     */
+    private function MailBoxMember(int $imapID): string
+    {
+        $zeilen = json_decode((string)$this->MailProp('MailBoxes', '[]'), true);
+        foreach (is_array($zeilen) ? $zeilen : [] as $zeile) {
+            if ((int)($zeile['InstanceID'] ?? 0) === $imapID) {
+                return trim((string)($zeile['UserID'] ?? ''));
+            }
+        }
+        return '';
     }
 
     /** @return array<string, string> Adresse (klein) → Mitglieds-ID */
