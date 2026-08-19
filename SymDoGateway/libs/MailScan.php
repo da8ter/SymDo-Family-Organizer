@@ -120,6 +120,15 @@ trait MailScan
         if ($this->MailIsEnabled() || $this->MailHookIsEnabled()) {
             $this->MailArm();
         }
+        // Der Datenschutzhinweis verspricht: Deaktivieren verwirft wartende
+        // Mails. Ohne aktiven Hook bliebe die Warteschlange sonst liegen,
+        // denn der Verfallsputz laeuft nur im dann abgeschalteten Timer.
+        if (!$this->MailHookIsEnabled()) {
+            $entfernt = $this->MailHookClearQueue();
+            if ($entfernt > 0) {
+                $this->LogMessage(sprintf('SymDo: %d wartende E-Mail(s) nach Abschalten des Mail-Empfangs verworfen', $entfernt), KL_NOTIFY);
+            }
+        }
     }
 
     /**
@@ -1295,7 +1304,7 @@ trait MailScan
     }
 
     /**
-     * Warteschlange vollstaendig leeren — fuer den Einwilligungs-Widerruf.
+     * Warteschlange vollstaendig leeren — bei Einwilligungs-Widerruf und Abschalten.
      *
      * Die Dateien sind rohe Mailinhalte, deren einziger Zweck die Analyse war;
      * faellt die Einwilligung weg, gibt es keinen Grund, sie noch sieben Tage
