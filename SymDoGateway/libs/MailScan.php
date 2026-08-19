@@ -234,7 +234,7 @@ trait MailScan
             ];
         }
         return [
-            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Store and notify" and paste the address below into its "Notify" field. Turn ON "Stop" as well. Leave "Forward" OFF and Priority at 0. The signing key is under Settings → Webhooks, the API key under Settings → API keys.'),
+            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Store and notify" and paste the address below into its "Notify" field. Turn ON "Stop" as well. Leave "Forward" OFF and Priority at 0. Both keys are under API Security: the signing key as "HTTP webhook signing key", the API key under "Mailgun API keys" (Create key — the value is shown only once, the Key ID in the list is not it). The "Verification public key" is not needed.'),
             'url'     => rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim,
             'bereit'  => true,
         ];

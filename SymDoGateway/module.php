@@ -1406,7 +1406,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookSigningKey',
                     'width'   => '400px',
-                    'caption' => $this->Translate('Mailgun signing key (verifies every delivery)')
+                    'caption' => $this->Translate('Mailgun HTTP webhook signing key (verifies every delivery)')
                 ],
                 [
                     'type'    => 'PasswordTextBox',
