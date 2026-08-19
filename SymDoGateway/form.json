@@ -161,15 +161,7 @@
             "items": [
                 {
                     "type": "Label",
-                    "caption": "The AI reads documents for you and saves the typing: a photo or a PDF is enough, and the text turns into ready-made entries — deadlines and dates included. Nothing is ever created on its own: you see every suggestion and add it with one tap.\n\nTASKS\nParent letters, notices from school or daycare, letters from authorities, invoices, appointment slips. Whatever has to be done becomes a task — a date found in the text becomes its due date, a looming penalty or reminder makes it high priority.\n\nSHOPPING LISTS\nRecipes become articles with quantity and category. You can change the number of servings before adding them, and every amount scales along. A handwritten note or a photographed label works just as well.\n\nDATES\nWhatever takes place instead of being done — a parents' evening, a course, an outing, a closing day — becomes an appointment in the calendar, with its time and multi-day periods. This needs the OpenCalendar module set up."
-                },
-                {
-                    "type": "Label",
-                    "caption": "SOURCES\nLink — paste a recipe address; the gateway loads the page and reads the ingredients from it. Recipes only.\nPhoto — camera shot of a cookbook page, a handwritten note, a package or a document.\nFile — JPG, PNG or PDF from storage. A multi-page PDF is analysed as a whole, so a two-page recipe or a long letter works too."
-                },
-                {
-                    "type": "Label",
-                    "caption": "SAVING RECIPES\nRecognised ingredients can be stored as a favorite list under a name of your choice — together with their source: the link, or the photo respectively the PDF as a media object below \"Rezeptfotos\". \"Open recipe\" later shows that original again."
+                    "caption": "The AI reads documents for you and saves the typing: a photo or a PDF is enough, and the text turns into ready-made entries — deadlines and dates included. Nothing is ever created on its own: you see every suggestion and add it with one tap.\n\nTASKS\nParent letters, notices from school or daycare, letters from authorities, invoices, appointment slips. Whatever has to be done becomes a task — a date found in the text becomes its due date, a looming penalty or reminder makes it high priority.\n\nSHOPPING LISTS\nRecipes become articles with quantity and category. You can change the number of servings before adding them, and every amount scales along. A handwritten note or a photographed label works just as well. Recognised ingredients can be kept as a favorite list under a name of your choice — together with their source: the link, or the photo respectively the PDF as a media object below \"Rezeptfotos\". \"Open recipe\" shows that original again later.\n\nDATES\nWhatever takes place instead of being done — a parents' evening, a course, an outing, a closing day — becomes an appointment in the calendar, with its time and multi-day periods. This needs the OpenCalendar module set up."
                 },
                 {
                     "type": "Label",
