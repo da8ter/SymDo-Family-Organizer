@@ -51,6 +51,14 @@ trait MailScan
     /** Topf der ueber den Webhook eingegangenen Mails — kollidiert nie mit einer
      *  Instanz-ID, weil die immer numerisch ist (gleiche Ueberlegung wie oben). */
     private const MAIL_HOOK_KEY      = '#hook';
+    /** Verzeichnis der Warteschlange, relativ zum Kernel-Verzeichnis. */
+    private const MAIL_HOOK_DIR      = 'symdo_mailhook';
+    /** Mehr wartende Mails heisst: etwas stimmt nicht — dann lieber verzoegern. */
+    private const MAIL_HOOK_QUEUE_MAX = 50;
+    /** Aelter als das wird beim naechsten Lauf weggeraeumt (Notbremse gegen Muell). */
+    private const MAIL_HOOK_TTL      = 7 * 86400;
+    /** Zeitfenster fuer Mailguns Signatur — aelteres ist ein Wiedereinspiel-Versuch. */
+    private const MAIL_HOOK_SIG_AGE  = 900;
     /** So viele Zeilen weit wird nach dem zitierten Kopf gesucht (siehe MailDetectOrigin). */
     private const MAIL_ORIGIN_LINES  = 40;
 
@@ -71,6 +79,23 @@ trait MailScan
         // das Kernmodul liefert sie nicht. Abschaltbar, weil es eine zweite
         // Verbindung ins Postfach aufbaut.
         $this->RegisterPropertyBoolean('MailReadAttachments', true);
+
+        // ── Zweiter Eingang: Mail per Webhook (Mailgun) ──────────────────
+        $this->RegisterPropertyBoolean('MailHookEnabled', false);
+        // Teil des Hook-Pfades. Mailgun kann keine eigenen Kopfzeilen setzen,
+        // deshalb reist das erste Geheimnis in der Adresse; die Signatur unten
+        // ist die zweite, eigentliche Wache.
+        $this->RegisterPropertyString('MailHookSecret', '');
+        // Mailguns „HTTP webhook signing key" — damit wird die Signatur geprueft.
+        $this->RegisterPropertyString('MailHookSigningKey', '');
+        // Eigene Freigabeliste: hier schreibt die Schule DIREKT, nicht der eigene
+        // Haushalt wie beim Weiterleiten. Leer = alle (die Plus-Tags sind geheim).
+        $this->RegisterPropertyString('MailHookSenderAllow', '');
+        // Basisadresse bei Mailgun, nur fuer die Anzeige und den Eintrag-Knopf.
+        $this->RegisterPropertyString('MailHookBase', '');
+        $this->RegisterPropertyInteger('MailHookMaxKB', 1024);
+        // Nur zum Nachladen der Anhaenge (Basic-Auth „api:<key>").
+        $this->RegisterPropertyString('MailHookApiKey', '');
 
         $this->RegisterAttributeString('MailProposals', '[]');
         // Je Instanz die bereits verarbeiteten UIDs: {"26939":["1","2"]}
@@ -151,6 +176,17 @@ trait MailScan
             $this->MailArm();
             return true;
         }
+        if ($Ident === 'MailHookNewSecret') {
+            // Beide Geheimnisse auf einmal: das Pfad-Geheimnis erzeugen wir selbst,
+            // den Signaturschluessel traegt der Nutzer aus Mailgun ein.
+            $this->UpdateFormField('MailHookSecret', 'value', bin2hex(random_bytes(24)));
+            echo $this->Translate('New secret created — press Apply, then copy the address below into Mailgun.');
+            return true;
+        }
+        if ($Ident === 'MailHookFillAddresses') {
+            $this->MailHookFillAddresses();
+            return true;
+        }
         if ($Ident === 'MailScanNow') {
             foreach ($this->MailBoxIDs() as $imapID) {
                 @IMAP_UpdateCache($imapID);
@@ -159,6 +195,56 @@ trait MailScan
             return true;
         }
         return false;
+    }
+
+    /**
+     * Traegt fuer jedes Haushaltsmitglied eine Plus-Adresse in die Zuordnungsliste ein.
+     *
+     * Rein oertlich: Bei Mailgun muss keine Adresse angelegt werden, die eine
+     * Auffang-Route nimmt ohnehin jede an. Der Knopf erspart nur das Abtippen —
+     * bestehende Zeilen bleiben unberuehrt, damit eine von Hand vergebene Adresse
+     * nicht ueberschrieben wird.
+     */
+    private function MailHookFillAddresses(): void
+    {
+        $basis = trim((string)$this->MailProp('MailHookBase', ''));
+        if (!str_contains($basis, '@')) {
+            echo $this->Translate('Please enter the base address at Mailgun first and press Apply.');
+            return;
+        }
+        [$lokal, $domain] = explode('@', $basis, 2);
+        $lokal = trim(explode('+', $lokal)[0]);
+
+        $zeilen = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
+        $zeilen = is_array($zeilen) ? $zeilen : [];
+        $belegt = [];
+        foreach ($zeilen as $z) {
+            $belegt[trim((string)($z['UserID'] ?? ''))] = true;
+        }
+
+        $neu = 0;
+        foreach ($this->LoadUsers() as $u) {
+            $id = (string)($u['id'] ?? '');
+            if ($id === '' || isset($belegt[$id])) {
+                continue;
+            }
+            // Umlaute und alles Ungewohnte raus: die Adresse muss durch jeden
+            // Mailserver passen, und der Tag ist ohnehin nur ein Erkennungszeichen.
+            $tag = strtolower((string)($u['name'] ?? ''));
+            $tag = strtr($tag, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+            $tag = preg_replace('/[^a-z0-9]/', '', $tag) ?? '';
+            if ($tag === '') {
+                $tag = substr($id, 0, 6);
+            }
+            $zeilen[] = ['Address' => $lokal . '+' . $tag . '@' . $domain, 'UserID' => $id];
+            $neu++;
+        }
+        if ($neu === 0) {
+            echo $this->Translate('Every member already has an address.');
+            return;
+        }
+        $this->UpdateFormField('MailAddresses', 'values', json_encode(array_values($zeilen), JSON_UNESCAPED_UNICODE));
+        echo sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu);
     }
 
     /** Setzt den One-Shot-Timer. Die Arbeit gehoert nicht in den Nachrichten-Thread. */
@@ -212,6 +298,14 @@ trait MailScan
         // Erst pruefen, ob das Ergebnis ueberhaupt ablegbar ist. Ein Anbieter-Aufruf
         // ins Leere kostet Geld und laesst den Vorschlag verschwinden.
         if (!$this->MailWriteAttr('MailSeenUIDs', $this->MailAttr('MailSeenUIDs', '{}'))) {
+            return;
+        }
+
+        // Der Webhook zuerst: was schon im Haus ist, soll nicht hinter einem
+        // Postfach-Durchlauf warten. Beides bleibt bei EINER Mail pro Lauf.
+        if ($this->MailHookSchritt()) {
+            $this->WsPushDirty();
+            $this->MailArm();
             return;
         }
 
@@ -658,6 +752,473 @@ trait MailScan
             $text = mb_strcut($text, 0, self::MAIL_TEXT_MAX, 'UTF-8');
         }
         return $text;
+    }
+
+    // ──────────────────── Zweiter Eingang: Webhook (Mailgun) ────────────────────
+    //
+    // Mailgun nimmt die Mail an und meldet sie uns per HTTPS. Der Weg ist bewusst
+    // zweigeteilt: Der Webhook nimmt nur an und legt ab, die Analyse macht wie
+    // gehabt der Timer. Ein Anbieter-Aufruf dauert am eigenen Rechner 20 bis 60
+    // Sekunden — so lange darf keine Webanfrage offen stehen.
+    //
+    // Mailgun wiederholt selbst: bei allem ausser 200 und 406 nach 10 min, 15 min,
+    // 30 min, 1 h, 2 h, 4 h. Deshalb bedeutet hier 200 „erledigt", 406 „endgueltig
+    // verworfen" und JEDER interne Fehler 5xx — dann kommt die Mail spaeter wieder
+    // und geht nicht verloren.
+
+    /**
+     * Einstieg aus dem Hook. Antwortet selbst und gibt nichts zurueck.
+     *
+     * @param string $pfadGeheimnis letzter Pfadteil der Ziel-Adresse
+     */
+    private function MailHookHandle(string $pfadGeheimnis): void
+    {
+        $antwort = function (int $code, string $text): void {
+            http_response_code($code);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $text;
+        };
+
+        if ((bool)$this->MailProp('MailHookEnabled', false) !== true) {
+            $antwort(403, 'mail hook disabled');
+            return;
+        }
+        $geheim = trim((string)$this->MailProp('MailHookSecret', ''));
+        // Zu kurz gilt wie „nicht eingerichtet": ein geratenes Geheimnis waere sonst
+        // die einzige Huerde vor der Signaturpruefung.
+        if (strlen($geheim) < 24 || !hash_equals($geheim, $pfadGeheimnis)) {
+            $this->SendDebug('MailHook', 'Pfad-Geheimnis passt nicht', 0);
+            $antwort(403, 'forbidden');
+            return;
+        }
+
+        // Groesse VOR dem Lesen pruefen — die einzige Wache, die keinen Speicher kostet.
+        $maxBytes = max(64, (int)$this->MailProp('MailHookMaxKB', 1024)) * 1024;
+        $laenge = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        if ($laenge > $maxBytes) {
+            $this->SendDebug('MailHook', sprintf('Rumpf zu gross: %d kB', (int)round($laenge / 1024)), 0);
+            $antwort(406, 'payload too large');
+            return;
+        }
+
+        $roh = (string)@file_get_contents('php://input');
+        if (strlen($roh) > $maxBytes) {
+            $antwort(406, 'payload too large');
+            return;
+        }
+        $daten = json_decode($roh, true);
+        unset($roh);
+        if (!is_array($daten)) {
+            $this->SendDebug('MailHook', 'Rumpf ist kein JSON', 0);
+            $antwort(406, 'expected json');
+            return;
+        }
+        if (!$this->MailHookVerify($daten)) {
+            $antwort(403, 'bad signature');
+            return;
+        }
+
+        $satz = $this->MailHookParse($daten);
+        unset($daten);
+        if ($satz === null) {
+            $antwort(406, 'unusable message');
+            return;
+        }
+
+        // Dieselbe Wache wie beim IMAP-Weg: Empfaenger einem Mitglied zuordnen,
+        // Absender pruefen, Massenmail erkennen. Nur die Freigabeliste ist eine
+        // eigene (siehe MailHookSenderAllow).
+        $urteil = $this->MailJudge($satz['kopf'], (string)$this->MailProp('MailHookSenderAllow', ''));
+        if ($urteil['skip']) {
+            $this->SendDebug('MailHook', 'verworfen: ' . $urteil['reason'], 0);
+            $antwort(406, 'rejected: ' . $urteil['reason']);
+            return;
+        }
+        if ($this->MailSeen(self::MAIL_HOOK_KEY, $satz['key']) || $this->MailHookSpooled($satz['key'])) {
+            $this->SendDebug('MailHook', 'schon bekannt: ' . $satz['key'], 0);
+            $antwort(200, 'duplicate');
+            return;
+        }
+
+        $satz['userId'] = $urteil['userId'];
+        if (!$this->MailHookSpool($satz)) {
+            // 5xx, damit Mailgun es spaeter erneut versucht — die Mail ist sonst weg.
+            $antwort(503, 'queue unavailable');
+            return;
+        }
+        $this->MailArm();
+        $this->SendDebug('MailHook', sprintf(
+            'angenommen: %s von %s (%d Zeichen Text, %s)',
+            $satz['key'],
+            (string)($satz['kopf']['SenderAddress'] ?? '?'),
+            strlen($satz['text']),
+            $satz['anhang'] === null ? 'ohne Anhang' : 'Anhang ' . $satz['anhang']['name']
+        ), 0);
+        $antwort(200, 'accepted');
+    }
+
+    /**
+     * Mailguns Signatur pruefen: timestamp und token verkettet, HMAC-SHA256 mit
+     * dem Signaturschluessel des Kontos.
+     *
+     * Ohne hinterlegten Schluessel wird abgelehnt statt durchgewunken — sonst
+     * bliebe nur das Pfad-Geheimnis, und das steht in jedem Zugriffsprotokoll.
+     *
+     * @param array<string, mixed> $daten
+     */
+    private function MailHookVerify(array $daten): bool
+    {
+        $key = trim((string)$this->MailProp('MailHookSigningKey', ''));
+        if ($key === '') {
+            $this->SendDebug('MailHook', 'kein Signaturschluessel hinterlegt', 0);
+            return false;
+        }
+        // Mailgun schickt die drei Felder je nach Route-Aktion flach oder unter
+        // „signature" gebuendelt — beide Formen bedienen.
+        $sig = is_array($daten['signature'] ?? null) ? $daten['signature'] : $daten;
+        $zeit  = (string)($sig['timestamp'] ?? '');
+        $token = (string)($sig['token'] ?? '');
+        $unterschrift = (string)($sig['signature'] ?? '');
+        if ($zeit === '' || $token === '' || $unterschrift === '') {
+            $this->SendDebug('MailHook', 'Signaturfelder fehlen', 0);
+            return false;
+        }
+        if (abs(time() - (int)$zeit) > self::MAIL_HOOK_SIG_AGE) {
+            $this->SendDebug('MailHook', 'Signatur ist zu alt', 0);
+            return false;
+        }
+        return hash_equals(hash_hmac('sha256', $zeit . $token, $key), $unterschrift);
+    }
+
+    /**
+     * Die Meldung auf die Formen bringen, die der Bestand kennt.
+     *
+     * Der Kopf entsteht genau so, wie ihn IMAP_GetCachedMails liefert, der Text
+     * genau so, wie ihn IMAP_GetMailEx liefert. Dadurch laufen MailJudge und
+     * MailPrepareText unveraendert — auch die Plus-Adressen kennen sie schon.
+     *
+     * @param array<string, mixed> $daten
+     * @return array{key: string, kopf: array, text: string, anhang: ?array, userId: string}|null
+     */
+    private function MailHookParse(array $daten): ?array
+    {
+        $feld = static function (array $q, string ...$namen): string {
+            foreach ($namen as $n) {
+                if (isset($q[$n]) && is_scalar($q[$n]) && (string)$q[$n] !== '') {
+                    return trim((string)$q[$n]);
+                }
+            }
+            return '';
+        };
+
+        // „Name <adresse>" trennen — dasselbe Muster wie in MailDetectOrigin.
+        $vonRoh = $feld($daten, 'from', 'From', 'sender');
+        $name = '';
+        $adresse = $vonRoh;
+        if (preg_match('/^(.*?)\s*<([^>]+)>\s*$/u', $vonRoh, $m) === 1) {
+            $name    = trim($m[1], " \t\"'");
+            $adresse = trim($m[2]);
+        }
+        $empfaenger = $feld($daten, 'recipient', 'To', 'to');
+        if ($empfaenger === '') {
+            $this->SendDebug('MailHook', 'kein Empfaenger in der Meldung', 0);
+            return null;
+        }
+
+        $datum = $feld($daten, 'Date', 'date');
+        $kopf = [
+            'Recipient'     => $empfaenger,
+            'SenderAddress' => $adresse !== '' ? $adresse : $feld($daten, 'sender'),
+            'SenderName'    => $name,
+            'Subject'       => $feld($daten, 'subject', 'Subject'),
+            'Date'          => $datum !== '' ? (int)(strtotime($datum) ?: time()) : time(),
+        ];
+
+        // Text: bevorzugt die reine Fassung. Manche Absender legen dort nur einen
+        // Stummel ab („Diese Nachricht ist in HTML"), deshalb die Mindestlaenge.
+        $plain = (string)($daten['body-plain'] ?? $daten['stripped-text'] ?? '');
+        $html  = (string)($daten['body-html'] ?? '');
+        $voll  = (strlen(trim($plain)) >= 40 || $html === '')
+            ? ['Text' => $plain, 'ContentType' => 'text/plain', 'CharSet' => 'UTF-8']
+            : ['Text' => $html,  'ContentType' => 'text/html',  'CharSet' => 'UTF-8'];
+        $text = $this->MailPrepareText($voll);
+        if ($text === '') {
+            $this->SendDebug('MailHook', 'kein brauchbarer Text', 0);
+            return null;
+        }
+
+        $messageId = $feld($daten, 'Message-Id', 'message-id', 'Message-ID');
+        $key = $messageId !== ''
+            ? substr(sha1(strtolower($messageId)), 0, 16)
+            : substr(sha1($empfaenger . '|' . $adresse . '|' . $kopf['Subject'] . '|' . $kopf['Date'] . '|' . strlen($text)), 0, 16);
+
+        return [
+            'key'    => $key,
+            'kopf'   => $kopf,
+            'text'   => $text,
+            'anhang' => $this->MailHookPickAttachment($daten),
+            'userId' => '',
+        ];
+    }
+
+    /**
+     * Anhang aus der Meldung waehlen — mit genau denselben Regeln wie beim IMAP-Weg.
+     *
+     * Mailgun nennt die Anhaenge nur mit Kopfdaten und einer Abrufadresse. Genau
+     * das passt: Aus den Kopfdaten wird eine Teileliste in der Form gebaut, die
+     * MailPickAttachment kennt, und geladen wird erst der EINE Gewinner. Ein
+     * Signaturlogo kostet damit nicht ein Byte Uebertragung.
+     *
+     * @param array<string, mixed> $daten
+     * @return array{kind: string, name: string, url: string}|null
+     */
+    private function MailHookPickAttachment(array $daten): ?array
+    {
+        if ((bool)$this->MailProp('MailReadAttachments', true) !== true) {
+            return null;
+        }
+        $liste = $daten['attachments'] ?? null;
+        if (is_string($liste)) {
+            $liste = json_decode($liste, true);   // Mailgun schickt das Feld als JSON-Text
+        }
+        if (!is_array($liste) || $liste === []) {
+            return null;
+        }
+        $teile = [];
+        $urls  = [];
+        foreach (array_values($liste) as $i => $a) {
+            if (!is_array($a)) {
+                continue;
+            }
+            $typRoh = strtolower(trim((string)($a['content-type'] ?? $a['content_type'] ?? '')));
+            $stueck = explode('/', $typRoh);
+            $teile[] = [
+                'part'       => (string)($i + 1),
+                'type'       => trim($stueck[0] ?? ''),
+                'subtype'    => trim($stueck[1] ?? ''),
+                'encoding'   => 'base64',
+                // Achtung: Mailgun nennt die ECHTE Groesse, BODYSTRUCTURE die kodierte.
+                // Der 8-MB-Deckel wirkt hier also etwas strenger, die 40-kB-Untergrenze
+                // fuer Bilder etwas grosszuegiger. Bewusst nicht umgerechnet — sonst
+                // stuende in der Debug-Zeile eine Zahl, die nirgends herkommt.
+                'size'       => (int)($a['size'] ?? 0),
+                'name'       => trim((string)($a['name'] ?? $a['file-name'] ?? $a['filename'] ?? '')),
+                'attachment' => strtolower((string)($a['disposition'] ?? 'attachment')) !== 'inline',
+                'inline'     => strtolower((string)($a['disposition'] ?? '')) === 'inline',
+                'cid'        => trim((string)($a['content-id'] ?? $a['content_id'] ?? ''), '<>'),
+            ];
+            $urls[(string)($i + 1)] = trim((string)($a['url'] ?? ''));
+        }
+        $wahl = $this->MailPickAttachment($teile);
+        if ($wahl === null) {
+            return null;
+        }
+        $url = $urls[$wahl['part']] ?? '';
+        if ($url === '') {
+            $this->SendDebug('MailHook', 'Anhang ohne Abrufadresse — wird uebergangen', 0);
+            return null;
+        }
+        return ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'url' => $url];
+    }
+
+    // ─────────────────────────── Warteschlange ───────────────────────────
+    //
+    // Bewusst Dateien und kein Attribut: Ein Attribut existiert nach einem
+    // Modul-Reload ohne Kernel-Neustart nicht (siehe MailWriteAttr), und ein
+    // stiller Schreibfehler haette die Mail verschluckt. Dateien ueberleben beides
+    // und der Bestand ist mit glob() ohne weiteren Zustand ablesbar.
+
+    /**
+     * @param bool $anlegen Nur der schreibende Weg legt das Verzeichnis an — das
+     *        blosse Anzeigen des Formulars soll nichts auf der Platte hinterlassen.
+     * @return string Verzeichnis mit Schrägstrich am Ende; '' wenn nicht nutzbar.
+     */
+    private function MailHookDir(bool $anlegen = false): string
+    {
+        $pfad = IPS_GetKernelDir() . self::MAIL_HOOK_DIR . DIRECTORY_SEPARATOR;
+        if (!is_dir($pfad)) {
+            if (!$anlegen) {
+                return '';
+            }
+            if (!@mkdir($pfad, 0700, true) && !is_dir($pfad)) {
+                $this->LogMessage('SymDo: Warteschlange fuer den Mail-Webhook nicht anlegbar: ' . $pfad, KL_ERROR);
+                return '';
+            }
+        }
+        return is_writable($pfad) ? $pfad : '';
+    }
+
+    private function MailHookSpooled(string $key): bool
+    {
+        $dir = $this->MailHookDir();
+        return $dir !== '' && glob($dir . '*_' . $key . '.json') !== [];
+    }
+
+    /**
+     * Einen angenommenen Satz ablegen. Der Dateiname traegt die Zeit (Reihenfolge)
+     * und den Schluessel (Doppelerkennung).
+     *
+     * @param array<string, mixed> $satz
+     */
+    private function MailHookSpool(array $satz): bool
+    {
+        $dir = $this->MailHookDir(true);
+        if ($dir === '') {
+            return false;
+        }
+        if (count($this->MailHookQueueFiles()) >= self::MAIL_HOOK_QUEUE_MAX) {
+            $this->LogMessage('SymDo: Warteschlange des Mail-Webhooks ist voll — Zustellung wird verzoegert', KL_WARNING);
+            return false;
+        }
+        $datei = $dir . sprintf('%d_%s.json', time(), $satz['key']);
+        $json = json_encode($satz, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($json) || @file_put_contents($datei, $json, LOCK_EX) === false) {
+            $this->LogMessage('SymDo: Mail konnte nicht in die Warteschlange geschrieben werden', KL_ERROR);
+            return false;
+        }
+        @chmod($datei, 0600);
+        return true;
+    }
+
+    /** @return list<string> aelteste zuerst; raeumt dabei Liegengebliebenes weg. */
+    private function MailHookQueueFiles(): array
+    {
+        $dir = $this->MailHookDir();
+        if ($dir === '') {
+            return [];
+        }
+        $treffer = glob($dir . '*.json') ?: [];
+        $raus = [];
+        $grenze = time() - self::MAIL_HOOK_TTL;
+        foreach ($treffer as $datei) {
+            if ((int)@filemtime($datei) < $grenze) {
+                @unlink($datei);
+                continue;
+            }
+            $raus[] = $datei;
+        }
+        sort($raus, SORT_STRING);
+        return $raus;
+    }
+
+    /**
+     * EINE wartende Mail verarbeiten. Gleiches Muster wie der IMAP-Schritt: kurz
+     * bleiben, der Timer holt sich den Rest.
+     *
+     * @return bool true, wenn etwas getan wurde
+     */
+    private function MailHookSchritt(): bool
+    {
+        $dateien = $this->MailHookQueueFiles();
+        if ($dateien === []) {
+            return false;
+        }
+        $datei = $dateien[0];
+        $satz = json_decode((string)@file_get_contents($datei), true);
+        if (!is_array($satz) || ($satz['key'] ?? '') === '') {
+            @unlink($datei);
+            return true;
+        }
+        $key = (string)$satz['key'];
+
+        if ($this->MailDayLimitReached()) {
+            // Nicht loeschen: morgen ist sie wieder dran. Der Timer wird durch das
+            // Postfach oder den naechsten Webhook ohnehin erneut geweckt.
+            $this->SendDebug('MailHook', 'Tageslimit erreicht, Analyse verschoben', 0);
+            return false;
+        }
+
+        // Anhang jetzt erst holen — im Webhook waere die Zeit dafuer nicht gewesen.
+        $anhang = null;
+        $besch = is_array($satz['anhang'] ?? null) ? $satz['anhang'] : null;
+        if ($besch !== null) {
+            $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
+            if ($base64 !== null) {
+                $anhang = ['kind' => (string)$besch['kind'], 'base64' => $base64, 'name' => (string)$besch['name']];
+            }
+        }
+
+        $fertig = $this->MailAnalyseRecord(
+            'hook:' . $key,
+            (array)$satz['kopf'],
+            (string)$satz['text'],
+            $anhang,
+            (string)($satz['userId'] ?? ''),
+            'Webhook'
+        );
+        if ($fertig) {
+            @unlink($datei);
+            $this->MailRemember(self::MAIL_HOOK_KEY, $key);
+            return true;
+        }
+
+        $versuche = $this->MailCountFailure(self::MAIL_HOOK_KEY, $key);
+        if ($versuche >= self::MAIL_FAIL_MAX) {
+            @unlink($datei);
+            $this->MailRemember(self::MAIL_HOOK_KEY, $key);
+            $this->LogMessage(sprintf(
+                'SymDo: E-Mail „%s" aus dem Webhook nach %d fehlgeschlagenen Analysen uebersprungen',
+                (string)($satz['kopf']['Subject'] ?? $key),
+                $versuche
+            ), KL_ERROR);
+        } else {
+            $this->MailArm(self::MAIL_RETRY_MS * $versuche);
+        }
+        return true;
+    }
+
+    /**
+     * Den gewaehlten Anhang bei Mailgun abholen.
+     *
+     * Basic-Auth mit dem API-Schluessel, Host-Wache gegen fremde Ziele, harte
+     * Zeit- und Groessengrenze. Scheitert es, wird ohne Anhang analysiert statt es
+     * ewig zu wiederholen: die Adressen laufen ab, und der Systemtext des Modells
+     * kommt mit „Anhang liegt nicht vor" ohnehin zurecht.
+     */
+    private function MailHookFetchAttachment(string $url, string $kind, string $name): ?string
+    {
+        $schluessel = trim((string)$this->MailProp('MailHookApiKey', ''));
+        if ($url === '' || $schluessel === '') {
+            return null;
+        }
+        $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+        if (parse_url($url, PHP_URL_SCHEME) !== 'https'
+            || !(str_ends_with($host, '.mailgun.net') || str_ends_with($host, '.mailgun.org'))) {
+            $this->SendDebug('MailHook', 'Anhang-Adresse abgelehnt: ' . $host, 0);
+            return null;
+        }
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_USERPWD        => 'api:' . $schluessel,
+            CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => 6,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXFILESIZE    => (int)(self::MAIL_ATTACH_MAX_B64 * 3 / 4),
+        ]);
+        $roh = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $fehler = curl_error($ch);
+        curl_close($ch);
+        if (!is_string($roh) || $roh === '' || $status !== 200) {
+            $this->SendDebug('MailHook', sprintf('Anhang %s nicht ladbar (HTTP %d) %s', $name, $status, $fehler), 0);
+            return null;
+        }
+        // Der Absender bestimmt den gemeldeten Typ — die Bytes entscheiden.
+        $istPdf   = str_starts_with($roh, '%PDF-');
+        $istBild  = str_starts_with($roh, "\xFF\xD8\xFF") || str_starts_with($roh, "\x89PNG\r\n\x1a\n");
+        if (($kind === 'pdf' && !$istPdf) || ($kind === 'image' && !$istBild)) {
+            $this->SendDebug('MailHook', 'Anhang ' . $name . ' passt nicht zum gemeldeten Typ', 0);
+            return null;
+        }
+        $base64 = base64_encode($roh);
+        unset($roh);
+        if ($kind === 'image' && !$this->MailImageUsable($base64, $name !== '' ? $name : 'Anhang')) {
+            return null;
+        }
+        $this->SendDebug('MailHook', sprintf('Anhang %s geladen (%d kB base64)', $name, (int)round(strlen($base64) / 1024)), 0);
+        return $base64;
     }
 
     // ────────────────────────────── Ablage ──────────────────────────────

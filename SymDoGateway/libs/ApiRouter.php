@@ -49,6 +49,15 @@ trait ApiRouter
             return;
         }
 
+        // Der Mail-Webhook bringt keinen Geraete-Token mit: Mailgun kann keine
+        // eigenen Kopfzeilen setzen. Er weist sich stattdessen mit einem Geheimnis
+        // im Pfad UND Mailguns Signatur aus (siehe MailHookHandle) und muss deshalb
+        // hier — vor AuthenticateRequest — abzweigen.
+        if ($resource === 'mail' && ($route[2] ?? '') === 'hook' && $method === 'POST') {
+            $this->MailHookHandle((string)($route[3] ?? ''));
+            return;
+        }
+
         // Der Token darf nur dort als ?t=-Query stehen, wo ein einfacher Bild-Loader
         // keine Header setzen kann: GET /assets/… und GET /users/{id}/avatar.
         // Überall sonst muss er im Header reisen, damit der langlebige Token nicht

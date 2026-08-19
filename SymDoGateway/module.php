@@ -1262,6 +1262,7 @@ class SymDoGateway extends IPSModuleStrict
                         ]
                     ]
                 ],
+                $this->GetMailHookPanel(),
                 [
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailSenderAllow',
@@ -1288,7 +1289,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'MailDeleteAfter',
-                    'caption' => $this->Translate('Delete mail after analysis')
+                    'caption' => $this->Translate('Delete mail after analysis (mailbox only)')
                 ],
                 [
                     'type'     => 'SelectInstance',
@@ -1321,6 +1322,157 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Label',
                     'caption' => $this->Translate('Analysed mail stays in the mailbox but is not looked at again. "Forget processed mail" clears that memory — use it after fixing an address or sender list, then everything still in the mailbox is analysed once more.')
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Zweiter Eingang: Mail per Webhook (Mailgun).
+     *
+     * Bewusst ein eigenes Panel und nicht zwischen die Postfach-Felder gemischt —
+     * es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll beim
+     * Suchen eines Fehlers wissen, welcher davon gemeint ist.
+     *
+     * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
+     * nirgends, und ein falsch abgetipptes Geheimnis kostet eine Stunde Suche.
+     */
+    private function GetMailHookPanel(): array
+    {
+        $geheim  = trim((string)$this->MailProp('MailHookSecret', ''));
+        $basis   = trim((string)$this->MailProp('MailHookBase', ''));
+        $connect = $this->GetConnectUrl();
+
+        if ($connect === '') {
+            $anleitung = $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.');
+        } elseif (strlen($geheim) < 24) {
+            $anleitung = $this->Translate('Press "Create new secret" and then Apply — the target address appears here afterwards.');
+        } else {
+            $ziel = rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim;
+            $domain = $basis !== '' ? (string)(explode('@', $basis)[1] ?? 'DEINE-DOMAIN') : 'DEINE-DOMAIN';
+            $anleitung = $this->Translate('Enter this in Mailgun (Receiving → Create Route):') . "\n\n"
+                . $this->Translate('Expression:') . ' match_recipient(".*@' . $domain . '")' . "\n"
+                . $this->Translate('Action:') . ' store(notify="' . $ziel . '")' . "\n"
+                . $this->Translate('Second action:') . ' stop()' . "\n\n"
+                . $this->Translate('The signing key is in Mailgun under Settings → Webhooks (HTTP webhook signing key), the API key under Settings → API keys.');
+        }
+
+        // Ueberblick: welches Mitglied hat welche Adresse — und wer noch keine.
+        $zeilen = [];
+        $karte = [];
+        $roh = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
+        foreach (is_array($roh) ? $roh : [] as $z) {
+            $adresse = trim((string)($z['Address'] ?? ''));
+            if ($adresse !== '') {
+                $karte[trim((string)($z['UserID'] ?? ''))][] = $adresse;
+            }
+        }
+        foreach ($this->LoadUsers() as $u) {
+            $id = (string)($u['id'] ?? '');
+            foreach ($karte[$id] ?? [] as $adresse) {
+                $zeilen[] = ['Member' => (string)($u['name'] ?? ''), 'Address' => $adresse];
+            }
+            if (($karte[$id] ?? []) === []) {
+                $zeilen[] = ['Member' => (string)($u['name'] ?? ''), 'Address' => $this->Translate('— no address yet —')];
+            }
+        }
+        foreach ($karte[''] ?? [] as $adresse) {
+            $zeilen[] = ['Member' => $this->Translate('(no member)'), 'Address' => $adresse];
+        }
+
+        $wartend = count($this->MailHookQueueFiles());
+
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: members are told apart by plus addresses (base+lena@…), and the assignment happens in the list above. Both ways run side by side; the mailbox settings above stay untouched.')
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailHookEnabled',
+                    'caption' => $this->Translate('Accept mail via webhook')
+                ],
+                [
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'MailHookBase',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Base address at Mailgun (e.g. abc123@sandbox….mailgun.org)')
+                ],
+                [
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        [
+                            'type'    => 'PasswordTextBox',
+                            'name'    => 'MailHookSecret',
+                            'width'   => '380px',
+                            'caption' => $this->Translate('Secret in the address')
+                        ],
+                        [
+                            'type'    => 'Button',
+                            'caption' => $this->Translate('Create new secret'),
+                            'onClick' => 'IPS_RequestAction($id, \'MailHookNewSecret\', 0);'
+                        ]
+                    ]
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'MailHookSigningKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Mailgun signing key (verifies every delivery)')
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'MailHookApiKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Mailgun API key (only needed to fetch attachments)')
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'MailHookSetup',
+                    'caption' => $anleitung
+                ],
+                [
+                    'type'     => 'List',
+                    'name'     => 'MailHookAddresses',
+                    'caption'  => $this->Translate('Addresses per member (from the list above)'),
+                    'rowCount' => 5,
+                    'add'      => false,
+                    'delete'   => false,
+                    'columns'  => [
+                        ['caption' => $this->Translate('Member'),  'name' => 'Member',  'width' => '200px'],
+                        ['caption' => $this->Translate('Address'), 'name' => 'Address', 'width' => 'auto']
+                    ],
+                    'values'   => $zeilen
+                ],
+                [
+                    'type'    => 'Button',
+                    'caption' => $this->Translate('Fill in plus addresses for all members'),
+                    'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', 0);'
+                ],
+                [
+                    'type'      => 'ValidationTextBox',
+                    'name'      => 'MailHookSenderAllow',
+                    'multiline' => true,
+                    'width'     => '400px',
+                    'caption'   => $this->Translate('Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.')
+                ],
+                [
+                    'type'    => 'NumberSpinner',
+                    'name'    => 'MailHookMaxKB',
+                    'minimum' => 64,
+                    'width'   => '120px',
+                    'caption' => $this->Translate('Maximum size per delivery (KB)')
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'MailHookQueueInfo',
+                    'caption' => $wartend === 0
+                        ? $this->Translate('Queue is empty.')
+                        : sprintf($this->Translate('%d message(s) waiting for analysis.'), $wartend)
                 ]
             ]
         ];
