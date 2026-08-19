@@ -36,6 +36,17 @@ class SymDoGateway extends IPSModuleStrict
 
     /** Symcon-Kernmodul „E-Mail, Empfangen (IMAP)" — Quelle der weitergeleiteten Post. */
     private const IMAP_MODULE_GUID = '{CABFCCA1-FBFF-4AB7-B11B-9879E67E152F}';
+    /**
+     * Breite der beiden E-Mail-Spalten.
+     *
+     * Bewusst in Pixel und nicht in Prozent: Die Konsole schreibt die Breite auf
+     * das INNERE Panel, waehrend das aeussere Element in einer Zeile (Flexbox)
+     * auf Inhaltsbreite schrumpft — „50%" waeren dann 50 % dieser schmalen Box
+     * und das Panel faellt zur Briefmarke zusammen. Ein fester Wert bestimmt
+     * umgekehrt die Breite der Zeile. Passt eine Zeile nicht, bricht die Konsole
+     * sie um und die Spalten stehen untereinander.
+     */
+    private const MAIL_COLUMN_WIDTH = '600px';
 
     /**
      * Appweite Bedienelemente, einmal je PHP-Aufruf aufgeloest. Zwei Felder, weil
@@ -1317,7 +1328,7 @@ class SymDoGateway extends IPSModuleStrict
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('IMAP mailboxes'),
             'expanded' => false,
-            'width'    => '50%',
+            'width'    => self::MAIL_COLUMN_WIDTH,
             'items'    => [
                 [
                     'type'    => 'Label',
@@ -1397,7 +1408,7 @@ class SymDoGateway extends IPSModuleStrict
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed'),
             'expanded' => false,
-            'width'    => '50%',
+            'width'    => self::MAIL_COLUMN_WIDTH,
             'items'    => [
                 [
                     'type'    => 'Label',
