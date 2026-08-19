@@ -843,6 +843,13 @@ trait MailScan
             http_response_code($code);
             header('Content-Type: text/plain; charset=utf-8');
             echo $text;
+            // Abgelehnte Zustellungen gehoeren ins Statusprotokoll, nicht nur ins
+            // Debug: Wer eine Testmail schickt und nichts passiert, sucht sonst an
+            // der falschen Stelle. Angenommene sind ohnehin an der Analysezeile
+            // erkennbar, die bleibt hier still.
+            if ($code !== 200) {
+                $this->LogMessage(sprintf('SymDo: Mail-Webhook hat eine Zustellung abgewiesen (%d): %s', $code, $text), KL_WARNING);
+            }
         };
 
         if ((bool)$this->MailProp('MailHookEnabled', false) !== true) {
