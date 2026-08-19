@@ -175,12 +175,6 @@
             "Mailgun signing key (verifies every delivery)": "Mailgun-Signaturschlüssel (prüft jede Zustellung)",
             "Mailgun API key (only needed to fetch attachments)": "Mailgun-API-Schlüssel (nur zum Nachladen der Anhänge nötig)",
             "No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.": "Keine Symcon-Connect-Adresse gefunden — ohne sie kann Mailgun dieses System nicht erreichen. Bitte zuerst Connect einrichten.",
-            "Press \"Create new secret\" and then Apply — the target address appears here afterwards.": "Bitte „Neues Geheimnis erzeugen\" und danach Übernehmen drücken — anschließend erscheint hier die Zieladresse.",
-            "Enter this in Mailgun (Receiving → Create Route):": "Dieses in Mailgun eintragen (Receiving → Create Route):",
-            "Expression:": "Ausdruck:",
-            "Action:": "Aktion:",
-            "Second action:": "Zweite Aktion:",
-            "The signing key is in Mailgun under Settings → Webhooks (HTTP webhook signing key), the API key under Settings → API keys.": "Den Signaturschlüssel finden Sie bei Mailgun unter Settings → Webhooks (HTTP webhook signing key), den API-Schlüssel unter Settings → API keys.",
             "Addresses per member (from the list above)": "Adressen je Mitglied (aus der Liste oben)",
             "Address": "Adresse",
             "— no address yet —": "— noch keine Adresse —",
@@ -194,7 +188,11 @@
             "Queue is empty.": "Die Warteschlange ist leer.",
             "%d message(s) waiting for analysis.": "%d Nachricht(en) warten auf die Analyse.",
             "Delete mail after analysis (mailbox only)": "E-Mail nach der Analyse löschen (nur Postfach)",
-            "New secret created — press Apply to save it.": "Neues Geheimnis erzeugt — zum Speichern bitte Übernehmen drücken."
+            "New secret created — press Apply to save it.": "Neues Geheimnis erzeugt — zum Speichern bitte Übernehmen drücken.",
+            "Expression (copy to Mailgun)": "Ausdruck (nach Mailgun kopieren)",
+            "Action (copy to Mailgun)": "Aktion (nach Mailgun kopieren)",
+            "Enter this in Mailgun under Receiving → Create Route (third action: stop()). The signing key is under Settings → Webhooks, the API key under Settings → API keys.": "In Mailgun unter Receiving → Create Route eintragen (als dritte Aktion: stop()). Den Signaturschlüssel finden Sie unter Settings → Webhooks, den API-Schlüssel unter Settings → API keys.",
+            "Press \"Create new secret\" and then Apply — the two lines for Mailgun appear here afterwards.": "Bitte „Neues Geheimnis erzeugen\" und danach Übernehmen drücken — anschließend stehen hier die beiden Zeilen für Mailgun."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

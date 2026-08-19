@@ -181,8 +181,11 @@ trait MailScan
             // der Nutzer aus Mailgun ein. Die Anleitung wird gleich mitgezogen, damit
             // die fertige Adresse ohne Umweg dasteht.
             $geheim = bin2hex(random_bytes(24));
+            $teile = $this->MailHookSetupParts($geheim);
             $this->UpdateFormField('MailHookSecret', 'value', $geheim);
-            $this->UpdateFormField('MailHookSetup', 'caption', $this->MailHookSetupText($geheim));
+            $this->UpdateFormField('MailHookSetup', 'caption', $teile['hinweis']);
+            $this->UpdateFormField('MailHookExpression', 'value', $teile['ausdruck']);
+            $this->UpdateFormField('MailHookAction', 'value', $teile['aktion']);
             $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('New secret created — press Apply to save it.'));
             return true;
         }
@@ -206,24 +209,40 @@ trait MailScan
      * Steht hier und nicht im Formular, weil sie zweimal gebraucht wird: beim
      * Aufbau des Panels und direkt nach dem Erzeugen eines neuen Geheimnisses.
      */
-    private function MailHookSetupText(string $geheim): string
+    /**
+     * Die Einzelteile der Mailgun-Einrichtung.
+     *
+     * Bewusst getrennt und nicht als Fliesstext: Ausdruck und Aktion muessen ins
+     * Mailgun-Formular kopiert werden, und aus einer Beschriftung laesst sich
+     * nichts markieren — sie wandern deshalb in Textfelder.
+     *
+     * @return array{hinweis: string, ausdruck: string, aktion: string, bereit: bool}
+     */
+    private function MailHookSetupParts(string $geheim): array
     {
         $connect = $this->GetConnectUrl();
         if ($connect === '') {
-            return $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.');
+            return [
+                'hinweis'  => $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.'),
+                'ausdruck' => '', 'aktion' => '', 'bereit' => false,
+            ];
         }
         if (strlen($geheim) < 24) {
-            return $this->Translate('Press "Create new secret" and then Apply — the target address appears here afterwards.');
+            return [
+                'hinweis'  => $this->Translate('Press "Create new secret" and then Apply — the two lines for Mailgun appear here afterwards.'),
+                'ausdruck' => '', 'aktion' => '', 'bereit' => false,
+            ];
         }
         $basis = trim((string)$this->MailProp('MailHookBase', ''));
         $domain = $basis !== '' ? (string)(explode('@', $basis)[1] ?? 'DEINE-DOMAIN') : 'DEINE-DOMAIN';
         $ziel = rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim;
 
-        return $this->Translate('Enter this in Mailgun (Receiving → Create Route):') . "\n\n"
-            . $this->Translate('Expression:') . ' match_recipient(".*@' . $domain . '")' . "\n"
-            . $this->Translate('Action:') . ' store(notify="' . $ziel . '")' . "\n"
-            . $this->Translate('Second action:') . ' stop()' . "\n\n"
-            . $this->Translate('The signing key is in Mailgun under Settings → Webhooks (HTTP webhook signing key), the API key under Settings → API keys.');
+        return [
+            'hinweis'  => $this->Translate('Enter this in Mailgun under Receiving → Create Route (third action: stop()). The signing key is under Settings → Webhooks, the API key under Settings → API keys.'),
+            'ausdruck' => 'match_recipient(".*@' . $domain . '")',
+            'aktion'   => 'store(notify="' . $ziel . '")',
+            'bereit'   => true,
+        ];
     }
 
     /**

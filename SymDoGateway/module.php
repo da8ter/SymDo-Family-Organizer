@@ -1339,7 +1339,7 @@ class SymDoGateway extends IPSModuleStrict
      */
     private function GetMailHookPanel(): array
     {
-        $anleitung = $this->MailHookSetupText(trim((string)$this->MailProp('MailHookSecret', '')));
+        $teile = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
 
         // Ueberblick: welches Mitglied hat welche Adresse — und wer noch keine.
         $zeilen = [];
@@ -1417,7 +1417,26 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Label',
                     'name'    => 'MailHookSetup',
-                    'caption' => $anleitung
+                    'caption' => $teile['hinweis']
+                ],
+                [
+                    // Kopierbar statt nur lesbar: aus einer Beschriftung laesst sich
+                    // nichts markieren, und beides muss ins Mailgun-Formular.
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'MailHookExpression',
+                    'caption' => $this->Translate('Expression (copy to Mailgun)'),
+                    'width'   => '600px',
+                    'enabled' => false,
+                    'value'   => $teile['ausdruck']
+                ],
+                [
+                    'type'      => 'ValidationTextBox',
+                    'name'      => 'MailHookAction',
+                    'caption'   => $this->Translate('Action (copy to Mailgun)'),
+                    'width'     => '600px',
+                    'multiline' => true,
+                    'enabled'   => false,
+                    'value'     => $teile['aktion']
                 ],
                 [
                     'type'     => 'List',
