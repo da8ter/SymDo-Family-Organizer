@@ -43,6 +43,21 @@ trait MailFetch
      */
     private const MAIL_ATTACH_MAX_B64 = 8 * 1024 * 1024;
 
+    /**
+     * Untergrenze fuer BILDER. Ein Logo aus einer Signatur wiegt 2 bis 30 kB; eine
+     * abfotografierte oder eingescannte A4-Seite liegt weit darueber (gemessen:
+     * eine gerenderte Textseite mit 1600 px Breite als JPEG = 147 kB). Darunter
+     * kann kein lesbarer Brief stecken, also gar nicht erst laden.
+     * PDFs haben bewusst KEINE Untergrenze — in Signaturen stehen keine PDFs.
+     */
+    private const MAIL_IMAGE_MIN_BYTES = 40 * 1024;
+
+    /** Kleinste Kantenlaenge, in der Fliesstext noch lesbar ist (nach dem Laden geprueft). */
+    private const MAIL_IMAGE_MIN_PIXEL = 600;
+
+    /** Dateinamen, die Absender ihren Layout- und Signaturbildern geben. */
+    private const MAIL_DECO_NAMES = ['image00', 'logo', 'signatur', 'signature', 'icon', 'spacer', 'footer', 'unnamed', 'banner'];
+
     /** Kleine Literale (Dateinamen) werden in die Struktur eingesetzt, grosse ausgelagert. */
     private const MAIL_LITERAL_INLINE_MAX = 1024;
 
@@ -124,6 +139,23 @@ trait MailFetch
             unset($inhalt);
             if ($base64 === '') {
                 return null;
+            }
+            // Letzte Wache, und die genaueste: die echten Kantenlaengen. Ein Bild
+            // unter MAIL_IMAGE_MIN_PIXEL traegt keinen lesbaren Fliesstext, egal
+            // wie schwer die Datei ist — ein grosses, aber winziges Logo (etwa ein
+            // wenig komprimiertes Emblem) faellt erst hier auf. Die Bytes liegen
+            // ohnehin vor, die Pruefung kostet also nur den Dekodierschritt.
+            if ($wahl['kind'] === 'image') {
+                $roh = base64_decode($base64, true);
+                $masse = is_string($roh) ? @getimagesizefromstring($roh) : false;
+                unset($roh);
+                if (is_array($masse) && (min((int)$masse[0], (int)$masse[1]) < self::MAIL_IMAGE_MIN_PIXEL)) {
+                    $this->SendDebug('MailFetch', sprintf(
+                        'Bild %s verworfen: %dx%d Pixel, dafuer zu klein',
+                        $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'], (int)$masse[0], (int)$masse[1]
+                    ), 0);
+                    return null;
+                }
             }
             $this->SendDebug('MailFetch', sprintf(
                 'UID %s: Anhang %s (%s/%s, Teil %s, %d kB base64)',
@@ -383,6 +415,11 @@ trait MailFetch
         $params = is_array($knoten[2] ?? null) ? $knoten[2] : [];
         $name   = (string)$this->MailParamValue($params, 'name');
         $anhang = false;
+        $inline = false;
+        // Feld 4 ist die Content-ID. Traegt ein Bild eine, wird es vom HTML-Teil
+        // ueber „cid:" eingebettet — also Layout oder Signatur und nie der Brief,
+        // um den es geht.
+        $cid = trim((string)($knoten[3] ?? ''));
 
         // Disposition steht in den Erweiterungsfeldern; ihr Index haengt am Typ,
         // deshalb wird der Bereich abgesucht statt eine feste Stelle geraten.
@@ -390,6 +427,7 @@ trait MailFetch
             $e = $knoten[$k] ?? null;
             if (is_array($e) && is_string($e[0] ?? null) && preg_match('/^(attachment|inline)$/i', $e[0]) === 1) {
                 $anhang = strcasecmp((string)$e[0], 'attachment') === 0;
+                $inline = !$anhang;
                 $dp    = is_array($e[1] ?? null) ? $e[1] : [];
                 $dname = (string)$this->MailParamValue($dp, 'filename');
                 if ($dname === '') {
@@ -416,6 +454,8 @@ trait MailFetch
             'size'       => (int)($knoten[6] ?? 0),
             'name'       => $this->MailDecodeHeader($name),
             'attachment' => $anhang,
+            'inline'     => $inline,
+            'cid'        => $cid,
         ];
     }
 
@@ -466,25 +506,63 @@ trait MailFetch
             if ($kind === null) {
                 continue;
             }
+            $bezeichnung = $t['name'] !== '' ? $t['name'] : $t['part'];
             if ($t['size'] > self::MAIL_ATTACH_MAX_B64) {
                 $this->SendDebug('MailFetch', sprintf(
                     'Anhang %s uebersprungen: %d kB ueberschreiten das Limit',
-                    $t['name'] !== '' ? $t['name'] : $t['part'], (int)round($t['size'] / 1024)
+                    $bezeichnung, (int)round($t['size'] / 1024)
                 ), 0);
                 continue;
             }
-            $kandidaten[] = $t + ['kind' => $kind];
+            // Ab hier die Aussortierung von Signatur- und Layoutbildern. Alles
+            // laeuft VOR dem Laden — ein Firmenlogo soll weder Bandbreite noch
+            // Rechenzeit der KI kosten. PDFs sind davon ausgenommen: die stecken
+            // nicht in Signaturen.
+            if ($kind === 'image') {
+                // Eingebettet ins HTML (inline MIT Content-ID) — das ist Layout.
+                // Beides zusammen, weil manche Absender auch echte Anhaenge als
+                // „inline" deklarieren; die tragen dann aber keine Content-ID.
+                if ($t['inline'] === true && ($t['cid'] ?? '') !== '') {
+                    $this->SendDebug('MailFetch', sprintf('Bild %s uebersprungen: im Text eingebettet (Content-ID)', $bezeichnung), 0);
+                    continue;
+                }
+                if ($t['size'] < self::MAIL_IMAGE_MIN_BYTES) {
+                    $this->SendDebug('MailFetch', sprintf(
+                        'Bild %s uebersprungen: nur %d kB, dafuer zu klein',
+                        $bezeichnung, (int)round($t['size'] / 1024)
+                    ), 0);
+                    continue;
+                }
+            }
+            $kandidaten[] = $t + ['kind' => $kind, 'deko' => $kind === 'image' && $this->MailLooksDecorative($t['name'])];
         }
         if ($kandidaten === []) {
             return null;
         }
-        // PDF gewinnt gegen Bild; darunter der groesste — Signaturbilder sind klein,
-        // der eigentliche Brief ist es nicht.
+        // PDF gewinnt gegen Bild; Bilder mit typischem Layout-Namen („image001",
+        // „logo") rutschen dahinter — aber sie fliegen nicht raus, denn ein Scan
+        // darf „logo_briefkopf.jpg" heissen. Zuletzt entscheidet die Groesse:
+        // Signaturbilder sind klein, der eigentliche Brief ist es nicht.
         usort($kandidaten, static function (array $a, array $b): int {
-            $rang = static fn(array $x): int => $x['kind'] === 'pdf' ? 0 : 1;
+            $rang = static fn(array $x): int => $x['kind'] === 'pdf' ? 0 : ($x['deko'] ? 2 : 1);
             return [$rang($a), -$a['size']] <=> [$rang($b), -$b['size']];
         });
         return $kandidaten[0];
+    }
+
+    /** Traegt der Dateiname eines Bildes die Handschrift eines Layout- oder Signaturbildes? */
+    private function MailLooksDecorative(string $name): bool
+    {
+        $klein = strtolower(trim($name));
+        if ($klein === '') {
+            return true; // namenlose Bilder sind fast immer eingebettete Grafiken
+        }
+        foreach (self::MAIL_DECO_NAMES as $muster) {
+            if (str_contains($klein, $muster)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Rohnutzlast in reines base64 bringen — unabhaengig von der Transportkodierung. */
