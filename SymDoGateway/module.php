@@ -1214,7 +1214,7 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.")
+                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -1373,7 +1373,7 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: members are told apart by plus addresses (base+lena@…), and the assignment happens in the list above. Both ways run side by side; the mailbox settings above stay untouched.')
+                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: members are told apart by plus addresses (base+lena@…), and the assignment happens in the list above. Both ways run side by side; the mailbox settings above stay untouched. Every mail addressed here — attachments included — passes through the servers of that service and is then analysed by the configured AI provider; this runs only with the consent given under "AI features" (see the privacy notice there).')
                 ],
                 [
                     'type'    => 'CheckBox',

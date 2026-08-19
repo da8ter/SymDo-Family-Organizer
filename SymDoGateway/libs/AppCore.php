@@ -534,6 +534,16 @@ trait AppCore
                 IPS_SetProperty($this->InstanceID, 'AiEnabled', false);
                 IPS_ApplyChanges($this->InstanceID);
             }
+            // Mit dem Widerruf verlieren auch die noch nicht analysierten E-Mails
+            // in der Webhook-Warteschlange ihre Grundlage — weg damit, statt sie
+            // sieben Tage liegen zu lassen. Neue nimmt der Hook ab jetzt ohnehin
+            // nicht mehr an (MailHookIsEnabled).
+            if (!$accepted) {
+                $entfernt = $this->MailHookClearQueue();
+                if ($entfernt > 0) {
+                    $this->LogMessage(sprintf('SymDo: %d wartende E-Mail(s) nach Einwilligungs-Widerruf verworfen', $entfernt), KL_NOTIFY);
+                }
+            }
             $this->UpdateFormField('AiEnabled', 'enabled', $accepted);
             if (!$accepted) {
                 $this->UpdateFormField('AiEnabled', 'value', false);

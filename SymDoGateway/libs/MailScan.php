@@ -115,8 +115,9 @@ trait MailScan
             }
         }
         // Nach einem Uebernehmen einmal nachsehen: waehrend der Konfiguration kann
-        // Post eingetroffen sein, ohne dass ein Abo bestand.
-        if ($this->MailIsEnabled()) {
+        // Post eingetroffen sein, ohne dass ein Abo bestand — und in der
+        // Webhook-Warteschlange kann etwas aus der Zeit vor einem Neustart liegen.
+        if ($this->MailIsEnabled() || $this->MailHookIsEnabled()) {
             $this->MailArm();
         }
     }
@@ -337,7 +338,7 @@ trait MailScan
         } catch (Throwable $e) {
             // egal, siehe MailArm()
         }
-        if (!$this->MailIsEnabled()) {
+        if (!$this->MailIsEnabled() && !$this->MailHookIsEnabled()) {
             return;
         }
 
@@ -369,9 +370,15 @@ trait MailScan
 
         // Der Webhook zuerst: was schon im Haus ist, soll nicht hinter einem
         // Postfach-Durchlauf warten. Beides bleibt bei EINER Mail pro Lauf.
-        if ($this->MailHookSchritt()) {
+        // Jeder Weg laeuft nur mit SEINER Freigabe — wer nur den Webhook nutzt,
+        // dessen Warteschlange darf nicht am Postfach-Schalter haengen (und
+        // umgekehrt darf der Postfach-Weg nicht ueber den Webhook-Schalter laufen).
+        if ($this->MailHookIsEnabled() && $this->MailHookSchritt()) {
             $this->WsPushDirty();
             $this->MailArm();
+            return;
+        }
+        if (!$this->MailIsEnabled()) {
             return;
         }
 
@@ -852,7 +859,10 @@ trait MailScan
             }
         };
 
-        if ((bool)$this->MailProp('MailHookEnabled', false) !== true) {
+        if (!$this->MailHookIsEnabled()) {
+            // Auch bei abgeschalteter KI oder widerrufener Einwilligung: 403 ist
+            // endgueltig, der Absender bekommt einen Bounce statt tagelanger
+            // Zustellversuche an ein System, das nicht verarbeiten darf.
             $antwort(403, 'mail hook disabled');
             return;
         }
@@ -1284,6 +1294,30 @@ trait MailScan
         return true;
     }
 
+    /**
+     * Warteschlange vollstaendig leeren — fuer den Einwilligungs-Widerruf.
+     *
+     * Die Dateien sind rohe Mailinhalte, deren einziger Zweck die Analyse war;
+     * faellt die Einwilligung weg, gibt es keinen Grund, sie noch sieben Tage
+     * liegen zu lassen.
+     *
+     * @return int Anzahl entfernter Nachrichten
+     */
+    private function MailHookClearQueue(): int
+    {
+        $dir = $this->MailHookDir();
+        if ($dir === '') {
+            return 0;
+        }
+        $n = 0;
+        foreach (glob($dir . '*.json') ?: [] as $datei) {
+            @unlink($datei);
+            @unlink(substr($datei, 0, -5) . '.att');
+            $n++;
+        }
+        return $n;
+    }
+
     /** @return list<string> aelteste zuerst; raeumt dabei Liegengebliebenes weg. */
     private function MailHookQueueFiles(): array
     {
@@ -1609,6 +1643,18 @@ trait MailScan
     private function MailIsEnabled(): bool
     {
         return (bool)$this->MailProp('MailEnabled', false)
+            && $this->ReadPropertyBoolean('AiEnabled')
+            && $this->AiPrivacyAccepted();
+    }
+
+    /**
+     * Der Webhook haengt an DERSELBEN Einwilligung wie der Postfach-Weg: Die
+     * Analyse ist der einzige Zweck der Annahme — ohne Einwilligung darf hier
+     * gar keine Mail erst angenommen und abgelegt werden.
+     */
+    private function MailHookIsEnabled(): bool
+    {
+        return (bool)$this->MailProp('MailHookEnabled', false)
             && $this->ReadPropertyBoolean('AiEnabled')
             && $this->AiPrivacyAccepted();
     }
