@@ -1339,23 +1339,7 @@ class SymDoGateway extends IPSModuleStrict
      */
     private function GetMailHookPanel(): array
     {
-        $geheim  = trim((string)$this->MailProp('MailHookSecret', ''));
-        $basis   = trim((string)$this->MailProp('MailHookBase', ''));
-        $connect = $this->GetConnectUrl();
-
-        if ($connect === '') {
-            $anleitung = $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.');
-        } elseif (strlen($geheim) < 24) {
-            $anleitung = $this->Translate('Press "Create new secret" and then Apply — the target address appears here afterwards.');
-        } else {
-            $ziel = rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim;
-            $domain = $basis !== '' ? (string)(explode('@', $basis)[1] ?? 'DEINE-DOMAIN') : 'DEINE-DOMAIN';
-            $anleitung = $this->Translate('Enter this in Mailgun (Receiving → Create Route):') . "\n\n"
-                . $this->Translate('Expression:') . ' match_recipient(".*@' . $domain . '")' . "\n"
-                . $this->Translate('Action:') . ' store(notify="' . $ziel . '")' . "\n"
-                . $this->Translate('Second action:') . ' stop()' . "\n\n"
-                . $this->Translate('The signing key is in Mailgun under Settings → Webhooks (HTTP webhook signing key), the API key under Settings → API keys.');
-        }
+        $anleitung = $this->MailHookSetupText(trim((string)$this->MailProp('MailHookSecret', '')));
 
         // Ueberblick: welches Mitglied hat welche Adresse — und wer noch keine.
         $zeilen = [];
@@ -1452,6 +1436,14 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Button',
                     'caption' => $this->Translate('Fill in plus addresses for all members'),
                     'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', 0);'
+                ],
+                [
+                    // Rueckmeldung der beiden Knoepfe. Bewusst ein Label und kein
+                    // echo: eine Ausgabe aus RequestAction meldet Symcon als
+                    // Skriptfehler samt Dateiname und Zeilennummer.
+                    'type'    => 'Label',
+                    'name'    => 'MailHookStatus',
+                    'caption' => ''
                 ],
                 [
                     'type'      => 'ValidationTextBox',

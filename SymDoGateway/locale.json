@@ -172,7 +172,6 @@
             "Base address at Mailgun (e.g. abc123@sandbox….mailgun.org)": "Basisadresse bei Mailgun (z. B. abc123@sandbox….mailgun.org)",
             "Secret in the address": "Geheimnis in der Adresse",
             "Create new secret": "Neues Geheimnis erzeugen",
-            "New secret created — press Apply, then copy the address below into Mailgun.": "Neues Geheimnis erzeugt — bitte Übernehmen drücken, danach steht die Adresse unten zum Kopieren bereit.",
             "Mailgun signing key (verifies every delivery)": "Mailgun-Signaturschlüssel (prüft jede Zustellung)",
             "Mailgun API key (only needed to fetch attachments)": "Mailgun-API-Schlüssel (nur zum Nachladen der Anhänge nötig)",
             "No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.": "Keine Symcon-Connect-Adresse gefunden — ohne sie kann Mailgun dieses System nicht erreichen. Bitte zuerst Connect einrichten.",
@@ -194,7 +193,8 @@
             "Maximum size per delivery (KB)": "Größte Zustellung (KB)",
             "Queue is empty.": "Die Warteschlange ist leer.",
             "%d message(s) waiting for analysis.": "%d Nachricht(en) warten auf die Analyse.",
-            "Delete mail after analysis (mailbox only)": "E-Mail nach der Analyse löschen (nur Postfach)"
+            "Delete mail after analysis (mailbox only)": "E-Mail nach der Analyse löschen (nur Postfach)",
+            "New secret created — press Apply to save it.": "Neues Geheimnis erzeugt — zum Speichern bitte Übernehmen drücken."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

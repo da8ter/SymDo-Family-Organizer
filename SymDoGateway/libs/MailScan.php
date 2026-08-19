@@ -177,10 +177,13 @@ trait MailScan
             return true;
         }
         if ($Ident === 'MailHookNewSecret') {
-            // Beide Geheimnisse auf einmal: das Pfad-Geheimnis erzeugen wir selbst,
-            // den Signaturschluessel traegt der Nutzer aus Mailgun ein.
-            $this->UpdateFormField('MailHookSecret', 'value', bin2hex(random_bytes(24)));
-            echo $this->Translate('New secret created — press Apply, then copy the address below into Mailgun.');
+            // Das Pfad-Geheimnis erzeugen wir selbst; den Signaturschluessel traegt
+            // der Nutzer aus Mailgun ein. Die Anleitung wird gleich mitgezogen, damit
+            // die fertige Adresse ohne Umweg dasteht.
+            $geheim = bin2hex(random_bytes(24));
+            $this->UpdateFormField('MailHookSecret', 'value', $geheim);
+            $this->UpdateFormField('MailHookSetup', 'caption', $this->MailHookSetupText($geheim));
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('New secret created — press Apply to save it.'));
             return true;
         }
         if ($Ident === 'MailHookFillAddresses') {
@@ -198,6 +201,32 @@ trait MailScan
     }
 
     /**
+     * Die Einrichtungsanleitung fuer Mailgun zusammensetzen.
+     *
+     * Steht hier und nicht im Formular, weil sie zweimal gebraucht wird: beim
+     * Aufbau des Panels und direkt nach dem Erzeugen eines neuen Geheimnisses.
+     */
+    private function MailHookSetupText(string $geheim): string
+    {
+        $connect = $this->GetConnectUrl();
+        if ($connect === '') {
+            return $this->Translate('No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.');
+        }
+        if (strlen($geheim) < 24) {
+            return $this->Translate('Press "Create new secret" and then Apply — the target address appears here afterwards.');
+        }
+        $basis = trim((string)$this->MailProp('MailHookBase', ''));
+        $domain = $basis !== '' ? (string)(explode('@', $basis)[1] ?? 'DEINE-DOMAIN') : 'DEINE-DOMAIN';
+        $ziel = rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim;
+
+        return $this->Translate('Enter this in Mailgun (Receiving → Create Route):') . "\n\n"
+            . $this->Translate('Expression:') . ' match_recipient(".*@' . $domain . '")' . "\n"
+            . $this->Translate('Action:') . ' store(notify="' . $ziel . '")' . "\n"
+            . $this->Translate('Second action:') . ' stop()' . "\n\n"
+            . $this->Translate('The signing key is in Mailgun under Settings → Webhooks (HTTP webhook signing key), the API key under Settings → API keys.');
+    }
+
+    /**
      * Traegt fuer jedes Haushaltsmitglied eine Plus-Adresse in die Zuordnungsliste ein.
      *
      * Rein oertlich: Bei Mailgun muss keine Adresse angelegt werden, die eine
@@ -209,7 +238,7 @@ trait MailScan
     {
         $basis = trim((string)$this->MailProp('MailHookBase', ''));
         if (!str_contains($basis, '@')) {
-            echo $this->Translate('Please enter the base address at Mailgun first and press Apply.');
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter the base address at Mailgun first and press Apply.'));
             return;
         }
         [$lokal, $domain] = explode('@', $basis, 2);
@@ -240,11 +269,11 @@ trait MailScan
             $neu++;
         }
         if ($neu === 0) {
-            echo $this->Translate('Every member already has an address.');
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Every member already has an address.'));
             return;
         }
         $this->UpdateFormField('MailAddresses', 'values', json_encode(array_values($zeilen), JSON_UNESCAPED_UNICODE));
-        echo sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu);
+        $this->UpdateFormField('MailHookStatus', 'caption', sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu));
     }
 
     /** Setzt den One-Shot-Timer. Die Arbeit gehoert nicht in den Nachrichten-Thread. */
