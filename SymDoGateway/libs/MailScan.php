@@ -879,11 +879,23 @@ trait MailScan
             $antwort(406, 'payload too large');
             return;
         }
+        // Mailgun schickt bei „store and notify" FORMULARDATEN, kein JSON — die
+        // JSON-Form kommt nur von anderen Diensten. Beides annehmen: erst als JSON
+        // versuchen, sonst als Formular lesen. (Am 19.08.2026 gemessen: Die
+        // Nachricht war bei Mailgun „stored", unser Hook antwortete 406 „expected
+        // json", und weil 406 endgueltig ist, gab es keinen zweiten Versuch.)
         $daten = json_decode($roh, true);
-        unset($roh);
         if (!is_array($daten)) {
-            $this->SendDebug('MailHook', 'Rumpf ist kein JSON', 0);
-            $antwort(406, 'expected json');
+            $daten = [];
+            parse_str($roh, $daten);
+            if ($daten === [] && $_POST !== []) {
+                $daten = $_POST;   // falls der Webserver den Rumpf schon zerlegt hat
+            }
+        }
+        unset($roh);
+        if (!is_array($daten) || $daten === []) {
+            $this->SendDebug('MailHook', 'Rumpf weder JSON noch Formulardaten', 0);
+            $antwort(406, 'unusable payload');
             return;
         }
         if (!$this->MailHookVerify($daten)) {
@@ -998,7 +1010,22 @@ trait MailScan
             return null;
         }
 
+        // Bei Formulardaten stecken die Kopfzeilen in „message-headers" als
+        // JSON-Liste von [Name, Wert]-Paaren — Message-Id und Datum kommen von dort.
+        $kopfzeilen = [];
+        $roheKopf = $daten['message-headers'] ?? null;
+        if (is_string($roheKopf)) {
+            $roheKopf = json_decode($roheKopf, true);
+        }
+        foreach (is_array($roheKopf) ? $roheKopf : [] as $paar) {
+            if (is_array($paar) && isset($paar[0], $paar[1]) && is_scalar($paar[1])) {
+                $kopfzeilen[strtolower((string)$paar[0])] = (string)$paar[1];
+            }
+        }
         $datum = $feld($daten, 'Date', 'date');
+        if ($datum === '') {
+            $datum = $kopfzeilen['date'] ?? '';
+        }
         $kopf = [
             'Recipient'     => $empfaenger,
             'SenderAddress' => $adresse !== '' ? $adresse : $feld($daten, 'sender'),
@@ -1021,6 +1048,9 @@ trait MailScan
         }
 
         $messageId = $feld($daten, 'Message-Id', 'message-id', 'Message-ID');
+        if ($messageId === '') {
+            $messageId = $kopfzeilen['message-id'] ?? '';
+        }
         $key = $messageId !== ''
             ? substr(sha1(strtolower($messageId)), 0, 16)
             : substr(sha1($empfaenger . '|' . $adresse . '|' . $kopf['Subject'] . '|' . $kopf['Date'] . '|' . strlen($text)), 0, 16);
