@@ -29,7 +29,25 @@ trait AiExtract
     // Reasoning mit, ein zu kleiner Cap liefert sonst eine leere Antwort.
     private const AI_MAX_TOKENS_PDF  = 32000;
     private const AI_TIMEOUT         = 45;
+    /**
+     * Der eigene Rechner darf laenger brauchen als eine Cloud: er rechnet mit dem,
+     * was da ist, und ein Reasoning-Modell denkt vor der Antwort sichtbar lange
+     * (gemessen: 23 s fuer einen einseitigen Elternbrief). 45 s waeren hier ein
+     * Abbruch mitten in der Arbeit.
+     */
+    private const AI_LOCAL_TIMEOUT   = 300;
     private const AI_CONNECT_TIMEOUT = 5;
+    /**
+     * PDF fuer einen lokalen Server aufbereiten (der nimmt keine PDF-Dateien an).
+     * Erst der Textweg — schnell, genau und billig; er traegt jedes digital
+     * erzeugte PDF. Bleibt zu wenig Text uebrig, ist es ein Scan, und die Seiten
+     * gehen als Bilder an ein Vision-Modell.
+     */
+    private const AI_PDF_MIN_TEXT     = 200;
+    /** So viele Seiten gehen als Bild mit — ein Halbjahresplaner sprengt sonst jede Zeit. */
+    private const AI_PDF_PAGES_MAX    = 3;
+    /** Kantenlaenge der Seitenbilder: mehr kostet Tokens und Zeit, ohne mehr zu zeigen. */
+    private const AI_PDF_IMAGE_WIDTH  = 1400;
     // Missbrauchsschutz: pro Gerät N KI-Aufrufe je Zeitfenster; zusätzlich darf
     // immer nur EIN Anbieter-Aufruf gleichzeitig laufen (sonst blockieren
     // parallele Requests den Symcon-Webserver).
@@ -498,7 +516,10 @@ trait AiExtract
     private function AiRunProviderCall(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
     {
         $provider = $this->ReadPropertyString('AiProvider');
-        $maxTokens = ($pdfBase64 !== null) ? self::AI_MAX_TOKENS_PDF : self::AI_MAX_TOKENS;
+        // Ein lokales Reasoning-Modell verbraucht sein Budget zuerst im Denken
+        // (gemessen: 794 von 990 Tokens gingen in den Denktext) — mit dem kleinen
+        // Cap kaeme regelmaessig eine leere Antwort mit finish_reason „length".
+        $maxTokens = ($pdfBase64 !== null || $provider === 'local') ? self::AI_MAX_TOKENS_PDF : self::AI_MAX_TOKENS;
 
         if ($provider === 'anthropic') {
             $key = trim($this->ReadPropertyString('AiAnthropicKey'));
@@ -541,8 +562,26 @@ trait AiExtract
         }
 
         if ($provider === 'openai' || $provider === 'local') {
+            // Ein lokaler Server nimmt keine PDF-Datei an, also wird sie hier
+            // aufbereitet: erst der Textweg (schnell, genau, traegt jedes digital
+            // erzeugte PDF), und nur wenn zu wenig Text herauskommt — also bei
+            // einem Scan — gehen die ersten Seiten als Bilder mit. Dafuer braucht
+            // es ein Modell mit Bildverstaendnis; hat es keines, kommt eine leere
+            // oder fantasierte Antwort zurueck, weshalb der Textweg Vorrang hat.
+            $seitenBilder = [];
             if ($provider === 'local' && $pdfBase64 !== null) {
-                return ['ok' => false, 'code' => 'ai_pdf_unsupported', 'message' => $this->Translate('PDF is not supported by this AI provider.'), 'status' => 400];
+                $pdfText = $this->AiPdfToText($pdfBase64);
+                if (strlen($pdfText) >= self::AI_PDF_MIN_TEXT) {
+                    $this->SendDebug('AI', sprintf('PDF als Text uebergeben (%d Zeichen)', strlen($pdfText)), 0);
+                    $userText .= "\n\n--- Inhalt der beigefuegten PDF-Datei ---\n" . $pdfText;
+                } else {
+                    $seitenBilder = $this->AiPdfToImages($pdfBase64);
+                    if ($seitenBilder === []) {
+                        return ['ok' => false, 'code' => 'ai_pdf_unsupported', 'message' => $this->Translate('PDF is not supported by this AI provider.'), 'status' => 400];
+                    }
+                    $this->SendDebug('AI', sprintf('PDF als %d Seitenbild(er) uebergeben (kein Text im PDF)', count($seitenBilder)), 0);
+                }
+                $pdfBase64 = null;   // ab hier ist es Text bzw. sind es Bilder
             }
             if ($provider === 'openai') {
                 $key   = trim($this->ReadPropertyString('AiOpenAIKey'));
@@ -559,9 +598,23 @@ trait AiExtract
                 if ($baseUrl === '' || $model === '') {
                     return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('Local server URL and model must be configured.'), 'status' => 400];
                 }
-                $url = $baseUrl . '/chat/completions';
+                // „http://127.0.0.1:1234" und „…:1234/v1" muessen beide gehen: die
+                // Server (LM Studio, Ollama, llama.cpp, vLLM) bedienen alle den
+                // Pfad /v1, aber das Formular fragt nach der BASIS. Ohne diese
+                // Ergaenzung antwortet LM Studio mit „Unexpected endpoint or
+                // method. (POST /chat/completions)" — und die leere Antwort sah
+                // aus wie ein Modellfehler (am 19.08.2026 genau so gemessen).
+                $url = (preg_match('#/v\d+$#', $baseUrl) === 1 ? $baseUrl : $baseUrl . '/v1') . '/chat/completions';
             }
-            if ($pdfBase64 !== null) {
+            if ($seitenBilder !== []) {
+                // Jede Seite ein eigener Bildblock, danach die Aufgabe — dieselbe
+                // Reihenfolge wie beim Einzelbild.
+                $userContent = [];
+                foreach ($seitenBilder as $seite) {
+                    $userContent[] = ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . $seite]];
+                }
+                $userContent[] = ['type' => 'text', 'text' => $userText];
+            } elseif ($pdfBase64 !== null) {
                 $userContent = [
                     ['type' => 'file', 'file' => ['filename' => 'dokument.pdf', 'file_data' => 'data:application/pdf;base64,' . $pdfBase64]],
                     ['type' => 'text', 'text' => $userText],
@@ -589,7 +642,13 @@ trait AiExtract
                 $headers[] = 'Authorization: Bearer ' . $key;
             }
             // Siehe Anthropic-Zweig: kaputte UTF-8-Bytes ersetzen statt scheitern.
-            $resp = $this->AiHttpPost($url, $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+            // Der eigene Rechner bekommt mehr Zeit als eine Cloud (AI_LOCAL_TIMEOUT).
+            $resp = $this->AiHttpPost(
+                $url,
+                $headers,
+                json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
+                $provider === 'local' ? self::AI_LOCAL_TIMEOUT : self::AI_TIMEOUT
+            );
             return $this->AiFinishText($resp, static function (array $data): string {
                 return (string)($data['choices'][0]['message']['content'] ?? '');
             });
@@ -627,6 +686,10 @@ trait AiExtract
         }
         $text = $extractText($data);
         if (trim($text) === '') {
+            // Die Rohantwort mitschreiben: ein Server, der den Pfad nicht kennt,
+            // oder ein Modell ohne Ausgabe sehen von aussen gleich aus — ohne diese
+            // Zeile sucht man am falschen Ende (siehe Kommentar zum /v1-Pfad).
+            $this->SendDebug('AI', 'Leere Antwort, Rohdaten: ' . mb_substr(json_encode($data, JSON_UNESCAPED_UNICODE) ?: '', 0, 400), 0);
             return ['ok' => false, 'code' => 'ai_empty', 'message' => $this->Translate('The AI returned an empty answer.'), 'status' => 502];
         }
         return ['ok' => true, 'text' => $text];
@@ -836,13 +899,137 @@ trait AiExtract
         return is_array($rows) ? $rows : [];
     }
 
+    // ────────────────────────────── PDF für lokale Server ──────────────────────────────
+
+    /**
+     * Werkzeug im Dateisystem suchen. Symcon erbt keinen brauchbaren PATH, deshalb
+     * absolute Pfade — Homebrew (Apple Silicon und Intel) und die Systemablage.
+     */
+    private function AiToolPath(string $name): ?string
+    {
+        foreach (['/opt/homebrew/bin/', '/usr/local/bin/', '/usr/bin/'] as $ordner) {
+            $pfad = $ordner . $name;
+            if (is_executable($pfad)) {
+                return $pfad;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Textebene eines PDFs lesen. Leer bei einem Scan — dann ist der Bildweg dran.
+     *
+     * Bewusst ueber Dateien und exec statt ueber Pipes: proc_open bleibt in Symcons
+     * Umgebung haengen (gemessen — das Skript kam nie zurueck), exec dagegen laeuft
+     * zuverlaessig. Beide Dateien verschwinden in jedem Fall wieder.
+     */
+    private function AiPdfToText(string $pdfBase64): string
+    {
+        $werkzeug = $this->AiToolPath('pdftotext');
+        if ($werkzeug === null) {
+            $this->SendDebug('AI', 'pdftotext nicht gefunden — PDF-Text entfaellt', 0);
+            return '';
+        }
+        $roh = base64_decode($pdfBase64, true);
+        if (!is_string($roh) || $roh === '') {
+            return '';
+        }
+        $stamm  = sys_get_temp_dir() . '/symdo_pdftxt_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        $quelle = $stamm . '.pdf';
+        $ziel   = $stamm . '.txt';
+        $text   = '';
+        try {
+            if (@file_put_contents($quelle, $roh) === false) {
+                return '';
+            }
+            unset($roh);
+            $rc = 0;
+            $ausgabe = [];
+            @exec(escapeshellarg($werkzeug) . ' -layout -enc UTF-8 '
+                . escapeshellarg($quelle) . ' ' . escapeshellarg($ziel) . ' 2>/dev/null', $ausgabe, $rc);
+            if ($rc !== 0) {
+                $this->SendDebug('AI', 'pdftotext meldet Fehler ' . $rc, 0);
+            }
+            $text = (string)@file_get_contents($ziel);
+        } catch (Throwable $e) {
+            $this->SendDebug('AI', 'PDF-Textauszug fehlgeschlagen: ' . $e->getMessage(), 0);
+        } finally {
+            @unlink($quelle);
+            @unlink($ziel);
+        }
+
+        $text = trim(preg_replace("/\n{3,}/", "\n\n", $text) ?? '');
+        if (strlen($text) > self::AI_RECIPE_TEXT_MAX) {
+            // mb_strcut, damit kein Multibyte-Zeichen zerschnitten wird (siehe MailPrepareText).
+            $text = mb_strcut($text, 0, self::AI_RECIPE_TEXT_MAX, 'UTF-8');
+        }
+        return $text;
+    }
+
+    /**
+     * Die ersten Seiten eines PDFs als JPEG — für Scans ohne Textebene.
+     *
+     * pdftoppm rendert direkt in Zielbreite; GD bleibt bewusst außen vor, denn das
+     * Laden einer A4-Seite kostet dort 16 MB von 32 MB memory_limit (gemessen).
+     *
+     * @return list<string> base64-kodierte JPEGs, leer wenn nichts ging
+     */
+    private function AiPdfToImages(string $pdfBase64, int $maxSeiten = self::AI_PDF_PAGES_MAX): array
+    {
+        $werkzeug = $this->AiToolPath('pdftoppm');
+        if ($werkzeug === null) {
+            $this->SendDebug('AI', 'pdftoppm nicht gefunden — PDF-Bildweg entfaellt', 0);
+            return [];
+        }
+        $roh = base64_decode($pdfBase64, true);
+        if (!is_string($roh) || $roh === '') {
+            return [];
+        }
+        $stamm = sys_get_temp_dir() . '/symdo_pdf_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        $quelle = $stamm . '.pdf';
+        $bilder = [];
+        try {
+            if (@file_put_contents($quelle, $roh) === false) {
+                return [];
+            }
+            unset($roh);
+            $cmd = escapeshellarg($werkzeug) . ' -jpeg -jpegopt quality=82'
+                 . ' -f 1 -l ' . max(1, $maxSeiten)
+                 . ' -scale-to-x ' . self::AI_PDF_IMAGE_WIDTH . ' -scale-to-y -1 '
+                 . escapeshellarg($quelle) . ' ' . escapeshellarg($stamm) . ' 2>/dev/null';
+            $rc = 0;
+            $ausgabe = [];
+            @exec($cmd, $ausgabe, $rc);
+            if ($rc !== 0) {
+                $this->SendDebug('AI', 'pdftoppm meldet Fehler ' . $rc, 0);
+            }
+            $seiten = glob($stamm . '-*.jpg') ?: [];
+            sort($seiten, SORT_NATURAL);
+            foreach (array_slice($seiten, 0, $maxSeiten) as $datei) {
+                $inhalt = (string)@file_get_contents($datei);
+                if ($inhalt !== '') {
+                    $bilder[] = base64_encode($inhalt);
+                }
+            }
+        } catch (Throwable $e) {
+            $this->SendDebug('AI', 'PDF-Bildwandlung fehlgeschlagen: ' . $e->getMessage(), 0);
+        } finally {
+            // Nichts auf der Platte zurücklassen — auch nicht bei einem Abbruch.
+            @unlink($quelle);
+            foreach (glob($stamm . '-*.jpg') ?: [] as $datei) {
+                @unlink($datei);
+            }
+        }
+        return $bilder;
+    }
+
     // ────────────────────────────── HTTP ──────────────────────────────
 
-    private function AiHttpPost(string $url, array $headers, string $bodyJson): array
+    private function AiHttpPost(string $url, array $headers, string $bodyJson, int $timeout = self::AI_TIMEOUT): array
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, self::AI_TIMEOUT);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::AI_CONNECT_TIMEOUT);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $bodyJson);
