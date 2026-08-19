@@ -1194,7 +1194,7 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     /**
-     * Panel „Aufgaben aus E-Mails".
+     * Panel „KI E-Mail Analyse".
      *
      * Bewusst in PHP gebaut und nicht in form.json: die Mitglieder-Spalte der
      * Adresstabelle braucht die Nutzer als Auswahloptionen, und die stehen erst zur
@@ -1209,7 +1209,7 @@ class SymDoGateway extends IPSModuleStrict
 
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Tasks from e-mails'),
+            'caption'  => $this->Translate('AI e-mail analysis'),
             'expanded' => false,
             'items'    => [
                 [

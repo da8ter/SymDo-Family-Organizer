@@ -121,7 +121,7 @@
             "This instance only works as a sync broker. The app API — pairing, users and AI analysis — runs on instance #%d.": "Diese Instanz arbeitet nur als Sync-Broker. Die App-API — Kopplung, Nutzer und KI-Analyse — läuft auf Instanz #%d.",
             "Works: SymDo Gateway reached over the local URL with a valid certificate. On the home network the web app will use it from now on.": "Funktioniert: SymDo Gateway über die lokale URL mit gültigem Zertifikat erreicht. Im Heimnetz nutzt die Web-App sie ab jetzt.",
             "Answered with HTTP %d, but this is not a SymDo Gateway endpoint. Does the URL point at this Symcon installation?": "Antwortet mit HTTP %d, ist aber kein SymDo-Gateway-Endpunkt. Zeigt die URL auf diese Symcon-Installation?",
-            "Tasks from e-mails": "Aufgaben aus E-Mails",
+            "AI e-mail analysis": "KI E-Mail Analyse",
             "Analyze incoming mail": "Eingehende Mail analysieren",
             "Mailboxes": "Postfächer",
             "IMAP instance": "IMAP-Instanz",
