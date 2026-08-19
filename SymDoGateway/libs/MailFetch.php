@@ -140,22 +140,12 @@ trait MailFetch
             if ($base64 === '') {
                 return null;
             }
-            // Letzte Wache, und die genaueste: die echten Kantenlaengen. Ein Bild
-            // unter MAIL_IMAGE_MIN_PIXEL traegt keinen lesbaren Fliesstext, egal
-            // wie schwer die Datei ist — ein grosses, aber winziges Logo (etwa ein
-            // wenig komprimiertes Emblem) faellt erst hier auf. Die Bytes liegen
-            // ohnehin vor, die Pruefung kostet also nur den Dekodierschritt.
-            if ($wahl['kind'] === 'image') {
-                $roh = base64_decode($base64, true);
-                $masse = is_string($roh) ? @getimagesizefromstring($roh) : false;
-                unset($roh);
-                if (is_array($masse) && (min((int)$masse[0], (int)$masse[1]) < self::MAIL_IMAGE_MIN_PIXEL)) {
-                    $this->SendDebug('MailFetch', sprintf(
-                        'Bild %s verworfen: %dx%d Pixel, dafuer zu klein',
-                        $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'], (int)$masse[0], (int)$masse[1]
-                    ), 0);
-                    return null;
-                }
+            // Letzte Wache, und die genaueste: die echten Kantenlaengen (siehe
+            // MailImageUsable). Die Bytes liegen ohnehin vor, die Pruefung kostet
+            // also nur den Dekodierschritt.
+            if ($wahl['kind'] === 'image'
+                && !$this->MailImageUsable($base64, $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'])) {
+                return null;
             }
             $this->SendDebug('MailFetch', sprintf(
                 'UID %s: Anhang %s (%s/%s, Teil %s, %d kB base64)',
@@ -566,6 +556,29 @@ trait MailFetch
             }
         }
         return false;
+    }
+
+    /**
+     * Traegt ein Bild ueberhaupt lesbaren Fliesstext?
+     *
+     * Ein Bild unter MAIL_IMAGE_MIN_PIXEL kann keinen Brief zeigen, egal wie schwer
+     * die Datei ist — ein grosses, aber wenig komprimiertes Emblem faellt erst hier
+     * auf. Herausgeloest, damit beide Eingaenge dieselbe Wache nutzen: der
+     * IMAP-Abruf und der Webhook.
+     */
+    private function MailImageUsable(string $base64, string $bezeichnung): bool
+    {
+        $roh = base64_decode($base64, true);
+        $masse = is_string($roh) ? @getimagesizefromstring($roh) : false;
+        unset($roh);
+        if (is_array($masse) && min((int)$masse[0], (int)$masse[1]) < self::MAIL_IMAGE_MIN_PIXEL) {
+            $this->SendDebug('MailFetch', sprintf(
+                'Bild %s verworfen: %dx%d Pixel, dafuer zu klein',
+                $bezeichnung, (int)$masse[0], (int)$masse[1]
+            ), 0);
+            return false;
+        }
+        return true;
     }
 
     /** Rohnutzlast in reines base64 bringen — unabhaengig von der Transportkodierung. */

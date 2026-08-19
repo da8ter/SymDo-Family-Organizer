@@ -48,6 +48,9 @@ trait MailScan
     /** Schluessel der Fehlversuchs-Zaehler im MailSeenUIDs-Attribut ("imapID:uid" → Anzahl).
      *  Kollidiert nie mit einer Instanz-ID, weil die immer numerisch ist. */
     private const MAIL_FAIL_KEY      = '#fehl';
+    /** Topf der ueber den Webhook eingegangenen Mails — kollidiert nie mit einer
+     *  Instanz-ID, weil die immer numerisch ist (gleiche Ueberlegung wie oben). */
+    private const MAIL_HOOK_KEY      = '#hook';
     /** So viele Zeilen weit wird nach dem zitierten Kopf gesucht (siehe MailDetectOrigin). */
     private const MAIL_ORIGIN_LINES  = 40;
 
@@ -227,14 +230,14 @@ trait MailScan
                     continue;
                 }
                 $uid = (string)($mail['UID'] ?? '');
-                if ($uid === '' || $this->MailSeen($imapID, $uid)) {
+                if ($uid === '' || $this->MailSeen((string)$imapID, $uid)) {
                     continue;
                 }
                 $urteil = $this->MailJudge($mail);
                 if ($urteil['skip']) {
                     // Verworfene Mail trotzdem vermerken, sonst wird sie bei jedem
                     // Signal erneut geprueft.
-                    $this->MailRemember($imapID, $uid);
+                    $this->MailRemember((string)$imapID, $uid);
                     $this->SendDebug('MailScan', sprintf('UID %s uebersprungen: %s', $uid, $urteil['reason']), 0);
                     continue;
                 }
@@ -250,12 +253,12 @@ trait MailScan
                 // scheiternde Mail (zu grosses PDF, kaputter Inhalt) darf nicht
                 // alle neueren blockieren.
                 if ($this->MailAnalyse($imapID, $mail, $urteil['userId'])) {
-                    $this->MailRemember($imapID, $uid);
+                    $this->MailRemember((string)$imapID, $uid);
                     $offen = true;
                 } else {
-                    $versuche = $this->MailCountFailure($imapID, $uid);
+                    $versuche = $this->MailCountFailure((string)$imapID, $uid);
                     if ($versuche >= self::MAIL_FAIL_MAX) {
-                        $this->MailRemember($imapID, $uid);
+                        $this->MailRemember((string)$imapID, $uid);
                         $betreff = trim((string)($mail['Subject'] ?? ''));
                         $this->LogMessage(sprintf(
                             'SymDo: E-Mail „%s" nach %d fehlgeschlagenen Analysen uebersprungen — sie bleibt im Postfach, wird aber nicht mehr versucht',
@@ -285,7 +288,7 @@ trait MailScan
      *
      * @return array{skip: bool, reason: string, userId: string}
      */
-    private function MailJudge(array $mail): array
+    private function MailJudge(array $mail, ?string $senderAllow = null): array
     {
         $nein = static fn(string $grund): array => ['skip' => true, 'reason' => $grund, 'userId' => ''];
 
@@ -306,7 +309,7 @@ trait MailScan
         }
 
         $absender = strtolower(trim((string)($mail['SenderAddress'] ?? '')));
-        if (!$this->MailSenderAllowed($absender)) {
+        if (!$this->MailSenderAllowed($absender, $senderAllow)) {
             return $nein('Absender ' . $absender . ' nicht freigegeben');
         }
         if ($this->MailLooksLikeBulk($absender, (string)($mail['Subject'] ?? ''))) {
@@ -343,9 +346,14 @@ trait MailScan
         return array_values(array_unique($raus));
     }
 
-    private function MailSenderAllowed(string $absender): bool
+    /**
+     * @param ?string $liste Eigene Freigabeliste; null = die des IMAP-Wegs.
+     *        Der Webhook braucht eine eigene, weil dort die Schule DIREKT schreibt,
+     *        waehrend beim Weiterleiten der eigene Haushalt der Absender ist.
+     */
+    private function MailSenderAllowed(string $absender, ?string $liste = null): bool
     {
-        $roh = trim((string)$this->MailProp('MailSenderAllow', ''));
+        $roh = trim($liste ?? (string)$this->MailProp('MailSenderAllow', ''));
         if ($roh === '') {
             return true; // keine Liste = keine Einschraenkung
         }
@@ -399,104 +407,150 @@ trait MailScan
             return true;
         }
 
-        $betreff = trim((string)($kopf['Subject'] ?? ''));
-        $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
-
         // Anhang dazuholen. Das Kernmodul liefert ihn nicht — MailFetch schlaegt
         // lesend im selben Postfach nach. Gerade Elternbriefe tragen die Termine
         // ausschliesslich im PDF; ohne das bliebe nur „siehe Anhang" uebrig.
         // Symcons php.ini setzt memory_limit auf 32 MB. Ein 5-MB-PDF liegt auf dieser
-        // Strecke mehrfach gleichzeitig im Speicher (Rohpuffer, base64, data:-URL,
-        // JSON-Rumpf) — ohne Luft bricht der Lauf mitten im Anbieter-Aufruf ab.
-        // Nur fuer diesen Abschnitt, danach zurueck auf den Ausgangswert.
-        $speicherVorher = (string)@ini_get('memory_limit');
+        // Strecke mehrfach gleichzeitig im Speicher — ohne Luft bricht der Lauf ab.
+        // Das `finally` ist wichtig: ohne es bliebe die Anhebung stehen, wenn
+        // MailFetchAttachment wirft.
         $anhang = null;
         if ((bool)$this->MailProp('MailReadAttachments', true)) {
+            $speicherVorher = (string)@ini_get('memory_limit');
             @ini_set('memory_limit', '192M');
-            $anhang = $this->MailFetchAttachment($imapID, $uid);
-        }
-        $bild = ($anhang !== null && $anhang['kind'] === 'image') ? $anhang['base64'] : null;
-        $pdf  = ($anhang !== null && $anhang['kind'] === 'pdf') ? $anhang['base64'] : null;
-        if ($anhang !== null && $anhang['name'] !== '') {
-            $eingabe .= "\n\n(Beigefuegte Datei: " . $anhang['name'] . ')';
-        }
-
-        $r = $this->AiRunCompletion(
-            $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null),
-            $eingabe,
-            $bild,
-            $pdf
-        );
-        // Kann der eingestellte Anbieter kein PDF (lokaler Server), scheitert der
-        // Aufruf dauerhaft. Dann lieber der Text allein als eine Mail, die bei jedem
-        // Lauf erneut ins Leere greift.
-        if (($r['ok'] ?? false) !== true && (string)($r['code'] ?? '') === 'ai_pdf_unsupported') {
-            $this->SendDebug('MailScan', 'Anbieter kann kein PDF — zweiter Versuch ohne Anhang', 0);
-            $anhang = null;
-            $r = $this->AiRunCompletion($this->AiMailSystemPrompt(date('Y-m-d')), $eingabe, null);
-        }
-        $this->MailCountDay();
-        if ($speicherVorher !== '') {
-            @ini_set('memory_limit', $speicherVorher);
-        }
-        if (($r['ok'] ?? false) !== true) {
-            $meldung = (string)($r['message'] ?? $r['code'] ?? '?');
-            $this->SendDebug('MailScan', 'KI-Fehler: ' . $meldung, 0);
-            $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
-            return false;
-        }
-        $aufgaben = $this->AiParseTodos((string)$r['text']);
-        // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
-        // unbeobachtet im Timer und kostet Geld beim Anbieter. Ohne diese Zeile
-        // waere im Nachhinein nicht feststellbar, welche Mail wann verarbeitet wurde.
-        // Mit Datumsangabe: daran erkennt man, ob der Anhang wirklich ausgewertet
-        // wurde — Fristen und Termine stehen fast immer nur dort. Bewusst nur
-        // Zahlen, keine Aufgabentitel: das Protokoll ist kein Ort fuer Inhalte.
-        // Aufgaben und Termine getrennt zaehlen, dazu wie viele ein Datum tragen.
-        // Daran erkennt man ohne Blick in die App, ob der Anhang ausgewertet wurde
-        // und ob die Unterscheidung greift. Bewusst nur Zahlen, keine Titel.
-        $mitDatum = 0;
-        $termine = 0;
-        foreach ($aufgaben as $a) {
-            if (($a['due'] ?? null) !== null) {
-                $mitDatum++;
-            }
-            if (($a['kind'] ?? 'task') === 'event') {
-                $termine++;
+            try {
+                $anhang = $this->MailFetchAttachment($imapID, $uid);
+            } finally {
+                if ($speicherVorher !== '') {
+                    @ini_set('memory_limit', $speicherVorher);
+                }
             }
         }
-        $this->LogMessage(sprintf(
-            'SymDo: E-Mail „%s" von %s analysiert%s → %d Aufgabe(n), %d Termin(e), davon %d mit Datum',
-            $betreff !== '' ? $betreff : '(ohne Betreff)',
-            (string)($kopf['SenderAddress'] ?? '?'),
-            $anhang !== null ? ' (mit Anhang ' . ($anhang['name'] !== '' ? $anhang['name'] : $anhang['kind']) . ')' : '',
-            count($aufgaben) - $termine,
-            $termine,
-            $mitDatum
-        ), KL_NOTIFY);
-        if ($aufgaben === []) {
-            return true; // sauber analysiert, nur nichts zu tun gefunden
-        }
 
-        $this->MailStoreProposal([
-            'id'        => $imapID . ':' . $uid,
-            'at'        => (int)($kopf['Date'] ?? time()),
-            'from'      => (string)($kopf['SenderAddress'] ?? ''),
-            'fromName'  => (string)($kopf['SenderName'] ?? ''),
-            'subject'   => $betreff,
-            'recipient' => (string)($kopf['Recipient'] ?? ''),
-            'userId'    => $userId,
-            // Wer die Mail urspruenglich geschrieben hat und wie sie damals hiess.
-            // Der aeussere Kopf nennt immer nur den weiterleitenden Haushalt und ein
-            // „Fwd:" davor — beides sagt dem Nutzer nichts.
-            'origin'    => $this->MailDetectOrigin($text),
-            'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
-        ]);
-
-        if ((bool)$this->MailProp('MailDeleteAfter', false)) {
+        $fertig = $this->MailAnalyseRecord($imapID . ':' . $uid, $kopf, $text, $anhang, $userId);
+        // Loeschen nur auf dem IMAP-Weg und nur nach einer abgeschlossenen Analyse:
+        // eine Mail, die noch einen zweiten Versuch verdient, muss im Postfach bleiben.
+        if ($fertig && (bool)$this->MailProp('MailDeleteAfter', false)) {
             @IMAP_DeleteMail($imapID, $uid);
         }
-        return true;
+        return $fertig;
+    }
+
+    /**
+     * Der quellenneutrale Teil der Analyse: KI befragen, Ergebnis vermerken, Vorschlag ablegen.
+     *
+     * Bewusst getrennt von der Beschaffung, damit derselbe Weg fuer beide Eingaenge
+     * gilt — die IMAP-Abholung und den Webhook. Alles, was hier steht, kennt weder
+     * Postfach noch UID; es bekommt fertigen Text und hoechstens EINEN Anhang.
+     *
+     * @param string     $vorschlagsId eindeutig je Quelle: „<imapID>:<uid>" bzw. „hook:<key>"
+     * @param array      $kopf         Subject, SenderAddress, SenderName, Recipient, Date
+     * @param ?array     $anhang       ['kind' => 'pdf'|'image', 'base64' => …, 'name' => …]
+     * @param string     $quelle       nur fuers Statusprotokoll
+     * @return bool true, wenn die Mail fertig behandelt ist (auch bei 0 Aufgaben).
+     *              false bei einem Fehler, der einen zweiten Versuch verdient.
+     */
+    private function MailAnalyseRecord(
+        string $vorschlagsId,
+        array $kopf,
+        string $text,
+        ?array $anhang,
+        string $userId,
+        string $quelle = 'IMAP'
+    ): bool {
+        $betreff = trim((string)($kopf['Subject'] ?? ''));
+        $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
+        $bild = ($anhang !== null && $anhang['kind'] === 'image') ? $anhang['base64'] : null;
+        $pdf  = ($anhang !== null && $anhang['kind'] === 'pdf') ? $anhang['base64'] : null;
+        if ($anhang !== null && ($anhang['name'] ?? '') !== '') {
+            $eingabe .= "\n\n(Beigefuegte Datei: " . $anhang['name'] . ')';
+        }
+        // Auch hier Luft fuer den Anbieter-Aufruf: das base64 des Anhangs liegt im
+        // JSON-Rumpf ein zweites Mal. Zurueckgesetzt wird in jedem Fall (finally).
+        $speicherVorher = (string)@ini_get('memory_limit');
+        if ($anhang !== null) {
+            @ini_set('memory_limit', '192M');
+        }
+        try {
+
+            $r = $this->AiRunCompletion(
+                $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null),
+                $eingabe,
+                $bild,
+                $pdf
+            );
+            // Kann der eingestellte Anbieter kein PDF (lokaler Server), scheitert der
+            // Aufruf dauerhaft. Dann lieber der Text allein als eine Mail, die bei jedem
+            // Lauf erneut ins Leere greift.
+            if (($r['ok'] ?? false) !== true && (string)($r['code'] ?? '') === 'ai_pdf_unsupported') {
+                $this->SendDebug('MailScan', 'Anbieter kann kein PDF — zweiter Versuch ohne Anhang', 0);
+                $anhang = null;
+                $r = $this->AiRunCompletion($this->AiMailSystemPrompt(date('Y-m-d')), $eingabe, null);
+            }
+            $this->MailCountDay();
+            if (($r['ok'] ?? false) !== true) {
+                $meldung = (string)($r['message'] ?? $r['code'] ?? '?');
+                $this->SendDebug('MailScan', 'KI-Fehler: ' . $meldung, 0);
+                $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
+                return false;
+            }
+            $aufgaben = $this->AiParseTodos((string)$r['text']);
+            // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
+            // unbeobachtet im Timer und kostet Geld beim Anbieter. Ohne diese Zeile
+            // waere im Nachhinein nicht feststellbar, welche Mail wann verarbeitet wurde.
+            // Mit Datumsangabe: daran erkennt man, ob der Anhang wirklich ausgewertet
+            // wurde — Fristen und Termine stehen fast immer nur dort. Bewusst nur
+            // Zahlen, keine Aufgabentitel: das Protokoll ist kein Ort fuer Inhalte.
+            // Aufgaben und Termine getrennt zaehlen, dazu wie viele ein Datum tragen.
+            // Daran erkennt man ohne Blick in die App, ob der Anhang ausgewertet wurde
+            // und ob die Unterscheidung greift. Bewusst nur Zahlen, keine Titel.
+            $mitDatum = 0;
+            $termine = 0;
+            foreach ($aufgaben as $a) {
+                if (($a['due'] ?? null) !== null) {
+                    $mitDatum++;
+                }
+                if (($a['kind'] ?? 'task') === 'event') {
+                    $termine++;
+                }
+            }
+            $this->LogMessage(sprintf(
+                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), davon %d mit Datum',
+                $betreff !== '' ? $betreff : '(ohne Betreff)',
+                (string)($kopf['SenderAddress'] ?? '?'),
+                // Der IMAP-Weg bleibt wortgleich wie bisher; nur ein anderer Eingang
+                // nennt sich, damit im Protokoll unterscheidbar ist, woher die Mail kam.
+                $quelle === 'IMAP' ? '' : ' (' . $quelle . ')',
+                $anhang !== null ? ' (mit Anhang ' . (($anhang['name'] ?? '') !== '' ? $anhang['name'] : $anhang['kind']) . ')' : '',
+                count($aufgaben) - $termine,
+                $termine,
+                $mitDatum
+            ), KL_NOTIFY);
+            if ($aufgaben === []) {
+                return true; // sauber analysiert, nur nichts zu tun gefunden
+            }
+
+            $this->MailStoreProposal([
+                'id'        => $vorschlagsId,
+                'at'        => (int)($kopf['Date'] ?? time()),
+                'from'      => (string)($kopf['SenderAddress'] ?? ''),
+                'fromName'  => (string)($kopf['SenderName'] ?? ''),
+                'subject'   => $betreff,
+                'recipient' => (string)($kopf['Recipient'] ?? ''),
+                'userId'    => $userId,
+                // Wer die Mail urspruenglich geschrieben hat und wie sie damals hiess.
+                // Der aeussere Kopf nennt immer nur den weiterleitenden Haushalt und ein
+                // „Fwd:" davor — beides sagt dem Nutzer nichts.
+                'origin'    => $this->MailDetectOrigin($text),
+                'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
+            ]);
+            return true;
+
+        } finally {
+            if ($speicherVorher !== '' && $anhang !== null) {
+                @ini_set('memory_limit', $speicherVorher);
+            }
+        }
     }
 
     /**
@@ -824,26 +878,33 @@ trait MailScan
         return $raus;
     }
 
-    private function MailSeen(int $imapID, string $uid): bool
+    /**
+     * Wurde dieser Eintrag schon verarbeitet?
+     *
+     * Der „Topf" trennt die Quellen: fuer den IMAP-Weg ist es die Instanz-ID (rein
+     * numerisch, wie bisher), fuer den Webhook MAIL_HOOK_KEY. Damit bleiben alte
+     * Eintraege im Attribut unveraendert gueltig — kein Migrationsschritt noetig.
+     */
+    private function MailSeen(string $topf, string $schluessel): bool
     {
         $karte = json_decode($this->MailAttr('MailSeenUIDs', '{}'), true);
-        $liste = is_array($karte) ? (array)($karte[(string)$imapID] ?? []) : [];
-        return in_array($uid, array_map('strval', $liste), true);
+        $liste = is_array($karte) ? (array)($karte[$topf] ?? []) : [];
+        return in_array($schluessel, array_map('strval', $liste), true);
     }
 
-    private function MailRemember(int $imapID, string $uid): void
+    private function MailRemember(string $topf, string $schluessel): void
     {
         $karte = json_decode($this->MailAttr('MailSeenUIDs', '{}'), true);
         $karte = is_array($karte) ? $karte : [];
-        $liste = array_map('strval', (array)($karte[(string)$imapID] ?? []));
-        $liste[] = $uid;
+        $liste = array_map('strval', (array)($karte[$topf] ?? []));
+        $liste[] = $schluessel;
         if (count($liste) > self::MAIL_SEEN_MAX) {
             $liste = array_slice($liste, -self::MAIL_SEEN_MAX);
         }
-        $karte[(string)$imapID] = array_values(array_unique($liste));
+        $karte[$topf] = array_values(array_unique($liste));
         // Eine erledigte Mail braucht ihren Fehlversuchs-Zaehler nicht mehr.
-        if (isset($karte[self::MAIL_FAIL_KEY][$imapID . ':' . $uid])) {
-            unset($karte[self::MAIL_FAIL_KEY][$imapID . ':' . $uid]);
+        if (isset($karte[self::MAIL_FAIL_KEY][$topf . ':' . $schluessel])) {
+            unset($karte[self::MAIL_FAIL_KEY][$topf . ':' . $schluessel]);
             if ($karte[self::MAIL_FAIL_KEY] === []) {
                 unset($karte[self::MAIL_FAIL_KEY]);
             }
@@ -852,14 +913,14 @@ trait MailScan
     }
 
     /** Fehlversuch einer Mail vermerken; liefert den neuen Stand des Zaehlers. */
-    private function MailCountFailure(int $imapID, string $uid): int
+    private function MailCountFailure(string $topf, string $schluessel): int
     {
         $karte = json_decode($this->MailAttr('MailSeenUIDs', '{}'), true);
         $karte = is_array($karte) ? $karte : [];
         $fehl = is_array($karte[self::MAIL_FAIL_KEY] ?? null) ? $karte[self::MAIL_FAIL_KEY] : [];
-        $schluessel = $imapID . ':' . $uid;
-        $n = (int)($fehl[$schluessel] ?? 0) + 1;
-        $fehl[$schluessel] = $n;
+        $eintrag = $topf . ':' . $schluessel;
+        $n = (int)($fehl[$eintrag] ?? 0) + 1;
+        $fehl[$eintrag] = $n;
         // Der Zaehlerbestand bleibt klein: mehr als 50 gleichzeitig scheiternde
         // Mails gibt es nicht, ohne dass laengst etwas Groesseres kaputt ist.
         if (count($fehl) > 50) {
