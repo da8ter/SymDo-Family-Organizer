@@ -164,7 +164,29 @@ trait ApiRouter
                 // die Web-App — die schickt alles ueber ihren einen POST-Helfer.
                 // Bewusst KEIN Zweig im Kachel-Relay (AiRelayBody): so bleibt das
                 // Briefing in der Symcon-Kachel unsichtbar, ohne Sonderfall dort.
-                if ($method === 'GET' || $method === 'POST') {
+                if ($method === 'POST') {
+                    $rumpf = $this->ReadJsonBody();
+                    // Vorschau auf einen anderen Tag: erzeugt JETZT einen Text und legt
+                    // ihn NICHT ab. Kostet je Aufruf einen Anbieter-Aufruf, deshalb nur
+                    // auf ausdrueckliche Anfrage und niemals im Regelbetrieb der Apps.
+                    if (array_key_exists('previewDays', $rumpf)) {
+                        $tage = max(0, min(7, (int)$rumpf['previewDays']));
+                        $erg  = $this->BriefingPreview($tage);
+                        $this->SendJson([
+                            'ok'      => (bool)$erg['ok'],
+                            'preview' => [
+                                'days' => $tage,
+                                'text' => (string)$erg['text'],
+                                'note' => (string)$erg['message'],
+                                'data' => $erg['daten'] ?? null,
+                            ],
+                        ]);
+                        return;
+                    }
+                    $this->SendJson($this->BriefingPublic());
+                    return;
+                }
+                if ($method === 'GET') {
                     $this->SendJson($this->BriefingPublic());
                     return;
                 }

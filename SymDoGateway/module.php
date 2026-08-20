@@ -1649,9 +1649,21 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('Generate at')
                 ],
                 [
-                    'type'    => 'Button',
-                    'caption' => $this->Translate('Generate briefing now'),
-                    'onClick' => 'IPS_RequestAction($id, \'BriefingNow\', 0);'
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        [
+                            'type'    => 'Button',
+                            'caption' => $this->Translate('Generate briefing now'),
+                            'onClick' => 'IPS_RequestAction($id, \'BriefingNow\', 0);'
+                        ],
+                        [
+                            // Zeigt nur an, legt nichts ab: Der abgelegte Stand gilt fuer
+                            // heute, und die Apps zeigen ihn als das Briefing des Tages.
+                            'type'    => 'Button',
+                            'caption' => $this->Translate('Preview for tomorrow'),
+                            'onClick' => 'IPS_RequestAction($id, \'BriefingPreviewTomorrow\', 0);'
+                        ]
+                    ]
                 ],
                 [
                     // Zeigt nach dem Knopf das Ergebnis — bewusst ein Label und kein

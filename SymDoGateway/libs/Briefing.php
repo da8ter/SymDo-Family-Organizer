@@ -98,6 +98,13 @@ trait Briefing
             $this->BriefingNow();
             return true;
         }
+        if ($ident === 'BriefingPreviewTomorrow') {
+            $ergebnis = $this->BriefingPreview(1);
+            $this->UpdateFormField('BriefingStatus', 'caption', $ergebnis['ok']
+                ? $ergebnis['text']
+                : sprintf($this->Translate('Preview failed: %s'), (string)$ergebnis['message']));
+            return true;
+        }
         return false;
     }
 
@@ -311,7 +318,11 @@ trait Briefing
         }
 
         $daten   = $this->BriefingCollect();
-        $antwort = $this->AiRunCompletion($this->BriefingSystemPrompt(), $this->BriefingUserText($daten), null);
+        $antwort = $this->AiRunCompletion(
+            $this->BriefingSystemPrompt($this->BriefingDayWord(0)),
+            $this->BriefingUserText($daten),
+            null
+        );
         if (!(bool)($antwort['ok'] ?? false)) {
             $code = (string)($antwort['code'] ?? 'ai_error');
             $this->SendDebug('Briefing', 'Anbieter meldet ' . $code, 0);
@@ -369,7 +380,7 @@ trait Briefing
      *
      * @return array{userId: string, name: string, termine: list<string>, aufgaben: list<string>, ueberfaellig: list<string>, geburtstage: list<string>, rollen: list<string>, einkauf: array{anzahl: int, liste: string}}
      */
-    private function BriefingCollect(): array
+    private function BriefingCollect(int $tage = 0): array
     {
         $mitglieder = $this->BriefingMembers();
         $userId     = $this->BriefingUserId();
@@ -377,13 +388,32 @@ trait Briefing
         return [
             'userId'       => $userId,
             'name'         => (string)($mitglieder[$userId]['name'] ?? ''),
-            'termine'      => $this->BriefingEventLines($mitglieder),
-            'aufgaben'     => $this->BriefingTaskLines($mitglieder, false),
-            'ueberfaellig' => $this->BriefingTaskLines($mitglieder, true),
-            'geburtstage'  => $this->BriefingBirthdayLines($mitglieder),
+            'tage'         => $tage,
+            'termine'      => $this->BriefingEventLines($mitglieder, $tage),
+            'aufgaben'     => $this->BriefingTaskLines($mitglieder, false, $tage),
+            'ueberfaellig' => $this->BriefingTaskLines($mitglieder, true, $tage),
+            'geburtstage'  => $this->BriefingBirthdayLines($mitglieder, $tage),
             'rollen'       => $this->BriefingRoleLines($mitglieder),
             'einkauf'      => $this->BriefingShopping(),
         ];
+    }
+
+    /** Der betrachtete Tag als Zeitstempel (0 = heute). */
+    private function BriefingDay(int $tage): int
+    {
+        return (int)strtotime(($tage === 0 ? 'today' : ($tage > 0 ? "+$tage days" : "$tage days")) . ' 00:00');
+    }
+
+    /** „heute", „morgen" — oder das Datum, wenn es weiter weg liegt. */
+    private function BriefingDayWord(int $tage): string
+    {
+        if ($tage === 0) {
+            return 'heute';
+        }
+        if ($tage === 1) {
+            return 'morgen';
+        }
+        return 'am ' . date('d.m.', $this->BriefingDay($tage));
     }
 
     /**
@@ -458,10 +488,10 @@ trait Briefing
     }
 
     /** @return list<string> */
-    private function BriefingEventLines(array $mitglieder): array
+    private function BriefingEventLines(array $mitglieder, int $tage = 0): array
     {
-        $von = (int)strtotime('today');
-        $bis = (int)strtotime('tomorrow');
+        $von = $this->BriefingDay($tage);
+        $bis = (int)strtotime('+1 day', $von);
         try {
             $termine = $this->CalEvents($von, $bis)['events'];
         } catch (Throwable $e) {
@@ -475,19 +505,37 @@ trait Briefing
                 break;
             }
             $start = (int)($e['start'] ?? 0);
-            // Ganztaegig oder aus einem frueheren Tag herueberlaufend: keine Uhrzeit,
-            // die waere sonst irrefuehrend („00:00" bzw. der Beginn von vorgestern).
-            $zeit = ((bool)($e['allDay'] ?? false) || $start < $von)
-                ? 'ganztägig'
-                : date('H:i', $start);
-            $zeile = $zeit . ' ' . trim((string)($e['title'] ?? ''));
+            $ende  = (int)($e['end'] ?? 0);
+            // Jede Zeile steht fuer sich: Titel in Anfuehrungszeichen, dann die
+            // Zeitangabe, dann die Personen ausgeschrieben. Standen die Angaben nur
+            // nebeneinander, zog das Modell Attribute von einer Zeile auf die naechste.
+            //
+            // Die Uhrzeit gilt AUCH, wenn der Datensatz an einem frueheren Tag beginnt:
+            // OpenCalendar liefert eine Serie als EINEN Block ueber alle Vorkommen
+            // (gemessen: „Powerfit 3", 20.08. 18:45 bis 03.09. 19:45). Das ist kein
+            // ganztaegiger Termin, sondern ein taeglicher Zeitraum — die Tageszeit
+            // stimmt, nur das Datum des Blockbeginns liegt zurueck.
+            //
+            // Nur wenn so ein Block um Mitternacht beginnt, laeuft er wirklich durch
+            // (mehrtaegige Ferien ohne Ganztags-Kennzeichen). Dann waere „um 00:00 Uhr"
+            // irrefuehrend.
+            $ganztags = (bool)($e['allDay'] ?? false)
+                || ($start < $von && (int)date('Hi', $start) === 0);
+            if ($ganztags) {
+                $zeit = 'ganztägig';
+            } elseif ($ende > $start) {
+                $zeit = 'von ' . date('H:i', $start) . ' bis ' . date('H:i', $ende) . ' Uhr';
+            } else {
+                $zeit = 'um ' . date('H:i', $start) . ' Uhr';
+            }
+            $zeile = 'Termin „' . trim((string)($e['title'] ?? '')) . '", ' . $zeit;
             $wer = $this->BriefingNames((array)($e['members'] ?? []), $mitglieder);
             if ($wer !== '') {
-                $zeile .= ' (' . $wer . ')';
+                $zeile .= ', für ' . $wer;
             }
             $ort = trim((string)($e['location'] ?? ''));
             if ($ort !== '') {
-                $zeile .= ', Ort: ' . $ort;
+                $zeile .= ', Ort ' . $ort;
             }
             $raus[] = $zeile;
         }
@@ -503,11 +551,14 @@ trait Briefing
      *
      * @return list<string>
      */
-    private function BriefingTaskLines(array $mitglieder, bool $ueberfaellig): array
+    private function BriefingTaskLines(array $mitglieder, bool $ueberfaellig, int $tage = 0): array
     {
-        $jetzt      = time();
-        $heuteStart = (int)strtotime('today');
-        $heuteEnde  = (int)strtotime('tomorrow');
+        $heuteStart = $this->BriefingDay($tage);
+        $heuteEnde  = (int)strtotime('+1 day', $heuteStart);
+        // Fuer heute zaehlt die Uhr: eine Frist um 9 Uhr ist mittags abgelaufen.
+        // Fuer einen kuenftigen Tag zaehlt der Tagesbeginn — dort ist noch nichts
+        // abgelaufen, was an diesem Tag erst faellig wird.
+        $jetzt = $tage === 0 ? time() : $heuteStart;
 
         $raus = [];
         foreach ($this->GetListInstances() as $instanz) {
@@ -538,30 +589,34 @@ trait Briefing
                 if (!$passt || count($raus) >= self::BRIEFING_MAX_TASKS) {
                     continue;
                 }
-                $zeile = trim((string)($it['title'] ?? ''));
-                if ($zeile === '') {
+                $titel = trim((string)($it['title'] ?? ''));
+                if ($titel === '') {
                     continue;
                 }
+                $zeile = 'Aufgabe „' . $titel . '"';
                 // Die Uhrzeit einer Aufgabe ist eine FRIST, kein Beginn. Vorangestellt
                 // („16:30 Formular abgeben") liest das Modell sie als Termin und schreibt
                 // „um 16:30 Uhr das Formular abgeben" — deshalb steht sie ausgeschrieben
                 // dahinter.
                 if ($ueberfaellig) {
-                    $tage = (int)floor(($heuteStart - (int)strtotime(date('Y-m-d', $due))) / 86400);
-                    $zeile .= $tage > 0
-                        ? sprintf(' — Frist war vor %d Tag(en)', $tage)
-                        : ' — Frist war heute vorhin';
+                    $abgelaufen = (int)floor(($heuteStart - (int)strtotime(date('Y-m-d', $due))) / 86400);
+                    $zeile .= $abgelaufen > 0
+                        ? sprintf(', Frist vor %d Tag(en) abgelaufen', $abgelaufen)
+                        : ', Frist vorhin abgelaufen';
                 } else {
+                    // Das Tageswort MUSS mitwandern: „Frist heute bis 08:00" liess das
+                    // Modell in der Vorschau auf morgen „heute noch" schreiben.
+                    $wort = $this->BriefingDayWord($tage);
                     $zeile .= $istAllDay
-                        ? ' — Frist: heute'
-                        : ' — Frist: heute bis ' . date('H:i', $due);
+                        ? ', Frist ' . $wort
+                        : ', Frist ' . $wort . ' bis ' . date('H:i', $due) . ' Uhr';
                 }
                 $wer = $this->BriefingNames((array)($it['assignedTo'] ?? []), $mitglieder);
                 if ($wer !== '') {
-                    $zeile .= ' (' . $wer . ')';
+                    $zeile .= ', für ' . $wer;
                 }
                 if ((string)($it['priority'] ?? '') === 'high') {
-                    $zeile .= ' [wichtig]';
+                    $zeile .= ', wichtig';
                 }
                 $raus[] = $zeile;
             }
@@ -610,11 +665,12 @@ trait Briefing
      *
      * @return list<string>
      */
-    private function BriefingBirthdayLines(array $mitglieder): array
+    private function BriefingBirthdayLines(array $mitglieder, int $tage = 0): array
     {
-        $m = (int)date('n');
-        $t = (int)date('j');
-        $j = (int)date('Y');
+        $tag = $this->BriefingDay($tage);
+        $m = (int)date('n', $tag);
+        $t = (int)date('j', $tag);
+        $j = (int)date('Y', $tag);
 
         $raus = [];
         foreach ($mitglieder as $mitglied) {
@@ -622,9 +678,10 @@ trait Briefing
             if ($g['m'] !== $m || $g['d'] !== $t || $g['m'] === 0) {
                 continue;
             }
+            $wort = $this->BriefingDayWord($tage);
             $raus[] = $g['y'] > 0 && $g['y'] < $j
-                ? sprintf('%s wird heute %d', $mitglied['name'], $j - $g['y'])
-                : sprintf('%s hat heute Geburtstag', $mitglied['name']);
+                ? sprintf('%s wird %s %d', $mitglied['name'], $wort, $j - $g['y'])
+                : sprintf('%s hat %s Geburtstag', $mitglied['name'], $wort);
         }
         return $raus;
     }
@@ -675,10 +732,10 @@ trait Briefing
      * Anbieter antworten in der Sprache der Anweisung, und die Daten selbst —
      * Termintitel, Aufgaben, Namen — sind ohnehin deutsch.
      */
-    private function BriefingSystemPrompt(): string
+    private function BriefingSystemPrompt(string $tagWort = 'heute'): string
     {
         return 'Du schreibst das Tagesbriefing für eine Familie in einer Haushalts-App. '
-            . 'Fasse den heutigen Tag in zwei bis fünf Sätzen zusammen — durchgehender '
+            . 'Fasse den Tag (' . $tagWort . ') in zwei bis fünf Sätzen zusammen — durchgehender '
             . 'Fließtext, KEINE Aufzählung, keine Zwischentitel, kein Markdown. '
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '
             . '„Fussballtraining". Die Angaben unten sind teils ohne Umlaute geschrieben — '
@@ -686,22 +743,27 @@ trait Briefing
             . 'Sprich die angesprochene Person mit ihrem Vornamen an, wenn einer genannt ist. '
             . 'Das Briefing ist der Überblick für den GANZEN Haushalt: Sage auch, was bei den '
             . 'anderen Familienmitgliedern ansteht, nicht nur bei der angesprochenen Person. '
-            . 'In Klammern hinter einem Eintrag stehen die Familienmitglieder, zu denen er '
-            . 'gehört. Nenne diese Namen IM SATZ und niemals in Klammern nachgestellt: '
-            . 'aus „Vokabeln üben (Mia, Tim)" wird „Mia und Tim üben Vokabeln", nicht '
-            . '„Vokabeln üben (Mia, Tim)". Stehen dort MEHRERE Namen, nenne sie ALLE und '
-            . 'verbinde sie mit „und". Lass keinen Namen weg und ordne keinen Eintrag '
-            . 'jemandem zu, der nicht dahinter steht. '
+            . 'Hinter „für" stehen die Familienmitglieder, zu denen ein Eintrag gehört. '
+            . 'Nenne diese Namen IM SATZ und niemals in Klammern nachgestellt: aus '
+            . '„Aufgabe „Vokabeln üben", Frist heute bis 18:00 Uhr, für Mia und Tim" wird '
+            . '„Mia und Tim üben bis 18 Uhr Vokabeln". Stehen dort MEHRERE Namen, nenne sie '
+            . 'ALLE. Lass keinen Namen weg und ordne keinen Eintrag jemandem zu, der nicht '
+            . 'dahinter steht. Jede Zeile ist für sich zu lesen — übertrage keine Uhrzeit '
+            . 'und kein „ganztägig" von einem Eintrag auf einen anderen. '
             . 'Uhrzeiten übernimmst du unverändert. UNTERSCHEIDE dabei streng: Bei einem '
             . 'TERMIN ist die Uhrzeit der Beginn („um 15:00 Uhr ist Fußballtraining"). Bei '
             . 'einer AUFGABE ist die Uhrzeit eine FRIST — bis wann etwas fertig sein muss, '
             . 'nicht wann man damit anfängt. Formuliere sie deshalb als Frist: „bis 16:30 '
             . 'Uhr", „spätestens um 16:30 Uhr", „heute noch". Schreibe NIE „um 16:30 Uhr '
             . 'den Zahnarzttermin bestätigen", als wäre die Aufgabe ein Termin. '
-            . 'Nenne jede Angabe nur EINMAL. Sind es viele Aufgaben, fasse sie in einem Satz '
-            . 'zusammen statt jede einzeln aufzuzählen. '
+            . 'VOLLSTÄNDIGKEIT: Jeder Termin und jede Aufgabe aus den Angaben muss im Text '
+            . 'vorkommen — zusammenfassen ist erlaubt, WEGLASSEN nicht. Nenne dabei jede '
+            . 'Angabe nur einmal. '
+            . 'Übernimm auch die Art genau: Was als „ganztägig" dasteht, ist ganztägig; '
+            . 'was eine Uhrzeit hat, ist es nicht — und dessen Uhrzeit MUSS im Text stehen. '
+            . 'Schreibe also nie „den ganzen Tag", wo eine Uhrzeit angegeben ist. '
             . 'Erfinde NICHTS: keine Termine, keine Aufgaben, keine Uhrzeiten, die unten nicht '
-            . 'stehen — und nichts für morgen oder später, es geht nur um HEUTE. '
+            . 'stehen — und nichts für andere Tage, es geht ausschließlich um ' . $tagWort . '. '
             . 'Steht nichts an, sag das in einem Satz. '
             . 'Hat jemand Geburtstag, gratuliere ihm zuerst. '
             . 'Steht unten eine Einkaufsliste mit Artikelzahl, weise am Ende darauf hin, '
@@ -782,19 +844,23 @@ trait Briefing
     private function BriefingUserText(array $daten): string
     {
         $wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+        $tag = $this->BriefingDay((int)($daten['tage'] ?? 0));
         $teile = [
-            'HEUTE: ' . $wochentage[(int)date('w')] . ', ' . date('d.m.Y'),
+            'TAG: ' . $wochentage[(int)date('w', $tag)] . ', ' . date('d.m.Y', $tag)
+                . ' (' . $this->BriefingDayWord((int)($daten['tage'] ?? 0)) . ')',
             'BRIEFING FUER: ' . ($daten['name'] !== '' ? $daten['name'] : '(niemand bestimmter — schreibe ohne Anrede)'),
-            'LESEHILFE: Klammern hinter einem Eintrag = zugeordnete Familienmitglieder.',
+            'LESEHILFE: Jede Zeile beschreibt EINEN Eintrag vollständig. „für <Namen>" '
+                . 'nennt die zugeordneten Familienmitglieder. Nimm keine Angabe von einer '
+                . 'Zeile in eine andere mit.',
         ];
         $block = static function (string $titel, array $zeilen, string $leer): string {
             return $titel . ': ' . ($zeilen === [] ? $leer : "\n- " . implode("\n- ", $zeilen));
         };
-        $teile[] = $block('TERMINE HEUTE (Uhrzeit = Beginn)', $daten['termine'], 'keine');
-        $teile[] = $block('AUFGABEN MIT FRIST HEUTE (Uhrzeit = bis wann)', $daten['aufgaben'], 'keine');
+        $teile[] = $block('TERMINE AN DIESEM TAG (Uhrzeit = Beginn)', $daten['termine'], 'keine');
+        $teile[] = $block('AUFGABEN MIT FRIST AN DIESEM TAG (Uhrzeit = bis wann)', $daten['aufgaben'], 'keine');
         $teile[] = $block('AUFGABEN MIT ABGELAUFENER FRIST', $daten['ueberfaellig'], 'keine');
         if ($daten['geburtstage'] !== []) {
-            $teile[] = $block('GEBURTSTAG HEUTE', $daten['geburtstage'], '');
+            $teile[] = $block('GEBURTSTAG AN DIESEM TAG', $daten['geburtstage'], '');
         }
         if ($daten['rollen'] !== []) {
             $teile[] = $block('ROLLEN IM HAUSHALT', $daten['rollen'], '');
@@ -964,6 +1030,40 @@ trait Briefing
             default:
                 return $basis . 'Vortrag: sachlich und freundlich, mittleres Tempo, ohne Überschwang.';
         }
+    }
+
+    /**
+     * Vorschau für einen anderen Tag — erzeugt nur Text, legt NICHTS ab.
+     *
+     * Bewusst ohne Ablage und ohne Ton: Der abgelegte Stand gilt für heute, und die
+     * Oberflächen zeigen ihn als das Briefing des Tages. Eine Vorschau, die ihn
+     * überschreibt, würde morgen als heute ausgegeben.
+     *
+     * @return array{ok: bool, text: string, message: string}
+     */
+    private function BriefingPreview(int $tage): array
+    {
+        if (!$this->BriefingIsEnabled()) {
+            return ['ok' => false, 'text' => '', 'message' => 'briefing_disabled'];
+        }
+        $daten   = $this->BriefingCollect($tage);
+        $antwort = $this->AiRunCompletion(
+            $this->BriefingSystemPrompt($this->BriefingDayWord($tage)),
+            $this->BriefingUserText($daten),
+            null
+        );
+        if (!(bool)($antwort['ok'] ?? false)) {
+            return ['ok' => false, 'text' => '', 'message' => (string)($antwort['code'] ?? 'ai_error')];
+        }
+        $text = $this->BriefingTidy((string)($antwort['text'] ?? ''));
+        return [
+            'ok'      => $text !== '',
+            'text'    => $text,
+            'message' => $text !== '' ? 'ok' : 'ai_empty',
+            // Die gesammelten Zeilen mitgeben: Weicht der Text von den Angaben ab,
+            // ist die erste Frage immer, was ueberhaupt im Prompt stand.
+            'daten'   => $daten,
+        ];
     }
 
     // ────────────────────────────── Ausgabe ──────────────────────────────
