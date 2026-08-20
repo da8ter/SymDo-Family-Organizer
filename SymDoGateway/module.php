@@ -1223,7 +1223,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Label',
                     'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Straight to Symcon: the Mailgun service accepts the mail and hands it over for analysis right away. A free account there is all it takes — no mailbox and no own domain. Every family member gets their own receiving address at Mailgun.")
                 ],
-                $this->GetMailBoxPanel($optionen),
+                $this->GetMailBoxPanel(),
                 $this->GetMailHookPanel($optionen),
                 [
                     'type'    => 'Label',
@@ -1287,11 +1287,9 @@ class SymDoGateway extends IPSModuleStrict
      * Zugeordnet wird hier ueber das POSTFACH, nicht ueber die Empfaengeradresse:
      * Wer ein eigenes Postfach hat, ist damit erkannt, und im Haushalts-Postfach
      * ist ohnehin niemand bestimmter gemeint. Eine Adressliste braucht dieser Weg
-     * deshalb nicht mehr — sie steht rechts, wo sie fuer Mailgun gebraucht wird.
-     *
-     * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
+     * deshalb nicht mehr — sie steht beim Webhook, wo sie gebraucht wird.
      */
-    private function GetMailBoxPanel(array $optionen): array
+    private function GetMailBoxPanel(): array
     {
         // Ein Formularfeld auf eine Eigenschaft zu setzen, die es noch nicht gibt,
         // laesst „Uebernehmen" scheitern: Eigenschaften entstehen in Create() und
@@ -1317,54 +1315,101 @@ class SymDoGateway extends IPSModuleStrict
             'expanded' => false,
             'items'    => [
                 [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate("Symcon reads the mailboxes set up here — a mailbox kept just for this, or the one the mail arrives in anyway. A mailbox that belongs to one member hands its mail to that member; the household mailbox produces suggestions without a member.")
-                ],
-                [
                     'type'    => 'CheckBox',
                     'name'    => 'MailEnabled',
                     'caption' => $this->Translate('Analyze incoming mail')
                 ],
                 $allgemein,
                 [
-                    'type'     => 'List',
-                    'name'     => 'MailBoxes',
-                    'caption'  => $this->Translate('Member → own mailbox'),
-                    'rowCount' => 4,
-                    'add'      => true,
-                    'delete'   => true,
-                    'columns'  => [
-                        [
-                            'caption' => $this->Translate('Member'),
-                            'name'    => 'UserID',
-                            'width'   => '160px',
-                            'add'     => '',
-                            'edit'    => ['type' => 'Select', 'options' => $optionen]
-                        ],
-                        [
-                            'caption' => $this->Translate('IMAP instance'),
-                            'name'    => 'InstanceID',
-                            'width'   => 'auto',
-                            'add'     => 0,
-                            'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
-                        ]
-                    ]
-                ],
-                [
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailSenderAllow',
-                    'caption'   => $this->Translate('Allowed senders (one per line, "@domain.tld" for a whole domain; empty = all)'),
+                    'caption'   => $this->Translate('Allowed senders for the household mailbox (one per line, "@domain.tld" for a whole domain; empty = all)'),
                     'multiline' => true,
                     'width'     => '400px'
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Empty means every mail in the mailbox is analysed. Enter the senders that matter — the school, the club — and the rest is left alone. Careful with forwarded mail: it carries YOUR address as the sender, not the original one, so there your own address is the one that belongs in this list.')
+                    'caption' => $this->Translate('Careful with forwarded mail: it carries YOUR address as the sender, not the original one — so there your own address is the one that belongs in the list.')
                 ],
+                $this->GetMailBoxList(),
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'MailDeleteAfter',
                     'caption' => $this->Translate('Delete mail after analysis (mailbox only)')
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Die Zuordnungstabelle: je Familienmitglied eine Zeile.
+     *
+     * Die Zeilen entstehen aus der Mitgliederliste, nicht aus dem Gespeicherten —
+     * deshalb `loadValuesFromConfiguration => false`. Die Konsole wuerde das
+     * Gespeicherte sonst nach ZEILENNUMMER ueber die Vorgaben mischen; nach dem
+     * Umbenennen oder Loeschen eines Mitglieds saesse die Einstellung dann beim
+     * falschen. Zugeordnet wird hier ueber die Mitglieds-ID, die als unsichtbare
+     * Spalte mitreist.
+     */
+    private function GetMailBoxList(): array
+    {
+        $gespeichert = [];
+        foreach ((array)json_decode((string)$this->MailProp('MailBoxes', '[]'), true) as $zeile) {
+            if (is_array($zeile)) {
+                $gespeichert[trim((string)($zeile['UserID'] ?? ''))] = $zeile;
+            }
+        }
+
+        $zeilen = [];
+        foreach ($this->LoadUsers() as $u) {
+            $id  = (string)($u['id'] ?? '');
+            $alt = $gespeichert[$id] ?? [];
+            $zeilen[] = [
+                'UserID'      => $id,
+                'Name'        => (string)($u['name'] ?? ''),
+                'InstanceID'  => (int)($alt['InstanceID'] ?? 0),
+                'SenderAllow' => (string)($alt['SenderAllow'] ?? '')
+            ];
+        }
+
+        return [
+            'type'     => 'List',
+            'name'     => 'MailBoxes',
+            'caption'  => $this->Translate('Per member: mailbox and allowed senders'),
+            'rowCount' => max(2, count($zeilen)),
+            'add'      => false,
+            'delete'   => false,
+            'loadValuesFromConfiguration' => false,
+            'values'   => $zeilen,
+            'columns'  => [
+                [
+                    'caption' => $this->Translate('Member'),
+                    'name'    => 'Name',
+                    'width'   => '160px',
+                    'add'     => ''
+                ],
+                [
+                    'caption' => $this->Translate('IMAP instance'),
+                    'name'    => 'InstanceID',
+                    'width'   => '280px',
+                    'add'     => 0,
+                    'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
+                ],
+                [
+                    'caption' => $this->Translate('Allowed senders (optional)'),
+                    'name'    => 'SenderAllow',
+                    'width'   => 'auto',
+                    'add'     => '',
+                    'edit'    => ['type' => 'ValidationTextBox']
+                ],
+                [
+                    // Traegt die Zuordnung, gehoert aber nicht ins Bild.
+                    'caption' => 'UserID',
+                    'name'    => 'UserID',
+                    'width'   => '10px',
+                    'visible' => false,
+                    'add'     => '',
+                    'edit'    => ['type' => 'ValidationTextBox', 'visible' => false]
                 ]
             ]
         ];

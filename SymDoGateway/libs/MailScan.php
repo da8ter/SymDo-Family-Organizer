@@ -68,9 +68,9 @@ trait MailScan
         // Das Haushalts-Postfach: was hier liegt, gehoert niemandem bestimmten und
         // wird ohne Mitglied vorgeschlagen.
         $this->RegisterPropertyInteger('MailBoxGeneral', 0);
-        // Liste: je Zeile ein Postfach EINES Mitglieds — darueber laeuft die
-        // Zuordnung des IMAP-Weges. Wer sein eigenes Postfach hat, braucht dafuer
-        // keine Adressliste.
+        // Liste: je Zeile EIN Mitglied, dazu freiwillig ein eigenes Postfach und
+        // eine eigene Absenderliste. Ueber das Postfach laeuft die Zuordnung des
+        // IMAP-Weges; wer sein eigenes hat, braucht dafuer keine Adressliste.
         $this->RegisterPropertyString('MailBoxes', '[]');
         // Liste: Empfaengeradresse → Mitglied. Gilt nur fuer den Webhook-Weg: dort
         // kommt alles auf derselben Domain an und nur der Plus-Tag verraet, wer
@@ -414,7 +414,7 @@ trait MailScan
                 if ($uid === '' || $this->MailSeen((string)$imapID, $uid)) {
                     continue;
                 }
-                $urteil = $this->MailJudge($mail, null, $this->MailBoxMember($imapID));
+                $urteil = $this->MailJudge($mail, $this->MailBoxSenderAllow($imapID), $this->MailBoxMember($imapID));
                 if ($urteil['skip']) {
                     // Verworfene Mail trotzdem vermerken, sonst wird sie bei jedem
                     // Signal erneut geprueft.
@@ -536,9 +536,11 @@ trait MailScan
     }
 
     /**
-     * @param ?string $liste Eigene Freigabeliste; null = die des IMAP-Wegs.
-     *        Der Webhook braucht eine eigene, weil dort die Schule DIREKT schreibt,
-     *        waehrend beim Weiterleiten die eigene Familie der Absender ist.
+     * @param ?string $liste Eigene Freigabeliste; null = die des Haushalts-Postfachs
+     *        (Property MailSenderAllow). Der Webhook und die Postfaecher der
+     *        Mitglieder bringen ihre eigene mit, weil dort die Schule DIREKT
+     *        schreibt, waehrend bei weitergeleiteter Post die eigene Familie als
+     *        Absender erscheint.
      */
     private function MailSenderAllowed(string $absender, ?string $liste = null): bool
     {
@@ -1697,6 +1699,29 @@ trait MailScan
             }
         }
         return array_values(array_unique($raus));
+    }
+
+    /**
+     * Freigegebene Absender fuer ein Postfach.
+     *
+     * Jedes Mitglied kann eine eigene Liste fuehren — bei ihm schreibt die Schule
+     * direkt, waehrend im Haushalts-Postfach oft weitergeleitete Post liegt, wo
+     * der eigene Haushalt der Absender ist. Eine leere Liste laesst alles durch;
+     * `null` bedeutet „die des Haushalts-Postfachs" (Property MailSenderAllow).
+     */
+    private function MailBoxSenderAllow(int $imapID): ?string
+    {
+        $zeilen = json_decode((string)$this->MailProp('MailBoxes', '[]'), true);
+        foreach (is_array($zeilen) ? $zeilen : [] as $zeile) {
+            // Nur eine Zeile MIT Mitglied fuehrt eine eigene Liste. Eine Zeile ohne
+            // gehoert niemandem — sie faellt auf die des Haushalts-Postfachs
+            // zurueck, statt mit ihrem leeren Feld jeden Absender freizugeben.
+            if ((int)($zeile['InstanceID'] ?? 0) === $imapID
+                && trim((string)($zeile['UserID'] ?? '')) !== '') {
+                return (string)($zeile['SenderAllow'] ?? '');
+            }
+        }
+        return null;
     }
 
     /**
