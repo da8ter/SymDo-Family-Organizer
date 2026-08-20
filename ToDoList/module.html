@@ -478,20 +478,34 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .card-head .link { color: var(--accent); font-size: 14px; font-weight: 600; }
 
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
-/* Tagesbriefing: ruhige Karte mit Sonne links, Text als Fliesstext. Bewusst ohne
-   Umschalter — zwei bis vier Saetze muss man nicht aufklappen. */
-.briefing-card {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.briefing-card .briefing-glyph {
-  flex: 0 0 auto;
-  font-size: 18px;
-  color: #ff9500;
-  margin-top: 2px;
-}
+/* Tagesbriefing: Ueberschrift mit Vorlese-Knopf, darunter der Fliesstext. Auf
+   schmalen Anzeigen nur vier Zeilen mit Aufklapper — auf einem Telefon schiebt ein
+   langes Briefing sonst alles andere unter den Rand. Ab 820px (dieselbe Schwelle
+   wie das Dashboard-Raster) steht es ganz da. */
+.briefing-card .card-head { margin-bottom: 6px; }
 .briefing-text { font-size: 15px; line-height: 1.45; }
+.briefing-text.gekappt {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Der Aufklapper sitzt unter dem Text und rechts — dort, wo der Blick nach der
+   letzten Zeile ohnehin ankommt. Weg ist er ueber [hidden]: Das setzt
+   briefingKlappHinweis(), wenn der Text ohnehin ganz hineinpasst. */
+.briefing-mehr {
+  display: block;
+  margin: 8px 0 0 auto;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.briefing-mehr[hidden] { display: none; }
+.briefing-mehr i { margin-left: 6px; font-size: 12px; }
 .briefing-morgen {
   display: inline-block;
   margin-right: 6px;
@@ -505,13 +519,12 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   letter-spacing: .3px;
   vertical-align: 2px;
 }
-/* Vorlesen: der Knopf sitzt oben rechts in der Karte und bleibt dort, auch wenn
-   der Text mehrere Zeilen laeuft (align-self statt Zeilenfluss). */
+/* Vorlesen: der Knopf sitzt rechts in der Kopfzeile, auf Hoehe der Ueberschrift. */
 .briefing-play {
   flex: 0 0 auto;
-  align-self: flex-start;
+  align-self: center;
   width: 34px; height: 34px;
-  margin: -4px -4px 0 4px;
+  margin: -4px -4px -4px 4px;
   border: 0; border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
@@ -2198,6 +2211,16 @@ html[data-symdo-theme="dark"] .member-bar {
      Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
      in einer schmalen Rasterspalte gequetscht. */
   .week-card, .shop-card, .dash-tasks, .briefing-card { grid-column: 1 / -1; }
+
+  /* Breite Anzeige: das Briefing steht ganz da, der Aufklapper entfaellt. Die
+     JS-Messung blendet ihn zusaetzlich aus, sobald der Text nicht mehr ueberlaeuft
+     — diese Regel ist die Zusicherung, jene der Feinschliff bei kurzen Texten. */
+  .briefing-text.gekappt {
+    display: block;
+    -webkit-line-clamp: none;
+    overflow: visible;
+  }
+  .briefing-mehr { display: none; }
 
   /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
      unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
@@ -4565,11 +4588,28 @@ function loadBriefing() {
 let briefingAudio = null;
 let briefingLaeuft = false;
 let briefingLaedt = false;
+let briefingOffen = false;    // Aufklapper: nur auf schmalen Anzeigen von Belang
 
 /** Vorlesen möglich? Immer dann, wenn das Gateway die Sprachausgabe erlaubt —
     auch in der Visu-Kachel: Die holt die Tondatei nicht über den Hook (dafür
     fehlt ihr der Token), sondern als data:-URL über das Relay, siehe
     ansageClipHolen. Sonst wäre der Knopf einer, der nichts kann. */
+/**
+ * Den Aufklapper nur zeigen, wenn wirklich mehr da ist als die vier Zeilen.
+ *
+ * Gemessen statt geraten: Die Zeichenzahl sagt nichts ueber die Zeilenzahl —
+ * Schriftgroesse, Kartenbreite und Umbrueche entscheiden. Auf breiten Anzeigen hebt
+ * die Media-Query das Kappen auf, dann laeuft nichts ueber und der Knopf geht von
+ * selbst. Im aufgeklappten Zustand bleibt er stehen, sonst gaebe es keinen Weg
+ * zurueck.
+ */
+function briefingKlappHinweis(wurzel) {
+  const text = wurzel.querySelector('.briefing-text');
+  const knopf = wurzel.querySelector('.briefing-mehr');
+  if (!text || !knopf) return;
+  knopf.hidden = !briefingOffen && text.scrollHeight <= text.clientHeight + 1;
+}
+
 function briefingTonMoeglich() {
   return briefingTon;
 }
@@ -4763,8 +4803,20 @@ function renderDashboard() {
     const marke = briefingVorschau
       ? `<span class="briefing-morgen">${escapeHtml(translate('Tomorrow'))}</span> `
       : '';
-    html += `<div class="card briefing-card"><i class="fa-light ${briefingVorschau ? 'fa-moon' : 'fa-sun'} briefing-glyph"></i>` +
-      `<div class="briefing-text">${marke}${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${knopf}</div>`;
+    // „Dein Tag" oder „Euer Tag": Im Mehrpersonen-Haushalt erzaehlt das Briefing
+    // auch von den anderen — die Anrede muss das treffen.
+    const ueberschrift = (store.users || []).length > 1
+      ? translate('Your day (plural)')
+      : translate('Your day');
+    // Der Aufklapper steht immer im Markup; briefingKlappHinweis() nimmt ihn nach
+    // dem Zeichnen weg, wenn der Text ohnehin ganz zu sehen ist.
+    const klapp = `<button class="briefing-mehr" data-briefing="mehr">` +
+      `${escapeHtml(briefingOffen ? translate('Show less') : translate('Show more'))}` +
+      `<i class="fa-light ${briefingOffen ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>`;
+    html += `<div class="card briefing-card">` +
+      `<div class="card-head"><h3>${escapeHtml(ueberschrift)}</h3>${knopf}</div>` +
+      `<div class="briefing-text${briefingOffen ? '' : ' gekappt'}">` +
+      `${marke}${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
   }
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
@@ -4921,6 +4973,12 @@ function renderDashboard() {
     e.stopPropagation();
     briefingVorlesen();
   }));
+  el.querySelectorAll('[data-briefing="mehr"]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    briefingOffen = !briefingOffen;
+    renderDashboard();
+  }));
+  briefingKlappHinweis(el);
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const id = b.dataset.member;

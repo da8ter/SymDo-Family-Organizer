@@ -444,7 +444,11 @@
             "The series was capped at %1 appointments.": "Die Reihe wurde bei %1 Terminen gekappt.",
             "This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu löschen — bitte im Kalender-Programm löschen.",
             "This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu ändern — bitte im Kalender-Programm bearbeiten.",
-            "Read aloud": "Vorlesen"
+            "Read aloud": "Vorlesen",
+            "Your day": "Dein Tag",
+            "Your day (plural)": "Euer Tag",
+            "Show more": "Mehr anzeigen",
+            "Show less": "Weniger anzeigen"
         },
         "en": {
             "ToDo List": "ToDo List",
