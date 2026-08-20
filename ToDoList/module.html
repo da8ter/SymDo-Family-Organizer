@@ -521,6 +521,34 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .briefing-play:disabled { opacity: .5; cursor: default; }
 .briefing-play.laeuft { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+/* Kopfzeile der Uebersicht: Datum links, Glocke daneben. Eigener Kasten, weil das
+   Datum selbst auf schmalen Anzeigen zwei Zeilen fuellt — die Glocke soll daneben
+   stehen und nicht als dritte Zeile darunter. */
+.dash-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+/* Die Glocke sitzt links neben dem Datum und nicht rechts: Rechts liegt die
+   sticky Mitglieder-Leiste, die per margin-bottom: -44px auf diese Zeile gezogen
+   wird. */
+.dash-bell {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  border: 0; border-radius: 50%;
+  background: color-mix(in srgb, var(--content-color) 8%, transparent);
+  color: var(--muted);
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.dash-bell.an {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.dash-bell:disabled { opacity: .5; cursor: default; }
+
 /* Datum: auf schmalen Anzeigen ZWEI Zeilen (Wochentag, darunter der Tag) — daneben
    liegt die sticky Avatar-Leiste, die dem Datum die Breite nimmt. Beide Zeilen
    bleiben in denselben 44 px hoch wie zuvor die eine, damit die Avatare weiter auf
@@ -538,9 +566,6 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  /* Abstand der Kopf-/Avatar-Zeile zum ersten Seiteninhalt (KPI-Grid) beim
-     initialen Laden */
-  margin-bottom: 16px;
 }
 /* Avatar-Menü: nur DIESES ist sticky (oben rechts), mit halbtransparentem
    Pillen-Hintergrund. Das Datum scrollt normal weiter. Rechtsbündig via
@@ -2221,7 +2246,7 @@ html[data-symdo-theme="dark"] .member-bar {
   }
   /* Überschriften, Filter, Aktionen und die Eingabezeile spannen über alle Spalten */
   .cat-header, .section-toggle, .empty-state, .screen-head,
-  .dash-date, .member-bar, .kpi-grid, .segmented, .fav-actions,
+  .dash-head, .member-bar, .kpi-grid, .segmented, .fav-actions,
   .suggestions, .composer { grid-column: 1 / -1; }
 
   /* Wochenring und Einkaufsvorschau bekommen im Raster jeweils eine eigene
@@ -3088,7 +3113,19 @@ const ls = {
   set(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
 };
 
-let activeTab = ls.get('symdo.tab') || 'dashboard';
+// Beim Antippen einer Benachrichtigung oeffnet der Service Worker die App mit
+// `?tab=<Bereich>`. Das schlaegt den gespeicherten Bereich, aber nur einmal: der
+// Parameter steht in der geoeffneten Adresse, nicht in der Startadresse der
+// installierten App.
+let activeTab = (function () {
+  try {
+    const wunsch = new URLSearchParams(window.location.search).get('tab');
+    if (wunsch && ['dashboard', 'shopping', 'favorites', 'todos', 'calendar'].includes(wunsch)) {
+      return wunsch;
+    }
+  } catch (e) {}
+  return ls.get('symdo.tab') || 'dashboard';
+})();
 // Fortschrittskarte auf der Uebersicht. Auf true setzen, um sie zurueckzuholen.
 const SHOW_PROGRESS_CARD = false;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
@@ -3511,6 +3548,9 @@ function handleMessage(data) {
     loadMailProposals();
     loadCalendars();
     loadBriefing();
+    // Erst hier: Vorher steht nicht fest, ob es ein Gateway gibt, und die
+    // Mitgliederliste fuer die Zuordnung ist noch leer.
+    pushInit();
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
@@ -4623,6 +4663,194 @@ let briefingOffen = false;    // Aufklapper: nur auf schmalen Anzeigen von Belan
     auch in der Visu-Kachel: Die holt die Tondatei nicht über den Hook (dafür
     fehlt ihr der Token), sondern als data:-URL über das Relay, siehe
     ansageClipHolen. Sonst wäre der Knopf einer, der nichts kann. */
+// ── Benachrichtigungen (Web Push) ─────────────────────────────────────────
+// Nur in der ausgelieferten Web-App: In der Visu-Kachel fehlt window.__SYMDO__,
+// dort bleibt der ganze Abschnitt aus. Der oeffentliche Schluessel steht im Kopf
+// (window.__SYMDO__.pushKey) und nicht hinter einem Abruf — Safari erlaubt die
+// Erlaubnisfrage nur mit gueltiger Nutzeraktivierung, und jedes await davor
+// verbraucht sie.
+let pushMoeglichkeit = null;   // null = noch nicht geprueft
+let pushAn = false;
+let pushLaeuft = false;
+let pushGestartet = false;
+
+function pushMoeglich() {
+  if (pushMoeglichkeit !== null) return pushMoeglichkeit;
+  pushMoeglichkeit = !!(window.__SYMDO__ && window.__SYMDO__.pushKey
+    && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+    // Ohne sicheren Kontext gibt es keine Service Worker. isSecureContext deckt das
+    // vollstaendig ab: HTTPS ueber Connect ja, http im Heimnetz nein, localhost ja.
+    // Dort bleibt der Knopf dann weg, statt einen Fehler zu ernten.
+    && window.isSecureContext === true);
+  return pushMoeglichkeit;
+}
+
+/** base64url aus dem Kopf in die Bytes, die subscribe() verlangt. */
+function pushSchluesselBytes(b64) {
+  const rein = String(b64).replace(/-/g, '+').replace(/_/g, '/');
+  const roh = atob(rein + '='.repeat((4 - rein.length % 4) % 4));
+  const bytes = new Uint8Array(roh.length);
+  for (let i = 0; i < roh.length; i++) bytes[i] = roh.charCodeAt(i);
+  return bytes;
+}
+
+function pushSchluesselAlsB64(puffer) {
+  if (!puffer) return '';
+  let s = '';
+  const bytes = new Uint8Array(puffer);
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function pushRegistrieren() {
+  // Ohne scope-Angabe: Das Verzeichnis der Skript-Adresse (/hook/lists/) IST schon
+  // der gebrauchte Bereich — siehe PWA_HOOK_PATH im Gateway.
+  return navigator.serviceWorker.register('/hook/lists/pwa', { updateViaCache: 'none' });
+}
+
+/** Abo an das Gateway melden. Es haengt am Token, also am gekoppelten Geraet. */
+async function pushMelden(abo) {
+  const roh = abo.toJSON();
+  const antwort = await aiPost('/push/subscribe', {
+    endpoint: roh.endpoint,
+    keys: roh.keys || {},
+    userId: ls.get('symdo.pushUser') || ''
+  });
+  return !!(antwort && antwort.json && antwort.json.ok === true);
+}
+
+/**
+ * Beim Start: Erlaubnis und Abo pruefen, und ein vorhandenes Abo NEU melden.
+ *
+ * Das erneute Melden ist Absicht: Push-Dienste tauschen Endpunkte ohne Vorwarnung,
+ * und der Service Worker kann das nicht selbst berichten — er hat keinen Token.
+ * Das Gateway dedupliziert ueber den Endpunkt, der Aufruf kostet also nichts.
+ */
+async function pushInit() {
+  if (pushGestartet || !pushMoeglich()) return;
+  pushGestartet = true;
+  try {
+    const reg = await pushRegistrieren();
+    if (Notification.permission !== 'granted') return;
+    let abo = await reg.pushManager.getSubscription();
+    // Wechselt der VAPID-Schluessel am Gateway, ist ein altes Abo wertlos: Jeder
+    // Versand endete in einem 403. Erkennbar am mitgespeicherten Schluessel.
+    if (abo && pushSchluesselAlsB64(abo.options && abo.options.applicationServerKey) !== window.__SYMDO__.pushKey) {
+      try { await abo.unsubscribe(); } catch (e) {}
+      abo = null;
+    }
+    if (!abo) {
+      abo = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: pushSchluesselBytes(window.__SYMDO__.pushKey)
+      });
+    }
+    pushAn = await pushMelden(abo);
+  } catch (e) {
+    pushAn = false;
+  }
+  renderDashboard();
+}
+
+function pushEinschalten() {
+  // Die Erlaubnisfrage MUSS die erste Anweisung sein: Safari verlangt eine gueltige
+  // Nutzeraktivierung, und schon ein await davor verbraucht sie (NotAllowedError).
+  const frage = Notification.requestPermission();
+  pushLaeuft = true;
+  renderDashboard();
+  (async () => {
+    try {
+      const erlaubnis = await frage;
+      if (erlaubnis !== 'granted') {
+        showToast(translate('Notifications were not allowed.'));
+        return;
+      }
+      const reg = await pushRegistrieren();
+      let abo = await reg.pushManager.getSubscription();
+      if (!abo) {
+        abo = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: pushSchluesselBytes(window.__SYMDO__.pushKey)
+        });
+      }
+      pushAn = await pushMelden(abo);
+      showToast(pushAn ? translate('Notifications are on') : translate('Notifications could not be turned on.'));
+    } catch (e) {
+      showToast(translate('Notifications could not be turned on.'));
+    } finally {
+      pushLaeuft = false;
+      renderDashboard();
+    }
+  })();
+}
+
+async function pushAusschalten() {
+  pushLaeuft = true;
+  renderDashboard();
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/hook/lists/');
+    const abo = reg ? await reg.pushManager.getSubscription() : null;
+    if (abo) { try { await abo.unsubscribe(); } catch (e) {} }
+    await aiPost('/push/unsubscribe', {});
+    pushAn = false;
+  } catch (e) {}
+  pushLaeuft = false;
+  renderDashboard();
+}
+
+async function pushTest() {
+  const antwort = await aiPost('/push/test', {});
+  const j = antwort && antwort.json;
+  if (!j || j.ok !== true) {
+    showToast(translate('The test notification could not be sent.'));
+  }
+}
+
+/** Zuordnung wechseln: Das Gateway merkt sie am Geraet, hier nur der Merkzettel. */
+async function pushMitglied(id) {
+  ls.set('symdo.pushUser', id || '');
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/hook/lists/');
+    const abo = reg ? await reg.pushManager.getSubscription() : null;
+    if (abo) { pushAn = await pushMelden(abo); }
+  } catch (e) {}
+  renderDashboard();
+}
+
+/** Das Glocken-Menue. Zeigt nur, was im jeweiligen Zustand moeglich ist. */
+function pushMenu(anchor) {
+  const eintraege = [];
+  if (Notification.permission === 'denied') {
+    // Auf iOS ist das nicht zuruecknehmbar, solange die App auf dem Home-Bildschirm
+    // liegt — ein „nochmal versuchen" waere eine Luege.
+    eintraege.push({ header: true, label: translate('Notifications are blocked in the browser settings.') });
+  } else if (!pushAn) {
+    eintraege.push({ label: translate('Turn on notifications'), icon: 'fa-bell', onClick: pushEinschalten });
+  } else {
+    eintraege.push({ label: translate('Send test notification'), icon: 'fa-paper-plane', onClick: pushTest });
+    eintraege.push({ sep: true });
+    eintraege.push({ header: true, label: translate('Notify on this device for') });
+    const jetzt = ls.get('symdo.pushUser') || '';
+    eintraege.push({ label: translate('Whole household'), checked: jetzt === '', onClick: () => pushMitglied('') });
+    for (const u of (store.users || [])) {
+      eintraege.push({ label: u.name, checked: jetzt === u.id, onClick: () => pushMitglied(u.id) });
+    }
+    eintraege.push({ sep: true });
+    eintraege.push({ label: translate('Turn off notifications'), icon: 'fa-bell-slash', onClick: pushAusschalten });
+  }
+  openMenu(anchor, eintraege);
+}
+
+// Der Service Worker meldet den Zielbereich einer angetippten Nachricht.
+if ('serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const d = event.data || {};
+      if (d.type === 'symdoTab' && typeof d.tab === 'string' && d.tab !== '') setTab(d.tab);
+    });
+  } catch (e) {}
+}
+
 /**
  * Den Aufklapper nur zeigen, wenn wirklich mehr da ist als die vier Zeilen.
  *
@@ -4799,8 +5027,16 @@ function renderDashboard() {
     }
     html += '</div>';
   }
-  html += `<div class="dash-date"><span class="dash-weekday">${escapeHtml(dateWeekday)}</span>` +
-    `<span class="dash-day">${escapeHtml(dateDay)}</span></div>`;
+  // Glocke nur in der ausgelieferten Web-App und nur mit sicherem Kontext — in der
+  // Visu-Kachel fehlt beides, dort bleibt die Kopfzeile wie bisher.
+  const glocke = pushMoeglich()
+    ? `<button class="dash-bell${pushAn ? ' an' : ''}" data-push="menu"${pushLaeuft ? ' disabled' : ''} ` +
+      `title="${escapeHtml(translate('Notifications'))}">` +
+      `<i class="fa-light ${pushLaeuft ? 'fa-circle-notch fa-spin' : (pushAn ? 'fa-bell' : 'fa-bell-slash')}"></i></button>`
+    : '';
+  html += `<div class="dash-head"><div class="dash-date">` +
+    `<span class="dash-weekday">${escapeHtml(dateWeekday)}</span>` +
+    `<span class="dash-day">${escapeHtml(dateDay)}</span></div>${glocke}</div>`;
 
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
@@ -5027,6 +5263,10 @@ function renderDashboard() {
   el.querySelectorAll('[data-briefing="play"]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     briefingVorlesen();
+  }));
+  el.querySelectorAll('[data-push="menu"]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pushMenu(b);
   }));
   el.querySelectorAll('[data-briefing="mehr"]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();

@@ -304,7 +304,18 @@
             "Your preview of tomorrow": "Deine Vorschau auf morgen",
             "Your preview of tomorrow (plural)": "Eure Vorschau auf morgen",
             "Appointments today": "Termine heute",
-            "Open (tasks)": "Offen"
+            "Open (tasks)": "Offen",
+            "Notifications": "Benachrichtigungen",
+            "Turn on notifications": "Benachrichtigungen einschalten",
+            "Turn off notifications": "Benachrichtigungen ausschalten",
+            "Send test notification": "Testbenachrichtigung senden",
+            "Notify on this device for": "Auf diesem Gerät benachrichtigen für",
+            "Whole household": "Den ganzen Haushalt",
+            "Notifications are on": "Benachrichtigungen sind an",
+            "Notifications were not allowed.": "Benachrichtigungen wurden nicht erlaubt.",
+            "Notifications could not be turned on.": "Benachrichtigungen konnten nicht eingeschaltet werden.",
+            "The test notification could not be sent.": "Die Testbenachrichtigung konnte nicht gesendet werden.",
+            "Notifications are blocked in the browser settings.": "Benachrichtigungen sind in den Browser-Einstellungen gesperrt."
         }
     }
 }
