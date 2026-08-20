@@ -521,15 +521,23 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .briefing-play:disabled { opacity: .5; cursor: default; }
 .briefing-play.laeuft { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+/* Datum: auf schmalen Anzeigen ZWEI Zeilen (Wochentag, darunter der Tag) — daneben
+   liegt die sticky Avatar-Leiste, die dem Datum die Breite nimmt. Beide Zeilen
+   bleiben in denselben 44 px hoch wie zuvor die eine, damit die Avatare weiter auf
+   der Zeile sitzen (sie werden per margin-bottom: -44px daraufgezogen) und darunter
+   nichts verrutscht. Ab 820 px steht es wieder in einer Zeile, dann mit Komma. */
 .dash-date {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .4px;
+  line-height: 1.25;
   min-height: 44px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
   /* Abstand der Kopf-/Avatar-Zeile zum ersten Seiteninhalt (KPI-Grid) beim
      initialen Laden */
   margin-bottom: 16px;
@@ -2208,6 +2216,14 @@ html[data-symdo-theme="dark"] .member-bar {
     overflow: visible;
   }
   .briefing-mehr { display: none; }
+
+  /* Breite Anzeige: Datum wieder in einer Zeile, Komma zwischen Wochentag und Tag. */
+  .dash-date {
+    flex-direction: row;
+    align-items: center;
+    gap: .35em;
+  }
+  .dash-date .dash-weekday::after { content: ','; }
 
   /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
      unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
@@ -4731,7 +4747,11 @@ function renderDashboard() {
 
   const multiTodo = visibleInstances('todo').length > 1;
   const byId = usersById();
-  const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  // Zwei Teile, getrennt formatiert: Ein Trennen der fertigen Zeichenkette haengt
+  // an der Sprache („Donnerstag, 20. August" gegen „Thursday, August 20").
+  const jetztDatum = new Date();
+  const dateWeekday = jetztDatum.toLocaleDateString(undefined, { weekday: 'long' });
+  const dateDay = jetztDatum.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
 
   // Abgeschaltete Bereiche verschwinden auch aus der Übersicht — sonst zeigte sie
   // Zahlen und Sprungziele, die es nicht mehr gibt.
@@ -4753,7 +4773,8 @@ function renderDashboard() {
     }
     html += '</div>';
   }
-  html += `<div class="dash-date">${escapeHtml(dateStr)}</div>`;
+  html += `<div class="dash-date"><span class="dash-weekday">${escapeHtml(dateWeekday)}</span>` +
+    `<span class="dash-day">${escapeHtml(dateDay)}</span></div>`;
 
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
