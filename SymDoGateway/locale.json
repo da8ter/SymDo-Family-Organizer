@@ -238,7 +238,18 @@
             "Subscription could not be stored": "Abo konnte nicht gespeichert werden",
             "No subscription for this device": "Für dieses Gerät ist kein Abo hinterlegt",
             "Too many notifications": "Zu viele Benachrichtigungen",
-            "On": "An"
+            "On": "An",
+            "Task due": "Aufgabe fällig",
+            "Task due in %s": "Aufgabe fällig in %s",
+            "1 hour": "1 Stunde",
+            "%d hours": "%d Stunden",
+            "%d minutes": "%d Minuten",
+            "New from your mail": "Neues aus der Post",
+            "%s waiting to be accepted": "%s warten auf Übernahme",
+            "1 appointment": "1 Termin",
+            "%d appointments": "%d Termine",
+            "1 task": "1 Aufgabe",
+            "%d tasks": "%d Aufgaben"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

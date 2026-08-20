@@ -39,6 +39,18 @@ declare(strict_types=1);
 trait WebPush
 {
     private const PUSH_VAPID_ATTR = 'PushVapid';
+    private const PUSH_SENT_ATTR  = 'PushSent';
+    private const PUSH_TIMER      = 'PushRemind';
+
+    /** Minutentakt fuer die Erinnerungen — feiner braucht es niemand. */
+    private const PUSH_REMIND_MS  = 60000;
+
+    /**
+     * Wie lange ein Merker fuer eine gemeldete Erinnerung liegen bleibt. Zwei Tage
+     * genuegen: Danach ist die Frist so weit vorbei, dass eine erneute Meldung
+     * ohnehin nicht mehr stoert — und die Ablage bleibt klein.
+     */
+    private const PUSH_SENT_TTL   = 172800;
 
     /** Wie lange der Dienst eine Nachricht aufbewahrt, wenn das Geraet offline ist. */
     private const PUSH_TTL = 86400;
@@ -90,6 +102,83 @@ trait WebPush
     private function PushCreate(): void
     {
         $this->RegisterAttributeString(self::PUSH_VAPID_ATTR, '');
+        $this->RegisterAttributeString(self::PUSH_SENT_ATTR, '{}');
+        // Alle drei mit Vorgabe AUS: Nach einem Update soll niemand ungefragt
+        // Nachrichten auf dem Telefon finden.
+        $this->RegisterPropertyBoolean('PushOnTaskDue', false);
+        $this->RegisterPropertyBoolean('PushOnBriefing', false);
+        $this->RegisterPropertyBoolean('PushOnMailProposal', false);
+        $this->RegisterTimer(self::PUSH_TIMER, 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'' . self::PUSH_TIMER . '\', 0);');
+    }
+
+    private function PushApplyChanges(): void
+    {
+        $this->PushArm();
+    }
+
+    /**
+     * Der Erinnerungs-Timer laeuft nur, wenn er etwas zu tun hat: Schalter an UND
+     * mindestens ein Geraet angemeldet. Sonst waere es ein Minutentakt fuer nichts.
+     */
+    private function PushArm(): void
+    {
+        $an = (bool)$this->PushProp('PushOnTaskDue', false) && $this->PushSubscriptions() !== [];
+        try {
+            $this->SetTimerInterval(self::PUSH_TIMER, $an ? self::PUSH_REMIND_MS : 0);
+        } catch (Throwable $e) {
+            // Timer nach einem Modul-Reload ohne Kernel-Neustart noch nicht
+            // registriert — wie in MailArm bewusst ohne Ersatzlauf von hier.
+            $this->SendDebug('WebPush', 'Timer fehlt, Lauf entfaellt', 0);
+        }
+    }
+
+    private function PushRequestAction(string $ident, mixed $value): bool
+    {
+        if ($ident === self::PUSH_TIMER) {
+            $this->PushRemindRun();
+            return true;
+        }
+        if ($ident === 'SendPush') {
+            // Weg fuer Skripte und Ablaufplaene, der schon nach einem Modul-Reload
+            // wirkt — eine neue public-Methode braeuchte einen Kernel-Neustart
+            // (dieselbe Begruendung wie beim KI-Relay in AppCore).
+            $satz = json_decode((string)$value, true);
+            if (is_array($satz)) {
+                $this->PushBroadcast(
+                    (string)($satz['title'] ?? ''),
+                    (string)($satz['body'] ?? ''),
+                    (string)($satz['userId'] ?? ''),
+                    (string)($satz['tab'] ?? '')
+                );
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Eigenschaft lesen, auch wenn sie noch nicht existiert.
+     *
+     * Ein frisch registriertes Feld gibt es erst nach dem naechsten Kernel-Neustart;
+     * ReadPropertyBoolean wuerde bis dahin werfen. Muster wie BriefingProp.
+     */
+    private function PushProp(string $name, mixed $vorgabe): mixed
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        return (is_array($cfg) && array_key_exists($name, $cfg)) ? $cfg[$name] : $vorgabe;
+    }
+
+    /**
+     * Eine Nachricht aus Symcon heraus — fuer Skripte, Ereignisse und Ablaufplaene.
+     *
+     * TGW_SendPush($id, 'Titel', 'Text') schickt an alle angemeldeten Geraete des
+     * Haushalts; mit $UserID nur an die Geraete eines Familienmitglieds, mit $Tab
+     * oeffnet ein Antippen den genannten Bereich.
+     */
+    public function SendPush(string $Title, string $Text, string $UserID = '', string $Tab = ''): int
+    {
+        $bilanz = $this->PushBroadcast($Title, $Text, $UserID, $Tab);
+        return (int)$bilanz['sent'];
     }
 
     // ──────────────────────── Schluessel aus Zufall ────────────────────────
@@ -584,6 +673,160 @@ trait WebPush
         }
         $this->SendDebug('WebPush', 'Versand: ' . json_encode($bilanz), 0);
         return $bilanz;
+    }
+
+    // ──────────────────── Erinnerungen an faellige Aufgaben ────────────────────
+
+    /**
+     * Der Minutenlauf: faellige Aufgaben suchen und je Aufgabe EINMAL melden.
+     *
+     * Die Erinnerungen leben in den Aufgabenlisten (`notification`,
+     * `notificationLeadTime`), und das Gateway sieht sie ohnehin schon — es liest
+     * denselben Zustand fuer das Briefing. Deshalb hier und nicht als Eingriff in
+     * das ToDo-Modul: Der Merker `notifiedFor` dort haengt am Erfolg der
+     * Visu-Zustellung; wer ihn mitbenutzt, verliert entweder Nachrichten (Visu
+     * geglueckt, Push nicht) oder wiederholt sie jede Minute (keine Visu
+     * eingestellt). Ein eigener Merker je Kanal ist die einzige saubere Loesung.
+     */
+    private function PushRemindRun(): void
+    {
+        if (!(bool)$this->PushProp('PushOnTaskDue', false)) {
+            $this->PushArm();
+            return;
+        }
+        if ($this->PushSubscriptions() === []) {
+            $this->PushArm();
+            return;
+        }
+
+        $jetzt   = time();
+        $merker  = $this->PushSentStore();
+        $namen   = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namen[(string)$u['id']] = (string)$u['name'];
+        }
+
+        $geaendert = false;
+        foreach ($this->GetListInstances() as $instanz) {
+            if ($instanz['kind'] !== 'todo') {
+                continue;   // Einkaufslisten haben keine Faelligkeit
+            }
+            $id = (int)$instanz['id'];
+            $zustand = json_decode((string)$this->CallInstanceGetAppState($id, 'todo'), true);
+            $items = (array)($zustand['state']['items'] ?? $zustand['items'] ?? []);
+            $vorgabe = (int)($zustand['state']['notificationLeadTimeDefault'] ?? 0);
+
+            foreach ($items as $it) {
+                if (!is_array($it) || empty($it['notification']) || !empty($it['done'])) {
+                    continue;
+                }
+                $frist = (int)($it['due'] ?? 0);
+                if ($frist <= 0) {
+                    continue;
+                }
+                $vorlauf = array_key_exists('notificationLeadTime', $it)
+                    ? max(0, (int)$it['notificationLeadTime'])
+                    : max(0, $vorgabe);
+                $ausloesung = $frist - $vorlauf;
+                if ($jetzt < $ausloesung) {
+                    continue;
+                }
+                // Eine Frist, die schon einen Tag zurueckliegt, ist keine Erinnerung
+                // mehr — sonst schickt ein Neustart nach dem Wochenende einen Stapel.
+                if ($jetzt - $ausloesung > 86400) {
+                    continue;
+                }
+                $schluessel = $id . ':' . (string)($it['id'] ?? '');
+                if ((int)($merker[$schluessel] ?? 0) === $ausloesung) {
+                    continue;
+                }
+
+                $titel = $vorlauf > 0
+                    ? sprintf($this->Translate('Task due in %s'), $this->PushLeadWord($vorlauf))
+                    : $this->Translate('Task due');
+                $wer = [];
+                foreach ((array)($it['assignedTo'] ?? []) as $uid) {
+                    if (($namen[(string)$uid] ?? '') !== '') {
+                        $wer[] = $namen[(string)$uid];
+                    }
+                }
+                $text = (string)($it['title'] ?? '');
+                if ($wer !== []) {
+                    $text .= ' — ' . implode(', ', $wer);
+                }
+                // Eine Aufgabe, die genau einem Mitglied gehoert, geht auch nur an
+                // dessen Geraete; bei mehreren oder keinem an den ganzen Haushalt.
+                $ziel = count((array)($it['assignedTo'] ?? [])) === 1
+                    ? (string)((array)$it['assignedTo'])[0]
+                    : '';
+
+                $this->PushBroadcast($titel, $text, $ziel, 'todos');
+                // Gemerkt wird unabhaengig vom Erfolg des Versands: Sonst wuerde ein
+                // Geraet, das gerade offline ist, dieselbe Erinnerung im Minutentakt
+                // wieder anstossen. Der Push-Dienst haelt die Nachricht ohnehin vor
+                // (TTL 24 h) und liefert sie nach.
+                $merker[$schluessel] = $ausloesung;
+                $geaendert = true;
+            }
+        }
+
+        if ($geaendert) {
+            $this->PushWriteSent($merker);
+        }
+        $this->PushArm();
+    }
+
+    /** „30 Minuten", „1 Stunde" — dieselben Stufen, die die Aufgabenliste anbietet. */
+    private function PushLeadWord(int $sekunden): string
+    {
+        if ($sekunden % 3600 === 0) {
+            $stunden = intdiv($sekunden, 3600);
+            return $stunden === 1
+                ? $this->Translate('1 hour')
+                : sprintf($this->Translate('%d hours'), $stunden);
+        }
+        return sprintf($this->Translate('%d minutes'), max(1, intdiv($sekunden, 60)));
+    }
+
+    /**
+     * Die Merker gemeldeter Erinnerungen: „<InstanzID>:<AufgabenID>" => Zeitpunkt.
+     *
+     * @return array<string, int>
+     */
+    private function PushSentStore(): array
+    {
+        $stand = json_decode($this->ReadAttributeStringSafe(self::PUSH_SENT_ATTR, '{}'), true);
+        if (!is_array($stand)) {
+            return [];
+        }
+        $grenze = time() - self::PUSH_SENT_TTL;
+        $raus = [];
+        foreach ($stand as $k => $v) {
+            if ((int)$v >= $grenze) {
+                $raus[(string)$k] = (int)$v;
+            }
+        }
+        return $raus;
+    }
+
+    /** @param array<string, int> $merker */
+    private function PushWriteSent(array $merker): void
+    {
+        $text = json_encode($merker, JSON_UNESCAPED_SLASHES);
+        @$this->WriteAttributeString(self::PUSH_SENT_ATTR, (string)$text);
+        if ($this->ReadAttributeStringSafe(self::PUSH_SENT_ATTR, '{}') !== $text) {
+            // Ohne Merker wuerde dieselbe Erinnerung jede Minute erneut hinausgehen.
+            // Lieber den Lauf abschalten als das Telefon zumuellen.
+            $this->LogMessage(
+                'Web Push: Attribut ' . self::PUSH_SENT_ATTR . ' nicht beschreibbar — Erinnerungen bleiben aus, '
+                . 'bis IP-Symcon neu gestartet wurde.',
+                KL_ERROR
+            );
+            try {
+                $this->SetTimerInterval(self::PUSH_TIMER, 0);
+            } catch (Throwable $e) {
+            }
+        }
     }
 
     /**

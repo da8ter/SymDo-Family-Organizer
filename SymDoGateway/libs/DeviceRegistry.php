@@ -393,9 +393,14 @@ trait DeviceRegistry
                 continue;
             }
             $gehoert = (string)($device['pushUserId'] ?? '');
-            // Ein Gerät ohne Zuordnung bekommt die Nachrichten des Haushalts, aber
-            // keine, die ausdrücklich an ein Mitglied gehen.
-            if ($userId !== '' && $gehoert !== $userId) {
+            // Ein Gerät OHNE Zuordnung ist ein Haushaltsgerät und bekommt alles —
+            // auch das, was an ein Mitglied gerichtet ist. Andernfalls gäbe es eine
+            // stille Falle: Solange niemand sein Gerät einem Mitglied zuordnet (die
+            // Vorgabe!), verschwände jede Nachricht mit Ziel-Mitglied ins Nichts.
+            // Wer nur seine eigenen Nachrichten will, ordnet sein Gerät zu; dann
+            // bekommt es die des Haushalts und die eigenen, aber nicht die der
+            // anderen.
+            if ($userId !== '' && $gehoert !== '' && $gehoert !== $userId) {
                 continue;
             }
             $raus[] = [

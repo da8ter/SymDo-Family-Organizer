@@ -123,6 +123,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->MailApplyChanges();
             $this->CalApplyChanges();
             $this->BriefingApplyChanges();
+            $this->PushApplyChanges();
         }
     }
 
@@ -154,6 +155,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->BriefingRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->PushRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->AppRequestAction($Ident, $Value)) {

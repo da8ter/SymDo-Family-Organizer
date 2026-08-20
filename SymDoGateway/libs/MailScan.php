@@ -803,6 +803,7 @@ trait MailScan
                 'origin'    => $this->MailDetectOrigin($text),
                 'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
             ]);
+            $this->MailNotifyProposal(count($aufgaben) - $termine, $termine, $userId);
             return true;
 
         } finally {
@@ -1561,6 +1562,43 @@ trait MailScan
         }
         $this->SendDebug('MailHook', sprintf('Anhang %s geladen (%d kB base64)', $name, (int)round(strlen($base64) / 1024)), 0);
         return $base64;
+    }
+
+    /**
+     * Kurze Nachricht ueber neue Vorschlaege aus einer analysierten Mail.
+     *
+     * Bewusst NUR Zahlen: Betreff und Absender bleiben draussen. Der Webhook ist
+     * nicht authentifiziert — wer die Adresse kennt, koennte sonst fremden Text auf
+     * die Sperrbildschirme der Familie schreiben. Die Ratenbegrenzung je Geraet in
+     * PushBroadcast deckelt zusaetzlich, wie oft das ueberhaupt gehen kann.
+     */
+    private function MailNotifyProposal(int $aufgaben, int $termine, string $userId): void
+    {
+        if (!(bool)$this->PushProp('PushOnMailProposal', false)) {
+            return;
+        }
+        $teile = [];
+        if ($termine > 0) {
+            $teile[] = $termine === 1
+                ? $this->Translate('1 appointment')
+                : sprintf($this->Translate('%d appointments'), $termine);
+        }
+        if ($aufgaben > 0) {
+            $teile[] = $aufgaben === 1
+                ? $this->Translate('1 task')
+                : sprintf($this->Translate('%d tasks'), $aufgaben);
+        }
+        if ($teile === []) {
+            return;
+        }
+        $this->PushBroadcast(
+            $this->Translate('New from your mail'),
+            sprintf($this->Translate('%s waiting to be accepted'), implode(', ', $teile)),
+            // Gehoert die Mail einem Mitglied, geht die Nachricht auch nur an dessen
+            // Geraete — die Haushaltsadresse dagegen betrifft alle.
+            $userId,
+            'todos'
+        );
     }
 
     // ────────────────────────────── Ablage ──────────────────────────────

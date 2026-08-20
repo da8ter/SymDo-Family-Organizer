@@ -207,7 +207,46 @@ trait Briefing
     {
         $stand = $this->BriefingStore();
         $stand[$tage === 0 ? 'heute' : 'vorschau'] = $inhalt;
-        return $this->BriefingWriteStore($stand);
+        $ok = $this->BriefingWriteStore($stand);
+
+        // Benachrichtigung nur fuer das Fach HEUTE: Die Vorschau entsteht am
+        // Vorabend, ein „Dein Tag" um 18 Uhr waere verkehrt. Und nur, wenn der Text
+        // wirklich abgelegt wurde — eine Meldung ueber etwas, das die Oberflaechen
+        // nicht zeigen koennen, waere schlimmer als keine.
+        if ($ok && $tage === 0 && (string)($inhalt['text'] ?? '') !== '') {
+            $this->BriefingNotify((string)$inhalt['text']);
+        }
+        return $ok;
+    }
+
+    /**
+     * Kurze Nachricht, wenn das Briefing des Tages geschrieben ist. Titel wie die
+     * Karte in den Oberflaechen, Text der erste Satz.
+     */
+    private function BriefingNotify(string $text): void
+    {
+        if (!(bool)$this->PushProp('PushOnBriefing', false)) {
+            return;
+        }
+        $viele = count($this->BriefingMembers()) > 1;
+        $titel = $viele ? $this->Translate('Your day (plural)') : $this->Translate('Your day');
+        // Ganze Saetze, nicht die ersten 256 Zeichen: Ein Schnitt mitten im Wort
+        // liest sich auf dem Sperrbildschirm wie ein Fehler. Ein Satz allein genuegt
+        // aber nicht — der erste ist oft nur „Guten Morgen, Max!" und sagt nichts.
+        // Deshalb weitersammeln, bis der Text etwas traegt.
+        $kurz = '';
+        foreach ((preg_split('/(?<=[.!?])\s+/u', trim($text)) ?: []) as $satz) {
+            $kurz = $kurz === '' ? (string)$satz : $kurz . ' ' . (string)$satz;
+            // 60 Zeichen: Ein inhaltsvoller Satz steht damit allein, ein blosser
+            // Gruss („Guten Morgen, Max!") bekommt den naechsten dazu.
+            if (mb_strlen($kurz) >= 60) {
+                break;
+            }
+        }
+        // Bewusst an alle: Das Briefing erzaehlt vom ganzen Haushalt, auch wenn es
+        // eine Person anspricht. Wer nur seine eigenen Nachrichten will, ordnet sein
+        // Geraet einem Mitglied zu — dann kommt diese hier nicht an.
+        $this->PushBroadcast($titel, $kurz === '' ? $text : $kurz, '', 'dashboard');
     }
 
     /**
