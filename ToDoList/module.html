@@ -506,19 +506,6 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .briefing-mehr[hidden] { display: none; }
 .briefing-mehr i { margin-left: 6px; font-size: 12px; }
-.briefing-morgen {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-  vertical-align: 2px;
-}
 /* Vorlesen: der Knopf sitzt rechts in der Kopfzeile, auf Hoehe der Ueberschrift. */
 .briefing-play {
   flex: 0 0 auto;
@@ -4798,16 +4785,14 @@ function renderDashboard() {
       ? `<button class="briefing-play${briefingLaeuft ? ' laeuft' : ''}" data-briefing="play" ` +
         `title="${escapeHtml(translate('Read aloud'))}"><i class="fa-light ${symbol}"></i></button>`
       : '';
-    // Am Abend zeigt die Karte den morgigen Text. Ohne Kennzeichnung liest man ihn
-    // als den heutigen — deshalb ein Vorsatz, kein stiller Wechsel.
-    const marke = briefingVorschau
-      ? `<span class="briefing-morgen">${escapeHtml(translate('Tomorrow'))}</span> `
-      : '';
-    // „Dein Tag" oder „Euer Tag": Im Mehrpersonen-Haushalt erzaehlt das Briefing
-    // auch von den anderen — die Anrede muss das treffen.
-    const ueberschrift = (store.users || []).length > 1
-      ? translate('Your day (plural)')
-      : translate('Your day');
+    // Die Ueberschrift traegt beides: die Anrede und den Tag. „Euer" im
+    // Mehrpersonen-Haushalt, weil das Briefing dort auch von den anderen erzaehlt;
+    // am Abend die Kennzeichnung als Vorschau, damit niemand den morgigen Text fuer
+    // den heutigen haelt (dafuer stand vorher eine MORGEN-Marke im Text).
+    const viele = (store.users || []).length > 1;
+    const ueberschrift = briefingVorschau
+      ? translate(viele ? 'Your preview of tomorrow (plural)' : 'Your preview of tomorrow')
+      : translate(viele ? 'Your day (plural)' : 'Your day');
     // Der Aufklapper steht immer im Markup; briefingKlappHinweis() nimmt ihn nach
     // dem Zeichnen weg, wenn der Text ohnehin ganz zu sehen ist.
     const klapp = `<button class="briefing-mehr" data-briefing="mehr">` +
@@ -4816,7 +4801,7 @@ function renderDashboard() {
     html += `<div class="card briefing-card">` +
       `<div class="card-head"><h3>${escapeHtml(ueberschrift)}</h3>${knopf}</div>` +
       `<div class="briefing-text${briefingOffen ? '' : ' gekappt'}">` +
-      `${marke}${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
+      `${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
   }
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
