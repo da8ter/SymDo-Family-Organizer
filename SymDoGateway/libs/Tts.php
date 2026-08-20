@@ -286,12 +286,15 @@ trait Tts
      * demselben Grund tragen die Überschreibungen mit ein — dasselbe Briefing
      * klingt als Drillsergeant anders als sachlich.
      */
-    private function TtsHash(string $text, string $stimme = '', string $anweisung = ''): string
+    private function TtsHash(string $text, string $stimme = '', string $anweisung = '', float $tempo = 1.0): string
     {
         return substr(hash('sha256',
             $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
             ($stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy')) . '|' .
-            ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) .
+            ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) . '|' .
+            // Das Tempo gehoert dazu, sonst spielte die alte, langsame Aufnahme
+            // weiter, obwohl jemand es geaendert hat.
+            number_format($tempo, 2, '.', '') .
             '|' . $text), 0, 32);
     }
 
@@ -317,9 +320,9 @@ trait Tts
      *                          waehlen (das Briefing tut das je Tonfall).
      * @param string $anweisung Leer = die Einstellung (Einkaufs-Vorlesestil).
      */
-    private function TtsProduce(string $hash, string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): int
+    private function TtsProduce(string $hash, string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3', float $tempo = 1.0): int
     {
-        $mp3 = $this->TtsRequestAudio($text, $stimme, $anweisung, $format);
+        $mp3 = $this->TtsRequestAudio($text, $stimme, $anweisung, $format, $tempo);
         if ($mp3 === '') {
             return 0;
         }
@@ -355,7 +358,7 @@ trait Tts
      *        Abholung bei 1 MB endet.
      * @return string rohe Audiodaten, '' bei Fehler
      */
-    private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
+    private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3', float $tempo = 1.0): string
     {
         $key = trim($this->ReadPropertyString('AiOpenAIKey'));
         if ($key === '') {
@@ -367,6 +370,9 @@ trait Tts
             'input'           => $text,
             'instructions'    => $anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS),
             'response_format' => $format,
+            // 1.0 waere die Vorgabe; mitgeschickt wird nur, was davon abweicht,
+            // damit ein Modell, das das Feld nicht kennt, nicht daran scheitert.
+            'speed'           => max(0.25, min(4.0, $tempo)),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $resp = $this->AiHttpPost('https://api.openai.com/v1/audio/speech', [

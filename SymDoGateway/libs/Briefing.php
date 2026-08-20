@@ -53,6 +53,13 @@ trait Briefing
      * Naht in der Mitte ist besser als Stille.
      */
     private const BRIEFING_TTS_ONE    = 1250;
+    /**
+     * Vorlesetempo, 1.0 waere die normale Sprechgeschwindigkeit des Modells.
+     * 20 % schneller: Ein Briefing hoert man morgens im Vorbeigehen, nicht als
+     * Hoerbuch. Der Wert reist im Cache-Schluessel mit, damit nach einer Aenderung
+     * nicht die alte, langsame Aufnahme weiterspielt.
+     */
+    private const BRIEFING_TTS_SPEED  = 1.2;
 
     private ?array $briefingConfigCache = null;
 
@@ -745,8 +752,15 @@ trait Briefing
                     . '(Termine, Aufgaben, Uhrzeiten) bleiben trotz allem vollständig und '
                     . 'korrekt.';
             case 'coach':
-                return 'TONFALL: Wie ein Motivationstrainer — anfeuernd, positiv, du-Form, '
-                    . 'ein aufbauender Halbsatz zum Schluss.';
+                return 'TONFALL: Du bist Motivationstrainerin und feuerst die Familie an. '
+                    . 'Du-Form, kurze Sätze mit Schwung, ruhig ein Ausrufezeichen. Beginne '
+                    . 'mit einem Lob und schließe mit einem Ansporn. Lobe konkret und nur, '
+                    . 'was in den Angaben steht: wenig Liegengebliebenes, ein voller Tag, den '
+                    . 'die Familie gemeinsam stemmt, jemand, der gleich zwei Sachen übernimmt. '
+                    . 'Erfinde KEINE Erfolge und keine erledigten Aufgaben. Sprich schwierige '
+                    . 'Dinge als machbar an („das räumst du heute weg"), statt sie '
+                    . 'vorzuwerfen. Ein aufbauender Halbsatz je Person, wo es passt, und ein '
+                    . 'Schlusssatz, der Lust auf den Tag macht.';
             default:
                 return 'TONFALL: Sachlich und freundlich, du-Form, ohne Überschwang.';
         }
@@ -827,10 +841,10 @@ trait Briefing
             // AAC und nicht MP3: Die Abholung endet bei 1 MB, und ein ganzes
             // Briefing als MP3 lag gemessen bei 1,3 MB — als AAC bleibt derselbe
             // Text darunter. Jeder Browser und iOS spielen AAC ohne Zutun.
-            $hash = $this->TtsHash($teil, $stimme, $anweisung);
+            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_SPEED);
             $mid  = $this->TtsLookup($hash);
             if ($mid <= 0) {
-                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, 'aac');
+                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, 'aac', self::BRIEFING_TTS_SPEED);
             }
             if ($mid <= 0) {
                 $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
