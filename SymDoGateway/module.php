@@ -7,6 +7,7 @@ require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
+require_once __DIR__ . '/libs/Briefing.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -28,6 +29,7 @@ class SymDoGateway extends IPSModuleStrict
     use MailScan;
     use MailFetch;
     use CalendarBridge;
+    use Briefing;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -93,6 +95,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->MailCreate();
         // Kalender: Zuordnung, Erinnerungen und ihr Timer
         $this->CalCreateProps();
+        // Tagesbriefing: Einstellungen, Ablage und sein Timer
+        $this->BriefingCreate();
     }
 
     public function ApplyChanges(): void
@@ -113,6 +117,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppApplyChanges();
             $this->MailApplyChanges();
             $this->CalApplyChanges();
+            $this->BriefingApplyChanges();
         }
     }
 
@@ -141,6 +146,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->CalRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->BriefingRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->AppRequestAction($Ident, $Value)) {
@@ -219,6 +227,9 @@ class SymDoGateway extends IPSModuleStrict
         // Nur auf der bedienenden Instanz: die Überschreibungen fassen Felder an, die
         // hier gar nicht stehen, und AiPrivacyStorable() prüft mit einer Schreibsonde.
         if ($isOwner) {
+            // Muss VOR den Ueberschreibungen passieren: die suchen Felder per Name,
+            // und die des Briefings entstehen erst hier.
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetBriefingPanel());
             $this->AppFormOverrides($elements);
         }
 
@@ -1561,6 +1572,93 @@ class SymDoGateway extends IPSModuleStrict
                     'visible' => false,
                     'add'     => '',
                     'edit'    => ['type' => 'ValidationTextBox', 'visible' => false]
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Panel „Taegliches Briefing" — sitzt in den KI-Funktionen, weil es eine ist.
+     *
+     * In PHP gebaut und nicht in form.json: Die Auswahl „fuer wen" braucht die
+     * Familienmitglieder als Optionen, und die stehen erst zur Laufzeit fest.
+     */
+    private function GetBriefingPanel(): array
+    {
+        // Felder auf Eigenschaften, die es noch nicht gibt, lassen „Uebernehmen"
+        // scheitern — sie entstehen in Create() und damit erst beim naechsten
+        // Kernel-Start. Bis dahin ein Hinweis statt eines Formulars, das die
+        // Eingabe schluckt.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('BriefingEnabled', $cfg)) {
+            return [
+                'type'     => 'ExpansionPanel',
+                'caption'  => $this->Translate('Daily briefing'),
+                'expanded' => false,
+                'items'    => [[
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('The briefing settings appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.')
+                ]]
+            ];
+        }
+
+        $wer = [['caption' => $this->Translate('— as set in the web app —'), 'value' => '']];
+        foreach ($this->LoadUsers() as $u) {
+            $wer[] = ['caption' => $u['name'], 'value' => $u['id']];
+        }
+
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Daily briefing'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate("Once a day the AI writes a short text for the dashboard: what is on today, which tasks are due, who has a birthday. It is generated once and then only read — so opening the app never waits for the AI.\n\nIt uses today's appointments, the tasks due today, what is still left over from the days before, and the family members' data. Nothing is created automatically; the text is just a text.")
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'BriefingEnabled',
+                    'caption' => $this->Translate('Show a daily briefing on the dashboard')
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'BriefingUserID',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Written for'),
+                    'options' => $wer
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'BriefingTone',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Tone'),
+                    'options' => [
+                        ['caption' => $this->Translate('Matter-of-fact'),   'value' => 'neutral'],
+                        ['caption' => $this->Translate('Formal'),           'value' => 'formal'],
+                        ['caption' => $this->Translate('Buddy'),            'value' => 'buddy'],
+                        ['caption' => $this->Translate('Funny'),            'value' => 'funny'],
+                        ['caption' => $this->Translate('Drill sergeant'),   'value' => 'drill'],
+                        ['caption' => $this->Translate('Motivational coach'), 'value' => 'coach']
+                    ]
+                ],
+                [
+                    'type'    => 'SelectTime',
+                    'name'    => 'BriefingTime',
+                    'caption' => $this->Translate('Generate at')
+                ],
+                [
+                    'type'    => 'Button',
+                    'caption' => $this->Translate('Generate briefing now'),
+                    'onClick' => 'IPS_RequestAction($id, \'BriefingNow\', 0);'
+                ],
+                [
+                    // Zeigt nach dem Knopf das Ergebnis — bewusst ein Label und kein
+                    // echo: eine Ausgabe aus RequestAction meldet Symcon als
+                    // Skriptfehler samt Dateiname und Zeilennummer.
+                    'type'    => 'Label',
+                    'name'    => 'BriefingStatus',
+                    'caption' => $this->BriefingText()
                 ]
             ]
         ];

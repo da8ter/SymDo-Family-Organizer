@@ -543,6 +543,11 @@ trait AppCore
                 if ($entfernt > 0) {
                     $this->LogMessage(sprintf('SymDo: %d wartende E-Mail(s) nach Einwilligungs-Widerruf verworfen', $entfernt), KL_NOTIFY);
                 }
+                // Dasselbe fuer das Briefing: Es ist aus Terminen, Aufgaben und
+                // Namen entstanden und hat ohne Einwilligung keine Grundlage mehr.
+                if ($this->BriefingClear()) {
+                    $this->LogMessage('SymDo: Tagesbriefing nach Einwilligungs-Widerruf verworfen', KL_NOTIFY);
+                }
             }
             $this->UpdateFormField('AiEnabled', 'enabled', $accepted);
             if (!$accepted) {
@@ -772,6 +777,35 @@ trait AppCore
             }
         }
         unset($element);
+    }
+
+    /**
+     * Haengt ein Element an die Items eines benannten Elements an.
+     *
+     * Gegenstueck zu SetFormElementProperty: Panels, deren Inhalt erst zur Laufzeit
+     * feststeht (Mitgliederauswahl), lassen sich so in ein form.json-Panel
+     * einsetzen, ohne die Datei zu verdoppeln.
+     */
+    private function AppendFormItem(array &$elements, string $name, array $item): bool
+    {
+        foreach ($elements as &$element) {
+            if (!is_array($element)) {
+                continue;
+            }
+            if (($element['name'] ?? '') === $name) {
+                if (!isset($element['items']) || !is_array($element['items'])) {
+                    $element['items'] = [];
+                }
+                $element['items'][] = $item;
+                return true;
+            }
+            if (isset($element['items']) && is_array($element['items'])
+                && $this->AppendFormItem($element['items'], $name, $item)) {
+                return true;
+            }
+        }
+        unset($element);
+        return false;
     }
 
     private function GetConnectUrl(): string

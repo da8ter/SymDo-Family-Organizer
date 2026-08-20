@@ -159,6 +159,16 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'briefing':
+                // Das Tagesbriefing, fertig abgelegt. GET fuer die iOS-App, POST fuer
+                // die Web-App — die schickt alles ueber ihren einen POST-Helfer.
+                // Bewusst KEIN Zweig im Kachel-Relay (AiRelayBody): so bleibt das
+                // Briefing in der Symcon-Kachel unsichtbar, ohne Sonderfall dort.
+                if ($method === 'GET' || $method === 'POST') {
+                    $this->SendJson($this->BriefingPublic());
+                    return;
+                }
+                break;
             case 'tts':
                 // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
                 // GET  /v1/tts/{hash} → die fertige Tondatei

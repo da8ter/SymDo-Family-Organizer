@@ -156,6 +156,7 @@
         },
         {
             "type": "ExpansionPanel",
+            "name": "AiPanel",
             "caption": "AI features",
             "expanded": false,
             "items": [
