@@ -1493,13 +1493,6 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => ''
                 ],
                 [
-                    'type'      => 'ValidationTextBox',
-                    'name'      => 'MailHookSenderAllow',
-                    'multiline' => true,
-                    'width'     => '400px',
-                    'caption'   => $this->Translate('Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.')
-                ],
-                [
                     'type'    => 'NumberSpinner',
                     'name'    => 'MailHookMaxKB',
                     'minimum' => 64,
@@ -1549,6 +1542,13 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'caption' => $this->Translate('Recipient address'),
                     'name'    => 'Address',
+                    'width'   => '280px',
+                    'add'     => '',
+                    'edit'    => ['type' => 'ValidationTextBox']
+                ],
+                [
+                    'caption' => $this->Translate('Allowed senders (empty = every mail is analysed)'),
+                    'name'    => 'SenderAllow',
                     'width'   => 'auto',
                     'add'     => '',
                     'edit'    => ['type' => 'ValidationTextBox']

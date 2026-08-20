@@ -96,9 +96,6 @@ trait MailScan
         $this->RegisterPropertyString('MailHookSecret', '');
         // Mailguns „HTTP webhook signing key" — damit wird die Signatur geprueft.
         $this->RegisterPropertyString('MailHookSigningKey', '');
-        // Eigene Freigabeliste: hier schreibt die Schule DIREKT, nicht die eigene
-        // Familie wie beim Weiterleiten. Leer = alle (die Plus-Tags sind geheim).
-        $this->RegisterPropertyString('MailHookSenderAllow', '');
         // Basisadresse bei Mailgun, nur fuer die Anzeige und den Eintrag-Knopf.
         $this->RegisterPropertyString('MailHookBase', '');
         $this->RegisterPropertyInteger('MailHookMaxKB', 1024);
@@ -296,7 +293,7 @@ trait MailScan
      * Mitglieds-ID; die leere ID ist die allgemeine Adresse (Vorschlaege ohne
      * Mitglied), das Gegenstueck zum Haushalts-Postfach des IMAP-Weges.
      *
-     * @return list<array{UserID: string, Name: string, Address: string}>
+     * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string}>
      */
     private function MailAddressRows(): array
     {
@@ -308,14 +305,19 @@ trait MailScan
             $id = trim((string)($zeile['UserID'] ?? ''));
             // Die erste Adresse gewinnt: je Zeile ist genau eine vorgesehen.
             if (!array_key_exists($id, $vorhanden)) {
-                $vorhanden[$id] = trim((string)($zeile['Address'] ?? ''));
+                $vorhanden[$id] = [
+                    'Address'     => trim((string)($zeile['Address'] ?? '')),
+                    'SenderAllow' => (string)($zeile['SenderAllow'] ?? '')
+                ];
             }
         }
+        $zelle = static fn(?array $alt, string $feld): string => (string)($alt[$feld] ?? '');
 
         $zeilen = [[
-            'UserID'  => '',
-            'Name'    => $this->Translate('Family (general)'),
-            'Address' => (string)($vorhanden[''] ?? '')
+            'UserID'      => '',
+            'Name'        => $this->Translate('Family (general)'),
+            'Address'     => $zelle($vorhanden[''] ?? null, 'Address'),
+            'SenderAllow' => $zelle($vorhanden[''] ?? null, 'SenderAllow')
         ]];
         foreach ($this->LoadUsers() as $u) {
             $id = (string)($u['id'] ?? '');
@@ -323,9 +325,10 @@ trait MailScan
                 continue;
             }
             $zeilen[] = [
-                'UserID'  => $id,
-                'Name'    => (string)($u['name'] ?? ''),
-                'Address' => (string)($vorhanden[$id] ?? '')
+                'UserID'      => $id,
+                'Name'        => (string)($u['name'] ?? ''),
+                'Address'     => $zelle($vorhanden[$id] ?? null, 'Address'),
+                'SenderAllow' => $zelle($vorhanden[$id] ?? null, 'SenderAllow')
             ];
         }
         return $zeilen;
@@ -542,14 +545,21 @@ trait MailScan
             if ($karte === []) {
                 return $nein('keine Adress-Zuordnung konfiguriert');
             }
+            $treffer = null;
             foreach ($this->MailRecipientCandidates($empfaenger) as $kandidat) {
                 if (array_key_exists($kandidat, $karte)) {
-                    $userId = $karte[$kandidat];
+                    $treffer = $karte[$kandidat];
                     break;
                 }
             }
-            if ($userId === null) {
+            if ($treffer === null) {
                 return $nein('Empfaenger ' . $empfaenger . ' nicht zugeordnet');
+            }
+            $userId = $treffer['UserID'];
+            // Erst die Adresse verraet, wessen Filter gilt — deshalb wird er hier
+            // geholt und nicht vom Aufrufer mitgegeben.
+            if ($senderAllow === null) {
+                $senderAllow = $treffer['SenderAllow'];
             }
         }
 
@@ -592,11 +602,11 @@ trait MailScan
     }
 
     /**
-     * @param ?string $liste Eigene Freigabeliste; null = die des Haushalts-Postfachs
-     *        (Property MailSenderAllow). Der Webhook und die Postfaecher der
-     *        Mitglieder bringen ihre eigene mit, weil dort die Schule DIREKT
-     *        schreibt, waehrend bei weitergeleiteter Post die eigene Familie als
-     *        Absender erscheint.
+     * @param ?string $senderAllow Freigegebene Absender fuer DIESEN Weg. Der
+     *        Postfach-Weg gibt sie mit (Postfach des Mitglieds oder Haushalt);
+     *        null heisst „die der getroffenen Empfangsadresse" und gilt fuer den
+     *        Webhook, wo erst die Adresse verraet, wer gemeint ist. Leer laesst
+     *        alles durch.
      */
     private function MailSenderAllowed(string $absender, ?string $liste = null): bool
     {
@@ -1010,9 +1020,9 @@ trait MailScan
         }
 
         // Dieselbe Wache wie beim IMAP-Weg: Empfaenger einem Mitglied zuordnen,
-        // Absender pruefen, Massenmail erkennen. Nur die Freigabeliste ist eine
-        // eigene (siehe MailHookSenderAllow).
-        $urteil = $this->MailJudge($satz['kopf'], (string)$this->MailProp('MailHookSenderAllow', ''));
+        // Absender pruefen, Massenmail erkennen. Die Freigabeliste steht an der
+        // getroffenen Empfangsadresse — deshalb ohne zweites Argument.
+        $urteil = $this->MailJudge($satz['kopf']);
         if ($urteil['skip']) {
             $this->SendDebug('MailHook', 'verworfen: ' . $urteil['reason'], 0);
             $antwort(406, 'rejected: ' . $urteil['reason']);
@@ -1764,10 +1774,11 @@ trait MailScan
      *
      * Jedes Mitglied kann eine eigene Liste fuehren — bei ihm schreibt die Schule
      * direkt, waehrend im Haushalts-Postfach oft weitergeleitete Post liegt, wo
-     * der eigene Haushalt der Absender ist. Eine leere Liste laesst alles durch;
-     * `null` bedeutet „die des Haushalts-Postfachs" (Property MailSenderAllow).
+     * der eigene Haushalt der Absender ist. Eine leere Liste laesst alles durch.
+     * Immer ein String, nie null: null bedeutet in MailJudge etwas anderes
+     * (die Liste der Empfangsadresse).
      */
-    private function MailBoxSenderAllow(int $imapID): ?string
+    private function MailBoxSenderAllow(int $imapID): string
     {
         $zeilen = json_decode((string)$this->MailProp('MailBoxes', '[]'), true);
         foreach (is_array($zeilen) ? $zeilen : [] as $zeile) {
@@ -1779,7 +1790,7 @@ trait MailScan
                 return (string)($zeile['SenderAllow'] ?? '');
             }
         }
-        return null;
+        return (string)$this->MailProp('MailSenderAllow', '');
     }
 
     /**
@@ -1801,7 +1812,10 @@ trait MailScan
         return '';
     }
 
-    /** @return array<string, string> Adresse (klein) → Mitglieds-ID */
+    /**
+     * @return array<string, array{UserID: string, SenderAllow: string}> Adresse (klein) → Zeile.
+     *         Jede Empfangsadresse traegt ihr Mitglied und ihre eigene Absenderliste.
+     */
     private function MailAddressMap(): array
     {
         $zeilen = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
@@ -1811,7 +1825,10 @@ trait MailScan
             if ($adresse === '') {
                 continue;
             }
-            $karte[$adresse] = trim((string)($zeile['UserID'] ?? ''));
+            $karte[$adresse] = [
+                'UserID'      => trim((string)($zeile['UserID'] ?? '')),
+                'SenderAllow' => (string)($zeile['SenderAllow'] ?? '')
+            ];
         }
         return $karte;
     }
