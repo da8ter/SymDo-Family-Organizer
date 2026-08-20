@@ -296,6 +296,16 @@ trait Briefing
         return $this->BriefingIsEnabled() && (bool)$this->BriefingProp('BriefingPreviewEnabled', false);
     }
 
+    /**
+     * Das Fach, das die Oberflaechen JETZT zeigen: 1 = die Vorschau auf morgen,
+     * 0 = heute. Eine Stelle fuer die Bedingung, damit Timer, Route und der Knopf
+     * im Formular nicht auseinanderlaufen.
+     */
+    private function BriefingShownSlot(): int
+    {
+        return ($this->BriefingPreviewIsEnabled() && time() >= $this->BriefingPreviewStart()) ? 1 : 0;
+    }
+
     /** Zeitpunkt heute, ab dem die Vorschau gilt. */
     private function BriefingPreviewStart(): int
     {
@@ -386,7 +396,7 @@ trait Briefing
     private function BriefingDueSlot(): ?int
     {
         $jetzt = time();
-        if ($this->BriefingPreviewIsEnabled() && $jetzt >= $this->BriefingPreviewStart()) {
+        if ($this->BriefingShownSlot() === 1) {
             $fach = $this->BriefingSlot(1);
             if ($fach['d'] !== date('Y-m-d', $this->BriefingDay(1)) || $fach['text'] === '') {
                 return 1;
@@ -422,9 +432,17 @@ trait Briefing
             $meldung($this->Translate('The AI is off or the consent under "AI features" is missing.'));
             return;
         }
-        $ergebnis = $this->BriefingErzeugen(true);
+        // Am Abend zeigen die Oberflaechen die Vorschau auf morgen. Dann muss der
+        // Knopf genau die erneuern — das Briefing von heute liest um 18 Uhr niemand
+        // mehr, und fuer die Vorschau gab es sonst keinen Weg, der auch ablegt
+        // (BriefingPreviewTomorrow zeigt nur an).
+        $tage     = $this->BriefingShownSlot();
+        $ergebnis = $this->BriefingErzeugen(true, $tage);
         if ($ergebnis['ok']) {
-            $meldung($this->BriefingText());
+            $text = (string)$this->BriefingSlot($tage)['text'];
+            $meldung($tage === 1
+                ? sprintf($this->Translate('Preview for tomorrow: %s'), $text)
+                : $text);
             return;
         }
         $meldung(sprintf($this->Translate('Briefing failed: %s'), (string)$ergebnis['message']));
@@ -1306,8 +1324,7 @@ trait Briefing
         $morgen = date('Y-m-d', $this->BriefingDay(1));
 
         $vorschau = $this->BriefingSlot(1);
-        if ($this->BriefingPreviewIsEnabled()
-            && time() >= $this->BriefingPreviewStart()
+        if ($this->BriefingShownSlot() === 1
             && $vorschau['d'] === $morgen
             && $vorschau['text'] !== '') {
             return $this->BriefingAntwort($vorschau, 'tomorrow', true);

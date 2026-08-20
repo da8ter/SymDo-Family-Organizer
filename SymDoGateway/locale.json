@@ -229,7 +229,8 @@
             "From this time on, show tomorrow instead of today": "Ab dieser Uhrzeit morgen statt heute zeigen",
             "The evening preview for tomorrow appears after the next Symcon restart — it brings new settings, and those only exist once the kernel has loaded the module again.": "Die abendliche Vorschau auf morgen erscheint nach dem nächsten Symcon-Neustart — sie bringt neue Einstellungen mit, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
             "Read the briefing aloud": "Briefing vorlesen lassen",
-            "The recording is produced together with the text, so the play button starts instantly. It needs OpenAI as the provider and costs roughly four times as much as the text — switch it off and the button disappears.": "Die Aufnahme entsteht zusammen mit dem Text, deshalb spielt der Knopf sofort los. Sie braucht OpenAI als Anbieter und kostet etwa das Vierfache des Textes — abgeschaltet verschwindet der Knopf."
+            "The recording is produced together with the text, so the play button starts instantly. It needs OpenAI as the provider and costs roughly four times as much as the text — switch it off and the button disappears.": "Die Aufnahme entsteht zusammen mit dem Text, deshalb spielt der Knopf sofort los. Sie braucht OpenAI als Anbieter und kostet etwa das Vierfache des Textes — abgeschaltet verschwindet der Knopf.",
+            "Preview for tomorrow: %s": "Vorschau für morgen: %s"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
