@@ -15,10 +15,12 @@
   /* Deckende Zeilenfläche: liegt über dem roten Wisch-Hintergrund, darf NICHT
      durchscheinen (color-mix zweier deckender Farben bleibt deckend) */
   --row:     color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
-  /* Flaeche der Aufgaben- UND Terminzeilen, heller als die uebrigen Zeilen (Wunsch
-     vom 20./21.08.2026): Auf der Uebersicht liegen sie IN einer Karte, und mit --row
-     (8 % Inhaltston) standen Karte und Zeile fast auf demselben Ton. Deckend wie
-     --row, denn hinter der Zeile liegt der rote Wisch-Untergrund. */
+  /* Flaeche der Aufgaben- und Terminzeilen AUF DER UEBERSICHT, heller als dieselben
+     Zeilen in ihren Bereichen (Wunsch vom 20./21.08.2026). Der Grund fuer den
+     Unterschied: Auf der Uebersicht liegen die Zeilen IN einer Karte, und mit --row
+     (8 % Inhaltston) standen Karte und Zeile fast auf demselben Ton. In den
+     Bereichen liegen sie auf dem Seitengrund, dort stimmt --row. Deckend wie --row,
+     denn hinter der Zeile liegt der rote Wisch-Untergrund. */
   --row-item: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 12%);
   --border:  color-mix(in srgb, var(--content-color) 14%, transparent);
   --accent:  var(--accent-color);
@@ -1242,6 +1244,11 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Ohne Rahmen, wie die Aufgabenzeilen und die Vorschlaege: die Flaeche allein
    trennt die Zeile vom Hintergrund. Ein Rahmen zusaetzlich zur Flaeche zeichnet
    dieselbe Kante zweimal. */
+/* Die hellere Zeilenflaeche gilt nur auf der Uebersicht — in den Bereichen bleiben
+   Aufgaben und Termine auf --row bzw. --surface. */
+#dashboardContent .todo-content,
+#dashboardContent .cal-event { background: var(--row-item); }
+
 /* Terminvorschau auf der Uebersicht: dieselben Zeilen wie im Kalender, nur ohne
    Wischen und Knoepfe. Der Abstand steckt dort am .cal-card-Behaelter, den es hier
    nicht gibt — deshalb hier direkt an der Zeile. */
@@ -1253,9 +1260,7 @@ html[data-symdo-theme="dark"] .member-bar {
   display: flex; align-items: stretch; gap: 9px;
   padding: 9px 10px;
   border-radius: var(--radius);
-  /* Dieselbe Flaeche wie die Aufgabenzeile (Wunsch vom 21.08.2026) — vorher trug sie
-     --surface und war damit heller als eine Aufgabe. */
-  background: var(--row-item);
+  background: var(--surface);
 }
 /* Wischen wie in den Listen: die Zeile liegt ueber zwei Untergruenden (links
    loeschen, rechts bearbeiten) und wird darueber verschoben. Der Behaelter traegt
@@ -1282,7 +1287,7 @@ html[data-symdo-theme="dark"] .member-bar {
 .cal-card.dragging-right .swipe-under-edit { opacity: 1; }
 .cal-card .cal-event {
   position: relative;
-  background: var(--row-item);
+  background: var(--row);
   transition: transform .18s ease;
   /* pan-y: das senkrechte Scrollen bleibt nativ, waagerecht uebernimmt die Geste
      (bindCardSwipe) — wie bei .todo-content. */
@@ -1568,7 +1573,7 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Angehobene Karte während des Long-Press-Reorderns: in Accent-Farbe getönt */
 .todo-card.todo-dragging .todo-content {
   box-shadow: 0 6px 16px rgba(0,0,0,.32);
-  background: color-mix(in srgb, var(--accent) 22%, var(--row-item));
+  background: color-mix(in srgb, var(--accent) 22%, var(--row));
   outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .todo-content {
@@ -1577,7 +1582,7 @@ html[data-symdo-theme="dark"] .member-bar {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--row-item);
+  background: var(--row);
   transition: transform .18s ease;
   /* pan-y → natives vertikales Scrollen (mit Schwung) bleibt erhalten; der
      horizontale Swipe wird per JS behandelt. Reorder läuft über den Griff
