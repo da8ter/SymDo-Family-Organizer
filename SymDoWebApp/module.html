@@ -4452,6 +4452,7 @@ function bindDragScroll(el) {
 // Der Text entsteht einmal taeglich im Gateway und wird dort abgelegt; hier wird
 // er nur geholt. Deshalb wartet das Dashboard nie auf die KI.
 let briefingText = '';
+let briefingClips = [];        // vom Gateway vorab erzeugte Tonschnipsel
 let briefingLoading = false;
 
 /** Nur mit Gateway: dort liegt der Text. In der Visu-Kachel scheitert aiPost
@@ -4474,8 +4475,10 @@ function loadBriefing() {
     // Kein Gateway, alte Version, Route unbekannt, abgeschaltet: still nichts.
     const frisch = (j && j.ok === true && j.briefing && typeof j.briefing.text === 'string')
       ? j.briefing.text : '';
-    if (frisch === briefingText) return;
+    const clips = (j && j.briefing && Array.isArray(j.briefing.clips)) ? j.briefing.clips : [];
+    if (frisch === briefingText && clips.join() === briefingClips.join()) return;
     briefingText = frisch;
+    briefingClips = clips;
     renderAll();
   }).catch(() => { briefingLoading = false; });
 }
@@ -4541,23 +4544,31 @@ async function briefingVorlesen() {
 
   briefingLaedt = true;
   renderDashboard();
-  const antwort = await aiPost('/tts', { texts: briefingHaeppchen(text) });
-  briefingLaedt = false;
-  const clips = antwort && antwort.json && Array.isArray(antwort.json.clips) ? antwort.json.clips : null;
-  if (!clips) {
-    const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
-    showToast(code === 'tts_restart_required'
-      ? translate('Speech output was just installed — restart IP-Symcon once.')
-      : translate('Speech output is not available.'));
-    renderDashboard();
-    return;
+
+  // Der Regelfall: Das Gateway hat den Ton schon beim Schreiben des Briefings
+  // erzeugt, hier sind nur noch die Dateien zu holen. Fehlen die Kennungen
+  // (Sprachausgabe war damals nicht bereit), wird jetzt erzeugt.
+  let hashes = briefingClips.slice();
+  if (hashes.length === 0) {
+    const antwort = await aiPost('/tts', { texts: briefingHaeppchen(text) });
+    const clips = antwort && antwort.json && Array.isArray(antwort.json.clips) ? antwort.json.clips : null;
+    if (!clips) {
+      briefingLaedt = false;
+      const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
+      showToast(code === 'tts_restart_required'
+        ? translate('Speech output was just installed — restart IP-Symcon once.')
+        : translate('Speech output is not available.'));
+      renderDashboard();
+      return;
+    }
+    hashes = clips.filter(c => c && c.ok && c.hash).map(c => c.hash);
   }
   const urls = [];
-  for (const c of clips) {
-    if (!c || !c.ok || !c.hash) continue;
-    const url = await ansageClipHolen(c.hash);
+  for (const h of hashes) {
+    const url = await ansageClipHolen(h);
     if (url) urls.push(url);
   }
+  briefingLaedt = false;
   if (urls.length === 0) { showToast(translate('Speech output is not available.')); renderDashboard(); return; }
 
   briefingLaeuft = true;

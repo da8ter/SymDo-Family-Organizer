@@ -38,6 +38,12 @@ trait Briefing
      * deshalb steht die Zahl unterhalb der Schwelle gar nicht erst im Prompt.
      */
     private const BRIEFING_SHOP_HINT  = 10;
+    /**
+     * Groesse der Haeppchen fuer die Sprachausgabe. Etwas unter der Grenze des
+     * TTS-Weges (TTS_MAX_CHARS = 200), der laengeren Text still abschneidet — ein
+     * halb vorgelesener Satz waere schlimmer als ein Schnipsel mehr.
+     */
+    private const BRIEFING_TTS_CHUNK  = 190;
 
     private ?array $briefingConfigCache = null;
 
@@ -311,6 +317,10 @@ trait Briefing
             'text'   => $text,
             'at'     => time(),
             'userId' => (string)$daten['userId'],
+            // Der Ton entsteht JETZT, nicht beim Tippen auf Vorlesen: Acht
+            // Schnipsel brauchen gemessen um zehn Sekunden — die soll niemand
+            // vor einem stummen Knopf abwarten.
+            'clips'  => $this->BriefingAudio($text),
         ];
         if (!$this->BriefingWriteStore($neu)) {
             return ['ok' => false, 'message' => 'attribute_unwritable', 'retry' => false];
@@ -676,9 +686,21 @@ trait Briefing
                 return 'TONFALL: Humorvoll mit einem Augenzwinkern, gern ein trockener Kommentar '
                     . 'zum Tag — aber die Angaben bleiben korrekt und vollstaendig.';
             case 'drill':
-                return 'TONFALL: Wie ein Drillsergeant beim Wecken — knappe Befehlssaetze, '
-                    . 'Grossbuchstaben fuer ein bis zwei Worte erlaubt, militaerischer Drill mit '
-                    . 'einem Augenzwinkern. Niemals beleidigend.';
+                // Bewusst grob, aber im Rahmen: Klischee-Kaserne aus dem Kino, nicht
+                // echte Herabsetzung. Was Aussehen, Herkunft oder Person angreift,
+                // bleibt draussen — den Rest hat der Nutzer ausdruecklich so gewollt.
+                return 'TONFALL: Du bist ein Drill-Sergeant aus einem Hollywood-Armeefilm und '
+                    . 'brüllst die Truppe aus den Federn. Knallharte Befehlssaetze, kurz und '
+                    . 'laut, Grossbuchstaben fuer einzelne Worte, gern eine Anrede wie '
+                    . '„Rekrut", „Truppe" oder „Maden". Vorwurfsvoll und respektlos bis an die '
+                    . 'Grenze des Klischees: „Stell dich nicht so an", „du Lusche", „das ist '
+                    . 'ja jaemmerlich", „bewegt euch" gehoeren ausdruecklich dazu. Uebertreib '
+                    . 'ruhig — es ist ein Gag, den sich die Familie selbst ausgesucht hat. '
+                    . 'Verboten bleibt nur, was wirklich verletzt: nichts ueber Aussehen, '
+                    . 'Gewicht, Herkunft, Geschlecht oder Faehigkeiten eines Menschen, keine '
+                    . 'Schimpfwoerter unter der Guertellinie, keine Drohungen. Die Angaben '
+                    . '(Termine, Aufgaben, Uhrzeiten) bleiben trotz allem vollstaendig und '
+                    . 'korrekt.';
             case 'coach':
                 return 'TONFALL: Wie ein Motivationstrainer — anfeuernd, positiv, du-Form, '
                     . 'ein aufbauender Halbsatz zum Schluss.';
@@ -720,6 +742,102 @@ trait Briefing
         return implode("\n\n", $teile);
     }
 
+    // ────────────────────────────── Sprachausgabe ──────────────────────────────
+
+    /**
+     * Der Text in Haeppchen fuer die Sprachausgabe — dieselbe Aufteilung wie in
+     * der Web-App (briefingHaeppchen): an Satzenden, ein ueberlanger Satz am
+     * Komma. Beides muss gleich teilen, sonst passen die vorab erzeugten
+     * Schnipsel nicht zu dem, was die Oberflaeche spielen will.
+     *
+     * @return list<string>
+     */
+    private function BriefingChunks(string $text): array
+    {
+        $grenze = self::BRIEFING_TTS_CHUNK;
+        $text   = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($text === '') {
+            return [];
+        }
+        preg_match_all('/[^.!?]+[.!?]*/u', $text, $treffer);
+
+        $raus   = [];
+        $puffer = '';
+        $schieben = static function () use (&$puffer, &$raus): void {
+            $t = trim($puffer);
+            if ($t !== '') {
+                $raus[] = $t;
+            }
+            $puffer = '';
+        };
+        foreach ($treffer[0] as $satz) {
+            $satz = trim($satz);
+            if ($satz === '') {
+                continue;
+            }
+            if (mb_strlen(trim($puffer . ' ' . $satz)) <= $grenze) {
+                $puffer = trim($puffer . ' ' . $satz);
+                continue;
+            }
+            $schieben();
+            if (mb_strlen($satz) <= $grenze) {
+                $puffer = $satz;
+                continue;
+            }
+            // Notfall: ein einzelner Satz ist zu lang — am Komma trennen, sonst hart.
+            $rest = $satz;
+            while (mb_strlen($rest) > $grenze) {
+                $schnitt = mb_strrpos(mb_substr($rest, 0, $grenze), ',');
+                if ($schnitt === false || $schnitt < (int)($grenze * 0.4)) {
+                    $schnitt = mb_strrpos(mb_substr($rest, 0, $grenze), ' ');
+                }
+                if ($schnitt === false || $schnitt < 1) {
+                    $schnitt = $grenze - 1;
+                }
+                $raus[] = trim(mb_substr($rest, 0, $schnitt + 1));
+                $rest   = trim(mb_substr($rest, $schnitt + 1));
+            }
+            $puffer = $rest;
+        }
+        $schieben();
+        return $raus;
+    }
+
+    /**
+     * Erzeugt die Tonschnipsel zum Briefing und liefert ihre Kennungen.
+     *
+     * Bewusst still, wenn die Sprachausgabe nicht bereitsteht (anderer Anbieter,
+     * fehlender Schluessel, Kernel noch nicht neu gestartet): Das Briefing selbst
+     * ist wertvoll genug, es soll nicht am Ton scheitern. Die Oberflaeche faellt
+     * dann auf ihren eigenen Weg zurueck.
+     *
+     * @return list<string> Kennungen in Spielreihenfolge
+     */
+    private function BriefingAudio(string $text): array
+    {
+        if (!$this->TtsEnabled()) {
+            $this->SendDebug('Briefing', 'Sprachausgabe nicht verfuegbar, kein Ton erzeugt', 0);
+            return [];
+        }
+        $kennungen = [];
+        foreach ($this->BriefingChunks($text) as $stueck) {
+            $sauber = $this->TtsNormalize($stueck);
+            if ($sauber === '') {
+                continue;
+            }
+            $hash = $this->TtsHash($sauber);
+            $mid  = $this->TtsLookup($hash);
+            if ($mid <= 0) {
+                $mid = $this->TtsProduce($hash, $sauber);
+            }
+            if ($mid > 0) {
+                $kennungen[] = $hash;
+            }
+        }
+        $this->SendDebug('Briefing', sprintf('Ton: %d Schnipsel', count($kennungen)), 0);
+        return $kennungen;
+    }
+
     // ────────────────────────────── Ausgabe ──────────────────────────────
 
     /** Der Text von heute, sonst leer. */
@@ -751,11 +869,20 @@ trait Briefing
             return ['ok' => true, 'briefing' => null];
         }
         $stand = $this->BriefingStore();
+        $clips = [];
+        foreach ((array)($stand['clips'] ?? []) as $h) {
+            if (is_string($h) && preg_match('/^[a-f0-9]{32}$/', $h) === 1) {
+                $clips[] = $h;
+            }
+        }
         return ['ok' => true, 'briefing' => [
             'text'        => $text,
             'date'        => (string)($stand['d'] ?? ''),
             'generatedAt' => (int)($stand['at'] ?? 0),
             'userId'      => (string)($stand['userId'] ?? ''),
+            // Fertige Tonschnipsel in Spielreihenfolge; leer = die Oberflaeche
+            // muss selbst erzeugen (Sprachausgabe war beim Schreiben nicht bereit).
+            'clips'       => $clips,
         ]];
     }
 }
