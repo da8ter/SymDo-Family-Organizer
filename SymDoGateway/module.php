@@ -1198,17 +1198,11 @@ class SymDoGateway extends IPSModuleStrict
      *
      * Aufbau: Einleitung, darunter die beiden Wege als je ein aufklappbares
      * Panel — zuerst die Postfaecher, dann Mailgun — und unten, was fuer beide
-     * gilt. Bewusst in PHP gebaut und nicht in form.json: die Mitglieder-Spalten
-     * brauchen die Nutzer als Auswahloptionen, und die stehen erst zur Laufzeit
-     * fest.
+     * gilt. Bewusst in PHP gebaut und nicht in form.json: beide Tabellen fuehren
+     * je Familienmitglied eine Zeile, und die stehen erst zur Laufzeit fest.
      */
     private function GetMailFormElements(): array
     {
-        $optionen = [['caption' => $this->Translate('— no member —'), 'value' => '']];
-        foreach ($this->LoadUsers() as $u) {
-            $optionen[] = ['caption' => $u['name'], 'value' => $u['id']];
-        }
-
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('AI e-mail analysis'),
@@ -1224,7 +1218,7 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Forward mail to Symcon: you forward the mail that matters to Symcon. There is one general family address, and every family member gets an own receiving address. This needs a free account with the Mailgun service. The upside: you keep full control over which mail reaches Symcon.")
                 ],
                 $this->GetMailBoxPanel(),
-                $this->GetMailHookPanel($optionen),
+                $this->GetMailHookPanel(),
                 [
                     'type'    => 'Label',
                     'bold'    => true,
@@ -1418,11 +1412,9 @@ class SymDoGateway extends IPSModuleStrict
      * beim Suchen eines Fehlers wissen, welcher davon gemeint ist.
      *
      * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
-     * nirgends, und ein falsch abgetipptes Geheimnis kostet eine Stunde Suche.
-     *
-     * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
+     * nirgends, und ein falsch abgetippter Token kostet eine Stunde Suche.
      */
-    private function GetMailHookPanel(array $optionen): array
+    private function GetMailHookPanel(): array
     {
         $teile   = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
         $wartend = count($this->MailHookQueueFiles());
@@ -1486,33 +1478,10 @@ class SymDoGateway extends IPSModuleStrict
                     'multiline' => true,
                     'value'     => $teile['url']
                 ],
-                [
-                    'type'     => 'List',
-                    'name'     => 'MailAddresses',
-                    'caption'  => $this->Translate('Recipient address → member'),
-                    'rowCount' => 5,
-                    'add'      => true,
-                    'delete'   => true,
-                    'columns'  => [
-                        [
-                            'caption' => $this->Translate('Recipient address'),
-                            'name'    => 'Address',
-                            'width'   => '280px',
-                            'add'     => '',
-                            'edit'    => ['type' => 'ValidationTextBox']
-                        ],
-                        [
-                            'caption' => $this->Translate('Member'),
-                            'name'    => 'UserID',
-                            'width'   => 'auto',
-                            'add'     => '',
-                            'edit'    => ['type' => 'Select', 'options' => $optionen]
-                        ]
-                    ]
-                ],
+                $this->GetMailAddressList(),
                 [
                     'type'    => 'Button',
-                    'caption' => $this->Translate('Fill in plus addresses for all members'),
+                    'caption' => $this->Translate('Generate receiving addresses'),
                     'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', 0);'
                 ],
                 [
@@ -1543,6 +1512,55 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $wartend === 0
                         ? $this->Translate('Queue is empty.')
                         : sprintf($this->Translate('%d message(s) waiting for analysis.'), $wartend)
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Adresstabelle des Webhook-Weges: erst das Mitglied, dann seine Adresse.
+     *
+     * Wie in der Postfach-Tabelle entstehen die Zeilen aus den Mitgliedern und
+     * nicht aus dem Gespeicherten (`loadValuesFromConfiguration => false`) — die
+     * Konsole wuerde sonst nach ZEILENNUMMER mischen. Deshalb braucht es hier
+     * auch kein Hinzufuegen und kein Loeschen: Wer eine Adresse nicht will,
+     * leert das Feld.
+     */
+    private function GetMailAddressList(): array
+    {
+        $zeilen = $this->MailAddressRows();
+
+        return [
+            'type'     => 'List',
+            'name'     => 'MailAddresses',
+            'caption'  => $this->Translate('Member → receiving address'),
+            'rowCount' => max(2, count($zeilen)),
+            'add'      => false,
+            'delete'   => false,
+            'loadValuesFromConfiguration' => false,
+            'values'   => $zeilen,
+            'columns'  => [
+                [
+                    'caption' => $this->Translate('Member'),
+                    'name'    => 'Name',
+                    'width'   => '160px',
+                    'add'     => ''
+                ],
+                [
+                    'caption' => $this->Translate('Recipient address'),
+                    'name'    => 'Address',
+                    'width'   => 'auto',
+                    'add'     => '',
+                    'edit'    => ['type' => 'ValidationTextBox']
+                ],
+                [
+                    // Traegt die Zuordnung, gehoert aber nicht ins Bild.
+                    'caption' => 'UserID',
+                    'name'    => 'UserID',
+                    'width'   => '10px',
+                    'visible' => false,
+                    'add'     => '',
+                    'edit'    => ['type' => 'ValidationTextBox', 'visible' => false]
                 ]
             ]
         ];

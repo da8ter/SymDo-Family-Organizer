@@ -124,10 +124,9 @@
             "AI e-mail analysis": "KI E-Mail Analyse",
             "Analyze incoming mail": "Eingehende Mail analysieren",
             "IMAP instance": "IMAP-Instanz",
-            "Recipient address → member": "Empfängeradresse → Mitglied",
+            "Member → receiving address": "Mitglied → Empfängeradresse",
             "Recipient address": "Empfängeradresse",
             "Member": "Mitglied",
-            "— no member —": "— kein Mitglied —",
             "Allowed senders for the household mailbox (one per line, \"@domain.tld\" for a whole domain; empty = all)": "Freigegebene Absender für das Haushalts-Postfach (einer pro Zeile, „@domain.tld\" für eine ganze Domain; leer = alle)",
             "Careful with forwarded mail: it carries YOUR address as the sender, not the original one — so there your own address is the one that belongs in the list.": "Achtung bei weitergeleiteter Post: dort steht DEINE Adresse als Absender, nicht die ursprüngliche — also gehört dann die eigene Adresse in die Liste.",
             "Maximum AI calls per day (0 = no limit)": "Höchstens KI-Aufrufe pro Tag (0 = ohne Begrenzung)",
@@ -161,8 +160,8 @@
             "Generate new token": "Neuen Token generieren",
             "No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.": "Keine Symcon-Connect-Adresse gefunden — ohne sie kann Mailgun dieses System nicht erreichen. Bitte zuerst Connect einrichten.",
             "Address": "Adresse",
-            "Fill in plus addresses for all members": "Plus-Adressen für alle Mitglieder eintragen",
-            "Every member already has an address.": "Jedes Mitglied hat bereits eine Adresse.",
+            "Generate receiving addresses": "Empfängeradressen generieren",
+            "Every row already has an address.": "Jede Zeile hat schon eine Adresse.",
             "%d address(es) added — press Apply to save.": "%d Adresse(n) eingetragen — zum Speichern bitte Übernehmen drücken.",
             "Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.": "Freigegebene Absender für den Webhook (einer pro Zeile; leer = alle). Achtung: Hier schreibt die Schule DIREKT — die eigenen Adressen gehören also nicht in diese Liste.",
             "Queue is empty.": "Die Warteschlange ist leer.",
@@ -192,7 +191,8 @@
             "Set up a free account at https://www.mailgun.com and configure it as described below.": "Kostenloses Konto unter https://www.mailgun.com anlegen und wie weiter unten beschrieben einrichten.",
             "The field for the household mailbox appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Das Feld für das Haushalts-Postfach erscheint nach dem nächsten Symcon-Neustart — es ist eine neue Einstellung, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
             "There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Forward mail to Symcon: you forward the mail that matters to Symcon. There is one general family address, and every family member gets an own receiving address. This needs a free account with the Mailgun service. The upside: you keep full control over which mail reaches Symcon.": "Für den Empfang gibt es zwei Wege — nutze einen davon oder beide:\n\n1. Postfach per IMAP: Symcon ruft ein Postfach ab. Ein Absenderfilter ist möglich, aber nicht nötig, und jedem Familienmitglied kann ein eigenes Postfach zugeordnet werden.\n\n2. Mails an Symcon weiterleiten: Du leitest entsprechende Mails an Symcon weiter. Es gibt eine allgemeine Familienadresse und jedes Familienmitglied erhält eine eigene Empfangsadresse. Es wird ein kostenloser Zugang zum Dienst Mailgun benötigt. Vorteil: Du hast die volle Kontrolle, welche Mails an Symcon weitergeleitet werden.",
-            "Allowed senders (empty = every mail is analysed)": "Erlaubte Absender (leer = alle Mails werden analysiert)"
+            "Allowed senders (empty = every mail is analysed)": "Erlaubte Absender (leer = alle Mails werden analysiert)",
+            "Family (general)": "Familie (allgemein)"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

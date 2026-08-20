@@ -287,50 +287,100 @@ trait MailScan
      * bestehende Zeilen bleiben unberuehrt, damit eine von Hand vergebene Adresse
      * nicht ueberschrieben wird.
      */
+    /**
+     * Die Zeilen der Adresstabelle: zuerst die allgemeine Familienadresse, dann
+     * je Familienmitglied eine.
+     *
+     * Quelle sind die Mitglieder, nicht das Gespeicherte — sonst zeigte die
+     * Tabelle Zeilen, die niemandem mehr gehoeren. Zugeordnet wird ueber die
+     * Mitglieds-ID; die leere ID ist die allgemeine Adresse (Vorschlaege ohne
+     * Mitglied), das Gegenstueck zum Haushalts-Postfach des IMAP-Weges.
+     *
+     * @return list<array{UserID: string, Name: string, Address: string}>
+     */
+    private function MailAddressRows(): array
+    {
+        $vorhanden = [];
+        foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $zeile) {
+            if (!is_array($zeile)) {
+                continue;
+            }
+            $id = trim((string)($zeile['UserID'] ?? ''));
+            // Die erste Adresse gewinnt: je Zeile ist genau eine vorgesehen.
+            if (!array_key_exists($id, $vorhanden)) {
+                $vorhanden[$id] = trim((string)($zeile['Address'] ?? ''));
+            }
+        }
+
+        $zeilen = [[
+            'UserID'  => '',
+            'Name'    => $this->Translate('Family (general)'),
+            'Address' => (string)($vorhanden[''] ?? '')
+        ]];
+        foreach ($this->LoadUsers() as $u) {
+            $id = (string)($u['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+            $zeilen[] = [
+                'UserID'  => $id,
+                'Name'    => (string)($u['name'] ?? ''),
+                'Address' => (string)($vorhanden[$id] ?? '')
+            ];
+        }
+        return $zeilen;
+    }
+
+    /**
+     * Adresse fuer eine Zeile bauen.
+     *
+     * Zwei Schreibweisen, beide sinnvoll: Wer nur die Domain eintraegt, bekommt je
+     * Mitglied eine eigene Adresse (lena@…) — eine eigene Domain nimmt ohnehin
+     * jede an, und das liest sich besser. Wer einen festen lokalen Teil vorgibt
+     * (post@…), bekommt Plus-Adressen darunter (post+lena@…); dessen Grundadresse
+     * ist dann die allgemeine.
+     */
+    private function MailHookAddressFor(string $lokal, string $domain, string $name, string $id): string
+    {
+        if ($id === '') {
+            return ($lokal === '' ? 'familie' : $lokal) . '@' . $domain;
+        }
+        // Umlaute und alles Ungewohnte raus: die Adresse muss durch jeden
+        // Mailserver passen, und der Tag ist ohnehin nur ein Erkennungszeichen.
+        $tag = strtolower($name);
+        $tag = strtr($tag, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $tag = preg_replace('/[^a-z0-9]/', '', $tag) ?? '';
+        if ($tag === '') {
+            $tag = substr($id, 0, 6);
+        }
+        return $lokal === '' ? $tag . '@' . $domain : $lokal . '+' . $tag . '@' . $domain;
+    }
+
     private function MailHookFillAddresses(): void
     {
-        $basis  = trim((string)$this->MailProp('MailHookBase', ''));
         $domain = $this->MailHookDomain();
         if ($domain === '') {
             $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
             return;
         }
-        // Zwei Schreibweisen, beide sinnvoll: Wer nur die Domain eintraegt, bekommt
-        // je Mitglied eine eigene Adresse (lena@…) — eine eigene Domain nimmt ohnehin
-        // jede an, und das liest sich besser. Wer einen festen lokalen Teil vorgibt
-        // (post@…), bekommt Plus-Adressen darunter (post+lena@…).
+        $basis = trim((string)$this->MailProp('MailHookBase', ''));
         $lokal = str_contains($basis, '@') ? trim(explode('+', explode('@', $basis, 2)[0])[0]) : '';
 
-        $zeilen = json_decode((string)$this->MailProp('MailAddresses', '[]'), true);
-        $zeilen = is_array($zeilen) ? $zeilen : [];
-        $belegt = [];
-        foreach ($zeilen as $z) {
-            $belegt[trim((string)($z['UserID'] ?? ''))] = true;
-        }
-
-        $neu = 0;
-        foreach ($this->LoadUsers() as $u) {
-            $id = (string)($u['id'] ?? '');
-            if ($id === '' || isset($belegt[$id])) {
-                continue;
+        $zeilen = [];
+        $neu    = 0;
+        foreach ($this->MailAddressRows() as $zeile) {
+            // Eingetragenes bleibt: der Knopf fuellt Luecken, er ueberschreibt nicht.
+            if ($zeile['Address'] === '') {
+                $zeile['Address'] = $this->MailHookAddressFor($lokal, $domain, $zeile['Name'], $zeile['UserID']);
+                $neu++;
             }
-            // Umlaute und alles Ungewohnte raus: die Adresse muss durch jeden
-            // Mailserver passen, und der Tag ist ohnehin nur ein Erkennungszeichen.
-            $tag = strtolower((string)($u['name'] ?? ''));
-            $tag = strtr($tag, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
-            $tag = preg_replace('/[^a-z0-9]/', '', $tag) ?? '';
-            if ($tag === '') {
-                $tag = substr($id, 0, 6);
-            }
-            $adresse = $lokal === '' ? $tag . '@' . $domain : $lokal . '+' . $tag . '@' . $domain;
-            $zeilen[] = ['Address' => $adresse, 'UserID' => $id];
-            $neu++;
+            $zeilen[] = $zeile;
         }
         if ($neu === 0) {
-            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Every member already has an address.'));
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Every row already has an address.'));
             return;
         }
-        $this->UpdateFormField('MailAddresses', 'values', json_encode(array_values($zeilen), JSON_UNESCAPED_UNICODE));
+        $this->UpdateFormField('MailAddresses', 'values', json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('MailHookStatus', 'caption', sprintf($this->Translate('%d address(es) added — press Apply to save.'), $neu));
     }
 
