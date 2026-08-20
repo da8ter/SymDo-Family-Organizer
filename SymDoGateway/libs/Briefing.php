@@ -77,6 +77,9 @@ trait Briefing
         // Abendliche Vorschau auf morgen: eigener Schalter, eigene Uhrzeit. Ab dieser
         // Zeit zeigen die Oberflaechen den morgigen Text statt des heutigen — der Tag
         // ist dann gelaufen, und was zaehlt, ist der naechste.
+        // Sprachausgabe des Briefings: an, weil sie den Nutzen ausmacht — aber
+        // abschaltbar, denn sie kostet je Tag ein Mehrfaches des Textes.
+        $this->RegisterPropertyBoolean('BriefingAudioEnabled', true);
         $this->RegisterPropertyBoolean('BriefingPreviewEnabled', false);
         $this->RegisterPropertyString('BriefingPreviewFrom', '{"hour":18,"minute":0,"second":0}');
         // {"d":"YYYY-MM-DD","text":"…","at":ts,"userId":"…","failDay":"…","fails":n}
@@ -1033,8 +1036,8 @@ trait Briefing
      */
     private function BriefingAudio(string $text): array
     {
-        if (!$this->TtsEnabled()) {
-            $this->SendDebug('Briefing', 'Sprachausgabe nicht verfuegbar, kein Ton erzeugt', 0);
+        if (!$this->BriefingAudioIsEnabled()) {
+            $this->SendDebug('Briefing', 'Sprachausgabe aus oder nicht verfuegbar, kein Ton erzeugt', 0);
             return [];
         }
         $vorlesen = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
@@ -1100,6 +1103,18 @@ trait Briefing
         $eins = trim(mb_substr($text, 0, $bester));
         $zwei = trim(mb_substr($text, $bester));
         return $zwei === '' ? [$eins] : [$eins, $zwei];
+    }
+
+    /**
+     * Darf zum Briefing Ton entstehen und ausgeliefert werden?
+     *
+     * Zwei Bedingungen: der eigene Schalter und die Sprachausgabe selbst. Letztere
+     * haengt am Anbieter OpenAI — mit Claude oder einem lokalen Modell gibt es
+     * keine Stimme, und dann soll auch kein Knopf erscheinen, der nichts kann.
+     */
+    private function BriefingAudioIsEnabled(): bool
+    {
+        return (bool)$this->BriefingProp('BriefingAudioEnabled', true) && $this->TtsEnabled();
     }
 
     /** Die Stimme zum Tonfall. Namen des Modells gpt-4o-mini-tts. */
@@ -1258,7 +1273,11 @@ trait Briefing
             'userId'      => $fach['userId'],
             // Fertige Tonschnipsel in Spielreihenfolge; leer = die Oberflaeche
             // muss selbst erzeugen (Sprachausgabe war beim Schreiben nicht bereit).
-            'clips'       => $fach['clips'],
+            // Bei abgeschaltetem Ton bleiben sie draussen, auch wenn noch welche
+            // von vorher liegen — sonst spielte ein Knopf, den es nicht geben soll.
+            'clips'       => $this->BriefingAudioIsEnabled() ? $fach['clips'] : [],
+            // Sagt der Oberflaeche, ob es einen Vorlese-Knopf geben darf.
+            'audio'       => $this->BriefingAudioIsEnabled(),
             // Damit die Karte nicht den morgigen Text als heutigen ausgibt.
             'day'         => $tag,
             'preview'     => $vorschau,

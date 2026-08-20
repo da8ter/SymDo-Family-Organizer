@@ -4519,6 +4519,7 @@ function bindDragScroll(el) {
 let briefingText = '';
 let briefingClips = [];        // vom Gateway vorab erzeugte Tonschnipsel
 let briefingVorschau = false;  // true = der Text gilt für MORGEN
+let briefingTon = false;       // darf es einen Vorlese-Knopf geben?
 let briefingLoading = false;
 
 /** Nur mit Gateway: dort liegt der Text. In der Visu-Kachel scheitert aiPost
@@ -4543,10 +4544,17 @@ function loadBriefing() {
       ? j.briefing.text : '';
     const clips = (j && j.briefing && Array.isArray(j.briefing.clips)) ? j.briefing.clips : [];
     const vorschau = !!(j && j.briefing && j.briefing.preview);
-    if (frisch === briefingText && clips.join() === briefingClips.join() && vorschau === briefingVorschau) return;
+    // Ältere Bridge ohne das Feld: Ton war dort immer erlaubt.
+    const ton = (j && j.briefing && j.briefing.audio !== undefined)
+      ? !!j.briefing.audio
+      : !!(j && j.briefing);
+    if (frisch === briefingText && clips.join() === briefingClips.join()
+        && vorschau === briefingVorschau && ton === briefingTon) return;
     briefingText = frisch;
     briefingClips = clips;
     briefingVorschau = vorschau;
+    briefingTon = ton;
+    if (!ton) { briefingTonBeenden(); return; }   // rendert selbst
     renderAll();
   }).catch(() => { briefingLoading = false; });
 }
@@ -4558,9 +4566,11 @@ let briefingAudio = null;
 let briefingLaeuft = false;
 let briefingLaedt = false;
 
-/** Nur in der ausgelieferten Web-App: die Visu-Kachel erreicht die Gateway-API nicht. */
+/** Vorlesen möglich? Nur in der ausgelieferten Web-App (die Visu-Kachel erreicht
+    die Gateway-API nicht) UND wenn das Gateway die Sprachausgabe erlaubt — sonst
+    wäre der Knopf einer, der nichts kann. */
 function briefingTonMoeglich() {
-  return !!window.__SYMDO__;
+  return !!window.__SYMDO__ && briefingTon;
 }
 
 /**

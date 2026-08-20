@@ -1648,6 +1648,17 @@ class SymDoGateway extends IPSModuleStrict
                     'name'    => 'BriefingTime',
                     'caption' => $this->Translate('Generate at')
                 ],
+                ...(array_key_exists('BriefingAudioEnabled', (array)$cfg) ? [
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'BriefingAudioEnabled',
+                        'caption' => $this->Translate('Read the briefing aloud')
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('The recording is produced together with the text, so the play button starts instantly. It needs OpenAI as the provider and costs roughly four times as much as the text — switch it off and the button disappears.')
+                    ],
+                ] : []),
                 // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein
                 // „Uebernehmen" auf diese Felder scheitern (siehe oben).
                 ...(array_key_exists('BriefingPreviewEnabled', (array)$cfg) ? [
