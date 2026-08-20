@@ -79,6 +79,9 @@ trait MailScan
         // Freigegebene Absender, einer pro Zeile; auch „@domain.tld". Leer = alle.
         $this->RegisterPropertyString('MailSenderAllow', '');
         $this->RegisterPropertyInteger('MailDailyLimit', 20);
+        // Ohne Formularfeld: Post loeschen zu lassen passt nicht zu einem Postfach,
+        // in das der Nutzer selbst hineinsieht. Die Eigenschaft bleibt, damit eine
+        // bestehende Einstellung weiter wirkt.
         $this->RegisterPropertyBoolean('MailDeleteAfter', false);
         // Anhaenge holt ein eigener, schmaler IMAP-Zugriff (Trait MailFetch) —
         // das Kernmodul liefert sie nicht. Abschaltbar, weil es eine zweite

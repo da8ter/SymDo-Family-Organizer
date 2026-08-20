@@ -1331,12 +1331,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Label',
                     'caption' => $this->Translate('Careful with forwarded mail: it carries YOUR address as the sender, not the original one — so there your own address is the one that belongs in the list.')
                 ],
-                $this->GetMailBoxList(),
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'MailDeleteAfter',
-                    'caption' => $this->Translate('Delete mail after analysis (mailbox only)')
-                ]
+                $this->GetMailBoxList()
             ]
         ];
     }
@@ -1375,7 +1370,7 @@ class SymDoGateway extends IPSModuleStrict
         return [
             'type'     => 'List',
             'name'     => 'MailBoxes',
-            'caption'  => $this->Translate('Per member: mailbox and allowed senders'),
+            'caption'  => $this->Translate('Member mailboxes: appointments and tasks are assigned to the matching family member automatically'),
             'rowCount' => max(2, count($zeilen)),
             'add'      => false,
             'delete'   => false,
