@@ -221,7 +221,8 @@
             "Switch the briefing on first and press Apply.": "Bitte zuerst das Briefing einschalten und Übernehmen drücken.",
             "The AI is off or the consent under \"AI features\" is missing.": "Die KI ist ausgeschaltet oder die Einwilligung unter „KI-Funktionen\" fehlt.",
             "Briefing failed: %s": "Briefing fehlgeschlagen: %s",
-            "The briefing settings appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.": "Die Einstellungen des Briefings erscheinen nach dem nächsten Symcon-Neustart — es sind neue Einstellungen, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat."
+            "The briefing settings appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.": "Die Einstellungen des Briefings erscheinen nach dem nächsten Symcon-Neustart — es sind neue Einstellungen, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
+            "Butler": "Butler"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

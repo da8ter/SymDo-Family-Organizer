@@ -688,6 +688,18 @@ trait Briefing
             case 'formal':
                 return 'TONFALL: Foermlich und zurueckhaltend, wie ein Butler. Siez die Person, '
                     . 'keine Ausrufezeichen, keine Emojis.';
+            case 'butler':
+                // Nicht dasselbe wie „foermlich": Der ist knapp und sachlich, der Butler
+                // ist ausgesucht umstaendlich — das ist der Witz daran.
+                return 'TONFALL: Du bist der Butler des Hauses und sprichst ausgesucht '
+                    . 'gehoben. Siez die Familie und rede sie mit „die Herrschaften", '
+                    . '„der junge Herr" oder „die gnaedige Frau" an. Gewaehlte, leicht '
+                    . 'altmodische Wendungen und Hoeflichkeitsfloskeln: „wenn ich mir die '
+                    . 'Bemerkung erlauben darf", „sehr wohl", „es wuerde mich freuen, wenn", '
+                    . '„ich habe mir erlaubt, darauf hinzuweisen". Nichts wird angetrieben, '
+                    . 'es wird respektvoll in Erinnerung gerufen. Kein Ausrufezeichen, keine '
+                    . 'Umgangssprache, keine Emojis. Die Angaben bleiben vollstaendig und '
+                    . 'korrekt — Umstaendlichkeit ersetzt keine Uhrzeit.';
             case 'buddy':
                 return 'TONFALL: Wie ein guter Kumpel — locker, duzend, kurze Saetze, ruhig mal '
                     . 'ein umgangssprachlicher Ausdruck. Keine Emojis.';
@@ -848,10 +860,16 @@ trait Briefing
     {
         switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
             case 'formal': return 'sage';
+            // „fable" ist die britisch gefaerbte Stimme des Modells — beim Butler
+            // traegt sie den Akzent, den die Anweisung unten verlangt.
+            case 'butler': return 'fable';
             case 'buddy':  return 'nova';
-            case 'funny':  return 'fable';
+            // Weicht auf eine ausdrucksstarke Stimme aus, weil „fable" jetzt dem
+            // Butler gehoert.
+            case 'funny':  return 'ash';
             case 'drill':  return 'onyx';
-            case 'coach':  return 'coral';
+            // Deutlich weiblich; „coral" klang dafuer zu neutral.
+            case 'coach':  return 'shimmer';
             default:       return 'alloy';
         }
     }
@@ -865,6 +883,12 @@ trait Briefing
             case 'formal':
                 return $basis . 'Vortrag: zurueckhaltend und hoeflich wie ein Butler, '
                     . 'ruhiges Tempo, klare Aussprache, keine Ausrufe.';
+            case 'butler':
+                return 'Sprich Deutsch mit einem deutlich hoerbaren britisch-englischen '
+                    . 'Akzent, wie ein englischer Butler, der seit Jahren in einem deutschen '
+                    . 'Haus dient: gemessenes Tempo, sehr hoefliche, fast singende Betonung, '
+                    . 'jedes Wort sauber artikuliert, kleine Pausen vor Hoeflichkeitsfloskeln. '
+                    . 'Niemals laut, niemals hastig. Uhrzeiten und Namen deutlich.';
             case 'buddy':
                 return $basis . 'Vortrag: locker und beilaeufig, wie zu einem Freund am '
                     . 'Kuechentisch, mittleres Tempo, freundlich.';
@@ -878,8 +902,9 @@ trait Briefing
                     . 'in der Stimme, keine Pausen zum Verschnaufen. Uhrzeiten und Namen '
                     . 'trotzdem deutlich.';
             case 'coach':
-                return $basis . 'Vortrag: energisch und anfeuernd wie ein Motivationstrainer, '
-                    . 'hohes Tempo, aufbauende Betonung.';
+                return $basis . 'Sprich mit WEIBLICHER Stimme. Vortrag: energisch und '
+                    . 'anfeuernd wie eine Motivationstrainerin, hohes Tempo, aufbauende '
+                    . 'Betonung, waermer werdend zum Schluss.';
             default:
                 return $basis . 'Vortrag: sachlich und freundlich, mittleres Tempo, ohne Ueberschwang.';
         }
