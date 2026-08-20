@@ -313,6 +313,21 @@ trait Briefing
     private function BriefingMsUntilNext(): int
     {
         $jetzt = time();
+
+        // Nachholen: Ist ein Fach ueberfaellig und leer, nicht bis zur naechsten
+        // Zielzeit warten. Sonst blieb die Karte bis morgen leer, wenn der Schalter
+        // ERST NACH der Zielzeit gesetzt wurde — genau so gesehen, als die Vorschau
+        // um 16:00 eingeschaltet wurde und der Timer auf 5:30 des Folgetags stand.
+        //
+        // Der Tages-Fehlerzaehler ist die Bremse: Ohne ihn wuerde ein nicht
+        // erreichbarer Anbieter daraus eine Schleife im Minutentakt machen, denn
+        // das Fach bliebe leer und waere damit dauerhaft „faellig".
+        $stand   = $this->BriefingStore();
+        $fehlerHeute = ((string)($stand['failDay'] ?? '') === date('Y-m-d')) ? (int)($stand['fails'] ?? 0) : 0;
+        if ($fehlerHeute < self::BRIEFING_FAIL_MAX && $this->BriefingDueSlot() !== null) {
+            return 60000;
+        }
+
         $ziele = [$this->BriefingNextAt($this->BriefingTargetTime(), $jetzt)];
         if ($this->BriefingPreviewIsEnabled()) {
             $ziele[] = $this->BriefingNextAt($this->BriefingPreviewTime(), $jetzt);
