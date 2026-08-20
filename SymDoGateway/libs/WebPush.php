@@ -25,10 +25,16 @@ declare(strict_types=1);
  * hash_hkdf), gemessen am 20.08.2026: ES256 signiert und verifiziert, ECDH 32
  * Byte, HKDF und aes128gcm im Rundgang bestaetigt.
  *
- * EINE Eigenheit von openssl in PHP: `openssl_pkey_new` mit `curve_name`
- * scheitert auf Systemen ohne auffindbare openssl.cnf mit
- * „configuration file routines::no such file". Deshalb PushOpensslArgs() —
- * erst ohne Konfig, dann OPENSSL_CONF, dann eine kurze Kandidatenliste.
+ * KEIN openssl_pkey_new. Das braucht auf manchen Systemen eine auffindbare
+ * openssl.cnf und scheitert sonst mit „configuration file routines::no such
+ * file" — hier gemessen der Fall. Und es waere kein Einrichtungsproblem, sondern
+ * eines im Betrieb: RFC 8291 verlangt je Nachricht ein frisches
+ * Einmalschluesselpaar, der Aufruf liegt also im heissen Pfad.
+ *
+ * Stattdessen entstehen Schluessel aus 32 Zufallsbytes, die in ein PKCS#8-DER mit
+ * festem 35-Byte-Vorsatz gepackt werden. OpenSSL 3 rechnet den oeffentlichen
+ * Punkt selbst aus, obwohl er im DER fehlt (gemessen: x und y je 32 Byte,
+ * Signieren, ECDH symmetrisch). Damit haengt nichts an einer Konfigdatei.
  */
 trait WebPush
 {
@@ -55,9 +61,17 @@ trait WebPush
     private const PUSH_TITLE_MAX = 32;
     private const PUSH_BODY_MAX  = 256;
 
-    /** Einmal gefundene openssl-Konfig fuer die Dauer des Laufs. */
-    private ?string $pushConf = null;
-    private bool $pushConfGeprueft = false;
+    /**
+     * Ordnung der Kurve P-256. Ein Skalar muss echt zwischen 0 und n liegen —
+     * 0 und alles ab n sind keine gueltigen Schluessel.
+     */
+    private const PUSH_CURVE_ORDER = 'ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551';
+
+    /** Fester Vorsatz eines PKCS#8-DER fuer prime256v1; dahinter nur der Skalar. */
+    private const PUSH_PKCS8_PREFIX = '3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420';
+
+    /** Fester Vorsatz einer SubjectPublicKeyInfo fuer prime256v1. */
+    private const PUSH_SPKI_PREFIX = '3059301306072a8648ce3d020106082a8648ce3d03010703420000';
 
     // ─────────────────────────── Modul-Haken ───────────────────────────
 
@@ -66,67 +80,50 @@ trait WebPush
         $this->RegisterAttributeString(self::PUSH_VAPID_ATTR, '');
     }
 
-    // ────────────────────────── openssl-Ausweg ──────────────────────────
+    // ──────────────────────── Schluessel aus Zufall ────────────────────────
 
     /**
-     * Argumente fuer openssl_pkey_new, inklusive Konfig-Ausweg.
+     * Ein neuer privater Schluessel: 32 Zufallsbytes im gueltigen Bereich.
      *
-     * Reihenfolge mit Absicht: Auf einem normal eingerichteten System findet
-     * openssl seine Konfig selbst, und dann soll nichts festgeschrieben werden.
-     * Erst wenn das scheitert, wird gesucht — zuerst dort, wohin die Umgebung
-     * zeigt, dann an den ueblichen Orten von Linux, macOS und Homebrew.
-     *
-     * @return array<string, mixed>|null null = Schluesselerzeugung unmoeglich
+     * Ausgeschlossen werden die Null und alles ab der Ordnung der Kurve. Die
+     * Wahrscheinlichkeit, so einen Wert zu ziehen, ist verschwindend — aber ein
+     * ungueltiger Skalar ergibt einen Schluessel, mit dem openssl still falsch
+     * rechnet, und das faende niemand wieder.
      */
-    private function PushOpensslArgs(): ?array
+    private function PushNewScalar(): string
     {
-        $grund = ['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC];
-
-        if ($this->pushConfGeprueft) {
-            if ($this->pushConf === '') {
-                return $grund;
+        $ordnung = (string)hex2bin(self::PUSH_CURVE_ORDER);
+        for ($versuch = 0; $versuch < 8; $versuch++) {
+            $d = random_bytes(32);
+            if ($d === str_repeat("\x00", 32)) {
+                continue;
             }
-            return $this->pushConf === null ? null : $grund + ['config' => $this->pushConf];
+            if (strcmp($d, $ordnung) >= 0) {
+                continue;
+            }
+            return $d;
         }
-        $this->pushConfGeprueft = true;
+        return '';
+    }
 
-        $kandidaten = array_merge(
-            [null],                                  // ohne Konfig — der Normalfall
-            [getenv('OPENSSL_CONF') ?: null],
-            [
-                '/etc/ssl/openssl.cnf',              // Debian, Ubuntu, Docker
-                '/usr/lib/ssl/openssl.cnf',
-                '/etc/pki/tls/openssl.cnf',          // RHEL, Fedora
-                '/private/etc/ssl/openssl.cnf',      // macOS
-                '/opt/homebrew/etc/openssl@3/openssl.cnf',
-                '/usr/local/etc/openssl@3/openssl.cnf',
-            ]
-        );
-        foreach ($kandidaten as $pfad) {
-            $args = $grund;
-            if ($pfad !== null) {
-                if (!is_string($pfad) || $pfad === '' || !file_exists($pfad)) {
-                    continue;
-                }
-                $args['config'] = $pfad;
-            }
-            $probe = @openssl_pkey_new($args);
-            while (openssl_error_string() !== false) {
-                // Fehlerspeicher leeren, sonst tragen spaetere Aufrufe fremde Meldungen.
-            }
-            if ($probe !== false) {
-                $this->pushConf = $pfad ?? '';
-                return $args;
-            }
+    /**
+     * Skalar zu einem Schluessel, mit dem openssl rechnen kann.
+     *
+     * Der oeffentliche Teil fehlt im DER absichtlich — OpenSSL 3 leitet ihn aus
+     * dem Skalar ab. Das ist der Grund, warum hier keine Konfigdatei noetig ist.
+     */
+    private function PushKeyFromScalar(string $d): mixed
+    {
+        if (strlen($d) !== 32) {
+            return false;
         }
-
-        $this->pushConf = null;
-        $this->LogMessage(
-            'Web Push: OpenSSL kann keinen P-256-Schluessel erzeugen (openssl.cnf nicht gefunden). '
-            . 'Bitte OPENSSL_CONF setzen oder einen VAPID-Schluessel hinterlegen.',
-            KL_ERROR
-        );
-        return null;
+        $der = (string)hex2bin(self::PUSH_PKCS8_PREFIX) . $d;
+        $pem = "-----BEGIN PRIVATE KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END PRIVATE KEY-----\n";
+        $key = @openssl_pkey_get_private($pem);
+        while (openssl_error_string() !== false) {
+            // Fehlerspeicher leeren, damit spaetere Aufrufe keine fremden Meldungen tragen.
+        }
+        return $key;
     }
 
     // ──────────────────────── Schluessel und Kodierung ────────────────────────
@@ -172,27 +169,9 @@ trait WebPush
         if (strlen($punkt) !== 65 || $punkt[0] !== "\x04") {
             return '';
         }
-        $vorsatz = hex2bin('3059301306072a8648ce3d020106082a8648ce3d03010703420000');
         // Das letzte Byte des Vorsatzes ist das „unbenutzte Bits"-Byte des BIT STRING.
-        $der = substr((string)$vorsatz, 0, -1) . $punkt;
+        $der = substr((string)hex2bin(self::PUSH_SPKI_PREFIX), 0, -1) . $punkt;
         return "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END PUBLIC KEY-----\n";
-    }
-
-    /**
-     * Rohen 32-Byte-Skalar in ein PEM giessen (SEC1, mit oeffentlichem Teil).
-     *
-     * Zwei Zwecke: der Harness prueft damit den RFC-Testvektor, und wer seinen
-     * VAPID-Schluessel woanders erzeugt hat (weil openssl hier nichts erzeugen
-     * kann), kann ihn so hinterlegen.
-     */
-    private function PushPemFromRawPrivate(string $skalar, string $punkt): string
-    {
-        if (strlen($skalar) !== 32 || strlen($punkt) !== 65) {
-            return '';
-        }
-        $der = hex2bin('3077020101' . '0420') . $skalar
-            . hex2bin('a00a06082a8648ce3d030107' . 'a144034200') . $punkt;
-        return "-----BEGIN EC PRIVATE KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END EC PRIVATE KEY-----\n";
     }
 
     /**
@@ -206,28 +185,40 @@ trait WebPush
     private function PushVapid(): ?array
     {
         $stand = json_decode($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR), true);
-        if (is_array($stand) && ($stand['priv'] ?? '') !== '' && ($stand['pub'] ?? '') !== '') {
-            return ['priv' => (string)$stand['priv'], 'pub' => (string)$stand['pub']];
+        if (is_array($stand) && ($stand['d'] ?? '') !== '' && ($stand['pub'] ?? '') !== '') {
+            return ['d' => (string)$stand['d'], 'pub' => (string)$stand['pub']];
         }
 
-        $args = $this->PushOpensslArgs();
-        if ($args === null) {
-            return null;
-        }
-        $schluessel = @openssl_pkey_new($args);
+        $d = $this->PushNewScalar();
+        $schluessel = $d === '' ? false : $this->PushKeyFromScalar($d);
         if ($schluessel === false) {
+            $this->LogMessage('Web Push: VAPID-Schluessel konnte nicht erzeugt werden.', KL_ERROR);
             return null;
         }
-        $pem = '';
-        if (!@openssl_pkey_export($schluessel, $pem, null, $args)) {
-            $this->LogMessage('Web Push: VAPID-Schluessel nicht exportierbar.', KL_ERROR);
+        $punkt = $this->PushRawPublic($schluessel);
+        if ($punkt === '') {
+            $this->LogMessage('Web Push: VAPID-Schluessel ohne oeffentlichen Punkt.', KL_ERROR);
             return null;
         }
-        $paar = ['priv' => $pem, 'pub' => $this->PushB64($this->PushRawPublic($schluessel))];
+        $paar = ['d' => $this->PushB64($d), 'pub' => $this->PushB64($punkt)];
         if (!$this->PushWriteVapid($paar)) {
             return null;
         }
         return $paar;
+    }
+
+    /**
+     * Kennung des aktuellen Schluessels, kurz und harmlos.
+     *
+     * Ein Abo haengt an dem oeffentlichen Schluessel, mit dem es erzeugt wurde.
+     * Wechselt der Schluessel, antwortet JEDER Push mit 403 — und zwar fuer alle
+     * Geraete gleichzeitig. Die Kennung steht deshalb am Abo, damit sich veraltete
+     * Abos erkennen lassen, statt sie blind anzusprechen.
+     */
+    private function PushVapidFingerprint(): string
+    {
+        $paar = $this->PushVapid();
+        return $paar === null ? '' : substr(hash('sha256', $paar['pub']), 0, 8);
     }
 
     /**
@@ -238,7 +229,7 @@ trait WebPush
      * erzeugte jeder Versand ein neues Schluesselpaar — und alle Abos, die noch
      * auf das alte lauten, waeren tot.
      *
-     * @param array{priv: string, pub: string} $paar
+     * @param array{d: string, pub: string} $paar
      */
     private function PushWriteVapid(array $paar): bool
     {
@@ -329,7 +320,7 @@ trait WebPush
             'sub' => $kontakt,
         ], JSON_UNESCAPED_SLASHES));
 
-        $schluessel = @openssl_pkey_get_private($paar['priv']);
+        $schluessel = $this->PushKeyFromScalar($this->PushUnb64($paar['d']));
         if ($schluessel === false) {
             return '';
         }
@@ -369,11 +360,8 @@ trait WebPush
         }
 
         if ($eigen === null) {
-            $args = $this->PushOpensslArgs();
-            if ($args === null) {
-                return ['ok' => false, 'error' => 'no_openssl_ec'];
-            }
-            $eigen = @openssl_pkey_new($args);
+            $d = $this->PushNewScalar();
+            $eigen = $d === '' ? false : $this->PushKeyFromScalar($d);
             if ($eigen === false) {
                 return ['ok' => false, 'error' => 'no_openssl_ec'];
             }
@@ -419,13 +407,13 @@ trait WebPush
      *
      * @param array{endpoint: string, p256dh: string, auth: string} $abo
      * @param array<string, mixed> $nutzlast
-     * @return array{ok: bool, status: int, gone: bool, error: string}
+     * @return array{ok: bool, status: int, gone: bool, retry: bool, error: string}
      */
     private function PushSendOne(array $abo, array $nutzlast, string $kontakt, string $dringlichkeit = 'normal'): array
     {
         $endpunkt = (string)($abo['endpoint'] ?? '');
         if (!str_starts_with($endpunkt, 'https://')) {
-            return ['ok' => false, 'status' => 0, 'gone' => true, 'error' => 'bad_endpoint'];
+            return ['ok' => false, 'status' => 0, 'gone' => true, 'retry' => false, 'error' => 'bad_endpoint'];
         }
 
         $klartext = (string)json_encode($nutzlast, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -433,12 +421,12 @@ trait WebPush
         if (($ver['ok'] ?? false) !== true) {
             // Ein unbrauchbarer Geraeteschluessel ist ein totes Abo, kein Ausfall.
             $tot = in_array($ver['error'] ?? '', ['bad_subscription'], true);
-            return ['ok' => false, 'status' => 0, 'gone' => $tot, 'error' => (string)($ver['error'] ?? 'encrypt_failed')];
+            return ['ok' => false, 'status' => 0, 'gone' => $tot, 'retry' => false, 'error' => (string)($ver['error'] ?? 'encrypt_failed')];
         }
 
         $jwt = $this->PushJwt($endpunkt, $kontakt);
         if ($jwt === '') {
-            return ['ok' => false, 'status' => 0, 'gone' => false, 'error' => 'no_vapid'];
+            return ['ok' => false, 'status' => 0, 'gone' => false, 'retry' => false, 'error' => 'no_vapid'];
         }
 
         $antwort = $this->PushHttp($endpunkt, (string)$ver['body'], [
@@ -450,12 +438,32 @@ trait WebPush
         ]);
 
         $status = (int)$antwort['status'];
-        // 404/410 heisst: dieses Geraet gibt es nicht mehr. Alles andere ist ein
-        // Ausfall — das Abo bleibt, der Fehlerzaehler entscheidet spaeter.
+
+        // Die Statuslogik ist die gefaehrlichste Stelle des ganzen Wegs.
+        //
+        // NUR 404 und 410 heissen „dieses Geraet gibt es nicht mehr" — dann darf
+        // das Abo weg. 400, 401, 403 und 413 sind Fehler AUF UNSERER Seite: ein
+        // falscher Kontakt in `sub`, eine abweichende Uhr, ein zu weites `exp`,
+        // eine zu grosse Nutzlast. Die treffen alle Geraete gleichzeitig — wer sie
+        // als „Abo tot" behandelt, loescht in einem Timerlauf den gesamten Bestand.
+        // Deshalb: nicht loeschen, nicht zaehlen, aber protokollieren, damit der
+        // Fehler auffaellt statt still Nachrichten zu verschlucken.
+        $weg      = in_array($status, [404, 410], true);
+        $nochmal  = $status === 0 || $status === 429 || $status >= 500;
+        $unsereSchuld = in_array($status, [400, 401, 403, 413], true);
+        if ($unsereSchuld) {
+            $this->LogMessage(
+                'Web Push: Der Dienst weist die Nachricht ab (HTTP ' . $status . '). '
+                . 'Das ist ein Fehler auf dieser Seite (Kontaktangabe, Uhrzeit oder Groesse) '
+                . 'und betrifft alle Geraete — die Abos bleiben unangetastet.',
+                KL_ERROR
+            );
+        }
         return [
             'ok'     => $status >= 200 && $status < 300,
             'status' => $status,
-            'gone'   => in_array($status, [404, 410], true),
+            'gone'   => $weg,
+            'retry'  => $nochmal,
             'error'  => (string)$antwort['err'],
         ];
     }
@@ -484,8 +492,9 @@ trait WebPush
         $ergebnis = curl_exec($c);
         $status   = (int)curl_getinfo($c, CURLINFO_RESPONSE_CODE);
         $fehler   = curl_error($c);
-        curl_close($c);
-        unset($ergebnis);
+        // Kein curl_close: seit PHP 8.0 ohne Wirkung, seit 8.5 missbilligt — der
+        // Griff wird mit der Variablen aufgeraeumt.
+        unset($ergebnis, $c);
         return ['status' => $status, 'err' => $fehler];
     }
 
