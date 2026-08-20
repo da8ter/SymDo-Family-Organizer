@@ -379,7 +379,8 @@
                             "caption": "ID",
                             "name": "id",
                             "width": "110px",
-                            "add": ""
+                            "add": "",
+                            "visible": false
                         }
                     ]
                 }
