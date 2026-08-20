@@ -103,6 +103,9 @@ trait MailScan
         $this->RegisterPropertyString('MailHookBase', '');
         $this->RegisterPropertyInteger('MailHookMaxKB', 1024);
         // Nur zum Nachladen der Anhaenge (Basic-Auth „api:<key>").
+        // Ohne Formularfeld: Er zaehlt nur fuer den Weg „Store and notify", und der
+        // scheitert bei Sandbox-Domains ohnehin am Abruf. Die Eigenschaft bleibt,
+        // damit ein bestehender Schluessel weiter wirkt.
         $this->RegisterPropertyString('MailHookApiKey', '');
 
         $this->RegisterAttributeString('MailProposals', '[]');
@@ -270,7 +273,7 @@ trait MailScan
             ];
         }
         return [
-            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Forward" and paste the address below into its "Destination" field — that way attachments come along. Turn ON "Stop" as well. Leave "Store and notify" OFF: for sandbox domains Mailgun refuses to hand out stored messages, so attachments would be lost. Priority stays 0. The signing key is under API Security → "HTTP webhook signing key"; an API key is not needed on this path.'),
+            'hinweis' => $this->Translate('In Mailgun: Receiving → Create Route. Leave "Expression type" on "Catch all". Turn ON "Forward" and paste the address below into its "Destination" field — that way attachments come along. Turn ON "Stop" as well. Leave "Store and notify" OFF: for sandbox domains Mailgun refuses to hand out stored messages, so attachments would be lost. Priority stays 0. The signing key is under API Security → "HTTP webhook signing key".'),
             'url'     => rtrim($connect, '/') . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION . '/mail/hook/' . $geheim,
             'bereit'  => true,
         ];
