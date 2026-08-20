@@ -39,11 +39,20 @@ trait Briefing
      */
     private const BRIEFING_SHOP_HINT  = 10;
     /**
-     * Groesse der Haeppchen fuer die Sprachausgabe. Etwas unter der Grenze des
-     * TTS-Weges (TTS_MAX_CHARS = 200), der laengeren Text still abschneidet — ein
-     * halb vorgelesener Satz waere schlimmer als ein Schnipsel mehr.
+     * Obergrenze fuer den vorgelesenen Text. OpenAI nimmt 4096 Zeichen je Aufruf;
+     * der Abstand ist Absicht, denn das Briefing selbst endet schon bei
+     * BRIEFING_TEXT_MAX.
      */
-    private const BRIEFING_TTS_CHUNK  = 190;
+    private const BRIEFING_TTS_MAX    = 3500;
+    /**
+     * Bis hierher wird EINE Datei erzeugt, darueber zwei.
+     *
+     * Gemessen am 20.08.2026: 1309 Zeichen ergaben als AAC 859 kB — die Abholung
+     * endet aber bei 1 MB (TTS_MAX_BYTES). Der Schwellwert laesst also Luft, statt
+     * knapp darunter zu zielen: Eine zu grosse Aufnahme waere gar keine, und eine
+     * Naht in der Mitte ist besser als Stille.
+     */
+    private const BRIEFING_TTS_ONE    = 1250;
 
     private ?array $briefingConfigCache = null;
 
@@ -745,73 +754,23 @@ trait Briefing
     // ────────────────────────────── Sprachausgabe ──────────────────────────────
 
     /**
-     * Der Text in Haeppchen fuer die Sprachausgabe — dieselbe Aufteilung wie in
-     * der Web-App (briefingHaeppchen): an Satzenden, ein ueberlanger Satz am
-     * Komma. Beides muss gleich teilen, sonst passen die vorab erzeugten
-     * Schnipsel nicht zu dem, was die Oberflaeche spielen will.
+     * Erzeugt EINE Tondatei zum ganzen Briefing und liefert ihre Kennung.
      *
-     * @return list<string>
-     */
-    private function BriefingChunks(string $text): array
-    {
-        $grenze = self::BRIEFING_TTS_CHUNK;
-        $text   = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
-        if ($text === '') {
-            return [];
-        }
-        preg_match_all('/[^.!?]+[.!?]*/u', $text, $treffer);
-
-        $raus   = [];
-        $puffer = '';
-        $schieben = static function () use (&$puffer, &$raus): void {
-            $t = trim($puffer);
-            if ($t !== '') {
-                $raus[] = $t;
-            }
-            $puffer = '';
-        };
-        foreach ($treffer[0] as $satz) {
-            $satz = trim($satz);
-            if ($satz === '') {
-                continue;
-            }
-            if (mb_strlen(trim($puffer . ' ' . $satz)) <= $grenze) {
-                $puffer = trim($puffer . ' ' . $satz);
-                continue;
-            }
-            $schieben();
-            if (mb_strlen($satz) <= $grenze) {
-                $puffer = $satz;
-                continue;
-            }
-            // Notfall: ein einzelner Satz ist zu lang — am Komma trennen, sonst hart.
-            $rest = $satz;
-            while (mb_strlen($rest) > $grenze) {
-                $schnitt = mb_strrpos(mb_substr($rest, 0, $grenze), ',');
-                if ($schnitt === false || $schnitt < (int)($grenze * 0.4)) {
-                    $schnitt = mb_strrpos(mb_substr($rest, 0, $grenze), ' ');
-                }
-                if ($schnitt === false || $schnitt < 1) {
-                    $schnitt = $grenze - 1;
-                }
-                $raus[] = trim(mb_substr($rest, 0, $schnitt + 1));
-                $rest   = trim(mb_substr($rest, $schnitt + 1));
-            }
-            $puffer = $rest;
-        }
-        $schieben();
-        return $raus;
-    }
-
-    /**
-     * Erzeugt die Tonschnipsel zum Briefing und liefert ihre Kennungen.
+     * Ein durchgehendes Stueck und nicht mehrere: Zwischen zwei Dateien entsteht
+     * beim Abspielen eine hoerbare Naht, und der Vortrag verliert seinen Bogen —
+     * die Stimme faengt jedes Mal neu an. Die 200-Zeichen-Grenze des Einkaufs-
+     * Weges (TTS_MAX_CHARS, dort sinnvoll: viele kurze Ansagen) gilt hier nicht,
+     * OpenAI nimmt bis 4096 Zeichen.
+     *
+     * Stimme und Vortragsweise kommen aus dem Tonfall: ein Drillsergeant, der
+     * freundlich und ohne Eile vorgelesen wird, ist kein Drillsergeant.
      *
      * Bewusst still, wenn die Sprachausgabe nicht bereitsteht (anderer Anbieter,
      * fehlender Schluessel, Kernel noch nicht neu gestartet): Das Briefing selbst
-     * ist wertvoll genug, es soll nicht am Ton scheitern. Die Oberflaeche faellt
-     * dann auf ihren eigenen Weg zurueck.
+     * ist wertvoll genug, es soll nicht am Ton scheitern — die Oberflaeche erzeugt
+     * dann beim Tippen selbst.
      *
-     * @return list<string> Kennungen in Spielreihenfolge
+     * @return list<string> eine Kennung, oder leer
      */
     private function BriefingAudio(string $text): array
     {
@@ -819,23 +778,111 @@ trait Briefing
             $this->SendDebug('Briefing', 'Sprachausgabe nicht verfuegbar, kein Ton erzeugt', 0);
             return [];
         }
+        $vorlesen = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        if ($vorlesen === '') {
+            return [];
+        }
+        if (mb_strlen($vorlesen) > self::BRIEFING_TTS_MAX) {
+            $vorlesen = rtrim(mb_substr($vorlesen, 0, self::BRIEFING_TTS_MAX));
+        }
+        $stimme    = $this->BriefingVoice();
+        $anweisung = $this->BriefingSpeechStyle();
+
         $kennungen = [];
-        foreach ($this->BriefingChunks($text) as $stueck) {
-            $sauber = $this->TtsNormalize($stueck);
-            if ($sauber === '') {
-                continue;
-            }
-            $hash = $this->TtsHash($sauber);
+        foreach ($this->BriefingSpeechParts($vorlesen) as $teil) {
+            // AAC und nicht MP3: Die Abholung endet bei 1 MB, und ein ganzes
+            // Briefing als MP3 lag gemessen bei 1,3 MB — als AAC bleibt derselbe
+            // Text darunter. Jeder Browser und iOS spielen AAC ohne Zutun.
+            $hash = $this->TtsHash($teil, $stimme, $anweisung);
             $mid  = $this->TtsLookup($hash);
             if ($mid <= 0) {
-                $mid = $this->TtsProduce($hash, $sauber);
+                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, 'aac');
             }
-            if ($mid > 0) {
-                $kennungen[] = $hash;
+            if ($mid <= 0) {
+                $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
+                return [];   // halber Ton ist schlechter als keiner
+            }
+            $kennungen[] = $hash;
+        }
+        $this->SendDebug('Briefing', sprintf('Ton erzeugt (%s, %d Zeichen, %d Datei(en))',
+            $stimme, mb_strlen($vorlesen), count($kennungen)), 0);
+        return $kennungen;
+    }
+
+    /**
+     * Der Text als eine Aufnahme — oder als zwei, wenn er zu lang ist.
+     *
+     * Geteilt wird am Satzende nahe der Mitte, damit die Naht dort liegt, wo eine
+     * Sprechpause ohnehin hingehoert. Bewusst nicht in viele kleine Stuecke: Jede
+     * Naht kostet den Bogen des Vortrags, weil die Stimme neu anfaengt.
+     *
+     * @return list<string>
+     */
+    private function BriefingSpeechParts(string $text): array
+    {
+        if (mb_strlen($text) <= self::BRIEFING_TTS_ONE) {
+            return [$text];
+        }
+        $mitte = (int)round(mb_strlen($text) / 2);
+        $bester = 0;
+        // Satzende, das der Mitte am naechsten liegt
+        if (preg_match_all('/[.!?]\s+/u', $text, $treffer, PREG_OFFSET_CAPTURE) > 0) {
+            foreach ($treffer[0] as $t) {
+                // preg gibt Byte-Positionen; in Zeichen umrechnen
+                $pos = mb_strlen(substr($text, 0, (int)$t[1])) + 1;
+                if ($bester === 0 || abs($pos - $mitte) < abs($bester - $mitte)) {
+                    $bester = $pos;
+                }
             }
         }
-        $this->SendDebug('Briefing', sprintf('Ton: %d Schnipsel', count($kennungen)), 0);
-        return $kennungen;
+        if ($bester <= 0 || $bester >= mb_strlen($text)) {
+            $bester = $mitte;   // kein Satzende gefunden: hart in der Mitte
+        }
+        $eins = trim(mb_substr($text, 0, $bester));
+        $zwei = trim(mb_substr($text, $bester));
+        return $zwei === '' ? [$eins] : [$eins, $zwei];
+    }
+
+    /** Die Stimme zum Tonfall. Namen des Modells gpt-4o-mini-tts. */
+    private function BriefingVoice(): string
+    {
+        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
+            case 'formal': return 'sage';
+            case 'buddy':  return 'nova';
+            case 'funny':  return 'fable';
+            case 'drill':  return 'onyx';
+            case 'coach':  return 'coral';
+            default:       return 'alloy';
+        }
+    }
+
+    /** Wie vorgetragen wird — das Gegenstueck zu BriefingToneRule fuer die Stimme. */
+    private function BriefingSpeechStyle(): string
+    {
+        $basis = 'Sprich Deutsch. Lies eine Tagesuebersicht fuer eine Familie vor. '
+            . 'Uhrzeiten und Namen deutlich, keine Satzzeichen vorlesen. ';
+        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
+            case 'formal':
+                return $basis . 'Vortrag: zurueckhaltend und hoeflich wie ein Butler, '
+                    . 'ruhiges Tempo, klare Aussprache, keine Ausrufe.';
+            case 'buddy':
+                return $basis . 'Vortrag: locker und beilaeufig, wie zu einem Freund am '
+                    . 'Kuechentisch, mittleres Tempo, freundlich.';
+            case 'funny':
+                return $basis . 'Vortrag: mit Augenzwinkern, leicht spoettisch, kleine Pausen '
+                    . 'vor den Pointen.';
+            case 'drill':
+                return 'Sprich Deutsch und BRUELLE wie ein Drill-Sergeant auf dem Kasernenhof: '
+                    . 'sehr laut, hart, abgehackt, hohes Tempo, scharfe Kommandobetonung, '
+                    . 'Grossbuchstaben schreist du heraus. Keine Freundlichkeit, kein Laecheln '
+                    . 'in der Stimme, keine Pausen zum Verschnaufen. Uhrzeiten und Namen '
+                    . 'trotzdem deutlich.';
+            case 'coach':
+                return $basis . 'Vortrag: energisch und anfeuernd wie ein Motivationstrainer, '
+                    . 'hohes Tempo, aufbauende Betonung.';
+            default:
+                return $basis . 'Vortrag: sachlich und freundlich, mittleres Tempo, ohne Ueberschwang.';
+        }
     }
 
     // ────────────────────────────── Ausgabe ──────────────────────────────

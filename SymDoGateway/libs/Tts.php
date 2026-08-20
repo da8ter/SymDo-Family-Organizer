@@ -29,6 +29,13 @@ trait Tts
     /** So viele Schnipsel bleiben liegen; darüber fliegt der älteste raus. */
     private const TTS_CACHE_MAX = 400;
 
+    /**
+     * Obergrenze je Aufnahme. Symcons Hook bricht die Ausgabe bei 1 MB ab
+     * („Output-Buffer exceeds Limit", am 20.08.2026 gemessen) — auch in Stücken
+     * mit flush(), die Grenze ist die Summe. Etwas Luft für die Kopfzeilen.
+     */
+    private const TTS_MAX_BYTES = 1000000;
+
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
     /** Vorgabe-Anweisung an das Sprachmodell. */
@@ -191,7 +198,7 @@ trait Tts
             return;
         }
         http_response_code(200);
-        header('Content-Type: audio/mpeg');
+        header('Content-Type: ' . $this->TtsMimeType($this->TtsFormatOf($hash)));
         header('Content-Length: ' . strlen($roh));
         header('X-Content-Type-Options: nosniff');
         echo $roh;
@@ -254,13 +261,38 @@ trait Tts
         return $text;
     }
 
-    /** Stimme und Modell gehören in den Schlüssel: sonst bliebe die alte Stimme liegen. */
-    private function TtsHash(string $text): string
+    /** Format einer abgelegten Aufnahme; alte Einträge ohne Angabe sind MP3. */
+    private function TtsFormatOf(string $hash): string
+    {
+        $cache = $this->TtsCacheRead();
+        $fmt = (string)($cache[$hash]['fmt'] ?? 'mp3');
+        return $fmt !== '' ? $fmt : 'mp3';
+    }
+
+    private function TtsMimeType(string $format): string
+    {
+        switch ($format) {
+            case 'aac':  return 'audio/aac';
+            case 'opus': return 'audio/ogg';
+            case 'wav':  return 'audio/wav';
+            case 'flac': return 'audio/flac';
+            default:     return 'audio/mpeg';
+        }
+    }
+
+    /**
+     * Stimme, Modell und Vorleseanweisung gehören in den Schlüssel: sonst bliebe
+     * die alte Aufnahme liegen, obwohl jemand die Stimme gewechselt hat. Aus
+     * demselben Grund tragen die Überschreibungen mit ein — dasselbe Briefing
+     * klingt als Drillsergeant anders als sachlich.
+     */
+    private function TtsHash(string $text, string $stimme = '', string $anweisung = ''): string
     {
         return substr(hash('sha256',
             $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
-            $this->TtsSetting('TtsVoice', 'alloy') . '|' .
-            $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS) . '|' . $text), 0, 32);
+            ($stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy')) . '|' .
+            ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) .
+            '|' . $text), 0, 32);
     }
 
     /** @return int Medien-ID oder 0 */
@@ -280,10 +312,23 @@ trait Tts
     }
 
     /** Erzeugt den Schnipsel und legt ihn ab. @return int Medien-ID oder 0 */
-    private function TtsProduce(string $hash, string $text): int
+    /**
+     * @param string $stimme    Leer = die Einstellung. Der Aufrufer kann eine eigene
+     *                          waehlen (das Briefing tut das je Tonfall).
+     * @param string $anweisung Leer = die Einstellung (Einkaufs-Vorlesestil).
+     */
+    private function TtsProduce(string $hash, string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): int
     {
-        $mp3 = $this->TtsRequestMp3($text);
+        $mp3 = $this->TtsRequestAudio($text, $stimme, $anweisung, $format);
         if ($mp3 === '') {
+            return 0;
+        }
+        // Symcons Hook gibt hoechstens 1 MB aus (gemessen: „Output-Buffer exceeds
+        // Limit") — und Haeppchen mit flush() helfen nicht, die Grenze ist die
+        // Summe. Was darueber liegt, waere nicht abholbar; dann lieber gar nichts
+        // ablegen als eine Datei, die im Player stumm bleibt.
+        if (strlen($mp3) > self::TTS_MAX_BYTES) {
+            $this->SendDebug('TTS', sprintf('Aufnahme zu gross (%d kB), verworfen', (int)round(strlen($mp3) / 1024)), 0);
             return 0;
         }
         $cat = $this->TtsCategoryID();
@@ -295,17 +340,22 @@ trait Tts
         IPS_SetParent($mid, $cat);
         IPS_SetName($mid, mb_substr($text, 0, 60));
         // Erst die Datei, dann der Inhalt — anders nimmt Symcon den Inhalt nicht an.
-        IPS_SetMediaFile($mid, 'media/tts_' . $hash . '.mp3', false);
+        IPS_SetMediaFile($mid, 'media/tts_' . $hash . '.' . $format, false);
         IPS_SetMediaContent($mid, base64_encode($mp3));
 
         $cache = $this->TtsCacheRead();
-        $cache[$hash] = ['id' => $mid, 'at' => time()];
+        $cache[$hash] = ['id' => $mid, 'at' => time(), 'fmt' => $format];
         $this->TtsCacheWrite($this->TtsEvict($cache));
         return $mid;
     }
 
-    /** @return string rohe MP3-Daten, '' bei Fehler */
-    private function TtsRequestMp3(string $text): string
+    /**
+     * @param string $format mp3 (Vorgabe), aac, opus … Kurze Ansagen bleiben bei
+     *        MP3; ein langer Text braucht ein sparsameres Format, weil die
+     *        Abholung bei 1 MB endet.
+     * @return string rohe Audiodaten, '' bei Fehler
+     */
+    private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
         $key = trim($this->ReadPropertyString('AiOpenAIKey'));
         if ($key === '') {
@@ -313,10 +363,10 @@ trait Tts
         }
         $body = json_encode([
             'model'           => $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts'),
-            'voice'           => $this->TtsSetting('TtsVoice', 'alloy'),
+            'voice'           => $stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy'),
             'input'           => $text,
-            'instructions'    => $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS),
-            'response_format' => 'mp3',
+            'instructions'    => $anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS),
+            'response_format' => $format,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $resp = $this->AiHttpPost('https://api.openai.com/v1/audio/speech', [
