@@ -640,30 +640,46 @@ trait Briefing
             if (count($raus) >= self::BRIEFING_MAX_EVENTS) {
                 break;
             }
-            $start = (int)($e['start'] ?? 0);
-            $ende  = (int)($e['end'] ?? 0);
+            $start    = (int)($e['start'] ?? 0);
+            $ende     = (int)($e['end'] ?? 0);
+            $ganztags = (bool)($e['allDay'] ?? false);
+
+            // Gehoert der Termin ueberhaupt zu DIESEM Tag? OpenCalendar liefert alles,
+            // was das Tagesfenster irgendwie beruehrt, und das sind zwei Sorten
+            // Fehlalarm.
+            //
+            // Ganztaegige Termine enden ausschliesslich: Der „Wandertag" am 20.08. traegt
+            // als Ende den Zeitstempel 21.08. 00:00 und gehoert trotzdem nicht zum 21.
+            //
+            // Termine mit Uhrzeit gehoeren zu dem Tag, an dem sie BEGINNEN. Ohne diese
+            // Regel wandert jeder mehrtaegige Block in jedes Briefing: am 20.08.2026
+            // lieferte OpenCalendar „Powerfit 3" als EINEN Datensatz von Do 20.08. 18:45
+            // bis Do 03.09. 19:45 — drei Donnerstagstermine zu einem Block verschmolzen
+            // (die Einzeltermine am 27.08. und 03.09. fehlten dafuer). Der Kurs ist
+            // donnerstags; im Briefing fuer Freitag hatte er nichts zu suchen.
+            if ($ganztags) {
+                if ($ende <= $von || $start >= $bis) {
+                    continue;
+                }
+                $zeit = 'ganztägig';
+            } else {
+                if ($start < $von || $start >= $bis) {
+                    continue;
+                }
+                if ($ende <= $start) {
+                    $zeit = 'um ' . date('H:i', $start) . ' Uhr';
+                } elseif ((int)date('Ymd', $ende) === (int)date('Ymd', $start)) {
+                    $zeit = 'von ' . date('H:i', $start) . ' bis ' . date('H:i', $ende) . ' Uhr';
+                } else {
+                    // Endet der Datensatz an einem anderen Tag, waere „bis 19:45 Uhr"
+                    // eine Erfindung — dann nur der Beginn und das Enddatum.
+                    $zeit = 'ab ' . date('H:i', $start) . ' Uhr, bis ' . date('j.n.', $ende);
+                }
+            }
+
             // Jede Zeile steht fuer sich: Titel in Anfuehrungszeichen, dann die
             // Zeitangabe, dann die Personen ausgeschrieben. Standen die Angaben nur
             // nebeneinander, zog das Modell Attribute von einer Zeile auf die naechste.
-            //
-            // Die Uhrzeit gilt AUCH, wenn der Datensatz an einem frueheren Tag beginnt:
-            // OpenCalendar liefert eine Serie als EINEN Block ueber alle Vorkommen
-            // (gemessen: „Powerfit 3", 20.08. 18:45 bis 03.09. 19:45). Das ist kein
-            // ganztaegiger Termin, sondern ein taeglicher Zeitraum — die Tageszeit
-            // stimmt, nur das Datum des Blockbeginns liegt zurueck.
-            //
-            // Nur wenn so ein Block um Mitternacht beginnt, laeuft er wirklich durch
-            // (mehrtaegige Ferien ohne Ganztags-Kennzeichen). Dann waere „um 00:00 Uhr"
-            // irrefuehrend.
-            $ganztags = (bool)($e['allDay'] ?? false)
-                || ($start < $von && (int)date('Hi', $start) === 0);
-            if ($ganztags) {
-                $zeit = 'ganztägig';
-            } elseif ($ende > $start) {
-                $zeit = 'von ' . date('H:i', $start) . ' bis ' . date('H:i', $ende) . ' Uhr';
-            } else {
-                $zeit = 'um ' . date('H:i', $start) . ' Uhr';
-            }
             $zeile = 'Termin „' . trim((string)($e['title'] ?? '')) . '", ' . $zeit;
             $wer = $this->BriefingNames((array)($e['members'] ?? []), $mitglieder);
             if ($wer !== '') {
