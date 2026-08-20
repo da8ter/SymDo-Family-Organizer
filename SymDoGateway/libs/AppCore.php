@@ -56,6 +56,10 @@ trait AppCore
         $this->RegisterAttributeString('ActionDedup', '{}');
         $this->RegisterAttributeString('AvatarCache', '{}');
         $this->RegisterAttributeString('HiddenInstances', '[]');
+        // Name → Kennung der Familienmitglieder. Rettungsnetz: Verliert eine Zeile
+        // im Formular ihre Kennung, bekommt sie die alte zurueck statt eine neue
+        // (siehe EnsureUserIDs).
+        $this->RegisterAttributeString('UserIDShadow', '{}');
         $this->RegisterAttributeString('RecipePhotoCategory', ''); // Kategorie-ID für „Rezeptfotos"
         // Einwilligung in die Datenschutzerklärung der KI-Analyse. Attribut statt
         // Property: kein Zustand, den man im Formular „mal eben" umschaltet, und
@@ -152,27 +156,81 @@ trait AppCore
         @WC_PushMessage($controls[0], '/hook/' . self::WS_HOOK_PATH, json_encode(['t' => 'dirty']));
     }
 
-    /** Assigns stable ids to user rows created in the form (runs once per new row). */
+    /**
+     * Vergibt den Zeilen der Mitgliederliste stabile Kennungen.
+     *
+     * Stabil ist hier das Wesentliche: An der Kennung haengt JEDE Zuordnung —
+     * Aufgaben (`assignedTo`), Termine (Attribut `CalMembers`), Mail-Vorschlaege.
+     * Eine neue Kennung fuer dasselbe Mitglied kappt sie alle stillschweigend;
+     * sichtbar wird das erst daran, dass Avatare verschwinden.
+     *
+     * Deshalb zwei Sicherungen: Die Spalte im Formular traegt ein (unsichtbares)
+     * Eingabefeld, damit die Konsole die Kennung beim Bearbeiten einer Zeile nicht
+     * fallen laesst — und hier bekommt eine Zeile ohne Kennung die alte ihres
+     * Namens zurueck, bevor eine neue erzeugt wird.
+     */
     private function EnsureUserIDs(): void
     {
         $users = json_decode($this->ReadPropertyString('Users'), true);
         if (!is_array($users)) {
             return;
         }
+        $schatten = json_decode($this->ReadAttributeStringSafe('UserIDShadow', '{}'), true);
+        $schatten = is_array($schatten) ? $schatten : [];
+
         $changed = false;
         foreach ($users as &$user) {
             if (!is_array($user)) {
                 continue;
             }
-            if (trim((string)($user['id'] ?? '')) === '') {
-                $user['id'] = bin2hex(random_bytes(4));
-                $changed = true;
+            if (trim((string)($user['id'] ?? '')) !== '') {
+                continue;
             }
+            $name = mb_strtolower(trim((string)($user['name'] ?? '')));
+            $alt  = trim((string)($schatten[$name] ?? ''));
+            if ($alt !== '') {
+                $user['id'] = $alt;
+                $this->LogMessage(sprintf(
+                    'SymDo: Kennung von „%s" war aus dem Formular verschwunden und wurde wiederhergestellt — Zuordnungen bleiben erhalten',
+                    trim((string)($user['name'] ?? ''))
+                ), KL_NOTIFY);
+            } else {
+                $user['id'] = bin2hex(random_bytes(4));
+            }
+            $changed = true;
         }
         unset($user);
+
+        // Schatten nachfuehren: Name → Kennung, fuer den naechsten Verlust.
+        $neuerSchatten = [];
+        foreach ($users as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            $name = mb_strtolower(trim((string)($user['name'] ?? '')));
+            $id   = trim((string)($user['id'] ?? ''));
+            if ($name !== '' && $id !== '') {
+                $neuerSchatten[$name] = $id;
+            }
+        }
+        if ($neuerSchatten !== $schatten) {
+            @$this->WriteAttributeString('UserIDShadow', json_encode($neuerSchatten, JSON_UNESCAPED_UNICODE));
+        }
+
         if ($changed) {
             IPS_SetProperty($this->InstanceID, 'Users', json_encode($users, JSON_UNESCAPED_UNICODE));
             IPS_ApplyChanges($this->InstanceID); // re-runs once, then stable
+        }
+    }
+
+    /** Attribut lesen, das es vielleicht noch nicht gibt (siehe MailAttr). */
+    private function ReadAttributeStringSafe(string $name, string $vorgabe): string
+    {
+        try {
+            $wert = @$this->ReadAttributeString($name);
+            return is_string($wert) && $wert !== '' ? $wert : $vorgabe;
+        } catch (Throwable $e) {
+            return $vorgabe;
         }
     }
 

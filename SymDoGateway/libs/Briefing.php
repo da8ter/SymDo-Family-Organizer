@@ -598,13 +598,21 @@ trait Briefing
     private function BriefingSystemPrompt(): string
     {
         return 'Du schreibst das Tagesbriefing fuer eine Familie in einer Haushalts-App. '
-            . 'Fasse den heutigen Tag in zwei bis vier Saetzen zusammen — durchgehender '
+            . 'Fasse den heutigen Tag in zwei bis fuenf Saetzen zusammen — durchgehender '
             . 'Fliesstext, KEINE Aufzaehlung, keine Zwischentitel, kein Markdown. '
             . 'Sprich die angesprochene Person mit ihrem Vornamen an, wenn einer genannt ist. '
-            . 'Nenne die Namen der beteiligten Familienmitglieder, wenn Termine oder Aufgaben '
-            . 'ihnen gehoeren. Uhrzeiten uebernimmst du unveraendert. '
+            . 'Das Briefing ist der Ueberblick fuer den GANZEN Haushalt: Sage auch, was bei den '
+            . 'anderen Familienmitgliedern ansteht, nicht nur bei der angesprochenen Person. '
+            . 'In Klammern hinter einem Eintrag stehen die Familienmitglieder, zu denen er '
+            . 'gehoert. Nenne diese Namen im Text. Stehen dort MEHRERE, nenne sie ALLE und '
+            . 'verbinde sie mit „und" (aus „Fussballturnier (Max, Tim)" wird also '
+            . '„das Fussballturnier von Max und Tim"). Lass keinen Namen weg und ordne keinen '
+            . 'Eintrag jemandem zu, der nicht dahinter steht. '
+            . 'Uhrzeiten uebernimmst du unveraendert. Steht eine Uhrzeit vor einer Aufgabe, ist '
+            . 'das ihre Faelligkeit. '
             . 'Erfinde NICHTS: keine Termine, keine Aufgaben, keine Uhrzeiten, die unten nicht '
-            . 'stehen. Steht nichts an, sag das in einem Satz. '
+            . 'stehen — und nichts fuer morgen oder spaeter, es geht nur um HEUTE. '
+            . 'Steht nichts an, sag das in einem Satz. '
             . 'Hat jemand Geburtstag, gratuliere ihm zuerst. '
             . 'Schliesse mit einem kurzen Wunsch fuer einen erfolgreichen Tag. '
             . $this->BriefingToneRule();
@@ -642,6 +650,7 @@ trait Briefing
         $teile = [
             'HEUTE: ' . $wochentage[(int)date('w')] . ', ' . date('d.m.Y'),
             'BRIEFING FUER: ' . ($daten['name'] !== '' ? $daten['name'] : '(niemand bestimmter — schreibe ohne Anrede)'),
+            'LESEHILFE: Klammern hinter einem Eintrag = zugeordnete Familienmitglieder.',
         ];
         $block = static function (string $titel, array $zeilen, string $leer): string {
             return $titel . ': ' . ($zeilen === [] ? $leer : "\n- " . implode("\n- ", $zeilen));

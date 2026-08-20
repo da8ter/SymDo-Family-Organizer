@@ -381,7 +381,11 @@
                             "name": "id",
                             "width": "110px",
                             "add": "",
-                            "visible": false
+                            "visible": false,
+                            "edit": {
+                                "type": "ValidationTextBox",
+                                "visible": false
+                            }
                         }
                     ]
                 }
