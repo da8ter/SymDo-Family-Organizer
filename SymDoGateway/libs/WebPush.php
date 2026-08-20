@@ -138,6 +138,21 @@ trait WebPush
             $this->PushRemindRun();
             return true;
         }
+        if ($ident === 'PushTestAll') {
+            $bilanz = $this->PushBroadcast(
+                $this->Translate('Notifications are on'),
+                $this->Translate('This is a test notification.'),
+                '',
+                'dashboard'
+            );
+            $this->UpdateFormField('PushStatus', 'caption', sprintf(
+                $this->Translate('Sent: %d, failed: %d, removed: %d'),
+                (int)$bilanz['sent'],
+                (int)$bilanz['failed'],
+                (int)$bilanz['dropped']
+            ));
+            return true;
+        }
         if ($ident === 'SendPush') {
             // Weg fuer Skripte und Ablaufplaene, der schon nach einem Modul-Reload
             // wirkt — eine neue public-Methode braeuchte einen Kernel-Neustart

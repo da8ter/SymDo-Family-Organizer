@@ -239,6 +239,7 @@ class SymDoGateway extends IPSModuleStrict
             // Muss VOR den Ueberschreibungen passieren: die suchen Felder per Name,
             // und die des Briefings entstehen erst hier.
             $this->AppendFormItem($elements, 'AiPanel', $this->GetBriefingPanel());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppFormOverrides($elements);
         }
 
@@ -1592,6 +1593,93 @@ class SymDoGateway extends IPSModuleStrict
      * In PHP gebaut und nicht in form.json: Die Auswahl „fuer wen" braucht die
      * Familienmitglieder als Optionen, und die stehen erst zur Laufzeit fest.
      */
+    /**
+     * Panel „Benachrichtigungen". Zeigt den Zustand und die drei Auslöser.
+     *
+     * Ein- und ausgeschaltet wird je Gerät in der Web-App (Glocke auf der
+     * Übersicht) — hier steht nur, WAS eine Nachricht auslöst. Das ist die richtige
+     * Trennung: Die Erlaubnis kann technisch nur der Browser des Geräts geben.
+     */
+    private function GetPushPanel(): array
+    {
+        $einleitung = [
+            'type'    => 'Label',
+            'caption' => $this->Translate("Notifications reach the web app even when it is closed — on the phone, on the tablet, on the computer.\n\nSwitched on per device: open the web app, tap the bell on the overview and allow notifications. On an iPhone the web app has to be added to the home screen first; Apple only allows notifications for an installed web app.")
+        ];
+
+        // Felder auf Eigenschaften, die es noch nicht gibt, lassen „Uebernehmen"
+        // scheitern — sie entstehen in Create() und damit erst beim naechsten
+        // Kernel-Start. Bis dahin ein Hinweis statt eines Formulars, das die Eingabe
+        // schluckt.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('PushOnTaskDue', $cfg)) {
+            return [
+                'type'     => 'ExpansionPanel',
+                'caption'  => $this->Translate('Notifications'),
+                'expanded' => false,
+                'items'    => [
+                    $einleitung,
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('The switches for what triggers a notification appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.')
+                    ],
+                ],
+            ];
+        }
+
+        $abos = $this->PushSubscriptions();
+        $schluessel = $this->PushPublicKey();
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Notifications'),
+            'expanded' => false,
+            'items'    => [
+                $einleitung,
+                [
+                    'type'    => 'Label',
+                    'caption' => $schluessel === ''
+                        // Ohne Schluessel geht gar nichts, und der Grund steht dann im
+                        // Meldungsprotokoll — hier nur der Hinweis darauf.
+                        ? $this->Translate('No key for notifications could be created. See the message log.')
+                        : sprintf(
+                            $this->Translate('Devices with notifications switched on: %d'),
+                            count($abos)
+                        )
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'PushOnTaskDue',
+                    'caption' => $this->Translate('When a task becomes due (uses the reminder set on the task)')
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'PushOnBriefing',
+                    'caption' => $this->Translate('When the daily briefing has been written')
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'PushOnMailProposal',
+                    'caption' => $this->Translate('When the mail analysis has found appointments or tasks')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('A task reminder goes to the devices of the member it is assigned to, plus every device that is not assigned to anyone. Assign a device in the web app under the bell.')
+                ],
+                [
+                    'type'     => 'Button',
+                    'caption'  => $this->Translate('Send a test notification to all devices'),
+                    'confirm'  => $this->Translate('Every device with notifications switched on will receive a test notification. Continue?'),
+                    'onClick'  => 'IPS_RequestAction($id, \'PushTestAll\', 0);'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'PushStatus',
+                    'caption' => ' '
+                ],
+            ],
+        ];
+    }
+
     private function GetBriefingPanel(): array
     {
         // Felder auf Eigenschaften, die es noch nicht gibt, lassen „Uebernehmen"

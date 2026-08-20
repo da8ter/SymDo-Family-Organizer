@@ -249,7 +249,19 @@
             "1 appointment": "1 Termin",
             "%d appointments": "%d Termine",
             "1 task": "1 Aufgabe",
-            "%d tasks": "%d Aufgaben"
+            "%d tasks": "%d Aufgaben",
+            "Notifications": "Benachrichtigungen",
+            "Notifications reach the web app even when it is closed — on the phone, on the tablet, on the computer.\n\nSwitched on per device: open the web app, tap the bell on the overview and allow notifications. On an iPhone the web app has to be added to the home screen first; Apple only allows notifications for an installed web app.": "Benachrichtigungen erreichen die Web-App auch, wenn sie geschlossen ist — auf dem Telefon, auf dem Tablet, am Rechner.\n\nEingeschaltet wird je Gerät: Web-App öffnen, in der Übersicht auf die Glocke tippen und Benachrichtigungen erlauben. Auf dem iPhone muss die Web-App vorher zum Home-Bildschirm hinzugefügt werden; Apple erlaubt Benachrichtigungen nur einer installierten Web-App.",
+            "The switches for what triggers a notification appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.": "Die Schalter dafür, was eine Benachrichtigung auslöst, erscheinen nach dem nächsten Symcon-Neustart — es sind neue Einstellungen, und die entstehen erst, wenn der Kernel das Modul neu geladen hat.",
+            "No key for notifications could be created. See the message log.": "Es konnte kein Schlüssel für Benachrichtigungen erzeugt werden. Siehe Meldungsprotokoll.",
+            "Devices with notifications switched on: %d": "Geräte mit eingeschalteten Benachrichtigungen: %d",
+            "When a task becomes due (uses the reminder set on the task)": "Wenn eine Aufgabe fällig wird (mit der Erinnerung, die an der Aufgabe steht)",
+            "When the daily briefing has been written": "Wenn das Tagesbriefing geschrieben ist",
+            "When the mail analysis has found appointments or tasks": "Wenn die Mailanalyse Termine oder Aufgaben gefunden hat",
+            "A task reminder goes to the devices of the member it is assigned to, plus every device that is not assigned to anyone. Assign a device in the web app under the bell.": "Eine Aufgaben-Erinnerung geht an die Geräte des zugewiesenen Mitglieds und an jedes Gerät, das keinem Mitglied zugeordnet ist. Zuordnen lässt sich ein Gerät in der Web-App unter der Glocke.",
+            "Send a test notification to all devices": "Testbenachrichtigung an alle Geräte senden",
+            "Every device with notifications switched on will receive a test notification. Continue?": "Jedes Gerät mit eingeschalteten Benachrichtigungen bekommt eine Testbenachrichtigung. Fortfahren?",
+            "Sent: %d, failed: %d, removed: %d": "Gesendet: %d, fehlgeschlagen: %d, entfernt: %d"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
