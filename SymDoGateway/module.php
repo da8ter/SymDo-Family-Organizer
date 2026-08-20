@@ -36,17 +36,6 @@ class SymDoGateway extends IPSModuleStrict
 
     /** Symcon-Kernmodul „E-Mail, Empfangen (IMAP)" — Quelle der weitergeleiteten Post. */
     private const IMAP_MODULE_GUID = '{CABFCCA1-FBFF-4AB7-B11B-9879E67E152F}';
-    /**
-     * Breite der beiden E-Mail-Spalten.
-     *
-     * Bewusst in Pixel und nicht in Prozent: Die Konsole schreibt die Breite auf
-     * das INNERE Panel, waehrend das aeussere Element in einer Zeile (Flexbox)
-     * auf Inhaltsbreite schrumpft — „50%" waeren dann 50 % dieser schmalen Box
-     * und das Panel faellt zur Briefmarke zusammen. Ein fester Wert bestimmt
-     * umgekehrt die Breite der Zeile. Passt eine Zeile nicht, bricht die Konsole
-     * sie um und die Spalten stehen untereinander.
-     */
-    private const MAIL_COLUMN_WIDTH = '600px';
 
     /**
      * Appweite Bedienelemente, einmal je PHP-Aufruf aufgeloest. Zwei Felder, weil
@@ -1207,11 +1196,11 @@ class SymDoGateway extends IPSModuleStrict
     /**
      * Panel „KI E-Mail Analyse".
      *
-     * Aufbau: Einleitung ueber die volle Breite, darunter die beiden Wege
-     * nebeneinander — links die Postfaecher, rechts Mailgun — und unten, was
-     * fuer beide gilt. Bewusst in PHP gebaut und nicht in form.json: die
-     * Mitglieder-Spalten brauchen die Nutzer als Auswahloptionen, und die
-     * stehen erst zur Laufzeit fest.
+     * Aufbau: Einleitung, darunter die beiden Wege als je ein aufklappbares
+     * Panel — zuerst die Postfaecher, dann Mailgun — und unten, was fuer beide
+     * gilt. Bewusst in PHP gebaut und nicht in form.json: die Mitglieder-Spalten
+     * brauchen die Nutzer als Auswahloptionen, und die stehen erst zur Laufzeit
+     * fest.
      */
     private function GetMailFormElements(): array
     {
@@ -1228,13 +1217,8 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Label',
                     'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
-                [
-                    'type'  => 'RowLayout',
-                    'items' => [
-                        $this->GetMailBoxColumn($optionen),
-                        $this->GetMailHookColumn($optionen)
-                    ]
-                ],
+                $this->GetMailBoxPanel($optionen),
+                $this->GetMailHookPanel($optionen),
                 [
                     'type'    => 'Label',
                     'bold'    => true,
@@ -1289,10 +1273,8 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     /**
-     * Linke Spalte: die Postfaecher.
+     * Erstes Panel: die Postfaecher.
      *
-     * Die Spalte IST das aufklappbare Panel: ColumnLayout kennt keine Breite,
-     * ExpansionPanel dagegen Prozentwerte — 50 % je Spalte teilt das Fenster.
      * Eingeklappt als Vorgabe, damit der Bereich nicht mit zwei vollen
      * Einstellungssaetzen aufschlaegt.
      *
@@ -1303,7 +1285,7 @@ class SymDoGateway extends IPSModuleStrict
      *
      * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
      */
-    private function GetMailBoxColumn(array $optionen): array
+    private function GetMailBoxPanel(array $optionen): array
     {
         // Ein Formularfeld auf eine Eigenschaft zu setzen, die es noch nicht gibt,
         // laesst „Uebernehmen" scheitern: Eigenschaften entstehen in Create() und
@@ -1314,13 +1296,12 @@ class SymDoGateway extends IPSModuleStrict
             ? [
                 'type'         => 'SelectInstance',
                 'name'         => 'MailBoxGeneral',
-                'width'        => '95%',
+                'width'        => '400px',
                 'validModules' => [self::IMAP_MODULE_GUID],
                 'caption'      => $this->Translate('Household mailbox (no member assignment)')
             ]
             : [
                 'type'    => 'Label',
-                'width'   => '95%',
                 'caption' => $this->Translate('The field for the household mailbox appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
             ];
 
@@ -1328,11 +1309,9 @@ class SymDoGateway extends IPSModuleStrict
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('IMAP mailboxes'),
             'expanded' => false,
-            'width'    => self::MAIL_COLUMN_WIDTH,
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'width'   => '95%',
                     'caption' => $this->Translate("Symcon reads the mailboxes set up here — forward mail to them, or let a member's own mailbox be read directly. A mailbox that belongs to one member hands its mail to that member; the household mailbox produces suggestions without a member.")
                 ],
                 [
@@ -1352,14 +1331,14 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'caption' => $this->Translate('Member'),
                             'name'    => 'UserID',
-                            'width'   => '40%',
+                            'width'   => '160px',
                             'add'     => '',
                             'edit'    => ['type' => 'Select', 'options' => $optionen]
                         ],
                         [
                             'caption' => $this->Translate('IMAP instance'),
                             'name'    => 'InstanceID',
-                            'width'   => '60%',
+                            'width'   => 'auto',
                             'add'     => 0,
                             'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
                         ]
@@ -1370,11 +1349,10 @@ class SymDoGateway extends IPSModuleStrict
                     'name'      => 'MailSenderAllow',
                     'caption'   => $this->Translate('Allowed senders (one per line, "@domain.tld" for a whole domain; empty = all)'),
                     'multiline' => true,
-                    'width'     => '95%'
+                    'width'     => '400px'
                 ],
                 [
                     'type'    => 'Label',
-                    'width'   => '95%',
                     'caption' => $this->Translate('A forwarded mail carries YOUR address as the sender, not the original one — so entering your own addresses here is the strongest filter: only mail forwarded from the household is ever analysed.')
                 ],
                 [
@@ -1387,19 +1365,18 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     /**
-     * Rechte Spalte: Mail per Webhook (Mailgun).
+     * Zweites Panel: Mail per Webhook (Mailgun).
      *
-     * Bewusst neben und nicht zwischen den Postfach-Feldern: es sind zwei
-     * getrennte Wege in dieselbe Analyse, und der Nutzer soll beim Suchen eines
-     * Fehlers wissen, welcher davon gemeint ist. Aufbau wie die linke Spalte —
-     * eingeklapptes Panel mit halber Fensterbreite.
+     * Bewusst ein eigenes Panel und nicht zwischen die Postfach-Felder gemischt
+     * — es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll
+     * beim Suchen eines Fehlers wissen, welcher davon gemeint ist.
      *
      * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
      * nirgends, und ein falsch abgetipptes Geheimnis kostet eine Stunde Suche.
      *
      * @param list<array{caption: string, value: string}> $optionen Mitglieder zur Auswahl
      */
-    private function GetMailHookColumn(array $optionen): array
+    private function GetMailHookPanel(array $optionen): array
     {
         $teile   = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
         $wartend = count($this->MailHookQueueFiles());
@@ -1408,11 +1385,9 @@ class SymDoGateway extends IPSModuleStrict
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed'),
             'expanded' => false,
-            'width'    => self::MAIL_COLUMN_WIDTH,
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'width'   => '95%',
                     'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: everything arrives on the same domain, so the plus tag in the address says who is meant (base+lena@…) — that is what the address list below assigns. Every mail addressed here, attachments included, passes through that service\'s servers first.')
                 ],
                 [
@@ -1423,7 +1398,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'ValidationTextBox',
                     'name'    => 'MailHookBase',
-                    'width'   => '95%',
+                    'width'   => '400px',
                     'caption' => $this->Translate('Mailgun domain (e.g. sandbox….mailgun.org) — or a fixed address if you prefer plus tags')
                 ],
                 [
@@ -1432,7 +1407,7 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'type'    => 'PasswordTextBox',
                             'name'    => 'MailHookSecret',
-                            'width'   => '260px',
+                            'width'   => '380px',
                             'caption' => $this->Translate('Secret in the address')
                         ],
                         [
@@ -1445,19 +1420,18 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookSigningKey',
-                    'width'   => '95%',
+                    'width'   => '400px',
                     'caption' => $this->Translate('Mailgun HTTP webhook signing key (verifies every delivery)')
                 ],
                 [
                     'type'    => 'PasswordTextBox',
                     'name'    => 'MailHookApiKey',
-                    'width'   => '95%',
+                    'width'   => '400px',
                     'caption' => $this->Translate('Mailgun API key (only for the "Store and notify" path — not needed with Forward)')
                 ],
                 [
                     'type'    => 'Label',
                     'name'    => 'MailHookSetup',
-                    'width'   => '95%',
                     'caption' => $teile['hinweis']
                 ],
                 [
@@ -1468,7 +1442,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailHookNotifyUrl',
                     'caption'   => $this->Translate('Address for Mailgun ("Forward" → Destination) — select and copy'),
-                    'width'     => '95%',
+                    'width'     => '600px',
                     'multiline' => true,
                     'value'     => $teile['url']
                 ],
@@ -1483,14 +1457,14 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'caption' => $this->Translate('Recipient address'),
                             'name'    => 'Address',
-                            'width'   => '60%',
+                            'width'   => '280px',
                             'add'     => '',
                             'edit'    => ['type' => 'ValidationTextBox']
                         ],
                         [
                             'caption' => $this->Translate('Member'),
                             'name'    => 'UserID',
-                            'width'   => '40%',
+                            'width'   => 'auto',
                             'add'     => '',
                             'edit'    => ['type' => 'Select', 'options' => $optionen]
                         ]
@@ -1507,14 +1481,13 @@ class SymDoGateway extends IPSModuleStrict
                     // Skriptfehler samt Dateiname und Zeilennummer.
                     'type'    => 'Label',
                     'name'    => 'MailHookStatus',
-                    'width'   => '95%',
                     'caption' => ''
                 ],
                 [
                     'type'      => 'ValidationTextBox',
                     'name'      => 'MailHookSenderAllow',
                     'multiline' => true,
-                    'width'     => '95%',
+                    'width'     => '400px',
                     'caption'   => $this->Translate('Allowed senders for the webhook (one per line; empty = all). Careful: here the school writes DIRECTLY, so your own addresses do not belong in this list.')
                 ],
                 [
@@ -1527,7 +1500,6 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Label',
                     'name'    => 'MailHookQueueInfo',
-                    'width'   => '95%',
                     'caption' => $wartend === 0
                         ? $this->Translate('Queue is empty.')
                         : sprintf($this->Translate('%d message(s) waiting for analysis.'), $wartend)
