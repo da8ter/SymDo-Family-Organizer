@@ -3138,6 +3138,8 @@ const SHOW_PROGRESS_CARD = false;
 const SHOW_MY_TASKS_CARD = false;
 /** Hoechstens so viele Termine in der Vorschau unter den Aufgaben. */
 const DASH_EVENTS_MAX = 5;
+/** Hoechstens so viele Aufgaben in der Heute-Karte — dieselbe Zahl wie bei den Terminen. */
+const DASH_TASKS_MAX = 5;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = ls.get('symdo.dashboardPriority') || '';
 // EINE Mitglieder-Auswahl fuer alle Bereiche: wer im Dashboard eine Person
@@ -4999,7 +5001,7 @@ function renderDashboard() {
   overdue.sort(dueSort);
   today.sort(dueSort);
   const dueNow = overdue.concat(today);
-  const todayRows = dueNow.slice(0, 6);
+  const todayRows = dueNow.slice(0, DASH_TASKS_MAX);
   const todayKeys = new Set(todayRows.map(t => t.key));
   const myUpcoming = filteredOpen.filter(t => !todayKeys.has(t.key)).sort(dueSort);
   const overdueCount = memberFiltered(open).filter(t => classifyDue(t.item) === 'overdue').length;
@@ -5197,6 +5199,16 @@ function renderDashboard() {
       html += `<div class="empty-row"><i class="fa-light fa-badge-check"></i>${escapeHtml(msg)}</div>`;
     } else {
       for (const t of todayRows) html += taskRowHtml(t, multiTodo);
+      // Bisher schnitt die Karte stumm ab. Was nicht mehr hineinpasst, wird jetzt
+      // genannt — wie in der Terminvorschau.
+      const restAufgaben = dueNow.length - todayRows.length;
+      if (restAufgaben > 0) {
+        const label = restAufgaben === 1
+          ? translate('1 more task')
+          : translate('%1 more tasks').replace('%1', String(restAufgaben));
+        html += `<button class="more-row" data-goto="todos"><span>${escapeHtml(label)}</span>` +
+          `<i class="fa-light fa-chevron-right"></i></button>`;
+      }
     }
     html += '</div>';
 
