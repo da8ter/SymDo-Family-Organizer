@@ -191,7 +191,19 @@
             "The field for the household mailbox appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Das Feld für das Haushalts-Postfach erscheint nach dem nächsten Symcon-Neustart — es ist eine neue Einstellung, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
             "There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Forward mail to Symcon: you forward the mail that matters to Symcon. There is one general family address, and every family member gets an own receiving address. This needs a free account with the Mailgun service. The upside: you keep full control over which mail reaches Symcon.": "Für den Empfang gibt es zwei Wege — nutze einen davon oder beide:\n\n1. Postfach per IMAP: Symcon ruft ein Postfach ab. Ein Absenderfilter ist möglich, aber nicht nötig, und jedem Familienmitglied kann ein eigenes Postfach zugeordnet werden.\n\n2. Mails an Symcon weiterleiten: Du leitest entsprechende Mails an Symcon weiter. Es gibt eine allgemeine Familienadresse und jedes Familienmitglied erhält eine eigene Empfangsadresse. Es wird ein kostenloser Zugang zum Dienst Mailgun benötigt. Vorteil: Du hast die volle Kontrolle, welche Mails an Symcon weitergeleitet werden.",
             "Allowed senders (empty = every mail is analysed)": "Erlaubte Absender (leer = alle Mails werden analysiert)",
-            "Family (general)": "Familie (allgemein)"
+            "Family (general)": "Familie (allgemein)",
+            "First name": "Vorname",
+            "Last name": "Nachname",
+            "Date of birth": "Geburtsdatum",
+            "Persona": "Persona",
+            "— not specified —": "— keine Angabe —",
+            "Father": "Vater",
+            "Mother": "Mutter",
+            "Child": "Kind",
+            "Grandmother": "Oma",
+            "Grandfather": "Opa",
+            "Uncle": "Onkel",
+            "Aunt": "Tante"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

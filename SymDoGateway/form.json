@@ -288,12 +288,73 @@
                     "delete": true,
                     "columns": [
                         {
-                            "caption": "Name",
+                            "caption": "First name",
                             "name": "name",
-                            "width": "auto",
+                            "width": "160px",
                             "add": "",
                             "edit": {
                                 "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "caption": "Last name",
+                            "name": "lastName",
+                            "width": "160px",
+                            "add": "",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "caption": "Date of birth",
+                            "name": "birthday",
+                            "width": "150px",
+                            "add": "{\"year\":0,\"month\":0,\"day\":0}",
+                            "edit": {
+                                "type": "SelectDate"
+                            }
+                        },
+                        {
+                            "caption": "Persona",
+                            "name": "persona",
+                            "width": "150px",
+                            "add": "",
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    {
+                                        "caption": "— not specified —",
+                                        "value": ""
+                                    },
+                                    {
+                                        "caption": "Father",
+                                        "value": "father"
+                                    },
+                                    {
+                                        "caption": "Mother",
+                                        "value": "mother"
+                                    },
+                                    {
+                                        "caption": "Child",
+                                        "value": "child"
+                                    },
+                                    {
+                                        "caption": "Grandmother",
+                                        "value": "grandmother"
+                                    },
+                                    {
+                                        "caption": "Grandfather",
+                                        "value": "grandfather"
+                                    },
+                                    {
+                                        "caption": "Uncle",
+                                        "value": "uncle"
+                                    },
+                                    {
+                                        "caption": "Aunt",
+                                        "value": "aunt"
+                                    }
+                                ]
                             }
                         },
                         {
