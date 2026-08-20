@@ -882,13 +882,9 @@ trait Briefing
     {
         switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
             case 'formal': return 'sage';
-            // „fable" ist die britisch gefaerbte Stimme des Modells — beim Butler
-            // traegt sie den Akzent, den die Anweisung unten verlangt.
-            case 'butler': return 'fable';
+            case 'butler': return 'ash';
             case 'buddy':  return 'nova';
-            // Weicht auf eine ausdrucksstarke Stimme aus, weil „fable" jetzt dem
-            // Butler gehoert.
-            case 'funny':  return 'ash';
+            case 'funny':  return 'fable';
             case 'drill':  return 'onyx';
             // Deutlich weiblich; „coral" klang dafuer zu neutral.
             case 'coach':  return 'shimmer';
@@ -906,11 +902,23 @@ trait Briefing
                 return $basis . 'Vortrag: zurückhaltend und höflich wie ein Butler, '
                     . 'ruhiges Tempo, klare Aussprache, keine Ausrufe.';
             case 'butler':
-                return 'Sprich Deutsch mit einem deutlich hörbaren britisch-englischen '
-                    . 'Akzent, wie ein englischer Butler, der seit Jahren in einem deutschen '
-                    . 'Haus dient: gemessenes Tempo, sehr höfliche, fast singende Betonung, '
-                    . 'jedes Wort sauber artikuliert, kleine Pausen vor Höflichkeitsfloskeln. '
-                    . 'Niemals laut, niemals hastig. Uhrzeiten und Namen deutlich.';
+                // Englisch formuliert und wörtlich so vom Nutzer vorgegeben: Die
+                // Anweisung beschreibt die Sprechweise, nicht die Sprache — gelesen
+                // wird weiter der deutsche Text.
+                return "Speak as a classic, refined English butler.\n\n"
+                    . "Use a polished British Received Pronunciation accent. The voice should "
+                    . "sound male, mature, calm, intelligent, discreet, and highly professional.\n\n"
+                    . "Speak at a measured, unhurried pace with precise articulation and "
+                    . "controlled intonation. Keep the pitch moderately low and the delivery "
+                    . "warm but reserved.\n\n"
+                    . "Convey quiet confidence, impeccable manners, and subtle dry British wit. "
+                    . "Sound attentive and helpful, never submissive or exaggerated.\n\n"
+                    . "Use natural pauses between sentences. Emphasize important information "
+                    . "gently rather than dramatically.\n\n"
+                    . "Avoid sounding theatrical, cartoonish, aristocratic, overly posh, "
+                    . "robotic, or like a movie trailer.\n\n"
+                    . "The overall impression should be that of an experienced English household "
+                    . "butler speaking personally to the owner of the house.";
             case 'buddy':
                 return $basis . 'Vortrag: locker und beiläufig, wie zu einem Freund am '
                     . 'Küchentisch, mittleres Tempo, freundlich.';
