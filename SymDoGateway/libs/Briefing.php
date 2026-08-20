@@ -936,6 +936,14 @@ trait Briefing
             . 'Steht unten eine Einkaufsliste mit Artikelzahl, weise am Ende darauf hin, '
             . 'dass sich eine Einkaufstour lohnen würde, und nenne die Zahl. '
             . 'Schließe mit einem kurzen Wunsch für einen erfolgreichen Tag. '
+            // Die Vorschau wird am Vorabend gelesen. „es geht ausschliesslich um morgen"
+            // allein genuegte nicht: Beim Ausprobieren wurde aus einer Frist fuer morgen
+            // ein „heute unbedingt unterschreiben".
+            . ($tagWort !== 'heute'
+                ? 'ZEITBEZUG: Dieser Text wird am Abend VORHER gelesen. Schreibe deshalb '
+                    . '„' . $tagWort . '" und niemals „heute" — was ' . $tagWort . ' ansteht, '
+                    . 'steht nicht heute an. '
+                : '')
             . $this->BriefingToneRule();
     }
 
@@ -974,8 +982,29 @@ trait Briefing
                 return 'TONFALL: Wie ein guter Kumpel — locker, duzend, kurze Sätze, ruhig mal '
                     . 'ein umgangssprachlicher Ausdruck. Keine Emojis.';
             case 'funny':
-                return 'TONFALL: Humorvoll mit einem Augenzwinkern, gern ein trockener Kommentar '
-                    . 'zum Tag — aber die Angaben bleiben korrekt und vollständig.';
+                // Ausdruecklich so gewollt (Wunsch vom 20.08.2026): richtig lustig,
+                // nicht bloss augenzwinkernd. Die Beispiele sind Beispiele — steht
+                // „Deutsche Bahn" im Prompt, kommt sie sonst jeden Tag vor.
+                return 'TONFALL: Du bist der Haus-Komiker und dein Briefing soll die Familie '
+                    . 'zum Lachen bringen. Frech, schlagfertig, respektlos-liebevoll — du '
+                    . 'darfst die Leute aufziehen und veräppeln. '
+                    . 'ERLAUBT UND ERWÜNSCHT: mit den Namen spielen (Wortwitz, Reim, '
+                    . 'Spitzname, „Turnbeutel-Tim"), übertriebene Vergleiche für die Lage '
+                    . 'ziehen (überfällige Aufgaben wie ein Zug, der noch nie pünktlich war; '
+                    . 'ein Faultier, das dagegen hektisch wirkt; ein Termin, der schon '
+                    . 'Anspruch auf Rente hat), kleine Spitzen gegen den Alltagswahnsinn, '
+                    . 'ironische Übertreibung, ein trockener Rausschmeißer am Ende. '
+                    . 'Denk dir die Vergleiche jedes Mal NEU aus — die genannten sind nur '
+                    . 'Muster, nicht die Liste. Ein Gag pro Punkt genügt, gehetzt ist nicht '
+                    . 'komisch. '
+                    . 'GRENZE: Es wird gefrotzelt, nicht getreten. Nichts über Aussehen, '
+                    . 'Gewicht, Herkunft, Geschlecht, Krankheit oder Fähigkeiten eines '
+                    . 'Menschen, keine Schimpfwörter, nichts, was ein Kind verletzen würde. '
+                    . 'Und der Witz baut auf den Angaben auf, statt sie zu ersetzen: Termine, '
+                    . 'Aufgaben, Namen und Uhrzeiten bleiben vollständig und korrekt. Auch die '
+                    . 'Rollen bleiben, wie sie dastehen — wer einem Termin zugeordnet ist, ist '
+                    . 'dabei und wird nicht zum Zuschauer umgedichtet (beim Ausprobieren wurde '
+                    . 'aus einem Turnierteilnehmer der „offizielle Anfeuerer").';
             case 'drill':
                 // Bewusst grob, aber im Rahmen: Klischee-Kaserne aus dem Kino, nicht
                 // echte Herabsetzung. Was Aussehen, Herkunft oder Person angreift,
@@ -1194,8 +1223,9 @@ trait Briefing
                 return $basis . 'Vortrag: locker und beiläufig, wie zu einem Freund am '
                     . 'Küchentisch, mittleres Tempo, freundlich.';
             case 'funny':
-                return $basis . 'Vortrag: mit Augenzwinkern, leicht spöttisch, kleine Pausen '
-                    . 'vor den Pointen.';
+                return $basis . 'Vortrag: gut gelaunt und spöttisch, mit hörbarer Freude an '
+                    . 'der eigenen Pointe. Kleine Pausen vor den Gags, die Spitzen leicht '
+                    . 'betont, am Ende ein Grinsen in der Stimme.';
             case 'drill':
                 return 'Sprich Deutsch und BRÜLLE wie ein Drill-Sergeant auf dem Kasernenhof: '
                     . 'sehr laut, hart, abgehackt, hohes Tempo, scharfe Kommandobetonung, '
