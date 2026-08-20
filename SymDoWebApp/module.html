@@ -5227,10 +5227,15 @@ function renderDashboard() {
       const wann = e.allDay
         ? translate('all day')
         : new Date(e.start * 1000).toTimeString().slice(0, 5);
+      // Avatare rechts, wie im Kalender-Bereich und in der Aufgabenzeile: dieselbe
+      // Spalte (.cal-side/.cal-chips), damit die Zeilen untereinander stehen.
+      const wer = e.members.length ? renderAvatarStack(e.members) : '';
       html += `<div class="cal-event"><span class="cal-body">` +
         `<div class="cal-when">${escapeHtml(wann)}</div>` +
         `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
-        `</span></div>`;
+        `</span>` +
+        (wer ? `<span class="cal-side"><span class="cal-chips">${wer}</span></span>` : '') +
+        `</div>`;
     }
     const restTermine = dashEvents.length - DASH_EVENTS_MAX;
     if (restTermine > 0) {
@@ -6287,7 +6292,15 @@ function loadDashEvents() {
       return '';
     };
     dashEvents = j.events
-      .map(e => ({ tag: tagVon(e), start: Number(e.start) || 0, allDay: e.allDay === true, title: String(e.title || '') }))
+      .map(e => ({
+        tag: tagVon(e),
+        start: Number(e.start) || 0,
+        allDay: e.allDay === true,
+        title: String(e.title || ''),
+        // Die Zuordnung kommt aus der eigenen Ablage des Gateways und ist das, was
+        // die Avatare in der Zeile zeigen.
+        members: Array.isArray(e.members) ? e.members : []
+      }))
       .filter(e => e.tag !== '')
       .sort((a, b) => a.start - b.start);
     dashEventsToday = dashEvents.filter(e => e.tag === 'today').length;
