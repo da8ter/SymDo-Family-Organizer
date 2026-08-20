@@ -32,6 +32,12 @@ trait Briefing
     private const BRIEFING_MAX_TASKS  = 30;
     /** Deckel fuer die Antwort: aus „zwei bis vier Saetzen" wird sonst gelegentlich ein Aufsatz. */
     private const BRIEFING_TEXT_MAX   = 1500;
+    /**
+     * Ab so vielen offenen Artikeln lohnt der Hinweis auf eine Einkaufstour.
+     * Darunter ist eine Liste normaler Alltag und der Hinweis nur Geplauder —
+     * deshalb steht die Zahl unterhalb der Schwelle gar nicht erst im Prompt.
+     */
+    private const BRIEFING_SHOP_HINT  = 10;
 
     private ?array $briefingConfigCache = null;
 
@@ -334,7 +340,7 @@ trait Briefing
      * Alles, was das Briefing braucht, in einer Form, die sich kurz in den Prompt
      * schreiben laesst.
      *
-     * @return array{userId: string, name: string, termine: list<string>, aufgaben: list<string>, ueberfaellig: list<string>, geburtstage: list<string>, rollen: list<string>}
+     * @return array{userId: string, name: string, termine: list<string>, aufgaben: list<string>, ueberfaellig: list<string>, geburtstage: list<string>, rollen: list<string>, einkauf: array{anzahl: int, liste: string}}
      */
     private function BriefingCollect(): array
     {
@@ -349,6 +355,7 @@ trait Briefing
             'ueberfaellig' => $this->BriefingTaskLines($mitglieder, true),
             'geburtstage'  => $this->BriefingBirthdayLines($mitglieder),
             'rollen'       => $this->BriefingRoleLines($mitglieder),
+            'einkauf'      => $this->BriefingShopping(),
         ];
     }
 
@@ -529,6 +536,41 @@ trait Briefing
     }
 
     /**
+     * Offene Artikel auf den Einkaufslisten.
+     *
+     * Gezaehlt wird wie in beiden Oberflaechen: alles, was nicht im Wagen liegt
+     * (`inCart`), und nur aus Listen, die nicht ausgeblendet sind — was niemand
+     * sieht, soll auch niemanden zum Einkaufen schicken.
+     *
+     * @return array{anzahl: int, liste: string}
+     */
+    private function BriefingShopping(): array
+    {
+        $versteckt = $this->GetHiddenInstances();
+        $anzahl = 0;
+        $groesste = ['n' => 0, 'name' => ''];
+        foreach ($this->GetListInstances() as $instanz) {
+            $id = (int)$instanz['id'];
+            if ($instanz['kind'] !== 'shopping' || in_array($id, $versteckt, true)) {
+                continue;
+            }
+            $zustand = json_decode((string)$this->CallInstanceGetAppState($id, 'shopping'), true);
+            $items = (array)($zustand['state']['items'] ?? $zustand['items'] ?? []);
+            $offen = 0;
+            foreach ($items as $it) {
+                if (is_array($it) && empty($it['inCart'])) {
+                    $offen++;
+                }
+            }
+            $anzahl += $offen;
+            if ($offen > $groesste['n']) {
+                $groesste = ['n' => $offen, 'name' => (string)($zustand['state']['listName'] ?? IPS_GetName($id))];
+            }
+        }
+        return ['anzahl' => $anzahl, 'liste' => $groesste['name']];
+    }
+
+    /**
      * Wer heute Geburtstag hat — von PHP gerechnet, nicht von der KI.
      * Datumsarithmetik ist die klassische Schwachstelle eines Sprachmodells.
      *
@@ -614,6 +656,8 @@ trait Briefing
             . 'stehen — und nichts fuer morgen oder spaeter, es geht nur um HEUTE. '
             . 'Steht nichts an, sag das in einem Satz. '
             . 'Hat jemand Geburtstag, gratuliere ihm zuerst. '
+            . 'Steht unten eine Einkaufsliste mit Artikelzahl, weise am Ende darauf hin, '
+            . 'dass sich eine Einkaufstour lohnen wuerde, und nenne die Zahl. '
             . 'Schliesse mit einem kurzen Wunsch fuer einen erfolgreichen Tag. '
             . $this->BriefingToneRule();
     }
@@ -663,6 +707,15 @@ trait Briefing
         }
         if ($daten['rollen'] !== []) {
             $teile[] = $block('ROLLEN IM HAUSHALT', $daten['rollen'], '');
+        }
+        // Unterhalb der Schwelle bleibt die Zahl draussen: Was nicht im Prompt
+        // steht, kann die KI auch nicht zum Thema machen.
+        if ((int)$daten['einkauf']['anzahl'] >= self::BRIEFING_SHOP_HINT) {
+            $teile[] = sprintf(
+                'EINKAUFSLISTE: %d offene Artikel%s',
+                (int)$daten['einkauf']['anzahl'],
+                $daten['einkauf']['liste'] !== '' ? ' (' . $daten['einkauf']['liste'] . ')' : ''
+            );
         }
         return implode("\n\n", $teile);
     }
