@@ -1391,7 +1391,7 @@ class SymDoGateway extends IPSModuleStrict
                     'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
                 ],
                 [
-                    'caption' => $this->Translate('Allowed senders (optional, separate with commas)'),
+                    'caption' => $this->Translate('Allowed senders (empty = every mail is analysed)'),
                     'name'    => 'SenderAllow',
                     'width'   => 'auto',
                     'add'     => '',
