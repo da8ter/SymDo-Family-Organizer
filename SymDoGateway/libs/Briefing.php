@@ -55,11 +55,12 @@ trait Briefing
     private const BRIEFING_TTS_ONE    = 1250;
     /**
      * Vorlesetempo, 1.0 waere die normale Sprechgeschwindigkeit des Modells.
-     * 20 % schneller: Ein Briefing hoert man morgens im Vorbeigehen, nicht als
-     * Hoerbuch. Der Wert reist im Cache-Schluessel mit, damit nach einer Aenderung
-     * nicht die alte, langsame Aufnahme weiterspielt.
+     * Schneller, weil man ein Briefing morgens im Vorbeigehen hoert und nicht als
+     * Hoerbuch — aber nicht zu schnell: 1.2 war einen Hauch gehetzt, deshalb 5 %
+     * zurueck. Der Wert reist im Cache-Schluessel mit, damit nach einer Aenderung
+     * nicht die alte Aufnahme im alten Tempo weiterspielt.
      */
-    private const BRIEFING_TTS_SPEED  = 1.2;
+    private const BRIEFING_TTS_SPEED  = 1.14;
 
     private ?array $briefingConfigCache = null;
 
