@@ -1434,7 +1434,7 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Mailgun accepts mail for you and delivers it here immediately — no mailbox, no own domain. One catch-all route is enough: everything arrives on the same domain, so the plus tag in the address says who is meant (base+lena@…) — that is what the address list below assigns. Every mail addressed here, attachments included, passes through that service\'s servers first.')
+                    'caption' => $this->Translate('Set up a free account at https://www.mailgun.com and configure it as described below.')
                 ],
                 [
                     'type'    => 'CheckBox',
