@@ -3087,6 +3087,12 @@ let activeTab = (function () {
 })();
 // Fortschrittskarte auf der Uebersicht. Auf true setzen, um sie zurueckzuholen.
 const SHOW_PROGRESS_CARD = false;
+/**
+ * Die Karte „Meine Aufgaben" unter der Heute-Karte. Ausgeblendet (Wunsch vom
+ * 20.08.2026: „vorerst nur ausblenden"). Wie bei der Fortschrittskarte bleibt der
+ * Code stehen — das Zurueckholen ist dann eine Zeile.
+ */
+const SHOW_MY_TASKS_CARD = false;
 /** Hoechstens so viele Termine in der Vorschau unter den Aufgaben. */
 const DASH_EVENTS_MAX = 5;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
@@ -5185,7 +5191,7 @@ function renderDashboard() {
     html += '</div>';
 
     // Meine Aufgaben / Aufgaben von X
-    if (myUpcoming.length > 0) {
+    if (SHOW_MY_TASKS_CARD && myUpcoming.length > 0) {
       let title = translate('Tasks');
       // Wie mySectionTitle in der App: nur bei GENAU EINEM gewählten Mitglied ein
       // personalisierter Titel; bei 0 oder mehreren das generische „Aufgaben".
