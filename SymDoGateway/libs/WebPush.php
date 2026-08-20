@@ -124,10 +124,12 @@ trait WebPush
     {
         $an = (bool)$this->PushProp('PushOnTaskDue', false) && $this->PushSubscriptions() !== [];
         try {
-            $this->SetTimerInterval(self::PUSH_TIMER, $an ? self::PUSH_REMIND_MS : 0);
+            // Der Klammeraffe wie beim Attribut-Schreiben: Fehlt der Timer (Trait neu,
+            // Kernel noch nicht neu gestartet), WARNT Symcon nur — das try/catch
+            // greift dann nicht, und die Warnung stuende bei jedem ApplyChanges im
+            // Meldungsprotokoll. Gemessen genau so.
+            @$this->SetTimerInterval(self::PUSH_TIMER, $an ? self::PUSH_REMIND_MS : 0);
         } catch (Throwable $e) {
-            // Timer nach einem Modul-Reload ohne Kernel-Neustart noch nicht
-            // registriert — wie in MailArm bewusst ohne Ersatzlauf von hier.
             $this->SendDebug('WebPush', 'Timer fehlt, Lauf entfaellt', 0);
         }
     }
@@ -838,7 +840,7 @@ trait WebPush
                 KL_ERROR
             );
             try {
-                $this->SetTimerInterval(self::PUSH_TIMER, 0);
+                @$this->SetTimerInterval(self::PUSH_TIMER, 0);
             } catch (Throwable $e) {
             }
         }
