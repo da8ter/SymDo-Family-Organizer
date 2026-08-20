@@ -1217,6 +1217,12 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Label',
                     'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
+                [
+                    // Wegweiser vor die beiden Panels: eingeklappt verraten deren
+                    // Beschriftungen nicht, worin sich die Wege unterscheiden.
+                    'type'    => 'Label',
+                    'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: you forward mail to a mailbox that Symcon polls. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Straight to Symcon: the Mailgun service accepts the mail and hands it over for analysis right away. A free account there is all it takes — no mailbox and no own domain. Every family member gets their own receiving address at Mailgun.")
+                ],
                 $this->GetMailBoxPanel($optionen),
                 $this->GetMailHookPanel($optionen),
                 [
