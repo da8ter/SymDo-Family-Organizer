@@ -224,7 +224,10 @@
             "The briefing settings appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.": "Die Einstellungen des Briefings erscheinen nach dem nächsten Symcon-Neustart — es sind neue Einstellungen, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
             "Butler": "Butler",
             "Preview for tomorrow": "Vorschau für morgen",
-            "Preview failed: %s": "Vorschau fehlgeschlagen: %s"
+            "Preview failed: %s": "Vorschau fehlgeschlagen: %s",
+            "Show tomorrow's briefing in the evening": "Abends das Briefing für morgen zeigen",
+            "From this time on, show tomorrow instead of today": "Ab dieser Uhrzeit morgen statt heute zeigen",
+            "The evening preview for tomorrow appears after the next Symcon restart — it brings new settings, and those only exist once the kernel has loaded the module again.": "Die abendliche Vorschau auf morgen erscheint nach dem nächsten Symcon-Neustart — sie bringt neue Einstellungen mit, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

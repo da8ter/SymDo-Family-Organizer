@@ -1648,6 +1648,25 @@ class SymDoGateway extends IPSModuleStrict
                     'name'    => 'BriefingTime',
                     'caption' => $this->Translate('Generate at')
                 ],
+                // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein
+                // „Uebernehmen" auf diese Felder scheitern (siehe oben).
+                ...(array_key_exists('BriefingPreviewEnabled', (array)$cfg) ? [
+                    [
+                        'type'    => 'CheckBox',
+                        'name'    => 'BriefingPreviewEnabled',
+                        'caption' => $this->Translate('Show tomorrow\'s briefing in the evening')
+                    ],
+                    [
+                        'type'    => 'SelectTime',
+                        'name'    => 'BriefingPreviewFrom',
+                        'caption' => $this->Translate('From this time on, show tomorrow instead of today')
+                    ],
+                ] : [
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('The evening preview for tomorrow appears after the next Symcon restart — it brings new settings, and those only exist once the kernel has loaded the module again.')
+                    ],
+                ]),
                 [
                     'type'  => 'RowLayout',
                     'items' => [

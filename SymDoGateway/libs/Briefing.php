@@ -74,6 +74,11 @@ trait Briefing
         // SelectTime traegt seinen Wert als JSON, genau wie SelectDate.
         $this->RegisterPropertyString('BriefingTime', '{"hour":5,"minute":30,"second":0}');
         $this->RegisterPropertyString('BriefingTone', 'neutral');
+        // Abendliche Vorschau auf morgen: eigener Schalter, eigene Uhrzeit. Ab dieser
+        // Zeit zeigen die Oberflaechen den morgigen Text statt des heutigen — der Tag
+        // ist dann gelaufen, und was zaehlt, ist der naechste.
+        $this->RegisterPropertyBoolean('BriefingPreviewEnabled', false);
+        $this->RegisterPropertyString('BriefingPreviewFrom', '{"hour":18,"minute":0,"second":0}');
         // {"d":"YYYY-MM-DD","text":"…","at":ts,"userId":"…","failDay":"…","fails":n}
         $this->RegisterAttributeString('Briefing', '{}');
         $this->RegisterTimer(self::BRIEFING_TIMER, 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Briefing\', 0);');
@@ -146,11 +151,60 @@ trait Briefing
         }
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Der ganze Stand: zwei Faecher plus Fehlerzaehler.
+     *
+     * `heute` traegt das Briefing des laufenden Tages, `vorschau` das auf morgen.
+     * Beide in derselben Form: d (Tag), text, at, userId, clips.
+     *
+     * @return array<string, mixed>
+     */
     private function BriefingStore(): array
     {
         $stand = json_decode($this->BriefingRaw(), true);
-        return is_array($stand) ? $stand : [];
+        if (!is_array($stand)) {
+            return [];
+        }
+        // Alter, flacher Stand aus der Zeit vor der Vorschau: als Fach „heute" lesen,
+        // statt ihn zu verwerfen — sonst waere die Karte bis zum naechsten Lauf leer.
+        if (array_key_exists('text', $stand) && !array_key_exists('heute', $stand)) {
+            $stand = [
+                'heute'   => $stand,
+                'failDay' => (string)($stand['failDay'] ?? ''),
+                'fails'   => (int)($stand['fails'] ?? 0),
+            ];
+        }
+        return $stand;
+    }
+
+    /**
+     * Ein Fach. `$tage` 0 = heute, 1 = die Vorschau auf morgen.
+     *
+     * @return array{d: string, text: string, at: int, userId: string, clips: list<string>}
+     */
+    private function BriefingSlot(int $tage): array
+    {
+        $fach = $this->BriefingStore()[$tage === 0 ? 'heute' : 'vorschau'] ?? [];
+        $clips = [];
+        foreach ((array)($fach['clips'] ?? []) as $h) {
+            if (is_string($h) && preg_match('/^[a-f0-9]{32}$/', $h) === 1) {
+                $clips[] = $h;
+            }
+        }
+        return [
+            'd'      => (string)($fach['d'] ?? ''),
+            'text'   => trim((string)($fach['text'] ?? '')),
+            'at'     => (int)($fach['at'] ?? 0),
+            'userId' => (string)($fach['userId'] ?? ''),
+            'clips'  => $clips,
+        ];
+    }
+
+    private function BriefingWriteSlot(int $tage, array $inhalt): bool
+    {
+        $stand = $this->BriefingStore();
+        $stand[$tage === 0 ? 'heute' : 'vorschau'] = $inhalt;
+        return $this->BriefingWriteStore($stand);
     }
 
     /**
@@ -188,6 +242,7 @@ trait Briefing
     }
 
     /** Beim Einwilligungs-Widerruf: der Text ist aus denselben Daten entstanden. */
+    /** Beim Einwilligungs-Widerruf: beide Faecher, heute und Vorschau. */
     private function BriefingClear(): bool
     {
         if ($this->BriefingStore() === []) {
@@ -215,10 +270,34 @@ trait Briefing
     /** @return array{0: int, 1: int} Stunde, Minute der eingestellten Zeit. */
     private function BriefingTargetTime(): array
     {
-        $zeit = json_decode((string)$this->BriefingProp('BriefingTime', ''), true);
-        $std  = is_array($zeit) ? (int)($zeit['hour'] ?? 5) : 5;
-        $min  = is_array($zeit) ? (int)($zeit['minute'] ?? 30) : 30;
+        return $this->BriefingTimeOf('BriefingTime', 5, 30);
+    }
+
+    /** Zeit der abendlichen Vorschau. */
+    private function BriefingPreviewTime(): array
+    {
+        return $this->BriefingTimeOf('BriefingPreviewFrom', 18, 0);
+    }
+
+    /** @return array{0: int, 1: int} */
+    private function BriefingTimeOf(string $property, int $stdVorgabe, int $minVorgabe): array
+    {
+        $zeit = json_decode((string)$this->BriefingProp($property, ''), true);
+        $std  = is_array($zeit) ? (int)($zeit['hour'] ?? $stdVorgabe) : $stdVorgabe;
+        $min  = is_array($zeit) ? (int)($zeit['minute'] ?? $minVorgabe) : $minVorgabe;
         return [max(0, min(23, $std)), max(0, min(59, $min))];
+    }
+
+    private function BriefingPreviewIsEnabled(): bool
+    {
+        return $this->BriefingIsEnabled() && (bool)$this->BriefingProp('BriefingPreviewEnabled', false);
+    }
+
+    /** Zeitpunkt heute, ab dem die Vorschau gilt. */
+    private function BriefingPreviewStart(): int
+    {
+        [$std, $min] = $this->BriefingPreviewTime();
+        return (int)mktime($std, $min, 0, (int)date('n'), (int)date('j'), (int)date('Y'));
     }
 
     /**
@@ -230,24 +309,46 @@ trait Briefing
      */
     private function BriefingMsUntilNext(): int
     {
-        [$std, $min] = $this->BriefingTargetTime();
         $jetzt = time();
-        $heute = mktime($std, $min, 0, (int)date('n'), (int)date('j'), (int)date('Y'));
-        if ($heute === false) {
-            return 3600000;
+        $ziele = [$this->BriefingNextAt($this->BriefingTargetTime(), $jetzt)];
+        if ($this->BriefingPreviewIsEnabled()) {
+            $ziele[] = $this->BriefingNextAt($this->BriefingPreviewTime(), $jetzt);
         }
-        $ziel = $heute > $jetzt ? $heute : (int)strtotime('+1 day', $heute);
+        $ziel = min($ziele);
         // Mindestabstand, damit ein Grenzfall (Zielzeit genau jetzt) den Timer
         // nicht in eine Schleife aus Sofortlaeufen schickt.
         return max(60000, ($ziel - $jetzt) * 1000);
     }
 
+    /** Naechstes Auftreten einer Tageszeit, heute oder morgen. */
+    private function BriefingNextAt(array $zeit, int $jetzt): int
+    {
+        [$std, $min] = $zeit;
+        $heute = mktime($std, $min, 0, (int)date('n'), (int)date('j'), (int)date('Y'));
+        if ($heute === false) {
+            return $jetzt + 3600;
+        }
+        // strtotime rechnet ueber die Zeitumstellung richtig, +86400 nicht.
+        return $heute > $jetzt ? (int)$heute : (int)strtotime('+1 day', (int)$heute);
+    }
+
     // ────────────────────────────── Lauf ──────────────────────────────
 
-    /** Der Timer-Lauf. Ergebnis interessiert hier niemanden, nur der Folgetermin. */
+    /**
+     * Der Timer-Lauf. EIN Fach pro Lauf, danach der Folgetermin.
+     *
+     * Die Vorschau hat Vorrang, sobald ihre Zeit erreicht ist: Von da an zeigen die
+     * Oberflaechen sie, ein dann noch fehlendes Briefing fuer heute waere umsonst
+     * bezahlt.
+     */
     private function BriefingRun(): void
     {
-        $ergebnis = $this->BriefingErzeugen(false);
+        $tage = $this->BriefingDueSlot();
+        if ($tage === null) {
+            $this->BriefingArm();
+            return;
+        }
+        $ergebnis = $this->BriefingErzeugen(false, $tage);
         // Fehlversuch: in einer halben Stunde erneut, hoechstens BRIEFING_FAIL_MAX
         // mal. Ein dauerhaft nicht erreichbarer Anbieter soll nicht alle 30 Minuten
         // einen Fehler ins Protokoll schreiben.
@@ -255,6 +356,36 @@ trait Briefing
             && ($ergebnis['retry'] ?? false)
             && (int)($this->BriefingStore()['fails'] ?? 0) < self::BRIEFING_FAIL_MAX;
         $this->BriefingArm($wiederholen ? self::BRIEFING_RETRY_MS : null);
+    }
+
+    /**
+     * Welches Fach ist jetzt zu erzeugen? null = nichts zu tun.
+     *
+     * Selbstheilend: Gepruefft wird nicht „ist die Uhrzeit gerade jetzt", sondern
+     * „ist die Zeit vorbei und das Fach leer". Ein verpasster Lauf (Neustart,
+     * Anbieter weg) wird so beim naechsten Anlauf nachgeholt.
+     */
+    private function BriefingDueSlot(): ?int
+    {
+        $jetzt = time();
+        if ($this->BriefingPreviewIsEnabled() && $jetzt >= $this->BriefingPreviewStart()) {
+            $fach = $this->BriefingSlot(1);
+            if ($fach['d'] !== date('Y-m-d', $this->BriefingDay(1)) || $fach['text'] === '') {
+                return 1;
+            }
+        }
+        if (!$this->BriefingIsEnabled()) {
+            return null;
+        }
+        [$std, $min] = $this->BriefingTargetTime();
+        $heuteZiel = (int)mktime($std, $min, 0, (int)date('n'), (int)date('j'), (int)date('Y'));
+        if ($jetzt >= $heuteZiel) {
+            $fach = $this->BriefingSlot(0);
+            if ($fach['d'] !== date('Y-m-d') || $fach['text'] === '') {
+                return 0;
+            }
+        }
+        return null;
     }
 
     /** Der Knopf im Formular: erzeugt sofort neu und meldet das Ergebnis zurueck. */
@@ -284,7 +415,7 @@ trait Briefing
     /**
      * @return array{ok: bool, message: string, retry: bool}
      */
-    private function BriefingErzeugen(bool $handanstoss): array
+    private function BriefingErzeugen(bool $handanstoss, int $tage = 0): array
     {
         if (!$this->BriefingIsEnabled()) {
             return ['ok' => false, 'message' => 'briefing_disabled', 'retry' => false];
@@ -295,68 +426,70 @@ trait Briefing
             return ['ok' => false, 'message' => 'busy', 'retry' => true];
         }
         try {
-            return $this->BriefingSchritt($handanstoss);
+            return $this->BriefingSchritt($handanstoss, $tage);
         } finally {
             IPS_SemaphoreLeave($riegel);
         }
     }
 
     /** @return array{ok: bool, message: string, retry: bool} */
-    private function BriefingSchritt(bool $handanstoss): array
+    private function BriefingSchritt(bool $handanstoss, int $tage = 0): array
     {
-        $stand = $this->BriefingStore();
-        $heute = date('Y-m-d');
+        $heute   = date('Y-m-d');
+        $zielTag = date('Y-m-d', $this->BriefingDay($tage));
 
         // Erst pruefen, ob das Ergebnis ueberhaupt ablegbar ist — ein Anbieter-
         // aufruf ins Leere kostet Geld und der Text waere danach weg.
         if (!$this->BriefingStorable()) {
             return ['ok' => false, 'message' => 'attribute_unwritable', 'retry' => false];
         }
-        if (!$handanstoss && ($stand['d'] ?? '') === $heute && trim((string)($stand['text'] ?? '')) !== '') {
-            $this->SendDebug('Briefing', 'fuer heute liegt schon eines vor', 0);
+        $fach = $this->BriefingSlot($tage);
+        if (!$handanstoss && $fach['d'] === $zielTag && $fach['text'] !== '') {
+            $this->SendDebug('Briefing', 'fuer ' . $zielTag . ' liegt schon eines vor', 0);
             return ['ok' => true, 'message' => 'already_done', 'retry' => false];
         }
 
-        $daten   = $this->BriefingCollect();
+        $daten   = $this->BriefingCollect($tage);
         $antwort = $this->AiRunCompletion(
-            $this->BriefingSystemPrompt($this->BriefingDayWord(0)),
+            $this->BriefingSystemPrompt($this->BriefingDayWord($tage)),
             $this->BriefingUserText($daten),
             null
         );
+        $fehlschlag = function (string $code) use ($heute): array {
+            $stand = $this->BriefingStore();
+            $stand['fails']   = (($stand['failDay'] ?? '') === $heute ? (int)($stand['fails'] ?? 0) : 0) + 1;
+            $stand['failDay'] = $heute;
+            $this->BriefingWriteStore($stand);
+            return ['ok' => false, 'message' => $code, 'retry' => true];
+        };
         if (!(bool)($antwort['ok'] ?? false)) {
             $code = (string)($antwort['code'] ?? 'ai_error');
             $this->SendDebug('Briefing', 'Anbieter meldet ' . $code, 0);
-            $stand['failDay'] = $heute;
-            $stand['fails']   = (($stand['failDay'] ?? '') === $heute ? (int)($stand['fails'] ?? 0) : 0) + 1;
-            $this->BriefingWriteStore($stand);
-            return ['ok' => false, 'message' => $code, 'retry' => true];
+            return $fehlschlag($code);
         }
 
         $text = $this->BriefingTidy((string)($antwort['text'] ?? ''));
         if ($text === '') {
-            $stand['failDay'] = $heute;
-            $stand['fails']   = (int)($stand['fails'] ?? 0) + 1;
-            $this->BriefingWriteStore($stand);
-            return ['ok' => false, 'message' => 'ai_empty', 'retry' => true];
+            return $fehlschlag('ai_empty');
         }
 
         $neu = [
-            'd'      => $heute,
+            'd'      => $zielTag,
             'text'   => $text,
             'at'     => time(),
             'userId' => (string)$daten['userId'],
-            // Der Ton entsteht JETZT, nicht beim Tippen auf Vorlesen: Acht
-            // Schnipsel brauchen gemessen um zehn Sekunden — die soll niemand
-            // vor einem stummen Knopf abwarten.
+            // Der Ton entsteht JETZT, nicht beim Tippen auf Vorlesen: Die Aufnahme
+            // braucht gemessen um zehn Sekunden — die soll niemand vor einem
+            // stummen Knopf abwarten.
             'clips'  => $this->BriefingAudio($text),
         ];
-        if (!$this->BriefingWriteStore($neu)) {
+        if (!$this->BriefingWriteSlot($tage, $neu)) {
             return ['ok' => false, 'message' => 'attribute_unwritable', 'retry' => false];
         }
         // Die Oberflaechen holen den Text beim naechsten „irgendetwas hat sich
         // geaendert" — ein eigener Kanal waere fuer einen Text pro Tag zu viel.
         $this->WsPushDirty();
-        $this->SendDebug('Briefing', sprintf('erzeugt, %d Zeichen', strlen($text)), 0);
+        $this->SendDebug('Briefing', sprintf('erzeugt fuer %s, %d Zeichen', $zielTag, mb_strlen($text)), 0);
         return ['ok' => true, 'message' => 'created', 'retry' => false];
     }
 
@@ -1068,22 +1201,23 @@ trait Briefing
 
     // ────────────────────────────── Ausgabe ──────────────────────────────
 
-    /** Der Text von heute, sonst leer. */
+    /** Der Text des heutigen Fachs, sonst leer. */
     private function BriefingText(): string
     {
-        $stand = $this->BriefingStore();
-        if (($stand['d'] ?? '') !== date('Y-m-d')) {
-            return '';
-        }
-        return trim((string)($stand['text'] ?? ''));
+        $fach = $this->BriefingSlot(0);
+        return $fach['d'] === date('Y-m-d') ? $fach['text'] : '';
     }
 
     /**
-     * Antwort der Route /v1/briefing.
+     * Was die Oberflaechen zeigen sollen — und ob es heute oder morgen betrifft.
      *
-     * `briefing` ist null, solange abgeschaltet, noch nichts erzeugt oder der
-     * Stand von einem anderen Tag ist — die Oberflaechen blenden dann aus, statt
-     * das Briefing von gestern als heutiges zu zeigen.
+     * Drei Faelle, in dieser Reihenfolge:
+     *  1. Vorschau eingeschaltet, ihre Uhrzeit erreicht, Text fuer morgen da → morgen.
+     *     Der Tag ist gelaufen; was zaehlt, ist der naechste.
+     *  2. Nach Mitternacht traegt die Vorschau von gestern das Datum von HEUTE. Sie
+     *     gilt dann als das heutige Briefing, bis der Morgenlauf sie ersetzt — sonst
+     *     waere die Karte zwischen 0 und 5:30 Uhr leer, obwohl ein passender Text da ist.
+     *  3. Sonst das Fach von heute.
      *
      * @return array<string, mixed>
      */
@@ -1092,25 +1226,42 @@ trait Briefing
         if (!$this->BriefingIsEnabled()) {
             return ['ok' => true, 'briefing' => null];
         }
-        $text = $this->BriefingText();
-        if ($text === '') {
+        $heute  = date('Y-m-d');
+        $morgen = date('Y-m-d', $this->BriefingDay(1));
+
+        $vorschau = $this->BriefingSlot(1);
+        if ($this->BriefingPreviewIsEnabled()
+            && time() >= $this->BriefingPreviewStart()
+            && $vorschau['d'] === $morgen
+            && $vorschau['text'] !== '') {
+            return $this->BriefingAntwort($vorschau, 'tomorrow', true);
+        }
+
+        $fach = $this->BriefingSlot(0);
+        if (($fach['d'] !== $heute || $fach['text'] === '')
+            && $vorschau['d'] === $heute && $vorschau['text'] !== '') {
+            return $this->BriefingAntwort($vorschau, 'today', false);
+        }
+        if ($fach['d'] !== $heute || $fach['text'] === '') {
             return ['ok' => true, 'briefing' => null];
         }
-        $stand = $this->BriefingStore();
-        $clips = [];
-        foreach ((array)($stand['clips'] ?? []) as $h) {
-            if (is_string($h) && preg_match('/^[a-f0-9]{32}$/', $h) === 1) {
-                $clips[] = $h;
-            }
-        }
+        return $this->BriefingAntwort($fach, 'today', false);
+    }
+
+    /** @return array<string, mixed> */
+    private function BriefingAntwort(array $fach, string $tag, bool $vorschau): array
+    {
         return ['ok' => true, 'briefing' => [
-            'text'        => $text,
-            'date'        => (string)($stand['d'] ?? ''),
-            'generatedAt' => (int)($stand['at'] ?? 0),
-            'userId'      => (string)($stand['userId'] ?? ''),
+            'text'        => $fach['text'],
+            'date'        => $fach['d'],
+            'generatedAt' => $fach['at'],
+            'userId'      => $fach['userId'],
             // Fertige Tonschnipsel in Spielreihenfolge; leer = die Oberflaeche
             // muss selbst erzeugen (Sprachausgabe war beim Schreiben nicht bereit).
-            'clips'       => $clips,
+            'clips'       => $fach['clips'],
+            // Damit die Karte nicht den morgigen Text als heutigen ausgibt.
+            'day'         => $tag,
+            'preview'     => $vorschau,
         ]];
     }
 }

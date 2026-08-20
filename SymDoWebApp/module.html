@@ -492,6 +492,19 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   margin-top: 2px;
 }
 .briefing-text { font-size: 15px; line-height: 1.45; }
+.briefing-morgen {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  vertical-align: 2px;
+}
 /* Vorlesen: der Knopf sitzt oben rechts in der Karte und bleibt dort, auch wenn
    der Text mehrere Zeilen laeuft (align-self statt Zeilenfluss). */
 .briefing-play {
@@ -4453,6 +4466,7 @@ function bindDragScroll(el) {
 // er nur geholt. Deshalb wartet das Dashboard nie auf die KI.
 let briefingText = '';
 let briefingClips = [];        // vom Gateway vorab erzeugte Tonschnipsel
+let briefingVorschau = false;  // true = der Text gilt für MORGEN
 let briefingLoading = false;
 
 /** Nur mit Gateway: dort liegt der Text. In der Visu-Kachel scheitert aiPost
@@ -4476,9 +4490,11 @@ function loadBriefing() {
     const frisch = (j && j.ok === true && j.briefing && typeof j.briefing.text === 'string')
       ? j.briefing.text : '';
     const clips = (j && j.briefing && Array.isArray(j.briefing.clips)) ? j.briefing.clips : [];
-    if (frisch === briefingText && clips.join() === briefingClips.join()) return;
+    const vorschau = !!(j && j.briefing && j.briefing.preview);
+    if (frisch === briefingText && clips.join() === briefingClips.join() && vorschau === briefingVorschau) return;
     briefingText = frisch;
     briefingClips = clips;
+    briefingVorschau = vorschau;
     renderAll();
   }).catch(() => { briefingLoading = false; });
 }
@@ -4679,8 +4695,13 @@ function renderDashboard() {
       ? `<button class="briefing-play${briefingLaeuft ? ' laeuft' : ''}" data-briefing="play" ` +
         `title="${escapeHtml(translate('Read aloud'))}"><i class="fa-light ${symbol}"></i></button>`
       : '';
-    html += `<div class="card briefing-card"><i class="fa-light fa-sun briefing-glyph"></i>` +
-      `<div class="briefing-text">${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${knopf}</div>`;
+    // Am Abend zeigt die Karte den morgigen Text. Ohne Kennzeichnung liest man ihn
+    // als den heutigen — deshalb ein Vorsatz, kein stiller Wechsel.
+    const marke = briefingVorschau
+      ? `<span class="briefing-morgen">${escapeHtml(translate('Tomorrow'))}</span> `
+      : '';
+    html += `<div class="card briefing-card"><i class="fa-light ${briefingVorschau ? 'fa-moon' : 'fa-sun'} briefing-glyph"></i>` +
+      `<div class="briefing-text">${marke}${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${knopf}</div>`;
   }
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
