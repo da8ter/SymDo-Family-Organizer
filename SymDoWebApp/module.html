@@ -680,6 +680,11 @@ html[data-symdo-theme="dark"] .member-bar {
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* Alle Zeilen gleich hoch, ohne festen Wert: Die Aufgaben-Kachel mit ihren drei
+     Zeilen ist hoeher als das Paar darunter, und 1fr zieht beide Rasterzeilen auf
+     die Hoehe der hoechsten. Eine feste min-height waere geraten und braeche, sobald
+     eine Beschriftung bei grosser Schrift umbricht. */
+  grid-auto-rows: 1fr;
   gap: var(--gap);
   margin-bottom: var(--gap);
 }
@@ -723,6 +728,8 @@ html[data-symdo-theme="dark"] .member-bar {
   font-size: 74px;
   opacity: .18;
   z-index: 0;
+  /* Leicht gegen den Uhrzeigersinn gekippt — dasselbe Mass wie in der iOS-App. */
+  transform: rotate(-10deg);
 }
 .kpi:active { filter: brightness(1.08); }
 
