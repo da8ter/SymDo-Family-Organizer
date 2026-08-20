@@ -118,6 +118,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::HOOK_PATH);
             $this->RegisterHook(self::WEBAPP_HOOK_PATH);
             $this->RegisterHook(self::WS_HOOK_PATH);
+            $this->RegisterHook(self::PWA_HOOK_PATH);
             $this->AppApplyChanges();
             $this->MailApplyChanges();
             $this->CalApplyChanges();

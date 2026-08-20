@@ -38,6 +38,17 @@ trait AppCore
     // WebSocket-Frames gar nicht erst in den REST-Router geraten (Symcon ruft das
     // Hook-Ziel pro Frame mit REQUEST_METHOD=GET und Body in php://input auf).
     private const WS_HOOK_PATH         = 'lists/ws';
+    /**
+     * Service Worker und Manifest. Eigener Hook mit Absicht: Ein Worker darf nur
+     * fuer sein eigenes Verzeichnis und darunter zustaendig sein. Unter
+     * `/hook/lists/pwa` ist das Verzeichnis `/hook/lists/` — genau der Bereich, in
+     * dem die Seite (`/hook/lists/webapp`) liegt. Unter
+     * `/hook/lists/webapp/sw.js` waere es `/hook/lists/webapp/`, und die Seite
+     * selbst laege NICHT darin; das braeuchte den Sonderkopf
+     * `Service-Worker-Allowed`, und dass der den Connect-Proxy unveraendert
+     * uebersteht, ist nirgends zugesagt.
+     */
+    private const PWA_HOOK_PATH        = 'lists/pwa';
     private const WEBHOOK_CONTROL_GUID = '{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}';
     private const API_VERSION          = 1;
     private const PAIRING_TTL          = 600;
@@ -676,6 +687,14 @@ trait AppCore
                 return;
             }
 
+            // Service Worker und Manifest: ohne Token, wie die Icons. Beides ist
+            // oeffentlich harmlos — der Worker kennt keine Geheimnisse, das Manifest
+            // beschreibt nur Name, Symbole und Startadresse.
+            if (str_starts_with($path, '/hook/' . self::PWA_HOOK_PATH)) {
+                $this->ServePwaFile($path);
+                return;
+            }
+
             // Web-App-Seite: eigener Hook, liefert HTML (kein Token nötig — die
             // Seite authentifiziert sich danach selbst gegen die JSON-API).
             if (str_starts_with($path, '/hook/' . self::WEBAPP_HOOK_PATH)) {
@@ -764,6 +783,88 @@ trait AppCore
     }
 
     /**
+     * Liefert den Service Worker oder das Manifest.
+     *
+     * Der Worker liegt GENAU auf `/hook/lists/pwa` (ohne Endung, ohne Unterpfad) —
+     * daran haengt sein Zustaendigkeitsbereich, siehe PWA_HOOK_PATH. Der Dateiname
+     * spielt keine Rolle, der Content-Type entscheidet.
+     */
+    private function ServePwaFile(string $path): void
+    {
+        $rest = trim(substr($path, strlen('/hook/' . self::PWA_HOOK_PATH)), '/');
+
+        if ($rest === 'manifest.webmanifest') {
+            $this->ServePwaManifest();
+            return;
+        }
+        if ($rest !== '') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Not found.';
+            return;
+        }
+
+        $js = @file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/assets/sw.js');
+        if (!is_string($js) || $js === '') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Worker not found.';
+            return;
+        }
+        http_response_code(200);
+        header('Content-Type: application/javascript; charset=utf-8');
+        // no-cache und nicht no-store: Der Browser DARF die Datei behalten, muss sie
+        // aber jedes Mal gegenpruefen. So greift eine neue Fassung beim naechsten
+        // Start, ohne dass der Worker bei jedem Ereignis neu geladen wird.
+        header('Cache-Control: no-cache');
+        header('X-Content-Type-Options: nosniff');
+        echo $js;
+    }
+
+    /**
+     * Das Web-App-Manifest. Ohne dieses erlaubt iOS gar keine Benachrichtigungen:
+     * Push gibt es dort nur fuer eine zum Home-Bildschirm hinzugefuegte App, und
+     * hinzufuegen laesst sich nur, was `display: standalone` erklaert.
+     *
+     * `id` und `start_url` sind auf Dauer festgelegt. Aendert sich eines davon,
+     * gilt die App auf iOS als eine ANDERE: zweites Symbol, zweiter Speicher,
+     * verwaistes Abo.
+     *
+     * `start_url` traegt bewusst KEIN Token. Der Weg, den die Seite heute nutzt
+     * (Token im Adressfragment, damit „Zum Home-Bildschirm" es mitnimmt), laesst
+     * sich mit einem Manifest nicht sauber verbinden: Safari holt ein zur Laufzeit
+     * geaendertes Manifest nicht verlaesslich neu, und ein Token in einer
+     * Manifest-Adresse stuende in jedem Zugriffsprotokoll. Die Home-Screen-App ist
+     * ein eigener Client mit eigenem Speicher — sie koppelt sich einmal selbst und
+     * bekommt damit ihren eigenen Eintrag in der Geraeteliste.
+     */
+    private function ServePwaManifest(): void
+    {
+        $seite = '/hook/' . self::WEBAPP_HOOK_PATH;
+        $manifest = [
+            'id'               => $seite,
+            'name'             => 'SymDo',
+            'short_name'       => 'SymDo',
+            'start_url'        => $seite,
+            // Umfasst Seite UND API, damit ein Klick aus der Benachrichtigung in der
+            // App landet und nicht in einem Browser-Fenster daneben.
+            'scope'            => '/hook/lists/',
+            'display'          => 'standalone',
+            'orientation'      => 'portrait',
+            'background_color' => '#1c1c1e',
+            'theme_color'      => '#1c1c1e',
+            'icons'            => [
+                ['src' => $seite . '/appicon-180.png', 'sizes' => '180x180', 'type' => 'image/png'],
+                ['src' => $seite . '/appicon-32.png', 'sizes' => '32x32', 'type' => 'image/png'],
+            ],
+        ];
+        http_response_code(200);
+        header('Content-Type: application/manifest+json; charset=utf-8');
+        header('Cache-Control: no-cache');
+        echo (string)json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
      * Host-Kopf für den Browser-Betrieb. Ersetzt die visu-spezifische
      * `/icons.js`-Zeile. (Phase A: Theme-Defaults; der REST-Adapter + Icons +
      * i18n folgen in den nächsten Phasen.)
@@ -815,7 +916,13 @@ trait AppCore
         $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
         $icons = '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png">'
             . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
-            . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">';
+            . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
+            // Manifest und die beiden Meta-Angaben machen die Seite erst
+            // installierbar — und ohne Installation gibt es auf iOS keinen Push.
+            . '<link rel="manifest" href="/hook/' . self::PWA_HOOK_PATH . '/manifest.webmanifest">'
+            . '<meta name="apple-mobile-web-app-capable" content="yes">'
+            . '<meta name="mobile-web-app-capable" content="yes">'
+            . '<meta name="theme-color" content="#1c1c1e">';
 
         $adapterJs = (string)@file_get_contents(__DIR__ . '/webapp-adapter.js');
         $adapter = '<script>' . $adapterJs . '</script>';
