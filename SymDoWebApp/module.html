@@ -492,6 +492,22 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   margin-top: 2px;
 }
 .briefing-text { font-size: 15px; line-height: 1.45; }
+/* Vorlesen: der Knopf sitzt oben rechts in der Karte und bleibt dort, auch wenn
+   der Text mehrere Zeilen laeuft (align-self statt Zeilenfluss). */
+.briefing-play {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 34px; height: 34px;
+  margin: -4px -4px 0 4px;
+  border: 0; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.briefing-play:disabled { opacity: .5; cursor: default; }
+.briefing-play.laeuft { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 .dash-date {
   font-size: 13px;
   font-weight: 600;
@@ -4464,6 +4480,101 @@ function loadBriefing() {
   }).catch(() => { briefingLoading = false; });
 }
 
+// Vorlesen des Briefings. Bewusst eine eigene, einfache Wiedergabe und nicht die
+// Einkaufs-Ansage: die fuehrt eine Schrittkette mit Abteilungen, Abhaken und
+// Fernbedienung — hier gibt es genau einen Text.
+let briefingAudio = null;
+let briefingLaeuft = false;
+let briefingLaedt = false;
+
+/** Nur in der ausgelieferten Web-App: die Visu-Kachel erreicht die Gateway-API nicht. */
+function briefingTonMoeglich() {
+  return !!window.__SYMDO__;
+}
+
+/**
+ * Der Text in Haeppchen fuer die Sprachausgabe. Das Gateway kappt jeden Text bei
+ * 200 Zeichen (TTS_MAX_CHARS) — ungeteilt bliebe also der halbe Satz stumm.
+ * Geteilt wird an Satzenden, und ein ueberlanger Satz notfalls am Komma.
+ */
+function briefingHaeppchen(text) {
+  const grenze = 190;
+  const raus = [];
+  const saetze = String(text).replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*/g) || [];
+  let puffer = '';
+  const schieben = () => { const t = puffer.trim(); if (t) raus.push(t); puffer = ''; };
+  for (const satz of saetze) {
+    if ((puffer + ' ' + satz).trim().length <= grenze) { puffer = (puffer + ' ' + satz).trim(); continue; }
+    schieben();
+    if (satz.trim().length <= grenze) { puffer = satz.trim(); continue; }
+    // Notfall: ein einzelner Satz ist zu lang — am Komma trennen, sonst hart.
+    let rest = satz.trim();
+    while (rest.length > grenze) {
+      let schnitt = rest.lastIndexOf(',', grenze);
+      if (schnitt < grenze * 0.4) schnitt = rest.lastIndexOf(' ', grenze);
+      if (schnitt < 1) schnitt = grenze;
+      raus.push(rest.slice(0, schnitt + 1).trim());
+      rest = rest.slice(schnitt + 1).trim();
+    }
+    puffer = rest;
+  }
+  schieben();
+  return raus;
+}
+
+function briefingTonBeenden() {
+  if (briefingAudio) {
+    briefingAudio.pause();
+    briefingAudio.src = '';
+    briefingAudio = null;
+  }
+  briefingLaeuft = false;
+  briefingLaedt = false;
+  renderDashboard();
+}
+
+/** Holt die Schnipsel und spielt sie der Reihe nach. */
+async function briefingVorlesen() {
+  if (briefingLaeuft || briefingLaedt) { briefingTonBeenden(); return; }
+  const text = String(briefingText || '').trim();
+  if (!text) return;
+
+  briefingLaedt = true;
+  renderDashboard();
+  const antwort = await aiPost('/tts', { texts: briefingHaeppchen(text) });
+  briefingLaedt = false;
+  const clips = antwort && antwort.json && Array.isArray(antwort.json.clips) ? antwort.json.clips : null;
+  if (!clips) {
+    const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
+    showToast(code === 'tts_restart_required'
+      ? translate('Speech output was just installed — restart IP-Symcon once.')
+      : translate('Speech output is not available.'));
+    renderDashboard();
+    return;
+  }
+  const urls = [];
+  for (const c of clips) {
+    if (!c || !c.ok || !c.hash) continue;
+    const url = await ansageClipHolen(c.hash);
+    if (url) urls.push(url);
+  }
+  if (urls.length === 0) { showToast(translate('Speech output is not available.')); renderDashboard(); return; }
+
+  briefingLaeuft = true;
+  briefingAudio = new Audio();
+  let i = 0;
+  const weiter = () => {
+    if (!briefingLaeuft || !briefingAudio) return;
+    if (i >= urls.length) { briefingTonBeenden(); return; }
+    briefingAudio.src = urls[i++];
+    briefingAudio.play().catch(() => briefingTonBeenden());
+  };
+  briefingAudio.addEventListener('ended', weiter);
+  briefingAudio.addEventListener('error', () => briefingTonBeenden());
+  weiter();
+  renderDashboard();
+}
+
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
@@ -4552,8 +4663,13 @@ function renderDashboard() {
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
   // darueber nur zaehlen. Ohne Text keine Karte — eine leere waere Ballast.
   if (briefingText) {
+    const symbol = briefingLaedt ? 'fa-circle-notch fa-spin' : (briefingLaeuft ? 'fa-pause' : 'fa-play');
+    const knopf = briefingTonMoeglich()
+      ? `<button class="briefing-play${briefingLaeuft ? ' laeuft' : ''}" data-briefing="play" ` +
+        `title="${escapeHtml(translate('Read aloud'))}"><i class="fa-light ${symbol}"></i></button>`
+      : '';
     html += `<div class="card briefing-card"><i class="fa-light fa-sun briefing-glyph"></i>` +
-      `<div class="briefing-text">${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div></div>`;
+      `<div class="briefing-text">${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${knopf}</div>`;
   }
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
@@ -4706,6 +4822,10 @@ function renderDashboard() {
 
   // Interaktionen
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
+  el.querySelectorAll('[data-briefing="play"]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    briefingVorlesen();
+  }));
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const id = b.dataset.member;
