@@ -8,6 +8,7 @@ require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
 require_once __DIR__ . '/libs/Briefing.php';
+require_once __DIR__ . '/libs/WebPush.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -30,6 +31,7 @@ class SymDoGateway extends IPSModuleStrict
     use MailFetch;
     use CalendarBridge;
     use Briefing;
+    use WebPush;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -97,6 +99,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->CalCreateProps();
         // Tagesbriefing: Einstellungen, Ablage und sein Timer
         $this->BriefingCreate();
+        // Web Push: Ablage des VAPID-Schluesselpaars
+        $this->PushCreate();
     }
 
     public function ApplyChanges(): void
