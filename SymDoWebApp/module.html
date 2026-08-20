@@ -15,6 +15,11 @@
   /* Deckende Zeilenfläche: liegt über dem roten Wisch-Hintergrund, darf NICHT
      durchscheinen (color-mix zweier deckender Farben bleibt deckend) */
   --row:     color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  /* Aufgabenzeilen etwas heller als die uebrigen Zeilen (Wunsch vom 20.08.2026):
+     Auf der Uebersicht liegen sie IN einer Karte, und mit --row (8 % Inhaltston)
+     standen Karte und Zeile fast auf demselben Ton. Deckend wie --row, denn hinter
+     der Zeile liegt der rote Wisch-Untergrund. */
+  --row-task: color-mix(in srgb, var(--card-color) 88%, var(--content-color) 12%);
   --border:  color-mix(in srgb, var(--content-color) 14%, transparent);
   --accent:  var(--accent-color);
   --red:     #ff4d4d;
@@ -1561,7 +1566,7 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Angehobene Karte während des Long-Press-Reorderns: in Accent-Farbe getönt */
 .todo-card.todo-dragging .todo-content {
   box-shadow: 0 6px 16px rgba(0,0,0,.32);
-  background: color-mix(in srgb, var(--accent) 22%, var(--row));
+  background: color-mix(in srgb, var(--accent) 22%, var(--row-task));
   outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .todo-content {
@@ -1570,7 +1575,7 @@ html[data-symdo-theme="dark"] .member-bar {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--row);
+  background: var(--row-task);
   transition: transform .18s ease;
   /* pan-y → natives vertikales Scrollen (mit Schwung) bleibt erhalten; der
      horizontale Swipe wird per JS behandelt. Reorder läuft über den Griff
@@ -2805,7 +2810,11 @@ html[data-symdo-theme="dark"] .member-bar {
 // gesetzt). Der Web-Adapter setzt --row zusätzlich inline — konsistenter Wert.
 (function symdoLightTiles(){
   try { var st = document.createElement('style');
-    st.textContent = 'html[data-symdo-theme="light"]{--row:color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)}';
+    st.textContent = 'html[data-symdo-theme="light"]{'
+      + '--row:color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);'
+      // Im Hellmodus wuerde ein hoeherer Inhaltsanteil die Zeile DUNKLER machen,
+      // nicht heller — dort bleibt sie deshalb, wie sie war.
+      + '--row-task:color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)}';
     (document.head || document.documentElement).appendChild(st); } catch (e) {}
   function apply(){ try {
     var p = document.createElement('span');

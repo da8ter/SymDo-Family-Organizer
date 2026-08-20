@@ -88,6 +88,12 @@
     document.documentElement.style.setProperty('--row', scheme === 'light'
       ? 'color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)'
       : 'color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%)');
+    // Aufgabenzeilen liegen im Dunkelmodus etwas heller als die uebrigen Zeilen; im
+    // Hellmodus wuerde mehr Inhaltston sie dunkler machen, dort bleibt es beim Wert
+    // von --row.
+    document.documentElement.style.setProperty('--row-task', scheme === 'light'
+      ? 'color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%)'
+      : 'color-mix(in srgb, var(--card-color) 88%, var(--content-color) 12%)');
   }
   // Canvas-Hintergrund (Overscroll/Safe-Areas) folgt der Kartenfarbe. Zuletzt
   // eingefügt → gewinnt über das statische Default aus BuildWebHead.
