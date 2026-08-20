@@ -478,6 +478,20 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .card-head .link { color: var(--accent); font-size: 14px; font-weight: 600; }
 
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
+/* Tagesbriefing: ruhige Karte mit Sonne links, Text als Fliesstext. Bewusst ohne
+   Umschalter — zwei bis vier Saetze muss man nicht aufklappen. */
+.briefing-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.briefing-card .briefing-glyph {
+  flex: 0 0 auto;
+  font-size: 18px;
+  color: #ff9500;
+  margin-top: 2px;
+}
+.briefing-text { font-size: 15px; line-height: 1.45; }
 .dash-date {
   font-size: 13px;
   font-weight: 600;
@@ -2154,7 +2168,7 @@ html[data-symdo-theme="dark"] .member-bar {
      Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
      Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
      in einer schmalen Rasterspalte gequetscht. */
-  .week-card, .shop-card, .dash-tasks { grid-column: 1 / -1; }
+  .week-card, .shop-card, .dash-tasks, .briefing-card { grid-column: 1 / -1; }
 
   /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
      unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
@@ -3363,6 +3377,7 @@ function handleMessage(data) {
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();
     loadCalendars();
+    loadBriefing();
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));
@@ -4417,6 +4432,38 @@ function bindDragScroll(el) {
   });
 }
 
+// ── Tagesbriefing ──────────────────────────────────────────────────────────
+// Der Text entsteht einmal taeglich im Gateway und wird dort abgelegt; hier wird
+// er nur geholt. Deshalb wartet das Dashboard nie auf die KI.
+let briefingText = '';
+let briefingLoading = false;
+
+/** Nur mit Gateway: dort liegt der Text. In der Visu-Kachel scheitert aiPost
+    still — die Karte bleibt dort also von selbst aus. */
+function briefingAvailable() {
+  if (window.__SYMDO__) return true;
+  return !!store.gatewayAvailable;
+}
+
+function loadBriefing() {
+  if (briefingLoading) return;
+  if (!briefingAvailable()) {
+    if (briefingText) { briefingText = ''; renderAll(); }
+    return;
+  }
+  briefingLoading = true;
+  aiPost('/briefing', {}).then(r => {
+    briefingLoading = false;
+    const j = r && r.json;
+    // Kein Gateway, alte Version, Route unbekannt, abgeschaltet: still nichts.
+    const frisch = (j && j.ok === true && j.briefing && typeof j.briefing.text === 'string')
+      ? j.briefing.text : '';
+    if (frisch === briefingText) return;
+    briefingText = frisch;
+    renderAll();
+  }).catch(() => { briefingLoading = false; });
+}
+
 // ── Übersicht (Dashboard) ──────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboardContent');
@@ -4501,6 +4548,13 @@ function renderDashboard() {
       `<i class="fa-light fa-basket-shopping kpi-glyph"></i></button>`;
   }
   html += '</div>';
+
+  // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
+  // darueber nur zaehlen. Ohne Text keine Karte — eine leere waere Ballast.
+  if (briefingText) {
+    html += `<div class="card briefing-card"><i class="fa-light fa-sun briefing-glyph"></i>` +
+      `<div class="briefing-text">${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div></div>`;
+  }
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
   // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.
