@@ -1258,6 +1258,13 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Ohne Rahmen, wie die Aufgabenzeilen und die Vorschlaege: die Flaeche allein
    trennt die Zeile vom Hintergrund. Ein Rahmen zusaetzlich zur Flaeche zeichnet
    dieselbe Kante zweimal. */
+/* Terminvorschau auf der Uebersicht: dieselben Zeilen wie im Kalender, nur ohne
+   Wischen und Knoepfe. Der Abstand steckt dort am .cal-card-Behaelter, den es hier
+   nicht gibt — deshalb hier direkt an der Zeile. */
+.cal-preview .cal-event { margin-bottom: 6px; }
+.cal-preview .cal-event:last-child { margin-bottom: 0; }
+.cal-preview .cal-day-head { margin: 10px 2px 6px; }
+.cal-preview .card-head + .cal-day-head { margin-top: 0; }
 .cal-event {
   display: flex; align-items: stretch; gap: 9px;
   padding: 9px 10px;
@@ -2257,7 +2264,7 @@ html[data-symdo-theme="dark"] .member-bar {
      Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
      Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
      in einer schmalen Rasterspalte gequetscht. */
-  .week-card, .shop-card, .dash-tasks, .briefing-card { grid-column: 1 / -1; }
+  .week-card, .shop-card, .dash-tasks, .briefing-card, .cal-preview { grid-column: 1 / -1; }
 
   /* Breite Anzeige: das Briefing steht ganz da, der Aufklapper entfaellt. Die
      JS-Messung blendet ihn zusaetzlich aus, sobald der Text nicht mehr ueberlaeuft
@@ -3132,6 +3139,8 @@ let activeTab = (function () {
 })();
 // Fortschrittskarte auf der Uebersicht. Auf true setzen, um sie zurueckzuholen.
 const SHOW_PROGRESS_CARD = false;
+/** Hoechstens so viele Termine in der Vorschau unter den Aufgaben. */
+const DASH_EVENTS_MAX = 5;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
 let dashPriority = ls.get('symdo.dashboardPriority') || '';
 // EINE Mitglieder-Auswahl fuer alle Bereiche: wer im Dashboard eine Person
@@ -5253,6 +5262,39 @@ function renderDashboard() {
     html += '</div>';   // .dash-tasks
   }
 
+  // Termine heute und morgen, direkt unter den Aufgaben. Die Kachel oben sagt nur,
+  // WIE VIELE heute anstehen; hier steht, WAS ansteht. Zeilen und Tagesueberschrift
+  // sind dieselben wie im Kalender-Bereich (.cal-event, .cal-day-head) — eine eigene
+  // Gestaltung fuer dieselbe Sache waere nur Ballast.
+  if (vis.includes('calendar') && dashEvents.length > 0) {
+    html += `<div class="card cal-preview"><div class="card-head"><h3>${translate('Appointments')}</h3>` +
+      `<button class="link" data-goto="calendar">${translate('Open')}</button></div>`;
+    let letzterTag = '';
+    for (const e of dashEvents.slice(0, DASH_EVENTS_MAX)) {
+      if (e.tag !== letzterTag) {
+        letzterTag = e.tag;
+        html += `<div class="cal-day-head${e.tag === 'today' ? ' is-today' : ''}">` +
+          `<span class="cal-weekday">${escapeHtml(translate(e.tag === 'today' ? 'Today' : 'Tomorrow'))}</span></div>`;
+      }
+      const wann = e.allDay
+        ? translate('all day')
+        : new Date(e.start * 1000).toTimeString().slice(0, 5);
+      html += `<div class="cal-event"><span class="cal-body">` +
+        `<div class="cal-when">${escapeHtml(wann)}</div>` +
+        `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
+        `</span></div>`;
+    }
+    const restTermine = dashEvents.length - DASH_EVENTS_MAX;
+    if (restTermine > 0) {
+      const label = restTermine === 1
+        ? translate('1 more appointment')
+        : translate('%1 more appointments').replace('%1', String(restTermine));
+      html += `<button class="more-row" data-goto="calendar"><span>${escapeHtml(label)}</span>` +
+        `<i class="fa-light fa-chevron-right"></i></button>`;
+    }
+    html += '</div>';
+  }
+
   // Einkaufsvorschau — wie in der App nur, wenn es eine sichtbare Einkaufsliste
   // gibt (kein Platzhalter-Card, wenn keine existiert/alle ausgeblendet sind)
   const shopId = selectedShoppingID();
@@ -6263,27 +6305,44 @@ function loadCalendars() {
  * eine vorschnelle 0 waere eine Falschaussage.
  */
 let dashEventsToday = null;
+let dashEvents = [];          // heute und morgen, nach Beginn sortiert
 
 function loadDashEvents() {
   if (!calAvailable() || calCalendars.length === 0) {
-    if (dashEventsToday !== null) { dashEventsToday = null; renderDashboard(); }
+    if (dashEventsToday !== null || dashEvents.length) {
+      dashEventsToday = null;
+      dashEvents = [];
+      renderDashboard();
+    }
     return;
   }
   const von = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
-  const bis = von + 86400;
+  const grenze = von + 86400;                 // Beginn von morgen
+  const bis = von + 2 * 86400;                // Ende von morgen
   aiPost('/calendar', { action: 'events', from: von, to: bis, ids: [] }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !Array.isArray(j.events)) return;
-    // Dieselbe Regel wie im Briefing: Ganztaegige Termine zaehlen fuer jeden Tag, den
+    // Dieselbe Regel wie im Briefing: Ganztaegige Termine gelten fuer jeden Tag, den
     // sie ECHT schneiden (das Ende ist ausschliesslich, ein Eintrag der um 00:00 endet
     // gehoert zum Vortag); Termine mit Uhrzeit gehoeren zu dem Tag, an dem sie
     // beginnen. Sonst zaehlte ein mehrtaegiger Block jeden Tag mit.
-    dashEventsToday = j.events.filter(e => {
+    const tagVon = (e) => {
       const start = Number(e.start) || 0;
       const ende = Number(e.end) || 0;
-      if (e.allDay === true) return ende > von && start < bis;
-      return start >= von && start < bis;
-    }).length;
+      if (e.allDay === true) {
+        if (ende > von && start < grenze) return 'today';
+        if (ende > grenze && start < bis) return 'tomorrow';
+        return '';
+      }
+      if (start >= von && start < grenze) return 'today';
+      if (start >= grenze && start < bis) return 'tomorrow';
+      return '';
+    };
+    dashEvents = j.events
+      .map(e => ({ tag: tagVon(e), start: Number(e.start) || 0, allDay: e.allDay === true, title: String(e.title || '') }))
+      .filter(e => e.tag !== '')
+      .sort((a, b) => a.start - b.start);
+    dashEventsToday = dashEvents.filter(e => e.tag === 'today').length;
     renderDashboard();
   }).catch(() => {});
 }

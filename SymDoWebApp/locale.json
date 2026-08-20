@@ -316,7 +316,10 @@
             "The test notification could not be sent.": "Die Testbenachrichtigung konnte nicht gesendet werden.",
             "Notifications are blocked in the browser settings.": "Benachrichtigungen sind in den Browser-Einstellungen gesperrt.",
             "There is no briefing to read out yet.": "Es liegt noch kein Briefing zum Vorlesen vor.",
-            "The browser blocked the playback. Tap the tile once, then it works.": "Der Browser hat die Wiedergabe blockiert. Tippe die Kachel einmal an, dann geht es."
+            "The browser blocked the playback. Tap the tile once, then it works.": "Der Browser hat die Wiedergabe blockiert. Tippe die Kachel einmal an, dann geht es.",
+            "Appointments": "Termine",
+            "1 more appointment": "1 weiterer Termin",
+            "%1 more appointments": "%1 weitere Termine"
         }
     }
 }
