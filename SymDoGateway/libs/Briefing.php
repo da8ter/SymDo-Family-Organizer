@@ -542,12 +542,19 @@ trait Briefing
                 if ($zeile === '') {
                     continue;
                 }
-                if (!$istAllDay && !$ueberfaellig) {
-                    $zeile = date('H:i', $due) . ' ' . $zeile;
-                }
+                // Die Uhrzeit einer Aufgabe ist eine FRIST, kein Beginn. Vorangestellt
+                // („16:30 Formular abgeben") liest das Modell sie als Termin und schreibt
+                // „um 16:30 Uhr das Formular abgeben" — deshalb steht sie ausgeschrieben
+                // dahinter.
                 if ($ueberfaellig) {
                     $tage = (int)floor(($heuteStart - (int)strtotime(date('Y-m-d', $due))) / 86400);
-                    $zeile .= $tage > 0 ? sprintf(' (seit %d Tag(en))', $tage) : ' (heute schon vorbei)';
+                    $zeile .= $tage > 0
+                        ? sprintf(' — Frist war vor %d Tag(en)', $tage)
+                        : ' — Frist war heute vorhin';
+                } else {
+                    $zeile .= $istAllDay
+                        ? ' — Frist: heute'
+                        : ' — Frist: heute bis ' . date('H:i', $due);
                 }
                 $wer = $this->BriefingNames((array)($it['assignedTo'] ?? []), $mitglieder);
                 if ($wer !== '') {
@@ -685,8 +692,12 @@ trait Briefing
             . '„Vokabeln üben (Mia, Tim)". Stehen dort MEHRERE Namen, nenne sie ALLE und '
             . 'verbinde sie mit „und". Lass keinen Namen weg und ordne keinen Eintrag '
             . 'jemandem zu, der nicht dahinter steht. '
-            . 'Uhrzeiten übernimmst du unverändert. Steht eine Uhrzeit vor einer Aufgabe, ist '
-            . 'das ihre Fälligkeit. '
+            . 'Uhrzeiten übernimmst du unverändert. UNTERSCHEIDE dabei streng: Bei einem '
+            . 'TERMIN ist die Uhrzeit der Beginn („um 15:00 Uhr ist Fußballtraining"). Bei '
+            . 'einer AUFGABE ist die Uhrzeit eine FRIST — bis wann etwas fertig sein muss, '
+            . 'nicht wann man damit anfängt. Formuliere sie deshalb als Frist: „bis 16:30 '
+            . 'Uhr", „spätestens um 16:30 Uhr", „heute noch". Schreibe NIE „um 16:30 Uhr '
+            . 'den Zahnarzttermin bestätigen", als wäre die Aufgabe ein Termin. '
             . 'Nenne jede Angabe nur EINMAL. Sind es viele Aufgaben, fasse sie in einem Satz '
             . 'zusammen statt jede einzeln aufzuzählen. '
             . 'Erfinde NICHTS: keine Termine, keine Aufgaben, keine Uhrzeiten, die unten nicht '
@@ -779,9 +790,9 @@ trait Briefing
         $block = static function (string $titel, array $zeilen, string $leer): string {
             return $titel . ': ' . ($zeilen === [] ? $leer : "\n- " . implode("\n- ", $zeilen));
         };
-        $teile[] = $block('TERMINE HEUTE', $daten['termine'], 'keine');
-        $teile[] = $block('AUFGABEN HEUTE FAELLIG', $daten['aufgaben'], 'keine');
-        $teile[] = $block('LIEGENGEBLIEBENE AUFGABEN', $daten['ueberfaellig'], 'keine');
+        $teile[] = $block('TERMINE HEUTE (Uhrzeit = Beginn)', $daten['termine'], 'keine');
+        $teile[] = $block('AUFGABEN MIT FRIST HEUTE (Uhrzeit = bis wann)', $daten['aufgaben'], 'keine');
+        $teile[] = $block('AUFGABEN MIT ABGELAUFENER FRIST', $daten['ueberfaellig'], 'keine');
         if ($daten['geburtstage'] !== []) {
             $teile[] = $block('GEBURTSTAG HEUTE', $daten['geburtstage'], '');
         }
