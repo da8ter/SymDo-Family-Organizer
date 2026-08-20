@@ -758,7 +758,10 @@ trait AppCore
     private function ServeWebAppIcon(string $path): bool
     {
         $name = basename($path);
-        if (!in_array($name, ['appicon-32.png', 'appicon-180.png'], true)) {
+        // 32 fuer den Browser-Tab, 180 fuer den iOS-Homescreen, 192 und 512 fuer
+        // Android: Chrome will diese beiden Groessen fuer eine installierte Web-App
+        // und fuer den Startbildschirm, sonst skaliert es das 180er hoch.
+        if (!in_array($name, ['appicon-32.png', 'appicon-180.png', 'appicon-192.png', 'appicon-512.png'], true)) {
             return false;
         }
         $raw = @file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/assets/' . $name);
@@ -853,7 +856,13 @@ trait AppCore
             'orientation'      => 'portrait',
             'background_color' => '#1c1c1e',
             'theme_color'      => '#1c1c1e',
+            // Absteigend, damit Android das passende zuerst findet. Bewusst OHNE
+            // `purpose: maskable`: Das Motiv reicht bis nahe an den Rand, und Androids
+            // Maske schneidet die aeusseren 20 Prozent weg — Einkaufswagen und
+            // Hauskante waeren ab.
             'icons'            => [
+                ['src' => $seite . '/appicon-512.png', 'sizes' => '512x512', 'type' => 'image/png'],
+                ['src' => $seite . '/appicon-192.png', 'sizes' => '192x192', 'type' => 'image/png'],
                 ['src' => $seite . '/appicon-180.png', 'sizes' => '180x180', 'type' => 'image/png'],
                 ['src' => $seite . '/appicon-32.png', 'sizes' => '32x32', 'type' => 'image/png'],
             ],
