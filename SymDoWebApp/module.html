@@ -709,15 +709,12 @@ html[data-symdo-theme="dark"] .member-bar {
   margin-top: 6px;
 }
 .kpi-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+/* Das Wasserzeichen der Sammelkachel etwas kleiner und tiefer als bei den
+   Einzelkacheln: Die Kachel ist flacher, und die Zahlen stehen rechts — genau dort,
+   wo das Symbol sitzt. So bleibt es Hintergrund und die Zahlen bleiben scharf. */
+.kpi-tasks .kpi-glyph { font-size: 58px; right: -4px; bottom: -16px; opacity: .14; }
 .kpi-row-label { font-size: 14px; font-weight: 600; opacity: .92; }
 .kpi-row-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-/* Ueberfaelliges hebt sich ab, sobald es welches gibt — sonst bliebe die Zahl eine
-   unter dreien. Kein Rot auf dem farbigen Grund: ein heller Kasten liest sich besser. */
-.kpi-row-warn .kpi-row-value {
-  background: rgba(255, 255, 255, .22);
-  border-radius: 8px;
-  padding: 0 8px;
-}
 .kpi .kpi-label { font-size: 13px; font-weight: 600; opacity: .92; position: relative; z-index: 1; }
 .kpi .kpi-value { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
 .kpi .kpi-glyph {
@@ -5031,16 +5028,19 @@ function renderDashboard() {
     // Zahl. Deshalb steht dort eine Kachel mit den drei Zahlen untereinander, ab 820px
     // wieder die drei einzelnen. Beide Fassungen stehen im Markup, umgeschaltet wird per
     // CSS — eine Breiten-Abfrage in JS muesste bei jeder Groessenaenderung neu zeichnen.
-    const zeile = (bez, wert, klasse) =>
-      `<span class="kpi-row${klasse ? ' ' + klasse : ''}">` +
-      `<span class="kpi-row-label">${bez}</span><span class="kpi-row-value">${wert}</span></span>`;
+    const zeile = (bez, wert) =>
+      `<span class="kpi-row"><span class="kpi-row-label">${bez}</span>` +
+      `<span class="kpi-row-value">${wert}</span></span>`;
     html += `<button class="kpi kpi-tasks" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Tasks')}</span>` +
       `<span class="kpi-rows">` +
       zeile(translate('Open (tasks)'), memberTasks.length) +
       zeile(translate('Due today'), todayCount) +
-      zeile(translate('Overdue'), overdueCount, zeroOverdue ? '' : 'kpi-row-warn') +
-      `</span></button>`;
+      zeile(translate('Overdue'), overdueCount) +
+      // Dasselbe Wasserzeichen wie die Einzelkacheln: Einkauf und Termine tragen
+      // ihres, ohne dieses saehe die Reihe wie zwei Gestaltungen aus. Die Zahlen
+      // liegen darueber (.kpi-rows hat z-index 1).
+      `</span><i class="fa-light fa-list-check kpi-glyph"></i></button>`;
     html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
       `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
