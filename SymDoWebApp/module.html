@@ -3469,6 +3469,10 @@ function handleMessage(data) {
     try { data = JSON.parse(data); } catch (e) { return; }
   }
   if (!data || typeof data !== 'object') return;
+  if (data.type === 'briefingPlay') {
+    briefingFernstart();
+    return;
+  }
   if (data.type === 'aiResult') {
     const cb = __aiPending[data.txn];
     if (cb) { delete __aiPending[data.txn]; cb({ status: data.status || 200, json: data.json || null }); }
@@ -4605,6 +4609,7 @@ function loadBriefing() {
 let briefingAudio = null;
 let briefingLaeuft = false;
 let briefingLaedt = false;
+let briefingFern = false;     // Wiedergabe aus Symcon angestossen, nicht per Knopf
 let briefingOffen = false;    // Aufklapper: nur auf schmalen Anzeigen von Belang
 
 /** Vorlesen möglich? Immer dann, wenn das Gateway die Sprachausgabe erlaubt —
@@ -4849,7 +4854,31 @@ function briefingHaeppchen(text) {
   return raus;
 }
 
+/**
+ * Aus Symcon angestossen (SDWA_PlayBriefing bzw. RequestAction 'PlayBriefing').
+ *
+ * Absichtlich KEIN Umschalter wie der Knopf: Ein Skript, das „abspielen" sagt,
+ * soll nicht abbrechen, wenn gerade schon gespielt wird.
+ */
+function briefingFernstart() {
+  if (briefingLaeuft || briefingLaedt) return;
+  if (!String(briefingText || '').trim()) {
+    showToast(translate('There is no briefing to read out yet.'));
+    return;
+  }
+  if (!briefingTonMoeglich()) {
+    showToast(translate('Speech output is not available.'));
+    return;
+  }
+  // Merker, damit ein vom Browser abgewiesener Start nicht still bleibt: Ohne
+  // Nutzergeste darf jeder Browser Ton verweigern, und dann sucht man den Fehler
+  // sonst in Symcon.
+  briefingFern = true;
+  briefingVorlesen();
+}
+
 function briefingTonBeenden() {
+  briefingFern = false;
   if (briefingAudio) {
     briefingAudio.pause();
     briefingAudio.src = '';
@@ -4902,7 +4931,14 @@ async function briefingVorlesen() {
     if (!briefingLaeuft || !briefingAudio) return;
     if (i >= urls.length) { briefingTonBeenden(); return; }
     briefingAudio.src = urls[i++];
-    briefingAudio.play().catch(() => briefingTonBeenden());
+    briefingAudio.play().catch(() => {
+      // Ton ohne Nutzergeste: Der Browser darf das abweisen. Beim Knopf kommt das
+      // nicht vor (der Klick IST die Geste), bei einem Start aus Symcon schon.
+      if (briefingFern) {
+        showToast(translate('The browser blocked the playback. Tap the tile once, then it works.'));
+      }
+      briefingTonBeenden();
+    });
   };
   briefingAudio.addEventListener('ended', weiter);
   briefingAudio.addEventListener('error', () => briefingTonBeenden());

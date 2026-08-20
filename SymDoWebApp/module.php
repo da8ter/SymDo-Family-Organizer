@@ -251,6 +251,11 @@ class SymDoWebApp extends IPSModuleStrict
             case 'AiCall':
                 $this->HandleAiCall((string)$value);
                 return;
+            case 'PlayBriefing':
+                // Derselbe Weg wie die öffentliche Funktion, nur ohne
+                // Kernel-Neustart nutzbar: IPS_RequestAction($id, 'PlayBriefing', 0).
+                $this->PlayBriefing();
+                return;
             case 'AiResult':
                 // Rückkanal vom Gateway → an die Kachel weiterreichen
                 $this->aiResultSeen = true;
@@ -854,6 +859,32 @@ class SymDoWebApp extends IPSModuleStrict
      * (TGW_AiRelay) und schickt das Ergebnis als 'aiResult'-Nachricht zur Kachel
      * zurück. So funktioniert die KI-Analyse auch ohne REST-Token.
      */
+    /**
+     * Spielt das Audio-Briefing in DIESER Kachel ab — für Skripte und Ereignisse:
+     * `SDWA_PlayBriefing(<InstanzID>)`.
+     *
+     * Gezielt je Instanz: Die Nachricht geht über UpdateVisualizationValue, und das
+     * erreicht ausschließlich die Betrachter dieser einen Kachel. Wer zwei Kacheln
+     * hat (Küche und Flur), spricht sie einzeln an.
+     *
+     * Zwei Dinge, die der Rückgabewert NICHT verspricht:
+     *
+     * Erstens muss die Kachel gerade offen sein. Eine Visualisierung, die niemand
+     * betrachtet, hat keinen Lautsprecher; die Nachricht verfällt dann.
+     *
+     * Zweitens darf der Browser Ton ohne Nutzergeste abweisen — das ist bei jedem
+     * modernen Browser so, auch in der Symcon-App. In einer Kachel, die schon
+     * angetippt wurde, spielt er; in einer frisch geladenen kann er stumm bleiben.
+     * Die Kachel zeigt in diesem Fall einen Hinweis an, statt still zu bleiben.
+     *
+     * @return bool true = Nachricht ist hinausgegangen (kein Zustellnachweis).
+     */
+    public function PlayBriefing(): bool
+    {
+        $this->Push(['type' => 'briefingPlay']);
+        return true;
+    }
+
     private function HandleAiCall(string $json): void
     {
         $req = json_decode($json, true);
