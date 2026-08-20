@@ -156,7 +156,7 @@
             "This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu ändern — bitte im Kalender-Programm bearbeiten.",
             "This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu löschen — bitte im Kalender-Programm löschen.",
             "2. Forward mail to Symcon": "2. Mails an Symcon weiterleiten",
-            "Accept mail via webhook": "E-Mail per Webhook annehmen",
+            "Activate mail analysis": "Mailanalyse aktivieren",
             "Secret in the address": "Geheimnis in der Adresse",
             "Create new secret": "Neues Geheimnis erzeugen",
             "No Symcon Connect address found — without it Mailgun cannot reach this system. Set up Connect first.": "Keine Symcon-Connect-Adresse gefunden — ohne sie kann Mailgun dieses System nicht erreichen. Bitte zuerst Connect einrichten.",

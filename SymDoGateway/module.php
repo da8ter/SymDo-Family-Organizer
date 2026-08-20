@@ -1439,7 +1439,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'MailHookEnabled',
-                    'caption' => $this->Translate('Accept mail via webhook')
+                    'caption' => $this->Translate('Activate mail analysis')
                 ],
                 [
                     'type'    => 'ValidationTextBox',
