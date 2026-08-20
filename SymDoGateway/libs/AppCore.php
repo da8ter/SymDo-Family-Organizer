@@ -794,6 +794,14 @@ trait AppCore
         // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",
         // das Gateway hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
         $symdo['tabs'] = $this->GetWebAppTabs();
+        // Oeffentlicher VAPID-Schluessel gleich mit: Safari erlaubt
+        // Notification.requestPermission() nur mit gueltiger Nutzeraktivierung, und
+        // JEDES await davor verbraucht sie. Muesste die Seite den Schluessel erst
+        // holen, scheiterte die Erlaubnisfrage auf dem iPhone mit NotAllowedError.
+        $vapid = $this->PushPublicKey();
+        if ($vapid !== '') {
+            $symdo['pushKey'] = $vapid;
+        }
         if ($localBase !== '') {
             $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
         }

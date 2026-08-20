@@ -57,6 +57,18 @@ trait WebPush
     /** Datensatzgroesse im Kopf des Koerpers. Muss zum Deckel oben passen. */
     private const PUSH_RECORD_SIZE = 4096;
 
+    /**
+     * Hoechstens so viele Nachrichten je Geraet und Stunde. Eigener Zaehler, nicht
+     * der der KI-Aufrufe: Ein Testpush soll kein KI-Budget verbrauchen.
+     */
+    private const PUSH_MAX_PER_HOUR = 30;
+
+    /**
+     * Erlaubte Zielbereiche fuer das Antippen. Weissliste, obwohl die Nutzlast aus
+     * dem eigenen Haus kommt — der Dienstweg fuehrt durch fremde Server.
+     */
+    private const PUSH_TABS = ['dashboard', 'todos', 'shopping', 'calendar'];
+
     /** Kappung wie bei den Visu-Nachrichten (ToDoList/module.php): 32 und 256. */
     private const PUSH_TITLE_MAX = 32;
     private const PUSH_BODY_MAX  = 256;
@@ -184,7 +196,7 @@ trait WebPush
      */
     private function PushVapid(): ?array
     {
-        $stand = json_decode($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR), true);
+        $stand = json_decode($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR, ''), true);
         if (is_array($stand) && ($stand['d'] ?? '') !== '' && ($stand['pub'] ?? '') !== '') {
             return ['d' => (string)$stand['d'], 'pub' => (string)$stand['pub']];
         }
@@ -235,12 +247,17 @@ trait WebPush
     {
         $text = json_encode($paar, JSON_UNESCAPED_SLASHES);
         try {
-            $this->WriteAttributeString(self::PUSH_VAPID_ATTR, (string)$text);
+            // Der Klammeraffe ist Pflicht, nicht Bequemlichkeit: Fehlt das Attribut
+            // (Trait neu, Kernel noch nicht neu gestartet), schreibt Symcon eine
+            // PHP-Warnung in die AUSGABE. In einem Hook landet die vor den
+            // Kopfzeilen und zerlegt die ganze HTTP-Antwort — gemessen an
+            // POST /v1/push/subscribe, das daraufhin „headers already sent" warf.
+            @$this->WriteAttributeString(self::PUSH_VAPID_ATTR, (string)$text);
         } catch (Throwable $e) {
             $this->LogMessage('Web Push: Attribut ' . self::PUSH_VAPID_ATTR . ' nicht beschreibbar: ' . $e->getMessage(), KL_ERROR);
             return false;
         }
-        if ($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR) !== $text) {
+        if ($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR, '') !== $text) {
             $this->LogMessage(
                 'Web Push: Attribut ' . self::PUSH_VAPID_ATTR . ' existiert noch nicht — '
                 . 'nach dem naechsten Neustart von IP-Symcon greift es.',
@@ -496,6 +513,95 @@ trait WebPush
         // Griff wird mit der Variablen aufgeraeumt.
         unset($ergebnis, $c);
         return ['status' => $status, 'err' => $fehler];
+    }
+
+    /**
+     * Eine Nachricht an alle passenden Geraete.
+     *
+     * `$userId` leer heisst „an den ganzen Haushalt"; mit Mitglied gehen nur die
+     * Geraete dieses Mitglieds. `$tab` ist der Bereich, den ein Antippen oeffnet.
+     *
+     * Aufgeraeumt wird nur, wo der Dienst das Geraet fuer verschwunden erklaert
+     * (404/410) oder wo ein Abo dauerhaft nicht erreichbar war. Ein 403 laesst den
+     * Bestand ausdruecklich unberuehrt — siehe die Statuslogik in PushSendOne.
+     *
+     * @return array{sent: int, failed: int, dropped: int, stale: int, blocked: int}
+     */
+    private function PushBroadcast(string $titel, string $text, string $userId = '', string $tab = ''): array
+    {
+        $bilanz = ['sent' => 0, 'failed' => 0, 'dropped' => 0, 'stale' => 0, 'blocked' => 0];
+        $abos = $this->PushSubscriptions($userId);
+        if ($abos === []) {
+            return $bilanz;
+        }
+        $kennung = $this->PushVapidFingerprint();
+        if ($kennung === '') {
+            return $bilanz;
+        }
+        $kontakt = $this->PushContact();
+        $kurz    = $this->PushTrim($titel, $text);
+        $nutzlast = ['title' => $kurz['title'], 'body' => $kurz['body']];
+        if ($tab !== '' && in_array($tab, self::PUSH_TABS, true)) {
+            $nutzlast['tab'] = $tab;
+        }
+
+        $riegel = 'SymDo_Push_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($riegel, 0)) {
+            $this->SendDebug('WebPush', 'Ein Versand laeuft schon, dieser entfaellt', 0);
+            return $bilanz;
+        }
+        try {
+            foreach ($abos as $abo) {
+                // Abo aus der Zeit eines anderen Schluessels: Ansprechen waere ein
+                // sicheres 403. Es bleibt liegen, bis die Oberflaeche es erneuert.
+                if (($abo['keyId'] ?? '') !== '' && $abo['keyId'] !== $kennung) {
+                    $bilanz['stale']++;
+                    continue;
+                }
+                if (!$this->DeviceRateAllows($abo['deviceId'], 'push', self::PUSH_MAX_PER_HOUR, 3600)) {
+                    $bilanz['blocked']++;
+                    $this->SendDebug('WebPush', 'Ratenbegrenzung fuer Geraet ' . $abo['deviceId'], 0);
+                    continue;
+                }
+                $erg = $this->PushSendOne($abo, $nutzlast, $kontakt);
+                if ($erg['ok']) {
+                    $bilanz['sent']++;
+                    continue;
+                }
+                if ($erg['gone']) {
+                    $this->PushDropSubscription($abo['deviceId']);
+                    $bilanz['dropped']++;
+                    continue;
+                }
+                if ($erg['retry']) {
+                    // Zaehlt mit; ab der Grenze in PushNoteFailure fliegt das Abo.
+                    $this->PushNoteFailure($abo['deviceId']);
+                }
+                $bilanz['failed']++;
+            }
+        } finally {
+            IPS_SemaphoreLeave($riegel);
+        }
+        $this->SendDebug('WebPush', 'Versand: ' . json_encode($bilanz), 0);
+        return $bilanz;
+    }
+
+    /**
+     * Die Kontaktangabe fuer das VAPID-Token (`sub`).
+     *
+     * Der Push-Dienst will wissen, an wen er sich bei Problemen wenden kann. Eine
+     * erfundene Adresse waere schlechter Stil und bei Apple ein Ablehnungsgrund;
+     * deshalb die Connect-Adresse dieses Systems, wenn es eine gibt.
+     */
+    private function PushContact(): string
+    {
+        $url = $this->GetConnectUrl();
+        if ($url !== '' && str_starts_with($url, 'https://')) {
+            return $url;
+        }
+        // Ohne Connect bleibt nur eine formal gueltige mailto-Angabe. Sie zeigt auf
+        // niemanden — besser als ein Token, das gar nicht erst akzeptiert wird.
+        return 'mailto:symdo@' . (gethostname() ?: 'localhost') . '.invalid';
     }
 
     /**

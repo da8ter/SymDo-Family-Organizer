@@ -270,18 +270,30 @@ trait DeviceRegistry
      */
     private function AiRateLimitAllows(string $deviceId, int $max, int $window): bool
     {
+        return $this->DeviceRateAllows($deviceId, 'ai', $max, $window);
+    }
+
+    /**
+     * Gleitendes Fenster je Gerät und je Zweck. `$zweck` benennt das Feldpaar
+     * (`aiWindowStart`/`aiCount`, `pushWindowStart`/`pushCount`), damit sich die
+     * KI-Aufrufe und die Benachrichtigungen nicht gegenseitig aufbrauchen.
+     */
+    private function DeviceRateAllows(string $deviceId, string $zweck, int $max, int $window): bool
+    {
         if ($deviceId === '') {
             return true;
         }
+        $feldStart = $zweck . 'WindowStart';
+        $feldZahl  = $zweck . 'Count';
         $allowed = true;
-        $this->ModifyPairedDevices(static function (array $devices) use ($deviceId, $max, $window, &$allowed): array {
+        $this->ModifyPairedDevices(static function (array $devices) use ($deviceId, $max, $window, $feldStart, $feldZahl, &$allowed): array {
             $now = time();
             foreach ($devices as &$device) {
                 if (($device['id'] ?? '') !== $deviceId) {
                     continue;
                 }
-                $start = (int)($device['aiWindowStart'] ?? 0);
-                $count = (int)($device['aiCount'] ?? 0);
+                $start = (int)($device[$feldStart] ?? 0);
+                $count = (int)($device[$feldZahl] ?? 0);
                 if ($now - $start >= $window) {
                     $start = $now;
                     $count = 0;
@@ -291,14 +303,150 @@ trait DeviceRegistry
                 } else {
                     $count++;
                 }
-                $device['aiWindowStart'] = $start;
-                $device['aiCount']       = $count;
+                $device[$feldStart] = $start;
+                $device[$feldZahl]  = $count;
                 break;
             }
             unset($device);
             return $devices;
         });
         return $allowed;
+    }
+
+    // ───────────────────────── Push-Abos am Gerät ─────────────────────────
+
+    /**
+     * Abo eines Geräts ablegen. Ein Gerät hat höchstens EIN Abo: Der Browser
+     * vergibt beim Erneuern einen neuen Endpunkt, der alte ist dann tot.
+     *
+     * `$userId` ist die Zuordnung zum Familienmitglied (leer = alle Nachrichten
+     * des Haushalts). Sie hängt am Gerät und nicht am Abo, damit sie ein
+     * Endpunkt-Wechsel überlebt.
+     */
+    private function PushStoreSubscription(string $deviceId, string $endpoint, string $p256dh, string $auth, string $userId): bool
+    {
+        if ($deviceId === '' || !str_starts_with($endpoint, 'https://')) {
+            return false;
+        }
+        // Kennung des Schluessels, unter dem dieses Abo entstanden ist. Wechselt der
+        // VAPID-Schluessel, sind alle Abos wertlos — mit der Kennung faellt das auf,
+        // statt in 403-Antworten zu enden.
+        $kennung = $this->PushVapidFingerprint();
+        return $this->ModifyPairedDevices(static function (array $devices) use ($deviceId, $endpoint, $p256dh, $auth, $userId, $kennung): array {
+            foreach ($devices as &$device) {
+                if (($device['id'] ?? '') !== $deviceId) {
+                    // Dasselbe Abo an einem anderen Gerät: Der Endpunkt gehört genau
+                    // einem Browser. Taucht er woanders auf, ist der alte Eintrag ein
+                    // Überrest (neu gekoppelt, Token gewechselt) und muss weg.
+                    if (($device['pushEndpoint'] ?? '') === $endpoint) {
+                        unset($device['pushEndpoint'], $device['pushP256dh'], $device['pushAuth'], $device['pushKeyId'], $device['pushSince'], $device['pushFails']);
+                    }
+                    continue;
+                }
+                $device['pushEndpoint'] = $endpoint;
+                $device['pushP256dh']   = $p256dh;
+                $device['pushAuth']     = $auth;
+                $device['pushUserId']   = $userId;
+                $device['pushKeyId']    = $kennung;
+                $device['pushSince']    = (int)($device['pushSince'] ?? 0) > 0 ? (int)$device['pushSince'] : time();
+                $device['pushFails']    = 0;
+            }
+            unset($device);
+            return $devices;
+        });
+    }
+
+    /** Abo entfernen — abgemeldet, abgelaufen oder vom Dienst als tot gemeldet. */
+    private function PushDropSubscription(string $deviceId): bool
+    {
+        if ($deviceId === '') {
+            return false;
+        }
+        return $this->ModifyPairedDevices(static function (array $devices) use ($deviceId): array {
+            foreach ($devices as &$device) {
+                if (($device['id'] ?? '') === $deviceId) {
+                    unset($device['pushEndpoint'], $device['pushP256dh'], $device['pushAuth'], $device['pushKeyId'], $device['pushSince'], $device['pushFails']);
+                }
+            }
+            unset($device);
+            return $devices;
+        });
+    }
+
+    /**
+     * Alle Abos, optional nur die eines Familienmitglieds.
+     *
+     * Widerrufene Geräte bleiben außen vor: Wer den Zugang verloren hat, soll auch
+     * keine Nachrichten mehr bekommen.
+     *
+     * @return list<array{deviceId: string, endpoint: string, p256dh: string, auth: string, userId: string, name: string}>
+     */
+    private function PushSubscriptions(string $userId = ''): array
+    {
+        $raus = [];
+        foreach ($this->LoadPairedDevices() as $device) {
+            if (($device['revoked'] ?? false) === true) {
+                continue;
+            }
+            $endpunkt = (string)($device['pushEndpoint'] ?? '');
+            if ($endpunkt === '') {
+                continue;
+            }
+            $gehoert = (string)($device['pushUserId'] ?? '');
+            // Ein Gerät ohne Zuordnung bekommt die Nachrichten des Haushalts, aber
+            // keine, die ausdrücklich an ein Mitglied gehen.
+            if ($userId !== '' && $gehoert !== $userId) {
+                continue;
+            }
+            $raus[] = [
+                'deviceId' => (string)($device['id'] ?? ''),
+                'endpoint' => $endpunkt,
+                'p256dh'   => (string)($device['pushP256dh'] ?? ''),
+                'auth'     => (string)($device['pushAuth'] ?? ''),
+                'userId'   => $gehoert,
+                'keyId'    => (string)($device['pushKeyId'] ?? ''),
+                'name'     => (string)($device['deviceName'] ?? ''),
+            ];
+        }
+        return $raus;
+    }
+
+    /**
+     * Fehlschlag vermerken. Ab `$grenze` Fehlschlägen fliegt das Abo — ein Gerät,
+     * das dauerhaft nicht erreichbar ist, kostet sonst bei jeder Nachricht Zeit.
+     */
+    private function PushNoteFailure(string $deviceId, int $grenze = 5): void
+    {
+        if ($deviceId === '') {
+            return;
+        }
+        $this->ModifyPairedDevices(static function (array $devices) use ($deviceId, $grenze): array {
+            foreach ($devices as &$device) {
+                if (($device['id'] ?? '') !== $deviceId) {
+                    continue;
+                }
+                $zahl = (int)($device['pushFails'] ?? 0) + 1;
+                if ($zahl >= $grenze) {
+                    unset($device['pushEndpoint'], $device['pushP256dh'], $device['pushAuth'], $device['pushKeyId'], $device['pushSince'], $device['pushFails']);
+                } else {
+                    $device['pushFails'] = $zahl;
+                }
+                break;
+            }
+            unset($device);
+            return $devices;
+        });
+    }
+
+    /** Das Abo genau eines Geräts — für die Testnachricht an den Aufrufer. */
+    private function PushSubscriptionOf(string $deviceId): ?array
+    {
+        foreach ($this->PushSubscriptions() as $abo) {
+            if ($abo['deviceId'] === $deviceId) {
+                return $abo;
+            }
+        }
+        return null;
     }
 
     private function LoadPairedDevices(): array
@@ -319,7 +467,20 @@ trait DeviceRegistry
         }
         try {
             $devices = $modifier($this->LoadPairedDevices());
-            $this->WriteAttributeString('PairedDevices', json_encode(array_values($devices), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $json = json_encode(array_values($devices), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $this->WriteAttributeString('PairedDevices', (string)$json);
+            // Rücklese-Probe: `WriteAttributeString` auf ein noch nicht registriertes
+            // Attribut wirft nicht, es tut still nichts. Ohne diese Prüfung gäbe
+            // RegisterPairedDevice() einen Token heraus, der nie abgelegt wurde —
+            // genau das, was der Kommentar dort zu verhindern verspricht.
+            if ($this->ReadAttributeString('PairedDevices') !== $json) {
+                $this->LogMessage(
+                    'Geräteliste nicht beschreibbar (Attribut PairedDevices fehlt) — '
+                    . 'nach dem nächsten Neustart von IP-Symcon greift sie.',
+                    KL_ERROR
+                );
+                return false;
+            }
             return true;
         } finally {
             IPS_SemaphoreLeave($semaphoreKey);
@@ -342,6 +503,9 @@ trait DeviceRegistry
                 'status'     => ($device['revoked'] ?? false) === true
                     ? $this->Translate('Revoked')
                     : $this->Translate('Active'),
+                'push'       => (string)($device['pushEndpoint'] ?? '') === ''
+                    ? '—'
+                    : $this->Translate('On'),
             ];
         }
         return $rows;

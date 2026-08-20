@@ -159,6 +159,24 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'push':
+                // Benachrichtigungen dieses Geraets. Der oeffentliche VAPID-Schluessel
+                // kommt NICHT von hier, sondern steht in window.__SYMDO__ — sonst
+                // muesste die Seite vor der Erlaubnisfrage warten und verlöre auf
+                // iOS die Nutzeraktivierung.
+                if ($method === 'POST' && ($route[2] ?? '') === 'subscribe') {
+                    $this->HandlePushSubscribe($device);
+                    return;
+                }
+                if ($method === 'POST' && ($route[2] ?? '') === 'unsubscribe') {
+                    $this->HandlePushUnsubscribe($device);
+                    return;
+                }
+                if ($method === 'POST' && ($route[2] ?? '') === 'test') {
+                    $this->HandlePushTest($device);
+                    return;
+                }
+                break;
             case 'briefing':
                 // Das Tagesbriefing, fertig abgelegt. GET fuer die iOS-App, POST fuer
                 // die Web-App — die schickt alles ueber ihren einen POST-Helfer.
@@ -822,4 +840,84 @@ trait ApiRouter
     {
         $this->SendJson(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], $status);
     }
+    // ───────────────────────── Benachrichtigungen ─────────────────────────
+
+    /**
+     * POST /v1/push/subscribe — das Abo dieses Geraets ablegen.
+     *
+     * Zugeordnet wird ueber den Token, nicht ueber eine Kennung im Rumpf: Das
+     * Geraet kennt seine eigene ID nicht, und es soll auch kein fremdes Abo
+     * ueberschreiben koennen.
+     */
+    private function HandlePushSubscribe(array $device): void
+    {
+        $rumpf = $this->ReadJsonBody();
+        $endpunkt = $this->BodyStr($rumpf, 'endpoint');
+        $keys = is_array($rumpf['keys'] ?? null) ? $rumpf['keys'] : [];
+        $p256dh = $this->BodyStr($keys, 'p256dh');
+        $auth   = $this->BodyStr($keys, 'auth');
+        if (!str_starts_with($endpunkt, 'https://') || $p256dh === '' || $auth === '') {
+            $this->SendApiError('invalid_payload', 'Subscription incomplete', 422);
+            return;
+        }
+        // Das Mitglied darf gesetzt werden, muss aber existieren — eine Nachricht
+        // „nur fuer Papa" an eine erfundene Kennung ginge sonst an niemanden.
+        $userId = $this->BodyStr($rumpf, 'userId');
+        $bekannt = array_column($this->LoadUsers(), 'id');
+        if ($userId !== '' && !in_array($userId, $bekannt, true)) {
+            $this->SendApiError('invalid_payload', 'Unknown user', 422);
+            return;
+        }
+        $ok = $this->PushStoreSubscription((string)($device['id'] ?? ''), $endpunkt, $p256dh, $auth, $userId);
+        if (!$ok) {
+            // Stiller Fehlschlag waere hier besonders boese: Die Oberflaeche haette
+            // die Glocke eingeschaltet und nie wieder eine Nachricht bekommen.
+            $this->SendApiError('internal', 'Subscription could not be stored', 500);
+            return;
+        }
+        $this->RefreshDeviceListFormField();
+        $this->SendJson(['ok' => true, 'userId' => $userId]);
+    }
+
+    /** POST /v1/push/unsubscribe — Abo dieses Geraets loeschen. */
+    private function HandlePushUnsubscribe(array $device): void
+    {
+        $this->PushDropSubscription((string)($device['id'] ?? ''));
+        $this->RefreshDeviceListFormField();
+        $this->SendJson(['ok' => true]);
+    }
+
+    /**
+     * POST /v1/push/test — eine Probenachricht, nur an das aufrufende Geraet.
+     *
+     * Fester Text mit Absicht: Ein Freitext aus dem Rumpf waere ein Kanal, mit dem
+     * ein gekoppeltes Geraet beliebige Meldungen auf die Sperrbildschirme der
+     * ganzen Familie schreiben koennte.
+     */
+    private function HandlePushTest(array $device): void
+    {
+        $abo = $this->PushSubscriptionOf((string)($device['id'] ?? ''));
+        if ($abo === null) {
+            $this->SendApiError('not_found', 'No subscription for this device', 404);
+            return;
+        }
+        if (!$this->DeviceRateAllows((string)($device['id'] ?? ''), 'push', 30, 3600)) {
+            $this->SendApiError('rate_limited', 'Too many notifications', 429);
+            return;
+        }
+        $erg = $this->PushSendOne(
+            $abo,
+            ['title' => $this->Translate('Notifications are on'), 'body' => $this->Translate('This is a test notification.'), 'tab' => 'dashboard'],
+            $this->PushContact()
+        );
+        if ($erg['gone']) {
+            $this->PushDropSubscription((string)($device['id'] ?? ''));
+        }
+        $this->SendJson([
+            'ok'     => (bool)$erg['ok'],
+            'status' => (int)$erg['status'],
+            'error'  => (string)$erg['error'],
+        ], $erg['ok'] ? 200 : 502);
+    }
+
 }
