@@ -1221,7 +1221,7 @@ class SymDoGateway extends IPSModuleStrict
                     // Wegweiser vor die beiden Panels: eingeklappt verraten deren
                     // Beschriftungen nicht, worin sich die Wege unterscheiden.
                     'type'    => 'Label',
-                    'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Straight to Symcon: the Mailgun service accepts the mail and hands it over for analysis right away. A free account there is all it takes — no mailbox and no own domain. Every family member gets their own receiving address at Mailgun.")
+                    'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Forward mail to Symcon: you forward the mail that matters to Symcon. There is one general family address, and every family member gets an own receiving address. This needs a free account with the Mailgun service. The upside: you keep full control over which mail reaches Symcon.")
                 ],
                 $this->GetMailBoxPanel(),
                 $this->GetMailHookPanel($optionen),
