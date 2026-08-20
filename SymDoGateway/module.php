@@ -1216,7 +1216,7 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("Many people know the problem: every day e-mails pour in from school, sports clubs, after-school care, day care or parent groups. Every one of them with some to-do, some information, some date. It is easy to lose track.\n\nThe AI e-mail analysis takes that work off your hands: no more typing out appointments and tasks. The AI reads the mail, recognises appointments and tasks and shows them as suggestions. Take them over into the calendar or the task list with one click.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
+                    'caption' => $this->Translate("Many people know the problem: every day e-mails pour in from school, sports clubs, after-school care, day care or parent groups. Every one of them with some to-do, some information, some date. It is easy to lose track.\n\nThe AI e-mail analysis takes that work off your hands: no more typing out appointments and tasks. The AI reads the mail, recognises appointments and tasks and shows them as suggestions. Take them over into the calendar or the task list with one click.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
                 [
                     // Wegweiser vor die beiden Panels: eingeklappt verraten deren
                     // Beschriftungen nicht, worin sich die Wege unterscheiden.
@@ -1313,7 +1313,7 @@ class SymDoGateway extends IPSModuleStrict
 
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('IMAP mailboxes'),
+            'caption'  => $this->Translate('1. Fetch mail from IMAP mailboxes'),
             'expanded' => false,
             'items'    => [
                 [
@@ -1389,7 +1389,7 @@ class SymDoGateway extends IPSModuleStrict
 
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Mail via webhook (Mailgun) — no mailbox needed'),
+            'caption'  => $this->Translate('2. Forward mail to Symcon'),
             'expanded' => false,
             'items'    => [
                 [
