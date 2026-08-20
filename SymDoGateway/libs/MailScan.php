@@ -206,7 +206,7 @@ trait MailScan
             $this->UpdateFormField('MailHookSecret', 'value', $geheim);
             $this->UpdateFormField('MailHookSetup', 'caption', $teile['hinweis']);
             $this->UpdateFormField('MailHookNotifyUrl', 'value', $teile['url']);
-            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('New secret created — press Apply to save it.'));
+            $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('New token generated — press Apply to save it.'));
             return true;
         }
         if ($Ident === 'MailHookFillAddresses') {
@@ -268,7 +268,7 @@ trait MailScan
         }
         if (strlen($geheim) < 24) {
             return [
-                'hinweis' => $this->Translate('Press "Create new secret" and then Apply — the address for Mailgun appears here afterwards.'),
+                'hinweis' => $this->Translate('Press "Generate new token" and then Apply — the address for Mailgun appears here afterwards.'),
                 'url'     => '', 'bereit' => false,
             ];
         }

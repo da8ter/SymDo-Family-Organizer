@@ -1454,11 +1454,11 @@ class SymDoGateway extends IPSModuleStrict
                             'type'    => 'PasswordTextBox',
                             'name'    => 'MailHookSecret',
                             'width'   => '380px',
-                            'caption' => $this->Translate('Secret in the address')
+                            'caption' => $this->Translate('Webhook token')
                         ],
                         [
                             'type'    => 'Button',
-                            'caption' => $this->Translate('Create new secret'),
+                            'caption' => $this->Translate('Generate new token'),
                             'onClick' => 'IPS_RequestAction($id, \'MailHookNewSecret\', 0);'
                         ]
                     ]
