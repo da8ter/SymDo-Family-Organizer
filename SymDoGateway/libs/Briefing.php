@@ -614,7 +614,13 @@ trait Briefing
         return $raus;
     }
 
-    /** @return list<string> */
+    /**
+     * Rollen im Haushalt. Wer keine hat, wird ausdruecklich als „ohne Angabe"
+     * gemeldet: Der Butler spricht Eltern und Kinder verschieden an, und ohne
+     * diesen Hinweis raet das Modell die Rolle aus dem Namen.
+     *
+     * @return list<string>
+     */
     private function BriefingRoleLines(array $mitglieder): array
     {
         $rollen = [
@@ -629,9 +635,7 @@ trait Briefing
         $raus = [];
         foreach ($mitglieder as $mitglied) {
             $rolle = $rollen[$mitglied['persona']] ?? '';
-            if ($rolle !== '') {
-                $raus[] = $mitglied['name'] . ' = ' . $rolle;
-            }
+            $raus[] = $mitglied['name'] . ' = ' . ($rolle !== '' ? $rolle : 'ohne Angabe');
         }
         return $raus;
     }
@@ -690,16 +694,28 @@ trait Briefing
                     . 'keine Ausrufezeichen, keine Emojis.';
             case 'butler':
                 // Nicht dasselbe wie „foermlich": Der ist knapp und sachlich, der Butler
-                // ist ausgesucht umstaendlich — das ist der Witz daran.
+                // ist ausgesucht umstaendlich — das ist der Witz daran. Die Anreden haengen
+                // an den Rollen, die unter ROLLEN IM HAUSHALT im Nutzer-Teil stehen; ohne
+                // Rolle muss eine neutrale Form her, sonst raet das Modell.
                 return 'TONFALL: Du bist der Butler des Hauses und sprichst ausgesucht '
-                    . 'gehoben. Siez die Familie und rede sie mit „die Herrschaften", '
-                    . '„der junge Herr" oder „die gnaedige Frau" an. Gewaehlte, leicht '
-                    . 'altmodische Wendungen und Hoeflichkeitsfloskeln: „wenn ich mir die '
-                    . 'Bemerkung erlauben darf", „sehr wohl", „es wuerde mich freuen, wenn", '
-                    . '„ich habe mir erlaubt, darauf hinzuweisen". Nichts wird angetrieben, '
-                    . 'es wird respektvoll in Erinnerung gerufen. Kein Ausrufezeichen, keine '
-                    . 'Umgangssprache, keine Emojis. Die Angaben bleiben vollstaendig und '
-                    . 'korrekt — Umstaendlichkeit ersetzt keine Uhrzeit.';
+                    . 'gehoben. Siez jeden. Gewaehlte, leicht altmodische Wendungen und '
+                    . 'Hoeflichkeitsfloskeln: „wenn ich mir die Bemerkung erlauben darf", '
+                    . '„sehr wohl", „es wuerde mich freuen, wenn", „ich habe mir erlaubt, '
+                    . 'darauf hinzuweisen". Nichts wird angetrieben, es wird respektvoll in '
+                    . 'Erinnerung gerufen. Kein Ausrufezeichen, keine Umgangssprache, keine '
+                    . 'Emojis. '
+                    . 'ANREDEN richten sich nach der Rolle, die unter „ROLLEN IM HAUSHALT" '
+                    . 'steht, und die Eltern werden hoeher angesprochen als die Kinder: '
+                    . 'Vater und Mutter sind „Durchlaucht", „Eure Durchlaucht", „der Herr '
+                    . 'des Hauses" bzw. „die gnaedige Frau" — mit Ehrfurcht. Kinder sind '
+                    . '„der junge Herr <Name>", „das gnaedige Fraeulein <Name>" oder „die '
+                    . 'junge Herrschaft". Oma und Opa sind „die verehrte Frau Grossmutter" '
+                    . 'und „der ehrwuerdige Herr Grossvater", Onkel und Tante „der Herr '
+                    . 'Onkel" und „die Frau Tante". Steht bei einem Namen KEINE Rolle, '
+                    . 'bleibt es beim neutral hoeflichen „Herr <Name>" oder „Frau <Name>" — '
+                    . 'rate nicht. Alle gemeinsam sind „die Herrschaften". '
+                    . 'Die Angaben bleiben vollstaendig und korrekt — Umstaendlichkeit '
+                    . 'ersetzt keine Uhrzeit.';
             case 'buddy':
                 return 'TONFALL: Wie ein guter Kumpel — locker, duzend, kurze Saetze, ruhig mal '
                     . 'ein umgangssprachlicher Ausdruck. Keine Emojis.';
