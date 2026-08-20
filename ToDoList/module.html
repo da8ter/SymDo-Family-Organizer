@@ -670,6 +670,29 @@ html[data-symdo-theme="dark"] .member-bar {
   justify-content: space-between;
   text-align: left;
 }
+/* Aufgaben zusammengelegt: auf schmalen Anzeigen EINE Kachel ueber die ganze Breite
+   mit den drei Zahlen untereinander, darunter Einkauf und Termine als Paar. Die drei
+   einzelnen Kacheln sind hier ausgeblendet und uebernehmen ab 820px. */
+.kpi-tasks { grid-column: 1 / -1; }
+.kpi-single { display: none; }
+.kpi-rows {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+.kpi-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.kpi-row-label { font-size: 14px; font-weight: 600; opacity: .92; }
+.kpi-row-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* Ueberfaelliges hebt sich ab, sobald es welches gibt — sonst bliebe die Zahl eine
+   unter dreien. Kein Rot auf dem farbigen Grund: ein heller Kasten liest sich besser. */
+.kpi-row-warn .kpi-row-value {
+  background: rgba(255, 255, 255, .22);
+  border-radius: 8px;
+  padding: 0 8px;
+}
 .kpi .kpi-label { font-size: 13px; font-weight: 600; opacity: .92; position: relative; z-index: 1; }
 .kpi .kpi-value { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
 .kpi .kpi-glyph {
@@ -2247,6 +2270,9 @@ html[data-symdo-theme="dark"] .member-bar {
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
   }
+  /* Breite Anzeige: die drei Aufgaben-Kacheln einzeln, die zusammengelegte weg. */
+  .kpi-tasks { display: none; }
+  .kpi-single { display: flex; }
 
   /* Vier Ringe in einer Reihe (Telefon: 2 x 2, siehe .ring-row) */
   .ring-row { grid-template-columns: repeat(4, 1fr); }
@@ -4781,13 +4807,27 @@ function renderDashboard() {
   const zeroOverdue = overdueCount === 0;
   html += '<div class="kpi-grid">';
   if (withTodos) {
-    html += `<button class="kpi" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
+    // Auf schmalen Anzeigen tragen DREI Aufgaben-Kacheln nebeneinander kaum noch eine
+    // Zahl. Deshalb steht dort eine Kachel mit den drei Zahlen untereinander, ab 820px
+    // wieder die drei einzelnen. Beide Fassungen stehen im Markup, umgeschaltet wird per
+    // CSS — eine Breiten-Abfrage in JS muesste bei jeder Groessenaenderung neu zeichnen.
+    const zeile = (bez, wert, klasse) =>
+      `<span class="kpi-row${klasse ? ' ' + klasse : ''}">` +
+      `<span class="kpi-row-label">${bez}</span><span class="kpi-row-value">${wert}</span></span>`;
+    html += `<button class="kpi kpi-tasks" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
+      `<span class="kpi-label">${translate('Tasks')}</span>` +
+      `<span class="kpi-rows">` +
+      zeile(translate('Open (tasks)'), memberTasks.length) +
+      zeile(translate('Due today'), todayCount) +
+      zeile(translate('Overdue'), overdueCount, zeroOverdue ? '' : 'kpi-row-warn') +
+      `</span></button>`;
+    html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
       `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
-    html += `<button class="kpi" data-goto="todos" style="${kpiTint('#ff9500')}">` +
+    html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('#ff9500')}">` +
       `<span class="kpi-label">${translate('Due today')}</span><span class="kpi-value">${todayCount}</span>` +
       `<i class="fa-light fa-calendar kpi-glyph"></i></button>`;
-    html += `<button class="kpi" data-goto="todos" style="${kpiTint(zeroOverdue ? '#8e8e93' : '#ff4d4d')}">` +
+    html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint(zeroOverdue ? '#8e8e93' : '#ff4d4d')}">` +
       `<span class="kpi-label">${translate('Overdue')}</span><span class="kpi-value">${overdueCount}</span>` +
       `<i class="fa-light ${zeroOverdue ? 'fa-check' : 'fa-triangle-exclamation'} kpi-glyph"></i></button>`;
   }
@@ -4795,6 +4835,15 @@ function renderDashboard() {
     html += `<button class="kpi" data-goto="shopping" style="${kpiTint('#34c759')}">` +
       `<span class="kpi-label">${translate('Items on the list')}</span><span class="kpi-value">${openShoppingCount()}</span>` +
       `<i class="fa-light fa-basket-shopping kpi-glyph"></i></button>`;
+  }
+  // Termine heute: nur mit eingerichtetem Kalender UND sichtbarem Kalender-Bereich —
+  // eine Kachel, die auf einen abgeschalteten Bereich zeigt, waere eine Sackgasse.
+  // Vor dem ersten Abruf (null) bleibt sie weg, eine vorschnelle 0 wuerde luegen.
+  if (vis.includes('calendar') && dashEventsToday !== null) {
+    html += `<button class="kpi" data-goto="calendar" style="${kpiTint('#5e5ce6')}">` +
+      `<span class="kpi-label">${translate('Appointments today')}</span>` +
+      `<span class="kpi-value">${dashEventsToday}</span>` +
+      `<i class="fa-light fa-calendar-day kpi-glyph"></i></button>`;
   }
   html += '</div>';
 
@@ -5914,8 +5963,46 @@ function loadCalendars() {
     if (calCalendars.length === 0) calEvents = [];
     // Sichtbarkeit haengt an der Anzahl — nur neu anwenden, wenn sie sich aendert.
     if ((vorher > 0) !== (calCalendars.length > 0)) applyTabVisibility();
+    // Die Uebersichts-Kachel braucht die heutige Zahl unabhaengig davon, ob der
+    // Kalender-Bereich offen ist.
+    loadDashEvents();
     if (activeTab === 'calendar') loadCalendarEvents();
     else renderCalendar();
+  }).catch(() => {});
+}
+
+/**
+ * Anzahl der heutigen Termine fuer die Uebersichts-Kachel — eigener, kleiner Abruf
+ * ueber ALLE Kalender und nur den heutigen Tag. Der Kalender-Bereich laedt seine
+ * Termine erst beim Oeffnen, fuer den gewaehlten Kalender und ueber Wochen; beides
+ * passt hier nicht.
+ *
+ * `null` heisst „noch nicht bekannt" — die Kachel erscheint erst mit einer Zahl,
+ * eine vorschnelle 0 waere eine Falschaussage.
+ */
+let dashEventsToday = null;
+
+function loadDashEvents() {
+  if (!calAvailable() || calCalendars.length === 0) {
+    if (dashEventsToday !== null) { dashEventsToday = null; renderDashboard(); }
+    return;
+  }
+  const von = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
+  const bis = von + 86400;
+  aiPost('/calendar', { action: 'events', from: von, to: bis, ids: [] }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true || !Array.isArray(j.events)) return;
+    // Dieselbe Regel wie im Briefing: Ganztaegige Termine zaehlen fuer jeden Tag, den
+    // sie ECHT schneiden (das Ende ist ausschliesslich, ein Eintrag der um 00:00 endet
+    // gehoert zum Vortag); Termine mit Uhrzeit gehoeren zu dem Tag, an dem sie
+    // beginnen. Sonst zaehlte ein mehrtaegiger Block jeden Tag mit.
+    dashEventsToday = j.events.filter(e => {
+      const start = Number(e.start) || 0;
+      const ende = Number(e.end) || 0;
+      if (e.allDay === true) return ende > von && start < bis;
+      return start >= von && start < bis;
+    }).length;
+    renderDashboard();
   }).catch(() => {});
 }
 

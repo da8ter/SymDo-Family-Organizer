@@ -302,7 +302,9 @@
             "Show more": "Mehr anzeigen",
             "Show less": "Weniger anzeigen",
             "Your preview of tomorrow": "Deine Vorschau auf morgen",
-            "Your preview of tomorrow (plural)": "Eure Vorschau auf morgen"
+            "Your preview of tomorrow (plural)": "Eure Vorschau auf morgen",
+            "Appointments today": "Termine heute",
+            "Open (tasks)": "Offen"
         }
     }
 }
