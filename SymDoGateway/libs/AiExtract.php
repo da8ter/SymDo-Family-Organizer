@@ -216,6 +216,20 @@ trait AiExtract
 
         // Kalender lesen: hat mit der KI nichts zu tun, reist aber ueber denselben
         // Relay-Pfad, weil die Visu-Kachel nur diesen einen Weg nach draussen hat.
+        // Das Tagesbriefing: kein KI-Aufruf, nur der abgelegte Text — deshalb VOR
+        // dem AiEnabled-Riegel. Ohne diesen Zweig blieb die Karte in der
+        // Kachel-Ansicht der Web-App leer, obwohl das Gateway dort erreichbar ist.
+        // Der Vorlese-Knopf erscheint dort weiterhin nicht: Die Tondatei braucht
+        // einen Token, und den hat die Kachel nicht.
+        // Tonschnipsel fuer die Kachel: als data:-URL, weil sie den Hook ohne
+        // Token nicht abrufen kann. Steht bei den Medien, nicht bei der KI — der
+        // Schnipsel ist zu diesem Zeitpunkt langst erzeugt.
+        if (str_ends_with($path, 'ttsclip')) {
+            return json_encode($this->TtsClipRelay($this->BodyStr($body, 'hash')), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        if (str_ends_with($path, 'briefing')) {
+            return json_encode($this->BriefingPublic(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         if (str_ends_with($path, 'calendar')) {
             return json_encode($this->CalHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }

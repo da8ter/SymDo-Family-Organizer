@@ -204,6 +204,36 @@ trait Tts
         echo $roh;
     }
 
+    /**
+     * Derselbe Schnipsel, aber als data:-URL fuer die Visu-Kachel.
+     *
+     * Die Kachel kann GET /v1/tts/{hash} nicht aufrufen: Sie hat keinen Token, weil
+     * sie nie gekoppelt wurde — ihr einziger Weg nach draussen ist das Relay. Also
+     * reist der Ton denselben Weg wie die Rezeptfotos (AiGetMedia), nur mit dem
+     * Ton-MIME. Rund 480 KB je Briefing werden dabei zu etwa 640 KB Base64.
+     *
+     * @return array<string, mixed>
+     */
+    private function TtsClipRelay(string $hash): array
+    {
+        if (!preg_match('/^[a-f0-9]{32}$/', $hash)) {
+            return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => 'Malformed clip id']];
+        }
+        $mid = $this->TtsLookup($hash);
+        if ($mid <= 0) {
+            return ['ok' => false, 'error' => ['code' => 'not_found', 'message' => 'Clip not found']];
+        }
+        $b64 = (string)@IPS_GetMediaContent($mid);
+        if ($b64 === '') {
+            return ['ok' => false, 'error' => ['code' => 'empty', 'message' => 'Clip not readable']];
+        }
+        return [
+            'ok'      => true,
+            'hash'    => $hash,
+            'dataUrl' => 'data:' . $this->TtsMimeType($this->TtsFormatOf($hash)) . ';base64,' . $b64,
+        ];
+    }
+
     // ---------------------------------------------------------------------
     // Erzeugung und Zwischenspeicher
     // ---------------------------------------------------------------------

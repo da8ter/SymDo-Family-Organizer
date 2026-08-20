@@ -4514,11 +4514,12 @@ let briefingAudio = null;
 let briefingLaeuft = false;
 let briefingLaedt = false;
 
-/** Vorlesen möglich? Nur in der ausgelieferten Web-App (die Visu-Kachel erreicht
-    die Gateway-API nicht) UND wenn das Gateway die Sprachausgabe erlaubt — sonst
-    wäre der Knopf einer, der nichts kann. */
+/** Vorlesen möglich? Immer dann, wenn das Gateway die Sprachausgabe erlaubt —
+    auch in der Visu-Kachel: Die holt die Tondatei nicht über den Hook (dafür
+    fehlt ihr der Token), sondern als data:-URL über das Relay, siehe
+    ansageClipHolen. Sonst wäre der Knopf einer, der nichts kann. */
 function briefingTonMoeglich() {
-  return !!window.__SYMDO__ && briefingTon;
+  return briefingTon;
 }
 
 /**
@@ -8388,8 +8389,16 @@ function apiToken() {
   try { return ls.get('symdo.token') || ''; } catch (e) { return ''; }
 }
 
-/** Holt einen erzeugten Schnipsel als Blob-URL. */
+/** Holt einen erzeugten Schnipsel als Blob-URL — in der Visu-Kachel als data:-URL. */
 function ansageClipHolen(hash) {
+  // Die Kachel hat keinen Token, GET /v1/tts/{hash} würde mit 401 abgewiesen.
+  // Ihr einziger Weg nach draußen ist das Relay; das liefert denselben Schnipsel
+  // als data:-URL, die <audio>.src genauso frisst wie eine Blob-URL.
+  if (!window.__SYMDO__) {
+    return aiPost('/ttsclip', { hash: hash })
+      .then(a => (a && a.json && a.json.ok && a.json.dataUrl) ? a.json.dataUrl : null)
+      .catch(() => null);
+  }
   const headers = {};
   const token = apiToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
