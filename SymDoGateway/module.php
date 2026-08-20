@@ -1496,7 +1496,7 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'NumberSpinner',
                     'name'    => 'MailHookMaxKB',
                     'minimum' => 64,
-                    'width'   => '120px',
+                    'width'   => '360px',
                     'caption' => $this->Translate('Maximum size per delivery (KB) — attachments come along, so allow a few MB')
                 ],
                 [
