@@ -548,7 +548,9 @@ trait MailScan
         if ($roh === '') {
             return true; // keine Liste = keine Einschraenkung
         }
-        foreach (preg_split('/[\r\n,;]+/', strtolower($roh)) ?: [] as $eintrag) {
+        // \s deckt Zeilenumbrueche und Leerzeichen ab: keine Schreibweise soll falsch
+        // sein. In einer Adresse kommt kein Leerzeichen vor, also trennt es gefahrlos.
+        foreach (preg_split('/[\s,;]+/', strtolower($roh)) ?: [] as $eintrag) {
             $eintrag = trim($eintrag);
             if ($eintrag === '') {
                 continue;

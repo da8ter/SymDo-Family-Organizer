@@ -1300,7 +1300,7 @@ class SymDoGateway extends IPSModuleStrict
             ? [
                 'type'         => 'SelectInstance',
                 'name'         => 'MailBoxGeneral',
-                'width'        => '400px',
+                'width'        => '800px',
                 'validModules' => [self::IMAP_MODULE_GUID],
                 'caption'      => $this->Translate('Household mailbox (no member assignment)')
             ]
@@ -1325,7 +1325,7 @@ class SymDoGateway extends IPSModuleStrict
                     'name'      => 'MailSenderAllow',
                     'caption'   => $this->Translate('Allowed senders for the household mailbox (one per line, "@domain.tld" for a whole domain; empty = all)'),
                     'multiline' => true,
-                    'width'     => '400px'
+                    'width'     => '800px'
                 ],
                 [
                     'type'    => 'Label',
@@ -1396,7 +1396,7 @@ class SymDoGateway extends IPSModuleStrict
                     'edit'    => ['type' => 'SelectInstance', 'moduleID' => self::IMAP_MODULE_GUID]
                 ],
                 [
-                    'caption' => $this->Translate('Allowed senders (optional)'),
+                    'caption' => $this->Translate('Allowed senders (optional, separate with commas)'),
                     'name'    => 'SenderAllow',
                     'width'   => 'auto',
                     'add'     => '',
