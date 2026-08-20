@@ -481,7 +481,11 @@ trait Briefing
                 continue; // Einkaufslisten haben keine Faelligkeit
             }
             $zustand = json_decode((string)$this->CallInstanceGetAppState((int)$instanz['id'], 'todo'), true);
-            foreach ((array)($zustand['items'] ?? []) as $it) {
+            // TDL_GetAppState huellt den Zustand ein: {revision, kind, state:{items}}.
+            // Der Rueckfall auf die flache Form kostet nichts und traegt eine
+            // aeltere Listen-Version, falls eine solche noch antwortet.
+            $items = (array)($zustand['state']['items'] ?? $zustand['items'] ?? []);
+            foreach ($items as $it) {
                 if (!is_array($it) || !empty($it['done'])) {
                     continue;
                 }
