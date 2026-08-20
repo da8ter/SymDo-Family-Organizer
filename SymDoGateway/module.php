@@ -1216,12 +1216,12 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("Forward mail to a mailbox that Symcon reads — one address per household member, e.g. via a catch-all domain or plus addresses. The AI derives tasks from the text; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
+                    'caption' => $this->Translate("The AI derives tasks and appointments from incoming mail; nothing is created automatically, the suggestions appear above the task list in the web app and are added with one tap.\n\nA PDF or image attachment is read along with the text — parent letters often carry the actual dates in the attachment. Symcon's IMAP module cannot deliver attachments, so this uses a separate read-only lookup in the same mailbox.\n\nThe analysis runs only with the consent given under \"AI features\" — the privacy notice there also covers the e-mail paths.")                ],
                 [
                     // Wegweiser vor die beiden Panels: eingeklappt verraten deren
                     // Beschriftungen nicht, worin sich die Wege unterscheiden.
                     'type'    => 'Label',
-                    'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: you forward mail to a mailbox that Symcon polls. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Straight to Symcon: the Mailgun service accepts the mail and hands it over for analysis right away. A free account there is all it takes — no mailbox and no own domain. Every family member gets their own receiving address at Mailgun.")
+                    'caption' => $this->Translate("There are two ways to get mail in — use one of them or both:\n\n1. Mailbox via IMAP: Symcon polls a mailbox. A sender filter is possible but not required, and each family member can be given their own mailbox.\n\n2. Straight to Symcon: the Mailgun service accepts the mail and hands it over for analysis right away. A free account there is all it takes — no mailbox and no own domain. Every family member gets their own receiving address at Mailgun.")
                 ],
                 $this->GetMailBoxPanel($optionen),
                 $this->GetMailHookPanel($optionen),
@@ -1318,7 +1318,7 @@ class SymDoGateway extends IPSModuleStrict
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("Symcon reads the mailboxes set up here — forward mail to them, or let a member's own mailbox be read directly. A mailbox that belongs to one member hands its mail to that member; the household mailbox produces suggestions without a member.")
+                    'caption' => $this->Translate("Symcon reads the mailboxes set up here — a mailbox kept just for this, or the one the mail arrives in anyway. A mailbox that belongs to one member hands its mail to that member; the household mailbox produces suggestions without a member.")
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -1359,7 +1359,7 @@ class SymDoGateway extends IPSModuleStrict
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('A forwarded mail carries YOUR address as the sender, not the original one — so entering your own addresses here is the strongest filter: only mail forwarded from the household is ever analysed.')
+                    'caption' => $this->Translate('Empty means every mail in the mailbox is analysed. Enter the senders that matter — the school, the club — and the rest is left alone. Careful with forwarded mail: it carries YOUR address as the sender, not the original one, so there your own address is the one that belongs in this list.')
                 ],
                 [
                     'type'    => 'CheckBox',
