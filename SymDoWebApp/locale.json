@@ -203,7 +203,6 @@
             "Shopping list": "Einkaufsliste",
             "Show all": "Alle anzeigen",
             "Show overview": "Übersicht anzeigen",
-            "Show shopping lists (tabs Shopping and Favorites)": "Einkaufslisten anzeigen (Tabs Einkaufen und Favoriten)",
             "Show to-dos": "ToDos anzeigen",
             "Sorting": "Sortierung",
             "Speaking": "spricht",
@@ -295,7 +294,6 @@
             "This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu löschen — bitte im Kalender-Programm löschen.",
             "The series was capped at %1 appointments.": "Die Reihe wurde bei %1 Terminen gekappt.",
             "Show calendar (requires the OpenCalendar module)": "Kalender anzeigen (setzt das Modul OpenCalendar voraus)",
-            "Controls the tabs of this tile and of the SymDo web app. Favorites belong to the shopping lists — that tab shows their favorite lists and the purchase history, so it follows the shopping switch. The calendar tab additionally requires at least one configured OpenCalendar calendar. If all sections are off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately.": "Steuert die Tabs dieser Kachel und der SymDo Web-App. Favoriten gehören zu den Einkaufslisten — dieser Tab zeigt deren Favoritenlisten und die Kaufhistorie und folgt deshalb dem Einkaufs-Schalter. Der Kalender-Tab setzt zusätzlich mindestens einen eingerichteten OpenCalendar-Kalender voraus. Sind alle Bereiche aus, erscheint die Übersicht, damit die Oberfläche nie leer ist. Bleibt nur ein Bereich, entfällt die Tab-Leiste und der Inhalt bekommt die volle Höhe. Die Web-App übernimmt eine Änderung nach dem Neuladen, die Kachel sofort.",
             "Read aloud": "Vorlesen",
             "Your day": "Dein Tag",
             "Your day (plural)": "Euer Tag",
@@ -369,7 +367,11 @@
             "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen.",
             "AI": "KI",
             "Detected by AI": "Von der KI erkannt",
-            "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden."
+            "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden.",
+            "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more — they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab and the AI inbox a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately.": "Steuert die Tabs dieser Kachel und der SymDo Web-App. Die Favoriten haben keinen eigenen Schalter mehr — sie gehören zu den Einkaufslisten und gehen als Blatt über das Herz in deren Kopfzeile auf. Der Kalender-Tab setzt zusätzlich mindestens einen eingerichteten OpenCalendar-Kalender voraus, der Notizen-Tab und der KI-Eingang ein SymDo Gateway. Sind alle Bereiche aus, erscheint die Übersicht, damit die Oberfläche nie leer ist. Bleibt nur ein Bereich, verschwindet die Tab-Leiste und der Inhalt bekommt die volle Höhe. Die Web-App übernimmt eine Änderung nach einem Neuladen, die Kachel sofort.",
+            "Show shopping lists (favorites are reached from their header)": "Einkaufslisten anzeigen (Favoriten über deren Kopfzeile)",
+            "Show notes (requires the SymDo Gateway)": "Notizen anzeigen (benötigt das SymDo Gateway)",
+            "Show AI inbox (requires the SymDo Gateway)": "KI-Eingang anzeigen (benötigt das SymDo Gateway)"
         }
     }
 }
