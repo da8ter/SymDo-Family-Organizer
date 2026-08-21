@@ -1082,9 +1082,14 @@ html[data-symdo-theme="dark"] .member-bar {
      Farbunterschied allein fasst die Mail schon zusammen. */
   background: color-mix(in srgb, var(--content-color) 6%, transparent);
   border-radius: var(--chip-r);
-  padding: 10px 8px 8px;
+  padding: 8px;
 }
 .mail-box > * { flex: 0 0 auto; }
+/* .mail-item bringt einen unteren Aussenabstand mit (aus der flachen Liste, wo er
+   die Zeilen trennte). Im Kasten uebernimmt das der gap — an der LETZTEN Zeile
+   addierte er sich dagegen auf die Polsterung, und unten standen 14 px gegen
+   8 px an den Seiten. */
+.mail-box > *:last-child { margin-bottom: 0; }
 /* Die Zeilen heben sich als hellere Karten von der Kastenflaeche ab — dieselbe
    Staffelung wie vorher im aufgeklappten Band. */
 .mail-box .mail-row { background: var(--bg); }
