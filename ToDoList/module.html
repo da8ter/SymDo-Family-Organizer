@@ -1063,47 +1063,39 @@ html[data-symdo-theme="dark"] .member-bar {
    Eingeklappt ist der Normalzustand: ein Halbjahresplaner liefert zwei Dutzend
    Termine, und die schoben die eigentliche Liste sonst aus dem Bild. Sichtbar
    bleibt nur die Zeile „N neue Termine gefunden". */
-.mail-ai { --chip-r: 18px; display: flex; flex-direction: column; gap: 0; margin-bottom: var(--gap); }
+.mail-ai { --chip-r: 18px; display: flex; flex-direction: column; gap: var(--gap); margin-bottom: var(--gap); }
 /* flex: 0 0 auto ist hier keine Kosmetik: .mail-ai ist ein Flex-Container, und
    ohne das schrumpfen die Kinder bei Platznot. */
 .mail-ai > * { flex: 0 0 auto; }
 
-/* JEDE MAIL EIN KASTEN — aber optisch, nicht im DOM. Kopf und Zeilen bleiben
-   Geschwister (siehe unten bei .mail-head), sie teilen sich nur eine Flaeche:
-   der Kopf traegt die obere Rundung, die letzte Zeile die untere. Ein echter
-   Behaelter je Mail waere die naheliegende Loesung und die falsche. */
-.mail-box-start, .mail-box-mid {
+/* JEDE MAIL EIN KASTEN, und zwar ein echter: .mail-box umschliesst Kopf UND
+   Zeilen. Der Behaelter traegt data-nest="1", damit renderRows darin eine Ebene
+   tiefer vergleicht — ohne das ersetzte jede Aenderung den ganzen Kasten und
+   riss eine laufende Wischgeste ab. Genau daran scheiterte der Versuch vorher,
+   und deshalb war die Liste bis jetzt flach. */
+.mail-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Nur eine Flaeche, KEINE Kontur: die Zeilen darin sind selbst Karten mit
+     eigenem Ton, und ein Rahmen darum ergab einen Kasten im Kasten. Der
+     Farbunterschied allein fasst die Mail schon zusammen. */
   background: color-mix(in srgb, var(--content-color) 6%, transparent);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  margin: 0;
+  border-radius: var(--chip-r);
+  padding: 10px 8px 8px;
 }
-.mail-box-start {
-  border-top: 1px solid var(--border);
-  border-top-left-radius: var(--chip-r);
-  border-top-right-radius: var(--chip-r);
-  padding: 10px 10px 6px;
-  margin-top: var(--gap);
-}
-.mail-ai > .mail-box-start:first-child { margin-top: 2px; }
-.mail-box-mid { padding: 0 8px; }
-.mail-box-end {
-  border-bottom: 1px solid var(--border);
-  border-bottom-left-radius: var(--chip-r);
-  border-bottom-right-radius: var(--chip-r);
-  padding-bottom: 8px;
-}
-/* Die Zeilen selbst heben sich als hellere Karten von der Kastenflaeche ab —
-   dieselbe Staffelung wie vorher im aufgeklappten Band. */
-.mail-ai .mail-row { background: var(--bg); }
-.mail-box-mid + .mail-box-mid { padding-top: 6px; }
-.mail-box-start + .mail-box-mid { padding-top: 0; }
+.mail-box > * { flex: 0 0 auto; }
+/* Die Zeilen heben sich als hellere Karten von der Kastenflaeche ab — dieselbe
+   Staffelung wie vorher im aufgeklappten Band. */
+.mail-box .mail-row { background: var(--bg); }
 
+/* Mailkopf und Zeilen sind Geschwister IM Kasten, beide mit Schluessel — nicht
+   noch tiefer verschachtelt. renderRows vergleicht genau EINE Ebene tiefer
+   (data-nest="1"), nicht beliebig viele. */
 .mail-head {
   display: flex; align-items: center; gap: 8px;
-  margin: 12px 2px 6px;
+  margin: 0 2px 2px;
 }
-.mail-ai > .mail-head:first-of-type { margin-top: 2px; }
 /* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
    Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
    .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
@@ -4737,6 +4729,24 @@ function renderRows(el, html) {
     const old = bucket && bucket.length ? bucket.shift() : null;
     if (old && old.outerHTML === next.outerHTML) {
       result.push(old);            // unverändert → DOM-Knoten behalten
+    } else if (old && old.dataset && old.dataset.nest === '1' && next.dataset.nest === '1') {
+      // Verschachtelter Behälter (data-nest="1"): NICHT ersetzen, sondern eine
+      // Ebene tiefer denselben Vergleich fahren. Ohne das verlöre ein Kasten, der
+      // seine Zeilen umschließt, bei jeder Änderung alle Kindknoten — samt der
+      // Wischgeste unter dem Finger. Genau deshalb waren solche Gruppen bisher
+      // verboten und die Listen flach.
+      //
+      // Die eigenen Attribute wandern mit, sonst bliebe eine geänderte Klasse
+      // (z.B. eine Zählung im Kopf) am alten Knoten stehen.
+      for (const a of Array.from(old.attributes)) {
+        if (!next.hasAttribute(a.name)) old.removeAttribute(a.name);
+      }
+      for (const a of Array.from(next.attributes)) {
+        if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value);
+      }
+      const innen = renderRows(old, next.innerHTML);
+      if (innen !== false) { for (const k of innen) fresh.push(k); }
+      result.push(old);
     } else {
       if (old && old.parentNode === el) el.removeChild(old);
       result.push(next);
@@ -6536,8 +6546,7 @@ function renderMailAi() {
       // data-id am BEHAELTER ist der Schluessel fuer renderRows: „<Mail>:<Nummer>"
       // ist je Vorschlag eindeutig. Die Erkennungsfelder bleiben zusaetzlich an der
       // Zeile, weil der Klick-Verteiler sie ueber closest('.mail-row') sucht.
-      const letzte = it === p.items[p.items.length - 1];
-      return `<div class="mail-item mail-box-mid${letzte ? ' mail-box-end' : ''}" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
+      return `<div class="mail-item" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
         `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
@@ -6568,18 +6577,20 @@ function renderMailAi() {
         `</div>` +
       `</div>`;
     }).join('');
-    // „mail-box-…" macht aus Kopf und Zeilen OPTISCH einen Kasten, waehrend das
-    // DOM flach bleibt (siehe den Kommentar bei .mail-head: ein echter Behaelter
-    // je Mail liesse renderRows die ganze Mail ersetzen, und eine Wischgeste
-    // unter dem Finger wuerde ruckeln).
-    return `<div class="mail-head mail-box-start" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
+    // Ein ECHTER Kasten um Kopf und Zeilen. Moeglich geworden durch
+    // data-nest="1": renderRows vergleicht darin eine Ebene tiefer weiter, statt
+    // den ganzen Kasten zu ersetzen — sonst verloeren die Zeilen bei jeder
+    // Aenderung ihre Knoten und eine Wischgeste unter dem Finger wuerde ruckeln.
+    return `<div class="mail-box" data-nest="1" data-key="mailbox:${escapeHtml(String(p.id))}">` +
+      `<div class="mail-head" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
         `<div class="mail-who">` +
           `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
           `<div class="mail-meta">${escapeHtml(von)}</div>` +
         `</div>` +
         `<button class="row-btn destructive" data-mail="dismiss" data-id="${escapeHtml(String(p.id))}" aria-label="${translate('Discard mail')}" title="${translate('Discard mail')}"><i class="fa-light fa-trash-can"></i></button>` +
       `</div>` +
-      zeilen;
+      zeilen +
+    `</div>`;
   }).join('');
 
   // renderRows liefert NUR die neu erzeugten Knoten: die behalten ihre Gesten nicht,
@@ -6739,8 +6750,18 @@ function entwurfOeffnen(eintrag, userId, quelle) {
  * Deshalb ohne Rueckfrage, anders als beim Loeschen eines echten Termins.
  */
 function bindMailRows(knoten) {
-  knoten.forEach(behaelter => {
-    if (!behaelter.classList || !behaelter.classList.contains('mail-item')) return;  // Kopf/Umschalter
+  // Ein frischer Knoten kann der KASTEN einer Mail sein (erste Zeichnung) oder
+  // eine einzelne Zeile darin (spaetere Aenderung, siehe data-nest in
+  // renderRows). Beide Faelle muessen zu Zeilen fuehren — sonst bekaeme eine
+  // ganz neue Mail keine Wischgesten.
+  const zeilen = [];
+  knoten.forEach(n => {
+    if (!n || !n.classList) return;
+    if (n.classList.contains('mail-item')) { zeilen.push(n); return; }
+    if (n.querySelectorAll) zeilen.push(...n.querySelectorAll('.mail-item'));
+  });
+  zeilen.forEach(behaelter => {
+    if (!behaelter.classList || !behaelter.classList.contains('mail-item')) return;  // Kopf
     const zeile = behaelter.querySelector('.mail-row');
     if (!zeile) return;
     const id = zeile.getAttribute('data-id') || '';
