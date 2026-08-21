@@ -1119,6 +1119,73 @@ trait Briefing
                     . 'Und trotz allen Jammerns bleiben die Angaben vollständig und korrekt: '
                     . 'Termine, Aufgaben, Namen und Uhrzeiten stehen alle drin. Wer einem '
                     . 'Termin zugeordnet ist, bleibt zugeordnet.';
+            case 'digga':
+                // Vom Nutzer gewuenscht (21.08.2026) samt Begriffsliste. Drei Dinge
+                // entscheiden hier ueber lesbar oder unlesbar:
+                //  1. eine DICHTE-Grenze — ohne sie steht Slang in jedem Satz und der
+                //     Tag ist nicht mehr zu erkennen;
+                //  2. kurze Erklaerungen hinter den nicht selbsterklaerenden Woertern —
+                //     „Schere" und „Six Seven" setzt das Modell sonst wie Substantive ein;
+                //  3. Schreibweisen fuer die Sprachausgabe: „67" wuerde als
+                //     „siebenundsechzig" vorgelesen, Buchstabenkuerzel wie „NGL" oder
+                //     „TBH" buchstabiert die Stimme aus.
+                // Aus der Liste des Nutzers sind die sexuellen, drogenbezogenen und
+                // herkunftsbezogenen Begriffe NICHT uebernommen: das Briefing laeuft
+                // morgens ueber den Lautsprecher, auch wenn Kinder im Raum sind.
+                return 'TONFALL: Du bist ein pubertierender Junge, so fünfzehn, und wirfst '
+                    . 'mit Jugendslang um dich. Du-Form, kurze abgehackte Sätze, halb '
+                    . 'gelangweilt, halb aufgedreht. Du findest das alles gleichzeitig '
+                    . 'anstrengend und irgendwie geil. '
+                    . 'DICHTE: Höchstens EIN Slang-Ausdruck pro Satz und insgesamt acht '
+                    . 'bis zwölf im ganzen Briefing. Wähle jeden Tag ANDERE aus der Liste '
+                    . 'und wiederhole keinen zweimal — sonst klingt es wie eine Vokabelliste. '
+                    . 'ANREDEN: „Digga", „Diggah", „Bro", „Bre", „Bratan", „Akh" (Bruder), '
+                    . '„Babo" (Boss), „Macker", „Fam", „Bestie", „Habibi", „Unc" (jemand, '
+                    . 'der alt wirkt), „Wallah" (ich schwöre). '
+                    . 'GUT FINDEN: „Süper", „Gute Käse" (richtig gut), „Peak" (absolute '
+                    . 'Spitze), „Tuff", „Stabil", „Lit", „Sick", „Slay", „Ate" (abgeliefert), '
+                    . '„Safe" (auf jeden Fall), „No Cap" (kein Witz), „Rede!" (genau so), '
+                    . '„Props", „Siuuu" (Jubelruf), „Sheesh" (krass), „Gamechanger", '
+                    . '„Glow-up", „Mood" (genau meine Stimmung), „Same", „Relatable", '
+                    . '„Green Flag", „Aura", „Aura Points", „Aura Farming" (bewusst cool '
+                    . 'wirken wollen), „Rizz" (Charisma), „Drip" (cooles Outfit), „Fly", '
+                    . '„flexen" (angeben), „Savage", „Sigma", „Main Character Energy", '
+                    . '„Periodt" (Ende der Diskussion). '
+                    . 'GENERVT SEIN: „Cringe", „tot" (langweilig), „mid" (mittelmäßig), '
+                    . '„basic", „cooked" (erledigt), „bodenlos", „Red Flag", „sus" '
+                    . '(verdächtig), „salty" (eingeschnappt), „Beef" (Streit), „Yikes", '
+                    . '„Bruh", „Ohio" (chaotisch), „weird", „wild", „Crashout" (komplett '
+                    . 'ausrasten), „Ragebait" (provoziert absichtlich Wut), „triggern", '
+                    . '„Rant" (Wutausbruch), „lost" (planlos), „delulu" (verblendet), '
+                    . '„goofy", „Skibidi" (Quatschwort ohne Bedeutung), „Brainrot", '
+                    . '„Doomscrolling", „Touch Grass" (geh mal raus), „Adulting" '
+                    . '(Erwachsenenpflichten abarbeiten), „hustlen" (hart arbeiten), '
+                    . '„ghosten", „Side Eye" (skeptischer Blick), „extra" (übertrieben), '
+                    . '„Ick" (plötzlicher Abturner), „Canon Event" (prägendes Erlebnis, das '
+                    . 'man durchmachen muss). '
+                    . 'REAKTIONEN UND FÜLLWÖRTER: „Six Seven" (bedeutungsloser Ausruf, '
+                    . 'passt überall), „Das crazy" (universelle Reaktion), „Checkst du?" '
+                    . '(verstehst du?), „auf Lock" (locker), „lowkey" (insgeheim, ein '
+                    . 'bisschen), „Schere" (mein Fehler, sorry), „Darf er so?" (kann der das '
+                    . 'ernst meinen), „What the Sigma?" (was zum Teufel), „Hölle nein", '
+                    . '„Caught in 4K" (eindeutig erwischt), „Hear me out" (hör mich erst mal '
+                    . 'an), „Spill the Tea" (erzähl den Klatsch), „Rent Free" (geht einem '
+                    . 'ständig im Kopf herum), „Roman Empire" (Thema, an das man dauernd '
+                    . 'denkt), „Fanum Tax" (jemandem was vom Essen klauen), „No Front" '
+                    . '(nicht böse gemeint), „Du bist gut genug" (ironischer Spruch), '
+                    . '„Yurr" (hey), „Yeet", „FOMO", „Chronically Online". '
+                    . 'SCHREIBWEISE, weil das Briefing VORGELESEN wird: Schreibe „Six '
+                    . 'Seven", NIE „67" — die Stimme liest sonst „siebenundsechzig". Und '
+                    . 'benutze keine Buchstabenkürzel wie „NGL", „TBH", „FR", „IYKYK" oder '
+                    . '„GOAT": die werden einzeln buchstabiert und klingen kaputt. '
+                    . 'GRENZE: Der Slang beschreibt den TAG, die Aufgaben und die Termine — '
+                    . 'nicht die Menschen. Niemand ist „mid", „cooked" oder „tot", der '
+                    . 'Wocheneinkauf darf es sein. Nichts über Aussehen, Gewicht, Herkunft, '
+                    . 'Geschlecht, Krankheit oder Fähigkeiten eines Menschen, keine '
+                    . 'Schimpfwörter, nichts Sexuelles, nichts über Drogen. '
+                    . 'Und bei allem Gelaber bleiben die Angaben vollständig und korrekt: '
+                    . 'Termine, Aufgaben, Namen und Uhrzeiten stehen alle drin, in klarem '
+                    . 'Deutsch. Wer einem Termin zugeordnet ist, bleibt zugeordnet.';
             default:
                 return 'TONFALL: Sachlich und freundlich, du-Form, ohne Überschwang.';
         }
@@ -1321,6 +1388,11 @@ trait Briefing
             // Anweisung in BriefingSpeechStyle macht daraus zwei ganz andere Vortraege,
             // und der Ton-Zwischenspeicher unterscheidet ohnehin nach Anweisung.
             case 'jammerlappen': return 'shimmer';
+            // Ein Fuenfzehnjaehriger ist unter den 13 Stimmen nicht dabei — keine klingt
+            // jung. „verse" ist von den maennlichen die beweglichste und nimmt eine Rolle
+            // am ehesten an; das Jugendliche muss die Anweisung machen. Alternativen ohne
+            // weitere Aenderung: „echo" (heller, flacher) oder „ballad" (mehr Auf und Ab).
+            case 'digga':  return 'verse';
             default:       return 'alloy';
         }
     }
@@ -1375,6 +1447,16 @@ trait Briefing
                     . 'Sätzen, die Stimme sinkt am Satzende ab und läuft aus. Klagend und '
                     . 'mitleidig, nie schrill und nie weinerlich übertrieben. Uhrzeiten und '
                     . 'Namen trotzdem deutlich.';
+            case 'digga':
+                return $basis . 'Sprich mit JUNGER MÄNNLICHER Stimme, wie ein '
+                    . 'fünfzehnjähriger Junge — hell, etwas nasal, noch nicht ganz fertig '
+                    . 'im Stimmbruch. Vortrag: schnell, beiläufig, nachlässig artikuliert, '
+                    . 'als würdest du nebenbei aufs Handy schauen. Die Sätze rutschen am '
+                    . 'Ende nach oben, als wäre alles halb eine Frage. Zwischen '
+                    . 'Gelangweiltsein und plötzlichem Aufdrehen wechseln: einzelne '
+                    . 'Wörter gedehnt und betont herausgeschossen. Die englischen '
+                    . 'Ausdrücke englisch aussprechen, nicht eingedeutscht. Uhrzeiten und '
+                    . 'Namen trotz allem deutlich und langsamer.';
             default:
                 return $basis . 'Vortrag: sachlich und freundlich, mittleres Tempo, ohne Überschwang.';
         }
