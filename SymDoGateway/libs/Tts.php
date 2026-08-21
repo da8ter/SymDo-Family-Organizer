@@ -30,9 +30,20 @@ trait Tts
     private const TTS_CACHE_MAX = 400;
 
     /**
-     * Obergrenze je Aufnahme. Symcons Hook bricht die Ausgabe bei 1 MB ab
-     * („Output-Buffer exceeds Limit", am 20.08.2026 gemessen) — auch in Stücken
-     * mit flush(), die Grenze ist die Summe. Etwas Luft für die Kopfzeilen.
+     * Obergrenze je Aufnahme.
+     *
+     * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit`, Vorgabe
+     * 1048576 Bytes (1 MiB) — auslesbar mit `IPS_GetOption('ScriptOutputBufferLimit')`.
+     * Sie zählt die SUMME der Ausgabe einer Anfrage, nicht den einzelnen Schreibvorgang:
+     * `readfile()` schreibt in 8-KB-Häppchen und läuft trotzdem dagegen.
+     *
+     * Wird sie überschritten, wird die Antwort nicht abgeschnitten, sondern ERSETZT —
+     * durch 62 Bytes Text „Output-Buffer exceeds Limit (1048576 bytes). Operation
+     * halted.", bei HTTP 200 und mit dem längst gesendeten Content-Type. Der Client
+     * sieht also eine kaputte Datei und keinen Fehler. Am 21.08.2026 bei 1048576 und
+     * 1048577 Bytes exakt eingegrenzt.
+     *
+     * Etwas Luft für die Kopfzeilen.
      */
     private const TTS_MAX_BYTES = 1000000;
 

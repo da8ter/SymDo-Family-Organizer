@@ -65,11 +65,15 @@ trait AiExtract
     /**
      * Groesste Rohgroesse, die sich noch ausliefern laesst.
      *
-     * Symcons Hook-Ausgabe endet bei 1 MB, kumulativ ueber die ganze Antwort
-     * (gemessen, siehe Tts.php). Was darueber liegt, war bisher abgelegt und
-     * dauerhaft UNABRUFBAR: AiSaveMedia prueft nur die Anzahl, und
-     * HandleAiMediaFile echot ohne Groessenpruefung. Dieselbe Zahl benutzt
-     * HandleUserAvatar fuer denselben Zweck.
+     * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit` (Vorgabe
+     * 1048576 Bytes) und zaehlt die SUMME der Ausgabe einer Anfrage — Naeheres im
+     * Kommentar zu TTS_MAX_BYTES in Tts.php. Darueber wird die Antwort nicht
+     * abgeschnitten, sondern durch eine kurze Fehlerzeile ERSETZT; beim Client
+     * kommt eine kaputte Datei an.
+     *
+     * Was darueber lag, war bisher abgelegt und dauerhaft UNABRUFBAR: AiSaveMedia
+     * prueft nur die Anzahl, und HandleAiMediaFile echot ohne Groessenpruefung.
+     * Dieselbe Zahl benutzt HandleUserAvatar fuer denselben Zweck.
      */
     private const AI_MEDIA_MAX_BYTES  = 900000;
     /** Groesste Base64-Nutzlast der data:-URL. Base64 blaeht um ein Drittel auf. */

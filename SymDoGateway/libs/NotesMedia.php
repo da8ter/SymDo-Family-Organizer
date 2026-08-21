@@ -14,10 +14,11 @@ declare(strict_types=1);
  *  2. AiReadMedia liest die Kategorie ROH aus dem Attribut statt sie aufzuloesen —
  *     vor dem ersten Speichern antwortet deshalb jeder Abruf `forbidden`. Hier
  *     loest das Lesen die Kategorie auf, ohne sie anzulegen.
- *  3. AiSaveMedia prueft nur die ANZAHL, nie die Groesse. Symcons Hook-Ausgabe endet
- *     aber bei 1 MB, kumulativ ueber die ganze Antwort (gemessen, siehe Tts.php).
- *     Eine zu grosse Datei ist damit dauerhaft unabrufbar. Deshalb wird hier beim
- *     ABLEGEN begrenzt: Bilder werden skaliert, PDFs abgelehnt.
+ *  3. AiSaveMedia prueft nur die ANZAHL, nie die Groesse. Die Ausgabe einer Anfrage
+ *     endet aber bei der Kernoption `ScriptOutputBufferLimit` (Vorgabe 1 MiB), und
+ *     zwar in der Summe (Naeheres bei TTS_MAX_BYTES in Tts.php). Eine zu grosse
+ *     Datei ist damit dauerhaft unabrufbar. Deshalb wird hier beim ABLEGEN
+ *     begrenzt: Bilder werden skaliert, PDFs abgelehnt.
  *
  * Eine eigene Kategorie ist auch deshalb Pflicht, weil ShoppingList Medienobjekte
  * loescht, sobald ihr Vater eine Kategorie namens „Rezeptfotos" ist — modulfremd
