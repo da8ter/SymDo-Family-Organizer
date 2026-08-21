@@ -2351,7 +2351,7 @@ html[data-symdo-theme="dark"] .member-bar {
 .note-file + .note-file { border-top: 1px solid var(--border); }
 .note-file > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Der Name traegt die Zeile — dadurch rutscht alles Folgende an den rechten Rand. */
-.note-file > span:not(.note-file-size) { flex: 1 1 auto; min-width: 0; }
+.note-file > span { flex: 1 1 auto; min-width: 0; }
 .note-file > i:first-child { flex: none; color: var(--muted); }
 .note-file .rm { flex: none; margin-left: auto; color: var(--muted); padding: 4px 2px 4px 10px; font-size: 16px; }
 .note-file .rm:active { color: var(--red); }
@@ -2363,28 +2363,17 @@ html[data-symdo-theme="dark"] .member-bar {
    Haken zu welchem Namen gehoert, ist nicht mehr abzulesen.
    Abgehakt sind sie blass: der Unterschied muss auf einen Blick erkennbar sein,
    ohne das Kaestchen zu lesen, denn davon haengt ab, was gespeichert wird. */
-/* Die Zeilen aus einem Mail-Vorschlag: noch nicht angehaengt, sondern zur Wahl.
-   `display: flex` mit dieser Genauigkeit, weil `.form-row label { display: block }`
-   (0,2,0) das `flex` von `.note-file` (0,1,0) sonst schlaegt — die Zeile ist ein
-   <label>, und ohne Flex-Kontext sind `flex-grow` am Namen und `margin-left: auto`
-   am Haken wirkungslos (am laufenden Chrome gemessen: display war „block").
-   Abgehakt sind sie blass: der Unterschied muss auf einen Blick erkennbar sein,
-   ohne das Kaestchen zu lesen, denn davon haengt ab, was gespeichert wird. */
-.note-files .note-file.is-choice { display: flex; opacity: .55; }
-.note-file.is-choice.is-on { opacity: 1; }
-/* Keine auto-Margins mehr: der Name traegt die Zeile (flex-grow) und schiebt
-   Groesse, Ansehen-Knopf und Haken von sich aus an den rechten Rand. Zwei
-   konkurrierende `margin-left: auto` haetten die Gruppe auseinandergerissen,
-   sobald der Knopf dazwischen kam. */
-.note-file.is-choice .ansehen {
-  flex: none; color: var(--muted); padding: 4px 2px 4px 8px; font-size: 15px;
-}
-.note-file.is-choice .ansehen:active { color: var(--accent); }
+/* Die Zeilen aus einem Mail-Vorschlag sehen aus wie die schon angehaengten
+   Dateien — nur der Haken steht rechts statt des Loeschknopfs. Keine
+   Abblendung mehr und keine Groessenangabe: was gespeichert wird, sagt der
+   Haken, und im Edit-Dialog gibt es beides auch nicht.
+   Kein Sonderfall fuer `display` noetig, seit die Zeile ein <div> ist: die
+   Regel `.form-row label { display: block }` griff nur auf das fruehere
+   <label> und schlug dort das `flex` von .note-file. */
 .note-file.is-choice input {
   flex: none; margin: 0 0 0 8px; accent-color: var(--accent);
   width: 18px; height: 18px;
 }
-.note-file-size { flex: none; color: var(--muted); font-size: 11.5px; }
 
 @media (min-width: 820px) {
   /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
@@ -8733,16 +8722,15 @@ function notesErsterOrdner() {
   return notizen.folders.length ? notizen.folders[0].id : null;
 }
 
-/** Dateigroesse kurz: unter einem MB in kB, darueber mit einer Nachkommastelle. */
-function notesGroesse(bytes) {
-  const n = Number(bytes) || 0;
-  if (n <= 0) return '';
-  if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + ' kB';
-  return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' MB';
-}
-
 function noteDateienZeichnen() {
   const el = document.getElementById('ntFiles');
+  // Kommt der Entwurf aus einem Mail-Vorschlag, waehlt man hier AUS, was die Mail
+  // mitgebracht hat — eine eigene Datei dazuzulegen ist eine andere Handlung und
+  // gehoert an die gespeicherte Notiz. Deshalb bleibt der Anhängen-Knopf dort weg.
+  const anhaengen = document.getElementById('btnNoteAttach');
+  if (anhaengen) {
+    anhaengen.style.display = (noteCtx && noteCtx.proposal) ? 'none' : '';
+  }
   const dateien = (noteCtx && noteCtx.files) ? noteCtx.files : [];
   const warten = (noteCtx && noteCtx.warten) ? noteCtx.warten : [];
   const wahl = (noteCtx && noteCtx.wahl) ? noteCtx.wahl : [];
@@ -8763,27 +8751,28 @@ function noteDateienZeichnen() {
     // Aus einem Mail-Vorschlag: noch nicht angehaengt, sondern zur Wahl. Ein
     // <label> statt eines Chips mit Knopf — so trifft jeder Tipper auf den Text
     // ODER das Kaestchen und schaltet um, ohne Zielen.
+    // Aufbau wie bei den schon angehaengten Dateien: Symbol, Dateiname, EIN
+    // Bedienelement rechts — dort der Loeschknopf, hier der Haken. Bewusst kein
+    // <label> mehr: sonst schaltete jeder Tipper auf die Zeile den Haken um, und
+    // die Zeile soll die Datei oeffnen, genau wie im Edit-Dialog. Weder
+    // Groessenangabe noch Auge-Knopf, die gibt es dort auch nicht.
     wahl.map(a =>
-      '<label class="note-file is-choice' + (a.an ? ' is-on' : '') + '">' +
+      '<div class="note-file is-choice" data-media="' + escapeHtml(String(a.id)) + '">' +
       '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(a.name) + '</span>' +
-      (a.bytes ? '<span class="note-file-size">' + notesGroesse(a.bytes) + '</span>' : '') +
-      '<button class="ansehen" data-ansehen="' + escapeHtml(String(a.id)) + '" ' +
-      'aria-label="' + translate('Open') + '"><i class="fa-light fa-eye"></i></button>' +
       '<input type="checkbox" data-wahl="' + escapeHtml(String(a.id)) + '"' + (a.an ? ' checked' : '') + '>' +
-      '</label>').join('');
-  el.querySelectorAll('[data-ansehen]').forEach(knopf => {
-    knopf.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      noteAnhangOeffnen(parseInt(knopf.dataset.ansehen, 10), true);
-    });
-  });
+      '</div>').join('');
   el.querySelectorAll('[data-wahl]').forEach(kasten => {
     kasten.addEventListener('change', () => {
       const eintrag = wahl.find(a => String(a.id) === String(kasten.dataset.wahl));
       if (eintrag) eintrag.an = kasten.checked;
-      kasten.closest('.note-file').classList.toggle('is-on', kasten.checked);
+    });
+    // Der Klick darf nicht zur Zeile durchlaufen — die oeffnet die Datei.
+    kasten.addEventListener('click', (e) => e.stopPropagation());
+  });
+  el.querySelectorAll('.note-file.is-choice').forEach(zeile => {
+    zeile.addEventListener('click', () => {
+      noteAnhangOeffnen(parseInt(zeile.dataset.media, 10), true);
     });
   });
   el.querySelectorAll('.note-file:not(.is-waiting):not(.is-choice)').forEach(chip => {
