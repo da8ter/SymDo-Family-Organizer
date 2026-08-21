@@ -700,7 +700,7 @@ trait ApiRouter
         }
         // Symcon caps a request's total output at ScriptOutputBufferLimit (1 MiB by
         // default) and REPLACES the body with an error line once exceeded — see the
-        // TTS_MAX_BYTES comment in Tts.php. User photos are often multiple MB,
+        // TtsOutputLimit() comment in Tts.php. User photos are often multiple MB,
         // so downscale to a small square thumbnail (avatars render as tiny circles).
         $thumb = $this->ScaleAvatar($content, 256);
         if ($thumb !== null) {

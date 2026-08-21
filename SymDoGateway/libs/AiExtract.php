@@ -67,7 +67,7 @@ trait AiExtract
      *
      * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit` (Vorgabe
      * 1048576 Bytes) und zaehlt die SUMME der Ausgabe einer Anfrage — Naeheres im
-     * Kommentar zu TTS_MAX_BYTES in Tts.php. Darueber wird die Antwort nicht
+     * Kommentar zu TtsOutputLimit() in Tts.php. Darueber wird die Antwort nicht
      * abgeschnitten, sondern durch eine kurze Fehlerzeile ERSETZT; beim Client
      * kommt eine kaputte Datei an.
      *

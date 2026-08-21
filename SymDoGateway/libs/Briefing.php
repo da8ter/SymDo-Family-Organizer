@@ -45,22 +45,22 @@ trait Briefing
      */
     private const BRIEFING_TTS_MAX    = 3500;
     /**
-     * Bis hierher wird EINE Datei erzeugt, darueber zwei.
-     *
-     * Gemessen am 20.08.2026: 1309 Zeichen ergaben als AAC 859 kB — die Abholung
-     * endet aber bei 1 MB (TTS_MAX_BYTES). Der Schwellwert laesst also Luft, statt
-     * knapp darunter zu zielen: Eine zu grosse Aufnahme waere gar keine, und eine
-     * Naht in der Mitte ist besser als Stille.
+     * Gemessen am 21.08.2026 an derselben Aufnahme (24 kHz mono):
+     * AAC 77 kbit/s ergab 652 Byte je Zeichen, FLAC verlustfrei 1654 Byte je Zeichen.
+     * Aus diesen Zahlen rechnet BriefingAudioPlan Format und Teilgroesse aus.
      */
-    private const BRIEFING_TTS_ONE    = 1250;
+    private const BRIEFING_TTS_BYTES_AAC  = 652;
+    private const BRIEFING_TTS_BYTES_FLAC = 1654;
     /**
-     * Vorlesetempo, 1.0 waere die normale Sprechgeschwindigkeit des Modells.
-     * Schneller, weil man ein Briefing morgens im Vorbeigehen hoert und nicht als
-     * Hoerbuch — aber nicht zu schnell: 1.2 war einen Hauch gehetzt, deshalb 5 %
-     * zurueck. Der Wert reist im Cache-Schluessel mit, damit nach einer Aenderung
-     * nicht die alte Aufnahme im alten Tempo weiterspielt.
+     * Vorlesetempo.
+     *
+     * Steht auf 1.0, weil das Feld `speed` fuer gpt-4o-mini-tts nicht dokumentiert
+     * ist und von ihm ignoriert wird — gemessen ergab derselbe Satz bei 1.0 und bei
+     * 1.14 dieselbe Laenge. Die frueheren 1.14 haben also nie gewirkt; sie standen
+     * nur im Cache-Schluessel. Wer es schneller haben will, schreibt das Tempo in
+     * die Anweisung (BriefingSpeechStyle) — dort befolgt das Modell es.
      */
-    private const BRIEFING_TTS_SPEED  = 1.14;
+    private const BRIEFING_TTS_SPEED  = 1.0;
 
     private ?array $briefingConfigCache = null;
 
@@ -1201,16 +1201,19 @@ trait Briefing
         }
         $stimme    = $this->BriefingVoice();
         $anweisung = $this->BriefingSpeechStyle();
+        $plan      = $this->BriefingAudioPlan(mb_strlen($vorlesen));
+        $this->SendDebug('Briefing', sprintf('Ton: %s, %d Zeichen, Teilgroesse %d',
+            $plan['format'], mb_strlen($vorlesen), $plan['teil']), 0);
 
         $kennungen = [];
-        foreach ($this->BriefingSpeechParts($vorlesen) as $teil) {
-            // AAC und nicht MP3: Die Abholung endet bei 1 MB, und ein ganzes
-            // Briefing als MP3 lag gemessen bei 1,3 MB — als AAC bleibt derselbe
-            // Text darunter. Jeder Browser und iOS spielen AAC ohne Zutun.
-            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_SPEED);
+        foreach ($this->BriefingSpeechParts($vorlesen, $plan['teil']) as $teil) {
+            // FLAC ist verlustfrei und klingt besser als AAC bei 77 kbit/s; AAC bleibt
+            // der Rueckfall, wenn der Platz nicht reicht. Beide spielen Browser und
+            // iOS ohne Zutun, und HandleTtsAudio setzt den Typ nach dem Format.
+            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_SPEED, $plan['format']);
             $mid  = $this->TtsLookup($hash);
             if ($mid <= 0) {
-                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, 'aac', self::BRIEFING_TTS_SPEED);
+                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, $plan['format'], self::BRIEFING_TTS_SPEED);
             }
             if ($mid <= 0) {
                 $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
@@ -1232,29 +1235,71 @@ trait Briefing
      *
      * @return list<string>
      */
-    private function BriefingSpeechParts(string $text): array
+    /**
+     * Format und Teilgroesse nach dem, was sich ausliefern laesst.
+     *
+     * Verlustfrei, wenn der Platz reicht — sonst AAC. Frueher war AAC gesetzt und
+     * ab 1250 Zeichen wurde geteilt; beides kam allein von der 1-MB-Grenze. Wer die
+     * Kernoption hochsetzt, bekommt jetzt eine bessere Aufnahme in einem Stueck.
+     *
+     * 80 % des Erlaubten: Die Schaetzung je Zeichen schwankt mit der Sprechweise
+     * (Seufzer und Pausen kosten Zeit ohne Text), und eine zu grosse Aufnahme waere
+     * gar keine — TtsProduce lehnt sie ab, und dann gibt es keinen Ton.
+     *
+     * @return array{format: string, teil: int}
+     */
+    private function BriefingAudioPlan(int $zeichen): array
     {
-        if (mb_strlen($text) <= self::BRIEFING_TTS_ONE) {
+        $platz = (int)($this->TtsOutputLimit() * 0.8);
+        if ($zeichen * self::BRIEFING_TTS_BYTES_FLAC <= $platz) {
+            return ['format' => 'flac', 'teil' => (int)($platz / self::BRIEFING_TTS_BYTES_FLAC)];
+        }
+        return ['format' => 'aac', 'teil' => max(200, (int)($platz / self::BRIEFING_TTS_BYTES_AAC))];
+    }
+
+    /**
+     * Den Text in so WENIGE Stuecke teilen wie moeglich.
+     *
+     * Jede Naht ist hoerbar: die Aufnahmen entstehen getrennt, die Sprechmelodie
+     * setzt neu an. Deshalb wird jedes Stueck so gross wie erlaubt und nicht mehr
+     * stur halbiert — passt alles in eines, gibt es gar keine Naht.
+     *
+     * @return list<string>
+     */
+    private function BriefingSpeechParts(string $text, int $budget): array
+    {
+        $budget = max(200, $budget);
+        if (mb_strlen($text) <= $budget) {
             return [$text];
         }
-        $mitte = (int)round(mb_strlen($text) / 2);
+        $teile = [];
+        $rest  = $text;
+        // Deckel gegen eine Endlosschleife, falls ein Schnitt nie vorankommt.
+        for ($runde = 0; $runde < 40 && mb_strlen($rest) > $budget; $runde++) {
+            $schnitt = $this->BriefingSentenceCut($rest, $budget);
+            $teile[] = trim(mb_substr($rest, 0, $schnitt));
+            $rest    = trim(mb_substr($rest, $schnitt));
+        }
+        if ($rest !== '') {
+            $teile[] = $rest;
+        }
+        return $teile;
+    }
+
+    /** Letztes Satzende innerhalb des Budgets; ohne eines hart am Budget. */
+    private function BriefingSentenceCut(string $text, int $budget): int
+    {
         $bester = 0;
-        // Satzende, das der Mitte am naechsten liegt
         if (preg_match_all('/[.!?]\s+/u', $text, $treffer, PREG_OFFSET_CAPTURE) > 0) {
             foreach ($treffer[0] as $t) {
                 // preg gibt Byte-Positionen; in Zeichen umrechnen
                 $pos = mb_strlen(substr($text, 0, (int)$t[1])) + 1;
-                if ($bester === 0 || abs($pos - $mitte) < abs($bester - $mitte)) {
+                if ($pos <= $budget && $pos > $bester) {
                     $bester = $pos;
                 }
             }
         }
-        if ($bester <= 0 || $bester >= mb_strlen($text)) {
-            $bester = $mitte;   // kein Satzende gefunden: hart in der Mitte
-        }
-        $eins = trim(mb_substr($text, 0, $bester));
-        $zwei = trim(mb_substr($text, $bester));
-        return $zwei === '' ? [$eins] : [$eins, $zwei];
+        return $bester > 0 ? $bester : $budget;
     }
 
     /**

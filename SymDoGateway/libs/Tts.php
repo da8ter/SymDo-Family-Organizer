@@ -30,22 +30,39 @@ trait Tts
     private const TTS_CACHE_MAX = 400;
 
     /**
-     * Obergrenze je Aufnahme.
+     * Obergrenze je Aufnahme — DIE zentrale Erklaerung zur Ausgabegrenze.
      *
      * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit`, Vorgabe
-     * 1048576 Bytes (1 MiB) — auslesbar mit `IPS_GetOption('ScriptOutputBufferLimit')`.
-     * Sie zählt die SUMME der Ausgabe einer Anfrage, nicht den einzelnen Schreibvorgang:
-     * `readfile()` schreibt in 8-KB-Häppchen und läuft trotzdem dagegen.
+     * 1048576 Bytes (1 MiB), auslesbar mit `IPS_GetOption('ScriptOutputBufferLimit')`
+     * und dort auch aenderbar. Sie zaehlt die SUMME der Ausgabe einer Anfrage, nicht
+     * den einzelnen Schreibvorgang: `readfile()` schreibt in 8-KB-Haeppchen und laeuft
+     * trotzdem dagegen.
      *
-     * Wird sie überschritten, wird die Antwort nicht abgeschnitten, sondern ERSETZT —
+     * Wird sie ueberschritten, wird die Antwort nicht abgeschnitten, sondern ERSETZT —
      * durch 62 Bytes Text „Output-Buffer exceeds Limit (1048576 bytes). Operation
-     * halted.", bei HTTP 200 und mit dem längst gesendeten Content-Type. Der Client
-     * sieht also eine kaputte Datei und keinen Fehler. Am 21.08.2026 bei 1048576 und
-     * 1048577 Bytes exakt eingegrenzt.
+     * halted.", bei HTTP 200 und mit dem laengst gesendeten Content-Type. Der Client
+     * sieht also eine kaputte Datei und keinen Fehler; deshalb muss jeder Riegel VOR
+     * der Ausgabe greifen. Am 21.08.2026 bei 1048576 und 1048577 Bytes exakt
+     * eingegrenzt.
      *
-     * Etwas Luft für die Kopfzeilen.
+     * Hier wird der Wert ABGELESEN und nicht festgeschrieben: Wer die Option
+     * hochsetzt, soll davon auch etwas haben — vorher stand hier eine feste Million,
+     * und die Aufnahmen blieben klein, obwohl Platz war. Etwas Luft fuer die
+     * Kopfzeilen bleibt abgezogen.
      */
-    private const TTS_MAX_BYTES = 1000000;
+    private function TtsOutputLimit(): int
+    {
+        $grenze = 1048576;
+        try {
+            $o = (int)@IPS_GetOption('ScriptOutputBufferLimit');
+            if ($o > 0) {
+                $grenze = $o;
+            }
+        } catch (Throwable $e) {
+            // Aeltere Symcon-Fassung ohne die Option: bei der Vorgabe bleiben.
+        }
+        return max(200000, $grenze - 100000);
+    }
 
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
@@ -327,7 +344,7 @@ trait Tts
      * demselben Grund tragen die Überschreibungen mit ein — dasselbe Briefing
      * klingt als Drillsergeant anders als sachlich.
      */
-    private function TtsHash(string $text, string $stimme = '', string $anweisung = '', float $tempo = 1.0): string
+    private function TtsHash(string $text, string $stimme = '', string $anweisung = '', float $tempo = 1.0, string $format = 'mp3'): string
     {
         return substr(hash('sha256',
             $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
@@ -335,7 +352,11 @@ trait Tts
             ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) . '|' .
             // Das Tempo gehoert dazu, sonst spielte die alte, langsame Aufnahme
             // weiter, obwohl jemand es geaendert hat.
-            number_format($tempo, 2, '.', '') .
+            number_format($tempo, 2, '.', '') . '|' .
+            // Das Format ebenso: Es steckt nicht im Text, macht aber eine ANDERE
+            // Aufnahme. Ohne es wuerde nach dem Wechsel auf ein besseres Format die
+            // alte, schlechtere weiterspielen — der Schluessel passte ja noch.
+            $format .
             '|' . $text), 0, 32);
     }
 
@@ -371,7 +392,7 @@ trait Tts
         // Limit") — und Haeppchen mit flush() helfen nicht, die Grenze ist die
         // Summe. Was darueber liegt, waere nicht abholbar; dann lieber gar nichts
         // ablegen als eine Datei, die im Player stumm bleibt.
-        if (strlen($mp3) > self::TTS_MAX_BYTES) {
+        if (strlen($mp3) > $this->TtsOutputLimit()) {
             $this->SendDebug('TTS', sprintf('Aufnahme zu gross (%d kB), verworfen', (int)round(strlen($mp3) / 1024)), 0);
             return 0;
         }
@@ -405,16 +426,22 @@ trait Tts
         if ($key === '') {
             return '';
         }
-        $body = json_encode([
+        $felder = [
             'model'           => $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts'),
             'voice'           => $stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy'),
             'input'           => $text,
             'instructions'    => $anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS),
             'response_format' => $format,
-            // 1.0 waere die Vorgabe; mitgeschickt wird nur, was davon abweicht,
-            // damit ein Modell, das das Feld nicht kennt, nicht daran scheitert.
-            'speed'           => max(0.25, min(4.0, $tempo)),
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ];
+        // `speed` ist fuer gpt-4o-mini-tts NICHT dokumentiert und wird von ihm
+        // ignoriert: derselbe Satz ergab am 21.08.2026 bei 1.0 und bei 1.14 dieselbe
+        // Laenge (9,69 s gegen 9,95 s — die Streuung zweier Laeufe, nicht 14 %).
+        // Das Tempo steuert man bei diesem Modell ueber `instructions`. Mitgeschickt
+        // wird das Feld nur noch, wenn es abweicht — fuer tts-1, wo es wirkt.
+        if (abs($tempo - 1.0) > 0.001) {
+            $felder['speed'] = max(0.25, min(4.0, $tempo));
+        }
+        $body = json_encode($felder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $resp = $this->AiHttpPost('https://api.openai.com/v1/audio/speech', [
             'Authorization: Bearer ' . $key,

@@ -16,7 +16,7 @@ declare(strict_types=1);
  *     loest das Lesen die Kategorie auf, ohne sie anzulegen.
  *  3. AiSaveMedia prueft nur die ANZAHL, nie die Groesse. Die Ausgabe einer Anfrage
  *     endet aber bei der Kernoption `ScriptOutputBufferLimit` (Vorgabe 1 MiB), und
- *     zwar in der Summe (Naeheres bei TTS_MAX_BYTES in Tts.php). Eine zu grosse
+ *     zwar in der Summe (Naeheres bei TtsOutputLimit() in Tts.php). Eine zu grosse
  *     Datei ist damit dauerhaft unabrufbar. Deshalb wird hier beim ABLEGEN
  *     begrenzt: Bilder werden skaliert, PDFs abgelehnt.
  *
