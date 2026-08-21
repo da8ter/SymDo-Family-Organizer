@@ -1142,21 +1142,14 @@ html[data-symdo-theme="dark"] .member-bar {
   margin: 12px 2px 6px;
 }
 .mail-ai > .mail-head:first-of-type { margin-top: 2px; }
-/* Rund, nicht eckig: es gibt KEINE allgemeine .avatar-Regel in dieser Datei —
-   jede Umgebung bringt ihre eigene mit (.avatar-stack .avatar, .assign-chip .avatar,
-   .member-bar .avatar-btn img). Hier fehlte sie, deshalb blieb ein Foto ein Quadrat.
-   object-fit: cover, damit ein nicht quadratisches Foto beschnitten wird statt
-   gestaucht; die Zentrierung gilt dem Buchstaben-Ersatz ohne Foto. */
-.mail-head .avatar {
-  width: 22px; height: 22px;
-  border-radius: 999px;
-  object-fit: cover;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
+/* Briefsymbol statt Portraitfoto (Wunsch vom 21.08.2026). Die frueheren
+   Avatar-Regeln fuer diesen Kopf sind damit entfallen — es gibt KEINE allgemeine
+   .avatar-Regel in dieser Datei, jede Umgebung bringt ihre eigene mit. */
+.mail-head .mail-icon {
+  width: 22px;
+  font-size: 16px;
+  color: var(--muted);
+  text-align: center;
   flex: 0 0 auto;
 }
 .mail-who { flex: 1 1 auto; min-width: 0; }
@@ -2297,7 +2290,7 @@ html[data-symdo-theme="dark"] .member-bar {
 .note-folder .fav-badge { width: 34px; height: 34px; color: var(--accent); font-size: 17px; }
 /* BEIDE Formen, die avatarHtml() liefert: <img> mit Foto, <span> mit der Initiale.
    Eine allgemeine .avatar-Regel gibt es in dieser Datei bewusst nicht — jede
-   Umgebung bemasst selbst (siehe .mail-head .avatar). Ohne diese Regel bliebe ein
+   Umgebung bemasst selbst (etwa .avatar-stack .avatar). Ohne diese Regel bliebe ein
    Foto ein Quadrat in Originalgroesse und die Initiale ein nackter Buchstabe.
    object-fit: cover, damit ein nicht quadratisches Foto beschnitten statt
    gestaucht wird; die Zentrierung gilt der Initiale, deren Farbton inline steht. */
@@ -2370,9 +2363,36 @@ html[data-symdo-theme="dark"] .member-bar {
    Kein Sonderfall fuer `display` noetig, seit die Zeile ein <div> ist: die
    Regel `.form-row label { display: block }` griff nur auf das fruehere
    <label> und schlug dort das `flex` von .note-file. */
+/* Der Haken wird selbst gezeichnet. `accent-color` faerbt nur den ANGEHAKTEN
+   Kasten; unabgewaehlt blieb das Systemfeld uebrig, und das ist auf dunklem Grund
+   ein fast unsichtbarer heller Rahmen (bzw. ein weisser Block auf hellem). Mit
+   appearance: none bestimmen wir beide Zustaende: leerer Kasten mit deutlichem
+   Rand, angehakt gefuellt mit dem Akzent und einem weissen Haken. */
 .note-file.is-choice input {
-  flex: none; margin: 0 0 0 8px; accent-color: var(--accent);
-  width: 18px; height: 18px;
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  margin: 0 0 0 8px;
+  width: 21px;
+  height: 21px;
+  border-radius: 6px;
+  border: 2px solid var(--muted);
+  background: transparent;
+  cursor: pointer;
+  /* Bewusst OHNE Uebergang: von diesem Kasten haengt ab, was gespeichert wird,
+     da soll die Antwort sofort dastehen. Ein Farbverlauf machte den Zustand
+     ausserdem im Prueflauf unlesbar — unter virtueller Zeit laufen CSS-Uebergaenge
+     nicht weiter, und gemessen wurde der Anfangswert. */
+}
+.note-file.is-choice input:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  /* Der Haken als SVG im Hintergrund, nicht als ::after: ein <input> ist ein
+     ersetztes Element, und Pseudoelemente daran sind nicht ueberall zuverlaessig. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 15px 15px;
 }
 
 @media (min-width: 820px) {
@@ -6368,7 +6388,6 @@ function renderMailAi(sorte) {
     area._lastHtml = null;
     return;
   }
-  const byId = usersById();
   area.style.display = '';
 
   // Eingeklappt sichtbar ist nur diese Zeile — mit der Zahl IM Titel, weil sie
@@ -6393,8 +6412,11 @@ function renderMailAi(sorte) {
     `</button>`;
 
   const karten = !auf ? '' : gefiltert.map(p => {
-    const u = byId[String(p.userId || '')];
-    const kopf = u ? avatarHtml(u, 'avatar') : '<i class="fa-light fa-envelope"></i>';
+    // Immer das Briefsymbol, auch wenn die Mail einem Mitglied gehoert. Der Kopf
+    // benennt die MAIL, nicht die Person: wem sie gehoert, steht schon in der
+    // Absenderzeile darunter, und ein Portraitfoto neben einem Betreff las sich
+    // wie ein Chat-Beitrag statt wie ein Posteingang.
+    const kopf = '<i class="fa-light fa-envelope mail-icon"></i>';
     // Eine weitergeleitete Mail nennt im aeusseren Kopf immer nur den Haushalt, der
     // sie weitergeleitet hat, und traegt ein „Fwd:" im Betreff. Wer sie geschrieben
     // hat und wie sie hiess, liest das Gateway aus dem zitierten Kopf (MailDetectOrigin)
