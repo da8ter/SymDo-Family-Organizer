@@ -9673,6 +9673,43 @@ function initCaptions() {
 // dokument-weiter Handler jede Scroll-Geste außerhalb erlaubter Bereiche.
 const SCROLL_AREA_SELECTOR = '.screen, .suggestions, .overlay-body, .scanner-body, .shop-strip, .menu-pop';
 
+/**
+ * Sucht zwischen Ereignisziel und Scrollbereich ein Kind, das SELBST scrollen kann
+ * und in dieser Richtung noch Weg hat.
+ *
+ * Ohne das erstickt die Eindämmung jede Textfläche in einem Blatt: die Handler
+ * hängen am .overlay-body, sehen aber auch die Gesten, die aus einem <textarea>
+ * darin heraufsteigen. Passt das Blatt ganz auf den Schirm, greift dort
+ * `maxScrollTop <= 0` und ruft preventDefault — und der Notiztext klebte fest.
+ * Selbst mit scrollbarem Blatt entschied die Randlogik am FALSCHEN Element.
+ *
+ * Kein `overflow`-Test für die Textfläche selbst: ein <textarea> scrollt seinen
+ * Inhalt auch bei `overflow: visible`.
+ */
+function innererScroller(ziel, scrollEl, deltaY) {
+  let el = (ziel instanceof Element) ? ziel : null;
+  while (el && el !== scrollEl) {
+    let eigen = el.tagName === 'TEXTAREA';
+    if (!eigen) {
+      try { eigen = /(auto|scroll)/.test(getComputedStyle(el).overflowY); } catch (e) { eigen = false; }
+    }
+    if (eigen) {
+      const max = el.scrollHeight - el.clientHeight;
+      if (max > 1) {
+        const oben  = el.scrollTop <= 0;
+        const unten = el.scrollTop >= max - 1;
+        // Nur wenn er in DIESER Richtung noch etwas zu zeigen hat — sonst soll die
+        // Eindämmung des Containers wie gehabt übernehmen.
+        if (!((deltaY < 0 && oben) || (deltaY > 0 && unten))) {
+          return el;
+        }
+      }
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function bindScrollContainment(scrollEl) {
   if (!scrollEl) return;
   let lastTouchY = null;
@@ -9688,10 +9725,12 @@ function bindScrollContainment(scrollEl) {
     // und die ganze Visu scrollte mit. Das default-Verhalten bleibt unberuehrt,
     // waagerechtes Scrollen funktioniert also weiter.
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { e.stopPropagation(); return; }
-    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
     const deltaY = e.deltaY || 0;
     if (deltaY === 0) { e.stopPropagation(); return; }
+    // Ein Kind mit eigenem Scrollweg (Textfläche) bedient sich selbst.
+    if (innererScroller(e.target, scrollEl, deltaY)) { e.stopPropagation(); return; }
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
     const atTop = scrollEl.scrollTop <= 0;
     const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
     if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
@@ -9723,10 +9762,14 @@ function bindScrollContainment(scrollEl) {
     // Visualisierung (postPosition), was dieselbe Mitscroll-Wirkung hat wie beim Rad.
     if (axis === 'x') { lastTouchY = currentY; e.stopPropagation(); return; }
 
-    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
+    // Reihenfolge: erst die Richtung kennen, dann den inneren Scroller fragen, und
+    // ERST DANN die Container-Grenzen. Umgekehrt hätte ein Blatt ohne eigenen
+    // Scrollweg die Geste schon verschluckt.
     if (lastTouchY === null) { lastTouchY = currentY; e.stopPropagation(); return; }
     const deltaY = lastTouchY - currentY;
+    if (innererScroller(e.target, scrollEl, deltaY)) { lastTouchY = currentY; e.stopPropagation(); return; }
+    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (maxScrollTop <= 0) { e.preventDefault(); e.stopPropagation(); return; }
     const atTop = scrollEl.scrollTop <= 0;
     const atBottom = scrollEl.scrollTop >= maxScrollTop - 1;
     if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) e.preventDefault();
