@@ -2205,10 +2205,22 @@ html[data-symdo-theme="dark"] .member-bar {
 @media (min-width: 820px)  { :root { --content-max: 1000px; } }
 @media (min-width: 1250px) { :root { --content-max: 1400px; } }
 
+/* Das Favoriten-Blatt liegt UNTER den Dialogen, die aus ihm heraus aufgehen:
+   promptOverlay (Liste anlegen/umbenennen), confirmOverlay (Liste loeschen),
+   editOverlay (Artikel bearbeiten) und recipeImgOverlay (Rezept ansehen). Bei
+   gleichem z-index (60 aus .overlay) entscheidet die DOM-Reihenfolge — und neue
+   Overlays kommen hinten dazu, der Stapel waere also bei der naechsten Ergaenzung
+   wieder falsch. Deshalb ausdruecklich tiefer. */
+#favOverlay { z-index: 58; }
+/* Breiter als die uebliche 900px-Grenze: ab 1100px stehen Auswahl und Inhalt
+   nebeneinander (#favoritesContent), und 360 px Auswahl plus Artikelspalte
+   brauchen den Platz. */
+#favOverlay .overlay-card { max-width: min(var(--content-max), 1200px); max-height: 92%; }
+
 /* Favoriten schmal: genau eine der beiden Spalten ist sichtbar — dasselbe
    Verhalten wie vor der Aufteilung in #favMaster/#favDetail. */
-#screen-favorites:not(.detail-open) #favDetail { display: none; }
-#screen-favorites.detail-open #favMaster { display: none; }
+#favoritesContent:not(.detail-open) #favDetail { display: none; }
+#favoritesContent.detail-open #favMaster { display: none; }
 
 @media (min-width: 820px) {
   /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
@@ -2362,10 +2374,10 @@ html[data-symdo-theme="dark"] .member-bar {
   }
   /* Beide Spalten immer sichtbar. Dieselben Selektoren wie die schmalen Regeln
      weiter oben, nur spaeter im Stylesheet — mit schwaecheren Selektoren
-     (#screen-favorites #favDetail) gewann dort das display:none, weil das :not()
+     (#favoritesContent #favDetail) gewann dort das display:none, weil das :not()
      eine Klasse mitbringt. Gemessen: rechte Spalte blieb 0 px breit. */
-  #screen-favorites:not(.detail-open) #favDetail,
-  #screen-favorites.detail-open #favMaster { display: block; }
+  #favoritesContent:not(.detail-open) #favDetail,
+  #favoritesContent.detail-open #favMaster { display: block; }
   /* Zurück-Pfeile haben nebeneinander keinen Sinn: die Auswahl steht ja links */
   #btnFavBack, #btnBoughtBack { display: none; }
   /* Zeigt, welche Liste rechts steht. Als innerer Schatten auf der ZEILE, NICHT als
@@ -2416,6 +2428,7 @@ html[data-symdo-theme="dark"] .member-bar {
         <div class="screen-head">
           <select id="shoppingSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="shoppingTitle"></h2>
+          <button id="btnShoppingFav" class="icon-btn" aria-label="Favoriten"><i class="fa-light fa-heart"></i></button>
           <button id="btnShoppingHint" class="icon-btn hint-btn" aria-label="Hinweis für den Einkauf"><i class="fa-light fa-comment"></i><span class="hint-badge" hidden>!</span></button>
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
@@ -2496,21 +2509,11 @@ html[data-symdo-theme="dark"] .member-bar {
       </div>
     </section>
 
-    <section id="screen-favorites" class="screen">
-      <!-- Zwei Spalten: links die Auswahl, rechts der Inhalt. Schmal ist immer nur
-           eine sichtbar (siehe #screen-favorites.detail-open), ab 1100px beide. -->
-      <div class="content" id="favoritesContent">
-        <div id="favMaster"></div>
-        <div id="favDetail"></div>
-      </div>
-    </section>
-
   </main>
 
   <nav class="tabbar">
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
-    <button id="tab-favorites"><i class="fa-light fa-heart"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span><span id="tabCalendarBadge" class="tab-badge" style="display:none;"></span></button>
   </nav>
@@ -2779,6 +2782,25 @@ html[data-symdo-theme="dark"] .member-bar {
   </div>
 </div>
 
+<!-- Favoriten und Kaufhistorie. Kein eigener Bereich mehr: erreichbar ueber das
+     Herz in der Kopfzeile der Einkaufsliste, zu der sie inhaltlich gehoeren.
+     Die Ueberschrift bleibt LEER — renderFavMaster/renderFavList bringen ihre
+     eigene .screen-head samt Zurueck- und Plus-Knopf mit. -->
+<div class="overlay" id="favOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title"></span>
+      <button class="btn-close-overlay" data-close="favOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <!-- Traegt jetzt detail-open (vorher #screen-favorites) und ist ab 1100px das
+         zweispaltige Raster. Die ID schlaegt das display:flex von .overlay-body. -->
+    <div class="overlay-body" id="favoritesContent">
+      <div id="favMaster"></div>
+      <div id="favDetail"></div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="confirmOverlay">
   <div class="overlay-card">
     <div class="overlay-head">
@@ -3008,11 +3030,12 @@ function visibleTabs() {
   const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
   const out = [];
   if (t.dashboard) out.push('dashboard');
-  // Favoriten hängen an den Einkaufslisten: der Tab zeigt deren Favoritenlisten und
-  // die Kaufhistorie — ohne Einkauf hätte er keinen Inhalt. Deshalb stehen sie auch in
-  // der Leiste direkt hinter „Einkaufen"; die Reihenfolge hier ist zugleich die des
-  // Rückfalls, wenn der gespeicherte Tab abgeschaltet wurde (vis[0] in setTab).
-  if (t.shopping) { out.push('shopping'); out.push('favorites'); }
+  // Die Reihenfolge hier ist zugleich die des Rückfalls, wenn der gespeicherte Tab
+  // abgeschaltet wurde (vis[0] in setTab).
+  // Favoriten sind kein Bereich mehr: sie gehören zur Einkaufsliste und gehen als
+  // Blatt über das Herz in ihrer Kopfzeile auf. Ohne Einkauf sind sie damit
+  // unerreichbar — dieselbe Kopplung wie vorher, nur ohne Platz in der Leiste.
+  if (t.shopping) out.push('shopping');
   if (t.todos) out.push('todos');
   // Kalender ganz hinten und nur, wenn OpenCalendar wirklich Kalender liefert:
   // ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist schlimmer als keiner.
@@ -3139,7 +3162,7 @@ const ls = {
 let activeTab = (function () {
   try {
     const wunsch = new URLSearchParams(window.location.search).get('tab');
-    if (wunsch && ['dashboard', 'shopping', 'favorites', 'todos', 'calendar'].includes(wunsch)) {
+    if (wunsch && ['dashboard', 'shopping', 'todos', 'calendar'].includes(wunsch)) {
       return wunsch;
     }
   } catch (e) {}
@@ -3606,7 +3629,7 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'shopping', 'favorites', 'todos', 'calendar'];
+const TABS = ['dashboard', 'shopping', 'todos', 'calendar'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -4389,7 +4412,10 @@ function renderAll() {
   if (activeTab === 'dashboard') renderDashboard();
   if (activeTab === 'shopping') renderShopping();
   if (activeTab === 'todos') renderTodos();
-  if (activeTab === 'favorites') renderFavorites();
+  // Favoriten sind ein Blatt, kein Bereich: nur mitzeichnen, solange es offen ist.
+  // Das deckt alle Wege ab, auf denen ein Zustand hereinkommt (state, instanceState,
+  // meta, Minutentakt) — ein Sonderweg wie bei favPickOverlay ist nicht nötig.
+  if (document.getElementById('favOverlay').classList.contains('open')) renderFavorites();
   if (activeTab === 'calendar') {
     // Termine erst beim Betreten holen: der Bereich ist selten offen, und jeder
     // Abruf laeuft ueber mehrere Seiten durch OpenCalendar.
@@ -7413,7 +7439,7 @@ function renderFavorites() {
   if (!st) {
     renderInto(elMaster, `<div class="empty-state"><i class="fa-light fa-heart"></i>${translate('No shopping list found')}${noInstanceHint('shopping')}</div>`);
     renderInto(elDetail, '');
-    document.getElementById('screen-favorites').classList.remove('detail-open');
+    document.getElementById('favoritesContent').classList.remove('detail-open');
     return;
   }
   const lists = (Array.isArray(st.favoriteLists) ? st.favoriteLists.slice() : []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true }));
@@ -7432,7 +7458,7 @@ function renderFavorites() {
   renderFavPane(elDetail, st, lists, bought, detail);
   // Eine Stelle entscheidet, ob ein Detail offen ist — die CSS-Regeln haengen
   // daran (schmal: genau eine Spalte sichtbar).
-  document.getElementById('screen-favorites')
+  document.getElementById('favoritesContent')
     .classList.toggle('detail-open', !!detail || favBoughtOpen);
 }
 
@@ -8797,7 +8823,6 @@ function initCaptions() {
   document.querySelector('#tab-dashboard span').textContent = translate('Overview');
   document.querySelector('#tab-shopping span').textContent = translate('Shopping');
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
-  document.querySelector('#tab-favorites span').textContent = translate('Favorites');
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
   document.getElementById('todoInput').placeholder = translate('New task …');
@@ -8940,6 +8965,21 @@ function aktuellerHinweis() {
 function hinweisAbzeichenAuffrischen() {
   const badge = document.querySelector('#btnShoppingHint .hint-badge');
   if (badge) badge.hidden = aktuellerHinweis() === '';
+}
+
+/**
+ * Favoriten und Kaufhistorie als Blatt oeffnen.
+ *
+ * Immer bei der Auswahl beginnen: Ein stehengebliebenes Detail waere beim naechsten
+ * Oeffnen nicht erklaerbar, und favDetailListId kann auf eine inzwischen geloeschte
+ * Liste zeigen (renderFavorites raeumt das erst beim Zeichnen auf).
+ */
+function favoritenOeffnen() {
+  if (!selectedShoppingID()) return;
+  favDetailListId = null;
+  favBoughtOpen = false;
+  renderFavorites();
+  openOverlay('favOverlay');
 }
 
 function hinweisOeffnen() {
@@ -9375,6 +9415,7 @@ document.addEventListener('DOMContentLoaded', () => {
   shopAdd.addEventListener('click', addFromInput);
   document.getElementById('btnShoppingMenu').addEventListener('click', (e) => openShoppingMenu(e.currentTarget));
   document.getElementById('btnShoppingHint').addEventListener('click', () => hinweisOeffnen());
+  document.getElementById('btnShoppingFav').addEventListener('click', () => favoritenOeffnen());
   document.getElementById('btnHintSave').addEventListener('click', () => {
     hinweisSpeichern(document.getElementById('hintInput').value);
   });
