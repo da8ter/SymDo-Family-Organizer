@@ -2329,21 +2329,31 @@ html[data-symdo-theme="dark"] .member-bar {
 .note-date { font-size: 12px; color: var(--faint); white-space: nowrap; }
 
 /* Anhaenge als Chips — im Editor mit Entfernen-Knopf, in der Zeile nur als Zahl. */
-.note-files { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+/* Anhaenge im Notiz-Editor sind eine LISTE, kein Chip-Feld: eine Zeile je Datei,
+   Symbol und Name links, die Handlung (Loeschen, Haken, Uhr) ganz rechts. Als
+   umbrechende Chips standen bei zwei Dateien mit langen Namen beide halb
+   nebeneinander, und welcher Knopf zu welchem Namen gehoert, war nicht
+   abzulesen. Ohne Rahmen und Flaeche, dafuer mit Trennlinien — das ist eine
+   Aufzaehlung und kein Satz Schaltflaechen. */
+.note-files { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .note-file {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 6px 8px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 13px;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 2px;
+  font-size: 14px;
   cursor: pointer;
+  /* aus `.form-row label`, das die Wahl-Zeilen trifft */
+  margin-bottom: 0;
 }
+/* Trennlinie zwischen den Zeilen, nicht ueber der ersten. */
+.note-file + .note-file { border-top: 1px solid var(--border); }
 .note-file > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note-file .rm { flex: none; color: var(--muted); padding: 0 2px; font-size: 13px; }
+/* Der Name traegt die Zeile — dadurch rutscht alles Folgende an den rechten Rand. */
+.note-file > span:not(.note-file-size) { flex: 1 1 auto; min-width: 0; }
+.note-file > i:first-child { flex: none; color: var(--muted); }
+.note-file .rm { flex: none; margin-left: auto; color: var(--muted); padding: 4px 2px 4px 10px; font-size: 16px; }
 .note-file .rm:active { color: var(--red); }
 /* Wartet auf den ersten Speichervorgang: sichtbar, aber nicht antippbar. */
 .note-file.is-waiting { opacity: .6; cursor: default; }
@@ -2353,42 +2363,24 @@ html[data-symdo-theme="dark"] .member-bar {
    Haken zu welchem Namen gehoert, ist nicht mehr abzulesen.
    Abgehakt sind sie blass: der Unterschied muss auf einen Blick erkennbar sein,
    ohne das Kaestchen zu lesen, denn davon haengt ab, was gespeichert wird. */
-/* Zwei Dinge, die hier zwingend sind:
+/* Die Zeilen aus einem Mail-Vorschlag: noch nicht angehaengt, sondern zur Wahl.
    `display: flex` mit dieser Genauigkeit, weil `.form-row label { display: block }`
-   (0,2,0) das `inline-flex` von `.note-file` (0,1,0) sonst schlaegt — die Zeile ist
-   ein <label>, und ohne Flex-Kontext sind `flex-grow` am Namen und das
-   `margin-left: auto` am Haken wirkungslos (gemessen: display=block).
-   Und `min-width: 0`, weil in CSS `min-width` gegen `max-width` gewinnt (die
-   benutzte Breite ist max(min, min(max, width))): mit dem voreingestellten `auto`
-   = Inhaltsmindestbreite haette das `max-width: 100%` von .note-file keine
-   Wirkung, und ein langer Dateiname schiebt die Zeile ueber das Blatt hinaus. */
-.note-files .note-file.is-choice {
-  display: flex;
-  flex: 0 0 100%;
-  min-width: 0;
-  cursor: pointer;
-  opacity: .55;
-}
-.note-files .note-file.is-choice { margin-bottom: 0; }   /* aus .form-row label */
-.note-file.is-choice.is-on { opacity: 1; border-color: var(--accent); }
-/* Der Name traegt die Zeile, Groesse und Haken sitzen rechts. `margin-left: auto`
-   auf der Groesse schiebt beide nach rechts, auch wenn keine Groesse dasteht —
-   dann uebernimmt das Kaestchen selbst. */
-/* min-width: 0 ist hier das Entscheidende: sonst behaelt der Name seine
-   Inhaltsbreite (er ist nowrap), die Zeile waechst mit und schiebt das ganze
-   Blatt ueber den Schirm. Erst mit 0 greift das text-overflow: ellipsis. */
-.note-file.is-choice > span:not(.note-file-size) { flex: 1 1 auto; min-width: 0; }
+   (0,2,0) das `flex` von `.note-file` (0,1,0) sonst schlaegt — die Zeile ist ein
+   <label>, und ohne Flex-Kontext sind `flex-grow` am Namen und `margin-left: auto`
+   am Haken wirkungslos (am laufenden Chrome gemessen: display war „block").
+   Abgehakt sind sie blass: der Unterschied muss auf einen Blick erkennbar sein,
+   ohne das Kaestchen zu lesen, denn davon haengt ab, was gespeichert wird. */
+.note-files .note-file.is-choice { display: flex; opacity: .55; }
+.note-file.is-choice.is-on { opacity: 1; }
 .note-file.is-choice .note-file-size { margin-left: auto; }
 .note-file.is-choice input {
-  /* margin-left: auto haelt den Haken rechts, auch ohne Groessenangabe. */
+  /* margin-left: auto haelt den Haken rechts, auch ohne Groessenangabe; steht
+     eine Groesse davor, hat DIE schon geschoben und es braucht nur Abstand. */
   flex: none; margin: 0 0 0 auto; accent-color: var(--accent);
   width: 18px; height: 18px;
 }
-/* Steht eine Groesse davor, hat DIE schon nach rechts geschoben — dann braucht
-   der Haken nur noch Abstand, sonst rissen zwei auto-Margins die beiden
-   auseinander. */
-.note-file.is-choice .note-file-size + input { margin-left: 8px; }
-.note-file-size { flex: none; color: var(--muted); font-size: 11px; }
+.note-file.is-choice .note-file-size + input { margin-left: 10px; }
+.note-file-size { flex: none; color: var(--muted); font-size: 11.5px; }
 
 @media (min-width: 820px) {
   /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
@@ -2928,6 +2920,14 @@ html[data-symdo-theme="dark"] .member-bar {
   <div class="overlay-card">
     <div class="overlay-head">
       <span class="overlay-title" id="recipeImgTitle">Rezeptfoto</span>
+      <!-- Ein echtes <a target="_blank">: der Tipper darauf IST die Nutzergeste,
+           deshalb greift keine Popup-Sperre. Ein window.open aus dem .then() des
+           Abrufs waere in Safari geblockt. Nur so kommt man in der Kachel (ohne
+           Token, also ohne Datei-Adresse) an die zweite Seite eines PDFs: das
+           <iframe> zeigt auf iOS ausschliesslich die erste und blaettert nicht. -->
+      <a id="recipeOpenExt" href="#" target="_blank" rel="noopener"
+         style="display:none;color:var(--accent);font-size:20px;padding:0 6px;"
+         aria-label="Im Browser öffnen"><i class="fa-light fa-arrow-up-right-from-square"></i></a>
       <button class="btn-close-overlay" data-close="recipeImgOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body" style="text-align:center;">
@@ -3406,7 +3406,8 @@ function openRecipePhoto(mediaId, triedExternally) {
     // war. Klappt nur, wenn der Popup-Blocker diesen späten Aufruf durchlässt —
     // sonst bleibt der iframe unten, der aber nur Seite 1 zeigt.
     if (istPdf && !triedExternally && openMediaExternally(mediaId)) return;
-    zeigeMedium(j.dataUrl, istPdf, translate(istPdf ? 'Recipe file' : 'Recipe photo'));
+    zeigeMedium(j.dataUrl, istPdf, translate(istPdf ? 'Recipe file' : 'Recipe photo'),
+                mediaFileUrl(mediaId));
   }).catch(() => showToast(translate('Could not load the image.')));
 }
 
@@ -3417,20 +3418,36 @@ function openRecipePhoto(mediaId, triedExternally) {
  *
  * PDF als Blob-URL im iframe: WebKit rendert eine riesige data:-URL nicht.
  */
-function zeigeMedium(dataUrl, istPdf, titel) {
+/**
+ * Ein Medienobjekt anzeigen.
+ *
+ * `direkt` ist die Datei-Adresse, wenn es eine gibt (Web-App mit Token). Dann
+ * traegt der Knopf oben rechts sie, und der Browser zeigt das PDF mit seinem
+ * eigenen Betrachter — mit Seitenzahl und Blaettern. Ohne Adresse (Kachel) muss
+ * ein Blob herhalten; das reicht fuer den Knopf, nicht fuer das <iframe>, das
+ * auf iOS bei Seite 1 stehen bleibt.
+ */
+function zeigeMedium(dataUrl, istPdf, titel, direkt) {
   const img = document.getElementById('recipeImg');
   const pdf = document.getElementById('recipePdf');
+  const raus = document.getElementById('recipeOpenExt');
+  let blobUrl = '';
   if (istPdf) {
     img.style.display = 'none'; img.removeAttribute('src');
     try {
       if (pdf.dataset.blob) { URL.revokeObjectURL(pdf.dataset.blob); }
-      const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
-      pdf.dataset.blob = url; pdf.src = url; pdf.style.display = '';
+      blobUrl = URL.createObjectURL(dataUrlToBlob(dataUrl));
+      pdf.dataset.blob = blobUrl; pdf.src = blobUrl; pdf.style.display = '';
     } catch (e) { showToast(translate('Could not load the file.')); return; }
   } else {
     pdf.style.display = 'none'; pdf.removeAttribute('src');
     img.src = dataUrl; img.style.display = '';
   }
+  // Die Datei-Adresse ist die bessere Wahl: ein Blob-Verweis stirbt mit der
+  // Seite, und manche Browser laden ihn im neuen Tab gar nicht.
+  const ziel = direkt || blobUrl || (istPdf ? '' : dataUrl);
+  if (ziel) { raus.href = ziel; raus.style.display = ''; }
+  else { raus.style.display = 'none'; raus.removeAttribute('href'); }
   document.getElementById('recipeImgTitle').textContent = titel;
   openOverlay('recipeImgOverlay');
 }
@@ -8767,12 +8784,7 @@ function noteDateienZeichnen() {
       noteAnhangOeffnen(parseInt(chip.dataset.media, 10));
     });
   });
-  // Typ vorab holen, damit der Klick synchron entscheiden kann, ob ein PDF an den
-  // System-Viewer geht — nach einem await wertet Safari window.open als Popup.
-  dateien.forEach(a => { if (a.kind === 'pdf') notesTypCache[String(a.id)] = true; });
 }
-
-const notesTypCache = {};
 
 /**
  * Anhang ansehen.
@@ -8784,17 +8796,21 @@ const notesTypCache = {};
  */
 function noteAnhangOeffnen(mediaId) {
   if (!mediaId || !noteCtx) return;
-  const istPdf = notesTypCache[String(mediaId)] === true;
   const direkt = notesMediaUrl(mediaId);
-  if (direkt && istPdf) {
+  // Gibt es eine Datei-Adresse, uebernimmt der Browser — fuer Bilder genauso wie
+  // fuer PDFs. Sein Betrachter kann blaettern, zoomen, drehen und speichern; das
+  // <iframe> im Blatt kann das nicht, auf iOS zeigt es sogar nur die erste Seite.
+  // Der Aufruf steht synchron im Klick, sonst wertet Safari ihn als Popup.
+  if (direkt) {
     let fenster = null;
     try { fenster = window.open(direkt, '_blank'); } catch (e) {}
     if (fenster) return;
+    // Popup-Sperre: dann eben das Blatt, aber mit der Adresse am Knopf.
   }
   aiPost('/notes', { action: 'attachData', noteId: noteCtx.noteId, attachmentId: mediaId }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !j.dataUrl) { showToast(notizenFehlertext(j)); return; }
-    zeigeMedium(j.dataUrl, j.isPdf === true, translate('Attachment'));
+    zeigeMedium(j.dataUrl, j.isPdf === true, translate('Attachment'), direkt);
   }).catch(() => showToast(translate('Action failed')));
 }
 
