@@ -633,7 +633,12 @@ trait WebPush
      *
      * @return array{sent: int, failed: int, dropped: int, stale: int, blocked: int}
      */
-    private function PushBroadcast(string $titel, string $text, string $userId = '', string $tab = ''): array
+    /**
+     * @param int $badge Zahl fuers App-Symbol, -1 = nicht mitschicken. Der Empfaenger
+     *                   ist der Service Worker: bei einem neuen Vorschlag ist die App
+     *                   zu, die Seite selbst kaeme also zu spaet.
+     */
+    private function PushBroadcast(string $titel, string $text, string $userId = '', string $tab = '', int $badge = -1): array
     {
         $bilanz = ['sent' => 0, 'failed' => 0, 'dropped' => 0, 'stale' => 0, 'blocked' => 0];
         $abos = $this->PushSubscriptions($userId);
@@ -649,6 +654,9 @@ trait WebPush
         $nutzlast = ['title' => $kurz['title'], 'body' => $kurz['body']];
         if ($tab !== '' && in_array($tab, self::PUSH_TABS, true)) {
             $nutzlast['tab'] = $tab;
+        }
+        if ($badge >= 0) {
+            $nutzlast['badge'] = $badge;
         }
 
         $riegel = 'SymDo_Push_' . $this->InstanceID;

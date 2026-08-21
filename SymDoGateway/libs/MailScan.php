@@ -1637,7 +1637,11 @@ trait MailScan
             $userId,
             // Ziel ist der KI-Bereich: dort liegen die Vorschlaege, seit sie nicht mehr
             // ueber der Aufgabenliste und der Agenda stehen.
-            'ki'
+            'ki',
+            // Aufs App-Symbol kommt ALLES, was noch wartet — nicht nur die Funde
+            // dieser einen Mail. Sonst stuende auf dem Symbol eine 3, waehrend im
+            // Bereich acht Vorschlaege liegen.
+            $this->MailPendingCount()
         );
     }
 
@@ -1653,6 +1657,28 @@ trait MailScan
     }
 
     /** @return list<array> */
+    /**
+     * Wie viele Vorschlaege warten insgesamt noch auf eine Entscheidung?
+     *
+     * Das ist die Zahl fuer das App-Symbol. Sie zaehlt die EINTRAEGE, nicht die
+     * Mails: eine Mail mit drei Funden ist drei Entscheidungen.
+     *
+     * Gezaehlt wird ueber MailProposalsPublic und nicht ueber MailProposals: ein
+     * uebernommener Eintrag wird NICHT entfernt, er bekommt nur „taken" gesetzt.
+     * Der rohe Bestand zaehlte ihn also mit, und das Symbol truege dauerhaft eine
+     * Zahl, die in der App nirgends steht. So sieht das Symbol genau das, was der
+     * KI-Bereich zeigt — und die Zahl laeuft von selbst auf null, sobald jeder
+     * Vorschlag uebernommen oder verworfen ist.
+     */
+    private function MailPendingCount(): int
+    {
+        $n = 0;
+        foreach ($this->MailProposalsPublic() as $p) {
+            $n += count(is_array($p['items'] ?? null) ? $p['items'] : []);
+        }
+        return $n;
+    }
+
     private function MailProposals(): array
     {
         $alle = json_decode($this->MailAttr('MailProposals', '[]'), true);

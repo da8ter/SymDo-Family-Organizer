@@ -6240,7 +6240,41 @@ function setMailBadges() {
   // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
   // Vorher zaehlte jede Sorte an ihrem eigenen Tab — das verteilte eine Nachricht
   // auf drei Stellen, von denen keine die ganze Zahl nannte.
-  setzen('tabKiBadge', zahl.task + zahl.event + zahl.note);
+  const offen = zahl.task + zahl.event + zahl.note;
+  setzen('tabKiBadge', offen);
+  appBadgeSetzen(offen);
+}
+
+/**
+ * Dieselbe Zahl aufs App-Symbol.
+ *
+ * Gezaehlt werden AUSSCHLIESSLICH die KI-Vorschlaege, und sie stehen so lange,
+ * bis jeder uebernommen oder verworfen ist — genau das leistet `mailProposals`
+ * von selbst, denn mailForget() nimmt den Eintrag bei beidem heraus.
+ *
+ * Die Badging-API gibt es nur in einer Web-App auf dem Home-Screen (iOS ab 16.4)
+ * und in einer installierten PWA unter Windows und macOS; in einem Safari-Tab,
+ * in der Symcon-Kachel und unter Android-Chrome fehlt sie ganz. Deshalb
+ * Merkmalspruefung statt Versionsraten. Auf iOS zeigt das Symbol die Zahl erst,
+ * wenn Mitteilungen erlaubt sind — gezaehlt wird auch vorher, das kostet nichts.
+ */
+let appBadgeZahl = -1;   // zuletzt gesetzte Zahl, -1 = noch nie
+
+function appBadgeSetzen(n) {
+  if (!('setAppBadge' in navigator)) return;
+  // setMailBadges() laeuft bei JEDEM Zeichnen. Ohne diesen Waechter setzte ein
+  // einzelner Zustand die gleiche Zahl ein halbes Dutzend Mal — jeder Aufruf ist
+  // auf iOS eine Zusage, die beantwortet werden muss.
+  if (n === appBadgeZahl) return;
+  appBadgeZahl = n;
+  try {
+    // clearAppBadge statt setAppBadge(0): letzteres zeigt auf manchen Systemen
+    // einen leeren Punkt statt gar nichts.
+    const p = n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge();
+    // Ohne Mitteilungsrecht lehnt Safari die Zusage ab — das ist kein Fehler,
+    // den der Nutzer sehen muesste, aber eine unbehandelte Ablehnung waere es.
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch (e) {}
 }
 
 /**

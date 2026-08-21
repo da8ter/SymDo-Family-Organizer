@@ -18,7 +18,7 @@
 // Bei jeder Aenderung hochzaehlen: Die Datei wird mit `Cache-Control: no-cache`
 // ausgeliefert, der Browser prueft sie also gegen — aber nur, wenn sich die Bytes
 // unterscheiden, gilt sie als neue Fassung.
-const SYMDO_SW_VERSION = 2;
+const SYMDO_SW_VERSION = 3;
 
 const SYMDO_SEITE = '/hook/lists/webapp';
 // Weissliste der Zielbereiche. Die Nutzlast kommt aus dem eigenen Haus, reist aber
@@ -56,6 +56,15 @@ self.addEventListener('push', (event) => {
       : 'SymDo';
     const text = (typeof daten.body === 'string') ? daten.body : '';
     const tab = SYMDO_TABS.includes(daten.tab) ? daten.tab : '';
+    // Zahl aufs App-Symbol. Muss HIER stehen und nicht in der Seite: wenn ein
+    // Vorschlag hereinkommt, ist die App zu — die Seite kaeme erst beim naechsten
+    // Oeffnen dazu, und bis dahin zeigte das Symbol nichts.
+    if (typeof daten.badge === 'number' && daten.badge >= 0 && 'setAppBadge' in navigator) {
+      try {
+        const b = daten.badge > 0 ? navigator.setAppBadge(daten.badge) : navigator.clearAppBadge();
+        if (b && typeof b.catch === 'function') b.catch(() => {});
+      } catch (e) {}
+    }
     try {
       await self.registration.showNotification(titel, {
         body: text,
