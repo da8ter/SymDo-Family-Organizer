@@ -1757,7 +1757,8 @@ class SymDoGateway extends IPSModuleStrict
                         ['caption' => $this->Translate('Buddy'),            'value' => 'buddy'],
                         ['caption' => $this->Translate('Funny'),            'value' => 'funny'],
                         ['caption' => $this->Translate('Drill sergeant'),   'value' => 'drill'],
-                        ['caption' => $this->Translate('Motivational coach'), 'value' => 'coach']
+                        ['caption' => $this->Translate('Motivational coach'), 'value' => 'coach'],
+                        ['caption' => $this->Translate('Whiner'),            'value' => 'jammerlappen']
                     ]
                 ],
                 [

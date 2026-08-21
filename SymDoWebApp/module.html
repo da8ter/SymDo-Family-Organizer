@@ -4860,6 +4860,25 @@ function briefingAvailable() {
   return !!store.gatewayAvailable;
 }
 
+/**
+ * Bestaende nachladen, die NICHT an einer Listeninstanz haengen.
+ *
+ * Briefing und Mail-Vorschlaege liegen im Gateway. Sie wurden bisher nur beim
+ * vollen Zustands-Push geholt, also einmal beim Start — danach nie wieder:
+ * checkRevisions vergleicht ausschliesslich Listen-Instanzen, und die Tuerklingel
+ * des Standalone-Adapters liefert nur `instanceState`, niemals einen `state`.
+ * Ein neues Briefing und ein neuer Vorschlag erschienen deshalb erst nach einem
+ * Neuladen der Seite.
+ *
+ * Beide Abrufe sind billig (ein Attribut lesen) und laufen im Takt mit — der
+ * Bereich zeigt damit hoechstens eine Minute lang einen alten Stand. Ohne Gateway
+ * steigen beide Funktionen von selbst aus.
+ */
+function gatewayNachladen() {
+  loadBriefing();
+  loadMailProposals();
+}
+
 function loadBriefing() {
   if (briefingLoading) return;
   if (!briefingAvailable()) {
@@ -11032,10 +11051,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.visibilityState === 'visible') checkRevisions();
   }, 15000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkRevisions();
+    if (document.visibilityState === 'visible') { checkRevisions(); gatewayNachladen(); }
   });
   setInterval(() => {
-    if (document.visibilityState === 'visible') renderAll();
+    if (document.visibilityState !== 'visible') return;
+    renderAll();
+    gatewayNachladen();
   }, 60000);
 });
 })();

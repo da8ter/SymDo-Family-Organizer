@@ -1088,6 +1088,31 @@ trait Briefing
                     . 'Dinge als machbar an („das räumst du heute weg"), statt sie '
                     . 'vorzuwerfen. Ein aufbauender Halbsatz je Person, wo es passt, und ein '
                     . 'Schlusssatz, der Lust auf den Tag macht.';
+            case 'jammerlappen':
+                // Gegenstueck zur Trainerin: die sieht alles als machbar, dieser Ton sieht
+                // alles als zu viel. Der Witz ist das Uebertreiben, nicht das Herabsetzen —
+                // bemitleidet wird die Familie, angegriffen wird niemand. Und die Grenze
+                // ist eng gezogen: ein Briefing, das echte Aussichtslosigkeit verbreitet,
+                // waere morgens das Letzte, was jemand hoeren will.
+                return 'TONFALL: Du bist ein Jammerlappen. Dich deprimiert der Tag, und die '
+                    . 'anstehenden Aufgaben überfordern dich vollkommen — schon das '
+                    . 'Aufzählen fällt dir schwer. Du-Form, seufzende, ausschweifende '
+                    . 'Sätze, viel „ach", „auch das noch", „wie soll das gehen", „ich weiß '
+                    . 'ja nicht". Vor allem aber BEMITLEIDEST DU DIE FAMILIE: Jedes '
+                    . 'Familienmitglied ist dir aufrichtig leid, und du sagst das auch — '
+                    . '„der arme Max, schon wieder Training", „und die Mia muss das auch '
+                    . 'noch alles schaffen", „ihr Ärmsten". Ein Halbsatz Mitleid je Person, '
+                    . 'wo es passt. '
+                    . 'ERLAUBT: Klagen über die Menge, die Uhrzeiten, das Wetter, das '
+                    . 'Liegengebliebene, über dich selbst. Ein resignierter Schlusssatz. '
+                    . 'VERBOTEN: echte Schwarzmalerei. Nichts über Krankheit, Geld­sorgen, '
+                    . 'Tod, Trennung, Sinnlosigkeit des Lebens; keine Verzweiflung, die '
+                    . 'jemandem den Tag verdirbt, kein Vorwurf an eine Person, niemand ist '
+                    . 'schuld. Es ist ein Gag, den sich die Familie selbst ausgesucht hat — '
+                    . 'jammerig, nicht hoffnungslos. '
+                    . 'Und trotz allen Jammerns bleiben die Angaben vollständig und korrekt: '
+                    . 'Termine, Aufgaben, Namen und Uhrzeiten stehen alle drin. Wer einem '
+                    . 'Termin zugeordnet ist, bleibt zugeordnet.';
             default:
                 return 'TONFALL: Sachlich und freundlich, du-Form, ohne Überschwang.';
         }
@@ -1293,6 +1318,12 @@ trait Briefing
                 return $basis . 'Sprich mit WEIBLICHER Stimme. Vortrag: energisch und '
                     . 'anfeuernd wie eine Motivationstrainerin, hohes Tempo, aufbauende '
                     . 'Betonung, wärmer werdend zum Schluss.';
+            case 'jammerlappen':
+                return $basis . 'Sprich mit WEIBLICHER Stimme. Vortrag: müde und '
+                    . 'niedergeschlagen, langsames Tempo, hörbare Seufzer zwischen den '
+                    . 'Sätzen, die Stimme sinkt am Satzende ab und läuft aus. Klagend und '
+                    . 'mitleidig, nie schrill und nie weinerlich übertrieben. Uhrzeiten und '
+                    . 'Namen trotzdem deutlich.';
             default:
                 return $basis . 'Vortrag: sachlich und freundlich, mittleres Tempo, ohne Überschwang.';
         }
