@@ -515,9 +515,7 @@
             "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden.",
             "New note …": "Neue Notiz …",
             "Controls": "Bedienelemente",
-            "Recurrence": "Wiederholung",
-            "1 new find": "1 neuer Fund",
-            "%1 new finds": "%1 neue Funde"
+            "Recurrence": "Wiederholung"
         },
         "en": {
             "ToDo List": "ToDo List",

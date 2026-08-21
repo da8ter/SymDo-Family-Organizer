@@ -357,8 +357,6 @@
             "%d tasks": "%d Aufgaben",
             "1 appointment": "1 Termin",
             "%d appointments": "%d Termine",
-            "1 new find": "1 neuer Fund",
-            "%1 new finds": "%1 neue Funde",
             "The list was saved — the file was too large to keep.": "Die Liste wurde gespeichert — die Datei war zu groß, um sie zu behalten.",
             "The list was saved — the source could not be kept.": "Die Liste wurde gespeichert — die Quelle ließ sich nicht behalten.",
             "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen.",

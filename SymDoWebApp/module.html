@@ -1063,80 +1063,42 @@ html[data-symdo-theme="dark"] .member-bar {
    Eingeklappt ist der Normalzustand: ein Halbjahresplaner liefert zwei Dutzend
    Termine, und die schoben die eigentliche Liste sonst aus dem Bild. Sichtbar
    bleibt nur die Zeile „N neue Termine gefunden". */
-.mail-ai { --chip-r: 18px; display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--gap); }
-/* Aufgeklappt fasst eine leicht graue FLAECHE Meldung und Fundstuecke zu einem
-   Block zusammen: der Chip ist ihr Kopf, die Zeilen ihr Inhalt — vorher schwebten
-   sie unverbunden auf dem Seitenhintergrund. Bewusst eine Flaeche und keine
-   Kontur: 5 % Inhaltston bleibt in beiden Themes ein leises Grau, und die Zeilen
-   (--row, ~8 %) heben sich als Karten davon ab. Die Klasse setzt renderMailAi,
-   weil der offene Zustand am Knopf haengt und CSS den Elternknoten nicht sieht. */
-.mail-ai.open {
-  background: color-mix(in srgb, var(--content-color) 9%, transparent);
-  border-radius: var(--chip-r);
-  padding: 0 8px 8px;
-}
-/* Die HOEHE gleitet per Skript (mailToggleAnimieren), weil „auto" nicht
-   animierbar ist und der Inhalt beim Zuklappen erst NACH dem Schrumpfen
-   verschwinden darf. Das Grau wechselt bewusst OHNE Uebergang: es gehoert zum
-   aufgeklappten Zustand, und ein Nachblenden beim Schliessen zeigte sich als
-   eckiges Grau hinter der wieder runden Pille (Rundung und Polster sind da
-   schon weg).
-
-   flex: 0 0 auto ist hier keine Kosmetik: .mail-ai ist ein Flex-Container, und
-   waehrend die Hoehe animiert wird, ist sie KLEINER als der Inhalt. Ohne diese
-   Zeile stauchen die Flex-Kinder auf fast null, statt unten beschnitten zu
-   werden — sichtbar als grauer Streifen unter dem Chip, aus dem die Zeilen erst
-   hervorwachsen. Mit ihr behalten sie ihre Hoehe und werden aufgedeckt. */
+.mail-ai { --chip-r: 18px; display: flex; flex-direction: column; gap: 0; margin-bottom: var(--gap); }
+/* flex: 0 0 auto ist hier keine Kosmetik: .mail-ai ist ein Flex-Container, und
+   ohne das schrumpfen die Kinder bei Platznot. */
 .mail-ai > * { flex: 0 0 auto; }
-/* Auf der Flaeche traegt die Zeile den Seitengrundton statt --row: --row (~8 %
-   Inhaltston) laege fast auf dem Grau der Flaeche (9 %) und die Karten
-   verschwaenden darin. Deckend bleibt sie (var(--bg) = card-color), sonst
-   schienen die Wisch-Untergruende durch. */
-.mail-ai.open .mail-row { background: var(--bg); }
-/* Der Chip bleibt buendig: die Seitenpolster der Flaeche hebt er mit negativem
-   Rand wieder auf, seine oberen Ecken sind ihre unteren Grenzen der Rundung. */
-.mail-ai.open .section-toggle { margin: 0 -8px; }
-/* Derselbe Umschalter wie bei „Erledigt" und „Zuletzt benutzt" (.section-toggle),
-   hier aber als Chip in der Akzentfarbe ueber die volle Inhaltsbreite: der Fund
-   ist eine MELDUNG und kein Listenabschnitt — er soll auffallen, solange er
-   ungelesen ist. Die Zahl steht im Titel statt rechts in .count, den Pfeil nach
-   rechts schiebt deshalb der Pfeil selbst.
 
-   Bewusst KEIN width: 100% (siehe Grundregel .section-toggle): als Flex-Container
-   auf Blockebene fuellt der Chip die Breite ohnehin.
-
-   Und bewusst KEIN Seitenrand: der Chip muss geschlossen exakt so breit sein wie
-   aufgeklappt (dort heben -8px Rand die 8px Seitenpolster der Flaeche auf) —
-   schon 2px Unterschied liessen ihn beim Umschalten sichtbar springen. */
-.mail-ai .section-toggle {
+/* JEDE MAIL EIN KASTEN — aber optisch, nicht im DOM. Kopf und Zeilen bleiben
+   Geschwister (siehe unten bei .mail-head), sie teilen sich nur eine Flaeche:
+   der Kopf traegt die obere Rundung, die letzte Zeile die untere. Ein echter
+   Behaelter je Mail waere die naheliegende Loesung und die falsche. */
+.mail-box-start, .mail-box-mid {
+  background: color-mix(in srgb, var(--content-color) 6%, transparent);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   margin: 0;
-  padding: 10px 14px;
-  /* Fester Radius statt 999px, und die Mindesthoehe ist sein Doppeltes.
-     Grund: bei 999px begrenzt der Browser jede Ecke auf die halbe Hoehe, weil die
-     Radien einer Kante zusammen nicht groesser sein duerfen als das Element. Fallen
-     die unteren Radien aufgeklappt auf 0, verschwindet diese Konkurrenz und die
-     OBEREN Ecken wachsen auf die volle Hoehe — der Chip wurde beim Aufklappen
-     sichtbar runder. Mit festem Wert ist die Rundung in beiden Zustaenden dieselbe,
-     und geschlossen bleibt es dank der Mindesthoehe eine echte Pille. */
-  /* --chip-r steht am Behaelter (.mail-ai): die aufgeklappte Flaeche teilt sich
-     die Rundung mit dem Chip, sonst staenden zwei verschiedene Radien uebereinander. */
-  min-height: calc(var(--chip-r) * 2);
-  border-radius: var(--chip-r);
-  background: var(--accent);
-  color: #fff;
 }
-.mail-ai .section-toggle i.chev, .mail-ai .section-toggle svg.chev { margin-left: auto; }
-/* Aufgeklappt verliert der Chip seine unteren Rundungen: er gehoert dann zu dem,
-   was darunter aufgeht, und soll nicht als abgeschlossene Pille darueber schweben. */
-.mail-ai .section-toggle.open {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+.mail-box-start {
+  border-top: 1px solid var(--border);
+  border-top-left-radius: var(--chip-r);
+  border-top-right-radius: var(--chip-r);
+  padding: 10px 10px 6px;
+  margin-top: var(--gap);
 }
-/* FLACHE Liste, aus demselben Grund wie in der Agenda: renderRows() erkennt
-   unveraenderte Knoten nur unter den DIREKTEN Kindern. In .mail-card/.mail-rows
-   verpackt wurde bei jedem Neuzeichnen die ganze Mail ersetzt — also auch die Zeile
-   unter dem Finger, und die Wischgeste ruckelte. Mailkopf und Zeilen sind deshalb
-   Geschwister mit Schluessel, wie Kategorie-Ueberschrift und Artikelzeile. */
+.mail-ai > .mail-box-start:first-child { margin-top: 2px; }
+.mail-box-mid { padding: 0 8px; }
+.mail-box-end {
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: var(--chip-r);
+  border-bottom-right-radius: var(--chip-r);
+  padding-bottom: 8px;
+}
+/* Die Zeilen selbst heben sich als hellere Karten von der Kastenflaeche ab —
+   dieselbe Staffelung wie vorher im aufgeklappten Band. */
+.mail-ai .mail-row { background: var(--bg); }
+.mail-box-mid + .mail-box-mid { padding-top: 6px; }
+.mail-box-start + .mail-box-mid { padding-top: 0; }
+
 .mail-head {
   display: flex; align-items: center; gap: 8px;
   margin: 12px 2px 6px;
@@ -6268,9 +6230,6 @@ let mailLoading = false;
 // Aufgeklappt als Vorgabe: Die Baender lagen frueher UEBER einer Liste und durften
 // sie nicht verdecken — im KI-Bereich sind sie der Inhalt, und drei zugeklappte
 // Zeilen waeren eine leere Seite mit drei Knoepfen.
-// EIN Schalter: das Band ist nach Mails gegliedert, nicht nach Sorten — es gibt
-// nichts mehr, was einzeln offen stehen koennte.
-let mailOpen = true;
 
 /**
  * Sorte eines Fundstuecks.
@@ -6455,25 +6414,10 @@ function renderMailAi() {
   }
   area.style.display = '';
 
-  // Eingeklappt sichtbar ist nur diese Zeile — mit der Zahl IM Titel, weil sie
-  // dort die Aussage ist und nicht eine Beschriftung dazu.
-  const anzahl = gefiltert.reduce((n, p) => n + p.items.length, 0);
-  const auf = mailOpen === true;
-  // Die graue Sammel-Flaeche (.mail-ai.open) haengt am Behaelter, der offene
-  // Zustand am Knopf darin — CSS sieht den Elternknoten nicht, also hier.
-  area.classList.toggle('open', auf);
-  // Eine Zahl ueber alles: das Band nennt nicht mehr eine Sorte, sondern den
-  // ganzen Rueckstand — dieselbe Zahl, die am Tab steht.
-  const titel = anzahl === 1
-    ? translate('1 new find')
-    : translate('%1 new finds').replace('%1', String(anzahl));
-  const umschalter =
-    `<button class="section-toggle${auf ? ' open' : ''}" data-mail="toggle" data-key="mailToggle" aria-expanded="${auf ? 'true' : 'false'}">` +
-      `<i class="fa-light fa-envelope"></i>${escapeHtml(titel)}` +
-      `<i class="fa-light fa-chevron-right chev"></i>` +
-    `</button>`;
-
-  const karten = !auf ? '' : gefiltert.map(p => {
+  // Keine Ueberschrift und kein Aufklappen mehr: die Zahl steht am Tab, und was
+  // wartet, soll man sehen, ohne es erst aufzuklappen. Stattdessen bekommt JEDE
+  // MAIL ihren eigenen Kasten.
+  const karten = gefiltert.map(p => {
     // Immer das Briefsymbol, auch wenn die Mail einem Mitglied gehoert. Der Kopf
     // benennt die MAIL, nicht die Person: wem sie gehoert, steht schon in der
     // Absenderzeile darunter, und ein Portraitfoto neben einem Betreff las sich
@@ -6540,7 +6484,8 @@ function renderMailAi() {
       // data-id am BEHAELTER ist der Schluessel fuer renderRows: „<Mail>:<Nummer>"
       // ist je Vorschlag eindeutig. Die Erkennungsfelder bleiben zusaetzlich an der
       // Zeile, weil der Klick-Verteiler sie ueber closest('.mail-row') sucht.
-      return `<div class="mail-item" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
+      const letzte = it === p.items[p.items.length - 1];
+      return `<div class="mail-item mail-box-mid${letzte ? ' mail-box-end' : ''}" data-id="${escapeHtml(String(p.id) + ':' + String(it.i))}">` +
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
         `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
@@ -6571,7 +6516,11 @@ function renderMailAi() {
         `</div>` +
       `</div>`;
     }).join('');
-    return `<div class="mail-head" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
+    // „mail-box-…" macht aus Kopf und Zeilen OPTISCH einen Kasten, waehrend das
+    // DOM flach bleibt (siehe den Kommentar bei .mail-head: ein echter Behaelter
+    // je Mail liesse renderRows die ganze Mail ersetzen, und eine Wischgeste
+    // unter dem Finger wuerde ruckeln).
+    return `<div class="mail-head mail-box-start" data-key="mailkopf:${escapeHtml(String(p.id))}">${kopf}` +
         `<div class="mail-who">` +
           `<div class="mail-subject">${escapeHtml(titelText)}</div>` +
           `<div class="mail-meta">${escapeHtml(von)}</div>` +
@@ -6585,7 +6534,7 @@ function renderMailAi() {
   // alle uebrigen schon — samt laufender Wischgeste. Bei unveraendertem Markup kommt
   // false, dann wird gar nicht gebunden (ein zweiter Satz Handler wuerde jede
   // Wischgeste doppelt ausfuehren).
-  const frische = renderRows(area, umschalter + karten);
+  const frische = renderRows(area, karten);
   if (frische !== false) bindMailRows(frische);
 
   // Messen wie am Ende von renderTodos: erst nach dem Zeichnen steht die Breite.
@@ -6593,58 +6542,6 @@ function renderMailAi() {
   requestAnimationFrame(layoutTodoMeta);
 }
 
-/**
- * Auf- und Zuklappen des Vorschlagsbands gleiten lassen.
- *
- * „height: auto" ist nicht animierbar, deshalb misst das Skript: Aufklappen
- * zeichnet ERST neu und gleitet dann von der alten zur neuen Hoehe (der Inhalt
- * wird aufgedeckt). Zuklappen schrumpft ERST auf die Chip-Hoehe und zeichnet
- * dann — sonst verschwaenden die Zeilen schlagartig, bevor sich die Flaeche
- * schliesst. Bei reduzierter Bewegung schaltet es ohne Uebergang um.
- */
-function mailToggleAnimieren(area, umschalten, schliesst) {
-  // Waehrend einer laufenden Animation hart umschalten: zwei ueberlappende
-  // Hoehen-Uebergaenge wuerden sich die Inline-Stile zerschreiben.
-  if (!area || area._mailAnim === true || mbReduceMotion()) { umschalten(); return; }
-  const von = area.offsetHeight;
-  let getan = false;
-  let notAus = 0;
-  const gleiten = (nach, danach) => {
-    if (nach === von) { if (danach) danach(); return; }
-    area._mailAnim = true;
-    area.style.height = von + 'px';
-    area.style.overflow = 'hidden';
-    void area.offsetHeight; // Reflow — erst dadurch wird die Starthoehe wirksam
-    area.style.transition = 'height .28s ease';
-    area.style.height = nach + 'px';
-    const fertig = (e) => {
-      // transitionend blubbert (Chip, Chevron) und feuert je Eigenschaft — nur
-      // die eigene Hoehe zaehlt. Ohne e kommt der Aufruf vom Sicherheitsnetz.
-      if (e && (e.target !== area || e.propertyName !== 'height')) return;
-      if (getan) return;
-      getan = true;
-      clearTimeout(notAus);
-      area.removeEventListener('transitionend', fertig);
-      area._mailAnim = false;
-      if (danach) danach();
-      area.style.height = '';
-      area.style.overflow = '';
-      area.style.transition = '';
-    };
-    area.addEventListener('transitionend', fertig);
-    // Sicherheitsnetz: transitionend kann ausbleiben (Tab im Hintergrund).
-    notAus = setTimeout(fertig, 400);
-  };
-  if (schliesst) {
-    const chip = area.querySelector('.section-toggle');
-    gleiten(chip ? chip.offsetHeight : 0, umschalten);
-  } else {
-    umschalten();
-    gleiten(area.offsetHeight, null);
-  }
-}
-
-/** Eintrag lokal entfernen und neu zeichnen — die Liste kommt sonst erst beim naechsten Laden. */
 function mailForget(id, index) {
   mailProposals = mailProposals.map(p => {
     if (String(p.id) !== String(id)) return p;
@@ -6663,16 +6560,6 @@ function mailAiBind(area) {
     const knopf = e.target.closest('[data-mail]');
     if (!knopf) return;
     const art = knopf.getAttribute('data-mail');
-    // Ein Umschalter fuer das ganze Band: seit es nach Mails gegliedert ist, gibt
-    // es keine Sorte mehr, die einzeln offen stehen koennte.
-    if (art === 'toggle') {
-      const schliesst = mailOpen === true;
-      mailToggleAnimieren(area, () => {
-        mailOpen = !mailOpen;
-        renderMailAi();
-      }, schliesst);
-      return;
-    }
     if (art === 'dismiss') {
       const id = knopf.getAttribute('data-id') || '';
       aiPost('/mail/proposals', { action: 'dismiss', id: id });
