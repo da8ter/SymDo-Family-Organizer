@@ -6534,6 +6534,21 @@ function mailAccept(id, i) {
  */
 function entwurfOeffnen(eintrag, userId, quelle) {
   if (eintrag.kind === 'note') {
+    // Die Ordner stehen erst, wenn der Notizen-Bereich einmal gezeichnet wurde —
+    // ladeNotizen() haengt dort am Zeichnen. Aus dem KI-Bereich heraus ist die
+    // Liste also leer, und ohne dieses Nachladen kam „Noch keine Ordner", bis der
+    // Nutzer einmal auf den Notizen-Tab gewechselt hatte. Der Aufruf holt
+    // ausserdem die Mitglieder-Ordner nach: die entstehen serverseitig in
+    // 'list' (NotesEnsureMemberFolders), nicht beim Uebernehmen.
+    if (!notizenGeladen) {
+      ladeNotizen(() => {
+        // Genau EIN zweiter Versuch. Bei einem gescheiterten Laden bleibt
+        // notizenGeladen false — ein blindes Wiederholen liefe endlos.
+        if (notizenGeladen) { entwurfOeffnen(eintrag, userId, quelle); return; }
+        showToast(translate('Could not load notes.'));
+      });
+      return;
+    }
     // Ordner des Mitglieds vorwaehlen, dem die Mail gehoert.
     const fid = (userId && notizen.memberFolders[userId]) || notesOrdnerId || notesErsterOrdner();
     if (!fid) { showToast(translate('No folders yet')); return; }
@@ -8186,6 +8201,7 @@ function addFavListToCart(instanceID, list) {
 let notizen = { rev: 0, folders: [], notes: [], memberFolders: {}, limits: {} };
 let notizenGeladen = false;
 let notizenLaden = false;
+let notizenWartende = [];   // Rueckmeldungen, die auf ein laufendes Laden warten
 let notesOrdnerId = null;   // geoeffneter Ordner (null = Uebersicht)
 let noteCtx = null;         // {folderId, noteId|null, files:[…], warten:[…], proposal:{id,i}|null}
 let noteFunde = [];         // von der KI erkannte Aufgaben/Termine, fluechtig
@@ -8196,13 +8212,29 @@ function notizenMoeglich() {
   return !!store.gatewayAvailable;
 }
 
+/**
+ * Notizen holen. Die Rueckmeldung kommt IMMER, auch wenn nichts geladen wurde.
+ *
+ * Vorher gab es drei Wege, auf denen `danach` verschwand: ein bereits laufendes
+ * Laden verwarf sie, eine Fehlerantwort sprang davor heraus, und der
+ * Netzfehler-Zweig rief sie nie. Wer sich darauf verlaesst — etwa das
+ * Uebernehmen einer vorgeschlagenen Notiz, das die Ordner erst braucht — bekam
+ * dann gar keine Antwort, und der Knopf tat scheinbar nichts. Ob es geklappt
+ * hat, sagt `notizenGeladen`.
+ */
 function ladeNotizen(danach) {
-  if (notizenLaden) return;
+  if (typeof danach === 'function') notizenWartende.push(danach);
+  if (notizenLaden) return;   // die Rueckmeldung haengt jetzt in der Warteschlange
   notizenLaden = true;
-  aiPost('/notes', { action: 'list' }).then(r => {
+  const fertig = () => {
     notizenLaden = false;
+    const warten = notizenWartende;
+    notizenWartende = [];
+    warten.forEach(f => { try { f(); } catch (e) {} });
+  };
+  aiPost('/notes', { action: 'list' }).then(r => {
     const j = r && r.json;
-    if (!j || j.ok !== true) return;
+    if (!j || j.ok !== true) { fertig(); return; }
     notizen = {
       rev: j.rev || 0,
       folders: Array.isArray(j.folders) ? j.folders : [],
@@ -8214,8 +8246,8 @@ function ladeNotizen(danach) {
     // Ein inzwischen geloeschter Ordner darf nicht offen bleiben.
     if (notesOrdnerId && !notizen.folders.some(f => f.id === notesOrdnerId)) notesOrdnerId = null;
     if (activeTab === 'notes') renderNotizen();
-    if (typeof danach === 'function') danach();
-  }).catch(() => { notizenLaden = false; });
+    fertig();
+  }).catch(() => { fertig(); });
 }
 
 /** Nach jeder Aenderung: der Server ist die Wahrheit, es wird nicht lokal geraten. */
