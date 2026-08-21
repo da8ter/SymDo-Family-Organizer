@@ -1739,6 +1739,29 @@ html[data-symdo-theme="dark"] .member-bar {
   justify-content: flex-end;
   row-gap: 4px;
 }
+/* Vorschlagszeile: KEIN Umbruch. Avatar und die beiden Knoepfe stehen immer neben
+   den Chips — eine zweite Zeile lies die Zeile auseinanderfallen (der lange
+   Bereichs-Chip schob den Avatar nach unten, die Knoepfe hinterher).
+   Anders als in der Aufgabenzeile ist das hier gefahrlos: dort ist der Umbruch die
+   strukturelle Garantie gegen den abgeschnittenen Drag-Griff, den es hier nicht
+   gibt. Reicht der Platz trotz der Verdichtungsstufen nicht, kuerzt Stufe 3 den
+   Datums-Chip statt die Zeile zu sprengen. */
+.mail-row.stacked .mail-chips { flex-wrap: nowrap; }
+/* Die Gruppe darf nicht ueber die Karte hinauswachsen. `.mail-side` erbt aus der
+   Grundregel `flex: none`, also flex-shrink: 0 — mit flex-basis: 100% und breiterem
+   Inhalt wuchs sie auf Inhaltsbreite (gemessen 231 px in einer 210 px breiten
+   Zeile) und schob die Knoepfe aus der Karte. Schrumpfen erlaubt heisst: die Box
+   bleibt bei 100 %, und der Druck kommt bei den Chips an — wo Stufe 3 ihn aufloest.
+   min-width: 0, weil ein Flex-Kind sonst nicht unter seine Inhaltsbreite geht. */
+.mail-row.stacked .mail-side { flex-shrink: 1; min-width: 0; }
+/* Stufe 3, nur fuer die Vorschlagszeile: der Datums-Chip darf schrumpfen und sein
+   Text mit Auslassungspunkten enden. min-width: 0 ist noetig, weil ein Flex-Kind
+   sonst nicht unter seine Inhaltsbreite geht. */
+.mail-row.meta-clip .badge.due-badge { min-width: 0; }
+.mail-row.meta-clip .badge.due-badge .due-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .avatar-stack .avatar.tight-more { display: none; }
 .todo-content.meta-tighter .avatar-stack .tight-hide,
 .mail-row.meta-tighter .avatar-stack .tight-hide,
@@ -6140,7 +6163,13 @@ function mailWhenText(due, time, end) {
   // und genau daran erkennt man eine Reihe statt eines Dauertermins.
   const bis = tag(end);
   const uhr = /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(time || '')) ? ' ' + time : '';
-  if (bis && bis !== von) return von + '–' + bis + uhr;
+  if (bis && bis !== von) {
+    // Gleiches Jahr: nur EINMAL nennen — „15.01.–30.06.2026" statt
+    // „15.01.2026–30.06.2026". Das sind fuenf Zeichen weniger und genau die Form,
+    // in der man einen Zeitraum schreibt. Bei Jahreswechsel bleiben beide stehen.
+    const kurz = von.slice(0, 6);   // „15.01." ohne Jahr
+    return (von.slice(6) === bis.slice(6) ? kurz : von) + '–' + bis + uhr;
+  }
   return von + uhr;
 }
 
@@ -7472,7 +7501,7 @@ function layoutRowMeta(cfg) {
   // Chip-Breite gemessen wird, dann pro Zeile stufenweise entscheiden.
   cards.forEach(card => {
     const c = card.querySelector(cfg.content);
-    if (c) c.classList.remove('stacked', 'meta-tight', 'meta-tighter');
+    if (c) c.classList.remove('stacked', 'meta-tight', 'meta-tighter', 'meta-clip');
   });
   cards.forEach(card => {
     const c = card.querySelector(cfg.content);
@@ -7496,21 +7525,44 @@ function layoutRowMeta(cfg) {
     // Chips bräuchten eine zweite Zeile. Das misst den tatsächlichen Zustand und
     // hängt nicht an Innenabständen, Schriftmetrik oder Flex-Feinheiten.
     const meta = c.querySelector(cfg.meta);
-    const wraps = () => {
+    // „Zu eng" heisst je nach Zeile etwas anderes, deshalb BEIDE Proben:
+    //  - Umbrechende Box (Aufgabe, Termin): sie wird hoeher als ihr hoechstes Kind.
+    //  - Nicht umbrechende Box (Vorschlagszeile): sie laeuft waagerecht ueber.
+    // Nur die Hoehe zu messen liess die Verdichtung bei nowrap nie anlaufen, nur
+    // die Breite zu messen bei wrap nie — eine umbrechende Box laeuft nicht ueber.
+    const zuEng = () => {
       if (!meta || !meta.firstElementChild) return false;
       let tallest = 0;
       for (const el of meta.children) {
         tallest = Math.max(tallest, el.getBoundingClientRect().height);
       }
-      return meta.getBoundingClientRect().height > tallest + 2;
+      if (meta.getBoundingClientRect().height > tallest + 2) return true;
+      // Waagerechter Ueberlauf NICHT ueber scrollWidth: auf einer Box mit
+      // `overflow: visible` gibt Chrome dort clientWidth zurueck und verschweigt
+      // herausragende Kinder (gemessen — Stufe 3 lief damit nie an). Stattdessen
+      // die tatsaechliche Ausdehnung der Kinder gegen die Box.
+      const box = meta.getBoundingClientRect();
+      let links = Infinity, rechts = -Infinity;
+      for (const el of meta.children) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;   // ausgeblendete Chips zaehlen nicht
+        links = Math.min(links, r.left);
+        rechts = Math.max(rechts, r.right);
+      }
+      if (rechts === -Infinity) return false;
+      return (rechts - links) > box.width + 1;
     };
-    if (!wraps()) return;
+    if (!zuEng()) return;
     // Stufe 1: Wiederholung + Erinnerung + Anzahl in einen Chip
     c.classList.add('meta-tight');
-    if (!wraps()) return;
+    if (!zuEng()) return;
     // Stufe 2: zwei Avatare weichen einem Zähler (nur ab drei Avataren — sonst
     // fehlt die Vorlage im Markup und die Klasse bleibt wirkungslos)
     c.classList.add('meta-tighter');
+    if (!zuEng()) return;
+    // Stufe 3: der Datums-Chip gibt nach. Bewusst ZULETZT — ein gekuerztes Datum
+    // ist der teuerste Verlust in der Zeile, ein Symbol-Chip der billigste.
+    c.classList.add('meta-clip');
   });
 }
 function ensureTodoMetaObserver() {
