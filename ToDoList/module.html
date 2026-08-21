@@ -1152,6 +1152,17 @@ html[data-symdo-theme="dark"] .member-bar {
   text-align: center;
   flex: 0 0 auto;
 }
+/* Art-Symbol der Zeile: schmale Spalte links, oben ausgerichtet, damit es bei
+   zweizeiligem Inhalt neben dem TITEL steht und nicht mittig dazwischen. */
+.mail-row-kind {
+  flex: 0 0 auto;
+  width: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  align-self: flex-start;
+  margin-top: 3px;
+}
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
   font-size: 13px; font-weight: 700;
@@ -2635,9 +2646,10 @@ html[data-symdo-theme="dark"] .member-bar {
     <section id="screen-ki" class="screen">
       <div class="content">
         <div class="screen-head"><h2 id="kiTitle"></h2></div>
-        <div id="kiTasks" class="mail-ai" style="display:none;"></div>
-        <div id="kiEvents" class="mail-ai" style="display:none;"></div>
-        <div id="kiNotes" class="mail-ai" style="display:none;"></div>
+        <!-- EIN Band, nach MAILS gegliedert: unter jedem Betreff stehen erst die
+             Aufgaben, dann die Termine, dann die Notizen. Vorher gab es drei
+             Baender je Sorte, in denen dieselbe Mail dreimal auftauchte. -->
+        <div id="kiFinds" class="mail-ai" style="display:none;"></div>
         <div id="kiEmpty" class="empty-state" style="display:none;"><i class="fa-light fa-sparkles"></i><span id="kiEmptyText"></span></div>
       </div>
     </section>
@@ -3899,7 +3911,7 @@ function invalidateRenderCache() {
   // beiden Spalten, dort liegen also die _lastHtml-Marken. Der Elternknoten hat nie
   // eine — ihn zu leeren liess eine abgelehnte Favoriten-Aktion ungezeichnet, die
   // weggewischte Zeile blieb bei translateX(-110%) stehen.
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'kiTasks', 'kiEvents', 'kiNotes'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'kiFinds'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
@@ -6304,7 +6316,9 @@ let mailLoading = false;
 // Aufgeklappt als Vorgabe: Die Baender lagen frueher UEBER einer Liste und durften
 // sie nicht verdecken — im KI-Bereich sind sie der Inhalt, und drei zugeklappte
 // Zeilen waeren eine leere Seite mit drei Knoepfen.
-const mailOpen = { task: true, event: true, note: true };
+// EIN Schalter: das Band ist nach Mails gegliedert, nicht nach Sorten — es gibt
+// nichts mehr, was einzeln offen stehen koennte.
+let mailOpen = true;
 
 /**
  * Sorte eines Fundstuecks.
@@ -6319,25 +6333,15 @@ function mailArt(it) {
   if (it && it.kind === 'note') return 'note';
   return 'task';
 }
-/** Wo das Vorschlagsband einer Sorte haengt — alle drei im KI-Bereich. */
-const MAIL_BEREICHE = { task: 'kiTasks', event: 'kiEvents', note: 'kiNotes' };
-/**
- * Alle drei Baender neu zeichnen und den Leerzustand nachziehen.
- *
- * Der Leerzustand gehoert hierher und nicht in renderMailAi: der einzelne Renderer
- * kennt nur seine Sorte und wuesste nicht, ob die beiden anderen auch leer sind.
- */
+/** Die Reihenfolge unter einer Mail: erst zu tun, dann Termine, dann zum Behalten. */
+const MAIL_SORTEN = ['task', 'event', 'note'];
+
 function renderMailAlle() {
-  renderMailAi('task');
-  renderMailAi('event');
-  renderMailAi('note');
+  renderMailAi();
   const leer = document.getElementById('kiEmpty');
   if (!leer) return;
-  const etwas = ['kiTasks', 'kiEvents', 'kiNotes'].some(id => {
-    const el = document.getElementById(id);
-    return el && el.style.display !== 'none';
-  });
-  leer.style.display = etwas ? 'none' : '';
+  const el = document.getElementById('kiFinds');
+  leer.style.display = (el && el.style.display !== 'none') ? 'none' : '';
 }
 
 /** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
@@ -6459,29 +6463,34 @@ function appBadgeSetzen(n) {
 }
 
 /**
- * Vorschlagsband einer Sorte.
+ * Das Vorschlagsband: EINE Liste, nach Mails gegliedert.
  *
- * Getrennte Bereiche, getrennte Sorten: Aufgaben stehen ueber der Aufgabenliste,
- * Termine ueber der Agenda. Eine Aufgabe im Kalender waere so falsch wie ein
- * Elternabend in der Aufgabenliste.
- *
- * @param {'task'|'event'} sorte
+ * Frueher standen drei Baender nach Sorte untereinander (Aufgaben, Termine,
+ * Notizen), jedes mit den Koepfen aller betroffenen Mails. Eine Mail mit allen
+ * drei Sorten tauchte damit dreimal auf, und was zusammengehoert — alles, was
+ * in EINEM Schreiben steht — lag an drei Stellen. Jetzt gibt es je Mail einen
+ * Kopf und darunter ihre Funde in der Reihenfolge Aufgabe, Termin, Notiz.
  */
-function renderMailAi(sorte) {
-  // Jede Sorte zaehlt an ihrem eigenen Tab: Aufgaben am ToDo-Tab, Termine am
-  // Kalender-Tab. Eine Summe ueber beide log — ein Halbjahresplaner mit 19
-  // Terminen liess das ToDo-Tab „20" melden, obwohl dort ein Vorschlag stand.
+function renderMailAi() {
   // Vor dem Ausstieg unten: die Zaehler haengen an der Tab-Leiste, nicht am
   // Vorschlagsband, und muessen auch stimmen, wenn dessen Behaelter fehlt.
   setMailBadges();
 
-  const area = document.getElementById(MAIL_BEREICHE[sorte]);
+  const area = document.getElementById('kiFinds');
   if (!area) return;
 
-  // Nur die Vorschlaege dieser Sorte, leere Mails fallen weg.
-  const gefiltert = mailProposals.map(p => Object.assign({}, p, {
-    items: (Array.isArray(p.items) ? p.items : []).filter(it => mailArt(it) === sorte)
-  })).filter(p => p.items.length > 0);
+  // Je Mail die Funde in fester Sortenfolge; die Reihenfolge INNERHALB einer
+  // Sorte bleibt, wie die KI sie geliefert hat.
+  const gefiltert = mailProposals.map(p => {
+    const roh = Array.isArray(p.items) ? p.items : [];
+    const sortiert = [];
+    for (const sorte of MAIL_SORTEN) {
+      for (const it of roh) {
+        if (mailArt(it) === sorte) sortiert.push(it);
+      }
+    }
+    return Object.assign({}, p, { items: sortiert });
+  }).filter(p => p.items.length > 0);
 
   if (gefiltert.length === 0) {
     area.style.display = 'none';
@@ -6497,18 +6506,15 @@ function renderMailAi(sorte) {
   // Eingeklappt sichtbar ist nur diese Zeile — mit der Zahl IM Titel, weil sie
   // dort die Aussage ist und nicht eine Beschriftung dazu.
   const anzahl = gefiltert.reduce((n, p) => n + p.items.length, 0);
-  const auf = mailOpen[sorte] === true;
+  const auf = mailOpen === true;
   // Die graue Sammel-Flaeche (.mail-ai.open) haengt am Behaelter, der offene
   // Zustand am Knopf darin — CSS sieht den Elternknoten nicht, also hier.
   area.classList.toggle('open', auf);
-  const T = {
-    task:  ['1 new task found', '%1 new tasks found'],
-    event: ['1 new appointment found', '%1 new appointments found'],
-    note:  ['1 new note found', '%1 new notes found']
-  }[sorte];
+  // Eine Zahl ueber alles: das Band nennt nicht mehr eine Sorte, sondern den
+  // ganzen Rueckstand — dieselbe Zahl, die am Tab steht.
   const titel = anzahl === 1
-    ? translate(T[0])
-    : translate(T[1]).replace('%1', String(anzahl));
+    ? translate('1 new find')
+    : translate('%1 new finds').replace('%1', String(anzahl));
   const umschalter =
     `<button class="section-toggle${auf ? ' open' : ''}" data-mail="toggle" data-key="mailToggle" aria-expanded="${auf ? 'true' : 'false'}">` +
       `<i class="fa-light fa-envelope"></i>${escapeHtml(titel)}` +
@@ -6539,9 +6545,19 @@ function renderMailAi(sorte) {
     const von = absender ? translate('From: %1').replace('%1', absender) : '';
     const zeilen = (Array.isArray(p.items) ? p.items : []).map(it => {
       const wann = mailWhenText(it.due, it.time, it.end);
-      // Kein Abzeichen fuer die Art: Aufgaben und Termine stehen in getrennten
-      // Bereichen, und die Klappzeile darueber nennt sie beim Namen. „Termin" an
-      // einer Zeile in der Agenda sagt nichts, was nicht schon dasteht.
+      // Die Art MUSS jetzt an der Zeile stehen. Solange es drei Baender gab, sagte
+      // die Klappzeile darueber, um welche Sorte es geht; unter einer Mail liegen
+      // jetzt alle drei gemischt, und ohne Zeichen waere „Elternabend" von
+      // „Elternbrief unterschreiben" nicht zu unterscheiden.
+      const sorte = mailArt(it);
+      const artZeichen = {
+        task:  ['fa-list-check',  translate('Task')],
+        event: ['fa-calendar',    translate('Appointment')],
+        note:  ['fa-note-sticky', translate('Note')]
+      }[sorte];
+      // Die Art steht als Symbol links (siehe artZeichen), nicht als Chip: ein
+      // weiterer Chip haette den knappen Platz in .mail-chips mit den Angaben
+      // geteilt, die man wirklich lesen muss (Datum, Frist, Reihe).
       // Verdichtung wie bei den Aufgaben: Wiederholung und „ganztaegig" stecken
       // zusaetzlich in EINEM kombinierten Chip (.meta-combined). Stufe 1 blendet die
       // Einzel-Chips (.meta-split) aus und den kombinierten ein — dieselben Klassen,
@@ -6576,6 +6592,7 @@ function renderMailAi(sorte) {
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
         `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
+        `<i class="fa-light ${artZeichen[0]} mail-row-kind" title="${escapeHtml(artZeichen[1])}" aria-label="${escapeHtml(artZeichen[1])}"></i>` +
         `<div class="mail-row-body">` +
           `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
           // Bei einer Notiz steht die Zusammenfassung in `text`, nicht in `info` —
@@ -6679,7 +6696,7 @@ function mailForget(id, index) {
 }
 
 function initMailAi() {
-  Object.values(MAIL_BEREICHE).forEach(id => mailAiBind(document.getElementById(id)));
+  mailAiBind(document.getElementById('kiFinds'));
 }
 
 function mailAiBind(area) {
@@ -6688,14 +6705,13 @@ function mailAiBind(area) {
     const knopf = e.target.closest('[data-mail]');
     if (!knopf) return;
     const art = knopf.getAttribute('data-mail');
-    // Der Umschalter gehoert dem Bereich, in dem er sitzt — die Aufgaben duerfen
-    // offen stehen, waehrend die Termine eingeklappt bleiben.
+    // Ein Umschalter fuer das ganze Band: seit es nach Mails gegliedert ist, gibt
+    // es keine Sorte mehr, die einzeln offen stehen koennte.
     if (art === 'toggle') {
-      const sorte = Object.keys(MAIL_BEREICHE).find(k => MAIL_BEREICHE[k] === area.id) || 'task';
-      const schliesst = mailOpen[sorte] === true;
+      const schliesst = mailOpen === true;
       mailToggleAnimieren(area, () => {
-        mailOpen[sorte] = !mailOpen[sorte];
-        renderMailAi(sorte);
+        mailOpen = !mailOpen;
+        renderMailAi();
       }, schliesst);
       return;
     }
@@ -7776,9 +7792,7 @@ function ensureTodoMetaLateObserver() {
  */
 const META_BEREICHE = [
   { area: 'todoListArea', card: '.todo-card', content: '.todo-content', side: '.todo-side', meta: '.todo-meta' },
-  { area: 'kiTasks',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
-  { area: 'kiEvents',     card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
-  { area: 'kiNotes',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'kiFinds',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
   { area: 'calArea',      card: '.cal-card',  content: '.cal-event',    side: '.cal-side',  meta: '.cal-chips'  },
 ];
 

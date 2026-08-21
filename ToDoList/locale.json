@@ -433,10 +433,6 @@
             "Part of a series": "Teil einer Serie",
             "Series": "Reihe",
             "The calendar rejected the deletion.": "Der Kalender hat das Löschen abgelehnt.",
-            "%1 new appointments found": "%1 neue Termine gefunden",
-            "%1 new tasks found": "%1 neue Aufgaben gefunden",
-            "1 new appointment found": "1 neuer Termin gefunden",
-            "1 new task found": "1 neue Aufgabe gefunden",
             "Appointment updated": "Termin geändert",
             "Edit appointment": "Termin bearbeiten",
             "weekly": "wöchentlich",
@@ -520,8 +516,8 @@
             "New note …": "Neue Notiz …",
             "Controls": "Bedienelemente",
             "Recurrence": "Wiederholung",
-            "1 new note found": "1 neue Notiz gefunden",
-            "%1 new notes found": "%1 neue Notizen gefunden"
+            "1 new find": "1 neuer Fund",
+            "%1 new finds": "%1 neue Funde"
         },
         "en": {
             "ToDo List": "ToDo List",
