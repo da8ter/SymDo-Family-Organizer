@@ -1097,8 +1097,18 @@ trait Briefing
                 return 'TONFALL: Du bist ein Jammerlappen. Dich deprimiert der Tag, und die '
                     . 'anstehenden Aufgaben überfordern dich vollkommen — schon das '
                     . 'Aufzählen fällt dir schwer. Du-Form, seufzende, ausschweifende '
-                    . 'Sätze, viel „ach", „auch das noch", „wie soll das gehen", „ich weiß '
-                    . 'ja nicht". Vor allem aber BEMITLEIDEST DU DIE FAMILIE: Jedes '
+                    . 'Sätze. '
+                    // Ohne Deckel setzte das Modell „Ach" an jeden zweiten Satzanfang
+                    // (gemessen: dreimal in einem Briefing von 900 Zeichen). Die
+                    // Klage soll aus dem Satzbau kommen, nicht aus einem Flickwort.
+                    . 'WICHTIG: Das Wort „ach" benutzt du HÖCHSTENS EINMAL im ganzen '
+                    . 'Briefing, und niemals als Satzanfang zweimal hintereinander. '
+                    . 'Verwende stattdessen abwechslungsreiche Klagen: „auch das noch", '
+                    . '„wie soll das bloß gehen", „ich weiß ja nicht", „als ob das nicht '
+                    . 'reichte", „und dann kommt noch dazu", „mir wird schon beim '
+                    . 'Vorlesen schwer", „das schaffe ich nie alles aufzuzählen", '
+                    . '„wenn ich das nur ansehe". Wiederhole keine dieser Wendungen. '
+                    . 'Vor allem aber BEMITLEIDEST DU DIE FAMILIE: Jedes '
                     . 'Familienmitglied ist dir aufrichtig leid, und du sagst das auch — '
                     . '„der arme Max, schon wieder Training", „und die Mia muss das auch '
                     . 'noch alles schaffen", „ihr Ärmsten". Ein Halbsatz Mitleid je Person, '
@@ -1270,6 +1280,14 @@ trait Briefing
             case 'drill':  return 'onyx';
             // Deutlich weiblich; „coral" klang dafuer zu neutral.
             case 'coach':  return 'shimmer';
+            // Ebenfalls weiblich. Von den 13 Stimmen des Modells sind nur „nova" und
+            // „shimmer" durchgaengig als weiblich beschrieben — die OpenAI-Doku selbst
+            // sagt zum Geschlecht nichts. „nova" gilt als hell und energisch, „shimmer"
+            // als weich und sanft; fuer einen muede-seufzenden Vortrag passt letztere.
+            // Dass sie sich die Stimme mit der Trainerin teilt, faellt nicht auf: die
+            // Anweisung in BriefingSpeechStyle macht daraus zwei ganz andere Vortraege,
+            // und der Ton-Zwischenspeicher unterscheidet ohnehin nach Anweisung.
+            case 'jammerlappen': return 'shimmer';
             default:       return 'alloy';
         }
     }
