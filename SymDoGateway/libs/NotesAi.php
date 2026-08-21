@@ -203,8 +203,19 @@ trait NotesAi
         if ($eintrag === null) {
             return $this->NotesFehler('not_found');
         }
-        $titel = $this->NotesTrim((string)($eintrag['title'] ?? ''), self::NOTE_TITLE_MAX);
-        $text  = mb_substr(trim((string)($eintrag['text'] ?? $eintrag['info'] ?? '')), 0, self::NOTE_TEXT_MAX);
+        // Titel und Text kommen aus dem EDITOR, wenn er sie mitschickt — der Nutzer
+        // darf den Vorschlag vor dem Speichern aendern. Nur die Medien-ID wird
+        // ausschliesslich serverseitig im Vorschlag nachgeschlagen; sonst waere att[]
+        // beliebig setzbar und die Datei-Route lieferte jedes Medienobjekt aus.
+        $titelRoh = array_key_exists('title', $body) ? (string)$body['title'] : (string)($eintrag['title'] ?? '');
+        $textRoh  = array_key_exists('text', $body)
+            ? (string)$body['text']
+            : (string)($eintrag['text'] ?? $eintrag['info'] ?? '');
+        if (mb_strlen($titelRoh) > self::NOTE_TITLE_MAX || mb_strlen($textRoh) > self::NOTE_TEXT_MAX) {
+            return $this->NotesFehler('invalid_payload');
+        }
+        $titel = $this->NotesTrim($titelRoh, self::NOTE_TITLE_MAX);
+        $text  = trim($textRoh);
         if ($titel === '' && $text === '') {
             return $this->NotesFehler('invalid_payload');
         }

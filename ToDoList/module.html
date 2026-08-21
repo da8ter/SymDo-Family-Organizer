@@ -8634,7 +8634,16 @@ function noteSpeichern() {
     return;
   }
   const warten = noteCtx.warten.slice();
-  notizenAktion({ action: 'noteCreate', folderId: fid, title: titel, text: text }, (j) => {
+  // Aus einem Mail-Vorschlag wird per 'adopt' angelegt, nicht per 'noteCreate':
+  // NUR adopt schlaegt den Anhang der Mail serverseitig im Vorschlag nach und
+  // haengt ihn an. Mit noteCreate blieb die abgelegte Datei liegen und wurde zwei
+  // Tage spaeter vom Aufraeumen wieder entfernt — der Anhang kam nie an der Notiz an.
+  // Titel und Text reisen mit, damit Aenderungen im Editor gewinnen.
+  const anlegen = noteCtx.proposal
+    ? { action: 'adopt', proposalId: noteCtx.proposal.id, i: noteCtx.proposal.i,
+        folderId: fid, title: titel, text: text }
+    : { action: 'noteCreate', folderId: fid, title: titel, text: text };
+  notizenAktion(anlegen, (j) => {
     const neueId = (j && j.note && j.note.id) ? j.note.id : null;
     if (!neueId || warten.length === 0) { fertig(); return; }
     // Wartende Anhaenge nacheinander, nicht gleichzeitig: jeder Aufruf schreibt den
