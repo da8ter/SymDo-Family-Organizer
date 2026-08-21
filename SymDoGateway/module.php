@@ -1269,6 +1269,15 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('Also read PDF and image attachments')
                 ],
                 [
+                    'type'    => 'CheckBox',
+                    'name'    => 'MailNoteAttachments',
+                    'caption' => $this->Translate('Keep the attachment when a note is suggested')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('The file is then stored below "Notizen" as soon as the mail is analyzed — even if the suggestion is later discarded. Unused files are removed automatically.')
+                ],
+                [
                     'type'     => 'SelectInstance',
                     'name'     => 'CalNotifyVisuID',
                     'width'    => '400px',

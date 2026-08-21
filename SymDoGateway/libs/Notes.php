@@ -61,6 +61,11 @@ trait Notes
     public function NotesApplyChanges(): void
     {
         $this->NotesEnsureMemberFolders();
+        // Kein eigener Timer: ein neu registrierter existiert vor dem
+        // Kernel-Neustart nicht und warnt bei jedem ApplyChanges in die Ausgabe.
+        // Der Durchlauf ist billig (ein Blick in eine Kategorie) und laeuft
+        // deshalb einfach hier mit — bei jedem Kernelstart und jedem Uebernehmen.
+        $this->NotesSweepOrphans();
     }
 
     // ── Ablage ───────────────────────────────────────────────────────────────
@@ -112,6 +117,32 @@ trait Notes
             KL_ERROR
         );
         return false;
+    }
+
+    /**
+     * Ist der Bestand ueberhaupt benutzbar?
+     *
+     * WriteAttributeString wirft nicht, es tut vor dem Kernel-Neustart einfach
+     * nichts — und ReadAttributeString liefert dann false. Beides sieht von aussen
+     * wie „leer" aus. Diese Probe unterscheidet es, ohne rev zu bewegen: den
+     * aktuellen Wert zurueckschreiben und gegenlesen.
+     */
+    private function NotesStorable(): bool
+    {
+        // Es MUSS ein anderer Wert geschrieben werden als der vorhandene: Schreibt man
+        // denselben zurueck, sieht ein wirkungsloses Schreiben genauso aus wie ein
+        // erfolgreiches. Der Probewert bleibt gueltiges JSON, damit ein gleichzeitiger
+        // Leser nichts Kaputtes sieht, und der alte Stand wird sofort wiederhergestellt.
+        $store = $this->NotesStore();
+        $alt   = (string)json_encode($store, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $probe = (string)json_encode($store + ['probe' => uniqid('', true)],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        @$this->WriteAttributeString(self::NOTES_ATTR, $probe);
+        $ok = $this->ReadAttributeStringSafe(self::NOTES_ATTR, '') === $probe;
+        if ($ok) {
+            @$this->WriteAttributeString(self::NOTES_ATTR, $alt);
+        }
+        return $ok;
     }
 
     private function NotesNewId(): string

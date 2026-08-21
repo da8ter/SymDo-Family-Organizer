@@ -87,6 +87,11 @@ trait MailScan
         // das Kernmodul liefert sie nicht. Abschaltbar, weil es eine zweite
         // Verbindung ins Postfach aufbaut.
         $this->RegisterPropertyBoolean('MailReadAttachments', true);
+        // Vorgabe AUS: Anhaenge dauerhaft abzulegen ist das ueberraschende Verhalten,
+        // und der Datenschutzhinweis sagt bisher das Gegenteil. Wer es will, schaltet
+        // es ein. Gelesen wird die Eigenschaft ueber PushProp, damit sie vor dem
+        // naechsten Kernel-Neustart nicht warnt.
+        $this->RegisterPropertyBoolean('MailNoteAttachments', false);
 
         // ── Zweiter Eingang: Mail per Webhook (Mailgun) ──────────────────
         $this->RegisterPropertyBoolean('MailHookEnabled', false);
@@ -753,7 +758,7 @@ trait MailScan
                 $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
                 return false;
             }
-            $aufgaben = $this->AiParseTodos((string)$r['text']);
+            $aufgaben = $this->AiParseTodos((string)$r['text'], ['task', 'event', 'note']);
             // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
             // unbeobachtet im Timer und kostet Geld beim Anbieter. Ohne diese Zeile
             // waere im Nachhinein nicht feststellbar, welche Mail wann verarbeitet wurde.
@@ -765,6 +770,7 @@ trait MailScan
             // und ob die Unterscheidung greift. Bewusst nur Zahlen, keine Titel.
             $mitDatum = 0;
             $termine = 0;
+            $notizen = 0;
             foreach ($aufgaben as $a) {
                 if (($a['due'] ?? null) !== null) {
                     $mitDatum++;
@@ -772,21 +778,48 @@ trait MailScan
                 if (($a['kind'] ?? 'task') === 'event') {
                     $termine++;
                 }
+                if (($a['kind'] ?? 'task') === 'note') {
+                    $notizen++;
+                }
             }
             $this->LogMessage(sprintf(
-                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), davon %d mit Datum',
+                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), %d Notiz(en), davon %d mit Datum',
                 $betreff !== '' ? $betreff : '(ohne Betreff)',
                 (string)($kopf['SenderAddress'] ?? '?'),
                 // Der IMAP-Weg bleibt wortgleich wie bisher; nur ein anderer Eingang
                 // nennt sich, damit im Protokoll unterscheidbar ist, woher die Mail kam.
                 $quelle === 'IMAP' ? '' : ' (' . $quelle . ')',
                 $anhang !== null ? ' (mit Anhang ' . (($anhang['name'] ?? '') !== '' ? $anhang['name'] : $anhang['kind']) . ')' : '',
-                count($aufgaben) - $termine,
+                count($aufgaben) - $termine - $notizen,
                 $termine,
+                $notizen,
                 $mitDatum
             ), KL_NOTIFY);
             if ($aufgaben === []) {
                 return true; // sauber analysiert, nur nichts zu tun gefunden
+            }
+
+            // Anhang dauerhaft ablegen, damit die Notiz ihn spaeter tragen kann. Muss
+            // HIER stehen, innerhalb des try: das base64 liegt noch im Speicher und
+            // IPS_SetMediaContent dekodiert intern, die Spitze liegt also bei etwa
+            // 2,3x der Dateigroesse. Nach dem finally waere das erhoehte memory_limit
+            // schon zurueckgesetzt und der Aufruf ein Abbruch.
+            //
+            // Nur die Medien-ID reist im Vorschlag mit, NIEMALS das base64 — der
+            // Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen.
+            if ($notizen > 0 && $anhang !== null && (bool)$this->PushProp('MailNoteAttachments', false)) {
+                $ablage = $this->NotesSaveAttachment((string)$anhang['base64'], (string)($anhang['name'] ?? ''));
+                if (($ablage['ok'] ?? false) === true) {
+                    foreach ($aufgaben as $k => $a) {
+                        if (($a['kind'] ?? '') === 'note') {
+                            $aufgaben[$k]['mediaId'] = (int)$ablage['id'];
+                        }
+                    }
+                } else {
+                    // Kein Abbruch: die Notiz ohne Anhang ist besser als keine.
+                    $this->SendDebug('MailScan', 'Anhang nicht ablegbar: '
+                        . (string)($ablage['error']['code'] ?? '?'), 0);
+                }
             }
 
             $this->MailStoreProposal([
@@ -803,7 +836,7 @@ trait MailScan
                 'origin'    => $this->MailDetectOrigin($text),
                 'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
             ]);
-            $this->MailNotifyProposal(count($aufgaben) - $termine, $termine, $userId);
+            $this->MailNotifyProposal(count($aufgaben) - $termine - $notizen, $termine, $notizen, $userId);
             return true;
 
         } finally {
@@ -1572,12 +1605,17 @@ trait MailScan
      * die Sperrbildschirme der Familie schreiben. Die Ratenbegrenzung je Geraet in
      * PushBroadcast deckelt zusaetzlich, wie oft das ueberhaupt gehen kann.
      */
-    private function MailNotifyProposal(int $aufgaben, int $termine, string $userId): void
+    private function MailNotifyProposal(int $aufgaben, int $termine, int $notizen, string $userId): void
     {
         if (!(bool)$this->PushProp('PushOnMailProposal', false)) {
             return;
         }
         $teile = [];
+        if ($notizen > 0) {
+            $teile[] = $notizen === 1
+                ? $this->Translate('1 note')
+                : sprintf($this->Translate('%d notes'), $notizen);
+        }
         if ($termine > 0) {
             $teile[] = $termine === 1
                 ? $this->Translate('1 appointment')

@@ -1556,7 +1556,7 @@ trait AiExtract
      * ein Termin. Verlangt ein Termin zusaetzlich eine Vorbereitung, sind das ZWEI
      * Eintraege — sonst verschwindet die Handlung hinter dem Datum.
      */
-    private function AiKindRule(): string
+    private function AiKindRule(bool $mitNotiz = false): string
     {
         return ' UNTERSCHEIDE AUFGABE UND TERMIN. Setze in jedem Eintrag das Feld "kind": '
             . '"task" fuer etwas, das der Empfaenger TUN muss (Formular ausfuellen, '
@@ -1584,7 +1584,36 @@ trait AiExtract
             . 'zahlen, gib zusaetzlich eine "task" dafuer zurueck. Eine leere Liste '
             . 'ist nur richtig, wenn WEDER ein Datum NOCH eine Handlung vorkommt — '
             . 'reine Werbung, Newsletter, Danksagungen, Rueckblicke.'
+            . ($mitNotiz ? $this->AiNoteKindRule() : '')
             . $this->AiSeriesRule();
+    }
+
+    /**
+     * Die dritte Art: „note" fuer etwas, das man BEHALTEN will.
+     *
+     * Nur fuer die Mailanalyse (AiKindRule(true)) — der Foto-Scan soll weiterhin
+     * ausschliesslich Aufgaben und Termine liefern, und der Notiz-Prompt hat sein
+     * eigenes Format.
+     *
+     * Die Laengengrenze und der Hinweis auf \n sind KRITISCH und nicht kosmetisch:
+     * Ein echter Zeilenumbruch in einem JSON-String reisst das ganze Array — mit ihm
+     * verschwinden ALLE Aufgaben und Termine derselben Mail. AiDecodeJsonArray
+     * bessert das inzwischen nach, aber die Regel ist die erste Verteidigungslinie.
+     */
+    private function AiNoteKindRule(): string
+    {
+        return ' DRITTE MOEGLICHKEIT — NOTIZ. Enthaelt die Mail Angaben, die man '
+            . 'AUFBEWAHREN will, ohne dass daraus eine Handlung oder ein Termin wird '
+            . '(Zugangsdaten, Zaehlerstaende, Bestell- und Aktenzeichen, Anschriften, '
+            . 'Telefonnummern, Oeffnungszeiten, Beitragshoehen, Ergebnisse, '
+            . 'Zusammenfassungen eines langen Schreibens), dann gib zusaetzlich EINEN '
+            . 'Eintrag mit "kind":"note" zurueck. Sein Feld "title" benennt die Sache '
+            . 'kurz, sein Feld "text" fasst die Mail mit ALLEN nachschlagbaren Angaben '
+            . 'zusammen: hoechstens 600 Zeichen, EIN Absatz, und Zeilenumbrueche '
+            . 'ausschliesslich als \\n — niemals ein echter Umbruch innerhalb der '
+            . 'Anfuehrungszeichen. Eine Notiz ersetzt Aufgaben und Termine NICHT: '
+            . 'enthaelt die Mail beides, gib beides zurueck. Reine Werbung und '
+            . 'Newsletter ergeben KEINE Notiz.';
     }
 
     /**
@@ -1625,7 +1654,7 @@ trait AiExtract
                 . '(Termine, Fristen, Betraege, Formularfelder) im Anhang — uebernimm sie von '
                 . 'dort. Stehen im Anhang mehrere eigenstaendige Termine oder Aufgaben, gib sie '
                 . 'als eigene Eintraege zurueck.'
-                . $this->AiKindRule();
+                . $this->AiKindRule(true);
         }
         return $this->AiSystemPrompt($today)
             . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
@@ -1633,7 +1662,7 @@ trait AiExtract
             . 'nicht in der Betreffzeile. Nenne diese Quelle in "info". Nennt die Mail '
             . 'einen konkreten Termin mit Uhrzeit (Elternabend, Sprechstunde, Abgabe um '
             . 'eine bestimmte Zeit), gib zusaetzlich das Feld "time" im Format "HH:MM" '
-            . 'an.' . $this->AiKindRule() . ' WICHTIG zum Anhang: '
+            . 'an.' . $this->AiKindRule(true) . ' WICHTIG zum Anhang: '
             . 'Anhaenge liegen dir NICHT vor. Ein Verweis darauf („siehe Anhang“, „im '
             . 'beigefuegten Formular“) hebt die Aufgabe aber NICHT auf — er ist selbst die '
             . 'Handlungsaufforderung. Nennt die Mail ein Formular, eine Abfrage, eine Liste '

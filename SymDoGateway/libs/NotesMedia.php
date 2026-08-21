@@ -38,6 +38,8 @@ trait NotesMedia
      * Dieselbe Zahl benutzt HandleUserAvatar fuer denselben Zweck.
      */
     private const NOTES_PDF_MAX_BYTES = 900000;
+    /** Schonfrist, bevor ein unbenutzter Anhang eingesammelt wird (zwei Tage). */
+    private const NOTES_SWEEP_GRACE   = 172800;
 
     public function NotesMediaCreate(): void
     {
@@ -305,6 +307,13 @@ trait NotesMedia
         if ($kat <= 0) {
             return 0;
         }
+        // Ohne benutzbaren Bestand NICHT aufraeumen. Ein unlesbares Attribut liefert
+        // eine leere Notizliste — dann saehe JEDER Anhang wie eine Waise aus und der
+        // Durchlauf loeschte den ganzen Bestand. Dasselbe gilt fuer die
+        // Mail-Vorschlaege, die aus demselben Grund leer erscheinen koennen.
+        if (!$this->NotesStorable()) {
+            return 0;
+        }
         $lebt = $this->NotesAttachmentIds($this->NotesStore()['notes']);
         foreach ($this->MailProposals() as $v) {
             foreach ((is_array($v['items'] ?? null) ? $v['items'] : []) as $it) {
@@ -314,13 +323,27 @@ trait NotesMedia
                 }
             }
         }
+        // Zweites Netz: eine Schonfrist. Ein gerade abgelegter Anhang gehoert zu
+        // einem Vorschlag, der noch keine Notiz ist — er darf nicht weggeraeumt
+        // werden, bloss weil der Bestand ihn (noch) nicht nennt.
+        $grenze = time() - self::NOTES_SWEEP_GRACE;
         $weg = 0;
         foreach (IPS_GetChildrenIDs($kat) as $kind) {
             if (!IPS_MediaExists($kind) || in_array($kind, $lebt, true)) {
                 continue;
             }
+            $m = @IPS_GetMedia($kind);
+            if (is_array($m) && (int)($m['MediaUpdated'] ?? 0) > $grenze) {
+                continue;
+            }
             @IPS_DeleteMedia($kind, true);
             $weg++;
+        }
+        if ($weg > 0) {
+            $this->LogMessage(sprintf(
+                'SymDo Notizen: %d nicht mehr benutzte Anhang-Datei(en) entfernt.',
+                $weg
+            ), KL_NOTIFY);
         }
         return $weg;
     }

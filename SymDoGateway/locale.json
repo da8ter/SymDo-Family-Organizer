@@ -261,7 +261,11 @@
             "A task reminder goes to the devices of the member it is assigned to, plus every device that is not assigned to anyone. Assign a device in the web app under the bell.": "Eine Aufgaben-Erinnerung geht an die Geräte des zugewiesenen Mitglieds und an jedes Gerät, das keinem Mitglied zugeordnet ist. Zuordnen lässt sich ein Gerät in der Web-App unter der Glocke.",
             "Send a test notification to all devices": "Testbenachrichtigung an alle Geräte senden",
             "Every device with notifications switched on will receive a test notification. Continue?": "Jedes Gerät mit eingeschalteten Benachrichtigungen bekommt eine Testbenachrichtigung. Fortfahren?",
-            "Sent: %d, failed: %d, removed: %d": "Gesendet: %d, fehlgeschlagen: %d, entfernt: %d"
+            "Sent: %d, failed: %d, removed: %d": "Gesendet: %d, fehlgeschlagen: %d, entfernt: %d",
+            "1 note": "1 Notiz",
+            "%d notes": "%d Notizen",
+            "Keep the attachment when a note is suggested": "Anhang behalten, wenn eine Notiz vorgeschlagen wird",
+            "The file is then stored below \"Notizen\" as soon as the mail is analyzed — even if the suggestion is later discarded. Unused files are removed automatically.": "Die Datei wird dann schon bei der Analyse unter „Notizen\" abgelegt — auch wenn der Vorschlag später verworfen wird. Nicht mehr benutzte Dateien werden selbständig entfernt."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
