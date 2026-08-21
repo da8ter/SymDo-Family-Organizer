@@ -9,6 +9,9 @@ require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
 require_once __DIR__ . '/libs/Briefing.php';
 require_once __DIR__ . '/libs/WebPush.php';
+require_once __DIR__ . '/libs/Notes.php';
+require_once __DIR__ . '/libs/NotesMedia.php';
+require_once __DIR__ . '/libs/NotesAi.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -32,6 +35,9 @@ class SymDoGateway extends IPSModuleStrict
     use CalendarBridge;
     use Briefing;
     use WebPush;
+    use Notes;
+    use NotesMedia;
+    use NotesAi;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -101,6 +107,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->BriefingCreate();
         // Web Push: Ablage des VAPID-Schluesselpaars
         $this->PushCreate();
+        // Notizen: Ablage und die Kategorie der Anhaenge
+        $this->NotesCreate();
     }
 
     public function ApplyChanges(): void
@@ -124,6 +132,9 @@ class SymDoGateway extends IPSModuleStrict
             $this->CalApplyChanges();
             $this->BriefingApplyChanges();
             $this->PushApplyChanges();
+            // Zuletzt: zieht Mitglieder-Ordner nach und braucht dafuer die
+            // Kennungen, die AppApplyChanges ueber EnsureUserIDs vergibt.
+            $this->NotesApplyChanges();
         }
     }
 

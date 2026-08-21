@@ -233,6 +233,17 @@ trait AiExtract
         if (str_ends_with($path, 'calendar')) {
             return json_encode($this->CalHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        // Notizen: lesen und bearbeiten hat mit der KI nichts zu tun, muss also auch
+        // bei abgeschalteter Analyse gehen. Der Riegel steckt in der Aktion selbst —
+        // 'analyse' prueft NotesAiAllowed(), alles andere nicht.
+        //
+        // NUR dieser eine Pfad. Ein Relay-Zweig fuer '/notes/media' waere unerreichbar,
+        // weil str_ends_with($path, 'media') weiter oben zuerst greift und in
+        // AiGetMedia (nur Rezeptfotos) umleitet. Die Rohdatei geht ohnehin nur ueber
+        // REST — dort braucht der System-Viewer sie, und dort hat er einen Token.
+        if (str_ends_with($path, 'notes')) {
+            return json_encode($this->NotesHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
 
         if (!$this->ReadPropertyBoolean('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
@@ -436,17 +447,17 @@ trait AiExtract
      * darf also niemals ungefiltert in einen Header — die Whitelist entfernt
      * insbesondere CR/LF und Anführungszeichen (Header-Injection).
      */
-    private function AiFileNameParams(string $name, bool $isPdf): string
+    private function AiFileNameParams(string $name, bool $isPdf, string $rueckfall = 'Rezept'): string
     {
         $ext   = $isPdf ? '.pdf' : '.jpg';
         $clean = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/[^\p{L}\p{N} ._-]+/u', ' ', $name)));
         if ($clean === '') {
-            $clean = 'Rezept';
+            $clean = $rueckfall;
         }
         $clean = mb_substr($clean, 0, 80);
         $ascii = trim((string)preg_replace('/_+/', '_', (string)preg_replace('/[^A-Za-z0-9._-]+/', '_', $clean)), '_');
         if ($ascii === '') {
-            $ascii = 'recipe';
+            $ascii = 'datei';
         }
         return 'filename="' . $ascii . $ext . '"; filename*=UTF-8\'\'' . rawurlencode($clean . $ext);
     }
@@ -712,7 +723,7 @@ trait AiExtract
     // ────────────────────────────── Parser ──────────────────────────────
 
     /** Toleranter Parser: erstes „[" … letztes „]", dann feldweise validieren. */
-    private function AiParseTodos(string $text): array
+    private function AiParseTodos(string $text, array $arten = ['task', 'event']): array
     {
         $rows = $this->AiDecodeJsonArray($text);
         if ($rows === []) {
@@ -720,6 +731,21 @@ trait AiExtract
             // aussen gleich aus — der Rohtext im Debug unterscheidet beides.
             $this->SendDebug('AI', 'Antwort ohne Eintraege, Rohtext: ' . mb_substr($text, 0, 300), 0);
         }
+        return $this->AiValidateTodoRows($rows, $arten);
+    }
+
+    /**
+     * Feldweise Validierung einer schon dekodierten Liste.
+     *
+     * Aus AiParseTodos herausgeloest, weil die Notiz-Analyse ihre Eintraege in einem
+     * UNTERFELD liefert (dort gibt es keinen Text zum Dekodieren) und die
+     * Mailanalyse eine dritte Art zulaesst. Die Vorgabewerte erhalten das bisherige
+     * Verhalten Byte fuer Byte.
+     *
+     * @param string[] $arten erlaubte Werte fuer "kind"
+     */
+    private function AiValidateTodoRows(array $rows, array $arten = ['task', 'event']): array
+    {
         $out  = [];
         foreach ($rows as $row) {
             if (!is_array($row)) {
@@ -756,7 +782,7 @@ trait AiExtract
             // Fehlt das Feld (Foto-Scan, aeltere Antworten), bleibt es eine Aufgabe —
             // damit aendert sich fuer die vorhandenen Wege nichts.
             $kind = strtolower(trim((string)($row['kind'] ?? 'task')));
-            if (!in_array($kind, ['task', 'event'], true)) {
+            if (!in_array($kind, $arten, true)) {
                 $kind = 'task';
             }
 
@@ -789,9 +815,22 @@ trait AiExtract
                 $end = null;
             }
 
-            $out[] = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time,
-                      'priority' => $priority, 'kind' => $kind, 'end' => $end, 'allDay' => $allDay,
-                      'recurrence' => $recurrence];
+            $eintrag = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time,
+                        'priority' => $priority, 'kind' => $kind, 'end' => $end, 'allDay' => $allDay,
+                        'recurrence' => $recurrence];
+            if ($kind === 'note') {
+                // Eine Notiz hat keine Frist und keinen Takt — sie hat einen Text.
+                // Rueckfall auf "info", weil kleine Modelle die Zusammenfassung
+                // dorthin schreiben, wo der Prompt sie bisher haben wollte.
+                $eintrag['text'] = mb_substr(trim((string)($row['text'] ?? $row['info'] ?? '')), 0, 2000);
+                $eintrag['due'] = null;
+                $eintrag['time'] = null;
+                $eintrag['end'] = null;
+                $eintrag['allDay'] = false;
+                $eintrag['recurrence'] = null;
+                $eintrag['priority'] = 'normal';
+            }
+            $out[] = $eintrag;
             if (count($out) >= 50) {
                 break;
             }
@@ -914,8 +953,64 @@ trait AiExtract
         if ($start === false || $end === false || $end < $start) {
             return [];
         }
-        $rows = json_decode(substr($text, $start, $end - $start + 1), true);
+        $roh  = substr($text, $start, $end - $start + 1);
+        $rows = json_decode($roh, true);
+        if (is_array($rows)) {
+            return $rows;
+        }
+        // Zweiter Versuch mit ausgebesserten Zeilenumbruechen. Modelle setzen in einen
+        // laengeren Wert regelmaessig ECHTE Umbrueche, und die sind in einem
+        // JSON-String unzulaessig — json_decode gibt dann null, und die ganze Antwort
+        // ist verloren, obwohl nur ein Feld unsauber ist. Vorher stand im Protokoll
+        // „0 Aufgabe(n)", waehrend beim Anbieter das Geld schon weg war.
+        $rows = json_decode($this->AiRepairJsonStrings($roh), true);
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * Rohe Steuerzeichen INNERHALB von JSON-Strings maskieren.
+     *
+     * Laeuft zeichenweise mit einem Zustand „stehe ich in einem String" — ausserhalb
+     * bleibt alles unberuehrt, damit die Struktur nicht angetastet wird. Der
+     * Rueckstrich-Zaehler ist noetig, weil ein maskierter Rueckstrich (\\) vor einem
+     * Anfuehrungszeichen dieses NICHT maskiert.
+     */
+    private function AiRepairJsonStrings(string $json): string
+    {
+        $aus = '';
+        $inStr = false;
+        $len = strlen($json);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $json[$i];
+            if (!$inStr) {
+                $aus .= $c;
+                if ($c === '"') {
+                    $inStr = true;
+                }
+                continue;
+            }
+            if ($c === '"') {
+                $rueck = 0;
+                for ($j = $i - 1; $j >= 0 && $json[$j] === '\\'; $j--) {
+                    $rueck++;
+                }
+                if ($rueck % 2 === 0) {
+                    $inStr = false;
+                }
+                $aus .= $c;
+                continue;
+            }
+            if ($c === "\n") {
+                $aus .= '\\n';
+            } elseif ($c === "\r") {
+                $aus .= '\\r';
+            } elseif ($c === "\t") {
+                $aus .= '\\t';
+            } else {
+                $aus .= $c;
+            }
+        }
+        return $aus;
     }
 
     /**

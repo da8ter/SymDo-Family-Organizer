@@ -66,7 +66,10 @@ trait ApiRouter
             || ($resource === 'users' && $method === 'GET' && ($route[3] ?? '') === 'avatar')
             // GET /ai/media/{id} lädt der System-PDF-Viewer bzw. ein neuer Tab direkt,
             // ganz ohne unser JavaScript — dort kann kein Header gesetzt werden.
-            || ($resource === 'ai' && $method === 'GET' && ($route[2] ?? '') === 'media');
+            || ($resource === 'ai' && $method === 'GET' && ($route[2] ?? '') === 'media')
+            // GET /notes/media/{id} ist derselbe Fall: ein Notiz-PDF oeffnet der
+            // System-Viewer direkt, ohne unser JavaScript.
+            || ($resource === 'notes' && $method === 'GET' && ($route[2] ?? '') === 'media');
         $device = $this->AuthenticateRequest($queryTokenOk);
         if ($device === null) {
             $this->SendApiError('unauthorized', 'Missing or invalid token', 401);
@@ -156,6 +159,25 @@ trait ApiRouter
                 }
                 if ($method === 'POST') {
                     $this->SendJson($this->CalHandleAction($this->ReadJsonBody()));
+                    return;
+                }
+                break;
+            case 'notes':
+                // Notizen. Ein Pfad, Aktion im Rumpf — wie Kalender und
+                // Mail-Vorschlaege, damit Browser, App und Visu-Kachel denselben
+                // Aufruf benutzen. Erscheint bewusst NICHT in /discovery: eine neue
+                // Listenart dort zerlegt die ausgelieferte iOS-App (ihr ListKind
+                // kennt nur shopping und todo und ist nicht optional).
+                if ($method === 'GET' && ($route[2] ?? '') === 'media') {
+                    $this->HandleNotesMediaFile((int)($route[3] ?? 0));
+                    return;
+                }
+                if ($method === 'GET') {
+                    $this->SendJson($this->NotesHandleAction(['action' => 'list'], $device));
+                    return;
+                }
+                if ($method === 'POST') {
+                    $this->SendJson($this->NotesHandleAction($this->ReadJsonBody(), $device));
                     return;
                 }
                 break;
