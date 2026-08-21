@@ -54,15 +54,18 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyString('DefaultUserID', '');
         // Formular-Liste: pro entdeckter Listen-Instanz eine Zeile mit Ausblenden-Flag
         $this->RegisterPropertyString('Lists', '[]');
-        // Sichtbare Bereiche. Favoriten hängen an den Einkaufslisten: der Tab zeigt
-        // deren Favoritenlisten und die Kaufhistorie, ohne Einkauf hätte er keinen
-        // Inhalt. Standard überall true — abschalten ist die Ausnahme.
+        // Sichtbare Bereiche. Standard überall true — abschalten ist die Ausnahme.
+        // Die Favoriten haben KEINEN eigenen Schalter mehr: sie gehören zur
+        // Einkaufsliste und gehen als Blatt über das Herz in ihrer Kopfzeile auf.
         $this->RegisterPropertyBoolean('ShowDashboard', true);
         $this->RegisterPropertyBoolean('ShowShopping', true);
         $this->RegisterPropertyBoolean('ShowTodos', true);
         // Kalender: haengt am Store-Modul OpenCalendar. Vorgabe an — ist es nicht
         // installiert, blendet die Oberflaeche den Bereich ohnehin selbst aus.
         $this->RegisterPropertyBoolean('ShowCalendar', true);
+        // Notizen: liegen im Gateway, brauchen also eines. Vorgabe an — ohne Gateway
+        // blendet die Oberflaeche den Bereich selbst aus.
+        $this->RegisterPropertyBoolean('ShowNotes', true);
 
         // Bedienelemente der Web-App. Sie gelten APPWEIT für alle Listen: die
         // gleichnamigen Schalter der ToDo- und Einkaufslisten-Instanzen werden hier
@@ -693,7 +696,7 @@ class SymDoWebApp extends IPSModuleStrict
      * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
      * überhaupt bedienen lässt.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool}
+     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool}
      */
     private function GetVisibleTabs(): array
     {
@@ -706,6 +709,7 @@ class SymDoWebApp extends IPSModuleStrict
             'shopping'  => $read('ShowShopping'),
             'todos'     => $read('ShowTodos'),
             'calendar'  => $read('ShowCalendar'),
+            'notes'     => $read('ShowNotes'),
         ];
     }
 

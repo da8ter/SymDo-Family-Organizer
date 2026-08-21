@@ -324,6 +324,11 @@ trait Notes
             ];
         }
 
+        if ($action === 'attachData') {
+            return $this->NotesAttachData((string)($body['noteId'] ?? ''),
+                (int)($body['attachmentId'] ?? 0), ($body['meta'] ?? false) === true);
+        }
+
         if ($action === 'get') {
             $store = $this->NotesStore();
             $i = $this->NotesIndexOf($store['notes'], (string)($body['id'] ?? ''));

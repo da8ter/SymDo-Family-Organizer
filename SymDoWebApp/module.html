@@ -2222,6 +2222,74 @@ html[data-symdo-theme="dark"] .member-bar {
 #favoritesContent:not(.detail-open) #favDetail { display: none; }
 #favoritesContent.detail-open #favMaster { display: none; }
 
+/* ── Notizen ─────────────────────────────────────────────────────────────────
+   Aufbau wie die Favoriten: links die Ordner, rechts ihr Inhalt. */
+#notesContent:not(.detail-open) #notesDetail { display: none; }
+#notesContent.detail-open #notesMaster { display: none; }
+
+/* Der Editor liegt unter den Dialogen, die aus ihm heraus aufgehen (Quellenwahl,
+   Funde, Bestaetigung, Aufgaben- und Termin-Editor), und das Fundblatt wieder
+   unter denen. Ausdrueckliche Staffel statt Verlass auf die DOM-Reihenfolge:
+   die stimmt bei der naechsten Ergaenzung nicht mehr. */
+#noteOverlay      { z-index: 58; }
+#noteFindOverlay  { z-index: 59; }
+
+/* Ordnerkachel: sieht aus wie eine Favoritenkarte, traegt aber statt des Herzens
+   ein Mitgliederfoto oder ein Ordnersymbol. */
+.note-folder .fav-badge { width: 34px; height: 34px; color: var(--accent); font-size: 17px; }
+/* BEIDE Formen, die avatarHtml() liefert: <img> mit Foto, <span> mit der Initiale.
+   Eine allgemeine .avatar-Regel gibt es in dieser Datei bewusst nicht — jede
+   Umgebung bemasst selbst (siehe .mail-head .avatar). Ohne diese Regel bliebe ein
+   Foto ein Quadrat in Originalgroesse und die Initiale ein nackter Buchstabe.
+   object-fit: cover, damit ein nicht quadratisches Foto beschnitten statt
+   gestaucht wird; die Zentrierung gilt der Initiale, deren Farbton inline steht. */
+.note-folder .fav-badge img,
+.note-folder .fav-badge span {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+}
+/* Ehemaliges Mitglied: der Ordner bleibt, das Foto ist weg. Damit er nicht wie ein
+   halb geladener Mitglieder-Ordner aussieht, bekommt er das gewoehnliche Symbol. */
+.note-folder-gone .fav-badge { color: var(--faint); }
+
+.note-preview {
+  font-size: 12.5px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-date { font-size: 12px; color: var(--faint); white-space: nowrap; }
+
+/* Anhaenge als Chips — im Editor mit Entfernen-Knopf, in der Zeile nur als Zahl. */
+.note-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+.note-file > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-file .rm { flex: none; color: var(--muted); padding: 0 2px; font-size: 13px; }
+.note-file .rm:active { color: var(--red); }
+/* Wartet auf den ersten Speichervorgang: sichtbar, aber nicht antippbar. */
+.note-file.is-waiting { opacity: .6; cursor: default; }
+
 @media (min-width: 820px) {
   /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
      der verfügbaren Breite (2 bei 1000px, 3–4 bei 1400px) — deshalb genügt EIN
@@ -2229,7 +2297,7 @@ html[data-symdo-theme="dark"] .member-bar {
      row-gap MUSS 0 bleiben: die Abstände kommen weiter aus margin-bottom der
      Zeilen. Mit einem row-gap bliebe beim Löschen eine Lücke stehen, weil
      dissolveCard() Höhe und margin-bottom zusammenfährt, den gap aber nicht. */
-  #shoppingListArea, #todoListArea, #favMaster, #favDetail {
+  #shoppingListArea, #todoListArea, #favMaster, #favDetail, #notesMaster, #notesDetail {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     column-gap: var(--gap);
@@ -2364,7 +2432,7 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 
 @media (min-width: 1100px) {
-  #favoritesContent {
+  #favoritesContent, #notesContent {
     display: grid;
     grid-template-columns: minmax(300px, 360px) 1fr;
     /* Doppelter Abstand: die beiden Spalten sind zwei getrennte Ansichten, kein
@@ -2377,9 +2445,11 @@ html[data-symdo-theme="dark"] .member-bar {
      (#favoritesContent #favDetail) gewann dort das display:none, weil das :not()
      eine Klasse mitbringt. Gemessen: rechte Spalte blieb 0 px breit. */
   #favoritesContent:not(.detail-open) #favDetail,
-  #favoritesContent.detail-open #favMaster { display: block; }
+  #favoritesContent.detail-open #favMaster,
+  #notesContent:not(.detail-open) #notesDetail,
+  #notesContent.detail-open #notesMaster { display: block; }
   /* Zurück-Pfeile haben nebeneinander keinen Sinn: die Auswahl steht ja links */
-  #btnFavBack, #btnBoughtBack { display: none; }
+  #btnFavBack, #btnBoughtBack, #btnNotesBack { display: none; }
   /* Zeigt, welche Liste rechts steht. Als innerer Schatten auf der ZEILE, NICHT als
      outline auf der Karte: die Zeile ist positioniert und wird ueber dem Umriss der
      Karte gezeichnet, deckte ihn auf den Geraden also ab. Sichtbar blieben nur vier
@@ -2387,6 +2457,8 @@ html[data-symdo-theme="dark"] .member-bar {
      als der um 2 px eingerueckte Umriss (dessen Radius auf 10 px sinkt), er schaute
      also hervor. Der innere Schatten folgt der Rundung der Zeile exakt. */
   .fav-card.is-open .fav-row { box-shadow: inset 0 0 0 2px var(--accent); }
+  /* Gleiche Kopfhoehe links und rechts, damit die Spalten auf einer Linie beginnen. */
+  #notesMaster .screen-head, #notesDetail .screen-head { min-height: 38px; }
 }
 
 /* Grosse Schirme (1920 x 1080 und breiter): vier Spalten bei Artikeln und
@@ -2509,6 +2581,24 @@ html[data-symdo-theme="dark"] .member-bar {
       </div>
     </section>
 
+    <section id="screen-notes" class="screen">
+      <div class="content">
+        <!-- Dritter Behaelter der Mail-Vorschlaege: Notiz-Funde stehen ueber den
+             Ordnern, wie die Aufgaben ueber der Aufgabenliste. Geschwister der
+             Spalten, nicht darin — renderRows() raeumt in seinem Container jeden
+             fremden Knoten weg. -->
+        <div id="notesAiArea" class="mail-ai" style="display:none;"></div>
+        <!-- Zwei Spalten wie bei den Favoriten: links die Ordner, rechts ihr Inhalt.
+             Schmal ist immer nur eine sichtbar, ab 1100px beide. -->
+        <div id="notesContent">
+          <div id="notesMaster"></div>
+          <div id="notesDetail"></div>
+        </div>
+        <input id="noteScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
+        <input id="noteFileInput" type="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" style="display:none" />
+      </div>
+    </section>
+
   </main>
 
   <nav class="tabbar">
@@ -2516,6 +2606,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span><span id="tabCalendarBadge" class="tab-badge" style="display:none;"></span></button>
+    <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span><span id="tabNotesBadge" class="tab-badge" style="display:none;"></span></button>
   </nav>
 </div>
 
@@ -2796,6 +2887,60 @@ html[data-symdo-theme="dark"] .member-bar {
   </div>
 </div>
 
+<!-- Notiz bearbeiten. Der Ordner steht als Auswahl drin, weil der Editor auch aus
+     dem Mail-Vorschlagsband aufgeht, wo kein Ordner geoeffnet ist. -->
+<div class="overlay" id="noteOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="noteOverlayTitle"></span>
+      <button class="btn-close-overlay" data-close="noteOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div class="form-row"><label id="lblNoteFolder"></label><select id="ntFolder"></select></div>
+      <div class="form-row"><label id="lblNoteTitle"></label><input id="ntTitle" type="text" autocomplete="off" /></div>
+      <div class="form-row"><label id="lblNoteText"></label><textarea id="ntText" rows="8"></textarea></div>
+      <div class="form-row">
+        <label id="lblNoteFiles"></label>
+        <div id="ntFiles" class="note-files"></div>
+        <button class="ai-source-btn" id="btnNoteAttach"><i class="fa-light fa-paperclip"></i><span id="noteAttachLabel"></span></button>
+      </div>
+      <div id="ntAiHint" class="ai-status" style="display:none;"></div>
+    </div>
+    <div class="overlay-footer">
+      <button data-close="noteOverlay" id="btnNoteCancel"></button>
+      <button class="destructive" id="btnNoteDelete" style="display:none"></button>
+      <button class="primary" id="btnNoteSave"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Woher kommt der Anhang: Kamera oder Datei. -->
+<div class="overlay" id="noteSourceOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="noteSourceTitle"></span>
+      <button class="btn-close-overlay" data-close="noteSourceOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <button class="ai-source-btn" id="btnNoteFromPhoto"><i class="fa-light fa-camera"></i><span id="noteFromPhotoLabel"></span></button>
+      <button class="ai-source-btn" id="btnNoteFromFile"><i class="fa-light fa-file-arrow-up"></i><span id="noteFromFileLabel"></span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Was die KI im Dokument ausser Titel und Text gefunden hat. Eigenes Blatt und
+     nicht aiReviewOverlay: dessen Knoepfe haengen an aiReviewMode, und es kann
+     Aufgaben und Termine nicht gleichzeitig zeigen — die haben verschiedene Ziele. -->
+<div class="overlay" id="noteFindOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="noteFindTitle"></span>
+      <button class="btn-close-overlay" data-close="noteFindOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="noteFindBody"></div>
+  </div>
+</div>
+
 <div class="overlay" id="confirmOverlay">
   <div class="overlay-card">
     <div class="overlay-head">
@@ -2970,7 +3115,11 @@ function normalizeTabs(raw) {
     // Kalender: NUR bei ausdruecklichem true. Anders als die anderen Bereiche
     // haengt er an einem fremden Modul (OpenCalendar) — ein fehlender Schluessel
     // bedeutet hier „nicht vorhanden", nicht „sichtbar".
-    calendar:  t.calendar   === true
+    calendar:  t.calendar   === true,
+    // Notizen ebenso: sie liegen im Gateway. Die beiden Listen-Kacheln nennen den
+    // Schluessel nicht, und mit dieser Regel bleibt der Bereich dort von selbst weg —
+    // ohne dass das Uebernahme-Skript etwas davon wissen muss.
+    notes:     t.notes      === true
   };
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
@@ -2988,6 +3137,8 @@ function visibleTabs() {
   // Kalender ganz hinten und nur, wenn OpenCalendar wirklich Kalender liefert:
   // ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist schlimmer als keiner.
   if (t.calendar && calCalendars.length > 0) out.push('calendar');
+  // Notizen ganz hinten und nur mit Gateway — dort liegen sie.
+  if (t.notes && notizenMoeglich()) out.push('notes');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -3066,29 +3217,39 @@ function openRecipePhoto(mediaId, triedExternally) {
   aiPost('/ai/media', { mediaId: mediaId }).then(res => {
     const j = res && res.json;
     if (!(j && j.ok && j.dataUrl)) { showToast(translate('Could not load the image.')); return; }
-    const img = document.getElementById('recipeImg');
-    const pdf = document.getElementById('recipePdf');
-    if (/^data:application\/pdf/i.test(j.dataUrl)) {
-      mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: true };
-      // Zweite Chance für den System-Viewer, falls der Typ beim Klick noch unbekannt
-      // war. Klappt nur, wenn der Popup-Blocker diesen späten Aufruf durchlässt —
-      // sonst bleibt der iframe unten, der aber nur Seite 1 zeigt.
-      if (!triedExternally && openMediaExternally(mediaId)) return;
-      img.style.display = 'none'; img.removeAttribute('src');
-      try {
-        if (pdf.dataset.blob) { URL.revokeObjectURL(pdf.dataset.blob); }
-        const url = URL.createObjectURL(dataUrlToBlob(j.dataUrl));
-        pdf.dataset.blob = url; pdf.src = url; pdf.style.display = '';
-      } catch (e) { showToast(translate('Could not load the file.')); return; }
-      document.getElementById('recipeImgTitle').textContent = translate('Recipe file');
-    } else {
-      mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: false };
-      pdf.style.display = 'none'; pdf.removeAttribute('src');
-      img.src = j.dataUrl; img.style.display = '';
-      document.getElementById('recipeImgTitle').textContent = translate('Recipe photo');
-    }
-    openOverlay('recipeImgOverlay');
+    const istPdf = /^data:application\/pdf/i.test(j.dataUrl);
+    mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: istPdf };
+    // Zweite Chance für den System-Viewer, falls der Typ beim Klick noch unbekannt
+    // war. Klappt nur, wenn der Popup-Blocker diesen späten Aufruf durchlässt —
+    // sonst bleibt der iframe unten, der aber nur Seite 1 zeigt.
+    if (istPdf && !triedExternally && openMediaExternally(mediaId)) return;
+    zeigeMedium(j.dataUrl, istPdf, translate(istPdf ? 'Recipe file' : 'Recipe photo'));
   }).catch(() => showToast(translate('Could not load the image.')));
+}
+
+/**
+ * Eine data:-URL im Anzeige-Blatt zeigen. Aus openRecipePhoto herausgeloest, weil
+ * die Notiz-Anhaenge denselben Weg brauchen, aber einen anderen Titel und eine
+ * andere Quelle (sie liegen unter „Notizen", nicht unter „Rezeptfotos").
+ *
+ * PDF als Blob-URL im iframe: WebKit rendert eine riesige data:-URL nicht.
+ */
+function zeigeMedium(dataUrl, istPdf, titel) {
+  const img = document.getElementById('recipeImg');
+  const pdf = document.getElementById('recipePdf');
+  if (istPdf) {
+    img.style.display = 'none'; img.removeAttribute('src');
+    try {
+      if (pdf.dataset.blob) { URL.revokeObjectURL(pdf.dataset.blob); }
+      const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
+      pdf.dataset.blob = url; pdf.src = url; pdf.style.display = '';
+    } catch (e) { showToast(translate('Could not load the file.')); return; }
+  } else {
+    pdf.style.display = 'none'; pdf.removeAttribute('src');
+    img.src = dataUrl; img.style.display = '';
+  }
+  document.getElementById('recipeImgTitle').textContent = titel;
+  openOverlay('recipeImgOverlay');
 }
 
 // Kompat-Schicht für die aus dem ShoppingList-Modul übernommenen Blöcke
@@ -3110,7 +3271,7 @@ const ls = {
 let activeTab = (function () {
   try {
     const wunsch = new URLSearchParams(window.location.search).get('tab');
-    if (wunsch && ['dashboard', 'shopping', 'todos', 'calendar'].includes(wunsch)) {
+    if (wunsch && ['dashboard', 'shopping', 'todos', 'calendar', 'notes'].includes(wunsch)) {
       return wunsch;
     }
   } catch (e) {}
@@ -3479,7 +3640,7 @@ function invalidateRenderCache() {
   // beiden Spalten, dort liegen also die _lastHtml-Marken. Der Elternknoten hat nie
   // eine — ihn zu leeren liess eine abgelehnte Favoriten-Aktion ungezeichnet, die
   // weggewischte Zeile blieb bei translateX(-110%) stehen.
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'todoMembers', 'calMembers', 'calArea', 'mailAiArea', 'calAiArea'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'mailAiArea', 'calAiArea', 'notesAiArea'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
@@ -3577,7 +3738,7 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'shopping', 'todos', 'calendar'];
+const TABS = ['dashboard', 'shopping', 'todos', 'calendar', 'notes'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -4370,6 +4531,7 @@ function renderAll() {
     if (calEvents.length === 0 && !calLoading) loadCalendarEvents();
     renderCalendar();
   }
+  if (activeTab === 'notes') renderNotizen();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
 }
@@ -5855,7 +6017,29 @@ let mailProposals = [];
 let mailLoading = false;
 // Aufgeklappt oder nicht, je Sorte. Wie cartExpanded nur im Speicher: jeder
 // Neustart beginnt eingeklappt, damit die Vorschlaege die Liste nicht ueberdecken.
-const mailOpen = { task: false, event: false };
+const mailOpen = { task: false, event: false, note: false };
+
+/**
+ * Sorte eines Fundstuecks.
+ *
+ * WICHTIG: Aeltere Vorschlaege tragen KEIN kind — die sind Aufgaben. Ein direkter
+ * Vergleich `it.kind === sorte` liesse sie lautlos verschwinden, weil sie in keinen
+ * der drei Toepfe fielen. Vorher war das kein Thema, weil der Vergleich
+ * `(it.kind === 'event') === istTermin` alles Unbekannte zur Aufgabe machte.
+ */
+function mailArt(it) {
+  if (it && it.kind === 'event') return 'event';
+  if (it && it.kind === 'note') return 'note';
+  return 'task';
+}
+/** Wo das Vorschlagsband einer Sorte haengt. */
+const MAIL_BEREICHE = { task: 'mailAiArea', event: 'calAiArea', note: 'notesAiArea' };
+/** Alle drei Baender neu zeichnen. */
+function renderMailAlle() {
+  renderMailAi('task');
+  renderMailAi('event');
+  renderMailAi('note');
+}
 
 /** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
 function mailAiAvailable() {
@@ -5868,7 +6052,7 @@ function loadMailProposals() {
   // Kein Gateway mehr: was noch auf dem Schirm steht, MUSS weg. Ein Vorschlag,
   // den niemand mehr uebernehmen oder verwerfen kann, ist eine Sackgasse.
   if (!mailAiAvailable()) {
-    if (mailProposals.length > 0) { mailProposals = []; renderMailAi('task'); renderMailAi('event'); }
+    if (mailProposals.length > 0) { mailProposals = []; renderMailAlle(); }
     return;
   }
   mailLoading = true;
@@ -5878,10 +6062,9 @@ function loadMailProposals() {
     // Kein Gateway, alte Version, KI-Route unbekannt: still nichts anzeigen.
     if (!j || j.ok !== true || !Array.isArray(j.proposals)) return;
     mailProposals = j.proposals;
-    renderMailAi('task');
-    // Termine haengen am Kalenderbereich; ohne das erschienen sie dort erst beim
-    // naechsten Tab-Wechsel.
-    renderMailAi('event');
+    // Alle drei Baender: Termine haengen am Kalenderbereich, Notizen am
+    // Notizbereich — ohne das erschienen sie dort erst beim naechsten Tab-Wechsel.
+    renderMailAlle();
   }).catch(() => { mailLoading = false; });
 }
 
@@ -5920,10 +6103,9 @@ function mailWhenText(due, time, end) {
  * anderen Sorte stehen, wenn nur ihre Liste leer wird.
  */
 function setMailBadges() {
-  let aufgaben = 0;
-  let termine = 0;
+  const zahl = { task: 0, event: 0, note: 0 };
   mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
-    if (it.kind === 'event') termine++; else aufgaben++;
+    zahl[mailArt(it)]++;
   }));
   const setzen = (id, n) => {
     const el = document.getElementById(id);
@@ -5931,8 +6113,9 @@ function setMailBadges() {
     el.textContent = String(n);
     el.style.display = n > 0 ? '' : 'none';
   };
-  setzen('tabTodoBadge', aufgaben);
-  setzen('tabCalendarBadge', termine);
+  setzen('tabTodoBadge', zahl.task);
+  setzen('tabCalendarBadge', zahl.event);
+  setzen('tabNotesBadge', zahl.note);
 }
 
 /**
@@ -5945,7 +6128,6 @@ function setMailBadges() {
  * @param {'task'|'event'} sorte
  */
 function renderMailAi(sorte) {
-  const istTermin = sorte === 'event';
   // Jede Sorte zaehlt an ihrem eigenen Tab: Aufgaben am ToDo-Tab, Termine am
   // Kalender-Tab. Eine Summe ueber beide log — ein Halbjahresplaner mit 19
   // Terminen liess das ToDo-Tab „20" melden, obwohl dort ein Vorschlag stand.
@@ -5953,12 +6135,12 @@ function renderMailAi(sorte) {
   // Vorschlagsband, und muessen auch stimmen, wenn dessen Behaelter fehlt.
   setMailBadges();
 
-  const area = document.getElementById(istTermin ? 'calAiArea' : 'mailAiArea');
+  const area = document.getElementById(MAIL_BEREICHE[sorte]);
   if (!area) return;
 
   // Nur die Vorschlaege dieser Sorte, leere Mails fallen weg.
   const gefiltert = mailProposals.map(p => Object.assign({}, p, {
-    items: (Array.isArray(p.items) ? p.items : []).filter(it => (it.kind === 'event') === istTermin)
+    items: (Array.isArray(p.items) ? p.items : []).filter(it => mailArt(it) === sorte)
   })).filter(p => p.items.length > 0);
 
   if (gefiltert.length === 0) {
@@ -5980,9 +6162,14 @@ function renderMailAi(sorte) {
   // Die graue Sammel-Flaeche (.mail-ai.open) haengt am Behaelter, der offene
   // Zustand am Knopf darin — CSS sieht den Elternknoten nicht, also hier.
   area.classList.toggle('open', auf);
+  const T = {
+    task:  ['1 new task found', '%1 new tasks found'],
+    event: ['1 new appointment found', '%1 new appointments found'],
+    note:  ['1 new note found', '%1 new notes found']
+  }[sorte];
   const titel = anzahl === 1
-    ? translate(istTermin ? '1 new appointment found' : '1 new task found')
-    : translate(istTermin ? '%1 new appointments found' : '%1 new tasks found').replace('%1', String(anzahl));
+    ? translate(T[0])
+    : translate(T[1]).replace('%1', String(anzahl));
   const umschalter =
     `<button class="section-toggle${auf ? ' open' : ''}" data-mail="toggle" data-key="mailToggle" aria-expanded="${auf ? 'true' : 'false'}">` +
       `<i class="fa-light fa-envelope"></i>${escapeHtml(titel)}` +
@@ -6143,12 +6330,11 @@ function mailForget(id, index) {
     if (String(p.id) !== String(id)) return p;
     return Object.assign({}, p, { items: (p.items || []).filter(it => String(it.i) !== String(index)) });
   }).filter(p => (p.items || []).length > 0);
-  renderMailAi('task');
-  renderMailAi('event');
+  renderMailAlle();
 }
 
 function initMailAi() {
-  ['mailAiArea', 'calAiArea'].forEach(id => mailAiBind(document.getElementById(id)));
+  Object.values(MAIL_BEREICHE).forEach(id => mailAiBind(document.getElementById(id)));
 }
 
 function mailAiBind(area) {
@@ -6160,7 +6346,7 @@ function mailAiBind(area) {
     // Der Umschalter gehoert dem Bereich, in dem er sitzt — die Aufgaben duerfen
     // offen stehen, waehrend die Termine eingeklappt bleiben.
     if (art === 'toggle') {
-      const sorte = area.id === 'calAiArea' ? 'event' : 'task';
+      const sorte = Object.keys(MAIL_BEREICHE).find(k => MAIL_BEREICHE[k] === area.id) || 'task';
       const schliesst = mailOpen[sorte] === true;
       mailToggleAnimieren(area, () => {
         mailOpen[sorte] = !mailOpen[sorte];
@@ -6172,8 +6358,7 @@ function mailAiBind(area) {
       const id = knopf.getAttribute('data-id') || '';
       aiPost('/mail/proposals', { action: 'dismiss', id: id });
       mailProposals = mailProposals.filter(p => String(p.id) !== String(id));
-      renderMailAi('task');
-      renderMailAi('event');
+      renderMailAlle();
       return;
     }
     const zeile = knopf.closest('.mail-row');
@@ -6203,37 +6388,60 @@ function mailDrop(id, i) {
  * etwas geaendert werden kann. Erst nach dem Speichern gilt er als erledigt.
  */
 function mailAccept(id, i) {
-    const vorschlag = mailProposals.find(p => String(p.id) === String(id));
-    const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
-    if (!eintrag) return;
+  const vorschlag = mailProposals.find(p => String(p.id) === String(id));
+  const eintrag = vorschlag && (vorschlag.items || []).find(it => String(it.i) === String(i));
+  if (!eintrag) return;
+  entwurfOeffnen(eintrag, String(vorschlag.userId || ''), { id: id, i: i });
+}
 
-    // NICHT direkt anlegen: der Vorschlag kommt von einem Sprachmodell und ist ein
-    // Entwurf. Der uebliche Dialog oeffnet vorbelegt, damit vor dem Speichern noch
-    // etwas geaendert werden kann. Erst nach dem Speichern gilt er als erledigt.
-    if (eintrag.kind === 'event') {
-      // Mitglied der Empfaengeradresse mitgeben — dieselbe Zuordnung wie bei Aufgaben.
-      openCalEditor(Object.assign({}, eintrag, { userId: String(vorschlag.userId || '') }), { id: id, i: i });
-      return;
-    }
-    const ziel = selectedTodoID();
-    if (!ziel) { showToast(translate('No ToDo list found')); return; }
-    // Zuordnung aus der Empfaengeradresse; ohne Treffer der Standardnutzer der Kachel.
-    const wem = String(vorschlag.userId || '') || currentUserID();
-    const entwurf = Object.assign({
-      id: null,
+/**
+ * Ein Fundstueck als Entwurf im passenden Editor oeffnen.
+ *
+ * NICHT direkt anlegen: der Vorschlag kommt von einem Sprachmodell. Der uebliche
+ * Dialog oeffnet vorbelegt, damit vor dem Speichern noch etwas geaendert werden
+ * kann. Erst nach dem Speichern gilt er als erledigt.
+ *
+ * `quelle` ist {id,i} eines Mail-Vorschlags oder null — letzteres bei einem KI-Fund
+ * in einer Notiz, denn dort gibt es nichts abzumelden.
+ */
+function entwurfOeffnen(eintrag, userId, quelle) {
+  if (eintrag.kind === 'note') {
+    // Ordner des Mitglieds vorwaehlen, dem die Mail gehoert.
+    const fid = (userId && notizen.memberFolders[userId]) || notesOrdnerId || notesErsterOrdner();
+    if (!fid) { showToast(translate('No folders yet')); return; }
+    noteEditorOeffnen({
+      folderId: fid,
       title: String(eintrag.title || ''),
-      info: eintrag.info ? String(eintrag.info) : '',
-      priority: eintrag.priority || 'normal',
-      quantity: 0,
-      assignedTo: wem ? [wem] : [],
-      recurrence: 'none',
-      notification: false
-    }, mailDueFields(eintrag.due, eintrag.allDay === true ? null : eintrag.time));
-    openTodoEditor(ziel, entwurf);
-    // Titel richtigstellen: openTodoEditor haelt jedes uebergebene Objekt fuer
-    // eine Bearbeitung, hier ist es ein Entwurf.
-    document.getElementById('todoOverlayTitle').textContent = translate('New task');
-    todoCtx.proposal = { id: id, i: i };
+      text: String(eintrag.text || eintrag.info || ''),
+      att: []
+    });
+    if (noteCtx) noteCtx.proposal = quelle || null;
+    return;
+  }
+  if (eintrag.kind === 'event') {
+    // Mitglied der Empfaengeradresse mitgeben — dieselbe Zuordnung wie bei Aufgaben.
+    openCalEditor(Object.assign({}, eintrag, { userId: String(userId || '') }), quelle);
+    return;
+  }
+  const ziel = selectedTodoID();
+  if (!ziel) { showToast(translate('No ToDo list found')); return; }
+  // Zuordnung aus der Empfaengeradresse; ohne Treffer der Standardnutzer der Kachel.
+  const wem = String(userId || '') || currentUserID();
+  const entwurf = Object.assign({
+    id: null,
+    title: String(eintrag.title || ''),
+    info: eintrag.info ? String(eintrag.info) : '',
+    priority: eintrag.priority || 'normal',
+    quantity: 0,
+    assignedTo: wem ? [wem] : [],
+    recurrence: 'none',
+    notification: false
+  }, mailDueFields(eintrag.due, eintrag.allDay === true ? null : eintrag.time));
+  openTodoEditor(ziel, entwurf);
+  // Titel richtigstellen: openTodoEditor haelt jedes uebergebene Objekt fuer
+  // eine Bearbeitung, hier ist es ein Entwurf.
+  document.getElementById('todoOverlayTitle').textContent = translate('New task');
+  todoCtx.proposal = quelle || null;
 }
 
 /**
@@ -7821,6 +8029,598 @@ function addFavListToCart(instanceID, list) {
   showToast(translate('"%1": %2 items added').replace('%1', list.name).replace('%2', String(n)));
 }
 
+// ── Notizen ────────────────────────────────────────────────────────────────
+// Kein sdCall: Notizen liegen im Gateway, nicht in einer Listeninstanz. Alles
+// laeuft ueber aiPost('/notes', {action}) — denselben Weg nehmen Kalender und
+// Mail-Vorschlaege, und er funktioniert in der Web-App wie in der Visu-Kachel.
+let notizen = { rev: 0, folders: [], notes: [], memberFolders: {}, limits: {} };
+let notizenGeladen = false;
+let notizenLaden = false;
+let notesOrdnerId = null;   // geoeffneter Ordner (null = Uebersicht)
+let noteCtx = null;         // {folderId, noteId|null, files:[…], warten:[…], proposal:{id,i}|null}
+let noteFunde = [];         // von der KI erkannte Aufgaben/Termine, fluechtig
+
+/** Ohne Gateway gibt es keine Notizen — dann bleibt der Bereich ganz weg. */
+function notizenMoeglich() {
+  if (window.__SYMDO__) return true;
+  return !!store.gatewayAvailable;
+}
+
+function ladeNotizen(danach) {
+  if (notizenLaden) return;
+  notizenLaden = true;
+  aiPost('/notes', { action: 'list' }).then(r => {
+    notizenLaden = false;
+    const j = r && r.json;
+    if (!j || j.ok !== true) return;
+    notizen = {
+      rev: j.rev || 0,
+      folders: Array.isArray(j.folders) ? j.folders : [],
+      notes: Array.isArray(j.notes) ? j.notes : [],
+      memberFolders: j.memberFolders || {},
+      limits: j.limits || {}
+    };
+    notizenGeladen = true;
+    // Ein inzwischen geloeschter Ordner darf nicht offen bleiben.
+    if (notesOrdnerId && !notizen.folders.some(f => f.id === notesOrdnerId)) notesOrdnerId = null;
+    if (activeTab === 'notes') renderNotizen();
+    if (typeof danach === 'function') danach();
+  }).catch(() => { notizenLaden = false; });
+}
+
+/** Nach jeder Aenderung: der Server ist die Wahrheit, es wird nicht lokal geraten. */
+function notizenAktion(nutzlast, danach) {
+  return aiPost('/notes', nutzlast).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) {
+      showToast(notizenFehlertext(j));
+      return null;
+    }
+    notizenGeladen = false;
+    ladeNotizen();
+    if (typeof danach === 'function') danach(j);
+    return j;
+  }).catch(() => { showToast(translate('Action failed')); return null; });
+}
+
+function notizenFehlertext(j) {
+  const code = (j && j.error && j.error.code) ? String(j.error.code) : '';
+  // store_unwritable bekommt eine eigene Meldung: die Abhilfe ist ein
+  // Kernel-Neustart, und „Aktion fehlgeschlagen" schickt auf die falsche Faehrte.
+  if (code === 'store_unwritable') return translate('Restart the Symcon kernel once, then notes can be stored.');
+  if (code === 'quota_exceeded') return translate('No more room — please delete something first.');
+  if (code === 'file_too_large') return translate('File too large.');
+  if (code === 'unsupported_file') return translate('Only JPEG, PNG and PDF are supported.');
+  if (code === 'no_consent') return translate('AI analysis is disabled.');
+  if (code === 'ai_busy') return translate('Another AI request is already running.');
+  if (code === 'too_large_for_tile') return translate('Too large to show here — open the note in the web app.');
+  return translate('Action failed');
+}
+
+function notesOrdner(id) {
+  return notizen.folders.find(f => f.id === id) || null;
+}
+function notesImOrdner(id) {
+  return notizen.notes.filter(n => n.folderId === id);
+}
+
+function renderNotizen() {
+  const elMaster = document.getElementById('notesMaster');
+  const elDetail = document.getElementById('notesDetail');
+  if (!notizenGeladen && !notizenLaden) ladeNotizen();
+  const offen = notesOrdnerId ? notesOrdner(notesOrdnerId) : null;
+  if (notesOrdnerId && !offen) notesOrdnerId = null;
+  renderNotizenMaster(elMaster);
+  renderNotizenDetail(elDetail, offen);
+  document.getElementById('notesContent').classList.toggle('detail-open', !!offen);
+}
+
+function renderNotizenMaster(el) {
+  let html = '<div class="screen-head" data-key="head"><h2>' + translate('Notes') + '</h2>' +
+    '<button class="icon-btn" id="btnNotesFolderCreate" aria-label="' + translate('New folder') + '">' +
+    '<i class="fa-light fa-plus"></i></button></div>';
+  if (!notizenGeladen) {
+    html += '<div class="empty-state" data-key="laden"><i class="fa-light fa-note-sticky"></i>' +
+      translate('Loading …') + '</div>';
+    bindeNotizenMaster(renderRows(el, html));
+    return;
+  }
+  if (notizen.folders.length === 0) {
+    html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
+      translate('No folders yet') + '</div>';
+  }
+  const users = usersById();
+  for (const f of notizen.folders) {
+    const anzahl = f.count === 1 ? translate('1 note') : translate('%1 notes').replace('%1', String(f.count));
+    const u = f.memberId ? users[f.memberId] : null;
+    const auf = notesOrdnerId === f.id ? ' is-open' : '';
+    if (u) {
+      // Mitglieder-Ordner: bewusst OHNE .swipe-under und mit eigenem data-key.
+      // renderRows() ordnet ueber den Schluessel zu; ein Knoten mit gleichem Aufbau
+      // koennte sonst samt seiner Wisch-Handler wiederverwendet werden, und dann
+      // riefe ein Wischen das Loeschen mit einer fremden Kennung auf.
+      html += '<div class="fav-card note-folder note-folder-user' + auf + '" data-key="nfu:' + escapeHtml(f.id) + '">' +
+        '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
+        '<span class="fav-badge">' + avatarHtml(u, '') + '</span>' +
+        '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
+        '<span class="fav-count">' + anzahl + '</span></span>' +
+        '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
+        '</div></div>';
+    } else {
+      const verwaist = !!f.memberId;   // stand mal an einem Mitglied, das es nicht mehr gibt
+      html += '<div class="fav-card note-folder' + (verwaist ? ' note-folder-gone' : '') + auf +
+        '" data-key="nf:' + escapeHtml(f.id) + '">' +
+        '<div class="swipe-under"><i class="fa-light fa-trash"></i></div>' +
+        '<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>' +
+        '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
+        '<span class="fav-badge"><i class="fa-light fa-folder"></i></span>' +
+        '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
+        '<span class="fav-count">' + anzahl + '</span></span>' +
+        '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
+        '</div></div>';
+    }
+  }
+  bindeNotizenMaster(renderRows(el, html));
+}
+
+/**
+ * Handler NUR an die neu erzeugten Knoten haengen.
+ *
+ * renderRows() behaelt unveraenderte Knoten im DOM und gibt die frischen zurueck.
+ * Wer stattdessen den ganzen Container abfragt, haengt bei JEDEM Zeichnen einen
+ * weiteren Handler an dieselbe Zeile — gemessen: ein zweiter Zustand liess einen
+ * Klick zwei Abrufe ausloesen. Dasselbe Muster benutzt renderFavList mit pick().
+ */
+function bindeNotizenMaster(frisch) {
+  if (!Array.isArray(frisch)) return;   // unveraendert: renderRows gab false zurueck
+  const suche = (sel) => {
+    const raus = [];
+    for (const n of frisch) {
+      if (n.matches && n.matches(sel)) raus.push(n);
+      if (n.querySelectorAll) raus.push(...n.querySelectorAll(sel));
+    }
+    return raus;
+  };
+  const kopf = suche('#btnNotesFolderCreate')[0];
+  if (kopf) kopf.addEventListener('click', () => {
+    showPrompt(translate('New folder'), '', translate('Create'), (name) => {
+      if (name.trim()) notizenAktion({ action: 'folderCreate', name: name.trim() });
+    });
+  });
+  suche('.note-folder').forEach(card => {
+    const zeile = card.querySelector('.fav-row');
+    if (!zeile) return;
+    const fid = zeile.dataset.folder;
+    zeile.addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      notesOrdnerId = fid;
+      renderNotizen();
+    });
+    // Nur selbst angelegte Ordner: links loeschen, rechts umbenennen.
+    if (!card.classList.contains('note-folder-user')) {
+      bindCardSwipe(card, '.fav-row',
+        () => { restoreCard(card); notesOrdnerLoeschen(fid); },
+        () => { restoreCard(card); notesOrdnerUmbenennen(fid); },
+        { dissolve: false });
+    }
+  });
+}
+
+function notesOrdnerUmbenennen(fid) {
+  const f = notesOrdner(fid);
+  if (!f) return;
+  showPrompt(translate('Rename folder'), f.name, translate('Save'), (name) => {
+    if (name.trim()) notizenAktion({ action: 'folderRename', id: fid, name: name.trim() });
+  });
+}
+
+/**
+ * Ordner loeschen. `mode` ist serverseitig Pflicht — eine Vorgabe, die Notizen
+ * mitnimmt, waere ein Datenverlust-Automat. Deshalb wird hier gefragt, sobald
+ * welche drin liegen.
+ */
+function notesOrdnerLoeschen(fid) {
+  const f = notesOrdner(fid);
+  if (!f) return;
+  const drin = notesImOrdner(fid).length;
+  if (drin === 0) {
+    showConfirm(translate('Delete this folder?'), translate('Delete'), () => {
+      notizenAktion({ action: 'folderDelete', id: fid, mode: 'notes' }, () => { notesOrdnerId = null; });
+    });
+    return;
+  }
+  const frage = drin === 1
+    ? translate('Delete the folder including 1 note?')
+    : translate('Delete the folder including %1 notes?').replace('%1', String(drin));
+  showConfirm(frage, translate('Delete'), () => {
+    notizenAktion({ action: 'folderDelete', id: fid, mode: 'notes' }, () => { notesOrdnerId = null; });
+  });
+}
+
+function renderNotizenDetail(el, ordner) {
+  if (!ordner) {
+    renderRows(el, '<div class="empty-state" data-key="waehlen"><i class="fa-light fa-folder-open"></i>' +
+      translate('Select a folder') + '</div>');
+    return;
+  }
+  let html = '<div class="screen-head" data-key="detailhead">' +
+    '<button class="icon-btn" id="btnNotesBack" aria-label="' + translate('Back') + '">' +
+    '<i class="fa-light fa-chevron-left"></i></button>' +
+    '<h2>' + escapeHtml(ordner.name) + '</h2>' +
+    '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
+    '<i class="fa-light fa-plus"></i></button></div>';
+  const liste = notesImOrdner(ordner.id);
+  if (liste.length === 0) {
+    html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-note-sticky"></i>' +
+      translate('No notes yet') + '</div>';
+  }
+  for (const n of liste) {
+    const anz = (n.att || []).length;
+    html += '<div class="item-card note-card" data-key="n:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '">' +
+      '<div class="swipe-under"><i class="fa-light fa-trash"></i></div>' +
+      '<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>' +
+      '<div class="item-card-content">' +
+      '<span class="item-main"><span class="item-name">' + escapeHtml(n.title || translate('New note')) + '</span>' +
+      (n.preview ? '<span class="note-preview">' + escapeHtml(n.preview) + '</span>' : '') +
+      '</span>' +
+      '<span class="item-side">' +
+      (anz > 0 ? '<span class="badge attr"><i class="fa-light fa-paperclip"></i><span>' + anz + '</span></span>' : '') +
+      '<span class="note-date">' + notesDatum(n.updatedAt) + '</span>' +
+      '</span></div></div>';
+  }
+  const frisch = renderRows(el, html);
+  const suche = (sel) => {
+    const raus = [];
+    for (const n of (Array.isArray(frisch) ? frisch : [])) {
+      if (n.matches && n.matches(sel)) raus.push(n);
+      if (n.querySelectorAll) raus.push(...n.querySelectorAll(sel));
+    }
+    return raus;
+  };
+  // Auch hier nur die frischen Knoten — siehe bindeNotizenMaster.
+  const zurueck = suche('#btnNotesBack')[0];
+  if (zurueck) zurueck.addEventListener('click', () => { notesOrdnerId = null; renderNotizen(); });
+  const neu = suche('#btnNoteCreate')[0];
+  if (neu) neu.addEventListener('click', () => noteEditorOeffnen({ folderId: ordner.id }));
+  suche('.note-card').forEach(card => {
+    const nid = card.dataset.note;
+    const inhalt = card.querySelector('.item-card-content');
+    if (inhalt) inhalt.addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      noteOeffnen(nid);
+    });
+    bindCardSwipe(card, '.item-card-content',
+      () => {
+        restoreCard(card);
+        showConfirm(translate('Delete this note?'), translate('Delete'), () => {
+          notizenAktion({ action: 'noteDelete', id: nid });
+        });
+      },
+      () => { restoreCard(card); noteOeffnen(nid); },
+      { dissolve: false });
+  });
+}
+
+/** Tag und Monat, wie in den Terminen — das Jahr nur, wenn es nicht das laufende ist. */
+function notesDatum(sek) {
+  if (!sek) return '';
+  const d = new Date(sek * 1000);
+  const heute = new Date();
+  const tag = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+  return d.getFullYear() === heute.getFullYear() ? tag : tag + String(d.getFullYear());
+}
+
+// ── Notiz-Editor ───────────────────────────────────────────────────────────
+
+/** Volltext holen und dann oeffnen: die Liste traegt nur eine Vorschau. */
+function noteOeffnen(nid) {
+  aiPost('/notes', { action: 'get', id: nid }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true || !j.note) { showToast(notizenFehlertext(j)); return; }
+    noteEditorOeffnen(j.note);
+  }).catch(() => showToast(translate('Action failed')));
+}
+
+function noteEditorOeffnen(notiz) {
+  noteCtx = {
+    folderId: notiz.folderId || notesOrdnerId || notesErsterOrdner(),
+    noteId: notiz.id || null,
+    files: Array.isArray(notiz.att) ? notiz.att.slice() : [],
+    // Dateien, die vor dem ersten Speichern angehaengt wurden. Eine Notiz ohne
+    // Kennung kann keinen Anhang tragen, also warten sie hier auf den noteCreate.
+    warten: [],
+    proposal: null
+  };
+  noteFunde = [];
+  document.getElementById('noteOverlayTitle').textContent =
+    noteCtx.noteId ? translate('Edit note') : translate('New note');
+  const wahl = document.getElementById('ntFolder');
+  wahl.innerHTML = notizen.folders
+    .map(f => '<option value="' + escapeHtml(f.id) + '">' + escapeHtml(f.name) + '</option>').join('');
+  wahl.value = noteCtx.folderId || '';
+  document.getElementById('ntTitle').value = notiz.title || '';
+  document.getElementById('ntText').value = notiz.text || '';
+  document.getElementById('btnNoteDelete').style.display = noteCtx.noteId ? '' : 'none';
+  noteHinweisAus();
+  noteDateienZeichnen();
+  openOverlay('noteOverlay');
+}
+
+function notesErsterOrdner() {
+  return notizen.folders.length ? notizen.folders[0].id : null;
+}
+
+function noteDateienZeichnen() {
+  const el = document.getElementById('ntFiles');
+  const dateien = (noteCtx && noteCtx.files) ? noteCtx.files : [];
+  const warten = (noteCtx && noteCtx.warten) ? noteCtx.warten : [];
+  el.innerHTML = dateien.map(a =>
+    '<span class="note-file" data-media="' + escapeHtml(String(a.id)) + '">' +
+    '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+    '<span>' + escapeHtml(a.name || translate('Attachment')) + '</span>' +
+    '<button class="rm" data-rm="' + escapeHtml(String(a.id)) + '" aria-label="' + translate('Remove') + '">' +
+    '<i class="fa-light fa-xmark"></i></button>' +
+    '</span>').join('') +
+    // Wartende: noch ohne Kennung, deshalb nicht antippbar und nicht einzeln
+    // entfernbar — sie verschwinden mit dem Verwerfen des Editors.
+    warten.map((w, i) =>
+      '<span class="note-file is-waiting" data-warten="' + i + '">' +
+      '<i class="fa-light ' + (w.nutzlast.pdf ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+      '<span>' + escapeHtml(w.name || translate('Attachment')) + '</span>' +
+      '<i class="fa-light fa-clock"></i></span>').join('');
+  el.querySelectorAll('.note-file:not(.is-waiting)').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-rm]');
+      if (rm) {
+        e.stopPropagation();
+        noteAnhangEntfernen(parseInt(rm.dataset.rm, 10));
+        return;
+      }
+      noteAnhangOeffnen(parseInt(chip.dataset.media, 10));
+    });
+  });
+  // Typ vorab holen, damit der Klick synchron entscheiden kann, ob ein PDF an den
+  // System-Viewer geht — nach einem await wertet Safari window.open als Popup.
+  dateien.forEach(a => { if (a.kind === 'pdf') notesTypCache[String(a.id)] = true; });
+}
+
+const notesTypCache = {};
+
+/**
+ * Anhang ansehen.
+ *
+ * Zwei Wege, genau wie beim Rezeptfoto: In der Web-App fuehrt die Datei-Route zum
+ * System-Viewer, der ein PDF vollstaendig blaettert. Die Visu-Kachel hat keinen
+ * Token, dort kommt der Inhalt als data:-URL ueber den Relay — ein mehrseitiges PDF
+ * zeigt im iframe dann nur seine erste Seite. Dieselbe bekannte Grenze wie dort.
+ */
+function noteAnhangOeffnen(mediaId) {
+  if (!mediaId || !noteCtx) return;
+  const istPdf = notesTypCache[String(mediaId)] === true;
+  const direkt = notesMediaUrl(mediaId);
+  if (direkt && istPdf) {
+    let fenster = null;
+    try { fenster = window.open(direkt, '_blank'); } catch (e) {}
+    if (fenster) return;
+  }
+  aiPost('/notes', { action: 'attachData', noteId: noteCtx.noteId, attachmentId: mediaId }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true || !j.dataUrl) { showToast(notizenFehlertext(j)); return; }
+    zeigeMedium(j.dataUrl, j.isPdf === true, translate('Attachment'));
+  }).catch(() => showToast(translate('Action failed')));
+}
+
+/** Direkte Datei-Adresse — nur in der Web-App, die Kachel hat keinen Token. */
+function notesMediaUrl(mediaId) {
+  if (!window.__SYMDO__ || !window.__SYMDO__.api) return '';
+  let token = '';
+  try { token = ls.get('symdo.token') || ''; } catch (e) {}
+  if (!token) return '';
+  return String(window.__SYMDO__.api).replace(/\/+$/, '') +
+    '/notes/media/' + encodeURIComponent(String(mediaId)) + '?t=' + encodeURIComponent(token);
+}
+
+function noteAnhangEntfernen(mediaId) {
+  if (!noteCtx || !noteCtx.noteId || !mediaId) return;
+  showConfirm(translate('Remove this attachment?'), translate('Remove'), () => {
+    notizenAktion({ action: 'attachDelete', noteId: noteCtx.noteId, attachmentId: mediaId }, () => {
+      noteCtx.files = noteCtx.files.filter(a => Number(a.id) !== Number(mediaId));
+      noteDateienZeichnen();
+    });
+  });
+}
+
+function noteHinweis(html) {
+  const el = document.getElementById('ntAiHint');
+  el.innerHTML = html;
+  el.style.display = '';
+}
+function noteHinweisAus() {
+  const el = document.getElementById('ntAiHint');
+  el.innerHTML = '';
+  el.style.display = 'none';
+}
+
+function noteAnhangHochladen(noteId, nutzlast, name) {
+  return aiPost('/notes', Object.assign({ action: 'attachUpload', noteId: noteId, name: name }, nutzlast))
+    .then(r => {
+      const j = r && r.json;
+      if (!j || j.ok !== true) { showToast(notizenFehlertext(j)); return null; }
+      if (noteCtx && noteCtx.noteId === noteId) {
+        noteCtx.files.push(j.attachment);
+        noteDateienZeichnen();
+      }
+      return j.attachment;
+    })
+    .catch(() => { showToast(translate('Action failed')); return null; });
+}
+
+function noteSpeichern() {
+  if (!noteCtx) return;
+  const titel = document.getElementById('ntTitle').value.trim();
+  const text = document.getElementById('ntText').value;
+  const fid = document.getElementById('ntFolder').value;
+  if (titel === '' && text.trim() === '') { showToast(translate('Please enter a title or a text.')); return; }
+  if (!fid) { showToast(translate('No folders yet')); return; }
+  const fertig = () => {
+    closeOverlay('noteOverlay');
+    // Erst NACH dem Erfolg abmelden: aiPost kann scheitern, und dann waeren
+    // Vorschlag und Notiz gleichzeitig verloren. (Das ToDo-Muster meldet synchron
+    // ab, weil sdCall optimistisch ist — hier gilt das nicht.)
+    if (noteCtx && noteCtx.proposal) {
+      mailDrop(noteCtx.proposal.id, noteCtx.proposal.i);
+      noteCtx.proposal = null;
+    }
+  };
+  if (noteCtx.noteId) {
+    notizenAktion({ action: 'noteUpdate', id: noteCtx.noteId, title: titel, text: text, folderId: fid }, fertig);
+    return;
+  }
+  const warten = noteCtx.warten.slice();
+  notizenAktion({ action: 'noteCreate', folderId: fid, title: titel, text: text }, (j) => {
+    const neueId = (j && j.note && j.note.id) ? j.note.id : null;
+    if (!neueId || warten.length === 0) { fertig(); return; }
+    // Wartende Anhaenge nacheinander, nicht gleichzeitig: jeder Aufruf schreibt den
+    // Bestand, parallele Aufrufe liefen in die Semaphore und einer waere verloren.
+    let kette = Promise.resolve();
+    for (const w of warten) {
+      kette = kette.then(() => noteAnhangHochladen(neueId, w.nutzlast, w.name));
+    }
+    kette.then(() => {
+      if (noteCtx) noteCtx.warten = [];
+      notizenGeladen = false;
+      ladeNotizen();
+      fertig();
+    });
+  });
+}
+
+function noteLoeschen() {
+  if (!noteCtx || !noteCtx.noteId) return;
+  showConfirm(translate('Delete this note?'), translate('Delete'), () => {
+    notizenAktion({ action: 'noteDelete', id: noteCtx.noteId }, () => closeOverlay('noteOverlay'));
+  });
+}
+
+// ── KI in der Notiz ────────────────────────────────────────────────────────
+
+/**
+ * Datei anhaengen und, wenn die KI freigeschaltet ist, gleich auswerten.
+ *
+ * Zwei unabhaengige Schritte, absichtlich: Anhaengen war die Handlung des Nutzers,
+ * die Analyse ist die Dreingabe. Scheitert sie, ist die Datei trotzdem dran.
+ */
+function noteDateiAufnehmen(nutzlast, name) {
+  if (!noteCtx) return;
+  const merkeAnhang = () => {
+    // Noch nicht gespeichert: die Datei wartet auf den noteCreate. Sonst haetten der
+    // Nutzer eine Datei angehaengt und nichts waere passiert.
+    if (!noteCtx.noteId) {
+      noteCtx.warten.push({ nutzlast: nutzlast, name: name });
+      noteDateienZeichnen();
+      return Promise.resolve();
+    }
+    return noteAnhangHochladen(noteCtx.noteId, nutzlast, name).then(() => {
+      notizenGeladen = false;
+      ladeNotizen();
+    });
+  };
+  noteHinweis('<div class="ai-spinner"></div>' + translate('Analyzing file …'));
+  document.getElementById('btnNoteSave').disabled = true;
+  aiPost('/notes', Object.assign({ action: 'analyse' }, nutzlast)).then(r => {
+    const j = r && r.json;
+    document.getElementById('btnNoteSave').disabled = false;
+    if (!j || j.ok !== true) {
+      noteHinweis(escapeHtml(notizenFehlertext(j)));
+      return merkeAnhang();
+    }
+    noteVorschlagUebernehmen(j.note || {});
+    noteFunde = Array.isArray(j.todos) ? j.todos : [];
+    noteFundeAnbieten();
+    return merkeAnhang();
+  }).catch(() => {
+    document.getElementById('btnNoteSave').disabled = false;
+    noteHinweis(escapeHtml(translate('Action failed')));
+    return merkeAnhang();
+  });
+}
+
+/**
+ * Titel und Text vorschlagen. Gefuellte Felder werden NICHT ueberschrieben — was
+ * der Nutzer selbst geschrieben hat, gewinnt. Bei einem Widerspruch entscheidet er.
+ */
+function noteVorschlagUebernehmen(vorschlag) {
+  const tE = document.getElementById('ntTitle');
+  const xE = document.getElementById('ntText');
+  const titel = String(vorschlag.title || '');
+  const text = String(vorschlag.text || '');
+  const leerT = tE.value.trim() === '';
+  const leerX = xE.value.trim() === '';
+  if (leerT) tE.value = titel;
+  if (leerX) xE.value = text;
+  if (leerT && leerX) { noteHinweisAus(); return; }
+  if (!leerT || !leerX) {
+    noteHinweis(escapeHtml(translate('A suggestion is available for the fields you already filled in.')) +
+      ' <button class="row-btn accent" id="btnNoteTakeAi">' + translate('Apply') + '</button>');
+    const b = document.getElementById('btnNoteTakeAi');
+    if (b) b.addEventListener('click', () => {
+      if (titel) tE.value = titel;
+      if (text) xE.value = text;
+      noteHinweisAus();
+      showToast(translate('Suggestion applied'));
+    });
+  }
+}
+
+function noteFundeAnbieten() {
+  if (noteFunde.length === 0) return;
+  const aufgaben = noteFunde.filter(f => f.kind !== 'event').length;
+  const termine = noteFunde.length - aufgaben;
+  const teile = [];
+  if (aufgaben > 0) teile.push(aufgaben === 1 ? translate('1 task') : translate('%d tasks').replace('%d', String(aufgaben)));
+  if (termine > 0) teile.push(termine === 1 ? translate('1 appointment') : translate('%d appointments').replace('%d', String(termine)));
+  const vorher = document.getElementById('ntAiHint').innerHTML;
+  noteHinweis((vorher ? vorher + '<br>' : '') + escapeHtml(translate('Also found: %1').replace('%1', teile.join(', '))) +
+    ' <button class="row-btn accent" id="btnNoteShowFinds"><i class="fa-light fa-list-check"></i></button>');
+  const b = document.getElementById('btnNoteShowFinds');
+  if (b) b.addEventListener('click', () => noteFundeZeigen());
+}
+
+function noteFundeZeigen() {
+  document.getElementById('noteFindTitle').textContent = translate('Detected tasks and appointments');
+  const body = document.getElementById('noteFindBody');
+  let html = '';
+  const gruppe = (titel, arr) => {
+    if (arr.length === 0) return '';
+    let h = '<div class="ai-fav-section">' + titel + '</div>';
+    for (const f of arr) {
+      const i = noteFunde.indexOf(f);
+      h += '<div class="ai-row" data-fund="' + i + '">' +
+        '<span class="ai-main"><span class="ai-title">' + escapeHtml(String(f.title || '')) + '</span>' +
+        '<span class="ai-meta">' + escapeHtml(mailWhenText(f.due, f.allDay === true ? '' : f.time, f.end)) + '</span></span>' +
+        '<button class="row-btn accent" data-take="' + i + '" aria-label="' + translate('Add') + '">' +
+        '<i class="fa-light fa-plus"></i></button></div>';
+    }
+    return h;
+  };
+  html += gruppe(translate('Tasks'), noteFunde.filter(f => f.kind !== 'event'));
+  html += gruppe(translate('Appointments'), noteFunde.filter(f => f.kind === 'event'));
+  body.innerHTML = html;
+  body.querySelectorAll('[data-take]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = noteFunde[parseInt(btn.dataset.take, 10)];
+      if (!f) return;
+      const zeile = btn.closest('.ai-row');
+      if (zeile) zeile.classList.add('selected');
+      // quelle = null: ein KI-Fund in einer Notiz hat keinen Vorschlag abzumelden.
+      entwurfOeffnen(f, '', null);
+    });
+  });
+  openOverlay('noteFindOverlay');
+}
+
 // ── Artikel-Editor (Einkaufsliste + Favoriten) ─────────────────────────────
 let editorCtx = null; // {type:'shopping'|'fav-edit'|'fav-add', instanceID, listId?, item?}
 function fillCategorySelect(select, current) {
@@ -8753,6 +9553,7 @@ function initCaptions() {
   document.querySelector('#tab-shopping span').textContent = translate('Shopping');
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
+  document.querySelector('#tab-notes span').textContent = translate('Notes');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
   document.getElementById('todoInput').placeholder = translate('New task …');
   set('lblEditName', translate('Name'));
@@ -9429,6 +10230,61 @@ document.addEventListener('DOMContentLoaded', () => {
   if (todoInTile && todoIsDesktop) {
     const bp = document.getElementById('btnTodoFromPhoto');
     if (bp) bp.style.display = 'none';
+  }
+
+  // ── Notiz-Editor ──
+  document.getElementById('lblNoteFolder').textContent = translate('Folder');
+  document.getElementById('lblNoteTitle').textContent = translate('Title');
+  document.getElementById('lblNoteText').textContent = translate('Text');
+  document.getElementById('lblNoteFiles').textContent = translate('Attachments');
+  document.getElementById('btnNoteCancel').textContent = translate('Cancel');
+  document.getElementById('btnNoteDelete').textContent = translate('Delete');
+  document.getElementById('btnNoteSave').textContent = translate('Save');
+  document.getElementById('noteAttachLabel').textContent = translate('Attach photo or file');
+  document.getElementById('noteSourceTitle').textContent = translate('Attach photo or file');
+  document.getElementById('noteFromPhotoLabel').textContent = translate('Take photo');
+  document.getElementById('noteFromFileLabel').textContent = translate('Choose file');
+  document.getElementById('btnNoteSave').addEventListener('click', () => noteSpeichern());
+  document.getElementById('btnNoteDelete').addEventListener('click', () => noteLoeschen());
+  const noteScanInput = document.getElementById('noteScanInput');
+  const noteFileInput = document.getElementById('noteFileInput');
+  document.getElementById('btnNoteAttach').addEventListener('click', () => {
+    // Ohne gespeicherte Notiz gibt es noch keine Kennung, an die ein Anhang koennte.
+    // Die KI darf trotzdem laufen — sie legt nichts ab.
+    openOverlay('noteSourceOverlay');
+  });
+  document.getElementById('btnNoteFromPhoto').addEventListener('click', () => {
+    closeOverlay('noteSourceOverlay'); noteScanInput.value = ''; noteScanInput.click();
+  });
+  document.getElementById('btnNoteFromFile').addEventListener('click', () => {
+    closeOverlay('noteSourceOverlay'); noteFileInput.value = ''; noteFileInput.click();
+  });
+  noteScanInput.addEventListener('change', () => {
+    const file = noteScanInput.files && noteScanInput.files[0];
+    if (!file) return;
+    aiDownscale(file, 1600, 0.8)
+      .then(d => noteDateiAufnehmen({ image: d }, file.name || ''))
+      .catch(() => showToast(translate('Could not read the photo.')));
+  });
+  noteFileInput.addEventListener('change', () => {
+    const file = noteFileInput.files && noteFileInput.files[0];
+    if (!file) return;
+    const istPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+    if (istPdf) {
+      aiReadFileB64(file)
+        .then(b64 => noteDateiAufnehmen({ pdf: b64 }, file.name || ''))
+        .catch(() => showToast(translate('Could not read the file.')));
+    } else {
+      aiDownscale(file, 1600, 0.8)
+        .then(d => noteDateiAufnehmen({ image: d }, file.name || ''))
+        .catch(() => showToast(translate('Could not read the photo.')));
+    }
+  });
+  // Dieselbe Ruecksicht wie oben: in der Desktop-Kachel oeffnet <input capture>
+  // keine Kamera, der Knopf waere eine Sackgasse.
+  if (todoInTile && todoIsDesktop) {
+    const np = document.getElementById('btnNoteFromPhoto');
+    if (np) np.style.display = 'none';
   }
 
   // ── KI: Foto/URL → Zutaten (Einkaufsliste). Gleiche Gateway-KI + Review-Overlay wie ToDo. ──

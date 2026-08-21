@@ -40,6 +40,8 @@ trait NotesMedia
     private const NOTES_PDF_MAX_BYTES = 900000;
     /** Schonfrist, bevor ein unbenutzter Anhang eingesammelt wird (zwei Tage). */
     private const NOTES_SWEEP_GRACE   = 172800;
+    /** Groesste Base64-Nutzlast fuer den Kachel-Relay (roh etwa 700 KB). */
+    private const NOTES_RELAY_MAX_B64 = 960000;
 
     public function NotesMediaCreate(): void
     {
@@ -253,6 +255,48 @@ trait NotesMedia
         }
         $this->NotesDeleteMedia([$mid]);
         return ['ok' => true, 'rev' => (int)$store['rev'] + 1];
+    }
+
+    /**
+     * Anhang als data:-URL — der Weg fuer die Visu-Kachel.
+     *
+     * Die Kachel hat keinen Token und kann die Datei-Route deshalb nicht abrufen. Als
+     * AKTION und nicht als Pfad, weil der Kachel-Relay mit str_ends_with vergleicht:
+     * ein Pfad '/notes/media' liefe in den 'media'-Zweig der Rezeptfotos.
+     *
+     * Mit `meta` kommt nur die Art zurueck. Die Oberflaeche braucht sie VOR dem Klick,
+     * um synchron entscheiden zu koennen — nach einem await wertet Safari ein
+     * window.open als Popup.
+     */
+    private function NotesAttachData(string $noteId, int $mediaId, bool $nurArt = false): array
+    {
+        $store = $this->NotesStore();
+        $i = $this->NotesIndexOf($store['notes'], $noteId);
+        if ($i < 0) {
+            return $this->NotesFehler('not_found');
+        }
+        $kat = $this->NotesMediaCategory(false);
+        if (!in_array($mediaId, $this->NotesAttachmentIds([$store['notes'][$i]]), true)
+            || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
+            return $this->NotesFehler('forbidden');
+        }
+        $b64 = (string)IPS_GetMediaContent($mediaId);
+        $roh = base64_decode($b64, true);
+        if (!is_string($roh) || $roh === '') {
+            return $this->NotesFehler('empty');
+        }
+        $istPdf = str_starts_with($roh, '%PDF-');
+        if ($nurArt) {
+            return ['ok' => true, 'isPdf' => $istPdf];
+        }
+        // Grenze der Relay-Nutzlast. Base64 blaeht um ein Drittel auf; ein grosses PDF
+        // kaeme in der Kachel nicht mehr an. Die Web-App holt es stattdessen ueber die
+        // Datei-Route, die kein Base64 braucht.
+        if (strlen($b64) > self::NOTES_RELAY_MAX_B64) {
+            return $this->NotesFehler('too_large_for_tile');
+        }
+        return ['ok' => true, 'isPdf' => $istPdf,
+                'dataUrl' => 'data:' . ($istPdf ? 'application/pdf' : 'image/jpeg') . ';base64,' . $b64];
     }
 
     /**

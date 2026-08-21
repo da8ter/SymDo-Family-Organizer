@@ -72,7 +72,7 @@
                 {
                     "type": "CheckBox",
                     "name": "ShowShopping",
-                    "caption": "Show shopping lists (tabs Shopping and Favorites)"
+                    "caption": "Show shopping lists (favorites are reached from their header)"
                 },
                 {
                     "type": "CheckBox",
@@ -85,8 +85,13 @@
                     "caption": "Show calendar (requires the OpenCalendar module)"
                 },
                 {
+                    "type": "CheckBox",
+                    "name": "ShowNotes",
+                    "caption": "Show notes (requires the SymDo Gateway)"
+                },
+                {
                     "type": "Label",
-                    "caption": "Controls the tabs of this tile and of the SymDo web app. Favorites belong to the shopping lists — that tab shows their favorite lists and the purchase history, so it follows the shopping switch. The calendar tab additionally requires at least one configured OpenCalendar calendar. If all sections are off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
+                    "caption": "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more \u2014 they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
                 }
             ]
         },

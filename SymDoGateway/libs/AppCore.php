@@ -1296,11 +1296,11 @@ trait AppCore
      * Ohne Kachel-Instanz: alles sichtbar. Bei mehreren entscheidet die erste — es
      * gibt nur eine Standalone-Web-App, eine Zuordnung je Kachel gäbe es also nicht.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool}
+     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool}
      */
     private function GetWebAppTabs(): array
     {
-        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true, 'calendar' => true];
+        $all = ['dashboard' => true, 'shopping' => true, 'todos' => true, 'calendar' => true, 'notes' => true];
         $ids = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
         if (!$ids) {
             return $all;
@@ -1309,7 +1309,8 @@ trait AppCore
         if (!is_array($cfg)) {
             return $all;
         }
-        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos', 'calendar' => 'ShowCalendar'] as $key => $prop) {
+        foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos',
+                  'calendar' => 'ShowCalendar', 'notes' => 'ShowNotes'] as $key => $prop) {
             if (array_key_exists($prop, $cfg)) {
                 $all[$key] = (bool)$cfg[$prop];
             }
