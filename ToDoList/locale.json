@@ -517,7 +517,11 @@
             "AI": "KI",
             "Detected by AI": "Von der KI erkannt",
             "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden.",
-            "New note …": "Neue Notiz …"
+            "New note …": "Neue Notiz …",
+            "Controls": "Bedienelemente",
+            "Recurrence": "Wiederholung",
+            "1 new note found": "1 neue Notiz gefunden",
+            "%1 new notes found": "%1 neue Notizen gefunden"
         },
         "en": {
             "ToDo List": "ToDo List",

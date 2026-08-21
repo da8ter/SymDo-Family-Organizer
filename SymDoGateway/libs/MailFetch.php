@@ -44,6 +44,18 @@ trait MailFetch
     private const MAIL_ATTACH_MAX_B64 = 8 * 1024 * 1024;
 
     /**
+     * Wie viele Anhaenge eine Mail hoechstens beisteuert.
+     *
+     * Nicht die Anzahl ist teuer, sondern der Speicher: jedes base64 liegt beim
+     * Ablegen gleichzeitig kodiert und dekodiert vor (etwa 2,3x der Dateigroesse).
+     * Fuenf passt zu NOTE_ATTACH_MAX — mehr koennte eine Notiz ohnehin nicht tragen.
+     */
+    private const MAIL_ATTACH_MAX_N = 5;
+
+    /** Und wie viele Bytes base64 insgesamt, ueber alle Anhaenge einer Mail. */
+    private const MAIL_ATTACH_TOTAL_B64 = 12 * 1024 * 1024;
+
+    /**
      * Untergrenze fuer BILDER. Ein Logo aus einer Signatur wiegt 2 bis 30 kB; eine
      * abfotografierte oder eingescannte A4-Seite liegt weit darueber (gemessen:
      * eine gerenderte Textseite mit 1600 px Breite als JPEG = 147 kB). Darunter
@@ -67,11 +79,21 @@ trait MailFetch
      * @return array{kind: string, base64: string, name: string}|null
      *         kind ist 'pdf' oder 'image'; null, wenn es keinen gibt oder etwas scheitert.
      */
-    private function MailFetchAttachment(int $imapID, string $uid): ?array
+    /**
+     * Die brauchbaren Anhaenge einer Mail holen.
+     *
+     * Liefert eine LISTE, seit die Notiz eine Auswahl anbietet. Frueher genau
+     * einen: die KI liest weiterhin nur den ersten, aber angehaengt werden darf
+     * jeder. Leere Liste heisst „keiner brauchbar" oder „nicht erreichbar" —
+     * beides ist kein Fehler, die Analyse laeuft dann nur mit dem Mailtext.
+     *
+     * @return list<array{kind: string, base64: string, name: string}>
+     */
+    private function MailFetchAttachments(int $imapID, string $uid): array
     {
         $cfg = $this->MailImapConfig($imapID);
         if ($cfg === null) {
-            return null;
+            return [];
         }
         // Ohne SSL ginge das Passwort im Klartext ueber die Leitung — STARTTLS
         // handelt dieser schmale Zugriff nicht aus. Dann lieber ohne Anhang
@@ -79,11 +101,11 @@ trait MailFetch
         // preiszugeben, nur weil die IMAP-Instanz unverschluesselt eingestellt ist.
         if ($cfg['auth'] && !$cfg['ssl']) {
             $this->SendDebug('MailFetch', 'IMAP-Instanz ohne SSL — Anhang-Abruf entfaellt, Analyse nur mit Mailtext', 0);
-            return null;
+            return [];
         }
         $fh = $this->MailImapOpen($cfg);
         if ($fh === null) {
-            return null;
+            return [];
         }
         try {
             $nr = 0;
@@ -93,7 +115,7 @@ trait MailFetch
                 // ohnehin kaputt, also gar nicht erst senden.
                 if (preg_match('/[\r\n]/', $cfg['user'] . $cfg['pass']) === 1) {
                     $this->SendDebug('MailFetch', 'Zugangsdaten enthalten Zeilenumbrueche — Anhang-Abruf entfaellt', 0);
-                    return null;
+                    return [];
                 }
                 $login = $this->MailImapCmd($fh, $nr, sprintf(
                     'LOGIN "%s" "%s"',
@@ -103,59 +125,77 @@ trait MailFetch
                 if (!$login['ok']) {
                     // Bewusst ohne Zugangsdaten im Text.
                     $this->SendDebug('MailFetch', 'Anmeldung abgelehnt: ' . $login['status'], 0);
-                    return null;
+                    return [];
                 }
             }
             // EXAMINE, nicht SELECT: nur lesen, keine Flag-Aenderung moeglich.
             if (!$this->MailImapCmd($fh, $nr, 'EXAMINE "INBOX"')['ok']) {
                 $this->SendDebug('MailFetch', 'INBOX nicht lesbar', 0);
-                return null;
+                return [];
             }
 
             $struktur = $this->MailImapCmd($fh, $nr, 'UID FETCH ' . $this->MailImapUid($uid) . ' (BODYSTRUCTURE)');
             if (!$struktur['ok']) {
                 $this->SendDebug('MailFetch', 'BODYSTRUCTURE fehlgeschlagen: ' . $struktur['status'], 0);
-                return null;
+                return [];
             }
             $teile = $this->MailStructureParts($struktur['daten']);
-            $wahl  = $this->MailPickAttachment($teile);
-            if ($wahl === null) {
+            $wahlen = $this->MailRankAttachments($teile);
+            if ($wahlen === []) {
                 $this->SendDebug('MailFetch', sprintf('UID %s: kein verwertbarer Anhang (%d Teile)', $uid, count($teile)), 0);
-                return null;
+                return [];
             }
 
-            $inhalt = $this->MailImapCmd($fh, $nr, sprintf(
-                'UID FETCH %s (BODY.PEEK[%s])',
-                $this->MailImapUid($uid),
-                $wahl['part']
-            ));
-            if (!$inhalt['ok'] || ($inhalt['literale'][0] ?? '') === '') {
-                $this->SendDebug('MailFetch', 'Anhang nicht abholbar: ' . $inhalt['status'], 0);
-                return null;
+            // Alle brauchbaren holen, nicht nur den ersten: die Notiz laesst den
+            // Nutzer auswaehlen. Ein Fehlschlag bei einem Teil ueberspringt nur
+            // diesen — fruehes Aufgeben haette die uebrigen mitgenommen.
+            $raus   = [];
+            $summe  = 0;
+            foreach ($wahlen as $wahl) {
+                $inhalt = $this->MailImapCmd($fh, $nr, sprintf(
+                    'UID FETCH %s (BODY.PEEK[%s])',
+                    $this->MailImapUid($uid),
+                    $wahl['part']
+                ));
+                if (!$inhalt['ok'] || ($inhalt['literale'][0] ?? '') === '') {
+                    $this->SendDebug('MailFetch', 'Anhang ' . $wahl['part'] . ' nicht abholbar: ' . $inhalt['status'], 0);
+                    continue;
+                }
+                $base64 = $this->MailToBase64((string)$inhalt['literale'][0], $wahl['encoding']);
+                // Rohpuffer sofort freigeben: er ist genauso gross wie die Kopie, und
+                // json_encode braucht den Platz gleich selbst.
+                unset($inhalt);
+                if ($base64 === '') {
+                    continue;
+                }
+                // Letzte Wache, und die genaueste: die echten Kantenlaengen (siehe
+                // MailImageUsable). Die Bytes liegen ohnehin vor, die Pruefung kostet
+                // also nur den Dekodierschritt.
+                if ($wahl['kind'] === 'image'
+                    && !$this->MailImageUsable($base64, $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'])) {
+                    continue;
+                }
+                // Gesamtdeckel: fuenf Anhaenge duerfen zusammen nicht den Speicher
+                // sprengen, den ein einzelner noch haette haben duerfen.
+                if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+                    $this->SendDebug('MailFetch', sprintf(
+                        'Anhang %s uebersprungen: Gesamtdeckel erreicht (%d kB)',
+                        $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'], (int)round($summe / 1024)
+                    ), 0);
+                    continue;
+                }
+                $summe += strlen($base64);
+                $this->SendDebug('MailFetch', sprintf(
+                    'UID %s: Anhang %s (%s/%s, Teil %s, %d kB base64)',
+                    $uid, $wahl['name'] !== '' ? $wahl['name'] : '(ohne Namen)',
+                    $wahl['type'], $wahl['subtype'], $wahl['part'], (int)round(strlen($base64) / 1024)
+                ), 0);
+                $raus[] = ['kind' => $wahl['kind'], 'base64' => $base64, 'name' => $wahl['name']];
             }
-            $base64 = $this->MailToBase64((string)$inhalt['literale'][0], $wahl['encoding']);
-            // Rohpuffer sofort freigeben: er ist genauso gross wie die Kopie, und
-            // json_encode braucht den Platz gleich selbst.
-            unset($inhalt);
-            if ($base64 === '') {
-                return null;
-            }
-            // Letzte Wache, und die genaueste: die echten Kantenlaengen (siehe
-            // MailImageUsable). Die Bytes liegen ohnehin vor, die Pruefung kostet
-            // also nur den Dekodierschritt.
-            if ($wahl['kind'] === 'image'
-                && !$this->MailImageUsable($base64, $wahl['name'] !== '' ? $wahl['name'] : $wahl['part'])) {
-                return null;
-            }
-            $this->SendDebug('MailFetch', sprintf(
-                'UID %s: Anhang %s (%s/%s, Teil %s, %d kB base64)',
-                $uid, $wahl['name'] !== '' ? $wahl['name'] : '(ohne Namen)',
-                $wahl['type'], $wahl['subtype'], $wahl['part'], (int)round(strlen($base64) / 1024)
-            ), 0);
-            return ['kind' => $wahl['kind'], 'base64' => $base64, 'name' => $wahl['name']];
+            return $raus;
         } catch (Throwable $e) {
             $this->SendDebug('MailFetch', 'Fehler: ' . $e->getMessage(), 0);
-            return null;
+            return [];
         } finally {
             @$this->MailImapCmd($fh, $nr, 'LOGOUT');
             @fclose($fh);
@@ -479,6 +519,22 @@ trait MailFetch
      */
     private function MailPickAttachment(array $teile): ?array
     {
+        return $this->MailRankAttachments($teile)[0] ?? null;
+    }
+
+    /**
+     * Alle brauchbaren Anhaenge in der Reihenfolge ihrer Eignung.
+     *
+     * Herausgeloest aus MailPickAttachment, weil die Notiz eine AUSWAHL braucht:
+     * die KI liest weiterhin nur den ersten (das ist der aussagekraeftigste), aber
+     * an die Notiz kann jeder gehaengt werden. Die Aussortierung von Signaturlogos
+     * und Miniaturbildern bleibt dieselbe — was hier durchfaellt, taucht auch in
+     * der Auswahlliste nicht auf.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function MailRankAttachments(array $teile): array
+    {
         $kandidaten = [];
         foreach ($teile as $t) {
             $kind = null;
@@ -529,9 +585,6 @@ trait MailFetch
             }
             $kandidaten[] = $t + ['kind' => $kind, 'deko' => $kind === 'image' && $this->MailLooksDecorative($t['name'])];
         }
-        if ($kandidaten === []) {
-            return null;
-        }
         // PDF gewinnt gegen Bild; Bilder mit typischem Layout-Namen („image001",
         // „logo") rutschen dahinter — aber sie fliegen nicht raus, denn ein Scan
         // darf „logo_briefkopf.jpg" heissen. Zuletzt entscheidet die Groesse:
@@ -540,7 +593,7 @@ trait MailFetch
             $rang = static fn(array $x): int => $x['kind'] === 'pdf' ? 0 : ($x['deko'] ? 2 : 1);
             return [$rang($a), -$a['size']] <=> [$rang($b), -$b['size']];
         });
-        return $kandidaten[0];
+        return array_slice($kandidaten, 0, self::MAIL_ATTACH_MAX_N);
     }
 
     /** Traegt der Dateiname eines Bildes die Handschrift eines Layout- oder Signaturbildes? */

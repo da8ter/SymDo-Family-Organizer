@@ -220,12 +220,44 @@ trait NotesAi
         if ($titel === '' && $text === '') {
             return $this->NotesFehler('invalid_payload');
         }
+        // Welche Anhaenge bringt der Vorschlag mit? „atts" ist die Liste, „mediaId"
+        // der Einzelne aus der Zeit davor — ein Vorschlag, der schon im Bestand
+        // liegt, soll nicht seinen Anhang verlieren, nur weil das Modul neuer ist.
+        $kandidaten = [];
+        foreach ((array)($eintrag['atts'] ?? []) as $a) {
+            if (is_array($a) && (int)($a['id'] ?? 0) > 0) {
+                $kandidaten[] = (int)$a['id'];
+            }
+        }
+        if ($kandidaten === [] && (int)($eintrag['mediaId'] ?? 0) > 0) {
+            $kandidaten[] = (int)$eintrag['mediaId'];
+        }
+        // Die Auswahl des Nutzers. Fehlt „keep" ganz, kommen ALLE mit — so
+        // verhalten sich aeltere Oberflaechen weiter wie bisher. Eine LEERE Liste
+        // ist dagegen eine Aussage: keiner. Deshalb array_key_exists und nicht ??.
+        $gewuenscht = array_key_exists('keep', $body) && is_array($body['keep'])
+            ? array_map('intval', $body['keep'])
+            : $kandidaten;
         $att = [];
-        $mid = (int)($eintrag['mediaId'] ?? 0);
-        if ($mid > 0 && IPS_MediaExists($mid) && $this->NotesMediaCategory(false) === IPS_GetParent($mid)) {
+        foreach ($kandidaten as $mid) {
+            // Gegen die Liste des VORSCHLAGS geprueft, nicht gegen die Wunschliste:
+            // sonst waere „keep" ein Freibrief, sich jedes Medienobjekt des Systems
+            // an eine Notiz zu haengen und es ueber die Datei-Route auszulesen.
+            if (!in_array($mid, $gewuenscht, true)) {
+                continue;
+            }
+            if ($mid <= 0 || !IPS_MediaExists($mid) || $this->NotesMediaCategory(false) !== IPS_GetParent($mid)) {
+                continue;
+            }
+            if (count($att) >= self::NOTE_ATTACH_MAX) {
+                break;
+            }
             $roh = (string)IPS_GetMediaContent($mid);
             $att[] = ['id' => $mid, 'kind' => str_starts_with((string)base64_decode(substr($roh, 0, 12), true), '%PDF-') ? 'pdf' : 'image',
                       'name' => (string)@IPS_GetName($mid), 'bytes' => (int)(strlen($roh) * 3 / 4)];
+            // Der Puffer ist so gross wie die Datei; bei fuenf Anhaengen liegt
+            // sonst alles gleichzeitig im Speicher.
+            unset($roh);
         }
         $notiz = ['id' => $this->NotesNewId(), 'folderId' => $fid,
                   'title' => $titel !== '' ? $titel : mb_substr($text, 0, 40),

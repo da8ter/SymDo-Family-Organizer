@@ -2342,6 +2342,13 @@ html[data-symdo-theme="dark"] .member-bar {
 .note-file .rm:active { color: var(--red); }
 /* Wartet auf den ersten Speichervorgang: sichtbar, aber nicht antippbar. */
 .note-file.is-waiting { opacity: .6; cursor: default; }
+/* Zur Wahl stehende Anhaenge eines Mail-Vorschlags. Abgehakt sind sie blass —
+   der Unterschied muss auf einen Blick erkennbar sein, ohne das Kaestchen zu
+   lesen, denn davon haengt ab, was gespeichert wird. */
+.note-file.is-choice { cursor: pointer; opacity: .55; }
+.note-file.is-choice.is-on { opacity: 1; border-color: var(--accent); }
+.note-file.is-choice input { flex: none; margin: 0; accent-color: var(--accent); width: 16px; height: 16px; }
+.note-file-size { flex: none; color: var(--muted); font-size: 11px; }
 
 @media (min-width: 820px) {
   /* Zeilen und Karten fließen in Spalten. Die Spaltenzahl regelt auto-fill nach
@@ -6592,7 +6599,22 @@ function entwurfOeffnen(eintrag, userId, quelle) {
       text: String(eintrag.text || eintrag.info || ''),
       att: []
     });
-    if (noteCtx) noteCtx.proposal = quelle || null;
+    if (noteCtx) {
+      noteCtx.proposal = quelle || null;
+      // Die Anhaenge der Mail zum Ankreuzen anbieten, vorgehakt: wer eine Notiz
+      // aus einem Elternbrief macht, will das PDF fast immer dabei haben.
+      // „atts" ist die Liste, „mediaId" der Einzelne aus Vorschlaegen, die vor
+      // der Umstellung entstanden sind.
+      const roh = Array.isArray(eintrag.atts) ? eintrag.atts : [];
+      if (roh.length === 0 && eintrag.mediaId) {
+        roh.push({ id: eintrag.mediaId, name: translate('Attachment'), kind: '' });
+      }
+      noteCtx.wahl = roh.map(a => ({
+        id: a.id, name: a.name || translate('Attachment'),
+        kind: a.kind || '', bytes: a.bytes || 0, an: true
+      }));
+      noteDateienZeichnen();
+    }
     return;
   }
   if (eintrag.kind === 'event') {
@@ -8574,6 +8596,9 @@ function noteEditorOeffnen(notiz) {
     // Dateien, die vor dem ersten Speichern angehaengt wurden. Eine Notiz ohne
     // Kennung kann keinen Anhang tragen, also warten sie hier auf den noteCreate.
     warten: [],
+    // Anhaenge, die ein Mail-Vorschlag mitbringt: zum Ankreuzen, nicht schon
+    // angehaengt. Erst beim Speichern entscheidet der Haken, welche mitkommen.
+    wahl: [],
     proposal: null
   };
   noteFunde = [];
@@ -8595,10 +8620,19 @@ function notesErsterOrdner() {
   return notizen.folders.length ? notizen.folders[0].id : null;
 }
 
+/** Dateigroesse kurz: unter einem MB in kB, darueber mit einer Nachkommastelle. */
+function notesGroesse(bytes) {
+  const n = Number(bytes) || 0;
+  if (n <= 0) return '';
+  if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + ' kB';
+  return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' MB';
+}
+
 function noteDateienZeichnen() {
   const el = document.getElementById('ntFiles');
   const dateien = (noteCtx && noteCtx.files) ? noteCtx.files : [];
   const warten = (noteCtx && noteCtx.warten) ? noteCtx.warten : [];
+  const wahl = (noteCtx && noteCtx.wahl) ? noteCtx.wahl : [];
   el.innerHTML = dateien.map(a =>
     '<span class="note-file" data-media="' + escapeHtml(String(a.id)) + '">' +
     '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
@@ -8612,8 +8646,25 @@ function noteDateienZeichnen() {
       '<span class="note-file is-waiting" data-warten="' + i + '">' +
       '<i class="fa-light ' + (w.nutzlast.pdf ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(w.name || translate('Attachment')) + '</span>' +
-      '<i class="fa-light fa-clock"></i></span>').join('');
-  el.querySelectorAll('.note-file:not(.is-waiting)').forEach(chip => {
+      '<i class="fa-light fa-clock"></i></span>').join('') +
+    // Aus einem Mail-Vorschlag: noch nicht angehaengt, sondern zur Wahl. Ein
+    // <label> statt eines Chips mit Knopf — so trifft jeder Tipper auf den Text
+    // ODER das Kaestchen und schaltet um, ohne Zielen.
+    wahl.map(a =>
+      '<label class="note-file is-choice' + (a.an ? ' is-on' : '') + '">' +
+      '<input type="checkbox" data-wahl="' + escapeHtml(String(a.id)) + '"' + (a.an ? ' checked' : '') + '>' +
+      '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+      '<span>' + escapeHtml(a.name) + '</span>' +
+      (a.bytes ? '<span class="note-file-size">' + notesGroesse(a.bytes) + '</span>' : '') +
+      '</label>').join('');
+  el.querySelectorAll('[data-wahl]').forEach(kasten => {
+    kasten.addEventListener('change', () => {
+      const eintrag = wahl.find(a => String(a.id) === String(kasten.dataset.wahl));
+      if (eintrag) eintrag.an = kasten.checked;
+      kasten.closest('.note-file').classList.toggle('is-on', kasten.checked);
+    });
+  });
+  el.querySelectorAll('.note-file:not(.is-waiting):not(.is-choice)').forEach(chip => {
     chip.addEventListener('click', (e) => {
       const rm = e.target.closest('[data-rm]');
       if (rm) {
@@ -8729,7 +8780,11 @@ function noteSpeichern() {
   // Titel und Text reisen mit, damit Aenderungen im Editor gewinnen.
   const anlegen = noteCtx.proposal
     ? { action: 'adopt', proposalId: noteCtx.proposal.id, i: noteCtx.proposal.i,
-        folderId: fid, title: titel, text: text }
+        folderId: fid, title: titel, text: text,
+        // Nur die angehakten Anhaenge. Die Kennungen sind kein Freibrief: die
+        // Gegenseite prueft sie gegen die Liste des Vorschlags. Eine leere Liste
+        // heisst ausdruecklich „keinen" — deshalb immer mitschicken, auch leer.
+        keep: (noteCtx.wahl || []).filter(a => a.an).map(a => a.id) }
     : { action: 'noteCreate', folderId: fid, title: titel, text: text };
   notizenAktion(anlegen, (j) => {
     const neueId = (j && j.note && j.note.id) ? j.note.id : null;

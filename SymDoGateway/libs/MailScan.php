@@ -678,12 +678,12 @@ trait MailScan
         // Strecke mehrfach gleichzeitig im Speicher — ohne Luft bricht der Lauf ab.
         // Das `finally` ist wichtig: ohne es bliebe die Anhebung stehen, wenn
         // MailFetchAttachment wirft.
-        $anhang = null;
+        $anhaenge = [];
         if ((bool)$this->MailProp('MailReadAttachments', true)) {
             $speicherVorher = (string)@ini_get('memory_limit');
             @ini_set('memory_limit', '192M');
             try {
-                $anhang = $this->MailFetchAttachment($imapID, $uid);
+                $anhaenge = $this->MailFetchAttachments($imapID, $uid);
             } finally {
                 if ($speicherVorher !== '') {
                     @ini_set('memory_limit', $speicherVorher);
@@ -691,7 +691,7 @@ trait MailScan
             }
         }
 
-        $fertig = $this->MailAnalyseRecord($imapID . ':' . $uid, $kopf, $text, $anhang, $userId);
+        $fertig = $this->MailAnalyseRecord($imapID . ':' . $uid, $kopf, $text, $anhaenge, $userId);
         // Loeschen nur auf dem IMAP-Weg und nur nach einer abgeschlossenen Analyse:
         // eine Mail, die noch einen zweiten Versuch verdient, muss im Postfach bleiben.
         if ($fertig && (bool)$this->MailProp('MailDeleteAfter', false)) {
@@ -709,7 +709,10 @@ trait MailScan
      *
      * @param string     $vorschlagsId eindeutig je Quelle: „<imapID>:<uid>" bzw. „hook:<key>"
      * @param array      $kopf         Subject, SenderAddress, SenderName, Recipient, Date
-     * @param ?array     $anhang       ['kind' => 'pdf'|'image', 'base64' => …, 'name' => …]
+     * @param list<array{kind: string, base64: string, name: string}> $anhaenge
+     *        Alle brauchbaren Anhaenge. Die KI liest NUR den ersten — er ist der
+     *        aussagekraeftigste (PDF vor Bild, groesser vor kleiner). Die uebrigen
+     *        reisen mit, damit die Notiz eine Auswahl anbieten kann.
      * @param string     $quelle       nur fuers Statusprotokoll
      * @return bool true, wenn die Mail fertig behandelt ist (auch bei 0 Aufgaben).
      *              false bei einem Fehler, der einen zweiten Versuch verdient.
@@ -718,10 +721,13 @@ trait MailScan
         string $vorschlagsId,
         array $kopf,
         string $text,
-        ?array $anhang,
+        array $anhaenge,
         string $userId,
         string $quelle = 'IMAP'
     ): bool {
+        // Der eine fuer die KI. Ab hier heisst er wie immer, damit der Analyseteil
+        // unveraendert bleibt: er hat nie mehr als einen gelesen.
+        $anhang  = $anhaenge[0] ?? null;
         $betreff = trim((string)($kopf['Subject'] ?? ''));
         $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
         $bild = ($anhang !== null && $anhang['kind'] === 'image') ? $anhang['base64'] : null;
@@ -732,8 +738,13 @@ trait MailScan
         // Auch hier Luft fuer den Anbieter-Aufruf: das base64 des Anhangs liegt im
         // JSON-Rumpf ein zweites Mal. Zurueckgesetzt wird in jedem Fall (finally).
         $speicherVorher = (string)@ini_get('memory_limit');
+        // Eigener Merker, nicht „$anhang !== null": der Notfallpfad fuer Anbieter
+        // ohne PDF setzt $anhang unten auf null, und dann fiel die Ruecknahme im
+        // finally aus — das erhoehte Limit blieb fuer den REST der Anfrage stehen.
+        $speicherAngehoben = false;
         if ($anhang !== null) {
             @ini_set('memory_limit', '192M');
+            $speicherAngehoben = true;
         }
         try {
 
@@ -789,7 +800,14 @@ trait MailScan
                 // Der IMAP-Weg bleibt wortgleich wie bisher; nur ein anderer Eingang
                 // nennt sich, damit im Protokoll unterscheidbar ist, woher die Mail kam.
                 $quelle === 'IMAP' ? '' : ' (' . $quelle . ')',
-                $anhang !== null ? ' (mit Anhang ' . (($anhang['name'] ?? '') !== '' ? $anhang['name'] : $anhang['kind']) . ')' : '',
+                $anhaenge === [] ? '' : sprintf(
+                    ' (mit %d Anhang/Anhaengen: %s)',
+                    count($anhaenge),
+                    implode(', ', array_map(
+                        static fn(array $a): string => ($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)$a['kind'],
+                        $anhaenge
+                    ))
+                ),
                 count($aufgaben) - $termine - $notizen,
                 $termine,
                 $notizen,
@@ -807,18 +825,34 @@ trait MailScan
             //
             // Nur die Medien-ID reist im Vorschlag mit, NIEMALS das base64 — der
             // Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen.
-            if ($notizen > 0 && $anhang !== null && (bool)$this->PushProp('MailNoteAttachments', false)) {
-                $ablage = $this->NotesSaveAttachment((string)$anhang['base64'], (string)($anhang['name'] ?? ''));
-                if (($ablage['ok'] ?? false) === true) {
+            if ($notizen > 0 && $anhaenge !== [] && (bool)$this->PushProp('MailNoteAttachments', false)) {
+                $abgelegt = [];
+                foreach ($anhaenge as $a) {
+                    $ablage = $this->NotesSaveAttachment((string)$a['base64'], (string)($a['name'] ?? ''));
+                    if (($ablage['ok'] ?? false) !== true) {
+                        // Kein Abbruch: die Notiz ohne diesen Anhang ist besser als keine,
+                        // und die uebrigen koennen trotzdem ankommen.
+                        $this->SendDebug('MailScan', 'Anhang „' . (string)($a['name'] ?? '?') . '" nicht ablegbar: '
+                            . (string)($ablage['error']['code'] ?? '?'), 0);
+                        continue;
+                    }
+                    $abgelegt[] = [
+                        'id'    => (int)$ablage['id'],
+                        'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)$a['kind'],
+                        'kind'  => (string)$a['kind'],
+                        'bytes' => (int)(strlen((string)$a['base64']) * 3 / 4),
+                    ];
+                }
+                if ($abgelegt !== []) {
                     foreach ($aufgaben as $k => $a) {
                         if (($a['kind'] ?? '') === 'note') {
-                            $aufgaben[$k]['mediaId'] = (int)$ablage['id'];
+                            // Die Liste ist das Neue; „mediaId" bleibt daneben stehen,
+                            // damit Vorschlaege aus der Zeit davor weiter uebernommen
+                            // werden koennen — NotesAdopt liest beides.
+                            $aufgaben[$k]['atts']    = $abgelegt;
+                            $aufgaben[$k]['mediaId'] = (int)$abgelegt[0]['id'];
                         }
                     }
-                } else {
-                    // Kein Abbruch: die Notiz ohne Anhang ist besser als keine.
-                    $this->SendDebug('MailScan', 'Anhang nicht ablegbar: '
-                        . (string)($ablage['error']['code'] ?? '?'), 0);
                 }
             }
 
@@ -840,7 +874,7 @@ trait MailScan
             return true;
 
         } finally {
-            if ($speicherVorher !== '' && $anhang !== null) {
+            if ($speicherVorher !== '' && $speicherAngehoben) {
                 @ini_set('memory_limit', $speicherVorher);
             }
         }
@@ -1080,7 +1114,12 @@ trait MailScan
             $satz['key'],
             (string)($satz['kopf']['SenderAddress'] ?? '?'),
             strlen($satz['text']),
-            $satz['anhang'] === null ? 'ohne Anhang' : 'Anhang ' . $satz['anhang']['name']
+            ($satz['anhaenge'] ?? []) === []
+                ? 'ohne Anhang'
+                : count($satz['anhaenge']) . ' Anhang/Anhaenge: ' . implode(', ', array_map(
+                    static fn(array $a): string => (string)($a['name'] ?? '?'),
+                    (array)$satz['anhaenge']
+                ))
         ), 0);
         $antwort(200, 'accepted');
     }
@@ -1202,7 +1241,7 @@ trait MailScan
             'key'    => $key,
             'kopf'   => $kopf,
             'text'   => $text,
-            'anhang' => $this->MailHookPickAttachment($daten),
+            'anhaenge' => $this->MailHookPickAttachments($daten),
             'userId' => '',
         ];
     }
@@ -1218,10 +1257,11 @@ trait MailScan
      * @param array<string, mixed> $daten
      * @return array{kind: string, name: string, url: string}|null
      */
-    private function MailHookPickAttachment(array $daten): ?array
+    /** @return list<array{kind: string, name: string, url?: string, base64?: string}> */
+    private function MailHookPickAttachments(array $daten): array
     {
         if ((bool)$this->MailProp('MailReadAttachments', true) !== true) {
-            return null;
+            return [];
         }
         // Zwei Wege, je nach Mailgun-Route:
         //  - „forward" liefert die Datei mit; sie liegt dann in $_FILES und muss
@@ -1233,12 +1273,14 @@ trait MailScan
         if ($_FILES !== []) {
             return $this->MailHookPickUploaded();
         }
+        // Zweiter Weg: nur Kopfdaten und Abrufadressen (siehe oben).
+
         $liste = $daten['attachments'] ?? null;
         if (is_string($liste)) {
             $liste = json_decode($liste, true);   // Mailgun schickt das Feld als JSON-Text
         }
         if (!is_array($liste) || $liste === []) {
-            return null;
+            return [];
         }
         $teile = [];
         $urls  = [];
@@ -1265,29 +1307,29 @@ trait MailScan
             ];
             $urls[(string)($i + 1)] = trim((string)($a['url'] ?? ''));
         }
-        $wahl = $this->MailPickAttachment($teile);
-        if ($wahl === null) {
-            return null;
+        $raus = [];
+        foreach ($this->MailRankAttachments($teile) as $wahl) {
+            $url = $urls[$wahl['part']] ?? '';
+            if ($url === '') {
+                $this->SendDebug('MailHook', 'Anhang ohne Abrufadresse — wird uebergangen', 0);
+                continue;
+            }
+            $raus[] = ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'url' => $url];
         }
-        $url = $urls[$wahl['part']] ?? '';
-        if ($url === '') {
-            $this->SendDebug('MailHook', 'Anhang ohne Abrufadresse — wird uebergangen', 0);
-            return null;
-        }
-        return ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'url' => $url];
+        return $raus;
     }
 
     /**
-     * Den brauchbarsten der mitgelieferten Anhaenge waehlen und einlesen.
+     * Die mitgelieferten Anhaenge auswaehlen und einlesen.
      *
-     * Die Auswahl trifft dasselbe MailPickAttachment wie beim Postfach-Weg, damit
-     * Signaturlogos und zu kleine Bilder auch hier fallen. Gelesen wird nur der
-     * Gewinner — und zwar gleich hier, weil Symcons Ablage der hochgeladenen Datei
-     * nach dieser Anfrage verschwindet.
+     * Die Auswahl trifft dasselbe MailRankAttachments wie beim Postfach-Weg, damit
+     * Signaturlogos und zu kleine Bilder auch hier fallen. Gelesen wird gleich
+     * hier, weil Symcons Ablage der hochgeladenen Dateien nach dieser Anfrage
+     * verschwindet — ein spaeteres Nachholen gibt es auf diesem Weg nicht.
      *
-     * @return array{kind: string, name: string, base64: string}|null
+     * @return list<array{kind: string, name: string, base64: string}>
      */
-    private function MailHookPickUploaded(): ?array
+    private function MailHookPickUploaded(): array
     {
         $teile = [];
         $pfade = [];
@@ -1317,35 +1359,41 @@ trait MailScan
             $pfade[(string)$nr] = (string)($f['tmp_name'] ?? '');
         }
         if ($teile === []) {
-            return null;
+            return [];
         }
-        $wahl = $this->MailPickAttachment($teile);
-        if ($wahl === null) {
-            return null;
+        $raus  = [];
+        $summe = 0;
+        foreach ($this->MailRankAttachments($teile) as $wahl) {
+            $pfad = $pfade[$wahl['part']] ?? '';
+            if ($pfad === '' || !is_file($pfad)) {
+                $this->SendDebug('MailHook', 'Anhang liegt nicht mehr vor', 0);
+                continue;
+            }
+            $roh = (string)@file_get_contents($pfad);
+            if ($roh === '') {
+                continue;
+            }
+            // Der Absender bestimmt den gemeldeten Typ — die Bytes entscheiden.
+            $istPdf  = str_starts_with($roh, '%PDF-');
+            $istBild = str_starts_with($roh, "\xFF\xD8\xFF") || str_starts_with($roh, "\x89PNG\r\n\x1a\n");
+            if (($wahl['kind'] === 'pdf' && !$istPdf) || ($wahl['kind'] === 'image' && !$istBild)) {
+                $this->SendDebug('MailHook', 'Anhang ' . $wahl['name'] . ' passt nicht zum gemeldeten Typ', 0);
+                continue;
+            }
+            $base64 = base64_encode($roh);
+            unset($roh);
+            if ($wahl['kind'] === 'image' && !$this->MailImageUsable($base64, $wahl['name'])) {
+                continue;
+            }
+            if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+                $this->SendDebug('MailHook', 'Anhang ' . $wahl['name'] . ' uebersprungen: Gesamtdeckel erreicht', 0);
+                continue;
+            }
+            $summe += strlen($base64);
+            $this->SendDebug('MailHook', sprintf('Anhang %s uebernommen (%d kB base64)', $wahl['name'], (int)round(strlen($base64) / 1024)), 0);
+            $raus[] = ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'base64' => $base64];
         }
-        $pfad = $pfade[$wahl['part']] ?? '';
-        if ($pfad === '' || !is_file($pfad)) {
-            $this->SendDebug('MailHook', 'Anhang liegt nicht mehr vor', 0);
-            return null;
-        }
-        $roh = (string)@file_get_contents($pfad);
-        if ($roh === '') {
-            return null;
-        }
-        // Der Absender bestimmt den gemeldeten Typ — die Bytes entscheiden.
-        $istPdf  = str_starts_with($roh, '%PDF-');
-        $istBild = str_starts_with($roh, "\xFF\xD8\xFF") || str_starts_with($roh, "\x89PNG\r\n\x1a\n");
-        if (($wahl['kind'] === 'pdf' && !$istPdf) || ($wahl['kind'] === 'image' && !$istBild)) {
-            $this->SendDebug('MailHook', 'Anhang ' . $wahl['name'] . ' passt nicht zum gemeldeten Typ', 0);
-            return null;
-        }
-        $base64 = base64_encode($roh);
-        unset($roh);
-        if ($wahl['kind'] === 'image' && !$this->MailImageUsable($base64, $wahl['name'])) {
-            return null;
-        }
-        $this->SendDebug('MailHook', sprintf('Anhang %s uebernommen (%d kB base64)', $wahl['name'], (int)round(strlen($base64) / 1024)), 0);
-        return ['kind' => $wahl['kind'], 'name' => $wahl['name'], 'base64' => $base64];
+        return $raus;
     }
 
     // ─────────────────────────── Warteschlange ───────────────────────────
@@ -1382,6 +1430,28 @@ trait MailScan
     }
 
     /**
+     * Die Nebendateien eines Warteschlangen-Satzes wegraeumen.
+     *
+     * Seit eine Mail mehrere Anhaenge mitbringt, heissen sie „…​.att0", „…​.att1"
+     * usw.; „.att" ohne Nummer gibt es noch aus der Zeit davor, in einer
+     * Warteschlange, die einen Modul-Wechsel ueberlebt hat. Deshalb beides.
+     *
+     * Bewusst KEIN glob(): der Dateiname traegt den Mail-Schluessel, und der darf
+     * Zeichen enthalten, die glob als Muster liest („[", „*", „?"). Ein Vergleich
+     * ueber den Namensanfang kann das nicht passieren.
+     */
+    private function MailHookDropSideFiles(string $datei): void
+    {
+        $dir    = dirname($datei) . '/';
+        $anfang = basename(substr($datei, 0, -5)) . '.att';
+        foreach (@scandir($dir) ?: [] as $eintrag) {
+            if ($eintrag !== '.' && $eintrag !== '..' && str_starts_with($eintrag, $anfang)) {
+                @unlink($dir . $eintrag);
+            }
+        }
+    }
+
+    /**
      * Einen angenommenen Satz ablegen. Der Dateiname traegt die Zeit (Reihenfolge)
      * und den Schluessel (Doppelerkennung).
      *
@@ -1398,18 +1468,22 @@ trait MailScan
             return false;
         }
         $datei = $dir . sprintf('%d_%s.json', time(), $satz['key']);
-        // Liegt der Anhang schon vor (Weg „forward"), wandert er in eine eigene
-        // Datei: im JSON zusammen mit dem Text laege er beim Kodieren doppelt im
-        // Speicher, und der Timer soll ihn getrennt lesen koennen.
-        if (isset($satz['anhang']['base64'])) {
-            $attDatei = substr($datei, 0, -5) . '.att';
-            if (@file_put_contents($attDatei, $satz['anhang']['base64'], LOCK_EX) === false) {
+        // Liegen die Anhaenge schon vor (Weg „forward"), wandert jeder in eine
+        // eigene Datei: im JSON zusammen mit dem Text laegen sie beim Kodieren
+        // doppelt im Speicher, und der Timer soll sie getrennt lesen koennen.
+        // Je Anhang eine Nummer im Namen — „.att" allein reichte nur fuer einen.
+        foreach ((array)($satz['anhaenge'] ?? []) as $i => $a) {
+            if (!is_array($a) || !isset($a['base64'])) {
+                continue;
+            }
+            $attDatei = substr($datei, 0, -5) . '.att' . $i;
+            if (@file_put_contents($attDatei, $a['base64'], LOCK_EX) === false) {
                 $this->LogMessage('SymDo: Anhang konnte nicht in die Warteschlange geschrieben werden', KL_ERROR);
                 return false;
             }
             @chmod($attDatei, 0600);
-            $satz['anhang']['datei'] = basename($attDatei);
-            unset($satz['anhang']['base64']);
+            $satz['anhaenge'][$i]['datei'] = basename($attDatei);
+            unset($satz['anhaenge'][$i]['base64']);
         }
         $json = json_encode($satz, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($json) || @file_put_contents($datei, $json, LOCK_EX) === false) {
@@ -1438,7 +1512,7 @@ trait MailScan
         $n = 0;
         foreach (glob($dir . '*.json') ?: [] as $datei) {
             @unlink($datei);
-            @unlink(substr($datei, 0, -5) . '.att');
+            $this->MailHookDropSideFiles($datei);
             $n++;
         }
         return $n;
@@ -1457,7 +1531,7 @@ trait MailScan
         foreach ($treffer as $datei) {
             if ((int)@filemtime($datei) < $grenze) {
                 @unlink($datei);
-                @unlink(substr($datei, 0, -5) . '.att');
+                $this->MailHookDropSideFiles($datei);
                 continue;
             }
             $raus[] = $datei;
@@ -1493,10 +1567,20 @@ trait MailScan
             return false;
         }
 
-        // Anhang jetzt erst holen — im Webhook waere die Zeit dafuer nicht gewesen.
-        $anhang = null;
-        $besch = is_array($satz['anhang'] ?? null) ? $satz['anhang'] : null;
-        if ($besch !== null) {
+        // Anhaenge jetzt erst holen — im Webhook waere die Zeit dafuer nicht gewesen.
+        //
+        // „anhaenge" ist die Liste; „anhang" liest sich noch aus Saetzen, die vor
+        // der Umstellung in die Warteschlange gelegt wurden. Ein Modul-Wechsel darf
+        // keine wartende Mail verschlucken.
+        $beschreibungen = is_array($satz['anhaenge'] ?? null) ? $satz['anhaenge'] : [];
+        if ($beschreibungen === [] && is_array($satz['anhang'] ?? null)) {
+            $beschreibungen = [$satz['anhang']];
+        }
+        $anhaenge = [];
+        foreach ($beschreibungen as $besch) {
+            if (!is_array($besch)) {
+                continue;
+            }
             $base64 = null;
             if (($besch['datei'] ?? '') !== '') {
                 // Weg „forward": liegt schon neben der Warteschlange.
@@ -1508,7 +1592,7 @@ trait MailScan
                 $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
             }
             if ($base64 !== null) {
-                $anhang = ['kind' => (string)$besch['kind'], 'base64' => $base64, 'name' => (string)$besch['name']];
+                $anhaenge[] = ['kind' => (string)$besch['kind'], 'base64' => $base64, 'name' => (string)$besch['name']];
             }
         }
 
@@ -1516,13 +1600,13 @@ trait MailScan
             'hook:' . $key,
             (array)$satz['kopf'],
             (string)$satz['text'],
-            $anhang,
+            $anhaenge,
             (string)($satz['userId'] ?? ''),
             'Webhook'
         );
         if ($fertig) {
             @unlink($datei);
-            @unlink(substr($datei, 0, -5) . '.att');
+            $this->MailHookDropSideFiles($datei);
             $this->MailRemember(self::MAIL_HOOK_KEY, $key);
             return true;
         }
@@ -1530,7 +1614,7 @@ trait MailScan
         $versuche = $this->MailCountFailure(self::MAIL_HOOK_KEY, $key);
         if ($versuche >= self::MAIL_FAIL_MAX) {
             @unlink($datei);
-            @unlink(substr($datei, 0, -5) . '.att');
+            $this->MailHookDropSideFiles($datei);
             $this->MailRemember(self::MAIL_HOOK_KEY, $key);
             $this->LogMessage(sprintf(
                 'SymDo: E-Mail „%s" aus dem Webhook nach %d fehlgeschlagenen Analysen uebersprungen',
