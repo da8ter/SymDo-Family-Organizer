@@ -1152,17 +1152,21 @@ html[data-symdo-theme="dark"] .member-bar {
   text-align: center;
   flex: 0 0 auto;
 }
-/* Art-Symbol der Zeile: schmale Spalte links, oben ausgerichtet, damit es bei
-   zweizeiligem Inhalt neben dem TITEL steht und nicht mittig dazwischen. */
+/* Art der Zeile: eigene Kopfzeile UEBER dem Titel, Symbol und Wort nebeneinander.
+   Klein und gedeckt — sie ordnet ein, sie ist nicht die Aussage; die steht im
+   Titel darunter. */
 .mail-row-kind {
-  flex: 0 0 auto;
-  width: 18px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 1px;
   color: var(--muted);
-  font-size: 14px;
-  align-self: flex-start;
-  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
+.mail-row-kind i { font-size: 12px; }
 .mail-who { flex: 1 1 auto; min-width: 0; }
 .mail-subject {
   font-size: 13px; font-weight: 700;
@@ -6555,9 +6559,9 @@ function renderMailAi() {
         event: ['fa-calendar',    translate('Appointment')],
         note:  ['fa-note-sticky', translate('Note')]
       }[sorte];
-      // Die Art steht als Symbol links (siehe artZeichen), nicht als Chip: ein
-      // weiterer Chip haette den knappen Platz in .mail-chips mit den Angaben
-      // geteilt, die man wirklich lesen muss (Datum, Frist, Reihe).
+      // Die Art steht als eigene Zeile UEBER dem Titel (Symbol plus Wort), nicht
+      // als Chip: ein weiterer Chip haette den knappen Platz in .mail-chips mit
+      // den Angaben geteilt, die man wirklich lesen muss (Datum, Frist, Reihe).
       // Verdichtung wie bei den Aufgaben: Wiederholung und „ganztaegig" stecken
       // zusaetzlich in EINEM kombinierten Chip (.meta-combined). Stufe 1 blendet die
       // Einzel-Chips (.meta-split) aus und den kombinierten ein — dieselben Klassen,
@@ -6592,8 +6596,14 @@ function renderMailAi() {
         `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
         `<div class="swipe-under-edit"><i class="fa-light fa-plus"></i></div>` +
         `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
-        `<i class="fa-light ${artZeichen[0]} mail-row-kind" title="${escapeHtml(artZeichen[1])}" aria-label="${escapeHtml(artZeichen[1])}"></i>` +
         `<div class="mail-row-body">` +
+          // Art ueber dem Titel, mit Wort dahinter: das Symbol allein war zu
+          // knapp — ein Kalender neben einer Haken-Liste sagt nichts, wenn man
+          // die Zuordnung nicht kennt.
+          `<div class="mail-row-kind">` +
+            `<i class="fa-light ${artZeichen[0]}"></i>` +
+            `<span>${escapeHtml(artZeichen[1])}</span>` +
+          `</div>` +
           `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
           // Bei einer Notiz steht die Zusammenfassung in `text`, nicht in `info` —
           // ohne diesen Vorzug zeigte die Zeile nur den Titel, und genau die
