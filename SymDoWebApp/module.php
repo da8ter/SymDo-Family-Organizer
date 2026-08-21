@@ -66,6 +66,9 @@ class SymDoWebApp extends IPSModuleStrict
         // Notizen: liegen im Gateway, brauchen also eines. Vorgabe an — ohne Gateway
         // blendet die Oberflaeche den Bereich selbst aus.
         $this->RegisterPropertyBoolean('ShowNotes', true);
+        // KI-Eingangskorb: zeigt, was die Analyse aus Mails und Dateien gelesen hat.
+        // Liegt im Gateway, deshalb blendet die Oberflaeche ihn ohne eines selbst aus.
+        $this->RegisterPropertyBoolean('ShowKi', true);
 
         // Bedienelemente der Web-App. Sie gelten APPWEIT für alle Listen: die
         // gleichnamigen Schalter der ToDo- und Einkaufslisten-Instanzen werden hier
@@ -696,7 +699,7 @@ class SymDoWebApp extends IPSModuleStrict
      * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
      * überhaupt bedienen lässt.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool}
+     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool,ki:bool}
      */
     private function GetVisibleTabs(): array
     {
@@ -710,6 +713,7 @@ class SymDoWebApp extends IPSModuleStrict
             'todos'     => $read('ShowTodos'),
             'calendar'  => $read('ShowCalendar'),
             'notes'     => $read('ShowNotes'),
+            'ki'        => $read('ShowKi'),
         ];
     }
 

@@ -366,7 +366,10 @@
             "%1 new notes found": "%1 neue Notizen gefunden",
             "The list was saved — the file was too large to keep.": "Die Liste wurde gespeichert — die Datei war zu groß, um sie zu behalten.",
             "The list was saved — the source could not be kept.": "Die Liste wurde gespeichert — die Quelle ließ sich nicht behalten.",
-            "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen."
+            "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen.",
+            "AI": "KI",
+            "Detected by AI": "Von der KI erkannt",
+            "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden."
         }
     }
 }

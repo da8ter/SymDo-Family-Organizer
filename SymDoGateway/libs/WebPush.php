@@ -79,7 +79,7 @@ trait WebPush
      * Erlaubte Zielbereiche fuer das Antippen. Weissliste, obwohl die Nutzlast aus
      * dem eigenen Haus kommt — der Dienstweg fuehrt durch fremde Server.
      */
-    private const PUSH_TABS = ['dashboard', 'todos', 'shopping', 'calendar'];
+    private const PUSH_TABS = ['dashboard', 'ki', 'todos', 'shopping', 'calendar', 'notes'];
 
     /** Kappung wie bei den Visu-Nachrichten (ToDoList/module.php): 32 und 256. */
     private const PUSH_TITLE_MAX = 32;

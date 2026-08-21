@@ -1635,7 +1635,9 @@ trait MailScan
             // Gehoert die Mail einem Mitglied, geht die Nachricht auch nur an dessen
             // Geraete — die Haushaltsadresse dagegen betrifft alle.
             $userId,
-            'todos'
+            // Ziel ist der KI-Bereich: dort liegen die Vorschlaege, seit sie nicht mehr
+            // ueber der Aufgabenliste und der Agenda stehen.
+            'ki'
         );
     }
 

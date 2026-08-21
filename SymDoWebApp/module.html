@@ -1223,7 +1223,16 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Titel und Zusatz genau wie in einer Aufgabenzeile (.todo-title/.todo-info) —
    ein Vorschlag soll lesbar sein wie das, was aus ihm wird. */
 .mail-row-title { font-size: 15px; font-weight: 600; }
-.mail-row-info { font-size: 12.5px; color: var(--muted); }
+.mail-row-info {
+  font-size: 12.5px;
+  color: var(--muted);
+  /* Eine Notiz-Zusammenfassung darf laenger sein als ein Aufgaben-Zusatz — hier
+     zwei Zeilen, danach abgeschnitten. Der ganze Text steht im Editor. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .mail-row .row-btn { font-size: 17px; padding: 4px 5px; }
 /* Kalender: Agenda nach Tagen. Bewusst keine Wochen-Gitter — auf einem Telefon ist
    eine Liste lesbar, ein Raster nicht. Die Farbe kommt je Termin aus OpenCalendar. */
@@ -2491,6 +2500,19 @@ html[data-symdo-theme="dark"] .member-bar {
 <div class="app">
   <main style="display:flex; flex-direction:column; flex:1; min-height:0;">
 
+    <!-- Was die KI aus Mails und Dateien gelesen hat, an EINER Stelle: Aufgaben,
+         Termine und Notizen. Vorher lagen die drei Baender in den Bereichen, in die
+         sie gehoerten — das versteckte sie hinter drei Tabs und drei Abzeichen. -->
+    <section id="screen-ki" class="screen">
+      <div class="content">
+        <div class="screen-head"><h2 id="kiTitle"></h2></div>
+        <div id="kiTasks" class="mail-ai" style="display:none;"></div>
+        <div id="kiEvents" class="mail-ai" style="display:none;"></div>
+        <div id="kiNotes" class="mail-ai" style="display:none;"></div>
+        <div id="kiEmpty" class="empty-state" style="display:none;"><i class="fa-light fa-sparkles"></i><span id="kiEmptyText"></span></div>
+      </div>
+    </section>
+
     <section id="screen-dashboard" class="screen active">
       <div class="content" id="dashboardContent"></div>
     </section>
@@ -2551,7 +2573,6 @@ html[data-symdo-theme="dark"] .member-bar {
           <select id="calRange" class="list-switcher"></select>
         </div>
         <div id="calStatus" class="cal-status" style="display:none;"></div>
-        <div id="calAiArea" class="mail-ai" style="display:none;"></div>
         <div id="calArea"></div>
       </div>
     </section>
@@ -2569,7 +2590,6 @@ html[data-symdo-theme="dark"] .member-bar {
           <div class="stat-box stat-overdue"><div class="stat-label" id="statOverdueLabel"></div><div class="stat-value" id="statOverdueValue">0</div></div>
           <div class="stat-box stat-today"><div class="stat-label" id="statTodayLabel"></div><div class="stat-value" id="statTodayValue">0</div></div>
         </div>
-        <div id="mailAiArea" class="mail-ai" style="display:none;"></div>
         <div id="todoListArea"></div>
         <div class="inputbar" id="todoInputbar">
           <input id="todoInput" type="text" autocomplete="off" />
@@ -2583,11 +2603,6 @@ html[data-symdo-theme="dark"] .member-bar {
 
     <section id="screen-notes" class="screen">
       <div class="content">
-        <!-- Dritter Behaelter der Mail-Vorschlaege: Notiz-Funde stehen ueber den
-             Ordnern, wie die Aufgaben ueber der Aufgabenliste. Geschwister der
-             Spalten, nicht darin — renderRows() raeumt in seinem Container jeden
-             fremden Knoten weg. -->
-        <div id="notesAiArea" class="mail-ai" style="display:none;"></div>
         <!-- Zwei Spalten wie bei den Favoriten: links die Ordner, rechts ihr Inhalt.
              Schmal ist immer nur eine sichtbar, ab 1100px beide. -->
         <div id="notesContent">
@@ -2603,10 +2618,11 @@ html[data-symdo-theme="dark"] .member-bar {
 
   <nav class="tabbar">
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
+    <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
-    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span><span id="tabTodoBadge" class="tab-badge" style="display:none;"></span></button>
-    <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span><span id="tabCalendarBadge" class="tab-badge" style="display:none;"></span></button>
-    <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span><span id="tabNotesBadge" class="tab-badge" style="display:none;"></span></button>
+    <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
+    <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
+    <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
   </nav>
 </div>
 
@@ -3119,7 +3135,9 @@ function normalizeTabs(raw) {
     // Notizen ebenso: sie liegen im Gateway. Die beiden Listen-Kacheln nennen den
     // Schluessel nicht, und mit dieser Regel bleibt der Bereich dort von selbst weg —
     // ohne dass das Uebernahme-Skript etwas davon wissen muss.
-    notes:     t.notes      === true
+    notes:     t.notes      === true,
+    // KI: gleiche Regel, gleicher Grund — die Vorschlaege liegen im Gateway.
+    ki:        t.ki         === true
   };
 }
 /** @return {string[]} sichtbare Tabs in der Reihenfolge der Leiste. */
@@ -3127,6 +3145,10 @@ function visibleTabs() {
   const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
   const out = [];
   if (t.dashboard) out.push('dashboard');
+  // Direkt hinter der Uebersicht: der KI-Bereich ist ein Eingangskorb. Er bleibt
+  // sichtbar, auch wenn nichts vorliegt — ein Tab, der beim Uebernehmen des letzten
+  // Vorschlags unter den Fingern verschwindet, wuerfe den Nutzer aus dem Bereich.
+  if (t.ki && mailAiAvailable()) out.push('ki');
   // Die Reihenfolge hier ist zugleich die des Rückfalls, wenn der gespeicherte Tab
   // abgeschaltet wurde (vis[0] in setTab).
   // Favoriten sind kein Bereich mehr: sie gehören zur Einkaufsliste und gehen als
@@ -3282,7 +3304,7 @@ const ls = {
 let activeTab = (function () {
   try {
     const wunsch = new URLSearchParams(window.location.search).get('tab');
-    if (wunsch && ['dashboard', 'shopping', 'todos', 'calendar', 'notes'].includes(wunsch)) {
+    if (wunsch && ['dashboard', 'ki', 'shopping', 'todos', 'calendar', 'notes'].includes(wunsch)) {
       return wunsch;
     }
   } catch (e) {}
@@ -3651,7 +3673,7 @@ function invalidateRenderCache() {
   // beiden Spalten, dort liegen also die _lastHtml-Marken. Der Elternknoten hat nie
   // eine — ihn zu leeren liess eine abgelehnte Favoriten-Aktion ungezeichnet, die
   // weggewischte Zeile blieb bei translateX(-110%) stehen.
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'mailAiArea', 'calAiArea', 'notesAiArea'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'kiTasks', 'kiEvents', 'kiNotes'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
@@ -3749,7 +3771,7 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'shopping', 'todos', 'calendar', 'notes'];
+const TABS = ['dashboard', 'ki', 'shopping', 'todos', 'calendar', 'notes'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -4543,6 +4565,7 @@ function renderAll() {
     renderCalendar();
   }
   if (activeTab === 'notes') renderNotizen();
+  if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
 }
@@ -6026,9 +6049,11 @@ function renderCalMembers() {
 // erfaehrt danach nur, dass der Eintrag erledigt ist.
 let mailProposals = [];
 let mailLoading = false;
-// Aufgeklappt oder nicht, je Sorte. Wie cartExpanded nur im Speicher: jeder
-// Neustart beginnt eingeklappt, damit die Vorschlaege die Liste nicht ueberdecken.
-const mailOpen = { task: false, event: false, note: false };
+// Aufgeklappt oder nicht, je Sorte. Nur im Speicher, wie cartExpanded.
+// Aufgeklappt als Vorgabe: Die Baender lagen frueher UEBER einer Liste und durften
+// sie nicht verdecken — im KI-Bereich sind sie der Inhalt, und drei zugeklappte
+// Zeilen waeren eine leere Seite mit drei Knoepfen.
+const mailOpen = { task: true, event: true, note: true };
 
 /**
  * Sorte eines Fundstuecks.
@@ -6043,13 +6068,25 @@ function mailArt(it) {
   if (it && it.kind === 'note') return 'note';
   return 'task';
 }
-/** Wo das Vorschlagsband einer Sorte haengt. */
-const MAIL_BEREICHE = { task: 'mailAiArea', event: 'calAiArea', note: 'notesAiArea' };
-/** Alle drei Baender neu zeichnen. */
+/** Wo das Vorschlagsband einer Sorte haengt — alle drei im KI-Bereich. */
+const MAIL_BEREICHE = { task: 'kiTasks', event: 'kiEvents', note: 'kiNotes' };
+/**
+ * Alle drei Baender neu zeichnen und den Leerzustand nachziehen.
+ *
+ * Der Leerzustand gehoert hierher und nicht in renderMailAi: der einzelne Renderer
+ * kennt nur seine Sorte und wuesste nicht, ob die beiden anderen auch leer sind.
+ */
 function renderMailAlle() {
   renderMailAi('task');
   renderMailAi('event');
   renderMailAi('note');
+  const leer = document.getElementById('kiEmpty');
+  if (!leer) return;
+  const etwas = ['kiTasks', 'kiEvents', 'kiNotes'].some(id => {
+    const el = document.getElementById(id);
+    return el && el.style.display !== 'none';
+  });
+  leer.style.display = etwas ? 'none' : '';
 }
 
 /** Nur mit Gateway: die Vorschlaege entstehen und liegen dort. */
@@ -6124,9 +6161,10 @@ function setMailBadges() {
     el.textContent = String(n);
     el.style.display = n > 0 ? '' : 'none';
   };
-  setzen('tabTodoBadge', zahl.task);
-  setzen('tabCalendarBadge', zahl.event);
-  setzen('tabNotesBadge', zahl.note);
+  // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
+  // Vorher zaehlte jede Sorte an ihrem eigenen Tab — das verteilte eine Nachricht
+  // auf drei Stellen, von denen keine die ganze Zahl nannte.
+  setzen('tabKiBadge', zahl.task + zahl.event + zahl.note);
 }
 
 /**
@@ -6247,7 +6285,10 @@ function renderMailAi(sorte) {
         `<div class="mail-row" data-id="${escapeHtml(String(p.id))}" data-i="${escapeHtml(String(it.i))}">` +
         `<div class="mail-row-body">` +
           `<div class="mail-row-title">${escapeHtml(String(it.title || ''))}</div>` +
-          (it.info ? `<div class="mail-row-info">${escapeHtml(String(it.info))}</div>` : '') +
+          // Bei einer Notiz steht die Zusammenfassung in `text`, nicht in `info` —
+          // ohne diesen Vorzug zeigte die Zeile nur den Titel, und genau die
+          // Zusammenfassung ist der Grund, warum es eine Notiz wird.
+          ((it.text || it.info) ? `<div class="mail-row-info">${escapeHtml(String(it.text || it.info))}</div>` : '') +
         `</div>` +
         // Aufbau wie in der Aufgabenzeile: erst die Merkmale, dann wer zustaendig
         // waere, dann die Knoepfe — alles in EINER Spalte, die layoutRowMeta() bei
@@ -6682,10 +6723,8 @@ function renderCalendar() {
     status.textContent = meldungen.join(' · ');
   }
 
-  // Erkannte Termine stehen NICHT in der Agenda, sondern als Vorschlagsband
-  // darueber — wie die erkannten Aufgaben ueber der Aufgabenliste. Erst nach dem
-  // Uebernehmen sind sie echte Kalendereintraege und erscheinen unten.
-  renderMailAi('event');
+  // Erkannte Termine stehen NICHT in der Agenda, sondern im KI-Bereich. Erst nach
+  // dem Uebernehmen sind sie echte Kalendereintraege und erscheinen hier unten.
 
   // Avatar-Pille zeichnen, bevor gefiltert wird: der Filter kommt aus ihr.
   // Gefiltert wird nur mit sichtbarer Leiste — die (bereichsuebergreifende)
@@ -7414,8 +7453,9 @@ function ensureTodoMetaLateObserver() {
  */
 const META_BEREICHE = [
   { area: 'todoListArea', card: '.todo-card', content: '.todo-content', side: '.todo-side', meta: '.todo-meta' },
-  { area: 'mailAiArea',   card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
-  { area: 'calAiArea',    card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'kiTasks',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'kiEvents',     card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
+  { area: 'kiNotes',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
   { area: 'calArea',      card: '.cal-card',  content: '.cal-event',    side: '.cal-side',  meta: '.cal-chips'  },
 ];
 
@@ -9565,6 +9605,9 @@ function initCaptions() {
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.querySelector('#tab-notes span').textContent = translate('Notes');
+  document.querySelector('#tab-ki span').textContent = translate('AI');
+  document.getElementById('kiTitle').textContent = translate('Detected by AI');
+  document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
   document.getElementById('todoInput').placeholder = translate('New task …');
   set('lblEditName', translate('Name'));

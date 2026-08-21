@@ -18,12 +18,12 @@
 // Bei jeder Aenderung hochzaehlen: Die Datei wird mit `Cache-Control: no-cache`
 // ausgeliefert, der Browser prueft sie also gegen — aber nur, wenn sich die Bytes
 // unterscheiden, gilt sie als neue Fassung.
-const SYMDO_SW_VERSION = 1;
+const SYMDO_SW_VERSION = 2;
 
 const SYMDO_SEITE = '/hook/lists/webapp';
 // Weissliste der Zielbereiche. Die Nutzlast kommt aus dem eigenen Haus, reist aber
 // durch fremde Server — was hier nicht drinsteht, oeffnet einfach die Uebersicht.
-const SYMDO_TABS = ['dashboard', 'todos', 'shopping', 'calendar'];
+const SYMDO_TABS = ['dashboard', 'ki', 'todos', 'shopping', 'calendar', 'notes'];
 
 self.addEventListener('install', (event) => {
   // Sofort uebernehmen: Es gibt nichts zu warmzulaufen, und eine halbe Fassung
