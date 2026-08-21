@@ -1630,6 +1630,24 @@ trait AiExtract
             . 'Sicht formuliert (kurzer, prägnanter deutscher Titel, z.B. „Daten bei der Commerzbank '
             . 'bestätigen“). Drohende Konsequenzen (Sperrung, Mahnung, Frist) → priority "high". Nutze '
             . '"info" für den wichtigsten Kontext (Absender, Referenz, Konsequenz, geforderter Weg). '
+            // Gemeldet am 21.08.2026: bei „Mitbringsel fuer den Opti-Kurs vorbereiten"
+            // fehlten die meisten Gegenstaende. Kein Wunder — „wichtigster Kontext"
+            // liest sich als Auftrag zum Zusammenfassen, und eine Materialliste ist
+            // genau das Gegenteil: Wer sie zusammenfasst, macht sie unbrauchbar.
+            // Serverseitig wird "info" nirgends gekuerzt, die Luecke entstand also
+            // ausschliesslich hier im Prompt.
+            . 'AUFZAEHLUNGEN GEHOEREN VOLLSTAENDIG IN "info": Nennt das Dokument, was '
+            . 'MITZUBRINGEN, einzureichen, auszufuellen, vorzubereiten oder zu besorgen '
+            . 'ist (Mitbringsel, Materialliste, Ausruestung, Unterlagen, Checkliste, '
+            . 'Zutaten), dann uebernimm JEDEN EINZELNEN PUNKT wortgetreu — kein '
+            . 'Auslassen, kein Zusammenfassen, kein „usw.", „u. a.", „etc." oder '
+            . '„unter anderem". Eine gekuerzte Liste ist schlimmer als keine: der '
+            . 'Empfaenger merkt am Kurstag, dass die Haelfte fehlt. Schreibe die Punkte '
+            . 'als eigene Zeilen, getrennt durch \\n (niemals ein echter Umbruch im '
+            . 'JSON-String), mit Mengen- und Groessenangaben, wenn sie dastehen '
+            . '(„2 Passfotos", „Schwimmweste Groesse M"). Der wichtigste Kontext steht '
+            . 'davor, die Liste darunter. Bei „info" gibt es keine Laengengrenze — '
+            . 'Vollstaendigkeit geht hier vor Kuerze. '
             . 'WICHTIG für "due": Enthält das Dokument eine Frist, ein Fälligkeits- oder Zahlungsdatum, '
             . 'einen Termin oder ein Datum, bis zu dem der Empfänger etwas erledigen muss, trage es IMMER '
             . 'in "due" ein (Format YYYY-MM-DD). Rechne relative Angaben ausgehend von heute (' . $today . ') '
