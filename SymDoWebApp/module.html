@@ -1254,8 +1254,12 @@ html[data-symdo-theme="dark"] .member-bar {
    nicht gibt — deshalb hier direkt an der Zeile. */
 .cal-preview .cal-event { margin-bottom: 6px; }
 .cal-preview .cal-event:last-child { margin-bottom: 0; }
-.cal-preview .cal-day-head { margin: 10px 2px 6px; }
-.cal-preview .card-head + .cal-day-head { margin-top: 0; }
+#dashboardContent .cal-day-head { margin: 10px 2px 6px; }
+#dashboardContent .card-head + .cal-day-head { margin-top: 0; }
+/* Zwischen einer Zeile und der naechsten Ueberschrift etwas mehr Luft, damit die
+   Gruppen als Gruppen lesbar bleiben. */
+#dashboardContent .todo-card + .cal-day-head,
+#dashboardContent .cal-event + .cal-day-head { margin-top: 12px; }
 .cal-event {
   display: flex; align-items: stretch; gap: 9px;
   padding: 9px 10px;
@@ -5142,8 +5146,9 @@ function renderDashboard() {
     // 820 px ein gewoehnliches div, die Karten stapeln also wie bisher.
     html += '<div class="dash-tasks">';
 
-    // Heute-Karte
-    html += `<div class="card"><div class="card-head"><h3>${translate('Today')}</h3>` +
+    // Aufgaben-Karte. Die Ueberschrift nennt die Sache, die Tagesangabe steht ueber
+    // den Zeilen — wie in der Terminvorschau.
+    html += `<div class="card"><div class="card-head"><h3>${translate('Tasks')}</h3>` +
       `<button class="link" data-goto="todos">${translate('Show all')}</button></div>`;
     if (todayRows.length === 0) {
       const msg = (overdueCount + todayCount === 0)
@@ -5151,7 +5156,19 @@ function renderDashboard() {
         : translate('No matches for this filter.');
       html += `<div class="empty-row"><i class="fa-light fa-badge-check"></i>${escapeHtml(msg)}</div>`;
     } else {
-      for (const t of todayRows) html += taskRowHtml(t, multiTodo);
+      // Ueberfaellige stehen vor den heute faelligen (dueNow = overdue + today).
+      // „Heute" ueber einer ueberfaelligen Aufgabe waere falsch, deshalb zwei
+      // Ueberschriften statt einer — dieselbe Zeile wie ueber den Terminen.
+      let letzteGruppe = '';
+      todayRows.forEach((t, i) => {
+        const gruppe = i < overdue.length ? 'overdue' : 'today';
+        if (gruppe !== letzteGruppe) {
+          letzteGruppe = gruppe;
+          html += `<div class="cal-day-head${gruppe === 'today' ? ' is-today' : ''}">` +
+            `<span class="cal-weekday">${escapeHtml(translate(gruppe === 'today' ? 'Today' : 'Overdue'))}</span></div>`;
+        }
+        html += taskRowHtml(t, multiTodo);
+      });
       // Bisher schnitt die Karte stumm ab. Was nicht mehr hineinpasst, wird jetzt
       // genannt — wie in der Terminvorschau.
       const restAufgaben = dueNow.length - todayRows.length;
