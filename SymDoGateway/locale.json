@@ -265,7 +265,12 @@
             "1 note": "1 Notiz",
             "%d notes": "%d Notizen",
             "Keep the attachment when a note is suggested": "Anhang behalten, wenn eine Notiz vorgeschlagen wird",
-            "The file is then stored below \"Notizen\" as soon as the mail is analyzed — even if the suggestion is later discarded. Unused files are removed automatically.": "Die Datei wird dann schon bei der Analyse unter „Notizen\" abgelegt — auch wenn der Vorschlag später verworfen wird. Nicht mehr benutzte Dateien werden selbständig entfernt."
+            "The file is then stored below \"Notizen\" as soon as the mail is analyzed — even if the suggestion is later discarded. Unused files are removed automatically.": "Die Datei wird dann schon bei der Analyse unter „Notizen\" abgelegt — auch wenn der Vorschlag später verworfen wird. Nicht mehr benutzte Dateien werden selbständig entfernt.",
+            "This PDF is too large to be stored and reopened here.": "Dieses PDF ist zu groß, um hier gespeichert und wieder geöffnet zu werden.",
+            "This photo is too large to be stored and reopened here.": "Dieses Foto ist zu groß, um hier gespeichert und wieder geöffnet zu werden.",
+            "This PDF is too large to be reopened here. Open it from its original source.": "Dieses PDF ist zu groß, um hier geöffnet zu werden. Bitte aus der Originalquelle öffnen.",
+            "This photo is too large to be reopened here.": "Dieses Foto ist zu groß, um hier geöffnet zu werden.",
+            "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

@@ -3216,7 +3216,18 @@ function openMediaExternally(mediaId) {
 function openRecipePhoto(mediaId, triedExternally) {
   aiPost('/ai/media', { mediaId: mediaId }).then(res => {
     const j = res && res.json;
-    if (!(j && j.ok && j.dataUrl)) { showToast(translate('Could not load the image.')); return; }
+    if (!(j && j.ok && j.dataUrl)) {
+      // Der Grund gehoert genannt: „zu gross" schickt sonst auf die Suche nach einer
+      // kaputten Datei, obwohl die Datei in Ordnung ist und nur nicht durch die
+      // Ausgabe passt. In der Web-App ist sie ueber die Datei-Route erreichbar.
+      const code = (j && j.error && j.error.code) ? String(j.error.code) : '';
+      if (code === 'file_too_large' || code === 'too_large_for_tile') {
+        showToast(translate('Too large to show here — open it in the web app.'));
+      } else {
+        showToast(translate('Could not load the image.'));
+      }
+      return;
+    }
     const istPdf = /^data:application\/pdf/i.test(j.dataUrl);
     mediaTypeCache[String(mediaId)] = { state: 'ok', isPdf: istPdf };
     // Zweite Chance für den System-Viewer, falls der Typ beim Klick noch unbekannt
@@ -10702,6 +10713,15 @@ document.addEventListener('DOMContentLoaded', () => {
       aiPost('/ai/savephoto', payload).then(res => {
         const j = res && res.json;
         const mediaId = (j && j.ok && j.mediaId) ? j.mediaId : 0;
+        // Die Liste wird auch ohne Quelle gespeichert — aber NICHT stillschweigend.
+        // Vorher verschwand ein zu grosses Rezept-PDF ohne ein Wort, und „Rezept
+        // oeffnen" fehlte danach unerklaerlich.
+        if (!mediaId) {
+          const code = (j && j.error && j.error.code) ? String(j.error.code) : '';
+          setTimeout(() => showToast(code === 'file_too_large'
+            ? translate('The list was saved — the file was too large to keep.')
+            : translate('The list was saved — the source could not be kept.')), 2400);
+        }
         finish(mediaId ? { mediaId: String(mediaId) } : {});
       }).catch(() => finish({}));
     };

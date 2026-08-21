@@ -62,6 +62,21 @@ trait AiExtract
     private const AI_MAX_IMAGE_B64    = 12 * 1024 * 1024;
     // Obergrenze für gespeicherte Rezeptfotos/-dateien unter „Rezeptfotos".
     private const AI_MEDIA_MAX        = 200;
+    /**
+     * Groesste Rohgroesse, die sich noch ausliefern laesst.
+     *
+     * Symcons Hook-Ausgabe endet bei 1 MB, kumulativ ueber die ganze Antwort
+     * (gemessen, siehe Tts.php). Was darueber liegt, war bisher abgelegt und
+     * dauerhaft UNABRUFBAR: AiSaveMedia prueft nur die Anzahl, und
+     * HandleAiMediaFile echot ohne Groessenpruefung. Dieselbe Zahl benutzt
+     * HandleUserAvatar fuer denselben Zweck.
+     */
+    private const AI_MEDIA_MAX_BYTES  = 900000;
+    /** Groesste Base64-Nutzlast der data:-URL. Base64 blaeht um ein Drittel auf. */
+    private const AI_MEDIA_RELAY_B64  = 960000;
+    /** Laengste Kante eines abgelegten Bildes. Mehr kostet Platz ohne mehr zu zeigen. */
+    private const AI_MEDIA_EDGE       = 1600;
+    private const AI_MEDIA_QUALITY    = 82;
 
     // ────────────────────────────── ToDo (Foto → Aufgaben) ──────────────────────────────
 
@@ -325,6 +340,67 @@ trait AiExtract
         return $catId;
     }
 
+    /**
+     * Seitenverhaeltnis erhalten, laengste Kante begrenzen, als JPEG ausgeben.
+     *
+     * ScaleAvatar taugt hier NICHT — das schneidet quadratisch mittig zu; bei einem
+     * abfotografierten Rezept oder Dokument waeren Kopf und Fuss weg. Ohne GD gibt
+     * es null; der Aufrufer muss dann selbst entscheiden.
+     */
+    private function AiScaleImage(string $binaer, int $maxKante = self::AI_MEDIA_EDGE): ?string
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return null;
+        }
+        $bild = @imagecreatefromstring($binaer);
+        if ($bild === false) {
+            return null;
+        }
+        try {
+            $b = imagesx($bild);
+            $h = imagesy($bild);
+            $lang = max($b, $h);
+            if ($lang > $maxKante) {
+                $f = $maxKante / $lang;
+                $neu = imagescale($bild, max(1, (int)round($b * $f)), max(1, (int)round($h * $f)));
+                if ($neu !== false) {
+                    $bild = $neu;
+                }
+            }
+            ob_start();
+            imagejpeg($bild, null, self::AI_MEDIA_QUALITY);
+            $aus = (string)ob_get_clean();
+            return $aus !== '' ? $aus : null;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Ein Bild so weit verkleinern, dass sein Base64 durch eine JSON-Antwort passt.
+     *
+     * Noetig, weil die abgelegte Datei bewusst hoeher aufgeloest bleibt (die
+     * Datei-Route braucht kein Base64), die data:-URL aber um ein Drittel aufblaeht.
+     * Ein Foto soll auf JEDEM Weg ankommen — deshalb absteigende Kanten statt einer
+     * Absage. Die Reihe ist kurz und endet; bleibt es danach zu gross, ist es kein
+     * Bild, mit dem sich etwas anfangen laesst.
+     *
+     * @return string|null Rohdaten, die passen — oder null
+     */
+    private function AiFitImageForRelay(string $roh, int $maxB64): ?string
+    {
+        if (strlen(base64_encode($roh)) <= $maxB64) {
+            return $roh;
+        }
+        foreach ([1200, 900, 700, 500] as $kante) {
+            $klein = $this->AiScaleImage($roh, $kante);
+            if ($klein !== null && strlen(base64_encode($klein)) <= $maxB64) {
+                return $klein;
+            }
+        }
+        return null;
+    }
+
     /** Speichert Foto (JPEG) ODER PDF als Medienobjekt unter „Rezeptfotos". @return array ok+mediaId | ok:false+error */
     private function AiSaveMedia(string $base64, string $name, bool $isPdf): array
     {
@@ -340,6 +416,25 @@ trait AiExtract
         $magicOk = $isPdf ? str_starts_with($raw, '%PDF-') : str_starts_with($raw, "\xFF\xD8\xFF");
         if (!$magicOk) {
             return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unsupported file type.')]];
+        }
+        // Nur ablegen, was sich auch wieder abrufen laesst. Vorher landete ein 3-MB-PDF
+        // im Objektbaum und „Rezept oeffnen" brach danach fuer immer ab.
+        if ($isPdf) {
+            if (strlen($raw) > self::AI_MEDIA_MAX_BYTES) {
+                return ['ok' => false, 'error' => ['code' => 'file_too_large',
+                    'message' => $this->Translate('This PDF is too large to be stored and reopened here.')]];
+            }
+        } else {
+            $klein = $this->AiScaleImage($raw);
+            if ($klein !== null) {
+                $raw = $klein;
+                $base64 = base64_encode($raw);
+            } elseif (strlen($raw) > self::AI_MEDIA_MAX_BYTES) {
+                // Ohne GD nicht ungeprueft durchlassen: die Datei waere nie wieder
+                // abrufbar. Derselbe Riegel wie fuer PDF.
+                return ['ok' => false, 'error' => ['code' => 'file_too_large',
+                    'message' => $this->Translate('This photo is too large to be stored and reopened here.')]];
+            }
         }
         $cat = $this->AiRecipePhotoCategory();
         if ($cat <= 0) {
@@ -374,17 +469,35 @@ trait AiExtract
             return ['ok' => false, 'error' => ['code' => 'forbidden', 'message' => 'Not a recipe photo']];
         }
         $media   = @IPS_GetMedia($mediaId);
+        $isPdf   = is_array($media) && ((int)($media['MediaType'] ?? MEDIATYPE_IMAGE) === MEDIATYPE_DOCUMENT);
         $content = '';
         if ($withContent) {
             $content = @IPS_GetMediaContent($mediaId);
             if (!is_string($content) || $content === '') {
                 return ['ok' => false, 'error' => ['code' => 'empty', 'message' => 'Empty media']];
             }
+            // Bestand heilen: Vor der Groessenbegrenzung in AiSaveMedia konnten hier
+            // beliebig grosse Dateien liegen, und die Hook-Ausgabe bricht bei 1 MB ab.
+            // Ein Bild wird deshalb beim Abruf verkleinert; ein PDF laesst sich nicht
+            // verkleinern und bekommt eine ehrliche Absage statt einer abgeschnittenen
+            // Antwort, die als kaputte Datei ankommt.
+            $roh = base64_decode($content, true);
+            if (is_string($roh) && strlen($roh) > self::AI_MEDIA_MAX_BYTES) {
+                $klein = $isPdf ? null : $this->AiScaleImage($roh);
+                if ($klein !== null) {
+                    $content = base64_encode($klein);
+                } else {
+                    return ['ok' => false, 'error' => ['code' => 'file_too_large',
+                        'message' => $this->Translate($isPdf
+                            ? 'This PDF is too large to be reopened here. Open it from its original source.'
+                            : 'This photo is too large to be reopened here.')]];
+                }
+            }
         }
         return [
             'ok'      => true,
             'base64'  => $content,
-            'isPdf'   => is_array($media) && ((int)($media['MediaType'] ?? MEDIATYPE_IMAGE) === MEDIATYPE_DOCUMENT),
+            'isPdf'   => $isPdf,
             'updated' => is_array($media) ? (int)($media['MediaUpdated'] ?? 0) : 0,
         ];
     }
@@ -402,6 +515,23 @@ trait AiExtract
         }
         if ($metaOnly) {
             return ['ok' => true, 'isPdf' => $m['isPdf']];
+        }
+        // Die data:-URL reist als JSON — entweder durch den Hook (1-MB-Grenze) oder
+        // ueber den Kachel-Relay. Base64 blaeht um ein Drittel auf, die Grenze ist
+        // hier also eine andere als bei der Rohdatei. Ein Bild wird dafuer weiter
+        // verkleinert (es soll auf jedem Weg ankommen), ein PDF laesst sich nicht
+        // verkleinern und bekommt eine Absage — die Web-App holt es dann ueber die
+        // Datei-Route, die ohne Base64 auskommt.
+        if (strlen((string)$m['base64']) > self::AI_MEDIA_RELAY_B64) {
+            $roh   = base64_decode((string)$m['base64'], true);
+            $passt = ($m['isPdf'] || !is_string($roh))
+                ? null
+                : $this->AiFitImageForRelay($roh, self::AI_MEDIA_RELAY_B64);
+            if ($passt === null) {
+                return ['ok' => false, 'error' => ['code' => 'too_large_for_tile',
+                    'message' => $this->Translate('Too large to show here — open it in the web app.')]];
+            }
+            $m['base64'] = base64_encode($passt);
         }
         return [
             'ok'      => true,
@@ -421,7 +551,14 @@ trait AiExtract
         $m = $this->AiReadMedia($mediaId);
         if (($m['ok'] ?? false) !== true) {
             $err = is_array($m['error'] ?? null) ? $m['error'] : ['code' => 'not_found', 'message' => 'Media not found'];
-            $this->SendApiError((string)$err['code'], (string)$err['message'], $err['code'] === 'forbidden' ? 403 : 404);
+            // „Zu gross" ist kein „nicht gefunden": die Datei ist da, sie passt nur
+            // nicht durch die Ausgabe. 413 sagt das, 404 schickt auf die falsche Suche.
+            $status = match ((string)$err['code']) {
+                'forbidden'      => 403,
+                'file_too_large' => 413,
+                default          => 404,
+            };
+            $this->SendApiError((string)$err['code'], (string)$err['message'], $status);
             return;
         }
         $raw = base64_decode((string)$m['base64'], true);

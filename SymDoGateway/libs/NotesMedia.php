@@ -31,7 +31,6 @@ trait NotesMedia
     private const NOTES_MEDIA_MAX     = 300;
     /** Laengste Kante eines abgelegten Bildes. Groesser kostet Platz ohne mehr zu zeigen. */
     private const NOTES_IMAGE_EDGE    = 1600;
-    private const NOTES_IMAGE_QUALITY = 82;
     /**
      * Rohgroesse eines PDF. Ein PDF laesst sich nicht skalieren, und ueber der
      * 1-MB-Grenze der Hook-Ausgabe waere es abgelegt, aber nie wieder abrufbar.
@@ -102,7 +101,7 @@ trait NotesMedia
             // Bilder werden auf JPEG normalisiert: ein MIME, eine Endung, und die
             // Ausgabegroesse ist garantiert. Der Preis sind weichere Kanten bei
             // einem Text-Screenshot — bewusst in Kauf genommen.
-            $klein = $this->NotesScaleImage($roh);
+            $klein = $this->AiScaleImage($roh, self::NOTES_IMAGE_EDGE);
             if ($klein === null) {
                 // Ohne GD nicht ungeprueft durchlassen: dann gilt derselbe Riegel
                 // wie fuer PDF, sonst waere die Datei nie wieder abrufbar.
@@ -128,41 +127,6 @@ trait NotesMedia
         IPS_SetMediaContent($mid, base64_encode($roh));
         return ['ok' => true, 'id' => $mid, 'kind' => $istPdf ? 'pdf' : 'image',
                 'name' => (string)@IPS_GetName($mid), 'bytes' => strlen($roh)];
-    }
-
-    /**
-     * Seitenverhaeltnis erhalten, laengste Kante begrenzen, als JPEG ausgeben.
-     * ScaleAvatar taugt hier NICHT — das schneidet quadratisch mittig zu, bei einem
-     * Dokumentfoto waeren Kopf und Fuss weg.
-     */
-    private function NotesScaleImage(string $binaer): ?string
-    {
-        if (!function_exists('imagecreatefromstring')) {
-            return null;
-        }
-        $bild = @imagecreatefromstring($binaer);
-        if ($bild === false) {
-            return null;
-        }
-        try {
-            $b = imagesx($bild);
-            $h = imagesy($bild);
-            $lang = max($b, $h);
-            if ($lang > self::NOTES_IMAGE_EDGE) {
-                $f = self::NOTES_IMAGE_EDGE / $lang;
-                $neu = imagescale($bild, max(1, (int)round($b * $f)), max(1, (int)round($h * $f)));
-                if ($neu !== false) {
-                    imagedestroy($bild);
-                    $bild = $neu;
-                }
-            }
-            ob_start();
-            imagejpeg($bild, null, self::NOTES_IMAGE_QUALITY);
-            $aus = (string)ob_get_clean();
-            return $aus !== '' ? $aus : null;
-        } finally {
-            imagedestroy($bild);
-        }
     }
 
     /** Alle Medien-IDs, die diese Notizen belegen. @return int[] */
@@ -293,7 +257,13 @@ trait NotesMedia
         // kaeme in der Kachel nicht mehr an. Die Web-App holt es stattdessen ueber die
         // Datei-Route, die kein Base64 braucht.
         if (strlen($b64) > self::NOTES_RELAY_MAX_B64) {
-            return $this->NotesFehler('too_large_for_tile');
+            // Ein Bild weiter verkleinern, damit es auf jedem Weg ankommt; ein PDF
+            // laesst sich nicht verkleinern und geht nur ueber die Datei-Route.
+            $passt = $istPdf ? null : $this->AiFitImageForRelay($roh, self::NOTES_RELAY_MAX_B64);
+            if ($passt === null) {
+                return $this->NotesFehler('too_large_for_tile');
+            }
+            $b64 = base64_encode($passt);
         }
         return ['ok' => true, 'isPdf' => $istPdf,
                 'dataUrl' => 'data:' . ($istPdf ? 'application/pdf' : 'image/jpeg') . ';base64,' . $b64];
