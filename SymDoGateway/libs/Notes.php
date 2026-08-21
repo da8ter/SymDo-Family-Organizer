@@ -313,7 +313,9 @@ trait Notes
                 'rev'     => (int)$store['rev'],
                 'folders' => $ordner,
                 'notes'   => $notes,
-                'memberFolders' => $mitglieder,
+                // Als OBJEKT, auch wenn leer: json_encode macht aus einem leeren
+                // PHP-Array `[]`, und der Vertrag sagt „Karte userId → folderId".
+                'memberFolders' => (object)$mitglieder,
                 'limits'  => [
                     'notes'      => self::NOTES_MAX,
                     'text'       => self::NOTE_TEXT_MAX,
