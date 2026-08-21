@@ -2264,6 +2264,27 @@ html[data-symdo-theme="dark"] .member-bar {
    unter denen. Ausdrueckliche Staffel statt Verlass auf die DOM-Reihenfolge:
    die stimmt bei der naechsten Ergaenzung nicht mehr. */
 #noteOverlay      { z-index: 58; }
+/* Der Notiz-Editor nimmt, was da ist. Im Text soll man nicht scrollen muessen —
+   erst wenn selbst die volle Hoehe nicht reicht. Deshalb feste Hoehe statt nur
+   max-height: eine Karte, die mit dem Inhalt waechst, waere bei kurzem Text klein
+   und beim Tippen sprunghaft.
+   min-height: 0 an jeder Stufe, sonst gibt ein Flex-Kind seine Inhaltshoehe nicht
+   auf und die Karte wird HOEHER als erlaubt statt innen zu verteilen. */
+#noteOverlay .overlay-card { height: 96%; max-height: 96%; }
+#noteOverlay .overlay-body { flex: 1 1 auto; min-height: 0; }
+#noteOverlay .form-row-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#noteOverlay .form-row-grow #ntText {
+  flex: 1 1 auto;
+  /* Etwa vier Zeilen bleiben immer: darunter waere das Feld auf kleinen Schirmen
+     mit offener Tastatur unbenutzbar. */
+  min-height: 5.5em;
+  resize: none;
+}
 #noteFindOverlay  { z-index: 59; }
 
 /* Ordnerkachel: sieht aus wie eine Favoritenkarte, traegt aber statt des Herzens
@@ -2632,6 +2653,13 @@ html[data-symdo-theme="dark"] .member-bar {
           <div id="notesMaster"></div>
           <div id="notesDetail"></div>
         </div>
+        <!-- Schnellerfassung wie bei den Aufgaben: Titel eintippen, Plus druecken.
+             Die Notiz landet im geoeffneten Ordner; ohne offenen Ordner ist der Knopf
+             gesperrt, weil sonst nicht feststeht, wohin sie gehoert. -->
+        <div class="inputbar" id="notesInputbar">
+          <input id="notesInput" type="text" autocomplete="off" />
+          <button id="btnNotesAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        </div>
         <input id="noteScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
         <input id="noteFileInput" type="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" style="display:none" />
       </div>
@@ -2937,7 +2965,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body">
       <div class="form-row"><label id="lblNoteFolder"></label><select id="ntFolder"></select></div>
       <div class="form-row"><label id="lblNoteTitle"></label><input id="ntTitle" type="text" autocomplete="off" /></div>
-      <div class="form-row"><label id="lblNoteText"></label><textarea id="ntText" rows="8"></textarea></div>
+      <div class="form-row form-row-grow"><label id="lblNoteText"></label><textarea id="ntText" rows="8"></textarea></div>
       <div class="form-row">
         <label id="lblNoteFiles"></label>
         <div id="ntFiles" class="note-files"></div>
@@ -8216,6 +8244,33 @@ function renderNotizen() {
   renderNotizenMaster(elMaster);
   renderNotizenDetail(elDetail, offen);
   document.getElementById('notesContent').classList.toggle('detail-open', !!offen);
+  notizenEingabePruefen();
+}
+
+/**
+ * Schnellerfassung: Titel eintippen, Plus druecken — wie bei den Aufgaben.
+ *
+ * Ziel ist der GEOEFFNETE Ordner. Ohne einen ist der Knopf gesperrt: eine Notiz
+ * ohne Ordner kann es nicht geben, und stillschweigend den ersten zu nehmen waere
+ * geraten. Deshalb wird der Zustand auch bei jedem Zeichnen nachgezogen — das
+ * Oeffnen eines Ordners schaltet den Knopf frei, ohne dass man tippen muss.
+ */
+function notizenEingabePruefen() {
+  const feld = document.getElementById('notesInput');
+  const knopf = document.getElementById('btnNotesAdd');
+  if (!feld || !knopf) return;
+  knopf.disabled = feld.value.trim() === '' || !notesOrdnerId;
+}
+
+function notizenSchnellAnlegen() {
+  const feld = document.getElementById('notesInput');
+  const titel = feld.value.trim();
+  if (titel === '') return;
+  if (!notesOrdnerId) { showToast(translate('Select a folder')); return; }
+  notizenAktion({ action: 'noteCreate', folderId: notesOrdnerId, title: titel, text: '' }, () => {
+    feld.value = '';
+    notizenEingabePruefen();
+  });
 }
 
 function renderNotizenMaster(el) {
@@ -10402,6 +10457,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('noteSourceTitle').textContent = translate('Attach photo or file');
   document.getElementById('noteFromPhotoLabel').textContent = translate('Take photo');
   document.getElementById('noteFromFileLabel').textContent = translate('Choose file');
+  const notesInput = document.getElementById('notesInput');
+  const notesAdd = document.getElementById('btnNotesAdd');
+  notesInput.placeholder = translate('New note …');
+  notesInput.addEventListener('input', () => notizenEingabePruefen());
+  notesInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') notizenSchnellAnlegen(); });
+  notesAdd.addEventListener('click', () => notizenSchnellAnlegen());
   document.getElementById('btnNoteSave').addEventListener('click', () => noteSpeichern());
   document.getElementById('btnNoteDelete').addEventListener('click', () => noteLoeschen());
   const noteScanInput = document.getElementById('noteScanInput');

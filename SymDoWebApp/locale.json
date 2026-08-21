@@ -371,7 +371,8 @@
             "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more — they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab and the AI inbox a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately.": "Steuert die Tabs dieser Kachel und der SymDo Web-App. Die Favoriten haben keinen eigenen Schalter mehr — sie gehören zu den Einkaufslisten und gehen als Blatt über das Herz in deren Kopfzeile auf. Der Kalender-Tab setzt zusätzlich mindestens einen eingerichteten OpenCalendar-Kalender voraus, der Notizen-Tab und der KI-Eingang ein SymDo Gateway. Sind alle Bereiche aus, erscheint die Übersicht, damit die Oberfläche nie leer ist. Bleibt nur ein Bereich, verschwindet die Tab-Leiste und der Inhalt bekommt die volle Höhe. Die Web-App übernimmt eine Änderung nach einem Neuladen, die Kachel sofort.",
             "Show shopping lists (favorites are reached from their header)": "Einkaufslisten anzeigen (Favoriten über deren Kopfzeile)",
             "Show notes (requires the SymDo Gateway)": "Notizen anzeigen (benötigt das SymDo Gateway)",
-            "Show AI inbox (requires the SymDo Gateway)": "KI-Eingang anzeigen (benötigt das SymDo Gateway)"
+            "Show AI inbox (requires the SymDo Gateway)": "KI-Eingang anzeigen (benötigt das SymDo Gateway)",
+            "New note …": "Neue Notiz …"
         }
     }
 }

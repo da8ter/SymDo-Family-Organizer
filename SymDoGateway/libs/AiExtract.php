@@ -1730,6 +1730,29 @@ trait AiExtract
     }
 
     /**
+     * Aufbau des Notiztextes — an EINER Stelle, damit beide Wege (Datei-Analyse und
+     * Mailanalyse) dieselbe Form liefern.
+     *
+     * Bewusst KEIN Markdown: Der Text wird als reiner Text gespeichert, in einem
+     * Textfeld bearbeitet und in der Vorschau auf eine Zeile zusammengezogen. Ein
+     * `**fett**` waere dort sichtbarer Muell. Struktur entsteht deshalb durch Zeilen
+     * und Beschriftungen, und die tragen ueberall.
+     */
+    private function AiNoteTextRule(): string
+    {
+        return ' AUFBAU DES NOTIZTEXTES. Erst EIN Satz, der die Sache zusammenfasst. '
+            . 'Danach je Angabe eine eigene Zeile in der Form „Bezeichnung: Wert" — '
+            . 'zum Beispiel „Termin: 12.09.2026, 19:30", „Ort: Raum 214", '
+            . '„Kosten: 12 EUR", „Frist: 10.09.2026", „Kontakt: Frau Weber, '
+            . '0221 4711-99", „Aktenzeichen: 4711/26". Nur Angaben, die wirklich im '
+            . 'Dokument stehen; erfinde keine Zeile und lass keine wichtige weg. '
+            . 'Bezeichnungen auf Deutsch, kurz und ohne Doppelpunkt im Wert. '
+            . 'Steht etwas ohne Bezeichnung da, was man behalten will, schreibe es als '
+            . 'eigene Zeile ohne Bezeichnung. KEIN Markdown, keine Sternchen, keine '
+            . 'Bindestrich-Listen, keine Ueberschriften.';
+    }
+
+    /**
      * Die dritte Art: „note" fuer etwas, das man BEHALTEN will.
      *
      * Nur fuer die Mailanalyse (AiKindRule(true)) — der Foto-Scan soll weiterhin
@@ -1750,9 +1773,10 @@ trait AiExtract
             . 'Zusammenfassungen eines langen Schreibens), dann gib zusaetzlich EINEN '
             . 'Eintrag mit "kind":"note" zurueck. Sein Feld "title" benennt die Sache '
             . 'kurz, sein Feld "text" fasst die Mail mit ALLEN nachschlagbaren Angaben '
-            . 'zusammen: hoechstens 600 Zeichen, EIN Absatz, und Zeilenumbrueche '
-            . 'ausschliesslich als \\n — niemals ein echter Umbruch innerhalb der '
-            . 'Anfuehrungszeichen. Eine Notiz ersetzt Aufgaben und Termine NICHT: '
+            . 'zusammen: hoechstens 800 Zeichen. Zeilenumbrueche darin ausschliesslich '
+            . 'als \\n — niemals ein echter Umbruch innerhalb der Anfuehrungszeichen.'
+            . $this->AiNoteTextRule()
+            . ' Eine Notiz ersetzt Aufgaben und Termine NICHT: '
             . 'enthaelt die Mail beides, gib beides zurueck. Reine Werbung und '
             . 'Newsletter ergeben KEINE Notiz.';
     }

@@ -515,7 +515,8 @@
             "Too large to show here — open it in the web app.": "Zu groß für die Anzeige hier — bitte in der Web-App öffnen.",
             "AI": "KI",
             "Detected by AI": "Von der KI erkannt",
-            "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden."
+            "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden.",
+            "New note …": "Neue Notiz …"
         },
         "en": {
             "ToDo List": "ToDo List",
