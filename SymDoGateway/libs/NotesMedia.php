@@ -32,16 +32,13 @@ trait NotesMedia
     private const NOTES_MEDIA_MAX     = 300;
     /** Laengste Kante eines abgelegten Bildes. Groesser kostet Platz ohne mehr zu zeigen. */
     private const NOTES_IMAGE_EDGE    = 1600;
-    /**
-     * Rohgroesse eines PDF. Ein PDF laesst sich nicht skalieren, und ueber der
-     * 1-MB-Grenze der Hook-Ausgabe waere es abgelegt, aber nie wieder abrufbar.
-     * Dieselbe Zahl benutzt HandleUserAvatar fuer denselben Zweck.
-     */
-    private const NOTES_PDF_MAX_BYTES = 900000;
     /** Schonfrist, bevor ein unbenutzter Anhang eingesammelt wird (zwei Tage). */
     private const NOTES_SWEEP_GRACE   = 172800;
-    /** Groesste Base64-Nutzlast fuer den Kachel-Relay (roh etwa 700 KB). */
-    private const NOTES_RELAY_MAX_B64 = 960000;
+    /**
+     * Groessengrenzen kommen aus OutputLimit()/RelayLimitB64() in AppCore — ein PDF
+     * laesst sich nicht verkleinern, und ueber der Ausgabegrenze waere es abgelegt,
+     * aber nie wieder abrufbar.
+     */
 
     public function NotesMediaCreate(): void
     {
@@ -95,7 +92,7 @@ trait NotesMedia
             return $this->NotesFehler('unsupported_file');
         }
         if ($istPdf) {
-            if (strlen($roh) > self::NOTES_PDF_MAX_BYTES) {
+            if (strlen($roh) > $this->OutputLimit()) {
                 return $this->NotesFehler('file_too_large');
             }
         } else {
@@ -106,7 +103,7 @@ trait NotesMedia
             if ($klein === null) {
                 // Ohne GD nicht ungeprueft durchlassen: dann gilt derselbe Riegel
                 // wie fuer PDF, sonst waere die Datei nie wieder abrufbar.
-                if (strlen($roh) > self::NOTES_PDF_MAX_BYTES || $istPng) {
+                if (strlen($roh) > $this->OutputLimit() || $istPng) {
                     return $this->NotesFehler('file_too_large');
                 }
             } else {
@@ -257,10 +254,10 @@ trait NotesMedia
         // Grenze der Relay-Nutzlast. Base64 blaeht um ein Drittel auf; ein grosses PDF
         // kaeme in der Kachel nicht mehr an. Die Web-App holt es stattdessen ueber die
         // Datei-Route, die kein Base64 braucht.
-        if (strlen($b64) > self::NOTES_RELAY_MAX_B64) {
+        if (strlen($b64) > $this->RelayLimitB64()) {
             // Ein Bild weiter verkleinern, damit es auf jedem Weg ankommt; ein PDF
             // laesst sich nicht verkleinern und geht nur ueber die Datei-Route.
-            $passt = $istPdf ? null : $this->AiFitImageForRelay($roh, self::NOTES_RELAY_MAX_B64);
+            $passt = $istPdf ? null : $this->AiFitImageForRelay($roh, $this->RelayLimitB64());
             if ($passt === null) {
                 return $this->NotesFehler('too_large_for_tile');
             }

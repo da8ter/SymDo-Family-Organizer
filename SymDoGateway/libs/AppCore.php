@@ -234,6 +234,50 @@ trait AppCore
         }
     }
 
+    /**
+     * Wie viel eine Antwort ausgeben darf — DIE zentrale Stelle dafuer.
+     *
+     * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit`, Vorgabe
+     * 1048576 Bytes (1 MiB), aenderbar mit `IPS_SetOption`. Sie zaehlt die SUMME der
+     * Ausgabe einer Anfrage, nicht den einzelnen Schreibvorgang: `readfile()` schreibt
+     * in 8-KB-Haeppchen und laeuft trotzdem dagegen.
+     *
+     * Wird sie ueberschritten, wird die Antwort nicht abgeschnitten, sondern ERSETZT —
+     * durch 62 Bytes Text „Output-Buffer exceeds Limit (1048576 bytes). Operation
+     * halted.", bei HTTP 200 und mit dem laengst gesendeten Content-Type. Der Client
+     * sieht also eine kaputte Datei und keinen Fehler; jeder Riegel muss deshalb VOR
+     * der Ausgabe greifen. Am 21.08.2026 bei 1048576 und 1048577 Bytes exakt
+     * eingegrenzt.
+     *
+     * ABGELESEN und nicht festgeschrieben: Wer die Option hochsetzt, soll davon auch
+     * etwas haben. Vorher standen an vier Stellen feste 900000 bzw. 960000, und
+     * Aufnahmen, Rezeptdateien und Notiz-Anhaenge blieben klein, obwohl Platz war.
+     * Etwas Luft fuer die Kopfzeilen bleibt abgezogen.
+     */
+    private function OutputLimit(): int
+    {
+        $grenze = 1048576;
+        try {
+            $o = (int)@IPS_GetOption('ScriptOutputBufferLimit');
+            if ($o > 0) {
+                $grenze = $o;
+            }
+        } catch (\Throwable $e) {
+            // Aeltere Symcon-Fassung ohne die Option: bei der Vorgabe bleiben.
+        }
+        return max(200000, $grenze - 100000);
+    }
+
+    /**
+     * Dasselbe fuer eine Nutzlast, die als Base64 in JSON reist (data:-URL, Relay).
+     * Base64 blaeht um ein Drittel auf; die Grenze gilt fuer die AUFGEBLAEHTE Laenge,
+     * plus etwas Luft fuer das JSON-Geruest ringsum.
+     */
+    private function RelayLimitB64(): int
+    {
+        return max(150000, $this->OutputLimit() - 50000);
+    }
+
     /** Attribut lesen, das es vielleicht noch nicht gibt (siehe MailAttr). */
     private function ReadAttributeStringSafe(string $name, string $vorgabe): string
     {

@@ -63,21 +63,10 @@ trait AiExtract
     // Obergrenze für gespeicherte Rezeptfotos/-dateien unter „Rezeptfotos".
     private const AI_MEDIA_MAX        = 200;
     /**
-     * Groesste Rohgroesse, die sich noch ausliefern laesst.
-     *
-     * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit` (Vorgabe
-     * 1048576 Bytes) und zaehlt die SUMME der Ausgabe einer Anfrage — Naeheres im
-     * Kommentar zu TtsOutputLimit() in Tts.php. Darueber wird die Antwort nicht
-     * abgeschnitten, sondern durch eine kurze Fehlerzeile ERSETZT; beim Client
-     * kommt eine kaputte Datei an.
-     *
-     * Was darueber lag, war bisher abgelegt und dauerhaft UNABRUFBAR: AiSaveMedia
-     * prueft nur die Anzahl, und HandleAiMediaFile echot ohne Groessenpruefung.
-     * Dieselbe Zahl benutzt HandleUserAvatar fuer denselben Zweck.
+     * Groessengrenzen kommen aus OutputLimit()/RelayLimitB64() in AppCore — dort steht
+     * auch, warum: die Kernoption ScriptOutputBufferLimit begrenzt die Ausgabe, und
+     * was darueber liegt, waere abgelegt aber dauerhaft unabrufbar.
      */
-    private const AI_MEDIA_MAX_BYTES  = 900000;
-    /** Groesste Base64-Nutzlast der data:-URL. Base64 blaeht um ein Drittel auf. */
-    private const AI_MEDIA_RELAY_B64  = 960000;
     /** Laengste Kante eines abgelegten Bildes. Mehr kostet Platz ohne mehr zu zeigen. */
     private const AI_MEDIA_EDGE       = 1600;
     private const AI_MEDIA_QUALITY    = 82;
@@ -424,7 +413,7 @@ trait AiExtract
         // Nur ablegen, was sich auch wieder abrufen laesst. Vorher landete ein 3-MB-PDF
         // im Objektbaum und „Rezept oeffnen" brach danach fuer immer ab.
         if ($isPdf) {
-            if (strlen($raw) > self::AI_MEDIA_MAX_BYTES) {
+            if (strlen($raw) > $this->OutputLimit()) {
                 return ['ok' => false, 'error' => ['code' => 'file_too_large',
                     'message' => $this->Translate('This PDF is too large to be stored and reopened here.')]];
             }
@@ -433,7 +422,7 @@ trait AiExtract
             if ($klein !== null) {
                 $raw = $klein;
                 $base64 = base64_encode($raw);
-            } elseif (strlen($raw) > self::AI_MEDIA_MAX_BYTES) {
+            } elseif (strlen($raw) > $this->OutputLimit()) {
                 // Ohne GD nicht ungeprueft durchlassen: die Datei waere nie wieder
                 // abrufbar. Derselbe Riegel wie fuer PDF.
                 return ['ok' => false, 'error' => ['code' => 'file_too_large',
@@ -486,7 +475,7 @@ trait AiExtract
             // verkleinern und bekommt eine ehrliche Absage statt einer abgeschnittenen
             // Antwort, die als kaputte Datei ankommt.
             $roh = base64_decode($content, true);
-            if (is_string($roh) && strlen($roh) > self::AI_MEDIA_MAX_BYTES) {
+            if (is_string($roh) && strlen($roh) > $this->OutputLimit()) {
                 $klein = $isPdf ? null : $this->AiScaleImage($roh);
                 if ($klein !== null) {
                     $content = base64_encode($klein);
@@ -526,11 +515,11 @@ trait AiExtract
         // verkleinert (es soll auf jedem Weg ankommen), ein PDF laesst sich nicht
         // verkleinern und bekommt eine Absage — die Web-App holt es dann ueber die
         // Datei-Route, die ohne Base64 auskommt.
-        if (strlen((string)$m['base64']) > self::AI_MEDIA_RELAY_B64) {
+        if (strlen((string)$m['base64']) > $this->RelayLimitB64()) {
             $roh   = base64_decode((string)$m['base64'], true);
             $passt = ($m['isPdf'] || !is_string($roh))
                 ? null
-                : $this->AiFitImageForRelay($roh, self::AI_MEDIA_RELAY_B64);
+                : $this->AiFitImageForRelay($roh, $this->RelayLimitB64());
             if ($passt === null) {
                 return ['ok' => false, 'error' => ['code' => 'too_large_for_tile',
                     'message' => $this->Translate('Too large to show here — open it in the web app.')]];

@@ -709,7 +709,7 @@ trait ApiRouter
             return;
         }
         // GD unavailable: only serve the original if it fits under the limit.
-        if (strlen($content) > 900000) {
+        if (strlen($content) > $this->OutputLimit()) {
             $this->SendApiError('avatar_too_large', 'Avatar exceeds the 1 MB limit and could not be scaled', 500);
             return;
         }

@@ -45,22 +45,18 @@ trait Briefing
      */
     private const BRIEFING_TTS_MAX    = 3500;
     /**
-     * Gemessen am 21.08.2026 an derselben Aufnahme (24 kHz mono):
-     * AAC 77 kbit/s ergab 652 Byte je Zeichen, FLAC verlustfrei 1654 Byte je Zeichen.
-     * Aus diesen Zahlen rechnet BriefingAudioPlan Format und Teilgroesse aus.
-     */
-    private const BRIEFING_TTS_BYTES_AAC  = 652;
-    private const BRIEFING_TTS_BYTES_FLAC = 1654;
-    /**
-     * Vorlesetempo.
+     * AAC, gemessen am 21.08.2026 (24 kHz mono, 77 kbit/s): 652 Byte je Zeichen.
+     * Daraus rechnet BriefingAudioBudget, wie viel Text in EINE Aufnahme passt.
      *
-     * Steht auf 1.0, weil das Feld `speed` fuer gpt-4o-mini-tts nicht dokumentiert
-     * ist und von ihm ignoriert wird — gemessen ergab derselbe Satz bei 1.0 und bei
-     * 1.14 dieselbe Laenge. Die frueheren 1.14 haben also nie gewirkt; sie standen
-     * nur im Cache-Schluessel. Wer es schneller haben will, schreibt das Tempo in
-     * die Anweisung (BriefingSpeechStyle) — dort befolgt das Modell es.
+     * Verlustfrei waere moeglich (FLAC braucht 1654 Byte je Zeichen und passt bei
+     * erhoehter Ausgabegrenze), ist aber bewusst NICHT gewaehlt: Die Quelle ist
+     * 24 kHz mono, der hoerbare Gewinn also klein, und AAC spart zwei Drittel der
+     * Uebertragung. Wer es anders will, aendert das Format an EINER Stelle in
+     * BriefingAudio.
      */
-    private const BRIEFING_TTS_SPEED  = 1.0;
+    private const BRIEFING_TTS_BYTES_AAC = 652;
+    /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
+    private const BRIEFING_TTS_FORMAT = 'aac';
 
     private ?array $briefingConfigCache = null;
 
@@ -1201,19 +1197,16 @@ trait Briefing
         }
         $stimme    = $this->BriefingVoice();
         $anweisung = $this->BriefingSpeechStyle();
-        $plan      = $this->BriefingAudioPlan(mb_strlen($vorlesen));
+        $budget    = $this->BriefingAudioBudget();
         $this->SendDebug('Briefing', sprintf('Ton: %s, %d Zeichen, Teilgroesse %d',
-            $plan['format'], mb_strlen($vorlesen), $plan['teil']), 0);
+            self::BRIEFING_TTS_FORMAT, mb_strlen($vorlesen), $budget), 0);
 
         $kennungen = [];
-        foreach ($this->BriefingSpeechParts($vorlesen, $plan['teil']) as $teil) {
-            // FLAC ist verlustfrei und klingt besser als AAC bei 77 kbit/s; AAC bleibt
-            // der Rueckfall, wenn der Platz nicht reicht. Beide spielen Browser und
-            // iOS ohne Zutun, und HandleTtsAudio setzt den Typ nach dem Format.
-            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_SPEED, $plan['format']);
+        foreach ($this->BriefingSpeechParts($vorlesen, $budget) as $teil) {
+            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_FORMAT);
             $mid  = $this->TtsLookup($hash);
             if ($mid <= 0) {
-                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, $plan['format'], self::BRIEFING_TTS_SPEED);
+                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, self::BRIEFING_TTS_FORMAT);
             }
             if ($mid <= 0) {
                 $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
@@ -1236,25 +1229,20 @@ trait Briefing
      * @return list<string>
      */
     /**
-     * Format und Teilgroesse nach dem, was sich ausliefern laesst.
+     * Wie viel Text in EINE Aufnahme passt — aus der Ausgabegrenze gerechnet.
      *
-     * Verlustfrei, wenn der Platz reicht — sonst AAC. Frueher war AAC gesetzt und
-     * ab 1250 Zeichen wurde geteilt; beides kam allein von der 1-MB-Grenze. Wer die
-     * Kernoption hochsetzt, bekommt jetzt eine bessere Aufnahme in einem Stueck.
+     * Frueher stand hier eine feste Schwelle von 1250 Zeichen, die allein von der
+     * 1-MB-Grenze kam. Wer die Kernoption hochsetzt, bekommt jetzt eine Aufnahme in
+     * einem Stueck statt zweier mit hoerbarer Naht.
      *
      * 80 % des Erlaubten: Die Schaetzung je Zeichen schwankt mit der Sprechweise
      * (Seufzer und Pausen kosten Zeit ohne Text), und eine zu grosse Aufnahme waere
      * gar keine — TtsProduce lehnt sie ab, und dann gibt es keinen Ton.
-     *
-     * @return array{format: string, teil: int}
      */
-    private function BriefingAudioPlan(int $zeichen): array
+    private function BriefingAudioBudget(): int
     {
-        $platz = (int)($this->TtsOutputLimit() * 0.8);
-        if ($zeichen * self::BRIEFING_TTS_BYTES_FLAC <= $platz) {
-            return ['format' => 'flac', 'teil' => (int)($platz / self::BRIEFING_TTS_BYTES_FLAC)];
-        }
-        return ['format' => 'aac', 'teil' => max(200, (int)($platz / self::BRIEFING_TTS_BYTES_AAC))];
+        $platz = (int)($this->OutputLimit() * 0.8);
+        return max(200, (int)($platz / self::BRIEFING_TTS_BYTES_AAC));
     }
 
     /**

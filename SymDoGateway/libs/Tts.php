@@ -29,40 +29,6 @@ trait Tts
     /** So viele Schnipsel bleiben liegen; darüber fliegt der älteste raus. */
     private const TTS_CACHE_MAX = 400;
 
-    /**
-     * Obergrenze je Aufnahme — DIE zentrale Erklaerung zur Ausgabegrenze.
-     *
-     * Die Grenze ist die Symcon-Kernoption `ScriptOutputBufferLimit`, Vorgabe
-     * 1048576 Bytes (1 MiB), auslesbar mit `IPS_GetOption('ScriptOutputBufferLimit')`
-     * und dort auch aenderbar. Sie zaehlt die SUMME der Ausgabe einer Anfrage, nicht
-     * den einzelnen Schreibvorgang: `readfile()` schreibt in 8-KB-Haeppchen und laeuft
-     * trotzdem dagegen.
-     *
-     * Wird sie ueberschritten, wird die Antwort nicht abgeschnitten, sondern ERSETZT —
-     * durch 62 Bytes Text „Output-Buffer exceeds Limit (1048576 bytes). Operation
-     * halted.", bei HTTP 200 und mit dem laengst gesendeten Content-Type. Der Client
-     * sieht also eine kaputte Datei und keinen Fehler; deshalb muss jeder Riegel VOR
-     * der Ausgabe greifen. Am 21.08.2026 bei 1048576 und 1048577 Bytes exakt
-     * eingegrenzt.
-     *
-     * Hier wird der Wert ABGELESEN und nicht festgeschrieben: Wer die Option
-     * hochsetzt, soll davon auch etwas haben — vorher stand hier eine feste Million,
-     * und die Aufnahmen blieben klein, obwohl Platz war. Etwas Luft fuer die
-     * Kopfzeilen bleibt abgezogen.
-     */
-    private function TtsOutputLimit(): int
-    {
-        $grenze = 1048576;
-        try {
-            $o = (int)@IPS_GetOption('ScriptOutputBufferLimit');
-            if ($o > 0) {
-                $grenze = $o;
-            }
-        } catch (Throwable $e) {
-            // Aeltere Symcon-Fassung ohne die Option: bei der Vorgabe bleiben.
-        }
-        return max(200000, $grenze - 100000);
-    }
 
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
@@ -344,18 +310,15 @@ trait Tts
      * demselben Grund tragen die Überschreibungen mit ein — dasselbe Briefing
      * klingt als Drillsergeant anders als sachlich.
      */
-    private function TtsHash(string $text, string $stimme = '', string $anweisung = '', float $tempo = 1.0, string $format = 'mp3'): string
+    private function TtsHash(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
         return substr(hash('sha256',
             $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
             ($stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy')) . '|' .
             ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) . '|' .
-            // Das Tempo gehoert dazu, sonst spielte die alte, langsame Aufnahme
-            // weiter, obwohl jemand es geaendert hat.
-            number_format($tempo, 2, '.', '') . '|' .
-            // Das Format ebenso: Es steckt nicht im Text, macht aber eine ANDERE
-            // Aufnahme. Ohne es wuerde nach dem Wechsel auf ein besseres Format die
-            // alte, schlechtere weiterspielen — der Schluessel passte ja noch.
+            // Das Format gehoert dazu: Es steckt nicht im Text, macht aber eine ANDERE
+            // Aufnahme. Ohne es wuerde nach einem Formatwechsel die alte weiterspielen —
+            // der Schluessel passte ja noch.
             $format .
             '|' . $text), 0, 32);
     }
@@ -382,9 +345,9 @@ trait Tts
      *                          waehlen (das Briefing tut das je Tonfall).
      * @param string $anweisung Leer = die Einstellung (Einkaufs-Vorlesestil).
      */
-    private function TtsProduce(string $hash, string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3', float $tempo = 1.0): int
+    private function TtsProduce(string $hash, string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): int
     {
-        $mp3 = $this->TtsRequestAudio($text, $stimme, $anweisung, $format, $tempo);
+        $mp3 = $this->TtsRequestAudio($text, $stimme, $anweisung, $format);
         if ($mp3 === '') {
             return 0;
         }
@@ -392,7 +355,7 @@ trait Tts
         // Limit") — und Haeppchen mit flush() helfen nicht, die Grenze ist die
         // Summe. Was darueber liegt, waere nicht abholbar; dann lieber gar nichts
         // ablegen als eine Datei, die im Player stumm bleibt.
-        if (strlen($mp3) > $this->TtsOutputLimit()) {
+        if (strlen($mp3) > $this->OutputLimit()) {
             $this->SendDebug('TTS', sprintf('Aufnahme zu gross (%d kB), verworfen', (int)round(strlen($mp3) / 1024)), 0);
             return 0;
         }
@@ -420,7 +383,7 @@ trait Tts
      *        Abholung bei 1 MB endet.
      * @return string rohe Audiodaten, '' bei Fehler
      */
-    private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3', float $tempo = 1.0): string
+    private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
         $key = trim($this->ReadPropertyString('AiOpenAIKey'));
         if ($key === '') {
@@ -433,14 +396,12 @@ trait Tts
             'instructions'    => $anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS),
             'response_format' => $format,
         ];
-        // `speed` ist fuer gpt-4o-mini-tts NICHT dokumentiert und wird von ihm
-        // ignoriert: derselbe Satz ergab am 21.08.2026 bei 1.0 und bei 1.14 dieselbe
-        // Laenge (9,69 s gegen 9,95 s — die Streuung zweier Laeufe, nicht 14 %).
-        // Das Tempo steuert man bei diesem Modell ueber `instructions`. Mitgeschickt
-        // wird das Feld nur noch, wenn es abweicht — fuer tts-1, wo es wirkt.
-        if (abs($tempo - 1.0) > 0.001) {
-            $felder['speed'] = max(0.25, min(4.0, $tempo));
-        }
+        // KEIN `speed`: Fuer gpt-4o-mini-tts ist das Feld nicht dokumentiert und wird
+        // ignoriert — derselbe Satz ergab am 21.08.2026 bei 1.0 und bei 1.14 dieselbe
+        // Laenge (9,69 s gegen 9,95 s, die Streuung zweier Laeufe, nicht 14 %). Das
+        // Tempo steuert man bei diesem Modell ueber `instructions`, siehe
+        // BriefingSpeechStyle. Wer je auf tts-1 wechselt, wo es wirkt, muss es dort
+        // wieder ergaenzen.
         $body = json_encode($felder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $resp = $this->AiHttpPost('https://api.openai.com/v1/audio/speech', [
