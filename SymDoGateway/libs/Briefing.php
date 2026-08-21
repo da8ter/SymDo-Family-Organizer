@@ -1125,10 +1125,10 @@ trait Briefing
                 //  1. eine DICHTE-Grenze — ohne sie steht Slang in jedem Satz und der
                 //     Tag ist nicht mehr zu erkennen;
                 //  2. kurze Erklaerungen hinter den nicht selbsterklaerenden Woertern —
-                //     „Schere" und „Six Seven" setzt das Modell sonst wie Substantive ein;
-                //  3. Schreibweisen fuer die Sprachausgabe: „67" wuerde als
-                //     „siebenundsechzig" vorgelesen, Buchstabenkuerzel wie „NGL" oder
-                //     „TBH" buchstabiert die Stimme aus.
+                //     „Schere" setzt das Modell sonst wie ein Substantiv ein;
+                //  3. Schreibweisen fuer die Sprachausgabe: Buchstabenkuerzel wie „NGL"
+                //     oder „TBH" buchstabiert die Stimme aus, Zahlen liest sie als Zahl.
+                // „Six Seven" war zuerst dabei und ist auf Wunsch wieder raus (21.08.2026).
                 // Aus der Liste des Nutzers sind die sexuellen, drogenbezogenen und
                 // herkunftsbezogenen Begriffe NICHT uebernommen: das Briefing laeuft
                 // morgens ueber den Lautsprecher, auch wenn Kinder im Raum sind.
@@ -1179,8 +1179,8 @@ trait Briefing
                     . '„ghosten", „Side Eye" (skeptischer Blick), „extra" (übertrieben), '
                     . '„Ick" (plötzlicher Abturner), „Canon Event" (prägendes Erlebnis, das '
                     . 'man durchmachen muss). '
-                    . 'REAKTIONEN UND FÜLLWÖRTER: „Six Seven" (bedeutungsloser Ausruf, '
-                    . 'passt überall), „Das crazy" (universelle Reaktion), „Checkst du?" '
+                    . 'REAKTIONEN UND FÜLLWÖRTER: „Das crazy" (universelle Reaktion), '
+                    . '„Checkst du?" '
                     . '(verstehst du?), „auf Lock" (locker), „lowkey" (insgeheim, ein '
                     . 'bisschen), „Schere" (mein Fehler, sorry), „Darf er so?" (kann der das '
                     . 'ernst meinen), „What the Sigma?" (was zum Teufel), „Hölle nein", '
@@ -1190,10 +1190,10 @@ trait Briefing
                     . 'denkt), „Fanum Tax" (jemandem was vom Essen klauen), „No Front" '
                     . '(nicht böse gemeint), „Du bist gut genug" (ironischer Spruch), '
                     . '„Yurr" (hey), „Yeet", „FOMO", „Chronically Online". '
-                    . 'SCHREIBWEISE, weil das Briefing VORGELESEN wird: Schreibe „Six '
-                    . 'Seven", NIE „67" — die Stimme liest sonst „siebenundsechzig". Und '
-                    . 'benutze keine Buchstabenkürzel wie „NGL", „TBH", „FR", „IYKYK" oder '
-                    . '„GOAT": die werden einzeln buchstabiert und klingen kaputt. '
+                    . 'SCHREIBWEISE, weil das Briefing VORGELESEN wird: Benutze keine '
+                    . 'Buchstabenkürzel wie „NGL", „TBH", „FR", „IYKYK" oder „GOAT" und '
+                    . 'keine Zahlen als Ausruf — die werden einzeln buchstabiert bzw. als '
+                    . 'Zahl vorgelesen und klingen kaputt. '
                     // Einzeln verschaerfen half nicht: Jede betonte Regel zog die
                     // Aufmerksamkeit von der anderen ab (gemessen ueber vier Laeufe:
                     // 11, 9, 5 Ausdruecke, dabei einmal gar kein „Digga"). Eine
