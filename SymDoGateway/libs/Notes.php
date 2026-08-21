@@ -32,10 +32,14 @@ declare(strict_types=1);
 trait Notes
 {
     /** Harte Notbremse fuer das Attribut. Bei Freitext zaehlt man Bytes, nicht Datensaetze. */
-    private const NOTES_STORE_MAX = 524288;
+    // Mit NOTE_TEXT_MAX = 3000 und NOTES_MAX = 200 liegt der schlimmste Fall bei
+    // etwa 600 kB Text plus Titel und Anhangs-Angaben. Der Deckel muss darueber
+    // liegen, sonst scheitert das Schreiben mit „store_unwritable" — und dessen
+    // Meldung schickt auf die falsche Faehrte (Kernel-Neustart).
+    private const NOTES_STORE_MAX = 786432;
 
     private const NOTES_MAX        = 200;
-    private const NOTE_TEXT_MAX    = 2000;
+    private const NOTE_TEXT_MAX    = 3000;
     private const NOTE_TITLE_MAX   = 120;
     private const NOTES_FOLDERS_MAX = 40;
     private const NOTE_FOLDER_NAME_MAX = 60;

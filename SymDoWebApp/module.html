@@ -2322,6 +2322,39 @@ html[data-symdo-theme="dark"] .member-bar {
 .note-date { font-size: 12px; color: var(--faint); white-space: nowrap; }
 
 /* Anhaenge als Chips — im Editor mit Entfernen-Knopf, in der Zeile nur als Zahl. */
+/* Notiz ansehen: der Text kommt als „Bezeichnung: Wert"-Zeilen (siehe
+   AiNoteTextRule) und wird hier als zweispaltige Aufzaehlung gezeigt. Die
+   Bezeichnung bekommt eine feste Breite, damit die Werte untereinander
+   ausgerichtet stehen; auf schmalen Schirmen bricht sie darueber um. */
+.note-view-meta { font-size: 12px; color: var(--muted); margin: 0 2px 10px; }
+.note-view { font-size: 14.5px; line-height: 1.5; }
+.note-view .nv-p { margin: 0 0 10px; }
+.note-view .nv-row {
+  display: flex;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.note-view .nv-row:last-child { border-bottom: 0; }
+.note-view .nv-k {
+  flex: 0 0 34%;
+  max-width: 180px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.note-view .nv-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.note-view a { color: var(--accent); text-decoration: none; }
+@media (max-width: 420px) {
+  /* Unter 420px bleiben von der Wertspalte keine lesbaren 60% mehr uebrig,
+     sobald die Bezeichnung „Betreuungszeit" heisst. Dann untereinander. */
+  .note-view .nv-row { display: block; }
+  .note-view .nv-k { max-width: none; display: block; }
+}
+#noteViewOverlay .overlay-card { max-height: 92%; }
+#noteViewOverlay #noteViewFiles { margin-top: 14px; }
+.note-file .nv-chev { flex: none; color: var(--muted); font-size: 13px; margin-left: auto; }
+
 /* Anhaenge im Notiz-Editor sind eine LISTE, kein Chip-Feld: eine Zeile je Datei,
    Symbol und Name links, die Handlung (Loeschen, Haken, Uhr) ganz rechts. Als
    umbrechende Chips standen bei zwei Dateien mit langen Namen beide halb
@@ -3010,6 +3043,25 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body" id="favoritesContent">
       <div id="favMaster"></div>
       <div id="favDetail"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Notiz ANSEHEN. Das Antippen einer Notiz oeffnet dieses Blatt, nicht den
+     Editor: die meisten Notizen werden gelesen und nicht geaendert, und ein
+     Formular mit Eingabefeldern ist zum Lesen die schlechtere Form. Der Stift
+     oben rechts fuehrt zum Editor. -->
+<div class="overlay" id="noteViewOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="noteViewTitle"></span>
+      <button class="btn-close-overlay" id="btnNoteEdit" aria-label="Bearbeiten"><i class="fa-light fa-pen"></i></button>
+      <button class="btn-close-overlay" data-close="noteViewOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div id="noteViewMeta" class="note-view-meta"></div>
+      <div id="noteViewBody" class="note-view"></div>
+      <div id="noteViewFiles" class="note-files"></div>
     </div>
   </div>
 </div>
@@ -8656,8 +8708,83 @@ function noteOeffnen(nid) {
   aiPost('/notes', { action: 'get', id: nid }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !j.note) { showToast(notizenFehlertext(j)); return; }
-    noteEditorOeffnen(j.note);
+    noteAnsichtOeffnen(j.note);
   }).catch(() => showToast(translate('Action failed')));
+}
+
+/** Die Notiz, die gerade angesehen wird — der Stift braucht sie unveraendert. */
+let noteAnsicht = null;
+
+function noteAnsichtOeffnen(notiz) {
+  noteAnsicht = notiz;
+  document.getElementById('noteViewTitle').textContent = notiz.title || translate('Note');
+  const ordner = notesOrdner(notiz.folderId);
+  const teile = [];
+  if (ordner) teile.push(ordner.name);
+  if (notiz.updatedAt) teile.push(notesDatum(notiz.updatedAt));
+  document.getElementById('noteViewMeta').textContent = teile.join(' · ');
+  document.getElementById('noteViewBody').innerHTML = notizTextHtml(String(notiz.text || ''));
+
+  // Anhaenge wie im Editor, nur ohne Loeschknopf: Symbol, Name, antippbar.
+  const el = document.getElementById('noteViewFiles');
+  const dateien = Array.isArray(notiz.att) ? notiz.att : [];
+  el.innerHTML = dateien.map(a =>
+    '<div class="note-file" data-media="' + escapeHtml(String(a.id)) + '">' +
+    '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+    '<span>' + escapeHtml(a.name || translate('Attachment')) + '</span>' +
+    '<i class="fa-light fa-chevron-right nv-chev"></i>' +
+    '</div>').join('');
+  el.querySelectorAll('.note-file').forEach(zeile => {
+    zeile.addEventListener('click', () => {
+      // noteAnhangOeffnen liest die Notiz-Kennung aus noteCtx; in der Ansicht gibt
+      // es keinen Editor-Zustand, also einen schmalen aufsetzen.
+      noteCtx = { noteId: notiz.id, files: dateien, warten: [], wahl: [], proposal: null };
+      noteAnhangOeffnen(parseInt(zeile.dataset.media, 10));
+    });
+  });
+  openOverlay('noteViewOverlay');
+}
+
+/**
+ * Notiztext als HTML.
+ *
+ * Der Text kommt in der Form, die AiNoteTextRule vorgibt: ein einleitender Satz,
+ * danach je Angabe eine Zeile „Bezeichnung: Wert". Genau das wird hier sichtbar
+ * gemacht — Bezeichnung halbfett und in eigener Spalte, Wert daneben. Adressen
+ * und Nummern werden antippbar.
+ *
+ * Reihenfolge ist wichtig: ZUERST maskieren, dann verlinken. Umgekehrt wuerde die
+ * Maskierung die eben erzeugten Tags zerlegen.
+ */
+function notizTextHtml(text) {
+  const verlinken = (roh) => roh
+    // Adressen: bis zum ersten Zeichen, das nicht mehr dazugehoert. Der Punkt am
+    // Satzende darf nicht mitwandern, deshalb der Ausschluss am Ende.
+    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g,
+      '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g, '<a href="mailto:$1">$1</a>')
+    // Telefon: mindestens sechs Ziffern, damit aus „13:00" oder „2026" keine
+    // Rufnummer wird. Fuer den Waehl-Verweis alles ausser Ziffern und + weg.
+    .replace(/(?<![\w>])(\+?\d[\d\s/()-]{5,}\d)(?![\w<])/g, (m) =>
+      '<a href="tel:' + m.replace(/[^\d+]/g, '') + '">' + m + '</a>');
+
+  const bloecke = String(text).split(/\n\s*\n/);
+  return bloecke.map(block => {
+    const zeilen = block.split('\n').map(z => z.trim()).filter(z => z !== '');
+    if (zeilen.length === 0) return '';
+    const teile = zeilen.map(zeile => {
+      // „Bezeichnung: Wert" nur, wenn die Bezeichnung kurz ist und keinen Punkt
+      // traegt — sonst wird aus „Wir starten am 07.09.2026: alles neu" ein Paar,
+      // und aus einer Adresse mit „https://" erst recht.
+      const m = zeile.match(/^([^:]{2,32}):\s+(.+)$/);
+      if (m && !/[.!?]$/.test(m[1]) && !/^https?$/i.test(m[1])) {
+        return '<div class="nv-row"><span class="nv-k">' + escapeHtml(m[1]) + '</span>' +
+               '<span class="nv-v">' + verlinken(escapeHtml(m[2])) + '</span></div>';
+      }
+      return '<p class="nv-p">' + verlinken(escapeHtml(zeile)) + '</p>';
+    });
+    return teile.join('');
+  }).join('');
 }
 
 function noteEditorOeffnen(notiz) {
@@ -10705,6 +10832,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnNoteDelete').addEventListener('click', () => noteLoeschen());
   const noteScanInput = document.getElementById('noteScanInput');
   const noteFileInput = document.getElementById('noteFileInput');
+  document.getElementById('btnNoteEdit').addEventListener('click', () => {
+    if (!noteAnsicht) return;
+    // Erst das Ansichts-Blatt schliessen: zwei offene Blaetter uebereinander
+    // haetten dieselbe Verdunkelung zweimal, und der Zurueck-Weg waere unklar.
+    closeOverlay('noteViewOverlay');
+    const notiz = noteAnsicht;
+    noteAnsicht = null;
+    noteEditorOeffnen(notiz);
+  });
   document.getElementById('btnNoteAttach').addEventListener('click', () => {
     // Ohne gespeicherte Notiz gibt es noch keine Kennung, an die ein Anhang koennte.
     // Die KI darf trotzdem laufen — sie legt nichts ab.

@@ -1774,10 +1774,11 @@ trait AiExtract
             . 'kurz, sein Feld "text" fasst die Mail mit ALLEN nachschlagbaren Angaben '
             // 800 war zu knapp: ein sechsseitiger Elternbrief mit zwoelf Abschnitten
             // laesst sich darin nicht unterbringen, und gemessen kamen Notizen mit 438
-            // und 480 Zeichen heraus, in denen halbe Abschnitte fehlten. 1800 liegt
-            // sicher unter NOTE_TEXT_MAX (2000) — darueber weist das Uebernehmen den
-            // ganzen Vorschlag als invalid_payload ab, die Notiz waere also verloren.
-            . 'zusammen: hoechstens 1800 Zeichen. Lieber lang und vollstaendig als '
+            // und 480 Zeichen heraus, in denen halbe Abschnitte fehlten. Erst 1800,
+            // dann auf Wunsch um die Haelfte mehr: 2700. Bleibt sicher unter
+            // NOTE_TEXT_MAX (3000) — darueber weist das Uebernehmen den ganzen
+            // Vorschlag als invalid_payload ab, die Notiz waere also verloren.
+            . 'zusammen: hoechstens 2700 Zeichen. Lieber lang und vollstaendig als '
             . 'kurz und lueckenhaft — wenn die Mail viele Abschnitte hat, nenne sie '
             . 'alle. Zeilenumbrueche darin ausschliesslich '
             . 'als \\n — niemals ein echter Umbruch innerhalb der Anfuehrungszeichen.'
