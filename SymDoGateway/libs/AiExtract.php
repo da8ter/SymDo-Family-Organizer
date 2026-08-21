@@ -1735,6 +1735,16 @@ trait AiExtract
             . '„Kosten: 12 EUR", „Frist: 10.09.2026", „Kontakt: Frau Weber, '
             . '0221 4711-99", „Aktenzeichen: 4711/26". Nur Angaben, die wirklich im '
             . 'Dokument stehen; erfinde keine Zeile und lass keine wichtige weg. '
+            // Beobachtet am 21.08.2026: aus „Hoffeldstrasse 79, 40235 Duesseldorf"
+            // wurde „Neanderstrasse 18, 40233 Duesseldorf" — eine frei erfundene
+            // Anschrift, mitten in einer sonst korrekten Notiz. Bei Anschriften,
+            // Nummern und Aktenzeichen genuegt „erfinde nichts" offenbar nicht;
+            // es braucht die ausdrueckliche Anweisung, ZU KOPIEREN.
+            . 'ANSCHRIFTEN, TELEFONNUMMERN, IBANs, AKTENZEICHEN, ADRESSEN UND DATEN '
+            . 'schreibst du ZEICHEN FUER ZEICHEN so ab, wie sie im Dokument stehen. '
+            . 'Ergaenze nichts aus eigenem Wissen und vervollstaendige nichts. Bist '
+            . 'du bei einer solchen Angabe unsicher, lass die Zeile weg — eine '
+            . 'falsche Hausnummer ist schlimmer als eine fehlende. '
             . 'Bezeichnungen auf Deutsch, kurz und ohne Doppelpunkt im Wert. '
             . 'Steht etwas ohne Bezeichnung da, was man behalten will, schreibe es als '
             . 'eigene Zeile ohne Bezeichnung. KEIN Markdown, keine Sternchen, keine '
@@ -1762,7 +1772,14 @@ trait AiExtract
             . 'Zusammenfassungen eines langen Schreibens), dann gib zusaetzlich EINEN '
             . 'Eintrag mit "kind":"note" zurueck. Sein Feld "title" benennt die Sache '
             . 'kurz, sein Feld "text" fasst die Mail mit ALLEN nachschlagbaren Angaben '
-            . 'zusammen: hoechstens 800 Zeichen. Zeilenumbrueche darin ausschliesslich '
+            // 800 war zu knapp: ein sechsseitiger Elternbrief mit zwoelf Abschnitten
+            // laesst sich darin nicht unterbringen, und gemessen kamen Notizen mit 438
+            // und 480 Zeichen heraus, in denen halbe Abschnitte fehlten. 1800 liegt
+            // sicher unter NOTE_TEXT_MAX (2000) — darueber weist das Uebernehmen den
+            // ganzen Vorschlag als invalid_payload ab, die Notiz waere also verloren.
+            . 'zusammen: hoechstens 1800 Zeichen. Lieber lang und vollstaendig als '
+            . 'kurz und lueckenhaft — wenn die Mail viele Abschnitte hat, nenne sie '
+            . 'alle. Zeilenumbrueche darin ausschliesslich '
             . 'als \\n — niemals ein echter Umbruch innerhalb der Anfuehrungszeichen.'
             . $this->AiNoteTextRule()
             . ' Eine Notiz ersetzt Aufgaben und Termine NICHT: '
