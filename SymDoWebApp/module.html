@@ -2372,14 +2372,18 @@ html[data-symdo-theme="dark"] .member-bar {
    ohne das Kaestchen zu lesen, denn davon haengt ab, was gespeichert wird. */
 .note-files .note-file.is-choice { display: flex; opacity: .55; }
 .note-file.is-choice.is-on { opacity: 1; }
-.note-file.is-choice .note-file-size { margin-left: auto; }
+/* Keine auto-Margins mehr: der Name traegt die Zeile (flex-grow) und schiebt
+   Groesse, Ansehen-Knopf und Haken von sich aus an den rechten Rand. Zwei
+   konkurrierende `margin-left: auto` haetten die Gruppe auseinandergerissen,
+   sobald der Knopf dazwischen kam. */
+.note-file.is-choice .ansehen {
+  flex: none; color: var(--muted); padding: 4px 2px 4px 8px; font-size: 15px;
+}
+.note-file.is-choice .ansehen:active { color: var(--accent); }
 .note-file.is-choice input {
-  /* margin-left: auto haelt den Haken rechts, auch ohne Groessenangabe; steht
-     eine Groesse davor, hat DIE schon geschoben und es braucht nur Abstand. */
-  flex: none; margin: 0 0 0 auto; accent-color: var(--accent);
+  flex: none; margin: 0 0 0 8px; accent-color: var(--accent);
   width: 18px; height: 18px;
 }
-.note-file.is-choice .note-file-size + input { margin-left: 10px; }
 .note-file-size { flex: none; color: var(--muted); font-size: 11.5px; }
 
 @media (min-width: 820px) {
@@ -8712,8 +8716,17 @@ function noteDateienZeichnen() {
       '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(a.name) + '</span>' +
       (a.bytes ? '<span class="note-file-size">' + notesGroesse(a.bytes) + '</span>' : '') +
+      '<button class="ansehen" data-ansehen="' + escapeHtml(String(a.id)) + '" ' +
+      'aria-label="' + translate('Open') + '"><i class="fa-light fa-eye"></i></button>' +
       '<input type="checkbox" data-wahl="' + escapeHtml(String(a.id)) + '"' + (a.an ? ' checked' : '') + '>' +
       '</label>').join('');
+  el.querySelectorAll('[data-ansehen]').forEach(knopf => {
+    knopf.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      noteAnhangOeffnen(parseInt(knopf.dataset.ansehen, 10), true);
+    });
+  });
   el.querySelectorAll('[data-wahl]').forEach(kasten => {
     kasten.addEventListener('change', () => {
       const eintrag = wahl.find(a => String(a.id) === String(kasten.dataset.wahl));
@@ -8742,7 +8755,15 @@ function noteDateienZeichnen() {
  * Token, dort kommt der Inhalt als data:-URL ueber den Relay — ein mehrseitiges PDF
  * zeigt im iframe dann nur seine erste Seite. Dieselbe bekannte Grenze wie dort.
  */
-function noteAnhangOeffnen(mediaId) {
+/**
+ * Eine Anhang-Datei anzeigen.
+ *
+ * `ausVorschlag` = true: die Datei haengt noch an einem Mail-Vorschlag, es gibt
+ * also keine Notiz-Kennung. Die Gegenseite laesst das zu (die Datei steht in
+ * einem offenen Vorschlag) — nur so kann man vor dem Uebernehmen hineinsehen,
+ * statt blind anzukreuzen.
+ */
+function noteAnhangOeffnen(mediaId, ausVorschlag) {
   if (!mediaId || !noteCtx) return;
   const direkt = notesMediaUrl(mediaId);
   // Gibt es eine Datei-Adresse, uebernimmt der Browser — fuer Bilder genauso wie
@@ -8755,20 +8776,30 @@ function noteAnhangOeffnen(mediaId) {
     if (fenster) return;
     // Popup-Sperre: dann eben das Blatt, aber mit der Adresse am Knopf.
   }
-  aiPost('/notes', { action: 'attachData', noteId: noteCtx.noteId, attachmentId: mediaId }).then(r => {
+  aiPost('/notes', { action: 'attachData', attachmentId: mediaId,
+                     noteId: ausVorschlag ? '' : (noteCtx.noteId || '') }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !j.dataUrl) { showToast(notizenFehlertext(j)); return; }
     zeigeMedium(j.dataUrl, j.isPdf === true, translate('Attachment'), direkt);
   }).catch(() => showToast(translate('Action failed')));
 }
 
-/** Direkte Datei-Adresse — nur in der Web-App, die Kachel hat keinen Token. */
+/**
+ * Direkte Datei-Adresse — nur in der Web-App, die Kachel hat keinen Token.
+ *
+ * Das eingebettete Objekt heisst `apiBase` (AppCore.php setzt genau diesen
+ * Schluessel). Hier stand `api`, und den gibt es nicht: die Funktion lieferte
+ * IMMER eine leere Adresse, jeder Anhang landete im Blatt, und ein PDF blieb
+ * damit auf iOS bei Seite 1. Der Rezept-Weg (mediaFileUrl) las von Anfang an
+ * `apiBase` und war deshalb nie betroffen — genau daran fiel es auf.
+ */
 function notesMediaUrl(mediaId) {
-  if (!window.__SYMDO__ || !window.__SYMDO__.api) return '';
+  const basis = (window.__SYMDO__ && window.__SYMDO__.apiBase) ? String(window.__SYMDO__.apiBase) : '';
+  if (!basis) return '';
   let token = '';
   try { token = ls.get('symdo.token') || ''; } catch (e) {}
   if (!token) return '';
-  return String(window.__SYMDO__.api).replace(/\/+$/, '') +
+  return basis.replace(/\/+$/, '') +
     '/notes/media/' + encodeURIComponent(String(mediaId)) + '?t=' + encodeURIComponent(token);
 }
 

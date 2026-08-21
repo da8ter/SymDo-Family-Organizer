@@ -230,16 +230,32 @@ trait NotesMedia
      * um synchron entscheiden zu koennen — nach einem await wertet Safari ein
      * window.open als Popup.
      */
+    /**
+     * Eine Anhang-Datei als data:-URL — der Weg fuer die Kachel, die keinen Token
+     * und damit keine Datei-Adresse hat.
+     *
+     * `$noteId` LEER heisst: die Datei haengt noch an einem Mail-Vorschlag, nicht
+     * an einer Notiz. Auch die muss sich ansehen lassen, sonst waehlt man im
+     * Editor blind aus, was uebernommen wird.
+     */
     private function NotesAttachData(string $noteId, int $mediaId, bool $nurArt = false): array
     {
-        $store = $this->NotesStore();
-        $i = $this->NotesIndexOf($store['notes'], $noteId);
-        if ($i < 0) {
-            return $this->NotesFehler('not_found');
-        }
         $kat = $this->NotesMediaCategory(false);
-        if (!in_array($mediaId, $this->NotesAttachmentIds([$store['notes'][$i]]), true)
-            || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
+        if ($noteId === '') {
+            if (!in_array($mediaId, $this->NotesProposalAttachmentIds(), true)) {
+                return $this->NotesFehler('forbidden');
+            }
+        } else {
+            $store = $this->NotesStore();
+            $i = $this->NotesIndexOf($store['notes'], $noteId);
+            if ($i < 0) {
+                return $this->NotesFehler('not_found');
+            }
+            if (!in_array($mediaId, $this->NotesAttachmentIds([$store['notes'][$i]]), true)) {
+                return $this->NotesFehler('forbidden');
+            }
+        }
+        if ($mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
             return $this->NotesFehler('forbidden');
         }
         $b64 = (string)IPS_GetMediaContent($mediaId);
@@ -279,8 +295,15 @@ trait NotesMedia
     private function HandleNotesMediaFile(int $mediaId): void
     {
         $kat = $this->NotesMediaCategory(false);
-        $bekannt = in_array($mediaId, $this->NotesAttachmentIds($this->NotesStore()['notes']), true);
-        if (!$bekannt || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
+        // Zwei Quellen sind erlaubt: die Anhaenge bestehender Notizen UND die
+        // Anhaenge noch offener Mail-Vorschlaege. Letztere braucht man, um VOR dem
+        // Uebernehmen hineinzusehen — ohne das waehlt man blind aus, welche Datei
+        // an die Notiz kommt. Keine weitere Einschraenkung nach Mitglied: der
+        // KI-Bereich zeigt dieselben Vorschlaege ohnehin allen Geraeten, und die
+        // Notizen sind bewusst gemeinsam.
+        $erlaubt = in_array($mediaId, $this->NotesAttachmentIds($this->NotesStore()['notes']), true)
+            || in_array($mediaId, $this->NotesProposalAttachmentIds(), true);
+        if (!$erlaubt || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
             $this->SendApiError('forbidden', 'Not a note attachment', 403);
             return;
         }
@@ -313,6 +336,42 @@ trait NotesMedia
      * wirft Datensaetze weg, ohne dass jemand davon erfaehrt. Ohne diesen Durchlauf
      * fuellt jeder verworfene Vorschlag mit Anhang die Platte — unsichtbar, fuer immer.
      */
+    /**
+     * Alle Anhang-Kennungen, die an einem Mail-Vorschlag haengen.
+     *
+     * Zwei Quellen, und beide sind noetig: „atts" ist die Liste, seit eine Mail
+     * mehrere Anhaenge mitbringen kann, „mediaId" der Einzelne aus Vorschlaegen,
+     * die vor der Umstellung entstanden sind. Nur „mediaId" zu lesen hiess: alle
+     * Anhaenge ausser dem ersten gelten als Waise und werden nach der Schonfrist
+     * geloescht — die Auswahl im Editor haette dann ins Leere gezeigt.
+     *
+     * Dieselbe Liste entscheidet, was die Datei-Route herausgeben darf: ein
+     * Anhang, den der KI-Bereich anbietet, muss sich ansehen lassen, BEVOR man
+     * ihn uebernimmt. Sonst waehlt man blind.
+     *
+     * @return list<int>
+     */
+    private function NotesProposalAttachmentIds(): array
+    {
+        $ids = [];
+        foreach ($this->MailProposals() as $v) {
+            foreach ((is_array($v['items'] ?? null) ? $v['items'] : []) as $it) {
+                if (!is_array($it) || ($it['taken'] ?? false) === true) {
+                    continue;
+                }
+                foreach ((array)($it['atts'] ?? []) as $a) {
+                    if (is_array($a) && (int)($a['id'] ?? 0) > 0) {
+                        $ids[] = (int)$a['id'];
+                    }
+                }
+                if ((int)($it['mediaId'] ?? 0) > 0) {
+                    $ids[] = (int)$it['mediaId'];
+                }
+            }
+        }
+        return array_values(array_unique($ids));
+    }
+
     private function NotesSweepOrphans(): int
     {
         $kat = $this->NotesMediaCategory(false);
@@ -326,15 +385,10 @@ trait NotesMedia
         if (!$this->NotesStorable()) {
             return 0;
         }
-        $lebt = $this->NotesAttachmentIds($this->NotesStore()['notes']);
-        foreach ($this->MailProposals() as $v) {
-            foreach ((is_array($v['items'] ?? null) ? $v['items'] : []) as $it) {
-                $mid = (int)($it['mediaId'] ?? 0);
-                if ($mid > 0) {
-                    $lebt[] = $mid;
-                }
-            }
-        }
+        $lebt = array_merge(
+            $this->NotesAttachmentIds($this->NotesStore()['notes']),
+            $this->NotesProposalAttachmentIds()
+        );
         // Zweites Netz: eine Schonfrist. Ein gerade abgelegter Anhang gehoert zu
         // einem Vorschlag, der noch keine Notiz ist — er darf nicht weggeraeumt
         // werden, bloss weil der Bestand ihn (noch) nicht nennt.
