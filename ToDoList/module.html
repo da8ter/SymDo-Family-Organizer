@@ -96,12 +96,12 @@ select option { color: #111; background: #fff; }
   /* Rechts nur --sb-pad statt marginside, damit der Scrollbereich in den
      rechten Rand hineinreicht und der Scrollbalken mittig darin liegt. Der
      fehlende Rest des Inhaltsabstands sitzt als padding-right auf .screen. */
-  /* Oben derselbe Gedanke wie unten: in der Kachel der eingestellte Rand, in der
-     Home-Screen-App der Sicherheitsabstand. Mit
-     apple-mobile-web-app-status-bar-style=black-translucent beginnt die Seite bei
-     Pixel 0 — die FLAECHE laeuft dann hinter Statusleiste und Dynamic Island durch,
-     der INHALT weicht ihnen aus. Ohne dieses Polster stuende die Titelzeile
-     darunter. */
+  /* Oben gilt der groessere von Kachelrand und Sicherheitsabstand. Auf iOS 26
+     meldet die Home-Screen-App env() derzeit immer als 0 und die Statusleiste
+     bleibt reserviert (am Geraet gemessen, 22.08.2026) — dort ist das max()
+     wirkungslos und der Kachelrand allein bestimmt. Es bleibt trotzdem stehen:
+     liefert eine Umgebung echte Abstaende (Android, kuenftiges iOS), weicht der
+     Inhalt ihnen ohne weiteres Zutun aus. */
   padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad) 0 var(--sym-ms);
 }
 /* Glasfläche über dem Sicherheitsabstand oben.

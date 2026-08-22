@@ -1006,19 +1006,17 @@ trait AppCore
             . '<link rel="manifest" href="/hook/' . self::PWA_HOOK_PATH . '/manifest.webmanifest">'
             . '<meta name="apple-mobile-web-app-capable" content="yes">'
             . '<meta name="mobile-web-app-capable" content="yes">'
-            // Erst hierdurch beginnt die Seite bei Pixel 0. Ohne die Angabe gilt
-            // „default": iOS reserviert die Statusleiste und die Web-Ansicht faengt
-            // DARUNTER an — der Bereich hinter der Dynamic Island gehoert dann gar
-            // nicht zur Seite. Der Inhalt weicht ihr per env(safe-area-inset-top)
-            // aus (siehe .app in module.html), die Flaeche laeuft darunter durch.
-            //
-            // Der Preis: iOS kennt nur „default" (dunkler Text, deckend), „black"
-            // und „black-translucent" (WEISSER Text). Die Schriftfarbe folgt NICHT
-            // dem theme-color. Im hellen Thema steht die Uhr also weiss auf hellem
-            // Grund — bewusst in Kauf genommen (Wunsch vom 22.08.2026), weil die
-            // App im dunklen Thema laeuft.
-            . '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
-            . '<meta name="theme-color" content="#1c1c1e">';
+            // BEWUSST KEIN apple-mobile-web-app-status-bar-style mehr (22.08.2026,
+            // am Geraet gemessen): auf iOS 26 vergroessert „black-translucent" die
+            // Seite NICHT auf den ganzen Schirm — die Web-App bekommt fest 761 von
+            // 812 Punkten, das Meta VERSCHIEBT sie nur nach oben (Seite ab Pixel 0,
+            // Inhalt unter der Uhr, und die 51 Punkte fehlen dann UNTEN als
+            // Systemstreifen). Ohne das Meta liegt die Seite unterhalb der
+            // Statusleiste und endet buendig an der Unterkante; die reservierte
+            // Leiste oben traegt ueber theme-color die Farbe der App-Flaeche.
+            // Das Meta wird beim Hinzufuegen zum Home-Bildschirm eingefangen —
+            // wer das hier aendert, zwingt alle Symbole zum Neu-Anlegen.
+            . '<meta name="theme-color" content="#2b2c30">';
 
         $adapterJs = (string)@file_get_contents(__DIR__ . '/webapp-adapter.js');
         $adapter = '<script>' . $adapterJs . '</script>';
