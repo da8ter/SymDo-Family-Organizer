@@ -2329,7 +2329,10 @@ html[data-symdo-theme="dark"] .member-bar {
    ausgerichtet stehen; auf schmalen Schirmen bricht sie darueber um. */
 .note-view-meta { font-size: 12px; color: var(--muted); margin: 0 2px 10px; }
 .note-view { font-size: 14.5px; line-height: 1.5; }
-.note-view .nv-p { margin: 0 0 10px; }
+/* overflow-wrap wie in .nv-v: eine Zeile, die NICHT dem Muster
+   „Bezeichnung: Wert" folgt, kann genauso eine lange ununterbrochene Adresse
+   tragen — die sprengte sonst die Breite des Blatts. */
+.note-view .nv-p { margin: 0 0 10px; overflow-wrap: anywhere; }
 .note-view .nv-row {
   display: flex;
   gap: 10px;
@@ -8666,7 +8669,10 @@ function renderNotizenDetail(el, ordner) {
           notizenAktion({ action: 'noteDelete', id: nid });
         });
       },
-      () => { restoreCard(card); noteOeffnen(nid); },
+      // Der Wisch nach rechts zeigt einen STIFT und muss deshalb den Editor
+      // oeffnen. Seit „Notiz ansehen statt bearbeiten" rief er noteOeffnen — also
+      // dasselbe wie ein einfacher Tipp, und die Geste war ohne Wirkung.
+      () => { restoreCard(card); noteBearbeitenOeffnen(nid); },
       { dissolve: false });
   });
 }
@@ -8684,10 +8690,23 @@ function notesDatum(sek) {
 
 /** Volltext holen und dann oeffnen: die Liste traegt nur eine Vorschau. */
 function noteOeffnen(nid) {
+  noteHolen(nid, (notiz) => noteAnsichtOeffnen(notiz));
+}
+
+/** Derselbe Weg, aber direkt in den Editor — fuer den Wisch mit dem Stift. */
+function noteBearbeitenOeffnen(nid) {
+  noteHolen(nid, (notiz) => noteEditorOeffnen(notiz));
+}
+
+/**
+ * Volltext einer Notiz holen. Noetig, weil die Liste nur eine Vorschau traegt
+ * (NOTE_PREVIEW_MAX) — der Editor und die Ansicht brauchen beide den ganzen Text.
+ */
+function noteHolen(nid, weiter) {
   aiPost('/notes', { action: 'get', id: nid }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !j.note) { showToast(notizenFehlertext(j)); return; }
-    noteAnsichtOeffnen(j.note);
+    weiter(j.note);
   }).catch(() => showToast(translate('Action failed')));
 }
 

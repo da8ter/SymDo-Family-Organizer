@@ -76,7 +76,18 @@ trait NotesAi
             $pdf !== '' ? $pdf : null
         );
         if (($r['ok'] ?? false) !== true) {
-            return $this->NotesFehler((string)($r['code'] ?? 'ai_upstream'));
+            // Mitschreiben, denn dieser Aufruf ist BEZAHLT. Beim Mailweg steht dazu
+            // ein KL_ERROR; hier stand nirgends etwas — ein an einem langen PDF
+            // volllaufendes Token-Budget (ai_truncated) verwarf das ganze Ergebnis
+            // still, und im Protokoll war nichts zu finden.
+            $code = (string)($r['code'] ?? 'ai_upstream');
+            $this->SendDebug('NotesAi', 'Analyse fehlgeschlagen (' . $code . '): '
+                . mb_substr((string)($r['message'] ?? ''), 0, 200), 0);
+            if ($code === 'ai_truncated') {
+                $this->LogMessage('SymDo Notizen: Die KI-Antwort war unvollstaendig '
+                    . '(Token-Budget erschoepft) — die Datei ist zu umfangreich.', KL_WARNING);
+            }
+            return $this->NotesFehler($code);
         }
         $erg = $this->NotesParseAi((string)$r['text']);
         return ['ok' => true, 'note' => ['title' => $erg['title'], 'text' => $erg['text']],

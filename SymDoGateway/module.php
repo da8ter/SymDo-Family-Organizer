@@ -1480,7 +1480,7 @@ class SymDoGateway extends IPSModuleStrict
                     'name'    => 'MailDailyLimit',
                     'caption' => $this->Translate('Maximum AI calls per day (0 = no limit)'),
                     'minimum' => 0,
-                    'width'   => '120px'
+                    'width'   => '200px'
                 ],
                 [
                     'type'    => 'CheckBox',

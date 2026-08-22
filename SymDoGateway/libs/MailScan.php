@@ -1836,6 +1836,25 @@ trait MailScan
         return $n;
     }
 
+    /**
+     * Ist der Vorschlagsbestand ueberhaupt LESBAR?
+     *
+     * MailProposals() kann nicht zwischen „leer" und „unlesbar" unterscheiden — bei
+     * kaputtem JSON oder fehlendem Attribut liefert es beides Mal []. Wer daraus
+     * schliesst, es gaebe keine Vorschlaege, raeumt fremde Anhaenge ab
+     * (NotesSweepOrphans). Diese Probe unterscheidet es, ohne etwas zu aendern:
+     * ein leeres Attribut ist in Ordnung (dann gibt es wirklich nichts), nur ein
+     * gefuelltes, das kein Array ergibt, ist ein Zweifelsfall.
+     */
+    private function MailProposalsReadable(): bool
+    {
+        $roh = $this->MailAttr('MailProposals', '[]');
+        if (trim($roh) === '') {
+            return true;
+        }
+        return is_array(json_decode($roh, true));
+    }
+
     private function MailProposals(): array
     {
         $alle = json_decode($this->MailAttr('MailProposals', '[]'), true);

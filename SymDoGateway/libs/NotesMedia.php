@@ -427,9 +427,15 @@ trait NotesMedia
     {
         // Ohne benutzbaren Bestand NICHT aufraeumen. Ein unlesbares Attribut liefert
         // eine leere Notizliste — dann saehe JEDER Anhang wie eine Waise aus und der
-        // Durchlauf loeschte den ganzen Bestand. Dasselbe gilt fuer die
-        // Mail-Vorschlaege, die aus demselben Grund leer erscheinen koennen.
-        if (!$this->NotesStorable()) {
+        // Durchlauf loeschte den ganzen Bestand.
+        //
+        // ACHTUNG, Reichweite: NotesStorable prueft NUR das Notizen-Attribut. Fuer
+        // die Mail-Vorschlaege gilt derselbe Zweifel — auch MailProposals() liefert
+        // bei unlesbarem Attribut still eine leere Liste — deshalb die zweite Wache
+        // darunter: ist der Vorschlagsbestand nicht lesbar, wird ebenfalls nichts
+        // geloescht. (Fruehere Fassung dieses Kommentars behauptete, NotesStorable
+        // deckte beides ab. Tat es nicht.)
+        if (!$this->NotesStorable() || !$this->MailProposalsReadable()) {
             return 0;
         }
         $lebt = array_merge(

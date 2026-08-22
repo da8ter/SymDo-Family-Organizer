@@ -345,6 +345,34 @@ trait AiExtract
         if (!function_exists('imagecreatefromstring')) {
             return null;
         }
+        // Kantenmasse ZUERST, ohne das Bild zu laden. GD braucht je Pixel vier Byte,
+        // Symcons php.ini erlaubt 32 MB: ein 12-MP-Foto (4032x3024) will rund 48 MB
+        // und ist damit ein „Allowed memory size exhausted" — ein FATAL, den das
+        // try/catch unten NICHT faengt. Der Weg ist erreichbar: AiReadMedia ruft
+        // hier den Altbestand auf, also die Dateien, die vor der Groessenbegrenzung
+        // unskaliert abgelegt wurden.
+        if (function_exists('getimagesizefromstring')) {
+            $mass = @getimagesizefromstring($binaer);
+            if (is_array($mass) && (int)($mass[0] ?? 0) > 0 && (int)($mass[1] ?? 0) > 0) {
+                if ((int)$mass[0] * (int)$mass[1] > self::AI_MAX_PIXEL) {
+                    return null;
+                }
+            }
+        }
+        // Und trotzdem Luft geben: auch ein erlaubtes Bild kostet in GD ein
+        // Vielfaches seiner Dateigroesse. Zurueckgesetzt wird in jedem Fall.
+        $speicherVorher = (string)@ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+        try {
+            return $this->AiScaleImageGd($binaer, $maxKante);
+        } finally {
+            @ini_set('memory_limit', $speicherVorher);
+        }
+    }
+
+    /** Der eigentliche GD-Teil. Nur aus AiScaleImage heraus aufrufen (Masspruefung dort). */
+    private function AiScaleImageGd(string $binaer, int $maxKante): ?string
+    {
         $bild = @imagecreatefromstring($binaer);
         if ($bild === false) {
             return null;
@@ -418,16 +446,29 @@ trait AiExtract
                     'message' => $this->Translate('This PDF is too large to be stored and reopened here.')]];
             }
         } else {
+            // ZWEI Schritte, und die Reihenfolge ist der Punkt:
+            //  1. Auf AI_MEDIA_EDGE normalisieren — das ist die Auflösung, in der
+            //     abgelegt werden SOLL. (Nur AiFitImageForRelay zu nehmen waere
+            //     falsch: es fragt bloss „passt es?" und liefert entweder das
+            //     unskalierte Original oder eine unnoetig kleine Fassung.)
+            //  2. Danach pruefen, ob das Ergebnis auch abrufbar ist. AiScaleImage
+            //     allein verkleinert nur bei Kante > 1600 — ein 1600er Scan wurde
+            //     also bloss neu kodiert und konnte weiter ueber der Ausgabegrenze
+            //     liegen. Dann waere die Datei abgelegt und nie wieder abrufbar,
+            //     genau was dieser Riegel verhindern soll.
             $klein = $this->AiScaleImage($raw);
             if ($klein !== null) {
                 $raw = $klein;
-                $base64 = base64_encode($raw);
-            } elseif (strlen($raw) > $this->OutputLimit()) {
-                // Ohne GD nicht ungeprueft durchlassen: die Datei waere nie wieder
-                // abrufbar. Derselbe Riegel wie fuer PDF.
-                return ['ok' => false, 'error' => ['code' => 'file_too_large',
-                    'message' => $this->Translate('This photo is too large to be stored and reopened here.')]];
             }
+            if (strlen($raw) > $this->OutputLimit()) {
+                $passt = $this->AiFitImageForRelay($raw, $this->OutputLimit());
+                if ($passt === null) {
+                    return ['ok' => false, 'error' => ['code' => 'file_too_large',
+                        'message' => $this->Translate('This photo is too large to be stored and reopened here.')]];
+                }
+                $raw = $passt;
+            }
+            $base64 = base64_encode($raw);
         }
         $cat = $this->AiRecipePhotoCategory();
         if ($cat <= 0) {
@@ -478,7 +519,11 @@ trait AiExtract
             // Antwort, die als kaputte Datei ankommt.
             $roh = base64_decode($content, true);
             if (is_string($roh) && strlen($roh) > $this->OutputLimit()) {
-                $klein = $isPdf ? null : $this->AiScaleImage($roh);
+                // Wieder AiFitImageForRelay: nach einem AiScaleImage allein war NICHT
+                // geprueft, ob das Ergebnis nun unter der Ausgabegrenze liegt — und
+                // Symcon ERSETZT die Antwort, sobald sie darueber geht. Der Client
+                // bekaeme eine kaputte Datei bei HTTP 200.
+                $klein = $isPdf ? null : $this->AiFitImageForRelay($roh, $this->OutputLimit());
                 if ($klein !== null) {
                     $content = base64_encode($klein);
                 } else {
@@ -878,6 +923,13 @@ trait AiExtract
      */
     /** Grosszuegig, aber nicht unbegrenzt: der Vorschlagsbestand ist ein Attribut. */
     private const AI_INFO_MAX = 6000;
+
+    /**
+     * Obergrenze fuer GD, in Pixeln. 24 MP deckt jedes Handyfoto ab und kostet in
+     * GD rund 96 MB — deshalb steht die Anhebung des memory_limit daneben. Darueber
+     * gibt es eine Absage statt eines Abbruchs.
+     */
+    private const AI_MAX_PIXEL = 24000000;
 
     /**
      * Ein Feld aus der Modellantwort als Zeichenkette — NIE mit (string) auf einen
