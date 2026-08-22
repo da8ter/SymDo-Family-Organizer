@@ -54,8 +54,12 @@ trait NotesAi
             && !$this->AiRateLimitAllows((string)($device['id'] ?? ''), self::AI_RATE_MAX, self::AI_RATE_WINDOW)) {
             return $this->NotesFehler('ai_quota');
         }
-        $pdf   = $this->AiStripImage((string)($body['pdf'] ?? ''));
-        $image = $this->AiStripImage((string)($body['image'] ?? ''));
+        // AiRowStr und nicht (string): `{"action":"analyse","pdf":[]}` erzeugte sonst
+        // eine PHP-Warnung im Antwortkoerper und zerlegte das JSON. Der Helfer liegt
+        // in AiExtract, dem Trait, aus dem diese Datei ohnehin lebt — BodyStr waere
+        // dasselbe, holte aber eine Abhaengigkeit auf den Router herein.
+        $pdf   = $this->AiStripImage($this->AiRowStr($body, 'pdf'));
+        $image = $this->AiStripImage($this->AiRowStr($body, 'image'));
         if ($pdf !== '' && strlen($pdf) > self::AI_MAX_PDF_B64) {
             return $this->NotesFehler('file_too_large');
         }
@@ -88,7 +92,7 @@ trait NotesAi
             . '### TITEL' . "\n"
             . 'eine einzige kurze Zeile, hoechstens 60 Zeichen' . "\n"
             . '### NOTIZ' . "\n"
-            . 'der Inhalt in eigenen Worten, beliebig viele Zeilen, hoechstens 1500 Zeichen' . "\n"
+            . 'der Inhalt in eigenen Worten, beliebig viele Zeilen, hoechstens 2700 Zeichen' . "\n"
             . '### FUNDE' . "\n"
             . '[ ... ]' . "\n\n"
             . 'ZUM TITEL: Er benennt die Sache, nicht die Gattung. „Elternabend 3b am 12.09." '

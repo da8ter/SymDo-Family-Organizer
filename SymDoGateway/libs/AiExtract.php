@@ -439,7 +439,9 @@ trait AiExtract
         }
         $mid = IPS_CreateMedia($isPdf ? MEDIATYPE_DOCUMENT : MEDIATYPE_IMAGE);
         IPS_SetParent($mid, $cat);
-        $name = trim($name);
+        // Auf 80 Zeichen wie NotesSaveAttachment — ein Client kann sonst
+        // Objekte mit beliebig langem Namen im Objektbaum anlegen.
+        $name = mb_substr(trim($name), 0, 80);
         IPS_SetName($mid, $name !== '' ? $name : $this->Translate($isPdf ? 'Recipe file' : 'Recipe photo'));
         // Ein Medienobjekt braucht erst eine Datei, bevor Content gesetzt werden kann.
         IPS_SetMediaFile($mid, 'media/recipe_' . $mid . ($isPdf ? '.pdf' : '.jpg'), false);
@@ -874,6 +876,48 @@ trait AiExtract
      *
      * @param string[] $arten erlaubte Werte fuer "kind"
      */
+    /** Grosszuegig, aber nicht unbegrenzt: der Vorschlagsbestand ist ein Attribut. */
+    private const AI_INFO_MAX = 6000;
+
+    /**
+     * Ein Feld aus der Modellantwort als Zeichenkette — NIE mit (string) auf einen
+     * unbekannten Wert. Liefert das Modell dort ein Array oder Objekt, waere das
+     * eine PHP-Warnung in der HTTP-Antwort (siehe BodyStr in ApiRouter).
+     */
+    private function AiRowStr(array $row, string $key, string $vorgabe = ''): string
+    {
+        $wert = $row[$key] ?? null;
+        if ($wert === null) {
+            return $vorgabe;
+        }
+        return is_scalar($wert) ? (string)$wert : $vorgabe;
+    }
+
+    /**
+     * Freitextfeld, das auch als LISTE kommen darf: verschachtelte Werte werden zu
+     * je einer Zeile. Das ist der Fall, den der Aufzaehlungs-Prompt geradezu
+     * einlaedt.
+     */
+    private function AiRowText(mixed $wert, int $max): string
+    {
+        if ($wert === null) {
+            return '';
+        }
+        if (is_scalar($wert)) {
+            return mb_substr(trim((string)$wert), 0, $max);
+        }
+        if (!is_array($wert)) {
+            return '';
+        }
+        $zeilen = [];
+        array_walk_recursive($wert, static function (mixed $v) use (&$zeilen): void {
+            if (is_scalar($v) && trim((string)$v) !== '') {
+                $zeilen[] = trim((string)$v);
+            }
+        });
+        return mb_substr(implode("\n", $zeilen), 0, $max);
+    }
+
     private function AiValidateTodoRows(array $rows, array $arten = ['task', 'event']): array
     {
         $out  = [];
@@ -881,21 +925,31 @@ trait AiExtract
             if (!is_array($row)) {
                 continue;
             }
-            $title = trim((string)($row['title'] ?? ''));
+            // Auf NOTE_TITLE_MAX gekappt: ungedeckelt baute die KI aus einem
+            // Elternbrief Titel von weit ueber 120 Zeichen, der Editor fuellte sie
+            // vor, und jedes Speichern lief in „invalid_payload" — eine Sackgasse,
+            // aus der der Nutzer nur durch Kuerzen von Hand herauskam.
+            $title = mb_substr(trim($this->AiRowStr($row, 'title')), 0, self::NOTE_TITLE_MAX);
             if ($title === '') {
                 continue;
             }
-            $info = $row['info'] ?? null;
-            $info = ($info === null || $info === '') ? null : (string)$info;
+            // „info" darf eine LISTE sein: der Prompt verlangt ausdruecklich, dass
+            // Aufzaehlungen vollstaendig hierher kommen — ein Modell antwortet darauf
+            // durchaus mit einem JSON-Array. Ein (string)-Cast darauf erzeugte eine
+            // PHP-Warnung, und die landet im Hook VOR dem JSON und zerlegt die
+            // Antwort (derselbe Grund, aus dem es BodyStr gibt). Deckel dazu: der
+            // Vorschlagsbestand ist ein Attribut ohne Byte-Grenze.
+            $info = $this->AiRowText($row['info'] ?? null, self::AI_INFO_MAX);
+            $info = ($info === '') ? null : $info;
 
-            $due = trim((string)($row['due'] ?? ''));
+            $due = trim($this->AiRowStr($row, 'due'));
             if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $due, $m) && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
                 // gültiges Kalenderdatum
             } else {
                 $due = null;
             }
 
-            $priority = strtolower(trim((string)($row['priority'] ?? 'normal')));
+            $priority = strtolower(trim($this->AiRowStr($row, 'priority', 'normal')));
             if (!in_array($priority, ['high', 'normal', 'low'], true)) {
                 $priority = 'normal';
             }
@@ -903,7 +957,7 @@ trait AiExtract
             // Uhrzeit nur, wenn auch ein Datum steht — eine Zeit ohne Tag ist
             // wertlos. Liefert das Modell keine (Foto-Scan), bleibt alles wie bisher
             // und die Aufgabe wird ganztaegig.
-            $time = trim((string)($row['time'] ?? ''));
+            $time = trim($this->AiRowStr($row, 'time'));
             if ($due === null || preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $time) !== 1) {
                 $time = null;
             }
@@ -911,14 +965,14 @@ trait AiExtract
             // Aufgabe oder Termin? Eine Aufgabe muss man TUN, ein Termin FINDET STATT.
             // Fehlt das Feld (Foto-Scan, aeltere Antworten), bleibt es eine Aufgabe —
             // damit aendert sich fuer die vorhandenen Wege nichts.
-            $kind = strtolower(trim((string)($row['kind'] ?? 'task')));
+            $kind = strtolower(trim($this->AiRowStr($row, 'kind', 'task')));
             if (!in_array($kind, $arten, true)) {
                 $kind = 'task';
             }
 
             // Ende nur bei Terminen und nur mit Beginn. Es darf nicht vor dem Beginn
             // liegen; ein einzelner Tag braucht kein Ende.
-            $end = trim((string)($row['end'] ?? ''));
+            $end = trim($this->AiRowStr($row, 'end'));
             if ($kind !== 'event' || $due === null
                 || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $end, $me) !== 1
                 || !checkdate((int)$me[2], (int)$me[3], (int)$me[1])
@@ -952,7 +1006,15 @@ trait AiExtract
                 // Eine Notiz hat keine Frist und keinen Takt — sie hat einen Text.
                 // Rueckfall auf "info", weil kleine Modelle die Zusammenfassung
                 // dorthin schreiben, wo der Prompt sie bisher haben wollte.
-                $eintrag['text'] = mb_substr(trim((string)($row['text'] ?? $row['info'] ?? '')), 0, 2000);
+                // NOTE_TEXT_MAX statt einer eigenen Zahl: die 2000 hier blieben beim
+                // Anheben der Grenzen stehen, waehrend der Prompt 2700 verlangt und der
+                // Bestand 3000 traegt — 700 Zeichen wurden mitten im Satz still
+                // verworfen, genau die Aufzaehlungen, um die es ging.
+                $eintrag['text'] = mb_substr(
+                    trim($this->AiRowText($row['text'] ?? ($row['info'] ?? null), self::NOTE_TEXT_MAX)),
+                    0,
+                    self::NOTE_TEXT_MAX
+                );
                 $eintrag['due'] = null;
                 $eintrag['time'] = null;
                 $eintrag['end'] = null;
