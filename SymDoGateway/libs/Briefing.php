@@ -58,6 +58,12 @@ trait Briefing
 
     /** Dasselbe fuer Azure-MP3 mit 48 kbit/s — siehe Rechnung in BriefingAudioBudget. */
     private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
+
+    /**
+     * Dasselbe fuer ElevenLabs. Wir holen mp3_22050_32, also 32 kbit/s = 4000 B/s;
+     * bei etwa 15 Zeichen/s sind das rund 265 B je Zeichen. Mit Luft: 300.
+     */
+    private const BRIEFING_TTS_BYTES_ELEVEN_MP3 = 300;
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
     private const BRIEFING_TTS_FORMAT = 'aac';
 
@@ -1305,13 +1311,25 @@ trait Briefing
         // englischer Anweisungssatz, hier „de-DE-KatjaNeural" und SSML. Beides an
         // einer Stelle entschieden, damit nie eine OpenAI-Stimme mit SSML oder
         // umgekehrt zusammenkommt.
-        $azure     = $this->TtsProvider() === 'azure';
-        $stimme    = $azure ? $this->BriefingAzureVoice() : $this->BriefingVoice();
-        $anweisung = $azure ? $this->BriefingAzureSsml()  : $this->BriefingSpeechStyle();
+        $anbieter = $this->TtsProvider();
+        if ($anbieter === 'azure') {
+            $stimme    = $this->BriefingAzureVoice();
+            $anweisung = $this->BriefingAzureSsml();
+        } elseif ($anbieter === 'elevenlabs') {
+            // Dort gibt es keine Stimme JE PERSONA: welche Stimmen ein Konto hat,
+            // weiss nur das Konto. Es gilt die eingestellte, und der Ausdruck kommt
+            // aus den Reglern — TtsElevenSettings liest dafuer den deutschen
+            // Anweisungssatz der Persona (leise/laut/sachlich).
+            $stimme    = '';
+            $anweisung = $this->BriefingSpeechStyle();
+        } else {
+            $stimme    = $this->BriefingVoice();
+            $anweisung = $this->BriefingSpeechStyle();
+        }
         $format    = $this->TtsFormat(self::BRIEFING_TTS_FORMAT);
         $budget    = $this->BriefingAudioBudget();
         $this->SendDebug('Briefing', sprintf('Ton: %s/%s, Stimme %s, %d Zeichen, Teilgroesse %d',
-            $azure ? 'azure' : 'openai', $format, $stimme, mb_strlen($vorlesen), $budget), 0);
+            $anbieter, $format, $stimme === '' ? '(eingestellte)' : $stimme, mb_strlen($vorlesen), $budget), 0);
 
         $kennungen = [];
         foreach ($this->BriefingSpeechParts($vorlesen, $budget) as $teil) {
@@ -1359,9 +1377,14 @@ trait Briefing
         // 48000 Bit/s / 8 = 6000 B/s, und die Sprechgeschwindigkeit lag bei etwa
         // 15 Zeichen/s → rund 400 B/Zeichen. Mit Luft: 420. Zu hoch angesetzt teilt
         // die Aufnahme unnoetig, zu niedrig reisst die Ausgabegrenze.
-        $jeZeichen = $this->TtsProvider() === 'azure'
-            ? self::BRIEFING_TTS_BYTES_AZURE_MP3
-            : self::BRIEFING_TTS_BYTES_AAC;
+        $anbieter = $this->TtsProvider();
+        if ($anbieter === 'azure') {
+            $jeZeichen = self::BRIEFING_TTS_BYTES_AZURE_MP3;
+        } elseif ($anbieter === 'elevenlabs') {
+            $jeZeichen = self::BRIEFING_TTS_BYTES_ELEVEN_MP3;
+        } else {
+            $jeZeichen = self::BRIEFING_TTS_BYTES_AAC;
+        }
         return max(200, (int)($platz / $jeZeichen));
     }
 

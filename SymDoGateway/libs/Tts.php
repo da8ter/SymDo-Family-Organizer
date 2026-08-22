@@ -32,6 +32,14 @@ trait Tts
     /** Vorgabe, wenn keine Persona-Stimme mitkommt. Neutral und gut verstaendlich. */
     private const TTS_AZURE_VOICE = 'de-DE-KatjaNeural';
 
+    /**
+     * Vorgabestimme bei ElevenLabs: „Rachel", eine der oeffentlichen Stimmen, die
+     * jedes Konto kennt. Sie ist englisch trainiert und spricht Deutsch ueber das
+     * mehrsprachige Modell — mit leichtem Akzent. Wer es akzentfrei will, traegt die
+     * Kennung einer deutschen Stimme aus seinem Konto ein (Knopf „Stimmen abrufen").
+     */
+    private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
+
 
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
@@ -55,9 +63,17 @@ trait Tts
         // Stilen: `mstts:express-as` kennen die DEUTSCHEN Stimmen fast nicht — nur
         // ConradNeural, und dort nur „cheerful" und „sad". Der Ausdruck kommt hier
         // also aus Stimmwahl plus prosody, nicht aus Stilnamen.
-        $this->RegisterPropertyString('TtsProvider', 'openai');   // openai | azure
+        $this->RegisterPropertyString('TtsProvider', 'openai');   // openai | azure | elevenlabs
         $this->RegisterPropertyString('TtsAzureKey', '');
         $this->RegisterPropertyString('TtsAzureRegion', 'westeurope');
+        // Dritter Anbieter. Braucht einen KOSTENPFLICHTIGEN Zugang: die freie Stufe
+        // hat keine kommerzielle Lizenz und verlangt Namensnennung im Ergebnis.
+        // Eine Stimme statt einer Liste: welche Stimmen ein Konto hat, weiss nur das
+        // Konto — die Kennungen sind nicht allgemeingueltig. Deshalb eintragbar, mit
+        // einer der oeffentlichen Vorgabestimmen als Startwert.
+        $this->RegisterPropertyString('TtsElevenKey', '');
+        $this->RegisterPropertyString('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
+        $this->RegisterPropertyString('TtsElevenModel', 'eleven_multilingual_v2');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -71,6 +87,11 @@ trait Tts
     {
         if (!$this->TtsStorageReady()) {
             return false;
+        }
+        if ($this->TtsProvider() === 'elevenlabs') {
+            // Wie bei Azure: eigener Dienst, eigener Schluessel — unabhaengig davon,
+            // welcher Anbieter die TEXTE schreibt.
+            return $this->TtsSetting('TtsElevenKey', '') !== '';
         }
         if ($this->TtsProvider() === 'azure') {
             // Azure haengt NICHT am KI-Anbieter: die Sprachausgabe ist ein eigener
@@ -88,7 +109,8 @@ trait Tts
     /** openai | azure — ueber TtsSetting, weil die Eigenschaft neu ist. */
     private function TtsProvider(): string
     {
-        return $this->TtsSetting('TtsProvider', 'openai') === 'azure' ? 'azure' : 'openai';
+        $wahl = $this->TtsSetting('TtsProvider', 'openai');
+        return in_array($wahl, ['azure', 'elevenlabs'], true) ? $wahl : 'openai';
     }
 
     /**
@@ -99,6 +121,10 @@ trait Tts
      */
     private function TtsFormat(string $wunsch): string
     {
+        if ($this->TtsProvider() === 'elevenlabs') {
+            // Dort gibt es weder AAC noch FLAC. MP3 in allen Faellen.
+            return 'mp3';
+        }
         if ($this->TtsProvider() !== 'azure') {
             return $wunsch;
         }
@@ -355,12 +381,23 @@ trait Tts
      */
     private function TtsHash(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
+        // Modell und Vorgabestimme je Anbieter: bei ElevenLabs stehen sie in eigenen
+        // Feldern. Ohne diese Unterscheidung aendert ein Stimmwechsel dort den
+        // Schluessel NICHT — die alte Aufnahme spielte weiter, obwohl eine andere
+        // Stimme eingestellt ist.
+        if ($this->TtsProvider() === 'elevenlabs') {
+            $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2');
+            $vorgabe = $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
+        } else {
+            $modell  = $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts');
+            $vorgabe = $this->TtsSetting('TtsVoice', 'alloy');
+        }
         return substr(hash('sha256',
             // Der Anbieter gehoert dazu, aus demselben Grund wie das Format: die
             // Aufnahme ist eine andere, der Text derselbe.
             $this->TtsProvider() . '|' .
-            $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
-            ($stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy')) . '|' .
+            $modell . '|' .
+            ($stimme !== '' ? $stimme : $vorgabe) . '|' .
             ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) . '|' .
             // Das Format gehoert dazu: Es steckt nicht im Text, macht aber eine ANDERE
             // Aufnahme. Ohne es wuerde nach einem Formatwechsel die alte weiterspielen —
@@ -431,6 +468,9 @@ trait Tts
      */
     private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
+        if ($this->TtsProvider() === 'elevenlabs') {
+            return $this->TtsRequestEleven($text, $stimme, $anweisung);
+        }
         if ($this->TtsProvider() === 'azure') {
             return $this->TtsRequestAzure($text, $stimme, $anweisung, $format);
         }
@@ -534,6 +574,188 @@ trait Tts
             return '';
         }
         return $roh;
+    }
+
+    /**
+     * Ein GET mit Kopfzeilen — eigener kleiner Helfer, KEIN AiHttpGet.
+     *
+     * Dessen zweiter Parameter sind gepinnte IP-Adressen, keine Kopfzeilen: der
+     * Aufruf ist ein SSRF-gesicherter Abruf einer FREMDEN Webseite (Rezept-Links),
+     * mit vorgetaeuschter Browser-Kennung. Ein API-Aufruf gegen einen festen
+     * Endpunkt ist etwas anderes; die Formen zu vermischen hiesse, dass eine
+     * Aenderung an einem der beiden Zwecke den anderen trifft.
+     *
+     * @param list<string> $headers
+     * @return array{status:int,body:string,err:string}
+     */
+    private function TtsHttpGet(string $url, array $headers): array
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
+        ]);
+        $body = curl_exec($ch);
+        $err  = ($body === false) ? curl_error($ch) : '';
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['status' => $code, 'body' => is_string($body) ? $body : '', 'err' => $err];
+    }
+
+    /**
+     * Aktionen der Sprachausgabe. Ueber RequestAction und NICHT als neue public
+     * TGW_-Methode: die gaebe es erst nach einem Kernel-Neustart (dieselbe
+     * Begruendung wie beim KI-Relay in AppCore).
+     */
+    private function TtsRequestAction(string $ident, mixed $value): bool
+    {
+        if ($ident !== 'TtsElevenVoices') {
+            return false;
+        }
+        $this->UpdateFormField('TtsElevenStatus', 'caption', $this->TtsElevenVoiceList());
+        return true;
+    }
+
+    /**
+     * Die Stimmen abrufen, die der eingetragene Schluessel sehen darf.
+     *
+     * Noetig, weil die Kennungen NICHT allgemeingueltig sind: jedes Konto hat seine
+     * eigenen. Ohne diese Liste muesste man sie aus der Weboberflaeche von
+     * ElevenLabs heraussuchen und abtippen.
+     */
+    private function TtsElevenVoiceList(): string
+    {
+        $key = $this->TtsSetting('TtsElevenKey', '');
+        if ($key === '') {
+            return $this->Translate('No ElevenLabs key entered.');
+        }
+        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v1/voices', [
+            'xi-api-key: ' . $key,
+            'Accept: application/json',
+            'User-Agent: SymDoGateway',
+        ]);
+        $status = (int)($resp['status'] ?? 0);
+        if (($resp['err'] ?? '') !== '' || $status !== 200) {
+            return sprintf($this->Translate('Could not fetch the voices (HTTP %d).'), $status);
+        }
+        $d = json_decode((string)($resp['body'] ?? ''), true);
+        $stimmen = is_array($d) && is_array($d['voices'] ?? null) ? $d['voices'] : [];
+        if ($stimmen === []) {
+            return $this->Translate('The key is valid, but the account holds no voices.');
+        }
+        $zeilen = [];
+        foreach (array_slice($stimmen, 0, 40) as $v) {
+            if (!is_array($v)) {
+                continue;
+            }
+            $sprachen = [];
+            foreach ((array)($v['labels'] ?? []) as $k => $w) {
+                if (is_scalar($w) && in_array((string)$k, ['language', 'accent', 'gender'], true)) {
+                    $sprachen[] = (string)$w;
+                }
+            }
+            $zeilen[] = (string)($v['name'] ?? '?')
+                . ($sprachen !== [] ? ' (' . implode(', ', $sprachen) . ')' : '')
+                . ' — ' . (string)($v['voice_id'] ?? '?');
+        }
+        return implode("\n", $zeilen);
+    }
+
+    /**
+     * ElevenLabs. POST /v1/text-to-speech/{voice_id}, Schluessel im Kopf `xi-api-key`,
+     * Antwort sind rohe Audiodaten.
+     *
+     * Der Ausdruck kommt hier NICHT aus einer Anweisung im Text (wie bei OpenAI) und
+     * nicht aus SSML (wie bei Azure), sondern aus `voice_settings`. Deshalb reist die
+     * Persona-Anweisung als Stellwerk-Angabe mit: `stability` niedrig heisst mehr
+     * Ausdruck und mehr Streuung, hoch heisst gleichmaessig und flach.
+     *
+     * Das mehrsprachige Modell spricht Deutsch mit jeder Stimme; eine englisch
+     * trainierte behaelt dabei einen leichten Akzent.
+     */
+    private function TtsRequestEleven(string $text, string $stimme, string $anweisung): string
+    {
+        $key = $this->TtsSetting('TtsElevenKey', '');
+        if ($key === '') {
+            return '';
+        }
+        $voice = $stimme !== '' ? $stimme : $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
+        // Nur was in einen Pfad gehoert: die Kennungen sind alphanumerisch. Ohne diese
+        // Wache truege ein vertippter Wert Schraegstriche in die Adresse.
+        $voice = preg_replace('/[^A-Za-z0-9_-]/', '', $voice) ?? '';
+        if ($voice === '') {
+            $voice = self::TTS_ELEVEN_VOICE;
+        }
+        $felder = [
+            'text'          => $text,
+            'model_id'      => $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2'),
+            'output_format' => 'mp3_22050_32',
+            'voice_settings' => $this->TtsElevenSettings($anweisung),
+        ];
+        $resp = $this->AiHttpPost(
+            'https://api.elevenlabs.io/v1/text-to-speech/' . $voice,
+            [
+                'xi-api-key: ' . $key,
+                'Content-Type: application/json',
+                'Accept: audio/mpeg',
+                'User-Agent: SymDoGateway',
+            ],
+            (string)json_encode($felder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+        $status = (int)($resp['status'] ?? 0);
+        $roh    = (string)($resp['body'] ?? '');
+        if (($resp['err'] ?? '') !== '') {
+            $this->SendDebug('TTS', 'ElevenLabs HTTP-Fehler: ' . $resp['err'], 0);
+            return '';
+        }
+        if ($status !== 200 || $roh === '') {
+            // Im Fehlerfall kommt JSON mit `detail`; die ersten 300 Zeichen genuegen.
+            $this->SendDebug('TTS', 'ElevenLabs Antwort ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            return '';
+        }
+        // Gegenprobe: MP3 beginnt mit „ID3" oder einem Frame-Kopf (0xFF 0xFB/0xF3/0xF2).
+        // Eine JSON-Fehlermeldung mit Status 200 waere sonst als Tondatei abgelegt.
+        if (!str_starts_with($roh, 'ID3') && !(strlen($roh) > 1 && $roh[0] === "\xFF")) {
+            $this->SendDebug('TTS', 'ElevenLabs: erwartete Audiodaten, bekam ' . mb_substr($roh, 0, 200), 0);
+            return '';
+        }
+        return $roh;
+    }
+
+    /**
+     * Die Persona-Anweisung auf die vier Regler von ElevenLabs uebersetzen.
+     *
+     * Es gibt dort kein Feld fuer eine Anweisung in Worten. Was bei OpenAI
+     * „fluestere verschwoererisch" ist, muss hier ueber `stability` (Gleichmass
+     * gegen Ausdruck) und `style` (Uebertreibung) laufen. Grob, aber nicht geraten:
+     * die Anweisung nennt die Tonlage, und danach richtet sich der Ausdruck.
+     *
+     * @return array<string,float|bool>
+     */
+    private function TtsElevenSettings(string $anweisung): array
+    {
+        $t = mb_strtolower($anweisung);
+        $ausdrucksstark = $t !== '' && (
+            str_contains($t, 'laut') || str_contains($t, 'schrei') || str_contains($t, 'befehl')
+            || str_contains($t, 'aufgeregt') || str_contains($t, 'begeistert')
+            || str_contains($t, 'loud') || str_contains($t, 'shout') || str_contains($t, 'excited')
+            || str_contains($t, 'drill') || str_contains($t, 'energisch')
+        );
+        $sachlich = $t !== '' && (
+            str_contains($t, 'sachlich') || str_contains($t, 'ruhig') || str_contains($t, 'neutral')
+            || str_contains($t, 'calm') || str_contains($t, 'neutral')
+        );
+        if ($ausdrucksstark) {
+            return ['stability' => 0.25, 'similarity_boost' => 0.75, 'style' => 0.65, 'use_speaker_boost' => true];
+        }
+        if ($sachlich) {
+            return ['stability' => 0.80, 'similarity_boost' => 0.75, 'style' => 0.10, 'use_speaker_boost' => true];
+        }
+        return ['stability' => 0.50, 'similarity_boost' => 0.75, 'style' => 0.35, 'use_speaker_boost' => true];
     }
 
     /** Unsere Formatnamen auf die von Azure. */

@@ -304,7 +304,16 @@
             "Sends one notification carrying an image, buttons, an icon and a long text — to see what this device actually shows. Continue?": "Schickt eine Benachrichtigung mit Bild, Knöpfen, eigenem Symbol und langem Text — um zu sehen, was dieses Gerät davon wirklich anzeigt. Fortfahren?",
             "This message carries an image, buttons, an icon and a tag. Note what of it actually appears — and pull the notification down to see whether the long text is shown in full. ": "Diese Nachricht trägt Bild, Knöpfe, Symbol und Kennung. Achte darauf, was davon erscheint — und zieh die Meldung auf, um zu sehen, ob der lange Text vollständig steht. ",
             "Open": "Öffnen",
-            "Dismiss": "Wegklicken"
+            "Dismiss": "Wegklicken",
+            "ElevenLabs (own key, paid account required)": "ElevenLabs (eigener Schlüssel, kostenpflichtiger Zugang nötig)",
+            "ElevenLabs API key": "ElevenLabs API-Schlüssel",
+            "ElevenLabs voice ID": "ElevenLabs Stimm-Kennung",
+            "ElevenLabs model (eleven_multilingual_v2 speaks German)": "ElevenLabs Modell (eleven_multilingual_v2 spricht Deutsch)",
+            "List voices of the account": "Stimmen des Kontos abrufen",
+            "No ElevenLabs key entered.": "Kein ElevenLabs-Schlüssel eingetragen.",
+            "Could not fetch the voices (HTTP %d).": "Die Stimmen konnten nicht abgerufen werden (HTTP %d).",
+            "The key is valid, but the account holds no voices.": "Der Schlüssel ist gültig, das Konto hat aber keine Stimmen.",
+            "ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). \"List voices of the account\" fetches the IDs available to your key.": "ElevenLabs braucht einen KOSTENPFLICHTIGEN Zugang: die freie Stufe gewährt keine kommerzielle Lizenz und verlangt, dass jede erzeugte Datei ElevenLabs nennt. Es gibt dort auch keine Stimme je Persona — welche Stimmen ein Konto hat, weiß nur das Konto. Alle Personas benutzen deshalb die oben eingetragene Stimme, und ihr Charakter kommt aus den Reglern (ausdrucksstark gegen gleichmäßig). „Stimmen des Kontos abrufen\" holt die Kennungen, die Ihr Schlüssel sehen darf."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

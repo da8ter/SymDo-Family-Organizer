@@ -181,6 +181,9 @@ class SymDoGateway extends IPSModuleStrict
         if ($this->PushRequestAction($Ident, $Value)) {
             return;
         }
+        if ($this->TtsRequestAction($Ident, $Value)) {
+            return;
+        }
         if ($this->AppRequestAction($Ident, $Value)) {
             return;
         }
@@ -219,6 +222,33 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     public function GetConfigurationForm(): string
+    {
+        // Ein Netz um den GANZEN Aufbau.
+        //
+        // Grund, am 22.08.2026 beobachtet: unmittelbar nach dem Neuschreiben der
+        // Modul-Dateien ist die Instanz-Schnittstelle fuer eine Anfrage noch nicht
+        // gebunden. `Translate()` liefert dann `false` statt einer Zeichenkette —
+        // und ein `sprintf(false, …)` ist bei strict_types ein Fatal. Der Nutzer
+        // sah statt der Konfiguration eine PHP-Fehlerseite, obwohl ein erneutes
+        // Oeffnen genuegt.
+        //
+        // Einzelne Stellen zu haerten hilft nicht: in diesem Zustand liefert JEDER
+        // Uebersetzungsaufruf false, der Fatal wanderte nur zur naechsten Stelle.
+        // Deshalb hier, an der einen Stelle, die alle umfasst.
+        try {
+            return $this->BuildConfigurationForm();
+        } catch (Throwable $e) {
+            $this->SendDebug('Form', 'Aufbau gescheitert: ' . $e->getMessage(), 0);
+            return (string)json_encode(['elements' => [[
+                'type'    => 'Label',
+                'caption' => "Die Konfiguration konnte gerade nicht aufgebaut werden — "
+                    . "das passiert unmittelbar nach einem Modul-Update. Bitte dieses "
+                    . "Fenster schliessen und erneut oeffnen.\n\n" . $e->getMessage()
+            ]]]);
+        }
+    }
+
+    private function BuildConfigurationForm(): string
     {
         // form.json traegt die App-Seite. Symcon mergt NICHT: ist
         // GetConfigurationForm ueberschrieben, gewinnt die Methode vollstaendig —
@@ -2035,6 +2065,7 @@ class SymDoGateway extends IPSModuleStrict
                         'options' => [
                             ['caption' => $this->Translate('OpenAI (same key as the AI)'), 'value' => 'openai'],
                             ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
+                            ['caption' => $this->Translate('ElevenLabs (own key, paid account required)'), 'value' => 'elevenlabs'],
                         ]
                     ],
                     [
@@ -2057,6 +2088,38 @@ class SymDoGateway extends IPSModuleStrict
                     [
                         'type'    => 'Label',
                         'caption' => $this->Translate('Azure brings 17 German voices instead of 13 mixed-language ones, and its speech markup really does control tempo and pauses — with OpenAI the speed parameter is ignored. Free tier F0: 0.5 million characters per month, which is about ten times our consumption. Note: the speaking styles (cheerful, sad, shouting) that Azure advertises exist for German on one single voice, so the character comes from the choice of voice and from tempo, not from style names.')
+                    ],
+                    [
+                        'type'    => 'PasswordTextBox',
+                        'name'    => 'TtsElevenKey',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('ElevenLabs API key')
+                    ],
+                    [
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'TtsElevenVoice',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('ElevenLabs voice ID')
+                    ],
+                    [
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'TtsElevenModel',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('ElevenLabs model (eleven_multilingual_v2 speaks German)')
+                    ],
+                    [
+                        'type'    => 'Button',
+                        'caption' => $this->Translate('List voices of the account'),
+                        'onClick' => 'IPS_RequestAction($id, \'TtsElevenVoices\', 0);'
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'name'    => 'TtsElevenStatus',
+                        'caption' => ' '
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). "List voices of the account" fetches the IDs available to your key.')
                     ],
                 ] : []),
                 // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein
