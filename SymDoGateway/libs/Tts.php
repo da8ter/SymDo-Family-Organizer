@@ -41,6 +41,13 @@ trait Tts
     private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
 
     /**
+     * Tonformat. 32 kbit/s bei 22 kHz — das Briefing ist Sprache, und die
+     * Hook-Ausgabe hat einen Deckel. MUSS in der Adresse stehen (siehe
+     * TtsRequestEleven), im Rumpf wird es ignoriert.
+     */
+    private const TTS_ELEVEN_FORMAT = 'mp3_22050_32';
+
+    /**
      * Stimmen von gpt-4o-mini-tts. Feste Liste, weil sie zum MODELL gehoert und nicht
      * zum Konto — anders als bei ElevenLabs.
      *
@@ -805,13 +812,18 @@ trait Tts
             $voice = self::TTS_ELEVEN_VOICE;
         }
         $felder = [
-            'text'          => $text,
-            'model_id'      => $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2'),
-            'output_format' => 'mp3_22050_32',
+            'text'           => $text,
+            'model_id'       => $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2'),
             'voice_settings' => $this->TtsElevenSettings($anweisung),
         ];
+        // output_format gehoert in die ADRESSE, nicht in den Rumpf. Im Rumpf wird es
+        // stillschweigend ignoriert: am 22.08.2026 gemessen, die Antwort kam mit der
+        // Vorgabe mp3_44100_128 — 1,36 MB fuer 1083 Zeichen statt der erwarteten
+        // 0,33 MB. Das ist kein Schoenheitsfehler: die Hook-Ausgabe hat einen Deckel,
+        // und BriefingAudioBudget rechnet mit Bytes je Zeichen.
         $resp = $this->AiHttpPost(
-            'https://api.elevenlabs.io/v1/text-to-speech/' . $voice,
+            'https://api.elevenlabs.io/v1/text-to-speech/' . $voice
+                . '?output_format=' . self::TTS_ELEVEN_FORMAT,
             [
                 'xi-api-key: ' . $key,
                 'Content-Type: application/json',

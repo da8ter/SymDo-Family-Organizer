@@ -1514,12 +1514,30 @@ trait Briefing
         if (!is_array($roh)) {
             return [];
         }
+        // Zuordnung ueber die REIHENFOLGE, nicht ueber einen Schluessel in der Zeile.
+        //
+        // Grund, am 22.08.2026 am gespeicherten Stand gesehen: Symcon schreibt die
+        // Werte UNSICHTBARER Listenspalten nicht mit. Die Zeilen kamen als
+        // {"azure":"","eleven":"","openai":""} zurueck — ohne `tone`, und damit war
+        // nicht mehr feststellbar, welche Zeile zu welcher Persona gehoert.
+        // Die Reihenfolge ist dagegen verlaesslich: das Formular baut immer alle
+        // Personas in der Reihenfolge von BriefingPersonas(), und Hinzufuegen wie
+        // Loeschen sind abgeschaltet. Ein mitgeschriebenes `tone` gewinnt trotzdem,
+        // falls es doch einmal ankommt.
+        //
+        // ACHTUNG fuer spaeter: eine neue Persona gehoert deshalb ANS ENDE von
+        // BriefingPersonas(). In die Mitte eingefuegt verschoebe sie die Zuordnung
+        // aller gespeicherten Zeilen dahinter.
+        $personas = $this->BriefingPersonas();
         $karte = [];
-        foreach ($roh as $zeile) {
+        foreach ($roh as $i => $zeile) {
             if (!is_array($zeile)) {
                 continue;
             }
             $ton = trim((string)($zeile['tone'] ?? ''));
+            if ($ton === '' && isset($personas[$i]['key'])) {
+                $ton = (string)$personas[$i]['key'];
+            }
             if ($ton === '') {
                 continue;
             }

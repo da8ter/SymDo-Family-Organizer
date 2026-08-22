@@ -1954,10 +1954,12 @@ class SymDoGateway extends IPSModuleStrict
                              'edit' => ['type' => 'Select', 'options' => $azure]],
                             ['caption' => 'ElevenLabs', 'name' => 'eleven', 'width' => '220px',
                              'edit' => ['type' => 'Select', 'options' => $eleven]],
-                            // Der Schluessel reist mit, sonst weiss das Speichern nicht,
-                            // welche Zeile welche Persona ist. Unsichtbar: er ist
-                            // Technik, nicht Bedienung.
-                            ['caption' => 'tone', 'name' => 'tone', 'width' => '1px', 'visible' => false],
+                            // KEINE unsichtbare Schluessel-Spalte mehr: Symcon schreibt
+                            // die Werte unsichtbarer Spalten nicht mit, die Zeilen kamen
+                            // ohne `tone` zurueck. Die Zuordnung laeuft jetzt ueber die
+                            // Reihenfolge (siehe BriefingVoiceMap) — der Schluessel steht
+                            // trotzdem in den Werten, falls Symcon ihn doch einmal
+                            // durchreicht.
                         ],
                         'values'  => $zeilen
                     ],
