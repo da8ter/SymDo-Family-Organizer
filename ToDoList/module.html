@@ -109,6 +109,29 @@ select option { color: #111; background: #fff; }
      darunter. */
   padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad) 0 var(--sym-ms);
 }
+/* Glasfläche über dem Sicherheitsabstand oben.
+   Das Polster darüber haelt den Inhalt im RUHEZUSTAND unter der Dynamic Island —
+   beim SCROLLEN wandert er trotzdem darunter durch, das ist der Sinn der Sache.
+   Ohne diese Fläche lief dabei die Überschrift ungeschützt hinter die Uhr
+   (gemessen am Gerät: „Einkaufsliste einzeln" halb unter der Statusleiste).
+   Dieselbe Glasbehandlung wie an der Tab-Leiste unten, damit es zusammenpasst.
+   Höhe 0, wenn es keinen Sicherheitsabstand gibt: in der Kachel und im Browser
+   ist die Fläche damit nicht vorhanden, nicht nur unsichtbar. */
+.app::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  /* Über dem Inhalt (5, 20, 40), aber unter den Blättern (58) und Meldungen (90) —
+     ein Dialog muss die Statusleiste überdecken dürfen. */
+  z-index: 45;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  pointer-events: none;
+}
 
 /* Sprechblase mit rotem Ausrufezeichen, sobald ein Hinweis hinterlegt ist */
 .hint-btn { position: relative; }
