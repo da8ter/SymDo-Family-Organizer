@@ -1,8 +1,8 @@
 # SymDo
 
-**Der Familienorganizer für IP-Symcon — mit einer KI, die den Papierkram übernimmt.**
+**Der Familienorganizer für Symcon — mit einer KI, die den Papierkram übernimmt.**
 
-Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: SymDo bringt den Familienalltag aufs Handy und auf die Wandvisualisierung — ohne App-Store, ohne Cloud-Zwang, direkt aus dem eigenen IP-Symcon. Jedes Familienmitglied sieht auf einen Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
+Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: SymDo bringt den Familienalltag aufs Handy und auf die Wandvisualisierung — ohne App-Store, ohne Cloud-Zwang, direkt aus dem eigenen Symcon. Jedes Familienmitglied sieht auf einen Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
 
 Das Beste daran: die KI nimmt euch die Tipparbeit ab.
 
@@ -27,7 +27,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **1. Funktionsumfang**
 - **2. Voraussetzungen**
 - **3. Installation**
-- **4. Einrichten der Instanzen in IP-Symcon**
+- **4. Einrichten der Instanzen in Symcon**
 - **5. Kopplung: Web-App und iOS-App**
 - **6. Konfiguration: SymDo Gateway**
 - **7. Konfiguration: SymDoWebApp (Kachel)**
@@ -54,7 +54,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 
 ## 2. Voraussetzungen
 
-- IP-Symcon ab Version **8.1**
+- Symcon ab Version **8.1**
 - **ToDo List**- und/oder **Einkaufsliste**-Instanzen dieser Bibliothek als Datenquellen
 - Für die Web-App unterwegs: **Symcon Connect** (oder eine eigene HTTPS-Adresse)
 - Für Web-Push auf dem iPhone: die Web-App muss zum **Home-Bildschirm** hinzugefügt sein (iOS 16.4 oder neuer)
@@ -70,7 +70,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 3. Eine Instanz **SymDo Gateway** anlegen
 4. Eine Instanz **SymDoWebApp** anlegen und in der Kachel-Visualisierung einbinden
 
-## 4. Einrichten der Instanzen in IP-Symcon
+## 4. Einrichten der Instanzen in Symcon
 
 1. Im **SymDo Gateway** unter *Familienmitglieder* die Mitglieder anlegen: Name, Nachname, Rolle (z. B. Vater, Mutter, Kind), Geburtstag und Foto. Rolle und Nachname nutzt auch das Briefing für die Anrede.
 2. In der **SymDoWebApp**-Instanz die Listen auswählen, die App und Kachel zeigen sollen, und das Standard-Mitglied setzen. Das Gateway wird automatisch gefunden.

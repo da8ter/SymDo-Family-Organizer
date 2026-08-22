@@ -37,7 +37,7 @@ Einkaufsliste für die IP-Symcon Kachel-Visualisierung.
 ![Shopping List](https://github.com/da8ter/images/blob/main/shoppinglist.png)
 
 ## SymDo
-Familien-App für IP-Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-Store) und Kachel für die Tile-Visualisierung — beide mit derselben Oberfläche.
+Familien-App für Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-Store) und Kachel für die Tile-Visualisierung — beide mit derselben Oberfläche.
 
 - Bereiche: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender (OpenCalendar) und Notizen
 - Familienmitglieder mit Foto, Aufgaben-Zuweisung und „Meine Aufgaben"
