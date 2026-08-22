@@ -70,6 +70,16 @@ class SymDoGateway extends IPSModuleStrict
         $this->RegisterPropertyString('MicrosoftClientID', '');
         $this->RegisterPropertyString('MicrosoftClientSecret', '');
         $this->RegisterPropertyString('MicrosoftTenant', 'common');
+        // Zwei Anmeldewege NEBENEINANDER:
+        //  'code'   — wie bisher: eigene App-Registrierung, Client Secret, Umleitung
+        //             ueber den Hook. Bleibt unveraendert.
+        //  'device' — Gerätecode (RFC 8628). Braucht KEIN Secret und KEINE
+        //             Umleitungs-URI, weil im ganzen Ablauf keine vorkommt. Genau
+        //             daran scheiterte eine mitgelieferte Client-ID bisher: Azure
+        //             verlangt jede Umleitungs-URI vorab, und die Connect-Adresse
+        //             ist bei jedem Nutzer eine andere.
+        $this->RegisterPropertyString('MicrosoftAuthMode', 'code');
+        $this->RegisterAttributeString('MicrosoftDeviceFlow', '');
         $this->RegisterAttributeString('MicrosoftAccessToken', '');
         $this->RegisterAttributeString('MicrosoftRefreshToken', '');
         $this->RegisterAttributeInteger('MicrosoftTokenExpires', 0);
@@ -549,6 +559,123 @@ class SymDoGateway extends IPSModuleStrict
         ];
 
         return 'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/authorize?' . http_build_query($params);
+    }
+
+    /**
+     * Gerätecode anfordern (Schritt 1 von 2).
+     *
+     * Microsofts Doku ist an der entscheidenden Stelle ausdruecklich: mit einem
+     * PRIVATEN Konto ueber /common oder /consumers muss man sich auf der
+     * Anmeldeseite ein zweites Mal anmelden, weil das Gerät nicht an die Cookies
+     * kommt. Sonst gilt derselbe Ablauf wie bei Geschaeftskonten.
+     *
+     * `verification_uri_complete` gibt es bei Microsoft NICHT — es fuehrt also kein
+     * Ein-Klick-Link zum Ziel, der Code muss eingetippt werden.
+     */
+    public function MicrosoftDeviceStart(): string
+    {
+        $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
+        if ($clientId === '') {
+            return $this->Translate('Please enter Client ID first.');
+        }
+        $tenant = $this->MicrosoftGetTenant();
+        $meta = $this->OAuthHttpRequestMeta(
+            'POST',
+            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/devicecode',
+            [],
+            ['client_id' => $clientId, 'scope' => 'offline_access Tasks.ReadWrite'],
+            false,
+            'MicrosoftToDo'
+        );
+        $daten = is_array($meta) ? json_decode((string)($meta['body'] ?? ''), true) : null;
+        if (!is_array($daten) || ($daten['device_code'] ?? '') === '' || ($daten['user_code'] ?? '') === '') {
+            // Der haeufigste Fall zuerst: die Registrierung erlaubt keine
+            // oeffentlichen Clientflows. Microsoft antwortet dann mit
+            // AADSTS7000218 und verlangt ein Secret, das es hier nicht gibt.
+            $fehler = is_array($daten) ? (string)($daten['error_description'] ?? $daten['error'] ?? '') : '';
+            $this->SendDebug('MicrosoftToDo', 'Gerätecode abgelehnt: ' . $fehler, 0);
+            return $this->Translate('Requesting the device code failed.') . ' ' . mb_substr($fehler, 0, 300);
+        }
+        $this->WriteAttributeString('MicrosoftDeviceFlow', json_encode([
+            'code'     => (string)$daten['device_code'],
+            'expires'  => time() + max(60, (int)($daten['expires_in'] ?? 900)),
+            'interval' => max(1, (int)($daten['interval'] ?? 5)),
+        ]));
+        return sprintf(
+            $this->Translate('Open %s and enter this code: %s — then click "Complete sign-in" here.'),
+            (string)($daten['verification_uri'] ?? 'https://microsoft.com/devicelogin'),
+            (string)$daten['user_code']
+        );
+    }
+
+    /**
+     * Anmeldung abschliessen (Schritt 2 von 2).
+     *
+     * Bewusst ohne Timer: ein neu registrierter Timer existiert vor dem naechsten
+     * Kernel-Neustart nicht und warnt beim Setzen in die Ausgabe. Ein zweiter
+     * Knopfdruck ist ehrlicher als ein Wartebalken, der beim ersten Mal nicht
+     * laeuft — der Nutzer steht ohnehin im Formular.
+     */
+    public function MicrosoftDeviceFinish(): string
+    {
+        $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
+        $stand = json_decode($this->ReadAttributeString('MicrosoftDeviceFlow'), true);
+        if (!is_array($stand) || ($stand['code'] ?? '') === '') {
+            return $this->Translate('No sign-in running — request a device code first.');
+        }
+        if (time() > (int)($stand['expires'] ?? 0)) {
+            $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+            return $this->Translate('The device code has expired. Please request a new one.');
+        }
+        $meta = $this->OAuthHttpRequestMeta(
+            'POST',
+            'https://login.microsoftonline.com/' . rawurlencode($this->MicrosoftGetTenant()) . '/oauth2/v2.0/token',
+            [],
+            [
+                'grant_type'  => 'urn:ietf:params:oauth:grant-type:device_code',
+                'client_id'   => $clientId,
+                'device_code' => (string)$stand['code'],
+            ],
+            false,
+            'MicrosoftToDo'
+        );
+        $daten = is_array($meta) ? json_decode((string)($meta['body'] ?? ''), true) : null;
+        if (!is_array($daten)) {
+            return $this->Translate('Connection failed');
+        }
+        // Die vier dokumentierten Zwischenstaende. „pending" ist der NORMALFALL,
+        // solange der Nutzer noch tippt — er darf nicht wie ein Fehler aussehen.
+        $fehler = (string)($daten['error'] ?? '');
+        if ($fehler === 'authorization_pending') {
+            return $this->Translate('Not confirmed yet — finish the sign-in in the browser, then click again.');
+        }
+        if ($fehler === 'authorization_declined') {
+            $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+            return $this->Translate('Sign-in was declined.');
+        }
+        if ($fehler === 'expired_token') {
+            $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+            return $this->Translate('The device code has expired. Please request a new one.');
+        }
+        if ($fehler === 'bad_verification_code') {
+            $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+            return $this->Translate('The device code was not recognized. Please request a new one.');
+        }
+        if (($daten['access_token'] ?? '') === '') {
+            $this->SendDebug('MicrosoftToDo', 'Gerätecode-Token unbrauchbar: ' . mb_substr((string)($meta['body'] ?? ''), 0, 300), 0);
+            return $this->Translate('Connection failed');
+        }
+        // Ab hier derselbe Speicherweg wie beim Umleitungs-Verfahren — verschluesselt
+        // mit demselben Schluesselvorsatz, damit beide Wege dieselben Attribute
+        // benutzen und der Rest des Moduls nichts merkt.
+        $this->OAuthSetEncryptedToken('MicrosoftAccessToken', (string)$daten['access_token'], 'MKey');
+        if (($daten['refresh_token'] ?? '') !== '') {
+            $this->OAuthSetEncryptedToken('MicrosoftRefreshToken', (string)$daten['refresh_token'], 'MKey');
+        }
+        $this->WriteAttributeInteger('MicrosoftTokenExpires', time() + max(60, (int)($daten['expires_in'] ?? 3600)) - 60);
+        $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+        $this->SendDebug('MicrosoftToDo', 'Gerätecode: Anmeldung erfolgreich', 0);
+        return $this->Translate('Connected to Microsoft.');
     }
 
     public function MicrosoftHandleCallback(string $Code): bool
@@ -1168,16 +1295,36 @@ class SymDoGateway extends IPSModuleStrict
 
     private function GetMicrosoftFormElements(): array
     {
+        // Ueber IPS_GetConfiguration und nicht ReadPropertyString: die Eigenschaft ist
+        // neu und existiert vor dem naechsten Kernel-Neustart nicht — das Lesen
+        // gaebe eine PHP-Warnung, die kein try/catch faengt.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $msMode = (is_array($cfg) && ($cfg['MicrosoftAuthMode'] ?? '') === 'device') ? 'device' : 'code';
         return [
             'type' => 'ExpansionPanel',
             'caption' => $this->Translate('Microsoft To Do'),
             'items' => [
                 [
+                    'type' => 'Select',
+                    'name' => 'MicrosoftAuthMode',
+                    'caption' => $this->Translate('Sign-in method'),
+                    'width' => '400px',
+                    'options' => [
+                        ['caption' => $this->Translate('Redirect (needs Client Secret and Redirect URI)'), 'value' => 'code'],
+                        ['caption' => $this->Translate('Device code (no secret, enter a code in the browser)'), 'value' => 'device'],
+                    ]
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('The device code needs neither a secret nor a redirect URI — no redirect occurs in that flow. In the app registration, "Allow public client flows" must be set to Yes, otherwise Microsoft answers with AADSTS7000218 and asks for a secret. Private Microsoft accounts work with both methods; with the device code you sign in a second time on the verification page, because the box cannot reach your cookies.')
+                ],
+                [
                     'type' => 'ValidationTextBox',
                     'caption' => $this->Translate('Redirect URI'),
                     'value' => $this->OAuthGetRedirectUri('/hook/todogateway_microsoft/'),
                     'width' => '750px',
-                    'enabled' => true
+                    'enabled' => true,
+                    'visible' => $msMode === 'code'
                 ],
                 [
                     'type' => 'ValidationTextBox',
@@ -1189,7 +1336,8 @@ class SymDoGateway extends IPSModuleStrict
                     'type' => 'PasswordTextBox',
                     'name' => 'MicrosoftClientSecret',
                     'caption' => $this->Translate('Client Secret'),
-                    'width' => '400px'
+                    'width' => '400px',
+                    'visible' => $msMode === 'code'
                 ],
                 [
                     'type' => 'ValidationTextBox',
@@ -1207,7 +1355,20 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Authorize with Microsoft'),
-                            'onClick' => 'echo TGW_MicrosoftGetAuthUrl($id);'
+                            'onClick' => 'echo TGW_MicrosoftGetAuthUrl($id);',
+                            'visible' => $msMode === 'code'
+                        ],
+                        [
+                            'type' => 'Button',
+                            'caption' => $this->Translate('Request device code'),
+                            'onClick' => 'echo TGW_MicrosoftDeviceStart($id);',
+                            'visible' => $msMode === 'device'
+                        ],
+                        [
+                            'type' => 'Button',
+                            'caption' => $this->Translate('Complete sign-in'),
+                            'onClick' => 'echo TGW_MicrosoftDeviceFinish($id);',
+                            'visible' => $msMode === 'device'
                         ],
                         [
                             'type' => 'Button',
