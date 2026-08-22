@@ -368,7 +368,9 @@
             "Show notes (requires the SymDo Gateway)": "Notizen anzeigen (benötigt das SymDo Gateway)",
             "Show AI inbox (requires the SymDo Gateway)": "KI-Eingang anzeigen (benötigt das SymDo Gateway)",
             "New note …": "Neue Notiz …",
-            "Title (max. 120) or text (max. 3000 characters) is too long.": "Titel (max. 120) oder Text (max. 3000 Zeichen) ist zu lang."
+            "Title (max. 120) or text (max. 3000 characters) is too long.": "Titel (max. 120) oder Text (max. 3000 Zeichen) ist zu lang.",
+            "New appointment …": "Neuer Termin …",
+            "Create a folder first": "Erst einen Ordner anlegen"
         }
     }
 }

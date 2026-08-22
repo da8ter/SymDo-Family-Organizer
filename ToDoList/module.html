@@ -316,12 +316,13 @@ html {
   /* Leiste und Eingabezeile 10 % schmaler als der Inhalt. Beide Werte sind die HALBE
      Ersparnis, weil sie links und rechts gleichzeitig anliegen und die Elemente
      mittig bleiben sollen.
-     Zwei verschiedene Größen, weil die Bezugsgrößen verschieden sind: die Leiste ist
-     fixiert, dort zählen nur Fensterkoordinaten — die Inhaltsbreite muss aus 100vw
-     minus der Einrückungen gerechnet werden. Die Eingabezeile steht im Inhaltsblock,
-     dort ist ein Prozentwert bereits auf dessen Breite bezogen. */
+     Nur EINE Größe, seit die Eingabezeile ebenfalls fixiert ist: dort zählen nur
+     Fensterkoordinaten, die Inhaltsbreite muss also aus 100vw minus der Einrückungen
+     gerechnet werden. (Bis zum 22.08.2026 stand daneben --input-narrow: 5% für die
+     Zeile im Inhaltsblock — ein Prozentwert bezog sich dort schon auf dessen
+     Breite. Mit der Fixierung ist die Näherung überflüssig, beide benutzen jetzt
+     denselben Wert und stehen damit exakt kantengleich.) */
   --tab-narrow:   calc((100vw - var(--sym-ms) - var(--sb-pad) * 2 - var(--sbw)) * 0.05);
-  --input-narrow: 5%;
   /* Glas-Optik an EINER Stelle: Leiste und Eingabezeile müssen denselben Wert
      benutzen, sonst driften Transparenz und Weichzeichnung beim nächsten
      Nachjustieren auseinander. */
@@ -352,8 +353,8 @@ html .tabbar {
      Davon dann 10 % ab: --tab-narrow ist die halbe Ersparnis und wandert auf BEIDE
      Einrückungen, damit die Leiste mittig bleibt. Der Deckel muss mit (0.9 * 720px),
      sonst bliebe sie auf breiten Fenstern bei voller Inhaltsbreite stehen — dort
-     begrenzt max-width, nicht left/right. --input-narrow hält die Eingabezeile auf
-     demselben Maß (Prozent des Inhaltsblocks, siehe html .inputbar). */
+     begrenzt max-width, nicht left/right. Die Eingabezeile rechnet mit denselben
+     Werten (siehe html .inputbar). */
   left: calc(var(--sym-ms) + var(--tab-narrow));
   right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
   bottom: calc(var(--tab-gap) + var(--sym-mb));
@@ -405,22 +406,45 @@ html .screen {
    Verlauf aus --card-color: ohne ausdrückliches Abschalten bliebe der wirksam. */
 html .inputbar {
   background: none;
-  /* 10 % schmaler, mittig — dasselbe Maß wie die Tab-Leiste. Prozent im Rand bezieht
-     sich auf die Breite des Inhaltsblocks, also genau auf die Kartenbreite. */
-  margin-left: var(--input-narrow);
-  margin-right: var(--input-narrow);
-  /* Oben 24px, damit die letzte Karte nicht am Feld klebt; unten 2px Grundmaß plus
-     --input-gap. Der Kasten ist am unteren Rand des Inhaltsbereichs festgeklemmt,
-     das Innenmaß hebt daher das Eingabefeld an, ohne die Leiste oder das
-     Scroll-Polster zu verschieben.
-     Die Seitenwerte sind 0: die randlose Geometrie (negative Ränder bis an die
-     Fensterkanten, per Innenabstand wieder ausgeglichen) trug ausschließlich den
-     Flächenhintergrund. Ohne den ist sie zwecklos. */
-  padding: 24px 0 calc(2px + var(--input-gap));
-  /* Über dem scrollenden Inhalt: die Liste läuft jetzt sichtbar hinter der Zeile
-     durch, Feld und Knöpfe müssen davor liegen und bedienbar bleiben. */
-  z-index: 5;
+  /* FIXIERT, nicht sticky (geändert 22.08.2026).
+     Ein sticky-bottom misst vom unteren Rand des SCROLLBEREICHS: bei wenig Inhalt
+     klebte die Zeile direkt unter der letzten Karte — also mitten im Bild — und
+     wanderte mit jeder weiteren Zeile nach unten. Ihre Lage hing damit an der Menge
+     des Inhalts. Fixiert steht sie immer an derselben Stelle.
+     Geometrie wie Tab-Leiste und Vorschlagsfenster (dieselbe Rechnung für
+     left/right, derselbe Deckel --bar-max), damit alle drei EINE Kante haben.
+     --input-narrow entfällt dabei: es war die Näherung „5 % des Inhaltsblocks" für
+     genau dieses Maß. */
+  position: fixed;
+  left: calc(var(--sym-ms) + var(--tab-narrow));
+  right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
+  max-width: var(--bar-max);
+  margin-left: auto;
+  margin-right: auto;
+  bottom: var(--tab-clear);
+  /* Oben KEIN Polster mehr. Es hielt die letzte Karte vom Feld weg, solange die
+     Zeile im Fluss lag; außerhalb des Flusses wäre es eine unsichtbare Fläche über
+     die ganze Breite, die Tipper auf den Inhalt dahinter abfängt. Der Abstand kommt
+     jetzt aus dem Scroll-Polster der .screen (Regel darunter). */
+  padding: 0 0 calc(2px + var(--input-gap));
+  /* Über dem Inhalt (5, 20, 40 sind Inhaltsebenen), aber UNTER dem
+     Vorschlagsfenster (45) und den Blättern (58): das Fenster öffnet direkt über
+     der Zeile und darf sie nicht hinter sich haben. */
+  z-index: 40;
 }
+/* Platz für die fixierte Zeile freihalten, damit die letzte Karte erreichbar bleibt
+   und nicht dauerhaft darunter liegt. Nur in Bereichen, die überhaupt eine haben —
+   sonst stünde in der Übersicht eine leere Fläche in Zeilenhöhe.
+   Die 24px am Ende sind der Abstand, den vorher das obere Polster der Zeile trug.
+   :has() ist seit Safari 15.4 und Chrome 105 dabei; fehlt es, bleibt es beim
+   Leisten-Polster — dann liegt die letzte Karte hinter der Zeile, statt dass das
+   Layout bricht. */
+html .screen:has(.inputbar) {
+  padding-bottom: calc(var(--tab-clear) + 2px + var(--input-gap) + var(--input-h) + 24px);
+}
+/* Ist die Zeile abgeschaltet (Liste ohne Anlegen-Recht), gilt wieder das reine
+   Leisten-Polster — die Klasse setzt die Oberfläche beim Ausblenden. */
+html .screen.bar-hidden:has(.inputbar) { padding-bottom: var(--tab-clear); }
 /* Der 12px-Streifen der Basisregel bleibt aus: er ist deckend in --card-color und
    wäre genau der Flächenhintergrund, der hier nicht mehr sein soll. */
 html .inputbar::after { content: none; }
@@ -1521,11 +1545,11 @@ html[data-symdo-theme="dark"] .member-bar {
 .suggestions::-webkit-scrollbar { display: none; }
 .suggestions.open { display: block; }
 .suggestions .chip-flow { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Vorschläge + Eingabe als EIN sticky Block: so klebt das Vorschlags-Fenster
-   beim Tippen direkt über der Eingabe, statt in der langen Liste zu verschwinden.
-   (Die Eingabe selbst wird dann vom Composer sticky gehalten, nicht mehr selbst.) */
-.composer { position: sticky; bottom: 0; z-index: 5; }
-.composer .inputbar { position: static; }
+/* Der Komponist hält nichts mehr zusammen: Vorschlagsfenster UND Eingabezeile sind
+   beide fixiert und finden ihren Platz selbst. Die frühere Fassung machte ihn zu
+   einem sticky Block und die Zeile darin `position: static` — und genau das hob die
+   Fixierung wieder auf (Klasse+Klasse schlägt html+Klasse). */
+.composer { position: static; }
 /* Keine Unterlage mehr: das Vorschlagsfenster ist ein eigenes schwebendes Fenster
    mit eigener Glasschicht (Regel bei .suggestions). */
 .chip {
@@ -2708,6 +2732,16 @@ html[data-symdo-theme="dark"] .member-bar {
         </div>
         <div id="calStatus" class="cal-status" style="display:none;"></div>
         <div id="calArea"></div>
+        <!-- Schnellerfassung wie bei Aufgaben und Notizen. Das Plus legt hier aber
+             NICHTS direkt an: ein Termin braucht mindestens einen Zeitpunkt, und den
+             kann eine Titelzeile nicht liefern. Es oeffnet deshalb den
+             Termin-Dialog mit dem eingetippten Titel — das Tippen bleibt der
+             schnelle Teil, das Datum waehlt man im Dialog. -->
+        <div class="inputbar" id="calInputbar">
+          <input id="calInput" type="text" autocomplete="off" />
+          <button id="btnCalScan" class="round-btn" aria-label="Termine mit KI erkennen"><i class="fa-light fa-wand-magic-sparkles"></i></button>
+          <button id="btnCalAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        </div>
       </div>
     </section>
 
@@ -2743,11 +2777,14 @@ html[data-symdo-theme="dark"] .member-bar {
           <div id="notesMaster"></div>
           <div id="notesDetail"></div>
         </div>
-        <!-- Schnellerfassung wie bei den Aufgaben: Titel eintippen, Plus druecken.
-             Die Notiz landet im geoeffneten Ordner; ohne offenen Ordner ist der Knopf
-             gesperrt, weil sonst nicht feststeht, wohin sie gehoert. -->
+        <!-- Schnellerfassung: Titel eintippen, Plus druecken. Das Plus oeffnet den
+             Notiz-Dialog mit dem Titel — auch OHNE offenen Ordner (dort ist der
+             Ordner dann waehlbar). Ist einer offen, steht er vorgewaehlt darin.
+             Vorher war der Knopf ohne Ordner gesperrt: man musste erst einen oeffnen,
+             um ueberhaupt tippen zu duerfen. -->
         <div class="inputbar" id="notesInputbar">
           <input id="notesInput" type="text" autocomplete="off" />
+          <button id="btnNotesScan" class="round-btn" aria-label="Notiz mit KI erkennen"><i class="fa-light fa-wand-magic-sparkles"></i></button>
           <button id="btnNotesAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
         </div>
         <input id="noteScanInput" type="file" accept="image/*" capture="environment" style="display:none" />
@@ -3415,7 +3452,10 @@ function computeAiEnabled() {
 }
 function applyAiEnabled() {
   const on = computeAiEnabled();
-  ['btnShopScan', 'btnTodoScan'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
+  // Alle vier Eingabezeilen tragen denselben Knopf und verschwinden gemeinsam,
+  // wenn die KI aus ist — ein Zauberstab, der nur absagt, ist schlimmer als keiner.
+  ['btnShopScan', 'btnTodoScan', 'btnCalScan', 'btnNotesScan']
+    .forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
 }
 // Wandelt eine data:-URL in ein Blob (für PDF-Anzeige im iframe — robuster als eine
 // riesige data:-URL, die manche Browser blockieren).
@@ -7572,7 +7612,14 @@ function renderTodos() {
   const showCreate = st.showCreateButton !== false;
   const showSorting = st.showSorting !== false;
   const inputbar = document.getElementById('todoInputbar');
-  if (inputbar) inputbar.style.display = showCreate ? '' : 'none';
+  if (inputbar) {
+    inputbar.style.display = showCreate ? '' : 'none';
+    // Die Zeile ist fixiert, ihr Platz wird per Scroll-Polster freigehalten (Regel
+    // `html .screen:has(.inputbar)`). Ist sie aus, muss das Polster mit weg — sonst
+    // bliebe unten eine leere Flaeche in Zeilenhoehe stehen.
+    const bereich = document.getElementById('screen-todos');
+    if (bereich) { bereich.classList.toggle('bar-hidden', !showCreate); }
+  }
   // Der "..."-Knopf ist der Sortier-Knopf: ohne Sortierung verschwindet er, auch
   // wenn Anlegen an ist. Angelegt wird dann ueber die Eingabezeile; der Weg
   // "Neue Aufgabe mit Details" ueber das Menue entfaellt damit bewusst.
@@ -8513,29 +8560,42 @@ function renderNotizen() {
 }
 
 /**
- * Schnellerfassung: Titel eintippen, Plus druecken — wie bei den Aufgaben.
+ * Schnellerfassung: Titel eintippen, Plus druecken.
  *
- * Ziel ist der GEOEFFNETE Ordner. Ohne einen ist der Knopf gesperrt: eine Notiz
- * ohne Ordner kann es nicht geben, und stillschweigend den ersten zu nehmen waere
- * geraten. Deshalb wird der Zustand auch bei jedem Zeichnen nachgezogen — das
- * Oeffnen eines Ordners schaltet den Knopf frei, ohne dass man tippen muss.
+ * Der Knopf haengt NUR am Text, nicht am Ordner (geaendert 22.08.2026). Vorher war
+ * er ohne offenen Ordner gesperrt — man musste also erst einen oeffnen, um
+ * ueberhaupt tippen zu duerfen, und die Zeile stand nutzlos da. Jetzt oeffnet das
+ * Plus den Dialog, und der Ordner ist dort waehlbar.
  */
 function notizenEingabePruefen() {
   const feld = document.getElementById('notesInput');
   const knopf = document.getElementById('btnNotesAdd');
   if (!feld || !knopf) return;
-  knopf.disabled = feld.value.trim() === '' || !notesOrdnerId;
+  knopf.disabled = feld.value.trim() === '';
 }
 
+/**
+ * Das Plus oeffnet den Notiz-Dialog mit dem eingetippten Titel.
+ *
+ * Nicht mehr direkt anlegen: eine Notiz aus einem Titel allein ist selten fertig,
+ * und der Dialog traegt Text, Ordnerwahl und Anhaenge. Der offene Ordner steht
+ * vorgewaehlt; ohne einen nimmt der Dialog seine eigene Vorgabe (erster Ordner)
+ * und laesst sie aendern — noteEditorOeffnen faellt dafuer schon auf
+ * notesErsterOrdner() zurueck.
+ */
 function notizenSchnellAnlegen() {
   const feld = document.getElementById('notesInput');
   const titel = feld.value.trim();
   if (titel === '') return;
-  if (!notesOrdnerId) { showToast(translate('Select a folder')); return; }
-  notizenAktion({ action: 'noteCreate', folderId: notesOrdnerId, title: titel, text: '' }, () => {
-    feld.value = '';
-    notizenEingabePruefen();
-  });
+  // Gibt es ueberhaupt keinen Ordner, kann auch der Dialog nicht speichern (der
+  // Server antwortet `not_found`). Dann lieber gleich sagen, was fehlt.
+  if (!notizen.folders || notizen.folders.length === 0) {
+    showToast(translate('Create a folder first'));
+    return;
+  }
+  noteEditorOeffnen({ folderId: notesOrdnerId || '', title: titel, text: '', att: [] });
+  feld.value = '';
+  notizenEingabePruefen();
 }
 
 function renderNotizenMaster(el) {
@@ -10871,6 +10931,31 @@ document.addEventListener('DOMContentLoaded', () => {
   todoAdd.addEventListener('click', quickAdd);
   document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
 
+  // ── Schnellerfassung Termine ───────────────────────────────────────────────
+  // Anders als bei Aufgaben und Einkaeufen legt das Plus hier NICHTS direkt an: ein
+  // Termin braucht mindestens einen Zeitpunkt, und den kann eine Titelzeile nicht
+  // liefern. Es oeffnet den Termin-Dialog mit dem eingetippten Titel — getippt wird
+  // schnell, das Datum waehlt man dort.
+  const calInput = document.getElementById('calInput');
+  const calAdd = document.getElementById('btnCalAdd');
+  if (calInput && calAdd) {
+    calInput.placeholder = translate('New appointment …');
+    const calUebernehmen = () => {
+      const titel = calInput.value.trim();
+      if (titel === '') return;
+      openCalEditor({ title: titel });
+      // Erst nach dem Oeffnen leeren: openCalEditor kann absagen (kein
+      // beschreibbarer Kalender), dann soll das Getippte nicht weg sein.
+      if (document.getElementById('calEditOverlay').classList.contains('open')) {
+        calInput.value = '';
+        calAdd.disabled = true;
+      }
+    };
+    calInput.addEventListener('input', () => { calAdd.disabled = calInput.value.trim() === ''; });
+    calInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calUebernehmen(); });
+    calAdd.addEventListener('click', calUebernehmen);
+  }
+
   // ── KI: Foto → Aufgaben (das Gateway leitet das Foto an die konfigurierte KI weiter) ──
   // KI-Buttons zeigen, wenn der Gateway-Schalter „aiEnabled" an ist — Standalone
   // (window.__SYMDO__) UND Visu-Kachel (Flag im State). applyAiEnabled() blendet
@@ -10896,6 +10981,29 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('todoFromFileLabel').textContent = translate('Analyze file');
   const todoFileInput = document.getElementById('todoFileInput');
   todoScan.addEventListener('click', () => openOverlay('todoSourceOverlay'));
+  // Termine: DERSELBE Weg wie bei den Aufgaben. Die Auswertung liefert beide Arten,
+  // und die Uebernahme schickt alles mit kind === 'event' ohnehin in den
+  // Termin-Dialog (siehe die Verzweigung in der Vorschlags-Uebernahme). Ein eigener
+  // Weg waere derselbe Aufruf mit anderem Namen.
+  const calScan = document.getElementById('btnCalScan');
+  if (calScan) { calScan.addEventListener('click', () => openOverlay('todoSourceOverlay')); }
+  // Notizen: eigener Weg, denn hier entsteht KEINE Aufgabenliste, sondern Titel und
+  // Text einer Notiz (NotesAnalyse). Der Dialog traegt das Ergebnis — also erst
+  // oeffnen, dann die Quelle waehlen. Ein bereits eingetippter Titel kommt mit.
+  const notesScan = document.getElementById('btnNotesScan');
+  if (notesScan) {
+    notesScan.addEventListener('click', () => {
+      if (!notizen.folders || notizen.folders.length === 0) {
+        showToast(translate('Create a folder first'));
+        return;
+      }
+      const feld = document.getElementById('notesInput');
+      const titel = feld ? feld.value.trim() : '';
+      noteEditorOeffnen({ folderId: notesOrdnerId || '', title: titel, text: '', att: [] });
+      if (feld) { feld.value = ''; notizenEingabePruefen(); }
+      openOverlay('noteSourceOverlay');
+    });
+  }
   document.getElementById('btnTodoFromPhoto').addEventListener('click', () => {
     closeOverlay('todoSourceOverlay'); todoScanInput.value = ''; todoScanInput.click();
   });

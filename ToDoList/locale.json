@@ -516,7 +516,9 @@
             "New note …": "Neue Notiz …",
             "Controls": "Bedienelemente",
             "Recurrence": "Wiederholung",
-            "Title (max. 120) or text (max. 3000 characters) is too long.": "Titel (max. 120) oder Text (max. 3000 Zeichen) ist zu lang."
+            "Title (max. 120) or text (max. 3000 characters) is too long.": "Titel (max. 120) oder Text (max. 3000 Zeichen) ist zu lang.",
+            "New appointment …": "Neuer Termin …",
+            "Create a folder first": "Erst einen Ordner anlegen"
         },
         "en": {
             "ToDo List": "ToDo List",
