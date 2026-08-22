@@ -1963,7 +1963,7 @@ class SymDoGateway extends IPSModuleStrict
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => $eleven === [] || count($eleven) === 1
+                        'caption' => count($eleven) <= 1
                             ? $this->Translate('The ElevenLabs column is empty: press "List voices of the account" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from "My Voices" are offered.')
                             : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), count($eleven) - 1)
                     ],

@@ -664,15 +664,19 @@ trait Tts
         if ($key === '') {
             return $this->Translate('No ElevenLabs key entered.');
         }
-        // v2 statt v1, wegen `voice_type`: gefragt sind NUR die Stimmen aus „Meine
-        // Stimmen" — nicht die Vorgabestimmen, die jedes Konto bekommt, und nicht
-        // die oeffentliche Bibliothek. Laut Doku ist `non-community` genau das:
-        // „personal und workspace zusammen (ohne Kopien aus der Bibliothek)".
-        // Sollte die Liste anders aussehen als im Konto, sind die Alternativen
-        // `personal` (nur eigene, ohne Arbeitsbereich) und `non-default`
-        // (alles ausser den Vorgabestimmen, also MIT gespeicherten aus der
-        // Bibliothek). Eine Zeile, und nur diese eine.
-        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?voice_type=non-community&page_size=100', [
+        // v2 statt v1, wegen `voice_type`. Gefragt sind die Stimmen des KONTOS, nicht
+        // die 21 Vorgabestimmen, die jedes Konto bekommt.
+        //
+        // `non-default` und nicht `non-community`: am echten Konto gemessen
+        // (22.08.2026) unterscheidet die API zwei Sorten, die im Konto beide unter
+        // „Meine Stimmen" stehen —
+        //   category `generated`/`cloned`  = selbst erzeugt oder geklont
+        //   category `professional`        = aus der Bibliothek gespeichert
+        // `non-community` und `personal` liefern NUR die erste Sorte; dort war von
+        // sechs Stimmen genau eine zu sehen. `non-default` liefert beide und laesst
+        // nur die Vorgabestimmen weg. Welche Sorte eine Stimme ist, steht als
+        // Merkmal in der Auswahl — sonst raet man beim Lesen der Liste.
+        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?voice_type=non-default&page_size=100', [
             'xi-api-key: ' . $key,
             'Accept: application/json',
             'User-Agent: SymDoGateway',
@@ -719,6 +723,16 @@ trait Tts
                 continue;
             }
             $merkmale = [];
+            // Herkunft zuerst, denn sie erklaert die Liste: „eigene" sind selbst
+            // erzeugte oder geklonte, „gespeichert" sind welche aus der Bibliothek.
+            // Ohne diese Angabe sieht man in der Auswahl nicht, warum sechs Stimmen
+            // dastehen, wenn man nur eine selbst gebaut hat.
+            $art = (string)($v['category'] ?? '');
+            if ($art === 'generated' || $art === 'cloned') {
+                $merkmale[] = $this->Translate('own');
+            } elseif ($art === 'professional') {
+                $merkmale[] = $this->Translate('saved');
+            }
             foreach (['language', 'accent', 'gender'] as $k) {
                 $w = ((array)($v['labels'] ?? []))[$k] ?? null;
                 if (is_scalar($w) && trim((string)$w) !== '') {

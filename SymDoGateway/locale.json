@@ -320,10 +320,12 @@
             "— as built in —": "— wie eingebaut —",
             "— the voice set above —": "— die oben eingestellte Stimme —",
             "One row per persona, one column per provider. An empty cell means the built-in voice — the column \"Built in\" shows which that is (OpenAI / Azure). Only the provider currently selected above is actually used; the other columns are kept for a later switch.": "Eine Zeile je Persona, eine Spalte je Anbieter. Eine leere Zelle heißt: die eingebaute Stimme — welche das ist, zeigt die Spalte „Eingebaut\" (OpenAI / Azure). Benutzt wird nur der oben gewählte Anbieter; die übrigen Spalten bleiben für einen späteren Wechsel stehen.",
-            "The ElevenLabs column is empty: press \"List voices of the account\" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from \"My Voices\" are offered.": "Die ElevenLabs-Spalte ist leer: erst beim Sprachausgabe-Anbieter „Stimmen des Kontos abrufen\" drücken — die Stimmen eines Kontos sind nicht allgemein bekannt, sie müssen geholt werden. Angeboten werden nur Stimmen aus „Meine Stimmen\".",
-            "ElevenLabs: %d voices from \"My Voices\" available.": "ElevenLabs: %d Stimmen aus „Meine Stimmen\" verfügbar.",
+            "The ElevenLabs column is empty: press \"List voices of the account\" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from \"My Voices\" are offered.": "Die ElevenLabs-Spalte ist leer: erst beim Sprachausgabe-Anbieter „Stimmen des Kontos abrufen\" drücken — die Stimmen eines Kontos sind nicht allgemein bekannt, sie müssen geholt werden. Angeboten wird alles außer den Vorgabestimmen: selbst erzeugte („eigene\") und aus der Bibliothek gespeicherte („gespeichert\").",
+            "ElevenLabs: %d voices from \"My Voices\" available.": "ElevenLabs: %d Stimmen aus dem Konto verfügbar.",
             "The persona editor appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Der Personas-Editor erscheint nach dem nächsten Symcon-Neustart — es ist eine neue Einstellung, und die gibt es erst, wenn der Kernel das Modul neu geladen hat.",
-            "The key works, but \"My Voices\" is empty in this account.": "Der Schlüssel funktioniert, aber „Meine Stimmen\" ist in diesem Konto leer."
+            "The key works, but \"My Voices\" is empty in this account.": "Der Schlüssel funktioniert, aber das Konto hat außer den Vorgabestimmen keine.",
+            "own": "eigene",
+            "saved": "gespeichert"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
