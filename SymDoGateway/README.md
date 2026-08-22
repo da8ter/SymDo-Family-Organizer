@@ -9,6 +9,7 @@ Das Beste daran: die KI nimmt euch die Tipparbeit ab.
 - **Fotografieren statt abtippen** — Elternbrief, Rezept oder Terminzettel einfach knipsen: die KI macht daraus fertige Aufgaben, Termine und Notizen. Kurz prüfen, übernehmen, fertig.
 - **E-Mails, die sich selbst eintragen** — die Schulmail und die Erinnerung vom Zahnarzt landen als fertige Vorschläge im KI-Eingang, schon dem richtigen Familienmitglied zugeordnet.
 - **Ein Briefing wie vom persönlichen Assistenten** — jeden Morgen fasst die KI zusammen, was heute zählt: Termine, fällige Aufgaben, die Einkaufsliste. Auf Wunsch vorgelesen, im Ton eurer Wahl — vom höflichen Butler bis zum Drillsergeant, der die Familie aus dem Bett scheucht.
+- **Freihändig einkaufen** — im Laden sagt die Web-App die Einkaufsliste über die Kopfhörer an: ein Tastendruck hakt den Artikel ab und nennt den nächsten. Das Handy bleibt in der Tasche.
 - **Nichts geht mehr unter** — Push aufs Handy, wenn eine Aufgabe fällig wird, das Briefing bereitsteht oder die KI etwas Neues gefunden hat.
 - **Eure Daten bleiben eure** — die KI läuft mit dem eigenen Schlüssel beim Anbieter eurer Wahl oder komplett lokal im eigenen Netz. Und ohne eure ausdrückliche Einwilligung bleibt sie aus.
 
@@ -31,10 +32,11 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **6. Konfiguration: SymDo Gateway**
 - **7. Konfiguration: SymDoWebApp (Kachel)**
 - **8. Tägliches Briefing**
-- **9. KI-Funktionen und Datenschutz**
-- **10. Benachrichtigungen**
-- **11. Statusvariablen**
-- **12. PHP-Befehlsreferenz**
+- **9. Einkaufs-Ansage**
+- **10. KI-Funktionen und Datenschutz**
+- **11. Benachrichtigungen**
+- **12. Statusvariablen**
+- **13. PHP-Befehlsreferenz**
 
 ## 1. Funktionsumfang
 
@@ -43,6 +45,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Bereiche**: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender und Notizen — einzeln abschaltbar
 - **Familienmitglieder** mit Name, Rolle und Foto; Aufgaben lassen sich Mitgliedern zuweisen („Meine Aufgaben")
 - **Tägliches Briefing** — die KI fasst morgens Termine, Aufgaben und Einkäufe zusammen, wahlweise mit Sprachausgabe; neun Personas vom Butler bis zum Drillsergeant
+- **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
 - **KI-Analyse** — Foto oder PDF wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
 - **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text und Anhängen (Bild, PDF)
 - **Kalender** — Termine aus dem Store-Modul OpenCalendar lesen, anlegen und bearbeiten
@@ -58,7 +61,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - Für den Kalender-Bereich: das Store-Modul **OpenCalendar** (de.burki24.opencalendar), optional
 - Für die E-Mail-Analyse: eine **E-Mail, Empfangen (IMAP)**-Instanz oder eine Mail-Weiterleitung, optional
 - Für die KI-Funktionen: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein **lokaler, OpenAI-kompatibler Server** (z. B. LM Studio)
-- Für die Sprachausgabe des Briefings: **OpenAI**, **Microsoft Azure Speech** oder **ElevenLabs** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig)
+- Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech** oder **ElevenLabs** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig)
 
 ## 3. Installation
 
@@ -97,7 +100,7 @@ Liste der Mitglieder mit Name, Nachname, Rolle, Geburtstag und Foto. Jedes Mitgl
 
 - **KI-Analyse aktivieren** (`AiEnabled`) — Hauptschalter für alle KI-Funktionen (Standard: an)
 - **Tageslimit** (`MailDailyLimit`) — höchstens so viele KI-Aufrufe pro Tag, ein gemeinsamer Topf für Foto-/PDF-Analyse, Mail-Analyse und Briefing (Standard: 100)
-- **Datenschutz** — die KI-Funktionen laufen erst nach erteilter Einwilligung; sie ist jederzeit widerrufbar (Kapitel 9)
+- **Datenschutz** — die KI-Funktionen laufen erst nach erteilter Einwilligung; sie ist jederzeit widerrufbar (Kapitel 10)
 - **KI-Anbieter** (`AiProvider`) — `Anthropic`, `OpenAI` oder ein lokaler OpenAI-kompatibler Server; je nach Wahl Schlüssel bzw. Server-Adresse und Modellname eintragen
 
 ### Tägliches Briefing
@@ -149,7 +152,15 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
 | Azure Speech | Schlüssel, Region | deutsche Neural-Stimmen |
 | ElevenLabs | Schlüssel, Stimme, Modell, Stimmen-Umfang, Tonqualität | **kostenpflichtiger Zugang nötig**; „Stimmen des Kontos abrufen" listet die eigenen Stimmen — Vorgabe ist die Rubrik *Meine Stimmen* wie auf der ElevenLabs-Webseite; Tonqualität `auto` wählt die beste Stufe, die zur Textlänge passt |
 
-## 9. KI-Funktionen und Datenschutz
+## 9. Einkaufs-Ansage
+
+Im Laden liest die Web-App die offene Einkaufsliste vor — Abteilung für Abteilung, jeder Artikel mit Menge und Notiz („500 Gramm Butter, salzig"). Gestartet wird im Menü der Einkaufsliste über **Einkauf starten**; ein hinterlegter *Hinweis für diesen Einkauf* wird als Erstes angesagt.
+
+Bedient wird mit der Kopfhörer-Taste, das Handy bleibt in der Tasche: Während der Ansage hält ein Druck an und setzt wieder fort — nach einem angesagten Artikel hakt er ihn ab und sagt den nächsten an. Sind alle Artikel im Wagen, meldet die Ansage den Einkauf als komplett und endet von selbst.
+
+Die Tondateien erzeugt der eingestellte Sprachausgabe-Anbieter (Kapitel 8). Jede Ansage wird als Medienobjekt zwischengespeichert und nur einmal erzeugt — „2 Kilo Äpfel" kostet beim Anbieter nur beim ersten Mal. Die Funktion steht in der gekoppelten Web-App zur Verfügung; die Kachel in der Visualisierung hat sie nicht.
+
+## 10. KI-Funktionen und Datenschutz
 
 Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den **selbst gewählten** Anbieter mit dem **eigenen** Schlüssel — oder vollständig lokal über einen OpenAI-kompatiblen Server. Es gilt:
 
@@ -158,17 +169,17 @@ Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den 
 - API-Schlüssel werden nur für die Anfragen an den gewählten Anbieter verwendet
 - Mail-Anhänge werden für die Analyse gelesen, aber nur dauerhaft gespeichert, wenn das ausdrücklich eingeschaltet ist
 
-## 10. Benachrichtigungen
+## 11. Benachrichtigungen
 
 Web-Push erreicht jedes gekoppelte Gerät, auf dem die Web-App als Home-Screen-App installiert ist und Benachrichtigungen erlaubt sind. Angezeigt werden Titel, Text und App-Symbol; Bilder und Antwort-Knöpfe zeigt iOS in Web-Push-Nachrichten nicht an. Ein Tipp auf die Nachricht öffnet die App im passenden Bereich.
 
 Termin-Erinnerungen aus dem Kalender lassen sich zusätzlich über eine Kachel-Visualisierungsinstanz zustellen (Kapitel 6, *Visualisierungs-Benachrichtigungen*).
 
-## 11. Statusvariablen
+## 12. Statusvariablen
 
 Beide Module legen **keine Statusvariablen** und **keine Variablenprofile** an. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt.
 
-## 12. PHP-Befehlsreferenz
+## 13. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 
