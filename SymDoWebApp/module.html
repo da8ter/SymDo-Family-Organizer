@@ -42,11 +42,6 @@
   --sym-mt:  0px;
   --sym-ms:  0px;
   --sym-mb:  0px;
-  /* Der WIRKSAME untere Rand. In der Symcon-Kachel liefert env() null, dort gewinnt
-     der eingestellte Kachelrand; in der Home-Screen-App ist --sym-mb null, dort
-     gewinnt der Sicherheitsabstand des Geraets (Home-Indikator). Ein max() statt
-     einer Summe: sonst stapelten sich beide auf einem iPhone in der Kachel-Visu. */
-  --sym-mb-eff: max(var(--sym-mb), env(safe-area-inset-bottom, 0px));
   --sbw:     6px;   /* Scrollbalken-Breite (muss ::-webkit-scrollbar width entsprechen) */
   /* Rechter Innenabstand, der den Scrollbalken mittig ins rechte Body-Padding
      legt: Scrollbereich endet um (marginside - Balken)/2 vor der Kante, der
@@ -302,7 +297,7 @@ html {
      marginbottom=24 gemessen: Eingabefeld 12px HINTER der Leiste. Mit dem
      Summanden bleibt der Abstand zwischen Zeile und Leiste konstant --tab-gap,
      unabhängig vom eingestellten Rand. */
-  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb-eff));
+  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
   /* Luft zwischen Eingabezeile und Leiste, zusätzlich zu --tab-gap. Ohne das lag
      das Eingabefeld nur 12px über der Kapsel und wirkte angeklebt — die Leiste
      selbst hat 10px zum Fensterrand. */
@@ -317,7 +312,7 @@ html {
   /* Der letzte Summand vor --sug-gap ist das UNTERE Innenmass der Eingabezeile, und
      das ist calc(2px + --input-gap) und nicht --input-gap allein (Regel html .inputbar).
      Mit dem falschen Term lag das Fenster 48px statt 50px ueber dem Feld — gemessen. */
-  --sug-bottom: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb-eff) + 2px + var(--input-gap) + var(--input-h) + var(--sug-gap));
+  --sug-bottom: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb) + 2px + var(--input-gap) + var(--input-h) + var(--sug-gap));
   /* Leiste und Eingabezeile 10 % schmaler als der Inhalt. Beide Werte sind die HALBE
      Ersparnis, weil sie links und rechts gleichzeitig anliegen und die Elemente
      mittig bleiben sollen.
@@ -361,7 +356,7 @@ html .tabbar {
      demselben Maß (Prozent des Inhaltsblocks, siehe html .inputbar). */
   left: calc(var(--sym-ms) + var(--tab-narrow));
   right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
-  bottom: calc(var(--tab-gap) + var(--sym-mb-eff));
+  bottom: calc(var(--tab-gap) + var(--sym-mb));
   width: auto;
   /* --bar-max, NICHT --content-max: die Leiste bleibt auf breiten Schirmen schmal
      (siehe :root). Sonst stünde sie dort in voller Inhaltsbreite. */
