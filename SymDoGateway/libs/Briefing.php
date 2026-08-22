@@ -599,7 +599,10 @@ trait Briefing
 
         return [
             'userId'       => $userId,
-            'name'         => (string)($mitglieder[$userId]['name'] ?? ''),
+            'name'         => $this->BriefingAudience($mitglieder, $userId),
+            // Ist es ein Haushalts-Briefing? Danach richtet sich die Anrede-Regel im
+            // Prompt: einen Namen ansprechen oder jeden bei seinen Sachen nennen.
+            'haushalt'     => $userId === '',
             'tage'         => $tage,
             'termine'      => $this->BriefingEventLines($mitglieder, $tage),
             'aufgaben'     => $this->BriefingTaskLines($mitglieder, false, $tage),
@@ -673,30 +676,47 @@ trait Briefing
     }
 
     /**
-     * Fuer wen das Briefing geschrieben wird.
+     * Fuer wen das Briefing geschrieben wird — LEER heisst: fuer den ganzen Haushalt.
      *
-     * Vorgabe ist der Standard-Benutzer der Web-App-Kachel — dort steht er, und
-     * die Erwartung des Nutzers hoert nicht an der Modulgrenze auf. Der Zugriff
-     * ist die EINZIGE Stelle, an der das Gateway eine Nachbar-Property liest,
-     * deshalb defensiv und ohne Folgen, wenn die Kachel fehlt.
+     * Bis zum 22.08.2026 fiel ein leeres Feld heimlich auf den Standard-Benutzer der
+     * Web-App-Kachel zurueck. Das war die Ursache eines echten Missstandes: Es gibt
+     * EIN Briefing pro Tag, und BriefingPublic gibt es an JEDEN Aufrufer heraus —
+     * angesprochen wurde aber immer nur diese eine Person. Anna las „Rekrut Max,
+     * mach dich bereit!". Nutzen mehrere Mitglieder die Web-App, war das Briefing
+     * damit fuer alle ausser einem falsch adressiert.
+     *
+     * Jetzt: leer = an die Familie (die Vorgabe), ein Mitglied = ausdruecklich an
+     * dieses. Der Rueckfall auf die Kachel-Property ist damit weg — er konnte nur
+     * die falsche Anrede erzeugen, nie die richtige.
      */
     private function BriefingUserId(): string
     {
-        $gewaehlt = trim((string)$this->BriefingProp('BriefingUserID', ''));
-        if ($gewaehlt !== '') {
-            return $gewaehlt;
+        return trim((string)$this->BriefingProp('BriefingUserID', ''));
+    }
+
+    /**
+     * Die Anrede fuer den Prompt: ein Name, oder die Familie mit allen Vornamen.
+     *
+     * Die Namen gehoeren MIT hinein, nicht nur das Wort „Familie": der Text soll
+     * jeden bei seinen Sachen nennen statt einen anzureden, und dafuer muss das
+     * Modell wissen, wer dazugehoert. Die Aufgaben- und Terminzeilen tragen die
+     * Namen ohnehin schon („fuer <Namen>").
+     */
+    private function BriefingAudience(array $mitglieder, string $userId): string
+    {
+        if ($userId !== '' && ($mitglieder[$userId]['name'] ?? '') !== '') {
+            return (string)$mitglieder[$userId]['name'];
         }
-        try {
-            foreach (IPS_GetInstanceListByModuleID(self::WEBAPP_MODULE_GUID) as $id) {
-                $wert = trim((string)@IPS_GetProperty($id, 'DefaultUserID'));
-                if ($wert !== '') {
-                    return $wert;
-                }
+        $namen = [];
+        foreach ($mitglieder as $m) {
+            if (($m['name'] ?? '') !== '') {
+                $namen[] = (string)$m['name'];
             }
-        } catch (Throwable $e) {
-            // Kachel nicht vorhanden oder Property unbekannt: dann ohne Anrede.
         }
-        return '';
+        if ($namen === []) {
+            return '';
+        }
+        return 'die ganze Familie (' . implode(', ', $namen) . ')';
     }
 
     /** @return list<string> */
@@ -940,6 +960,77 @@ trait Briefing
         return $raus;
     }
 
+    /**
+     * Die Anredetabelle fuer die Persona „foermlich": Erwachsene mit Nachnamen und
+     * Sie, Kinder mit Vornamen.
+     *
+     * SERVERSEITIG ausgerechnet und nicht als Regel formuliert. Eine Regel („siez die
+     * Erwachsenen") muesste das Modell auf die Mitglieder anwenden, und dafuer
+     * muesste es wissen, wer erwachsen ist und welche Anrede dazugehoert — es wuerde
+     * beides aus den Vornamen raten. Hier steht stattdessen fertig da, wer wie
+     * angesprochen wird.
+     *
+     * Erwachsen oder Kind entscheidet die ROLLE aus den Stammdaten, nicht das
+     * Geburtsdatum: die Rolle ist gepflegt (sie steuert schon die Butler-Anreden),
+     * ein Geburtsdatum fehlt bei Erwachsenen oft. Sie liefert zugleich das
+     * Geschlecht und damit „Herr" oder „Frau" — geraten wird nichts.
+     *
+     * Drei Faelle ohne Nachnamen oder ohne Rolle:
+     *  - kein Nachname  -> Vorname (ausdruecklicher Wunsch, 22.08.2026)
+     *  - Rolle „Kind"   -> Vorname
+     *  - keine Rolle    -> Nachname mit „Sie", aber OHNE „Herr"/„Frau": ohne
+     *    Geschlecht waere die Anrede geraten, und ein falsches „Herr" ist schlimmer
+     *    als keines.
+     */
+    private function BriefingFormalAddresses(): string
+    {
+        $maennlich = ['father', 'grandfather', 'uncle'];
+        $weiblich  = ['mother', 'grandmother', 'aunt'];
+
+        // ERST die Anreden bilden, DANN auf Doppelte prüfen. In einem Haushalt teilen
+        // sich die Erwachsenen meist den Nachnamen: Mutter und Oma wären beide „Frau
+        // Muster" und im Text nicht auseinanderzuhalten (an den echten Stammdaten
+        // sofort aufgefallen). Bei einer Kollision kommt der Vorname mit hinein —
+        // „Frau Anna Muster" ist ungewöhnlich, aber eindeutig, und eindeutig ist hier
+        // das Wichtigere.
+        $anreden = [];
+        foreach ($this->BriefingMembers() as $m) {
+            $vorname  = (string)$m['name'];
+            $nachname = trim((string)($m['lastName'] ?? ''));
+            $rolle    = (string)($m['persona'] ?? '');
+            if ($rolle === 'child' || $nachname === '') {
+                $anreden[] = ['vorname' => $vorname, 'wort' => '', 'nach' => '',
+                              'anrede' => $vorname, 'form' => 'du'];
+                continue;
+            }
+            $wort = in_array($rolle, $maennlich, true) ? 'Herr'
+                : (in_array($rolle, $weiblich, true) ? 'Frau' : '');
+            $anreden[] = ['vorname' => $vorname, 'wort' => $wort, 'nach' => $nachname,
+                          'anrede' => trim($wort . ' ' . $nachname), 'form' => 'Sie'];
+        }
+        $zahl = [];
+        foreach ($anreden as $a) {
+            $zahl[$a['anrede']] = ($zahl[$a['anrede']] ?? 0) + 1;
+        }
+        $zeilen = [];
+        foreach ($anreden as $a) {
+            $anrede = $a['anrede'];
+            if (($zahl[$anrede] ?? 0) > 1 && $a['nach'] !== '') {
+                $anrede = trim($a['wort'] . ' ' . $a['vorname'] . ' ' . $a['nach']);
+            }
+            $zeilen[] = $a['vorname'] . ' = „' . $anrede . '", ' . $a['form']
+                . ($a['form'] === 'Sie' && $a['wort'] === '' ? ' (ohne „Herr" oder „Frau")' : '');
+        }
+        if ($zeilen === []) {
+            return 'Siez alle Erwachsenen.';
+        }
+        return 'ANREDE — genau so und nicht anders, das ist keine Empfehlung: '
+            . implode('; ', $zeilen) . '. '
+            . 'Erwachsene werden gesiezt und mit ihrem Nachnamen genannt, Kinder mit '
+            . 'ihrem Vornamen und geduzt. Verwende keine andere Form, auch nicht in '
+            . 'Nebensätzen, und mische die Formen nicht innerhalb eines Satzes.';
+    }
+
     /** Mitglieds-IDs zu Namen; unbekannte Kennungen fallen weg. */
     private function BriefingNames(array $ids, array $mitglieder): string
     {
@@ -968,7 +1059,16 @@ trait Briefing
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '
             . '„Fussballtraining". Die Angaben unten sind teils ohne Umlaute geschrieben — '
             . 'setze sie in deinem Text richtig. '
-            . 'Sprich die angesprochene Person mit ihrem Vornamen an, wenn einer genannt ist. '
+            // Die Anrede haengt am Modus. Ohne diese Unterscheidung greift sich das
+            // Modell aus der Namensliste einen heraus und spricht wieder nur den an —
+            // genau der Missstand, den das Haushalts-Briefing behebt (bis zum
+            // 22.08.2026 las Anna „Rekrut Max, mach dich bereit!").
+            . ($this->BriefingUserId() === ''
+                ? 'Das Briefing gilt der GANZEN Familie. Sprich niemanden einzeln mit „du" '
+                    . 'an — nenne jeden bei den Sachen, die ihm zugeordnet sind. Eine '
+                    . 'gemeinsame Anrede am Anfang ist gut („Guten Morgen, ihr vier"), eine '
+                    . 'einzelne nicht. '
+                : 'Sprich die angesprochene Person mit ihrem Vornamen und mit „du" an. ')
             . 'Das Briefing ist der Überblick für den GANZEN Haushalt: Sage auch, was bei den '
             . 'anderen Familienmitgliedern ansteht, nicht nur bei der angesprochenen Person. '
             . 'Hinter „für" stehen die Familienmitglieder, zu denen ein Eintrag gehört. '
@@ -1013,8 +1113,8 @@ trait Briefing
     {
         switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
             case 'formal':
-                return 'TONFALL: Förmlich und zurückhaltend, wie ein Butler. Siez die Person, '
-                    . 'keine Ausrufezeichen, keine Emojis.';
+                return 'TONFALL: Förmlich und zurückhaltend. Keine Ausrufezeichen, keine '
+                    . 'Emojis. ' . $this->BriefingFormalAddresses();
             case 'butler':
                 // Nicht dasselbe wie „foermlich": Der ist knapp und sachlich, der Butler
                 // ist ausgesucht umstaendlich — das ist der Witz daran. Die Anreden haengen
@@ -1161,8 +1261,15 @@ trait Briefing
                     . 'ANREDE: „Digga" ist dein Erkennungszeichen. Das Wort „Digga" selbst '
                     . 'steht MINDESTENS ZWEIMAL im Briefing, davon einmal im ERSTEN SATZ. '
                     . '„Diggah", „Bro", „Bratan", „Akh" und die anderen Anreden kommen '
-                    . 'zusätzlich dazu, sie ersetzen „Digga" NICHT. Den Vornamen sprichst '
-                    . 'du zusätzlich an, beides zusammen: „Digga, Max, …". '
+                    . 'zusätzlich dazu, sie ersetzen „Digga" NICHT. '
+                    // Der Vorname nur im persoenlichen Briefing. Im Haushalts-Briefing
+                    // waere „Digga, Max, …" wieder die Einzelanrede, die hier gerade
+                    // vermieden werden soll — dort steht „Digga" fuer sich.
+                    . ($this->BriefingUserId() === ''
+                        ? '„Digga" steht fuer sich, ohne einen Vornamen dahinter — es gilt '
+                            . 'allen. '
+                        : 'Den Vornamen sprichst du zusätzlich an, beides zusammen: '
+                            . '„Digga, Max, …". ')
                     . 'ANREDEN: „Digga", „Diggah", „Bro", „Bre", „Bratan", „Akh" (Bruder), '
                     . '„Babo" (Boss), „Macker", „Fam", „Bestie", „Habibi", '
                     . '„Wallah" (ich schwöre). '
@@ -1244,6 +1351,17 @@ trait Briefing
             'TAG: ' . $wochentage[(int)date('w', $tag)] . ', ' . date('d.m.Y', $tag)
                 . ' (' . $this->BriefingDayWord((int)($daten['tage'] ?? 0)) . ')',
             'BRIEFING FUER: ' . ($daten['name'] !== '' ? $daten['name'] : '(niemand bestimmter — schreibe ohne Anrede)'),
+            // Die Anrede-Regel MUSS im Prompt stehen und nicht nur im Namen: sonst
+            // greift sich das Modell aus der Aufzaehlung einen Namen heraus und
+            // spricht wieder nur den an — genau das Verhalten, das behoben werden
+            // sollte.
+            ($daten['haushalt'] ?? false)
+                ? 'ANREDE: An ALLE gemeinsam. Sprich niemanden einzeln als „du" an, '
+                    . 'sondern nenne jeden bei DEN SACHEN, die ihm zugeordnet sind '
+                    . '(„Mia bringt die Buecher zurueck", nicht „du bringst"). Eine '
+                    . 'gemeinsame Anrede am Anfang ist gut, eine einzelne nicht.'
+                : 'ANREDE: An diese eine Person, mit „du". Die Sachen der anderen '
+                    . 'nennst du mit ihren Namen.',
             'LESEHILFE: Jede Zeile beschreibt EINEN Eintrag vollständig. „für <Namen>" '
                 . 'nennt die zugeordneten Familienmitglieder. Nimm keine Angabe von einer '
                 . 'Zeile in eine andere mit.',

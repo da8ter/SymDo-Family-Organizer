@@ -2114,7 +2114,10 @@ class SymDoGateway extends IPSModuleStrict
             ];
         }
 
-        $wer = [['caption' => $this->Translate('— as set in the web app —'), 'value' => '']];
+        // Leer ist die Vorgabe und heisst: an die ganze Familie. Vorher stand hier
+        // „wie in der Web-App eingestellt" — und das fiel heimlich auf EINE Person
+        // zurueck, die dann alle anderen mitlesen mussten.
+        $wer = [['caption' => $this->Translate('— the whole family —'), 'value' => '']];
         foreach ($this->LoadUsers() as $u) {
             $wer[] = ['caption' => $u['name'], 'value' => $u['id']];
         }

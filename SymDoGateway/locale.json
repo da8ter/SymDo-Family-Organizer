@@ -203,7 +203,6 @@
             "Once a day the AI writes a short text for the dashboard: what is on today, which tasks are due, who has a birthday. It is generated once and then only read — so opening the app never waits for the AI.\n\nIt uses today's appointments, the tasks due today, what is still left over from the days before, and the family members' data. Nothing is created automatically; the text is just a text.": "Einmal am Tag schreibt die KI einen kurzen Text für das Dashboard: was heute ansteht, welche Aufgaben fällig sind, wer Geburtstag hat. Er wird einmal erzeugt und danach nur noch gelesen — das Öffnen der App wartet also nie auf die KI.\n\nVerwendet werden die heutigen Termine, die heute fälligen Aufgaben, das Liegengebliebene der Tage davor und die Daten der Familienmitglieder. Angelegt wird nichts von allein; der Text ist nur ein Text.",
             "Show a daily briefing on the dashboard": "Tägliches Briefing auf dem Dashboard anzeigen",
             "Written for": "Geschrieben für",
-            "— as set in the web app —": "— wie in der Web-App eingestellt —",
             "Tone": "Tonfall",
             "Matter-of-fact": "Sachlich",
             "Formal": "Förmlich",
@@ -335,7 +334,8 @@
             "Always high (128 kbit, like the ElevenLabs preview)": "Immer hoch (128 kbit, wie die Vorschau bei ElevenLabs)",
             "Always good (64 kbit)": "Immer gut (64 kbit)",
             "Always thrifty (32 kbit at 22 kHz) — audibly dull": "Immer sparsam (32 kbit bei 22 kHz) — hörbar dumpf",
-            "Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.": "Automatisch arbeitet wie der Riegel für Fotos und PDFs: es liest die Symcon-Kernoption ScriptOutputBufferLimit zur Laufzeit und nimmt die beste Qualität, deren Aufnahme noch in EIN Stück passt — jede Naht zwischen zwei Aufnahmen ist hörbar, weil die Sprechmelodie neu ansetzt. Ihre Grenze steht derzeit auf %s, das reicht bei 128 kbit für etwa %d Zeichen. Stellen Sie die Option höher, wird der Klang von selbst besser; stellen Sie sie niedriger, kommt trotzdem eine Aufnahme an."
+            "Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.": "Automatisch arbeitet wie der Riegel für Fotos und PDFs: es liest die Symcon-Kernoption ScriptOutputBufferLimit zur Laufzeit und nimmt die beste Qualität, deren Aufnahme noch in EIN Stück passt — jede Naht zwischen zwei Aufnahmen ist hörbar, weil die Sprechmelodie neu ansetzt. Ihre Grenze steht derzeit auf %s, das reicht bei 128 kbit für etwa %d Zeichen. Stellen Sie die Option höher, wird der Klang von selbst besser; stellen Sie sie niedriger, kommt trotzdem eine Aufnahme an.",
+            "— the whole family —": "— die ganze Familie —"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
