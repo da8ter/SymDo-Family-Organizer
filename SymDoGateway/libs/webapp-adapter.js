@@ -76,6 +76,22 @@
     if (c && c.card)    { r.setProperty('--card-color', c.card); }
     if (c && c.content) { r.setProperty('--content-color', c.content); }
     if (c && c.accent)  { r.setProperty('--accent-color', c.accent); }
+    // Statusleiste faerbt sich nach der App. Reserviert iOS die Leiste (Web-App
+    // vom Home-Bildschirm), malt es die Flaeche nach dem theme-color-Meta — das
+    // statische #1c1c1e aus dem Seitenkopf war aber NICHT die Kartenfarbe
+    // (dunkel #2b2c30, hell #ffffff, Visu-Farben beliebig). Ergebnis war ein
+    // andersfarbiger Streifen am oberen Rand, im Hellmodus fast schwarz auf
+    // weisser App. Mit der echten Kartenfarbe ist die Leiste nahtlos; zeichnet
+    // iOS die Seite dagegen hinter die Leiste (black-translucent), ist das Meta
+    // dort wirkungslos und der Abgleich schadet nicht.
+    try {
+      var karte = (c && c.card) || '';
+      if (karte) {
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'theme-color'); (document.head || document.documentElement).appendChild(m); }
+        if (m.getAttribute('content') !== karte) { m.setAttribute('content', karte); }
+      }
+    } catch (e) {}
   }
   function applyTheme() {
     var scheme = prefersDark() ? 'dark' : 'light';
@@ -453,9 +469,33 @@
     });
   }
 
+  // ---- Messsonde (voruebergehend, 2026-08-22) -----------------------------------
+  // Einmal je Seitenstart die echten Anzeigewerte an /discovery anhaengen; der
+  // Router schreibt sie ins Symcon-Log. Klaert am Geraet, wie iOS 26 die
+  // Statusleiste behandelt: zeichnet es die Seite dahinter (sat > 0) oder
+  // reserviert es die Leiste (sat = 0 und ih < sh). Wieder ausbauen, sobald die
+  // Frage beantwortet ist — der Router vertraegt den Parameter auch danach.
+  var vpGesendet = false;
+  function vpProbe() {
+    if (vpGesendet) { return ''; }
+    vpGesendet = true;
+    try {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:-9999px;top:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+      var wirt = document.body || document.documentElement;
+      wirt.appendChild(d);
+      var cs = getComputedStyle(d);
+      var werte = 'sat=' + cs.paddingTop + ',sab=' + cs.paddingBottom
+        + ',ih=' + window.innerHeight + ',sh=' + ((window.screen && window.screen.height) || 0)
+        + ',dm=' + (isStandalone() ? 'standalone' : 'browser');
+      wirt.removeChild(d);
+      return '?vp=' + encodeURIComponent(werte);
+    } catch (e) { return ''; }
+  }
+
   // ---- Aggregation: discovery + per-Instanz-state -> Kachel-'state' ------------
   function loadFullState() {
-    return apiGet('/discovery').then(function (disc) {
+    return apiGet('/discovery' + vpProbe()).then(function (disc) {
       if (!disc || disc.ok !== true) { throw new Error('discovery failed'); }
       // Echte Visu-Farben übernehmen (falls die ShoppingList-Kachel welche gemeldet hat).
       discoveryTheme = disc.theme || null;
