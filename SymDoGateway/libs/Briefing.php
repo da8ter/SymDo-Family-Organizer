@@ -60,8 +60,16 @@ trait Briefing
     private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
 
     /**
-     * Dasselbe fuer ElevenLabs. Wir holen mp3_22050_32, also 32 kbit/s = 4000 B/s;
-     * bei etwa 15 Zeichen/s sind das rund 265 B je Zeichen. Mit Luft: 300.
+     * Dasselbe fuer ElevenLabs, mp3_22050_32.
+     *
+     * GEMESSEN am 22.08.2026 an einem erzeugten Briefing: 222 999 Byte fuer 798
+     * Zeichen, also 279 je Zeichen. Die 300 lassen knapp Luft darueber.
+     *
+     * Zum Vergleich, weil es den Wert erst glaubhaft macht: solange
+     * `output_format` im JSON-Rumpf stand und deshalb ignoriert wurde, lag
+     * derselbe Weg bei 1257 Byte je Zeichen (1 361 755 fuer 1083 Zeichen). Wer
+     * diese Zahl anfasst, sollte vorher pruefen, ob das Format wirklich in der
+     * ADRESSE steht — sonst rechnet sie mit dem Vierfachen.
      */
     private const BRIEFING_TTS_BYTES_ELEVEN_MP3 = 300;
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
