@@ -430,7 +430,13 @@ trait Tts
         // Schluessel NICHT — die alte Aufnahme spielte weiter, obwohl eine andere
         // Stimme eingestellt ist.
         if ($this->TtsProvider() === 'elevenlabs') {
-            $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2');
+            // Das WIRKLICHE Tonformat gehoert in den Schluessel, nicht nur unser
+            // Kurzname „mp3". Sonst liefert der Zwischenspeicher nach einer
+            // Formataenderung weiter die alte Aufnahme — genau das waere nach dem
+            // Umzug von output_format in die Adresse passiert: dieselbe Ansage, aber
+            // noch in 128 kbit/s und damit viermal so gross.
+            $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2')
+                . '|' . self::TTS_ELEVEN_FORMAT;
             $vorgabe = $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
         } else {
             $modell  = $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts');
