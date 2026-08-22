@@ -313,7 +313,7 @@
             "No ElevenLabs key entered.": "Kein ElevenLabs-Schlüssel eingetragen.",
             "Could not fetch the voices (HTTP %d).": "Die Stimmen konnten nicht abgerufen werden (HTTP %d).",
             "The key is valid, but the account holds no voices.": "Der Schlüssel ist gültig, das Konto hat aber keine Stimmen.",
-            "ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). \"List voices of the account\" fetches the IDs available to your key.": "ElevenLabs braucht einen KOSTENPFLICHTIGEN Zugang: die freie Stufe gewährt keine kommerzielle Lizenz und verlangt, dass jede erzeugte Datei ElevenLabs nennt. Es gibt dort auch keine Stimme je Persona — welche Stimmen ein Konto hat, weiß nur das Konto. Alle Personas benutzen deshalb die oben eingetragene Stimme, und ihr Charakter kommt aus den Reglern (ausdrucksstark gegen gleichmäßig). „Stimmen des Kontos abrufen\" holt die Kennungen, die Ihr Schlüssel sehen darf.",
+            "ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). \"List voices of the account\" fetches the IDs available to your key.": "ElevenLabs braucht einen KOSTENPFLICHTIGEN Zugang: die freie Stufe gewährt keine kommerzielle Lizenz und verlangt, dass jede erzeugte Datei ElevenLabs nennt. Welche Stimmen ein Konto hat, weiß nur das Konto — „Stimmen des Kontos abrufen\" holt sie. Die API unterscheidet dabei nur „selbst erzeugt/geklont\" von „aus der Bibliothek kopiert\"; die Rubriken der ElevenLabs-Weboberfläche lassen sich damit nicht nachbilden, deshalb die Auswahl darüber.",
             "Edit personas": "Personas bearbeiten",
             "Voice per persona and provider": "Stimme je Persona und Anbieter",
             "Built in": "Eingebaut",
@@ -325,7 +325,11 @@
             "The persona editor appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Der Personas-Editor erscheint nach dem nächsten Symcon-Neustart — es ist eine neue Einstellung, und die gibt es erst, wenn der Kernel das Modul neu geladen hat.",
             "The key works, but \"My Voices\" is empty in this account.": "Der Schlüssel funktioniert, aber das Konto hat außer den Vorgabestimmen keine.",
             "own": "eigene",
-            "saved": "gespeichert"
+            "saved": "gespeichert",
+            "Which voices to offer": "Welche Stimmen anbieten",
+            "Own voices only (created or cloned by you)": "Nur eigene (selbst erzeugt oder geklont)",
+            "Own and saved from the library": "Eigene und aus der Bibliothek gespeicherte",
+            "All, including the default voices": "Alle, auch die Vorgabestimmen"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

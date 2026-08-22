@@ -2225,6 +2225,17 @@ class SymDoGateway extends IPSModuleStrict
                         'caption' => $this->Translate('ElevenLabs model (eleven_multilingual_v2 speaks German)')
                     ],
                     [
+                        'type'    => 'Select',
+                        'name'    => 'TtsElevenScope',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('Which voices to offer'),
+                        'options' => [
+                            ['caption' => $this->Translate('Own voices only (created or cloned by you)'), 'value' => 'personal'],
+                            ['caption' => $this->Translate('Own and saved from the library'), 'value' => 'non-default'],
+                            ['caption' => $this->Translate('All, including the default voices'), 'value' => 'all'],
+                        ]
+                    ],
+                    [
                         'type'    => 'Button',
                         'caption' => $this->Translate('List voices of the account'),
                         'onClick' => 'IPS_RequestAction($id, \'TtsElevenVoices\', 0);'

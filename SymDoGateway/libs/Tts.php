@@ -101,6 +101,12 @@ trait Tts
         $this->RegisterPropertyString('TtsElevenKey', '');
         $this->RegisterPropertyString('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
         $this->RegisterPropertyString('TtsElevenModel', 'eleven_multilingual_v2');
+        // Welche Stimmen der Abruf anbietet. Einstellbar, weil sich am echten Konto
+        // gezeigt hat, dass die API die Rubriken der Weboberflaeche NICHT nachbilden
+        // kann: sie unterscheidet nur „selbst erzeugt" von „aus der Bibliothek
+        // kopiert", und alle Kopien sind in jedem Feld identisch. Wer eine andere
+        // Menge sehen will, waehlt sie hier, statt dass ich sie errate.
+        $this->RegisterPropertyString('TtsElevenScope', 'non-default');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -664,19 +670,23 @@ trait Tts
         if ($key === '') {
             return $this->Translate('No ElevenLabs key entered.');
         }
-        // v2 statt v1, wegen `voice_type`. Gefragt sind die Stimmen des KONTOS, nicht
-        // die 21 Vorgabestimmen, die jedes Konto bekommt.
+        // v2 statt v1, wegen `voice_type`. WELCHE Menge, entscheidet die Einstellung.
         //
-        // `non-default` und nicht `non-community`: am echten Konto gemessen
-        // (22.08.2026) unterscheidet die API zwei Sorten, die im Konto beide unter
-        // „Meine Stimmen" stehen —
-        //   category `generated`/`cloned`  = selbst erzeugt oder geklont
-        //   category `professional`        = aus der Bibliothek gespeichert
-        // `non-community` und `personal` liefern NUR die erste Sorte; dort war von
-        // sechs Stimmen genau eine zu sehen. `non-default` liefert beide und laesst
-        // nur die Vorgabestimmen weg. Welche Sorte eine Stimme ist, steht als
-        // Merkmal in der Auswahl — sonst raet man beim Lesen der Liste.
-        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?voice_type=non-default&page_size=100', [
+        // Am echten Konto gemessen (22.08.2026, 27 Stimmen): die API unterscheidet
+        //   category `generated`/`cloned`  = selbst erzeugt oder geklont   (1)
+        //   category `professional`        = aus der Bibliothek kopiert    (5)
+        //   category `premade`             = Vorgabestimmen jedes Kontos  (21)
+        // `personal`/`non-community` liefern nur die erste Sorte, `non-default`
+        // beide ersten, ohne Filter alle. Die Rubriken der Weboberflaeche lassen
+        // sich damit NICHT nachbilden: die fuenf Kopien sind in jedem Feld
+        // identisch (sharing.status=copied, is_owner=false, keine Sammlungen, keine
+        // Stufen) — es gibt kein Merkmal, das eine Teilmenge davon abgrenzt.
+        // Deshalb waehlt der Nutzer die Menge, statt dass wir sie erraten.
+        $umfang = $this->TtsSetting('TtsElevenScope', 'non-default');
+        $filter = in_array($umfang, ['personal', 'non-default', 'non-community'], true)
+            ? '&voice_type=' . $umfang
+            : '';
+        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?page_size=100' . $filter, [
             'xi-api-key: ' . $key,
             'Accept: application/json',
             'User-Agent: SymDoGateway',
