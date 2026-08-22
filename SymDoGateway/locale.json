@@ -296,7 +296,10 @@
             "Sign-in was declined.": "Die Anmeldung wurde abgelehnt.",
             "The device code was not recognized. Please request a new one.": "Der Gerätecode wurde nicht erkannt. Bitte einen neuen anfordern.",
             "Connected to Microsoft.": "Mit Microsoft verbunden.",
-            "Signed in, but without lasting access (offline_access is missing in the app registration).": "Angemeldet, aber ohne Dauerzugriff (offline_access fehlt in der App-Registrierung)."
+            "Signed in, but without lasting access (offline_access is missing in the app registration).": "Angemeldet, aber ohne Dauerzugriff (offline_access fehlt in der App-Registrierung).",
+            "Maximum AI calls per day, all ways together (0 = no limit)": "Höchstens KI-Aufrufe pro Tag, alle Wege zusammen (0 = ohne Begrenzung)",
+            "Counts every call that costs money at the provider: mail analysis, photo capture in the app, and the calls from the Symcon tile. The tile has no device token and therefore no hourly window — this daily limit is its only brake.": "Gezählt wird jeder Aufruf, der beim Anbieter Geld kostet: die Mailanalyse, die Foto-Erfassung in der App und die Aufrufe aus der Symcon-Kachel. Die Kachel bringt keinen Gerätetoken mit und hat deshalb kein Stundenfenster — dieser Tagesdeckel ist dort die einzige Bremse.",
+            "Daily limit for AI calls reached.": "Der Tagesdeckel für KI-Aufrufe ist erreicht."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

@@ -43,6 +43,13 @@ trait MailScan
      *  sonst blockiert eine dauerhaft scheiternde Mail alle neueren und kostet
      *  bei jedem Lauf erneut Geld beim Anbieter. */
     private const MAIL_FAIL_MAX      = 3;
+
+    /**
+     * Vorgabe des Tagesdeckels fuer KI-Aufrufe. Seit der Deckel ALLE Wege umfasst
+     * (Mail, Web-App, Kachel) waren 20 zu knapp — ein Nachmittag mit Rezept-Scans
+     * haette die Post liegen lassen.
+     */
+    private const MAIL_DAILY_LIMIT_DEFAULT = 100;
     /** Wartezeit vor dem naechsten Versuch nach einem Fehlschlag; waechst je Versuch. */
     private const MAIL_RETRY_MS      = 120000;
     /** Schluessel der Fehlversuchs-Zaehler im MailSeenUIDs-Attribut ("imapID:uid" → Anzahl).
@@ -78,7 +85,7 @@ trait MailScan
         $this->RegisterPropertyString('MailAddresses', '[]');
         // Freigegebene Absender, einer pro Zeile; auch „@domain.tld". Leer = alle.
         $this->RegisterPropertyString('MailSenderAllow', '');
-        $this->RegisterPropertyInteger('MailDailyLimit', 20);
+        $this->RegisterPropertyInteger('MailDailyLimit', self::MAIL_DAILY_LIMIT_DEFAULT);
         // Ohne Formularfeld: Post loeschen zu lassen passt nicht zu einem Postfach,
         // in das der Nutzer selbst hineinsieht. Die Eigenschaft bleibt, damit eine
         // bestehende Einstellung weiter wirkt.
@@ -2209,9 +2216,20 @@ trait MailScan
         return $n;
     }
 
+    /**
+     * Tagesdeckel fuer bezahlte KI-Aufrufe — EIN Topf fuer alle Wege.
+     *
+     * Gezaehlt wird jeder Aufruf, der beim Anbieter Geld kostet: die Mailanalyse,
+     * die Erfassung aus der Web-App und die Aufrufe aus der Visu-Kachel. Letztere
+     * kommen ohne Geraetetoken herein und hatten deshalb ueberhaupt kein Fenster —
+     * das gleitende Stundenfenster je Geraet (AiRateLimitAllows) greift dort nicht.
+     *
+     * Ein gemeinsamer Topf ist die ehrliche Lesart der Einstellung: sie heisst
+     * „hoechstens N KI-Aufrufe pro Tag", nicht „je Weg".
+     */
     private function MailDayLimitReached(): bool
     {
-        $grenze = (int)$this->MailProp('MailDailyLimit', 20);
+        $grenze = (int)$this->MailProp('MailDailyLimit', self::MAIL_DAILY_LIMIT_DEFAULT);
         if ($grenze <= 0) {
             return false; // 0 = ohne Begrenzung
         }
@@ -2223,12 +2241,31 @@ trait MailScan
         return (int)($stand['n'] ?? 0) >= $grenze;
     }
 
+    /**
+     * Unter eigener Sperre: der Zaehler ist ein Lesen-Aendern-Schreiben, und seit
+     * die Kachel mitzaehlt, kommen die Aufrufe auch aus Webserver-Threads. Ohne
+     * Sperre verschluckt der eine Weg den Zaehlschritt des anderen — die Bremse
+     * waere loechrig. Eigener Name, NICHT die Scanner-Sperre: die haelt der Timer
+     * beim Mailweg schon, und IPS-Semaphoren sind nicht wiedereintrittsfaehig.
+     */
     private function MailCountDay(): void
     {
-        $stand = json_decode($this->MailAttr('MailDayCount', '{}'), true);
-        $stand = is_array($stand) ? $stand : [];
-        $heute = date('Y-m-d');
-        $n = ((string)($stand['d'] ?? '') === $heute) ? (int)($stand['n'] ?? 0) : 0;
-        $this->MailWriteJsonAttr('MailDayCount', ['d' => $heute, 'n' => $n + 1]);
+        $lock = 'SymDo_MailDay_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            // Nicht zaehlen ist besser als falsch zaehlen; der Aufruf laeuft
+            // trotzdem. Ein verlorener Zaehlschritt ist bei einem Tagesdeckel
+            // harmlos.
+            $this->SendDebug('MailScan', 'Tageszaehler belegt — Schritt ausgelassen', 0);
+            return;
+        }
+        try {
+            $stand = json_decode($this->MailAttr('MailDayCount', '{}'), true);
+            $stand = is_array($stand) ? $stand : [];
+            $heute = date('Y-m-d');
+            $n = ((string)($stand['d'] ?? '') === $heute) ? (int)($stand['n'] ?? 0) : 0;
+            $this->MailWriteJsonAttr('MailDayCount', ['d' => $heute, 'n' => $n + 1]);
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
     }
 }

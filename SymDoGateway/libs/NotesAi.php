@@ -54,6 +54,12 @@ trait NotesAi
             && !$this->AiRateLimitAllows((string)($device['id'] ?? ''), self::AI_RATE_MAX, self::AI_RATE_WINDOW)) {
             return $this->NotesFehler('ai_quota');
         }
+        // Der Tagesdeckel gilt auf JEDEM Weg — auch ohne Geraet. Ueber die Kachel
+        // kommt hier `$device === null` herein, und dann greift das Stundenfenster
+        // oben nicht: dieser Aufruf war bis hierher ungebremst.
+        if ($this->MailDayLimitReached()) {
+            return $this->NotesFehler('ai_quota');
+        }
         // AiRowStr und nicht (string): `{"action":"analyse","pdf":[]}` erzeugte sonst
         // eine PHP-Warnung im Antwortkoerper und zerlegte das JSON. Der Helfer liegt
         // in AiExtract, dem Trait, aus dem diese Datei ohnehin lebt — BodyStr waere
@@ -89,6 +95,9 @@ trait NotesAi
             }
             return $this->NotesFehler($code);
         }
+        // Erst nach dem gelungenen Aufruf zaehlen: ein Fehlschlag beim Anbieter soll
+        // kein Budget verbrauchen.
+        $this->MailCountDay();
         $erg = $this->NotesParseAi((string)$r['text']);
         return ['ok' => true, 'note' => ['title' => $erg['title'], 'text' => $erg['text']],
                 'todos' => $erg['todos']];

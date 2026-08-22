@@ -75,7 +75,7 @@ trait AiExtract
 
     private function HandleAiExtract(array $device): void
     {
-        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device)) {
+        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device) || !$this->AiDayBudgetOk()) {
             return;
         }
         $body = $this->ReadJsonBody();
@@ -97,6 +97,7 @@ trait AiExtract
             $this->SendAiErrorResult($result);
             return;
         }
+        $this->MailCountDay();
         $this->SendJson(['ok' => true, 'todos' => $result['todos']]);
     }
 
@@ -119,7 +120,7 @@ trait AiExtract
 
     private function HandleAiIngredients(array $device): void
     {
-        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device)) {
+        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device) || !$this->AiDayBudgetOk()) {
             return;
         }
         $body = $this->ReadJsonBody();
@@ -152,6 +153,7 @@ trait AiExtract
             $this->SendAiErrorResult($result);
             return;
         }
+        $this->MailCountDay();
         $this->SendJson([
             'ok'       => true,
             'title'    => $result['title'] ?? null,
@@ -257,6 +259,15 @@ trait AiExtract
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }
 
+        // Ab hier kostet jeder Aufruf Geld. Der Weg ueber die Kachel bringt KEIN
+        // Geraet mit, das gleitende Stundenfenster je Geraet greift also nicht — bis
+        // hierher war er voellig ungebremst. Der Tagesdeckel gilt jetzt auch hier;
+        // gezaehlt wird erst nach dem Aufruf (siehe unten), damit ein Fehlschlag
+        // beim Anbieter kein Budget verbraucht.
+        if ($this->MailDayLimitReached()) {
+            return $this->AiRelayError('ai_quota', $this->Translate('Daily limit for AI calls reached.'));
+        }
+
         if (str_ends_with($path, 'ingredients')) {
             $url        = trim($this->BodyStr($body, 'url'));
             $kategorien = $this->AiAllowedCategories($body);
@@ -272,6 +283,7 @@ trait AiExtract
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
             }
+            $this->MailCountDay();
             return json_encode(['ok' => true, 'title' => $r['title'] ?? null, 'servings' => $r['servings'] ?? null, 'items' => $r['items']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
@@ -286,6 +298,7 @@ trait AiExtract
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
             }
+            $this->MailCountDay();
             return json_encode(['ok' => true, 'todos' => $r['todos']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
@@ -1690,6 +1703,24 @@ trait AiExtract
             return true;
         }
         $this->SendApiError('ai_quota', $this->Translate('Too many AI requests — please wait a moment.'), 429);
+        return false;
+    }
+
+    /**
+     * Der Tagesdeckel — NUR fuer Wege, die beim Anbieter wirklich Geld kosten.
+     *
+     * Bewusst getrennt von AiRateLimitOk: das gleitende Stundenfenster schuetzt auch
+     * Endpunkte, die bloss ein Medienobjekt ablegen (HandleAiSavePhoto). Deren
+     * Sperre am KI-Budget waere falsch — ein Foto zu speichern kostet nichts.
+     *
+     * false = die Absage ist schon gesendet.
+     */
+    private function AiDayBudgetOk(): bool
+    {
+        if (!$this->MailDayLimitReached()) {
+            return true;
+        }
+        $this->SendApiError('ai_quota', $this->Translate('Daily limit for AI calls reached.'), 429);
         return false;
     }
 

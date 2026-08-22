@@ -1478,9 +1478,13 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'NumberSpinner',
                     'name'    => 'MailDailyLimit',
-                    'caption' => $this->Translate('Maximum AI calls per day (0 = no limit)'),
+                    'caption' => $this->Translate('Maximum AI calls per day, all ways together (0 = no limit)'),
                     'minimum' => 0,
-                    'width'   => '200px'
+                    'width'   => '400px'
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Counts every call that costs money at the provider: mail analysis, photo capture in the app, and the calls from the Symcon tile. The tile has no device token and therefore no hourly window — this daily limit is its only brake.')
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -1499,7 +1503,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'     => 'SelectInstance',
                     'name'     => 'CalNotifyVisuID',
-                    'width'    => '400px',
+                    'width'    => '600px',
                     // Nur die Kachel-Visualisierung versteht VISU_PostNotification;
                     // jede andere Instanz liesse den Erinnerungs-Timer werfen.
                     'validModules' => ['{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}'],
