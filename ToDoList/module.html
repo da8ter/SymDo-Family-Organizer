@@ -42,6 +42,11 @@
   --sym-mt:  0px;
   --sym-ms:  0px;
   --sym-mb:  0px;
+  /* Der WIRKSAME untere Rand. In der Symcon-Kachel liefert env() null, dort gewinnt
+     der eingestellte Kachelrand; in der Home-Screen-App ist --sym-mb null, dort
+     gewinnt der Sicherheitsabstand des Geraets (Home-Indikator). Ein max() statt
+     einer Summe: sonst stapelten sich beide auf einem iPhone in der Kachel-Visu. */
+  --sym-mb-eff: max(var(--sym-mb), env(safe-area-inset-bottom, 0px));
   --sbw:     6px;   /* Scrollbalken-Breite (muss ::-webkit-scrollbar width entsprechen) */
   /* Rechter Innenabstand, der den Scrollbalken mittig ins rechte Body-Padding
      legt: Scrollbereich endet um (marginside - Balken)/2 vor der Kante, der
@@ -96,7 +101,13 @@ select option { color: #111; background: #fff; }
   /* Rechts nur --sb-pad statt marginside, damit der Scrollbereich in den
      rechten Rand hineinreicht und der Scrollbalken mittig darin liegt. Der
      fehlende Rest des Inhaltsabstands sitzt als padding-right auf .screen. */
-  padding: var(--sym-mt) var(--sb-pad) 0 var(--sym-ms);
+  /* Oben derselbe Gedanke wie unten: in der Kachel der eingestellte Rand, in der
+     Home-Screen-App der Sicherheitsabstand. Mit
+     apple-mobile-web-app-status-bar-style=black-translucent beginnt die Seite bei
+     Pixel 0 — die FLAECHE laeuft dann hinter Statusleiste und Dynamic Island durch,
+     der INHALT weicht ihnen aus. Ohne dieses Polster stuende die Titelzeile
+     darunter. */
+  padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad) 0 var(--sym-ms);
 }
 
 /* Sprechblase mit rotem Ausrufezeichen, sobald ein Hinweis hinterlegt ist */
@@ -268,7 +279,7 @@ html {
      marginbottom=24 gemessen: Eingabefeld 12px HINTER der Leiste. Mit dem
      Summanden bleibt der Abstand zwischen Zeile und Leiste konstant --tab-gap,
      unabhängig vom eingestellten Rand. */
-  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb));
+  --tab-clear: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb-eff));
   /* Luft zwischen Eingabezeile und Leiste, zusätzlich zu --tab-gap. Ohne das lag
      das Eingabefeld nur 12px über der Kapsel und wirkte angeklebt — die Leiste
      selbst hat 10px zum Fensterrand. */
@@ -283,7 +294,7 @@ html {
   /* Der letzte Summand vor --sug-gap ist das UNTERE Innenmass der Eingabezeile, und
      das ist calc(2px + --input-gap) und nicht --input-gap allein (Regel html .inputbar).
      Mit dem falschen Term lag das Fenster 48px statt 50px ueber dem Feld — gemessen. */
-  --sug-bottom: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb) + 2px + var(--input-gap) + var(--input-h) + var(--sug-gap));
+  --sug-bottom: calc(var(--nav-h) + var(--tab-gap) * 2 + var(--sym-mb-eff) + 2px + var(--input-gap) + var(--input-h) + var(--sug-gap));
   /* Leiste und Eingabezeile 10 % schmaler als der Inhalt. Beide Werte sind die HALBE
      Ersparnis, weil sie links und rechts gleichzeitig anliegen und die Elemente
      mittig bleiben sollen.
@@ -327,7 +338,7 @@ html .tabbar {
      demselben Maß (Prozent des Inhaltsblocks, siehe html .inputbar). */
   left: calc(var(--sym-ms) + var(--tab-narrow));
   right: calc(var(--sb-pad) * 2 + var(--sbw) + var(--tab-narrow));
-  bottom: calc(var(--tab-gap) + var(--sym-mb));
+  bottom: calc(var(--tab-gap) + var(--sym-mb-eff));
   width: auto;
   /* --bar-max, NICHT --content-max: die Leiste bleibt auf breiten Schirmen schmal
      (siehe :root). Sonst stünde sie dort in voller Inhaltsbreite. */

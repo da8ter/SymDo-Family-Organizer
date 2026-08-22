@@ -967,7 +967,14 @@ trait AppCore
         // Connect trägt. rel="apple-touch-icon" ohne -precomposed, denn iOS
         // maskiert die Ecken selbst — sonst gäbe es doppelte Rundungen.
         $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
-        $icons = '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png">'
+        // viewport-fit=cover ist die VORAUSSETZUNG dafuer, dass env(safe-area-inset-*)
+        // ueberhaupt Werte liefert — ohne es sind alle vier null und die Seite bleibt
+        // im Briefkasten zwischen Statusleiste und Home-Indikator. Der Adapter setzt
+        // die Angabe zwar auch (webapp-adapter.js), aber erst per JavaScript; hier
+        // steht sie ab dem ersten Aufbau, damit die Abstaende nicht von der
+        // Reihenfolge abhaengen.
+        $icons = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            . '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png">'
             . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
             . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
             // Manifest und die beiden Meta-Angaben machen die Seite erst
@@ -975,6 +982,18 @@ trait AppCore
             . '<link rel="manifest" href="/hook/' . self::PWA_HOOK_PATH . '/manifest.webmanifest">'
             . '<meta name="apple-mobile-web-app-capable" content="yes">'
             . '<meta name="mobile-web-app-capable" content="yes">'
+            // Erst hierdurch beginnt die Seite bei Pixel 0. Ohne die Angabe gilt
+            // „default": iOS reserviert die Statusleiste und die Web-Ansicht faengt
+            // DARUNTER an — der Bereich hinter der Dynamic Island gehoert dann gar
+            // nicht zur Seite. Der Inhalt weicht ihr per env(safe-area-inset-top)
+            // aus (siehe .app in module.html), die Flaeche laeuft darunter durch.
+            //
+            // Der Preis: iOS kennt nur „default" (dunkler Text, deckend), „black"
+            // und „black-translucent" (WEISSER Text). Die Schriftfarbe folgt NICHT
+            // dem theme-color. Im hellen Thema steht die Uhr also weiss auf hellem
+            // Grund — bewusst in Kauf genommen (Wunsch vom 22.08.2026), weil die
+            // App im dunklen Thema laeuft.
+            . '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
             . '<meta name="theme-color" content="#1c1c1e">';
 
         $adapterJs = (string)@file_get_contents(__DIR__ . '/webapp-adapter.js');
