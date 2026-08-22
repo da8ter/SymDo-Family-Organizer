@@ -581,18 +581,22 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .briefing-play:disabled { opacity: .5; cursor: default; }
 .briefing-play.laeuft { background: color-mix(in srgb, var(--accent) 26%, transparent); }
-/* Kopfzeile der Uebersicht: Datum links, Glocke daneben. Eigener Kasten, weil das
-   Datum selbst auf schmalen Anzeigen zwei Zeilen fuellt — die Glocke soll daneben
-   stehen und nicht als dritte Zeile darunter. */
+/* Kopfzeile der Uebersicht: nur die Glocke, links in der Ecke.
+   min-height MUSS hier stehen und ist keine Kosmetik — es ist die Zeile, auf der
+   die Avatare sitzen: die Mitglieder-Leiste wird per margin-bottom: -44px darauf
+   gezogen. Bis zum 22.08.2026 kamen die 44 px vom Datum, das hier stand; ohne
+   Ersatz waere die Zeile auf Glockenhoehe (34 px) geschrumpft und die Avatare
+   haetten sich in den Inhalt darunter geschoben.
+   Auch OHNE Glocke bleibt die Hoehe: in der Visu-Kachel gibt es kein Web Push,
+   der Kasten ist dort leer — und trotzdem die Avatar-Zeile. */
 .dash-head {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
   margin-bottom: 16px;
 }
-/* Die Glocke sitzt links neben dem Datum und nicht rechts: Rechts liegt die
-   sticky Mitglieder-Leiste, die per margin-bottom: -44px auf diese Zeile gezogen
-   wird. */
+/* Die Glocke sitzt LINKS: rechts liegt die sticky Mitglieder-Leiste. */
 .dash-bell {
   flex: 0 0 auto;
   width: 34px; height: 34px;
@@ -609,24 +613,6 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .dash-bell:disabled { opacity: .5; cursor: default; }
 
-/* Datum: auf schmalen Anzeigen ZWEI Zeilen (Wochentag, darunter der Tag) — daneben
-   liegt die sticky Avatar-Leiste, die dem Datum die Breite nimmt. Beide Zeilen
-   bleiben in denselben 44 px hoch wie zuvor die eine, damit die Avatare weiter auf
-   der Zeile sitzen (sie werden per margin-bottom: -44px daraufgezogen) und darunter
-   nichts verrutscht. Ab 820 px steht es wieder in einer Zeile, dann mit Komma. */
-.dash-date {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  line-height: 1.25;
-  min-height: 44px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-}
 /* Avatar-Menü: nur DIESES ist sticky (oben rechts), mit halbtransparentem
    Pillen-Hintergrund. Das Datum scrollt normal weiter. Rechtsbündig via
    margin-left:auto + fit-content; negatives margin-bottom zieht das folgende
@@ -2516,14 +2502,6 @@ html[data-symdo-theme="dark"] .member-bar {
     overflow: visible;
   }
   .briefing-mehr { display: none; }
-
-  /* Breite Anzeige: Datum wieder in einer Zeile, Komma zwischen Wochentag und Tag. */
-  .dash-date {
-    flex-direction: row;
-    align-items: center;
-    gap: .35em;
-  }
-  .dash-date .dash-weekday::after { content: ','; }
 
   /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
      unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
@@ -5488,12 +5466,6 @@ function renderDashboard() {
 
   const multiTodo = visibleInstances('todo').length > 1;
   const byId = usersById();
-  // Zwei Teile, getrennt formatiert: Ein Trennen der fertigen Zeichenkette haengt
-  // an der Sprache („Donnerstag, 20. August" gegen „Thursday, August 20").
-  const jetztDatum = new Date();
-  const dateWeekday = jetztDatum.toLocaleDateString(undefined, { weekday: 'long' });
-  const dateDay = jetztDatum.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
-
   // Abgeschaltete Bereiche verschwinden auch aus der Übersicht — sonst zeigte sie
   // Zahlen und Sprungziele, die es nicht mehr gibt.
   const vis = visibleTabs();
@@ -5501,7 +5473,7 @@ function renderDashboard() {
   const withShop  = vis.includes('shopping');
 
   let html = '';
-  // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Das Datum folgt
+  // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Die Kopfzeile folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
   // Die Mitglieder-Leiste filtert ausschließlich Aufgaben.
   // Ist sie abgeschaltet, MUSS auch die Auswahl weg: sonst filterte eine zuvor
@@ -5521,9 +5493,12 @@ function renderDashboard() {
       `title="${escapeHtml(translate('Notifications'))}">` +
       `<i class="fa-light ${pushLaeuft ? 'fa-circle-notch fa-spin' : (pushAn ? 'fa-bell' : 'fa-bell-slash')}"></i></button>`
     : '';
-  html += `<div class="dash-head"><div class="dash-date">` +
-    `<span class="dash-weekday">${escapeHtml(dateWeekday)}</span>` +
-    `<span class="dash-day">${escapeHtml(dateDay)}</span></div>${glocke}</div>`;
+  // Kopfzeile: NUR die Glocke, links in der Ecke. Das Datum stand hier bis zum
+  // 22.08.2026 — es steht ohnehin in der Statusleiste des Geraets und auf jeder
+  // Terminkarte. Der Kasten BLEIBT trotzdem, auch wenn er leer ist: die
+  // Mitglieder-Leiste wird per margin-bottom: -44px auf diese Zeile gezogen, seine
+  // Hoehe ist also die Zeile, auf der die Avatare sitzen.
+  html += `<div class="dash-head">${glocke}</div>`;
 
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
