@@ -101,7 +101,11 @@ trait ApiRouter
                     // Klaert, wie iOS 26 die Statusleiste einer Home-Screen-App
                     // behandelt. Ausbau zusammen mit vpProbe() im Adapter.
                     if (isset($_GET['vp'])) {
-                        $this->LogMessage('WebApp-Anzeige: ' . substr((string)$_GET['vp'], 0, 320), KL_NOTIFY);
+                        // Nur die erwarteten Zeichen: der Wert kommt aus der Query und
+                        // geht in eine Protokollzeile. Zeilenumbrueche daraus wuerden
+                        // eigene Eintraege vortaeuschen.
+                        $vp = preg_replace('/[^A-Za-z0-9=,.\-#()% ]/', '', (string)$_GET['vp']);
+                        $this->LogMessage('WebApp-Anzeige: ' . substr((string)$vp, 0, 320), KL_NOTIFY);
                     }
                     $this->HandleDiscovery();
                     return;
@@ -344,11 +348,17 @@ trait ApiRouter
             $this->SendApiError('pairing_invalid', 'Pairing code invalid or expired', 403);
             return;
         }
+        // Gekappt an der Systemgrenze: die vier Angaben kommen unbesehen vom Client
+        // und landen unverkuerzt in der Geraeteliste (Attribut). Nur der eigene
+        // Adapter kuerzt sie heute; ein fremder oder fehlerhafter Client koennte das
+        // Attribut mit einem ueberlangen Namen aufblaehen, bis das Schreiben der
+        // ganzen Liste scheitert. Die Werte sind reine Anzeige, 80 Zeichen genuegen.
+        $kurz = static fn(mixed $w): string => mb_substr(trim((string)$w), 0, 80);
         $token = $this->RegisterPairedDevice([
-            'deviceName' => trim((string)($body['deviceName'] ?? '')),
-            'model'      => trim((string)($body['model'] ?? '')),
-            'platform'   => trim((string)($body['platform'] ?? '')),
-            'appVersion' => trim((string)($body['appVersion'] ?? '')),
+            'deviceName' => $kurz($body['deviceName'] ?? ''),
+            'model'      => $kurz($body['model'] ?? ''),
+            'platform'   => $kurz($body['platform'] ?? ''),
+            'appVersion' => $kurz($body['appVersion'] ?? ''),
         ]);
         if ($token === null) {
             // Device was not persisted — the code stays valid within its grace
