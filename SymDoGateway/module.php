@@ -646,10 +646,15 @@ class SymDoGateway extends IPSModuleStrict
         // Die vier dokumentierten Zwischenstaende. „pending" ist der NORMALFALL,
         // solange der Nutzer noch tippt — er darf nicht wie ein Fehler aussehen.
         $fehler = (string)($daten['error'] ?? '');
-        if ($fehler === 'authorization_pending') {
+        // „slow_down" gehoert zu „pending": RFC 8628 schickt es, wenn zu schnell
+        // nachgefragt wird. Der Vorgang ist intakt — der Stand darf NICHT geleert
+        // werden, sonst kostet ein doppelter Knopfdruck den ganzen Gerätecode.
+        if ($fehler === 'authorization_pending' || $fehler === 'slow_down') {
             return $this->Translate('Not confirmed yet — finish the sign-in in the browser, then click again.');
         }
-        if ($fehler === 'authorization_declined') {
+        // „access_denied" ist die Absage des Nutzers am Anmeldebildschirm; RFC 8628
+        // nennt sie so, Microsoft schickt daneben auch „authorization_declined".
+        if ($fehler === 'authorization_declined' || $fehler === 'access_denied') {
             $this->WriteAttributeString('MicrosoftDeviceFlow', '');
             return $this->Translate('Sign-in was declined.');
         }
@@ -665,15 +670,24 @@ class SymDoGateway extends IPSModuleStrict
             $this->SendDebug('MicrosoftToDo', 'Gerätecode-Token unbrauchbar: ' . mb_substr((string)($meta['body'] ?? ''), 0, 300), 0);
             return $this->Translate('Connection failed');
         }
-        // Ab hier derselbe Speicherweg wie beim Umleitungs-Verfahren — verschluesselt
-        // mit demselben Schluesselvorsatz, damit beide Wege dieselben Attribute
-        // benutzen und der Rest des Moduls nichts merkt.
+        // Ab hier derselbe Speicherweg wie beim Umleitungs-Verfahren, mit demselben
+        // Schluesselvorsatz, damit beide Wege dieselben Attribute benutzen und der
+        // Rest des Moduls nichts merkt. Zur Ablage siehe OAuthSetEncryptedToken:
+        // sie VERSCHLEIERT (XOR mit einem aus der Instanz-ID abgeleiteten Vorsatz),
+        // sie verschluesselt nicht — wer settings.json lesen kann, rechnet das
+        // zurueck. Auf mehr als Sichtschutz darf sich hier nichts verlassen.
         $this->OAuthSetEncryptedToken('MicrosoftAccessToken', (string)$daten['access_token'], 'MKey');
-        if (($daten['refresh_token'] ?? '') !== '') {
-            $this->OAuthSetEncryptedToken('MicrosoftRefreshToken', (string)$daten['refresh_token'], 'MKey');
-        }
         $this->WriteAttributeInteger('MicrosoftTokenExpires', time() + max(60, (int)($daten['expires_in'] ?? 3600)) - 60);
         $this->WriteAttributeString('MicrosoftDeviceFlow', '');
+        if (($daten['refresh_token'] ?? '') === '') {
+            // Ohne Auffrischungs-Token endet der Zugriff in einer Stunde, und
+            // MicrosoftIsConnected() prueft genau dieses Token — der Knopf duerfte
+            // also keinen Erfolg melden, waehrend das Statuslabel „Nicht verbunden"
+            // sagt. Ursache ist praktisch immer ein fehlendes offline_access.
+            $this->SendDebug('MicrosoftToDo', 'Gerätecode: kein refresh_token in der Antwort', 0);
+            return $this->Translate('Signed in, but without lasting access (offline_access is missing in the app registration).');
+        }
+        $this->OAuthSetEncryptedToken('MicrosoftRefreshToken', (string)$daten['refresh_token'], 'MKey');
         $this->SendDebug('MicrosoftToDo', 'Gerätecode: Anmeldung erfolgreich', 0);
         return $this->Translate('Connected to Microsoft.');
     }
@@ -737,6 +751,10 @@ class SymDoGateway extends IPSModuleStrict
         $this->MicrosoftSetEncryptedToken('MicrosoftAccessToken', '');
         $this->MicrosoftSetEncryptedToken('MicrosoftRefreshToken', '');
         $this->WriteAttributeInteger('MicrosoftTokenExpires', 0);
+        // Auch einen offenen Gerätecode wegraeumen: er bleibt sonst bis zu 15 Minuten
+        // gueltig, und ein Druck auf „Anmeldung abschliessen" wuerde das gerade
+        // getrennte Konto wieder verbinden.
+        @$this->WriteAttributeString('MicrosoftDeviceFlow', '');
         echo $this->Translate('Disconnected from Microsoft.');
     }
 
@@ -1127,7 +1145,7 @@ class SymDoGateway extends IPSModuleStrict
     private function ProcessOAuthHookData(bool $isGoogle): void
     {
         $code = $_GET['code'] ?? '';
-        $error = $_GET['error'] ?? '';
+        $error = (string)($_GET['error'] ?? '');
         $state = (string)($_GET['state'] ?? '');
 
         if ($error !== '') {
@@ -1143,7 +1161,16 @@ class SymDoGateway extends IPSModuleStrict
                 . '<h1>' . $this->Translate('Authorization failed') . '</h1>'
                 . '<p><b>' . htmlspecialchars($error) . '</b></p>'
                 . ($beschreibung !== '' ? '<p>' . htmlspecialchars($beschreibung) . '</p>' : '')
-                . ($spur !== '' ? '<p><a href="' . htmlspecialchars($spur) . '">' . htmlspecialchars($spur) . '</a></p>' : '')
+                // NUR http/https verlinken. htmlspecialchars maskiert Anfuehrungs-
+                // zeichen, aber kein Schema: ein `error_uri=javascript:…` waere ein
+                // anklickbarer Link, der im Ursprung dieser Connect-Adresse laeuft —
+                // demselben, in dem die Web-App ihr Kopplungs-Token ablegt. Alles
+                // andere erscheint als reiner Text.
+                . ($spur !== ''
+                    ? (preg_match('#^https?://#i', $spur) === 1
+                        ? '<p><a href="' . htmlspecialchars($spur) . '" rel="noreferrer noopener">' . htmlspecialchars($spur) . '</a></p>'
+                        : '<p>' . htmlspecialchars($spur) . '</p>')
+                    : '')
                 . '</body></html>';
             return;
         }
@@ -1322,6 +1349,14 @@ class SymDoGateway extends IPSModuleStrict
                     'name' => 'MicrosoftAuthMode',
                     'caption' => $this->Translate('Sign-in method'),
                     'width' => '400px',
+                    // Ohne onChange wirkte die Auswahl erst NACH dem Speichern: die
+                    // Sichtbarkeiten unten stammen aus der gespeicherten
+                    // Konfiguration. Wer auf „Gerätecode" stellte, sah die beiden
+                    // zugehoerigen Knoepfe nicht — sie schienen zu fehlen.
+                    // Bewusst ueber IPS_RequestAction und nicht ueber eine neue
+                    // public TGW_-Methode: die gaebe es erst nach einem
+                    // Kernel-Neustart (Muster wie bei AppRequestAction).
+                    'onChange' => 'IPS_RequestAction($id, "MicrosoftAuthMode", $MicrosoftAuthMode);',
                     'options' => [
                         ['caption' => $this->Translate('Redirect (needs Client Secret and Redirect URI)'), 'value' => 'code'],
                         ['caption' => $this->Translate('Device code (no secret, enter a code in the browser)'), 'value' => 'device'],
@@ -1333,6 +1368,9 @@ class SymDoGateway extends IPSModuleStrict
                 ],
                 [
                     'type' => 'ValidationTextBox',
+                    // Name nur, damit onChange die Sichtbarkeit umschalten kann —
+                    // es gibt keine Property dieses Namens (der Wert ist berechnet).
+                    'name' => 'MsRedirectUriInfo',
                     'caption' => $this->Translate('Redirect URI'),
                     'value' => $this->OAuthGetRedirectUri('/hook/todogateway_microsoft/'),
                     'width' => '750px',
@@ -1367,18 +1405,21 @@ class SymDoGateway extends IPSModuleStrict
                     'items' => [
                         [
                             'type' => 'Button',
+                            'name' => 'MsAuthorizeButton',
                             'caption' => $this->Translate('Authorize with Microsoft'),
                             'onClick' => 'echo TGW_MicrosoftGetAuthUrl($id);',
                             'visible' => $msMode === 'code'
                         ],
                         [
                             'type' => 'Button',
+                            'name' => 'MsDeviceStartButton',
                             'caption' => $this->Translate('Request device code'),
                             'onClick' => 'echo TGW_MicrosoftDeviceStart($id);',
                             'visible' => $msMode === 'device'
                         ],
                         [
                             'type' => 'Button',
+                            'name' => 'MsDeviceFinishButton',
                             'caption' => $this->Translate('Complete sign-in'),
                             'onClick' => 'echo TGW_MicrosoftDeviceFinish($id);',
                             'visible' => $msMode === 'device'
@@ -1969,7 +2010,12 @@ class SymDoGateway extends IPSModuleStrict
                         ]
                     ],
                     [
-                        'type'    => 'ValidationTextBox',
+                        // PasswordTextBox wie jedes andere Geheimnis in diesem
+                        // Formular (Client-Secrets, Mailgun-Schluessel, KI-Schluessel,
+                        // CalDAV-Passwort). Als ValidationTextBox stand der Schluessel
+                        // im Klartext auf dem Schirm — sichtbar bei jedem Blick ueber
+                        // die Schulter und in jedem Bildschirmfoto der Konfiguration.
+                        'type'    => 'PasswordTextBox',
                         'name'    => 'TtsAzureKey',
                         'width'   => '400px',
                         'caption' => $this->Translate('Azure Speech key')

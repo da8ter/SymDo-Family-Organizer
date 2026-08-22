@@ -251,16 +251,27 @@ trait OAuthHelper
     private function OAuthRefreshTokenLocked(string $TokenUrl, string $KeyPrefix, string $AccessAttr, string $RefreshAttr, string $ExpiresAttr, string $ClientId, string $ClientSecret, string $DebugLabel, string $Scope = '', ?string $RefreshTokenOverride = null): bool
     {
         $refreshToken = $RefreshTokenOverride ?? $this->OAuthGetDecryptedToken($RefreshAttr, $KeyPrefix);
-        if ($refreshToken === '' || $ClientId === '' || $ClientSecret === '') {
+        // KEIN Abbruch mehr bei leerem Secret: ein OEFFENTLICHER Client (Anmeldung
+        // per Geraetecode, allowPublicClient) hat keines und frischt genau so auf.
+        // Vorher scheiterte das Auffrischen dort still und OHNE Protokollzeile —
+        // die Synchronisierung tat nach einer Stunde nichts mehr, waehrend der
+        // Status weiter „Verbunden" meldete.
+        if ($refreshToken === '' || $ClientId === '') {
+            $this->SendDebug($DebugLabel, 'Kein Auffrischen: '
+                . ($refreshToken === '' ? 'kein Refresh-Token' : 'keine Client-ID'), 0);
             return false;
         }
 
         $postData = [
             'refresh_token' => $refreshToken,
             'client_id' => $ClientId,
-            'client_secret' => $ClientSecret,
             'grant_type' => 'refresh_token'
         ];
+        // Nur mitsenden, wenn es eines gibt: einem oeffentlichen Client weist Azure
+        // ein (leeres) client_secret als `invalid_client` zurueck.
+        if ($ClientSecret !== '') {
+            $postData['client_secret'] = $ClientSecret;
+        }
         if ($Scope !== '') {
             $postData['scope'] = $Scope;
         }

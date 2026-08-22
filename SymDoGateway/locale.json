@@ -295,7 +295,8 @@
             "Not confirmed yet — finish the sign-in in the browser, then click again.": "Noch nicht bestätigt — die Anmeldung im Browser abschließen und dann erneut drücken.",
             "Sign-in was declined.": "Die Anmeldung wurde abgelehnt.",
             "The device code was not recognized. Please request a new one.": "Der Gerätecode wurde nicht erkannt. Bitte einen neuen anfordern.",
-            "Connected to Microsoft.": "Mit Microsoft verbunden."
+            "Connected to Microsoft.": "Mit Microsoft verbunden.",
+            "Signed in, but without lasting access (offline_access is missing in the app registration).": "Angemeldet, aber ohne Dauerzugriff (offline_access fehlt in der App-Registrierung)."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
