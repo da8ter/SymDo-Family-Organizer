@@ -3083,8 +3083,13 @@ html[data-symdo-theme="dark"] .member-bar {
     </div>
     <div class="overlay-body">
       <div class="form-row"><label id="lblNoteFolder"></label><select id="ntFolder"></select></div>
-      <div class="form-row"><label id="lblNoteTitle"></label><input id="ntTitle" type="text" autocomplete="off" /></div>
-      <div class="form-row form-row-grow"><label id="lblNoteText"></label><textarea id="ntText" rows="8"></textarea></div>
+      <!-- maxlength wie die Servergrenzen (NOTE_TITLE_MAX 120, NOTE_TEXT_MAX 3000
+           in SymDoGateway/libs/Notes.php). Der Server KUERZT NICHT, er antwortet
+           `invalid_payload` — ohne diese Grenzen lief ein zu langer Titel (etwa
+           einer, den die KI aus einem Elternbrief baut) bei jedem Speichern in
+           „Aktion fehlgeschlagen", ohne dass zu sehen war, warum. -->
+      <div class="form-row"><label id="lblNoteTitle"></label><input id="ntTitle" type="text" maxlength="120" autocomplete="off" /></div>
+      <div class="form-row form-row-grow"><label id="lblNoteText"></label><textarea id="ntText" rows="8" maxlength="3000"></textarea></div>
       <div class="form-row">
         <label id="lblNoteFiles"></label>
         <div id="ntFiles" class="note-files"></div>
@@ -6463,7 +6468,10 @@ function appBadgeSetzen(n) {
     const p = n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge();
     // Ohne Mitteilungsrecht lehnt Safari die Zusage ab — das ist kein Fehler,
     // den der Nutzer sehen muesste, aber eine unbehandelte Ablehnung waere es.
-    if (p && typeof p.catch === 'function') p.catch(() => {});
+    // Und der Merker muss dann ZURUECK: sonst gilt die Zahl als gesetzt, und
+    // erlaubt der Nutzer die Mitteilungen im selben Lauf, bliebe das Symbol leer,
+    // bis sich die Zahl von selbst aendert.
+    if (p && typeof p.catch === 'function') p.catch(() => { appBadgeZahl = -1; });
   } catch (e) {}
 }
 
@@ -8401,6 +8409,10 @@ let notizenWartende = [];   // Rueckmeldungen, die auf ein laufendes Laden warte
 let notesOrdnerId = null;   // geoeffneter Ordner (null = Uebersicht)
 let noteCtx = null;         // {folderId, noteId|null, files:[…], warten:[…], proposal:{id,i}|null}
 let noteFunde = [];         // von der KI erkannte Aufgaben/Termine, fluechtig
+// Der zuletzt angebotene Titel/Text-Vorschlag. Gemerkt, weil der Hinweiskasten
+// neu geschrieben wird, sobald ausserdem Funde angeboten werden — der
+// Uebernehmen-Knopf braucht dann seine Werte ein zweites Mal.
+let noteAiVorschlag = null;
 
 /** Ohne Gateway gibt es keine Notizen — dann bleibt der Bereich ganz weg. */
 function notizenMoeglich() {
@@ -8472,6 +8484,9 @@ function notizenFehlertext(j) {
   if (code === 'no_consent') return translate('AI analysis is disabled.');
   if (code === 'ai_busy') return translate('Another AI request is already running.');
   if (code === 'too_large_for_tile') return translate('Too large to show here — open the note in the web app.');
+  // Praktisch immer ein zu langer Titel oder Text. Ohne eigene Meldung stand nur
+  // „Aktion fehlgeschlagen" da, und zwar bei jedem weiteren Versuch genauso.
+  if (code === 'invalid_payload') return translate('Title (max. 120) or text (max. 3000 characters) is too long.');
   return translate('Action failed');
 }
 
@@ -8773,16 +8788,37 @@ function noteAnsichtOeffnen(notiz) {
  * Maskierung die eben erzeugten Tags zerlegen.
  */
 function notizTextHtml(text) {
-  const verlinken = (roh) => roh
-    // Adressen: bis zum ersten Zeichen, das nicht mehr dazugehoert. Der Punkt am
-    // Satzende darf nicht mitwandern, deshalb der Ausschluss am Ende.
-    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g,
-      '<a href="$1" target="_blank" rel="noopener">$1</a>')
-    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g, '<a href="mailto:$1">$1</a>')
-    // Telefon: mindestens sechs Ziffern, damit aus „13:00" oder „2026" keine
-    // Rufnummer wird. Fuer den Waehl-Verweis alles ausser Ziffern und + weg.
-    .replace(/(?<![\w>])(\+?\d[\d\s/()-]{5,}\d)(?![\w<])/g, (m) =>
-      '<a href="tel:' + m.replace(/[^\d+]/g, '') + '">' + m + '</a>');
+  // EIN Durchlauf mit Alternativen, nicht drei hintereinander. Drei Laeufe
+  // greifen naemlich in die href-Werte, die der vorige gerade erzeugt hat:
+  // aus „https://schule.de/id/123456789" wurde
+  // `<a href="https://schule.de/id/<a href="tel:123456789">…` — der Verweis
+  // zerbrach, und die Bruchstuecke standen als Text auf dem Schirm. (Gefaehrlich
+  // war das nie: maskiert wird vorher, es kann also nichts ausbrechen — es sah
+  // nur kaputt aus, und zwar bei genau den Zeilen, die aus einem Elternbrief
+  // kommen: Adressen mit langen Kennungen, „1234567@schule.de", „?q=1234567&r=2".)
+  //
+  // Reihenfolge der Alternativen ist die Rangfolge: Adresse, dann Mail, dann
+  // Rufnummer. Was die erste Alternative frisst, sieht keine spaetere mehr.
+  const MUSTER = new RegExp(
+    '(https?:\\/\\/[^\\s<]+[^\\s<.,;:!?)\\]])'          // 1 Adresse
+    + '|([\\w.+-]+@[\\w-]+\\.[\\w.-]+)'                   // 2 Mail
+    // 3 Rufnummer: mindestens sechs Ziffern, damit „13:00" oder „2026" keine
+    // wird. Die Grenzen schliessen Ziffern UND Punkte aus, sonst greift das
+    // Muster mitten in „15.01.2026-30.06.2026" oder in eine IBAN.
+    + '|((?<![\\w.>\\d])\\+?\\d[\\d\\s/()-]{5,}\\d(?![\\w<.\\d]))',
+    'g'
+  );
+  const verlinken = (roh) => String(roh).replace(MUSTER, (treffer, adresse, mail, tel) => {
+    if (adresse) { return '<a href="' + adresse + '" target="_blank" rel="noopener noreferrer">' + adresse + '</a>'; }
+    if (mail)    { return '<a href="mailto:' + mail + '">' + mail + '</a>'; }
+    const ziffern = tel.replace(/[^\d+]/g, '');
+    // Obergrenze nach E.164: eine Rufnummer hat hoechstens 15 Ziffern. Damit
+    // fallen die Ziffernblöcke heraus, die in einem Elternbrief sonst noch
+    // stehen — eine IBAN (20 Ziffern) sieht Zeichen fuer Zeichen wie eine
+    // Rufnummer aus, und ein Waehl-Verweis darauf ist Unsinn.
+    if (ziffern.replace(/\+/g, '').length > 15) { return treffer; }
+    return '<a href="tel:' + ziffern + '">' + tel + '</a>';
+  });
 
   const bloecke = String(text).split(/\n\s*\n/);
   return bloecke.map(block => {
@@ -9104,6 +9140,7 @@ function noteVorschlagUebernehmen(vorschlag) {
   const xE = document.getElementById('ntText');
   const titel = String(vorschlag.title || '');
   const text = String(vorschlag.text || '');
+  noteAiVorschlag = { titel, text };
   const leerT = tE.value.trim() === '';
   const leerX = xE.value.trim() === '';
   if (leerT) tE.value = titel;
@@ -9112,18 +9149,34 @@ function noteVorschlagUebernehmen(vorschlag) {
   if (!leerT || !leerX) {
     noteHinweis(escapeHtml(translate('A suggestion is available for the fields you already filled in.')) +
       ' <button class="row-btn accent" id="btnNoteTakeAi">' + translate('Apply') + '</button>');
-    const b = document.getElementById('btnNoteTakeAi');
-    if (b) b.addEventListener('click', () => {
-      if (titel) tE.value = titel;
-      if (text) xE.value = text;
-      noteHinweisAus();
-      showToast(translate('Suggestion applied'));
-    });
+    noteUebernehmenBinden(titel, text, tE, xE);
   }
+}
+
+/**
+ * Den Uebernehmen-Knopf (neu) binden.
+ *
+ * Eigene Funktion, weil noteFundeAnbieten den Hinweiskasten danach NEU schreibt:
+ * derselbe id, aber ein anderer Knoten — der hier gesetzte Zuhoerer war damit weg
+ * und der Knopf reagierte nicht mehr. Der KI-Vorschlag fuer Titel und Text war so
+ * unerreichbar, sobald die Antwort ausserdem Aufgaben oder Termine enthielt.
+ */
+function noteUebernehmenBinden(titel, text, tE, xE) {
+  const b = document.getElementById('btnNoteTakeAi');
+  if (!b) return;
+  b.addEventListener('click', () => {
+    if (titel) tE.value = titel;
+    if (text) xE.value = text;
+    noteHinweisAus();
+    showToast(translate('Suggestion applied'));
+  });
 }
 
 function noteFundeAnbieten() {
   if (noteFunde.length === 0) return;
+  // Stand des Vorschlags sichern, BEVOR der Hinweis neu geschrieben wird — danach
+  // muss der Uebernehmen-Knopf erneut gebunden werden (siehe noteUebernehmenBinden).
+  const alterKnopf = document.getElementById('btnNoteTakeAi') !== null;
   const aufgaben = noteFunde.filter(f => f.kind !== 'event').length;
   const termine = noteFunde.length - aufgaben;
   const teile = [];
@@ -9134,6 +9187,12 @@ function noteFundeAnbieten() {
     ' <button class="row-btn accent" id="btnNoteShowFinds"><i class="fa-light fa-list-check"></i></button>');
   const b = document.getElementById('btnNoteShowFinds');
   if (b) b.addEventListener('click', () => noteFundeZeigen());
+  // Der Kasten wurde eben neu geschrieben: stand vorher ein Uebernehmen-Knopf
+  // darin, ist sein Zuhoerer jetzt am alten, verworfenen Knoten.
+  if (alterKnopf && noteAiVorschlag) {
+    noteUebernehmenBinden(noteAiVorschlag.titel, noteAiVorschlag.text,
+      document.getElementById('ntTitle'), document.getElementById('ntText'));
+  }
 }
 
 function noteFundeZeigen() {

@@ -515,7 +515,8 @@
             "Nothing detected at the moment.": "Zurzeit ist nichts erkannt worden.",
             "New note …": "Neue Notiz …",
             "Controls": "Bedienelemente",
-            "Recurrence": "Wiederholung"
+            "Recurrence": "Wiederholung",
+            "Title (max. 120) or text (max. 3000 characters) is too long.": "Titel (max. 120) oder Text (max. 3000 Zeichen) ist zu lang."
         },
         "en": {
             "ToDo List": "ToDo List",
