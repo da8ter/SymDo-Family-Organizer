@@ -66,20 +66,62 @@ trait Tts
         '128' => ['format' => 'mp3_44100_128', 'bytes' => 1300],
     ];
 
-    /** Das Format fuer die Adresse. Im Rumpf wird output_format ignoriert. */
-    private function TtsElevenFormat(): string
+    /**
+     * Die beste Qualitaet, die fuer DIESEN Text noch in EINE Aufnahme passt.
+     *
+     * Dasselbe Vorgehen wie bei Bildern und PDFs: nicht raten und nicht einstellen
+     * lassen, sondern an der Kernoption ausrichten. OutputLimit() liest
+     * ScriptOutputBufferLimit zur Laufzeit — wer sie hochstellt, bekommt hier ohne
+     * weiteres Zutun besseren Klang, wer sie senkt, bekommt eine Aufnahme, die
+     * ueberhaupt ankommt.
+     *
+     * Warum „in eine Aufnahme": jede Naht zwischen zwei Aufnahmen ist hoerbar, die
+     * Sprechmelodie setzt neu an. Ein Stueck in 64 kbit klingt besser als zwei in
+     * 128. Deshalb faellt die Stufe, wenn der Text lang wird — und steigt wieder,
+     * wenn er kurz ist.
+     *
+     * 80 Prozent der Grenze, nicht 100: die Schaetzung je Zeichen schwankt mit der
+     * Sprechweise (Pausen kosten Zeit ohne Text), und eine zu grosse Aufnahme waere
+     * gar keine — der Anbieter liefert sie, aber die Hook-Ausgabe ERSETZT die
+     * Antwort.
+     *
+     * Passt selbst die sparsamste Stufe nicht, gilt trotzdem sie: dann teilt
+     * BriefingSpeechParts, und das ist besser als nichts.
+     *
+     * @return array{format:string,bytes:int}
+     */
+    private function TtsElevenQualityFor(int $zeichen): array
     {
-        $wahl = $this->TtsSetting('TtsElevenQuality', '64');
-        return (string)(self::TTS_ELEVEN_QUALITIES[$wahl]['format']
-            ?? self::TTS_ELEVEN_QUALITIES['64']['format']);
+        // Ausdrueckliche Wahl schlaegt die Rechnung — fuer den Fall, dass jemand
+        // bewusst kleine Dateien will (langsame Verbindung).
+        $wahl = $this->TtsSetting('TtsElevenQuality', 'auto');
+        if (isset(self::TTS_ELEVEN_QUALITIES[$wahl])) {
+            return self::TTS_ELEVEN_QUALITIES[$wahl];
+        }
+        $platz = (int)($this->OutputLimit() * 0.8);
+        $zeichen = max(1, $zeichen);
+        // Absteigend: die erste Stufe, die passt, ist die beste, die passt.
+        foreach (['128', '64', '32'] as $stufe) {
+            if ($zeichen * self::TTS_ELEVEN_QUALITIES[$stufe]['bytes'] <= $platz) {
+                return self::TTS_ELEVEN_QUALITIES[$stufe];
+            }
+        }
+        return self::TTS_ELEVEN_QUALITIES['32'];
     }
 
-    /** Bytes je Zeichen zum gewaehlten Format — Grundlage von BriefingAudioBudget. */
-    private function TtsElevenBytesPerChar(): int
+    /**
+     * Das Format fuer die Adresse. Im Rumpf wird output_format ignoriert.
+     *
+     * `$vorgabe` ist das Format, das der Aufrufer schon bestimmt hat (das Briefing
+     * waehlt es EINMAL fuer den ganzen Text, damit alle Stuecke gleich klingen).
+     * Ohne Vorgabe entscheidet die Textlaenge.
+     */
+    private function TtsElevenFormat(string $text, string $vorgabe = ''): string
     {
-        $wahl = $this->TtsSetting('TtsElevenQuality', '64');
-        return (int)(self::TTS_ELEVEN_QUALITIES[$wahl]['bytes']
-            ?? self::TTS_ELEVEN_QUALITIES['64']['bytes']);
+        if (str_starts_with($vorgabe, 'mp3_')) {
+            return $vorgabe;
+        }
+        return $this->TtsElevenQualityFor(mb_strlen($text))['format'];
     }
 
     /**
@@ -149,9 +191,11 @@ trait Tts
         // kopiert", und alle Kopien sind in jedem Feld identisch. Wer eine andere
         // Menge sehen will, waehlt sie hier, statt dass ich sie errate.
         $this->RegisterPropertyString('TtsElevenScope', 'non-default');
-        // 64 als Vorgabe: guter Klang UND ein Briefing in einem Stueck, auch bei der
-        // Symcon-Vorgabe fuer ScriptOutputBufferLimit (siehe TTS_ELEVEN_QUALITIES).
-        $this->RegisterPropertyString('TtsElevenQuality', '64');
+        // „auto": die Stufe richtet sich an ScriptOutputBufferLimit und an der
+        // Textlaenge aus — wie bei Bildern und PDFs (siehe TtsElevenQualityFor).
+        // 32/64/128 sind ausdrueckliche Vorgaben fuer den Fall, dass jemand bewusst
+        // kleine Dateien will.
+        $this->RegisterPropertyString('TtsElevenQuality', 'auto');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -473,8 +517,12 @@ trait Tts
             // Formataenderung weiter die alte Aufnahme — genau das waere nach dem
             // Umzug von output_format in die Adresse passiert: dieselbe Ansage, aber
             // noch in 128 kbit/s und damit viermal so gross.
+            // Das WIRKLICHE Format in den Schluessel — es haengt an der Textlaenge
+            // und an der Kernoption, kann sich also aendern. Genau derselbe Aufruf
+            // wie beim Versand, sonst zeigte der Schluessel auf eine Aufnahme in
+            // einem anderen Format.
             $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2')
-                . '|' . $this->TtsElevenFormat();
+                . '|' . $this->TtsElevenFormat($text, $format);
             $vorgabe = $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
         } else {
             $modell  = $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts');
@@ -557,7 +605,7 @@ trait Tts
     private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
         if ($this->TtsProvider() === 'elevenlabs') {
-            return $this->TtsRequestEleven($text, $stimme, $anweisung);
+            return $this->TtsRequestEleven($text, $stimme, $anweisung, $format);
         }
         if ($this->TtsProvider() === 'azure') {
             return $this->TtsRequestAzure($text, $stimme, $anweisung, $format);
@@ -842,7 +890,7 @@ trait Tts
      * Das mehrsprachige Modell spricht Deutsch mit jeder Stimme; eine englisch
      * trainierte behaelt dabei einen leichten Akzent.
      */
-    private function TtsRequestEleven(string $text, string $stimme, string $anweisung): string
+    private function TtsRequestEleven(string $text, string $stimme, string $anweisung, string $format = ''): string
     {
         $key = $this->TtsSetting('TtsElevenKey', '');
         if ($key === '') {
@@ -867,7 +915,7 @@ trait Tts
         // und BriefingAudioBudget rechnet mit Bytes je Zeichen.
         $resp = $this->AiHttpPost(
             'https://api.elevenlabs.io/v1/text-to-speech/' . $voice
-                . '?output_format=' . $this->TtsElevenFormat(),
+                . '?output_format=' . $this->TtsElevenFormat($text, $format),
             [
                 'xi-api-key: ' . $key,
                 'Content-Type: application/json',

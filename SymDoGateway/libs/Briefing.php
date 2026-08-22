@@ -1328,7 +1328,22 @@ trait Briefing
             $anweisung = $this->BriefingSpeechStyle();
         }
         $format    = $this->TtsFormat(self::BRIEFING_TTS_FORMAT);
-        $budget    = $this->BriefingAudioBudget();
+        // Bei ElevenLabs wird die Tonqualitaet EINMAL fuer den ganzen Text gewaehlt
+        // und dann als konkretes Format weitergegeben. Zwei Gruende, warum das nicht
+        // je Stueck passieren darf:
+        //   - Zwei Aufnahmen in verschiedener Qualitaet hintereinander sind ein
+        //     hoerbarer Bruch.
+        //   - Der Schluessel des Zwischenspeichers enthaelt das Format; waehlte jedes
+        //     Stueck neu, zeigte er auf Aufnahmen, die nicht zusammengehoeren.
+        // Die Wahl selbst richtet sich an ScriptOutputBufferLimit aus — genau wie bei
+        // Bildern und PDFs (siehe TtsElevenQualityFor).
+        $jeZeichen = 0;
+        if ($anbieter === 'elevenlabs') {
+            $stufe     = $this->TtsElevenQualityFor(mb_strlen($vorlesen));
+            $format    = (string)$stufe['format'];
+            $jeZeichen = (int)$stufe['bytes'];
+        }
+        $budget    = $this->BriefingAudioBudget($jeZeichen);
         $this->SendDebug('Briefing', sprintf('Ton: %s/%s, Stimme %s, %d Zeichen, Teilgroesse %d',
             $anbieter, $format, $stimme === '' ? '(eingestellte)' : $stimme, mb_strlen($vorlesen), $budget), 0);
 
@@ -1370,7 +1385,21 @@ trait Briefing
      * (Seufzer und Pausen kosten Zeit ohne Text), und eine zu grosse Aufnahme waere
      * gar keine — TtsProduce lehnt sie ab, und dann gibt es keinen Ton.
      */
-    private function BriefingAudioBudget(): int
+    /**
+     * @param int $jeZeichen Bytes je Zeichen, wenn der Aufrufer sie schon kennt
+     *        (ElevenLabs: die Stufe steht fuer den ganzen Text fest). 0 = selbst
+     *        bestimmen.
+     */
+    /** Die geltende Ausgabegrenze in lesbarer Form — fuer den Hinweis im Formular. */
+    private function BriefingLimitText(): string
+    {
+        $b = $this->OutputLimit();
+        return $b >= 1048576
+            ? number_format($b / 1048576, 1, ',', '.') . ' MiB'
+            : number_format($b / 1024, 0, ',', '.') . ' KiB';
+    }
+
+    private function BriefingAudioBudget(int $jeZeichen = 0): int
     {
         $platz = (int)($this->OutputLimit() * 0.8);
         // Bytes je Zeichen haengen am Anbieter, weil das Format daran haengt: AAC bei
@@ -1382,11 +1411,11 @@ trait Briefing
         if ($anbieter === 'azure') {
             $jeZeichen = self::BRIEFING_TTS_BYTES_AZURE_MP3;
         } elseif ($anbieter === 'elevenlabs') {
-            // Haengt an der eingestellten Tonqualitaet, nicht an einer festen Zahl:
-            // zwischen 32 und 128 kbit liegt Faktor vier (siehe
-            // TTS_ELEVEN_QUALITIES). Eine Konstante hier waere nach dem ersten
-            // Umstellen falsch.
-            $jeZeichen = $this->TtsElevenBytesPerChar();
+            // Kam der Wert schon mit, gilt er — der Aufrufer hat die Stufe fuer den
+            // ganzen Text festgelegt. Sonst hier bestimmen (kurze Ansagen).
+            if ($jeZeichen <= 0) {
+                $jeZeichen = (int)$this->TtsElevenQualityFor(1)['bytes'];
+            }
         } else {
             $jeZeichen = self::BRIEFING_TTS_BYTES_AAC;
         }

@@ -2232,14 +2232,16 @@ class SymDoGateway extends IPSModuleStrict
                         'width'   => '400px',
                         'caption' => $this->Translate('Audio quality'),
                         'options' => [
-                            ['caption' => $this->Translate('High (like the ElevenLabs preview, 128 kbit) — needs a raised output limit'), 'value' => '128'],
-                            ['caption' => $this->Translate('Good (64 kbit) — recommended'), 'value' => '64'],
-                            ['caption' => $this->Translate('Thrifty (32 kbit at 22 kHz) — audibly dull'), 'value' => '32'],
+                            ['caption' => $this->Translate('Automatic — best quality that still fits in one recording'), 'value' => 'auto'],
+                            ['caption' => $this->Translate('Always high (128 kbit, like the ElevenLabs preview)'), 'value' => '128'],
+                            ['caption' => $this->Translate('Always good (64 kbit)'), 'value' => '64'],
+                            ['caption' => $this->Translate('Always thrifty (32 kbit at 22 kHz) — audibly dull'), 'value' => '32'],
                         ]
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => $this->Translate('The quality decides how much text fits into ONE recording, because a request may only return so much (Symcon core option ScriptOutputBufferLimit, 1 MiB by default). At 128 kbit that is about 580 characters — a briefing would be split into several recordings, and every seam is audible because the intonation starts anew. 64 kbit keeps a normal briefing in one piece and is hard to tell from 128 for speech.')
+                        'caption' => sprintf($this->Translate('Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.'),
+                            $this->BriefingLimitText(), (int)($this->OutputLimit() * 0.8 / 1300))
                     ],
                     [
                         'type'    => 'Select',
