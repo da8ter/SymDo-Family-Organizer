@@ -901,20 +901,23 @@ trait AppCore
             // Umfasst Seite UND API, damit ein Klick aus der Benachrichtigung in der
             // App landet und nicht in einem Browser-Fenster daneben.
             'scope'            => '/hook/lists/',
-            // fullscreen statt standalone (22.08.2026, nach Messung am Geraet):
-            // iOS 26 reserviert bei standalone oben und unten Systemstreifen
-            // (Fenster 812pt, Seite nur 761pt) und ignoriert dabei
-            // viewport-fit=cover, black-translucent UND das theme-color-Meta —
-            // aus der Seite heraus ist die Reservierung nicht aufzuloesen.
-            // fullscreen ist der einzige verbliebene Hebel; wo iOS es nicht
-            // umsetzt, faellt es auf standalone zurueck und nichts wird
-            // schlechter. Preis, bewusst gewaehlt: im echten Vollbild zeigt iOS
-            // keine Uhr/Statuszeile mehr. Gilt erst nach Entfernen und erneutem
-            // Hinzufuegen des Home-Bildschirm-Symbols (Manifest wird beim
-            // Hinzufuegen gelesen). display/theme_color sind KEINE
-            // Identitaetsfelder — nur id/start_url machen die App zu einer
-            // anderen (siehe oben).
-            'display'          => 'fullscreen',
+            // standalone ist auf iOS 26 das ERREICHBARE Maximum — zweimal am
+            // Geraet gemessen (22.08.2026, Sonde in webapp-adapter.js):
+            // 1. standalone: iOS reserviert oben und unten Systemstreifen
+            //    (Fenster 812pt, Seite 761pt) und ignoriert dabei
+            //    viewport-fit=cover, black-translucent UND das theme-color-Meta.
+            // 2. fullscreen: iOS behandelt die Seite gar nicht mehr als Web-App —
+            //    das Home-Bildschirm-Symbol oeffnet als Safari-LESEZEICHEN
+            //    (display-mode: browser, Seite 628pt, Safari-Leisten oben und
+            //    unten). KEIN Rueckfall auf standalone, entgegen der Spec.
+            // fullscreen hier also nie wieder eintragen. Die Streifen selbst
+            // sind aus der Seite heraus nicht aufloesbar; sie tragen ueber
+            // background_color/theme_color die Farbe der App-Flaeche und
+            // verschmelzen damit. Gilt erst nach Entfernen und erneutem
+            // Hinzufuegen des Symbols (Manifest wird beim Hinzufuegen gelesen).
+            // display/theme_color sind KEINE Identitaetsfelder — nur
+            // id/start_url machen die App zu einer anderen (siehe oben).
+            'display'          => 'standalone',
             'orientation'      => 'portrait',
             // Rueckfallnetz fuers Blenden: bleibt es bei reservierten Streifen,
             // sollen sie wenigstens die Farbe der dunklen App-Flaeche tragen
