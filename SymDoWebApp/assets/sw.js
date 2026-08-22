@@ -18,7 +18,7 @@
 // Bei jeder Aenderung hochzaehlen: Die Datei wird mit `Cache-Control: no-cache`
 // ausgeliefert, der Browser prueft sie also gegen — aber nur, wenn sich die Bytes
 // unterscheiden, gilt sie als neue Fassung.
-const SYMDO_SW_VERSION = 3;
+const SYMDO_SW_VERSION = 4;
 
 const SYMDO_SEITE = '/hook/lists/webapp';
 // Weissliste der Zielbereiche. Die Nutzlast kommt aus dem eigenen Haus, reist aber
@@ -65,18 +65,40 @@ self.addEventListener('push', (event) => {
         if (b && typeof b.catch === 'function') b.catch(() => {});
       } catch (e) {}
     }
+    // Bausteine, die die Nutzlast mitbringen DARF. Alles Optionale: fehlt es,
+    // bleibt es bei der Vorgabe. Adressen muessen aus dem EIGENEN Haus kommen —
+    // die Nutzlast reist durch fremde Server, und ein Verweis auf einen fremden
+    // Host in einer Benachrichtigung waere ein Datenabfluss.
+    const eigen = (w) => typeof w === 'string' && w.startsWith('/') && !w.startsWith('//');
+    const optionen = {
+      body: text,
+      icon: eigen(daten.icon) ? daten.icon : SYMDO_SEITE + '/appicon-180.png',
+      badge: SYMDO_SEITE + '/appicon-32.png',
+      // Gleiche Kennung ersetzt statt zu stapeln: Zwei Erinnerungen an dieselbe
+      // Aufgabe sollen nicht zweimal auf dem Sperrbildschirm liegen.
+      tag: typeof daten.tag === 'string' && daten.tag !== '' ? daten.tag : undefined,
+      data: { tab: tab },
+    };
+    if (eigen(daten.image)) { optionen.image = daten.image; }
+    if (typeof daten.renotify === 'boolean') { optionen.renotify = daten.renotify; }
+    if (typeof daten.requireInteraction === 'boolean') { optionen.requireInteraction = daten.requireInteraction; }
+    if (typeof daten.silent === 'boolean') { optionen.silent = daten.silent; }
+    if (Array.isArray(daten.vibrate)) { optionen.vibrate = daten.vibrate.slice(0, 8).map(Number).filter(n => n >= 0); }
+    if (typeof daten.timestamp === 'number') { optionen.timestamp = daten.timestamp; }
+    // Knoepfe: hoechstens zwei (mehr zeigt kein System) und nur mit Text.
+    if (Array.isArray(daten.actions)) {
+      const knoepfe = daten.actions
+        .filter(a => a && typeof a.action === 'string' && typeof a.title === 'string')
+        .slice(0, 2)
+        .map(a => ({ action: a.action, title: a.title }));
+      if (knoepfe.length > 0) { optionen.actions = knoepfe; }
+    }
     try {
-      await self.registration.showNotification(titel, {
-        body: text,
-        icon: SYMDO_SEITE + '/appicon-180.png',
-        badge: SYMDO_SEITE + '/appicon-32.png',
-        // Gleiche Kennung ersetzt statt zu stapeln: Zwei Erinnerungen an dieselbe
-        // Aufgabe sollen nicht zweimal auf dem Sperrbildschirm liegen.
-        tag: typeof daten.tag === 'string' && daten.tag !== '' ? daten.tag : undefined,
-        data: { tab: tab },
-      });
+      await self.registration.showNotification(titel, optionen);
     } catch (e) {
-      await self.registration.showNotification('SymDo', { body: text });
+      // Ein System, das eine der Optionen nicht kennt, kann werfen. Dann lieber
+      // schmucklos als gar nicht — der Text ist die Nachricht.
+      await self.registration.showNotification(titel, { body: text, data: { tab: tab } });
     }
   })());
 });
@@ -88,6 +110,9 @@ self.addEventListener('push', (event) => {
  */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  // „dismiss" heisst wegklicken: Meldung schliessen und NICHT die App oeffnen.
+  // Jeder andere Knopf verhaelt sich wie ein Tipp auf die Meldung selbst.
+  if (event.action === 'dismiss') { return; }
   const tab = (event.notification.data && SYMDO_TABS.includes(event.notification.data.tab))
     ? event.notification.data.tab
     : '';

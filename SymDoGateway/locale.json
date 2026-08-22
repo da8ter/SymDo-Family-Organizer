@@ -299,7 +299,12 @@
             "Daily limit for AI calls reached.": "Der Tagesdeckel für KI-Aufrufe ist erreicht.",
             "1. Web app notifications": "1. Web-App-Benachrichtigungen",
             "2. Visualization notifications": "2. Visualisierungs-Benachrichtigungen",
-            "Visualization instance": "Visualisierungsinstanz"
+            "Visualization instance": "Visualisierungsinstanz",
+            "Test with all extras": "Test mit allen Extras",
+            "Sends one notification carrying an image, buttons, an icon and a long text — to see what this device actually shows. Continue?": "Schickt eine Benachrichtigung mit Bild, Knöpfen, eigenem Symbol und langem Text — um zu sehen, was dieses Gerät davon wirklich anzeigt. Fortfahren?",
+            "This message carries an image, buttons, an icon and a tag. Note what of it actually appears — and pull the notification down to see whether the long text is shown in full. ": "Diese Nachricht trägt Bild, Knöpfe, Symbol und Kennung. Achte darauf, was davon erscheint — und zieh die Meldung auf, um zu sehen, ob der lange Text vollständig steht. ",
+            "Open": "Öffnen",
+            "Dismiss": "Wegklicken"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

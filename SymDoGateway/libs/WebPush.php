@@ -81,9 +81,25 @@ trait WebPush
      */
     private const PUSH_TABS = ['dashboard', 'ki', 'todos', 'shopping', 'calendar', 'notes'];
 
-    /** Kappung wie bei den Visu-Nachrichten (ToDoList/module.php): 32 und 256. */
+    /**
+     * Titel wie bei den Visu-Nachrichten (32) — mehr zeigt keine Meldungsflaeche.
+     *
+     * Der TEXT dagegen darf viel mehr als die 256 der Visu-Nachrichten: iOS zeigt
+     * zusammengefaltet zwei Zeilen, beim Aufziehen aber den ganzen Text. Bei 256
+     * brach eine Mail-Zusammenfassung mitten im Satz ab, obwohl die Nutzlast 3072
+     * Byte tragen darf. Die Byte-Grenze haelt PushFitPayload ein — dort MUSS sie
+     * gehalten werden, denn PushEncrypt LEHNT eine zu grosse Nutzlast AB, statt sie
+     * zu kappen: die Nachricht kaeme sonst gar nicht an.
+     */
     private const PUSH_TITLE_MAX = 32;
-    private const PUSH_BODY_MAX  = 256;
+    private const PUSH_BODY_MAX  = 1000;
+
+    /**
+     * Felder, die eine Nutzlast ausser Titel und Text tragen darf. Weissliste, weil
+     * der Service Worker sie ungeprueft an showNotification weitergibt.
+     */
+    private const PUSH_EXTRA_KEYS = ['icon', 'image', 'tag', 'renotify', 'requireInteraction',
+                                     'silent', 'vibrate', 'timestamp', 'actions'];
 
     /**
      * Ordnung der Kurve P-256. Ein Skalar muss echt zwischen 0 und n liegen —
@@ -146,6 +162,28 @@ trait WebPush
                 $this->Translate('This is a test notification.'),
                 '',
                 'dashboard'
+            );
+            $this->UpdateFormField('PushStatus', 'caption', sprintf(
+                $this->Translate('Sent: %d, failed: %d, removed: %d'),
+                (int)$bilanz['sent'],
+                (int)$bilanz['failed'],
+                (int)$bilanz['dropped']
+            ));
+            return true;
+        }
+        if ($ident === 'PushTestFull') {
+            // Messnachricht: sie traegt ALLES, was der Standard hergibt. Was davon
+            // auf dem Geraet erscheint, sagt uns, worauf wir bauen koennen — die
+            // Berichte im Netz stammen aus der iOS-16.4-Zeit und widersprechen sich.
+            // Auf Android und am Rechner sollten Bild und Knoepfe kommen.
+            $bilanz = $this->PushBroadcast(
+                $this->Translate('Test with all extras'),
+                $this->Translate('This message carries an image, buttons, an icon and a tag. Note what of it actually appears — and pull the notification down to see whether the long text is shown in full. ')
+                    . str_repeat('Beispieltext zum Aufziehen. ', 12),
+                '',
+                'dashboard',
+                -1,
+                $this->PushTestExtras()
             );
             $this->UpdateFormField('PushStatus', 'caption', sprintf(
                 $this->Translate('Sent: %d, failed: %d, removed: %d'),
@@ -638,7 +676,12 @@ trait WebPush
      *                   ist der Service Worker: bei einem neuen Vorschlag ist die App
      *                   zu, die Seite selbst kaeme also zu spaet.
      */
-    private function PushBroadcast(string $titel, string $text, string $userId = '', string $tab = '', int $badge = -1): array
+    /**
+     * @param array<string,mixed> $extra Zusaetzliche Felder fuer showNotification
+     *        (nur aus PUSH_EXTRA_KEYS). Auf iOS werden die meisten davon ignoriert —
+     *        auf Android und am Rechner nicht.
+     */
+    private function PushBroadcast(string $titel, string $text, string $userId = '', string $tab = '', int $badge = -1, array $extra = []): array
     {
         $bilanz = ['sent' => 0, 'failed' => 0, 'dropped' => 0, 'stale' => 0, 'blocked' => 0];
         $abos = $this->PushSubscriptions($userId);
@@ -658,6 +701,13 @@ trait WebPush
         if ($badge >= 0) {
             $nutzlast['badge'] = $badge;
         }
+        foreach (self::PUSH_EXTRA_KEYS as $k) {
+            if (array_key_exists($k, $extra)) {
+                $nutzlast[$k] = $extra[$k];
+            }
+        }
+        // ZULETZT: erst jetzt steht fest, wie gross die Nutzlast wirklich ist.
+        $nutzlast = $this->PushFitPayload($nutzlast);
 
         $riegel = 'SymDo_Push_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($riegel, 0)) {
@@ -887,5 +937,73 @@ trait WebPush
             'title' => mb_substr(trim($titel), 0, self::PUSH_TITLE_MAX),
             'body'  => mb_substr(trim($text), 0, self::PUSH_BODY_MAX),
         ];
+    }
+
+    /**
+     * Die Bausteine der Messnachricht.
+     *
+     * Eigene Methode, damit sich der Inhalt pruefen laesst, ohne den Versandweg
+     * nachzubilden — im Versand steckt die Nutzlast zwischen json_encode und
+     * Verschluesselung und ist von aussen nicht mehr greifbar.
+     *
+     * @return array<string,mixed>
+     */
+    private function PushTestExtras(): array
+    {
+        // Eigene Herkunft: ein Bild von woanders waere ein Verweis auf einen fremden
+        // Server in einer Benachrichtigung — und der Service Worker weist Adressen
+        // ausserhalb des eigenen Hauses ohnehin ab.
+        $basis = '/hook/' . self::WEBAPP_HOOK_PATH;
+        return [
+            'icon'               => $basis . '/appicon-180.png',
+            'image'              => $basis . '/appicon-512.png',
+            'tag'                => 'symdo-test-extras',
+            'renotify'           => true,
+            'requireInteraction' => true,
+            'silent'             => false,
+            'vibrate'            => [200, 100, 200],
+            'actions'            => [
+                ['action' => 'open',    'title' => $this->Translate('Open')],
+                ['action' => 'dismiss', 'title' => $this->Translate('Dismiss')],
+            ],
+        ];
+    }
+
+    /**
+     * Die Nutzlast auf die Byte-Grenze bringen — durch KUERZEN, nicht durch Absage.
+     *
+     * PushEncrypt prueft dieselbe Grenze und gibt bei Ueberschreitung
+     * `payload_too_large` zurueck; die Nachricht faellt dann fuer JEDES Geraet aus.
+     * Das war harmlos, solange der Text auf 256 Zeichen gekappt war. Mit 1000
+     * Zeichen ist es erreichbar: Umlaute zaehlen in UTF-8 doppelt, und die Extras
+     * (Bild, Knoepfe) kommen dazu. Also hier kuerzen, bis es passt — ein
+     * gekuerzter Text ist unendlich besser als keine Nachricht.
+     *
+     * Gekuerzt wird der TEXT, nie der Titel: ohne Titel ist eine Meldung nutzlos.
+     */
+    private function PushFitPayload(array $nutzlast): array
+    {
+        $laenge = static fn(array $n): int => strlen(
+            (string)json_encode($n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+        // 64 Byte Luft: die Verschluesselung haengt Polster und GCM-Marke an.
+        $grenze = self::PUSH_MAX_BYTES - 64;
+        if ($laenge($nutzlast) <= $grenze) {
+            return $nutzlast;
+        }
+        $text = (string)($nutzlast['body'] ?? '');
+        while ($text !== '' && $laenge($nutzlast) > $grenze) {
+            $text = mb_substr($text, 0, max(0, mb_strlen($text) - 32));
+            $nutzlast['body'] = $text === '' ? '' : rtrim($text) . '…';
+        }
+        if ($laenge($nutzlast) > $grenze) {
+            // Selbst ohne Text zu gross: dann sind es die Extras. Die fliegen raus,
+            // der Titel bleibt.
+            foreach (self::PUSH_EXTRA_KEYS as $k) {
+                unset($nutzlast[$k]);
+            }
+            $this->SendDebug('WebPush', 'Nutzlast zu gross — Extras entfernt', 0);
+        }
+        return $nutzlast;
     }
 }

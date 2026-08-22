@@ -1012,6 +1012,16 @@ trait AppCore
             . '<link rel="manifest" href="/hook/' . self::PWA_HOOK_PATH . '/manifest.webmanifest">'
             . '<meta name="apple-mobile-web-app-capable" content="yes">'
             . '<meta name="mobile-web-app-capable" content="yes">'
+            // Der Name UNTER dem Symbol — und damit die Zeile, die iOS ueber jede
+            // Benachrichtigung schreibt („von SymDo"). Ohne diese Angabe raet iOS:
+            // es nimmt short_name aus dem Manifest oder den <title> der Seite. Hier
+            // festgelegt, damit der Name nicht von der Seite abhaengt, auf der
+            // gerade „Zum Home-Bildschirm" gedrueckt wurde.
+            //
+            // Eine angehaengte Zahl („SymDo 2") ist NICHT von hier: die setzt iOS
+            // selbst, wenn ein Symbol dieses Namens schon auf dem Home-Bildschirm
+            // liegt. Dagegen hilft nur, das aeltere Symbol zu entfernen.
+            . '<meta name="apple-mobile-web-app-title" content="SymDo">'
             // BEWUSST KEIN apple-mobile-web-app-status-bar-style mehr (22.08.2026,
             // am Geraet gemessen): auf iOS 26 vergroessert „black-translucent" die
             // Seite NICHT auf den ganzen Schirm — die Web-App bekommt fest 761 von

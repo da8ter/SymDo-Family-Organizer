@@ -1902,10 +1902,24 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('A task reminder goes to the devices of the member it is assigned to, plus every device that is not assigned to anyone. Assign a device in the web app under the bell.')
                 ],
                 [
-                    'type'     => 'Button',
-                    'caption'  => $this->Translate('Send a test notification to all devices'),
-                    'confirm'  => $this->Translate('Every device with notifications switched on will receive a test notification. Continue?'),
-                    'onClick'  => 'IPS_RequestAction($id, \'PushTestAll\', 0);'
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        [
+                            'type'     => 'Button',
+                            'caption'  => $this->Translate('Send a test notification to all devices'),
+                            'confirm'  => $this->Translate('Every device with notifications switched on will receive a test notification. Continue?'),
+                            'onClick'  => 'IPS_RequestAction($id, \'PushTestAll\', 0);'
+                        ],
+                        [
+                            // Messnachricht: klaert am Geraet, welche Bausteine iOS
+                            // wirklich anzeigt (Bild, Knoepfe, eigenes Symbol, langer
+                            // Text). Die Berichte im Netz widersprechen sich.
+                            'type'     => 'Button',
+                            'caption'  => $this->Translate('Test with all extras'),
+                            'confirm'  => $this->Translate('Sends one notification carrying an image, buttons, an icon and a long text — to see what this device actually shows. Continue?'),
+                            'onClick'  => 'IPS_RequestAction($id, \'PushTestFull\', 0);'
+                        ],
+                    ]
                 ],
                 [
                     'type'    => 'Label',
