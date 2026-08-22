@@ -925,6 +925,21 @@ trait AppCore
             // id/start_url machen die App zu einer anderen (siehe oben).
             'display'          => 'standalone',
             'orientation'      => 'portrait',
+            // Sprache der App. Zieht `<html lang="de">` aus module.html nach — bisher
+            // stand sie NUR dort, das Manifest schwieg.
+            //
+            // Anlass ist die Zeile, die iOS ueber jede Web-Push-Benachrichtigung
+            // schreibt: „from SymDo". Auf einem deutschen iPhone (es schreibt „jetzt"
+            // fuer die Uhrzeit) steht dort trotzdem englisch „from" — der Verdacht
+            // ist, dass iOS dafuer die Sprache der WEB-APP nimmt und nicht die des
+            // Geraets. Ob es hilft, zeigt erst das Geraet: die Angabe koennte in iOS
+            // auch fest englisch sein. Kostet nichts und ist ohnehin richtig.
+            //
+            // Wirksam erst nach Entfernen und erneutem Hinzufuegen des Symbols —
+            // das Manifest wird beim Hinzufuegen gelesen. `lang`/`dir` sind KEINE
+            // Identitaetsfelder, die App bleibt also dieselbe.
+            'lang'             => 'de',
+            'dir'              => 'ltr',
             // Rueckfallnetz fuers Blenden: bleibt es bei reservierten Streifen,
             // sollen sie wenigstens die Farbe der dunklen App-Flaeche tragen
             // (THEME_DEFAULTS.dark.card im Adapter), nicht ein fremdes Grau.
