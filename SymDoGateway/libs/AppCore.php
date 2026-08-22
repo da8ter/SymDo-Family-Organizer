@@ -901,10 +901,26 @@ trait AppCore
             // Umfasst Seite UND API, damit ein Klick aus der Benachrichtigung in der
             // App landet und nicht in einem Browser-Fenster daneben.
             'scope'            => '/hook/lists/',
-            'display'          => 'standalone',
+            // fullscreen statt standalone (22.08.2026, nach Messung am Geraet):
+            // iOS 26 reserviert bei standalone oben und unten Systemstreifen
+            // (Fenster 812pt, Seite nur 761pt) und ignoriert dabei
+            // viewport-fit=cover, black-translucent UND das theme-color-Meta —
+            // aus der Seite heraus ist die Reservierung nicht aufzuloesen.
+            // fullscreen ist der einzige verbliebene Hebel; wo iOS es nicht
+            // umsetzt, faellt es auf standalone zurueck und nichts wird
+            // schlechter. Preis, bewusst gewaehlt: im echten Vollbild zeigt iOS
+            // keine Uhr/Statuszeile mehr. Gilt erst nach Entfernen und erneutem
+            // Hinzufuegen des Home-Bildschirm-Symbols (Manifest wird beim
+            // Hinzufuegen gelesen). display/theme_color sind KEINE
+            // Identitaetsfelder — nur id/start_url machen die App zu einer
+            // anderen (siehe oben).
+            'display'          => 'fullscreen',
             'orientation'      => 'portrait',
-            'background_color' => '#1c1c1e',
-            'theme_color'      => '#1c1c1e',
+            // Rueckfallnetz fuers Blenden: bleibt es bei reservierten Streifen,
+            // sollen sie wenigstens die Farbe der dunklen App-Flaeche tragen
+            // (THEME_DEFAULTS.dark.card im Adapter), nicht ein fremdes Grau.
+            'background_color' => '#2b2c30',
+            'theme_color'      => '#2b2c30',
             // Absteigend, damit Android das passende zuerst findet. Bewusst OHNE
             // `purpose: maskable`: Das Motiv reicht bis nahe an den Rand, und Androids
             // Maske schneidet die aeusseren 20 Prozent weg — Einkaufswagen und
