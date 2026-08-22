@@ -167,6 +167,26 @@ trait Notes
      */
     private function NotesEnsureMemberFolders(): bool
     {
+        // Unter DERSELBEN Sperre wie die Mutationen: diese Methode liest den Bestand
+        // und schreibt ihn zurueck, und sie laeuft auf Lesewegen (GET /v1/notes ->
+        // action 'list') sowie beim ApplyChanges. Ohne Sperre kann ihr Rueckschreiben
+        // eine gleichzeitig gespeicherte Notiz verschlucken (verlorenes Update).
+        // Bekommt sie die Sperre nicht, wird NICHT gewartet: das Nachziehen ist eine
+        // Heilung, die beim naechsten Aufruf ohnehin wieder ansteht.
+        $lock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 300)) {
+            return true;
+        }
+        try {
+            return $this->NotesEnsureMemberFoldersLocked();
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /** Nur aufrufen, wenn die Notizen-Sperre gehalten wird. */
+    private function NotesEnsureMemberFoldersLocked(): bool
+    {
         $store = $this->NotesStore();
         $vorher = count($store['folders']);
         $seen = array_flip(array_map('strval', $store['seen']));
@@ -427,8 +447,10 @@ trait Notes
                     return $this->NotesFehler('store_unwritable');
                 }
                 // ERST der Store, DANN die Medien: umgekehrt hätte ein gescheiterter
-                // Schreibvorgang Notizen mit toten Anhängen hinterlassen.
-                $this->NotesDeleteMedia($medien);
+                // Schreibvorgang Notizen mit toten Anhängen hinterlassen. Und nur, was
+                // keine andere Notiz und kein offener Vorschlag mehr nennt — eine Mail
+                // gibt allen ihren Notiz-Funden dieselbe Anhangsliste mit.
+                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($store, $medien));
                 return ['ok' => true, 'rev' => (int)$store['rev'] + 1];
 
             case 'attachUpload':
@@ -492,8 +514,9 @@ trait Notes
         if (!$this->NotesWriteStore($store)) {
             return $this->NotesFehler('store_unwritable');
         }
-        $this->NotesDeleteMedia($medien);
-        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($medien)];
+        $frei = $this->NotesUnreferencedMedia($store, $medien);
+        $this->NotesDeleteMedia($frei);
+        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($frei)];
     }
 
     private function NotesNoteCreate(array $store, array $body, int $jetzt): array

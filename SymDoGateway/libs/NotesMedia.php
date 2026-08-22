@@ -142,6 +142,34 @@ trait NotesMedia
         return array_values(array_unique($ids));
     }
 
+    /**
+     * Von den genannten Dateien die, auf die NIEMAND mehr zeigt.
+     *
+     * Noetig, weil eine Mail mit mehreren Notiz-Funden allen Eintraegen DIESELBE
+     * Anhangsliste mitgibt: uebernimmt man beide, verweisen zwei Notizen auf
+     * dasselbe Medienobjekt. Ein Loeschen an der einen Notiz nahm der anderen dann
+     * die Datei weg — deren Anhang blieb in der Liste stehen und antwortete ab da
+     * mit 403. Geprueft wird gegen den NEUEN Stand (das Loeschen ist schon darin)
+     * und gegen die offenen Vorschlaege.
+     *
+     * @param list<int> $ids
+     * @return list<int>
+     */
+    private function NotesUnreferencedMedia(array $store, array $ids): array
+    {
+        $benutzt = array_merge(
+            $this->NotesAttachmentIds(is_array($store['notes'] ?? null) ? $store['notes'] : []),
+            $this->NotesProposalAttachmentIds()
+        );
+        $frei = [];
+        foreach ($ids as $id) {
+            if (!in_array((int)$id, $benutzt, true)) {
+                $frei[] = (int)$id;
+            }
+        }
+        return $frei;
+    }
+
     /** Loescht nur, was wirklich in der Notizen-Kategorie liegt. */
     private function NotesDeleteMedia(array $ids): void
     {
@@ -215,7 +243,7 @@ trait NotesMedia
         if (!$this->NotesWriteStore($store)) {
             return $this->NotesFehler('store_unwritable');
         }
-        $this->NotesDeleteMedia([$mid]);
+        $this->NotesDeleteMedia($this->NotesUnreferencedMedia($store, [$mid]));
         return ['ok' => true, 'rev' => (int)$store['rev'] + 1];
     }
 
@@ -378,6 +406,25 @@ trait NotesMedia
         if ($kat <= 0) {
             return 0;
         }
+        // Unter der Notizen-Sperre, denn NotesStorable() schreibt einen Probewert und
+        // stellt danach den ALTEN Stand wieder her. Laeuft gleichzeitig eine
+        // Mutation, ueberschreibt diese Wiederherstellung sie — die Notiz waere weg.
+        // Ohne freie Sperre lieber gar nicht aufraeumen: die Schonfrist von zwei
+        // Tagen laesst jede Menge weitere Gelegenheiten.
+        $lock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 300)) {
+            return 0;
+        }
+        try {
+            return $this->NotesSweepOrphansLocked($kat);
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /** Nur aufrufen, wenn die Notizen-Sperre gehalten wird. */
+    private function NotesSweepOrphansLocked(int $kat): int
+    {
         // Ohne benutzbaren Bestand NICHT aufraeumen. Ein unlesbares Attribut liefert
         // eine leere Notizliste — dann saehe JEDER Anhang wie eine Waise aus und der
         // Durchlauf loeschte den ganzen Bestand. Dasselbe gilt fuer die
