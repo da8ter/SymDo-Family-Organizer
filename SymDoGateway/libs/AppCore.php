@@ -492,11 +492,17 @@ trait AppCore
     {
         $form = ['elements' => &$elements];
 
-        $connectUrl = $this->GetConnectUrl();
-        $info = $connectUrl !== ''
-            ? sprintf($this->Translate('Symcon Connect: %s'), $connectUrl)
-            : $this->Translate('No Symcon Connect instance found — remote access for the app is unavailable.');
-        $this->SetFormElementProperty($form['elements'], 'ConnectInfo', 'caption', $info);
+        // Die Connect-Adresse steht NICHT mehr im Formular (Wunsch vom 22.08.2026):
+        // sie ist dem Betreiber bekannt, sie war die erste Zeile jedes
+        // Bildschirmfotos der Konfiguration, und wer sie braucht, findet sie im
+        // QR-Code des Browser-Zugangs. Die Zeile bleibt aber fuer den umgekehrten
+        // Fall: FEHLT Connect, ist das eine Erklaerung, warum die App von unterwegs
+        // nicht erreichbar ist — sonst sucht man sie in der App.
+        $ohneConnect = $this->GetConnectUrl() === '';
+        $this->SetFormElementProperty($form['elements'], 'ConnectInfo', 'caption', $ohneConnect
+            ? $this->Translate('No Symcon Connect instance found — remote access for the app is unavailable.')
+            : ' ');
+        $this->SetFormElementProperty($form['elements'], 'ConnectInfo', 'visible', $ohneConnect);
         $this->SetFormElementProperty($form['elements'], 'LocalUrlHint', 'caption', $this->LocalUrlHint());
         $this->SetFormElementProperty($form['elements'], 'PairedDevicesList', 'values', $this->BuildDeviceRows());
 

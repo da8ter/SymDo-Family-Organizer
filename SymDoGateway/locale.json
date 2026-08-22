@@ -57,7 +57,6 @@
             "Local HTTPS URL (optional, e.g. https://symcon.mydomain.de) — on the home network the web app switches to this local address; Symcon Connect stays the fallback when away. Requires a browser-trusted certificate.": "Lokale HTTPS-URL (optional, z. B. https://symcon.meinedomain.de) — im Heimnetz schaltet die Web-App auf diese lokale Adresse um; unterwegs bleibt Symcon Connect der Fallback. Erfordert ein browservertrautes Zertifikat.",
             "Scan with the phone camera to open the web app (valid for 10 minutes). Code for manual entry: %s | Link: %s": "Mit der Handykamera scannen, um die Web-App zu öffnen (10 Minuten gültig). Code zum Eintippen: %s | Link: %s",
             "Warning: No Symcon Connect URL found. Enable Symcon Connect to reach the web app over the internet.": "Achtung: Keine Symcon-Connect-URL gefunden. Aktiviere Symcon Connect, um die Web-App über das Internet zu erreichen.",
-            "Symcon Connect: %s": "Symcon Connect: %s",
             "No Symcon Connect instance found — remote access for the app is unavailable.": "Keine Symcon-Connect-Instanz gefunden — Fernzugriff für die App ist nicht verfügbar.",
             "Active": "Aktiv",
             "Revoked": "Widerrufen",
@@ -147,8 +146,6 @@
             "The calendar rejected the appointment.": "Der Kalender hat den Termin abgelehnt.",
             "The calendar rejected the deletion.": "Der Kalender hat das Löschen abgelehnt.",
             "This appointment no longer exists.": "Diesen Termin gibt es nicht mehr.",
-            "Visualization instance for appointment reminders": "Visualisierungsinstanz für Termin-Erinnerungen",
-            "Reminders for appointments are delivered the same way as task reminders: as a notification to this visualization instance. Without an instance a reminder stays pending instead of being lost.": "Erinnerungen an Termine gehen denselben Weg wie die der Aufgaben: als Benachrichtigung an diese Visualisierungsinstanz. Ohne Instanz bleibt eine Erinnerung liegen, statt verloren zu gehen.",
             "%d d": "%d T",
             "%d h": "%d Std",
             "%d min": "%d Min",
@@ -302,7 +299,7 @@
             "Daily limit for AI calls reached.": "Der Tagesdeckel für KI-Aufrufe ist erreicht.",
             "1. Web app notifications": "1. Web-App-Benachrichtigungen",
             "2. Visualization notifications": "2. Visualisierungs-Benachrichtigungen",
-            "This way does not go to the web app but to a Symcon visualization — the same way a task reminder takes. It stood in the mail panel before, where it had nothing to do with the subject.": "Dieser Weg führt nicht in die Web-App, sondern an eine Symcon-Visualisierung — derselbe Weg, den eine Aufgaben-Erinnerung nimmt. Er stand vorher im Mail-Bereich, wo er thematisch nichts zu suchen hatte."
+            "Visualization instance": "Visualisierungsinstanz"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
