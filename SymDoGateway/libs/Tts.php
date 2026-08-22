@@ -41,6 +41,14 @@ trait Tts
     private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
 
     /**
+     * Stilverstaerkung fuer ALLE Personas. 0 ist die Einstellung der Vorschau und
+     * die qualitativ sicherste; hoehere Werte betonen den Charakter, kosten aber
+     * Stabilitaet (siehe TtsElevenSettings). 0,2 entspricht 20 von 100 in der
+     * ElevenLabs-Oberflaeche.
+     */
+    private const TTS_ELEVEN_STYLE = 0.2;
+
+    /**
      * Tonqualitaet bei ElevenLabs, und was ein Zeichen dann kostet.
      *
      * Warum einstellbar und nicht fest: die zwei Anforderungen widersprechen sich.
@@ -952,10 +960,14 @@ trait Tts
      *
      * ZWEI Regeln, beide aus der Doku und am 22.08.2026 hoerbar bestaetigt:
      *
-     *  1. `style` bleibt 0. Die Stilverstaerkung „fuehrt schnell zu unerwuenschter
-     *     Instabilitaet und unnatuerlichem Klang" und kostet zusaetzlich Rechenzeit.
-     *     Genau daran lag es, dass das Briefing schlechter klang als die Vorschau:
-     *     die stand bei 0, der Drillsergeant bei 0,65.
+     *  1. `style` bleibt KLEIN. Die Stilverstaerkung „fuehrt schnell zu
+     *     unerwuenschter Instabilitaet und unnatuerlichem Klang" und kostet
+     *     zusaetzlich Rechenzeit. Genau daran lag es, dass das Briefing schlechter
+     *     klang als die Vorschau: die stand bei 0, der Drillsergeant bei 0,65.
+     *     Seit dem 22.08.2026 steht hier 0,2 (auf Wunsch, zum Vergleich) — das sind
+     *     20 von 100 auf der Skala der ElevenLabs-Oberflaeche, also kein
+     *     Mini-Wert. Klingt es rauh oder unruhig, ist TTS_ELEVEN_STYLE der Regler:
+     *     0 ist die Einstellung der Vorschau.
      *  2. `stability` bleibt in der Naehe der Vorgabe 0,5. Niedrig heisst laut Doku
      *     „ausdrucksstaerker, aber anfaellig fuer Halluzinationen" — 0,25 war zu
      *     weit unten.
@@ -1002,8 +1014,8 @@ trait Tts
         return [
             'stability'         => $stability,
             'similarity_boost'  => 0.75,
-            // Bewusst 0 — siehe Regel 1 im Kommentar oben.
-            'style'             => 0.0,
+            // Siehe Regel 1 im Kommentar oben — an EINER Stelle einstellbar.
+            'style'             => self::TTS_ELEVEN_STYLE,
             'use_speaker_boost' => true,
             'speed'             => max(0.7, min(1.2, $speed)),
         ];
