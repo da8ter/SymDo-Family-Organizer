@@ -1024,11 +1024,37 @@ trait Briefing
         if ($zeilen === []) {
             return 'Siez alle Erwachsenen.';
         }
+        // Die SAMMELANREDE braucht eine eigene Regel. Die Tabelle oben bindet nur, wie
+        // eine EINZELNE Person genannt wird; wie die Gruppe angesprochen wird, stand
+        // nirgends — und das Modell nahm dann beides. Im ersten förmlichen
+        // Haushaltsbriefing (22.08.2026, Stimme Toby) stand „Ihr habt einige Aufgaben"
+        // und drei Sätze später „Ich wünsche Ihnen einen erfolgreichen Tag".
+        //
+        // Richtig ist im gemischten Haushalt „ihr": die Kinder sind mitgemeint, und
+        // „Ihnen" schließt sie aus. Sind ALLE erwachsen, gilt umgekehrt „Ihnen" — sonst
+        // würde die Regel gerade dort duzen, wo förmlich gewünscht ist. Deshalb wird
+        // gezählt und nicht geraten.
+        $geduzte = 0;
+        foreach ($anreden as $a) {
+            if ($a['form'] === 'du') {
+                $geduzte++;
+            }
+        }
+        $sammel = '';
+        if ($this->BriefingUserId() === '') {
+            $sammel = $geduzte > 0
+                ? ' Die Familie als ganze wird mit „ihr" und „euch" angesprochen, niemals '
+                    . 'mit „Sie" oder „Ihnen" — die Kinder sind mitgemeint. Das gilt auch '
+                    . 'für den Schlusssatz.'
+                : ' Die Runde als ganze wird mit „Sie" und „Ihnen" angesprochen; in diesem '
+                    . 'Haushalt leben nur Erwachsene.';
+        }
         return 'ANREDE — genau so und nicht anders, das ist keine Empfehlung: '
             . implode('; ', $zeilen) . '. '
             . 'Erwachsene werden gesiezt und mit ihrem Nachnamen genannt, Kinder mit '
             . 'ihrem Vornamen und geduzt. Verwende keine andere Form, auch nicht in '
-            . 'Nebensätzen, und mische die Formen nicht innerhalb eines Satzes.';
+            . 'Nebensätzen, und mische die Formen nicht innerhalb eines Satzes.'
+            . $sammel;
     }
 
     /** Mitglieds-IDs zu Namen; unbekannte Kennungen fallen weg. */
