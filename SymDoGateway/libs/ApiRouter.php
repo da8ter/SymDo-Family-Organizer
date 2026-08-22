@@ -101,7 +101,7 @@ trait ApiRouter
                     // Klaert, wie iOS 26 die Statusleiste einer Home-Screen-App
                     // behandelt. Ausbau zusammen mit vpProbe() im Adapter.
                     if (isset($_GET['vp'])) {
-                        $this->LogMessage('WebApp-Anzeige: ' . substr((string)$_GET['vp'], 0, 200), KL_NOTIFY);
+                        $this->LogMessage('WebApp-Anzeige: ' . substr((string)$_GET['vp'], 0, 320), KL_NOTIFY);
                     }
                     $this->HandleDiscovery();
                     return;

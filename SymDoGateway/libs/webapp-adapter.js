@@ -485,8 +485,27 @@
       var wirt = document.body || document.documentElement;
       wirt.appendChild(d);
       var cs = getComputedStyle(d);
+      // Runde 2 (2026-08-22): dem Fenster fehlen 51pt zur Bildschirmhoehe, alle
+      // env() melden 0 — iOS 26 ignoriert cover UND black-translucent. Diese
+      // Werte klaeren, WO der reservierte Streifen sitzt: visualViewport zeigt
+      // die sichtbare Flaeche, tb den Abstand der Tab-Leiste zum Fensterboden,
+      // bg/tc ob Karten-Hintergrund und theme-color-Abgleich wirklich anliegen.
+      var vv = window.visualViewport || null;
+      var leiste = document.querySelector('.tabbar');
+      var tb = 'x';
+      try { if (leiste) { tb = String(Math.round(window.innerHeight - leiste.getBoundingClientRect().bottom)); } } catch (e2) {}
+      var meta = document.querySelector('meta[name="theme-color"]');
       var werte = 'sat=' + cs.paddingTop + ',sab=' + cs.paddingBottom
         + ',ih=' + window.innerHeight + ',sh=' + ((window.screen && window.screen.height) || 0)
+        + ',oh=' + window.outerHeight
+        + ',av=' + ((window.screen && window.screen.availHeight) || 0)
+        + ',sw=' + ((window.screen && window.screen.width) || 0)
+        + ',dr=' + (window.devicePixelRatio || 0)
+        + ',vv=' + (vv ? Math.round(vv.height) : -1)
+        + ',vt=' + (vv ? Math.round(vv.offsetTop) : -1)
+        + ',tb=' + tb
+        + ',bg=' + String(getComputedStyle(document.body).backgroundColor || '').replace(/\s+/g, '')
+        + ',tc=' + (meta ? String(meta.getAttribute('content') || '') : 'kein')
         + ',dm=' + (isStandalone() ? 'standalone' : 'browser');
       wirt.removeChild(d);
       return '?vp=' + encodeURIComponent(werte);
