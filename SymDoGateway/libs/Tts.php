@@ -198,7 +198,7 @@ trait Tts
         // kann: sie unterscheidet nur „selbst erzeugt" von „aus der Bibliothek
         // kopiert", und alle Kopien sind in jedem Feld identisch. Wer eine andere
         // Menge sehen will, waehlt sie hier, statt dass ich sie errate.
-        $this->RegisterPropertyString('TtsElevenScope', 'non-default');
+        $this->RegisterPropertyString('TtsElevenScope', 'bookmarked');
         // „auto": die Stufe richtet sich an ScriptOutputBufferLimit und an der
         // Textlaenge aus — wie bei Bildern und PDFs (siehe TtsElevenQualityFor).
         // 32/64/128 sind ausdrueckliche Vorgaben fuer den Fall, dass jemand bewusst
@@ -784,14 +784,23 @@ trait Tts
         //   category `professional`        = aus der Bibliothek kopiert    (5)
         //   category `premade`             = Vorgabestimmen jedes Kontos  (21)
         // `personal`/`non-community` liefern nur die erste Sorte, `non-default`
-        // beide ersten, ohne Filter alle. Die Rubriken der Weboberflaeche lassen
-        // sich damit NICHT nachbilden: die fuenf Kopien sind in jedem Feld
-        // identisch (sharing.status=copied, is_owner=false, keine Sammlungen, keine
-        // Stufen) — es gibt kein Merkmal, das eine Teilmenge davon abgrenzt.
-        // Deshalb waehlt der Nutzer die Menge, statt dass wir sie erraten.
-        $umfang = $this->TtsSetting('TtsElevenScope', 'non-default');
-        $filter = in_array($umfang, ['personal', 'non-default', 'non-community'], true)
-            ? '&voice_type=' . $umfang
+        // beide ersten, ohne Filter alle.
+        //
+        // Die Rubrik „Meine Stimmen" der Weboberflaeche ist KEINE dieser Mengen,
+        // laesst sich aber nachbilden — ueber `is_bookmarked`, ein Feld, das schon
+        // immer im Rumpf stand. Am 22.08.2026 nachgerechnet: von neun kopierten
+        // Stimmen tragen sechs `true` und drei `false`; die drei mit `false` fehlen
+        // in der Rubrik. Die Gegenprobe am Stand des Vortags (sechs Stimmen: eine
+        // eigene, zwei gemerkte, drei nicht gemerkte) ergibt genau die drei, die
+        // der Nutzer dort sah.
+        //
+        // Eigene Stimmen haben das Feld gar nicht (NULL). Deshalb wird auf
+        // `=== false` geprueft und nicht auf „nicht wahr" — sonst fielen die
+        // eigenen mit heraus, also gerade die, die sicher hineingehoeren.
+        $umfang = $this->TtsSetting('TtsElevenScope', 'bookmarked');
+        $art    = $umfang === 'bookmarked' ? 'non-default' : $umfang;
+        $filter = in_array($art, ['personal', 'non-default', 'non-community'], true)
+            ? '&voice_type=' . $art
             : '';
         $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?page_size=100' . $filter, [
             'xi-api-key: ' . $key,
@@ -802,7 +811,7 @@ trait Tts
         if (($resp['err'] ?? '') !== '' || $status !== 200) {
             return sprintf($this->Translate('Could not fetch the voices (HTTP %d).'), $status);
         }
-        $stimmen = $this->TtsElevenParseVoices((string)($resp['body'] ?? ''));
+        $stimmen = $this->TtsElevenParseVoices((string)($resp['body'] ?? ''), $umfang === 'bookmarked');
         if ($stimmen === []) {
             return $this->Translate('The key works, but "My Voices" is empty in this account.');
         }
@@ -826,7 +835,7 @@ trait Tts
      *
      * @return list<array{id:string,name:string,info:string}>
      */
-    private function TtsElevenParseVoices(string $rumpf): array
+    private function TtsElevenParseVoices(string $rumpf, bool $nurGemerkte = false): array
     {
         $d = json_decode($rumpf, true);
         $roh = is_array($d) && is_array($d['voices'] ?? null) ? $d['voices'] : [];
@@ -839,6 +848,10 @@ trait Tts
             if ($id === '') {
                 continue;
             }
+            // Nur bei „Meine Stimmen": die nicht gemerkten Kopien aussortieren.
+            if ($nurGemerkte && ($v['is_bookmarked'] ?? null) === false) {
+                continue;
+            }
             $merkmale = [];
             // Herkunft zuerst, denn sie erklaert die Liste: „eigene" sind selbst
             // erzeugte oder geklonte, „gespeichert" sind welche aus der Bibliothek.
@@ -848,7 +861,12 @@ trait Tts
             if ($art === 'generated' || $art === 'cloned') {
                 $merkmale[] = $this->Translate('own');
             } elseif ($art === 'professional') {
-                $merkmale[] = $this->Translate('saved');
+                // Gemerkt oder nur kopiert — der Unterschied ist sichtbar, sobald
+                // eine weitere Menge gewaehlt ist, und erklaert dann die Zeilen,
+                // die unter „Meine Stimmen" fehlen.
+                $merkmale[] = ($v['is_bookmarked'] ?? null) === true
+                    ? $this->Translate('saved')
+                    : $this->Translate('library');
             }
             foreach (['language', 'accent', 'gender'] as $k) {
                 $w = ((array)($v['labels'] ?? []))[$k] ?? null;

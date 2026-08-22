@@ -2252,8 +2252,9 @@ class SymDoGateway extends IPSModuleStrict
                         'width'   => '400px',
                         'caption' => $this->Translate('Which voices to offer'),
                         'options' => [
+                            ['caption' => $this->Translate('My Voices (as on the ElevenLabs website)'), 'value' => 'bookmarked'],
                             ['caption' => $this->Translate('Own voices only (created or cloned by you)'), 'value' => 'personal'],
-                            ['caption' => $this->Translate('Own and saved from the library'), 'value' => 'non-default'],
+                            ['caption' => $this->Translate('Own plus every copy from the library'), 'value' => 'non-default'],
                             ['caption' => $this->Translate('All, including the default voices'), 'value' => 'all'],
                         ]
                     ],

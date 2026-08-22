@@ -327,7 +327,6 @@
             "saved": "gespeichert",
             "Which voices to offer": "Welche Stimmen anbieten",
             "Own voices only (created or cloned by you)": "Nur eigene (selbst erzeugt oder geklont)",
-            "Own and saved from the library": "Eigene und aus der Bibliothek gespeicherte",
             "All, including the default voices": "Alle, auch die Vorgabestimmen",
             "Audio quality": "Tonqualität",
             "Automatic — best quality that still fits in one recording": "Automatisch — die beste Qualität, die noch in eine Aufnahme passt",
@@ -335,7 +334,10 @@
             "Always good (64 kbit)": "Immer gut (64 kbit)",
             "Always thrifty (32 kbit at 22 kHz) — audibly dull": "Immer sparsam (32 kbit bei 22 kHz) — hörbar dumpf",
             "Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.": "Automatisch arbeitet wie der Riegel für Fotos und PDFs: es liest die Symcon-Kernoption ScriptOutputBufferLimit zur Laufzeit und nimmt die beste Qualität, deren Aufnahme noch in EIN Stück passt — jede Naht zwischen zwei Aufnahmen ist hörbar, weil die Sprechmelodie neu ansetzt. Ihre Grenze steht derzeit auf %s, das reicht bei 128 kbit für etwa %d Zeichen. Stellen Sie die Option höher, wird der Klang von selbst besser; stellen Sie sie niedriger, kommt trotzdem eine Aufnahme an.",
-            "— the whole family —": "— die ganze Familie —"
+            "— the whole family —": "— die ganze Familie —",
+            "My Voices (as on the ElevenLabs website)": "Meine Stimmen (wie auf der ElevenLabs-Webseite)",
+            "Own plus every copy from the library": "Eigene und alle Kopien aus der Bibliothek",
+            "library": "Bibliothek"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
