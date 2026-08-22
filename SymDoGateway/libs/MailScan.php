@@ -836,11 +836,17 @@ trait MailScan
                             . (string)($ablage['error']['code'] ?? '?'), 0);
                         continue;
                     }
+                    // Art und Groesse aus der ABLAGE, nicht aus der Mail-Deklaration:
+                    // NotesSaveAttachment skaliert Bilder und normalisiert sie auf
+                    // JPEG. Aus der Mail gerechnet stand in der Auswahlliste die
+                    // Groesse des Originals — bei einem Handyfoto leicht das
+                    // Zehnfache — und bei einer als „.pdf" benannten JPEG die
+                    // falsche Art.
                     $abgelegt[] = [
                         'id'    => (int)$ablage['id'],
-                        'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)$a['kind'],
-                        'kind'  => (string)$a['kind'],
-                        'bytes' => (int)(strlen((string)$a['base64']) * 3 / 4),
+                        'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)($ablage['kind'] ?? ''),
+                        'kind'  => (string)($ablage['kind'] ?? $a['kind']),
+                        'bytes' => (int)($ablage['bytes'] ?? (strlen((string)$a['base64']) * 3 / 4)),
                     ];
                 }
                 if ($abgelegt !== []) {
@@ -856,7 +862,7 @@ trait MailScan
                 }
             }
 
-            $this->MailStoreProposal([
+            $gespeichert = $this->MailStoreProposal([
                 'id'        => $vorschlagsId,
                 'at'        => (int)($kopf['Date'] ?? time()),
                 'from'      => (string)($kopf['SenderAddress'] ?? ''),
@@ -870,6 +876,15 @@ trait MailScan
                 'origin'    => $this->MailDetectOrigin($text),
                 'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
             ]);
+            // Nicht gespeichert heisst NICHT erledigt. Sonst merkt MailRemember die
+            // Mail als abgearbeitet und „nach Auswertung loeschen" wirft sie aus dem
+            // Postfach — waehrend der bezahlte Anbieter-Aufruf verloren ist und die
+            // gerade angelegten Anhaenge niemandem gehoeren.
+            if (!$gespeichert) {
+                $this->LogMessage('SymDo: Vorschlag zu „' . mb_substr($betreff, 0, 60)
+                    . '" konnte nicht gespeichert werden — die Mail bleibt unerledigt.', KL_ERROR);
+                return false;
+            }
             $this->MailNotifyProposal(count($aufgaben) - $termine - $notizen, $termine, $notizen, $userId);
             return true;
 
@@ -1577,23 +1592,47 @@ trait MailScan
             $beschreibungen = [$satz['anhang']];
         }
         $anhaenge = [];
-        foreach ($beschreibungen as $besch) {
-            if (!is_array($besch)) {
-                continue;
-            }
-            $base64 = null;
-            if (($besch['datei'] ?? '') !== '') {
-                // Weg „forward": liegt schon neben der Warteschlange.
-                $base64 = (string)@file_get_contents($this->MailHookDir() . basename((string)$besch['datei']));
-                if ($base64 === '') {
-                    $base64 = null;
+        // Zwei Riegel, die dieser Weg als einziger noch nicht hatte — der
+        // Postfach-Weg (MailFetch) und der Sofort-Weg (MailHookAnalyse) haben beide:
+        //
+        //  1. Ein GESAMTDECKEL. Fuenf Anhaenge duerfen je bis zu 6 MB roh sein, also
+        //     rund 8 MB base64 — in Summe 40 MB.
+        //  2. Das angehobene memory_limit. Symcons php.ini erlaubt 32 MB; ohne
+        //     Anhebung ist die Summe oben ein Abbruch, und zwar einer VOR
+        //     MailCountFailure: die Warteschlangendatei bliebe liegen, und
+        //     MailHookQueueFiles greift immer die aelteste zuerst — der Webhook-Weg
+        //     stuende damit dauerhaft.
+        $speicherVorher = (string)@ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+        try {
+            $summe = 0;
+            foreach ($beschreibungen as $besch) {
+                if (!is_array($besch)) {
+                    continue;
                 }
-            } elseif (($besch['url'] ?? '') !== '') {
-                $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
-            }
-            if ($base64 !== null) {
+                $base64 = null;
+                if (($besch['datei'] ?? '') !== '') {
+                    // Weg „forward": liegt schon neben der Warteschlange.
+                    $base64 = (string)@file_get_contents($this->MailHookDir() . basename((string)$besch['datei']));
+                    if ($base64 === '') {
+                        $base64 = null;
+                    }
+                } elseif (($besch['url'] ?? '') !== '') {
+                    $base64 = $this->MailHookFetchAttachment((string)$besch['url'], (string)$besch['kind'], (string)$besch['name']);
+                }
+                if ($base64 === null) {
+                    continue;
+                }
+                if ($summe + strlen($base64) > self::MAIL_ATTACH_TOTAL_B64) {
+                    $this->SendDebug('MailHook', 'Anhang „' . (string)$besch['name']
+                        . '" uebersprungen: Gesamtgrenze der Anhaenge erreicht', 0);
+                    continue;
+                }
+                $summe += strlen($base64);
                 $anhaenge[] = ['kind' => (string)$besch['kind'], 'base64' => $base64, 'name' => (string)$besch['name']];
             }
+        } finally {
+            @ini_set('memory_limit', $speicherVorher);
         }
 
         $fertig = $this->MailAnalyseRecord(
@@ -1731,13 +1770,47 @@ trait MailScan
 
     // ────────────────────────────── Ablage ──────────────────────────────
 
-    private function MailStoreProposal(array $satz): void
+    /**
+     * Unter eigener Sperre, NICHT unter der des Scanners: den hat der Timer bereits,
+     * und IPS-Semaphoren sind nicht wiedereintrittsfaehig. Geschuetzt wird genau das
+     * Vorschlags-Attribut — Verwerfen und Uebernehmen kommen aus Webserver-Threads
+     * und lesen/schreiben denselben Bestand.
+     */
+    private function MailStoreProposal(array $satz): bool
     {
-        $alle = $this->MailProposals();
-        // Gleiche Mail nie zweimal: der Datensatz gewinnt, der neu kommt.
-        $alle = array_values(array_filter($alle, static fn(array $p): bool => ($p['id'] ?? '') !== $satz['id']));
-        $alle[] = $satz;
-        $this->MailWriteProposals($alle);
+        return $this->MailWithProposalLock(function () use ($satz): bool {
+            $alle = $this->MailProposals();
+            // Gleiche Mail nie zweimal: der Datensatz gewinnt, der neu kommt.
+            $alle = array_values(array_filter($alle, static fn(array $p): bool => ($p['id'] ?? '') !== $satz['id']));
+            $alle[] = $satz;
+            return $this->MailWriteProposals($alle);
+        }, false);
+    }
+
+    /**
+     * Sperre um jedes Lesen-Aendern-Schreiben des Vorschlags-Attributs.
+     *
+     * Ohne sie verschluckt ein „Verwerfen" den Vorschlag, den der Timer im selben
+     * Moment ablegt (und dessen Anhaenge werden zu Waisen) — beide lesen den Stand,
+     * beide schreiben ihre eigene Fassung zurueck, die zweite gewinnt.
+     *
+     * @template T
+     * @param callable():T $fn
+     * @param T $wennBesetzt
+     * @return T
+     */
+    private function MailWithProposalLock(callable $fn, mixed $wennBesetzt): mixed
+    {
+        $lock = 'SymDo_MailProposals_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            $this->SendDebug('MailScan', 'Vorschlagsliste belegt — Aenderung nicht ausgefuehrt', 0);
+            return $wennBesetzt;
+        }
+        try {
+            return $fn();
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
     }
 
     /** @return list<array> */
@@ -1779,13 +1852,37 @@ trait MailScan
         return $raus;
     }
 
-    private function MailWriteProposals(array $alle): void
+    /**
+     * Kodieren und schreiben in einem, mit den beiden Riegeln, die der
+     * Warteschlangen-Weg (MailHookSpool) schon hat und die hier fehlten:
+     *
+     *  1. JSON_INVALID_UTF8_SUBSTITUTE. Ein Anhangsname aus einer fremden Mail muss
+     *     kein gueltiges UTF-8 sein — `filename*=iso-8859-1''Gr%FC%DFe.pdf` liefert
+     *     rohe Latin-1-Bytes. json_encode gibt dann FALSE zurueck.
+     *  2. is_string davor. MailWriteAttr verlangt `string`, und bei strict_types ist
+     *     ein FALSE dort ein TypeError — also ein Abbruch mitten in der Auswertung,
+     *     der MailRemember und MailCountFailure nie erreicht. Die Mailliste ist nach
+     *     Datum sortiert: dieselbe Mail waere bei jedem Lauf wieder die erste, der
+     *     Postfach-Weg stuende dauerhaft, und jeder Versuch legte bis zu fuenf neue
+     *     Medienobjekte an.
+     */
+    private function MailWriteJsonAttr(string $name, mixed $daten): bool
+    {
+        $json = json_encode($daten, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!is_string($json)) {
+            $this->LogMessage('SymDo: ' . $name . ' konnte nicht kodiert werden (' . json_last_error_msg() . ')', KL_ERROR);
+            return false;
+        }
+        return $this->MailWriteAttr($name, $json);
+    }
+
+    private function MailWriteProposals(array $alle): bool
     {
         usort($alle, static fn(array $a, array $b): int => (int)($a['at'] ?? 0) <=> (int)($b['at'] ?? 0));
         if (count($alle) > self::MAIL_PROPOSALS_MAX) {
             $alle = array_slice($alle, -self::MAIL_PROPOSALS_MAX);
         }
-        $this->MailWriteAttr('MailProposals', json_encode(array_values($alle), JSON_UNESCAPED_UNICODE));
+        return $this->MailWriteJsonAttr('MailProposals', array_values($alle));
     }
 
     /** Vorschlaege fuer die API: erledigte Eintraege und leere Mails fallen raus. */
@@ -1831,35 +1928,41 @@ trait MailScan
         return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unknown action.')]];
     }
 
+    // Beide unter MailWithProposalLock: sie kommen aus Webserver-Threads (REST und
+    // Kachel-Relay) und aendern denselben Bestand, den der Timer gleichzeitig
+    // fortschreibt. Ohne Sperre verschwand der neue Vorschlag, wenn der Nutzer im
+    // selben Moment einen alten verwarf.
     private function MailDismiss(string $id): bool
     {
-        $alle = $this->MailProposals();
-        $neu  = array_values(array_filter($alle, static fn(array $p): bool => (string)($p['id'] ?? '') !== $id));
-        if (count($neu) === count($alle)) {
-            return false;
-        }
-        $this->MailWriteProposals($neu);
-        return true;
+        return $this->MailWithProposalLock(function () use ($id): bool {
+            $alle = $this->MailProposals();
+            $neu  = array_values(array_filter($alle, static fn(array $p): bool => (string)($p['id'] ?? '') !== $id));
+            if (count($neu) === count($alle)) {
+                return false;
+            }
+            return $this->MailWriteProposals($neu);
+        }, false);
     }
 
     private function MailMarkTaken(string $id, int $index): bool
     {
-        $alle = $this->MailProposals();
-        $treffer = false;
-        foreach ($alle as &$p) {
-            if ((string)($p['id'] ?? '') !== $id) {
-                continue;
+        return $this->MailWithProposalLock(function () use ($id, $index): bool {
+            $alle = $this->MailProposals();
+            $treffer = false;
+            foreach ($alle as &$p) {
+                if ((string)($p['id'] ?? '') !== $id) {
+                    continue;
+                }
+                if (isset($p['items'][$index]) && is_array($p['items'][$index])) {
+                    $p['items'][$index]['taken'] = true;
+                    $treffer = true;
+                }
             }
-            if (isset($p['items'][$index]) && is_array($p['items'][$index])) {
-                $p['items'][$index]['taken'] = true;
-                $treffer = true;
-            }
-        }
-        unset($p);
-        if ($treffer) {
-            $this->MailWriteProposals($alle);
-        }
-        return $treffer;
+            unset($p);
+            // Nur „wahr", wenn es auch gespeichert wurde: der Aufrufer legt danach
+            // eine Notiz an und darf nicht glauben, der Vorschlag sei erledigt.
+            return $treffer && $this->MailWriteProposals($alle);
+        }, false);
     }
 
     // ────────────────────────────── Kleinteile ──────────────────────────────
@@ -2065,7 +2168,7 @@ trait MailScan
                 unset($karte[self::MAIL_FAIL_KEY]);
             }
         }
-        $this->MailWriteAttr('MailSeenUIDs', json_encode($karte, JSON_UNESCAPED_UNICODE));
+        $this->MailWriteJsonAttr('MailSeenUIDs', $karte);
     }
 
     /** Fehlversuch einer Mail vermerken; liefert den neuen Stand des Zaehlers. */
@@ -2083,7 +2186,7 @@ trait MailScan
             $fehl = array_slice($fehl, -50, null, true);
         }
         $karte[self::MAIL_FAIL_KEY] = $fehl;
-        $this->MailWriteAttr('MailSeenUIDs', json_encode($karte, JSON_UNESCAPED_UNICODE));
+        $this->MailWriteJsonAttr('MailSeenUIDs', $karte);
         return $n;
     }
 
@@ -2107,6 +2210,6 @@ trait MailScan
         $stand = is_array($stand) ? $stand : [];
         $heute = date('Y-m-d');
         $n = ((string)($stand['d'] ?? '') === $heute) ? (int)($stand['n'] ?? 0) : 0;
-        $this->MailWriteAttr('MailDayCount', json_encode(['d' => $heute, 'n' => $n + 1]));
+        $this->MailWriteJsonAttr('MailDayCount', ['d' => $heute, 'n' => $n + 1]);
     }
 }

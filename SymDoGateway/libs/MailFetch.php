@@ -168,6 +168,20 @@ trait MailFetch
                 if ($base64 === '') {
                     continue;
                 }
+                // Der Absender bestimmt den gemeldeten Typ — die Bytes entscheiden.
+                // Dieselbe Wache wie in beiden Webhook-Wegen (MailHookParse,
+                // MailHookFetchAttachment); der Postfach-Weg war der einzige ohne.
+                // Ohne sie geht eine als „application/pdf" deklarierte beliebige
+                // Datei an den Anbieter, der Aufruf scheitert, wird MAIL_FAIL_MAX-mal
+                // wiederholt und kostet jedes Mal Geld.
+                $kopf = (string)base64_decode(substr($base64, 0, 16), true);
+                $istPdf  = str_starts_with($kopf, '%PDF-');
+                $istBild = str_starts_with($kopf, "\xFF\xD8\xFF") || str_starts_with($kopf, "\x89PNG\r\n\x1a\n");
+                if (($wahl['kind'] === 'pdf' && !$istPdf) || ($wahl['kind'] === 'image' && !$istBild)) {
+                    $this->SendDebug('MailFetch', 'Anhang ' . ($wahl['name'] !== '' ? $wahl['name'] : $wahl['part'])
+                        . ' passt nicht zum gemeldeten Typ', 0);
+                    continue;
+                }
                 // Letzte Wache, und die genaueste: die echten Kantenlaengen (siehe
                 // MailImageUsable). Die Bytes liegen ohnehin vor, die Pruefung kostet
                 // also nur den Dekodierschritt.
