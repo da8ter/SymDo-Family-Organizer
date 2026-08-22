@@ -1497,19 +1497,6 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('The file is then stored below "Notizen" as soon as the mail is analyzed — even if the suggestion is later discarded. Unused files are removed automatically.')
                 ],
                 [
-                    'type'     => 'SelectInstance',
-                    'name'     => 'CalNotifyVisuID',
-                    'width'    => '600px',
-                    // Nur die Kachel-Visualisierung versteht VISU_PostNotification;
-                    // jede andere Instanz liesse den Erinnerungs-Timer werfen.
-                    'validModules' => ['{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}'],
-                    'caption'  => $this->Translate('Visualization instance for appointment reminders')
-                ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Reminders for appointments are delivered the same way as task reminders: as a notification to this visualization instance. Without an instance a reminder stays pending instead of being lost.')
-                ],
-                [
                     'type'  => 'RowLayout',
                     'items' => [
                         [
@@ -1872,7 +1859,17 @@ class SymDoGateway extends IPSModuleStrict
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Notifications'),
             'expanded' => false,
+            // Zwei Themen, denn es sind zwei voneinander unabhaengige Wege: Web Push
+            // geht an die Geraete, die sich selbst angemeldet haben, und
+            // VISU_PostNotification an EINE Symcon-Visualisierung. Sie teilen weder
+            // Schalter noch Empfaenger — nebeneinander in einer Liste sah das aus wie
+            // ein Weg mit vielen Einstellungen.
             'items'    => [
+                [
+                    'type'    => 'Label',
+                    'bold'    => true,
+                    'caption' => $this->Translate('1. Web app notifications')
+                ],
                 $einleitung,
                 [
                     'type'    => 'Label',
@@ -1914,6 +1911,28 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Label',
                     'name'    => 'PushStatus',
                     'caption' => ' '
+                ],
+                [
+                    'type'    => 'Label',
+                    'bold'    => true,
+                    'caption' => $this->Translate('2. Visualization notifications')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('This way does not go to the web app but to a Symcon visualization — the same way a task reminder takes. It stood in the mail panel before, where it had nothing to do with the subject.')
+                ],
+                [
+                    'type'     => 'SelectInstance',
+                    'name'     => 'CalNotifyVisuID',
+                    'width'    => '600px',
+                    // Nur die Kachel-Visualisierung versteht VISU_PostNotification;
+                    // jede andere Instanz liesse den Erinnerungs-Timer werfen.
+                    'validModules' => ['{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}'],
+                    'caption'  => $this->Translate('Visualization instance for appointment reminders')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Reminders for appointments are delivered the same way as task reminders: as a notification to this visualization instance. Without an instance a reminder stays pending instead of being lost.')
                 ],
             ],
         ];
