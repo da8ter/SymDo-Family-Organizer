@@ -46,7 +46,7 @@ trait Tts
      * Stabilitaet (siehe TtsElevenSettings). 0,2 entspricht 20 von 100 in der
      * ElevenLabs-Oberflaeche.
      */
-    private const TTS_ELEVEN_STYLE = 0.2;
+    private const TTS_ELEVEN_STYLE = 0.02;
 
     /**
      * Tonqualitaet bei ElevenLabs, und was ein Zeichen dann kostet.
