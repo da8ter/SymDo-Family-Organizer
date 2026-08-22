@@ -40,6 +40,33 @@ trait Tts
      */
     private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
 
+    /**
+     * Stimmen von gpt-4o-mini-tts. Feste Liste, weil sie zum MODELL gehoert und nicht
+     * zum Konto — anders als bei ElevenLabs.
+     *
+     * Zwoelf, nicht dreizehn: das sind die, die hier nachweislich benutzt oder
+     * abgehoert wurden (acht in den Personas, dazu ballad, coral, marin und echo aus
+     * den Hoerproben). Das Modell hat noch eine weitere, die ich nicht benennen kann
+     * — eine geratene Kennung waere eine Auswahl, die beim Anbieter abgelehnt wird.
+     */
+    private const TTS_OPENAI_VOICES = [
+        'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
+        'marin', 'nova', 'onyx', 'sage', 'shimmer', 'verse',
+    ];
+
+    /**
+     * Die deutschen neuronalen Stimmen von Azure. Ebenfalls fest: sie gehoeren zum
+     * Dienst. „Multilingual" spricht mehrere Sprachen mit derselben Stimme.
+     */
+    private const TTS_AZURE_GERMAN_VOICES = [
+        'de-DE-KatjaNeural', 'de-DE-ConradNeural', 'de-DE-ChristophNeural',
+        'de-DE-KillianNeural', 'de-DE-RalfNeural', 'de-DE-KasperNeural',
+        'de-DE-BerndNeural', 'de-DE-AmalaNeural', 'de-DE-ElkeNeural',
+        'de-DE-GiselaNeural', 'de-DE-KlarissaNeural', 'de-DE-LouisaNeural',
+        'de-DE-MajaNeural', 'de-DE-TanjaNeural', 'de-DE-FlorianMultilingualNeural',
+        'de-DE-SeraphinaMultilingualNeural',
+    ];
+
 
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
@@ -77,6 +104,10 @@ trait Tts
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
+        // Die abgerufenen ElevenLabs-Stimmen. Abgelegt, damit die Personas-Liste sie
+        // als Auswahl anbieten kann — ein HTTP-Abruf bei jedem Formularaufbau waere
+        // eine Wartezeit bei jedem Oeffnen, auch wenn niemand Stimmen sucht.
+        $this->RegisterAttributeString('TtsElevenVoiceCache', '[]');
     }
 
     /**
@@ -633,7 +664,15 @@ trait Tts
         if ($key === '') {
             return $this->Translate('No ElevenLabs key entered.');
         }
-        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v1/voices', [
+        // v2 statt v1, wegen `voice_type`: gefragt sind NUR die Stimmen aus „Meine
+        // Stimmen" — nicht die Vorgabestimmen, die jedes Konto bekommt, und nicht
+        // die oeffentliche Bibliothek. Laut Doku ist `non-community` genau das:
+        // „personal und workspace zusammen (ohne Kopien aus der Bibliothek)".
+        // Sollte die Liste anders aussehen als im Konto, sind die Alternativen
+        // `personal` (nur eigene, ohne Arbeitsbereich) und `non-default`
+        // (alles ausser den Vorgabestimmen, also MIT gespeicherten aus der
+        // Bibliothek). Eine Zeile, und nur diese eine.
+        $resp = $this->TtsHttpGet('https://api.elevenlabs.io/v2/voices?voice_type=non-community&page_size=100', [
             'xi-api-key: ' . $key,
             'Accept: application/json',
             'User-Agent: SymDoGateway',
@@ -642,27 +681,78 @@ trait Tts
         if (($resp['err'] ?? '') !== '' || $status !== 200) {
             return sprintf($this->Translate('Could not fetch the voices (HTTP %d).'), $status);
         }
-        $d = json_decode((string)($resp['body'] ?? ''), true);
-        $stimmen = is_array($d) && is_array($d['voices'] ?? null) ? $d['voices'] : [];
+        $stimmen = $this->TtsElevenParseVoices((string)($resp['body'] ?? ''));
         if ($stimmen === []) {
-            return $this->Translate('The key is valid, but the account holds no voices.');
+            return $this->Translate('The key works, but "My Voices" is empty in this account.');
         }
+        // Ablegen, damit die Personas-Liste sie als Auswahl anbieten kann. Scheitert
+        // das Schreiben (Attribut vor dem Kernel-Neustart), bleibt die Anzeige
+        // trotzdem — sie ist der eigentliche Zweck des Knopfes.
+        @$this->WriteAttributeString('TtsElevenVoiceCache',
+            (string)json_encode($stimmen, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $zeilen = [];
-        foreach (array_slice($stimmen, 0, 40) as $v) {
+        foreach ($stimmen as $v) {
+            $zeilen[] = $v['name'] . ($v['info'] !== '' ? ' (' . $v['info'] . ')' : '') . ' — ' . $v['id'];
+        }
+        return implode("\n", $zeilen);
+    }
+
+    /**
+     * Die Antwort auf das Wesentliche eindampfen: Kennung, Name, ein paar Merkmale.
+     *
+     * Getrennt, weil daran zwei Dinge haengen — die Anzeige im Formular und der
+     * Zwischenspeicher fuer die Personas-Liste. Beide sollen dasselbe sehen.
+     *
+     * @return list<array{id:string,name:string,info:string}>
+     */
+    private function TtsElevenParseVoices(string $rumpf): array
+    {
+        $d = json_decode($rumpf, true);
+        $roh = is_array($d) && is_array($d['voices'] ?? null) ? $d['voices'] : [];
+        $raus = [];
+        foreach (array_slice($roh, 0, 100) as $v) {
             if (!is_array($v)) {
                 continue;
             }
-            $sprachen = [];
-            foreach ((array)($v['labels'] ?? []) as $k => $w) {
-                if (is_scalar($w) && in_array((string)$k, ['language', 'accent', 'gender'], true)) {
-                    $sprachen[] = (string)$w;
+            $id = trim((string)($v['voice_id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $merkmale = [];
+            foreach (['language', 'accent', 'gender'] as $k) {
+                $w = ((array)($v['labels'] ?? []))[$k] ?? null;
+                if (is_scalar($w) && trim((string)$w) !== '') {
+                    $merkmale[] = trim((string)$w);
                 }
             }
-            $zeilen[] = (string)($v['name'] ?? '?')
-                . ($sprachen !== [] ? ' (' . implode(', ', $sprachen) . ')' : '')
-                . ' — ' . (string)($v['voice_id'] ?? '?');
+            $raus[] = [
+                'id'   => $id,
+                'name' => trim((string)($v['name'] ?? '')) !== '' ? trim((string)$v['name']) : $id,
+                'info' => implode(', ', $merkmale),
+            ];
         }
-        return implode("\n", $zeilen);
+        return $raus;
+    }
+
+    /**
+     * Die abgelegten Stimmen — Quelle der Auswahlspalte in der Personas-Liste.
+     *
+     * @return list<array{id:string,name:string,info:string}>
+     */
+    private function TtsElevenCachedVoices(): array
+    {
+        $roh = json_decode($this->ReadAttributeStringSafe('TtsElevenVoiceCache', '[]'), true);
+        if (!is_array($roh)) {
+            return [];
+        }
+        $raus = [];
+        foreach ($roh as $v) {
+            if (is_array($v) && trim((string)($v['id'] ?? '')) !== '') {
+                $raus[] = ['id' => (string)$v['id'], 'name' => (string)($v['name'] ?? $v['id']),
+                           'info' => (string)($v['info'] ?? '')];
+            }
+        }
+        return $raus;
     }
 
     /**

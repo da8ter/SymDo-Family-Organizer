@@ -1856,6 +1856,122 @@ class SymDoGateway extends IPSModuleStrict
      * Übersicht) — hier steht nur, WAS eine Nachricht auslöst. Das ist die richtige
      * Trennung: Die Erlaubnis kann technisch nur der Browser des Geräts geben.
      */
+    /**
+     * „Personas bearbeiten": je Persona eine Zeile, je Anbieter eine Spalte.
+     *
+     * Die eingebauten Stimmen stehen in BriefingPersonas(); leer gelassene Zellen
+     * heissen „wie eingebaut" und werden nicht gespeichert — so bleibt die Vorgabe
+     * die Wahrheit, auch wenn sie sich in einer spaeteren Fassung aendert.
+     *
+     * Bei ElevenLabs kommen die Auswahlmoeglichkeiten aus dem Konto und nicht aus
+     * einer festen Liste: die Kennungen sind kontoeigen. Sie stammen aus dem letzten
+     * „Stimmen des Kontos abrufen" (Rubrik „Meine Stimmen"). Vor dem ersten Abruf
+     * bleibt die Spalte leer und nennt den Grund — eine Auswahl mit erfundenen
+     * Kennungen waere schlimmer als keine.
+     */
+    private function GetPersonaEditor(): array
+    {
+        // Vor dem Kernel-Neustart gibt es die Property nicht; ein Listenfeld darauf
+        // liesse „Uebernehmen" scheitern. Dann nur der Hinweis (Muster wie oben).
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('BriefingVoices', $cfg)) {
+            return [
+                'type'    => 'Label',
+                'caption' => $this->Translate('The persona editor appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
+            ];
+        }
+
+        $openai = [];
+        foreach (self::TTS_OPENAI_VOICES as $v) {
+            $openai[] = ['caption' => $v, 'value' => $v];
+        }
+        $azure = [];
+        foreach (self::TTS_AZURE_GERMAN_VOICES as $v) {
+            // Ohne den Vorsatz „de-DE-" und das Anhaengsel „Neural" liest sich die
+            // Spalte als Namensliste; gespeichert wird die vollstaendige Kennung.
+            $azure[] = ['caption' => str_replace(['de-DE-', 'Neural'], '', $v), 'value' => $v];
+        }
+        $eleven = [];
+        foreach ($this->TtsElevenCachedVoices() as $v) {
+            $eleven[] = [
+                'caption' => $v['name'] . ($v['info'] !== '' ? ' (' . $v['info'] . ')' : ''),
+                'value'   => $v['id'],
+            ];
+        }
+        // „Wie eingebaut" muss waehlbar BLEIBEN, sonst kann man eine Aenderung nicht
+        // zurueknehmen. Steht bewusst oben.
+        $wieEingebaut = ['caption' => $this->Translate('— as built in —'), 'value' => ''];
+        array_unshift($openai, $wieEingebaut);
+        array_unshift($azure, $wieEingebaut);
+        array_unshift($eleven, ['caption' => $this->Translate('— the voice set above —'), 'value' => '']);
+
+        // Zeilen: immer ALLE Personas, mit dem gespeicherten Stand gefuellt. Eine
+        // fehlende Zeile waere sonst eine Persona, die man nicht einstellen kann.
+        $stand = json_decode((string)($cfg['BriefingVoices'] ?? '[]'), true);
+        $nach  = [];
+        foreach (is_array($stand) ? $stand : [] as $z) {
+            if (is_array($z) && trim((string)($z['tone'] ?? '')) !== '') {
+                $nach[(string)$z['tone']] = $z;
+            }
+        }
+        $zeilen = [];
+        foreach ($this->BriefingPersonas() as $p) {
+            $z = $nach[$p['key']] ?? [];
+            $zeilen[] = [
+                'tone'    => $p['key'],
+                'persona' => $this->Translate($p['caption']),
+                'openai'  => (string)($z['openai'] ?? ''),
+                'azure'   => (string)($z['azure'] ?? ''),
+                'eleven'  => (string)($z['eleven'] ?? ''),
+                // Die eingebauten Stimmen als Anzeige daneben: sonst sieht man bei
+                // „wie eingebaut" nicht, WAS eingebaut ist.
+                'vorgabe' => $p['openai'] . ' / ' . str_replace(['de-DE-', 'Neural'], '', $p['azure']),
+            ];
+        }
+
+        return [
+            'type'    => 'PopupButton',
+            'caption' => $this->Translate('Edit personas'),
+            'popup'   => [
+                'caption' => $this->Translate('Voice per persona and provider'),
+                'items'   => [
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('One row per persona, one column per provider. An empty cell means the built-in voice — the column "Built in" shows which that is (OpenAI / Azure). Only the provider currently selected above is actually used; the other columns are kept for a later switch.')
+                    ],
+                    [
+                        'type'    => 'List',
+                        'name'    => 'BriefingVoices',
+                        'rowCount' => count($zeilen),
+                        'add'     => false,
+                        'delete'  => false,
+                        'columns' => [
+                            ['caption' => $this->Translate('Persona'), 'name' => 'persona', 'width' => '170px'],
+                            ['caption' => $this->Translate('Built in'), 'name' => 'vorgabe', 'width' => '200px'],
+                            ['caption' => 'OpenAI', 'name' => 'openai', 'width' => '160px',
+                             'edit' => ['type' => 'Select', 'options' => $openai]],
+                            ['caption' => 'Azure', 'name' => 'azure', 'width' => '200px',
+                             'edit' => ['type' => 'Select', 'options' => $azure]],
+                            ['caption' => 'ElevenLabs', 'name' => 'eleven', 'width' => '220px',
+                             'edit' => ['type' => 'Select', 'options' => $eleven]],
+                            // Der Schluessel reist mit, sonst weiss das Speichern nicht,
+                            // welche Zeile welche Persona ist. Unsichtbar: er ist
+                            // Technik, nicht Bedienung.
+                            ['caption' => 'tone', 'name' => 'tone', 'width' => '1px', 'visible' => false],
+                        ],
+                        'values'  => $zeilen
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $eleven === [] || count($eleven) === 1
+                            ? $this->Translate('The ElevenLabs column is empty: press "List voices of the account" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from "My Voices" are offered.')
+                            : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), count($eleven) - 1)
+                    ],
+                ]
+            ]
+        ];
+    }
+
     private function GetPushPanel(): array
     {
         $einleitung = [
@@ -2039,6 +2155,7 @@ class SymDoGateway extends IPSModuleStrict
                         ['caption' => $this->Translate('Teen slang'),         'value' => 'digga']
                     ]
                 ],
+                $this->GetPersonaEditor(),
                 [
                     'type'    => 'SelectTime',
                     'name'    => 'BriefingTime',

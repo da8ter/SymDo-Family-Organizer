@@ -79,6 +79,10 @@ trait Briefing
         // SelectTime traegt seinen Wert als JSON, genau wie SelectDate.
         $this->RegisterPropertyString('BriefingTime', '{"hour":5,"minute":30,"second":0}');
         $this->RegisterPropertyString('BriefingTone', 'neutral');
+        // Stimme je Persona und Anbieter, vom Nutzer aenderbar. LEER heisst „wie
+        // eingebaut" — die Vorgaben stehen in BriefingPersonas() und bleiben damit
+        // die Wahrheit, solange niemand etwas umstellt.
+        $this->RegisterPropertyString('BriefingVoices', '[]');
         // Abendliche Vorschau auf morgen: eigener Schalter, eigene Uhrzeit. Ab dieser
         // Zeit zeigen die Oberflaechen den morgigen Text statt des heutigen — der Tag
         // ist dann gelaufen, und was zaehlt, ist der naechste.
@@ -1316,11 +1320,13 @@ trait Briefing
             $stimme    = $this->BriefingAzureVoice();
             $anweisung = $this->BriefingAzureSsml();
         } elseif ($anbieter === 'elevenlabs') {
-            // Dort gibt es keine Stimme JE PERSONA: welche Stimmen ein Konto hat,
-            // weiss nur das Konto. Es gilt die eingestellte, und der Ausdruck kommt
-            // aus den Reglern — TtsElevenSettings liest dafuer den deutschen
-            // Anweisungssatz der Persona (leise/laut/sachlich).
-            $stimme    = '';
+            // Eine Stimme je Persona gibt es hier nur, wenn sie im Personas-Editor
+            // zugeordnet wurde — die Kennungen sind kontoeigen, eine eingebaute
+            // Vorgabe kann es also nicht geben. Ohne Zuordnung bleibt es leer und
+            // TtsRequestEleven nimmt die im Anbieter-Feld eingestellte Stimme.
+            // Der Ausdruck kommt in jedem Fall aus den Reglern: TtsElevenSettings
+            // liest dafuer den deutschen Anweisungssatz der Persona.
+            $stimme    = $this->BriefingElevenVoice();
             $anweisung = $this->BriefingSpeechStyle();
         } else {
             $stimme    = $this->BriefingVoice();
@@ -1445,32 +1451,125 @@ trait Briefing
         return (bool)$this->BriefingProp('BriefingAudioEnabled', true) && $this->TtsEnabled();
     }
 
+    /**
+     * Alle Personas mit ihren EINGEBAUTEN Stimmen — die eine Quelle dafuer.
+     *
+     * Vorher standen sie in drei switch-Blöcken und einmal als Formular-Auswahl,
+     * also viermal. Eine neue Persona hiess: vier Stellen finden. Jetzt hier, und
+     * Formular wie Zuordnung lesen daraus.
+     *
+     * `eleven` bleibt leer: welche Stimmen ein ElevenLabs-Konto hat, weiss nur das
+     * Konto. Ohne Eintrag gilt dort die im Anbieter-Feld eingestellte Stimme.
+     *
+     * @return list<array{key:string,caption:string,openai:string,azure:string,eleven:string}>
+     */
+    private function BriefingPersonas(): array
+    {
+        return [
+            ['key' => 'neutral', 'caption' => 'Matter-of-fact', 'openai' => 'alloy',
+             'azure' => 'de-DE-KatjaNeural', 'eleven' => ''],
+            ['key' => 'formal', 'caption' => 'Formal', 'openai' => 'sage',
+             'azure' => 'de-DE-ChristophNeural', 'eleven' => ''],
+            // Conrad ist die einzige deutsche Azure-Stimme MIT Stilen (cheerful, sad)
+            // und klingt gesetzt — beides passt zum Butler.
+            ['key' => 'butler', 'caption' => 'Butler', 'openai' => 'ash',
+             'azure' => 'de-DE-ConradNeural', 'eleven' => ''],
+            ['key' => 'buddy', 'caption' => 'Buddy', 'openai' => 'nova',
+             'azure' => 'de-DE-KillianNeural', 'eleven' => ''],
+            ['key' => 'funny', 'caption' => 'Funny', 'openai' => 'fable',
+             'azure' => 'de-DE-FlorianMultilingualNeural', 'eleven' => ''],
+            ['key' => 'drill', 'caption' => 'Drill sergeant', 'openai' => 'onyx',
+             'azure' => 'de-DE-RalfNeural', 'eleven' => ''],
+            // Deutlich weiblich; „coral" klang dafuer zu neutral.
+            ['key' => 'coach', 'caption' => 'Motivational coach', 'openai' => 'shimmer',
+             'azure' => 'de-DE-AmalaNeural', 'eleven' => ''],
+            // Ebenfalls weiblich. Von den 13 OpenAI-Stimmen sind nur „nova" und
+            // „shimmer" durchgaengig als weiblich beschrieben — die Doku sagt zum
+            // Geschlecht nichts. „shimmer" gilt als weich und sanft; fuer einen
+            // muede-seufzenden Vortrag passt das. Dass sie sich die Stimme mit der
+            // Trainerin teilt, faellt nicht auf: die Anweisung macht daraus zwei ganz
+            // andere Vortraege, und der Ton-Zwischenspeicher unterscheidet danach.
+            ['key' => 'jammerlappen', 'caption' => 'Whiner', 'openai' => 'shimmer',
+             'azure' => 'de-DE-SeraphinaMultilingualNeural', 'eleven' => ''],
+            // Ein Fuenfzehnjaehriger ist unter den 13 Stimmen nicht dabei — keine
+            // klingt jung. „verse" ist von den maennlichen die beweglichste; das
+            // Jugendliche muss die Anweisung machen.
+            ['key' => 'digga', 'caption' => 'Teen slang', 'openai' => 'verse',
+             'azure' => 'de-DE-KasperNeural', 'eleven' => ''],
+        ];
+    }
+
+    /**
+     * Die Zuordnung des Nutzers, Persona -> Anbieter -> Stimme.
+     *
+     * Leere Zellen bedeuten „wie eingebaut" und werden hier gar nicht uebernommen —
+     * so bleibt die Vorgabe die Wahrheit, auch wenn sich die eingebaute Stimme
+     * spaeter aendert.
+     *
+     * @return array<string,array<string,string>>
+     */
+    private function BriefingVoiceMap(): array
+    {
+        $roh = json_decode((string)$this->BriefingProp('BriefingVoices', '[]'), true);
+        if (!is_array($roh)) {
+            return [];
+        }
+        $karte = [];
+        foreach ($roh as $zeile) {
+            if (!is_array($zeile)) {
+                continue;
+            }
+            $ton = trim((string)($zeile['tone'] ?? ''));
+            if ($ton === '') {
+                continue;
+            }
+            foreach (['openai', 'azure', 'eleven'] as $anbieter) {
+                $wert = trim((string)($zeile[$anbieter] ?? ''));
+                if ($wert !== '') {
+                    $karte[$ton][$anbieter] = $wert;
+                }
+            }
+        }
+        return $karte;
+    }
+
+    /** Die eingestellte Persona, oder „neutral". */
+    private function BriefingToneKey(): string
+    {
+        return (string)$this->BriefingProp('BriefingTone', 'neutral');
+    }
+
+    /**
+     * Stimme fuer Persona und Anbieter: erst die Zuordnung des Nutzers, dann die
+     * eingebaute Vorgabe.
+     */
+    private function BriefingVoiceFor(string $anbieter): string
+    {
+        $ton = $this->BriefingToneKey();
+        $karte = $this->BriefingVoiceMap();
+        if (($karte[$ton][$anbieter] ?? '') !== '') {
+            return (string)$karte[$ton][$anbieter];
+        }
+        foreach ($this->BriefingPersonas() as $p) {
+            if ($p['key'] === $ton) {
+                return (string)$p[$anbieter];
+            }
+        }
+        // Unbekannte Persona: die Vorgabe der ersten Zeile (neutral).
+        $erste = $this->BriefingPersonas()[0];
+        return (string)$erste[$anbieter];
+    }
+
     /** Die Stimme zum Tonfall. Namen des Modells gpt-4o-mini-tts. */
     private function BriefingVoice(): string
     {
-        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
-            case 'formal': return 'sage';
-            case 'butler': return 'ash';
-            case 'buddy':  return 'nova';
-            case 'funny':  return 'fable';
-            case 'drill':  return 'onyx';
-            // Deutlich weiblich; „coral" klang dafuer zu neutral.
-            case 'coach':  return 'shimmer';
-            // Ebenfalls weiblich. Von den 13 Stimmen des Modells sind nur „nova" und
-            // „shimmer" durchgaengig als weiblich beschrieben — die OpenAI-Doku selbst
-            // sagt zum Geschlecht nichts. „nova" gilt als hell und energisch, „shimmer"
-            // als weich und sanft; fuer einen muede-seufzenden Vortrag passt letztere.
-            // Dass sie sich die Stimme mit der Trainerin teilt, faellt nicht auf: die
-            // Anweisung in BriefingSpeechStyle macht daraus zwei ganz andere Vortraege,
-            // und der Ton-Zwischenspeicher unterscheidet ohnehin nach Anweisung.
-            case 'jammerlappen': return 'shimmer';
-            // Ein Fuenfzehnjaehriger ist unter den 13 Stimmen nicht dabei — keine klingt
-            // jung. „verse" ist von den maennlichen die beweglichste und nimmt eine Rolle
-            // am ehesten an; das Jugendliche muss die Anweisung machen. Alternativen ohne
-            // weitere Aenderung: „echo" (heller, flacher) oder „ballad" (mehr Auf und Ab).
-            case 'digga':  return 'verse';
-            default:       return 'alloy';
-        }
+        return $this->BriefingVoiceFor('openai');
+    }
+
+    /** Stimm-Kennung bei ElevenLabs. Leer = die im Anbieter-Feld eingestellte. */
+    private function BriefingElevenVoice(): string
+    {
+        return $this->BriefingVoiceFor('eleven');
     }
 
     /**
@@ -1487,19 +1586,7 @@ trait Briefing
      */
     private function BriefingAzureVoice(): string
     {
-        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
-            case 'formal': return 'de-DE-ChristophNeural';
-            // Conrad ist die einzige deutsche Stimme MIT Stilen (cheerful, sad) und
-            // klingt gesetzt — beides passt zum Butler.
-            case 'butler': return 'de-DE-ConradNeural';
-            case 'buddy':  return 'de-DE-KillianNeural';
-            case 'funny':  return 'de-DE-FlorianMultilingualNeural';
-            case 'drill':  return 'de-DE-RalfNeural';
-            case 'coach':  return 'de-DE-AmalaNeural';
-            case 'jammerlappen': return 'de-DE-SeraphinaMultilingualNeural';
-            case 'digga':  return 'de-DE-KasperNeural';
-            default:       return 'de-DE-KatjaNeural';
-        }
+        return $this->BriefingVoiceFor('azure');
     }
 
     /**
