@@ -1131,7 +1131,20 @@ class SymDoGateway extends IPSModuleStrict
         $state = (string)($_GET['state'] ?? '');
 
         if ($error !== '') {
-            echo '<html><body><h1>' . $this->Translate('Authorization failed') . '</h1><p>' . htmlspecialchars($error) . '</p></body></html>';
+            // Die Beschreibung MUSS mit: „invalid_request" allein sagt nichts, der
+            // Grund steht im AADSTS-Code darin (50011 = Umleitungs-URI passt nicht,
+            // 7000218 = oeffentliche Clientflows nicht erlaubt, 50020 = privates
+            // Konto in einem Mandanten gesucht). Ohne sie sucht man blind — genau
+            // das ist am 22.08.2026 passiert.
+            $beschreibung = trim((string)($_GET['error_description'] ?? ''));
+            $spur = trim((string)($_GET['error_uri'] ?? ''));
+            $this->SendDebug('OAuth', 'Rueckleitung mit Fehler: ' . $error . ' — ' . $beschreibung, 0);
+            echo '<html><body style="font-family:sans-serif;padding:1.5rem;line-height:1.5">'
+                . '<h1>' . $this->Translate('Authorization failed') . '</h1>'
+                . '<p><b>' . htmlspecialchars($error) . '</b></p>'
+                . ($beschreibung !== '' ? '<p>' . htmlspecialchars($beschreibung) . '</p>' : '')
+                . ($spur !== '' ? '<p><a href="' . htmlspecialchars($spur) . '">' . htmlspecialchars($spur) . '</a></p>' : '')
+                . '</body></html>';
             return;
         }
 
