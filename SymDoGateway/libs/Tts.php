@@ -29,6 +29,9 @@ trait Tts
     /** So viele Schnipsel bleiben liegen; darüber fliegt der älteste raus. */
     private const TTS_CACHE_MAX = 400;
 
+    /** Vorgabe, wenn keine Persona-Stimme mitkommt. Neutral und gut verstaendlich. */
+    private const TTS_AZURE_VOICE = 'de-DE-KatjaNeural';
+
 
     private const TTS_CATEGORY_NAME = 'Sprachausgabe';
 
@@ -46,6 +49,15 @@ trait Tts
         // gern mit englischem Einschlag.
         $this->RegisterPropertyString('TtsInstructions', self::TTS_INSTRUCTIONS);
         $this->RegisterPropertyString('TtsModel', 'gpt-4o-mini-tts');
+        // Zweiter Anbieter. Grund fuer die Wahl: bei OpenAI wird `speed` ignoriert
+        // (gemessen), Azure steuert Tempo und Pausen ueber SSML verbindlich, und es
+        // hat 17 deutsche Stimmen statt 13 gemischtsprachiger. ACHTUNG bei den
+        // Stilen: `mstts:express-as` kennen die DEUTSCHEN Stimmen fast nicht — nur
+        // ConradNeural, und dort nur „cheerful" und „sad". Der Ausdruck kommt hier
+        // also aus Stimmwahl plus prosody, nicht aus Stilnamen.
+        $this->RegisterPropertyString('TtsProvider', 'openai');   // openai | azure
+        $this->RegisterPropertyString('TtsAzureKey', '');
+        $this->RegisterPropertyString('TtsAzureRegion', 'westeurope');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -57,9 +69,40 @@ trait Tts
      */
     private function TtsEnabled(): bool
     {
+        if (!$this->TtsStorageReady()) {
+            return false;
+        }
+        if ($this->TtsProvider() === 'azure') {
+            // Azure haengt NICHT am KI-Anbieter: die Sprachausgabe ist ein eigener
+            // Dienst mit eigenem Schluessel. Man kann also mit Anthropic texten und
+            // mit Azure sprechen — bei OpenAI ging das nie, dort ist es derselbe
+            // Schluessel.
+            return $this->TtsSetting('TtsAzureKey', '') !== ''
+                && $this->TtsSetting('TtsAzureRegion', '') !== '';
+        }
         return $this->ReadPropertyString('AiProvider') === 'openai'
             && trim($this->ReadPropertyString('AiOpenAIKey')) !== ''
-            && $this->TtsStorageReady();
+            && true;
+    }
+
+    /** openai | azure — ueber TtsSetting, weil die Eigenschaft neu ist. */
+    private function TtsProvider(): string
+    {
+        return $this->TtsSetting('TtsProvider', 'openai') === 'azure' ? 'azure' : 'openai';
+    }
+
+    /**
+     * Das Tonformat haengt am Anbieter, nicht am Geschmack: AAC gibt es bei Azure
+     * nicht. Wer den Anbieter wechselt, bekommt also MP3 — und weil das im
+     * Schluessel steckt (TtsHash), entsteht die Aufnahme sauber neu statt aus dem
+     * Zwischenspeicher der anderen Seite zu kommen.
+     */
+    private function TtsFormat(string $wunsch): string
+    {
+        if ($this->TtsProvider() !== 'azure') {
+            return $wunsch;
+        }
+        return $wunsch === 'flac' ? 'flac' : 'mp3';
     }
 
     /**
@@ -313,6 +356,9 @@ trait Tts
     private function TtsHash(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
         return substr(hash('sha256',
+            // Der Anbieter gehoert dazu, aus demselben Grund wie das Format: die
+            // Aufnahme ist eine andere, der Text derselbe.
+            $this->TtsProvider() . '|' .
             $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts') . '|' .
             ($stimme !== '' ? $stimme : $this->TtsSetting('TtsVoice', 'alloy')) . '|' .
             ($anweisung !== '' ? $anweisung : $this->TtsSetting('TtsInstructions', self::TTS_INSTRUCTIONS)) . '|' .
@@ -385,6 +431,9 @@ trait Tts
      */
     private function TtsRequestAudio(string $text, string $stimme = '', string $anweisung = '', string $format = 'mp3'): string
     {
+        if ($this->TtsProvider() === 'azure') {
+            return $this->TtsRequestAzure($text, $stimme, $anweisung, $format);
+        }
         $key = trim($this->ReadPropertyString('AiOpenAIKey'));
         if ($key === '') {
             return '';
@@ -426,6 +475,76 @@ trait Tts
             return '';
         }
         return $roh;
+    }
+
+    /**
+     * Azure Speech: EIN POST, SSML im Rumpf, Audiobytes zurueck.
+     *
+     * Zwei Dinge sind hier anders als bei OpenAI und beide sind Fallen:
+     *  - Die Vorleseanweisung ist kein Freitext, sondern Markup. Was dort ankommt,
+     *    ist ein SSML-Rumpf aus BriefingSpeechStyle bzw. der Vorgabe unten; ein
+     *    englischer Satz („speak slowly") hat hier keine Wirkung.
+     *  - Der Text MUSS maskiert werden. Ein „&" oder ein „<" im Briefing (etwa in
+     *    „Müller & Sohn") macht das SSML sonst ungueltig, und Azure antwortet mit
+     *    400 statt mit Ton.
+     */
+    private function TtsRequestAzure(string $text, string $stimme, string $anweisung, string $format): string
+    {
+        $key    = $this->TtsSetting('TtsAzureKey', '');
+        $region = $this->TtsSetting('TtsAzureRegion', '');
+        if ($key === '' || $region === '') {
+            return '';
+        }
+        $voice = $stimme !== '' ? $stimme : self::TTS_AZURE_VOICE;
+        // Die Sprache steckt im Stimmnamen („de-DE-KatjaNeural"); xml:lang muss dazu
+        // passen, sonst spricht die Stimme den Text mit fremder Lautung.
+        $lang = preg_match('/^([a-z]{2}-[A-Z]{2})-/', $voice, $m) === 1 ? $m[1] : 'de-DE';
+        $ssml = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+            . 'xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="' . $lang . '">'
+            . '<voice name="' . htmlspecialchars($voice, ENT_QUOTES | ENT_XML1, 'UTF-8') . '">'
+            . ($anweisung !== '' ? $anweisung : '<prosody rate="0%">%%TEXT%%</prosody>')
+            . '</voice></speak>';
+        // Der Text wird EINGESETZT, nicht angehaengt: die Anweisung bringt ihre
+        // eigenen Huellen mit (prosody, express-as), und der Text gehoert hinein.
+        $ssml = str_replace('%%TEXT%%', htmlspecialchars($text, ENT_QUOTES | ENT_XML1, 'UTF-8'), $ssml);
+
+        $resp = $this->AiHttpPost(
+            'https://' . rawurlencode($region) . '.tts.speech.microsoft.com/cognitiveservices/v1',
+            [
+                'Ocp-Apim-Subscription-Key: ' . $key,
+                // charset ausdruecklich: der Text ist voller Umlaute, und
+                // htmlspecialchars laesst die als rohes UTF-8 stehen (nur & < > " '
+                // werden maskiert). XML nimmt ohne Angabe zwar UTF-8 an, aber darauf
+                // soll sich hier nichts verlassen.
+                'Content-Type: application/ssml+xml; charset=utf-8',
+                'X-Microsoft-OutputFormat: ' . self::TtsAzureFormat($format),
+                'User-Agent: SymDoGateway',
+            ],
+            $ssml
+        );
+        $status = (int)($resp['status'] ?? 0);
+        $roh    = (string)($resp['body'] ?? '');
+        if (($resp['err'] ?? '') !== '') {
+            $this->SendDebug('TTS', 'Azure HTTP-Fehler: ' . $resp['err'], 0);
+            return '';
+        }
+        if ($status !== 200 || $roh === '') {
+            // Azure schickt im Fehlerfall eine knappe Textmeldung, kein JSON.
+            $this->SendDebug('TTS', 'Azure Antwort ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            return '';
+        }
+        return $roh;
+    }
+
+    /** Unsere Formatnamen auf die von Azure. */
+    private static function TtsAzureFormat(string $format): string
+    {
+        // 48 kbit/s statt der ueblichen 96: das Briefing ist Sprache, und die
+        // Hook-Ausgabe hat einen Deckel (siehe BriefingAudioBudget). Bei 24 kHz mono
+        // ist der Unterschied kaum hoerbar, die Datei aber halb so gross.
+        return $format === 'flac'
+            ? 'riff-24khz-16bit-mono-pcm'
+            : 'audio-24khz-48kbitrate-mono-mp3';
     }
 
     /** @param array<string, array{id:int,at:int}> $cache */

@@ -55,6 +55,9 @@ trait Briefing
      * BriefingAudio.
      */
     private const BRIEFING_TTS_BYTES_AAC = 652;
+
+    /** Dasselbe fuer Azure-MP3 mit 48 kbit/s — siehe Rechnung in BriefingAudioBudget. */
+    private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
     private const BRIEFING_TTS_FORMAT = 'aac';
 
@@ -1298,18 +1301,24 @@ trait Briefing
         if (mb_strlen($vorlesen) > self::BRIEFING_TTS_MAX) {
             $vorlesen = rtrim(mb_substr($vorlesen, 0, self::BRIEFING_TTS_MAX));
         }
-        $stimme    = $this->BriefingVoice();
-        $anweisung = $this->BriefingSpeechStyle();
+        // Stimme UND Vortrag haengen am Anbieter: dort Namen wie „shimmer" und ein
+        // englischer Anweisungssatz, hier „de-DE-KatjaNeural" und SSML. Beides an
+        // einer Stelle entschieden, damit nie eine OpenAI-Stimme mit SSML oder
+        // umgekehrt zusammenkommt.
+        $azure     = $this->TtsProvider() === 'azure';
+        $stimme    = $azure ? $this->BriefingAzureVoice() : $this->BriefingVoice();
+        $anweisung = $azure ? $this->BriefingAzureSsml()  : $this->BriefingSpeechStyle();
+        $format    = $this->TtsFormat(self::BRIEFING_TTS_FORMAT);
         $budget    = $this->BriefingAudioBudget();
-        $this->SendDebug('Briefing', sprintf('Ton: %s, %d Zeichen, Teilgroesse %d',
-            self::BRIEFING_TTS_FORMAT, mb_strlen($vorlesen), $budget), 0);
+        $this->SendDebug('Briefing', sprintf('Ton: %s/%s, Stimme %s, %d Zeichen, Teilgroesse %d',
+            $azure ? 'azure' : 'openai', $format, $stimme, mb_strlen($vorlesen), $budget), 0);
 
         $kennungen = [];
         foreach ($this->BriefingSpeechParts($vorlesen, $budget) as $teil) {
-            $hash = $this->TtsHash($teil, $stimme, $anweisung, self::BRIEFING_TTS_FORMAT);
+            $hash = $this->TtsHash($teil, $stimme, $anweisung, $format);
             $mid  = $this->TtsLookup($hash);
             if ($mid <= 0) {
-                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, self::BRIEFING_TTS_FORMAT);
+                $mid = $this->TtsProduce($hash, $teil, $stimme, $anweisung, $format);
             }
             if ($mid <= 0) {
                 $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
@@ -1345,7 +1354,15 @@ trait Briefing
     private function BriefingAudioBudget(): int
     {
         $platz = (int)($this->OutputLimit() * 0.8);
-        return max(200, (int)($platz / self::BRIEFING_TTS_BYTES_AAC));
+        // Bytes je Zeichen haengen am Anbieter, weil das Format daran haengt: AAC bei
+        // OpenAI (gemessen 652), MP3 mit 48 kbit/s bei Azure. Rechnung fuer Azure:
+        // 48000 Bit/s / 8 = 6000 B/s, und die Sprechgeschwindigkeit lag bei etwa
+        // 15 Zeichen/s → rund 400 B/Zeichen. Mit Luft: 420. Zu hoch angesetzt teilt
+        // die Aufnahme unnoetig, zu niedrig reisst die Ausgabegrenze.
+        $jeZeichen = $this->TtsProvider() === 'azure'
+            ? self::BRIEFING_TTS_BYTES_AZURE_MP3
+            : self::BRIEFING_TTS_BYTES_AAC;
+        return max(200, (int)($platz / $jeZeichen));
     }
 
     /**
@@ -1430,6 +1447,74 @@ trait Briefing
             // weitere Aenderung: „echo" (heller, flacher) oder „ballad" (mehr Auf und Ab).
             case 'digga':  return 'verse';
             default:       return 'alloy';
+        }
+    }
+
+    /**
+     * Die deutsche Azure-Stimme zum Tonfall.
+     *
+     * Getrennt von BriefingVoice, weil die Namen nichts miteinander zu tun haben:
+     * dort „shimmer", hier „de-DE-SeraphinaMultilingualNeural". Und getrennt
+     * gewaehlt, weil es hier ueberhaupt eine Wahl gibt — 17 deutsche Sprecher
+     * gegen 13 gemischtsprachige, davon nur zwei klar weiblich. Der Jammerlappen
+     * muss sich die Stimme nicht mehr mit der Trainerin teilen.
+     *
+     * Die Zuordnung ist ein erster Vorschlag nach Beschreibung, NICHT nach Gehoer —
+     * ich habe die Stimmen nicht gehoert. Jede Zeile ist einzeln austauschbar.
+     */
+    private function BriefingAzureVoice(): string
+    {
+        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
+            case 'formal': return 'de-DE-ChristophNeural';
+            // Conrad ist die einzige deutsche Stimme MIT Stilen (cheerful, sad) und
+            // klingt gesetzt — beides passt zum Butler.
+            case 'butler': return 'de-DE-ConradNeural';
+            case 'buddy':  return 'de-DE-KillianNeural';
+            case 'funny':  return 'de-DE-FlorianMultilingualNeural';
+            case 'drill':  return 'de-DE-RalfNeural';
+            case 'coach':  return 'de-DE-AmalaNeural';
+            case 'jammerlappen': return 'de-DE-SeraphinaMultilingualNeural';
+            case 'digga':  return 'de-DE-KasperNeural';
+            default:       return 'de-DE-KatjaNeural';
+        }
+    }
+
+    /**
+     * Der Vortrag als SSML — das Gegenstueck zu BriefingSpeechStyle fuer Azure.
+     *
+     * `%%TEXT%%` ist die Stelle, an die TtsRequestAzure den maskierten Text setzt.
+     * Gesteuert wird ueber `prosody` (rate, pitch, volume): das wirkt auf ALLEN
+     * neuronalen Stimmen und ist der Grund fuer den Anbieterwechsel — bei OpenAI
+     * ignoriert das Modell `speed` schlicht (gemessen am 21.08.2026).
+     *
+     * Stilnamen (`mstts:express-as`) kommen NICHT vor: bei den deutschen Stimmen
+     * kennt sie nur ConradNeural, und dort nur „cheerful" und „sad". Fuer Drill
+     * oder Butler gibt es auf Deutsch kein „shouting" bzw. „serious".
+     */
+    private function BriefingAzureSsml(): string
+    {
+        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
+            case 'formal':
+                return '<prosody rate="-8%" pitch="-2st">%%TEXT%%</prosody>';
+            case 'butler':
+                return '<mstts:express-as style="cheerful" styledegree="0.4">'
+                    . '<prosody rate="-12%" pitch="-3st">%%TEXT%%</prosody></mstts:express-as>';
+            case 'buddy':
+                return '<prosody rate="0%">%%TEXT%%</prosody>';
+            case 'funny':
+                return '<prosody rate="+6%" pitch="+2st">%%TEXT%%</prosody>';
+            case 'drill':
+                return '<prosody rate="+18%" pitch="-1st" volume="+40%">%%TEXT%%</prosody>';
+            case 'coach':
+                return '<prosody rate="+10%" pitch="+2st" volume="+10%">%%TEXT%%</prosody>';
+            case 'jammerlappen':
+                // Langsam und tief; die Seufzer muss der Text tragen, dafuer gibt es
+                // auf Deutsch keinen Stil.
+                return '<prosody rate="-18%" pitch="-2st" volume="-10%">%%TEXT%%</prosody>';
+            case 'digga':
+                return '<prosody rate="+14%" pitch="+3st">%%TEXT%%</prosody>';
+            default:
+                return '<prosody rate="0%">%%TEXT%%</prosody>';
         }
     }
 

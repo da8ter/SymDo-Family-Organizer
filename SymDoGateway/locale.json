@@ -227,7 +227,6 @@
             "From this time on, show tomorrow instead of today": "Ab dieser Uhrzeit morgen statt heute zeigen",
             "The evening preview for tomorrow appears after the next Symcon restart — it brings new settings, and those only exist once the kernel has loaded the module again.": "Die abendliche Vorschau auf morgen erscheint nach dem nächsten Symcon-Neustart — sie bringt neue Einstellungen mit, und die entstehen erst, wenn der Kernel das Modul erneut geladen hat.",
             "Read the briefing aloud": "Briefing vorlesen lassen",
-            "The recording is produced together with the text, so the play button starts instantly. It needs OpenAI as the provider and costs roughly four times as much as the text — switch it off and the button disappears.": "Die Aufnahme entsteht zusammen mit dem Text, deshalb spielt der Knopf sofort los. Sie braucht OpenAI als Anbieter und kostet etwa das Vierfache des Textes — abgeschaltet verschwindet der Knopf.",
             "Preview for tomorrow: %s": "Vorschau für morgen: %s",
             "Notifications are on": "Benachrichtigungen sind an",
             "This is a test notification.": "Das ist eine Testbenachrichtigung.",
@@ -274,7 +273,14 @@
             "Your day": "Dein Tag",
             "Your day (plural)": "Euer Tag",
             "Whiner": "Jammerlappen",
-            "Teen slang": "Digga"
+            "Teen slang": "Digga",
+            "Voice from": "Stimme von",
+            "OpenAI (same key as the AI)": "OpenAI (derselbe Schlüssel wie die KI)",
+            "Azure Speech (own key, German voices)": "Azure Speech (eigener Schlüssel, deutsche Stimmen)",
+            "Azure Speech key": "Azure-Speech-Schlüssel",
+            "Azure region (e.g. westeurope)": "Azure-Region (z. B. westeurope)",
+            "Azure brings 17 German voices instead of 13 mixed-language ones, and its speech markup really does control tempo and pauses — with OpenAI the speed parameter is ignored. Free tier F0: 0.5 million characters per month, which is about ten times our consumption. Note: the speaking styles (cheerful, sad, shouting) that Azure advertises exist for German on one single voice, so the character comes from the choice of voice and from tempo, not from style names.": "Azure bringt 17 deutsche Stimmen statt 13 gemischtsprachiger, und seine Sprach-Auszeichnung steuert Tempo und Pausen wirklich — bei OpenAI wird die Geschwindigkeitsangabe ignoriert. Freier Tarif F0: 0,5 Millionen Zeichen im Monat, etwa das Zehnfache unseres Verbrauchs. Zu beachten: die Sprechstile (fröhlich, traurig, brüllend), mit denen Azure wirbt, gibt es auf Deutsch bei genau einer Stimme — der Charakter kommt hier also aus der Stimmwahl und dem Tempo, nicht aus Stilnamen.",
+            "The recording is produced together with the text, so the play button starts instantly. It costs roughly four times as much as the text — switch it off and the button disappears.": "Die Aufnahme entsteht zusammen mit dem Text, deshalb startet der Abspielknopf sofort. Sie kostet etwa das Vierfache des Textes — abgeschaltet verschwindet der Knopf."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

@@ -1775,7 +1775,36 @@ class SymDoGateway extends IPSModuleStrict
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => $this->Translate('The recording is produced together with the text, so the play button starts instantly. It needs OpenAI as the provider and costs roughly four times as much as the text — switch it off and the button disappears.')
+                        'caption' => $this->Translate('The recording is produced together with the text, so the play button starts instantly. It costs roughly four times as much as the text — switch it off and the button disappears.')
+                    ],
+                ] : []),
+                // Ebenfalls erst nach einem Kernel-Neustart vorhanden.
+                ...(array_key_exists('TtsProvider', (array)$cfg) ? [
+                    [
+                        'type'    => 'Select',
+                        'name'    => 'TtsProvider',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('Voice from'),
+                        'options' => [
+                            ['caption' => $this->Translate('OpenAI (same key as the AI)'), 'value' => 'openai'],
+                            ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
+                        ]
+                    ],
+                    [
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'TtsAzureKey',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('Azure Speech key')
+                    ],
+                    [
+                        'type'    => 'ValidationTextBox',
+                        'name'    => 'TtsAzureRegion',
+                        'width'   => '200px',
+                        'caption' => $this->Translate('Azure region (e.g. westeurope)')
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('Azure brings 17 German voices instead of 13 mixed-language ones, and its speech markup really does control tempo and pauses — with OpenAI the speed parameter is ignored. Free tier F0: 0.5 million characters per month, which is about ten times our consumption. Note: the speaking styles (cheerful, sad, shouting) that Azure advertises exist for German on one single voice, so the character comes from the choice of voice and from tempo, not from style names.')
                     ],
                 ] : []),
                 // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein
