@@ -6,7 +6,8 @@ Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: SymDo bringt den Fami
 
 Das Beste daran: die KI nimmt euch die Tipparbeit ab.
 
-- **Fotografieren statt abtippen** — Elternbrief, Rezept oder Terminzettel einfach knipsen: die KI macht daraus fertige Aufgaben, Termine und Notizen. Kurz prüfen, übernehmen, fertig.
+- **Fotografieren statt abtippen** — Elternbrief oder Terminzettel einfach knipsen: die KI macht daraus fertige Aufgaben, Termine und Notizen. Kurz prüfen, übernehmen, fertig.
+- **Vom Rezept zum Einkauf** — Rezeptfoto, PDF oder Link analysieren, Portionen einstellen, fertig: die Zutaten stehen auf der Einkaufsliste. Oder gleich als Favoritenliste mit dem Rezept daran — Lieblingsgerichte landen beim nächsten Mal mit einem Klick im Wagen.
 - **E-Mails, die sich selbst eintragen** — die Schulmail und die Erinnerung vom Zahnarzt landen als fertige Vorschläge im KI-Eingang, schon dem richtigen Familienmitglied zugeordnet.
 - **Ein Briefing wie vom persönlichen Assistenten** — jeden Morgen fasst die KI zusammen, was heute zählt: Termine, fällige Aufgaben, die Einkaufsliste. Auf Wunsch vorgelesen, im Ton eurer Wahl — vom höflichen Butler bis zum Drillsergeant, der die Familie aus dem Bett scheucht.
 - **Freihändig einkaufen** — im Laden sagt die Web-App die Einkaufsliste über die Kopfhörer an: ein Tastendruck hakt den Artikel ab und nennt den nächsten. Das Handy bleibt in der Tasche.
@@ -33,10 +34,11 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **7. Konfiguration: SymDoWebApp (Kachel)**
 - **8. Tägliches Briefing**
 - **9. Einkaufs-Ansage**
-- **10. KI-Funktionen und Datenschutz**
-- **11. Benachrichtigungen**
-- **12. Statusvariablen**
-- **13. PHP-Befehlsreferenz**
+- **10. Rezeptanalyse**
+- **11. KI-Funktionen und Datenschutz**
+- **12. Benachrichtigungen**
+- **13. Statusvariablen**
+- **14. PHP-Befehlsreferenz**
 
 ## 1. Funktionsumfang
 
@@ -45,6 +47,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Bereiche**: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender und Notizen — einzeln abschaltbar
 - **Familienmitglieder** mit Name, Rolle und Foto; Aufgaben lassen sich Mitgliedern zuweisen („Meine Aufgaben")
 - **Tägliches Briefing** — die KI fasst morgens Termine, Aufgaben und Einkäufe zusammen, wahlweise mit Sprachausgabe; neun Personas vom Butler bis zum Drillsergeant
+- **Rezeptanalyse** — Rezeptfoto, PDF oder Rezept-URL wird zur Zutatenliste: Portionen skalierbar, Zutaten direkt auf die Einkaufsliste oder als Favoritenliste gespeichert, auf Wunsch mit dem Rezept selbst daran
 - **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
 - **KI-Analyse** — Foto oder PDF wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
 - **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text und Anhängen (Bild, PDF)
@@ -100,7 +103,7 @@ Liste der Mitglieder mit Name, Nachname, Rolle, Geburtstag und Foto. Jedes Mitgl
 
 - **KI-Analyse aktivieren** (`AiEnabled`) — Hauptschalter für alle KI-Funktionen (Standard: an)
 - **Tageslimit** (`MailDailyLimit`) — höchstens so viele KI-Aufrufe pro Tag, ein gemeinsamer Topf für Foto-/PDF-Analyse, Mail-Analyse und Briefing (Standard: 100)
-- **Datenschutz** — die KI-Funktionen laufen erst nach erteilter Einwilligung; sie ist jederzeit widerrufbar (Kapitel 10)
+- **Datenschutz** — die KI-Funktionen laufen erst nach erteilter Einwilligung; sie ist jederzeit widerrufbar (Kapitel 11)
 - **KI-Anbieter** (`AiProvider`) — `Anthropic`, `OpenAI` oder ein lokaler OpenAI-kompatibler Server; je nach Wahl Schlüssel bzw. Server-Adresse und Modellname eintragen
 
 ### Tägliches Briefing
@@ -160,7 +163,17 @@ Bedient wird mit der Kopfhörer-Taste, das Handy bleibt in der Tasche: Während 
 
 Die Tondateien erzeugt der eingestellte Sprachausgabe-Anbieter (Kapitel 8). Jede Ansage wird als Medienobjekt zwischengespeichert und nur einmal erzeugt — „2 Kilo Äpfel" kostet beim Anbieter nur beim ersten Mal. Die Funktion steht in der gekoppelten Web-App zur Verfügung; die Kachel in der Visualisierung hat sie nicht.
 
-## 10. KI-Funktionen und Datenschutz
+## 10. Rezeptanalyse
+
+In der Einkaufsliste öffnet der KI-Knopf das Blatt **Rezept oder Foto scannen**: analysiert wird ein Foto, eine PDF-Datei oder eine Rezept-URL — die Seite holt das Gateway serverseitig. Die KI liefert Titel, Portionszahl und die Zutaten mit Menge und Kategorie.
+
+In der Prüfansicht lässt sich die Portionszahl ändern, alle Mengen skalieren mit (nennt das Rezept keine Portionen, gibt es stattdessen einen ganzzahligen Faktor). Zutaten sind einzeln an- und abwählbar; **Hinzufügen** setzt die Auswahl direkt auf die Einkaufsliste.
+
+**In Favoriten speichern** legt die Zutaten stattdessen als Favoritenliste ab — als neue Liste (der Name ist mit dem Rezepttitel vorbelegt) oder in eine bestehende. Bei einer neuen Liste wird auf Wunsch die Quelle mitgespeichert: Foto oder PDF als Medienobjekt unter „Rezeptfotos", eine URL als Verweis. Die Favoritenliste trägt dann den Knopf **Rezept öffnen** — beim nächsten Mal wandern die Zutaten mit einem Klick komplett auf die Einkaufsliste, und das Rezept zum Kochen ist gleich dabei.
+
+Für gespeicherte Rezeptdateien gilt eine Obergrenze; ist eine Datei zu groß für die Ablage, wird die Favoritenliste trotzdem gespeichert und die App sagt es dazu.
+
+## 11. KI-Funktionen und Datenschutz
 
 Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den **selbst gewählten** Anbieter mit dem **eigenen** Schlüssel — oder vollständig lokal über einen OpenAI-kompatiblen Server. Es gilt:
 
@@ -169,17 +182,17 @@ Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den 
 - API-Schlüssel werden nur für die Anfragen an den gewählten Anbieter verwendet
 - Mail-Anhänge werden für die Analyse gelesen, aber nur dauerhaft gespeichert, wenn das ausdrücklich eingeschaltet ist
 
-## 11. Benachrichtigungen
+## 12. Benachrichtigungen
 
 Web-Push erreicht jedes gekoppelte Gerät, auf dem die Web-App als Home-Screen-App installiert ist und Benachrichtigungen erlaubt sind. Angezeigt werden Titel, Text und App-Symbol; Bilder und Antwort-Knöpfe zeigt iOS in Web-Push-Nachrichten nicht an. Ein Tipp auf die Nachricht öffnet die App im passenden Bereich.
 
 Termin-Erinnerungen aus dem Kalender lassen sich zusätzlich über eine Kachel-Visualisierungsinstanz zustellen (Kapitel 6, *Visualisierungs-Benachrichtigungen*).
 
-## 12. Statusvariablen
+## 13. Statusvariablen
 
-Beide Module legen **keine Statusvariablen** und **keine Variablenprofile** an. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt.
+Beide Module legen **keine Statusvariablen** und **keine Variablenprofile** an. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt, gespeicherte Rezeptdateien unter der Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz.
 
-## 13. PHP-Befehlsreferenz
+## 14. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 
