@@ -245,7 +245,6 @@ class SymDoGateway extends IPSModuleStrict
 
         $elements = array_merge(
             $appElements,
-            $isOwner ? [$this->GetMailFormElements()] : [],
             [
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),
@@ -259,7 +258,15 @@ class SymDoGateway extends IPSModuleStrict
         if ($isOwner) {
             // Muss VOR den Ueberschreibungen passieren: die suchen Felder per Name,
             // und die des Briefings entstehen erst hier.
+            //
+            // Die Reihenfolge der Aufrufe IST die Reihenfolge im Formular
+            // (AppendFormItem haengt hinten an): erst das Briefing, dann die
+            // Mailanalyse, dann die Benachrichtigungen. Die Mailanalyse stand
+            // vorher auf der obersten Ebene ueber Google/Microsoft — sie gehoert
+            // aber in den KI-Bereich, weil sie dessen Schalter und dessen
+            // Tagesdeckel gehorcht.
             $this->AppendFormItem($elements, 'AiPanel', $this->GetBriefingPanel());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetMailFormElements());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppFormOverrides($elements);
         }
@@ -1474,17 +1481,6 @@ class SymDoGateway extends IPSModuleStrict
                     'type'    => 'Label',
                     'bold'    => true,
                     'caption' => $this->Translate('Applies to both ways')
-                ],
-                [
-                    'type'    => 'NumberSpinner',
-                    'name'    => 'MailDailyLimit',
-                    'caption' => $this->Translate('Maximum AI calls per day, all ways together (0 = no limit)'),
-                    'minimum' => 0,
-                    'width'   => '400px'
-                ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Counts every call that costs money at the provider: mail analysis, photo capture in the app, and the calls from the Symcon tile. The tile has no device token and therefore no hourly window — this daily limit is its only brake.')
                 ],
                 [
                     'type'    => 'CheckBox',
