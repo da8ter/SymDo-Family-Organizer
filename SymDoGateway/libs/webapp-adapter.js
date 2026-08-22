@@ -469,52 +469,9 @@
     });
   }
 
-  // ---- Messsonde (voruebergehend, 2026-08-22) -----------------------------------
-  // Einmal je Seitenstart die echten Anzeigewerte an /discovery anhaengen; der
-  // Router schreibt sie ins Symcon-Log. Klaert am Geraet, wie iOS 26 die
-  // Statusleiste behandelt: zeichnet es die Seite dahinter (sat > 0) oder
-  // reserviert es die Leiste (sat = 0 und ih < sh). Wieder ausbauen, sobald die
-  // Frage beantwortet ist — der Router vertraegt den Parameter auch danach.
-  var vpGesendet = false;
-  function vpProbe() {
-    if (vpGesendet) { return ''; }
-    vpGesendet = true;
-    try {
-      var d = document.createElement('div');
-      d.style.cssText = 'position:fixed;left:-9999px;top:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
-      var wirt = document.body || document.documentElement;
-      wirt.appendChild(d);
-      var cs = getComputedStyle(d);
-      // Runde 2 (2026-08-22): dem Fenster fehlen 51pt zur Bildschirmhoehe, alle
-      // env() melden 0 — iOS 26 ignoriert cover UND black-translucent. Diese
-      // Werte klaeren, WO der reservierte Streifen sitzt: visualViewport zeigt
-      // die sichtbare Flaeche, tb den Abstand der Tab-Leiste zum Fensterboden,
-      // bg/tc ob Karten-Hintergrund und theme-color-Abgleich wirklich anliegen.
-      var vv = window.visualViewport || null;
-      var leiste = document.querySelector('.tabbar');
-      var tb = 'x';
-      try { if (leiste) { tb = String(Math.round(window.innerHeight - leiste.getBoundingClientRect().bottom)); } } catch (e2) {}
-      var meta = document.querySelector('meta[name="theme-color"]');
-      var werte = 'sat=' + cs.paddingTop + ',sab=' + cs.paddingBottom
-        + ',ih=' + window.innerHeight + ',sh=' + ((window.screen && window.screen.height) || 0)
-        + ',oh=' + window.outerHeight
-        + ',av=' + ((window.screen && window.screen.availHeight) || 0)
-        + ',sw=' + ((window.screen && window.screen.width) || 0)
-        + ',dr=' + (window.devicePixelRatio || 0)
-        + ',vv=' + (vv ? Math.round(vv.height) : -1)
-        + ',vt=' + (vv ? Math.round(vv.offsetTop) : -1)
-        + ',tb=' + tb
-        + ',bg=' + String(getComputedStyle(document.body).backgroundColor || '').replace(/\s+/g, '')
-        + ',tc=' + (meta ? String(meta.getAttribute('content') || '') : 'kein')
-        + ',dm=' + (isStandalone() ? 'standalone' : 'browser');
-      wirt.removeChild(d);
-      return '?vp=' + encodeURIComponent(werte);
-    } catch (e) { return ''; }
-  }
-
   // ---- Aggregation: discovery + per-Instanz-state -> Kachel-'state' ------------
   function loadFullState() {
-    return apiGet('/discovery' + vpProbe()).then(function (disc) {
+    return apiGet('/discovery').then(function (disc) {
       if (!disc || disc.ok !== true) { throw new Error('discovery failed'); }
       // Echte Visu-Farben übernehmen (falls die ShoppingList-Kachel welche gemeldet hat).
       discoveryTheme = disc.theme || null;

@@ -95,18 +95,6 @@ trait ApiRouter
                 break;
             case 'discovery':
                 if ($method === 'GET') {
-                    // Messsonde der Web-App (voruebergehend, 2026-08-22): einmal je
-                    // Seitenstart haengt der Adapter seine Anzeigewerte an
-                    // (env(safe-area-*), innerHeight, screen.height, Anzeigemodus).
-                    // Klaert, wie iOS 26 die Statusleiste einer Home-Screen-App
-                    // behandelt. Ausbau zusammen mit vpProbe() im Adapter.
-                    if (isset($_GET['vp'])) {
-                        // Nur die erwarteten Zeichen: der Wert kommt aus der Query und
-                        // geht in eine Protokollzeile. Zeilenumbrueche daraus wuerden
-                        // eigene Eintraege vortaeuschen.
-                        $vp = preg_replace('/[^A-Za-z0-9=,.\-#()% ]/', '', (string)$_GET['vp']);
-                        $this->LogMessage('WebApp-Anzeige: ' . substr((string)$vp, 0, 320), KL_NOTIFY);
-                    }
                     $this->HandleDiscovery();
                     return;
                 }
