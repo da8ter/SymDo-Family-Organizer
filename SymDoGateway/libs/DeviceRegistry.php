@@ -87,7 +87,10 @@ trait DeviceRegistry
                 $this->UpdateFormField('WebAccessQrImage', 'image', $dataUri);
                 $this->UpdateFormField('WebAccessQrImage', 'visible', true);
             }
-            $caption = sprintf($this->Translate('Scan with the phone camera to open the web app (valid for 10 minutes). Link: %s'), $webUrl);
+            // Der Code steht auch einzeln da: die Home-Screen-App auf iOS startet
+            // ueber `start_url` aus dem Manifest, bekommt das Fragment aus dem
+            // Lesezeichen also NICHT mit und koppelt sich selbst per Eingabe.
+            $caption = sprintf($this->Translate('Scan with the phone camera to open the web app (valid for 10 minutes). Code for manual entry: %s | Link: %s'), $code, $webUrl);
         } else {
             $caption = $this->Translate('Warning: No Symcon Connect URL found. Enable Symcon Connect to reach the web app over the internet.');
         }

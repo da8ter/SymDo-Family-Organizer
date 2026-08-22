@@ -208,19 +208,81 @@
     catch (e) { try { location.hash = ''; } catch (e2) {} }
   }
   function whenBody(fn) { if (document.body) { fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+  // Der Kopplungs-Bildschirm ist KEINE Sackgasse: er nimmt einen Kopplungscode an.
+  // Grund ist die Home-Screen-App auf iOS. Sobald die Seite ein Manifest anbietet
+  // (fuer Push unverzichtbar), startet iOS das Symbol nicht mit der gemerkten
+  // Adresse, sondern mit `start_url` aus dem Manifest — das Fragment `#t=…` aus
+  // dem Lesezeichen faellt dabei weg. Die App hat eigenen Speicher, sieht das in
+  // Safari abgelegte Token nicht und kann auch nicht scannen. Also koppelt sie
+  // sich hier selbst und bekommt ihren eigenen Eintrag in der Geraeteliste.
+  var PAIR_STYLE_INPUT = 'width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#fff;font:600 17px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-align:center';
+  var PAIR_STYLE_BTN   = 'width:100%;margin-top:10px;padding:13px 14px;border-radius:12px;border:0;background:#0a84ff;color:#fff;font:600 16px/1.2 -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
   function showPairScreen(msg) {
     whenBody(function () {
       var el = document.getElementById('symdo-pair-screen');
+      // Schon offen? Nur die Meldung tauschen. Ein Neuaufbau wuerde eine
+      // begonnene Eingabe loeschen — und mehrere 401-Antworten hintereinander
+      // rufen hier mehrfach herein.
+      var txt = document.getElementById('symdo-pair-text');
+      if (el && txt) { txt.textContent = msg; return; }
       if (!el) {
         el = document.createElement('div');
         el.id = 'symdo-pair-screen';
         el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;background:#1c1c1e;color:#fff;font:500 16px/1.55 -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
         document.body.appendChild(el);
       }
-      el.innerHTML = '<div style="max-width:340px"><div style="font-size:44px;margin-bottom:14px">🔗</div><div>' + msg + '</div></div>';
+      el.innerHTML = ''
+        + '<div style="max-width:340px;width:100%">'
+        +   '<div style="font-size:44px;margin-bottom:14px">\uD83D\uDD17</div>'
+        +   '<div id="symdo-pair-text"></div>'
+        +   '<div style="margin-top:20px">'
+        +     '<input id="symdo-pair-code" type="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="Kopplungscode" aria-label="Kopplungscode" style="' + PAIR_STYLE_INPUT + '">'
+        +     '<button id="symdo-pair-go" type="button" style="' + PAIR_STYLE_BTN + '">Verbinden</button>'
+        +     '<div id="symdo-pair-msg" role="status" style="min-height:20px;margin-top:10px;font-size:13px;opacity:.85"></div>'
+        +   '</div>'
+        + '</div>';
+      document.getElementById('symdo-pair-text').textContent = msg;
+      var inp = document.getElementById('symdo-pair-code');
+      var btn = document.getElementById('symdo-pair-go');
+      if (btn) { btn.addEventListener('click', submitPairCode); }
+      if (inp) {
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitPairCode(); } });
+        try { inp.focus(); } catch (e) {}
+      }
+      if (isStandalone()) {
+        var hint = document.getElementById('symdo-pair-msg');
+        if (hint) { hint.textContent = 'Die App vom Home-Bildschirm hat eigenen Speicher und braucht deshalb einen eigenen Zugang.'; }
+      }
     });
   }
   function hidePairScreen() { var el = document.getElementById('symdo-pair-screen'); if (el && el.parentNode) { el.parentNode.removeChild(el); } }
+  // Angenommen wird der Code selbst — oder der ganze Link aus dem Formular, damit
+  // sich die Adresse aus der Gateway-Beschriftung einfach einsetzen laesst.
+  // Gross/klein ist gleichgueltig: der Server prueft mit strtoupper(trim(...)).
+  function codeFromInput(raw) {
+    var s = String(raw || '').trim();
+    var m = s.match(/[#?&]c=([^&\s]+)/i);
+    if (m) { try { s = decodeURIComponent(m[1]); } catch (e) { s = m[1]; } }
+    return s.replace(/[\s\-\u2013\u2014]/g, '');
+  }
+  function submitPairCode() {
+    var inp = document.getElementById('symdo-pair-code');
+    var out = document.getElementById('symdo-pair-msg');
+    var btn = document.getElementById('symdo-pair-go');
+    if (!inp) { return; }
+    var code = codeFromInput(inp.value);
+    if (!code) { if (out) { out.textContent = 'Bitte den Code aus dem Gateway eingeben.'; } return; }
+    if (btn) { btn.disabled = true; }
+    if (out) { out.textContent = 'Verbinde \u2026'; }
+    pairing = true;
+    pairWithCode(code)
+      .then(function (t) { hidePairScreen(); ensureTokenInUrl(t); startApp(); })
+      .catch(function () {
+        pairing = false;
+        if (btn) { btn.disabled = false; }
+        if (out) { out.textContent = 'Der Code wurde nicht angenommen. Er gilt 10 Minuten und nur ein einziges Mal \u2014 bitte im Gateway einen neuen Browser-Zugang erzeugen.'; }
+      });
+  }
   function pairWithCode(code) {
     return apiPost('/pair', {
       code: code,
@@ -259,14 +321,19 @@
     if (typeof window.requestAction === 'function') { window.requestAction('GetState', 0); }
   }
   window.__symdoUnauthorized = function () {
+    // Ohne Token ist nichts abgelaufen — dann ist diese Kopie der App einfach
+    // noch nicht gekoppelt (typisch beim ersten Start vom Home-Bildschirm).
+    var hatte = !!token();
     clearToken();
-    showPairScreen('Sitzung abgelaufen. Erstelle im SymDo Gateway einen neuen Browser-Zugang und scanne den QR-Code.');
+    showPairScreen(hatte
+      ? 'Sitzung abgelaufen. Erstelle im SymDo Gateway einen neuen Browser-Zugang und gib den Code hier ein.'
+      : 'Diese App ist noch nicht gekoppelt. Erstelle im SymDo Gateway einen Browser-Zugang und gib den Code hier ein.');
   };
   (function bootstrapPairing() {
     var hp = parseHash();
     if (hp.logout !== undefined) {
       clearToken(); stripHash();
-      showPairScreen('Abgemeldet. Erstelle im SymDo Gateway einen neuen Browser-Zugang, um dich wieder zu verbinden.');
+      showPairScreen('Abgemeldet. Erstelle im SymDo Gateway einen neuen Browser-Zugang und gib den Code hier ein.');
       return;
     }
     // Token direkt aus dem Fragment (Home-Screen-Lesezeichen mit #t=…). In der
@@ -288,10 +355,10 @@
       pairing = true;
       pairWithCode(hp.c)
         .then(function (t) { ensureTokenInUrl(t); startApp(); })
-        .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Bitte im Gateway einen neuen Browser-Zugang erstellen.'); });
+        .catch(function () { pairing = false; stripHash(); showPairScreen('Kopplung fehlgeschlagen oder abgelaufen. Erstelle im Gateway einen neuen Browser-Zugang und gib den Code hier ein.'); });
       return;
     }
-    showPairScreen('Nicht gekoppelt. Erstelle im SymDo Gateway einen Browser-Zugang und scanne den QR-Code mit der iPhone-Kamera.');
+    showPairScreen('Nicht gekoppelt. Erstelle im SymDo Gateway einen Browser-Zugang: QR-Code scannen \u2014 oder den Code hier eingeben.');
   })();
 
   // Instanz-Art aus der letzten discovery (für Call/CheckRevisions ohne Roundtrip)

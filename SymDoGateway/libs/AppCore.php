@@ -884,6 +884,11 @@ trait AppCore
      * Manifest-Adresse stuende in jedem Zugriffsprotokoll. Die Home-Screen-App ist
      * ein eigener Client mit eigenem Speicher — sie koppelt sich einmal selbst und
      * bekommt damit ihren eigenen Eintrag in der Geraeteliste.
+     *
+     * Damit das nicht in einer Sackgasse endet, nimmt der Kopplungs-Bildschirm in
+     * `webapp-adapter.js` einen Code an (Feld `symdo-pair-code`), und die
+     * Beschriftung des Browser-Zugangs weist den Code einzeln aus. Wer das hier
+     * aendert, muss dort nachsehen.
      */
     private function ServePwaManifest(): void
     {
