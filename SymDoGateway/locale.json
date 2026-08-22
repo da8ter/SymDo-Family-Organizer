@@ -329,7 +329,12 @@
             "Which voices to offer": "Welche Stimmen anbieten",
             "Own voices only (created or cloned by you)": "Nur eigene (selbst erzeugt oder geklont)",
             "Own and saved from the library": "Eigene und aus der Bibliothek gespeicherte",
-            "All, including the default voices": "Alle, auch die Vorgabestimmen"
+            "All, including the default voices": "Alle, auch die Vorgabestimmen",
+            "Audio quality": "Tonqualität",
+            "High (like the ElevenLabs preview, 128 kbit) — needs a raised output limit": "Hoch (wie die Vorschau bei ElevenLabs, 128 kbit) — braucht eine erhöhte Ausgabegrenze",
+            "Good (64 kbit) — recommended": "Gut (64 kbit) — empfohlen",
+            "Thrifty (32 kbit at 22 kHz) — audibly dull": "Sparsam (32 kbit bei 22 kHz) — hörbar dumpf",
+            "The quality decides how much text fits into ONE recording, because a request may only return so much (Symcon core option ScriptOutputBufferLimit, 1 MiB by default). At 128 kbit that is about 580 characters — a briefing would be split into several recordings, and every seam is audible because the intonation starts anew. 64 kbit keeps a normal briefing in one piece and is hard to tell from 128 for speech.": "Die Qualität entscheidet, wie viel Text in EINE Aufnahme passt, denn eine Anfrage darf nur begrenzt viel zurückgeben (Symcon-Kernoption ScriptOutputBufferLimit, Vorgabe 1 MiB). Bei 128 kbit sind das etwa 580 Zeichen — ein Briefing zerfiele in mehrere Aufnahmen, und jede Naht ist hörbar, weil die Sprechmelodie neu ansetzt. 64 kbit hält ein normales Briefing in einem Stück und ist bei Sprache kaum von 128 zu unterscheiden."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

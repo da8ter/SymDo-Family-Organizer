@@ -2228,6 +2228,21 @@ class SymDoGateway extends IPSModuleStrict
                     ],
                     [
                         'type'    => 'Select',
+                        'name'    => 'TtsElevenQuality',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('Audio quality'),
+                        'options' => [
+                            ['caption' => $this->Translate('High (like the ElevenLabs preview, 128 kbit) — needs a raised output limit'), 'value' => '128'],
+                            ['caption' => $this->Translate('Good (64 kbit) — recommended'), 'value' => '64'],
+                            ['caption' => $this->Translate('Thrifty (32 kbit at 22 kHz) — audibly dull'), 'value' => '32'],
+                        ]
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('The quality decides how much text fits into ONE recording, because a request may only return so much (Symcon core option ScriptOutputBufferLimit, 1 MiB by default). At 128 kbit that is about 580 characters — a briefing would be split into several recordings, and every seam is audible because the intonation starts anew. 64 kbit keeps a normal briefing in one piece and is hard to tell from 128 for speech.')
+                    ],
+                    [
+                        'type'    => 'Select',
                         'name'    => 'TtsElevenScope',
                         'width'   => '400px',
                         'caption' => $this->Translate('Which voices to offer'),

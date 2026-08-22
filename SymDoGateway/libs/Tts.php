@@ -41,11 +41,46 @@ trait Tts
     private const TTS_ELEVEN_VOICE = '21m00Tcm4TlvDq8ikWAM';
 
     /**
-     * Tonformat. 32 kbit/s bei 22 kHz — das Briefing ist Sprache, und die
-     * Hook-Ausgabe hat einen Deckel. MUSS in der Adresse stehen (siehe
-     * TtsRequestEleven), im Rumpf wird es ignoriert.
+     * Tonqualitaet bei ElevenLabs, und was ein Zeichen dann kostet.
+     *
+     * Warum einstellbar und nicht fest: die zwei Anforderungen widersprechen sich.
+     *   - Klang. mp3_22050_32 (der frueheste Wert hier) ist fuer Sprache hoerbar
+     *     dumpf; die Vorschau bei ElevenLabs spielt mp3_44100_128. Genau das war
+     *     der Grund, warum das Briefing schlechter klang als die Vorschau.
+     *   - Die Hook-Ausgabegrenze. Bei der Symcon-Vorgabe von 1 MiB passen in EIN
+     *     Stueck nur rund 580 Zeichen im 128er Format — ein Briefing zerfiele in
+     *     mehrere Aufnahmen, und jede Naht ist hoerbar (die Sprechmelodie setzt neu
+     *     an).
+     * Wer die Kernoption hochgestellt hat, kann also 128 nehmen; bei der Vorgabe ist
+     * 64 die bessere Wahl — bei Sprache kaum vom 128er zu unterscheiden, aber
+     * gut doppelt so sparsam.
+     *
+     * Die Bytes je Zeichen sind GEMESSEN (22.08.2026, deutscher Text):
+     *   32 kbit/22 kHz  ->  279  (222 999 fuer 798 Zeichen)
+     *  128 kbit/44 kHz  -> 1257  (1 361 755 fuer 1083 Zeichen)
+     * Der 64er Wert ist daraus verhaeltnisgleich abgeleitet, mit Luft nach oben.
      */
-    private const TTS_ELEVEN_FORMAT = 'mp3_22050_32';
+    private const TTS_ELEVEN_QUALITIES = [
+        '32'  => ['format' => 'mp3_22050_32',  'bytes' => 300],
+        '64'  => ['format' => 'mp3_44100_64',  'bytes' => 660],
+        '128' => ['format' => 'mp3_44100_128', 'bytes' => 1300],
+    ];
+
+    /** Das Format fuer die Adresse. Im Rumpf wird output_format ignoriert. */
+    private function TtsElevenFormat(): string
+    {
+        $wahl = $this->TtsSetting('TtsElevenQuality', '64');
+        return (string)(self::TTS_ELEVEN_QUALITIES[$wahl]['format']
+            ?? self::TTS_ELEVEN_QUALITIES['64']['format']);
+    }
+
+    /** Bytes je Zeichen zum gewaehlten Format — Grundlage von BriefingAudioBudget. */
+    private function TtsElevenBytesPerChar(): int
+    {
+        $wahl = $this->TtsSetting('TtsElevenQuality', '64');
+        return (int)(self::TTS_ELEVEN_QUALITIES[$wahl]['bytes']
+            ?? self::TTS_ELEVEN_QUALITIES['64']['bytes']);
+    }
 
     /**
      * Stimmen von gpt-4o-mini-tts. Feste Liste, weil sie zum MODELL gehoert und nicht
@@ -114,6 +149,9 @@ trait Tts
         // kopiert", und alle Kopien sind in jedem Feld identisch. Wer eine andere
         // Menge sehen will, waehlt sie hier, statt dass ich sie errate.
         $this->RegisterPropertyString('TtsElevenScope', 'non-default');
+        // 64 als Vorgabe: guter Klang UND ein Briefing in einem Stueck, auch bei der
+        // Symcon-Vorgabe fuer ScriptOutputBufferLimit (siehe TTS_ELEVEN_QUALITIES).
+        $this->RegisterPropertyString('TtsElevenQuality', '64');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -436,7 +474,7 @@ trait Tts
             // Umzug von output_format in die Adresse passiert: dieselbe Ansage, aber
             // noch in 128 kbit/s und damit viermal so gross.
             $modell  = $this->TtsSetting('TtsElevenModel', 'eleven_multilingual_v2')
-                . '|' . self::TTS_ELEVEN_FORMAT;
+                . '|' . $this->TtsElevenFormat();
             $vorgabe = $this->TtsSetting('TtsElevenVoice', self::TTS_ELEVEN_VOICE);
         } else {
             $modell  = $this->TtsSetting('TtsModel', 'gpt-4o-mini-tts');
@@ -829,7 +867,7 @@ trait Tts
         // und BriefingAudioBudget rechnet mit Bytes je Zeichen.
         $resp = $this->AiHttpPost(
             'https://api.elevenlabs.io/v1/text-to-speech/' . $voice
-                . '?output_format=' . self::TTS_ELEVEN_FORMAT,
+                . '?output_format=' . $this->TtsElevenFormat(),
             [
                 'xi-api-key: ' . $key,
                 'Content-Type: application/json',
@@ -859,35 +897,68 @@ trait Tts
     }
 
     /**
-     * Die Persona-Anweisung auf die vier Regler von ElevenLabs uebersetzen.
+     * Die Persona-Anweisung auf die Regler von ElevenLabs uebersetzen.
      *
-     * Es gibt dort kein Feld fuer eine Anweisung in Worten. Was bei OpenAI
-     * „fluestere verschwoererisch" ist, muss hier ueber `stability` (Gleichmass
-     * gegen Ausdruck) und `style` (Uebertreibung) laufen. Grob, aber nicht geraten:
-     * die Anweisung nennt die Tonlage, und danach richtet sich der Ausdruck.
+     * Es gibt dort kein Feld fuer eine Anweisung in Worten — was bei OpenAI ein Satz
+     * ist und bei Azure SSML, muss hier durch die Regler.
+     *
+     * ZWEI Regeln, beide aus der Doku und am 22.08.2026 hoerbar bestaetigt:
+     *
+     *  1. `style` bleibt 0. Die Stilverstaerkung „fuehrt schnell zu unerwuenschter
+     *     Instabilitaet und unnatuerlichem Klang" und kostet zusaetzlich Rechenzeit.
+     *     Genau daran lag es, dass das Briefing schlechter klang als die Vorschau:
+     *     die stand bei 0, der Drillsergeant bei 0,65.
+     *  2. `stability` bleibt in der Naehe der Vorgabe 0,5. Niedrig heisst laut Doku
+     *     „ausdrucksstaerker, aber anfaellig fuer Halluzinationen" — 0,25 war zu
+     *     weit unten.
+     *
+     * Das Tempo ist der eigentliche Hebel, und dafuer gibt es ein eigenes,
+     * unbedenkliches Feld: `speed` (0,7 bis 1,2; die Doku warnt nur vor den
+     * Extremen). Die Anweisungen nennen ihr Tempo woertlich („hohes Tempo",
+     * „langsames Tempo", „ruhiges Tempo"), daran haengt die Zuordnung — nicht an
+     * geratenen Stimmungswoertern.
+     *
+     * Die Vorgabewerte des Kontos (stability 0,5 / similarity 0,75 / style 0 /
+     * speed 1,0) sind ueber /v1/voices/settings/default nachgelesen.
      *
      * @return array<string,float|bool>
      */
     private function TtsElevenSettings(string $anweisung): array
     {
         $t = mb_strtolower($anweisung);
-        $ausdrucksstark = $t !== '' && (
-            str_contains($t, 'laut') || str_contains($t, 'schrei') || str_contains($t, 'befehl')
-            || str_contains($t, 'aufgeregt') || str_contains($t, 'begeistert')
-            || str_contains($t, 'loud') || str_contains($t, 'shout') || str_contains($t, 'excited')
-            || str_contains($t, 'drill') || str_contains($t, 'energisch')
+        $hat = static fn(string ...$w): bool => (bool)array_filter(
+            $w, static fn(string $x): bool => $t !== '' && str_contains($t, $x)
         );
-        $sachlich = $t !== '' && (
-            str_contains($t, 'sachlich') || str_contains($t, 'ruhig') || str_contains($t, 'neutral')
-            || str_contains($t, 'calm') || str_contains($t, 'neutral')
-        );
-        if ($ausdrucksstark) {
-            return ['stability' => 0.25, 'similarity_boost' => 0.75, 'style' => 0.65, 'use_speaker_boost' => true];
+
+        // Tempo nach dem, was die Anweisung ausdruecklich sagt.
+        if ($hat('hohes tempo', 'schnell')) {
+            $speed = 1.12;
+        } elseif ($hat('langsames tempo', 'müde', 'unhurried', 'measured')) {
+            $speed = 0.85;
+        } elseif ($hat('ruhiges tempo')) {
+            $speed = 0.94;
+        } else {
+            $speed = 1.0;
         }
-        if ($sachlich) {
-            return ['stability' => 0.80, 'similarity_boost' => 0.75, 'style' => 0.10, 'use_speaker_boost' => true];
+
+        // Ausdruck nur MASSVOLL ueber die Stabilitaet: laut/bruellend etwas
+        // beweglicher, sachlich/hoeflich etwas gleichmaessiger.
+        if ($hat('brülle', 'sehr laut', 'energisch', 'aufdrehen')) {
+            $stability = 0.45;
+        } elseif ($hat('sachlich', 'ruhig', 'zurückhaltend', 'calm', 'controlled')) {
+            $stability = 0.60;
+        } else {
+            $stability = 0.50;
         }
-        return ['stability' => 0.50, 'similarity_boost' => 0.75, 'style' => 0.35, 'use_speaker_boost' => true];
+
+        return [
+            'stability'         => $stability,
+            'similarity_boost'  => 0.75,
+            // Bewusst 0 — siehe Regel 1 im Kommentar oben.
+            'style'             => 0.0,
+            'use_speaker_boost' => true,
+            'speed'             => max(0.7, min(1.2, $speed)),
+        ];
     }
 
     /** Unsere Formatnamen auf die von Azure. */

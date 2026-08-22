@@ -59,19 +59,6 @@ trait Briefing
     /** Dasselbe fuer Azure-MP3 mit 48 kbit/s — siehe Rechnung in BriefingAudioBudget. */
     private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
 
-    /**
-     * Dasselbe fuer ElevenLabs, mp3_22050_32.
-     *
-     * GEMESSEN am 22.08.2026 an einem erzeugten Briefing: 222 999 Byte fuer 798
-     * Zeichen, also 279 je Zeichen. Die 300 lassen knapp Luft darueber.
-     *
-     * Zum Vergleich, weil es den Wert erst glaubhaft macht: solange
-     * `output_format` im JSON-Rumpf stand und deshalb ignoriert wurde, lag
-     * derselbe Weg bei 1257 Byte je Zeichen (1 361 755 fuer 1083 Zeichen). Wer
-     * diese Zahl anfasst, sollte vorher pruefen, ob das Format wirklich in der
-     * ADRESSE steht — sonst rechnet sie mit dem Vierfachen.
-     */
-    private const BRIEFING_TTS_BYTES_ELEVEN_MP3 = 300;
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
     private const BRIEFING_TTS_FORMAT = 'aac';
 
@@ -1395,7 +1382,11 @@ trait Briefing
         if ($anbieter === 'azure') {
             $jeZeichen = self::BRIEFING_TTS_BYTES_AZURE_MP3;
         } elseif ($anbieter === 'elevenlabs') {
-            $jeZeichen = self::BRIEFING_TTS_BYTES_ELEVEN_MP3;
+            // Haengt an der eingestellten Tonqualitaet, nicht an einer festen Zahl:
+            // zwischen 32 und 128 kbit liegt Faktor vier (siehe
+            // TTS_ELEVEN_QUALITIES). Eine Konstante hier waere nach dem ersten
+            // Umstellen falsch.
+            $jeZeichen = $this->TtsElevenBytesPerChar();
         } else {
             $jeZeichen = self::BRIEFING_TTS_BYTES_AAC;
         }
