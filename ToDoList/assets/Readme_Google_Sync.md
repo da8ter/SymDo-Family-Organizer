@@ -4,7 +4,7 @@
 
 - Ein Google-Konto
 - Zugang zur [Google Cloud Console](https://console.cloud.google.com/)
-- **IP-Symcon Connect** muss konfiguriert und erreichbar sein (für OAuth-Callback)
+- **Symcon Connect** muss konfiguriert und erreichbar sein (für OAuth-Callback)
 
 ## Schritt 1: Google Cloud Projekt erstellen
 

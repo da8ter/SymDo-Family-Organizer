@@ -2,14 +2,14 @@
 
 Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung bereit. Sie zeigt die drei Kennzahlen einer **ToDo List**-Instanz (**Offen**, **Überfällig**, **Heute**) und öffnet beim Klick ein frei wählbares Objekt bzw. eine Kategorie.
 
-> Hintergrund: IP-Symcon rendert HTML-Modulinhalte **nicht** innerhalb einer Kategorie-Kachel. Damit die Übersicht z. B. neben einer Kategorie-Kachel platziert werden kann, gibt es dieses eigenständige Modul.
+> Hintergrund: Symcon rendert HTML-Modulinhalte **nicht** innerhalb einer Kategorie-Kachel. Damit die Übersicht z. B. neben einer Kategorie-Kachel platziert werden kann, gibt es dieses eigenständige Modul.
 
 ## Inhalt
 
 - **1. Funktionsumfang**
 - **2. Voraussetzungen**
 - **3. Installation**
-- **4. Konfiguration in IP-Symcon**
+- **4. Konfiguration in Symcon**
 - **5. Responsives Verhalten**
 - **6. Funktionsweise**
 
@@ -27,18 +27,18 @@ Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisi
 
 ## 2. Voraussetzungen
 
-- IP-Symcon ab Version **8.1**
+- Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
 - Eine vorhandene **ToDo List**-Instanz als Datenquelle
 
 ## 3. Installation
 
 1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
-2. In IP-Symcon eine Instanz vom Typ **ToDo List** anlegen (Datenquelle), falls noch nicht vorhanden
+2. In Symcon eine Instanz vom Typ **ToDo List** anlegen (Datenquelle), falls noch nicht vorhanden
 3. Eine Instanz vom Typ **ToDo Übersicht** anlegen
 4. Instanz in der Kachel-Visualisierung einbinden
 
-## 4. Konfiguration in IP-Symcon
+## 4. Konfiguration in Symcon
 
 ### Instanz-Eigenschaften
 

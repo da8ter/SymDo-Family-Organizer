@@ -792,7 +792,7 @@ class ShoppingList extends IPSModuleStrict
         // trotzdem Erfolg). Ohne diese Probe verlaere der Nutzer seinen Text
         // kommentarlos; so bekommt der Client eine klare Meldung.
         if ($this->ReadHint() !== $sauber) {
-            throw new \Exception($this->Translate('Hint could not be saved — please restart IP-Symcon once.'));
+            throw new \Exception($this->Translate('Hint could not be saved — please restart Symcon once.'));
         }
         $this->SendState();
     }

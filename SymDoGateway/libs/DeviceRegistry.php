@@ -484,7 +484,7 @@ trait DeviceRegistry
             if ($this->ReadAttributeString('PairedDevices') !== $json) {
                 $this->LogMessage(
                     'Geräteliste nicht beschreibbar (Attribut PairedDevices fehlt) — '
-                    . 'nach dem nächsten Neustart von IP-Symcon greift sie.',
+                    . 'nach dem nächsten Neustart von Symcon greift sie.',
                     KL_ERROR
                 );
                 return false;

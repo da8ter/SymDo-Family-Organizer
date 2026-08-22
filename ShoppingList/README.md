@@ -18,7 +18,7 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
 1. Bibliothek über das Module Control installieren:
    - `https://github.com/da8ter/ToDo-List.git`
-2. In IP-Symcon eine Instanz vom Typ **Shopping List** anlegen
+2. In Symcon eine Instanz vom Typ **Shopping List** anlegen
 3. Instanz in der Kachel-Visualisierung einbinden
 4. Optional im Backend Kategorien, Suchvorschläge und Favoritenlisten konfigurieren
 

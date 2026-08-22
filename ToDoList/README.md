@@ -21,7 +21,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 - **1. Funktionsumfang**
 - **2. Voraussetzungen**
 - **3. Installation**
-- **4. Konfiguration in IP-Symcon**
+- **4. Konfiguration in Symcon**
 - **5. Visualisierung (Tile/HTML-SDK)**
 - **6. Statusvariablen**
 - **7. PHP-Befehlsreferenz**
@@ -51,7 +51,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 
 ## 2. Voraussetzungen
 
-- IP-Symcon ab Version **8.1**
+- Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
 
 ## 3. Installation
@@ -60,7 +60,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 2. Instanz anlegen: **ToDo Gateway** (Zentrale Instanz für die Synchronisation. Bitte auch erstellen wenn keine Synchronisation verwendet wird)
 3. Instanz anlegen: **ToDo List** (Für jede Liste wird eine Instanz benötigt)
 
-## 4. Konfiguration in IP-Symcon
+## 4. Konfiguration in Symcon
 
 ### Instanz-Eigenschaften
 

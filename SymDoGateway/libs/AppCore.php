@@ -1120,7 +1120,7 @@ trait AppCore
     private function GetSystemName(): string
     {
         $name = IPS_GetName(0);
-        return $name !== '' ? $name : 'IP-Symcon';
+        return $name !== '' ? $name : 'Symcon';
     }
 
     /**

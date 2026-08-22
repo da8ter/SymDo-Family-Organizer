@@ -305,7 +305,7 @@ trait Tts
     {
         if (!$this->TtsStorageReady()) {
             $this->SendApiError('tts_restart_required',
-                'Speech output was just installed — restart the IP-Symcon kernel once', 503);
+                'Speech output was just installed — restart the Symcon kernel once', 503);
             return;
         }
         if (!$this->TtsEnabled()) {

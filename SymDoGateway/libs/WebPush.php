@@ -404,7 +404,7 @@ trait WebPush
         if ($this->ReadAttributeStringSafe(self::PUSH_VAPID_ATTR, '') !== $text) {
             $this->LogMessage(
                 'Web Push: Attribut ' . self::PUSH_VAPID_ATTR . ' existiert noch nicht — '
-                . 'nach dem naechsten Neustart von IP-Symcon greift es.',
+                . 'nach dem naechsten Neustart von Symcon greift es.',
                 KL_ERROR
             );
             return false;
@@ -894,7 +894,7 @@ trait WebPush
             // Lieber den Lauf abschalten als das Telefon zumuellen.
             $this->LogMessage(
                 'Web Push: Attribut ' . self::PUSH_SENT_ATTR . ' nicht beschreibbar — Erinnerungen bleiben aus, '
-                . 'bis IP-Symcon neu gestartet wurde.',
+                . 'bis Symcon neu gestartet wurde.',
                 KL_ERROR
             );
             try {

@@ -5442,7 +5442,7 @@ async function briefingVorlesen() {
       briefingLaedt = false;
       const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
       showToast(code === 'tts_restart_required'
-        ? translate('Speech output was just installed — restart IP-Symcon once.')
+        ? translate('Speech output was just installed — restart Symcon once.')
         : translate('Speech output is not available.'));
       renderDashboard();
       return;
@@ -10804,7 +10804,7 @@ async function ansageStarten() {
   if (!antwort || antwort.status !== 200 || !antwort.json || !Array.isArray(antwort.json.clips)) {
     const code = antwort && antwort.json ? String(antwort.json.error || antwort.json.code || '') : '';
     showToast(code === 'tts_restart_required'
-      ? translate('Speech output was just installed — restart IP-Symcon once.')
+      ? translate('Speech output was just installed — restart Symcon once.')
       : translate('Speech output is not available.'));
     ansageBeenden();
     return;

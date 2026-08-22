@@ -3,7 +3,7 @@
 Diese Modul-Bibliothek stellt eine ToDo-Liste und eine Einkaufsliste für die Tile-Visualisierung bereit — optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV. Mit **SymDo** kommen eine Web-App fürs Handy und eine Kachel dazu, die beide Listen samt Kalender, Notizen, KI-Funktionen und täglichem Briefing in einer Oberfläche für die ganze Familie bündeln.
 
 ## ToDo Liste
-Aufgabenverwaltung für die IP-Symcon Kachel-Visualisierung.
+Aufgabenverwaltung für die Symcon Kachel-Visualisierung.
 
 - Aufgaben direkt in der Visualisierung anlegen, bearbeiten und abhaken
 - Zwei-Wege-Synchronisation mit Google Tasks, Microsoft To Do und CalDAV (z. B. Nextcloud)
@@ -20,7 +20,7 @@ Aufgabenverwaltung für die IP-Symcon Kachel-Visualisierung.
 ![ToDo List](https://github.com/da8ter/images/blob/main/todo.png)
 
 ## Einkaufsliste
-Einkaufsliste für die IP-Symcon Kachel-Visualisierung.
+Einkaufsliste für die Symcon Kachel-Visualisierung.
 
 - Artikel anlegen, bearbeiten, abhaken und löschen
 - Suchvorschläge auf Basis häufig verwendeter Artikel

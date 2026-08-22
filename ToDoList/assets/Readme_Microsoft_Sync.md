@@ -4,7 +4,7 @@
 
 - Ein Microsoft-Konto (persönlich oder Organisations-/Geschäftskonto)
 - Zugang zum [Microsoft Entra Admin Center](https://entra.microsoft.com/) (oder Azure Portal)
-- **IP-Symcon Connect** muss konfiguriert und erreichbar sein (für OAuth-Callback)
+- **Symcon Connect** muss konfiguriert und erreichbar sein (für OAuth-Callback)
 
 ## Schritt 1: App in Microsoft Entra ID registrieren
 
