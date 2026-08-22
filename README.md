@@ -1,6 +1,6 @@
 # ToDo Liste / Einkaufsliste
 
-Diese Modul-Bibliothek enthält zwei Module: Modul 1 stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV. Modul 2 ist eine Einkaufsliste für die Tile-Visualisierung.
+Diese Modul-Bibliothek stellt eine ToDo-Liste und eine Einkaufsliste für die Tile-Visualisierung bereit — optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV. Mit **SymDo** kommen eine Web-App fürs Handy und eine Kachel dazu, die beide Listen samt Kalender, Notizen, KI-Funktionen und täglichem Briefing in einer Oberfläche für die ganze Familie bündeln.
 
 ## ToDo Liste
 Aufgabenverwaltung für die IP-Symcon Kachel-Visualisierung.
@@ -36,7 +36,17 @@ Einkaufsliste für die IP-Symcon Kachel-Visualisierung.
 
 ![Shopping List](https://github.com/da8ter/images/blob/main/shoppinglist.png)
 
+## SymDo
+Familien-App für IP-Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-Store) und Kachel für die Tile-Visualisierung — beide mit derselben Oberfläche.
+
+- Bereiche: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender (OpenCalendar) und Notizen
+- Familienmitglieder mit Foto, Aufgaben-Zuweisung und „Meine Aufgaben"
+- Tägliches Briefing mit Sprachausgabe (OpenAI, Azure oder ElevenLabs) — neun Personas vom Butler bis zum Drillsergeant
+- KI-Analyse: Foto, PDF oder E-Mail wird zu Aufgaben-, Termin- und Notiz-Vorschlägen (eigener Schlüssel oder lokaler Server)
+- Web-Push aufs Handy: fällige Aufgaben, neues Briefing, neue KI-Vorschläge
+
 ## Anleitungen:
 
 - [ToDo Liste](ToDoList/README.md)
 - [Einkaufsliste](ShoppingList/README.md)
+- [SymDo](SymDoGateway/README.md)
