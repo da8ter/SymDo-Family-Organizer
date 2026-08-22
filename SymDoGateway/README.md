@@ -1,8 +1,18 @@
 # SymDo
 
-SymDo macht aus den Listen dieser Bibliothek eine **App für die ganze Familie**: eine Web-App fürs Handy (als Home-Screen-App installierbar) und eine Kachel für die Tile-Visualisierung — beide zeigen dieselbe Oberfläche. Dazu kommen Familienmitglieder mit Foto, ein tägliches Briefing mit Sprachausgabe, KI-Funktionen (Foto, PDF und E-Mail werden zu Aufgaben, Terminen und Notizen) und Push-Benachrichtigungen aufs Handy.
+**Der Familienorganizer für IP-Symcon — mit einer KI, die den Papierkram übernimmt.**
 
-SymDo besteht aus zwei Instanzen:
+Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: SymDo bringt den Familienalltag aufs Handy und auf die Wandvisualisierung — ohne App-Store, ohne Cloud-Zwang, direkt aus dem eigenen IP-Symcon. Jedes Familienmitglied sieht auf einen Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
+
+Das Beste daran: die KI nimmt euch die Tipparbeit ab.
+
+- **Fotografieren statt abtippen** — Elternbrief, Rezept oder Terminzettel einfach knipsen: die KI macht daraus fertige Aufgaben, Termine und Notizen. Kurz prüfen, übernehmen, fertig.
+- **E-Mails, die sich selbst eintragen** — die Schulmail und die Erinnerung vom Zahnarzt landen als fertige Vorschläge im KI-Eingang, schon dem richtigen Familienmitglied zugeordnet.
+- **Ein Briefing wie vom persönlichen Assistenten** — jeden Morgen fasst die KI zusammen, was heute zählt: Termine, fällige Aufgaben, die Einkaufsliste. Auf Wunsch vorgelesen, im Ton eurer Wahl — vom höflichen Butler bis zum Drillsergeant, der die Familie aus dem Bett scheucht.
+- **Nichts geht mehr unter** — Push aufs Handy, wenn eine Aufgabe fällig wird, das Briefing bereitsteht oder die KI etwas Neues gefunden hat.
+- **Eure Daten bleiben eure** — die KI läuft mit dem eigenen Schlüssel beim Anbieter eurer Wahl oder komplett lokal im eigenen Netz. Und ohne eure ausdrückliche Einwilligung bleibt sie aus.
+
+Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt, als Home-Screen-App installierbar) und als Kachel für die Tile-Visualisierung — beide zeigen denselben Stand. Technisch besteht SymDo aus zwei Instanzen:
 
 | Instanz | Modul | Aufgabe |
 |---|---|---|
