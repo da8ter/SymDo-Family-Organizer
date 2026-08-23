@@ -602,7 +602,9 @@ trait Briefing
             'name'         => $this->BriefingAudience($mitglieder, $userId),
             // Ist es ein Haushalts-Briefing? Danach richtet sich die Anrede-Regel im
             // Prompt: einen Namen ansprechen oder jeden bei seinen Sachen nennen.
-            'haushalt'     => $userId === '',
+            // Ueber den Helfer, nicht ueber $userId === '': ein Ein-Personen-
+            // Haushalt wird persoenlich angesprochen.
+            'haushalt'     => $this->BriefingHaushalt(),
             'tage'         => $tage,
             'termine'      => $this->BriefingEventLines($mitglieder, $tage),
             'aufgaben'     => $this->BriefingTaskLines($mitglieder, false, $tage),
@@ -687,11 +689,32 @@ trait Briefing
      *
      * Jetzt: leer = an die Familie (die Vorgabe), ein Mitglied = ausdruecklich an
      * dieses. Der Rueckfall auf die Kachel-Property ist damit weg — er konnte nur
-     * die falsche Anrede erzeugen, nie die richtige.
+     * die falsche Anrede erzeugen, nie die richtige. Ob „an die Familie" auch als
+     * Mehrzahl gesprochen wird, entscheidet BriefingHaushalt().
      */
     private function BriefingUserId(): string
     {
         return trim((string)$this->BriefingProp('BriefingUserID', ''));
+    }
+
+    /**
+     * Ist es WIRKLICH ein Briefing an mehrere? Erst ab zwei Mitgliedern.
+     *
+     * „— die ganze Familie —" (leer, die Vorgabe) heisst bei einem
+     * Ein-Personen-Haushalt: genau ein Leser. „Guten Morgen, ihr alle" fuer
+     * eine Person liest sich wie ein Serienbrief — die Person soll ihre
+     * persoenliche Anrede bekommen, ohne dass sie sich selbst als Mitglied
+     * auswaehlen muss (das waere dieselbe Entscheidung an einer zweiten Stelle,
+     * und beim Anlegen des zweiten Mitglieds muesste man daran denken, sie
+     * wieder zurueckzunehmen).
+     *
+     * ALLE Anrede-Weichen laufen ueber diesen Helfer, nicht ueber
+     * BriefingUserId() === '' — sonst spraeche der Systemprompt von der
+     * „GANZEN Familie", waehrend die Anrede persoenlich ist.
+     */
+    private function BriefingHaushalt(): bool
+    {
+        return $this->BriefingUserId() === '' && count($this->BriefingMembers()) > 1;
     }
 
     /**
@@ -715,6 +738,11 @@ trait Briefing
         }
         if ($namen === []) {
             return '';
+        }
+        // Ein-Personen-Haushalt: die persoenliche Anrede, kein „die ganze
+        // Familie (Max)" — siehe BriefingHaushalt().
+        if (count($namen) === 1) {
+            return $namen[0];
         }
         return 'die ganze Familie (' . implode(', ', $namen) . ')';
     }
@@ -1041,7 +1069,7 @@ trait Briefing
             }
         }
         $sammel = '';
-        if ($this->BriefingUserId() === '') {
+        if ($this->BriefingHaushalt()) {
             $sammel = $geduzte > 0
                 ? ' Die Familie als ganze wird mit „ihr" und „euch" angesprochen, niemals '
                     . 'mit „Sie" oder „Ihnen" — die Kinder sind mitgemeint. Das gilt auch '
@@ -1089,7 +1117,7 @@ trait Briefing
             // Modell aus der Namensliste einen heraus und spricht wieder nur den an —
             // genau der Missstand, den das Haushalts-Briefing behebt (bis zum
             // 22.08.2026 las Anna „Rekrut Max, mach dich bereit!").
-            . ($this->BriefingUserId() === ''
+            . ($this->BriefingHaushalt()
                 ? 'Das Briefing gilt der GANZEN Familie. Sprich niemanden einzeln mit „du" '
                     . 'an — nenne jeden bei den Sachen, die ihm zugeordnet sind. Eine '
                     . 'gemeinsame Anrede am Anfang ist gut („Guten Morgen, ihr vier"), eine '
@@ -1291,7 +1319,7 @@ trait Briefing
                     // Der Vorname nur im persoenlichen Briefing. Im Haushalts-Briefing
                     // waere „Digga, Max, …" wieder die Einzelanrede, die hier gerade
                     // vermieden werden soll — dort steht „Digga" fuer sich.
-                    . ($this->BriefingUserId() === ''
+                    . ($this->BriefingHaushalt()
                         ? '„Digga" steht fuer sich, ohne einen Vornamen dahinter — es gilt '
                             . 'allen. '
                         : 'Den Vornamen sprichst du zusätzlich an, beides zusammen: '

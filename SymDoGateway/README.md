@@ -142,7 +142,7 @@ Diese Schalter gelten für **alle** Listen dieser Web-App und dieser Kachel geme
 
 Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine kurze Zusammenfassung: Termine des Tages, fällige und überfällige Aufgaben, Stand der Einkaufsliste. Das Briefing erscheint auf der Übersicht der App und der Kachel — auf Wunsch mit Sprachausgabe zum Abspielen.
 
-- **Geschrieben für** — ein einzelnes Mitglied (persönliche Anrede) oder *— die ganze Familie —* (Haushalts-Briefing: alle werden gemeinsam angesprochen, jede Aufgabe mit dem Namen des Zuständigen)
+- **Geschrieben für** — ein einzelnes Mitglied (persönliche Anrede) oder *— die ganze Familie —* (Haushalts-Briefing: alle werden gemeinsam angesprochen, jede Aufgabe mit dem Namen des Zuständigen). Lebt nur ein Mitglied im Haushalt, spricht auch das Familien-Briefing es automatisch persönlich an
 - **Persona** — Tonfall des Texts **und** der Stimme: Sachlich, Förmlich, Butler, Kumpel, Lustig, Drillsergeant, Motivationstrainer, Jammerlappen, Digga. Die Persona *Förmlich* siezt Erwachsene mit Nachnamen („Herr Muster"), Kinder bleiben beim Vornamen und Du
 - **Personas bearbeiten** — je Persona lässt sich für jeden Sprachausgabe-Anbieter eine eigene Stimme hinterlegen; ohne Eintrag gilt die eingebaute Vorgabe
 - **Vorschau am Vorabend** — ab der eingestellten Uhrzeit (Standard 18:00 Uhr) zeigt die Übersicht das Briefing für morgen
