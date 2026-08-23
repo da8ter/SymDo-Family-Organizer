@@ -11121,6 +11121,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function runAiExtract(payload) {
     aiAdd.disabled = true;
+    // Die Notiz-Wahl der Pruefansicht haengt an den GELADENEN Ordnern — und die
+    // laedt sonst erst der Notizen-Bereich beim ersten Oeffnen. Wer direkt aus
+    // ToDos oder Terminen scannte, sah deshalb nie eine Notiz-Wahl (live am
+    // 23.08.2026 gemeldet; die Fixture hatte den Bereich vorher angeklickt und
+    // den Fehler damit versteckt). Also: parallel zur Analyse anstossen und
+    // erst zeichnen, wenn BEIDES da ist — die Analyse dauert ohnehin laenger,
+    // und ladeNotizen meldet sich auch im Fehlerfall zurueck (fertig() laeuft
+    // auf jedem Pfad, der Rueckruf haengt nie).
+    if (!notizenGeladen) ladeNotizen();
     const statusMsg = (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
@@ -11131,7 +11140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         aiStatus(escapeHtml(msg));
         return;
       }
-      renderAiReview(Array.isArray(j.todos) ? j.todos : []);
+      const rows = Array.isArray(j.todos) ? j.todos : [];
+      if (notizenGeladen) { renderAiReview(rows); return; }
+      ladeNotizen(() => renderAiReview(rows));
     };
     const fail = () => aiStatus(translate('Could not reach the AI service.'));
     // aiPost wählt den Transport: Standalone REST/Adapter, Visu-Kachel requestAction-Relay.
