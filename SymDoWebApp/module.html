@@ -10904,6 +10904,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const titel = feld ? feld.value.trim() : '';
       noteEditorOeffnen({ folderId: notesOrdnerId || '', title: titel, text: '', att: [] });
       if (feld) { feld.value = ''; notizenEingabePruefen(); }
+      // Vom KI-Knopf aus heisst das Blatt wie bei den Aufgaben: hier wird
+      // analysiert, nicht bloss angehaengt. Der Anhang-Knopf im Editor setzt
+      // die Beschriftung wieder zurueck (dasselbe Blatt, zwei Absichten).
+      noteQuelleBeschriften(true);
       openOverlay('noteSourceOverlay');
     });
   }
@@ -10966,9 +10970,19 @@ document.addEventListener('DOMContentLoaded', () => {
     noteAnsicht = null;
     noteEditorOeffnen(notiz);
   });
+  // Dasselbe Quellen-Blatt traegt zwei Absichten: der KI-Knopf verspricht die
+  // Analyse (Beschriftung wie bei den Aufgaben), der Anhang-Knopf nur das
+  // Anhaengen. Beide Wege laufen danach identisch — angehaengt UND (wenn die
+  // KI an ist) analysiert wird immer.
+  function noteQuelleBeschriften(analyse) {
+    document.getElementById('noteSourceTitle').textContent = translate(analyse ? 'Detect note' : 'Attach photo or file');
+    document.getElementById('noteFromPhotoLabel').textContent = translate(analyse ? 'Analyze photo' : 'Take photo');
+    document.getElementById('noteFromFileLabel').textContent = translate(analyse ? 'Analyze file' : 'Choose file');
+  }
   document.getElementById('btnNoteAttach').addEventListener('click', () => {
     // Ohne gespeicherte Notiz gibt es noch keine Kennung, an die ein Anhang koennte.
     // Die KI darf trotzdem laufen — sie legt nichts ab.
+    noteQuelleBeschriften(false);
     openOverlay('noteSourceOverlay');
   });
   document.getElementById('btnNoteFromPhoto').addEventListener('click', () => {
