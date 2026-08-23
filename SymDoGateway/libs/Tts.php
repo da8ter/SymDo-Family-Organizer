@@ -1051,6 +1051,54 @@ trait Tts
     }
 
     /** @param array<string, array{id:int,at:int}> $cache */
+    /**
+     * Markiert einen Schnipsel als Briefing-Aufnahme. Der Unterschied zaehlt
+     * beim Aufraeumen: Einkaufs-Ansagen („2 Kilo Aepfel") werden WIEDERVERWENDET
+     * und sollen liegen bleiben — ein Briefing-Text kommt nie wieder vor, sein
+     * Schnipsel ist nach ein paar Tagen nur noch Ballast.
+     */
+    private function TtsMarkBriefing(string $hash): void
+    {
+        $cache = $this->TtsCacheRead();
+        if (!isset($cache[$hash]) || !empty($cache[$hash]['briefing'])) {
+            return;
+        }
+        $cache[$hash]['briefing'] = true;
+        $this->TtsCacheWrite($cache);
+    }
+
+    /**
+     * Raeumt Briefing-Schnipsel weg, die aelter als $tage sind (Wunsch vom
+     * 23.08.2026: nach 7 Tagen loeschen). NUR markierte: die Einkaufs-Ansagen
+     * bezahlt man sonst jede Woche neu. Die aktuellen Briefings sind nie
+     * betroffen — heutiges und Vorschau sind hoechstens zwei Tage alt, und das
+     * feste Objekt „Briefing-Audio" traegt ohnehin eine eigene Kopie.
+     *
+     * @return int wie viele entfernt wurden
+     */
+    private function TtsSweepBriefing(int $tage = 7): int
+    {
+        $cache  = $this->TtsCacheRead();
+        $grenze = time() - $tage * 86400;
+        $weg    = 0;
+        foreach ($cache as $hash => $eintrag) {
+            if (empty($eintrag['briefing']) || (int)($eintrag['at'] ?? 0) >= $grenze) {
+                continue;
+            }
+            $mid = (int)($eintrag['id'] ?? 0);
+            if ($mid > 0 && @IPS_MediaExists($mid)) {
+                @IPS_DeleteMedia($mid, true);
+            }
+            unset($cache[$hash]);
+            $weg++;
+        }
+        if ($weg > 0) {
+            $this->TtsCacheWrite($cache);
+            $this->SendDebug('TTS', sprintf('%d alte Briefing-Aufnahme(n) entfernt', $weg), 0);
+        }
+        return $weg;
+    }
+
     private function TtsEvict(array $cache): array
     {
         if (count($cache) <= self::TTS_CACHE_MAX) {

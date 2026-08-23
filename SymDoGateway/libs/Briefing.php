@@ -60,6 +60,9 @@ trait Briefing
     private const BRIEFING_TTS_BYTES_AZURE_MP3 = 420;
 
     /** Format der Aufnahmen. Jeder Browser und iOS spielen AAC ohne Zutun. */
+    /** Briefing-Aufnahmen im Zwischenspeicher: nach so vielen Tagen weg. */
+    private const BRIEFING_AUDIO_KEEP_DAYS = 7;
+
     private const BRIEFING_TTS_FORMAT = 'aac';
 
     private ?array $briefingConfigCache = null;
@@ -1617,8 +1620,13 @@ trait Briefing
                 $this->SendDebug('Briefing', 'Ton konnte nicht erzeugt werden', 0);
                 return [];   // halber Ton ist schlechter als keiner
             }
+            // Als Briefing markieren: nur markierte Schnipsel raeumt der
+            // 7-Tage-Lauf weg, die wiederverwendbaren Einkaufs-Ansagen nie.
+            $this->TtsMarkBriefing($hash);
             $kennungen[] = $hash;
         }
+        // Einmal je Erzeugung, also einmal am Tag: alte Briefing-Aufnahmen weg.
+        $this->TtsSweepBriefing(self::BRIEFING_AUDIO_KEEP_DAYS);
         $this->SendDebug('Briefing', sprintf('Ton erzeugt (%s, %d Zeichen, %d Datei(en))',
             $stimme, mb_strlen($vorlesen), count($kennungen)), 0);
         return $kennungen;
