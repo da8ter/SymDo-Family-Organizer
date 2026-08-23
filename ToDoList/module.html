@@ -2046,10 +2046,6 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-kind { display: inline-flex; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent); border-radius: 999px; overflow: hidden; }
 .ai-kind button { border: 0; background: transparent; color: inherit; font-size: 12px; padding: 4px 12px; cursor: pointer; }
 .ai-kind button.on { background: var(--accent); color: #fff; }
-/* Kalender-Wahl unter der Liste: nur sichtbar, wenn Termine dabei sind und es
-   mehr als einen beschreibbaren Kalender gibt. */
-.ai-cal-row { display: flex; align-items: center; gap: 10px; padding: 0 16px 12px; }
-.ai-cal-row select { flex: 1; min-width: 0; }
 /* KI-Rezeptkopf: Titel + Portionen mit Mengen-Stepper */
 .ai-recipe-head { padding: 2px 0 12px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent); }
 .ai-recipe-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
@@ -2969,10 +2965,6 @@ html[data-symdo-theme="dark"] .member-bar {
       <button class="btn-close-overlay" data-close="aiReviewOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body" id="aiReviewBody"></div>
-    <div class="ai-cal-row" id="aiCalWrap" style="display:none">
-      <span id="aiCalLabel"></span>
-      <select id="aiCalSelect"></select>
-    </div>
     <div class="overlay-footer">
       <button data-close="aiReviewOverlay" id="btnAiCancel"></button>
       <button id="btnAiFav" style="display:none" aria-label="In Favoritenliste speichern"><i class="fa-light fa-heart"></i></button>
@@ -4172,6 +4164,12 @@ function openOverlay(id) {
 function closeOverlay(id) {
   const ov = document.getElementById(id);
   if (!ov) return;
+  // Uebernahme-Kette des KI-Scans: das Schliessen des erwarteten Dialogs —
+  // durch Speichern WIE durch Abbrechen — ruft den naechsten Fund auf.
+  if (aiUebernahmeWartet === id && ov.classList.contains('open')) {
+    aiUebernahmeWartet = '';
+    window.setTimeout(aiUebernahmeWeiter, 350);
+  }
   if (mbReduceMotion() || !ov.classList.contains('open')) {
     ov.classList.remove('open');
     return;
@@ -6423,6 +6421,61 @@ function mailDueFields(due, time) {
     ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(t[1]), Number(t[2]))
     : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   return { due: Math.floor(d.getTime() / 1000), dueAllDay: !t, dueDay: m[0] };
+}
+
+// ── Uebernahme-Kette des KI-Scans ────────────────────────────────────────
+// Nach „Hinzufuegen" oeffnet sich je Fund der passende, vorausgefuellte
+// Dialog NACHEINANDER (Wunsch vom 23.08.2026: „damit man z.B. noch den
+// Ordner anpassen kann"). Speichern legt den Fund an, Abbrechen ueberspringt
+// ihn — beides schliesst den Dialog, und das Schliessen (Haken in
+// closeOverlay) ruft den naechsten auf. Es gibt also keinen zweiten
+// Speicherweg: es gelten die Pruefungen und Ansagen der Dialoge selbst.
+let aiUebernahmeKette = [];
+let aiUebernahmeWartet = '';
+function aiUebernahmeWeiter() {
+  if (!aiUebernahmeKette.length) { aiUebernahmeWartet = ''; return; }
+  const e = aiUebernahmeKette.shift();
+  const me = currentUserID();
+  if (e.art === 'note') {
+    if (!notizen.folders || notizen.folders.length === 0) {
+      showToast(translate('Create a folder first'));
+      aiUebernahmeWeiter();
+      return;
+    }
+    const fid = (me && notizen.memberFolders && notizen.memberFolders[me]) || notesOrdnerId || notesErsterOrdner();
+    aiUebernahmeWartet = 'noteOverlay';
+    noteEditorOeffnen({ folderId: fid || '', title: String(e.t.title || ''),
+      text: e.t.info ? String(e.t.info) : '', att: [] });
+    return;
+  }
+  if (e.art === 'event') {
+    // openCalEditor sagt ohne beschreibbaren Kalender selbst ab — dann darf
+    // die Kette nicht auf ein Schliessen warten, das nie kommt.
+    if (calWritable().length === 0) {
+      showToast(translate('No writable calendar available.'));
+      aiUebernahmeWeiter();
+      return;
+    }
+    aiUebernahmeWartet = 'calEditOverlay';
+    openCalEditor(Object.assign({}, e.t, { userId: me || '' }));
+    return;
+  }
+  const ziel = selectedTodoID();
+  if (!ziel) {
+    aiUebernahmeKette = [];
+    showToast(translate('No ToDo list found'));
+    return;
+  }
+  const entwurf = Object.assign({
+    id: null, title: String(e.t.title || ''), info: e.t.info ? String(e.t.info) : '',
+    priority: e.t.priority || 'normal', quantity: 0,
+    assignedTo: me ? [me] : [], recurrence: 'none', notification: false
+  }, mailDueFields(e.t.due, e.t.time));
+  aiUebernahmeWartet = 'todoOverlay';
+  openTodoEditor(ziel, entwurf);
+  // openTodoEditor haelt jedes uebergebene Objekt fuer eine Bearbeitung,
+  // hier ist es ein Entwurf — dieselbe Richtigstellung wie beim Mail-Vorschlag.
+  document.getElementById('todoOverlayTitle').textContent = translate('New task');
 }
 
 function mailWhenText(due, time, end) {
@@ -11271,15 +11324,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const kannNotiz  = !!(notizen && Array.isArray(notizen.folders) && notizen.folders.length > 0);
     document.getElementById('aiReviewTitle').textContent = translate((kannTermin || kannNotiz) ? 'Detected entries' : 'Detected tasks');
     if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
-    if (kannTermin) {
-      const sel = document.getElementById('aiCalSelect');
-      const schreibbar = calWritable();
-      sel.innerHTML = schreibbar.map(c =>
-        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`).join('');
-      const gemerkt = String(ls.get('symdo.calWrite') || '');
-      if (schreibbar.some(c => String(c.id) === gemerkt)) sel.value = gemerkt;
-      document.getElementById('aiCalLabel').textContent = translate('Calendar');
-    }
     aiBody.innerHTML = '';
     rows.forEach(it => {
       const row = document.createElement('div');
@@ -11306,13 +11350,10 @@ document.addEventListener('DOMContentLoaded', () => {
       zeigeWahl();
       row.querySelectorAll('.ai-kind button').forEach(b => b.addEventListener('click', (ev) => {
         // Die Wahl darf die Zeile nicht abwaehlen — ein Tipp, eine Bedeutung.
+        // Auch ein Fund OHNE Datum darf zum Termin werden: sein Dialog oeffnet
+        // sich beim Uebernehmen ohnehin, und dort wird der Anfang gesetzt —
+        // ohne ihn speichert der Dialog nicht.
         ev.stopPropagation();
-        if (b.dataset.k === 'event' && !it.due) {
-          // Ein Termin braucht einen Anfang. Stumm „heute" zu erfinden truege
-          // einen falschen Tag in den Kalender.
-          showToast(translate('Without a date this cannot become an appointment.'));
-          return;
-        }
         row.__kind = b.dataset.k;
         zeigeWahl();
         updateAiAdd();
@@ -11446,13 +11487,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       aiAdd.textContent = n > 0 ? translate('Add') + ' (' + n + ')' : translate('Add');
     }
-    // Kalender-Wahl nur, wenn Termine dabei sind UND es etwas zu waehlen gibt —
-    // bei genau einem beschreibbaren Kalender ist er gesetzt.
-    const wrap = document.getElementById('aiCalWrap');
-    if (wrap) {
-      const termine = aiReviewMode === 'todos' ? gewaehlt.filter(r => r.__kind === 'event').length : 0;
-      wrap.style.display = (termine > 0 && calWritable().length > 1) ? '' : 'none';
-    }
   }
 
   function aiDueFields(due) {
@@ -11475,103 +11509,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const rows = Array.from(aiBody.querySelectorAll('.ai-row.selected'));
     if (!rows.length) return;
-    const me = currentUserID();
-    const aufgaben = rows.filter(r => r.__kind !== 'event' && r.__kind !== 'note');
-    const termine = rows.filter(r => r.__kind === 'event');
-    const notizZeilen = rows.filter(r => r.__kind === 'note');
-    if (aufgaben.length) {
-      const target = selectedTodoID();
-      aufgaben.forEach(row => {
-        const t = row.__todo || {};
-        const fields = Object.assign({
-          title: String(t.title || ''), info: t.info ? String(t.info) : '',
-          priority: t.priority || 'normal', quantity: 0,
-          assignedTo: me ? [me] : [], recurrence: 'none', notification: false
-        }, aiDueFields(t.due));
-        if (me) fields.actorUserId = me;
-        sdCall(target, 'AddItem', fields);
-      });
-      showToast(translate('%1 tasks added').replace('%1', String(aufgaben.length)));
-    }
-    // Notizen entstehen direkt: in den eigenen Mitglieder-Ordner, sonst in den
-    // gerade offenen, sonst in den ersten — dieselbe Staffel wie beim
-    // Uebernehmen eines Mail-Vorschlags. Der Text der Notiz ist die
-    // Zusatzinfo des Fundes; mehr hat ein Scan-Fund nicht.
-    let notizLauf = Promise.resolve({ gut: 0, alle: 0 });
-    if (notizZeilen.length) {
-      const fid = (me && notizen.memberFolders && notizen.memberFolders[me]) || notesOrdnerId || notesErsterOrdner();
-      notizLauf = Promise.all(notizZeilen.map(row => {
-        const t = row.__todo || {};
-        return aiPost('/notes', { action: 'noteCreate', folderId: String(fid || ''),
-            title: String(t.title || ''), text: t.info ? String(t.info) : '' })
-          .then(r => !!(r && r.json && r.json.ok === true)).catch(() => false);
-      })).then(erg => {
-        const gut = erg.filter(Boolean).length;
-        if (gut > 0) { notizenGeladen = false; ladeNotizen(); }
-        return { gut: gut, alle: erg.length };
-      });
-    }
-    if (!termine.length) {
-      notizLauf.then(n => {
-        if (n.alle > 0 && n.gut > 0) {
-          showToast(n.gut > 1 ? translate('%1 notes added').replace('%1', String(n.gut)) : translate('Note added'));
-        }
-        if (n.alle > n.gut) {
-          setTimeout(() => showToast(translate('%1 of %2 notes could not be created.')
-            .replace('%1', String(n.alle - n.gut)).replace('%2', String(n.alle))), n.gut > 0 ? 2200 : 0);
-        }
-        closeOverlay('aiReviewOverlay');
-      });
-      return;
-    }
-    // Termine entstehen DIREKT im gewaehlten Kalender — mit genau den Werten,
-    // die der Termin-Dialog unveraendert speichern wuerde: Start aus Datum und
-    // Uhrzeit, ohne Uhrzeit ganztaegig, Ende nur wenn die KI eines nennt, bei
-    // einer Reihe rechnet das Gateway die Einzeltermine. KEINE Erinnerung:
-    // die legt niemand ungefragt an.
-    const schreibbar = calWritable();
-    const sel = document.getElementById('aiCalSelect');
-    const kalenderID = parseInt(sel && sel.value) || (schreibbar.length ? parseInt(String(schreibbar[0].id)) || 0 : 0);
-    if (!kalenderID) { showToast(translate('No writable calendar available.')); closeOverlay('aiReviewOverlay'); return; }
-    aiAdd.disabled = true;
-    Promise.all(termine.map(row => {
-      const t = row.__todo || {};
-      const ganztags = !t.time;
-      const ereignis = {
-        title: String(t.title || ''), allDay: ganztags,
-        start: calLocalInput(String(t.due || ''), String(t.time || ''), ganztags),
-        end: t.end ? calLocalInput(String(t.end), null, ganztags) : '',
-        location: '', info: t.info ? String(t.info) : '',
-        members: me ? [me] : [], reminder: -1
-      };
-      if (t.recurrence) { ereignis.recurrence = t.recurrence; delete ereignis.end; }
-      return aiPost('/calendar', { action: 'create', calendarID: kalenderID, event: ereignis })
-        .then(r => !!(r && r.json && r.json.ok === true)).catch(() => false);
-    })).then(erg => {
-      aiAdd.disabled = false;
-      const gut = erg.filter(Boolean).length;
-      if (gut > 0) {
-        ls.set('symdo.calWrite', String(kalenderID));
-        showToast(gut > 1 ? translate('%1 appointments added').replace('%1', String(gut)) : translate('Appointment added'));
-        calEvents = [];
-        loadCalendarEvents();
-      }
-      if (gut < erg.length) {
-        // Nicht stumm: ein abgelehnter Termin waere sonst einfach weg.
-        setTimeout(() => showToast(translate('%1 of %2 appointments could not be created.')
-          .replace('%1', String(erg.length - gut)).replace('%2', String(erg.length))), gut > 0 ? 2200 : 0);
-      }
-      notizLauf.then(n => {
-        if (n.alle > 0 && n.gut > 0) {
-          setTimeout(() => showToast(n.gut > 1 ? translate('%1 notes added').replace('%1', String(n.gut)) : translate('Note added')), gut > 0 ? 1100 : 0);
-        }
-        if (n.alle > n.gut) {
-          setTimeout(() => showToast(translate('%1 of %2 notes could not be created.')
-            .replace('%1', String(n.alle - n.gut)).replace('%2', String(n.alle))), 3300);
-        }
-        closeOverlay('aiReviewOverlay');
-      });
-    });
+    // Kein stilles Anlegen mehr: je Fund oeffnet sich der vorausgefuellte
+    // Dialog, einer nach dem anderen — Aufgaben-, Termin- oder Notiz-Editor
+    // je nach Wahl in der Zeile. Dort laesst sich alles richtigstellen
+    // (Ordner, Kalender, Datum), Speichern legt an, Abbrechen ueberspringt.
+    aiUebernahmeKette = rows.map(r => ({ art: r.__kind, t: r.__todo || {} }));
+    closeOverlay('aiReviewOverlay');
+    window.setTimeout(aiUebernahmeWeiter, 350);
   });
 
   // ── Favoriten-Speichern (Rezept → Favoritenliste) ──

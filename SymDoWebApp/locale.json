@@ -18,7 +18,6 @@
             "%1 of %2 open": "%1 von %2 offen",
             "%1 of %2 tasks done": "%1 von %2 Aufgaben geschafft",
             "%1 servings": "%1 Portionen",
-            "%1 tasks added": "%1 Aufgaben hinzugefügt",
             "1 hour before": "1 Stunde vorher",
             "1 item": "1 Artikel",
             "1 more task": "1 weitere Aufgabe",
@@ -372,12 +371,7 @@
             "New appointment …": "Neuer Termin …",
             "Create a folder first": "Erst einen Ordner anlegen",
             "Detect note": "Notiz erkennen",
-            "Detected entries": "Erkannte Einträge",
-            "Without a date this cannot become an appointment.": "Ohne Datum wird daraus kein Termin.",
-            "%1 of %2 appointments could not be created.": "%1 von %2 Terminen ließen sich nicht anlegen.",
-            "Note added": "Notiz hinzugefügt",
-            "%1 notes added": "%1 Notizen hinzugefügt",
-            "%1 of %2 notes could not be created.": "%1 von %2 Notizen ließen sich nicht anlegen."
+            "Detected entries": "Erkannte Einträge"
         }
     }
 }
