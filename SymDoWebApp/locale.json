@@ -371,7 +371,8 @@
             "New appointment …": "Neuer Termin …",
             "Create a folder first": "Erst einen Ordner anlegen",
             "Detect note": "Notiz erkennen",
-            "Detected entries": "Erkannte Einträge"
+            "Detected entries": "Erkannte Einträge",
+            "Scanned photo": "Gescanntes Foto"
         }
     }
 }

@@ -6394,6 +6394,14 @@ function aiUebernahmeWeiter() {
     aiUebernahmeWartet = 'noteOverlay';
     noteEditorOeffnen({ folderId: fid || '', title: String(e.t.title || ''),
       text: e.t.info ? String(e.t.info) : '', att: [] });
+    // Die gescannte Datei zum Mitspeichern anbieten — vorgehakt, wie die
+    // Anhaenge eines Mail-Vorschlags: wer eine Notiz aus einem fotografierten
+    // Zettel macht, will den Zettel fast immer dabei haben. Abwaehlbar bleibt
+    // sie trotzdem.
+    if (e.quelle && noteCtx) {
+      noteCtx.scanQuelle = { nutzlast: e.quelle.nutzlast, name: e.quelle.name || '', an: true };
+      noteDateienZeichnen();
+    }
     return;
   }
   if (e.art === 'event') {
@@ -8920,6 +8928,9 @@ function noteEditorOeffnen(notiz) {
     // Anhaenge, die ein Mail-Vorschlag mitbringt: zum Ankreuzen, nicht schon
     // angehaengt. Erst beim Speichern entscheidet der Haken, welche mitkommen.
     wahl: [],
+    // Die gescannte Datei aus der KI-Uebernahme: ebenfalls zum Ankreuzen, aber
+    // als ROHDATEN statt einer Medien-Kennung — sie liegt noch nirgends.
+    scanQuelle: null,
     proposal: null
   };
   noteFunde = [];
@@ -8980,7 +8991,17 @@ function noteDateienZeichnen() {
       '<i class="fa-light ' + (a.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(a.name) + '</span>' +
       '<input type="checkbox" data-wahl="' + escapeHtml(String(a.id)) + '"' + (a.an ? ' checked' : '') + '>' +
-      '</div>').join('');
+      '</div>').join('') +
+    // Die gescannte Datei aus der KI-Uebernahme: derselbe Ankreuz-Chip wie bei
+    // den Mail-Anhaengen, nur liegen hier Rohdaten vor — die Zeile zeigt sie
+    // deshalb direkt an, ohne den Server zu fragen.
+    (noteCtx && noteCtx.scanQuelle
+      ? '<div class="note-file is-scan">' +
+        '<i class="fa-light ' + (noteCtx.scanQuelle.nutzlast.pdf ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+        '<span>' + escapeHtml(noteCtx.scanQuelle.name || translate('Scanned photo')) + '</span>' +
+        '<input type="checkbox" data-scan="1"' + (noteCtx.scanQuelle.an ? ' checked' : '') + '>' +
+        '</div>'
+      : '');
   el.querySelectorAll('[data-wahl]').forEach(kasten => {
     kasten.addEventListener('change', () => {
       const eintrag = wahl.find(a => String(a.id) === String(kasten.dataset.wahl));
@@ -8994,7 +9015,18 @@ function noteDateienZeichnen() {
       noteAnhangOeffnen(parseInt(zeile.dataset.media, 10), true);
     });
   });
-  el.querySelectorAll('.note-file:not(.is-waiting):not(.is-choice)').forEach(chip => {
+  const scanKasten = el.querySelector('[data-scan]');
+  if (scanKasten) {
+    scanKasten.addEventListener('change', () => { noteCtx.scanQuelle.an = scanKasten.checked; });
+    scanKasten.addEventListener('click', (e) => e.stopPropagation());
+    el.querySelector('.note-file.is-scan').addEventListener('click', () => {
+      const q = noteCtx.scanQuelle;
+      const istPdf = !!q.nutzlast.pdf;
+      zeigeMedium(istPdf ? 'data:application/pdf;base64,' + q.nutzlast.pdf : q.nutzlast.image,
+        istPdf, q.name || translate('Scanned photo'), '');
+    });
+  }
+  el.querySelectorAll('.note-file:not(.is-waiting):not(.is-choice):not(.is-scan)').forEach(chip => {
     chip.addEventListener('click', (e) => {
       const rm = e.target.closest('[data-rm]');
       if (rm) {
@@ -9120,6 +9152,12 @@ function noteSpeichern() {
     return;
   }
   const warten = noteCtx.warten.slice();
+  // Die angehakte Scan-Quelle reist wie ein wartender Anhang: erst der
+  // noteCreate, dann der Upload an die neue Kennung. Abgehakt bleibt sie weg.
+  if (noteCtx.scanQuelle && noteCtx.scanQuelle.an) {
+    warten.push({ nutzlast: noteCtx.scanQuelle.nutzlast,
+                  name: noteCtx.scanQuelle.name || translate('Scanned photo') });
+  }
   // Aus einem Mail-Vorschlag wird per 'adopt' angelegt, nicht per 'noteCreate':
   // NUR adopt schlaegt den Anhang der Mail serverseitig im Vorschlag nach und
   // haengt ihn an. Mit noteCreate blieb die abgelegte Datei liegen und wurde zwei
@@ -10994,7 +11032,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!file) return;
     const isPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
     if (isPdf) {
-      aiReadFileB64(file).then(b64 => runAiExtract({ pdf: b64 })).catch(() => showToast(translate('Could not read the file.')));
+      // pdfName wie beim Rezept-Weg: die Notiz-Uebernahme beschriftet damit
+      // die angebotene Quelldatei. Das Gateway ignoriert unbekannte Felder.
+      aiReadFileB64(file).then(b64 => runAiExtract({ pdf: b64, pdfName: file.name || '' })).catch(() => showToast(translate('Could not read the file.')));
     } else {
       aiDownscale(file, 1280, 0.7).then(d => runAiExtract({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
     }
@@ -11183,6 +11223,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // und ladeNotizen meldet sich auch im Fehlerfall zurueck (fertig() laeuft
     // auf jedem Pfad, der Rueckruf haengt nie).
     if (!notizenGeladen) ladeNotizen();
+    // Die analysierte Datei selbst aufheben: wird ein Fund als NOTIZ
+    // uebernommen, bietet ihr Editor sie zum Mitspeichern an.
+    aiQuellDatei = payload && payload.pdf
+      ? { nutzlast: { pdf: payload.pdf }, name: String(payload.pdfName || '') }
+      : (payload && payload.image ? { nutzlast: { image: payload.image }, name: '' } : null);
     const statusMsg = (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
@@ -11238,6 +11283,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Review-Overlay wird für ToDos und Einkaufs-/Rezept-Zutaten geteilt; der Modus steuert Zeilen + Übernahme.
   let aiReviewMode = 'todos';
   let aiRecipe = null;    // { title, servings, url, factor } — für die Einkaufs-/Rezeptansicht
+  let aiQuellDatei = null; // { nutzlast: {image|pdf}, name } — die gescannte Datei für die Notiz-Übernahme
   let aiFavItems = null;  // zwischengespeicherte Auswahl fürs Favoriten-Speichern
   let aiFavSelectedList = ''; // gewählte bestehende Favoritenliste ('' = neue Liste)
 
@@ -11441,7 +11487,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dialog, einer nach dem anderen — Aufgaben-, Termin- oder Notiz-Editor
     // je nach Wahl in der Zeile. Dort laesst sich alles richtigstellen
     // (Ordner, Kalender, Datum), Speichern legt an, Abbrechen ueberspringt.
-    aiUebernahmeKette = rows.map(r => ({ art: r.__kind, t: r.__todo || {} }));
+    aiUebernahmeKette = rows.map(r => ({ art: r.__kind, t: r.__todo || {}, quelle: aiQuellDatei }));
     closeOverlay('aiReviewOverlay');
     window.setTimeout(aiUebernahmeWeiter, 350);
   });
