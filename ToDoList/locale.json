@@ -522,7 +522,10 @@
             "Detect note": "Notiz erkennen",
             "Detected entries": "Erkannte Einträge",
             "Without a date this cannot become an appointment.": "Ohne Datum wird daraus kein Termin.",
-            "%1 of %2 appointments could not be created.": "%1 von %2 Terminen ließen sich nicht anlegen."
+            "%1 of %2 appointments could not be created.": "%1 von %2 Terminen ließen sich nicht anlegen.",
+            "Note added": "Notiz hinzugefügt",
+            "%1 notes added": "%1 Notizen hinzugefügt",
+            "%1 of %2 notes could not be created.": "%1 von %2 Notizen ließen sich nicht anlegen."
         },
         "en": {
             "ToDo List": "ToDo List",

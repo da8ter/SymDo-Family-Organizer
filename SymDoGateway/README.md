@@ -49,7 +49,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Tägliches Briefing** — die KI fasst morgens Termine, Aufgaben und Einkäufe zusammen, wahlweise mit Sprachausgabe; neun Personas vom Butler bis zum Drillsergeant
 - **Rezeptanalyse** — Rezeptfoto, PDF oder Rezept-URL wird zur Zutatenliste: Portionen skalierbar, Zutaten direkt auf die Einkaufsliste oder als Favoritenliste gespeichert, auf Wunsch mit dem Rezept selbst daran
 - **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
-- **KI-Analyse** — Foto oder PDF wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; jeder Fund lässt sich vor der Übernahme zwischen Aufgabe und Termin umstimmen. Auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
+- **KI-Analyse** — Foto oder PDF wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; jeder Fund lässt sich vor der Übernahme zwischen Aufgabe, Termin und Notiz umstimmen. Auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
 - **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text und Anhängen (Bild, PDF)
 - **Kalender** — Termine aus dem Store-Modul OpenCalendar lesen, anlegen und bearbeiten
 - **Web-Push** — Benachrichtigungen aufs gekoppelte Handy bei fälligen Aufgaben, neuem Briefing und neuen KI-Vorschlägen; Termin-Erinnerungen zusätzlich über die Kachel-Visualisierung

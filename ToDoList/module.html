@@ -2039,10 +2039,12 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-/* KI-Pruefansicht: Wahl je Fund — Aufgabe oder Termin. Die aktive Seite traegt
-   die Akzentfarbe; die Knoepfe duerfen die Zeile nicht abwaehlen (stopPropagation). */
+/* KI-Pruefansicht: Wahl je Fund — Aufgabe, Termin oder Notiz. Immer eine EIGENE
+   Zeile unter den Abzeichen (Wunsch vom 23.08.2026), die aktive Seite traegt die
+   Akzentfarbe; die Knoepfe duerfen die Zeile nicht abwaehlen (stopPropagation). */
+.ai-kind-row { margin-top: 8px; }
 .ai-kind { display: inline-flex; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent); border-radius: 999px; overflow: hidden; }
-.ai-kind button { border: 0; background: transparent; color: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.ai-kind button { border: 0; background: transparent; color: inherit; font-size: 12px; padding: 4px 12px; cursor: pointer; }
 .ai-kind button.on { background: var(--accent); color: #fff; }
 /* Kalender-Wahl unter der Liste: nur sichtbar, wenn Termine dabei sind und es
    mehr als einen beschreibbaren Kalender gibt. */
@@ -11251,10 +11253,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAiReview(rows) {
     aiReviewMode = 'todos';
     if (aiFav) aiFav.style.display = 'none';
-    // Termin-Wahl nur, wenn es einen beschreibbaren Kalender gibt — sonst
-    // verhaelt sich die Ansicht wie frueher: alles wird zur Aufgabe.
+    // Termin-Wahl nur, wenn es einen beschreibbaren Kalender gibt; Notiz-Wahl
+    // nur, wenn es Ordner gibt (ohne antwortet der Server not_found). Ohne
+    // beides verhaelt sich die Ansicht wie frueher: alles wird zur Aufgabe.
     const kannTermin = calWritable().length > 0;
-    document.getElementById('aiReviewTitle').textContent = translate(kannTermin ? 'Detected entries' : 'Detected tasks');
+    const kannNotiz  = !!(notizen && Array.isArray(notizen.folders) && notizen.folders.length > 0);
+    document.getElementById('aiReviewTitle').textContent = translate((kannTermin || kannNotiz) ? 'Detected entries' : 'Detected tasks');
     if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
     if (kannTermin) {
       const sel = document.getElementById('aiCalSelect');
@@ -11275,14 +11279,16 @@ document.addEventListener('DOMContentLoaded', () => {
       row.__kind = (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
-      const wahl = kannTermin
-        ? '<span class="ai-kind"><button type="button" data-k="task">' + escapeHtml(translate('Task')) + '</button>' +
-          '<button type="button" data-k="event">' + escapeHtml(translate('Appointment')) + '</button></span>'
+      const knopf = (k, wort) => '<button type="button" data-k="' + k + '">' + escapeHtml(translate(wort)) + '</button>';
+      const wahl = (kannTermin || kannNotiz)
+        ? '<div class="ai-kind-row"><span class="ai-kind">' + knopf('task', 'Task') +
+          (kannTermin ? knopf('event', 'Appointment') : '') +
+          (kannNotiz ? knopf('note', 'Note') : '') + '</span></div>'
         : '';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
         '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + prioChip + wahl + '</div></div>';
+        '<div class="ai-meta">' + dueChip + prioChip + '</div>' + wahl + '</div>';
       row.__todo = it;
       const zeigeWahl = () => row.querySelectorAll('.ai-kind button').forEach(b =>
         b.classList.toggle('on', b.dataset.k === row.__kind));
@@ -11459,8 +11465,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const rows = Array.from(aiBody.querySelectorAll('.ai-row.selected'));
     if (!rows.length) return;
     const me = currentUserID();
-    const aufgaben = rows.filter(r => r.__kind !== 'event');
+    const aufgaben = rows.filter(r => r.__kind !== 'event' && r.__kind !== 'note');
     const termine = rows.filter(r => r.__kind === 'event');
+    const notizZeilen = rows.filter(r => r.__kind === 'note');
     if (aufgaben.length) {
       const target = selectedTodoID();
       aufgaben.forEach(row => {
@@ -11475,7 +11482,37 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       showToast(translate('%1 tasks added').replace('%1', String(aufgaben.length)));
     }
-    if (!termine.length) { closeOverlay('aiReviewOverlay'); return; }
+    // Notizen entstehen direkt: in den eigenen Mitglieder-Ordner, sonst in den
+    // gerade offenen, sonst in den ersten — dieselbe Staffel wie beim
+    // Uebernehmen eines Mail-Vorschlags. Der Text der Notiz ist die
+    // Zusatzinfo des Fundes; mehr hat ein Scan-Fund nicht.
+    let notizLauf = Promise.resolve({ gut: 0, alle: 0 });
+    if (notizZeilen.length) {
+      const fid = (me && notizen.memberFolders && notizen.memberFolders[me]) || notesOrdnerId || notesErsterOrdner();
+      notizLauf = Promise.all(notizZeilen.map(row => {
+        const t = row.__todo || {};
+        return aiPost('/notes', { action: 'noteCreate', folderId: String(fid || ''),
+            title: String(t.title || ''), text: t.info ? String(t.info) : '' })
+          .then(r => !!(r && r.json && r.json.ok === true)).catch(() => false);
+      })).then(erg => {
+        const gut = erg.filter(Boolean).length;
+        if (gut > 0) { notizenGeladen = false; ladeNotizen(); }
+        return { gut: gut, alle: erg.length };
+      });
+    }
+    if (!termine.length) {
+      notizLauf.then(n => {
+        if (n.alle > 0 && n.gut > 0) {
+          showToast(n.gut > 1 ? translate('%1 notes added').replace('%1', String(n.gut)) : translate('Note added'));
+        }
+        if (n.alle > n.gut) {
+          setTimeout(() => showToast(translate('%1 of %2 notes could not be created.')
+            .replace('%1', String(n.alle - n.gut)).replace('%2', String(n.alle))), n.gut > 0 ? 2200 : 0);
+        }
+        closeOverlay('aiReviewOverlay');
+      });
+      return;
+    }
     // Termine entstehen DIREKT im gewaehlten Kalender — mit genau den Werten,
     // die der Termin-Dialog unveraendert speichern wuerde: Start aus Datum und
     // Uhrzeit, ohne Uhrzeit ganztaegig, Ende nur wenn die KI eines nennt, bei
@@ -11513,7 +11550,16 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => showToast(translate('%1 of %2 appointments could not be created.')
           .replace('%1', String(erg.length - gut)).replace('%2', String(erg.length))), gut > 0 ? 2200 : 0);
       }
-      closeOverlay('aiReviewOverlay');
+      notizLauf.then(n => {
+        if (n.alle > 0 && n.gut > 0) {
+          setTimeout(() => showToast(n.gut > 1 ? translate('%1 notes added').replace('%1', String(n.gut)) : translate('Note added')), gut > 0 ? 1100 : 0);
+        }
+        if (n.alle > n.gut) {
+          setTimeout(() => showToast(translate('%1 of %2 notes could not be created.')
+            .replace('%1', String(n.alle - n.gut)).replace('%2', String(n.alle))), 3300);
+        }
+        closeOverlay('aiReviewOverlay');
+      });
     });
   });
 
