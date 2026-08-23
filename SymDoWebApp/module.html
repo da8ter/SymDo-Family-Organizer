@@ -2039,6 +2039,15 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* KI-Pruefansicht: Wahl je Fund — Aufgabe oder Termin. Die aktive Seite traegt
+   die Akzentfarbe; die Knoepfe duerfen die Zeile nicht abwaehlen (stopPropagation). */
+.ai-kind { display: inline-flex; border: 1px solid color-mix(in srgb, var(--content-color) 25%, transparent); border-radius: 999px; overflow: hidden; }
+.ai-kind button { border: 0; background: transparent; color: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.ai-kind button.on { background: var(--accent); color: #fff; }
+/* Kalender-Wahl unter der Liste: nur sichtbar, wenn Termine dabei sind und es
+   mehr als einen beschreibbaren Kalender gibt. */
+.ai-cal-row { display: flex; align-items: center; gap: 10px; padding: 0 16px 12px; }
+.ai-cal-row select { flex: 1; min-width: 0; }
 /* KI-Rezeptkopf: Titel + Portionen mit Mengen-Stepper */
 .ai-recipe-head { padding: 2px 0 12px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent); }
 .ai-recipe-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
@@ -2953,6 +2962,10 @@ html[data-symdo-theme="dark"] .member-bar {
       <button class="btn-close-overlay" data-close="aiReviewOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body" id="aiReviewBody"></div>
+    <div class="ai-cal-row" id="aiCalWrap" style="display:none">
+      <span id="aiCalLabel"></span>
+      <select id="aiCalSelect"></select>
+    </div>
     <div class="overlay-footer">
       <button data-close="aiReviewOverlay" id="btnAiCancel"></button>
       <button id="btnAiFav" style="display:none" aria-label="In Favoritenliste speichern"><i class="fa-light fa-heart"></i></button>
@@ -11166,19 +11179,55 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAiReview(rows) {
     aiReviewMode = 'todos';
     if (aiFav) aiFav.style.display = 'none';
-    document.getElementById('aiReviewTitle').textContent = translate('Detected tasks');
+    // Termin-Wahl nur, wenn es einen beschreibbaren Kalender gibt — sonst
+    // verhaelt sich die Ansicht wie frueher: alles wird zur Aufgabe.
+    const kannTermin = calWritable().length > 0;
+    document.getElementById('aiReviewTitle').textContent = translate(kannTermin ? 'Detected entries' : 'Detected tasks');
     if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
+    if (kannTermin) {
+      const sel = document.getElementById('aiCalSelect');
+      const schreibbar = calWritable();
+      sel.innerHTML = schreibbar.map(c =>
+        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`).join('');
+      const gemerkt = String(ls.get('symdo.calWrite') || '');
+      if (schreibbar.some(c => String(c.id) === gemerkt)) sel.value = gemerkt;
+      document.getElementById('aiCalLabel').textContent = translate('Calendar');
+    }
     aiBody.innerHTML = '';
     rows.forEach(it => {
       const row = document.createElement('div');
       row.className = 'ai-row selected';
-      const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due)) + '</span>' : '';
+      // Die Einschaetzung der KI ist nur die VORBELEGUNG — „Elternabend 12.9."
+      // kann Termin oder Aufgabe sein (hingehen? Zettel zurueckgeben?), das
+      // entscheidet, wer das Blatt vor sich hat.
+      row.__kind = (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
+      const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
+      const wahl = kannTermin
+        ? '<span class="ai-kind"><button type="button" data-k="task">' + escapeHtml(translate('Task')) + '</button>' +
+          '<button type="button" data-k="event">' + escapeHtml(translate('Appointment')) + '</button></span>'
+        : '';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
         '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
+        '<div class="ai-meta">' + dueChip + prioChip + wahl + '</div></div>';
       row.__todo = it;
+      const zeigeWahl = () => row.querySelectorAll('.ai-kind button').forEach(b =>
+        b.classList.toggle('on', b.dataset.k === row.__kind));
+      zeigeWahl();
+      row.querySelectorAll('.ai-kind button').forEach(b => b.addEventListener('click', (ev) => {
+        // Die Wahl darf die Zeile nicht abwaehlen — ein Tipp, eine Bedeutung.
+        ev.stopPropagation();
+        if (b.dataset.k === 'event' && !it.due) {
+          // Ein Termin braucht einen Anfang. Stumm „heute" zu erfinden truege
+          // einen falschen Tag in den Kalender.
+          showToast(translate('Without a date this cannot become an appointment.'));
+          return;
+        }
+        row.__kind = b.dataset.k;
+        zeigeWahl();
+        updateAiAdd();
+      }));
       row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
       aiBody.appendChild(row);
     });
@@ -11299,13 +11348,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateAiAdd() {
-    const n = aiBody.querySelectorAll('.ai-row.selected').length;
+    const gewaehlt = Array.from(aiBody.querySelectorAll('.ai-row.selected'));
+    const n = gewaehlt.length;
     aiAdd.disabled = n === 0;
     if (aiReviewMode === 'shopping') {
       aiAdd.innerHTML = '<i class="fa-light fa-cart-plus"></i>';
       if (aiFav) aiFav.disabled = n === 0;
     } else {
       aiAdd.textContent = n > 0 ? translate('Add') + ' (' + n + ')' : translate('Add');
+    }
+    // Kalender-Wahl nur, wenn Termine dabei sind UND es etwas zu waehlen gibt —
+    // bei genau einem beschreibbaren Kalender ist er gesetzt.
+    const wrap = document.getElementById('aiCalWrap');
+    if (wrap) {
+      const termine = aiReviewMode === 'todos' ? gewaehlt.filter(r => r.__kind === 'event').length : 0;
+      wrap.style.display = (termine > 0 && calWritable().length > 1) ? '' : 'none';
     }
   }
 
@@ -11327,22 +11384,65 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(translate('%1 items added').replace('%1', String(items.length)));
       return;
     }
-    const rows = aiBody.querySelectorAll('.ai-row.selected');
+    const rows = Array.from(aiBody.querySelectorAll('.ai-row.selected'));
     if (!rows.length) return;
     const me = currentUserID();
-    const target = selectedTodoID();
-    rows.forEach(row => {
+    const aufgaben = rows.filter(r => r.__kind !== 'event');
+    const termine = rows.filter(r => r.__kind === 'event');
+    if (aufgaben.length) {
+      const target = selectedTodoID();
+      aufgaben.forEach(row => {
+        const t = row.__todo || {};
+        const fields = Object.assign({
+          title: String(t.title || ''), info: t.info ? String(t.info) : '',
+          priority: t.priority || 'normal', quantity: 0,
+          assignedTo: me ? [me] : [], recurrence: 'none', notification: false
+        }, aiDueFields(t.due));
+        if (me) fields.actorUserId = me;
+        sdCall(target, 'AddItem', fields);
+      });
+      showToast(translate('%1 tasks added').replace('%1', String(aufgaben.length)));
+    }
+    if (!termine.length) { closeOverlay('aiReviewOverlay'); return; }
+    // Termine entstehen DIREKT im gewaehlten Kalender — mit genau den Werten,
+    // die der Termin-Dialog unveraendert speichern wuerde: Start aus Datum und
+    // Uhrzeit, ohne Uhrzeit ganztaegig, Ende nur wenn die KI eines nennt, bei
+    // einer Reihe rechnet das Gateway die Einzeltermine. KEINE Erinnerung:
+    // die legt niemand ungefragt an.
+    const schreibbar = calWritable();
+    const sel = document.getElementById('aiCalSelect');
+    const kalenderID = parseInt(sel && sel.value) || (schreibbar.length ? parseInt(String(schreibbar[0].id)) || 0 : 0);
+    if (!kalenderID) { showToast(translate('No writable calendar available.')); closeOverlay('aiReviewOverlay'); return; }
+    aiAdd.disabled = true;
+    Promise.all(termine.map(row => {
       const t = row.__todo || {};
-      const fields = Object.assign({
-        title: String(t.title || ''), info: t.info ? String(t.info) : '',
-        priority: t.priority || 'normal', quantity: 0,
-        assignedTo: me ? [me] : [], recurrence: 'none', notification: false
-      }, aiDueFields(t.due));
-      if (me) fields.actorUserId = me;
-      sdCall(target, 'AddItem', fields);
+      const ganztags = !t.time;
+      const ereignis = {
+        title: String(t.title || ''), allDay: ganztags,
+        start: calLocalInput(String(t.due || ''), String(t.time || ''), ganztags),
+        end: t.end ? calLocalInput(String(t.end), null, ganztags) : '',
+        location: '', info: t.info ? String(t.info) : '',
+        members: me ? [me] : [], reminder: -1
+      };
+      if (t.recurrence) { ereignis.recurrence = t.recurrence; delete ereignis.end; }
+      return aiPost('/calendar', { action: 'create', calendarID: kalenderID, event: ereignis })
+        .then(r => !!(r && r.json && r.json.ok === true)).catch(() => false);
+    })).then(erg => {
+      aiAdd.disabled = false;
+      const gut = erg.filter(Boolean).length;
+      if (gut > 0) {
+        ls.set('symdo.calWrite', String(kalenderID));
+        showToast(gut > 1 ? translate('%1 appointments added').replace('%1', String(gut)) : translate('Appointment added'));
+        calEvents = [];
+        loadCalendarEvents();
+      }
+      if (gut < erg.length) {
+        // Nicht stumm: ein abgelehnter Termin waere sonst einfach weg.
+        setTimeout(() => showToast(translate('%1 of %2 appointments could not be created.')
+          .replace('%1', String(erg.length - gut)).replace('%2', String(erg.length))), gut > 0 ? 2200 : 0);
+      }
+      closeOverlay('aiReviewOverlay');
     });
-    closeOverlay('aiReviewOverlay');
-    showToast(translate('%1 tasks added').replace('%1', String(rows.length)));
   });
 
   // ── Favoriten-Speichern (Rezept → Favoritenliste) ──
