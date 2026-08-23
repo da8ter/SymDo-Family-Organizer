@@ -103,11 +103,68 @@ trait Briefing
             'ICON'         => 'Speaker',
         ], 10, (bool)$this->BriefingProp('BriefingEnabled', false));
         $this->BriefingTextVariable();
+        $this->BriefingAudioObjekt();
         if (!$this->BriefingIsEnabled()) {
             $this->BriefingArm(0);
             return;
         }
         $this->BriefingArm();
+    }
+
+    /**
+     * Ein FESTES Medienobjekt mit der Aufnahme des gezeigten Briefings — das
+     * Gegenstueck zur Statusvariable BriefingText, fuer Multiroom und eigene
+     * Automationen. Die Zwischenspeicher-Objekte der Sprachausgabe wechseln
+     * mit jedem Text (tts_<hash>) und werden irgendwann verdraengt; dieses
+     * Objekt behaelt seine Kennung.
+     *
+     * Mehrteilige Briefings werden aneinandergehaengt: je Lauf gilt EIN Format
+     * (siehe BriefingAudio), und MP3-Rahmen hintereinander spielen sauber.
+     * Geschrieben wird nur bei Aenderung — verglichen ueber die Kennungsliste
+     * im Info-Feld, nicht ueber den Inhalt (der ist gross).
+     */
+    private function BriefingAudioObjekt(): void
+    {
+        $soll = (bool)$this->BriefingProp('BriefingEnabled', false)
+            && (bool)$this->BriefingProp('BriefingAudioEnabled', true);
+        $id = (int)@IPS_GetObjectIDByIdent('BriefingAudio', $this->InstanceID);
+        if (!$soll) {
+            // Wie bei der Textvariable: aus heisst weg — ein Objekt mit
+            // veralteter Aufnahme waere schlechter als keines.
+            if ($id > 0 && IPS_MediaExists($id)) {
+                IPS_DeleteMedia($id, true);
+            }
+            return;
+        }
+        if ($id <= 0 || !IPS_MediaExists($id)) {
+            $id = IPS_CreateMedia(MEDIATYPE_DOCUMENT);
+            IPS_SetParent($id, $this->InstanceID);
+            IPS_SetIdent($id, 'BriefingAudio');
+            IPS_SetName($id, $this->Translate('Briefing audio'));
+            IPS_SetPosition($id, 11);
+            // .mp3 fuer alle heutigen Anbieterwege (OpenAI mp3, Azure mp3,
+            // ElevenLabs mp3_*). Kommt je ein anderes Format, muss der Name mit.
+            IPS_SetMediaFile($id, 'media/briefing_' . $this->InstanceID . '.mp3', false);
+        }
+        $clips = (array)($this->BriefingSlot($this->BriefingShownSlot())['clips'] ?? []);
+        $marke = implode(',', array_map('strval', $clips));
+        $info  = (string)(@IPS_GetObject($id)['ObjectInfo'] ?? '');
+        if ($marke === $info) {
+            return;
+        }
+        $roh = '';
+        foreach ($clips as $hash) {
+            $mid = $this->TtsLookup((string)$hash);
+            $teil = $mid > 0 ? base64_decode((string)IPS_GetMediaContent($mid), true) : false;
+            if (!is_string($teil) || $teil === '') {
+                // Halber Ton ist schlechter als keiner — dann lieber leeren.
+                $roh = '';
+                break;
+            }
+            $roh .= $teil;
+        }
+        IPS_SetMediaContent($id, base64_encode($roh));
+        IPS_SetInfo($id, $marke);
     }
 
     /**
@@ -598,6 +655,7 @@ trait Briefing
         $this->WsPushDirty();
         $this->SendDebug('Briefing', sprintf('erzeugt fuer %s, %d Zeichen', $zielTag, mb_strlen($text)), 0);
         $this->BriefingTextVariable();
+        $this->BriefingAudioObjekt();
         return ['ok' => true, 'message' => 'created', 'retry' => false];
     }
 
