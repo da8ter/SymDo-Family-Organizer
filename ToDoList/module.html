@@ -2422,7 +2422,8 @@ html[data-symdo-theme="dark"] .member-bar {
    ein fast unsichtbarer heller Rahmen (bzw. ein weisser Block auf hellem). Mit
    appearance: none bestimmen wir beide Zustaende: leerer Kasten mit deutlichem
    Rand, angehakt gefuellt mit dem Akzent und einem weissen Haken. */
-.note-file.is-choice input {
+.note-file.is-choice input,
+.note-file.is-scan input {
   appearance: none;
   -webkit-appearance: none;
   flex: none;
@@ -2438,7 +2439,8 @@ html[data-symdo-theme="dark"] .member-bar {
      ausserdem im Prueflauf unlesbar — unter virtueller Zeit laufen CSS-Uebergaenge
      nicht weiter, und gemessen wurde der Anfangswert. */
 }
-.note-file.is-choice input:checked {
+.note-file.is-choice input:checked,
+.note-file.is-scan input:checked {
   background-color: var(--accent);
   border-color: var(--accent);
   /* Der Haken als SVG im Hintergrund, nicht als ::after: ein <input> ist ein
@@ -9074,8 +9076,12 @@ function noteDateienZeichnen() {
     el.querySelector('.note-file.is-scan').addEventListener('click', () => {
       const q = noteCtx.scanQuelle;
       const istPdf = !!q.nutzlast.pdf;
-      zeigeMedium(istPdf ? 'data:application/pdf;base64,' + q.nutzlast.pdf : q.nutzlast.image,
-        istPdf, q.name || translate('Scanned photo'), '');
+      // aiReadFileB64 liefert bereits eine vollstaendige data:-URL; nur nackte
+      // Base64 (der Foto-Weg normalisiert anders) bekommt den Vorspann dazu.
+      const roh = istPdf ? String(q.nutzlast.pdf) : String(q.nutzlast.image);
+      const url = roh.startsWith('data:') ? roh
+        : 'data:' + (istPdf ? 'application/pdf' : 'image/jpeg') + ';base64,' + roh;
+      zeigeMedium(url, istPdf, q.name || translate('Scanned photo'), '');
     });
   }
   el.querySelectorAll('.note-file:not(.is-waiting):not(.is-choice):not(.is-scan)').forEach(chip => {
@@ -11108,7 +11114,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // die angebotene Quelldatei. Das Gateway ignoriert unbekannte Felder.
       aiReadFileB64(file).then(b64 => runAiExtract({ pdf: b64, pdfName: file.name || '' })).catch(() => showToast(translate('Could not read the file.')));
     } else {
-      aiDownscale(file, 1280, 0.7).then(d => runAiExtract({ image: d })).catch(() => showToast(translate('Could not read the photo.')));
+      // Auch ein Bild aus dem Datei-Waehler HAT einen Namen — mitgeben, sonst
+      // hiesse die Quelldatei an der Notiz nur „Gescanntes Foto".
+      aiDownscale(file, 1280, 0.7).then(d => runAiExtract({ image: d, pdfName: file.name || '' })).catch(() => showToast(translate('Could not read the photo.')));
     }
   });
   // Desktop-Kachel: „Foto analysieren" (Kamera) ausblenden — <input capture> öffnet dort keine Kamera.
@@ -11299,7 +11307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // uebernommen, bietet ihr Editor sie zum Mitspeichern an.
     aiQuellDatei = payload && payload.pdf
       ? { nutzlast: { pdf: payload.pdf }, name: String(payload.pdfName || '') }
-      : (payload && payload.image ? { nutzlast: { image: payload.image }, name: '' } : null);
+      : (payload && payload.image ? { nutzlast: { image: payload.image }, name: String(payload.pdfName || '') } : null);
     const statusMsg = (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
