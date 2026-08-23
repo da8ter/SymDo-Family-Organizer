@@ -190,7 +190,7 @@ Termin-Erinnerungen aus dem Kalender lassen sich zusätzlich über eine Kachel-V
 
 ## 13. Statusvariablen
 
-Beide Module legen **keine Statusvariablen** und **keine Variablenprofile** an. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt, gespeicherte Rezeptdateien unter der Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz.
+Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt, gespeicherte Rezeptdateien unter der Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz.
 
 ## 14. PHP-Befehlsreferenz
 

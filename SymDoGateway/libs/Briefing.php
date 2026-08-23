@@ -93,11 +93,39 @@ trait Briefing
 
     private function BriefingApplyChanges(): void
     {
+        // Der Text des aktuellen Briefings als Statusvariable — fuer eigene
+        // Automationen (Wunsch vom 23.08.2026). MaintainVariable statt
+        // RegisterVariable, damit sie OHNE Kernel-Neustart entsteht und mit dem
+        // Briefing-Schalter wieder verschwindet: eine Variable mit veraltetem
+        // Text waere schlechter als keine.
+        $this->MaintainVariable('BriefingText', $this->Translate('Briefing text'), VARIABLETYPE_STRING, [
+            'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'         => 'Speaker',
+        ], 10, (bool)$this->BriefingProp('BriefingEnabled', false));
+        $this->BriefingTextVariable();
         if (!$this->BriefingIsEnabled()) {
             $this->BriefingArm(0);
             return;
         }
         $this->BriefingArm();
+    }
+
+    /**
+     * Schreibt den Text des GEZEIGTEN Briefings in die Statusvariable — also
+     * dieselbe Wahl wie in den Oberflaechen: tagsueber das heutige, ab der
+     * Vorschauzeit das morgige. Der Wechsel am Nachmittag laeuft ueber die
+     * Erzeugung der Vorschau, die hier ohnehin vorbeikommt.
+     */
+    private function BriefingTextVariable(): void
+    {
+        $id = @$this->GetIDForIdent('BriefingText');
+        if (!$id) {
+            return;
+        }
+        $text = (string)($this->BriefingSlot($this->BriefingShownSlot())['text'] ?? '');
+        if ((string)$this->GetValue('BriefingText') !== $text) {
+            $this->SetValue('BriefingText', $text);
+        }
     }
 
     private function BriefingRequestAction(string $ident, mixed $value): bool
@@ -569,6 +597,7 @@ trait Briefing
         // geaendert" — ein eigener Kanal waere fuer einen Text pro Tag zu viel.
         $this->WsPushDirty();
         $this->SendDebug('Briefing', sprintf('erzeugt fuer %s, %d Zeichen', $zielTag, mb_strlen($text)), 0);
+        $this->BriefingTextVariable();
         return ['ok' => true, 'message' => 'created', 'retry' => false];
     }
 
