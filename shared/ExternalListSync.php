@@ -138,7 +138,7 @@ trait ExternalListSync
      */
     private function ExtListSync(): array
     {
-        $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+        $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
         $quellen = $this->ExtListSources();
         if ($quellen === []) {
             return array_merge($leer, ['reason' => $this->ExtListEnabled() ? 'no_source' : 'disabled']);
@@ -151,13 +151,13 @@ trait ExternalListSync
             // Jede Quelle einzeln, NACHEINANDER: jeder Schritt liest und schreibt
             // die eigene Liste, verschraenkt arbeitete die zweite Quelle auf
             // einem Stand, den die erste gerade veraendert.
-            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
             $gruende = [];
             $runde   = function () use ($quellen, &$summe, &$gruende): int {
                 $neuImportiert = 0;
                 foreach ($quellen as $quelle) {
                     $b = $this->ExtListSyncStep($quelle);
-                    foreach (['imported', 'pushed', 'completed', 'resolved', 'removed'] as $feld) {
+                    foreach (['imported', 'pushed', 'completed', 'vanished', 'resolved', 'removed'] as $feld) {
                         $summe[$feld] += (int)$b[$feld];
                     }
                     $neuImportiert += (int)$b['imported'];
@@ -198,7 +198,7 @@ trait ExternalListSync
     /** @return array{ok: bool, imported: int, pushed: int, completed: int, resolved: int, reason: string} */
     private function ExtListSyncStep(ListSource $quelle): array
     {
-        $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+        $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
 
         // Der eigene Lesezugriff schreibt bei Alexa die Variable „Liste" neu und
         // erzeugt damit dieselbe Nachricht, die uns gerade gerufen hat. Das
@@ -435,8 +435,13 @@ trait ExternalListSync
             }
             if (!$nochDa) {
                 if ($vollstaendig) {
+                    // Eigener Zaehler: „dort abgehakt" und „dort geloescht" sind
+                    // an der Gegenstelle ZWEI Dinge (COMPLETE gegen ganz weg).
+                    // Bei uns fuehren beide in den Wagen, aber die Meldung soll
+                    // sie unterscheiden — sonst liest man „1 abgehakt", obwohl man
+                    // geloescht hat (genau so gefragt am 24.08.2026).
                     $this->ExtListMarkDone($schluessel);
-                    $bilanz['completed']++;
+                    $bilanz['vanished']++;
                 } else {
                     $this->SendDebug('ExtListSync',
                         'Antwort unvollstaendig (' . count($fremd) . ' Eintraege) — fehlender Eintrag bleibt offen', 0);
@@ -457,8 +462,10 @@ trait ExternalListSync
         @$this->WriteAttributeString('ExtListKnownIds', (string)json_encode($gemerkt));
 
         @$this->WriteAttributeInteger('ExtListLastSync', time());
-        $this->SendDebug('ExtListSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt, %d entfernt',
-            $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'], $bilanz['completed'], $bilanz['removed']), 0);
+        $this->SendDebug('ExtListSync', sprintf(
+            '%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt, %d dort entfernt, %d hier entfernt',
+            $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'],
+            $bilanz['completed'], $bilanz['vanished'], $bilanz['removed']), 0);
         return $bilanz;
     }
 

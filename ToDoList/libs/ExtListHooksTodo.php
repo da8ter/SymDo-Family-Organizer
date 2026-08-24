@@ -256,8 +256,9 @@ trait ExtListHooksTodo
             return $this->Translate('Switch the sync on and select at least one external list first.');
         }
         $b = $this->ExtListSync();
-        $text = sprintf($this->Translate('%d added, %d sent, %d matched, %d checked off, %d removed'),
-            (int)$b['imported'], (int)$b['pushed'], (int)$b['resolved'], (int)$b['completed'], (int)$b['removed']);
+        $text = sprintf($this->Translate('%d added, %d sent, %d matched, %d checked off there, %d deleted there, %d deleted here'),
+            (int)$b['imported'], (int)$b['pushed'], (int)$b['resolved'],
+            (int)$b['completed'], (int)$b['vanished'], (int)$b['removed']);
         if ((string)$b['reason'] !== '') {
             $text .= ' — ' . sprintf($this->Translate('problems: %s'), (string)$b['reason']);
         }
