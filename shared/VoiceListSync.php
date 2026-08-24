@@ -49,7 +49,7 @@ trait VoiceListSync
      */
     private function VoiceBindTrigger(): void
     {
-        $alt = $this->ReadAttributeInteger('VoiceLastVariableID');
+        $alt = (int)@$this->ReadAttributeInteger('VoiceLastVariableID');
         $neu = 0;
         if ($this->VoiceEnabled()) {
             $quelle = VoiceSource::For($this->VoiceInstanceID());
@@ -70,7 +70,7 @@ trait VoiceListSync
             $this->RegisterMessage($neu, VM_UPDATE);
             @$this->RegisterReference($neu);
         }
-        $this->WriteAttributeInteger('VoiceLastVariableID', $neu);
+        @$this->WriteAttributeInteger('VoiceLastVariableID', $neu);
     }
 
     /**
@@ -82,7 +82,7 @@ trait VoiceListSync
      */
     private function VoiceIsTrigger(int $senderID, int $message, array $data): bool
     {
-        if ($message !== VM_UPDATE || $senderID !== $this->ReadAttributeInteger('VoiceLastVariableID')) {
+        if ($message !== VM_UPDATE || $senderID !== (int)@$this->ReadAttributeInteger('VoiceLastVariableID')) {
             return false;
         }
         return (bool)($data[1] ?? false);
@@ -288,7 +288,7 @@ trait VoiceListSync
             }
         }
 
-        $this->WriteAttributeInteger('VoiceLastSync', time());
+        @$this->WriteAttributeInteger('VoiceLastSync', time());
         $this->SendDebug('VoiceSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt',
             $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'], $bilanz['completed']), 0);
         return $bilanz;

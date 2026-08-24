@@ -397,7 +397,22 @@
             "End": "Ende",
             "Location": "Ort",
             "Reminder": "Erinnerung",
-            "Remind": "Erinnern"
+            "Remind": "Erinnern",
+            "Voice assistant (Alexa, Bring)": "Sprachassistent (Alexa, Bring)",
+            "Sync with a voice list": "Mit einer Sprachliste abgleichen",
+            "Voice list": "Sprachliste",
+            "Also send items from this list to the voice list": "Artikel dieser Liste auch an die Sprachliste senden",
+            "Split a spoken amount from the name (\"3 milk\" becomes milk, amount 3)": "Gesprochene Menge vom Namen trennen („3 Milch\" wird Milch, Menge 3)",
+            "Sync now": "Jetzt abgleichen",
+            "The delay depends on the voice module: it queries the cloud on its own schedule. Set its update interval to 1–2 minutes. With Bring the text box variable must be enabled, otherwise there is no trigger.": "Der Verzug hängt am Sprachmodul: es fragt die Cloud in seinem eigenen Takt ab. Stelle dessen Aktualisierungsintervall auf 1–2 Minuten. Bei Bring muss die Textbox-Variable aktiviert sein, sonst gibt es keinen Auslöser.",
+            "Off": "Aus",
+            "No voice list selected": "Keine Sprachliste gewählt",
+            "Connected (%s) · last sync: %s": "Verbunden (%s) · letzter Abgleich: %s",
+            "never": "nie",
+            "Switch the sync on and select a voice list first.": "Schalte den Abgleich ein und wähle zuerst eine Sprachliste.",
+            "The voice list could not be read. Nothing was changed.": "Die Sprachliste war nicht lesbar. Es wurde nichts geändert.",
+            "Sync did not run (%s).": "Abgleich lief nicht (%s).",
+            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt"
         }
     }
 }

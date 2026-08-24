@@ -6,6 +6,9 @@ require_once __DIR__ . '/libs/ItemStore.php';
 require_once __DIR__ . '/libs/SuggestionEngine.php';
 require_once __DIR__ . '/libs/FavoriteStore.php';
 require_once __DIR__ . '/libs/PurchaseStore.php';
+require_once __DIR__ . '/../shared/VoiceSource.php';
+require_once __DIR__ . '/../shared/VoiceListSync.php';
+require_once __DIR__ . '/libs/VoiceHooks.php';
 
 class ShoppingList extends IPSModuleStrict
 {
@@ -14,6 +17,8 @@ class ShoppingList extends IPSModuleStrict
     use SuggestionEngine;
     use FavoriteStore;
     use PurchaseStore;
+    use VoiceListSync;
+    use VoiceHooks;
 
     /**
      * Das eingebaute Aussehen der Standardkategorien: Symbol und Farbe.
@@ -140,6 +145,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
+        $this->VoiceCreateProperties();
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
         $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
         $this->RegisterPropertyString('ExtApiMarketId', '');
@@ -198,6 +204,7 @@ class ShoppingList extends IPSModuleStrict
         $this->WriteExtApiCertFiles();
 
         $this->SyncExternalScannerVariable();
+        $this->VoiceBindTrigger();
 
         // Sync counts and push updated state to tile
         $this->UpdateCounts($this->LoadItems());
@@ -213,7 +220,20 @@ class ShoppingList extends IPSModuleStrict
 
         if ($Message === VM_UPDATE && $SenderID === $this->ReadPropertyInteger('ExternalScannerVariableID')) {
             $this->HandleExternalScannerUpdate($SenderID);
+            return;
         }
+
+        // Die Sprachliste hat sich geaendert — abgleichen. VoiceIsTrigger prueft
+        // das Changed-Flag, ein unveraenderter Fremd-Takt loest also nichts aus.
+        if ($this->VoiceIsTrigger($SenderID, $Message, $Data)) {
+            $this->VoiceSync();
+        }
+    }
+
+    /** Abgleich mit der Sprachliste von Hand — der Knopf im Formular. */
+    public function VoiceSyncNow(): string
+    {
+        return $this->VoiceSyncNowText();
     }
 
     public function Destroy(): void
@@ -3739,6 +3759,11 @@ class ShoppingList extends IPSModuleStrict
                             'validVariableTypes' => [3],
                             'width'              => '500px',
                         ],
+                        // Sprachliste: eine zweite Quelle von aussen, nach
+                        // demselben Muster wie der externe Scanner — fremde
+                        // Instanz, Nachricht auf deren Variable, Anlegen ueber
+                        // den normalen Weg.
+                        $this->GetVoiceFormElements(),
                         [
                             'type'     => 'ExpansionPanel',
                             'caption'  => $this->Translate('External product API'),
