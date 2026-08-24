@@ -179,7 +179,7 @@ trait ExtListHooksTodo
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'ExtListEnabledProp',
-                    'caption' => $this->Translate('Sync with external lists'),
+                    'caption' => $this->Translate('Synchronisation active'),
                 ],
                 [
                     'type'         => 'SelectInstance',
