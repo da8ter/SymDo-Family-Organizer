@@ -130,7 +130,8 @@ meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
 1. Bibliothek „Echo Remote" über das Module Control: `https://github.com/roastedelectrons/IPSymconEchoRemote`
 2. Instanz **Echo IO** — meldet sich am Amazon-Konto an (einmal für alles)
 3. Instanz **AlexaList** — eine **je Amazon-Liste**: die Einkaufsliste und die Aufgabenliste brauchen **getrennte Instanzen**
-4. Dort das Aktualisierungsintervall auf **1–2 Minuten** stellen (Vorgabe ist 60) — dieser Takt entscheidet, wie schnell Gesprochenes ankommt
+4. Dort das Aktualisierungsintervall auf **2 Minuten** stellen (Vorgabe ist 60) — dieser Takt entscheidet, wie schnell Gesprochenes ankommt
+5. **Nicht kürzer.** Das Echo-Modul drosselt seinen eigenen Aktivitätsabruf auf **60 Anfragen pro Stunde** (`CheckRateLimit`, `Echo IO/module.php:1386`), und die Anfragen zählen **je Amazon-Konto**, nicht je Instanz. Bei 1 Minute ist dieses Budget schon von einer Instanz aufgebraucht, und unsere Abgleiche kommen obendrauf. Der Listen-Abruf selbst ist im Fremdmodul **gar nicht** gedrosselt — dort landet ein `429` nur im Protokoll. Wer zwei AlexaList-Instanzen betreibt (Einkaufen + Aufgaben): **je 3 Minuten**
 
 *BRING* (die Einkaufs-App Bring!, **kein** Sprachassistent)
 

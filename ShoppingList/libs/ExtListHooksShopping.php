@@ -256,7 +256,7 @@ trait ExtListHooksShopping
                         ],
                         [
                             'type'    => 'Label',
-                            'caption' => $this->Translate("What has to be installed:\n1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. Set \"List\" to \"Shopping list (default)\" here; the task list needs its OWN second instance for the to-do list module.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken item arrives here."),
+                            'caption' => $this->Translate("What has to be installed:\n1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. Set \"List\" to \"Shopping list (default)\" here; the task list needs its OWN second instance for the to-do list module.\n4. In that instance set the update interval to 2 MINUTES (default is 60) — its schedule decides how fast a spoken item arrives here.\n5. Do not go below that: the Echo module throttles its own activity polling to 60 requests per hour, and requests count PER AMAZON ACCOUNT, not per instance. At 1 minute a single instance already uses that whole budget, and our syncs come on top. Running two AlexaList instances (shopping + tasks): 3 minutes each."),
                         ],
                     ],
                 ],
