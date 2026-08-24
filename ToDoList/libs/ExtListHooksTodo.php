@@ -141,6 +141,22 @@ trait ExtListHooksTodo
         }
     }
 
+    /**
+     * Eine Aufgabe wirklich loeschen — ueber den EIGENEN Weg des Moduls.
+     *
+     * Nicht selbst aus der Ablage streichen: DeleteItem fuehrt die Buchhaltung
+     * der anderen Sync-Partner (CalDAVPendingDeletes, GooglePendingDeletes …).
+     * Ohne sie legte Google die Aufgabe beim naechsten Abgleich wieder an.
+     */
+    private function ExtListDelete(string|int $schluessel): void
+    {
+        try {
+            $this->DeleteItem(['id' => (int)$schluessel]);
+        } catch (\Throwable $e) {
+            $this->SendDebug('ExtListSync', 'Aufgabe nicht geloescht: ' . $e->getMessage(), 0);
+        }
+    }
+
     private function ExtListSetId(string|int $schluessel, string $extId, string $quelle): void
     {
         $this->ExtListStamp((int)$schluessel, $extId, $quelle);

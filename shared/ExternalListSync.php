@@ -435,12 +435,17 @@ trait ExternalListSync
             }
             if (!$nochDa) {
                 if ($vollstaendig) {
-                    // Eigener Zaehler: „dort abgehakt" und „dort geloescht" sind
-                    // an der Gegenstelle ZWEI Dinge (COMPLETE gegen ganz weg).
-                    // Bei uns fuehren beide in den Wagen, aber die Meldung soll
-                    // sie unterscheiden — sonst liest man „1 abgehakt", obwohl man
-                    // geloescht hat (genau so gefragt am 24.08.2026).
-                    $this->ExtListMarkDone($schluessel);
+                    // Dort GELOESCHT heisst hier geloescht — nicht bloss abgehakt
+                    // (so entschieden am 24.08.2026). Abhaken bleibt Abhaken:
+                    // COMPLETE fuehrt weiter in den Wagen, das ist Abschnitt 2.
+                    //
+                    // Der Riegel $vollstaendig ist hier keine Feinheit, sondern
+                    // die Bedingung: Alexa liefert hoechstens 100 Eintraege ohne
+                    // Hinweis auf weitere, und „nicht enthalten" waere bei einer
+                    // laengeren Liste kein Beweis fuer „geloescht". Loeschen ist
+                    // nicht umkehrbar, deshalb nur bei nachweislich vollstaendiger
+                    // Antwort.
+                    $this->ExtListDelete($schluessel);
                     $bilanz['vanished']++;
                 } else {
                     $this->SendDebug('ExtListSync',
@@ -526,6 +531,7 @@ trait ExternalListSync
     //   ExtListLoad(): array                  [schluessel => ['name','amount','extIds'=>[dienst=>id]]]
     //   ExtListIsDone(array $eintrag): bool   erledigt bzw. im Wagen?
     //   ExtListCreate(string $name, string $menge, string $extId, string $quelle): void
-    //   ExtListMarkDone(string|int $schluessel): void
+    //   ExtListMarkDone(string|int $schluessel): void   (dort abgehakt)
+    //   ExtListDelete(string|int $schluessel): void     (dort geloescht)
     //   ExtListSetId(string|int $schluessel, string $extId, string $quelle): void
 }

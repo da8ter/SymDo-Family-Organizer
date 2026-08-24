@@ -146,6 +146,33 @@ trait ExtListHooksShopping
         $this->ToggleItemCart((string)$schluessel, true);
     }
 
+    /**
+     * Eine Zeile wirklich loeschen — GEZIELT nach Kennung.
+     *
+     * Bewusst nicht DeleteItemInternal: das entfernt jede Zeile mit demselben
+     * NAMEN, also auch die abgehakten und die Kaufhistorie. Wer bei Alexa
+     * „Milch" loescht, will nicht seine gekauften Milch-Eintraege verlieren.
+     */
+    private function ExtListDelete(string|int $schluessel): void
+    {
+        $id     = (string)$schluessel;
+        $riegel = 'SL_Items_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($riegel, 500)) {
+            $this->SendDebug('ExtListSync', 'Riegel belegt — nicht geloescht', 0);
+            return;
+        }
+        try {
+            $items = $this->LoadItems();
+            $rest  = array_values(array_filter($items,
+                static fn(array $i): bool => (string)($i['id'] ?? '') !== $id));
+            if (count($rest) !== count($items)) {
+                $this->SaveItems($rest);
+            }
+        } finally {
+            IPS_SemaphoreLeave($riegel);
+        }
+    }
+
     private function ExtListSetId(string|int $schluessel, string $extId, string $quelle): void
     {
         $this->ExtListStamp((string)$schluessel, $extId, $quelle);

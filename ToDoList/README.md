@@ -684,8 +684,13 @@ und die *AlexaList-Instanz* wählen.
 - Der Verzug ist der Takt des Fremdmoduls. Sofort geht nur über den Knopf.
 - Die Schnittstelle ist **inoffiziell** und kann ohne Ankündigung wegfallen.
 - Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig.
+- **Abhaken und Löschen wirken verschieden:** dort abgehakt → hier erledigt
+  (bei Einkäufen: in den Wagen), dort **gelöscht** → hier ebenfalls gelöscht.
+  Gelöscht wird nur bei nachweislich vollständiger Antwort, siehe die
+  100-Einträge-Grenze unten.
 - Steht in der Alexa-Instanz *Lösche erledigte Einträge* auf an, ist „abgehakt"
-  von „gelöscht" nicht unterscheidbar. Beides bedeutet hier „von der Liste".
+  von „gelöscht" nicht mehr unterscheidbar — dann wird ein abgehakter Eintrag
+  hier gelöscht statt erledigt.
 - Ein fehlender Eintrag gilt nur dann als „von der Liste genommen", wenn die
   Antwort vollständig war. Alexa liefert höchstens 100 Einträge ohne Hinweis auf
   weitere — bei einer längeren Liste wird deshalb nichts abgehakt.
