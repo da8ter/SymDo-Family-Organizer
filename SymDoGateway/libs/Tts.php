@@ -1119,6 +1119,11 @@ trait Tts
             return false;
         }
         $this->UpdateFormField('TtsElevenStatus', 'caption', $this->TtsElevenVoiceList());
+        // Der Abruf legt die Stimmen ab; die Auswahl im Personen-Editor entstand
+        // aber schon beim Bau des Formulars und wuesste sonst nichts davon.
+        // Unbedingt und nicht nur bei Erfolg: schlug der Abruf fehl, ist der
+        // Zwischenspeicher unveraendert und das Nachziehen ohne Wirkung.
+        $this->RefreshPersonaVoicePicker();
         return true;
     }
 

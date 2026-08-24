@@ -1869,18 +1869,13 @@ class SymDoGateway extends IPSModuleStrict
      * bleibt die Spalte leer und nennt den Grund — eine Auswahl mit erfundenen
      * Kennungen waere schlimmer als keine.
      */
-    private function GetPersonaEditor(): array
+    /**
+     * Spalten der Personas-Liste. Eigene Methode, weil sie an ZWEI Stellen
+     * gebraucht werden: beim Bau des Formulars und beim Nachziehen, nachdem die
+     * ElevenLabs-Stimmen abgerufen wurden. Zwei Kopien waeren zwei Staende.
+     */
+    private function GetPersonaVoiceColumns(): array
     {
-        // Vor dem Kernel-Neustart gibt es die Property nicht; ein Listenfeld darauf
-        // liesse „Uebernehmen" scheitern. Dann nur der Hinweis (Muster wie oben).
-        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        if (!is_array($cfg) || !array_key_exists('BriefingVoices', $cfg)) {
-            return [
-                'type'    => 'Label',
-                'caption' => $this->Translate('The persona editor appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
-            ];
-        }
-
         $openai = [];
         foreach (self::TTS_OPENAI_VOICES as $v) {
             $openai[] = ['caption' => $v, 'value' => $v];
@@ -1904,6 +1899,60 @@ class SymDoGateway extends IPSModuleStrict
         array_unshift($openai, $wieEingebaut);
         array_unshift($azure, $wieEingebaut);
         array_unshift($eleven, ['caption' => $this->Translate('— the voice set above —'), 'value' => '']);
+
+        return [
+            ['caption' => $this->Translate('Persona'), 'name' => 'persona', 'width' => '170px'],
+            ['caption' => $this->Translate('Built in'), 'name' => 'vorgabe', 'width' => '200px'],
+            ['caption' => 'OpenAI', 'name' => 'openai', 'width' => '160px',
+             'edit' => ['type' => 'Select', 'options' => $openai]],
+            ['caption' => 'Azure', 'name' => 'azure', 'width' => '200px',
+             'edit' => ['type' => 'Select', 'options' => $azure]],
+            ['caption' => 'ElevenLabs', 'name' => 'eleven', 'width' => '220px',
+             'edit' => ['type' => 'Select', 'options' => $eleven]],
+            // KEINE unsichtbare Schluessel-Spalte mehr: Symcon schreibt die Werte
+            // unsichtbarer Spalten nicht mit, die Zeilen kamen ohne `tone` zurueck.
+            // Die Zuordnung laeuft jetzt ueber die Reihenfolge (siehe
+            // BriefingVoiceMap) — der Schluessel steht trotzdem in den Werten, falls
+            // Symcon ihn doch einmal durchreicht.
+        ];
+    }
+
+    /** Zeile unter der Liste: leer heisst „erst abrufen", sonst die Anzahl. */
+    private function GetPersonaVoiceHint(): string
+    {
+        $anzahl = count($this->TtsElevenCachedVoices());
+        return $anzahl === 0
+            ? $this->Translate('The ElevenLabs column is empty: press "List voices of the account" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from "My Voices" are offered.')
+            : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), $anzahl);
+    }
+
+    /**
+     * Nach dem Abruf die Auswahl im Personen-Editor nachziehen. Die Spalten
+     * entstehen beim Bau des Formulars; ohne diesen Aufruf bliebe die schon
+     * gezeichnete Liste auf dem alten Stand, und der Abruf schiene wirkungslos.
+     */
+    private function RefreshPersonaVoicePicker(): void
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('BriefingVoices', $cfg)) {
+            return;   // Den Editor gibt es vor dem naechsten Kernel-Neustart nicht.
+        }
+        $this->UpdateFormField('BriefingVoices', 'columns', (string)json_encode(
+            $this->GetPersonaVoiceColumns(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $this->UpdateFormField('PersonaVoiceHint', 'caption', $this->GetPersonaVoiceHint());
+    }
+
+    private function GetPersonaEditor(): array
+    {
+        // Vor dem Kernel-Neustart gibt es die Property nicht; ein Listenfeld darauf
+        // liesse „Uebernehmen" scheitern. Dann nur der Hinweis (Muster wie oben).
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('BriefingVoices', $cfg)) {
+            return [
+                'type'    => 'Label',
+                'caption' => $this->Translate('The persona editor appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
+            ];
+        }
 
         // Zeilen: immer ALLE Personas, mit dem gespeicherten Stand gefuellt. Eine
         // fehlende Zeile waere sonst eine Persona, die man nicht einstellen kann.
@@ -1945,29 +1994,16 @@ class SymDoGateway extends IPSModuleStrict
                         'rowCount' => count($zeilen),
                         'add'     => false,
                         'delete'  => false,
-                        'columns' => [
-                            ['caption' => $this->Translate('Persona'), 'name' => 'persona', 'width' => '170px'],
-                            ['caption' => $this->Translate('Built in'), 'name' => 'vorgabe', 'width' => '200px'],
-                            ['caption' => 'OpenAI', 'name' => 'openai', 'width' => '160px',
-                             'edit' => ['type' => 'Select', 'options' => $openai]],
-                            ['caption' => 'Azure', 'name' => 'azure', 'width' => '200px',
-                             'edit' => ['type' => 'Select', 'options' => $azure]],
-                            ['caption' => 'ElevenLabs', 'name' => 'eleven', 'width' => '220px',
-                             'edit' => ['type' => 'Select', 'options' => $eleven]],
-                            // KEINE unsichtbare Schluessel-Spalte mehr: Symcon schreibt
-                            // die Werte unsichtbarer Spalten nicht mit, die Zeilen kamen
-                            // ohne `tone` zurueck. Die Zuordnung laeuft jetzt ueber die
-                            // Reihenfolge (siehe BriefingVoiceMap) — der Schluessel steht
-                            // trotzdem in den Werten, falls Symcon ihn doch einmal
-                            // durchreicht.
-                        ],
+                        'columns' => $this->GetPersonaVoiceColumns(),
                         'values'  => $zeilen
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => count($eleven) <= 1
-                            ? $this->Translate('The ElevenLabs column is empty: press "List voices of the account" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from "My Voices" are offered.')
-                            : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), count($eleven) - 1)
+                        // Name, damit der Abruf ihn mit nachziehen kann — sonst
+                        // stuende hier weiter „erst abrufen", waehrend die Spalte
+                        // daneben schon gefuellt ist.
+                        'name'    => 'PersonaVoiceHint',
+                        'caption' => $this->GetPersonaVoiceHint()
                     ],
                 ]
             ]
