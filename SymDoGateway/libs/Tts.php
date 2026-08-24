@@ -477,19 +477,21 @@ trait Tts
         return $minute === 0 ? $wort . ' Uhr' : $wort . ' Uhr ' . $this->TtsNumberWord($minute);
     }
 
-    /** Zahlwort fuer 0 bis 59 — mehr braucht eine Uhrzeit nicht. */
+    /** Zahlwort fuer 0 bis 99 — Uhrzeit braucht 59, die Jahreszahl mehr. */
     private function TtsNumberWord(int $zahl): string
     {
         $klein = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun',
                   'zehn', 'elf', 'zwölf', 'dreizehn', 'vierzehn', 'fünfzehn', 'sechzehn', 'siebzehn',
                   'achtzehn', 'neunzehn'];
-        if ($zahl < 0 || $zahl > 59) {
+        if ($zahl < 0 || $zahl > 99) {
             return (string)$zahl;
         }
         if ($zahl < 20) {
             return $klein[$zahl];
         }
-        $zehner = [2 => 'zwanzig', 3 => 'dreißig', 4 => 'vierzig', 5 => 'fünfzig'];
+        // sechzig und siebzig, nicht sechszig und siebenzig — wie bei 16 und 17.
+        $zehner = [2 => 'zwanzig', 3 => 'dreißig', 4 => 'vierzig', 5 => 'fünfzig',
+                   6 => 'sechzig', 7 => 'siebzig', 8 => 'achtzig', 9 => 'neunzig'];
         $z = intdiv($zahl, 10);
         $e = $zahl % 10;
         if ($e === 0) {
@@ -499,6 +501,125 @@ trait Tts
         // „sechsundzwanzig", „siebenundzwanzig" — anders als 16 und 17.
         $vorne = $e === 1 ? 'ein' : $klein[$e];
         return $vorne . 'und' . $zehner[$z];
+    }
+
+    /**
+     * Datumsangaben ausschreiben — wie bei den Uhrzeiten nur fuer die Stimme.
+     *
+     * „am 24.08." liest die KI als zwei Zahlen mit Punkten. Drei Formen kommen im
+     * Briefing vor: die Kurzform aus BriefingDayWord, die volle Form mit Jahr aus
+     * der Kopfzeile des Auftrags, und „24. August", das das Modell selbst schreibt.
+     *
+     * Der Fall ist am Wort DAVOR entschieden: nach „am", „bis", „seit", „vom",
+     * „ab" steht der Dativ („am vierundzwanzigsten August"), nach „der", „die",
+     * „das", „ist" der Nominativ („der vierundzwanzigste August"). Alles andere
+     * bekommt den Dativ, weil im Briefing praktisch immer eine Praeposition
+     * davorsteht; die Verwechslung waere ein Schoenheitsfehler, kein Vorlesefehler.
+     */
+    private function TtsDatesAsWords(string $text): string
+    {
+        $monate = [1 => 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+                   'August', 'September', 'Oktober', 'November', 'Dezember'];
+        // Das Wort davor wird mitgelesen und unveraendert wieder ausgegeben; es
+        // entscheidet nur den Fall.
+        $vor = '(?:(?<vor>\p{L}+)(?<lz>\s+))?';
+
+        // Alle Gruppen sind BENANNT. Benannte Gruppen bekommen in PHP zusaetzlich
+        // eine Nummer, und die zaehlt das Wort davor mit — mit $t[1] fuer den Tag
+        // erkannte die Umschrift kein einziges Datum.
+        $bauen = function (array $t, int $tag, int $monat, string $jahr = '') use ($monate): ?string {
+            if ($tag < 1 || $tag > 31 || $monat < 1 || $monat > 12) {
+                return null;   // kein Datum: unangetastet lassen
+            }
+            $wort  = (string)($t['vor'] ?? '');
+            $davor = mb_strtolower($wort);
+            // Drei Endungen, drei Faelle: nach Artikel die schwache („der dritte
+            // Oktober"), als Satzaussage ohne Artikel die starke („Abgabe ist
+            // dritter Oktober"), sonst der Dativ („am dritten Oktober").
+            if (in_array($davor, ['der', 'die', 'das', 'dieser', 'jeder'], true)) {
+                $form = 'schwach';
+            } elseif (in_array($davor, ['ist', 'war', 'wird', 'bleibt'], true)) {
+                $form = 'stark';
+            } else {
+                $form = 'dativ';
+            }
+            $satz = $this->TtsOrdinalWord($tag, $form) . ' ' . $monate[$monat];
+            if ($jahr !== '') {
+                $satz .= ' ' . $this->TtsYearWord((int)$jahr);
+            }
+            return $wort === '' ? $satz : $wort . ($t['lz'] ?? ' ') . $satz;
+        };
+
+        // 1) 24.08.2026 — mit Jahr, kein abschliessender Punkt im Weg.
+        $text = (string)preg_replace_callback(
+            '/' . $vor . '\b(?<tag>\d{1,2})\.(?<monat>\d{1,2})\.(?<jahr>\d{4})(?!\d)/u',
+            fn (array $t): string => $bauen($t, (int)$t['tag'], (int)$t['monat'], $t['jahr']) ?? $t[0],
+            $text);
+
+        // 2) 24.08. am Satzende. Der Punkt der Kurzform IST hier zugleich der
+        //    Schlusspunkt des Satzes — ohne ihn liefen zwei Saetze ineinander.
+        $text = (string)preg_replace_callback(
+            '/' . $vor . '\b(?<tag>\d{1,2})\.(?<monat>\d{1,2})\.(?!\d)(?=\s+\p{Lu}|\s*$)/u',
+            fn (array $t): string => ($g = $bauen($t, (int)$t['tag'], (int)$t['monat'])) === null ? $t[0] : $g . '.',
+            $text);
+
+        // 3) 24.08. mitten im Satz — hier gehoert kein Punkt hin.
+        $text = (string)preg_replace_callback(
+            '/' . $vor . '\b(?<tag>\d{1,2})\.(?<monat>\d{1,2})\.(?!\d)/u',
+            fn (array $t): string => $bauen($t, (int)$t['tag'], (int)$t['monat']) ?? $t[0],
+            $text);
+
+        // 4) „24. August" — Monat schon ausgeschrieben, nur der Tag fehlt.
+        $text = (string)preg_replace_callback(
+            '/' . $vor . '\b(?<tag>\d{1,2})\.\s*(?<monat>' . implode('|', $monate) . ')\b(?:\s+(?<jahr>\d{4})\b)?/u',
+            function (array $t) use ($monate, $bauen): string {
+                // Die Jahreszahl mitnehmen, sonst stuende der Monat ausgeschrieben
+                // und daneben „2026" wieder als Ziffernfolge.
+                $monat = (int)array_search($t['monat'], $monate, true);
+                return $bauen($t, (int)$t['tag'], $monat, (string)($t['jahr'] ?? '')) ?? $t[0];
+            },
+            $text);
+
+        return $text;
+    }
+
+    /**
+     * Ordnungszahl 1 bis 31. Bis 19 auf „-te", ab 20 auf „-ste"; vier Formen
+     * folgen der Regel nicht: erste, dritte, siebte, achte.
+     *
+     * $form waehlt die Endung: 'dativ' fuer „am dritten Oktober", 'schwach' fuer
+     * „der dritte Oktober", 'stark' fuer „Abgabe ist dritter Oktober".
+     */
+    private function TtsOrdinalWord(int $tag, string $form = 'dativ'): string
+    {
+        $sonder = [1 => 'erste', 3 => 'dritte', 7 => 'siebte', 8 => 'achte'];
+        if (isset($sonder[$tag])) {
+            $wort = $sonder[$tag];
+        } elseif ($tag < 20) {
+            $wort = $this->TtsNumberWord($tag) . 'te';
+        } else {
+            $wort = $this->TtsNumberWord($tag) . 'ste';
+        }
+        return match ($form) {
+            'stark'   => $wort . 'r',
+            'schwach' => $wort,
+            default   => $wort . 'n',
+        };
+    }
+
+    /** Jahreszahl: zweitausendsechsundzwanzig, neunzehnhundertneunundneunzig. */
+    private function TtsYearWord(int $jahr): string
+    {
+        if ($jahr >= 2000 && $jahr <= 2099) {
+            $rest = $jahr - 2000;
+            return $rest === 0 ? 'zweitausend' : 'zweitausend' . $this->TtsNumberWord($rest);
+        }
+        if ($jahr >= 1900 && $jahr <= 1999) {
+            $rest = $jahr - 1900;
+            return $rest === 0 ? 'neunzehnhundert' : 'neunzehnhundert' . $this->TtsNumberWord($rest);
+        }
+        // Alles ausserhalb bleibt, wie es ist — geraten wird hier nicht.
+        return (string)$jahr;
     }
 
     private function TtsNormalize(string $text): string

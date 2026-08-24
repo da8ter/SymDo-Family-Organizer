@@ -1569,7 +1569,7 @@ trait Briefing
         // macht den Text laenger, und sowohl die Grenze als auch die Wahl der
         // Tonqualitaet rechnen mit der Laenge, die wirklich gesprochen wird.
         // Nur hier — der Text in Variable, Push und Anzeige behaelt die Ziffern.
-        $vorlesen = $this->TtsTimesAsWords($vorlesen);
+        $vorlesen = $this->TtsDatesAsWords($this->TtsTimesAsWords($vorlesen));
         if (mb_strlen($vorlesen) > self::BRIEFING_TTS_MAX) {
             $vorlesen = rtrim(mb_substr($vorlesen, 0, self::BRIEFING_TTS_MAX));
         }
