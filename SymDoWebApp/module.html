@@ -1920,7 +1920,12 @@ html[data-symdo-theme="dark"] .member-bar {
   justify-content: space-between;
   padding: 14px 16px 8px;
 }
-.overlay-title { font-size: 17px; font-weight: 700; }
+/* Der Titel nimmt den freien Platz — sonst verteilt space-between ihn ZWISCHEN
+   allen Kindern, und ein Kopf mit drei Elementen setzt den mittleren Knopf in
+   die Mitte statt neben den Schliessen-Knopf (am Notiz-Blatt aufgefallen).
+   min-width: 0 laesst lange Titel weiter umbrechen statt die Knoepfe zu
+   verdraengen. */
+.overlay-title { font-size: 17px; font-weight: 700; flex: 1; min-width: 0; }
 .btn-close-overlay { font-size: 18px; color: var(--muted); padding: 4px 8px; }
 .overlay-body {
   padding: 8px 16px 18px;
