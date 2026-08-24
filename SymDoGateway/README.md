@@ -151,6 +151,9 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
   kommen aus dem Stundenplan-Modul — ohne es entfällt dieser Teil. Der Tonfall
   gilt weiterhin, die Kürze hat aber Vorrang: mit *Sachlich* sind es rund 600
   Zeichen, mit *Lustig* bleibt es länger, weil die Persona Bilder braucht
+- **Abendvorschau** — das Briefing auf morgen beginnt nicht mit „Guten Morgen",
+  sondern schaut voraus („Für morgen ist Folgendes geplant"). Es entsteht abends
+  und spricht über den nächsten Tag; ein Tagesgruß wäre dort falsch
 - **Personas bearbeiten** — je Persona lässt sich für jeden Sprachausgabe-Anbieter eine eigene Stimme hinterlegen; ohne Eintrag gilt die eingebaute Vorgabe
 - **Vorschau am Vorabend** — ab der eingestellten Uhrzeit (Standard 18:00 Uhr) zeigt die Übersicht das Briefing für morgen
 - **Für eigene Automationen** liegen Text und Aufnahme des gezeigten Briefings dauerhaft bereit: Statusvariable *Briefing-Text* und Medienobjekt *Briefing-Audio* mit fester Objekt-ID (Kapitel 13)

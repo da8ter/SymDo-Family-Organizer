@@ -620,7 +620,7 @@ trait Briefing
 
         $daten   = $this->BriefingCollect($tage);
         $antwort = $this->AiRunCompletion(
-            $this->BriefingSystemPrompt($this->BriefingDayWord($tage)),
+            $this->BriefingSystemPrompt($this->BriefingDayWord($tage), $tage),
             $this->BriefingUserText($daten),
             null
         );
@@ -1200,15 +1200,23 @@ trait Briefing
      * Anbieter antworten in der Sprache der Anweisung, und die Daten selbst —
      * Termintitel, Aufgaben, Namen — sind ohnehin deutsch.
      */
-    private function BriefingSystemPrompt(string $tagWort = 'heute'): string
+    private function BriefingSystemPrompt(string $tagWort = 'heute', int $tage = 0): string
     {
+        // Eine VORSCHAU ist kein Tagesbriefing. Sie entsteht am Abend und spricht
+        // ueber morgen — „Guten Morgen" waere dort schlicht falsch.
+        $vorschau = $tage >= 1;
         $aufbau = $this->BriefingKompakt()
             // KOMPAKT: fester Aufbau in fester Reihenfolge. Die Reihenfolge steht
             // hier ausdruecklich, weil das Modell sonst den Einkauf nach vorne
             // zieht und die Schulzeiten unter die Termine mischt.
             ? 'Du schreibst eine KURZE Tagesansage für eine Familie in einer Haushalts-App. '
                 . 'Halte dich streng an diesen Aufbau und diese Reihenfolge: '
-                . 'ERSTENS eine kurze Begrüßung, ein einziger kurzer Satz. '
+                . ($vorschau
+                    ? 'ERSTENS ein kurzer Einstieg, der auf MORGEN vorausschaut — KEINE '
+                        . 'Tageszeit-Begrüßung, also weder „Guten Morgen" noch „Guten '
+                        . 'Abend". Ein Satz wie „Das steht morgen an" oder „Für morgen ist '
+                        . 'Folgendes geplant". Eine Anrede darf davor stehen. '
+                    : 'ERSTENS eine kurze Begrüßung, ein einziger kurzer Satz. ')
                 . 'ZWEITENS die Termine und Aufgaben, kurz und bündig — je Eintrag ein '
                 . 'knapper Hauptsatz, ohne Ausschmückung und ohne Überleitungen. '
                 . 'DRITTENS, wenn Schulzeiten angegeben sind: je Kind ein kurzer Satz, '
@@ -1288,6 +1296,18 @@ trait Briefing
                     . 'in der WORTWAHL, nicht in der Länge. Der Text endet mit dem '
                     . 'Einkaufs-Hinweis — kein Schlusssatz, kein Wunsch, keine Ermunterung '
                     . 'danach.'
+                : '')
+            // Auch diese Regel steht ZULETZT: die Personas bringen ihre eigene
+            // Begruessung mit („Guten Morgen, Truppe!"), und ein Hinweis weiter
+            // oben ginge dagegen unter — dieselbe Lehre wie bei der Kuerze.
+            . ($vorschau
+                ? ' EINSTIEG — gilt VOR dem Tonfall: Dies ist eine VORSCHAU auf morgen, '
+                    . 'kein Gruß zum Tagesbeginn. Beginne NICHT mit „Guten Morgen", '
+                    . '„Guten Abend", „Guten Tag" oder einer anderen Tageszeit-Formel. '
+                    . 'Steige stattdessen vorausschauend ein — „Das steht morgen an", '
+                    . '„Für morgen ist Folgendes geplant", „Morgen wird es so aussehen". '
+                    . 'Eine Anrede an die Familie darf davor oder darin stehen. Alles '
+                    . 'Weitere schreibst du im Futur oder mit „morgen".'
                 : '');
     }
 
@@ -2080,7 +2100,7 @@ trait Briefing
         }
         $daten   = $this->BriefingCollect($tage);
         $antwort = $this->AiRunCompletion(
-            $this->BriefingSystemPrompt($this->BriefingDayWord($tage)),
+            $this->BriefingSystemPrompt($this->BriefingDayWord($tage), $tage),
             $this->BriefingUserText($daten),
             null
         );
