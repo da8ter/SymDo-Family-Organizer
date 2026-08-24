@@ -111,6 +111,36 @@
   .ticks span.stark { width: 2px; opacity: .8; }
   .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
   .keinTag { font-size: 12px; color: var(--muted); padding: 4px 0; }
+
+  /* ── Legende ───────────────────────────────────────────────────────────── */
+  /* Im Balken steht nur ein Symbol; welches Fach dahinter liegt, verraet
+     bisher nur der Mauszeiger — und auf einem Tablet gibt es keinen. */
+  .legende { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 9px; }
+  .legendenkopf {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+  }
+  .legendenkopf .zu {
+    margin-left: auto; border: 0; background: transparent; color: var(--muted);
+    font: inherit; cursor: pointer; padding: 2px 4px;
+  }
+  .faecher { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fach {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 9px 4px 6px; border-radius: 999px;
+    background: color-mix(in srgb, var(--content-color) 7%, transparent);
+    font-size: 11px; font-weight: 600;
+  }
+  .fach .tupfen {
+    width: 16px; height: 16px; border-radius: 50%; flex: 0 0 16px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 9px;
+  }
+  .fach .wessen { color: var(--muted); font-weight: 500; }
+  /* Der Hinweis verschwindet, sobald die Legende offen ist. */
+  .legendenhinweis {
+    margin-top: 8px; font-size: 11px; color: var(--muted); text-align: center;
+  }
 </style>
 
 <div id="inhalt"><div class="leer">…</div></div>
@@ -121,6 +151,7 @@
      dieselben Zahlen zeigen. Hier wird nur gezeichnet. */
   let zustand = null;
   let kindNr  = 0;
+  let legende = false;   // Legende der heute sichtbaren Faecher
 
   function esc(t) {
     return String(t == null ? '' : t).replace(/[&<>"']/g, function (z) {
@@ -188,6 +219,17 @@
         zeichne();
       });
     });
+    /* Klick auf die Kachel klappt die Legende auf und zu. Nur in der Timeline:
+       im Wochenraster sind die Kinder-Knoepfe anklickbar, und ein Klick daneben
+       darf dort nichts anderes tun. Das ✕ schliesst gezielt. */
+    if (zustand.mode === 'timeline') {
+      ziel.onclick = function (e) {
+        legende = e.target.closest('[data-legende="zu"]') ? false : !legende;
+        zeichne();
+      };
+    } else {
+      ziel.onclick = null;
+    }
     // Beim Oeffnen zum heutigen Tag: die Woche faengt sonst am Montag an, und
     // am Donnerstag sieht man zuerst, was vorbei ist.
     const heute = document.querySelector('.spalte.istHeute');
@@ -276,6 +318,52 @@
     return html;
   }
 
+  /* Die heute im Balken sichtbaren Faecher, in der Reihenfolge des Tages und
+     ohne Wiederholung. Zusammengefasst wird nach NAME: dasselbe Fach bei zwei
+     Kindern ist ein Eintrag, und die Gesamtdauer summiert beide. */
+  function sichtbareFaecher() {
+    const karte = new Map();
+    zustand.children.forEach(function (kind) {
+      const tag = kind.days.filter(function (t) { return t.today; })[0];
+      (tag ? tag.slots : []).forEach(function (s) {
+        const da = karte.get(s.name);
+        if (da) {
+          da.minuten += Math.max(s.to - s.from, 0);
+          if (da.wer.indexOf(kind.name) < 0) { da.wer.push(kind.name); }
+          return;
+        }
+        karte.set(s.name, {
+          name: s.name, icon: s.icon, color: s.color,
+          minuten: Math.max(s.to - s.from, 0), wer: [kind.name], care: !!s.care,
+        });
+      });
+    });
+    return Array.from(karte.values());
+  }
+
+  function legendeHtml() {
+    const faecher = sichtbareFaecher();
+    if (faecher.length === 0) { return ''; }
+    if (!legende) {
+      return '<div class="legendenhinweis" data-legende="auf">Fächer anzeigen</div>';
+    }
+    const mehrereKinder = zustand.children.length > 1;
+    const eintraege = faecher.map(function (f) {
+      /* KEINE Dauer. Sie stand hier zuerst, war aber die Summe ueber alle
+         Kinder: „Deutsch 90 min", obwohl beide je 45 Minuten haben — eine Zahl,
+         die man zwangslaeufig falsch liest. Statt dessen der Name des Kindes,
+         wenn das Fach nur bei einem vorkommt; das beantwortet die Frage, die
+         der Balken offen laesst. */
+      const nur = (mehrereKinder && f.wer.length === 1)
+        ? ' <span class="wessen">' + esc(f.wer[0]) + '</span>' : '';
+      return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + '">'
+        + symbol(f.icon) + '</span>' + esc(f.name) + nur + '</span>';
+    }).join('');
+    return '<div class="legende"><div class="legendenkopf"><span>Fächer heute</span>'
+      + '<button class="zu" data-legende="zu" aria-label="Legende schließen">✕</button></div>'
+      + '<div class="faecher">' + eintraege + '</div></div>';
+  }
+
   /* ── Timeline ─────────────────────────────────────────────────────────── */
   function timeline() {
     const von = zustand.span[0], bis = zustand.span[1];
@@ -332,6 +420,6 @@
         + '<div class="fuss"><span>Beginn: ' + esc(beginn) + '</span>'
         + '<span>Ende: ' + esc(ende) + '</span></div></div>';
     });
-    return html;
+    return html + legendeHtml();
   }
 </script>
