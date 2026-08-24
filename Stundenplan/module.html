@@ -1,0 +1,310 @@
+<style>
+  /* Symcon stellt --card-color, --content-color und --accent-color je nach
+     Thema bereit. Alles Weitere leitet sich davon ab, damit die Kachel in Hell
+     und Dunkel ohne eigenen Umschalter stimmt. */
+  :root {
+    --bg:      var(--card-color);
+    --text:    var(--content-color);
+    --muted:   color-mix(in srgb, var(--content-color) 45%, transparent);
+    --line:    color-mix(in srgb, var(--content-color) 14%, transparent);
+    --frei:    color-mix(in srgb, var(--content-color) 8%, transparent);
+    --spalte:  color-mix(in srgb, var(--content-color) 5%, transparent);
+    --kopf:    color-mix(in srgb, var(--content-color) 10%, transparent);
+    --accent:  var(--accent-color);
+    --viertel: 18px;   /* Pixel je Viertelstunde — der Massstab der Vorlage */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text); background: var(--bg);
+  }
+  .leer { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  /* ── Kopf ──────────────────────────────────────────────────────────────── */
+  .kopf { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .kopf h1 { font-size: 15px; font-weight: 700; margin: 0; }
+  .naechste { margin-left: auto; font-size: 12px; font-weight: 600; }
+  .ferien {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; margin-bottom: 10px; border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    font-size: 13px; font-weight: 600;
+  }
+
+  /* Kinder-Auswahl: nur bei mehr als einem Kind. */
+  .kinder { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip {
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .chip.an { color: #fff; border-color: transparent; }
+
+  /* ── Wochenraster ──────────────────────────────────────────────────────── */
+  .raster { display: flex; gap: 6px; align-items: flex-start; }
+  /* Die Zeitachse bleibt stehen, waehrend die Spalten wandern. */
+  .achse { position: sticky; left: 0; z-index: 2; flex: 0 0 46px; background: var(--bg); }
+  .achse .innen { position: relative; }
+  .marke {
+    position: absolute; right: 0; display: flex; align-items: center; gap: 4px;
+    font-size: 10px; font-variant-numeric: tabular-nums; color: var(--muted);
+  }
+  .marke.stark { color: var(--text); font-weight: 700; }
+  .marke i { display: block; width: 6px; height: 1px; background: currentColor; opacity: .6; }
+  .spalten { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; position: relative; }
+  .spalte { flex: 0 0 148px; border-radius: 16px; background: var(--spalte); overflow: hidden; }
+  .spaltenkopf {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; background: var(--kopf); min-height: 36px;
+  }
+  .spaltenkopf .tag { font-size: 13px; font-weight: 700; }
+  .spaltenkopf .kw { font-size: 9px; font-weight: 600; color: var(--muted); }
+  .heute {
+    margin-left: auto; padding: 2px 7px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+  .frei {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--frei); color: var(--muted); font-size: 10px;
+  }
+  .stunde { padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start; }
+  .stunde .sym {
+    flex: 0 0 22px; height: 22px; border-radius: 50%;
+    background: rgba(255,255,255,.22);
+    display: flex; align-items: center; justify-content: center; font-size: 11px;
+  }
+  .stunde .fach { font-size: 13px; font-weight: 600; line-height: 1.2; }
+  .stunde .zeit { font-size: 10px; font-weight: 500; opacity: .82; margin-top: 2px; }
+  .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
+  .stunde.betreuung { color: #fff; }
+
+  /* ── Timeline ──────────────────────────────────────────────────────────── */
+  .zeile { padding: 10px; border-radius: 14px; background: var(--spalte); margin-bottom: 8px; }
+  .zeile:last-child { margin-bottom: 0; }
+  .zeilenkopf { display: flex; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+  .zeilenkopf .wer { font-size: 13px; font-weight: 700; }
+  .zeilenkopf .was { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .zeilenkopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .balken { position: relative; height: 22px; border-radius: 11px; background: var(--frei); }
+  .stueck {
+    position: absolute; top: 0; height: 22px; display: flex; align-items: center;
+    color: #fff; font-size: 10px; overflow: hidden;
+  }
+  .stueck i { margin-left: 7px; }
+  .ticks { position: relative; height: 8px; margin-top: 3px; }
+  .ticks .linie { position: absolute; top: 4px; left: 0; right: 0; height: 1px; background: var(--line); }
+  .ticks span { position: absolute; top: 2px; width: 1px; height: 5px; background: var(--muted); opacity: .5; }
+  .ticks span.stark { width: 2px; opacity: .8; }
+  .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .keinTag { font-size: 12px; color: var(--muted); padding: 4px 0; }
+</style>
+
+<div id="inhalt"><div class="leer">…</div></div>
+
+<script>
+  /* Der Zustand kommt fertig gerechnet aus PHP: Hoehen, Luecken und Spannen
+     sind dort geprueft, damit Raster, Timeline und die Karte in der App
+     dieselben Zahlen zeigen. Hier wird nur gezeichnet. */
+  let zustand = null;
+  let kindNr  = 0;
+
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function (z) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[z];
+    });
+  }
+
+  /* Ein <i> OHNE Klasse waere ein leerer Kasten — deshalb gar keins. */
+  function symbol(klasse) {
+    return klasse ? '<i class="fa-light ' + esc(klasse) + '"></i>' : '';
+  }
+
+  function uhr(minuten) {
+    const s = Math.floor(minuten / 60), m = minuten % 60;
+    return (s < 10 ? '0' : '') + s + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  function stundenText(minuten) {
+    const h = minuten / 60;
+    if (Math.abs(Math.round(h) - h) < 0.05) {
+      const g = Math.round(h);
+      return g === 1 ? '1 Stunde' : g + ' Stunden';
+    }
+    return h.toFixed(1).replace('.', ',') + ' Stunden';
+  }
+
+  function handleMessage(daten) {
+    if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
+    if (!daten || !Array.isArray(daten.children)) { return; }
+    zustand = daten;
+    if (kindNr >= daten.children.length) { kindNr = 0; }
+    zeichne();
+  }
+
+  function zeichne() {
+    const ziel = document.getElementById('inhalt');
+    if (!zustand) { return; }
+    if (zustand.empty || zustand.children.length === 0) {
+      ziel.innerHTML = '<div class="leer">Noch kein Stundenplan — im Backend Kinder und Stunden anlegen.</div>';
+      return;
+    }
+    let html = '';
+    if (zustand.holiday) {
+      html += '<div class="ferien">' + symbol('fa-umbrella-beach')
+        + '<span>' + esc(zustand.holiday.name) + ' — bis '
+        + esc(datumKurz(zustand.holiday.until)) + '</span></div>';
+    }
+    html += zustand.mode === 'timeline' ? timeline() : woche();
+    ziel.innerHTML = html;
+
+    document.querySelectorAll('.chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        kindNr = parseInt(b.dataset.nr, 10) || 0;
+        zeichne();
+      });
+    });
+    // Beim Oeffnen zum heutigen Tag: die Woche faengt sonst am Montag an, und
+    // am Donnerstag sieht man zuerst, was vorbei ist.
+    const heute = document.querySelector('.spalte.istHeute');
+    if (heute && heute.parentElement) {
+      heute.parentElement.scrollLeft = Math.max(0, heute.offsetLeft - 8);
+    }
+  }
+
+  function datumKurz(iso) {
+    const t = String(iso || '').split('-');
+    return t.length === 3 ? t[2] + '.' + t[1] + '.' : iso;
+  }
+
+  function kinderLeiste() {
+    if (zustand.children.length < 2) { return ''; }
+    return '<div class="kinder">' + zustand.children.map(function (k, i) {
+      const an = i === kindNr;
+      return '<button class="chip' + (an ? ' an' : '') + '" data-nr="' + i + '"'
+        + (an ? ' style="background:' + esc(k.color) + '"' : '') + '>' + esc(k.name) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  /* ── Wochenraster ─────────────────────────────────────────────────────── */
+  function woche() {
+    const kind = zustand.children[kindNr];
+    const von = zustand.span[0], bis = zustand.span[1];
+    const proViertel = 18;
+    const hoehe = Math.max(Math.ceil((bis - von) / 15), 1) * proViertel;
+
+    let html = '<div class="kopf"><h1>Woche</h1>';
+    if (kind.next) {
+      html += '<span class="naechste" style="color:' + esc(kind.color) + '">Als nächstes: '
+        + esc(kind.next) + '</span>';
+    }
+    html += '</div>' + kinderLeiste();
+
+    // Zeitachse: volle Stunden mit Beschriftung, dazu die tatsaechliche
+    // Anfangszeit — krumme Startzeiten wie 07:45 sieht man sonst nirgends.
+    let achse = '';
+    const ersteStunde = Math.ceil(von / 60);
+    for (let s = ersteStunde; s * 60 <= bis; s++) {
+      const y = (s * 60 - von) / 15 * proViertel;
+      achse += '<div class="marke" style="top:' + (y - 6) + 'px">' + s + ':00<i></i></div>';
+    }
+    if (von % 60 !== 0) {
+      achse += '<div class="marke stark" style="top:-6px">' + uhr(von) + '<i></i></div>';
+    }
+
+    let spalten = '';
+    kind.days.forEach(function (tag) {
+      spalten += '<div class="spalte' + (tag.today ? ' istHeute' : '') + '">'
+        + '<div class="spaltenkopf"><div><div class="tag">' + esc(tag.label) + '</div>'
+        + (tag.parity ? '<div class="kw">' + esc(tag.parity) + '</div>' : '')
+        + '</div>'
+        + (tag.today ? '<span class="heute" style="background:' + esc(kind.color) + '">Heute</span>' : '')
+        + '</div>';
+      if (tag.slots.length === 0) {
+        spalten += '<div class="frei" style="height:' + hoehe + 'px">frei</div>';
+      } else {
+        tag.slots.forEach(function (s) {
+          if (s.gap > 0) {
+            spalten += '<div class="frei" style="height:' + s.gap + 'px">frei</div>';
+          }
+          spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
+            + (s.care ? ' betreuung' : '') + '" style="background:' + esc(s.color)
+            + ';height:' + s.height + 'px">'
+            + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
+            + '<div><div class="fach">' + esc(s.name) + '</div>'
+            + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div></div></div>';
+        });
+        // Schwanz bis zum Wochenende: sonst endet der Dienstag um 10:00 und der
+        // Montag um 16:00, und die Spalten stehen ausgefranst nebeneinander.
+        const letzte = tag.slots[tag.slots.length - 1];
+        const rest = Math.max(Math.ceil((bis - letzte.to) / 15), 0) * proViertel;
+        if (rest > 0) {
+          spalten += '<div class="frei" style="height:' + rest + 'px">frei</div>';
+        }
+      }
+      spalten += '</div>';
+    });
+
+    html += '<div class="raster"><div class="achse"><div class="innen" style="height:'
+      + (hoehe + 40) + 'px;margin-top:40px">' + achse + '</div></div>'
+      + '<div class="spalten">' + spalten + '</div></div>';
+    return html;
+  }
+
+  /* ── Timeline ─────────────────────────────────────────────────────────── */
+  function timeline() {
+    const von = zustand.span[0], bis = zustand.span[1];
+    const spanne = Math.max(bis - von, 60);
+    let html = '';
+
+    zustand.children.forEach(function (kind) {
+      const tag = kind.days.filter(function (t) { return t.today; })[0];
+      const slots = tag ? tag.slots : [];
+      html += '<div class="zeile">';
+      html += '<div class="zeilenkopf"><span class="wer" style="color:' + esc(kind.color) + '">'
+        + esc(kind.name) + '</span>';
+      if (!tag || slots.length === 0) {
+        html += '<span class="was">' + (zustand.holiday ? 'Ferien' : 'heute keine Schule') + '</span></div>';
+        html += '<div class="keinTag">—</div></div>';
+        return;
+      }
+      const beginn = slots[0].start, ende = slots[slots.length - 1].end;
+      html += '<span class="was">Heute (' + esc(kind.todayLabel) + ') · '
+        + esc(stundenText(kind.minutes)) + '</span>'
+        + '<span class="spanne">' + esc(beginn) + '–' + esc(ende) + '</span></div>';
+
+      let stuecke = '';
+      slots.forEach(function (s, i) {
+        const a = Math.min(Math.max((s.from - von) / spanne, 0), 1);
+        const b = Math.min(Math.max((s.to - von) / spanne, 0), 1);
+        // Mindestbreite, sonst verschwindet eine kurze Stunde ganz.
+        const breite = Math.max((b - a) * 100, 4);
+        const erster = i === 0, letzter = i === slots.length - 1;
+        const r = '11px';
+        stuecke += '<div class="stueck" title="' + esc(s.name + ' ' + s.start + '–' + s.end) + '"'
+          + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(s.color)
+          + ';border-top-left-radius:' + (erster ? r : '0')
+          + ';border-bottom-left-radius:' + (erster ? r : '0')
+          + ';border-top-right-radius:' + (letzter ? r : '0')
+          + ';border-bottom-right-radius:' + (letzter ? r : '0') + '">'
+          + symbol(s.icon) + '</div>';
+      });
+
+      // 15-Minuten-Raster: erster, letzter und volle Stunden staerker, damit
+      // die Tagesgrenzen lesbar bleiben.
+      let ticks = '<div class="linie"></div>';
+      const ersterTick = Math.ceil(von / 15) * 15;
+      for (let m = ersterTick; m <= bis; m += 15) {
+        const stark = m === ersterTick || m + 15 > bis || m % 60 === 0;
+        ticks += '<span class="' + (stark ? 'stark' : '') + '" style="left:'
+          + ((m - von) / spanne * 100) + '%"></span>';
+      }
+
+      html += '<div class="balken">' + stuecke + '</div>'
+        + '<div class="ticks">' + ticks + '</div>'
+        + '<div class="fuss"><span>Beginn: ' + esc(beginn) + '</span>'
+        + '<span>Ende: ' + esc(ende) + '</span></div></div>';
+    });
+    return html;
+  }
+</script>
