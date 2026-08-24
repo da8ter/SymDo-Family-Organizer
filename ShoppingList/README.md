@@ -30,6 +30,7 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 - **Kategorien** – Artikel nach Kategorien sortieren, Kategorie-Reihenfolge im Backend konfigurierbar; Artikel innerhalb einer Kategorie werden alphabetisch sortiert
 - **Produktfotos** – Optionale generische Produktbilder in der Einkaufsliste, Suchvorschlägen und Favoritenlisten; im Backend deaktivierbar
 - **Barcode-Scanner** – Live-Kamera-Scan mit animierter Scanline und Trefferanzeige direkt über dem Kamerabild; Produktabgleich über Open Food Facts und OpenGTINDB
+- **Externe Einkaufslisten** – Zwei-Wege-Abgleich mit der **Amazon-Alexa**-Einkaufsliste („Alexa, setze Milch auf die Einkaufsliste“) und mit **Bring!**; beide gleichzeitig möglich, dann spiegeln sich alle drei Listen
 - **Drucken** – Einkaufsliste drucken in drei Layouts: Ultra Kompakt (3 Spalten, ohne Kategorien), Kompakt (Checkliste mit Kategorien) und Detailliert (mit Bildern und Notizen). Auf iOS/Android in der Symcon App aus technischen Gründen nicht verfügbar.
 ## Bedienung
 
@@ -112,16 +113,14 @@ Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle
 
 ### Externe Einkaufslisten (Amazon Alexa, Bring)
 
-Zwei getrennte Auswahlfelder — **Alexa-Einkaufsliste** und **Bring-Einkaufsliste** —,
-beide dürfen gleichzeitig belegt sein. Dann spiegeln sich alle drei Listen
-gegenseitig: was bei Alexa gesprochen wird, erscheint hier *und* bei Bring; was
-hier entsteht, geht an beide. Abhaken wirkt überall.
-
-
 Per Sprache auf die Liste setzen — „Alexa, setze Milch auf die Einkaufsliste" —
 und die Liste bleibt in beide Richtungen gleich: was gesprochen wird, erscheint
 hier; was hier entsteht, erscheint bei Alexa, sodass „Alexa, was steht auf
 meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
+
+Zwei getrennte Auswahlfelder für **Amazon Alexa** und **Bring!** dürfen
+gleichzeitig belegt sein. Dann spiegeln sich alle drei Listen gegenseitig: ein bei
+Alexa gesprochener Artikel landet auch bei Bring, und umgekehrt.
 
 **Was installiert und angelegt werden muss** — getrennt nach Dienst:
 

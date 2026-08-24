@@ -7,6 +7,7 @@ Aufgabenverwaltung für die Symcon Kachel-Visualisierung.
 
 - Aufgaben direkt in der Visualisierung anlegen, bearbeiten und abhaken
 - Zwei-Wege-Synchronisation mit Google Tasks, Microsoft To Do und CalDAV (z. B. Nextcloud)
+- Abgleich mit der **Amazon-Alexa**-Aufgabenliste: per Sprache angelegte Aufgaben landen in der Liste und umgekehrt — parallel zur Synchronisation oben, nicht statt ihr
 - Push-Benachrichtigungen vor Fälligkeit, Vorlaufzeit pro Aufgabe einstellbar
 - Wiederkehrende Aufgaben (wöchentlich bis jährlich oder eigenes Intervall); erledigte Aufgaben werden zum nächsten Termin automatisch wieder geöffnet
 - Aufgaben mit Notiz, Priorität, Menge und Fälligkeit — mit Uhrzeit oder ganztägig
@@ -27,6 +28,7 @@ Einkaufsliste für die Symcon Kachel-Visualisierung.
 - Automatische Mengenerhöhung, wenn ein Artikel bereits auf der Liste steht
 - Gruppierung nach Kategorien; Reihenfolge der Kategorien frei konfigurierbar
 - Barcode-Scanner über die Gerätekamera mit automatischer Produkterkennung; alternativ Anbindung eines externen Scanners über eine Variable
+- Abgleich mit externen Einkaufslisten: **Amazon Alexa** („Alexa, setze Milch auf die Einkaufsliste“) und **Bring!** — beide gleichzeitig möglich, in beide Richtungen, Abhaken wirkt überall
 - Favoritenlisten (z. B. Wocheneinkauf) — komplette Artikelgruppen mit einem Klick übernehmen
 - Abgehakte Artikel wandern in den Bereich „Zuletzt benutzt" und lassen sich von dort wieder auf die Liste setzen
 - Funktionen „Alles erledigt" und „Benutzte Artikel löschen" für die ganze Liste
