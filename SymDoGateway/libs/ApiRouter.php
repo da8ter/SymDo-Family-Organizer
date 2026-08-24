@@ -231,6 +231,16 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'timetable':
+                // Der Stundenplan der Kinder. Wie beim Briefing: GET fuer die
+                // iOS-App, POST fuer die Web-App, die alles ueber ihren einen
+                // POST-Helfer schickt. Rein lesend — gepflegt wird im Backend
+                // des Stundenplan-Moduls, nicht hier.
+                if ($method === 'GET' || $method === 'POST') {
+                    $this->SendJson($this->TimetablePublic());
+                    return;
+                }
+                break;
             case 'tts':
                 // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
                 // GET  /v1/tts/{hash} → die fertige Tondatei

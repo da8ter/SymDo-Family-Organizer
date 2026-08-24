@@ -581,6 +581,28 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .briefing-play:disabled { opacity: .5; cursor: default; }
 .briefing-play.laeuft { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+
+/* Stundenplan: eine Zeile je Kind mit dem heutigen Tag als Balken. Massstab ist
+   die WOCHENspanne aller Kinder, nicht der jeweilige Tag — nur so sind zwei
+   Balken untereinander vergleichbar. */
+.plan-zeile { padding: 8px 0; border-top: 1px solid var(--row-line, rgba(128,128,128,.18)); }
+.plan-zeile:first-of-type { border-top: 0; padding-top: 2px; }
+.plan-kopf { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.plan-kopf .wer { font-size: 14px; font-weight: 700; }
+.plan-kopf .was { font-size: 12px; color: var(--muted-color, #888); }
+.plan-kopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted-color, #888); }
+.plan-balken { position: relative; height: 20px; border-radius: 10px;
+  background: color-mix(in srgb, currentColor 8%, transparent); }
+.plan-stueck { position: absolute; top: 0; height: 20px; display: flex; align-items: center;
+  color: #fff; font-size: 10px; overflow: hidden; }
+.plan-stueck i { margin-left: 6px; }
+.plan-ticks { position: relative; height: 7px; margin-top: 3px; }
+.plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
+  background: color-mix(in srgb, currentColor 14%, transparent); }
+.plan-ticks span { position: absolute; top: 1px; width: 1px; height: 5px;
+  background: currentColor; opacity: .25; }
+.plan-ticks span.stark { width: 2px; opacity: .45; }
+.plan-frei { font-size: 12px; color: var(--muted-color, #888); padding: 2px 0 4px; }
 /* Kopfzeile der Uebersicht: nur die Glocke, links in der Ecke.
    min-height MUSS hier stehen und ist keine Kosmetik — es ist die Zeile, auf der
    die Avatare sitzen: die Mitglieder-Leiste wird per margin-bottom: -44px darauf
@@ -2522,7 +2544,7 @@ html[data-symdo-theme="dark"] .member-bar {
      Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
      Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
      in einer schmalen Rasterspalte gequetscht. */
-  .week-card, .shop-card, .dash-tasks, .briefing-card, .cal-preview { grid-column: 1 / -1; }
+  .week-card, .shop-card, .dash-tasks, .briefing-card, .cal-preview, .plan-card { grid-column: 1 / -1; }
 
   /* Breite Anzeige: das Briefing steht ganz da, der Aufklapper entfaellt. Die
      JS-Messung blendet ihn zusaetzlich aus, sobald der Text nicht mehr ueberlaeuft
@@ -3991,6 +4013,11 @@ function handleMessage(data) {
     loadMailProposals();
     loadCalendars();
     loadBriefing();
+    // MUSS auch hier stehen, nicht nur in gatewayNachladen: dieser Weg ist der
+    // ERSTE Aufbau, gatewayNachladen laeuft erst beim Zurueckkehren oder nach
+    // einer Minute. Nur dort eingehaengt, blieb die Karte beim Oeffnen leer und
+    // erschien erst eine Minute spaeter — im Prueflauf als „fehlt" sichtbar.
+    loadTimetable();
     // Erst hier: Vorher steht nicht fest, ob es ein Gateway gibt, und die
     // Mitgliederliste fuer die Zuordnung ist noch leer.
     pushInit();
@@ -5120,6 +5147,89 @@ function briefingAvailable() {
 function gatewayNachladen() {
   loadBriefing();
   loadMailProposals();
+  loadTimetable();
+}
+
+/* Stundenplan der Kinder. Wie beim Briefing: still nichts, wenn es kein
+   Gateway, keine Instanz oder keinen eingeschalteten Plan gibt — eine leere
+   Karte waere schlechter als gar keine. */
+let stundenplan = null;
+let stundenplanLaeuft = false;
+function loadTimetable() {
+  // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
+  // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay
+  // ohnehin bei „unknown_route" endet — ohne Kosten, aber ohne Nutzen.
+  if (stundenplanLaeuft || !briefingAvailable() || !(store.tabs && store.tabs.dashboard)) { return; }
+  stundenplanLaeuft = true;
+  aiPost('/timetable', {}).then(r => {
+    stundenplanLaeuft = false;
+    const j = r && r.json;
+    const frisch = (j && j.ok === true && j.timetable) ? j.timetable : null;
+    if (JSON.stringify(frisch) === JSON.stringify(stundenplan)) { return; }
+    stundenplan = frisch;
+    renderAll();
+  }).catch(() => { stundenplanLaeuft = false; });
+}
+
+/* Zeichnet die Karte. Getrennt von renderDashboard, damit die Kachel-Fassung
+   der Web-App dieselbe Funktion nutzen kann. */
+function stundenplanKarte() {
+  if (!stundenplan || !Array.isArray(stundenplan.children) || !stundenplan.children.length) {
+    return '';
+  }
+  const von = stundenplan.span[0], bis = stundenplan.span[1];
+  const spanne = Math.max(bis - von, 60);
+  const stundenText = (m) => {
+    const h = m / 60;
+    if (Math.abs(Math.round(h) - h) < 0.05) {
+      const g = Math.round(h);
+      // EIGENE Schluessel: „1 hour" ist in der ToDo-Kachel schon vergeben und
+      // heisst dort „1 Stunde vorher" — eine Erinnerungs-Vorlaufzeit. Derselbe
+      // Schluessel haette hier „1 Stunde vorher Schule" ergeben.
+      return g === 1 ? translate('1 school hour')
+        : translate('%1 school hours').replace('%1', String(g));
+    }
+    return translate('%1 school hours').replace('%1', h.toFixed(1).replace('.', ','));
+  };
+  let zeilen = '';
+  for (const kind of stundenplan.children) {
+    const slots = Array.isArray(kind.slots) ? kind.slots : [];
+    zeilen += `<div class="plan-zeile"><div class="plan-kopf">` +
+      `<span class="wer" style="color:${escapeHtml(kind.color)}">${escapeHtml(kind.name)}</span>`;
+    if (!slots.length) {
+      zeilen += `<span class="was">${escapeHtml(stundenplan.holiday
+        ? stundenplan.holiday.name : translate('no school today'))}</span></div>` +
+        `<div class="plan-frei">—</div></div>`;
+      continue;
+    }
+    const beginn = slots[0].start, ende = slots[slots.length - 1].end;
+    zeilen += `<span class="was">${escapeHtml(kind.day)} · ${escapeHtml(stundenText(kind.minutes))}</span>` +
+      `<span class="spanne">${escapeHtml(beginn)}–${escapeHtml(ende)}</span></div>`;
+    let stuecke = '';
+    slots.forEach((s, i) => {
+      const a = Math.min(Math.max((s.from - von) / spanne, 0), 1);
+      const b = Math.min(Math.max((s.to - von) / spanne, 0), 1);
+      // Mindestbreite, sonst verschwindet eine kurze Stunde ganz.
+      const breite = Math.max((b - a) * 100, 4);
+      const r = '10px', erster = i === 0, letzter = i === slots.length - 1;
+      stuecke += `<div class="plan-stueck" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
+        ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
+        `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
+        `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
+        (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '') + `</div>`;
+    });
+    let ticks = '<div class="plan-linie"></div>';
+    const ersterTick = Math.ceil(von / 15) * 15;
+    for (let m = ersterTick; m <= bis; m += 15) {
+      const stark = m === ersterTick || m + 15 > bis || m % 60 === 0;
+      ticks += `<span class="${stark ? 'stark' : ''}" style="left:${(m - von) / spanne * 100}%"></span>`;
+    }
+    zeilen += `<div class="plan-balken">${stuecke}</div><div class="plan-ticks">${ticks}</div></div>`;
+  }
+  const ferien = stundenplan.holiday
+    ? ` <span class="was">· ${escapeHtml(stundenplan.holiday.name)}</span>` : '';
+  return `<div class="card plan-card"><div class="card-head">` +
+    `<h3>${translate('Timetable')}</h3>${ferien}</div>${zeilen}</div>`;
 }
 
 function loadBriefing() {
@@ -5641,6 +5751,10 @@ function renderDashboard() {
       `<div class="briefing-text${briefingOffen ? '' : ' gekappt'}">` +
       `${escapeHtml(briefingText).replace(/\n+/g, '<br><br>')}</div>${klapp}</div>`;
   }
+
+  // Stundenplan direkt hinter dem Briefing: beides beantwortet die Frage „wie
+  // sieht mein Tag aus", und beides steht oben, bevor es um Aufgaben geht.
+  html += stundenplanKarte();
 
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
   // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.

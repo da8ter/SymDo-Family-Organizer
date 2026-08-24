@@ -43,12 +43,25 @@ Familien-App für Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-S
 
 - Bereiche: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender (OpenCalendar) und Notizen
 - Familienmitglieder mit Foto, Aufgaben-Zuweisung und „Meine Aufgaben"
-- Tägliches Briefing mit Sprachausgabe (OpenAI, Azure oder ElevenLabs) — neun Personas vom Butler bis zum Drillsergeant
+- Tägliches Briefing mit Sprachausgabe (OpenAI, Azure oder ElevenLabs) — acht Personas vom Butler bis zum Drillsergeant
 - KI-Analyse: Foto, PDF oder E-Mail wird zu Aufgaben-, Termin- und Notiz-Vorschlägen (eigener Schlüssel oder lokaler Server)
 - Web-Push aufs Handy: fällige Aufgaben, neues Briefing, neue KI-Vorschläge
+- Stundenplan der Kinder als Zeitleiste in der Übersicht — je Kind ein Balken mit den heutigen Stunden
+
+## Stundenplan
+Der Wochenplan der Kinder als eigene Kachel: Fächer mit Symbol und Farbe, Zeiten,
+Betreuung und Ferien. Gepflegt wird alles im Backend der Instanz.
+
+- **Wochenraster** mit fester Zeitachse, farbigen Stunden und „frei"-Blöcken; heutiger Tag hervorgehoben
+- **Timeline** je Kind — als zweite Kachel und, wenn eingeschaltet, in der SymDo-Übersicht
+- Fächer selbst gepflegt: Name, **Symcon-Symbol** und Farbe; eine einzelne Stunde darf die Farbe überschreiben
+- Samstag je Kind zuschaltbar, auch nur in geraden oder ungeraden Kalenderwochen
+- Betreuung je Wochentag — als grauer Block bis zur Endzeit, zählt nicht als Unterricht
+- Ferien und Feiertage über OpenHolidaysAPI (kostenlos, ohne Konto) oder das Almanac-Modul
 
 ## Anleitungen:
 
 - [ToDo Liste](ToDoList/README.md)
 - [Einkaufsliste](ShoppingList/README.md)
 - [SymDo](SymDoGateway/README.md)
+- [Stundenplan](Stundenplan/README.md)

@@ -376,7 +376,11 @@
             "Analyze text": "Text analysieren",
             "Analyze": "Analysieren",
             "Analyzing text…": "Text wird analysiert …",
-            "Paste text here — e.g. a message from WhatsApp.": "Text hier einfügen — z. B. eine Nachricht aus WhatsApp."
+            "Paste text here — e.g. a message from WhatsApp.": "Text hier einfügen — z. B. eine Nachricht aus WhatsApp.",
+            "Timetable": "Stundenplan",
+            "no school today": "heute keine Schule",
+            "1 school hour": "1 Stunde",
+            "%1 school hours": "%1 Stunden"
         }
     }
 }
