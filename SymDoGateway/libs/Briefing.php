@@ -1283,9 +1283,6 @@ trait Briefing
                     . 'rate nicht. Alle gemeinsam sind „die Herrschaften". '
                     . 'Die Angaben bleiben vollständig und korrekt — Umständlichkeit '
                     . 'ersetzt keine Uhrzeit.';
-            case 'buddy':
-                return 'TONFALL: Wie ein guter Kumpel — locker, duzend, kurze Sätze, ruhig mal '
-                    . 'ein umgangssprachlicher Ausdruck. Keine Emojis.';
             case 'funny':
                 // Ausdruecklich so gewollt (Wunsch vom 20.08.2026): richtig lustig,
                 // nicht bloss augenzwinkernd. Die Beispiele sind Beispiele — steht
@@ -1774,8 +1771,6 @@ trait Briefing
             // und klingt gesetzt — beides passt zum Butler.
             ['key' => 'butler', 'caption' => 'Butler', 'openai' => 'ash',
              'azure' => 'de-DE-ConradNeural', 'eleven' => ''],
-            ['key' => 'buddy', 'caption' => 'Buddy', 'openai' => 'nova',
-             'azure' => 'de-DE-KillianNeural', 'eleven' => ''],
             ['key' => 'funny', 'caption' => 'Funny', 'openai' => 'fable',
              'azure' => 'de-DE-FlorianMultilingualNeural', 'eleven' => ''],
             ['key' => 'drill', 'caption' => 'Drill sergeant', 'openai' => 'onyx',
@@ -1828,6 +1823,14 @@ trait Briefing
         // ACHTUNG fuer spaeter: eine neue Persona gehoert deshalb ANS ENDE von
         // BriefingPersonas(). In die Mitte eingefuegt verschoebe sie die Zuordnung
         // aller gespeicherten Zeilen dahinter.
+        //
+        // Nachtrag vom 24.08.2026, am gespeicherten Stand nachgesehen: die Zeilen
+        // tragen `tone` INZWISCHEN doch — Symcon schrieb sie mitsamt `tone`,
+        // `persona` und `vorgabe` zurueck. Der Rueckfall auf die Reihenfolge greift
+        // also nur bei Staenden von damals. Belegt beim Entfernen der Persona
+        // „Kumpel" aus der Mitte: alle uebrigen behielten ihre Stimme. Die Warnung
+        // oben bleibt trotzdem stehen, denn ein alter Stand ohne `tone` kann hier
+        // jederzeit ankommen.
         $personas = $this->BriefingPersonas();
         $karte = [];
         foreach ($roh as $i => $zeile) {
@@ -1927,8 +1930,6 @@ trait Briefing
             case 'butler':
                 return '<mstts:express-as style="cheerful" styledegree="0.4">'
                     . '<prosody rate="-12%" pitch="-3st">%%TEXT%%</prosody></mstts:express-as>';
-            case 'buddy':
-                return '<prosody rate="0%">%%TEXT%%</prosody>';
             case 'funny':
                 return '<prosody rate="+6%" pitch="+2st">%%TEXT%%</prosody>';
             case 'drill':
@@ -1973,9 +1974,6 @@ trait Briefing
                     . "robotic, or like a movie trailer.\n\n"
                     . "The overall impression should be that of an experienced English household "
                     . "butler speaking personally to the owner of the house.";
-            case 'buddy':
-                return $basis . 'Vortrag: locker und beiläufig, wie zu einem Freund am '
-                    . 'Küchentisch, mittleres Tempo, freundlich.';
             case 'funny':
                 return $basis . 'Vortrag: gut gelaunt und spöttisch, mit hörbarer Freude an '
                     . 'der eigenen Pointe. Kleine Pausen vor den Gags, die Spitzen leicht '
