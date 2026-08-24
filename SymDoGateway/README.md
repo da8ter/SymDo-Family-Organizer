@@ -144,6 +144,13 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
 
 - **Geschrieben für** — ein einzelnes Mitglied (persönliche Anrede) oder *— die ganze Familie —* (Haushalts-Briefing: alle werden gemeinsam angesprochen, jede Aufgabe mit dem Namen des Zuständigen). Lebt nur ein Mitglied im Haushalt, spricht auch das Familien-Briefing es automatisch persönlich an
 - **Persona** — Tonfall des Texts **und** der Stimme: Sachlich, Förmlich, Butler, Lustig, Drillsergeant, Motivationstrainer, Jammerlappen, Digga. Die Persona *Förmlich* siezt Erwachsene mit Nachnamen („Herr Muster"), Kinder bleiben beim Vornamen und Du
+- **Länge** — *Ausführlich* schreibt wie bisher einen Fließtext über den Tag.
+  *Kompakt* hält eine feste Reihenfolge ein: kurze Begrüßung, dann Termine und
+  Aufgaben in je einem knappen Hauptsatz, danach wie lange welches Kind Schule
+  hat, zum Schluss die Anzahl der Artikel auf der Einkaufsliste. Die Schulzeiten
+  kommen aus dem Stundenplan-Modul — ohne es entfällt dieser Teil. Der Tonfall
+  gilt weiterhin, die Kürze hat aber Vorrang: mit *Sachlich* sind es rund 600
+  Zeichen, mit *Lustig* bleibt es länger, weil die Persona Bilder braucht
 - **Personas bearbeiten** — je Persona lässt sich für jeden Sprachausgabe-Anbieter eine eigene Stimme hinterlegen; ohne Eintrag gilt die eingebaute Vorgabe
 - **Vorschau am Vorabend** — ab der eingestellten Uhrzeit (Standard 18:00 Uhr) zeigt die Übersicht das Briefing für morgen
 - **Für eigene Automationen** liegen Text und Aufnahme des gezeigten Briefings dauerhaft bereit: Statusvariable *Briefing-Text* und Medienobjekt *Briefing-Audio* mit fester Objekt-ID (Kapitel 13)

@@ -152,13 +152,17 @@ trait TimetableStore
      * Timeline und in der Web-App herauskommen, und die Rechenregeln stehen
      * unter Prueflauf.
      */
-    private function PlanAufbauen(): array
+    private function PlanAufbauen(string $datum = ''): array
     {
         $kinder  = $this->Kinder();
         $bilder  = $this->Gesichter();
         $faecher = $this->Faecher();
         $slots   = $this->Stunden();
-        $heute   = date('Y-m-d');
+        // Ein DATUM, nicht fest „heute": das Briefing fragt abends auch nach
+        // morgen. Ferien und die Heute-Marke muessen sich dann auf diesen Tag
+        // beziehen — sonst behauptet die Abendvorschau mitten in den Ferien
+        // Unterricht.
+        $heute   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum) === 1 ? $datum : date('Y-m-d');
         [$von, $bis] = TimetableCalc::Wochenspanne($slots, $kinder);
         $ferien  = $this->FerienAmTag($heute);
         $jetzt   = date('H:i');

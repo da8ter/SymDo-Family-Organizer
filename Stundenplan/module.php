@@ -93,6 +93,30 @@ class Stundenplan extends IPSModuleStrict
         return (string)json_encode($this->Plan(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Derselbe Plan, aber fuer einen bestimmten Tag („2026-08-25").
+     *
+     * Gebraucht vom Briefing: die Abendvorschau spricht ueber MORGEN, und Ferien
+     * wie die Heute-Marke muessen sich dann auf morgen beziehen. Eigene Funktion
+     * statt eines Parameters an GetPlan, damit vorhandene Aufrufer unveraendert
+     * bleiben.
+     */
+    public function GetPlanForDate(string $Date): string
+    {
+        $quelle = $this->ReadPropertyInteger('SourceInstanceID');
+        if ($quelle > 0 && $quelle !== $this->InstanceID && IPS_InstanceExists($quelle)
+            && function_exists('STPL_GetPlanForDate')) {
+            $roh  = @STPL_GetPlanForDate($quelle, $Date);
+            $plan = json_decode((string)$roh, true);
+            if (is_array($plan)) {
+                $plan['mode'] = $this->Darstellung();
+                return (string)json_encode($plan, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            }
+        }
+        return (string)json_encode($this->PlanAufbauen($Date),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     /** Ferien erneuern und die Anzeige nachziehen. Haengt am Timer. */
     public function Refresh(): void
     {

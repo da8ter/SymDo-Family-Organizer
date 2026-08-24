@@ -341,7 +341,11 @@
             "Briefing audio": "Briefing-Audio",
             "Text too long.": "Text zu lang.",
             "Voice provider": "Anbieter der Sprachausgabe",
-            "OpenAI needs nothing further here: it speaks with the key already entered under \"AI features\". The voice is chosen per persona in the persona editor.": "OpenAI braucht hier nichts weiter: Es spricht mit dem Schlüssel, der unter „KI-Funktionen\" schon eingetragen ist. Die Stimme wird je Persona im Personen-Editor gewählt."
+            "OpenAI needs nothing further here: it speaks with the key already entered under \"AI features\". The voice is chosen per persona in the persona editor.": "OpenAI braucht hier nichts weiter: Es spricht mit dem Schlüssel, der unter „KI-Funktionen\" schon eingetragen ist. Die Stimme wird je Persona im Personen-Editor gewählt.",
+            "Length": "Länge",
+            "Detailed — flowing text about the day": "Ausführlich — Fließtext über den Tag",
+            "Compact — short announcement": "Kompakt — kurze Ansage",
+            "Compact keeps a fixed order: a short greeting, then the appointments and tasks in brief, then how long each child has school, and at the end how many items are on the shopping list. The school times come from the Timetable module — without it that part is simply left out. The tone still applies, but brevity wins.": "Kompakt hält eine feste Reihenfolge ein: eine kurze Begrüßung, dann die Termine und Aufgaben kurz und bündig, danach wie lange welches Kind Schule hat, und zum Schluss die Anzahl der Artikel auf der Einkaufsliste. Die Schulzeiten kommen aus dem Stundenplan-Modul — ohne es entfällt dieser Teil einfach. Der Tonfall gilt weiterhin, aber die Kürze hat Vorrang."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

@@ -97,29 +97,105 @@ trait TimetableBridge
     }
 
     /**
-     * Instanzen, die ihren Plan in der App zeigen sollen.
+     * Alle Instanzen mit EIGENEN Daten. Spiegel-Instanzen (die ihre Daten aus
+     * einer anderen holen) bleiben draussen — sonst stuende jedes Kind zweimal.
      *
-     * Spiegel-Instanzen (die ihre Daten aus einer anderen holen) bleiben
-     * draussen — sonst stuende jedes Kind zweimal in der Liste.
+     * @return list<int>
+     */
+    private function TimetableOwnInstances(): array
+    {
+        $ids = [];
+        foreach (@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+            $cfg = json_decode((string)@IPS_GetConfiguration($id), true);
+            if (!is_array($cfg) || (int)($cfg['SourceInstanceID'] ?? 0) > 0) {
+                continue;
+            }
+            $ids[] = (int)$id;
+        }
+        return $ids;
+    }
+
+    /**
+     * Instanzen, die ihren Plan in der APP zeigen sollen. Das Briefing hat einen
+     * eigenen Schalter und richtet sich nicht danach.
      *
      * @return list<int>
      */
     private function TimetableInstances(): array
     {
         $ids = [];
-        foreach (@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+        foreach ($this->TimetableOwnInstances() as $id) {
             $cfg = json_decode((string)@IPS_GetConfiguration($id), true);
-            if (!is_array($cfg)) {
-                continue;
+            if (is_array($cfg) && (bool)($cfg['ShowInApp'] ?? false)) {
+                $ids[] = $id;
             }
-            if (!(bool)($cfg['ShowInApp'] ?? false)) {
-                continue;
-            }
-            if ((int)($cfg['SourceInstanceID'] ?? 0) > 0) {
-                continue;
-            }
-            $ids[] = (int)$id;
         }
         return $ids;
+    }
+
+    /**
+     * Eine Zeile je Kind fuer das Briefing: wie lange an diesem Tag Schule ist.
+     *
+     * Das Datum wird durchgereicht, weil die Abendvorschau ueber MORGEN spricht —
+     * mit „heute" gerechnet behauptete sie mitten in den Ferien Unterricht.
+     *
+     * Kinder ohne Schule an dem Tag bleiben DRIN („keine Schule"): dass ein Kind
+     * frei hat, ist fuer die Familienplanung genauso eine Auskunft wie eine
+     * Uhrzeit — und ein fehlender Name sieht aus wie ein Fehler.
+     *
+     * @return list<string>
+     */
+    private function TimetableSchoolLines(string $datum): array
+    {
+        if (!function_exists('STPL_GetPlanForDate')) {
+            return [];
+        }
+        $zeilen = [];
+        foreach ($this->TimetableOwnInstances() as $id) {
+            $plan = json_decode((string)@STPL_GetPlanForDate($id, $datum), true);
+            if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
+                continue;
+            }
+            $ferien = is_array($plan['holiday'] ?? null) ? (string)$plan['holiday']['name'] : '';
+            foreach ($plan['children'] as $kind) {
+                if (!is_array($kind)) {
+                    continue;
+                }
+                $name = trim((string)($kind['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $tag = null;
+                foreach ((array)($kind['days'] ?? []) as $t) {
+                    if (is_array($t) && (bool)($t['today'] ?? false)) {
+                        $tag = $t;
+                        break;
+                    }
+                }
+                $stunden = is_array($tag['slots'] ?? null) ? $tag['slots'] : [];
+                if ($stunden === []) {
+                    $zeilen[] = $name . ': keine Schule' . ($ferien !== '' ? ' (' . $ferien . ')' : '');
+                    continue;
+                }
+                // Unterricht und Betreuung getrennt nennen: „bis 16 Uhr Schule"
+                // waere falsch, wenn davon dreieinhalb Stunden Hort sind.
+                $unterricht = array_values(array_filter($stunden,
+                    static fn(array $s): bool => !(bool)($s['care'] ?? false)));
+                $betreuung  = array_values(array_filter($stunden,
+                    static fn(array $s): bool => (bool)($s['care'] ?? false)));
+                if ($unterricht === []) {
+                    $zeilen[] = $name . ': keine Schule';
+                    continue;
+                }
+                $zeile = sprintf('%s: Schule von %s bis %s', $name,
+                    (string)$unterricht[0]['start'],
+                    (string)$unterricht[count($unterricht) - 1]['end']);
+                if ($betreuung !== []) {
+                    $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
+                }
+                $zeilen[] = $zeile;
+            }
+        }
+        return $zeilen;
     }
 }

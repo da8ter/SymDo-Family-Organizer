@@ -2202,6 +2202,22 @@ class SymDoGateway extends IPSModuleStrict
                         ['caption' => $this->Translate('Teen slang'),         'value' => 'digga']
                     ]
                 ],
+                ...(array_key_exists('BriefingStyle', (array)$cfg) ? [
+                    [
+                        'type'    => 'Select',
+                        'name'    => 'BriefingStyle',
+                        'width'   => '400px',
+                        'caption' => $this->Translate('Length'),
+                        'options' => [
+                            ['caption' => $this->Translate('Detailed — flowing text about the day'), 'value' => 'detailed'],
+                            ['caption' => $this->Translate('Compact — short announcement'), 'value' => 'compact'],
+                        ]
+                    ],
+                    [
+                        'type'    => 'Label',
+                        'caption' => $this->Translate('Compact keeps a fixed order: a short greeting, then the appointments and tasks in brief, then how long each child has school, and at the end how many items are on the shopping list. The school times come from the Timetable module — without it that part is simply left out. The tone still applies, but brevity wins.')
+                    ],
+                ] : []),
                 $this->GetPersonaEditor(),
                 [
                     'type'    => 'SelectTime',

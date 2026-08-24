@@ -87,6 +87,8 @@ trait Briefing
         // Sprachausgabe des Briefings: an, weil sie den Nutzen ausmacht — aber
         // abschaltbar, denn sie kostet je Tag ein Mehrfaches des Textes.
         $this->RegisterPropertyBoolean('BriefingAudioEnabled', true);
+        // Ausfuehrlich (Fliesstext) oder kompakt (kurze Ansage).
+        $this->RegisterPropertyString('BriefingStyle', 'detailed');
         $this->RegisterPropertyBoolean('BriefingPreviewEnabled', false);
         $this->RegisterPropertyString('BriefingPreviewFrom', '{"hour":18,"minute":0,"second":0}');
         // {"d":"YYYY-MM-DD","text":"…","at":ts,"userId":"…","failDay":"…","fails":n}
@@ -702,6 +704,9 @@ trait Briefing
             'geburtstage'  => $this->BriefingBirthdayLines($mitglieder, $tage),
             'rollen'       => $this->BriefingRoleLines($mitglieder),
             'einkauf'      => $this->BriefingShopping(),
+            // Wie lange welches Kind an DIESEM Tag Schule hat. Kommt aus dem
+            // Stundenplan-Modul; ohne Modul oder ohne Instanz bleibt es leer.
+            'schule'       => $this->TimetableSchoolLines(date('Y-m-d', $this->BriefingDay($tage))),
         ];
     }
 
@@ -1197,9 +1202,28 @@ trait Briefing
      */
     private function BriefingSystemPrompt(string $tagWort = 'heute'): string
     {
-        return 'Du schreibst das Tagesbriefing für eine Familie in einer Haushalts-App. '
-            . 'Fasse den Tag (' . $tagWort . ') in zwei bis fünf Sätzen zusammen — durchgehender '
-            . 'Fließtext, KEINE Aufzählung, keine Zwischentitel, kein Markdown. '
+        $aufbau = $this->BriefingKompakt()
+            // KOMPAKT: fester Aufbau in fester Reihenfolge. Die Reihenfolge steht
+            // hier ausdruecklich, weil das Modell sonst den Einkauf nach vorne
+            // zieht und die Schulzeiten unter die Termine mischt.
+            ? 'Du schreibst eine KURZE Tagesansage für eine Familie in einer Haushalts-App. '
+                . 'Halte dich streng an diesen Aufbau und diese Reihenfolge: '
+                . 'ERSTENS eine kurze Begrüßung, ein einziger kurzer Satz. '
+                . 'ZWEITENS die Termine und Aufgaben, kurz und bündig — je Eintrag ein '
+                . 'knapper Hauptsatz, ohne Ausschmückung und ohne Überleitungen. '
+                . 'DRITTENS, wenn Schulzeiten angegeben sind: je Kind ein kurzer Satz, '
+                . 'wie lange es Schule hat. '
+                . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
+                . 'Einkaufsliste stehen — steht dazu nichts unten, lass ihn weg. '
+                . 'Durchgehender Fließtext ohne Aufzählungszeichen, ohne Zwischentitel, '
+                . 'ohne Markdown. Kein Schlusswort, keine Ermunterung, keine Wiederholung. '
+                . 'Der Tonfall unten gilt auch hier, aber die KÜRZE hat Vorrang: lieber '
+                . 'ein trockener kurzer Satz als ein ausgeschmückter langer. '
+            : 'Du schreibst das Tagesbriefing für eine Familie in einer Haushalts-App. '
+                . 'Fasse den Tag (' . $tagWort . ') in zwei bis fünf Sätzen zusammen — durchgehender '
+                . 'Fließtext, KEINE Aufzählung, keine Zwischentitel, kein Markdown. ';
+
+        return $aufbau
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '
             . '„Fussballtraining". Die Angaben unten sind teils ohne Umlaute geschrieben — '
             . 'setze sie in deinem Text richtig. '
@@ -1249,7 +1273,28 @@ trait Briefing
                     . '„' . $tagWort . '" und niemals „heute" — was ' . $tagWort . ' ansteht, '
                     . 'steht nicht heute an. '
                 : '')
-            . $this->BriefingToneRule();
+            . $this->BriefingToneRule()
+            // NACH dem Tonfall, und das ist der Punkt: die Tonfall-Regeln sind
+            // nachdruecklich formuliert („richtig lustig, nicht bloss
+            // augenzwinkernd"), und ein Kuerze-Hinweis DAVOR ging unter. Der
+            // erste Kompakt-Lauf ergab 1282 Zeichen mit ausgebauten Pointen und
+            // einem Schlusswort, das oben ausdruecklich verboten war. Also steht
+            // die Grenze jetzt zuletzt, und sie ist zaehlbar statt appellativ.
+            . ($this->BriefingKompakt()
+                ? ' KÜRZE — diese Regel gilt VOR dem Tonfall: Je Eintrag HÖCHSTENS '
+                    . 'ein Hauptsatz mit höchstens zehn Wörtern. Keine Vergleiche, keine '
+                    . 'Bilder, keine Pointen, keine Nebensätze, keine Füllwörter, keine '
+                    . 'Anmoderation („übrigens", „außerdem"). Der Tonfall zeigt sich nur '
+                    . 'in der WORTWAHL, nicht in der Länge. Der Text endet mit dem '
+                    . 'Einkaufs-Hinweis — kein Schlusssatz, kein Wunsch, keine Ermunterung '
+                    . 'danach.'
+                : '');
+    }
+
+    /** Kurze Ansage statt Fliesstext? */
+    private function BriefingKompakt(): bool
+    {
+        return (string)$this->BriefingProp('BriefingStyle', 'detailed') === 'compact';
     }
 
     /** Der Tonfall aus den Einstellungen — ein Satz, der den Rest des Prompts einfaerbt. */
@@ -1513,6 +1558,13 @@ trait Briefing
         $teile[] = $block('TERMINE AN DIESEM TAG (Uhrzeit = Beginn)', $daten['termine'], 'keine');
         $teile[] = $block('AUFGABEN MIT FRIST AN DIESEM TAG (Uhrzeit = bis wann)', $daten['aufgaben'], 'keine');
         $teile[] = $block('AUFGABEN MIT ABGELAUFENER FRIST', $daten['ueberfaellig'], 'keine');
+        // Die Schulzeiten gehoeren zum Kompaktmodus. Im ausfuehrlichen Briefing
+        // bleiben sie draussen: was nicht im Prompt steht, kann die KI auch nicht
+        // zum Thema machen — und die lange Fassung soll sich nicht ungefragt
+        // aendern.
+        if ($this->BriefingKompakt() && ($daten['schule'] ?? []) !== []) {
+            $teile[] = $block('SCHULZEITEN AN DIESEM TAG', $daten['schule'], 'keine');
+        }
         if ($daten['geburtstage'] !== []) {
             $teile[] = $block('GEBURTSTAG AN DIESEM TAG', $daten['geburtstage'], '');
         }
@@ -1520,8 +1572,11 @@ trait Briefing
             $teile[] = $block('ROLLEN IM HAUSHALT', $daten['rollen'], '');
         }
         // Unterhalb der Schwelle bleibt die Zahl draussen: Was nicht im Prompt
-        // steht, kann die KI auch nicht zum Thema machen.
-        if ((int)$daten['einkauf']['anzahl'] >= self::BRIEFING_SHOP_HINT) {
+        // steht, kann die KI auch nicht zum Thema machen. Im Kompaktmodus gilt
+        // die Schwelle NICHT — dort ist der Einkaufs-Hinweis ein fester Teil des
+        // Aufbaus und muss auch bei drei Artikeln kommen.
+        if ((int)$daten['einkauf']['anzahl'] >= self::BRIEFING_SHOP_HINT
+            || ($this->BriefingKompakt() && (int)$daten['einkauf']['anzahl'] > 0)) {
             $teile[] = sprintf(
                 'EINKAUFSLISTE: %d offene Artikel%s',
                 (int)$daten['einkauf']['anzahl'],
