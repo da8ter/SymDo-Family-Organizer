@@ -53,6 +53,11 @@ trait AiExtract
     // parallele Requests den Symcon-Webserver).
     private const AI_RATE_MAX        = 60;
     private const AI_RATE_WINDOW     = 3600;
+    // Eingefuegter Text („Text analysieren"): grosszuegig fuer lange Mails und
+    // Chat-Verlaeufe, aber gedeckelt — der Prompt reist sonst ungebremst zum
+    // Anbieter. 20.000 Zeichen sind ~5 Druckseiten.
+    private const AI_TEXT_MAX = 20000;
+
     // Rezept-URL-Analyse
     private const AI_MAX_INGREDIENTS  = 100;
     private const AI_HTTP_GET_TIMEOUT = 15;
@@ -80,7 +85,16 @@ trait AiExtract
         }
         $body = $this->ReadJsonBody();
         $pdf  = $this->AiStripImage($this->BodyStr($body, 'pdf'));
-        if ($pdf !== '') {
+        $text = trim($this->BodyStr($body, 'text'));
+        if ($text !== '') {
+            // Eingefuegter Text (z. B. eine WhatsApp-Nachricht) — derselbe Weg
+            // wie Foto und PDF, nur reist der Inhalt direkt im Nutzer-Teil.
+            if (mb_strlen($text) > self::AI_TEXT_MAX) {
+                $this->SendApiError('invalid_payload', $this->Translate('Text too long.'), 413);
+                return;
+            }
+            $result = $this->AiExtractTodos('', '', $text);
+        } elseif ($pdf !== '') {
             if (strlen($pdf) > self::AI_MAX_PDF_B64) {
                 $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
                 return;
@@ -102,11 +116,16 @@ trait AiExtract
     }
 
     /** @return array ok:true+todos | ok:false+code+message+status */
-    private function AiExtractTodos(string $imageBase64 = '', string $pdfBase64 = ''): array
+    private function AiExtractTodos(string $imageBase64 = '', string $pdfBase64 = '', string $text = ''): array
     {
+        $auftrag = $pdfBase64 !== '' ? 'Extrahiere die Aufgaben aus dieser Datei.' : 'Extrahiere die Aufgaben aus diesem Dokument.';
+        if ($text !== '') {
+            // Kein Bild, keine Datei: der Text selbst ist das Dokument.
+            $auftrag = "Extrahiere die Aufgaben aus dieser Nachricht.\n\n--- Nachricht ---\n" . $text;
+        }
         $r = $this->AiRunCompletion(
             $this->AiSystemPrompt(date('Y-m-d')),
-            $pdfBase64 !== '' ? 'Extrahiere die Aufgaben aus dieser Datei.' : 'Extrahiere die Aufgaben aus diesem Dokument.',
+            $auftrag,
             $imageBase64 !== '' ? $imageBase64 : null,
             $pdfBase64 !== '' ? $pdfBase64 : null
         );

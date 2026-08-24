@@ -520,7 +520,11 @@
             "Create a folder first": "Erst einen Ordner anlegen",
             "Detect note": "Notiz erkennen",
             "Detected entries": "Erkannte Einträge",
-            "Scanned photo": "Gescanntes Foto"
+            "Scanned photo": "Gescanntes Foto",
+            "Analyze text": "Text analysieren",
+            "Analyze": "Analysieren",
+            "Analyzing text…": "Text wird analysiert …",
+            "Paste text here — e.g. a message from WhatsApp.": "Text hier einfügen — z. B. eine Nachricht aus WhatsApp."
         },
         "en": {
             "ToDo List": "ToDo List",

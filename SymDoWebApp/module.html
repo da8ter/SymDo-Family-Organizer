@@ -2039,6 +2039,9 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* KI-Leiste ohne Eingabefeld (KI-Bereich): der Knopf steht rechts, wo er in
+   den anderen Leisten auch sitzt. */
+.inputbar.only-scan { justify-content: flex-end; }
 /* KI-Pruefansicht: Wahl je Fund — Aufgabe, Termin oder Notiz. Immer eine EIGENE
    Zeile unter den Abzeichen (Wunsch vom 23.08.2026), die aktive Seite traegt die
    Akzentfarbe; die Knoepfe duerfen die Zeile nicht abwaehlen (stopPropagation). */
@@ -2656,6 +2659,11 @@ html[data-symdo-theme="dark"] .member-bar {
         <div id="kiFinds" class="mail-ai" style="display:none;"></div>
         <div id="kiEmpty" class="empty-state" style="display:none;"><i class="fa-light fa-sparkles"></i><span id="kiEmptyText"></span></div>
       </div>
+        <!-- Wie die Eingabeleisten der anderen Bereiche, nur ohne Eingabefeld:
+             hier gibt es nichts einzutippen, der Knopf oeffnet die Quellen-Wahl. -->
+        <div class="inputbar only-scan" id="kiInputbar">
+          <button id="btnKiScan" class="round-btn" aria-label="Mit KI erkennen"><i class="fa-light fa-wand-magic-sparkles"></i></button>
+        </div>
     </section>
 
     <section id="screen-dashboard" class="screen active">
@@ -2954,6 +2962,23 @@ html[data-symdo-theme="dark"] .member-bar {
   </div>
 </div>
 
+<!-- KI: eingefuegten Text analysieren (z. B. eine WhatsApp-Nachricht) -->
+<div class="overlay" id="aiTextOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="aiTextTitle"></span>
+      <button class="btn-close-overlay" data-close="aiTextOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <textarea id="aiTextInput" rows="10" style="min-height: 38vh; resize: vertical;"></textarea>
+    </div>
+    <div class="overlay-footer">
+      <button data-close="aiTextOverlay" id="btnAiTextCancel"></button>
+      <button class="primary" id="btnAiTextRun" disabled></button>
+    </div>
+  </div>
+</div>
+
 <!-- KI: erkannte Aufgaben aus einem Foto prüfen und übernehmen -->
 <div class="overlay" id="aiReviewOverlay">
   <div class="overlay-card">
@@ -3017,6 +3042,7 @@ html[data-symdo-theme="dark"] .member-bar {
     <div class="overlay-body">
       <button class="ai-source-btn primary" id="btnTodoFromPhoto"><i class="fa-light fa-camera"></i><span id="todoFromPhotoLabel">Foto analysieren</span></button>
       <button class="ai-source-btn primary" id="btnTodoFromFile"><i class="fa-light fa-file-arrow-up"></i><span id="todoFromFileLabel">Datei analysieren</span></button>
+      <button class="ai-source-btn primary" id="btnTodoFromText"><i class="fa-light fa-keyboard"></i><span id="todoFromTextLabel">Text analysieren</span></button>
     </div>
   </div>
 </div>
@@ -3389,8 +3415,16 @@ function applyAiEnabled() {
   const on = computeAiEnabled();
   // Alle vier Eingabezeilen tragen denselben Knopf und verschwinden gemeinsam,
   // wenn die KI aus ist — ein Zauberstab, der nur absagt, ist schlimmer als keiner.
-  ['btnShopScan', 'btnTodoScan', 'btnCalScan', 'btnNotesScan']
+  ['btnShopScan', 'btnTodoScan', 'btnCalScan', 'btnNotesScan', 'btnKiScan']
     .forEach(id => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; });
+  // Die KI-Leiste besteht NUR aus dem Knopf: ohne ihn muss die ganze Leiste weg,
+  // samt Scroll-Polster des Bereichs — sonst bliebe unten eine leere Flaeche.
+  const kiBar = document.getElementById('kiInputbar');
+  if (kiBar) {
+    kiBar.style.display = on ? '' : 'none';
+    const bereich = document.getElementById('screen-ki');
+    if (bereich) bereich.classList.toggle('bar-hidden', !on);
+  }
 }
 // Wandelt eine data:-URL in ein Blob (für PDF-Anzeige im iframe — robuster als eine
 // riesige data:-URL, die manche Browser blockieren).
@@ -10991,9 +11025,34 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnAiCancel').textContent = translate('Cancel');
   aiAdd.textContent = translate('Add');
 
-  // ToDo-KI: Quelle wählen (Foto aufnehmen ODER Datei hochladen: JPG/PNG/PDF).
+  // ToDo-KI: Quelle wählen (Foto aufnehmen ODER Datei hochladen ODER Text einfügen).
   document.getElementById('todoFromPhotoLabel').textContent = translate('Analyze photo');
   document.getElementById('todoFromFileLabel').textContent = translate('Analyze file');
+  document.getElementById('todoFromTextLabel').textContent = translate('Analyze text');
+  document.getElementById('aiTextTitle').textContent = translate('Analyze text');
+  document.getElementById('btnAiTextCancel').textContent = translate('Cancel');
+  document.getElementById('btnAiTextRun').textContent = translate('Analyze');
+  const aiTextInput = document.getElementById('aiTextInput');
+  aiTextInput.placeholder = translate('Paste text here — e.g. a message from WhatsApp.');
+  aiTextInput.addEventListener('input', () => {
+    document.getElementById('btnAiTextRun').disabled = aiTextInput.value.trim() === '';
+  });
+  document.getElementById('btnTodoFromText').addEventListener('click', () => {
+    closeOverlay('todoSourceOverlay');
+    aiTextInput.value = '';
+    document.getElementById('btnAiTextRun').disabled = true;
+    openOverlay('aiTextOverlay');
+    setTimeout(() => aiTextInput.focus(), 60);
+  });
+  document.getElementById('btnAiTextRun').addEventListener('click', () => {
+    const t = aiTextInput.value.trim();
+    if (!t) return;
+    closeOverlay('aiTextOverlay');
+    runAiExtract({ text: t });
+  });
+  // KI-Bereich: derselbe Weg wie ToDos und Termine, nur ohne Eingabefeld.
+  const kiScan = document.getElementById('btnKiScan');
+  if (kiScan) { kiScan.addEventListener('click', () => openOverlay('todoSourceOverlay')); }
   const todoFileInput = document.getElementById('todoFileInput');
   todoScan.addEventListener('click', () => openOverlay('todoSourceOverlay'));
   // Termine: DERSELBE Weg wie bei den Aufgaben. Die Auswertung liefert beide Arten,
@@ -11236,7 +11295,8 @@ document.addEventListener('DOMContentLoaded', () => {
     aiQuellDatei = payload && payload.pdf
       ? { nutzlast: { pdf: payload.pdf }, name: String(payload.pdfName || '') }
       : (payload && payload.image ? { nutzlast: { image: payload.image }, name: String(payload.pdfName || '') } : null);
-    const statusMsg = (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
+    const statusMsg = (payload && payload.text) ? translate('Analyzing text…')
+      : (payload && payload.pdf) ? translate('Analyzing file…') : translate('Analyzing photo…');
     aiStatus('<div class="ai-spinner"></div>' + statusMsg);
     openOverlay('aiReviewOverlay');
     const done = (res) => {
