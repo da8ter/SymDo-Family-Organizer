@@ -199,32 +199,28 @@ trait ExtListHooksShopping
 
     // ────────────────────────── Formular ──────────────────────────
 
-    /** @return array<string, mixed> */
+    /**
+     * Der Bereich im Formular.
+     *
+     * Je Dienst ein eigener Unterbereich mit Auswahlfeld UND dem Hinweis, was
+     * dafuer installiert werden muss — beides gehoert zusammen und stand vorher
+     * getrennt. Die drei Schalter darueber gelten fuer BEIDE Dienste und bleiben
+     * deshalb oben; sie je Dienst zu doppeln waere eine Einstellung, die man an
+     * zwei Stellen suchen muss.
+     *
+     * @return array<string, mixed>
+     */
     private function GetExtListFormElements(): array
     {
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('External list integration'),
+            'caption'  => $this->Translate('External shopping lists'),
             'expanded' => false,
             'items'    => [
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'ExtListEnabledProp',
                     'caption' => $this->Translate('Sync with external lists'),
-                ],
-                [
-                    'type'         => 'SelectInstance',
-                    'name'         => 'AlexaListID',
-                    'caption'      => $this->Translate('Alexa shopping list'),
-                    'validModules' => [ListSource::GUID_ALEXA],
-                    'width'        => '500px',
-                ],
-                [
-                    'type'         => 'SelectInstance',
-                    'name'         => 'BringListID',
-                    'caption'      => $this->Translate('Bring shopping list'),
-                    'validModules' => [ListSource::GUID_BRING],
-                    'width'        => '500px',
                 ],
                 [
                     'type'    => 'CheckBox',
@@ -248,32 +244,43 @@ trait ExtListHooksShopping
                 ],
                 [
                     'type'     => 'ExpansionPanel',
-                    'caption'  => $this->Translate('What has to be installed'),
+                    'caption'  => $this->Translate('Amazon Alexa shopping list'),
                     'expanded' => false,
                     'items'    => [
                         [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate('ALEXA — voice list of an Amazon account'),
-                            'bold'    => true,
+                            'type'         => 'SelectInstance',
+                            'name'         => 'AlexaListID',
+                            'caption'      => $this->Translate('AlexaList instance'),
+                            'validModules' => [ListSource::GUID_ALEXA],
+                            'width'        => '500px',
                         ],
                         [
                             'type'    => 'Label',
-                            'caption' => $this->Translate("1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. Set \"List\" to \"Shopping list (default)\" here; the task list needs its OWN second instance for the to-do list module.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken item arrives here."),
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate('BRING — the Bring! shopping app (not a voice assistant)'),
-                            'bold'    => true,
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate("1. Library \"Bring!\" via Module Control: https://github.com/Nall-chan/bring-symcon\n2. Instance \"Bring! Konto\" — asks for the e-mail and password of the Bring account.\n3. Instance \"Bring List\" — one per Bring list, select the list there.\n4. Switch ON \"Create text box variable\" in that instance: that variable is our trigger, and the module only writes it when the switch is on.\n5. Set the refresh interval there — those are SECONDS (60–120 is sensible), unlike Alexa's minutes."),
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate('Both can be used at the same time. Bring has no to-do lists, and it cannot check items off — an item bought here is removed there and lands in "recently bought", which means the same thing.'),
+                            'caption' => $this->Translate("What has to be installed:\n1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. Set \"List\" to \"Shopping list (default)\" here; the task list needs its OWN second instance for the to-do list module.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken item arrives here."),
                         ],
                     ],
+                ],
+                [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Bring shopping list'),
+                    'expanded' => false,
+                    'items'    => [
+                        [
+                            'type'         => 'SelectInstance',
+                            'name'         => 'BringListID',
+                            'caption'      => $this->Translate('Bring List instance'),
+                            'validModules' => [ListSource::GUID_BRING],
+                            'width'        => '500px',
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => $this->Translate("Bring is a shopping app, not a voice assistant.\n\nWhat has to be installed:\n1. Library \"Bring!\" via Module Control: https://github.com/Nall-chan/bring-symcon\n2. Instance \"Bring! Konto\" — asks for the e-mail and password of the Bring account.\n3. Instance \"Bring List\" — one per Bring list, select the list there.\n4. Switch ON \"Create text box variable\" in that instance: that variable is our trigger, and the module only writes it when the switch is on.\n5. Set the refresh interval there — those are SECONDS (60–120 is sensible), unlike Alexa's minutes.\n\nBring cannot check items off — an item bought here is removed there and lands in \"recently bought\", which means the same thing."),
+                        ],
+                    ],
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Both can be used at the same time; then all three lists mirror each other.'),
                 ],
             ],
         ];

@@ -656,7 +656,7 @@ Anleitungen zur Konfiguration:
 - [Google Tasks Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Google_Sync.md)
 - [Microsoft To Do Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Microsoft_Sync.md)
 
-### Anbindung an externe Listen (Alexa)
+### Amazon Alexa Aufgabenliste
 
 Der Abgleich läuft **neben**
 CalDAV, Google und Microsoft — die externe Liste ist keines der exklusiven
@@ -675,8 +675,8 @@ meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
 3. Instanz **AlexaList** — für Aufgaben mit *Liste* = „Aufgabenliste (Standard)". Die Einkaufsliste braucht eine **eigene** Instanz
 4. Dort das Aktualisierungsintervall auf **1–2 Minuten** stellen (Vorgabe ist 60) — dieser Takt entscheidet, wie schnell Gesprochenes ankommt
 
-**Einrichtung:** Im Bereich *Anbindung an externe Listen* den Abgleich einschalten
-und im Feld *Alexa-Aufgabenliste* die Instanz wählen.
+**Einrichtung:** Im Bereich *Amazon Alexa Aufgabenliste* den Abgleich einschalten
+und die *AlexaList-Instanz* wählen.
 
 **Grenzen, ehrlich benannt:**
 

@@ -175,7 +175,7 @@ trait ExtListHooksTodo
     {
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('External list integration'),
+            'caption'  => $this->Translate('Amazon Alexa task list'),
             'expanded' => false,
             'items'    => [
                 [
@@ -190,7 +190,7 @@ trait ExtListHooksTodo
                 [
                     'type'         => 'SelectInstance',
                     'name'         => 'AlexaListID',
-                    'caption'      => $this->Translate('Alexa task list'),
+                    'caption'      => $this->Translate('AlexaList instance'),
                     'validModules' => [ListSource::GUID_ALEXA],
                     'width'        => '500px',
                 ],
@@ -216,15 +216,8 @@ trait ExtListHooksTodo
                     'onClick' => 'echo TDL_ExtListSyncNow($id);',
                 ],
                 [
-                    'type'     => 'ExpansionPanel',
-                    'caption'  => $this->Translate('What has to be installed'),
-                    'expanded' => false,
-                    'items'    => [
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate("1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. For tasks set \"List\" to \"Task list (default)\"; the shopping list needs its OWN instance.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken task arrives here."),
-                        ],
-                    ],
+                    'type'    => 'Label',
+                    'caption' => $this->Translate("What has to be installed:\n1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. For tasks set \"List\" to \"Task list (default)\"; the shopping list needs its OWN instance.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken task arrives here."),
                 ],
             ],
         ];

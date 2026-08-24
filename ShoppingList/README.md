@@ -110,7 +110,7 @@ Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle
 
 **Lookup-Reihenfolge:** Externer Produkt-API → Open Food Facts → OpenGTINDB.
 
-### Anbindung an externe Listen (Alexa, Bring)
+### Externe Einkaufslisten (Amazon Alexa, Bring)
 
 Zwei getrennte Auswahlfelder — **Alexa-Einkaufsliste** und **Bring-Einkaufsliste** —,
 beide dürfen gleichzeitig belegt sein. Dann spiegeln sich alle drei Listen
@@ -140,8 +140,10 @@ meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
 4. In dieser Instanz **„Textbox-Variable erstellen" einschalten**: diese Variable ist unser Auslöser, und das Modul beschreibt sie nur, wenn der Schalter an ist
 5. Das Aktualisierungsintervall dort setzen — das sind **Sekunden** (60–120 ist sinnvoll), anders als bei Alexa
 
-**Einrichtung:** Im Bereich *Anbindung an externe Listen* den Abgleich einschalten
-und die Instanzen in den beiden Feldern wählen — Alexa, Bring oder beide.
+**Einrichtung:** Im Bereich *Externe Einkaufslisten* den Abgleich einschalten und
+darunter die Instanz im jeweiligen Unterbereich wählen — *Amazon Alexa
+Einkaufsliste*, *Bring Einkaufsliste* oder beide. Jeder Unterbereich trägt den
+Hinweis, was dafür zu installieren ist.
 
 **Grenzen, ehrlich benannt:**
 
