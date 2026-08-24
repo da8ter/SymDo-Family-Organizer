@@ -13,10 +13,10 @@ declare(strict_types=1);
  *
  * Die Klassen sind absichtlich duenn: sie uebersetzen, sie entscheiden nichts.
  * Jede Entscheidung (was angelegt, abgehakt, entfernt wird) faellt in
- * VoiceListSync — und ist dadurch ohne Cloud pruefbar, weil der Pruefstand hier
+ * ExternalListSync — und ist dadurch ohne Cloud pruefbar, weil der Pruefstand hier
  * eine Attrappe einsetzt.
  */
-abstract class VoiceSource
+abstract class ListSource
 {
     /** GUID des Fremdmoduls AlexaList (Bibliothek „Echo Remote"). */
     public const GUID_ALEXA = '{7129178B-E633-238A-0851-2F1B5A09805E}';
@@ -32,7 +32,7 @@ abstract class VoiceSource
      * Bei mehr als 100 Eintraegen kommt also stillschweigend ein Ausschnitt
      * zurueck, nicht erkennbar als Fehler. Deshalb darf „Eintrag fehlt" nur
      * dann als „von der Liste genommen" gelten, wenn die Antwort nachweislich
-     * vollstaendig war — siehe VoiceListSync.
+     * vollstaendig war — siehe ExternalListSync.
      */
     public const READ_LIMIT = 100;
 
@@ -57,10 +57,10 @@ abstract class VoiceSource
         }
         $guid = (string)(@IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '');
         if ($guid === self::GUID_ALEXA) {
-            return new VoiceSourceAlexa($instanceID);
+            return new ListSourceAlexa($instanceID);
         }
         if ($guid === self::GUID_BRING) {
-            return new VoiceSourceBring($instanceID);
+            return new ListSourceBring($instanceID);
         }
         return null;
     }
@@ -114,7 +114,7 @@ abstract class VoiceSource
  * gesprochene Menge steckt im Namen („3 Milch"). Deshalb kann `Add()` auch nur
  * einen Text uebergeben und muss die Menge wieder hineinschreiben.
  */
-class VoiceSourceAlexa extends VoiceSource
+class ListSourceAlexa extends ListSource
 {
     public function Key(): string
     {
@@ -204,7 +204,7 @@ class VoiceSourceAlexa extends VoiceSource
  * (Stand 24.08.2026). Alle Signaturen stammen aus dem Quelltext des Moduls,
  * `RemoveItem()` steht dort in module.php:603 — die README fuehrt sie nicht auf.
  */
-class VoiceSourceBring extends VoiceSource
+class ListSourceBring extends ListSource
 {
     public function Key(): string
     {

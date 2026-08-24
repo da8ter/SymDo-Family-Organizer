@@ -112,22 +112,36 @@ Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle
 
 ### Anbindung an externe Listen (Alexa, Bring)
 
+Zwei getrennte Auswahlfelder — **Alexa-Einkaufsliste** und **Bring-Einkaufsliste** —,
+beide dürfen gleichzeitig belegt sein. Dann spiegeln sich alle drei Listen
+gegenseitig: was bei Alexa gesprochen wird, erscheint hier *und* bei Bring; was
+hier entsteht, geht an beide. Abhaken wirkt überall.
+
+
 Per Sprache auf die Liste setzen — „Alexa, setze Milch auf die Einkaufsliste" —
 und die Liste bleibt in beide Richtungen gleich: was gesprochen wird, erscheint
 hier; was hier entsteht, erscheint bei Alexa, sodass „Alexa, was steht auf
 meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
 
-**Voraussetzung** ist ein Fremdmodul, das die Sprachliste bereitstellt:
+**Was installiert und angelegt werden muss** — getrennt nach Dienst:
 
-- **AlexaList** aus der Bibliothek [Echo Remote](https://github.com/roastedelectrons/IPSymconEchoRemote) — je Amazon-Liste eine Instanz (Einkaufsliste und Aufgabenliste sind getrennte Instanzen!)
-- **Bring List** aus der Bibliothek [bring-symcon](https://github.com/Nall-chan/bring-symcon) — dort muss die Textbox-Variable aktiviert sein, sonst gibt es keinen Auslöser
+*ALEXA* (Sprachliste eines Amazon-Kontos)
 
-**Einrichtung:** Im Bereich *Sprachassistent* den Abgleich einschalten und die
-Instanz auswählen. Anschließend im Fremdmodul das **Aktualisierungsintervall auf
-1–2 Minuten** stellen: dessen Takt bestimmt, wie schnell Gesprochenes ankommt —
-in der Voreinstellung sind das 60 Minuten. Dieses Modul fragt die Cloud nicht
-selbst ab, sondern hängt sich an diesen Takt; der Knopf *Jetzt abgleichen* geht
-sofort.
+1. Bibliothek „Echo Remote" über das Module Control: `https://github.com/roastedelectrons/IPSymconEchoRemote`
+2. Instanz **Echo IO** — meldet sich am Amazon-Konto an (einmal für alles)
+3. Instanz **AlexaList** — eine **je Amazon-Liste**: die Einkaufsliste und die Aufgabenliste brauchen **getrennte Instanzen**
+4. Dort das Aktualisierungsintervall auf **1–2 Minuten** stellen (Vorgabe ist 60) — dieser Takt entscheidet, wie schnell Gesprochenes ankommt
+
+*BRING* (die Einkaufs-App Bring!, **kein** Sprachassistent)
+
+1. Bibliothek „Bring!" über das Module Control: `https://github.com/Nall-chan/bring-symcon`
+2. Instanz **Bring! Konto** — fragt E-Mail und Passwort des Bring-Kontos ab
+3. Instanz **Bring List** — eine je Bring-Liste, dort die Liste auswählen
+4. In dieser Instanz **„Textbox-Variable erstellen" einschalten**: diese Variable ist unser Auslöser, und das Modul beschreibt sie nur, wenn der Schalter an ist
+5. Das Aktualisierungsintervall dort setzen — das sind **Sekunden** (60–120 ist sinnvoll), anders als bei Alexa
+
+**Einrichtung:** Im Bereich *Anbindung an externe Listen* den Abgleich einschalten
+und die Instanzen in den beiden Feldern wählen — Alexa, Bring oder beide.
 
 **Grenzen, ehrlich benannt:**
 

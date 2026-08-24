@@ -6,9 +6,9 @@ require_once __DIR__ . '/libs/ItemStore.php';
 require_once __DIR__ . '/libs/SuggestionEngine.php';
 require_once __DIR__ . '/libs/FavoriteStore.php';
 require_once __DIR__ . '/libs/PurchaseStore.php';
-require_once __DIR__ . '/../shared/VoiceSource.php';
-require_once __DIR__ . '/../shared/VoiceListSync.php';
-require_once __DIR__ . '/libs/VoiceHooksShopping.php';
+require_once __DIR__ . '/../shared/ListSource.php';
+require_once __DIR__ . '/../shared/ExternalListSync.php';
+require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
 class ShoppingList extends IPSModuleStrict
 {
@@ -17,8 +17,8 @@ class ShoppingList extends IPSModuleStrict
     use SuggestionEngine;
     use FavoriteStore;
     use PurchaseStore;
-    use VoiceListSync;
-    use VoiceHooksShopping;
+    use ExternalListSync;
+    use ExtListHooksShopping;
 
     /**
      * Das eingebaute Aussehen der Standardkategorien: Symbol und Farbe.
@@ -145,7 +145,7 @@ class ShoppingList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
-        $this->VoiceCreateProperties();
+        $this->ExtListCreateProperties();
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
         $this->RegisterPropertyBoolean('ExtApiShowPrice', false);
         $this->RegisterPropertyString('ExtApiMarketId', '');
@@ -204,7 +204,7 @@ class ShoppingList extends IPSModuleStrict
         $this->WriteExtApiCertFiles();
 
         $this->SyncExternalScannerVariable();
-        $this->VoiceBindTrigger();
+        $this->ExtListBindTrigger();
 
         // Sync counts and push updated state to tile
         $this->UpdateCounts($this->LoadItems());
@@ -223,17 +223,17 @@ class ShoppingList extends IPSModuleStrict
             return;
         }
 
-        // Die Sprachliste hat sich geaendert — abgleichen. VoiceIsTrigger prueft
+        // Eine externe Liste hat sich geaendert. ExtListIsTrigger prueft
         // das Changed-Flag, ein unveraenderter Fremd-Takt loest also nichts aus.
-        if ($this->VoiceIsTrigger($SenderID, $Message, $Data)) {
-            $this->VoiceSync();
+        if ($this->ExtListIsTrigger($SenderID, $Message, $Data)) {
+            $this->ExtListSync();
         }
     }
 
-    /** Abgleich mit der Sprachliste von Hand — der Knopf im Formular. */
-    public function VoiceSyncNow(): string
+    /** Abgleich mit den externen Listen von Hand — der Knopf im Formular. */
+    public function ExtListSyncNow(): string
     {
-        return $this->VoiceSyncNowText();
+        return $this->ExtListSyncNowText();
     }
 
     public function Destroy(): void
@@ -3903,7 +3903,7 @@ class ShoppingList extends IPSModuleStrict
         // Externe Listen als eigener Bereich auf der HAUPTEBENE — nicht im
         // Barcode-Bereich, wo er zuerst gelandet war: es ist eine eigene Quelle
         // und kein Zubehoer des Scanners.
-        $form['elements'][] = $this->GetVoiceFormElements();
+        $form['elements'][] = $this->GetExtListFormElements();
 
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }

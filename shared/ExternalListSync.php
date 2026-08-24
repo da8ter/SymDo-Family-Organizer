@@ -3,10 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Abgleich einer eigenen Liste mit einer Sprachliste (Alexa, Bring).
+ * Abgleich einer eigenen Liste mit externen Listen (Alexa, Bring).
+ *
+ * „Extern" und nicht „Sprache": Alexa ist eine Sprachliste, Bring ist eine App.
+ * Beide koennen GLEICHZEITIG an derselben Liste haengen — deshalb traegt jeder
+ * Eintrag eine Kennung JE DIENST (`extIds`), nicht eine einzige.
  *
  * Der Trait entscheidet, kennt aber weder die Gegenstelle noch die eigene Ablage:
- * die Gegenstelle kommt als VoiceSource herein, die eigene Liste bedient das
+ * die Gegenstelle kommt als ListSource herein, die eigene Liste bedient das
  * jeweilige Modul ueber die Haken am Ende dieser Datei. Genau dadurch laesst sich
  * die Logik ohne Cloud und ohne Symcon-Objektbaum pruefen.
  *
@@ -16,10 +20,10 @@ declare(strict_types=1);
  * „ToDo Liste Google" soll auch Alexa hoeren. Deshalb eigene Felder, eigener
  * Auslöser, keine Beruehrung mit SyncBackend.
  */
-trait VoiceListSync
+trait ExternalListSync
 {
     /** Kennung eines lokal angelegten, noch nicht uebertragenen Eintrags. */
-    private const VOICE_PENDING = 'pending_';
+    private const EXT_PENDING = 'pending_';
 
     /**
      * Einheiten, die zur Menge gehoeren duerfen.
@@ -28,7 +32,7 @@ trait VoiceListSync
      * teilen, „3 Musketiere" nicht. Wer raet, benennt Artikel falsch um — und das
      * faellt erst beim Einkaufen auf.
      */
-    private const VOICE_UNITS = [
+    private const EXT_UNITS = [
         'kilo', 'kilogramm', 'kg', 'gramm', 'g', 'pfund',
         'liter', 'l', 'milliliter', 'ml',
         'packung', 'packungen', 'paeckchen', 'päckchen', 'pack', 'pck',
@@ -47,30 +51,36 @@ trait VoiceListSync
      * ALTE Anmeldung loesen muss und die Property zu diesem Zeitpunkt schon den
      * neuen Wert traegt.
      */
-    private function VoiceBindTrigger(): void
+    private function ExtListBindTrigger(): void
     {
-        $alt = (int)@$this->ReadAttributeInteger('VoiceLastVariableID');
-        $neu = 0;
-        if ($this->VoiceEnabled()) {
-            $quelle = VoiceSource::For($this->VoiceInstanceID());
-            if ($quelle !== null) {
-                $kandidat = $quelle->TriggerVariableID();
-                if ($kandidat > 0 && @IPS_VariableExists($kandidat)) {
-                    $neu = $kandidat;
-                }
+        $alt = $this->ExtListTriggerVars();
+        $neu = [];
+        foreach ($this->ExtListSources() as $quelle) {
+            $kandidat = $quelle->TriggerVariableID();
+            if ($kandidat > 0 && @IPS_VariableExists($kandidat)) {
+                $neu[] = $kandidat;
             }
         }
+        sort($alt);
+        sort($neu);
         if ($alt === $neu) {
             return;
         }
-        if ($alt > 0) {
-            @$this->UnregisterMessage($alt, VM_UPDATE);
+        foreach (array_diff($alt, $neu) as $weg) {
+            @$this->UnregisterMessage($weg, VM_UPDATE);
         }
-        if ($neu > 0) {
-            $this->RegisterMessage($neu, VM_UPDATE);
-            @$this->RegisterReference($neu);
+        foreach (array_diff($neu, $alt) as $dazu) {
+            $this->RegisterMessage($dazu, VM_UPDATE);
+            @$this->RegisterReference($dazu);
         }
-        @$this->WriteAttributeInteger('VoiceLastVariableID', $neu);
+        @$this->WriteAttributeString('ExtListTriggerVars', (string)json_encode(array_values($neu)));
+    }
+
+    /** @return list<int> die Variablen, auf die wir angemeldet sind */
+    private function ExtListTriggerVars(): array
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString('ExtListTriggerVars'), true);
+        return is_array($roh) ? array_values(array_map('intval', $roh)) : [];
     }
 
     /**
@@ -80,9 +90,9 @@ trait VoiceListSync
      * der Gegenstelle geschrieben, auch unveraendert. Ohne diese Pruefung kostete
      * jeder Leerlauf-Takt einen weiteren Cloud-Aufruf.
      */
-    private function VoiceIsTrigger(int $senderID, int $message, array $data): bool
+    private function ExtListIsTrigger(int $senderID, int $message, array $data): bool
     {
-        if ($message !== VM_UPDATE || $senderID !== (int)@$this->ReadAttributeInteger('VoiceLastVariableID')) {
+        if ($message !== VM_UPDATE || !in_array($senderID, $this->ExtListTriggerVars(), true)) {
             return false;
         }
         return (bool)($data[1] ?? false);
@@ -95,43 +105,81 @@ trait VoiceListSync
      *
      * @return array{ok: bool, imported: int, pushed: int, completed: int, resolved: int, reason: string}
      */
-    private function VoiceSync(): array
+    private function ExtListSync(): array
     {
         $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
-        if (!$this->VoiceEnabled()) {
-            return array_merge($leer, ['reason' => 'disabled']);
+        $quellen = $this->ExtListSources();
+        if ($quellen === []) {
+            return array_merge($leer, ['reason' => $this->ExtListEnabled() ? 'no_source' : 'disabled']);
         }
-        $quelle = VoiceSource::For($this->VoiceInstanceID());
-        if ($quelle === null) {
-            return array_merge($leer, ['reason' => 'no_source']);
-        }
-        $riegel = 'VoiceSync_' . $this->InstanceID;
+        $riegel = 'ExtListSync_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($riegel, 500)) {
             return array_merge($leer, ['reason' => 'busy']);
         }
         try {
-            return $this->VoiceSyncStep($quelle);
+            // Jede Quelle einzeln, NACHEINANDER: jeder Schritt liest und schreibt
+            // die eigene Liste, verschraenkt arbeitete die zweite Quelle auf
+            // einem Stand, den die erste gerade veraendert.
+            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
+            $gruende = [];
+            $runde   = function () use ($quellen, &$summe, &$gruende): int {
+                $neuImportiert = 0;
+                foreach ($quellen as $quelle) {
+                    $b = $this->ExtListSyncStep($quelle);
+                    foreach (['imported', 'pushed', 'completed', 'resolved'] as $feld) {
+                        $summe[$feld] += (int)$b[$feld];
+                    }
+                    $neuImportiert += (int)$b['imported'];
+                    // Geglueckt, wenn MINDESTENS eine Quelle lesbar war — sonst
+                    // meldete eine kaputte Bring-Anbindung den erfolgreichen
+                    // Alexa-Abgleich als Fehlschlag.
+                    if ($b['ok']) {
+                        $summe['ok'] = true;
+                    } else {
+                        $gruende[] = $quelle->Key() . ': ' . (string)$b['reason'];
+                    }
+                }
+                return $neuImportiert;
+            };
+            $importiert = $runde();
+
+            // ZWEITE Runde, wenn etwas hereinkam und mehr als ein Dienst haengt.
+            //
+            // Der Grund ist eine Asymmetzie der Reihenfolge, die der Prueflauf
+            // gefunden hat: Der Bring-Artikel wird erst im zweiten Schritt
+            // importiert — da ist der Alexa-Schritt schon vorbei und hat ihn nie
+            // gesehen. Er erreichte Alexa erst bei der naechsten Aenderung, und
+            // wenn keine kommt, nie. Eine zweite Runde holt genau das nach; sie
+            // importiert nichts Neues (die Kennungen sind jetzt bekannt) und
+            // kostet je Dienst einen weiteren Lesezugriff — deshalb nur dann.
+            if ($importiert > 0 && count($quellen) > 1) {
+                $gruende = [];
+                $runde();
+            }
+
+            $summe['reason'] = implode(', ', array_unique($gruende));
+            return $summe;
         } finally {
             IPS_SemaphoreLeave($riegel);
         }
     }
 
     /** @return array{ok: bool, imported: int, pushed: int, completed: int, resolved: int, reason: string} */
-    private function VoiceSyncStep(VoiceSource $quelle): array
+    private function ExtListSyncStep(ListSource $quelle): array
     {
         $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
 
         // Der eigene Lesezugriff schreibt bei Alexa die Variable „Liste" neu und
         // erzeugt damit dieselbe Nachricht, die uns gerade gerufen hat. Das
         // kreist trotzdem nicht: der zweite Schreibvorgang traegt denselben Text,
-        // also Changed = false, und VoiceIsTrigger laesst ihn liegen. Ueberlappen
-        // kann es auch nicht — der Riegel in VoiceSync haelt den Lauf allein.
+        // also Changed = false, und ExtListIsTrigger laesst ihn liegen. Ueberlappen
+        // kann es auch nicht — der Riegel in ExtListSync haelt den Lauf allein.
         $fremd = $quelle->Read();
         if ($fremd === false) {
             // NICHTS anfassen. Ein nicht lesbarer Bestand sieht aus wie ein leerer,
             // und ein leerer hiesse „alles geloescht" — der teuerste Fehlschluss,
             // den dieser Baustein machen koennte.
-            $this->SendDebug('VoiceSync', 'Gegenstelle nicht lesbar — Lauf entfaellt', 0);
+            $this->SendDebug('ExtListSync', 'Gegenstelle nicht lesbar — Lauf entfaellt', 0);
             return array_merge($bilanz, ['ok' => false, 'reason' => 'unreadable']);
         }
 
@@ -139,14 +187,17 @@ trait VoiceListSync
         // Eintrag als „von der Liste genommen" gelten. AlexaList holt
         // `?limit=100` ohne Seitenfortsetzung — bei mehr Eintraegen kommt ein
         // Ausschnitt, und der sieht aus wie eine geleerte Liste.
-        $vollstaendig = count($fremd) < VoiceSource::READ_LIMIT;
+        $vollstaendig = count($fremd) < ListSource::READ_LIMIT;
 
-        $lokal   = $this->VoiceLoad();
+        $lokal   = $this->ExtListLoad();
         $key     = $quelle->Key();
+        // Die Kennung gilt JE DIENST: derselbe Artikel kann gleichzeitig bei
+        // Alexa und bei Bring liegen, mit verschiedenen Kennungen.
+        $kennung = static fn(array $e): string => (string)(($e['extIds'] ?? [])[$key] ?? '');
         $bekannt = [];   // fremde Kennung => lokaler Schluessel
         foreach ($lokal as $schluessel => $eintrag) {
-            $id = (string)($eintrag['voiceId'] ?? '');
-            if ($id !== '' && strpos($id, self::VOICE_PENDING) !== 0) {
+            $id = $kennung($eintrag);
+            if ($id !== '' && strpos($id, self::EXT_PENDING) !== 0) {
                 $bekannt[$id] = $schluessel;
             }
         }
@@ -165,26 +216,26 @@ trait VoiceListSync
         $offen = [];
         foreach ($fremd as $f) {
             if (!$f['done'] && !isset($bekannt[(string)$f['id']])) {
-                $offen[$this->VoiceNormalize((string)$f['name'])][] = (string)$f['id'];
+                $offen[$this->ExtListNormalize((string)$f['name'])][] = (string)$f['id'];
             }
         }
         foreach ($lokal as $schluessel => $eintrag) {
-            $id = (string)($eintrag['voiceId'] ?? '');
-            if (strpos($id, self::VOICE_PENDING) !== 0) {
+            $id = $kennung($eintrag);
+            if (strpos($id, self::EXT_PENDING) !== 0) {
                 continue;
             }
-            $name = $this->VoiceNormalize((string)($eintrag['name'] ?? ''));
+            $name = $this->ExtListNormalize((string)($eintrag['name'] ?? ''));
             if (count($offen[$name] ?? []) !== 1) {
                 continue;
             }
             $echt = $offen[$name][0];
-            $this->VoiceSetId($schluessel, $echt, $key);
+            $this->ExtListSetId($schluessel, $echt, $key);
             $bekannt[$echt] = $schluessel;
             unset($offen[$name]);
             $bilanz['resolved']++;
         }
         if ($bilanz['resolved'] > 0) {
-            $lokal = $this->VoiceLoad();
+            $lokal = $this->ExtListLoad();
         }
 
         // ── 2. Von der Gegenstelle hierher ──
@@ -194,8 +245,8 @@ trait VoiceListSync
             $gesehen[$id] = true;
             if (isset($bekannt[$id])) {
                 // Bekannt: nur der Status kann sich geaendert haben.
-                if ($f['done'] && !$this->VoiceIsDone($lokal[$bekannt[$id]])) {
-                    $this->VoiceMarkDone($bekannt[$id]);
+                if ($f['done'] && !$this->ExtListIsDone($lokal[$bekannt[$id]])) {
+                    $this->ExtListMarkDone($bekannt[$id]);
                     $bilanz['completed']++;
                 }
                 continue;
@@ -206,21 +257,21 @@ trait VoiceListSync
                 // Einkaeufe als frische Eintraege.
                 continue;
             }
-            [$name, $menge] = $this->VoiceSplitAmount((string)$f['name'], (string)($f['spec'] ?? ''));
-            $this->VoiceCreate($name, $menge, $id, $key);
+            [$name, $menge] = $this->ExtListSplitAmount((string)$f['name'], (string)($f['spec'] ?? ''));
+            $this->ExtListCreate($name, $menge, $id, $key);
             $bilanz['imported']++;
         }
 
-        // Nach dem Import neu laden: VoiceCreate schreibt in die Ablage, und der
+        // Nach dem Import neu laden: ExtListCreate schreibt in die Ablage, und der
         // naechste Abschnitt muss die frischen Eintraege sehen (sonst schickte er
         // sie sofort wieder zurueck).
-        $lokal = $this->VoiceLoad();
+        $lokal = $this->ExtListLoad();
 
         // ── 3. Von hier zur Gegenstelle ──
-        if ($this->VoicePushEnabled()) {
+        if ($this->ExtListPushEnabled()) {
             foreach ($lokal as $schluessel => $eintrag) {
-                $id       = (string)($eintrag['voiceId'] ?? '');
-                $erledigt = $this->VoiceIsDone($eintrag);
+                $id       = $kennung($eintrag);
+                $erledigt = $this->ExtListIsDone($eintrag);
 
                 // 3a. Noch nie uebertragen → anlegen.
                 if ($id === '') {
@@ -237,7 +288,7 @@ trait VoiceListSync
                         // Lauf sie aufloest, steht ein Platzhalter — Muster aus
                         // GoogleTasksSync: ohne ihn wuerde der Eintrag bei jedem
                         // Lauf erneut hochgeladen.
-                        $this->VoiceSetId($schluessel, self::VOICE_PENDING . $this->InstanceID . '_' . $schluessel, $key);
+                        $this->ExtListSetId($schluessel, self::EXT_PENDING . $this->InstanceID . '_' . $schluessel, $key);
                         $bilanz['pushed']++;
                     }
                     continue;
@@ -246,7 +297,7 @@ trait VoiceListSync
                 // Platzhalter: die Auflösung lief oben (Abschnitt 1). Klappte sie
                 // nicht, ist der Eintrag mehrdeutig — dann hier nichts tun und
                 // beim naechsten Lauf erneut versuchen.
-                if (strpos($id, self::VOICE_PENDING) === 0) {
+                if (strpos($id, self::EXT_PENDING) === 0) {
                     continue;
                 }
 
@@ -274,22 +325,22 @@ trait VoiceListSync
                 //
                 // ABER nur bei nachweislich vollstaendiger Antwort. Sonst waere
                 // eine abgeschnittene Liste (ueber 100 Eintraege, siehe
-                // VoiceSource::READ_LIMIT) ein Befehl, den halben Zettel
+                // ListSource::READ_LIMIT) ein Befehl, den halben Zettel
                 // abzuhaken — und das nimmt dem Nutzer niemand wieder ab.
                 if (!isset($gesehen[$id])) {
                     if ($vollstaendig) {
-                        $this->VoiceMarkDone($schluessel);
+                        $this->ExtListMarkDone($schluessel);
                         $bilanz['completed']++;
                     } else {
-                        $this->SendDebug('VoiceSync',
+                        $this->SendDebug('ExtListSync',
                             'Antwort unvollstaendig (' . count($fremd) . ' Eintraege) — fehlender Eintrag bleibt offen', 0);
                     }
                 }
             }
         }
 
-        @$this->WriteAttributeInteger('VoiceLastSync', time());
-        $this->SendDebug('VoiceSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt',
+        @$this->WriteAttributeInteger('ExtListLastSync', time());
+        $this->SendDebug('ExtListSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt',
             $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'], $bilanz['completed']), 0);
         return $bilanz;
     }
@@ -305,13 +356,13 @@ trait VoiceListSync
      *
      * @return array{0: string, 1: string} Name, Menge
      */
-    private function VoiceSplitAmount(string $text, string $spec = ''): array
+    private function ExtListSplitAmount(string $text, string $spec = ''): array
     {
         $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
         if ($spec !== '') {
             return [$text, trim($spec)];
         }
-        if ($text === '' || !$this->VoiceParseAmountEnabled()) {
+        if ($text === '' || !$this->ExtListParseAmountEnabled()) {
             return [$text, ''];
         }
         // Zahl am Anfang: ganz, mit Komma, als Bruch oder als Bruchzeichen.
@@ -326,8 +377,8 @@ trait VoiceListSync
         }
         // Steht dahinter eine bekannte Einheit, gehoert sie zur Menge.
         $teile = explode(' ', $rest);
-        $wort  = $this->VoiceNormalize(rtrim($teile[0], '.'));
-        if (in_array($wort, self::VOICE_UNITS, true) && count($teile) > 1) {
+        $wort  = $this->ExtListNormalize(rtrim($teile[0], '.'));
+        if (in_array($wort, self::EXT_UNITS, true) && count($teile) > 1) {
             return [trim(implode(' ', array_slice($teile, 1))), $zahl . ' ' . $teile[0]];
         }
         // Keine Einheit: die blosse Zahl ist die Menge, der Rest der Name.
@@ -335,7 +386,7 @@ trait VoiceListSync
     }
 
     /** Vergleichsform eines Namens — dieselbe Regel wie in der Einkaufsliste. */
-    private function VoiceNormalize(string $name): string
+    private function ExtListNormalize(string $name): string
     {
         return mb_strtolower(trim($name));
     }
@@ -345,13 +396,13 @@ trait VoiceListSync
     // erzwingt die Signatur, und beide Module haben unterschiedliche Ablagen
     // (fortlaufende Kennung gegen Hex-Kennung). Die Haken sind hier nur benannt:
     //
-    //   VoiceEnabled(): bool                Schalter der Instanz
-    //   VoiceInstanceID(): int              gewaehlte Gegenstellen-Instanz
-    //   VoicePushEnabled(): bool            eigene Eintraege senden?
-    //   VoiceParseAmountEnabled(): bool     Menge aus dem Namen loesen?
-    //   VoiceLoad(): array                  [schluessel => ['name','amount','voiceId',…]]
-    //   VoiceIsDone(array $eintrag): bool   erledigt bzw. im Wagen?
-    //   VoiceCreate(string $name, string $menge, string $voiceId, string $quelle): void
-    //   VoiceMarkDone(string|int $schluessel): void
-    //   VoiceSetId(string|int $schluessel, string $voiceId, string $quelle): void
+    //   ExtListSources(): list<ListSource>    die eingerichteten Gegenstellen
+    //   ExtListEnabled(): bool                Schalter der Instanz
+    //   ExtListPushEnabled(): bool            eigene Eintraege senden?
+    //   ExtListParseAmountEnabled(): bool     Menge aus dem Namen loesen?
+    //   ExtListLoad(): array                  [schluessel => ['name','amount','extIds'=>[dienst=>id]]]
+    //   ExtListIsDone(array $eintrag): bool   erledigt bzw. im Wagen?
+    //   ExtListCreate(string $name, string $menge, string $extId, string $quelle): void
+    //   ExtListMarkDone(string|int $schluessel): void
+    //   ExtListSetId(string|int $schluessel, string $extId, string $quelle): void
 }

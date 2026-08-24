@@ -6,9 +6,9 @@ require_once __DIR__ . '/libs/SyncHelper.php';
 require_once __DIR__ . '/libs/CalDAVSync.php';
 require_once __DIR__ . '/libs/GoogleTasksSync.php';
 require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
-require_once __DIR__ . '/../shared/VoiceSource.php';
-require_once __DIR__ . '/../shared/VoiceListSync.php';
-require_once __DIR__ . '/libs/VoiceHooksTodo.php';
+require_once __DIR__ . '/../shared/ListSource.php';
+require_once __DIR__ . '/../shared/ExternalListSync.php';
+require_once __DIR__ . '/libs/ExtListHooksTodo.php';
 
 class ToDoList extends IPSModuleStrict
 {
@@ -17,8 +17,8 @@ class ToDoList extends IPSModuleStrict
     use CalDAVSync;
     use GoogleTasksSync;
     use MicrosoftToDoSync;
-    use VoiceListSync;
-    use VoiceHooksTodo;
+    use ExternalListSync;
+    use ExtListHooksTodo;
 
     public function GetCompatibleParents(): string
     {
@@ -132,7 +132,7 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('MicrosoftListOptions', '[]');
         $this->RegisterAttributeString('LastMicrosoftListID', '');
 
-        $this->VoiceCreateProperties();
+        $this->ExtListCreateProperties();
 
         $this->RegisterAttributeString('Items', '[]');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
@@ -237,7 +237,7 @@ class ToDoList extends IPSModuleStrict
         $this->ProcessNotifications();
         $this->ProcessRecurrences();
 
-        $this->VoiceBindTrigger();
+        $this->ExtListBindTrigger();
     }
 
     /**
@@ -252,17 +252,17 @@ class ToDoList extends IPSModuleStrict
             return;
         }
 
-        // Die Sprachliste hat sich geaendert. VoiceIsTrigger prueft das
+        // Eine externe Liste hat sich geaendert. ExtListIsTrigger prueft das
         // Changed-Flag, ein unveraenderter Fremd-Takt loest also nichts aus.
-        if ($this->VoiceIsTrigger($SenderID, $Message, $Data)) {
-            $this->VoiceSync();
+        if ($this->ExtListIsTrigger($SenderID, $Message, $Data)) {
+            $this->ExtListSync();
         }
     }
 
-    /** Abgleich mit der Sprachliste von Hand — der Knopf im Formular. */
-    public function VoiceSyncNow(): string
+    /** Abgleich mit der externen Liste von Hand — der Knopf im Formular. */
+    public function ExtListSyncNow(): string
     {
-        return $this->VoiceSyncNowText();
+        return $this->ExtListSyncNowText();
     }
 
     public function GetConfigurationForm(): string
@@ -453,8 +453,8 @@ class ToDoList extends IPSModuleStrict
                 $this->GetGoogleTasksFormElements($syncBackend),
                 $this->GetMicrosoftToDoFormElements($syncBackend),
                 // Bewusst NACH den drei exklusiven Backends und ohne deren
-                // Sichtbarkeitsregel: die Sprachliste laeuft daneben, nicht statt.
-                $this->GetVoiceFormElements()
+                // Sichtbarkeitsregel: die externe Liste laeuft daneben, nicht statt.
+                $this->GetExtListFormElements()
             ]
         ];
 
