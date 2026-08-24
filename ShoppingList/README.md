@@ -110,6 +110,48 @@ Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle
 
 **Lookup-Reihenfolge:** Externer Produkt-API → Open Food Facts → OpenGTINDB.
 
+### Sprachassistent (Alexa, Bring)
+
+Per Sprache auf die Liste setzen — „Alexa, setze Milch auf die Einkaufsliste" —
+und die Liste bleibt in beide Richtungen gleich: was gesprochen wird, erscheint
+hier; was hier entsteht, erscheint bei Alexa, sodass „Alexa, was steht auf
+meiner Einkaufsliste?" vollständig vorliest. Abhaken wirkt auf beiden Seiten.
+
+**Voraussetzung** ist ein Fremdmodul, das die Sprachliste bereitstellt:
+
+- **AlexaList** aus der Bibliothek [Echo Remote](https://github.com/roastedelectrons/IPSymconEchoRemote) — je Amazon-Liste eine Instanz (Einkaufsliste und Aufgabenliste sind getrennte Instanzen!)
+- **Bring List** aus der Bibliothek [bring-symcon](https://github.com/Nall-chan/bring-symcon) — dort muss die Textbox-Variable aktiviert sein, sonst gibt es keinen Auslöser
+
+**Einrichtung:** Im Bereich *Sprachassistent* den Abgleich einschalten und die
+Instanz auswählen. Anschließend im Fremdmodul das **Aktualisierungsintervall auf
+1–2 Minuten** stellen: dessen Takt bestimmt, wie schnell Gesprochenes ankommt —
+in der Voreinstellung sind das 60 Minuten. Dieses Modul fragt die Cloud nicht
+selbst ab, sondern hängt sich an diesen Takt; der Knopf *Jetzt abgleichen* geht
+sofort.
+
+**Grenzen, ehrlich benannt:**
+
+- Der Verzug ist der Takt des Fremdmoduls. Sofort geht nur über den Knopf.
+- Beide Schnittstellen sind **inoffiziell** und können ohne Ankündigung wegfallen.
+- Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig.
+- Bring kann nicht abhaken — dort wird ein gekaufter Artikel entfernt.
+- Steht in der Alexa-Instanz *Lösche erledigte Einträge* auf an, ist „abgehakt"
+  von „gelöscht" nicht unterscheidbar. Beides bedeutet hier „von der Liste".
+- Ein fehlender Eintrag gilt nur dann als „von der Liste genommen", wenn die
+  Antwort vollständig war. Alexa liefert höchstens 100 Einträge ohne Hinweis auf
+  weitere — bei einer längeren Liste wird deshalb nichts abgehakt.
+- Ist die Liste gerade nicht lesbar (Netz, Anmeldung), wird **nichts** geändert.
+- Neue Einstellungen brauchen einen **Kernel-Neustart**, bevor sie sich
+  speichern lassen.
+
+**Mengen** kommen wie bei Bring als freier Text an: eine führende Zahl mit
+optionaler Einheit wird vom Namen getrennt — „3 Milch" wird *Milch* mit Menge 3,
+„2 Liter Milch" wird *Milch* mit Menge „2 Liter". Erkannt werden nur bekannte
+Einheiten; „Cola 2 Liter" bleibt unangetastet. Steht der Artikel schon offen auf
+der Liste, **gewinnt die gesprochene Zahl** (aus Menge 1 wird Menge 3) — ohne
+gesprochene Zahl bleibt es beim gewohnten Erhöhen um 1. Die Aufteilung ist
+abschaltbar.
+
 ## Produktfotos
 
 - Artikel ohne passendes Bild zeigen den Anfangsbuchstaben als Platzhalter
