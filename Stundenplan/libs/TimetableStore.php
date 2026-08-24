@@ -203,6 +203,9 @@ trait TimetableStore
                 $tage[] = [
                     'weekday' => $tag,
                     'label'   => TimetableCalc::TagKurz($tag),
+                    // Dauer JE TAG, nicht nur fuer heute: die Timeline laesst
+                    // sich durch die Woche blaettern und braucht sie ueberall.
+                    'minutes' => TimetableCalc::TagesDauer($tages),
                     'today'   => $tag === $heuteTag,
                     'parity'  => $tag === TimetableCalc::SAMSTAG && $samstag['biweekly']
                         ? ($samstag['parity'] === 'odd' ? 'ungerade KW' : 'gerade KW') : '',

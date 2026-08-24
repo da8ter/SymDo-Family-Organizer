@@ -22,7 +22,30 @@
   .leer { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 14px; }
 
   /* ── Kopf ──────────────────────────────────────────────────────────────── */
-  .kopf { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .kopf { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+
+  /* Wochentag-Umschalter: fester Kasten, damit die Pfeile beim Blaettern nicht
+     wandern. Die Breite kommt NICHT aus einer geratenen Zahl, sondern aus dem
+     laengsten Wochentag selbst: alle Namen liegen uebereinander in derselben
+     Rasterzelle, nur der aktuelle ist sichtbar. Damit stimmt sie auch, wenn
+     jemand die Namen aendert. */
+  .tagwahl {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 2px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px;
+    background: color-mix(in srgb, var(--content-color) 4%, transparent);
+  }
+  .tagwahl button {
+    border: 0; background: transparent; color: var(--text); cursor: pointer;
+    font: inherit; line-height: 1; padding: 4px 7px; border-radius: 999px;
+  }
+  .tagwahl button:hover { background: color-mix(in srgb, var(--content-color) 10%, transparent); }
+  .tagname { display: inline-grid; place-items: center; padding: 0 2px; }
+  .tagname span {
+    grid-area: 1 / 1; font-size: 12px; font-weight: 700; white-space: nowrap;
+    visibility: hidden;
+  }
+  .tagname span.an { visibility: visible; }
+  .tagname span.ist-heute { color: var(--accent); }
   .kopf h1 { font-size: 15px; font-weight: 700; margin: 0; }
   .naechste { margin-left: auto; font-size: 12px; font-weight: 600; }
   .ferien {
@@ -151,7 +174,8 @@
      dieselben Zahlen zeigen. Hier wird nur gezeichnet. */
   let zustand = null;
   let kindNr  = 0;
-  let legende = false;   // Legende der heute sichtbaren Faecher
+  let legende = false;   // Legende der sichtbaren Faecher
+  let tagNr   = 0;       // gewaehlter Wochentag in der Timeline, 0 = noch keiner
 
   function esc(t) {
     return String(t == null ? '' : t).replace(/[&<>"']/g, function (z) {
@@ -224,6 +248,14 @@
        darf dort nichts anderes tun. Das ✕ schliesst gezielt. */
     if (zustand.mode === 'timeline') {
       ziel.onclick = function (e) {
+        // Die Pfeile blaettern und lassen die Legende, wie sie ist — sonst
+        // klappte sie bei jedem Tageswechsel zu.
+        const pfeil = e.target.closest('[data-tag]');
+        if (pfeil) {
+          tagBlaettern(pfeil.dataset.tag === 'vor' ? 1 : -1);
+          zeichne();
+          return;
+        }
         legende = e.target.closest('[data-legende="zu"]') ? false : !legende;
         zeichne();
       };
@@ -318,13 +350,67 @@
     return html;
   }
 
-  /* Die heute im Balken sichtbaren Faecher, in der Reihenfolge des Tages und
+  const TAGNAMEN = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+  /* Die Tage, die die Timeline anbietet: die Vereinigung ueber alle Kinder.
+     Hat EIN Kind Samstag, gibt es den Samstag — dann steht beim anderen dort
+     „keine Schule", was richtig ist und nicht fehlt. */
+  function timelineTage() {
+    const gesehen = new Set();
+    (zustand.children || []).forEach(function (k) {
+      (k.days || []).forEach(function (t) { gesehen.add(t.weekday); });
+    });
+    return Array.from(gesehen).sort(function (a, b) { return a - b; });
+  }
+
+  /* Beim ersten Zeichnen auf HEUTE stellen — und wenn heute kein Schultag ist
+     (Sonntag, Ferien, abgeschalteter Samstag), auf den ersten angebotenen Tag.
+     Danach bleibt die Wahl des Nutzers stehen. */
+  function tagWaehlen() {
+    const tage = timelineTage();
+    if (tage.indexOf(tagNr) >= 0) { return tagNr; }
+    let heute = 0;
+    (zustand.children || []).forEach(function (k) {
+      (k.days || []).forEach(function (t) { if (t.today) { heute = t.weekday; } });
+    });
+    tagNr = tage.indexOf(heute) >= 0 ? heute : (tage[0] || 1);
+    return tagNr;
+  }
+
+  function tagwahlHtml() {
+    const tage = timelineTage();
+    if (tage.length < 2) { return ''; }
+    const jetzt = tagWaehlen();
+    const heute = (zustand.children || []).some(function (k) {
+      return (k.days || []).some(function (t) { return t.today && t.weekday === jetzt; });
+    });
+    // ALLE Namen stehen im Markup, damit der Kasten so breit ist wie der
+    // laengste; sichtbar ist nur einer.
+    const namen = tage.map(function (t) {
+      return '<span class="' + (t === jetzt ? 'an' : '')
+        + (t === jetzt && heute ? ' ist-heute' : '') + '">' + esc(TAGNAMEN[t]) + '</span>';
+    }).join('');
+    return '<span class="tagwahl">'
+      + '<button data-tag="zurueck" aria-label="Vorheriger Tag">‹</button>'
+      + '<span class="tagname">' + namen + '</span>'
+      + '<button data-tag="vor" aria-label="Nächster Tag">›</button></span>';
+  }
+
+  function tagBlaettern(richtung) {
+    const tage = timelineTage();
+    const i = tage.indexOf(tagWaehlen());
+    // Rundlauf: von Freitag weiter landet man wieder bei Montag.
+    tagNr = tage[(i + richtung + tage.length) % tage.length];
+  }
+
+  /* Die im Balken sichtbaren Faecher, in der Reihenfolge des Tages und
      ohne Wiederholung. Zusammengefasst wird nach NAME: dasselbe Fach bei zwei
      Kindern ist ein Eintrag, und die Gesamtdauer summiert beide. */
   function sichtbareFaecher() {
     const karte = new Map();
+    const gewaehlt = tagWaehlen();
     zustand.children.forEach(function (kind) {
-      const tag = kind.days.filter(function (t) { return t.today; })[0];
+      const tag = kind.days.filter(function (t) { return t.weekday === gewaehlt; })[0];
       (tag ? tag.slots : []).forEach(function (s) {
         const da = karte.get(s.name);
         if (da) {
@@ -359,7 +445,12 @@
       return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + '">'
         + symbol(f.icon) + '</span>' + esc(f.name) + nur + '</span>';
     }).join('');
-    return '<div class="legende"><div class="legendenkopf"><span>Fächer heute</span>'
+    const jetzt = tagWaehlen();
+    const istHeute = (zustand.children || []).some(function (k) {
+      return (k.days || []).some(function (t) { return t.today && t.weekday === jetzt; });
+    });
+    const ueberschrift = istHeute ? 'Fächer heute' : 'Fächer am ' + TAGNAMEN[jetzt];
+    return '<div class="legende"><div class="legendenkopf"><span>' + esc(ueberschrift) + '</span>'
       + '<button class="zu" data-legende="zu" aria-label="Legende schließen">✕</button></div>'
       + '<div class="faecher">' + eintraege + '</div></div>';
   }
@@ -368,23 +459,27 @@
   function timeline() {
     const von = zustand.span[0], bis = zustand.span[1];
     const spanne = Math.max(bis - von, 60);
-    let html = '';
+    const gewaehlt = tagWaehlen();
+    // Kopfzeile nur wegen des Umschalters — er gehoert nach oben rechts.
+    let html = '<div class="kopf">' + tagwahlHtml() + '</div>';
 
     zustand.children.forEach(function (kind) {
-      const tag = kind.days.filter(function (t) { return t.today; })[0];
+      const tag = kind.days.filter(function (t) { return t.weekday === gewaehlt; })[0];
       const slots = tag ? tag.slots : [];
       html += '<div class="zeile">';
       html += '<div class="zeilenkopf">' + gesicht(kind, 'gesicht')
         + '<span class="wer" style="color:' + esc(kind.color) + '">'
         + esc(kind.name) + '</span>';
       if (!tag || slots.length === 0) {
-        html += '<span class="was">' + (zustand.holiday ? 'Ferien' : 'heute keine Schule') + '</span></div>';
+        html += '<span class="was">' + (zustand.holiday ? 'Ferien' : 'keine Schule') + '</span></div>';
         html += '<div class="keinTag">—</div></div>';
         return;
       }
       const beginn = slots[0].start, ende = slots[slots.length - 1].end;
-      html += '<span class="was">Heute (' + esc(kind.todayLabel) + ') · '
-        + esc(stundenText(kind.minutes)) + '</span>'
+      // Der Tag steht im Umschalter; hier nur noch die Dauer, und „Heute" nur
+      // dann, wenn der gewaehlte Tag auch heute ist.
+      html += '<span class="was">' + (tag.today ? 'Heute · ' : '')
+        + esc(stundenText(tag.minutes || 0)) + '</span>'
         + '<span class="spanne">' + esc(beginn) + '–' + esc(ende) + '</span></div>';
 
       let stuecke = '';

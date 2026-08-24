@@ -10,8 +10,11 @@ Zwei Darstellungen aus denselben Daten:
   Stunde eine farbige Karte mit Symbol, Fach und Zeitspanne; Lücken als graue
   „frei"-Blöcke; der heutige Tag mit Kapsel, die laufende oder nächste Stunde
   mit hellem Rand.
-- **Timeline** — ein Balken je Kind mit den heutigen Stunden, anteilig zur
-  Wochenspanne, darunter ein 15-Minuten-Raster. Ein Klick auf die Kachel klappt
+- **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
+  15-Minuten-Raster. Oben rechts ein Umschalter (‹ Wochentag ›), der durch die
+  Woche blättert; er startet auf heute und hebt den heutigen Tag farbig hervor.
+  Seine Breite richtet sich nach dem längsten Wochentagsnamen, damit die Pfeile
+  beim Blättern nicht wandern. Ein Klick auf die Kachel klappt
   eine **Legende** der heute sichtbaren Fächer auf: Farbe, Symbol und Name, und
   wenn ein Fach nur bei einem Kind vorkommt, auch dessen Name. Im Balken steht
   nur ein Symbol — auf einem Tablet gibt es keinen Mauszeiger, der es verrät.
