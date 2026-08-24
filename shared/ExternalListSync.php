@@ -267,74 +267,72 @@ trait ExternalListSync
         // sie sofort wieder zurueck).
         $lokal = $this->ExtListLoad();
 
-        // ── 3. Von hier zur Gegenstelle ──
-        if ($this->ExtListPushEnabled()) {
-            foreach ($lokal as $schluessel => $eintrag) {
-                $id       = $kennung($eintrag);
-                $erledigt = $this->ExtListIsDone($eintrag);
+        // ── 3. Von hier zur Gegenstelle — immer, in beide Richtungen ──
+        foreach ($lokal as $schluessel => $eintrag) {
+            $id       = $kennung($eintrag);
+            $erledigt = $this->ExtListIsDone($eintrag);
 
-                // 3a. Noch nie uebertragen → anlegen.
-                if ($id === '') {
-                    if ($erledigt) {
-                        continue;   // erledigt und nie dort gewesen: nichts zu tun
-                    }
-                    $name  = (string)($eintrag['name'] ?? '');
-                    $menge = (string)($eintrag['amount'] ?? '');
-                    if ($name === '') {
-                        continue;
-                    }
-                    if ($quelle->Add($name, $menge)) {
-                        // Die Kennung kennt nur die Gegenstelle. Bis der naechste
-                        // Lauf sie aufloest, steht ein Platzhalter — Muster aus
-                        // GoogleTasksSync: ohne ihn wuerde der Eintrag bei jedem
-                        // Lauf erneut hochgeladen.
-                        $this->ExtListSetId($schluessel, self::EXT_PENDING . $this->InstanceID . '_' . $schluessel, $key);
-                        $bilanz['pushed']++;
-                    }
-                    continue;
-                }
-
-                // Platzhalter: die Auflösung lief oben (Abschnitt 1). Klappte sie
-                // nicht, ist der Eintrag mehrdeutig — dann hier nichts tun und
-                // beim naechsten Lauf erneut versuchen.
-                if (strpos($id, self::EXT_PENDING) === 0) {
-                    continue;
-                }
-
-                // 3b. Bekannt, aber hier erledigt → dort abhaken.
+            // 3a. Noch nie uebertragen → anlegen.
+            if ($id === '') {
                 if ($erledigt) {
-                    $nochOffen = false;
-                    foreach ($fremd as $f) {
-                        if ((string)$f['id'] === $id && !$f['done']) {
-                            $nochOffen = true;
-                            break;
-                        }
-                    }
-                    if ($nochOffen) {
-                        $quelle->Complete($id, (string)($eintrag['name'] ?? ''));
-                        $bilanz['completed']++;
-                    }
+                    continue;   // erledigt und nie dort gewesen: nichts zu tun
+                }
+                $name  = (string)($eintrag['name'] ?? '');
+                $menge = (string)($eintrag['amount'] ?? '');
+                if ($name === '') {
                     continue;
                 }
+                if ($quelle->Add($name, $menge)) {
+                    // Die Kennung kennt nur die Gegenstelle. Bis der naechste
+                    // Lauf sie aufloest, steht ein Platzhalter — Muster aus
+                    // GoogleTasksSync: ohne ihn wuerde der Eintrag bei jedem
+                    // Lauf erneut hochgeladen.
+                    $this->ExtListSetId($schluessel, self::EXT_PENDING . $this->InstanceID . '_' . $schluessel, $key);
+                    $bilanz['pushed']++;
+                }
+                continue;
+            }
 
-                // 3c. Bekannt, hier offen, dort ganz verschwunden.
-                //
-                // Verschwunden heisst „von der Liste genommen" — abgehakt bei
-                // eingeschaltetem DeleteCompletedItems oder in der Alexa-App
-                // geloescht. Beides ist dieselbe Absicht, also hier erledigen.
-                //
-                // ABER nur bei nachweislich vollstaendiger Antwort. Sonst waere
-                // eine abgeschnittene Liste (ueber 100 Eintraege, siehe
-                // ListSource::READ_LIMIT) ein Befehl, den halben Zettel
-                // abzuhaken — und das nimmt dem Nutzer niemand wieder ab.
-                if (!isset($gesehen[$id])) {
-                    if ($vollstaendig) {
-                        $this->ExtListMarkDone($schluessel);
-                        $bilanz['completed']++;
-                    } else {
-                        $this->SendDebug('ExtListSync',
-                            'Antwort unvollstaendig (' . count($fremd) . ' Eintraege) — fehlender Eintrag bleibt offen', 0);
+            // Platzhalter: die Auflösung lief oben (Abschnitt 1). Klappte sie
+            // nicht, ist der Eintrag mehrdeutig — dann hier nichts tun und
+            // beim naechsten Lauf erneut versuchen.
+            if (strpos($id, self::EXT_PENDING) === 0) {
+                continue;
+            }
+
+            // 3b. Bekannt, aber hier erledigt → dort abhaken.
+            if ($erledigt) {
+                $nochOffen = false;
+                foreach ($fremd as $f) {
+                    if ((string)$f['id'] === $id && !$f['done']) {
+                        $nochOffen = true;
+                        break;
                     }
+                }
+                if ($nochOffen) {
+                    $quelle->Complete($id, (string)($eintrag['name'] ?? ''));
+                    $bilanz['completed']++;
+                }
+                continue;
+            }
+
+            // 3c. Bekannt, hier offen, dort ganz verschwunden.
+            //
+            // Verschwunden heisst „von der Liste genommen" — abgehakt bei
+            // eingeschaltetem DeleteCompletedItems oder in der Alexa-App
+            // geloescht. Beides ist dieselbe Absicht, also hier erledigen.
+            //
+            // ABER nur bei nachweislich vollstaendiger Antwort. Sonst waere
+            // eine abgeschnittene Liste (ueber 100 Eintraege, siehe
+            // ListSource::READ_LIMIT) ein Befehl, den halben Zettel
+            // abzuhaken — und das nimmt dem Nutzer niemand wieder ab.
+            if (!isset($gesehen[$id])) {
+                if ($vollstaendig) {
+                    $this->ExtListMarkDone($schluessel);
+                    $bilanz['completed']++;
+                } else {
+                    $this->SendDebug('ExtListSync',
+                        'Antwort unvollstaendig (' . count($fremd) . ' Eintraege) — fehlender Eintrag bleibt offen', 0);
                 }
             }
         }
@@ -398,7 +396,6 @@ trait ExternalListSync
     //
     //   ExtListSources(): list<ListSource>    die eingerichteten Gegenstellen
     //   ExtListEnabled(): bool                Schalter der Instanz
-    //   ExtListPushEnabled(): bool            eigene Eintraege senden?
     //   ExtListParseAmountEnabled(): bool     Menge aus dem Namen loesen?
     //   ExtListLoad(): array                  [schluessel => ['name','amount','extIds'=>[dienst=>id]]]
     //   ExtListIsDone(array $eintrag): bool   erledigt bzw. im Wagen?

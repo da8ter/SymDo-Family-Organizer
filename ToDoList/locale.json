@@ -536,7 +536,6 @@
             "No external list selected": "Keine externe Liste gewählt",
             "Switch the sync on and select at least one external list first.": "Schalte den Abgleich ein und wähle zuerst mindestens eine externe Liste.",
             "problems: %s": "Probleme: %s",
-            "Also send tasks from this list to the external lists": "Aufgaben dieser Liste auch an die externe Liste senden",
             "Works alongside CalDAV, Google and Microsoft — the external list is not one of the exclusive sync backends.": "Läuft neben CalDAV, Google und Microsoft — die externe Liste ist keines der exklusiven Sync-Backends.",
             "Amazon Alexa task list": "Amazon Alexa Aufgabenliste",
             "AlexaList instance": "AlexaList-Instanz",

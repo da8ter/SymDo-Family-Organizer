@@ -20,7 +20,6 @@ trait ExtListHooksShopping
         $this->RegisterPropertyBoolean('ExtListEnabledProp', false);
         $this->RegisterPropertyInteger('AlexaListID', 0);
         $this->RegisterPropertyInteger('BringListID', 0);
-        $this->RegisterPropertyBoolean('ExtListPushLocal', true);
         $this->RegisterPropertyBoolean('ExtListParseAmount', true);
         $this->RegisterAttributeInteger('ExtListLastSync', 0);
         $this->RegisterAttributeString('ExtListTriggerVars', '[]');
@@ -74,11 +73,6 @@ trait ExtListHooksShopping
             }
         }
         return $raus;
-    }
-
-    private function ExtListPushEnabled(): bool
-    {
-        return (bool)$this->ExtListProp('ExtListPushLocal', true);
     }
 
     private function ExtListParseAmountEnabled(): bool
@@ -221,11 +215,6 @@ trait ExtListHooksShopping
                     'type'    => 'CheckBox',
                     'name'    => 'ExtListEnabledProp',
                     'caption' => $this->Translate('Sync with external lists'),
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'ExtListPushLocal',
-                    'caption' => $this->Translate('Also send items from this list to the external lists'),
                 ],
                 [
                     'type'    => 'CheckBox',

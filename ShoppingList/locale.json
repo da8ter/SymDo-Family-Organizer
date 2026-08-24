@@ -410,7 +410,6 @@
             "problems: %s": "Probleme: %s",
             "1. Library \"Bring!\" via Module Control: https://github.com/Nall-chan/bring-symcon\n2. Instance \"Bring! Konto\" — asks for the e-mail and password of the Bring account.\n3. Instance \"Bring List\" — one per Bring list, select the list there.\n4. Switch ON \"Create text box variable\" in that instance: that variable is our trigger, and the module only writes it when the switch is on.\n5. Set the refresh interval there — those are SECONDS (60–120 is sensible), unlike Alexa's minutes.": "1. Bibliothek „Bring!“ über das Module Control: https://github.com/Nall-chan/bring-symcon\n2. Instanz „Bring! Konto“ — fragt E-Mail und Passwort des Bring-Kontos ab.\n3. Instanz „Bring List“ — eine je Bring-Liste, dort die Liste auswählen.\n4. In dieser Instanz „Textbox-Variable erstellen“ EINSCHALTEN: diese Variable ist unser Auslöser, und das Modul beschreibt sie nur, wenn der Schalter an ist.\n5. Das Aktualisierungsintervall dort setzen — das sind SEKUNDEN (60–120 ist sinnvoll), anders als bei Alexa, wo es Minuten sind.",
             "Bring shopping list": "Bring Einkaufsliste",
-            "Also send items from this list to the external lists": "Artikel dieser Liste auch an die externen Listen senden",
             "Split a stated amount from the name (\"3 milk\" becomes milk, amount 3)": "Genannte Menge vom Namen trennen („3 Milch“ wird Milch, Menge 3)",
             "External shopping lists": "Externe Einkaufslisten",
             "Amazon Alexa shopping list": "Amazon Alexa Einkaufsliste",

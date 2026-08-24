@@ -20,7 +20,6 @@ trait ExtListHooksTodo
     {
         $this->RegisterPropertyBoolean('ExtListEnabledProp', false);
         $this->RegisterPropertyInteger('AlexaListID', 0);
-        $this->RegisterPropertyBoolean('ExtListPushLocal', true);
         $this->RegisterPropertyString('ExtListAssignTo', '');
         $this->RegisterAttributeInteger('ExtListLastSync', 0);
         $this->RegisterAttributeString('ExtListTriggerVars', '[]');
@@ -67,11 +66,6 @@ trait ExtListHooksTodo
         }
         $quelle = ListSource::For($id);
         return $quelle !== null ? [$quelle] : [];
-    }
-
-    private function ExtListPushEnabled(): bool
-    {
-        return (bool)$this->ExtListProp('ExtListPushLocal', true);
     }
 
     /**
@@ -193,11 +187,6 @@ trait ExtListHooksTodo
                     'caption'      => $this->Translate('AlexaList instance'),
                     'validModules' => [ListSource::GUID_ALEXA],
                     'width'        => '500px',
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'ExtListPushLocal',
-                    'caption' => $this->Translate('Also send tasks from this list to the external lists'),
                 ],
                 [
                     'type'    => 'ValidationTextBox',
