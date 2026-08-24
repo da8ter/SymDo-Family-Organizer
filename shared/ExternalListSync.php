@@ -222,13 +222,38 @@ trait ExternalListSync
 
         $lokal   = $this->ExtListLoad();
         $key     = $quelle->Key();
-        // Die Kennung gilt JE DIENST: derselbe Artikel kann gleichzeitig bei
-        // Alexa und bei Bring liegen, mit verschiedenen Kennungen.
-        $kennung = static fn(array $e): string => (string)(($e['extIds'] ?? [])[$key] ?? '');
-        $bekannt = [];   // fremde Kennung => lokaler Schluessel
+        // Die Kennungen gelten JE DIENST — und es sind MEHRERE moeglich.
+        //
+        // Warum eine Menge und nicht eine Kennung: Alexa dedupliziert nicht, dort
+        // stehen „Milch" und „3 Milch" gleichzeitig. Bei uns ist das EIN Artikel,
+        // weil die Einkaufsliste nach Namen zusammenfasst. Mit nur einer Kennung
+        // je Zeile galt der jeweils andere Eintrag als unbekannt, wurde importiert,
+        // in dieselbe Zeile verschmolzen und ueberschrieb die Kennung — bei jedem
+        // Lauf „1 neu" und eine Menge, die hin und her sprang (am 24.08.2026 an
+        // den echten Daten gesehen). Eine Zeile darf fuer mehrere fremde Eintraege
+        // stehen.
+        //
+        // Altbestand: frueher stand dort eine einzelne Zeichenkette.
+        $kennungen = static function (array $e) use ($key): array {
+            $roh = ($e['extIds'] ?? [])[$key] ?? [];
+            if (is_string($roh)) {
+                $roh = $roh === '' ? [] : [$roh];
+            }
+            $raus = [];
+            foreach ((array)$roh as $x) {
+                $x = (string)$x;
+                if ($x !== '') {
+                    $raus[] = $x;
+                }
+            }
+            return $raus;
+        };
+        $echte = static function (array $ids): array {
+            return array_values(array_filter($ids, static fn(string $i): bool => strpos($i, self::EXT_PENDING) !== 0));
+        };
+        $bekannt = [];   // fremde Kennung => lokaler Schluessel (mehrere je Zeile)
         foreach ($lokal as $schluessel => $eintrag) {
-            $id = $kennung($eintrag);
-            if ($id !== '' && strpos($id, self::EXT_PENDING) !== 0) {
+            foreach ($echte($kennungen($eintrag)) as $id) {
                 $bekannt[$id] = $schluessel;
             }
         }
@@ -290,8 +315,9 @@ trait ExternalListSync
             }
         }
         foreach ($lokal as $schluessel => $eintrag) {
-            $id = $kennung($eintrag);
-            if (strpos($id, self::EXT_PENDING) !== 0) {
+            $ids     = $kennungen($eintrag);
+            $wartend = array_values(array_diff($ids, $echte($ids)));
+            if ($wartend === []) {
                 continue;
             }
             $name = $this->ExtListNormalize((string)($eintrag['name'] ?? ''));
@@ -344,11 +370,12 @@ trait ExternalListSync
 
         // ── 3. Von hier zur Gegenstelle — immer, in beide Richtungen ──
         foreach ($lokal as $schluessel => $eintrag) {
-            $id       = $kennung($eintrag);
+            $ids      = $kennungen($eintrag);
+            $vergeben = $echte($ids);
             $erledigt = $this->ExtListIsDone($eintrag);
 
             // 3a. Noch nie uebertragen → anlegen.
-            if ($id === '') {
+            if ($ids === []) {
                 if ($erledigt) {
                     continue;   // erledigt und nie dort gewesen: nichts zu tun
                 }
@@ -368,25 +395,22 @@ trait ExternalListSync
                 continue;
             }
 
-            // Platzhalter: die Auflösung lief oben (Abschnitt 1). Klappte sie
-            // nicht, ist der Eintrag mehrdeutig — dann hier nichts tun und
-            // beim naechsten Lauf erneut versuchen.
-            if (strpos($id, self::EXT_PENDING) === 0) {
+            // Nur Platzhalter: die Auflösung lief oben (Abschnitt 1). Klappte sie
+            // nicht, ist der Eintrag mehrdeutig — dann hier nichts tun und beim
+            // naechsten Lauf erneut versuchen.
+            if ($vergeben === []) {
                 continue;
             }
 
             // 3b. Bekannt, aber hier erledigt → dort abhaken.
             if ($erledigt) {
-                $nochOffen = false;
-                foreach ($fremd as $f) {
-                    if ((string)$f['id'] === $id && !$f['done']) {
-                        $nochOffen = true;
-                        break;
+                // JEDE noch offene Kennung dieser Zeile abhaken — sie kann fuer
+                // mehrere fremde Eintraege stehen.
+                foreach ($vergeben as $id) {
+                    if (isset($fremdNachId[$id]) && !$fremdNachId[$id]['done']) {
+                        $quelle->Complete($id, (string)($eintrag['name'] ?? ''));
+                        $bilanz['completed']++;
                     }
-                }
-                if ($nochOffen) {
-                    $quelle->Complete($id, (string)($eintrag['name'] ?? ''));
-                    $bilanz['completed']++;
                 }
                 continue;
             }
@@ -401,7 +425,15 @@ trait ExternalListSync
             // eine abgeschnittene Liste (ueber 100 Eintraege, siehe
             // ListSource::READ_LIMIT) ein Befehl, den halben Zettel
             // abzuhaken — und das nimmt dem Nutzer niemand wieder ab.
-            if (!isset($gesehen[$id])) {
+            // Erledigen nur, wenn ALLE Kennungen der Zeile verschwunden sind.
+            $nochDa = false;
+            foreach ($vergeben as $id) {
+                if (isset($gesehen[$id])) {
+                    $nochDa = true;
+                    break;
+                }
+            }
+            if (!$nochDa) {
                 if ($vollstaendig) {
                     $this->ExtListMarkDone($schluessel);
                     $bilanz['completed']++;
@@ -417,8 +449,7 @@ trait ExternalListSync
         // Bestand veraendert haben.
         $stand = [];
         foreach ($this->ExtListLoad() as $eintrag) {
-            $id = (string)(($eintrag['extIds'] ?? [])[$key] ?? '');
-            if ($id !== '' && strpos($id, self::EXT_PENDING) !== 0) {
+            foreach ($echte($kennungen($eintrag)) as $id) {
                 $stand[$id] = 1;
             }
         }

@@ -150,7 +150,9 @@ Hinweis, was dafür zu installieren ist.
 
 - Der Verzug ist der Takt des Fremdmoduls. Sofort geht nur über den Knopf.
 - Beide Schnittstellen sind **inoffiziell** und können ohne Ankündigung wegfallen.
-- Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig.
+- Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig. Bei uns
+  ist das **ein** Artikel — die Zeile trägt dann beide Alexa-Kennungen, und Abhaken
+  oder Löschen wirkt auf beide Einträge.
 - Bring kann nicht abhaken — dort wird ein gekaufter Artikel entfernt.
 - Steht in der Alexa-Instanz *Lösche erledigte Einträge* auf an, ist „abgehakt"
   von „gelöscht" nicht unterscheidbar. Beides bedeutet hier „von der Liste".

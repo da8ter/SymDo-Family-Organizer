@@ -157,9 +157,27 @@ trait ExtListHooksTodo
         $items = $this->LoadItems();
         foreach ($items as &$item) {
             if ((int)($item['id'] ?? 0) === $id) {
-                $item['voiceId']     = $extId;
-                $item['voiceSource'] = $quelle;
-                $item['voiceSynced'] = time();
+                // ANHAENGEN, nicht ersetzen: eine Zeile kann fuer mehrere fremde
+                // Eintraege stehen. Stand hier vorher fehlerhaft als Einzelfeld
+                // (voiceId/voiceSource) — die Maschine liest `extIds`, der
+                // Abgleich der ToDo-Liste haette also nie eine Zuordnung
+                // gefunden und bei jedem Lauf neu importiert. Ungenutzt
+                // aufgefallen, weil hier noch keine Instanz gewaehlt ist.
+                $karte     = is_array($item['extIds'] ?? null) ? $item['extIds'] : [];
+                $vorhanden = $karte[$quelle] ?? [];
+                if (is_string($vorhanden)) {
+                    $vorhanden = $vorhanden === '' ? [] : [$vorhanden];
+                }
+                $vorhanden = array_values(array_map('strval', (array)$vorhanden));
+                if (strpos($extId, 'pending_') !== 0) {
+                    $vorhanden = array_values(array_filter($vorhanden,
+                        static fn(string $i): bool => strpos($i, 'pending_') !== 0));
+                }
+                if (!in_array($extId, $vorhanden, true)) {
+                    $vorhanden[] = $extId;
+                }
+                $karte[$quelle] = $vorhanden;
+                $item['extIds'] = $karte;
                 $this->SaveItems($items);
                 return;
             }

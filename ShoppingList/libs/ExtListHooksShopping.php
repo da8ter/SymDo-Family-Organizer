@@ -183,8 +183,25 @@ trait ExtListHooksShopping
             $items = $this->LoadItems();
             foreach ($items as &$item) {
                 if ((string)($item['id'] ?? '') === $id) {
+                    // ANHAENGEN, nicht ersetzen: eine Zeile kann fuer mehrere
+                    // fremde Eintraege stehen (Alexa dedupliziert nicht, unsere
+                    // Liste fasst nach Namen zusammen). Altbestand war eine
+                    // einzelne Zeichenkette.
                     $karte = is_array($item['extIds'] ?? null) ? $item['extIds'] : [];
-                    $karte[$quelle] = $extId;
+                    $vorhanden = $karte[$quelle] ?? [];
+                    if (is_string($vorhanden)) {
+                        $vorhanden = $vorhanden === '' ? [] : [$vorhanden];
+                    }
+                    $vorhanden = array_values(array_map('strval', (array)$vorhanden));
+                    // Einen wartenden Platzhalter ersetzt die echte Kennung.
+                    if (strpos($extId, 'pending_') !== 0) {
+                        $vorhanden = array_values(array_filter($vorhanden,
+                            static fn(string $i): bool => strpos($i, 'pending_') !== 0));
+                    }
+                    if (!in_array($extId, $vorhanden, true)) {
+                        $vorhanden[] = $extId;
+                    }
+                    $karte[$quelle] = $vorhanden;
                     $item['extIds'] = $karte;
                     $this->SaveItems($items);
                     return;
