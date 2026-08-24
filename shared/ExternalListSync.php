@@ -138,7 +138,7 @@ trait ExternalListSync
      */
     private function ExtListSync(): array
     {
-        $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+        $leer = ['ok' => false, 'lokal' => 0, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
         $quellen = $this->ExtListSources();
         if ($quellen === []) {
             return array_merge($leer, ['reason' => $this->ExtListEnabled() ? 'no_source' : 'disabled']);
@@ -151,13 +151,13 @@ trait ExternalListSync
             // Jede Quelle einzeln, NACHEINANDER: jeder Schritt liest und schreibt
             // die eigene Liste, verschraenkt arbeitete die zweite Quelle auf
             // einem Stand, den die erste gerade veraendert.
-            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+            $summe   = ['ok' => false, 'lokal' => 0, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
             $gruende = [];
             $runde   = function () use ($quellen, &$summe, &$gruende): int {
                 $neuImportiert = 0;
                 foreach ($quellen as $quelle) {
                     $b = $this->ExtListSyncStep($quelle);
-                    foreach (['imported', 'pushed', 'completed', 'vanished', 'resolved', 'removed'] as $feld) {
+                    foreach (['lokal', 'imported', 'pushed', 'completed', 'vanished', 'resolved', 'removed'] as $feld) {
                         $summe[$feld] += (int)$b[$feld];
                     }
                     $neuImportiert += (int)$b['imported'];
@@ -188,6 +188,18 @@ trait ExternalListSync
                 $runde();
             }
 
+            // Die Kachel erfaehrt von sich aus nichts. Jede Aenderung, die aus
+            // der Kachel selbst kommt, laeuft ueber RequestAction und stoesst dort
+            // den Push an — ein Abgleich aber laeuft am Formular-Knopf oder am
+            // Fremd-Takt vorbei daran vorbei. Ohne diesen Aufruf melden wir „1 neue
+            // Aufgabe" und die Anzeige bleibt auf dem alten Stand stehen.
+            //
+            // Nur bei SICHTBARER Aenderung: die Kennungs-Stempel (resolved, pushed)
+            // aendern nichts, was jemand sehen kann.
+            if ($summe['lokal'] > 0) {
+                $this->ExtListAfterChange();
+            }
+
             $summe['reason'] = implode(', ', array_unique($gruende));
             return $summe;
         } finally {
@@ -198,7 +210,7 @@ trait ExternalListSync
     /** @return array{ok: bool, imported: int, pushed: int, completed: int, resolved: int, reason: string} */
     private function ExtListSyncStep(ListSource $quelle): array
     {
-        $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
+        $bilanz = ['ok' => true, 'lokal' => 0, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'vanished' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
 
         // Der eigene Lesezugriff schreibt bei Alexa die Variable „Liste" neu und
         // erzeugt damit dieselbe Nachricht, die uns gerade gerufen hat. Das
@@ -345,6 +357,7 @@ trait ExternalListSync
                 if ($f['done'] && !$this->ExtListIsDone($lokal[$bekannt[$id]])) {
                     $this->ExtListMarkDone($bekannt[$id]);
                     $bilanz['completed']++;
+                    $bilanz['lokal']++;
                 }
                 continue;
             }
@@ -362,6 +375,7 @@ trait ExternalListSync
             [$name, $menge] = $this->ExtListSplitAmount((string)$f['name'], (string)($f['spec'] ?? ''));
             $this->ExtListCreate($name, $menge, $id, $key);
             $bilanz['imported']++;
+            $bilanz['lokal']++;
         }
 
         // Nach dem Import neu laden: ExtListCreate schreibt in die Ablage, und der
@@ -449,6 +463,7 @@ trait ExternalListSync
                     // Antwort.
                     $this->ExtListDelete($schluessel);
                     $bilanz['vanished']++;
+                    $bilanz['lokal']++;
                 } else {
                     $this->SendDebug('ExtListSync',
                         'Antwort unvollstaendig (' . count($fremd) . ' Eintraege) — fehlender Eintrag bleibt offen', 0);
@@ -536,4 +551,5 @@ trait ExternalListSync
     //   ExtListMarkDone(string|int $schluessel): void   (dort abgehakt)
     //   ExtListDelete(string|int $schluessel): void     (dort geloescht)
     //   ExtListSetId(string|int $schluessel, string $extId, string $quelle): void
+    //   ExtListAfterChange(): void            Kachel/Anzeige nach sichtbarer Aenderung
 }

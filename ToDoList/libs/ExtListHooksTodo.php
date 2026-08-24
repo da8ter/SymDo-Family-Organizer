@@ -132,6 +132,17 @@ trait ExtListHooksTodo
         }
     }
 
+    /**
+     * Nach sichtbarer Aenderung: genau die Nachbereitung, die CalDAV, Google und
+     * Microsoft nach ihrem Lauf ebenfalls fahren (SyncPostComplete) — Statistik,
+     * HTML-Box, Wiederholungs-Takt und der Push an die Kachel. Ohne den Push
+     * meldet der Knopf „1 neue Aufgabe" und die Anzeige bleibt alt.
+     */
+    private function ExtListAfterChange(): void
+    {
+        $this->SyncPostComplete();
+    }
+
     private function ExtListMarkDone(string|int $schluessel): void
     {
         try {

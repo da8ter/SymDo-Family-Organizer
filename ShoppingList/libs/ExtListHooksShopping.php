@@ -141,6 +141,16 @@ trait ExtListHooksShopping
         }
     }
 
+    /**
+     * Nach sichtbarer Aenderung die Kachel anstossen. SaveItems hat Zaehler und
+     * Revision schon nachgezogen; was fehlt, ist allein die Benachrichtigung —
+     * ein Abgleich laeuft nicht durch RequestAction, wo sie sonst passiert.
+     */
+    private function ExtListAfterChange(): void
+    {
+        $this->SendState();
+    }
+
     private function ExtListMarkDone(string|int $schluessel): void
     {
         $this->ToggleItemCart((string)$schluessel, true);
