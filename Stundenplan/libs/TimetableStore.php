@@ -120,6 +120,33 @@ trait TimetableStore
     // ────────────────────────── Aufbereiteter Zustand ──────────────────────────
 
     /**
+     * Gesichter aus dem Gateway, als Data-URI je Mitglied. GetUsersForTile
+     * liefert verkleinerte Bilder — die Kachel kann sich am App-Hook nicht
+     * anmelden und braucht sie eingebettet.
+     *
+     * @return array<string,string>
+     */
+    private function Gesichter(): array
+    {
+        $gw = (int)@IPS_GetProperty($this->InstanceID, 'GatewayInstanceID');
+        if ($gw <= 0 || !IPS_InstanceExists($gw) || !function_exists('TGW_GetUsersForTile')) {
+            return [];
+        }
+        try {
+            $roh = json_decode((string)@TGW_GetUsersForTile($gw), true);
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $karte = [];
+        foreach (is_array($roh) ? $roh : [] as $u) {
+            if (is_array($u) && trim((string)($u['id'] ?? '')) !== '') {
+                $karte[(string)$u['id']] = (string)($u['avatar'] ?? '');
+            }
+        }
+        return $karte;
+    }
+
+    /**
      * Der vollstaendige Zustand fuer die Anzeige. Hoehen und Luecken werden HIER
      * gerechnet, nicht in der Kachel: dieselben Zahlen sollen im Raster, in der
      * Timeline und in der Web-App herauskommen, und die Rechenregeln stehen
@@ -128,12 +155,16 @@ trait TimetableStore
     private function PlanAufbauen(): array
     {
         $kinder  = $this->Kinder();
+        $bilder  = $this->Gesichter();
         $faecher = $this->Faecher();
         $slots   = $this->Stunden();
         $heute   = date('Y-m-d');
         [$von, $bis] = TimetableCalc::Wochenspanne($slots, $kinder);
         $ferien  = $this->FerienAmTag($heute);
         $jetzt   = date('H:i');
+
+        $betreuungGepflegt = in_array(TimetableCalc::FACH_BETREUUNG,
+            array_column($faecher, 'name'), true);
 
         $ausgabe = [];
         foreach ($kinder as $kind) {
@@ -153,7 +184,11 @@ trait TimetableStore
                     $karten[] = [
                         'name'   => $stil['name'],
                         'icon'   => $stil['icon'],
-                        'color'  => (bool)($s['care'] ?? false) ? '#9E9E9E' : $stil['color'],
+                        // Bei der Betreuung entscheidet das Fach, WENN es gepflegt
+                        // ist; sonst Grau. Ein hart gesetztes Grau haette die
+                        // Farbwahl des Nutzers stumm uebergangen.
+                        'color'  => ((bool)($s['care'] ?? false) && !$betreuungGepflegt)
+                            ? '#9E9E9E' : $stil['color'],
                         'start'  => $s['start'],
                         'end'    => $s['end'],
                         'from'   => $beginn,
@@ -179,6 +214,7 @@ trait TimetableStore
                 'name'    => $kind['name'],
                 'color'   => $kind['color'],
                 'userId'  => $kind['userId'],
+                'avatar'  => (string)($bilder[$kind['userId']] ?? ''),
                 'days'    => $tage,
                 'today'   => $heuteTag,
                 'todayLabel' => $heuteTag === null ? '' : TimetableCalc::TagKurz($heuteTag),

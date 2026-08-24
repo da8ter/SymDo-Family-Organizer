@@ -587,7 +587,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Balken untereinander vergleichbar. */
 .plan-zeile { padding: 8px 0; border-top: 1px solid var(--row-line, rgba(128,128,128,.18)); }
 .plan-zeile:first-of-type { border-top: 0; padding-top: 2px; }
-.plan-kopf { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+/* Mitte statt Grundlinie: mit einem Bild im Kopf laege der Text sonst neben
+   der Bildunterkante. */
+.plan-kopf { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.plan-kopf .plan-avatar {
+  width: 24px; height: 24px; border-radius: 999px; object-fit: cover; flex: 0 0 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; font-weight: 700;
+}
 .plan-kopf .wer { font-size: 14px; font-weight: 700; }
 .plan-kopf .was { font-size: 12px; color: var(--muted-color, #888); }
 .plan-kopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted-color, #888); }
@@ -595,7 +602,12 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   background: color-mix(in srgb, currentColor 8%, transparent); }
 .plan-stueck { position: absolute; top: 0; height: 20px; display: flex; align-items: center;
   color: #fff; font-size: 10px; overflow: hidden; }
-.plan-stueck i { margin-left: 6px; }
+/* Der Abstand muss BEIDE Formen treffen: /icons.js ersetzt das <i> durch ein
+   <svg>, und eine Regel nur auf `i` greift danach nicht mehr. Genau daran klebte
+   das Symbol am linken Rand und wurde von der runden Kappe angeschnitten.
+   Beim ERSTEN Stueck etwas mehr, weil dort die Rundung Platz frisst. */
+.plan-stueck > * { margin-left: 6px; flex: 0 0 auto; }
+.plan-stueck.erst > * { margin-left: 9px; }
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }
 .plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
   background: color-mix(in srgb, currentColor 14%, transparent); }
@@ -5194,7 +5206,13 @@ function stundenplanKarte() {
   let zeilen = '';
   for (const kind of stundenplan.children) {
     const slots = Array.isArray(kind.slots) ? kind.slots : [];
-    zeilen += `<div class="plan-zeile"><div class="plan-kopf">` +
+    // Gesicht vor den Namen, wenn das Kind einem Familienmitglied zugeordnet
+    // ist. avatarHtml liefert das Foto als Data-URI oder ersatzweise den
+    // Anfangsbuchstaben auf farbigem Grund — dieselbe Darstellung wie in der
+    // Mitgliederleiste.
+    const mitglied = usersById()[kind.userId];
+    const gesicht = mitglied ? avatarHtml(mitglied, 'plan-avatar') : '';
+    zeilen += `<div class="plan-zeile"><div class="plan-kopf">${gesicht}` +
       `<span class="wer" style="color:${escapeHtml(kind.color)}">${escapeHtml(kind.name)}</span>`;
     if (!slots.length) {
       zeilen += `<span class="was">${escapeHtml(stundenplan.holiday
@@ -5212,7 +5230,7 @@ function stundenplanKarte() {
       // Mindestbreite, sonst verschwindet eine kurze Stunde ganz.
       const breite = Math.max((b - a) * 100, 4);
       const r = '10px', erster = i === 0, letzter = i === slots.length - 1;
-      stuecke += `<div class="plan-stueck" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
+      stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
         `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +

@@ -24,6 +24,9 @@ class TimetableCalc
      *  sonst rendert eine 30-Minuten-AG niedriger als ihr Text hoch ist. */
     public const MIN_DAUER = 45;
 
+    /** Der Name, unter dem die Betreuung als Fach gefuehrt wird. */
+    public const FACH_BETREUUNG = 'Betreuung';
+
     public const MONTAG     = 1;
     public const SAMSTAG    = 6;
 
@@ -215,11 +218,14 @@ class TimetableCalc
             'id'        => 'care_' . (string)($kind['id'] ?? '') . '_' . $tag,
             'childId'   => (string)($kind['id'] ?? ''),
             'weekday'   => $tag,
-            'subjectId' => '',
-            'subject'   => 'Betreuung',
+            // Zeigt auf das Fach „Betreuung", damit Symbol und Farbe von dort
+            // kommen, wenn der Nutzer es pflegt (in der Vorbelegung tut er das).
+            // Fehlt es, faellt die Anzeige auf Grau ohne Symbol zurueck.
+            'subjectId' => self::FACH_BETREUUNG,
+            'subject'   => self::FACH_BETREUUNG,
             'start'     => self::Zeit($letztes),
             'end'       => self::Zeit($endeMin),
-            'color'     => '#9E9E9E',
+            'color'     => null,
             'care'      => true,
         ];
     }
