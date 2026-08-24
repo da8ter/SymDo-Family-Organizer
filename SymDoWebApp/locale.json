@@ -383,7 +383,17 @@
             "%1 school hours": "%1 Stunden",
             "Show subjects": "Fächer anzeigen",
             "Subjects today": "Fächer heute",
-            "Close": "Schließen"
+            "Close": "Schließen",
+            "Monday": "Montag",
+            "Tuesday": "Dienstag",
+            "Wednesday": "Mittwoch",
+            "Thursday": "Donnerstag",
+            "Friday": "Freitag",
+            "Saturday": "Samstag",
+            "Previous day": "Vorheriger Tag",
+            "Next day": "Nächster Tag",
+            "Subjects on %1": "Fächer am %1",
+            "no school": "keine Schule"
         }
     }
 }

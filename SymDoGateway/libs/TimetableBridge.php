@@ -6,8 +6,8 @@ declare(strict_types=1);
  * Der Stundenplan fuer die Apps.
  *
  * Das Gateway pflegt hier nichts — es holt den fertigen Plan aus den
- * Stundenplan-Instanzen und reicht die heutigen Stunden weiter. Gerechnet wird
- * dort, damit Kachel, Web-App und iOS dieselben Zahlen zeigen.
+ * Stundenplan-Instanzen und reicht die ganze Woche weiter. Gerechnet wird dort,
+ * damit Kachel, Web-App und iOS dieselben Zahlen zeigen.
  */
 trait TimetableBridge
 {
@@ -43,38 +43,46 @@ trait TimetableBridge
                     ? [(int)$plan['span'][0], (int)$plan['span'][1]]
                     : [min($spanne[0], (int)$plan['span'][0]), max($spanne[1], (int)$plan['span'][1])];
             }
+            $stunde = static fn(array $s): array => [
+                'name'  => (string)($s['name'] ?? ''),
+                'icon'  => (string)($s['icon'] ?? ''),
+                'color' => (string)($s['color'] ?? ''),
+                'start' => (string)($s['start'] ?? ''),
+                'end'   => (string)($s['end'] ?? ''),
+                'from'  => (int)($s['from'] ?? 0),
+                'to'    => (int)($s['to'] ?? 0),
+                'care'  => (bool)($s['care'] ?? false),
+            ];
             foreach ($plan['children'] as $kind) {
                 if (!is_array($kind)) {
                     continue;
                 }
-                $heute = null;
+                // Die GANZE Woche, nicht nur heute: die Karte in der App laesst
+                // sich durch die Wochentage blaettern. Der Aufwand ist gering —
+                // ein Stundenplan hat ein paar Dutzend Eintraege.
+                $tage = [];
                 foreach ((array)($kind['days'] ?? []) as $tag) {
-                    if (is_array($tag) && (bool)($tag['today'] ?? false)) {
-                        $heute = $tag;
-                        break;
+                    if (!is_array($tag)) {
+                        continue;
                     }
+                    $tage[] = [
+                        'weekday' => (int)($tag['weekday'] ?? 0),
+                        'label'   => (string)($tag['label'] ?? ''),
+                        'today'   => (bool)($tag['today'] ?? false),
+                        'minutes' => (int)($tag['minutes'] ?? 0),
+                        'slots'   => array_values(array_map($stunde,
+                            array_filter((array)($tag['slots'] ?? []), 'is_array'))),
+                    ];
                 }
-                $stunden = is_array($heute['slots'] ?? null) ? $heute['slots'] : [];
-                // Kinder ohne Unterricht heute bleiben DRIN, aber mit leerer
-                // Liste: „Mia hat heute frei" ist eine Auskunft, ein fehlender
-                // Name dagegen sieht nach einem Fehler aus.
+                // Kinder ohne Unterricht bleiben DRIN, aber mit leerer Liste:
+                // „Mia hat heute frei" ist eine Auskunft, ein fehlender Name
+                // dagegen sieht nach einem Fehler aus.
                 $kinder[] = [
-                    'name'    => (string)($kind['name'] ?? ''),
-                    'color'   => (string)($kind['color'] ?? '#1E88E5'),
-                    'userId'  => (string)($kind['userId'] ?? ''),
-                    'day'     => (string)($kind['todayLabel'] ?? ''),
-                    'minutes' => (int)($kind['minutes'] ?? 0),
-                    'next'    => (string)($kind['next'] ?? ''),
-                    'slots'   => array_values(array_map(static fn(array $s): array => [
-                        'name'  => (string)($s['name'] ?? ''),
-                        'icon'  => (string)($s['icon'] ?? ''),
-                        'color' => (string)($s['color'] ?? ''),
-                        'start' => (string)($s['start'] ?? ''),
-                        'end'   => (string)($s['end'] ?? ''),
-                        'from'  => (int)($s['from'] ?? 0),
-                        'to'    => (int)($s['to'] ?? 0),
-                        'care'  => (bool)($s['care'] ?? false),
-                    ], array_filter($stunden, 'is_array'))),
+                    'name'   => (string)($kind['name'] ?? ''),
+                    'color'  => (string)($kind['color'] ?? '#1E88E5'),
+                    'userId' => (string)($kind['userId'] ?? ''),
+                    'next'   => (string)($kind['next'] ?? ''),
+                    'days'   => $tage,
                 ];
             }
         }

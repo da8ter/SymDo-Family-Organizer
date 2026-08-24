@@ -620,6 +620,24 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Mauszeiger, der den Titel verraet. */
 .plan-card { cursor: pointer; }
 .plan-hinweis { margin-top: 8px; font-size: 12px; color: var(--muted-color, #888); text-align: center; }
+
+/* Wochentag-Umschalter. Die Breite kommt aus dem laengsten Namen selbst: alle
+   liegen uebereinander in derselben Rasterzelle, nur der aktuelle ist sichtbar.
+   Eine geratene Zahl waere bei anderer Schrift oder Sprache falsch. */
+.plan-tagwahl {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--row-line, rgba(128,128,128,.25)); border-radius: 999px; padding: 2px;
+}
+.plan-tagwahl button {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; line-height: 1; padding: 4px 8px; border-radius: 999px;
+}
+.plan-tagname { display: inline-grid; place-items: center; padding: 0 2px; }
+.plan-tagname span {
+  grid-area: 1 / 1; font-size: 13px; font-weight: 700; white-space: nowrap; visibility: hidden;
+}
+.plan-tagname span.an { visibility: visible; }
+.plan-tagname span.ist-heute { color: var(--accent, #0a84ff); }
 .plan-legende { margin-top: 10px; border-top: 1px solid var(--row-line, rgba(128,128,128,.18)); padding-top: 9px; }
 .plan-legendenkopf {
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
@@ -5247,6 +5265,7 @@ function gatewayNachladen() {
 let stundenplan = null;
 let stundenplanLaeuft = false;
 let stundenplanLegende = false;
+let stundenplanTag = 0;   // gewaehlter Wochentag, 0 = noch keiner
 function loadTimetable() {
   // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
   // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay
@@ -5263,12 +5282,67 @@ function loadTimetable() {
   }).catch(() => { stundenplanLaeuft = false; });
 }
 
-/* Die heute im Balken sichtbaren Faecher, ohne Wiederholung. Zusammengefasst
+/* Die Tage, die die Karte anbietet: die Vereinigung ueber alle Kinder. Hat ein
+   Kind Samstag und das andere nicht, gibt es den Samstag trotzdem — dort steht
+   dann „keine Schule", was richtig ist und nicht fehlt. */
+function stundenplanTage() {
+  const gesehen = new Set();
+  ((stundenplan && stundenplan.children) || []).forEach(k => {
+    (k.days || []).forEach(t => gesehen.add(t.weekday));
+  });
+  return Array.from(gesehen).sort((a, b) => a - b);
+}
+
+/* Beim ersten Zeichnen auf HEUTE — und wenn heute kein Schultag ist (Sonntag,
+   Ferien, abgeschalteter Samstag), auf den ersten angebotenen Tag. Danach
+   bleibt die Wahl des Nutzers stehen. */
+function stundenplanGewaehlt() {
+  const tage = stundenplanTage();
+  if (tage.indexOf(stundenplanTag) >= 0) { return stundenplanTag; }
+  let heute = 0;
+  ((stundenplan && stundenplan.children) || []).forEach(k => {
+    (k.days || []).forEach(t => { if (t.today) { heute = t.weekday; } });
+  });
+  stundenplanTag = tage.indexOf(heute) >= 0 ? heute : (tage[0] || 1);
+  return stundenplanTag;
+}
+
+function stundenplanIstHeute(weekday) {
+  return ((stundenplan && stundenplan.children) || []).some(k =>
+    (k.days || []).some(t => t.today && t.weekday === weekday));
+}
+
+const PLAN_TAGE = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function stundenplanTagwahl() {
+  const tage = stundenplanTage();
+  if (tage.length < 2) { return ''; }
+  const jetzt = stundenplanGewaehlt();
+  // ALLE Namen ins Markup — daher die feste Breite; sichtbar ist einer.
+  const namen = tage.map(t => `<span class="${t === jetzt ? 'an' : ''}` +
+    `${t === jetzt && stundenplanIstHeute(t) ? ' ist-heute' : ''}">` +
+    `${escapeHtml(translate(PLAN_TAGE[t] || ''))}</span>`).join('');
+  return `<span class="plan-tagwahl">` +
+    `<button data-plantag="zurueck" aria-label="${translate('Previous day')}">‹</button>` +
+    `<span class="plan-tagname">${namen}</span>` +
+    `<button data-plantag="vor" aria-label="${translate('Next day')}">›</button></span>`;
+}
+
+function stundenplanBlaettern(richtung) {
+  const tage = stundenplanTage();
+  const i = tage.indexOf(stundenplanGewaehlt());
+  // Rundlauf: von Freitag weiter landet man wieder bei Montag.
+  stundenplanTag = tage[(i + richtung + tage.length) % tage.length];
+}
+
+/* Die am gewaehlten Tag sichtbaren Faecher, ohne Wiederholung. Zusammengefasst
    wird nach NAME: dasselbe Fach bei zwei Kindern ist EIN Eintrag. */
 function stundenplanFaecher() {
   const karte = new Map();
+  const gewaehlt = stundenplanGewaehlt();
   ((stundenplan && stundenplan.children) || []).forEach(kind => {
-    (Array.isArray(kind.slots) ? kind.slots : []).forEach(s => {
+    const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
+    ((tag && tag.slots) || []).forEach(s => {
       const da = karte.get(s.name);
       if (da) {
         if (da.wer.indexOf(kind.name) < 0) { da.wer.push(kind.name); }
@@ -5296,8 +5370,12 @@ function stundenplanLegendeHtml() {
       (f.icon ? `<i class="fa-light ${escapeHtml(f.icon)}"></i>` : '') + `</span>` +
       `${escapeHtml(f.name)}${nur}</span>`;
   }).join('');
+  const jetzt = stundenplanGewaehlt();
+  const kopf = stundenplanIstHeute(jetzt)
+    ? translate('Subjects today')
+    : translate('Subjects on %1').replace('%1', translate(PLAN_TAGE[jetzt] || ''));
   return `<div class="plan-legende"><div class="plan-legendenkopf">` +
-    `<span>${translate('Subjects today')}</span>` +
+    `<span>${escapeHtml(kopf)}</span>` +
     `<button class="zu" data-plan="zu" aria-label="${translate('Close')}">✕</button></div>` +
     `<div class="plan-faecher">${eintraege}</div></div>`;
 }
@@ -5322,9 +5400,11 @@ function stundenplanKarte() {
     }
     return translate('%1 school hours').replace('%1', h.toFixed(1).replace('.', ','));
   };
+  const gewaehlt = stundenplanGewaehlt();
   let zeilen = '';
   for (const kind of stundenplan.children) {
-    const slots = Array.isArray(kind.slots) ? kind.slots : [];
+    const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
+    const slots = (tag && Array.isArray(tag.slots)) ? tag.slots : [];
     // Gesicht vor den Namen, wenn das Kind einem Familienmitglied zugeordnet
     // ist. avatarHtml liefert das Foto als Data-URI oder ersatzweise den
     // Anfangsbuchstaben auf farbigem Grund — dieselbe Darstellung wie in der
@@ -5335,12 +5415,15 @@ function stundenplanKarte() {
       `<span class="wer" style="color:${escapeHtml(kind.color)}">${escapeHtml(kind.name)}</span>`;
     if (!slots.length) {
       zeilen += `<span class="was">${escapeHtml(stundenplan.holiday
-        ? stundenplan.holiday.name : translate('no school today'))}</span></div>` +
+        ? stundenplan.holiday.name : translate('no school'))}</span></div>` +
         `<div class="plan-frei">—</div></div>`;
       continue;
     }
     const beginn = slots[0].start, ende = slots[slots.length - 1].end;
-    zeilen += `<span class="was">${escapeHtml(kind.day)} · ${escapeHtml(stundenText(kind.minutes))}</span>` +
+    // Der Tag steht im Umschalter; hier nur die Dauer, und „Heute" nur dann,
+    // wenn der gewaehlte Tag auch heute ist.
+    const wann = (tag.today ? translate('Today') + ' · ' : '') + stundenText(tag.minutes || 0);
+    zeilen += `<span class="was">${escapeHtml(wann)}</span>` +
       `<span class="spanne">${escapeHtml(beginn)}–${escapeHtml(ende)}</span></div>`;
     let stuecke = '';
     slots.forEach((s, i) => {
@@ -5366,7 +5449,7 @@ function stundenplanKarte() {
   const ferien = stundenplan.holiday
     ? ` <span class="was">· ${escapeHtml(stundenplan.holiday.name)}</span>` : '';
   return `<div class="card plan-card" data-plan="karte"><div class="card-head">` +
-    `<h3>${translate('Timetable')}</h3>${ferien}</div>${zeilen}` +
+    `<h3>${translate('Timetable')}</h3>${ferien}${stundenplanTagwahl()}</div>${zeilen}` +
     stundenplanLegendeHtml() + `</div>`;
 }
 
@@ -6123,6 +6206,14 @@ function renderDashboard() {
   // Balken wirkt — die Karte hat sonst nichts Anklickbares.
   el.querySelectorAll('[data-plan="karte"]').forEach(k => k.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Die Pfeile blaettern und lassen die Legende, wie sie ist — sonst klappte
+    // sie bei jedem Tageswechsel zu.
+    const pfeil = e.target.closest('[data-plantag]');
+    if (pfeil) {
+      stundenplanBlaettern(pfeil.dataset.plantag === 'vor' ? 1 : -1);
+      renderDashboard();
+      return;
+    }
     stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
     renderDashboard();
   }));
