@@ -3,21 +3,25 @@
 declare(strict_types=1);
 
 /**
- * Anbindung der Einkaufsliste an eine Sprachliste (Alexa, Bring).
+ * Anbindung der ToDo-Liste an eine Sprachliste (Alexa, Bring).
  *
- * Hier stehen nur die Haken, die VoiceListSync braucht — die Entscheidungen
- * fallen dort. Diese Datei uebersetzt zwischen der Maschine und unserem
- * ItemStore: dessen Eintraege haben eine Hex-Kennung, ein freies Mengenfeld und
- * `inCart` statt `done`.
+ * Gegenstueck zu ShoppingList/libs/VoiceHooks.php, aber nicht dasselbe: hier
+ * haben Aufgaben eine fortlaufende Zahl als Kennung, `done` statt `inCart`, und
+ * es gibt KEINE Zusammenfassung gleichnamiger Eintraege — TDL_AddItem legt
+ * immer eine neue Aufgabe an. Das bleibt so; eine Sonderregel nur fuer Alexa
+ * wuerde sich vom Verhalten aller anderen Quellen unterscheiden.
+ *
+ * Laeuft ABSICHTLICH neben SyncBackend: das ist exklusiv (EnforceSyncBackend),
+ * die Sprachliste soll aber auch auf einer Liste mit Google-Abgleich hoeren.
  */
-trait VoiceHooks
+trait VoiceHooksTodo
 {
     private function VoiceCreateProperties(): void
     {
         $this->RegisterPropertyBoolean('VoiceSyncEnabled', false);
         $this->RegisterPropertyInteger('VoiceListID', 0);
         $this->RegisterPropertyBoolean('VoicePushLocal', true);
-        $this->RegisterPropertyBoolean('VoiceParseAmount', true);
+        $this->RegisterPropertyString('VoiceAssignTo', '');
         $this->RegisterAttributeInteger('VoiceLastSync', 0);
         $this->RegisterAttributeInteger('VoiceLastVariableID', 0);
     }
@@ -25,13 +29,10 @@ trait VoiceHooks
     /**
      * Eine Einstellung lesen, die es vielleicht noch nicht gibt.
      *
-     * ReadProperty* auf eine noch nicht registrierte Eigenschaft WIRFT nicht,
-     * sondern gibt eine PHP-Warnung in die Ausgabe — und die zerlegt den
-     * Rueckgabewert von GetConfigurationForm (am lebenden System gesehen:
-     * „Eigenschaft VoiceSyncEnabled nicht gefunden", Formular kam leer an).
-     * Neue Eigenschaften entstehen erst, wenn Create() wieder laeuft, also nach
-     * einem Kernel-Neustart. Ueber die Konfiguration gelesen wirkt die
-     * Anbindung sofort — dasselbe Muster wie TtsSetting im Gateway.
+     * ReadProperty* auf eine nicht registrierte Eigenschaft wirft nicht, es gibt
+     * eine PHP-Warnung in die Ausgabe — und die zerlegt den Rueckgabewert von
+     * GetConfigurationForm. Neue Eigenschaften entstehen erst mit dem naechsten
+     * Create(); ueber die Konfiguration gelesen wirkt der Bereich sofort.
      */
     private function VoiceProp(string $name, mixed $vorgabe): mixed
     {
@@ -59,120 +60,98 @@ trait VoiceHooks
         return (bool)$this->VoiceProp('VoicePushLocal', true);
     }
 
+    /**
+     * Aufgaben haben kein Mengenfeld — hier gibt es nichts zu trennen.
+     *
+     * „3 Milch" ist ein Einkaufsartikel; eine Aufgabe heisst „Drei Angebote
+     * einholen", und daraus „Angebote einholen" mit Menge 3 zu machen waere
+     * Unsinn. Die Aufteilung bleibt der Einkaufsliste.
+     */
     private function VoiceParseAmountEnabled(): bool
     {
-        return (bool)$this->VoiceProp('VoiceParseAmount', true);
+        return false;
     }
 
-    /** Der Bestand, geschluesselt nach der Artikel-Kennung. */
+    /** Der Bestand, geschluesselt nach der Aufgaben-Kennung. */
     private function VoiceLoad(): array
     {
         $raus = [];
         foreach ($this->LoadItems() as $item) {
-            $id = (string)($item['id'] ?? '');
-            if ($id === '') {
+            $id = (int)($item['id'] ?? 0);
+            if ($id <= 0) {
                 continue;
             }
-            $raus[$id] = [
-                'name'        => (string)($item['name'] ?? ''),
-                'amount'      => (string)($item['amount'] ?? ''),
+            $raus[(string)$id] = [
+                'name'        => (string)($item['title'] ?? ''),
+                'amount'      => '',
                 'voiceId'     => (string)($item['voiceId'] ?? ''),
                 'voiceSource' => (string)($item['voiceSource'] ?? ''),
-                'done'        => ($item['inCart'] ?? false) === true,
+                'done'        => ($item['done'] ?? false) === true,
             ];
         }
         return $raus;
     }
 
-    /** „Erledigt" heisst hier: im Einkaufswagen. */
     private function VoiceIsDone(array $eintrag): bool
     {
         return (bool)($eintrag['done'] ?? false);
     }
 
-    /**
-     * Legt einen gesprochenen Artikel an.
-     *
-     * Zwei Wege, und der Unterschied ist gewollt: Ohne Menge geht es den
-     * gewohnten Weg (AddItemInternal fasst einen gleichnamigen offenen Artikel
-     * zusammen und erhoeht dessen Menge um 1). MIT gesprochener Menge waere das
-     * falsch — „drei Milch" soll Menge 3 ergeben und nicht 2. Dann wird die
-     * vorhandene Zeile per UpdateItemInternal auf die gesprochene Menge GESETZT.
-     */
     private function VoiceCreate(string $name, string $menge, string $voiceId, string $quelle): void
     {
         $name = trim($name);
         if ($name === '') {
             return;
         }
-        $treffer = $this->VoiceFindOpenByName($name);
-        if ($menge !== '' && $treffer !== '') {
-            $this->UpdateItemInternal($treffer, $name, $menge, '');
-            $this->VoiceStamp($treffer, $voiceId, $quelle);
+        // Ueber den normalen Weg, damit Benachrichtigung, Statistik und
+        // Revision genauso laufen wie bei einer per App angelegten Aufgabe.
+        $entwurf = ['title' => $name, 'info' => '', 'priority' => 'normal'];
+        $wem = trim((string)$this->VoiceProp('VoiceAssignTo', ''));
+        if ($wem !== '') {
+            $entwurf['assignedTo'] = [$wem];
+        }
+        try {
+            $id = $this->AddItem($entwurf);
+        } catch (\Throwable $e) {
+            $this->SendDebug('VoiceSync', 'Aufgabe nicht angelegt: ' . $e->getMessage(), 0);
             return;
         }
-        // Leere Kategorie: dann waehlt LookupCategory selbst — keine erfundene
-        // Kategorie und dieselbe Zuordnung wie bei jedem anderen Artikel.
-        if (!$this->AddItemInternal($name, '', $menge)) {
-            return;
-        }
-        $ziel = $treffer !== '' ? $treffer : $this->VoiceFindOpenByName($name);
-        if ($ziel !== '') {
-            $this->VoiceStamp($ziel, $voiceId, $quelle);
+        if ($id > 0) {
+            $this->VoiceStamp($id, $voiceId, $quelle);
         }
     }
 
     private function VoiceMarkDone(string|int $schluessel): void
     {
-        $this->ToggleItemCart((string)$schluessel, true);
+        try {
+            $this->ToggleDone(['id' => (int)$schluessel, 'done' => true]);
+        } catch (\Throwable $e) {
+            $this->SendDebug('VoiceSync', 'Aufgabe nicht abgehakt: ' . $e->getMessage(), 0);
+        }
     }
 
     private function VoiceSetId(string|int $schluessel, string $voiceId, string $quelle): void
     {
-        $this->VoiceStamp((string)$schluessel, $voiceId, $quelle);
+        $this->VoiceStamp((int)$schluessel, $voiceId, $quelle);
     }
-
-    // ────────────────────────── Helfer ──────────────────────────
 
     /**
-     * Kennung des offenen Artikels mit diesem Namen, oder ''.
+     * Schreibt Kennung und Quelle an die Aufgabe.
      *
-     * Dieselbe Vergleichsregel wie im ItemStore (mb_strtolower auf den Namen,
-     * nur nicht im Wagen) — sonst faende diese Suche etwas anderes als die
-     * Duplikatpruefung des Anlegens.
+     * Eigener Weg statt UpdateItem: der zieht die ganze Nutzlast durch die
+     * Pruefungen und wuerde Felder ueberschreiben, die hier niemand anfasst.
      */
-    private function VoiceFindOpenByName(string $name): string
+    private function VoiceStamp(int $id, string $voiceId, string $quelle): void
     {
-        $gesucht = mb_strtolower(trim($name));
-        foreach ($this->LoadItems() as $item) {
-            if (($item['inCart'] ?? false) === false && mb_strtolower((string)($item['name'] ?? '')) === $gesucht) {
-                return (string)($item['id'] ?? '');
+        $items = $this->LoadItems();
+        foreach ($items as &$item) {
+            if ((int)($item['id'] ?? 0) === $id) {
+                $item['voiceId']     = $voiceId;
+                $item['voiceSource'] = $quelle;
+                $item['voiceSynced'] = time();
+                $this->SaveItems($items);
+                return;
             }
-        }
-        return '';
-    }
-
-    /** Schreibt Kennung und Quelle an den Artikel. */
-    private function VoiceStamp(string $id, string $voiceId, string $quelle): void
-    {
-        $riegel = 'SL_Items_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($riegel, 500)) {
-            $this->SendDebug('VoiceSync', 'Riegel belegt — Kennung nicht vermerkt', 0);
-            return;
-        }
-        try {
-            $items = $this->LoadItems();
-            foreach ($items as &$item) {
-                if ((string)($item['id'] ?? '') === $id) {
-                    $item['voiceId']     = $voiceId;
-                    $item['voiceSource'] = $quelle;
-                    $item['voiceSynced'] = time();
-                    $this->SaveItems($items);
-                    return;
-                }
-            }
-        } finally {
-            IPS_SemaphoreLeave($riegel);
         }
     }
 
@@ -186,6 +165,10 @@ trait VoiceHooks
             'caption'  => $this->Translate('Voice assistant (Alexa, Bring)'),
             'expanded' => false,
             'items'    => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Works alongside CalDAV, Google and Microsoft — the voice list is not one of the exclusive sync backends.'),
+                ],
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'VoiceSyncEnabled',
@@ -201,12 +184,13 @@ trait VoiceHooks
                 [
                     'type'    => 'CheckBox',
                     'name'    => 'VoicePushLocal',
-                    'caption' => $this->Translate('Also send items from this list to the voice list'),
+                    'caption' => $this->Translate('Also send tasks from this list to the voice list'),
                 ],
                 [
-                    'type'    => 'CheckBox',
-                    'name'    => 'VoiceParseAmount',
-                    'caption' => $this->Translate('Split a spoken amount from the name ("3 milk" becomes milk, amount 3)'),
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'VoiceAssignTo',
+                    'caption' => $this->Translate('Assign spoken tasks to this member ID (optional)'),
+                    'width'   => '360px',
                 ],
                 [
                     'type'    => 'Label',
@@ -216,11 +200,11 @@ trait VoiceHooks
                 [
                     'type'    => 'Button',
                     'caption' => $this->Translate('Sync now'),
-                    'onClick' => 'echo SL_VoiceSyncNow($id);',
+                    'onClick' => 'echo TDL_VoiceSyncNow($id);',
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('The delay depends on the voice module: it queries the cloud on its own schedule. Set its update interval to 1–2 minutes. With Bring the text box variable must be enabled, otherwise there is no trigger.'),
+                    'caption' => $this->Translate('For tasks you need a separate voice list instance set to the task list. The delay depends on that module: set its update interval to 1–2 minutes.'),
                 ],
             ],
         ];
@@ -241,7 +225,6 @@ trait VoiceHooks
             $letzter > 0 ? date('d.m.Y H:i', $letzter) : $this->Translate('never'));
     }
 
-    /** Der Knopf im Formular. Gibt eine lesbare Bilanz zurueck. */
     private function VoiceSyncNowText(): string
     {
         if (!$this->VoiceEnabled()) {

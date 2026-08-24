@@ -8,7 +8,7 @@ require_once __DIR__ . '/libs/FavoriteStore.php';
 require_once __DIR__ . '/libs/PurchaseStore.php';
 require_once __DIR__ . '/../shared/VoiceSource.php';
 require_once __DIR__ . '/../shared/VoiceListSync.php';
-require_once __DIR__ . '/libs/VoiceHooks.php';
+require_once __DIR__ . '/libs/VoiceHooksShopping.php';
 
 class ShoppingList extends IPSModuleStrict
 {
@@ -18,7 +18,7 @@ class ShoppingList extends IPSModuleStrict
     use FavoriteStore;
     use PurchaseStore;
     use VoiceListSync;
-    use VoiceHooks;
+    use VoiceHooksShopping;
 
     /**
      * Das eingebaute Aussehen der Standardkategorien: Symbol und Farbe.

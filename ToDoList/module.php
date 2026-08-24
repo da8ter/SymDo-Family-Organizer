@@ -6,6 +6,9 @@ require_once __DIR__ . '/libs/SyncHelper.php';
 require_once __DIR__ . '/libs/CalDAVSync.php';
 require_once __DIR__ . '/libs/GoogleTasksSync.php';
 require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
+require_once __DIR__ . '/../shared/VoiceSource.php';
+require_once __DIR__ . '/../shared/VoiceListSync.php';
+require_once __DIR__ . '/libs/VoiceHooksTodo.php';
 
 class ToDoList extends IPSModuleStrict
 {
@@ -14,6 +17,8 @@ class ToDoList extends IPSModuleStrict
     use CalDAVSync;
     use GoogleTasksSync;
     use MicrosoftToDoSync;
+    use VoiceListSync;
+    use VoiceHooksTodo;
 
     public function GetCompatibleParents(): string
     {
@@ -127,6 +132,8 @@ class ToDoList extends IPSModuleStrict
         $this->RegisterAttributeString('MicrosoftListOptions', '[]');
         $this->RegisterAttributeString('LastMicrosoftListID', '');
 
+        $this->VoiceCreateProperties();
+
         $this->RegisterAttributeString('Items', '[]');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
         // das Gateway liefert sie der SymDo-App/Web-App über die Discovery aus.
@@ -229,6 +236,8 @@ class ToDoList extends IPSModuleStrict
 
         $this->ProcessNotifications();
         $this->ProcessRecurrences();
+
+        $this->VoiceBindTrigger();
     }
 
     /**
@@ -240,7 +249,20 @@ class ToDoList extends IPSModuleStrict
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->SetStatus(IS_ACTIVE);
+            return;
         }
+
+        // Die Sprachliste hat sich geaendert. VoiceIsTrigger prueft das
+        // Changed-Flag, ein unveraenderter Fremd-Takt loest also nichts aus.
+        if ($this->VoiceIsTrigger($SenderID, $Message, $Data)) {
+            $this->VoiceSync();
+        }
+    }
+
+    /** Abgleich mit der Sprachliste von Hand — der Knopf im Formular. */
+    public function VoiceSyncNow(): string
+    {
+        return $this->VoiceSyncNowText();
     }
 
     public function GetConfigurationForm(): string
@@ -429,7 +451,10 @@ class ToDoList extends IPSModuleStrict
 
                 $this->GetCalDAVFormElements($syncBackend),
                 $this->GetGoogleTasksFormElements($syncBackend),
-                $this->GetMicrosoftToDoFormElements($syncBackend)
+                $this->GetMicrosoftToDoFormElements($syncBackend),
+                // Bewusst NACH den drei exklusiven Backends und ohne deren
+                // Sichtbarkeitsregel: die Sprachliste laeuft daneben, nicht statt.
+                $this->GetVoiceFormElements()
             ]
         ];
 
