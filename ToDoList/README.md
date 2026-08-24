@@ -658,7 +658,7 @@ Anleitungen zur Konfiguration:
 
 ### Anbindung an externe Listen (Alexa)
 
-Nur Alexa: **Bring kennt keine Aufgabenlisten**. Der Abgleich läuft **neben**
+Der Abgleich läuft **neben**
 CalDAV, Google und Microsoft — die externe Liste ist keines der exklusiven
 Sync-Backends, eine Liste mit Google-Abgleich kann also zusätzlich Alexa hören.
 
@@ -681,9 +681,8 @@ und im Feld *Alexa-Aufgabenliste* die Instanz wählen.
 **Grenzen, ehrlich benannt:**
 
 - Der Verzug ist der Takt des Fremdmoduls. Sofort geht nur über den Knopf.
-- Beide Schnittstellen sind **inoffiziell** und können ohne Ankündigung wegfallen.
+- Die Schnittstelle ist **inoffiziell** und kann ohne Ankündigung wegfallen.
 - Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig.
-- Bring kann nicht abhaken — dort wird ein gekaufter Artikel entfernt.
 - Steht in der Alexa-Instanz *Lösche erledigte Einträge* auf an, ist „abgehakt"
   von „gelöscht" nicht unterscheidbar. Beides bedeutet hier „von der Liste".
 - Ein fehlender Eintrag gilt nur dann als „von der Liste genommen", wenn die

@@ -222,21 +222,7 @@ trait ExtListHooksTodo
                     'items'    => [
                         [
                             'type'    => 'Label',
-                            'caption' => $this->Translate('ALEXA — voice list of an Amazon account'),
-                            'bold'    => true,
-                        ],
-                        [
-                            'type'    => 'Label',
                             'caption' => $this->Translate("1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. For tasks set \"List\" to \"Task list (default)\"; the shopping list needs its OWN instance.\n4. In that instance set the update interval to 1–2 MINUTES (default is 60) — its schedule decides how fast a spoken task arrives here."),
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate('BRING — the Bring! shopping app (not a voice assistant)'),
-                            'bold'    => true,
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => $this->Translate('Bring is not offered here: it only knows shopping lists, no tasks. Use it in the shopping list module.'),
                         ],
                     ],
                 ],
