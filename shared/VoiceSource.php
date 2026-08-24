@@ -229,13 +229,19 @@ class VoiceSourceBring extends VoiceSource
                 if (!is_array($item)) {
                     continue;
                 }
-                $name = trim((string)($item['itemId'] ?? $item['name'] ?? ''));
+                // `name` zuerst: DAS liefert die Liste. Am Quelltext des Moduls
+                // nachgelesen — es liest die Faecher selbst ueber `$Item['name']`
+                // (module.php:319, 346); `itemId` kommt nur dort vor, wo das Modul
+                // Eintraege aus seiner Textbox SELBST zusammenbaut. Vorher stand
+                // itemId vorn, was durch den Rueckfall zwar lief, aber die falsche
+                // Erwartung dokumentierte.
+                $name = trim((string)($item['name'] ?? $item['itemId'] ?? ''));
                 if ($name === '') {
                     continue;
                 }
-                // Bei Bring IST der Artikelname die Kennung (itemId). Eine eigene
-                // UUID gibt es nicht, deshalb steht hier derselbe Wert in beiden
-                // Feldern — die Abgleich-Logik braucht nur, dass er stabil ist.
+                // Bei Bring IST der Artikelname die Kennung. Eine eigene UUID gibt
+                // es nicht, deshalb steht hier derselbe Wert in beiden Feldern —
+                // die Abgleich-Logik braucht nur, dass er stabil ist.
                 $raus[] = [
                     'id'   => $name,
                     'name' => $name,
