@@ -2136,6 +2136,11 @@ class SymDoGateway extends IPSModuleStrict
                     'name'    => 'BriefingEnabled',
                     'caption' => $this->Translate('Show a daily briefing on the dashboard')
                 ],
+                // Anbieter und Schluessel der Stimme: ein eigener Klapp-Bereich, der
+                // zugeklappt eine Zeile braucht statt dreizehn Felder. Erst nach
+                // einem Kernel-Neustart vorhanden — bis dahin gaebe „Uebernehmen"
+                // auf diese Eigenschaften einen Fehler.
+                ...(array_key_exists('TtsProvider', (array)$cfg) ? [$this->GetTtsProviderPanel((array)$cfg)] : []),
                 [
                     'type'    => 'Select',
                     'name'    => 'BriefingUserID',
@@ -2175,102 +2180,6 @@ class SymDoGateway extends IPSModuleStrict
                     [
                         'type'    => 'Label',
                         'caption' => $this->Translate('The recording is produced together with the text, so the play button starts instantly. It costs roughly four times as much as the text — switch it off and the button disappears.')
-                    ],
-                ] : []),
-                // Ebenfalls erst nach einem Kernel-Neustart vorhanden.
-                ...(array_key_exists('TtsProvider', (array)$cfg) ? [
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'TtsProvider',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('Voice from'),
-                        'options' => [
-                            ['caption' => $this->Translate('OpenAI (same key as the AI)'), 'value' => 'openai'],
-                            ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
-                            ['caption' => $this->Translate('ElevenLabs (own key, paid account required)'), 'value' => 'elevenlabs'],
-                        ]
-                    ],
-                    [
-                        // PasswordTextBox wie jedes andere Geheimnis in diesem
-                        // Formular (Client-Secrets, Mailgun-Schluessel, KI-Schluessel,
-                        // CalDAV-Passwort). Als ValidationTextBox stand der Schluessel
-                        // im Klartext auf dem Schirm — sichtbar bei jedem Blick ueber
-                        // die Schulter und in jedem Bildschirmfoto der Konfiguration.
-                        'type'    => 'PasswordTextBox',
-                        'name'    => 'TtsAzureKey',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('Azure Speech key')
-                    ],
-                    [
-                        'type'    => 'ValidationTextBox',
-                        'name'    => 'TtsAzureRegion',
-                        'width'   => '200px',
-                        'caption' => $this->Translate('Azure region (e.g. westeurope)')
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'caption' => $this->Translate('Azure brings 17 German voices instead of 13 mixed-language ones, and its speech markup really does control tempo and pauses — with OpenAI the speed parameter is ignored. Free tier F0: 0.5 million characters per month, which is about ten times our consumption. Note: the speaking styles (cheerful, sad, shouting) that Azure advertises exist for German on one single voice, so the character comes from the choice of voice and from tempo, not from style names.')
-                    ],
-                    [
-                        'type'    => 'PasswordTextBox',
-                        'name'    => 'TtsElevenKey',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('ElevenLabs API key')
-                    ],
-                    [
-                        'type'    => 'ValidationTextBox',
-                        'name'    => 'TtsElevenVoice',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('ElevenLabs voice ID')
-                    ],
-                    [
-                        'type'    => 'ValidationTextBox',
-                        'name'    => 'TtsElevenModel',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('ElevenLabs model (eleven_multilingual_v2 speaks German)')
-                    ],
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'TtsElevenQuality',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('Audio quality'),
-                        'options' => [
-                            ['caption' => $this->Translate('Automatic — best quality that still fits in one recording'), 'value' => 'auto'],
-                            ['caption' => $this->Translate('Always high (128 kbit, like the ElevenLabs preview)'), 'value' => '128'],
-                            ['caption' => $this->Translate('Always good (64 kbit)'), 'value' => '64'],
-                            ['caption' => $this->Translate('Always thrifty (32 kbit at 22 kHz) — audibly dull'), 'value' => '32'],
-                        ]
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'caption' => sprintf($this->Translate('Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.'),
-                            $this->BriefingLimitText(), (int)($this->OutputLimit() * 0.8 / 1300))
-                    ],
-                    [
-                        'type'    => 'Select',
-                        'name'    => 'TtsElevenScope',
-                        'width'   => '400px',
-                        'caption' => $this->Translate('Which voices to offer'),
-                        'options' => [
-                            ['caption' => $this->Translate('My Voices (as on the ElevenLabs website)'), 'value' => 'bookmarked'],
-                            ['caption' => $this->Translate('Own voices only (created or cloned by you)'), 'value' => 'personal'],
-                            ['caption' => $this->Translate('Own plus every copy from the library'), 'value' => 'non-default'],
-                            ['caption' => $this->Translate('All, including the default voices'), 'value' => 'all'],
-                        ]
-                    ],
-                    [
-                        'type'    => 'Button',
-                        'caption' => $this->Translate('List voices of the account'),
-                        'onClick' => 'IPS_RequestAction($id, \'TtsElevenVoices\', 0);'
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'name'    => 'TtsElevenStatus',
-                        'caption' => ' '
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'caption' => $this->Translate('ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). "List voices of the account" fetches the IDs available to your key.')
                     ],
                 ] : []),
                 // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein

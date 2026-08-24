@@ -937,8 +937,184 @@ trait Tts
      * TGW_-Methode: die gaebe es erst nach einem Kernel-Neustart (dieselbe
      * Begruendung wie beim KI-Relay in AppCore).
      */
+    /**
+     * Anbieter und Schluessel der Sprachausgabe — ein eigener Klapp-Bereich im
+     * Briefing, damit die drei Anbieter nicht dreizehn Felder untereinander
+     * legen, von denen hoechstens neun je gebraucht werden.
+     *
+     * Gezeigt wird NUR, was zum gewaehlten Anbieter gehoert. Die erste Anzeige
+     * richtet sich nach dem gespeicherten Stand, jede Umstellung sofort ueber
+     * TtsProviderPick — sonst saehe man bis zum Uebernehmen die falschen Felder.
+     *
+     * Der Aufrufer prueft, ob es die Eigenschaften schon gibt: sie entstehen in
+     * Create() und damit erst nach einem Kernel-Neustart.
+     */
+    private function GetTtsProviderPanel(array $cfg): array
+    {
+        $ist = (string)($cfg['TtsProvider'] ?? 'openai');
+        if (!in_array($ist, ['openai', 'azure', 'elevenlabs'], true)) {
+            $ist = 'openai';
+        }
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Voice provider'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsProvider',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Voice from'),
+                    // Ohne onChange zeigte der Bereich die Felder des GESPEICHERTEN
+                    // Anbieters: wer umstellte, sah bis zum Uebernehmen die
+                    // falschen. Ueber IPS_RequestAction und nicht ueber eine neue
+                    // public TGW_-Methode — die gaebe es erst nach einem
+                    // Kernel-Neustart.
+                    'onChange' => 'IPS_RequestAction($id, "TtsProviderPick", $TtsProvider);',
+                    'options' => [
+                        ['caption' => $this->Translate('OpenAI (same key as the AI)'), 'value' => 'openai'],
+                        ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
+                        ['caption' => $this->Translate('ElevenLabs (own key, paid account required)'), 'value' => 'elevenlabs'],
+                    ]
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsOpenAiHint',
+                    'visible' => $ist === 'openai',
+                    'caption' => $this->Translate('OpenAI needs nothing further here: it speaks with the key already entered under "AI features". The voice is chosen per persona in the persona editor.')
+                ],
+                [
+                    // PasswordTextBox wie jedes andere Geheimnis in diesem
+                    // Formular (Client-Secrets, Mailgun-Schluessel, KI-Schluessel,
+                    // CalDAV-Passwort). Als ValidationTextBox stand der Schluessel
+                    // im Klartext auf dem Schirm — sichtbar bei jedem Blick ueber
+                    // die Schulter und in jedem Bildschirmfoto der Konfiguration.
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'TtsAzureKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Azure Speech key'),
+                    'visible' => $ist === 'azure'
+                ],
+                [
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'TtsAzureRegion',
+                    'width'   => '200px',
+                    'caption' => $this->Translate('Azure region (e.g. westeurope)'),
+                    'visible' => $ist === 'azure'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsAzureHint',
+                    'visible' => $ist === 'azure',
+                    'caption' => $this->Translate('Azure brings 17 German voices instead of 13 mixed-language ones, and its speech markup really does control tempo and pauses — with OpenAI the speed parameter is ignored. Free tier F0: 0.5 million characters per month, which is about ten times our consumption. Note: the speaking styles (cheerful, sad, shouting) that Azure advertises exist for German on one single voice, so the character comes from the choice of voice and from tempo, not from style names.')
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'TtsElevenKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('ElevenLabs API key'),
+                    'visible' => $ist === 'elevenlabs'
+                ],
+                [
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'TtsElevenVoice',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('ElevenLabs voice ID'),
+                    'visible' => $ist === 'elevenlabs'
+                ],
+                [
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'TtsElevenModel',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('ElevenLabs model (eleven_multilingual_v2 speaks German)'),
+                    'visible' => $ist === 'elevenlabs'
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsElevenQuality',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Audio quality'),
+                    'visible' => $ist === 'elevenlabs',
+                    'options' => [
+                        ['caption' => $this->Translate('Automatic — best quality that still fits in one recording'), 'value' => 'auto'],
+                        ['caption' => $this->Translate('Always high (128 kbit, like the ElevenLabs preview)'), 'value' => '128'],
+                        ['caption' => $this->Translate('Always good (64 kbit)'), 'value' => '64'],
+                        ['caption' => $this->Translate('Always thrifty (32 kbit at 22 kHz) — audibly dull'), 'value' => '32'],
+                    ]
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsElevenQualityHint',
+                    'visible' => $ist === 'elevenlabs',
+                    'caption' => sprintf($this->Translate('Automatic works like the guard for photos and PDFs: it reads the Symcon core option ScriptOutputBufferLimit at runtime and picks the best quality whose recording still fits into ONE piece — every seam between two recordings is audible, because the intonation starts anew. Your limit is currently %s, which is enough for about %d characters at 128 kbit. Raise the option and the sound improves by itself; lower it and you still get a recording that arrives.'),
+                        $this->BriefingLimitText(), (int)($this->OutputLimit() * 0.8 / 1300))
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsElevenScope',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Which voices to offer'),
+                    'visible' => $ist === 'elevenlabs',
+                    'options' => [
+                        ['caption' => $this->Translate('My Voices (as on the ElevenLabs website)'), 'value' => 'bookmarked'],
+                        ['caption' => $this->Translate('Own voices only (created or cloned by you)'), 'value' => 'personal'],
+                        ['caption' => $this->Translate('Own plus every copy from the library'), 'value' => 'non-default'],
+                        ['caption' => $this->Translate('All, including the default voices'), 'value' => 'all'],
+                    ]
+                ],
+                [
+                    'type'    => 'Button',
+                    'name'    => 'TtsElevenVoicesButton',
+                    'visible' => $ist === 'elevenlabs',
+                    'caption' => $this->Translate('List voices of the account'),
+                    'onClick' => 'IPS_RequestAction($id, \'TtsElevenVoices\', 0);'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsElevenStatus',
+                    'visible' => $ist === 'elevenlabs',
+                    'caption' => ' '
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsElevenHint',
+                    'visible' => $ist === 'elevenlabs',
+                    'caption' => $this->Translate('ElevenLabs needs a PAID account: the free tier grants no commercial licence and requires every generated file to name ElevenLabs. It also has no voice per persona — which voices an account holds only that account knows, so all personas share the voice entered above and their character comes from the sliders (expressive against level). "List voices of the account" fetches the IDs available to your key.')
+                ],
+            ]
+        ];
+    }
+
+    /**
+     * Felder des gewaehlten Anbieters zeigen, die der anderen verbergen. Getrennt
+     * von der Formularerzeugung, weil UpdateFormField nur aus einer laufenden
+     * Aktion heraus wirkt.
+     */
+    private function TtsShowProviderFields(string $anbieter): void
+    {
+        $gruppen = [
+            'openai'     => ['TtsOpenAiHint'],
+            'azure'      => ['TtsAzureKey', 'TtsAzureRegion', 'TtsAzureHint'],
+            'elevenlabs' => ['TtsElevenKey', 'TtsElevenVoice', 'TtsElevenModel',
+                             'TtsElevenQuality', 'TtsElevenQualityHint', 'TtsElevenScope',
+                             'TtsElevenVoicesButton', 'TtsElevenStatus', 'TtsElevenHint'],
+        ];
+        if (!isset($gruppen[$anbieter])) {
+            $anbieter = 'openai';
+        }
+        foreach ($gruppen as $key => $felder) {
+            foreach ($felder as $feld) {
+                $this->UpdateFormField($feld, 'visible', $key === $anbieter);
+            }
+        }
+    }
+
     private function TtsRequestAction(string $ident, mixed $value): bool
     {
+        if ($ident === 'TtsProviderPick') {
+            $this->TtsShowProviderFields((string)$value);
+            return true;
+        }
         if ($ident !== 'TtsElevenVoices') {
             return false;
         }

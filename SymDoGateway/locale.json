@@ -340,7 +340,9 @@
             "library": "Bibliothek",
             "Briefing text": "Briefing-Text",
             "Briefing audio": "Briefing-Audio",
-            "Text too long.": "Text zu lang."
+            "Text too long.": "Text zu lang.",
+            "Voice provider": "Anbieter der Sprachausgabe",
+            "OpenAI needs nothing further here: it speaks with the key already entered under \"AI features\". The voice is chosen per persona in the persona editor.": "OpenAI braucht hier nichts weiter: Es spricht mit dem Schlüssel, der unter „KI-Funktionen\" schon eingetragen ist. Die Stimme wird je Persona im Personen-Editor gewählt."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
