@@ -440,6 +440,67 @@ trait Tts
      * „zwei ka geh Äpfel" ankommt. Bewusst schlicht — nur die Fälle, die in
      * Einkaufslisten wirklich vorkommen.
      */
+    /**
+     * Uhrzeiten ausschreiben — NUR auf dem Weg zur Stimme.
+     *
+     * ElevenLabs liest „14:15" uneinheitlich: mal als Uhrzeit, mal als zwei
+     * getrennte Zahlen, gelegentlich englisch. Ausgeschrieben ist die Aussprache
+     * festgelegt. Der angezeigte Text behaelt die Ziffern, denn gelesen ist
+     * „14:15" die bessere Form — die beiden Fassungen durften auseinandergehen.
+     *
+     * Drei Formen, in dieser Reihenfolge: „14:15" (ein angehaengtes „Uhr" wird
+     * mitgenommen, sonst stuende danach „vierzehn Uhr fuenfzehn Uhr"), dann das
+     * halb ausgeschriebene „14 Uhr 15", zuletzt das blosse „18 Uhr". Zahlen ohne
+     * „Uhr" bleiben unberuehrt: „14 Artikel" ist keine Uhrzeit, und „um 8" ist
+     * von einer Anzahl nicht zu unterscheiden.
+     */
+    private function TtsTimesAsWords(string $text): string
+    {
+        $uhr = fn (array $t): string => $this->TtsClockWords((int)$t[1], (int)($t[2] ?? 0));
+        $regeln = [
+            '/\b([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:Uhr|h)\b)?/u',
+            '/\b([01]?\d|2[0-3])\s*Uhr\s*([0-5]?\d)\b(?!\s*\d)/u',
+            '/\b([01]?\d|2[0-3])\s*Uhr\b/u',
+        ];
+        foreach ($regeln as $regel) {
+            $text = (string)preg_replace_callback($regel, $uhr, $text);
+        }
+        return $text;
+    }
+
+    /** „vierzehn Uhr fuenfzehn". Volle Stunde ohne Minutenangabe. */
+    private function TtsClockWords(int $stunde, int $minute): string
+    {
+        // „ein Uhr", nicht „eins Uhr": vor „Uhr" steht die Stunde attributiv.
+        // Bei einundzwanzig Uhr gilt das nicht — dort ist die Eins schon gebeugt.
+        $wort = $stunde === 1 ? 'ein' : $this->TtsNumberWord($stunde);
+        return $minute === 0 ? $wort . ' Uhr' : $wort . ' Uhr ' . $this->TtsNumberWord($minute);
+    }
+
+    /** Zahlwort fuer 0 bis 59 — mehr braucht eine Uhrzeit nicht. */
+    private function TtsNumberWord(int $zahl): string
+    {
+        $klein = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun',
+                  'zehn', 'elf', 'zwölf', 'dreizehn', 'vierzehn', 'fünfzehn', 'sechzehn', 'siebzehn',
+                  'achtzehn', 'neunzehn'];
+        if ($zahl < 0 || $zahl > 59) {
+            return (string)$zahl;
+        }
+        if ($zahl < 20) {
+            return $klein[$zahl];
+        }
+        $zehner = [2 => 'zwanzig', 3 => 'dreißig', 4 => 'vierzig', 5 => 'fünfzig'];
+        $z = intdiv($zahl, 10);
+        $e = $zahl % 10;
+        if ($e === 0) {
+            return $zehner[$z];
+        }
+        // „einundzwanzig", nicht „einsundzwanzig". Sechs und sieben bleiben voll:
+        // „sechsundzwanzig", „siebenundzwanzig" — anders als 16 und 17.
+        $vorne = $e === 1 ? 'ein' : $klein[$e];
+        return $vorne . 'und' . $zehner[$z];
+    }
+
     private function TtsNormalize(string $text): string
     {
         $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
