@@ -182,6 +182,26 @@ Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den 
 - API-Schlüssel werden nur für die Anfragen an den gewählten Anbieter verwendet
 - Mail-Anhänge werden für die Analyse gelesen, aber nur dauerhaft gespeichert, wenn das ausdrücklich eingeschaltet ist
 
+### Was der gewählte Anbieter kann
+
+| KI-Funktion | Anthropic | OpenAI | Lokaler Server |
+|---|:---:|:---:|:---:|
+| Text analysieren (eingefügte Nachricht) | ✓ | ✓ | ✓ |
+| Tägliches Briefing | ✓ | ✓ | ✓ |
+| Rezept-URL auswerten | ✓ | ✓ | ✓ |
+| E-Mail-Analyse (Mailtext) | ✓ | ✓ | ✓ |
+| Foto analysieren (Aufgaben, Rezept, Notiz, Mail-Anhang) | ✓ | ✓ | ✓ ¹ |
+| PDF analysieren — digital erzeugt (mit Textebene) | ✓ | ✓ | ✓ ² |
+| PDF analysieren — gescannt (nur Bilder) | ✓ | ✓ | ✓ ¹ ³ |
+
+¹ Nur mit einem Modell, das **Bilder versteht** (Vision). Ein reines Textmodell liefert leere oder erfundene Ergebnisse — deshalb im lokalen Betrieb ein Vision-Modell wählen (z. B. in LM Studio).
+² Der Text wird aus dem PDF gezogen und als Text übergeben — das trägt jedes digital erzeugte PDF, unabhängig vom Modell.
+³ Ein gescanntes PDF ohne Textebene geht als Seitenbilder an das Modell; dafür muss zusätzlich das Werkzeug `pdftoppm` (Poppler) auf dem Symcon-Rechner installiert sein, sonst wird die Datei abgelehnt.
+
+Verwendete Modelle: Anthropic `claude-sonnet-4-5`, OpenAI `gpt-4o` (PDFs über `gpt-5.6-terra`), lokal das im Formular eingetragene Modell.
+
+> Die **Sprachausgabe** des Briefings und der Einkaufs-Ansage hängt nicht am KI-Anbieter — sie hat ihre eigene Wahl (OpenAI, Azure Speech oder ElevenLabs, Kapitel 8).
+
 ## 12. Benachrichtigungen
 
 Web-Push erreicht jedes gekoppelte Gerät, auf dem die Web-App als Home-Screen-App installiert ist und Benachrichtigungen erlaubt sind. Angezeigt werden Titel, Text und App-Symbol; Bilder und Antwort-Knöpfe zeigt iOS in Web-Push-Nachrichten nicht an. Ein Tipp auf die Nachricht öffnet die App im passenden Bereich.
