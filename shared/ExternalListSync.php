@@ -279,7 +279,8 @@ trait ExternalListSync
         }
         foreach (array_keys($gesperrt) as $id) {
             if (isset($fremdNachId[$id])) {
-                if ($quelle->Remove((string)$id, (string)$fremdNachId[$id]['name'])) {
+                if ($quelle->Remove((string)$id, (string)$fremdNachId[$id]['name'],
+                        (string)($fremdNachId[$id]['spec'] ?? ''))) {
                     unset($friedhof[$key][$id]);
                     $bilanz['removed']++;
                 }
@@ -408,7 +409,8 @@ trait ExternalListSync
                 // mehrere fremde Eintraege stehen.
                 foreach ($vergeben as $id) {
                     if (isset($fremdNachId[$id]) && !$fremdNachId[$id]['done']) {
-                        $quelle->Complete($id, (string)($eintrag['name'] ?? ''));
+                        $quelle->Complete($id, (string)($eintrag['name'] ?? ''),
+                            (string)($eintrag['amount'] ?? ''));
                         $bilanz['completed']++;
                     }
                 }

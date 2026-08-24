@@ -70,6 +70,37 @@ abstract class ListSource
         return $this->instanceID;
     }
 
+    /**
+     * Eine Funktion des Fremdmoduls rufen — und ueberleben, wenn es sie nicht gibt.
+     *
+     * `function_exists` ist hier keine Vorsicht auf Vorrat: BRING_RemoveItem gibt
+     * es nicht, die Deklaration ist im Modul AUSKOMMENTIERT. Der Aufruf war
+     * damit ein Fatal, das den ganzen Abgleich mitnahm — mitten im Lauf, nachdem
+     * andere Eintraege schon geschrieben waren (live am 24.08.2026).
+     *
+     * Fremdmodule aendern ihre Schnittstelle ohne uns zu fragen. Ein fehlender
+     * oder umbenannter Aufruf darf hoechstens DIESE eine Aktion scheitern lassen.
+     *
+     * @return mixed null = ging nicht (fehlt oder hat geworfen)
+     */
+    protected static function Fremd(string $funktion, mixed ...$args): mixed
+    {
+        if (!function_exists($funktion)) {
+            return null;
+        }
+        try {
+            return $funktion(...$args);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Hat der Aufruf geklappt? `null` heisst „gibt es nicht", `false` „hat abgelehnt". */
+    protected static function Geklappt(mixed $ergebnis): bool
+    {
+        return $ergebnis !== null && $ergebnis !== false;
+    }
+
     /** Kurzname fuer die Ablage am Eintrag (`voiceSource`) und fuer Protokollzeilen. */
     abstract public function Key(): string;
 
@@ -86,11 +117,17 @@ abstract class ListSource
     /** Legt an. `$spec` ist die Mengenangabe; wer sie nicht trennen kann, haengt sie an. */
     abstract public function Add(string $name, string $spec): bool;
 
-    /** Nimmt den Eintrag von der Liste (abhaken, wo moeglich, sonst entfernen). */
-    abstract public function Complete(string $id, string $name): bool;
+    /**
+     * Nimmt den Eintrag von der Liste (abhaken, wo moeglich, sonst entfernen).
+     *
+     * `$spec` ist die Mengenangabe. Bring braucht sie: dort ist „von der Liste"
+     * ein Umbuchen nach „kuerzlich gekauft", und ohne Menge verliert der Eintrag
+     * dort seine Angabe.
+     */
+    abstract public function Complete(string $id, string $name, string $spec = ''): bool;
 
-    /** Entfernt den Eintrag ganz. */
-    abstract public function Remove(string $id, string $name): bool;
+    /** Entfernt den Eintrag ganz — soweit die Gegenstelle das kann. */
+    abstract public function Remove(string $id, string $name, string $spec = ''): bool;
 
     /** Stoesst eine Aktualisierung der Gegenstelle an (kostet dort einen Cloud-Aufruf). */
     abstract public function Refresh(): void;
@@ -129,11 +166,7 @@ class ListSourceAlexa extends ListSource
         // try/catch, nicht nur @: das Fremdmodul bildet eine inoffizielle
         // Amazon-Schnittstelle ab. Eine Ausnahme von dort darf den Abgleich
         // beenden, aber nicht den ganzen ApplyChanges der Liste zerlegen.
-        try {
-            $roh = ALEXALIST_GetItems($this->instanceID, true);
-        } catch (\Throwable $e) {
-            return false;
-        }
+        $roh = self::Fremd('ALEXALIST_GetItems', $this->instanceID, true);
         if (!is_array($roh)) {
             return false;
         }
@@ -163,22 +196,22 @@ class ListSourceAlexa extends ListSource
         // Alexa hat kein Mengenfeld — die Menge geht voran, so wie Alexa selbst
         // es schreibt („3 Milch"). Damit liest die Ansage sich richtig vor.
         $text = trim($spec) !== '' ? trim($spec) . ' ' . trim($name) : trim($name);
-        return $text !== '' && @ALEXALIST_AddItem($this->instanceID, $text) !== false;
+        return $text !== '' && self::Geklappt(self::Fremd('ALEXALIST_AddItem', $this->instanceID, $text));
     }
 
-    public function Complete(string $id, string $name): bool
+    public function Complete(string $id, string $name, string $spec = ''): bool
     {
-        return $id !== '' && @ALEXALIST_CheckItemByID($this->instanceID, $id) !== false;
+        return $id !== '' && self::Geklappt(self::Fremd('ALEXALIST_CheckItemByID', $this->instanceID, $id));
     }
 
-    public function Remove(string $id, string $name): bool
+    public function Remove(string $id, string $name, string $spec = ''): bool
     {
-        return $id !== '' && @ALEXALIST_DeleteItemByID($this->instanceID, $id) !== false;
+        return $id !== '' && self::Geklappt(self::Fremd('ALEXALIST_DeleteItemByID', $this->instanceID, $id));
     }
 
     public function Refresh(): void
     {
-        @ALEXALIST_Update($this->instanceID);
+        self::Fremd('ALEXALIST_Update', $this->instanceID);
     }
 
     public function TriggerVariableID(): int
@@ -213,11 +246,7 @@ class ListSourceBring extends ListSource
 
     public function Read(): array|false
     {
-        try {
-            $roh = BRING_GetList($this->instanceID);
-        } catch (\Throwable $e) {
-            return false;
-        }
+        $roh = self::Fremd('BRING_GetList', $this->instanceID);
         if (!is_array($roh)) {
             return false;
         }
@@ -257,23 +286,37 @@ class ListSourceBring extends ListSource
     public function Add(string $name, string $spec): bool
     {
         $name = trim($name);
-        return $name !== '' && @BRING_AddItem($this->instanceID, $name, trim($spec)) !== false;
+        return $name !== '' && self::Geklappt(self::Fremd('BRING_AddItem', $this->instanceID, $name, trim($spec)));
     }
 
-    public function Complete(string $id, string $name): bool
+    public function Complete(string $id, string $name, string $spec = ''): bool
     {
-        return $this->Remove($id, $name);
+        return $this->Remove($id, $name, $spec);
     }
 
-    public function Remove(string $id, string $name): bool
+    /**
+     * Von der Liste nehmen heisst bei Bring: nach „kuerzlich gekauft" umbuchen.
+     *
+     * NICHT BRING_RemoveItem — die Deklaration ist im Modul auskommentiert, die
+     * Funktion existiert also nicht (der Aufruf war ein Fatal). AddToRecentlyItem
+     * ist der Weg, den das Modul SELBST nimmt, wenn man eine Zeile aus seiner
+     * Textbox entfernt (Bring List/module.php:272) — und semantisch derselbe:
+     * ein gekaufter Artikel verschwindet dort aus „zu kaufen".
+     *
+     * Ein echtes Loeschen kennt Bring ueber dieses Modul nicht. „Dort geloescht"
+     * ist damit nicht von „dort gekauft" zu unterscheiden — beides kommt bei uns
+     * als abwesend an.
+     */
+    public function Remove(string $id, string $name, string $spec = ''): bool
     {
         $wert = trim($name) !== '' ? trim($name) : trim($id);
-        return $wert !== '' && @BRING_RemoveItem($this->instanceID, $wert) !== false;
+        return $wert !== '' && self::Geklappt(
+            self::Fremd('BRING_AddToRecentlyItem', $this->instanceID, $wert, trim($spec)));
     }
 
     public function Refresh(): void
     {
-        @BRING_UpdateList($this->instanceID);
+        self::Fremd('BRING_UpdateList', $this->instanceID);
     }
 
     public function TriggerVariableID(): int

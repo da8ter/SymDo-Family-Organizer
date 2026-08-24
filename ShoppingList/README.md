@@ -153,7 +153,10 @@ Hinweis, was dafür zu installieren ist.
 - Alexa dedupliziert nicht: „Milch" und „3 Milch" stehen dort gleichzeitig. Bei uns
   ist das **ein** Artikel — die Zeile trägt dann beide Alexa-Kennungen, und Abhaken
   oder Löschen wirkt auf beide Einträge.
-- Bring kann nicht abhaken — dort wird ein gekaufter Artikel entfernt.
+- Bring kennt kein Abhaken und kein Löschen: ein hier abgehakter oder gelöschter
+  Artikel wird dort nach „kürzlich gekauft" umgebucht. Das ist Brings eigener Weg
+  (sein Modul macht es genauso) und bedeutet dasselbe. Umgekehrt heißt das: „dort
+  gekauft" und „dort gelöscht" sind bei Bring nicht zu unterscheiden.
 - **Abhaken und Löschen wirken verschieden:** dort abgehakt → hier erledigt
   (bei Einkäufen: in den Wagen), dort **gelöscht** → hier ebenfalls gelöscht.
   Gelöscht wird nur bei nachweislich vollständiger Antwort, siehe die
