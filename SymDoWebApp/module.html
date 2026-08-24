@@ -2271,7 +2271,21 @@ html[data-symdo-theme="dark"] .member-bar {
 /* Breiter als die uebliche 900px-Grenze: ab 1100px stehen Auswahl und Inhalt
    nebeneinander (#favoritesContent), und 360 px Auswahl plus Artikelspalte
    brauchen den Platz. */
-#favOverlay .overlay-card { max-width: min(var(--content-max), 1200px); max-height: 92%; }
+/* FESTE Hoehe, nicht nur eine Obergrenze: das Blatt ist ein Blaetterwerk mit
+   Auswahl und Detail, und die Karte sprang beim Wechsel der Liste in der Hoehe,
+   je nachdem wie viele Artikel darin standen. Mit `height` steht sie still, der
+   Inhalt scrollt darin (die .overlay-body hat ohnehin overflow-y: auto).
+   Auf grossen Schirmen bei 820 px gedeckelt — 92 % eines hohen Fensters waere
+   ein Blatt, das man nur noch scrollt. */
+#favOverlay .overlay-card {
+  max-width: min(var(--content-max), 1200px);
+  height: min(92%, 820px);
+  max-height: 92%;
+}
+/* Der Inhalt nimmt die feste Hoehe ein und scrollt darin. min-height: 0 ist
+   Pflicht: ohne sie behaelt ein Flex-Kind seine Inhaltshoehe als Mindestmass
+   und wuerde die Karte doch wieder aufblaehen. */
+#favOverlay .overlay-body { flex: 1; min-height: 0; }
 
 /* Favoriten schmal: genau eine der beiden Spalten ist sichtbar — dasselbe
    Verhalten wie vor der Aufteilung in #favMaster/#favDetail. */
