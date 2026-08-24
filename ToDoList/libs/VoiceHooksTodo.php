@@ -162,7 +162,7 @@ trait VoiceHooksTodo
     {
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Voice assistant (Alexa, Bring)'),
+            'caption'  => $this->Translate('External list integration'),
             'expanded' => false,
             'items'    => [
                 [

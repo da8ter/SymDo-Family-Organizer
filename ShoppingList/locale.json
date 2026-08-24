@@ -398,7 +398,6 @@
             "Location": "Ort",
             "Reminder": "Erinnerung",
             "Remind": "Erinnern",
-            "Voice assistant (Alexa, Bring)": "Sprachassistent (Alexa, Bring)",
             "Sync with a voice list": "Mit einer Sprachliste abgleichen",
             "Voice list": "Sprachliste",
             "Also send items from this list to the voice list": "Artikel dieser Liste auch an die Sprachliste senden",
@@ -412,7 +411,8 @@
             "Switch the sync on and select a voice list first.": "Schalte den Abgleich ein und wähle zuerst eine Sprachliste.",
             "The voice list could not be read. Nothing was changed.": "Die Sprachliste war nicht lesbar. Es wurde nichts geändert.",
             "Sync did not run (%s).": "Abgleich lief nicht (%s).",
-            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt"
+            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt",
+            "External list integration": "Anbindung an externe Listen"
         }
     }
 }

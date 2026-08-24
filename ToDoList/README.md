@@ -656,7 +656,7 @@ Anleitungen zur Konfiguration:
 - [Google Tasks Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Google_Sync.md)
 - [Microsoft To Do Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Microsoft_Sync.md)
 
-### Sprachassistent (Alexa, Bring)
+### Anbindung an externe Listen (Alexa, Bring)
 
 Per Sprache auf die Liste setzen — „Alexa, setze Milch auf die Einkaufsliste" —
 und die Liste bleibt in beide Richtungen gleich: was gesprochen wird, erscheint

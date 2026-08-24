@@ -3759,11 +3759,6 @@ class ShoppingList extends IPSModuleStrict
                             'validVariableTypes' => [3],
                             'width'              => '500px',
                         ],
-                        // Sprachliste: eine zweite Quelle von aussen, nach
-                        // demselben Muster wie der externe Scanner — fremde
-                        // Instanz, Nachricht auf deren Variable, Anlegen ueber
-                        // den normalen Weg.
-                        $this->GetVoiceFormElements(),
                         [
                             'type'     => 'ExpansionPanel',
                             'caption'  => $this->Translate('External product API'),
@@ -3904,6 +3899,11 @@ class ShoppingList extends IPSModuleStrict
                 ],
             ],
         ];
+
+        // Externe Listen als eigener Bereich auf der HAUPTEBENE — nicht im
+        // Barcode-Bereich, wo er zuerst gelandet war: es ist eine eigene Quelle
+        // und kein Zubehoer des Scanners.
+        $form['elements'][] = $this->GetVoiceFormElements();
 
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }

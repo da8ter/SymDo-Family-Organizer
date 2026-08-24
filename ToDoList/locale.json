@@ -525,7 +525,6 @@
             "Analyze": "Analysieren",
             "Analyzing text…": "Text wird analysiert …",
             "Paste text here — e.g. a message from WhatsApp.": "Text hier einfügen — z. B. eine Nachricht aus WhatsApp.",
-            "Voice assistant (Alexa, Bring)": "Sprachassistent (Alexa, Bring)",
             "Works alongside CalDAV, Google and Microsoft — the voice list is not one of the exclusive sync backends.": "Läuft neben CalDAV, Google und Microsoft — die Sprachliste ist keines der exklusiven Sync-Backends.",
             "Sync with a voice list": "Mit einer Sprachliste abgleichen",
             "Voice list": "Sprachliste",
@@ -540,7 +539,8 @@
             "Switch the sync on and select a voice list first.": "Schalte den Abgleich ein und wähle zuerst eine Sprachliste.",
             "The voice list could not be read. Nothing was changed.": "Die Sprachliste war nicht lesbar. Es wurde nichts geändert.",
             "Sync did not run (%s).": "Abgleich lief nicht (%s).",
-            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt"
+            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt",
+            "External list integration": "Anbindung an externe Listen"
         },
         "en": {
             "ToDo List": "ToDo List",

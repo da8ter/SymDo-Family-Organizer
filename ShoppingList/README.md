@@ -110,7 +110,7 @@ Alternativ bzw. zusätzlich kann eine String-Variable als externe Scanner-Quelle
 
 **Lookup-Reihenfolge:** Externer Produkt-API → Open Food Facts → OpenGTINDB.
 
-### Sprachassistent (Alexa, Bring)
+### Anbindung an externe Listen (Alexa, Bring)
 
 Per Sprache auf die Liste setzen — „Alexa, setze Milch auf die Einkaufsliste" —
 und die Liste bleibt in beide Richtungen gleich: was gesprochen wird, erscheint
