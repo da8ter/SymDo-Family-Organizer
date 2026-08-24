@@ -76,6 +76,37 @@ trait ExternalListSync
         @$this->WriteAttributeString('ExtListTriggerVars', (string)json_encode(array_values($neu)));
     }
 
+    /**
+     * Welche fremden Kennungen lagen beim LETZTEN Lauf lokal vor?
+     *
+     * Daran erkennt der naechste Lauf, dass hier etwas geloescht wurde: eine
+     * Kennung, die gemerkt war und deren Zeile es nicht mehr gibt, ist von Hand
+     * entfernt worden. Ohne diesen Merkposten kam der Eintrag beim naechsten
+     * Abgleich als „unbekannt und offen" zurueck und wurde neu angelegt — live
+     * gemeldet am 24.08.2026: zwei in der Kachel geloeschte Artikel standen nach
+     * dem naechsten Abgleich wieder da.
+     *
+     * Bewusst ein Vergleich und keine Meldung an jeder Loeschstelle: die
+     * Einkaufsliste loescht an vier Stellen (einzeln, per Name, Wagen leeren,
+     * Kaufhistorie), die ToDo-Liste beim Abhaken mit DeleteCompletedTasks. Jede
+     * einzeln zu verdrahten hiesse, dass die naechste neue Stelle es wieder
+     * vergisst.
+     *
+     * @return array<string, array<string, int>> [Dienst => [Kennung => 1]]
+     */
+    private function ExtListKnownRead(): array
+    {
+        $d = json_decode((string)@$this->ReadAttributeString('ExtListKnownIds'), true);
+        return is_array($d) ? $d : [];
+    }
+
+    /** @return array<string, array<string, int>> Kennungen, die hier geloescht wurden */
+    private function ExtListRemovedRead(): array
+    {
+        $d = json_decode((string)@$this->ReadAttributeString('ExtListRemovedIds'), true);
+        return is_array($d) ? $d : [];
+    }
+
     /** @return list<int> die Variablen, auf die wir angemeldet sind */
     private function ExtListTriggerVars(): array
     {
@@ -107,7 +138,7 @@ trait ExternalListSync
      */
     private function ExtListSync(): array
     {
-        $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
+        $leer = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
         $quellen = $this->ExtListSources();
         if ($quellen === []) {
             return array_merge($leer, ['reason' => $this->ExtListEnabled() ? 'no_source' : 'disabled']);
@@ -120,13 +151,13 @@ trait ExternalListSync
             // Jede Quelle einzeln, NACHEINANDER: jeder Schritt liest und schreibt
             // die eigene Liste, verschraenkt arbeitete die zweite Quelle auf
             // einem Stand, den die erste gerade veraendert.
-            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
+            $summe   = ['ok' => false, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
             $gruende = [];
             $runde   = function () use ($quellen, &$summe, &$gruende): int {
                 $neuImportiert = 0;
                 foreach ($quellen as $quelle) {
                     $b = $this->ExtListSyncStep($quelle);
-                    foreach (['imported', 'pushed', 'completed', 'resolved'] as $feld) {
+                    foreach (['imported', 'pushed', 'completed', 'resolved', 'removed'] as $feld) {
                         $summe[$feld] += (int)$b[$feld];
                     }
                     $neuImportiert += (int)$b['imported'];
@@ -167,7 +198,7 @@ trait ExternalListSync
     /** @return array{ok: bool, imported: int, pushed: int, completed: int, resolved: int, reason: string} */
     private function ExtListSyncStep(ListSource $quelle): array
     {
-        $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'reason' => ''];
+        $bilanz = ['ok' => true, 'imported' => 0, 'pushed' => 0, 'completed' => 0, 'resolved' => 0, 'removed' => 0, 'reason' => ''];
 
         // Der eigene Lesezugriff schreibt bei Alexa die Variable „Liste" neu und
         // erzeugt damit dieselbe Nachricht, die uns gerade gerufen hat. Das
@@ -201,6 +232,45 @@ trait ExternalListSync
                 $bekannt[$id] = $schluessel;
             }
         }
+
+        // ── 0. Hier geloeschte Eintraege an die Gegenstelle melden ──
+        //
+        // Muss VOR dem Import laufen: sonst kommt der geloeschte Eintrag als
+        // „unbekannt und offen" zurueck und wird neu angelegt — genau der
+        // gemeldete Fehler.
+        $gemerkt  = $this->ExtListKnownRead();
+        $friedhof = $this->ExtListRemovedRead();
+        $vorher   = array_keys($gemerkt[$key] ?? []);
+        foreach (array_diff($vorher, array_keys($bekannt)) as $weg) {
+            $friedhof[$key][(string)$weg] = 1;
+        }
+        // Die Merkposten DIESES Laufs festhalten: was hier drinsteht, wird unten
+        // nicht importiert — auch dann nicht, wenn das Entfernen scheitert.
+        // Sonst holte ein misslungener Loeschversuch den Eintrag zurueck.
+        $gesperrt    = $friedhof[$key] ?? [];
+        $fremdNachId = [];
+        foreach ($fremd as $f) {
+            $fremdNachId[(string)$f['id']] = $f;
+        }
+        foreach (array_keys($gesperrt) as $id) {
+            if (isset($fremdNachId[$id])) {
+                if ($quelle->Remove((string)$id, (string)$fremdNachId[$id]['name'])) {
+                    unset($friedhof[$key][$id]);
+                    $bilanz['removed']++;
+                }
+                continue;
+            }
+            // Dort schon weg. Den Merkposten nur bei VOLLSTAENDIGER Antwort
+            // fallen lassen — bei einer abgeschnittenen Liste (ueber 100
+            // Eintraege) waere „nicht enthalten" kein Beweis fuer „nicht da".
+            if ($vollstaendig) {
+                unset($friedhof[$key][$id]);
+            }
+        }
+        if (($friedhof[$key] ?? []) === []) {
+            unset($friedhof[$key]);
+        }
+        @$this->WriteAttributeString('ExtListRemovedIds', (string)json_encode($friedhof));
 
         // ── 1. Platzhalter aufloesen — VOR dem Import ──
         //
@@ -255,6 +325,11 @@ trait ExternalListSync
                 // Erledigt und unbekannt: das ist Vergangenheit der Gegenstelle,
                 // die hier nie stand. Nicht importieren, sonst erscheinen alte
                 // Einkaeufe als frische Eintraege.
+                continue;
+            }
+            if (isset($gesperrt[$id])) {
+                // Hier geloescht. Nicht wieder hereinholen, auch wenn das
+                // Entfernen an der Gegenstelle gerade nicht geklappt hat.
                 continue;
             }
             [$name, $menge] = $this->ExtListSplitAmount((string)$f['name'], (string)($f['spec'] ?? ''));
@@ -337,9 +412,22 @@ trait ExternalListSync
             }
         }
 
+        // Merkposten fuer den naechsten Lauf: welche fremden Kennungen liegen
+        // JETZT lokal vor. Frisch geladen, weil Import, Auflösung und Senden den
+        // Bestand veraendert haben.
+        $stand = [];
+        foreach ($this->ExtListLoad() as $eintrag) {
+            $id = (string)(($eintrag['extIds'] ?? [])[$key] ?? '');
+            if ($id !== '' && strpos($id, self::EXT_PENDING) !== 0) {
+                $stand[$id] = 1;
+            }
+        }
+        $gemerkt[$key] = $stand;
+        @$this->WriteAttributeString('ExtListKnownIds', (string)json_encode($gemerkt));
+
         @$this->WriteAttributeInteger('ExtListLastSync', time());
-        $this->SendDebug('ExtListSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt',
-            $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'], $bilanz['completed']), 0);
+        $this->SendDebug('ExtListSync', sprintf('%s: %d neu, %d gesendet, %d aufgeloest, %d abgehakt, %d entfernt',
+            $key, $bilanz['imported'], $bilanz['pushed'], $bilanz['resolved'], $bilanz['completed'], $bilanz['removed']), 0);
         return $bilanz;
     }
 

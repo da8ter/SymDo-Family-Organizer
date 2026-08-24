@@ -23,6 +23,10 @@ trait ExtListHooksShopping
         $this->RegisterPropertyBoolean('ExtListParseAmount', true);
         $this->RegisterAttributeInteger('ExtListLastSync', 0);
         $this->RegisterAttributeString('ExtListTriggerVars', '[]');
+        // Welche fremden Kennungen lagen beim letzten Lauf vor — daran erkennt
+        // der naechste, dass hier etwas geloescht wurde.
+        $this->RegisterAttributeString('ExtListKnownIds', '{}');
+        $this->RegisterAttributeString('ExtListRemovedIds', '{}');
     }
 
     /**
@@ -301,8 +305,8 @@ trait ExtListHooksShopping
             return $this->Translate('Switch the sync on and select at least one external list first.');
         }
         $b = $this->ExtListSync();
-        $text = sprintf($this->Translate('%d added, %d sent, %d matched, %d checked off'),
-            (int)$b['imported'], (int)$b['pushed'], (int)$b['resolved'], (int)$b['completed']);
+        $text = sprintf($this->Translate('%d added, %d sent, %d matched, %d checked off, %d removed'),
+            (int)$b['imported'], (int)$b['pushed'], (int)$b['resolved'], (int)$b['completed'], (int)$b['removed']);
         if ((string)$b['reason'] !== '') {
             // Auch bei Teilerfolg ehrlich sagen, was nicht ging.
             $text .= ' — ' . sprintf($this->Translate('problems: %s'), (string)$b['reason']);

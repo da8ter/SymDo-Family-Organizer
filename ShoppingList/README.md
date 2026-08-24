@@ -157,6 +157,9 @@ Hinweis, was dafür zu installieren ist.
 - Ein fehlender Eintrag gilt nur dann als „von der Liste genommen", wenn die
   Antwort vollständig war. Alexa liefert höchstens 100 Einträge ohne Hinweis auf
   weitere — bei einer längeren Liste wird deshalb nichts abgehakt.
+- Hier gelöschte Einträge werden an der externen Liste entfernt. Erkannt wird das
+  am Vergleich mit dem letzten Lauf — läuft der Abgleich nie, bleibt die Löschung
+  dort stehen.
 - Ist die Liste gerade nicht lesbar (Netz, Anmeldung), wird **nichts** geändert.
 - Neue Einstellungen brauchen einen **Kernel-Neustart**, bevor sie sich
   speichern lassen.

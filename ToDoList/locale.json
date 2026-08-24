@@ -531,7 +531,6 @@
             "No voice list selected": "Keine Sprachliste gewählt",
             "Connected (%s) · last sync: %s": "Verbunden (%s) · letzter Abgleich: %s",
             "never": "nie",
-            "%d added, %d sent, %d matched, %d checked off": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt",
             "No external list selected": "Keine externe Liste gewählt",
             "Switch the sync on and select at least one external list first.": "Schalte den Abgleich ein und wähle zuerst mindestens eine externe Liste.",
             "problems: %s": "Probleme: %s",
@@ -539,7 +538,8 @@
             "Amazon Alexa task list": "Amazon Alexa Aufgabenliste",
             "AlexaList instance": "AlexaList-Instanz",
             "What has to be installed:\n1. Library \"Echo Remote\" via Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instance \"Echo IO\" — logs in to the Amazon account (once for everything).\n3. Instance \"AlexaList\" — one PER Amazon list. For tasks set \"List\" to \"Task list (default)\"; the shopping list needs its OWN instance.\n4. In that instance set the update interval to 2 MINUTES (default is 60) — its schedule decides how fast a spoken task arrives here.\n5. Do not go below that: the Echo module throttles its own activity polling to 60 requests per hour, and requests count PER AMAZON ACCOUNT, not per instance. At 1 minute a single instance already uses that whole budget, and our syncs come on top. Running two AlexaList instances (shopping + tasks): 3 minutes each.": "Was installiert und angelegt werden muss:\n1. Bibliothek „Echo Remote“ über das Module Control: https://github.com/roastedelectrons/IPSymconEchoRemote\n2. Instanz „Echo IO“ — meldet sich am Amazon-Konto an (einmal für alles).\n3. Instanz „AlexaList“ — eine JE Amazon-Liste. Für Aufgaben hier „Liste“ auf „Aufgabenliste (Standard)“ stellen; die Einkaufsliste braucht eine EIGENE Instanz.\n4. In dieser Instanz das Aktualisierungsintervall auf 2 MINUTEN stellen (Vorgabe ist 60) — ihr Takt entscheidet, wie schnell eine gesprochene Aufgabe hier ankommt.\n5. Nicht kürzer: das Echo-Modul drosselt seinen eigenen Aktivitätsabruf auf 60 Anfragen pro Stunde, und die Anfragen zählen JE AMAZON-KONTO, nicht je Instanz. Bei 1 Minute ist dieses Budget schon von einer Instanz aufgebraucht, und unsere Abgleiche kommen obendrauf. Wer zwei AlexaList-Instanzen betreibt (Einkaufen + Aufgaben): je 3 Minuten.",
-            "Synchronisation active": "Synchronisation aktiv"
+            "Synchronisation active": "Synchronisation aktiv",
+            "%d added, %d sent, %d matched, %d checked off, %d removed": "%d neu, %d gesendet, %d zugeordnet, %d abgehakt, %d entfernt"
         },
         "en": {
             "ToDo List": "ToDo List",
