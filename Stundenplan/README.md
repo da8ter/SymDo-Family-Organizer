@@ -15,6 +15,8 @@ Zwei Darstellungen aus denselben Daten:
   eine **Legende** der heute sichtbaren Fächer auf: Farbe, Symbol und Name, und
   wenn ein Fach nur bei einem Kind vorkommt, auch dessen Name. Im Balken steht
   nur ein Symbol — auf einem Tablet gibt es keinen Mauszeiger, der es verrät.
+  Dieselbe Legende steckt in der Karte der SymDo-App: ein Tippen darauf klappt
+  sie auf.
 
 ## Einrichtung
 

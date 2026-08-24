@@ -380,7 +380,10 @@
             "Timetable": "Stundenplan",
             "no school today": "heute keine Schule",
             "1 school hour": "1 Stunde",
-            "%1 school hours": "%1 Stunden"
+            "%1 school hours": "%1 Stunden",
+            "Show subjects": "Fächer anzeigen",
+            "Subjects today": "Fächer heute",
+            "Close": "Schließen"
         }
     }
 }

@@ -615,6 +615,33 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   background: currentColor; opacity: .25; }
 .plan-ticks span.stark { width: 2px; opacity: .45; }
 .plan-frei { font-size: 12px; color: var(--muted-color, #888); padding: 2px 0 4px; }
+
+/* Legende: im Balken steht nur ein Symbol, und auf einem Tablet gibt es keinen
+   Mauszeiger, der den Titel verraet. */
+.plan-card { cursor: pointer; }
+.plan-hinweis { margin-top: 8px; font-size: 12px; color: var(--muted-color, #888); text-align: center; }
+.plan-legende { margin-top: 10px; border-top: 1px solid var(--row-line, rgba(128,128,128,.18)); padding-top: 9px; }
+.plan-legendenkopf {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 12px; font-weight: 700; color: var(--muted-color, #888);
+}
+.plan-legendenkopf .zu {
+  margin-left: auto; border: 0; background: transparent; color: inherit;
+  font: inherit; cursor: pointer; padding: 2px 6px;
+}
+.plan-faecher { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-fach {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 6px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 12px; font-weight: 600;
+}
+.plan-fach .tupfen {
+  width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 10px;
+}
+.plan-fach .wessen { color: var(--muted-color, #888); font-weight: 500; }
 /* Kopfzeile der Uebersicht: nur die Glocke, links in der Ecke.
    min-height MUSS hier stehen und ist keine Kosmetik — es ist die Zeile, auf der
    die Avatare sitzen: die Mitglieder-Leiste wird per margin-bottom: -44px darauf
@@ -5167,6 +5194,7 @@ function gatewayNachladen() {
    Karte waere schlechter als gar keine. */
 let stundenplan = null;
 let stundenplanLaeuft = false;
+let stundenplanLegende = false;
 function loadTimetable() {
   // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
   // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay
@@ -5181,6 +5209,45 @@ function loadTimetable() {
     stundenplan = frisch;
     renderAll();
   }).catch(() => { stundenplanLaeuft = false; });
+}
+
+/* Die heute im Balken sichtbaren Faecher, ohne Wiederholung. Zusammengefasst
+   wird nach NAME: dasselbe Fach bei zwei Kindern ist EIN Eintrag. */
+function stundenplanFaecher() {
+  const karte = new Map();
+  ((stundenplan && stundenplan.children) || []).forEach(kind => {
+    (Array.isArray(kind.slots) ? kind.slots : []).forEach(s => {
+      const da = karte.get(s.name);
+      if (da) {
+        if (da.wer.indexOf(kind.name) < 0) { da.wer.push(kind.name); }
+        return;
+      }
+      karte.set(s.name, { name: s.name, icon: s.icon, color: s.color, wer: [kind.name] });
+    });
+  });
+  return Array.from(karte.values());
+}
+
+function stundenplanLegendeHtml() {
+  const faecher = stundenplanFaecher();
+  if (!faecher.length) { return ''; }
+  if (!stundenplanLegende) {
+    return `<div class="plan-hinweis" data-plan="auf">${translate('Show subjects')}</div>`;
+  }
+  const mehrere = ((stundenplan && stundenplan.children) || []).length > 1;
+  // KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
+  // Doppelstunde. Statt dessen der Name, wenn nur ein Kind das Fach hat.
+  const eintraege = faecher.map(f => {
+    const nur = (mehrere && f.wer.length === 1)
+      ? ` <span class="wessen">${escapeHtml(f.wer[0])}</span>` : '';
+    return `<span class="plan-fach"><span class="tupfen" style="background:${escapeHtml(f.color)}">` +
+      (f.icon ? `<i class="fa-light ${escapeHtml(f.icon)}"></i>` : '') + `</span>` +
+      `${escapeHtml(f.name)}${nur}</span>`;
+  }).join('');
+  return `<div class="plan-legende"><div class="plan-legendenkopf">` +
+    `<span>${translate('Subjects today')}</span>` +
+    `<button class="zu" data-plan="zu" aria-label="${translate('Close')}">✕</button></div>` +
+    `<div class="plan-faecher">${eintraege}</div></div>`;
 }
 
 /* Zeichnet die Karte. Getrennt von renderDashboard, damit die Kachel-Fassung
@@ -5246,8 +5313,9 @@ function stundenplanKarte() {
   }
   const ferien = stundenplan.holiday
     ? ` <span class="was">· ${escapeHtml(stundenplan.holiday.name)}</span>` : '';
-  return `<div class="card plan-card"><div class="card-head">` +
-    `<h3>${translate('Timetable')}</h3>${ferien}</div>${zeilen}</div>`;
+  return `<div class="card plan-card" data-plan="karte"><div class="card-head">` +
+    `<h3>${translate('Timetable')}</h3>${ferien}</div>${zeilen}` +
+    stundenplanLegendeHtml() + `</div>`;
 }
 
 function loadBriefing() {
@@ -5996,6 +6064,14 @@ function renderDashboard() {
   el.querySelectorAll('[data-briefing="mehr"]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
     briefingOffen = !briefingOffen;
+    renderDashboard();
+  }));
+  // Klick auf die Stundenplan-Karte klappt die Faecher-Legende auf und zu; das
+  // ✕ schliesst gezielt. Gebunden auf die KARTE, damit auch ein Klick neben den
+  // Balken wirkt — die Karte hat sonst nichts Anklickbares.
+  el.querySelectorAll('[data-plan="karte"]').forEach(k => k.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
     renderDashboard();
   }));
   briefingKlappHinweis(el);
