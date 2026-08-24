@@ -1229,7 +1229,12 @@ trait Briefing
                 . 'ein trockener kurzer Satz als ein ausgeschmückter langer. '
             : 'Du schreibst das Tagesbriefing für eine Familie in einer Haushalts-App. '
                 . 'Fasse den Tag (' . $tagWort . ') in zwei bis fünf Sätzen zusammen — durchgehender '
-                . 'Fließtext, KEINE Aufzählung, keine Zwischentitel, kein Markdown. ';
+                . 'Fließtext, KEINE Aufzählung, keine Zwischentitel, kein Markdown. '
+                // Ausdruecklich, weil Schulzeiten weder Termin noch Aufgabe sind:
+                // die Vollstaendigkeitsregel weiter unten erfasst sie nicht, und
+                // ohne diesen Satz laesst das Modell sie einfach weg.
+                . 'Stehen unten SCHULZEITEN, sage auch, wie lange die Kinder Schule '
+                . 'haben — je Kind kurz, und Betreuung getrennt vom Unterricht. ';
 
         return $aufbau
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '
@@ -1268,6 +1273,13 @@ trait Briefing
             . 'Schreibe also nie „den ganzen Tag", wo eine Uhrzeit angegeben ist. '
             . 'Erfinde NICHTS: keine Termine, keine Aufgaben, keine Uhrzeiten, die unten nicht '
             . 'stehen — und nichts für andere Tage, es geht ausschließlich um ' . $tagWort . '. '
+            // Zahlen ausdruecklich dazu: die Regel nannte nur Termine, Aufgaben
+            // und Uhrzeiten, und genau deshalb konnte aus „5 offene Artikel" ein
+            // „mit einem Artikel ist die Liste mickrig" werden. Am 24.08.2026 im
+            // Betrieb gesehen.
+            . 'Das gilt auch für ZAHLEN: Anzahlen und Zeitspannen übernimmst du '
+            . 'unverändert aus den Angaben. Rechne nicht, schätze nicht, runde nicht — '
+            . 'besonders nicht bei der Anzahl der Artikel auf der Einkaufsliste. '
             . 'Steht nichts an, sag das in einem Satz. '
             . 'Hat jemand Geburtstag, gratuliere ihm zuerst. '
             . 'Steht unten eine Einkaufsliste mit Artikelzahl, weise am Ende darauf hin, '
@@ -1578,11 +1590,10 @@ trait Briefing
         $teile[] = $block('TERMINE AN DIESEM TAG (Uhrzeit = Beginn)', $daten['termine'], 'keine');
         $teile[] = $block('AUFGABEN MIT FRIST AN DIESEM TAG (Uhrzeit = bis wann)', $daten['aufgaben'], 'keine');
         $teile[] = $block('AUFGABEN MIT ABGELAUFENER FRIST', $daten['ueberfaellig'], 'keine');
-        // Die Schulzeiten gehoeren zum Kompaktmodus. Im ausfuehrlichen Briefing
-        // bleiben sie draussen: was nicht im Prompt steht, kann die KI auch nicht
-        // zum Thema machen — und die lange Fassung soll sich nicht ungefragt
-        // aendern.
-        if ($this->BriefingKompakt() && ($daten['schule'] ?? []) !== []) {
+        // In BEIDEN Fassungen: wie lange die Kinder Schule haben, gehoert zum Tag.
+        // Anfangs stand das nur im Kompaktmodus, damit sich die lange Fassung
+        // nicht ungefragt aendert — auf Zuruf gilt es jetzt ueberall.
+        if (($daten['schule'] ?? []) !== []) {
             $teile[] = $block('SCHULZEITEN AN DIESEM TAG', $daten['schule'], 'keine');
         }
         if ($daten['geburtstage'] !== []) {

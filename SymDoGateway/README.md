@@ -148,7 +148,8 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
   *Kompakt* hält eine feste Reihenfolge ein: kurze Begrüßung, dann Termine und
   Aufgaben in je einem knappen Hauptsatz, danach wie lange welches Kind Schule
   hat, zum Schluss die Anzahl der Artikel auf der Einkaufsliste. Die Schulzeiten
-  kommen aus dem Stundenplan-Modul — ohne es entfällt dieser Teil. Der Tonfall
+  stehen in **beiden** Fassungen; sie kommen aus dem Stundenplan-Modul — ohne es
+  entfällt dieser Teil. Der Tonfall
   gilt weiterhin, die Kürze hat aber Vorrang: mit *Sachlich* sind es rund 600
   Zeichen, mit *Lustig* bleibt es länger, weil die Persona Bilder braucht
 - **Abendvorschau** — das Briefing auf morgen beginnt nicht mit „Guten Morgen",

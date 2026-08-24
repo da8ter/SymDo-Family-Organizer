@@ -2215,7 +2215,7 @@ class SymDoGateway extends IPSModuleStrict
                     ],
                     [
                         'type'    => 'Label',
-                        'caption' => $this->Translate('Compact keeps a fixed order: a short greeting, then the appointments and tasks in brief, then how long each child has school, and at the end how many items are on the shopping list. The school times come from the Timetable module — without it that part is simply left out. The tone still applies, but brevity wins.')
+                        'caption' => $this->Translate('Compact keeps a fixed order: a short greeting, then the appointments and tasks in brief, then how long each child has school, and at the end how many items are on the shopping list. Detailed writes flowing text as before and mentions the school times as well. They come from the Timetable module — without it that part is simply left out. The tone still applies, but brevity wins.')
                     ],
                 ] : []),
                 $this->GetPersonaEditor(),
