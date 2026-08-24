@@ -146,6 +146,7 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
 - **Persona** — Tonfall des Texts **und** der Stimme: Sachlich, Förmlich, Butler, Kumpel, Lustig, Drillsergeant, Motivationstrainer, Jammerlappen, Digga. Die Persona *Förmlich* siezt Erwachsene mit Nachnamen („Herr Muster"), Kinder bleiben beim Vornamen und Du
 - **Personas bearbeiten** — je Persona lässt sich für jeden Sprachausgabe-Anbieter eine eigene Stimme hinterlegen; ohne Eintrag gilt die eingebaute Vorgabe
 - **Vorschau am Vorabend** — ab der eingestellten Uhrzeit (Standard 18:00 Uhr) zeigt die Übersicht das Briefing für morgen
+- **Für eigene Automationen** liegen Text und Aufnahme des gezeigten Briefings dauerhaft bereit: Statusvariable *Briefing-Text* und Medienobjekt *Briefing-Audio* mit fester Objekt-ID (Kapitel 13)
 
 **Sprachausgabe-Anbieter** (`TtsProvider`):
 
