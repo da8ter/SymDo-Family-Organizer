@@ -2657,7 +2657,12 @@ html[data-symdo-theme="dark"] .member-bar {
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     column-gap: var(--gap);
     row-gap: 0;
-    align-items: start;
+    /* stretch statt start: Karten in DERSELBEN Reihe bekommen dieselbe Hoehe.
+       Das galt bisher schon fuer die beiden Aufgaben-Karten (im eigenen
+       Zweispalter); seit die Termine mit in die Reihe kommen, muss es fuer alle
+       drei gelten — sonst stehen sie unten ausgefranst. Auf eine Karte, die
+       allein in ihrer Reihe steht, wirkt es nicht. */
+    align-items: stretch;
   }
   /* Überschriften, Filter, Aktionen und die Eingabezeile spannen über alle Spalten */
   .cat-header, .section-toggle, .empty-state, .screen-head,
@@ -2668,7 +2673,7 @@ html[data-symdo-theme="dark"] .member-bar {
      Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
      Einkaufsvorschau traegt einen waagerechten Artikelstreifen — beide wirken
      in einer schmalen Rasterspalte gequetscht. */
-  .week-card, .shop-card, .dash-tasks, .briefing-card, .cal-preview, .plan-card { grid-column: 1 / -1; }
+  .week-card, .shop-card, .briefing-card, .plan-card { grid-column: 1 / -1; }
 
   /* Breite Anzeige: das Briefing steht ganz da, der Aufklapper entfaellt. Die
      JS-Messung blendet ihn zusaetzlich aus, sobald der Text nicht mehr ueberlaeuft
@@ -2680,19 +2685,20 @@ html[data-symdo-theme="dark"] .member-bar {
   }
   .briefing-mehr { display: none; }
 
-  /* „Heute" und „Meine Aufgaben" nebeneinander, aber HOECHSTENS zwei Spalten,
-     unabhaengig davon, wie viele das aeussere Raster hat. align-items: stretch
-     (der Standard, hier gegen das start des aeusseren Rasters gesetzt) gibt
-     beiden Karten dieselbe Hoehe. */
-  .dash-tasks {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--gap);
-    align-items: stretch;
-  }
-  /* Fehlt „Meine Aufgaben" (keine anstehenden Aufgaben), nimmt „Heute" die
-     ganze Breite statt eine halb leere Reihe zu bilden. */
-  .dash-tasks > .card:only-child { grid-column: 1 / -1; }
+  /* Der Behaelter wird DURCHSICHTIG: seine beiden Aufgaben-Karten werden damit
+     selbst Kacheln des aeusseren Rasters und stehen neben der Terminvorschau,
+     statt gemeinsam eine Zeile zu belegen.
+
+     Vorher war er ein eigener Zweispalter mit `grid-column: 1 / -1`, und die
+     Termine spannten daneben ebenfalls ueber alles — auf einem breiten Schirm
+     standen Aufgaben und Termine deshalb nie nebeneinander, obwohl beide
+     dieselbe Bauform haben und in eine halbe Spalte passen.
+
+     Die Deckelung auf zwei Spalten faellt damit weg: bei 1000px stehen zwei
+     Karten nebeneinander, bei 1400px drei. Voll bleiben nur die Karten, die
+     wirklich Breite brauchen — Wochenring, Einkaufsstreifen, Briefing-Fliesstext
+     und der Stundenplan-Balken. */
+  .dash-tasks { display: contents; }
 
   /* KPI-Kacheln in EINE Reihe, gleich breit, genau so viele Spalten wie Kacheln.
      Mit repeat(auto-fit, …) entstanden bei 1400px acht Spuren fuer vier Kacheln —
