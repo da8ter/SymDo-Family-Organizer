@@ -152,6 +152,10 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
   entfällt dieser Teil. Der Tonfall
   gilt weiterhin, die Kürze hat aber Vorrang: mit *Sachlich* sind es rund 600
   Zeichen, mit *Lustig* bleibt es länger, weil die Persona Bilder braucht
+- **Einkaufsliste im Briefing** — sie wird erst ab **fünf** offenen Artikeln
+  erwähnt. Darunter steht im Auftrag an die KI ausdrücklich, dass sie die Liste
+  nicht zum Thema machen darf; das bloße Weglassen der Zahl genügte nicht, dann
+  hat sich das Modell eine ausgedacht
 - **Abendvorschau** — das Briefing auf morgen beginnt nicht mit „Guten Morgen",
   sondern schaut voraus („Für morgen ist Folgendes geplant"). Es entsteht abends
   und spricht über den nächsten Tag; ein Tagesgruß wäre dort falsch

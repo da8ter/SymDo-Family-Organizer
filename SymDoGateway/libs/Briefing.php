@@ -37,7 +37,7 @@ trait Briefing
      * Darunter ist eine Liste normaler Alltag und der Hinweis nur Geplauder —
      * deshalb steht die Zahl unterhalb der Schwelle gar nicht erst im Prompt.
      */
-    private const BRIEFING_SHOP_HINT  = 10;
+    private const BRIEFING_SHOP_HINT  = 5;
     /**
      * Obergrenze fuer den vorgelesenen Text. OpenAI nimmt 4096 Zeichen je Aufruf;
      * der Abstand ist Absicht, denn das Briefing selbst endet schon bei
@@ -1222,7 +1222,9 @@ trait Briefing
                 . 'DRITTENS, wenn Schulzeiten angegeben sind: je Kind ein kurzer Satz, '
                 . 'wie lange es Schule hat. '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
-                . 'Einkaufsliste stehen — steht dazu nichts unten, lass ihn weg. '
+                . 'Einkaufsliste stehen. Steht unten „EINKAUFSLISTE: NICHT ERWÄHNEN", '
+                . 'lässt du diesen vierten Punkt ersatzlos weg und endest mit den '
+                . 'Schulzeiten. '
                 . 'Durchgehender Fließtext ohne Aufzählungszeichen, ohne Zwischentitel, '
                 . 'ohne Markdown. Kein Schlusswort, keine Ermunterung, keine Wiederholung. '
                 . 'Der Tonfall unten gilt auch hier, aber die KÜRZE hat Vorrang: lieber '
@@ -1602,18 +1604,21 @@ trait Briefing
         if ($daten['rollen'] !== []) {
             $teile[] = $block('ROLLEN IM HAUSHALT', $daten['rollen'], '');
         }
-        // Unterhalb der Schwelle bleibt die Zahl draussen: Was nicht im Prompt
-        // steht, kann die KI auch nicht zum Thema machen. Im Kompaktmodus gilt
-        // die Schwelle NICHT — dort ist der Einkaufs-Hinweis ein fester Teil des
-        // Aufbaus und muss auch bei drei Artikeln kommen.
-        if ((int)$daten['einkauf']['anzahl'] >= self::BRIEFING_SHOP_HINT
-            || ($this->BriefingKompakt() && (int)$daten['einkauf']['anzahl'] > 0)) {
-            $teile[] = sprintf(
-                'EINKAUFSLISTE: %d offene Artikel%s',
-                (int)$daten['einkauf']['anzahl'],
-                $daten['einkauf']['liste'] !== '' ? ' (' . $daten['einkauf']['liste'] . ')' : ''
-            );
-        }
+        // Unter der Schwelle wird die Liste NICHT erwaehnt — in beiden Laengen.
+        //
+        // Und das steht ausdruecklich da, statt die Zahl nur wegzulassen: Am
+        // 24.08.2026 im Betrieb gesehen, dass das Modell sich eine Zahl AUSDENKT,
+        // wenn keine im Prompt steht („die Einkaufsliste ist mit einem Artikel
+        // ein Witz", offen waren fuenf). Eine Verbotsregel weiter oben hat das
+        // nicht verhindert. Eine ausdrueckliche Anweisung an dieser Stelle laesst
+        // dem Modell nichts zu raten.
+        $anzahl = (int)$daten['einkauf']['anzahl'];
+        $teile[] = $anzahl >= self::BRIEFING_SHOP_HINT
+            ? sprintf('EINKAUFSLISTE: %d offene Artikel%s', $anzahl,
+                $daten['einkauf']['liste'] !== '' ? ' (' . $daten['einkauf']['liste'] . ')' : '')
+            : 'EINKAUFSLISTE: NICHT ERWÄHNEN. Die Liste ist zu kurz, um sie zum Thema '
+                . 'zu machen. Schreibe kein Wort über die Einkaufsliste, nenne keine '
+                . 'Anzahl und schlage keinen Einkauf vor.';
         return implode("\n\n", $teile);
     }
 
