@@ -6330,6 +6330,13 @@ function renderDashboard() {
   }
 
   if (!renderInto(el, html)) return;
+  /* Chip-Zeilen messen wie in den anderen Bereichen. Die Beobachter wurden
+     bisher nur aus Aufgaben-, Kalender- und KI-Bereich heraus eingerichtet — wer
+     die App oeffnet und auf der Uebersicht bleibt, hatte gar keinen. Damit fiel
+     auch die Nachmessung aus, fuer die es sie gibt: /icons.js liefert die <svg>
+     nachtraeglich, vorher sind die Chips zu schmal gemessen. */
+  ensureTodoMetaObserver();
+  requestAnimationFrame(layoutTodoMeta);
 
   // Interaktionen
   el.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.goto)));
@@ -8357,7 +8364,20 @@ const META_BEREICHE = [
   { area: 'todoListArea', card: '.todo-card', content: '.todo-content', side: '.todo-side', meta: '.todo-meta' },
   { area: 'kiFinds',      card: '.mail-item', content: '.mail-row',     side: '.mail-side', meta: '.mail-chips' },
   { area: 'calArea',      card: '.cal-card',  content: '.cal-event',    side: '.cal-side',  meta: '.cal-chips'  },
+  /* Die Uebersicht fehlte hier. Ihre Aufgaben- und Terminzeilen sind dieselben
+     Zeilen wie in den Bereichen darueber, wurden aber NIE gemessen — sie
+     stapelten deshalb nie, egal wie breit die Chips wurden. Auf dem Telefon
+     nahmen Gesicht, Faelligkeit und Priorität gut die halbe Zeile, und vom Titel
+     blieb „Müll rausb…". Zwei Eintraege, weil dort beide Zeilenarten stehen. */
+  { area: 'dashboardContent', card: '.todo-card', content: '.todo-content', side: '.todo-side', meta: '.todo-meta' },
+  /* In der Uebersicht steht die Terminzeile OHNE .cal-card-Rahmen — die Zeile
+     ist dort selbst die Karte. Deshalb zweimal derselbe Waehler; inhalt() unten
+     nimmt in dem Fall das Element selbst. */
+  { area: 'dashboardContent', card: '.cal-event', content: '.cal-event',    side: '.cal-side',  meta: '.cal-chips'  },
 ];
+
+/** Anteil der Zeilenbreite, ab dem die Chips eine eigene Zeile bekommen. */
+const META_ANTEIL = 0.4;
 
 function layoutTodoMeta() {
   META_BEREICHE.forEach(layoutRowMeta);
@@ -8370,17 +8390,25 @@ function layoutRowMeta(cfg) {
   const cards = area.querySelectorAll(cfg.card);
   // Erst überall zurücksetzen, damit die natürliche (nicht verdichtete)
   // Chip-Breite gemessen wird, dann pro Zeile stufenweise entscheiden.
+  // Die Zeile kann die Karte SELBST sein (Terminzeile der Uebersicht) — dann
+  // findet querySelector sie nicht, weil der nur nach unten sucht.
+  const inhalt = (card) => card.matches(cfg.content) ? card : card.querySelector(cfg.content);
   cards.forEach(card => {
-    const c = card.querySelector(cfg.content);
+    const c = inhalt(card);
     if (c) c.classList.remove('stacked', 'meta-tight', 'meta-tighter', 'meta-clip');
   });
   cards.forEach(card => {
-    const c = card.querySelector(cfg.content);
+    const c = inhalt(card);
     const m = card.querySelector(cfg.side) || card.querySelector(cfg.meta);
     if (!c || !m) return;
-    // Unveränderte Grenze: belegt die Chip-Zeile mehr als die halbe Kartenbreite,
-    // rutscht sie als eigene Zeile unter den Inhalt.
-    if (m.offsetWidth <= c.clientWidth / 2) return;
+    /* Belegt die Chip-Zeile mehr als META_ANTEIL der Kartenbreite, rutscht sie
+       als eigene Zeile unter den Inhalt.
+
+       Die Grenze lag bei der HAELFTE. Das war zu spaet: bei knapp der Haelfte
+       bleibt dem Titel die andere Haelfte minus Kontrollkaestchen und Abstaenden,
+       und lange Titel enden dann schon bei zehn Zeichen mit Puenktchen. Bei 0,4
+       wandern die Chips frueher hinunter und der Titel bekommt echte Breite. */
+    if (m.offsetWidth <= c.clientWidth * META_ANTEIL) return;
     c.classList.add('stacked');
 
     // Verdichtet wird ausschließlich HIER, in der eigenen Zeile — und nur, wenn
