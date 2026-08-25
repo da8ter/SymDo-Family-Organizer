@@ -76,6 +76,13 @@
   .spalten::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbereich::-webkit-scrollbar-track,
   .spalten::-webkit-scrollbar-track { background: transparent; }
+  /* Wo senkrechter und waagerechter Streifen zusammentreffen, malt WebKit eine
+     eigene ECKE. Ohne diese Regel bleibt sie undurchsichtig hell — im
+     Wochenraster ein weisses Quadrat unten rechts, das nach einem Fehler aussah.
+     Sie entsteht nur dort: der senkrechte Bereich scrollt nur in einer Richtung
+     und hat keine Ecke. */
+  .scrollbereich::-webkit-scrollbar-corner,
+  .spalten::-webkit-scrollbar-corner { background: transparent; }
   .scrollbereich::-webkit-scrollbar-thumb,
   .spalten::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--accent) 70%, transparent);
