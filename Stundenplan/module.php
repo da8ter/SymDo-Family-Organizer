@@ -96,6 +96,8 @@ class Stundenplan extends IPSModuleStrict
         // Einmalig: die alte Sammelliste auf die Tageslisten verteilen.
         $this->StundenWandern();
         $this->BetreuungWandern();
+        // NACH der Wanderung: sie legt die alten Zeichenketten erst ab.
+        $this->ZeitenWandern();
         // Und danach: sind die Kinder umsortiert worden, wandern ihre Stunden mit.
         $this->StundenAbgleichen();
 
@@ -144,6 +146,71 @@ class Stundenplan extends IPSModuleStrict
         }
         return (string)json_encode($this->PlanAufbauen($Date),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Einmalige Umschrift der Zeiten auf die Form des Zeitwaehlers.
+     *
+     * Die Spalten Von und Bis sind SelectTime. Die Konsole liest eine solche
+     * Zelle mit JSON.parse und schreibt „ungültig", wenn das misslingt — und
+     * genau das stand ueberall, weil die Wanderung die alten Zeichenketten
+     * („07:45") unveraendert uebernommen hatte. Der Plan zeigte trotzdem die
+     * richtigen Zeiten, weil ZeitText beide Formen liest; nur im Formular war
+     * nichts mehr zu erkennen.
+     *
+     * Laeuft, solange irgendwo noch eine Zeichenkette steht, und schreibt nur
+     * dann. Die Betreuung ist nicht betroffen: sie wurde von Anfang an als
+     * Waehler-Objekt abgelegt.
+     */
+    private function ZeitenWandern(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $neu = [];
+        for ($kind = 1; $kind <= self::MAX_KINDER; $kind++) {
+            for ($tag = 1; $tag <= 6; $tag++) {
+                $prop   = self::SlotProp($kind, $tag);
+                $zeilen = json_decode((string)@IPS_GetProperty($this->InstanceID, $prop), true);
+                if (!is_array($zeilen) || $zeilen === []) {
+                    continue;
+                }
+                $geaendert = false;
+                foreach ($zeilen as $i => $z) {
+                    if (!is_array($z)) {
+                        continue;
+                    }
+                    foreach (['start', 'end'] as $feld) {
+                        $wert = (string)($z[$feld] ?? '');
+                        // Schon ein Objekt? Dann nichts tun.
+                        if ($wert === '' || str_starts_with(trim($wert), '{')) {
+                            continue;
+                        }
+                        $text = TimetableCalc::ZeitText($wert);
+                        $zeilen[$i][$feld] = TimetableCalc::ZeitFeld($text === '' ? '00:00' : $text);
+                        $geaendert = true;
+                    }
+                }
+                if ($geaendert) {
+                    $neu[$prop] = (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE);
+                }
+            }
+        }
+        if ($neu === []) {
+            return;
+        }
+        $laeuft = true;
+        try {
+            foreach ($neu as $prop => $wert) {
+                @IPS_SetProperty($this->InstanceID, $prop, $wert);
+            }
+            @IPS_ApplyChanges($this->InstanceID);
+        } finally {
+            $laeuft = false;
+        }
+        $this->LogMessage(sprintf('Stundenplan: Zeiten in %d Tageslisten auf den Zeitwaehler umgeschrieben',
+            count($neu)), KL_NOTIFY);
     }
 
     /**
