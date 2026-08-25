@@ -9,7 +9,11 @@ Zwei Darstellungen aus denselben Daten:
 - **Wochenraster** — feste Zeitachse links, daneben die Tagesspalten. Jede
   Stunde eine farbige Karte mit Symbol, Fach und Zeitspanne; Lücken als graue
   „frei"-Blöcke; der heutige Tag mit Kapsel, die laufende oder nächste Stunde
-  mit hellem Rand. Jede Stunde sitzt **auf ihrer Uhrzeit**, nicht auf der
+  mit hellem Rand — eine eigene Zeile „Als nächstes …" braucht es dafür nicht,
+  und eine Überschrift auch nicht: beide nähmen dem Plan nur Höhe weg. Die
+  Heute-Kapsel und der gewählte Kinder-Chip tragen die **Akzentfarbe der
+  Visualisierung**; sie bezeichnen eine Auswahl, und die sieht überall gleich
+  aus. Jede Stunde sitzt **auf ihrer Uhrzeit**, nicht auf der
   vorigen — sie steht damit genau auf ihrer Marke in der Zeitachse. Alle Tage
   sind **gleich breit** und teilen sich die Breite neben der Zeitachse; ihre
   Mindestbreite ist „das Wort *Mathematik* passt neben den Symbolkreis",

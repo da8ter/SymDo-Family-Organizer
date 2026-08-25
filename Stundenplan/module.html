@@ -1,11 +1,16 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
 <!-- Der Icon-Satz von Symcon. OHNE ihn bleiben alle <i> leere Kaesten: die
      Faecher haetten kein Symbol, die Betreuung keins und die Legende auch
      nicht. Die ToDo-Kachel bindet ihn genauso ein.
 
-     Dass das gefehlt hat, konnte der Prueflauf nicht sehen — ER hat den Satz
-     beigesteuert und damit etwas geliefert, was das Produkt selbst nicht
-     mitbrachte. Geprueft wird das jetzt an einer Kachel, die ueber ihre eigene
-     Adresse laedt, ohne Zutun des Wirts. -->
+     VOLLSTAENDIGES Dokument und nicht wie zuvor ein Fragment: wo ein Fragment
+     eingehaengt wird, entscheidet der Wirt — und ueber innerHTML eingesetzte
+     script-Verweise laufen gar nicht. Im Prueflauf blieben so zwei von drei
+     Laeufen ohne Symbole, obwohl der Satz geladen war. Die ToDo-Kachel ist
+     seit jeher ein ganzes Dokument mit dem Verweis im Kopf. -->
 <script src="/icons.js"></script>
 <style>
   /* Symcon stellt --card-color, --content-color und --accent-color je nach
@@ -113,8 +118,6 @@
   }
   .tagname span.an { visibility: visible; }
   .tagname span.ist-heute { color: var(--accent); }
-  .kopf h1 { font-size: 15px; font-weight: 700; margin: 0; }
-  .naechste { margin-left: auto; font-size: 12px; font-weight: 600; }
   .ferien {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 12px; margin-bottom: 10px; border-radius: 12px;
@@ -129,7 +132,7 @@
     border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
     cursor: pointer; font-family: inherit;
   }
-  .chip.an { color: #fff; border-color: transparent; }
+  .chip.an { color: #fff; border-color: transparent; background: var(--accent); }
 
   /* ── Wochenraster ──────────────────────────────────────────────────────── */
   /* Das Raster ist eine BEGRENZTE Flaeche, kein mitwachsender Block. Vorher war
@@ -193,6 +196,7 @@
   .heute {
     margin-left: auto; padding: 2px 7px; border-radius: 999px;
     font-size: 10px; font-weight: 700; color: #fff;
+    background: var(--accent);
   }
   .frei {
     position: absolute; left: 0; right: 0;
@@ -303,6 +307,8 @@
     margin-top: 8px; font-size: 11px; color: var(--muted); text-align: center;
   }
 </style>
+</head>
+<body>
 
 <div id="rahmen"><div id="inhalt" class="scrollbereich"><div class="leer">…</div></div></div>
 
@@ -487,6 +493,23 @@
     });
   }
 
+  /* Der Icon-Satz ersetzt <i> durch <svg> von selbst — aber nur, was beim
+     Laden schon dasteht oder was sein Beobachter mitbekommt. Die Kachel zeichnet
+     ihren Inhalt nach dem Laden neu, und gemessen fiel sie einmal genau in die
+     Luecke zwischen erstem Durchgang und Beobachter: der Satz war geladen, und
+     trotzdem standen 22 leere Kaesten da. Deshalb nach JEDEM Zeichnen selbst
+     anstossen — laeuft der Satz noch nicht, passiert nichts, und sein Beobachter
+     holt es nach. */
+  function symboleErsetzen() {
+    // Ueber document.body und nicht ueber den Inhalt: mit einem engeren Knoten
+    // blieb die Ersetzung im Prueflauf zwei von drei Laeufen aus.
+    try {
+      if (window.FontAwesome && window.FontAwesome.dom) {
+        window.FontAwesome.dom.i2svg({ node: document.body });
+      }
+    } catch (e) {}
+  }
+
   /* Ein <i> OHNE Klasse waere ein leerer Kasten — deshalb gar keins. */
   function symbol(klasse) {
     return klasse ? '<i class="fa-light ' + esc(klasse) + '"></i>' : '';
@@ -586,6 +609,7 @@
     }
     html += zustand.mode === 'timeline' ? timeline() : woche();
     ziel.innerHTML = html;
+    symboleErsetzen();
 
     document.querySelectorAll('.chip').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -635,8 +659,12 @@
     if (zustand.children.length < 2) { return ''; }
     return '<div class="kinder">' + zustand.children.map(function (k, i) {
       const an = i === kindNr;
-      return '<button class="chip' + (an ? ' an' : '') + '" data-nr="' + i + '"'
-        + (an ? ' style="background:' + esc(k.color) + '"' : '') + '>'
+      // Die Farbe des ausgewaehlten Chips kommt aus der AKZENTFARBE der Visu,
+      // nicht mehr aus der Farbe des Kindes: sie bezeichnet die Auswahl, und
+      // Auswahl sieht in dieser Kachel ueberall gleich aus. Das Kind erkennt
+      // man am Gesicht und am Namen daneben, dafuer braucht es keine zweite
+      // Farbsprache.
+      return '<button class="chip' + (an ? ' an' : '') + '" data-nr="' + i + '">'
         + gesicht(k, 'gesicht') + esc(k.name) + '</button>';
     }).join('') + '</div>';
   }
@@ -648,12 +676,11 @@
     const proViertel = 18;
     const hoehe = Math.max(Math.ceil((bis - von) / 15), 1) * proViertel;
 
-    let html = '<div class="kopf"><h1>Woche</h1>';
-    if (kind.next) {
-      html += '<span class="naechste" style="color:' + esc(kind.color) + '">Als nächstes: '
-        + esc(kind.next) + '</span>';
-    }
-    html += '</div>' + kinderLeiste();
+    /* Ohne Kopfzeile. Die Ueberschrift „Woche" sagte nichts, was das Raster
+       nicht selbst zeigt, und „Als nächstes …" stand doppelt da: die laufende
+       oder naechste Stunde ist im Raster ohnehin mit hellem Rand markiert.
+       Beides nahm nur Hoehe weg, die dem Plan fehlte. */
+    let html = kinderLeiste();
 
     // Zeitachse: volle Stunden mit Beschriftung, dazu die tatsaechliche
     // Anfangszeit — krumme Startzeiten wie 07:45 sieht man sonst nirgends.
@@ -673,7 +700,7 @@
         + '<div class="spaltenkopf"><div><div class="tag">' + esc(tag.label) + '</div>'
         + (tag.parity ? '<div class="kw">' + esc(tag.parity) + '</div>' : '')
         + '</div>'
-        + (tag.today ? '<span class="heute" style="background:' + esc(kind.color) + '">Heute</span>' : '')
+        + (tag.today ? '<span class="heute">Heute</span>' : '')
         + '</div>';
       /* Der Koerper bekommt GENAU die Hoehe der Wochenspanne — dieselbe wie die
          Zeitachse. Vorher ergab sich die Spaltenhoehe aus der Summe der
@@ -894,3 +921,5 @@
     return html + legendeHtml();
   }
 </script>
+</body>
+</html>
