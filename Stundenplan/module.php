@@ -35,8 +35,32 @@ class Stundenplan extends IPSModuleStrict
         $this->RegisterPropertyString('Children', '[]');
         $this->RegisterPropertyString('Subjects',
             (string)json_encode(TimetableSubjects::Vorgabefaecher(), JSON_UNESCAPED_UNICODE));
+        // Die alte Sammelliste. Bleibt registriert, damit die einmalige
+        // Wanderung auf die Tageslisten einen Beleg hat und ein Rueckweg offen
+        // bleibt; im Formular steht sie nicht mehr.
         $this->RegisterPropertyString('Slots', '[]');
         $this->RegisterPropertyString('Care', '[]');
+
+        // Je Kind und Wochentag eine eigene Liste. Symcon registriert
+        // Eigenschaften FEST in Create() — eine wachsende Zahl von Kindern ist
+        // damit unmoeglich, die Hoechstzahl muss hier stehen.
+        for ($kind = 1; $kind <= self::MAX_KINDER; $kind++) {
+            for ($tag = 1; $tag <= 6; $tag++) {
+                $this->RegisterPropertyString(self::SlotProp($kind, $tag), '[]');
+                // Die Betreuung steht seit dem Umbau UNTER der Tagesliste statt
+                // in einem eigenen Bereich: Schalter plus Endzeit, dort wo der
+                // Tag ohnehin gepflegt wird.
+                $this->RegisterPropertyBoolean(self::CareProp($kind, $tag), false);
+                $this->RegisterPropertyString(self::CareEndProp($kind, $tag),
+                    TimetableCalc::ZeitFeld('16:00'));
+            }
+        }
+        // Welcher Name lag beim letzten Speichern auf welchem Index — daran
+        // erkennt ApplyChanges, dass die Kinder umsortiert wurden.
+        $this->RegisterAttributeString('SlotOwners', '[]');
+        // Was der letzte Abgleich verschoben, umbenannt oder geleert hat — steht
+        // in der Statuszeile, damit es niemandem entgeht.
+        $this->RegisterAttributeString('SlotOwnersReport', '');
 
         $this->RegisterPropertyString('Display', 'week');
         $this->RegisterPropertyInteger('SourceInstanceID', 0);
@@ -69,6 +93,12 @@ class Stundenplan extends IPSModuleStrict
         // nicht veralten, grob genug, um nichts zu kosten. Der Ferien-Abruf
         // haengt am selben Takt, laeuft aber nur einmal am Tag (siehe Refresh).
         $this->SetTimerInterval('Refresh', 5 * 60 * 1000);
+
+        // Einmalig: die alte Sammelliste auf die Tageslisten verteilen.
+        $this->StundenWandern();
+        $this->BetreuungWandern();
+        // Und danach: sind die Kinder umsortiert worden, wandern ihre Stunden mit.
+        $this->StundenAbgleichen();
 
         $this->PushState();
     }
@@ -115,6 +145,241 @@ class Stundenplan extends IPSModuleStrict
         }
         return (string)json_encode($this->PlanAufbauen($Date),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Einmalige Wanderung der Betreuung von der alten Sammelliste auf die
+     * Schalter unter den Tageslisten.
+     *
+     * Gleiche Bauart wie StundenWandern: laeuft nur, solange in `Care` Zeilen
+     * stehen, leert die Liste danach und faellt fuer immer aus. Zeilen ohne
+     * passendes Kind gehen verloren — sie hatten schon vorher keine Wirkung.
+     */
+    private function BetreuungWandern(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $alt = json_decode((string)@IPS_GetProperty($this->InstanceID, 'Care'), true);
+        if (!is_array($alt) || $alt === []) {
+            return;
+        }
+        $nummer = [];
+        foreach (array_values($this->Kinder()) as $i => $kind) {
+            $nummer[(string)$kind['name']] = $i + 1;
+        }
+        $ziel = [];
+        $verwaist = 0;
+        foreach ($alt as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $nr   = $nummer[trim((string)($z['child'] ?? ''))] ?? 0;
+            $tag  = (int)($z['weekday'] ?? 0);
+            $ende = TimetableCalc::ZeitText($z['end'] ?? '');
+            if ($nr < 1 || $nr > self::MAX_KINDER || $tag < 1 || $tag > 6 || $ende === '') {
+                $verwaist++;
+                continue;
+            }
+            $ziel[$nr][$tag] = $ende;
+        }
+
+        $laeuft = true;
+        try {
+            foreach ($ziel as $nr => $tage) {
+                foreach ($tage as $tag => $ende) {
+                    @IPS_SetProperty($this->InstanceID, self::CareProp((int)$nr, (int)$tag), true);
+                    @IPS_SetProperty($this->InstanceID, self::CareEndProp((int)$nr, (int)$tag),
+                        TimetableCalc::ZeitFeld($ende));
+                }
+            }
+            @IPS_SetProperty($this->InstanceID, 'Care', '[]');
+            @IPS_ApplyChanges($this->InstanceID);
+        } finally {
+            $laeuft = false;
+        }
+        $this->LogMessage(sprintf('Stundenplan: %d Betreuungszeiten auf die Tage verteilt%s',
+            count($alt) - $verwaist,
+            $verwaist > 0 ? sprintf(', %d ohne passendes Kind verworfen', $verwaist) : ''), KL_NOTIFY);
+    }
+
+    /**
+     * Einmalige Wanderung von der alten Sammelliste auf die Tageslisten.
+     *
+     * Laeuft nur, solange in `Slots` noch Zeilen stehen; danach wird sie geleert
+     * und die Wanderung faellt fuer immer aus. Die Eigenschaft bleibt
+     * registriert — als Beleg und damit ein Rueckweg offen bleibt.
+     *
+     * Der Riegel ist noetig, weil das Schreiben ueber IPS_ApplyChanges laeuft und
+     * sich ApplyChanges damit selbst ruft (Muster aus EnforceSyncBackend).
+     */
+    private function StundenWandern(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $alt = json_decode((string)@IPS_GetProperty($this->InstanceID, 'Slots'), true);
+        if (!is_array($alt) || $alt === []) {
+            return;
+        }
+        $nummer = [];
+        foreach (array_values($this->Kinder()) as $i => $kind) {
+            $nummer[(string)$kind['name']] = $i + 1;
+        }
+        $eimer = [];
+        $verwaist = 0;
+        foreach ($alt as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $nr  = $nummer[trim((string)($z['child'] ?? ''))] ?? 0;
+            $tag = (int)($z['weekday'] ?? 0);
+            if ($nr < 1 || $nr > self::MAX_KINDER || $tag < 1 || $tag > 6) {
+                $verwaist++;
+                continue;
+            }
+            $eimer[$nr][$tag][] = [
+                'subject' => trim((string)($z['subject'] ?? '')),
+                'start'   => trim((string)($z['start'] ?? '')),
+                'end'     => trim((string)($z['end'] ?? '')),
+            ];
+        }
+
+        $laeuft = true;
+        try {
+            foreach ($eimer as $nr => $tage) {
+                foreach ($tage as $tag => $zeilen) {
+                    usort($zeilen, static fn(array $a, array $b): int
+                        => TimetableCalc::Minuten($a['start']) <=> TimetableCalc::Minuten($b['start']));
+                    @IPS_SetProperty($this->InstanceID, self::SlotProp((int)$nr, (int)$tag),
+                        (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+                }
+            }
+            @IPS_SetProperty($this->InstanceID, 'Slots', '[]');
+            @IPS_ApplyChanges($this->InstanceID);
+        } finally {
+            $laeuft = false;
+        }
+        $this->LogMessage(sprintf('Stundenplan: %d Stunden auf die Tageslisten verteilt%s',
+            count($alt) - $verwaist,
+            $verwaist > 0 ? sprintf(', %d ohne passendes Kind verworfen', $verwaist) : ''), KL_NOTIFY);
+    }
+
+    /**
+     * Die Tageslisten haengen an der POSITION des Kindes, nicht am Namen. Wer die
+     * Kinder umsortiert oder eines in der Mitte loescht, verschoebe sonst alle
+     * Stundenplaene dahinter.
+     *
+     * Genau dieser Fehler ist am 24.08.2026 bei den Personas-Stimmen aufgetreten:
+     * neun Zeilen auf acht Personas, ab der vierten alles um eins verschoben, und
+     * der Drillsergeant sprach mit der Stimme des Komikers. Deshalb wird hier
+     * nicht auf Sichtbarkeit vertraut, sondern abgeglichen.
+     */
+    private function StundenAbgleichen(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $neu = [];
+        foreach (array_slice(array_values($this->Kinder()), 0, self::MAX_KINDER) as $kind) {
+            $neu[] = (string)$kind['name'];
+        }
+        $roh = json_decode((string)@$this->ReadAttributeString('SlotOwners'), true);
+        $alt = is_array($roh) ? array_values(array_map('strval', $roh)) : [];
+
+        // ERSTER Lauf: es gibt keinen Vorstand, also gibt es auch nichts zu
+        // verschieben. Nur merken — sonst faende der Abgleich unten fuer JEDES
+        // Kind „kein Treffer" und leerte die eben gewanderten Listen.
+        if ($alt === []) {
+            @$this->WriteAttributeString('SlotOwners', (string)json_encode($neu, JSON_UNESCAPED_UNICODE));
+            return;
+        }
+        if ($alt === $neu) {
+            return;
+        }
+
+        // Ein Tag sind DREI Eigenschaften: Stundenliste, Betreuungsschalter und
+        // Endzeit. Sie muessen zusammen wandern — zoege nur die Liste um, stuende
+        // die Betreuung des Vorgaengers unter dem Plan des Nachfolgers.
+        $listen = [];
+        for ($i = 1; $i <= self::MAX_KINDER; $i++) {
+            for ($t = 1; $t <= 6; $t++) {
+                $listen[$i][$t] = array_map(
+                    fn(string $prop) => @IPS_GetProperty($this->InstanceID, $prop),
+                    self::TagProps($i, $t));
+            }
+        }
+        $leer = array_fill(1, 6, ['[]', false, TimetableCalc::ZeitFeld('16:00')]);
+        $ziel = [];
+        $bewegt = [];
+        $benannt = [];
+        $geleert = [];
+        foreach ($neu as $j => $name) {
+            $nr = $j + 1;
+            $altIndex = array_search($name, $alt, true);
+            if ($altIndex !== false) {
+                $ziel[$nr] = $listen[$altIndex + 1];
+                if ((int)$altIndex !== $j) {
+                    $bewegt[] = sprintf('%s (%d→%d)', $name, (int)$altIndex + 1, $nr);
+                }
+                continue;
+            }
+            // Kein Treffer ueber den Namen. War der fruehere Eigentümer dieses
+            // Platzes ebenfalls verschwunden, ist es eine UMBENENNUNG — die
+            // Stunden bleiben liegen. Sonst ist es ein neues Kind, und das erbt
+            // nicht den Plan eines fremden.
+            $frueher = (string)($alt[$j] ?? '');
+            if ($frueher !== '' && !in_array($frueher, $neu, true)) {
+                $ziel[$nr] = $listen[$nr];
+                $benannt[] = sprintf('%s → %s', $frueher, $name);
+            } else {
+                $ziel[$nr] = $leer;
+                $geleert[] = $name;
+            }
+        }
+        for ($nr = count($neu) + 1; $nr <= self::MAX_KINDER; $nr++) {
+            $ziel[$nr] = $leer;
+        }
+
+        $laeuft = true;
+        try {
+            $geaendert = false;
+            foreach ($ziel as $nr => $tage) {
+                foreach ($tage as $tag => $werte) {
+                    foreach (self::TagProps((int)$nr, (int)$tag) as $k => $prop) {
+                        if (($listen[$nr][$tag][$k] ?? null) === $werte[$k]) {
+                            continue;
+                        }
+                        @IPS_SetProperty($this->InstanceID, $prop, $werte[$k]);
+                        $geaendert = true;
+                    }
+                }
+            }
+            @$this->WriteAttributeString('SlotOwners', (string)json_encode($neu, JSON_UNESCAPED_UNICODE));
+            if ($geaendert) {
+                @IPS_ApplyChanges($this->InstanceID);
+            }
+        } finally {
+            $laeuft = false;
+        }
+
+        $meldung = [];
+        if ($bewegt !== []) {
+            $meldung[] = sprintf($this->Translate('moved: %s'), implode(', ', $bewegt));
+        }
+        if ($benannt !== []) {
+            $meldung[] = sprintf($this->Translate('renamed: %s'), implode(', ', $benannt));
+        }
+        if ($geleert !== []) {
+            $meldung[] = sprintf($this->Translate('emptied: %s'), implode(', ', $geleert));
+        }
+        if ($meldung !== []) {
+            $this->LogMessage('Stundenplan: ' . implode(' | ', $meldung), KL_NOTIFY);
+            @$this->WriteAttributeString('SlotOwnersReport', implode('  |  ', $meldung));
+        }
     }
 
     /** Ferien erneuern und die Anzeige nachziehen. Haengt am Timer. */
@@ -220,11 +485,6 @@ class Stundenplan extends IPSModuleStrict
             }
             return $optionen;
         };
-        $tage = [];
-        foreach (TimetableCalc::Wochentage(true) as $t) {
-            $tage[] = ['caption' => $this->Translate(TimetableCalc::TagKurz($t)), 'value' => $t];
-        }
-
         $form = [
             'elements' => [
                 [
@@ -233,8 +493,7 @@ class Stundenplan extends IPSModuleStrict
                 ],
                 $this->KinderBereich($auswahl),
                 $this->FaecherBereich(),
-                $this->StundenBereich($auswahl, $kinder, $faecher, $tage),
-                $this->BetreuungBereich($auswahl, $kinder, $tage),
+                $this->StundenBereich($auswahl, $faecher),
                 $this->FerienBereich(),
                 $this->AnzeigeBereich(),
                 [
@@ -269,8 +528,13 @@ class Stundenplan extends IPSModuleStrict
                          'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                         ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
                          'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']],
+                        // Wert ist die KENNUNG, angezeigt wird der Name. Vorher stand hier
+                        // der Name auch als Wert — wer ein Mitglied im Formular waehlte,
+                        // speicherte damit „Mia" statt „fa0ad897", und das Gesicht in
+                        // Kachel und App blieb leer, weil die Avatare nach Kennung
+                        // nachgeschlagen werden.
                         ['caption' => $this->Translate('Family member'), 'name' => 'userId', 'width' => '190px',
-                         'add' => '', 'edit' => ['type' => 'Select', 'options' => $auswahl($this->GatewayMitglieder(), $this->Translate('— none —'))]],
+                         'add' => '', 'edit' => ['type' => 'Select', 'options' => $this->MitgliederOptionen()]],
                         ['caption' => $this->Translate('Saturday'), 'name' => 'saturday', 'width' => '110px',
                          'add' => false, 'edit' => ['type' => 'CheckBox']],
                         ['caption' => $this->Translate('Every other week'), 'name' => 'biweekly', 'width' => '150px',
@@ -331,71 +595,114 @@ class Stundenplan extends IPSModuleStrict
         ];
     }
 
-    private function StundenBereich(callable $auswahl, array $kinder, array $faecher, array $tage): array
+    /**
+     * Je Kind ein Klapp-Bereich, darin die Wochentage NEBENEINANDER — eine
+     * schmale Liste je Tag.
+     *
+     * Vorher stand hier EINE Liste mit Kind- und Tag-Spalte. Der Plan ist aber
+     * eine Wochenmatrix; wer den Montag eines Kindes sehen wollte, musste ihn
+     * zwischen den Zeilen der anderen suchen.
+     *
+     * Gezeigt werden nur die eingerichteten Kinder. Die Eigenschaften gibt es
+     * immer alle (siehe Create), das Formular bleibt trotzdem klein.
+     */
+    private function StundenBereich(callable $auswahl, array $faecher): array
     {
+        $kinder = $this->Kinder();
+        if ($kinder === []) {
+            return [
+                'type'     => 'ExpansionPanel',
+                'caption'  => $this->Translate('Lessons'),
+                'expanded' => true,
+                'items'    => [[
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Add a child first — the lessons are entered per child.')
+                ]],
+            ];
+        }
+
+        $bereiche = [];
+        foreach (array_slice($kinder, 0, self::MAX_KINDER) as $i => $kind) {
+            $bereiche[] = [
+                'type'     => 'ExpansionPanel',
+                'caption'  => (string)$kind['name'],
+                'expanded' => $i === 0,
+                'items'    => [$this->TageszeileFuer($i + 1, $kind, $auswahl, $faecher)],
+            ];
+        }
+        if (count($kinder) > self::MAX_KINDER) {
+            $bereiche[] = [
+                'type'    => 'Label',
+                'caption' => sprintf($this->Translate('Only the first %d children can have lessons.'), self::MAX_KINDER)
+            ];
+        }
+        $bereiche[] = [
+            'type'    => 'Label',
+            'caption' => $this->Translate('The color comes from the subject. Lessons that touch (one ends when the next begins) are normal and are not reported as a clash. Where care is switched on, a grey block runs from the end of the lessons until the end time — only on days that have lessons, and it does not count as teaching time. Seconds in the time pickers are ignored.')
+        ];
+
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Lessons'),
             'expanded' => true,
-            'items'    => [
-                [
-                    'type'     => 'List',
-                    'name'     => 'Slots',
-                    'rowCount' => 12,
-                    'add'      => true,
-                    'delete'   => true,
-                    'sort'     => ['column' => 'weekday', 'direction' => 'ascending'],
-                    'columns'  => [
-                        ['caption' => $this->Translate('Child'), 'name' => 'child', 'width' => '150px',
-                         'add' => $kinder[0] ?? '', 'edit' => ['type' => 'Select', 'options' => $auswahl($kinder, $this->Translate('— pick —'))]],
-                        ['caption' => $this->Translate('Day'), 'name' => 'weekday', 'width' => '90px',
-                         'add' => 1, 'edit' => ['type' => 'Select', 'options' => $tage]],
-                        ['caption' => $this->Translate('Subject'), 'name' => 'subject', 'width' => 'auto',
-                         'add' => $faecher[0] ?? '', 'edit' => ['type' => 'Select', 'options' => $auswahl($faecher, $this->Translate('— pick —'))]],
-                        ['caption' => $this->Translate('From'), 'name' => 'start', 'width' => '100px',
-                         'add' => '07:45', 'edit' => ['type' => 'ValidationTextBox', 'validate' => '^\\d{1,2}:\\d{2}$']],
-                        ['caption' => $this->Translate('To'), 'name' => 'end', 'width' => '100px',
-                         'add' => '08:30', 'edit' => ['type' => 'ValidationTextBox', 'validate' => '^\\d{1,2}:\\d{2}$']],
-                        ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
-                         'add' => -1, 'edit' => ['type' => 'SelectColor']],
-                    ],
-                ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Times as HH:MM. Leave the color empty to use the subject color. Lessons that touch (one ends when the next begins) are normal and are not reported as a clash.')
-                ],
-            ],
+            'items'    => $bereiche,
         ];
     }
 
-    private function BetreuungBereich(callable $auswahl, array $kinder, array $tage): array
+    /** Die sechs Tageslisten eines Kindes in einer Reihe. */
+    private function TageszeileFuer(int $nr, array $kind, callable $auswahl, array $faecher): array
     {
-        return [
-            'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('After-school care'),
-            'expanded' => false,
-            'items'    => [
-                [
-                    'type'     => 'List',
-                    'name'     => 'Care',
-                    'rowCount' => 5,
-                    'add'      => true,
-                    'delete'   => true,
-                    'columns'  => [
-                        ['caption' => $this->Translate('Child'), 'name' => 'child', 'width' => '150px',
-                         'add' => $kinder[0] ?? '', 'edit' => ['type' => 'Select', 'options' => $auswahl($kinder, $this->Translate('— pick —'))]],
-                        ['caption' => $this->Translate('Day'), 'name' => 'weekday', 'width' => '90px',
-                         'add' => 1, 'edit' => ['type' => 'Select', 'options' => $tage]],
-                        ['caption' => $this->Translate('Until'), 'name' => 'end', 'width' => '100px',
-                         'add' => '16:00', 'edit' => ['type' => 'ValidationTextBox', 'validate' => '^\\d{1,2}:\\d{2}$']],
+        // Samstag nur, wenn er fuer dieses Kind eingeschaltet ist — sonst stuende
+        // dort eine Spalte, in die niemand etwas eintragen darf.
+        $tage = TimetableCalc::Wochentage((bool)($kind['saturday']['enabled'] ?? false));
+        $spalten = [];
+        foreach ($tage as $tag) {
+            $spalten[] = [
+                // ColumnLayout, damit unter der Liste noch die Betreuung dieses
+                // Tages Platz hat — Schalter und Endzeit nebeneinander.
+                'type'  => 'ColumnLayout',
+                'items' => [
+                    [
+                        'type'     => 'List',
+                        'name'     => self::SlotProp($nr, $tag),
+                        'caption'  => $this->Translate(TimetableCalc::TagKurz($tag)),
+                        'rowCount' => 8,
+                        'add'      => true,
+                        'delete'   => true,
+                        'sort'     => ['column' => 'start', 'direction' => 'ascending'],
+                        // Breiten in PIXELN: Prozentangaben sind in Symcon 9.0 im
+                        // RowLayout fehlerhaft (bestaetigter Bug, Fix erst 9.1).
+                        // Von und Bis sind breiter als frueher, weil ein
+                        // Zeitwaehler drei Felder zeigt statt eines Textfelds.
+                        'columns'  => [
+                            ['caption' => $this->Translate('Subject'), 'name' => 'subject', 'width' => '110px',
+                             'add' => $faecher[0] ?? '',
+                             'edit' => ['type' => 'Select', 'options' => $auswahl($faecher, $this->Translate('— pick —'))]],
+                            ['caption' => $this->Translate('From'), 'name' => 'start', 'width' => '105px',
+                             'add' => TimetableCalc::ZeitFeld('07:45'), 'edit' => ['type' => 'SelectTime']],
+                            ['caption' => $this->Translate('To'), 'name' => 'end', 'width' => '105px',
+                             'add' => TimetableCalc::ZeitFeld('08:30'), 'edit' => ['type' => 'SelectTime']],
+                        ],
+                    ],
+                    [
+                        'type'  => 'RowLayout',
+                        'items' => [
+                            [
+                                'type'    => 'CheckBox',
+                                'name'    => self::CareProp($nr, $tag),
+                                'caption' => $this->Translate('After-school care'),
+                            ],
+                            [
+                                'type'    => 'SelectTime',
+                                'name'    => self::CareEndProp($nr, $tag),
+                                'caption' => $this->Translate('End'),
+                            ],
+                        ],
                     ],
                 ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('A grey block runs from the end of the lessons until this time. It only appears on days that have lessons, and it does not count as teaching time.')
-                ],
-            ],
-        ];
+            ];
+        }
+        return ['type' => 'RowLayout', 'items' => $spalten];
     }
 
     private function FerienBereich(): array
@@ -578,8 +885,14 @@ class Stundenplan extends IPSModuleStrict
                 count($pruef['konflikte']), implode(' · ', array_slice($pruef['konflikte'], 0, 4)));
         }
         if ($pruef['verwaist'] !== []) {
-            $teile[] = sprintf($this->Translate('%d lessons without a match: %s'),
+            $teile[] = sprintf($this->Translate('%d lessons with an unknown subject: %s'),
                 count($pruef['verwaist']), implode(' · ', array_slice($pruef['verwaist'], 0, 4)));
+        }
+        // Was der letzte Abgleich mit den Stundenlisten gemacht hat, gehoert
+        // ebenfalls hierher — sonst verschiebt sich etwas und niemand erfaehrt es.
+        $abgleich = trim((string)@$this->ReadAttributeString('SlotOwnersReport'));
+        if ($abgleich !== '') {
+            $teile[] = $this->Translate('Lesson lists') . ': ' . $abgleich;
         }
         if ($teile === []) {
             $kinder = count($this->Kinder());
@@ -590,7 +903,22 @@ class Stundenplan extends IPSModuleStrict
         return implode('  |  ', $teile);
     }
 
-    /** Namen der Familienmitglieder aus dem Gateway, Kinder zuerst. */
+    /**
+     * Auswahl der Familienmitglieder: Name sichtbar, KENNUNG gespeichert.
+     * Ein bereits gespeicherter Wert, der keine bekannte Kennung ist, bleibt als
+     * eigene Option erhalten — sonst faende die Auswahl ihn nicht wieder und der
+     * naechste Klick auf „Uebernehmen" wuerfe ihn weg.
+     */
+    private function MitgliederOptionen(): array
+    {
+        $optionen = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        foreach ($this->GatewayMitglieder() as $id => $name) {
+            $optionen[] = ['caption' => $name, 'value' => $id];
+        }
+        return $optionen;
+    }
+
+    /** Familienmitglieder aus dem Gateway als Kennung => Name. */
     private function GatewayMitglieder(): array
     {
         $gw = $this->ReadPropertyInteger('GatewayInstanceID');
@@ -605,8 +933,14 @@ class Stundenplan extends IPSModuleStrict
         if (!is_array($roh)) {
             return [];
         }
-        return array_values(array_filter(array_map(
-            static fn(array $u): string => trim((string)($u['name'] ?? '')),
-            array_filter($roh, 'is_array')), static fn(string $n): bool => $n !== ''));
+        $karte = [];
+        foreach (array_filter($roh, 'is_array') as $u) {
+            $id   = trim((string)($u['id'] ?? ''));
+            $name = trim((string)($u['name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $karte[$id] = $name;
+            }
+        }
+        return $karte;
     }
 }

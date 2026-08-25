@@ -26,14 +26,24 @@ Zwei Darstellungen aus denselben Daten:
 
 1. **Kinder** anlegen: Name und Farbe. Ist ein SymDo-Gateway gewählt, lässt sich
    jedes Kind einem Familienmitglied zuordnen — dann trägt die Karte in der App
-   denselben Namen.
+   denselben Namen und zeigt das Foto. Höchstens **sechs** Kinder können Stunden
+   bekommen; die Zahl steht im Code, weil Symcon Eigenschaften nur fest
+   registriert.
 2. **Fächer** pflegen: Name, **Symcon-Symbol** und Farbe. Neun gängige Fächer
    sind vorbelegt. Der Knopf *Fächer aus den Stunden ergänzen* trägt nach, was
    in den Stunden vorkommt, aber noch fehlt — mit einem Vorschlag, den Sie
    danach ändern können.
-3. **Stunden** eintragen: Kind, Tag, Fach, Von, Bis. Die Farbe bleibt leer, dann
-   gilt die des Fachs.
-4. **Betreuung** (falls vorhanden): je Wochentag eine Endzeit.
+3. **Stunden** eintragen: Der Bereich zeigt je Kind einen ausklappbaren
+   Abschnitt, darin nebeneinander eine schmale Liste je Wochentag — Fach, Von,
+   Bis. Von und Bis sind **Zeitwähler**; die Sekunden, die der Wähler anbietet
+   und die Zelle anzeigt, werden ignoriert (das Format der Zelle steckt fest in
+   der Konsole). Der Samstag erscheint nur bei Kindern, für die er eingeschaltet
+   ist. Die Farbe kommt immer vom Fach; eine Ausnahmefarbe je Stunde gibt es
+   nicht.
+4. **Betreuung**: unter jeder Tagesliste ein Schalter und daneben die Endzeit —
+   dort, wo der Tag ohnehin gepflegt wird. Ein grauer Block läuft dann vom Ende
+   des Unterrichts bis zu dieser Zeit, aber nur an Tagen mit Unterricht, und er
+   zählt nicht als Unterrichtszeit.
 5. **Ferien**: Quelle wählen und einmal abrufen.
 6. **Anzeige**: Wochenraster oder Timeline.
 
@@ -74,9 +84,13 @@ Schultag zum Ferientag machen und umgekehrt.
 - Der 14-tägliche Samstag folgt der **Parität der ISO-Kalenderwoche**, nicht
   einem strikten 14-Tage-Rhythmus. In Jahren mit 53 Wochen wiederholt sich die
   Parität deshalb am Jahreswechsel — genau wie im Schulaushang.
-- Kinder und Fächer werden über ihren **Namen** verknüpft. Wer ein Kind oder
-  Fach umbenennt, löst die Zuordnung der zugehörigen Stunden; die Statuszeile
-  meldet das, damit es nicht still im Raster fehlt.
+- **Fächer** werden über ihren Namen verknüpft. Wer ein Fach umbenennt, löst die
+  Zuordnung der zugehörigen Stunden; die Statuszeile meldet das, damit es nicht
+  still im Raster fehlt.
+- Stunden **und Betreuung** hängen an der **Position** des Kindes in der
+  Kinderliste. Beim Umsortieren oder Löschen wandern sie gemeinsam mit — das
+  Modul gleicht das beim Übernehmen ab und meldet, was verschoben oder geleert
+  wurde.
 
 ## Öffentliche Funktionen
 

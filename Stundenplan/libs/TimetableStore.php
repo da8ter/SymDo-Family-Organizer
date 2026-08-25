@@ -20,6 +20,42 @@ declare(strict_types=1);
  */
 trait TimetableStore
 {
+    /** Hoechstzahl der Kinder. Steht im Code, weil Symcon Eigenschaften nur fest
+     *  in Create() registriert — mehr Kinder heissen Codeaenderung UND
+     *  Kernel-Neustart. Je Kind sechs Wochentage, also 6 x 6 Eigenschaften. */
+    public const MAX_KINDER = 6;
+
+    /** Name der Eigenschaft fuer Kind $kind (1-basiert) an Wochentag $tag. */
+    public static function SlotProp(int $kind, int $tag): string
+    {
+        return sprintf('SlotsK%dD%d', $kind, $tag);
+    }
+
+    /** Schalter „Betreuung" unter der Tagesliste. */
+    public static function CareProp(int $kind, int $tag): string
+    {
+        return sprintf('CareK%dD%d', $kind, $tag);
+    }
+
+    /** Endzeit der Betreuung, als Zeitwaehler-Objekt abgelegt. */
+    public static function CareEndProp(int $kind, int $tag): string
+    {
+        return sprintf('CareEndK%dD%d', $kind, $tag);
+    }
+
+    /** Die drei Eigenschaften, die zu Kind $kind an Tag $tag gehoeren.
+     *  @return list<string> */
+    public static function TagProps(int $kind, int $tag): array
+    {
+        return [self::SlotProp($kind, $tag), self::CareProp($kind, $tag), self::CareEndProp($kind, $tag)];
+    }
+
+    /** Ein Schalter, nachsichtig gelesen — siehe ListeLesen. */
+    private function SchalterLesen(string $name): bool
+    {
+        return (bool)@IPS_GetProperty($this->InstanceID, $name);
+    }
+
     /** @return list<array<string,mixed>> Zeilen einer Listen-Eigenschaft. */
     private function ListeLesen(string $name): array
     {
@@ -37,36 +73,64 @@ trait TimetableStore
     /** @return list<array{name:string,color:mixed,userId:string,saturday:array,care:list}> */
     private function Kinder(): array
     {
-        $betreuung = [];
-        foreach ($this->ListeLesen('Care') as $z) {
-            $kind = trim((string)($z['child'] ?? ''));
-            $ende = trim((string)($z['end'] ?? ''));
-            if ($kind === '' || TimetableCalc::Minuten($ende) < 0) {
-                continue;
-            }
-            $betreuung[$kind][] = ['weekday' => (int)($z['weekday'] ?? 0), 'end' => $ende];
-        }
-
         $kinder = [];
         foreach ($this->ListeLesen('Children') as $z) {
             $name = trim((string)($z['name'] ?? ''));
             if ($name === '') {
                 continue;
             }
+            // Die Betreuung haengt wie die Stunden an der POSITION des Kindes:
+            // je Tag ein Schalter und eine Endzeit, gepflegt unter der Tagesliste.
+            $nr = count($kinder) + 1;
+            $betreuung = [];
+            if ($nr <= self::MAX_KINDER) {
+                foreach (TimetableCalc::Wochentage(true) as $tag) {
+                    if (!$this->SchalterLesen(self::CareProp($nr, $tag))) {
+                        continue;
+                    }
+                    $ende = TimetableCalc::ZeitText(@IPS_GetProperty($this->InstanceID, self::CareEndProp($nr, $tag)));
+                    if ($ende === '') {
+                        continue;
+                    }
+                    $betreuung[] = ['weekday' => $tag, 'end' => $ende];
+                }
+            }
             $kinder[] = [
                 'id'       => $name,   // der Name IST die Kennung, siehe Kopf
                 'name'     => $name,
                 'color'    => TimetableSubjects::FarbeHex($z['color'] ?? -1) ?? '#1E88E5',
-                'userId'   => trim((string)($z['userId'] ?? '')),
+                // Nachsichtig gegen den alten Fehler: bis zur Berichtigung hat das
+                // Formular den NAMEN statt der Kennung gespeichert. Steht dort ein
+                // bekannter Mitgliedsname, wird er hier auf die Kennung gedreht —
+                // sonst bliebe das Gesicht leer, bis jemand die Zeile neu waehlt.
+                'userId'   => $this->MitgliedKennung(trim((string)($z['userId'] ?? ''))),
                 'saturday' => [
                     'enabled'  => (bool)($z['saturday'] ?? false),
                     'biweekly' => (bool)($z['biweekly'] ?? false),
                     'parity'   => (string)($z['parity'] ?? 'even') === 'odd' ? 'odd' : 'even',
                 ],
-                'care'     => $betreuung[$name] ?? [],
+                'care'     => $betreuung,
             ];
         }
         return $kinder;
+    }
+
+    /**
+     * Kennung eines Mitglieds. Ist der Wert schon eine Kennung, bleibt er; ist es
+     * ein Name, wird die Kennung dazu gesucht. Ohne Gateway bleibt alles, wie es
+     * ist — dann gibt es ohnehin keine Gesichter.
+     */
+    private function MitgliedKennung(string $wert): string
+    {
+        if ($wert === '') {
+            return '';
+        }
+        $mitglieder = $this->GatewayMitglieder();
+        if (isset($mitglieder[$wert])) {
+            return $wert;
+        }
+        $treffer = array_search($wert, $mitglieder, true);
+        return $treffer === false ? $wert : (string)$treffer;
     }
 
     /** @return list<array{id:string,name:string,icon:string,color:int}> */
@@ -88,31 +152,52 @@ trait TimetableStore
         return $faecher;
     }
 
-    /** @return list<array<string,mixed>> */
+    /**
+     * Alle Stunden, aufgesammelt aus den Tageslisten je Kind.
+     *
+     * Die Struktur der Rueckgabe ist UNVERAENDERT gegenueber der frueheren
+     * Sammelliste — Kachel, Gateway, Briefing und der Prueflauf haengen daran
+     * und merken vom Umbau nichts.
+     *
+     * Kind und Wochentag stehen nicht mehr in der Zeile, sondern SIND die Liste.
+     * Damit kann es keine Stunde mehr geben, deren Kind es nicht gibt.
+     *
+     * @return list<array<string,mixed>>
+     */
     private function Stunden(): array
     {
         $slots = [];
-        foreach ($this->ListeLesen('Slots') as $i => $z) {
-            $kind = trim((string)($z['child'] ?? ''));
-            $von  = trim((string)($z['start'] ?? ''));
-            $bis  = trim((string)($z['end'] ?? ''));
-            if ($kind === '' || TimetableCalc::Minuten($von) < 0 || TimetableCalc::Minuten($bis) < 0) {
-                continue;
+        foreach (array_values($this->Kinder()) as $i => $kind) {
+            $nr = $i + 1;
+            if ($nr > self::MAX_KINDER) {
+                break;
             }
-            $fach = trim((string)($z['subject'] ?? ''));
-            $slots[] = [
-                // Die Zeilennummer als Kennung: sie muss nur INNERHALB eines
-                // Laufs eindeutig sein (Konfliktpruefung, Vergleich mit sich
-                // selbst) und wird nirgends gespeichert.
-                'id'        => 'r' . $i,
-                'childId'   => $kind,
-                'weekday'   => (int)($z['weekday'] ?? 0),
-                'subjectId' => $fach,
-                'subject'   => $fach,
-                'start'     => $von,
-                'end'       => $bis,
-                'color'     => (int)($z['color'] ?? -1),
-            ];
+            foreach (TimetableCalc::Wochentage(true) as $tag) {
+                foreach ($this->ListeLesen(self::SlotProp($nr, $tag)) as $z => $zeile) {
+                    // ZeitText statt trim: die Spalten sind Zeitwaehler und legen
+                    // ein Objekt ab. Alte Zeilen stehen weiter als „07:45" da —
+                    // beide Formen kommen hier gleich heraus.
+                    $von = TimetableCalc::ZeitText($zeile['start'] ?? '');
+                    $bis = TimetableCalc::ZeitText($zeile['end'] ?? '');
+                    if ($von === '' || $bis === '') {
+                        continue;
+                    }
+                    $fach = trim((string)($zeile['subject'] ?? ''));
+                    $slots[] = [
+                        // Kennung nur INNERHALB eines Laufs eindeutig (Konflikt-
+                        // pruefung, Vergleich mit sich selbst); nirgends gespeichert.
+                        'id'        => sprintf('k%dd%dr%d', $nr, $tag, $z),
+                        'childId'   => (string)$kind['name'],
+                        'weekday'   => $tag,
+                        'subjectId' => $fach,
+                        'subject'   => $fach,
+                        'start'     => $von,
+                        'end'       => $bis,
+                        // Keine Farbe je Stunde mehr — sie kommt vom Fach.
+                        'color'     => null,
+                    ];
+                }
+            }
         }
         return $slots;
     }
@@ -252,16 +337,16 @@ trait TimetableStore
      */
     private function PlanPruefen(): array
     {
-        $kinder  = array_column($this->Kinder(), 'name');
         $faecher = array_column($this->Faecher(), 'name');
         $slots   = $this->Stunden();
         $konflikte = [];
         $verwaist  = [];
         foreach ($slots as $s) {
-            if (!in_array($s['childId'], $kinder, true)) {
-                $verwaist[] = sprintf('%s %s: Kind „%s" gibt es nicht',
-                    TimetableCalc::TagKurz((int)$s['weekday']), $s['start'], $s['childId']);
-            } elseif ($s['subjectId'] !== '' && !in_array($s['subjectId'], $faecher, true)) {
+            // Nur noch das FACH kann verwaisen. Das Kind steht seit dem Umbau auf
+            // Tageslisten nicht mehr in der Zeile — es IST die Liste, und die
+            // Zeilen entstehen beim Lesen aus der Kinderliste selbst. Eine Stunde
+            // ohne passendes Kind kann es damit nicht mehr geben.
+            if ($s['subjectId'] !== '' && !in_array($s['subjectId'], $faecher, true)) {
                 $verwaist[] = sprintf('%s %s %s: Fach „%s" gibt es nicht',
                     $s['childId'], TimetableCalc::TagKurz((int)$s['weekday']), $s['start'], $s['subjectId']);
             }

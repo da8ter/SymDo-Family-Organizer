@@ -58,6 +58,59 @@ class TimetableCalc
         return $std * 60 + $min;
     }
 
+    /**
+     * Was in einem Zeitfeld steht → „07:45".
+     *
+     * Symcons SelectTime legt `{"hour":7,"minute":45,"second":0}` ab (als
+     * JSON-Zeichenkette, auch in Listenspalten). Aeltere Eintraege stehen als
+     * schlichtes „07:45" da. Beide Formen kommen hier an, weil die Wanderung die
+     * alten Zeilen NICHT umschreibt — wer nie eine Zeile anfasst, behaelt seine
+     * Zeichenketten.
+     *
+     * Die SEKUNDEN werden verworfen. Der Zeitwaehler der Konsole bietet sie an
+     * und die Zelle zeigt sie sogar (das steckt fest in der Konsole), aber ein
+     * Stundenplan kennt keine Sekunden — „07:45:30" waere hier ein Unfall, kein
+     * Wunsch.
+     *
+     * @param mixed $wert
+     * @return string „HH:MM" oder "" wenn unbrauchbar
+     */
+    public static function ZeitText($wert): string
+    {
+        if (is_string($wert)) {
+            $roh = trim($wert);
+            if ($roh === '') {
+                return '';
+            }
+            // Nur wenn es nach einem Objekt aussieht: „07:45" durch json_decode
+            // zu schicken kostet nichts, aber die Absicht bleibt so lesbar.
+            if ($roh[0] === '{') {
+                $wert = json_decode($roh, true);
+            } else {
+                return self::Minuten($roh) < 0 ? '' : self::Zeit(self::Minuten($roh));
+            }
+        }
+        if (!is_array($wert) || !isset($wert['hour'], $wert['minute'])) {
+            return '';
+        }
+        $std = (int)$wert['hour'];
+        $min = (int)$wert['minute'];
+        if ($std < 0 || $std > 23 || $min < 0 || $min > 59) {
+            return '';
+        }
+        return sprintf('%02d:%02d', $std, $min);
+    }
+
+    /** „07:45" → `{"hour":7,"minute":45,"second":0}` fuer den Zeitwaehler. */
+    public static function ZeitFeld(string $zeit): string
+    {
+        $min = self::Minuten($zeit);
+        if ($min < 0) {
+            $min = 0;
+        }
+        return (string)json_encode(['hour' => intdiv($min, 60), 'minute' => $min % 60, 'second' => 0]);
+    }
+
     /** 465 → „07:45". Fuehrende Null bleibt: „7:45" bricht die Spaltenbreite. */
     public static function Zeit(int $minuten): string
     {
