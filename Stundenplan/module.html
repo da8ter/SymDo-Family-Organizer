@@ -12,12 +12,66 @@
     --kopf:    color-mix(in srgb, var(--content-color) 10%, transparent);
     --accent:  var(--accent-color);
     --viertel: 18px;   /* Pixel je Viertelstunde — der Massstab der Vorlage */
+    /* Vom System vorgegebene Kachelraender (margintop/marginside/marginbottom
+       aus der Abfragezeichenfolge, per JS gesetzt). Vorgabe 0, damit eine
+       Kachel ohne diese Angaben randlos bleibt statt auf geratene Werte zu
+       fallen. Dieselbe Mechanik wie in der ToDoList-Kachel. */
+    --sym-mt:  0px;
+    --sym-ms:  0px;
+    --sym-mb:  0px;
+    --sbw:     6px;   /* Balkenbreite; muss zu ::-webkit-scrollbar passen */
+    /* Rechter Innenabstand, der den Balken MITTIG in den marginside-Streifen
+       legt: der Scrollbereich endet um (marginside - Balken)/2 vor der Kante. */
+    --sb-pad:  max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0; padding: 12px;
+    /* Ein vom System gesetztes Body-Padding wird NEUTRALISIERT: die Raender
+       werden unten selbst aus --sym-* aufgetragen. Vorher standen hier feste
+       12px — die kamen zu dem des Systems HINZU, und der Inhalt rutschte je
+       nach Kacheleinstellung unterschiedlich weit ein. */
+    margin: 0 !important; padding: 0 !important;
+    overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--text); background: var(--bg);
+  }
+
+  /* Der Rahmen traegt die Systemraender, #inhalt scrollt darin. Zwei Ebenen,
+     damit der Balken im rechten Randstreifen sitzt und nicht daneben:
+     links --sym-ms, rechts --sb-pad + --sb-pad + Balken = --sym-ms. */
+  #rahmen {
+    height: 100%; display: flex; flex-direction: column;
+    padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
+             var(--sym-mb) var(--sym-ms);
+  }
+  .scrollbereich {
+    flex: 1; min-height: 0;
+    /* overflow-y: scroll statt auto: der Streifen ist IMMER reserviert, damit
+       der rechte Abstand mit und ohne sichtbaren Balken derselbe ist. Die Spur
+       ist durchsichtig, der Griff erscheint nur bei Bedarf. */
+    overflow-y: scroll;
+    overscroll-behavior: contain;
+    padding: 12px var(--sb-pad) 12px 0;
+  }
+  .scrollbereich::-webkit-scrollbar,
+  .spalten::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbereich::-webkit-scrollbar-track,
+  .spalten::-webkit-scrollbar-track { background: transparent; }
+  .scrollbereich::-webkit-scrollbar-thumb,
+  .spalten::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 70%, transparent);
+    border-radius: 999px;
+  }
+  /* scrollbar-color/-width und ::-webkit-scrollbar schliessen sich gegenseitig
+     aus: ist der Standard gesetzt, uebergeht WebKit die Pseudoelemente. Deshalb
+     bekommt WebKit die Pseudoelemente, und der Standard gilt nur dort, wo es
+     sie nicht gibt. */
+  @supports not selector(::-webkit-scrollbar) {
+    .scrollbereich, .spalten {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+    }
   }
   .leer { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 14px; }
 
@@ -181,12 +235,51 @@
   }
 </style>
 
-<div id="inhalt"><div class="leer">…</div></div>
+<div id="rahmen"><div id="inhalt" class="scrollbereich"><div class="leer">…</div></div></div>
 
 <script>
   /* Der Zustand kommt fertig gerechnet aus PHP: Hoehen, Luecken und Spannen
      sind dort geprueft, damit Raster, Timeline und die Karte in der App
      dieselben Zahlen zeigen. Hier wird nur gezeichnet. */
+  /* ── Systemraender aus der Abfragezeichenfolge uebernehmen ────────────────
+     Die Kachel-Visualisierung uebergibt margintop/marginside/marginbottom in
+     der Adresse. Aufgetragen werden sie selbst (siehe #rahmen), damit der
+     Inhalt nicht unter die eingeblendeten Bedienelemente rutscht. So frueh wie
+     moeglich, damit die Variablen vor dem ersten Zeichnen stehen. */
+  (function systemRaender() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const px = (name) => {
+        const v = parseInt(p.get(name), 10);
+        return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+      };
+      const wurzel = document.documentElement.style;
+      const mt = px('margintop');    if (mt !== null) { wurzel.setProperty('--sym-mt', mt); }
+      const ms = px('marginside');   if (ms !== null) { wurzel.setProperty('--sym-ms', ms); }
+      const mb = px('marginbottom'); if (mb !== null) { wurzel.setProperty('--sym-mb', mb); }
+    } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
+  })();
+
+  /* ── Die tatsaechliche Balkenbreite messen ────────────────────────────────
+     Sie schwankt je nach Umgebung (Webkit auf dem Schreibtisch 6–15 px). Ohne
+     Messung stimmte die Zentrierung des Balkens im Randstreifen nur zufaellig.
+     Gemessen wird an einer Probe mit derselben Klasse wie der Scrollbereich. */
+  (function balkenBreite() {
+    try {
+      const probe = document.createElement('div');
+      probe.className = 'scrollbereich';
+      probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;'
+        + 'display:block;width:100px;height:100px;padding:0;';
+      probe.innerHTML = '<div style="height:200px"></div>';
+      document.body.appendChild(probe);
+      const b = probe.offsetWidth - probe.clientWidth;
+      probe.remove();
+      if (Number.isFinite(b) && b >= 0) {
+        document.documentElement.style.setProperty('--sbw', b + 'px');
+      }
+    } catch (e) { /* Vorgabe --sbw (6px) greift */ }
+  })();
+
   let zustand = null;
   let kindNr  = 0;
   let legende = false;   // Legende der sichtbaren Faecher

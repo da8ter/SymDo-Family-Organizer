@@ -26,6 +26,13 @@ Zwei Darstellungen aus denselben Daten:
   in der Karte der SymDo-App: ein Tippen klappt die Fächer auf, die Pfeile
   blättern durch die Woche.
 
+Beide Ansichten halten sich an die **Ränder, die für die Kachel eingestellt
+sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst
+aufgetragen, statt zu einem festen Innenabstand hinzuzukommen. Gescrollt wird
+in der Kachel selbst, mit demselben schmalen Balken in der Akzentfarbe wie in
+der ToDo-Kachel; sein Streifen ist immer reserviert, damit der rechte Abstand
+nicht springt, sobald der Balken auftaucht.
+
 ## Einrichtung
 
 1. **Kinder** anlegen: Name und Farbe. Ist ein SymDo-Gateway gewählt, lässt sich
