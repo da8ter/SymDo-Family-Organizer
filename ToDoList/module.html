@@ -645,7 +645,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Legende: im Balken steht nur ein Symbol, und auf einem Tablet gibt es keinen
    Mauszeiger, der den Titel verraet. */
 .plan-card { cursor: pointer; }
-.plan-hinweis { margin-top: 8px; font-size: 12px; color: var(--muted-color, #888); text-align: center; }
+
 
 /* Wochentag-Umschalter. Die Breite kommt aus dem laengsten Namen selbst: alle
    liegen uebereinander in derselben Rasterzelle, nur der aktuelle ist sichtbar.
@@ -664,7 +664,24 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 .plan-tagname span.an { visibility: visible; }
 .plan-tagname span.ist-heute { color: var(--accent, #0a84ff); }
-.plan-legende { margin-top: 10px; border-top: 1px solid var(--row-line, rgba(128,128,128,.18)); padding-top: 9px; }
+/* Das Blatt deckt die KARTE ab, nicht den Schirm: es gehoert zum Stundenplan
+   und nicht zur ganzen Oberflaeche. Dafuer braucht die Karte einen Bezug. */
+.plan-card { position: relative; }
+.plan-legendenblatt {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: flex-end;
+  background: color-mix(in srgb, var(--card, var(--card-color)) 55%, transparent);
+  backdrop-filter: blur(3px);
+  border-radius: inherit;
+}
+.plan-legende {
+  width: 100%; max-height: 100%; overflow-y: auto;
+  padding: 10px 12px 12px;
+  background: var(--card, var(--card-color));
+  border-top: 1px solid var(--row-line, rgba(128,128,128,.18));
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, .18);
+}
 .plan-legendenkopf {
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
   font-size: 12px; font-weight: 700; color: var(--muted-color, #888);
@@ -5475,10 +5492,10 @@ function stundenplanFaecher() {
 
 function stundenplanLegendeHtml() {
   const faecher = stundenplanFaecher();
-  if (!faecher.length) { return ''; }
-  if (!stundenplanLegende) {
-    return `<div class="plan-hinweis" data-plan="auf">${translate('Show subjects')}</div>`;
-  }
+  if (!faecher.length || !stundenplanLegende) { return ''; }
+  /* Kein Hinweis „Fächer anzeigen" mehr am Fuss: er stand dauerhaft da, um eine
+     Geste zu erklaeren, die man ohnehin probiert — und nahm der Karte eine
+     Zeile. Ein Tipp auf die Karte oeffnet die Legende weiterhin. */
   const mehrere = ((stundenplan && stundenplan.children) || []).length > 1;
   // KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
   // Doppelstunde. Statt dessen der Name, wenn nur ein Kind das Fach hat.
@@ -5493,10 +5510,14 @@ function stundenplanLegendeHtml() {
   const kopf = stundenplanIstHeute(jetzt)
     ? translate('Subjects today')
     : translate('Subjects on %1').replace('%1', translate(PLAN_TAGE[jetzt] || ''));
-  return `<div class="plan-legende"><div class="plan-legendenkopf">` +
+  /* Ueber der Karte statt darunter: unten angehaengt schob die Legende die
+     Balken nach oben und die Karte wuchs bei jedem Oeffnen. Als Blatt verdeckt
+     sie den Plan, solange man sie liest, und gibt ihn unveraendert wieder frei. */
+  return `<div class="plan-legendenblatt" data-plan="zu">` +
+    `<div class="plan-legende" data-plan="halt"><div class="plan-legendenkopf">` +
     `<span>${escapeHtml(kopf)}</span>` +
     `<button class="zu" data-plan="zu" aria-label="${translate('Close')}">✕</button></div>` +
-    `<div class="plan-faecher">${eintraege}</div></div>`;
+    `<div class="plan-faecher">${eintraege}</div></div></div>`;
 }
 
 /* Zeichnet die Karte. Getrennt von renderDashboard, damit die Kachel-Fassung
@@ -6366,7 +6387,16 @@ function renderDashboard() {
       renderDashboard();
       return;
     }
-    stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
+    /* Ein Tipp INS Blatt laesst es offen — sonst schloesse jeder Griff nach
+       einem Fach die Legende, die man gerade liest. Die Reihenfolge ist die
+       Aussage: das ✕ liegt im Blatt und muss deshalb ZUERST geprueft werden. */
+    if (e.target.closest('button[data-plan="zu"]')) {
+      stundenplanLegende = false;
+    } else if (e.target.closest('[data-plan="halt"]')) {
+      return;
+    } else {
+      stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
+    }
     renderDashboard();
   }));
   briefingKlappHinweis(el);

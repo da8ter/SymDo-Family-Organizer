@@ -120,17 +120,27 @@ trait TimetableStore
      * ein Name, wird die Kennung dazu gesucht. Ohne Gateway bleibt alles, wie es
      * ist — dann gibt es ohnehin keine Gesichter.
      */
+    /**
+     * Nur noch die Kennung selbst — die Nachsicht gegen NAMEN ist raus.
+     *
+     * Sie war als Rettung fuer Zeilen gedacht, die aus der Zeit stammen, als das
+     * Formular den Namen statt der Kennung speicherte. Genau daran ist sie
+     * gescheitert: in Tims Zeile stand „Mia", und die Nachsicht loeste das
+     * pflichtschuldig auf Mias Kennung auf — beide Kinder trugen dasselbe Foto.
+     * Ein LEERES Bild haette dem Nutzer gesagt, dass die Zuordnung fehlt; ein
+     * fremdes Foto sagt gar nichts, es sieht nur richtig aus.
+     *
+     * Wie „Mia" in Tims Zeile kam: als die Auswahlliste von Namen auf Kennungen
+     * umgestellt wurde, stand Tims alter Wert nicht mehr unter den Optionen —
+     * und ein Select ohne passende Option faellt auf die erste zurueck.
+     */
     private function MitgliedKennung(string $wert): string
     {
+        $wert = trim($wert);
         if ($wert === '') {
             return '';
         }
-        $mitglieder = $this->GatewayMitglieder();
-        if (isset($mitglieder[$wert])) {
-            return $wert;
-        }
-        $treffer = array_search($wert, $mitglieder, true);
-        return $treffer === false ? $wert : (string)$treffer;
+        return isset($this->GatewayMitglieder()[$wert]) ? $wert : '';
     }
 
     /** @return list<array{id:string,name:string,icon:string,color:int}> */

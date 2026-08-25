@@ -33,13 +33,16 @@ Zwei Darstellungen aus denselben Daten:
   Oben rechts ein Umschalter (‹ Wochentag ›), der durch die
   Woche blättert; er startet auf heute und hebt den heutigen Tag farbig hervor.
   Seine Breite richtet sich nach dem längsten Wochentagsnamen, damit die Pfeile
-  beim Blättern nicht wandern. Ein Klick auf die Kachel klappt
-  eine **Legende** der heute sichtbaren Fächer auf: Farbe, Symbol und Name, und
-  wenn ein Fach nur bei einem Kind vorkommt, auch dessen Name. Im Balken steht
-  nur ein Symbol — auf einem Tablet gibt es keinen Mauszeiger, der es verrät.
+  beim Blättern nicht wandern. Ein Tipp auf die Kachel öffnet eine **Legende**
+  der sichtbaren Fächer — als Blatt **über** dem Plan, nicht darunter angehängt:
+  unten angehängt schob sie die Balken aus der Kachel. Sie nennt Farbe, Symbol
+  und Name, und wenn ein Fach nur bei einem Kind vorkommt, auch dessen Namen.
+  Ein Tipp daneben oder auf das ✕ schließt sie, ein Tipp auf ein Fach lässt sie
+  offen. Im Balken steht nur ein Symbol — auf einem Tablet gibt es keinen
+  Mauszeiger, der es verrät.
   Dieselbe Legende, derselbe Umschalter, derselbe Jetzt-Strich **und derselbe
-  graue Ferienbalken** stecken in der Karte der SymDo-App: ein Tippen klappt die
-  Fächer auf, die Pfeile blättern durch die Woche.
+  graue Ferienbalken** stecken in der Karte der SymDo-App; dort deckt das Blatt
+  die Karte ab statt den ganzen Schirm.
 
 Beide Ansichten halten sich an die **Ränder, die für die Kachel eingestellt
 sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst
