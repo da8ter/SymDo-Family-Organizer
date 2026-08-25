@@ -46,18 +46,19 @@ Familien-App für Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-S
 - Tägliches Briefing mit Sprachausgabe (OpenAI, Azure oder ElevenLabs) — acht Personas vom Butler bis zum Drillsergeant
 - KI-Analyse: Foto, PDF oder E-Mail wird zu Aufgaben-, Termin- und Notiz-Vorschlägen (eigener Schlüssel oder lokaler Server)
 - Web-Push aufs Handy: fällige Aufgaben, neues Briefing, neue KI-Vorschläge
-- Stundenplan der Kinder als Zeitleiste in der Übersicht — je Kind ein Balken mit den heutigen Stunden
+- Stundenplan der Kinder als Zeitleiste in der Übersicht — je Kind ein Balken, ein Strich markiert die aktuelle Zeit, und ein Umschalter blättert durch die Wochentage
 
 ## Stundenplan
 Der Wochenplan der Kinder als eigene Kachel: Fächer mit Symbol und Farbe, Zeiten,
 Betreuung und Ferien. Gepflegt wird alles im Backend der Instanz.
 
-- **Wochenraster** mit fester Zeitachse, farbigen Stunden und „frei"-Blöcken; heutiger Tag hervorgehoben
-- **Timeline** je Kind — als zweite Kachel und, wenn eingeschaltet, in der SymDo-Übersicht
-- Fächer selbst gepflegt: Name, **Symcon-Symbol** und Farbe; eine einzelne Stunde darf die Farbe überschreiben
+- **Wochenraster** mit fester Zeitachse, farbigen Stunden und „frei"-Blöcken; heutiger Tag hervorgehoben. Alle Tage sind gleich breit; zu lange Fachnamen enden mit „…"
+- **Timeline** je Kind — als zweite Kachel und, je Instanz zuschaltbar, in der SymDo-Übersicht. Ein Strich zeigt die aktuelle Zeit, ein Umschalter blättert durch die Woche, ein Tipp öffnet die Legende der sichtbaren Fächer
+- Eingetragen wird je Kind in einem ausklappbaren Bereich, darin nebeneinander eine schmale Liste je Wochentag — Fach, Von, Bis als Zeitwähler
+- Fächer selbst gepflegt: Name, **Symcon-Symbol** und Farbe; die Farbe einer Stunde kommt immer vom Fach
 - Samstag je Kind zuschaltbar, auch nur in geraden oder ungeraden Kalenderwochen
-- Betreuung je Wochentag — als grauer Block bis zur Endzeit, zählt nicht als Unterricht
-- Ferien und Feiertage über OpenHolidaysAPI (kostenlos, ohne Konto) oder das Almanac-Modul
+- Betreuung je Kind und Wochentag, direkt unter der Tagesliste — als grauer Block bis zur Endzeit, zählt nicht als Unterricht
+- Ferien und Feiertage über OpenHolidaysAPI (kostenlos, ohne Konto) oder das Almanac-Modul; an freien Tagen wird der Balken grau und nennt Ferien oder Feiertag beim Namen
 
 ## Anleitungen:
 
