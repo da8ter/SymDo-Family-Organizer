@@ -9,11 +9,13 @@ Zwei Darstellungen aus denselben Daten:
 - **Wochenraster** — feste Zeitachse links, daneben die Tagesspalten. Jede
   Stunde eine farbige Karte mit Symbol, Fach und Zeitspanne; Lücken als graue
   „frei"-Blöcke; der heutige Tag mit Kapsel, die laufende oder nächste Stunde
-  mit hellem Rand. Alle Tage sind **gleich breit** und teilen sich die Breite
-  neben der Zeitachse — auf üblichen Kacheln passt die ganze Woche
-  nebeneinander. Zu lange Fachnamen enden mit „…". Wird eine Spalte sehr
-  schmal, weicht der Symbolkreis: er nähme dem Namen fast den ganzen Platz.
-  Erst unterhalb der Mindestbreite scrollt das Raster wieder waagerecht.
+  mit hellem Rand. Jede Stunde sitzt **auf ihrer Uhrzeit**, nicht auf der
+  vorigen — sie steht damit genau auf ihrer Marke in der Zeitachse. Alle Tage
+  sind **gleich breit** und teilen sich die Breite neben der Zeitachse; ihre
+  Mindestbreite ist „das Wort *Mathematik* passt neben den Symbolkreis",
+  gemessen an der tatsächlich verwendeten Schrift. Ist die Kachel breiter,
+  werden die Spalten breiter; ist sie schmaler, scrollt das Raster waagerecht.
+  Fachnamen, die trotzdem nicht hineinpassen, enden mit „…".
 - **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
   15-Minuten-Raster. Ein Strich in der Akzentfarbe markiert die **aktuelle
   Zeit** — nur am heutigen Tag und nur, solange sie in der Wochenspanne liegt;
