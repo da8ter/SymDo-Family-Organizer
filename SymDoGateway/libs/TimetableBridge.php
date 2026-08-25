@@ -15,10 +15,36 @@ trait TimetableBridge
 
     private function TimetableCreate(): void
     {
-        // Der Schalter stand bis hierher in JEDER Stundenplan-Instanz. Er gehoert
-        // aber dorthin, wo man die App einrichtet: wer die Karte sucht, sucht sie
-        // im SymDo-Backend und nicht im Formular eines anderen Moduls.
-        $this->RegisterPropertyBoolean('TimetableEnabled', false);
+        // Der Schalter stand einmal in JEDER Stundenplan-Instanz, dann als EIN
+        // Haekchen hier. Beides war falsch: im Modul sucht ihn niemand, und ein
+        // Haekchen fuer alle zeigte bei zwei Instanzen beide Plaene — dieselben
+        // Kinder standen doppelt in der App.
+        //
+        // Jetzt eine Zeile je Instanz. Eigenschaften registriert Symcon FEST in
+        // Create(), eine je Instanz ist damit unmoeglich; deshalb eine Liste, die
+        // ihre Zeilen beim Aufbau des Formulars aus den vorhandenen Instanzen
+        // bekommt und beim Uebernehmen zurueckgeschrieben wird.
+        $this->RegisterPropertyString('TimetableChoice', '[]');
+    }
+
+    /**
+     * Instanz-Kennung => anzeigen? aus der gespeicherten Liste.
+     *
+     * @return array<int,bool>
+     */
+    private function TimetableChoiceMap(): array
+    {
+        // IPS_GetConfiguration statt ReadPropertyString: die Eigenschaft entsteht
+        // in Create() und existiert erst beim naechsten Kernel-Start.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $roh = json_decode((string)($cfg['TimetableChoice'] ?? '[]'), true);
+        $karte = [];
+        foreach (is_array($roh) ? $roh : [] as $z) {
+            if (is_array($z) && (int)($z['id'] ?? 0) > 0) {
+                $karte[(int)$z['id']] = (bool)($z['show'] ?? false);
+            }
+        }
+        return $karte;
     }
 
     /**
@@ -37,7 +63,7 @@ trait TimetableBridge
         // naechsten Kernel-Start nicht gibt, laesst „Uebernehmen" das Formular
         // scheitern. Bis dahin ein Hinweis statt eines Feldes, das nichts tut.
         $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        if (!is_array($cfg) || !array_key_exists('TimetableEnabled', $cfg)) {
+        if (!is_array($cfg) || !array_key_exists('TimetableChoice', $cfg)) {
             return [[
                 'type'     => 'ExpansionPanel',
                 'caption'  => $this->Translate('Timetable'),
@@ -48,9 +74,28 @@ trait TimetableBridge
                 ]],
             ]];
         }
-        $namen = [];
+        /* Die Zeilen entstehen HIER aus den vorhandenen Instanzen, nicht aus der
+           gespeicherten Liste: eine neu angelegte Instanz taucht damit von selbst
+           auf, eine geloeschte verschwindet. Aus der gespeicherten Liste kommt
+           nur das Haekchen. */
+        $wahl   = $this->TimetableChoiceMap();
+        $zeilen = [];
         foreach ($eigene as $id) {
-            $namen[] = sprintf('%s (#%d)', IPS_GetName($id), $id);
+            $kinder = [];
+            $c = json_decode((string)@IPS_GetConfiguration($id), true);
+            foreach ((array)json_decode((string)($c['Children'] ?? '[]'), true) as $k) {
+                if (is_array($k) && trim((string)($k['name'] ?? '')) !== '') {
+                    $kinder[] = trim((string)$k['name']);
+                }
+            }
+            $zeilen[] = [
+                'id'     => (int)$id,
+                'name'   => sprintf('%s (#%d)', IPS_GetName((int)$id), (int)$id),
+                // Die Kinder mit anzeigen: nur so sieht man, dass zwei Instanzen
+                // DIESELBEN fuehren — genau daran stand jedes Kind doppelt.
+                'kinder' => $kinder === [] ? '—' : implode(', ', $kinder),
+                'show'   => $wahl[(int)$id] ?? false,
+            ];
         }
         return [[
             'type'     => 'ExpansionPanel',
@@ -59,16 +104,28 @@ trait TimetableBridge
             'items'    => [
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate("The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide whether the app shows it.")
+                    'caption' => $this->Translate("The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide which instances the app shows.")
                 ],
                 [
-                    'type'    => 'CheckBox',
-                    'name'    => 'TimetableEnabled',
-                    'caption' => $this->Translate('Show the timetable on the dashboard of the app')
+                    'type'     => 'List',
+                    'name'     => 'TimetableChoice',
+                    'rowCount' => max(2, count($zeilen)),
+                    'add'      => false,
+                    'delete'   => false,
+                    'columns'  => [
+                        ['caption' => $this->Translate('Instance'), 'name' => 'name', 'width' => '260px'],
+                        ['caption' => $this->Translate('Children'), 'name' => 'kinder', 'width' => 'auto'],
+                        ['caption' => $this->Translate('In the app'), 'name' => 'show', 'width' => '90px',
+                         'edit' => ['type' => 'CheckBox']],
+                        // Die Kennung traegt die Zuordnung und gehoert deshalb in
+                        // die Zeile — UNSICHTBARE Spalten speichert Symcon nicht.
+                        ['caption' => 'ID', 'name' => 'id', 'width' => '70px'],
+                    ],
+                    'values'   => $zeilen,
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => sprintf($this->Translate('Data from: %s'), implode(', ', $namen))
+                    'caption' => $this->Translate('Two instances with the same children put every child into the app twice. For both views of ONE plan, give the second instance the first as its data source — then it does not appear here at all.')
                 ],
             ],
         ]];
@@ -198,21 +255,25 @@ trait TimetableBridge
      * Instanzen, die ihren Plan in der APP zeigen sollen. Das Briefing hat einen
      * eigenen Schalter und richtet sich nicht danach.
      *
-     * Ein Schalter fuer alle statt einer je Instanz: Spiegel-Instanzen sind schon
-     * draussen, und zwei UNABHAENGIGE Stundenplaene gehoeren derselben Familie —
-     * einen davon auszublenden waere ein Fall, den es zu erfinden nicht lohnt.
+     * Eine Zeile je Instanz. Ein Haekchen fuer alle stand hier zuerst, mit der
+     * Begruendung, zwei unabhaengige Stundenplaene gehoerten derselben Familie —
+     * das war ein Fehlschluss: zwei Instanzen mit denselben Kindern schoben jedes
+     * Kind DOPPELT in die App.
      *
      * @return list<int>
      */
     private function TimetableInstances(): array
     {
-        // IPS_GetConfiguration statt ReadPropertyBoolean: die Eigenschaft entsteht
-        // in Create() und existiert erst beim naechsten Kernel-Start.
-        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        if (!is_array($cfg) || !(bool)($cfg['TimetableEnabled'] ?? false)) {
-            return [];
+        $wahl = $this->TimetableChoiceMap();
+        $ids  = [];
+        foreach ($this->TimetableOwnInstances() as $id) {
+            // Unbekannte Instanz = AUS. Eine neue soll nicht ungefragt den
+            // Stundenplan der Kinder auf jedes gekoppelte Geraet schieben.
+            if ($wahl[$id] ?? false) {
+                $ids[] = $id;
+            }
         }
-        return $this->TimetableOwnInstances();
+        return $ids;
     }
 
     /**

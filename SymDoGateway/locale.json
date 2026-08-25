@@ -348,9 +348,11 @@
             "Compact keeps a fixed order: a short greeting, then the appointments and tasks in brief, then how long each child has school, and at the end how many items are on the shopping list. Detailed writes flowing text as before and mentions the school times as well. They come from the Timetable module — without it that part is simply left out. The tone still applies, but brevity wins.": "Kompakt hält eine feste Reihenfolge ein: eine kurze Begrüßung, dann die Termine und Aufgaben kurz und bündig, danach wie lange welches Kind Schule hat, und zum Schluss die Anzahl der Artikel auf der Einkaufsliste. Ausführlich schreibt wie bisher Fließtext und nennt die Schulzeiten ebenfalls. Sie kommen aus dem Stundenplan-Modul — ohne es entfällt dieser Teil einfach. Der Tonfall gilt weiterhin, aber die Kürze hat Vorrang.",
             "Timetable": "Stundenplan",
             "The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Die Stundenplan-Einstellung erscheint nach dem nächsten Symcon-Neustart — sie ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul wieder geladen hat.",
-            "The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide whether the app shows it.": "Die Karte zeigt je Kind einen Balken mit dem Schultag, eine Marke für die aktuelle Zeit und einen Umschalter durch die Wochentage. Gepflegt wird der Plan im Stundenplan-Modul — hier entscheidest du nur, ob die App ihn zeigt.",
-            "Show the timetable on the dashboard of the app": "Stundenplan auf dem Dashboard der App anzeigen",
-            "Data from: %s": "Daten aus: %s"
+            "The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide which instances the app shows.": "Die Karte zeigt je Kind einen Balken mit dem Schultag, eine Marke für die aktuelle Zeit und einen Umschalter durch die Wochentage. Gepflegt wird der Plan im Stundenplan-Modul — hier entscheidest du nur, welche Instanzen die App zeigt.",
+            "Instance": "Instanz",
+            "Children": "Kinder",
+            "In the app": "In der App",
+            "Two instances with the same children put every child into the app twice. For both views of ONE plan, give the second instance the first as its data source — then it does not appear here at all.": "Zwei Instanzen mit denselben Kindern stellen jedes Kind doppelt in die App. Für beide Ansichten EINES Plans gibst du der zweiten Instanz die erste als Datenquelle — dann taucht sie hier gar nicht mehr auf."
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",

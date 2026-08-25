@@ -85,8 +85,15 @@ Meldung entsteht.
 
 Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern im
 SymDo-Gateway unter *Stundenplan* — zusammen mit dem Übrigen, was die App
-anzeigt. Der Schalter stand bis zuletzt in jeder Stundenplan-Instanz; wer die
-Karte suchte, suchte sie aber im SymDo-Backend.
+anzeigt. Dort steht eine Zeile je Instanz mit einem Häkchen; eine neu angelegte
+Instanz ist zunächst **aus**, damit sie den Stundenplan der Kinder nicht
+ungefragt auf jedes gekoppelte Gerät schiebt.
+
+> **Zwei Instanzen mit denselben Kindern** stellen jedes Kind **doppelt** in die
+> App — die Zeile im Gateway nennt deshalb die Kinder je Instanz. Wer beide
+> Ansichten *eines* Plans will, gibt der zweiten Instanz die erste als
+> **Datenquelle** (siehe unten); dann taucht sie im Gateway gar nicht auf und
+> der Plan wird nur einmal gepflegt.
 
 Die Statuszeile unten meldet Überschneidungen und Stunden, deren Kind oder Fach
 es nicht (mehr) gibt.
