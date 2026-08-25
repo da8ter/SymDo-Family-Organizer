@@ -320,6 +320,11 @@ trait TimetableStore
         return [
             'mode'     => $this->Darstellung(),
             'date'     => $heute,
+            // Die aktuelle Minute fuer den Jetzt-Strich in der Timeline — und
+            // NUR, wenn dieser Plan auch von heute handelt. Die Abendvorschau
+            // baut denselben Plan fuer morgen; ein Strich darin behauptete, es
+            // sei gerade Dienstagvormittag, obwohl der Dienstag noch bevorsteht.
+            'now'      => $heute === date('Y-m-d') ? TimetableCalc::Minuten($jetzt) : null,
             'span'     => [$von, $bis],
             'holiday'  => $ferien,
             'children' => $ausgabe,

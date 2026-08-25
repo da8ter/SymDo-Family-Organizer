@@ -11,7 +11,11 @@ Zwei Darstellungen aus denselben Daten:
   „frei"-Blöcke; der heutige Tag mit Kapsel, die laufende oder nächste Stunde
   mit hellem Rand.
 - **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
-  15-Minuten-Raster. Oben rechts ein Umschalter (‹ Wochentag ›), der durch die
+  15-Minuten-Raster. Ein Strich in der Akzentfarbe markiert die **aktuelle
+  Zeit** — nur am heutigen Tag und nur, solange sie in der Wochenspanne liegt;
+  danach verschwindet er, statt am Rand zu kleben. Er läuft alle 30 Sekunden
+  weiter, gerechnet ab der Uhrzeit des Servers, nicht der des Betrachters.
+  Oben rechts ein Umschalter (‹ Wochentag ›), der durch die
   Woche blättert; er startet auf heute und hebt den heutigen Tag farbig hervor.
   Seine Breite richtet sich nach dem längsten Wochentagsnamen, damit die Pfeile
   beim Blättern nicht wandern. Ein Klick auf die Kachel klappt

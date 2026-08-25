@@ -132,6 +132,21 @@
   .ticks .linie { position: absolute; top: 4px; left: 0; right: 0; height: 1px; background: var(--line); }
   .ticks span { position: absolute; top: 2px; width: 1px; height: 5px; background: var(--muted); opacity: .5; }
   .ticks span.stark { width: 2px; opacity: .8; }
+  /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
+     ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
+     Kachelfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht —
+     die Akzentfarbe allein kann auf einem farbigen Block untergehen. */
+  .jetztstrich {
+    position: absolute; top: -4px; height: 37px; width: 2px; z-index: 3;
+    background: var(--accent); border-radius: 1px; pointer-events: none;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
+    transform: translateX(-1px);
+  }
+  .jetztstrich::before {
+    content: ''; position: absolute; left: -3px; top: -3px;
+    width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
+  }
   .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
   .keinTag { font-size: 12px; color: var(--muted); padding: 4px 0; }
 
@@ -176,6 +191,12 @@
   let kindNr  = 0;
   let legende = false;   // Legende der sichtbaren Faecher
   let tagNr   = 0;       // gewaehlter Wochentag in der Timeline, 0 = noch keiner
+  /* Wann der Plan mit seiner Minutenangabe eintraf. Der Strich laeuft zwischen
+     zwei Sendungen weiter, sonst spraenge er alle fuenf Minuten. Gezaehlt wird
+     die VERGANGENE Zeit seit dem Eintreffen, nicht die Uhr des Betrachters:
+     dessen Zeitzone muss nicht die des Servers sein. */
+  let planAn  = 0;
+  let ticker  = null;
 
   function esc(t) {
     return String(t == null ? '' : t).replace(/[&<>"']/g, function (z) {
@@ -213,12 +234,58 @@
     return h.toFixed(1).replace('.', ',') + ' Stunden';
   }
 
+  /* Die aktuelle Minute des SERVERS, fortgeschrieben um die Zeit seit dem
+     Eintreffen des Plans. null heisst „gilt nicht fuer heute" — dann gibt es
+     auch keinen Strich. */
+  function jetztMinute() {
+    if (!zustand || zustand.now == null) { return null; }
+    const her = planAn ? Math.max(0, (Date.now() - planAn) / 60000) : 0;
+    return zustand.now + her;
+  }
+
+  /* Der Strich fuer eine Balkenzeile — leer, wenn der gewaehlte Tag nicht heute
+     ist oder die Uhr ausserhalb der Wochenspanne steht. Kein Klemmen an den
+     Rand: ein Strich, der um 6 Uhr auf dem Schulbeginn klebte, behauptete, der
+     Unterricht laufe. */
+  function jetztStrichHtml(istHeute, von, spanne) {
+    const jetzt = jetztMinute();
+    if (!istHeute || jetzt === null || jetzt < von || jetzt > von + spanne) { return ''; }
+    return '<div class="jetztstrich" title="jetzt ' + esc(uhr(Math.floor(jetzt)))
+      + '" style="left:' + ((jetzt - von) / spanne * 100) + '%"></div>';
+  }
+
+  /* Zwischen zwei Sendungen weiterlaufen. Nur die Position wird gesetzt, nicht
+     neu gezeichnet — ein Neuzeichnen schloesse die Legende und risse einen
+     gerade gedrueckten Pfeil unter dem Finger weg. */
+  function tickerStellen() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    if (!zustand || zustand.mode !== 'timeline' || zustand.now == null) { return; }
+    ticker = setInterval(function () {
+      const striche = document.querySelectorAll('.jetztstrich');
+      const jetzt = jetztMinute();
+      if (jetzt === null) { return; }
+      const von = zustand.span[0], spanne = Math.max(zustand.span[1] - von, 60);
+      if (jetzt < von || jetzt > von + spanne) {
+        // Aus der Spanne gelaufen (Nachmittag): wegnehmen statt am Rand kleben.
+        striche.forEach(function (n) { n.remove(); });
+        return;
+      }
+      if (striche.length === 0) { zeichne(); return; }
+      striche.forEach(function (n) {
+        n.style.left = ((jetzt - von) / spanne * 100) + '%';
+        n.title = 'jetzt ' + uhr(Math.floor(jetzt));
+      });
+    }, 30000);
+  }
+
   function handleMessage(daten) {
     if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
     if (!daten || !Array.isArray(daten.children)) { return; }
     zustand = daten;
+    planAn = Date.now();
     if (kindNr >= daten.children.length) { kindNr = 0; }
     zeichne();
+    tickerStellen();
   }
 
   function zeichne() {
@@ -510,7 +577,9 @@
           + ((m - von) / spanne * 100) + '%"></span>';
       }
 
-      html += '<div class="balken">' + stuecke + '</div>'
+      // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern
+      // liegen, nicht darunter.
+      html += '<div class="balken">' + stuecke + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
         + '<div class="ticks">' + ticks + '</div>'
         + '<div class="fuss"><span>Beginn: ' + esc(beginn) + '</span>'
         + '<span>Ende: ' + esc(ende) + '</span></div></div>';
