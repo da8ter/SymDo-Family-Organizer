@@ -1918,13 +1918,28 @@ trait Briefing
         // oben bleibt trotzdem stehen, denn ein alter Stand ohne `tone` kann hier
         // jederzeit ankommen.
         $personas = $this->BriefingPersonas();
+        // Der Rueckfall auf die Reihenfolge gilt NUR, wenn die Zeilenzahl passt.
+        //
+        // Am 24.08.2026 im Betrieb gesehen: nach dem Entfernen der Persona
+        // „Kumpel" lagen noch NEUN Zeilen fuer ACHT Personas, und Symcon hatte
+        // beim letzten Speichern das Feld `tone` nicht mitgeschrieben. Die
+        // Zuordnung verschob sich dadurch ab der vierten Zeile — das
+        // Drillsergeant-Briefing sprach mit der Stimme des Komikers, und Digga
+        // verlor seine ganz. Eine FALSCHE Stimme ist schlimmer als die
+        // eingebaute: die faellt auf, die falsche klingt nur seltsam.
+        $passt = count($roh) === count($personas);
+        if (!$passt) {
+            $this->SendDebug('Briefing', sprintf(
+                'Stimmen-Zuordnung: %d Zeilen zu %d Personas — Reihenfolge wird NICHT geraten, '
+                . 'nur Zeilen mit eigenem Schluessel zaehlen', count($roh), count($personas)), 0);
+        }
         $karte = [];
         foreach ($roh as $i => $zeile) {
             if (!is_array($zeile)) {
                 continue;
             }
             $ton = trim((string)($zeile['tone'] ?? ''));
-            if ($ton === '' && isset($personas[$i]['key'])) {
+            if ($ton === '' && $passt && isset($personas[$i]['key'])) {
                 $ton = (string)$personas[$i]['key'];
             }
             if ($ton === '') {
