@@ -2654,7 +2654,13 @@ html[data-symdo-theme="dark"] .member-bar {
   #shoppingListArea > .item-card.span-all { grid-column: 1 / -1; }
   #dashboardContent {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    /* HOECHSTENS ZWEI Spalten, egal wie breit der Schirm ist. Mit auto-fit
+       standen bei 1400px drei bis vier Karten nebeneinander, und eine
+       Aufgabenzeile in einer 340px-Spalte ist zu schmal, um noch etwas zu
+       taugen. Zwei Spalten geben bei 1400px rund 690px je Karte.
+       In Betrieb sind ohnehin genau zwei Listen — Aufgaben und Termine
+       (SHOW_MY_TASKS_CARD steht auf false) —, die damit nebeneinander stehen. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--gap);
     row-gap: 0;
     /* stretch statt start: Karten in DERSELBEN Reihe bekommen dieselbe Hoehe.
