@@ -295,9 +295,20 @@ trait TimetableHolidays
             $schule, count($abschnitte) - $schule);
     }
 
-    /** Der abgelegte Stand. */
+    /**
+     * Der abgelegte Stand — oder NICHTS, wenn keine Quelle gewaehlt ist.
+     *
+     * Der abgerufene Stand bleibt beim Abschalten absichtlich liegen: wer die
+     * Quelle nur kurz wechselt, soll seine Ferien nicht neu holen muessen. Ohne
+     * diese Abfrage wirkte er aber weiter — Band, grauer Balken und die Zeile im
+     * Briefing blieben stehen, obwohl im Formular „Keine" stand. Wer die Quelle
+     * abschaltet, will keine Ferien mehr sehen; das ist die ganze Aussage.
+     */
     private function Ferien(): array
     {
+        if ((string)@IPS_GetProperty($this->InstanceID, 'HolidaySource') === 'none') {
+            return [];
+        }
         $roh = json_decode((string)@$this->ReadAttributeString('Holidays'), true);
         return is_array($roh) ? $roh : [];
     }

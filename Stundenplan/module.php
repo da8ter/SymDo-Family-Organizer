@@ -896,6 +896,12 @@ class Stundenplan extends IPSModuleStrict
     private function FerienStatus(): string
     {
         $wann = $this->ReadAttributeInteger('HolidaysFetched');
+        /* Ohne Quelle sagt die Zeile das — und NICHT „0 Abschnitte". Der
+           abgerufene Stand liegt weiter da, er wirkt nur nicht; „0" haette
+           behauptet, er sei weg. */
+        if ((string)$this->ReadPropertyString('HolidaySource') === 'none') {
+            return $this->Translate('No holiday source selected — the plan always applies. A fetched set stays stored and takes effect again as soon as a source is chosen.');
+        }
         if ($wann <= 0) {
             return $this->Translate('Not fetched yet.');
         }

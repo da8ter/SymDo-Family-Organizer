@@ -110,7 +110,7 @@ anderen Form — der Plan wird nur einmal gepflegt.
 |---|---|
 | **OpenHolidaysAPI** | Kostenlos, ohne Konto und ohne Schlüssel. Bundesland im Formular wählen. Geprüft. |
 | **Almanac** (Wilkware) | **Ungeprüft** — siehe unten. |
-| **Keine** | Der Plan gilt immer. |
+| **Keine** | Der Plan gilt immer. Ein bereits abgerufener Stand bleibt gespeichert, **wirkt aber nicht**: kein Band, kein grauer Ferienbalken, keine Ferienzeile im Briefing. Er greift wieder, sobald eine Quelle gewählt ist. |
 
 Abgerufen wird einmal täglich, dazu auf Knopfdruck. Ein misslungener Abruf lässt
 den abgelegten Stand stehen, statt ihn zu leeren: ein Netzfehler darf keinen
