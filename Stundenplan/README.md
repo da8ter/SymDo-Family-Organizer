@@ -37,8 +37,8 @@ Zwei Darstellungen aus denselben Daten:
   der sichtbaren Fächer — als Blatt **über** dem Plan, nicht darunter angehängt:
   unten angehängt schob sie die Balken aus der Kachel. Sie nennt Farbe, Symbol
   und Name, und wenn ein Fach nur bei einem Kind vorkommt, auch dessen Namen.
-  Ein Tipp daneben oder auf das ✕ schließt sie, ein Tipp auf ein Fach lässt sie
-  offen. Im Balken steht nur ein Symbol — auf einem Tablet gibt es keinen
+  Ein zweiter Tipp schließt sie wieder — auf das Blatt, auf ein Fach, daneben
+  oder auf das ✕, alles schließt. Im Balken steht nur ein Symbol — auf einem Tablet gibt es keinen
   Mauszeiger, der es verrät.
   Dieselbe Legende, derselbe Umschalter, derselbe Jetzt-Strich **und derselbe
   graue Ferienbalken** stecken in der Karte der SymDo-App; dort deckt das Blatt

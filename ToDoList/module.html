@@ -5526,7 +5526,7 @@ function stundenplanLegendeHtml() {
      Balken nach oben und die Karte wuchs bei jedem Oeffnen. Als Blatt verdeckt
      sie den Plan, solange man sie liest, und gibt ihn unveraendert wieder frei. */
   return `<div class="plan-legendenblatt" data-plan="zu">` +
-    `<div class="plan-legende" data-plan="halt"><div class="plan-legendenkopf">` +
+    `<div class="plan-legende"><div class="plan-legendenkopf">` +
     `<span>${escapeHtml(kopf)}</span>` +
     `<button class="zu" data-plan="zu" aria-label="${translate('Close')}">✕</button></div>` +
     `<div class="plan-faecher">${eintraege}</div></div></div>`;
@@ -6399,16 +6399,12 @@ function renderDashboard() {
       renderDashboard();
       return;
     }
-    /* Ein Tipp INS Blatt laesst es offen — sonst schloesse jeder Griff nach
-       einem Fach die Legende, die man gerade liest. Die Reihenfolge ist die
-       Aussage: das ✕ liegt im Blatt und muss deshalb ZUERST geprueft werden. */
-    if (e.target.closest('button[data-plan="zu"]')) {
-      stundenplanLegende = false;
-    } else if (e.target.closest('[data-plan="halt"]')) {
-      return;
-    } else {
-      stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
-    }
+    /* JEDER Tipp aufs Blatt schliesst — auch auf ein Fach. Hier stand zuerst
+       eine Sperre, damit ein Griff nach einem Fach die Legende nicht zuklappt;
+       die schuetzte aber nichts: die Chips sind Beschriftungen, nicht bedienbar.
+       Sie zwang den Nutzer statt dessen aufs ✕ oder auf den schmalen Streifen
+       daneben. */
+    stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
     renderDashboard();
   }));
   briefingKlappHinweis(el);

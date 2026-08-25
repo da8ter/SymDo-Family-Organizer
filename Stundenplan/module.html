@@ -667,17 +667,12 @@
           zeichne();
           return;
         }
-        /* Ein Tipp INS Blatt laesst es offen — sonst schloesse jeder Griff
-           nach einem Fach die Legende, die man gerade liest. Nur daneben oder
-           auf das ✕ schliesst. Die Reihenfolge ist die Aussage: das ✕ liegt im
-           Blatt und muss deshalb ZUERST geprueft werden. */
-        if (e.target.closest('button[data-legende="zu"]')) {
-          legende = false;
-        } else if (e.target.closest('[data-legende="halt"]')) {
-          return;
-        } else {
-          legende = e.target.closest('[data-legende="zu"]') ? false : !legende;
-        }
+        /* JEDER Tipp aufs Blatt schliesst — auch auf ein Fach. Hier stand
+           zuerst eine Sperre, damit ein Griff nach einem Fach die Legende nicht
+           zuklappt; die schuetzte aber nichts: die Chips sind Beschriftungen,
+           nicht bedienbar. Sie zwang den Nutzer statt dessen aufs ✕ oder auf
+           den schmalen Streifen daneben. */
+        legende = e.target.closest('[data-legende="zu"]') ? false : !legende;
         zeichne();
       };
     } else {
@@ -916,7 +911,7 @@
        nur halb. Als Blatt verdeckt sie den Plan, solange man sie liest, und
        gibt ihn unveraendert wieder frei. */
     return '<div class="legendenblatt" data-legende="zu">'
-      + '<div class="legende" data-legende="halt">'
+      + '<div class="legende">'
       + '<div class="legendenkopf"><span>' + esc(ueberschrift) + '</span>'
       + '<button class="zu" data-legende="zu" aria-label="Legende schließen">✕</button></div>'
       + '<div class="faecher">' + eintraege + '</div></div></div>';
