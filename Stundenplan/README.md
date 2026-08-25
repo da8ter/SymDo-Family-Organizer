@@ -42,7 +42,11 @@ Zwei Darstellungen aus denselben Daten:
   Mauszeiger, der es verrät.
   Dieselbe Legende, derselbe Umschalter, derselbe Jetzt-Strich **und derselbe
   graue Ferienbalken** stecken in der Karte der SymDo-App; dort deckt das Blatt
-  die Karte ab statt den ganzen Schirm.
+  die Karte ab statt den ganzen Schirm. Beim **Betreten des Dashboards** steht
+  die Karte wieder auf heute — die Tageswahl bliebe sonst stehen, wo man sie
+  zuletzt gelassen hat, und wer abends bis Freitag geblättert hatte, sähe am
+  nächsten Morgen den Freitag. Das Blättern selbst bleibt erhalten, solange man
+  auf dem Dashboard ist.
 
 Beide Ansichten halten sich an die **Ränder, die für die Kachel eingestellt
 sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst

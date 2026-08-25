@@ -4260,6 +4260,18 @@ function setTab(tab) {
   // ABGESCHAFFTER Bereich steht nicht mehr in TABS; dessen Rückfall MUSS geschrieben
   // werden, sonst hinge ein alter symdo.tab für immer.
   if (tab === gewuenscht || !TABS.includes(gewuenscht)) ls.set('symdo.tab', tab);
+  /* Der Stundenplan faengt beim BETRETEN des Dashboards wieder bei heute an.
+     Die Tageswahl blieb sonst stehen, wo man sie zuletzt gelassen hatte: wer
+     abends bis Freitag geblaettert hatte, sah am naechsten Morgen den Freitag.
+     Das Blaettern selbst zeichnet nur neu und laeuft hier nicht durch — die
+     Wahl bleibt also erhalten, solange man auf dem Dashboard ist.
+     Die Legende geht dabei zu: sie ist ein Blatt ueber der Karte, und ein
+     offenes Blatt beim Zurueckkommen sieht aus wie ein haengengebliebener
+     Dialog. */
+  if (tab === 'dashboard') {
+    stundenplanTag = 0;
+    stundenplanLegende = false;
+  }
   for (const t of TABS) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
