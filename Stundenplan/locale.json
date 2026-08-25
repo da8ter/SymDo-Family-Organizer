@@ -37,7 +37,6 @@
             "Timeline (compact)": "Timeline (kompakt)",
             "Data from another timetable (empty = own data)": "Daten aus einem anderen Stundenplan (leer = eigene Daten)",
             "SymDo gateway": "SymDo Gateway",
-            "Show the timeline in the SymDo app": "Timeline in der SymDo-App zeigen",
             "For both views at once: create a second instance of this module, set it to \"Timeline\" and pick this instance as its data source. It then shows the same plan in the other shape.": "Für beide Ansichten gleichzeitig: eine zweite Instanz dieses Moduls anlegen, auf „Timeline\" stellen und diese Instanz als Datenquelle wählen. Sie zeigt denselben Plan in der anderen Form.",
             "Not fetched yet.": "Noch nicht abgerufen.",
             "%d periods, fetched %s.": "%d Abschnitte, abgerufen am %s.",
@@ -59,7 +58,8 @@
             "emptied: %s": "geleert: %s",
             "Lesson lists": "Stundenlisten",
             "End": "Ende",
-            "The color comes from the subject. Lessons that touch (one ends when the next begins) are normal and are not reported as a clash. Where care is switched on, a grey block runs from the end of the lessons until the end time — only on days that have lessons, and it does not count as teaching time. Seconds in the time pickers are ignored.": "Die Farbe kommt vom Fach. Stunden, die sich berühren (eine endet, wenn die nächste beginnt), sind normal und gelten nicht als Überschneidung. Wo die Betreuung eingeschaltet ist, läuft ein grauer Block vom Ende des Unterrichts bis zur Endzeit — nur an Tagen mit Unterricht, und er zählt nicht als Unterrichtszeit. Die Sekunden der Zeitwähler werden ignoriert."
+            "The color comes from the subject. Lessons that touch (one ends when the next begins) are normal and are not reported as a clash. Where care is switched on, a grey block runs from the end of the lessons until the end time — only on days that have lessons, and it does not count as teaching time. Seconds in the time pickers are ignored.": "Die Farbe kommt vom Fach. Stunden, die sich berühren (eine endet, wenn die nächste beginnt), sind normal und gelten nicht als Überschneidung. Wo die Betreuung eingeschaltet ist, läuft ein grauer Block vom Ende des Unterrichts bis zur Endzeit — nur an Tagen mit Unterricht, und er zählt nicht als Unterrichtszeit. Die Sekunden der Zeitwähler werden ignoriert.",
+            "Whether the app shows the timetable is set in the gateway, under \"Timetable\" — together with the other things the app displays.": "Ob die App den Stundenplan zeigt, wird im Gateway unter „Stundenplan\" eingestellt — zusammen mit dem Übrigen, was die App anzeigt."
         }
     }
 }

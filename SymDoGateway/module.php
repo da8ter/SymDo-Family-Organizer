@@ -121,6 +121,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->PushCreate();
         // Notizen: Ablage und die Kategorie der Anhaenge
         $this->NotesCreate();
+        // Stundenplan: nur der Schalter, ob die App die Karte zeigt
+        $this->TimetableCreate();
     }
 
     public function ApplyChanges(): void
@@ -277,6 +279,10 @@ class SymDoGateway extends IPSModuleStrict
 
         $elements = array_merge(
             $appElements,
+            // Der Stundenplan steht VOR den Fremddiensten: er gehoert zur App und
+            // nicht zu Google, Microsoft oder CalDAV. Auf der zweiten Instanz
+            // faellt er weg, denn dort gibt es die App-Seite ohnehin nicht.
+            $isOwner ? $this->GetTimetablePanel() : [],
             [
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),

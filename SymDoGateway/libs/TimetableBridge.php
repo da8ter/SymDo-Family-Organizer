@@ -13,6 +13,67 @@ trait TimetableBridge
 {
     private const TIMETABLE_MODULE_GUID = '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}';
 
+    private function TimetableCreate(): void
+    {
+        // Der Schalter stand bis hierher in JEDER Stundenplan-Instanz. Er gehoert
+        // aber dorthin, wo man die App einrichtet: wer die Karte sucht, sucht sie
+        // im SymDo-Backend und nicht im Formular eines anderen Moduls.
+        $this->RegisterPropertyBoolean('TimetableEnabled', false);
+    }
+
+    /**
+     * Der Bereich im Formular. Faellt WEG, wenn es keinen Stundenplan mit eigenen
+     * Daten gibt — ein Schalter fuer etwas, das gar nicht existiert, ist Laerm.
+     *
+     * @return list<array<string,mixed>> leer oder genau ein Klapp-Bereich
+     */
+    private function GetTimetablePanel(): array
+    {
+        $eigene = $this->TimetableOwnInstances();
+        if ($eigene === []) {
+            return [];
+        }
+        // Wie bei den Briefing-Feldern: auf eine Eigenschaft, die es vor dem
+        // naechsten Kernel-Start nicht gibt, laesst „Uebernehmen" das Formular
+        // scheitern. Bis dahin ein Hinweis statt eines Feldes, das nichts tut.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('TimetableEnabled', $cfg)) {
+            return [[
+                'type'     => 'ExpansionPanel',
+                'caption'  => $this->Translate('Timetable'),
+                'expanded' => false,
+                'items'    => [[
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
+                ]],
+            ]];
+        }
+        $namen = [];
+        foreach ($eigene as $id) {
+            $namen[] = sprintf('%s (#%d)', IPS_GetName($id), $id);
+        }
+        return [[
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Timetable'),
+            'expanded' => false,
+            'items'    => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate("The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide whether the app shows it.")
+                ],
+                [
+                    'type'    => 'CheckBox',
+                    'name'    => 'TimetableEnabled',
+                    'caption' => $this->Translate('Show the timetable on the dashboard of the app')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => sprintf($this->Translate('Data from: %s'), implode(', ', $namen))
+                ],
+            ],
+        ]];
+    }
+
     /**
      * @return array{ok:bool,timetable:array|null}
      *         timetable = null heisst „nichts einzublenden" — kein Modul, keine
@@ -128,18 +189,21 @@ trait TimetableBridge
      * Instanzen, die ihren Plan in der APP zeigen sollen. Das Briefing hat einen
      * eigenen Schalter und richtet sich nicht danach.
      *
+     * Ein Schalter fuer alle statt einer je Instanz: Spiegel-Instanzen sind schon
+     * draussen, und zwei UNABHAENGIGE Stundenplaene gehoeren derselben Familie —
+     * einen davon auszublenden waere ein Fall, den es zu erfinden nicht lohnt.
+     *
      * @return list<int>
      */
     private function TimetableInstances(): array
     {
-        $ids = [];
-        foreach ($this->TimetableOwnInstances() as $id) {
-            $cfg = json_decode((string)@IPS_GetConfiguration($id), true);
-            if (is_array($cfg) && (bool)($cfg['ShowInApp'] ?? false)) {
-                $ids[] = $id;
-            }
+        // IPS_GetConfiguration statt ReadPropertyBoolean: die Eigenschaft entsteht
+        // in Create() und existiert erst beim naechsten Kernel-Start.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !(bool)($cfg['TimetableEnabled'] ?? false)) {
+            return [];
         }
-        return $ids;
+        return $this->TimetableOwnInstances();
     }
 
     /**

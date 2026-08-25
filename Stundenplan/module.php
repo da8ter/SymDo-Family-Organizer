@@ -65,7 +65,6 @@ class Stundenplan extends IPSModuleStrict
         $this->RegisterPropertyString('Display', 'week');
         $this->RegisterPropertyInteger('SourceInstanceID', 0);
         $this->RegisterPropertyInteger('GatewayInstanceID', 0);
-        $this->RegisterPropertyBoolean('ShowInApp', false);
 
         $this->RegisterPropertyString('HolidaySource', 'openholidays');
         $this->RegisterPropertyString('HolidayRegion', 'DE-HE');
@@ -806,9 +805,8 @@ class Stundenplan extends IPSModuleStrict
                     'validModules' => [self::GATEWAY_GUID],
                 ],
                 [
-                    'type'    => 'CheckBox',
-                    'name'    => 'ShowInApp',
-                    'caption' => $this->Translate('Show the timeline in the SymDo app')
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Whether the app shows the timetable is set in the gateway, under "Timetable" — together with the other things the app displays.')
                 ],
                 [
                     'type'    => 'Label',

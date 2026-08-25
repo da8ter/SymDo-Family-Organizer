@@ -51,6 +51,11 @@ Zwei Darstellungen aus denselben Daten:
 5. **Ferien**: Quelle wählen und einmal abrufen.
 6. **Anzeige**: Wochenraster oder Timeline.
 
+Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern im
+SymDo-Gateway unter *Stundenplan* — zusammen mit dem Übrigen, was die App
+anzeigt. Der Schalter stand bis zuletzt in jeder Stundenplan-Instanz; wer die
+Karte suchte, suchte sie aber im SymDo-Backend.
+
 Die Statuszeile unten meldet Überschneidungen und Stunden, deren Kind oder Fach
 es nicht (mehr) gibt.
 
