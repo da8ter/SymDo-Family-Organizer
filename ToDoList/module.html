@@ -2499,6 +2499,23 @@ html[data-symdo-theme="dark"] .member-bar {
   .note-view .nv-row { display: block; }
   .note-view .nv-k { max-width: none; display: block; }
 }
+/* Das Blatt fuer Anhaenge nimmt, was da ist. Es zeigt fremde Dokumente — ein
+   mehrseitiges Elternschreiben, ein Foto —, und die liest man nicht in einem
+   Ausschnitt von 900 auf 88 Prozent. Die uebliche Deckelung gilt fuer FORMULARE,
+   die ueber die volle Breite unlesbar weit waeren; hier ist sie verkehrt. */
+#recipeImgOverlay .overlay-card {
+  max-width: min(var(--content-max), 1400px);
+  height: 96%;
+  max-height: 96%;
+}
+/* min-height: 0 an jeder Stufe, sonst gibt ein Flex-Kind seine Inhaltshoehe
+   nicht auf und die Karte wuerde HOEHER als erlaubt, statt innen zu verteilen. */
+#recipeImgOverlay .overlay-body { flex: 1 1 auto; min-height: 0; padding-bottom: 12px; }
+#recipeImgOverlay #recipePdf { flex: 1 1 auto; min-height: 0; width: 100%; }
+/* Das Bild fuellt die Hoehe und behaelt sein Seitenverhaeltnis — vorher stand es
+   oben in der Karte und liess den Rest leer. */
+#recipeImgOverlay #recipeImg { flex: 1 1 auto; min-height: 0; object-fit: contain; }
+
 /* Die Ansicht liegt UNTER den Dialogen, die aus ihr heraus aufgehen — vor allem
    unter recipeImgOverlay, dem Blatt fuer Anhaenge. Ohne diese Zeile trug sie die
    60 aus .overlay, also denselben Wert; dann entscheidet die Reihenfolge im
@@ -3163,7 +3180,9 @@ html[data-symdo-theme="dark"] .member-bar {
     </div>
     <div class="overlay-body" style="text-align:center;">
       <img id="recipeImg" alt="" style="max-width:100%;border-radius:12px;" />
-      <iframe id="recipePdf" title="PDF" style="display:none;width:100%;height:75vh;border:0;border-radius:12px;"></iframe>
+      <!-- KEINE Hoehe im style-Attribut: die schlaegt jede Regel im Stylesheet,
+           und das PDF blieb auf 75vh stehen, waehrend die Karte hoeher wurde. -->
+      <iframe id="recipePdf" title="PDF" style="display:none;border:0;border-radius:12px;"></iframe>
     </div>
   </div>
 </div>
