@@ -2499,6 +2499,13 @@ html[data-symdo-theme="dark"] .member-bar {
   .note-view .nv-row { display: block; }
   .note-view .nv-k { max-width: none; display: block; }
 }
+/* Die Ansicht liegt UNTER den Dialogen, die aus ihr heraus aufgehen — vor allem
+   unter recipeImgOverlay, dem Blatt fuer Anhaenge. Ohne diese Zeile trug sie die
+   60 aus .overlay, also denselben Wert; dann entscheidet die Reihenfolge im
+   Dokument, und die Ansicht steht weiter hinten als das Blatt. Ein PDF aus einer
+   Notiz ging damit HINTER der Notiz auf. Dieselbe Staffel wie beim Editor und
+   beim Favoritenblatt, und aus demselben Grund ausdruecklich. */
+#noteViewOverlay { z-index: 58; }
 #noteViewOverlay .overlay-card { max-height: 92%; }
 #noteViewOverlay #noteViewFiles { margin-top: 14px; }
 .note-file .nv-chev { flex: none; color: var(--muted); font-size: 13px; margin-left: auto; }
