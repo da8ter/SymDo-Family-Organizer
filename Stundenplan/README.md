@@ -21,7 +21,12 @@ Zwei Darstellungen aus denselben Daten:
   werden die Spalten breiter; ist sie schmaler, scrollt das Raster waagerecht.
   Fachnamen, die trotzdem nicht hineinpassen, enden mit „…".
 - **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
-  15-Minuten-Raster. Ein Strich in der Akzentfarbe markiert die **aktuelle
+  15-Minuten-Raster. An Tagen ohne Schule wird der Balken **ganz grau** und
+  trägt mittig den Hinweis — mit dem Namen aus der Ferienquelle und dem
+  Enddatum („Sommerferien bis 05.09."), bei einem Feiertag nur dessen Namen, denn
+  der dauert einen Tag. Ein Band über dem Plan gibt es dort nicht: es wäre
+  dieselbe Auskunft ein zweites Mal. Gerechnet wird **je Wochentag**, nicht für
+  heute — sonst wäre der Donnerstag grau, nur weil heute ein Feiertag ist. Ein Strich in der Akzentfarbe markiert die **aktuelle
   Zeit** — nur am heutigen Tag und nur, solange sie in der Wochenspanne liegt;
   danach verschwindet er, statt am Rand zu kleben. Er läuft alle 30 Sekunden
   weiter, gerechnet ab der Uhrzeit des Servers, nicht der des Betrachters.

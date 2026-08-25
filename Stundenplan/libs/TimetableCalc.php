@@ -193,6 +193,21 @@ class TimetableCalc
      * ISO-Kalenderwoche. Deutschland rechnet nach ISO; die Zeitzone wird fest
      * gesetzt, damit das Ergebnis nicht an der Servereinstellung haengt.
      */
+    /**
+     * Das Datum eines Wochentags in DERSELBEN Woche wie $datum.
+     *
+     * Gebraucht, damit die Timeline beim Blaettern die richtige Auskunft gibt:
+     * Ferien und Feiertage haengen am Datum, nicht am Wochentag. Ohne das waere
+     * ein Donnerstag grau, nur weil heute (Mittwoch) ein Feiertag ist.
+     */
+    public static function DatumInWoche(string $datum, int $tag): string
+    {
+        $d = new \DateTimeImmutable($datum . ' 12:00:00', new \DateTimeZone('Europe/Berlin'));
+        $ist = (int)$d->format('N');
+        $diff = max(1, min(7, $tag)) - $ist;
+        return $d->modify(sprintf('%+d days', $diff))->format('Y-m-d');
+    }
+
     public static function IsoWoche(string $datum): int
     {
         $d = new \DateTimeImmutable($datum . ' 12:00:00', new \DateTimeZone('Europe/Berlin'));

@@ -257,6 +257,18 @@
      linken Rand und wurde von der runden Kappe angeschnitten. */
   .stueck > * { margin-left: 6px; flex: 0 0 auto; }
   .stueck.erst > * { margin-left: 9px; }
+  /* Ferienbalken: derselbe Balken wie sonst, nur ganz grau und mit dem Hinweis
+     in der Mitte statt der Faecher. Kein Tickraster darunter — es gliederte
+     eine Zeit, die an diesem Tag niemand hat. */
+  .ferienbalken {
+    background: var(--frei);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ferientext {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
   .ticks { position: relative; height: 8px; margin-top: 3px; }
   .ticks .linie { position: absolute; top: 4px; left: 0; right: 0; height: 1px; background: var(--line); }
   .ticks span { position: absolute; top: 2px; width: 1px; height: 5px; background: var(--muted); opacity: .5; }
@@ -609,7 +621,11 @@
       return;
     }
     let html = '';
-    if (zustand.holiday) {
+    /* Das Ferienband steht NUR ueber dem Wochenraster. In der Timeline sagt es
+       der Balken selbst: er wird grau und traegt den Hinweis in der Mitte. Ein
+       Band darueber waere dieselbe Auskunft ein zweites Mal — und es nahm dem
+       Plan eine Zeile. */
+    if (zustand.holiday && zustand.mode !== 'timeline') {
       html += '<div class="ferien">' + symbol('fa-umbrella-beach')
         + '<span>' + esc(zustand.holiday.name) + ' — bis '
         + esc(datumKurz(zustand.holiday.until)) + '</span></div>';
@@ -655,6 +671,19 @@
       const breit = achse ? achse.getBoundingClientRect().width : 0;
       heute.parentElement.scrollLeft = Math.max(0, heute.offsetLeft - breit - 8);
     }
+  }
+
+  /* „Sommerferien bis 05.09." — der NAME, wenn die Quelle einen liefert, sonst
+     das allgemeine Wort. Ein Feiertag dauert einen Tag, dort waere ein „bis"
+     eine falsche Auskunft. */
+  function ferienText(f) {
+    const name = String((f && f.name) || '').trim();
+    if (f && f.public) {
+      return name !== '' ? name : 'Feiertag';
+    }
+    const wort = name !== '' ? name : 'Schulferien';
+    const bis = f && f.until ? datumKurz(f.until) : '';
+    return bis !== '' ? wort + ' bis ' + bis : wort;
   }
 
   function datumKurz(iso) {
@@ -878,8 +907,17 @@
       html += '<div class="zeilenkopf">' + gesicht(kind, 'gesicht')
         + '<span class="wer" style="color:' + esc(kind.color) + '">'
         + esc(kind.name) + '</span>';
+      /* Ferien oder Feiertag AN DIESEM Tag — nicht „heute": die Timeline
+         blaettert durch die Woche, und die Auskunft haengt am Datum. */
+      const frei = tag ? tag.holiday : null;
+      if (frei) {
+        html += '</div><div class="balken ferienbalken">'
+          + '<span class="ferientext">' + symbol('fa-umbrella-beach')
+          + esc(ferienText(frei)) + '</span></div></div>';
+        return;
+      }
       if (!tag || slots.length === 0) {
-        html += '<span class="was">' + (zustand.holiday ? 'Ferien' : 'keine Schule') + '</span></div>';
+        html += '<span class="was">keine Schule</span></div>';
         html += '<div class="keinTag">—</div></div>';
         return;
       }

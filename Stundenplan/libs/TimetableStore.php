@@ -251,6 +251,17 @@ trait TimetableStore
         [$von, $bis] = TimetableCalc::Wochenspanne($slots, $kinder);
         $ferien  = $this->FerienAmTag($heute);
         $jetzt   = date('H:i');
+        // Ferien JE WOCHENTAG, nicht nur fuer heute: die Timeline blaettert
+        // durch die Woche, und Ferien haengen am Datum. Ohne das waere der
+        // Donnerstag grau, nur weil heute (Mittwoch) ein Feiertag ist. Einmal
+        // vorab statt in der Kinderschleife — sonst dieselbe Suche sechsmal je
+        // Kind.
+        $abschnitte  = $this->Ferien();
+        $ferienJeTag = [];
+        foreach ([1, 2, 3, 4, 5, 6] as $t) {
+            $ferienJeTag[$t] = HolidaySource::AmTag(
+                $abschnitte, TimetableCalc::DatumInWoche($heute, $t));
+        }
 
         $betreuungGepflegt = in_array(TimetableCalc::FACH_BETREUUNG,
             array_column($faecher, 'name'), true);
@@ -292,6 +303,8 @@ trait TimetableStore
                 $tage[] = [
                     'weekday' => $tag,
                     'label'   => TimetableCalc::TagKurz($tag),
+                    // Ferien oder Feiertag AN DIESEM Tag, oder null.
+                    'holiday' => $ferienJeTag[$tag] ?? null,
                     // Dauer JE TAG, nicht nur fuer heute: die Timeline laesst
                     // sich durch die Woche blaettern und braucht sie ueberall.
                     'minutes' => TimetableCalc::TagesDauer($tages),
