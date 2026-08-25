@@ -1791,14 +1791,22 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .todo-content.stacked,
 .mail-row.stacked,
-.cal-event.stacked { flex-wrap: wrap; }
+.cal-event.stacked {
+  flex-wrap: wrap;
+  /* row-gap AUSDRUECKLICH auf 0: das `gap: 10px` der Zeile ist fuer den
+     WAAGERECHTEN Abstand zwischen Kaestchen, Text und Chips gedacht, wirkt beim
+     Umbruch aber auch als Zeilenabstand. Zusammen mit dem margin-top unten
+     standen 16px zwischen Text und Chips — die Zeile fiel dadurch auseinander,
+     obwohl beides zusammengehoert. */
+  row-gap: 0;
+}
 .todo-content.stacked .todo-side,
 .mail-row.stacked .mail-side,
 .cal-event.stacked .cal-side {
   flex-basis: 100%;
   justify-content: flex-end;
   align-self: flex-start;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 /* Prioritäts-Chip — identisch zur ToDoList-Kachel (.badge.high/normal/low) */
 .badge {
