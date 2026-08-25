@@ -608,6 +608,21 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Beim ERSTEN Stueck etwas mehr, weil dort die Rundung Platz frisst. */
 .plan-stueck > * { margin-left: 6px; flex: 0 0 auto; }
 .plan-stueck.erst > * { margin-left: 9px; }
+/* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
+   ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
+   Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
+   Akzentfarbe allein kann auf einem farbigen Block untergehen. */
+.plan-jetzt {
+  position: absolute; top: -4px; height: 34px; width: 2px; z-index: 3;
+  background: var(--accent); border-radius: 1px; pointer-events: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
+  transform: translateX(-1px);
+}
+.plan-jetzt::before {
+  content: ''; position: absolute; left: -3px; top: -3px;
+  width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
+}
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }
 .plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
   background: color-mix(in srgb, currentColor 14%, transparent); }
@@ -5266,6 +5281,59 @@ let stundenplan = null;
 let stundenplanLaeuft = false;
 let stundenplanLegende = false;
 let stundenplanTag = 0;   // gewaehlter Wochentag, 0 = noch keiner
+/* Wann der Plan mit seiner Minutenangabe eintraf, und der Plan OHNE diese
+   Minute. Beides gehoert zusammen: die Karte darf sich nicht jede Minute neu
+   zeichnen, nur weil die Uhr weitergelaufen ist — ein renderAll() schloesse
+   die Legende und risse einen gerade gedrueckten Pfeil unter dem Finger weg. */
+let stundenplanAn = 0;
+let stundenplanSignatur = '';
+let stundenplanTicker = null;
+
+/* Die aktuelle Minute des SERVERS, fortgeschrieben um die Zeit seit dem
+   Eintreffen. null heisst „gilt nicht fuer heute" — dann gibt es keinen Strich.
+   Nicht die Uhr des Geraets: es kann in einer anderen Zeitzone stehen. */
+function stundenplanJetzt() {
+  if (!stundenplan || stundenplan.now == null) { return null; }
+  const her = stundenplanAn ? Math.max(0, (Date.now() - stundenplanAn) / 60000) : 0;
+  return stundenplan.now + her;
+}
+
+/* Der Strich fuer eine Balkenzeile. Kein Klemmen an den Rand: ein Strich, der
+   abends auf der letzten Stunde klebte, behauptete, der Unterricht laufe. */
+function stundenplanStrichHtml(istHeute, von, spanne) {
+  const jetzt = stundenplanJetzt();
+  if (!istHeute || jetzt === null || jetzt < von || jetzt > von + spanne) { return ''; }
+  const s = Math.floor(jetzt / 60), m = Math.floor(jetzt) % 60;
+  const uhr = (s < 10 ? '0' : '') + s + ':' + (m < 10 ? '0' : '') + m;
+  return `<div class="plan-jetzt" title="${escapeHtml(uhr)}" ` +
+    `style="left:${(jetzt - von) / spanne * 100}%"></div>`;
+}
+
+/* Nur die Position setzen, nicht neu zeichnen. Laeuft der Strich aus der
+   Spanne, wird er weggenommen statt am Rand zu kleben. */
+function stundenplanStrichStellen() {
+  const striche = document.querySelectorAll('.plan-jetzt');
+  const jetzt = stundenplanJetzt();
+  if (!stundenplan || !stundenplan.span) { return; }
+  const von = stundenplan.span[0], spanne = Math.max(stundenplan.span[1] - von, 60);
+  if (jetzt === null || jetzt < von || jetzt > von + spanne) {
+    striche.forEach(n => n.remove());
+    return;
+  }
+  // Erst jetzt in der Spanne (morgens) — dann muss die Karte einmal neu.
+  if (!striche.length) { renderAll(); return; }
+  const s = Math.floor(jetzt / 60), m = Math.floor(jetzt) % 60;
+  striche.forEach(n => {
+    n.style.left = ((jetzt - von) / spanne * 100) + '%';
+    n.title = (s < 10 ? '0' : '') + s + ':' + (m < 10 ? '0' : '') + m;
+  });
+}
+
+function stundenplanTickerStellen() {
+  if (stundenplanTicker) { return; }
+  stundenplanTicker = setInterval(stundenplanStrichStellen, 30000);
+}
+
 function loadTimetable() {
   // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
   // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay
@@ -5276,9 +5344,23 @@ function loadTimetable() {
     stundenplanLaeuft = false;
     const j = r && r.json;
     const frisch = (j && j.ok === true && j.timetable) ? j.timetable : null;
-    if (JSON.stringify(frisch) === JSON.stringify(stundenplan)) { return; }
+    // Verglichen wird OHNE die Minute — sonst waere der Plan bei jedem Abruf
+    // „neu" und die Karte zeichnete sich jede Minute frisch.
+    // Nichts da und nichts gewesen: nicht zeichnen. Sonst liefe renderAll bei
+    // jedem Abruf, obwohl es gar keinen Stundenplan gibt.
+    if (frisch === null && stundenplan === null) { return; }
+    const signatur = frisch === null ? ''
+      : JSON.stringify(Object.assign({}, frisch, { now: null }));
+    stundenplanAn = Date.now();
+    if (frisch !== null && signatur === stundenplanSignatur) {
+      stundenplan.now = frisch.now;
+      stundenplanStrichStellen();
+      return;
+    }
+    stundenplanSignatur = signatur;
     stundenplan = frisch;
     renderAll();
+    stundenplanTickerStellen();
   }).catch(() => { stundenplanLaeuft = false; });
 }
 
@@ -5444,7 +5526,10 @@ function stundenplanKarte() {
       const stark = m === ersterTick || m + 15 > bis || m % 60 === 0;
       ticks += `<span class="${stark ? 'stark' : ''}" style="left:${(m - von) / spanne * 100}%"></span>`;
     }
-    zeilen += `<div class="plan-balken">${stuecke}</div><div class="plan-ticks">${ticks}</div></div>`;
+    // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern liegen.
+    zeilen += `<div class="plan-balken">${stuecke}` +
+      stundenplanStrichHtml(!!tag.today, von, spanne) +
+      `</div><div class="plan-ticks">${ticks}</div></div>`;
   }
   const ferien = stundenplan.holiday
     ? ` <span class="was">· ${escapeHtml(stundenplan.holiday.name)}</span>` : '';

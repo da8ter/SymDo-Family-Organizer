@@ -26,6 +26,7 @@ trait TimetableBridge
         $kinder  = [];
         $spanne  = null;
         $ferien  = null;
+        $jetzt   = null;
         foreach ($this->TimetableInstances() as $id) {
             $plan = json_decode((string)@STPL_GetPlan($id), true);
             if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
@@ -33,6 +34,13 @@ trait TimetableBridge
             }
             if ($ferien === null && is_array($plan['holiday'] ?? null)) {
                 $ferien = $plan['holiday'];
+            }
+            // Die aktuelle Minute fuer den Jetzt-Strich. Sie kommt aus der
+            // Instanz und nicht aus der App: die Uhr des Betrachters muss nicht
+            // die des Servers sein. Alle Instanzen stehen auf derselben Uhr,
+            // die erste genuegt.
+            if ($jetzt === null && ($plan['now'] ?? null) !== null) {
+                $jetzt = (int)$plan['now'];
             }
             // Die Spanne ist der gemeinsame Massstab aller Balken. Bei mehreren
             // Instanzen die aeussersten Werte, sonst haetten zwei Kinder aus
@@ -91,6 +99,7 @@ trait TimetableBridge
         }
         return ['ok' => true, 'timetable' => [
             'span'     => $spanne ?? [8 * 60, 16 * 60],
+            'now'      => $jetzt,
             'holiday'  => $ferien,
             'children' => $kinder,
         ]];
