@@ -2,7 +2,7 @@
     "id": "{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}",
     "name": "Stundenplan",
     "type": 3,
-    "vendor": "da8ter",
+    "vendor": "",
     "aliases": ["Stundenplan", "Timetable", "Schule"],
     "parentRequirements": [],
     "childRequirements": [],
