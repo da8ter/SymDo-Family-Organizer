@@ -47,6 +47,9 @@
   }
   .scrollbereich {
     flex: 1; min-height: 0;
+    /* Spalte, damit das Wochenraster die Resthoehe unter Kopf und Kinderleiste
+       bekommt — und die beiden ueber dem Raster stehen bleiben. */
+    display: flex; flex-direction: column;
     /* overflow-y: scroll statt auto: der Streifen ist IMMER reserviert, damit
        der rechte Abstand mit und ohne sichtbaren Balken derselbe ist. Die Spur
        ist durchsichtig, der Griff erscheint nur bei Bedarf. */
@@ -119,8 +122,15 @@
   .chip.an { color: #fff; border-color: transparent; }
 
   /* ── Wochenraster ──────────────────────────────────────────────────────── */
-  .raster { display: flex; gap: 6px; align-items: flex-start; }
-  /* Die Zeitachse bleibt stehen, waehrend die Spalten wandern. */
+  /* Das Raster ist eine BEGRENZTE Flaeche, kein mitwachsender Block. Vorher war
+     .spalten so hoch wie das ganze Raster — sein waagerechter Balken sass damit
+     ganz unten am Inhalt, und man musste erst hinunterscrollen, um ihn ueberhaupt
+     zu sehen. Jetzt fuellt das Raster die Resthoehe, und beide Balken liegen an
+     den Kanten der sichtbaren Flaeche. */
+  .raster { flex: 1 1 auto; min-height: 0; display: flex; }
+  /* Die Zeitachse steht MIT IM Scrollbereich: nur so tragen Achse und Spalten
+     denselben senkrechten Weg. Waagerecht bleibt sie durch sticky stehen,
+     waehrend die Spalten darunter durchwandern. */
   .achse { position: sticky; left: 0; z-index: 2; flex: 0 0 46px; background: var(--bg); }
   .achse .innen { position: relative; }
   .marke {
@@ -129,8 +139,30 @@
   }
   .marke.stark { color: var(--text); font-weight: 700; }
   .marke i { display: block; width: 6px; height: 1px; background: currentColor; opacity: .6; }
-  .spalten { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; position: relative; }
-  .spalte { flex: 0 0 148px; border-radius: 16px; background: var(--spalte); overflow: hidden; }
+  /* Ein Bereich fuer BEIDE Richtungen; scroll statt auto, damit die Streifen
+     immer reserviert sind und der Inhalt nicht springt, sobald ein Balken
+     auftaucht — dieselbe Ueberlegung wie beim senkrechten Bereich. */
+  .spalten {
+    /* align-items bleibt auf stretch: so sind alle Tagesspalten gleich hoch,
+       auch wenn ihre Stunden zusammen ein Viertel mehr oder weniger ergeben.
+       Die Zeitachse nimmt sich davon aus, sonst zoege sie die Zeile hoch. */
+    flex: 1; min-width: 0; display: flex; gap: 8px;
+    overflow: scroll; position: relative;
+  }
+  .achse { align-self: flex-start; }
+  /* Alle Tage GLEICH breit und so schmal wie moeglich: sie teilen sich die
+     Restbreite neben der Zeitachse (flex-basis 0, gleicher Wachstumsanteil).
+     Die Untergrenze greift erst, wenn selbst ein gekuerztes Fach keinen Platz
+     mehr haette; dann scrollt das Raster wieder waagerecht, statt unleserlich
+     zu werden. Bei ueblichen Kachelbreiten passen alle Tage nebeneinander und
+     es gibt gar nichts mehr zu schieben. */
+  .spalte {
+    flex: 1 1 0; min-width: 44px;
+    border-radius: 16px; background: var(--spalte); overflow: hidden;
+    /* Behaeltnis fuer die Abfrage unten: die Stunde soll sich nach der Breite
+       IHRER Spalte richten, nicht nach der des Fensters. */
+    container-type: inline-size;
+  }
   .spaltenkopf {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px; background: var(--kopf); min-height: 36px;
@@ -146,13 +178,32 @@
     background: var(--frei); color: var(--muted); font-size: 10px;
   }
   .stunde { padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start; }
+  /* min-width: 0 ist die Bedingung fuers Kuerzen: ein Flex-Kind ist von Haus
+     aus mindestens so breit wie sein Inhalt, und text-overflow bekaeme nie
+     Gelegenheit zu greifen — die Spalte waere statt dessen aufgegangen. */
+  .stunde > div { min-width: 0; }
   .stunde .sym {
     flex: 0 0 22px; height: 22px; border-radius: 50%;
     background: rgba(255,255,255,.22);
     display: flex; align-items: center; justify-content: center; font-size: 11px;
   }
+  .stunde .fach, .stunde .zeit {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .stunde .fach { font-size: 13px; font-weight: 600; line-height: 1.2; }
   .stunde .zeit { font-size: 10px; font-weight: 500; opacity: .82; margin-top: 2px; }
+  /* In engen Spalten weicht der Symbolkreis. Er ist 22px breit und nimmt mit
+     seinem Abstand 30 der knapp 40 Pixel Inhaltsbreite — gemessen blieben dem
+     Fachnamen 9px, also nichts als drei Puenktchen. Lieber der Name allein als
+     ein Symbol und ein Rest. Im Kopf der Spalte steht der Tag ohnehin, und die
+     Legende nennt Farbe und Symbol.
+
+     Steht NACH .stunde .sym: eine Behaelter-Abfrage erhoeht die Spezifitaet
+     nicht, und die spaetere Regel haette gewonnen — der Kreis blieb stehen. */
+  @container (max-width: 104px) {
+    .stunde .sym { display: none; }
+    .stunde { padding: 6px 8px; }
+  }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -217,18 +268,23 @@
     font: inherit; cursor: pointer; padding: 2px 4px;
   }
   .faecher { display: flex; flex-wrap: wrap; gap: 6px; }
-  .fach {
+  /* AN .faecher GEBUNDEN. Die Klasse `fach` traegt im Wochenraster auch den
+     Fachtitel einer Stunde. Ungebunden vererbte diese Regel ihm Anzeigeart,
+     Polsterung, Rundung und Hintergrund der Pille mit — sichtbar als blasse
+     Kapsel hinter jedem Fachnamen, und `inline-flex` machte den Titel zu einer
+     schrumpffreien Box, die sich nicht kuerzen liess. */
+  .faecher .fach {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 4px 9px 4px 6px; border-radius: 999px;
     background: color-mix(in srgb, var(--content-color) 7%, transparent);
     font-size: 11px; font-weight: 600;
   }
-  .fach .tupfen {
+  .faecher .fach .tupfen {
     width: 16px; height: 16px; border-radius: 50%; flex: 0 0 16px;
     display: inline-flex; align-items: center; justify-content: center;
     color: #fff; font-size: 9px;
   }
-  .fach .wessen { color: var(--muted); font-weight: 500; }
+  .faecher .fach .wessen { color: var(--muted); font-weight: 500; }
   /* Der Hinweis verschwindet, sobald die Legende offen ist. */
   .legendenhinweis {
     margin-top: 8px; font-size: 11px; color: var(--muted); text-align: center;
@@ -278,6 +334,84 @@
         document.documentElement.style.setProperty('--sbw', b + 'px');
       }
     } catch (e) { /* Vorgabe --sbw (6px) greift */ }
+  })();
+
+  /* ── Scrollen in der Kachel halten ────────────────────────────────────────
+     html-sdk.js von Symcon haengt an window ein `onwheel`, das JEDES deltaY an
+     die Visualisierung meldet (postScroll), und meldet touchstart/touchmove als
+     Position weiter. Die Visu scrollt daraufhin mit — unabhaengig davon, ob die
+     Kachel die Geste selbst verbraucht hat. Dagegen hilft kein CSS: weder
+     overscroll-behavior noch overflow greifen, weil es kein Ketten ist, sondern
+     eine ausdrueckliche Weitergabe.
+
+     Deshalb werden die Ereignisse in der ABFANG-Phase an document gestoppt. Das
+     liegt vor der Blasen-Phase an window, wo html-sdk.js zuhoert — die Meldung
+     unterbleibt also. Das Standardverhalten bleibt unberuehrt, die Kachel
+     scrollt normal weiter; nur an den Raendern wird zusaetzlich preventDefault
+     gerufen, damit dort nichts durchrutscht.
+
+     Ueber document und nicht ueber die Bereiche selbst, weil .spalten bei jedem
+     Zeichnen neu entsteht — ein einmal gebundener Handler haenge sonst an einem
+     Element, das es nicht mehr gibt. */
+  const SCROLL_BEREICHE = '#inhalt, .spalten';
+
+  /* Der naechste Vorfahr, der in DIESER Richtung noch Weg hat. Ohne die
+     Richtungsfrage gaelte ein Bereich, der schon am Anschlag steht, als
+     zustaendig — und die Geste verpuffte. */
+  function zustaendigerScroller(ziel, dx, dy) {
+    let el = (ziel instanceof Element) ? ziel : null;
+    while (el && el !== document.body) {
+      if (el.matches && el.matches(SCROLL_BEREICHE)) {
+        const maxY = el.scrollHeight - el.clientHeight;
+        const maxX = el.scrollWidth - el.clientWidth;
+        const gehtY = maxY > 1 && ((dy < 0 && el.scrollTop > 0)
+                                || (dy > 0 && el.scrollTop < maxY - 1));
+        const gehtX = maxX > 1 && ((dx < 0 && el.scrollLeft > 0)
+                                || (dx > 0 && el.scrollLeft < maxX - 1));
+        if (gehtY || gehtX) { return el; }
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  (function scrollEindaemmen() {
+    document.addEventListener('wheel', function (e) {
+      if (!zustaendigerScroller(e.target, e.deltaX || 0, e.deltaY || 0)) {
+        // Nichts kann die Geste verbrauchen — dann soll sie auch nirgends
+        // wirken, statt als Ersatzhandlung die ganze Visu zu bewegen.
+        e.preventDefault();
+      }
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    let letzteY = null, letzteX = null;
+    document.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches.length === 1) {
+        letzteX = e.touches[0].clientX;
+        letzteY = e.touches[0].clientY;
+      } else {
+        letzteX = letzteY = null;
+      }
+      e.stopPropagation();
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchmove', function (e) {
+      if (!e.touches || e.touches.length !== 1 || letzteY === null) {
+        e.stopPropagation();
+        return;
+      }
+      const x = e.touches[0].clientX, y = e.touches[0].clientY;
+      // Umgekehrtes Vorzeichen: nach oben wischen heisst nach unten scrollen.
+      const dy = letzteY - y, dx = letzteX - x;
+      letzteX = x; letzteY = y;
+      if (!zustaendigerScroller(e.target, dx, dy)) { e.preventDefault(); }
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    document.addEventListener('touchend', function () {
+      letzteX = letzteY = null;
+    }, { passive: true, capture: true });
   })();
 
   let zustand = null;
@@ -426,7 +560,13 @@
     // am Donnerstag sieht man zuerst, was vorbei ist.
     const heute = document.querySelector('.spalte.istHeute');
     if (heute && heute.parentElement) {
-      heute.parentElement.scrollLeft = Math.max(0, heute.offsetLeft - 8);
+      // Die Breite der Zeitachse MUSS abgezogen werden: sie steht seit dem
+      // Umbau mit im Scrollbereich, Montag beginnt also nicht mehr bei 0.
+      // Ohne den Abzug oeffnete das Raster um genau diese Breite verschoben —
+      // gemessen 46px, und Montag verschwand halb unter der Achse.
+      const achse = heute.parentElement.querySelector('.achse');
+      const breit = achse ? achse.getBoundingClientRect().width : 0;
+      heute.parentElement.scrollLeft = Math.max(0, heute.offsetLeft - breit - 8);
     }
   }
 
@@ -504,9 +644,10 @@
       spalten += '</div>';
     });
 
-    html += '<div class="raster"><div class="achse"><div class="innen" style="height:'
-      + (hoehe + 40) + 'px;margin-top:40px">' + achse + '</div></div>'
-      + '<div class="spalten">' + spalten + '</div></div>';
+    html += '<div class="raster"><div class="spalten">'
+      + '<div class="achse"><div class="innen" style="height:'
+      + hoehe + 'px;margin-top:40px">' + achse + '</div></div>'
+      + spalten + '</div></div>';
     return html;
   }
 

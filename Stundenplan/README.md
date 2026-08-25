@@ -9,7 +9,11 @@ Zwei Darstellungen aus denselben Daten:
 - **Wochenraster** — feste Zeitachse links, daneben die Tagesspalten. Jede
   Stunde eine farbige Karte mit Symbol, Fach und Zeitspanne; Lücken als graue
   „frei"-Blöcke; der heutige Tag mit Kapsel, die laufende oder nächste Stunde
-  mit hellem Rand.
+  mit hellem Rand. Alle Tage sind **gleich breit** und teilen sich die Breite
+  neben der Zeitachse — auf üblichen Kacheln passt die ganze Woche
+  nebeneinander. Zu lange Fachnamen enden mit „…". Wird eine Spalte sehr
+  schmal, weicht der Symbolkreis: er nähme dem Namen fast den ganzen Platz.
+  Erst unterhalb der Mindestbreite scrollt das Raster wieder waagerecht.
 - **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
   15-Minuten-Raster. Ein Strich in der Akzentfarbe markiert die **aktuelle
   Zeit** — nur am heutigen Tag und nur, solange sie in der Wochenspanne liegt;
@@ -31,7 +35,14 @@ sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst
 aufgetragen, statt zu einem festen Innenabstand hinzuzukommen. Gescrollt wird
 in der Kachel selbst, mit demselben schmalen Balken in der Akzentfarbe wie in
 der ToDo-Kachel; sein Streifen ist immer reserviert, damit der rechte Abstand
-nicht springt, sobald der Balken auftaucht.
+nicht springt, sobald der Balken auftaucht. Das Wochenraster ist dabei eine
+begrenzte Fläche und scrollt in sich — sonst säße sein waagerechter Balken ganz
+unten am Inhalt statt an der Unterkante der Kachel.
+
+Die Kachel behält die Geste außerdem **bei sich**: Symcons Kachel-SDK meldet
+jedes Rad- und Wischereignis an die Visualisierung, die daraufhin mitscrollt.
+Dagegen hilft kein CSS, deshalb werden die Ereignisse abgefangen, bevor die
+Meldung entsteht.
 
 ## Einrichtung
 
