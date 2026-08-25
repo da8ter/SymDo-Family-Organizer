@@ -555,7 +555,10 @@
             "Previous day": "Vorheriger Tag",
             "Next day": "Nächster Tag",
             "Subjects on %1": "Fächer am %1",
-            "no school": "keine Schule"
+            "no school": "keine Schule",
+            "%1 until %2": "%1 bis %2",
+            "Public holiday": "Feiertag",
+            "School holidays": "Schulferien"
         },
         "en": {
             "ToDo List": "ToDo List",

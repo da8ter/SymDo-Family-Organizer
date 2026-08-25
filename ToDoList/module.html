@@ -623,6 +623,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
 }
+/* Ferienbalken: derselbe Balken, nur ganz grau und mit dem Hinweis in der
+   Mitte statt der Faecher. Kein Tickraster darunter — es gliederte eine Zeit,
+   die an diesem Tag niemand hat. */
+.plan-ferienbalken {
+  display: flex; align-items: center; justify-content: center;
+}
+.plan-ferientext {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: var(--muted-color, #888);
+  max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }
 .plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
   background: color-mix(in srgb, currentColor 14%, transparent); }
@@ -5464,6 +5475,26 @@ function stundenplanLegendeHtml() {
 
 /* Zeichnet die Karte. Getrennt von renderDashboard, damit die Kachel-Fassung
    der Web-App dieselbe Funktion nutzen kann. */
+/* „2026-09-05" → „05.09." — dieselbe Kurzform wie in der Symcon-Kachel, damit
+   beide Oberflaechen dasselbe zeigen. Bewusst nicht toLocaleDateString: das
+   liefert je nach Sprache „Sep 5" und liefe von der Kachel weg. */
+function stundenplanDatumKurz(iso) {
+  const t = String(iso || '').split('-');
+  return t.length === 3 ? t[2] + '.' + t[1] + '.' : String(iso || '');
+}
+
+/* „Sommerferien bis 05.09." — der NAME aus der Ferienquelle, wenn sie einen
+   liefert. Ein Feiertag dauert einen Tag, dort waere ein „bis" falsch. */
+function stundenplanFreiText(f) {
+  const name = String((f && f.name) || '').trim();
+  if (f && f.public) {
+    return name !== '' ? name : translate('Public holiday');
+  }
+  const wort = name !== '' ? name : translate('School holidays');
+  const bis = (f && f.until) ? stundenplanDatumKurz(f.until) : '';
+  return bis !== '' ? translate('%1 until %2').replace('%1', wort).replace('%2', bis) : wort;
+}
+
 function stundenplanKarte() {
   if (!stundenplan || !Array.isArray(stundenplan.children) || !stundenplan.children.length) {
     return '';
@@ -5495,9 +5526,18 @@ function stundenplanKarte() {
     const gesicht = mitglied ? avatarHtml(mitglied, 'plan-avatar') : '';
     zeilen += `<div class="plan-zeile"><div class="plan-kopf">${gesicht}` +
       `<span class="wer" style="color:${escapeHtml(kind.color)}">${escapeHtml(kind.name)}</span>`;
+    /* Ferien oder Feiertag AN DIESEM Tag — nicht „heute": die Karte blaettert
+       durch die Woche, und die Auskunft haengt am Datum. Der Balken sagt es
+       selbst, statt dass ein Hinweis ueber der Karte steht. */
+    const frei = tag ? tag.holiday : null;
+    if (frei) {
+      zeilen += `</div><div class="plan-balken plan-ferienbalken">` +
+        `<span class="plan-ferientext"><i class="fa-light fa-umbrella-beach"></i>` +
+        `${escapeHtml(stundenplanFreiText(frei))}</span></div></div>`;
+      continue;
+    }
     if (!slots.length) {
-      zeilen += `<span class="was">${escapeHtml(stundenplan.holiday
-        ? stundenplan.holiday.name : translate('no school'))}</span></div>` +
+      zeilen += `<span class="was">${escapeHtml(translate('no school'))}</span></div>` +
         `<div class="plan-frei">—</div></div>`;
       continue;
     }
@@ -5531,10 +5571,11 @@ function stundenplanKarte() {
       stundenplanStrichHtml(!!tag.today, von, spanne) +
       `</div><div class="plan-ticks">${ticks}</div></div>`;
   }
-  const ferien = stundenplan.holiday
-    ? ` <span class="was">· ${escapeHtml(stundenplan.holiday.name)}</span>` : '';
+  /* KEIN Hinweis mehr neben der Ueberschrift: der graue Balken traegt ihn, und
+     zweimal dasselbe zu sagen kostet nur Platz. Ausserdem galt er fuer heute
+     und blieb beim Blaettern stehen. */
   return `<div class="card plan-card" data-plan="karte"><div class="card-head">` +
-    `<h3>${translate('Timetable')}</h3>${ferien}${stundenplanTagwahl()}</div>${zeilen}` +
+    `<h3>${translate('Timetable')}</h3>${stundenplanTagwahl()}</div>${zeilen}` +
     stundenplanLegendeHtml() + `</div>`;
 }
 

@@ -393,7 +393,10 @@
             "Previous day": "Vorheriger Tag",
             "Next day": "Nächster Tag",
             "Subjects on %1": "Fächer am %1",
-            "no school": "keine Schule"
+            "no school": "keine Schule",
+            "Public holiday": "Feiertag",
+            "School holidays": "Schulferien",
+            "%1 until %2": "%1 bis %2"
         }
     }
 }

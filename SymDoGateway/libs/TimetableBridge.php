@@ -134,11 +134,20 @@ trait TimetableBridge
                     if (!is_array($tag)) {
                         continue;
                     }
+                    // Ferien JE TAG: die Karte blaettert durch die Woche, und die
+                    // Auskunft haengt am Datum. Der Wert oben (holiday) gilt nur
+                    // fuer heute und taugt nicht zum Blaettern.
+                    $frei = is_array($tag['holiday'] ?? null) ? [
+                        'name'   => (string)($tag['holiday']['name'] ?? ''),
+                        'until'  => (string)($tag['holiday']['until'] ?? ''),
+                        'public' => (bool)($tag['holiday']['public'] ?? false),
+                    ] : null;
                     $tage[] = [
                         'weekday' => (int)($tag['weekday'] ?? 0),
                         'label'   => (string)($tag['label'] ?? ''),
                         'today'   => (bool)($tag['today'] ?? false),
                         'minutes' => (int)($tag['minutes'] ?? 0),
+                        'holiday' => $frei,
                         'slots'   => array_values(array_map($stunde,
                             array_filter((array)($tag['slots'] ?? []), 'is_array'))),
                     ];

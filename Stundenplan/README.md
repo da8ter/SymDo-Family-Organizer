@@ -37,9 +37,9 @@ Zwei Darstellungen aus denselben Daten:
   eine **Legende** der heute sichtbaren Fächer auf: Farbe, Symbol und Name, und
   wenn ein Fach nur bei einem Kind vorkommt, auch dessen Name. Im Balken steht
   nur ein Symbol — auf einem Tablet gibt es keinen Mauszeiger, der es verrät.
-  Dieselbe Legende, derselbe Umschalter **und derselbe Jetzt-Strich** stecken
-  in der Karte der SymDo-App: ein Tippen klappt die Fächer auf, die Pfeile
-  blättern durch die Woche.
+  Dieselbe Legende, derselbe Umschalter, derselbe Jetzt-Strich **und derselbe
+  graue Ferienbalken** stecken in der Karte der SymDo-App: ein Tippen klappt die
+  Fächer auf, die Pfeile blättern durch die Woche.
 
 Beide Ansichten halten sich an die **Ränder, die für die Kachel eingestellt
 sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst
