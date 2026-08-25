@@ -32,6 +32,10 @@ trait Tts
     /** Vorgabe, wenn keine Persona-Stimme mitkommt. Neutral und gut verstaendlich. */
     private const TTS_AZURE_VOICE = 'de-DE-KatjaNeural';
 
+    /** Amazon Polly: deutsche Neural-Stimme und eine Region, die es fuehrt. */
+    private const TTS_POLLY_VOICE  = 'Vicki';
+    private const TTS_POLLY_REGION = 'eu-central-1';
+
     /**
      * Vorgabestimme bei ElevenLabs: „Rachel", eine der oeffentlichen Stimmen, die
      * jedes Konto kennt. Sie ist englisch trainiert und spricht Deutsch ueber das
@@ -204,6 +208,21 @@ trait Tts
         // 32/64/128 sind ausdrueckliche Vorgaben fuer den Fall, dass jemand bewusst
         // kleine Dateien will.
         $this->RegisterPropertyString('TtsElevenQuality', 'auto');
+        /* Vierter Anbieter: Amazon Polly. Braucht ZWEI Geheimnisse statt einem —
+           Zugriffsschluessel und geheimer Schluessel — und unterschreibt jede
+           Anfrage (Signature Version 4, siehe AwsSigV4). Grund fuer die Aufnahme:
+           Polly rechnet nach Zeichen ohne Monatsmindestbetrag, hat mehrere
+           deutsche Neural-Stimmen und laeuft in Frankfurt.
+           Die Engine steht auf `neural`: `standard` klingt deutlich blecherner,
+           kostet aber nur wenig weniger. */
+        $this->RegisterPropertyString('TtsPollyKey', '');
+        $this->RegisterPropertyString('TtsPollySecret', '');
+        $this->RegisterPropertyString('TtsPollyRegion', self::TTS_POLLY_REGION);
+        $this->RegisterPropertyString('TtsPollyVoice', self::TTS_POLLY_VOICE);
+        $this->RegisterPropertyString('TtsPollyEngine', 'neural');
+        // Die abgerufenen Polly-Stimmen — wie bei ElevenLabs, damit die Auswahl
+        // ohne HTTP-Abruf bei jedem Formularaufbau auskommt.
+        $this->RegisterAttributeString('TtsPollyVoiceCache', '[]');
         // Hash → ['id' => Medien-ID, 'at' => Zeitstempel]
         $this->RegisterAttributeString('TtsCache', '{}');
         $this->RegisterAttributeString('TtsCategory', '');
@@ -227,6 +246,14 @@ trait Tts
             // welcher Anbieter die TEXTE schreibt.
             return $this->TtsSetting('TtsElevenKey', '') !== '';
         }
+        if ($this->TtsProvider() === 'polly') {
+            // Zwei Geheimnisse UND die Region: ohne Region gibt es keinen Wirt,
+            // an den die Anfrage ginge, und ohne beide Schluessel keine
+            // Unterschrift.
+            return $this->TtsSetting('TtsPollyKey', '') !== ''
+                && $this->TtsSetting('TtsPollySecret', '') !== ''
+                && $this->TtsSetting('TtsPollyRegion', '') !== '';
+        }
         if ($this->TtsProvider() === 'azure') {
             // Azure haengt NICHT am KI-Anbieter: die Sprachausgabe ist ein eigener
             // Dienst mit eigenem Schluessel. Man kann also mit Anthropic texten und
@@ -240,11 +267,12 @@ trait Tts
             && true;
     }
 
-    /** openai | azure — ueber TtsSetting, weil die Eigenschaft neu ist. */
+    /** openai | azure | elevenlabs | polly — ueber TtsSetting, weil die
+     *  Eigenschaften erst nach dem naechsten Kernel-Start existieren. */
     private function TtsProvider(): string
     {
         $wahl = $this->TtsSetting('TtsProvider', 'openai');
-        return in_array($wahl, ['azure', 'elevenlabs'], true) ? $wahl : 'openai';
+        return in_array($wahl, ['azure', 'elevenlabs', 'polly'], true) ? $wahl : 'openai';
     }
 
     /**
@@ -257,6 +285,10 @@ trait Tts
     {
         if ($this->TtsProvider() === 'elevenlabs') {
             // Dort gibt es weder AAC noch FLAC. MP3 in allen Faellen.
+            return 'mp3';
+        }
+        if ($this->TtsProvider() === 'polly') {
+            // Polly kennt mp3, ogg_vorbis und pcm — kein AAC, kein FLAC.
             return 'mp3';
         }
         if ($this->TtsProvider() !== 'azure') {
@@ -800,6 +832,9 @@ trait Tts
         if ($this->TtsProvider() === 'azure') {
             return $this->TtsRequestAzure($text, $stimme, $anweisung, $format);
         }
+        if ($this->TtsProvider() === 'polly') {
+            return $this->TtsRequestPolly($text, $stimme, $anweisung, $format);
+        }
         $key = trim($this->ReadPropertyString('AiOpenAIKey'));
         if ($key === '') {
             return '';
@@ -841,6 +876,143 @@ trait Tts
             return '';
         }
         return $roh;
+    }
+
+    /**
+     * Amazon Polly: EIN unterschriebener POST, JSON im Rumpf, Audiobytes zurueck.
+     *
+     * Zwei Dinge unterscheiden ihn von den anderen dreien:
+     *  - Jede Anfrage wird UNTERSCHRIEBEN (Signature Version 4). Ein Schluessel im
+     *    Kopf reicht nicht; Rumpf, Pfad, Kopfzeilen und Zeitstempel gehen in die
+     *    Rechnung ein. Sie steht in AwsSigV4 und ist dort gegen die offiziellen
+     *    Pruefwerte von AWS belegt — ohne das saehe man bei einem Fehler nur ein
+     *    „403 SignatureDoesNotMatch" und muesste raten.
+     *  - Die Vorleseanweisung ist wieder Markup, aber ANDERES als bei Azure:
+     *    Polly nimmt SSML nur, wenn TextType auf `ssml` steht, und kennt
+     *    `mstts:express-as` nicht. Kommt hier ein SSML-Rumpf an, wird er
+     *    durchgereicht; sonst schlichter Text.
+     */
+    private function TtsRequestPolly(string $text, string $stimme, string $anweisung, string $format): string
+    {
+        $schluessel = $this->TtsSetting('TtsPollyKey', '');
+        $geheim     = $this->TtsSetting('TtsPollySecret', '');
+        $region     = $this->TtsSetting('TtsPollyRegion', self::TTS_POLLY_REGION);
+        if ($schluessel === '' || $geheim === '' || $region === '') {
+            return '';
+        }
+        $stimme = $stimme !== '' ? $stimme : $this->TtsSetting('TtsPollyVoice', self::TTS_POLLY_VOICE);
+        $engine = $this->TtsSetting('TtsPollyEngine', 'neural');
+
+        /* SSML nur, wenn wirklich welches ankommt. Die Anweisungen aus
+           BriefingSpeechStyle sind fuer Azure gebaut; ein <speak>-Rumpf passt
+           auch hier, ein englischer Freitext („speak slowly") waere dagegen
+           Text, den Polly VORLESEN wuerde. Deshalb die Pruefung auf das Markup
+           und nicht auf „ist etwas gesetzt". */
+        $ssml = trim($anweisung) !== '' && str_starts_with(ltrim($anweisung), '<');
+        $inhalt = $ssml ? $anweisung : $text;
+        if ($ssml && !str_contains($inhalt, '<speak')) {
+            $inhalt = '<speak>' . $inhalt . '</speak>';
+        }
+
+        $felder = [
+            'OutputFormat' => $format === 'ogg' ? 'ogg_vorbis' : 'mp3',
+            'Text'         => $inhalt,
+            'TextType'     => $ssml ? 'ssml' : 'text',
+            'VoiceId'      => $stimme,
+            'Engine'       => in_array($engine, ['neural', 'standard', 'long-form', 'generative'], true)
+                ? $engine : 'neural',
+            // Ohne Sprachangabe liest eine zweisprachige Stimme deutsche Texte
+            // gern englisch. Bei rein deutschen Stimmen ist es folgenlos.
+            'LanguageCode' => 'de-DE',
+        ];
+        $rumpf = (string)json_encode($felder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $wirt  = 'polly.' . $region . '.amazonaws.com';
+
+        $kopf = AwsSigV4::Headers('POST', $wirt, '/v1/speech', '', $rumpf,
+            ['Content-Type' => 'application/json'], $region, 'polly', $schluessel, $geheim);
+        $zeilen = [];
+        foreach ($kopf as $name => $wert) {
+            $zeilen[] = $name . ': ' . $wert;
+        }
+
+        $resp = $this->AiHttpPost('https://' . $wirt . '/v1/speech', $zeilen, $rumpf);
+        $status = (int)($resp['status'] ?? 0);
+        $roh    = (string)($resp['body'] ?? '');
+        if (($resp['err'] ?? '') !== '') {
+            $this->SendDebug('TTS', 'Polly HTTP-Fehler: ' . $resp['err'], 0);
+            return '';
+        }
+        if ($status !== 200 || $roh === '') {
+            // Polly meldet Fehler als JSON — das ist die Meldung, nicht der Ton.
+            $this->SendDebug('TTS', 'Polly Antwort ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            return '';
+        }
+        if (str_starts_with(ltrim($roh), '{')) {
+            $this->SendDebug('TTS', 'Polly: erwartete Audiodaten, bekam JSON: ' . mb_substr($roh, 0, 300), 0);
+            return '';
+        }
+        return $roh;
+    }
+
+    /**
+     * Die deutschen Stimmen des Kontos abrufen und ablegen.
+     *
+     * Wie bei ElevenLabs abgelegt statt bei jedem Formularaufbau geholt: ein
+     * HTTP-Abruf beim Oeffnen waere eine Wartezeit fuer jeden, auch fuer den, der
+     * gar keine Stimme sucht.
+     *
+     * @return string Meldung fuer die Statuszeile
+     */
+    private function TtsPollyVoiceList(): string
+    {
+        $schluessel = $this->TtsSetting('TtsPollyKey', '');
+        $geheim     = $this->TtsSetting('TtsPollySecret', '');
+        $region     = $this->TtsSetting('TtsPollyRegion', self::TTS_POLLY_REGION);
+        if ($schluessel === '' || $geheim === '' || $region === '') {
+            return $this->Translate('Enter access key, secret and region first.');
+        }
+        $wirt    = 'polly.' . $region . '.amazonaws.com';
+        // Die Abfrage MUSS kanonisch sein (sortiert, kodiert) — sie geht in die
+        // Unterschrift ein.
+        $abfrage = 'LanguageCode=de-DE';
+        $kopf    = AwsSigV4::Headers('GET', $wirt, '/v1/voices', $abfrage, '', [],
+            $region, 'polly', $schluessel, $geheim);
+        $zeilen = [];
+        foreach ($kopf as $name => $wert) {
+            $zeilen[] = $name . ': ' . $wert;
+        }
+        $resp = $this->TtsHttpGet('https://' . $wirt . '/v1/voices?' . $abfrage, $zeilen);
+        $status = (int)($resp['status'] ?? 0);
+        $roh    = (string)($resp['body'] ?? '');
+        if ($status !== 200) {
+            $this->SendDebug('TTS', 'Polly Stimmen ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            return sprintf($this->Translate('Could not fetch voices (HTTP %d).'), $status);
+        }
+        $daten = json_decode($roh, true);
+        $liste = [];
+        foreach ((array)($daten['Voices'] ?? []) as $v) {
+            if (!is_array($v) || trim((string)($v['Id'] ?? '')) === '') {
+                continue;
+            }
+            $liste[] = [
+                'id'   => (string)$v['Id'],
+                'name' => trim(sprintf('%s (%s%s)', (string)$v['Id'],
+                    (string)($v['Gender'] ?? ''),
+                    // Welche Engines die Stimme kann, entscheidet, ob `neural`
+                    // ueberhaupt geht — deshalb steht es im Namen.
+                    ($v['SupportedEngines'] ?? []) ? ', ' . implode('/', (array)$v['SupportedEngines']) : '')),
+            ];
+        }
+        usort($liste, static fn(array $a, array $b): int => strcmp($a['id'], $b['id']));
+        @$this->WriteAttributeString('TtsPollyVoiceCache', (string)json_encode($liste, JSON_UNESCAPED_UNICODE));
+        return sprintf($this->Translate('%d German voices fetched.'), count($liste));
+    }
+
+    /** @return list<array{id:string,name:string}> Die abgelegten Polly-Stimmen. */
+    private function TtsPollyCachedVoices(): array
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString('TtsPollyVoiceCache'), true);
+        return is_array($roh) ? array_values(array_filter($roh, 'is_array')) : [];
     }
 
     /**
@@ -952,8 +1124,19 @@ trait Tts
     private function GetTtsProviderPanel(array $cfg): array
     {
         $ist = (string)($cfg['TtsProvider'] ?? 'openai');
-        if (!in_array($ist, ['openai', 'azure', 'elevenlabs'], true)) {
+        if (!in_array($ist, ['openai', 'azure', 'elevenlabs', 'polly'], true)) {
             $ist = 'openai';
+        }
+        // Die abgerufenen Stimmen als Auswahl; ohne Abruf bleibt das Feld ein
+        // Textfeld-Ersatz mit der Vorgabestimme, damit man auch ohne Abruf
+        // sprechen kann.
+        $pollyStimmen = [['caption' => self::TTS_POLLY_VOICE, 'value' => self::TTS_POLLY_VOICE]];
+        foreach ($this->TtsPollyCachedVoices() as $v) {
+            if ((string)$v['id'] === self::TTS_POLLY_VOICE) {
+                $pollyStimmen[0]['caption'] = (string)$v['name'];
+                continue;
+            }
+            $pollyStimmen[] = ['caption' => (string)$v['name'], 'value' => (string)$v['id']];
         }
         return [
             'type'     => 'ExpansionPanel',
@@ -975,7 +1158,69 @@ trait Tts
                         ['caption' => $this->Translate('OpenAI (same key as the AI)'), 'value' => 'openai'],
                         ['caption' => $this->Translate('Azure Speech (own key, German voices)'), 'value' => 'azure'],
                         ['caption' => $this->Translate('ElevenLabs (own key, paid account required)'), 'value' => 'elevenlabs'],
+                        ['caption' => $this->Translate('Amazon Polly (own access key, billed per character)'), 'value' => 'polly'],
                     ]
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'TtsPollyKey',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('AWS access key ID'),
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'PasswordTextBox',
+                    'name'    => 'TtsPollySecret',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('AWS secret access key'),
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'ValidationTextBox',
+                    'name'    => 'TtsPollyRegion',
+                    'width'   => '200px',
+                    'caption' => $this->Translate('AWS region (e.g. eu-central-1)'),
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsPollyVoice',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Polly voice'),
+                    'options' => $pollyStimmen,
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'Select',
+                    'name'    => 'TtsPollyEngine',
+                    'width'   => '400px',
+                    'caption' => $this->Translate('Polly engine'),
+                    'options' => [
+                        ['caption' => $this->Translate('neural (recommended)'), 'value' => 'neural'],
+                        ['caption' => $this->Translate('generative (most natural, most expensive)'), 'value' => 'generative'],
+                        ['caption' => $this->Translate('long-form (for long texts)'), 'value' => 'long-form'],
+                        ['caption' => $this->Translate('standard (cheapest, noticeably tinnier)'), 'value' => 'standard'],
+                    ],
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'Button',
+                    'name'    => 'TtsPollyVoicesButton',
+                    'caption' => $this->Translate('Fetch German voices'),
+                    'onClick' => 'IPS_RequestAction($id, "TtsPollyVoices", 0);',
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsPollyStatus',
+                    'caption' => sprintf($this->Translate('%d voices stored.'), count($this->TtsPollyCachedVoices())),
+                    'visible' => $ist === 'polly'
+                ],
+                [
+                    'type'    => 'Label',
+                    'name'    => 'TtsPollyHint',
+                    'visible' => $ist === 'polly',
+                    'caption' => $this->Translate("Polly bills per character with no monthly minimum and runs in Frankfurt (eu-central-1). Every request is signed (Signature Version 4) — that is why it needs two secrets instead of one: access key ID and secret access key. Create them in the AWS console under IAM; the policy needs only „polly:SynthesizeSpeech“ and „polly:DescribeVoices“.\n\nThe engine decides how it sounds and what it costs: neural is the sensible default, generative is the most natural and by far the most expensive, standard is the cheapest and audibly tinnier.")
                 ],
                 [
                     'type'    => 'Label',
@@ -1098,6 +1343,9 @@ trait Tts
             'elevenlabs' => ['TtsElevenKey', 'TtsElevenVoice', 'TtsElevenModel',
                              'TtsElevenQuality', 'TtsElevenQualityHint', 'TtsElevenScope',
                              'TtsElevenVoicesButton', 'TtsElevenStatus', 'TtsElevenHint'],
+            'polly'      => ['TtsPollyKey', 'TtsPollySecret', 'TtsPollyRegion', 'TtsPollyVoice',
+                             'TtsPollyEngine', 'TtsPollyVoicesButton', 'TtsPollyStatus',
+                             'TtsPollyHint'],
         ];
         if (!isset($gruppen[$anbieter])) {
             $anbieter = 'openai';
@@ -1113,6 +1361,13 @@ trait Tts
     {
         if ($ident === 'TtsProviderPick') {
             $this->TtsShowProviderFields((string)$value);
+            return true;
+        }
+        if ($ident === 'TtsPollyVoices') {
+            $this->UpdateFormField('TtsPollyStatus', 'caption', $this->TtsPollyVoiceList());
+            // Wie bei ElevenLabs: die Auswahl im Personen-Editor entstand beim Bau
+            // des Formulars und wuesste sonst nichts von den neuen Stimmen.
+            $this->RefreshPersonaVoicePicker();
             return true;
         }
         if ($ident !== 'TtsElevenVoices') {

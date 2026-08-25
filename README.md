@@ -43,7 +43,7 @@ Familien-App für Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-S
 
 - Bereiche: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender (OpenCalendar) und Notizen
 - Familienmitglieder mit Foto, Aufgaben-Zuweisung und „Meine Aufgaben"
-- Tägliches Briefing mit Sprachausgabe (OpenAI, Azure oder ElevenLabs) — acht Personas vom Butler bis zum Drillsergeant
+- Tägliches Briefing mit Sprachausgabe (OpenAI, Azure, ElevenLabs oder Amazon Polly) — acht Personas vom Butler bis zum Drillsergeant
 - KI-Analyse: Foto, PDF oder E-Mail wird zu Aufgaben-, Termin- und Notiz-Vorschlägen (eigener Schlüssel oder lokaler Server)
 - Web-Push aufs Handy: fällige Aufgaben, neues Briefing, neue KI-Vorschläge
 - Stundenplan der Kinder als Zeitleiste in der Übersicht — je Kind ein Balken, ein Strich markiert die aktuelle Zeit, und ein Umschalter blättert durch die Wochentage

@@ -64,7 +64,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - Für den Kalender-Bereich: das Store-Modul **OpenCalendar** (de.burki24.opencalendar), optional
 - Für die E-Mail-Analyse: eine **E-Mail, Empfangen (IMAP)**-Instanz oder eine Mail-Weiterleitung, optional
 - Für die KI-Funktionen: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein **lokaler, OpenAI-kompatibler Server** (z. B. LM Studio)
-- Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech** oder **ElevenLabs** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig)
+- Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech**, **ElevenLabs** oder **Amazon Polly** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig, Polly rechnet je Zeichen ab)
 
 ## 3. Installation
 
@@ -170,6 +170,7 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
 | OpenAI | Stimme, Modell, Sprechanweisung | nutzt den OpenAI-Schlüssel der KI-Funktionen |
 | Azure Speech | Schlüssel, Region | deutsche Neural-Stimmen |
 | ElevenLabs | Schlüssel, Stimme, Modell, Stimmen-Umfang, Tonqualität | **kostenpflichtiger Zugang nötig**; „Stimmen des Kontos abrufen" listet die eigenen Stimmen — Vorgabe ist die Rubrik *Meine Stimmen* wie auf der ElevenLabs-Webseite; Tonqualität `auto` wählt die beste Stufe, die zur Textlänge passt |
+| Amazon Polly | Zugriffsschlüssel-ID, Geheimschlüssel, Region, Stimme, Engine | rechnet je Zeichen ab, ohne Monatsmindestbetrag, und läuft in Frankfurt (`eu-central-1`). Braucht **zwei** Geheimnisse, weil jede Anfrage unterschrieben wird (Signature Version 4). Anzulegen in der AWS-Konsole unter IAM; die Berechtigung braucht nur `polly:SynthesizeSpeech` und `polly:DescribeVoices`. „Deutsche Stimmen abrufen" füllt die Auswahl. Die **Engine** entscheidet über Klang und Preis: `neural` ist die Vorgabe, `generative` klingt am natürlichsten und kostet mit Abstand am meisten, `standard` ist am günstigsten und hörbar blecherner |
 
 ## 9. Einkaufs-Ansage
 
@@ -216,7 +217,7 @@ Alle KI-Funktionen (Foto-/PDF-Analyse, Mail-Analyse, Briefing) laufen über den 
 
 Verwendete Modelle: Anthropic `claude-sonnet-4-5`, OpenAI `gpt-4o` (PDFs über `gpt-5.6-terra`), lokal das im Formular eingetragene Modell.
 
-> Die **Sprachausgabe** des Briefings und der Einkaufs-Ansage hängt nicht am KI-Anbieter — sie hat ihre eigene Wahl (OpenAI, Azure Speech oder ElevenLabs, Kapitel 8).
+> Die **Sprachausgabe** des Briefings und der Einkaufs-Ansage hängt nicht am KI-Anbieter — sie hat ihre eigene Wahl (OpenAI, Azure Speech, ElevenLabs oder Amazon Polly, Kapitel 8).
 
 ## 12. Benachrichtigungen
 
