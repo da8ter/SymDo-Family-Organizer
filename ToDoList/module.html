@@ -4228,6 +4228,17 @@ function handleMessage(data) {
     // einer Minute. Nur dort eingehaengt, blieb die Karte beim Oeffnen leer und
     // erschien erst eine Minute spaeter — im Prueflauf als „fehlt" sichtbar.
     loadTimetable();
+    /* Notizen VORAB holen, nicht erst beim Betreten des Bereichs.
+       Bisher stiess renderNotizen() den Abruf beim ersten Zeichnen an — der
+       Bereich stand also einen Moment leer da, jedes Mal beim ersten Oeffnen.
+       Ein Kostengrund dafuer gab es nicht: die Liste ist gemessen 3,7 KB und
+       braucht auf dem Server 1,5 ms. (Beim Kalender ist das anders und dort auch
+       so begruendet — der arbeitet sich seitenweise durch OpenCalendar.)
+       Nur wenn der Bereich ueberhaupt sichtbar ist: wer die Notizen abgeschaltet
+       hat, soll dafuer keine Anfrage schicken. */
+    if (visibleTabs().includes('notes') && !notizenGeladen && !notizenLaden) {
+      ladeNotizen();
+    }
     // Erst hier: Vorher steht nicht fest, ob es ein Gateway gibt, und die
     // Mitgliederliste fuer die Zuordnung ist noch leer.
     pushInit();
