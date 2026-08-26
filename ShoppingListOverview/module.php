@@ -7,7 +7,7 @@ declare(strict_types=1);
  * scrollbare Bild-Leiste — Nachbildung der Einkaufsvorschau aus dem
  * SymDo-App-Dashboard (ohne Buttons). Klick öffnet ein konfigurierbares Ziel.
  */
-class ShoppingListOverview extends IPSModuleStrict
+class SymDoShoppingListOverview extends IPSModuleStrict
 {
     // GUID des Quell-Moduls Shopping List (Filter/Validierung)
     private const SHOPPINGLIST_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';

@@ -10,7 +10,7 @@ require_once __DIR__ . '/../shared/ListSource.php';
 require_once __DIR__ . '/../shared/ExternalListSync.php';
 require_once __DIR__ . '/libs/ExtListHooksTodo.php';
 
-class ToDoList extends IPSModuleStrict
+class SymDoToDoList extends IPSModuleStrict
 {
 
     use SyncHelper;

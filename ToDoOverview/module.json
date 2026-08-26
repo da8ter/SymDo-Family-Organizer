@@ -1,9 +1,9 @@
 {
   "id": "{E28EE872-873E-4544-8D97-BE0BB4AAA597}",
-  "name": "ToDo Overview",
+  "name": "SymDo ToDo Overview",
   "type": 3,
   "vendor": "",
-  "aliases": [],
+  "aliases": ["ToDo Overview"],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/ToDoOverview",
   "parentRequirements": [],
   "childRequirements": [],

@@ -1,4 +1,4 @@
-# ToDo Liste / Einkaufsliste
+# SymDo — Family Organizer
 
 Diese Modul-Bibliothek stellt eine ToDo-Liste und eine Einkaufsliste für die Tile-Visualisierung bereit — optional mit Synchronisation für Google Tasks, Microsoft To Do und CalDAV. Mit **SymDo** kommen eine Web-App fürs Handy und eine Kachel dazu, die beide Listen samt Kalender, Notizen, KI-Funktionen und täglichem Briefing in einer Oberfläche für die ganze Familie bündeln.
 

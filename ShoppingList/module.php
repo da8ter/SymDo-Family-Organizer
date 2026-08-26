@@ -10,7 +10,7 @@ require_once __DIR__ . '/../shared/ListSource.php';
 require_once __DIR__ . '/../shared/ExternalListSync.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
-class ShoppingList extends IPSModuleStrict
+class SymDoShoppingList extends IPSModuleStrict
 {
 
     use ItemStore;

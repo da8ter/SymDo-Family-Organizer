@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-class ToDoOverview extends IPSModuleStrict
+class SymDoToDoOverview extends IPSModuleStrict
 {
     // GUID des Quell-Moduls ToDoList (Filter im SelectInstance des Formulars)
     private const TODOLIST_MODULE_GUID = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
