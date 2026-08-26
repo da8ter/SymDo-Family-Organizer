@@ -63,7 +63,9 @@ Betreuung und Ferien. Gepflegt wird alles im Backend der Instanz.
 
 ## Anleitungen:
 
-- [ToDo Liste](ToDoList/README.md)
-- [Einkaufsliste](ShoppingList/README.md)
-- [SymDo](SymDoGateway/README.md)
-- [Stundenplan](Stundenplan/README.md)
+- [SymDo ToDo List](ToDoList/README.md)
+- [SymDo Shopping List](ShoppingList/README.md)
+- [SymDo Gateway](SymDoGateway/README.md)
+- [SymDo Web App](SymDoWebApp/README.md)
+- [SymDo Stundenplan](Stundenplan/README.md)
+- [SymDo ToDo Overview](ToDoOverview/README.md)
