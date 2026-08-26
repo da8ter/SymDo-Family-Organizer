@@ -8246,6 +8246,12 @@ function openCalEditor(entwurf, vorschlag, bestand) {
   }
   calCtx = {
     proposal: vorschlag || null,
+    /* Beides festhalten, damit der Dialog nach einem gescheiterten Speichern
+       genau so wieder aufgebaut werden kann, wie er war (siehe
+       calSpeichernSenden). Sonst waere die Eingabe weg — der Dialog schliesst
+       jetzt sofort, ohne die Antwort abzuwarten. */
+    draft: entwurf || null,
+    original: bestand || null,
     // Reihe nur beim Anlegen aus einem Vorschlag: ein bestehender Termin ist immer
     // ein einzelnes Vorkommen (gemessen — Aendern trifft nie die ganze Serie).
     recurrence: (!bestand && entwurf && entwurf.recurrence) ? entwurf.recurrence : null,
@@ -8415,6 +8421,41 @@ function calSyncEditor(ganztags) {
   });
 }
 
+/**
+ * Der eingegebene Stand des Termin-Dialogs. Gebraucht, weil der Dialog beim
+ * Speichern SOFORT schliesst: scheitert der Kalender hinterher, muss die
+ * Eingabe zurueckkommen koennen statt verloren zu sein.
+ */
+function calFormularStand() {
+  const wert = (id) => (document.getElementById(id) || {}).value;
+  const an   = (id) => ((document.getElementById(id) || {}).checked === true);
+  return {
+    title: wert('ceTitle'), info: wert('ceInfo'), location: wert('ceLocation'),
+    allDay: an('ceAllDay'), start: wert('ceStart'), end: wert('ceEnd'),
+    annual: an('ceAnnual'), annualType: wert('ceAnnualType'), annualDate: wert('ceAnnualDate'),
+    calendar: wert('ceCalendar'), notify: an('ceNotify'), lead: wert('ceLeadTime'),
+    members: Array.isArray(ceAssigned) ? ceAssigned.slice() : []
+  };
+}
+
+/** Gegenstueck zu calFormularStand — der Dialog muss dafuer schon offen sein. */
+function calFormularSetzen(s) {
+  if (!s) return;
+  const setz = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const hak  = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v === true; };
+  hak('ceAllDay', s.allDay);
+  calSyncEditor(s.allDay);          // schaltet die Zeitfelder um, LEERT sie dabei
+  setz('ceTitle', s.title); setz('ceInfo', s.info); setz('ceLocation', s.location);
+  setz('ceStart', s.start); setz('ceEnd', s.end);
+  hak('ceAnnual', s.annual); setz('ceAnnualType', s.annualType); setz('ceAnnualDate', s.annualDate);
+  setz('ceCalendar', s.calendar);
+  hak('ceNotify', s.notify); setz('ceLeadTime', s.lead);
+  ceAssigned = Array.isArray(s.members) ? s.members.slice() : [];
+  renderAssignList('ceAssignList', ceAssigned);
+  calSyncNotify();
+  calSyncAnnual();
+}
+
 function saveCalEditor() {
   if (!calCtx) return;
   const titel = document.getElementById('ceTitle').value.trim();
@@ -8473,20 +8514,51 @@ function saveCalEditor() {
   });
 }
 
-/** Der eigentliche Aufruf — herausgeloest, damit die Reichweitenfrage davor passt. */
+/**
+ * Der eigentliche Aufruf — herausgeloest, damit die Reichweitenfrage davor passt.
+ *
+ * Der Dialog schliesst SOFORT, ohne auf den Kalender zu warten. Der Grund ist
+ * gemessen: OpenCalendar braucht fuer einen gewoehnlichen Termin 0,6 s, fuer eine
+ * endlose Serie 17 s und fuer ein Jahresereignis 26 bis 28 s — die Zeit vergeht
+ * vollstaendig im fremden Modul, hinter einem einzigen synchronen Aufruf. Ein
+ * Dialog, der eine halbe Minute stillsteht, sieht aus wie ein Haenger.
+ *
+ * Der Preis: ein Fehlschlag faellt erst verspaetet auf. Deshalb wird der
+ * eingegebene Stand vorher gesichert und der Dialog im Fehlerfall genau so wieder
+ * aufgebaut — die Eingabe ist nie verloren, sie kommt nur spaeter zurueck.
+ */
 function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
-  knopf.disabled = true;
+  const stand = calFormularStand();
+  const ctx   = calCtx;
+  const jahrestag = String(ereignis.anniversaryType || '') !== '';
+  const langsam = jahrestag || !!(ereignis.recurrence) || (bestand && bestand.recurring === true);
+
+  closeOverlay('calEditOverlay');
+  calCtx = null;
+  knopf.disabled = false;
+  /* Beim Anlegen einer Serie oder eines Jahresereignisses ausdruecklich sagen,
+     dass es dauert. „Wird gespeichert" allein liesse jemanden nach zehn Sekunden
+     ein zweites Mal anlegen. */
+  showToast(translate(langsam
+    ? 'Saving — annual events and series take a moment in the calendar.'
+    : 'Saving…'));
+
+  const zurueck = (meldung) => {
+    showToast(meldung);
+    // Denselben Dialog neu aufbauen und den Stand zurueckschreiben.
+    openCalEditor(ctx && ctx.draft, ctx && ctx.proposal, ctx && ctx.original);
+    calFormularSetzen(stand);
+  };
+
   aiPost('/calendar', {
     action: bestand ? 'update' : 'create',
     calendarID: bestand ? bestand.calendarID : kalenderID,
     event: ereignis
   }).then(r => {
-    knopf.disabled = false;
     const j = r && r.json;
     if (!j || j.ok !== true) {
-      // Der Anbieter kann ablehnen (Rechte, ungueltiger Zeitraum). Der Dialog bleibt
-      // offen, damit die Eingabe nicht verloren ist.
-      showToast((j && j.error && j.error.message) || translate('The calendar rejected the appointment.'));
+      // Der Anbieter kann ablehnen (Rechte, ungueltiger Zeitraum).
+      zurueck((j && j.error && j.error.message) || translate('The calendar rejected the appointment.'));
       return;
     }
     if (!bestand) {
@@ -8496,8 +8568,6 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
         mailForget(calCtx.proposal.id, calCtx.proposal.i);
       }
     }
-    closeOverlay('calEditOverlay');
-    calCtx = null;
     // Bei einer Reihe zaehlt die Rueckmeldung: 15 Termine sind ein anderes Ergebnis
     // als einer. Blieb es bei einem Teil, sagt der Hinweis das ausdruecklich — sonst
     // haette niemand Anlass, im Kalender nachzuzaehlen.
@@ -8521,7 +8591,15 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
     // Der neue Stand kommt erst nach dem naechsten Abruf aus OpenCalendar.
     calEvents = [];
     loadCalendarEvents();
-  }).catch(() => { knopf.disabled = false; });
+    // Die Uebersicht zeigt dieselben Termine — ohne das stuende dort bis zum
+    // naechsten Kalenderabruf der alte Stand.
+    loadDashEvents();
+  }).catch(() => {
+    /* Netzfehler: derselbe Weg wie eine Ablehnung. Der Kalender KANN den Termin
+       trotzdem angelegt haben — deshalb sagt der Text nicht, dass nichts
+       passiert ist. */
+    zurueck(translate('Could not reach the calendar. Please check whether the appointment was created.'));
+  });
 }
 
 function initCalEditor() {
