@@ -901,20 +901,28 @@ trait CalendarBridge
         $uidIn  = trim((string)($daten['uid'] ?? ''));
         $startTs = (int)($daten['startTimestamp'] ?? 0);
 
-        // Zwei Anlaeufe, dazwischen ein Abgleich — siehe CalRefresh. Wiederholt wird
-        // nach JEDER Ablehnung und nicht nur nach der Konflikt-Meldung: die kommt
-        // uebersetzt vom fremden Modul, ein Textvergleich darauf waere bruechig. Der
-        // zweite Versuch schickt dieselben Inhalte an denselben Termin, kann also
-        // nichts anrichten, was der erste nicht auch getan haette.
+        /* Zwei Anlaeufe. Der erste nimmt den Stand aus dem Zwischenspeicher (7 ms);
+           wird er abgelehnt, holt der zweite GENAU DIESEN Termin frisch vom
+           Anbieter (491 ms) statt den ganzen Kalender abzugleichen (882 ms).
+           Wiederholt wird nach JEDER Ablehnung und nicht nur nach der
+           Konflikt-Meldung: die kommt uebersetzt vom fremden Modul, ein
+           Textvergleich darauf waere bruechig. Der zweite Versuch schickt
+           dieselben Inhalte an denselben Termin, kann also nichts anrichten, was
+           der erste nicht auch getan haette. */
         $letzteMeldung = '';
+        $roh = $this->CalFindRaw($calendarID, $id, $uidIn, $startTs);
+        if ($roh === null) {
+            return $fehler('calendar_error', $this->Translate('This appointment no longer exists.'));
+        }
         for ($versuch = 1; $versuch <= 2; $versuch++) {
             if ($versuch === 2) {
-                $this->CalRefresh($calendarID);
-            }
-            $roh = $this->CalFindRaw($calendarID, $id, $uidIn, $startTs);
-            if ($roh === null) {
-                $letzteMeldung = $this->Translate('This appointment no longer exists.');
-                continue;
+                $frisch = $this->CalFreshRaw($calendarID, $roh);
+                if ($frisch === null) {
+                    // Nichts Besseres zu holen — ein zweiter Anlauf mit demselben
+                    // Stand waere nur dieselbe Ablehnung.
+                    break;
+                }
+                $roh = $frisch;
             }
 
             $ereignis = array_merge($roh, $geprueft['fields']);
@@ -984,25 +992,49 @@ trait CalendarBridge
     }
 
     /**
-     * OpenCalendars Zwischenspeicher auffrischen.
+     * EINEN Termin frisch vom Anbieter holen — mit dessen aktuellem etag.
      *
-     * Noetig, weil er sich nur im eingestellten Takt selbst abgleicht (hier 15
-     * Minuten): sein `etag` ist dann veraltet, und der Anbieter lehnt jedes
-     * Schreiben mit „Der Termin wurde von einem anderen Client geaendert" ab.
-     * Gemessen am 17.08.2026: direkt nach IPSKAL_Synchronize liefert das Lesen den
-     * frischen Satz, ohne jede Wartezeit — deshalb genuegt der eine Aufruf hier und
-     * es braucht kein Warten im Anfragepfad.
+     * Ersetzt im Schreibpfad den vollstaendigen Abgleich. Der war die einzige
+     * Moeglichkeit, solange OpenCalendar nichts Gezielteres anbot: ein veraltetes
+     * etag im Zwischenspeicher laesst den Anbieter jede Aenderung ablehnen, also
+     * wurde der GANZE Kalender abgeglichen, um eine einzige Zeile aufzufrischen.
+     *
+     * Gemessen am 26.08.2026 an „Schule und Kita": voller Abgleich 882 ms, dieser
+     * gezielte Griff 491 ms — und er ruehrt die uebrigen Termine nicht an.
+     *
+     * Gibt null zurueck, wenn es die Funktion nicht gibt (aeltere Fassung des
+     * Kalender-Moduls) oder der Anbieter nichts Brauchbares liefert. Der Aufrufer
+     * bricht dann ab, statt denselben Stand ein zweites Mal zu schicken.
+     *
+     * @param array<string, mixed> $roh der Datensatz, wie er im Zwischenspeicher steht
+     * @return array<string, mixed>|null
      */
-    private function CalRefresh(int $calendarID): void
+    private function CalFreshRaw(int $calendarID, array $roh): ?array
     {
-        if (!function_exists('IPSKAL_Synchronize')) {
-            return;
+        if (!function_exists('IPSKAL_GetEventForEdit')) {
+            return null;
         }
+        // Nur die Kennungsfelder mitgeben: die Funktion sucht den Termin damit beim
+        // Anbieter und liefert ihn mit aktuellem etag zurueck.
+        $kennung = [
+            'id'             => (string)($roh['id'] ?? ''),
+            'uid'            => (string)($roh['uid'] ?? ''),
+            'resourceUrl'    => (string)($roh['resourceUrl'] ?? ''),
+            'startTimestamp' => (int)($roh['startTimestamp'] ?? 0),
+            'endTimestamp'   => (int)($roh['endTimestamp'] ?? 0),
+        ];
         try {
-            IPSKAL_Synchronize($calendarID);
+            $frisch = json_decode((string)IPSKAL_GetEventForEdit(
+                $calendarID, (string)json_encode($kennung, JSON_UNESCAPED_UNICODE)), true);
         } catch (Throwable $e) {
-            $this->SendDebug('Calendar', 'Synchronize fehlgeschlagen: ' . $e->getMessage(), 0);
+            $this->SendDebug('Calendar', 'GetEventForEdit geworfen: ' . $e->getMessage(), 0);
+            return null;
         }
+        // Ohne etag waere der Griff wertlos — dann lieber abbrechen.
+        if (!is_array($frisch) || trim((string)($frisch['etag'] ?? '')) === '') {
+            return null;
+        }
+        return $frisch;
     }
 
     /**
@@ -1028,19 +1060,20 @@ trait CalendarBridge
         $uidIn   = trim((string)($daten['uid'] ?? ''));
         $startTs = (int)($daten['startTimestamp'] ?? 0);
 
-        // Zwei Anlaeufe wie beim Aendern (siehe CalRefresh): ein veraltetes etag im
+        // Zwei Anlaeufe wie beim Aendern (siehe CalFreshRaw): ein veraltetes etag im
         // Zwischenspeicher laesst den Anbieter auch das Loeschen ablehnen.
         // IPSKAL_DeleteEvent antwortet mit true/false und nennt keinen Grund — umso
         // mehr Grund, es nach einem Abgleich noch einmal zu versuchen.
-        $roh = null;
+        $roh = $this->CalFindRaw($calendarID, $id, $uidIn, $startTs);
         $erfolg = false;
-        for ($versuch = 1; $versuch <= 2; $versuch++) {
+        for ($versuch = 1; $roh !== null && $versuch <= 2; $versuch++) {
             if ($versuch === 2) {
-                $this->CalRefresh($calendarID);
-            }
-            $roh = $this->CalFindRaw($calendarID, $id, $uidIn, $startTs);
-            if ($roh === null) {
-                continue;
+                // Gezielt statt vollstaendig — siehe CalFreshRaw.
+                $frisch = $this->CalFreshRaw($calendarID, $roh);
+                if ($frisch === null) {
+                    break;
+                }
+                $roh = $frisch;
             }
             // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent),
             // massgeblich ist das Flag am Datensatz.
