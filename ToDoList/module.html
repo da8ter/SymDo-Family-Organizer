@@ -3141,13 +3141,26 @@ html[data-symdo-theme="dark"] .member-bar {
         <textarea id="ceInfo" rows="3"></textarea></div>
       <div class="form-row"><label id="calEditCalendarLabel"></label>
         <select id="ceCalendar"></select></div>
+      <!-- Jahresereignis: Geburtstag, Jahrestag, Hochzeits- oder Todestag. Beginn,
+           Ende und „ganztaegig" entfallen dann — der Termin wiederholt sich
+           jaehrlich, das rechnet der Kalender selbst aus dem Ursprungsdatum. -->
       <div class="form-row inline">
+        <label id="calEditAnnualLabel"></label>
+        <span class="switch"><input type="checkbox" id="ceAnnual" /><span class="knob"></span></span>
+      </div>
+      <div class="form-row" id="ceAnnualTypeRow" style="display:none;">
+        <label id="calEditAnnualTypeLabel"></label>
+        <select id="ceAnnualType"></select></div>
+      <div class="form-row" id="ceAnnualDateRow" style="display:none;">
+        <label id="calEditAnnualDateLabel"></label>
+        <input id="ceAnnualDate" type="date" /></div>
+      <div class="form-row inline" id="ceAllDayRow">
         <label id="calEditAllDayLabel"></label>
         <span class="switch"><input type="checkbox" id="ceAllDay" /><span class="knob"></span></span>
       </div>
-      <div class="form-row"><label id="calEditStartLabel"></label>
+      <div class="form-row" id="ceStartRow"><label id="calEditStartLabel"></label>
         <input id="ceStart" type="datetime-local" /></div>
-      <div class="form-row"><label id="calEditEndLabel"></label>
+      <div class="form-row" id="ceEndRow"><label id="calEditEndLabel"></label>
         <input id="ceEnd" type="datetime-local" /></div>
       <!-- Reihe aus einem erkannten Kurs: nur Anzeige. Der Takt kommt aus der
            Analyse, die Einzeltermine rechnet das Gateway aus (CalExpandSeries) —
@@ -7582,6 +7595,23 @@ let calLoading = false;
 let calError = '';
 const CAL_RANGES = [7, 30, 90];
 
+/* Jahresereignisse, wie OpenCalendar sie kennt. Die Symbole stehen im Kit von
+   Symcon (/icons.js) — geprueft, bevor sie hier stehen: ein fehlender Name bliebe
+   ein leeres <i>, das niemandem auffaellt. Die Kerze fuer den Todestag ist
+   bewusst kein Kreuz und keine betenden Haende: sie passt zu jedem Glauben. */
+const CAL_ANNUAL_TYPES = [
+  { value: 'birthday',    label: 'Birthday',           icon: 'fa-gift' },
+  { value: 'anniversary', label: 'Anniversary',        icon: 'fa-trophy' },
+  { value: 'wedding',     label: 'Wedding anniversary', icon: 'fa-rings-wedding' },
+  { value: 'death',       label: 'Remembrance day',    icon: 'fa-candle-holder' }
+];
+
+/** Die Art eines Jahresereignisses, oder '' wenn es keines ist. */
+function calAnnualType(e) {
+  const art = String((e && e.anniversaryType) || '');
+  return CAL_ANNUAL_TYPES.some(t => t.value === art) ? art : '';
+}
+
 function calAvailable() {
   if (window.__SYMDO__) return true;
   return !!store.gatewayAvailable;
@@ -7837,8 +7867,20 @@ function renderCalendar() {
       // Abzeichen bewusst „Teil einer Serie" und nicht den Takt: den kennt nur der
       // Serienkopf, das einzelne Vorkommen traegt die Regel nicht.
       const vorlauf = Number(e.reminder);
-      const abzeichen =
-        (zeigeWiederholung && e.recurring === true
+      /* Jahresereignis: eigenes Abzeichen mit der Zahl der Jahre. Es ersetzt das
+         Wiederholungs-Abzeichen — dass ein Geburtstag jaehrlich wiederkehrt, sagt
+         schon das Symbol, zwei Zeichen nebeneinander waeren dieselbe Auskunft
+         zweimal. */
+      const art = calAnnualType(e);
+      const artZeile = art ? CAL_ANNUAL_TYPES.find(t => t.value === art) : null;
+      const jahre = Number(e.years);
+      const jahrestag = artZeile
+        ? `<span class="badge attr" title="${escapeHtml(calAnnualTitle(e))}">` +
+          `<i class="fa-light ${artZeile.icon}"></i>` +
+          (Number.isFinite(jahre) && jahre > 0 ? escapeHtml(String(jahre)) : '') + '</span>'
+        : '';
+      const abzeichen = jahrestag +
+        (zeigeWiederholung && e.recurring === true && !artZeile
           ? `<span class="badge attr" title="${escapeHtml(translate('Part of a series'))}"><i class="fa-light fa-repeat"></i></span>` : '') +
         (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
           ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
@@ -7923,9 +7965,12 @@ function bindCalRows(knoten) {
        der nur die ganze Serie schreiben laesst, galt als gesperrt. */
     const serieErlaubt = (e, art) => {
       if (e.recurring !== true) return true;
-      const geht = art === 'del'
+      // Jahresereignis: nur das Serienrecht zaehlt (siehe calFrageReichweite).
+      const geht = calAnnualType(e)
+        ? (art === 'del' ? e.canDeleteSeries === true : e.canUpdateSeries === true)
+        : (art === 'del'
         ? (e.canDeleteOccurrence === true || e.canDeleteSeries === true)
-        : (e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true);
+        : (e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true));
       if (geht) return true;
       showToast(translate(art === 'del'
         ? 'This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.'
@@ -7944,8 +7989,10 @@ function bindCalRows(knoten) {
       // geloescht wird, waere bei einer Serie eine gefaehrliche Zustimmung.
       calFrageReichweite(e, 'del').then(scope => {
         if (!scope) return;
-        showConfirm(translate(scope === 'series'
-          ? 'Delete the whole series?' : 'Delete this appointment?'),
+        // Beim Jahresereignis waere „ganze Serie" die technisch richtige, aber
+        // unverstaendliche Frage — geloescht wird ein Geburtstag, keine Serie.
+        showConfirm(translate(calAnnualType(e) ? 'Delete this annual event?'
+          : (scope === 'series' ? 'Delete the whole series?' : 'Delete this appointment?')),
           translate('Delete'), () => calDelete(e, scope));
       });
     };
@@ -7971,12 +8018,29 @@ function bindCalRows(knoten) {
       if (!e || !serieErlaubt(e, 'del')) return;
       calFrageReichweite(e, 'del').then(scope => {
         if (!scope) return;
-        showConfirm(translate(scope === 'series'
-          ? 'Delete the whole series?' : 'Delete this appointment?'),
+        // Beim Jahresereignis waere „ganze Serie" die technisch richtige, aber
+        // unverstaendliche Frage — geloescht wird ein Geburtstag, keine Serie.
+        showConfirm(translate(calAnnualType(e) ? 'Delete this annual event?'
+          : (scope === 'series' ? 'Delete the whole series?' : 'Delete this appointment?')),
           translate('Delete'), () => calDelete(e, scope));
       });
     });
   });
+}
+
+/**
+ * Beschriftung des Jahrestags-Abzeichens: „wird 80", „12. Hochzeitstag". Beim
+ * Todestag wird bewusst nicht gezaehlt wie bei einem Geburtstag — dort steht die
+ * Jahreszahl fuer sich.
+ */
+function calAnnualTitle(e) {
+  const art = calAnnualType(e);
+  const zeile = CAL_ANNUAL_TYPES.find(t => t.value === art);
+  if (!zeile) return '';
+  const jahre = Number(e.years);
+  if (!Number.isFinite(jahre) || jahre <= 0) return translate(zeile.label);
+  if (art === 'birthday') return translate('Turns %1').replace('%1', String(jahre));
+  return translate('%1. %2').replace('%1', String(jahre)).replace('%2', translate(zeile.label));
 }
 
 /**
@@ -7994,6 +8058,14 @@ function bindCalRows(knoten) {
 function calFrageReichweite(e, art) {
   return new Promise(fertig => {
     if (!e || e.recurring !== true) { fertig('occurrence'); return; }
+    /* Ein Jahresereignis kennt nur eine Reichweite: das Ganze. Ein einzelnes
+       Vorkommen zu aendern lehnt der Kalender ohnehin ab, und ein Geburtstag, dem
+       genau ein Jahr fehlt, waere ein Zustand ohne Sinn. Also nicht fragen. */
+    if (calAnnualType(e)) {
+      const darf = art === 'del' ? e.canDeleteSeries : e.canUpdateSeries;
+      fertig(darf === true ? 'series' : null);
+      return;
+    }
     const moeglich = (art === 'del'
       ? [['occurrence', e.canDeleteOccurrence, translate('Only this appointment')],
          ['series', e.canDeleteSeries, translate('The whole series')]]
@@ -8144,11 +8216,20 @@ function openCalEditor(entwurf, vorschlag, bestand) {
     recurrence: (!bestand && entwurf && entwurf.recurrence) ? entwurf.recurrence : null,
     // Erkennungsfelder festhalten: die Liste kann sich waehrend des Dialogs neu
     // laden, der Termin unter der Zeile bleibt aber derselbe.
+    /* Auch die Serien-Merkmale festhalten. Ohne sie fragt calFrageReichweite beim
+       Speichern nichts und antwortet sofort mit „nur dieses Vorkommen" — die
+       Reichweitenfrage gab es damit nur beim Loeschen, wo der volle Datensatz aus
+       der Liste kommt. Dasselbe gilt fuer die Art des Jahresereignisses. */
     edit: bestand ? {
       calendarID: bestand.calendarID,
       id: String(bestand.id || ''),
       uid: String(bestand.uid || ''),
-      startTimestamp: bestand.start || 0
+      startTimestamp: bestand.start || 0,
+      recurring: bestand.recurring === true,
+      canUpdateOccurrence: bestand.canUpdateOccurrence === true,
+      canUpdateFollowing: bestand.canUpdateFollowing === true,
+      canUpdateSeries: bestand.canUpdateSeries === true,
+      anniversaryType: String(bestand.anniversaryType || '')
     } : null
   };
   const e = bestand || entwurf || {};
@@ -8160,6 +8241,16 @@ function openCalEditor(entwurf, vorschlag, bestand) {
   document.getElementById('ceInfo').value = String(e.info || '');
   document.getElementById('ceLocation').value = String(e.location || '');
   document.getElementById('ceAllDay').checked = ganztags;
+
+  // Jahresereignis: Art und Ursprungsdatum kommen mit dem Termin (das Gateway
+  // reicht sie aus OpenCalendar durch). Beim Anlegen ist der Schalter aus.
+  const artFeld = document.getElementById('ceAnnualType');
+  artFeld.innerHTML = CAL_ANNUAL_TYPES.map(t =>
+    `<option value="${t.value}">${escapeHtml(translate(t.label))}</option>`).join('');
+  const artAlt = calAnnualType(e);
+  document.getElementById('ceAnnual').checked = artAlt !== '';
+  artFeld.value = artAlt || 'birthday';
+  document.getElementById('ceAnnualDate').value = String(e.anniversaryDate || '');
 
   const auswahl = document.getElementById('ceCalendar');
   auswahl.innerHTML = schreibbar.map(c =>
@@ -8227,7 +8318,28 @@ function openCalEditor(entwurf, vorschlag, bestand) {
     endeZeile.parentElement.style.display = reiheText ? 'none' : '';
     if (reiheText) endeZeile.value = '';
   }
+  // Zuletzt, damit die Zeitfelder eines Jahresereignisses verschwunden BLEIBEN:
+  // die Reihen-Zeile oben blendet das Ende-Feld sonst wieder ein.
+  calSyncAnnual();
   openOverlay('calEditOverlay');
+}
+
+/**
+ * Jahresereignis an: Beginn, Ende und „ganztaegig" verschwinden. Sie stehen dann
+ * nicht zur Wahl — der Kalender baut aus dem Ursprungsdatum selbst einen
+ * ganztaegigen, jaehrlich wiederkehrenden Termin. Ein sichtbares Beginn-Feld waere
+ * ein Versprechen, das beim Speichern gebrochen wuerde.
+ */
+function calSyncAnnual() {
+  const an = document.getElementById('ceAnnual').checked;
+  ['ceAnnualTypeRow', 'ceAnnualDateRow'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = an ? '' : 'none';
+  });
+  ['ceAllDayRow', 'ceStartRow', 'ceEndRow'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = an ? 'none' : '';
+  });
 }
 
 /** Vorlaufzeit nur zeigen, wenn eine Erinnerung gewuenscht ist. */
@@ -8256,7 +8368,17 @@ function saveCalEditor() {
   const ganztags = document.getElementById('ceAllDay').checked;
   const start = document.getElementById('ceStart').value;
   const ende = document.getElementById('ceEnd').value;
-  if (!start) { showToast(translate('The appointment start is invalid.')); return; }
+  // Jahresereignis: statt Beginn und Ende zaehlt das Ursprungsdatum. Es MUSS in
+  // der Vergangenheit liegen — gezaehlt werden die Jahre seither.
+  const jahrestag = document.getElementById('ceAnnual').checked;
+  const jahresDatum = document.getElementById('ceAnnualDate').value;
+  if (jahrestag) {
+    const heute = new Date(); heute.setHours(0, 0, 0, 0);
+    if (!jahresDatum || new Date(jahresDatum + 'T00:00') > heute) {
+      showToast(translate('The date of the annual event must be in the past.'));
+      return;
+    }
+  } else if (!start) { showToast(translate('The appointment start is invalid.')); return; }
 
   // Aendern oder anlegen: derselbe Dialog, dieselben Pruefungen, nur die Aktion und
   // die Erkennungsfelder unterscheiden sich.
@@ -8266,6 +8388,11 @@ function saveCalEditor() {
     location: document.getElementById('ceLocation').value.trim(),
     info: document.getElementById('ceInfo').value.trim(),
     members: ceAssigned.slice(),
+    /* Immer mitschicken, auch leer: der leere Wert nimmt einem Termin die
+       Einordnung als Jahresereignis wieder ab. Fehlte das Feld, bliebe ein
+       abgewaehlter Geburtstag im Kalender ein Geburtstag. */
+    anniversaryType: jahrestag ? document.getElementById('ceAnnualType').value : '',
+    anniversaryDate: jahrestag ? jahresDatum : '',
     // -1 = keine Erinnerung. 0 ist eine gueltige Vorlaufzeit („zum Termin").
     reminder: document.getElementById('ceNotify').checked
       ? (parseInt(document.getElementById('ceLeadTime').value) || 0) : -1
@@ -8343,6 +8470,8 @@ function initCalEditor() {
   if (alle) alle.addEventListener('change', () => calSyncEditor(alle.checked));
   const melden = document.getElementById('ceNotify');
   if (melden) melden.addEventListener('change', calSyncNotify);
+  const jahrestag = document.getElementById('ceAnnual');
+  if (jahrestag) jahrestag.addEventListener('change', calSyncAnnual);
   const speichern = document.getElementById('btnCalEditSave');
   if (speichern) speichern.addEventListener('click', saveCalEditor);
   // Beschriftungen einmalig setzen
@@ -8350,6 +8479,9 @@ function initCalEditor() {
   t('calEditTitleLabel', 'Title');
   t('calEditCalendarLabel', 'Calendar');
   t('calEditAllDayLabel', 'All day');
+  t('calEditAnnualLabel', 'Annual event');
+  t('calEditAnnualTypeLabel', 'Kind');
+  t('calEditAnnualDateLabel', 'Since');
   t('calEditStartLabel', 'Start');
   t('calEditEndLabel', 'End');
   t('calEditLocationLabel', 'Location');

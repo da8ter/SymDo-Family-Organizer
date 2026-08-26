@@ -54,6 +54,13 @@ trait CalendarBridge
     private const CAL_SERIES_MAX = 60;
 
     /**
+     * Die vier Arten von Jahresereignissen, die OpenCalendar kennt. Andere Werte
+     * weist es zurueck; wir pruefen sie hier, damit die Meldung an den Nutzer
+     * verstaendlich bleibt statt aus dem fremden Modul zu kommen.
+     */
+    private const CAL_ANNIVERSARY_TYPES = ['birthday', 'anniversary', 'wedding', 'death'];
+
+    /**
      * Dauer eines Termins, wenn keine genannt ist (Sekunden). Eine Stunde ist die
      * Annahme, die auch Kalender-Apps treffen — sie muss hier nur ausdruecklich
      * getroffen werden, weil OpenCalendar ein Ende VERLANGT.
@@ -477,7 +484,7 @@ trait CalendarBridge
         if ($ende < $start) {
             $ende = $start;
         }
-        return [
+        $zeile = [
             'id'         => (string)($e['id'] ?? ($e['uid'] ?? '')),
             'uid'        => (string)($e['uid'] ?? ''),
             'calendarID' => $calendarID,
@@ -508,6 +515,21 @@ trait CalendarBridge
             'canUpdateSeries'     => ($e['canUpdateSeries'] ?? false) === true,
             'canDeleteSeries'     => ($e['canDeleteSeries'] ?? false) === true,
         ];
+
+        /* Jahresereignis (Geburtstag, Jahrestag, Hochzeits-, Todestag). Die Art
+           steht NICHT beim Anbieter, sondern in einer Ablage der Kalender-Instanz;
+           OpenCalendar haengt sie beim Lesen an jeden Datensatz. Nur mitschicken,
+           wenn es eines ist — sonst traegt jeder gewoehnliche Termin drei leere
+           Felder durch die Leitung. */
+        $art = trim((string)($e['anniversaryType'] ?? ''));
+        if (in_array($art, self::CAL_ANNIVERSARY_TYPES, true)) {
+            $zeile['anniversaryType'] = $art;
+            $zeile['anniversaryDate'] = trim((string)($e['anniversaryDate'] ?? ''));
+            // Wie viele Jahre dieses Vorkommen zaehlt — rechnet OpenCalendar aus
+            // dem Jahr des Vorkommens gegen das Ursprungsjahr.
+            $zeile['years'] = (int)($e['years'] ?? 0);
+        }
+        return $zeile;
     }
 
     /**
@@ -521,6 +543,19 @@ trait CalendarBridge
         return ($e['recurring'] ?? false) === true
             || trim((string)($e['recurrenceId'] ?? '')) !== ''
             || trim((string)($e['occurrenceId'] ?? '')) !== '';
+    }
+
+    /**
+     * Ist der Datensatz ein Jahresereignis? Massgeblich ist der Wert, der beim
+     * Schreiben gilt: die Oberflaeche kann ihn setzen (dann steht er in den
+     * geprueften Feldern) oder abwaehlen (dann steht dort ein leerer Wert, der den
+     * Wert aus dem Rohdatensatz ueberschreibt).
+     *
+     * @param array<string, mixed> $e
+     */
+    private function CalIsAnniversary(array $e): bool
+    {
+        return in_array(trim((string)($e['anniversaryType'] ?? '')), self::CAL_ANNIVERSARY_TYPES, true);
     }
 
     /**
@@ -540,6 +575,48 @@ trait CalendarBridge
         if ($titel === '') {
             return $fehler('invalid_payload', $this->Translate('The appointment needs a title.'));
         }
+        /* Jahresereignis? Dann bestimmt das Ursprungsdatum alles Weitere.
+           OpenCalendar baut daraus selbst einen ganztaegigen, jaehrlich
+           wiederkehrenden Termin ohne Ende (applyAnniversaryEventDefaults) —
+           Beginn, Ende und „ganztaegig" aus der Oberflaeche waeren hier also
+           bestenfalls wirkungslos und schlimmstenfalls widerspruechlich. Wir
+           rechnen sie trotzdem aus und schicken sie mit, damit der Datensatz auch
+           dann stimmt, wenn das fremde Modul seine Vorgabe einmal aendert.
+
+           Der Schluessel muss VORHANDEN sein, damit ein leerer Wert etwas bedeutet:
+           „ist keiner (mehr)". Fehlt er ganz, sagt die Oberflaeche nichts dazu und
+           ein bestehendes Jahresereignis bleibt unangetastet — sonst loeschte jede
+           Aenderung aus einem aelteren Client die Einordnung. */
+        $jahrestag = null;
+        if (array_key_exists('anniversaryType', $daten)) {
+            $art = strtolower(trim((string)$daten['anniversaryType']));
+            if ($art !== '' && !in_array($art, self::CAL_ANNIVERSARY_TYPES, true)) {
+                return $fehler('invalid_payload', $this->Translate('This kind of annual event is unknown.'));
+            }
+            $jahrestag = ['type' => $art, 'date' => ''];
+            if ($art !== '') {
+                $datum = trim((string)($daten['anniversaryDate'] ?? ''));
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum) !== 1 || $datum > date('Y-m-d')) {
+                    // OpenCalendar verlangt ein Datum in der Vergangenheit: gezaehlt
+                    // werden Jahre SEIT dem Ereignis.
+                    return $fehler('invalid_payload', $this->Translate('The date of the annual event must be in the past.'));
+                }
+                $jahrestag['date'] = $datum;
+            }
+        }
+        if ($jahrestag !== null && $jahrestag['type'] !== '') {
+            return ['ok' => true, 'fields' => [
+                'summary'         => $titel,
+                'start'           => $jahrestag['date'],
+                'end'             => date('Y-m-d', (int)strtotime($jahrestag['date'] . ' +1 day')),
+                'allDay'          => true,
+                'description'     => trim((string)($daten['info'] ?? '')),
+                'location'        => trim((string)($daten['location'] ?? '')),
+                'anniversaryType' => $jahrestag['type'],
+                'anniversaryDate' => $jahrestag['date'],
+            ]];
+        }
+
         $ganztags = ($daten['allDay'] ?? false) === true;
         $start = trim((string)($daten['start'] ?? ''));
         $ende  = trim((string)($daten['end'] ?? ''));
@@ -580,6 +657,11 @@ trait CalendarBridge
                 ? date('Y-m-d', (int)strtotime($start . ' +1 day'))
                 : date('Y-m-d\TH:i', (int)strtotime($start) + self::CAL_DEFAULT_DURATION);
         }
+        if ($jahrestag !== null) {
+            // Ausdruecklich abgewaehlt: der leere Wert nimmt OpenCalendar die
+            // Einordnung wieder ab. Der Termin selbst bleibt, was er ist.
+            $felder['anniversaryType'] = '';
+        }
         return ['ok' => true, 'fields' => $felder];
     }
 
@@ -605,7 +687,10 @@ trait CalendarBridge
         // Reihe? Dann wird daraus eine Folge von Einzelterminen. Echte Serien kann
         // OpenCalendar nicht anlegen (`recurrenceRule` wird beim Anlegen verworfen —
         // am 17.08.2026 in beiden Schreibweisen geprueft), Einzeltermine schon.
-        $reihe = $this->CalSeriesRule($daten['recurrence'] ?? null);
+        // Ein Jahresereignis bringt seinen Takt selbst mit (jaehrlich, ohne Ende) —
+        // eine zusaetzliche Reihe waere ein zweiter Takt auf demselben Termin.
+        $eigenerTakt = trim((string)($daten['anniversaryType'] ?? '')) !== '';
+        $reihe = $eigenerTakt ? null : $this->CalSeriesRule($daten['recurrence'] ?? null);
         if ($reihe !== null) {
             return $this->CalCreateSeries($calendarID, $daten, $reihe);
         }
@@ -1021,6 +1106,15 @@ trait CalendarBridge
                 if (!in_array($scope, ['occurrence', 'following', 'series'], true)) {
                     $scope = 'occurrence';
                 }
+                /* Jahresereignisse kennen nur EINE Reichweite. OpenCalendar lehnt
+                   „Annual-event settings can only be changed for a complete
+                   recurring series." ab, sobald ein Vorkommen mit anniversaryType
+                   geschrieben wird — und der Rohdatensatz traegt das Feld bei jedem
+                   Geburtstag mit. Ohne diese Zeile scheiterte also schon das
+                   Umbenennen eines Geburtstags, den jemand im Kalender pflegt. */
+                if ($this->CalIsAnniversary($ereignis)) {
+                    $scope = 'series';
+                }
                 $recht = ['occurrence' => 'canUpdateOccurrence',
                           'following'  => 'canUpdateFollowing',
                           'series'     => 'canUpdateSeries'][$scope];
@@ -1233,6 +1327,14 @@ trait CalendarBridge
                    nicht (es gibt kein canDeleteFollowing), also bieten wir es auch
                    nicht an. */
                 $scope = trim((string)($daten['scope'] ?? 'occurrence')) === 'series' ? 'series' : 'occurrence';
+                /* Ein Jahresereignis wird als Ganzes geloescht. Ein einzelnes
+                   Vorkommen liesse einen Geburtstag zurueck, dem genau ein Jahr
+                   fehlt — ein Zustand, den niemand absichtlich herstellt. Darf die
+                   Serie nicht geloescht werden, sagen wir das, statt hilfsweise ein
+                   Jahr zu entfernen. */
+                if ($this->CalIsAnniversary($roh)) {
+                    $scope = 'series';
+                }
                 $recht = $scope === 'series' ? 'canDeleteSeries' : 'canDeleteOccurrence';
                 if (($roh[$recht] ?? false) !== true) {
                     return $fehler('series_locked', $this->Translate(

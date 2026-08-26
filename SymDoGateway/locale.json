@@ -142,6 +142,8 @@
             "This calendar is read-only.": "Dieser Kalender ist nur lesbar.",
             "The appointment needs a title.": "Der Termin braucht einen Titel.",
             "The appointment start is invalid.": "Der Beginn des Termins ist ungültig.",
+            "The date of the annual event must be in the past.": "Das Datum des Jahresereignisses muss in der Vergangenheit liegen.",
+            "This kind of annual event is unknown.": "Diese Art von Jahresereignis ist unbekannt.",
             "The appointment end is invalid.": "Das Ende des Termins ist ungültig.",
             "The calendar rejected the appointment.": "Der Kalender hat den Termin abgelehnt.",
             "The calendar rejected the deletion.": "Der Kalender hat das Löschen abgelehnt.",

@@ -42,6 +42,7 @@ Einkaufsliste für die Symcon Kachel-Visualisierung.
 Familien-App für Symcon: Web-App fürs Handy (per QR-Code gekoppelt, ohne App-Store) und Kachel für die Tile-Visualisierung — beide mit derselben Oberfläche.
 
 - Bereiche: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender (OpenCalendar) und Notizen
+- Termine anlegen und bearbeiten, Serien mit wählbarer Reichweite, dazu Jahresereignisse: Geburtstag, Jahrestag, Hochzeits- und Todestag
 - Familienmitglieder mit Foto, Aufgaben-Zuweisung und „Meine Aufgaben"
 - Tägliches Briefing mit Sprachausgabe (OpenAI, Azure, ElevenLabs oder Amazon Polly) — acht Personas vom Butler bis zum Drillsergeant
 - KI-Analyse: Foto, PDF oder E-Mail wird zu Aufgaben-, Termin- und Notiz-Vorschlägen (eigener Schlüssel oder lokaler Server)
