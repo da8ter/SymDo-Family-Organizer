@@ -1,6 +1,6 @@
-# ToDo Übersicht
+# SymDo ToDo Overview
 
-Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung bereit. Sie zeigt die drei Kennzahlen einer **ToDo List**-Instanz (**Offen**, **Überfällig**, **Heute**) und öffnet beim Klick ein frei wählbares Objekt bzw. eine Kategorie.
+Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung bereit. Sie zeigt die drei Kennzahlen einer **SymDo ToDo List**-Instanz (**Offen**, **Überfällig**, **Heute**) und öffnet beim Klick ein frei wählbares Objekt bzw. eine Kategorie.
 
 > Hintergrund: Symcon rendert HTML-Modulinhalte **nicht** innerhalb einer Kategorie-Kachel. Damit die Übersicht z. B. neben einer Kategorie-Kachel platziert werden kann, gibt es dieses eigenständige Modul.
 
@@ -29,13 +29,13 @@ Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisi
 
 - Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
-- Eine vorhandene **ToDo List**-Instanz als Datenquelle
+- Eine vorhandene **SymDo ToDo List**-Instanz als Datenquelle
 
 ## 3. Installation
 
 1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
-2. In Symcon eine Instanz vom Typ **ToDo List** anlegen (Datenquelle), falls noch nicht vorhanden
-3. Eine Instanz vom Typ **ToDo Übersicht** anlegen
+2. In Symcon eine Instanz vom Typ **SymDo ToDo List** anlegen (Datenquelle), falls noch nicht vorhanden
+3. Eine Instanz vom Typ **SymDo ToDo Overview** anlegen
 4. Instanz in der Kachel-Visualisierung einbinden
 
 ## 4. Konfiguration in Symcon

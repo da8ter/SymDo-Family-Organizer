@@ -1,4 +1,4 @@
-# Stundenplan
+# SymDo Stundenplan
 
 Der Wochenplan der Kinder als Symcon-Kachel: Fächer, Zeiten, Betreuung, Ferien.
 Eingerichtet wird alles im Backend der Instanz — es gibt keine zweite Ablage und
