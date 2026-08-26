@@ -293,13 +293,18 @@ trait TimetableBridge
         if (!function_exists('STPL_GetPlanForDate')) {
             return [];
         }
-        $zeilen = [];
+        /* JE KIND gesammelt, nicht je Instanz: dasselbe Kind kann in mehreren
+           Stundenplan-Instanzen stehen (etwa in einer zweiten zum Ausprobieren).
+           Ohne diese Zusammenfassung stuende es zweimal im Briefing — und im
+           schlechteren Fall einmal mit „Ferien" und einmal mit Unterricht, weil
+           die eine Instanz eine Ferienquelle hat und die andere nicht. */
+        $kinder = [];
         foreach ($this->TimetableOwnInstances() as $id) {
             $plan = json_decode((string)@STPL_GetPlanForDate($id, $datum), true);
             if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
                 continue;
             }
-            $ferien = is_array($plan['holiday'] ?? null) ? (string)$plan['holiday']['name'] : '';
+            $planFerien = is_array($plan['holiday'] ?? null) ? $plan['holiday'] : null;
             foreach ($plan['children'] as $kind) {
                 if (!is_array($kind)) {
                     continue;
@@ -315,30 +320,123 @@ trait TimetableBridge
                         break;
                     }
                 }
-                $stunden = is_array($tag['slots'] ?? null) ? $tag['slots'] : [];
-                if ($stunden === []) {
-                    $zeilen[] = $name . ': keine Schule' . ($ferien !== '' ? ' (' . $ferien . ')' : '');
+                // Ferien stehen am Tag; kennt der Tag keine (ältere Fassung oder
+                // gar kein Tag für dieses Datum), gilt die Angabe des Plans.
+                $ferien = is_array($tag['holiday'] ?? null) ? $tag['holiday'] : $planFerien;
+                if (!isset($kinder[$name])) {
+                    $kinder[$name] = ['ferien' => null, 'zeile' => ''];
+                }
+                if (is_array($ferien)) {
+                    /* Ferien schlagen den Unterricht: die Angabe ist eine Aussage
+                       ueber den Tag, ein Stundenplan nur eine ueber die Woche. Eine
+                       Instanz ohne Ferienquelle meldet an einem Ferientag ganz
+                       normal Unterricht — die darf das Ergebnis nicht kippen. */
+                    $kinder[$name]['ferien'] = $ferien;
                     continue;
                 }
-                // Unterricht und Betreuung getrennt nennen: „bis 16 Uhr Schule"
-                // waere falsch, wenn davon dreieinhalb Stunden Hort sind.
-                $unterricht = array_values(array_filter($stunden,
-                    static fn(array $s): bool => !(bool)($s['care'] ?? false)));
-                $betreuung  = array_values(array_filter($stunden,
-                    static fn(array $s): bool => (bool)($s['care'] ?? false)));
-                if ($unterricht === []) {
-                    $zeilen[] = $name . ': keine Schule';
+                if ($kinder[$name]['zeile'] !== '') {
                     continue;
                 }
-                $zeile = sprintf('%s: Schule von %s bis %s', $name,
-                    (string)$unterricht[0]['start'],
-                    (string)$unterricht[count($unterricht) - 1]['end']);
-                if ($betreuung !== []) {
-                    $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
-                }
-                $zeilen[] = $zeile;
+                $kinder[$name]['zeile'] = $this->TimetableSchoolLine($name, is_array($tag) ? $tag : []);
+            }
+        }
+        return $this->TimetableSchoolText($kinder);
+    }
+
+    /**
+     * Eine Zeile fuer ein Kind an einem Schultag.
+     *
+     * @param array<string, mixed> $tag
+     */
+    private function TimetableSchoolLine(string $name, array $tag): string
+    {
+        $stunden = is_array($tag['slots'] ?? null) ? $tag['slots'] : [];
+        if ($stunden === []) {
+            return $name . ': keine Schule';
+        }
+        // Unterricht und Betreuung getrennt nennen: „bis 16 Uhr Schule"
+        // waere falsch, wenn davon dreieinhalb Stunden Hort sind.
+        $unterricht = array_values(array_filter($stunden,
+            static fn(array $s): bool => !(bool)($s['care'] ?? false)));
+        $betreuung  = array_values(array_filter($stunden,
+            static fn(array $s): bool => (bool)($s['care'] ?? false)));
+        if ($unterricht === []) {
+            return $name . ': keine Schule';
+        }
+        $zeile = sprintf('%s: Schule von %s bis %s', $name,
+            (string)$unterricht[0]['start'],
+            (string)$unterricht[count($unterricht) - 1]['end']);
+        if ($betreuung !== []) {
+            $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
+        }
+        return $zeile;
+    }
+
+    /**
+     * Aus dem Sammelergebnis die Zeilen fuers Briefing.
+     *
+     * In den Ferien wird NUR die Ferienlage genannt und kein Stundenplan: der
+     * interessiert dann niemanden. Haben alle Kinder dieselben Ferien, steht eine
+     * einzige Zeile da statt derselben Aussage je Kind.
+     *
+     * @param array<string, array{ferien: array<string,mixed>|null, zeile: string}> $kinder
+     * @return list<string>
+     */
+    private function TimetableSchoolText(array $kinder): array
+    {
+        if ($kinder === []) {
+            return [];
+        }
+        $namen = array_keys($kinder);
+        $alleFerien = true;
+        $einName = null;
+        foreach ($kinder as $k) {
+            if (!is_array($k['ferien'])) {
+                $alleFerien = false;
+                break;
+            }
+            $n = trim((string)($k['ferien']['name'] ?? ''));
+            $einName = $einName === null ? $n : ($einName === $n ? $n : false);
+        }
+        if ($alleFerien && is_string($einName)) {
+            $wort = $einName !== '' ? $einName : 'Ferien';
+            $bis  = $this->TimetableHolidayEnd($kinder[$namen[0]]['ferien']);
+            // Das Datum endet selbst auf einen Punkt („01.09."). Ein weiterer waere
+            // einer zu viel.
+            return ['Keine Schule, ' . $wort . ($bis !== '' ? ' bis ' . $bis : '.')];
+        }
+        $zeilen = [];
+        foreach ($kinder as $name => $k) {
+            if (is_array($k['ferien'])) {
+                $wort = trim((string)($k['ferien']['name'] ?? ''));
+                $bis  = $this->TimetableHolidayEnd($k['ferien']);
+                $zeilen[] = $name . ': keine Schule' . ($wort !== '' ? ' (' . $wort . ')' : '')
+                    . ($bis !== '' ? ', bis ' . $bis : '');
+                continue;
+            }
+            if ($k['zeile'] !== '') {
+                $zeilen[] = $k['zeile'];
             }
         }
         return $zeilen;
+    }
+
+    /**
+     * Das Ende der Ferien als „01.09." — leer, wenn keins genannt ist. Ein
+     * Feiertag traegt oft dasselbe Datum wie der Tag selbst; dann sagt „bis" nichts
+     * und bleibt weg.
+     *
+     * @param array<string, mixed>|null $ferien
+     */
+    private function TimetableHolidayEnd(?array $ferien): string
+    {
+        $bis = trim((string)($ferien['until'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bis) !== 1) {
+            return '';
+        }
+        if (($ferien['public'] ?? false) === true) {
+            return '';   // Ein Feiertag ist EIN Tag; „bis heute" waere sinnlos.
+        }
+        return date('d.m.', (int)strtotime($bis));
     }
 }

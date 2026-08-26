@@ -1242,8 +1242,10 @@ trait Briefing
                     : 'ERSTENS eine kurze Begrüßung, ein einziger kurzer Satz. ')
                 . 'ZWEITENS die Termine und Aufgaben, kurz und bündig — je Eintrag ein '
                 . 'knapper Hauptsatz, ohne Ausschmückung und ohne Überleitungen. '
-                . 'DRITTENS, wenn Schulzeiten angegeben sind: je Kind ein kurzer Satz, '
-                . 'wie lange es Schule hat. '
+                . 'DRITTENS, wenn Schulzeiten angegeben sind: gib genau das wieder, was '
+                . 'dort steht — je Kind ein kurzer Satz. Steht dort, dass keine Schule '
+                . 'ist, sage NUR das (mit dem Namen der Ferien) und nenne keine '
+                . 'Unterrichtszeiten. '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
                 . 'Einkaufsliste stehen. Steht unten „EINKAUFSLISTE: NICHT ERWÄHNEN", '
                 . 'lässt du diesen vierten Punkt ersatzlos weg und endest mit den '
@@ -1259,7 +1261,11 @@ trait Briefing
                 // die Vollstaendigkeitsregel weiter unten erfasst sie nicht, und
                 // ohne diesen Satz laesst das Modell sie einfach weg.
                 . 'Stehen unten SCHULZEITEN, sage auch, wie lange die Kinder Schule '
-                . 'haben — je Kind kurz, und Betreuung getrennt vom Unterricht. ';
+                . 'haben — je Kind kurz, und Betreuung getrennt vom Unterricht. '
+                // In den Ferien steht dort keine Zeit, sondern die Ferienlage. Ohne
+                // diesen Satz erfindet ein kleines Modell gern trotzdem eine.
+                . 'Steht dort, dass keine Schule ist, erwaehne nur das und den Namen '
+                . 'der Ferien — keine Unterrichtszeiten, kein Stundenplan. ';
 
         return $aufbau
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '

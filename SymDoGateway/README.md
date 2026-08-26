@@ -153,7 +153,10 @@ Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine 
   Aufgaben in je einem knappen Hauptsatz, danach wie lange welches Kind Schule
   hat, zum Schluss die Anzahl der Artikel auf der Einkaufsliste. Die Schulzeiten
   stehen in **beiden** Fassungen; sie kommen aus dem Stundenplan-Modul — ohne es
-  entfällt dieser Teil. Der Tonfall
+  entfällt dieser Teil. **In den Ferien und an Feiertagen** nennt das Briefing nur
+  die Ferienlage („Keine Schule, Sommerferien bis 01.09.") und keine
+  Unterrichtszeiten — der Stundenplan gilt dann zwar weiter, interessiert aber
+  niemanden. Der Tonfall
   gilt weiterhin, die Kürze hat aber Vorrang: mit *Sachlich* sind es rund 600
   Zeichen, mit *Lustig* bleibt es länger, weil die Persona Bilder braucht
 - **Einkaufsliste im Briefing** — sie wird erst ab **fünf** offenen Artikeln
