@@ -465,32 +465,37 @@ class SymDoGateway extends IPSModuleStrict
         return $this->GoogleGetDecryptedToken('GoogleRefreshToken') !== '';
     }
 
-    public function GoogleTestConnection(): bool
+    /**
+     * Die Meldung wird ZURUECKGEGEBEN, nicht ausgegeben — der Knopf schreibt sie
+     * mit `echo TGW_GoogleTestConnection($id);`.
+     *
+     * Grund: Symcon 9.1 betrachtet jeden Funktionsaufruf fuer sich und meldet ein
+     * `echo` INNERHALB einer Funktion als Fehler. Bis dahin sah beides gleich aus;
+     * ab dann waere aus der Meldung eine Fehlermeldung geworden.
+     */
+    public function GoogleTestConnection(): string
     {
         if (!$this->GoogleIsConnected()) {
-            echo $this->Translate('Not connected to Google. Please authorize first.');
-            return false;
+            return $this->Translate('Not connected to Google. Please authorize first.');
         }
 
         // R18: routed through GoogleApiRequest so the 401-retry and the back-off window
         // apply here too (the raw helper bypassed both).
         $data = $this->GoogleApiRequest('GET', '/tasks/v1/users/@me/lists');
         if ($data === null) {
-            echo $this->Translate('Connection failed');
-            return false;
+            return $this->Translate('Connection failed');
         }
 
         $count = count($data['items'] ?? []);
-        echo sprintf($this->Translate('Connection successful. Found %d task list(s).'), $count);
-        return true;
+        return sprintf($this->Translate('Connection successful. Found %d task list(s).'), $count);
     }
 
-    public function GoogleDisconnect(): void
+    public function GoogleDisconnect(): string
     {
         $this->GoogleSetEncryptedToken('GoogleAccessToken', '');
         $this->GoogleSetEncryptedToken('GoogleRefreshToken', '');
         $this->WriteAttributeInteger('GoogleTokenExpires', 0);
-        echo $this->Translate('Disconnected from Google.');
+        return $this->Translate('Disconnected from Google.');
     }
 
     public function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
@@ -772,27 +777,25 @@ class SymDoGateway extends IPSModuleStrict
         return $this->MicrosoftGetDecryptedToken('MicrosoftRefreshToken') !== '';
     }
 
-    public function MicrosoftTestConnection(): bool
+    /** Meldung als RUECKGABE — siehe GoogleTestConnection. */
+    public function MicrosoftTestConnection(): string
     {
         if (!$this->MicrosoftIsConnected()) {
-            echo $this->Translate('Not connected to Microsoft. Please authorize first.');
-            return false;
+            return $this->Translate('Not connected to Microsoft. Please authorize first.');
         }
 
         // R18: routed through MicrosoftApiRequest so the 401-retry and the back-off window
         // apply here too (the raw helper bypassed both).
         $data = $this->MicrosoftApiRequest('GET', '/me/todo/lists');
         if ($data === null) {
-            echo $this->Translate('Connection failed');
-            return false;
+            return $this->Translate('Connection failed');
         }
 
         $count = count($data['value'] ?? []);
-        echo sprintf($this->Translate('Connection successful. Found %d list(s).'), $count);
-        return true;
+        return sprintf($this->Translate('Connection successful. Found %d list(s).'), $count);
     }
 
-    public function MicrosoftDisconnect(): void
+    public function MicrosoftDisconnect(): string
     {
         $this->MicrosoftSetEncryptedToken('MicrosoftAccessToken', '');
         $this->MicrosoftSetEncryptedToken('MicrosoftRefreshToken', '');
@@ -801,7 +804,7 @@ class SymDoGateway extends IPSModuleStrict
         // gueltig, und ein Druck auf „Anmeldung abschliessen" wuerde das gerade
         // getrennte Konto wieder verbinden.
         @$this->WriteAttributeString('MicrosoftDeviceFlow', '');
-        echo $this->Translate('Disconnected from Microsoft.');
+        return $this->Translate('Disconnected from Microsoft.');
     }
 
     public function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
@@ -893,12 +896,12 @@ class SymDoGateway extends IPSModuleStrict
         ];
     }
 
-    public function CalDAVTestConnection(): bool
+    /** Meldung als RUECKGABE — siehe GoogleTestConnection. */
+    public function CalDAVTestConnection(): string
     {
         $creds = $this->CalDAVGetCredentials();
         if ($creds['url'] === '' || $creds['user'] === '' || $creds['pass'] === '') {
-            echo $this->Translate('Please fill in server URL, username and password.');
-            return false;
+            return $this->Translate('Please fill in server URL, username and password.');
         }
 
         $testUrl = rtrim($creds['url'], '/') . '/';
@@ -917,20 +920,16 @@ class SymDoGateway extends IPSModuleStrict
 
         $statusCode = (int)($res['status'] ?? 0);
         if ($statusCode === 0) {
-            echo $this->Translate('Connection failed');
-            return false;
+            return $this->Translate('Connection failed');
         }
         if ($statusCode === 207 || $statusCode === 200) {
-            echo $this->Translate('Connection successful');
-            return true;
+            return $this->Translate('Connection successful');
         }
         if ($statusCode === 401) {
-            echo $this->Translate('Authentication failed');
-            return false;
+            return $this->Translate('Authentication failed');
         }
 
-        echo $this->Translate('Connection failed') . ' (HTTP ' . $statusCode . ')';
-        return false;
+        return $this->Translate('Connection failed') . ' (HTTP ' . $statusCode . ')';
     }
 
     public function CalDAVRequest(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
@@ -1362,12 +1361,12 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Test Connection'),
-                            'onClick' => 'TGW_GoogleTestConnection($id);'
+                            'onClick' => 'echo TGW_GoogleTestConnection($id);'
                         ],
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Disconnect'),
-                            'onClick' => 'TGW_GoogleDisconnect($id);'
+                            'onClick' => 'echo TGW_GoogleDisconnect($id);'
                         ]
                     ]
                 ],
@@ -1473,12 +1472,12 @@ class SymDoGateway extends IPSModuleStrict
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Test Connection'),
-                            'onClick' => 'TGW_MicrosoftTestConnection($id);'
+                            'onClick' => 'echo TGW_MicrosoftTestConnection($id);'
                         ],
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Disconnect'),
-                            'onClick' => 'TGW_MicrosoftDisconnect($id);'
+                            'onClick' => 'echo TGW_MicrosoftDisconnect($id);'
                         ]
                     ]
                 ],
@@ -2336,7 +2335,7 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type' => 'Button',
                     'caption' => $this->Translate('Test Connection'),
-                    'onClick' => 'TGW_CalDAVTestConnection($id);'
+                    'onClick' => 'echo TGW_CalDAVTestConnection($id);'
                 ]
             ]
         ];

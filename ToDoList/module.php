@@ -599,7 +599,12 @@ class SymDoToDoList extends IPSModuleStrict
             'kind'     => 'todo',
             // Ohne Avatare: die REST-Clients holen die Nutzer aus /v1/discovery.
             'state'    => $this->BuildStatePayload(false),
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        /* Ein Eintrag kann Text aus fremder Hand tragen: ein Produktname aus einer
+           Barcode-Datenbank, eine Aufgabe von einem CalDAV-Server. Ist darin ein
+           Byte kein gueltiges UTF-8, gaebe json_encode `false` zurueck — die App
+           bekaeme eine leere Zeichenkette und zeigte eine leere Liste. Das
+           Ersatzzeichen ist die kleinere Stoerung. */
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function AppCall(string $Action, string $Payload): string

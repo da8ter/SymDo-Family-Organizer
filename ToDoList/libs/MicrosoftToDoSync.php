@@ -30,23 +30,26 @@ trait MicrosoftToDoSync
         return TGW_MicrosoftApiStatus($gw, $Method, $Endpoint, $Body, $Headers);
     }
 
-    public function MicrosoftRefreshListOptions(): void
+    /**
+     * Meldung als RUECKGABE statt als Ausgabe: Symcon 9.1 betrachtet jeden
+     * Funktionsaufruf fuer sich und meldet ein `echo` INNERHALB einer Funktion als
+     * Fehler. Der Knopf im Formular gibt sie aus.
+     */
+    public function MicrosoftRefreshListOptions(): string
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0 || !TGW_MicrosoftIsConnected($gw)) {
-            echo $this->Translate('Not connected to Microsoft. Please authorize first.');
-            return;
+            return $this->Translate('Not connected to Microsoft. Please authorize first.');
         }
 
         $stored = $this->MicrosoftFetchAndStoreListOptions();
         if ($stored === null) {
-            echo $this->Translate('Failed to fetch lists.');
-            return;
+            return $this->Translate('Failed to fetch lists.');
         }
 
         $options = $this->GetMicrosoftListOptions();
         $this->UpdateFormField('MicrosoftListID', 'options', json_encode($options));
-        echo sprintf($this->Translate('Found %d list(s).'), count($stored));
+        return sprintf($this->Translate('Found %d list(s).'), count($stored));
     }
 
     private function MicrosoftFetchAndStoreListOptions(): ?array
@@ -101,14 +104,14 @@ trait MicrosoftToDoSync
         return $options;
     }
 
-    public function MicrosoftTestConnection(): bool
+    /** Meldung als RUECKGABE — siehe CalDAVTestConnection. */
+    public function MicrosoftTestConnection(): string
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            echo $this->Translate('Not connected. Please authorize first.');
-            return false;
+            return $this->Translate('Not connected. Please authorize first.');
         }
-        return TGW_MicrosoftTestConnection($gw);
+        return (string)TGW_MicrosoftTestConnection($gw);
     }
 
     public function MicrosoftToDoSync(): bool
@@ -126,9 +129,10 @@ trait MicrosoftToDoSync
         }
     }
 
-    public function MicrosoftResetSync(): void
+    /** Meldung als RUECKGABE — der Knopf gibt sie aus (siehe SyncResetItems). */
+    public function MicrosoftResetSync(): string
     {
-        $this->SyncResetItems(
+        $meldung = $this->SyncResetItems(
             ['microsoftTaskId'],
             ['microsoftEtag'],
             ['microsoftSynced'],
@@ -136,6 +140,7 @@ trait MicrosoftToDoSync
             'MicrosoftPendingDeletes'
         );
         $this->WriteAttributeString('MicrosoftDeltaLink', ''); // A1: force a fresh full delta next sync
+        return $meldung;
     }
 
     private function MicrosoftToDoSyncInternal(): bool
@@ -1272,7 +1277,7 @@ trait MicrosoftToDoSync
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Refresh Lists'),
-                            'onClick' => 'TDL_MicrosoftRefreshListOptions($id);'
+                            'onClick' => 'echo TDL_MicrosoftRefreshListOptions($id);'
                         ],
                         [
                             'type' => 'Button',

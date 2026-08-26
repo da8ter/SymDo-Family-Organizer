@@ -1034,7 +1034,14 @@ trait ApiRouter
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
-        echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        /* JSON_INVALID_UTF8_SUBSTITUTE: ein einziges kaputtes Byte irgendwo in der
+           Antwort — ein Produktname aus einer fremden Datenbank, ein Termin aus
+           einem alten CalDAV-Server — liesse json_encode sonst `false` zurueckgeben.
+           Der Client bekaeme einen LEEREN Rumpf und zeigte eine leere Liste, ohne
+           dass irgendwo ein Fehler stuende. Lieber ein Ersatzzeichen an einer
+           Stelle als eine Antwort, die es gar nicht gibt. */
+        echo (string)json_encode($payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     private function SendApiError(string $code, string $message, int $status): void

@@ -28,19 +28,23 @@ trait CalDAVSync
         return $this->Translate('Last sync') . ': ' . date('d.m.Y H:i:s', $lastSync);
     }
 
-    public function CalDAVTestConnection(): bool
+    /**
+     * Die Meldung wird ZURUECKGEGEBEN, nicht ausgegeben — Symcon 9.1 meldet ein
+     * `echo` innerhalb einer Funktion als Fehler. Der Knopf gibt sie aus.
+     */
+    public function CalDAVTestConnection(): string
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            echo $this->Translate('Connection failed');
-            return false;
+            return $this->Translate('Connection failed');
         }
-        return TGW_CalDAVTestConnection($gw);
+        return (string)TGW_CalDAVTestConnection($gw);
     }
 
-    public function CalDAVResetSync(): void
+    /** Meldung als RUECKGABE — der Knopf gibt sie aus (siehe SyncResetItems). */
+    public function CalDAVResetSync(): string
     {
-        $this->SyncResetItems(
+        return $this->SyncResetItems(
             ['caldavUid'],
             ['caldavEtag', 'caldavHref'],
             ['caldavSynced'],
@@ -385,6 +389,21 @@ trait CalDAVSync
 
     private function CalDAVParseVTodo(string $ICalData): ?array
     {
+        /* iCalendar IST laut RFC 5545 UTF-8 — aber nicht jeder Server haelt sich
+           daran, und aeltere schicken ISO-8859-1 (frueher mit einem CHARSET-Zusatz,
+           den RFC 5545 gar nicht mehr kennt). Ein einziges solches Byte in einem
+           Aufgabentitel reichte, damit json_encode beim Ausliefern des Zustands
+           `false` zurueckgab und die App eine LEERE Liste zeigte.
+
+           Symcon hat solche Bytes bis zur C++-Fassung geduldet
+           („CompatibilitySloppyUTF8"); die Rust-Fassung tut das nicht mehr. Deshalb
+           hier, am Eingang: gueltiges UTF-8 bleibt unangetastet, alles andere wird
+           als ISO-8859-1 gelesen — das kann nicht scheitern, denn dort ist jedes
+           Byte ein gueltiges Zeichen. */
+        if (!mb_check_encoding($ICalData, 'UTF-8')) {
+            $this->SendDebug('CalDAV', 'Antwort ist kein UTF-8 — als ISO-8859-1 gelesen', 0);
+            $ICalData = (string)mb_convert_encoding($ICalData, 'UTF-8', 'ISO-8859-1');
+        }
         $lines = $this->CalDAVUnfold($ICalData);
 
         $inVTodo = false;
@@ -1712,29 +1731,34 @@ trait CalDAVSync
         return '"' . $Etag . '"';
     }
 
-    public function CalDAVRefreshCalendarOptions(): void
+    /**
+     * Meldung als RUECKGABE statt als Ausgabe: Symcon 9.1 betrachtet jeden
+     * Funktionsaufruf fuer sich und meldet ein `echo` INNERHALB einer Funktion als
+     * Fehler. Der Knopf im Formular gibt sie aus.
+     */
+    public function CalDAVRefreshCalendarOptions(): string
     {
         $stored = $this->CalDAVFetchAndStoreCalendarOptions();
         if ($stored === null) {
-            echo $this->Translate('Failed to fetch calendars.');
-            return;
+            return $this->Translate('Failed to fetch calendars.');
         }
 
         if (empty($stored)) {
-            echo $this->Translate('No calendars found.');
-            return;
+            return $this->Translate('No calendars found.');
         }
 
         $options = $this->GetCalDAVCalendarOptions();
         $this->UpdateFormField('CalDAVCalendarPath', 'options', json_encode($options));
-        echo sprintf($this->Translate('Found %d calendar(s).'), count($stored));
+        return sprintf($this->Translate('Found %d calendar(s).'), count($stored));
     }
 
+    /**
+     * Frueher fing das hier die Ausgabe mit ob_start() ein — seit die Meldung
+     * zurueckgegeben wird, ist der Umweg ueberfluessig.
+     */
     public function CalDAVDiscoverCalendars(): string
     {
-        ob_start();
-        $this->CalDAVRefreshCalendarOptions();
-        return (string)ob_get_clean();
+        return $this->CalDAVRefreshCalendarOptions();
     }
 
     private function CalDAVFetchAndStoreCalendarOptions(): ?array
@@ -1869,7 +1893,7 @@ trait CalDAVSync
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Refresh Calendars'),
-                            'onClick' => 'TDL_CalDAVRefreshCalendarOptions($id);'
+                            'onClick' => 'echo TDL_CalDAVRefreshCalendarOptions($id);'
                         ],
                         [
                             'type' => 'Button',

@@ -30,30 +30,36 @@ trait GoogleTasksSync
         return TGW_GoogleApiStatus($gw, $Method, $Endpoint, $Body, $Headers);
     }
 
-    public function GoogleRefreshTaskListOptions(): void
+    /**
+     * Meldung als RUECKGABE statt als Ausgabe: Symcon 9.1 betrachtet jeden
+     * Funktionsaufruf fuer sich und meldet ein `echo` INNERHALB einer Funktion als
+     * Fehler. Der Knopf im Formular gibt sie aus.
+     */
+    public function GoogleRefreshTaskListOptions(): string
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0 || !TGW_GoogleIsConnected($gw)) {
-            echo $this->Translate('Not connected to Google. Please authorize first.');
-            return;
+            return $this->Translate('Not connected to Google. Please authorize first.');
         }
 
         $stored = $this->GoogleFetchAndStoreTaskListOptions();
         if ($stored === null) {
-            echo $this->Translate('Failed to fetch task lists.');
-            return;
+            return $this->Translate('Failed to fetch task lists.');
         }
 
         $options = $this->GetGoogleTaskListOptions();
         $this->UpdateFormField('GoogleTaskListID', 'options', json_encode($options));
-        echo sprintf($this->Translate('Found %d task list(s).'), count($stored));
+        return sprintf($this->Translate('Found %d task list(s).'), count($stored));
     }
 
+    /**
+     * Frueher fing das hier die Ausgabe mit ob_start() ein. Seit die Meldung
+     * zurueckgegeben wird, ist der Umweg ueberfluessig — und ein Ausgabepuffer um
+     * eine Funktion herum ist genau das Muster, das 9.1 abschafft.
+     */
     public function GoogleDiscoverTasklists(): string
     {
-        ob_start();
-        $this->GoogleRefreshTaskListOptions();
-        return (string)ob_get_clean();
+        return $this->GoogleRefreshTaskListOptions();
     }
 
     private function GoogleSanitizeTaskListTitle(string $Title): string
@@ -126,14 +132,14 @@ trait GoogleTasksSync
         return $options;
     }
 
-    public function GoogleTestConnection(): bool
+    /** Meldung als RUECKGABE — siehe CalDAVTestConnection. */
+    public function GoogleTestConnection(): string
     {
         $gw = $this->GetGatewayID();
         if ($gw === 0) {
-            echo $this->Translate('Not connected. Please authorize first.');
-            return false;
+            return $this->Translate('Not connected. Please authorize first.');
         }
-        return TGW_GoogleTestConnection($gw);
+        return (string)TGW_GoogleTestConnection($gw);
     }
 
     public function GoogleTasksSync(): bool
@@ -151,9 +157,10 @@ trait GoogleTasksSync
         }
     }
 
-    public function GoogleResetSync(): void
+    /** Meldung als RUECKGABE — der Knopf gibt sie aus (siehe SyncResetItems). */
+    public function GoogleResetSync(): string
     {
-        $this->SyncResetItems(
+        $meldung = $this->SyncResetItems(
             ['googleTaskId'],
             ['googleEtag'],
             ['googleSynced'],
@@ -162,6 +169,7 @@ trait GoogleTasksSync
         );
         $this->WriteAttributeInteger('GoogleSyncCursor', 0); // A1: force a full re-fetch next sync
         $this->WriteAttributeInteger('GoogleLastFullSync', 0);
+        return $meldung;
     }
 
     private function GoogleTasksSyncInternal(): bool
@@ -704,7 +712,7 @@ trait GoogleTasksSync
                         [
                             'type' => 'Button',
                             'caption' => $this->Translate('Refresh Task Lists'),
-                            'onClick' => 'TDL_GoogleRefreshTaskListOptions($id);'
+                            'onClick' => 'echo TDL_GoogleRefreshTaskListOptions($id);'
                         ],
                         [
                             'type' => 'Button',

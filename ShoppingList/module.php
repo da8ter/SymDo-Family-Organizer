@@ -704,7 +704,12 @@ class SymDoShoppingList extends IPSModuleStrict
             'revision' => $revision,
             'kind'     => 'shopping',
             'state'    => $this->BuildStatePayload(),
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        /* Ein Eintrag kann Text aus fremder Hand tragen: ein Produktname aus einer
+           Barcode-Datenbank, eine Aufgabe von einem CalDAV-Server. Ist darin ein
+           Byte kein gueltiges UTF-8, gaebe json_encode `false` zurueck — die App
+           bekaeme eine leere Zeichenkette und zeigte eine leere Liste. Das
+           Ersatzzeichen ist die kleinere Stoerung. */
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function AppCall(string $Action, string $Payload): string
@@ -1685,11 +1690,8 @@ class SymDoShoppingList extends IPSModuleStrict
         if ($body === null) {
             return null;
         }
-        // OpenGTINDB answers in ISO-8859-1; without conversion json_encode of
-        // umlaut product names fails downstream.
-        if (!mb_check_encoding($body, 'UTF-8')) {
-            $body = mb_convert_encoding($body, 'UTF-8', 'ISO-8859-1');
-        }
+        // OpenGTINDB antwortet in ISO-8859-1. Umgeschrieben wird das inzwischen in
+        // FetchBarcodeLookupUrl fuer JEDE Quelle — hier bleibt nichts zu tun.
 
         $flat = trim(str_replace('---', ' ', preg_replace('/\r?\n/', ' ', $body) ?? $body));
         if ($flat === '') {
@@ -1748,7 +1750,28 @@ class SymDoShoppingList extends IPSModuleStrict
             return null;
         }
 
-        return (string)$body;
+        return $this->AsUtf8((string)$body);
+    }
+
+    /**
+     * Fremden Text nach UTF-8 bringen.
+     *
+     * Symcon hat bis zur C++-Fassung ungueltiges UTF-8 stillschweigend geduldet
+     * (Schalter „CompatibilitySloppyUTF8", da fuer die Vertraeglichkeit mit 3.4).
+     * Die Rust-Fassung tut das nicht mehr — und schon vorher gab json_encode bei
+     * einem einzigen falschen Byte `false` zurueck, was die ganze Liste leerte.
+     *
+     * Gueltiges UTF-8 bleibt unangetastet; alles andere wird als ISO-8859-1
+     * gelesen. Das ist die richtige Annahme fuer die Quellen, die uns betreffen
+     * (OpenGTINDB antwortet so), und es kann nicht scheitern: in ISO-8859-1 ist
+     * jedes Byte ein gueltiges Zeichen.
+     */
+    private function AsUtf8(string $text): string
+    {
+        if ($text === '' || mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
+        return (string)mb_convert_encoding($text, 'UTF-8', 'ISO-8859-1');
     }
 
     private function MatchLocalCategory(array $categoryHints): string

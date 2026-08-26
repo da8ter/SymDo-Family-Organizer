@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 trait SyncHelper
 {
-    private function SyncResetItems(array $IdField, array $EtagField, array $SyncedField, string $LastSyncAttr, string $PendingDeletesAttr): void
+    private function SyncResetItems(array $IdField, array $EtagField, array $SyncedField, string $LastSyncAttr, string $PendingDeletesAttr): string
     {
         $items = $this->LoadItems();
         $count = 0;
@@ -41,7 +41,11 @@ trait SyncHelper
         $this->SaveItems($items);
         $this->WriteAttributeInteger($LastSyncAttr, 0);
         $this->WriteAttributeString($PendingDeletesAttr, '{}');
-        echo sprintf($this->Translate('%d items reset for re-sync'), $count);
+        /* Meldung als RUECKGABE: Symcon 9.1 meldet ein `echo` innerhalb einer
+           Funktion als Fehler. Die Knoepfe geben sie ohnehin schon aus
+           (`echo TDL_CalDAVResetSync($id);`) — bisher kam dort nur nichts an,
+           weil die Funktion void war und die Ausgabe von hier stammte. */
+        return sprintf($this->Translate('%d items reset for re-sync'), $count);
     }
 
     private function SyncAddPendingDelete(string $TaskId, string $PendingPrefix, string $PendingDeletesAttr, string $Value = '1'): void

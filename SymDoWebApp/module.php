@@ -499,7 +499,8 @@ class SymDoWebApp extends IPSModuleStrict
     /** Aggregat-Payload der Kachel als JSON — Diagnose-Getter (GetVisualizationTile bekommt keinen Prefix-Wrapper). */
     public function GetTilePayload(): string
     {
-        return json_encode($this->BuildFullPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return (string)json_encode($this->BuildFullPayload(),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     public function GetVisualizationTile(): string
@@ -512,7 +513,9 @@ class SymDoWebApp extends IPSModuleStrict
         }
 
         // Initial-Payload inline mitgeben, damit die Kachel ohne Roundtrip rendert
-        $payload = json_encode($this->BuildFullPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Siehe GetTilePayload: ein kaputtes Byte darf nicht die ganze Kachel leeren.
+        $payload = (string)json_encode($this->BuildFullPayload(),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 
@@ -957,7 +960,8 @@ class SymDoWebApp extends IPSModuleStrict
         $payload     = $data['payload'] ?? '';
         $payloadJson = is_string($payload)
             ? $payload
-            : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            : (string)json_encode($payload,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
         try {
             $result = $kind === 'shopping'

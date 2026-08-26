@@ -475,6 +475,16 @@ trait Notes
 
     private function NotesTrim(string $wert, int $max): string
     {
+        /* Der Trichter fuer alles, was aus fremder Hand in den Bestand geht:
+           Titel, Ordnernamen, Anhangsnamen. Ein Anhangsname stammt aus einer Mail
+           und ist nicht immer UTF-8 — mb_substr macht daraus Zeichensalat, und
+           Symcon 9.1 weist ungueltiges UTF-8 beim Speichern rundweg zurueck
+           („Value is not encoded as valid UTF-8"). Deshalb hier, an EINER Stelle:
+           gueltiges UTF-8 bleibt unangetastet, alles andere wird als ISO-8859-1
+           gelesen — das kann nicht scheitern. */
+        if (!mb_check_encoding($wert, 'UTF-8')) {
+            $wert = (string)mb_convert_encoding($wert, 'UTF-8', 'ISO-8859-1');
+        }
         return mb_substr(trim($wert), 0, $max);
     }
 

@@ -159,6 +159,14 @@ class HolidaySourceOpenHolidays extends HolidaySource
         if (!is_string($rumpf) || $status !== 200) {
             return false;
         }
+        /* json_decode verlangt gueltiges UTF-8 und gibt sonst null zurueck — eine
+           Antwort in ISO-8859-1 saehe damit aus wie „keine Ferien". Das ist die
+           gefaehrlichere Auskunft, seit das Briefing an Ferientagen NUR die
+           Ferienlage nennt. Deshalb vorher umschreiben; gueltiges UTF-8 bleibt
+           unangetastet. */
+        if (!mb_check_encoding($rumpf, 'UTF-8')) {
+            $rumpf = (string)mb_convert_encoding($rumpf, 'UTF-8', 'ISO-8859-1');
+        }
         $daten = json_decode($rumpf, true);
         return is_array($daten) ? $daten : false;
     }
