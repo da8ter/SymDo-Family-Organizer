@@ -64,9 +64,13 @@ Meldung entsteht.
 
 ## Einrichtung
 
-1. **Kinder** anlegen: Name und Farbe. Ist ein SymDo-Gateway gewählt, lässt sich
-   jedes Kind einem Familienmitglied zuordnen — dann trägt die Karte in der App
-   denselben Namen und zeigt das Foto. Höchstens **sechs** Kinder können Stunden
+1. **Kinder** anlegen: Name und Farbe. Jedes Kind lässt sich einem
+   **Familienmitglied** aus SymDo zuordnen — dann trägt die Karte in der App
+   denselben Namen, und Kachel wie App zeigen das Foto statt des
+   Anfangsbuchstabens. Das Gateway wird von selbst gefunden; die Auswahl unter
+   *Anzeige* ist nur nötig, wenn mehrere in Frage kommen. Steht die Spalte
+   *Familienmitglied* nur auf „— keins —", fehlt der Bezug zum Gateway — der
+   Hinweis unter der Auswahl sagt dann, welches genommen wird. Höchstens **sechs** Kinder können Stunden
    bekommen; die Zahl steht im Code, weil Symcon Eigenschaften nur fest
    registriert.
 2. **Fächer** pflegen: Name, **Symcon-Symbol** und Farbe. Neun gängige Fächer
@@ -87,16 +91,16 @@ Meldung entsteht.
 5. **Ferien**: Quelle wählen und einmal abrufen.
 6. **Anzeige**: Wochenraster oder Timeline.
 
-Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern im
-SymDo-Gateway unter *Stundenplan* — zusammen mit dem Übrigen, was die App
-anzeigt. Dort steht eine Zeile je Instanz mit einem Häkchen; eine neu angelegte
-Instanz ist zunächst **aus**, damit sie den Stundenplan der Kinder nicht
-ungefragt auf jedes gekoppelte Gerät schiebt.
+Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern in der
+**SymDo Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die
+App anzeigt. Dort steht eine Zeile je Instanz mit einem Häkchen; eine neu
+angelegte Instanz ist zunächst **aus**, damit sie den Stundenplan der Kinder
+nicht ungefragt auf jedes gekoppelte Gerät schiebt.
 
 > **Zwei Instanzen mit denselben Kindern** stellen jedes Kind **doppelt** in die
-> App — die Zeile im Gateway nennt deshalb die Kinder je Instanz. Wer beide
+> App — die Zeile in der Web App nennt deshalb die Kinder je Instanz. Wer beide
 > Ansichten *eines* Plans will, gibt der zweiten Instanz die erste als
-> **Datenquelle** (siehe unten); dann taucht sie im Gateway gar nicht auf und
+> **Datenquelle** (siehe unten); dann taucht sie in der Liste gar nicht auf und
 > der Plan wird nur einmal gepflegt.
 
 Die Statuszeile unten meldet Überschneidungen und Stunden, deren Kind oder Fach

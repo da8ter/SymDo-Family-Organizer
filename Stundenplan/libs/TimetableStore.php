@@ -215,6 +215,34 @@ trait TimetableStore
     // ────────────────────────── Aufbereiteter Zustand ──────────────────────────
 
     /**
+     * Die Gateway-Instanz, aus der Namen und Gesichter kommen. Erste Wahl ist die
+     * im Formular gewaehlte; zeigt sie ins Leere — oder ist keine gewaehlt —,
+     * wird die vorhandene genommen, genau wie es die SymDo Web App tut
+     * (GetAppGatewayID).
+     *
+     * Der Rueckfall ist nicht Bequemlichkeit, sondern Schadensbegrenzung: an
+     * dieser einen Zahl haengt der ganze Bezug zu SymDo. Zeigt sie auf eine
+     * geloeschte Instanz, liefert die Auswahlliste „Familienmitglied" nur noch
+     * „— keins —", die Kachel zeigt Anfangsbuchstaben statt Fotos, und beides
+     * ohne eine Zeile Erklaerung. Genau so ist es hier passiert: eine Instanz
+     * stand auf #1, die es nie gab.
+     */
+    private function GatewayInstanz(): int
+    {
+        $gw = (int)@IPS_GetProperty($this->InstanceID, 'GatewayInstanceID');
+        if ($gw > 0 && IPS_InstanceExists($gw)
+            && (IPS_GetInstance($gw)['ModuleInfo']['ModuleID'] ?? '') === self::GATEWAY_GUID) {
+            return $gw;
+        }
+        $ids = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
+        if (!is_array($ids) || $ids === []) {
+            return 0;
+        }
+        sort($ids);
+        return (int)$ids[0];
+    }
+
+    /**
      * Gesichter aus dem Gateway, als Data-URI je Mitglied. GetUsersForTile
      * liefert verkleinerte Bilder — die Kachel kann sich am App-Hook nicht
      * anmelden und braucht sie eingebettet.
@@ -223,8 +251,8 @@ trait TimetableStore
      */
     private function Gesichter(): array
     {
-        $gw = (int)@IPS_GetProperty($this->InstanceID, 'GatewayInstanceID');
-        if ($gw <= 0 || !IPS_InstanceExists($gw) || !function_exists('TGW_GetUsersForTile')) {
+        $gw = $this->GatewayInstanz();
+        if ($gw <= 0 || !function_exists('TGW_GetUsersForTile')) {
             return [];
         }
         try {

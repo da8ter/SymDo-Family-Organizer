@@ -59,7 +59,9 @@
             "Lesson lists": "Stundenlisten",
             "End": "Ende",
             "The color comes from the subject. Lessons that touch (one ends when the next begins) are normal and are not reported as a clash. Where care is switched on, a grey block runs from the end of the lessons until the end time — only on days that have lessons, and it does not count as teaching time. Seconds in the time pickers are ignored.": "Die Farbe kommt vom Fach. Stunden, die sich berühren (eine endet, wenn die nächste beginnt), sind normal und gelten nicht als Überschneidung. Wo die Betreuung eingeschaltet ist, läuft ein grauer Block vom Ende des Unterrichts bis zur Endzeit — nur an Tagen mit Unterricht, und er zählt nicht als Unterrichtszeit. Die Sekunden der Zeitwähler werden ignoriert.",
-            "Whether the app shows the timetable is set in the gateway, under \"Timetable\" — together with the other things the app displays.": "Ob die App den Stundenplan zeigt, wird im Gateway unter „Stundenplan\" eingestellt — zusammen mit dem Übrigen, was die App anzeigt.",
+            "Whether the app shows the timetable is set in the SymDo Web App, under \"Visible sections\" — together with the other things the app displays.": "Ob die App den Stundenplan zeigt, wird in der SymDo Web App unter „Sichtbare Bereiche“ eingestellt — zusammen mit dem Übrigen, was die App anzeigt.",
+            "No SymDo gateway found. Without one the \"Family member\" column stays empty and the card shows initials instead of photos.": "Kein SymDo Gateway gefunden. Ohne Gateway bleibt die Spalte „Familienmitglied“ leer, und die Kachel zeigt Anfangsbuchstaben statt Fotos.",
+            "No gateway selected — %s (#%d) is used. The family members come from there.": "Kein Gateway gewählt — genommen wird %s (#%d). Von dort kommen die Familienmitglieder.",
             "No holiday source selected — the plan always applies. A fetched set stays stored and takes effect again as soon as a source is chosen.": "Keine Ferienquelle gewählt — der Plan gilt immer. Ein abgerufener Stand bleibt gespeichert und wirkt wieder, sobald eine Quelle gewählt ist."
         }
     }

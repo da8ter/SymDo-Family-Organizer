@@ -873,7 +873,13 @@ class SymDoStundenplan extends IPSModuleStrict
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Whether the app shows the timetable is set in the gateway, under "Timetable" — together with the other things the app displays.')
+                    'name'    => 'GatewayHint',
+                    'caption' => $this->GatewayHinweis(),
+                    'visible' => $this->GatewayHinweis() !== '',
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Whether the app shows the timetable is set in the SymDo Web App, under "Visible sections" — together with the other things the app displays.')
                 ],
                 [
                     'type'    => 'Label',
@@ -884,6 +890,29 @@ class SymDoStundenplan extends IPSModuleStrict
     }
 
     // ───────────────────────────── Formular-Hilfen ─────────────────────────────
+
+    /**
+     * Sagt, woher die Familienmitglieder wirklich kommen — leer, solange die
+     * Auswahl stimmt. Ohne diesen Satz sieht ein verwaister Eintrag genau so aus
+     * wie ein leerer: die Spalte „Familienmitglied" zeigt nur „— keins —", und
+     * warum, steht nirgends.
+     */
+    private function GatewayHinweis(): string
+    {
+        $gewaehlt = $this->ReadPropertyInteger('GatewayInstanceID');
+        $genutzt  = $this->GatewayInstanz();
+        if ($gewaehlt > 0 && $gewaehlt === $genutzt) {
+            return '';
+        }
+        if ($genutzt <= 0) {
+            return $this->Translate('No SymDo gateway found. Without one the "Family member" column stays empty and the card shows initials instead of photos.');
+        }
+        return sprintf(
+            $this->Translate('No gateway selected — %s (#%d) is used. The family members come from there.'),
+            IPS_GetName($genutzt),
+            $genutzt
+        );
+    }
 
     private function FerienFelderZeigen(string $quelle): void
     {
@@ -992,8 +1021,8 @@ class SymDoStundenplan extends IPSModuleStrict
     /** Familienmitglieder aus dem Gateway als Kennung => Name. */
     private function GatewayMitglieder(): array
     {
-        $gw = $this->ReadPropertyInteger('GatewayInstanceID');
-        if ($gw <= 0 || !IPS_InstanceExists($gw) || !function_exists('TGW_GetUsers')) {
+        $gw = $this->GatewayInstanz();
+        if ($gw <= 0 || !function_exists('TGW_GetUsers')) {
             return [];
         }
         try {
