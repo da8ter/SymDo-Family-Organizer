@@ -51,7 +51,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
 - **KI-Analyse** — Foto, PDF oder eingefügter Text (z. B. eine WhatsApp-Nachricht) wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; jeder Fund lässt sich zwischen Aufgabe, Termin und Notiz umstimmen und wird beim Übernehmen nacheinander im vorausgefüllten Dialog bestätigt (Ordner, Kalender und Zeiten anpassbar). Auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
 - **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text und Anhängen (Bild, PDF)
-- **Kalender** — Termine aus dem Store-Modul OpenCalendar lesen, anlegen und bearbeiten; bei einem Termin aus einer Serie fragt die App vor dem Speichern oder Löschen nach der Reichweite (nur dieser Termin, dieser und alle folgenden, die ganze Serie) — angeboten wird nur, was OpenCalendar an diesem Termin erlaubt
+- **Kalender** — Termine aus dem Store-Modul [OpenCalendar](https://github.com/Burki24/OpenCalendar) lesen, anlegen und bearbeiten; bei einem Termin aus einer Serie fragt die App vor dem Speichern oder Löschen nach der Reichweite (nur dieser Termin, dieser und alle folgenden, die ganze Serie) — angeboten wird nur, was OpenCalendar an diesem Termin erlaubt
 - **Serientermine** — erkennt die KI in einem Elternbrief einen wiederkehrenden Termin („jeden Montag, bis zu den Ferien"), entsteht daraus **eine** Serie im Kalender, kein Stapel Einzeltermine. Kalender, die das Anlegen von Serien nicht unterstützen, bekommen weiterhin die Einzeltermine
 - **Jahresereignisse** — Geburtstag, Jahrestag, Hochzeits- und Todestag lassen sich im Termin-Dialog anlegen: ein Schalter, die Art und das Ursprungsdatum, mehr nicht. Beginn, Ende und Wiederholung rechnet der Kalender selbst aus. In der Agenda tragen sie ein eigenes Abzeichen mit der Zahl der Jahre, und das Briefing nennt sie am Tag selbst
 - **Web-Push** — Benachrichtigungen aufs gekoppelte Handy bei fälligen Aufgaben, neuem Briefing und neuen KI-Vorschlägen; Termin-Erinnerungen zusätzlich über die Kachel-Visualisierung
@@ -63,7 +63,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **ToDo List**- und/oder **Einkaufsliste**-Instanzen dieser Bibliothek als Datenquellen
 - Für die Web-App unterwegs: **Symcon Connect** (oder eine eigene HTTPS-Adresse)
 - Für Web-Push auf dem iPhone: die Web-App muss zum **Home-Bildschirm** hinzugefügt sein (iOS 16.4 oder neuer)
-- Für den Kalender-Bereich: das Store-Modul **OpenCalendar** (de.burki24.opencalendar), optional
+- Für den Kalender-Bereich: das Modul **OpenCalendar** von Burkhard Kneiseler, optional — im **Symcon Module Store** unter „OpenCalendar" zu finden, Quelltext und Dokumentation unter [github.com/Burki24/OpenCalendar](https://github.com/Burki24/OpenCalendar) (Bibliothekskennung `de.burki24.opencalendar`)
 - Für die E-Mail-Analyse: eine **E-Mail, Empfangen (IMAP)**-Instanz oder eine Mail-Weiterleitung, optional
 - Für die KI-Funktionen: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein **lokaler, OpenAI-kompatibler Server** (z. B. LM Studio)
 - Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech**, **ElevenLabs** oder **Amazon Polly** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig, Polly rechnet je Zeichen ab)
