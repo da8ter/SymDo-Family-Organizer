@@ -1901,12 +1901,24 @@ class SymDoGateway extends IPSModuleStrict
                 'value'   => $v['id'],
             ];
         }
+        /* Polly wie ElevenLabs und nicht wie OpenAI oder Azure: eine eingebaute
+           Vorgabe je Persona gibt es nicht, und die Stimmen des Kontos stehen erst
+           nach dem Abruf fest (welche Stimmen und welche Engines ein Konto kann,
+           ist nicht allgemein bekannt). Ohne Zuordnung bleibt es leer, dann gilt
+           die im Anbieter-Feld eingestellte Stimme. */
+        $polly = [];
+        foreach ($this->TtsPollyCachedVoices() as $v) {
+            $polly[] = ['caption' => (string)$v['name'], 'value' => (string)$v['id']];
+        }
+
         // „Wie eingebaut" muss waehlbar BLEIBEN, sonst kann man eine Aenderung nicht
         // zurueknehmen. Steht bewusst oben.
         $wieEingebaut = ['caption' => $this->Translate('— as built in —'), 'value' => ''];
         array_unshift($openai, $wieEingebaut);
         array_unshift($azure, $wieEingebaut);
-        array_unshift($eleven, ['caption' => $this->Translate('— the voice set above —'), 'value' => '']);
+        $wieOben = ['caption' => $this->Translate('— the voice set above —'), 'value' => ''];
+        array_unshift($eleven, $wieOben);
+        array_unshift($polly, $wieOben);
 
         return [
             ['caption' => $this->Translate('Persona'), 'name' => 'persona', 'width' => '170px'],
@@ -1917,6 +1929,8 @@ class SymDoGateway extends IPSModuleStrict
              'edit' => ['type' => 'Select', 'options' => $azure]],
             ['caption' => 'ElevenLabs', 'name' => 'eleven', 'width' => '220px',
              'edit' => ['type' => 'Select', 'options' => $eleven]],
+            ['caption' => 'Amazon Polly', 'name' => 'polly', 'width' => '200px',
+             'edit' => ['type' => 'Select', 'options' => $polly]],
             // KEINE unsichtbare Schluessel-Spalte mehr: Symcon schreibt die Werte
             // unsichtbarer Spalten nicht mit, die Zeilen kamen ohne `tone` zurueck.
             // Die Zuordnung laeuft jetzt ueber die Reihenfolge (siehe
@@ -1928,10 +1942,18 @@ class SymDoGateway extends IPSModuleStrict
     /** Zeile unter der Liste: leer heisst „erst abrufen", sonst die Anzahl. */
     private function GetPersonaVoiceHint(): string
     {
-        $anzahl = count($this->TtsElevenCachedVoices());
-        return $anzahl === 0
+        $eleven = count($this->TtsElevenCachedVoices());
+        $polly  = count($this->TtsPollyCachedVoices());
+        // Beide Spalten haengen an einem Abruf beim Anbieter — und beide sind ohne
+        // ihn leer. Der Hinweis nennt deshalb beide Staende, nicht nur einen.
+        $teile = [];
+        $teile[] = $eleven === 0
             ? $this->Translate('The ElevenLabs column is empty: press "List voices of the account" under the speech provider first — the voices of an account are not generally known, they have to be fetched. Only voices from "My Voices" are offered.')
-            : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), $anzahl);
+            : sprintf($this->Translate('ElevenLabs: %d voices from "My Voices" available.'), $eleven);
+        $teile[] = $polly === 0
+            ? $this->Translate('The Amazon Polly column is empty until the voices of the account have been fetched under the speech provider.')
+            : sprintf($this->Translate('Amazon Polly: %d German voices available.'), $polly);
+        return implode(' ', $teile);
     }
 
     /**
@@ -1980,6 +2002,7 @@ class SymDoGateway extends IPSModuleStrict
                 'openai'  => (string)($z['openai'] ?? ''),
                 'azure'   => (string)($z['azure'] ?? ''),
                 'eleven'  => (string)($z['eleven'] ?? ''),
+                'polly'   => (string)($z['polly'] ?? ''),
                 // Die eingebauten Stimmen als Anzeige daneben: sonst sieht man bei
                 // „wie eingebaut" nicht, WAS eingebaut ist.
                 'vorgabe' => $p['openai'] . ' / ' . str_replace(['de-DE-', 'Neural'], '', $p['azure']),
@@ -2235,10 +2258,6 @@ class SymDoGateway extends IPSModuleStrict
                         'type'    => 'CheckBox',
                         'name'    => 'BriefingAudioEnabled',
                         'caption' => $this->Translate('Read the briefing aloud')
-                    ],
-                    [
-                        'type'    => 'Label',
-                        'caption' => $this->Translate('The recording is produced together with the text, so the play button starts instantly. It costs roughly four times as much as the text — switch it off and the button disappears.')
                     ],
                 ] : []),
                 // Erst nach einem Kernel-Neustart vorhanden — bis dahin wuerde ein

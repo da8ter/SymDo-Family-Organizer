@@ -1701,6 +1701,14 @@ trait Briefing
             // liest dafuer den deutschen Anweisungssatz der Persona.
             $stimme    = $this->BriefingElevenVoice();
             $anweisung = $this->BriefingSpeechStyle();
+        } elseif ($anbieter === 'polly') {
+            // NICHT in den OpenAI-Zweig fallen lassen: dort kaeme „shimmer" heraus,
+            // und Polly kennt keine Stimme dieses Namens. Leer heisst „die im
+            // Anbieter-Feld eingestellte" — TtsRequestPolly setzt sie dann ein.
+            // Der Vortrag kommt als SSML wie bei Azure, denn Polly versteht SSML;
+            // ein englischer Anweisungssatz waere Text, den es VORLESEN wuerde.
+            $stimme    = $this->BriefingPollyVoice();
+            $anweisung = $this->BriefingAzureSsml();
         } else {
             $stimme    = $this->BriefingVoice();
             $anweisung = $this->BriefingSpeechStyle();
@@ -1973,7 +1981,7 @@ trait Briefing
             if ($ton === '') {
                 continue;
             }
-            foreach (['openai', 'azure', 'eleven'] as $anbieter) {
+            foreach (['openai', 'azure', 'eleven', 'polly'] as $anbieter) {
                 $wert = trim((string)($zeile[$anbieter] ?? ''));
                 if ($wert !== '') {
                     $karte[$ton][$anbieter] = $wert;
@@ -2020,6 +2028,23 @@ trait Briefing
     private function BriefingElevenVoice(): string
     {
         return $this->BriefingVoiceFor('eleven');
+    }
+
+    /**
+     * Stimm-Kennung bei Amazon Polly. Leer = die im Anbieter-Feld eingestellte.
+     *
+     * Wie bei ElevenLabs: eine eingebaute Vorgabe je Persona gibt es nicht, die
+     * Stimmen sind kontoabhaengig. Wichtig ist vor allem, dass diese Funktion
+     * ueberhaupt existiert — vorher fiel Polly in den OpenAI-Zweig und bekam
+     * „shimmer" als VoiceId. Polly kennt keine Stimme dieses Namens und antwortet
+     * mit einer Fehlermeldung statt mit Ton; hoerbar war das als ein Briefing ohne
+     * Aufnahme, ohne jeden Hinweis.
+     */
+    private function BriefingPollyVoice(): string
+    {
+        $ton   = $this->BriefingToneKey();
+        $karte = $this->BriefingVoiceMap();
+        return (string)($karte[$ton]['polly'] ?? '');
     }
 
     /**
