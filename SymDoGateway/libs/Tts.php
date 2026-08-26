@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+/* Die Unterschrift fuer Amazon Polly steht in einer eigenen, reinen Klasse — und
+   eine Klasse laedt PHP nicht von selbst. Sie fehlte hier: der Griff darauf
+   endete mit „Class AwsSigV4 not found", sowohl beim Abrufen der Stimmenliste als
+   auch beim Sprechen selbst. Deshalb steht das require HIER, beim einzigen
+   Benutzer, und nicht in AppCore neben den Traits. */
+require_once __DIR__ . '/AwsSigV4.php';
+
 /**
  * Sprachausgabe für die Einkaufs-Ansage.
  *
@@ -944,7 +951,10 @@ trait Tts
         }
         if ($status !== 200 || $roh === '') {
             // Polly meldet Fehler als JSON — das ist die Meldung, nicht der Ton.
-            $this->SendDebug('TTS', 'Polly Antwort ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
+            // Der Hinweis auf die Schluessellaengen gehoert hier genauso hin: eine
+            // stumme Ansage laesst sonst genauso raten wie ein leeres Stimmenfeld.
+            $this->SendDebug('TTS', 'Polly Antwort ' . $status . ': ' . mb_substr($roh, 0, 300)
+                . $this->TtsPollyCredentialHint($schluessel, $geheim), 0);
             return '';
         }
         if (str_starts_with(ltrim($roh), '{')) {
@@ -952,6 +962,32 @@ trait Tts
             return '';
         }
         return $roh;
+    }
+
+    /**
+     * Sehen die Polly-Zugangsdaten ueberhaupt nach Zugangsdaten aus?
+     *
+     * Amazon antwortet auf jeden Formfehler mit demselben 403
+     * „SignatureDoesNotMatch" — dieselbe Meldung, die auch ein Fehler in der
+     * Rechnung ergaebe. Man raet dann zwischen „Schluessel falsch" und „Modul
+     * kaputt". Die Laengen sind bei AWS fest: die Kennung hat 20 Zeichen, das
+     * Geheimnis 40. Ein 20 Zeichen langes Geheimnis ist die Kennung, zweimal
+     * eingefuegt — der haeufigste Fall.
+     *
+     * Bewusst nur ein HINWEIS und keine Sperre: aendert AWS das Format, soll das
+     * Modul nicht den Dienst verweigern.
+     *
+     * @return string Leer, wenn nichts auffaellt.
+     */
+    private function TtsPollyCredentialHint(string $schluessel, string $geheim): string
+    {
+        if (strlen($geheim) > 0 && strlen($geheim) < 40) {
+            return ' ' . $this->Translate('The secret access key looks too short — AWS uses 40 characters (the 20-character value is the access key ID).');
+        }
+        if (strlen($schluessel) > 0 && strlen($schluessel) !== 20) {
+            return ' ' . $this->Translate('The access key ID looks unusual — AWS uses 20 characters.');
+        }
+        return '';
     }
 
     /**
@@ -986,7 +1022,8 @@ trait Tts
         $roh    = (string)($resp['body'] ?? '');
         if ($status !== 200) {
             $this->SendDebug('TTS', 'Polly Stimmen ' . $status . ': ' . mb_substr($roh, 0, 300), 0);
-            return sprintf($this->Translate('Could not fetch voices (HTTP %d).'), $status);
+            return sprintf($this->Translate('Could not fetch voices (HTTP %d).'), $status)
+                . $this->TtsPollyCredentialHint($schluessel, $geheim);
         }
         $daten = json_decode($roh, true);
         $liste = [];
