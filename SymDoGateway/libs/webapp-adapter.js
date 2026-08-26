@@ -451,7 +451,7 @@
       var server = (rv && rv.revisions) || {};
       Object.keys(server).forEach(function (id) {
         if (String(server[id]) === String(clientRevs[id])) { return; }
-        apiGet('/instances/' + id + '/state').then(function (s) {
+        apiGet('/instances/' + id + '/state?images=0&suggestions=0').then(function (s) {
           if (!s || s.ok !== true) { return; }
           var kind = s.kind || kindOf[String(id)] || '';
           deliver({
@@ -459,7 +459,7 @@
             instanceID: parseInt(id, 10),
             kind: kind,
             revision: s.revision || 0,
-            state: stripState(kind, s.state || {}),
+            state: mitVorschlaegen(kind, id, stripState(kind, s.state || {})),
             ok: true,
             error: null,
             txn: ''
@@ -488,6 +488,19 @@
     return s;
   }
 
+  /* Die getrennt geholten Vorschlaege zurueck in den Zustand legen. Die
+     Oberflaeche liest sie dort — dass sie ueber eine eigene Adresse kamen, geht
+     sie nichts an. */
+  function mitVorschlaegen(kind, id, state) {
+    if (kind !== 'shopping' || !state) { return state; }
+    if (Array.isArray(state.suggestions) && state.suggestions.length) { return state; }
+    var eigene = vorschlaege[String(id)];
+    if (!eigene) { return state; }
+    var s = Object.assign({}, state);
+    s.suggestions = eigene;
+    return s;
+  }
+
   // discovery liefert nur {id,name,hasAvatar} (keine Bilddaten wie die Kachel-
   // Data-URI). Avatar-Foto daher über den token-gesicherten Gateway-Endpoint laden
   // (Query-Token für die 'users'-Route erlaubt). Der Browser cached es per ETag.
@@ -510,6 +523,27 @@
 
      Im Speicher gehalten, damit ein erneuter Abruf im selben Sitzungsverlauf
      nicht einmal den Browser-Cache fragt. */
+  /* Vorschlaege je Einkaufsliste. Sie machen rund 34 kB aus, werden erst beim
+     Tippen gebraucht und aendern sich mit jedem Einkauf. Als eigene Adresse mit
+     ETag kann der Browser sie revalidieren — unveraendert kostet das ein paar
+     hundert Byte statt 34 kB. Im Zustand ginge das nicht: dessen ETag haengt an
+     der Revision der ganzen Liste und springt bei jedem Haken.
+
+     Gemerkt werden sie, weil auch die ANTWORT AUF EINE AKTION den Zustand ohne
+     sie liefert — ohne die Kopie waeren die Vorschlaege nach dem ersten Haken
+     verschwunden. */
+  var vorschlaege = {};
+  function ladeVorschlaege(id) {
+    return apiGet('/instances/' + id + '/suggestions')
+      .then(function (r) {
+        if (r && r.ok === true && Array.isArray(r.suggestions)) {
+          vorschlaege[String(id)] = r.suggestions;
+        }
+        return vorschlaege[String(id)] || [];
+      })
+      .catch(function () { return vorschlaege[String(id)] || []; });
+  }
+
   var bildIndex = null;
   function ladeBilder(version) {
     if (bildIndex && bildIndex.version === version) { return Promise.resolve(bildIndex); }
@@ -543,12 +577,18 @@
         /* `images=0`: die Bildzuordnung kommt getrennt (siehe ladeBilder). Sie
            machte 103 von 166 kB des Einkaufslisten-Zustands aus — bei jedem Abruf
            und bei jeder Aktion neu, obwohl sie sich fast nie aendert. */
-        return apiGet('/instances/' + inst.id + '/state?images=0')
+        return apiGet('/instances/' + inst.id + '/state?images=0&suggestions=0')
           .then(function (s) { return { inst: inst, data: (s && s.ok === true) ? s : null }; })
           .catch(function () { return { inst: inst, data: null }; });
       })).then(function (results) {
-        return ladeBilder((disc.server && disc.server.assetsVersion) || 0)
-          .then(function (index) { return { results: results, index: index }; });
+        // Beides parallel zu den Zustaenden, nicht danach: eine zweite Zustellung
+        // nach dem ersten Bild waere ein kompletter Neuaufbau der Liste (sichtbar
+        // als Flackern aller Produktbilder, siehe requestAction/Call).
+        var einkauf = visible.filter(function (i) { return i.kind === 'shopping'; });
+        return Promise.all([
+          ladeBilder((disc.server && disc.server.assetsVersion) || 0),
+          Promise.all(einkauf.map(function (i) { return ladeVorschlaege(i.id); }))
+        ]).then(function (zwei) { return { results: results, index: zwei[0] }; });
       }).then(function (paket) {
         var results = paket.results;
         // Aus dem Index, nicht mehr aus dem ersten Zustand.
@@ -577,7 +617,8 @@
               imagesEnabled: true
             };
           }
-          states[String(r.inst.id)] = { kind: kind, revision: r.data.revision || 0, state: stripState(kind, st) };
+          states[String(r.inst.id)] = { kind: kind, revision: r.data.revision || 0,
+                                        state: mitVorschlaegen(kind, r.inst.id, stripState(kind, st)) };
         });
         return {
           type: 'state',
@@ -613,7 +654,7 @@
       // als Flackern aller Produktbilder. Solange ein Call läuft, ignorieren wir
       // die Türklingel; fremde Änderungen kommen weiter sofort durch.
       callsInFlight++;
-      apiPost('/instances/' + id + '/actions?images=0', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
+      apiPost('/instances/' + id + '/actions?images=0&suggestions=0', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
         .then(function (res) {
           var j = res.json || {};
           releaseCall();
@@ -622,7 +663,7 @@
             instanceID: id,
             kind: j.kind || kind,
             revision: j.revision || 0,
-            state: (j.state != null) ? stripState(j.kind || kind, j.state) : null,
+            state: (j.state != null) ? mitVorschlaegen(j.kind || kind, id, stripState(j.kind || kind, j.state)) : null,
             ok: j.ok === true,
             error: j.error || null,
             txn: d.txn

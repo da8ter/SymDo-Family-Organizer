@@ -5927,6 +5927,20 @@ function pushMenu(anchor) {
   openMenu(anchor, eintraege);
 }
 
+/* Den Service Worker gleich beim Start anmelden — nicht erst, wenn jemand
+   Benachrichtigungen einschaltet.
+   Er speichert den Icon-Satz (1,2 MB an der Host-Wurzel) und die App-Icons
+   zwischen; ohne Anmeldung holt der Browser sie bei jedem Start erneut. An der
+   API und an allem mit `?t=<Token>` fasst der Worker nichts an (siehe sw.js).
+   Nur in der Web-App: `__SYMDO__` gibt es in der Kachel nicht, und dort waere ein
+   Worker fuer /hook/lists/ nur ein Eintrag ohne Wirkung. */
+if (window.__SYMDO__ && 'serviceWorker' in navigator && window.isSecureContext === true) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/hook/lists/pwa', { updateViaCache: 'none' })
+      .catch(() => {});
+  });
+}
+
 // Der Service Worker meldet den Zielbereich einer angetippten Nachricht.
 if ('serviceWorker' in navigator) {
   try {

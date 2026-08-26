@@ -5,10 +5,11 @@
  * AppCore.php). Damit ist sein Zustaendigkeitsbereich /hook/lists/ — er umfasst
  * die Seite /hook/lists/webapp und die API darunter.
  *
- * BEWUSST OHNE fetch-Handler. Der Bereich schliesst die token-gesicherte API mit
- * ein; jede Zwischenspeicherung wuerde Adressen mit `?t=<Token>` in
- * Cache-Schluessel schreiben. Ein Worker ohne fetch-Handler mischt sich in keine
- * einzige Anfrage ein und kostet nichts.
+ * Der fetch-Handler fasst NUR token-freie, unveraenderliche Dateien an: den
+ * Icon-Satz an der Host-Wurzel (1,2 MB) und die App-Icons. Alles andere laesst er
+ * unberuehrt durch — insbesondere jede Adresse mit `?t=<Token>` und alles unter
+ * der API. Eine Zwischenspeicherung dort schriebe den Token in Cache-Schluessel,
+ * und genau deshalb gab es hier lange gar keinen fetch-Handler.
  *
  * Der Worker kennt kein Token und kann deshalb selbst nichts an die API melden.
  * Ein erneuertes Abo (pushsubscriptionchange) meldet die Seite beim naechsten
@@ -18,7 +19,17 @@
 // Bei jeder Aenderung hochzaehlen: Die Datei wird mit `Cache-Control: no-cache`
 // ausgeliefert, der Browser prueft sie also gegen — aber nur, wenn sich die Bytes
 // unterscheiden, gilt sie als neue Fassung.
-const SYMDO_SW_VERSION = 4;
+const SYMDO_SW_VERSION = 5;
+
+/* Nur diese Dateien werden zwischengespeichert. Sie tragen keinen Token, sind
+   fuer alle gleich und aendern sich nur mit einer neuen Symcon- bzw. Modulfassung.
+   Der Icon-Satz allein ist 1,2 MB — ohne Cache holt ihn der Browser bei jedem
+   Start erneut (mit ETag zwar als 304, aber eben mit einer Anfrage und Wartezeit
+   vor dem ersten Bild). */
+const SYMDO_CACHE = 'symdo-statisch-v' + SYMDO_SW_VERSION;
+const SYMDO_STATISCH = [
+  '/icons.js',
+];
 
 const SYMDO_SEITE = '/hook/lists/webapp';
 // Weissliste der Zielbereiche. Die Nutzlast kommt aus dem eigenen Haus, reist aber
@@ -32,7 +43,61 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Alte Fassungen wegraeumen: der Cache-Name traegt die Version, ein Rest aus
+    // Fassung 4 waere nur belegter Platz.
+    const namen = await caches.keys();
+    await Promise.all(namen
+      .filter((n) => n.startsWith('symdo-statisch-') && n !== SYMDO_CACHE)
+      .map((n) => caches.delete(n)));
+    await self.clients.claim();
+  })());
+});
+
+/**
+ * Gehoert die Adresse zu den Dateien, die wir zwischenspeichern duerfen?
+ *
+ * Drei Bedingungen, alle noetig: gleiche Herkunft (fremde Hosts gehen uns nichts
+ * an), KEIN Token in der Abfrage, und der Pfad steht auf der Liste bzw. ist ein
+ * App-Icon. Alles unter der API faellt damit heraus, auch ohne Token — dort
+ * aendert sich der Inhalt staendig.
+ */
+function symdoStatisch(url) {
+  if (url.origin !== self.location.origin) { return false; }
+  if (url.searchParams.has('t')) { return false; }
+  if (SYMDO_STATISCH.includes(url.pathname)) { return true; }
+  return url.pathname.startsWith(SYMDO_SEITE + '/appicon-');
+}
+
+/**
+ * Aus dem Cache antworten und im Hintergrund auffrischen.
+ *
+ * Die Seite bekommt sofort etwas zu sehen, und die naechste Fassung liegt beim
+ * uebernaechsten Start bereit. Faellt das Netz aus, bleibt der Cache — der
+ * Icon-Satz ist damit auch offline da.
+ */
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') { return; }
+  let url;
+  try {
+    url = new URL(event.request.url);
+  } catch (e) {
+    return;
+  }
+  if (!symdoStatisch(url)) { return; }   // NICHT anfassen — auch nicht respondWith
+  event.respondWith((async () => {
+    const cache = await caches.open(SYMDO_CACHE);
+    const treffer = await cache.match(event.request);
+    const netz = fetch(event.request).then((antwort) => {
+      // Nur vollstaendige Antworten ablegen. Eine 206 oder ein Fehler waere ein
+      // Cache-Eintrag, der beim naechsten Start eine kaputte Datei liefert.
+      if (antwort && antwort.status === 200 && antwort.type === 'basic') {
+        cache.put(event.request, antwort.clone()).catch(() => {});
+      }
+      return antwort;
+    }).catch(() => null);
+    return treffer || (await netz) || fetch(event.request);
+  })());
 });
 
 /**

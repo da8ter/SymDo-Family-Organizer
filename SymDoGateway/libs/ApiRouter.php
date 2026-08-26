@@ -317,6 +317,10 @@ trait ApiRouter
             $this->HandleState($id, $kind);
             return;
         }
+        if ($sub === 'suggestions' && $method === 'GET') {
+            $this->HandleSuggestions($id, $kind);
+            return;
+        }
         if ($sub === 'actions' && $method === 'POST') {
             $this->HandleActions($id, $kind);
             return;
@@ -463,13 +467,13 @@ trait ApiRouter
             return;
         }
         $revision = (int)($data['revision'] ?? 0);
-        $schmal = $this->WantsSlimState();
+        $weggelassen = $this->OmittedParts();
         /* Der ETag muss die Fassung mit unterscheiden. Sonst bekaeme ein Client,
            der einmal den vollen Zustand geholt hat und danach den schmalen
            anfordert, ein 304 auf einen Rumpf, der nicht dazu passt — und
            umgekehrt fehlten ihm die Bilder. */
-        header('ETag: "' . $revision . ($schmal ? '-s' : '') . '"');
-        if ($this->GetIfNoneMatchRevision($schmal) === $revision) {
+        header('ETag: "' . $revision . ($weggelassen !== '' ? '-' . $weggelassen : '') . '"');
+        if ($this->GetIfNoneMatchRevision($weggelassen) === $revision) {
             http_response_code(304);
             return;
         }
@@ -485,7 +489,24 @@ trait ApiRouter
      */
     private function WantsSlimState(): bool
     {
-        return isset($_GET['images']) && (string)$_GET['images'] === '0';
+        return $this->OmittedParts() !== '';
+    }
+
+    /**
+     * Welche Teile der Client nicht im Zustand haben will, als Kuerzel: `i` fuer
+     * die Bildzuordnung (`?images=0`), `s` fuer die Vorschlaege (`?suggestions=0`).
+     * Die Reihenfolge ist fest, damit derselbe Wunsch immer denselben ETag ergibt.
+     */
+    private function OmittedParts(): string
+    {
+        $teile = '';
+        if (isset($_GET['images']) && (string)$_GET['images'] === '0') {
+            $teile .= 'i';
+        }
+        if (isset($_GET['suggestions']) && (string)$_GET['suggestions'] === '0') {
+            $teile .= 's';
+        }
+        return $teile;
     }
 
     /**
@@ -497,15 +518,50 @@ trait ApiRouter
      */
     private function SlimState(array $data): array
     {
-        if (!$this->WantsSlimState() || !is_array($data['state'] ?? null)) {
+        $weggelassen = $this->OmittedParts();
+        if ($weggelassen === '' || !is_array($data['state'] ?? null)) {
             return $data;
         }
-        unset($data['state']['availableImages'], $data['state']['availableBrands']);
-        // Der Client soll wissen, dass hier etwas fehlt UND woran er merkt, ob
-        // seine Kopie noch stimmt.
-        $data['imagesOmitted'] = true;
-        $data['assetsVersion'] = $this->GetAssetsVersion();
+        if (str_contains($weggelassen, 'i')) {
+            unset($data['state']['availableImages'], $data['state']['availableBrands']);
+            // Der Client soll wissen, dass hier etwas fehlt UND woran er merkt, ob
+            // seine Kopie noch stimmt.
+            $data['imagesOmitted'] = true;
+            $data['assetsVersion'] = $this->GetAssetsVersion();
+        }
+        if (str_contains($weggelassen, 's')) {
+            unset($data['state']['suggestions']);
+            $data['suggestionsOmitted'] = true;
+        }
         return $data;
+    }
+
+    /**
+     * Die Vorschlaege einer Liste als eigene Auskunft.
+     *
+     * Sie machen bei einer gewachsenen Einkaufsliste rund 37 kB aus und werden
+     * erst beim Tippen gebraucht. Als eigene Adresse mit ETag kann der Browser sie
+     * revalidieren: unveraendert kostet sie ein paar hundert Byte statt 37 kB —
+     * innerhalb des Zustands ginge das nicht, weil dessen ETag an der Revision der
+     * ganzen Liste haengt und sich mit jedem Haken aendert.
+     */
+    private function HandleSuggestions(int $id, string $kind): void
+    {
+        if ($kind !== 'shopping') {
+            $this->SendApiError('unknown_instance', 'Not a shopping list', 404);
+            return;
+        }
+        $data  = json_decode((string)$this->CallInstanceGetAppState($id, $kind), true);
+        $state = is_array($data['state'] ?? null) ? $data['state'] : [];
+        $liste = is_array($state['suggestions'] ?? null) ? $state['suggestions'] : [];
+        $etag  = '"' . md5((string)json_encode($liste)) . '"';
+        header('ETag: ' . $etag);
+        header('Cache-Control: private, no-cache');
+        if ($this->IfNoneMatchHits($etag)) {
+            http_response_code(304);
+            return;
+        }
+        $this->SendJson(['ok' => true, 'suggestions' => $liste]);
     }
 
     /**
@@ -915,7 +971,7 @@ trait ApiRouter
         return is_string($neu) ? $neu : $json;
     }
 
-    private function GetIfNoneMatchRevision(bool $slim = false): ?int
+    private function GetIfNoneMatchRevision(string $weggelassen = ''): ?int
     {
         $raw = trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
         if ($raw === '' && isset($_GET['rev'])) {
@@ -926,13 +982,14 @@ trait ApiRouter
             $raw = substr($raw, 2);
         }
         $raw = trim($raw, " \t\"");
-        // „5-s" ist die schmale Fassung der Revision 5. Ein Vergleich ueber die
-        // Zahl allein wuerde beide Fassungen gleichsetzen.
-        $istSchmal = str_ends_with($raw, '-s');
-        if ($istSchmal) {
-            $raw = substr($raw, 0, -2);
+        // „5-is" ist Revision 5 ohne Bildzuordnung und ohne Vorschlaege. Ein
+        // Vergleich ueber die Zahl allein wuerde alle Fassungen gleichsetzen.
+        $teile = explode('-', $raw, 2);
+        $raw   = $teile[0];
+        if (($teile[1] ?? '') !== $weggelassen) {
+            return null;
         }
-        if ($raw === '' || !preg_match('/^\d+$/', $raw) || $istSchmal !== $slim) {
+        if ($raw === '' || !preg_match('/^\d+$/', $raw)) {
             return null;
         }
         return (int)$raw;
