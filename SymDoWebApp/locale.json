@@ -395,7 +395,15 @@
             "no school": "keine Schule",
             "Public holiday": "Feiertag",
             "School holidays": "Schulferien",
-            "%1 until %2": "%1 bis %2"
+            "%1 until %2": "%1 bis %2",
+            "Only this appointment": "Nur dieser Termin",
+            "This and all following": "Dieser und alle folgenden",
+            "The whole series": "Die ganze Serie",
+            "Delete which appointments?": "Was soll gelöscht werden?",
+            "Change which appointments?": "Was soll geändert werden?",
+            "Delete the whole series?": "Die ganze Serie löschen?",
+            "This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender lässt das so nicht zu — bitte in der Kalender-App löschen.",
+            "This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender lässt das so nicht zu — bitte in der Kalender-App bearbeiten."
         }
     }
 }

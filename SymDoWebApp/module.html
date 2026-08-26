@@ -678,6 +678,18 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-tagname span.ist-heute { color: var(--accent, #0a84ff); }
 /* Das Blatt deckt die KARTE ab, nicht den Schirm: es gehoert zum Stundenplan
    und nicht zur ganzen Oberflaeche. Dafuer braucht die Karte einen Bezug. */
+/* Wahl der Reichweite: gestapelte, volle Schaltflaechen statt einer Fussleiste —
+   die Beschriftungen („Dieser und alle folgenden") sind zu lang fuer nebeneinander. */
+#calScopeOverlay .overlay-body { gap: 8px; }
+.scope-btn {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 14px; border-radius: 12px;
+  background: var(--row); color: var(--text);
+  border: 1px solid var(--border); font: inherit; cursor: pointer;
+}
+.scope-btn:active { background: var(--row-item); }
+.scope-btn.destructive { color: var(--danger, #e5484d); }
+
 .plan-card { position: relative; }
 .plan-legendenblatt {
   position: absolute; inset: 0; z-index: 5;
@@ -3376,6 +3388,19 @@ html[data-symdo-theme="dark"] .member-bar {
       <button class="btn-close-overlay" data-close="noteFindOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body" id="noteFindBody"></div>
+  </div>
+</div>
+
+<!-- Reichweite einer Serien-Aenderung. Ein eigenes Blatt, weil die Bestaetigung
+     nur EINE Schaltflaeche kennt und hier bis zu drei zur Wahl stehen. Gezeigt
+     werden nur die, die der Anbieter am Termin auch erlaubt. -->
+<div class="overlay" id="calScopeOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="calScopeTitle"></span>
+      <button class="btn-close-overlay" data-close="calScopeOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body" id="calScopeBody"></div>
   </div>
 </div>
 
@@ -7766,8 +7791,13 @@ function renderCalendar() {
         (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
           ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
       const serie = e.recurring === true;
-      const kannBearbeiten = schreibbar[String(e.calendarID)] === true && (!serie || e.canUpdateOccurrence === true);
-      const kannLoeschen   = schreibbar[String(e.calendarID)] === true && (!serie || e.canDeleteOccurrence === true);
+      /* Auch hier zaehlt JEDE Reichweite, nicht nur das einzelne Vorkommen:
+         ein Kalender, der bloss die ganze Serie schreiben laesst, zeigte sonst
+         gar keine Knoepfe — obwohl das Aendern erlaubt ist. */
+      const kannBearbeiten = schreibbar[String(e.calendarID)] === true && (!serie
+        || e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true);
+      const kannLoeschen   = schreibbar[String(e.calendarID)] === true && (!serie
+        || e.canDeleteOccurrence === true || e.canDeleteSeries === true);
       const darf = kannBearbeiten || kannLoeschen;
       // Die Wisch-Untergruende nur dort, wo auch gewischt werden kann — sonst
       // blitzte beim Ziehen ein rotes Feld auf, das nichts tut.
@@ -7836,12 +7866,18 @@ function bindCalRows(knoten) {
     // ablehnen, den auch das Gateway gaebe. Die Wache steht an der AKTION und
     // nicht nur am Markup, weil eine Zeile mit nur einer erlaubten Richtung
     // trotzdem beide Wischwege hat.
+    /* Erlaubt ist es, wenn IRGENDEINE Reichweite geht — nicht nur das einzelne
+       Vorkommen. Frueher stand hier allein canUpdateOccurrence, und ein Kalender,
+       der nur die ganze Serie schreiben laesst, galt als gesperrt. */
     const serieErlaubt = (e, art) => {
       if (e.recurring !== true) return true;
-      if (art === 'del' ? e.canDeleteOccurrence === true : e.canUpdateOccurrence === true) return true;
+      const geht = art === 'del'
+        ? (e.canDeleteOccurrence === true || e.canDeleteSeries === true)
+        : (e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true);
+      if (geht) return true;
       showToast(translate(art === 'del'
-        ? 'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
-        : 'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'));
+        ? 'This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.'
+        : 'This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.'));
       return false;
     };
 
@@ -7852,7 +7888,14 @@ function bindCalRows(knoten) {
       restoreCard(card);
       const e = finde();
       if (!e || !serieErlaubt(e, 'del')) return;
-      showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
+      // Erst die Reichweite, dann die Rueckfrage: „Loeschen?" ohne zu wissen, WAS
+      // geloescht wird, waere bei einer Serie eine gefaehrliche Zustimmung.
+      calFrageReichweite(e, 'del').then(scope => {
+        if (!scope) return;
+        showConfirm(translate(scope === 'series'
+          ? 'Delete the whole series?' : 'Delete this appointment?'),
+          translate('Delete'), () => calDelete(e, scope));
+      });
     };
     const bearbeiten = () => { const e = finde(); if (e && serieErlaubt(e, 'edit')) openCalEditor(e, null, e); };
 
@@ -7873,17 +7916,73 @@ function bindCalRows(knoten) {
     if (lBtn) lBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const e = finde();
-      if (e && serieErlaubt(e, 'del')) showConfirm(translate('Delete this appointment?'), translate('Delete'), () => calDelete(e));
+      if (!e || !serieErlaubt(e, 'del')) return;
+      calFrageReichweite(e, 'del').then(scope => {
+        if (!scope) return;
+        showConfirm(translate(scope === 'series'
+          ? 'Delete the whole series?' : 'Delete this appointment?'),
+          translate('Delete'), () => calDelete(e, scope));
+      });
     });
   });
 }
 
+/**
+ * Fragt, worauf eine Aenderung an einem Serien-Vorkommen wirken soll.
+ *
+ * Angeboten wird nur, was der Anbieter AM TERMIN erlaubt — die Flags kommen mit
+ * dem Datensatz (canUpdateOccurrence/Following/Series bzw. canDelete…). Gibt es
+ * nur eine Moeglichkeit, wird nicht gefragt; gibt es keine, null.
+ *
+ * Loeschen kennt nur zwei Reichweiten: „dieser" und „ganze Serie". Ein „und alle
+ * folgenden" meldet der Anbieter dafuer nicht.
+ *
+ * @returns {Promise<string|null>} 'occurrence' | 'following' | 'series' | null
+ */
+function calFrageReichweite(e, art) {
+  return new Promise(fertig => {
+    if (!e || e.recurring !== true) { fertig('occurrence'); return; }
+    const moeglich = (art === 'del'
+      ? [['occurrence', e.canDeleteOccurrence, translate('Only this appointment')],
+         ['series', e.canDeleteSeries, translate('The whole series')]]
+      : [['occurrence', e.canUpdateOccurrence, translate('Only this appointment')],
+         ['following', e.canUpdateFollowing, translate('This and all following')],
+         ['series', e.canUpdateSeries, translate('The whole series')]]
+    ).filter(x => x[1] === true);
+    if (moeglich.length === 0) { fertig(null); return; }
+    if (moeglich.length === 1) { fertig(moeglich[0][0]); return; }
+    document.getElementById('calScopeTitle').textContent = translate(
+      art === 'del' ? 'Delete which appointments?' : 'Change which appointments?');
+    const body = document.getElementById('calScopeBody');
+    body.innerHTML = moeglich.map(x =>
+      `<button class="scope-btn${x[0] === 'series' && art === 'del' ? ' destructive' : ''}" ` +
+      `data-scope="${x[0]}">${escapeHtml(x[2])}</button>`).join('');
+    let beantwortet = false;
+    body.querySelectorAll('[data-scope]').forEach(b => b.addEventListener('click', () => {
+      beantwortet = true;
+      closeOverlay('calScopeOverlay');
+      fertig(b.dataset.scope);
+    }));
+    // Wegtippen heisst abbrechen — nicht stillschweigend das Vorkommen nehmen.
+    const blatt = document.getElementById('calScopeOverlay');
+    const zu = () => {
+      blatt.removeEventListener('transitionend', zu);
+      if (!beantwortet) { fertig(null); }
+    };
+    blatt.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
+      if (!beantwortet) { beantwortet = true; fertig(null); }
+    }, { once: true }));
+    openOverlay('calScopeOverlay');
+  });
+}
+
 /** Termin beim Anbieter loeschen. Die Rueckfrage ist an dieser Stelle bereits gefallen. */
-function calDelete(e) {
+function calDelete(e, scope) {
   aiPost('/calendar', {
     action: 'delete',
     calendarID: e.calendarID,
-    event: { id: e.id, uid: e.uid, startTimestamp: e.start }
+    // Die Reichweite MUSS mit: ohne sie loescht das Gateway nur das Vorkommen.
+    event: { id: e.id, uid: e.uid, startTimestamp: e.start, scope: scope || 'occurrence' }
   }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) {
@@ -8131,6 +8230,17 @@ function saveCalEditor() {
   }
 
   const knopf = document.getElementById('btnCalEditSave');
+  /* Reichweite VOR dem Absenden klaeren. Bei allem ausser einem Serien-Vorkommen
+     antwortet die Frage sofort mit 'occurrence' und es geht ohne Blatt weiter. */
+  calFrageReichweite(bestand, 'edit').then(scope => {
+    if (!scope) { return; }   // weggetippt = abgebrochen
+    if (bestand && bestand.recurring === true) { ereignis.scope = scope; }
+    calSpeichernSenden(bestand, kalenderID, ereignis, knopf);
+  });
+}
+
+/** Der eigentliche Aufruf — herausgeloest, damit die Reichweitenfrage davor passt. */
+function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
   knopf.disabled = true;
   aiPost('/calendar', {
     action: bestand ? 'update' : 'create',

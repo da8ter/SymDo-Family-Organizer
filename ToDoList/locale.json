@@ -557,7 +557,10 @@
             "no school": "keine Schule",
             "%1 until %2": "%1 bis %2",
             "Public holiday": "Feiertag",
-            "School holidays": "Schulferien"
+            "School holidays": "Schulferien",
+            "Only this appointment": "Nur dieser Termin",
+            "The whole series": "Die ganze Serie",
+            "This and all following": "Dieser und alle folgenden"
         },
         "en": {
             "ToDo List": "ToDo List",

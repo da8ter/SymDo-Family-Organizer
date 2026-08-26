@@ -432,6 +432,13 @@ trait CalendarBridge
             'recurring'  => $this->CalIsOccurrence($e),
             'canUpdateOccurrence' => ($e['canUpdateOccurrence'] ?? false) === true,
             'canDeleteOccurrence' => ($e['canDeleteOccurrence'] ?? false) === true,
+            /* Seit Build 750 meldet der Anbieter auch, ob „dieser und alle
+               folgenden" und „die ganze Serie" erlaubt sind. Wir reichten das
+               nicht durch — die App konnte deshalb immer nur EIN Vorkommen
+               aendern, obwohl mehr erlaubt war. */
+            'canUpdateFollowing'  => ($e['canUpdateFollowing'] ?? false) === true,
+            'canUpdateSeries'     => ($e['canUpdateSeries'] ?? false) === true,
+            'canDeleteSeries'     => ($e['canDeleteSeries'] ?? false) === true,
         ];
     }
 
@@ -938,14 +945,33 @@ trait CalendarBridge
             // dem Rohdatensatz mit und wird nur gesetzt, falls er fehlt (der
             // CalDAV-Zweig verlangt ihn).
             if ($this->CalIsOccurrence($roh)) {
-                if (($roh['canUpdateOccurrence'] ?? false) !== true) {
+                /* Reichweite: nur dieses Vorkommen, dieses und alle folgenden, oder
+                   die ganze Serie. Sie kommt aus der Oberflaeche; fehlt sie, bleibt
+                   es beim einzelnen Vorkommen — das ist die vorsichtige Wahl und
+                   das bisherige Verhalten. */
+                $scope = trim((string)($daten['scope'] ?? 'occurrence'));
+                if (!in_array($scope, ['occurrence', 'following', 'series'], true)) {
+                    $scope = 'occurrence';
+                }
+                $recht = ['occurrence' => 'canUpdateOccurrence',
+                          'following'  => 'canUpdateFollowing',
+                          'series'     => 'canUpdateSeries'][$scope];
+                if (($roh[$recht] ?? false) !== true) {
                     return $fehler('series_locked', $this->Translate(
-                        'This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.'
+                        'This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.'
                     ));
                 }
-                if (trim((string)($ereignis['writeScope'] ?? '')) === '') {
-                    $ereignis['writeScope'] = 'occurrence';
+                if ($scope !== 'occurrence') {
+                    // Fuer „folgende" und „ganze Serie" ist ein ANDERER Datensatz
+                    // das Ziel — siehe CalScopeTarget.
+                    $ziel = $this->CalScopeTarget($calendarID, $roh, $scope);
+                    if (($ziel['ok'] ?? false) !== true) {
+                        return $fehler((string)$ziel['code'], (string)$ziel['message']);
+                    }
+                    $ereignis = array_merge($ziel['event'], $geprueft['fields']);
+                    unset($ereignis['startTimestamp'], $ereignis['endTimestamp']);
                 }
+                $ereignis['writeScope'] = $scope;
             }
             try {
                 $antwort = json_decode((string)IPSKAL_UpdateEvent(
@@ -989,6 +1015,62 @@ trait CalendarBridge
             'calendar_error',
             $letzteMeldung !== '' ? $letzteMeldung : $this->Translate('The calendar rejected the appointment.')
         );
+    }
+
+    /**
+     * Der Datensatz, auf den eine Serien-Aenderung wirken soll.
+     *
+     * Drei Reichweiten, drei Datensaetze — das ist der Punkt: OpenCalendar
+     * entscheidet NICHT am writeScope allein, sondern will fuer „ganze Serie" den
+     * Serienkopf und fuer „dieser und folgende" einen eigens dafuer gebauten
+     * Datensatz. Wer dem Vorkommen bloss writeScope=series anhaengt, aendert
+     * weiterhin nur das Vorkommen.
+     *
+     * @param array<string, mixed> $roh das Vorkommen aus dem Zwischenspeicher
+     * @return array{ok:bool,event?:array<string,mixed>,code?:string,message?:string}
+     */
+    private function CalScopeTarget(int $calendarID, array $roh, string $scope): array
+    {
+        $fehler = fn(string $code, string $text): array => ['ok' => false, 'code' => $code, 'message' => $text];
+
+        if ($scope === '' || $scope === 'occurrence') {
+            return ['ok' => true, 'event' => $roh];
+        }
+        $serie = trim((string)($roh['seriesId'] ?? ''));
+        $url   = (string)($roh['resourceUrl'] ?? '');
+        if ($serie === '') {
+            return $fehler('series_locked', $this->Translate(
+                'This appointment does not belong to a series that can be edited as a whole.'));
+        }
+        try {
+            if ($scope === 'series') {
+                if (!function_exists('IPSKAL_GetRecurringSeries')) {
+                    return $fehler('series_locked', $this->Translate(
+                        'This calendar module is too old to edit a whole series.'));
+                }
+                $ziel = json_decode((string)IPSKAL_GetRecurringSeries($calendarID, $serie, $url), true);
+            } else {
+                if (!function_exists('IPSKAL_GetRecurringFollowing')) {
+                    return $fehler('series_locked', $this->Translate(
+                        'This calendar module is too old to edit an appointment and the ones after it.'));
+                }
+                $ziel = json_decode((string)IPSKAL_GetRecurringFollowing(
+                    $calendarID, $serie,
+                    (string)($roh['occurrenceId'] ?? ''),
+                    (string)($roh['originalStart'] ?? ''),
+                    $url), true);
+            }
+        } catch (Throwable $e) {
+            $this->SendDebug('Calendar', 'Serienziel geworfen: ' . $e->getMessage(), 0);
+            return $fehler('calendar_error', $e->getMessage());
+        }
+        if (!is_array($ziel) || trim((string)($ziel['etag'] ?? '')) === '') {
+            return $fehler('calendar_error', $this->Translate('The calendar did not return the series.'));
+        }
+        // Die Reichweite MUSS mit: ohne sie ruehrt OpenCalendar den Serienkopf
+        // nicht an, und die Aenderung traefe wieder nur das eine Vorkommen.
+        $ziel['writeScope'] = $scope;
+        return ['ok' => true, 'event' => $ziel];
     }
 
     /**
@@ -1078,14 +1160,25 @@ trait CalendarBridge
             // Serien-Vorkommen: gleiche Wache wie beim Aendern (siehe CalUpdateEvent),
             // massgeblich ist das Flag am Datensatz.
             if ($this->CalIsOccurrence($roh)) {
-                if (($roh['canDeleteOccurrence'] ?? false) !== true) {
+                /* Beim Loeschen gibt es nur ZWEI Reichweiten: dieses Vorkommen oder
+                   die ganze Serie. Ein „und alle folgenden" meldet der Anbieter
+                   nicht (es gibt kein canDeleteFollowing), also bieten wir es auch
+                   nicht an. */
+                $scope = trim((string)($daten['scope'] ?? 'occurrence')) === 'series' ? 'series' : 'occurrence';
+                $recht = $scope === 'series' ? 'canDeleteSeries' : 'canDeleteOccurrence';
+                if (($roh[$recht] ?? false) !== true) {
                     return $fehler('series_locked', $this->Translate(
-                        'This appointment is part of a series. This calendar does not allow deleting a single occurrence — please delete it in your calendar app.'
+                        'This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.'
                     ));
                 }
-                if (trim((string)($roh['writeScope'] ?? '')) === '') {
-                    $roh['writeScope'] = 'occurrence';
+                if ($scope === 'series') {
+                    $ziel = $this->CalScopeTarget($calendarID, $roh, 'series');
+                    if (($ziel['ok'] ?? false) !== true) {
+                        return $fehler((string)$ziel['code'], (string)$ziel['message']);
+                    }
+                    $roh = $ziel['event'];
                 }
+                $roh['writeScope'] = $scope;
             }
             try {
                 $erfolg = IPSKAL_DeleteEvent(
