@@ -701,7 +701,11 @@ trait Briefing
             'termine'      => $this->BriefingEventLines($mitglieder, $tage),
             'aufgaben'     => $this->BriefingTaskLines($mitglieder, false, $tage),
             'ueberfaellig' => $this->BriefingTaskLines($mitglieder, true, $tage),
-            'geburtstage'  => $this->BriefingBirthdayLines($mitglieder, $tage),
+            // Aus ZWEI Quellen: den Stammdaten der Familienmitglieder und den
+            // Jahrestagen, die im Kalender gepflegt sind. Letztere kamen bisher
+            // gar nicht vor — und Hochzeits- oder Jahrestage kannten wir
+            // ueberhaupt nicht.
+            'geburtstage'  => $this->BriefingAnnualLines($mitglieder, $tage),
             'rollen'       => $this->BriefingRoleLines($mitglieder),
             'einkauf'      => $this->BriefingShopping(),
             // Wie lange welches Kind an DIESEM Tag Schule hat. Kommt aus dem
@@ -1036,6 +1040,25 @@ trait Briefing
      *
      * @return list<string>
      */
+    /**
+     * Alle Anlaesse eines Tages: Stammdaten der Familie PLUS Jahrestage aus dem
+     * Kalender. Die Stammdaten stehen vorn — ein doppelter Name faellt dort nicht
+     * noch einmal an (siehe CalAnnualLines).
+     *
+     * @return list<string>
+     */
+    private function BriefingAnnualLines(array $mitglieder, int $tage = 0): array
+    {
+        $ausStammdaten = $this->BriefingBirthdayLines($mitglieder, $tage);
+        if (!method_exists($this, 'CalAnnualLines')) {
+            return $ausStammdaten;
+        }
+        $tag    = $this->BriefingDay($tage);
+        $namen  = array_map(static fn(array $m): string => (string)$m['name'], array_values($mitglieder));
+        return array_merge($ausStammdaten, $this->CalAnnualLines(
+            date('Y-m-d', $tag), $this->BriefingDayWord($tage), $namen));
+    }
+
     private function BriefingBirthdayLines(array $mitglieder, int $tage = 0): array
     {
         $tag = $this->BriefingDay($tage);

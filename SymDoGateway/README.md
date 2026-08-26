@@ -51,7 +51,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
 - **KI-Analyse** — Foto, PDF oder eingefügter Text (z. B. eine WhatsApp-Nachricht) wird zu Aufgaben-, Termin- und Notiz-Vorschlägen; jeder Fund lässt sich zwischen Aufgabe, Termin und Notiz umstimmen und wird beim Übernehmen nacheinander im vorausgefüllten Dialog bestätigt (Ordner, Kalender und Zeiten anpassbar). Auf Wunsch werden auch E-Mails ausgewertet (IMAP-Abruf oder Weiterleitung)
 - **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text und Anhängen (Bild, PDF)
-- **Kalender** — Termine aus dem Store-Modul OpenCalendar lesen, anlegen und bearbeiten
+- **Kalender** — Termine aus dem Store-Modul OpenCalendar lesen, anlegen und bearbeiten; bei einem Termin aus einer Serie fragt die App vor dem Speichern oder Löschen nach der Reichweite (nur dieser Termin, dieser und alle folgenden, die ganze Serie) — angeboten wird nur, was OpenCalendar an diesem Termin erlaubt
 - **Web-Push** — Benachrichtigungen aufs gekoppelte Handy bei fälligen Aufgaben, neuem Briefing und neuen KI-Vorschlägen; Termin-Erinnerungen zusätzlich über die Kachel-Visualisierung
 - **Geräteverwaltung** — Liste aller gekoppelten Geräte, einzelne Geräte sperrbar
 
@@ -141,6 +141,8 @@ Diese Schalter gelten für **alle** Listen dieser Web-App und dieser Kachel geme
 ## 8. Tägliches Briefing
 
 Die KI schreibt jeden Morgen zur eingestellten Uhrzeit (Standard 5:30 Uhr) eine kurze Zusammenfassung: Termine des Tages, fällige und überfällige Aufgaben, Stand der Einkaufsliste. Das Briefing erscheint auf der Übersicht der App und der Kachel — auf Wunsch mit Sprachausgabe zum Abspielen.
+
+**Geburtstage und Jahrestage** kommen aus **zwei** Quellen: den Stammdaten der Familienmitglieder (Kapitel 5) und den Jahresereignissen, die in **OpenCalendar** gepflegt sind — Geburtstag, Jahrestag, Hochzeitstag, Todestag. Steht derselbe Name in beiden, gewinnt die Stammdaten-Zeile; es wird nicht zweimal gratuliert. Ein Todestag wird ausdrücklich als solcher genannt, damit die KI dort nicht gratuliert.
 
 - **Geschrieben für** — ein einzelnes Mitglied (persönliche Anrede) oder *— die ganze Familie —* (Haushalts-Briefing: alle werden gemeinsam angesprochen, jede Aufgabe mit dem Namen des Zuständigen). Lebt nur ein Mitglied im Haushalt, spricht auch das Familien-Briefing es automatisch persönlich an
 - **Persona** — Tonfall des Texts **und** der Stimme: Sachlich, Förmlich, Butler, Lustig, Drillsergeant, Motivationstrainer, Jammerlappen, Digga. Die Persona *Förmlich* siezt Erwachsene mit Nachnamen („Herr Muster"), Kinder bleiben beim Vornamen und Du

@@ -249,6 +249,74 @@ trait CalendarBridge
     }
 
     /** @return list<int> */
+    /**
+     * Geburtstage und Jahrestage, die IM KALENDER gepflegt sind, fuer einen Tag.
+     *
+     * Das Briefing kannte Geburtstage bisher nur aus den Stammdaten der
+     * Familienmitglieder. Wer sie in OpenCalendar pflegt — und wer ueberhaupt
+     * Hochzeits-, Jahres- oder Todestage fuehrt —, kam darin nicht vor.
+     *
+     * Doppelte werden weggelassen: steht derselbe Name schon in den Stammdaten,
+     * gewinnt die Stammdaten-Zeile. Sonst gratulierte das Briefing zweimal.
+     *
+     * @param string $datum      Y-m-d, der Tag um den es geht
+     * @param string $wort       „heute" oder „morgen", wie im uebrigen Briefing
+     * @param list<string> $schonGenannt Namen, die bereits eine Zeile haben
+     * @return list<string>
+     */
+    private function CalAnnualLines(string $datum, string $wort, array $schonGenannt = []): array
+    {
+        if (!function_exists('IPSKAL_GetAnniversaryList')) {
+            return [];
+        }
+        $klein = array_map('mb_strtolower', $schonGenannt);
+        $raus  = [];
+        foreach ($this->CalInstanceIDs() as $id) {
+            try {
+                // 0 Tage = alles; gefiltert wird unten auf den GENAUEN Tag. Ein
+                // Fenster waere hier falsch: die Abendvorschau spricht ueber
+                // morgen, nicht ueber „die naechsten sieben Tage".
+                $roh = json_decode((string)IPSKAL_GetAnniversaryList($id, 0, ''), true);
+            } catch (Throwable $e) {
+                $this->SendDebug('Calendar', 'GetAnniversaryList geworfen: ' . $e->getMessage(), 0);
+                continue;
+            }
+            foreach ((array)$roh as $e) {
+                if (!is_array($e) || (string)($e['nextDate'] ?? '') !== $datum) {
+                    continue;
+                }
+                $name = trim((string)($e['name'] ?? ''));
+                if ($name === '' || in_array(mb_strtolower($name), $klein, true)) {
+                    continue;
+                }
+                $jahre = (int)($e['years'] ?? 0);
+                switch ((string)($e['anniversaryType'] ?? '')) {
+                    case 'birthday':
+                        $raus[] = $jahre > 0
+                            ? sprintf('%s wird %s %d', $name, $wort, $jahre)
+                            : sprintf('%s hat %s Geburtstag', $name, $wort);
+                        break;
+                    case 'wedding':
+                        $raus[] = $jahre > 0
+                            ? sprintf('%s: %s %d. Hochzeitstag', $name, $wort, $jahre)
+                            : sprintf('%s: %s Hochzeitstag', $name, $wort);
+                        break;
+                    case 'death':
+                        // Bewusst ohne Jahreszahl und ohne Gratulation — die
+                        // Tonregel im Briefing sagt „gratuliere zuerst", und das
+                        // waere hier grob daneben.
+                        $raus[] = sprintf('%s: %s Todestag (KEIN Anlass zu gratulieren)', $name, $wort);
+                        break;
+                    default:
+                        $raus[] = $jahre > 0
+                            ? sprintf('%s: %s %d. Jahrestag', $name, $wort, $jahre)
+                            : sprintf('%s: %s Jahrestag', $name, $wort);
+                }
+            }
+        }
+        return $raus;
+    }
+
     private function CalInstanceIDs(): array
     {
         $ids = @IPS_GetInstanceListByModuleID(self::CAL_MODULE_GUID);
