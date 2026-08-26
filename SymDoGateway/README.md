@@ -45,7 +45,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Web-App fürs Handy** — vom Gateway ausgeliefert, per QR-Code gekoppelt, zum Home-Bildschirm hinzufügbar; kein App-Store nötig
 - **Kachel für die Tile-Visualisierung** — dieselbe Oberfläche als Instanz in der Visualisierung
 - **Bereiche**: Übersicht, KI-Eingang, Einkaufen, ToDos, Kalender und Notizen — einzeln abschaltbar
-- **Familienmitglieder** mit Name, Rolle und Foto; Aufgaben lassen sich Mitgliedern zuweisen („Meine Aufgaben")
+- **Familienmitglieder** mit Name, Rolle und Foto; Aufgaben und Termine lassen sich ihnen zuweisen, die Avatar-Leiste filtert damit alle Bereiche
 - **Tägliches Briefing** — die KI fasst morgens Termine, Aufgaben und Einkäufe zusammen, wahlweise mit Sprachausgabe; neun Personas vom Butler bis zum Drillsergeant
 - **Rezeptanalyse** — Rezeptfoto, PDF oder Rezept-URL wird zur Zutatenliste: Portionen skalierbar, Zutaten direkt auf die Einkaufsliste oder als Favoritenliste gespeichert, auf Wunsch mit dem Rezept selbst daran
 - **Einkaufs-Ansage** — die Web-App liest die offene Einkaufsliste Abteilung für Abteilung vor; bedient wird über die Kopfhörer-Taste, ein Druck hakt ab und sagt den nächsten Artikel an
@@ -132,7 +132,7 @@ Das Gateway ist zugleich der Sync-Broker der ToDo-Listen. Einrichtung und Ablauf
 
 ## 7. Konfiguration: SymDo Web App (Kachel)
 
-- **Standard-Mitglied** (`DefaultUserID`) — wird schnell angelegten Aufgaben zugewiesen und speist den Bereich „Meine Aufgaben"
+- **Standard-Mitglied** (`DefaultUserID`) — Vorbelegung für schnell angelegte Aufgaben, KI-Übernahmen und E-Mail-Vorschläge ohne eigenen Empfänger
 - **Listen** (`Lists`) — welche ToDo- und Einkaufslisten App und Kachel zeigen
 - **Sichtbare Bereiche** — Übersicht (`ShowDashboard`), Einkaufen (`ShowShopping`), ToDos (`ShowTodos`), Kalender (`ShowCalendar`), Notizen (`ShowNotes`), KI-Eingang (`ShowKi`), dazu die Wahl der Stundenplan-Instanzen (`TimetableChoice`). Der Kalender-Bereich braucht zusätzlich mindestens einen OpenCalendar-Kalender. Sind alle Bereiche aus, bleibt die Übersicht stehen; bei nur einem Bereich verschwindet die Tab-Leiste
 - **Bedienelemente** — Mitglieder-Leiste, Anlegen-Knopf, Sortierung, Favoriten-Herz, Zeilen-Knöpfe, Verschiebe-Griff (`ShowMemberBar`, `ShowCreateButton`, `ShowSorting`, `ShowFavoriteHeart`, `ShowRowEditButton`, `ShowRowDeleteButton`, `ShowReorderHandle`)

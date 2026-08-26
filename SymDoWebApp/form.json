@@ -13,7 +13,7 @@
         },
         {
             "type": "Label",
-            "caption": "The default user is assigned to quickly added tasks and drives the 'My tasks' section."
+            "caption": "The default user is assigned to quickly added tasks, to items adopted from the AI inbox and to e-mail proposals without a recipient of their own."
         },
         {
             "type": "Label",

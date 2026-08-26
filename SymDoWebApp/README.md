@@ -27,7 +27,7 @@ den Zeilen erscheinen.
 - **Dieselbe Oberfläche wie auf dem Handy** — Übersicht, Einkaufen, Favoriten, ToDos, Kalender, Notizen und KI-Eingang in einer Kachel, mit denselben Gesten (wischen zum Erledigen und Löschen) wie in der App
 - **Findet die Listen selbst** — alle **SymDo ToDo List**- und **SymDo Shopping List**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
-- **Standard-Mitglied** — wem schnell angelegte Aufgaben gehören und wessen Aufgaben unter „Meine Aufgaben" stehen
+- **Standard-Mitglied** — die Vorbelegung, wenn niemand ausdrücklich gewählt wird: schnell angelegte Aufgaben, aus dem KI-Eingang übernommene Einträge und E-Mail-Vorschläge ohne eigenen Empfänger
 - **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen; zwei Instanzen mit denselben Kindern zeigten jedes Kind doppelt, deshalb eine Zeile je Instanz
 - **Live ohne Neuladen** — die Kachel hängt an den Kennzahlen der Listen und wird bei jeder Änderung nachgezogen, entprellt zu einem Push statt zu dreien
 - **Farben der Visualisierung** — die Kachel meldet die Farben des Skins zurück; App und Web-App übernehmen sie, damit alles gleich aussieht
@@ -54,7 +54,7 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 
 | Einstellung | Eigenschaft | Bedeutung |
 |---|---|---|
-| Standard-Mitglied | `DefaultUserID` | Bekommt schnell angelegte Aufgaben und speist „Meine Aufgaben" |
+| Standard-Mitglied | `DefaultUserID` | Vorbelegung für schnell angelegte Aufgaben, KI-Übernahmen und E-Mail-Vorschläge ohne eigenen Empfänger |
 | Listen | `Lists` | Je gefundener Liste eine Zeile mit Schalter „ausblenden" |
 | Übersicht | `ShowDashboard` | Der Bereich mit Kennzahlen, Briefing und Stundenplan |
 | Einkaufen | `ShowShopping` | Einkaufsliste samt Favoriten und Kaufhistorie |

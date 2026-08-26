@@ -16,9 +16,9 @@ einzeln als Kachel; alles Weitere kommt mit dem Gateway dazu.
   auseinander entwickeln.
 - **Bereiche**: Übersicht, Einkaufen (samt Favoriten), ToDos, Kalender, Notizen
   und KI-Eingang — jeder einzeln abschaltbar.
-- **Familienmitglieder** mit Foto: Aufgaben lassen sich zuweisen, „Meine
-  Aufgaben" zeigt jedem das Seine, und die Avatar-Leiste filtert quer über alle
-  Bereiche.
+- **Familienmitglieder** mit Foto: Aufgaben und Termine lassen sich zuweisen, und
+  die Avatar-Leiste filtert quer über alle Bereiche — wer oben eine Person
+  antippt, sieht überall nur deren Einträge.
 - **Fotografieren statt abtippen** — Elternbrief oder Terminzettel knipsen: die
   KI macht daraus fertige Vorschläge für Aufgaben, Termine und Notizen. Angelegt
   wird nichts von allein; jeder Fund wird im vorausgefüllten Dialog bestätigt.

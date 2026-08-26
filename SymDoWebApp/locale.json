@@ -210,7 +210,7 @@
             "Tap to continue": "tippen für weiter",
             "Tasks": "Aufgaben",
             "Tasks of %1": "Aufgaben von %1",
-            "The default user is assigned to quickly added tasks and drives the 'My tasks' section.": "Der Standard-Benutzer wird schnell angelegten Aufgaben zugewiesen und steuert den Bereich „Meine Aufgaben“.",
+            "The default user is assigned to quickly added tasks, to items adopted from the AI inbox and to e-mail proposals without a recipient of their own.": "Der Standard-Benutzer wird schnell angelegten Aufgaben zugewiesen, ebenso aus dem KI-Eingang übernommenen Einträgen und E-Mail-Vorschlägen ohne eigenen Empfänger.",
             "The list is empty.": "Liste ist leer.",
             "These settings apply to ALL lists of this web app and of this tile. The identically named switches in the individual to-do and shopping list instances are ignored here — those keep applying to each list's own tile. Swipe gestures always stay active, hiding a button never removes the function; the reorder handle is the exception, without it dragging is off. The web app applies a change after a reload, the tile immediately.": "Diese Einstellungen gelten für ALLE Listen dieser Web-App und dieser Kachel. Die gleichnamigen Schalter in den einzelnen ToDo- und Einkaufslisten werden hier bewusst ignoriert — dort gelten sie weiter für die jeweils eigene Kachel. Die Wischgesten bleiben immer aktiv, ein ausgeblendeter Knopf entfernt also keine Funktion; Ausnahme ist der Verschieben-Griff, ohne ihn entfällt das Ziehen. Die Web-App übernimmt eine Änderung nach einem Neuladen, die Kachel sofort.",
             "This week": "Diese Woche",
