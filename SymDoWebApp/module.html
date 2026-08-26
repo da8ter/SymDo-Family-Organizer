@@ -3892,6 +3892,11 @@ function syncCompat() {
   }
   // Duplikat-Erkennung des Scanners mit dem frischen State abgleichen
   if (typeof syncScannerAddedNames === 'function') syncScannerAddedNames();
+  /* Die Bilder der Vorschlaege im Hintergrund holen. Sie werden erst beim Tippen
+     gebraucht — und genau dann waeren dreissig Einzelabrufe drei Sekunden
+     Wartezeit. Hier kostet es nichts: die Antwort kommt, waehrend niemand
+     wartet. */
+  bildBedarfVorwaermen(state);
 }
 
 // ── Produktbilder (aus dem ShoppingList-Modul übernommen; Lookup gespiegelt
@@ -3954,8 +3959,57 @@ function _piResolve(key) {
   }
   return null;
 }
+/* Produktbilder, die als BUENDEL gekommen sind: Dateiname -> Data-URI.
+   Gefuellt wird das nur in der Web-App (window.__symdoBildBuendel im Adapter);
+   in der Kachel bleibt es leer und alles laeuft wie bisher ueber die Adresse.
+
+   Der Grund ist gemessen: einzeln geholt schafft der Hook rund zehn Bilder je
+   Sekunde — mehr Parallelitaet aendert daran nichts, die Grenze liegt beim
+   Server. Ein frischer Satz Vorschlaege mit dreissig Bildern brauchte damit
+   drei Sekunden. Liegen sie hier, kostet die Anzeige nichts mehr. */
+window.__imageBlobs = window.__imageBlobs || {};
+const _bildBedarf = new Set();
+let _bildBedarfTimer = null;
+/**
+ * Ein Bild anmelden, das die Oberflaeche gerade zeigen will. Gesammelt und
+ * gebuendelt abgeholt — einzeln waere es genau der Zustand, der weg soll.
+ * Die erste Anzeige laeuft weiter ueber die Einzeladresse: ein Platzhalter, bis
+ * das Buendel da ist, waere schlechter als ein Bild, das eben etwas braucht.
+ */
+function bildBedarfMelden(datei) {
+  if (!datei || typeof window.__symdoBildBuendel !== 'function') return;
+  if (window.__imageBlobs[datei] || _bildBedarf.has(datei)) return;
+  _bildBedarf.add(datei);
+  clearTimeout(_bildBedarfTimer);
+  _bildBedarfTimer = setTimeout(() => {
+    const liste = [..._bildBedarf];
+    _bildBedarf.clear();
+    window.__symdoBildBuendel(liste);
+  }, 200);
+}
+
+/** Vorwaermen: die Bilder der Vorschlaege holen, BEVOR jemand ins Feld tippt. */
+function bildBedarfVorwaermen(state) {
+  if (!state || !Array.isArray(state.suggestions)) return;
+  for (const s of state.suggestions.slice(0, 120)) {
+    const key = String(s && s.name || '').normalize().toLowerCase();
+    if (!key) continue;
+    let file = _piCache.get(key);
+    if (file === undefined) { file = _piResolve(key); _piCache.set(key, file); }
+    if (file) bildBedarfMelden(file);
+  }
+}
+
+/* Das Buendel ist da: einmal neu zeichnen, damit die Data-URIs auch dort
+   greifen, wo schon eine Adresse steht. */
+window.__symdoBilderDa = function () {
+  if (typeof renderAll === 'function') renderAll();
+};
+
 function getProductImageUrl(name, apiImageUrl) {
   if (apiImageUrl) {
+    if (window.__imageBlobs[apiImageUrl]) return window.__imageBlobs[apiImageUrl];
+    bildBedarfMelden(apiImageUrl);
     return window.__imageHookUrl + encodeURIComponent(apiImageUrl);
   }
   if (!window.__imageHookUrl) return null;
@@ -3966,7 +4020,10 @@ function getProductImageUrl(name, apiImageUrl) {
     file = _piResolve(key);
     _piCache.set(key, file);
   }
-  return file ? window.__imageHookUrl + encodeURIComponent(file) : null;
+  if (!file) return null;
+  if (window.__imageBlobs[file]) return window.__imageBlobs[file];
+  bildBedarfMelden(file);
+  return window.__imageHookUrl + encodeURIComponent(file);
 }
 // Bildauflösung wie in der App: Scan-Bild → Name → Notiz → Initial-Fallback
 function resolveItemImage(item) {

@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 trait ApiRouter
 {
+    /* Grenzen des Bild-Buendels (siehe HandleAssetBundle). 60 Dateien decken einen
+       vollen Satz Vorschlaege ab; 600 kB bleiben mit Abstand unter der
+       Ausgabegrenze eines Symcon-Skripts, die im Auslieferungszustand bei 1 MB
+       liegt und bei Ueberschreitung die Antwort ERSETZT statt zu melden. */
+    private const ASSET_BUNDLE_MAX_FILES = 60;
+    private const ASSET_BUNDLE_MAX_BYTES = 600000;
+
     private function HandleApiRequest(): void
     {
         $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
@@ -259,6 +266,10 @@ trait ApiRouter
                 // Aenderung neu, obwohl sie sich fast nie aendert.
                 if ($method === 'GET' && ($route[2] ?? '') === 'index') {
                     $this->HandleAssetIndex();
+                    return;
+                }
+                if ($method === 'GET' && ($route[2] ?? '') === 'bundle') {
+                    $this->HandleAssetBundle();
                     return;
                 }
                 if ($method === 'GET') {
@@ -762,6 +773,82 @@ trait ApiRouter
             return;
         }
         $this->SendJson(['ok' => true] + $data);
+    }
+
+    /** Der Medientyp einer Bilddatei — Grundlage ist die Endung, nicht der Inhalt. */
+    private function AssetMimeType(string $path): string
+    {
+        $map = [
+            'png'  => 'image/png',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'svg'  => 'image/svg+xml',
+        ];
+        return $map[strtolower(pathinfo($path, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+    }
+
+    /**
+     * Viele Produktbilder in EINER Antwort, als Data-URIs.
+     *
+     * Der Grund ist gemessen: einzeln geholt schafft der Hook rund zehn Bilder je
+     * Sekunde, und mehr Parallelitaet aendert daran nichts — die Grenze liegt beim
+     * Server, nicht beim Netz. Ein frischer Satz Vorschlaege mit dreissig Bildern
+     * brauchte damit rund drei Sekunden. Als Buendel ist es eine Anfrage.
+     *
+     * Zwei Grenzen, beide noetig: die Zahl der Dateien und die Menge der Bytes. Die
+     * Ausgabe eines Symcon-Skripts ist begrenzt (ScriptOutputBufferLimit, im
+     * Auslieferungszustand 1 MB), und wird die Grenze ueberschritten, ERSETZT
+     * Symcon die Antwort — der Client bekaeme keinen Fehler, sondern etwas
+     * anderes. Was nicht mehr hineinpasst, bleibt deshalb weg; der Client sieht
+     * am fehlenden Schluessel, dass er nachfragen muss.
+     */
+    private function HandleAssetBundle(): void
+    {
+        $base = realpath(dirname(__DIR__, 2) . '/ShoppingList/assets');
+        $roh  = (string)($_GET['f'] ?? '');
+        if ($base === false || trim($roh) === '') {
+            $this->SendApiError('asset_not_found', 'Asset not found', 404);
+            return;
+        }
+        $namen = [];
+        foreach (explode(',', $roh) as $eintrag) {
+            $name = trim(rawurldecode($eintrag));
+            if ($name !== '' && !in_array($name, $namen, true)) {
+                $namen[] = $name;
+            }
+        }
+        $namen = array_slice($namen, 0, self::ASSET_BUNDLE_MAX_FILES);
+
+        $bilder = [];
+        $bytes  = 0;
+        foreach ($namen as $name) {
+            $path = realpath($base . '/' . $name);
+            if ($path === false || !str_starts_with($path, $base . DIRECTORY_SEPARATOR) || is_dir($path)) {
+                continue;
+            }
+            $inhalt = @file_get_contents($path);
+            if ($inhalt === false) {
+                continue;
+            }
+            $b64 = base64_encode($inhalt);
+            // Das erste Bild kommt immer mit: eine leere Antwort waere schlechter
+            // als eine zu grosse, und ein einzelnes Bild sprengt keine Grenze.
+            if ($bilder !== [] && $bytes + strlen($b64) > self::ASSET_BUNDLE_MAX_BYTES) {
+                break;
+            }
+            $bytes += strlen($b64);
+            $bilder[$name] = 'data:' . $this->AssetMimeType($path) . ';base64,' . $b64;
+        }
+
+        /* Der Client sortiert die Namen, dieselbe Menge ergibt also dieselbe
+           Adresse — und die darf lange gelten: die Dateien aendern sich nur mit
+           einer neuen Asset-Version, und die steht mit in der Adresse. */
+        $this->SendJson([
+            'ok'     => true,
+            'images' => $bilder === [] ? new \stdClass() : $bilder,
+        ], 200, 'private, max-age=2592000');
     }
 
     private function HandleAsset(array $segments): void

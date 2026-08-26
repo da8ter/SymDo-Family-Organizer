@@ -560,6 +560,53 @@
       });
   }
 
+  /* Bild-Buendel: viele Produktbilder in EINER Anfrage.
+
+     Gemessen am laufenden Gateway schafft der Hook einzeln rund zehn Bilder je
+     Sekunde, und ab sechs gleichzeitigen Anfragen bringt mehr Parallelitaet
+     nichts mehr — die Grenze liegt beim Server, nicht beim Netz. Ein frischer
+     Satz Vorschlaege mit dreissig Bildern kostete damit drei Sekunden.
+
+     Die Namen werden SORTIERT in die Adresse geschrieben: dieselbe Menge ergibt
+     so dieselbe Adresse, unabhaengig davon, in welcher Reihenfolge die
+     Oberflaeche sie angemeldet hat — sonst waere jeder Abruf ein neuer
+     Cache-Eintrag und die dreissig Tage waeren wertlos. */
+  window.__imageBlobs = window.__imageBlobs || {};
+  var buendelAngefragt = {};
+  var buendelVersion = 0;
+
+  window.__symdoBildBuendel = function (dateien) {
+    var offen = [];
+    (dateien || []).forEach(function (d) {
+      var name = String(d || '');
+      if (name === '' || window.__imageBlobs[name] || buendelAngefragt[name]) { return; }
+      buendelAngefragt[name] = true;
+      offen.push(name);
+    });
+    if (offen.length === 0) { return Promise.resolve(); }
+    offen.sort();
+    var stapel = [];
+    for (var i = 0; i < offen.length; i += 60) { stapel.push(offen.slice(i, i + 60)); }
+    return Promise.all(stapel.map(function (teil) {
+      return apiGet('/assets/bundle?v=' + encodeURIComponent(String(buendelVersion))
+                    + '&f=' + teil.map(encodeURIComponent).join(','))
+        .then(function (r) {
+          if (r && r.ok === true && r.images) {
+            Object.keys(r.images).forEach(function (k) { window.__imageBlobs[k] = r.images[k]; });
+          }
+          /* Was NICHT zurueckkam, hat die Byte-Grenze des Buendels gerissen. Die
+             Sperre faellt, damit es beim naechsten Bedarf erneut mitkommt —
+             sonst waere die Datei fuer die ganze Sitzung verloren. */
+          teil.forEach(function (n) { if (!window.__imageBlobs[n]) { delete buendelAngefragt[n]; } });
+        })
+        .catch(function () {
+          teil.forEach(function (n) { delete buendelAngefragt[n]; });
+        });
+    })).then(function () {
+      if (typeof window.__symdoBilderDa === 'function') { window.__symdoBilderDa(); }
+    });
+  };
+
   // ---- Aggregation: discovery + per-Instanz-state -> Kachel-'state' ------------
   function loadFullState() {
     return apiGet('/discovery').then(function (disc) {
@@ -585,8 +632,9 @@
         // nach dem ersten Bild waere ein kompletter Neuaufbau der Liste (sichtbar
         // als Flackern aller Produktbilder, siehe requestAction/Call).
         var einkauf = visible.filter(function (i) { return i.kind === 'shopping'; });
+        buendelVersion = (disc.server && disc.server.assetsVersion) || 0;
         return Promise.all([
-          ladeBilder((disc.server && disc.server.assetsVersion) || 0),
+          ladeBilder(buendelVersion),
           Promise.all(einkauf.map(function (i) { return ladeVorschlaege(i.id); }))
         ]).then(function (zwei) { return { results: results, index: zwei[0] }; });
       }).then(function (paket) {
