@@ -183,9 +183,16 @@ trait CalendarBridge
             }
             $start = (int)($eintrag['start'] ?? 0);
             // Aufgeraeumt wird nach dem Termin, nicht nach der Erinnerung — sonst
-            // waechst die Liste bei abgeschalteter Zustellung endlos.
+            // waechst die Liste bei abgeschalteter Zustellung endlos. Gehoert der
+            // Eintrag zu einer Serie, wandert er stattdessen auf das naechste
+            // Vorkommen weiter; verworfen wird er erst, wenn die Serie zu Ende ist.
             if ($start > 0 && $jetzt > $start + 86400) {
-                unset($liste[$schluessel]);
+                $weiter = $this->CalReminderAdvance($eintrag, $jetzt);
+                if ($weiter === null) {
+                    unset($liste[$schluessel]);
+                } else {
+                    $liste[$schluessel] = $weiter;
+                }
                 $geaendert = true;
                 continue;
             }
@@ -229,6 +236,65 @@ trait CalendarBridge
             } catch (Throwable $e) {
             }
         }
+    }
+
+    /**
+     * Den Erinnerungs-Eintrag einer Serie auf das naechste Vorkommen setzen, das
+     * noch bevorsteht. Null heisst: die Serie ist zu Ende, der Eintrag darf weg.
+     *
+     * Gerechnet wird auf der ORTSZEIT (strtotime mit „+7 days" behaelt die Uhrzeit
+     * ueber die Zeitumstellung). Monatlich wird auf die Laenge des Zielmonats
+     * begrenzt — sonst wuerde aus dem 31. Januar der 3. Maerz.
+     *
+     * @param array<string, mixed> $eintrag
+     * @return array<string, mixed>|null
+     */
+    private function CalReminderAdvance(array $eintrag, int $jetzt): ?array
+    {
+        $serie = $eintrag['series'] ?? null;
+        if (!is_array($serie)) {
+            return null;
+        }
+        $freq  = (string)($serie['freq'] ?? '');
+        $bis   = trim((string)($serie['until'] ?? ''));
+        $rest  = array_key_exists('left', $serie) && $serie['left'] !== null ? (int)$serie['left'] : null;
+        $start = (int)($eintrag['start'] ?? 0);
+        if ($start <= 0 || !in_array($freq, ['weekly', 'biweekly', 'monthly'], true)) {
+            return null;
+        }
+
+        // Ein Deckel gegen eine Regel, die nie in die Zukunft laeuft: lieber den
+        // Eintrag verlieren als den Minutentimer in einer Endlosschleife.
+        for ($runde = 0; $runde < 500; $runde++) {
+            if ($rest !== null && $rest <= 0) {
+                return null;
+            }
+            if ($freq === 'monthly') {
+                $tag     = (int)date('j', $start);
+                $monat   = (int)date('n', $start) + 1;
+                $jahr    = (int)date('Y', $start) + intdiv($monat - 1, 12);
+                $monat   = (($monat - 1) % 12) + 1;
+                $letzter = (int)date('t', (int)mktime(12, 0, 0, $monat, 1, $jahr));
+                $start   = (int)mktime((int)date('H', $start), (int)date('i', $start), 0,
+                                       $monat, min($tag, $letzter), $jahr);
+            } else {
+                $start = (int)strtotime($freq === 'biweekly' ? '+14 days' : '+7 days', $start);
+            }
+            if ($rest !== null) {
+                $rest--;
+            }
+            if ($bis !== '' && date('Y-m-d', $start) > $bis) {
+                return null;
+            }
+            if ($jetzt <= $start + 86400) {
+                $eintrag['start'] = $start;
+                // Wieder scharf: das naechste Vorkommen hat noch nicht gemeldet.
+                $eintrag['sent'] = false;
+                $eintrag['series']['left'] = $rest;
+                return $eintrag;
+            }
+        }
+        return null;
     }
 
     private function CalLeadText(int $sekunden): string
@@ -364,6 +430,12 @@ trait CalendarBridge
                 // die Instanz-Statusabfrage meldet false, obwohl der Schreibzugriff
                 // geht — massgeblich ist das Flag AM TERMIN-Datensatz (am 18.08.2026
                 // live gemessen). Siehe CalNormalize.
+                /* Darf dieser Kalender ECHTE Serien anlegen? Bis Build 750 legten
+                   wir aus einer Reihe bis zu 60 Einzeltermine an, weil wir den
+                   falschen Schluessel geprueft hatten (`recurrenceRule` statt
+                   `recurrence`). Wo der Anbieter es kann, entsteht jetzt EINE
+                   Serie; wo nicht, bleibt der alte Weg. */
+                'canCreateRecurrence' => (bool)($status['canCreateRecurrence'] ?? false),
                 'count'     => (int)($status['eventCount'] ?? 0),
                 'today'     => (int)($status['todayEventCount'] ?? 0),
                 'lastSync'  => (int)($status['lastSynchronization'] ?? 0),
@@ -711,7 +783,7 @@ trait CalendarBridge
      * @param array<string, mixed> $kalender Zeile aus CalCalendars
      * @return array<string, mixed>
      */
-    private function CalCreateEventChecked(int $calendarID, array $daten, array $kalender): array
+    private function CalCreateEventChecked(int $calendarID, array $daten, array $kalender, array $zusatz = []): array
     {
         $fehler = static fn(string $code, string $text): array =>
             ['ok' => false, 'error' => ['code' => $code, 'message' => $text]];
@@ -720,7 +792,9 @@ trait CalendarBridge
         if (($geprueft['ok'] ?? false) !== true) {
             return $fehler((string)$geprueft['code'], (string)$geprueft['message']);
         }
-        $ereignis = $geprueft['fields'];
+        // $zusatz traegt Felder, die nicht aus der Oberflaeche kommen, sondern hier
+        // errechnet werden — heute die Wiederholungsregel einer echten Serie.
+        $ereignis = $zusatz === [] ? $geprueft['fields'] : array_merge($geprueft['fields'], $zusatz);
         $titel    = (string)$ereignis['summary'];
         $ganztags = (bool)$ereignis['allDay'];
         $start    = (string)$ereignis['start'];
@@ -906,6 +980,16 @@ trait CalendarBridge
         if (($geprueft['ok'] ?? false) !== true) {
             return ['ok' => false, 'error' => ['code' => (string)$geprueft['code'], 'message' => (string)$geprueft['message']]];
         }
+        /* Der kurze Weg: EINE echte Serie statt vieler Einzeltermine. Moeglich,
+           seit klar ist, dass OpenCalendar den Schluessel `recurrence` liest — wir
+           hatten `recurrenceRule` geprueft, den es nirgends anfasst, und daraus
+           geschlossen, es koenne keine Serien anlegen. Der Unterschied ist nicht
+           kosmetisch: ein Schreibzugriff statt sechzig, eine Serie, die sich am
+           Stueck aendern und loeschen laesst, und kein Deckel. */
+        if (($wache['calendar']['canCreateRecurrence'] ?? false) === true) {
+            return $this->CalCreateRealSeries($calendarID, $daten, $reihe, $wache['calendar'], $geprueft);
+        }
+
         $start = (string)$geprueft['fields']['start'];
         $reihenPlan = $this->CalExpandSeries(substr($start, 0, 10), $reihe);
         $tage = $reihenPlan['days'];
@@ -965,6 +1049,85 @@ trait CalendarBridge
      *
      * @return array{ok: bool, code?: string, message?: string, calendar?: array<string, mixed>}
      */
+    /**
+     * Eine echte Serie: ein Termin, eine Wiederholungsregel.
+     *
+     * @param array<string, mixed> $daten     Eingabe der Oberflaeche
+     * @param array<string, mixed> $reihe     Regel aus CalSeriesRule
+     * @param array<string, mixed> $kalender  Zeile aus CalCalendars
+     * @param array<string, mixed> $geprueft  Ergebnis von CalInputFields
+     * @return array<string, mixed>
+     */
+    private function CalCreateRealSeries(int $calendarID, array $daten, array $reihe,
+                                         array $kalender, array $geprueft): array
+    {
+        $antwort = $this->CalCreateEventChecked($calendarID, $daten, $kalender, [
+            'recurrence' => $this->CalRecurrenceFields($reihe),
+        ]);
+        if (($antwort['ok'] ?? false) !== true) {
+            return $antwort;
+        }
+        $this->LogMessage(sprintf(
+            'SymDo: Serie „%s" in %s angelegt (%s)',
+            (string)$geprueft['fields']['summary'],
+            (string)$kalender['name'],
+            $this->CalSeriesLog($reihe)
+        ), KL_NOTIFY);
+
+        return [
+            'ok'      => true,
+            'created' => 1,
+            // Die Oberflaeche sagt damit „Serie angelegt" statt „1 Termin
+            // hinzugefuegt" — es ist ein anderes Ergebnis.
+            'series'  => true,
+            'event'   => $antwort['event'] ?? null,
+        ];
+    }
+
+    /**
+     * Unsere Regel in die Form, die OpenCalendar erwartet.
+     *
+     * Die Wochentage bleiben leer: fehlen sie, nimmt OpenCalendar den Wochentag des
+     * Beginns — genau das, was eine Reihe „ab diesem Termin" meint.
+     *
+     * @param array<string, mixed> $reihe
+     * @return array<string, mixed>
+     */
+    private function CalRecurrenceFields(array $reihe): array
+    {
+        $freq = (string)($reihe['freq'] ?? '');
+        $regel = [
+            'frequency' => $freq === 'monthly' ? 'MONTHLY' : 'WEEKLY',
+            // Vierzehntaegig ist woechentlich mit Schrittweite zwei — eine eigene
+            // Frequenz dafuer kennt weder RFC 5545 noch OpenCalendar.
+            'interval'  => $freq === 'biweekly' ? 2 : 1,
+        ];
+        $anzahl = (int)($reihe['count'] ?? 0);
+        if ($anzahl > 1) {
+            $regel['endMode'] = 'count';
+            $regel['count']   = $anzahl;
+        } elseif (trim((string)($reihe['until'] ?? '')) !== '') {
+            $regel['endMode'] = 'until';
+            $regel['until']   = (string)$reihe['until'];
+        } else {
+            $regel['endMode'] = 'never';
+        }
+        return $regel;
+    }
+
+    /** Kurzform der Regel fuers Protokoll. */
+    private function CalSeriesLog(array $reihe): string
+    {
+        $takt = ['weekly' => 'woechentlich', 'biweekly' => 'zweiwoechentlich',
+                 'monthly' => 'monatlich'][(string)($reihe['freq'] ?? '')] ?? '?';
+        if ((int)($reihe['count'] ?? 0) > 1) {
+            return $takt . ', ' . (int)$reihe['count'] . 'x';
+        }
+        return trim((string)($reihe['until'] ?? '')) !== ''
+            ? $takt . ', bis ' . (string)$reihe['until']
+            : $takt . ', ohne Ende';
+    }
+
     private function CalWritableOne(int $calendarID, string $benoetigt): array
     {
         $fehler = static fn(string $code, string $text): array => ['ok' => false, 'code' => $code, 'message' => $text];
@@ -1438,6 +1601,21 @@ trait CalendarBridge
             }
             return;
         }
+        /* Bei einer echten Serie gibt es nur EINEN Termin und damit nur EINEN
+           Eintrag — die Erinnerung muss deshalb weiterwandern statt nach dem ersten
+           Vorkommen zu verfallen. Frueher entstanden bis zu 60 Eintraege, einer je
+           Einzeltermin; das erledigte sich von selbst und faellt jetzt weg.
+           Nennt die Eingabe keine Regel (z. B. beim Aendern eines Termins), bleibt
+           die bisherige stehen: sonst verlernte eine Serie ihr Weiterwandern,
+           sobald jemand den Titel aendert. */
+        $regel = $this->CalSeriesRule($daten['recurrence'] ?? null);
+        $serie = $regel !== null
+            ? ['freq'  => (string)$regel['freq'],
+               'until' => (string)($regel['until'] ?? ''),
+               // Verbleibende Vorkommen NACH dem ersten; null = ohne Ende.
+               'left'  => isset($regel['count']) ? max(0, (int)$regel['count'] - 1) : null]
+            : ($erinnerungen[$schluessel]['series'] ?? null);
+
         $erinnerungen[$schluessel] = [
             // „sent" bewusst zurueck auf false: ein verschobener Termin soll erneut
             // melden, auch wenn die alte Erinnerung schon raus war.
@@ -1446,6 +1624,9 @@ trait CalendarBridge
             'title' => $titel,
             'sent'  => false,
         ];
+        if (is_array($serie)) {
+            $erinnerungen[$schluessel]['series'] = $serie;
+        }
         if ($this->CalWriteStore('CalReminders', $erinnerungen, self::CAL_REMINDERS_MAX)) {
             try {
                 $this->SetTimerInterval('CalNotify', 60000);

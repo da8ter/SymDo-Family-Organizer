@@ -585,7 +585,8 @@
             "Change which appointments?": "Was soll geändert werden?",
             "Delete the whole series?": "Die ganze Serie löschen?",
             "This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender lässt das so nicht zu — bitte in der Kalender-App löschen.",
-            "This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender lässt das so nicht zu — bitte in der Kalender-App bearbeiten."
+            "This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender lässt das so nicht zu — bitte in der Kalender-App bearbeiten.",
+            "Series created": "Serie angelegt"
         },
         "en": {
             "ToDo List": "ToDo List",

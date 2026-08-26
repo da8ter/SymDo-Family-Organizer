@@ -3163,8 +3163,9 @@ html[data-symdo-theme="dark"] .member-bar {
       <div class="form-row" id="ceEndRow"><label id="calEditEndLabel"></label>
         <input id="ceEnd" type="datetime-local" /></div>
       <!-- Reihe aus einem erkannten Kurs: nur Anzeige. Der Takt kommt aus der
-           Analyse, die Einzeltermine rechnet das Gateway aus (CalExpandSeries) —
-           hier steht, was das Speichern anlegen wird. -->
+           Analyse; daraus legt das Gateway eine echte Serie an, wo der Kalender
+           das kann, sonst einzelne Termine. Hier steht der Takt, damit vor dem
+           Speichern klar ist, was entsteht. -->
       <div class="form-row" id="ceSeriesRow" style="display:none;">
         <label id="calEditSeriesLabel"></label>
         <div id="ceSeries" class="cal-series-note"></div>
@@ -8454,6 +8455,10 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
       // Nur-bis-Reihe am 60er-Deckel gekappt: alles Geplante ist da, aber das
       // Bis-Datum haette mehr ergeben — das gehoert gesagt.
       showToast(translate('The series was capped at %1 appointments.').replace('%1', String(parseInt(j.capped) || 0)));
+    } else if (j.series === true) {
+      // Eine echte Serie ist EIN Eintrag im Kalender, kein Stapel Einzeltermine —
+      // „1 Termin hinzugefuegt" waere die falsche Auskunft.
+      showToast(translate('Series created'));
     } else if (angelegt > 1) {
       showToast(translate('%1 appointments added').replace('%1', String(angelegt)));
     } else {

@@ -296,6 +296,7 @@
             "monthly": "monatlich",
             "%1 appointments": "%1 Termine",
             "%1 appointments added": "%1 Termine hinzugefügt",
+            "Series created": "Serie angelegt",
             "Only %1 of %2 appointments were created.": "Es wurden nur %1 von %2 Terminen angelegt.",
             "From: %1": "Von: %1",
             "This appointment is part of a series. This calendar does not allow editing a single occurrence — please edit it in your calendar app.": "Dieser Termin gehört zu einer Serie. Dieser Kalender erlaubt es nicht, ein einzelnes Vorkommen zu ändern — bitte im Kalender-Programm bearbeiten.",
