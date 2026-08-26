@@ -561,7 +561,7 @@ trait ApiRouter
             http_response_code(304);
             return;
         }
-        $this->SendJson(['ok' => true, 'suggestions' => $liste]);
+        $this->SendJson(['ok' => true, 'suggestions' => $liste], 200, 'private, no-cache');
     }
 
     /**
@@ -601,13 +601,12 @@ trait ApiRouter
             http_response_code(304);
             return;
         }
-        header('Cache-Control: private, max-age=2592000');
         $this->SendJson([
             'ok'      => true,
             'version' => $version,
             'images'  => $bilder === [] ? new \stdClass() : $bilder,
             'brands'  => $marken === [] ? new \stdClass() : $marken,
-        ]);
+        ], 200, 'private, max-age=2592000');
     }
 
     private function HandleActions(int $id, string $kind): void
@@ -1029,11 +1028,20 @@ trait ApiRouter
         return is_array($data) ? $data : [];
     }
 
-    private function SendJson(array $payload, int $status = 200): void
+    /**
+     * @param string $cacheControl Vorgabe `no-store`: Zustaende und Auskuenfte
+     *   aendern sich staendig. Wer laenger gelten will, sagt es HIER — bis hierher
+     *   setzte diese Methode ihr `no-store` bedingungslos, und weil PHPs header()
+     *   ersetzt statt zu ergaenzen, ueberschrieb sie stillschweigend jede Vorgabe,
+     *   die ein Handler vorher gesetzt hatte. Die dreissig Tage der Bildzuordnung
+     *   und die Revalidierung der Vorschlaege gab es deshalb nie: beide gingen als
+     *   `no-store` hinaus und wurden bei JEDEM Start voll uebertragen.
+     */
+    private function SendJson(array $payload, int $status = 200, string $cacheControl = 'no-store'): void
     {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
-        header('Cache-Control: no-store');
+        header('Cache-Control: ' . $cacheControl);
         /* JSON_INVALID_UTF8_SUBSTITUTE: ein einziges kaputtes Byte irgendwo in der
            Antwort — ein Produktname aus einer fremden Datenbank, ein Termin aus
            einem alten CalDAV-Server — liesse json_encode sonst `false` zurueckgeben.
