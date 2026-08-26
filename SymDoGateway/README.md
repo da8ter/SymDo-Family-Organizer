@@ -91,7 +91,7 @@ Ohne Symcon Connect lässt sich unter *Lokale HTTPS-Adresse* (`LocalHttpsUrl`) e
 
 **iOS-App:** Unter *iOS App verbinden* auf **Neues Gerät koppeln** klicken und den QR-Code mit der SymDo-App scannen.
 
-**Geräte verwalten:** Unter *Gekoppelte Geräte* stehen alle Geräte mit letzter Aktivität. Ein gesperrtes Gerät verliert den Zugriff sofort und muss neu gekoppelt werden; gesperrte Einträge lassen sich anschließend aufräumen.
+**Geräte verwalten:** Unter *Web-App verbinden → Gekoppelte Geräte* stehen alle Geräte mit letzter Aktivität. Ein gesperrtes Gerät verliert den Zugriff sofort und muss neu gekoppelt werden; gesperrte Einträge lassen sich anschließend aufräumen.
 
 Kopplungscodes werden nur als Hash gespeichert und verfallen nach 10 Minuten.
 

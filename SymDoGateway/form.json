@@ -81,82 +81,82 @@
                     "name": "WebAccessLabel",
                     "caption": "",
                     "visible": false
-                }
-            ]
-        },
-        {
-            "type": "ExpansionPanel",
-            "caption": "Paired devices (iOS app and web app)",
-            "expanded": false,
-            "items": [
-                {
-                    "type": "List",
-                    "name": "PairedDevicesList",
-                    "rowCount": 6,
-                    "add": false,
-                    "delete": false,
-                    "columns": [
-                        {
-                            "caption": "ID",
-                            "name": "deviceId",
-                            "width": "90px"
-                        },
-                        {
-                            "caption": "Name",
-                            "name": "deviceName",
-                            "width": "auto"
-                        },
-                        {
-                            "caption": "Model",
-                            "name": "model",
-                            "width": "140px"
-                        },
-                        {
-                            "caption": "Platform",
-                            "name": "platform",
-                            "width": "100px"
-                        },
-                        {
-                            "caption": "App version",
-                            "name": "appVersion",
-                            "width": "110px"
-                        },
-                        {
-                            "caption": "Paired",
-                            "name": "createdAt",
-                            "width": "140px"
-                        },
-                        {
-                            "caption": "Last seen",
-                            "name": "lastSeenAt",
-                            "width": "140px"
-                        },
-                        {
-                            "name": "push",
-                            "caption": "Notifications",
-                            "width": "130px",
-                            "add": "—"
-                        },
-                        {
-                            "caption": "Status",
-                            "name": "status",
-                            "width": "110px"
-                        }
-                    ],
-                    "values": []
                 },
                 {
-                    "type": "RowLayout",
+                    "type": "ExpansionPanel",
+                    "caption": "Paired devices",
+                    "expanded": false,
                     "items": [
                         {
-                            "type": "Button",
-                            "caption": "Revoke selected device",
-                            "onClick": "TGW_RevokeDevice($id, (string)$PairedDevicesList['deviceId']);"
+                            "type": "List",
+                            "name": "PairedDevicesList",
+                            "rowCount": 6,
+                            "add": false,
+                            "delete": false,
+                            "columns": [
+                                {
+                                    "caption": "ID",
+                                    "name": "deviceId",
+                                    "width": "90px"
+                                },
+                                {
+                                    "caption": "Name",
+                                    "name": "deviceName",
+                                    "width": "auto"
+                                },
+                                {
+                                    "caption": "Model",
+                                    "name": "model",
+                                    "width": "140px"
+                                },
+                                {
+                                    "caption": "Platform",
+                                    "name": "platform",
+                                    "width": "100px"
+                                },
+                                {
+                                    "caption": "App version",
+                                    "name": "appVersion",
+                                    "width": "110px"
+                                },
+                                {
+                                    "caption": "Paired",
+                                    "name": "createdAt",
+                                    "width": "140px"
+                                },
+                                {
+                                    "caption": "Last seen",
+                                    "name": "lastSeenAt",
+                                    "width": "140px"
+                                },
+                                {
+                                    "name": "push",
+                                    "caption": "Notifications",
+                                    "width": "130px",
+                                    "add": "—"
+                                },
+                                {
+                                    "caption": "Status",
+                                    "name": "status",
+                                    "width": "110px"
+                                }
+                            ],
+                            "values": []
                         },
                         {
-                            "type": "Button",
-                            "caption": "Remove revoked entries",
-                            "onClick": "TGW_RemoveRevokedDevices($id);"
+                            "type": "RowLayout",
+                            "items": [
+                                {
+                                    "type": "Button",
+                                    "caption": "Revoke selected device",
+                                    "onClick": "TGW_RevokeDevice($id, (string)$PairedDevicesList['deviceId']);"
+                                },
+                                {
+                                    "type": "Button",
+                                    "caption": "Remove revoked entries",
+                                    "onClick": "TGW_RemoveRevokedDevices($id);"
+                                }
+                            ]
                         }
                     ]
                 }

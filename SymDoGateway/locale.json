@@ -40,7 +40,6 @@
             "Say thanks and support the developer of this module:": "Sag Danke und unterstütze den Entwickler dieses Moduls:",
             "Pairs the SymDo smartphone app with this Symcon system. Devices connect via Symcon Connect using their own access token — no license credentials are stored in the app.": "Koppelt die SymDo Smartphone-App mit diesem Symcon-System. Geräte verbinden sich über Symcon Connect mit einem eigenen Zugriffstoken — es werden keine Lizenz-Zugangsdaten in der App gespeichert.",
             "Pair new device": "Neues Gerät koppeln",
-            "Paired devices (iOS app and web app)": "Gekoppelte Geräte (iOS App und Web-App)",
             "ID": "ID",
             "Name": "Name",
             "Model": "Modell",
@@ -379,7 +378,8 @@
             "Amazon Polly: %d German voices available.": "Amazon Polly: %d deutsche Stimmen verfügbar.",
             "The secret access key looks too short — AWS uses 40 characters (the 20-character value is the access key ID).": "Der geheime Schlüssel sieht zu kurz aus — AWS verwendet 40 Zeichen (der 20 Zeichen lange Wert ist die Zugriffskennung).",
             "The access key ID looks unusual — AWS uses 20 characters.": "Die Zugriffskennung sieht ungewöhnlich aus — AWS verwendet 20 Zeichen.",
-            "Polly engine (wish — a voice that cannot do it speaks with the next best one)": "Polly-Engine (Wunsch — eine Stimme, die sie nicht kann, spricht mit der nächstbesten)"
+            "Polly engine (wish — a voice that cannot do it speaks with the next best one)": "Polly-Engine (Wunsch — eine Stimme, die sie nicht kann, spricht mit der nächstbesten)",
+            "Paired devices": "Gekoppelte Geräte"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
