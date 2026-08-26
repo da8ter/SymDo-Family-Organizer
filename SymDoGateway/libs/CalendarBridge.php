@@ -132,6 +132,12 @@ trait CalendarBridge
         @$this->WriteAttributeString($name, $json);
         try {
             if ((string)@$this->ReadAttributeString($name) === $json) {
+                /* Signal fuer die anderen Geraete. ACHTUNG, Reichweite: hier liegen
+                   nur UNSERE Zusaetze (Erinnerungen, Zuordnungen). Die Termine
+                   selbst stehen in OpenCalendar — ein Termin, den jemand dort oder
+                   in einem fremden Kalender anlegt, laeuft nie durch diese Stelle
+                   und kommt weiter nur ueber den Minutentakt im offenen Bereich. */
+                $this->WsPushDirty();
                 return true;
             }
         } catch (Throwable $e) {

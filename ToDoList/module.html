@@ -4263,11 +4263,26 @@ function handleMessage(data) {
       // frischen State neu zeichnen (korrigiert auch verworfene Aktionen)
       if (document.getElementById('favPickOverlay').classList.contains('open')) renderFavPicker();
     }
+  } else if (data.type === 'gatewayDirty') {
+    /* „Irgendetwas im Gateway hat sich geaendert." Der WebSocket-Kanal traegt
+       keine Daten, nur dieses Signal; der Adapter reicht es hier herein.
+
+       Vorher endete es blind: der Empfaenger im Adapter glich ausschliesslich
+       LISTEN-Revisionen ab, und Briefing wie Mailanalyse klingelten mit der
+       Begruendung, die Oberflaechen holten den Text „beim naechsten irgendetwas
+       hat sich geaendert" — was so nicht stimmte. Sie kamen tatsaechlich erst mit
+       dem Minutentakt. */
+    gatewayNachladen();
   } else if (data.type === 'meta') {
     store.instances = data.instances || [];
     store.hiddenIDs = data.hiddenIDs || [];
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.tabs = normalizeTabs(data.tabs);
+    /* Mitglieder NUR wenn welche mitkommen. Sie fehlten hier ganz: ein neu
+       angelegtes Familienmitglied erreichte eine offene Oberflaeche nie. Der
+       Riegel ist noetig, weil ein Meta-Push ohne users sonst die vorhandenen
+       loeschte — und den gibt es (die Kachel schickte lange keine). */
+    if (Array.isArray(data.users)) { store.users = data.users; }
     applyTabVisibility();
     for (const key of Object.keys(store.states)) {
       const inst = store.instances.find(i => String(i.id) === key);
@@ -4315,6 +4330,12 @@ function setTab(tab) {
     stundenplanTag = 0;
     stundenplanLegende = false;
   }
+  /* Beim BETRETEN des Kalenders frisch holen. renderAll holt nur bei leerer
+     Liste; ohne das hier saehe man beim Wiederbetreten den Stand von vorhin,
+     auch wenn ein anderes Geraet inzwischen einen Termin angelegt hat.
+     loadCalendarEvents hat seinen eigenen Riegel (calLoading), ein doppelter
+     Aufruf kostet also nichts. */
+  if (tab === 'calendar') { loadCalendarEvents(); }
   for (const t of TABS) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
@@ -5115,6 +5136,12 @@ function renderAll() {
   if (activeTab === 'calendar') {
     // Termine erst beim Betreten holen: der Bereich ist selten offen, und jeder
     // Abruf laeuft ueber mehrere Seiten durch OpenCalendar.
+    //
+    // Beim ERSTEN Betreten. Das Nachziehen danach macht setTab (Wiederbetreten)
+    // und gatewayNachladen (Minutentakt, solange der Bereich offen ist) — mit
+     // dieser Bedingung allein wurde nach dem ersten Laden nie wieder geholt,
+    // auch beim Wiederbetreten nicht, und ein Termin von einem anderen Geraet
+    // erschien nie.
     if (calEvents.length === 0 && !calLoading) loadCalendarEvents();
     renderCalendar();
   }
@@ -5381,6 +5408,17 @@ function gatewayNachladen() {
   loadBriefing();
   loadMailProposals();
   loadTimetable();
+  /* Notizen und Termine ziehen jetzt auch nach. Sie standen bisher in KEINEM
+     Takt: wer sie auf einem anderen Geraet aenderte, sah es hier erst nach dem
+     Neuladen der App. Der Notiz-Abruf ist billig (gemessen 3,7 KB, 1,5 ms) und
+     durch die Revision gegen ueberfluessiges Zeichnen gesichert.
+
+     Die Termine dagegen NUR im offenen Kalender: dieser Abruf arbeitet sich
+     seitenweise durch OpenCalendar, und ihn im Minutentakt fuer einen Bereich zu
+     fahren, den niemand ansieht, waere Verschwendung. Wer ihn ansieht, bekommt
+     ihn frisch. */
+  if (visibleTabs().includes('notes')) { ladeNotizen(); }
+  if (activeTab === 'calendar') { loadCalendarEvents(); }
 }
 
 /* Stundenplan der Kinder. Wie beim Briefing: still nichts, wenn es kein
@@ -9159,6 +9197,11 @@ function ladeNotizen(danach) {
   aiPost('/notes', { action: 'list' }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) { fertig(); return; }
+    /* Unveraendert? Dann NICHTS anfassen. Der Abruf laeuft jetzt im Minutentakt
+       (fremde Geraete), und ein blindes Neusetzen wuerde bei jedem Takt den
+       Bestand ersetzen und neu zeichnen — auch wenn sich nichts getan hat. Die
+       Revision zaehlt serverseitig bei jeder Aenderung hoch (Notes.php). */
+    if (notizenGeladen && (j.rev || 0) === (notizen.rev || 0)) { fertig(); return; }
     notizen = {
       rev: j.rev || 0,
       folders: Array.isArray(j.folders) ? j.folders : [],

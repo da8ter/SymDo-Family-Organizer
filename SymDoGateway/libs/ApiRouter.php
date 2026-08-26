@@ -391,6 +391,11 @@ trait ApiRouter
             'server'       => $this->BuildServerInfo(),
             'capabilities' => ['barcode' => true, 'images' => true, 'websocket' => false],
             'users'        => json_decode($this->GetUsers(), true),
+            /* Die sichtbaren Bereiche gehoeren MIT in die Auskunft. Sie standen
+               bisher nur in window.__SYMDO__, also nur im Seitenaufbau — wer
+               einen Bereich abschaltete, erreichte eine offene Web-App nie. Die
+               Kachel bekam das ueber ihren Meta-Push, die Web-App gar nicht. */
+            'tabs'         => $this->GetWebAppTabs(),
             'instances'    => $instances,
             'theme'        => $theme,
         ]);

@@ -1029,6 +1029,9 @@ class SymDoWebApp extends IPSModuleStrict
             // Muss mit: ein Meta-Push ist der einzige Push nach einer reinen
             // Sichtbarkeits-Änderung, sonst zöge die offene Kachel nicht nach.
             'tabs'            => $this->GetVisibleTabs(),
+            // Und die Mitglieder: ein neu angelegtes Familienmitglied erreichte
+            // eine offene Kachel bisher nie, es kam nur im vollen Zustand mit.
+            'users'           => json_decode($this->GetUsers(), true),
         ]);
     }
 

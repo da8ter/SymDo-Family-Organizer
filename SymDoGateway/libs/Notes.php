@@ -113,6 +113,11 @@ trait Notes
         }
         @$this->WriteAttributeString(self::NOTES_ATTR, $json);
         if ($this->ReadAttributeStringSafe(self::NOTES_ATTR, '') === $json) {
+            /* Die EINZIGE Schreibstelle des Bestands — also der richtige Ort fuer
+               das Signal. Ohne es sah ein anderes Geraet eine neue Notiz erst
+               nach dem Neuladen der App: die Notizen haengen an keiner
+               Listen-Revision und kamen ueber den Revisionsabgleich nie mit. */
+            $this->WsPushDirty();
             return true;
         }
         $this->LogMessage(

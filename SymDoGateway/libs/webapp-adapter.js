@@ -412,6 +412,40 @@
   // Holt die Server-Revisionen und liefert nur die Instanzen nach, deren Revision
   // vom übergebenen Stand abweicht. Gemeinsamer Kern von Poll (CheckRevisions) und
   // Push-Signal — ein Codepfad, damit beide sich nicht auseinanderentwickeln.
+  /* Zuletzt gelieferter Meta-Stand als Fingerabdruck. Der Adapter erzeugte NIE
+     ein `meta` — die Oberflaeche versteht es (module.html), und die Kachel schickt
+     es, aber in der Web-App kam es nicht an. Eine neu angelegte Liste, ein
+     umgeschaltetes „ausblenden", ein abgeschalteter Bereich und ein neues
+     Familienmitglied erreichten eine offene Web-App deshalb nie. */
+  var lastMeta = '';
+
+  function metaAbgleich() {
+    return apiGet('/discovery').then(function (disc) {
+      if (!disc || disc.ok !== true) { return; }
+      var instances = [], hiddenIDs = [];
+      (disc.instances || []).forEach(function (inst) {
+        kindOf[String(inst.id)] = inst.kind;
+        instances.push({ id: inst.id, kind: inst.kind, name: inst.name, hidden: !!inst.hidden });
+        if (inst.hidden) { hiddenIDs.push(inst.id); }
+      });
+      var users = mapUsers(disc.users);
+      var meta = {
+        type: 'meta',
+        instances: instances,
+        hiddenIDs: hiddenIDs,
+        gatewayAvailable: true,
+        tabs: disc.tabs || null,
+        users: users
+      };
+      // Fingerabdruck ohne den Typ: nur bei echter Aenderung liefern, sonst
+      // zeichnete die Oberflaeche bei jedem Takt neu (meta ruft renderAll).
+      var fp = JSON.stringify([instances, hiddenIDs, disc.tabs || null, users]);
+      if (fp === lastMeta) { return; }
+      lastMeta = fp;
+      deliver(meta);
+    }).catch(function () {});
+  }
+
   function syncChanged(clientRevs) {
     return apiGet('/revisions').then(function (rv) {
       var server = (rv && rv.revisions) || {};
@@ -574,6 +608,17 @@
     }
   };
 
+  /* Eigener Minutentakt fuer den Meta-Abgleich. Die Klingel allein genuegt nicht:
+     eine neu ANGELEGTE Instanz entsteht in Symcon, ohne dass sich eine
+     Stat-Variable aendert — es klingelt also nichts. Die Kachel merkt es ueber
+     RescanIfChanged in ihrem eigenen Poll; hier braucht es denselben Weg.
+     60 s und nicht 15: /discovery kostet gemessen 1,9 KB und 6,5 ms, und eine
+     neue Liste ist selten. Der 15-s-Revisionspoll bleibt unangetastet. */
+  window.setInterval(function () {
+    if (document.visibilityState !== 'visible') { return; }
+    metaAbgleich();
+  }, 60000);
+
   // ---- Push-Kanal: WebSocket auf dem Gateway-Hook ------------------------------
   // Symcon zieht auf einem Hook-Pfad selbst einen WebSocket hoch (WebHook Control
   // ab 5.2) und sendet darüber per WC_PushMessage. Wir empfangen nur ein
@@ -614,6 +659,12 @@
           // ein zusätzlicher Abgleich wäre nur ein zweiter Neuaufbau der Liste.
           if (ownActionPending()) { return; }
           syncChanged(lastRev);
+          /* Und die Gateway-Sachen mit: Briefing, Mailanalyse, Stundenplan,
+             Notizen, Termine. Sie haengen nicht an Listen-Revisionen, kamen also
+             ueber syncChanged nie mit — die Klingel aus Briefing.php und
+             MailScan.php lief damit ins Leere. */
+          deliver({ type: 'gatewayDirty' });
+          metaAbgleich();
         }, 150);
       };
       sock.onclose = function () { sock = null; retry(); };
