@@ -254,6 +254,13 @@ trait ApiRouter
                 }
                 break;
             case 'assets':
+                // Die Bildzuordnung als EIGENE Auskunft. Sie steckte im Zustand der
+                // Einkaufsliste und machte dort 103 von 166 kB aus — bei jeder
+                // Aenderung neu, obwohl sie sich fast nie aendert.
+                if ($method === 'GET' && ($route[2] ?? '') === 'index') {
+                    $this->HandleAssetIndex();
+                    return;
+                }
                 if ($method === 'GET') {
                     $this->HandleAsset(array_slice($route, 2));
                     return;
@@ -456,12 +463,95 @@ trait ApiRouter
             return;
         }
         $revision = (int)($data['revision'] ?? 0);
-        header('ETag: "' . $revision . '"');
-        if ($this->GetIfNoneMatchRevision() === $revision) {
+        $schmal = $this->WantsSlimState();
+        /* Der ETag muss die Fassung mit unterscheiden. Sonst bekaeme ein Client,
+           der einmal den vollen Zustand geholt hat und danach den schmalen
+           anfordert, ein 304 auf einen Rumpf, der nicht dazu passt — und
+           umgekehrt fehlten ihm die Bilder. */
+        header('ETag: "' . $revision . ($schmal ? '-s' : '') . '"');
+        if ($this->GetIfNoneMatchRevision($schmal) === $revision) {
             http_response_code(304);
             return;
         }
-        $this->SendJson(['ok' => true] + $data);
+        $this->SendJson(['ok' => true] + $this->SlimState($data));
+    }
+
+    /**
+     * Will der Client den Zustand ohne die Bildzuordnung? `?images=0`.
+     *
+     * Ausdruecklich als Wunsch des Clients und nicht als neue Vorgabe: eine
+     * ausgelieferte App, die `availableImages` im Zustand erwartet, wuerde sonst
+     * eine leere Einkaufsliste zeigen. Wer fragt, bekommt es schmal.
+     */
+    private function WantsSlimState(): bool
+    {
+        return isset($_GET['images']) && (string)$_GET['images'] === '0';
+    }
+
+    /**
+     * Die Bildzuordnung aus dem Zustand nehmen, wenn der Client sie nicht will.
+     * Sie steht dann unter GET /assets/index — einmal, statt bei jeder Aenderung.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function SlimState(array $data): array
+    {
+        if (!$this->WantsSlimState() || !is_array($data['state'] ?? null)) {
+            return $data;
+        }
+        unset($data['state']['availableImages'], $data['state']['availableBrands']);
+        // Der Client soll wissen, dass hier etwas fehlt UND woran er merkt, ob
+        // seine Kopie noch stimmt.
+        $data['imagesOmitted'] = true;
+        $data['assetsVersion'] = $this->GetAssetsVersion();
+        return $data;
+    }
+
+    /**
+     * Die Bildzuordnung aller Einkaufslisten: Datei je Artikelname, dazu die
+     * Markenliste. Genommen wird der Zustand der ersten Einkaufsliste — die
+     * Zuordnung ist modulweit dieselbe (so hat es auch der Web-Adapter bisher aus
+     * dem ersten Zustand gehoben).
+     */
+    private function HandleAssetIndex(): void
+    {
+        $bilder = [];
+        $marken = [];
+        foreach ($this->GetListInstances() as $instance) {
+            if ((string)$instance['kind'] !== 'shopping') {
+                continue;
+            }
+            $data = json_decode((string)$this->CallInstanceGetAppState((int)$instance['id'], 'shopping'), true);
+            $state = is_array($data['state'] ?? null) ? $data['state'] : [];
+            if ($bilder === [] && is_array($state['availableImages'] ?? null)) {
+                $bilder = $state['availableImages'];
+            }
+            if ($marken === [] && is_array($state['availableBrands'] ?? null)) {
+                $marken = $state['availableBrands'];
+            }
+            if ($bilder !== [] && $marken !== []) {
+                break;
+            }
+        }
+        $version = $this->GetAssetsVersion();
+        /* Der Client haengt die Version an die Adresse (`?v=…`), deshalb darf die
+           Antwort lange gelten: eine neue Version ist eine neue Adresse. Der ETag
+           bleibt trotzdem dabei, damit ein Client ohne Versionsangabe wenigstens
+           revalidieren kann. */
+        $etag = '"' . md5((string)json_encode([$bilder, $marken])) . '"';
+        header('ETag: ' . $etag);
+        if ($this->IfNoneMatchHits($etag)) {
+            http_response_code(304);
+            return;
+        }
+        header('Cache-Control: private, max-age=2592000');
+        $this->SendJson([
+            'ok'      => true,
+            'version' => $version,
+            'images'  => $bilder === [] ? new \stdClass() : $bilder,
+            'brands'  => $marken === [] ? new \stdClass() : $marken,
+        ]);
     }
 
     private function HandleActions(int $id, string $kind): void
@@ -505,7 +595,7 @@ trait ApiRouter
             $data = ['ok' => true, 'replayed' => true] + $data;
             $data['clientActionId'] = $clientActionId;
             header('ETag: "' . (int)($data['revision'] ?? 0) . '"');
-            $this->SendJson($data);
+            $this->SendJson($this->SlimState($data));
             return;
         }
 
@@ -531,7 +621,10 @@ trait ApiRouter
         if (($data['ok'] ?? false) !== true) {
             $status = (($data['error']['code'] ?? '') === 'unknown_action') ? 400 : 422;
         }
-        $this->SendJson($data, $status);
+        /* Auch die Antwort auf eine Aktion traegt den vollen Zustand — und damit
+           bisher die ganze Bildzuordnung. Ein Haken auf der Einkaufsliste kostete
+           so 166 kB, davon 103 kB, die sich nie aendern. */
+        $this->SendJson($this->SlimState($data), $status);
     }
 
     /**
@@ -822,7 +915,7 @@ trait ApiRouter
         return is_string($neu) ? $neu : $json;
     }
 
-    private function GetIfNoneMatchRevision(): ?int
+    private function GetIfNoneMatchRevision(bool $slim = false): ?int
     {
         $raw = trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
         if ($raw === '' && isset($_GET['rev'])) {
@@ -833,7 +926,13 @@ trait ApiRouter
             $raw = substr($raw, 2);
         }
         $raw = trim($raw, " \t\"");
-        if ($raw === '' || !preg_match('/^\d+$/', $raw)) {
+        // „5-s" ist die schmale Fassung der Revision 5. Ein Vergleich ueber die
+        // Zahl allein wuerde beide Fassungen gleichsetzen.
+        $istSchmal = str_ends_with($raw, '-s');
+        if ($istSchmal) {
+            $raw = substr($raw, 0, -2);
+        }
+        if ($raw === '' || !preg_match('/^\d+$/', $raw) || $istSchmal !== $slim) {
             return null;
         }
         return (int)$raw;

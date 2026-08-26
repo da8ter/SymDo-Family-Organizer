@@ -788,10 +788,50 @@ trait AppCore
             '<script src="/icons.js"></script>' . $this->BuildWebHead(),
             $html
         );
-        http_response_code(200);
+        /* Die Seite ist gross (rund 650 kB) und aendert sich nur, wenn das Modul
+           aktualisiert wird oder sich die Konfiguration aendert. Sie war bis hier
+           mit `no-store` ausgeliefert, also bei JEDEM Start vollstaendig neu — ueber
+           Connect der teuerste Posten des Kaltstarts.
+
+           Jetzt `no-cache` mit starkem ETag: der Browser fragt weiter jedes Mal
+           nach (nichts wird stillschweigend alt), bekommt aber im Regelfall ein
+           304 ohne Rumpf. Der ETag laeuft ueber die FERTIG zusammengesetzten Bytes
+           und deckt damit auch den angehaengten Kopf mit — sichtbare Bereiche,
+           KI-Schalter, Uebersetzungen, oeffentlicher Push-Schluessel. Ein Token
+           steht nicht darin; den holt die Seite aus ihrem eigenen Speicher. */
+        $etag = '"' . md5($html) . '"';
         header('Content-Type: text/html; charset=utf-8');
-        header('Cache-Control: no-store');
+        header('Cache-Control: no-cache');
+        header('ETag: ' . $etag);
+        if ($this->IfNoneMatchHits($etag)) {
+            http_response_code(304);
+            return;
+        }
+        http_response_code(200);
         echo $html;
+    }
+
+    /**
+     * Passt der mitgeschickte ETag? Proxys duerfen auf einen schwachen ETag
+     * abschwaechen (`W/"…"`), und ein Client darf mehrere schicken — beides wird
+     * akzeptiert, sonst geht das 304 verloren, um das es hier geht.
+     */
+    private function IfNoneMatchHits(string $etag): bool
+    {
+        $roh = trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+        if ($roh === '') {
+            return false;
+        }
+        foreach (explode(',', $roh) as $kandidat) {
+            $kandidat = trim($kandidat);
+            if (str_starts_with($kandidat, 'W/')) {
+                $kandidat = trim(substr($kandidat, 2));
+            }
+            if ($kandidat === $etag || $kandidat === '*') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

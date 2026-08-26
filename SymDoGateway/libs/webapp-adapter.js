@@ -503,6 +503,29 @@
     });
   }
 
+  /* Die Bildzuordnung (Artikelname -> Dateiname) und die Markenliste.
+     Sie stehen unter /assets/index und gelten dreissig Tage — die Version steckt
+     in der Adresse, eine neue Version ist also eine neue Adresse und der Browser
+     holt sie von selbst. Danach kostet die Zuordnung keinen einzigen Byte mehr.
+
+     Im Speicher gehalten, damit ein erneuter Abruf im selben Sitzungsverlauf
+     nicht einmal den Browser-Cache fragt. */
+  var bildIndex = null;
+  function ladeBilder(version) {
+    if (bildIndex && bildIndex.version === version) { return Promise.resolve(bildIndex); }
+    return apiGet('/assets/index?v=' + encodeURIComponent(String(version || 0)))
+      .then(function (r) {
+        if (!r || r.ok !== true) { throw new Error('asset index failed'); }
+        bildIndex = { version: version, images: r.images || {}, brands: r.brands || {} };
+        return bildIndex;
+      })
+      .catch(function () {
+        // Kein Index? Dann bleibt es bei dem, was die Zustaende mitbringen —
+        // eine Einkaufsliste ohne Bilder ist besser als keine Liste.
+        return { version: version, images: {}, brands: {} };
+      });
+  }
+
   // ---- Aggregation: discovery + per-Instanz-state -> Kachel-'state' ------------
   function loadFullState() {
     return apiGet('/discovery').then(function (disc) {
@@ -517,16 +540,26 @@
         if (inst.hidden) { hiddenIDs.push(inst.id); } else { visible.push(inst); }
       });
       return Promise.all(visible.map(function (inst) {
-        return apiGet('/instances/' + inst.id + '/state')
+        /* `images=0`: die Bildzuordnung kommt getrennt (siehe ladeBilder). Sie
+           machte 103 von 166 kB des Einkaufslisten-Zustands aus — bei jedem Abruf
+           und bei jeder Aktion neu, obwohl sie sich fast nie aendert. */
+        return apiGet('/instances/' + inst.id + '/state?images=0')
           .then(function (s) { return { inst: inst, data: (s && s.ok === true) ? s : null }; })
           .catch(function () { return { inst: inst, data: null }; });
       })).then(function (results) {
-        var states = {}, images = {}, brands = {}, shoppingExtras = {};
+        return ladeBilder((disc.server && disc.server.assetsVersion) || 0)
+          .then(function (index) { return { results: results, index: index }; });
+      }).then(function (paket) {
+        var results = paket.results;
+        // Aus dem Index, nicht mehr aus dem ersten Zustand.
+        var states = {}, images = paket.index.images, brands = paket.index.brands, shoppingExtras = {};
         results.forEach(function (r) {
           if (!r.data) { return; }
           var kind = r.data.kind || r.inst.kind;
           var st = r.data.state || {};
           if (kind === 'shopping') {
+            // Rueckfall fuer den Fall, dass ein Zustand die Zuordnung doch
+            // mitbringt (aeltere Bridge, oder /assets/index nicht erreichbar).
             if (Object.keys(images).length === 0 && st.availableImages && Object.keys(st.availableImages).length) { images = st.availableImages; }
             if (Object.keys(brands).length === 0 && st.availableBrands && Object.keys(st.availableBrands).length) { brands = st.availableBrands; }
             // Produktbilder über den Asset-Endpoint des Gateways (same-origin, Token als
@@ -580,7 +613,7 @@
       // als Flackern aller Produktbilder. Solange ein Call läuft, ignorieren wir
       // die Türklingel; fremde Änderungen kommen weiter sofort durch.
       callsInFlight++;
-      apiPost('/instances/' + id + '/actions', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
+      apiPost('/instances/' + id + '/actions?images=0', { action: d.action, payload: d.payload, clientActionId: uniqueActionId() })
         .then(function (res) {
           var j = res.json || {};
           releaseCall();
