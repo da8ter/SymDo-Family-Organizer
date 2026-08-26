@@ -42,7 +42,7 @@
             "items": [
                 {
                     "type": "Label",
-                    "caption": "Opens the SymDo app as a website over Symcon Connect — no app install needed. Create an access, then scan the QR code with the phone camera; the browser opens the app already paired. The one-time code is valid for 10 minutes; the browser then keeps its own access token."
+                    "caption": "Opens the SymDo app as a website over Symcon Connect — no app store, no installation. Every phone is paired once and then keeps its own access token."
                 },
                 {
                     "type": "ValidationTextBox",
@@ -64,6 +64,10 @@
                     "name": "LocalUrlResult",
                     "caption": "",
                     "visible": false
+                },
+                {
+                    "type": "Label",
+                    "caption": "CONNECTING A PHONE\n1. Click \"Create browser access\". A QR code appears below it, together with the one-time code and the link.\n2. Scan the QR code with the phone camera — the browser opens the web app, already paired. Without a camera: open the link on the phone and type the code on the pairing screen. It accepts the bare code as well as the whole link.\n3. Add it to the home screen: Share → \"Add to Home Screen\". Only from there does the web app run full screen and receive push notifications.\n4. Started from the home screen, it asks for a code once more. It opens its own address and therefore never sees the code from the bookmark, and each surface keeps its own access. Create a second browser access and enter that code — once.\n\nA code is valid for 10 minutes and pairs a single device. Afterwards the browser holds its own token and the code is no longer needed. Should the web app report an expired session later on, create a new browser access here."
                 },
                 {
                     "type": "Button",
