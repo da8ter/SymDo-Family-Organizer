@@ -28,6 +28,7 @@ den Zeilen erscheinen.
 - **Findet die Listen selbst** — alle **SymDo ToDo List**- und **SymDo Shopping List**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
 - **Standard-Mitglied** — wem schnell angelegte Aufgaben gehören und wessen Aufgaben unter „Meine Aufgaben" stehen
+- **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen; zwei Instanzen mit denselben Kindern zeigten jedes Kind doppelt, deshalb eine Zeile je Instanz
 - **Live ohne Neuladen** — die Kachel hängt an den Kennzahlen der Listen und wird bei jeder Änderung nachgezogen, entprellt zu einem Push statt zu dreien
 - **Farben der Visualisierung** — die Kachel meldet die Farben des Skins zurück; App und Web-App übernehmen sie, damit alles gleich aussieht
 - **Briefing abspielen** — `SDWA_PlayBriefing()` gibt das Briefing in einer offenen Kachel als Sprachausgabe wieder
@@ -61,6 +62,7 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 | Kalender | `ShowCalendar` | Termine aus OpenCalendar |
 | Notizen | `ShowNotes` | Ordner und Notizen aus dem Gateway |
 | KI-Eingang | `ShowKi` | Was die KI aus Mails und Dateien gelesen hat |
+| Stundenplan | `TimetableChoice` | Welche Stundenplan-Instanzen die Übersicht zeigt — je Instanz eine Zeile. Ohne Stundenplan-Modul fällt die Liste weg |
 | Bedienelemente | `ShowMemberBar`, `ShowCreateButton`, `ShowSorting`, `ShowFavoriteHeart`, `ShowRowEditButton`, `ShowRowDeleteButton`, `ShowReorderHandle` | Mitglieder-Leiste, Anlegen-Knopf, Sortierung, Favoriten-Herz, Zeilen-Knöpfe, Verschiebe-Griff |
 | Info-Abzeichen | `ShowQuantityBadge`, `ShowRecurrenceBadge`, `ShowDueBadge`, `ShowNotificationBadge`, `ShowPriorityBadge` | Menge, Wiederholung, Fälligkeit, Erinnerung, Priorität |
 
