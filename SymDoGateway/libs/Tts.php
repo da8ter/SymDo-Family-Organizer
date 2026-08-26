@@ -930,8 +930,24 @@ trait Tts
            und nicht auf „ist etwas gesetzt". */
         $ssml = trim($anweisung) !== '' && str_starts_with(ltrim($anweisung), '<');
         $inhalt = $ssml ? $anweisung : $text;
-        if ($ssml && !str_contains($inhalt, '<speak')) {
-            $inhalt = '<speak>' . $inhalt . '</speak>';
+        if ($ssml) {
+            /* Der Text wird EINGESETZT, nicht angehaengt — wie bei Azure: die
+               Anweisung bringt ihre eigene Huelle mit (prosody), und der Text
+               gehoert hinein. Ohne diese Zeile stand `%%TEXT%%` im Markup und Polly
+               las den Platzhalter vor. Maskiert wird dabei, sonst macht ein „&" im
+               Text („Müller & Sohn") das SSML ungueltig und Polly antwortet mit 400
+               statt mit Ton.
+
+               Steht kein Platzhalter drin, wird der Text angehaengt — dann ist die
+               Anweisung eine Huelle ohne Loch, und ohne Text waere die Aufnahme
+               stumm. */
+            $maskiert = htmlspecialchars($text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+            $inhalt = str_contains($inhalt, '%%TEXT%%')
+                ? str_replace('%%TEXT%%', $maskiert, $inhalt)
+                : $inhalt . $maskiert;
+            if (!str_contains($inhalt, '<speak')) {
+                $inhalt = '<speak>' . $inhalt . '</speak>';
+            }
         }
 
         $felder = [

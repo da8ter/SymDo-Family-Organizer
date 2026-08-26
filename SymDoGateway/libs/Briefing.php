@@ -1705,10 +1705,12 @@ trait Briefing
             // NICHT in den OpenAI-Zweig fallen lassen: dort kaeme „shimmer" heraus,
             // und Polly kennt keine Stimme dieses Namens. Leer heisst „die im
             // Anbieter-Feld eingestellte" — TtsRequestPolly setzt sie dann ein.
-            // Der Vortrag kommt als SSML wie bei Azure, denn Polly versteht SSML;
-            // ein englischer Anweisungssatz waere Text, den es VORLESEN wuerde.
+            /* Der Vortrag kommt als SSML — aber als POLLY-SSML. Die Azure-Fassung
+               hier zu nehmen war ein Fehler: sie enthaelt Microsoft-Erweiterungen,
+               und ihren Platzhalter `%%TEXT%%` setzt nur TtsRequestAzure ein. Polly
+               bekam ihn wortwoertlich und LAS „Prozent Prozent TEXT" vor. */
             $stimme    = $this->BriefingPollyVoice();
-            $anweisung = $this->BriefingAzureSsml();
+            $anweisung = $this->BriefingPollySsml();
         } else {
             $stimme    = $this->BriefingVoice();
             $anweisung = $this->BriefingSpeechStyle();
@@ -2098,6 +2100,41 @@ trait Briefing
                 return '<prosody rate="+14%" pitch="+3st">%%TEXT%%</prosody>';
             default:
                 return '<prosody rate="0%">%%TEXT%%</prosody>';
+        }
+    }
+
+    /**
+     * Der Vortrag als SSML fuer Amazon Polly.
+     *
+     * Nicht dasselbe wie fuer Azure, und das ist der Punkt:
+     *  - `mstts:express-as` ist eine Microsoft-Erweiterung. Polly kennt sie nicht
+     *    und wies das ganze Markup zurueck.
+     *  - `pitch` in Halbtoenen („-2st") versteht Polly nicht, und die neuronale
+     *    Engine ignoriert `pitch` ohnehin. Es steht deshalb gar nicht drin — eine
+     *    Angabe, die nichts tut, waere nur eine Behauptung.
+     * Uebrig bleiben Tempo und Lautstaerke; beides wirkt bei Polly wirklich.
+     */
+    private function BriefingPollySsml(): string
+    {
+        switch ((string)$this->BriefingProp('BriefingTone', 'neutral')) {
+            case 'formal':
+                return '<prosody rate="-8%">%%TEXT%%</prosody>';
+            case 'butler':
+                return '<prosody rate="-12%">%%TEXT%%</prosody>';
+            case 'funny':
+                return '<prosody rate="+6%">%%TEXT%%</prosody>';
+            case 'drill':
+                return '<prosody rate="+18%" volume="+6dB">%%TEXT%%</prosody>';
+            case 'coach':
+                return '<prosody rate="+10%" volume="+3dB">%%TEXT%%</prosody>';
+            case 'jammerlappen':
+                return '<prosody rate="-18%" volume="-3dB">%%TEXT%%</prosody>';
+            case 'digga':
+                return '<prosody rate="+14%">%%TEXT%%</prosody>';
+            default:
+                // Ohne Abweichung gar kein Markup: ein `rate="0%"` waere Aufwand
+                // ohne Wirkung, und Polly spricht den schlichten Text sauber.
+                return '';
         }
     }
 
