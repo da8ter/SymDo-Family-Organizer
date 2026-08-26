@@ -58,7 +58,19 @@ html, body { height: 100%; }
    Flaechen heraus (gemessen am Klapp-Chip: sah wie ein Hover-Effekt aus, war
    aber die Beruehrung). Die Oberflaeche gibt ihre Rueckmeldung selbst — ueber
    :active-Regeln und die Animationen. Vererbt sich auf alle Elemente. */
-html { -webkit-tap-highlight-color: transparent; }
+/* Und keine selbsttaetige Schriftvergroesserung. WebKit auf iOS blaeht Text auf,
+   wenn sich die Layoutbreite aendert — beim Drehen ins Querformat wird die
+   Schrift groesser, und beim Zurueckdrehen bleibt der aufgeblaehte Wert stehen,
+   weil die Vergroesserung an der Breite von damals haengt.
+
+   100% und NICHT `none`: none nimmt dem Nutzer auch seine eigene
+   Schriftgroessen-Einstellung, 100% unterbindet nur die automatische
+   Aufblaehung. Die Vorgabe (`auto`) ist genau das Verhalten, das hier stoert. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 body {
   color: var(--text);

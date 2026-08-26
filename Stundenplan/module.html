@@ -41,6 +41,11 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  /* Keine selbsttaetige Schriftvergroesserung: WebKit auf iOS blaeht Text auf,
+     wenn sich die Layoutbreite aendert (Drehen ins Querformat), und nimmt es beim
+     Zurueckdrehen nicht zurueck. 100% und nicht `none` — none naehme dem Nutzer
+     auch seine eigene Schriftgroessen-Einstellung. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     /* Ein vom System gesetztes Body-Padding wird NEUTRALISIERT: die Raender
        werden unten selbst aus --sym-* aufgetragen. Vorher standen hier feste
