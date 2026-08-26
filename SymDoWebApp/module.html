@@ -6388,11 +6388,13 @@ function renderDashboard() {
       // Avatare rechts, wie im Kalender-Bereich und in der Aufgabenzeile: dieselbe
       // Spalte (.cal-side/.cal-chips), damit die Zeilen untereinander stehen.
       const wer = e.members.length ? renderAvatarStack(e.members) : '';
+      const jahrestag = calAnnualBadge(e);
       html += `<div class="cal-event"><span class="cal-body">` +
         `<div class="cal-when">${escapeHtml(wann)}</div>` +
         `<div class="cal-title">${escapeHtml(e.title || translate('Appointment'))}</div>` +
         `</span>` +
-        (wer ? `<span class="cal-side"><span class="cal-chips">${wer}</span></span>` : '') +
+        (jahrestag || wer
+          ? `<span class="cal-side"><span class="cal-chips">${jahrestag}${wer}</span></span>` : '') +
         `</div>`;
     }
     const restTermine = dashEvents.length - DASH_EVENTS_MAX;
@@ -7664,6 +7666,10 @@ function loadDashEvents() {
         start: Number(e.start) || 0,
         allDay: e.allDay === true,
         title: String(e.title || ''),
+        // Jahresereignis: Art und Jahre muessen mit, sonst kann die Zeile das
+        // Abzeichen nicht bauen. Sie standen im Datensatz, fielen hier aber weg.
+        anniversaryType: String(e.anniversaryType || ''),
+        years: Number(e.years) || 0,
         // Die Zuordnung kommt aus der eigenen Ablage des Gateways und ist das, was
         // die Avatare in der Zeile zeigen.
         members: Array.isArray(e.members) ? e.members : []
@@ -7834,16 +7840,9 @@ function renderCalendar() {
          Wiederholungs-Abzeichen — dass ein Geburtstag jaehrlich wiederkehrt, sagt
          schon das Symbol, zwei Zeichen nebeneinander waeren dieselbe Auskunft
          zweimal. */
-      const art = calAnnualType(e);
-      const artZeile = art ? CAL_ANNUAL_TYPES.find(t => t.value === art) : null;
-      const jahre = Number(e.years);
-      const jahrestag = artZeile
-        ? `<span class="badge attr" title="${escapeHtml(calAnnualTitle(e))}">` +
-          `<i class="fa-light ${artZeile.icon}"></i>` +
-          (Number.isFinite(jahre) && jahre > 0 ? escapeHtml(String(jahre)) : '') + '</span>'
-        : '';
+      const jahrestag = calAnnualBadge(e);
       const abzeichen = jahrestag +
-        (zeigeWiederholung && e.recurring === true && !artZeile
+        (zeigeWiederholung && e.recurring === true && !jahrestag
           ? `<span class="badge attr" title="${escapeHtml(translate('Part of a series'))}"><i class="fa-light fa-repeat"></i></span>` : '') +
         (zeigeGlocke && Number.isFinite(vorlauf) && vorlauf >= 0
           ? `<span class="badge attr" title="${escapeHtml(calReminderTitle(vorlauf))}"><i class="fa-light fa-bell"></i></span>` : '');
@@ -8004,6 +8003,22 @@ function calAnnualTitle(e) {
   if (!Number.isFinite(jahre) || jahre <= 0) return translate(zeile.label);
   if (art === 'birthday') return translate('Turns %1').replace('%1', String(jahre));
   return translate('%1. %2').replace('%1', String(jahre)).replace('%2', translate(zeile.label));
+}
+
+/**
+ * Das Abzeichen eines Jahresereignisses — Symbol und Zahl der Jahre, leer bei
+ * einem gewoehnlichen Termin. Steht hier und nicht zweimal in den Zeilen: die
+ * Uebersicht zeigt dieselben Termine wie der Kalender, und ein Geburtstag, der
+ * nur an einer der beiden Stellen als solcher zu erkennen waere, ist keiner.
+ */
+function calAnnualBadge(e) {
+  const art = calAnnualType(e);
+  const zeile = art ? CAL_ANNUAL_TYPES.find(t => t.value === art) : null;
+  if (!zeile) return '';
+  const jahre = Number(e.years);
+  return `<span class="badge attr" title="${escapeHtml(calAnnualTitle(e))}">` +
+    `<i class="fa-light ${zeile.icon}"></i>` +
+    (Number.isFinite(jahre) && jahre > 0 ? escapeHtml(String(jahre)) : '') + '</span>';
 }
 
 /**
