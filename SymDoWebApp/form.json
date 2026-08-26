@@ -96,7 +96,54 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more \u2014 they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab and the AI inbox a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
+                    "name": "TimetableRestartHint",
+                    "visible": false,
+                    "caption": "The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again."
+                },
+                {
+                    "type": "List",
+                    "name": "TimetableChoice",
+                    "caption": "Timetable: which instances the interface shows",
+                    "rowCount": 2,
+                    "add": false,
+                    "delete": false,
+                    "visible": false,
+                    "columns": [
+                        {
+                            "caption": "Instance",
+                            "name": "name",
+                            "width": "260px"
+                        },
+                        {
+                            "caption": "Children",
+                            "name": "kinder",
+                            "width": "auto"
+                        },
+                        {
+                            "caption": "Show",
+                            "name": "show",
+                            "width": "90px",
+                            "edit": {
+                                "type": "CheckBox"
+                            }
+                        },
+                        {
+                            "caption": "ID",
+                            "name": "id",
+                            "width": "70px"
+                        }
+                    ],
+                    "values": []
+                },
+                {
+                    "type": "Label",
+                    "name": "TimetableHint",
+                    "visible": false,
+                    "caption": "The timetable appears on the overview: one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide which instances the interface shows. Two instances with the same children put every child in twice; for two views of ONE plan, give the second instance the first as its data source, then it does not appear here at all."
+                },
+                {
+                    "type": "Label",
+                    "caption": "Controls the tabs of this tile and of the SymDo web app. The favorites have no switch of their own any more — they belong to the shopping lists and open as a sheet from the heart in their header. The calendar tab additionally requires at least one configured OpenCalendar calendar, the notes tab and the AI inbox a SymDo Gateway. If all sections are switched off the overview is shown, so the interface is never empty. Only one section left: the tab bar disappears and the content gets the full height. The web app applies a change after a reload, the tile immediately."
                 }
             ]
         },

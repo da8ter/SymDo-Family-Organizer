@@ -134,7 +134,7 @@ Das Gateway ist zugleich der Sync-Broker der ToDo-Listen. Einrichtung und Ablauf
 
 - **Standard-Mitglied** (`DefaultUserID`) — wird schnell angelegten Aufgaben zugewiesen und speist den Bereich „Meine Aufgaben"
 - **Listen** (`Lists`) — welche ToDo- und Einkaufslisten App und Kachel zeigen
-- **Sichtbare Bereiche** — Übersicht (`ShowDashboard`), Einkaufen (`ShowShopping`), ToDos (`ShowTodos`), Kalender (`ShowCalendar`), Notizen (`ShowNotes`), KI-Eingang (`ShowKi`). Der Kalender-Bereich braucht zusätzlich mindestens einen OpenCalendar-Kalender. Sind alle Bereiche aus, bleibt die Übersicht stehen; bei nur einem Bereich verschwindet die Tab-Leiste
+- **Sichtbare Bereiche** — Übersicht (`ShowDashboard`), Einkaufen (`ShowShopping`), ToDos (`ShowTodos`), Kalender (`ShowCalendar`), Notizen (`ShowNotes`), KI-Eingang (`ShowKi`), dazu die Wahl der Stundenplan-Instanzen (`TimetableChoice`). Der Kalender-Bereich braucht zusätzlich mindestens einen OpenCalendar-Kalender. Sind alle Bereiche aus, bleibt die Übersicht stehen; bei nur einem Bereich verschwindet die Tab-Leiste
 - **Bedienelemente** — Mitglieder-Leiste, Anlegen-Knopf, Sortierung, Favoriten-Herz, Zeilen-Knöpfe, Verschiebe-Griff (`ShowMemberBar`, `ShowCreateButton`, `ShowSorting`, `ShowFavoriteHeart`, `ShowRowEditButton`, `ShowRowDeleteButton`, `ShowReorderHandle`)
 - **Info-Abzeichen** — Menge, Wiederholung, Fälligkeit, Erinnerung, Priorität (`ShowQuantityBadge`, `ShowRecurrenceBadge`, `ShowDueBadge`, `ShowNotificationBadge`, `ShowPriorityBadge`)
 

@@ -277,12 +277,13 @@ class SymDoGateway extends IPSModuleStrict
                 : [];
         }
 
+        /* Der Stundenplan-Bereich stand hier und ist in die SymDo Web App
+           gewandert, Rubrik „Sichtbare Bereiche". Dort gehoert er hin: was die
+           Oberflaeche zeigt, wird an einer Stelle eingestellt, und niemand sucht
+           es im Gateway. Das Gateway LIEST die Wahl weiterhin — siehe
+           TimetableChoiceMap. */
         $elements = array_merge(
             $appElements,
-            // Der Stundenplan steht VOR den Fremddiensten: er gehoert zur App und
-            // nicht zu Google, Microsoft oder CalDAV. Auf der zweiten Instanz
-            // faellt er weg, denn dort gibt es die App-Seite ohnehin nicht.
-            $isOwner ? $this->GetTimetablePanel() : [],
             [
                 $this->GetGoogleFormElements(),
                 $this->GetMicrosoftFormElements(),

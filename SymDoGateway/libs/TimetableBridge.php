@@ -24,6 +24,10 @@ trait TimetableBridge
         // Create(), eine je Instanz ist damit unmoeglich; deshalb eine Liste, die
         // ihre Zeilen beim Aufbau des Formulars aus den vorhandenen Instanzen
         // bekommt und beim Uebernehmen zurueckgeschrieben wird.
+        /* Bleibt registriert, obwohl die Einstellung in die SymDo Web App
+           gewandert ist: hier steht der ALTE Stand, und TimetableChoiceMap liest
+           ihn als Rueckfall. Ein Entfernen haette die Wahl beim Verschieben
+           stillschweigend geloescht. */
         $this->RegisterPropertyString('TimetableChoice', '[]');
     }
 
@@ -34,101 +38,43 @@ trait TimetableBridge
      */
     private function TimetableChoiceMap(): array
     {
+        /* Die Wahl steht in der SymDo-Web-App-Instanz, nicht mehr hier: sichtbare
+           Bereiche werden dort eingestellt, und niemand sucht sie im Gateway.
+           Kennt die Web-App eine Instanz noch nicht (weil dort noch niemand
+           uebernommen hat), gilt der alte Stand aus dieser Instanz — sonst waere
+           die Einstellung beim Verschieben verloren gegangen. */
+        $karte = [];
+        foreach (@IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID) as $id) {
+            $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
+            foreach ($this->TimetableChoiceRows((string)($cfg['TimetableChoice'] ?? '[]')) as $inst => $an) {
+                $karte[$inst] = $an;
+            }
+        }
         // IPS_GetConfiguration statt ReadPropertyString: die Eigenschaft entsteht
         // in Create() und existiert erst beim naechsten Kernel-Start.
-        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        $roh = json_decode((string)($cfg['TimetableChoice'] ?? '[]'), true);
-        $karte = [];
-        foreach (is_array($roh) ? $roh : [] as $z) {
-            if (is_array($z) && (int)($z['id'] ?? 0) > 0) {
-                $karte[(int)$z['id']] = (bool)($z['show'] ?? false);
+        $eigen = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        foreach ($this->TimetableChoiceRows((string)($eigen['TimetableChoice'] ?? '[]')) as $inst => $an) {
+            if (!array_key_exists($inst, $karte)) {
+                $karte[$inst] = $an;
             }
         }
         return $karte;
     }
 
     /**
-     * Der Bereich im Formular. Faellt WEG, wenn es keinen Stundenplan mit eigenen
-     * Daten gibt — ein Schalter fuer etwas, das gar nicht existiert, ist Laerm.
+     * Die gespeicherte Liste als Karte.
      *
-     * @return list<array<string,mixed>> leer oder genau ein Klapp-Bereich
+     * @return array<int,bool>
      */
-    private function GetTimetablePanel(): array
+    private function TimetableChoiceRows(string $roh): array
     {
-        $eigene = $this->TimetableOwnInstances();
-        if ($eigene === []) {
-            return [];
-        }
-        // Wie bei den Briefing-Feldern: auf eine Eigenschaft, die es vor dem
-        // naechsten Kernel-Start nicht gibt, laesst „Uebernehmen" das Formular
-        // scheitern. Bis dahin ein Hinweis statt eines Feldes, das nichts tut.
-        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
-        if (!is_array($cfg) || !array_key_exists('TimetableChoice', $cfg)) {
-            return [[
-                'type'     => 'ExpansionPanel',
-                'caption'  => $this->Translate('Timetable'),
-                'expanded' => false,
-                'items'    => [[
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.')
-                ]],
-            ]];
-        }
-        /* Die Zeilen entstehen HIER aus den vorhandenen Instanzen, nicht aus der
-           gespeicherten Liste: eine neu angelegte Instanz taucht damit von selbst
-           auf, eine geloeschte verschwindet. Aus der gespeicherten Liste kommt
-           nur das Haekchen. */
-        $wahl   = $this->TimetableChoiceMap();
-        $zeilen = [];
-        foreach ($eigene as $id) {
-            $kinder = [];
-            $c = json_decode((string)@IPS_GetConfiguration($id), true);
-            foreach ((array)json_decode((string)($c['Children'] ?? '[]'), true) as $k) {
-                if (is_array($k) && trim((string)($k['name'] ?? '')) !== '') {
-                    $kinder[] = trim((string)$k['name']);
-                }
+        $karte = [];
+        foreach ((array)json_decode($roh, true) as $z) {
+            if (is_array($z) && (int)($z['id'] ?? 0) > 0) {
+                $karte[(int)$z['id']] = (bool)($z['show'] ?? false);
             }
-            $zeilen[] = [
-                'id'     => (int)$id,
-                'name'   => sprintf('%s (#%d)', IPS_GetName((int)$id), (int)$id),
-                // Die Kinder mit anzeigen: nur so sieht man, dass zwei Instanzen
-                // DIESELBEN fuehren — genau daran stand jedes Kind doppelt.
-                'kinder' => $kinder === [] ? '—' : implode(', ', $kinder),
-                'show'   => $wahl[(int)$id] ?? false,
-            ];
         }
-        return [[
-            'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('Timetable'),
-            'expanded' => false,
-            'items'    => [
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate("The card shows one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide which instances the app shows.")
-                ],
-                [
-                    'type'     => 'List',
-                    'name'     => 'TimetableChoice',
-                    'rowCount' => max(2, count($zeilen)),
-                    'add'      => false,
-                    'delete'   => false,
-                    'columns'  => [
-                        ['caption' => $this->Translate('Instance'), 'name' => 'name', 'width' => '260px'],
-                        ['caption' => $this->Translate('Children'), 'name' => 'kinder', 'width' => 'auto'],
-                        ['caption' => $this->Translate('In the app'), 'name' => 'show', 'width' => '90px',
-                         'edit' => ['type' => 'CheckBox']],
-                        // Die Kennung traegt die Zuordnung und gehoert deshalb in
-                        // die Zeile — UNSICHTBARE Spalten speichert Symcon nicht.
-                        ['caption' => 'ID', 'name' => 'id', 'width' => '70px'],
-                    ],
-                    'values'   => $zeilen,
-                ],
-                [
-                    'type'    => 'Label',
-                    'caption' => $this->Translate('Two instances with the same children put every child into the app twice. For both views of ONE plan, give the second instance the first as its data source — then it does not appear here at all.')
-                ],
-            ],
-        ]];
+        return $karte;
     }
 
     /**

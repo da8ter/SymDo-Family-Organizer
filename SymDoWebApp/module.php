@@ -15,6 +15,7 @@ class SymDoWebApp extends IPSModuleStrict
     private const SHOPPING_MODULE_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
     private const GATEWAY_MODULE_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+    private const TIMETABLE_MODULE_GUID = '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}';
 
     // Stat-Variablen der Quell-Module: jede Mutation läuft durch SendState und
     // aktualisiert mindestens eine davon — unser Änderungs-Trigger ohne Polling.
@@ -69,6 +70,13 @@ class SymDoWebApp extends IPSModuleStrict
         // KI-Eingangskorb: zeigt, was die Analyse aus Mails und Dateien gelesen hat.
         // Liegt im Gateway, deshalb blendet die Oberflaeche ihn ohne eines selbst aus.
         $this->RegisterPropertyBoolean('ShowKi', true);
+        /* Welche Stundenplan-Instanzen die Oberflaeche zeigt — eine Zeile je
+           Instanz. Stand bis hier im Gateway; dort sucht sie niemand: sichtbare
+           Bereiche werden hier eingestellt, nicht dort. Eigenschaften registriert
+           Symcon FEST in Create(), eine je Instanz ist damit unmoeglich — deshalb
+           eine Liste, deren Zeilen beim Aufbau des Formulars aus den vorhandenen
+           Instanzen entstehen und beim Uebernehmen zurueckgeschrieben werden. */
+        $this->RegisterPropertyString('TimetableChoice', '[]');
 
         // Bedienelemente der Web-App. Sie gelten APPWEIT für alle Listen: die
         // gleichnamigen Schalter der ToDo- und Einkaufslisten-Instanzen werden hier
@@ -376,13 +384,116 @@ class SymDoWebApp extends IPSModuleStrict
             ];
         }
 
+        // Stundenplan-Zeilen: aus den VORHANDENEN Instanzen, das Haekchen aus der
+        // Ablage. Eine neu angelegte Instanz taucht damit von selbst auf, eine
+        // geloeschte verschwindet.
+        $plaene = $this->TimetableRows();
+
         $this->SetFormValues($form['elements'], 'DefaultUserID', 'options', $options);
         $this->SetFormValues($form['elements'], 'Lists', 'values', $values);
+        if ($plaene !== []) {
+            /* Auf eine Eigenschaft, die es vor dem naechsten Kernel-Start nicht
+               gibt, laesst „Uebernehmen" das GANZE Formular scheitern. Bis dahin
+               steht dort ein Hinweis statt einer Liste, die nichts tut. */
+            $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+            if (is_array($cfg) && array_key_exists('TimetableChoice', $cfg)) {
+                $this->SetFormValues($form['elements'], 'TimetableChoice', 'values', $plaene);
+                $this->SetFormValues($form['elements'], 'TimetableChoice', 'rowCount', max(2, count($plaene)));
+                $this->SetFormValues($form['elements'], 'TimetableChoice', 'visible', true);
+                $this->SetFormValues($form['elements'], 'TimetableHint', 'visible', true);
+            } else {
+                $this->SetFormValues($form['elements'], 'TimetableRestartHint', 'visible', true);
+            }
+        }
         if ($gatewayID <= 0) {
             $this->SetFormValues($form['elements'], 'GatewayHint', 'visible', true);
         }
 
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Eine Zeile je Stundenplan-Instanz MIT EIGENEN DATEN.
+     *
+     * Instanzen, die ihre Daten aus einer anderen ziehen (`SourceInstanceID`),
+     * bleiben weg: sie sind eine zweite Ansicht desselben Plans, und beide zu
+     * zeigen hiesse jedes Kind doppelt.
+     *
+     * Gibt es keine, ist die Liste leer und das Formular blendet sie aus — ein
+     * Schalter fuer etwas, das gar nicht existiert, ist Laerm.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function TimetableRows(): array
+    {
+        $wahl = $this->TimetableChoiceMap();
+        $zeilen = [];
+        foreach (@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+            $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
+            if (!is_array($cfg) || (int)($cfg['SourceInstanceID'] ?? 0) > 0) {
+                continue;
+            }
+            $kinder = [];
+            foreach ((array)json_decode((string)($cfg['Children'] ?? '[]'), true) as $k) {
+                if (is_array($k) && trim((string)($k['name'] ?? '')) !== '') {
+                    $kinder[] = trim((string)$k['name']);
+                }
+            }
+            $zeilen[] = [
+                'id'     => (int)$id,
+                'name'   => sprintf('%s (#%d)', IPS_GetName((int)$id), (int)$id),
+                // Die Kinder mit anzeigen: nur so sieht man, dass zwei Instanzen
+                // DIESELBEN fuehren — genau daran stand jedes Kind doppelt.
+                'kinder' => $kinder === [] ? '—' : implode(', ', $kinder),
+                'show'   => $wahl[(int)$id] ?? false,
+            ];
+        }
+        return $zeilen;
+    }
+
+    /**
+     * Instanz-Kennung => anzeigen? aus der eigenen Ablage.
+     *
+     * Kennt die eigene Liste eine Instanz noch nicht, gilt die Angabe aus dem
+     * GATEWAY — dort stand die Einstellung frueher. So ist die Wahl nach dem
+     * Verschieben nicht verloren; mit dem ersten „Uebernehmen" hier steht sie
+     * endgueltig in dieser Instanz.
+     *
+     * @return array<int,bool>
+     */
+    private function TimetableChoiceMap(): array
+    {
+        // IPS_GetConfiguration statt ReadPropertyString: die Eigenschaft entsteht
+        // in Create() und existiert erst beim naechsten Kernel-Start.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $karte = self::TimetableChoiceRows((string)($cfg['TimetableChoice'] ?? '[]'));
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0) {
+            return $karte;
+        }
+        $alt = json_decode((string)@IPS_GetConfiguration($gatewayID), true);
+        foreach (self::TimetableChoiceRows((string)($alt['TimetableChoice'] ?? '[]')) as $id => $an) {
+            if (!array_key_exists($id, $karte)) {
+                $karte[$id] = $an;
+            }
+        }
+        return $karte;
+    }
+
+    /**
+     * Die gespeicherte Liste als Karte.
+     *
+     * @return array<int,bool>
+     */
+    private static function TimetableChoiceRows(string $roh): array
+    {
+        $karte = [];
+        foreach ((array)json_decode($roh, true) as $z) {
+            if (is_array($z) && (int)($z['id'] ?? 0) > 0) {
+                $karte[(int)$z['id']] = (bool)($z['show'] ?? false);
+            }
+        }
+        return $karte;
     }
 
     /** Aggregat-Payload der Kachel als JSON — Diagnose-Getter (GetVisualizationTile bekommt keinen Prefix-Wrapper). */
