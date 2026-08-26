@@ -41,6 +41,10 @@ trait Tts
 
     /** Amazon Polly: deutsche Neural-Stimme und eine Region, die es fuehrt. */
     private const TTS_POLLY_VOICE  = 'Vicki';
+    /** Die Engines, die Polly kennt. */
+    private const TTS_POLLY_ENGINES = ['neural', 'standard', 'long-form', 'generative'];
+    /** Rangfolge, wenn die Stimme den Wunsch nicht kann. */
+    private const TTS_POLLY_ENGINE_ORDER = ['neural', 'generative', 'long-form', 'standard'];
     private const TTS_POLLY_REGION = 'eu-central-1';
 
     /**
@@ -908,7 +912,16 @@ trait Tts
             return '';
         }
         $stimme = $stimme !== '' ? $stimme : $this->TtsSetting('TtsPollyVoice', self::TTS_POLLY_VOICE);
-        $engine = $this->TtsSetting('TtsPollyEngine', 'neural');
+        $wunsch = $this->TtsSetting('TtsPollyEngine', 'neural');
+        if (!in_array($wunsch, self::TTS_POLLY_ENGINES, true)) {
+            $wunsch = 'neural';
+        }
+        // Die Engine haengt an der STIMME, nicht an einer Einstellung — siehe
+        // TtsPollyEngineFor.
+        $engine = $this->TtsPollyEngineFor($stimme, $wunsch);
+        if ($engine !== $wunsch) {
+            $this->SendDebug('TTS', sprintf('Polly: %s kann kein %s, nehme %s', $stimme, $wunsch, $engine), 0);
+        }
 
         /* SSML nur, wenn wirklich welches ankommt. Die Anweisungen aus
            BriefingSpeechStyle sind fuer Azure gebaut; ein <speak>-Rumpf passt
@@ -926,8 +939,7 @@ trait Tts
             'Text'         => $inhalt,
             'TextType'     => $ssml ? 'ssml' : 'text',
             'VoiceId'      => $stimme,
-            'Engine'       => in_array($engine, ['neural', 'standard', 'long-form', 'generative'], true)
-                ? $engine : 'neural',
+            'Engine'       => $engine,
             // Ohne Sprachangabe liest eine zweisprachige Stimme deutsche Texte
             // gern englisch. Bei rein deutschen Stimmen ist es folgenlos.
             'LanguageCode' => 'de-DE',
@@ -1038,11 +1050,72 @@ trait Tts
                     // Welche Engines die Stimme kann, entscheidet, ob `neural`
                     // ueberhaupt geht — deshalb steht es im Namen.
                     ($v['SupportedEngines'] ?? []) ? ', ' . implode('/', (array)$v['SupportedEngines']) : '')),
+                // Und zusaetzlich als Liste: die Engine wird je Stimme gewaehlt,
+                // dafuer darf sie nicht aus dem Anzeigenamen geparst werden muessen.
+                'engines' => array_values(array_map('strval', (array)($v['SupportedEngines'] ?? []))),
             ];
         }
         usort($liste, static fn(array $a, array $b): int => strcmp($a['id'], $b['id']));
         @$this->WriteAttributeString('TtsPollyVoiceCache', (string)json_encode($liste, JSON_UNESCAPED_UNICODE));
         return sprintf($this->Translate('%d German voices fetched.'), count($liste));
+    }
+
+    /**
+     * Die Engine, mit der DIESE Stimme sprechen kann.
+     *
+     * Bei Polly haengt die Engine an der Stimme: Vicki kann alle drei, Lennart nur
+     * `generative`, Hans und Marlene nur `standard`. Eine feste Einstellung fuer
+     * alle war deshalb eine Falle — steht dort `neural` und die Persona hat
+     * Lennart, lehnt Amazon die Anfrage ab, und hoerbar ist das als Briefing ohne
+     * Aufnahme.
+     *
+     * Der eingestellte Wert bleibt der WUNSCH: kann die Stimme ihn, wird er
+     * genommen. Sonst die beste, die sie kann — neural vor generative (guenstiger
+     * bei gleicher Verstaendlichkeit), dann long-form, dann standard. Ist die
+     * Stimme unbekannt (noch kein Abruf), bleibt es beim Wunsch: eine Vermutung
+     * waere schlechter als das, was der Nutzer eingestellt hat.
+     */
+    private function TtsPollyEngineFor(string $stimme, string $wunsch): string
+    {
+        $koennen = [];
+        foreach ($this->TtsPollyCachedVoices() as $v) {
+            if ((string)($v['id'] ?? '') !== $stimme) {
+                continue;
+            }
+            if (is_array($v['engines'] ?? null) && $v['engines'] !== []) {
+                $koennen = array_map('strval', $v['engines']);
+                break;
+            }
+            /* Rueckfall fuer Staende von vor dieser Aenderung: dort steht die
+               Faehigkeit nur im Anzeigenamen, „Vicki (Female, generative/neural)".
+               Ein erneuter Abruf ersetzt das; bis dahin wird gelesen, was da ist. */
+            if (preg_match('/\(([^)]*)\)/', (string)($v['name'] ?? ''), $m)) {
+                // „Female, generative/neural/standard" — der Teil nach dem Komma.
+                // Erst in eine Variable, dann end(): eine Funktion direkt an einen
+                // Referenzparameter zu geben, ist in PHP 8 ein Fehler.
+                $stuecke = explode(',', $m[1]);
+                $letztes = (string)end($stuecke);
+                foreach (explode('/', $letztes) as $teil) {
+                    $teil = strtolower(trim($teil));
+                    if (in_array($teil, self::TTS_POLLY_ENGINES, true)) {
+                        $koennen[] = $teil;
+                    }
+                }
+            }
+            break;
+        }
+        if ($koennen === []) {
+            return $wunsch;
+        }
+        if (in_array($wunsch, $koennen, true)) {
+            return $wunsch;
+        }
+        foreach (self::TTS_POLLY_ENGINE_ORDER as $kandidat) {
+            if (in_array($kandidat, $koennen, true)) {
+                return $kandidat;
+            }
+        }
+        return (string)$koennen[0];
     }
 
     /** @return list<array{id:string,name:string}> Die abgelegten Polly-Stimmen. */
@@ -1231,7 +1304,7 @@ trait Tts
                     'type'    => 'Select',
                     'name'    => 'TtsPollyEngine',
                     'width'   => '400px',
-                    'caption' => $this->Translate('Polly engine'),
+                    'caption' => $this->Translate('Polly engine (wish — a voice that cannot do it speaks with the next best one)'),
                     'options' => [
                         ['caption' => $this->Translate('neural (recommended)'), 'value' => 'neural'],
                         ['caption' => $this->Translate('generative (most natural, most expensive)'), 'value' => 'generative'],

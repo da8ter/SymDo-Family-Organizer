@@ -359,7 +359,6 @@
             "AWS secret access key": "AWS-Geheimschlüssel",
             "AWS region (e.g. eu-central-1)": "AWS-Region (z. B. eu-central-1)",
             "Polly voice": "Polly-Stimme",
-            "Polly engine": "Polly-Engine",
             "neural (recommended)": "neural (empfohlen)",
             "generative (most natural, most expensive)": "generative (am natürlichsten, am teuersten)",
             "long-form (for long texts)": "long-form (für lange Texte)",
@@ -379,7 +378,8 @@
             "The Amazon Polly column is empty until the voices of the account have been fetched under the speech provider.": "Die Spalte Amazon Polly bleibt leer, bis die Stimmen des Kontos beim Sprachanbieter abgerufen wurden.",
             "Amazon Polly: %d German voices available.": "Amazon Polly: %d deutsche Stimmen verfügbar.",
             "The secret access key looks too short — AWS uses 40 characters (the 20-character value is the access key ID).": "Der geheime Schlüssel sieht zu kurz aus — AWS verwendet 40 Zeichen (der 20 Zeichen lange Wert ist die Zugriffskennung).",
-            "The access key ID looks unusual — AWS uses 20 characters.": "Die Zugriffskennung sieht ungewöhnlich aus — AWS verwendet 20 Zeichen."
+            "The access key ID looks unusual — AWS uses 20 characters.": "Die Zugriffskennung sieht ungewöhnlich aus — AWS verwendet 20 Zeichen.",
+            "Polly engine (wish — a voice that cannot do it speaks with the next best one)": "Polly-Engine (Wunsch — eine Stimme, die sie nicht kann, spricht mit der nächstbesten)"
         },
         "en": {
             "ToDo Gateway": "ToDo Gateway",
