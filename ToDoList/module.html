@@ -4397,6 +4397,30 @@ function ladeschirmWeg() {
 // ihm stehen und deckte die App nach dem Koppeln weiter zu.
 window.__symdoLadeschirmWeg = ladeschirmWeg;
 
+/* Der Schirm geht erst, wenn die Uebersicht STEHT. Mit dem ersten Zustand sind
+   Aufgaben und Einkaeufe da, aber drei Karten fehlen noch und kosten je einen
+   eigenen Umlauf: das Briefing, die Zahl der heutigen Termine (die haengt sogar
+   an einem zweiten Umlauf hinter der Kalenderliste) und der Stundenplan. Ging
+   der Schirm schon mit dem ersten Zustand, sah man genau den Aufbau, den er
+   verdecken soll — die Karten rasteten nacheinander ein.
+
+   Mit Deckel: gemessen kostet jeder dieser Abrufe im Haus wenige Millisekunden,
+   ueber Connect ein paar hundert. Haengt aber einer, darf er den Start nicht
+   aufhalten — nach drei Sekunden geht der Schirm auf jeden Fall, und die
+   fehlende Karte kommt dann eben sichtbar nach. */
+const LADESCHIRM_DECKEL = 3000;
+function ladeschirmWartenAuf(nachlaeufer) {
+  const el = document.getElementById('ladeschirm');
+  if (!el) { return; }
+  // Die Geduldsfrist hat sich erledigt: das Gateway HAT geantwortet.
+  clearTimeout(ladeschirmFrist);
+  el.classList.remove('dauert');
+  const fertig = Promise.allSettled(
+    nachlaeufer.filter(v => v && typeof v.then === 'function'));
+  const deckel = new Promise(f => setTimeout(f, LADESCHIRM_DECKEL));
+  Promise.race([fertig, deckel]).then(ladeschirmWeg);
+}
+
 /* Kein Schirm ohne Ausweg. Antwortet das Gateway nicht — kein Netz, Instanz
    aus, Connect gestoert —, gaebe es sonst nichts als den Kreisel: die Anfrage
    wird nicht wiederholt, und die App bliebe fuer immer im Ladezustand. Nach
@@ -4484,21 +4508,18 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
-    // Jetzt steht etwas da — der Ladeschirm hat seine Aufgabe erfuellt. Die
-    // Nachlaeufer darunter (Kalender, Stundenplan, Briefing) holen ihre Daten
-    // in eine bereits sichtbare Oberflaeche nach; auf sie zu warten hiesse,
-    // den Schirm wegen der langsamsten Karte stehen zu lassen.
-    ladeschirmWeg();
     // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();
-    loadCalendars();
-    loadBriefing();
-    // MUSS auch hier stehen, nicht nur in gatewayNachladen: dieser Weg ist der
-    // ERSTE Aufbau, gatewayNachladen laeuft erst beim Zurueckkehren oder nach
-    // einer Minute. Nur dort eingehaengt, blieb die Karte beim Oeffnen leer und
-    // erschien erst eine Minute spaeter — im Prueflauf als „fehlt" sichtbar.
-    loadTimetable();
+    /* Die drei Karten, die der Uebersicht nach dem ersten Zustand noch fehlen.
+       Der Ladeschirm bleibt so lange stehen (ladeschirmWartenAuf) — sonst sieht
+       man sie einzeln einrasten.
+       loadTimetable() MUSS auch hier stehen, nicht nur in gatewayNachladen:
+       dieser Weg ist der ERSTE Aufbau, gatewayNachladen laeuft erst beim
+       Zurueckkehren oder nach einer Minute. Nur dort eingehaengt, blieb die
+       Karte beim Oeffnen leer und erschien erst eine Minute spaeter — im
+       Prueflauf als „fehlt" sichtbar. */
+    ladeschirmWartenAuf([loadCalendars(), loadBriefing(), loadTimetable()]);
     /* Notizen VORAB holen, nicht erst beim Betreten des Bereichs.
        Bisher stiess renderNotizen() den Abruf beim ersten Zeichnen an — der
        Bereich stand also einen Moment leer da, jedes Mal beim ersten Oeffnen.
@@ -5957,7 +5978,8 @@ function loadTimetable() {
   // ohnehin bei „unknown_route" endet — ohne Kosten, aber ohne Nutzen.
   if (stundenplanLaeuft || !briefingAvailable() || !(store.tabs && store.tabs.dashboard)) { return; }
   stundenplanLaeuft = true;
-  aiPost('/timetable', {}).then(r => {
+  // Herausgegeben, damit der Ladeschirm darauf warten kann (ladeschirmWartenAuf).
+  return aiPost('/timetable', {}).then(r => {
     stundenplanLaeuft = false;
     const j = r && r.json;
     const frisch = (j && j.ok === true && j.timetable) ? j.timetable : null;
@@ -6224,7 +6246,7 @@ function loadBriefing() {
     return;
   }
   briefingLoading = true;
-  aiPost('/briefing', {}).then(r => {
+  return aiPost('/briefing', {}).then(r => {
     briefingLoading = false;
     const j = r && r.json;
     // Kein Gateway, alte Version, Route unbekannt, abgeschaltet: still nichts.
@@ -8116,7 +8138,7 @@ function loadCalendars() {
     if (calCalendars.length) { calCalendars = []; calEvents = []; renderCalendar(); applyTabVisibility(); }
     return;
   }
-  aiPost('/calendar', { action: 'calendars' }).then(r => {
+  return aiPost('/calendar', { action: 'calendars' }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !Array.isArray(j.calendars)) return;
     const vorher = calCalendars.length;
@@ -8128,9 +8150,13 @@ function loadCalendars() {
     if ((vorher > 0) !== (calCalendars.length > 0)) applyTabVisibility();
     // Die Uebersichts-Kachel braucht die heutige Zahl unabhaengig davon, ob der
     // Kalender-Bereich offen ist.
-    loadDashEvents();
+    // Die Zahl der heutigen Termine kostet einen ZWEITEN Umlauf. Das Versprechen
+    // wird durchgereicht, sonst waere der Kalender fuer den Ladeschirm schon
+    // fertig, waehrend die Kachel auf der Uebersicht noch leer ist.
+    const heutige = loadDashEvents();
     if (activeTab === 'calendar') loadCalendarEvents();
     else renderCalendar();
+    return heutige;
   }).catch(() => {});
 }
 
@@ -8158,7 +8184,7 @@ function loadDashEvents() {
   const von = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
   const grenze = von + 86400;                 // Beginn von morgen
   const bis = von + 2 * 86400;                // Ende von morgen
-  aiPost('/calendar', { action: 'events', from: von, to: bis, ids: [] }).then(r => {
+  return aiPost('/calendar', { action: 'events', from: von, to: bis, ids: [] }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !Array.isArray(j.events)) return;
     // Dieselbe Regel wie im Briefing: Ganztaegige Termine gelten fuer jeden Tag, den
