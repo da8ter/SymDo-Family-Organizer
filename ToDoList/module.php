@@ -28,6 +28,41 @@ class SymDoToDoList extends IPSModuleStrict
         ]);
     }
 
+    /**
+     * Erklaert die zwei Gateway-Rollen im Formular.
+     *
+     * Die Verwirrung ist verstaendlich: „das Gateway" gibt es nicht. Die
+     * ELTERN-Instanz traegt die Konten-Synchronisation (Google, Microsoft,
+     * CalDAV) und darf mehrfach existieren — ein Instanzsatz je Konto. Die
+     * App-Haelfte dagegen gibt es nur einmal, auf der Instanz mit der
+     * niedrigsten ID: ihre Hook-Pfade sind fest. Deshalb steht hier auch kein
+     * Auswahlfeld, sondern ein Satz.
+     */
+    private function GatewayRollenText(): string
+    {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        $app    = $this->GetAppGatewayID();
+        if ($eltern <= 0 && $app <= 0) {
+            return $this->Translate('No SymDo Gateway connected. Account synchronization needs one as a parent; without it this list works locally.');
+        }
+        if ($eltern <= 0) {
+            return sprintf(
+                $this->Translate('No parent gateway connected — account synchronization needs one. Family members and photos come from "%s" (#%d) either way: the app is always served by the gateway with the lowest instance ID.'),
+                IPS_GetName($app), $app
+            );
+        }
+        if ($app > 0 && $app !== $eltern) {
+            return sprintf(
+                $this->Translate('Account synchronization runs over the parent gateway "%s" (#%d). Family members, photos and notifications come from "%s" (#%d) instead — the app is always served by the gateway with the lowest instance ID. Both is normal with several accounts.'),
+                IPS_GetName($eltern), $eltern, IPS_GetName($app), $app
+            );
+        }
+        return sprintf(
+            $this->Translate('Account synchronization runs over the parent gateway "%s" (#%d), which also serves the app. Which gateway is responsible is decided by the connection in the object tree, not here.'),
+            IPS_GetName($eltern), $eltern
+        );
+    }
+
     private function GetGatewayID(): int
     {
         $instance = @IPS_GetInstance($this->InstanceID);
@@ -410,6 +445,17 @@ class SymDoToDoList extends IPSModuleStrict
                     ]
                 ],
 
+                /* Welches Gateway hier zustaendig ist, entscheidet die
+                   ELTERN-Verbindung im Objektbaum — nicht ein Feld in diesem
+                   Formular. Das ist die Stelle, an der man mehrere Konten
+                   trennt. Die App-Haelfte (Mitglieder, Fotos, Push) laeuft
+                   unabhaengig davon auf dem Gateway mit der niedrigsten ID;
+                   diese Zeile sagt beides, weil es sonst niemand weiss. */
+                [
+                    'type'    => 'Label',
+                    'name'    => 'GatewayRolesHint',
+                    'caption' => $this->GatewayRollenText(),
+                ],
                 [
                     'type' => 'Select',
                     'name' => 'SyncBackend',

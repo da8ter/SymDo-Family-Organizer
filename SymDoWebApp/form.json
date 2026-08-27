@@ -17,6 +17,12 @@
         },
         {
             "type": "Label",
+            "name": "GatewayOwnerHint",
+            "caption": "",
+            "visible": false
+        },
+        {
+            "type": "Label",
             "name": "GatewayHint",
             "visible": false,
             "caption": "No SymDo Gateway instance found — users and household-wide hidden lists are unavailable."

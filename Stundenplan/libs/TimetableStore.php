@@ -275,6 +275,19 @@ trait TimetableStore
             && (IPS_GetInstance($gw)['ModuleInfo']['ModuleID'] ?? '') === self::GATEWAY_GUID) {
             return $gw;
         }
+        return $this->GatewayAppSeite();
+    }
+
+    /**
+     * Das Gateway, das die APP bedient: die Instanz mit der niedrigsten ID.
+     *
+     * Das ist keine Vorliebe, sondern eine feste Regel des Gateways
+     * (OwnsAppApi) — die Hook-Pfade gibt es nur einmal. Wer die Mitglieder und
+     * ihre Fotos will, muss diese Instanz fragen; jede andere fuehrt eine eigene,
+     * meist leere Mitgliederliste.
+     */
+    private function GatewayAppSeite(): int
+    {
         $ids = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
         if (!is_array($ids) || $ids === []) {
             return 0;

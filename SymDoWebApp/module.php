@@ -408,6 +408,19 @@ class SymDoWebApp extends IPSModuleStrict
         if ($gatewayID <= 0) {
             $this->SetFormValues($form['elements'], 'GatewayHint', 'visible', true);
         }
+        /* Mehrere Gateways: sagen, welches die App bedient. Waehlen laesst sich das
+           NICHT — die Hook-Pfade sind fest, es bedient immer die Instanz mit der
+           niedrigsten ID. Eine Auswahlliste boete hier einen Zustand an, den es
+           nicht geben kann. Bei einem einzigen Gateway bleibt die Zeile weg; dann
+           gibt es nichts zu unterscheiden. */
+        $gateways = IPS_GetInstanceListByModuleID(self::GATEWAY_MODULE_GUID);
+        if ($gatewayID > 0 && is_array($gateways) && count($gateways) > 1) {
+            $this->SetFormValues($form['elements'], 'GatewayOwnerHint', 'caption', sprintf(
+                $this->Translate('%d SymDo Gateway instances found. The app is served by "%s" (#%d) — the one with the lowest instance ID; the others only synchronise accounts.'),
+                count($gateways), IPS_GetName($gatewayID), $gatewayID
+            ));
+            $this->SetFormValues($form['elements'], 'GatewayOwnerHint', 'visible', true);
+        }
 
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }

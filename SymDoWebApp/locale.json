@@ -8,6 +8,7 @@
             "Badge: priority": "Priority"
         },
         "de": {
+            "%d SymDo Gateway instances found. The app is served by \"%s\" (#%d) — the one with the lowest instance ID; the others only synchronise accounts.": "%d SymDo-Gateway-Instanzen gefunden. Die App bedient „%s\" (#%d) — die mit der niedrigsten Instanz-ID; die übrigen synchronisieren nur Konten.",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
             "%1 items": "%1 Artikel",

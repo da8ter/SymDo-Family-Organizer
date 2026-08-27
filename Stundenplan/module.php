@@ -1030,14 +1030,26 @@ class SymDoStundenplan extends IPSModuleStrict
     {
         $gewaehlt = $this->ReadPropertyInteger('GatewayInstanceID');
         $genutzt  = $this->GatewayInstanz();
-        if ($gewaehlt > 0 && $gewaehlt === $genutzt) {
-            return '';
-        }
+        $app      = $this->GatewayAppSeite();
+
         if ($genutzt <= 0) {
             return $this->Translate('No SymDo gateway found. Without one the "Family member" column stays empty and the card shows initials instead of photos.');
         }
+        /* Die gefaehrliche Lage zuerst: jemand hat AUSDRUECKLICH ein Gateway
+           gewaehlt, das die App gar nicht bedient. Dessen Mitgliederliste ist
+           eine andere — meist eine leere. Das Feld bleibt als Uebersteuerung
+           erhalten, aber es muss dabeistehen, was man sich damit einhandelt. */
+        if ($gewaehlt > 0 && $app > 0 && $gewaehlt !== $app) {
+            return sprintf(
+                $this->Translate('Careful: "%s" (#%d) is selected, but the app is served by "%s" (#%d). Every gateway keeps its own list of family members — the children here then come from an instance that the app does not use. Leave the field empty unless you know you want this.'),
+                IPS_GetName($gewaehlt), $gewaehlt, IPS_GetName($app), $app
+            );
+        }
+        if ($gewaehlt > 0) {
+            return '';
+        }
         return sprintf(
-            $this->Translate('No gateway selected — %s (#%d) is used. The family members come from there.'),
+            $this->Translate('Nothing selected — "%s" (#%d) is used: the gateway that serves the app. That is the right one in almost every case; the field is only there for setups with several gateways.'),
             IPS_GetName($genutzt),
             $genutzt
         );
