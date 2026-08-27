@@ -430,7 +430,9 @@
             "Children": "Kinder",
             "Show": "Anzeigen",
             "The timetable appears on the overview: one bar per child with the school day, a marker for the current time and a switcher through the weekdays. The plan itself is kept in the timetable module — here you only decide which instances the interface shows. Two instances with the same children put every child in twice; for two views of ONE plan, give the second instance the first as its data source, then it does not appear here at all.": "Der Stundenplan erscheint auf der Übersicht: je Kind ein Balken mit dem Schultag, ein Strich für die aktuelle Zeit und ein Umschalter durch die Wochentage. Der Plan selbst wird im Stundenplan-Modul gepflegt — hier wird nur entschieden, welche Instanzen die Oberfläche zeigt. Zwei Instanzen mit denselben Kindern führen jedes Kind doppelt auf; für zwei Ansichten EINES Plans gib der zweiten Instanz die erste als Datenquelle, dann erscheint sie hier gar nicht.",
-            "The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Die Stundenplan-Einstellung erscheint nach dem nächsten Symcon-Neustart — sie ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat."
+            "The timetable setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Die Stundenplan-Einstellung erscheint nach dem nächsten Symcon-Neustart — sie ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
+            "The gateway has not answered yet.": "Das Gateway hat noch nicht geantwortet.",
+            "Try again": "Erneut versuchen"
         }
     }
 }

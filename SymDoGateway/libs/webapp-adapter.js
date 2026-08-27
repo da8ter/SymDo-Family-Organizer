@@ -235,6 +235,11 @@
   var PAIR_STYLE_BTN   = 'width:100%;margin-top:10px;padding:13px 14px;border-radius:12px;border:0;background:#0a84ff;color:#fff;font:600 16px/1.2 -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
   function showPairScreen(msg) {
     whenBody(function () {
+      /* Der Ladeschirm der Seite hat hier nichts mehr zu warten: gekoppelt wird
+         von Hand, und ohne diesen Ruf bliebe er hinter dem Kopplungsschirm
+         stehen und deckte die App nach dem Koppeln weiter zu. */
+      try { if (typeof window.__symdoLadeschirmWeg === 'function') { window.__symdoLadeschirmWeg(); } }
+      catch (e) {}
       var el = document.getElementById('symdo-pair-screen');
       // Schon offen? Nur die Meldung tauschen. Ein Neuaufbau wuerde eine
       // begonnene Eingabe loeschen — und mehrere 401-Antworten hintereinander

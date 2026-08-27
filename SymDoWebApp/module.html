@@ -2888,9 +2888,93 @@ html[data-symdo-theme="dark"] .member-bar {
   #shoppingListArea { grid-template-columns: repeat(8, minmax(0, 1fr)); }
   #shoppingListArea > .item-card.span-half { grid-column: span 4; }
 }
+/* ── Ladeschirm ─────────────────────────────────────────────────────────────
+   Zwischen dem Aufbau der Seite und der ersten Antwort des Gateways stand die
+   App leer da: Tab-Leiste, weisse Flaeche, sonst nichts. Ueber Connect sind das
+   auf dem Telefon gut zwei Sekunden, und die sehen aus wie ein Fehler.
+
+   Nur in der Web-App: als Kachel liegt die Oberflaeche in der Visualisierung,
+   die ihren Zustand gleich mitliefert — und ein bildschirmfuellender Schirm
+   ueber einer Kachel waere ohnehin verkehrt. Die Klasse setzt das Skript
+   gleich zu Beginn des Rumpfes (window.__SYMDO__ steht im Kopf).
+
+   `position:fixed` + `inset:0` statt einer Flaeche im Fluss: der Schirm liegt
+   ueber allem, was der Aufbau nach und nach sichtbar macht. */
+#ladeschirm { display: none; }
+html.web-app #ladeschirm {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--bg);
+  /* Ausblenden, nicht wegschneiden: der Wechsel zur fertigen Oberflaeche ist
+     sonst ein harter Sprung. Die Dauer steht auch im Skript (350 ms) — wer die
+     eine aendert, muss die andere mitziehen. */
+  opacity: 1; transition: opacity .35s ease;
+}
+html.web-app #ladeschirm.geht { opacity: 0; }
+#ladeschirm .lade-symbol {
+  width: 88px; height: 88px; border-radius: 22px; object-fit: cover;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+}
+#ladeschirm .lade-name {
+  font-size: 21px; font-weight: 600; letter-spacing: .01em; color: var(--text);
+}
+/* Der Kreisel: ein Ring, dessen obere Vierteldrehung die Akzentfarbe traegt. */
+#ladeschirm .lade-kreisel {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-top-color: var(--accent);
+  animation: ladeDreh .8s linear infinite;
+}
+@keyframes ladeDreh { to { transform: rotate(360deg); } }
+/* Erst nach einer Weile: siehe ladeschirmGeduld() im Skript. */
+#ladeschirm .lade-lange { display: none; flex-direction: column; align-items: center; gap: 12px; }
+#ladeschirm.dauert .lade-kreisel { display: none; }
+#ladeschirm.dauert .lade-lange { display: flex; }
+#ladeschirm .lade-hinweis {
+  max-width: 280px; text-align: center; font-size: 14px; line-height: 1.5;
+  color: var(--muted);
+}
+#ladeschirm .lade-nochmal {
+  padding: 11px 22px; border: 0; border-radius: 11px;
+  background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
+}
+/* Wer Bewegung abgestellt hat, bekommt einen stehenden Ring statt eines
+   Kreisels — der Schirm bleibt trotzdem als „es passiert etwas" lesbar. */
+@media (prefers-reduced-motion: reduce) {
+  #ladeschirm .lade-kreisel { animation: none; }
+  html.web-app #ladeschirm { transition: none; }
+}
   </style>
 </head>
 <body>
+<!-- Ganz am Anfang des Rumpfes, damit der Schirm beim ERSTEN Aufbau steht: die
+     Seite ist rund 650 kB, ein spaeter angehaengter Schirm zeigte erst das, was
+     er verdecken soll. -->
+<div id="ladeschirm" role="status" aria-live="polite">
+  <img class="lade-symbol" alt="" src="" hidden>
+  <div class="lade-name">SymDo</div>
+  <div class="lade-kreisel"></div>
+  <div class="lade-lange">
+    <div class="lade-hinweis" id="ladeHinweis"></div>
+    <button type="button" class="lade-nochmal" id="ladeNochmal"></button>
+  </div>
+</div>
+<script>
+/* Vor allem anderen: nur die Web-App bekommt den Ladeschirm, und sie bekommt
+   ihn SOFORT — nicht erst, wenn das Skript am Ende der Seite gelesen ist. */
+(function () {
+  var s = window.__SYMDO__;
+  if (!s) { return; }
+  document.documentElement.classList.add('web-app');
+  var bild = document.querySelector('#ladeschirm .lade-symbol');
+  // Ohne Symbolpfad (aeltere Gateway-Version) bleibt es beim Namen — ein
+  // kaputtes Bildsymbol waere die schlechtere Auskunft.
+  if (bild && s.iconBase) {
+    bild.onload = function () { bild.hidden = false; };
+    bild.src = s.iconBase + '/appicon-180.png';
+  }
+})();
+</script>
 <div class="app">
   <main style="display:flex; flex-direction:column; flex:1; min-height:0;">
 
@@ -4248,6 +4332,54 @@ function checkRevisions() {
   }
 }
 
+/* ── Ladeschirm ─────────────────────────────────────────────────────────────
+   Er steht ab dem ersten Aufbau der Seite (Markup gleich hinter <body>) und
+   geht, sobald die erste Antwort des Gateways gezeichnet ist. */
+let ladeschirmFrist = null;
+function ladeschirmWeg() {
+  const el = document.getElementById('ladeschirm');
+  if (!el || el.classList.contains('geht')) return;
+  clearTimeout(ladeschirmFrist);
+  el.classList.add('geht');
+  // Erst nach dem Ausblenden aus dem Baum nehmen — 350 ms, wie die Ueberblendung
+  // im Stil. Entfernen statt verstecken: der Schirm liegt ueber allem, ein
+  // durchsichtig gebliebener faenge jede Beruehrung ab.
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 350);
+}
+// Der Adapter blendet ihn damit weg, wenn statt der App der Kopplungsschirm
+// kommt: der liegt zwar darueber, aber ein Schirm, der nie geht, bliebe hinter
+// ihm stehen und deckte die App nach dem Koppeln weiter zu.
+window.__symdoLadeschirmWeg = ladeschirmWeg;
+
+/* Kein Schirm ohne Ausweg. Antwortet das Gateway nicht — kein Netz, Instanz
+   aus, Connect gestoert —, gaebe es sonst nichts als den Kreisel: die Anfrage
+   wird nicht wiederholt, und die App bliebe fuer immer im Ladezustand. Nach
+   zwoelf Sekunden sagt der Schirm deshalb, was los ist, und bietet einen
+   zweiten Versuch an. */
+function ladeschirmFristStellen() {
+  clearTimeout(ladeschirmFrist);
+  ladeschirmFrist = setTimeout(() => {
+    const el = document.getElementById('ladeschirm');
+    if (el) el.classList.add('dauert');
+  }, 12000);
+}
+function ladeschirmGeduld() {
+  const el = document.getElementById('ladeschirm');
+  if (!el || !window.__SYMDO__) return;
+  const hinweis = document.getElementById('ladeHinweis');
+  const knopf = document.getElementById('ladeNochmal');
+  if (hinweis) hinweis.textContent = translate('The gateway has not answered yet.');
+  if (knopf) {
+    knopf.textContent = translate('Try again');
+    knopf.addEventListener('click', () => {
+      el.classList.remove('dauert');
+      ladeschirmFristStellen();
+      requestState();
+    });
+  }
+  ladeschirmFristStellen();
+}
+
 // ── Nachrichten vom Modul ──────────────────────────────────────────────────
 // Verwirft die Markup-Caches von renderInto() und setzt hängende Swipe-/Lösch-
 // Animationen zurück, damit ein Re-Render nach einer abgelehnten Aktion wirklich
@@ -4300,6 +4432,11 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
+    // Jetzt steht etwas da — der Ladeschirm hat seine Aufgabe erfuellt. Die
+    // Nachlaeufer darunter (Kalender, Stundenplan, Briefing) holen ihre Daten
+    // in eine bereits sichtbare Oberflaeche nach; auf sie zu warten hiesse,
+    // den Schirm wegen der langsamsten Karte stehen zu lassen.
+    ladeschirmWeg();
     // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();
@@ -13037,6 +13174,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setTab(tabWunschStart);
+  ladeschirmGeduld();
   if (store.instances.length === 0) requestState();
 
   // ── Visu-Theme-Reporter (NUR als Kachel in der Visu, nicht als Web-App) ──

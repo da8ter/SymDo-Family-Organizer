@@ -1054,6 +1054,12 @@ trait AppCore
         if ($localBase !== '') {
             $symdo['localBase'] = $localBase . '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION;
         }
+        // Wo die App-Symbole liegen. Die Seite braucht das fuer den Ladeschirm:
+        // der zeigt dasselbe Symbol wie der Home-Bildschirm, und der Pfad steht
+        // hier statt fest in der Oberflaeche — die laeuft auch als Kachel, wo es
+        // diesen Hook nicht gibt.
+        $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
+        $symdo['iconBase'] = $iconBase;
         $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
             . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
 
@@ -1061,7 +1067,6 @@ trait AppCore
         // iOS-Homescreen. Root-absolut wie /icons.js, damit die URL auch über
         // Connect trägt. rel="apple-touch-icon" ohne -precomposed, denn iOS
         // maskiert die Ecken selbst — sonst gäbe es doppelte Rundungen.
-        $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
         // viewport-fit=cover ist die VORAUSSETZUNG dafuer, dass env(safe-area-inset-*)
         // ueberhaupt Werte liefert — ohne es sind alle vier null und die Seite bleibt
         // im Briefkasten zwischen Statusleiste und Home-Indikator. Der Adapter setzt
