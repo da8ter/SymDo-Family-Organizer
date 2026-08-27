@@ -5797,6 +5797,28 @@ function planZeitenSetzen() {
   });
 }
 
+/* Der freie Weg von x aus, bis das naechste Hindernis kommt. Ueberdeckt ein
+   Hindernis die Stelle x selbst, ist der Weg null.
+   Hindernisse sind die Schulstunden: ein Termintitel darf sie NIE ueberlappen.
+   Vorher galt der ganze Platz links bzw. rechts vom Balken als frei, und ein
+   langer Titel legte sich quer ueber den Vormittag. */
+function planWegRechts(hindernisse, x, ende) {
+  let grenze = ende;
+  hindernisse.forEach(h => {
+    if (h.b <= x) return;                          // liegt ganz links davon
+    grenze = Math.min(grenze, Math.max(h.a, x));   // deckt es x, wird der Weg 0
+  });
+  return Math.max(grenze - x, 0);
+}
+function planWegLinks(hindernisse, x) {
+  let grenze = 0;
+  hindernisse.forEach(h => {
+    if (h.a >= x) return;
+    grenze = Math.max(grenze, Math.min(h.b, x));
+  });
+  return Math.max(x - grenze, 0);
+}
+
 function planTermineBeschriften() {
   document.querySelectorAll('.plan-balken').forEach(balken => {
     const alle = [...balken.querySelectorAll('.plan-termin')];
@@ -5807,6 +5829,12 @@ function planTermineBeschriften() {
        Stellen synchron halten). Erst die Geometrie, dann die Verteilung: die
        Reihe haengt am BALKEN, nicht am Label — zwei zeitlich ueberlappende
        Termine muessen auseinander, auch wenn fuer die Titel kein Platz ist. */
+    /* Aus dem Baum gemessen, nicht aus den Daten gerechnet: die Stunden haben
+       eine Mindestbreite in Pixeln (planBalkenBreite), ihre Lage steht also
+       nicht im Verhaeltnis zur Zeitspanne allein. */
+    const stunden = [...balken.querySelectorAll('.plan-stueck')]
+      .map(s => ({ a: s.offsetLeft, b: s.offsetLeft + s.offsetWidth }));
+
     const posten = [];
     alle.forEach(m => {
       const label = m.querySelector('.plan-termin-titel');
@@ -5830,38 +5858,78 @@ function planTermineBeschriften() {
       const barB = barA + barBreit;
       // +1: scrollWidth rundet ab, und ein Pixel zu wenig laesst den Titel laufen.
       const natur = lauf.scrollWidth ? lauf.scrollWidth + 1 : 0;
-      const platzR = Math.floor(breite - barB - 4);
-      const platzL = Math.floor(barA - 4);
+      const platzR = Math.floor(planWegRechts(stunden, barB, breite) - 4);
+      const platzL = Math.floor(planWegLinks(stunden, barA) - 4);
       const nachLinks = platzL > platzR;
       const platz = nachLinks ? platzL : platzR;
       posten.push({ m, label, anteil, anteil2, barA, barB, nachLinks, natur,
-                    w: Math.min(natur, Math.max(platz, 0)), passt: platz >= 32 });
+                    w: Math.min(natur, Math.max(platz, 0)),
+                    // Genug Platz? Gemessen am Titel, nicht an einer festen
+                    // Zahl: ein kurzer Titel braucht kein 32 px breites Fenster.
+                    passt: platz >= Math.min(natur, 32) });
     });
 
-    const reihen = [{ ende: -1e9 }, { ende: -1e9 }];
+    /* ── Reihe und Etikettbreite vergeben ────────────────────────────────
+       Zwei Enden je Reihe: `endeBalken` zaehlt nur die BALKEN, `ende` auch die
+       Etiketten. Ein Balken ist der Termin selbst, ein Etikett nur seine
+       Beschriftung — bei Platznot gewinnt der Balken. Mit nur einem Ende
+       landete „Abendessen" in derselben Reihe wie der Schwimmunterricht und
+       verschwand unter dessen Balken, weil das lange Etikett der anderen
+       Reihe sie rechnerisch belegt hielt. */
+    const MIN_TITEL = 32;   // schmaler ist kein Titel mehr, sondern ein Streifen
+    const reihen = [{ ende: -1e9, endeBalken: -1e9, letzter: null },
+                    { ende: -1e9, endeBalken: -1e9, letzter: null }];
+    // Wie weit ragt ein Posten nach RECHTS? Nur ein Etikett rechts vom Balken
+    // verlaengert ihn; eines links liegt vor dem Balken.
+    const ragtBis = pos => (pos.mitTitel && !pos.nachLinks) ? pos.barB + 4 + pos.w : pos.barB;
+
     posten.forEach(pos => {
       let r = -1;
-      // a) Mit Titel: Balken UND Label muessen in die Reihe passen.
+      /* a) Eine Reihe, in der Balken UND Etikett Platz haben. Das Fenster darf
+            dabei SCHMALER werden als der Titel: seit zu lange Titel laufen,
+            ist ein enges Fenster kein Grund mehr, den Titel wegzulassen. */
       if (pos.passt) {
-        const a = pos.nachLinks ? pos.barA - 4 - pos.w : pos.barA;
-        const b = pos.nachLinks ? pos.barB : pos.barB + 4 + pos.w;
         for (let k = 0; k < 2; k++) {
-          if (a >= reihen[k].ende + 4) { r = k; pos.mitTitel = true; pos.ende = b; break; }
+          if (pos.barA < reihen[k].endeBalken + 4) continue;
+          const w = pos.nachLinks
+            ? Math.min(pos.w, Math.floor(pos.barA - 8 - reihen[k].ende))
+            : pos.w;
+          if (w < Math.min(pos.natur, MIN_TITEL)) continue;
+          // Nach rechts beschriftet: unser BALKEN darf nicht unter dem Etikett
+          // liegen, das in dieser Reihe schon steht.
+          if (!pos.nachLinks && pos.barA < reihen[k].ende + 4) continue;
+          r = k; pos.mitTitel = true; pos.w = w;
+          break;
         }
       }
-      // b) Ohne Titel: nur der Balken muss passen.
+      // b) Ohne Titel: nur der BALKEN muss frei stehen.
       if (r === -1) {
         for (let k = 0; k < 2; k++) {
-          if (pos.barA >= reihen[k].ende + 4) { r = k; pos.mitTitel = false; pos.ende = pos.barB; break; }
+          if (pos.barA >= reihen[k].endeBalken + 4) { r = k; pos.mitTitel = false; break; }
         }
       }
-      // c) Beide belegt: die Reihe mit dem frueheren Ende, Titel weg.
+      // c) Beide Reihen belegt: die mit dem frueheren Balkenende.
       if (r === -1) {
-        r = reihen[0].ende <= reihen[1].ende ? 0 : 1;
+        r = reihen[0].endeBalken <= reihen[1].endeBalken ? 0 : 1;
         pos.mitTitel = false;
-        pos.ende = Math.max(reihen[r].ende, pos.barB);
       }
-      reihen[r] = { ende: pos.ende };
+
+      /* Steht in der gewaehlten Reihe noch ein Etikett im Weg, muss es weichen
+         — erst schmaler, dann ganz. Ein verdeckter Balken waere der groessere
+         Verlust. */
+      const reihe = reihen[r];
+      const vor = reihe.letzter;
+      if (vor && vor.mitTitel && !vor.nachLinks && pos.barA < ragtBis(vor) + 4) {
+        const rest = Math.floor(pos.barA - 8 - vor.barB);
+        if (rest >= Math.min(vor.natur, MIN_TITEL)) { vor.w = rest; }
+        else { vor.mitTitel = false; }
+      }
+      pos.ende = ragtBis(pos);
+      reihen[r] = {
+        ende: Math.max(reihe.endeBalken, vor ? ragtBis(vor) : -1e9, pos.ende),
+        endeBalken: Math.max(reihe.endeBalken, pos.barB),
+        letzter: pos
+      };
       pos.r = r;
     });
 
