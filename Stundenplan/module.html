@@ -281,6 +281,14 @@
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   .scrollbahn::-webkit-scrollbar { display: none; }
+  /* Zeichen, dass es rechts weitergeht — ohne das sieht eine rollende Bahn
+     aus wie ein abgeschnittener Plan. */
+  .scrollbahn.rollt { position: relative; }
+  .scrollbahn.rollt::after {
+    content: ''; position: sticky; float: right; top: 0; right: 0;
+    width: 18px; height: 22px; margin-left: -18px; pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--bg));
+  }
   .ticks { position: relative; height: 8px; margin-top: 3px; }
   .ticks .linie { position: absolute; top: 4px; left: 0; right: 0; height: 1px; background: var(--line); }
   .ticks span { position: absolute; top: 2px; width: 1px; height: 5px; background: var(--muted); opacity: .5; }
@@ -641,6 +649,15 @@
      Balken und die Bahn rollt. */
   const MIN_STUECK = 24;
 
+  /* Wie viel der sichtbaren Breite dem SCHULTAG mindestens bleibt.
+     Der Grund steht in echten Daten: ein Abendessen um 21:00 zog die Achse
+     bis 21:45, und der Schultag von 07:45 bis 11:50 schrumpfte auf ein
+     Viertel der Kachel — der Plan war nicht mehr zu lesen, nur damit ein
+     Punkt am Rand Platz hat. Faellt der Anteil darunter, waechst der Balken
+     und die Bahn rollt: der Schultag behaelt seine Groesse, der spaete
+     Termin ist einen Wisch entfernt. */
+  const SCHULTAG_ANTEIL = 0.7;
+
   /**
    * Breite der Balken bestimmen. Rechnet mit der KUERZESTEN Stunde des
    * gewaehlten Tages ueber ALLE Kinder: alle Zeilen brauchen denselben
@@ -652,17 +669,27 @@
     if (!bahnen.length || !zustand || !zustand.span) { return; }
     const spanne = Math.max(zustand.span[1] - zustand.span[0], 60);
     const gewaehlt = tagWaehlen();
-    let kuerzeste = Infinity;
+    let kuerzeste = Infinity, schulVon = Infinity, schulBis = -Infinity;
     (zustand.children || []).forEach(function (k) {
       const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
       ((tag && tag.slots) || []).forEach(function (s) {
         kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
+        schulVon = Math.min(schulVon, s.from);
+        schulBis = Math.max(schulBis, s.to);
       });
     });
-    const noetig = isFinite(kuerzeste) ? Math.ceil(spanne / kuerzeste * MIN_STUECK) : 0;
+    const schulSpanne = (isFinite(schulVon) && schulBis > schulVon) ? schulBis - schulVon : spanne;
     bahnen.forEach(function (bahn) {
-      const breite = noetig > bahn.clientWidth ? noetig : 0;
-      bahn.querySelectorAll('.balken, .ticks').forEach(function (el) {
+      const platz = bahn.clientWidth;
+      /* Zwei Untergrenzen fuer den Massstab: die kuerzeste Stunde braucht ihre
+         Pixel, und der Schultag braucht seinen Anteil an der Kachel. Die
+         groessere gewinnt. */
+      const proMinute = Math.max(
+        isFinite(kuerzeste) ? MIN_STUECK / kuerzeste : 0,
+        platz ? platz * SCHULTAG_ANTEIL / schulSpanne : 0);
+      const noetig = Math.ceil(spanne * proMinute);
+      const breite = noetig > platz ? noetig : 0;
+      bahn.querySelectorAll('.balken, .ticks, .zeiten').forEach(function (el) {
         el.style.width = breite ? breite + 'px' : '';
       });
       bahn.classList.toggle('rollt', !!breite);

@@ -110,11 +110,14 @@ Meldung entsteht.
 Stunde, Ende der letzten (beide kräftiger) und die Startzeit jedes Termins. Wird
 es eng, weicht die Terminzeit — sie steht ohnehin am Marker.
 
-Eine Schulstunde ist mindestens **24 Pixel** breit — genug für ihr Symbol.
-Reicht die Kachelbreite dafür nicht (kurze Stunden oder ein langer Tag), wird
-die Timeline **waagerecht scrollbar**; alle Zeilen rollen gemeinsam und tragen
-denselben Maßstab, sonst läge dieselbe Uhrzeit in zwei Zeilen an verschiedenen
-Stellen.
+Zwei Regeln halten die Timeline lesbar. Eine Schulstunde ist mindestens
+**24 Pixel** breit — genug für ihr Symbol. Und dem **Schultag** bleiben
+mindestens **sieben Zehntel** der sichtbaren Breite: Ein Termin am späten Abend
+darf den Unterricht nicht an den linken Rand quetschen. Reicht die Kachelbreite
+für beides nicht, wird die Timeline **waagerecht scrollbar** — ein weicher
+Verlauf am rechten Rand zeigt, dass es weitergeht. Alle Zeilen rollen gemeinsam
+und tragen denselben Maßstab, sonst läge dieselbe Uhrzeit in zwei Zeilen an
+verschiedenen Stellen.
 
 Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern in der
 **SymDo Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die
