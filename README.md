@@ -170,3 +170,5 @@ heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
 Kompakte Kachel mit den offenen Artikeln einer Einkaufsliste als waagerecht
 scrollbare Bild-Leiste — dieselbe Vorschau wie auf der SymDo-Übersicht. Ein Tipp
 öffnet ein frei wählbares Objekt.
+
+→ [Ausführliche Anleitung](ShoppingListOverview/README.md)
