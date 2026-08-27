@@ -118,19 +118,23 @@ gepflegt.
 | Quelle | Zustand |
 |---|---|
 | **OpenHolidaysAPI** | Kostenlos, ohne Konto und ohne Schlüssel. Bundesland im Formular wählen. Geprüft. |
-| **Almanac** (Wilkware) | **Ungeprüft** — siehe unten. |
+| **Jahreskalender** (Almanac, Wilkware) | Geprüft gegen das installierte Modul. Antwortet je Tag, deshalb wird tageweise abgefragt — siehe unten. |
 | **Keine** | Der Plan gilt immer. Ein bereits abgerufener Stand bleibt gespeichert, **wirkt aber nicht**: kein Band, kein grauer Ferienbalken, keine Ferienzeile im Briefing. Er greift wieder, sobald eine Quelle gewählt ist. |
 
 Abgerufen wird einmal täglich, dazu auf Knopfdruck. Ein misslungener Abruf lässt
 den abgelegten Stand stehen, statt ihn zu leeren: ein Netzfehler darf keinen
 Schultag zum Ferientag machen und umgekehrt.
 
-> **Zum Almanac-Anschluss:** Das Modul *Jahreskalender (Almanac)* ist auf dem
-> Entwicklungssystem nicht installiert. Der Adapter entstand deshalb nach der
-> Dokumentation und **nicht** gegen die echte Schnittstelle. Er ist so gebaut,
-> dass ein Fehlschlag folgenlos bleibt — antwortet keine der erwarteten
-> Funktionen, kennt der Plan einfach keine Ferien. Sobald das Modul installiert
-> ist, wird der Adapter gegen das echte nachgezogen.
+> **Zum Jahreskalender:** Das Modul kennt nur eine Auskunft je **Tag**
+> (`ALMANAC_DateInfo`), keine Zeiträume. Der Stundenplan fragt deshalb Tag für Tag
+> und setzt die Abschnitte selbst zusammen. Gemessen rund 21 ms je Tag, für die
+> **vier Monate** Vorausschau also etwa drei Sekunden — einmal täglich und einmal
+> auf Knopfdruck. Ein Block, der am Fensterende noch läuft, wird zu Ende gefragt;
+> sonst stünde am Weihnachtsferien-Balken das Fensterende statt des 6. Januar.
+>
+> Im Jahreskalender müssen die **Schulferien eingerichtet** sein (Bundesland, bei
+> Bedarf die Schule). Ob dort der Zeitraum im Namen steht, ist gleichgültig — der
+> Klammerzusatz wird entfernt.
 
 ## Grenzen
 

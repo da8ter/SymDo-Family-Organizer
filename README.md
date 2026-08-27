@@ -133,7 +133,7 @@ der SymDo-Übersicht.
 - Betreuung je Kind und Tag, getrennt vom Unterricht gezählt
 - Samstag je Kind zuschaltbar, auch nur in geraden oder ungeraden Wochen
 - Ferien und Feiertage über **OpenHolidaysAPI** (kostenlos, ohne Konto) oder das
-  Almanac-Modul; an freien Tagen wird der Balken grau und nennt den Anlass
+  **Jahreskalender**-Modul; an freien Tagen wird der Balken grau und nennt den Anlass
 
 → [Ausführliche Anleitung](Stundenplan/README.md)
 

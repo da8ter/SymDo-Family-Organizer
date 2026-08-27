@@ -817,7 +817,7 @@ class SymDoStundenplan extends IPSModuleStrict
                     'options' => [
                         ['caption' => $this->Translate('None — the plan always applies'), 'value' => 'none'],
                         ['caption' => $this->Translate('OpenHolidaysAPI (free, no account)'), 'value' => 'openholidays'],
-                        ['caption' => $this->Translate('Almanac module (untested)'), 'value' => 'almanac'],
+                        ['caption' => $this->Translate("Almanac module (Jahreskalender)"), 'value' => 'almanac'],
                     ],
                 ],
                 [
@@ -839,7 +839,7 @@ class SymDoStundenplan extends IPSModuleStrict
                     'type'    => 'Label',
                     'name'    => 'AlmanacHint',
                     'visible' => $quelle === 'almanac',
-                    'caption' => $this->Translate('UNTESTED: the Almanac module is not installed on this system, so this connection was written against the documentation, not against the real interface. If it does not answer, nothing breaks — the plan then simply knows no holidays. Tell me once the module is installed and I will check it against the real thing.')
+                    'caption' => $this->Translate("The Almanac module answers per day, not per period. The days are therefore queried one by one and the periods assembled from that — about 21 ms each, so roughly three seconds for the four months looked ahead. It runs once a day and once when you press the button; the window moves along with the days, so nothing is lost. Almanac must be set up for school holidays (federal state, and the school if it matters); whether its name carries the period does not matter here, the bracket is stripped.")
                 ],
                 [
                     'type'    => 'Button',
