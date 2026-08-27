@@ -5713,10 +5713,12 @@ function stundenplanJetzt() {
    Stundenplan-Kachel (beide Stellen synchron halten). */
 const PLAN_MIN_STUECK = 24;
 
-/* Wie viel der sichtbaren Breite dem SCHULTAG mindestens bleibt — Zwilling von
-   SCHULTAG_ANTEIL in der Stundenplan-Kachel. Ein Abendessen um 21:00 zog die
-   Achse sonst bis 21:45 und quetschte den Schultag an den linken Rand. */
-const PLAN_SCHULTAG_ANTEIL = 0.7;
+/* HIER STAND EINE ZWEITE UNTERGRENZE — der Schultag sollte immer sieben
+   Zehntel der sichtbaren Breite behalten. Sie ist raus, an echten Daten
+   gemessen: freitags endet die Schule um 10:35, die Achse laeuft wegen eines
+   Termins am Donnerstag aber bis 22:15. Um 170 Minuten Schule auf 70 Prozent
+   der Karte zu bringen, braucht die ganze Achse das 3,6-Fache ihrer Breite.
+   MIN_STUECK haelt jede Stunde lesbar, mehr braucht es nicht. */
 
 /**
  * Breite der Balken bestimmen. Massstab ist die KUERZESTE Stunde des
@@ -5728,23 +5730,19 @@ function planBalkenBreite() {
   if (!bahnen.length || !stundenplan || !stundenplan.span) return;
   const spanne = Math.max(stundenplan.span[1] - stundenplan.span[0], 60);
   const gewaehlt = stundenplanGewaehlt();
-  let kuerzeste = Infinity, schulVon = Infinity, schulBis = -Infinity;
+  let kuerzeste = Infinity;
   (stundenplan.children || []).forEach(k => {
     const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
     ((tag && tag.slots) || []).forEach(s => {
       kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
-      schulVon = Math.min(schulVon, s.from);
-      schulBis = Math.max(schulBis, s.to);
     });
   });
-  const schulSpanne = (isFinite(schulVon) && schulBis > schulVon) ? schulBis - schulVon : spanne;
+  // Der Massstab haengt allein an der kuerzesten Stunde des Tages und damit
+  // NICHT an der Kartenbreite — nur die Frage, ob gerollt wird, tut das.
+  const proMinute = isFinite(kuerzeste) ? PLAN_MIN_STUECK / kuerzeste : 0;
+  const noetig = Math.ceil(spanne * proMinute);
   bahnen.forEach(bahn => {
     const platz = bahn.clientWidth;
-    // Zwei Untergrenzen fuer den Massstab; die groessere gewinnt.
-    const proMinute = Math.max(
-      isFinite(kuerzeste) ? PLAN_MIN_STUECK / kuerzeste : 0,
-      platz ? platz * PLAN_SCHULTAG_ANTEIL / schulSpanne : 0);
-    const noetig = Math.ceil(spanne * proMinute);
     const breite = noetig > platz ? noetig : 0;
     bahn.querySelectorAll('.plan-balken, .plan-ticks, .plan-zeiten').forEach(el => {
       el.style.width = breite ? breite + 'px' : '';

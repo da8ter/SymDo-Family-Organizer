@@ -671,14 +671,19 @@
      Balken und die Bahn rollt. */
   const MIN_STUECK = 24;
 
-  /* Wie viel der sichtbaren Breite dem SCHULTAG mindestens bleibt.
-     Der Grund steht in echten Daten: ein Abendessen um 21:00 zog die Achse
-     bis 21:45, und der Schultag von 07:45 bis 11:50 schrumpfte auf ein
-     Viertel der Kachel — der Plan war nicht mehr zu lesen, nur damit ein
-     Punkt am Rand Platz hat. Faellt der Anteil darunter, waechst der Balken
-     und die Bahn rollt: der Schultag behaelt seine Groesse, der spaete
-     Termin ist einen Wisch entfernt. */
-  const SCHULTAG_ANTEIL = 0.7;
+  /* HIER STAND EINE ZWEITE UNTERGRENZE — der Schultag sollte immer sieben
+     Zehntel der sichtbaren Breite behalten. Sie ist raus, und zwar an echten
+     Daten gemessen: freitags endet die Schule um 10:35, die Achse laeuft
+     wegen eines Termins am Donnerstag aber bis 22:15. Um 170 Minuten Schule
+     auf 70 Prozent von 394 Pixeln zu bringen, braucht die ganze Achse 1412
+     Pixel — das 3,6-Fache der Kachel, und der Freitag war nur noch mit
+     mehreren Wischern zu ueberblicken.
+
+     Was bleibt, reicht: MIN_STUECK haelt jede einzelne Stunde lesbar, und
+     genau daran haengt jetzt allein, ob die Bahn rollt. Derselbe Freitag
+     kommt so auf 464 Pixel. Ein kurzer Schultag nimmt dann eben nur ein
+     Fuenftel der Achse ein — das ist keine schlechte Darstellung, sondern
+     die Wahrheit ueber den Tag. */
 
   /**
    * Breite der Balken bestimmen. Rechnet mit der KUERZESTEN Stunde des
@@ -691,25 +696,19 @@
     if (!bahnen.length || !zustand || !zustand.span) { return; }
     const spanne = Math.max(zustand.span[1] - zustand.span[0], 60);
     const gewaehlt = tagWaehlen();
-    let kuerzeste = Infinity, schulVon = Infinity, schulBis = -Infinity;
+    let kuerzeste = Infinity;
     (zustand.children || []).forEach(function (k) {
       const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
       ((tag && tag.slots) || []).forEach(function (s) {
         kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
-        schulVon = Math.min(schulVon, s.from);
-        schulBis = Math.max(schulBis, s.to);
       });
     });
-    const schulSpanne = (isFinite(schulVon) && schulBis > schulVon) ? schulBis - schulVon : spanne;
+    // Der Massstab haengt allein an der kuerzesten Stunde des Tages und damit
+    // NICHT an der Kachelbreite — nur die Frage, ob gerollt wird, tut das.
+    const proMinute = isFinite(kuerzeste) ? MIN_STUECK / kuerzeste : 0;
+    const noetig = Math.ceil(spanne * proMinute);
     bahnen.forEach(function (bahn) {
       const platz = bahn.clientWidth;
-      /* Zwei Untergrenzen fuer den Massstab: die kuerzeste Stunde braucht ihre
-         Pixel, und der Schultag braucht seinen Anteil an der Kachel. Die
-         groessere gewinnt. */
-      const proMinute = Math.max(
-        isFinite(kuerzeste) ? MIN_STUECK / kuerzeste : 0,
-        platz ? platz * SCHULTAG_ANTEIL / schulSpanne : 0);
-      const noetig = Math.ceil(spanne * proMinute);
       const breite = noetig > platz ? noetig : 0;
       bahn.querySelectorAll('.balken, .ticks, .zeiten').forEach(function (el) {
         el.style.width = breite ? breite + 'px' : '';
