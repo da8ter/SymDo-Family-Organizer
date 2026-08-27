@@ -157,6 +157,11 @@ trait TimetableBridge
                             'title' => (string)($e['title'] ?? ''),
                             'time'  => (string)($e['time'] ?? ''),
                             'at'    => (int)($e['at'] ?? 0),
+                            // Ende und „ohne Endzeit" gehoeren mit: der Termin
+                            // wird als Balken gezeichnet, und ohne Endzeit
+                            // laeuft er aus statt hart abzubrechen.
+                            'bis'   => (int)($e['bis'] ?? 0),
+                            'open'  => ($e['open'] ?? false) === true,
                         ];
                     }
                     $tage[] = [

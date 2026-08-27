@@ -628,17 +628,23 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   position: absolute; top: 0; height: 100%; z-index: 2;
   display: flex; align-items: center; gap: 3px;
 }
-.plan-termin-punkt {
-  width: 8px; height: 8px; border-radius: 50%; flex: none;
+/* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
+   rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
+.plan-termin-bar {
+  height: 10px; border-radius: 5px; flex: none;
   background: var(--accent, #0a84ff);
+}
+.plan-termin[data-open] .plan-termin-bar {
+  border-radius: 5px 0 0 5px;
+  background: linear-gradient(90deg, var(--accent, #0a84ff), transparent);
 }
 /* Ohne Grund und ohne Saum — Zwilling der Kachel. */
 .plan-termin-titel {
   font-size: 9px; line-height: 1; color: var(--text, #1c1c1e);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.plan-termin.oben  .plan-termin-punkt, .plan-termin.oben  .plan-termin-titel { transform: translateY(-5px); }
-.plan-termin.unten .plan-termin-punkt, .plan-termin.unten .plan-termin-titel { transform: translateY(5px); }
+.plan-termin.oben  .plan-termin-bar, .plan-termin.oben  .plan-termin-titel { transform: translateY(-6px); }
+.plan-termin.unten .plan-termin-bar, .plan-termin.unten .plan-termin-titel { transform: translateY(6px); }
 /* Klappung ueber `right` (gesetzt in planTermineBeschriften), nicht ueber
    transform: ein absolut positioniertes Element bei `left: 94%` bekommt nur
    die restlichen 6 % als Hoechstbreite. */
@@ -5673,41 +5679,49 @@ function planTermineBeschriften() {
     const breite = balken.clientWidth;
     if (!alle.length || !breite) return;
     /* ZWEI Reihen — Zwilling von termineBeschriften() in der
-       Stundenplan-Kachel (beide Stellen synchron halten). Ueberschneiden sich
-       zwei Titel, stehen sie versetzt uebereinander; beim dritten bleibt es
-       beim blossen Punkt. */
+       Stundenplan-Kachel (beide Stellen synchron halten). */
     const reihen = [{ ende: -1e9, wer: -1 }, { ende: -1e9, wer: -1 }];
     alle.forEach((m, i) => {
       const label = m.querySelector('.plan-termin-titel');
-      if (!label) return;
+      const bar   = m.querySelector('.plan-termin-bar');
+      if (!label || !bar) return;
       m.classList.remove('flip', 'oben', 'unten');
       m.style.right = 'auto';
-      m.style.left = (parseFloat(m.dataset.p) || 0) + '%';
+      const anteil  = (parseFloat(m.dataset.p) || 0) / 100;
+      const anteil2 = (parseFloat(m.dataset.p2) || 0) / 100;
+      m.style.left = (anteil * 100) + '%';
       label.style.display = '';
       label.style.maxWidth = 'none';
-      const anteil = parseFloat(m.dataset.p) / 100;
-      const links = anteil * breite;
-      /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
-         Deckel von 85 px setzt die Ellipse — genau so wurde aus
-         „Schwimmunterricht" ein „Schwimmunterric…". */
+      // Der Balken so lang wie der Termin dauert, mindestens 6 px.
+      const barBreit = Math.max(Math.round((anteil2 - anteil) * breite), 6);
+      bar.style.width = barBreit + 'px';
+
+      const links  = anteil * breite;
+      const rechts = links + barBreit;
+      // +1: scrollWidth rundet ab, und ein Pixel zu wenig setzt die Ellipse.
       const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
-      const rechts = Math.floor(breite - links - 12);
-      const linksP = Math.floor(links - 12);
-      const nachLinks = linksP > rechts;
-      const platz = nachLinks ? linksP : rechts;
+      const platzR = Math.floor(breite - rechts - 4);
+      const platzL = Math.floor(links - 4);
+      const nachLinks = platzL > platzR;
+      const platz = nachLinks ? platzL : platzR;
       if (platz < 32) { label.style.display = 'none'; return; }
       const w = Math.min(natur, platz);
-      const a = nachLinks ? links - 12 - w : links + 12;
+      const a = nachLinks ? links - 4 - w : links;
+      const b = nachLinks ? rechts : rechts + 4 + w;
       let r = -1;
       for (let k = 0; k < 2; k++) {
         if (a >= reihen[k].ende + 4) { r = k; break; }
       }
       if (r === -1) { label.style.display = 'none'; return; }
       label.style.maxWidth = w + 'px';
+      /* Geklappt ueber `right`: ein absolut positioniertes Element bei
+         left:94 % bekaeme sonst nur die restlichen 6 % als Hoechstbreite.
+         Verankert wird am ENDE des Termins, der Balken liegt also weiter
+         genau ueber seiner Zeit. */
       if (nachLinks) {
         m.classList.add('flip');
         m.style.left = 'auto';
-        m.style.right = (100 - anteil * 100) + '%';
+        m.style.right = (100 - anteil2 * 100) + '%';
       } else {
         m.style.right = 'auto';
         m.style.left = (anteil * 100) + '%';
@@ -5717,7 +5731,7 @@ function planTermineBeschriften() {
         const partner = alle[reihen[0].wer];
         if (partner) partner.classList.add('oben');
       }
-      reihen[r] = { ende: a + w, wer: i };
+      reihen[r] = { ende: b, wer: i };
     });
   });
 }
@@ -5987,10 +6001,12 @@ function stundenplanKarte() {
        gemessen (planTermineBeschriften). */
     let marker = '';
     (tag.events || []).forEach(e => {
-      const p = Math.min(Math.max((e.at - von) / spanne, 0), 1);
-      marker += `<div class="plan-termin" data-p="${p * 100}"` +
+      const p  = Math.min(Math.max((e.at - von) / spanne, 0), 1);
+      const p2 = Math.min(Math.max(((e.bis || e.at) - von) / spanne, 0), 1);
+      marker += `<div class="plan-termin" data-p="${p * 100}" data-p2="${p2 * 100}"` +
+        (e.open ? ' data-open="1"' : '') +
         ` title="${escapeHtml((e.time || '') + ' ' + (e.title || ''))}"` +
-        ` style="left:${p * 100}%"><span class="plan-termin-punkt"></span>` +
+        ` style="left:${p * 100}%"><span class="plan-termin-bar"></span>` +
         `<span class="plan-termin-titel">${escapeHtml(e.title || '')}</span></div>`;
     });
     // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern liegen.

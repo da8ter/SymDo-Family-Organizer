@@ -95,9 +95,11 @@ Meldung entsteht.
    zählt nicht als Unterrichtszeit.
 5. **Ferien**: Quelle wählen und einmal abrufen.
 6. **Anzeige**: Wochenraster oder Timeline. Dazu optional **Termine der Kinder
-   auf der Timeline** — kleine Marker an der Startzeit, mit Titel, wenn Platz
-   ist (bei Enge wandert das Label auf die linke Seite des Punktes oder
-   entfällt; Antippen zeigt es immer). Die Marker folgen der
+   auf der Timeline** — als **Balken** auf der Zeitachse, so lang wie der Termin
+   dauert, mit dem Titel daneben. Hat der Termin **keine Endzeit**, gilt eine
+   Stunde und der Balken läuft nach rechts aus, statt ein Ende zu behaupten.
+   Für den Titel gilt: er steht auf der Seite mit mehr Platz, wird bei Enge
+   gekürzt und entfällt notfalls ganz — Antippen zeigt ihn immer. Die Marker folgen der
    **Mitglieder-Zuordnung** aus SymDo: Ein Termin erscheint bei jedem Kind, dem
    er in der App zugewiesen ist. Ganztägige Termine und Termine ohne Zuordnung
    erscheinen nicht; die Zeitachse verlängert sich bei Bedarf bis zum letzten

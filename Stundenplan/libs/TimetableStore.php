@@ -381,10 +381,22 @@ trait TimetableStore
             if ($tag > 6) {
                 continue;   // Sonntag zeigt die Timeline nicht
             }
+            /* Dauer: der Termin wird als Balken gezeichnet. Ohne echtes Ende
+               (manche Kalender legen Termine mit Dauer null an) gilt EINE
+               STUNDE, und der Balken laeuft nach rechts aus — die Kachel
+               behauptet dann keine Endzeit, die niemand gesetzt hat. */
+            $ende  = (int)($e['end'] ?? 0);
+            $offen = $ende <= $start;
+            $von_m = (int)date('G', $start) * 60 + (int)date('i', $start);
+            $bis_m = $offen ? $von_m + 60 : $von_m + (int)ceil(($ende - $start) / 60);
             $marker = [
                 'title' => trim((string)($e['title'] ?? '')),
                 'time'  => date('H:i', $start),
-                'at'    => (int)date('G', $start) * 60 + (int)date('i', $start),
+                'at'    => $von_m,
+                // Ende in Minuten des Tages, gedeckelt: ein Termin ueber
+                // Mitternacht hinaus endet in dieser Darstellung um 24:00.
+                'bis'   => min($bis_m, 24 * 60),
+                'open'  => $offen,
             ];
             foreach ((array)($e['members'] ?? []) as $m) {
                 $m = (string)$m;
@@ -436,7 +448,8 @@ trait TimetableStore
             foreach ($jeTag as $liste) {
                 foreach ($liste as $marker) {
                     $von = min($von, max(0, (int)$marker['at'] - 15));
-                    $bis = max($bis, min(24 * 60, (int)$marker['at'] + 45));
+                    // Bis zum ENDE des Termins, plus etwas Luft fuer das Label.
+                    $bis = max($bis, min(24 * 60, (int)$marker['bis'] + 15));
                 }
             }
         }

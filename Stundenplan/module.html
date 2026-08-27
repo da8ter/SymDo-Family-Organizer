@@ -295,9 +295,16 @@
     position: absolute; top: 0; height: 100%; z-index: 2;
     display: flex; align-items: center; gap: 3px;
   }
-  .termin-punkt {
-    width: 8px; height: 8px; border-radius: 50%; flex: none;
+  /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er
+     nach rechts aus (data-open) — die Kachel behauptet dann keine Endzeit,
+     die niemand gesetzt hat. */
+  .termin-bar {
+    height: 10px; border-radius: 5px; flex: none;
     background: var(--accent);
+  }
+  .termin[data-open] .termin-bar {
+    border-radius: 5px 0 0 5px;
+    background: linear-gradient(90deg, var(--accent), transparent);
   }
   /* Ohne Grund und ohne Saum (Wunsch vom 27.08.2026): der Titel steht blank
      im Balken. Er liegt damit moeglicherweise ueber einem farbigen Fach —
@@ -308,8 +315,8 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   /* Zwei Reihen bei Ueberschneidung — nur dann, sonst bleibt es mittig. */
-  .termin.oben  .termin-punkt, .termin.oben  .termin-titel { transform: translateY(-5px); }
-  .termin.unten .termin-punkt, .termin.unten .termin-titel { transform: translateY(5px); }
+  .termin.oben  .termin-bar, .termin.oben  .termin-titel { transform: translateY(-6px); }
+  .termin.unten .termin-bar, .termin.unten .termin-titel { transform: translateY(6px); }
   /* Label links vom Punkt. Verankert wird ueber `right` (gesetzt in
      termineBeschriften), NICHT ueber transform: ein absolut positioniertes
      Element bei `left: 94%` bekommt als Hoechstbreite nur die restlichen 6 %
@@ -748,45 +755,57 @@
       if (!alle.length || !breite) { return; }
       /* ZWEI Reihen. Ueberschneiden sich zwei Titel, stehen sie versetzt
          uebereinander statt dass einer verschwindet — bei zweien geht das,
-         bei dreien nicht mehr, dann bleibt der dritte beim blossen Punkt.
-         Gemerkt wird je Reihe der rechte Rand des letzten Labels UND wer ihn
-         belegt: der Partner muss mitversetzt werden. */
+         bei dreien nicht mehr, dann bleibt der dritte beim blossen Balken. */
       const reihen = [{ ende: -1e9, wer: -1 }, { ende: -1e9, wer: -1 }];
       alle.forEach(function (m, i) {
         const label = m.querySelector('.termin-titel');
-        if (!label) { return; }
+        const bar   = m.querySelector('.termin-bar');
+        if (!label || !bar) { return; }
         m.classList.remove('flip', 'oben', 'unten');
         m.style.right = 'auto';
-        m.style.left = (parseFloat(m.dataset.p) || 0) + '%';
+        const anteil  = (parseFloat(m.dataset.p) || 0) / 100;
+        const anteil2 = (parseFloat(m.dataset.p2) || 0) / 100;
+        m.style.left = (anteil * 100) + '%';
         label.style.display = '';
         label.style.maxWidth = 'none';
-        const anteil = parseFloat(m.dataset.p) / 100;
-        const links = anteil * breite;
+        /* Der Balken so lang wie der Termin dauert. Mindestens 6 px, sonst
+           verschwindet ein kurzer Termin ganz — dieselbe Ueberlegung wie bei
+           der Mindestbreite einer Schulstunde, nur bescheidener: der Balken
+           traegt kein Symbol. */
+        const barBreit = Math.max(Math.round((anteil2 - anteil) * breite), 6);
+        bar.style.width = barBreit + 'px';
+
+        const links  = anteil * breite;
+        const rechts = links + barBreit;
         /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
            Deckel von 85 px setzt die Ellipse — genau so wurde aus
            „Schwimmunterricht" ein „Schwimmunterric…". */
         const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
-        /* Platz bis zum BALKENENDE, nicht bis zum naechsten Marker: das
-           Nebeneinander regeln jetzt die Reihen. 12 px fuer den Punkt. */
-        const rechts = Math.floor(breite - links - 12);
-        const linksP = Math.floor(links - 12);
-        const nachLinks = linksP > rechts;
-        const platz = nachLinks ? linksP : rechts;
+        // Platz bis zum Balkenende bzw. bis zum Balkenanfang; 4 px Abstand.
+        const platzR = Math.floor(breite - rechts - 4);
+        const platzL = Math.floor(links - 4);
+        const nachLinks = platzL > platzR;
+        const platz = nachLinks ? platzL : platzR;
         if (platz < 32) { label.style.display = 'none'; return; }
         const w = Math.min(natur, platz);
-        const a = nachLinks ? links - 12 - w : links + 12;
+        // Belegter Bereich: der Balken IMMER, das Label auf seiner Seite.
+        const a = nachLinks ? links - 4 - w : links;
+        const b = nachLinks ? rechts : rechts + 4 + w;
         let r = -1;
         for (let k = 0; k < 2; k++) {
           if (a >= reihen[k].ende + 4) { r = k; break; }
         }
         if (r === -1) { label.style.display = 'none'; return; }
         label.style.maxWidth = w + 'px';
-        /* Verankerung umstellen: geklappt zaehlt der Platz LINKS vom Punkt,
-           und den gibt es nur ueber `right`. */
+        /* Verankerung: geklappt zaehlt der Platz LINKS, und den gibt es nur
+           ueber `right` — ein absolut positioniertes Element bei left:94 %
+           bekommt sonst nur die restlichen 6 % als Hoechstbreite. Geklappt
+           liegt das rechte Ende des Kastens auf dem ENDE des Termins, der
+           Balken also weiter genau ueber seiner Zeit. */
         if (nachLinks) {
           m.classList.add('flip');
           m.style.left = 'auto';
-          m.style.right = (100 - anteil * 100) + '%';
+          m.style.right = (100 - anteil2 * 100) + '%';
         } else {
           m.style.right = 'auto';
           m.style.left = (anteil * 100) + '%';
@@ -798,7 +817,7 @@
           const partner = alle[reihen[0].wer];
           if (partner) { partner.classList.add('oben'); }
         }
-        reihen[r] = { ende: a + w, wer: i };
+        reihen[r] = { ende: b, wer: i };
       });
     });
   }
@@ -1212,10 +1231,14 @@
          fest, wie viel Pixel bis zum naechsten Marker bleiben. */
       let marker = '';
       (tag.events || []).forEach(function (e) {
-        const p = Math.min(Math.max((e.at - von) / spanne, 0), 1);
-        marker += '<div class="termin" data-at="' + (e.at || 0) + '" data-p="' + (p * 100) + '" title="'
+        const p  = Math.min(Math.max((e.at - von) / spanne, 0), 1);
+        const p2 = Math.min(Math.max(((e.bis || e.at) - von) / spanne, 0), 1);
+        // Die Breite setzt termineBeschriften in Pixeln — hier steht die
+        // Balkenbreite noch nicht fest (balkenBreite laeuft davor).
+        marker += '<div class="termin" data-at="' + (e.at || 0) + '" data-p="' + (p * 100) + '"'
+          + ' data-p2="' + (p2 * 100) + '"' + (e.open ? ' data-open="1"' : '') + ' title="'
           + esc((e.time || '') + ' ' + (e.title || '')) + '" style="left:' + (p * 100) + '%">'
-          + '<span class="termin-punkt"></span>'
+          + '<span class="termin-bar"></span>'
           + '<span class="termin-titel">' + esc(e.title || '') + '</span></div>';
       });
 
