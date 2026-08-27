@@ -103,6 +103,14 @@ Meldung entsteht.
    erscheinen nicht; die Zeitachse verlängert sich bei Bedarf bis zum letzten
    Termin. Bei einer Spiegel-Instanz entscheidet der Schalter der **Quelle**.
    Erscheint auch im Stundenplan-Balken der SymDo-Übersicht (App und Kachel).
+   Überschneiden sich zwei Titel, stehen sie **versetzt übereinander**; beim
+   dritten bleibt es beim Punkt.
+
+Eine Schulstunde ist mindestens **24 Pixel** breit — genug für ihr Symbol.
+Reicht die Kachelbreite dafür nicht (kurze Stunden oder ein langer Tag), wird
+die Timeline **waagerecht scrollbar**; alle Zeilen rollen gemeinsam und tragen
+denselben Maßstab, sonst läge dieselbe Uhrzeit in zwei Zeilen an verschiedenen
+Stellen.
 
 Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern in der
 **SymDo Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die

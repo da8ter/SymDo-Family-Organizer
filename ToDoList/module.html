@@ -625,18 +625,21 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
    Akzentfarbe allein kann auf einem farbigen Block untergehen. */
 .plan-termin {
-  position: absolute; top: -3px; height: 26px; z-index: 2;
-  display: flex; align-items: flex-start; gap: 3px;
+  position: absolute; top: 0; height: 100%; z-index: 2;
+  display: flex; align-items: center; gap: 3px;
 }
 .plan-termin-punkt {
-  width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: -5px;
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
   background: var(--accent, #0a84ff); border: 2px solid var(--card-bg, #fff);
   box-sizing: content-box;
 }
 .plan-termin-titel {
-  font-size: 9px; line-height: 1; color: var(--muted, #8a8a8e); margin-top: -4px;
+  font-size: 9px; line-height: 1; color: var(--text, #1c1c1e);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--card-bg, #fff); padding: 1px 3px; border-radius: 3px;
 }
+.plan-termin.oben  .plan-termin-punkt, .plan-termin.oben  .plan-termin-titel { transform: translateY(-5px); }
+.plan-termin.unten .plan-termin-punkt, .plan-termin.unten .plan-termin-titel { transform: translateY(5px); }
 .plan-termin.flip { flex-direction: row-reverse; transform: translateX(calc(-100% + 11px)); }
 .plan-jetzt {
   position: absolute; top: -4px; height: 34px; width: 2px; z-index: 3;
@@ -660,6 +663,12 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   font-size: 11px; font-weight: 600; color: var(--muted-color, #888);
   max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
+/* Balken und Tick-Zeile in EINER Bahn: sie muessen zusammen rollen. */
+.plan-bahn {
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.plan-bahn::-webkit-scrollbar { display: none; }
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }
 .plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
   background: color-mix(in srgb, currentColor 14%, transparent); }
@@ -5561,41 +5570,90 @@ function stundenplanJetzt() {
    termineBeschriften() in der Stundenplan-Kachel (beide Stellen synchron
    halten). Titel zeigen, wenn Platz ist; kuerzen per Ellipsis; unter 32 px ganz
    weg — Punkt und title-Attribut bleiben. */
+/* Mindestbreite einer Schulstunde in Pixeln — Zwilling von MIN_STUECK in der
+   Stundenplan-Kachel (beide Stellen synchron halten). */
+const PLAN_MIN_STUECK = 24;
+
+/**
+ * Breite der Balken bestimmen. Massstab ist die KUERZESTE Stunde des
+ * gewaehlten Tages ueber alle Kinder — alle Zeilen brauchen denselben, sonst
+ * laegen dieselben Uhrzeiten in zwei Zeilen an verschiedenen Stellen.
+ */
+function planBalkenBreite() {
+  const bahnen = [...document.querySelectorAll('.plan-bahn')];
+  if (!bahnen.length || !stundenplan || !stundenplan.span) return;
+  const spanne = Math.max(stundenplan.span[1] - stundenplan.span[0], 60);
+  const gewaehlt = stundenplanGewaehlt();
+  let kuerzeste = Infinity;
+  (stundenplan.children || []).forEach(k => {
+    const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
+    ((tag && tag.slots) || []).forEach(s => {
+      kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
+    });
+  });
+  const noetig = isFinite(kuerzeste) ? Math.ceil(spanne / kuerzeste * PLAN_MIN_STUECK) : 0;
+  bahnen.forEach(bahn => {
+    const breite = noetig > bahn.clientWidth ? noetig : 0;
+    bahn.querySelectorAll('.plan-balken, .plan-ticks').forEach(el => {
+      el.style.width = breite ? breite + 'px' : '';
+    });
+    bahn.classList.toggle('rollt', !!breite);
+  });
+}
+
+/* Alle Zeilen rollen gemeinsam — nebeneinander gestellte Zeilen, die
+   verschiedene Zeiten meinen, sind schlimmer als gar kein Rollen. */
+function planScrollGleichziehen() {
+  const bahnen = [...document.querySelectorAll('.plan-bahn')];
+  let laeuft = false;
+  bahnen.forEach(b => {
+    b.addEventListener('scroll', () => {
+      if (laeuft) return;
+      laeuft = true;
+      bahnen.forEach(a => { if (a !== b) a.scrollLeft = b.scrollLeft; });
+      laeuft = false;
+    });
+  });
+}
+
 function planTermineBeschriften() {
   document.querySelectorAll('.plan-balken').forEach(balken => {
     const alle = [...balken.querySelectorAll('.plan-termin')];
     const breite = balken.clientWidth;
     if (!alle.length || !breite) return;
-    const enden = [];
+    /* ZWEI Reihen — Zwilling von termineBeschriften() in der
+       Stundenplan-Kachel (beide Stellen synchron halten). Ueberschneiden sich
+       zwei Titel, stehen sie versetzt uebereinander; beim dritten bleibt es
+       beim blossen Punkt. */
+    const reihen = [{ ende: -1e9, wer: -1 }, { ende: -1e9, wer: -1 }];
     alle.forEach((m, i) => {
-      const links = parseFloat(m.style.left) / 100 * breite;
-      const naechster = alle[i + 1] ? parseFloat(alle[i + 1].style.left) / 100 * breite : breite;
-      const platz = Math.floor(naechster - links - 12);
       const label = m.querySelector('.plan-termin-titel');
       if (!label) return;
-      m.classList.remove('flip');
-      /* Platz auf BEIDEN Seiten messen und die bessere nehmen — am Achsenende
-         bleiben rechts oft vierzig Pixel, links zweihundert. */
-      const vorherEnde = i > 0
-        ? (enden[i - 1] !== undefined ? enden[i - 1]
-           : parseFloat(alle[i - 1].style.left) / 100 * breite + 12)
-        : 0;
-      const platzLinks = Math.floor(links - vorherEnde - 4);
-      const nachLinks = platzLinks > platz;
-      const gewaehlt = nachLinks ? platzLinks : platz;
-      if (gewaehlt < 32) {
-        label.style.display = 'none';
-        enden[i] = links + 12;
-        return;
-      }
+      m.classList.remove('flip', 'oben', 'unten');
       label.style.display = '';
-      label.style.maxWidth = gewaehlt + 'px';
-      if (nachLinks) {
-        m.classList.add('flip');
-        enden[i] = links + 12;
-      } else {
-        enden[i] = links + 12 + Math.min(gewaehlt, label.scrollWidth || gewaehlt);
+      label.style.maxWidth = 'none';
+      const links = parseFloat(m.style.left) / 100 * breite;
+      const natur = label.scrollWidth || 0;
+      const rechts = Math.floor(breite - links - 12);
+      const linksP = Math.floor(links - 12);
+      const nachLinks = linksP > rechts;
+      const platz = nachLinks ? linksP : rechts;
+      if (platz < 32) { label.style.display = 'none'; return; }
+      const w = Math.min(natur, platz);
+      const a = nachLinks ? links - 12 - w : links + 12;
+      let r = -1;
+      for (let k = 0; k < 2; k++) {
+        if (a >= reihen[k].ende + 4) { r = k; break; }
       }
+      if (r === -1) { label.style.display = 'none'; return; }
+      label.style.maxWidth = w + 'px';
+      if (nachLinks) m.classList.add('flip');
+      if (r === 1) {
+        m.classList.add('unten');
+        const partner = alle[reihen[0].wer];
+        if (partner) partner.classList.add('oben');
+      }
+      reihen[r] = { ende: a + w, wer: i };
     });
   });
 }
@@ -5844,8 +5902,9 @@ function stundenplanKarte() {
     slots.forEach((s, i) => {
       const a = Math.min(Math.max((s.from - von) / spanne, 0), 1);
       const b = Math.min(Math.max((s.to - von) / spanne, 0), 1);
-      // Mindestbreite, sonst verschwindet eine kurze Stunde ganz.
-      const breite = Math.max((b - a) * 100, 4);
+      /* Kein Prozent-Boden mehr: die Mindestbreite steht in PIXELN und wird
+         ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
+      const breite = Math.max((b - a) * 100, 0.2);
       const r = '10px', erster = i === 0, letzter = i === slots.length - 1;
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
@@ -5870,9 +5929,9 @@ function stundenplanKarte() {
         `<span class="plan-termin-titel">${escapeHtml(e.title || '')}</span></div>`;
     });
     // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern liegen.
-    zeilen += `<div class="plan-balken">${stuecke}${marker}` +
+    zeilen += `<div class="plan-bahn"><div class="plan-balken">${stuecke}${marker}` +
       stundenplanStrichHtml(!!tag.today, von, spanne) +
-      `</div><div class="plan-ticks">${ticks}</div></div>`;
+      `</div><div class="plan-ticks">${ticks}</div></div></div>`;
   }
   /* KEIN Hinweis mehr neben der Ueberschrift: der graue Balken traegt ihn, und
      zweimal dasselbe zu sagen kostet nur Platz. Ausserdem galt er fuer heute
@@ -6729,7 +6788,10 @@ function renderDashboard() {
   });
   applyMarquees(el);
   // Nach dem Einfuegen: erst jetzt haben die Stundenplan-Balken eine Breite.
+  // Reihenfolge zaehlt — die Labels messen gegen die ENDGUELTIGE Breite.
+  planBalkenBreite();
   planTermineBeschriften();
+  planScrollGleichziehen();
 }
 
 /**
