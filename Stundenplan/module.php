@@ -839,7 +839,7 @@ class SymDoStundenplan extends IPSModuleStrict
                     'type'    => 'Label',
                     'name'    => 'AlmanacHint',
                     'visible' => $quelle === 'almanac',
-                    'caption' => $this->Translate("The Almanac module answers per day, not per period. The days are therefore queried one by one and the periods assembled from that — about 21 ms each, so roughly three seconds for the four months looked ahead. It runs once a day and once when you press the button; the window moves along with the days, so nothing is lost. Almanac must be set up for school holidays (federal state, and the school if it matters); whether its name carries the period does not matter here, the bracket is stripped.")
+                    'caption' => $this->Translate("Module \"Jahreskalender (Almanac)\" by Wilkware (@Pitti), available in the Symcon Module Store: https://github.com/Wilkware/Almanac — it must be installed and set up for school holidays.")
                 ],
                 [
                     'type'    => 'Button',

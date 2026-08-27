@@ -29,7 +29,7 @@
             "Almanac module (Jahreskalender)": "Jahreskalender (Almanac)",
             "Federal state": "Bundesland",
             "Almanac instance": "Almanac-Instanz",
-            "The Almanac module answers per day, not per period. The days are therefore queried one by one and the periods assembled from that — about 21 ms each, so roughly three seconds for the four months looked ahead. It runs once a day and once when you press the button; the window moves along with the days, so nothing is lost. Almanac must be set up for school holidays (federal state, and the school if it matters); whether its name carries the period does not matter here, the bracket is stripped.": "Der Jahreskalender antwortet je TAG, nicht je Zeitraum. Deshalb werden die Tage einzeln abgefragt und die Abschnitte daraus zusammengesetzt — rund 21 ms je Tag, für die vier Monate Vorausschau also etwa drei Sekunden. Das läuft einmal täglich und einmal, wenn du den Knopf drückst; das Fenster wandert mit den Tagen mit, es geht also nichts verloren. Im Jahreskalender müssen die Schulferien eingerichtet sein (Bundesland, bei Bedarf die Schule); ob dort der Zeitraum im Namen steht, ist gleichgültig — der Klammerzusatz wird entfernt.",
+            "Module \"Jahreskalender (Almanac)\" by Wilkware (@Pitti), available in the Symcon Module Store: https://github.com/Wilkware/Almanac — it must be installed and set up for school holidays.": "Modul „Jahreskalender (Almanac)\" von Wilkware (@Pitti), im Symcon Module Store: https://github.com/Wilkware/Almanac — es muss installiert und für die Schulferien eingerichtet sein.",
             "Fetch holidays now": "Ferien jetzt abrufen",
             "Display": "Anzeige",
             "This tile shows": "Diese Kachel zeigt",
