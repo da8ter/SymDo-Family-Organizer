@@ -557,11 +557,15 @@ class SymDoStundenplan extends IPSModuleStrict
                     'type'    => 'Label',
                     'caption' => $this->Translate("A weekly template for the children's school days: subjects, times, care. It shows as a week grid or as a timeline — and, if you switch it on, as a card in the SymDo app.\n\nIt is a template, not a calendar: substitutions, cancellations and one-off changes are not part of it.")
                 ],
+                // Anzeige zuerst: welche Ansicht die Kachel zeigt und woher die
+                // Daten kommen, entscheidet man einmal beim Einrichten - und
+                // danach steht es dort, wo man es sucht, statt unter vier
+                // Bereichen, die man taeglich pflegt.
+                $this->AnzeigeBereich(),
                 $this->KinderBereich($auswahl),
                 $this->FaecherBereich(),
                 $this->StundenBereich($auswahl, $faecher),
                 $this->FerienBereich(),
-                $this->AnzeigeBereich(),
                 [
                     'type'    => 'Label',
                     'name'    => 'PlanStatus',
