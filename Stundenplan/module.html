@@ -629,30 +629,30 @@
         const label = m.querySelector('.termin-titel');
         if (!label) { return; }
         m.classList.remove('flip');
-        if (platz >= 32) {
-          label.style.display = '';
-          label.style.maxWidth = platz + 'px';
-          enden[i] = links + 12 + Math.min(platz, label.scrollWidth || platz);
-          return;
-        }
-        /* Rechts ist kein Platz — der Normalfall am Achsenende: die Achse
-           endet 45 Minuten nach dem letzten Termin, das sind auf einer
-           schmalen Kachel keine 32 px. Dann klappt das Label auf die LINKE
-           Seite des Punktes, wenn dort Platz ist (bis zum Ende des vorigen
-           Labels bzw. zum Balkenanfang). */
+        /* Platz auf BEIDEN Seiten messen und die bessere nehmen. Rechts zuerst
+           zu nehmen war falsch: am Achsenende bleiben dort oft vierzig Pixel,
+           links dagegen zweihundert — und ein auf vierzig Pixel gestutztes
+           Label sagt nichts mehr. Links reicht es bis zum Ende des vorigen
+           Labels bzw. bis zum Balkenanfang. */
         const vorherEnde = i > 0
           ? (enden[i - 1] !== undefined ? enden[i - 1]
              : parseFloat(alle[i - 1].style.left) / 100 * breite + 12)
           : 0;
         const platzLinks = Math.floor(links - vorherEnde - 4);
-        if (platzLinks >= 32) {
-          m.classList.add('flip');
-          label.style.display = '';
-          label.style.maxWidth = platzLinks + 'px';
-          enden[i] = links + 12;
-        } else {
+        const nachLinks = platzLinks > platz;
+        const gewaehlt = nachLinks ? platzLinks : platz;
+        if (gewaehlt < 32) {
           label.style.display = 'none';
           enden[i] = links + 12;
+          return;
+        }
+        label.style.display = '';
+        label.style.maxWidth = gewaehlt + 'px';
+        if (nachLinks) {
+          m.classList.add('flip');
+          enden[i] = links + 12;
+        } else {
+          enden[i] = links + 12 + Math.min(gewaehlt, label.scrollWidth || gewaehlt);
         }
       });
     });
