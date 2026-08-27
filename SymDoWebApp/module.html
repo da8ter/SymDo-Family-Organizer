@@ -633,10 +633,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   background: var(--accent, #0a84ff); border: 2px solid var(--card-bg, #fff);
   box-sizing: content-box;
 }
+/* Ohne eigenen Grund — Zwilling der Kachel: lesbar haelt den Titel ein
+   Schattenrand in Kartenfarbe. */
 .plan-termin-titel {
   font-size: 9px; line-height: 1; color: var(--text, #1c1c1e);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: var(--card-bg, #fff); padding: 1px 3px; border-radius: 3px;
+  text-shadow:
+     1px 0 var(--card-bg, #fff), -1px 0 var(--card-bg, #fff),
+     0 1px var(--card-bg, #fff),  0 -1px var(--card-bg, #fff);
 }
 .plan-termin.oben  .plan-termin-punkt, .plan-termin.oben  .plan-termin-titel { transform: translateY(-5px); }
 .plan-termin.unten .plan-termin-punkt, .plan-termin.unten .plan-termin-titel { transform: translateY(5px); }

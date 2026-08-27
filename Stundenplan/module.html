@@ -300,12 +300,16 @@
     background: var(--accent); border: 2px solid var(--bg);
     box-sizing: content-box;
   }
-  /* Eigener Grund unter dem Text: das Label liegt jetzt IM Balken und damit
-     moeglicherweise ueber einem farbigen Fach. */
+  /* Ohne eigenen Grund (Wunsch vom 27.08.2026). Das Label liegt im Balken und
+     damit moeglicherweise ueber einem farbigen Fach — lesbar haelt es ein
+     Schattenrand in Kachelfarbe: er kostet keine Flaeche und laesst die Form
+     des Balkens unberuehrt. */
   .termin-titel {
     font-size: 9px; line-height: 1; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    background: var(--bg); padding: 1px 3px; border-radius: 3px;
+    text-shadow:
+       1px 0 var(--bg), -1px 0 var(--bg),
+       0 1px var(--bg),  0 -1px var(--bg);
   }
   /* Zwei Reihen bei Ueberschneidung — nur dann, sonst bleibt es mittig. */
   .termin.oben  .termin-punkt, .termin.oben  .termin-titel { transform: translateY(-5px); }
