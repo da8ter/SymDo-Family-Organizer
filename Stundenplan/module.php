@@ -98,6 +98,9 @@ class SymDoStundenplan extends IPSModuleStrict
         $this->BetreuungWandern();
         // NACH der Wanderung: sie legt die alten Zeichenketten erst ab.
         $this->ZeitenWandern();
+        // Erst die Kinder gegen SymDo ziehen, dann die Stunden nachfuehren: der
+        // Abgleich unten arbeitet auf dem Ergebnis von diesem hier.
+        $this->KinderAbgleichen();
         // Und danach: sind die Kinder umsortiert worden, wandern ihre Stunden mit.
         $this->StundenAbgleichen();
 
@@ -343,6 +346,75 @@ class SymDoStundenplan extends IPSModuleStrict
      * der Drillsergeant sprach mit der Stimme des Komikers. Deshalb wird hier
      * nicht auf Sichtbarkeit vertraut, sondern abgeglichen.
      */
+    /**
+     * Die Kinderliste gegen SymDo abgleichen.
+     *
+     * Mit Gateway sind die Kinder die Mitglieder mit der Rolle `child`. Die
+     * gespeicherte Liste wird darauf gezogen: fehlende Kinder kommen dazu,
+     * Zeilen ohne Mitglied fallen weg, die Reihenfolge folgt dem Gateway. Was
+     * der Stundenplan selbst verwaltet — Farbe, Samstag, gerade/ungerade Wochen
+     * — bleibt dabei an der KENNUNG haengen und nicht an der Position.
+     *
+     * Ohne Gateway passiert nichts: dann ist die Liste die Wahrheit.
+     */
+    private function KinderAbgleichen(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $ausGateway = $this->GatewayKinder();
+        if ($ausGateway === []) {
+            return;
+        }
+        $vorher = $this->ListeLesen('Children');
+        $nachKennung = [];
+        $nachName = [];
+        foreach ($vorher as $z) {
+            $id = trim((string)($z['userId'] ?? ''));
+            $n  = trim((string)($z['name'] ?? ''));
+            if ($id !== '' && !isset($nachKennung[$id])) {
+                $nachKennung[$id] = $z;
+            }
+            // Bestand aus der Zeit vor der Umstellung: Zeile ohne Kennung, aber
+            // mit dem Namen eines Mitglieds. Ihre Einstellungen wandern mit.
+            if ($id === '' && $n !== '' && !isset($nachName[$n])) {
+                $nachName[$n] = $z;
+            }
+        }
+        $zeile = static function (array $z, string $id, string $name): array {
+            return [
+                'name'     => $name,
+                'color'    => $z['color'] ?? 0x1E88E5,
+                'userId'   => $id,
+                'saturday' => (bool)($z['saturday'] ?? false),
+                'biweekly' => (bool)($z['biweekly'] ?? false),
+                'parity'   => (string)($z['parity'] ?? 'even') === 'odd' ? 'odd' : 'even',
+                'hidden'   => (bool)($z['hidden'] ?? false),
+            ];
+        };
+        $neu = [];
+        foreach ($ausGateway as $id => $name) {
+            $neu[] = $zeile($nachKennung[$id] ?? $nachName[$name] ?? [], $id, $name);
+        }
+        // Vergleich ueber DIESELBE Form, sonst meldete jede Zeile eine Aenderung,
+        // nur weil sie frueher andere Schluessel trug.
+        $altVergleich = [];
+        foreach ($vorher as $z) {
+            $altVergleich[] = $zeile($z, trim((string)($z['userId'] ?? '')), trim((string)($z['name'] ?? '')));
+        }
+        if (json_encode($altVergleich) === json_encode($neu)) {
+            return;
+        }
+        $laeuft = true;
+        try {
+            @IPS_SetProperty($this->InstanceID, 'Children', (string)json_encode($neu, JSON_UNESCAPED_UNICODE));
+            @IPS_ApplyChanges($this->InstanceID);
+        } finally {
+            $laeuft = false;
+        }
+    }
+
     private function StundenAbgleichen(): void
     {
         static $laeuft = false;
@@ -350,11 +422,24 @@ class SymDoStundenplan extends IPSModuleStrict
             return;
         }
         $neu = [];
+        $namen = [];   // Kennung => Name, nur fuer die Meldung
         foreach (array_slice(array_values($this->Kinder()), 0, self::MAX_KINDER) as $kind) {
-            $neu[] = (string)$kind['name'];
+            $neu[] = (string)$kind['id'];
+            $namen[(string)$kind['id']] = (string)$kind['name'];
         }
         $roh = json_decode((string)@$this->ReadAttributeString('SlotOwners'), true);
         $alt = is_array($roh) ? array_values(array_map('strval', $roh)) : [];
+        /* Wanderung des Bestands: bis hierher standen NAMEN in SlotOwners. Steht
+           dort der Name eines Kindes, das heute eine Kennung hat, wird er still
+           darauf gedreht — sonst meldete der Abgleich beim ersten Lauf eine
+           Umbenennung „Mia → fa0ad897" und die Statuszeile spraeche von etwas,
+           das gar nicht passiert ist. */
+        $nachName = array_flip($namen);
+        foreach ($alt as $i => $e) {
+            if (!isset($namen[$e]) && isset($nachName[$e])) {
+                $alt[$i] = (string)$nachName[$e];
+            }
+        }
 
         // ERSTER Lauf: es gibt keinen Vorstand, also gibt es auch nichts zu
         // verschieben. Nur merken — sonst faende der Abgleich unten fuer JEDES
@@ -383,13 +468,14 @@ class SymDoStundenplan extends IPSModuleStrict
         $bewegt = [];
         $benannt = [];
         $geleert = [];
-        foreach ($neu as $j => $name) {
+        $zeig = static fn(string $k): string => $namen[$k] ?? $k;
+        foreach ($neu as $j => $kennung) {
             $nr = $j + 1;
-            $altIndex = array_search($name, $alt, true);
+            $altIndex = array_search($kennung, $alt, true);
             if ($altIndex !== false) {
                 $ziel[$nr] = $listen[$altIndex + 1];
                 if ((int)$altIndex !== $j) {
-                    $bewegt[] = sprintf('%s (%d→%d)', $name, (int)$altIndex + 1, $nr);
+                    $bewegt[] = sprintf('%s (%d→%d)', $zeig($kennung), (int)$altIndex + 1, $nr);
                 }
                 continue;
             }
@@ -400,10 +486,10 @@ class SymDoStundenplan extends IPSModuleStrict
             $frueher = (string)($alt[$j] ?? '');
             if ($frueher !== '' && !in_array($frueher, $neu, true)) {
                 $ziel[$nr] = $listen[$nr];
-                $benannt[] = sprintf('%s → %s', $frueher, $name);
+                $benannt[] = sprintf('%s → %s', $zeig($frueher), $zeig($kennung));
             } else {
                 $ziel[$nr] = $leer;
-                $geleert[] = $name;
+                $geleert[] = $zeig($kennung);
             }
         }
         for ($nr = count($neu) + 1; $nr <= self::MAX_KINDER; $nr++) {
@@ -580,8 +666,35 @@ class SymDoStundenplan extends IPSModuleStrict
 
     private function KinderBereich(callable $auswahl): array
     {
-        // Mitglieder des Gateways, wenn eines gewaehlt ist. Kinder zuerst: die
-        // Rolle steht in der Gateway-Eigenschaft und spart das Suchen.
+        /* Mit Gateway sind die Kinder GENAU die Familienmitglieder mit der Rolle
+           `child` — angelegt und benannt wird in SymDo, hier stehen nur noch die
+           Einstellungen, die der Stundenplan selbst braucht. Deshalb dann keine
+           Namensspalte (der Name folgt jeder Umbenennung von selbst) und kein
+           Hinzufuegen oder Loeschen: zwei Kinderlisten, die auseinanderlaufen
+           koennen, waren genau das Problem.
+
+           OHNE Gateway bleibt die Liste, wie sie war. Die Kachel soll allein
+           lauffaehig bleiben. */
+        $ausGateway = $this->GatewayKinder();
+        $spalten = [];
+        if ($ausGateway === []) {
+            $spalten[] = ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => 'auto',
+                          'add' => '', 'edit' => ['type' => 'ValidationTextBox']];
+        }
+        $spalten[] = ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
+                      'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']];
+        // Wert ist die KENNUNG, angezeigt wird der Name. Vorher stand hier
+        // der Name auch als Wert — wer ein Mitglied im Formular waehlte,
+        // speicherte damit „Mia" statt „fa0ad897", und das Gesicht in
+        // Kachel und App blieb leer, weil die Avatare nach Kennung
+        // nachgeschlagen werden.
+        $spalten[] = ['caption' => $this->Translate($ausGateway === [] ? 'Family member' : 'Child'),
+                      'name' => 'userId', 'width' => $ausGateway === [] ? '190px' : 'auto',
+                      'add' => '', 'edit' => ['type' => 'Select', 'options' => $this->MitgliederOptionen()]];
+        $hinweis = $ausGateway === []
+            ? $this->Translate('The family member links this child to SymDo — the card in the app then appears under the right name. Saturday only shows in the plan when it is switched on here; "every other week" follows the parity of the ISO calendar week, exactly like a school notice ("lessons in odd weeks").')
+            : $this->Translate('The children come from SymDo: every family member with the role "child" gets a row here, in that order, with their name and photo. Add, rename or remove them in the SymDo Gateway — this list follows. Saturday only shows in the plan when it is switched on here; "every other week" follows the parity of the ISO calendar week, exactly like a school notice ("lessons in odd weeks").');
+
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Children'),
@@ -591,20 +704,10 @@ class SymDoStundenplan extends IPSModuleStrict
                     'type'     => 'List',
                     'name'     => 'Children',
                     'rowCount' => 4,
-                    'add'      => true,
-                    'delete'   => true,
+                    'add'      => $ausGateway === [],
+                    'delete'   => $ausGateway === [],
                     'columns'  => [
-                        ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => 'auto',
-                         'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                        ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
-                         'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']],
-                        // Wert ist die KENNUNG, angezeigt wird der Name. Vorher stand hier
-                        // der Name auch als Wert — wer ein Mitglied im Formular waehlte,
-                        // speicherte damit „Mia" statt „fa0ad897", und das Gesicht in
-                        // Kachel und App blieb leer, weil die Avatare nach Kennung
-                        // nachgeschlagen werden.
-                        ['caption' => $this->Translate('Family member'), 'name' => 'userId', 'width' => '190px',
-                         'add' => '', 'edit' => ['type' => 'Select', 'options' => $this->MitgliederOptionen()]],
+                        ...$spalten,
                         ['caption' => $this->Translate('Saturday'), 'name' => 'saturday', 'width' => '110px',
                          'add' => false, 'edit' => ['type' => 'CheckBox']],
                         ['caption' => $this->Translate('Every other week'), 'name' => 'biweekly', 'width' => '150px',
@@ -614,11 +717,22 @@ class SymDoStundenplan extends IPSModuleStrict
                              ['caption' => $this->Translate('Even weeks'), 'value' => 'even'],
                              ['caption' => $this->Translate('Odd weeks'), 'value' => 'odd'],
                          ]]],
+                        /* Ausblenden statt loeschen. Mit Gateway ist die Liste die
+                           der Familie — ein Kleinkind hat dort eine Zeile, aber
+                           keinen Stundenplan. Die Zeile bleibt (und mit ihr die
+                           Position, an der die Stundenlisten haengen), sie wird
+                           nur nicht mehr gezeigt. */
+                        ['caption' => $this->Translate('Hide'), 'name' => 'hidden', 'width' => '110px',
+                         'add' => false, 'edit' => ['type' => 'CheckBox']],
                     ],
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('The family member links this child to SymDo — the card in the app then appears under the right name. Saturday only shows in the plan when it is switched on here; "every other week" follows the parity of the ISO calendar week, exactly like a school notice ("lessons in odd weeks").')
+                    'caption' => $hinweis,
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('Hidden children disappear from the card, from the app and from the briefing — their lessons stay stored and come back when you switch it off.'),
                 ],
             ],
         ];
@@ -706,6 +820,11 @@ class SymDoStundenplan extends IPSModuleStrict
 
         $bereiche = [$quelle];
         foreach (array_slice($kinder, 0, self::MAX_KINDER) as $i => $kind) {
+            // Ausgeblendet: kein Klapp-Bereich. Der Zaehler $i laeuft trotzdem
+            // weiter — an ihm haengen die Eigenschaften.
+            if (($kind['hidden'] ?? false) === true) {
+                continue;
+            }
             $bereiche[] = [
                 'type'     => 'ExpansionPanel',
                 'caption'  => (string)$kind['name'],
@@ -1021,15 +1140,59 @@ class SymDoStundenplan extends IPSModuleStrict
      */
     private function MitgliederOptionen(): array
     {
+        // Mit Gateway stehen nur die KINDER zur Wahl: die Zeilen werden ohnehin
+        // gegen sie abgeglichen, ein gewaehlter Vater verschwaende nur einen Klick.
+        $kinder = $this->GatewayKinder();
         $optionen = [['caption' => $this->Translate('— none —'), 'value' => '']];
-        foreach ($this->GatewayMitglieder() as $id => $name) {
+        foreach ($kinder !== [] ? $kinder : $this->GatewayMitglieder() as $id => $name) {
             $optionen[] = ['caption' => $name, 'value' => $id];
         }
         return $optionen;
     }
 
+    /**
+     * Die KINDER der Familie: Mitglieder mit der Rolle `child`, in der
+     * Reihenfolge des Gateways.
+     *
+     * Sie sind die Kinder des Stundenplans, sobald ein Gateway da ist — getippt
+     * wird dann nichts mehr. Die Rolle steht in der Mitgliederliste des
+     * Gateways; ohne sie muesste hier jemand von Hand sagen, wer ein Kind ist,
+     * und genau diese zweite Liste soll weg.
+     *
+     * @return array<string,string> Kennung => Name
+     */
+    private function GatewayKinder(): array
+    {
+        $kinder = [];
+        foreach ($this->GatewayMitgliederRoh() as $u) {
+            if (strtolower(trim((string)($u['persona'] ?? ''))) !== 'child') {
+                continue;
+            }
+            $id   = trim((string)($u['id'] ?? ''));
+            $name = trim((string)($u['name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $kinder[$id] = $name;
+            }
+        }
+        return $kinder;
+    }
+
     /** Familienmitglieder aus dem Gateway als Kennung => Name. */
     private function GatewayMitglieder(): array
+    {
+        $karte = [];
+        foreach ($this->GatewayMitgliederRoh() as $u) {
+            $id   = trim((string)($u['id'] ?? ''));
+            $name = trim((string)($u['name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $karte[$id] = $name;
+            }
+        }
+        return $karte;
+    }
+
+    /** Die Mitgliederliste des Gateways, roh — mit Rolle. */
+    private function GatewayMitgliederRoh(): array
     {
         $gw = $this->GatewayInstanz();
         if ($gw <= 0 || !function_exists('TGW_GetUsers')) {
@@ -1040,17 +1203,6 @@ class SymDoStundenplan extends IPSModuleStrict
         } catch (\Throwable $e) {
             return [];
         }
-        if (!is_array($roh)) {
-            return [];
-        }
-        $karte = [];
-        foreach (array_filter($roh, 'is_array') as $u) {
-            $id   = trim((string)($u['id'] ?? ''));
-            $name = trim((string)($u['name'] ?? ''));
-            if ($id !== '' && $name !== '') {
-                $karte[$id] = $name;
-            }
-        }
-        return $karte;
+        return is_array($roh) ? array_values(array_filter($roh, 'is_array')) : [];
     }
 }

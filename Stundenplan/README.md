@@ -64,13 +64,18 @@ Meldung entsteht.
 
 ## Einrichtung
 
-1. **Kinder** anlegen: Name und Farbe. Jedes Kind lässt sich einem
-   **Familienmitglied** aus SymDo zuordnen — dann trägt die Karte in der App
-   denselben Namen, und Kachel wie App zeigen das Foto statt des
-   Anfangsbuchstabens. Das Gateway wird von selbst gefunden; die Auswahl unter
-   *Anzeige* ist nur nötig, wenn mehrere in Frage kommen. Steht die Spalte
-   *Familienmitglied* nur auf „— keins —", fehlt der Bezug zum Gateway — der
-   Hinweis unter der Auswahl sagt dann, welches genommen wird. Höchstens **sechs** Kinder können Stunden
+1. **Kinder**: Mit SymDo-Gateway gibt es hier nichts anzulegen — die Kinder sind
+   genau die Familienmitglieder mit der Rolle **Kind**, in deren Reihenfolge, mit
+   Name und Foto von dort. Angelegt, umbenannt und entfernt wird im Gateway;
+   diese Liste folgt. Einzutragen bleibt, was nur den Stundenplan angeht:
+   **Farbe**, **Samstag**, **alle zwei Wochen** und **Ausblenden**.
+
+   *Ausblenden* ist der Ersatz fürs Löschen: Ein Kind, das (noch) keinen
+   Stundenplan hat, verschwindet damit aus Kachel, App und Briefing — seine
+   Stunden bleiben gespeichert und kommen zurück, sobald der Haken weg ist.
+
+   **Ohne Gateway** bleibt es bei der eigenen Liste mit Namensfeld, Anlegen und
+   Löschen; die Kachel läuft allein. Höchstens **sechs** Kinder können Stunden
    bekommen; die Zahl steht im Code, weil Symcon Eigenschaften nur fest
    registriert.
 2. **Fächer** pflegen: Name, **Symcon-Symbol** und Farbe. Neun gängige Fächer

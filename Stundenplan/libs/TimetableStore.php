@@ -70,11 +70,44 @@ trait TimetableStore
         return array_values(array_filter($zeilen, 'is_array'));
     }
 
-    /** @return list<array{name:string,color:mixed,userId:string,saturday:array,care:list}> */
+    /**
+     * Die Kinder des Plans.
+     *
+     * MIT Gateway sind es genau die Familienmitglieder mit der Rolle `child`, in
+     * deren Reihenfolge; Name und Foto kommen von dort und folgen jeder
+     * Umbenennung. Die gespeicherten Zeilen liefern dann nur noch, was der
+     * Stundenplan selbst braucht — Farbe, Samstag, gerade/ungerade Wochen —,
+     * nachgeschlagen ueber die KENNUNG und nicht ueber die Position.
+     *
+     * OHNE Gateway bleibt es bei der eigenen Liste: die Kachel soll allein
+     * lauffaehig bleiben.
+     *
+     * @return list<array{id:string,name:string,color:mixed,userId:string,saturday:array,care:list}>
+     */
     private function Kinder(): array
     {
+        $zeilen     = $this->ListeLesen('Children');
+        $ausGateway = $this->GatewayKinder();
+
+        if ($ausGateway !== []) {
+            $nachKennung = [];
+            foreach ($zeilen as $z) {
+                $id = trim((string)($z['userId'] ?? ''));
+                if ($id !== '' && !isset($nachKennung[$id])) {
+                    $nachKennung[$id] = $z;
+                }
+            }
+            $zeilen = [];
+            foreach ($ausGateway as $id => $name) {
+                $z = $nachKennung[$id] ?? [];
+                $z['userId'] = $id;
+                $z['name']   = $name;
+                $zeilen[]    = $z;
+            }
+        }
+
         $kinder = [];
-        foreach ($this->ListeLesen('Children') as $z) {
+        foreach ($zeilen as $z) {
             $name = trim((string)($z['name'] ?? ''));
             if ($name === '') {
                 continue;
@@ -95,15 +128,21 @@ trait TimetableStore
                     $betreuung[] = ['weekday' => $tag, 'end' => $ende];
                 }
             }
+            $kennung = $this->MitgliedKennung(trim((string)($z['userId'] ?? '')));
             $kinder[] = [
-                'id'       => $name,   // der Name IST die Kennung, siehe Kopf
+                /* Die Identitaet des Kindes. Mit Gateway die Mitglieds-Kennung —
+                   sie ueberlebt ein Umbenennen und ein Umsortieren, woran der
+                   Name beides nicht tut. Ohne Gateway bleibt der Name die
+                   Kennung; eine andere gibt es dort nicht. */
+                'id'       => $kennung !== '' ? $kennung : $name,
                 'name'     => $name,
                 'color'    => TimetableSubjects::FarbeHex($z['color'] ?? -1) ?? '#1E88E5',
-                // Nachsichtig gegen den alten Fehler: bis zur Berichtigung hat das
-                // Formular den NAMEN statt der Kennung gespeichert. Steht dort ein
-                // bekannter Mitgliedsname, wird er hier auf die Kennung gedreht —
-                // sonst bliebe das Gesicht leer, bis jemand die Zeile neu waehlt.
-                'userId'   => $this->MitgliedKennung(trim((string)($z['userId'] ?? ''))),
+                'userId'   => $kennung,
+                /* Ausgeblendet: das Kind bleibt in der Liste — seine Stunden
+                   haengen an der Position, und ein Herausfiltern hier verschoebe
+                   die Plaene aller nachfolgenden Kinder. Uebersprungen wird erst
+                   beim Zusammenbauen des Plans. */
+                'hidden'   => (bool)($z['hidden'] ?? false),
                 'saturday' => [
                     'enabled'  => (bool)($z['saturday'] ?? false),
                     'biweekly' => (bool)($z['biweekly'] ?? false),
@@ -197,7 +236,9 @@ trait TimetableStore
                         // Kennung nur INNERHALB eines Laufs eindeutig (Konflikt-
                         // pruefung, Vergleich mit sich selbst); nirgends gespeichert.
                         'id'        => sprintf('k%dd%dr%d', $nr, $tag, $z),
-                        'childId'   => (string)$kind['name'],
+                        'childId'   => (string)$kind['id'],
+                        // Fuer Meldungen: die Kennung sagt niemandem etwas.
+                        'childName' => (string)$kind['name'],
                         'weekday'   => $tag,
                         'subjectId' => $fach,
                         'subject'   => $fach,
@@ -286,7 +327,14 @@ trait TimetableStore
         // beziehen — sonst behauptet die Abendvorschau mitten in den Ferien
         // Unterricht.
         $heute   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum) === 1 ? $datum : date('Y-m-d');
-        [$von, $bis] = TimetableCalc::Wochenspanne($slots, $kinder);
+        /* Die Zeitachse richtet sich nach den SICHTBAREN Kindern. Sonst zoege ein
+           ausgeblendetes Kind mit spaeter Betreuung die Achse in die Laenge und
+           der Plan der anderen schrumpfte auf ein Drittel der Kachel. */
+        $sichtbar = array_values(array_filter($kinder, static fn(array $k): bool => ($k['hidden'] ?? false) !== true));
+        $sichtbareIds = array_column($sichtbar, 'id');
+        $slotsSichtbar = array_values(array_filter($slots,
+            static fn(array $s): bool => in_array((string)($s['childId'] ?? ''), $sichtbareIds, true)));
+        [$von, $bis] = TimetableCalc::Wochenspanne($slotsSichtbar, $sichtbar);
         $ferien  = $this->FerienAmTag($heute);
         $jetzt   = date('H:i');
         // Ferien JE WOCHENTAG, nicht nur fuer heute: die Timeline blaettert
@@ -306,6 +354,9 @@ trait TimetableStore
 
         $ausgabe = [];
         foreach ($kinder as $kind) {
+            if (($kind['hidden'] ?? false) === true) {
+                continue;
+            }
             $samstag  = $kind['saturday'];
             $heuteTag = $ferien === null ? TimetableCalc::Schultag($heute, $samstag) : null;
             $tage     = [];
@@ -404,14 +455,15 @@ trait TimetableStore
             // ohne passendes Kind kann es damit nicht mehr geben.
             if ($s['subjectId'] !== '' && !in_array($s['subjectId'], $faecher, true)) {
                 $verwaist[] = sprintf('%s %s %s: Fach „%s" gibt es nicht',
-                    $s['childId'], TimetableCalc::TagKurz((int)$s['weekday']), $s['start'], $s['subjectId']);
+                    $s['childName'] ?? $s['childId'], TimetableCalc::TagKurz((int)$s['weekday']),
+                    $s['start'], $s['subjectId']);
             }
             $gegen = TimetableCalc::Konflikt($s, $slots);
             if ($gegen !== null) {
                 $paar = [$s['id'], $gegen['id']];
                 sort($paar);
                 $konflikte[implode('|', $paar)] = sprintf('%s %s: %s–%s trifft %s–%s',
-                    $s['childId'], TimetableCalc::TagKurz((int)$s['weekday']),
+                    $s['childName'] ?? $s['childId'], TimetableCalc::TagKurz((int)$s['weekday']),
                     $s['start'], $s['end'], $gegen['start'], $gegen['end']);
             }
         }

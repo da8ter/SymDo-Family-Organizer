@@ -311,6 +311,11 @@ trait AppCore
             $result[] = [
                 'id'        => $id,
                 'name'      => $name,
+                // Die Rolle in der Familie (mother, father, child, grandmother …).
+                // Sie steht in der Mitgliederliste und beantwortet Fragen, die
+                // sonst niemand beantworten kann — der Stundenplan etwa nimmt
+                // genau die Mitglieder mit `child` als seine Kinder.
+                'persona'   => trim((string)($user['persona'] ?? '')),
                 'mediaID'   => $mediaID,
                 'visuID'    => (int)($user['visu'] ?? 0),
                 'hasAvatar' => $mediaID > 0 && IPS_MediaExists($mediaID),
@@ -323,7 +328,12 @@ trait AppCore
     public function GetUsers(): string
     {
         $users = array_map(
-            static fn(array $u): array => ['id' => $u['id'], 'name' => $u['name'], 'hasAvatar' => $u['hasAvatar']],
+            static fn(array $u): array => [
+                'id'        => $u['id'],
+                'name'      => $u['name'],
+                'persona'   => $u['persona'],
+                'hasAvatar' => $u['hasAvatar'],
+            ],
             $this->LoadUsers()
         );
         return json_encode($users, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
