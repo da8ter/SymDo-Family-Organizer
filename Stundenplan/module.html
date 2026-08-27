@@ -753,15 +753,12 @@
       const alle = Array.prototype.slice.call(balken.querySelectorAll('.termin'));
       const breite = balken.clientWidth;
       if (!alle.length || !breite) { return; }
-      /* ZWEI Reihen. Stoesst ein Titel an den Balken oder den Titel eines
-         anderen Termins, rueckt der ganze Termin — Balken UND Titel — in die
-         zweite Reihe, statt dass der Titel verschwindet. Bei dreien geht das
-         nicht mehr auf, dann bleibt der dritte beim blossen Balken.
 
-         Belegt wird je Reihe der Bereich von Balken UND Label: ein Titel darf
-         weder auf einem fremden Titel noch auf einem fremden Balken liegen. */
-      const reihen = [{ ende: -1e9 }, { ende: -1e9 }];
-      const gelegt = [];
+      /* Erst die Geometrie jedes Termins, dann die Verteilung auf zwei Reihen.
+         Getrennt, weil die Reihe vom BALKEN abhaengt und nicht vom Label:
+         zwei Termine, die sich zeitlich ueberschneiden, muessen auseinander,
+         auch wenn fuer die Titel gar kein Platz mehr ist. */
+      const posten = [];
       alle.forEach(function (m) {
         const label = m.querySelector('.termin-titel');
         const bar   = m.querySelector('.termin-bar');
@@ -773,51 +770,80 @@
         m.style.left = (anteil * 100) + '%';
         label.style.display = '';
         label.style.maxWidth = 'none';
-        /* Der Balken so lang wie der Termin dauert. Mindestens 6 px, sonst
-           verschwindet ein Fuenf-Minuten-Termin ganz. */
+        // Der Balken so lang wie der Termin dauert, mindestens 6 px.
         const barBreit = Math.max(Math.round((anteil2 - anteil) * breite), 6);
         bar.style.width = barBreit + 'px';
-
-        const links  = anteil * breite;
-        const rechts = links + barBreit;
+        const barA = anteil * breite;
+        const barB = barA + barBreit;
         /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
            Deckel von 85 px setzt die Ellipse. */
         const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
-        const platzR = Math.floor(breite - rechts - 4);
-        const platzL = Math.floor(links - 4);
+        const platzR = Math.floor(breite - barB - 4);
+        const platzL = Math.floor(barA - 4);
         const nachLinks = platzL > platzR;
         const platz = nachLinks ? platzL : platzR;
-        if (platz < 32) { label.style.display = 'none'; gelegt.push({ m: m, r: 0 }); return; }
-        const w = Math.min(natur, platz);
-        const a = nachLinks ? links - 4 - w : links;
-        const b = nachLinks ? rechts : rechts + 4 + w;
+        posten.push({
+          m: m, label: label, anteil: anteil, anteil2: anteil2,
+          barA: barA, barB: barB, nachLinks: nachLinks,
+          w: Math.min(natur, Math.max(platz, 0)), passt: platz >= 32,
+        });
+      });
+
+      const reihen = [{ ende: -1e9 }, { ende: -1e9 }];
+      posten.forEach(function (pos) {
         let r = -1;
-        for (let k = 0; k < 2; k++) {
-          if (a >= reihen[k].ende + 4) { r = k; break; }
+        // a) Mit Titel: Balken UND Label muessen in die Reihe passen.
+        if (pos.passt) {
+          const a = pos.nachLinks ? pos.barA - 4 - pos.w : pos.barA;
+          const b = pos.nachLinks ? pos.barB : pos.barB + 4 + pos.w;
+          for (let k = 0; k < 2; k++) {
+            if (a >= reihen[k].ende + 4) { r = k; pos.mitTitel = true; pos.ende = b; break; }
+          }
         }
-        if (r === -1) { label.style.display = 'none'; gelegt.push({ m: m, r: 0 }); return; }
-        label.style.maxWidth = w + 'px';
+        /* b) Ohne Titel: nur der BALKEN muss passen. Diese Stufe fehlte —
+              ein Termin ohne Platz fuer sein Label landete pauschal in Reihe
+              eins und verschwand dort unter einem laengeren Balken. Genau so
+              war „Abendessen" (21:00) unter „Schwimmunterricht" (bis 21:15)
+              nicht mehr zu sehen. */
+        if (r === -1) {
+          for (let k = 0; k < 2; k++) {
+            if (pos.barA >= reihen[k].ende + 4) { r = k; pos.mitTitel = false; pos.ende = pos.barB; break; }
+          }
+        }
+        // c) Beide Reihen belegt: die mit dem frueheren Ende, Titel weg.
+        if (r === -1) {
+          r = reihen[0].ende <= reihen[1].ende ? 0 : 1;
+          pos.mitTitel = false;
+          pos.ende = Math.max(reihen[r].ende, pos.barB);
+        }
+        reihen[r] = { ende: pos.ende };
+        pos.r = r;
+      });
+
+      posten.forEach(function (pos) {
+        if (pos.mitTitel) {
+          pos.label.style.maxWidth = pos.w + 'px';
+        } else {
+          pos.label.style.display = 'none';
+        }
         /* Geklappt ueber `right` am ENDE des Termins: ein absolut
            positioniertes Element bei left:94 % bekaeme sonst nur die
-           restlichen 6 % als Hoechstbreite. */
-        if (nachLinks) {
-          m.classList.add('flip');
-          m.style.left = 'auto';
-          m.style.right = (100 - anteil2 * 100) + '%';
+           restlichen 6 % als Hoechstbreite. Ohne Titel bleibt es bei `left`
+           — es gibt nichts, was nach links ragen muesste. */
+        if (pos.mitTitel && pos.nachLinks) {
+          pos.m.classList.add('flip');
+          pos.m.style.left = 'auto';
+          pos.m.style.right = (100 - pos.anteil2 * 100) + '%';
         } else {
-          m.style.right = 'auto';
-          m.style.left = (anteil * 100) + '%';
+          pos.m.style.right = 'auto';
+          pos.m.style.left = (pos.anteil * 100) + '%';
         }
-        reihen[r] = { ende: b };
-        gelegt.push({ m: m, r: r });
       });
-      /* Versetzt wird erst JETZT und nur, wenn die zweite Reihe ueberhaupt
-         gebraucht wird — dann aber DURCHGEHEND. Vorher blieb ein Termin, der
-         nach einer Kollision wieder in Reihe eins passte, mittig stehen und
-         ragte damit in die Zeile darunter: „Schwimmunterricht" stand oben,
-         „Abendessen" in der Mitte, obwohl beide in derselben Reihe liegen. */
-      if (gelegt.some(function (g) { return g.r === 1; })) {
-        gelegt.forEach(function (g) { g.m.classList.add(g.r === 1 ? 'unten' : 'oben'); });
+      /* Versetzt wird erst jetzt und nur, wenn die zweite Reihe gebraucht
+         wird — dann aber durchgehend. Ein mittig stehender Termin ragte sonst
+         in die untere Zeile hinein. */
+      if (posten.some(function (p) { return p.r === 1; })) {
+        posten.forEach(function (p) { p.m.classList.add(p.r === 1 ? 'unten' : 'oben'); });
       }
     });
   }
