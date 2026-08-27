@@ -5679,9 +5679,12 @@ function planTermineBeschriften() {
     const breite = balken.clientWidth;
     if (!alle.length || !breite) return;
     /* ZWEI Reihen — Zwilling von termineBeschriften() in der
-       Stundenplan-Kachel (beide Stellen synchron halten). */
-    const reihen = [{ ende: -1e9, wer: -1 }, { ende: -1e9, wer: -1 }];
-    alle.forEach((m, i) => {
+       Stundenplan-Kachel (beide Stellen synchron halten). Stoesst ein Titel
+       an einen Balken oder einen anderen Titel, rueckt der ganze Termin in
+       die zweite Reihe; versetzt wird erst am Ende und dann durchgehend. */
+    const reihen = [{ ende: -1e9 }, { ende: -1e9 }];
+    const gelegt = [];
+    alle.forEach(m => {
       const label = m.querySelector('.plan-termin-titel');
       const bar   = m.querySelector('.plan-termin-bar');
       if (!label || !bar) return;
@@ -5692,7 +5695,6 @@ function planTermineBeschriften() {
       m.style.left = (anteil * 100) + '%';
       label.style.display = '';
       label.style.maxWidth = 'none';
-      // Der Balken so lang wie der Termin dauert, mindestens 6 px.
       const barBreit = Math.max(Math.round((anteil2 - anteil) * breite), 6);
       bar.style.width = barBreit + 'px';
 
@@ -5704,7 +5706,7 @@ function planTermineBeschriften() {
       const platzL = Math.floor(links - 4);
       const nachLinks = platzL > platzR;
       const platz = nachLinks ? platzL : platzR;
-      if (platz < 32) { label.style.display = 'none'; return; }
+      if (platz < 32) { label.style.display = 'none'; gelegt.push({ m, r: 0 }); return; }
       const w = Math.min(natur, platz);
       const a = nachLinks ? links - 4 - w : links;
       const b = nachLinks ? rechts : rechts + 4 + w;
@@ -5712,12 +5714,8 @@ function planTermineBeschriften() {
       for (let k = 0; k < 2; k++) {
         if (a >= reihen[k].ende + 4) { r = k; break; }
       }
-      if (r === -1) { label.style.display = 'none'; return; }
+      if (r === -1) { label.style.display = 'none'; gelegt.push({ m, r: 0 }); return; }
       label.style.maxWidth = w + 'px';
-      /* Geklappt ueber `right`: ein absolut positioniertes Element bei
-         left:94 % bekaeme sonst nur die restlichen 6 % als Hoechstbreite.
-         Verankert wird am ENDE des Termins, der Balken liegt also weiter
-         genau ueber seiner Zeit. */
       if (nachLinks) {
         m.classList.add('flip');
         m.style.left = 'auto';
@@ -5726,13 +5724,13 @@ function planTermineBeschriften() {
         m.style.right = 'auto';
         m.style.left = (anteil * 100) + '%';
       }
-      if (r === 1) {
-        m.classList.add('unten');
-        const partner = alle[reihen[0].wer];
-        if (partner) partner.classList.add('oben');
-      }
-      reihen[r] = { ende: b, wer: i };
+      reihen[r] = { ende: b };
+      gelegt.push({ m, r });
     });
+    // Nur wenn die zweite Reihe gebraucht wird — dann aber durchgehend.
+    if (gelegt.some(g => g.r === 1)) {
+      gelegt.forEach(g => g.m.classList.add(g.r === 1 ? 'unten' : 'oben'));
+    }
   });
 }
 

@@ -753,11 +753,16 @@
       const alle = Array.prototype.slice.call(balken.querySelectorAll('.termin'));
       const breite = balken.clientWidth;
       if (!alle.length || !breite) { return; }
-      /* ZWEI Reihen. Ueberschneiden sich zwei Titel, stehen sie versetzt
-         uebereinander statt dass einer verschwindet — bei zweien geht das,
-         bei dreien nicht mehr, dann bleibt der dritte beim blossen Balken. */
-      const reihen = [{ ende: -1e9, wer: -1 }, { ende: -1e9, wer: -1 }];
-      alle.forEach(function (m, i) {
+      /* ZWEI Reihen. Stoesst ein Titel an den Balken oder den Titel eines
+         anderen Termins, rueckt der ganze Termin — Balken UND Titel — in die
+         zweite Reihe, statt dass der Titel verschwindet. Bei dreien geht das
+         nicht mehr auf, dann bleibt der dritte beim blossen Balken.
+
+         Belegt wird je Reihe der Bereich von Balken UND Label: ein Titel darf
+         weder auf einem fremden Titel noch auf einem fremden Balken liegen. */
+      const reihen = [{ ende: -1e9 }, { ende: -1e9 }];
+      const gelegt = [];
+      alle.forEach(function (m) {
         const label = m.querySelector('.termin-titel');
         const bar   = m.querySelector('.termin-bar');
         if (!label || !bar) { return; }
@@ -769,39 +774,32 @@
         label.style.display = '';
         label.style.maxWidth = 'none';
         /* Der Balken so lang wie der Termin dauert. Mindestens 6 px, sonst
-           verschwindet ein kurzer Termin ganz — dieselbe Ueberlegung wie bei
-           der Mindestbreite einer Schulstunde, nur bescheidener: der Balken
-           traegt kein Symbol. */
+           verschwindet ein Fuenf-Minuten-Termin ganz. */
         const barBreit = Math.max(Math.round((anteil2 - anteil) * breite), 6);
         bar.style.width = barBreit + 'px';
 
         const links  = anteil * breite;
         const rechts = links + barBreit;
         /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
-           Deckel von 85 px setzt die Ellipse — genau so wurde aus
-           „Schwimmunterricht" ein „Schwimmunterric…". */
+           Deckel von 85 px setzt die Ellipse. */
         const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
-        // Platz bis zum Balkenende bzw. bis zum Balkenanfang; 4 px Abstand.
         const platzR = Math.floor(breite - rechts - 4);
         const platzL = Math.floor(links - 4);
         const nachLinks = platzL > platzR;
         const platz = nachLinks ? platzL : platzR;
-        if (platz < 32) { label.style.display = 'none'; return; }
+        if (platz < 32) { label.style.display = 'none'; gelegt.push({ m: m, r: 0 }); return; }
         const w = Math.min(natur, platz);
-        // Belegter Bereich: der Balken IMMER, das Label auf seiner Seite.
         const a = nachLinks ? links - 4 - w : links;
         const b = nachLinks ? rechts : rechts + 4 + w;
         let r = -1;
         for (let k = 0; k < 2; k++) {
           if (a >= reihen[k].ende + 4) { r = k; break; }
         }
-        if (r === -1) { label.style.display = 'none'; return; }
+        if (r === -1) { label.style.display = 'none'; gelegt.push({ m: m, r: 0 }); return; }
         label.style.maxWidth = w + 'px';
-        /* Verankerung: geklappt zaehlt der Platz LINKS, und den gibt es nur
-           ueber `right` — ein absolut positioniertes Element bei left:94 %
-           bekommt sonst nur die restlichen 6 % als Hoechstbreite. Geklappt
-           liegt das rechte Ende des Kastens auf dem ENDE des Termins, der
-           Balken also weiter genau ueber seiner Zeit. */
+        /* Geklappt ueber `right` am ENDE des Termins: ein absolut
+           positioniertes Element bei left:94 % bekaeme sonst nur die
+           restlichen 6 % als Hoechstbreite. */
         if (nachLinks) {
           m.classList.add('flip');
           m.style.left = 'auto';
@@ -810,15 +808,17 @@
           m.style.right = 'auto';
           m.style.left = (anteil * 100) + '%';
         }
-        if (r === 1) {
-          // Erst die zweite Reihe versetzt — solange nichts kollidiert,
-          // bleibt alles auf einer Linie und mittig im Balken.
-          m.classList.add('unten');
-          const partner = alle[reihen[0].wer];
-          if (partner) { partner.classList.add('oben'); }
-        }
-        reihen[r] = { ende: b, wer: i };
+        reihen[r] = { ende: b };
+        gelegt.push({ m: m, r: r });
       });
+      /* Versetzt wird erst JETZT und nur, wenn die zweite Reihe ueberhaupt
+         gebraucht wird — dann aber DURCHGEHEND. Vorher blieb ein Termin, der
+         nach einer Kollision wieder in Reihe eins passte, mittig stehen und
+         ragte damit in die Zeile darunter: „Schwimmunterricht" stand oben,
+         „Abendessen" in der Mitte, obwohl beide in derselben Reihe liegen. */
+      if (gelegt.some(function (g) { return g.r === 1; })) {
+        gelegt.forEach(function (g) { g.m.classList.add(g.r === 1 ? 'unten' : 'oben'); });
+      }
     });
   }
 
