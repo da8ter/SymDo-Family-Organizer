@@ -35,7 +35,7 @@
             "This tile shows": "Diese Kachel zeigt",
             "Week grid": "Wochenraster",
             "Timeline (compact)": "Timeline (kompakt)",
-            "Data from another timetable (empty = own data)": "Daten aus einem anderen Stundenplan (leer = eigene Daten)",
+            "Use data from another timetable instance": "Daten aus einer anderen Stundenplan-Instanz verwenden",
             "SymDo gateway": "SymDo Gateway",
             "For both views at once: create a second instance of this module, set it to \"Timeline\" and pick this instance as its data source. It then shows the same plan in the other shape.": "Für beide Ansichten gleichzeitig: eine zweite Instanz dieses Moduls anlegen, auf „Timeline\" stellen und diese Instanz als Datenquelle wählen. Sie zeigt denselben Plan in der anderen Form.",
             "Not fetched yet.": "Noch nicht abgerufen.",

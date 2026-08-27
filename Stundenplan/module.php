@@ -687,7 +687,7 @@ class SymDoStundenplan extends IPSModuleStrict
             'type'         => 'SelectInstance',
             'name'         => 'SourceInstanceID',
             'width'        => '400px',
-            'caption'      => $this->Translate('Data from another timetable (empty = own data)'),
+            'caption'      => $this->Translate('Use data from another timetable instance'),
             'validModules' => [self::EIGENE_GUID],
         ];
 
