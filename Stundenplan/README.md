@@ -106,6 +106,10 @@ Meldung entsteht.
    Überschneiden sich zwei Titel, stehen sie **versetzt übereinander**; beim
    dritten bleibt es beim Punkt.
 
+**Unter der Zeitachse** stehen die Uhrzeiten an ihrer Stelle: Beginn der ersten
+Stunde, Ende der letzten (beide kräftiger) und die Startzeit jedes Termins. Wird
+es eng, weicht die Terminzeit — sie steht ohnehin am Marker.
+
 Eine Schulstunde ist mindestens **24 Pixel** breit — genug für ihr Symbol.
 Reicht die Kachelbreite dafür nicht (kurze Stunden oder ein langer Tag), wird
 die Timeline **waagerecht scrollbar**; alle Zeilen rollen gemeinsam und tragen

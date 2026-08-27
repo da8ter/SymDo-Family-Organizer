@@ -679,6 +679,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-ticks span { position: absolute; top: 1px; width: 1px; height: 5px;
   background: currentColor; opacity: .25; }
 .plan-ticks span.stark { width: 2px; opacity: .45; }
+/* Uhrzeiten unter der Achse — Stundenzeiten kraeftiger als Terminzeiten. */
+.plan-zeiten { position: relative; height: 12px; margin-top: 2px; }
+.plan-zeiten .plan-zeit {
+  position: absolute; top: 0; font-size: 9px; line-height: 1.3;
+  color: var(--muted, #8a8a8e); white-space: nowrap; transform: translateX(-50%);
+}
+.plan-zeiten .plan-zeit.fest { color: var(--text, #1c1c1e); }
 .plan-frei { font-size: 12px; color: var(--muted-color, #888); padding: 2px 0 4px; }
 
 /* Legende: im Balken steht nur ein Symbol, und auf einem Tablet gibt es keinen
@@ -5620,6 +5627,35 @@ function planScrollGleichziehen() {
   });
 }
 
+/**
+ * Die Uhrzeiten unter der Achse setzen — Zwilling von zeitenSetzen() in der
+ * Stundenplan-Kachel. An den Raendern nicht ueberstehen, und bei Enge weicht
+ * die Terminzeit: die Stundenzeiten umreissen den Schultag.
+ */
+function planZeitenSetzen() {
+  document.querySelectorAll('.plan-zeiten').forEach(zeile => {
+    const alle = [...zeile.querySelectorAll('.plan-zeit')];
+    const breite = zeile.clientWidth;
+    if (!alle.length || !breite) return;
+    const platziert = [];
+    const stelle = (z) => {
+      z.style.display = '';
+      const p = parseFloat(z.style.left) / 100;
+      z.style.transform = p < 0.06 ? 'none' : (p > 0.94 ? 'translateX(-100%)' : 'translateX(-50%)');
+      const w = z.offsetWidth;
+      const mitte = p * breite;
+      const links = p < 0.06 ? mitte : (p > 0.94 ? mitte - w : mitte - w / 2);
+      return [links, links + w];
+    };
+    alle.filter(z => z.classList.contains('fest')).forEach(z => platziert.push(stelle(z)));
+    alle.filter(z => !z.classList.contains('fest')).forEach(z => {
+      const [a, b] = stelle(z);
+      if (platziert.some(p => a < p[1] + 3 && b + 3 > p[0])) { z.style.display = 'none'; }
+      else { platziert.push([a, b]); }
+    });
+  });
+}
+
 function planTermineBeschriften() {
   document.querySelectorAll('.plan-balken').forEach(balken => {
     const alle = [...balken.querySelectorAll('.plan-termin')];
@@ -5933,9 +5969,23 @@ function stundenplanKarte() {
         `<span class="plan-termin-titel">${escapeHtml(e.title || '')}</span></div>`;
     });
     // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern liegen.
+    /* Uhrzeiten UNTER der Achse, an ihrer Stelle: Beginn der ersten Stunde,
+       Ende der letzten und die Startzeit jedes Termins. Liegt IN der Bahn —
+       sie muss mit dem Balken rollen. Zwilling der Stundenplan-Kachel. */
+    let zeiten = '';
+    const zeitMarke = (min, text, fest) => {
+      const p = Math.min(Math.max((min - von) / spanne, 0), 1);
+      zeiten += `<span class="plan-zeit${fest ? ' fest' : ''}" style="left:${p * 100}%">` +
+        `${escapeHtml(text)}</span>`;
+    };
+    zeitMarke(slots[0].from, beginn, true);
+    zeitMarke(slots[slots.length - 1].to, ende, true);
+    (tag.events || []).forEach(e => zeitMarke(e.at, e.time || '', false));
+
     zeilen += `<div class="plan-bahn"><div class="plan-balken">${stuecke}${marker}` +
       stundenplanStrichHtml(!!tag.today, von, spanne) +
-      `</div><div class="plan-ticks">${ticks}</div></div></div>`;
+      `</div><div class="plan-ticks">${ticks}</div>` +
+      `<div class="plan-zeiten">${zeiten}</div></div></div>`;
   }
   /* KEIN Hinweis mehr neben der Ueberschrift: der graue Balken traegt ihn, und
      zweimal dasselbe zu sagen kostet nur Platz. Ausserdem galt er fuer heute
@@ -6795,6 +6845,7 @@ function renderDashboard() {
   // Reihenfolge zaehlt — die Labels messen gegen die ENDGUELTIGE Breite.
   planBalkenBreite();
   planTermineBeschriften();
+  planZeitenSetzen();
   planScrollGleichziehen();
 }
 

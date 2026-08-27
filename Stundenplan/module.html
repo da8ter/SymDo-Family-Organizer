@@ -327,7 +327,14 @@
     width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
   }
-  .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  /* Uhrzeiten unter der Achse. Die Stundenzeiten (fest) etwas kraeftiger als
+     die Terminzeiten — sie umreissen den Schultag, die Termine haengen daran. */
+  .zeiten { position: relative; height: 12px; margin-top: 2px; }
+  .zeiten .zeit {
+    position: absolute; top: 0; font-size: 9px; line-height: 1.3;
+    color: var(--muted); white-space: nowrap; transform: translateX(-50%);
+  }
+  .zeiten .zeit.fest { color: var(--text); }
   .keinTag { font-size: 12px; color: var(--muted); padding: 4px 0; }
 
   /* ── Legende ───────────────────────────────────────────────────────────── */
@@ -678,6 +685,43 @@
     });
   }
 
+  /**
+   * Die Uhrzeiten unter der Achse setzen.
+   *
+   * Zwei Dinge, die erst nach dem Einfuegen zu haben sind: an den Raendern
+   * darf die Beschriftung nicht ueber den Balken hinausragen, und zwei
+   * Zeiten duerfen nicht uebereinanderliegen. Vorrang haben die STUNDENZEITEN
+   * — sie umreissen den Schultag; eine Terminzeit, die sich mit ihnen
+   * ueberschneidet, entfaellt (die Zeit steht ohnehin am Marker).
+   */
+  function zeitenSetzen() {
+    document.querySelectorAll('.zeiten').forEach(function (zeile) {
+      const alle = Array.prototype.slice.call(zeile.querySelectorAll('.zeit'));
+      const breite = zeile.clientWidth;
+      if (!alle.length || !breite) { return; }
+      const platziert = [];
+      const stelle = function (z) {
+        z.style.display = '';
+        const p = parseFloat(z.style.left) / 100;
+        z.style.transform = p < 0.06 ? 'none'
+          : (p > 0.94 ? 'translateX(-100%)' : 'translateX(-50%)');
+        const w = z.offsetWidth;
+        const mitte = p * breite;
+        const links = p < 0.06 ? mitte : (p > 0.94 ? mitte - w : mitte - w / 2);
+        return [links, links + w];
+      };
+      // Erst die festen, dann die Termine — die weichen bei Enge.
+      alle.filter(function (z) { return z.classList.contains('fest'); })
+          .forEach(function (z) { platziert.push(stelle(z)); });
+      alle.filter(function (z) { return !z.classList.contains('fest'); })
+          .forEach(function (z) {
+            const [a, b] = stelle(z);
+            const stoert = platziert.some(function (p) { return a < p[1] + 3 && b + 3 > p[0]; });
+            if (stoert) { z.style.display = 'none'; } else { platziert.push([a, b]); }
+          });
+    });
+  }
+
   function termineBeschriften() {
     document.querySelectorAll('.balken').forEach(function (balken) {
       const alle = Array.prototype.slice.call(balken.querySelectorAll('.termin'));
@@ -790,6 +834,7 @@
     // zaehlt — die Labels werden gegen die ENDGUELTIGE Balkenbreite gemessen.
     balkenBreite();
     termineBeschriften();
+    zeitenSetzen();
     scrollGleichziehen();
 
     document.querySelectorAll('.chip').forEach(function (b) {
@@ -1142,11 +1187,25 @@
 
       // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern
       // liegen, nicht darunter.
+      /* Uhrzeiten UNTER der Achse, an ihrer Stelle: Beginn der ersten Stunde,
+         Ende der letzten und die Startzeit jedes Termins. Sie ersetzen die
+         alte Fusszeile, die „Beginn"/„Ende" an die Zeilenraender schrieb —
+         dort standen sie neben der Zeit, zu der sie gehoeren, statt darunter.
+         Die Zeile liegt IN der Scrollbahn: sie muss mit dem Balken rollen. */
+      let zeiten = '';
+      const zeitMarke = function (min, text, fest) {
+        const p = Math.min(Math.max((min - von) / spanne, 0), 1);
+        zeiten += '<span class="zeit' + (fest ? ' fest' : '') + '" style="left:'
+          + (p * 100) + '%">' + esc(text) + '</span>';
+      };
+      zeitMarke(slots[0].from, beginn, true);
+      zeitMarke(slots[slots.length - 1].to, ende, true);
+      (tag.events || []).forEach(function (e) { zeitMarke(e.at, e.time || '', false); });
+
       html += '<div class="scrollbahn"><div class="balken">' + stuecke + marker
         + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
-        + '<div class="ticks">' + ticks + '</div></div>'
-        + '<div class="fuss"><span>Beginn: ' + esc(beginn) + '</span>'
-        + '<span>Ende: ' + esc(ende) + '</span></div></div>';
+        + '<div class="ticks">' + ticks + '</div>'
+        + '<div class="zeiten">' + zeiten + '</div></div></div>';
     });
     return html + legendeHtml();
   }
