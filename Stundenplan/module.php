@@ -585,7 +585,7 @@ class SymDoStundenplan extends IPSModuleStrict
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Children'),
-            'expanded' => true,
+            'expanded' => false,
             'items'    => [
                 [
                     'type'     => 'List',
