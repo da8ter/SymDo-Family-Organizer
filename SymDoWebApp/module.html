@@ -633,18 +633,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   background: var(--accent, #0a84ff); border: 2px solid var(--card-bg, #fff);
   box-sizing: content-box;
 }
-/* Ohne eigenen Grund — Zwilling der Kachel: lesbar haelt den Titel ein
-   Schattenrand in Kartenfarbe. */
+/* Ohne Grund und ohne Saum — Zwilling der Kachel. */
 .plan-termin-titel {
   font-size: 9px; line-height: 1; color: var(--text, #1c1c1e);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  text-shadow:
-     1px 0 var(--card-bg, #fff), -1px 0 var(--card-bg, #fff),
-     0 1px var(--card-bg, #fff),  0 -1px var(--card-bg, #fff);
 }
 .plan-termin.oben  .plan-termin-punkt, .plan-termin.oben  .plan-termin-titel { transform: translateY(-5px); }
 .plan-termin.unten .plan-termin-punkt, .plan-termin.unten .plan-termin-titel { transform: translateY(5px); }
-.plan-termin.flip { flex-direction: row-reverse; transform: translateX(calc(-100% + 11px)); }
+/* Klappung ueber `right` (gesetzt in planTermineBeschriften), nicht ueber
+   transform: ein absolut positioniertes Element bei `left: 94%` bekommt nur
+   die restlichen 6 % als Hoechstbreite. */
+.plan-termin.flip { flex-direction: row-reverse; }
 .plan-jetzt {
   position: absolute; top: -4px; height: 34px; width: 2px; z-index: 3;
   background: var(--accent); border-radius: 1px; pointer-events: none;
@@ -5631,10 +5630,16 @@ function planTermineBeschriften() {
       const label = m.querySelector('.plan-termin-titel');
       if (!label) return;
       m.classList.remove('flip', 'oben', 'unten');
+      m.style.right = 'auto';
+      m.style.left = (parseFloat(m.dataset.p) || 0) + '%';
       label.style.display = '';
       label.style.maxWidth = 'none';
-      const links = parseFloat(m.style.left) / 100 * breite;
-      const natur = label.scrollWidth || 0;
+      const anteil = parseFloat(m.dataset.p) / 100;
+      const links = anteil * breite;
+      /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
+         Deckel von 85 px setzt die Ellipse — genau so wurde aus
+         „Schwimmunterricht" ein „Schwimmunterric…". */
+      const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
       const rechts = Math.floor(breite - links - 12);
       const linksP = Math.floor(links - 12);
       const nachLinks = linksP > rechts;
@@ -5648,7 +5653,14 @@ function planTermineBeschriften() {
       }
       if (r === -1) { label.style.display = 'none'; return; }
       label.style.maxWidth = w + 'px';
-      if (nachLinks) m.classList.add('flip');
+      if (nachLinks) {
+        m.classList.add('flip');
+        m.style.left = 'auto';
+        m.style.right = (100 - anteil * 100) + '%';
+      } else {
+        m.style.right = 'auto';
+        m.style.left = (anteil * 100) + '%';
+      }
       if (r === 1) {
         m.classList.add('unten');
         const partner = alle[reihen[0].wer];
@@ -5925,7 +5937,8 @@ function stundenplanKarte() {
     let marker = '';
     (tag.events || []).forEach(e => {
       const p = Math.min(Math.max((e.at - von) / spanne, 0), 1);
-      marker += `<div class="plan-termin" title="${escapeHtml((e.time || '') + ' ' + (e.title || ''))}"` +
+      marker += `<div class="plan-termin" data-p="${p * 100}"` +
+        ` title="${escapeHtml((e.time || '') + ' ' + (e.title || ''))}"` +
         ` style="left:${p * 100}%"><span class="plan-termin-punkt"></span>` +
         `<span class="plan-termin-titel">${escapeHtml(e.title || '')}</span></div>`;
     });
