@@ -311,7 +311,7 @@ trait OAuthHelper
             $this->OAuthSetEncryptedToken($RefreshAttr, '', $KeyPrefix);
             $this->WriteAttributeInteger($ExpiresAttr, 0);
             $this->SendDebug($DebugLabel, 'Refresh rejected (' . $error . ') – reauthorization required', 0);
-            $this->LogMessage($this->Translate('The ToDo authorization has expired. Please reconnect the account in the ToDo gateway.'), KL_WARNING);
+            $this->LogMessage($this->Translate('The ToDo authorization has expired. Please reconnect the account in the SymDo Gateway.'), KL_WARNING);
             return false;
         }
 

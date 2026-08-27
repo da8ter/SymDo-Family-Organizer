@@ -149,6 +149,9 @@ class SymDoGateway extends IPSModuleStrict
             // Zuletzt: zieht Mitglieder-Ordner nach und braucht dafuer die
             // Kennungen, die AppApplyChanges ueber EnsureUserIDs vergibt.
             $this->NotesApplyChanges();
+            // Bestand: die Rezeptfoto-Kategorie lag frueher unter der Web-App —
+            // sie gehoert unter die Instanz, die sie fuellt. Legt keine an.
+            $this->AiRecipePhotoMigrate();
         }
     }
 

@@ -508,7 +508,7 @@ class SymDoWebApp extends IPSModuleStrict
         $path = __DIR__ . '/module.html';
         $html = @file_get_contents($path);
         if (!is_string($html)) {
-            $this->LogMessage('GetVisualizationTile: module.html could not be loaded. path=' . $path, KL_WARNING);
+            $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $path, KL_WARNING);
             return '';
         }
 

@@ -569,11 +569,11 @@ class SymDoToDoList extends IPSModuleStrict
             $size = file_exists($path) ? (string)@filesize($path) : 'n/a';
             $err = error_get_last();
             $errMsg = is_array($err) && isset($err['message']) ? (string)$err['message'] : '';
-            $this->LogMessage('GetVisualizationTile: module.html could not be loaded. path=' . $path . ' exists=' . $exists . ' readable=' . $readable . ' size=' . $size . ' err=' . $errMsg, KL_WARNING);
+            $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $path . ' vorhanden=' . $exists . ' readable=' . $readable . ' size=' . $size . ' err=' . $errMsg, KL_WARNING);
             return '';
         }
         if (strlen($html) < 200) {
-            $this->LogMessage('GetVisualizationTile: module.html loaded but is very short. bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
+            $this->LogMessage('GetVisualizationTile: module.html gelesen, aber auffaellig kurz. Bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
         return $html;
     }

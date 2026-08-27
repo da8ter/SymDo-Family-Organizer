@@ -702,7 +702,7 @@ trait AppCore
                 $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
                 $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''), (string)$payloadJson), true);
             } catch (\Throwable $e) {
-                $this->LogMessage('AI relay failed: ' . $e->getMessage(), KL_ERROR);
+                $this->LogMessage('SymDo: KI-Weiterleitung fehlgeschlagen — ' . $e->getMessage(), KL_ERROR);
                 $body = ['ok' => false, 'error' => ['code' => 'internal', 'message' => $this->Translate('AI request failed.')]];
             }
             if (!is_array($body)) {

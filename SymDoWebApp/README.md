@@ -107,9 +107,10 @@ drei dieser Variablen schreibt, werden die Meldungen zusammengefasst: Ein
 Abhaken ergibt **einen** Push, nicht drei. Kommen Listen hinzu oder fallen weg,
 merkt die Instanz das und legt die Abos neu an.
 
-Was die Kachel an Bildern speichert, liegt unter ihr: Rezeptfotos und -dateien aus
-der Rezeptanalyse sammelt das Gateway in einer Kategorie **Rezeptfotos**
-unterhalb dieser Instanz.
+Unter dieser Instanz liegt nichts Gespeichertes: Rezeptfotos und -dateien aus der
+Rezeptanalyse sammelt das Gateway in einer Kategorie **Rezeptfotos** unterhalb
+seiner eigenen Instanz. Bis Version 3.0 lagen sie hier — vorhandene Kategorien
+zieht das Gateway beim nächsten Übernehmen selbst um, samt Fotos.
 
 ## 7. PHP-Funktionen
 

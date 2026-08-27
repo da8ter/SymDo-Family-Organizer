@@ -340,29 +340,67 @@ trait AiExtract
 
     // ────────────────────────────── Rezeptfotos (Medienobjekte) ──────────────────────────────
 
-    /** Kategorie „Rezeptfotos" unterhalb der SymDoWebApp-Instanz (einmal anlegen, dann gecached). */
+    /**
+     * Kategorie „Rezeptfotos" unterhalb der EIGENEN Instanz (einmal anlegen, dann gemerkt).
+     *
+     * Sie lag bis hierher unter der SymDoWebApp-Instanz. Das war die falsche
+     * Stelle: angelegt werden die Fotos hier, geloescht wuerde die Kategorie mit
+     * einer fremden Instanz — und wer das Gateway entfernt, liesse sie samt
+     * Fotos verwaist stehen. Symcon raeumt Kinder mit der Instanz weg, also
+     * gehoeren sie unter die Instanz, die sie erzeugt.
+     *
+     * Bestand wandert mit: zeigt das Attribut auf eine Kategorie mit fremdem
+     * Elternteil, wird sie umgehaengt. Die Medienobjekte gehen dabei mit, es
+     * geht nichts verloren.
+     */
     private function AiRecipePhotoCategory(): int
+    {
+        $catId = $this->AiRecipePhotoMigrate();
+        if ($catId > 0) {
+            return $catId;
+        }
+        $catId = IPS_CreateCategory();
+        IPS_SetParent($catId, $this->InstanceID);
+        IPS_SetName($catId, 'Rezeptfotos');
+        $this->WriteAttributeString('RecipePhotoCategory', (string)$catId);
+        return $catId;
+    }
+
+    /**
+     * Die vorhandene Kategorie finden und, falls noetig, unter die eigene
+     * Instanz holen. Legt NIE eine an — deshalb kann sie auch aus ApplyChanges
+     * gerufen werden, ohne auf Anlagen ohne Rezeptanalyse eine leere Kategorie
+     * zu hinterlassen.
+     *
+     * @return int 0, wenn es keine gibt
+     */
+    private function AiRecipePhotoMigrate(): int
     {
         $catId = (int)$this->ReadAttributeString('RecipePhotoCategory');
         if ($catId > 0 && IPS_CategoryExists($catId)) {
+            if ((int)IPS_GetObject($catId)['ParentID'] !== $this->InstanceID) {
+                @IPS_SetParent($catId, $this->InstanceID);
+            }
             return $catId;
         }
-        $sdwa   = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
-        $parent = (is_array($sdwa) && count($sdwa) > 0) ? (int)$sdwa[0] : 0;
-        if ($parent <= 0) {
-            return 0;
+        // Unter der eigenen Instanz und — aus der Zeit davor — unter der Web-App.
+        $orte = [$this->InstanceID];
+        foreach (IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID) as $sdwa) {
+            $orte[] = (int)$sdwa;
         }
-        foreach (IPS_GetChildrenIDs($parent) as $child) {
-            if (IPS_CategoryExists($child) && IPS_GetName($child) === 'Rezeptfotos') {
+        foreach ($orte as $ort) {
+            foreach (IPS_GetChildrenIDs($ort) as $child) {
+                if (!IPS_CategoryExists($child) || IPS_GetName($child) !== 'Rezeptfotos') {
+                    continue;
+                }
+                if ($ort !== $this->InstanceID) {
+                    @IPS_SetParent($child, $this->InstanceID);
+                }
                 $this->WriteAttributeString('RecipePhotoCategory', (string)$child);
                 return $child;
             }
         }
-        $catId = IPS_CreateCategory();
-        IPS_SetParent($catId, $parent);
-        IPS_SetName($catId, 'Rezeptfotos');
-        $this->WriteAttributeString('RecipePhotoCategory', (string)$catId);
-        return $catId;
+        return 0;
     }
 
     /**

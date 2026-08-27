@@ -28,7 +28,7 @@
             "Connection successful. Found %d list(s).": "Verbindung erfolgreich. %d Liste(n) gefunden.",
             "Disconnected from Google.": "Verbindung zu Google getrennt.",
             "Disconnected from Microsoft.": "Verbindung zu Microsoft getrennt.",
-            "The ToDo authorization has expired. Please reconnect the account in the ToDo gateway.": "Die ToDo-Autorisierung ist abgelaufen. Bitte das Konto im ToDo-Gateway neu verbinden.",
+            "The ToDo authorization has expired. Please reconnect the account in the SymDo Gateway.": "Die ToDo-Autorisierung ist abgelaufen. Bitte das Konto im SymDo Gateway neu verbinden.",
             "Please enter Client ID first.": "Bitte zuerst Client ID eingeben.",
             "Please fill in server URL, username and password.": "Bitte Server URL, Benutzername und Passwort ausfüllen.",
             "Authorization successful": "Autorisierung erfolgreich",
