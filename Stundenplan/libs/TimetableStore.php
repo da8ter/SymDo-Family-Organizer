@@ -324,6 +324,84 @@ trait TimetableStore
     }
 
     /**
+     * Die Termine der Kinder fuer die angezeigte Woche, als Marker-Daten.
+     *
+     * EIN Abruf beim Gateway (TGW_GetEventsForTile, liest OpenCalendars Store in
+     * Millisekunden), dann Buckets Kennung → Wochentag. Regeln, alle
+     * Nutzerentscheid vom 27.08.2026:
+     *   - nur Termine MIT Uhrzeit — ganztaegige erscheinen nicht,
+     *   - nur Termine, denen das Mitglied des Kindes zugeordnet ist,
+     *   - ein Termin gehoert zu dem Tag, an dem er BEGINNT (Regel aus dem
+     *     Briefing — sonst leckt ein mehrtaegiger Block in jeden Tag).
+     *
+     * @param list<array<string,mixed>> $kinder aus Kinder()
+     * @return array<string,array<int,list<array{title:string,time:string,at:int}>>>
+     */
+    private function TermineFuerWoche(array $kinder, string $heute): array
+    {
+        if (!$this->SchalterLesen('ShowCalendarEvents')) {
+            return [];
+        }
+        $kennungen = [];
+        foreach ($kinder as $kind) {
+            $id = trim((string)($kind['userId'] ?? ''));
+            if ($id !== '' && ($kind['hidden'] ?? false) !== true) {
+                $kennungen[$id] = true;
+            }
+        }
+        $gw = $this->GatewayInstanz();
+        if ($kennungen === [] || $gw <= 0 || !function_exists('TGW_GetEventsForTile')) {
+            return [];
+        }
+        // Montag 00:00 bis Samstag 24:00 der ANGEZEIGTEN Woche — die Timeline
+        // blaettert durch genau diese Tage.
+        $von = strtotime(TimetableCalc::DatumInWoche($heute, 1) . ' 00:00:00');
+        $bis = strtotime(TimetableCalc::DatumInWoche($heute, 6) . ' 00:00:00') + 86400;
+        if ($von === false || $bis === false) {
+            return [];
+        }
+        try {
+            $roh = json_decode((string)@TGW_GetEventsForTile($gw, $von, $bis), true);
+        } catch (\Throwable $e) {
+            return [];
+        }
+        if (!is_array($roh) || ($roh['ok'] ?? false) !== true) {
+            return [];
+        }
+        $buckets = [];
+        foreach ((array)($roh['events'] ?? []) as $e) {
+            if (!is_array($e) || ($e['allDay'] ?? false) === true) {
+                continue;
+            }
+            $start = (int)($e['start'] ?? 0);
+            if ($start < $von || $start >= $bis) {
+                continue;
+            }
+            $tag = (int)date('N', $start);
+            if ($tag > 6) {
+                continue;   // Sonntag zeigt die Timeline nicht
+            }
+            $marker = [
+                'title' => trim((string)($e['title'] ?? '')),
+                'time'  => date('H:i', $start),
+                'at'    => (int)date('G', $start) * 60 + (int)date('i', $start),
+            ];
+            foreach ((array)($e['members'] ?? []) as $m) {
+                $m = (string)$m;
+                if (isset($kennungen[$m])) {
+                    $buckets[$m][$tag][] = $marker;
+                }
+            }
+        }
+        foreach ($buckets as &$tage) {
+            foreach ($tage as &$liste) {
+                usort($liste, static fn(array $a, array $b): int => $a['at'] <=> $b['at']);
+            }
+        }
+        return $buckets;
+    }
+
+    /**
      * Der vollstaendige Zustand fuer die Anzeige. Hoehen und Luecken werden HIER
      * gerechnet, nicht in der Kachel: dieselben Zahlen sollen im Raster, in der
      * Timeline und in der Web-App herauskommen, und die Rechenregeln stehen
@@ -348,6 +426,20 @@ trait TimetableStore
         $slotsSichtbar = array_values(array_filter($slots,
             static fn(array $s): bool => in_array((string)($s['childId'] ?? ''), $sichtbareIds, true)));
         [$von, $bis] = TimetableCalc::Wochenspanne($slotsSichtbar, $sichtbar);
+        /* Termin-Marker: EIN Abruf fuer die Woche, Buckets Kennung → Wochentag.
+           Die ZEITACHSE zieht mit — Kindertermine liegen meist am Nachmittag,
+           hinter dem Ende der Betreuung; ohne die Erweiterung laege der Marker
+           unsichtbar hinter dem Achsenende. 15 Minuten Vorlauf fuer den Punkt,
+           45 Nachlauf als Platz fuer das Label. */
+        $termine = $this->TermineFuerWoche($kinder, $heute);
+        foreach ($termine as $jeTag) {
+            foreach ($jeTag as $liste) {
+                foreach ($liste as $marker) {
+                    $von = min($von, max(0, (int)$marker['at'] - 15));
+                    $bis = max($bis, min(24 * 60, (int)$marker['at'] + 45));
+                }
+            }
+        }
         $ferien  = $this->FerienAmTag($heute);
         $jetzt   = date('H:i');
         // Ferien JE WOCHENTAG, nicht nur fuer heute: die Timeline blaettert
@@ -414,6 +506,9 @@ trait TimetableStore
                     'parity'  => $tag === TimetableCalc::SAMSTAG && $samstag['biweekly']
                         ? ($samstag['parity'] === 'odd' ? 'ungerade KW' : 'gerade KW') : '',
                     'slots'   => $karten,
+                    // Termine des Kindes an DIESEM Wochentag — leer, wenn der
+                    // Schalter aus ist oder niemand zugeordnet hat.
+                    'events'  => $termine[$kind['userId']][$tag] ?? [],
                 ];
             }
             $heuteSlots = $heuteTag === null ? [] : TimetableCalc::TagesSlots($heuteTag, $kind, $slots);

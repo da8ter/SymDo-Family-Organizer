@@ -282,6 +282,23 @@
      ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
      Kachelfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht —
      die Akzentfarbe allein kann auf einem farbigen Block untergehen. */
+  /* Termin-Marker: Punkt an der Startzeit, Label daneben. Unter dem
+   Jetzt-Strich (z-index 2 < 3): der Strich ist die wichtigere Auskunft. */
+  .termin {
+    position: absolute; top: -3px; height: 28px; z-index: 2;
+    display: flex; align-items: flex-start; gap: 3px; pointer-events: auto;
+  }
+  .termin-punkt {
+    width: 8px; height: 8px; border-radius: 50%; flex: none; margin-top: -6px;
+    background: var(--accent); border: 2px solid var(--bg);
+    box-sizing: content-box;
+  }
+  .termin-titel {
+    font-size: 9px; line-height: 1; color: var(--muted); margin-top: -5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Label links vom Punkt: Container endet mit dem Punkt auf der Terminzeit. */
+  .termin.flip { flex-direction: row-reverse; transform: translateX(calc(-100% + 12px)); }
   .jetztstrich {
     position: absolute; top: -4px; height: 37px; width: 2px; z-index: 3;
     background: var(--accent); border-radius: 1px; pointer-events: none;
@@ -591,6 +608,56 @@
      ist oder die Uhr ausserhalb der Wochenspanne steht. Kein Klemmen an den
      Rand: ein Strich, der um 6 Uhr auf dem Schulbeginn klebte, behauptete, der
      Unterricht laufe. */
+  /* Labels der Termin-Marker an den Platz anpassen. Muss NACH dem Einfuegen
+     laufen: die Breite des Balkens steht erst im Layout fest. Regel
+     (Nutzerentscheid): Titel zeigen, wenn Platz ist; kuerzen, wenn es eng wird
+     (Ellipsis); unter 32 px ganz weg - der Punkt und das title-Attribut bleiben. */
+  function termineBeschriften() {
+    document.querySelectorAll('.balken').forEach(function (balken) {
+      const alle = Array.prototype.slice.call(balken.querySelectorAll('.termin'));
+      const breite = balken.clientWidth;
+      if (!alle.length || !breite) { return; }
+      // Wo jedes sichtbare Label RECHTS endet — fuer die Links-Klappung unten.
+      const enden = [];
+      alle.forEach(function (m, i) {
+        const links = parseFloat(m.style.left) / 100 * breite;
+        const naechster = alle[i + 1]
+          ? parseFloat(alle[i + 1].style.left) / 100 * breite
+          : breite;
+        // 12 px fuer den Punkt und etwas Luft.
+        const platz = Math.floor(naechster - links - 12);
+        const label = m.querySelector('.termin-titel');
+        if (!label) { return; }
+        m.classList.remove('flip');
+        if (platz >= 32) {
+          label.style.display = '';
+          label.style.maxWidth = platz + 'px';
+          enden[i] = links + 12 + Math.min(platz, label.scrollWidth || platz);
+          return;
+        }
+        /* Rechts ist kein Platz — der Normalfall am Achsenende: die Achse
+           endet 45 Minuten nach dem letzten Termin, das sind auf einer
+           schmalen Kachel keine 32 px. Dann klappt das Label auf die LINKE
+           Seite des Punktes, wenn dort Platz ist (bis zum Ende des vorigen
+           Labels bzw. zum Balkenanfang). */
+        const vorherEnde = i > 0
+          ? (enden[i - 1] !== undefined ? enden[i - 1]
+             : parseFloat(alle[i - 1].style.left) / 100 * breite + 12)
+          : 0;
+        const platzLinks = Math.floor(links - vorherEnde - 4);
+        if (platzLinks >= 32) {
+          m.classList.add('flip');
+          label.style.display = '';
+          label.style.maxWidth = platzLinks + 'px';
+          enden[i] = links + 12;
+        } else {
+          label.style.display = 'none';
+          enden[i] = links + 12;
+        }
+      });
+    });
+  }
+
   function jetztStrichHtml(istHeute, von, spanne) {
     const jetzt = jetztMinute();
     if (!istHeute || jetzt === null || jetzt < von || jetzt > von + spanne) { return ''; }
@@ -652,6 +719,8 @@
     html += zustand.mode === 'timeline' ? timeline() : woche();
     ziel.innerHTML = html;
     symboleErsetzen();
+    // Nach dem Einfuegen: erst jetzt hat der Balken eine Breite.
+    termineBeschriften();
 
     document.querySelectorAll('.chip').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -986,9 +1055,21 @@
           + ((m - von) / spanne * 100) + '%"></span>';
       }
 
+      /* Termin-Marker: Punkt an der Startzeit, daneben das Label. Das Label
+         wird NACH dem Einfuegen gemessen (termineBeschriften) - erst dann steht
+         fest, wie viel Pixel bis zum naechsten Marker bleiben. */
+      let marker = '';
+      (tag.events || []).forEach(function (e) {
+        const p = Math.min(Math.max((e.at - von) / spanne, 0), 1);
+        marker += '<div class="termin" data-at="' + (e.at || 0) + '" title="'
+          + esc((e.time || '') + ' ' + (e.title || '')) + '" style="left:' + (p * 100) + '%">'
+          + '<span class="termin-punkt"></span>'
+          + '<span class="termin-titel">' + esc(e.title || '') + '</span></div>';
+      });
+
       // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern
       // liegen, nicht darunter.
-      html += '<div class="balken">' + stuecke + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
+      html += '<div class="balken">' + stuecke + marker + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
         + '<div class="ticks">' + ticks + '</div>'
         + '<div class="fuss"><span>Beginn: ' + esc(beginn) + '</span>'
         + '<span>Ende: ' + esc(ende) + '</span></div></div>';

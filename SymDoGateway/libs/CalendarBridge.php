@@ -446,6 +446,50 @@ trait CalendarBridge
     }
 
     /**
+     * Termine fuer eine Kachel: schlanke Projektion als JSON.
+     *
+     * Fuer andere Module dieses Hauses — der Stundenplan markiert damit die
+     * Termine der Kinder auf seiner Zeitachse. Alle Kalender-Funktionen hier
+     * sind sonst private; die HTTP-API kommt fuer eine Kachel nicht in Frage,
+     * sie kann sich am Hook nicht anmelden.
+     *
+     * Schlank aus zwei Gruenden: die Rueckgabe einer PREFIX_-Funktion faellt
+     * unter das ScriptOutputBufferLimit, und der Verbraucher braucht nur, was
+     * hier steht. Gefiltert (Mitglied, ganztaegig) wird beim Verbraucher — die
+     * Funktion bleibt allgemein.
+     *
+     * @return string JSON {ok, events: [{uid,title,start,end,allDay,members}], truncated}
+     */
+    public function GetEventsForTile(int $From, int $To): string
+    {
+        // Deckel gegen versehentlich riesige Fenster: der Stundenplan fragt eine
+        // Woche, mehr als 14 Tage braucht keine Kachel.
+        if ($To > $From + 14 * 86400) {
+            $To = $From + 14 * 86400;
+        }
+        if ($From <= 0 || $To <= $From) {
+            return (string)json_encode(['ok' => false, 'events' => [], 'truncated' => false]);
+        }
+        $ergebnis = $this->CalEvents($From, $To);
+        $schlank = [];
+        foreach ($ergebnis['events'] as $e) {
+            $schlank[] = [
+                'uid'     => (string)($e['uid'] ?? ''),
+                'title'   => (string)($e['title'] ?? ''),
+                'start'   => (int)($e['start'] ?? 0),
+                'end'     => (int)($e['end'] ?? 0),
+                'allDay'  => ($e['allDay'] ?? false) === true,
+                'members' => array_values(array_map('strval', (array)($e['members'] ?? []))),
+            ];
+        }
+        return (string)json_encode([
+            'ok'        => true,
+            'events'    => $schlank,
+            'truncated' => $ergebnis['truncated'],
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    /**
      * Termine aus einem oder mehreren Kalendern, nach Beginn sortiert.
      *
      * @param list<int> $nurIDs Leer = alle eingerichteten Kalender.

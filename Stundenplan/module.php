@@ -63,6 +63,9 @@ class SymDoStundenplan extends IPSModuleStrict
         $this->RegisterAttributeString('SlotOwnersReport', '');
 
         $this->RegisterPropertyString('Display', 'week');
+        // Termine der Kinder als Marker auf der Timeline (Vorgabe aus: die
+        // Zeitachse waechst dadurch, und nicht jede Anlage pflegt Zuordnungen).
+        $this->RegisterPropertyBoolean('ShowCalendarEvents', false);
         $this->RegisterPropertyInteger('SourceInstanceID', 0);
         $this->RegisterPropertyInteger('GatewayInstanceID', 0);
 
@@ -1006,6 +1009,10 @@ class SymDoStundenplan extends IPSModuleStrict
                     'caption' => $this->GatewayHinweis(),
                     'visible' => $this->GatewayHinweis() !== '',
                 ],
+                // Neue Eigenschaft: vor dem Kernel-Neustart existiert sie nicht,
+                // und ein Feld, dessen Wert nicht gespeichert werden kann, ist
+                // schlimmer als ein Hinweis (Muster aus der SymDo Web App).
+                ...$this->TerminSchalter(),
                 [
                     'type'    => 'Label',
                     'caption' => $this->Translate('Whether the app shows the timetable is set in the SymDo Web App, under "Visible sections" — together with the other things the app displays.')
@@ -1026,6 +1033,35 @@ class SymDoStundenplan extends IPSModuleStrict
      * wie ein leerer: die Spalte „Familienmitglied" zeigt nur „— keins —", und
      * warum, steht nirgends.
      */
+    /**
+     * Der Termin-Schalter — oder der Neustart-Hinweis, solange es die
+     * Eigenschaft noch nicht gibt (Eigenschaften entstehen nur in Create,
+     * und Create laeuft erst nach einem Kernel-Neustart erneut).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function TerminSchalter(): array
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('ShowCalendarEvents', $cfg)) {
+            return [[
+                'type'    => 'Label',
+                'caption' => $this->Translate('New in this version: appointment markers on the timeline. Restart Symcon once, then the switch appears here.'),
+            ]];
+        }
+        return [
+            [
+                'type'    => 'CheckBox',
+                'name'    => 'ShowCalendarEvents',
+                'caption' => $this->Translate("Show the children's appointments on the timeline"),
+            ],
+            [
+                'type'    => 'Label',
+                'caption' => $this->Translate('Markers follow the member assignment from SymDo: an appointment appears on the timeline of every child assigned to it. All-day appointments and appointments without an assignment stay away. On a mirror instance the switch of the SOURCE decides — the plan arrives from there, markers included.'),
+            ],
+        ];
+    }
+
     private function GatewayHinweis(): string
     {
         $gewaehlt = $this->ReadPropertyInteger('GatewayInstanceID');

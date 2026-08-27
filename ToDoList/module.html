@@ -624,6 +624,20 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
    Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
    Akzentfarbe allein kann auf einem farbigen Block untergehen. */
+.plan-termin {
+  position: absolute; top: -3px; height: 26px; z-index: 2;
+  display: flex; align-items: flex-start; gap: 3px;
+}
+.plan-termin-punkt {
+  width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: -5px;
+  background: var(--accent, #0a84ff); border: 2px solid var(--card-bg, #fff);
+  box-sizing: content-box;
+}
+.plan-termin-titel {
+  font-size: 9px; line-height: 1; color: var(--muted, #8a8a8e); margin-top: -4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.plan-termin.flip { flex-direction: row-reverse; transform: translateX(calc(-100% + 11px)); }
 .plan-jetzt {
   position: absolute; top: -4px; height: 34px; width: 2px; z-index: 3;
   background: var(--accent); border-radius: 1px; pointer-events: none;
@@ -5543,6 +5557,50 @@ function stundenplanJetzt() {
 
 /* Der Strich fuer eine Balkenzeile. Kein Klemmen an den Rand: ein Strich, der
    abends auf der letzten Stunde klebte, behauptete, der Unterricht laufe. */
+/* Labels der Termin-Marker an den Platz anpassen — Zwilling von
+   termineBeschriften() in der Stundenplan-Kachel (beide Stellen synchron
+   halten). Titel zeigen, wenn Platz ist; kuerzen per Ellipsis; unter 32 px ganz
+   weg — Punkt und title-Attribut bleiben. */
+function planTermineBeschriften() {
+  document.querySelectorAll('.plan-balken').forEach(balken => {
+    const alle = [...balken.querySelectorAll('.plan-termin')];
+    const breite = balken.clientWidth;
+    if (!alle.length || !breite) return;
+    const enden = [];
+    alle.forEach((m, i) => {
+      const links = parseFloat(m.style.left) / 100 * breite;
+      const naechster = alle[i + 1] ? parseFloat(alle[i + 1].style.left) / 100 * breite : breite;
+      const platz = Math.floor(naechster - links - 12);
+      const label = m.querySelector('.plan-termin-titel');
+      if (!label) return;
+      m.classList.remove('flip');
+      if (platz >= 32) {
+        label.style.display = '';
+        label.style.maxWidth = platz + 'px';
+        enden[i] = links + 12 + Math.min(platz, label.scrollWidth || platz);
+        return;
+      }
+      /* Rechts kein Platz — am Achsenende der Normalfall (die Achse endet 45
+         Minuten nach dem letzten Termin). Dann klappt das Label auf die LINKE
+         Seite des Punktes, wenn dort Platz ist. */
+      const vorherEnde = i > 0
+        ? (enden[i - 1] !== undefined ? enden[i - 1]
+           : parseFloat(alle[i - 1].style.left) / 100 * breite + 12)
+        : 0;
+      const platzLinks = Math.floor(links - vorherEnde - 4);
+      if (platzLinks >= 32) {
+        m.classList.add('flip');
+        label.style.display = '';
+        label.style.maxWidth = platzLinks + 'px';
+        enden[i] = links + 12;
+      } else {
+        label.style.display = 'none';
+        enden[i] = links + 12;
+      }
+    });
+  });
+}
+
 function stundenplanStrichHtml(istHeute, von, spanne) {
   const jetzt = stundenplanJetzt();
   if (!istHeute || jetzt === null || jetzt < von || jetzt > von + spanne) { return ''; }
@@ -5802,8 +5860,18 @@ function stundenplanKarte() {
       const stark = m === ersterTick || m + 15 > bis || m % 60 === 0;
       ticks += `<span class="${stark ? 'stark' : ''}" style="left:${(m - von) / spanne * 100}%"></span>`;
     }
+    /* Termin-Marker: Punkt an der Startzeit, Label daneben — dasselbe Bild
+       wie in der Stundenplan-Kachel. Das Label wird nach dem Einfuegen
+       gemessen (planTermineBeschriften). */
+    let marker = '';
+    (tag.events || []).forEach(e => {
+      const p = Math.min(Math.max((e.at - von) / spanne, 0), 1);
+      marker += `<div class="plan-termin" title="${escapeHtml((e.time || '') + ' ' + (e.title || ''))}"` +
+        ` style="left:${p * 100}%"><span class="plan-termin-punkt"></span>` +
+        `<span class="plan-termin-titel">${escapeHtml(e.title || '')}</span></div>`;
+    });
     // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern liegen.
-    zeilen += `<div class="plan-balken">${stuecke}` +
+    zeilen += `<div class="plan-balken">${stuecke}${marker}` +
       stundenplanStrichHtml(!!tag.today, von, spanne) +
       `</div><div class="plan-ticks">${ticks}</div></div>`;
   }
@@ -6661,6 +6729,8 @@ function renderDashboard() {
     });
   });
   applyMarquees(el);
+  // Nach dem Einfuegen: erst jetzt haben die Stundenplan-Balken eine Breite.
+  planTermineBeschriften();
 }
 
 /**

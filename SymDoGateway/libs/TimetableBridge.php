@@ -145,6 +145,20 @@ trait TimetableBridge
                         'until'  => (string)($tag['holiday']['until'] ?? ''),
                         'public' => (bool)($tag['holiday']['public'] ?? false),
                     ] : null;
+                    /* Termin-Marker: diese Liste ist eine WEISSLISTE, kein
+                       Durchreicher — ohne diese Zeilen kaeme der Schluessel nie
+                       in der App an. Dieselbe schlanke Form wie im Plan. */
+                    $marker = [];
+                    foreach ((array)($tag['events'] ?? []) as $e) {
+                        if (!is_array($e)) {
+                            continue;
+                        }
+                        $marker[] = [
+                            'title' => (string)($e['title'] ?? ''),
+                            'time'  => (string)($e['time'] ?? ''),
+                            'at'    => (int)($e['at'] ?? 0),
+                        ];
+                    }
                     $tage[] = [
                         'weekday' => (int)($tag['weekday'] ?? 0),
                         'label'   => (string)($tag['label'] ?? ''),
@@ -153,6 +167,7 @@ trait TimetableBridge
                         'holiday' => $frei,
                         'slots'   => array_values(array_map($stunde,
                             array_filter((array)($tag['slots'] ?? []), 'is_array'))),
+                        'events'  => $marker,
                     ];
                 }
                 // Kinder ohne Unterricht bleiben DRIN, aber mit leerer Liste:

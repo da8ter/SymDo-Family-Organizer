@@ -94,7 +94,15 @@ Meldung entsteht.
    des Unterrichts bis zu dieser Zeit, aber nur an Tagen mit Unterricht, und er
    zählt nicht als Unterrichtszeit.
 5. **Ferien**: Quelle wählen und einmal abrufen.
-6. **Anzeige**: Wochenraster oder Timeline.
+6. **Anzeige**: Wochenraster oder Timeline. Dazu optional **Termine der Kinder
+   auf der Timeline** — kleine Marker an der Startzeit, mit Titel, wenn Platz
+   ist (bei Enge wandert das Label auf die linke Seite des Punktes oder
+   entfällt; Antippen zeigt es immer). Die Marker folgen der
+   **Mitglieder-Zuordnung** aus SymDo: Ein Termin erscheint bei jedem Kind, dem
+   er in der App zugewiesen ist. Ganztägige Termine und Termine ohne Zuordnung
+   erscheinen nicht; die Zeitachse verlängert sich bei Bedarf bis zum letzten
+   Termin. Bei einer Spiegel-Instanz entscheidet der Schalter der **Quelle**.
+   Erscheint auch im Stundenplan-Balken der SymDo-Übersicht (App und Kachel).
 
 Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern in der
 **SymDo Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die
