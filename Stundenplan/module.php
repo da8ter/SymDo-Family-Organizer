@@ -678,20 +678,33 @@ class SymDoStundenplan extends IPSModuleStrict
      */
     private function StundenBereich(callable $auswahl, array $faecher): array
     {
+        /* Die Datenquelle steht hier und nicht mehr unter „Anzeige": sie
+           entscheidet, ob die Stunden darunter ueberhaupt gelten. Steht dort eine
+           andere Instanz, kommt der ganze Plan von dort und alles Weitere in
+           diesem Bereich ist ohne Wirkung — das gehoert vor die Listen, nicht in
+           einen anderen Bereich. */
+        $quelle = [
+            'type'         => 'SelectInstance',
+            'name'         => 'SourceInstanceID',
+            'width'        => '400px',
+            'caption'      => $this->Translate('Data from another timetable (empty = own data)'),
+            'validModules' => [self::EIGENE_GUID],
+        ];
+
         $kinder = $this->Kinder();
         if ($kinder === []) {
             return [
                 'type'     => 'ExpansionPanel',
                 'caption'  => $this->Translate('Lessons'),
                 'expanded' => true,
-                'items'    => [[
+                'items'    => [$quelle, [
                     'type'    => 'Label',
                     'caption' => $this->Translate('Add a child first — the lessons are entered per child.')
                 ]],
             ];
         }
 
-        $bereiche = [];
+        $bereiche = [$quelle];
         foreach (array_slice($kinder, 0, self::MAX_KINDER) as $i => $kind) {
             $bereiche[] = [
                 'type'     => 'ExpansionPanel',
@@ -860,13 +873,6 @@ class SymDoStundenplan extends IPSModuleStrict
                         ['caption' => $this->Translate('Week grid'), 'value' => 'week'],
                         ['caption' => $this->Translate('Timeline (compact)'), 'value' => 'timeline'],
                     ],
-                ],
-                [
-                    'type'         => 'SelectInstance',
-                    'name'         => 'SourceInstanceID',
-                    'width'        => '400px',
-                    'caption'      => $this->Translate('Data from another timetable (empty = own data)'),
-                    'validModules' => [self::EIGENE_GUID],
                 ],
                 [
                     'type'         => 'SelectInstance',

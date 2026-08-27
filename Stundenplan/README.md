@@ -108,9 +108,10 @@ es nicht (mehr) gibt.
 
 ## Beide Ansichten gleichzeitig
 
-Eine zweite Instanz dieses Moduls anlegen, auf **Timeline** stellen und die
-erste Instanz als **Datenquelle** wählen. Sie zeigt denselben Plan in der
-anderen Form — der Plan wird nur einmal gepflegt.
+Eine zweite Instanz dieses Moduls anlegen, unter *Anzeige* auf **Timeline**
+stellen und oben im Bereich *Stunden* die erste Instanz als **Datenquelle**
+wählen. Sie zeigt denselben Plan in der anderen Form — der Plan wird nur einmal
+gepflegt.
 
 ## Ferien und Feiertage
 
