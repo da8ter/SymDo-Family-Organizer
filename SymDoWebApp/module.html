@@ -631,11 +631,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
    rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
 .plan-termin-bar {
-  height: 10px; border-radius: 5px; flex: none;
+  height: 7.5px; border-radius: 999px; flex: none;
   background: var(--accent, #0a84ff);
 }
 .plan-termin[data-open] .plan-termin-bar {
-  border-radius: 5px 0 0 5px;
+  border-radius: 999px 0 0 999px;
   background: linear-gradient(90deg, var(--accent, #0a84ff), transparent);
 }
 /* Ohne Grund und ohne Saum — Zwilling der Kachel. */
