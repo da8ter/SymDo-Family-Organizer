@@ -312,7 +312,30 @@
      der Balken leer ist. */
   .termin-titel {
     font-size: 9px; line-height: 1; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden;
+  }
+  /* Zu lange Titel laufen hin und her, statt abgeschnitten dazustehen — wie die
+     Artikelnamen im Einkaufs-Streifen der Uebersicht, und mit denselben Zeiten.
+
+     Der Lauf sitzt INNEN: .termin-titel traegt bei zwei Reihen bereits ein
+     translateY, und ein zweites transform am selben Element wuerde es
+     ueberschreiben — der Titel spraenge beim Laufen in die andere Reihe.
+
+     Kein text-overflow mehr am Titel: sobald der Text in einem eigenen Kasten
+     steckt, greift die Ellipse dort nicht mehr. Sie steht jetzt am inneren
+     Element, fuer den Fall ohne Bewegung (siehe unten). */
+  .termin-lauf { display: inline-block; }
+  .termin-titel.laeuft .termin-lauf { animation: termin-pingpong 6s ease-in-out infinite; }
+  @keyframes termin-pingpong {
+    0%, 15%   { transform: translateX(0); }
+    45%, 55%  { transform: translateX(var(--lauf-weg, -30px)); }
+    85%, 100% { transform: translateX(0); }
+  }
+  /* Wer Bewegung abgestellt hat, bekommt die Ellipse zurueck: mit max-width hat
+     das innere Element einen eigenen Deckel, an dem sie greift. */
+  @media (prefers-reduced-motion: reduce) {
+    .termin-titel.laeuft .termin-lauf { animation: none; }
+    .termin-lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   }
   /* Zwei Reihen bei Ueberschneidung — nur dann, sonst bleibt es mittig. */
   .termin.oben  .termin-bar, .termin.oben  .termin-titel { transform: translateY(-6px); }
@@ -761,9 +784,14 @@
       const posten = [];
       alle.forEach(function (m) {
         const label = m.querySelector('.termin-titel');
+        const lauf  = m.querySelector('.termin-lauf');
         const bar   = m.querySelector('.termin-bar');
-        if (!label || !bar) { return; }
+        if (!label || !lauf || !bar) { return; }
         m.classList.remove('flip', 'oben', 'unten');
+        // Vor dem Messen zuruecksetzen: ein noch laufender Titel wuerde sonst
+        // seine alte Weglaenge behalten, wenn die Kachel schmaler geworden ist.
+        label.classList.remove('laeuft');
+        label.style.removeProperty('--lauf-weg');
         m.style.right = 'auto';
         const anteil  = (parseFloat(m.dataset.p) || 0) / 100;
         const anteil2 = (parseFloat(m.dataset.p2) || 0) / 100;
@@ -777,7 +805,7 @@
         const barB = barA + barBreit;
         /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
            Deckel von 85 px setzt die Ellipse. */
-        const natur = label.scrollWidth ? label.scrollWidth + 1 : 0;
+        const natur = lauf.scrollWidth ? lauf.scrollWidth + 1 : 0;
         const platzR = Math.floor(breite - barB - 4);
         const platzL = Math.floor(barA - 4);
         const nachLinks = platzL > platzR;
@@ -785,7 +813,7 @@
         posten.push({
           m: m, label: label, anteil: anteil, anteil2: anteil2,
           barA: barA, barB: barB, nachLinks: nachLinks,
-          w: Math.min(natur, Math.max(platz, 0)), passt: platz >= 32,
+          w: Math.min(natur, Math.max(platz, 0)), natur: natur, passt: platz >= 32,
         });
       });
 
@@ -823,6 +851,14 @@
       posten.forEach(function (pos) {
         if (pos.mitTitel) {
           pos.label.style.maxWidth = pos.w + 'px';
+          /* Passt der Titel nicht, laeuft er hin und her statt abgeschnitten
+             zu bleiben. Erst ab vier Pixeln Ueberhang — wie im Artikelstreifen:
+             fuer zwei Pixel lohnt keine Bewegung. */
+          const ueber = pos.natur - pos.w;
+          if (ueber > 4) {
+            pos.label.style.setProperty('--lauf-weg', '-' + Math.round(ueber) + 'px');
+            pos.label.classList.add('laeuft');
+          }
         } else {
           pos.label.style.display = 'none';
         }
@@ -1304,7 +1340,8 @@
           + ' data-p2="' + (p2 * 100) + '"' + (e.open ? ' data-open="1"' : '') + ' title="'
           + esc((e.time || '') + ' ' + (e.title || '')) + '" style="left:' + (p * 100) + '%">'
           + '<span class="termin-bar"></span>'
-          + '<span class="termin-titel">' + esc(e.title || '') + '</span></div>';
+          + '<span class="termin-titel"><span class="termin-lauf">'
+          + esc(e.title || '') + '</span></span></div>';
       });
 
       // Der Strich kommt ZULETZT in den Balken: er soll ueber den Faechern
