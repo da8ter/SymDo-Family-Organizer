@@ -76,6 +76,9 @@ KI-Eingang und Briefing kommen erst mit ihm.
 - Für die Web-App unterwegs: **Symcon Connect** oder eine eigene HTTPS-Adresse
 - Für den Kalender: das Store-Modul **OpenCalendar** von Burkhard Kneiseler,
   optional
+- Für Ferien und Feiertage im Stundenplan: **OpenHolidaysAPI** (nichts zu
+  installieren) oder das Store-Modul **Jahreskalender (Almanac)** von Wilkware,
+  optional
 - Für die KI: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein
   lokaler, OpenAI-kompatibler Server (z. B. LM Studio), optional
 - Für die Sprachausgabe: **OpenAI**, **Azure Speech**, **ElevenLabs** oder
@@ -133,7 +136,8 @@ der SymDo-Übersicht.
 - Betreuung je Kind und Tag, getrennt vom Unterricht gezählt
 - Samstag je Kind zuschaltbar, auch nur in geraden oder ungeraden Wochen
 - Ferien und Feiertage über **OpenHolidaysAPI** (kostenlos, ohne Konto) oder das
-  **Jahreskalender**-Modul; an freien Tagen wird der Balken grau und nennt den Anlass
+  Store-Modul [**Jahreskalender**](https://github.com/Wilkware/Almanac) von Wilkware;
+  an freien Tagen wird der Balken grau und nennt den Anlass
 
 → [Ausführliche Anleitung](Stundenplan/README.md)
 

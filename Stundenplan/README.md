@@ -118,14 +118,16 @@ gepflegt.
 | Quelle | Zustand |
 |---|---|
 | **OpenHolidaysAPI** | Kostenlos, ohne Konto und ohne Schlüssel. Bundesland im Formular wählen. Geprüft. |
-| **Jahreskalender** (Almanac, Wilkware) | Geprüft gegen das installierte Modul. Antwortet je Tag, deshalb wird tageweise abgefragt — siehe unten. |
+| **Jahreskalender** ([Almanac](https://github.com/Wilkware/Almanac), Wilkware) | Store-Modul, muss installiert sein. Geprüft gegen die echte Schnittstelle. Antwortet je Tag, deshalb wird tageweise abgefragt — siehe unten. |
 | **Keine** | Der Plan gilt immer. Ein bereits abgerufener Stand bleibt gespeichert, **wirkt aber nicht**: kein Band, kein grauer Ferienbalken, keine Ferienzeile im Briefing. Er greift wieder, sobald eine Quelle gewählt ist. |
 
 Abgerufen wird einmal täglich, dazu auf Knopfdruck. Ein misslungener Abruf lässt
 den abgelegten Stand stehen, statt ihn zu leeren: ein Netzfehler darf keinen
 Schultag zum Ferientag machen und umgekehrt.
 
-> **Zum Jahreskalender:** Das Modul kennt nur eine Auskunft je **Tag**
+> **Zum Jahreskalender:** Gemeint ist das Modul **Jahreskalender (Almanac)** von Wilkware (@Pitti) — im **Symcon Module Store** unter „Jahreskalender" zu finden, Quelltext und Dokumentation unter [github.com/Wilkware/Almanac](https://github.com/Wilkware/Almanac) (Bibliothekskennung `de.wilkware.ips.modul.almanac`).
+>
+> Das Modul kennt nur eine Auskunft je **Tag**
 > (`ALMANAC_DateInfo`), keine Zeiträume. Der Stundenplan fragt deshalb Tag für Tag
 > und setzt die Abschnitte selbst zusammen. Gemessen rund 21 ms je Tag, für die
 > **vier Monate** Vorausschau also etwa drei Sekunden — einmal täglich und einmal
