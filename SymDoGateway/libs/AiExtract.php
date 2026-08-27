@@ -383,8 +383,21 @@ trait AiExtract
             }
             return $catId;
         }
-        // Unter der eigenen Instanz und — aus der Zeit davor — unter der Web-App.
+        /* Gesucht wird an drei Stellen, in dieser Reihenfolge:
+             1. unter der eigenen Instanz,
+             2. unter einem ANDEREN Gateway — die App-Seite bedient immer die
+                Instanz mit der niedrigsten ID (OwnsAppApi), und Symcon vergibt
+                IDs zufaellig. Ein spaeter angelegtes Gateway kann die Rolle also
+                uebernehmen; dann muss die Kategorie mitwandern, sonst legte der
+                neue Eigentuemer eine zweite an und die alte haetten wir beim
+                Loeschen der alten Instanz samt Fotos verloren,
+             3. unter der Web-App — dort lag sie bis Version 3.0. */
         $orte = [$this->InstanceID];
+        foreach (IPS_GetInstanceListByModuleID(IPS_GetInstance($this->InstanceID)['ModuleInfo']['ModuleID']) as $gw) {
+            if ((int)$gw !== $this->InstanceID) {
+                $orte[] = (int)$gw;
+            }
+        }
         foreach (IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID) as $sdwa) {
             $orte[] = (int)$sdwa;
         }
