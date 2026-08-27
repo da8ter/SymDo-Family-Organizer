@@ -681,16 +681,16 @@ class SymDoStundenplan extends IPSModuleStrict
             $spalten[] = ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => 'auto',
                           'add' => '', 'edit' => ['type' => 'ValidationTextBox']];
         }
-        $spalten[] = ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
-                      'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']];
-        // Wert ist die KENNUNG, angezeigt wird der Name. Vorher stand hier
-        // der Name auch als Wert — wer ein Mitglied im Formular waehlte,
-        // speicherte damit „Mia" statt „fa0ad897", und das Gesicht in
-        // Kachel und App blieb leer, weil die Avatare nach Kennung
-        // nachgeschlagen werden.
+        // Wer, dann wie: das Kind steht vor seiner Farbe. Wert ist die KENNUNG,
+        // angezeigt wird der Name. Vorher stand hier der Name auch als Wert —
+        // wer ein Mitglied im Formular waehlte, speicherte damit „Mia" statt
+        // „fa0ad897", und das Gesicht in Kachel und App blieb leer, weil die
+        // Avatare nach Kennung nachgeschlagen werden.
         $spalten[] = ['caption' => $this->Translate($ausGateway === [] ? 'Family member' : 'Child'),
                       'name' => 'userId', 'width' => $ausGateway === [] ? '190px' : 'auto',
                       'add' => '', 'edit' => ['type' => 'Select', 'options' => $this->MitgliederOptionen()]];
+        $spalten[] = ['caption' => $this->Translate('Color'), 'name' => 'color', 'width' => '110px',
+                      'add' => 0x1E88E5, 'edit' => ['type' => 'SelectColor']];
         $hinweis = $ausGateway === []
             ? $this->Translate('The family member links this child to SymDo — the card in the app then appears under the right name. Saturday only shows in the plan when it is switched on here; "every other week" follows the parity of the ISO calendar week, exactly like a school notice ("lessons in odd weeks").')
             : $this->Translate('The children come from SymDo: every family member with the role "child" gets a row here, in that order, with their name and photo. Add, rename or remove them in the SymDo Gateway — this list follows. Saturday only shows in the plan when it is switched on here; "every other week" follows the parity of the ISO calendar week, exactly like a school notice ("lessons in odd weeks").');
