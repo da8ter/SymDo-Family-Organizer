@@ -5736,6 +5736,32 @@ function stundenplanTickerStellen() {
   stundenplanTicker = setInterval(stundenplanStrichStellen, 30000);
 }
 
+/* ── Nach einer Drehung neu messen ─────────────────────────────────────────
+   planBalkenBreite() schreibt eine PIXELbreite. Wird die Seite schmaler —
+   Querformat und zurueck ins Hochformat —, stammt die Breite noch vom
+   Querformat, und der Balken ragt hinaus. Also neu messen. NICHT neu zeichnen:
+   die Prozentlagen stimmen weiter, und ein Neuaufbau verloere die Rollposition
+   und den gewaehlten Tag.
+
+   Nur bei tatsaechlich anderer Breite arbeiten: waehrend der Drehung feuert
+   `resize` mehrfach, und die Tastatur auf dem Telefon feuert ihn auch. */
+let stundenplanMessTimer = null;
+let stundenplanLetzteBreite = -1;
+function stundenplanNeuMessen(sofort) {
+  clearTimeout(stundenplanMessTimer);
+  stundenplanMessTimer = setTimeout(() => {
+    const breite = document.documentElement.clientWidth;
+    if (!stundenplan || (!sofort && breite === stundenplanLetzteBreite)) return;
+    stundenplanLetzteBreite = breite;
+    planBalkenBreite();
+    planTermineBeschriften();
+    planZeitenSetzen();
+  }, 120);
+}
+window.addEventListener('resize', () => stundenplanNeuMessen(false));
+// Safari meldet orientationchange vor dem neuen Layout — deshalb beide.
+window.addEventListener('orientationchange', () => stundenplanNeuMessen(true));
+
 function loadTimetable() {
   // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
   // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay

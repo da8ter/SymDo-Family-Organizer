@@ -855,6 +855,45 @@
       + '" style="left:' + ((jetzt - von) / spanne * 100) + '%"></div>';
   }
 
+  /* ── Nach einer Drehung neu messen ───────────────────────────────────────
+     balkenBreite() schreibt eine PIXELbreite. Wird die Kachel schmaler —
+     Querformat und zurueck ins Hochformat —, stammt die Breite noch vom
+     Querformat, und der Balken ragt hinaus. Also neu messen. NICHT neu
+     zeichnen: die Prozentlagen stimmen weiter, und ein Neuaufbau verloere die
+     Rollposition, den gewaehlten Tag und eine offene Legende.
+
+     Ueber einen ResizeObserver und nicht ueber window.resize: die Kachel liegt
+     in einem Rahmen, dessen Groesse die Visualisierung setzt. Im Pruefstand
+     kam bei einem von aussen verbreiterten Rahmen kein einziges resize an,
+     obwohl innerWidth sich aenderte — window.resize ist hier also kein
+     verlaesslicher Melder. Der Beobachter am Inhalt sieht jede Aenderung, egal
+     woher sie kommt.
+
+     Nur bei tatsaechlich anderer Breite arbeiten: der Beobachter meldet auch
+     Hoehenaenderungen (aufgeklappte Legende), und ohne die Schranke koennte
+     sich das Messen selbst wieder anstossen. */
+  let messTimer = null;
+  let letzteBreite = -1;
+  function neuMessen(sofort) {
+    clearTimeout(messTimer);
+    messTimer = setTimeout(function () {
+      const inhalt = document.getElementById('inhalt');
+      const breite = inhalt ? inhalt.clientWidth : 0;
+      if (!zustand || (!sofort && breite === letzteBreite)) { return; }
+      letzteBreite = breite;
+      balkenBreite();
+      termineBeschriften();
+      zeitenSetzen();
+    }, 120);
+  }
+  if (window.ResizeObserver) {
+    const beobachter = new ResizeObserver(function () { neuMessen(false); });
+    const inhalt = document.getElementById('inhalt');
+    if (inhalt) { beobachter.observe(inhalt); }
+  }
+  // Guerteltier und Hosentraeger: wo der Beobachter fehlt, tut es die Drehung.
+  window.addEventListener('orientationchange', function () { neuMessen(true); });
+
   /* Zwischen zwei Sendungen weiterlaufen. Nur die Position wird gesetzt, nicht
      neu gezeichnet — ein Neuzeichnen schloesse die Legende und risse einen
      gerade gedrueckten Pfeil unter dem Finger weg. */
