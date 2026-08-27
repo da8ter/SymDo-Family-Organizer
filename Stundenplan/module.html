@@ -281,14 +281,6 @@
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   .scrollbahn::-webkit-scrollbar { display: none; }
-  /* Zeichen, dass es rechts weitergeht — ohne das sieht eine rollende Bahn
-     aus wie ein abgeschnittener Plan. */
-  .scrollbahn.rollt { position: relative; }
-  .scrollbahn.rollt::after {
-    content: ''; position: sticky; float: right; top: 0; right: 0;
-    width: 18px; height: 22px; margin-left: -18px; pointer-events: none;
-    background: linear-gradient(90deg, transparent, var(--bg));
-  }
   .ticks { position: relative; height: 8px; margin-top: 3px; }
   .ticks .linie { position: absolute; top: 4px; left: 0; right: 0; height: 1px; background: var(--line); }
   .ticks span { position: absolute; top: 2px; width: 1px; height: 5px; background: var(--muted); opacity: .5; }

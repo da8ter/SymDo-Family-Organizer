@@ -114,8 +114,8 @@ Zwei Regeln halten die Timeline lesbar. Eine Schulstunde ist mindestens
 **24 Pixel** breit — genug für ihr Symbol. Und dem **Schultag** bleiben
 mindestens **sieben Zehntel** der sichtbaren Breite: Ein Termin am späten Abend
 darf den Unterricht nicht an den linken Rand quetschen. Reicht die Kachelbreite
-für beides nicht, wird die Timeline **waagerecht scrollbar** — ein weicher
-Verlauf am rechten Rand zeigt, dass es weitergeht. Alle Zeilen rollen gemeinsam
+für beides nicht, wird die Timeline **waagerecht scrollbar**. Alle Zeilen rollen
+gemeinsam
 und tragen denselben Maßstab, sonst läge dieselbe Uhrzeit in zwei Zeilen an
 verschiedenen Stellen.
 

@@ -673,13 +673,6 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
 .plan-bahn::-webkit-scrollbar { display: none; }
-/* Zeichen, dass es rechts weitergeht. */
-.plan-bahn.rollt { position: relative; }
-.plan-bahn.rollt::after {
-  content: ''; position: sticky; float: right; top: 0; right: 0;
-  width: 18px; height: 20px; margin-left: -18px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--card-bg, #fff));
-}
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }
 .plan-ticks .plan-linie { position: absolute; top: 3px; left: 0; right: 0; height: 1px;
   background: color-mix(in srgb, currentColor 14%, transparent); }
