@@ -773,7 +773,7 @@ class SymDoStundenplan extends IPSModuleStrict
                 ],
                 [
                     'type'    => 'Label',
-                    'caption' => $this->Translate('Icon and color belong to the subject and apply everywhere it appears. A single lesson may override the color. The button adds subjects that occur in the lessons but are missing here — with a suggested icon and color that you can change afterwards.')
+                    'caption' => $this->Translate('Icon and color belong to the subject and apply everywhere it appears — a single lesson cannot differ. The button adds subjects that occur in the lessons but are missing here — with a suggested icon and color that you can change afterwards.')
                 ],
             ],
         ];
