@@ -252,9 +252,9 @@
   .zeilenkopf .wer { font-size: 13px; font-weight: 700; }
   .zeilenkopf .was { font-size: 12px; font-weight: 600; color: var(--muted); }
   .zeilenkopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); }
-  .balken { position: relative; height: 22px; border-radius: 11px; background: var(--frei); }
+  .balken { position: relative; height: 26px; border-radius: 13px; background: var(--frei); }
   .stueck {
-    position: absolute; top: 0; height: 22px; display: flex; align-items: center;
+    position: absolute; top: 0; height: 26px; display: flex; align-items: center;
     color: #fff; font-size: 10px; overflow: hidden;
   }
   /* BEIDE Formen: /icons.js tauscht das <i> gegen ein <svg>, und eine Regel
@@ -317,7 +317,7 @@
      Genau daran wurde „Abendessen" zu „Abendess…". */
   .termin.flip { flex-direction: row-reverse; }
   .jetztstrich {
-    position: absolute; top: -4px; height: 37px; width: 2px; z-index: 3;
+    position: absolute; top: -4px; height: 41px; width: 2px; z-index: 3;
     background: var(--accent); border-radius: 1px; pointer-events: none;
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
     transform: translateX(-1px);
@@ -1186,7 +1186,7 @@
            sie ist, und verschob damit alles Folgende. */
         const breite = Math.max((b - a) * 100, 0.2);
         const erster = i === 0, letzter = i === slots.length - 1;
-        const r = '11px';
+        const r = '13px';
         stuecke += '<div class="stueck' + (erster ? ' erst' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end) + '"'
           + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(s.color)

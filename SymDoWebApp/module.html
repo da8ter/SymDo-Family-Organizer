@@ -610,9 +610,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-kopf .wer { font-size: 14px; font-weight: 700; }
 .plan-kopf .was { font-size: 12px; color: var(--muted-color, #888); }
 .plan-kopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted-color, #888); }
-.plan-balken { position: relative; height: 20px; border-radius: 10px;
+.plan-balken { position: relative; height: 24px; border-radius: 12px;
   background: color-mix(in srgb, currentColor 8%, transparent); }
-.plan-stueck { position: absolute; top: 0; height: 20px; display: flex; align-items: center;
+.plan-stueck { position: absolute; top: 0; height: 24px; display: flex; align-items: center;
   color: #fff; font-size: 10px; overflow: hidden; }
 /* Der Abstand muss BEIDE Formen treffen: /icons.js ersetzt das <i> durch ein
    <svg>, und eine Regel nur auf `i` greift danach nicht mehr. Genau daran klebte
@@ -644,7 +644,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    die restlichen 6 % als Hoechstbreite. */
 .plan-termin.flip { flex-direction: row-reverse; }
 .plan-jetzt {
-  position: absolute; top: -4px; height: 34px; width: 2px; z-index: 3;
+  position: absolute; top: -4px; height: 38px; width: 2px; z-index: 3;
   background: var(--accent); border-radius: 1px; pointer-events: none;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
   transform: translateX(-1px);
@@ -5917,7 +5917,7 @@ function stundenplanKarte() {
       /* Kein Prozent-Boden mehr: die Mindestbreite steht in PIXELN und wird
          ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
       const breite = Math.max((b - a) * 100, 0.2);
-      const r = '10px', erster = i === 0, letzter = i === slots.length - 1;
+      const r = '12px', erster = i === 0, letzter = i === slots.length - 1;
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
