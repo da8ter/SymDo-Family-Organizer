@@ -633,6 +633,19 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   pointer-events: none;
 }
 .plan-termin-bar, .plan-termin-titel { pointer-events: auto; }
+/* Der Titel bei BERUEHRUNG. Das title-Attribut kennt nur der Mauszeiger — auf
+   dem Telefon bliebe ein Termin ohne Platz fuers Etikett sonst stumm. Fest im
+   Fenster und an <body>, weil die Rollbahn senkrecht abschneidet. */
+.plan-terminblase {
+  position: fixed; z-index: 60; pointer-events: none;
+  padding: 5px 9px; border-radius: 9px; font-size: 11px; line-height: 1.25;
+  color: var(--card, #fff); background: var(--text, #1c1c1e);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+  max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; transition: opacity .12s ease;
+}
+.plan-terminblase.an { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .plan-terminblase { transition: none; } }
 /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
    rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
 .plan-termin-bar {
@@ -5885,6 +5898,8 @@ function planScrollGleichziehen() {
   const bahnen = [...document.querySelectorAll('.plan-bahn')];
   let laeuft = false;
   bahnen.forEach(b => {
+    // Beim Rollen wandert der Balken unter der Blase weg.
+    b.addEventListener('scroll', planBlaseWeg);
     b.addEventListener('scroll', () => {
       if (laeuft) return;
       laeuft = true;
@@ -5945,7 +5960,40 @@ function planWegLinks(hindernisse, x) {
   return Math.max(x - grenze, 0);
 }
 
+/* ── Termintitel bei Beruehrung ────────────────────────────────────────────
+   Ein Tipp auf den Balken (oder sein Etikett) zeigt Uhrzeit und Titel — derselbe
+   Text, den der Mauszeiger als title bekommt. Die Blase geht nach zweieinhalb
+   Sekunden von selbst, ausserdem beim naechsten Tipp, beim Rollen und beim
+   Neuzeichnen. */
+let planBlase = null;
+let planBlaseFrist = null;
+function planBlaseWeg() {
+  clearTimeout(planBlaseFrist);
+  if (planBlase) planBlase.classList.remove('an');
+}
+function planBlaseZeigen(el, text) {
+  if (!text) return;
+  if (!planBlase) {
+    planBlase = document.createElement('div');
+    planBlase.className = 'plan-terminblase';
+    document.body.appendChild(planBlase);
+  }
+  planBlase.textContent = text;
+  planBlase.classList.add('an');
+  // Erst nach dem Setzen messen: vorher ist die Breite die des alten Textes.
+  const k = el.getBoundingClientRect();
+  const b = planBlase.getBoundingClientRect();
+  const links = Math.min(Math.max(4, k.left + k.width / 2 - b.width / 2),
+                         document.documentElement.clientWidth - b.width - 4);
+  const oben = k.top - b.height - 6;
+  planBlase.style.left = links + 'px';
+  planBlase.style.top = (oben < 4 ? k.bottom + 6 : oben) + 'px';
+  clearTimeout(planBlaseFrist);
+  planBlaseFrist = setTimeout(planBlaseWeg, 2500);
+}
+
 function planTermineBeschriften() {
+  planBlaseWeg();
   // Groesster Fehlbetrag ueber alle Zeilen, als ANTEIL der Balkenbreite.
   let fehltAnteil = 0;
   document.querySelectorAll('.plan-balken').forEach(balken => {
@@ -6081,10 +6129,15 @@ function planTermineBeschriften() {
 
       /* Steht in der gewaehlten Reihe noch ein Etikett im Weg, muss es weichen
          — erst schmaler, dann ganz. Ein verdeckter Balken waere der groessere
-         Verlust. */
+         Verlust.
+
+         NICHT aber, wenn dieser Termin ohnehin auf einem anderen liegt: dann
+         ueberlappt sein Balken so oder so (dafuer wird er halb durchsichtig
+         gezeichnet), und das Etikett des Nachbarn waere umsonst geopfert. */
       const reihe = reihen[r];
       const vor = reihe.letzter;
-      if (vor && vor.mitTitel && !vor.nachLinks && pos.barA < ragtBis(vor) + 4) {
+      if (!pos.ueberlappt && vor && vor.mitTitel && !vor.nachLinks
+          && pos.barA < ragtBis(vor) + 4) {
         const rest = Math.floor(pos.barA - 8 - vor.barB);
         if (rest >= Math.min(vor.natur, MIN_TITEL)) { vor.w = rest; }
         else { vor.mitTitel = false; }
@@ -7280,6 +7333,14 @@ function renderDashboard() {
        die schuetzte aber nichts: die Chips sind Beschriftungen, nicht bedienbar.
        Sie zwang den Nutzer statt dessen aufs ✕ oder auf den schmalen Streifen
        daneben. */
+    // Ein Tipp auf einen Terminbalken zeigt seinen Titel.
+    const termin = e.target.closest('.plan-termin');
+    if (termin) {
+      planBlaseZeigen(e.target.closest('.plan-termin-bar, .plan-termin-titel') || termin,
+                      termin.getAttribute('title') || '');
+      return;
+    }
+    planBlaseWeg();
     const zu  = e.target.closest('[data-plan="zu"]');
     const auf = e.target.closest('[data-plan="auf"]');
     if (!zu && !auf) { return; }        // sonst: Finger weg, die Bahn rollt

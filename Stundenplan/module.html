@@ -342,6 +342,20 @@
     pointer-events: none;
   }
   .termin-bar, .termin-titel { pointer-events: auto; }
+  /* Der Titel bei BERUEHRUNG. Das title-Attribut kennt nur der Mauszeiger — am
+     Wandtablet bliebe ein Termin ohne Platz fuers Etikett sonst stumm.
+     Haengt an <body> und liegt fest im Fenster, weil die Rollbahn senkrecht
+     abschneidet: eine Blase ueber dem Balken waere dort gekappt. */
+  .terminblase {
+    position: fixed; z-index: 20; pointer-events: none;
+    padding: 5px 9px; border-radius: 9px; font-size: 11px; line-height: 1.25;
+    color: var(--card-color); background: var(--text);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+    max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; transition: opacity .12s ease;
+  }
+  .terminblase.an { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .terminblase { transition: none; } }
   /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er
      nach rechts aus (data-open) — die Kachel behauptet dann keine Endzeit,
      die niemand gesetzt hat. */
@@ -827,6 +841,8 @@
     const bahnen = Array.prototype.slice.call(document.querySelectorAll('.scrollbahn'));
     let laeuft = false;
     bahnen.forEach(function (b) {
+      // Beim Rollen wandert der Balken unter der Blase weg.
+      b.addEventListener('scroll', blaseWeg);
       b.addEventListener('scroll', function () {
         if (laeuft) { return; }
         laeuft = true;
@@ -894,6 +910,43 @@
       grenze = Math.max(grenze, Math.min(h.b, x));
     });
     return Math.max(x - grenze, 0);
+  }
+
+  /* ── Termintitel bei Beruehrung ──────────────────────────────────────────
+     Ein Tipp auf den Balken (oder sein Etikett) zeigt Uhrzeit und Titel. Der
+     Text steht schon im title-Attribut des Rahmens — genau den nimmt auch der
+     Mauszeiger, es gibt also keine zweite Wahrheit.
+
+     Die Blase verschwindet nach zweieinhalb Sekunden von selbst, ausserdem beim
+     naechsten Tipp, beim Rollen und beim Neuzeichnen: eine stehengebliebene
+     Blase ueber einem Plan, der sich inzwischen geaendert hat, waere schlimmer
+     als gar keine. */
+  let blase = null;
+  let blaseFrist = null;
+  function blaseWeg() {
+    clearTimeout(blaseFrist);
+    if (blase) { blase.classList.remove('an'); }
+  }
+  function blaseZeigen(el, text) {
+    if (!text) { return; }
+    if (!blase) {
+      blase = document.createElement('div');
+      blase.className = 'terminblase';
+      document.body.appendChild(blase);
+    }
+    blase.textContent = text;
+    blase.classList.add('an');
+    // Erst nach dem Setzen messen: vorher ist die Breite die des alten Textes.
+    const k = el.getBoundingClientRect();
+    const b = blase.getBoundingClientRect();
+    // Ueber dem Balken, mittig — und innerhalb der Kachel gehalten.
+    const links = Math.min(Math.max(4, k.left + k.width / 2 - b.width / 2),
+                           document.documentElement.clientWidth - b.width - 4);
+    const oben = k.top - b.height - 6;
+    blase.style.left = links + 'px';
+    blase.style.top = (oben < 4 ? k.bottom + 6 : oben) + 'px';
+    clearTimeout(blaseFrist);
+    blaseFrist = setTimeout(blaseWeg, 2500);
   }
 
   function termineBeschriften() {
@@ -1062,10 +1115,17 @@
 
         /* Steht in der gewaehlten Reihe noch ein Etikett im Weg, muss es
            weichen — erst schmaler, dann ganz. Ein verdeckter Balken waere der
-           groessere Verlust. */
+           groessere Verlust.
+
+           NICHT aber, wenn dieser Termin ohnehin auf einem anderen liegt: dann
+           ist nichts zu retten, sein Balken ueberlappt so oder so (dafuer wird
+           er halb durchsichtig gezeichnet), und das Etikett des Nachbarn waere
+           umsonst geopfert. Genau daran verlor „Schwimmen" seinen Titel, weil
+           ein drittes „Test 2" zur selben Zeit dazukam. */
         const reihe = reihen[r];
         const vor = reihe.letzter;
-        if (vor && vor.mitTitel && !vor.nachLinks && pos.barA < ragtBis(vor) + 4) {
+        if (!pos.ueberlappt && vor && vor.mitTitel && !vor.nachLinks
+            && pos.barA < ragtBis(vor) + 4) {
           const rest = Math.floor(pos.barA - 8 - vor.barB);
           if (rest >= Math.min(vor.natur, MIN_TITEL)) { vor.w = rest; }
           else { vor.mitTitel = false; }
@@ -1230,6 +1290,7 @@
     }
     /* Im Wochenraster scrollt das RASTER selbst, nicht dieser Bereich — die
        Kennzeichnung steuert, wo der Balken sitzt (siehe #inhalt.istWoche). */
+    blaseWeg();
     ziel.classList.toggle('istWoche', zustand.mode !== 'timeline');
     let html = zustand.mode === 'timeline' ? timeline() : woche();
     ziel.innerHTML = html;
@@ -1267,6 +1328,14 @@
         /* JEDER Tipp aufs Blatt schliesst — auch auf ein Fach. Die Chips sind
            Beschriftungen, nicht bedienbar; eine Sperre dafuer zwang den Nutzer
            nur aufs ✕. */
+        // Ein Tipp auf einen Terminbalken zeigt seinen Titel.
+        const termin = e.target.closest('.termin');
+        if (termin) {
+          blaseZeigen(e.target.closest('.termin-bar, .termin-titel') || termin,
+                      termin.getAttribute('title') || '');
+          return;
+        }
+        blaseWeg();
         const zu  = e.target.closest('[data-legende="zu"]');
         const auf = e.target.closest('[data-legende="auf"]');
         if (!zu && !auf) { return; }        // sonst: Finger weg, die Bahn rollt
