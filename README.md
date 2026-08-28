@@ -7,17 +7,13 @@ Familienalltag aufs Handy und an die Wandvisualisierung — ohne App-Store, ohne
 Cloud-Zwang, direkt aus dem eigenen Symcon. Jedes Familienmitglied sieht auf einen
 Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
 
-Die Bibliothek bringt dafür sieben Module mit. Die beiden Listen laufen auch
-einzeln als Kachel; alles Weitere kommt mit dem Gateway dazu.
-
 ## Was SymDo kann
 
 - **Zwei Oberflächen, eine Datei** — die Web-App fürs Handy (per QR-Code
   gekoppelt, zum Home-Bildschirm hinzufügbar) und die Kachel in der
-  Tile-Visualisierung sind buchstäblich dieselbe Seite. Sie können sich gar nicht
-  auseinander entwickeln.
+  Tile-Visualisierung sind buchstäblich dieselbe Seite.
 - **Bereiche**: Übersicht, Einkaufen (samt Favoriten), ToDos, Kalender, Notizen
-  und KI-Eingang — jeder einzeln abschaltbar.
+  und KI-Assistenten.
 - **Familienmitglieder** mit Foto: Aufgaben und Termine lassen sich zuweisen, und
   die Avatar-Leiste filtert quer über alle Bereiche — wer oben eine Person
   antippt, sieht überall nur deren Einträge.
@@ -35,7 +31,7 @@ einzeln als Kachel; alles Weitere kommt mit dem Gateway dazu.
   (nur dieser Termin, dieser und alle folgenden, die ganze Serie), und
   Jahresereignisse — Geburtstag, Jahrestag, Hochzeits- und Todestag — brauchen nur
   Art und Ursprungsdatum; den Rest rechnet der Kalender.
-- **Notizen** — Ordner je Familienmitglied und selbst angelegte, Notizen mit Text
+- **Notizen** — Ein Ordner je Familienmitglied und selbst angelegte, Notizen mit Text
   und Anhängen (Bild, PDF).
 - **Stundenplan der Kinder** auf der Übersicht: je Kind ein Balken mit dem
   Schultag, ein Strich für die aktuelle Zeit, ein Umschalter durch die Woche.
@@ -60,7 +56,7 @@ einzeln als Kachel; alles Weitere kommt mit dem Gateway dazu.
 
 ## Schnellstart
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
+1. Bibliothek über das Module Control oder Module Store installieren: `https://github.com/da8ter/ToDo-List.git`
 2. **SymDo ToDo List**- und/oder **SymDo Shopping List**-Instanzen anlegen — sie
    sind die Datenquellen
 3. Eine **SymDo Gateway**-Instanz anlegen; Familienmitglieder eintragen
