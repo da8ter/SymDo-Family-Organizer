@@ -56,7 +56,8 @@
                 {
                     "caption": "ID",
                     "name": "instanceID",
-                    "width": "90px"
+                    "width": "90px",
+                    "save": true
                 }
             ],
             "values": []
@@ -136,7 +137,8 @@
                         {
                             "caption": "ID",
                             "name": "id",
-                            "width": "70px"
+                            "width": "70px",
+                            "save": true
                         }
                     ],
                     "values": []

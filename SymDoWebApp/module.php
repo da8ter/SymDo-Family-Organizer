@@ -164,8 +164,9 @@ class SymDoWebApp extends IPSModuleStrict
      * Repariert die Zeilen der Formular-Liste und trägt die Ausblendungen in die
      * Gateway nach.
      *
-     * Hintergrund: Die Symcon-Formularoberfläche schreibt beim Speichern nur Spalten
-     * zurück, die eine `edit`-Definition haben — bei dieser Liste also allein `hide`.
+     * Hintergrund: Die Symcon-Formularoberfläche sichert beim Speichern nur Spalten,
+     * die editierbar sind ODER `save` gesetzt haben (so dokumentiert; ohne `edit`
+     * ist die Vorgabe `false`) — bei dieser Liste also lange allein `hide`.
      * Die `instanceID` ging dadurch verloren, und GetTileHiddenIDs() konnte keine
      * Zeile mehr zuordnen: das Häkchen war wirkungslos (gemessen: die gespeicherte
      * Eigenschaft war [{"hide":false} × 7]). Die Eigenschaft SELBST kann die IDs
@@ -487,10 +488,15 @@ class SymDoWebApp extends IPSModuleStrict
     /**
      * Traegt die Instanz-Kennungen in die gespeicherte Stundenplan-Wahl nach.
      *
-     * Dieselbe Falle wie bei SyncListVisibility: die Formularoberflaeche schreibt
-     * beim Speichern nur Spalten mit einer `edit`-Definition zurueck — bei dieser
-     * Liste also allein `show`. Auf einer Symbox mit 9.1 gemessen: nach dem Setzen
-     * des Haekchens stand [{"show":true}] in der Eigenschaft, ohne `id`.
+     * Dieselbe Falle wie bei SyncListVisibility: gesichert werden nur Spalten, die
+     * editierbar sind oder `save` gesetzt haben — bei dieser Liste also lange allein
+     * `show`. Auf einer Symbox mit 9.1 gemessen: nach dem Setzen des Haekchens stand
+     * [{"show":true}] in der Eigenschaft, ohne `id`.
+     *
+     * Die Ursache ist behoben: beide Kennungsspalten tragen in form.json jetzt
+     * `"save": true`. Diese Heilung bleibt fuer das, was vorher gespeichert wurde —
+     * eine Anlage mit verstuemmelter Wahl repariert sich beim naechsten Uebernehmen
+     * selbst, statt still einen leeren Stundenplan zu zeigen.
      * TimetableChoiceRows() verwirft eine Zeile ohne Kennung, die Karte blieb leer
      * — und weil eine unbekannte Instanz als AUS gilt, fehlte der Stundenplan in
      * der App, obwohl das Haekchen gesetzt war.
