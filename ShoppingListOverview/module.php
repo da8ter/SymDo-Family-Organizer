@@ -200,6 +200,8 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             'imageHeight'   => max(24, $this->ReadPropertyInteger('ImageHeight')),
             'fontSize'      => max(7, $this->ReadPropertyInteger('FontSize')),
             'emptyText'     => $this->Translate('List is empty'),
+            // Beschriftung unter der Zahl im Zaehler.
+            'itemsLabel'    => $this->Translate('Items'),
         ];
 
         $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');

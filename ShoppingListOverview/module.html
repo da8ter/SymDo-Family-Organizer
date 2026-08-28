@@ -78,7 +78,7 @@
   .zaehler {
     flex: none; align-self: stretch;
     position: relative; overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: var(--accent-color, #0a84ff); color: #fff;
     font-weight: 700; line-height: 1; box-sizing: border-box;
   }
@@ -97,6 +97,13 @@
     pointer-events: none;
   }
   .zaehler .zahl { position: relative; z-index: 1; }
+  /* Klein unter der Zahl. Etwas durchscheinend, damit die Zahl die Hauptsache
+     bleibt; die Groesse setzt zaehlerMessen() aus der Kantenlaenge. */
+  .zaehler .wort {
+    position: relative; z-index: 1;
+    margin-top: 3px; font-weight: 600; opacity: .8;
+    max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   /* Die Huelle traegt das Mengen-Abzeichen. Sie darf die Kreisbeschneidung des
      Bildes NICHT erben, sonst waere das Abzeichen an der Rundung abgeschnitten. */
   .thumbwrap { position: relative; display: inline-flex; flex: none; }
@@ -226,7 +233,8 @@
     }
 
     // ── Kachel ────────────────────────────────────────────────────────────
-    let state = { items: [], imageBase: '', openObjectId: 0, imageHeight: 48, fontSize: 11, emptyText: 'Liste ist leer' };
+    let state = { items: [], imageBase: '', openObjectId: 0, imageHeight: 48, fontSize: 11,
+                  emptyText: 'Liste ist leer', itemsLabel: 'Artikel' };
 
     const PALETTE = ['#e7743d', '#4a6cf7', '#28a745', '#c957c9', '#e6a817', '#2aa8a8', '#d9534f', '#7a68c9'];
     function tintFor(name) {
@@ -263,7 +271,8 @@
         + '<path d="M4 9h16l-1.4 9.3a2.2 2.2 0 0 1-2.2 1.9H7.6a2.2 2.2 0 0 1-2.2-1.9L4 9Z"/>'
         + '<path d="M8.2 9 11 3.4M15.8 9 13 3.4"/>'
         + '<path d="M9.6 12.6v4.2M14.4 12.6v4.2"/></svg>'
-        + '<span class="zahl">' + state.items.length + '</span></div>';
+        + '<span class="zahl">' + state.items.length + '</span>'
+        + '<span class="wort">' + escapeHtml(state.itemsLabel || '') + '</span></div>';
       for (const item of state.items) {
         const url = imageUrlFor(item);
         const initial = escapeHtml(String(item.name || '?').trim().charAt(0).toUpperCase());
@@ -308,6 +317,10 @@
       el.style.width = hoehe + 'px';
       el.style.borderRadius = Math.round(hoehe * 0.24) + 'px';
       el.style.fontSize = Math.round(hoehe * 0.4) + 'px';
+      const wort = el.querySelector('.wort');
+      // Deutlich kleiner als die Zahl, aber nicht unter 8 px — darunter ist es
+      // auf der Wandvisualisierung nur noch ein grauer Strich.
+      if (wort) { wort.style.fontSize = Math.max(8, Math.round(hoehe * 0.16)) + 'px'; }
     }
 
     /* Nur die Namen laufen lassen, die wirklich nicht passen. Erst ab vier
