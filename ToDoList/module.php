@@ -2359,7 +2359,7 @@ class SymDoToDoList extends IPSModuleStrict
 
     private function PushCurrentState(): void
     {
-        $this->UpdateVisualizationValue(json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $this->UpdateVisualizationValue(json_encode($this->BuildStatePayload(), JSON_UNESCAPED_SLASHES));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

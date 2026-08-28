@@ -592,7 +592,13 @@ class SymDoStundenplan extends IPSModuleStrict
 
     private function PushState(): void
     {
-        $this->UpdateVisualizationValue($this->GetPlan());
+        /* Fuer die Kachel ohne UNESCAPED_UNICODE — siehe unten. GetPlan()
+           selbst bleibt unveraendert, es ist die oeffentliche Auskunft fuer
+           Skripte und soll dort lesbar bleiben. */
+        $plan = json_decode($this->GetPlan(), true);
+        $this->UpdateVisualizationValue(is_array($plan)
+            ? (string)json_encode($plan, JSON_UNESCAPED_SLASHES)
+            : $this->GetPlan());
     }
 
     /**

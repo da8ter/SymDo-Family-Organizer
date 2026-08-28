@@ -134,7 +134,7 @@ class SymDoToDoOverview extends IPSModuleStrict
     private function PushState(): void
     {
         $this->UpdateVisualizationValue(
-            json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES)
         );
     }
 

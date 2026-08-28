@@ -1189,7 +1189,7 @@ class SymDoWebApp extends IPSModuleStrict
     private function Push(array $payload): void
     {
         $this->UpdateVisualizationValue(
-            json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            json_encode($payload, JSON_UNESCAPED_SLASHES)
         );
     }
 
