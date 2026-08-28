@@ -108,6 +108,19 @@
   /* ── Kopf ──────────────────────────────────────────────────────────────── */
   .kopf { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 
+  /* Legende NUR ueber diesen Knopf. Vorher oeffnete ein Klick auf die ganze
+     Kachel — das nahm der Maus das waagerechte Ziehen an der Zeitleiste weg:
+     jeder Zieh-Versuch endete als Klick und klappte die Legende auf. */
+  .legendeauf {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; flex: none; padding: 0; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 999px; color: var(--text);
+    background: color-mix(in srgb, var(--content-color) 4%, transparent);
+  }
+  .legendeauf:hover { background: color-mix(in srgb, var(--content-color) 10%, transparent); }
+  /* BEIDE Formen: /icons.js tauscht das <i> gegen ein <svg>. */
+  .legendeauf > * { width: 12px; height: 12px; }
+
   /* Wochentag-Umschalter: fester Kasten, damit die Pfeile beim Blaettern nicht
      wandern. Die Breite kommt NICHT aus einer geratenen Zahl, sondern aus dem
      laengsten Wochentag selbst: alle Namen liegen uebereinander in derselben
@@ -300,7 +313,16 @@
   .termin {
     position: absolute; top: 0; height: 100%; z-index: 2;
     display: flex; align-items: center; gap: 3px;
+    /* Der Rahmen faengt KEINE Zeiger. Er ist volle Balkenhoehe, und die
+       Reihenversetzung sitzt an Balken und Titel — nicht an ihm. Sein Kasten
+       lag damit ueber dem Nachbarn, und wer auf den Balken von „Schwimmen"
+       zeigte, bekam den Tooltip von „Test" zu sehen, weil dessen Rahmen
+       spaeter im Baum steht und darueber liegt. Der Tooltip kommt trotzdem von
+       hier: der Browser sucht den title am naechsten Vorfahren des getroffenen
+       Elements. */
+    pointer-events: none;
   }
+  .termin-bar, .termin-titel { pointer-events: auto; }
   /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er
      nach rechts aus (data-open) — die Kachel behauptet dann keine Endzeit,
      die niemand gesetzt hat. */
@@ -1213,9 +1235,13 @@
         zeichne();
       });
     });
-    /* Klick auf die Kachel klappt die Legende auf und zu. Nur in der Timeline:
-       im Wochenraster sind die Kinder-Knoepfe anklickbar, und ein Klick daneben
-       darf dort nichts anderes tun. Das ✕ schliesst gezielt. */
+    /* Die Legende geht ueber IHREN Knopf auf und ueber das Blatt wieder zu.
+       Vorher oeffnete jeder Klick auf die Kachel sie — dadurch liess sich die
+       Zeitleiste mit der Maus nicht mehr waagerecht ziehen: jeder Zieh-Versuch
+       endete als Klick und klappte die Legende auf.
+
+       Nur in der Timeline: im Wochenraster sind die Kinder-Knoepfe anklickbar,
+       und ein Klick daneben darf dort nichts anderes tun. */
     if (zustand.mode === 'timeline') {
       ziel.onclick = function (e) {
         // Die Pfeile blaettern und lassen die Legende, wie sie ist — sonst
@@ -1226,12 +1252,13 @@
           zeichne();
           return;
         }
-        /* JEDER Tipp aufs Blatt schliesst — auch auf ein Fach. Hier stand
-           zuerst eine Sperre, damit ein Griff nach einem Fach die Legende nicht
-           zuklappt; die schuetzte aber nichts: die Chips sind Beschriftungen,
-           nicht bedienbar. Sie zwang den Nutzer statt dessen aufs ✕ oder auf
-           den schmalen Streifen daneben. */
-        legende = e.target.closest('[data-legende="zu"]') ? false : !legende;
+        /* JEDER Tipp aufs Blatt schliesst — auch auf ein Fach. Die Chips sind
+           Beschriftungen, nicht bedienbar; eine Sperre dafuer zwang den Nutzer
+           nur aufs ✕. */
+        const zu  = e.target.closest('[data-legende="zu"]');
+        const auf = e.target.closest('[data-legende="auf"]');
+        if (!zu && !auf) { return; }        // sonst: Finger weg, die Bahn rollt
+        legende = !zu;
         zeichne();
       };
     } else {
@@ -1447,7 +1474,7 @@
     if (faecher.length === 0 || !legende) { return ''; }
     /* Kein Hinweis „Fächer anzeigen" mehr am Fuss: er stand dauerhaft da, um
        eine Geste zu erklaeren, die man ohnehin probiert — und nahm dem Plan
-       eine Zeile. Ein Tipp auf die Kachel oeffnet die Legende weiterhin. */
+       eine Zeile. Geoeffnet wird sie ueber den Knopf oben links. */
     const mehrereKinder = zustand.children.length > 1;
     const eintraege = faecher.map(function (f) {
       /* KEINE Dauer. Sie stand hier zuerst, war aber die Summe ueber alle
@@ -1482,8 +1509,13 @@
     const tagSpan = tagesSpanne(gewaehlt);
     const von = tagSpan[0], bis = tagSpan[1];
     const spanne = Math.max(bis - von, 60);
-    // Kopfzeile nur wegen des Umschalters — er gehoert nach oben rechts.
-    let html = '<div class="kopf">' + tagwahlHtml() + '</div>';
+    /* Kopfzeile: links der Knopf fuer die Legende, rechts der Umschalter.
+       Der Knopf erscheint nur, wenn es ueberhaupt Faecher zu erklaeren gibt. */
+    const legendeKnopf = sichtbareFaecher().length
+      ? '<button class="legendeauf" data-legende="auf" aria-label="Fächer anzeigen">'
+        + symbol('fa-list') + '</button>'
+      : '';
+    let html = '<div class="kopf">' + legendeKnopf + tagwahlHtml() + '</div>';
 
     zustand.children.forEach(function (kind) {
       const tag = kind.days.filter(function (t) { return t.weekday === gewaehlt; })[0];

@@ -627,7 +627,12 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-termin {
   position: absolute; top: 0; height: 100%; z-index: 2;
   display: flex; align-items: center; gap: 3px;
+  /* Der Rahmen faengt KEINE Zeiger: er ist volle Balkenhoehe, die
+     Reihenversetzung sitzt an Balken und Titel. Sonst zeigt der Nachbar, dessen
+     Rahmen darueber liegt, seinen Tooltip. */
+  pointer-events: none;
 }
+.plan-termin-bar, .plan-termin-titel { pointer-events: auto; }
 /* Der Termin als Balken: so lang wie er dauert. Ohne Endzeit laeuft er nach
    rechts aus (data-open). Zwilling der Stundenplan-Kachel. */
 .plan-termin-bar {
