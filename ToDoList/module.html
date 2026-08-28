@@ -5777,11 +5777,40 @@ const PLAN_MIN_STUECK = 24;
  * gewaehlten Tages ueber alle Kinder — alle Zeilen brauchen denselben, sonst
  * laegen dieselben Uhrzeiten in zwei Zeilen an verschiedenen Stellen.
  */
+/* Die Achse des GEWAEHLTEN Tages, nicht die der Woche. stundenplan.span
+   umspannt die ganze Woche: ein Abendessen am Donnerstag zog sie bis 22:15,
+   und am Freitag — Schule bis 10:35, ein Termin bis 15:45 — lief die
+   Zeitleiste danach noch sechs Stunden ins Leere.
+
+   Ueber ALLE Kinder vereinigt: die Zeilen stehen untereinander, dieselbe
+   Uhrzeit muss in jeder an derselben Stelle liegen. Die Viertelstunde Zugabe
+   an den Raendern ist dieselbe, mit der schon das Gateway die Wochenspanne
+   aufzieht. */
+function planTagesSpanne(gewaehlt) {
+  let von = Infinity, bis = -Infinity;
+  (stundenplan.children || []).forEach(k => {
+    const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
+    ((tag && tag.slots) || []).forEach(s => {
+      von = Math.min(von, s.from); bis = Math.max(bis, s.to);
+    });
+    ((tag && tag.events) || []).forEach(e => {
+      const a = Number(e.at) || 0;
+      const b = Number(e.bis) > a ? Number(e.bis) : a + 60;
+      von = Math.min(von, a - 15); bis = Math.max(bis, b + 15);
+    });
+  });
+  // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
+  // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
+  if (!isFinite(von) || bis <= von) return [stundenplan.span[0], stundenplan.span[1]];
+  return [Math.max(0, von), Math.min(1440, bis)];
+}
+
 function planBalkenBreite() {
   const bahnen = [...document.querySelectorAll('.plan-bahn')];
   if (!bahnen.length || !stundenplan || !stundenplan.span) return;
-  const spanne = Math.max(stundenplan.span[1] - stundenplan.span[0], 60);
   const gewaehlt = stundenplanGewaehlt();
+  const tagSpan = planTagesSpanne(gewaehlt);
+  const spanne = Math.max(tagSpan[1] - tagSpan[0], 60);
   let kuerzeste = Infinity;
   (stundenplan.children || []).forEach(k => {
     const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
@@ -6025,7 +6054,8 @@ function stundenplanStrichStellen() {
   const striche = document.querySelectorAll('.plan-jetzt');
   const jetzt = stundenplanJetzt();
   if (!stundenplan || !stundenplan.span) { return; }
-  const von = stundenplan.span[0], spanne = Math.max(stundenplan.span[1] - von, 60);
+  const tagSpan = planTagesSpanne(stundenplanGewaehlt());
+  const von = tagSpan[0], spanne = Math.max(tagSpan[1] - von, 60);
   if (jetzt === null || jetzt < von || jetzt > von + spanne) {
     striche.forEach(n => n.remove());
     return;
@@ -6229,7 +6259,8 @@ function stundenplanKarte() {
   if (!stundenplan || !Array.isArray(stundenplan.children) || !stundenplan.children.length) {
     return '';
   }
-  const von = stundenplan.span[0], bis = stundenplan.span[1];
+  const tagSpan = planTagesSpanne(stundenplanGewaehlt());
+  const von = tagSpan[0], bis = tagSpan[1];
   const spanne = Math.max(bis - von, 60);
   const stundenText = (m) => {
     const h = m / 60;

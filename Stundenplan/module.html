@@ -691,11 +691,43 @@
    * Massstab, sonst laegen dieselben Uhrzeiten in zwei Zeilen an
    * verschiedenen Stellen und der Vergleich waere hin.
    */
+  /* Die Achse des GEWAEHLTEN Tages, nicht die der Woche.
+     zustand.span umspannt die ganze Woche: ein Abendessen am Donnerstag zog
+     sie bis 22:15, und am Freitag — Schule bis 10:35, ein Termin bis 15:45 —
+     lief die Zeitleiste danach noch sechs Stunden ins Leere. Gebraucht wird
+     genau das, was an diesem Tag stattfindet.
+
+     Ueber ALLE Kinder vereinigt: die Zeilen stehen untereinander, dieselbe
+     Uhrzeit muss in jeder an derselben Stelle liegen.
+
+     Die Viertelstunde Zugabe an den Raendern ist dieselbe, mit der schon das
+     Gateway die Wochenspanne aufzieht — ein Marker genau am Rand haette sonst
+     keinen Platz fuer seinen Balken. */
+  function tagesSpanne(gewaehlt) {
+    let von = Infinity, bis = -Infinity;
+    (zustand.children || []).forEach(function (k) {
+      const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
+      ((tag && tag.slots) || []).forEach(function (s) {
+        von = Math.min(von, s.from); bis = Math.max(bis, s.to);
+      });
+      ((tag && tag.events) || []).forEach(function (e) {
+        const a = Number(e.at) || 0;
+        const b = Number(e.bis) > a ? Number(e.bis) : a + 60;
+        von = Math.min(von, a - 15); bis = Math.max(bis, b + 15);
+      });
+    });
+    // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
+    // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
+    if (!isFinite(von) || bis <= von) { return [zustand.span[0], zustand.span[1]]; }
+    return [Math.max(0, von), Math.min(1440, bis)];
+  }
+
   function balkenBreite() {
     const bahnen = Array.prototype.slice.call(document.querySelectorAll('.scrollbahn'));
     if (!bahnen.length || !zustand || !zustand.span) { return; }
-    const spanne = Math.max(zustand.span[1] - zustand.span[0], 60);
     const gewaehlt = tagWaehlen();
+    const tagSpan = tagesSpanne(gewaehlt);
+    const spanne = Math.max(tagSpan[1] - tagSpan[0], 60);
     let kuerzeste = Infinity;
     (zustand.children || []).forEach(function (k) {
       const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
@@ -1010,7 +1042,8 @@
       const striche = document.querySelectorAll('.jetztstrich');
       const jetzt = jetztMinute();
       if (jetzt === null) { return; }
-      const von = zustand.span[0], spanne = Math.max(zustand.span[1] - von, 60);
+      const tagSpan = tagesSpanne(tagWaehlen());
+      const von = tagSpan[0], spanne = Math.max(tagSpan[1] - von, 60);
       if (jetzt < von || jetzt > von + spanne) {
         // Aus der Spanne gelaufen (Nachmittag): wegnehmen statt am Rand kleben.
         striche.forEach(function (n) { n.remove(); });
@@ -1332,9 +1365,10 @@
 
   /* ── Timeline ─────────────────────────────────────────────────────────── */
   function timeline() {
-    const von = zustand.span[0], bis = zustand.span[1];
-    const spanne = Math.max(bis - von, 60);
     const gewaehlt = tagWaehlen();
+    const tagSpan = tagesSpanne(gewaehlt);
+    const von = tagSpan[0], bis = tagSpan[1];
+    const spanne = Math.max(bis - von, 60);
     // Kopfzeile nur wegen des Umschalters — er gehoert nach oben rechts.
     let html = '<div class="kopf">' + tagwahlHtml() + '</div>';
 
