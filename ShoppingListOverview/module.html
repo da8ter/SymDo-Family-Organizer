@@ -9,13 +9,21 @@
     font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none;
   }
-  /* Volle Hoehe des Kachelbereichs, der Streifen steht mittig darin. Gemessen
-     am 28.08.2026: der Bereich ist 170 px hoch, der Rumpf hat kein Polster,
-     der Streifen ist 76 px — es bleibt also oben wie unten gleich viel Luft.
-     Was in der Visualisierung darunter noch frei aussieht, gehoert der Kachel
-     selbst und liegt ausserhalb dieses Bereichs. */
+  /* Oben bleiben 60 px frei: der Rahmen der Kachel deckt die GANZE Karte, und
+     die Visualisierung zeichnet ihre Ueberschrift darueber. Ohne diesen
+     Vorbehalt zentrierte der Streifen ueber die volle Hoehe — er landete damit
+     dicht unter der Ueberschrift, und die Luft sammelte sich unten.
+
+     Gemessen am 28.08.2026: Kachelbereich 170 px, Streifen 76 px. Ohne
+     Vorbehalt stand er bei 47, mit ihm bei 77 — also mittig in dem, was unter
+     der Ueberschrift wirklich frei ist.
+
+     Als Polster und nicht als Aussenabstand, zusammen mit border-box: die
+     Huelle bleibt so genau im Rahmen. Ein Aussenabstand haette sie unten um
+     dieselben 60 px hinausgeschoben. */
   #wrap {
     width: 100%; height: 100%;
+    padding-top: 60px;
     display: flex; align-items: center;
     box-sizing: border-box;
   }
