@@ -105,7 +105,7 @@ trait Briefing
         // Text waere schlechter als keine.
         $this->MaintainVariable('BriefingText', $this->Translate('Briefing text'), VARIABLETYPE_STRING, [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
-            'ICON'         => 'Speaker',
+            'ICON'         => 'speaker',
         ], 10, (bool)$this->BriefingProp('BriefingEnabled', false));
         $this->BriefingTextVariable();
         $this->BriefingAudioObjekt();

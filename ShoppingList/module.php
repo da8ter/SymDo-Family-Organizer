@@ -164,13 +164,13 @@ class SymDoShoppingList extends IPSModuleStrict
 
         $this->RegisterVariableInteger('ItemCount', $this->Translate('Item Count'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
-            'ICON'         => 'Groceries',
+            'ICON'         => 'basket-shopping',
             'SUFFIX'       => '',
         ], 200);
 
         $this->RegisterVariableInteger('LastUsed', $this->Translate('Last Used'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
-            'ICON'         => 'Cart',
+            'ICON'         => 'cart-shopping',
             'SUFFIX'       => '',
         ], 210);
     }
