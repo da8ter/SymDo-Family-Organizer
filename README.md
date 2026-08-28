@@ -88,6 +88,8 @@ KI-Eingang und Briefing kommen erst mit ihm.
 
 ## SymDo ToDo List
 
+![SymDo — ToDo List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List.png)
+
 Aufgabenverwaltung für die Kachel-Visualisierung — und Datenquelle für SymDo.
 
 - Anlegen, bearbeiten, abhaken und löschen direkt in der Visualisierung; Löschen
@@ -102,9 +104,9 @@ Aufgabenverwaltung für die Kachel-Visualisierung — und Datenquelle für SymDo
 
 → [Ausführliche Anleitung](ToDoList/README.md)
 
-![SymDo — ToDo List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List.png)
-
 ## SymDo Shopping List
+
+![SymDo — Shopping List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List.png)
 
 Einkaufsliste für die Kachel-Visualisierung — und Datenquelle für SymDo.
 
@@ -118,8 +120,6 @@ Einkaufsliste für die Kachel-Visualisierung — und Datenquelle für SymDo.
 - Druckfunktion mit drei Layouts
 
 → [Ausführliche Anleitung](ShoppingList/README.md)
-
-![SymDo — Shopping List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List.png)
 
 ## SymDo Stundenplan
 
