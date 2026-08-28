@@ -192,3 +192,112 @@ abschaltbar.
 |---|---|
 | **ItemCount** | Anzahl der Artikel auf der Einkaufsliste |
 | **LastUsed** | Anzahl der Artikel im Bereich „Zuletzt benutzt" |
+
+## PHP-Befehlsreferenz
+
+Alle Funktionen erwarten als ersten Wert die Objekt-ID der Instanz.
+
+| Funktion | Rückgabe | Wofür |
+|---|---|---|
+| `SL_AddItem($id, $Name, $Category, $Amount)` | `bool` | Artikel auf die Liste setzen |
+| `SL_RemoveItem($id, $Name)` | `bool` | Artikel über seinen **Namen** entfernen |
+| `SL_DeleteItem($id, $Id)` | `bool` | Artikel über seine **ID** entfernen |
+| `SL_ClearCart($id)` | `void` | alle abgehakten Artikel löschen |
+| `SL_GetItems($id)` | `string` | die komplette Liste als JSON |
+| `SL_GetSuggestions($id)` | `string` | Vorschläge als JSON, nach Häufigkeit sortiert |
+| `SL_GetPurchaseHistory($id)` | `string` | was wie oft gekauft wurde, als JSON |
+
+Drei Eigenheiten, die man beim Skripten kennen sollte:
+
+- **`SL_AddItem` legt keinen zweiten Eintrag an**, wenn derselbe Name schon
+  offen auf der Liste steht — statt dessen wird die **Menge erhöht**. Genau wie
+  beim Tippen in der Oberfläche.
+- **Die Kategorie darf leer bleiben.** Dann sucht das Modul sie selbst
+  (Artikelkatalog und gelernte Zuordnungen). Nur wenn du sie ausdrücklich
+  setzt, gewinnt dein Wert.
+- **`false` heißt nicht immer „Fehler".** Es kommt bei leerem Namen — und wenn
+  gerade jemand anderes schreibt und die Sperre nach 500 ms nicht frei wird. Im
+  zweiten Fall steht eine Warnung im Meldungsprotokoll.
+
+Ein Artikel aus `SL_GetItems` sieht so aus:
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `id` | string | eindeutige Kennung, für `SL_DeleteItem` |
+| `name` | string | Artikelname |
+| `category` | string | Kategorie (gesetzt oder selbst ermittelt) |
+| `amount` | string | Menge als Text — `2`, aber auch `500 g` |
+| `notes` | string | Notiz zum Artikel |
+| `inCart` | bool | `true` = abgehakt, liegt im Wagen |
+| `addedAt` | int | Unix-Zeitstempel des Hinzufügens |
+| `boughtAt` | int | Zeitpunkt des Abhakens (erst danach vorhanden — mit `?? 0` lesen) |
+
+### Beispiel: Wochenendeinkauf aus einem Skript füllen
+
+```php
+<?php
+// >>> HIER ANPASSEN <<<
+$listeID = 12345;   // Objekt-ID der SymDo Shopping List
+
+// Kategorie leer lassen — die Liste ordnet selbst ein.
+$einkauf = [
+    ['Milch',      '', '2'],
+    ['Butter',     '', '1'],
+    ['Mehl',       '', '500 g'],
+    ['Kaffee',     'Getränke', '1'],   // Kategorie ausdrücklich gesetzt
+];
+
+$gesetzt = 0;
+foreach ($einkauf as [$name, $kategorie, $menge]) {
+    if (SL_AddItem($listeID, $name, $kategorie, $menge)) {
+        $gesetzt++;
+    } else {
+        IPS_LogMessage('Einkauf', $name . ' konnte nicht gesetzt werden');
+    }
+}
+IPS_LogMessage('Einkauf', "$gesetzt von " . count($einkauf) . ' Artikeln gesetzt');
+```
+
+### Beispiel: abgehakte Artikel aufräumen und melden, was noch fehlt
+
+```php
+<?php
+$listeID = 12345;
+
+// Erst zählen, dann räumen: nach ClearCart sind die abgehakten weg.
+$artikel   = json_decode(SL_GetItems($listeID), true) ?: [];
+$erledigt  = array_filter($artikel, fn($a) => !empty($a['inCart']));
+$offen     = array_filter($artikel, fn($a) => empty($a['inCart']));
+
+SL_ClearCart($listeID);
+
+$namen = implode(', ', array_column($offen, 'name'));
+IPS_LogMessage('Einkauf', count($erledigt) . ' erledigt, es fehlen noch: '
+    . ($namen !== '' ? $namen : 'nichts'));
+```
+
+### Beispiel: Vorratsartikel nachlegen, der seit vier Wochen nicht gekauft wurde
+
+```php
+<?php
+$listeID = 12345;
+
+$historie = json_decode(SL_GetPurchaseHistory($listeID), true) ?: [];
+$vorrat   = ['Kaffee', 'Spülmaschinentabs', 'Katzenfutter'];
+
+foreach ($historie as $eintrag) {
+    if (!in_array($eintrag['name'], $vorrat, true)) {
+        continue;
+    }
+    // 'last' ist der Zeitpunkt des letzten Kaufs, 'count' die Zahl der Käufe.
+    if (time() - (int)$eintrag['last'] > 28 * 86400) {
+        SL_AddItem($listeID, $eintrag['name'], (string)($eintrag['category'] ?? ''),
+                   (string)($eintrag['amount'] ?? '1'));
+        IPS_LogMessage('Einkauf', $eintrag['name'] . ' seit vier Wochen nicht gekauft — nachgelegt');
+    }
+}
+```
+
+> Die Favoriten-Funktionen (`SL_LoadFavoriteItems`, `SL_SaveFavoriteItems`)
+> bedienen das Konfigurationsformular und erwarten dessen JSON-Aufbau. Für
+> eigene Skripte sind sie nicht gedacht.
