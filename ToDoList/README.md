@@ -14,7 +14,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 - Zählerwerte (offen/überfällig/heute fällig) als Variablen für eigene Automationen; alle Funktionen per PHP-Skript nutzbar
 - Zusätzliche HTML-Ausgabe für IPSView
 
-![ToDo List](https://raw.githubusercontent.com/da8ter/images/main/todo.png)
+![SymDo — ToDo List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List.png)
 
 ## Inhalt
 
@@ -652,9 +652,9 @@ Die OAuth-Webhook-Endpunkte (`/hook/todogateway_google` und `/hook/todogateway_m
 
 Anleitungen zur Konfiguration:
 
-- [CalDAV Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_CalDav_Sync.md)
-- [Google Tasks Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Google_Sync.md)
-- [Microsoft To Do Synchronisation](https://github.com/da8ter/ToDo-List/blob/main/ToDoList/assets/Readme_Microsoft_Sync.md)
+- [CalDAV Synchronisation](assets/Readme_CalDav_Sync.md)
+- [Google Tasks Synchronisation](assets/Readme_Google_Sync.md)
+- [Microsoft To Do Synchronisation](assets/Readme_Microsoft_Sync.md)
 
 ### Amazon Alexa Aufgabenliste
 
