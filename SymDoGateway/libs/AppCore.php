@@ -230,7 +230,8 @@ trait AppCore
 
         if ($changed) {
             IPS_SetProperty($this->InstanceID, 'Users', json_encode($users, JSON_UNESCAPED_UNICODE));
-            IPS_ApplyChanges($this->InstanceID); // re-runs once, then stable
+            // Wirksam wird die Eigenschaft erst mit dem naechsten Uebernehmen.
+            $this->UebernehmenNachtragen();
         }
     }
 

@@ -99,8 +99,16 @@ trait TimetableStore
             }
             $zeilen = [];
             foreach ($ausGateway as $id => $name) {
-                $z = $nachKennung[$id] ?? [];
-                $z['userId'] = $id;
+                /* (string) ist PFLICHT: die Kennung ist der Array-SCHLUESSEL, und
+                   PHP macht aus einem Schluessel aus lauter Ziffern still ein int.
+                   Ohne den Guss stuende in `userId` eine ZAHL — und die Kachel
+                   vergleicht sie streng mit den Mitgliedern eines Termins
+                   (members[] === userId). Fuer ein Kind mit rein numerischer
+                   Kennung waere damit kein einziger Termin je zugeordnet, ohne
+                   dass irgendwo ein Fehler auftaucht. */
+                $kennung = (string)$id;
+                $z = $nachKennung[$kennung] ?? [];
+                $z['userId'] = $kennung;
                 $z['name']   = $name;
                 $zeilen[]    = $z;
             }

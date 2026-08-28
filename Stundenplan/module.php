@@ -211,7 +211,7 @@ class SymDoStundenplan extends IPSModuleStrict
             foreach ($neu as $prop => $wert) {
                 @IPS_SetProperty($this->InstanceID, $prop, $wert);
             }
-            @IPS_ApplyChanges($this->InstanceID);
+            $this->UebernehmenNachtragen();
         } finally {
             $laeuft = false;
         }
@@ -267,7 +267,7 @@ class SymDoStundenplan extends IPSModuleStrict
                 }
             }
             @IPS_SetProperty($this->InstanceID, 'Care', '[]');
-            @IPS_ApplyChanges($this->InstanceID);
+            $this->UebernehmenNachtragen();
         } finally {
             $laeuft = false;
         }
@@ -330,7 +330,7 @@ class SymDoStundenplan extends IPSModuleStrict
                 }
             }
             @IPS_SetProperty($this->InstanceID, 'Slots', '[]');
-            @IPS_ApplyChanges($this->InstanceID);
+            $this->UebernehmenNachtragen();
         } finally {
             $laeuft = false;
         }
@@ -398,7 +398,15 @@ class SymDoStundenplan extends IPSModuleStrict
         };
         $neu = [];
         foreach ($ausGateway as $id => $name) {
-            $neu[] = $zeile($nachKennung[$id] ?? $nachName[$name] ?? [], $id, $name);
+            /* (string) ist PFLICHT: die Kennung ist der Array-SCHLUESSEL, und PHP
+               macht aus einem Schluessel, der nur aus Ziffern besteht, still ein
+               int. Tims Kennung ist „57648139" — damit bekam die Closure ein int
+               statt eines string und warf unter strict_types einen TypeError,
+               der ApplyChanges des ganzen Moduls abbrach. Mias „fa0ad897" hat
+               Buchstaben und blieb ein string; deshalb traf es nur eines der
+               beiden Kinder. */
+            $kennung = (string)$id;
+            $neu[] = $zeile($nachKennung[$kennung] ?? $nachName[$name] ?? [], $kennung, $name);
         }
         // Vergleich ueber DIESELBE Form, sonst meldete jede Zeile eine Aenderung,
         // nur weil sie frueher andere Schluessel trug.
@@ -412,7 +420,7 @@ class SymDoStundenplan extends IPSModuleStrict
         $laeuft = true;
         try {
             @IPS_SetProperty($this->InstanceID, 'Children', (string)json_encode($neu, JSON_UNESCAPED_UNICODE));
-            @IPS_ApplyChanges($this->InstanceID);
+            $this->UebernehmenNachtragen();
         } finally {
             $laeuft = false;
         }
@@ -515,7 +523,7 @@ class SymDoStundenplan extends IPSModuleStrict
             }
             @$this->WriteAttributeString('SlotOwners', (string)json_encode($neu, JSON_UNESCAPED_UNICODE));
             if ($geaendert) {
-                @IPS_ApplyChanges($this->InstanceID);
+                $this->UebernehmenNachtragen();
             }
         } finally {
             $laeuft = false;
@@ -1259,4 +1267,30 @@ class SymDoStundenplan extends IPSModuleStrict
         }
         return is_array($roh) ? array_values(array_filter($roh, 'is_array')) : [];
     }
+
+    /**
+     * Uebernehmen NACH dem laufenden Aufruf anstossen.
+     *
+     * Eine Selbstheilung, die eine Eigenschaft schreibt, muss sie auch wirksam
+     * machen — und das geht nur ueber IPS_ApplyChanges. Steht der Aufruf aber
+     * INNERHALB von ApplyChanges, ist es ein Aufruf in sich selbst: Symcon 9.1
+     * lehnt ihn ab und bricht das Uebernehmen ab („Instanz ist durch eine selbst
+     * gestartete Operation belegt", Code -32603). Bis 9.0 lief es stillschweigend
+     * durch, deshalb ist es lange nicht aufgefallen.
+     *
+     * Der Einmal-Timer legt das Uebernehmen hinter den laufenden Aufruf. Beim
+     * zweiten Durchgang ist die Selbstheilung erledigt, sie schreibt nichts mehr
+     * und stoesst auch nichts mehr an — es bleibt bei genau einer Wiederholung.
+     *
+     * Ein Ident fuer alle Aufrufer: laufen mehrere Selbstheilungen im selben
+     * Durchgang, genuegt EIN nachgelagertes Uebernehmen fuer alle.
+     *
+     * Der Timer ruft IPS_ApplyChanges unmittelbar und nicht ueber eine eigene
+     * Funktion — so braucht es dafuer keine oeffentliche Schnittstelle.
+     */
+    private function UebernehmenNachtragen(): void
+    {
+        $this->RegisterOnceTimer('UebernehmenNachtragen', 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
+    }
+
 }

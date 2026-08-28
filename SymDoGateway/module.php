@@ -2307,4 +2307,30 @@ class SymDoGateway extends IPSModuleStrict
             ]
         ];
     }
+
+    /**
+     * Uebernehmen NACH dem laufenden Aufruf anstossen.
+     *
+     * Eine Selbstheilung, die eine Eigenschaft schreibt, muss sie auch wirksam
+     * machen — und das geht nur ueber IPS_ApplyChanges. Steht der Aufruf aber
+     * INNERHALB von ApplyChanges, ist es ein Aufruf in sich selbst: Symcon 9.1
+     * lehnt ihn ab und bricht das Uebernehmen ab („Instanz ist durch eine selbst
+     * gestartete Operation belegt", Code -32603). Bis 9.0 lief es stillschweigend
+     * durch, deshalb ist es lange nicht aufgefallen.
+     *
+     * Der Einmal-Timer legt das Uebernehmen hinter den laufenden Aufruf. Beim
+     * zweiten Durchgang ist die Selbstheilung erledigt, sie schreibt nichts mehr
+     * und stoesst auch nichts mehr an — es bleibt bei genau einer Wiederholung.
+     *
+     * Ein Ident fuer alle Aufrufer: laufen mehrere Selbstheilungen im selben
+     * Durchgang, genuegt EIN nachgelagertes Uebernehmen fuer alle.
+     *
+     * Der Timer ruft IPS_ApplyChanges unmittelbar und nicht ueber eine eigene
+     * Funktion — so braucht es dafuer keine oeffentliche Schnittstelle.
+     */
+    private function UebernehmenNachtragen(): void
+    {
+        $this->RegisterOnceTimer('UebernehmenNachtragen', 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
+    }
+
 }
