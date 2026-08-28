@@ -1,3 +1,5 @@
+![SymDo — Family Organizer](https://raw.githubusercontent.com/da8ter/images/main/SymDo-Mockup.jpg)
+
 # SymDo Web App
 
 Dieses Modul bringt die SymDo-Oberfläche als **Kachel** in die Tile-Visualisierung —

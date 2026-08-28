@@ -1,3 +1,5 @@
+![SymDo — Family Organizer](https://raw.githubusercontent.com/da8ter/images/main/SymDo-Mockup.jpg)
+
 # SymDo — Family Organizer
 
 Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: **SymDo** bringt den
