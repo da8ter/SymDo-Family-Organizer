@@ -4,31 +4,31 @@
 <meta charset="utf-8">
 <style>
   html, body {
-    margin: 0; padding: 0; width: 100%; height: 100%;
+    width: 100%;
     background: transparent; overflow: hidden;
     font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none;
   }
-  /* Oben bleiben 60 px frei: der Rahmen der Kachel deckt die GANZE Karte, und
-     die Visualisierung zeichnet ihre Ueberschrift darueber. Ohne diesen
-     Vorbehalt zentrierte der Streifen ueber die volle Hoehe — er landete damit
-     dicht unter der Ueberschrift, und die Luft sammelte sich unten.
+  /* Die Visualisierung setzt am RUMPF die Kachelraender: 60 px oben (dort
+     zeichnet sie ihre Ueberschrift), 20 seitlich, 15 unten. Genau diese Regel
+     hat die Kachel bis hierher mit `margin: 0` ueberschrieben und sass danach
+     in der ganzen Karte, Ueberschrift eingeschlossen — der Streifen klebte
+     dicht darunter, die Luft sammelte sich unten.
 
-     Die Zahl steht hier FEST, weil sie sich nicht ermitteln laesst. Am
-     28.08.2026 hat die Kachel ihre eigene Geometrie gemeldet:
-     Sichtfeld 170, Rumpf beginnt bei 0 und ist 171 hoch, Aussenabstand 0/0,
-     Polster 0/0, an der Wurzel ebenso. Der Platz fuer die Ueberschrift steht
-     also nirgends in diesem Dokument — es gibt nichts auszulesen.
-
-     Kachelbereich 170 px, Streifen 76 px: ohne Vorbehalt stand er bei 47, mit
-     ihm bei 77 — mittig in dem, was unter der Ueberschrift wirklich frei ist.
-
-     Als Polster und nicht als Aussenabstand, zusammen mit border-box: die
-     Huelle bleibt so genau im Rahmen. Ein Aussenabstand haette sie unten um
-     dieselben 60 px hinausgeschoben. */
+     Der Abstand bleibt jetzt stehen, und die Hoehe wird darum herum verteilt:
+     die Wurzel ist so hoch wie die Kachel und ordnet als Flex-Behaelter, der
+     Rumpf nimmt sich mit `flex: 1` den Rest ZWISCHEN seinen Abstaenden. Damit
+     stimmt die Flaeche auch dann noch, wenn Symcon die Werte einmal aendert —
+     es steht keine Zahl mehr in dieser Datei. */
+  html {
+    height: 100%; margin: 0; padding: 0;
+    display: flex; flex-direction: column;
+  }
+  body { flex: 1; min-height: 0; display: flex; }
+  /* Nimmt, was der Rumpf zwischen seinen Abstaenden uebrig laesst, und stellt
+     den Streifen mittig hinein. */
   #wrap {
-    width: 100%; height: 100%;
-    padding-top: 60px;
+    flex: 1; min-width: 0;
     display: flex; align-items: center;
     box-sizing: border-box;
   }
@@ -40,7 +40,10 @@
        dort also unmittelbar der Abstand von Kreis zu Kreis. */
     display: flex; align-items: flex-start; gap: 25px;
     overflow-x: auto; overflow-y: hidden;
-    padding: 6px 12px;
+    /* Seitlich kein eigenes Polster mehr: den Rand setzt jetzt der Rumpf
+       (20 px von der Visualisierung). Zusammen waeren es 32 px, und der
+       Streifen begaenne deutlich weiter innen als die Ueberschrift darueber. */
+    padding: 6px 0;
     width: 100%; box-sizing: border-box;
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
