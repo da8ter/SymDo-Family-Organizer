@@ -106,7 +106,7 @@ Aufgabenverwaltung für die Kachel-Visualisierung — und Datenquelle für SymDo
 
 → [Ausführliche Anleitung](ToDoList/README.md)
 
-![ToDo List](https://github.com/da8ter/images/blob/main/todo.png)
+![SymDo — ToDo List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List.png)
 
 ## SymDo Shopping List
 
@@ -123,9 +123,13 @@ Einkaufsliste für die Kachel-Visualisierung — und Datenquelle für SymDo.
 
 → [Ausführliche Anleitung](ShoppingList/README.md)
 
-![Shopping List](https://github.com/da8ter/images/blob/main/shoppinglist.png)
+![SymDo — Shopping List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List.png)
 
 ## SymDo Stundenplan
+
+![SymDo — Stundenplan Timeline](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Stundenplan%20Timeline.png)
+
+![SymDo — Stundenplan Woche](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Stundenplan%20Woche.png)
 
 Der Wochenplan der Kinder — als eigene Kachel und, je Instanz zuschaltbar, auf
 der SymDo-Übersicht.
