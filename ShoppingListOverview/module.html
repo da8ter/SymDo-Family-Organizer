@@ -16,7 +16,9 @@
   }
   #wrap.clickable { cursor: pointer; }
   #strip {
-    display: flex; align-items: flex-start; gap: 10px;
+    /* 18 statt 10 px: die Artikel standen zu dicht, und seit das Mengen-
+       Abzeichen 4 px ueber den Kreis hinausragt, kam es dem Nachbarn nahe. */
+    display: flex; align-items: flex-start; gap: 18px;
     overflow-x: auto; overflow-y: hidden;
     padding: 6px 12px;
     width: 100%; box-sizing: border-box;
@@ -30,11 +32,50 @@
     display: flex; align-items: center; justify-content: center;
   }
   .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Die Huelle traegt das Mengen-Abzeichen. Sie darf die Kreisbeschneidung des
+     Bildes NICHT erben, sonst waere das Abzeichen an der Rundung abgeschnitten. */
+  .thumbwrap { position: relative; display: inline-flex; flex: none; }
+  /* Menge unten rechts am Bild — wie im Artikelstreifen der SymDo-Uebersicht.
+     Hoehe und Mindestbreite gleich: so bleibt die Pille bei „1" ein Kreis und
+     wird erst bei „500 g" laenger. line-height gleich der Inhaltshoehe haelt
+     die Zahl senkrecht mittig. Nicht umbrechen — „2 Zehe/n" waere sonst
+     zweizeilig und wuechse in den Artikelnamen hinein. */
+  .menge {
+    position: absolute; right: -4px; bottom: -3px;
+    min-width: 16px; height: 16px; padding: 1px 4px;
+    border-radius: 999px;
+    background: var(--card-color, #fff); color: var(--content-color, #1c1c1e);
+    font-size: 10px; font-weight: 700; line-height: 14px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-sizing: border-box;
+  }
   .thumb .initial { font-weight: 700; color: #fff; }
   .iname {
     color: var(--content-color, #8e8e93); opacity: 0.85;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden;
     text-align: center;
+  }
+  /* Zu lange Artikelnamen laufen hin und her, statt abgeschnitten dazustehen —
+     dieselbe Bewegung und dieselben Zeiten wie im Artikelstreifen der
+     SymDo-Uebersicht. Die Kachel ist schmal, und die Bilder sind rund: aus
+     „Schokoladenpudding" wurde hier regelmaessig „Schokolade…".
+
+     Der Lauf sitzt in einem eigenen Element INNEN. Kein text-overflow mehr am
+     Namen: sobald der Text in einem eigenen Kasten steckt, greift die Ellipse
+     dort nicht mehr — sie steht jetzt am inneren Element, fuer den Fall ohne
+     Bewegung. */
+  .iname .lauf { display: inline-block; }
+  .iname.laeuft .lauf { animation: name-pingpong 6s ease-in-out infinite; }
+  @keyframes name-pingpong {
+    0%, 15%   { transform: translateX(0); }
+    45%, 55%  { transform: translateX(var(--lauf-weg, -30px)); }
+    85%, 100% { transform: translateX(0); }
+  }
+  /* Wer Bewegung abgestellt hat, bekommt die Ellipse zurueck: mit max-width hat
+     das innere Element einen eigenen Deckel, an dem sie greift. */
+  @media (prefers-reduced-motion: reduce) {
+    .iname.laeuft .lauf { animation: none; }
+    .iname .lauf { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   }
   #empty {
     width: 100%; text-align: center;
@@ -158,14 +199,42 @@
             + 'this.parentNode.style.background=\'' + tintFor(item.name) + '\';">'
           : '<span class="initial" style="font-size:' + Math.round(size * 0.42) + 'px">' + initial + '</span>';
         const bg = url ? '' : ' style="background:' + tintFor(item.name) + '"';
+        /* Menge wie in der Artikelzeile: leer bedeutet eins. Nicht-numerische
+           Angaben wie „500 g" bleiben unveraendert — hier gibt es keinen
+           Stepper, das Abzeichen zeigt beides gleich an. Der Deckel haelt es
+           innerhalb des Artikels, statt den Nachbarn zu beruehren. */
+        const menge = String(item.amount || '').trim() || '1';
         html += '<div class="item" style="width:' + nameWidth + 'px">'
+          + '<div class="thumbwrap">'
           + '<div class="thumb" style="width:' + size + 'px;height:' + size + 'px"' + (url ? '' : bg) + '>'
           + inner + '</div>'
+          + '<span class="menge" style="max-width:' + Math.max(28, nameWidth) + 'px">'
+          + escapeHtml(menge) + '</span></div>'
           + '<div class="iname" style="font-size:' + font + 'px;max-width:' + nameWidth + 'px">'
-          + escapeHtml(item.name) + '</div>'
+          + '<span class="lauf">' + escapeHtml(item.name) + '</span></div>'
           + '</div>';
       }
       strip.innerHTML = html;
+      namenLaufen(strip);
+    }
+
+    /* Nur die Namen laufen lassen, die wirklich nicht passen. Erst ab vier
+       Pixeln Ueberhang — fuer zwei Pixel lohnt keine Bewegung, und eine Kachel,
+       in der staendig etwas wackelt, ist unruhiger als eine mit ein paar
+       gekuerzten Namen. Gemessen wird NACH dem Einfuegen: vorher hat der Text
+       keine Breite. */
+    function namenLaufen(strip) {
+      strip.querySelectorAll('.iname').forEach(function (el) {
+        const innen = el.querySelector('.lauf');
+        if (!innen) { return; }
+        el.classList.remove('laeuft');
+        el.style.removeProperty('--lauf-weg');
+        const ueber = innen.scrollWidth - el.clientWidth;
+        if (ueber > 4) {
+          el.style.setProperty('--lauf-weg', '-' + Math.round(ueber) + 'px');
+          el.classList.add('laeuft');
+        }
+      });
     }
 
     function handleMessage(data) {

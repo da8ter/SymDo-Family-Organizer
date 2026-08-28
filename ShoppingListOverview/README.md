@@ -23,7 +23,9 @@ Objekt.
 - **Nur was noch fehlt** — gezeigt werden ausschließlich die **offenen** Artikel; abgehakte verschwinden sofort aus der Leiste
 - **Reihenfolge wie überall** — sortiert nach der Kategorien-Reihenfolge der Quell-Liste, also identisch zur Einkaufslisten-Kachel und zur App
 - **Produktbilder** — dieselbe Auflösung wie in der Liste: das beim Scannen gefundene Bild, sonst das über den Artikelnamen ermittelte (samt Marken-Nachschlag). Ohne Treffer der **Anfangsbuchstabe** auf getöntem Grund, dessen Farbe sich aus dem Namen ergibt
-- **Größe einstellbar** — Bildhöhe und Schriftgröße frei wählbar; die Namen laufen bei Platzmangel mit Auslassungspunkten aus
+- **Mengen-Abzeichen** — die Menge steht als kleine Pille unten rechts am Bild, genau wie im Artikelstreifen der SymDo-Übersicht. Ohne Angabe zeigt sie `1`; Angaben wie `500 g` stehen unverändert da
+- **Lange Namen laufen** — passt ein Artikelname nicht unter sein Bild, wandert er langsam hin und her, statt abgeschnitten dazustehen. Wer passt, bleibt in Ruhe. Ist im System die Bewegungsreduzierung eingeschaltet, wird stattdessen mit Auslassungspunkten gekürzt
+- **Größe einstellbar** — Bildhöhe und Schriftgröße frei wählbar
 - **Waagerecht scrollbar** — ohne sichtbare Bildlaufleiste, auf dem Touchgerät mit Schwung
 - **Klick öffnet ein Objekt** — beim Tippen wird über `openObject()` ein frei wählbares Objekt oder eine Kategorie geöffnet; ohne Ziel bleibt die Kachel unklickbar
 - **Live-Aktualisierung** — jede Änderung an der Einkaufsliste zieht ohne Neuladen nach
