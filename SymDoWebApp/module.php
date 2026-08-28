@@ -139,6 +139,7 @@ class SymDoWebApp extends IPSModuleStrict
         // jeder Objektänderung im GESAMTEN System feuern).
 
         $this->SyncListVisibility();
+        $this->SyncTimetableChoice();
         $this->ResubscribeAll();
 
         // Den vollen Push NICHT hier ausfuehren, sondern verzoegert: bei einem
@@ -441,11 +442,8 @@ class SymDoWebApp extends IPSModuleStrict
     {
         $wahl = $this->TimetableChoiceMap();
         $zeilen = [];
-        foreach (@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+        foreach ($this->TimetableOwnInstances() as $id) {
             $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
-            if (!is_array($cfg) || (int)($cfg['SourceInstanceID'] ?? 0) > 0) {
-                continue;
-            }
             $kinder = [];
             foreach ((array)json_decode((string)($cfg['Children'] ?? '[]'), true) as $k) {
                 if (is_array($k) && trim((string)($k['name'] ?? '')) !== '') {
@@ -462,6 +460,83 @@ class SymDoWebApp extends IPSModuleStrict
             ];
         }
         return $zeilen;
+    }
+
+    /**
+     * Die Stundenplan-Instanzen MIT EIGENEN DATEN, in der Reihenfolge, in der das
+     * Formular sie zeigt.
+     *
+     * Diese Reihenfolge traegt die Zuordnung in SyncTimetableChoice() und darf
+     * deshalb nur an EINER Stelle entstehen.
+     *
+     * @return list<int>
+     */
+    private function TimetableOwnInstances(): array
+    {
+        $ids = [];
+        foreach (@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+            $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
+            if (!is_array($cfg) || (int)($cfg['SourceInstanceID'] ?? 0) > 0) {
+                continue;
+            }
+            $ids[] = (int)$id;
+        }
+        return $ids;
+    }
+
+    /**
+     * Traegt die Instanz-Kennungen in die gespeicherte Stundenplan-Wahl nach.
+     *
+     * Dieselbe Falle wie bei SyncListVisibility: die Formularoberflaeche schreibt
+     * beim Speichern nur Spalten mit einer `edit`-Definition zurueck — bei dieser
+     * Liste also allein `show`. Auf einer Symbox mit 9.1 gemessen: nach dem Setzen
+     * des Haekchens stand [{"show":true}] in der Eigenschaft, ohne `id`.
+     * TimetableChoiceRows() verwirft eine Zeile ohne Kennung, die Karte blieb leer
+     * — und weil eine unbekannte Instanz als AUS gilt, fehlte der Stundenplan in
+     * der App, obwohl das Haekchen gesetzt war.
+     *
+     * Deshalb hier: fehlende Kennungen ueber die Position nachtragen. Das Formular
+     * baut die Zeilen aus TimetableOwnInstances() in genau dieser Reihenfolge, und
+     * gespeichert wird dieselbe Zeilenzahl. Bei abweichender Zahl (eine Instanz kam
+     * dazu oder fiel weg, waehrend der Dialog offen war) wird NICHT geraten,
+     * sondern nur uebernommen, was schon eine Kennung traegt.
+     */
+    private function SyncTimetableChoice(): void
+    {
+        // IPS_GetConfiguration statt ReadPropertyString: die Eigenschaft entsteht
+        // in Create() und existiert erst beim naechsten Kernel-Start.
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || !array_key_exists('TimetableChoice', $cfg)) {
+            return;
+        }
+        $rows = json_decode((string)$cfg['TimetableChoice'], true);
+        if (!is_array($rows) || $rows === []) {
+            return;
+        }
+        $eigene    = $this->TimetableOwnInstances();
+        $repariert = [];
+        $ergaenzt  = false;
+        foreach (array_values($rows) as $i => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0 && count($rows) === count($eigene) && isset($eigene[$i])) {
+                $id       = $eigene[$i];
+                $ergaenzt = true;
+            }
+            if ($id <= 0) {
+                continue;
+            }
+            $repariert[] = ['id' => $id, 'show' => (bool)($row['show'] ?? false)];
+        }
+        if (!$ergaenzt || $repariert === []) {
+            return;
+        }
+        // Ohne Rueckschreiben waere die Reparatur bei jedem Aufruf noetig — und der
+        // naechste Formular-Aufbau zeigte die Haekchen wieder falsch.
+        IPS_SetProperty($this->InstanceID, 'TimetableChoice', json_encode($repariert));
+        $this->UebernehmenNachtragen();
     }
 
     /**
