@@ -256,8 +256,9 @@
       /* Die Zahl steht VOR den Artikeln — dieselbe Kantenlaenge wie die Bilder,
          damit die Reihe eine Linie behaelt. Der Radius folgt der Groesse: bei
          48 px sind das 13 px, also eine Kachel und kein Kreis. */
-      let html = '<div class="zaehler" style="width:' + size + 'px;border-radius:'
-        + Math.round(size * 0.28) + 'px;font-size:' + Math.round(size * 0.4) + 'px">'
+      /* Breite und Schriftgroesse setzt zaehlerMessen() nach dem Einfuegen: die
+         Hoehe steht erst fest, wenn die Zeile steht (Bild plus Namenszeile). */
+      let html = '<div class="zaehler">'
         + '<svg class="korb" viewBox="0 0 24 24" aria-hidden="true">'
         + '<path d="M4 9h16l-1.4 9.3a2.2 2.2 0 0 1-2.2 1.9H7.6a2.2 2.2 0 0 1-2.2-1.9L4 9Z"/>'
         + '<path d="M8.2 9 11 3.4M15.8 9 13 3.4"/>'
@@ -290,7 +291,23 @@
           + '</div>';
       }
       strip.innerHTML = html;
+      zaehlerMessen(strip);
       namenLaufen(strip);
+    }
+
+    /* Der Kasten mit der Artikelzahl soll quadratisch sein. Seine HOEHE kommt
+       aus der Zeile (Bild plus Namenszeile, per align-self: stretch) und steht
+       erst nach dem Einfuegen fest — die Breite muss deshalb gemessen und
+       nachgetragen werden, eine gerechnete waere bei anderer Schriftgroesse
+       falsch. Radius und Zahl folgen derselben Kantenlaenge. */
+    function zaehlerMessen(strip) {
+      const el = strip.querySelector('.zaehler');
+      if (!el) { return; }
+      const hoehe = Math.round(el.getBoundingClientRect().height);
+      if (hoehe <= 0) { return; }
+      el.style.width = hoehe + 'px';
+      el.style.borderRadius = Math.round(hoehe * 0.24) + 'px';
+      el.style.fontSize = Math.round(hoehe * 0.4) + 'px';
     }
 
     /* Nur die Namen laufen lassen, die wirklich nicht passen. Erst ab vier
