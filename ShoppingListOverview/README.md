@@ -20,7 +20,7 @@ Objekt.
 
 ## 1. Funktionsumfang
 
-- **Zahl der offenen Artikel** — ganz links steht sie als Kachel in der Akzentfarbe, auf Höhe der Bilder
+- **Zahl der offenen Artikel** — ganz links als Kachel in der Akzentfarbe, so hoch wie ein Artikel samt Namenszeile, mit dem Einkaufskorb blass im Hintergrund
 - **Nur was noch fehlt** — gezeigt werden ausschließlich die **offenen** Artikel; abgehakte verschwinden sofort aus der Leiste
 - **Reihenfolge wie überall** — sortiert nach der Kategorien-Reihenfolge der Quell-Liste, also identisch zur Einkaufslisten-Kachel und zur App
 - **Produktbilder** — dieselbe Auflösung wie in der Liste: das beim Scannen gefundene Bild, sonst das über den Artikelnamen ermittelte (samt Marken-Nachschlag). Ohne Treffer der **Anfangsbuchstabe** auf getöntem Grund, dessen Farbe sich aus dem Namen ergibt
