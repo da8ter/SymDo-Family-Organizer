@@ -1021,10 +1021,16 @@ trait AppCore
     private function BuildWebHead(): string
     {
         // Konkrete Theme-Werte, da die Visu-Variablen (--card-color etc.) außerhalb
-        // der Visualisierung fehlen. Dunkles Standard-Theme wie in der App.
+        // der Visualisierung fehlen. Dunkles Standard-Theme wie in der App — und
+        // ein heller Zweig fuer hell gestellte Geraete: bis der Adapter zum ersten
+        // Mal laeuft, malte die Seite sonst dunkel, was auf einem hellen iPhone
+        // als Schlag zu sehen war. Bleibt das Skript aus, ist es die Anzeige.
         $theme = '<style>:root{'
             . '--card-color:#2b2c30;--content-color:#ffffff;--accent-color:#00cdab;'
-            . '}html,body{background:#1c1c1e;}</style>';
+            . '}html,body{background:#1c1c1e;}'
+            . '@media (prefers-color-scheme: light){:root{'
+            . '--card-color:#ffffff;--content-color:#1c1c1e;'
+            . '}html,body{background:#ffffff;}}</style>';
 
         // Übersetzungen aus der geteilten UI-Quelle einbetten (kein Extra-Request).
         $translations = '{}';

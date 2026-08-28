@@ -95,8 +95,22 @@
   }
   function applyTheme() {
     var scheme = prefersDark() ? 'dark' : 'light';
-    var visu = discoveryTheme && (discoveryTheme[scheme] || discoveryTheme.dark || discoveryTheme.light);
-    setColors((visu && visu.card && visu.content && visu.accent) ? visu : THEME_DEFAULTS[scheme]);
+    var vorgabe = THEME_DEFAULTS[scheme];
+    // NUR das passende Schema. Die Visu meldet immer bloss das, in dem sie
+    // gerade laeuft — hier stand frueher ein Rueckfall auf das jeweils andere,
+    // und eine dunkel gestellte Visu schickte damit einem HELL gestellten
+    // iPhone ihre dunkle Kartenfarbe (#333438 auf weissem Geraet). Die Web-App
+    // blieb dunkel, und am Geraet war nichts dagegen auszurichten.
+    var visu = discoveryTheme && discoveryTheme[scheme];
+    var farben = (visu && visu.card && visu.content) ? visu : vorgabe;
+    // Der Akzent ist die Hausfarbe und haengt nicht am Schema: was die Visu
+    // gemeldet hat, gilt in beiden — sonst verloere eine hell gestellte App die
+    // eingestellte Akzentfarbe, nur weil die Visu dunkel laeuft.
+    var akzent = (visu && visu.accent)
+      || (discoveryTheme && ((discoveryTheme.dark && discoveryTheme.dark.accent)
+                          || (discoveryTheme.light && discoveryTheme.light.accent)))
+      || vorgabe.accent;
+    setColors({ card: farben.card, content: farben.content, accent: akzent });
     // Zeilenfläche der Kacheln (--row): im Hellmodus dezenter, sonst wirken die
     // Kacheln zu dunkel; im Dunkelmodus wie in der Visu-Kachel. Bleibt DECKEND
     // (kein 50 %-Transparent), da hinter den Kacheln der rote Wisch-zum-Löschen-
