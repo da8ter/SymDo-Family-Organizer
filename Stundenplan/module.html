@@ -894,19 +894,54 @@
         /* +1: scrollWidth rundet ab. Bei 85,4 px Text meldet sie 85, und ein
            Deckel von 85 px setzt die Ellipse. */
         const natur = lauf.scrollWidth ? lauf.scrollWidth + 1 : 0;
-        const platzR = Math.floor(wegRechts(stunden, barB, breite) - 4);
-        const platzL = Math.floor(wegLinks(stunden, barA) - 4);
-        const nachLinks = platzL > platzR;
-        const platz = nachLinks ? platzL : platzR;
         posten.push({
           m: m, label: label, anteil: anteil, anteil2: anteil2,
-          barA: barA, barB: barB, nachLinks: nachLinks,
-          platzL: platzL, platzR: platzR,
-          w: Math.min(natur, Math.max(platz, 0)), natur: natur,
-          // Genug Platz? Gemessen am Titel, nicht an einer festen Zahl: ein
-          // kurzer Titel braucht kein 32 px breites Fenster.
-          passt: platz >= Math.min(natur, 32),
+          barA: barA, barB: barB, natur: natur,
         });
+      });
+
+      /* Erst wenn ALLE Balken vermessen sind, steht fest, wo ein Titel hin
+         darf. Hindernisse sind die Schulstunden UND die uebrigen Terminbalken.
+
+         Die Balken der Nachbarn muessen mitzaehlen, sonst greift sich der
+         erste Termin den ganzen Platz bis zum naechsten Balken — und der
+         naechste steht dann ohne Beschriftung da, obwohl links von ihm eine
+         freie Stunde liegt. Genau so war es am Freitag zu sehen: der
+         Klavierunterricht schrieb nach rechts bis an das Schwimmen heran,
+         „Test 2" bekam gar nichts mehr. Mit den Nachbarn als Grenze waehlt
+         jeder Titel die Seite, auf der er niemandem im Weg steht. */
+      const balkenAlle = posten.map(function (p) { return { a: p.barA, b: p.barB }; });
+      posten.forEach(function (pos) {
+        /* Die SEITE waehlen die Nachbarn mit: sonst greift sich der erste
+           Termin den Platz bis zum naechsten Balken, und der naechste steht
+           ohne Beschriftung da, obwohl links von ihm eine freie Stunde liegt.
+           Genau so war es am Freitag — der Klavierunterricht schrieb nach
+           rechts bis ans Schwimmen heran, „Test 2" bekam gar nichts mehr.
+
+           Aber nur die Nachbarn, die sich zeitlich NICHT mit uns ueberschneiden:
+           nur die koennen in derselben Reihe landen. Wer sich mit uns
+           ueberschneidet, wird von der Reihenvergabe ohnehin nach oben oder
+           unten geschoben und liegt dann 12 px entfernt. Zaehlte er hier mit,
+           verloere „Abendessen" seine Seite an den Schwimmunterricht, in dem
+           es steckt. Der eigene Balken faellt ueber dieselbe Regel heraus. */
+        const fremd = stunden.concat(balkenAlle.filter(function (h) {
+          return h.b <= pos.barA || h.a >= pos.barB;
+        }));
+        pos.nachLinks = wegLinks(fremd, pos.barA) > wegRechts(fremd, pos.barB, breite);
+        /* Die BREITE dagegen begrenzen nur die Schulstunden. Ein Etikett darf
+           ueber den Balken der ANDEREN Reihe hinweglaufen — die liegen 12 px
+           auseinander, da stoesst nichts zusammen. Zaehlten die Nachbarn auch
+           hier mit, verloere ein Termin, der ganz innerhalb eines anderen
+           liegt, seinen Titel: „Hausaufgaben" steckt mitten im
+           Schwimmunterricht und haette links wie rechts null Platz. Was in
+           DERSELBEN Reihe kollidiert, faengt die Reihenvergabe ab. */
+        pos.platzR = Math.floor(wegRechts(stunden, pos.barB, breite) - 4);
+        pos.platzL = Math.floor(wegLinks(stunden, pos.barA) - 4);
+        const platz = pos.nachLinks ? pos.platzL : pos.platzR;
+        pos.w = Math.min(pos.natur, Math.max(platz, 0));
+        // Genug Platz? Gemessen am Titel, nicht an einer festen Zahl: ein
+        // kurzer Titel braucht kein 32 px breites Fenster.
+        pos.passt = platz >= Math.min(pos.natur, 32);
       });
 
       /* Der letzte Termin des Tages — der mit dem spaetesten Ende. Wurde die
@@ -1537,7 +1572,8 @@
       zeitMarke(slots[slots.length - 1].to, ende, true);
       (tag.events || []).forEach(function (e) { zeitMarke(e.at, e.time || '', false); });
 
-      html += '<div class="scrollbahn"><div class="balken">' + stuecke + marker
+      html += '<div class="scrollbahn" data-von="' + von + '" data-bis="' + bis
+        + '"><div class="balken">' + stuecke + marker
         + jetztStrichHtml(!!tag.today, von, spanne) + '</div>'
         + '<div class="ticks">' + ticks + '</div>'
         + '<div class="zeiten">' + zeiten + '</div></div></div>';

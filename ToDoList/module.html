@@ -5958,16 +5958,37 @@ function planTermineBeschriften() {
       const barB = barA + barBreit;
       // +1: scrollWidth rundet ab, und ein Pixel zu wenig laesst den Titel laufen.
       const natur = lauf.scrollWidth ? lauf.scrollWidth + 1 : 0;
-      const platzR = Math.floor(planWegRechts(stunden, barB, breite) - 4);
-      const platzL = Math.floor(planWegLinks(stunden, barA) - 4);
-      const nachLinks = platzL > platzR;
-      const platz = nachLinks ? platzL : platzR;
-      posten.push({ m, label, anteil, anteil2, barA, barB, nachLinks, natur,
-                    platzL, platzR,
-                    w: Math.min(natur, Math.max(platz, 0)),
-                    // Genug Platz? Gemessen am Titel, nicht an einer festen
-                    // Zahl: ein kurzer Titel braucht kein 32 px breites Fenster.
-                    passt: platz >= Math.min(natur, 32) });
+      posten.push({ m, label, anteil, anteil2, barA, barB, natur });
+    });
+
+    /* Erst wenn ALLE Balken vermessen sind, steht fest, wo ein Titel hin darf.
+       Hindernisse sind die Schulstunden UND die uebrigen Terminbalken: ohne die
+       Nachbarn greift sich der erste Termin den Platz bis zum naechsten Balken,
+       und der naechste steht ohne Beschriftung da, obwohl links von ihm eine
+       freie Stunde liegt. */
+    const balkenAlle = posten.map(p => ({ a: p.barA, b: p.barB }));
+    posten.forEach(pos => {
+      /* Die SEITE waehlen die Nachbarn mit: sonst greift sich der erste Termin
+         den Platz bis zum naechsten Balken, und der naechste steht ohne
+         Beschriftung da, obwohl neben ihm eine freie Stunde liegt.
+
+         Aber nur die Nachbarn, die sich zeitlich NICHT mit uns ueberschneiden:
+         nur die koennen in derselben Reihe landen. Wer sich mit uns
+         ueberschneidet, wird ohnehin nach oben oder unten geschoben. Der eigene
+         Balken faellt ueber dieselbe Regel heraus. */
+      const fremd = stunden.concat(balkenAlle.filter(h => h.b <= pos.barA || h.a >= pos.barB));
+      pos.nachLinks = planWegLinks(fremd, pos.barA) > planWegRechts(fremd, pos.barB, breite);
+      /* Die BREITE dagegen begrenzen nur die Schulstunden. Ein Etikett darf
+         ueber den Balken der ANDEREN Reihe hinweglaufen — die liegen 12 px
+         auseinander. Zaehlten die Nachbarn auch hier mit, verloere ein Termin,
+         der ganz innerhalb eines anderen liegt, seinen Titel. Was in DERSELBEN
+         Reihe kollidiert, faengt die Reihenvergabe ab. */
+      pos.platzR = Math.floor(planWegRechts(stunden, pos.barB, breite) - 4);
+      pos.platzL = Math.floor(planWegLinks(stunden, pos.barA) - 4);
+      const platz = pos.nachLinks ? pos.platzL : pos.platzR;
+      pos.w = Math.min(pos.natur, Math.max(platz, 0));
+      // Genug Platz? Gemessen am Titel, nicht an einer festen Zahl.
+      pos.passt = platz >= Math.min(pos.natur, 32);
     });
 
     /* Der letzte Termin des Tages — der mit dem spaetesten Ende. Wurde die
@@ -6417,7 +6438,8 @@ function stundenplanKarte() {
     zeitMarke(slots[slots.length - 1].to, ende, true);
     (tag.events || []).forEach(e => zeitMarke(e.at, e.time || '', false));
 
-    zeilen += `<div class="plan-bahn"><div class="plan-balken">${stuecke}${marker}` +
+    zeilen += `<div class="plan-bahn" data-von="${von}" data-bis="${bis}">` +
+      `<div class="plan-balken">${stuecke}${marker}` +
       stundenplanStrichHtml(!!tag.today, von, spanne) +
       `</div><div class="plan-ticks">${ticks}</div>` +
       `<div class="plan-zeiten">${zeiten}</div></div></div>`;
