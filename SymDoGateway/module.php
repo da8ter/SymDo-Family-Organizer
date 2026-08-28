@@ -436,7 +436,7 @@ class SymDoGateway extends IPSModuleStrict
         return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
     }
 
-    public function GoogleHandleCallback(string $Code): bool
+    private function GoogleHandleCallback(string $Code): bool
     {
         $clientId = trim($this->ReadPropertyString('GoogleClientID'));
         $clientSecret = trim($this->ReadPropertyString('GoogleClientSecret'));
@@ -550,24 +550,6 @@ class SymDoGateway extends IPSModuleStrict
             'GoogleTasks', '', $Headers, 'GoogleRetryAfter'
         );
         return $meta === null ? 0 : (int)($meta['status'] ?? 0);
-    }
-
-    public function GoogleFetchTaskLists(): array
-    {
-        // R18: routed through GoogleApiRequest (401-retry + back-off window).
-        $data = $this->GoogleApiRequest('GET', '/tasks/v1/users/@me/lists');
-        if ($data === null) {
-            return [];
-        }
-
-        $lists = [];
-        foreach ($data['items'] ?? [] as $item) {
-            $lists[] = [
-                'id' => $item['id'] ?? '',
-                'title' => $item['title'] ?? ''
-            ];
-        }
-        return $lists;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -746,7 +728,7 @@ class SymDoGateway extends IPSModuleStrict
         return $this->Translate('Connected to Microsoft.');
     }
 
-    public function MicrosoftHandleCallback(string $Code): bool
+    private function MicrosoftHandleCallback(string $Code): bool
     {
         $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
         $clientSecret = trim($this->ReadPropertyString('MicrosoftClientSecret'));
@@ -866,24 +848,6 @@ class SymDoGateway extends IPSModuleStrict
             'offline_access Tasks.ReadWrite', $Headers, 'MicrosoftRetryAfter'
         );
         return $meta === null ? 0 : (int)($meta['status'] ?? 0);
-    }
-
-    public function MicrosoftFetchLists(): array
-    {
-        // R18: routed through MicrosoftApiRequest (401-retry + back-off window).
-        $data = $this->MicrosoftApiRequest('GET', '/me/todo/lists');
-        if ($data === null) {
-            return [];
-        }
-
-        $lists = [];
-        foreach ($data['value'] ?? [] as $item) {
-            $lists[] = [
-                'id' => $item['id'] ?? '',
-                'displayName' => $item['displayName'] ?? ''
-            ];
-        }
-        return $lists;
     }
 
     // ──────────────────────────────────────────────────────────────────────────

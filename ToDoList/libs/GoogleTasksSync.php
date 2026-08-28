@@ -52,16 +52,6 @@ trait GoogleTasksSync
         return sprintf($this->Translate('Found %d task list(s).'), count($stored));
     }
 
-    /**
-     * Frueher fing das hier die Ausgabe mit ob_start() ein. Seit die Meldung
-     * zurueckgegeben wird, ist der Umweg ueberfluessig — und ein Ausgabepuffer um
-     * eine Funktion herum ist genau das Muster, das 9.1 abschafft.
-     */
-    public function GoogleDiscoverTasklists(): string
-    {
-        return $this->GoogleRefreshTaskListOptions();
-    }
-
     private function GoogleSanitizeTaskListTitle(string $Title): string
     {
         $title = trim($Title);
@@ -130,16 +120,6 @@ trait GoogleTasksSync
         }
 
         return $options;
-    }
-
-    /** Meldung als RUECKGABE — siehe CalDAVTestConnection. */
-    public function GoogleTestConnection(): string
-    {
-        $gw = $this->GetGatewayID();
-        if ($gw === 0) {
-            return $this->Translate('Not connected. Please authorize first.');
-        }
-        return (string)TGW_GoogleTestConnection($gw);
     }
 
     public function GoogleTasksSync(): bool

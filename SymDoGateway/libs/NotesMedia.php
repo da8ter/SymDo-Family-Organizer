@@ -40,7 +40,7 @@ trait NotesMedia
      * aber nie wieder abrufbar.
      */
 
-    public function NotesMediaCreate(): void
+    private function NotesMediaCreate(): void
     {
         $this->RegisterAttributeString(self::NOTES_MEDIA_ATTR, '');
     }

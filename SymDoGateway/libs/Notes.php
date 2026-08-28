@@ -52,7 +52,7 @@ trait Notes
     private const NOTES_ATTR = 'NotesStore';
     private const NOTES_LOCK = 'TGW_Notes_';
 
-    public function NotesCreate(): void
+    private function NotesCreate(): void
     {
         $this->RegisterAttributeString(self::NOTES_ATTR, '');
         $this->NotesMediaCreate();
@@ -62,7 +62,7 @@ trait Notes
      * Mitglieder-Ordner nachziehen. Idempotent, ruft NIE IPS_ApplyChanges — das
      * tut EnsureUserIDs schon, ein zweiter Aufruf waere eine Rekursion.
      */
-    public function NotesApplyChanges(): void
+    private function NotesApplyChanges(): void
     {
         $this->NotesEnsureMemberFolders();
         // Kein eigener Timer: ein neu registrierter existiert vor dem
@@ -313,7 +313,7 @@ trait Notes
      *
      * @param array<string,mixed>|null $device Gerätedatensatz (REST) oder null (Relay)
      */
-    public function NotesHandleAction(array $body, ?array $device = null): array
+    private function NotesHandleAction(array $body, ?array $device = null): array
     {
         $action = (string)($body['action'] ?? '');
         if ($action === '' || $action === 'list') {

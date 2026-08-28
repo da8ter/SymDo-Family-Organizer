@@ -28,19 +28,6 @@ trait CalDAVSync
         return $this->Translate('Last sync') . ': ' . date('d.m.Y H:i:s', $lastSync);
     }
 
-    /**
-     * Die Meldung wird ZURUECKGEGEBEN, nicht ausgegeben — Symcon 9.1 meldet ein
-     * `echo` innerhalb einer Funktion als Fehler. Der Knopf gibt sie aus.
-     */
-    public function CalDAVTestConnection(): string
-    {
-        $gw = $this->GetGatewayID();
-        if ($gw === 0) {
-            return $this->Translate('Connection failed');
-        }
-        return (string)TGW_CalDAVTestConnection($gw);
-    }
-
     /** Meldung als RUECKGABE — der Knopf gibt sie aus (siehe SyncResetItems). */
     public function CalDAVResetSync(): string
     {
@@ -1750,15 +1737,6 @@ trait CalDAVSync
         $options = $this->GetCalDAVCalendarOptions();
         $this->UpdateFormField('CalDAVCalendarPath', 'options', json_encode($options));
         return sprintf($this->Translate('Found %d calendar(s).'), count($stored));
-    }
-
-    /**
-     * Frueher fing das hier die Ausgabe mit ob_start() ein — seit die Meldung
-     * zurueckgegeben wird, ist der Umweg ueberfluessig.
-     */
-    public function CalDAVDiscoverCalendars(): string
-    {
-        return $this->CalDAVRefreshCalendarOptions();
     }
 
     private function CalDAVFetchAndStoreCalendarOptions(): ?array

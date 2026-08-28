@@ -510,7 +510,7 @@ class SymDoWebApp extends IPSModuleStrict
     }
 
     /** Aggregat-Payload der Kachel als JSON — Diagnose-Getter (GetVisualizationTile bekommt keinen Prefix-Wrapper). */
-    public function GetTilePayload(): string
+    private function GetTilePayload(): string
     {
         return (string)json_encode($this->BuildFullPayload(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);

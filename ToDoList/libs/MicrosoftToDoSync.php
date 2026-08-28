@@ -104,16 +104,6 @@ trait MicrosoftToDoSync
         return $options;
     }
 
-    /** Meldung als RUECKGABE — siehe CalDAVTestConnection. */
-    public function MicrosoftTestConnection(): string
-    {
-        $gw = $this->GetGatewayID();
-        if ($gw === 0) {
-            return $this->Translate('Not connected. Please authorize first.');
-        }
-        return (string)TGW_MicrosoftTestConnection($gw);
-    }
-
     public function MicrosoftToDoSync(): bool
     {
         $sem = 'TDL_MicrosoftSync_' . $this->InstanceID;

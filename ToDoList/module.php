@@ -20,14 +20,6 @@ class SymDoToDoList extends IPSModuleStrict
     use ExternalListSync;
     use ExtListHooksTodo;
 
-    public function GetCompatibleParents(): string
-    {
-        return json_encode([
-            'type'      => 'connect',
-            'moduleIDs' => ['{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}']
-        ]);
-    }
-
     /**
      * Erklaert die zwei Gateway-Rollen im Formular.
      *
@@ -682,68 +674,6 @@ class SymDoToDoList extends IPSModuleStrict
         return json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public function DebugRecurrence(): string
-    {
-        $items = $this->LoadItems();
-        $now = time();
-        $interval = 60;
-        $timerInterval = $this->GetTimerInterval('RecurrenceTimer');
-
-        $debug = [
-            'now' => date('Y-m-d H:i:s', $now),
-            'nowTs' => $now,
-            'timerActive' => $timerInterval > 0,
-            'timerInterval' => $timerInterval,
-            'items' => []
-        ];
-
-        foreach ($items as $item) {
-            $due = (int)($item['due'] ?? 0);
-            $recurrence = $this->NormalizeRecurrence($item['recurrence'] ?? 'none', $due);
-            $leadTime = $this->NormalizeRecurrenceResetLeadTime($item['recurrenceResetLeadTime'] ?? null, $recurrence);
-            $windowStart = $leadTime - $interval;
-            $left = $due - $now;
-
-            $wouldReopen = false;
-            $reason = '';
-
-            if (empty($item['done'])) {
-                $reason = 'Task ist nicht erledigt (done=false)';
-            } elseif ($due <= 0) {
-                $reason = 'Keine Fälligkeit gesetzt (due=0)';
-            } elseif ($recurrence === 'none') {
-                $reason = 'Keine Wiederholung gesetzt (recurrence=none)';
-            } elseif ($leadTime <= 0) {
-                $reason = 'Wieder öffnen deaktiviert (recurrenceResetLeadTime=0)';
-            } elseif ($left > $leadTime) {
-                $reason = 'Noch nicht im Fenster (left > leadTime): ' . $left . ' > ' . $leadTime;
-            } elseif ($left < $windowStart) {
-                $reason = 'Fenster verpasst (left < windowStart): ' . $left . ' < ' . $windowStart . ' -> Due wird weitergeschoben';
-            } else {
-                $wouldReopen = true;
-                $reason = 'WÜRDE JETZT WIEDER GEÖFFNET (left=' . $left . ', Fenster=' . $windowStart . '-' . $leadTime . ')';
-            }
-
-            $debug['items'][] = [
-                'id' => $item['id'] ?? 0,
-                'title' => $item['title'] ?? '',
-                'done' => $item['done'] ?? false,
-                'due' => $due > 0 ? date('Y-m-d H:i:s', $due) : 'nicht gesetzt',
-                'dueTs' => $due,
-                'recurrence' => $item['recurrence'] ?? 'none',
-                'recurrenceNormalized' => $recurrence,
-                'recurrenceResetLeadTime' => $item['recurrenceResetLeadTime'] ?? 'nicht gesetzt',
-                'recurrenceResetLeadTimeNormalized' => $leadTime,
-                'left' => $left,
-                'windowStart' => $windowStart,
-                'wouldReopen' => $wouldReopen,
-                'reason' => $reason
-            ];
-        }
-
-        return json_encode($debug, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
     public function AddItem(mixed $Data): int
     {
         $Data = $this->DecodeValue($Data);
@@ -1149,7 +1079,7 @@ class SymDoToDoList extends IPSModuleStrict
         $this->ScheduleSyncOnChange();
     }
 
-    public function Reorder(mixed $Data): void
+    private function Reorder(mixed $Data): void
     {
         $Data = $this->DecodeValue($Data);
         $order = $Data['order'] ?? [];

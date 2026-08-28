@@ -476,27 +476,6 @@ class SymDoShoppingList extends IPSModuleStrict
         }
     }
 
-    public function SaveSuggestionItemsFromForm(string $ItemsJson): void
-    {
-        $newItems = json_decode($ItemsJson, true);
-        if (!is_array($newItems)) {
-            return;
-        }
-        $clean = [];
-        foreach ($newItems as $row) {
-            $name = trim((string)($row['name'] ?? ''));
-            if ($name === '') {
-                continue;
-            }
-            $clean[] = [
-                'name'     => $name,
-                'category' => trim((string)($row['category'] ?? '')),
-            ];
-        }
-        $this->SaveSuggestionItems($clean);
-        $this->SendState();
-    }
-
     public function LoadFavoriteItems(string $ListId): void
     {
         $this->SetBuffer('EditingFavListId', $ListId);
