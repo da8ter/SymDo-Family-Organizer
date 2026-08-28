@@ -5730,6 +5730,19 @@ const PLAN_MIN_STUECK = 24;
  * gewaehlten Tages ueber alle Kinder — alle Zeilen brauchen denselben, sonst
  * laegen dieselben Uhrzeiten in zwei Zeilen an verschiedenen Stellen.
  */
+/* Zusatzminuten am rechten Ende der Achse: Platz fuer den Titel des LETZTEN
+   Termins. Steht rechts von ihm kein weiterer Termin und keine Stunde, wird die
+   Achse so weit verlaengert, dass der Titel vollstaendig daneben passt — statt
+   ihn zu kuerzen oder nach links zu klappen. Gemessen statt geraten: wie breit
+   ein Titel wirklich ist, weiss erst der gezeichnete Text.
+
+   Gilt immer nur fuer EINEN Tag. Die Rundenzaehlung ist die Bremse: jede
+   Verlaengerung zieht ein neues Zeichnen nach sich. */
+let planZusatzMinuten = 0;
+let planZusatzTag = null;
+let planZusatzRunden = 0;
+const PLAN_ZUSATZ_RUNDEN = 3;
+
 /* Die Achse des GEWAEHLTEN Tages, nicht die der Woche. stundenplan.span
    umspannt die ganze Woche: ein Abendessen am Donnerstag zog sie bis 22:15,
    und am Freitag — Schule bis 10:35, ein Termin bis 15:45 — lief die
@@ -5755,6 +5768,7 @@ function planTagesSpanne(gewaehlt) {
   // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
   // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
   if (!isFinite(von) || bis <= von) return [stundenplan.span[0], stundenplan.span[1]];
+  if (planZusatzTag === gewaehlt) bis += planZusatzMinuten;
   return [Math.max(0, von), Math.min(1440, bis)];
 }
 
@@ -5852,6 +5866,8 @@ function planWegLinks(hindernisse, x) {
 }
 
 function planTermineBeschriften() {
+  // Groesster Fehlbetrag ueber alle Zeilen, als ANTEIL der Balkenbreite.
+  let fehltAnteil = 0;
   document.querySelectorAll('.plan-balken').forEach(balken => {
     const alle = [...balken.querySelectorAll('.plan-termin')];
     const breite = balken.clientWidth;
@@ -5895,11 +5911,23 @@ function planTermineBeschriften() {
       const nachLinks = platzL > platzR;
       const platz = nachLinks ? platzL : platzR;
       posten.push({ m, label, anteil, anteil2, barA, barB, nachLinks, natur,
+                    platzL, platzR,
                     w: Math.min(natur, Math.max(platz, 0)),
                     // Genug Platz? Gemessen am Titel, nicht an einer festen
                     // Zahl: ein kurzer Titel braucht kein 32 px breites Fenster.
                     passt: platz >= Math.min(natur, 32) });
     });
+
+    /* Der letzte Termin des Tages — der mit dem spaetesten Ende. Wurde die
+       Achse fuer ihn verlaengert, gehoert sein Titel nach RECHTS: dafuer ist
+       der Platz ja entstanden. Ohne diese Zeile klappte er weiter nach links
+       und der gewonnene Raum blieb leer. */
+    const letzter = posten.reduce((a, b) => (!a || b.barB > a.barB) ? b : a, null);
+    if (letzter && planZusatzTag === stundenplanGewaehlt() && planZusatzMinuten > 0) {
+      letzter.nachLinks = false;
+      letzter.w = Math.min(letzter.natur, Math.max(letzter.platzR, 0));
+      letzter.passt = letzter.platzR >= Math.min(letzter.natur, 32);
+    }
 
     /* ── Reihe und Etikettbreite vergeben ────────────────────────────────
        Zwei Enden je Reihe: `endeBalken` zaehlt nur die BALKEN, `ende` auch die
@@ -5991,10 +6019,33 @@ function planTermineBeschriften() {
         pos.m.style.left = (pos.anteil * 100) + '%';
       }
     });
+    /* Reicht der Platz rechts vom LETZTEN Termin nicht fuer seinen Titel, wird
+       die Achse spaeter verlaengert — aber nur, wenn dort wirklich nichts mehr
+       steht, weder ein weiterer Termin noch eine Schulstunde. */
+    if (letzter && letzter.natur > 0
+        && (!letzter.mitTitel || letzter.natur > letzter.w + 1)) {
+      const rechts = breite - letzter.barB;
+      if (planWegRechts(stunden, letzter.barB, breite) >= rechts - 0.5) {
+        const fehlt = letzter.natur + 8 - rechts;
+        if (fehlt > 0) fehltAnteil = Math.max(fehltAnteil, fehlt / breite);
+      }
+    }
+
     if (posten.some(p => p.r === 1)) {
       posten.forEach(p => p.m.classList.add(p.r === 1 ? 'unten' : 'oben'));
     }
   });
+
+  if (fehltAnteil <= 0) return;
+  const gewaehlt = stundenplanGewaehlt();
+  if (planZusatzTag !== gewaehlt) { planZusatzTag = gewaehlt; planZusatzMinuten = 0; planZusatzRunden = 0; }
+  if (planZusatzRunden >= PLAN_ZUSATZ_RUNDEN) return;
+  const sp = planTagesSpanne(gewaehlt);
+  const dazu = Math.ceil(fehltAnteil * Math.max(sp[1] - sp[0], 60));
+  if (dazu <= 0) return;
+  planZusatzMinuten += dazu;
+  planZusatzRunden += 1;
+  renderDashboard();   // mit der laengeren Achse; der Titel steht dann rechts
 }
 
 function stundenplanStrichHtml(istHeute, von, spanne) {

@@ -699,6 +699,21 @@
    * Massstab, sonst laegen dieselben Uhrzeiten in zwei Zeilen an
    * verschiedenen Stellen und der Vergleich waere hin.
    */
+  /* Zusatzminuten am rechten Ende der Achse: Platz fuer den Titel des LETZTEN
+     Termins. Steht rechts von ihm kein weiterer Termin und keine Stunde, wird
+     die Achse so weit verlaengert, dass der Titel vollstaendig daneben passt —
+     statt ihn zu kuerzen oder nach links zu klappen. Gemessen statt geraten:
+     wie breit ein Titel wirklich ist, weiss erst der gezeichnete Text.
+
+     Gilt immer nur fuer EINEN Tag; wer weiterblaettert, faengt bei null an.
+     Die Rundenzaehlung ist die Bremse: jede Verlaengerung zieht ein neues
+     Zeichnen nach sich, und ohne Deckel koennte sich das aufschaukeln. In der
+     Praxis reicht eine Runde, drei sind grosszuegig. */
+  let zusatzMinuten = 0;
+  let zusatzTag = null;
+  let zusatzRunden = 0;
+  const ZUSATZ_RUNDEN = 3;
+
   /* Die Achse des GEWAEHLTEN Tages, nicht die der Woche.
      zustand.span umspannt die ganze Woche: ein Abendessen am Donnerstag zog
      sie bis 22:15, und am Freitag — Schule bis 10:35, ein Termin bis 15:45 —
@@ -727,6 +742,7 @@
     // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
     // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
     if (!isFinite(von) || bis <= von) { return [zustand.span[0], zustand.span[1]]; }
+    if (zusatzTag === gewaehlt) { bis += zusatzMinuten; }
     return [Math.max(0, von), Math.min(1440, bis)];
   }
 
@@ -834,6 +850,9 @@
   }
 
   function termineBeschriften() {
+    // Groesster Fehlbetrag ueber alle Zeilen, als ANTEIL der Balkenbreite —
+    // in Minuten umgerechnet wird erst zum Schluss, wenn die Spanne feststeht.
+    let fehltAnteil = 0;
     document.querySelectorAll('.balken').forEach(function (balken) {
       const alle = Array.prototype.slice.call(balken.querySelectorAll('.termin'));
       const breite = balken.clientWidth;
@@ -882,12 +901,27 @@
         posten.push({
           m: m, label: label, anteil: anteil, anteil2: anteil2,
           barA: barA, barB: barB, nachLinks: nachLinks,
+          platzL: platzL, platzR: platzR,
           w: Math.min(natur, Math.max(platz, 0)), natur: natur,
           // Genug Platz? Gemessen am Titel, nicht an einer festen Zahl: ein
           // kurzer Titel braucht kein 32 px breites Fenster.
           passt: platz >= Math.min(natur, 32),
         });
       });
+
+      /* Der letzte Termin des Tages — der mit dem spaetesten Ende. Wurde die
+         Achse fuer ihn verlaengert, gehoert sein Titel nach RECHTS: dafuer ist
+         der Platz ja entstanden. Ohne diese Zeile klappte er weiter nach links
+         (dort ist seit der Verlaengerung immer noch mehr Raum) und der
+         gewonnene Platz blieb leer. */
+      const letzter = posten.reduce(function (a, b) {
+        return (!a || b.barB > a.barB) ? b : a;
+      }, null);
+      if (letzter && zusatzTag === tagWaehlen() && zusatzMinuten > 0) {
+        letzter.nachLinks = false;
+        letzter.w = Math.min(letzter.natur, Math.max(letzter.platzR, 0));
+        letzter.passt = letzter.platzR >= Math.min(letzter.natur, 32);
+      }
 
       /* ── Reihe und Etikettbreite vergeben ──────────────────────────────
          Zwei Enden je Reihe, und das ist der Kern: `endeBalken` zaehlt nur die
@@ -994,10 +1028,34 @@
       /* Versetzt wird erst jetzt und nur, wenn die zweite Reihe gebraucht
          wird — dann aber durchgehend. Ein mittig stehender Termin ragte sonst
          in die untere Zeile hinein. */
+      /* Reicht der Platz rechts vom LETZTEN Termin nicht fuer seinen Titel,
+         wird die Achse spaeter verlaengert. Nur wenn dort wirklich nichts mehr
+         steht — weder ein weiterer Termin noch eine Schulstunde. */
+      if (letzter && letzter.natur > 0
+          && (!letzter.mitTitel || letzter.natur > letzter.w + 1)) {
+        const rechts = breite - letzter.barB;
+        const frei = wegRechts(stunden, letzter.barB, breite);
+        if (frei >= rechts - 0.5) {                 // keine Stunde im Weg
+          const fehlt = letzter.natur + 8 - rechts;
+          if (fehlt > 0) { fehltAnteil = Math.max(fehltAnteil, fehlt / breite); }
+        }
+      }
+
       if (posten.some(function (p) { return p.r === 1; })) {
         posten.forEach(function (p) { p.m.classList.add(p.r === 1 ? 'unten' : 'oben'); });
       }
     });
+
+    if (fehltAnteil <= 0) { return; }
+    const gewaehlt = tagWaehlen();
+    if (zusatzTag !== gewaehlt) { zusatzTag = gewaehlt; zusatzMinuten = 0; zusatzRunden = 0; }
+    if (zusatzRunden >= ZUSATZ_RUNDEN) { return; }
+    const sp = tagesSpanne(gewaehlt);
+    const dazu = Math.ceil(fehltAnteil * Math.max(sp[1] - sp[0], 60));
+    if (dazu <= 0) { return; }
+    zusatzMinuten += dazu;
+    zusatzRunden += 1;
+    zeichne();   // mit der laengeren Achse; der Titel steht dann rechts
   }
 
   function jetztStrichHtml(istHeute, von, spanne) {
