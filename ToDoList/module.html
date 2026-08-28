@@ -638,6 +638,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   border-radius: 999px 0 0 999px;
   background: linear-gradient(90deg, var(--accent, #0a84ff), transparent);
 }
+/* Ueberschneidet ein Termin einen frueheren, wird SEIN Balken halb durchsichtig
+   und etwas dunkler — sonst sehen die beiden in den versetzten Reihen wie ein
+   einziger langer Balken aus. Dunkler zuerst: die halbe Deckkraft hellt ihn
+   ohnehin wieder auf. */
+.plan-termin.ueberlappt .plan-termin-bar { filter: brightness(.72); opacity: .5; }
 /* Ohne Grund und ohne Saum — Zwilling der Kachel. */
 .plan-termin-titel {
   font-size: 9px; line-height: 1; color: var(--text, #1c1c1e);
@@ -5920,7 +5925,7 @@ function planTermineBeschriften() {
       const lauf  = m.querySelector('.plan-termin-lauf');
       const bar   = m.querySelector('.plan-termin-bar');
       if (!label || !lauf || !bar) return;
-      m.classList.remove('flip', 'oben', 'unten');
+      m.classList.remove('flip', 'oben', 'unten', 'ueberlappt');
       // Vor dem Messen zuruecksetzen: ein noch laufender Titel behielte sonst
       // seine alte Weglaenge, wenn die Karte schmaler geworden ist.
       label.classList.remove('laeuft');
@@ -5991,6 +5996,10 @@ function planTermineBeschriften() {
       if (r === -1) {
         r = reihen[0].endeBalken <= reihen[1].endeBalken ? 0 : 1;
         pos.mitTitel = false;
+        /* Erst JETZT liegt wirklich Balken auf Balken — es gibt keine Reihe
+           mehr, in die dieser Termin ausweichen koennte. Nur dann wird er
+           gekennzeichnet. */
+        pos.ueberlappt = pos.barA < reihen[r].endeBalken - 0.5;
       }
 
       /* Steht in der gewaehlten Reihe noch ein Etikett im Weg, muss es weichen
@@ -6013,6 +6022,7 @@ function planTermineBeschriften() {
     });
 
     posten.forEach(pos => {
+      if (pos.ueberlappt) pos.m.classList.add('ueberlappt');
       if (pos.mitTitel) {
         pos.label.style.maxWidth = pos.w + 'px';
         /* Passt der Titel nicht, laeuft er hin und her statt abgeschnitten zu

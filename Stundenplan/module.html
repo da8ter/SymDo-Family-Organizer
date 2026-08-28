@@ -306,6 +306,14 @@
     border-radius: 999px 0 0 999px;
     background: linear-gradient(90deg, var(--accent), transparent);
   }
+  /* Ueberschneidet ein Termin einen frueheren, wird SEIN Balken halb
+     durchsichtig und etwas dunkler. Die beiden stehen zwar in versetzten
+     Reihen, beruehren sich dort aber — ohne Unterschied sah das aus wie ein
+     einziger langer Balken.
+     Dunkler ZUERST: die halbe Deckkraft hellt ihn ueber dem hellen Grund
+     ohnehin wieder auf, ohne brightness bliebe er blasser als das Original
+     statt kraeftiger. */
+  .termin.ueberlappt .termin-bar { filter: brightness(.72); opacity: .5; }
   /* Ohne Grund und ohne Saum (Wunsch vom 27.08.2026): der Titel steht blank
      im Balken. Er liegt damit moeglicherweise ueber einem farbigen Fach —
      in der Praxis selten, weil Termine nach dem Unterricht liegen und dort
@@ -848,7 +856,7 @@
         const lauf  = m.querySelector('.termin-lauf');
         const bar   = m.querySelector('.termin-bar');
         if (!label || !lauf || !bar) { return; }
-        m.classList.remove('flip', 'oben', 'unten');
+        m.classList.remove('flip', 'oben', 'unten', 'ueberlappt');
         // Vor dem Messen zuruecksetzen: ein noch laufender Titel wuerde sonst
         // seine alte Weglaenge behalten, wenn die Kachel schmaler geworden ist.
         label.classList.remove('laeuft');
@@ -929,6 +937,11 @@
         if (r === -1) {
           r = reihen[0].endeBalken <= reihen[1].endeBalken ? 0 : 1;
           pos.mitTitel = false;
+          /* Erst JETZT liegt wirklich Balken auf Balken — es gibt keine Reihe
+             mehr, in die dieser Termin ausweichen koennte. Nur dann wird er
+             gekennzeichnet: solange das Versetzen reicht, sind die beiden
+             ohnehin getrennt zu sehen. */
+          pos.ueberlappt = pos.barA < reihen[r].endeBalken - 0.5;
         }
 
         /* Steht in der gewaehlten Reihe noch ein Etikett im Weg, muss es
@@ -951,6 +964,7 @@
       });
 
       posten.forEach(function (pos) {
+        if (pos.ueberlappt) { pos.m.classList.add('ueberlappt'); }
         if (pos.mitTitel) {
           pos.label.style.maxWidth = pos.w + 'px';
           /* Passt der Titel nicht, laeuft er hin und her statt abgeschnitten
