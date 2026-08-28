@@ -672,16 +672,15 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    transform: ein absolut positioniertes Element bei `left: 94%` bekommt nur
    die restlichen 6 % als Hoechstbreite. */
 .plan-termin.flip { flex-direction: row-reverse; }
+/* Ohne Ring (Wunsch vom 28.08.2026) — Zwilling der Kachel. */
 .plan-jetzt {
   position: absolute; top: -4px; height: 38px; width: 2px; z-index: 3;
   background: var(--accent); border-radius: 1px; pointer-events: none;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
   transform: translateX(-1px);
 }
 .plan-jetzt::before {
   content: ''; position: absolute; left: -3px; top: -3px;
   width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 75%, transparent);
 }
 /* Ferienbalken: derselbe Balken, nur ganz grau und mit dem Hinweis in der
    Mitte statt der Faecher. Kein Tickraster darunter — es gliederte eine Zeit,
@@ -698,6 +697,10 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-bahn {
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  /* Platz fuer den Kopf des Jetzt-Strichs: die Bahn rollt waagerecht, und
+     sobald eine Achse nicht `visible` ist, schneidet auch die andere ab. Der
+     Kreis ragt 7 px ueber den Balken hinaus und wurde oben gekappt. */
+  padding-top: 8px; margin-top: -8px;
 }
 .plan-bahn::-webkit-scrollbar { display: none; }
 .plan-ticks { position: relative; height: 7px; margin-top: 3px; }

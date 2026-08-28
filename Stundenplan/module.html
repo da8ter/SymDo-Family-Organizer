@@ -279,6 +279,12 @@
   .scrollbahn {
     overflow-x: auto; overflow-y: hidden;
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    /* Platz fuer den Kopf des Jetzt-Strichs. Die Bahn muss waagerecht rollen,
+       und sobald eine Achse nicht mehr `visible` ist, schneidet auch die
+       andere ab — der Kreis ragt 7 px ueber den Balken hinaus (Strich bei
+       top:-4, Kreis 3 px darueber) und wurde oben gekappt. Das Polster schiebt die Schnittkante nach oben, der negative
+       Aussenabstand haelt die Bahn dort, wo sie vorher lag. */
+    padding-top: 8px; margin-top: -8px;
   }
   .scrollbahn::-webkit-scrollbar { display: none; }
   .ticks { position: relative; height: 8px; margin-top: 3px; }
@@ -354,16 +360,16 @@
      des Balkens — transform verschiebt es zwar, gibt ihm aber keine Breite.
      Genau daran wurde „Abendessen" zu „Abendess…". */
   .termin.flip { flex-direction: row-reverse; }
+  /* Ohne Ring (Wunsch vom 28.08.2026). Er hob den Strich von einem farbigen
+     Fach ab; auf Wunsch steht die Akzentfarbe jetzt fuer sich allein. */
   .jetztstrich {
     position: absolute; top: -4px; height: 41px; width: 2px; z-index: 3;
     background: var(--accent); border-radius: 1px; pointer-events: none;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
     transform: translateX(-1px);
   }
   .jetztstrich::before {
     content: ''; position: absolute; left: -3px; top: -3px;
     width: 8px; height: 8px; border-radius: 999px; background: var(--accent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--card-color) 75%, transparent);
   }
   /* Uhrzeiten unter der Achse. Die Stundenzeiten (fest) etwas kraeftiger als
      die Terminzeiten — sie umreissen den Schultag, die Termine haengen daran. */
