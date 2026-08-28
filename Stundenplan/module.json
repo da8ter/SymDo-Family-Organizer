@@ -3,7 +3,7 @@
     "name": "SymDo Stundenplan",
     "type": 3,
     "vendor": "",
-    "aliases": ["Stundenplan", "Timetable", "Schule"],
+    "aliases": ["SymDo Timetable"],
     "parentRequirements": [],
     "childRequirements": [],
     "implemented": [],
