@@ -6248,11 +6248,14 @@ function stundenplanLegendeHtml() {
      Geste zu erklaeren, die man ohnehin probiert — und nahm der Karte eine
      Zeile. Ein Tipp auf die Karte oeffnet die Legende weiterhin. */
   const mehrere = ((stundenplan && stundenplan.children) || []).length > 1;
-  // KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
-  // Doppelstunde. Statt dessen der Name, wenn nur ein Kind das Fach hat.
+  /* KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
+     Doppelstunde. Statt dessen, WESSEN Fach es ist — auch wenn es alle haben,
+     mehrere durch Schraegstrich getrennt („Mia / Tim"). Stand der Name nur bei
+     einem einzelnen Kind, musste man raten, ob ein fehlender Name „beide"
+     heisst oder bloss vergessen wurde. */
   const eintraege = faecher.map(f => {
-    const nur = (mehrere && f.wer.length === 1)
-      ? ` <span class="wessen">${escapeHtml(f.wer[0])}</span>` : '';
+    const nur = mehrere
+      ? ` <span class="wessen">${escapeHtml(f.wer.join(' / '))}</span>` : '';
     return `<span class="plan-fach"><span class="tupfen" style="background:${escapeHtml(f.color)}">` +
       (f.icon ? `<i class="fa-light ${escapeHtml(f.icon)}"></i>` : '') + `</span>` +
       `${escapeHtml(f.name)}${nur}</span>`;

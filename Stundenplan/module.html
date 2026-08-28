@@ -77,6 +77,17 @@
     overscroll-behavior: contain;
     padding: 12px var(--sb-pad) 12px 0;
   }
+  /* Im Wochenraster rollt das Raster selbst, und sein Balken soll dort liegen,
+     wo er in der Timeline liegt: mittig im marginside-Streifen. Dafuer muss
+     dieser Bereich zweierlei hergeben — seinen rechten Innenabstand UND den
+     Streifen, den er sich fuer den eigenen Balken reserviert. Zusammen sind das
+     genau die 11 px, um die der Balken des Rasters zu weit innen lag (bei
+     16 px marginside gemessen: 16 statt 5 px von der Kante).
+     Ohne `overflow-y: hidden` blieben die 6 px reserviert; ein negativer
+     Aussenabstand am Raster haette statt dessen eine waagerechte Rolle in
+     diesem Bereich ausgeloest. */
+  #inhalt.istWoche { overflow-y: hidden; padding-right: 0; }
+
   .scrollbereich::-webkit-scrollbar,
   .spalten::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbereich::-webkit-scrollbar-track,
@@ -143,15 +154,23 @@
   }
   .tagname span.an { visibility: visible; }
   .tagname span.ist-heute { color: var(--accent); }
+  /* Eine Zeile: Gesichter, daneben das Ferienband ueber den Rest der Breite. */
+  .kinderzeile { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .ferien {
     display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; margin-bottom: 10px; border-radius: 12px;
+    padding: 8px 12px; border-radius: 12px;
     background: color-mix(in srgb, var(--accent) 16%, transparent);
     font-size: 13px; font-weight: 600;
+    /* Nimmt, was die Gesichter uebrig lassen. min-width: 0 ist Pflicht — ohne
+       das waechst ein Flex-Kind bis zu seinem Inhalt und schoebe die Gesichter
+       aus der Kachel, statt selbst zu kuerzen. */
+    flex: 1 1 auto; min-width: 0;
   }
+  .ferien span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ferien > *:first-child { flex: none; }
 
   /* Kinder-Auswahl: nur bei mehr als einem Kind. */
-  .kinder { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .kinder { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip {
     border: 1px solid var(--line); background: transparent; color: var(--text);
     border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
@@ -1209,17 +1228,10 @@
       ziel.innerHTML = '<div class="leer">Noch kein Stundenplan — im Backend Kinder und Stunden anlegen.</div>';
       return;
     }
-    let html = '';
-    /* Das Ferienband steht NUR ueber dem Wochenraster. In der Timeline sagt es
-       der Balken selbst: er wird grau und traegt den Hinweis in der Mitte. Ein
-       Band darueber waere dieselbe Auskunft ein zweites Mal — und es nahm dem
-       Plan eine Zeile. */
-    if (zustand.holiday && zustand.mode !== 'timeline') {
-      html += '<div class="ferien">' + symbol('fa-umbrella-beach')
-        + '<span>' + esc(zustand.holiday.name) + ' — bis '
-        + esc(datumKurz(zustand.holiday.until)) + '</span></div>';
-    }
-    html += zustand.mode === 'timeline' ? timeline() : woche();
+    /* Im Wochenraster scrollt das RASTER selbst, nicht dieser Bereich — die
+       Kennzeichnung steuert, wo der Balken sitzt (siehe #inhalt.istWoche). */
+    ziel.classList.toggle('istWoche', zustand.mode !== 'timeline');
+    let html = zustand.mode === 'timeline' ? timeline() : woche();
     ziel.innerHTML = html;
     symboleErsetzen();
     // Nach dem Einfuegen: erst jetzt hat der Balken eine Breite. Reihenfolge
@@ -1296,6 +1308,24 @@
     return t.length === 3 ? t[2] + '.' + t[1] + '.' : iso;
   }
 
+  /* Gesichter links, das Ferienband daneben. Es stand vorher als eigene Zeile
+     darueber und nahm dem Plan eine ganze Zeile Hoehe — neben den Gesichtern
+     ist der Platz ohnehin frei. Es nimmt die restliche Breite; gibt es nur ein
+     Kind (keine Gesichter), die ganze.
+
+     NUR ueber dem Wochenraster: in der Timeline sagt es der Balken selbst — er
+     wird grau und traegt den Hinweis in der Mitte. */
+  function kinderZeile() {
+    const gesichter = kinderLeiste();
+    const frei = zustand.holiday
+      ? '<div class="ferien">' + symbol('fa-umbrella-beach')
+        + '<span>' + esc(zustand.holiday.name) + ' — bis '
+        + esc(datumKurz(zustand.holiday.until)) + '</span></div>'
+      : '';
+    if (!gesichter && !frei) { return ''; }
+    return '<div class="kinderzeile">' + gesichter + frei + '</div>';
+  }
+
   function kinderLeiste() {
     if (zustand.children.length < 2) { return ''; }
     return '<div class="kinder">' + zustand.children.map(function (k, i) {
@@ -1313,7 +1343,20 @@
   /* ── Wochenraster ─────────────────────────────────────────────────────── */
   function woche() {
     const kind = zustand.children[kindNr];
-    const von = zustand.span[0], bis = zustand.span[1];
+    /* Die Skala reicht nur so weit wie der laengste Unterrichtstag DIESES
+       Kindes. zustand.span umspannt die ganze Woche einschliesslich der
+       Termine — seit die Timeline Termin-Marker zeigt, zog ein Abendessen um
+       21:00 das Raster bis 22:15 auf. Der Nachmittag stand dann leer im Bild
+       und drueckte die Stunden zusammen; Termine zeigt das Raster ohnehin
+       nicht. */
+    let von = Infinity, bis = -Infinity;
+    (kind.days || []).forEach(function (tag) {
+      (tag.slots || []).forEach(function (s) {
+        von = Math.min(von, s.from);
+        bis = Math.max(bis, s.to);
+      });
+    });
+    if (!isFinite(von) || bis <= von) { von = zustand.span[0]; bis = zustand.span[1]; }
     const proViertel = 18;
     const hoehe = Math.max(Math.ceil((bis - von) / 15), 1) * proViertel;
 
@@ -1321,7 +1364,7 @@
        nicht selbst zeigt, und „Als nächstes …" stand doppelt da: die laufende
        oder naechste Stunde ist im Raster ohnehin mit hellem Rand markiert.
        Beides nahm nur Hoehe weg, die dem Plan fehlte. */
-    let html = kinderLeiste();
+    let html = kinderZeile();
 
     // Zeitachse: volle Stunden mit Beschriftung, dazu die tatsaechliche
     // Anfangszeit — krumme Startzeiten wie 07:45 sieht man sonst nirgends.
@@ -1479,11 +1522,14 @@
     const eintraege = faecher.map(function (f) {
       /* KEINE Dauer. Sie stand hier zuerst, war aber die Summe ueber alle
          Kinder: „Deutsch 90 min", obwohl beide je 45 Minuten haben — eine Zahl,
-         die man zwangslaeufig falsch liest. Statt dessen der Name des Kindes,
-         wenn das Fach nur bei einem vorkommt; das beantwortet die Frage, die
-         der Balken offen laesst. */
-      const nur = (mehrereKinder && f.wer.length === 1)
-        ? ' <span class="wessen">' + esc(f.wer[0]) + '</span>' : '';
+         die man zwangslaeufig falsch liest. Statt dessen, WESSEN Fach es ist.
+
+         Auch wenn es alle haben: bis hierher stand der Name nur bei einem Fach,
+         das genau einem Kind gehoert. Fehlte er, musste man raten, ob das Fach
+         beiden gehoert oder ob der Name bloss vergessen wurde. Jetzt steht er
+         immer, mehrere durch Schraegstrich getrennt („Mia / Tim"). */
+      const nur = mehrereKinder
+        ? ' <span class="wessen">' + esc(f.wer.join(' / ')) + '</span>' : '';
       return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + '">'
         + symbol(f.icon) + '</span>' + esc(f.name) + nur + '</span>';
     }).join('');
