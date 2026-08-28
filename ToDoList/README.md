@@ -14,7 +14,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 - Zählerwerte (offen/überfällig/heute fällig) als Variablen für eigene Automationen; alle Funktionen per PHP-Skript nutzbar
 - Zusätzliche HTML-Ausgabe für IPSView
 
-![ToDo List](https://github.com/da8ter/images/blob/main/todo.png)
+![ToDo List](https://raw.githubusercontent.com/da8ter/images/main/todo.png)
 
 ## Inhalt
 
