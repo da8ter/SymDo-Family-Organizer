@@ -11095,12 +11095,19 @@ function noteLoeschen() {
 // ── KI in der Notiz ────────────────────────────────────────────────────────
 
 /**
- * Datei anhaengen und, wenn die KI freigeschaltet ist, gleich auswerten.
+ * Datei aufnehmen — anhaengen, und NUR auf dem KI-Weg auch auswerten.
  *
  * Zwei unabhaengige Schritte, absichtlich: Anhaengen war die Handlung des Nutzers,
  * die Analyse ist die Dreingabe. Scheitert sie, ist die Datei trotzdem dran.
+ *
+ * Welcher der beiden Wege gemeint war, entscheidet `analysieren`. Frueher lief
+ * immer beides — wer an eine vorhandene Notiz nur eine Datei haengen wollte,
+ * schickte sie damit ungefragt an ein Sprachmodell und bekam Titel- und
+ * Textvorschlaege zu einer Notiz, die laengst geschrieben war. Der Anhang-Knopf
+ * verspricht „Foto aufnehmen" bzw. „Datei waehlen", nicht „analysieren"; jetzt
+ * haelt er sich daran.
  */
-function noteDateiAufnehmen(nutzlast, name) {
+function noteDateiAufnehmen(nutzlast, name, analysieren) {
   if (!noteCtx) return;
   const merkeAnhang = () => {
     // Noch nicht gespeichert: die Datei wartet auf den noteCreate. Sonst haetten der
@@ -11115,6 +11122,10 @@ function noteDateiAufnehmen(nutzlast, name) {
       ladeNotizen();
     });
   };
+  if (!analysieren) {
+    noteHinweis('<div class="ai-spinner"></div>' + translate('Saving…'));
+    return merkeAnhang().then(noteHinweisAus, noteHinweisAus);
+  }
   noteHinweis('<div class="ai-spinner"></div>' + translate('Analyzing file …'));
   document.getElementById('btnNoteSave').disabled = true;
   aiPost('/notes', Object.assign({ action: 'analyse' }, nutzlast)).then(r => {
@@ -13023,9 +13034,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Dasselbe Quellen-Blatt traegt zwei Absichten: der KI-Knopf verspricht die
   // Analyse (Beschriftung wie bei den Aufgaben), der Anhang-Knopf nur das
-  // Anhaengen. Beide Wege laufen danach identisch — angehaengt UND (wenn die
-  // KI an ist) analysiert wird immer.
+  // Anhaengen. Die Absicht wird hier gemerkt und entscheidet spaeter, ob die
+  // Datei ausgewertet wird — die Beschriftung allein waere ein Versprechen
+  // gewesen, das der weitere Weg nicht gehalten hat.
+  let noteQuelleAnalyse = false;
   function noteQuelleBeschriften(analyse) {
+    noteQuelleAnalyse = !!analyse;
     document.getElementById('noteSourceTitle').textContent = translate(analyse ? 'Detect note' : 'Attach photo or file');
     document.getElementById('noteFromPhotoLabel').textContent = translate(analyse ? 'Analyze photo' : 'Take photo');
     document.getElementById('noteFromFileLabel').textContent = translate(analyse ? 'Analyze file' : 'Choose file');
@@ -13046,7 +13060,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = noteScanInput.files && noteScanInput.files[0];
     if (!file) return;
     aiDownscale(file, 1600, 0.8)
-      .then(d => noteDateiAufnehmen({ image: d }, file.name || ''))
+      .then(d => noteDateiAufnehmen({ image: d }, file.name || '', noteQuelleAnalyse))
       .catch(() => showToast(translate('Could not read the photo.')));
   });
   noteFileInput.addEventListener('change', () => {
@@ -13055,11 +13069,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const istPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
     if (istPdf) {
       aiReadFileB64(file)
-        .then(b64 => noteDateiAufnehmen({ pdf: b64 }, file.name || ''))
+        .then(b64 => noteDateiAufnehmen({ pdf: b64 }, file.name || '', noteQuelleAnalyse))
         .catch(() => showToast(translate('Could not read the file.')));
     } else {
       aiDownscale(file, 1600, 0.8)
-        .then(d => noteDateiAufnehmen({ image: d }, file.name || ''))
+        .then(d => noteDateiAufnehmen({ image: d }, file.name || '', noteQuelleAnalyse))
         .catch(() => showToast(translate('Could not read the photo.')));
     }
   });
