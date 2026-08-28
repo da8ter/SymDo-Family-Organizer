@@ -725,7 +725,27 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 
 /* Legende: im Balken steht nur ein Symbol, und auf einem Tablet gibt es keinen
    Mauszeiger, der den Titel verraet. */
-.plan-card { cursor: pointer; }
+/* Kein Zeigefinger mehr ueber der ganzen Karte: anklickbar ist der Knopf. */
+.plan-card { cursor: default; }
+
+/* Legende NUR ueber diesen Knopf. Vorher oeffnete ein Klick auf die ganze
+   Karte — das nahm der Maus das waagerechte Ziehen an der Zeitleiste weg:
+   jeder Zieh-Versuch endete als Klick und klappte die Legende auf.
+   Zwilling von .legendeauf in der Stundenplan-Kachel. */
+.plan-legendeauf {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: none; padding: 0; cursor: pointer;
+  margin-left: auto;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--text);
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+.plan-legendeauf:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+/* BEIDE Formen: /icons.js tauscht das <i> gegen ein <svg>. */
+.plan-legendeauf > * { width: 12px; height: 12px; }
+/* Der Umschalter schob sich bisher selbst nach rechts. Steht der Knopf davor,
+   uebernimmt DER den Abstand — sonst klebten beide aneinander am rechten Rand
+   und der Knopf saesse nicht mehr „neben" ihm. */
+.card-head .plan-legendeauf + .plan-tagwahl { margin-left: 8px; }
 
 
 /* Wochentag-Umschalter. Die Breite kommt aus dem laengsten Namen selbst: alle
@@ -6458,8 +6478,15 @@ function stundenplanKarte() {
   /* KEIN Hinweis mehr neben der Ueberschrift: der graue Balken traegt ihn, und
      zweimal dasselbe zu sagen kostet nur Platz. Ausserdem galt er fuer heute
      und blieb beim Blaettern stehen. */
+  /* Der Knopf fuer die Faecher-Legende steht links neben dem Umschalter — nur
+     wenn es ueberhaupt Faecher zu erklaeren gibt. */
+  const legendeKnopf = stundenplanFaecher().length
+    ? `<button class="plan-legendeauf" data-plan="auf" ` +
+      `aria-label="${escapeHtml(translate('Show subjects'))}">` +
+      `<i class="fa-light fa-list"></i></button>`
+    : '';
   return `<div class="card plan-card" data-plan="karte"><div class="card-head">` +
-    `<h3>${translate('Timetable')}</h3>${stundenplanTagwahl()}</div>${zeilen}` +
+    `<h3>${translate('Timetable')}</h3>${legendeKnopf}${stundenplanTagwahl()}</div>${zeilen}` +
     stundenplanLegendeHtml() + `</div>`;
 }
 
@@ -7234,9 +7261,10 @@ function renderDashboard() {
     briefingOffen = !briefingOffen;
     renderDashboard();
   }));
-  // Klick auf die Stundenplan-Karte klappt die Faecher-Legende auf und zu; das
-  // ✕ schliesst gezielt. Gebunden auf die KARTE, damit auch ein Klick neben den
-  // Balken wirkt — die Karte hat sonst nichts Anklickbares.
+  /* Die Legende geht ueber IHREN Knopf auf und ueber das Blatt wieder zu.
+     Vorher oeffnete jeder Klick auf die Karte sie — dadurch liess sich die
+     Zeitleiste mit der Maus nicht waagerecht ziehen: jeder Zieh-Versuch endete
+     als Klick. Gebunden bleibt es an der Karte, weil das Blatt darin liegt. */
   el.querySelectorAll('[data-plan="karte"]').forEach(k => k.addEventListener('click', (e) => {
     e.stopPropagation();
     // Die Pfeile blaettern und lassen die Legende, wie sie ist — sonst klappte
@@ -7252,7 +7280,10 @@ function renderDashboard() {
        die schuetzte aber nichts: die Chips sind Beschriftungen, nicht bedienbar.
        Sie zwang den Nutzer statt dessen aufs ✕ oder auf den schmalen Streifen
        daneben. */
-    stundenplanLegende = e.target.closest('[data-plan="zu"]') ? false : !stundenplanLegende;
+    const zu  = e.target.closest('[data-plan="zu"]');
+    const auf = e.target.closest('[data-plan="auf"]');
+    if (!zu && !auf) { return; }        // sonst: Finger weg, die Bahn rollt
+    stundenplanLegende = !zu;
     renderDashboard();
   }));
   briefingKlappHinweis(el);
