@@ -4,33 +4,18 @@
 <meta charset="utf-8">
 <style>
   html, body {
-    margin: 0; padding: 0; width: 100%;
+    margin: 0; padding: 0; width: 100%; height: 100%;
     background: transparent; overflow: hidden;
     font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none;
   }
-  html { height: 100%; }
-  /* Der Rumpf ist der Bezug fuer die Hoehe — NICHT das Sichtfeld.
-     Die Visualisierung setzt hier ein Polster (Ueberschrift der Kachel und
-     Raender), und zwar als Inline-Stil, der eine Regel von hier schlaegt.
-     `min-height: 100dvh` zusammen mit `box-sizing: border-box` macht den
-     Aussenrand des Rumpfes so hoch wie die Kachel; sein INHALTSbereich ist
-     damit die Kachel minus dieses Polster — genau die Flaeche, in der
-     zentriert werden soll.
-
-     Vorher stand hier `height: 100%`. Das misst am Elternelement, und wo
-     zwischen Rumpf und Huelle noch ein Behaelter ohne feste Hoehe steckt,
-     faellt es auf die Inhaltshoehe zusammen: der Streifen klebte unter der
-     Ueberschrift, darunter blieb die Flaeche leer. */
-  body {
-    box-sizing: border-box;
-    min-height: 100dvh;
-    display: flex;
-  }
-  @supports not (height: 100dvh) { body { min-height: 100vh; } }
-  /* Nimmt den Inhaltsbereich des Rumpfes und stellt den Streifen mittig hinein. */
+  /* Volle Hoehe des Kachelbereichs, der Streifen steht mittig darin. Gemessen
+     am 28.08.2026: der Bereich ist 170 px hoch, der Rumpf hat kein Polster,
+     der Streifen ist 76 px — es bleibt also oben wie unten gleich viel Luft.
+     Was in der Visualisierung darunter noch frei aussieht, gehoert der Kachel
+     selbst und liegt ausserhalb dieses Bereichs. */
   #wrap {
-    flex: 1; min-width: 0;
+    width: 100%; height: 100%;
     display: flex; align-items: center;
     box-sizing: border-box;
   }
