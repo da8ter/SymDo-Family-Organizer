@@ -27,7 +27,8 @@ Objekt.
 - **Lange Namen laufen** — passt ein Artikelname nicht unter sein Bild, wandert er langsam hin und her, statt abgeschnitten dazustehen. Wer passt, bleibt in Ruhe. Ist im System die Bewegungsreduzierung eingeschaltet, wird stattdessen mit Auslassungspunkten gekürzt
 - **Größe einstellbar** — Bildhöhe und Schriftgröße frei wählbar
 - **Waagerecht scrollbar** — ohne sichtbare Bildlaufleiste, auf dem Touchgerät mit Schwung
-- **Klick öffnet ein Objekt** — beim Tippen wird über `openObject()` ein frei wählbares Objekt oder eine Kategorie geöffnet; ohne Ziel bleibt die Kachel unklickbar
+- **Tippen hakt ab** — ein Tipp auf einen Artikel legt ihn in den Einkaufswagen; er verblasst sofort und verschwindet mit dem nächsten Zustand aus der Leiste. Die Kachel schaltet dabei nicht um, sondern setzt „im Wagen" ausdrücklich: sie zeigt ohnehin nur offene Artikel, und eine doppelt zugestellte Anfrage soll ihn nicht zurückholen
+- **Tippen daneben öffnet ein Objekt** — auf der freien Fläche wird über `openObject()` ein frei wählbares Objekt oder eine Kategorie geöffnet; ohne Ziel passiert dort nichts
 - **Live-Aktualisierung** — jede Änderung an der Einkaufsliste zieht ohne Neuladen nach
 - **Leere Liste sagt es** — steht nichts mehr an, erscheint „Liste ist leer" statt einer leeren Fläche
 
@@ -50,7 +51,7 @@ Objekt.
 | Einstellung | Eigenschaft | Bedeutung |
 |---|---|---|
 | Einkaufslisten-Instanz | `ShoppingListInstanceID` | Quelle der Artikel. Die Auswahl listet alle gefundenen Einkaufslisten mit Namen und ID |
-| Beim Antippen öffnen | `OpenObjectID` | Objekt oder Kategorie, die sich beim Klick öffnet. `0` = kein Ziel, die Kachel reagiert dann nicht auf Klicks |
+| Beim Antippen öffnen | `OpenObjectID` | Objekt oder Kategorie, die sich beim Tippen **neben** einen Artikel öffnet. `0` = kein Ziel; abgehakt wird trotzdem |
 | Bildhöhe | `ImageHeight` | Kantenlänge der runden Vorschaubilder in Pixeln (Minimum 24) |
 | Schriftgröße | `FontSize` | Schriftgröße der Artikelnamen in Pixeln (Minimum 7) |
 

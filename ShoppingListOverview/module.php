@@ -139,6 +139,33 @@ class SymDoShoppingListOverview extends IPSModuleStrict
         return json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Abhaken aus der Kachel. Die Kachel kennt die Einkaufsliste nicht selbst —
+     * sie schickt nur die Kennung des Artikels hierher, und hier geht sie an die
+     * eingestellte Liste weiter.
+     *
+     * `inCart` steht ausdruecklich auf `true` statt umzuschalten: die Kachel
+     * zeigt ausschliesslich OFFENE Artikel. Ein Umschalten haette bei einer
+     * doppelt zugestellten Anfrage den Artikel wieder in die Liste geholt.
+     */
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        if ($Ident !== 'Check') {
+            parent::RequestAction($Ident, $Value);
+            return;
+        }
+        $id = trim((string) $Value);
+        $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
+        if ($id === '' || $instanceID <= 0 || !IPS_InstanceExists($instanceID)) {
+            return;
+        }
+        try {
+            IPS_RequestAction($instanceID, 'ToggleCart', json_encode(['id' => $id, 'inCart' => true]));
+        } catch (\Throwable $e) {
+            $this->SendDebug('Check', $e->getMessage(), 0);
+        }
+    }
+
     public function GetVisualizationTile(): string
     {
         $path = __DIR__ . '/module.html';
@@ -211,6 +238,10 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             }
             $category = trim((string) ($item['category'] ?? ''));
             $items[$category === '' ? 'Sonstiges' : $category][] = [
+                // Die Kennung braucht die Kachel zum Abhaken; ohne sie koennte
+                // sie den Artikel nur ueber den Namen benennen, und der ist
+                // nicht eindeutig.
+                'id'       => (string) ($item['id'] ?? ''),
                 'name'     => (string) ($item['name'] ?? ''),
                 'amount'   => (string) ($item['amount'] ?? ''),
                 'imageUrl' => (string) ($item['imageUrl'] ?? ''),

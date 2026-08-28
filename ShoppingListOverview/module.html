@@ -27,7 +27,22 @@
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   #strip::-webkit-scrollbar { display: none; }
-  .item { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .item {
+    flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  /* Abgehakt: der Artikel verblasst und faellt in sich zusammen, bevor der
+     naechste Zustand ihn ohnehin entfernt. Ohne diese Rueckmeldung wirkte der
+     Tipp folgenlos — zwischen Tipp und neuem Zustand liegt der Weg ueber die
+     Einkaufsliste. */
+  .item.abgehakt {
+    opacity: 0; transform: scale(.8);
+    transition: opacity .22s ease, transform .22s ease;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item.abgehakt { transition: opacity .22s ease; transform: none; }
+  }
   .thumb {
     border-radius: 50%; overflow: hidden; flex: none;
     background: rgba(127,127,127,0.15);
@@ -206,7 +221,8 @@
            Stepper, das Abzeichen zeigt beides gleich an. Der Deckel haelt es
            innerhalb des Artikels, statt den Nachbarn zu beruehren. */
         const menge = String(item.amount || '').trim() || '1';
-        html += '<div class="item" style="width:' + nameWidth + 'px">'
+        html += '<div class="item" data-id="' + escapeHtml(String(item.id || ''))
+          + '" style="width:' + nameWidth + 'px">'
           + '<div class="thumbwrap">'
           + '<div class="thumb" style="width:' + size + 'px;height:' + size + 'px"' + (url ? '' : bg) + '>'
           + inner + '</div>'
@@ -253,7 +269,18 @@
       render();
     }
 
-    document.getElementById('wrap').addEventListener('click', () => {
+    document.getElementById('wrap').addEventListener('click', (e) => {
+      /* Ein Tipp auf einen Artikel hakt ihn ab; ein Tipp daneben oeffnet wie
+         bisher das eingestellte Objekt. Der Artikel gewinnt, sonst waere das
+         Abhaken auf einer Kachel mit Ziel gar nicht erreichbar. */
+      const artikel = e.target.closest('.item');
+      const artikelId = artikel && artikel.dataset.id;
+      if (artikelId) {
+        if (artikel.classList.contains('abgehakt')) { return; }   // schon unterwegs
+        artikel.classList.add('abgehakt');
+        if (typeof requestAction === 'function') { requestAction('Check', artikelId); }
+        return;
+      }
       const id = parseInt(state.openObjectId) || 0;
       if (id > 0 && typeof openObject === 'function') {
         openObject(id);
