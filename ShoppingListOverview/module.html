@@ -16,9 +16,11 @@
   }
   #wrap.clickable { cursor: pointer; }
   #strip {
-    /* 18 statt 10 px: die Artikel standen zu dicht, und seit das Mengen-
-       Abzeichen 4 px ueber den Kreis hinausragt, kam es dem Nachbarn nahe. */
-    display: flex; align-items: flex-start; gap: 18px;
+    /* 25 statt 10 px: die Artikel standen zu dicht, und seit das Mengen-
+       Abzeichen 4 px ueber den Kreis hinausragt, kam es dem Nachbarn nahe.
+       Bei Bildhoehe 48 ist die Artikelbreite genau der Kreis — der Wert ist
+       dort also unmittelbar der Abstand von Kreis zu Kreis. */
+    display: flex; align-items: flex-start; gap: 25px;
     overflow-x: auto; overflow-y: hidden;
     padding: 6px 12px;
     width: 100%; box-sizing: border-box;
