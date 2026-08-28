@@ -180,12 +180,17 @@ declare(strict_types=1);
  *  │ dueAllDay            │ bool    │ true = ganztägig (ohne Uhrzeit)       │
  *  │ priority             │ string  │ 'low' | 'normal' | 'high'             │
  *  │ quantity             │ int     │ Anzahl/Menge (0 = nicht gesetzt)      │
+ *  │ assignedTo           │ array   │ Mitglieds-IDs; leer = niemandem       │
  *  │ notification         │ bool    │ Benachrichtigung aktiv                │
  *  │ notificationLeadTime │ int     │ Vorlaufzeit in Sekunden               │
  *  │ recurrence           │ string  │ 'none','w1','w2','w3','m1','q1','y1', │
  *  │                      │         │ 'custom' (siehe "Task erstellen")     │
  *  │ createdAt/updatedAt  │ int     │ Unix-Timestamps (angelegt/geändert)   │
- *  │ doneAt               │ int     │ Zeitpunkt der Erledigung              │
+ *  │ doneAt               │ int     │ Zeitpunkt der Erledigung — steht NUR  │
+ *  │                      │         │ an Tasks, die über TDL_ToggleDone      │
+ *  │                      │         │ erledigt wurden. Sonst fehlt das Feld │
+ *  │                      │         │ ganz, also mit ($task['doneAt'] ?? 0)  │
+ *  │                      │         │ lesen                                 │
  *  └──────────────────────┴─────────┴───────────────────────────────────────┘
  *
  *  Hinweis: Die Liste enthält offene UND erledigte Tasks (sofern erledigte
@@ -332,6 +337,8 @@ declare(strict_types=1);
  *  │                      │ 00:00 normalisiert); wirkt nur mit due > 0       │
  *  │ priority             │ 'low' | 'normal' | 'high'   (Standard: normal)   │
  *  │ quantity             │ Anzahl/Menge als int (Einkaufslisten-Modus)      │
+ *  │ assignedTo           │ Array von Mitglieds-IDs (aus TGW_GetUsers),      │
+ *  │                      │ höchstens 16; leer = niemandem zugewiesen        │
  *  │ done                 │ true = direkt als erledigt anlegen               │
  *  │ notification         │ true = Benachrichtigung bei Fälligkeit           │
  *  │                      │ (erfordert due > 0)                              │
@@ -345,6 +352,13 @@ declare(strict_types=1);
  *  │ recurrenceCustomUnit │ nur bei 'custom': 'h','d','w','m','y'            │
  *  │                      │ (Stunden/Tage/Wochen/Monate/Jahre)               │
  *  │ recurrenceCustomValue│ nur bei 'custom': Intervall als int (z.B. 2)     │
+ *  │ recurrenceResetLead- │ nur bei Wiederholung: wie viele Sekunden vor dem  │
+ *  │ Time                 │ nächsten Termin ein erledigter Serientask wieder  │
+ *  │                      │ geöffnet wird. 0 = gar nicht, Standard 604800     │
+ *  │                      │ (7 Tage). Erlaubt: 0, 1800, 3600, 21600, 43200,  │
+ *  │                      │ 86400, 172800, 259200, 604800, 1209600, 2592000  │
+ *  │                      │ — größere Werte als das Wiederholungsintervall    │
+ *  │                      │ werden darauf gekürzt                            │
  *  └──────────────────────┴──────────────────────────────────────────────────┘
  *
  *  Hinweise:
@@ -422,8 +436,9 @@ declare(strict_types=1);
  *  also nie den kompletten Task, sondern nur die gewünschten Änderungen.
  *
  *  Erlaubte Felder: title, info, due, dueAllDay, priority, quantity, done,
- *  notification, notificationLeadTime, recurrence, recurrenceCustomUnit,
- *  recurrenceCustomValue  (Bedeutung und Wertebereiche: siehe "Task erstellen").
+ *  assignedTo, notification, notificationLeadTime, recurrence,
+ *  recurrenceCustomUnit, recurrenceCustomValue, recurrenceResetLeadTime
+ *  (Bedeutung und Wertebereiche: siehe "Task erstellen").
  *
  *  Verhalten, das man kennen sollte:
  *  - Existiert die ID nicht, passiert schlicht nichts (kein Fehler).
