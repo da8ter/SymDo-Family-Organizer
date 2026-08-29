@@ -1,7 +1,7 @@
 {
   "translations": {
     "de": {
-      "SymDo - ToDo Overview": "SymDo - ToDo Übersicht",
+      "SymDo ToDo Overview": "SymDo - ToDo Übersicht",
       "ToDo Overview": "ToDo Übersicht",
       "ToDo List instance": "ToDo Liste Instanz",
       "Open object/category on click": "Objekt/Kategorie bei Klick öffnen",
@@ -26,6 +26,7 @@
       "Say thanks and support the developer of this module:": "Sag Danke und unterstütze den Entwickler dieses Moduls:"
     },
     "en": {
+      "SymDo ToDo Overview": "SymDo - ToDo Overview",
       "ToDo Overview": "ToDo Overview",
       "ToDo List instance": "ToDo List instance",
       "Open object/category on click": "Open object/category on click",

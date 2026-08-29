@@ -1,9 +1,12 @@
 {
     "translations": {
+        "en": {
+            "SymDo Shopping List Overview": "SymDo - Shopping List Overview"
+        },
         "de": {
             "Shopping List Overview": "Einkaufslisten Übersicht",
             "Shopping list instance": "Einkaufslisten-Instanz",
-            "SymDo - Shopping List Overview": "SymDo - Einkaufslisten Übersicht",
+            "SymDo Shopping List Overview": "SymDo - Einkaufslisten Übersicht",
             "Open on tap": "Beim Antippen öffnen",
             "Image height": "Bildhöhe",
             "Font size": "Schriftgröße",

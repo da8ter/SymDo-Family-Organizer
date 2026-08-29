@@ -1,7 +1,10 @@
 {
     "translations": {
+        "en": {
+            "SymDo Timetable": "SymDo - Timetable"
+        },
         "de": {
-            "SymDo - Timetable": "SymDo - Stundenplan",
+            "SymDo Timetable": "SymDo - Stundenplan",
             "Children": "Kinder",
             "Child": "Kind",
             "The children come from SymDo: every family member with the role \"child\" gets a row here, in that order, with their name and photo. Add, rename or remove them in the SymDo Gateway — this list follows. Saturday only shows in the plan when it is switched on here; \"every other week\" follows the parity of the ISO calendar week, exactly like a school notice (\"lessons in odd weeks\").": "Die Kinder kommen aus SymDo: Jedes Familienmitglied mit der Rolle „Kind\" bekommt hier eine Zeile, in dieser Reihenfolge, mit Name und Foto. Anlegen, umbenennen und entfernen geschieht im SymDo Gateway — diese Liste folgt. Der Samstag erscheint im Plan nur, wenn er hier eingeschaltet ist; „alle zwei Wochen\" richtet sich nach der Parität der ISO-Kalenderwoche, genau wie ein Schulaushang („Unterricht in ungeraden Wochen\").",

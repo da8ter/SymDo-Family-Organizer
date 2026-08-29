@@ -16,7 +16,7 @@ require_once __DIR__ . '/libs/HolidaySource.php';
  * als Datenquelle — dasselbe Verhaeltnis wie ToDoOverview zu ToDoList, aber
  * ohne zweites Modul.
  */
-class SymDoStundenplan extends IPSModuleStrict
+class SymDoTimetable extends IPSModuleStrict
 {
     use TimetableStore;
     use TimetableHolidays;
