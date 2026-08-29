@@ -13036,28 +13036,25 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(translate('Recording too short.'));
         return;
       }
-      // Waehrenddessen zeigt das Text-Blatt den Fortschritt — dort landet das
-      // Transkript auch, korrigierbar, bevor „Analysieren" es zerlegt.
-      aiTextInput.value = '';
-      aiTextInput.placeholder = translate('Transcribing…');
-      document.getElementById('btnAiTextRun').disabled = true;
-      openOverlay('aiTextOverlay');
+      // Direkt durchreichen (Nutzerentscheid 29.08.2026): transkribieren und
+      // sofort auswerten. Die Pruefansicht zeigt erst den Transkriptions-,
+      // dann nahtlos den Analyse-Schritt — korrigiert wird am VORSCHLAG in
+      // der Pruefansicht, nicht am Transkript.
+      aiStatus('<div class="ai-spinner"></div>' + translate('Transcribing…'));
+      openOverlay('aiReviewOverlay');
       const leser = new FileReader();
       leser.onload = () => {
         aiPost('/ai/transcribe', { audio: String(leser.result), mime: blob.type || 'audio/webm' }).then((r) => {
           const j = r && r.json;
-          aiTextInput.placeholder = translate('Paste text here — e.g. a message from WhatsApp.');
-          if (!j || j.ok !== true || !String(j.text || '').trim()) {
-            closeOverlay('aiTextOverlay');
+          const text = (j && j.ok === true) ? String(j.text || '').trim() : '';
+          if (!text) {
+            closeOverlay('aiReviewOverlay');
             showToast((j && (j.message || (j.error && j.error.message))) || translate('Action failed'));
             return;
           }
-          aiTextInput.value = String(j.text).trim();
-          document.getElementById('btnAiTextRun').disabled = false;
-          setTimeout(() => aiTextInput.focus(), 60);
+          runAiExtract({ text: text });
         }).catch(() => {
-          aiTextInput.placeholder = translate('Paste text here — e.g. a message from WhatsApp.');
-          closeOverlay('aiTextOverlay');
+          closeOverlay('aiReviewOverlay');
           showToast(translate('Action failed'));
         });
       };
