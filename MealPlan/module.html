@@ -1,0 +1,456 @@
+<style>
+/* Symcon injiziert --card-color, --content-color und --accent-color je nach
+   Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets. */
+:root {
+  --bg: var(--card-color, #2b2c30);
+  --text: var(--content-color, #ffffff);
+  --akzent: var(--accent-color, #00cdab);
+  --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
+  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+}
+html[data-symdo-theme="light"] {
+  --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
+}
+html {
+  height: 100%; margin: 0; padding: 0;
+  display: flex; flex-direction: column;
+}
+/* BEWUSST kein margin am body: die Tile-Visu setzt hier ihre Kachelränder. */
+body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  background: transparent;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+#wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box; padding: 4px 2px; }
+
+/* ── Kopf: Wochenumschalter + Wochen-Einkauf ────────────────────────────── */
+#kopf { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; }
+.pfeil {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rand);
+  background: var(--zeile); color: var(--text); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  user-select: none; -webkit-user-select: none;
+}
+.pfeil[disabled] { opacity: .35; }
+#wochentitel { flex: 1 1 auto; text-align: center; font-weight: 800; font-size: clamp(15px, 4.6vmin, 18px); }
+#wochenkorb {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--rand); border-radius: 999px; padding: 7px 12px;
+  background: var(--zeile); color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* ── Tage ───────────────────────────────────────────────────────────────── */
+#tage { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+.tag {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--zeile); border-radius: 14px; padding: 8px 10px;
+  min-height: 48px; box-sizing: border-box; cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.tag .kalender {
+  width: 44px; flex: 0 0 auto; text-align: center; border-radius: 10px; padding: 3px 0;
+}
+.tag.heute .kalender { background: var(--akzent); color: #fff; }
+.tag .kalender .wt { display: block; font-size: 11px; font-weight: 700; opacity: .8; }
+.tag .kalender .nr { display: block; font-size: 17px; font-weight: 800; line-height: 1.1; }
+.tag .bild {
+  width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto; overflow: hidden;
+  background: color-mix(in srgb, var(--akzent) 12%, var(--bg));
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.tag .bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tag .titel {
+  flex: 1 1 auto; min-width: 0; font-size: clamp(14px, 4.2vmin, 16px); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tag .titel.leer { color: var(--dezent); font-weight: 500; }
+.tag .korb {
+  width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; border: 1px solid var(--rand);
+  background: transparent; color: var(--text); font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.tag .korb.ok { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+#leerhinweis { color: var(--dezent); font-size: 13px; text-align: center; padding: 6px; }
+
+/* ── Gericht-Blatt ──────────────────────────────────────────────────────── */
+#schleier {
+  position: fixed; inset: 0; display: none; z-index: 20;
+  background: color-mix(in srgb, #000 45%, transparent);
+  align-items: flex-end; justify-content: center;
+}
+#schleier.an { display: flex; }
+#blatt {
+  background: var(--bg); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px;
+  max-height: 86%; overflow-y: auto; box-sizing: border-box; padding: 14px 14px 18px;
+  border: 1px solid var(--rand); border-bottom: none;
+}
+#blatt h3 { margin: 0 0 4px; font-size: 17px; }
+#blatt .abschnitt { margin-top: 14px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--dezent); }
+.fav {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px;
+  background: var(--zeile); margin-top: 6px; cursor: pointer; font-weight: 600; font-size: 14px;
+}
+.fav .zutaten { margin-left: auto; color: var(--dezent); font-size: 12px; flex: 0 0 auto; }
+#blatt input[type="text"], #blatt input[type="url"] {
+  width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid var(--rand); background: var(--zeile);
+  color: var(--text); font-size: 15px;
+}
+.knopfzeile { display: flex; gap: 8px; margin-top: 8px; }
+.knopf {
+  flex: 1 1 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rand);
+  background: var(--zeile); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.knopf.voll { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+.knopf.rot { color: #ff6b6b; }
+.knopf[disabled] { opacity: .4; }
+#scanErgebnis { display: none; margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--zeile); }
+#scanErgebnis .anzahl { color: var(--dezent); font-size: 12px; margin-top: 4px; }
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  background: var(--zeile); color: var(--text); border: 1px solid var(--rand);
+  border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 600;
+  opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; white-space: nowrap;
+}
+#toast.an { opacity: 1; }
+</style>
+
+<div id="wrap">
+  <div id="kopf">
+    <button class="pfeil" id="zurueck">‹</button>
+    <div id="wochentitel"></div>
+    <button class="pfeil" id="vor">›</button>
+    <button id="wochenkorb">🛒 <span id="wochenkorbText"></span></button>
+  </div>
+  <div id="tage"></div>
+  <div id="leerhinweis" style="display:none"></div>
+</div>
+
+<div id="schleier">
+  <div id="blatt">
+    <h3 id="blattTitel"></h3>
+    <div class="abschnitt" id="favKopf"></div>
+    <div id="favListe"></div>
+    <div class="abschnitt" id="freiKopf"></div>
+    <input type="text" id="freiText" maxlength="120">
+    <div class="knopfzeile"><button class="knopf voll" id="freiSpeichern"></button></div>
+    <div class="abschnitt" id="scanKopf"></div>
+    <input type="url" id="scanUrl" inputmode="url" autocomplete="off">
+    <div class="knopfzeile">
+      <button class="knopf" id="scanUrlKnopf"></button>
+      <button class="knopf" id="scanDateiKnopf"></button>
+    </div>
+    <input type="file" id="scanDatei" accept="image/*,application/pdf" style="display:none">
+    <div id="scanErgebnis">
+      <input type="text" id="scanName" maxlength="80">
+      <div class="anzahl" id="scanAnzahl"></div>
+      <div class="knopfzeile"><button class="knopf voll" id="scanSpeichern"></button></div>
+    </div>
+    <div class="knopfzeile" style="margin-top:16px">
+      <button class="knopf rot" id="entfernen"></button>
+      <button class="knopf" id="blattZu"></button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* IIFE: die Tile-Visu injiziert selbst globale Bindungen (const translate,
+   const requestAction …) — gleichnamige Top-Level-Deklarationen bräche das. */
+(function () {
+'use strict';
+
+/* Hell/Dunkel aus der Luminanz der Kartenfarbe — Hausmuster symdoLightTiles. */
+(function () {
+  function anwenden() { try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+    (document.body || document.documentElement).appendChild(p);
+    var c = getComputedStyle(p).color; p.remove();
+    var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+    var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+    document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+  } catch (e) {} }
+  anwenden();
+  try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', anwenden); } catch (e) {}
+})();
+
+let zustand = null;
+let woche = 0;             // 0 = diese, 1 = nächste
+let blattDatum = '';       // der Tag, dessen Blatt offen ist
+let scanFund = null;       // { name, items, url, mediaId } aus der Analyse
+let toastTimer = 0;
+
+const el = (id) => document.getElementById(id);
+const t = (k) => (zustand && zustand.texts && zustand.texts[k]) || k;
+
+function toast(text) {
+  const box = el('toast');
+  box.textContent = text;
+  box.classList.add('an');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.classList.remove('an'), 2600);
+}
+
+/* ── KI-Relay: die Kachel hat keinen Token; requestAction('AiCall') reicht ans
+   Gateway weiter, die Antwort kommt als aiResult-Push mit txn zurück. */
+let __aiTxn = 0;
+const __aiPending = {};
+function aiPost(path, payload) {
+  const txn = 'ai' + (++__aiTxn);
+  return new Promise((resolve) => {
+    __aiPending[txn] = resolve;
+    if (typeof requestAction === 'function') {
+      requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
+    }
+    setTimeout(() => {
+      if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); }
+    }, 130000);
+  });
+}
+
+// ── Zeichnen ────────────────────────────────────────────────────────────────
+function zeichnen() {
+  if (!zustand) { return; }
+  const w = zustand.weeks[woche] || zustand.weeks[0];
+  el('wochentitel').textContent = woche === 0 ? t('thisWeek') : t('nextWeek');
+  el('zurueck').disabled = woche === 0;
+  el('vor').disabled = woche >= zustand.weeks.length - 1;
+  el('wochenkorbText').textContent = t('cartWeek');
+  el('wochenkorb').style.display = w.days.some((d) => d.cart) ? '' : 'none';
+
+  const tage = el('tage');
+  tage.innerHTML = '';
+  let geplant = 0;
+  w.days.forEach((d) => {
+    if (d.title) { geplant++; }
+    const zeile = document.createElement('div');
+    zeile.className = 'tag' + (d.today ? ' heute' : '');
+    const bild = d.image
+      ? '<span class="bild"><img alt="" src="' + d.image + '"></span>'
+      : '<span class="bild">' + (d.title ? '🍽' : '·') + '</span>';
+    zeile.innerHTML = '<span class="kalender"><span class="wt"></span><span class="nr"></span></span>'
+      + bild + '<span class="titel"></span>';
+    zeile.querySelector('.wt').textContent = d.weekday;
+    zeile.querySelector('.nr').textContent = d.dayNum;
+    const titel = zeile.querySelector('.titel');
+    titel.textContent = d.title || '—';
+    titel.classList.toggle('leer', !d.title);
+    if (d.cart) {
+      const korb = document.createElement('button');
+      korb.className = 'korb';
+      korb.textContent = '🛒';
+      korb.title = t('cart');
+      korb.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (korb.classList.contains('ok')) { return; }   // Doppel-Tipp-Schutz
+        korb.classList.add('ok');
+        if (typeof requestAction === 'function') { requestAction('AddToCart', d.listId); }
+      });
+      zeile.appendChild(korb);
+    }
+    zeile.addEventListener('click', () => blattOeffnen(d));
+    tage.appendChild(zeile);
+  });
+
+  const hinweis = el('leerhinweis');
+  if (!zustand.hasSource) {
+    hinweis.textContent = t('noSource');
+    hinweis.style.display = '';
+  } else if (geplant === 0) {
+    hinweis.textContent = t('empty');
+    hinweis.style.display = '';
+  } else {
+    hinweis.style.display = 'none';
+  }
+}
+
+// ── Gericht-Blatt ───────────────────────────────────────────────────────────
+function blattOeffnen(tag) {
+  if (!zustand.hasSource) { toast(t('noSource')); return; }
+  blattDatum = tag.date;
+  scanFund = null;
+  el('blattTitel').textContent = t('planned') + ' — ' + tag.weekday + ' ' + tag.dayNum + '.';
+  el('favKopf').textContent = t('favHead');
+  el('freiKopf').textContent = t('freeHead');
+  el('scanKopf').textContent = t('scanHead');
+  el('freiText').value = tag.listId ? '' : (tag.title === '—' ? '' : (tag.title || ''));
+  el('freiText').placeholder = t('freeHint');
+  el('freiSpeichern').textContent = t('save');
+  el('scanUrl').value = '';
+  el('scanUrl').placeholder = t('urlHint');
+  el('scanUrlKnopf').textContent = t('scanUrl');
+  el('scanUrlKnopf').disabled = !zustand.aiReady;
+  el('scanDateiKnopf').textContent = t('scanFile');
+  el('scanDateiKnopf').disabled = !zustand.aiReady;
+  el('scanErgebnis').style.display = 'none';
+  el('scanSpeichern').textContent = t('save');
+  el('entfernen').textContent = t('remove');
+  el('entfernen').style.display = tag.title ? '' : 'none';
+  el('blattZu').textContent = t('close');
+
+  const favListe = el('favListe');
+  favListe.innerHTML = '';
+  (zustand.favorites || []).forEach((f) => {
+    const zeile = document.createElement('div');
+    zeile.className = 'fav';
+    zeile.innerHTML = '<span>🍽</span><span class="name"></span><span class="zutaten"></span>';
+    zeile.querySelector('.name').textContent = f.name;
+    zeile.querySelector('.zutaten').textContent = f.items;
+    zeile.addEventListener('click', () => gerichtSetzen(f.id, ''));
+    favListe.appendChild(zeile);
+  });
+  el('schleier').classList.add('an');
+}
+
+function blattZu() {
+  el('schleier').classList.remove('an');
+  blattDatum = '';
+}
+
+function gerichtSetzen(listId, text) {
+  if (!blattDatum) { return; }
+  if (typeof requestAction === 'function') {
+    requestAction('SetMeal', JSON.stringify({ date: blattDatum, listId: listId, text: text }));
+  }
+  blattZu();
+}
+
+// ── Rezept-Scan (URL / Foto / Datei) ────────────────────────────────────────
+function scanZeigen(daten, url, mediaId) {
+  const items = (daten && Array.isArray(daten.items)) ? daten.items : [];
+  if (!items.length) { toast(t('noItems')); return; }
+  scanFund = { items: items, url: url || '', mediaId: mediaId || '' };
+  el('scanName').value = (daten.title ? String(daten.title) : '').slice(0, 80);
+  el('scanName').placeholder = t('nameHint');
+  el('scanAnzahl').textContent = items.length + ' × 🛒';
+  el('scanErgebnis').style.display = '';
+}
+
+function scanLaeuft(knopf) {
+  knopf.disabled = true;
+  const alt = knopf.textContent;
+  knopf.textContent = t('analyzing');
+  return () => { knopf.disabled = false; knopf.textContent = alt; };
+}
+
+function dateiVerkleinern(file, maxKante, qualitaet) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const f = Math.min(1, maxKante / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+      const b = Math.max(1, Math.round((img.naturalWidth || 1) * f));
+      const h = Math.max(1, Math.round((img.naturalHeight || 1) * f));
+      const leinwand = document.createElement('canvas');
+      leinwand.width = b; leinwand.height = h;
+      leinwand.getContext('2d').drawImage(img, 0, 0, b, h);
+      resolve(leinwand.toDataURL('image/jpeg', qualitaet).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bild')); };
+    img.src = url;
+  });
+}
+
+// ── Anbindung ───────────────────────────────────────────────────────────────
+function handleMessage(daten) {
+  if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
+  if (!daten || typeof daten !== 'object') { return; }
+  if (daten.type === 'aiResult') {
+    const cb = __aiPending[daten.txn];
+    if (cb) { delete __aiPending[daten.txn]; cb({ status: daten.status || 200, json: daten.json || null }); }
+    return;
+  }
+  if (daten.type === 'cartDone') {
+    toast(t('cartDone'));
+    return;
+  }
+  if (daten.type === 'state') {
+    zustand = daten;
+    zeichnen();
+  }
+}
+window.handleMessage = handleMessage;
+window.updateState = handleMessage;
+window.addEventListener('message', (event) => { if (event) { handleMessage(event.data); } });
+
+document.addEventListener('DOMContentLoaded', () => {
+  el('zurueck').addEventListener('click', () => { if (woche > 0) { woche--; zeichnen(); } });
+  el('vor').addEventListener('click', () => { if (zustand && woche < zustand.weeks.length - 1) { woche++; zeichnen(); } });
+  el('wochenkorb').addEventListener('click', () => {
+    if (!zustand) { return; }
+    const w = zustand.weeks[woche];
+    if (typeof requestAction === 'function') { requestAction('AddWeekToCart', w.monday); }
+  });
+  el('blattZu').addEventListener('click', blattZu);
+  el('schleier').addEventListener('click', (ev) => { if (ev.target === el('schleier')) { blattZu(); } });
+  el('entfernen').addEventListener('click', () => gerichtSetzen('', ''));
+  el('freiSpeichern').addEventListener('click', () => {
+    const text = el('freiText').value.trim();
+    if (text) { gerichtSetzen('', text); }
+  });
+  el('scanUrlKnopf').addEventListener('click', () => {
+    const url = el('scanUrl').value.trim();
+    if (!url) { return; }
+    const fertig = scanLaeuft(el('scanUrlKnopf'));
+    aiPost('/ai/ingredients', { url: url }).then((r) => {
+      fertig();
+      const j = r && r.json;
+      if (!j || j.ok !== true) { toast((j && j.error && j.error.message) || t('failed')); return; }
+      scanZeigen(j, url, '');
+    });
+  });
+  el('scanDateiKnopf').addEventListener('click', () => { el('scanDatei').value = ''; el('scanDatei').click(); });
+  el('scanDatei').addEventListener('change', () => {
+    const file = el('scanDatei').files && el('scanDatei').files[0];
+    if (!file) { return; }
+    const fertig = scanLaeuft(el('scanDateiKnopf'));
+    const istPdf = /pdf/i.test(file.type || '') || /\.pdf$/i.test(file.name || '');
+    if (istPdf) {
+      const leser = new FileReader();
+      leser.onload = () => {
+        aiPost('/ai/ingredients', { pdf: String(leser.result).split(',')[1] }).then((r) => {
+          fertig();
+          const j = r && r.json;
+          if (!j || j.ok !== true) { toast((j && j.error && j.error.message) || t('failed')); return; }
+          scanZeigen(j, '', '');
+        });
+      };
+      leser.readAsDataURL(file);
+      return;
+    }
+    dateiVerkleinern(file, 1280, 0.7).then((b64) => {
+      aiPost('/ai/ingredients', { image: b64 }).then((r) => {
+        const j = r && r.json;
+        if (!j || j.ok !== true) { fertig(); toast((j && j.error && j.error.message) || t('failed')); return; }
+        // Das Foto als Rezeptbild sichern — die Miniatur der Kachel kommt daher.
+        aiPost('/ai/savephoto', { image: b64 }).then((rf) => {
+          fertig();
+          const jf = rf && rf.json;
+          scanZeigen(j, '', (jf && jf.ok === true && jf.mediaId) ? String(jf.mediaId) : '');
+        });
+      });
+    }).catch(() => { fertig(); toast(t('failed')); });
+  });
+  el('scanSpeichern').addEventListener('click', () => {
+    if (!scanFund || !blattDatum) { return; }
+    const name = el('scanName').value.trim();
+    if (!name) { return; }
+    if (typeof requestAction === 'function') {
+      requestAction('SaveScan', JSON.stringify({
+        date: blattDatum, name: name, items: scanFund.items,
+        url: scanFund.url, mediaId: scanFund.mediaId
+      }));
+    }
+    blattZu();
+  });
+});
+})();
+</script>

@@ -711,6 +711,9 @@ trait Briefing
             // Wie lange welches Kind an DIESEM Tag Schule hat. Kommt aus dem
             // Stundenplan-Modul; ohne Modul oder ohne Instanz bleibt es leer.
             'schule'       => $this->TimetableSchoolLines(date('Y-m-d', $this->BriefingDay($tage))),
+            // Das geplante Abendessen dieses Tages. Kommt aus dem Essensplan-
+            // Modul; ohne Modul oder ohne Gericht bleibt es leer.
+            'essen'        => $this->MealPlanLines(date('Y-m-d', $this->BriefingDay($tage))),
         ];
     }
 
@@ -1246,6 +1249,8 @@ trait Briefing
                 . 'dort steht — je Kind ein kurzer Satz. Steht dort, dass keine Schule '
                 . 'ist, sage NUR das (mit dem Namen der Ferien) und nenne keine '
                 . 'Unterrichtszeiten. '
+                . 'Steht unten ein ABENDESSEN, erwähne es in einem kurzen Satz '
+                . '(„Heute Abend gibt es …" bzw. in der Vorschau „Morgen gibt es …"). '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
                 . 'Einkaufsliste stehen. Steht unten „EINKAUFSLISTE: NICHT ERWÄHNEN", '
                 . 'lässt du diesen vierten Punkt ersatzlos weg und endest mit den '
@@ -1265,7 +1270,12 @@ trait Briefing
                 // In den Ferien steht dort keine Zeit, sondern die Ferienlage. Ohne
                 // diesen Satz erfindet ein kleines Modell gern trotzdem eine.
                 . 'Steht dort, dass keine Schule ist, erwaehne nur das und den Namen '
-                . 'der Ferien — keine Unterrichtszeiten, kein Stundenplan. ';
+                . 'der Ferien — keine Unterrichtszeiten, kein Stundenplan. '
+                // Dieselbe Sorte Luecke wie bei den Schulzeiten: das Abendessen
+                // ist weder Termin noch Aufgabe, ohne den Satz faellt es weg.
+                . 'Steht unten ein ABENDESSEN, erwaehne auch das in einem kurzen '
+                . 'Satz („Heute Abend gibt es ...", in der Vorschau entsprechend '
+                . '„Morgen gibt es ..."). ';
 
         return $aufbau
             . 'Schreibe korrektes Deutsch mit Umlauten und ß: „Fußballtraining", nicht '
@@ -1626,6 +1636,9 @@ trait Briefing
         // nicht ungefragt aendert — auf Zuruf gilt es jetzt ueberall.
         if (($daten['schule'] ?? []) !== []) {
             $teile[] = $block('SCHULZEITEN AN DIESEM TAG', $daten['schule'], 'keine');
+        }
+        if (($daten['essen'] ?? []) !== []) {
+            $teile[] = $block('ABENDESSEN AN DIESEM TAG', $daten['essen'], '');
         }
         if ($daten['geburtstage'] !== []) {
             $teile[] = $block('GEBURTSTAG AN DIESEM TAG', $daten['geburtstage'], '');

@@ -722,13 +722,18 @@ trait AppCore
         return false;
     }
 
-    /** Rückkanal nur an echte SymDoWebApp-Instanzen (Ident kommt von außen). */
+    /**
+     * Rückkanal nur an eigene Kachel-Module (der Ident kommt von außen):
+     * die SymDo-Web-App-Kachel und die Essensplan-Kachel — beide nutzen das
+     * AiCall/AiResult-Relay. Weiter eine GUID-Weißliste, nie ein Freibrief.
+     */
     private function IsSymDoWebAppInstance(int $instanceID): bool
     {
         if (!IPS_InstanceExists($instanceID)) {
             return false;
         }
-        return (IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '') === self::SDWA_MODULE_GUID;
+        $guid = (string)(IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '');
+        return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID], true);
     }
 
     /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */

@@ -1,0 +1,45 @@
+{
+    "translations": {
+        "en": {
+            "SymDo Meal Plan": "SymDo - Meal Plan"
+        },
+        "de": {
+            "SymDo Meal Plan": "SymDo - Essensplan",
+            "Shopping list": "Einkaufsliste",
+            "Please select": "Bitte wählen",
+            "not found": "nicht gefunden",
+            "The favorite lists of this shopping list are the recipes of the meal plan, and its cart receives the ingredients. Recipes scanned from the tile are saved there as new favorite lists.": "Die Favoritenlisten dieser Einkaufsliste sind die Rezepte des Essensplans, und ihr Einkaufswagen bekommt die Zutaten. Aus der Kachel gescannte Rezepte werden dort als neue Favoritenlisten gespeichert.",
+            "Mon": "Mo",
+            "Tue": "Di",
+            "Wed": "Mi",
+            "Thu": "Do",
+            "Fri": "Fr",
+            "Sat": "Sa",
+            "Sun": "So",
+            "This week": "Diese Woche",
+            "Next week": "Nächste Woche",
+            "Nothing planned yet — tap a day.": "Noch nichts geplant — Tag antippen.",
+            "Select a shopping list in the instance settings first.": "Zuerst in den Instanz-Einstellungen eine Einkaufsliste wählen.",
+            "Plan a meal": "Gericht planen",
+            "From the favorite lists": "Aus den Favoritenlisten",
+            "Free text": "Freier Text",
+            "e.g. leftovers, order pizza": "z. B. Reste, Pizza bestellen",
+            "New recipe": "Neues Rezept",
+            "Analyze URL": "URL analysieren",
+            "Analyze photo or file": "Foto oder Datei analysieren",
+            "Analyzing…": "Wird analysiert …",
+            "Save": "Speichern",
+            "Remove meal": "Gericht entfernen",
+            "Close": "Schließen",
+            "Ingredients to the cart": "Zutaten in den Einkaufswagen",
+            "Shop for this week": "Für die Woche einkaufen",
+            "Ingredients added": "Zutaten übernommen",
+            "No ingredients found in that.": "Darin waren keine Zutaten zu finden.",
+            "Dish name": "Name des Gerichts",
+            "Action failed": "Aktion fehlgeschlagen",
+            "Paste recipe URL": "Rezept-URL einfügen",
+            "(recipe deleted)": "(Rezept gelöscht)",
+            "Could not reach the AI service.": "Der KI-Dienst war nicht erreichbar."
+        }
+    }
+}

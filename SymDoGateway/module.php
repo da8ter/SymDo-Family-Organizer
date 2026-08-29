@@ -13,6 +13,7 @@ require_once __DIR__ . '/libs/Notes.php';
 require_once __DIR__ . '/libs/NotesMedia.php';
 require_once __DIR__ . '/libs/NotesAi.php';
 require_once __DIR__ . '/libs/TimetableBridge.php';
+require_once __DIR__ . '/libs/MealPlanBridge.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -40,6 +41,7 @@ class SymDoGateway extends IPSModuleStrict
     use NotesMedia;
     use NotesAi;
     use TimetableBridge;
+    use MealPlanBridge;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
