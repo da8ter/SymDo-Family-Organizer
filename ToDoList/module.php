@@ -6,8 +6,8 @@ require_once __DIR__ . '/libs/SyncHelper.php';
 require_once __DIR__ . '/libs/CalDAVSync.php';
 require_once __DIR__ . '/libs/GoogleTasksSync.php';
 require_once __DIR__ . '/libs/MicrosoftToDoSync.php';
-require_once __DIR__ . '/../shared/ListSource.php';
-require_once __DIR__ . '/../shared/ExternalListSync.php';
+require_once __DIR__ . '/../libs/ListSource.php';
+require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/libs/ExtListHooksTodo.php';
 
 class SymDoToDoList extends IPSModuleStrict

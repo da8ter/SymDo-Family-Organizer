@@ -6,8 +6,8 @@ require_once __DIR__ . '/libs/ItemStore.php';
 require_once __DIR__ . '/libs/SuggestionEngine.php';
 require_once __DIR__ . '/libs/FavoriteStore.php';
 require_once __DIR__ . '/libs/PurchaseStore.php';
-require_once __DIR__ . '/../shared/ListSource.php';
-require_once __DIR__ . '/../shared/ExternalListSync.php';
+require_once __DIR__ . '/../libs/ListSource.php';
+require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
 class SymDoShoppingList extends IPSModuleStrict

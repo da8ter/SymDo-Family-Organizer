@@ -41,7 +41,7 @@ abstract class HolidaySource
         return '+13 months';
     }
 
-    /** Fremde Funktion vorsichtig rufen — Muster aus shared/ListSource.php. */
+    /** Fremde Funktion vorsichtig rufen — Muster aus libs/ListSource.php (Bibliotheksebene). */
     protected static function Fremd(string $funktion, mixed ...$args): mixed
     {
         if (!function_exists($funktion)) {
