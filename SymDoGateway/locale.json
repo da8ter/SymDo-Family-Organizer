@@ -1,6 +1,11 @@
 {
     "translations": {
         "de": {
+            "No audio data.": "Keine Audiodaten.",
+            "Recording too long.": "Aufnahme zu lang.",
+            "Dictation needs an OpenAI API key or a local AI server with transcription.": "Diktieren braucht einen OpenAI-API-Schlüssel oder einen lokalen KI-Server mit Transkription.",
+            "Transcription failed.": "Transkription fehlgeschlagen.",
+            "Transcription came back empty.": "Die Transkription kam leer zurück.",
             "SymDo Gateway": "SymDo - Gateway",
             "ToDo Gateway": "ToDo Gateway",
             "Google Tasks": "Google Tasks",

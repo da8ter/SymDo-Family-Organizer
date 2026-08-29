@@ -120,6 +120,10 @@ trait ApiRouter
                     $this->HandleAiExtract($device);
                     return;
                 }
+                if ($method === 'POST' && ($route[2] ?? '') === 'transcribe') {
+                    $this->HandleAiTranscribe($device);
+                    return;
+                }
                 if ($method === 'POST' && ($route[2] ?? '') === 'ingredients') {
                     $this->HandleAiIngredients($device);
                     return;

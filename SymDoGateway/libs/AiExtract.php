@@ -64,6 +64,12 @@ trait AiExtract
     private const AI_RECIPE_TEXT_MAX  = 12000;
     // PDF-Upload: base64-Größenlimit (Datei ~3/4 davon).
     private const AI_MAX_PDF_B64      = 20 * 1024 * 1024;
+    // Diktat: Audio-Obergrenze (Base64) und Transkriptionsmodell. 14 MB Base64
+    // sind rund 10 MB Ton — bei Opus ueber 20 Minuten Sprache, mehr ist kein
+    // Diktat mehr. Laengere Aufnahmen brauchen auch mehr Geduld als AI_TIMEOUT.
+    private const AI_MAX_AUDIO_B64     = 14 * 1024 * 1024;
+    private const AI_TRANSCRIBE_MODEL  = 'gpt-4o-mini-transcribe';
+    private const AI_TRANSCRIBE_TIMEOUT = 120;
     private const AI_MAX_IMAGE_B64    = 12 * 1024 * 1024;
     // Obergrenze für gespeicherte Rezeptfotos/-dateien unter „Rezeptfotos".
     private const AI_MEDIA_MAX        = 200;
@@ -327,6 +333,110 @@ trait AiExtract
     private function AiRelayError(string $code, string $message): string
     {
         return json_encode(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * POST /v1/ai/transcribe — ein Diktat in Text wandeln.
+     *
+     * Bewusst NUR Transkription: das Zerlegen in Artikel, Termine und Aufgaben
+     * macht danach der vorhandene Extract-Weg mit seinem Review-Overlay. So
+     * kann die Oberflaeche das Transkript vor der Analyse noch korrigieren.
+     */
+    private function HandleAiTranscribe(array $device): void
+    {
+        if (!$this->AiIsEnabled() || !$this->AiRateLimitOk($device) || !$this->AiDayBudgetOk()) {
+            return;
+        }
+        $body  = $this->ReadJsonBody();
+        $audio = $this->AiStripImage($this->BodyStr($body, 'audio'));   // schneidet nur den data:-Kopf ab
+        $mime  = trim($this->BodyStr($body, 'mime'));
+        if ($audio === '') {
+            $this->SendApiError('invalid_payload', $this->Translate('No audio data.'), 422);
+            return;
+        }
+        if (strlen($audio) > self::AI_MAX_AUDIO_B64) {
+            $this->SendApiError('invalid_payload', $this->Translate('Recording too long.'), 413);
+            return;
+        }
+        $bytes = base64_decode($audio, true);
+        if (!is_string($bytes) || $bytes === '') {
+            $this->SendApiError('invalid_payload', $this->Translate('No audio data.'), 422);
+            return;
+        }
+        $result = $this->AiTranscribe($bytes, $mime !== '' ? $mime : 'audio/webm');
+        if (!($result['ok'] ?? false)) {
+            $this->SendApiError((string)($result['code'] ?? 'ai_failed'), (string)($result['message'] ?? ''), (int)($result['status'] ?? 502));
+            return;
+        }
+        $this->SendJson(['ok' => true, 'text' => (string)$result['text']]);
+    }
+
+    /**
+     * Sprache -> Text ueber eine OpenAI-kompatible /audio/transcriptions.
+     *
+     * Anbieterwahl unabhaengig vom Chat-Anbieter: ein OpenAI-Schluessel gewinnt
+     * (auch wenn die Extraktion bei Anthropic oder lokal laeuft — Anthropic hat
+     * keine Transkription), sonst der lokale Server, sonst eine klare Ansage.
+     *
+     * @return array{ok:bool, text?:string, code?:string, message?:string, status?:int}
+     */
+    private function AiTranscribe(string $bytes, string $mime): array
+    {
+        $openAiKey = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $lokalBase = rtrim(trim($this->ReadPropertyString('AiLocalBaseUrl')), '/');
+        if ($openAiKey !== '') {
+            $url     = 'https://api.openai.com/v1/audio/transcriptions';
+            $modell  = self::AI_TRANSCRIBE_MODEL;
+            $kopfAuth = ['Authorization: Bearer ' . $openAiKey];
+        } elseif ($this->ReadPropertyString('AiProvider') === 'local' && $lokalBase !== '') {
+            // Dieselbe Basis-Ergaenzung wie beim Chat: das Formular fragt nach
+            // der BASIS, die Server bedienen /v1.
+            $url    = (preg_match('#/v\d+$#', $lokalBase) === 1 ? $lokalBase : $lokalBase . '/v1') . '/audio/transcriptions';
+            $modell = 'whisper-1';
+            $lokalKey = trim($this->ReadPropertyString('AiLocalKey'));
+            $kopfAuth = $lokalKey !== '' ? ['Authorization: Bearer ' . $lokalKey] : [];
+        } else {
+            return ['ok' => false, 'code' => 'ai_not_configured',
+                'message' => $this->Translate('Dictation needs an OpenAI API key or a local AI server with transcription.'), 'status' => 400];
+        }
+
+        $endung = match (strtolower(strtok($mime, ';') ?: '')) {
+            'audio/mp4', 'audio/x-m4a', 'audio/m4a', 'audio/aac' => 'm4a',
+            'audio/mpeg', 'audio/mp3'                            => 'mp3',
+            'audio/ogg'                                          => 'ogg',
+            'audio/wav', 'audio/x-wav'                           => 'wav',
+            default                                              => 'webm',
+        };
+        // Multipart von Hand: AiHttpPost nimmt einen fertigen Rumpf, und curl
+        // braucht fuer form-data nur die passende Grenze im Content-Type.
+        $grenze = '----symdo' . bin2hex(random_bytes(12));
+        $rumpf  = '--' . $grenze . "\r\n"
+            . "Content-Disposition: form-data; name=\"model\"\r\n\r\n" . $modell . "\r\n"
+            . '--' . $grenze . "\r\n"
+            . "Content-Disposition: form-data; name=\"file\"; filename=\"diktat." . $endung . "\"\r\n"
+            . 'Content-Type: ' . $mime . "\r\n\r\n"
+            . $bytes . "\r\n"
+            . '--' . $grenze . "--\r\n";
+        $kopf = array_merge(['Content-Type: multipart/form-data; boundary=' . $grenze], $kopfAuth);
+
+        $resp = $this->AiHttpPost($url, $kopf, $rumpf, self::AI_TRANSCRIBE_TIMEOUT);
+        if ($resp['err'] !== '' || $resp['status'] < 200 || $resp['status'] >= 300) {
+            $daten = json_decode((string)$resp['body'], true);
+            $grund = is_array($daten) ? (string)($daten['error']['message'] ?? '') : '';
+            if ($grund === '') {
+                $grund = $resp['err'] !== '' ? $resp['err'] : ('HTTP ' . $resp['status']);
+            }
+            $this->SendDebug('AI', 'Transkription fehlgeschlagen: ' . $grund, 0);
+            return ['ok' => false, 'code' => 'ai_failed',
+                'message' => $this->Translate('Transcription failed.') . ' ' . mb_substr($grund, 0, 200), 'status' => 502];
+        }
+        $daten = json_decode((string)$resp['body'], true);
+        $text  = is_array($daten) ? trim((string)($daten['text'] ?? '')) : '';
+        if ($text === '') {
+            return ['ok' => false, 'code' => 'ai_failed',
+                'message' => $this->Translate('Transcription came back empty.'), 'status' => 502];
+        }
+        return ['ok' => true, 'text' => $text];
     }
 
     private function AiStripImage(string $image): string
