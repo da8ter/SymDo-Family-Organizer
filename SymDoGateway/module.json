@@ -1,11 +1,9 @@
 {
   "id": "{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}",
-  "name": "SymDo Gateway",
+  "name": "SymDo - Gateway",
   "type": 2,
-  "vendor": "",
-  "aliases": [
-
-  ],
+  "vendor": "Stephan Sprick",
+  "aliases": [],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/SymDoGateway",
   "parentRequirements": [],
   "childRequirements": [

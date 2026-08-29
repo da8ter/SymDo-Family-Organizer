@@ -18,8 +18,8 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 
 | Instanz | Modul | Aufgabe |
 |---|---|---|
-| **SymDo Gateway** | Splitter (Präfix `TGW`) | Zentrale: liefert die Web-App aus, verwaltet Kopplung, Geräte und Familienmitglieder, KI, Briefing, Push. Zugleich Sync-Broker (Google Tasks, Microsoft To Do, CalDAV) für die ToDo-Listen |
-| **SymDo Web App** | Device (Präfix `SDWA`) | Kachel für die Tile-Visualisierung mit derselben Oberfläche; steuert, welche Bereiche und Bedienelemente App und Kachel zeigen |
+| **SymDo - Gateway** | Splitter (Präfix `TGW`) | Zentrale: liefert die Web-App aus, verwaltet Kopplung, Geräte und Familienmitglieder, KI, Briefing, Push. Zugleich Sync-Broker (Google Tasks, Microsoft To Do, CalDAV) für die ToDo-Listen |
+| **SymDo - Web App** | Device (Präfix `SDWA`) | Kachel für die Tile-Visualisierung mit derselben Oberfläche; steuert, welche Bereiche und Bedienelemente App und Kachel zeigen |
 
 > Die Einrichtung der Listen-Synchronisation (Google Tasks, Microsoft To Do, CalDAV) ist in der [ToDo-List-Anleitung](../ToDoList/README.md) beschrieben.
 
@@ -31,7 +31,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **4. Einrichten der Instanzen in Symcon**
 - **5. Kopplung: Web-App und iOS-App**
 - **6. Konfiguration: SymDo Gateway**
-- **7. Konfiguration: SymDo Web App (Kachel)**
+- **7. Konfiguration: SymDo - Web App (Kachel)**
 - **8. Tägliches Briefing**
 - **9. Einkaufs-Ansage**
 - **10. Rezeptanalyse**
@@ -60,7 +60,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 ## 2. Voraussetzungen
 
 - Symcon ab Version **8.1**
-- **SymDo ToDo List**- und/oder **SymDo Shopping List**-Instanzen dieser Bibliothek als Datenquellen
+- **SymDo - ToDo Liste**- und/oder **SymDo - Einkaufsliste**-Instanzen dieser Bibliothek als Datenquellen
 - Für die Web-App unterwegs: **Symcon Connect** (oder eine eigene HTTPS-Adresse)
 - Für Web-Push auf dem iPhone: die Web-App muss zum **Home-Bildschirm** hinzugefügt sein (iOS 16.4 oder neuer)
 - Für den Kalender-Bereich: das Modul **OpenCalendar** von Burkhard Kneiseler, optional — im **Symcon Module Store** unter „OpenCalendar" zu finden, Quelltext und Dokumentation unter [github.com/Burki24/OpenCalendar](https://github.com/Burki24/OpenCalendar) (Bibliothekskennung `de.burki24.opencalendar`)
@@ -71,14 +71,14 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 ## 3. Installation
 
 1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
-2. Falls noch nicht vorhanden: **SymDo ToDo List**- und **SymDo Shopping List**-Instanzen anlegen
-3. Eine Instanz **SymDo Gateway** anlegen
-4. Eine Instanz **SymDo Web App** anlegen und in der Kachel-Visualisierung einbinden
+2. Falls noch nicht vorhanden: **SymDo - ToDo Liste**- und **SymDo - Einkaufsliste**-Instanzen anlegen
+3. Eine Instanz **SymDo - Gateway** anlegen
+4. Eine Instanz **SymDo - Web App** anlegen und in der Kachel-Visualisierung einbinden
 
 ## 4. Einrichten der Instanzen in Symcon
 
-1. Im **SymDo Gateway** unter *Familienmitglieder* die Mitglieder anlegen: Name, Nachname, Rolle (z. B. Vater, Mutter, Kind), Geburtstag und Foto. Rolle und Nachname nutzt auch das Briefing für die Anrede.
-2. In der **SymDo Web App**-Instanz die Listen auswählen, die App und Kachel zeigen sollen, und das Standard-Mitglied setzen. Das Gateway wird automatisch gefunden.
+1. Im **SymDo - Gateway** unter *Familienmitglieder* die Mitglieder anlegen: Name, Nachname, Rolle (z. B. Vater, Mutter, Kind), Geburtstag und Foto. Rolle und Nachname nutzt auch das Briefing für die Anrede.
+2. In der **SymDo - Web App**-Instanz die Listen auswählen, die App und Kachel zeigen sollen, und das Standard-Mitglied setzen. Das Gateway wird automatisch gefunden.
 3. Web-App und/oder iOS-App koppeln (Kapitel 5).
 
 Betreibt man mehrere Gateway-Instanzen (etwa für getrennte Synchronisation), bedient nur **eine** davon die App — die weiteren arbeiten als reine Sync-Broker und zeigen im Formular an, welche Instanz die App-Seite trägt.
@@ -130,7 +130,7 @@ Zuordnung und Filter: `MailAddresses` ordnet Absender-Adressen den Mitgliedern z
 
 Das Gateway ist zugleich der Sync-Broker der ToDo-Listen. Einrichtung und Ablauf: [ToDo-List-Anleitung](../ToDoList/README.md).
 
-## 7. Konfiguration: SymDo Web App (Kachel)
+## 7. Konfiguration: SymDo - Web App (Kachel)
 
 - **Standard-Mitglied** (`DefaultUserID`) — Vorbelegung für schnell angelegte Aufgaben, KI-Übernahmen und E-Mail-Vorschläge ohne eigenen Empfänger
 - **Listen** (`Lists`) — welche ToDo- und Einkaufslisten App und Kachel zeigen
@@ -274,7 +274,7 @@ IPS_LogMessage('SymDo', $anzahl . ' Gerät(e) erreicht');
 
 Die weiteren öffentlichen Funktionen (`TGW_Google*`, `TGW_Microsoft*`, `TGW_CalDAV*`) dienen der Listen-Synchronisation und werden von den Listen-Instanzen intern aufgerufen.
 
-### SymDo Web App (`SDWA_`)
+### SymDo - Web App (`SDWA_`)
 
 ```php
 bool SDWA_PlayBriefing(int $InstanzID);  // spielt das aktuelle Briefing in der Kachel ab

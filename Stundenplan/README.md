@@ -1,4 +1,4 @@
-# SymDo Stundenplan
+# SymDo - Stundenplan
 
 Der Wochenplan der Kinder als Symcon-Kachel: Fächer, Zeiten, Betreuung, Ferien.
 Eingerichtet wird alles im Backend der Instanz — es gibt keine zweite Ablage und
@@ -122,7 +122,7 @@ und tragen denselben Maßstab, sonst läge dieselbe Uhrzeit in zwei Zeilen an
 verschiedenen Stellen.
 
 Ob die **App** den Plan zeigt, wird nicht hier eingestellt, sondern in der
-**SymDo Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die
+**SymDo - Web App** unter *Sichtbare Bereiche* — zusammen mit dem Übrigen, was die
 App anzeigt. Dort steht eine Zeile je Instanz mit einem Häkchen; eine neu
 angelegte Instanz ist zunächst **aus**, damit sie den Stundenplan der Kinder
 nicht ungefragt auf jedes gekoppelte Gerät schiebt.

@@ -1,7 +1,7 @@
-# SymDo Shopping List Overview
+# SymDo - Einkaufslisten Übersicht
 
 Dieses Modul stellt eine kompakte **Übersichts-Kachel** für die Tile-Visualisierung
-bereit: die noch offenen Artikel einer **SymDo Shopping List**-Instanz als
+bereit: die noch offenen Artikel einer **SymDo - Einkaufsliste**-Instanz als
 waagerecht scrollbare **Bild-Leiste** — dieselbe Vorschau wie auf der
 SymDo-Übersicht, nur ohne Bedienelemente. Ein Tipp öffnet ein frei wählbares
 Objekt.
@@ -37,14 +37,14 @@ Objekt.
 
 - Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
-- Eine **SymDo Shopping List**-Instanz als Quelle
+- Eine **SymDo - Einkaufsliste**-Instanz als Quelle
 - Für Produktbilder: in der Quell-Liste müssen die **Produktbilder eingeschaltet** sein
 
 ## 3. Installation
 
 1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
-2. Falls noch nicht vorhanden: eine **SymDo Shopping List**-Instanz anlegen
-3. Eine Instanz vom Typ **SymDo Shopping List Overview** anlegen
+2. Falls noch nicht vorhanden: eine **SymDo - Einkaufsliste**-Instanz anlegen
+3. Eine Instanz vom Typ **SymDo - Einkaufslisten Übersicht** anlegen
 4. Im Formular die Einkaufsliste wählen und die Instanz in der Kachel-Visualisierung einbinden
 
 ## 4. Konfiguration in Symcon

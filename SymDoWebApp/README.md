@@ -1,6 +1,6 @@
 ![SymDo — Family Organizer](https://raw.githubusercontent.com/da8ter/images/main/SymDo-Mockup.jpg)
 
-# SymDo Web App
+# SymDo - Web App
 
 Dieses Modul bringt die SymDo-Oberfläche als **Kachel** in die Tile-Visualisierung —
 dieselbe Oberfläche, die auf dem Handy als Web-App läuft, nur ohne Kopplung und
@@ -11,7 +11,7 @@ welche Bereiche es gibt, welche Listen dazugehören und welche Bedienelemente in
 den Zeilen erscheinen.
 
 > Ohne dieses Modul gibt es die SymDo-Oberfläche nur auf dem Handy. Ohne das
-> **SymDo Gateway** gibt es hier nur die Listen — Kalender, Notizen, KI-Eingang
+> **SymDo - Gateway** gibt es hier nur die Listen — Kalender, Notizen, KI-Eingang
 > und Briefing liegen dort und blenden sich sonst selbst aus.
 
 ## Inhalt
@@ -27,7 +27,7 @@ den Zeilen erscheinen.
 ## 1. Funktionsumfang
 
 - **Dieselbe Oberfläche wie auf dem Handy** — Übersicht, Einkaufen, Favoriten, ToDos, Kalender, Notizen und KI-Eingang in einer Kachel, mit denselben Gesten (wischen zum Erledigen und Löschen) wie in der App
-- **Findet die Listen selbst** — alle **SymDo ToDo List**- und **SymDo Shopping List**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
+- **Findet die Listen selbst** — alle **SymDo - ToDo Liste**- und **SymDo - Einkaufsliste**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
 - **Standard-Mitglied** — die Vorbelegung, wenn niemand ausdrücklich gewählt wird: schnell angelegte Aufgaben, aus dem KI-Eingang übernommene Einträge und E-Mail-Vorschläge ohne eigenen Empfänger
 - **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen; zwei Instanzen mit denselben Kindern zeigten jedes Kind doppelt, deshalb eine Zeile je Instanz
@@ -39,14 +39,14 @@ den Zeilen erscheinen.
 
 - Symcon ab Version **8.1**
 - Nutzung in der **Kachel-Visualisierung** (Tile-Visualisierung)
-- Mindestens eine **SymDo ToDo List**- oder **SymDo Shopping List**-Instanz
-- Für Kalender, Notizen, KI-Eingang und Briefing zusätzlich eine **SymDo Gateway**-Instanz, optional
+- Mindestens eine **SymDo - ToDo Liste**- oder **SymDo - Einkaufsliste**-Instanz
+- Für Kalender, Notizen, KI-Eingang und Briefing zusätzlich eine **SymDo - Gateway**-Instanz, optional
 
 ## 3. Installation
 
 1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
-2. Falls noch nicht vorhanden: **SymDo ToDo List**- und/oder **SymDo Shopping List**-Instanzen anlegen
-3. Eine Instanz vom Typ **SymDo Web App** anlegen
+2. Falls noch nicht vorhanden: **SymDo - ToDo Liste**- und/oder **SymDo - Einkaufsliste**-Instanzen anlegen
+3. Eine Instanz vom Typ **SymDo - Web App** anlegen
 4. Instanz in der Kachel-Visualisierung einbinden
 
 Das Gateway wird automatisch gefunden — es gibt nichts zu verknüpfen. Läuft eines,
@@ -127,4 +127,4 @@ diesem Fall zeigt die Kachel einen Hinweis, statt still zu bleiben. Der Rückgab
 sagt nur, dass die Nachricht hinausgegangen ist; ein Zustellnachweis ist er nicht.
 
 Ausführlich beschrieben ist die Oberfläche selbst — Bereiche, Briefing, KI,
-Notizen, Kalender — im README des **SymDo Gateway**.
+Notizen, Kalender — im README des **SymDo - Gateway**.

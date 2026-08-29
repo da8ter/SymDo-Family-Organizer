@@ -46,21 +46,21 @@ Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
 
 | Modul | Art | Wofür |
 |---|---|---|
-| **SymDo Gateway** | Splitter | Die Zentrale: liefert die Web-App aus, verwaltet Kopplung, Geräte und Familienmitglieder, KI, Briefing und Push. Zugleich Sync-Broker für Google Tasks, Microsoft To Do und CalDAV |
-| **SymDo Web App** | Device | Dieselbe Oberfläche als Kachel — und die Stelle, an der eingestellt wird, welche Bereiche und Bedienelemente App und Kachel zeigen |
-| **SymDo ToDo List** | Device | Eine Aufgabenliste, als eigene Kachel und als Datenquelle für SymDo |
-| **SymDo Shopping List** | Device | Eine Einkaufsliste, ebenso |
-| **SymDo Stundenplan** | Device | Der Wochenplan der Kinder |
-| **SymDo ToDo Overview** | Device | Kennzahlen einer Aufgabenliste als kleine Kachel |
-| **SymDo Shopping List Overview** | Device | Die offenen Artikel als Bild-Leiste |
+| **SymDo - Gateway** | Splitter | Die Zentrale: liefert die Web-App aus, verwaltet Kopplung, Geräte und Familienmitglieder, KI, Briefing und Push. Zugleich Sync-Broker für Google Tasks, Microsoft To Do und CalDAV |
+| **SymDo - Web App** | Device | Dieselbe Oberfläche als Kachel — und die Stelle, an der eingestellt wird, welche Bereiche und Bedienelemente App und Kachel zeigen |
+| **SymDo - ToDo Liste** | Device | Eine Aufgabenliste, als eigene Kachel und als Datenquelle für SymDo |
+| **SymDo - Einkaufsliste** | Device | Eine Einkaufsliste, ebenso |
+| **SymDo - Stundenplan** | Device | Der Wochenplan der Kinder |
+| **SymDo - ToDo Übersicht** | Device | Kennzahlen einer Aufgabenliste als kleine Kachel |
+| **SymDo - Einkaufslisten Übersicht** | Device | Die offenen Artikel als Bild-Leiste |
 
 ## Schnellstart
 
 1. Bibliothek über das Module Control oder Module Store installieren: `https://github.com/da8ter/ToDo-List.git`
-2. **SymDo ToDo List**- und/oder **SymDo Shopping List**-Instanzen anlegen — sie
+2. **SymDo - ToDo Liste**- und/oder **SymDo - Einkaufsliste**-Instanzen anlegen — sie
    sind die Datenquellen
-3. Eine **SymDo Gateway**-Instanz anlegen; Familienmitglieder eintragen
-4. Eine **SymDo Web App**-Instanz anlegen und in die Kachel-Visualisierung
+3. Eine **SymDo - Gateway**-Instanz anlegen; Familienmitglieder eintragen
+4. Eine **SymDo - Web App**-Instanz anlegen und in die Kachel-Visualisierung
    einbinden; dort auswählen, welche Listen und Bereiche erscheinen
 5. Im Gateway unter *Web-App verbinden* den Browser-Zugang erzeugen und den
    QR-Code mit dem Handy scannen
@@ -86,7 +86,7 @@ KI-Eingang und Briefing kommen erst mit ihm.
 
 # Die Kacheln im Einzelnen
 
-## SymDo ToDo List
+## SymDo - ToDo Liste
 
 ![SymDo — ToDo List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20ToDo%20List.png)
 
@@ -104,7 +104,7 @@ Aufgabenverwaltung für die Kachel-Visualisierung — und Datenquelle für SymDo
 
 → [Ausführliche Anleitung](ToDoList/README.md)
 
-## SymDo Shopping List
+## SymDo - Einkaufsliste
 
 ![SymDo — Shopping List](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Shopping%20List.png)
 
@@ -121,7 +121,7 @@ Einkaufsliste für die Kachel-Visualisierung — und Datenquelle für SymDo.
 
 → [Ausführliche Anleitung](ShoppingList/README.md)
 
-## SymDo Stundenplan
+## SymDo - Stundenplan
 
 ![SymDo — Stundenplan Timeline](https://raw.githubusercontent.com/da8ter/images/main/SymDo%20Stundenplan%20Timeline.png)
 
@@ -143,7 +143,7 @@ der SymDo-Übersicht.
 
 → [Ausführliche Anleitung](Stundenplan/README.md)
 
-## SymDo Web App
+## SymDo - Web App
 
 Die SymDo-Oberfläche als Kachel — und das Backend, in dem steht, was App und
 Kachel zeigen: sichtbare Bereiche, Listenauswahl, Bedienelemente, Info-Abzeichen
@@ -159,7 +159,7 @@ ToDo-Listen mit Google, Microsoft und CalDAV sprechen.
 
 → [Ausführliche Anleitung](SymDoGateway/README.md)
 
-## SymDo ToDo Overview
+## SymDo - ToDo Übersicht
 
 Kompakte Kachel mit den drei Kennzahlen einer Aufgabenliste (offen, überfällig,
 heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
@@ -167,7 +167,7 @@ heute), Farben je Feld, optional roter Hintergrund bei Überfälligen. Ein Tipp
 
 → [Ausführliche Anleitung](ToDoOverview/README.md)
 
-## SymDo Shopping List Overview
+## SymDo - Einkaufslisten Übersicht
 
 Kompakte Kachel mit den offenen Artikeln einer Einkaufsliste als waagerecht
 scrollbare Bild-Leiste — dieselbe Vorschau wie auf der SymDo-Übersicht. Ein Tipp

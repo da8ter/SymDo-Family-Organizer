@@ -1,9 +1,9 @@
 {
   "id": "{87AA918E-2FDA-4A20-87E3-189BF88BF127}",
-  "name": "SymDo Shopping List Overview",
+  "name": "SymDo - Shopping List Overview",
   "type": 3,
-  "vendor": "",
-  "aliases": ["Shopping List Overview"],
+  "vendor": "Stephan Sprick",
+  "aliases": [],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/ShoppingListOverview",
   "parentRequirements": [],
   "childRequirements": [],

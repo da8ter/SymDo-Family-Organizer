@@ -1,4 +1,4 @@
-# SymDo Shopping List
+# SymDo - Einkaufsliste
 
 Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
@@ -18,7 +18,7 @@ Dieses Modul stellt eine Einkaufsliste für die Tile-Visualisierung bereit.
 
 1. Bibliothek über das Module Control installieren:
    - `https://github.com/da8ter/ToDo-List.git`
-2. In Symcon eine Instanz vom Typ **SymDo Shopping List** anlegen
+2. In Symcon eine Instanz vom Typ **SymDo - Einkaufsliste** anlegen
 3. Instanz in der Kachel-Visualisierung einbinden
 4. Optional im Backend Kategorien, Suchvorschläge und Favoritenlisten konfigurieren
 
@@ -237,7 +237,7 @@ Ein Artikel aus `SL_GetItems` sieht so aus:
 ```php
 <?php
 // >>> HIER ANPASSEN <<<
-$listeID = 12345;   // Objekt-ID der SymDo Shopping List
+$listeID = 12345;   // Objekt-ID der SymDo - Einkaufsliste
 
 // Kategorie leer lassen — die Liste ordnet selbst ein.
 $einkauf = [

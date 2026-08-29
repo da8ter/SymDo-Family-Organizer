@@ -1,6 +1,7 @@
 {
     "translations": {
         "de": {
+            "SymDo - Gateway": "SymDo - Gateway",
             "ToDo Gateway": "ToDo Gateway",
             "Google Tasks": "Google Tasks",
             "Microsoft To Do": "Microsoft To Do",

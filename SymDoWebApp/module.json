@@ -1,11 +1,9 @@
 {
     "id": "{6703A24A-E9E9-44D3-AB21-27176BF224AA}",
-    "name": "SymDo Web App",
+    "name": "SymDo - Web App",
     "type": 3,
-    "vendor": "",
-    "aliases": [
-        "SymDo Kachel", "SymDo Web App"    
-    ],
+    "vendor": "Stephan Sprick",
+    "aliases": [],
     "parentRequirements": [],
     "childRequirements": [],
     "implemented": [],

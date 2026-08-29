@@ -2,6 +2,7 @@
     "translations": {
         "en": {
             "Everything done": "Everything done",
+            "SymDo - Shopping List": "SymDo - Shopping List",
             "Choose print layout": "Choose print layout",
             "For the WAF ;-)": "For the WAF ;-)",
             "Scanning…": "Scanning…",
@@ -74,6 +75,7 @@
             "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:"
         },
         "de": {
+            "SymDo - Shopping List": "SymDo - Einkaufsliste",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
             "%1 items": "%1 Artikel",

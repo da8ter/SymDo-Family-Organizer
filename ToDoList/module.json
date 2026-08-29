@@ -1,11 +1,9 @@
 {
   "id": "{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}",
-  "name": "SymDo ToDo List",
+  "name": "SymDo - ToDo List",
   "type": 3,
-  "vendor": "",
-  "aliases": [
-    "ToDo List"
-  ],
+  "vendor": "Stephan Sprick",
+  "aliases": [],
   "url": "https://github.com/da8ter/ToDo-List/tree/main/ToDoList",
   "parentRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
   "childRequirements": [],

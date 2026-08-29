@@ -1,6 +1,7 @@
 {
     "translations": {
         "de": {
+            "SymDo - ToDo List": "SymDo - ToDo Liste",
             "No SymDo Gateway connected. Account synchronization needs one as a parent; without it this list works locally.": "Kein SymDo Gateway verbunden. Die Konten-Synchronisation braucht eines als Eltern-Instanz; ohne läuft diese Liste lokal.",
             "No parent gateway connected — account synchronization needs one. Family members and photos come from \"%s\" (#%d) either way: the app is always served by the gateway with the lowest instance ID.": "Kein Eltern-Gateway verbunden — die Konten-Synchronisation braucht eines. Familienmitglieder und Fotos kommen ohnehin von „%s\" (#%d): Die App bedient immer das Gateway mit der niedrigsten Instanz-ID.",
             "Account synchronization runs over the parent gateway \"%s\" (#%d). Family members, photos and notifications come from \"%s\" (#%d) instead — the app is always served by the gateway with the lowest instance ID. Both is normal with several accounts.": "Die Konten-Synchronisation läuft über das Eltern-Gateway „%s\" (#%d). Familienmitglieder, Fotos und Benachrichtigungen kommen dagegen von „%s\" (#%d) — die App bedient immer das Gateway mit der niedrigsten Instanz-ID. Beides nebeneinander ist bei mehreren Konten normal.",
