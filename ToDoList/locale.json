@@ -1,9 +1,8 @@
 {
     "translations": {
         "de": {
+            "Tap to finish": "Tippen zum Beenden",
             "Dictate": "Diktieren",
-            "Stop dictation": "Aufnahme beenden",
-            "Speak freely — groceries, appointments and tasks in one go.": "Einfach frei sprechen — Einkäufe, Termine und Aufgaben in einem Rutsch.",
             "Transcribing…": "Wird transkribiert …",
             "Recording too short.": "Aufnahme zu kurz.",
             "Microphone not available or not allowed.": "Mikrofon nicht verfügbar oder nicht erlaubt.",
