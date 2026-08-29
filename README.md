@@ -2,10 +2,11 @@
 
 # SymDo — Family Organizer
 
-Einkaufsliste, Aufgaben, Termine und Notizen an einem Ort: **SymDo** bringt den
-Familienalltag aufs Handy und an die Wandvisualisierung — ohne App-Store, ohne
-Cloud-Zwang, direkt aus dem eigenen Symcon. Jedes Familienmitglied sieht auf einen
-Blick, was ansteht, wer dran ist und was noch in den Einkaufswagen muss.
+Einkaufslisten, Aufgaben, Termine, Stundenpläne und Notizen, alles an einem Ort. SymDo bringt die Organisation des Familienalltags aufs Handy und an die Wandvisualisierung, ohne App-Store, ohne Cloud-Zwang und vollständig in das eigene Symcon-System integriert.
+
+Die KI Integration hilft dabei, E-Mails, Rezepte, Dokumente und Alltagsinformationen in Sekundenschnelle in Aufgaben, Termine und Einkaufslisten zu verwandeln.
+
+Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noch auf die Einkaufsliste muss. Einfach, intelligent und jederzeit griffbereit.
 
 ## Was SymDo kann
 
