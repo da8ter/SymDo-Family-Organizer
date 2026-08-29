@@ -30,8 +30,7 @@ den Zeilen erscheinen.
 - **Findet die Listen selbst** — alle **SymDo - ToDo Liste**- und **SymDo - Einkaufsliste**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
 - **Standard-Mitglied** — die Vorbelegung, wenn niemand ausdrücklich gewählt wird: schnell angelegte Aufgaben, aus dem KI-Eingang übernommene Einträge und E-Mail-Vorschläge ohne eigenen Empfänger
-- **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen; zwei Instanzen mit denselben Kindern zeigten jedes Kind doppelt, deshalb eine Zeile je Instanz
-- **Live ohne Neuladen** — die Kachel hängt an den Kennzahlen der Listen und wird bei jeder Änderung nachgezogen, entprellt zu einem Push statt zu dreien
+- **Stundenplan der Kinder** — welche Stundenplan-Instanzen auf der Übersicht erscheinen
 - **Farben der Visualisierung** — die Kachel meldet die Farben des Skins zurück; App und Web-App übernehmen sie, damit alles gleich aussieht
 - **Briefing abspielen** — `SDWA_PlayBriefing()` gibt das Briefing in einer offenen Kachel als Sprachausgabe wieder
 
