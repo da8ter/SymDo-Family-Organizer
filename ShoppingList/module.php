@@ -6,6 +6,7 @@ require_once __DIR__ . '/libs/ItemStore.php';
 require_once __DIR__ . '/libs/SuggestionEngine.php';
 require_once __DIR__ . '/libs/FavoriteStore.php';
 require_once __DIR__ . '/libs/PurchaseStore.php';
+require_once __DIR__ . '/libs/StoreOrder.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
@@ -17,6 +18,7 @@ class SymDoShoppingList extends IPSModuleStrict
     use SuggestionEngine;
     use FavoriteStore;
     use PurchaseStore;
+    use StoreOrder;
     use ExternalListSync;
     use ExtListHooksShopping;
 
@@ -111,6 +113,7 @@ class SymDoShoppingList extends IPSModuleStrict
         // Kaufhistorie: Map normalisierter Name → {name, category, count, last}.
         // Getrennt von Frequencies, weil das Hinzufügen zählt, nicht das Abhaken.
         $this->RegisterAttributeString('PurchaseHistory', '{}');
+        $this->RegisterAttributeString('StoreOrderStats', '{}');
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme)
         $this->RegisterAttributeString('VisuTheme', '{}');
         $this->RegisterAttributeString('PreviousCategoryOrder', '[]');
@@ -144,6 +147,9 @@ class SymDoShoppingList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowRowEditButton', false);
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ScannerEnabled', true);
+        // Laden-Reihenfolge: gelernt wird immer, der Schalter steuert nur die
+        // Sortierung (siehe libs/StoreOrder.php).
+        $this->RegisterPropertyBoolean('StoreOrderEnabled', false);
         $this->RegisterPropertyInteger('ExternalScannerVariableID', 0);
         $this->ExtListCreateProperties();
         $this->RegisterPropertyBoolean('ExtApiEnabled', false);
@@ -248,6 +254,13 @@ class SymDoShoppingList extends IPSModuleStrict
             case 'GetState':
                 // Read-only push to the tile — must not bump AppRevision, otherwise
                 // every tile open would invalidate the app clients' state caches.
+                $this->PushCurrentState();
+                return;
+            case 'StoreOrderReset':
+                // Der Formular-Knopf: falsch Gelerntes verwerfen (z. B. nach
+                // einem Marktwechsel). Danach gilt wieder die konfigurierte
+                // Reihenfolge, bis neue Einkäufe gelernt sind.
+                $this->LadenVergessen();
                 $this->PushCurrentState();
                 return;
             case 'SetHint':
@@ -1028,7 +1041,13 @@ class SymDoShoppingList extends IPSModuleStrict
             'type'            => 'state',
             'items'           => $items,
             'suggestions'     => $suggestions,
-            'categoryOrder'   => $this->GetCategoryOrderFlat(),
+            // In Laden-Reihenfolge, wenn eingeschaltet: Kachel, Web-App und die
+            // iOS-App ordnen ihre Kategorie-Gruppen alle nach dieser Liste —
+            // die Sortierung wirkt damit überall, ohne dass eine Oberfläche
+            // etwas davon wissen muss.
+            'categoryOrder'   => $this->LadenAktiv()
+                ? $this->LadenReihenfolge(time())
+                : $this->GetCategoryOrderFlat(),
             // Zusaetzlicher Schluessel und KEINE Aenderung an categoryOrder: dessen
             // flache Namensliste lesen Kachel, Web-App und die iOS-App: eine andere
             // Form dort wuerde alle drei brechen.
@@ -3603,6 +3622,12 @@ class SymDoShoppingList extends IPSModuleStrict
                             'caption' => $this->Translate('The standard categories arrive with their built-in icon and color and can be changed here. Own categories stay empty: they get a shopping basket in a color derived from their name.'),
                         ],
                     ],
+                ],
+                [
+                    'type'     => 'ExpansionPanel',
+                    'caption'  => $this->Translate('Store order'),
+                    'expanded' => false,
+                    'items'    => $this->LadenFormular(),
                 ],
                 [
                     'type'     => 'ExpansionPanel',

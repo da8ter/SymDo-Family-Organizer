@@ -409,6 +409,10 @@ trait ItemStore
                 }
             }
             $this->TrackPurchases($purchased);
+            // NUR hier lernt die Laden-Reihenfolge: das einzelne Abhaken ist der
+            // Gang durch den Markt. MarkAllDone raeumt bloss auf und sagt nichts
+            // ueber die Laufwege.
+            $this->LadenLernen($purchased, time());
             $this->SaveItems($items);
             return true;
         } finally {

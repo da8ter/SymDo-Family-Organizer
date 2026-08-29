@@ -76,6 +76,12 @@
             "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:"
         },
         "de": {
+            "Store order": "Laden-Reihenfolge",
+            "Sort in store order (learned from the check-off order)": "In Laden-Reihenfolge sortieren (gelernt aus der Abhak-Reihenfolge)",
+            "While shopping, the list watches in which order the categories get checked off (a 45-minute pause starts a new trip) and derives the walking order through the store. Recent trips weigh more; categories without data follow in their configured order. Learning is always on — this switch only applies the sorting.": "Beim Einkaufen merkt sich die Liste, in welcher Reihenfolge die Kategorien abgehakt werden (eine Pause von 45 Minuten beginnt einen neuen Einkauf), und leitet daraus den Laufweg durch den Markt ab. Jüngere Einkäufe zählen stärker; Kategorien ohne Daten folgen in ihrer eingestellten Reihenfolge. Gelernt wird immer — dieser Schalter wendet nur die Sortierung an.",
+            "Forget learned store order": "Gelernte Laden-Reihenfolge vergessen",
+            "Learned store order forgotten.": "Gelernte Laden-Reihenfolge verworfen.",
+            "The store-order setting appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Die Laden-Reihenfolge erscheint nach dem nächsten Symcon-Neustart — sie ist eine neue Einstellung, und die gibt es erst, wenn der Kernel das Modul neu geladen hat.",
             "SymDo Shopping List": "SymDo - Einkaufsliste",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
