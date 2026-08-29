@@ -1403,14 +1403,17 @@ class SymDoGateway extends IPSModuleStrict
                     'visible' => $msMode === 'code'
                 ],
                 [
+                    /* Nur noch lesbar, der erklaerende Hinweis ist weg (29.08.2026,
+                       Nutzerentscheid): "common" ist fuer diese App-Registrierung
+                       der einzige sinnvolle Wert, ein Tippfehler hier sperrte
+                       private Konten mit AADSTS50020 aus. Die Vorgabe kommt aus
+                       Create(); wer wirklich einen Mandanten braucht, setzt ihn
+                       per IPS_SetProperty. */
                     'type' => 'ValidationTextBox',
                     'name' => 'MicrosoftTenant',
                     'caption' => $this->Translate('Tenant'),
-                    'width' => '400px'
-                ],
-                [
-                    'type' => 'Label',
-                    'caption' => $this->Translate('Leave this on "common": then private Microsoft accounts (outlook.com, hotmail.com, live.com) can sign in as well as work and school accounts. "consumers" allows private accounts only, "organizations" only business ones. Putting a directory ID (GUID) here locks private accounts out — the sign-in then fails with AADSTS50020. Second condition, and it is set in the app registration, not here: under "Supported account types" it must say "Accounts in any organizational directory and personal Microsoft accounts".')
+                    'width' => '400px',
+                    'enabled' => false
                 ],
                 [
                     'type' => 'RowLayout',
