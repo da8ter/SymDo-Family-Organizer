@@ -58,7 +58,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 
 ## Schnellstart
 
-1. Bibliothek über das Module Control oder Module Store installieren: `https://github.com/da8ter/ToDo-List.git`
+1. Bibliothek über das Module Control oder Module Store installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. **SymDo - ToDo Liste**- und/oder **SymDo - Einkaufsliste**-Instanzen anlegen — sie
    sind die Datenquellen
 3. Eine **SymDo - Gateway**-Instanz anlegen; Familienmitglieder eintragen

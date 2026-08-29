@@ -44,7 +44,7 @@ den Zeilen erscheinen.
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
+1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Falls noch nicht vorhanden: **SymDo - ToDo Liste**- und/oder **SymDo - Einkaufsliste**-Instanzen anlegen
 3. Eine Instanz vom Typ **SymDo - Web App** anlegen
 4. Instanz in der Kachel-Visualisierung einbinden

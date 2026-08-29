@@ -56,7 +56,7 @@ Dieses Modul stellt eine ToDo-Liste für die Tile-Visualisierung bereit. Optiona
 
 ## 3. Installation
 
-1. Repository/Library installieren über das Module Control (https://github.com/da8ter/ToDo-List.git)
+1. Repository/Library installieren über das Module Control (https://github.com/da8ter/SymDo-Family-Organizer.git)
 2. Instanz anlegen: **ToDo Gateway** (Zentrale Instanz für die Synchronisation. Bitte auch erstellen wenn keine Synchronisation verwendet wird)
 3. Instanz anlegen: **SymDo - ToDo Liste** (Für jede Liste wird eine Instanz benötigt)
 

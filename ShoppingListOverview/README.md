@@ -42,7 +42,7 @@ Objekt.
 
 ## 3. Installation
 
-1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/ToDo-List.git`
+1. Bibliothek über das Module Control installieren: `https://github.com/da8ter/SymDo-Family-Organizer.git`
 2. Falls noch nicht vorhanden: eine **SymDo - Einkaufsliste**-Instanz anlegen
 3. Eine Instanz vom Typ **SymDo - Einkaufslisten Übersicht** anlegen
 4. Im Formular die Einkaufsliste wählen und die Instanz in der Kachel-Visualisierung einbinden
