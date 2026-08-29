@@ -1435,7 +1435,19 @@ trait AppCore
             'id'       => $id,
             'kind'     => $kind,
             'name'     => IPS_GetName($id),
-            'location' => IPS_GetLocation($id),
+            /* Bewusst LEER statt IPS_GetLocation(): der volle Pfad im Symcon-Baum
+               („Erdgeschoss\Küche\Einkaufsliste") beschreibt den Aufbau der
+               Anlage, und keine Oberfläche zeigt ihn an — die Web-App und die
+               Kacheln nennen nur den Namen, die iOS-App liest das Feld nirgends.
+               Was niemand braucht, gehört auch nicht über eine öffentlich
+               erreichbare Adresse.
+
+               Der SCHLÜSSEL bleibt trotzdem stehen: InstanceInfo.location ist in
+               der iOS-App ein nicht-optionales String-Feld mit erzeugtem Decoder.
+               Fehlt der Schlüssel, scheitert das Dekodieren der GANZEN Auskunft,
+               und eine bereits installierte App-Fassung wäre blind. Er darf weg,
+               sobald das Modell dort ohne ihn auskommt. */
+            'location' => '',
             'revision' => $this->GetInstanceRevision($id, $kind),
             'features' => $features,
             'hidden'   => in_array($id, $this->GetHiddenInstances(), true),
