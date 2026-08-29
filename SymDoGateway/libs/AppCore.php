@@ -1067,6 +1067,19 @@ trait AppCore
         // diesen Hook nicht gibt.
         $iconBase = '/hook/' . self::WEBAPP_HOOK_PATH;
         $symdo['iconBase'] = $iconBase;
+        /* Fassungskennung aus dem Inhalt des Symbols. ServeWebAppIcon liefert die
+           Symbole mit `max-age=604800` aus — sieben Tage, in denen der Browser gar
+           nicht erst nachfragt. Nach einem Symbolwechsel zeigten Ladeschirm und
+           Browser-Tab deshalb weiter das alte Bild, obwohl die Datei laengst neu
+           war. Mit der Kennung in der Adresse ist ein neues Symbol eine neue
+           Adresse, und der Zwischenspeicher greift nicht mehr daneben.
+
+           Aus der 180er gerechnet, die vier Groessen wechseln immer zusammen.
+           NICHT ans Manifest gehaengt: dessen Symbolpfade gehoeren zur Identitaet
+           der installierten App, und die soll ein Symbolwechsel nicht anfassen. */
+        $iconHash = @md5_file(dirname(__DIR__, 2) . '/SymDoWebApp/assets/appicon-180.png');
+        $symdo['iconVersion'] = is_string($iconHash) ? substr($iconHash, 0, 8) : '';
+        $iconV = $symdo['iconVersion'] !== '' ? '?v=' . $symdo['iconVersion'] : '';
         $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
             . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
 
@@ -1081,9 +1094,9 @@ trait AppCore
         // steht sie ab dem ersten Aufbau, damit die Abstaende nicht von der
         // Reihenfolge abhaengen.
         $icons = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            . '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png">'
-            . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
-            . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png">'
+            . '<link rel="icon" type="image/png" sizes="32x32" href="' . $iconBase . '/appicon-32.png' . $iconV . '">'
+            . '<link rel="icon" type="image/png" sizes="180x180" href="' . $iconBase . '/appicon-180.png' . $iconV . '">'
+            . '<link rel="apple-touch-icon" sizes="180x180" href="' . $iconBase . '/appicon-180.png' . $iconV . '">'
             // Manifest und die beiden Meta-Angaben machen die Seite erst
             // installierbar — und ohne Installation gibt es auf iOS keinen Push.
             . '<link rel="manifest" href="/hook/' . self::PWA_HOOK_PATH . '/manifest.webmanifest">'

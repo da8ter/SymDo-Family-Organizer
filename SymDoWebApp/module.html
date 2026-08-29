@@ -3035,7 +3035,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   // kaputtes Bildsymbol waere die schlechtere Auskunft.
   if (bild && s.iconBase) {
     bild.onload = function () { bild.hidden = false; };
-    bild.src = s.iconBase + '/appicon-180.png';
+    // Mit Fassungskennung, sonst zeigte der Ladeschirm nach einem Symbolwechsel
+    // bis zu sieben Tage das alte Bild (siehe iconVersion in AppCore).
+    bild.src = s.iconBase + '/appicon-180.png' + (s.iconVersion ? '?v=' + s.iconVersion : '');
   }
 })();
 </script>
