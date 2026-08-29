@@ -104,6 +104,40 @@ trait SyncHelper
         $this->SetTimerInterval($TimerName, min(60000, $delay * 1000));
     }
 
+    /**
+     * Fragt das Gateway, ob ein Konto verbunden ist — reload-fest.
+     *
+     * Beim Modul-Reload laeuft ApplyChanges, WAEHREND die Gateway-Schnittstelle
+     * neu entsteht. Der direkte Aufruf schlug dann mit "InstanceInterface is not
+     * available" fehl, und der InstanceManager meldete "Kann Schnittstellen-
+     * Instanz nicht erstellen" (Symbox, 29.08.2026, nach einem Modul-Update).
+     * Schlimmer als die Logzeile: der Fehlwert wirkte wie "kein Token", und
+     * SyncUpdateTimer stellte den Sync-Timer ab — die Synchronisation stand
+     * still bis zum naechsten Uebernehmen.
+     *
+     * Gemessen am lebenden System verhalten sich die Fehlschlaege verschieden:
+     * eine falsche Instanz WIRFT ("Instance does not implement this function"),
+     * die fehlende Schnittstelle WARNT und liefert keinen Bool. Deshalb beides:
+     * try/catch und die Typprobe.
+     *
+     * null heisst "gerade nicht beantwortbar" — der Aufrufer laesst den Timer
+     * dann unangetastet, denn der letzte gesetzte Stand stammt aus einer
+     * Antwort, die das Gateway wirklich gegeben hat.
+     */
+    private function SyncGatewayVerbunden(string $Funktion): ?bool
+    {
+        $gw = $this->GetGatewayID();
+        if ($gw <= 0) {
+            return false;
+        }
+        try {
+            $antwort = @call_user_func($Funktion, $gw);
+        } catch (Throwable $e) {
+            return null;
+        }
+        return is_bool($antwort) ? $antwort : null;
+    }
+
     private function SyncUpdateTimer(string $Backend, string $TimerName, int $IntervalMinutes, bool $HasToken = true): void
     {
         $enabled = $this->GetSyncBackend() === $Backend;

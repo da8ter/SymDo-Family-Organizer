@@ -6,9 +6,13 @@ trait MicrosoftToDoSync
 {
     private function UpdateMicrosoftToDoTimer(): void
     {
-        $gw = $this->GetGatewayID();
-        $hasToken = $gw > 0 && TGW_MicrosoftIsConnected($gw);
-        $this->SyncUpdateTimer('microsoft', 'MicrosoftToDoSyncTimer', $this->ReadPropertyInteger('MicrosoftSyncInterval'), $hasToken);
+        $verbunden = $this->SyncGatewayVerbunden('TGW_MicrosoftIsConnected');
+        if ($verbunden === null) {
+            // Gateway-Schnittstelle entsteht gerade neu (Modul-Reload): den Timer
+            // NICHT anfassen — siehe SyncGatewayVerbunden.
+            return;
+        }
+        $this->SyncUpdateTimer('microsoft', 'MicrosoftToDoSyncTimer', $this->ReadPropertyInteger('MicrosoftSyncInterval'), $verbunden);
     }
 
     private function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array

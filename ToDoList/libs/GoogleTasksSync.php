@@ -6,9 +6,13 @@ trait GoogleTasksSync
 {
     private function UpdateGoogleTasksTimer(): void
     {
-        $gw = $this->GetGatewayID();
-        $hasToken = $gw > 0 && TGW_GoogleIsConnected($gw);
-        $this->SyncUpdateTimer('google', 'GoogleTasksSyncTimer', $this->ReadPropertyInteger('GoogleSyncInterval'), $hasToken);
+        $verbunden = $this->SyncGatewayVerbunden('TGW_GoogleIsConnected');
+        if ($verbunden === null) {
+            // Gateway-Schnittstelle entsteht gerade neu (Modul-Reload): den Timer
+            // NICHT anfassen — siehe SyncGatewayVerbunden.
+            return;
+        }
+        $this->SyncUpdateTimer('google', 'GoogleTasksSyncTimer', $this->ReadPropertyInteger('GoogleSyncInterval'), $verbunden);
     }
 
     private function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
