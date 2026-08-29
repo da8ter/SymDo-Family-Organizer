@@ -13391,6 +13391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // beides verhaelt sich die Ansicht wie frueher: alles wird zur Aufgabe.
     const kannTermin = calWritable().length > 0;
     const kannNotiz  = !!(notizen && Array.isArray(notizen.folders) && notizen.folders.length > 0);
+    const kannEinkauf = (typeof selectedShoppingID === 'function') && selectedShoppingID() > 0;
     document.getElementById('aiReviewTitle').textContent = translate((kannTermin || kannNotiz) ? 'Detected entries' : 'Detected tasks');
     if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
     aiBody.innerHTML = '';
@@ -13400,19 +13401,22 @@ document.addEventListener('DOMContentLoaded', () => {
       // Die Einschaetzung der KI ist nur die VORBELEGUNG — „Elternabend 12.9."
       // kann Termin oder Aufgabe sein (hingehen? Zettel zurueckgeben?), das
       // entscheidet, wer das Blatt vor sich hat.
-      row.__kind = (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
+      row.__kind = (kannEinkauf && it.kind === 'shopping') ? 'shopping'
+        : (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
+      const amtChip = (it.kind === 'shopping' && it.amount) ? '<span class="badge ai-amt">' + escapeHtml(String(it.amount)) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
       const knopf = (k, wort) => '<button type="button" data-k="' + k + '">' + escapeHtml(translate(wort)) + '</button>';
-      const wahl = (kannTermin || kannNotiz)
+      const wahl = (kannTermin || kannNotiz || kannEinkauf)
         ? '<div class="ai-kind-row"><span class="ai-kind">' + knopf('task', 'Task') +
           (kannTermin ? knopf('event', 'Appointment') : '') +
+          (kannEinkauf ? knopf('shopping', 'Purchase') : '') +
           (kannNotiz ? knopf('note', 'Note') : '') + '</span></div>'
         : '';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
         '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + prioChip + '</div>' + wahl + '</div>';
+        '<div class="ai-meta">' + dueChip + amtChip + prioChip + '</div>' + wahl + '</div>';
       row.__todo = it;
       const zeigeWahl = () => row.querySelectorAll('.ai-kind button').forEach(b =>
         b.classList.toggle('on', b.dataset.k === row.__kind));
@@ -13578,11 +13582,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const rows = Array.from(aiBody.querySelectorAll('.ai-row.selected'));
     if (!rows.length) return;
-    // Kein stilles Anlegen mehr: je Fund oeffnet sich der vorausgefuellte
-    // Dialog, einer nach dem anderen — Aufgaben-, Termin- oder Notiz-Editor
-    // je nach Wahl in der Zeile. Dort laesst sich alles richtigstellen
-    // (Ordner, Kalender, Datum), Speichern legt an, Abbrechen ueberspringt.
-    aiUebernahmeKette = rows.map(r => ({ art: r.__kind, t: r.__todo || {}, quelle: aiQuellDatei }));
+    // Einkaufs-Funde gehen DIREKT in die Einkaufsliste — ein Editor je Artikel
+    // waere Quaelerei. Der Rest laeuft wie gehabt durch die Dialog-Kette.
+    const einkaeufe = rows.filter(r => r.__kind === 'shopping');
+    const andere = rows.filter(r => r.__kind !== 'shopping');
+    if (einkaeufe.length) {
+      const ziel = selectedShoppingID();
+      einkaeufe.forEach(r => sdCall(ziel, 'AddItem', {
+        name: String((r.__todo && r.__todo.title) || ''),
+        category: '',
+        amount: String((r.__todo && r.__todo.amount) || '1')
+      }));
+      showToast(translate('%1 items added').replace('%1', String(einkaeufe.length)));
+    }
+    if (!andere.length) {
+      closeOverlay('aiReviewOverlay');
+      return;
+    }
+    // Kein stilles Anlegen: je Fund oeffnet sich der vorausgefuellte Dialog,
+    // einer nach dem anderen — Aufgaben-, Termin- oder Notiz-Editor je nach
+    // Wahl in der Zeile. Speichern legt an, Abbrechen ueberspringt.
+    aiUebernahmeKette = andere.map(r => ({ art: r.__kind, t: r.__todo || {}, quelle: aiQuellDatei }));
     closeOverlay('aiReviewOverlay');
     window.setTimeout(aiUebernahmeWeiter, 350);
   });

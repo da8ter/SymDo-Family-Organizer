@@ -138,7 +138,7 @@ trait AiExtract
         if (($r['ok'] ?? false) !== true) {
             return $r;
         }
-        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'])];
+        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'], ['task', 'event', 'shopping'])];
     }
 
     // ─────────────────────── Einkaufsliste (Foto/URL → Zutaten) ───────────────────────
@@ -1247,6 +1247,17 @@ trait AiExtract
             $eintrag = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time,
                         'priority' => $priority, 'kind' => $kind, 'end' => $end, 'allDay' => $allDay,
                         'recurrence' => $recurrence];
+            if ($kind === 'shopping') {
+                // Ein Artikel hat eine Menge, aber weder Frist noch Takt.
+                $amount = mb_substr(trim($this->AiRowStr($row, 'amount')), 0, 40);
+                $eintrag['amount'] = $amount === '' ? null : $amount;
+                $eintrag['due'] = null;
+                $eintrag['time'] = null;
+                $eintrag['end'] = null;
+                $eintrag['allDay'] = false;
+                $eintrag['recurrence'] = null;
+                $eintrag['priority'] = 'normal';
+            }
             if ($kind === 'note') {
                 // Eine Notiz hat keine Frist und keinen Takt — sie hat einen Text.
                 // Rueckfall auf "info", weil kleine Modelle die Zusammenfassung
@@ -1981,18 +1992,22 @@ trait AiExtract
             . 'Nur wenn wirklich kein Datum und keine Frist erkennbar ist, setze "due" auf null. Antworte '
             . 'AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und ohne Markdown. Jedes Element hat '
             . 'exakt diese Felder: {"title": string, "info": string oder null, "due": "YYYY-MM-DD" oder '
-            . 'null, "priority": "high" oder "normal" oder "low"}. '
+            . 'null, "time": "HH:MM" oder null, "priority": "high" oder "normal" oder "low", '
+            . '"kind": "task" oder "event" oder "shopping", "end": "YYYY-MM-DD" oder null, '
+            . '"allDay": true oder false, "amount": string oder null}. '
             // Ohne diesen Satz liefert ein kleines Modell bei einer freundlichen
             // Einladung eine leere Liste: Es sucht die Aufforderung („bitte
             // zurücksenden") und findet keine (gemessen an „Angebot Segelboot bauen
             // am 27.06." — 0 Einträge, obwohl Datum, Kosten und Anmeldung dastanden).
-            . 'EINLADUNGEN UND ANGEBOTE ZÄHLEN MIT: Ein Kurs, Workshop, Ausflug, Fest oder '
-            . 'Mitmachangebot mit konkretem Datum gehört IMMER in die Liste — auch wenn der '
-            . 'Text nur einlädt, erinnert oder „aufmerksam macht" und niemanden ausdrücklich '
-            . 'auffordert; das Datum kommt dann in "due". Ist eine Anmeldung nötig oder ein '
-            . 'Beitrag zu zahlen, gib das als eigenen Eintrag zurück. Antworte nur dann mit [], '
-            . 'wenn WEDER ein Datum NOCH eine Handlung vorkommt — reine Werbung, Newsletter, '
-            . 'Danksagungen, Rückblicke.';
+            . $this->AiKindRule()
+            . ' EINKAEUFE SIND EINE EIGENE ART: Nennt die Nachricht Dinge, die zu KAUFEN oder zu '
+            . 'besorgen sind (Lebensmittel, Drogerie, „auf die Einkaufsliste", „wir brauchen noch"), '
+            . 'gib JEDEN Artikel als eigenen Eintrag mit "kind": "shopping" zurueck. "title" ist dabei '
+            . 'NUR der Artikelname („Milch", nicht „Milch kaufen"), eine Mengenangabe gehoert nach '
+            . '"amount" („2", „500 g"), sonst ist "amount" null; "due", "time", "end" und "recurrence" '
+            . 'bleiben bei Einkaeufen null. Eine REINE ARTIKELLISTE ohne Handlung und ohne Datum '
+            . '(„Milch, Butter, Klopapier") ist deshalb KEINE leere Liste, sondern lauter '
+            . '"shopping"-Eintraege.';
     }
 
     /**
