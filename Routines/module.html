@@ -15,14 +15,23 @@ html[data-symdo-theme="light"] {
   --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
   --zeile-fertig: color-mix(in srgb, var(--card-color) 98%, var(--content-color) 2%);
 }
-html, body { margin: 0; padding: 0; height: 100%; }
+html {
+  height: 100%; margin: 0; padding: 0;
+  display: flex; flex-direction: column;
+}
+/* BEWUSST kein margin am body: die Tile-Visu setzt hier ihre Kachelränder
+   (oben ~60px für die Kopfzeile). Ein margin:0 überschriebe sie, und der
+   Inhalt rutschte unter die Systemleiste — dieselbe Falle wie einst bei der
+   Einkaufs-Übersicht; das Muster hier ist deren erprobtes. */
 body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
   background: transparent;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
 }
-#wrap { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 4px 2px; }
+#wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box; padding: 4px 2px; }
 
 /* ── Kopf: großes Avatar-Foto links, „Hallo <Name>" daneben ─────────────── */
 #kopf { display: flex; align-items: center; gap: 14px; padding: 4px 6px 10px; }
