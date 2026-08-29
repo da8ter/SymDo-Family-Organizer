@@ -1,4 +1,5 @@
 ![SymDo — Family Organizer](https://raw.githubusercontent.com/da8ter/images/main/SymDo-Mockup.jpg)
+![SymDo — Kachelübersicht](https://raw.githubusercontent.com/da8ter/images/main/Symdo%20-%20Kachelu%CC%88bersicht.png)
 
 # SymDo — Family Organizer
 
