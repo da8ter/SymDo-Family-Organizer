@@ -1,0 +1,12 @@
+{
+  "id": "{B1DF065E-80F5-49DF-B2B8-3CE657ED23BB}",
+  "name": "SymDo Routines",
+  "type": 3,
+  "vendor": "Stephan Sprick",
+  "aliases": [],
+  "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/Routines",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "RTN"
+}

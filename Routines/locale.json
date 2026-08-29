@@ -1,0 +1,43 @@
+{
+    "translations": {
+        "en": {
+            "SymDo Routines": "SymDo - Routines"
+        },
+        "de": {
+            "SymDo Routines": "SymDo - Routinen",
+            "Routines": "Routinen",
+            "Routine": "Routine",
+            "Name": "Name",
+            "Emoji": "Emoji",
+            "Child": "Kind",
+            "From": "Von",
+            "Until": "Bis",
+            "Step": "Schritt",
+            "Steps": "Schritte",
+            "Coins": "Münzen",
+            "Behavior": "Verhalten",
+            "Daily reset at": "Täglicher Neustart um",
+            "Reward coins (amount per step, default 5)": "Belohnungs-Münzen (Anzahl je Schritt, Vorgabe 5)",
+            "Show today's tasks of the children when no routine is active": "Heutige Aufgaben der Kinder zeigen, wenn keine Routine aktiv ist",
+            "SymDo gateway": "SymDo Gateway",
+            "The gateway provides the family members with photos. Without one, routines work — just without avatars and without today's tasks.": "Das Gateway liefert die Familienmitglieder mit Fotos. Ohne Gateway funktionieren die Routinen trotzdem — nur ohne Avatare und ohne die heutigen Aufgaben.",
+            "From/Until decide when the tile shows a routine. Without times the routine is always visible. A window past midnight (e.g. 20:00–06:00) works.": "Von/Bis bestimmen, wann die Kachel eine Routine zeigt. Ohne Zeiten ist die Routine immer sichtbar. Ein Fenster über Mitternacht (z. B. 20:00–06:00) funktioniert.",
+            "The order here is the order on the tile. Ticks reset daily at the reset time; reordering clears today's ticks of the affected routine.": "Die Reihenfolge hier ist die Reihenfolge auf der Kachel. Häkchen setzen sich täglich zur Neustart-Zeit zurück; ein Umsortieren verwirft die heutigen Häkchen der betroffenen Routine.",
+            "— none —": "— keins —",
+            "— first add a routine above —": "— erst oben eine Routine anlegen —",
+            "%s completed": "%s geschafft",
+            "Open": "Offen",
+            "Done": "Geschafft",
+            "Coins %s": "Münzen %s",
+            "Hi %s!": "Hallo %s!",
+            "%1$d of %2$d": "%1$d von %2$d",
+            "All done!": "Alles geschafft!",
+            "You did it — high five!": "Super gemacht — High Five!",
+            "Nothing to do right now. Enjoy!": "Gerade nichts zu tun. Genieß es!",
+            "Coming up at %1$s: %2$s": "Um %1$s geht's weiter: %2$s",
+            "Today's tasks": "Heutige Aufgaben",
+            "overdue": "überfällig",
+            "No steps configured yet — add routines and steps in the instance settings.": "Noch keine Schritte eingerichtet — Routinen und Schritte in den Instanz-Einstellungen anlegen."
+        }
+    }
+}

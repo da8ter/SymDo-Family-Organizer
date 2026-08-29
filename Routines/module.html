@@ -1,0 +1,488 @@
+<style>
+/* Symcon injiziert --card-color, --content-color und --accent-color je nach
+   Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets. */
+:root {
+  --bg: var(--card-color, #2b2c30);
+  --text: var(--content-color, #ffffff);
+  --akzent: var(--accent-color, #00cdab);
+  --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  --zeile-fertig: color-mix(in srgb, var(--card-color) 96%, var(--content-color) 4%);
+  --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
+  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+}
+/* Hellmodus: Zeilen dunkeln statt aufhellen (siehe symdoLightTiles unten) */
+html[data-symdo-theme="light"] {
+  --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
+  --zeile-fertig: color-mix(in srgb, var(--card-color) 98%, var(--content-color) 2%);
+}
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  background: transparent;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+#wrap { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 4px 2px; }
+
+/* ── Kopf: großes Avatar-Foto links, „Hallo <Name>" daneben ─────────────── */
+#kopf { display: flex; align-items: center; gap: 14px; padding: 4px 6px 10px; }
+#avatarBox {
+  width: 64px; height: 64px; border-radius: 50%; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  border: 3px solid var(--akzent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; overflow: hidden;
+}
+#avatarBox img { width: 100%; height: 100%; object-fit: cover; display: none; }
+#gruss { flex: 1 1 auto; min-width: 0; }
+#hallo {
+  font-size: clamp(18px, 6vmin, 26px); font-weight: 800; line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#untertitel { font-size: clamp(12px, 3.6vmin, 15px); color: var(--dezent); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#muenzen {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  background: color-mix(in srgb, #f6b73c 22%, var(--bg));
+  border: 2px solid color-mix(in srgb, #f6b73c 70%, var(--bg));
+  border-radius: 999px; padding: 6px 12px; font-weight: 800;
+  font-size: clamp(14px, 4vmin, 18px); position: relative;
+}
+#muenzen .symbol { font-size: 1.1em; }
+
+/* ── Fortschritt ────────────────────────────────────────────────────────── */
+#fortschritt { display: flex; align-items: center; gap: 10px; padding: 0 6px 10px; }
+#balken { flex: 1 1 auto; height: 14px; border-radius: 999px; background: var(--zeile); overflow: hidden; }
+#balkenfuellung {
+  height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--akzent), color-mix(in srgb, var(--akzent) 55%, #ffffff));
+  transition: width .45s cubic-bezier(.22,1.2,.36,1);
+}
+#zaehler { flex: 0 0 auto; font-weight: 700; font-size: clamp(12px, 3.8vmin, 15px); color: var(--dezent); }
+
+/* ── Umschalt-Chips (nur wenn mehrere Routinen gerade aktiv sind) ───────── */
+#chips { display: none; gap: 8px; padding: 0 6px 10px; overflow-x: auto; scrollbar-width: none; }
+#chips::-webkit-scrollbar { display: none; }
+#chips.an { display: flex; }
+.chip {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 7px;
+  border: 2px solid var(--rand); border-radius: 999px; padding: 5px 12px 5px 6px;
+  background: var(--zeile); font-size: 13px; font-weight: 700; color: var(--text);
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+}
+.chip img, .chip .mini {
+  width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
+  background: color-mix(in srgb, var(--akzent) 20%, var(--bg));
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.chip.aktiv { border-color: var(--akzent); background: color-mix(in srgb, var(--akzent) 16%, var(--bg)); }
+
+/* ── Schritte: große, kindertaugliche Zeilen ────────────────────────────── */
+#liste { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; }
+.schritt {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--zeile); border-radius: 18px; padding: 10px 12px;
+  min-height: 52px; box-sizing: border-box;
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+  transition: background .25s, opacity .25s;
+}
+.schritt .bild {
+  width: 44px; height: 44px; border-radius: 14px; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--akzent) 14%, var(--bg));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+}
+.schritt .titel {
+  flex: 1 1 auto; min-width: 0; font-size: clamp(15px, 4.6vmin, 19px); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.schritt .haken {
+  width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto;
+  border: 3px solid color-mix(in srgb, var(--content-color) 30%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 900; color: #fff; box-sizing: border-box;
+}
+.schritt .haken span { transform: scale(0); transition: transform .25s cubic-bezier(.22,1.6,.36,1); }
+.schritt.fertig { background: var(--zeile-fertig); opacity: .72; }
+.schritt.fertig .titel { text-decoration: line-through; color: var(--dezent); }
+.schritt.fertig .haken { background: var(--akzent); border-color: var(--akzent); }
+.schritt.fertig .haken span { transform: scale(1); }
+.schritt.huepft { animation: huepfen .4s cubic-bezier(.22,1.4,.36,1); }
+@keyframes huepfen { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+
+/* ── „+5"-Flieger zur Münzanzeige ───────────────────────────────────────── */
+.muenzflug {
+  position: absolute; right: 6px; top: -6px; font-weight: 900; color: #f6b73c;
+  font-size: 16px; pointer-events: none; animation: flug 1s ease-out forwards;
+}
+@keyframes flug { 0% { opacity: 0; transform: translateY(14px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+
+/* ── Leerlauf: Heute-ToDos oder freundlicher Hinweis ────────────────────── */
+#leer { flex: 1 1 auto; display: none; flex-direction: column; gap: 8px; padding: 0 4px; overflow-y: auto; }
+#leer.an { display: flex; }
+#leerkopf { font-size: clamp(14px, 4.2vmin, 17px); font-weight: 800; padding: 2px 4px; }
+.todo .bild { font-size: 20px; }
+.todo .bild img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; }
+.todo .frist { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #ff5f5f; }
+#leerhinweis { color: var(--dezent); font-size: clamp(13px, 4vmin, 16px); padding: 8px 6px; }
+#leergross { font-size: clamp(28px, 12vmin, 44px); text-align: center; padding: 12px 0 0; }
+
+/* ── Feier ──────────────────────────────────────────────────────────────── */
+#feier {
+  position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent); z-index: 30;
+}
+#feier.an { display: flex; }
+#konfetti { position: absolute; inset: 0; width: 100%; height: 100%; }
+#feierkarte {
+  position: relative; background: var(--bg); border: 3px solid var(--akzent);
+  border-radius: 24px; padding: 22px 30px; text-align: center;
+  animation: karte .5s cubic-bezier(.22,1.4,.36,1);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 35%, transparent);
+}
+@keyframes karte { 0% { transform: scale(.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+#feierkarte .gross { font-size: 44px; }
+#feierkarte .titel { font-size: 22px; font-weight: 900; margin-top: 6px; }
+#feierkarte .lob { font-size: 15px; color: var(--dezent); margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .schritt.huepft { animation: none; }
+  #feierkarte { animation: none; }
+  .muenzflug { animation-duration: .01s; }
+  #balkenfuellung { transition: none; }
+}
+</style>
+
+<div id="wrap">
+  <div id="kopf">
+    <div id="avatarBox"><img id="avatarBild" alt=""><span id="avatarEmoji">⭐</span></div>
+    <div id="gruss">
+      <div id="hallo"></div>
+      <div id="untertitel"></div>
+    </div>
+    <div id="muenzen" style="display:none"><span class="symbol">🪙</span><span id="muenzZahl">0</span></div>
+  </div>
+  <div id="chips"></div>
+  <div id="fortschritt"><div id="balken"><div id="balkenfuellung"></div></div><div id="zaehler"></div></div>
+  <div id="liste"></div>
+  <div id="leer">
+    <div id="leergross" style="display:none">🌈</div>
+    <div id="leerkopf" style="display:none"></div>
+    <div id="todos"></div>
+    <div id="leerhinweis"></div>
+  </div>
+  <div id="feier">
+    <canvas id="konfetti"></canvas>
+    <div id="feierkarte">
+      <div class="gross">🎉</div>
+      <div class="titel"></div>
+      <div class="lob"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* In einer IIFE gekapselt: die Tile-Visu injiziert selbst globale Bindungen
+   (const translate, const requestAction, openObject) — gleichnamige Top-Level-
+   Deklarationen brächen das ganze Script mit „Identifier already declared". */
+(function () {
+'use strict';
+
+/* Hell/Dunkel aus der Luminanz der Kartenfarbe — wörtlich das Muster der
+   übrigen Kacheln (symdoLightTiles). */
+(function () {
+  function anwenden() { try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+    (document.body || document.documentElement).appendChild(p);
+    var c = getComputedStyle(p).color; p.remove();
+    var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+    var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+    document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+  } catch (e) {} }
+  anwenden();
+  try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', anwenden); } catch (e) {}
+})();
+
+let zustand = null;          // letzter Payload vom Modul
+let gewaehlt = '';           // vom Nutzer angetippte Routine (Kennung)
+let feierFuer = '';          // gegen doppelte Feiern je Routine+Tag
+let unterwegs = {};          // "routine:step" => true, solange die Aktion läuft
+const ruhig = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const el = (id) => document.getElementById(id);
+const uebersetzt = (s) => String(s == null ? '' : s);
+
+function jetztMinuten() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/* Eine Routine ist „an", wenn keine Zeiten gesetzt sind oder jetzt im Fenster
+   liegt; bis < von reicht über Mitternacht. */
+function istAktiv(r, min) {
+  if (r.von == null || r.von < 0 || r.bis == null || r.bis < 0) { return true; }
+  if (r.von === r.bis) { return true; }
+  return r.von <= r.bis ? (min >= r.von && min <= r.bis) : (min >= r.von || min <= r.bis);
+}
+
+function aktiveRoutinen() {
+  const min = jetztMinuten();
+  return (zustand && zustand.routines || []).filter((r) => r.steps.length > 0 && istAktiv(r, min));
+}
+
+function person(id) {
+  return (zustand && zustand.members && zustand.members[id]) || { name: '', avatar: '' };
+}
+
+function zeit(min) {
+  return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+}
+
+function textErsetzen(vorlage, werte) {
+  let s = uebersetzt(vorlage);
+  werte.forEach((w, i) => {
+    s = s.replace('%' + (i + 1) + '$s', w).replace('%' + (i + 1) + '$d', w).replace('%s', w).replace('%d', w);
+  });
+  return s;
+}
+
+// ── Zeichnen ────────────────────────────────────────────────────────────────
+function zeichnen() {
+  if (!zustand) { return; }
+  const aktive = aktiveRoutinen();
+  if (!aktive.some((r) => r.id === gewaehlt)) {
+    gewaehlt = aktive.length ? aktive[0].id : '';
+  }
+  zeichneChips(aktive);
+  const routine = aktive.find((r) => r.id === gewaehlt) || null;
+  if (routine) {
+    zeichneRoutine(routine);
+  } else {
+    zeichneLeerlauf();
+  }
+}
+
+function zeichneChips(aktive) {
+  const chips = el('chips');
+  chips.classList.toggle('an', aktive.length > 1);
+  if (aktive.length <= 1) { chips.innerHTML = ''; return; }
+  chips.innerHTML = '';
+  aktive.forEach((r) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (r.id === gewaehlt ? ' aktiv' : '');
+    const wer = person(r.memberId);
+    if (wer.avatar) {
+      const img = document.createElement('img'); img.src = wer.avatar; chip.appendChild(img);
+    } else {
+      const mini = document.createElement('span'); mini.className = 'mini';
+      mini.textContent = r.emoji || '⭐'; chip.appendChild(mini);
+    }
+    const name = document.createElement('span');
+    name.textContent = wer.name || r.name;
+    chip.appendChild(name);
+    chip.addEventListener('click', () => { gewaehlt = r.id; zeichnen(); });
+    chips.appendChild(chip);
+  });
+}
+
+function zeichneRoutine(r) {
+  el('leer').classList.remove('an');
+  el('liste').style.display = '';
+  el('fortschritt').style.display = '';
+
+  const wer = person(r.memberId);
+  const bild = el('avatarBild');
+  if (wer.avatar) { bild.src = wer.avatar; bild.style.display = 'block'; el('avatarEmoji').style.display = 'none'; }
+  else { bild.style.display = 'none'; el('avatarEmoji').style.display = ''; el('avatarEmoji').textContent = r.emoji || '⭐'; }
+  el('hallo').textContent = wer.name ? textErsetzen(zustand.texts.hello, [wer.name]) : r.name;
+  el('untertitel').textContent = wer.name ? ((r.emoji ? r.emoji + ' ' : '') + r.name) : '';
+
+  const fertig = r.steps.filter((s) => s.done).length;
+  el('balkenfuellung').style.width = (r.steps.length ? Math.round(fertig / r.steps.length * 100) : 0) + '%';
+  el('zaehler').textContent = fertig >= r.steps.length && r.steps.length > 0
+    ? uebersetzt(zustand.texts.allDone)
+    : textErsetzen(zustand.texts.of, [fertig, r.steps.length]);
+
+  muenzenZeigen(r);
+
+  const liste = el('liste');
+  liste.innerHTML = '';
+  r.steps.forEach((s, i) => {
+    const zeile = document.createElement('div');
+    zeile.className = 'schritt' + (s.done ? ' fertig' : '');
+    zeile.innerHTML = '<div class="bild"></div><div class="titel"></div><div class="haken"><span>✓</span></div>';
+    zeile.querySelector('.bild').textContent = s.emoji || '✅';
+    zeile.querySelector('.titel').textContent = s.text;
+    zeile.addEventListener('click', () => schrittTippen(r, s, i, zeile));
+    liste.appendChild(zeile);
+  });
+  if (r.steps.length === 0) {
+    liste.innerHTML = '<div id="leerhinweis">' + uebersetzt(zustand.texts.noSteps) + '</div>';
+  }
+}
+
+function muenzenZeigen(r) {
+  const box = el('muenzen');
+  if (!zustand.coins) { box.style.display = 'none'; return; }
+  const stand = zustand.coins[r.beutel] || 0;
+  el('muenzZahl').textContent = stand;
+  box.style.display = 'flex';
+}
+
+// ── Tippen: Zielzustand senden, nie toggeln ────────────────────────────────
+function schrittTippen(r, s, i, zeile) {
+  const marke = r.id + ':' + i;
+  if (unterwegs[marke]) { return; }
+  unterwegs[marke] = true;
+  setTimeout(() => { delete unterwegs[marke]; }, 1500);
+
+  const ziel = !s.done;
+  s.done = ziel;                                  // optimistisch, Push korrigiert
+  zeile.classList.toggle('fertig', ziel);
+  zeile.classList.remove('huepft');
+  void zeile.offsetWidth;                         // Animation neu starten
+  zeile.classList.add('huepft');
+
+  if (ziel && zustand.coins && s.coins > 0) { muenzFlug(s.coins, r); }
+  if (typeof requestAction === 'function') {
+    requestAction('Check', JSON.stringify({ routine: r.id, step: i, done: ziel }));
+  }
+
+  const alle = r.steps.length > 0 && r.steps.every((x) => x.done);
+  zeichneRoutine(r);
+  if (ziel && alle && feierFuer !== zustand.day + ':' + r.id) {
+    feierFuer = zustand.day + ':' + r.id;
+    feiern();
+  }
+}
+
+function muenzFlug(anzahl, r) {
+  if (zustand.coins) { zustand.coins[r.beutel] = (zustand.coins[r.beutel] || 0) + anzahl; }
+  const flieger = document.createElement('div');
+  flieger.className = 'muenzflug';
+  flieger.textContent = '+' + anzahl;
+  el('muenzen').appendChild(flieger);
+  setTimeout(() => flieger.remove(), 1100);
+}
+
+// ── Leerlauf: Heute-ToDos, sonst freundlicher Hinweis ──────────────────────
+function zeichneLeerlauf() {
+  el('liste').style.display = 'none';
+  el('fortschritt').style.display = 'none';
+  el('muenzen').style.display = 'none';
+  const leer = el('leer');
+  leer.classList.add('an');
+
+  el('avatarBild').style.display = 'none';
+  el('avatarEmoji').style.display = '';
+  el('avatarEmoji').textContent = '🌞';
+  el('hallo').textContent = uebersetzt(zustand.texts.todoHead);
+  el('untertitel').textContent = '';
+
+  const todos = el('todos');
+  todos.innerHTML = '';
+  const eintraege = zustand.todos || [];
+  el('leerkopf').style.display = 'none';
+  el('leergross').style.display = eintraege.length ? 'none' : '';
+  eintraege.forEach((t) => {
+    const zeile = document.createElement('div');
+    zeile.className = 'schritt todo';
+    zeile.innerHTML = '<div class="bild"></div><div class="titel"></div><div class="frist"></div><div class="haken"><span>✓</span></div>';
+    const wer = person(t.memberId);
+    const bild = zeile.querySelector('.bild');
+    if (wer.avatar) { const img = document.createElement('img'); img.src = wer.avatar; bild.appendChild(img); }
+    else { bild.textContent = '📝'; }
+    zeile.querySelector('.titel').textContent = t.title;
+    zeile.querySelector('.frist').textContent = t.overdue ? uebersetzt(zustand.texts.overdue) : '';
+    zeile.addEventListener('click', () => {
+      if (zeile.classList.contains('fertig')) { return; }
+      zeile.classList.add('fertig');
+      if (typeof requestAction === 'function') {
+        requestAction('TodoCheck', JSON.stringify({ list: t.list, id: t.id, done: true }));
+      }
+    });
+    todos.appendChild(zeile);
+  });
+
+  // Wann geht es weiter? Kleinster künftiger Start, heute oder morgen.
+  const min = jetztMinuten();
+  let bester = null;
+  (zustand.routines || []).forEach((r) => {
+    if (r.von == null || r.von < 0 || r.steps.length === 0) { return; }
+    const abstand = r.von > min ? r.von - min : r.von + 1440 - min;
+    if (!bester || abstand < bester.abstand) { bester = { abstand: abstand, r: r }; }
+  });
+  el('leerhinweis').textContent = bester
+    ? textErsetzen(zustand.texts.idleNext, [zeit(bester.r.von), bester.r.name])
+    : (eintraege.length ? '' : uebersetzt(zustand.texts.idleNone));
+}
+
+// ── Feier: Konfetti aus eigener Hand ────────────────────────────────────────
+function feiern() {
+  const feier = el('feier');
+  feier.classList.add('an');
+  el('feierkarte').querySelector('.titel').textContent = uebersetzt(zustand.texts.allDone);
+  el('feierkarte').querySelector('.lob').textContent = uebersetzt(zustand.texts.praise);
+  if (!ruhig) { konfettiRegen(); }
+  const weg = () => { feier.classList.remove('an'); feier.removeEventListener('click', weg); };
+  feier.addEventListener('click', weg);
+  setTimeout(weg, 4000);
+}
+
+function konfettiRegen() {
+  const leinwand = el('konfetti');
+  const ctx = leinwand.getContext('2d');
+  if (!ctx) { return; }
+  leinwand.width = leinwand.clientWidth;
+  leinwand.height = leinwand.clientHeight;
+  const farben = ['#f6b73c', '#ff5f8f', '#4fc3f7', '#81c784', '#ba68c8',
+    getComputedStyle(document.documentElement).getPropertyValue('--akzent').trim() || '#00cdab'];
+  const teile = [];
+  for (let i = 0; i < 110; i++) {
+    teile.push({
+      x: Math.random() * leinwand.width,
+      y: -20 - Math.random() * leinwand.height * 0.5,
+      w: 6 + Math.random() * 6,
+      h: 8 + Math.random() * 8,
+      farbe: farben[i % farben.length],
+      vy: 2 + Math.random() * 3,
+      vx: -1 + Math.random() * 2,
+      dreh: Math.random() * Math.PI,
+      vdreh: -0.1 + Math.random() * 0.2
+    });
+  }
+  const start = Date.now();
+  (function malen() {
+    ctx.clearRect(0, 0, leinwand.width, leinwand.height);
+    teile.forEach((t) => {
+      t.x += t.vx; t.y += t.vy; t.dreh += t.vdreh;
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.dreh);
+      ctx.fillStyle = t.farbe;
+      ctx.fillRect(-t.w / 2, -t.h / 2, t.w, t.h);
+      ctx.restore();
+    });
+    if (Date.now() - start < 3200 && el('feier').classList.contains('an')) {
+      requestAnimationFrame(malen);
+    } else {
+      ctx.clearRect(0, 0, leinwand.width, leinwand.height);
+    }
+  })();
+}
+
+// ── Anbindung an die Visu ───────────────────────────────────────────────────
+function handleMessage(daten) {
+  if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
+  if (!daten || typeof daten !== 'object' || daten.type !== 'state') { return; }
+  zustand = daten;
+  zeichnen();
+}
+window.handleMessage = handleMessage;
+window.updateState = handleMessage;
+window.addEventListener('message', (event) => { if (event) { handleMessage(event.data); } });
+
+// Minuten-Tick: Fenstergrenzen ohne Server-Hilfe nachziehen
+setInterval(zeichnen, 30000);
+})();
+</script>

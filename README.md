@@ -55,6 +55,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Stundenplan** | Device | Der Wochenplan der Kinder |
 | **SymDo - ToDo Übersicht** | Device | Kennzahlen einer Aufgabenliste als kleine Kachel |
 | **SymDo - Einkaufslisten Übersicht** | Device | Die offenen Artikel als Bild-Leiste |
+| **SymDo - Routinen** | Device | Tägliche Häkchen-Routinen für Kinder: Anzeigezeiten je Routine, optionale Belohnungs-Münzen, Konfetti — und die Heute-Aufgaben als Füller |
 
 ## Schnellstart
 
