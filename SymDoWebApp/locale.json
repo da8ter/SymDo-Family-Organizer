@@ -1,7 +1,7 @@
 {
     "translations": {
         "en": {
-            "SymDo Web App": "SymDo - Web App",
+            "SymDo Web App": "SymDo - Familiorganizer (Web App & Kachel)",
             "Badge: quantity": "Quantity",
             "Badge: repeat": "Repeat",
             "Badge: due date": "Due date",
@@ -9,7 +9,7 @@
             "Badge: priority": "Priority"
         },
         "de": {
-            "SymDo Web App": "SymDo - Web App",
+            "SymDo Web App": "SymDo - Familiorganizer (Web App & Kachel)",
             "%d SymDo Gateway instances found. The app is served by \"%s\" (#%d) — the one with the lowest instance ID; the others only synchronise accounts.": "%d SymDo-Gateway-Instanzen gefunden. Die App bedient „%s\" (#%d) — die mit der niedrigsten Instanz-ID; die übrigen synchronisieren nur Konten.",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
