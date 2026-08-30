@@ -364,11 +364,8 @@ trait MealStore
             'srcKind'    => $srcKind,
             'srcUrl'     => $srcUrl,
             'srcMediaId' => $srcMediaId,
-            // Für die Auswahl vor der Übernahme: Name, Menge und Kategorie-Chip.
-            'ingredients' => array_map(
-                static fn(array $z): array => ['name' => $z['name'], 'amount' => $z['amount'], 'category' => $z['category']],
-                $fav !== null ? (array)$fav['itemList'] : []
-            ),
+            // Für die Zutatenliste und die Auswahl vor der Übernahme.
+            'ingredients' => $this->ZutatenMitBild($fav !== null ? (array)$fav['itemList'] : []),
         ];
     }
 
@@ -423,6 +420,120 @@ trait MealStore
             return $zielId;
         }
         return $this->QuellListe();
+    }
+
+    /**
+     * Zutaten um die Adresse ihres Produktbildes ergänzen — dieselben Bilder,
+     * die die Einkaufsliste an ihren Zeilen zeigt.
+     *
+     * Der Server schlägt nach, nicht die Kachel: Die Zuordnung ist eine Tabelle
+     * mit über 3000 Einträgen (Plural- und Umlautformen), die niemand je Kachel
+     * mitschicken will. Ausgeliefert wird über den Asset-Hook der Einkaufsliste,
+     * dessen Token in imageBase steckt — die Bilder reisen also NICHT im
+     * Zustand, und der Browser cacht sie.
+     *
+     * @param list<array{name:string,amount:string,category:string}> $zutaten
+     */
+    private function ZutatenMitBild(array $zutaten): array
+    {
+        $sl = $this->QuellListe();
+        $bilder = [];
+        $basis = '';
+        if ($sl > 0 && function_exists('SL_GetAppState')) {
+            try {
+                $st = json_decode((string)@SL_GetAppState($sl), true)['state'] ?? [];
+                $bilder = is_array($st['availableImages'] ?? null) ? $st['availableImages'] : [];
+                $basis = (string)($st['imageBase'] ?? '');
+            } catch (\Throwable $e) {
+                // ohne Zuordnung eben ohne Bilder
+            }
+        }
+        // Nach Länge sortiert: „lasagneplatten" muss vor „platten" greifen.
+        $schluessel = array_keys($bilder);
+        usort($schluessel, static fn(string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+
+        $raus = [];
+        foreach ($zutaten as $z) {
+            $eintrag = ['name' => $z['name'], 'amount' => $z['amount'], 'category' => $z['category'], 'image' => ''];
+            $datei = $basis === '' ? '' : $this->BildFuerZutat((string)$z['name'], $bilder, $schluessel);
+            if ($datei !== '') {
+                $eintrag['image'] = $basis . rawurlencode($datei);
+            }
+            $raus[] = $eintrag;
+        }
+        return $raus;
+    }
+
+    /**
+     * Bilddatei zu einem Zutatennamen — dieselbe Auflösung wie in der Web-App
+     * (_piResolve): erst der Name selbst samt Umlaut- und Pluralformen, dann
+     * der längste Bildname, auf den er endet, dann der längste, der als ganzes
+     * Wort darin steht.
+     *
+     * Nötig, weil Rezepte anders schreiben als Einkaufslisten: „Zwiebel(n)",
+     * „Baguette(s)", „Käse (Gruyère oder Allgäuer)" — exakt nachschlagen findet
+     * davon nichts.
+     *
+     * @param array<string,string> $bilder Name => Datei
+     * @param list<string> $schluessel nach Länge absteigend
+     */
+    private function BildFuerZutat(string $name, array $bilder, array $schluessel): string
+    {
+        // Klammerzusätze und alles ab dem ersten Komma weg: „Käse (Gruyère oder
+        // Allgäuer)" wird zu „käse", „Zwiebel(n)" zu „zwiebel".
+        $roh = mb_strtolower(trim($name));
+        $roh = (string)preg_replace('/\([^)]*\)/u', ' ', $roh);
+        $roh = trim((string)preg_split('/,/u', $roh)[0]);
+        $roh = trim((string)preg_replace('/\s+/u', ' ', $roh));
+        if ($roh === '') {
+            return '';
+        }
+
+        $falten = static fn(string $t): string => strtr($t, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $entfalten = static fn(string $t): string => strtr($t, ['ae' => 'ä', 'oe' => 'ö', 'ue' => 'ü', 'ss' => 'ß']);
+
+        $kandidaten = [];
+        $merken = static function (string $v) use (&$kandidaten): void {
+            if ($v !== '' && !in_array($v, $kandidaten, true)) {
+                $kandidaten[] = $v;
+            }
+        };
+        foreach ([$roh, $falten($roh), $entfalten($roh)] as $v) {
+            $merken($v);
+        }
+        // Ein deutsches Plural-Suffix abschneiden (längstes zuerst), wie die
+        // Einkaufsliste es beim Aufbau ihrer Tabelle tut.
+        foreach (['nen', 'en', 'er', 'es', 'se', 'n', 'e', 's'] as $endung) {
+            if (mb_strlen($roh) > mb_strlen($endung) + 2 && str_ends_with($roh, $endung)) {
+                $stamm = mb_substr($roh, 0, mb_strlen($roh) - mb_strlen($endung));
+                foreach ([$stamm, $falten($stamm), $entfalten($stamm)] as $v) {
+                    $merken($v);
+                }
+            }
+        }
+
+        foreach ($kandidaten as $k) {
+            if (isset($bilder[$k]) && is_string($bilder[$k])) {
+                return $bilder[$k];
+            }
+        }
+        // Zusammensetzungen: „buttermilch" endet auf „milch".
+        foreach ($schluessel as $k) {
+            foreach ($kandidaten as $c) {
+                if (mb_strlen($c) > mb_strlen($k) && str_ends_with($c, $k)) {
+                    return (string)$bilder[$k];
+                }
+            }
+        }
+        // „gehackte tomaten" enthält „tomaten" als ganzes Wort.
+        foreach ($schluessel as $k) {
+            foreach ($kandidaten as $c) {
+                if (mb_strlen($c) > mb_strlen($k) && preg_match('/(?<!\p{L})' . preg_quote($k, '/') . '(?!\p{L})/u', $c) === 1) {
+                    return (string)$bilder[$k];
+                }
+            }
+        }
+        return '';
     }
 
     /** Auskunft fürs Briefing: das Gericht eines Tages als JSON. */
