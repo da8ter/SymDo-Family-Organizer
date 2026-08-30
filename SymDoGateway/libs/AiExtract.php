@@ -82,6 +82,13 @@ trait AiExtract
     private const AI_MEDIA_EDGE       = 1600;
     private const AI_MEDIA_QUALITY    = 82;
 
+    // Gerichtsbilder (Essensplan): Bilderzeugung gibt es nur bei OpenAI, der
+    // Key wird darum direkt gelesen — unabhaengig vom gewaehlten Chat-Anbieter.
+    // 'medium' kostet ~4 Cent je Bild und reicht fuer Kachel-Miniaturen locker.
+    // Eine Bilderzeugung braucht laenger als ein Chat-Aufruf (gemessen bis ~1 min).
+    private const AI_IMAGE_MODEL   = 'gpt-image-1';
+    private const AI_IMAGE_TIMEOUT = 120;
+
     // ────────────────────────────── ToDo (Foto → Aufgaben) ──────────────────────────────
 
     private function HandleAiExtract(array $device): void
@@ -291,6 +298,24 @@ trait AiExtract
         // beim Anbieter kein Budget verbraucht.
         if ($this->MailDayLimitReached()) {
             return $this->AiRelayError('ai_quota', $this->Translate('Daily limit for AI calls reached.'));
+        }
+
+        // Gerichtsbild fuer den Essensplan: {name, items[]} → PNG (base64) im
+        // festen Stil. Der Aufrufer (MealPlan-Modul, serverseitig) verkleinert
+        // und legt selbst ab — hier entsteht nur das Bild.
+        if (str_ends_with($path, 'dishimage')) {
+            $items = [];
+            foreach ((array)($body['items'] ?? []) as $item) {
+                if (is_string($item) && trim($item) !== '') {
+                    $items[] = trim($item);
+                }
+            }
+            $r = $this->AiGenerateDishImage($this->BodyStr($body, 'name'), $items);
+            if (($r['ok'] ?? false) !== true) {
+                return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
+            }
+            $this->MailCountDay();
+            return json_encode(['ok' => true, 'image' => $r['image']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
         if (str_ends_with($path, 'ingredients')) {
@@ -881,6 +906,106 @@ trait AiExtract
             return $r;
         }
         return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
+    }
+
+    // ────────────────────────────── Gerichtsbild (Essensplan) ──────────────────────────────
+
+    /**
+     * Erzeugt ein Gerichtsbild im festen Essensplan-Stil: angerichteter Teller
+     * streng von oben, transparenter Hintergrund. Nur OpenAI kann Bilder, der
+     * Key wird deshalb direkt gelesen — der Chat-Anbieter darf ein anderer sein.
+     * @return array ok:true+image(base64-PNG) | ok:false+code+message+status
+     */
+    private function AiGenerateDishImage(string $name, array $zutaten): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return ['ok' => false, 'code' => 'invalid_payload', 'message' => $this->Translate('No dish name provided.'), 'status' => 400];
+        }
+        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        if ($key === '') {
+            return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 503];
+        }
+
+        // Dieselbe Sperre wie die Chat-Aufrufe: nur EIN Anbieter-Aufruf zugleich,
+        // sonst blockieren parallele Requests den Symcon-Webserver.
+        $lock = 'TGW_Ai_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 0)) {
+            return ['ok' => false, 'code' => 'ai_busy', 'message' => $this->Translate('Another AI request is already running.'), 'status' => 429];
+        }
+        try {
+            $resp = $this->AiHttpPost(
+                'https://api.openai.com/v1/images/generations',
+                ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+                (string)json_encode([
+                    'model'         => self::AI_IMAGE_MODEL,
+                    'prompt'        => $this->AiDishImagePrompt($name, $zutaten),
+                    'size'          => '1024x1024',
+                    'quality'       => 'medium',
+                    'background'    => 'transparent',
+                    'output_format' => 'png',
+                ], JSON_UNESCAPED_UNICODE),
+                self::AI_IMAGE_TIMEOUT
+            );
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+        return $this->AiParseImageResponse($resp);
+    }
+
+    /**
+     * Der feste Stil-Prompt — dieselbe Schule wie die Produktbilder der
+     * Einkaufsliste (tools/generate-images.mjs), aber als fertiges Gericht:
+     * ein passender Teller streng von oben, freigestellt. Die Zutaten geben
+     * dem Modell nur Kontext, damit das Gericht plausibel aussieht.
+     */
+    private function AiDishImagePrompt(string $name, array $zutaten): string
+    {
+        $prompt = 'Erstelle folgendes Bild: ' . mb_substr($name, 0, 120);
+        $liste  = implode(', ', array_slice($zutaten, 0, 30));
+        if ($liste !== '') {
+            $prompt .= ', prepared from ' . mb_substr($liste, 0, 600);
+        }
+        return $prompt . ', premium 3D food render, served as a complete finished dish'
+            . ' plated on a single fitting plate or bowl, top-down view directly from'
+            . ' above (90 degree overhead), slightly idealized but believable, isolated,'
+            . ' transparent background, centered, soft refined studio lighting, fresh'
+            . ' appetizing appearance, realistic proportions, high detail, single plate'
+            . ' only, no cutlery, no table, no napkin, no hands, no text, no logo,'
+            . ' no watermark, not cartoonish';
+    }
+
+    /**
+     * Antwort der Bild-API auswerten — eigene Methode, damit der Pruefstand die
+     * Fehler-Zuordnung ohne echten Anbieter messen kann.
+     * @param array $resp ['status','body','err'] aus AiHttpPost
+     * @return array ok:true+image | ok:false+code+message+status
+     */
+    private function AiParseImageResponse(array $resp): array
+    {
+        if (($resp['err'] ?? '') !== '') {
+            return ['ok' => false, 'code' => 'ai_unreachable', 'message' => $this->Translate('Could not reach the AI service.'), 'status' => 502];
+        }
+        $status = (int)($resp['status'] ?? 0);
+        $daten  = json_decode((string)($resp['body'] ?? ''), true);
+        if ($status < 200 || $status >= 300) {
+            $detail = is_array($daten) ? trim((string)($daten['error']['message'] ?? '')) : '';
+            $code   = match (true) {
+                $status === 401 || $status === 403 => 'ai_unauthorized',
+                $status === 429                    => 'ai_rate_limited',
+                default                            => 'ai_upstream',
+            };
+            $this->SendDebug('AiDishImage', sprintf('HTTP %d: %s', $status, mb_substr($detail, 0, 300)), 0);
+            return ['ok' => false, 'code' => $code,
+                'message' => $detail !== '' ? mb_substr($detail, 0, 200) : $this->Translate('AI provider returned an error.'),
+                'status'  => $status];
+        }
+        $b64 = is_array($daten) ? (string)($daten['data'][0]['b64_json'] ?? '') : '';
+        $roh = base64_decode($b64, true);
+        if (!is_string($roh) || !str_starts_with($roh, "\x89PNG")) {
+            return ['ok' => false, 'code' => 'ai_bad_response', 'message' => $this->Translate('AI provider returned no image.'), 'status' => 502];
+        }
+        return ['ok' => true, 'image' => $b64];
     }
 
     // ────────────────────────────── Gemeinsame Provider-Logik ──────────────────────────────

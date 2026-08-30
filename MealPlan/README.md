@@ -17,6 +17,12 @@ legt die Zutaten in den Einkaufswagen.
   zusammen).
 - **Briefing:** das tägliche Briefing erwähnt das Gericht („Heute Abend:
   Lasagne"; die Abend-Vorschau nennt das von morgen).
+- **KI-Gerichtsbilder (optional):** Auf Wunsch bekommt jedes eingeplante
+  Rezept automatisch ein einheitliches Gerichtsbild — angerichteter Teller
+  von oben, transparenter Hintergrund. Einmal je Rezept erzeugt und
+  wiederverwendet; ein vorhandenes Rezeptfoto bleibt als Quelle erhalten
+  („Rezept öffnen"). Braucht ein SymDo Gateway mit OpenAI-API-Key
+  (`gpt-image-1`, ~4 Cent je Bild), Schalter in den Instanz-Einstellungen.
 
 ## Einrichtung
 
