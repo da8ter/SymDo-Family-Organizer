@@ -87,20 +87,29 @@ body {
   background: var(--bg); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px;
   max-height: 86%; overflow-y: auto; box-sizing: border-box; padding: 14px 14px 18px;
   border: 1px solid var(--rand); border-bottom: none;
+  /* Flex-Kind im Schleier: ohne min-width waechst es auf die min-content-Breite
+     der laengsten Knopfzeile und ragt auf schmalen Kacheln rechts hinaus. */
+  min-width: 0;
 }
 #blatt h3 { margin: 0 0 4px; font-size: 17px; }
 #blatt .abschnitt { margin-top: 14px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--dezent); }
-.fav {
-  display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px;
-  background: var(--zeile); margin-top: 6px; cursor: pointer; font-weight: 600; font-size: 14px;
+/* Favoriten als Dropdown: eine Zeile statt einer Liste — das Blatt bleibt
+   kurz, auch wenn der Haushalt viele Rezepte sammelt. */
+#favWahl {
+  width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 34px 10px 12px;
+  border-radius: 10px; border: 1px solid var(--rand);
+  color: var(--text); font-size: 15px; font-weight: 600;
+  /* Eigener Chevron: das native Aussehen faellt je Plattform anders aus und
+     laesst das Feld teils wie eine Textzeile wirken. Grau traegt beide Themes. */
+  -webkit-appearance: none; appearance: none;
+  background: var(--zeile) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23999999' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 12px center;
 }
-.fav .zutaten { margin-left: auto; color: var(--dezent); font-size: 12px; flex: 0 0 auto; }
 #blatt input[type="text"], #blatt input[type="url"] {
   width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 12px;
   border-radius: 10px; border: 1px solid var(--rand); background: var(--zeile);
   color: var(--text); font-size: 15px;
 }
-.knopfzeile { display: flex; gap: 8px; margin-top: 8px; }
+.knopfzeile { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .knopf {
   flex: 1 1 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rand);
   background: var(--zeile); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer;
@@ -136,7 +145,7 @@ body {
   <div id="blatt">
     <h3 id="blattTitel"></h3>
     <div class="abschnitt" id="favKopf"></div>
-    <div id="favListe"></div>
+    <select id="favWahl"></select>
     <div class="abschnitt" id="freiKopf"></div>
     <input type="text" id="freiText" maxlength="120">
     <div class="knopfzeile"><button class="knopf voll" id="freiSpeichern"></button></div>
@@ -295,17 +304,24 @@ function blattOeffnen(tag) {
   el('entfernen').style.display = tag.title ? '' : 'none';
   el('blattZu').textContent = t('close');
 
-  const favListe = el('favListe');
-  favListe.innerHTML = '';
+  const wahl = el('favWahl');
+  wahl.innerHTML = '';
+  const leer = document.createElement('option');
+  leer.value = '';
+  leer.textContent = t('favPick');
+  wahl.appendChild(leer);
   (zustand.favorites || []).forEach((f) => {
-    const zeile = document.createElement('div');
-    zeile.className = 'fav';
-    zeile.innerHTML = '<span>🍽</span><span class="name"></span><span class="zutaten"></span>';
-    zeile.querySelector('.name').textContent = f.name;
-    zeile.querySelector('.zutaten').textContent = f.items;
-    zeile.addEventListener('click', () => gerichtSetzen(f.id, ''));
-    favListe.appendChild(zeile);
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.name;
+    wahl.appendChild(opt);
   });
+  // Steht am Tag schon ein Rezept, zeigt das Dropdown es an — ein WECHSEL
+  // (change) speichert; dieselbe Wahl erneut ist kein Ereignis, das passt.
+  wahl.value = tag.listId && (zustand.favorites || []).some((f) => f.id === tag.listId) ? tag.listId : '';
+  const hatFavoriten = (zustand.favorites || []).length > 0;
+  el('favKopf').style.display = hatFavoriten ? '' : 'none';
+  wahl.style.display = hatFavoriten ? '' : 'none';
   el('schleier').classList.add('an');
 }
 
@@ -392,6 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
   el('blattZu').addEventListener('click', blattZu);
   el('schleier').addEventListener('click', (ev) => { if (ev.target === el('schleier')) { blattZu(); } });
   el('entfernen').addEventListener('click', () => gerichtSetzen('', ''));
+  el('favWahl').addEventListener('change', () => {
+    const listId = el('favWahl').value;
+    if (listId !== '') { gerichtSetzen(listId, ''); }
+  });
   el('freiSpeichern').addEventListener('click', () => {
     const text = el('freiText').value.trim();
     if (text) { gerichtSetzen('', text); }

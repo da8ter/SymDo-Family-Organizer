@@ -289,6 +289,7 @@ trait MealStore
                 'noSource'  => $this->Translate('Select a shopping list in the instance settings first.'),
                 'planned'   => $this->Translate('Plan a meal'),
                 'favHead'   => $this->Translate('From the favorite lists'),
+                'favPick'   => $this->Translate('Choose a recipe …'),
                 'freeHead'  => $this->Translate('Free text'),
                 'freeHint'  => $this->Translate('e.g. leftovers, order pizza'),
                 'scanHead'  => $this->Translate('New recipe'),
