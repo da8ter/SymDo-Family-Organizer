@@ -11,7 +11,11 @@
   --akzent: var(--accent-color, #00cdab);
   --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
-  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+  /* Button-Sprache der Web-App: durchscheinende Inhaltston-Flaeche (7 %),
+     Raender mit 14 % — dieselben Mischungen wie dort. */
+  --rand: color-mix(in srgb, var(--content-color) 14%, transparent);
+  --flaeche: color-mix(in srgb, var(--content-color) 7%, transparent);
+  --rot: #ff4d4d;
 }
 html[data-symdo-theme="light"] {
   --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
@@ -35,7 +39,7 @@ body {
 #kopf { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; }
 .pfeil {
   width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rand);
-  background: var(--zeile); color: var(--text); font-size: 16px; cursor: pointer;
+  background: var(--flaeche); color: var(--text); font-size: 16px; cursor: pointer;
   display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
   user-select: none; -webkit-user-select: none;
 }
@@ -43,8 +47,8 @@ body {
 #wochentitel { flex: 1 1 auto; text-align: center; font-weight: 800; font-size: clamp(15px, 4.6vmin, 18px); }
 #wochenkorb {
   flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
-  border: 1px solid var(--rand); border-radius: 999px; padding: 7px 12px;
-  background: var(--zeile); color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer;
+  border: none; border-radius: 999px; padding: 8px 13px;
+  background: var(--flaeche); color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer;
 }
 
 /* ── Tage ───────────────────────────────────────────────────────────────── */
@@ -75,7 +79,7 @@ body {
 .tag .titel.leer { color: var(--dezent); font-weight: 500; }
 .tag .korb {
   width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; border: 1px solid var(--rand);
-  background: transparent; color: var(--text); font-size: 15px; cursor: pointer;
+  background: var(--flaeche); color: var(--text); font-size: 15px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .tag .korb.ok { background: var(--akzent); border-color: var(--akzent); color: #fff; }
@@ -101,7 +105,7 @@ body {
 #detail { display: none; position: relative; }
 #detailStift {
   position: absolute; top: 12px; right: 12px; width: 38px; height: 38px;
-  border-radius: 50%; border: 1px solid var(--rand); background: var(--zeile);
+  border-radius: 50%; border: 1px solid var(--rand); background: var(--flaeche);
   font-size: 16px; cursor: pointer; line-height: 1; color: var(--text);
 }
 #detailBild {
@@ -145,13 +149,16 @@ body {
   border-radius: 10px; border: 1px solid var(--rand); background: var(--zeile);
   color: var(--text); font-size: 15px;
 }
-.knopfzeile { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.knopfzeile { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+/* Blatt-Knoepfe wie die Dialog-Fusszeile der Web-App: randlos auf
+   durchscheinender Flaeche, 12er-Radius, fette Schrift; „primary" =
+   Akzent mit weisser Schrift, destruktiv = roter Text. */
 .knopf {
-  flex: 1 1 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rand);
-  background: var(--zeile); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer;
+  flex: 1 1 auto; padding: 12px; border-radius: 12px; border: none;
+  background: var(--flaeche); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer;
 }
-.knopf.voll { background: var(--akzent); border-color: var(--akzent); color: #fff; }
-.knopf.rot { color: #ff6b6b; }
+.knopf.voll { background: var(--akzent); color: #fff; }
+.knopf.rot { color: var(--rot); }
 .knopf[disabled] { opacity: .4; }
 #scanErgebnis { display: none; margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--zeile); }
 #scanErgebnis .anzahl { color: var(--dezent); font-size: 12px; margin-top: 4px; }
