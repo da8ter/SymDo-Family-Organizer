@@ -4567,9 +4567,21 @@ const HEART_SOLID_SVG = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill=
    Aenderung mit. So greift ausserdem der Browser-Cache. */
 function dishImageUrl(list) {
   const mid = (list && list.isRecipe) ? parseInt(list.imageId, 10) || 0 : 0;
-  if (!mid || !window.__dishHookUrl) { return ''; }
-  // Die Basis endet auf „…&f=" — fuer das Bild zaehlt stattdessen a/mid.
-  // s=96: das Badge zeigt 34 px, doppelt reicht auch auf Retina-Schirmen.
+  if (!mid) { return ''; }
+  // Zwei Betriebsarten, zwei Wege — dasselbe Muster wie mediaFileUrl:
+  // Die Standalone-Web-App (auch als Startbildschirm-App und ueber Connect)
+  // spricht die Bridge mit ihrem eigenen Token an. Der Asset-Hook der
+  // Einkaufsliste liegt dort hinter der Symcon-Anmeldung — von aussen kam
+  // darueber nur ein kaputtes Bild.
+  if (window.__SYMDO__) {
+    let token = ''; try { token = ls.get('symdo.token') || ''; } catch (e) { token = ''; }
+    if (!token) { return ''; }
+    const base = window.__SYMDO__.apiBase || '/hook/lists/app/v1';
+    // s=96: das Badge zeigt 34 px, doppelt reicht auch auf Retina-Schirmen.
+    return base + '/dishimage/' + mid + '?t=' + encodeURIComponent(token) + '&s=96';
+  }
+  // Visu-Kachel: kein Token, dafuer der Asset-Hook (Basis endet auf „…&f=").
+  if (!window.__dishHookUrl) { return ''; }
   return window.__dishHookUrl.replace(/&f=$/, '') + '&a=dish&s=96&mid=' + mid;
 }
 function favBadgeHtml(list) {
