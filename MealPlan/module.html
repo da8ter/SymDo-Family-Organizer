@@ -407,15 +407,23 @@ function quelleOeffnen() {
     knopf.disabled = false;
     knopf.textContent = alt;
     const j = (r && r.json) || {};
-    if (j.ok === true && j.base64) {
-      quelleZeigen(j.isPdf === true, String(j.base64));
+    // Die Antwort traegt eine data:-URL (AiGetMedia) — fuer den Betrachter
+    // wird ihr Base64-Teil zum Blob, data:-URLs selbst darf kein Tab oeffnen.
+    const b64 = j.ok === true ? String(j.dataUrl || '').split(',')[1] || '' : '';
+    if (b64 !== '') {
+      quelleZeigen(j.isPdf === true, b64);
     } else {
       toast((j.error && j.error.message) || t('failed'));
     }
   });
 }
 
-/** Foto oder PDF als Blob im Vollbild-Betrachter — data:-URLs darf ein Tab nicht öffnen. */
+/**
+ * Foto oder PDF als Blob im Vollbild-Betrachter — data:-URLs darf ein Tab
+ * nicht öffnen. Ehrliche Grenze: WebKit (iOS-Visu) zeigt ein PDF im iframe
+ * nur als erste Seite; mehr geht ohne Token nicht, und Rezepte stehen in
+ * aller Regel auf Seite eins.
+ */
 function quelleZeigen(istPdf, b64) {
   let bytes;
   try { bytes = atob(b64); } catch (e) { toast(t('failed')); return; }
