@@ -1344,6 +1344,9 @@ html[data-symdo-theme="dark"] .member-bar {
 .fav-badge-dish img { width: 100%; height: 100%; border-radius: 999px; object-fit: cover; }
 .fav-badge-warten { color: var(--muted); font-size: 15px; }
 .fav-badge-ordner { color: #ff2d55; font-size: 15px; background: rgba(255, 45, 85, .12); }
+/* Gerichtsbild ueber den Zutaten einer Rezeptliste. */
+.fav-hero { display: flex; justify-content: center; padding: 4px 0 12px; }
+.fav-hero img { width: 160px; height: 160px; object-fit: contain; }
 .fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fav-name { font-size: 15px; font-weight: 600; }
 .fav-count { font-size: 12.5px; color: var(--muted); }
@@ -5430,6 +5433,12 @@ function renderFavList(el, st, detail) {
   let html = `<div class="screen-head" data-key="detailhead">` +
     `<button class="icon-btn" id="btnFavBack" aria-label="${translate('Back')}"><i class="fa-light fa-chevron-left"></i></button>` +
     `<h2>${escapeHtml(detail.name)}</h2></div>`;
+  // Nur bei Rezepten: das Gerichtsbild gross und mittig ueber die Zutaten.
+  // Groesser angefordert als das Badge (s=320), sonst waere es hier unscharf.
+  const kopfBild = dishImageUrl(detail);
+  if (kopfBild) {
+    html += `<div class="fav-hero" data-key="favhero"><img src="${escapeHtml(kopfBild.replace('&s=96', '&s=320'))}" alt="" /></div>`;
+  }
   const items = detail.items || [];
   if (items.length === 0) {
     html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-heart"></i>${translate('No items yet')}</div>`;
