@@ -686,7 +686,9 @@ function scanZeigen(daten, url, mediaId) {
   el('scanName').value = (daten.title ? String(daten.title) : '').slice(0, 80);
   el('scanName').placeholder = t('nameHint');
   el('scanAnzahl').innerHTML = items.length + ' × <i class="fa-light fa-basket-shopping"></i>';
-  el('scanErgebnis').style.display = '';
+  // 'block', nicht '': leer fiele auf das display:none des Stylesheets zurueck
+  // — der Fund war da, blieb aber unsichtbar.
+  el('scanErgebnis').style.display = 'block';
 }
 
 function scanLaeuft(knopf) {
