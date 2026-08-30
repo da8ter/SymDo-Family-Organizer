@@ -432,6 +432,37 @@ trait DishImages
         return $kat;
     }
 
+    /**
+     * GET /v1/dishimage/{mediaId} — das Bild als PNG. Anders als der
+     * Asset-Hook der Einkaufsliste prüft dieser Weg gegen die eigene
+     * Ablage-Kategorie: Nur was darunter hängt, geht hinaus.
+     */
+    private function HandleDishImage(int $mediaId, int $kante): void
+    {
+        $kat = (int)@$this->ReadAttributeInteger('DishImageCategory');
+        if ($mediaId <= 0 || $kat <= 0 || !@IPS_MediaExists($mediaId) || (int)@IPS_GetParent($mediaId) !== $kat) {
+            $this->SendApiError('not_found', 'Not a dish image', 404);
+            return;
+        }
+        $roh = base64_decode((string)@IPS_GetMediaContent($mediaId), true);
+        if (!is_string($roh) || !str_starts_with($roh, "\x89PNG")) {
+            $this->SendApiError('not_found', 'Not a dish image', 404);
+            return;
+        }
+        $kante = max(0, min(512, $kante));
+        if ($kante > 0) {
+            $klein = $this->DishVerkleinern($roh, $kante);
+            if ($klein !== '' && strlen($klein) < strlen($roh)) {
+                $roh = $klein;
+            }
+        }
+        header('Content-Type: image/png');
+        header('X-Content-Type-Options: nosniff');
+        // Ein erzeugtes Bild ändert sich nie — ein neues bekäme eine neue Kennung.
+        header('Cache-Control: public, max-age=31536000, immutable');
+        echo $roh;
+    }
+
     // ------------------------------------------------------------------
     // Rückmeldung an die Einkaufsliste
     // ------------------------------------------------------------------

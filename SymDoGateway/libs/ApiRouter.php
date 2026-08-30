@@ -76,7 +76,10 @@ trait ApiRouter
             || ($resource === 'ai' && $method === 'GET' && ($route[2] ?? '') === 'media')
             // GET /notes/media/{id} ist derselbe Fall: ein Notiz-PDF oeffnet der
             // System-Viewer direkt, ohne unser JavaScript.
-            || ($resource === 'notes' && $method === 'GET' && ($route[2] ?? '') === 'media');
+            || ($resource === 'notes' && $method === 'GET' && ($route[2] ?? '') === 'media')
+            // GET /dishimage/{id} laedt ein schlichter Bildlader (iOS-Cache,
+            // <img>) — auch der kann keinen Header setzen.
+            || ($resource === 'dishimage' && $method === 'GET');
         $device = $this->AuthenticateRequest($queryTokenOk);
         if ($device === null) {
             $this->SendApiError('unauthorized', 'Missing or invalid token', 401);
@@ -278,6 +281,14 @@ trait ApiRouter
                 }
                 if ($method === 'GET') {
                     $this->HandleAsset(array_slice($route, 2));
+                    return;
+                }
+                break;
+            case 'dishimage':
+                // GET /dishimage/{mediaId}[?s=96] — das erzeugte Gerichtsbild
+                // einer Rezept-Favoritenliste als PNG.
+                if ($method === 'GET') {
+                    $this->HandleDishImage((int)($route[2] ?? 0), (int)($_GET['s'] ?? 0));
                     return;
                 }
                 break;
