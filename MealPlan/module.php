@@ -134,6 +134,23 @@ class SymDoMealPlan extends IPSModuleStrict
                 }
                 return;
 
+            case 'SetServings':
+                // Portionszahl eines Rezepts dauerhaft aendern: {listId, servings, amounts}
+                $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
+                $sl = $this->QuellListe();
+                if (is_array($daten) && $sl > 0) {
+                    try {
+                        IPS_RequestAction($sl, 'SetFavoriteServings', json_encode([
+                            'listId'   => trim((string)($daten['listId'] ?? '')),
+                            'servings' => (int)($daten['servings'] ?? 0),
+                            'amounts'  => is_array($daten['amounts'] ?? null) ? $daten['amounts'] : [],
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                    } catch (\Throwable $e) {
+                        $this->SendDebug('MealPlan', 'Portionen speichern fehlgeschlagen: ' . $e->getMessage(), 0);
+                    }
+                }
+                return;
+
             case 'MealDetail':
                 // Detail-Blatt der Kachel: {date} → größeres Bild + Rezept-Quelle.
                 $this->Push($this->GerichtDetail(trim((string)$Value)));
@@ -338,6 +355,9 @@ class SymDoMealPlan extends IPSModuleStrict
                 // Was aus einer Rezept-Analyse kommt, IST ein Rezept — nur mit
                 // diesem Haken erzeugt das Gateway ein Gerichtsbild.
                 'isRecipe' => true,
+                // Die KI erkennt die Portionszahl; ohne sie bliebe der
+                // Portions-Steller im Rezept ohne Bezugsgroesse.
+                'servings' => (int)($daten['servings'] ?? 0),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), true);
         } catch (\Throwable $e) {
             $this->SendDebug('MealPlan', 'Rezept speichern fehlgeschlagen: ' . $e->getMessage(), 0);

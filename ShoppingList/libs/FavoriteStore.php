@@ -91,7 +91,7 @@ trait FavoriteStore
      * @param string $url      optionale Rezept-URL, die auf der Liste gespeichert wird
      * @param string $mediaId  optionale Rezeptfoto-Medienobjekt-ID (Alternative zur URL)
      */
-    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = '', string $mediaId = '', bool $isRecipe = false): string
+    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = '', string $mediaId = '', bool $isRecipe = false, int $servings = 0): string
     {
         $lists       = $this->LoadFavoriteLists();
         $targetIndex = -1;
@@ -131,6 +131,9 @@ trait FavoriteStore
             if ($isRecipe) {
                 $lists[$targetIndex]['isRecipe'] = true;
             }
+            if ($servings > 0) {
+                $lists[$targetIndex]['servings'] = $servings;
+            }
         }
 
         foreach ($items as $it) {
@@ -169,6 +172,41 @@ trait FavoriteStore
             $this->DishAnfordern($listId);
         }
         return $listId;
+    }
+
+    /**
+     * Portionszahl eines Rezepts dauerhaft ändern und die Zutatenmengen
+     * mitrechnen. Der Client schickt die fertig skalierten Mengen — er zeigt
+     * sie vorher an, und beide müssen übereinstimmen. Namen und Kategorien
+     * bleiben unangetastet: gerechnet wird nur an den Mengen.
+     *
+     * @param array<string,string> $mengen Zutatenname => neue Menge
+     */
+    private function SetFavoriteServingsInternal(string $listId, int $servings, array $mengen): bool
+    {
+        $listId = trim($listId);
+        if ($listId === '' || $servings < 1 || $servings > 99) {
+            return false;
+        }
+        $lists = $this->LoadFavoriteLists();
+        foreach ($lists as &$l) {
+            if (!is_array($l) || trim((string)($l['id'] ?? '')) !== $listId) {
+                continue;
+            }
+            $l['servings'] = $servings;
+            foreach ($l['items'] as &$item) {
+                $name = is_array($item) ? (string)($item['name'] ?? '') : '';
+                if ($name !== '' && array_key_exists($name, $mengen)) {
+                    $item['amount'] = mb_substr(trim((string)$mengen[$name]), 0, 40);
+                }
+            }
+            unset($item, $l);
+            $this->SaveFavoriteLists($lists);
+            $this->SendState();
+            return true;
+        }
+        unset($l);
+        return false;
     }
 
     /**

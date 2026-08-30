@@ -13722,7 +13722,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Was aus einer Rezept-Analyse kommt, IST ein Rezept — der Haken wird hier
     // nicht gefragt, sondern gesetzt (nur bei neuen Listen; bestehende behalten
     // ihre Art).
-    if (isNew) base.isRecipe = true;
+    if (isNew) {
+      base.isRecipe = true;
+      // Die erkannte Portionszahl gehoert ans Rezept — ohne sie hat der
+      // Portions-Steller spaeter keine Bezugsgroesse.
+      if (aiRecipe && aiRecipe.servings) { base.servings = aiRecipe.servings; }
+    }
     const finish = (extra) => {
       sdCall(id, 'AddItemsToFavoriteList', Object.assign({}, base, extra || {}));
       closeOverlay('aiFavOverlay');

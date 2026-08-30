@@ -148,6 +148,7 @@ trait MealStore
                 'imageId'   => ($liste['isRecipe'] ?? false) === true ? (int)($liste['imageId'] ?? 0) : 0,
                 'url'       => trim((string)($liste['url'] ?? '')),
                 'items'     => count((array)($liste['items'] ?? [])),
+                'servings'  => (int)($liste['servings'] ?? 0),
                 'itemNames' => $namen,
                 'itemList'  => $zutaten,
             ];
@@ -312,6 +313,8 @@ trait MealStore
                 'editMeal'  => $this->Translate('Edit'),
                 'loading'   => $this->Translate('Loading …'),
                 'quantityX' => $this->Translate('Quantity ×%1'),
+                'servings'  => $this->Translate('%1 servings'),
+                'changeMeal' => $this->Translate('Change meal'),
                 'toList'    => $this->Translate('Shopping list'),
                 'freeHead'  => $this->Translate('Free text'),
                 'freeHint'  => $this->Translate('e.g. leftovers, order pizza'),
@@ -366,6 +369,8 @@ trait MealStore
             'srcMediaId' => $srcMediaId,
             // Für die Zutatenliste und die Auswahl vor der Übernahme.
             'ingredients' => $this->ZutatenMitBild($fav !== null ? (array)$fav['itemList'] : []),
+            // Portionszahl des Rezepts (0 = unbekannt, dann zählt der Faktor).
+            'servings'    => $fav !== null ? (int)$fav['servings'] : 0,
         ];
     }
 

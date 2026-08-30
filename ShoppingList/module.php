@@ -383,7 +383,8 @@ class SymDoShoppingList extends IPSModuleStrict
                     $data['items'],
                     (string)($data['url'] ?? ''),
                     (string)($data['mediaId'] ?? ''),
-                    ($data['isRecipe'] ?? false) === true
+                    ($data['isRecipe'] ?? false) === true,
+                    (int)($data['servings'] ?? 0)
                 );
                 return;
 
@@ -396,6 +397,19 @@ class SymDoShoppingList extends IPSModuleStrict
                 $this->SetFavoriteRecipeInternal(
                     (string)($data['listId'] ?? ''),
                     ($data['isRecipe'] ?? false) === true
+                );
+                return;
+
+            case 'SetFavoriteServings':
+                // Portionszahl dauerhaft aendern: {listId, servings, amounts{}}
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data) || trim((string)($data['listId'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                $this->SetFavoriteServingsInternal(
+                    (string)($data['listId'] ?? ''),
+                    (int)($data['servings'] ?? 0),
+                    is_array($data['amounts'] ?? null) ? $data['amounts'] : []
                 );
                 return;
 
@@ -741,6 +755,7 @@ class SymDoShoppingList extends IPSModuleStrict
             'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
             'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
             'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem', 'SetFavoriteRecipe',
+            'SetFavoriteServings',
             'ForgetPurchase', 'UpdatePurchase',
             'SetHint',
         ];

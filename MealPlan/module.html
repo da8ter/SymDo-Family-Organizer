@@ -153,6 +153,7 @@ body {
 #detailBild img { max-width: 100%; max-height: 100%; border-radius: 18px; }
 #detailTitel { margin: 12px 0 0; font-size: 18px; text-align: center; }
 /* Zutaten wie in der Web-App: Kreis mit Anfangsbuchstabe, Name, Menge rechts. */
+#detailPortionen { text-align: center; color: var(--dezent); font-size: 13px; margin-top: 4px; }
 #detailZutaten { margin-top: 12px; }
 .zutatzeile {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px;
@@ -272,6 +273,7 @@ body {
     <button id="detailStift"><i class="fa-light fa-pencil"></i></button>
     <div id="detailBild"></div>
     <h3 id="detailTitel"></h3>
+    <div id="detailPortionen"></div>
     <div id="detailZutaten"></div>
     <div class="knopfzeile" id="detailAktionen" style="margin-top:14px">
       <button id="detailQuelle" class="knopf voll"></button>
@@ -294,6 +296,7 @@ body {
     <div class="knopfzeile" style="margin-top:16px">
       <button class="knopf voll" id="korbBestaetigen"><i class="fa-light fa-cart-plus"></i> <span></span></button>
     </div>
+    <div class="knopfzeile"><button class="knopf" id="korbGerichtAendern"></button></div>
   </div>
 </div>
 <div id="quelleSchau">
@@ -424,6 +427,7 @@ let tagAktuell = null;    // der im Detail gezeigte Tag
 let detailDatum = '';     // wehrt verspätete mealDetail-Antworten anderer Tage ab
 let quelleInfo = null;    // {kind, url, mediaId} aus der Detail-Antwort
 let detailZutaten = null; // [{name, amount}] aus der Detail-Antwort (Abwahl-Liste)
+let detailPortionen = 0;  // Portionszahl des Rezepts (0 = unbekannt)
 let schauUrl = '';        // Blob-URL des Betrachters, beim Schließen freigeben
 
 function detailOeffnen(tag) {
@@ -431,6 +435,8 @@ function detailOeffnen(tag) {
   detailDatum = tag.date;
   quelleInfo = null;
   detailZutaten = null;
+  detailPortionen = 0;
+  el('detailPortionen').textContent = '';
   el('detailTitel').textContent = tag.title;
   el('detailZutaten').innerHTML = '';
   detailBildSetzen(tag.image || '');
@@ -514,6 +520,9 @@ function detailAuffrischen(daten) {
     detailZutaten = daten.ingredients;
     zutatenZeigen(daten.ingredients);
   }
+  detailPortionen = parseInt(daten.servings, 10) || 0;
+  el('detailPortionen').textContent = detailPortionen > 0
+    ? t('servings').replace('%1', String(detailPortionen)) : '';
   const kind = String(daten.srcKind || '');
   // Foto/PDF reisen über das Gateway-Relay — ohne Gateway bleibt nur die URL.
   if (kind === 'url' || ((kind === 'pdf' || kind === 'photo') && zustand.aiReady)) {
@@ -581,6 +590,7 @@ function schauZu() {
    Favoritenlisten kennen keine Portionszahl, also der ganzzahlige
    Mengen-Faktor („Menge ×2") — wie die Web-App im selben Fall. */
 let korbFaktor = 1;
+let korbPortionen = 0;   // >0: der Steller zaehlt Portionen statt Faktoren
 
 /* Mengenangabe um den Faktor skalieren („500 g", „1,5 EL", „½ TL", „2-3") —
    wortgleich mit scaleAmount/fmtNum der Web-App. */
@@ -609,6 +619,10 @@ function scaleAmount(str, factor) {
 
 function korbOeffnen() {
   korbFaktor = 1;
+  // Kennt das Rezept seine Portionszahl, steuert der Steller Portionen (und
+  // aendert sie dauerhaft); sonst bleibt es beim ganzzahligen Mengen-Faktor.
+  korbPortionen = detailPortionen > 0 ? detailPortionen : 0;
+  el('korbGerichtAendern').textContent = t('changeMeal');
   const liste = el('korbListe');
   liste.innerHTML = '';
   (detailZutaten || []).forEach((z) => {
@@ -657,19 +671,53 @@ function korbOeffnen() {
   el('korb').style.display = 'block';
 }
 
+/** Der wirksame Faktor: bei bekannter Portionszahl deren Verhaeltnis. */
+function korbAktuellerFaktor() {
+  if (korbPortionen > 0 && detailPortionen > 0) { return korbPortionen / detailPortionen; }
+  return korbFaktor;
+}
+
 function korbSkalieren() {
-  el('korbFaktorText').textContent = t('quantityX').replace('%1', String(korbFaktor));
-  el('korbMinus').disabled = korbFaktor <= 1;
+  const f = korbAktuellerFaktor();
+  el('korbFaktorText').textContent = korbPortionen > 0
+    ? t('servings').replace('%1', String(korbPortionen))
+    : t('quantityX').replace('%1', String(korbFaktor));
+  el('korbMinus').disabled = korbPortionen > 0 ? (korbPortionen <= 1) : (korbFaktor <= 1);
   el('korbListe').querySelectorAll('.ai-row').forEach((zeile) => {
     const chip = zeile.querySelector('.ai-amt');
-    if (chip) { chip.textContent = scaleAmount(String((zeile.__item || {}).amount || ''), korbFaktor); }
+    if (chip) { chip.textContent = scaleAmount(String((zeile.__item || {}).amount || ''), f); }
   });
+}
+
+/**
+ * Geaenderte Portionszahl dauerhaft ans Rezept: neue Portionen und die
+ * umgerechneten Mengen. Der Server nimmt die Mengen, die hier stehen — was
+ * man sieht, wird gespeichert.
+ */
+function portionenSichern() {
+  if (!tagAktuell || !tagAktuell.listId || korbPortionen <= 0 || korbPortionen === detailPortionen) {
+    return;
+  }
+  const f = korbAktuellerFaktor();
+  const mengen = {};
+  (detailZutaten || []).forEach((z) => { mengen[z.name] = scaleAmount(String(z.amount || ''), f); });
+  if (typeof requestAction === 'function') {
+    requestAction('SetServings', JSON.stringify({
+      listId: tagAktuell.listId, servings: korbPortionen, amounts: mengen,
+    }));
+  }
+  // Ab jetzt IST das die Portionszahl des Rezepts — der Steller steht wieder
+  // auf 1:1, und die Zutatenliste im Detail zeigt die neuen Mengen.
+  detailZutaten = (detailZutaten || []).map((z) => Object.assign({}, z, { amount: mengen[z.name] }));
+  detailPortionen = korbPortionen;
+  el('detailPortionen').textContent = t('servings').replace('%1', String(detailPortionen));
+  zutatenZeigen(detailZutaten);
 }
 
 function korbGewaehlt() {
   return Array.from(el('korbListe').querySelectorAll('.ai-row.selected')).map((zeile) => {
     const z = zeile.__item || {};
-    return { name: String(z.name || ''), amount: scaleAmount(String(z.amount || ''), korbFaktor) };
+    return { name: String(z.name || ''), amount: scaleAmount(String(z.amount || ''), korbAktuellerFaktor()) };
   });
 }
 
@@ -819,7 +867,12 @@ document.addEventListener('DOMContentLoaded', () => {
   el('blattZu').addEventListener('click', blattZu);
   el('schleier').addEventListener('click', (ev) => { if (ev.target === el('schleier')) { blattZu(); } });
   el('entfernen').addEventListener('click', () => gerichtSetzen('', ''));
-  el('detailStift').addEventListener('click', () => blattOeffnen(tagAktuell));
+  // Der Stift fuehrt in die Rezept-Bearbeitung: Zutaten und Portionen. Das
+  // Gericht selbst wechselt man von dort ueber „Gericht aendern".
+  el('detailStift').addEventListener('click', () => {
+    if (detailZutaten && detailZutaten.length) { korbOeffnen(); } else { blattOeffnen(tagAktuell); }
+  });
+  el('korbGerichtAendern').addEventListener('click', () => blattOeffnen(tagAktuell));
   el('detailZuX').addEventListener('click', blattZu);
   el('detailQuelle').addEventListener('click', quelleOeffnen);
   el('detailKorb').addEventListener('click', () => {
@@ -835,15 +888,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof requestAction === 'function') { requestAction('AddToCart', tagAktuell.listId); }
   });
   el('korbZuX').addEventListener('click', () => {
+    portionenSichern();
     el('korb').style.display = 'none';
     el('detail').style.display = 'block';
   });
-  el('korbMinus').addEventListener('click', () => { korbFaktor = Math.max(1, korbFaktor - 1); korbSkalieren(); });
-  el('korbPlus').addEventListener('click', () => { korbFaktor = korbFaktor + 1; korbSkalieren(); });
+  el('korbMinus').addEventListener('click', () => {
+    if (korbPortionen > 0) { korbPortionen = Math.max(1, korbPortionen - 1); }
+    else { korbFaktor = Math.max(1, korbFaktor - 1); }
+    korbSkalieren();
+  });
+  el('korbPlus').addEventListener('click', () => {
+    if (korbPortionen > 0) { korbPortionen = Math.min(99, korbPortionen + 1); }
+    else { korbFaktor = korbFaktor + 1; }
+    korbSkalieren();
+  });
   el('korbBestaetigen').addEventListener('click', () => {
     const items = korbGewaehlt();
     if (!tagAktuell || !tagAktuell.listId || !items.length) { return; }
     el('korbBestaetigen').disabled = true;   // Doppel-Tipp-Schutz
+    portionenSichern();
     if (typeof requestAction === 'function') {
       requestAction('AddItemsToCart', JSON.stringify({
         listId: tagAktuell.listId,
