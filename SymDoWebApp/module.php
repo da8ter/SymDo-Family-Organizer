@@ -32,8 +32,6 @@ class SymDoWebApp extends IPSModuleStrict
      */
     private ?array $buttonFlagsCache = null;
 
-    /** Wird im 'AiResult'-Branch gesetzt; HandleAiCall erkennt daran eine ausgefallene Antwort. */
-    private bool $aiResultSeen = false;
 
     /**
      * Gesetzt, wenn ApplyChanges vom Kernelstart kommt und nicht von einem Übernehmen.
@@ -112,6 +110,14 @@ class SymDoWebApp extends IPSModuleStrict
         // Von der Kachel gemeldete Visu-Farben je Schema (ReportVisuTheme) —
         // das Gateway liefert sie der SymDo-App/Web-App über die Discovery aus.
         $this->RegisterAttributeString('VisuTheme', '{}');
+        // Briefkasten fuer den synchronen AiResult-Rueckruf des Gateways: der
+        // Rueckruf laeuft auf einem ANDEREN Objekt derselben Instanz (gemessen
+        // beim Essensplan-Bau) — ein Objektfeld ueberlebt die Grenze nicht,
+        // ein Attribut schon. Das alte aiResultSeen-Feld blieb deshalb immer
+        // false, und nach JEDEM erfolgreichen Kachel-KI-Aufruf ging zusaetzlich
+        // ein ai_unavailable-Push raus (harmlos nur, weil die Kachel
+        // aufgeloeste txn ignoriert).
+        $this->RegisterAttributeString('AiSeenTxn', '');
 
         // Entprellt VM_UPDATE: die Quell-Module schreiben 2-3 Stat-Variablen pro
         // Mutation (und der ToDo-Timer für jede Liste). Ohne Coalescing liefe für
@@ -273,10 +279,12 @@ class SymDoWebApp extends IPSModuleStrict
                 $this->PlayBriefing();
                 return;
             case 'AiResult':
-                // Rückkanal vom Gateway → an die Kachel weiterreichen
-                $this->aiResultSeen = true;
+                // Rückkanal vom Gateway → an die Kachel weiterreichen. Der
+                // Briefkasten sagt HandleAiCall, dass die Antwort ankam
+                // (@-Wächter: bis zum Kernel-Neustart fehlt das Attribut).
                 $r = json_decode((string)$value, true);
                 if (is_array($r)) {
+                    @$this->WriteAttributeString('AiSeenTxn', (string)($r['txn'] ?? ''));
                     $this->Push([
                         'type'   => 'aiResult',
                         'txn'    => (string)($r['txn'] ?? ''),
@@ -1114,7 +1122,7 @@ class SymDoWebApp extends IPSModuleStrict
         // IPS_RequestAction nur eine PHP-Warning aus (keine Throwable), es käme
         // also nie ein AiResult und das txn-Promise der Kachel würde ewig warten.
         if ($gatewayID > 0 && $this->IsInstanceReady($gatewayID)) {
-            $this->aiResultSeen = false;
+            @$this->WriteAttributeString('AiSeenTxn', '');
             try {
                 // Das Gateway extrahiert und ruft danach IPS_RequestAction($this,'AiResult') → Push zur Kachel.
                 IPS_RequestAction($gatewayID, 'AiTileRequest', json_encode([
@@ -1124,8 +1132,10 @@ class SymDoWebApp extends IPSModuleStrict
                     'sdwa'    => $this->InstanceID,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 // Das Relay ist synchron: das Gateway pusht sein AiResult im selben
-                // Aufruf. Kam keins, ist die Antwort ausgefallen → Fehler melden.
-                if ($this->aiResultSeen) {
+                // Aufruf — aber auf einem anderen Objekt, deshalb der Attribut-
+                // Briefkasten. Steht dort nicht unsere txn, ist die Antwort
+                // ausgefallen → Fehler melden.
+                if ($txn !== '' && (string)@$this->ReadAttributeString('AiSeenTxn') === $txn) {
                     return;
                 }
             } catch (Throwable $e) {
