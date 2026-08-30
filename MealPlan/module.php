@@ -330,11 +330,14 @@ class SymDoMealPlan extends IPSModuleStrict
         }
         try {
             $antwort = json_decode((string)@SL_AppCall($sl, 'AddItemsToFavoriteList', json_encode([
-                'listId'  => '',
-                'name'    => $name,
-                'items'   => $items,
-                'url'     => (string)($daten['url'] ?? ''),
-                'mediaId' => (string)($daten['mediaId'] ?? ''),
+                'listId'   => '',
+                'name'     => $name,
+                'items'    => $items,
+                'url'      => (string)($daten['url'] ?? ''),
+                'mediaId'  => (string)($daten['mediaId'] ?? ''),
+                // Was aus einer Rezept-Analyse kommt, IST ein Rezept — nur mit
+                // diesem Haken erzeugt das Gateway ein Gerichtsbild.
+                'isRecipe' => true,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), true);
         } catch (\Throwable $e) {
             $this->SendDebug('MealPlan', 'Rezept speichern fehlgeschlagen: ' . $e->getMessage(), 0);
