@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 trait FavoriteStore
 {
+    /**
+     * Das SymDo-Gateway erzeugt die Gerichtsbilder der Rezept-Favoritenlisten
+     * und lagert sie. Ohne Gateway bleibt die Liste voll nutzbar — sie zeigt
+     * dann eben das Herz.
+     */
+    private const DISH_GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+
     private function LoadFavoriteLists(): array
     {
         $raw  = $this->ReadAttributeString('FavoriteLists');
@@ -19,7 +26,7 @@ trait FavoriteStore
         );
     }
 
-    private function CreateFavoriteListInternal(string $name): string
+    private function CreateFavoriteListInternal(string $name, bool $isRecipe = false): string
     {
         $name = trim($name);
         if ($name === '') {
@@ -27,9 +34,18 @@ trait FavoriteStore
         }
         $lists   = $this->LoadFavoriteLists();
         $id      = bin2hex(random_bytes(8));
-        $lists[] = ['id' => $id, 'name' => $name, 'items' => []];
+        $eintrag = ['id' => $id, 'name' => $name, 'items' => []];
+        // Rezept-Haken: nur damit erzeugt das Gateway ein Gerichtsbild, und nur
+        // dann zeigen die Oberflächen es anstelle des Herzens.
+        if ($isRecipe) {
+            $eintrag['isRecipe'] = true;
+        }
+        $lists[] = $eintrag;
         $this->SaveFavoriteLists($lists);
         $this->SendState();
+        if ($isRecipe) {
+            $this->DishAnfordern($id);
+        }
         return $id;
     }
 
@@ -75,7 +91,7 @@ trait FavoriteStore
      * @param string $url      optionale Rezept-URL, die auf der Liste gespeichert wird
      * @param string $mediaId  optionale Rezeptfoto-Medienobjekt-ID (Alternative zur URL)
      */
-    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = '', string $mediaId = ''): string
+    private function AddItemsToFavoriteListInternal(string $listId, string $newListName, array $items, string $url = '', string $mediaId = '', bool $isRecipe = false): string
     {
         $lists       = $this->LoadFavoriteLists();
         $targetIndex = -1;
@@ -112,6 +128,9 @@ trait FavoriteStore
             if ($mediaId !== '') {
                 $lists[$targetIndex]['mediaId'] = (int)$mediaId;
             }
+            if ($isRecipe) {
+                $lists[$targetIndex]['isRecipe'] = true;
+            }
         }
 
         foreach ($items as $it) {
@@ -146,7 +165,167 @@ trait FavoriteStore
 
         $this->SaveFavoriteLists($lists);
         $this->SendState();
+        if ($isNew && $isRecipe) {
+            $this->DishAnfordern($listId);
+        }
         return $listId;
+    }
+
+    /**
+     * Die vom Gateway erzeugte Bild-ID an der Liste hinterlegen.
+     * imageId 0 mit failed=true heißt: die Erzeugung ist endgültig gescheitert
+     * — dann fällt der Rezept-Haken weg und die Oberflächen zeigen wieder das
+     * Herz, statt dauerhaft einen Platzhalter, den niemand einordnen kann.
+     */
+    private function SetFavoriteImageInternal(string $listId, int $imageId, bool $failed = false, bool $alsRezept = false): bool
+    {
+        $listId = trim($listId);
+        if ($listId === '') {
+            return false;
+        }
+        $lists = $this->LoadFavoriteLists();
+        foreach ($lists as &$l) {
+            if (!is_array($l) || trim((string)($l['id'] ?? '')) !== $listId) {
+                continue;
+            }
+            if ($imageId > 0) {
+                $l['imageId'] = $imageId;
+                if ($alsRezept) {
+                    // Übernahme eines Altbestands: ohne Haken bliebe es unsichtbar.
+                    $l['isRecipe'] = true;
+                }
+            } elseif ($failed) {
+                unset($l['imageId'], $l['isRecipe']);
+            } else {
+                unset($l['imageId']);
+            }
+            unset($l);
+            $this->SaveFavoriteLists($lists);
+            $this->SendState();
+            return true;
+        }
+        unset($l);
+        return false;
+    }
+
+    /**
+     * Beim Gateway ein Gerichtsbild anfordern. Es stellt nur in die
+     * Warteschlange — die Erzeugung dauert bis zu zwei Minuten und darf den
+     * Anlege-Aufruf niemals aufhalten.
+     */
+    private function DishAnfordern(string $listId): void
+    {
+        $gw = $this->DishGatewayInstanz();
+        if ($gw <= 0 || trim($listId) === '') {
+            return;
+        }
+        try {
+            IPS_RequestAction($gw, 'DishRequest', json_encode([
+                'instanceId' => $this->InstanceID,
+                'listId'     => trim($listId),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } catch (\Throwable $e) {
+            // Ohne Gateway (oder waehrend eines Modul-Reloads) gibt es eben kein
+            // Bild — die Liste bleibt nutzbar und zeigt weiter das Herz.
+            $this->SendDebug('FavoriteStore', 'Gerichtsbild-Anforderung fehlgeschlagen: ' . $e->getMessage(), 0);
+        }
+    }
+
+    /** Das Gateway, das die App bedient: die Instanz mit der niedrigsten ID. */
+    private function DishGatewayInstanz(): int
+    {
+        $ids = @IPS_GetInstanceListByModuleID(self::DISH_GATEWAY_GUID);
+        if (!is_array($ids) || $ids === []) {
+            return 0;
+        }
+        sort($ids);
+        return (int)$ids[0];
+    }
+
+    /**
+     * Auslieferung eines Gerichtsbildes über den Asset-Hook. Der Token ist
+     * schon geprüft; hier zählt nur noch, dass die Kennung wirklich zu einer
+     * eigenen Rezeptliste gehört — sonst wäre der Hook ein Leseschlüssel für
+     * beliebige Medienobjekte des Systems.
+     */
+    private function HandleDishImageHook(int $mediaId): void
+    {
+        $erlaubt = false;
+        foreach ($this->LoadFavoriteLists() as $l) {
+            if (is_array($l) && (int)($l['imageId'] ?? 0) === $mediaId && $mediaId > 0) {
+                $erlaubt = true;
+                break;
+            }
+        }
+        if (!$erlaubt || !@IPS_MediaExists($mediaId)) {
+            http_response_code(404);
+            return;
+        }
+        $roh = base64_decode((string)@IPS_GetMediaContent($mediaId), true);
+        if (!is_string($roh) || !str_starts_with($roh, "\x89PNG")) {
+            http_response_code(404);
+            return;
+        }
+        // Auf Wunsch verkleinert ausliefern: das Badge zeigt 34 px, die Ablage
+        // hat 512 — ungefragt wären das eine halbe Megabyte je Zeile. Dank der
+        // Ewigkeits-Frist unten rechnet das jeder Browser genau einmal.
+        $kante = max(0, min(512, (int)($_GET['s'] ?? 0)));
+        if ($kante > 0) {
+            $klein = $this->DishSkalieren($roh, $kante);
+            if ($klein !== '') {
+                $roh = $klein;
+            }
+        }
+        header('Content-Type: image/png');
+        header('X-Content-Type-Options: nosniff');
+        // Ein erzeugtes Gerichtsbild ändert sich nie — die Kennung wechselt,
+        // wenn ein neues entsteht.
+        header('Cache-Control: public, max-age=31536000, immutable');
+        echo $roh;
+    }
+
+    /** PNG verkleinern, Transparenz erhalten. '' bei jedem Fehler. */
+    private function DishSkalieren(string $roh, int $kante): string
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return '';
+        }
+        $bild = @imagecreatefromstring($roh);
+        if ($bild === false) {
+            return '';
+        }
+        $b = imagesx($bild);
+        $h = imagesy($bild);
+        if (max($b, $h) <= $kante) {
+            return '';   // schon klein genug
+        }
+        $f = $kante / max(1, max($b, $h));
+        $zb = max(1, (int)round($b * $f));
+        $zh = max(1, (int)round($h * $f));
+        $klein = imagecreatetruecolor($zb, $zh);
+        imagealphablending($klein, false);
+        imagesavealpha($klein, true);
+        imagecopyresampled($klein, $bild, 0, 0, 0, 0, $zb, $zh, $b, $h);
+        ob_start();
+        imagepng($klein);
+        return (string)ob_get_clean();
+    }
+
+    /**
+     * Ein generiertes Gerichtsbild löschen — nur wenn es wirklich unter der
+     * Gateway-Kategorie „Gerichtsbilder" hängt (gleicher Namens-Wächter wie
+     * bei den Rezeptfotos, damit eine korrupte Zuordnung keine fremden
+     * Objekte kostet).
+     */
+    private function DeleteDishImage(int $mediaId): void
+    {
+        if ($mediaId <= 0 || !@IPS_MediaExists($mediaId)) {
+            return;
+        }
+        $parent = (int)@IPS_GetParent($mediaId);
+        if ($parent > 0 && @IPS_GetName($parent) === 'Gerichtsbilder') {
+            @IPS_DeleteMedia($mediaId, true);
+        }
     }
 
     private function RemoveItemFromFavoriteListInternal(string $listId, string $itemName): bool
@@ -265,10 +444,11 @@ trait FavoriteStore
             return;
         }
         $lists = $this->LoadFavoriteLists();
-        // Zugehöriges Rezeptfoto-Medienobjekt mitlöschen.
+        // Zugehöriges Rezeptfoto und das generierte Gerichtsbild mitlöschen.
         foreach ($lists as $l) {
             if (($l['id'] ?? '') === $listId) {
                 $this->DeleteRecipePhoto((int)($l['mediaId'] ?? 0));
+                $this->DeleteDishImage((int)($l['imageId'] ?? 0));
                 break;
             }
         }

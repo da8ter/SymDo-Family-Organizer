@@ -144,6 +144,8 @@ trait MealStore
             $raus[$id] = [
                 'name'      => trim((string)($liste['name'] ?? '')),
                 'mediaId'   => (int)($liste['mediaId'] ?? 0),
+                // Das vom Gateway erzeugte Gerichtsbild — nur mit Rezept-Haken.
+                'imageId'   => ($liste['isRecipe'] ?? false) === true ? (int)($liste['imageId'] ?? 0) : 0,
                 'url'       => trim((string)($liste['url'] ?? '')),
                 'items'     => count((array)($liste['items'] ?? [])),
                 'itemNames' => $namen,
@@ -224,7 +226,7 @@ trait MealStore
     // ------------------------------------------------------------------
 
     /** Das Gericht eines Tages, aufgelöst gegen die Favoriten. */
-    private function GerichtFuer(string $datum, array $tage, array $favoriten, array $dishImages = []): array
+    private function GerichtFuer(string $datum, array $tage, array $favoriten): array
     {
         $g = $tage[$datum] ?? null;
         if ($g === null) {
@@ -236,8 +238,7 @@ trait MealStore
             // Stil); das Original bleibt an der Favoritenliste unangetastet.
             return ['title' => $fav['name'], 'listId' => $g['listId'],
                 'hasIngredients' => $fav['items'] > 0,
-                'mediaId' => (int)($dishImages[$g['listId']] ?? 0) > 0
-                    ? (int)$dishImages[$g['listId']] : $fav['mediaId']];
+                'mediaId' => $fav['imageId'] > 0 ? $fav['imageId'] : $fav['mediaId']];
         }
         if ($g['listId'] !== '') {
             // Die Favoritenliste wurde inzwischen gelöscht: ehrlich zeigen,
@@ -254,7 +255,6 @@ trait MealStore
         $heute = date('Y-m-d', $jetzt);
         $tage = $this->PlanLesen();
         $favoriten = $this->Favoriten();
-        $dishImages = $this->DishMapLesen();
 
         $wochen = [];
         foreach ([0, 1] as $w) {
@@ -262,7 +262,7 @@ trait MealStore
             $zeilen = [];
             foreach (range(1, 7) as $t) {
                 $datum = $this->DatumInWoche($montag, $t);
-                $gericht = $this->GerichtFuer($datum, $tage, $favoriten, $dishImages);
+                $gericht = $this->GerichtFuer($datum, $tage, $favoriten);
                 $zeilen[] = [
                     'date'    => $datum,
                     'weekday' => $this->TagKurz($t),
@@ -342,7 +342,7 @@ trait MealStore
     private function GerichtDetail(string $datum): array
     {
         $favoriten = $this->Favoriten();
-        $g = $this->GerichtFuer($datum, $this->PlanLesen(), $favoriten, $this->DishMapLesen());
+        $g = $this->GerichtFuer($datum, $this->PlanLesen(), $favoriten);
         $fav = ($g['listId'] !== '' && isset($favoriten[$g['listId']])) ? $favoriten[$g['listId']] : null;
         $srcUrl     = $fav !== null ? (string)$fav['url'] : '';
         $srcMediaId = $fav !== null ? (int)$fav['mediaId'] : 0;
@@ -437,415 +437,54 @@ trait MealStore
     }
 
     // ------------------------------------------------------------------
-    // KI-Gerichtsbilder
+    // Gerichtsbilder (erzeugt und gelagert vom Gateway)
     //
-    // Einheitlicher Stil für alle Rezepte: Teller streng von oben,
-    // transparenter Hintergrund. Das generierte Bild wohnt als eigenes
-    // Medienobjekt unter dieser Instanz und wird in der Zuordnung
-    // DishImages {listId → mediaId} geführt — die mediaId der Favoritenliste
-    // (das Quelldokument für „Rezept öffnen") bleibt unangetastet.
-    //
-    // Bis zum Kernel-Neustart nach dem Modul-Update existieren Property,
-    // Attribute und Timer noch nicht (Create() läuft bei einem Reload nicht
-    // erneut) — deshalb tragen alle Zugriffe hier @-Wächter und Rückfälle.
+    // Der Essensplan erzeugt selbst nichts mehr: Die Bilder entstehen beim
+    // Anlegen einer Rezept-Favoritenliste im Gateway und stehen als imageId
+    // am Favoritenlisten-Datensatz — die Kachel liest sie einfach mit.
     // ------------------------------------------------------------------
 
-    /** Der Backend-Schalter — @IPS_GetProperty trägt auch die Zeit vor dem Neustart. */
-    private function DishSchalterAn(): bool
-    {
-        return (bool)@IPS_GetProperty($this->InstanceID, 'DishImagesEnabled');
-    }
-
-    /** @return array<string,int> listId => Medien-ID */
-    private function DishMapLesen(): array
+    /**
+     * Einmalige Übergabe der früher hier erzeugten Bilder ans Gateway: Es hängt
+     * die Medienobjekte unter seine Kategorie und hinterlegt die Zuordnung an
+     * der Einkaufsliste. Danach ist das alte Attribut leer und bleibt es.
+     */
+    private function DishUebergeben(): void
     {
         $roh = json_decode((string)@$this->ReadAttributeString('DishImages'), true);
-        $raus = [];
-        foreach (is_array($roh) ? $roh : [] as $listId => $mid) {
-            if (is_string($listId) && $listId !== '' && (int)$mid > 0) {
-                $raus[$listId] = (int)$mid;
-            }
-        }
-        return $raus;
-    }
-
-    private function DishMapSchreiben(array $map): void
-    {
-        @$this->WriteAttributeString('DishImages', (string)json_encode($map, JSON_UNESCAPED_SLASHES));
-    }
-
-    /** @return list<array{id:string,tries:int}> */
-    private function DishQueueLesen(): array
-    {
-        $roh = json_decode((string)@$this->ReadAttributeString('DishImageQueue'), true);
-        $raus = [];
-        foreach (is_array($roh) ? $roh : [] as $e) {
-            $id = is_array($e) ? trim((string)($e['id'] ?? '')) : '';
-            if ($id !== '') {
-                $raus[] = ['id' => $id, 'tries' => max(0, (int)($e['tries'] ?? 0))];
-            }
-        }
-        return $raus;
-    }
-
-    private function DishQueueSchreiben(array $queue): void
-    {
-        @$this->WriteAttributeString('DishImageQueue', (string)json_encode($queue, JSON_UNESCAPED_SLASHES));
-    }
-
-    /** One-Shot-Timer setzen — vor dem Kernel-Neustart existiert er noch nicht. */
-    private function DishTimerStarten(int $ms): void
-    {
-        try {
-            $this->SetTimerInterval('DishImages', $ms);
-        } catch (\Throwable $e) {
-            // Timer fehlt bis zum Neustart — der Bedarf steht in der Queue und
-            // wird beim nächsten ApplyChanges/Anstoß nachgeholt.
-        }
-    }
-
-    /**
-     * Rezept zur Bild-Erzeugung vormerken (dedupliziert, gedeckelt). Der
-     * Kachel-Thread meldet, der Timer-Thread arbeitet ab — die Queue wird
-     * darum nur unter der Semaphore verändert.
-     */
-    private function DishBedarfMelden(string $listId): void
-    {
-        $listId = trim($listId);
-        if ($listId === '' || !$this->DishSchalterAn()) {
+        if (!is_array($roh) || $roh === []) {
             return;
         }
-        $lock = 'MPL_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
-            return;
-        }
-        $neu = false;
-        try {
-            if (isset($this->DishMapLesen()[$listId])) {
-                return;
-            }
-            $queue = $this->DishQueueLesen();
-            if (in_array($listId, array_column($queue, 'id'), true) || count($queue) >= 100) {
-                return;
-            }
-            $queue[] = ['id' => $listId, 'tries' => 0];
-            $this->DishQueueSchreiben($queue);
-            $neu = true;
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-        if ($neu) {
-            $this->DishTimerStarten(200);
-        }
-    }
-
-    /**
-     * Ein Timer-Tick: EIN Rezept aus der Queue erzeugen. Sequenziell — das
-     * Gateway lässt ohnehin nur einen Anbieter-Aufruf zu, und parallele Ticks
-     * wären doppelte Kosten.
-     */
-    private function DishTick(): void
-    {
-        // Intervall SOFORT stoppen: der Aufruf dauert bis zu zwei Minuten,
-        // ein weiterlaufender Timer würde parallel feuern.
-        $this->DishTimerStarten(0);
-        if (IPS_GetKernelRunlevel() !== KR_READY) {
-            return;
-        }
-        $run = 'MPL_DishRun_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($run, 0)) {
-            return;
-        }
-        $naechster = 0;
-        try {
-            $eintrag = $this->DishQueueEntnehmen(!$this->DishSchalterAn());
-            if ($eintrag === null) {
-                return;
-            }
-            $fav = $this->Favoriten()[$eintrag['id']] ?? null;
-            if ($fav !== null) {
-                $naechster = $this->DishErzeugen($eintrag['id'], $eintrag['tries'], $fav);
-            }
-            // Liste inzwischen gelöscht → Eintrag stillschweigend verfallen.
-            if ($this->DishQueueLesen() !== []) {
-                $naechster = max($naechster, 200);
-            }
-        } finally {
-            IPS_SemaphoreLeave($run);
-        }
-        if ($naechster > 0) {
-            $this->DishTimerStarten($naechster);
-        }
-    }
-
-    /** Nächsten Queue-Eintrag entnehmen; $leeren räumt stattdessen alles ab. */
-    private function DishQueueEntnehmen(bool $leeren): ?array
-    {
-        $lock = 'MPL_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
-            return null;
-        }
-        try {
-            if ($leeren) {
-                $this->DishQueueSchreiben([]);
-                return null;
-            }
-            $queue = $this->DishQueueLesen();
-            $eintrag = array_shift($queue);
-            $this->DishQueueSchreiben($queue);
-            return $eintrag;
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-    }
-
-    /**
-     * Ein Rezept erzeugen und das Ergebnis einsortieren.
-     * @return int Verzögerung bis zum nächsten Tick in ms (0 = sofort/regulär)
-     */
-    private function DishErzeugen(string $listId, int $tries, array $fav): int
-    {
-        $ergebnis = $this->DishAnfrage((string)$fav['name'], (array)($fav['itemNames'] ?? []), $listId);
-        if ($ergebnis !== null && $ergebnis['ok']) {
-            // Das Bild hat der Rückruf-Zweig schon abgelegt (siehe DishAnfrage).
-            $this->PushState();
-            return 0;
-        }
-        $code = (string)($ergebnis['code'] ?? '');
-        if (in_array($code, ['ai_busy', 'ai_rate_limited'], true) && $tries < 3) {
-            // Vorübergehend belegt: hinten wieder anstellen, mit Abstand.
-            $this->DishWiederAnstellen($listId, $tries + 1);
-            $this->SendDebug('DishImages', sprintf('%s: %s — neuer Versuch in 30 s', $listId, $code), 0);
-            return 30000;
-        }
-        if (in_array($code, ['ai_disabled', 'ai_not_configured', 'ai_unauthorized', 'ai_quota'], true)) {
-            // Aussichtslos (kein Key, abgeschaltet, Budget leer): die ganze
-            // Queue leeren statt Anbieter-Fehler im Sekundentakt zu sammeln.
-            $this->DishQueueEntnehmen(true);
-            $this->SendDebug('DishImages', sprintf('%s: %s — Warteschlange geleert', $listId, $code), 0);
-            return 0;
-        }
-        if ($tries < 2) {
-            $this->DishWiederAnstellen($listId, $tries + 1);
-        }
-        $this->SendDebug('DishImages', sprintf('%s: fehlgeschlagen (%s), Versuch %d', $listId,
-            $code !== '' ? $code : 'keine Antwort', $tries + 1), 0);
-        return 0;
-    }
-
-    /** Eintrag hinten wieder anstellen (dedupliziert). */
-    private function DishWiederAnstellen(string $listId, int $tries): void
-    {
-        $lock = 'MPL_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
-            return;
-        }
-        try {
-            $queue = $this->DishQueueLesen();
-            if (!in_array($listId, array_column($queue, 'id'), true)) {
-                $queue[] = ['id' => $listId, 'tries' => $tries];
-                $this->DishQueueSchreiben($queue);
-            }
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-    }
-
-    /**
-     * Der eigentliche Gateway-Aufruf. Der Rückruf 'AiResult' kommt zwar
-     * synchron zurück, landet aber auf einem ANDEREN Objekt derselben Instanz
-     * (gemessen: ein Objektfeld überlebt die Grenze nicht). Briefkasten ist
-     * deshalb das Attribut DishErgebnis — der Rückruf-Zweig legt das Bild
-     * direkt ab und hinterlässt hier nur das kompakte Ergebnis.
-     * @return array{ok:bool,code:string}|null null = Gateway nicht erreicht
-     */
-    private function DishAnfrage(string $name, array $zutaten, string $listId): ?array
-    {
         $gw = $this->GatewayInstanz();
-        if ($gw <= 0) {
-            return null;
+        $sl = $this->QuellListe();
+        if ($gw <= 0 || $sl <= 0) {
+            return;   // ohne Gateway später erneut versuchen, nichts verlieren
         }
-        @$this->WriteAttributeString('DishErgebnis', '{}');
-        try {
-            IPS_RequestAction($gw, 'AiTileRequest', json_encode([
-                'path'    => '/ai/dishimage',
-                'payload' => ['name' => $name, 'items' => array_values($zutaten)],
-                'txn'     => 'dish:' . $listId,
-                'sdwa'    => $this->InstanceID,
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-        } catch (\Throwable $e) {
-            $this->SendDebug('DishImages', 'Gateway-Aufruf fehlgeschlagen: ' . $e->getMessage(), 0);
-            return null;
-        }
-        $ergebnis = json_decode((string)@$this->ReadAttributeString('DishErgebnis'), true);
-        if (!is_array($ergebnis) || trim((string)($ergebnis['listId'] ?? '')) !== $listId) {
-            return null;
-        }
-        return ['ok' => ($ergebnis['ok'] ?? false) === true, 'code' => (string)($ergebnis['code'] ?? '')];
-    }
-
-    /**
-     * Verarbeitet den 'dish:'-Rückruf des Gateways — läuft im Objekt des
-     * Rückrufs: das Bild wird SOFORT abgelegt (nur hier existiert es), der
-     * wartende DishTick bekommt das kompakte Ergebnis über den Briefkasten.
-     * @param array $r {txn, status, json}
-     */
-    private function DishAntwortVerarbeiten(array $r): void
-    {
-        $listId = substr((string)($r['txn'] ?? ''), strlen('dish:'));
-        $json = $r['json'] ?? null;
-        $ok = false;
-        $code = '';
-        if (is_array($json) && ($json['ok'] ?? false) === true && is_string($json['image'] ?? null)) {
-            $name = (string)($this->Favoriten()[$listId]['name'] ?? '');
-            $ok = $this->DishBildSpeichern($listId, $name, (string)$json['image']);
-            if (!$ok) {
-                $code = 'save_failed';
+        $anzahl = 0;
+        foreach ($roh as $listId => $mid) {
+            if (!is_string($listId) || trim($listId) === '' || (int)$mid <= 0) {
+                continue;
             }
-        } else {
-            $code = is_array($json) ? (string)($json['error']['code'] ?? '') : '';
+            try {
+                IPS_RequestAction($gw, 'DishAdopt', json_encode([
+                    'slID'    => $sl,
+                    'listId'  => trim($listId),
+                    'mediaId' => (int)$mid,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                $anzahl++;
+            } catch (\Throwable $e) {
+                $this->SendDebug('MealPlan', 'Bild-Übergabe fehlgeschlagen: ' . $e->getMessage(), 0);
+                return;   // Rest beim nächsten Anlauf
+            }
         }
-        @$this->WriteAttributeString('DishErgebnis', (string)json_encode([
-            'listId' => $listId, 'ok' => $ok, 'code' => $code,
-        ], JSON_UNESCAPED_SLASHES));
-    }
-
-    /** Das 1024er-PNG des Anbieters auf 512 px verkleinern und ablegen. */
-    private function DishBildSpeichern(string $listId, string $name, string $b64): bool
-    {
-        $roh = base64_decode($b64, true);
-        if (!is_string($roh) || !str_starts_with($roh, "\x89PNG")) {
-            return false;
-        }
-        $klein = $this->DishVerkleinern($roh, 512);
-        if ($klein === '') {
-            return false;
-        }
-        $kat = $this->DishKategorie();
-        if ($kat <= 0 || count((array)@IPS_GetChildrenIDs($kat)) >= 100) {
-            return false;
-        }
-        try {
-            $mid = IPS_CreateMedia(MEDIATYPE_IMAGE);
-            IPS_SetParent($mid, $kat);
-            IPS_SetName($mid, mb_substr($name !== '' ? $name : $this->Translate('Dish image'), 0, 80));
-            // Ein Medienobjekt braucht erst eine Datei, bevor Content gesetzt werden kann.
-            IPS_SetMediaFile($mid, 'media/dish_' . $mid . '.png', false);
-            IPS_SetMediaContent($mid, base64_encode($klein));
-        } catch (\Throwable $e) {
-            $this->SendDebug('DishImages', 'Ablage fehlgeschlagen: ' . $e->getMessage(), 0);
-            return false;
-        }
-        $lock = 'MPL_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
-            return true; // Bild existiert; die Zuordnung holt DishBestandPflegen nach
-        }
-        try {
-            $map = $this->DishMapLesen();
-            $map[$listId] = $mid;
-            $this->DishMapSchreiben($map);
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-        return true;
-    }
-
-    /** PNG verkleinern, Transparenz erhalten. '' bei jedem Fehler. */
-    private function DishVerkleinern(string $roh, int $kante): string
-    {
-        if (!function_exists('imagecreatefromstring')) {
-            return '';
-        }
-        $bild = @imagecreatefromstring($roh);
-        if ($bild === false) {
-            return '';
-        }
-        $b = imagesx($bild);
-        $h = imagesy($bild);
-        $f = min(1.0, $kante / max(1, max($b, $h)));
-        $zb = max(1, (int)round($b * $f));
-        $zh = max(1, (int)round($h * $f));
-        $klein = imagecreatetruecolor($zb, $zh);
-        imagealphablending($klein, false);
-        imagesavealpha($klein, true);
-        imagecopyresampled($klein, $bild, 0, 0, 0, 0, $zb, $zh, $b, $h);
-        imagedestroy($bild);
-        ob_start();
-        imagepng($klein);
-        $bytes = (string)ob_get_clean();
-        imagedestroy($klein);
-        return $bytes;
-    }
-
-    /** Ablage-Kategorie „Gerichtsbilder" unter dieser Instanz — bei Bedarf anlegen. */
-    private function DishKategorie(): int
-    {
+        @$this->WriteAttributeString('DishImages', '{}');
+        // Die leere Ablage-Kategorie mitnehmen — sie hat keine Aufgabe mehr.
         $kat = (int)@$this->ReadAttributeInteger('DishImageCategory');
-        if ($kat > 0 && @IPS_CategoryExists($kat)
-            && (int)(@IPS_GetObject($kat)['ParentID'] ?? -1) === $this->InstanceID) {
-            return $kat;
+        if ($kat > 0 && @IPS_CategoryExists($kat) && @IPS_GetChildrenIDs($kat) === []) {
+            @IPS_DeleteCategory($kat);
+            @$this->WriteAttributeInteger('DishImageCategory', 0);
         }
-        try {
-            $kat = IPS_CreateCategory();
-            IPS_SetParent($kat, $this->InstanceID);
-            IPS_SetName($kat, $this->Translate('Dish images'));
-        } catch (\Throwable $e) {
-            return 0;
-        }
-        @$this->WriteAttributeInteger('DishImageCategory', $kat);
-        return $kat;
-    }
-
-    /**
-     * Bestand pflegen (aus ApplyChanges): verwaiste Bilder gelöschter
-     * Favoritenlisten entfernen, für geplante Rezepte ohne Bild den Bedarf
-     * nachziehen. Läuft NICHT im Payload-Lesepfad — ein Getter löscht nichts.
-     */
-    private function DishBestandPflegen(): void
-    {
-        $favoriten = $this->Favoriten();
-
-        // Aufräumen nur mit belastbarer Favoritenliste: eine leere Antwort kann
-        // auch ein Reload-Loch der Einkaufsliste sein — dann lieber behalten.
-        if ($favoriten !== []) {
-            $kat = (int)@$this->ReadAttributeInteger('DishImageCategory');
-            $lock = 'MPL_DishQ_' . $this->InstanceID;
-            if (IPS_SemaphoreEnter($lock, 500)) {
-                try {
-                    $map = $this->DishMapLesen();
-                    $geaendert = false;
-                    foreach ($map as $listId => $mid) {
-                        if (isset($favoriten[$listId])) {
-                            continue;
-                        }
-                        // Nur eigene Objekte löschen: Parent muss die eigene
-                        // Ablage-Kategorie sein (Schutz vor korrupter Map).
-                        if ($kat > 0 && @IPS_MediaExists($mid)
-                            && (int)(@IPS_GetObject($mid)['ParentID'] ?? -1) === $kat) {
-                            @IPS_DeleteMedia($mid, true);
-                        }
-                        unset($map[$listId]);
-                        $geaendert = true;
-                    }
-                    if ($geaendert) {
-                        $this->DishMapSchreiben($map);
-                    }
-                } finally {
-                    IPS_SemaphoreLeave($lock);
-                }
-            }
-        }
-
-        if (!$this->DishSchalterAn()) {
-            return;
-        }
-        // Nachzug: alle geplanten Rezepte ohne Bild vormerken (deckt auch das
-        // frische Einschalten des Schalters ab).
-        foreach ($this->PlanLesen() as $g) {
-            if ($g['listId'] !== '' && isset($favoriten[$g['listId']])) {
-                $this->DishBedarfMelden($g['listId']);
-            }
-        }
+        $this->SendDebug('MealPlan', sprintf('%d Gerichtsbild(er) ans Gateway übergeben', $anzahl), 0);
     }
 
     // ------------------------------------------------------------------

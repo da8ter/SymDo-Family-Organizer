@@ -33,24 +33,18 @@ class SymDoMealPlan extends IPSModuleStrict
         $this->SetVisualizationType(1);
 
         $this->RegisterPropertyInteger('ShoppingListInstanceID', 0);
-        $this->RegisterPropertyBoolean('DishImagesEnabled', false);
         $this->RegisterAttributeString('Plan', '{}');
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
 
-        // KI-Gerichtsbilder: Zuordnung listId → Medien-ID, Warteschlange der
-        // noch zu erzeugenden Rezepte und die Ablage-Kategorie darunter.
+        // Alt-Bestand der früher hier erzeugten Gerichtsbilder — bleibt für die
+        // einmalige Übergabe ans Gateway registriert und wird danach nie wieder
+        // beschrieben.
         $this->RegisterAttributeString('DishImages', '{}');
-        $this->RegisterAttributeString('DishImageQueue', '[]');
         $this->RegisterAttributeInteger('DishImageCategory', 0);
-        // Briefkästen für die synchronen Gateway-Rückrufe: der Rückruf landet
-        // auf einem ANDEREN Objekt derselben Instanz (gemessen) — Objektfelder
-        // überleben die Grenze nicht, Attribute schon.
-        $this->RegisterAttributeString('DishErgebnis', '{}');
+        // Quittung des synchronen Gateway-Rückrufs: er landet auf einem ANDEREN
+        // Objekt derselben Instanz (gemessen) — ein Objektfeld überlebt die
+        // Grenze nicht, ein Attribut schon.
         $this->RegisterAttributeString('AiSeenTxn', '');
-        // Kein Präfix-Wrapper nötig: der Timer ruft die eigene RequestAction
-        // (Hausmuster der SymDoWebApp — vermeidet einen Kernel-Neustart-Zwang
-        // bei künftigen Umbenennungen).
-        $this->RegisterTimer('DishImages', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'DishTick\', 0);');
     }
 
     public function ApplyChanges(): void
@@ -88,8 +82,8 @@ class SymDoMealPlan extends IPSModuleStrict
         }
         $this->WriteAttributeString('SubscribedVarIDs', json_encode($abos));
 
-        // Gerichtsbilder-Bestand pflegen: Verwaiste löschen, Fehlende nachziehen.
-        $this->DishBestandPflegen();
+        // Einmalig: früher hier erzeugte Gerichtsbilder ans Gateway übergeben.
+        $this->DishUebergeben();
 
         $this->PushState();
     }
@@ -123,7 +117,6 @@ class SymDoMealPlan extends IPSModuleStrict
                         (string)($daten['text'] ?? ''),
                         time()
                     );
-                    $this->DishBedarfMelden((string)($daten['listId'] ?? ''));
                     $this->PushState();
                 }
                 return;
@@ -144,11 +137,6 @@ class SymDoMealPlan extends IPSModuleStrict
             case 'MealDetail':
                 // Detail-Blatt der Kachel: {date} → größeres Bild + Rezept-Quelle.
                 $this->Push($this->GerichtDetail(trim((string)$Value)));
-                return;
-
-            case 'DishTick':
-                // One-Shot-Timer der Gerichtsbilder — arbeitet die Warteschlange ab.
-                $this->DishTick();
                 return;
 
             case 'AddToCart':
@@ -193,16 +181,8 @@ class SymDoMealPlan extends IPSModuleStrict
                 return;
 
             case 'AiResult':
-                // Rückkanal vom Gateway → an die Kachel weiterreichen. Antworten
-                // einer Gerichtsbild-Erzeugung (txn 'dish:…') gehören NICHT in
-                // die Kachel (1–3 MB Base64 im Push!) — das Bild wird hier, im
-                // Objekt des Rückrufs, abgelegt und der wartende DishTick über
-                // den Attribut-Briefkasten informiert.
+                // Rückkanal vom Gateway → an die Kachel weiterreichen.
                 $r = json_decode((string)$Value, true);
-                if (is_array($r) && str_starts_with((string)($r['txn'] ?? ''), 'dish:')) {
-                    $this->DishAntwortVerarbeiten($r);
-                    return;
-                }
                 if (is_array($r)) {
                     @$this->WriteAttributeString('AiSeenTxn', (string)($r['txn'] ?? ''));
                     $this->Push([
@@ -271,9 +251,7 @@ class SymDoMealPlan extends IPSModuleStrict
                 ['type' => 'Select', 'name' => 'ShoppingListInstanceID',
                  'caption' => $this->Translate('Shopping list'), 'options' => $optionen],
                 ['type' => 'Label', 'caption' => $this->Translate('The favorite lists of this shopping list are the recipes of the meal plan, and its cart receives the ingredients. Recipes scanned from the tile are saved there as new favorite lists.')],
-                ['type' => 'CheckBox', 'name' => 'DishImagesEnabled',
-                 'caption' => $this->Translate('Generate dish images with AI')],
-                ['type' => 'Label', 'caption' => $this->Translate('Every planned recipe gets a uniform dish image (plate seen from above, transparent background), generated once per recipe. Requires a SymDo Gateway with an OpenAI API key and costs about 4 cents per image. While an image is being generated, other AI requests may briefly report busy.')],
+                ['type' => 'Label', 'caption' => $this->Translate('A SymDo Gateway is required: it delivers the daily briefing, the recipe analysis and the dish images of the recipe lists.')],
             ],
             'actions' => [
                 ['type' => 'Label', 'caption' => ''],
@@ -371,9 +349,6 @@ class SymDoMealPlan extends IPSModuleStrict
         }
         if ($listId !== '' && $datum !== '') {
             $this->GerichtSetzen($datum, $listId, '', time());
-        }
-        if ($listId !== '') {
-            $this->DishBedarfMelden($listId);
         }
         $this->PushState();
     }

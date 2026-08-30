@@ -2077,6 +2077,14 @@ html[data-symdo-theme="dark"] .member-bar {
   justify-content: center;
   font-size: 20px;
 }
+/* Gerichtsbild statt Herz (gleiche Schule wie .note-folder .fav-badge). */
+.fav-badge-dish, .fav-badge-warten {
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.fav-badge-dish img { width: 100%; height: 100%; border-radius: 999px; object-fit: cover; }
+.fav-badge-warten { color: var(--muted); font-size: 15px; }
 .fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fav-name { font-size: 15px; font-weight: 600; }
 .fav-count { font-size: 12.5px; color: var(--muted); }
@@ -2323,6 +2331,8 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-fav-new { display: flex; gap: 8px; align-items: center; }
 .ai-fav-new input { flex: 1; }
 .ai-fav-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0 2px; cursor: pointer; }
+.prompt-haken { display: flex; align-items: center; gap: 8px; font-size: 15px; padding: 12px 0 2px; cursor: pointer; }
+.prompt-haken input { width: 18px; height: 18px; accent-color: var(--accent); }
 .ai-fav-toggle input { width: 18px; height: 18px; }
 /* Bei gewählter Bestandsliste: „Neue Liste"-Bedienelemente ausgegraut + deaktiviert */
 .ai-fav-section.disabled, .ai-fav-toggle.disabled, .ai-fav-new.disabled { opacity: .4; }
@@ -3305,6 +3315,11 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     </div>
     <div class="overlay-body">
       <input id="promptInput" type="text" />
+      <label class="prompt-haken" id="promptHakenZeile" style="display:none">
+        <input type="checkbox" id="promptHaken">
+        <span id="promptHakenText"></span>
+      </label>
+      <div class="hint-note" id="promptHakenHinweis" style="display:none"></div>
     </div>
     <div class="overlay-footer">
       <button data-close="promptOverlay" id="btnPromptCancel"></button>
@@ -4096,6 +4111,9 @@ function syncCompat() {
   // Bilder nur, wenn DIESE Liste ShowProductImages aktiv hat (imagesEnabled) —
   // sonst kein Hook → getProductImageUrl liefert null → Initialen
   window.__imageHookUrl = extras.imagesEnabled ? (extras.imageBase || '') : '';
+  // Gerichtsbilder haengen NICHT an ShowProductImages: der Schalter regelt die
+  // Artikelbilder, nicht das Badge der Rezeptlisten.
+  window.__dishHookUrl = extras.imageBase || '';
   window.__extApiHookUrl = extras.extApiBase || '';
   if (productImages !== store.images) {
     productImages = store.images || {};
@@ -4809,11 +4827,29 @@ function showConfirm(title, okLabel, cb) {
   openOverlay('confirmOverlay');
 }
 let promptCb = null;
-function showPrompt(title, initial, okLabel, cb) {
+/**
+ * Texteingabe im Overlay. Mit `haken` erscheint zusaetzlich eine Checkbox
+ * ({text, hint}) — der Rueckruf bekommt dann ihren Zustand als zweites
+ * Argument. Ohne die Angabe bleibt der Dialog, was er war.
+ */
+function showPrompt(title, initial, okLabel, cb, haken) {
   document.getElementById('promptTitle').textContent = title;
   const input = document.getElementById('promptInput');
   input.value = initial || '';
   document.getElementById('btnPromptOk').textContent = okLabel;
+  const zeile = document.getElementById('promptHakenZeile');
+  const box = document.getElementById('promptHaken');
+  const hinweis = document.getElementById('promptHakenHinweis');
+  box.checked = false;
+  if (haken && haken.text) {
+    document.getElementById('promptHakenText').textContent = haken.text;
+    zeile.style.display = 'flex';
+    hinweis.textContent = haken.hint || '';
+    hinweis.style.display = haken.hint ? 'block' : 'none';
+  } else {
+    zeile.style.display = 'none';
+    hinweis.style.display = 'none';
+  }
   promptCb = cb;
   openOverlay('promptOverlay');
   input.focus();
@@ -7553,6 +7589,34 @@ function renderShopping() {
 // Ausgefülltes Herz als Inline-SVG (das fa-solid-Icon ist im Icon-Kit nicht
 // enthalten und rendert sonst als leerer Kasten). Füllt sich über currentColor.
 const HEART_SOLID_SVG = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="display:block"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+
+/* Das Badge einer Favoritenliste: Rezeptlisten zeigen ihr Gerichtsbild, sonst
+   das Herz. Ist eine Liste als Rezept markiert, das Bild aber noch nicht
+   erzeugt (das dauert bis zu einer Minute), steht solange ein gedaempfter
+   Teller — schlaegt die Erzeugung endgueltig fehl, nimmt der Server der Liste
+   den Haken und das Herz kehrt zurueck.
+
+   Das Bild kommt ueber den Asset-Hook (Token steckt in __imageHookUrl), NICHT
+   im Zustand: eine Miniatur wiegt 37 kB, und der Zustand reist bei jeder
+   Aenderung mit. So greift ausserdem der Browser-Cache. */
+function dishImageUrl(list) {
+  const mid = (list && list.isRecipe) ? parseInt(list.imageId, 10) || 0 : 0;
+  if (!mid || !window.__dishHookUrl) { return ''; }
+  // Die Basis endet auf „…&f=" — fuer das Bild zaehlt stattdessen a/mid.
+  // s=96: das Badge zeigt 34 px, doppelt reicht auch auf Retina-Schirmen.
+  return window.__dishHookUrl.replace(/&f=$/, '') + '&a=dish&s=96&mid=' + mid;
+}
+function favBadgeHtml(list) {
+  const url = dishImageUrl(list);
+  if (url) {
+    return '<span class="fav-badge fav-badge-dish"><img alt="" src="' + escapeHtml(url) + '"></span>';
+  }
+  if (list && list.isRecipe) {
+    return '<span class="fav-badge fav-badge-warten"><i class="fa-light fa-plate-utensils"></i></span>';
+  }
+  return '<span class="fav-badge">' + HEART_SOLID_SVG + '</span>';
+}
+
 function shoppingRowHtml(it, favNames, st, inCart, spanne) {
   const img = resolveItemImage(it);
   const tint = categoryStyle(it.category).tint;
@@ -9924,7 +9988,7 @@ function renderFavMaster(el, st, lists, bought, detail) {
       `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
       `<div class="swipe-under-edit"><i class="fa-light fa-cart-plus"></i></div>` +
       `<div class="fav-row" data-list="${escapeHtml(list.id)}">` +
-      `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
+      favBadgeHtml(list) +
       `<span class="fav-main"><span class="fav-name">${escapeHtml(list.name)}</span>` +
       `<span class="fav-count">${count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count))}</span></span>` +
       `<button class="fav-cart-btn" data-addall="${escapeHtml(list.id)}" aria-label="${translate('Add all to shopping list')}"><i class="fa-light fa-cart-plus"></i></button>` +
@@ -9944,9 +10008,11 @@ function renderFavMaster(el, st, lists, bought, detail) {
   });
   const headNode = freshFav.find(n => n.querySelector && n.querySelector('#btnFavCreate'));
   if (headNode) headNode.querySelector('#btnFavCreate').addEventListener('click', () => {
-    showPrompt(translate('New favorite list'), '', translate('Create'), (name) => {
-      if (name.trim()) sdCall(selectedShoppingID(), 'CreateFavoriteList', { name: name.trim() });
-    });
+    showPrompt(translate('New favorite list'), '', translate('Create'), (name, istRezept) => {
+      if (name.trim()) {
+        sdCall(selectedShoppingID(), 'CreateFavoriteList', { name: name.trim(), isRecipe: !!istRezept });
+      }
+    }, { text: translate('This list is a recipe'), hint: translate('Recipes get a generated dish image instead of the heart.') });
   });
   freshFav.forEach(node => (node.querySelectorAll ? node.querySelectorAll('[data-addall]') : []).forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -11311,7 +11377,7 @@ function renderFavPicker() {
     const count = (l.items || []).length;
     const cnt = count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count));
     return `<div class="fav-row${inList ? ' selected' : ''}" data-list="${escapeHtml(l.id)}">` +
-      `<span class="fav-badge">${HEART_SOLID_SVG}</span>` +
+      favBadgeHtml(l) +
       `<span class="fav-main"><span class="fav-name">${escapeHtml(l.name)}</span>` +
       `<span class="fav-count">${cnt}</span></span>` +
       `<i class="fa-light fa-check check"></i></div>`;
@@ -12760,7 +12826,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnPromptOk').addEventListener('click', () => {
     closeOverlay('promptOverlay');
-    if (promptCb) { const cb = promptCb; promptCb = null; cb(document.getElementById('promptInput').value); }
+    if (promptCb) { const cb = promptCb; promptCb = null; cb(document.getElementById('promptInput').value, document.getElementById('promptHaken').checked); }
   });
   document.getElementById('btnEditSave').addEventListener('click', saveItemEditor);
   document.getElementById('btnTodoSave').addEventListener('click', saveTodoEditor);
@@ -13586,7 +13652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const count = (l.items || []).length;
         const cnt = count === 1 ? translate('1 item') : translate('%1 items').replace('%1', String(count));
         return '<div class="fav-row" data-list="' + escapeHtml(String(l.id)) + '">' +
-          '<span class="fav-badge">' + HEART_SOLID_SVG + '</span>' +
+          favBadgeHtml(l) +
           '<span class="fav-main"><span class="fav-name">' + escapeHtml(String(l.name || '')) + '</span>' +
           '<span class="fav-count">' + escapeHtml(cnt) + '</span></span>' +
           '<i class="fa-light fa-check check"></i></div>';
@@ -13630,6 +13696,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const base = { items: items };
     if (target.listId) base.listId = target.listId;
     if (target.name) base.name = target.name;
+    // Was aus einer Rezept-Analyse kommt, IST ein Rezept — der Haken wird hier
+    // nicht gefragt, sondern gesetzt (nur bei neuen Listen; bestehende behalten
+    // ihre Art).
+    if (isNew) base.isRecipe = true;
     const finish = (extra) => {
       sdCall(id, 'AddItemsToFavoriteList', Object.assign({}, base, extra || {}));
       closeOverlay('aiFavOverlay');

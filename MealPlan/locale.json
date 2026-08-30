@@ -45,10 +45,7 @@
             "Paste recipe URL": "Rezept-URL einfügen",
             "(recipe deleted)": "(Rezept gelöscht)",
             "Could not reach the AI service.": "Der KI-Dienst war nicht erreichbar.",
-            "Generate dish images with AI": "Gerichtsbilder per KI erzeugen",
-            "Every planned recipe gets a uniform dish image (plate seen from above, transparent background), generated once per recipe. Requires a SymDo Gateway with an OpenAI API key and costs about 4 cents per image. While an image is being generated, other AI requests may briefly report busy.": "Jedes eingeplante Rezept bekommt ein einheitliches Gerichtsbild (Teller von oben, transparenter Hintergrund), einmal je Rezept erzeugt. Braucht ein SymDo Gateway mit OpenAI-API-Key und kostet rund 4 Cent je Bild. Während ein Bild entsteht, können andere KI-Anfragen kurz „belegt“ melden.",
-            "Dish image": "Gerichtsbild",
-            "Dish images": "Gerichtsbilder"
+            "A SymDo Gateway is required: it delivers the daily briefing, the recipe analysis and the dish images of the recipe lists.": "Ein SymDo Gateway wird benötigt: Es liefert das Tagesbriefing, die Rezept-Analyse und die Gerichtsbilder der Rezeptlisten."
         }
     }
 }

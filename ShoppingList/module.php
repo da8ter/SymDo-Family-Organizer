@@ -354,7 +354,10 @@ class SymDoShoppingList extends IPSModuleStrict
                 if (!is_array($data) || trim((string)($data['name'] ?? '')) === '') {
                     throw new \Exception($this->Translate('Invalid payload'));
                 }
-                $this->CreateFavoriteListInternal((string)($data['name'] ?? ''));
+                $this->CreateFavoriteListInternal(
+                    (string)($data['name'] ?? ''),
+                    ($data['isRecipe'] ?? false) === true
+                );
                 return;
             case 'AddItemToFavoriteList':
                 $data = json_decode((string)$Value, true);
@@ -379,7 +382,22 @@ class SymDoShoppingList extends IPSModuleStrict
                     (string)($data['name'] ?? ''),
                     $data['items'],
                     (string)($data['url'] ?? ''),
-                    (string)($data['mediaId'] ?? '')
+                    (string)($data['mediaId'] ?? ''),
+                    ($data['isRecipe'] ?? false) === true
+                );
+                return;
+
+            case 'SetFavoriteImage':
+                // Rückmeldung des Gateways: {listId, imageId, failed?, isRecipe?}
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data) || trim((string)($data['listId'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                $this->SetFavoriteImageInternal(
+                    (string)($data['listId'] ?? ''),
+                    (int)($data['imageId'] ?? 0),
+                    ($data['failed'] ?? false) === true,
+                    ($data['isRecipe'] ?? false) === true
                 );
                 return;
             case 'RemoveItemFromFavoriteList':
@@ -1306,6 +1324,15 @@ class SymDoShoppingList extends IPSModuleStrict
         // Bulk-add all marked items to external cart
         if ($action === 'cart_bulk') {
             $this->HandleCartBulkHook();
+            return;
+        }
+
+        // Gerichtsbild einer Rezept-Favoritenliste. Es liegt als Medienobjekt
+        // beim Gateway; ausgeliefert wird es hier, weil Kachel und Web-App den
+        // Token dieses Hooks ohnehin kennen (imageBase) — und weil ein Bild im
+        // Zustand jeden Abruf verteuern wuerde (gemessen: 37 kB je Miniatur).
+        if ($action === 'dish') {
+            $this->HandleDishImageHook((int)($_GET['mid'] ?? 0));
             return;
         }
 
