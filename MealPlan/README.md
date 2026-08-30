@@ -12,10 +12,12 @@ legt die Zutaten in den Einkaufswagen.
   „Pizza bestellen"), **URL analysieren** oder **Foto/Datei analysieren** —
   die KI liest die Zutaten, das Rezept wird als neue Favoritenliste
   gespeichert und dem Tag zugewiesen.
-- **Zutaten-Übernahme:** je Gericht ein Korb-Knopf — er öffnet erst eine
-  Abwahl-Liste (alles vorgewählt, Vorrätiges abhaken), übernommen wird nur
-  die Auswahl. Dazu „Für die Woche einkaufen" (jedes geplante Rezept einmal,
-  Mengen führt die Einkaufsliste zusammen).
+- **Zutaten-Übernahme:** je Gericht ein Korb-Knopf — er öffnet den
+  Übernahme-Dialog im Stil der Web-App-Rezeptprüfung: Zutaten an-/abwählen
+  (Vorrätiges abhaken), Mengen-Stepper skaliert die Mengen („Menge ×2"),
+  und bei mehreren Einkaufslisten wählt ein Dropdown die Ziel-Liste.
+  Dazu „Für die Woche einkaufen" (jedes geplante Rezept einmal, Mengen
+  führt die Einkaufsliste zusammen).
 - **Gericht-Ansicht:** ein geplanter Tag öffnet erst die Detail-Ansicht —
   Bild groß, Titel, „Rezept öffnen" (URL, Foto oder PDF der Quelle) und der
   🛒-Knopf; der Stift oben rechts führt in die Bearbeitung.

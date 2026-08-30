@@ -110,16 +110,41 @@ body {
 }
 #detailStift { right: 12px; }
 #detailZuX, #korbZuX { left: 12px; }
-/* Abwahl-Liste vor der Uebernahme: alle Zutaten vorgewaehlt, Vorraetiges
-   laesst sich abhaken. */
+/* Auswahl vor der Uebernahme — derselbe Dialog wie die Rezept-Pruefansicht
+   der Web-App: Zeilen zum An-/Abwaehlen (.ai-row), Portionen-Stepper im
+   Rezeptkopf, Mengen-Chips skalieren live mit. */
 #korbTitel { margin: 8px 48px 4px; font-size: 17px; text-align: center; }
-.zutat {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  border-radius: 12px; background: var(--flaeche); margin-top: 6px;
-  cursor: pointer; font-weight: 600; font-size: 14px;
+.ai-recipe-head { padding: 8px 0 12px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.ai-portions { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.ai-portions-label { font-size: 14px; color: var(--dezent); }
+.ai-step {
+  flex: none; width: 30px; height: 30px; border-radius: 999px; font-size: 18px;
+  line-height: 1; cursor: pointer; color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
-.zutat input { width: 18px; height: 18px; accent-color: var(--akzent); flex: 0 0 auto; margin: 0; }
-.zutat .menge { margin-left: auto; color: var(--dezent); font-size: 12px; flex: 0 0 auto; }
+.ai-step:disabled { opacity: .35; cursor: default; }
+.ai-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+.ai-row .ai-box {
+  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 6px;
+  border: 2px solid color-mix(in srgb, var(--text) 30%, transparent);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px;
+}
+.ai-row.selected .ai-box { background: var(--akzent); border-color: var(--akzent); }
+.ai-row .ai-box i, .ai-row .ai-box svg { opacity: 0; }
+.ai-row.selected .ai-box i, .ai-row.selected .ai-box svg { opacity: 1; }
+.ai-main { flex: 1; min-width: 0; }
+.ai-title { font-size: 15px; font-weight: 600; }
+.ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.badge {
+  font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  background-color: var(--flaeche); color: var(--dezent); white-space: nowrap;
+}
 #detailBild {
   width: 220px; height: 220px; margin: 10px auto 0; display: flex;
   align-items: center; justify-content: center; font-size: 72px;
@@ -145,10 +170,10 @@ body {
 #schauInhalt img { max-width: 94%; max-height: 92%; border-radius: 12px; }
 #schauInhalt iframe { width: 100%; height: 100%; border: none; background: #fff; }
 #blatt h3 { margin: 0 0 4px; font-size: 17px; }
-#blatt .abschnitt { margin-top: 14px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--dezent); }
+#blatt .abschnitt, #korb .abschnitt { margin-top: 14px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--dezent); }
 /* Favoriten als Dropdown: eine Zeile statt einer Liste — das Blatt bleibt
    kurz, auch wenn der Haushalt viele Rezepte sammelt. */
-#favWahl {
+#favWahl, #korbZiel {
   width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 34px 10px 12px;
   border-radius: 10px; border: 1px solid var(--rand);
   color: var(--text); font-size: 15px; font-weight: 600;
@@ -235,6 +260,15 @@ body {
   <div id="korb">
     <button id="korbZuX"><i class="fa-light fa-xmark"></i></button>
     <h3 id="korbTitel"></h3>
+    <div class="abschnitt" id="korbZielKopf"></div>
+    <select id="korbZiel"></select>
+    <div class="ai-recipe-head">
+      <div class="ai-portions">
+        <button type="button" class="ai-step" id="korbMinus" aria-label="minus">–</button>
+        <span class="ai-portions-label" id="korbFaktorText"></span>
+        <button type="button" class="ai-step" id="korbPlus" aria-label="plus">+</button>
+      </div>
+    </div>
     <div id="korbListe"></div>
     <div class="knopfzeile" style="margin-top:16px">
       <button class="knopf voll" id="korbBestaetigen"><i class="fa-light fa-cart-plus"></i> <span></span></button>
@@ -477,29 +511,101 @@ function schauZu() {
   if (schauUrl) { URL.revokeObjectURL(schauUrl); schauUrl = ''; }
 }
 
-/* Abwahl-Liste vor der Uebernahme: alles vorgewaehlt, Vorraetiges abhaken. */
+/* Auswahl vor der Uebernahme — der Dialog der Web-App-Rezeptpruefung:
+   Zeile antippen waehlt an/ab, der Stepper skaliert die Mengen-Chips.
+   Favoritenlisten kennen keine Portionszahl, also der ganzzahlige
+   Mengen-Faktor („Menge ×2") — wie die Web-App im selben Fall. */
+let korbFaktor = 1;
+
+/* Mengenangabe um den Faktor skalieren („500 g", „1,5 EL", „½ TL", „2-3") —
+   wortgleich mit scaleAmount/fmtNum der Web-App. */
+function fmtNum(n) {
+  const r = Math.round(n * 100) / 100;
+  const s = Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return s.replace('.', ',');
+}
+function scaleAmount(str, factor) {
+  const s = String(str == null ? '' : str).trim();
+  if (!s || factor === 1) return s;
+  const FR = { '½': 0.5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 0.25, '¾': 0.75, '⅕': 0.2, '⅛': 0.125 };
+  let m = s.match(/^([½⅓⅔¼¾⅕⅛])\s*(.*)$/);
+  if (m) return fmtNum(FR[m[1]] * factor) + (m[2] ? ' ' + m[2] : '');
+  m = s.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+  if (m) return fmtNum((parseInt(m[1], 10) / parseInt(m[2], 10)) * factor) + (m[3] ? ' ' + m[3] : '');
+  m = s.match(/^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(.*)$/);
+  if (m) {
+    const toN = (x) => parseFloat(x.replace(',', '.'));
+    let out = fmtNum(toN(m[1]) * factor);
+    if (m[2] != null) out += '–' + fmtNum(toN(m[2]) * factor);
+    return out + (m[3] ? ' ' + m[3] : '');
+  }
+  return s;
+}
+
 function korbOeffnen() {
+  korbFaktor = 1;
   const liste = el('korbListe');
   liste.innerHTML = '';
   (detailZutaten || []).forEach((z) => {
-    const zeile = document.createElement('label');
-    zeile.className = 'zutat';
-    zeile.innerHTML = '<input type="checkbox" checked><span class="name"></span><span class="menge"></span>';
-    zeile.querySelector('.name').textContent = z.name;
-    zeile.querySelector('.menge').textContent = z.amount || '';
-    zeile.querySelector('input').addEventListener('change', korbZaehlen);
+    const zeile = document.createElement('div');
+    zeile.className = 'ai-row selected';
+    zeile.__item = z;
+    zeile.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>'
+      + '<div class="ai-main"><div class="ai-title"></div><div class="ai-meta"></div></div>';
+    zeile.querySelector('.ai-title').textContent = z.name;
+    const meta = zeile.querySelector('.ai-meta');
+    if (z.amount) {
+      const chip = document.createElement('span');
+      chip.className = 'badge ai-amt';
+      chip.textContent = z.amount;
+      meta.appendChild(chip);
+    }
+    if (z.category) {
+      const chip = document.createElement('span');
+      chip.className = 'badge';
+      chip.textContent = z.category;
+      meta.appendChild(chip);
+    }
+    zeile.addEventListener('click', () => { zeile.classList.toggle('selected'); korbZaehlen(); });
     liste.appendChild(zeile);
   });
+  // Ziel-Liste: Dropdown nur bei mehreren Einkaufslisten, vorgewaehlt die Quelle.
+  const listen = zustand.lists || [];
+  const zeigeZiel = listen.length > 1;
+  el('korbZielKopf').textContent = t('toList');
+  el('korbZielKopf').style.display = zeigeZiel ? '' : 'none';
+  const ziel = el('korbZiel');
+  ziel.style.display = zeigeZiel ? 'block' : 'none';
+  ziel.innerHTML = '';
+  listen.forEach((l) => {
+    const opt = document.createElement('option');
+    opt.value = String(l.id);
+    opt.textContent = l.name;
+    ziel.appendChild(opt);
+  });
+  if (listen.some((l) => l.id === zustand.sourceList)) { ziel.value = String(zustand.sourceList); }
   el('korbTitel').textContent = tagAktuell ? tagAktuell.title : '';
   el('korbZuX').title = t('close');
+  korbSkalieren();
   korbZaehlen();
   el('detail').style.display = 'none';
   el('korb').style.display = 'block';
 }
 
+function korbSkalieren() {
+  el('korbFaktorText').textContent = t('quantityX').replace('%1', String(korbFaktor));
+  el('korbMinus').disabled = korbFaktor <= 1;
+  el('korbListe').querySelectorAll('.ai-row').forEach((zeile) => {
+    const chip = zeile.querySelector('.ai-amt');
+    if (chip) { chip.textContent = scaleAmount(String((zeile.__item || {}).amount || ''), korbFaktor); }
+  });
+}
+
 function korbGewaehlt() {
-  return Array.from(el('korbListe').querySelectorAll('.zutat input:checked'))
-    .map((box) => box.closest('.zutat').querySelector('.name').textContent);
+  return Array.from(el('korbListe').querySelectorAll('.ai-row.selected')).map((zeile) => {
+    const z = zeile.__item || {};
+    return { name: String(z.name || ''), amount: scaleAmount(String(z.amount || ''), korbFaktor) };
+  });
 }
 
 function korbZaehlen() {
@@ -665,12 +771,18 @@ document.addEventListener('DOMContentLoaded', () => {
     el('korb').style.display = 'none';
     el('detail').style.display = 'block';
   });
+  el('korbMinus').addEventListener('click', () => { korbFaktor = Math.max(1, korbFaktor - 1); korbSkalieren(); });
+  el('korbPlus').addEventListener('click', () => { korbFaktor = korbFaktor + 1; korbSkalieren(); });
   el('korbBestaetigen').addEventListener('click', () => {
-    const namen = korbGewaehlt();
-    if (!tagAktuell || !tagAktuell.listId || !namen.length) { return; }
+    const items = korbGewaehlt();
+    if (!tagAktuell || !tagAktuell.listId || !items.length) { return; }
     el('korbBestaetigen').disabled = true;   // Doppel-Tipp-Schutz
     if (typeof requestAction === 'function') {
-      requestAction('AddItemsToCart', JSON.stringify({ listId: tagAktuell.listId, names: namen }));
+      requestAction('AddItemsToCart', JSON.stringify({
+        listId: tagAktuell.listId,
+        targetId: parseInt(el('korbZiel').value, 10) || 0,
+        items: items,
+      }));
     }
     blattZu();
   });

@@ -283,11 +283,21 @@ trait MealStore
         }
         usort($auswahl, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
 
+        // Alle Einkaufslisten fürs Ziel-Dropdown der Übernahme (die Kachel
+        // zeigt es nur, wenn es mehr als eine gibt).
+        $listen = [];
+        foreach ((array)@IPS_GetInstanceListByModuleID(self::SHOPPING_GUID) as $id) {
+            $listen[] = ['id' => (int)$id, 'name' => (string)IPS_GetName((int)$id)];
+        }
+        usort($listen, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
         return [
             'type'      => 'state',
             'today'     => $heute,
             'weeks'     => $wochen,
             'favorites' => $auswahl,
+            'lists'     => $listen,
+            'sourceList' => $this->QuellListe(),
             'hasSource' => $this->QuellListe() > 0,
             'aiReady'   => $this->GatewayInstanz() > 0,
             'texts'     => [
@@ -301,6 +311,8 @@ trait MealStore
                 'openRecipe' => $this->Translate('Open recipe'),
                 'editMeal'  => $this->Translate('Edit'),
                 'loading'   => $this->Translate('Loading …'),
+                'quantityX' => $this->Translate('Quantity ×%1'),
+                'toList'    => $this->Translate('Shopping list'),
                 'freeHead'  => $this->Translate('Free text'),
                 'freeHint'  => $this->Translate('e.g. leftovers, order pizza'),
                 'scanHead'  => $this->Translate('New recipe'),
@@ -352,9 +364,9 @@ trait MealStore
             'srcKind'    => $srcKind,
             'srcUrl'     => $srcUrl,
             'srcMediaId' => $srcMediaId,
-            // Für die Abwahl-Liste vor der Übernahme: Name + Menge je Zutat.
+            // Für die Auswahl vor der Übernahme: Name, Menge und Kategorie-Chip.
             'ingredients' => array_map(
-                static fn(array $z): array => ['name' => $z['name'], 'amount' => $z['amount']],
+                static fn(array $z): array => ['name' => $z['name'], 'amount' => $z['amount'], 'category' => $z['category']],
                 $fav !== null ? (array)$fav['itemList'] : []
             ),
         ];
@@ -362,35 +374,38 @@ trait MealStore
 
     /**
      * Nur die AUSGEWÄHLTEN Zutaten eines Rezepts in den Einkaufswagen — der
-     * Weg hinter der Abwahl-Liste der Kachel („Tomaten sind noch da"). Läuft
-     * über AddItem der Einkaufsliste (dedupliziert dort selbst: offener
-     * gleichnamiger Artikel bekommt die Menge erhöht); Kategorie und Menge
-     * kommen aus der Favoritenliste, nie vom Client.
-     * @param list<string> $namen
+     * Weg hinter der Auswahl-Liste der Kachel. Läuft über AddItem der
+     * Ziel-Liste (dedupliziert dort selbst: offener gleichnamiger Artikel
+     * bekommt die Menge erhöht). Namen und Kategorien kommen IMMER aus der
+     * Favoritenliste — der Client wählt nur aus und skaliert die Menge
+     * (Portionen-Stepper); erfundene Artikel fallen durch.
+     * @param int $zielId Ziel-Einkaufsliste; 0 = die konfigurierte Quelle
+     * @param list<array{name:string,amount?:string}> $items
      */
-    private function KorbAuswahl(string $listId, array $namen): bool
+    private function KorbAuswahl(string $listId, int $zielId, array $items): bool
     {
-        $sl = $this->QuellListe();
+        $ziel = $this->ZielListe($zielId);
         $fav = $this->Favoriten()[trim($listId)] ?? null;
-        if ($sl <= 0 || $fav === null || $namen === []) {
+        if ($ziel <= 0 || $fav === null || $items === []) {
             return false;
         }
-        $gewaehlt = [];
-        foreach ($namen as $n) {
-            if (is_string($n) && trim($n) !== '') {
-                $gewaehlt[mb_strtolower(trim($n))] = true;
-            }
+        $zutaten = [];
+        foreach ((array)$fav['itemList'] as $z) {
+            $zutaten[mb_strtolower($z['name'])] = $z;
         }
         $uebernommen = 0;
-        foreach ((array)$fav['itemList'] as $zutat) {
-            if (!isset($gewaehlt[mb_strtolower($zutat['name'])])) {
+        foreach ($items as $item) {
+            $name = is_array($item) ? trim((string)($item['name'] ?? '')) : '';
+            $zutat = $zutaten[mb_strtolower($name)] ?? null;
+            if ($zutat === null) {
                 continue;
             }
+            $menge = mb_substr(trim((string)($item['amount'] ?? '')), 0, 40);
             try {
-                IPS_RequestAction($sl, 'AddItem', json_encode([
+                IPS_RequestAction($ziel, 'AddItem', json_encode([
                     'name'     => $zutat['name'],
                     'category' => $zutat['category'],
-                    'amount'   => $zutat['amount'],
+                    'amount'   => $menge !== '' ? $menge : $zutat['amount'],
                 ], JSON_UNESCAPED_UNICODE));
                 $uebernommen++;
             } catch (\Throwable $e) {
@@ -398,6 +413,16 @@ trait MealStore
             }
         }
         return $uebernommen > 0;
+    }
+
+    /** Ziel-Einkaufsliste der Übernahme — jede echte Liste erlaubt, Rückfall Quelle. */
+    private function ZielListe(int $zielId): int
+    {
+        if ($zielId > 0 && IPS_InstanceExists($zielId)
+            && (IPS_GetInstance($zielId)['ModuleInfo']['ModuleID'] ?? '') === self::SHOPPING_GUID) {
+            return $zielId;
+        }
+        return $this->QuellListe();
     }
 
     /** Auskunft fürs Briefing: das Gericht eines Tages als JSON. */
