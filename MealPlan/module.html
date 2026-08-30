@@ -103,11 +103,13 @@ body {
 /* Detail-Blatt eines geplanten Tages: Bild mittig, Titel darunter, Quelle als
    Link, Stift oben rechts. Sichtbar ist immer nur EIN Blatt im Schleier. */
 #detail { display: none; position: relative; }
-#detailStift {
-  position: absolute; top: 12px; right: 12px; width: 38px; height: 38px;
+#detailStift, #detailZuX {
+  position: absolute; top: 12px; width: 38px; height: 38px;
   border-radius: 50%; border: 1px solid var(--rand); background: var(--flaeche);
   font-size: 16px; cursor: pointer; line-height: 1; color: var(--text);
 }
+#detailStift { right: 12px; }
+#detailZuX { left: 12px; }
 #detailBild {
   width: 220px; height: 220px; margin: 10px auto 0; display: flex;
   align-items: center; justify-content: center; font-size: 72px;
@@ -210,6 +212,7 @@ body {
     </div>
   </div>
   <div id="detail">
+    <button id="detailZuX"><i class="fa-light fa-xmark"></i></button>
     <button id="detailStift"><i class="fa-light fa-pencil"></i></button>
     <div id="detailBild"></div>
     <h3 id="detailTitel"></h3>
@@ -217,7 +220,6 @@ body {
     <div class="knopfzeile" style="margin-top:16px">
       <button class="knopf voll" id="detailKorb"><i class="fa-light fa-cart-plus"></i> <span></span></button>
     </div>
-    <div class="knopfzeile"><button class="knopf" id="detailZu"></button></div>
   </div>
 </div>
 <div id="quelleSchau">
@@ -360,7 +362,7 @@ function detailOeffnen(tag) {
   el('detailKorb').style.display = tag.cart ? '' : 'none';
   el('detailKorb').disabled = false;
   el('detailKorb').querySelector('span').textContent = t('cart');
-  el('detailZu').textContent = t('close');
+  el('detailZuX').title = t('close');
   el('blatt').style.display = 'none';
   // 'block', nicht '': leer fiele auf das display:none des Stylesheets zurueck.
   el('detail').style.display = 'block';
@@ -588,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
   el('schleier').addEventListener('click', (ev) => { if (ev.target === el('schleier')) { blattZu(); } });
   el('entfernen').addEventListener('click', () => gerichtSetzen('', ''));
   el('detailStift').addEventListener('click', () => blattOeffnen(tagAktuell));
-  el('detailZu').addEventListener('click', blattZu);
+  el('detailZuX').addEventListener('click', blattZu);
   el('detailQuelle').addEventListener('click', quelleOeffnen);
   el('detailKorb').addEventListener('click', () => {
     if (!tagAktuell || !tagAktuell.listId) { return; }
