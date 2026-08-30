@@ -2078,13 +2078,14 @@ html[data-symdo-theme="dark"] .member-bar {
   font-size: 20px;
 }
 /* Gerichtsbild statt Herz (gleiche Schule wie .note-folder .fav-badge). */
-.fav-badge-dish, .fav-badge-warten {
+.fav-badge-dish, .fav-badge-warten, .fav-badge-ordner {
   width: 34px; height: 34px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .fav-badge-dish img { width: 100%; height: 100%; border-radius: 999px; object-fit: cover; }
 .fav-badge-warten { color: var(--muted); font-size: 15px; }
+.fav-badge-ordner { color: #ff2d55; font-size: 15px; background: rgba(255, 45, 85, .12); }
 .fav-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fav-name { font-size: 15px; font-weight: 600; }
 .fav-count { font-size: 12.5px; color: var(--muted); }
@@ -3087,7 +3088,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
         <div class="screen-head">
           <select id="shoppingSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="shoppingTitle"></h2>
-          <button id="btnShoppingFav" class="icon-btn" aria-label="Favoriten"><i class="fa-light fa-heart"></i></button>
+          <button id="btnShoppingFav" class="icon-btn" aria-label="Favoriten"><i class="fa-light fa-folder-heart"></i></button>
           <button id="btnShoppingHint" class="icon-btn hint-btn" aria-label="Hinweis für den Einkauf"><i class="fa-light fa-comment"></i><span class="hint-badge" hidden>!</span></button>
           <button id="btnShoppingMenu" class="icon-btn" aria-label="Menü"><i class="fa-light fa-ellipsis"></i></button>
         </div>
@@ -7678,7 +7679,8 @@ function favBadgeHtml(list) {
   if (list && list.isRecipe) {
     return '<span class="fav-badge fav-badge-warten"><i class="fa-light fa-plate-utensils"></i></span>';
   }
-  return '<span class="fav-badge">' + HEART_SOLID_SVG + '</span>';
+  // Keine Rezeptliste: dasselbe Ordner-Herz wie der Oeffner in der Kopfzeile.
+  return '<span class="fav-badge fav-badge-ordner"><i class="fa-light fa-folder-heart"></i></span>';
 }
 
 function shoppingRowHtml(it, favNames, st, inCart, spanne) {
