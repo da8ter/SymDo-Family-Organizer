@@ -1,6 +1,10 @@
+<script src="/icons.js"></script>
 <style>
 /* Symcon injiziert --card-color, --content-color und --accent-color je nach
-   Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets. */
+   Visu-Design. Alles hier leitet sich daraus ab. Einziges Fremd-Asset ist
+   /icons.js (Font Awesome SVG+JS, wie in den grossen Kacheln): es ersetzt
+   die <i class="fa-…"> nachtraeglich durch <svg> — faellt es aus, fehlt nur
+   das Stift-Symbol, die Kachel selbst laeuft ohne. */
 :root {
   --bg: var(--card-color, #2b2c30);
   --text: var(--content-color, #ffffff);
@@ -60,7 +64,8 @@ body {
 .tag .bild {
   width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto; overflow: hidden;
   background: color-mix(in srgb, var(--akzent) 12%, var(--bg));
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+  color: var(--dezent);
 }
 .tag .bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tag .titel {
@@ -97,11 +102,12 @@ body {
 #detailStift {
   position: absolute; top: 12px; right: 12px; width: 38px; height: 38px;
   border-radius: 50%; border: 1px solid var(--rand); background: var(--zeile);
-  font-size: 16px; cursor: pointer; line-height: 1;
+  font-size: 16px; cursor: pointer; line-height: 1; color: var(--text);
 }
 #detailBild {
   width: 220px; height: 220px; margin: 10px auto 0; display: flex;
-  align-items: center; justify-content: center; font-size: 84px;
+  align-items: center; justify-content: center; font-size: 72px;
+  color: var(--dezent);
 }
 #detailBild img { max-width: 100%; max-height: 100%; border-radius: 18px; }
 #detailTitel { margin: 12px 0 0; font-size: 18px; text-align: center; }
@@ -165,7 +171,7 @@ body {
     <button class="pfeil" id="zurueck">‹</button>
     <div id="wochentitel"></div>
     <button class="pfeil" id="vor">›</button>
-    <button id="wochenkorb">🛒 <span id="wochenkorbText"></span></button>
+    <button id="wochenkorb"><i class="fa-light fa-cart-plus"></i> <span id="wochenkorbText"></span></button>
   </div>
   <div id="tage"></div>
   <div id="leerhinweis" style="display:none"></div>
@@ -197,18 +203,18 @@ body {
     </div>
   </div>
   <div id="detail">
-    <button id="detailStift">✏️</button>
+    <button id="detailStift"><i class="fa-light fa-pencil"></i></button>
     <div id="detailBild"></div>
     <h3 id="detailTitel"></h3>
     <button id="detailQuelle"></button>
     <div class="knopfzeile" style="margin-top:16px">
-      <button class="knopf voll" id="detailKorb">🛒 <span></span></button>
+      <button class="knopf voll" id="detailKorb"><i class="fa-light fa-cart-plus"></i> <span></span></button>
     </div>
     <div class="knopfzeile"><button class="knopf" id="detailZu"></button></div>
   </div>
 </div>
 <div id="quelleSchau">
-  <button id="schauZu">✕</button>
+  <button id="schauZu"><i class="fa-light fa-xmark"></i></button>
   <div id="schauInhalt"></div>
 </div>
 <div id="toast"></div>
@@ -287,7 +293,7 @@ function zeichnen() {
     zeile.className = 'tag' + (d.today ? ' heute' : '');
     const bild = d.image
       ? '<span class="bild"><img alt="" src="' + d.image + '"></span>'
-      : '<span class="bild">' + (d.title ? '🍽' : '·') + '</span>';
+      : '<span class="bild">' + (d.title ? '<i class="fa-light fa-plate-utensils"></i>' : '·') + '</span>';
     zeile.innerHTML = '<span class="kalender"><span class="wt"></span><span class="nr"></span></span>'
       + bild + '<span class="titel"></span>';
     zeile.querySelector('.wt').textContent = d.weekday;
@@ -298,7 +304,7 @@ function zeichnen() {
     if (d.cart) {
       const korb = document.createElement('button');
       korb.className = 'korb';
-      korb.textContent = '🛒';
+      korb.innerHTML = '<i class="fa-light fa-cart-plus"></i>';
       korb.title = t('cart');
       korb.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -368,7 +374,7 @@ function detailBildSetzen(dataUrl) {
     img.src = dataUrl;
     halter.appendChild(img);
   } else {
-    halter.textContent = '🍽';
+    halter.innerHTML = '<i class="fa-light fa-plate-utensils"></i>';
   }
 }
 
@@ -499,7 +505,7 @@ function scanZeigen(daten, url, mediaId) {
   scanFund = { items: items, url: url || '', mediaId: mediaId || '' };
   el('scanName').value = (daten.title ? String(daten.title) : '').slice(0, 80);
   el('scanName').placeholder = t('nameHint');
-  el('scanAnzahl').textContent = items.length + ' × 🛒';
+  el('scanAnzahl').innerHTML = items.length + ' × <i class="fa-light fa-basket-shopping"></i>';
   el('scanErgebnis').style.display = '';
 }
 
