@@ -128,6 +128,18 @@ class SymDoMealPlan extends IPSModuleStrict
                 }
                 return;
 
+            case 'AddItemsToCart':
+                // Abwahl-Liste des Detail-Blatts: {listId, names[]} — nur die
+                // ausgewählten Zutaten wandern in den Wagen.
+                $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
+                if (is_array($daten) && $this->KorbAuswahl(
+                    trim((string)($daten['listId'] ?? '')),
+                    is_array($daten['names'] ?? null) ? $daten['names'] : []
+                )) {
+                    $this->Push(['type' => 'cartDone', 'listId' => trim((string)($daten['listId'] ?? ''))]);
+                }
+                return;
+
             case 'MealDetail':
                 // Detail-Blatt der Kachel: {date} → größeres Bild + Rezept-Quelle.
                 $this->Push($this->GerichtDetail(trim((string)$Value)));

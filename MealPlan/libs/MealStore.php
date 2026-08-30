@@ -129,10 +129,16 @@ trait MealStore
                 continue;
             }
             $namen = [];
+            $zutaten = [];
             foreach ((array)($liste['items'] ?? []) as $item) {
                 $n = is_array($item) ? trim((string)($item['name'] ?? '')) : '';
                 if ($n !== '') {
                     $namen[] = $n;
+                    $zutaten[] = [
+                        'name'     => $n,
+                        'amount'   => trim((string)($item['amount'] ?? '')),
+                        'category' => trim((string)($item['category'] ?? '')),
+                    ];
                 }
             }
             $raus[$id] = [
@@ -141,6 +147,7 @@ trait MealStore
                 'url'       => trim((string)($liste['url'] ?? '')),
                 'items'     => count((array)($liste['items'] ?? [])),
                 'itemNames' => $namen,
+                'itemList'  => $zutaten,
             ];
         }
         return $raus;
@@ -345,7 +352,52 @@ trait MealStore
             'srcKind'    => $srcKind,
             'srcUrl'     => $srcUrl,
             'srcMediaId' => $srcMediaId,
+            // Für die Abwahl-Liste vor der Übernahme: Name + Menge je Zutat.
+            'ingredients' => array_map(
+                static fn(array $z): array => ['name' => $z['name'], 'amount' => $z['amount']],
+                $fav !== null ? (array)$fav['itemList'] : []
+            ),
         ];
+    }
+
+    /**
+     * Nur die AUSGEWÄHLTEN Zutaten eines Rezepts in den Einkaufswagen — der
+     * Weg hinter der Abwahl-Liste der Kachel („Tomaten sind noch da"). Läuft
+     * über AddItem der Einkaufsliste (dedupliziert dort selbst: offener
+     * gleichnamiger Artikel bekommt die Menge erhöht); Kategorie und Menge
+     * kommen aus der Favoritenliste, nie vom Client.
+     * @param list<string> $namen
+     */
+    private function KorbAuswahl(string $listId, array $namen): bool
+    {
+        $sl = $this->QuellListe();
+        $fav = $this->Favoriten()[trim($listId)] ?? null;
+        if ($sl <= 0 || $fav === null || $namen === []) {
+            return false;
+        }
+        $gewaehlt = [];
+        foreach ($namen as $n) {
+            if (is_string($n) && trim($n) !== '') {
+                $gewaehlt[mb_strtolower(trim($n))] = true;
+            }
+        }
+        $uebernommen = 0;
+        foreach ((array)$fav['itemList'] as $zutat) {
+            if (!isset($gewaehlt[mb_strtolower($zutat['name'])])) {
+                continue;
+            }
+            try {
+                IPS_RequestAction($sl, 'AddItem', json_encode([
+                    'name'     => $zutat['name'],
+                    'category' => $zutat['category'],
+                    'amount'   => $zutat['amount'],
+                ], JSON_UNESCAPED_UNICODE));
+                $uebernommen++;
+            } catch (\Throwable $e) {
+                $this->SendDebug('MealPlan', 'Zutat übernehmen fehlgeschlagen: ' . $e->getMessage(), 0);
+            }
+        }
+        return $uebernommen > 0;
     }
 
     /** Auskunft fürs Briefing: das Gericht eines Tages als JSON. */

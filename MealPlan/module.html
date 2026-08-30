@@ -92,7 +92,7 @@ body {
   align-items: flex-end; justify-content: center;
 }
 #schleier.an { display: flex; }
-#blatt, #detail {
+#blatt, #detail, #korb {
   background: var(--bg); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px;
   max-height: 86%; overflow-y: auto; box-sizing: border-box; padding: 14px 14px 18px;
   border: 1px solid var(--rand); border-bottom: none;
@@ -102,14 +102,24 @@ body {
 }
 /* Detail-Blatt eines geplanten Tages: Bild mittig, Titel darunter, Quelle als
    Link, Stift oben rechts. Sichtbar ist immer nur EIN Blatt im Schleier. */
-#detail { display: none; position: relative; }
-#detailStift, #detailZuX {
+#detail, #korb { display: none; position: relative; }
+#detailStift, #detailZuX, #korbZuX {
   position: absolute; top: 12px; width: 38px; height: 38px;
   border-radius: 50%; border: 1px solid var(--rand); background: var(--flaeche);
   font-size: 16px; cursor: pointer; line-height: 1; color: var(--text);
 }
 #detailStift { right: 12px; }
-#detailZuX { left: 12px; }
+#detailZuX, #korbZuX { left: 12px; }
+/* Abwahl-Liste vor der Uebernahme: alle Zutaten vorgewaehlt, Vorraetiges
+   laesst sich abhaken. */
+#korbTitel { margin: 8px 48px 4px; font-size: 17px; text-align: center; }
+.zutat {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 12px; background: var(--flaeche); margin-top: 6px;
+  cursor: pointer; font-weight: 600; font-size: 14px;
+}
+.zutat input { width: 18px; height: 18px; accent-color: var(--akzent); flex: 0 0 auto; margin: 0; }
+.zutat .menge { margin-left: auto; color: var(--dezent); font-size: 12px; flex: 0 0 auto; }
 #detailBild {
   width: 220px; height: 220px; margin: 10px auto 0; display: flex;
   align-items: center; justify-content: center; font-size: 72px;
@@ -220,6 +230,14 @@ body {
     <div class="knopfzeile" id="detailAktionen" style="margin-top:14px">
       <button id="detailQuelle" class="knopf voll"></button>
       <button class="knopf voll" id="detailKorb" title=""><i class="fa-light fa-cart-plus"></i></button>
+    </div>
+  </div>
+  <div id="korb">
+    <button id="korbZuX"><i class="fa-light fa-xmark"></i></button>
+    <h3 id="korbTitel"></h3>
+    <div id="korbListe"></div>
+    <div class="knopfzeile" style="margin-top:16px">
+      <button class="knopf voll" id="korbBestaetigen"><i class="fa-light fa-cart-plus"></i> <span></span></button>
     </div>
   </div>
 </div>
@@ -350,12 +368,14 @@ function tagOeffnen(tag) {
 let tagAktuell = null;    // der im Detail gezeigte Tag
 let detailDatum = '';     // wehrt verspätete mealDetail-Antworten anderer Tage ab
 let quelleInfo = null;    // {kind, url, mediaId} aus der Detail-Antwort
+let detailZutaten = null; // [{name, amount}] aus der Detail-Antwort (Abwahl-Liste)
 let schauUrl = '';        // Blob-URL des Betrachters, beim Schließen freigeben
 
 function detailOeffnen(tag) {
   tagAktuell = tag;
   detailDatum = tag.date;
   quelleInfo = null;
+  detailZutaten = null;
   el('detailTitel').textContent = tag.title;
   detailBildSetzen(tag.image || '');
   el('detailStift').title = t('editMeal');
@@ -392,6 +412,9 @@ function detailBildSetzen(dataUrl) {
 function detailAuffrischen(daten) {
   if (!detailDatum || daten.date !== detailDatum) { return; }
   if (daten.image) { detailBildSetzen(daten.image); }
+  if (Array.isArray(daten.ingredients) && daten.ingredients.length) {
+    detailZutaten = daten.ingredients;
+  }
   const kind = String(daten.srcKind || '');
   // Foto/PDF reisen über das Gateway-Relay — ohne Gateway bleibt nur die URL.
   if (kind === 'url' || ((kind === 'pdf' || kind === 'photo') && zustand.aiReady)) {
@@ -454,9 +477,41 @@ function schauZu() {
   if (schauUrl) { URL.revokeObjectURL(schauUrl); schauUrl = ''; }
 }
 
+/* Abwahl-Liste vor der Uebernahme: alles vorgewaehlt, Vorraetiges abhaken. */
+function korbOeffnen() {
+  const liste = el('korbListe');
+  liste.innerHTML = '';
+  (detailZutaten || []).forEach((z) => {
+    const zeile = document.createElement('label');
+    zeile.className = 'zutat';
+    zeile.innerHTML = '<input type="checkbox" checked><span class="name"></span><span class="menge"></span>';
+    zeile.querySelector('.name').textContent = z.name;
+    zeile.querySelector('.menge').textContent = z.amount || '';
+    zeile.querySelector('input').addEventListener('change', korbZaehlen);
+    liste.appendChild(zeile);
+  });
+  el('korbTitel').textContent = tagAktuell ? tagAktuell.title : '';
+  el('korbZuX').title = t('close');
+  korbZaehlen();
+  el('detail').style.display = 'none';
+  el('korb').style.display = 'block';
+}
+
+function korbGewaehlt() {
+  return Array.from(el('korbListe').querySelectorAll('.zutat input:checked'))
+    .map((box) => box.closest('.zutat').querySelector('.name').textContent);
+}
+
+function korbZaehlen() {
+  const n = korbGewaehlt().length;
+  el('korbBestaetigen').querySelector('span').textContent = t('cart') + ' (' + n + ')';
+  el('korbBestaetigen').disabled = n === 0;
+}
+
 function blattOeffnen(tag) {
   if (!zustand.hasSource) { toast(t('noSource')); return; }
   el('detail').style.display = 'none';
+  el('korb').style.display = 'none';
   el('blatt').style.display = '';
   blattDatum = tag.date;
   scanFund = null;
@@ -503,6 +558,7 @@ function blattOeffnen(tag) {
 function blattZu() {
   el('schleier').classList.remove('an');
   el('detail').style.display = 'none';
+  el('korb').style.display = 'none';
   el('blatt').style.display = '';
   blattDatum = '';
   detailDatum = '';
@@ -595,8 +651,28 @@ document.addEventListener('DOMContentLoaded', () => {
   el('detailQuelle').addEventListener('click', quelleOeffnen);
   el('detailKorb').addEventListener('click', () => {
     if (!tagAktuell || !tagAktuell.listId) { return; }
+    // Erst die Abwahl-Liste — Vorraetiges soll draussen bleiben koennen. Ist
+    // die Detail-Antwort noch unterwegs (kein Zutatenstand), faellt der Knopf
+    // auf die Komplett-Uebernahme zurueck.
+    if (detailZutaten && detailZutaten.length) {
+      korbOeffnen();
+      return;
+    }
     el('detailKorb').disabled = true;   // Doppel-Tipp-Schutz, Toast kommt per cartDone
     if (typeof requestAction === 'function') { requestAction('AddToCart', tagAktuell.listId); }
+  });
+  el('korbZuX').addEventListener('click', () => {
+    el('korb').style.display = 'none';
+    el('detail').style.display = 'block';
+  });
+  el('korbBestaetigen').addEventListener('click', () => {
+    const namen = korbGewaehlt();
+    if (!tagAktuell || !tagAktuell.listId || !namen.length) { return; }
+    el('korbBestaetigen').disabled = true;   // Doppel-Tipp-Schutz
+    if (typeof requestAction === 'function') {
+      requestAction('AddItemsToCart', JSON.stringify({ listId: tagAktuell.listId, names: namen }));
+    }
+    blattZu();
   });
   el('schauZu').addEventListener('click', schauZu);
   el('quelleSchau').addEventListener('click', (ev) => { if (ev.target === el('quelleSchau')) { schauZu(); } });
