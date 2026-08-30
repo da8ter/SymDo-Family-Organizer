@@ -209,6 +209,41 @@ trait FavoriteStore
     }
 
     /**
+     * Eine bestehende Liste nachträglich als Rezept markieren (oder die
+     * Markierung zurücknehmen). Beim Markieren wird gleich ein Bild
+     * angefordert; beim Zurücknehmen fällt die Liste aufs Herz zurück und ihr
+     * Bild wird mitgelöscht — es hätte sonst niemanden mehr, der es zeigt.
+     */
+    private function SetFavoriteRecipeInternal(string $listId, bool $isRecipe): bool
+    {
+        $listId = trim($listId);
+        if ($listId === '') {
+            return false;
+        }
+        $lists = $this->LoadFavoriteLists();
+        foreach ($lists as &$l) {
+            if (!is_array($l) || trim((string)($l['id'] ?? '')) !== $listId) {
+                continue;
+            }
+            if ($isRecipe) {
+                $l['isRecipe'] = true;
+            } else {
+                $this->DeleteDishImage((int)($l['imageId'] ?? 0));
+                unset($l['isRecipe'], $l['imageId']);
+            }
+            unset($l);
+            $this->SaveFavoriteLists($lists);
+            $this->SendState();
+            if ($isRecipe) {
+                $this->DishAnfordern($listId);
+            }
+            return true;
+        }
+        unset($l);
+        return false;
+    }
+
+    /**
      * Beim Gateway ein Gerichtsbild anfordern. Es stellt nur in die
      * Warteschlange — die Erzeugung dauert bis zu zwei Minuten und darf den
      * Anlege-Aufruf niemals aufhalten.

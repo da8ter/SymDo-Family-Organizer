@@ -387,6 +387,18 @@ class SymDoShoppingList extends IPSModuleStrict
                 );
                 return;
 
+            case 'SetFavoriteRecipe':
+                // Nachträglich als Rezept markieren: {listId, isRecipe}
+                $data = json_decode((string)$Value, true);
+                if (!is_array($data) || trim((string)($data['listId'] ?? '')) === '') {
+                    throw new \Exception($this->Translate('Invalid payload'));
+                }
+                $this->SetFavoriteRecipeInternal(
+                    (string)($data['listId'] ?? ''),
+                    ($data['isRecipe'] ?? false) === true
+                );
+                return;
+
             case 'SetFavoriteImage':
                 // Rückmeldung des Gateways: {listId, imageId, failed?, isRecipe?}
                 $data = json_decode((string)$Value, true);
@@ -728,7 +740,7 @@ class SymDoShoppingList extends IPSModuleStrict
             'AddItem', 'AddScannedItem', 'ToggleCart', 'RemoveItem', 'DeleteItem',
             'ClearCart', 'MarkAllDone', 'UpdateItem', 'CreateFavoriteList',
             'AddItemToFavoriteList', 'AddItemsToFavoriteList', 'RemoveItemFromFavoriteList', 'AddFavoriteListToCart',
-            'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem',
+            'RenameFavoriteList', 'DeleteFavoriteList', 'UpdateFavoriteItem', 'SetFavoriteRecipe',
             'ForgetPurchase', 'UpdatePurchase',
             'SetHint',
         ];
