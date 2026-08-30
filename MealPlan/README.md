@@ -15,6 +15,9 @@ legt die Zutaten in den Einkaufswagen.
 - **Zutaten-Übernahme:** je Gericht ein 🛒-Knopf, dazu „Für die Woche
   einkaufen" (jedes geplante Rezept einmal, Mengen führt die Einkaufsliste
   zusammen).
+- **Gericht-Ansicht:** ein geplanter Tag öffnet erst die Detail-Ansicht —
+  Bild groß, Titel, „Rezept öffnen" (URL, Foto oder PDF der Quelle) und der
+  🛒-Knopf; der Stift oben rechts führt in die Bearbeitung.
 - **Briefing:** das tägliche Briefing erwähnt das Gericht („Heute Abend:
   Lasagne"; die Abend-Vorschau nennt das von morgen).
 - **KI-Gerichtsbilder (optional):** Auf Wunsch bekommt jedes eingeplante

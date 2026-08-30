@@ -138,6 +138,7 @@ trait MealStore
             $raus[$id] = [
                 'name'      => trim((string)($liste['name'] ?? '')),
                 'mediaId'   => (int)($liste['mediaId'] ?? 0),
+                'url'       => trim((string)($liste['url'] ?? '')),
                 'items'     => count((array)($liste['items'] ?? [])),
                 'itemNames' => $namen,
             ];
@@ -290,6 +291,9 @@ trait MealStore
                 'planned'   => $this->Translate('Plan a meal'),
                 'favHead'   => $this->Translate('From the favorite lists'),
                 'favPick'   => $this->Translate('Choose a recipe …'),
+                'openRecipe' => $this->Translate('Open recipe'),
+                'editMeal'  => $this->Translate('Edit'),
+                'loading'   => $this->Translate('Loading …'),
                 'freeHead'  => $this->Translate('Free text'),
                 'freeHint'  => $this->Translate('e.g. leftovers, order pizza'),
                 'scanHead'  => $this->Translate('New recipe'),
@@ -307,6 +311,40 @@ trait MealStore
                 'urlHint'   => $this->Translate('Paste recipe URL'),
                 'close'     => $this->Translate('Close'),
             ],
+        ];
+    }
+
+    /**
+     * Detail-Ansicht eines geplanten Tages für die Kachel: größeres Bild und
+     * die Rezept-Quelle (URL, PDF oder Foto der Favoritenliste). Kommt auf
+     * Zuruf (RequestAction MealDetail), nicht im Wochen-Payload — 480er-Bilder
+     * für 14 Tage würden ihn sprengen.
+     */
+    private function GerichtDetail(string $datum): array
+    {
+        $favoriten = $this->Favoriten();
+        $g = $this->GerichtFuer($datum, $this->PlanLesen(), $favoriten, $this->DishMapLesen());
+        $fav = ($g['listId'] !== '' && isset($favoriten[$g['listId']])) ? $favoriten[$g['listId']] : null;
+        $srcUrl     = $fav !== null ? (string)$fav['url'] : '';
+        $srcMediaId = $fav !== null ? (int)$fav['mediaId'] : 0;
+        $srcKind = '';
+        if ($srcUrl !== '') {
+            $srcKind = 'url';
+        } elseif ($srcMediaId > 0 && @IPS_MediaExists($srcMediaId)) {
+            // Quelldokument-Art am Medienobjekt ablesen: PDFs liegen als
+            // MEDIATYPE_DOCUMENT, abfotografierte Rezepte als Bild.
+            $srcKind = ((int)(@IPS_GetMedia($srcMediaId)['MediaType'] ?? 0) === MEDIATYPE_DOCUMENT) ? 'pdf' : 'photo';
+        }
+        return [
+            'type'       => 'mealDetail',
+            'date'       => $datum,
+            'title'      => $g['title'],
+            'listId'     => $g['listId'],
+            'cart'       => $g['hasIngredients'],
+            'image'      => $g['mediaId'] > 0 ? $this->MiniBild($g['mediaId'], 480) : '',
+            'srcKind'    => $srcKind,
+            'srcUrl'     => $srcUrl,
+            'srcMediaId' => $srcMediaId,
         ];
     }
 

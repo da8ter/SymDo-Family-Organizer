@@ -128,6 +128,11 @@ class SymDoMealPlan extends IPSModuleStrict
                 }
                 return;
 
+            case 'MealDetail':
+                // Detail-Blatt der Kachel: {date} → größeres Bild + Rezept-Quelle.
+                $this->Push($this->GerichtDetail(trim((string)$Value)));
+                return;
+
             case 'DishTick':
                 // One-Shot-Timer der Gerichtsbilder — arbeitet die Warteschlange ab.
                 $this->DishTick();
