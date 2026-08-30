@@ -12871,20 +12871,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ansageUeberspringen').addEventListener('click', () => ansageUeberspringen());
   document.getElementById('ansageEnde').addEventListener('click', () => ansageBeenden());
 
-  // ToDos: Quick-Add (auto-zugewiesen an den Standard-Benutzer, wie die App)
+  // ToDos: das Plus legt NICHTS direkt an — es oeffnet den Aufgaben-Dialog mit
+  // dem eingetippten Titel (gleiche Schule wie die Termine weiter unten).
+  // Faelligkeit, Zuweisung und Co. stellt man dort ein; gespeichert wird erst
+  // mit dem Sichern-Knopf des Dialogs.
   const todoInput = document.getElementById('todoInput');
   const todoAdd = document.getElementById('btnTodoAdd');
   const quickAdd = () => {
     const title = todoInput.value.trim();
     if (!title) return;
-    const me = currentUserID();
-    const fields = {
-      title, info: '', priority: 'normal', quantity: 0,
-      assignedTo: me ? [me] : [],
-      due: 0, dueAllDay: false, recurrence: 'none', notification: false
-    };
-    if (me) fields.actorUserId = me;
-    sdCall(selectedTodoID(), 'AddItem', fields);
+    openTodoEditor(selectedTodoID(), null);
+    // Nach dem Oeffnen: der Editor startet fuer neue Aufgaben mit leerem Titel.
+    document.getElementById('tdTitle').value = title;
     todoInput.value = '';
     todoAdd.disabled = true;
   };
@@ -12894,10 +12892,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnTodoMenu').addEventListener('click', (e) => openTodoMenu(e.currentTarget));
 
   // ── Schnellerfassung Termine ───────────────────────────────────────────────
-  // Anders als bei Aufgaben und Einkaeufen legt das Plus hier NICHTS direkt an: ein
-  // Termin braucht mindestens einen Zeitpunkt, und den kann eine Titelzeile nicht
-  // liefern. Es oeffnet den Termin-Dialog mit dem eingetippten Titel — getippt wird
-  // schnell, das Datum waehlt man dort.
+  // Wie bei den Aufgaben legt das Plus hier NICHTS direkt an (nur Einkaeufe gehen
+  // direkt in die Liste): es oeffnet den Termin-Dialog mit dem eingetippten
+  // Titel — getippt wird schnell, das Datum waehlt man dort.
   const calInput = document.getElementById('calInput');
   const calAdd = document.getElementById('btnCalAdd');
   if (calInput && calAdd) {
