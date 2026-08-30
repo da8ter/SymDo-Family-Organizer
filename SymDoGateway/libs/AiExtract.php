@@ -966,13 +966,18 @@ trait AiExtract
         if ($liste !== '') {
             $prompt .= ', prepared from ' . mb_substr($liste, 0, 600);
         }
+        // Bewusst KEINE Vorgabe zu Gefaess und Kamerawinkel: eine Suppe gehoert
+        // in eine Schale, ein Auflauf in die Form, eine Pizza aufs Brett — und
+        // manches Gericht sieht schraeg von der Seite schlicht besser aus.
+        // Einheitlich bleiben Anmutung, Licht und der freigestellte Grund.
         return $prompt . ', premium 3D food render, served as a complete finished dish'
-            . ' plated on a single fitting plate or bowl, top-down view directly from'
-            . ' above (90 degree overhead), slightly idealized but believable, isolated,'
-            . ' transparent background, centered, soft refined studio lighting, fresh'
-            . ' appetizing appearance, realistic proportions, high detail, single plate'
-            . ' only, no cutlery, no table, no napkin, no hands, no text, no logo,'
-            . ' no watermark, not cartoonish';
+            . ' in whichever vessel suits it best (plate, bowl, baking dish, pan,'
+            . ' board or glass), shown from a flattering angle for this dish,'
+            . ' slightly idealized but believable, isolated, transparent background,'
+            . ' centered, soft refined studio lighting, fresh appetizing appearance,'
+            . ' realistic proportions, high detail, single serving only, no cutlery,'
+            . ' no table, no napkin, no hands, no text, no logo, no watermark,'
+            . ' not cartoonish';
     }
 
     /**
