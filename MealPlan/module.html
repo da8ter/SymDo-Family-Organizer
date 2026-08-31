@@ -780,7 +780,9 @@ function korbOeffnen() {
       // niemand, warum dieselben Nudeln zweimal in der Liste stehen.
       const chip = document.createElement('span');
       chip.className = 'badge';
-      chip.textContent = z.recipe;
+      // Kennt das Rezept seine Portionszahl, steht sie in Klammern dahinter —
+      // die Mengen der Zeile gelten fuer genau diese Zahl.
+      chip.textContent = z.servings > 0 ? (z.recipe + ' (' + z.servings + ')') : z.recipe;
       meta.appendChild(chip);
     } else if (z.category) {
       const chip = document.createElement('span');

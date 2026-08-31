@@ -448,7 +448,11 @@ trait MealStore
             $gesehen[$listId] = true;
             $fav = $favoriten[$listId];
             foreach ($this->ZutatenMitBild((array)$fav['itemList']) as $z) {
-                $raus[] = $z + ['listId' => $listId, 'recipe' => (string)$fav['name']];
+                $raus[] = $z + [
+                    'listId'   => $listId,
+                    'recipe'   => (string)$fav['name'],
+                    'servings' => (int)$fav['servings'],   // 0 = unbekannt
+                ];
             }
         }
         return $raus;
