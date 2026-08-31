@@ -1599,6 +1599,10 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .overlay-footer button.primary { background: var(--accent); color: #fff; }
 .overlay-footer button.destructive { color: var(--red); }
+/* Nur-Icon-Knopf im Fuss: quadratisch statt gleichberechtigt breit, damit
+   Abbrechen und Speichern den Platz behalten. */
+.overlay-footer button.icon-only { flex: none; width: 46px; padding: 12px 0; }
+.overlay-footer button.icon-only i { font-size: 17px; }
 .overlay-footer button:disabled { opacity: .4; }
 
 /* Menü-Popover */
@@ -2148,11 +2152,11 @@ html[data-symdo-theme="dark"] .member-bar {
       </div>
     </div>
     <div class="overlay-footer">
+      <!-- Loeschen ganz links, nur der Muelleimer; die Beschriftung steckt in
+           title/aria-label. Ein Fehlgriff ist dank der Rueckfrage folgenlos. -->
+      <button class="destructive icon-only" id="btnTodoDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
       <button data-close="todoOverlay" id="btnTodoCancel"></button>
       <button class="primary" id="btnTodoSave"></button>
-      <!-- Loeschen steht ganz rechts (so gewuenscht); ein Fehlgriff ist dank der
-           Rueckfrage folgenlos. -->
-      <button class="destructive" id="btnTodoDelete" style="display:none"></button>
     </div>
   </div>
 </div>
@@ -6726,7 +6730,8 @@ function initCaptions() {
   set('lblTodoQuantity', translate('Quantity'));
   set('btnTodoCancel', translate('Cancel'));
   set('btnTodoSave', translate('Save'));
-  set('btnTodoDelete', translate('Delete'));
+  const tdDel = document.getElementById('btnTodoDelete');
+  if (tdDel) { tdDel.title = translate('Delete'); tdDel.setAttribute('aria-label', translate('Delete')); }
   set('btnPromptCancel', translate('Cancel'));
   set('btnHintSaveText', translate('Save'));
   set('btnHintDeleteText', translate('Delete'));

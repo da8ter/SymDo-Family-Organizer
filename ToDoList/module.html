@@ -2381,6 +2381,10 @@ html[data-symdo-theme="dark"] .member-bar {
 }
 .overlay-footer button.primary { background: var(--accent); color: #fff; }
 .overlay-footer button.destructive { color: var(--red); }
+/* Nur-Icon-Knopf im Fuss: quadratisch statt gleichberechtigt breit, damit
+   Abbrechen und Speichern den Platz behalten. */
+.overlay-footer button.icon-only { flex: none; width: 46px; padding: 12px 0; }
+.overlay-footer button.icon-only i { font-size: 17px; }
 .overlay-footer button:disabled { opacity: .4; }
 
 /* Menü-Popover */
@@ -3301,11 +3305,11 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </div>
     <div class="overlay-footer">
+      <!-- Loeschen ganz links, nur der Muelleimer; die Beschriftung steckt in
+           title/aria-label. Ein Fehlgriff ist dank der Rueckfrage folgenlos. -->
+      <button class="destructive icon-only" id="btnTodoDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
       <button data-close="todoOverlay" id="btnTodoCancel"></button>
       <button class="primary" id="btnTodoSave"></button>
-      <!-- Loeschen steht ganz rechts (so gewuenscht); ein Fehlgriff ist dank der
-           Rueckfrage folgenlos. -->
-      <button class="destructive" id="btnTodoDelete" style="display:none"></button>
     </div>
   </div>
 </div>
@@ -3402,6 +3406,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
         <input id="ceLocation" type="text" /></div>
     </div>
     <div class="overlay-footer">
+      <!-- Loeschen ganz links, nur der Muelleimer — wie im Aufgaben- und
+           Notiz-Editor. Erscheint nur an einem bestehenden Termin. -->
+      <button class="destructive icon-only" id="btnCalEditDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
       <button data-close="calEditOverlay" id="btnCalEditCancel"></button>
       <button class="primary" id="btnCalEditSave"></button>
     </div>
@@ -3607,10 +3614,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <div id="ntAiHint" class="ai-status" style="display:none;"></div>
     </div>
     <div class="overlay-footer">
+      <!-- Loeschen ganz links, nur der Muelleimer — wie im Aufgaben-Editor. -->
+      <button class="destructive icon-only" id="btnNoteDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
       <button data-close="noteOverlay" id="btnNoteCancel"></button>
       <button class="primary" id="btnNoteSave"></button>
-      <!-- Loeschen ganz rechts, wie im Aufgaben-Editor. -->
-      <button class="destructive" id="btnNoteDelete" style="display:none"></button>
     </div>
   </div>
 </div>
@@ -8901,38 +8908,14 @@ function bindCalRows(knoten) {
     /* Erlaubt ist es, wenn IRGENDEINE Reichweite geht — nicht nur das einzelne
        Vorkommen. Frueher stand hier allein canUpdateOccurrence, und ein Kalender,
        der nur die ganze Serie schreiben laesst, galt als gesperrt. */
-    const serieErlaubt = (e, art) => {
-      if (e.recurring !== true) return true;
-      // Jahresereignis: nur das Serienrecht zaehlt (siehe calFrageReichweite).
-      const geht = calAnnualType(e)
-        ? (art === 'del' ? e.canDeleteSeries === true : e.canUpdateSeries === true)
-        : (art === 'del'
-        ? (e.canDeleteOccurrence === true || e.canDeleteSeries === true)
-        : (e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true));
-      if (geht) return true;
-      showToast(translate(art === 'del'
-        ? 'This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.'
-        : 'This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.'));
-      return false;
-    };
+    const serieErlaubt = calSerieErlaubt;
 
     const loeschen = () => {
       // Slide-out zuruecknehmen, damit die Zeile bei Abbruch stehen bleibt.
       card.classList.remove('is-deleting'); delete card.dataset.animating;
       if (zeile) zeile.style.transform = '';
       restoreCard(card);
-      const e = finde();
-      if (!e || !serieErlaubt(e, 'del')) return;
-      // Erst die Reichweite, dann die Rueckfrage: „Loeschen?" ohne zu wissen, WAS
-      // geloescht wird, waere bei einer Serie eine gefaehrliche Zustimmung.
-      calFrageReichweite(e, 'del').then(scope => {
-        if (!scope) return;
-        // Beim Jahresereignis waere „ganze Serie" die technisch richtige, aber
-        // unverstaendliche Frage — geloescht wird ein Geburtstag, keine Serie.
-        showConfirm(translate(calAnnualType(e) ? 'Delete this annual event?'
-          : (scope === 'series' ? 'Delete the whole series?' : 'Delete this appointment?')),
-          translate('Delete'), () => calDelete(e, scope));
-      });
+      calLoeschAblauf(finde());
     };
     const bearbeiten = () => { const e = finde(); if (e && serieErlaubt(e, 'edit')) openCalEditor(e, null, e); };
 
@@ -8952,16 +8935,7 @@ function bindCalRows(knoten) {
     const lBtn = card.querySelector('[data-cal-del]');
     if (lBtn) lBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      const e = finde();
-      if (!e || !serieErlaubt(e, 'del')) return;
-      calFrageReichweite(e, 'del').then(scope => {
-        if (!scope) return;
-        // Beim Jahresereignis waere „ganze Serie" die technisch richtige, aber
-        // unverstaendliche Frage — geloescht wird ein Geburtstag, keine Serie.
-        showConfirm(translate(calAnnualType(e) ? 'Delete this annual event?'
-          : (scope === 'series' ? 'Delete the whole series?' : 'Delete this appointment?')),
-          translate('Delete'), () => calDelete(e, scope));
-      });
+      calLoeschAblauf(finde());
     });
   });
 }
@@ -9055,6 +9029,50 @@ function calFrageReichweite(e, art) {
 }
 
 /** Termin beim Anbieter loeschen. Die Rueckfrage ist an dieser Stelle bereits gefallen. */
+/**
+ * Darf DIESES Vorkommen geaendert bzw. geloescht werden? Serien-Vorkommen nur,
+ * wenn der Kalender IRGENDEINE Reichweite erlaubt (Flags am Termin). Sonst
+ * derselbe Hinweis, den auch das Gateway gaebe.
+ *
+ * Stand frueher als Closure in bindCalRows; seit der Editor ebenfalls loeschen
+ * kann, brauchen beide dieselbe Wache.
+ */
+function calSerieErlaubt(e, art) {
+  if (e.recurring !== true) return true;
+  // Jahresereignis: nur das Serienrecht zaehlt (siehe calFrageReichweite).
+  const geht = calAnnualType(e)
+    ? (art === 'del' ? e.canDeleteSeries === true : e.canUpdateSeries === true)
+    : (art === 'del'
+      ? (e.canDeleteOccurrence === true || e.canDeleteSeries === true)
+      : (e.canUpdateOccurrence === true || e.canUpdateFollowing === true || e.canUpdateSeries === true));
+  if (geht) return true;
+  showToast(translate(art === 'del'
+    ? 'This appointment is part of a series. This calendar does not allow deleting it that way — please delete it in your calendar app.'
+    : 'This appointment is part of a series. This calendar does not allow editing it that way — please edit it in your calendar app.'));
+  return false;
+}
+
+/**
+ * Der ganze Loeschweg eines Termins: Wache, Reichweite, Rueckfrage, Loeschen.
+ *
+ * Erst die Reichweite, dann die Rueckfrage: „Loeschen?" ohne zu wissen, WAS
+ * geloescht wird, waere bei einer Serie eine gefaehrliche Zustimmung.
+ */
+function calLoeschAblauf(e, danach) {
+  if (!e || !calSerieErlaubt(e, 'del')) return;
+  calFrageReichweite(e, 'del').then(scope => {
+    if (!scope) return;
+    // Beim Jahresereignis waere „ganze Serie" die technisch richtige, aber
+    // unverstaendliche Frage — geloescht wird ein Geburtstag, keine Serie.
+    showConfirm(translate(calAnnualType(e) ? 'Delete this annual event?'
+      : (scope === 'series' ? 'Delete the whole series?' : 'Delete this appointment?')),
+      translate('Delete'), () => {
+        calDelete(e, scope);
+        if (typeof danach === 'function') danach();
+      });
+  });
+}
+
 function calDelete(e, scope) {
   aiPost('/calendar', {
     action: 'delete',
@@ -9197,6 +9215,9 @@ function openCalEditor(entwurf, vorschlag, bestand) {
 
   document.getElementById('calEditTitle').textContent =
     translate(bestand ? 'Edit appointment' : 'New appointment');
+  // Beim Anlegen gibt es nichts zu loeschen. Ob eine Serie es zulaesst, klaert
+  // erst der Ablauf selbst — mit demselben Hinweis wie am Zeilen-Knopf.
+  document.getElementById('btnCalEditDelete').style.display = bestand ? '' : 'none';
   document.getElementById('ceTitle').value = String(e.title || '');
   document.getElementById('ceInfo').value = String(e.info || '');
   document.getElementById('ceLocation').value = String(e.location || '');
@@ -9551,9 +9572,18 @@ function initCalEditor() {
   // dieselben Schluessel, damit beide Dialoge nicht auseinanderlaufen.
   t('btnCalEditCancel', 'Cancel');
   t('btnCalEditSave', 'Save');
+  const calDel = document.getElementById('btnCalEditDelete');
+  if (calDel) { calDel.title = translate('Delete'); calDel.setAttribute('aria-label', translate('Delete')); }
 }
 
 function initCalendar() {
+  const calDel = document.getElementById('btnCalEditDelete');
+  if (calDel) calDel.addEventListener('click', () => {
+    // calCtx.original ist der Termin aus der Liste — derselbe Datensatz, mit dem
+    // auch der Zeilen-Knopf arbeitet.
+    if (!calCtx || !calCtx.original) return;
+    calLoeschAblauf(calCtx.original, () => closeOverlay('calEditOverlay'));
+  });
   const schalter = document.getElementById('calSwitcher');
   if (schalter) schalter.addEventListener('change', () => {
     ls.set('symdo.calID', schalter.value);
@@ -12373,7 +12403,8 @@ function initCaptions() {
   set('lblTodoQuantity', translate('Quantity'));
   set('btnTodoCancel', translate('Cancel'));
   set('btnTodoSave', translate('Save'));
-  set('btnTodoDelete', translate('Delete'));
+  const tdDel = document.getElementById('btnTodoDelete');
+  if (tdDel) { tdDel.title = translate('Delete'); tdDel.setAttribute('aria-label', translate('Delete')); }
   set('btnPromptCancel', translate('Cancel'));
   set('btnHintSaveText', translate('Save'));
   set('btnHintDeleteText', translate('Delete'));
@@ -13284,7 +13315,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('lblNoteText').textContent = translate('Text');
   document.getElementById('lblNoteFiles').textContent = translate('Attachments');
   document.getElementById('btnNoteCancel').textContent = translate('Cancel');
-  document.getElementById('btnNoteDelete').textContent = translate('Delete');
+  const ntDel = document.getElementById('btnNoteDelete');
+  ntDel.title = translate('Delete');
+  ntDel.setAttribute('aria-label', translate('Delete'));
   document.getElementById('btnNoteSave').textContent = translate('Save');
   document.getElementById('noteAttachLabel').textContent = translate('Attach photo or file');
   document.getElementById('noteSourceTitle').textContent = translate('Attach photo or file');
