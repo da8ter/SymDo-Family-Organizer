@@ -2388,8 +2388,9 @@ trait AiExtract
             . '(z.B. „500 g“, „2“, „1 Bund“), leer wenn keine Menge angegeben ist. '
             . $this->AiCategoryRule($erlaubteKategorien)
             . 'Fasse Dubletten zusammen. "title" = der Rezepttitel, WENN es sich um ein Rezept handelt, sonst '
-            . 'null. "servings" = die Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl, wenn '
-            . 'angegeben, sonst null (bei reinen Einkaufslisten immer null). Antworte AUSSCHLIESSLICH mit '
+            . 'null. "servings" = die Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl. Steht '
+            . 'keine Portionsangabe im Rezept, schätze sie anhand der Zutatenmengen (z.B. 500 g Nudeln → 4) '
+            . 'und gib die Schätzung an; nur bei reinen Einkaufslisten ist "servings" null. Antworte AUSSCHLIESSLICH mit '
             . 'einem JSON-Objekt, ohne Erklärungen und ohne Markdown, mit exakt diesen Feldern: '
             . '{"title": string oder null, "servings": Zahl oder null, "items": [{"name": string, '
             . '"amount": string, "category": string}]}. Wenn keinerlei Artikel erkennbar sind, gib '
@@ -2402,7 +2403,8 @@ trait AiExtract
             . 'und die vollständige Zutatenliste des Rezepts. Ignoriere Navigation, Werbung, Kommentare, '
             . 'Nährwerte und Zubereitungsschritte. "title" = der Titel/Name des Rezepts. "servings" = die '
             . 'Anzahl der Portionen, die das Rezept ergibt, als ganze Zahl (z.B. bei „für 4 Personen“ → 4; '
-            . 'bei „12 Muffins“ → 12); null, wenn nicht angegeben. "items" ist die Zutatenliste: "name" = '
+            . 'bei „12 Muffins“ → 12). Fehlt die Angabe, schätze sie anhand der Zutatenmengen und gib die '
+            . 'Schätzung an. "items" ist die Zutatenliste: "name" = '
             . 'die Zutat, kurz und ohne Menge (z.B. „Mehl“, „Zwiebeln“). "amount" = die Menge samt Einheit '
             . 'als kurzer Text (z.B. „500 g“, „2“, „1 EL“), leer wenn keine Menge angegeben ist. '
             . $this->AiCategoryRule($erlaubteKategorien)
