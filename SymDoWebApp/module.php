@@ -432,6 +432,15 @@ class SymDoWebApp extends IPSModuleStrict
                 $this->SetFormValues($form['elements'], 'TimetableRestartHint', 'visible', true);
             }
         }
+        /* Derselbe Fall wie bei TimetableChoice: der Schalter ist neu, seine
+           Eigenschaft entsteht erst beim naechsten Kernel-Start, und bis dahin
+           liesse „Uebernehmen" das ganze Formular scheitern. */
+        $cfgAlle = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (is_array($cfgAlle) && array_key_exists('EnableSwipeGestures', $cfgAlle)) {
+            $this->SetFormValues($form['elements'], 'EnableSwipeGestures', 'visible', true);
+        } else {
+            $this->SetFormValues($form['elements'], 'SwipeRestartHint', 'visible', true);
+        }
         if ($gatewayID <= 0) {
             $this->SetFormValues($form['elements'], 'GatewayHint', 'visible', true);
         }

@@ -203,7 +203,14 @@
                 {
                     "type": "CheckBox",
                     "name": "EnableSwipeGestures",
-                    "caption": "Swipe gestures"
+                    "caption": "Swipe gestures",
+                    "visible": false
+                },
+                {
+                    "type": "Label",
+                    "name": "SwipeRestartHint",
+                    "visible": false,
+                    "caption": "The swipe gestures switch appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again."
                 },
                 {
                     "type": "Label",

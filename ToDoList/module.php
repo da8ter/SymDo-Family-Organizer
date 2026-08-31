@@ -373,11 +373,21 @@ class SymDoToDoList extends IPSModuleStrict
                     'name' => 'ShowReorderHandle',
                     'caption' => $this->Translate('Reorder handle')
                 ],
-                [
-                    'type' => 'CheckBox',
-                    'name' => 'EnableSwipeGestures',
-                    'caption' => $this->Translate('Swipe gestures')
-                ],
+                /* Auf eine Eigenschaft, die es vor dem naechsten Kernel-Start nicht
+                   gibt, laesst „Uebernehmen" das GANZE Formular scheitern
+                   (gemessen: IPS_SetConfiguration antwortet „Eigenschaft nicht
+                   gefunden" und verwirft alles). Bis dahin steht hier ein Hinweis
+                   statt eines Schalters, der nichts tun kann. */
+                $this->PropertyExistiert('EnableSwipeGestures')
+                    ? [
+                        'type' => 'CheckBox',
+                        'name' => 'EnableSwipeGestures',
+                        'caption' => $this->Translate('Swipe gestures')
+                    ]
+                    : [
+                        'type' => 'Label',
+                        'caption' => $this->Translate('Swipe gestures restart hint')
+                    ],
                 [
                     'type' => 'Label',
                     'caption' => $this->Translate('Swipe gestures hint')
@@ -2223,6 +2233,13 @@ class SymDoToDoList extends IPSModuleStrict
      * `false` liefert statt ihres Vorgabewerts — ein "an"-Schalter waere fuer
      * Bestandsnutzer nach dem Update also still aus.
      */
+    /** Gibt es die Eigenschaft schon? Neue entstehen erst beim naechsten Kernel-Start. */
+    private function PropertyExistiert(string $Name): bool
+    {
+        $config = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        return is_array($config) && array_key_exists($Name, $config);
+    }
+
     private function ReadBooleanPropertyOrDefault(string $Name, bool $Default): bool
     {
         $config = json_decode((string)IPS_GetConfiguration($this->InstanceID), true);

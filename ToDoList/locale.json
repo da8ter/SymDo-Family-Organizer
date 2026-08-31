@@ -2,6 +2,7 @@
     "translations": {
         "de": {
             "Purchase": "Einkauf",
+            "Swipe gestures restart hint": "Der Schalter für die Wischgesten erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "Tap to finish": "Tippen zum Beenden",
             "Dictate": "Diktieren",
             "Transcribing…": "Wird transkribiert …",
