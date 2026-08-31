@@ -130,11 +130,15 @@ body {
 .tag .kalender .nr { display: block; font-size: 17px; font-weight: 800; line-height: 1.1; }
 .tag .bild {
   width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto; overflow: hidden;
-  background: color-mix(in srgb, var(--akzent) 12%, var(--bg));
   display: flex; align-items: center; justify-content: center; font-size: 17px;
   color: var(--dezent);
 }
-.tag .bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Nur der Platzhalter (Teller, Punkt) bekommt eine Flaeche — hinter einem
+   freigestellten Gerichtsbild waere sie ein Kasten, der es einrahmt. */
+.tag .bild:not(:has(img)) { background: color-mix(in srgb, var(--akzent) 12%, var(--bg)); }
+/* contain statt cover: ohne Flaeche dahinter wuerde ein beschnittenes Bild wie
+   ein Kasten wirken — so steht das freigestellte Gericht frei in der Zeile. */
+.tag .bild img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .tag .titel {
   flex: 1 1 auto; min-width: 0; font-size: clamp(14px, 4.2vmin, 16px); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -213,7 +217,12 @@ body {
   align-items: center; justify-content: center; font-size: 72px;
   color: var(--dezent);
 }
-#detailBild img { max-width: 100%; max-height: 100%; border-radius: 18px; }
+/* Nicht max-*, sondern volle Flaeche mit contain: Beim Oeffnen steht zuerst
+   die kleine Miniatur aus der Wochenliste, das grosse Bild kommt einen
+   Wimpernschlag spaeter vom Server. Mit max-* blieb die Miniatur in ihrer
+   Originalgroesse stehen und das Bild sprang sichtbar auf; so aendert sich nur
+   die Schaerfe. */
+#detailBild img { width: 100%; height: 100%; object-fit: contain; border-radius: 18px; }
 #detailTitel { margin: 12px 0 0; font-size: 18px; text-align: center; }
 /* Zutaten wie in der Web-App: Kreis mit Anfangsbuchstabe, Name, Menge rechts. */
 #detailPortionen { text-align: center; color: var(--dezent); font-size: 13px; margin-top: 4px; }
@@ -476,9 +485,9 @@ function zeichnen() {
       korb.title = t('cart');
       korb.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        if (korb.classList.contains('ok')) { return; }   // Doppel-Tipp-Schutz
-        korb.classList.add('ok');
-        if (typeof requestAction === 'function') { requestAction('AddToCart', d.listId); }
+        // Nichts wandert ungefragt in den Wagen: erst die Auswahl zeigen,
+        // damit man Vorraetiges abwaehlen kann (wie im geoeffneten Gericht).
+        korbFuerTagOeffnen(d);
       });
       zeile.appendChild(korb);
     }
@@ -605,6 +614,16 @@ function detailAuffrischen(daten) {
   detailPortionen = parseInt(daten.servings, 10) || 0;
   el('detailPortionen').textContent = detailPortionen > 0
     ? t('servings').replace('%1', String(detailPortionen)) : '';
+  if (korbWartet === 'tag') {
+    korbWartet = '';
+    if (detailZutaten && detailZutaten.length) {
+      korbOeffnen();
+      el('schleier').classList.add('an');
+    } else if (tagAktuell) {
+      // Rezept ohne Zutaten: nichts zum Auswaehlen, also nichts zu tun.
+      toast(t('noItems'));
+    }
+  }
   const kind = String(daten.srcKind || '');
   // Foto/PDF reisen über das Gateway-Relay — ohne Gateway bleibt nur die URL.
   if (kind === 'url' || ((kind === 'pdf' || kind === 'photo') && zustand.aiReady)) {
@@ -673,6 +692,9 @@ function schauZu() {
    Mengen-Faktor („Menge ×2") — wie die Web-App im selben Fall. */
 let korbFaktor = 1;
 let korbPortionen = 0;   // >0: der Steller zaehlt Portionen statt Faktoren
+let korbWartet = '';     // 'tag' | 'woche', solange die Zutaten unterwegs sind
+let korbHerkunft = '';   // 'detail' = aus dem geoeffneten Gericht, sonst direkt
+let korbWoche = '';      // Montag der Woche, wenn die ganze Woche gemeint ist
 
 /* Mengenangabe um den Faktor skalieren („500 g", „1,5 EL", „½ TL", „2-3") —
    wortgleich mit scaleAmount/fmtNum der Web-App. */
@@ -699,6 +721,33 @@ function scaleAmount(str, factor) {
   return s;
 }
 
+/**
+ * Auswahl fuer EINEN Tag, ohne ihn vorher zu oeffnen: Die Zutaten holt der
+ * Server nach (MealDetail), der Dialog geht auf, sobald sie da sind.
+ */
+function korbFuerTagOeffnen(tag) {
+  if (!tag || !tag.listId) { return; }
+  tagAktuell = tag;
+  detailDatum = tag.date;
+  detailZutaten = null;
+  detailPortionen = 0;
+  korbWartet = 'tag';
+  korbHerkunft = 'zeile';
+  if (typeof requestAction === 'function') { requestAction('MealDetail', tag.date); }
+}
+
+/** Dasselbe fuer die ganze Woche: alle Zutaten aller geplanten Rezepte. */
+function korbFuerWocheOeffnen(montag) {
+  tagAktuell = null;
+  detailDatum = '';
+  detailZutaten = null;
+  detailPortionen = 0;
+  korbWartet = 'woche';
+  korbHerkunft = 'woche';
+  korbWoche = montag;
+  if (typeof requestAction === 'function') { requestAction('WeekDetail', montag); }
+}
+
 function korbOeffnen() {
   korbFaktor = 1;
   // Kennt das Rezept seine Portionszahl, steuert der Steller Portionen (und
@@ -721,7 +770,14 @@ function korbOeffnen() {
       chip.textContent = z.amount;
       meta.appendChild(chip);
     }
-    if (z.category) {
+    if (z.recipe) {
+      // Beim Wochen-Einkauf steht statt der Kategorie das Rezept — sonst weiss
+      // niemand, warum dieselben Nudeln zweimal in der Liste stehen.
+      const chip = document.createElement('span');
+      chip.className = 'badge';
+      chip.textContent = z.recipe;
+      meta.appendChild(chip);
+    } else if (z.category) {
       const chip = document.createElement('span');
       chip.className = 'badge';
       chip.textContent = z.category;
@@ -747,6 +803,8 @@ function korbOeffnen() {
   if (listen.some((l) => l.id === zustand.sourceList)) { ziel.value = String(zustand.sourceList); }
   el('korbTitel').textContent = tagAktuell ? tagAktuell.title : '';
   el('korbZuX').title = t('close');
+  // Ohne einzelnes Gericht (Wochen-Einkauf) gibt es nichts zu wechseln.
+  el('korbGerichtAendern').style.display = tagAktuell ? 'block' : 'none';
   korbSkalieren();
   korbZaehlen();
   el('detail').style.display = 'none';
@@ -799,7 +857,10 @@ function portionenSichern() {
 function korbGewaehlt() {
   return Array.from(el('korbListe').querySelectorAll('.ai-row.selected')).map((zeile) => {
     const z = zeile.__item || {};
-    return { name: String(z.name || ''), amount: scaleAmount(String(z.amount || ''), korbAktuellerFaktor()) };
+    const zeileDaten = { name: String(z.name || ''), amount: scaleAmount(String(z.amount || ''), korbAktuellerFaktor()) };
+    // Beim Wochen-Einkauf kommt jede Zeile aus einem eigenen Rezept.
+    if (z.listId) { zeileDaten.listId = z.listId; }
+    return zeileDaten;
   });
 }
 
@@ -929,6 +990,19 @@ function handleMessage(daten) {
     detailAuffrischen(daten);
     return;
   }
+  if (daten.type === 'weekDetail') {
+    if (korbWartet === 'woche' && daten.monday === korbWoche) {
+      korbWartet = '';
+      const zutaten = Array.isArray(daten.ingredients) ? daten.ingredients : [];
+      if (!zutaten.length) { toast(t('noItems')); return; }
+      detailZutaten = zutaten;
+      detailPortionen = 0;   // ueber mehrere Rezepte hinweg gibt es keine Portionszahl
+      korbOeffnen();
+      el('korbTitel').textContent = t('cartWeek');
+      el('schleier').classList.add('an');
+    }
+    return;
+  }
   if (daten.type === 'state') {
     zustand = daten;
     zeichnen();
@@ -944,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
   el('wochenkorb').addEventListener('click', () => {
     if (!zustand) { return; }
     const w = zustand.weeks[woche];
-    if (typeof requestAction === 'function') { requestAction('AddWeekToCart', w.monday); }
+    korbFuerWocheOeffnen(w.monday);
   });
   el('blattZu').addEventListener('click', blattZu);
   el('schleier').addEventListener('click', (ev) => { if (ev.target === el('schleier')) { blattZu(); } });
@@ -952,6 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Der Stift fuehrt in die Rezept-Bearbeitung: Zutaten und Portionen. Das
   // Gericht selbst wechselt man von dort ueber „Gericht aendern".
   el('detailStift').addEventListener('click', () => {
+    korbHerkunft = 'detail';
     if (detailZutaten && detailZutaten.length) { korbOeffnen(); } else { blattOeffnen(tagAktuell); }
   });
   el('korbGerichtAendern').addEventListener('click', () => blattOeffnen(tagAktuell));
@@ -963,6 +1038,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // die Detail-Antwort noch unterwegs (kein Zutatenstand), faellt der Knopf
     // auf die Komplett-Uebernahme zurueck.
     if (detailZutaten && detailZutaten.length) {
+      korbHerkunft = 'detail';
       korbOeffnen();
       return;
     }
@@ -972,7 +1048,13 @@ document.addEventListener('DOMContentLoaded', () => {
   el('korbZuX').addEventListener('click', () => {
     portionenSichern();
     el('korb').style.display = 'none';
-    el('detail').style.display = 'block';
+    // Kam die Auswahl aus einem geoeffneten Gericht, geht es dorthin zurueck;
+    // vom Wochen- oder Zeilen-Korb aus schliesst sie ganz.
+    if (korbHerkunft === 'detail') {
+      el('detail').style.display = 'block';
+    } else {
+      blattZu();   // vom Zeilen- oder Wochen-Korb aus gibt es kein Blatt dahinter
+    }
   });
   el('korbMinus').addEventListener('click', () => {
     if (korbPortionen > 0) { korbPortionen = Math.max(1, korbPortionen - 1); }
@@ -986,15 +1068,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   el('korbBestaetigen').addEventListener('click', () => {
     const items = korbGewaehlt();
-    if (!tagAktuell || !tagAktuell.listId || !items.length) { return; }
+    // Beim Wochen-Einkauf traegt jede Zeile ihre eigene Herkunft, beim
+    // einzelnen Gericht steht sie am Aufruf.
+    const einzeln = tagAktuell && tagAktuell.listId ? tagAktuell.listId : '';
+    if (!items.length || (!einzeln && !items.every((i) => i.listId))) { return; }
     el('korbBestaetigen').disabled = true;   // Doppel-Tipp-Schutz
     portionenSichern();
     if (typeof requestAction === 'function') {
-      requestAction('AddItemsToCart', JSON.stringify({
-        listId: tagAktuell.listId,
-        targetId: parseInt(el('korbZiel').value, 10) || 0,
-        items: items,
-      }));
+      const nutzlast = { targetId: parseInt(el('korbZiel').value, 10) || 0, items: items };
+      if (einzeln) { nutzlast.listId = einzeln; }
+      requestAction('AddItemsToCart', JSON.stringify(nutzlast));
     }
     blattZu();
   });

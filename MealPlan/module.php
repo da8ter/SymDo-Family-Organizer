@@ -122,15 +122,33 @@ class SymDoMealPlan extends IPSModuleStrict
                 return;
 
             case 'AddItemsToCart':
-                // Auswahl-Liste des Detail-Blatts: {listId, targetId?, items[]}
-                // — nur die gewählten Zutaten, skaliert, in die Ziel-Liste.
+                // Auswahl-Liste: {targetId?, items[]} — jede Zeile trägt ihre
+                // Herkunft (listId), damit auch eine ganze Woche in einem
+                // Aufruf gehen kann. Übernommen wird je Rezept.
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
-                if (is_array($daten) && $this->KorbAuswahl(
-                    trim((string)($daten['listId'] ?? '')),
-                    (int)($daten['targetId'] ?? 0),
-                    is_array($daten['items'] ?? null) ? $daten['items'] : []
-                )) {
-                    $this->Push(['type' => 'cartDone', 'listId' => trim((string)($daten['listId'] ?? ''))]);
+                if (!is_array($daten)) {
+                    return;
+                }
+                $ziel = (int)($daten['targetId'] ?? 0);
+                $nachRezept = [];
+                foreach (is_array($daten['items'] ?? null) ? $daten['items'] : [] as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    // Ohne eigene Herkunft gilt die des Aufrufs (Einzel-Gericht).
+                    $lid = trim((string)($item['listId'] ?? ($daten['listId'] ?? '')));
+                    if ($lid !== '') {
+                        $nachRezept[$lid][] = $item;
+                    }
+                }
+                $erfolg = 0;
+                foreach ($nachRezept as $lid => $zeilen) {
+                    if ($this->KorbAuswahl((string)$lid, $ziel, $zeilen)) {
+                        $erfolg++;
+                    }
+                }
+                if ($erfolg > 0) {
+                    $this->Push(['type' => 'cartDone', 'count' => $erfolg]);
                 }
                 return;
 
@@ -148,6 +166,18 @@ class SymDoMealPlan extends IPSModuleStrict
                     } catch (\Throwable $e) {
                         $this->SendDebug('MealPlan', 'Portionen speichern fehlgeschlagen: ' . $e->getMessage(), 0);
                     }
+                }
+                return;
+
+            case 'WeekDetail':
+                // Auswahl vor dem Wochen-Einkauf: alle Zutaten der Woche.
+                $montag = trim((string)$Value);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $montag) === 1) {
+                    $this->Push([
+                        'type'        => 'weekDetail',
+                        'monday'      => $montag,
+                        'ingredients' => $this->WochenZutaten($montag),
+                    ]);
                 }
                 return;
 

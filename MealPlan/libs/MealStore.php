@@ -428,6 +428,33 @@ trait MealStore
     }
 
     /**
+     * Alle Zutaten der geplanten Rezepte einer Woche — für die Auswahl vor dem
+     * Wochen-Einkauf. Jede Zeile trägt ihre Herkunft (listId + Rezeptname), denn
+     * übernommen wird je Rezept, und derselbe Artikel kann in zweien vorkommen.
+     * Ein doppelt geplantes Rezept zählt nur einmal.
+     */
+    private function WochenZutaten(string $montag): array
+    {
+        $tage = $this->PlanLesen();
+        $favoriten = $this->Favoriten();
+        $gesehen = [];
+        $raus = [];
+        foreach (range(1, 7) as $t) {
+            $g = $tage[$this->DatumInWoche($montag, $t)] ?? null;
+            $listId = is_array($g) ? trim((string)($g['listId'] ?? '')) : '';
+            if ($listId === '' || isset($gesehen[$listId]) || !isset($favoriten[$listId])) {
+                continue;
+            }
+            $gesehen[$listId] = true;
+            $fav = $favoriten[$listId];
+            foreach ($this->ZutatenMitBild((array)$fav['itemList']) as $z) {
+                $raus[] = $z + ['listId' => $listId, 'recipe' => (string)$fav['name']];
+            }
+        }
+        return $raus;
+    }
+
+    /**
      * Zutaten um die Adresse ihres Produktbildes ergänzen — dieselben Bilder,
      * die die Einkaufsliste an ihren Zeilen zeigt.
      *
