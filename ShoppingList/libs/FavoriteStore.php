@@ -643,6 +643,19 @@ trait FavoriteStore
             }
         }
         if ($newLists !== $current) {
+            // Aus der Tabelle entfernte Listen nehmen ihre Medien mit — sonst
+            // bleiben Rezeptfoto und Gerichtsbild unter den Gateway-Kategorien
+            // liegen, ohne dass sie noch jemand zeigt. Der Weg über die App
+            // (DeleteFavoriteListInternal) tut das längst; nur dieser hier,
+            // über das Konfigurationsformular, tat es nicht.
+            $bleiben = array_column($newLists, 'id');
+            foreach ($current as $alt) {
+                if (!is_array($alt) || in_array($alt['id'] ?? '', $bleiben, true)) {
+                    continue;
+                }
+                $this->DeleteRecipePhoto((int)($alt['mediaId'] ?? 0));
+                $this->DeleteDishImage((int)($alt['imageId'] ?? 0));
+            }
             $this->SaveFavoriteLists($newLists);
             $this->SendState();
         }

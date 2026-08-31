@@ -44,11 +44,62 @@ trait DishImages
         $this->RegisterTimer('DishImages', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'DishTick\', 0);');
     }
 
-    /** Aus ApplyChanges: offene Warteschlange anstoßen. */
+    /** Aus ApplyChanges: Bestand aufräumen und offene Warteschlange anstoßen. */
     public function DishApplyChanges(): void
     {
+        $this->DishAufraeumen();
         if ($this->DishQueueLesen() !== []) {
             $this->DishTimerStarten(200);
+        }
+    }
+
+    /**
+     * Bilder wegräumen, die keine Favoritenliste mehr beansprucht — etwa weil
+     * eine Liste über das Konfigurationsformular verschwand oder eine ganze
+     * Einkaufslisten-Instanz gelöscht wurde.
+     *
+     * Vorsichtig: Antwortet KEINE Einkaufsliste, wird nichts angefasst. Ein
+     * Modul-Reload liefert kurzzeitig leere Zustände, und daraufhin alle Bilder
+     * zu löschen wäre ein teurer Irrtum (jedes kostet Geld und ist nicht
+     * wiederherstellbar).
+     */
+    private function DishAufraeumen(): void
+    {
+        $kat = (int)@$this->ReadAttributeInteger('DishImageCategory');
+        if ($kat <= 0 || !@IPS_CategoryExists($kat)) {
+            return;
+        }
+        $listen = (array)@IPS_GetInstanceListByModuleID(self::DISH_SHOPPING_GUID);
+        if ($listen === []) {
+            return;
+        }
+        $beansprucht = [];
+        $eineAntwortete = false;
+        foreach ($listen as $sl) {
+            $favoriten = $this->DishFavoriten((int)$sl);
+            if ($favoriten === []) {
+                continue;   // stumme Liste zählt nicht als „hat keine Bilder"
+            }
+            $eineAntwortete = true;
+            foreach ($favoriten as $f) {
+                $mid = is_array($f) ? (int)($f['imageId'] ?? 0) : 0;
+                if ($mid > 0) {
+                    $beansprucht[$mid] = true;
+                }
+            }
+        }
+        if (!$eineAntwortete) {
+            return;
+        }
+        $weg = 0;
+        foreach ((array)@IPS_GetChildrenIDs($kat) as $mid) {
+            if (!isset($beansprucht[(int)$mid])) {
+                @IPS_DeleteMedia((int)$mid, true);
+                $weg++;
+            }
+        }
+        if ($weg > 0) {
+            $this->SendDebug('DishImages', sprintf('%d verwaiste(s) Bild(er) entfernt', $weg), 0);
         }
     }
 
