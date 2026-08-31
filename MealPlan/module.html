@@ -750,9 +750,14 @@ function korbFuerWocheOeffnen(montag) {
 
 function korbOeffnen() {
   korbFaktor = 1;
-  // Kennt das Rezept seine Portionszahl, steuert der Steller Portionen (und
-  // aendert sie dauerhaft); sonst bleibt es beim ganzzahligen Mengen-Faktor.
-  korbPortionen = detailPortionen > 0 ? detailPortionen : 0;
+  // Der Steller zaehlt IMMER Portionen. Kennt das Rezept seine Zahl, ist sie
+  // der Ausgangspunkt; sonst gelten die gespeicherten Mengen als eine Portion
+  // — stellt der Nutzer um, wird die Zahl mitsamt Mengen dauerhaft vermerkt,
+  // und ab dann steht sie auch unter dem Titel.
+  // Nur beim einzelnen Gericht; der Wochen-Korb buendelt mehrere Rezepte, dort
+  // gibt es keine gemeinsame Portionszahl und der Mengen-Faktor bleibt.
+  const einGericht = !!(tagAktuell && tagAktuell.listId);
+  korbPortionen = einGericht ? (detailPortionen > 0 ? detailPortionen : 1) : 0;
   el('korbGerichtAendern').textContent = t('changeMeal');
   const liste = el('korbListe');
   liste.innerHTML = '';
@@ -819,15 +824,17 @@ function korbOeffnen() {
 
 /** Der wirksame Faktor: bei bekannter Portionszahl deren Verhaeltnis. */
 function korbAktuellerFaktor() {
-  if (korbPortionen > 0 && detailPortionen > 0) { return korbPortionen / detailPortionen; }
-  return korbFaktor;
+  if (korbPortionen <= 0) { return korbFaktor; }
+  // Ohne bekannte Ausgangszahl zaehlen die gespeicherten Mengen als eine
+  // Portion: aus „Portionen: 2" wird dann das Doppelte.
+  return korbPortionen / (detailPortionen > 0 ? detailPortionen : 1);
 }
 
 function korbSkalieren() {
   const f = korbAktuellerFaktor();
   el('korbFaktorText').textContent = korbPortionen > 0
     ? t('servings').replace('%1', String(korbPortionen))
-    : t('quantityX').replace('%1', String(korbFaktor));
+    : t('quantityX').replace('%1', String(korbFaktor));   // nur noch der Rueckfall
   el('korbMinus').disabled = korbPortionen > 0 ? (korbPortionen <= 1) : (korbFaktor <= 1);
   el('korbListe').querySelectorAll('.ai-row').forEach((zeile) => {
     const chip = zeile.querySelector('.ai-amt');
@@ -841,6 +848,8 @@ function korbSkalieren() {
  * man sieht, wird gespeichert.
  */
 function portionenSichern() {
+  // Beim Wochen-Einkauf gibt es kein einzelnes Rezept (tagAktuell leer) — dort
+  // wird nichts vermerkt.
   if (!tagAktuell || !tagAktuell.listId || korbPortionen <= 0 || korbPortionen === detailPortionen) {
     return;
   }
