@@ -357,7 +357,7 @@ body {
     <h3 id="korbTitel"></h3>
     <div class="abschnitt" id="korbZielKopf"></div>
     <select id="korbZiel"></select>
-    <div class="ai-recipe-head">
+    <div class="ai-recipe-head" id="korbKopf">
       <div class="ai-portions">
         <button type="button" class="ai-step" id="korbMinus" aria-label="minus">–</button>
         <span class="ai-portions-label" id="korbFaktorText"></span>
@@ -758,6 +758,10 @@ function korbOeffnen() {
   // gibt es keine gemeinsame Portionszahl und der Mengen-Faktor bleibt.
   const einGericht = !!(tagAktuell && tagAktuell.listId);
   korbPortionen = einGericht ? (detailPortionen > 0 ? detailPortionen : 1) : 0;
+  // Beim Wochen-Einkauf gar kein Steller: die Mengen jedes Gerichts stehen
+  // laengst auf seiner eigenen Portionszahl, ein Faktor darueber wuerde sie alle
+  // zusammen noch einmal hochrechnen.
+  el('korbKopf').style.display = einGericht ? 'block' : 'none';
   el('korbGerichtAendern').textContent = t('changeMeal');
   const liste = el('korbListe');
   liste.innerHTML = '';
