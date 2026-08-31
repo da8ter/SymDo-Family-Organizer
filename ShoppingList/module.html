@@ -3265,7 +3265,8 @@ function showPrompt(title, initial, okLabel, cb, haken) {
   const zeile = document.getElementById('promptHakenZeile');
   const box = document.getElementById('promptHaken');
   const hinweis = document.getElementById('promptHakenHinweis');
-  box.checked = false;
+  // Vorbelegung: beim Anlegen leer, beim Bearbeiten der aktuelle Zustand.
+  box.checked = !!(haken && haken.checked);
   if (haken && haken.text) {
     document.getElementById('promptHakenText').textContent = haken.text;
     zeile.style.display = 'flex';
@@ -5555,12 +5556,20 @@ function renderFavList(el, st, detail) {
   if (btnFavRename) btnFavRename.addEventListener('click', () => {
     // Der Name kommt beim Klick frisch aus dem Bestand, nicht aus dem Render-Moment.
     const liste = curDetail();
-    showPrompt(translate('Rename list'), liste.name || '', translate('Save'), (name) => {
-      const neu = name.trim();
-      if (neu && neu !== liste.name) {
-        sdCall(selectedShoppingID(), 'RenameFavoriteList', { listId: liste.id, newName: neu });
+    const warRezept = liste.isRecipe === true;
+    showPrompt(translate('Rename list'), liste.name || '', translate('Save'), (name, istRezept) => {
+      const neuerName = name.trim();
+      if (neuerName && neuerName !== liste.name) {
+        sdCall(selectedShoppingID(), 'RenameFavoriteList', { listId: liste.id, newName: neuerName });
       }
-    });
+      // NUR bei echter Aenderung senden: Einschalten kostet ein KI-Bild,
+      // Ausschalten loescht das vorhandene.
+      if (!!istRezept !== warRezept) {
+        sdCall(selectedShoppingID(), 'SetFavoriteRecipe', { listId: liste.id, isRecipe: !!istRezept });
+      }
+    }, { text: translate('This list is a recipe'),
+         hint: translate('Recipes get a generated dish image instead of the heart.'),
+         checked: warRezept });
   });
   const btnAddAll = pick('#btnFavAddAll');
   if (btnAddAll) btnAddAll.addEventListener('click', () => addFavListToCart(selectedShoppingID(), curDetail()));
