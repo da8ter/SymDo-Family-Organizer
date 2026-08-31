@@ -9,6 +9,15 @@
   --zeile-fertig: color-mix(in srgb, var(--card-color) 96%, var(--content-color) 4%);
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
   --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+  /* Systemraender der Kachel (aus margintop/marginside/marginbottom der
+     Adresse, per JS gesetzt) und die Balkenbreite. */
+  --sym-mt:  0px;
+  --sym-ms:  0px;
+  --sym-mb:  0px;
+  --sbw:     6px;   /* Balkenbreite; muss zu ::-webkit-scrollbar passen */
+  /* Rechter Innenabstand, der den Balken MITTIG in den marginside-Streifen
+     legt: der Scrollbereich endet um (marginside - Balken)/2 vor der Kante. */
+  --sb-pad:  max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 /* Hellmodus: Zeilen dunkeln statt aufhellen (siehe symdoLightTiles unten) */
 html[data-symdo-theme="light"] {
@@ -19,11 +28,12 @@ html {
   height: 100%; margin: 0; padding: 0;
   display: flex; flex-direction: column;
 }
-/* BEWUSST kein margin am body: die Tile-Visu setzt hier ihre Kachelränder
-   (oben ~60px für die Kopfzeile). Ein margin:0 überschriebe sie, und der
-   Inhalt rutschte unter die Systemleiste — dieselbe Falle wie einst bei der
-   Einkaufs-Übersicht; das Muster hier ist deren erprobtes. */
+/* Ein vom System gesetztes Body-Padding wird NEUTRALISIERT: die Raender traegt
+   #wrap selbst auf (siehe dort). Nur so sitzt der Scrollbalken MITTIG im
+   rechten Randstreifen statt daneben — dieselbe Zwei-Ebenen-Mechanik wie in
+   der Stundenplan-Kachel. */
 body {
+  margin: 0 !important; padding: 0 !important;
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   background: transparent;
@@ -31,7 +41,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
 }
-#wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box; padding: 4px 2px; }
+/* Der Rahmen traegt die Systemraender: links --sym-ms, rechts nur --sb-pad —
+   die fehlende Haelfte plus Balkenbreite steuert der Scrollbereich bei, sodass
+   rechts wieder genau --sym-ms herauskommt. */
+#wrap {
+  display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box;
+  padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
+           var(--sym-mb) var(--sym-ms);
+}
 
 /* ── Kopf: großes Avatar-Foto links, „Hallo <Name>" daneben ─────────────── */
 #kopf { display: flex; align-items: center; gap: 14px; padding: 4px 6px 10px; }
@@ -87,7 +104,7 @@ body {
 .chip.aktiv { border-color: var(--akzent); background: color-mix(in srgb, var(--akzent) 16%, var(--bg)); }
 
 /* ── Schritte: große, kindertaugliche Zeilen ────────────────────────────── */
-#liste { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; }
+#liste { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 0 var(--sb-pad) 4px 0; }
 
 /* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
    overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
@@ -158,7 +175,7 @@ body {
 @keyframes flug { 0% { opacity: 0; transform: translateY(14px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
 
 /* ── Leerlauf: Heute-ToDos oder freundlicher Hinweis ────────────────────── */
-#leer { flex: 1 1 auto; display: none; flex-direction: column; gap: 8px; padding: 0 4px; }
+#leer { flex: 1 1 auto; display: none; flex-direction: column; gap: 8px; padding: 0 var(--sb-pad) 0 0; }
 #leer.an { display: flex; }
 #leerkopf { font-size: clamp(14px, 4.2vmin, 17px); font-weight: 800; padding: 2px 4px; }
 .todo .bild { font-size: 20px; }
@@ -226,6 +243,24 @@ body {
    Deklarationen brächen das ganze Script mit „Identifier already declared". */
 (function () {
 'use strict';
+
+/* Systemraender aus der Adresse uebernehmen, so frueh wie moeglich — die
+   Variablen muessen vor dem ersten Zeichnen stehen. Dieselbe Mechanik wie in
+   der Stundenplan-Kachel: Der Rahmen traegt die Raender, damit der Scrollbalken
+   MITTIG im rechten Randstreifen sitzt statt daneben. */
+(function systemRaender() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const px = (name) => {
+      const v = parseInt(p.get(name), 10);
+      return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+    };
+    const wurzel = document.documentElement.style;
+    const mt = px('margintop');    if (mt !== null) { wurzel.setProperty('--sym-mt', mt); }
+    const ms = px('marginside');   if (ms !== null) { wurzel.setProperty('--sym-ms', ms); }
+    const mb = px('marginbottom'); if (mb !== null) { wurzel.setProperty('--sym-mb', mb); }
+  } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
+})();
 
 /* Hell/Dunkel aus der Luminanz der Kartenfarbe — wörtlich das Muster der
    übrigen Kacheln (symdoLightTiles). */
