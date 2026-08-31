@@ -52,7 +52,44 @@ body {
 }
 
 /* ── Tage ───────────────────────────────────────────────────────────────── */
-#tage { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+#tage { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+
+/* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
+   overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
+   rechte Abstand bleibt also gleich, ob der Balken gerade sichtbar ist oder
+   nicht (die Spur ist transparent, der Griff erscheint nur bei Bedarf).
+   scrollbar-color/-width und ::-webkit-scrollbar schliessen sich gegenseitig
+   aus: ist der Standard gesetzt, ignoriert WebKit die Pseudoelemente (gemessen
+   11px statt 6px, und die Spur wird in Safari hell gemalt). Deshalb bekommt
+   WebKit die Pseudoelemente, der Standard gilt nur, wo es sie nicht gibt.
+   Jeder Selektor braucht sein EIGENES Pseudoelement — in einer Liste haengt es
+   sonst nur am letzten. */
+#tage, #blatt, #detail, #korb {
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+}
+#tage::-webkit-scrollbar,
+#blatt::-webkit-scrollbar,
+#detail::-webkit-scrollbar,
+#korb::-webkit-scrollbar { width: 6px; height: 6px; }
+#tage::-webkit-scrollbar-track,
+#blatt::-webkit-scrollbar-track,
+#detail::-webkit-scrollbar-track,
+#korb::-webkit-scrollbar-track { background: transparent; }
+#tage::-webkit-scrollbar-thumb,
+#blatt::-webkit-scrollbar-thumb,
+#detail::-webkit-scrollbar-thumb,
+#korb::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--akzent) 70%, transparent);
+  border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  #tage, #blatt, #detail, #korb {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent;
+  }
+}
+
 .tag {
   display: flex; align-items: center; gap: 10px;
   background: var(--zeile); border-radius: 14px; padding: 8px 10px;
@@ -94,7 +131,7 @@ body {
 #schleier.an { display: flex; }
 #blatt, #detail, #korb {
   background: var(--bg); border-radius: 18px 18px 0 0; width: 100%; max-width: 560px;
-  max-height: 86%; overflow-y: auto; box-sizing: border-box; padding: 14px 14px 18px;
+  max-height: 86%; box-sizing: border-box; padding: 14px 14px 18px;
   border: 1px solid var(--rand); border-bottom: none;
   /* Flex-Kind im Schleier: ohne min-width waechst es auf die min-content-Breite
      der laengsten Knopfzeile und ragt auf schmalen Kacheln rechts hinaus. */

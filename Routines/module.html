@@ -87,7 +87,38 @@ body {
 .chip.aktiv { border-color: var(--akzent); background: color-mix(in srgb, var(--akzent) 16%, var(--bg)); }
 
 /* ── Schritte: große, kindertaugliche Zeilen ────────────────────────────── */
-#liste { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; }
+#liste { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; }
+
+/* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
+   overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
+   rechte Abstand bleibt also gleich, ob der Balken gerade sichtbar ist oder
+   nicht (die Spur ist transparent, der Griff erscheint nur bei Bedarf).
+   scrollbar-color/-width und ::-webkit-scrollbar schliessen sich gegenseitig
+   aus: ist der Standard gesetzt, ignoriert WebKit die Pseudoelemente (gemessen
+   11px statt 6px, und die Spur wird in Safari hell gemalt). Deshalb bekommt
+   WebKit die Pseudoelemente, der Standard gilt nur, wo es sie nicht gibt.
+   Jeder Selektor braucht sein EIGENES Pseudoelement — in einer Liste haengt es
+   sonst nur am letzten. */
+#liste, #leer {
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+}
+#liste::-webkit-scrollbar,
+#leer::-webkit-scrollbar { width: 6px; height: 6px; }
+#liste::-webkit-scrollbar-track,
+#leer::-webkit-scrollbar-track { background: transparent; }
+#liste::-webkit-scrollbar-thumb,
+#leer::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--akzent) 70%, transparent);
+  border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  #liste, #leer {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent;
+  }
+}
+
 .schritt {
   display: flex; align-items: center; gap: 12px;
   background: var(--zeile); border-radius: 18px; padding: 10px 12px;
@@ -127,7 +158,7 @@ body {
 @keyframes flug { 0% { opacity: 0; transform: translateY(14px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
 
 /* ── Leerlauf: Heute-ToDos oder freundlicher Hinweis ────────────────────── */
-#leer { flex: 1 1 auto; display: none; flex-direction: column; gap: 8px; padding: 0 4px; overflow-y: auto; }
+#leer { flex: 1 1 auto; display: none; flex-direction: column; gap: 8px; padding: 0 4px; }
 #leer.an { display: flex; }
 #leerkopf { font-size: clamp(14px, 4.2vmin, 17px); font-weight: 800; padding: 2px 4px; }
 .todo .bild { font-size: 20px; }
