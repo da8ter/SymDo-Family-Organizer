@@ -201,6 +201,11 @@
                     "caption": "Reorder handle"
                 },
                 {
+                    "type": "CheckBox",
+                    "name": "EnableSwipeGestures",
+                    "caption": "Swipe gestures"
+                },
+                {
                     "type": "Label",
                     "caption": ""
                 },
@@ -235,7 +240,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "These settings apply to ALL lists of this web app and of this tile. The identically named switches in the individual to-do and shopping list instances are ignored here — those keep applying to each list's own tile. Swipe gestures always stay active, hiding a button never removes the function; the reorder handle is the exception, without it dragging is off. The web app applies a change after a reload, the tile immediately."
+                    "caption": "These settings apply to ALL lists of this web app and of this tile. The identically named switches in the individual to-do and shopping list instances are ignored here — those keep applying to each list's own tile. Hiding a button removes no function as long as the swipe gestures are on; with them off, only the buttons and the delete button in the edit dialog remain. The reorder handle is such a grip too: without it dragging is off. The web app applies a change after a reload, the tile immediately."
                 }
             ]
         },

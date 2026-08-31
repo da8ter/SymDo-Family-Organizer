@@ -97,6 +97,7 @@ class SymDoToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowRowEditButton', false);
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ShowReorderHandle', true);
+        $this->RegisterPropertyBoolean('EnableSwipeGestures', true);
         $this->RegisterPropertyBoolean('HideCompletedTasks', false);
         $this->RegisterPropertyBoolean('DeleteCompletedTasks', false);
         $this->RegisterPropertyBoolean('EnableHtmlBox', false);
@@ -371,6 +372,15 @@ class SymDoToDoList extends IPSModuleStrict
                     'type' => 'CheckBox',
                     'name' => 'ShowReorderHandle',
                     'caption' => $this->Translate('Reorder handle')
+                ],
+                [
+                    'type' => 'CheckBox',
+                    'name' => 'EnableSwipeGestures',
+                    'caption' => $this->Translate('Swipe gestures')
+                ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Swipe gestures hint')
                 ],
                 [
                     'type' => 'Label',
@@ -2232,7 +2242,7 @@ class SymDoToDoList extends IPSModuleStrict
      * Liste stoerend. Ueberschrieben wird nicht hier, sondern beim Zusammensetzen der
      * Nutzlast: SymDoWebApp::StripState() und im Gateway ApplyWebAppButtonFlags().
      *
-     * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool}
+     * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool, swipeGestures: bool}
      */
     private function ResolveButtonFlags(): array
     {
@@ -2244,6 +2254,7 @@ class SymDoToDoList extends IPSModuleStrict
             'showEditButton'    => $this->ReadBooleanPropertyOrDefault('ShowRowEditButton', false),
             'showDeleteButton'  => $this->ReadBooleanPropertyOrDefault('ShowRowDeleteButton', false),
             'showReorderHandle' => $this->ReadBooleanPropertyOrDefault('ShowReorderHandle', true),
+            'swipeGestures'     => $this->ReadBooleanPropertyOrDefault('EnableSwipeGestures', true),
         ];
     }
 
@@ -2284,6 +2295,7 @@ class SymDoToDoList extends IPSModuleStrict
             'showEditButton' => $knoepfe['showEditButton'],
             'showDeleteButton' => $knoepfe['showDeleteButton'],
             'showReorderHandle' => $knoepfe['showReorderHandle'],
+            'swipeGestures' => $knoepfe['swipeGestures'],
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
             'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
         ];

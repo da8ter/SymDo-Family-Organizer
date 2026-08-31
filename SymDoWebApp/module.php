@@ -97,6 +97,7 @@ class SymDoWebApp extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowRowEditButton', false);
         $this->RegisterPropertyBoolean('ShowRowDeleteButton', false);
         $this->RegisterPropertyBoolean('ShowReorderHandle', true);
+        $this->RegisterPropertyBoolean('EnableSwipeGestures', true);
 
         // Merkt sich die aktuell abonnierten Variablen-IDs, um Abos sauber zu lösen
         $this->RegisterAttributeString('SubscribedVarIDs', '[]');
@@ -876,7 +877,7 @@ class SymDoWebApp extends IPSModuleStrict
             : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
                'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
                'showNotificationBadge', 'showPriorityBadge',
-               'showEditButton', 'showDeleteButton', 'showReorderHandle'];
+               'showEditButton', 'showDeleteButton', 'showReorderHandle', 'swipeGestures'];
         foreach ($relevant as $name) {
             $state[$name] = $flags[$name];
         }
@@ -972,6 +973,7 @@ class SymDoWebApp extends IPSModuleStrict
             'showEditButton'    => $read('ShowRowEditButton', false),
             'showDeleteButton'  => $read('ShowRowDeleteButton', false),
             'showReorderHandle' => $read('ShowReorderHandle', true),
+            'swipeGestures'     => $read('EnableSwipeGestures', true),
         ];
         return $this->buttonFlagsCache;
     }

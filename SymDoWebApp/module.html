@@ -1858,6 +1858,9 @@ html[data-symdo-theme="dark"] .member-bar {
   -webkit-touch-callout: none;
   cursor: pointer;
 }
+/* Ist das Wischen abgeschaltet, gehoert die waagerechte Geste wieder ganz dem
+   Browser — pan-y wuerde sie ohne Grund beschneiden. */
+.todo-card.no-swipe .todo-content { touch-action: auto; }
 .todo-content.is-dragging { transition: none; }
 .todo-handle {
   flex: none;
@@ -3295,6 +3298,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <div class="overlay-footer">
       <button data-close="todoOverlay" id="btnTodoCancel"></button>
       <button class="primary" id="btnTodoSave"></button>
+      <!-- Loeschen steht ganz rechts (so gewuenscht); ein Fehlgriff ist dank der
+           Rueckfrage folgenlos. -->
+      <button class="destructive" id="btnTodoDelete" style="display:none"></button>
     </div>
   </div>
 </div>
@@ -5158,12 +5164,15 @@ function bindCardSwipe(card, contentSel, onDelete, onEdit, opts) {
 // mouse + touch while vertical touch stays native scroll (touch-action:pan-y);
 // reorder is a drag from the grip handle only (touch-action:none on the handle),
 // so dragging the handle reorders while the rest of the list scrolls natively.
-function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelete, onEdit) {
+function bindTodoGesture(card, instanceID, area, open, done, canReorder, onDelete, onEdit, wischbar = true) {
   const content = card.querySelector('.todo-content');
   if (!content) return;
 
   // ── Horizontal swipe on the row body (vertical is left to native scroll) ──
   (function bindSwipe() {
+    // Abgeschaltet: kein Zuhoerer, damit auch der waagerechte Zug wieder dem
+    // Browser gehoert.
+    if (!wischbar) return;
     let startX = 0, startY = 0, dx = 0;
     let active = false, decided = false, usingTouch = false;
     const SLOP = 8, THRESHOLD = 64;
@@ -9584,6 +9593,10 @@ function renderTodos() {
     && st.showReorderHandle !== false;
   const showEdit = st.showEditButton === true;
   const showDelete = st.showDeleteButton === true;
+  // Wischen ist je Liste abschaltbar (Backend-Schalter). Dann entfallen die
+  // Untergruende im Markup UND die Geste selbst; der Griff zum Sortieren und
+  // die Zeilen-Knoepfe bleiben davon unberuehrt.
+  const wischbar = st.swipeGestures !== false;
 
   // Member-Menü: eigenständige sticky Pille ganz oben (vor dem Header), wie im
   // Dashboard. Wird in den statischen #todoMembers-Container gerendert, damit
@@ -9596,13 +9609,13 @@ function renderTodos() {
     const msg = todoFilter.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
     html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
   }
-  for (const it of open) html += todoRowHtml(it, canReorder, badges, showEdit, showDelete);
+  for (const it of open) html += todoRowHtml(it, canReorder, badges, showEdit, showDelete, 0, '', wischbar);
   if (done.length > 0 && st.hideCompletedTasks !== true) {
     html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" data-key="doneToggle" id="doneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
       `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
     if (completedExpanded) {
-      for (const it of done) html += todoRowHtml(it, false, badges, showEdit, showDelete);
+      for (const it of done) html += todoRowHtml(it, false, badges, showEdit, showDelete, 0, '', wischbar);
     }
   }
   const freshNodes = renderRows(area, html);
@@ -9640,7 +9653,8 @@ function renderTodos() {
     if (!curItem(itemId)) return;
     bindTodoGesture(card, id, area, openNow, doneNow, canReorder,
       () => sdCall(curId(), 'DeleteItem', { id: itemId }),
-      () => { const it = curItem(itemId); if (it) openTodoEditor(curId(), it); });
+      () => { const it = curItem(itemId); if (it) openTodoEditor(curId(), it); },
+      wischbar);
     const chk = card.querySelector('.chk');
     chk.addEventListener('click', (e) => e.stopPropagation());
     chk.addEventListener('change', () => {
@@ -9880,7 +9894,7 @@ function todoRowHtml(it, draggable, badges, showEdit, showDelete, instanzID = 0,
       '</span>'
     : '';
   const unten = [it.info, zusatz].filter(Boolean).join(' · ');
-  return `<div class="todo-card${it.done ? ' done-row' : ''}" data-id="${it.id}"` +
+  return `<div class="todo-card${it.done ? ' done-row' : ''}${wischbar ? '' : ' no-swipe'}" data-id="${it.id}"` +
     (instanzID ? ` data-inst="${instanzID}" data-item="${it.id}"` : '') + `>` +
     // Die Wisch-Untergruende nur dort, wo auch gewischt wird. Auf der Uebersicht
     // gibt es die Geste nicht — dann waeren es zwei Knoten, die nie etwas tun.
@@ -11448,6 +11462,9 @@ function toLocalInputValue(d, dateOnly) {
 function openTodoEditor(instanceID, item) {
   todoCtx = { instanceID, itemId: item ? item.id : null };
   document.getElementById('todoOverlayTitle').textContent = item ? translate('Edit') : translate('New task');
+  // Beim Anlegen gibt es nichts zu loeschen — der Knopf erscheint erst an einer
+  // bestehenden Aufgabe (wie im Notiz-Editor).
+  document.getElementById('btnTodoDelete').style.display = (item && todoCtx.itemId) ? '' : 'none';
   document.getElementById('tdTitle').value = item ? (item.title || '') : '';
   document.getElementById('tdInfo').value = item ? (item.info || '') : '';
 
@@ -11554,6 +11571,25 @@ function renderPrioritySeg() {
   }));
 }
 // Payload exakt wie TodoDraft.fields() in der App (+ actorUserId)
+/**
+ * Aufgabe aus dem Editor heraus loeschen.
+ *
+ * Mit Rueckfrage, anders als der Wisch und der Zeilen-Knopf: hier sitzt das
+ * Loeschen neben dem Speichern, und ein Fehlgriff waere sonst endgueltig.
+ */
+function todoLoeschen() {
+  if (!todoCtx || !todoCtx.itemId) return;
+  // Werte festhalten: zwischen Frage und Antwort kann der Editor laengst einen
+  // anderen Vorgang tragen.
+  const instanz = todoCtx.instanceID;
+  const id = todoCtx.itemId;
+  showConfirm(translate('Delete this task?'), translate('Delete'), () => {
+    sdCall(instanz, 'DeleteItem', { id: id });
+    closeOverlay('todoOverlay');
+    todoCtx = null;
+  });
+}
+
 function saveTodoEditor() {
   if (!todoCtx) return;
   const title = document.getElementById('tdTitle').value.trim();
@@ -12264,6 +12300,7 @@ function initCaptions() {
   set('lblTodoQuantity', translate('Quantity'));
   set('btnTodoCancel', translate('Cancel'));
   set('btnTodoSave', translate('Save'));
+  set('btnTodoDelete', translate('Delete'));
   set('btnPromptCancel', translate('Cancel'));
   set('btnHintSaveText', translate('Save'));
   set('btnHintDeleteText', translate('Delete'));
@@ -12853,6 +12890,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnEditSave').addEventListener('click', saveItemEditor);
   document.getElementById('btnTodoSave').addEventListener('click', saveTodoEditor);
+  document.getElementById('btnTodoDelete').addEventListener('click', todoLoeschen);
 
   // Einkaufen: Eingabe + Vorschläge
   const shopInput = document.getElementById('shoppingInput');

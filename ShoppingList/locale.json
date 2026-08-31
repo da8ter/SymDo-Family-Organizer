@@ -172,6 +172,7 @@
             "Decoder could not be loaded": "Decoder konnte nicht geladen werden",
             "Default user": "Standard-Benutzer",
             "Delete": "Löschen",
+            "Delete this task?": "Diese Aufgabe löschen?",
             "Delete all used items?": "Alle benutzten Artikel löschen?",
             "Delete list": "Liste löschen",
             "Delete this favorite list?": "Diese Favoritenliste löschen?",
