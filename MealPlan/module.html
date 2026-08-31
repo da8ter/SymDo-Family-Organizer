@@ -807,6 +807,12 @@ function korbOeffnen() {
   el('korbGerichtAendern').style.display = tagAktuell ? 'block' : 'none';
   korbSkalieren();
   korbZaehlen();
+  // ALLE anderen Blaetter ausblenden. Der Editor (#blatt) traegt kein
+  // display:none im Stylesheet — er ist die Vorgabe im Schleier. Solange die
+  // Auswahl nur aus dem geoeffneten Gericht kam, hatte detailOeffnen ihn
+  // bereits versteckt; vom Zeilen- und Wochen-Korb aus stand er sonst offen
+  // daneben (leer, weil blattOeffnen nie lief).
+  el('blatt').style.display = 'none';
   el('detail').style.display = 'none';
   el('korb').style.display = 'block';
 }
