@@ -96,6 +96,20 @@ class SymDoShoppingList extends IPSModuleStrict
         return $rows;
     }
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
+     * Gateway an oder legt eines an. Ohne diesen Eintrag fragt die Konsole beim
+     * Erstellen gar nicht erst nach.
+     *
+     * Gebraucht wird das Gateway fuer die KI-Gerichtsbilder der
+     * Rezept-Favoritenlisten; ohne eines bleibt die Liste vollstaendig
+     * benutzbar und zeigt dort weiter das Herz.
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => ['{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}']]);
+    }
+
     public function Create(): void
     {
         parent::Create();

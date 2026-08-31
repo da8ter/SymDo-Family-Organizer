@@ -41,6 +41,22 @@ class SymDoWebApp extends IPSModuleStrict
      */
     private bool $applyFromKernelStart = false;
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
+     * Gateway an oder legt eines an. Ohne diesen Eintrag fragt die Konsole beim
+     * Erstellen gar nicht erst nach.
+     *
+     * Die Verbindung ist hier bewusst nur die Zuordnung — welches Gateway die
+     * Kachel BEFRAGT, entscheidet weiter GetAppGatewayID (niedrigste ID). Die
+     * App-Haelfte des Gateways gibt es nur einmal: ihre Hook-Pfade sind fest.
+     * Wuerde die Kachel ein anderes Gateway fragen als die App, zeigte sie
+     * andere Benutzer und andere ausgeblendete Listen als die App selbst.
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_MODULE_GUID]]);
+    }
+
     public function Create(): void
     {
         parent::Create();

@@ -4,9 +4,9 @@
     "type": 3,
     "vendor": "Stephan Sprick",
     "aliases": [],
-    "parentRequirements": [],
+    "parentRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
     "childRequirements": [],
-    "implemented": [],
+    "implemented": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
     "prefix": "SL",
     "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/ShoppingList"
 }

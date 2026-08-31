@@ -304,9 +304,21 @@ trait FavoriteStore
         }
     }
 
-    /** Das Gateway, das die App bedient: die Instanz mit der niedrigsten ID. */
+    /**
+     * Das Gateway, das die Gerichtsbilder erzeugt und lagert: das verbundene
+     * (Eltern-Instanz aus der Konsole), sonst das mit der niedrigsten ID.
+     *
+     * Unkritisch, welches es ist: Die Bild-ID ist objektweit gueltig, die
+     * Auslieferung laeuft ueber den Hook DIESER Liste bzw. ueber
+     * IPS_GetMediaContent — beides unabhaengig davon, unter welchem Gateway das
+     * Medienobjekt haengt.
+     */
     private function DishGatewayInstanz(): int
     {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
         $ids = @IPS_GetInstanceListByModuleID(self::DISH_GATEWAY_GUID);
         if (!is_array($ids) || $ids === []) {
             return 0;
