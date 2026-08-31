@@ -282,9 +282,19 @@ trait RoutineStore
     // Gateway: Mitglieder, Gesichter
     // ------------------------------------------------------------------
 
-    /** Das gewählte Gateway, mit Rückfall auf das, das die App bedient. */
+    /**
+     * Das zuständige Gateway, in dieser Reihenfolge:
+     *   1. die verbundene Eltern-Instanz (Konsole, seit dem Elternanschluss),
+     *   2. die alte Property GatewayInstanceID — ihr Feld gibt es nicht mehr,
+     *      aber eine früher getroffene Wahl soll nicht stillschweigend kippen,
+     *   3. das Gateway, das die App bedient (niedrigste ID).
+     */
     private function GatewayInstanz(): int
     {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
         $gw = (int)@IPS_GetProperty($this->InstanceID, 'GatewayInstanceID');
         if ($gw > 0 && IPS_InstanceExists($gw)
             && (IPS_GetInstance($gw)['ModuleInfo']['ModuleID'] ?? '') === self::GATEWAY_GUID) {

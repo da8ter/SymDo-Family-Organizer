@@ -24,6 +24,20 @@ class SymDoTimetable extends IPSModuleStrict
     private const EIGENE_GUID = '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}';
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
+     * Gateway an oder legt auf Wunsch eines an. Damit entfaellt das
+     * Auswahlfeld im Formular — die Zuordnung steht in der Konsole und laesst
+     * sich dort jederzeit aendern.
+     *
+     * „connect" statt „require": an EINEM Gateway haengen mehrere Kacheln.
+     * (ConnectParent/RequireParent gibt es fuer IPSModuleStrict nicht.)
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
     public function Create(): void
     {
         parent::Create();
@@ -1011,13 +1025,6 @@ class SymDoTimetable extends IPSModuleStrict
                     ],
                 ],
                 [
-                    'type'         => 'SelectInstance',
-                    'name'         => 'GatewayInstanceID',
-                    'width'        => '400px',
-                    'caption'      => $this->Translate('SymDo gateway'),
-                    'validModules' => [self::GATEWAY_GUID],
-                ],
-                [
                     'type'    => 'Label',
                     'name'    => 'GatewayHint',
                     'caption' => $this->GatewayHinweis(),
@@ -1078,28 +1085,24 @@ class SymDoTimetable extends IPSModuleStrict
 
     private function GatewayHinweis(): string
     {
-        $gewaehlt = $this->ReadPropertyInteger('GatewayInstanceID');
-        $genutzt  = $this->GatewayInstanz();
-        $app      = $this->GatewayAppSeite();
+        $genutzt = $this->GatewayInstanz();
+        $app     = $this->GatewayAppSeite();
 
         if ($genutzt <= 0) {
             return $this->Translate('No SymDo gateway found. Without one the "Family member" column stays empty and the card shows initials instead of photos.');
         }
-        /* Die gefaehrliche Lage zuerst: jemand hat AUSDRUECKLICH ein Gateway
-           gewaehlt, das die App gar nicht bedient. Dessen Mitgliederliste ist
-           eine andere — meist eine leere. Das Feld bleibt als Uebersteuerung
-           erhalten, aber es muss dabeistehen, was man sich damit einhandelt. */
-        if ($gewaehlt > 0 && $app > 0 && $gewaehlt !== $app) {
+        /* Die gefaehrliche Lage zuerst: die Instanz haengt an einem Gateway, das
+           die App gar nicht bedient. Dessen Mitgliederliste ist eine andere —
+           meist eine leere. Seit der Elternanschluss das Auswahlfeld ersetzt
+           hat, kommt diese Lage aus der Verbindung in der Konsole. */
+        if ($app > 0 && $genutzt !== $app) {
             return sprintf(
-                $this->Translate('Careful: "%s" (#%d) is selected, but the app is served by "%s" (#%d). Every gateway keeps its own list of family members — the children here then come from an instance that the app does not use. Leave the field empty unless you know you want this.'),
-                IPS_GetName($gewaehlt), $gewaehlt, IPS_GetName($app), $app
+                $this->Translate('Careful: this instance uses "%s" (#%d), but the app is served by "%s" (#%d). Every gateway keeps its own list of family members — the children here then come from an instance that the app does not use. Connect the instance to the other gateway in the console unless you know you want this.'),
+                IPS_GetName($genutzt), $genutzt, IPS_GetName($app), $app
             );
         }
-        if ($gewaehlt > 0) {
-            return '';
-        }
         return sprintf(
-            $this->Translate('Nothing selected — "%s" (#%d) is used: the gateway that serves the app. That is the right one in almost every case; the field is only there for setups with several gateways.'),
+            $this->Translate('"%s" (#%d) is used: the gateway that serves the app. Which gateway an instance belongs to is set as its parent in the console — that only matters in setups with several gateways.'),
             IPS_GetName($genutzt),
             $genutzt
         );

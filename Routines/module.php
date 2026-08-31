@@ -23,6 +23,20 @@ class SymDoRoutines extends IPSModuleStrict
     // Änderungen an diesen Variablen der ToDo-Listen stoßen den Kachel-Push an
     private const TODO_TRIGGER_IDENTS = ['OpenTasks', 'OverdueTasks', 'DueTodayTasks'];
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
+     * Gateway an oder legt auf Wunsch eines an. Damit entfaellt das
+     * Auswahlfeld im Formular — die Zuordnung steht in der Konsole und laesst
+     * sich dort jederzeit aendern.
+     *
+     * „connect" statt „require": an EINEM Gateway haengen mehrere Kacheln.
+     * (ConnectParent/RequireParent gibt es fuer IPSModuleStrict nicht.)
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
     public function Create(): void
     {
         parent::Create();
@@ -267,9 +281,7 @@ class SymDoRoutines extends IPSModuleStrict
                         ['type' => 'SelectTime', 'name' => 'ResetTime', 'caption' => $this->Translate('Daily reset at')],
                         ['type' => 'CheckBox', 'name' => 'CoinsEnabled', 'caption' => $this->Translate('Reward coins (amount per step, default 5)')],
                         ['type' => 'CheckBox', 'name' => 'IdleTodos', 'caption' => $this->Translate('Show today\'s tasks of the children when no routine is active')],
-                        ['type' => 'SelectInstance', 'name' => 'GatewayInstanceID', 'width' => '400px',
-                         'caption' => $this->Translate('SymDo gateway'), 'validModules' => [self::GATEWAY_GUID]],
-                        ['type' => 'Label', 'caption' => $this->Translate('The gateway provides the family members with photos. Without one, routines work — just without avatars and without today\'s tasks.')],
+                        ['type' => 'Label', 'caption' => $this->Translate('The gateway provides the family members with photos. Without one, routines work — just without avatars and without today\'s tasks. Which gateway is used is decided by the parent instance, to be set in the console.')],
                     ],
                 ],
             ],

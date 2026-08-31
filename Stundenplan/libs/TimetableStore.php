@@ -278,11 +278,19 @@ trait TimetableStore
      */
     private function GatewayInstanz(): int
     {
+        // 1. die verbundene Eltern-Instanz (Konsole, seit dem Elternanschluss)
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
+        // 2. die alte Property — ihr Feld gibt es nicht mehr, aber eine früher
+        //    getroffene Wahl soll nicht stillschweigend kippen
         $gw = (int)@IPS_GetProperty($this->InstanceID, 'GatewayInstanceID');
         if ($gw > 0 && IPS_InstanceExists($gw)
             && (IPS_GetInstance($gw)['ModuleInfo']['ModuleID'] ?? '') === self::GATEWAY_GUID) {
             return $gw;
         }
+        // 3. das Gateway, das die App bedient
         return $this->GatewayAppSeite();
     }
 
