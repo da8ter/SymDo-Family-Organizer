@@ -638,9 +638,22 @@ trait MealStore
     // Gateway (nur fürs KI-Relay des Rezept-Scans)
     // ------------------------------------------------------------------
 
-    /** Das Gateway, das die App bedient: die Instanz mit der niedrigsten ID. */
+    /**
+     * Das zustaendige Gateway: das verbundene (Datenfluss-Elter), sonst das mit
+     * der niedrigsten ID.
+     *
+     * Die Verbindung entsteht beim Anlegen der Instanz ueber die Konsole und ist
+     * damit die Aussage des Nutzers, welches Gateway gemeint ist. Ohne
+     * Verbindung — Bestandsinstanzen, oder per Skript angelegt — gilt weiter die
+     * niedrigste ID: dieselbe Instanz, die auch die App bedient. Muster wie in
+     * der ToDoList (GetGatewayID).
+     */
     private function GatewayInstanz(): int
     {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
         $ids = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
         if (!is_array($ids) || $ids === []) {
             return 0;

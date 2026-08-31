@@ -25,6 +25,24 @@ class SymDoMealPlan extends IPSModuleStrict
     private const SRC_IDENTS = ['ItemCount', 'LastUsed'];
 
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: ohne sie steht dort nur „keine
+     * passende Instanz", mit ihr bietet sie das vorhandene Gateway an oder legt
+     * auf Wunsch eines an.
+     *
+     * „connect" statt „require": an EINEM Gateway haengen ueblicherweise mehrere
+     * Kacheln — „require" boete nur Gateways ohne andere untergeordnete Instanz
+     * an und draengte so zu einem zweiten.
+     *
+     * Die Verbindung sortiert die Instanz NICHT in den Objektbaum um; sie ist
+     * reiner Datenfluss (gemessen: bei allen 43 verbundenen Instanzen dieses
+     * Systems liegt der Baum-Elter woanders).
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
     public function Create(): void
     {
         parent::Create();
