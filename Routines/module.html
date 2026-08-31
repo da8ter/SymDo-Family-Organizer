@@ -51,6 +51,12 @@ body {
 }
 
 /* ── Kopf: großes Avatar-Foto links, „Hallo <Name>" daneben ─────────────── */
+
+/* Alles, was NICHT scrollt, muss den Rest des rechten Randes selbst tragen:
+   Der Rahmen gibt nur --sb-pad her, die zweite Haelfte plus Balkenbreite
+   steuert sonst der Scrollbereich bei. Ohne diese Regel ragen Kopfzeile und
+   Co. um genau diese 11 px in den Randstreifen (gemessen bei marginside 16). */
+.randrest { margin-right: calc(var(--sb-pad) + var(--sbw)); }
 #kopf { display: flex; align-items: center; gap: 14px; padding: 4px 6px 10px; }
 #avatarBox {
   width: 64px; height: 64px; border-radius: 50%; flex: 0 0 auto;
@@ -210,7 +216,7 @@ body {
 </style>
 
 <div id="wrap">
-  <div id="kopf">
+  <div id="kopf" class="randrest">
     <div id="avatarBox"><img id="avatarBild" alt=""><span id="avatarEmoji">⭐</span></div>
     <div id="gruss">
       <div id="hallo"></div>
@@ -218,8 +224,8 @@ body {
     </div>
     <div id="muenzen" style="display:none"><span class="symbol">🪙</span><span id="muenzZahl">0</span></div>
   </div>
-  <div id="chips"></div>
-  <div id="fortschritt"><div id="balken"><div id="balkenfuellung"></div></div><div id="zaehler"></div></div>
+  <div id="chips" class="randrest"></div>
+  <div id="fortschritt" class="randrest"><div id="balken"><div id="balkenfuellung"></div></div><div id="zaehler"></div></div>
   <div id="liste"></div>
   <div id="leer">
     <div id="leergross" style="display:none">🌈</div>

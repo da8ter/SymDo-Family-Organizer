@@ -56,6 +56,12 @@ body {
 }
 
 /* ── Kopf: Wochenumschalter + Wochen-Einkauf ────────────────────────────── */
+
+/* Alles, was NICHT scrollt, muss den Rest des rechten Randes selbst tragen:
+   Der Rahmen gibt nur --sb-pad her, die zweite Haelfte plus Balkenbreite
+   steuert sonst der Scrollbereich bei. Ohne diese Regel ragen Kopfzeile und
+   Co. um genau diese 11 px in den Randstreifen (gemessen bei marginside 16). */
+.randrest { margin-right: calc(var(--sb-pad) + var(--sbw)); }
 #kopf { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; }
 .pfeil {
   width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rand);
@@ -290,14 +296,14 @@ body {
 </style>
 
 <div id="wrap">
-  <div id="kopf">
+  <div id="kopf" class="randrest">
     <button class="pfeil" id="zurueck">‹</button>
     <div id="wochentitel"></div>
     <button class="pfeil" id="vor">›</button>
     <button id="wochenkorb"><i class="fa-light fa-cart-plus"></i> <span id="wochenkorbText"></span></button>
   </div>
   <div id="tage"></div>
-  <div id="leerhinweis" style="display:none"></div>
+  <div id="leerhinweis" class="randrest" style="display:none"></div>
 </div>
 
 <div id="schleier">
