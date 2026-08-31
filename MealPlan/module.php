@@ -318,14 +318,38 @@ class SymDoMealPlan extends IPSModuleStrict
                 ['type' => 'Label', 'caption' => $this->Translate('The favorite lists of this shopping list are the recipes of the meal plan, and its cart receives the ingredients. Recipes scanned from the tile are saved there as new favorite lists.')],
                 ['type' => 'Label', 'caption' => $this->Translate('A SymDo Gateway is required: it delivers the daily briefing, the recipe analysis and the dish images of the recipe lists.')],
             ],
-            'actions' => [
-                ['type' => 'Label', 'caption' => ''],
-                ['type' => 'Label', 'caption' => 'Donation / Gift'],
-                ['type' => 'Label', 'caption' => 'Say thanks and support the developer of this module:'],
-                ['type' => 'Button', 'caption' => 'PayPal', 'onClick' => 'echo \'https://paypal.me/sspkbw25\';'],
-            ],
+            'actions' => $this->SpendenFormular(),
         ];
         return (string)json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Der Spenden-Block, wie ihn die anderen Module zeigen: Überschrift, Satz
+     * und das PayPal-Bild. Er steht EINMAL in ToDoOverview/form.json und wird
+     * von dort ab „DonationHeader" (samt der Leerzeile davor) übernommen —
+     * dasselbe Vorgehen wie in ToDoList und im Gateway.
+     *
+     * Fehlt die Vorlage (einzeln installiertes Modul), bleibt der bisherige
+     * Knopf: lieber schlichter als gar kein Hinweis.
+     */
+    private function SpendenFormular(): array
+    {
+        $pfad = __DIR__ . '/../ToDoOverview/form.json';
+        $vorlage = is_readable($pfad)
+            ? json_decode((string)@file_get_contents($pfad), true)
+            : null;
+        $elemente = is_array($vorlage) && is_array($vorlage['elements'] ?? null) ? $vorlage['elements'] : [];
+        foreach ($elemente as $i => $element) {
+            if (is_array($element) && ($element['name'] ?? '') === 'DonationHeader') {
+                return array_slice($elemente, max(0, $i - 1));
+            }
+        }
+        return [
+            ['type' => 'Label', 'caption' => ''],
+            ['type' => 'Label', 'name' => 'DonationHeader', 'caption' => 'Donation / Gift'],
+            ['type' => 'Label', 'caption' => 'Say thanks and support the developer of this module:'],
+            ['type' => 'Button', 'caption' => 'PayPal', 'onClick' => 'echo \'https://paypal.me/sspkbw25\';'],
+        ];
     }
 
     // ------------------------------------------------------------------
