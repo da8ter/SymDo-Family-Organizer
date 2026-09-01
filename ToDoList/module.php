@@ -100,6 +100,7 @@ class SymDoToDoList extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowReorderHandle', true);
         $this->RegisterPropertyBoolean('EnableSwipeGestures', true);
         $this->RegisterPropertyBoolean('ShowListTitle', true);
+        $this->RegisterPropertyBoolean('ResponsiveLayout', true);
         $this->RegisterPropertyBoolean('HideCompletedTasks', false);
         $this->RegisterPropertyBoolean('DeleteCompletedTasks', false);
         $this->RegisterPropertyBoolean('EnableHtmlBox', false);
@@ -385,6 +386,20 @@ class SymDoToDoList extends IPSModuleStrict
                    (gemessen: IPS_SetConfiguration antwortet „Eigenschaft nicht
                    gefunden" und verwirft alles). Bis dahin steht hier ein Hinweis
                    statt eines Schalters, der nichts tun kann. */
+                $this->PropertyExistiert('ResponsiveLayout')
+                    ? [
+                        'type' => 'CheckBox',
+                        'name' => 'ResponsiveLayout',
+                        'caption' => $this->Translate('Responsive Layout')
+                    ]
+                    : [
+                        'type' => 'Label',
+                        'caption' => $this->Translate('Responsive layout restart hint')
+                    ],
+                [
+                    'type' => 'Label',
+                    'caption' => $this->Translate('Responsive layout hint')
+                ],
                 $this->PropertyExistiert('ShowListTitle')
                     ? [
                         'type' => 'CheckBox',
@@ -2276,7 +2291,7 @@ class SymDoToDoList extends IPSModuleStrict
      * Liste stoerend. Ueberschrieben wird nicht hier, sondern beim Zusammensetzen der
      * Nutzlast: SymDoWebApp::StripState() und im Gateway ApplyWebAppButtonFlags().
      *
-     * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool, swipeGestures: bool, showListTitle: bool}
+     * @return array{showOverview: bool, showMemberBar: bool, showCreateButton: bool, showSorting: bool, showEditButton: bool, showDeleteButton: bool, showReorderHandle: bool, swipeGestures: bool, showListTitle: bool, responsiveLayout: bool}
      */
     private function ResolveButtonFlags(): array
     {
@@ -2290,6 +2305,7 @@ class SymDoToDoList extends IPSModuleStrict
             'showReorderHandle' => $this->ReadBooleanPropertyOrDefault('ShowReorderHandle', true),
             'swipeGestures'     => $this->ReadBooleanPropertyOrDefault('EnableSwipeGestures', true),
             'showListTitle'     => $this->ReadBooleanPropertyOrDefault('ShowListTitle', true),
+            'responsiveLayout'  => $this->ReadBooleanPropertyOrDefault('ResponsiveLayout', true),
         ];
     }
 
@@ -2332,6 +2348,7 @@ class SymDoToDoList extends IPSModuleStrict
             'showReorderHandle' => $knoepfe['showReorderHandle'],
             'swipeGestures' => $knoepfe['swipeGestures'],
             'showListTitle' => $knoepfe['showListTitle'],
+            'responsiveLayout' => $knoepfe['responsiveLayout'],
             'hideCompletedTasks' => $this->ReadPropertyBoolean('HideCompletedTasks'),
             'deleteCompletedTasks' => $this->ReadPropertyBoolean('DeleteCompletedTasks')
         ];

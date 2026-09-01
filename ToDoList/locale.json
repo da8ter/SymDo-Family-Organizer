@@ -2,6 +2,9 @@
     "translations": {
         "de": {
             "Purchase": "Einkauf",
+            "Responsive Layout": "Responsive Layout",
+            "Responsive layout hint": "Auf breiten Schirmen ordnet die Kachel die Aufgaben in mehreren Spalten an. Ausgeschaltet bleibt es bei einer Spalte, egal wie breit die Kachel ist.",
+            "Responsive layout restart hint": "Der Schalter für das responsive Layout erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "List title": "Listentitel",
             "List title restart hint": "Der Schalter für den Listentitel erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "Swipe gestures restart hint": "Der Schalter für die Wischgesten erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",

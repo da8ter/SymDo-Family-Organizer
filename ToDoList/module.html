@@ -2905,6 +2905,10 @@ html[data-symdo-theme="dark"] .member-bar {
   .fav-actions button { flex: 1 1 45%; }
 
   #todoListArea { align-items: stretch; }
+  /* Abgeschaltetes Raster (Backend-Schalter „Responsive Layout"): eine Spalte,
+     egal wie breit der Schirm ist. Hoehere Spezifitaet als die Rasterregel
+     oben, deshalb ohne !important. */
+  #todoListArea.eine-spalte { display: block; }
   #todoListArea .todo-card { display: flex; flex-direction: column; }
   #todoListArea .todo-content { flex: 1; }
 
@@ -9618,6 +9622,8 @@ function renderTodos() {
   }
 
   const area = document.getElementById('todoListArea');
+  // Mehrspaltig ist der Normalfall; die Liste kann es fuer ihre Kachel abstellen.
+  area.classList.toggle('eine-spalte', !!(st && st.responsiveLayout === false));
   if (!st) {
     renderInto(area, `<div class="empty-state"><i class="fa-light fa-list-check"></i>${translate('No ToDo list found')}${noInstanceHint('todo')}</div>`);
     return;

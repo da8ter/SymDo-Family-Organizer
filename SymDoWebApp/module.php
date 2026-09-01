@@ -906,7 +906,7 @@ class SymDoWebApp extends IPSModuleStrict
                'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
                'showNotificationBadge', 'showPriorityBadge',
                'showEditButton', 'showDeleteButton', 'showReorderHandle', 'swipeGestures',
-               'showListTitle'];
+               'showListTitle', 'responsiveLayout'];
         foreach ($relevant as $name) {
             $state[$name] = $flags[$name];
         }
@@ -1007,6 +1007,9 @@ class SymDoWebApp extends IPSModuleStrict
             // sonst nicht erkennbar, welche man vor sich hat. Der Schalter der
             // Liste gilt nur fuer deren eigene Kachel.
             'showListTitle'     => true,
+            // Ebenso das Spaltenraster: die Web-App laeuft auch auf breiten
+            // Schirmen und ordnet dort selbst an.
+            'responsiveLayout'  => true,
         ];
         return $this->buttonFlagsCache;
     }
