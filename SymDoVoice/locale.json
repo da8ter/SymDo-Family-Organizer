@@ -1,0 +1,14 @@
+{
+    "translations": {
+        "de": {
+            "SymDo Voice": "SymDo - Sprachassistent",
+            "Feasibility probe: whether this environment supports the voice dialog (WebRTC to the AI provider). The tile measures and reports automatically.": "Machbarkeitsprobe: ob diese Umgebung den Sprachdialog trägt (WebRTC zum KI-Anbieter). Die Kachel misst und meldet von selbst.",
+            "Probe results": "Messergebnisse",
+            "No reports yet — open the tile in each environment (browser, Symcon app on iOS and Android). The probe runs by itself and reports here.": "Noch keine Berichte — öffne die Kachel in jeder Umgebung (Browser, Symcon-App auf iOS und Android). Die Probe läuft von selbst und meldet sich hier.",
+            "Clear reports": "Berichte löschen"
+        },
+        "en": {
+            "SymDo Voice": "SymDo - Voice Assistant"
+        }
+    }
+}
