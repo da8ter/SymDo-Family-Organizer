@@ -80,7 +80,7 @@
             "Local model (a vision model, e.g. llama3.2-vision)": "Lokales Modell (ein Vision-Modell, z. B. llama3.2-vision)",
             "Local API key (optional)": "Lokaler API-Key (optional)",
             "AI analysis is disabled.": "Die KI-Analyse ist deaktiviert.",
-            "No image provided.": "Kein Bild übermittelt.",
+            "No image provided.": "Nichts erkannt.",
             "No file provided.": "Keine Datei übermittelt.",
             "No image or URL provided.": "Kein Bild und keine URL übermittelt.",
             "Invalid or non-public URL.": "Ungültige oder nicht öffentlich erreichbare URL.",
