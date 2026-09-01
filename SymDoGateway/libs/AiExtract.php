@@ -338,7 +338,18 @@ trait AiExtract
         }
 
         if (str_ends_with($path, 'extract')) {
-            if ($pdf !== '') {
+            /* Text zuerst, wie im HTTP-Weg: Nach einem Diktat schickt die
+               Oberflaeche das Transkript hier durch, und der Text-Scan
+               („Nachricht einfuegen") nimmt denselben Weg. Fehlte der Zweig,
+               antwortete das Relay mit „No image provided" — die Aufnahme lief
+               dann durch, aber es wurde nichts erkannt. */
+            $text = trim($this->BodyStr($body, 'text'));
+            if ($text !== '') {
+                if (mb_strlen($text) > self::AI_TEXT_MAX) {
+                    return $this->AiRelayError('invalid_payload', $this->Translate('Text too long.'));
+                }
+                $r = $this->AiExtractTodos('', '', $text);
+            } elseif ($pdf !== '') {
                 $r = $this->AiExtractTodos('', $pdf);
             } elseif ($image !== '') {
                 $r = $this->AiExtractTodos($image);
