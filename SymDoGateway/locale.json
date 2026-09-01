@@ -479,7 +479,12 @@
       "I could not delete that — nothing was removed.": "Ich konnte das nicht löschen — es wurde nichts entfernt.",
       "The task \"%s\" is deleted.": "Die Aufgabe „%s“ ist gelöscht.",
       "\"%s\" is off the list.": "„%s“ ist von der Liste entfernt.",
-      "The appointment \"%s\" is deleted.": "Der Termin „%s“ ist gelöscht."
+      "The appointment \"%s\" is deleted.": "Der Termin „%s“ ist gelöscht.",
+      "This appointment repeats. Change just this one (%s) or the whole series?": "Der Termin wiederholt sich. Nur diesen einen (%s) ändern oder die ganze Serie?",
+      "This appointment repeats. Delete just this one (%s) or the whole series?": "Der Termin wiederholt sich. Nur diesen einen (%s) löschen oder die ganze Serie?",
+      "The whole series \"%s\" is updated.": "Die ganze Serie „%s“ ist geändert.",
+      "I will delete the WHOLE series \"%s\". This cannot be undone. Shall I?": "Ich lösche die GANZE Serie „%s“. Das lässt sich nicht rückgängig machen. Soll ich?",
+      "The whole series \"%s\" is deleted.": "Die ganze Serie „%s“ ist gelöscht."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

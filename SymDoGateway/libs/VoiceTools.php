@@ -184,8 +184,9 @@ trait VoiceTools
                         'neue_bis'    => ['type' => ['string', 'null'], 'description' => 'Neue Endzeit HH:MM oder null'],
                         'neuer_titel' => ['type' => ['string', 'null'], 'description' => 'Neuer Titel oder null (bleibt)'],
                         'neuer_ort'   => ['type' => ['string', 'null'], 'description' => 'Neuer Ort; null = bleibt, "" = Ort entfernen'],
+                        'umfang'      => ['type' => ['string', 'null'], 'enum' => ['einzeln', 'serie', null], 'description' => 'Nur bei Serienterminen: "einzeln" = dieses Vorkommen, "serie" = ganze Serie. Sonst null — bei einer Serie fragt das Werkzeug von selbst nach.'],
                     ],
-                    'required' => ['welcher', 'suchtag', 'neues_datum', 'neue_von', 'neue_bis', 'neuer_titel', 'neuer_ort'],
+                    'required' => ['welcher', 'suchtag', 'neues_datum', 'neue_von', 'neue_bis', 'neuer_titel', 'neuer_ort', 'umfang'],
                 ],
             ],
             'loeschen' => [
@@ -197,9 +198,10 @@ trait VoiceTools
                         'was'     => ['type' => 'string', 'description' => 'Titel der Aufgabe, Name des Artikels oder Titel des Termins'],
                         'bereich' => ['type' => 'string', 'enum' => ['aufgabe', 'einkauf', 'termin'], 'description' => 'Was gelöscht werden soll'],
                         'liste'   => ['type' => ['string', 'null'], 'description' => 'Liste bei Aufgabe/Einkauf; null = Standardliste'],
+                        'umfang'  => ['type' => ['string', 'null'], 'enum' => ['einzeln', 'serie', null], 'description' => 'Nur bei Serienterminen: "einzeln" = dieses Vorkommen, "serie" = ganze Serie. Sonst null — bei einer Serie fragt das Werkzeug von selbst nach.'],
                         'marke'   => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der ersten Antwort'],
                     ],
-                    'required' => ['was', 'bereich', 'liste', 'marke'],
+                    'required' => ['was', 'bereich', 'liste', 'umfang', 'marke'],
                 ],
             ],
         ];
@@ -432,6 +434,18 @@ trait VoiceTools
         return trim($wann . ' ' . $titel . ($ort !== '' ? ' (' . $ort . ')' : ''));
     }
 
+    /** Nur Wochentag + Datum (+ Uhrzeit) eines Termins — ohne Titel, für Rückfragen. */
+    private function VoiceTerminWann(array $e): string
+    {
+        $start = (int)($e['start'] ?? 0);
+        if ($start <= 0) {
+            return '';
+        }
+        $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        return $wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
+            . (($e['allDay'] ?? false) === true ? '' : ' um ' . date('H:i', $start));
+    }
+
     /** @return array<string,mixed> */
     private function VoiceToolTerminAnlegen(array $args, array $ctx): array
     {
@@ -575,6 +589,16 @@ trait VoiceTools
         }
         $e = (array)$auf['event'];
 
+        // Serientermin: erst den Umfang klären (nur dieses Vorkommen oder die ganze
+        // Serie), solange er nicht feststeht.
+        $serie  = ($e['recurring'] ?? false) === true;
+        $umfang = is_string($args['umfang'] ?? null) ? trim((string)$args['umfang']) : '';
+        if ($serie && $umfang === '') {
+            return ['ok' => false, 'error' => ['code' => 'umfang_noetig', 'message' => 'scope required'],
+                    'sag' => sprintf($this->Translate('This appointment repeats. Change just this one (%s) or the whole series?'), $this->VoiceTerminWann($e))];
+        }
+        $scope = ($serie && $umfang === 'serie') ? 'series' : 'occurrence';
+
         // Änderungswünsche einsammeln (null/leer = bleibt).
         $neuesDatum = is_string($args['neues_datum'] ?? null) ? trim((string)$args['neues_datum']) : '';
         $neueVon    = is_string($args['neue_von']    ?? null) ? trim((string)$args['neue_von'])    : '';
@@ -636,6 +660,7 @@ trait VoiceTools
             'start'          => $startStr,
             'location'       => $neuOrt,
             'info'           => (string)($e['info'] ?? ''),
+            'scope'          => $scope,   // nur bei Serien ausgewertet; sonst ignoriert
         ];
         if ($endeStr !== '') {
             $event['end'] = $endeStr;
@@ -647,6 +672,13 @@ trait VoiceTools
             return $this->VoiceErr((string)($upd['error']['code'] ?? 'kalender_fehler'), $msg);
         }
 
+        if ($scope === 'series') {
+            return [
+                'ok'    => true,
+                'titel' => $neuTitel,
+                'sag'   => sprintf($this->Translate('The whole series "%s" is updated.'), $neuTitel),
+            ];
+        }
         $neuStartTs = (int)strtotime($startStr);
         $wann = $ganztags
             ? ('am ' . date('d.m.', $neuStartTs))
@@ -743,21 +775,24 @@ trait VoiceTools
                     return $auf;
                 }
                 $e = (array)$auf['event'];
-                $serie = ($e['recurring'] ?? false) === true;
+                $serie  = ($e['recurring'] ?? false) === true;
+                $umfang = is_string($args['umfang'] ?? null) ? trim((string)$args['umfang']) : '';
+                // Serie: erst den Umfang klären, BEVOR eine Marke entsteht.
+                if ($serie && $umfang === '') {
+                    return ['ok' => false, 'error' => ['code' => 'umfang_noetig', 'message' => 'scope required'],
+                            'sag' => sprintf($this->Translate('This appointment repeats. Delete just this one (%s) or the whole series?'), $this->VoiceTerminWann($e))];
+                }
+                $scope = ($serie && $umfang === 'serie') ? 'series' : 'occurrence';
                 $ziel = ['bereich' => 'termin', 'cal' => (int)($e['calendarID'] ?? 0),
                          'id' => (string)($e['id'] ?? ''), 'uid' => (string)($e['uid'] ?? ''),
                          'startTimestamp' => (int)($e['start'] ?? 0), 'titel' => (string)($e['title'] ?? ''),
-                         'serie' => $serie];
-                // Nur Datum/Zeit (ohne Titel — der steht schon im Satz).
-                $start = (int)($e['start'] ?? 0);
-                $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-                $wann = $start > 0
-                    ? ($wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
-                       . (($e['allDay'] ?? false) === true ? '' : ' um ' . date('H:i', $start)))
-                    : '';
-                $frage = $serie
-                    ? sprintf($this->Translate('I will delete this one occurrence of "%s" (%s); the rest of the series stays. Shall I?'), (string)($e['title'] ?? ''), $wann)
-                    : sprintf($this->Translate('I will delete the appointment "%s" (%s). This cannot be undone. Shall I?'), (string)($e['title'] ?? ''), $wann);
+                         'serie' => $serie, 'scope' => $scope];
+                $wann = $this->VoiceTerminWann($e);
+                $frage = $scope === 'series'
+                    ? sprintf($this->Translate('I will delete the WHOLE series "%s". This cannot be undone. Shall I?'), (string)($e['title'] ?? ''))
+                    : ($serie
+                        ? sprintf($this->Translate('I will delete this one occurrence of "%s" (%s); the rest of the series stays. Shall I?'), (string)($e['title'] ?? ''), $wann)
+                        : sprintf($this->Translate('I will delete the appointment "%s" (%s). This cannot be undone. Shall I?'), (string)($e['title'] ?? ''), $wann));
                 break;
 
             default:
@@ -808,14 +843,17 @@ trait VoiceTools
                     break;
 
                 case 'termin':
+                    $scope = (string)($ziel['scope'] ?? 'occurrence');
                     $r = $this->CalHandleAction(['action' => 'delete', 'calendarID' => (int)($ziel['cal'] ?? 0),
                         'event' => ['id' => (string)($ziel['id'] ?? ''), 'uid' => (string)($ziel['uid'] ?? ''),
-                                    'startTimestamp' => (int)($ziel['startTimestamp'] ?? 0)]]);
+                                    'startTimestamp' => (int)($ziel['startTimestamp'] ?? 0), 'scope' => $scope]]);
                     if (($r['ok'] ?? false) !== true) {
                         $msg = (string)($r['error']['message'] ?? $this->Translate('The calendar rejected the deletion.'));
                         return $this->VoiceErr((string)($r['error']['code'] ?? 'kalender_fehler'), $msg);
                     }
-                    $satz = sprintf($this->Translate('The appointment "%s" is deleted.'), $titel);
+                    $satz = $scope === 'series'
+                        ? sprintf($this->Translate('The whole series "%s" is deleted.'), $titel)
+                        : sprintf($this->Translate('The appointment "%s" is deleted.'), $titel);
                     break;
 
                 default:
@@ -1400,6 +1438,7 @@ trait VoiceTools
         $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
         $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
+        $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
         return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;
