@@ -466,7 +466,20 @@
       "I cannot pin down that appointment.": "Ich kann den Termin nicht genau zuordnen.",
       "The calendar rejected the change.": "Der Kalender hat die Änderung abgelehnt.",
       "\"%s\" is now %s.": "„%s“ ist jetzt %s.",
-      "Location: %s.": "Ort: %s."
+      "Location: %s.": "Ort: %s.",
+      "The confirmation has expired — please tell me again what to delete.": "Die Bestätigung ist abgelaufen — sag mir bitte noch einmal, was ich löschen soll.",
+      "Too many deletions in a short time — please try again later.": "Zu viele Löschungen in kurzer Zeit — bitte später noch einmal.",
+      "What should I delete?": "Was soll ich löschen?",
+      "items on the list": "Artikeln auf der Liste",
+      "I will delete the task \"%s\" from %s. This cannot be undone. Shall I?": "Ich lösche die Aufgabe „%s“ aus %s. Das lässt sich nicht rückgängig machen. Soll ich?",
+      "I will remove \"%s\" from the shopping list %s. Shall I?": "Ich entferne „%s“ von der Einkaufsliste %s. Soll ich?",
+      "I will delete this one occurrence of \"%s\" (%s); the rest of the series stays. Shall I?": "Ich lösche nur dieses eine Vorkommen von „%s“ (%s); die übrige Serie bleibt. Soll ich?",
+      "I will delete the appointment \"%s\" (%s). This cannot be undone. Shall I?": "Ich lösche den Termin „%s“ (%s). Das lässt sich nicht rückgängig machen. Soll ich?",
+      "I can only delete tasks, shopping items or appointments.": "Ich kann nur Aufgaben, Einkaufsartikel oder Termine löschen.",
+      "I could not delete that — nothing was removed.": "Ich konnte das nicht löschen — es wurde nichts entfernt.",
+      "The task \"%s\" is deleted.": "Die Aufgabe „%s“ ist gelöscht.",
+      "\"%s\" is off the list.": "„%s“ ist von der Liste entfernt.",
+      "The appointment \"%s\" is deleted.": "Der Termin „%s“ ist gelöscht."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

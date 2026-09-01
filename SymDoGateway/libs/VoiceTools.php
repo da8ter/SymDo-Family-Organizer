@@ -188,6 +188,20 @@ trait VoiceTools
                     'required' => ['welcher', 'suchtag', 'neues_datum', 'neue_von', 'neue_bis', 'neuer_titel', 'neuer_ort'],
                 ],
             ],
+            'loeschen' => [
+                'art' => 'gefaehrlich',
+                'beschreibung' => 'Löscht endgültig eine Aufgabe, einen Einkaufsartikel oder einen Termin. IMMER zweistufig: Der erste Aufruf (marke = null) löscht NICHTS, sondern liefert eine Rückfrage und eine "marke". Sprich die Rückfrage, warte auf ein klares Ja und rufe dann GENAU DIESES Werkzeug erneut mit derselben marke auf. Bei Nein rufe nicht erneut auf.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'was'     => ['type' => 'string', 'description' => 'Titel der Aufgabe, Name des Artikels oder Titel des Termins'],
+                        'bereich' => ['type' => 'string', 'enum' => ['aufgabe', 'einkauf', 'termin'], 'description' => 'Was gelöscht werden soll'],
+                        'liste'   => ['type' => ['string', 'null'], 'description' => 'Liste bei Aufgabe/Einkauf; null = Standardliste'],
+                        'marke'   => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der ersten Antwort'],
+                    ],
+                    'required' => ['was', 'bereich', 'liste', 'marke'],
+                ],
+            ],
         ];
     }
 
@@ -236,6 +250,7 @@ trait VoiceTools
                 'termine_lesen'       => $this->VoiceToolTermineLesen($args, $ctx),
                 'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
                 'termin_aendern'      => $this->VoiceToolTerminAendern($args, $ctx),
+                'loeschen'            => $this->VoiceToolLoeschen($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -498,6 +513,47 @@ trait VoiceTools
     }
 
     /**
+     * Einen Termin über seinen Titel in einem Zeitfenster auflösen — gemeinsam für
+     * Ändern und Löschen. Ein klar genannter Tag grenzt eng ein (2 Tage), sonst wird
+     * breit über die kommenden 31 Tage gesucht. Rückgabe: ['ok'=>true,'event'=>…]
+     * oder die Fehlerform (mit `sag`); bei Mehrdeutigkeit tragen die Beispiele
+     * Datum und Uhrzeit, weil gleiche Titel allein nicht unterscheiden.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceTerminAufloesen(string $was, mixed $suchtag): array
+    {
+        $tag    = is_string($suchtag) ? trim($suchtag) : '';
+        $offset = $tag !== '' ? $this->VoiceTagOffset($tag) : null;
+        $eng    = $offset !== null;
+        $startOff = $eng ? $offset : 0;
+        $von = (int)strtotime(date('Y-m-d', (int)strtotime('+' . $startOff . ' day')) . ' 00:00');
+        $bis = $von + ($eng ? 2 : 31) * 86400;
+
+        $r = $this->CalHandleAction(['action' => 'events', 'from' => $von, 'to' => $bis]);
+        if (($r['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The calendar is not answering right now.'));
+        }
+        $kand = [];
+        foreach ((array)($r['events'] ?? []) as $e) {
+            if (is_array($e) && trim((string)($e['title'] ?? '')) !== '') {
+                $kand[] = ['schluessel' => (string)($e['uid'] ?? $e['id'] ?? ''), 'titel' => (string)$e['title'], 'event' => $e];
+            }
+        }
+        $erg = $this->VoiceAufloesen($was, $kand);
+        $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('upcoming appointments'));
+        if ($fehler !== null) {
+            if (($erg['status'] ?? '') === 'mehrdeutig') {
+                $labels = array_map(fn(array $t): string => $this->VoiceTerminZeile((array)$t['event']), $erg['treffer']);
+                $fehler['sag'] = sprintf($this->Translate('Which appointment do you mean? For example: %s.'), implode('; ', array_slice($labels, 0, 3)));
+                $fehler['treffer'] = $labels;
+            }
+            return $fehler;
+        }
+        return ['ok' => true, 'event' => (array)$erg['treffer'][0]['event']];
+    }
+
+    /**
      * Einen bestehenden Termin über seinen Titel finden und ändern: verschieben
      * (Datum/Zeit), umbenennen, Ort setzen. Nur die gesetzten Felder ändern sich,
      * der Rest bleibt. Eine reine Zeitverschiebung erhält die Dauer. Serien werden
@@ -513,38 +569,11 @@ trait VoiceTools
             return $this->VoiceErr('ungueltige_eingabe', $this->Translate('Which appointment should I change?'));
         }
 
-        // Suchfenster: ein klar aufgelöster Tag (heute/morgen/nahes Datum) grenzt
-        // eng ein; alles andere (kein Tag, oder ein Datum weiter als eine Woche
-        // voraus) sucht breit über die kommenden 31 Tage.
-        $suchtag = is_string($args['suchtag'] ?? null) ? trim((string)$args['suchtag']) : '';
-        $offset  = $suchtag !== '' ? $this->VoiceTagOffset($suchtag) : null;
-        $eng     = $offset !== null;
-        $startOff = $eng ? $offset : 0;
-        $von = (int)strtotime(date('Y-m-d', (int)strtotime('+' . $startOff . ' day')) . ' 00:00');
-        $bis = $von + ($eng ? 2 : 31) * 86400;
-
-        $r = $this->CalHandleAction(['action' => 'events', 'from' => $von, 'to' => $bis]);
-        if (($r['ok'] ?? false) !== true) {
-            return $this->VoiceErr('nicht_bereit', $this->Translate('The calendar is not answering right now.'));
+        $auf = $this->VoiceTerminAufloesen($welcher, $args['suchtag'] ?? null);
+        if (($auf['ok'] ?? false) !== true) {
+            return $auf;
         }
-        $kand = [];
-        foreach ((array)($r['events'] ?? []) as $e) {
-            if (is_array($e) && trim((string)($e['title'] ?? '')) !== '') {
-                $kand[] = ['schluessel' => (string)($e['uid'] ?? $e['id'] ?? ''), 'titel' => (string)$e['title'], 'event' => $e];
-            }
-        }
-        $erg = $this->VoiceAufloesen($welcher, $kand);
-        $fehler = $this->VoiceAufloeseFehler($erg, $welcher, $this->Translate('upcoming appointments'));
-        if ($fehler !== null) {
-            // Gleiche Titel allein helfen nicht — bei Mehrdeutigkeit Datum/Zeit nennen.
-            if (($erg['status'] ?? '') === 'mehrdeutig') {
-                $labels = array_map(fn(array $t): string => $this->VoiceTerminZeile((array)$t['event']), $erg['treffer']);
-                $fehler['sag'] = sprintf($this->Translate('Which appointment do you mean? For example: %s.'), implode('; ', array_slice($labels, 0, 3)));
-                $fehler['treffer'] = $labels;
-            }
-            return $fehler;
-        }
-        $e = (array)$erg['treffer'][0]['event'];
+        $e = (array)$auf['event'];
 
         // Änderungswünsche einsammeln (null/leer = bleibt).
         $neuesDatum = is_string($args['neues_datum'] ?? null) ? trim((string)$args['neues_datum']) : '';
@@ -628,6 +657,203 @@ trait VoiceTools
             'sag'   => sprintf($this->Translate('"%s" is now %s.'), $neuTitel, $wann)
                        . ($ortGesetzt && $neuOrt !== '' ? ' ' . sprintf($this->Translate('Location: %s.'), $neuOrt) : ''),
         ];
+    }
+
+    /**
+     * Löschen — zweistufig und servererzeugt bestätigt. Der erste Aufruf löst das
+     * Ziel auf und prägt eine Marke samt Rückfrage; erst der zweite Aufruf mit der
+     * Marke führt aus. Die Rückfrage formuliert der SERVER (nicht das Modell, das
+     * womöglich das falsche Ziel halluziniert), das Ziel klebt an der Marke, und ein
+     * Stundendeckel bremst ein durchdrehendes Modell.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceToolLoeschen(array $args, array $ctx): array
+    {
+        $marke = is_string($args['marke'] ?? null) ? trim((string)$args['marke']) : '';
+
+        // ---- Zweiter Aufruf: Marke einlösen und ausführen ----
+        if ($marke !== '') {
+            $ziel = $this->VoiceMarkeEinloesen($marke);
+            if ($ziel === null) {
+                // NICHT auf eine frische Auflösung zurückfallen — sonst löschte ein
+                // erfundener oder abgelaufener Code etwas Unbestätigtes.
+                return $this->VoiceErr('marke_abgelaufen', $this->Translate('The confirmation has expired — please tell me again what to delete.'));
+            }
+            if (!$this->VoiceLoeschDeckelOffen()) {
+                return $this->VoiceErr('loesch_deckel', $this->Translate('Too many deletions in a short time — please try again later.'));
+            }
+            return $this->VoiceLoeschAusfuehren($ziel);
+        }
+
+        // ---- Erster Aufruf: Ziel auflösen, Marke prägen, Rückfrage stellen ----
+        $was     = trim((string)($args['was'] ?? ''));
+        $bereich = trim((string)($args['bereich'] ?? ''));
+        if ($was === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What should I delete?'));
+        }
+
+        switch ($bereich) {
+            case 'aufgabe':
+                $liste = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
+                if (!($liste['ok'] ?? false)) {
+                    return $liste;
+                }
+                $erg = $this->VoiceAufgabeAufloesen((int)$liste['id'], $was);
+                $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('tasks'));
+                if ($fehler !== null) {
+                    return $fehler;
+                }
+                $t = $erg['treffer'][0];
+                $ziel = ['bereich' => 'aufgabe', 'tdl' => (int)$liste['id'], 'id' => (int)$t['schluessel'],
+                         'titel' => (string)$t['titel'], 'liste' => (string)$liste['name']];
+                $frage = sprintf($this->Translate('I will delete the task "%s" from %s. This cannot be undone. Shall I?'),
+                                 (string)$t['titel'], (string)$liste['name']);
+                break;
+
+            case 'einkauf':
+                $liste = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+                if (!($liste['ok'] ?? false)) {
+                    return $liste;
+                }
+                $items = json_decode((string)@SL_GetItems((int)$liste['id']), true);
+                $kand = [];
+                foreach ((array)$items as $it) {
+                    if (is_array($it) && trim((string)($it['name'] ?? '')) !== '') {
+                        $kand[] = ['schluessel' => (string)($it['id'] ?? ''), 'titel' => (string)$it['name']];
+                    }
+                }
+                $erg = $this->VoiceAufloesen($was, $kand);
+                $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('items on the list'));
+                if ($fehler !== null) {
+                    return $fehler;
+                }
+                $t = $erg['treffer'][0];
+                $ziel = ['bereich' => 'einkauf', 'sl' => (int)$liste['id'], 'id' => (string)$t['schluessel'],
+                         'titel' => (string)$t['titel'], 'liste' => (string)$liste['name']];
+                $frage = sprintf($this->Translate('I will remove "%s" from the shopping list %s. Shall I?'),
+                                 (string)$t['titel'], (string)$liste['name']);
+                break;
+
+            case 'termin':
+                // Kein Tagesfenster im Löschschema — breit suchen; bei mehreren
+                // Treffern fragt die Auflösung mit Datum/Zeit nach.
+                $auf = $this->VoiceTerminAufloesen($was, null);
+                if (($auf['ok'] ?? false) !== true) {
+                    return $auf;
+                }
+                $e = (array)$auf['event'];
+                $serie = ($e['recurring'] ?? false) === true;
+                $ziel = ['bereich' => 'termin', 'cal' => (int)($e['calendarID'] ?? 0),
+                         'id' => (string)($e['id'] ?? ''), 'uid' => (string)($e['uid'] ?? ''),
+                         'startTimestamp' => (int)($e['start'] ?? 0), 'titel' => (string)($e['title'] ?? ''),
+                         'serie' => $serie];
+                // Nur Datum/Zeit (ohne Titel — der steht schon im Satz).
+                $start = (int)($e['start'] ?? 0);
+                $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+                $wann = $start > 0
+                    ? ($wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
+                       . (($e['allDay'] ?? false) === true ? '' : ' um ' . date('H:i', $start)))
+                    : '';
+                $frage = $serie
+                    ? sprintf($this->Translate('I will delete this one occurrence of "%s" (%s); the rest of the series stays. Shall I?'), (string)($e['title'] ?? ''), $wann)
+                    : sprintf($this->Translate('I will delete the appointment "%s" (%s). This cannot be undone. Shall I?'), (string)($e['title'] ?? ''), $wann);
+                break;
+
+            default:
+                return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I can only delete tasks, shopping items or appointments.'));
+        }
+
+        $ttl = (($ziel['serie'] ?? false) === true) ? self::$VOICE_MARKE_TTL_SERIE : self::$VOICE_MARKE_TTL;
+        $id = $this->VoiceMarkeErzeugen($ziel, $ttl);
+        if ($id === '') {
+            return $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
+        }
+        return ['ok' => false, 'error' => ['code' => 'bestaetigung_noetig', 'message' => 'confirmation required'],
+                'marke' => $id, 'sag' => $frage];
+    }
+
+    /**
+     * Führt eine bestätigte Löschung aus (Ziel kommt aus der Marke). Verlässt sich
+     * NICHT auf das `ok` der Zielmodule (DeleteItem der Einkaufsliste verwirft es),
+     * sondern liest gegen; protokolliert jede Löschung zusätzlich als KL_NOTIFY.
+     *
+     * @param array<string,mixed> $ziel
+     * @return array<string,mixed>
+     */
+    private function VoiceLoeschAusfuehren(array $ziel): array
+    {
+        $titel   = (string)($ziel['titel'] ?? '');
+        $bereich = (string)($ziel['bereich'] ?? '');
+        try {
+            switch ($bereich) {
+                case 'aufgabe':
+                    $tdl = (int)($ziel['tdl'] ?? 0);
+                    $id  = (int)($ziel['id'] ?? 0);
+                    @TDL_AppCall($tdl, 'DeleteItem', (string)json_encode(['id' => $id]));
+                    if ($this->VoiceAufgabeExistiert($tdl, $id)) {
+                        return $this->VoiceErr('nicht_geloescht', $this->Translate('I could not delete that — nothing was removed.'));
+                    }
+                    $satz = sprintf($this->Translate('The task "%s" is deleted.'), $titel);
+                    break;
+
+                case 'einkauf':
+                    $sl = (int)($ziel['sl'] ?? 0);
+                    $id = (string)($ziel['id'] ?? '');
+                    @SL_AppCall($sl, 'DeleteItem', $id);   // ROHE id, kein JSON!
+                    if ($this->VoiceArtikelExistiert($sl, $id)) {
+                        return $this->VoiceErr('nicht_geloescht', $this->Translate('I could not delete that — nothing was removed.'));
+                    }
+                    $satz = sprintf($this->Translate('"%s" is off the list.'), $titel);
+                    break;
+
+                case 'termin':
+                    $r = $this->CalHandleAction(['action' => 'delete', 'calendarID' => (int)($ziel['cal'] ?? 0),
+                        'event' => ['id' => (string)($ziel['id'] ?? ''), 'uid' => (string)($ziel['uid'] ?? ''),
+                                    'startTimestamp' => (int)($ziel['startTimestamp'] ?? 0)]]);
+                    if (($r['ok'] ?? false) !== true) {
+                        $msg = (string)($r['error']['message'] ?? $this->Translate('The calendar rejected the deletion.'));
+                        return $this->VoiceErr((string)($r['error']['code'] ?? 'kalender_fehler'), $msg);
+                    }
+                    $satz = sprintf($this->Translate('The appointment "%s" is deleted.'), $titel);
+                    break;
+
+                default:
+                    return $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
+            }
+        } catch (\Throwable $e) {
+            $this->SendDebug('Voice', 'Löschen warf: ' . $e->getMessage(), 0);
+            return $this->VoiceErr('nicht_geloescht', $this->Translate('I could not delete that — nothing was removed.'));
+        }
+
+        $this->VoiceLoeschZaehlen();
+        $this->LogMessage(sprintf('SymDo Sprachdialog: gelöscht (%s) „%s"', $bereich, $titel), KL_NOTIFY);
+        return ['ok' => true, 'geloescht' => $titel, 'sag' => $satz];
+    }
+
+    /** Existiert die Aufgabe noch? Gegenprobe nach dem Löschen (nie dem Ziel-ok glauben). */
+    private function VoiceAufgabeExistiert(int $tdl, int $id): bool
+    {
+        $st = json_decode((string)@TDL_GetAppState($tdl), true);
+        $items = is_array($st) ? (($st['state'] ?? [])['items'] ?? []) : [];
+        foreach ((array)$items as $it) {
+            if (is_array($it) && (int)($it['id'] ?? 0) === $id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Existiert der Artikel noch? Gegenprobe nach dem Löschen. */
+    private function VoiceArtikelExistiert(int $sl, string $id): bool
+    {
+        $items = json_decode((string)@SL_GetItems($sl), true);
+        foreach ((array)$items as $it) {
+            if (is_array($it) && (string)($it['id'] ?? '') === $id) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @return array<string,mixed> */
@@ -1173,6 +1399,7 @@ trait VoiceTools
         }
         $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
         $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
+        $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
         return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;

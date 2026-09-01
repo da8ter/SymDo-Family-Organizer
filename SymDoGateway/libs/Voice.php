@@ -26,6 +26,13 @@ trait Voice
     /** Takt des Wachhunds in Millisekunden. */
     private static int $VOICE_TICK_MS = 15000;
 
+    /** Bestätigungsmarke fürs Löschen: kurzlebig, einmal verwendbar. Serien enger. */
+    private static int $VOICE_MARKE_TTL = 90;
+    private static int $VOICE_MARKE_TTL_SERIE = 60;
+
+    /** Löschdeckel: so viele erfolgreiche Löschungen je Stunde — ein durchdrehendes Modell räumt keine Liste leer. */
+    private static int $VOICE_LOESCH_MAX = 10;
+
     private function VoiceCreate(): void
     {
         $this->RegisterPropertyBoolean('VoiceEnabled', false);
@@ -416,6 +423,121 @@ trait Voice
             }
             $stand['secs']     = (int)($stand['secs'] ?? 0) + $sekunden;
             $stand['sessions'] = (int)($stand['sessions'] ?? 0) + $sitzungen;
+            $this->WriteAttributeString('VoiceDayCount', (string)json_encode($stand));
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Löschen: Bestätigungsmarke (servererzeugt, einmal verwendbar) + Deckel
+    // ------------------------------------------------------------------
+
+    /**
+     * Prägt eine Bestätigungsmarke für ein aufgelöstes Löschziel und legt sie im
+     * Briefkasten ab (überlebt die RequestAction-Objektgrenze — der zweite Aufruf
+     * läuft auf einem anderen PHP-Objekt). Das Modell kann die Marke nicht erraten,
+     * also hat der Nutzer die Rückfrage zwingend gehört. Gibt die Marken-ID zurück.
+     *
+     * @param array<string,mixed> $ziel
+     */
+    private function VoiceMarkeErzeugen(array $ziel, int $ttl): string
+    {
+        $lock = 'SymDo_VoiceMarks_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            return '';
+        }
+        try {
+            $marken = json_decode((string)@$this->ReadAttributeString('VoiceMarks'), true);
+            $marken = is_array($marken) ? $this->VoiceMarkenAufraeumen($marken) : [];
+            $id = bin2hex(random_bytes(4));
+            $marken[$id] = ['ziel' => $ziel, 'exp' => time() + max(15, $ttl)];
+            $this->WriteAttributeString('VoiceMarks', (string)json_encode($marken, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            return $id;
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /**
+     * Löst eine Marke ein: prüft Ablauf, entfernt sie (EINMAL verwendbar) und gibt
+     * das gespeicherte Ziel zurück — oder null, wenn unbekannt/abgelaufen. Das Ziel
+     * ist beim Prägen festgeschrieben; ein zweiter Hörfehler beim „was" kann es
+     * nicht mehr umlenken.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function VoiceMarkeEinloesen(string $id): ?array
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return null;
+        }
+        $lock = 'SymDo_VoiceMarks_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            return null;
+        }
+        try {
+            $marken = json_decode((string)@$this->ReadAttributeString('VoiceMarks'), true);
+            $marken = is_array($marken) ? $marken : [];
+            $eintrag = $marken[$id] ?? null;
+            if (isset($marken[$id])) {
+                unset($marken[$id]);   // einmal verwendbar — vor der Ausführung entwerten
+            }
+            $marken = $this->VoiceMarkenAufraeumen($marken);
+            $this->WriteAttributeString('VoiceMarks', (string)json_encode($marken, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            if (!is_array($eintrag) || (int)($eintrag['exp'] ?? 0) < time()) {
+                return null;
+            }
+            return is_array($eintrag['ziel'] ?? null) ? $eintrag['ziel'] : null;
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $marken
+     * @return array<string,mixed>
+     */
+    private function VoiceMarkenAufraeumen(array $marken): array
+    {
+        $jetzt = time();
+        foreach ($marken as $k => $v) {
+            if (!is_array($v) || (int)($v['exp'] ?? 0) < $jetzt) {
+                unset($marken[$k]);
+            }
+        }
+        return $marken;
+    }
+
+    /** Ist der Löschdeckel dieser Stunde noch offen? */
+    private function VoiceLoeschDeckelOffen(): bool
+    {
+        if (self::$VOICE_LOESCH_MAX <= 0) {
+            return true;
+        }
+        $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
+        $stunde = date('Y-m-d-H');
+        $n = (is_array($stand) && ($stand['delh'] ?? '') === $stunde) ? (int)($stand['deln'] ?? 0) : 0;
+        return $n < self::$VOICE_LOESCH_MAX;
+    }
+
+    /** Eine erfolgreiche Löschung auf die laufende Stunde buchen (nach Erfolg, wie MailCountDay). */
+    private function VoiceLoeschZaehlen(): void
+    {
+        $lock = 'SymDo_VoiceDay_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            return;
+        }
+        try {
+            $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
+            $stand = is_array($stand) ? $stand : [];
+            $stunde = date('Y-m-d-H');
+            if (($stand['delh'] ?? '') !== $stunde) {
+                $stand['delh'] = $stunde;
+                $stand['deln'] = 0;
+            }
+            $stand['deln'] = (int)($stand['deln'] ?? 0) + 1;
             $this->WriteAttributeString('VoiceDayCount', (string)json_encode($stand));
         } finally {
             IPS_SemaphoreLeave($lock);
