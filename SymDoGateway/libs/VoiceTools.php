@@ -966,6 +966,10 @@ trait VoiceTools
         $zeilen = [
             'Du bist SymDo, der Sprachassistent dieses Haushalts. Sprich Deutsch, antworte in ein bis zwei kurzen Sätzen, außer man bittet um mehr.',
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
+            // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
+            // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen und abhaken; Termine im Kalender lesen und eintragen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
             $zeilen[] = 'Du sprichst mit ' . $wer . '. „ich", „mir" und „meine Aufgaben" heißen: ' . $wer . '.';
@@ -992,7 +996,7 @@ trait VoiceTools
         $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
-        return mb_strlen($text) > 1200 ? mb_substr($text, 0, 1200) : $text;
+        return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;
     }
 
     private function VoiceDatumZeile(): string
