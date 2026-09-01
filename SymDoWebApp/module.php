@@ -902,7 +902,8 @@ class SymDoWebApp extends IPSModuleStrict
             : ['showOverview', 'showMemberBar', 'showCreateButton', 'showSorting',
                'showQuantityBadge', 'showRecurrenceBadge', 'showDueBadge',
                'showNotificationBadge', 'showPriorityBadge',
-               'showEditButton', 'showDeleteButton', 'showReorderHandle', 'swipeGestures'];
+               'showEditButton', 'showDeleteButton', 'showReorderHandle', 'swipeGestures',
+               'showListTitle'];
         foreach ($relevant as $name) {
             $state[$name] = $flags[$name];
         }
@@ -999,6 +1000,10 @@ class SymDoWebApp extends IPSModuleStrict
             'showDeleteButton'  => $read('ShowRowDeleteButton', false),
             'showReorderHandle' => $read('ShowReorderHandle', true),
             'swipeGestures'     => $read('EnableSwipeGestures', true),
+            // Die Web-App zeigt IMMER den Listennamen: bei mehreren Listen waere
+            // sonst nicht erkennbar, welche man vor sich hat. Der Schalter der
+            // Liste gilt nur fuer deren eigene Kachel.
+            'showListTitle'     => true,
         ];
         return $this->buttonFlagsCache;
     }

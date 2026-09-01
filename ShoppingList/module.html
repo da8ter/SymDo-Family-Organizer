@@ -4844,6 +4844,14 @@ function renderTodos() {
   const id = selectedTodoID();
   const st = id ? instState(id) : null;
   updateSwitcher('todoSwitcher', 'todoTitle', vis, id, 'symdo.selectedTodoID');
+  // Der Listentitel ist je Liste abschaltbar (Backend-Schalter). Der Umschalter
+  // bleibt davon unberuehrt: bei mehreren Listen ist er der einzige Weg zu
+  // wechseln, und dann steht der Name ohnehin in ihm statt in der Ueberschrift.
+  const kopfTitel = document.getElementById('todoTitle');
+  if (kopfTitel && kopfTitel.style.display !== 'none') {
+    const stTitel = id ? instState(id) : null;
+    kopfTitel.style.display = (stTitel && stTitel.showListTitle === false) ? 'none' : '';
+  }
 
   const area = document.getElementById('todoListArea');
   if (!st) {

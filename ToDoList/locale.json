@@ -2,6 +2,8 @@
     "translations": {
         "de": {
             "Purchase": "Einkauf",
+            "List title": "Listentitel",
+            "List title restart hint": "Der Schalter für den Listentitel erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "Swipe gestures restart hint": "Der Schalter für die Wischgesten erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "Tap to finish": "Tippen zum Beenden",
             "Dictate": "Diktieren",
