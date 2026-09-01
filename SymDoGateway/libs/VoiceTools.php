@@ -207,6 +207,17 @@ trait VoiceTools
                     'required' => ['was', 'bereich', 'liste', 'umfang', 'marke'],
                 ],
             ],
+            'symcon_handbuch' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Schlägt eine Frage zu Symcon im offiziellen Handbuch nach — Benutzerteil (Einführung, Grundlagen, Komponenten, Vorgehensweisen) und Entwicklerbereich samt Befehlsreferenz aller PHP-Funktionen. Nutze das IMMER, wenn jemand etwas über Symcon selbst wissen will, statt aus dem Gedächtnis zu antworten.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'frage' => ['type' => 'string', 'description' => 'Das Stichwort oder die Frage, z.B. "SetValue", "Ereignis anlegen", "Variablenprofil"'],
+                    ],
+                    'required' => ['frage'],
+                ],
+            ],
             'notizen_lesen' => [
                 'art' => 'lesen',
                 'beschreibung' => 'Liest Notizen — optional nur aus dem Ordner einer Person oder gefiltert nach einem Stichwort.',
@@ -296,6 +307,7 @@ trait VoiceTools
                 'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
                 'termin_aendern'      => $this->VoiceToolTerminAendern($args, $ctx),
                 'loeschen'            => $this->VoiceToolLoeschen($args, $ctx),
+                'symcon_handbuch'     => $this->VoiceToolHandbuch($args, $ctx),
                 'notizen_lesen'       => $this->VoiceToolNotizenLesen($args, $ctx),
                 'notiz_anlegen'       => $this->VoiceToolNotizAnlegen($args, $ctx),
                 'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
@@ -1736,8 +1748,8 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben. Mehr nicht, und ausschließlich über deine Werkzeuge.',
-            'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
             $zeilen[] = 'Du sprichst mit ' . $wer . '. „ich", „mir" und „meine Aufgaben" heißen: ' . $wer . '.';
@@ -1766,10 +1778,18 @@ trait VoiceTools
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
         $zeilen[] = 'Für einen wiederkehrenden Termin setze bei termin_anlegen "wiederholung" (woechentlich/zweiwoechentlich/monatlich) und dazu entweder "wiederhol_anzahl" (wie oft) oder "wiederhol_bis" (bis wann). Bei wöchentlich lege "datum" auf den gewünschten Wochentag. Fehlt Anzahl und Enddatum, frag kurz nach.';
+        $zeilen[] = 'Bei Fragen zu Symcon rufe symcon_handbuch auf und antworte AUSSCHLIESSLICH aus dem Feld "auszug" der Antwort — kurz und in eigenen Worten. Rate nie einen Funktionsnamen oder Parameter, und erfinde nichts dazu. Steht die Antwort nicht im Auszug, sage genau das und nenne den Titel der gefundenen Seite.';
         $zeilen[] = 'Für eine Notiz denk dir aus dem Gesagten einen kurzen, treffenden Titel selbst aus (der Nutzer nennt selten einen). Nennt der Nutzer eine Person ("für Max", "in Annas Ordner"), setze "person" auf diesen Namen; ohne Person landet die Notiz beim Kachel-Benutzer.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
-        return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;
+        /* Der Deckel ist eine REISSLEINE gegen ausufernde Listen (Mitglieder,
+           Listennamen, Rezeptzahl), kein Sparzwang: Die Anweisungen reisen EINMAL
+           je Gespräch. Er lag bei 2500 und wurde von den neuen Werkzeugen still
+           gerissen — abgeschnitten wurde mitten im Wort, und mit dem Ende fielen
+           die wichtigsten Regeln weg („nie behaupten, etwas sei erledigt",
+           Handbuch, Notizen). Gemessen: 2500 von 2500 Zeichen belegt.
+           Deshalb weit genug, dass der feste Teil immer vollständig ankommt. */
+        return mb_strlen($text) > 8000 ? mb_substr($text, 0, 8000) : $text;
     }
 
     private function VoiceDatumZeile(): string

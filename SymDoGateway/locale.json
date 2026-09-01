@@ -506,7 +506,13 @@
       "What should I change about the note?": "Was soll ich an der Notiz ändern?",
       "The note could not be changed.": "Die Notiz konnte nicht geändert werden.",
       "The note \"%s\" is now in %s.": "Die Notiz „%s“ ist jetzt bei %s.",
-      "The note \"%s\" is updated.": "Die Notiz „%s“ ist geändert."
+      "The note \"%s\" is updated.": "Die Notiz „%s“ ist geändert.",
+      "What would you like to know about Symcon?": "Was möchtest du über Symcon wissen?",
+      "I cannot find anything about \"%s\" in the Symcon manual.": "Ich finde im Symcon-Handbuch nichts zu „%s“.",
+      "The manual index is still being built — please ask again in a moment.": "Das Inhaltsverzeichnis des Handbuchs wird gerade aufgebaut — frag gleich noch einmal.",
+      "The Symcon manual is not reachable right now.": "Das Symcon-Handbuch ist gerade nicht erreichbar.",
+      "I found the page but no readable text on it.": "Ich habe die Seite gefunden, aber keinen lesbaren Text darauf.",
+      "I found \"%s\" in the manual.": "Ich habe „%s“ im Handbuch gefunden."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

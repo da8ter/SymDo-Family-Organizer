@@ -18,6 +18,7 @@ require_once __DIR__ . '/libs/DishImages.php';
 require_once __DIR__ . '/libs/Voice.php';
 require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
+require_once __DIR__ . '/libs/SymconDoku.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -50,6 +51,7 @@ class SymDoGateway extends IPSModuleStrict
     use Voice;
     use VoiceTools;
     use VoiceResolve;
+    use SymconDoku;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -135,6 +137,7 @@ class SymDoGateway extends IPSModuleStrict
         // und ihr Timer
         $this->DishCreate();
         $this->VoiceCreate();
+        $this->DokuCreate();
         // Stundenplan: nur der Schalter, ob die App die Karte zeigt
         $this->TimetableCreate();
     }
@@ -165,6 +168,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->NotesApplyChanges();
             $this->DishApplyChanges();
             $this->VoiceApplyChanges();
+        $this->DokuApplyChanges();
             // Bestand: die Rezeptfoto-Kategorie lag frueher unter der Web-App —
             // sie gehoert unter die Instanz, die sie fuellt. Legt keine an.
             $this->AiRecipePhotoMigrate();
@@ -211,6 +215,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->VoiceRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->DokuRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->AppRequestAction($Ident, $Value)) {
