@@ -100,10 +100,11 @@ trait VoiceTools
                             'items' => [
                                 'type' => 'object', 'additionalProperties' => false,
                                 'properties' => [
-                                    'name'  => ['type' => 'string'],
-                                    'menge' => ['type' => ['string', 'null'], 'description' => 'z.B. "2", "500 g", null'],
+                                    'name'  => ['type' => 'string', 'description' => 'Nur der reine Artikel, z.B. "Cola", "Milch"'],
+                                    'menge' => ['type' => ['string', 'null'], 'description' => 'Nur die Menge, z.B. "2", "500 g", null'],
+                                    'info'  => ['type' => ['string', 'null'], 'description' => 'Zusatzinfo/Gebinde, z.B. "Dosen im Karton", "TK", "die große Flasche"; sonst null'],
                                 ],
-                                'required' => ['name', 'menge'],
+                                'required' => ['name', 'menge', 'info'],
                             ],
                         ],
                         'liste' => ['type' => ['string', 'null'], 'description' => 'Ziel-Einkaufsliste; null = Standardliste'],
@@ -500,14 +501,28 @@ trait VoiceTools
                 continue;
             }
             $menge = trim((string)($a['menge'] ?? ''));
+            $info  = trim((string)($a['info'] ?? ''));
             // Menge aus dem Namen ziehen: „2 Liter Milch" gehört getrennt, auch
-            // wenn das Modell alles in den Namen geschrieben hat.
-            [$name, $menge] = $this->VoiceMengeTrennen($name, $menge);
-            // AppCall AddItem nimmt ein Objekt {name, category, amount} — feldweise.
+            // wenn das Modell alles in den Namen geschrieben hat. Ein dabei
+            // abgetrenntes Gebinde („Dosen") wird zur Zusatzinfo, falls das
+            // Modell keine eigene lieferte — so landet „5 Dosen Cola im Karton"
+            // als Cola / 5 / „Dosen im Karton" statt im Titel.
+            [$name, $menge, $gebinde] = $this->VoiceMengeTrennen($name, $menge);
+            if ($info === '' && $gebinde !== '') {
+                $info = $gebinde;
+            }
+            // AppCall AddItem nimmt {name, category, amount, notes} — feldweise.
             @SL_AppCall((int)$ziel['id'], 'AddItem', (string)json_encode(
-                ['name' => $name, 'category' => '', 'amount' => $menge],
+                ['name' => $name, 'category' => '', 'amount' => $menge, 'notes' => $info],
                 JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-            $namen[] = $menge !== '' ? ($name . ' (' . $menge . ')') : $name;
+            $etikett = $name;
+            if ($menge !== '') {
+                $etikett .= ' (' . $menge . ')';
+            }
+            if ($info !== '') {
+                $etikett .= ' – ' . $info;
+            }
+            $namen[] = $etikett;
             $n++;
         }
         if ($n === 0) {
@@ -848,7 +863,11 @@ trait VoiceTools
      * hatte es die Menge schon getrennt, bleibt sie und der Name wird nur
      * bereinigt, falls die Menge dort noch einmal steht.
      *
-     * @return array{0:string,1:string} [name, menge]
+     * Ein abgetrenntes Gebinde-Wort („Dosen", „Packung") kommt als drittes
+     * Element zurück — der Aufrufer kann es als Zusatzinfo/Notiz verwenden, wenn
+     * das Modell keine eigene gab. Bei echten Maßeinheiten (g, Liter) ist es leer.
+     *
+     * @return array{0:string,1:string,2:string} [name, menge, gebinde]
      */
     private function VoiceMengeTrennen(string $name, string $menge): array
     {
@@ -878,13 +897,21 @@ trait VoiceTools
             . 'stk|pck|pkg|msp|kg|mg|ml|cl|dl|el|tl|st|g|l';
         $zahl = '\d+(?:[.,]\d+)?';
         $extrakt = '';
+        $gebinde = '';
         $rest = $roh;
         // A: Zahl + Einheit + Rest
         if (preg_match('/^(' . $zahl . ')\s*(' . $einheiten . ')\b\.?\s+(.+)$/iu', $roh, $m) === 1) {
-            // Gebinde-Einheiten (Packung, Dose, …) sind nur Zähler und fallen
-            // weg — „1 Packung Butter" ist „1 Butter". Echte Maßeinheiten
-            // (g, kg, Liter, EL) bleiben, „500" allein wäre sinnlos.
-            $extrakt = $this->VoiceGebinde($m[2]) ? $m[1] : ($m[1] . ' ' . $m[2]);
+            // Gebinde-Einheiten (Packung, Dose, …) sind nur Zähler und fallen aus
+            // der Menge — „1 Packung Butter" ist Menge „1". Das Gebinde-Wort geht
+            // aber nicht verloren, sondern nach oben als Zusatzinfo. Echte
+            // Maßeinheiten (g, kg, Liter, EL) bleiben in der Menge, „500" allein
+            // wäre sinnlos.
+            if ($this->VoiceGebinde($m[2])) {
+                $extrakt = $m[1];
+                $gebinde = trim($m[2]);
+            } else {
+                $extrakt = $m[1] . ' ' . $m[2];
+            }
             $rest = trim($m[3]);
         // B: nur Zahl + Rest (der Rest muss mit einem Buchstaben beginnen, sonst
         //    ist es kein „6 Eier", sondern etwa „3-Minuten-Terrine")
@@ -893,11 +920,11 @@ trait VoiceTools
             $rest = trim($m[2]);
         }
         if ($extrakt === '') {
-            return [$roh, $menge];   // keine führende Menge — unverändert
+            return [$roh, $menge, ''];   // keine führende Menge — unverändert
         }
         // Menge gesetzt lassen, wenn das Modell sie schon getrennt hatte; sonst
         // die extrahierte übernehmen. Der Name ist in jedem Fall der bereinigte.
-        return [$rest !== '' ? $rest : $roh, $menge !== '' ? $menge : $extrakt];
+        return [$rest !== '' ? $rest : $roh, $menge !== '' ? $menge : $extrakt, $gebinde];
     }
 
     /** Kleinschreibung + Umlautfaltung — levenshtein/Vergleiche sind sonst falsch geeicht. */
@@ -994,6 +1021,7 @@ trait VoiceTools
             $zeilen[] = 'Es gibt ' . $rezAnzahl . ' gespeicherte Rezepte; frag sie mit dem Werkzeug rezepte_lesen ab.';
         }
         $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
+        $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
         return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;

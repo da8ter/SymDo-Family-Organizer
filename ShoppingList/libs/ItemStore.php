@@ -96,7 +96,7 @@ trait ItemStore
         return $amount;
     }
 
-    private function AddItemInternal(string $Name, string $Category, string $Amount): bool
+    private function AddItemInternal(string $Name, string $Category, string $Amount, string $Notes = ''): bool
     {
         $name = trim($Name);
         if ($name === '') {
@@ -108,6 +108,7 @@ trait ItemStore
             $category = $this->LookupCategory($name);
         }
         $amount = trim($Amount);
+        $notes  = trim($Notes);
 
         $semaphoreKey = 'SL_Items_' . $this->InstanceID;
         if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
@@ -121,6 +122,11 @@ trait ItemStore
             foreach ($items as &$item) {
                 if ($item['inCart'] === false && mb_strtolower($item['name']) === $nameLower) {
                     $item['amount'] = $this->IncrementAmount($item['amount']);
+                    // Notiz nur nachtragen, wenn noch keine da ist — eine vorhandene
+                    // Bemerkung des Nutzers nicht durch eine neue überschreiben.
+                    if ($notes !== '' && trim((string)($item['notes'] ?? '')) === '') {
+                        $item['notes'] = $notes;
+                    }
                     $this->SaveItems($items);
                     return true;
                 }
@@ -131,7 +137,7 @@ trait ItemStore
                 'name'     => $name,
                 'category' => $category,
                 'amount'   => $amount,
-                'notes'    => '',
+                'notes'    => $notes,
                 'inCart'   => false,
                 'addedAt'  => time(),
             ];

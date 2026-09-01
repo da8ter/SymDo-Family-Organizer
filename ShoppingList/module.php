@@ -293,7 +293,8 @@ class SymDoShoppingList extends IPSModuleStrict
                 if (!$this->AddItem(
                     (string)($data['name'] ?? ''),
                     (string)($data['category'] ?? ''),
-                    (string)($data['amount'] ?? '')
+                    (string)($data['amount'] ?? ''),
+                    (string)($data['notes'] ?? '')
                 )) {
                     throw new \Exception($this->Translate('Item operation failed'));
                 }
@@ -704,9 +705,9 @@ class SymDoShoppingList extends IPSModuleStrict
         return 'shoppinglist/assets/' . $this->InstanceID;
     }
 
-    public function AddItem(string $Name, string $Category, string $Amount): bool
+    public function AddItem(string $Name, string $Category, string $Amount, string $Notes = ''): bool
     {
-        $result = $this->AddItemInternal($Name, $Category, $Amount);
+        $result = $this->AddItemInternal($Name, $Category, $Amount, $Notes);
         if ($result) {
             $this->TrackFrequency($Name, $Category);
         }
