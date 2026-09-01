@@ -484,7 +484,15 @@
       "This appointment repeats. Delete just this one (%s) or the whole series?": "Der Termin wiederholt sich. Nur diesen einen (%s) löschen oder die ganze Serie?",
       "The whole series \"%s\" is updated.": "Die ganze Serie „%s“ ist geändert.",
       "I will delete the WHOLE series \"%s\". This cannot be undone. Shall I?": "Ich lösche die GANZE Serie „%s“. Das lässt sich nicht rückgängig machen. Soll ich?",
-      "The whole series \"%s\" is deleted.": "Die ganze Serie „%s“ ist gelöscht."
+      "The whole series \"%s\" is deleted.": "Die ganze Serie „%s“ ist gelöscht.",
+      "For a repeating appointment I need how many times or an end date.": "Für einen wiederkehrenden Termin brauche ich, wie oft oder bis wann.",
+      "weekly": "wöchentlich",
+      "every two weeks": "alle zwei Wochen",
+      "monthly": "monatlich",
+      "%d times": "%d Mal",
+      "until %s": "bis %s",
+      "The series \"%s\" is set up in %s: %s, %s.": "Die Serie „%s“ ist in %s angelegt: %s, %s.",
+      "I set up at most %d dates.": "Ich habe höchstens %d Termine angelegt."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

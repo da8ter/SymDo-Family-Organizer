@@ -162,13 +162,16 @@ trait VoiceTools
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
                         'titel'    => ['type' => 'string'],
-                        'datum'    => ['type' => 'string', 'description' => 'JJJJ-MM-TT'],
+                        'datum'    => ['type' => 'string', 'description' => 'JJJJ-MM-TT (bei Wiederholung der erste Termin)'],
                         'von'      => ['type' => ['string', 'null'], 'description' => 'Beginn HH:MM oder null (dann ganztägig)'],
                         'bis'      => ['type' => ['string', 'null'], 'description' => 'Ende HH:MM oder null'],
                         'ort'      => ['type' => ['string', 'null']],
                         'kalender' => ['type' => ['string', 'null'], 'description' => 'Name des Kalenders; null = Standardkalender'],
+                        'wiederholung'     => ['type' => ['string', 'null'], 'enum' => ['woechentlich', 'zweiwoechentlich', 'monatlich', null], 'description' => 'Wiederholung oder null (einmalig). Bei wöchentlich bestimmt der Wochentag von "datum" den Takt — für "jeden Dienstag" datum auf einen Dienstag legen.'],
+                        'wiederhol_anzahl' => ['type' => ['integer', 'null'], 'description' => 'Anzahl der Termine inkl. des ersten (z.B. 15) oder null'],
+                        'wiederhol_bis'    => ['type' => ['string', 'null'], 'description' => 'Enddatum der Wiederholung JJJJ-MM-TT oder null (statt Anzahl)'],
                     ],
-                    'required' => ['titel', 'datum', 'von', 'bis', 'ort', 'kalender'],
+                    'required' => ['titel', 'datum', 'von', 'bis', 'ort', 'kalender', 'wiederholung', 'wiederhol_anzahl', 'wiederhol_bis'],
                 ],
             ],
             'termin_aendern' => [
@@ -477,10 +480,43 @@ trait VoiceTools
         if (($ctx['userId'] ?? '') !== '') {
             $event['members'] = [(string)$ctx['userId']];
         }
+        // Wiederholung? → recurrence-Feld; CalCreateEvent macht daraus eine echte
+        // Serie (wo der Kalender das kann) oder eine Folge von Einzelterminen (bis 60).
+        $freqMap = ['woechentlich' => 'weekly', 'zweiwoechentlich' => 'biweekly', 'monatlich' => 'monthly'];
+        $wdh  = is_string($args['wiederholung'] ?? null) ? trim((string)$args['wiederholung']) : '';
+        $freq = $freqMap[$wdh] ?? '';
+        $serie  = false;
+        $anzahl = 0;
+        $bisDat = '';
+        if ($freq !== '') {
+            $anzahl = (int)($args['wiederhol_anzahl'] ?? 0);
+            $bisDat = is_string($args['wiederhol_bis'] ?? null) ? trim((string)$args['wiederhol_bis']) : '';
+            $rec = ['freq' => $freq];
+            if ($anzahl > 1) {
+                $rec['count'] = $anzahl;
+            } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bisDat) === 1) {
+                $rec['until'] = $bisDat;
+            } else {
+                return $this->VoiceErr('ungueltige_eingabe', $this->Translate('For a repeating appointment I need how many times or an end date.'));
+            }
+            $event['recurrence'] = $rec;
+            $serie = true;
+        }
         $r = $this->CalHandleAction(['action' => 'create', 'calendarID' => (int)$kal['id'], 'event' => $event]);
         if (($r['ok'] ?? false) !== true) {
             $msg = (string)($r['error']['message'] ?? $this->Translate('The calendar rejected the appointment.'));
             return $this->VoiceErr((string)($r['error']['code'] ?? 'kalender_fehler'), $msg);
+        }
+        if ($serie) {
+            $takt = $this->Translate(['woechentlich' => 'weekly', 'zweiwoechentlich' => 'every two weeks', 'monatlich' => 'monthly'][$wdh]);
+            $umfang = $anzahl > 1
+                ? sprintf($this->Translate('%d times'), $anzahl)
+                : sprintf($this->Translate('until %s'), date('d.m.Y', (int)strtotime($bisDat)));
+            $satz = sprintf($this->Translate('The series "%s" is set up in %s: %s, %s.'), $titel, (string)$kal['name'], $takt, $umfang);
+            if (($r['capped'] ?? null) !== null) {
+                $satz .= ' ' . sprintf($this->Translate('I set up at most %d dates.'), (int)$r['capped']);
+            }
+            return ['ok' => true, 'titel' => $titel, 'kalender' => (string)$kal['name'], 'serie' => true, 'sag' => $satz];
         }
         $wann = $ganztags ? ('am ' . date('d.m.', (int)strtotime($datum))) : ('am ' . date('d.m.', (int)strtotime($datum)) . ' um ' . $von);
         return [
@@ -1439,6 +1475,7 @@ trait VoiceTools
         $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
+        $zeilen[] = 'Für einen wiederkehrenden Termin setze bei termin_anlegen "wiederholung" (woechentlich/zweiwoechentlich/monatlich) und dazu entweder "wiederhol_anzahl" (wie oft) oder "wiederhol_bis" (bis wann). Bei wöchentlich lege "datum" auf den gewünschten Wochentag. Fehlt Anzahl und Enddatum, frag kurz nach.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
         return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;
