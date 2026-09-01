@@ -79,8 +79,10 @@ class SymDoVoice extends IPSModuleStrict
                 $this->HandleVoiceCall((string)$Value);
                 return;
 
-            case 'VoiceResult':
+            case 'AiResult':
                 // Rückkanal des Gateways: Briefkasten füllen und zur Kachel pushen.
+                // Der Ident heißt AiResult, weil der AiTileRequest-Zweig des
+                // Gateways ihn fest so ruft — für alle Kacheln gleich.
                 $daten = json_decode((string)$Value, true);
                 if (!is_array($daten)) {
                     return;
@@ -120,6 +122,12 @@ class SymDoVoice extends IPSModuleStrict
     public function GetProbeResults(): string
     {
         return $this->ReadAttributeString('ProbeResult');
+    }
+
+    /** Der jüngste beantwortete txn — für Prüfstände (SDVC_LastSeenTxn). */
+    public function LastSeenTxn(): string
+    {
+        return $this->ReadAttributeString('SeenTxn');
     }
 
     /** Not-Aus aus Symcon heraus: beendet alle Gespräche am Gateway (SDVC_Hangup). */
