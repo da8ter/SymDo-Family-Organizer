@@ -47,10 +47,9 @@ body {
 @keyframes mikBlink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
 /* ── Blase ────────────────────────────────────────────────────────────────
-   Die Größe kommt aus BEIDEN Kachelmaßen (min aus vw und vh): eine breite,
-   flache Kachel darf die Blase genauso wenig abschneiden wie eine schmale.
-   Bewegt wird ausschließlich über CSS-Variablen, die das Bild je Vollbild
-   setzt — transform und border-radius, damit kein Layout neu gerechnet wird. */
+   Die Größe kommt aus BEIDEN Kachelmaßen: eine breite, flache Kachel darf die
+   Blase genauso wenig abschneiden wie eine schmale. Die Kontur selbst zeichnet
+   JS je Bild als SVG-Pfad; hier stehen nur Maß, Farbe und Weichzeichner. */
 #buehne {
   flex: 1 1 auto; min-height: 0; position: relative;
   display: flex; align-items: center; justify-content: center;
@@ -58,62 +57,27 @@ body {
      darunter am eigenen Kasten gemessen. Ohne das ragt die Blase in einer
      flachen, breiten Kachel über den Knopf (gemessen bei 900×400: Blase 132 px
      hoch, Bühne nur 103 px). */
-  --d: min(74vw, 46vh);
+  --d: min(92vw, 52vh);
   --c1: #28dcff; --c2: #397cff; --c3: #583aff; --c4: #db35ff;
   transition: opacity .25s ease;
 }
 @supports (container-type: size) {
-  #buehne { container-type: size; --d: min(78cqw, 88cqh); }
+  #buehne { container-type: size; --d: min(96cqw, 98cqh); }
 }
 #buehne[hidden] { display: none; }
-#buehne .schein, #buehne .schleier, #buehne .blase { position: absolute; }
-#buehne .schein {
-  width: calc(var(--d) * 1.18); height: calc(var(--d) * 1.06);
-  border-radius: 48% 52% 55% 45% / 50% 45% 55% 50%;
-  background: radial-gradient(circle at 50% 55%,
-    color-mix(in srgb, var(--c4) 80%, transparent),
-    color-mix(in srgb, var(--c3) 60%, transparent) 45%,
-    color-mix(in srgb, var(--c1) 45%, transparent) 80%);
-  filter: blur(calc(var(--d) * .09));
-  opacity: var(--schein, .55);
-  transform: scale(calc(var(--sx, 1) * 1.06), calc(var(--sy, 1) * 1.06)) rotate(calc(var(--dreh, 0deg) * -.6));
-}
-#buehne .schleier {
-  width: calc(var(--d) * .97); height: calc(var(--d) * .88);
-  border-radius: var(--s1, 50%) var(--s2, 50%) var(--s3, 50%) var(--s4, 50%) /
-                 var(--s5, 50%) var(--s6, 50%) var(--s7, 50%) var(--s8, 50%);
-  background: radial-gradient(circle at 60% 70%,
-    color-mix(in srgb, var(--c4) 45%, transparent),
-    color-mix(in srgb, var(--c2) 30%, transparent) 60%, transparent 85%);
-  filter: blur(calc(var(--d) * .03));
-  transform: scale(calc(var(--sx, 1) * 1.03), calc(var(--sy, 1) * 1.02)) rotate(calc(var(--dreh, 0deg) * 1.4));
-}
-#buehne .blase {
-  width: calc(var(--d) * .86); height: calc(var(--d) * .78);
-  background: radial-gradient(circle at 35% 25%, var(--c1) 0%, var(--c2) 30%, var(--c3) 58%, var(--c4) 100%);
-  border-radius: var(--r1, 52%) var(--r2, 48%) var(--r3, 55%) var(--r4, 45%) /
-                 var(--r5, 48%) var(--r6, 53%) var(--r7, 47%) var(--r8, 52%);
-  filter: blur(1.5px) drop-shadow(0 0 calc(var(--d) * .08) color-mix(in srgb, var(--c3) 65%, transparent));
-  transform: scaleX(var(--sx, 1)) scaleY(var(--sy, 1)) rotate(var(--dreh, 0deg));
-  transition: border-radius .12s ease-out, filter .1s linear;
-  will-change: transform, border-radius;
-  display: flex; align-items: center; justify-content: center;
-}
-#buehne .augen {
-  display: flex; gap: calc(var(--d) * .18);
-  margin-top: calc(var(--d) * -.06);
-  transform: translate(var(--augeX, 0px), var(--augeY, 0px));
-}
-#buehne .auge {
-  width: calc(var(--d) * .085); height: calc(var(--d) * .1); border-radius: 50%;
-  background: radial-gradient(circle at 40% 30%, rgba(80,100,210,.55), rgba(12,16,80,.88) 55%, rgba(4,6,40,.96));
-  transform: scaleY(var(--augeAuf, 1)); transition: transform .08s ease;
-  position: relative;
-}
-#buehne .auge::after {
-  content: ""; position: absolute; left: 22%; top: 16%;
-  width: 22%; height: 19%; border-radius: 50%; background: rgba(180,220,255,.75);
-}
+/* Die Kurve entsteht in JS als SVG-Pfad: border-radius formt immer eine glatte
+   Superellipse, die Vorlage hat aber Lappen. Das SVG trägt nur Farbe und
+   Weichzeichner — die Form kommt je Bild aus dem Ton. */
+#blasenBild { width: var(--d); height: var(--d); }
+#gKern .s1, #gSchein .s1, #gSchleier .s1 { stop-color: var(--c1); }
+#gKern .s2, #gSchein .s2, #gSchleier .s2 { stop-color: var(--c2); }
+#gKern .s3, #gSchein .s3, #gSchleier .s3 { stop-color: var(--c3); }
+#gKern .s4, #gSchein .s4, #gSchleier .s4 { stop-color: var(--c4); }
+#pSchein { opacity: var(--schein, .55); }
+#augen { transform-box: fill-box; transform-origin: center;
+  transform: translate(var(--augeX, 0px), var(--augeY, 0px)) scaleY(var(--augeAuf, 1)); }
+#buehne .auge { fill: #0b1030; }
+#buehne .glanz { fill: rgba(180, 220, 255, .75); }
 /* Zustandsfarben — dieselbe Sprache wie die Statuszeile. */
 #buehne.z-bereit   { --c1:#3a4a6a; --c2:#3b5aa0; --c3:#4a3a8a; --c4:#6a3a9a; }
 /* Zuhören ist ruhiger und kühler als Antworten — sonst sähe beides gleich aus. */
@@ -186,11 +150,44 @@ body {
        einem anderen Frequenzband — außen der Bass, in der Mitte die Sprache,
        innen die Höhen. -->
   <div id="buehne" hidden>
-    <div class="schein"></div>
-    <div class="schleier"></div>
-    <div class="blase">
-      <div class="augen"><span class="auge"></span><span class="auge"></span></div>
-    </div>
+    <svg id="blasenBild" viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>
+        <radialGradient id="gKern" cx="35%" cy="25%" r="78%">
+          <stop class="s1" offset="0%"/><stop class="s2" offset="30%"/>
+          <stop class="s3" offset="58%"/><stop class="s4" offset="100%"/>
+        </radialGradient>
+        <radialGradient id="gSchein" cx="50%" cy="55%" r="62%">
+          <stop class="s4" offset="0%" stop-opacity=".75"/>
+          <stop class="s3" offset="45%" stop-opacity=".45"/>
+          <stop class="s1" offset="100%" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gSchleier" cx="60%" cy="70%" r="70%">
+          <stop class="s4" offset="0%" stop-opacity=".42"/>
+          <stop class="s2" offset="60%" stop-opacity=".22"/>
+          <stop class="s1" offset="100%" stop-opacity="0"/>
+        </radialGradient>
+        <!-- Weichzeichner in Nutzereinheiten: skaliert mit der Kachel mit,
+             anders als ein CSS-Blur in px. -->
+        <filter id="fSchein" x="-45%" y="-45%" width="190%" height="190%">
+          <feGaussianBlur stdDeviation="5.5"/>
+        </filter>
+        <filter id="fSchleier" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3"/>
+        </filter>
+        <filter id="fKern" x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur stdDeviation=".7"/>
+        </filter>
+      </defs>
+      <path id="pSchein" fill="url(#gSchein)" filter="url(#fSchein)"/>
+      <path id="pSchleier" fill="url(#gSchleier)" filter="url(#fSchleier)"/>
+      <path id="pKern" fill="url(#gKern)" filter="url(#fKern)"/>
+      <g id="augen">
+        <ellipse class="auge" cx="-19" cy="-5" rx="6.1" ry="7.3"/>
+        <ellipse class="auge" cx="19"  cy="-5" rx="6.1" ry="7.3"/>
+        <ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>
+        <ellipse class="glanz" cx="17.2"  cy="-7.4" rx="1.7" ry="1.8"/>
+      </g>
+    </svg>
   </div>
   <div id="fuss">
     <div id="hinweis"></div>
@@ -377,6 +374,40 @@ var Blase = (function () {
 
   function setz(name, wert) { buehne.style.setProperty(name, wert); }
 
+  var pKern = el('pKern'), pSchleier = el('pSchleier'), pSchein = el('pSchein');
+  var N = 56, TAU = Math.PI * 2;
+
+  /* Geschlossene, glatte Kurve durch alle Punkte: Catmull-Rom, umgerechnet in
+     kubische Bézier-Stücke. Der Umweg über den Pfad ist der ganze Grund für das
+     SVG — border-radius formt immer eine glatte Superellipse, nie eine Kontur
+     mit Lappen. */
+  function kurve(p) {
+    var n = p.length, d = 'M' + p[0][0].toFixed(1) + ' ' + p[0][1].toFixed(1);
+    for (var i = 0; i < n; i++) {
+      var a = p[(i - 1 + n) % n], b = p[i], c = p[(i + 1) % n], e = p[(i + 2) % n];
+      d += 'C' + (b[0] + (c[0] - a[0]) / 6).toFixed(1) + ' ' + (b[1] + (c[1] - a[1]) / 6).toFixed(1)
+         + ' ' + (c[0] - (e[0] - b[0]) / 6).toFixed(1) + ' ' + (c[1] - (e[1] - b[1]) / 6).toFixed(1)
+         + ' ' + c[0].toFixed(1) + ' ' + c[1].toFixed(1);
+    }
+    return d + 'Z';
+  }
+
+  /* Lappen statt Ellipse: mehrere Moden überlagern sich, jede mit eigener
+     Lappenzahl, eigener Drift und eigener Phase. Ungerade Zahlen (3, 5, 7)
+     wirken organisch, gerade ergäben eine gespiegelte, künstliche Form.
+     Jede Mode: [Lappen, Amplitude, Drift, Phase]. */
+  function form(R, sx, sy, moden, t) {
+    var p = [];
+    for (var i = 0; i < N; i++) {
+      var th = i / N * TAU, r = R;
+      for (var m = 0; m < moden.length; m++) {
+        r += R * moden[m][1] * Math.sin(moden[m][0] * th + t * moden[m][2] + moden[m][3]);
+      }
+      p.push([Math.cos(th) * r * sx, Math.sin(th) * r * sy]);
+    }
+    return kurve(p);
+  }
+
   function bild(t) {
     if (!laeuft) { raf = 0; return; }
     raf = requestAnimationFrame(bild);
@@ -411,36 +442,27 @@ var Blase = (function () {
       bass = atem * .13; mitten = atem * .09; hoehen = .02; energie = atem * .12;
     }
 
-    setz('--sx', 1 + bass * .28);
-    setz('--sy', 1 + mitten * .20);
-    setz('--dreh', (Math.sin(t * .002) * (2 + hoehen * 5)) + 'deg');
     setz('--schein', .40 + energie * .60);
+    var sx = 1 + bass * .20;
+    var sy = (1 + mitten * .16) * .90;      // etwas breiter als hoch, wie in der Vorlage
 
-    // Die Form wird seltener neu gesetzt als gezeichnet: sie soll fließen,
-    // nicht zappeln (und border-radius ist der teure Teil).
-    if (t - letzteForm > 90) {
+    /* Die Kontur wird seltener neu gerechnet als gezeichnet — sie soll fließen,
+       nicht zappeln, und drei Pfade je Bild neu zu bauen wäre Verschwendung. */
+    if (t - letzteForm > 33) {
       letzteForm = t;
-      /* Zwei Anteile je Ecke: ein langsamer Eigengang, damit die Blase auch in
-         der Stille lebt und nicht als glatte Ellipse dasteht, und darüber der
-         Ton. Die Wellen laufen mit teilerfremden Frequenzen, sonst atmete alles
-         im Gleichtakt und die Form bliebe rund. */
-      var w = function (f, p) { return Math.sin(t * f + p); };
-      setz('--r1', (48 + w(.00061, 0.0) * 7 + bass * 13) + '%');
-      setz('--r2', (49 + w(.00083, 1.7) * 7 + mitten * 11) + '%');
-      setz('--r3', (47 + w(.00047, 3.1) * 8 + hoehen * 17) + '%');
-      setz('--r4', (51 + w(.00071, 4.6) * 7 + bass * 9) + '%');
-      setz('--r5', (48 + w(.00057, 2.2) * 8 + mitten * 12) + '%');
-      setz('--r6', (47 + w(.00089, 5.4) * 7 + bass * 13) + '%');
-      setz('--r7', (50 + w(.00043, 0.8) * 8 + hoehen * 12) + '%');
-      setz('--r8', (49 + w(.00067, 3.9) * 7 + mitten * 10) + '%');
-      setz('--s1', (52 + w(.00051, 2.6) * 9 - bass * 10) + '%');
-      setz('--s2', (46 + w(.00079, 0.4) * 9 + mitten * 12) + '%');
-      setz('--s3', (54 + w(.00063, 4.1) * 9 - hoehen * 10) + '%');
-      setz('--s4', (48 + w(.00087, 1.3) * 9 + bass * 10) + '%');
-      setz('--s5', (45 + w(.00059, 5.0) * 9 + mitten * 14) + '%');
-      setz('--s6', (52 + w(.00073, 2.9) * 9 - bass * 8) + '%');
-      setz('--s7', (47 + w(.00049, 0.6) * 9 + hoehen * 14) + '%');
-      setz('--s8', (51 + w(.00081, 3.4) * 9 - mitten * 8) + '%');
+      pKern.setAttribute('d', form(66, sx, sy, [
+        [3, .052 + bass   * .075,  .00041, 0.0],
+        [5, .034 + mitten * .060,  .00062, 2.1],
+        [7, .019 + hoehen * .055,  .00087, 4.3]
+      ], t));
+      pSchleier.setAttribute('d', form(71, sx * 1.02, sy * 1.02, [
+        [3, .055 + mitten * .070, -.00035, 1.2],
+        [6, .028 + hoehen * .050,  .00058, 3.4]
+      ], t));
+      pSchein.setAttribute('d', form(76, sx * 1.04, sy * 1.04, [
+        [2, .058 + bass * .085,  .00029, 2.6],
+        [5, .026 + bass * .040, -.00047, 5.1]
+      ], t));
     }
 
     setz('--augeX', (Math.sin(t * .0011) * 3) + 'px');
