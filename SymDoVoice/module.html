@@ -59,8 +59,18 @@ body {
      hoch, Bühne nur 103 px). */
   --d: min(92vw, 52vh);
   --c1: #28dcff; --c2: #397cff; --c3: #583aff; --c4: #db35ff;
-  transition: opacity .25s ease;
+  /* Der Farbwechsel beim Zustandswechsel soll überblenden, nicht umspringen.
+     Eine gewöhnliche Custom Property kann das nicht — sie ist für den Browser
+     ein Text ohne Typ und damit nicht animierbar. Erst die Anmeldung per
+     @property (unten) macht sie zu einer Farbe, die sich überblenden lässt.
+     Wo @property fehlt, springt die Farbe wie bisher — kein Bruch, nur härter. */
+  transition: opacity .25s ease,
+              --c1 1.4s ease, --c2 1.4s ease, --c3 1.4s ease, --c4 1.4s ease;
 }
+@property --c1 { syntax: '<color>'; inherits: true; initial-value: #28dcff; }
+@property --c2 { syntax: '<color>'; inherits: true; initial-value: #397cff; }
+@property --c3 { syntax: '<color>'; inherits: true; initial-value: #583aff; }
+@property --c4 { syntax: '<color>'; inherits: true; initial-value: #db35ff; }
 @supports (container-type: size) {
   #buehne { container-type: size; --d: min(96cqw, 98cqh); }
 }
