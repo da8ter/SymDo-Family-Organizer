@@ -47,56 +47,10 @@ body {
 @keyframes mikBlink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
 /* ── Blase ────────────────────────────────────────────────────────────────
-   Die Größe kommt aus BEIDEN Kachelmaßen: eine breite, flache Kachel darf die
-   Blase genauso wenig abschneiden wie eine schmale. Die Kontur selbst zeichnet
-   JS je Bild als SVG-Pfad; hier stehen nur Maß, Farbe und Weichzeichner. */
-#buehne {
-  flex: 1 1 auto; min-height: 0; position: relative;
-  display: flex; align-items: center; justify-content: center;
-  /* Rückfall am Fenster; die Kachel ist aber nicht das Fenster — deshalb
-     darunter am eigenen Kasten gemessen. Ohne das ragt die Blase in einer
-     flachen, breiten Kachel über den Knopf (gemessen bei 900×400: Blase 132 px
-     hoch, Bühne nur 103 px). */
-  --d: min(92vw, 52vh);
-  --c1: #28dcff; --c2: #397cff; --c3: #583aff; --c4: #db35ff;
-  /* Der Farbwechsel beim Zustandswechsel soll überblenden, nicht umspringen.
-     Eine gewöhnliche Custom Property kann das nicht — sie ist für den Browser
-     ein Text ohne Typ und damit nicht animierbar. Erst die Anmeldung per
-     @property (unten) macht sie zu einer Farbe, die sich überblenden lässt.
-     Wo @property fehlt, springt die Farbe wie bisher — kein Bruch, nur härter. */
-  transition: opacity .25s ease,
-              --c1 1.4s ease, --c2 1.4s ease, --c3 1.4s ease, --c4 1.4s ease;
-}
-@property --c1 { syntax: '<color>'; inherits: true; initial-value: #28dcff; }
-@property --c2 { syntax: '<color>'; inherits: true; initial-value: #397cff; }
-@property --c3 { syntax: '<color>'; inherits: true; initial-value: #583aff; }
-@property --c4 { syntax: '<color>'; inherits: true; initial-value: #db35ff; }
-@supports (container-type: size) {
-  #buehne { container-type: size; --d: min(96cqw, 98cqh); }
-}
+   Aussehen und Bewegung stehen in SymDoGateway/libs/voice-blob.js — eine
+   Quelle für Kachel und Web-App. Hier steht nur, wo sie sitzt. */
+#buehne { flex: 1 1 auto; min-height: 0; }
 #buehne[hidden] { display: none; }
-/* Die Kurve entsteht in JS als SVG-Pfad: border-radius formt immer eine glatte
-   Superellipse, die Vorlage hat aber Lappen. Das SVG trägt nur Farbe und
-   Weichzeichner — die Form kommt je Bild aus dem Ton. */
-#blasenBild { width: var(--d); height: var(--d); }
-#gKern .s1, #gSchein .s1, #gSchleier .s1 { stop-color: var(--c1); }
-#gKern .s2, #gSchein .s2, #gSchleier .s2 { stop-color: var(--c2); }
-#gKern .s3, #gSchein .s3, #gSchleier .s3 { stop-color: var(--c3); }
-#gKern .s4, #gSchein .s4, #gSchleier .s4 { stop-color: var(--c4); }
-#pSchein { opacity: var(--schein, .55); }
-#augen { transform-box: fill-box; transform-origin: center;
-  transform: translate(var(--augeX, 0px), var(--augeY, 0px)) scaleY(var(--augeAuf, 1)); }
-#buehne .auge { fill: #0b1030; }
-#buehne .glanz { fill: rgba(180, 220, 255, .75); }
-/* Zustandsfarben — dieselbe Sprache wie die Statuszeile. */
-#buehne.z-bereit   { --c1:#3a4a6a; --c2:#3b5aa0; --c3:#4a3a8a; --c4:#6a3a9a; }
-/* Zuhören ist ruhiger und kühler als Antworten — sonst sähe beides gleich aus. */
-#buehne.z-hoert    { --c1:#6fe9ff; --c2:#3aa6f0; --c3:#4a63d0; --c4:#8a4ad0; }
-#buehne.z-duSprichst { --c1:#2bffd0; --c2:#22c3ff; --c3:#3a7aff; --c4:#7a5cff; }
-#buehne.z-denkt    { --c1:#9a7bff; --c2:#7a5cff; --c3:#5a3ad0; --c4:#c035ff; }
-#buehne.z-werkzeug { --c1:#ffd36b; --c2:#ffa63a; --c3:#ff7a3a; --c4:#ff4fa0; }
-#buehne.z-fehler   { --c1:#ff9a9a; --c2:#ff5c5c; --c3:#d02a4a; --c4:#a01a5a; }
-
 #verlauf {
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain;
@@ -156,49 +110,8 @@ body {
   </div>
   <div id="verlauf"><div id="leer">Tippe auf den Knopf und sprich — zum Beispiel:
 „Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
-  <!-- Alternative Darstellung: die Blase atmet mit dem Ton. Drei Ebenen, jede an
-       einem anderen Frequenzband — außen der Bass, in der Mitte die Sprache,
-       innen die Höhen. -->
-  <div id="buehne" hidden>
-    <svg id="blasenBild" viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <defs>
-        <radialGradient id="gKern" cx="35%" cy="25%" r="78%">
-          <stop class="s1" offset="0%"/><stop class="s2" offset="30%"/>
-          <stop class="s3" offset="58%"/><stop class="s4" offset="100%"/>
-        </radialGradient>
-        <radialGradient id="gSchein" cx="50%" cy="55%" r="62%">
-          <stop class="s4" offset="0%" stop-opacity=".75"/>
-          <stop class="s3" offset="45%" stop-opacity=".45"/>
-          <stop class="s1" offset="100%" stop-opacity="0"/>
-        </radialGradient>
-        <radialGradient id="gSchleier" cx="60%" cy="70%" r="70%">
-          <stop class="s4" offset="0%" stop-opacity=".42"/>
-          <stop class="s2" offset="60%" stop-opacity=".22"/>
-          <stop class="s1" offset="100%" stop-opacity="0"/>
-        </radialGradient>
-        <!-- Weichzeichner in Nutzereinheiten: skaliert mit der Kachel mit,
-             anders als ein CSS-Blur in px. -->
-        <filter id="fSchein" x="-45%" y="-45%" width="190%" height="190%">
-          <feGaussianBlur stdDeviation="5.5"/>
-        </filter>
-        <filter id="fSchleier" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="3"/>
-        </filter>
-        <filter id="fKern" x="-25%" y="-25%" width="150%" height="150%">
-          <feGaussianBlur stdDeviation=".7"/>
-        </filter>
-      </defs>
-      <path id="pSchein" fill="url(#gSchein)" filter="url(#fSchein)"/>
-      <path id="pSchleier" fill="url(#gSchleier)" filter="url(#fSchleier)"/>
-      <path id="pKern" fill="url(#gKern)" filter="url(#fKern)"/>
-      <g id="augen">
-        <ellipse class="auge" cx="-19" cy="-5" rx="6.1" ry="7.3"/>
-        <ellipse class="auge" cx="19"  cy="-5" rx="6.1" ry="7.3"/>
-        <ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>
-        <ellipse class="glanz" cx="17.2"  cy="-7.4" rx="1.7" ry="1.8"/>
-      </g>
-    </svg>
-  </div>
+  <!-- Alternative Darstellung: die tonreagierende Blase (voice-blob.js füllt sie). -->
+  <div id="buehne" hidden></div>
   <div id="fuss">
     <div id="hinweis"></div>
     <button type="button" id="knopf" aria-label="Gespräch starten">
@@ -342,181 +255,24 @@ function statusZeigen(text, an) {
   statusEl.classList.toggle('an', an === true);
 }
 
-/* ── Blase: den Ton sichtbar machen ───────────────────────────────────────
-   EIN Messpunkt über BEIDE Ströme (Mikrofon und KI-Stimme) — wer gerade
-   spricht, sagt ohnehin der Zustand, also braucht es keine zwei.
-   Der Ton läuft NICHT durch diesen Graphen zum Lautsprecher: das Audio-Element
-   spielt ihn selbst: ein zweiter Weg zur destination verdoppelte ihn.
-   Bass macht die Breite, die Mitten (die Sprache) die Höhe, die Höhen die
-   feinen schnellen Ausschläge. */
+/* ── Blase ───────────────────────────────────────────────────────────────
+   Aussehen und Bewegung kommen aus voice-blob.js (dieselbe Quelle wie in der
+   Web-App); hier wird nur zwischen Verlauf und Blase umgeschaltet. */
 var Blase = (function () {
-  var buehne = el('buehne');
-  var laeuft = false, aktiv = false;      // aktiv = Darstellung gewählt
-  var ac = null, analyser = null, roh = null, verbunden = [];
-  var raf = 0, letzteForm = 0, zustandJetzt = 'bereit';
-  var stummSeit = 0, kunst = false, blinzelt = false;
-
-  function tonAnzapfen() {
-    if (!aktiv || typeof AudioContext === 'undefined') { return; }
-    try {
-      if (!ac) {
-        ac = new AudioContext();
-        analyser = ac.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = .78;
-        roh = new Uint8Array(analyser.frequencyBinCount);
-      }
-      if (ac.state === 'suspended') { ac.resume(); }
-      var s = kern.stroeme();
-      [s.mikro, s.fern].forEach(function (strom) {
-        if (!strom || verbunden.indexOf(strom) !== -1) { return; }
-        try { ac.createMediaStreamSource(strom).connect(analyser); verbunden.push(strom); }
-        catch (e) { /* Ein Strom ohne Tonspur ist kein Grund aufzugeben. */ }
-      });
-    } catch (e) { analyser = null; }
-  }
-
-  function mittel(von, bis) {
-    var summe = 0;
-    for (var i = von; i < bis; i++) { summe += roh[i]; }
-    return summe / (bis - von) / 255;
-  }
-
-  function setz(name, wert) { buehne.style.setProperty(name, wert); }
-
-  var pKern = el('pKern'), pSchleier = el('pSchleier'), pSchein = el('pSchein');
-  var N = 56, TAU = Math.PI * 2;
-
-  /* Geschlossene, glatte Kurve durch alle Punkte: Catmull-Rom, umgerechnet in
-     kubische Bézier-Stücke. Der Umweg über den Pfad ist der ganze Grund für das
-     SVG — border-radius formt immer eine glatte Superellipse, nie eine Kontur
-     mit Lappen. */
-  function kurve(p) {
-    var n = p.length, d = 'M' + p[0][0].toFixed(1) + ' ' + p[0][1].toFixed(1);
-    for (var i = 0; i < n; i++) {
-      var a = p[(i - 1 + n) % n], b = p[i], c = p[(i + 1) % n], e = p[(i + 2) % n];
-      d += 'C' + (b[0] + (c[0] - a[0]) / 6).toFixed(1) + ' ' + (b[1] + (c[1] - a[1]) / 6).toFixed(1)
-         + ' ' + (c[0] - (e[0] - b[0]) / 6).toFixed(1) + ' ' + (c[1] - (e[1] - b[1]) / 6).toFixed(1)
-         + ' ' + c[0].toFixed(1) + ' ' + c[1].toFixed(1);
-    }
-    return d + 'Z';
-  }
-
-  /* Lappen statt Ellipse: mehrere Moden überlagern sich, jede mit eigener
-     Lappenzahl, eigener Drift und eigener Phase. Ungerade Zahlen (3, 5, 7)
-     wirken organisch, gerade ergäben eine gespiegelte, künstliche Form.
-     Jede Mode: [Lappen, Amplitude, Drift, Phase]. */
-  function form(R, sx, sy, moden, t) {
-    var p = [];
-    for (var i = 0; i < N; i++) {
-      var th = i / N * TAU, r = R;
-      for (var m = 0; m < moden.length; m++) {
-        r += R * moden[m][1] * Math.sin(moden[m][0] * th + t * moden[m][2] + moden[m][3]);
-      }
-      p.push([Math.cos(th) * r * sx, Math.sin(th) * r * sy]);
-    }
-    return kurve(p);
-  }
-
-  function bild(t) {
-    if (!laeuft) { raf = 0; return; }
-    raf = requestAnimationFrame(bild);
-    if (kern.istOffen()) { tonAnzapfen(); }
-
-    var bass = 0, mitten = 0, hoehen = 0;
-    if (analyser && roh) {
-      analyser.getByteFrequencyData(roh);
-      bass = mittel(0, 8); mitten = mittel(8, 30); hoehen = mittel(30, 70);
-    }
-    var energie = bass * .45 + mitten * .40 + hoehen * .15;
-    var spricht = zustandJetzt === 'spricht' || zustandJetzt === 'duSprichst';
-
-    /* Rückfall: manche Browser geben für einen ENTFERNTEN WebRTC-Strom
-       dauerhaft Nullen zurück (bekannte WebKit-Eigenheit). Bleibt es beim
-       Sprechen still, wird die Bewegung erzeugt statt gemessen — eine lebendige
-       Blase ist ehrlicher als eine erstarrte, die Betrieb vortäuscht. */
-    if (spricht) {
-      if (energie > .02) { stummSeit = 0; kunst = false; }
-      else if (!stummSeit) { stummSeit = t; }
-      else if (!kunst && t - stummSeit > 1200) { kunst = true; }
-    } else { stummSeit = 0; }
-    if (kunst && spricht) {
-      bass   = .26 + Math.sin(t * .0041) * .17 + Math.sin(t * .0017) * .06;
-      mitten = .28 + Math.sin(t * .0063 + 1.2) * .19;
-      hoehen = .17 + Math.sin(t * .0111 + .5) * .11;
-      energie = bass * .45 + mitten * .40 + hoehen * .15;
-    }
-    /* Ruhe: ohne Gespräch atmet sie langsam von selbst (rund 7 s je Zug). */
-    if (!kern.istOffen() || zustandJetzt === 'bereit') {
-      var atem = (Math.sin(t * .0009) + 1) / 2;
-      bass = atem * .13; mitten = atem * .09; hoehen = .02; energie = atem * .12;
-    }
-
-    setz('--schein', .40 + energie * .60);
-    var sx = 1 + bass * .20;
-    var sy = (1 + mitten * .16) * .90;      // etwas breiter als hoch, wie in der Vorlage
-
-    /* Die Kontur wird seltener neu gerechnet als gezeichnet — sie soll fließen,
-       nicht zappeln, und drei Pfade je Bild neu zu bauen wäre Verschwendung. */
-    if (t - letzteForm > 33) {
-      letzteForm = t;
-      pKern.setAttribute('d', form(66, sx, sy, [
-        [3, .052 + bass   * .075,  .00041, 0.0],
-        [5, .034 + mitten * .060,  .00062, 2.1],
-        [7, .019 + hoehen * .055,  .00087, 4.3]
-      ], t));
-      pSchleier.setAttribute('d', form(71, sx * 1.02, sy * 1.02, [
-        [3, .055 + mitten * .070, -.00035, 1.2],
-        [6, .028 + hoehen * .050,  .00058, 3.4]
-      ], t));
-      pSchein.setAttribute('d', form(76, sx * 1.04, sy * 1.04, [
-        [2, .058 + bass * .085,  .00029, 2.6],
-        [5, .026 + bass * .040, -.00047, 5.1]
-      ], t));
-    }
-
-    setz('--augeX', (Math.sin(t * .0011) * 3) + 'px');
-    setz('--augeY', (Math.sin(t * .0017) * 2) + 'px');
-    // Während des Blinzelns NICHT überschreiben — sonst bliebe es unsichtbar.
-    if (!blinzelt) { setz('--augeAuf', 1 - energie * .12); }
-  }
-
-  function blinzeln() {
-    if (!aktiv) { return; }
-    blinzelt = true;
-    setz('--augeAuf', .08);
-    setTimeout(function () { blinzelt = false; setz('--augeAuf', 1); }, 120);
-    setTimeout(blinzeln, 2200 + Math.random() * 4500);
-  }
-
-  function anhalten() { laeuft = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-  function anwerfen() {
-    if (!aktiv || laeuft || document.hidden) { return; }
-    laeuft = true; raf = requestAnimationFrame(bild);
-  }
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { anhalten(); } else { anwerfen(); }
-  });
-
+  var buehne = el('buehne'), verlauf = el('verlauf'), bild = null, letzterZustand = 'bereit';
   return {
-    /* Darstellung umschalten: 'blob' zeigt die Blase, alles andere den Verlauf. */
     modus: function (welche) {
-      aktiv = (welche === 'blob');
-      buehne.hidden = !aktiv;
-      el('verlauf').hidden = aktiv;
-      buehne.className = 'z-' + zustandJetzt;
-      if (aktiv) { anwerfen(); blinzeln(); } else { anhalten(); }
+      var an = (welche === 'blob');
+      buehne.hidden = !an;
+      verlauf.hidden = an;
+      if (an && !bild && window.SymDoVoiceBlase) {
+        bild = SymDoVoiceBlase.erzeuge(buehne, kern);
+      }
+      if (bild) { bild.an(an); bild.zustand(letzterZustand); }
     },
     zustand: function (z) {
-      zustandJetzt = z;
-      if (!aktiv) { return; }
-      buehne.className = 'z-' + z;
-      // Der Griff zum Ton braucht die Nutzergeste — 'verbinde' kommt noch
-      // innerhalb des Klicks auf den Knopf.
-      if (z === 'verbinde') { tonAnzapfen(); }
-      if (z === 'ende' || z === 'fehler') { verbunden = []; }
-      anwerfen();
+      letzterZustand = z;
+      if (bild) { bild.zustand(z); }
     }
   };
 })();

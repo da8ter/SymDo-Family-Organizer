@@ -155,6 +155,12 @@ class SymDoVoice extends IPSModuleStrict
         // Web-App) und wird VOR das Dokument gehängt.
         $kern = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-core.js');
         $kopf = is_string($kern) ? ('<script>' . $kern . '</script>') : '';
+        // Die Blase bringt Markup, Stil und Bewegung selbst mit — dieselbe Quelle
+        // wie in der Web-App, damit nichts von Hand nachgezogen werden muss.
+        $blase = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-blob.js');
+        if (is_string($blase)) {
+            $kopf .= '<script>' . $blase . '</script>';
+        }
         $payload = json_encode($this->PayloadBauen(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
