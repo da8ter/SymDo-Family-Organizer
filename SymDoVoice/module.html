@@ -1,13 +1,10 @@
-<!-- SymDo Voice — Etappe 0: Machbarkeitsprobe.
+<!-- SymDo Voice — die Gesprächs-Kachel.
 
-     Diese Fassung der Kachel spricht noch nicht. Sie prüft in der ECHTEN
-     Umgebung (Visu-iframe, Symcon-App), ob der geplante Weg trägt:
-       1. Umgebung  — sicherer Kontext, WebRTC, Mikrofon, Spracherkennung
-       2. ICE       — kommt UDP nach draußen (srflx-Kandidat über STUN)?
-       3. OpenAI    — ist /v1/realtime/calls per fetch erreichbar (CSP!),
-                      und ist der Location-Kopf lesbar (call_id → Not-Aus)?
-     Das Ergebnis steht in der Kachel UND wird per requestAction ans Modul
-     gemeldet — ablesbar im Konfigurationsformular, auch vom Handy aus. -->
+     Der Ton läuft per WebRTC direkt vom Browser zu OpenAI (voice-core.js wird
+     vom Modul vor dieses Dokument gehängt). Über das Modul reisen nur die
+     Marke, der Herzschlag und die Werkzeugaufrufe:
+       Kachel → requestAction('VoiceCall', {payload, txn})
+       Modul  → Gateway (AiTileRequest, Pfad /voice) → Push {type:'voiceResult'} -->
 <style>
 :root {
   --bg: var(--card-color, #2b2c30);
@@ -15,10 +12,7 @@
   --akzent: var(--accent-color, #00cdab);
   --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
-  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
-  --gruen: #34c759;
   --rot: #ff4d4d;
-  --orange: #ff9500;
   --sym-mt: 0px; --sym-ms: 0px; --sym-mb: 0px;
   --sbw: 6px;
   --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
@@ -26,7 +20,6 @@
 html[data-symdo-theme="light"] {
   --zeile: color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%);
 }
-/* Das Systempadding wird neutralisiert; die Raender traegt #wrap selbst. */
 html { height: 100%; display: flex; flex-direction: column; }
 body {
   margin: 0 !important; padding: 0 !important;
@@ -40,78 +33,104 @@ body {
   padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
            calc(var(--sym-mb) + 4px) var(--sym-ms);
 }
-h2 { margin: 4px 0 10px; font-size: 17px; }
-h2 .unter { display: block; font-size: 12px; font-weight: 400; color: var(--dezent); margin-top: 2px; }
-#fazit {
-  border-radius: 12px; padding: 10px 12px; font-weight: 700; font-size: 14px;
-  background: var(--zeile); margin-bottom: 10px;
+#kopf { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+#kopf h2 { margin: 0; font-size: 17px; flex: 1; }
+#status {
+  font-size: 12px; color: var(--dezent); border-radius: 999px; padding: 4px 10px;
+  background: var(--zeile); white-space: nowrap;
 }
-#fazit.gut { color: var(--gruen); }
-#fazit.schlecht { color: var(--rot); }
-#fazit.teils { color: var(--orange); }
-/* Unten KEIN Polster am Scrollbereich (zaehlt zu scrollHeight → Griff fuer nichts). */
-#liste {
+#status.an { color: var(--akzent); }
+/* Unübersehbar, solange das Mikrofon offen ist. */
+#mikPunkt { display: none; width: 9px; height: 9px; border-radius: 999px; background: var(--rot);
+  animation: mikBlink 1.6s ease-in-out infinite; }
+#mikPunkt.an { display: inline-block; }
+@keyframes mikBlink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+#verlauf {
   flex: 1 1 auto; min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  overscroll-behavior: contain;
+  overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain;
   padding: 0 var(--sb-pad) 0 0;
 }
-#liste::-webkit-scrollbar { width: 6px; height: 6px; }
-#liste::-webkit-scrollbar-track { background: transparent; }
-#liste::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--akzent) 70%, transparent);
-  border-radius: 999px;
+#verlauf::-webkit-scrollbar { width: 6px; height: 6px; }
+#verlauf::-webkit-scrollbar-track { background: transparent; }
+#verlauf::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--akzent) 70%, transparent); border-radius: 999px;
 }
 @supports not selector(::-webkit-scrollbar) {
-  #liste { scrollbar-width: thin;
+  #verlauf { scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent; }
 }
-.punkt {
-  display: flex; align-items: baseline; gap: 8px;
-  background: var(--zeile); border-radius: 10px;
-  padding: 8px 10px; margin-bottom: 6px; font-size: 13px;
+.blase { max-width: 86%; border-radius: 14px; padding: 8px 11px; margin: 0 0 6px;
+  font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+.blase.du { margin-left: auto; background: color-mix(in srgb, var(--akzent) 22%, var(--zeile)); }
+.blase.symdo { margin-right: auto; background: var(--zeile); }
+.aktion { display: flex; align-items: baseline; gap: 6px; font-size: 12px;
+  color: var(--dezent); margin: 0 0 6px; }
+.aktion .z { font-weight: 700; }
+.aktion .z.ok { color: var(--akzent); } .aktion .z.nein { color: var(--rot); }
+#leer { color: var(--dezent); font-size: 13px; text-align: center; margin-top: 18px; }
+
+#fuss { padding-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#hinweis { font-size: 12px; color: var(--dezent); min-height: 15px; text-align: center; }
+#hinweis.fehler { color: var(--rot); }
+#knopf {
+  width: 74px; height: 74px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--akzent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--akzent) 45%, transparent);
+  transition: transform .12s ease, background .2s ease;
 }
-.punkt .zeichen { flex: none; font-weight: 700; }
-.punkt .zeichen.ok { color: var(--gruen); }
-.punkt .zeichen.nein { color: var(--rot); }
-.punkt .zeichen.info { color: var(--dezent); }
-.punkt .wert { color: var(--dezent); margin-left: auto; text-align: right; word-break: break-all; }
-#knopfzeile { padding-top: 8px; }
-#nochmal {
-  width: 100%; border: 0; border-radius: 12px; padding: 12px;
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer;
+#knopf:active { transform: scale(.94); }
+#knopf.laeuft { background: var(--rot);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--rot) 45%, transparent); }
+#knopf.hoert { animation: pulsieren 2.2s ease-in-out infinite; }
+@keyframes pulsieren {
+  0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--akzent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--akzent) 0%, transparent); }
 }
+#knopf svg { width: 30px; height: 30px; fill: #fff; }
+#nebenzeile { display: flex; gap: 8px; }
+#nebenzeile button {
+  border: 0; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+  background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text);
+  cursor: pointer; display: none;
+}
+#nebenzeile button.zeigen { display: inline-block; }
 </style>
 <div id="wrap">
-  <h2>Sprachassistent
-    <span class="unter">Machbarkeitsprobe — läuft von selbst und meldet ans Modul</span>
-  </h2>
-  <div id="fazit">Probe läuft …</div>
-  <div id="liste"></div>
-  <div id="knopfzeile"><button type="button" id="nochmal">Erneut prüfen</button></div>
+  <div id="kopf">
+    <h2>Sprachassistent</h2>
+    <span id="mikPunkt" title="Mikrofon offen"></span>
+    <span id="status">bereit</span>
+  </div>
+  <div id="verlauf"><div id="leer">Tippe auf den Knopf und sprich — zum Beispiel:
+„Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
+  <div id="fuss">
+    <div id="hinweis"></div>
+    <button type="button" id="knopf" aria-label="Gespräch starten">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5.3-3a.9.9 0 0 1 1.8.1 7.1 7.1 0 0 1-6.2 6.9V20h2.2a.9.9 0 1 1 0 1.8H8.9a.9.9 0 1 1 0-1.8h2.2v-2a7.1 7.1 0 0 1-6.2-6.9.9.9 0 0 1 1.8-.1 5.3 5.3 0 0 0 10.6 0z"/></svg>
+    </button>
+    <div id="nebenzeile">
+      <button type="button" id="ruhe">Ruhe</button>
+    </div>
+  </div>
+  <audio id="ton" autoplay playsinline></audio>
 </div>
 <script>
-/* IIFE: die Tile-Visu injiziert eigene globale Bindungen (const translate,
-   const requestAction, openObject) — gleichnamige Top-Level-Deklarationen
-   braechen das ganze Script. */
+/* IIFE: die Tile-Visu injiziert eigene globale Bindungen. */
 (function () {
 'use strict';
 
 /* Systemraender aus der Adresse — vor dem ersten Zeichnen. */
-(function systemRaender() {
+(function () {
   try {
     var p = new URLSearchParams(window.location.search);
-    var px = function (name) {
-      var v = parseInt(p.get(name), 10);
-      return (isFinite(v) && v >= 0) ? v + 'px' : null;
-    };
-    var wurzel = document.documentElement.style;
-    var mt = px('margintop');    if (mt !== null) { wurzel.setProperty('--sym-mt', mt); }
-    var ms = px('marginside');   if (ms !== null) { wurzel.setProperty('--sym-ms', ms); }
-    var mb = px('marginbottom'); if (mb !== null) { wurzel.setProperty('--sym-mb', mb); }
-  } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
+    var px = function (n) { var v = parseInt(p.get(n), 10); return (isFinite(v) && v >= 0) ? v + 'px' : null; };
+    var w = document.documentElement.style;
+    var mt = px('margintop');    if (mt !== null) { w.setProperty('--sym-mt', mt); }
+    var ms = px('marginside');   if (ms !== null) { w.setProperty('--sym-ms', ms); }
+    var mb = px('marginbottom'); if (mb !== null) { w.setProperty('--sym-mb', mb); }
+  } catch (e) {}
 })();
 
 /* Hell/Dunkel aus der Luminanz der Kartenfarbe — Hausmuster. */
@@ -129,19 +148,15 @@ h2 .unter { display: block; font-size: 12px; font-weight: 400; color: var(--deze
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', anwenden); } catch (e) {}
 })();
 
-/* Scroll-Eindaemmung gegen html-sdk.js: es meldet JEDES deltaY an die Visu
-   (postScroll), die dann mitscrollt. Ereignisse in der Abfangphase an document
-   stoppen — vor der Blasenphase an window, wo html-sdk.js zuhoert. */
-var SCROLL_BEREICHE = '#liste';
+/* Scroll-Eindaemmung gegen html-sdk.js (postScroll) — Hausmuster. */
+var SCROLL_BEREICHE = '#verlauf';
 function zustaendigerScroller(ziel, dx, dy) {
   var el = (ziel instanceof Element) ? ziel : null;
   while (el && el !== document.body) {
     if (el.matches && el.matches(SCROLL_BEREICHE)) {
       var maxY = el.scrollHeight - el.clientHeight;
-      var maxX = el.scrollWidth - el.clientWidth;
       var gehtY = maxY > 1 && ((dy < 0 && el.scrollTop > 0) || (dy > 0 && el.scrollTop < maxY - 1));
-      var gehtX = maxX > 1 && ((dx < 0 && el.scrollLeft > 0) || (dx > 0 && el.scrollLeft < maxX - 1));
-      if (gehtY || gehtX) { return el; }
+      if (gehtY) { return el; }
     }
     el = el.parentElement;
   }
@@ -151,177 +166,172 @@ document.addEventListener('wheel', function (e) {
   if (!zustaendigerScroller(e.target, e.deltaX || 0, e.deltaY || 0)) { e.preventDefault(); }
   e.stopPropagation();
 }, { passive: false, capture: true });
-var letzteY = null, letzteX = null;
+var lY = null;
 document.addEventListener('touchstart', function (e) {
-  if (e.touches && e.touches.length === 1) { letzteX = e.touches[0].clientX; letzteY = e.touches[0].clientY; }
-  else { letzteX = letzteY = null; }
+  lY = (e.touches && e.touches.length === 1) ? e.touches[0].clientY : null;
   e.stopPropagation();
 }, { passive: true, capture: true });
 document.addEventListener('touchmove', function (e) {
-  if (!e.touches || e.touches.length !== 1 || letzteY === null) { e.stopPropagation(); return; }
-  var x = e.touches[0].clientX, y = e.touches[0].clientY;
-  var dy = letzteY - y, dx = letzteX - x;
-  letzteX = x; letzteY = y;
-  if (!zustaendigerScroller(e.target, dx, dy)) { e.preventDefault(); }
+  if (!e.touches || e.touches.length !== 1 || lY === null) { e.stopPropagation(); return; }
+  var dy = lY - e.touches[0].clientY; lY = e.touches[0].clientY;
+  if (!zustaendigerScroller(e.target, 0, dy)) { e.preventDefault(); }
   e.stopPropagation();
 }, { passive: false, capture: true });
-document.addEventListener('touchend', function () { letzteX = letzteY = null; }, { passive: true, capture: true });
+document.addEventListener('touchend', function () { lY = null; }, { passive: true, capture: true });
 
-/* ── Die drei Messungen ──────────────────────────────────────────────────── */
+/* ── Transport: requestAction hin, voiceResult per Push zurueck ───────────── */
 
-function probeUmgebung() {
-  var inIframe = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
-  return {
-    protokoll: location.protocol,
-    sicher: window.isSecureContext === true,
-    iframe: inIframe,
-    webrtc: typeof RTCPeerConnection === 'function',
-    mikro: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-    recorder: typeof MediaRecorder === 'function',
-    erkennung: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
-    agent: (navigator.userAgent || '').slice(0, 120)
-  };
-}
-
-/* ICE ohne Gegenstelle: ein Offer mit STUN. Erscheint ein srflx-Kandidat,
-   kommt UDP nach draussen — ohne STUN gaebe es prinzipbedingt nur host. */
-function probeIce() {
-  var out = { kandidaten: {}, fehler: '' };
-  return new Promise(function (fertigMachen) {
-    var pc = null;
-    try {
-      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-    } catch (e) { out.fehler = String((e && e.name) || e); fertigMachen(out); return; }
-    var zu = setTimeout(abschluss, 5000);
-    function abschluss() {
-      clearTimeout(zu);
-      try {
-        var sdp = (pc.localDescription && pc.localDescription.sdp) || '';
-        (sdp.match(/^a=candidate:.*$/gm) || []).forEach(function (z) {
-          var m = / typ (\w+)/.exec(z);
-          if (m) { out.kandidaten[m[1]] = (out.kandidaten[m[1]] || 0) + 1; }
-        });
-      } catch (e) { out.fehler = String((e && e.name) || e); }
-      try { pc.close(); } catch (e) {}
-      fertigMachen(out);
-    }
-    pc.addEventListener('icegatheringstatechange', function () {
-      if (pc.iceGatheringState === 'complete') { abschluss(); }
-    });
-    try {
-      pc.createDataChannel('oai-events');
-      pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); })
-        .catch(function (e) { out.fehler = String((e && e.name) || e); abschluss(); });
-    } catch (e) { out.fehler = String((e && e.name) || e); abschluss(); }
-  });
-}
-
-/* Erreichbarkeit und Location-Kopf: Attrappen-Marke, kaputtes SDP. Erwartet
-   ist 400 invalid_offer MIT lesbarem Location — kostet nichts, beweist alles.
-   Ein TypeError hiesse: die iframe-CSP blockt connect-src → unified-Weg. */
-function probeApi() {
-  var out = { status: 0, code: '', location: '', fehler: '' };
-  return fetch('https://api.openai.com/v1/realtime/calls', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ek_probe', 'Content-Type': 'application/sdp' },
-    body: 'v=0'
-  }).then(function (r) {
-    out.status = r.status;
-    out.location = r.headers.get('Location') || '';
-    return r.json().then(function (j) {
-      out.code = (j && j.error && (j.error.code || j.error.type)) || '';
-      return out;
-    }).catch(function () { return out; });
-  }).catch(function (e) {
-    out.fehler = String((e && (e.name + ': ' + e.message)) || e);
-    return out;
-  });
-}
-
-/* ── Auswertung und Anzeige ──────────────────────────────────────────────── */
-
-function fazitBilden(u, ice, api) {
-  if (!u.sicher) { return ['schlecht', 'Kein sicherer Kontext (http) — Mikrofon und WebRTC sind hier gesperrt.']; }
-  if (!u.webrtc) { return ['schlecht', 'Kein WebRTC in dieser Umgebung.']; }
-  if (api.fehler !== '') { return ['schlecht', 'OpenAI per fetch blockiert (' + api.fehler + ') — der unified-Weg über das Gateway wäre nötig.']; }
-  if (api.status !== 400 && api.status !== 401) { return ['teils', 'Unerwartete Antwort von OpenAI (HTTP ' + api.status + ').']; }
-  var srflx = (ice.kandidaten && ice.kandidaten.srflx) || 0;
-  if (api.location === '') {
-    return ['teils', 'OpenAI erreichbar, aber der Location-Kopf ist nicht lesbar — Not-Aus nur über den unified-Weg.'];
-  }
-  if (!srflx) { return ['teils', 'OpenAI erreichbar, aber kein UDP nach draußen erkennbar (nur ' + Object.keys(ice.kandidaten || {}).join('/') + ') — WebRTC könnte scheitern.']; }
-  if (!u.mikro) { return ['teils', 'Alles erreichbar, aber kein Mikrofonzugriff in dieser Umgebung.']; }
-  return ['gut', 'Grünes Licht: WebRTC zu OpenAI trägt in dieser Umgebung.'];
-}
-
-function punkt(liste, ok, text, wert) {
-  var el = document.createElement('div');
-  el.className = 'punkt';
-  var z = document.createElement('span');
-  z.className = 'zeichen ' + (ok === true ? 'ok' : ok === false ? 'nein' : 'info');
-  z.textContent = ok === true ? '✓' : ok === false ? '✗' : '·';
-  var t = document.createElement('span');
-  t.textContent = text;
-  var w = document.createElement('span');
-  w.className = 'wert';
-  w.textContent = wert || '';
-  el.appendChild(z); el.appendChild(t); el.appendChild(w);
-  liste.appendChild(el);
-}
-
-function probeLaufen() {
-  var fazitEl = document.getElementById('fazit');
-  var liste = document.getElementById('liste');
-  fazitEl.className = '';
-  fazitEl.textContent = 'Probe läuft …';
-  liste.innerHTML = '';
-
-  var u = probeUmgebung();
-  Promise.all([probeIce(), probeApi()]).then(function (ergebnisse) {
-    var ice = ergebnisse[0], api = ergebnisse[1];
-    var fazit = fazitBilden(u, ice, api);
-    fazitEl.className = fazit[0];
-    fazitEl.textContent = fazit[1];
-
-    punkt(liste, u.sicher, 'Sicherer Kontext', u.protokoll);
-    punkt(liste, u.webrtc, 'WebRTC (RTCPeerConnection)');
-    punkt(liste, u.mikro, 'Mikrofonzugriff möglich');
-    punkt(liste, u.recorder, 'MediaRecorder (Diktat-Baustein)');
-    punkt(liste, u.erkennung, 'Spracherkennung (fürs Weckwort)', u.erkennung ? '' : 'nicht auf diesem Gerät');
-    punkt(liste, null, 'Im Visu-Rahmen (iframe)', u.iframe ? 'ja' : 'nein');
-    var typen = Object.keys(ice.kandidaten || {}).map(function (k) { return k + '×' + ice.kandidaten[k]; }).join('  ');
-    punkt(liste, !!(ice.kandidaten && ice.kandidaten.srflx), 'UDP nach draußen (srflx über STUN)', typen || ice.fehler || 'keine Kandidaten');
-    punkt(liste, api.fehler === '' && (api.status === 400 || api.status === 401),
-      'OpenAI Realtime erreichbar', api.fehler !== '' ? api.fehler : ('HTTP ' + api.status + ' ' + api.code));
-    punkt(liste, api.location !== '', 'call_id lesbar (Not-Aus möglich)', api.location ? api.location.split('/').pop().slice(0, 18) + '…' : 'Location fehlt');
-    punkt(liste, null, 'Browser', u.agent.slice(0, 48));
-
-    // Selbstbericht ans Modul — ablesbar im Formular, auch vom Handy aus.
-    var bericht = { umgebung: u, ice: ice, api: api, fazit: fazit[1] };
+var __txn = 0;
+var __wartend = {};
+function post(payload) {
+  return new Promise(function (aufloesen) {
+    var txn = 'v' + (++__txn) + '-' + Date.now().toString(36);
+    __wartend[txn] = aufloesen;
     try {
       if (typeof requestAction === 'function') {
-        requestAction('ProbeReport', JSON.stringify(bericht));
+        requestAction('VoiceCall', JSON.stringify({ payload: payload, txn: txn }));
+      } else {
+        delete __wartend[txn];
+        aufloesen({ ok: false, sag: 'Kein Verbindungsweg (Vorschau ohne Visu).' });
+        return;
       }
-    } catch (e) { /* Standalone-Vorschau ohne Visu: nur Anzeige */ }
+    } catch (e) {
+      delete __wartend[txn];
+      aufloesen({ ok: false, sag: 'Aufruf fehlgeschlagen.' });
+      return;
+    }
+    /* Transportdeckel knapp ueber dem Werkzeugdeckel des Kerns (8 s). */
+    setTimeout(function () {
+      if (__wartend[txn]) { delete __wartend[txn]; aufloesen({ ok: false, error: { code: 'timeout' }, sag: 'Der Server hat nicht geantwortet.' }); }
+    }, 10000);
   });
 }
 
-document.getElementById('nochmal').addEventListener('click', probeLaufen);
+/* ── Oberflaeche ─────────────────────────────────────────────────────────── */
 
-/* Zustand vom Modul — die Probe braucht ihn (noch) nicht, aber der Vertrag
-   handleMessage/updateState muss von Anfang an stehen. */
+var el = function (id) { return document.getElementById(id); };
+var verlauf = el('verlauf');
+var statusEl = el('status');
+var hinweis = el('hinweis');
+var knopf = el('knopf');
+var ruheKnopf = el('ruhe');
+var mikPunkt = el('mikPunkt');
+
+var duBlasen = {};      // item_id → Element (Live-Mitschrift des Gesagten)
+var symdoBlasen = {};   // response_id → Element
+
+function leerWeg() { var l = el('leer'); if (l) { l.remove(); } }
+function runter() { verlauf.scrollTop = verlauf.scrollHeight; }
+
+function blase(klasse, schluessel, ablage) {
+  if (schluessel && ablage[schluessel]) { return ablage[schluessel]; }
+  leerWeg();
+  var b = document.createElement('div');
+  b.className = 'blase ' + klasse;
+  verlauf.appendChild(b);
+  if (schluessel) { ablage[schluessel] = b; }
+  return b;
+}
+
+function aktion(ok, text) {
+  leerWeg();
+  var z = document.createElement('div');
+  z.className = 'aktion';
+  z.innerHTML = '<span class="z ' + (ok ? 'ok' : 'nein') + '">' + (ok ? '✓' : '✗') + '</span><span></span>';
+  z.lastChild.textContent = text;
+  verlauf.appendChild(z);
+  runter();
+}
+
+function statusZeigen(text, an) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle('an', an === true);
+}
+
+var kern = SymDoVoiceKern.erzeuge({
+  post: post,
+  audioEl: el('ton'),
+  onState: function (z, detail) {
+    mikPunkt.classList.toggle('an', kern.istOffen());
+    knopf.classList.toggle('laeuft', kern.istOffen());
+    knopf.classList.toggle('hoert', z === 'hoert' || z === 'duSprichst');
+    ruheKnopf.classList.toggle('zeigen', z === 'spricht');
+    hinweis.classList.remove('fehler');
+    switch (z) {
+      case 'verbinde':   statusZeigen('verbinde …', true); hinweis.textContent = ''; break;
+      case 'hoert':      statusZeigen('ich höre zu', true); break;
+      case 'duSprichst': statusZeigen('du sprichst …', true); break;
+      case 'denkt':      statusZeigen('einen Moment …', true); break;
+      case 'spricht':    statusZeigen('SymDo antwortet', true); break;
+      case 'werkzeug':   statusZeigen('schaue nach …', true); break;
+      case 'ende':
+        statusZeigen('bereit', false);
+        hinweis.textContent = detail ? ('Gespräch beendet — ' + detail) : '';
+        break;
+      case 'fehler':
+        statusZeigen('bereit', false);
+        hinweis.textContent = detail || 'Fehler';
+        hinweis.classList.add('fehler');
+        break;
+    }
+  },
+  onEvent: function (e) {
+    switch (e.art) {
+      case 'duDelta': {
+        var b = blase('du', 'i' + e.item, duBlasen);
+        b.textContent += e.text; runter(); break;
+      }
+      case 'duFertig': {
+        var b2 = blase('du', 'i' + e.item, duBlasen);
+        if (e.text) { b2.textContent = e.text; }
+        runter(); break;
+      }
+      case 'symdoDelta': {
+        var s = blase('symdo', 'r' + e.antwort, symdoBlasen);
+        s.textContent += e.text; runter(); break;
+      }
+      case 'symdoFertig': {
+        var s2 = blase('symdo', 'r' + e.antwort, symdoBlasen);
+        if (e.text) { s2.textContent = e.text; }
+        runter(); break;
+      }
+      case 'werkzeugFertig':
+        aktion(e.ok === true, e.sag || e.name);
+        break;
+      case 'rest':
+        if (e.sekunden <= 30) { hinweis.textContent = 'noch ' + e.sekunden + ' s Gesprächszeit'; }
+        break;
+      case 'fehler':
+        hinweis.textContent = e.text || 'Fehler';
+        hinweis.classList.add('fehler');
+        break;
+    }
+  }
+});
+
+/* Debug-Haken fuer Pruefstaende und die Browser-Konsole. */
+window.__voiceKern = kern;
+
+knopf.addEventListener('click', function () {
+  if (kern.istOffen()) { kern.stop('vom Nutzer beendet'); return; }
+  kern.start();
+});
+ruheKnopf.addEventListener('click', function () { kern.ruhe(); });
+
+/* ── Anbindung ans Modul ─────────────────────────────────────────────────── */
+
 function handleMessage(daten) {
   if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
   if (!daten || typeof daten !== 'object') { return; }
+  if (daten.type === 'voiceResult') {
+    var cb = __wartend[daten.txn];
+    if (cb) { delete __wartend[daten.txn]; cb(daten.json || { ok: false }); }
+    return;
+  }
+  /* type 'state': die Kachel braucht (noch) keinen Zustand vom Modul. */
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;
 window.addEventListener('message', function (event) { if (event) { handleMessage(event.data); } });
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', probeLaufen);
-} else {
-  probeLaufen();
-}
 })();
 </script>

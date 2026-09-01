@@ -2,6 +2,13 @@
     "translations": {
         "de": {
             "SymDo Voice": "SymDo - Sprachassistent",
+            "Voice dialog with the AI: talk, ask, control SymDo. Enable the voice dialog and give the consent in the SymDo Gateway instance (panel \"Voice dialog\").": "Sprachdialog mit der KI: reden, fragen, SymDo steuern. Einschalten und Einwilligung geben in der SymDo-Gateway-Instanz (Bereich „Sprachdialog\").",
+            "This tile belongs to": "Diese Kachel gehört",
+            "— none —": "— niemand —",
+            "Default shopping list": "Standard-Einkaufsliste",
+            "Default task list": "Standard-Aufgabenliste",
+            "More settings appear after the next Symcon restart.": "Weitere Einstellungen erscheinen nach dem nächsten Symcon-Neustart.",
+            "The gateway is not reachable.": "Das Gateway ist nicht erreichbar.",
             "Feasibility probe: whether this environment supports the voice dialog (WebRTC to the AI provider). The tile measures and reports automatically.": "Machbarkeitsprobe: ob diese Umgebung den Sprachdialog trägt (WebRTC zum KI-Anbieter). Die Kachel misst und meldet von selbst.",
             "Probe results": "Messergebnisse",
             "No reports yet — open the tile in each environment (browser, Symcon app on iOS and Android). The probe runs by itself and reports here.": "Noch keine Berichte — öffne die Kachel in jeder Umgebung (Browser, Symcon-App auf iOS und Android). Die Probe läuft von selbst und meldet sich hier.",

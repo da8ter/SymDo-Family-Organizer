@@ -5,16 +5,16 @@ declare(strict_types=1);
 /**
  * SymDo Voice — Zweiwege-Sprachdialog mit der KI.
  *
- * Stand: Etappe 0 (Machbarkeitsprobe). Die Kachel prüft, ob die Umgebung
- * (Browser, Symcon-App iOS/Android) WebRTC zu OpenAI überhaupt trägt, und
- * meldet die Ergebnisse hierher zurück — ablesbar im Konfigurationsformular.
- * Der eigentliche Sprachdialog folgt in den nächsten Etappen; das Gerüst
- * (Gateway-Anschluss, Benutzerzuordnung, Kachel-Anbindung) ist schon das
- * endgültige.
+ * Die Kachel spricht per WebRTC direkt mit dem Anbieter; über dieses Modul
+ * reisen nur Marke, Herzschlag und Werkzeugaufrufe (Relay ans Gateway, Muster
+ * SymDoWebApp::HandleAiCall). Der Benutzer und die Standard-Listen werden HIER
+ * erzwungen — was der Browser behauptet, zählt nicht.
  */
 class SymDoVoice extends IPSModuleStrict
 {
-    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+    private const GATEWAY_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+    private const SHOPPING_GUID = '{A5D3F2E1-7B4C-4E8A-9D6F-1C2B3A4E5F6D}';
+    private const TODO_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
 
     /** Höchstens so viele Proben-Berichte werden aufgehoben (je Umgebung einer). */
     private const PROBE_MAX = 8;
@@ -39,8 +39,17 @@ class SymDoVoice extends IPSModuleStrict
         // Der feste Benutzer dieser Kachel: „meine Aufgaben" und neue Einträge
         // gehören ihm (Entscheidung vom 01.09.2026).
         $this->RegisterPropertyString('UserID', '');
+        // „die Liste" ist im Haushalt nicht eindeutig (5 ToDo-, 2 Einkaufslisten
+        // gemessen) — deshalb je Kachel eine Vorgabe.
+        $this->RegisterPropertyInteger('DefaultShoppingID', 0);
+        $this->RegisterPropertyInteger('DefaultTodoID', 0);
 
-        // Berichte der Machbarkeitsprobe, je Umgebung der jüngste.
+        // Briefkasten für den synchronen Relay-Rückruf: er läuft auf einem
+        // ANDEREN PHP-Objekt dieser Instanz — ein Objektfeld überlebt die
+        // Grenze nicht, ein Attribut schon (Muster SymDoWebApp).
+        $this->RegisterAttributeString('SeenTxn', '');
+
+        // Berichte der Machbarkeitsprobe (Etappe 0), je Umgebung der jüngste.
         $this->RegisterAttributeString('ProbeResult', '[]');
     }
 
@@ -66,10 +75,25 @@ class SymDoVoice extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
+            case 'VoiceCall':
+                $this->HandleVoiceCall((string)$Value);
+                return;
+
+            case 'VoiceResult':
+                // Rückkanal des Gateways: Briefkasten füllen und zur Kachel pushen.
+                $daten = json_decode((string)$Value, true);
+                if (!is_array($daten)) {
+                    return;
+                }
+                $this->WriteAttributeString('SeenTxn', (string)($daten['txn'] ?? ''));
+                $this->Push([
+                    'type' => 'voiceResult',
+                    'txn'  => (string)($daten['txn'] ?? ''),
+                    'json' => $daten['json'] ?? null,
+                ]);
+                return;
+
             case 'ProbeReport':
-                // Die Kachel meldet ihr Messergebnis. Aufheben je Umgebung
-                // (Kennung aus Browser + Rahmen), damit iPhone, Android und
-                // Desktop nebeneinander im Formular stehen.
                 $this->ProbeAblegen((string)$Value);
                 return;
 
@@ -98,59 +122,162 @@ class SymDoVoice extends IPSModuleStrict
         return $this->ReadAttributeString('ProbeResult');
     }
 
+    /** Not-Aus aus Symcon heraus: beendet alle Gespräche am Gateway (SDVC_Hangup). */
+    public function Hangup(): bool
+    {
+        $gw = $this->GatewayID();
+        if ($gw <= 0) {
+            return false;
+        }
+        @IPS_RequestAction($gw, 'VoiceHangupAll', '');
+        return true;
+    }
+
     public function GetVisualizationTile(): string
     {
-        $path = __DIR__ . '/module.html';
-        $html = @file_get_contents($path);
+        $html = @file_get_contents(__DIR__ . '/module.html');
         if (!is_string($html)) {
-            $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $path, KL_WARNING);
+            $this->LogMessage('GetVisualizationTile: module.html nicht lesbar', KL_WARNING);
             return '';
         }
-        // Initial-Payload inline mitgeben, damit die Kachel sofort korrekt zeichnet
+        // Der Gesprächskern liegt beim Gateway (eine Quelle für Kachel und
+        // Web-App) und wird VOR das Dokument gehängt.
+        $kern = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-core.js');
+        $kopf = is_string($kern) ? ('<script>' . $kern . '</script>') : '';
         $payload = json_encode($this->PayloadBauen(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        return $html . '<script>handleMessage(' . $payload . ');</script>';
+        return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 
     public function GetConfigurationForm(): string
     {
-        $zeilen = [];
-        $berichte = json_decode($this->ReadAttributeString('ProbeResult'), true);
-        foreach (is_array($berichte) ? $berichte : [] as $b) {
-            if (!is_array($b)) {
-                continue;
+        $benutzer = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        $gw = $this->GatewayID();
+        if ($gw > 0 && function_exists('TGW_GetUsers')) {
+            foreach ((array)json_decode((string)@TGW_GetUsers($gw), true) as $u) {
+                if (is_array($u) && trim((string)($u['name'] ?? '')) !== '') {
+                    $benutzer[] = ['caption' => (string)$u['name'], 'value' => (string)($u['id'] ?? '')];
+                }
             }
-            $zeilen[] = ['type' => 'Label', 'caption' => $this->ProbeZeile($b)];
-        }
-        if ($zeilen === []) {
-            $zeilen[] = ['type' => 'Label', 'caption' => $this->Translate('No reports yet — open the tile in each environment (browser, Symcon app on iOS and Android). The probe runs by itself and reports here.')];
         }
 
-        $form = [
-            'elements' => [
-                ['type' => 'Label', 'caption' => $this->Translate('Feasibility probe: whether this environment supports the voice dialog (WebRTC to the AI provider). The tile measures and reports automatically.')],
-                ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Probe results'), 'expanded' => true,
-                 'items' => array_merge($zeilen, [
-                     ['type' => 'Button', 'caption' => $this->Translate('Clear reports'),
-                      'onClick' => 'IPS_RequestAction($id, "ProbeReset", "");'],
-                 ])],
-            ],
-            'actions' => [],
-            'status'  => [],
+        $elements = [
+            ['type' => 'Label', 'caption' => $this->Translate('Voice dialog with the AI: talk, ask, control SymDo. Enable the voice dialog and give the consent in the SymDo Gateway instance (panel "Voice dialog").')],
         ];
-        return (string)json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Neue Felder erst zeigen, wenn ihre Eigenschaft existiert — sonst lässt
+        // „Übernehmen" vor dem Kernel-Neustart das ganze Formular scheitern.
+        if ($this->PropertyExistiert('UserID')) {
+            $elements[] = ['type' => 'Select', 'name' => 'UserID',
+                'caption' => $this->Translate('This tile belongs to'), 'options' => $benutzer];
+        }
+        if ($this->PropertyExistiert('DefaultShoppingID')) {
+            $elements[] = ['type' => 'SelectInstance', 'name' => 'DefaultShoppingID', 'width' => '400px',
+                'caption' => $this->Translate('Default shopping list'), 'validModules' => [self::SHOPPING_GUID]];
+            $elements[] = ['type' => 'SelectInstance', 'name' => 'DefaultTodoID', 'width' => '400px',
+                'caption' => $this->Translate('Default task list'), 'validModules' => [self::TODO_GUID]];
+        } else {
+            $elements[] = ['type' => 'Label',
+                'caption' => $this->Translate('More settings appear after the next Symcon restart.')];
+        }
+
+        // Die Messergebnisse der Machbarkeitsprobe (Etappe 0) bleiben ablesbar.
+        $zeilen = [];
+        foreach ((array)json_decode($this->ReadAttributeString('ProbeResult'), true) as $b) {
+            if (is_array($b)) {
+                $zeilen[] = ['type' => 'Label', 'caption' => $this->ProbeZeile($b)];
+            }
+        }
+        if ($zeilen !== []) {
+            $zeilen[] = ['type' => 'Button', 'caption' => $this->Translate('Clear reports'),
+                'onClick' => 'IPS_RequestAction($id, "ProbeReset", "");'];
+            $elements[] = ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Probe results'),
+                'expanded' => false, 'items' => $zeilen];
+        }
+
+        return (string)json_encode(['elements' => $elements, 'actions' => [], 'status' => []],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     // ------------------------------------------------------------------
     // Intern
     // ------------------------------------------------------------------
 
+    /**
+     * Relay zum Gateway — mit serverseitig erzwungener Identität: userId,
+     * Kachel-Kennung und Standard-Listen kommen aus den Eigenschaften dieser
+     * Instanz, niemals aus dem Browser.
+     */
+    private function HandleVoiceCall(string $json): void
+    {
+        $req = json_decode($json, true);
+        if (!is_array($req)) {
+            return;
+        }
+        $txn = (string)($req['txn'] ?? '');
+        $payload = is_array($req['payload'] ?? null) ? $req['payload'] : [];
+        $payload['userId'] = $this->ReadPropertyString('UserID');
+        $payload['tile']   = $this->InstanceID;
+        $payload['defaults'] = [
+            'shopping' => $this->ReadPropertyInteger('DefaultShoppingID'),
+            'todo'     => $this->ReadPropertyInteger('DefaultTodoID'),
+        ];
+
+        $gw = $this->GatewayID();
+        if ($gw > 0 && $this->InstanzBereit($gw)) {
+            $this->WriteAttributeString('SeenTxn', '');
+            try {
+                IPS_RequestAction($gw, 'AiTileRequest', json_encode([
+                    'path'    => '/voice',
+                    'payload' => $payload,
+                    'txn'     => $txn,
+                    'sdwa'    => $this->InstanceID,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                // Das Relay ist synchron, aber auf einem anderen Objekt — der
+                // Briefkasten sagt, ob unsere Antwort wirklich ankam.
+                if ($txn !== '' && (string)@$this->ReadAttributeString('SeenTxn') === $txn) {
+                    return;
+                }
+            } catch (Throwable $e) {
+                // fällt unten in die Fehlerantwort
+            }
+        }
+        $this->Push(['type' => 'voiceResult', 'txn' => $txn, 'json' => [
+            'ok' => false, 'error' => ['code' => 'gateway_unavailable'],
+            'sag' => $this->Translate('The gateway is not reachable.'),
+        ]]);
+    }
+
+    /** Das zuständige Gateway: verbundene Eltern-Instanz, sonst die niedrigste ID. */
+    private function GatewayID(): int
+    {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
+        $ids = @IPS_GetInstanceListByModuleID(self::GATEWAY_GUID);
+        if (!is_array($ids) || $ids === []) {
+            return 0;
+        }
+        sort($ids);
+        return (int)$ids[0];
+    }
+
+    /** IPS_RequestAction auf eine unfertige Instanz warnt nur — vorher prüfen. */
+    private function InstanzBereit(int $id): bool
+    {
+        return IPS_GetKernelRunlevel() === KR_READY && @IPS_InstanceExists($id);
+    }
+
+    /** Gibt es die Eigenschaft schon? Neue entstehen erst beim nächsten Kernel-Start. */
+    private function PropertyExistiert(string $Name): bool
+    {
+        $config = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        return is_array($config) && array_key_exists($Name, $config);
+    }
+
     private function PayloadBauen(): array
     {
-        return [
-            'type'  => 'state',
-            'stufe' => 'probe',
-        ];
+        return ['type' => 'state', 'stufe' => 'dialog'];
     }
 
     private function Push(array $daten): void
@@ -159,14 +286,13 @@ class SymDoVoice extends IPSModuleStrict
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
-    /** Bericht der Kachel ablegen — je Umgebungskennung nur der jüngste. */
+    /** Bericht der Machbarkeitsprobe ablegen — je Umgebungskennung nur der jüngste. */
     private function ProbeAblegen(string $json): void
     {
         $neu = json_decode($json, true);
         if (!is_array($neu)) {
             return;
         }
-        // Kennung der Umgebung: gekürzter Browser-Stempel plus Rahmen-Frage.
         $agent = (string)($neu['umgebung']['agent'] ?? '');
         $iframe = ($neu['umgebung']['iframe'] ?? false) === true;
         $kennung = substr(md5($agent . '|' . ($iframe ? '1' : '0')), 0, 8);
@@ -183,23 +309,21 @@ class SymDoVoice extends IPSModuleStrict
         $this->WriteAttributeString('ProbeResult',
             (string)json_encode($alle, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         $this->LogMessage('SymDo Voice: Machbarkeitsprobe gemeldet — ' . (string)($neu['fazit'] ?? '?'), KL_NOTIFY);
-        // Formular offen? Dann gleich zeigen. Warnung vermeiden, falls keins offen ist.
         @$this->ReloadForm();
     }
 
-    /** Eine Formularzeile je Bericht — kompakt, aber vollständig. */
+    /** Eine Formularzeile je Proben-Bericht — kompakt, aber vollständig. */
     private function ProbeZeile(array $b): string
     {
         $u = is_array($b['umgebung'] ?? null) ? $b['umgebung'] : [];
         $ice = is_array($b['ice'] ?? null) ? $b['ice'] : [];
         $api = is_array($b['api'] ?? null) ? $b['api'] : [];
-        $kandidaten = is_array($ice['kandidaten'] ?? null) ? $ice['kandidaten'] : [];
         $teile = [];
-        foreach ($kandidaten as $typ => $anzahl) {
+        foreach ((array)($ice['kandidaten'] ?? []) as $typ => $anzahl) {
             $teile[] = $typ . '×' . (int)$anzahl;
         }
         return sprintf(
-            "[%s] %s\n%s | %s | iframe: %s | WebRTC: %s | Mikro: %s | Erkennung: %s\nICE: %s | API: HTTP %s %s | call_id: %s",
+            "[%s] %s\n%s | %s | iframe: %s | WebRTC: %s | Mikro: %s\nICE: %s | API: HTTP %s %s | call_id: %s",
             date('d.m. H:i', (int)($b['at'] ?? 0)),
             (string)($b['fazit'] ?? '?'),
             mb_substr((string)($u['agent'] ?? '?'), 0, 60),
@@ -207,7 +331,6 @@ class SymDoVoice extends IPSModuleStrict
             ($u['iframe'] ?? false) ? 'ja' : 'nein',
             ($u['webrtc'] ?? false) ? 'ja' : 'NEIN',
             ($u['mikro'] ?? false) ? 'ja' : 'NEIN',
-            ($u['erkennung'] ?? false) ? 'ja' : 'nein',
             $teile !== [] ? implode(' ', $teile) : ('FEHLER ' . (string)($ice['fehler'] ?? 'keine Kandidaten')),
             (string)($api['status'] ?? '0'),
             (string)($api['code'] ?? ($api['fehler'] ?? '')),
