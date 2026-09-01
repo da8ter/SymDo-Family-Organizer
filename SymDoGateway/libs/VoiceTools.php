@@ -500,6 +500,9 @@ trait VoiceTools
                 continue;
             }
             $menge = trim((string)($a['menge'] ?? ''));
+            // Menge aus dem Namen ziehen: „2 Liter Milch" gehört getrennt, auch
+            // wenn das Modell alles in den Namen geschrieben hat.
+            [$name, $menge] = $this->VoiceMengeTrennen($name, $menge);
             // AppCall AddItem nimmt ein Objekt {name, category, amount} — feldweise.
             @SL_AppCall((int)$ziel['id'], 'AddItem', (string)json_encode(
                 ['name' => $name, 'category' => '', 'amount' => $menge],
@@ -817,6 +820,64 @@ trait VoiceTools
             'sag' => sprintf($this->Translate('Which list do you mean? There is: %s.'), implode(', ', $namen)),
             'listen' => $namen,
         ];
+    }
+
+    /**
+     * Trennt eine führende Mengenangabe vom Artikelnamen. „2 Liter Milch" →
+     * ['Milch', '2 Liter']; „500g Mehl" → ['Mehl', '500 g']; „6 Eier" →
+     * ['Eier', '6']; „Milch" → ['Milch', ''] (unverändert).
+     *
+     * Läuft IMMER: schrieb das Modell alles in den Namen, wird korrigiert;
+     * hatte es die Menge schon getrennt, bleibt sie und der Name wird nur
+     * bereinigt, falls die Menge dort noch einmal steht.
+     *
+     * @return array{0:string,1:string} [name, menge]
+     */
+    private function VoiceMengeTrennen(string $name, string $menge): array
+    {
+        $roh = trim($name);
+        // Zahlwörter am Anfang → Ziffer (Diktat liefert oft Wörter).
+        $zahlwort = [
+            'ein' => '1', 'eine' => '1', 'einen' => '1', 'eins' => '1',
+            'zwei' => '2', 'drei' => '3', 'vier' => '4', 'fünf' => '5', 'fuenf' => '5',
+            'sechs' => '6', 'sieben' => '7', 'acht' => '8', 'neun' => '9',
+            'zehn' => '10', 'elf' => '11', 'zwölf' => '12', 'zwoelf' => '12',
+            'ein halbes' => '0,5', 'ein halber' => '0,5', 'anderthalb' => '1,5',
+        ];
+        foreach ($zahlwort as $wort => $ziffer) {
+            if (preg_match('/^' . preg_quote($wort, '/') . '\b/iu', $roh) === 1) {
+                $roh = $ziffer . ' ' . preg_replace('/^' . preg_quote($wort, '/') . '\s*/iu', '', $roh);
+                break;
+            }
+        }
+        // Bekannte Einheiten (mit Punkt-Varianten).  greift bei „g"/„l" sauber.
+        // Lange Einheiten ZUERST — bei Alternation gewinnt der erste Treffer,
+        // sonst schluckt „l" das „L" von „Liter".
+        $einheiten = 'kilogramm|messerspitze|packungen|portionen|flaschen|'
+            . 'scheiben|packung|flasche|portion|gramm|kilo|liter|becher|beutel|'
+            . 'gläser|blätter|scheibe|köpfe|zehen|blatt|tüten|tueten|dosen|'
+            . 'prisen|tafeln|rollen|kasten|kiste|riegel|handvoll|'
+            . 'stück|paket|dose|glas|tüte|bund|kopf|zehe|prise|tafel|rolle|paar|'
+            . 'stk|pck|pkg|msp|kg|mg|ml|cl|dl|el|tl|st|g|l';
+        $zahl = '\d+(?:[.,]\d+)?';
+        $extrakt = '';
+        $rest = $roh;
+        // A: Zahl + Einheit + Rest
+        if (preg_match('/^(' . $zahl . ')\s*(' . $einheiten . ')\b\.?\s+(.+)$/iu', $roh, $m) === 1) {
+            $extrakt = $m[1] . ' ' . $m[2];
+            $rest = trim($m[3]);
+        // B: nur Zahl + Rest (der Rest muss mit einem Buchstaben beginnen, sonst
+        //    ist es kein „6 Eier", sondern etwa „3-Minuten-Terrine")
+        } elseif (preg_match('/^(' . $zahl . ')\s+(\p{L}.+)$/u', $roh, $m) === 1) {
+            $extrakt = $m[1];
+            $rest = trim($m[2]);
+        }
+        if ($extrakt === '') {
+            return [$roh, $menge];   // keine führende Menge — unverändert
+        }
+        // Menge gesetzt lassen, wenn das Modell sie schon getrennt hatte; sonst
+        // die extrahierte übernehmen. Der Name ist in jedem Fall der bereinigte.
+        return [$rest !== '' ? $rest : $roh, $menge !== '' ? $menge : $extrakt];
     }
 
     /** Kleinschreibung + Umlautfaltung — levenshtein/Vergleiche sind sonst falsch geeicht. */
