@@ -352,6 +352,31 @@ trait AiExtract
             return json_encode(['ok' => true, 'todos' => $r['todos']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
+        /* Diktat aus der Visu-Kachel. Den HTTP-Weg (/v1/ai/transcribe) erreichen
+           nur App und Web-App mit Token; die Kachel hat keinen und kommt
+           ausschliesslich hier vorbei — ohne diesen Zweig antwortete das Relay
+           mit „Unknown AI route", und das Diktat ging in der Kachel gar nicht. */
+        if (str_ends_with($path, 'transcribe')) {
+            $audio = $this->AiStripImage($this->BodyStr($body, 'audio'));
+            if ($audio === '') {
+                return $this->AiRelayError('invalid_payload', $this->Translate('No audio data.'));
+            }
+            if (strlen($audio) > self::AI_MAX_AUDIO_B64) {
+                return $this->AiRelayError('invalid_payload', $this->Translate('Recording too long.'));
+            }
+            $bytes = base64_decode($audio, true);
+            if (!is_string($bytes) || $bytes === '') {
+                return $this->AiRelayError('invalid_payload', $this->Translate('No audio data.'));
+            }
+            $mime = trim($this->BodyStr($body, 'mime'));
+            $r = $this->AiTranscribe($bytes, $mime !== '' ? $mime : 'audio/webm');
+            if (($r['ok'] ?? false) !== true) {
+                return $this->AiRelayError((string)($r['code'] ?? 'ai_failed'), (string)($r['message'] ?? 'AI error'));
+            }
+            $this->MailCountDay();
+            return json_encode(['ok' => true, 'text' => (string)$r['text']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         return $this->AiRelayError('unknown_route', 'Unknown AI route');
     }
 
