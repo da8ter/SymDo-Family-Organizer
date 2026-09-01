@@ -63,7 +63,7 @@
   #rahmen {
     height: 100%; display: flex; flex-direction: column;
     padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
-             var(--sym-mb) var(--sym-ms);
+             calc(var(--sym-mb) + 12px) var(--sym-ms);
   }
   .scrollbereich {
     flex: 1; min-height: 0;
@@ -73,9 +73,13 @@
     /* overflow-y: scroll statt auto: der Streifen ist IMMER reserviert, damit
        der rechte Abstand mit und ohne sichtbaren Balken derselbe ist. Die Spur
        ist durchsichtig, der Griff erscheint nur bei Bedarf. */
-    overflow-y: scroll;
+    overflow-y: auto;
+  scrollbar-gutter: stable;
     overscroll-behavior: contain;
-    padding: 12px var(--sb-pad) 12px 0;
+    /* Unten KEIN Polster: ein padding-bottom zaehlt zu scrollHeight und laesst
+       den Griff erscheinen, obwohl optisch nichts fehlt. Die 12px traegt der
+       Rahmen, der nicht scrollt. */
+    padding: 12px var(--sb-pad) 0 0;
   }
   /* Im Wochenraster rollt das Raster selbst, und sein Balken soll dort liegen,
      wo er in der Timeline liegt: mittig im marginside-Streifen. Dafuer muss

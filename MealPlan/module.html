@@ -52,7 +52,7 @@ body {
 #wrap {
   display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box;
   padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
-           var(--sym-mb) var(--sym-ms);
+           calc(var(--sym-mb) + 4px) var(--sym-ms);
 }
 
 /* ── Kopf: Wochenumschalter + Wochen-Einkauf ────────────────────────────── */
@@ -78,7 +78,11 @@ body {
 }
 
 /* ── Tage ───────────────────────────────────────────────────────────────── */
-#tage { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 0 var(--sb-pad) 4px 0; }
+/* Unten KEIN Polster: Ein padding-bottom am Scrollbereich zaehlt zu scrollHeight
+   und laesst den Griff erscheinen, obwohl optisch nichts fehlt (gemessen: Inhalt
+   endete bei 372px, scrollHeight war 376px — 4px „Ueberlauf" aus reiner Luft).
+   Die Luft traegt jetzt der Rahmen, der nicht scrollt. */
+#tage { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 0 var(--sb-pad) 0 0; }
 
 /* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
    overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
@@ -91,7 +95,8 @@ body {
    Jeder Selektor braucht sein EIGENES Pseudoelement — in einer Liste haengt es
    sonst nur am letzten. */
 #tage, #blatt, #detail, #korb {
-  overflow-y: scroll;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 #tage::-webkit-scrollbar,

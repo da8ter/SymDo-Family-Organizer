@@ -148,7 +148,8 @@ select option { color: #111; background: #fff; }
      reserviert — so ist der rechte Abstand mit und ohne sichtbaren Balken
      gleich (leerer Track ist transparent, der Thumb erscheint nur bei Bedarf).
      KEIN scrollbar-gutter zusätzlich — das würde doppelt reservieren. */
-  overflow-y: scroll;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   display: none;
   /* Vertikaler Gutter; rechts --sb-pad, damit der Inhalt trotz des nach rechts
