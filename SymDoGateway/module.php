@@ -17,6 +17,7 @@ require_once __DIR__ . '/libs/MealPlanBridge.php';
 require_once __DIR__ . '/libs/DishImages.php';
 require_once __DIR__ . '/libs/Voice.php';
 require_once __DIR__ . '/libs/VoiceTools.php';
+require_once __DIR__ . '/libs/VoiceResolve.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -48,6 +49,7 @@ class SymDoGateway extends IPSModuleStrict
     use DishImages;
     use Voice;
     use VoiceTools;
+    use VoiceResolve;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 

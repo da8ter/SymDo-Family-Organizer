@@ -89,6 +89,59 @@ trait VoiceTools
                     'required' => ['rezept', 'liste'],
                 ],
             ],
+            'einkauf_hinzufuegen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Setzt einen oder mehrere Artikel auf die Einkaufsliste.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'artikel' => [
+                            'type' => 'array', 'description' => 'Die Artikel', 'maxItems' => 20,
+                            'items' => [
+                                'type' => 'object', 'additionalProperties' => false,
+                                'properties' => [
+                                    'name'  => ['type' => 'string'],
+                                    'menge' => ['type' => ['string', 'null'], 'description' => 'z.B. "2", "500 g", null'],
+                                ],
+                                'required' => ['name', 'menge'],
+                            ],
+                        ],
+                        'liste' => ['type' => ['string', 'null'], 'description' => 'Ziel-Einkaufsliste; null = Standardliste'],
+                    ],
+                    'required' => ['artikel', 'liste'],
+                ],
+            ],
+            'aufgabe_anlegen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Legt eine neue Aufgabe an.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'titel'   => ['type' => 'string'],
+                        'info'    => ['type' => ['string', 'null']],
+                        'frist'   => ['type' => ['string', 'null'], 'description' => 'Fälligkeitsdatum JJJJ-MM-TT oder null'],
+                        'uhrzeit' => ['type' => ['string', 'null'], 'description' => 'HH:MM oder null (dann ganztägig)'],
+                        'wichtig' => ['type' => 'boolean'],
+                        'liste'   => ['type' => ['string', 'null'], 'description' => 'Ziel-Aufgabenliste; null = Standardliste'],
+                    ],
+                    'required' => ['titel', 'info', 'frist', 'uhrzeit', 'wichtig', 'liste'],
+                ],
+            ],
+            'abhaken' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Hakt eine Aufgabe ab oder legt einen Einkaufsartikel in den Wagen (bzw. macht das rückgängig).',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'was'      => ['type' => 'string', 'description' => 'Titel der Aufgabe oder Name des Artikels'],
+                        'bereich'  => ['type' => ['string', 'null'], 'enum' => ['aufgabe', 'einkauf', null],
+                                       'description' => 'Wo suchen; null = zuerst Aufgaben, dann Einkauf'],
+                        'erledigt' => ['type' => 'boolean', 'description' => 'true = abhaken/in den Wagen, false = zurück'],
+                        'liste'    => ['type' => ['string', 'null']],
+                    ],
+                    'required' => ['was', 'bereich', 'erledigt', 'liste'],
+                ],
+            ],
         ];
     }
 
@@ -131,6 +184,9 @@ trait VoiceTools
                 'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
                 'rezepte_lesen'       => $this->VoiceToolRezepte($args, $ctx),
                 'rezept_einkaufen'    => $this->VoiceToolRezeptEinkaufen($args, $ctx),
+                'einkauf_hinzufuegen' => $this->VoiceToolEinkaufHinzu($args, $ctx),
+                'aufgabe_anlegen'     => $this->VoiceToolAufgabeAnlegen($args, $ctx),
+                'abhaken'             => $this->VoiceToolAbhaken($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -262,6 +318,139 @@ trait VoiceTools
                 ? $this->Translate('Nothing there — all done.')
                 : sprintf($this->Translate('%d task(s) on %s.'), $gesamt, (string)$ziel['name']),
         ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolEinkaufHinzu(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $artikel = is_array($args['artikel'] ?? null) ? $args['artikel'] : [];
+        if ($artikel === []) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not catch any item.'));
+        }
+        $namen = [];
+        $n = 0;
+        foreach (array_slice($artikel, 0, 20) as $a) {
+            if (!is_array($a)) {
+                continue;
+            }
+            $name = trim((string)($a['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $menge = trim((string)($a['menge'] ?? ''));
+            // AppCall AddItem nimmt ein Objekt {name, category, amount} — feldweise.
+            @SL_AppCall((int)$ziel['id'], 'AddItem', (string)json_encode(
+                ['name' => $name, 'category' => '', 'amount' => $menge],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $namen[] = $menge !== '' ? ($name . ' (' . $menge . ')') : $name;
+            $n++;
+        }
+        if ($n === 0) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not catch any item.'));
+        }
+        return [
+            'ok'    => true,
+            'liste' => (string)$ziel['name'],
+            'anzahl'=> $n,
+            'sag'   => $n === 1
+                ? sprintf($this->Translate('%s is on %s now.'), $namen[0], (string)$ziel['name'])
+                : sprintf($this->Translate('%d items are on %s now: %s.'), $n, (string)$ziel['name'], implode(', ', $namen)),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolAufgabeAnlegen(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $titel = trim((string)($args['titel'] ?? ''));
+        if ($titel === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('The task needs a title.'));
+        }
+        // Frist + Uhrzeit → Zeitstempel. Ohne Uhrzeit ist die Aufgabe ganztägig.
+        $due = 0;
+        $ganztags = false;
+        $frist = trim((string)($args['frist'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $frist) === 1) {
+            $uhr = trim((string)($args['uhrzeit'] ?? ''));
+            if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $uhr) === 1) {
+                $due = (int)strtotime($frist . ' ' . $uhr);
+            } else {
+                $due = (int)strtotime($frist . ' 00:00');
+                $ganztags = true;
+            }
+        }
+        $payload = [
+            'title'      => $titel,
+            'info'       => trim((string)($args['info'] ?? '')),
+            'due'        => $due,
+            'dueAllDay'  => $ganztags,
+            'priority'   => ($args['wichtig'] ?? false) === true ? 'high' : 'normal',
+            'assignedTo' => ($ctx['userId'] ?? '') !== '' ? [(string)$ctx['userId']] : [],
+        ];
+        @TDL_AppCall((int)$ziel['id'], 'AddItem', (string)json_encode($payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $wann = $due > 0 ? ($ganztags ? (' am ' . date('d.m.', $due)) : (' am ' . date('d.m. H:i', $due))) : '';
+        return [
+            'ok'    => true,
+            'liste' => (string)$ziel['name'],
+            'titel' => $titel,
+            'sag'   => sprintf($this->Translate('Task "%s" created%s.'), $titel, $wann),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolAbhaken(array $args, array $ctx): array
+    {
+        $was = trim((string)($args['was'] ?? ''));
+        if ($was === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What should I check off?'));
+        }
+        $erledigt = ($args['erledigt'] ?? true) !== false;
+        $bereich = (string)($args['bereich'] ?? '');
+
+        // Reihenfolge: ausdrücklicher Bereich zuerst; sonst Aufgaben, dann Einkauf.
+        $versuche = $bereich === 'einkauf' ? ['einkauf']
+                  : ($bereich === 'aufgabe' ? ['aufgabe'] : ['aufgabe', 'einkauf']);
+        $letzterFehler = null;
+        foreach ($versuche as $b) {
+            if ($b === 'aufgabe') {
+                $ziel = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
+                if (!($ziel['ok'] ?? false)) { $letzterFehler = $ziel; continue; }
+                $erg = $this->VoiceAufgabeAufloesen((int)$ziel['id'], $was);
+                $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('tasks'));
+                if ($fehler === null) {
+                    $t = $erg['treffer'][0];
+                    @TDL_AppCall((int)$ziel['id'], 'ToggleDone', (string)json_encode(
+                        ['id' => (int)$t['schluessel'], 'done' => $erledigt]));
+                    return ['ok' => true, 'bereich' => 'aufgabe', 'titel' => (string)$t['titel'],
+                        'sag' => sprintf($erledigt ? $this->Translate('"%s" is checked off.')
+                                                   : $this->Translate('"%s" is open again.'), (string)$t['titel'])];
+                }
+                $letzterFehler = $fehler;
+            } else {
+                $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+                if (!($ziel['ok'] ?? false)) { $letzterFehler = $ziel; continue; }
+                $erg = $this->VoiceArtikelAufloesen((int)$ziel['id'], $was);
+                $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('shopping items'));
+                if ($fehler === null) {
+                    $t = $erg['treffer'][0];
+                    @SL_AppCall((int)$ziel['id'], 'ToggleCart', (string)json_encode(
+                        ['id' => (string)$t['schluessel'], 'inCart' => $erledigt]));
+                    return ['ok' => true, 'bereich' => 'einkauf', 'titel' => (string)$t['titel'],
+                        'sag' => sprintf($erledigt ? $this->Translate('"%s" is in the cart.')
+                                                   : $this->Translate('"%s" is back on the list.'), (string)$t['titel'])];
+                }
+                $letzterFehler = $fehler;
+            }
+        }
+        return $letzterFehler ?? $this->VoiceErr('nicht_gefunden', $this->Translate('I did not find that.'));
     }
 
     /** @return array<string,mixed> */
