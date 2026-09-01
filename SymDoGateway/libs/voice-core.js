@@ -54,10 +54,47 @@ function erzeuge(opt) {
 
   /* ── Verbindungsaufbau ──────────────────────────────────────────────────── */
 
+  /**
+   * Kann dieser Ursprung überhaupt Sprache? Mikrofon und WebRTC sind für Browser
+   * „powerful features" und nur in einem SICHEREN KONTEXT freigegeben: https,
+   * localhost oder 127.0.0.1. Eine lokale http-Adresse (192.168.x.x:3777) zählt
+   * ausdrücklich NICHT — auch nicht im eigenen WLAN.
+   *
+   * Die Probe muss sein, weil WebKit den Zugriff nicht verweigert, sondern
+   * `navigator.mediaDevices` gar nicht erst ausliefert: ohne sie fiele das als
+   * nacktes „TypeError" auf den Nutzer zurück, statt ihm den einen Satz zu sagen,
+   * der das Problem löst. Trifft in der Visu-App auf dem iPhone jeden, der die
+   * lokale Adresse eingetragen hat.
+   *
+   * @return {string} Fehlertext, oder '' wenn alles vorhanden ist.
+   */
+  function umgebungsFehler() {
+    var sicher = (typeof window.isSecureContext === 'boolean') ? window.isSecureContext : true;
+    if (!sicher) {
+      return 'Sprache braucht eine verschlüsselte Verbindung. Öffne die Visu über die '
+           + 'Connect-Adresse (https) statt über die lokale http-Adresse.';
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return 'Dieser Browser gibt kein Mikrofon frei.';
+    }
+    if (typeof RTCPeerConnection === 'undefined') {
+      return 'Dieser Browser kann keine Sprachverbindung aufbauen.';
+    }
+    return '';
+  }
+
   function start() {
     if (!beendet) { return Promise.resolve(false); }
     beendet = false;
     zustand('verbinde');
+
+    var hindernis = umgebungsFehler();
+    if (hindernis !== '') {
+      beendet = true;
+      zustand('fehler', hindernis);
+      ereignis({ art: 'fehler', text: hindernis });
+      return Promise.resolve(false);
+    }
 
     // ZUERST das Mikrofon, DANN die Marke: die Berechtigungsfrage kann
     // Sekunden dauern, und die Marke verfällt nach 60 s.
@@ -78,9 +115,19 @@ function erzeuge(opt) {
       return true;
     }).catch(function (e) {
       var text = e && e.eigene ? e.message : mikrofonFehlerText(e);
+      /* Ein gescheiterter Start ist ein BEENDETER Zustand. Ohne diese Zeile bliebe
+         `beendet` false: die Kachel zeigte „Gespräch läuft" samt leuchtendem
+         Mikrofonpunkt, und der nächste Druck auf den Knopf hätte nur gestoppt,
+         statt es erneut zu versuchen. */
+      beendet = true;
+      var id = callId;
+      callId = '';
       aufraeumen();
       zustand('fehler', text);
       ereignis({ art: 'fehler', text: text });
+      // Kam die Sitzung noch zustande, bevor es scheiterte, serverseitig auflegen —
+      // aber OHNE 'ende'-Zustand, der die Fehlermeldung sonst überschriebe.
+      if (id) { post({ action: 'close', callId: id }).catch(function () {}); }
       return false;
     });
   }
