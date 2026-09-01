@@ -2,6 +2,13 @@
     "translations": {
         "de": {
             "No audio data.": "Keine Audiodaten.",
+            "There are no recipes saved yet.": "Es sind noch keine Rezepte gespeichert.",
+            "%d recipes saved.": "%d Rezepte gespeichert.",
+            "The recipe \"%s\" has no ingredients stored.": "Für das Rezept „%s\" sind keine Zutaten hinterlegt.",
+            "The recipe \"%s\" has %d ingredients.": "Das Rezept „%s\" hat %d Zutaten.",
+            "The ingredients for \"%s\" are now on %s.": "Die Zutaten für „%s\" stehen jetzt auf %s.",
+            "I cannot find a recipe called \"%s\".": "Ein Rezept „%s\" finde ich nicht.",
+            "Which recipe do you mean? For example: %s.": "Welches Rezept meinst du? Zum Beispiel: %s.",
             "Voice dialog": "Sprachdialog",
             "The voice dialog settings appear after the next Symcon restart — they are new settings, and those only exist once the kernel has loaded the module again.": "Die Einstellungen des Sprachdialogs erscheinen nach dem nächsten Symcon-Neustart — sie sind neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
             "Enable voice dialog (SymDo Voice tile)": "Sprachdialog einschalten (Kachel SymDo - Sprachassistent)",

@@ -65,6 +65,30 @@ trait VoiceTools
                     'required' => ['filter', 'liste'],
                 ],
             ],
+            'rezepte_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Die gespeicherten Rezepte (Rezept-Favoritenlisten): ohne Angabe alle Namen, mit einem Rezeptnamen dessen Zutaten.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'rezept' => ['type' => ['string', 'null'], 'description' => 'Name eines Rezepts für die Zutaten; null = alle Rezepte auflisten'],
+                        'liste'  => ['type' => ['string', 'null'], 'description' => 'Einkaufsliste, zu der die Rezepte gehören; null = Standardliste'],
+                    ],
+                    'required' => ['rezept', 'liste'],
+                ],
+            ],
+            'rezept_einkaufen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Setzt die Zutaten eines Rezepts auf die Einkaufsliste.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'rezept' => ['type' => 'string', 'description' => 'Name des Rezepts'],
+                        'liste'  => ['type' => ['string', 'null'], 'description' => 'Ziel-Einkaufsliste; null = Standardliste'],
+                    ],
+                    'required' => ['rezept', 'liste'],
+                ],
+            ],
         ];
     }
 
@@ -105,6 +129,8 @@ trait VoiceTools
                 'tag_uebersicht'      => $this->VoiceToolTag($args),
                 'einkaufsliste_lesen' => $this->VoiceToolEinkauf($args, $ctx),
                 'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
+                'rezepte_lesen'       => $this->VoiceToolRezepte($args, $ctx),
+                'rezept_einkaufen'    => $this->VoiceToolRezeptEinkaufen($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -235,6 +261,155 @@ trait VoiceTools
             'sag'      => $gesamt === 0
                 ? $this->Translate('Nothing there — all done.')
                 : sprintf($this->Translate('%d task(s) on %s.'), $gesamt, (string)$ziel['name']),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolRezepte(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $rezepte = $this->VoiceRezeptListe((int)$ziel['id']);
+        $such = is_string($args['rezept'] ?? null) ? trim($args['rezept']) : '';
+        if ($such === '') {
+            $namen = array_map(static fn(array $r): string => $r['name'], $rezepte);
+            return [
+                'ok'      => true,
+                'anzahl'  => count($namen),
+                'rezepte' => array_slice($namen, 0, 30),
+                'gekuerzt'=> count($namen) > 30,
+                'sag'     => count($namen) === 0
+                    ? $this->Translate('There are no recipes saved yet.')
+                    : sprintf($this->Translate('%d recipes saved.'), count($namen)),
+            ];
+        }
+        $treffer = $this->VoiceRezeptFinden($rezepte, $such);
+        if (($treffer['status'] ?? '') !== 'eindeutig') {
+            return $this->VoiceRezeptMehrdeutig($treffer, $such);
+        }
+        $r = $treffer['rezept'];
+        $zutaten = [];
+        foreach ((array)($r['items'] ?? []) as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $name  = trim((string)($it['name'] ?? ''));
+            $menge = trim((string)($it['amount'] ?? ''));
+            if ($name !== '') {
+                $zutaten[] = $menge !== '' ? ($name . ' (' . $menge . ')') : $name;
+            }
+        }
+        return [
+            'ok'      => true,
+            'rezept'  => (string)$r['name'],
+            'zutaten' => array_slice($zutaten, 0, 30),
+            'anzahl'  => count($zutaten),
+            'gekuerzt'=> count($zutaten) > 30,
+            'sag'     => count($zutaten) === 0
+                ? sprintf($this->Translate('The recipe "%s" has no ingredients stored.'), (string)$r['name'])
+                : sprintf($this->Translate('The recipe "%s" has %d ingredients.'), (string)$r['name'], count($zutaten)),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolRezeptEinkaufen(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $rezepte = $this->VoiceRezeptListe((int)$ziel['id']);
+        $treffer = $this->VoiceRezeptFinden($rezepte, is_string($args['rezept'] ?? null) ? trim($args['rezept']) : '');
+        if (($treffer['status'] ?? '') !== 'eindeutig') {
+            return $this->VoiceRezeptMehrdeutig($treffer, (string)($args['rezept'] ?? ''));
+        }
+        $r = $treffer['rezept'];
+        // AddFavoriteListToCart nimmt die ROHE listId (kein JSON) — feldweise, nie
+        // die Nutzlast des Modells durchreichen.
+        @SL_AppCall((int)$ziel['id'], 'AddFavoriteListToCart', (string)$r['id']);
+        $anzahl = count((array)($r['items'] ?? []));
+        return [
+            'ok'     => true,
+            'rezept' => (string)$r['name'],
+            'liste'  => (string)$ziel['name'],
+            'anzahl' => $anzahl,
+            'sag'    => sprintf($this->Translate('The ingredients for "%s" are now on %s.'),
+                (string)$r['name'], (string)$ziel['name']),
+        ];
+    }
+
+    /**
+     * Die Rezept-Favoritenlisten einer Einkaufsliste, schmal. Der volle Zustand
+     * ist 166.000 Zeichen — er bleibt in PHP, wir nehmen nur die Favoriten mit
+     * isRecipe.
+     * @return list<array{id:string,name:string,items:array}>
+     */
+    private function VoiceRezeptListe(int $slId): array
+    {
+        $st = json_decode((string)@SL_GetAppState($slId), true);
+        $favs = is_array($st) ? (($st['state'] ?? [])['favoriteLists'] ?? null) : null;
+        $raus = [];
+        foreach (is_array($favs) ? $favs : [] as $f) {
+            if (is_array($f) && ($f['isRecipe'] ?? false) === true) {
+                $raus[] = [
+                    'id'    => (string)($f['id'] ?? ''),
+                    'name'  => (string)($f['name'] ?? ''),
+                    'items' => is_array($f['items'] ?? null) ? $f['items'] : [],
+                ];
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Rezeptname unscharf auflösen — wie VoiceListeFinden, aber über die
+     * Rezeptnamen. @return array{status:string,rezept?:array,treffer?:array}
+     */
+    private function VoiceRezeptFinden(array $rezepte, string $such): array
+    {
+        if ($such === '') {
+            return ['status' => 'nichts', 'treffer' => []];
+        }
+        $sn = $this->VoiceNorm($such);
+        $genau = [];
+        $teil  = [];
+        foreach ($rezepte as $r) {
+            $kn = $this->VoiceNorm($r['name']);
+            if ($kn === $sn) {
+                $genau[] = $r;
+            } elseif (str_contains($kn, $sn) || str_contains($sn, $kn)) {
+                $teil[] = $r;
+            }
+        }
+        if (count($genau) === 1) {
+            return ['status' => 'eindeutig', 'rezept' => $genau[0]];
+        }
+        $kandidaten = $genau !== [] ? $genau : $teil;
+        if (count($kandidaten) === 1) {
+            return ['status' => 'eindeutig', 'rezept' => $kandidaten[0]];
+        }
+        if ($kandidaten === []) {
+            return ['status' => 'nichts', 'treffer' => []];
+        }
+        return ['status' => 'mehrdeutig', 'treffer' => $kandidaten];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceRezeptMehrdeutig(array $treffer, string $such): array
+    {
+        if (($treffer['status'] ?? '') === 'nichts') {
+            return [
+                'ok' => false, 'error' => ['code' => 'nicht_gefunden', 'message' => 'Rezept nicht gefunden'],
+                'sag' => sprintf($this->Translate('I cannot find a recipe called "%s".'), $such),
+            ];
+        }
+        $namen = array_map(static fn(array $r): string => $r['name'], array_slice($treffer['treffer'] ?? [], 0, 5));
+        return [
+            'ok' => false, 'error' => ['code' => 'mehrdeutig', 'message' => 'Rezept nicht eindeutig'],
+            'sag' => sprintf($this->Translate('Which recipe do you mean? For example: %s.'), implode(', ', $namen)),
+            'treffer' => $namen,
         ];
     }
 
@@ -375,6 +550,16 @@ trait VoiceTools
         }
         if ($aufgaben !== []) {
             $zeilen[] = 'Aufgabenlisten: ' . implode(', ', array_slice($aufgaben, 0, 6)) . '.';
+        }
+        // Gibt es Rezepte, dem Modell sagen, dass es sie abfragen kann.
+        $rezAnzahl = 0;
+        foreach ($this->GetListInstances() as $inst) {
+            if ((string)($inst['kind'] ?? '') === 'shopping') {
+                $rezAnzahl += count($this->VoiceRezeptListe((int)($inst['id'] ?? 0)));
+            }
+        }
+        if ($rezAnzahl > 0) {
+            $zeilen[] = 'Es gibt ' . $rezAnzahl . ' gespeicherte Rezepte; frag sie mit dem Werkzeug rezepte_lesen ab.';
         }
         $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
