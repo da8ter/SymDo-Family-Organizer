@@ -823,6 +823,23 @@ trait VoiceTools
     }
 
     /**
+     * Ist die Einheit ein reiner Stück-/Gebinde-Zähler? Dann trägt nur die Zahl
+     * die Menge (Nutzerwunsch 02.09.2026: „1 Packung Butter" → Menge „1").
+     */
+    private function VoiceGebinde(string $einheit): bool
+    {
+        $e = strtr(mb_strtolower(trim($einheit)), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        return in_array($e, [
+            'stück', 'stueck', 'stk', 'st', 'packung', 'packungen', 'pck', 'pkg', 'paket',
+            'dose', 'dosen', 'flasche', 'flaschen', 'glas', 'glaeser', 'becher',
+            'tüte', 'tuete', 'tueten', 'tüten', 'beutel', 'bund', 'kopf', 'koepfe',
+            'zehe', 'zehen', 'scheibe', 'scheiben', 'blatt', 'blaetter',
+            'tafel', 'tafeln', 'riegel', 'rolle', 'rollen', 'kasten', 'kiste',
+            'paar', 'portion', 'portionen',
+        ], true);
+    }
+
+    /**
      * Trennt eine führende Mengenangabe vom Artikelnamen. „2 Liter Milch" →
      * ['Milch', '2 Liter']; „500g Mehl" → ['Mehl', '500 g']; „6 Eier" →
      * ['Eier', '6']; „Milch" → ['Milch', ''] (unverändert).
@@ -864,7 +881,10 @@ trait VoiceTools
         $rest = $roh;
         // A: Zahl + Einheit + Rest
         if (preg_match('/^(' . $zahl . ')\s*(' . $einheiten . ')\b\.?\s+(.+)$/iu', $roh, $m) === 1) {
-            $extrakt = $m[1] . ' ' . $m[2];
+            // Gebinde-Einheiten (Packung, Dose, …) sind nur Zähler und fallen
+            // weg — „1 Packung Butter" ist „1 Butter". Echte Maßeinheiten
+            // (g, kg, Liter, EL) bleiben, „500" allein wäre sinnlos.
+            $extrakt = $this->VoiceGebinde($m[2]) ? $m[1] : ($m[1] . ' ' . $m[2]);
             $rest = trim($m[3]);
         // B: nur Zahl + Rest (der Rest muss mit einem Buchstaben beginnen, sonst
         //    ist es kein „6 Eier", sondern etwa „3-Minuten-Terrine")
