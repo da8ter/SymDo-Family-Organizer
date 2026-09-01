@@ -23,7 +23,9 @@ var STIL_ID = 'symdo-blase-stil';
 
 var STIL = [
   '.sym-blase{position:relative;display:flex;align-items:center;justify-content:center;',
-  '  --c1:#28dcff;--c2:#397cff;--c3:#583aff;--c4:#db35ff;',
+  /* Die vier Toene setzt JS je Zustand aus der Akzentfarbe (siehe palette()) —
+     hier stehen nur Rueckfallwerte, falls das Skript nicht dazu kommt. */
+  '  --c1:#7fe3d8;--c2:#00cdab;--c3:#2f7f8f;--c4:#7a86c8;',
   /* Der Farbwechsel beim Zustandswechsel soll überblenden, nicht umspringen.
      Eine gewöhnliche Custom Property kann das nicht — sie ist für den Browser
      ein Text ohne Typ. Erst die Anmeldung per @property (unten) macht sie zu
@@ -45,22 +47,20 @@ var STIL = [
   '.sym-blase .auge{fill:#0b1030;}',
   '.sym-blase .glanz{fill:rgba(180,220,255,.75);}',
   /* Zustandsfarben — dieselbe Sprache wie die Statuszeile der Kachel. */
-  '.sym-blase.z-bereit{--c1:#3a4a6a;--c2:#3b5aa0;--c3:#4a3a8a;--c4:#6a3a9a;}',
-  /* Zuhören ist ruhiger und kühler als Antworten — sonst sähe beides gleich aus. */
-  '.sym-blase.z-hoert{--c1:#6fe9ff;--c2:#3aa6f0;--c3:#4a63d0;--c4:#8a4ad0;}',
-  '.sym-blase.z-duSprichst{--c1:#2bffd0;--c2:#22c3ff;--c3:#3a7aff;--c4:#7a5cff;}',
-  '.sym-blase.z-denkt{--c1:#9a7bff;--c2:#7a5cff;--c3:#5a3ad0;--c4:#c035ff;}',
-  '.sym-blase.z-werkzeug{--c1:#ffd36b;--c2:#ffa63a;--c3:#ff7a3a;--c4:#ff4fa0;}',
-  '.sym-blase.z-fehler{--c1:#ff9a9a;--c2:#ff5c5c;--c3:#d02a4a;--c4:#a01a5a;}'
+  /* „bereit" traegt die volle Palette: nach dem Laden soll das Wesen leuchten
+     und nicht abgedunkelt dasitzen. Unterschieden wird der Zustand ohnehin
+     ueber die BEWEGUNG — im Ruhezustand atmet es langsam, beim Sprechen folgt
+     es dem Ton. */
+  '.sym-blase.z-fehler{}'
 ].join('');
 
 /* @property lässt sich nicht per CSSOM-Regel nachreichen; als Text im
    Stylesheet greift es überall dort, wo der Browser es kennt. */
 var ANMELDUNG = [
-  "@property --c1{syntax:'<color>';inherits:true;initial-value:#28dcff;}",
-  "@property --c2{syntax:'<color>';inherits:true;initial-value:#397cff;}",
-  "@property --c3{syntax:'<color>';inherits:true;initial-value:#583aff;}",
-  "@property --c4{syntax:'<color>';inherits:true;initial-value:#db35ff;}"
+  "@property --c1{syntax:'<color>';inherits:true;initial-value:#7fe3d8;}",
+  "@property --c2{syntax:'<color>';inherits:true;initial-value:#00cdab;}",
+  "@property --c3{syntax:'<color>';inherits:true;initial-value:#2f7f8f;}",
+  "@property --c4{syntax:'<color>';inherits:true;initial-value:#7a86c8;}"
 ].join('');
 
 var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
@@ -92,6 +92,115 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>'
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
   + '</g></svg>';
+
+/* ── Farben aus der Akzentfarbe ───────────────────────────────────────────
+   Das Wesen traegt die Akzentfarbe des Hauses. Die Zustaende sind Abwandlungen
+   DERSELBEN Farbe, damit es erkennbar bleibt — mit zwei Ausnahmen: Werkzeug
+   (Bernstein) und Fehler (Rot) sind Bedeutung, nicht Geschmack.
+
+   Genau daraus entsteht ein Problem, das hier geloest wird: Ist der Akzent
+   selbst orange, sieht "bereit" aus wie "Werkzeug"; ist er rot, wie "Fehler".
+   Deshalb wird der Abstand GEMESSEN (in Oklab, das perzeptuell gleichabstaendig
+   ist) und notfalls die Helligkeit der Warnfarbe so weit verschoben, bis er
+   reicht. Die Bedeutung bleibt so erhalten, die Unterscheidbarkeit auch. */
+
+function zuRgb(text) {
+  var s = String(text || '').trim();
+  var m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(s);
+  if (m) {
+    var h = m[1];
+    if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+    return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+  }
+  m = /rgba?\(([^)]+)\)/i.exec(s);
+  if (m) {
+    var t = m[1].split(/[,\/\s]+/).filter(function (x) { return x !== ''; }).map(parseFloat);
+    if (t.length >= 3 && t.every(function (x) { return isFinite(x); })) {
+      return [t[0], t[1], t[2]];
+    }
+  }
+  return null;
+}
+
+function rgbZuHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  var h = 0, sT = 0, l = (max + min) / 2;
+  if (d !== 0) {
+    sT = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) { h = ((g - b) / d) % 6; }
+    else if (max === g) { h = (b - r) / d + 2; }
+    else { h = (r - g) / d + 4; }
+    h *= 60; if (h < 0) { h += 360; }
+  }
+  return [h, sT * 100, l * 100];
+}
+
+function hslZuRgb(h, sT, l) {
+  h = ((h % 360) + 360) % 360; sT = Math.max(0, Math.min(100, sT)) / 100; l = Math.max(0, Math.min(100, l)) / 100;
+  var c = (1 - Math.abs(2 * l - 1)) * sT, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  var q = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h / 60) % 6];
+  return [Math.round((q[0] + m) * 255), Math.round((q[1] + m) * 255), Math.round((q[2] + m) * 255)];
+}
+
+/* Oklab: gleiche Zahlenabstaende entsprechen ungefaehr gleichen Sichtabstaenden
+   — anders als in RGB, wo Gruen alles dominiert. */
+function oklab(rgb) {
+  function lin(v) { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }
+  var r = lin(rgb[0]), g = lin(rgb[1]), b = lin(rgb[2]);
+  var l = Math.cbrt(.4122214708 * r + .5363325363 * g + .0514459929 * b);
+  var m = Math.cbrt(.2119034982 * r + .6806995451 * g + .1073969566 * b);
+  var s2 = Math.cbrt(.0883024619 * r + .2817188376 * g + .6299787005 * b);
+  return [.2104542553 * l + .7936177850 * m - .0040720468 * s2,
+          1.9779984951 * l - 2.4285922050 * m + .4505937099 * s2,
+          .0259040371 * l + .7827717662 * m - .8086757660 * s2];
+}
+function abstand(a, b) {
+  var x = oklab(a), y = oklab(b);
+  return Math.sqrt(Math.pow(x[0] - y[0], 2) + Math.pow(x[1] - y[1], 2) + Math.pow(x[2] - y[2], 2));
+}
+
+/* So weit auseinander muessen Grundfarbe und Warnfarbe mindestens liegen.
+   0.25 in Oklab ist ein deutlicher, auf einen Blick sichtbarer Unterschied. */
+var MINDESTABSTAND = .25;
+
+/* Die Warnfarbe von der Grundfarbe wegziehen, bis der Abstand reicht.
+   Gesucht wird die Fassung, die dem Original am NAECHSTEN bleibt und den
+   Mindestabstand trotzdem schafft — nicht die erstbeste. Nur eine Richtung zu
+   probieren genuegte nicht: bei orangem Akzent lief die Suche ins Weiss und
+   blieb bei 0,24 stecken (gemessen), waehrend ein dunkles Bernstein muehelos
+   0,3 erreicht. Der Farbton darf sich hoechstens leicht bewegen — er traegt
+   die Bedeutung. */
+function abheben(basis, grundRgb) {
+  var kandidaten = [];
+  var tonVersatz = [0, -8, 8, -16, 16];
+  for (var ti = 0; ti < tonVersatz.length; ti++) {
+    for (var l = 14; l <= 92; l += 6) {
+      for (var si = 0; si < 2; si++) {
+        var sT = Math.min(100, basis[1] + si * 8);
+        kandidaten.push({
+          hsl: [basis[0] + tonVersatz[ti], sT, l],
+          weh: Math.abs(tonVersatz[ti]) * 2.2 + Math.abs(l - basis[2]) * .5 + si * 3
+        });
+      }
+    }
+  }
+  kandidaten.sort(function (a, b) { return a.weh - b.weh; });
+  var bestes = null, bestAbst = -1;
+  for (var i = 0; i < kandidaten.length; i++) {
+    var k = kandidaten[i];
+    var d = abstand(hslZuRgb(k.hsl[0], k.hsl[1], k.hsl[2]), grundRgb);
+    if (d >= MINDESTABSTAND) { return k.hsl; }
+    if (d > bestAbst) { bestAbst = d; bestes = k.hsl; }
+  }
+  return bestes || basis;   // nichts reicht (fast unmoeglich) — das Beste nehmen
+}
+
+function hex(rgb) {
+  return '#' + rgb.map(function (v) {
+    return ('0' + Math.max(0, Math.min(255, Math.round(v))).toString(16)).slice(-2);
+  }).join('');
+}
 
 var zaehler = 0;
 
@@ -135,6 +244,66 @@ function erzeuge(behaelter, kern) {
   var N = 56, TAU = Math.PI * 2;
 
   function setz(name, wert) { behaelter.style.setProperty(name, wert); }
+
+  /* NUR die eigenen Klassen anfassen. Ein className-Zuweisen wischte alles weg,
+     was der Wirt an den Kasten gehängt hat — in einer Vergleichsseite verschwand
+     dadurch dessen Höhenangabe, und die Blase war unsichtbar. */
+  var ZUSTAENDE = ['bereit', 'verbinde', 'hoert', 'duSprichst', 'denkt', 'spricht',
+                   'werkzeug', 'fehler', 'ende'];
+  function klasseSetzen() {
+    ZUSTAENDE.forEach(function (z) { behaelter.classList.remove('z-' + z); });
+    behaelter.classList.add('sym-blase');
+    behaelter.classList.add('z-' + zustandJetzt);
+    paletteSetzen();
+  }
+
+  /* Die Akzentfarbe frisch lesen (sie kann sich mit dem Theme ändern) und die
+     vier Töne des Zustands daraus rechnen. Gesetzt wird auf dem Element — der
+     Übergang aus dem Stylesheet greift trotzdem, weil --c1..--c4 angemeldete
+     Farben sind. */
+  function paletteSetzen() {
+    var roh = '';
+    try { roh = getComputedStyle(behaelter).getPropertyValue('--accent-color').trim(); } catch (e) {}
+    var akzRgb = zuRgb(roh) || zuRgb('#00cdab');
+    var p = palette(zustandJetzt, akzRgb);
+    for (var i = 0; i < 4; i++) { setz('--c' + (i + 1), p[i]); }
+  }
+
+  /* Vier Töne aus einer Farbe: heller Kern, die Akzentfarbe selbst, eine
+     tiefere Tiefe und ein Rand mit etwas Farbdrift — das ergibt den Schimmer.
+     Die Zustände verschieben Ton, Sättigung und Helligkeit. */
+  function palette(zustand, akzRgb) {
+    var hsl = rgbZuHsl(akzRgb[0], akzRgb[1], akzRgb[2]);
+    var h = hsl[0], sT = Math.max(35, hsl[1]), l = Math.min(70, Math.max(38, hsl[2]));
+    /* In welche Richtung der Schimmer driftet. Immer nach "oben" zu drehen war
+       falsch: bei einem warmen Akzent landete er im Gelbgruenen — Orange sah
+       gruen aus, Rot braeunlich (im Bild verglichen). Warme Toene driften
+       deshalb zum Magenta hin, kalte zum Violett. So bleibt es in beiden
+       Faellen ein Abendrot statt einer Farbverirrung. */
+    var drift = (h >= 0 && h <= 95) ? -1 : 1;
+    var grund = hslZuRgb(h, sT, l);
+    var v;   // [Ton-Versatz, Saettigung, Helligkeit] je Ton
+    switch (zustand) {
+      case 'hoert':      v = [[-14, sT - 12, l + 30], [-4, sT - 4, l + 16], [20, sT, l - 8], [48, sT - 6, l + 6]]; break;
+      case 'duSprichst': v = [[-16, sT + 6, l + 30], [4, sT + 6, l + 14], [26, sT + 2, l - 6], [56, sT, l + 8]]; break;
+      case 'denkt':      v = [[-6, sT - 6, l + 20], [16, sT - 2, l + 2], [34, sT, l - 14], [62, sT - 4, l - 2]]; break;
+      case 'spricht':    v = [[-10, sT + 10, l + 32], [2, sT + 8, l + 8], [24, sT + 4, l - 10], [58, sT + 6, l + 4]]; break;
+      case 'werkzeug':
+      case 'fehler': {
+        // Bedeutung vor Geschmack: Bernstein bzw. Rot bleiben — aber MIT
+        // gemessenem Abstand zur Grundfarbe (sonst ist ein oranger Akzent von
+        // „Werkzeug" und ein roter von „Fehler" nicht zu unterscheiden).
+        var basis = zustand === 'werkzeug' ? [38, 92, 58] : [2, 84, 60];
+        var w = abheben(basis, grund);
+        // Ohne Drift: der Farbton IST hier die Bedeutung.
+        return [[w[0] + 8, w[1] - 6, w[2] + 18], [w[0], w[1], w[2]],
+                [w[0] - 12, w[1], w[2] - 14], [w[0] - 34, w[1] - 4, w[2] - 4]]
+               .map(function (t) { return hex(hslZuRgb(t[0], t[1], t[2])); });
+      }
+      default:           v = [[-12, sT + 4, l + 28], [0, sT, l], [22, sT, l - 12], [52, sT + 2, l + 2]];
+    }
+    return v.map(function (t) { return hex(hslZuRgb(h + t[0] * drift, t[1], t[2])); });
+  }
   function offen() { return !!(kern && kern.istOffen && kern.istOffen()); }
 
   function tonAnzapfen() {
@@ -278,14 +447,14 @@ function erzeuge(behaelter, kern) {
   return {
     an: function (ja) {
       aktiv = ja !== false;
-      behaelter.className = 'sym-blase z-' + zustandJetzt;
+      klasseSetzen();
       if (aktiv) { anwerfen(); if (!blinzelUhr) { blinzeln(); } }
       else { anhalten(); }
     },
     zustand: function (z) {
       zustandJetzt = z || 'bereit';
       if (!aktiv) { return; }
-      behaelter.className = 'sym-blase z-' + zustandJetzt;
+      klasseSetzen();
       // Der Griff zum Ton braucht die Nutzergeste — 'verbinde' kommt noch
       // innerhalb des Klicks auf den Knopf.
       if (zustandJetzt === 'verbinde') { tonAnzapfen(); }
