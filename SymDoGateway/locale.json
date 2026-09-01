@@ -2,6 +2,14 @@
     "translations": {
         "de": {
             "No audio data.": "Keine Audiodaten.",
+            "I did not understand the date.": "Das Datum habe ich nicht verstanden.",
+            "The calendar is not answering right now.": "Der Kalender antwortet gerade nicht.",
+            "No appointments in that period.": "In dem Zeitraum sind keine Termine.",
+            "%d appointment(s).": "%d Termin(e).",
+            "I need a date for the appointment.": "Ich brauche ein Datum für den Termin.",
+            "There is no writable calendar.": "Es gibt keinen beschreibbaren Kalender.",
+            "Which calendar? There is: %s.": "Welcher Kalender? Es gibt: %s.",
+            "Appointment \"%s\" %s created in %s.": "Termin „%s\" %s im Kalender %s angelegt.",
             "I did not catch any item.": "Ich habe keinen Artikel verstanden.",
             "%s is on %s now.": "%s steht jetzt auf %s.",
             "%d items are on %s now: %s.": "%d Artikel stehen jetzt auf %s: %s.",

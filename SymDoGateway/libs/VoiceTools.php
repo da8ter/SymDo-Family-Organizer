@@ -142,6 +142,34 @@ trait VoiceTools
                     'required' => ['was', 'bereich', 'erledigt', 'liste'],
                 ],
             ],
+            'termine_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Liest anstehende Termine aus dem Kalender.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'von'  => ['type' => 'string', 'description' => '"heute", "morgen" oder ein Datum JJJJ-MM-TT'],
+                        'tage' => ['type' => 'integer', 'description' => 'Anzahl Tage ab "von", 1 bis 31'],
+                    ],
+                    'required' => ['von', 'tage'],
+                ],
+            ],
+            'termin_anlegen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Legt einen neuen Termin im Kalender an.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'titel'    => ['type' => 'string'],
+                        'datum'    => ['type' => 'string', 'description' => 'JJJJ-MM-TT'],
+                        'von'      => ['type' => ['string', 'null'], 'description' => 'Beginn HH:MM oder null (dann ganztägig)'],
+                        'bis'      => ['type' => ['string', 'null'], 'description' => 'Ende HH:MM oder null'],
+                        'ort'      => ['type' => ['string', 'null']],
+                        'kalender' => ['type' => ['string', 'null'], 'description' => 'Name des Kalenders; null = Standardkalender'],
+                    ],
+                    'required' => ['titel', 'datum', 'von', 'bis', 'ort', 'kalender'],
+                ],
+            ],
         ];
     }
 
@@ -187,6 +215,8 @@ trait VoiceTools
                 'einkauf_hinzufuegen' => $this->VoiceToolEinkaufHinzu($args, $ctx),
                 'aufgabe_anlegen'     => $this->VoiceToolAufgabeAnlegen($args, $ctx),
                 'abhaken'             => $this->VoiceToolAbhaken($args, $ctx),
+                'termine_lesen'       => $this->VoiceToolTermineLesen($args, $ctx),
+                'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -317,6 +347,134 @@ trait VoiceTools
             'sag'      => $gesamt === 0
                 ? $this->Translate('Nothing there — all done.')
                 : sprintf($this->Translate('%d task(s) on %s.'), $gesamt, (string)$ziel['name']),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolTermineLesen(array $args, array $ctx): array
+    {
+        $offset = $this->VoiceTagOffset((string)($args['von'] ?? 'heute'));
+        if ($offset === null) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the date.'));
+        }
+        $tage = max(1, min(31, (int)($args['tage'] ?? 7)));
+        $von = (int)strtotime(date('Y-m-d', strtotime('+' . $offset . ' day')) . ' 00:00');
+        $bis = $von + $tage * 86400;
+        $r = $this->CalHandleAction(['action' => 'events', 'from' => $von, 'to' => $bis]);
+        if (($r['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The calendar is not answering right now.'));
+        }
+        $termine = [];
+        foreach ((array)($r['events'] ?? []) as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+            $termine[] = $this->VoiceTerminZeile($e);
+        }
+        $gesamt = count($termine);
+        return [
+            'ok'       => true,
+            'zeitraum' => $tage === 1 ? date('d.m.', $von) : (date('d.m.', $von) . '–' . date('d.m.', $bis - 1)),
+            'anzahl'   => $gesamt,
+            'termine'  => array_slice($termine, 0, 20),
+            'gekuerzt' => $gesamt > 20,
+            'sag'      => $gesamt === 0
+                ? $this->Translate('No appointments in that period.')
+                : sprintf($this->Translate('%d appointment(s).'), $gesamt),
+        ];
+    }
+
+    /** Ein Termin als sprachgerechte Zeile: „Fr 05.09. 15:00 Zahnarzt (Praxis)". */
+    private function VoiceTerminZeile(array $e): string
+    {
+        $start = (int)($e['start'] ?? 0);
+        $wo    = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        $wann  = $start > 0
+            ? ($wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
+               . (($e['allDay'] ?? false) === true ? ' ganztägig' : ' ' . date('H:i', $start)))
+            : '';
+        $titel = trim((string)($e['title'] ?? ''));
+        $ort   = trim((string)($e['location'] ?? ''));
+        return trim($wann . ' ' . $titel . ($ort !== '' ? ' (' . $ort . ')' : ''));
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolTerminAnlegen(array $args, array $ctx): array
+    {
+        $titel = trim((string)($args['titel'] ?? ''));
+        if ($titel === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('The appointment needs a title.'));
+        }
+        $datum = trim((string)($args['datum'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum) !== 1) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I need a date for the appointment.'));
+        }
+        $kal = $this->VoiceKalenderFinden($args['kalender'] ?? null);
+        if (!($kal['ok'] ?? false)) {
+            return $kal;
+        }
+        $von = trim((string)($args['von'] ?? ''));
+        $ganztags = preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $von) !== 1;
+        $event = [
+            'title'    => $titel,
+            'allDay'   => $ganztags,
+            'start'    => $ganztags ? $datum : ($datum . 'T' . $von),
+            'location' => trim((string)($args['ort'] ?? '')),
+        ];
+        $bis = trim((string)($args['bis'] ?? ''));
+        if (!$ganztags && preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $bis) === 1) {
+            $event['end'] = $datum . 'T' . $bis;
+        }
+        // Mitglieder-Zuweisung: der Kachel-Benutzer, wenn vorhanden.
+        if (($ctx['userId'] ?? '') !== '') {
+            $event['members'] = [(string)$ctx['userId']];
+        }
+        $r = $this->CalHandleAction(['action' => 'create', 'calendarID' => (int)$kal['id'], 'event' => $event]);
+        if (($r['ok'] ?? false) !== true) {
+            $msg = (string)($r['error']['message'] ?? $this->Translate('The calendar rejected the appointment.'));
+            return $this->VoiceErr((string)($r['error']['code'] ?? 'kalender_fehler'), $msg);
+        }
+        $wann = $ganztags ? ('am ' . date('d.m.', (int)strtotime($datum))) : ('am ' . date('d.m.', (int)strtotime($datum)) . ' um ' . $von);
+        return [
+            'ok'    => true,
+            'titel' => $titel,
+            'kalender' => (string)$kal['name'],
+            'sag'   => sprintf($this->Translate('Appointment "%s" %s created in %s.'), $titel, $wann, (string)$kal['name']),
+        ];
+    }
+
+    /**
+     * Kalender nach Name oder Vorgabe (erster beschreibbarer). Nur beschreibbare
+     * kommen infrage — ein Feiertagskalender lässt sich nicht bestücken.
+     * @return array<string,mixed>
+     */
+    private function VoiceKalenderFinden(mixed $name): array
+    {
+        $r = $this->CalHandleAction(['action' => 'calendars']);
+        $schreibbar = [];
+        foreach ((array)($r['calendars'] ?? []) as $c) {
+            if (is_array($c) && ($c['canWrite'] ?? false) === true) {
+                $schreibbar[] = ['id' => (int)($c['id'] ?? 0), 'name' => (string)($c['name'] ?? '')];
+            }
+        }
+        if ($schreibbar === []) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no writable calendar.'));
+        }
+        $such = is_string($name) ? trim($name) : '';
+        if ($such === '') {
+            return ['ok' => true] + $schreibbar[0];
+        }
+        $sn = $this->VoiceNorm($such);
+        foreach ($schreibbar as $c) {
+            $kn = $this->VoiceNorm($c['name']);
+            if ($kn === $sn || str_contains($kn, $sn) || str_contains($sn, $kn)) {
+                return ['ok' => true] + $c;
+            }
+        }
+        $namen = array_map(static fn(array $c): string => $c['name'], $schreibbar);
+        return [
+            'ok' => false, 'error' => ['code' => 'unbekannter_kalender', 'message' => 'Kalender nicht gefunden'],
+            'sag' => sprintf($this->Translate('Which calendar? There is: %s.'), implode(', ', $namen)),
         ];
     }
 
