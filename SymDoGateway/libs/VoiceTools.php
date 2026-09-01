@@ -171,6 +171,23 @@ trait VoiceTools
                     'required' => ['titel', 'datum', 'von', 'bis', 'ort', 'kalender'],
                 ],
             ],
+            'termin_aendern' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Ändert einen bestehenden Termin: verschiebt ihn auf ein anderes Datum oder eine andere Uhrzeit, oder ändert Titel bzw. Ort. Der Termin wird über seinen Namen gefunden. Nur Felder setzen, die sich ändern; der Rest bleibt.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'welcher'     => ['type' => 'string', 'description' => 'Name/Titel des zu ändernden Termins'],
+                        'suchtag'     => ['type' => ['string', 'null'], 'description' => 'Grober Zeitpunkt zum Eingrenzen: "heute", "morgen" oder JJJJ-MM-TT; null = kommende 31 Tage'],
+                        'neues_datum' => ['type' => ['string', 'null'], 'description' => 'Neues Datum JJJJ-MM-TT oder null (Datum bleibt)'],
+                        'neue_von'    => ['type' => ['string', 'null'], 'description' => 'Neue Startzeit HH:MM oder null (Zeit bleibt)'],
+                        'neue_bis'    => ['type' => ['string', 'null'], 'description' => 'Neue Endzeit HH:MM oder null'],
+                        'neuer_titel' => ['type' => ['string', 'null'], 'description' => 'Neuer Titel oder null (bleibt)'],
+                        'neuer_ort'   => ['type' => ['string', 'null'], 'description' => 'Neuer Ort; null = bleibt, "" = Ort entfernen'],
+                    ],
+                    'required' => ['welcher', 'suchtag', 'neues_datum', 'neue_von', 'neue_bis', 'neuer_titel', 'neuer_ort'],
+                ],
+            ],
         ];
     }
 
@@ -218,6 +235,7 @@ trait VoiceTools
                 'abhaken'             => $this->VoiceToolAbhaken($args, $ctx),
                 'termine_lesen'       => $this->VoiceToolTermineLesen($args, $ctx),
                 'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
+                'termin_aendern'      => $this->VoiceToolTerminAendern($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -476,6 +494,139 @@ trait VoiceTools
         return [
             'ok' => false, 'error' => ['code' => 'unbekannter_kalender', 'message' => 'Kalender nicht gefunden'],
             'sag' => sprintf($this->Translate('Which calendar? There is: %s.'), implode(', ', $namen)),
+        ];
+    }
+
+    /**
+     * Einen bestehenden Termin über seinen Titel finden und ändern: verschieben
+     * (Datum/Zeit), umbenennen, Ort setzen. Nur die gesetzten Felder ändern sich,
+     * der Rest bleibt. Eine reine Zeitverschiebung erhält die Dauer. Serien werden
+     * NUR als einzelnes Vorkommen angefasst (CalUpdateEvent-Vorgabe „occurrence");
+     * lässt der Kalender das nicht zu, kommt eine verständliche Absage zurück.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceToolTerminAendern(array $args, array $ctx): array
+    {
+        $welcher = trim((string)($args['welcher'] ?? ''));
+        if ($welcher === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('Which appointment should I change?'));
+        }
+
+        // Suchfenster: ein klar aufgelöster Tag (heute/morgen/nahes Datum) grenzt
+        // eng ein; alles andere (kein Tag, oder ein Datum weiter als eine Woche
+        // voraus) sucht breit über die kommenden 31 Tage.
+        $suchtag = is_string($args['suchtag'] ?? null) ? trim((string)$args['suchtag']) : '';
+        $offset  = $suchtag !== '' ? $this->VoiceTagOffset($suchtag) : null;
+        $eng     = $offset !== null;
+        $startOff = $eng ? $offset : 0;
+        $von = (int)strtotime(date('Y-m-d', (int)strtotime('+' . $startOff . ' day')) . ' 00:00');
+        $bis = $von + ($eng ? 2 : 31) * 86400;
+
+        $r = $this->CalHandleAction(['action' => 'events', 'from' => $von, 'to' => $bis]);
+        if (($r['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The calendar is not answering right now.'));
+        }
+        $kand = [];
+        foreach ((array)($r['events'] ?? []) as $e) {
+            if (is_array($e) && trim((string)($e['title'] ?? '')) !== '') {
+                $kand[] = ['schluessel' => (string)($e['uid'] ?? $e['id'] ?? ''), 'titel' => (string)$e['title'], 'event' => $e];
+            }
+        }
+        $erg = $this->VoiceAufloesen($welcher, $kand);
+        $fehler = $this->VoiceAufloeseFehler($erg, $welcher, $this->Translate('upcoming appointments'));
+        if ($fehler !== null) {
+            // Gleiche Titel allein helfen nicht — bei Mehrdeutigkeit Datum/Zeit nennen.
+            if (($erg['status'] ?? '') === 'mehrdeutig') {
+                $labels = array_map(fn(array $t): string => $this->VoiceTerminZeile((array)$t['event']), $erg['treffer']);
+                $fehler['sag'] = sprintf($this->Translate('Which appointment do you mean? For example: %s.'), implode('; ', array_slice($labels, 0, 3)));
+                $fehler['treffer'] = $labels;
+            }
+            return $fehler;
+        }
+        $e = (array)$erg['treffer'][0]['event'];
+
+        // Änderungswünsche einsammeln (null/leer = bleibt).
+        $neuesDatum = is_string($args['neues_datum'] ?? null) ? trim((string)$args['neues_datum']) : '';
+        $neueVon    = is_string($args['neue_von']    ?? null) ? trim((string)$args['neue_von'])    : '';
+        $neueBis    = is_string($args['neue_bis']    ?? null) ? trim((string)$args['neue_bis'])    : '';
+        $neuerTitel = is_string($args['neuer_titel'] ?? null) ? trim((string)$args['neuer_titel']) : '';
+        $ortGesetzt = array_key_exists('neuer_ort', $args) && $args['neuer_ort'] !== null;
+        $neuerOrt   = $ortGesetzt ? trim((string)$args['neuer_ort']) : '';
+
+        $zeitMuster = '/^([01]\d|2[0-3]):([0-5]\d)$/';
+        $tagMuster  = '/^\d{4}-\d{2}-\d{2}$/';
+        if ($neuesDatum !== '' && preg_match($tagMuster, $neuesDatum) !== 1) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I need a valid date (YYYY-MM-DD).'));
+        }
+        if (($neueVon !== '' && preg_match($zeitMuster, $neueVon) !== 1)
+            || ($neueBis !== '' && preg_match($zeitMuster, $neueBis) !== 1)) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I need a valid time (HH:MM).'));
+        }
+        if ($neuesDatum === '' && $neueVon === '' && $neueBis === '' && $neuerTitel === '' && !$ortGesetzt) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What exactly should I change about the appointment?'));
+        }
+
+        // Alter Stand.
+        $altStart = (int)($e['start'] ?? 0);
+        $altEnde  = (int)($e['end'] ?? 0);
+        $altGanz  = ($e['allDay'] ?? false) === true;
+        if ($altStart <= 0) {
+            return $this->VoiceErr('nicht_gefunden', $this->Translate('I cannot pin down that appointment.'));
+        }
+
+        // Neues Datum + Zeit. Eine Uhrzeit macht aus einem ganztägigen einen
+        // Zeittermin; eine reine Verschiebung erhält die Dauer.
+        $basisDatum = $neuesDatum !== '' ? $neuesDatum : date('Y-m-d', $altStart);
+        $ganztags = $altGanz && $neueVon === '';
+        if ($ganztags) {
+            $startStr = $basisDatum;
+            $endeStr  = '';
+        } else {
+            $zeit = $neueVon !== '' ? $neueVon : ($altGanz ? '09:00' : date('H:i', $altStart));
+            $startStr = $basisDatum . 'T' . $zeit;
+            $neuStartTs = (int)strtotime($startStr);
+            if ($neueBis !== '') {
+                $endeStr = $basisDatum . 'T' . $neueBis;
+            } elseif (!$altGanz && $altEnde > $altStart) {
+                $endeStr = date('Y-m-d\TH:i', $neuStartTs + ($altEnde - $altStart));   // Dauer erhalten
+            } else {
+                $endeStr = '';
+            }
+        }
+
+        $neuTitel = $neuerTitel !== '' ? $neuerTitel : (string)($e['title'] ?? '');
+        $neuOrt   = $ortGesetzt ? $neuerOrt : (string)($e['location'] ?? '');
+
+        $event = [
+            'id'             => (string)($e['id'] ?? ''),
+            'uid'            => (string)($e['uid'] ?? ''),
+            'startTimestamp' => $altStart,     // ORIGINAL — damit CalFindRaw den Datensatz trifft
+            'title'          => $neuTitel,
+            'allDay'         => $ganztags,
+            'start'          => $startStr,
+            'location'       => $neuOrt,
+            'info'           => (string)($e['info'] ?? ''),
+        ];
+        if ($endeStr !== '') {
+            $event['end'] = $endeStr;
+        }
+
+        $upd = $this->CalHandleAction(['action' => 'update', 'calendarID' => (int)($e['calendarID'] ?? 0), 'event' => $event]);
+        if (($upd['ok'] ?? false) !== true) {
+            $msg = (string)($upd['error']['message'] ?? $this->Translate('The calendar rejected the change.'));
+            return $this->VoiceErr((string)($upd['error']['code'] ?? 'kalender_fehler'), $msg);
+        }
+
+        $neuStartTs = (int)strtotime($startStr);
+        $wann = $ganztags
+            ? ('am ' . date('d.m.', $neuStartTs))
+            : ('am ' . date('d.m.', $neuStartTs) . ' um ' . date('H:i', $neuStartTs));
+        return [
+            'ok'    => true,
+            'titel' => $neuTitel,
+            'sag'   => sprintf($this->Translate('"%s" is now %s.'), $neuTitel, $wann)
+                       . ($ortGesetzt && $neuOrt !== '' ? ' ' . sprintf($this->Translate('Location: %s.'), $neuOrt) : ''),
         ];
     }
 
