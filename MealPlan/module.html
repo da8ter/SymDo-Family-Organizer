@@ -404,6 +404,85 @@ body {
   } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
 })();
 
+
+/* ── Scrollen in der Kachel halten ────────────────────────────────────────────
+   html-sdk.js von Symcon haengt an window ein `onwheel`, das JEDES deltaY an die
+   Visualisierung meldet (postScroll), und meldet touchstart/touchmove als
+   Position weiter. Die Visu scrollt daraufhin mit — unabhaengig davon, ob die
+   Kachel die Geste selbst verbraucht hat. Dagegen hilft kein CSS: weder
+   overscroll-behavior noch overflow greifen, weil es kein Ketten ist, sondern
+   eine ausdrueckliche Weitergabe.
+
+   Deshalb werden die Ereignisse in der ABFANG-Phase an document gestoppt. Das
+   liegt vor der Blasen-Phase an window, wo html-sdk.js zuhoert — die Meldung
+   unterbleibt also. Das Standardverhalten bleibt unberuehrt, die Kachel scrollt
+   normal weiter; nur an den Raendern wird zusaetzlich preventDefault gerufen,
+   damit dort nichts durchrutscht.
+
+   Wortgleich aus der Stundenplan-Kachel uebernommen, nur die Bereichsliste ist
+   eine andere. Ueber document und nicht ueber die Bereiche selbst, weil deren
+   Inhalt bei jedem Zeichnen neu entsteht. */
+(function scrollInDerKachelHalten() {
+  const SCROLL_BEREICHE = '#tage, #blatt, #detail, #korb, #korbListe, #detailZutaten';
+
+  /* Der naechste Vorfahr, der in DIESER Richtung noch Weg hat. Ohne die
+     Richtungsfrage gaelte ein Bereich, der schon am Anschlag steht, als
+     zustaendig — und die Geste verpuffte. */
+  function zustaendigerScroller(ziel, dx, dy) {
+    let el = (ziel instanceof Element) ? ziel : null;
+    while (el && el !== document.body) {
+      if (el.matches && el.matches(SCROLL_BEREICHE)) {
+        const maxY = el.scrollHeight - el.clientHeight;
+        const maxX = el.scrollWidth - el.clientWidth;
+        const gehtY = maxY > 1 && ((dy < 0 && el.scrollTop > 0)
+                                || (dy > 0 && el.scrollTop < maxY - 1));
+        const gehtX = maxX > 1 && ((dx < 0 && el.scrollLeft > 0)
+                                || (dx > 0 && el.scrollLeft < maxX - 1));
+        if (gehtY || gehtX) { return el; }
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  document.addEventListener('wheel', function (e) {
+    if (!zustaendigerScroller(e.target, e.deltaX || 0, e.deltaY || 0)) {
+      // Nichts kann die Geste verbrauchen — dann soll sie auch nirgends wirken,
+      // statt als Ersatzhandlung die ganze Visu zu bewegen.
+      e.preventDefault();
+    }
+    e.stopPropagation();
+  }, { passive: false, capture: true });
+
+  let letzteY = null, letzteX = null;
+  document.addEventListener('touchstart', function (e) {
+    if (e.touches && e.touches.length === 1) {
+      letzteX = e.touches[0].clientX;
+      letzteY = e.touches[0].clientY;
+    } else {
+      letzteX = letzteY = null;
+    }
+    e.stopPropagation();
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!e.touches || e.touches.length !== 1 || letzteY === null) {
+      e.stopPropagation();
+      return;
+    }
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    // Umgekehrtes Vorzeichen: nach oben wischen heisst nach unten scrollen.
+    const dy = letzteY - y, dx = letzteX - x;
+    letzteX = x; letzteY = y;
+    if (!zustaendigerScroller(e.target, dx, dy)) { e.preventDefault(); }
+    e.stopPropagation();
+  }, { passive: false, capture: true });
+
+  document.addEventListener('touchend', function () {
+    letzteX = letzteY = null;
+  }, { passive: true, capture: true });
+})();
+
 (function () {
 'use strict';
 
