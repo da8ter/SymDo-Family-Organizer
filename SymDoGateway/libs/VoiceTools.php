@@ -207,6 +207,46 @@ trait VoiceTools
                     'required' => ['was', 'bereich', 'liste', 'umfang', 'marke'],
                 ],
             ],
+            'notizen_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Liest Notizen — optional nur aus dem Ordner einer Person oder gefiltert nach einem Stichwort.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'person' => ['type' => ['string', 'null'], 'description' => 'Name der Person bzw. des Ordners; null = alle Notizen'],
+                        'suche'  => ['type' => ['string', 'null'], 'description' => 'Stichwort in Titel oder Text; null = keine Einschränkung'],
+                    ],
+                    'required' => ['person', 'suche'],
+                ],
+            ],
+            'notiz_anlegen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Legt eine Notiz an. Denk dir aus dem Gesagten einen kurzen, treffenden Titel aus. Ohne Person landet die Notiz im Ordner des Kachel-Benutzers.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'titel'  => ['type' => 'string', 'description' => 'Kurzer, selbst ausgedachter Titel'],
+                        'text'   => ['type' => 'string', 'description' => 'Der Notiztext'],
+                        'person' => ['type' => ['string', 'null'], 'description' => 'Name der Person, in deren Ordner die Notiz soll; null = Kachel-Benutzer'],
+                    ],
+                    'required' => ['titel', 'text', 'person'],
+                ],
+            ],
+            'notiz_aendern' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Ändert eine Notiz: neuer Titel, neuer Text, oder verschiebt sie in den Ordner einer anderen Person.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'welche'      => ['type' => 'string', 'description' => 'Titel oder Stichwort der Notiz'],
+                        'person'      => ['type' => ['string', 'null'], 'description' => 'Ordner zum Eingrenzen der Suche; null = überall'],
+                        'neuer_titel' => ['type' => ['string', 'null'], 'description' => 'Neuer Titel oder null'],
+                        'neuer_text'  => ['type' => ['string', 'null'], 'description' => 'Neuer Text (ersetzt den alten) oder null'],
+                        'neue_person' => ['type' => ['string', 'null'], 'description' => 'In den Ordner dieser Person verschieben; null = bleibt'],
+                    ],
+                    'required' => ['welche', 'person', 'neuer_titel', 'neuer_text', 'neue_person'],
+                ],
+            ],
         ];
     }
 
@@ -256,6 +296,9 @@ trait VoiceTools
                 'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
                 'termin_aendern'      => $this->VoiceToolTerminAendern($args, $ctx),
                 'loeschen'            => $this->VoiceToolLoeschen($args, $ctx),
+                'notizen_lesen'       => $this->VoiceToolNotizenLesen($args, $ctx),
+                'notiz_anlegen'       => $this->VoiceToolNotizAnlegen($args, $ctx),
+                'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -930,6 +973,253 @@ trait VoiceTools
         return false;
     }
 
+    // ------------------------------------------------------------------
+    // Notizen
+    // ------------------------------------------------------------------
+
+    /** Bestand (Ordner, Notizen, Mitglied→Ordner) über NotesHandleAction 'list'. */
+    private function VoiceNotizDaten(): array
+    {
+        $r = $this->NotesHandleAction(['action' => 'list']);
+        if (($r['ok'] ?? false) !== true) {
+            return ['ok' => false];
+        }
+        return [
+            'ok'      => true,
+            'folders' => is_array($r['folders'] ?? null) ? $r['folders'] : [],
+            'notes'   => is_array($r['notes'] ?? null) ? $r['notes'] : [],
+            'memberFolders' => (array)($r['memberFolders'] ?? []),
+        ];
+    }
+
+    /**
+     * Person/Ordner-Name → Ordner. Trifft Mitglieder-Ordner (nach dem Namen des
+     * Mitglieds) wie gewöhnliche Ordner. @return array{ok:bool, id?:string, name?:string}
+     * oder die Fehlerform mit `sag`.
+     */
+    private function VoiceNotizOrdner(string $person, array $daten): array
+    {
+        $kand = [];
+        foreach ($daten['folders'] as $f) {
+            if (is_array($f) && trim((string)($f['name'] ?? '')) !== '') {
+                $kand[] = ['schluessel' => (string)($f['id'] ?? ''), 'titel' => (string)$f['name']];
+            }
+        }
+        $erg = $this->VoiceAufloesen($person, $kand);
+        $fehler = $this->VoiceAufloeseFehler($erg, $person, $this->Translate('folders'));
+        if ($fehler !== null) {
+            return $fehler;
+        }
+        $t = $erg['treffer'][0];
+        return ['ok' => true, 'id' => (string)$t['schluessel'], 'name' => (string)$t['titel']];
+    }
+
+    private function VoiceNotizOrdnerName(string $fid, array $daten): string
+    {
+        foreach ($daten['folders'] as $f) {
+            if (is_array($f) && (string)($f['id'] ?? '') === $fid) {
+                return (string)($f['name'] ?? '');
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Eine Notiz über Titel/Stichwort finden, optional auf einen Ordner begrenzt.
+     * @return array{ok:bool, id?:string, titel?:string} oder die Fehlerform.
+     */
+    private function VoiceNotizFinden(string $welche, string $folderId, array $daten): array
+    {
+        $kand = [];
+        foreach ($daten['notes'] as $n) {
+            if (!is_array($n)) {
+                continue;
+            }
+            if ($folderId !== '' && (string)($n['folderId'] ?? '') !== $folderId) {
+                continue;
+            }
+            $titel = trim((string)($n['title'] ?? ''));
+            if ($titel === '') {
+                $titel = trim((string)($n['preview'] ?? ''));
+            }
+            if ($titel !== '') {
+                $kand[] = ['schluessel' => (string)($n['id'] ?? ''), 'titel' => $titel];
+            }
+        }
+        $erg = $this->VoiceAufloesen($welche, $kand);
+        $fehler = $this->VoiceAufloeseFehler($erg, $welche, $this->Translate('notes'));
+        if ($fehler !== null) {
+            return $fehler;
+        }
+        $t = $erg['treffer'][0];
+        return ['ok' => true, 'id' => (string)$t['schluessel'], 'titel' => (string)$t['titel']];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolNotizenLesen(array $args, array $ctx): array
+    {
+        $daten = $this->VoiceNotizDaten();
+        if (($daten['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The notes are not available right now.'));
+        }
+        $person = is_string($args['person'] ?? null) ? trim((string)$args['person']) : '';
+        $folderId = '';
+        if ($person !== '') {
+            $o = $this->VoiceNotizOrdner($person, $daten);
+            if (($o['ok'] ?? false) !== true) {
+                return $o;
+            }
+            $folderId = (string)$o['id'];
+        }
+        $namen = [];
+        foreach ($daten['folders'] as $f) {
+            if (is_array($f)) {
+                $namen[(string)($f['id'] ?? '')] = (string)($f['name'] ?? '');
+            }
+        }
+        $suche = is_string($args['suche'] ?? null) ? trim((string)$args['suche']) : '';
+        $sn = $this->VoiceNorm($suche);
+        $liste = [];
+        foreach ($daten['notes'] as $n) {
+            if (!is_array($n)) {
+                continue;
+            }
+            if ($folderId !== '' && (string)($n['folderId'] ?? '') !== $folderId) {
+                continue;
+            }
+            $titel = trim((string)($n['title'] ?? ''));
+            $vorschau = trim((string)($n['preview'] ?? ''));
+            if ($sn !== '' && !str_contains($this->VoiceNorm($titel . ' ' . $vorschau), $sn)) {
+                continue;
+            }
+            $zeile = $titel !== '' ? $titel : $vorschau;
+            if ($titel !== '' && $vorschau !== '') {
+                $zeile .= ' — ' . $vorschau;
+            }
+            $ordner = $namen[(string)($n['folderId'] ?? '')] ?? '';
+            if ($person === '' && $ordner !== '') {
+                $zeile .= ' [' . $ordner . ']';
+            }
+            $liste[] = $zeile;
+        }
+        $gesamt = count($liste);
+        return [
+            'ok'      => true,
+            'anzahl'  => $gesamt,
+            'notizen' => array_slice($liste, 0, 20),
+            'gekuerzt' => $gesamt > 20,
+            'sag'     => $gesamt === 0
+                ? $this->Translate('No notes found.')
+                : sprintf($this->Translate('%d note(s).'), $gesamt),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolNotizAnlegen(array $args, array $ctx): array
+    {
+        $titel = trim((string)($args['titel'] ?? ''));
+        $text  = trim((string)($args['text'] ?? ''));
+        if ($titel === '' && $text === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('The note needs some content.'));
+        }
+        $daten = $this->VoiceNotizDaten();
+        if (($daten['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The notes are not available right now.'));
+        }
+        $person = is_string($args['person'] ?? null) ? trim((string)$args['person']) : '';
+        if ($person !== '') {
+            $o = $this->VoiceNotizOrdner($person, $daten);
+            if (($o['ok'] ?? false) !== true) {
+                return $o;
+            }
+            $fid = (string)$o['id'];
+            $ordner = (string)$o['name'];
+        } else {
+            // Vorgabe: der Ordner des Kachel-Benutzers.
+            $uid = (string)($ctx['userId'] ?? '');
+            $fid = (string)($daten['memberFolders'][$uid] ?? '');
+            if ($fid === '') {
+                return $this->VoiceErr('ordner_unklar', $this->Translate('Whose folder should the note go in?'));
+            }
+            $ordner = $this->VoiceNotizOrdnerName($fid, $daten);
+        }
+        $r = $this->NotesHandleAction(['action' => 'noteCreate', 'folderId' => $fid, 'title' => $titel, 'text' => $text]);
+        if (($r['ok'] ?? false) !== true) {
+            return $this->VoiceErr((string)($r['error']['code'] ?? 'notiz_fehler'), $this->Translate('The note could not be saved.'));
+        }
+        $echt = (string)($r['note']['title'] ?? $titel);
+        return [
+            'ok'     => true,
+            'titel'  => $echt,
+            'ordner' => $ordner,
+            'sag'    => sprintf($this->Translate('The note "%s" is in %s\'s folder now.'), $echt, $ordner),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolNotizAendern(array $args, array $ctx): array
+    {
+        $welche = trim((string)($args['welche'] ?? ''));
+        if ($welche === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('Which note should I change?'));
+        }
+        $daten = $this->VoiceNotizDaten();
+        if (($daten['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The notes are not available right now.'));
+        }
+        $person = is_string($args['person'] ?? null) ? trim((string)$args['person']) : '';
+        $folderId = '';
+        if ($person !== '') {
+            $o = $this->VoiceNotizOrdner($person, $daten);
+            if (($o['ok'] ?? false) !== true) {
+                return $o;
+            }
+            $folderId = (string)$o['id'];
+        }
+        $f = $this->VoiceNotizFinden($welche, $folderId, $daten);
+        if (($f['ok'] ?? false) !== true) {
+            return $f;
+        }
+        $update = ['action' => 'noteUpdate', 'id' => (string)$f['id']];
+        $etwas = false;
+        $zielOrdner = '';
+        $neuerTitel = is_string($args['neuer_titel'] ?? null) ? trim((string)$args['neuer_titel']) : '';
+        $neuerText  = is_string($args['neuer_text'] ?? null) ? trim((string)$args['neuer_text']) : '';
+        $neuePerson = is_string($args['neue_person'] ?? null) ? trim((string)$args['neue_person']) : '';
+        if ($neuerTitel !== '') {
+            $update['title'] = $neuerTitel;
+            $etwas = true;
+        }
+        if ($neuerText !== '') {
+            $update['text'] = $neuerText;
+            $etwas = true;
+        }
+        if ($neuePerson !== '') {
+            $o = $this->VoiceNotizOrdner($neuePerson, $daten);
+            if (($o['ok'] ?? false) !== true) {
+                return $o;
+            }
+            $update['folderId'] = (string)$o['id'];
+            $zielOrdner = (string)$o['name'];
+            $etwas = true;
+        }
+        if (!$etwas) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What should I change about the note?'));
+        }
+        $r = $this->NotesHandleAction($update);
+        if (($r['ok'] ?? false) !== true) {
+            return $this->VoiceErr((string)($r['error']['code'] ?? 'notiz_fehler'), $this->Translate('The note could not be changed.'));
+        }
+        $titelNachher = (string)($r['note']['title'] ?? $f['titel']);
+        return [
+            'ok'    => true,
+            'titel' => $titelNachher,
+            'sag'   => $zielOrdner !== ''
+                ? sprintf($this->Translate('The note "%s" is now in %s.'), $titelNachher, $zielOrdner)
+                : sprintf($this->Translate('The note "%s" is updated.'), $titelNachher),
+        ];
+    }
+
     /** @return array<string,mixed> */
     private function VoiceToolEinkaufHinzu(array $args, array $ctx): array
     {
@@ -1446,7 +1736,7 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen und abhaken; Termine im Kalender lesen und eintragen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
@@ -1476,6 +1766,7 @@ trait VoiceTools
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
         $zeilen[] = 'Für einen wiederkehrenden Termin setze bei termin_anlegen "wiederholung" (woechentlich/zweiwoechentlich/monatlich) und dazu entweder "wiederhol_anzahl" (wie oft) oder "wiederhol_bis" (bis wann). Bei wöchentlich lege "datum" auf den gewünschten Wochentag. Fehlt Anzahl und Enddatum, frag kurz nach.';
+        $zeilen[] = 'Für eine Notiz denk dir aus dem Gesagten einen kurzen, treffenden Titel selbst aus (der Nutzer nennt selten einen). Nennt der Nutzer eine Person ("für Max", "in Annas Ordner"), setze "person" auf diesen Namen; ohne Person landet die Notiz beim Kachel-Benutzer.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
         $text = implode("\n", $zeilen);
         return mb_strlen($text) > 2500 ? mb_substr($text, 0, 2500) : $text;

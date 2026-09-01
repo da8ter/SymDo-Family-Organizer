@@ -492,7 +492,21 @@
       "%d times": "%d Mal",
       "until %s": "bis %s",
       "The series \"%s\" is set up in %s: %s, %s.": "Die Serie „%s“ ist in %s angelegt: %s, %s.",
-      "I set up at most %d dates.": "Ich habe höchstens %d Termine angelegt."
+      "I set up at most %d dates.": "Ich habe höchstens %d Termine angelegt.",
+      "folders": "Ordnern",
+      "notes": "Notizen",
+      "The notes are not available right now.": "Die Notizen sind gerade nicht verfügbar.",
+      "No notes found.": "Keine Notizen gefunden.",
+      "%d note(s).": "%d Notiz(en).",
+      "The note needs some content.": "Die Notiz braucht einen Inhalt.",
+      "Whose folder should the note go in?": "In wessen Ordner soll die Notiz?",
+      "The note could not be saved.": "Die Notiz konnte nicht gespeichert werden.",
+      "The note \"%s\" is in %s's folder now.": "Die Notiz „%s“ liegt jetzt im Ordner von %s.",
+      "Which note should I change?": "Welche Notiz soll ich ändern?",
+      "What should I change about the note?": "Was soll ich an der Notiz ändern?",
+      "The note could not be changed.": "Die Notiz konnte nicht geändert werden.",
+      "The note \"%s\" is now in %s.": "Die Notiz „%s“ ist jetzt bei %s.",
+      "The note \"%s\" is updated.": "Die Notiz „%s“ ist geändert."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",
