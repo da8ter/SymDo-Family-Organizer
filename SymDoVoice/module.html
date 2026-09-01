@@ -46,6 +46,83 @@ body {
 #mikPunkt.an { display: inline-block; }
 @keyframes mikBlink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
+/* ── Blase ────────────────────────────────────────────────────────────────
+   Die Größe kommt aus BEIDEN Kachelmaßen (min aus vw und vh): eine breite,
+   flache Kachel darf die Blase genauso wenig abschneiden wie eine schmale.
+   Bewegt wird ausschließlich über CSS-Variablen, die das Bild je Vollbild
+   setzt — transform und border-radius, damit kein Layout neu gerechnet wird. */
+#buehne {
+  flex: 1 1 auto; min-height: 0; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  /* Rückfall am Fenster; die Kachel ist aber nicht das Fenster — deshalb
+     darunter am eigenen Kasten gemessen. Ohne das ragt die Blase in einer
+     flachen, breiten Kachel über den Knopf (gemessen bei 900×400: Blase 132 px
+     hoch, Bühne nur 103 px). */
+  --d: min(74vw, 46vh);
+  --c1: #28dcff; --c2: #397cff; --c3: #583aff; --c4: #db35ff;
+  transition: opacity .25s ease;
+}
+@supports (container-type: size) {
+  #buehne { container-type: size; --d: min(78cqw, 88cqh); }
+}
+#buehne[hidden] { display: none; }
+#buehne .schein, #buehne .schleier, #buehne .blase { position: absolute; }
+#buehne .schein {
+  width: calc(var(--d) * 1.18); height: calc(var(--d) * 1.06);
+  border-radius: 48% 52% 55% 45% / 50% 45% 55% 50%;
+  background: radial-gradient(circle at 50% 55%,
+    color-mix(in srgb, var(--c4) 80%, transparent),
+    color-mix(in srgb, var(--c3) 60%, transparent) 45%,
+    color-mix(in srgb, var(--c1) 45%, transparent) 80%);
+  filter: blur(calc(var(--d) * .09));
+  opacity: var(--schein, .55);
+  transform: scale(calc(var(--sx, 1) * 1.06), calc(var(--sy, 1) * 1.06)) rotate(calc(var(--dreh, 0deg) * -.6));
+}
+#buehne .schleier {
+  width: calc(var(--d) * .97); height: calc(var(--d) * .88);
+  border-radius: var(--s1, 50%) var(--s2, 50%) var(--s3, 50%) var(--s4, 50%) /
+                 var(--s5, 50%) var(--s6, 50%) var(--s7, 50%) var(--s8, 50%);
+  background: radial-gradient(circle at 60% 70%,
+    color-mix(in srgb, var(--c4) 45%, transparent),
+    color-mix(in srgb, var(--c2) 30%, transparent) 60%, transparent 85%);
+  filter: blur(calc(var(--d) * .03));
+  transform: scale(calc(var(--sx, 1) * 1.03), calc(var(--sy, 1) * 1.02)) rotate(calc(var(--dreh, 0deg) * 1.4));
+}
+#buehne .blase {
+  width: calc(var(--d) * .86); height: calc(var(--d) * .78);
+  background: radial-gradient(circle at 35% 25%, var(--c1) 0%, var(--c2) 30%, var(--c3) 58%, var(--c4) 100%);
+  border-radius: var(--r1, 52%) var(--r2, 48%) var(--r3, 55%) var(--r4, 45%) /
+                 var(--r5, 48%) var(--r6, 53%) var(--r7, 47%) var(--r8, 52%);
+  filter: blur(1.5px) drop-shadow(0 0 calc(var(--d) * .08) color-mix(in srgb, var(--c3) 65%, transparent));
+  transform: scaleX(var(--sx, 1)) scaleY(var(--sy, 1)) rotate(var(--dreh, 0deg));
+  transition: border-radius .12s ease-out, filter .1s linear;
+  will-change: transform, border-radius;
+  display: flex; align-items: center; justify-content: center;
+}
+#buehne .augen {
+  display: flex; gap: calc(var(--d) * .18);
+  margin-top: calc(var(--d) * -.06);
+  transform: translate(var(--augeX, 0px), var(--augeY, 0px));
+}
+#buehne .auge {
+  width: calc(var(--d) * .085); height: calc(var(--d) * .1); border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, rgba(80,100,210,.55), rgba(12,16,80,.88) 55%, rgba(4,6,40,.96));
+  transform: scaleY(var(--augeAuf, 1)); transition: transform .08s ease;
+  position: relative;
+}
+#buehne .auge::after {
+  content: ""; position: absolute; left: 22%; top: 16%;
+  width: 22%; height: 19%; border-radius: 50%; background: rgba(180,220,255,.75);
+}
+/* Zustandsfarben — dieselbe Sprache wie die Statuszeile. */
+#buehne.z-bereit   { --c1:#3a4a6a; --c2:#3b5aa0; --c3:#4a3a8a; --c4:#6a3a9a; }
+/* Zuhören ist ruhiger und kühler als Antworten — sonst sähe beides gleich aus. */
+#buehne.z-hoert    { --c1:#6fe9ff; --c2:#3aa6f0; --c3:#4a63d0; --c4:#8a4ad0; }
+#buehne.z-duSprichst { --c1:#2bffd0; --c2:#22c3ff; --c3:#3a7aff; --c4:#7a5cff; }
+#buehne.z-denkt    { --c1:#9a7bff; --c2:#7a5cff; --c3:#5a3ad0; --c4:#c035ff; }
+#buehne.z-werkzeug { --c1:#ffd36b; --c2:#ffa63a; --c3:#ff7a3a; --c4:#ff4fa0; }
+#buehne.z-fehler   { --c1:#ff9a9a; --c2:#ff5c5c; --c3:#d02a4a; --c4:#a01a5a; }
+
 #verlauf {
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain;
@@ -105,6 +182,16 @@ body {
   </div>
   <div id="verlauf"><div id="leer">Tippe auf den Knopf und sprich — zum Beispiel:
 „Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
+  <!-- Alternative Darstellung: die Blase atmet mit dem Ton. Drei Ebenen, jede an
+       einem anderen Frequenzband — außen der Bass, in der Mitte die Sprache,
+       innen die Höhen. -->
+  <div id="buehne" hidden>
+    <div class="schein"></div>
+    <div class="schleier"></div>
+    <div class="blase">
+      <div class="augen"><span class="auge"></span><span class="auge"></span></div>
+    </div>
+  </div>
   <div id="fuss">
     <div id="hinweis"></div>
     <button type="button" id="knopf" aria-label="Gespräch starten">
@@ -248,10 +335,165 @@ function statusZeigen(text, an) {
   statusEl.classList.toggle('an', an === true);
 }
 
+/* ── Blase: den Ton sichtbar machen ───────────────────────────────────────
+   EIN Messpunkt über BEIDE Ströme (Mikrofon und KI-Stimme) — wer gerade
+   spricht, sagt ohnehin der Zustand, also braucht es keine zwei.
+   Der Ton läuft NICHT durch diesen Graphen zum Lautsprecher: das Audio-Element
+   spielt ihn selbst: ein zweiter Weg zur destination verdoppelte ihn.
+   Bass macht die Breite, die Mitten (die Sprache) die Höhe, die Höhen die
+   feinen schnellen Ausschläge. */
+var Blase = (function () {
+  var buehne = el('buehne');
+  var laeuft = false, aktiv = false;      // aktiv = Darstellung gewählt
+  var ac = null, analyser = null, roh = null, verbunden = [];
+  var raf = 0, letzteForm = 0, zustandJetzt = 'bereit';
+  var stummSeit = 0, kunst = false, blinzelt = false;
+
+  function tonAnzapfen() {
+    if (!aktiv || typeof AudioContext === 'undefined') { return; }
+    try {
+      if (!ac) {
+        ac = new AudioContext();
+        analyser = ac.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = .78;
+        roh = new Uint8Array(analyser.frequencyBinCount);
+      }
+      if (ac.state === 'suspended') { ac.resume(); }
+      var s = kern.stroeme();
+      [s.mikro, s.fern].forEach(function (strom) {
+        if (!strom || verbunden.indexOf(strom) !== -1) { return; }
+        try { ac.createMediaStreamSource(strom).connect(analyser); verbunden.push(strom); }
+        catch (e) { /* Ein Strom ohne Tonspur ist kein Grund aufzugeben. */ }
+      });
+    } catch (e) { analyser = null; }
+  }
+
+  function mittel(von, bis) {
+    var summe = 0;
+    for (var i = von; i < bis; i++) { summe += roh[i]; }
+    return summe / (bis - von) / 255;
+  }
+
+  function setz(name, wert) { buehne.style.setProperty(name, wert); }
+
+  function bild(t) {
+    if (!laeuft) { raf = 0; return; }
+    raf = requestAnimationFrame(bild);
+    if (kern.istOffen()) { tonAnzapfen(); }
+
+    var bass = 0, mitten = 0, hoehen = 0;
+    if (analyser && roh) {
+      analyser.getByteFrequencyData(roh);
+      bass = mittel(0, 8); mitten = mittel(8, 30); hoehen = mittel(30, 70);
+    }
+    var energie = bass * .45 + mitten * .40 + hoehen * .15;
+    var spricht = zustandJetzt === 'spricht' || zustandJetzt === 'duSprichst';
+
+    /* Rückfall: manche Browser geben für einen ENTFERNTEN WebRTC-Strom
+       dauerhaft Nullen zurück (bekannte WebKit-Eigenheit). Bleibt es beim
+       Sprechen still, wird die Bewegung erzeugt statt gemessen — eine lebendige
+       Blase ist ehrlicher als eine erstarrte, die Betrieb vortäuscht. */
+    if (spricht) {
+      if (energie > .02) { stummSeit = 0; kunst = false; }
+      else if (!stummSeit) { stummSeit = t; }
+      else if (!kunst && t - stummSeit > 1200) { kunst = true; }
+    } else { stummSeit = 0; }
+    if (kunst && spricht) {
+      bass   = .26 + Math.sin(t * .0041) * .17 + Math.sin(t * .0017) * .06;
+      mitten = .28 + Math.sin(t * .0063 + 1.2) * .19;
+      hoehen = .17 + Math.sin(t * .0111 + .5) * .11;
+      energie = bass * .45 + mitten * .40 + hoehen * .15;
+    }
+    /* Ruhe: ohne Gespräch atmet sie langsam von selbst (rund 7 s je Zug). */
+    if (!kern.istOffen() || zustandJetzt === 'bereit') {
+      var atem = (Math.sin(t * .0009) + 1) / 2;
+      bass = atem * .13; mitten = atem * .09; hoehen = .02; energie = atem * .12;
+    }
+
+    setz('--sx', 1 + bass * .28);
+    setz('--sy', 1 + mitten * .20);
+    setz('--dreh', (Math.sin(t * .002) * (2 + hoehen * 5)) + 'deg');
+    setz('--schein', .40 + energie * .60);
+
+    // Die Form wird seltener neu gesetzt als gezeichnet: sie soll fließen,
+    // nicht zappeln (und border-radius ist der teure Teil).
+    if (t - letzteForm > 90) {
+      letzteForm = t;
+      /* Zwei Anteile je Ecke: ein langsamer Eigengang, damit die Blase auch in
+         der Stille lebt und nicht als glatte Ellipse dasteht, und darüber der
+         Ton. Die Wellen laufen mit teilerfremden Frequenzen, sonst atmete alles
+         im Gleichtakt und die Form bliebe rund. */
+      var w = function (f, p) { return Math.sin(t * f + p); };
+      setz('--r1', (48 + w(.00061, 0.0) * 7 + bass * 13) + '%');
+      setz('--r2', (49 + w(.00083, 1.7) * 7 + mitten * 11) + '%');
+      setz('--r3', (47 + w(.00047, 3.1) * 8 + hoehen * 17) + '%');
+      setz('--r4', (51 + w(.00071, 4.6) * 7 + bass * 9) + '%');
+      setz('--r5', (48 + w(.00057, 2.2) * 8 + mitten * 12) + '%');
+      setz('--r6', (47 + w(.00089, 5.4) * 7 + bass * 13) + '%');
+      setz('--r7', (50 + w(.00043, 0.8) * 8 + hoehen * 12) + '%');
+      setz('--r8', (49 + w(.00067, 3.9) * 7 + mitten * 10) + '%');
+      setz('--s1', (52 + w(.00051, 2.6) * 9 - bass * 10) + '%');
+      setz('--s2', (46 + w(.00079, 0.4) * 9 + mitten * 12) + '%');
+      setz('--s3', (54 + w(.00063, 4.1) * 9 - hoehen * 10) + '%');
+      setz('--s4', (48 + w(.00087, 1.3) * 9 + bass * 10) + '%');
+      setz('--s5', (45 + w(.00059, 5.0) * 9 + mitten * 14) + '%');
+      setz('--s6', (52 + w(.00073, 2.9) * 9 - bass * 8) + '%');
+      setz('--s7', (47 + w(.00049, 0.6) * 9 + hoehen * 14) + '%');
+      setz('--s8', (51 + w(.00081, 3.4) * 9 - mitten * 8) + '%');
+    }
+
+    setz('--augeX', (Math.sin(t * .0011) * 3) + 'px');
+    setz('--augeY', (Math.sin(t * .0017) * 2) + 'px');
+    // Während des Blinzelns NICHT überschreiben — sonst bliebe es unsichtbar.
+    if (!blinzelt) { setz('--augeAuf', 1 - energie * .12); }
+  }
+
+  function blinzeln() {
+    if (!aktiv) { return; }
+    blinzelt = true;
+    setz('--augeAuf', .08);
+    setTimeout(function () { blinzelt = false; setz('--augeAuf', 1); }, 120);
+    setTimeout(blinzeln, 2200 + Math.random() * 4500);
+  }
+
+  function anhalten() { laeuft = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  function anwerfen() {
+    if (!aktiv || laeuft || document.hidden) { return; }
+    laeuft = true; raf = requestAnimationFrame(bild);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { anhalten(); } else { anwerfen(); }
+  });
+
+  return {
+    /* Darstellung umschalten: 'blob' zeigt die Blase, alles andere den Verlauf. */
+    modus: function (welche) {
+      aktiv = (welche === 'blob');
+      buehne.hidden = !aktiv;
+      el('verlauf').hidden = aktiv;
+      buehne.className = 'z-' + zustandJetzt;
+      if (aktiv) { anwerfen(); blinzeln(); } else { anhalten(); }
+    },
+    zustand: function (z) {
+      zustandJetzt = z;
+      if (!aktiv) { return; }
+      buehne.className = 'z-' + z;
+      // Der Griff zum Ton braucht die Nutzergeste — 'verbinde' kommt noch
+      // innerhalb des Klicks auf den Knopf.
+      if (z === 'verbinde') { tonAnzapfen(); }
+      if (z === 'ende' || z === 'fehler') { verbunden = []; }
+      anwerfen();
+    }
+  };
+})();
+
 var kern = SymDoVoiceKern.erzeuge({
   post: post,
   audioEl: el('ton'),
   onState: function (z, detail) {
+    Blase.zustand(z);
     mikPunkt.classList.toggle('an', kern.istOffen());
     knopf.classList.toggle('laeuft', kern.istOffen());
     knopf.classList.toggle('hoert', z === 'hoert' || z === 'duSprichst');
@@ -328,7 +570,8 @@ function handleMessage(daten) {
     if (cb) { delete __wartend[daten.txn]; cb(daten.json || { ok: false }); }
     return;
   }
-  /* type 'state': die Kachel braucht (noch) keinen Zustand vom Modul. */
+  /* type 'state': bislang trägt er nur die gewählte Darstellung. */
+  if (daten.darstellung) { Blase.modus(daten.darstellung); }
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;

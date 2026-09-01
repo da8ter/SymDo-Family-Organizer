@@ -372,6 +372,12 @@ function erzeuge(opt) {
     stop: function (grund) { stop(grund || 'vom Nutzer beendet'); },
     ruhe: ruhe,
     istOffen: function () { return !beendet; },
+    /* Beide Tonquellen für eine Visualisierung: das eigene Mikrofon und die
+       Stimme der KI. Nur herausgereicht, nicht ausgewertet — der Kern bleibt
+       transportlos und weiß nichts von Darstellungen. */
+    stroeme: function () {
+      return { mikro: mic, fern: (audioEl && audioEl.srcObject) || null };
+    },
     laufzeit: function () { return offenSeit ? Math.floor((Date.now() - offenSeit) / 1000) : 0; },
     handleServerEvent: handleServerEvent,
     _testSend: null

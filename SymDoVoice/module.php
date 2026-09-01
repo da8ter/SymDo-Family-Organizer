@@ -43,6 +43,9 @@ class SymDoVoice extends IPSModuleStrict
         // gemessen) — deshalb je Kachel eine Vorgabe.
         $this->RegisterPropertyInteger('DefaultShoppingID', 0);
         $this->RegisterPropertyInteger('DefaultTodoID', 0);
+        // Darstellung der Kachelmitte: Gesprächsverlauf (Vorgabe) oder die
+        // tonreagierende Blase. Bedienung und Werkzeuge sind in beiden gleich.
+        $this->RegisterPropertyString('Darstellung', 'gespraech');
 
         // Briefkasten für den synchronen Relay-Rückruf: er läuft auf einem
         // ANDEREN PHP-Objekt dieser Instanz — ein Objektfeld überlebt die
@@ -183,7 +186,15 @@ class SymDoVoice extends IPSModuleStrict
                 'caption' => $this->Translate('Default shopping list'), 'validModules' => [self::SHOPPING_GUID]];
             $elements[] = ['type' => 'SelectInstance', 'name' => 'DefaultTodoID', 'width' => '400px',
                 'caption' => $this->Translate('Default task list'), 'validModules' => [self::TODO_GUID]];
-        } else {
+        }
+        if ($this->PropertyExistiert('Darstellung')) {
+            $elements[] = ['type' => 'Select', 'name' => 'Darstellung', 'width' => '400px',
+                'caption' => $this->Translate('Tile view'), 'options' => [
+                    ['caption' => $this->Translate('Conversation (text)'), 'value' => 'gespraech'],
+                    ['caption' => $this->Translate('Animated blob (reacts to the voice)'), 'value' => 'blob'],
+                ]];
+        }
+        if (!$this->PropertyExistiert('DefaultShoppingID')) {
             $elements[] = ['type' => 'Label',
                 'caption' => $this->Translate('More settings appear after the next Symcon restart.')];
         }
@@ -285,7 +296,15 @@ class SymDoVoice extends IPSModuleStrict
 
     private function PayloadBauen(): array
     {
-        return ['type' => 'state', 'stufe' => 'dialog'];
+        return [
+            'type'  => 'state',
+            'stufe' => 'dialog',
+            // Vor dem Modul-Reload gibt es die Eigenschaft noch nicht; ein
+            // ReadProperty darauf wäre eine PHP-Warnung MITTEN in der Kachel-
+            // Antwort und zerlegte das HTML.
+            'darstellung' => $this->PropertyExistiert('Darstellung')
+                ? $this->ReadPropertyString('Darstellung') : 'gespraech',
+        ];
     }
 
     private function Push(array $daten): void
