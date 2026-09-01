@@ -40,6 +40,7 @@ class SymDoRoutines extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+        $this->RegisterAttributeBoolean('ParentMigrated', false);
 
         // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert
         $this->SetVisualizationType(1);
@@ -70,6 +71,8 @@ class SymDoRoutines extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
+
+        $this->GatewayEinmaligVerbinden();
 
         // Neuen Zeilen ihre Kennung geben (unsichtbare id-Spalte, add liefert '').
         // Schreibt zurück und wendet über den Einmal-Timer erneut an.
@@ -393,4 +396,38 @@ class SymDoRoutines extends IPSModuleStrict
     {
         $this->RegisterOnceTimer('UebernehmenNachtragen', 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
     }
+
+    /**
+     * Einmalig nach dem Update: die Gateway-Zuordnung, die dieses Modul ohnehin
+     * benutzt, als Eltern-Instanz eintragen.
+     *
+     * Ohne sie muesste sie nach dem Update von Hand in der Konsole gesetzt
+     * werden — bei jeder Instanz einzeln. Am Verhalten aendert sich nichts: Es
+     * wird genau das Gateway verbunden, das die Instanz vorher schon gefragt
+     * hat. Deshalb laeuft es still, ohne Meldung.
+     *
+     * Das Flag steht VOR dem Verbinden: IPS_ConnectInstance loest ApplyChanges
+     * erneut aus. Wer die Verbindung spaeter bewusst loest, behaelt es so —
+     * die Migration greift genau einmal.
+     */
+    private function GatewayEinmaligVerbinden(): void
+    {
+        // Nie waehrend des Hochlaufs: IPS_ConnectInstance braucht fertige Objekte.
+        // Das Flag bleibt dann ungesetzt, der naechste Anlauf holt es nach.
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+        if ((bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            return;
+        }
+        @$this->WriteAttributeBoolean('ParentMigrated', true);
+        if ((int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0) > 0) {
+            return;
+        }
+        $gateway = $this->GatewayInstanz();
+        if ($gateway > 0 && @IPS_InstanceExists($gateway)) {
+            @IPS_ConnectInstance($this->InstanceID, $gateway);
+        }
+    }
+
 }
