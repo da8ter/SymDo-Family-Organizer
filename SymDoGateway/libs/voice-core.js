@@ -27,6 +27,11 @@ function erzeuge(opt) {
   var pingUhr = null, stilleUhr = null, verstecktSeit = 0, verstecktUhr = null;
   var offenSeit = 0;
   var beendet = true;
+  /* Frist fuer den Verbindungsaufbau. Ohne sie bleibt die Anzeige ewig auf
+     "verbinde" stehen, wenn die Mikrofonfrage unbeantwortet bleibt:
+     getUserMedia loest dann WEDER auf NOCH ab (headless nachgestellt und
+     nach 5 s noch haengend). */
+  var startUhr = 0;
   var werkzeugDeckelMs = opt.toolTimeoutMs || 8000;
   var stilleMs = (opt.silenceSeconds || 45) * 1000;
 
@@ -96,6 +101,16 @@ function erzeuge(opt) {
       return Promise.resolve(false);
     }
 
+    if (startUhr) { clearTimeout(startUhr); }
+    startUhr = setTimeout(function () {
+      if (beendet) { return; }
+      var text = 'Der Verbindungsaufbau hat zu lange gedauert — bitte den Mikrofonzugriff erlauben und es erneut versuchen.';
+      beendet = true;
+      aufraeumen();
+      zustand('fehler', text);
+      ereignis({ art: 'fehler', text: text });
+    }, 25000);
+
     // ZUERST das Mikrofon, DANN die Marke: die Berechtigungsfrage kann
     // Sekunden dauern, und die Marke verfällt nach 60 s.
     return navigator.mediaDevices.getUserMedia({
@@ -143,7 +158,10 @@ function erzeuge(opt) {
     };
     pc.onconnectionstatechange = function () {
       if (!pc) { return; }
-      if (pc.connectionState === 'connected') { zustand('hoert'); stilleZuruecksetzen(); }
+      if (pc.connectionState === 'connected') {
+        if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
+        zustand('hoert'); stilleZuruecksetzen();
+      }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected'
           || pc.connectionState === 'closed') {
         if (!beendet) { stop('Verbindung verloren'); }
@@ -332,6 +350,7 @@ function erzeuge(opt) {
   }
 
   function aufraeumen() {
+    if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
     if (pingUhr) { clearInterval(pingUhr); pingUhr = null; }
     if (stilleUhr) { clearTimeout(stilleUhr); stilleUhr = null; }
     try { if (dc) { dc.close(); } } catch (e) {}

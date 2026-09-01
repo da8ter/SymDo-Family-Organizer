@@ -999,7 +999,37 @@ html[data-symdo-theme="dark"] .member-bar {
    mit den drei Zahlen untereinander, darunter Einkauf und Termine als Paar. Die drei
    einzelnen Kacheln sind hier ausgeblendet und uebernehmen ab 820px. */
 .kpi-tasks { grid-column: 1 / -1; }
+/* Steht die Sprach-Kachel daneben, teilen sich beide die Reihe. Nur DANN —
+   ohne sie bliebe sonst ein Loch neben den Aufgaben. */
+.kpi-grid.mit-voice .kpi-tasks { grid-column: span 1; }
 .kpi-single { display: none; }
+
+/* ── Sprachdialog: die Blase als Kachel ───────────────────────────────────
+   Auf dem Telefon neben der halbierten Aufgaben-Kachel; ab 820 px ist die
+   KPI-Reihe voll, dort bekommt sie eine eigene halbbreite Karte darunter
+   (das Dashboard-Raster hat dort zwei Spalten). */
+.kpi-voice, .voice-card {
+  position: relative; overflow: hidden; padding: 0;
+  background: linear-gradient(160deg, #171a2e 0%, #0b0d18 62%, #05060d 100%);
+  border-radius: var(--radius); cursor: pointer;
+}
+.voice-card { display: none; min-height: 200px; }
+.voice-slot { position: absolute; inset: 0; }
+.voice-mic {
+  position: absolute; top: 10px; right: 12px; z-index: 2;
+  font-size: 15px; line-height: 1; pointer-events: none;
+  color: rgba(255, 255, 255, .45);
+  /* Dieselbe Trägheit wie die Blase: der Status soll überblenden, nicht blinken. */
+  transition: color 1.4s ease;
+}
+.voice-mic i, .voice-mic svg { color: inherit; fill: currentColor; }
+.voice-mic.z-verbinde   { color: #9a7bff; }
+.voice-mic.z-hoert      { color: #6fe9ff; }
+.voice-mic.z-duSprichst { color: #2bffd0; }
+.voice-mic.z-denkt      { color: #9a7bff; }
+.voice-mic.z-spricht    { color: #28dcff; }
+.voice-mic.z-werkzeug   { color: #ffd36b; }
+.voice-mic.z-fehler     { color: #ff5c5c; }
 .kpi-rows {
   position: relative;
   z-index: 1;
@@ -2884,6 +2914,11 @@ html[data-symdo-theme="dark"] .member-bar {
   .kpi-tasks { display: none; }
   .kpi-single { display: flex; }
 
+  /* Die Sprach-Kachel verlaesst die volle KPI-Reihe und wird zur eigenen Karte
+     im Zweispalter — also halbe Breite, wie besprochen. */
+  .kpi-voice { display: none; }
+  .voice-card { display: block; }
+
   /* Vier Ringe in einer Reihe (Telefon: 2 x 2, siehe .ring-row) */
   .ring-row { grid-template-columns: repeat(4, 1fr); }
 
@@ -3836,6 +3871,101 @@ function aiPost(path, payload) {
     setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
   });
 }
+// ── Sprachdialog: die Blase als Dashboard-Kachel ────────────────────────────
+// Kern und Aussehen kommen aus denselben Quellen wie in der Visu-Kachel
+// (voice-core.js / voice-blob.js); der Gateway haengt sie nur an, wenn der
+// Sprachdialog im Backend eingeschaltet und beiden Einwilligungen zugestimmt ist.
+let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null;
+let voiceZustand = 'bereit';
+
+function voiceMoeglich() {
+  return !!(window.__SYMDO__ && window.__SYMDO__.voiceEnabled
+    && window.SymDoVoiceKern && window.SymDoVoiceBlase
+    && window.isSecureContext && navigator.mediaDevices);
+}
+
+/* Eine Kennung je Geraet: das Gateway laesst je „Kachel" nur EIN Gespraech zu.
+   Aus dem Token abgeleitet, damit sie ein Neuladen ueberlebt — sonst hielte der
+   Server das alte Gespraech noch fuer fremd und liesse beide nebeneinander. */
+function voiceKennung() {
+  let t = ''; try { t = ls.get('symdo.token') || ''; } catch (e) {}
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) { h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; }
+  return (h % 900000) + 100000;
+}
+
+/* Sprecher und Standardlisten setzt hier der Client — in der Visu-Kachel macht
+   das serverseitig das Modul. Sie reisen bei JEDEM Aufruf mit, weil 'open' und
+   'opened' sie getrennt auswerten. Sprecher ist dasselbe „ich" wie sonst in der
+   App (currentUserID), Listen sind die gerade gewaehlten. */
+function voicePost(payload) {
+  const voll = Object.assign({}, payload, {
+    tile: voiceKennung(),
+    userId: currentUserID(),
+    defaults: { shopping: selectedShoppingID(), todo: selectedTodoID() }
+  });
+  return aiPost('/voice', voll).then(a => (a && a.json) || { ok: false });
+}
+
+/* Nur die FARBE schaltet um, nicht das Symbol: das Icon-Kit (FontAwesome)
+   ersetzt jedes <i> durch ein <svg> und nimmt Klassen wie Datenattribute mit.
+   Deshalb sitzt der Zustand auf einer eigenen Huelle, die es nie anfasst — das
+   SVG darin erbt die Farbe (fill: currentColor). */
+function voiceMikSetzen(z) {
+  document.querySelectorAll('[data-voice-mic]').forEach(h => {
+    h.className = 'voice-mic z-' + z;
+  });
+}
+
+function voiceKernHolen() {
+  if (voiceKern) return voiceKern;
+  // Eigenes Audio-Element: die Stimme der KI kommt als WebRTC-Strom und braucht
+  // etwas, das sie abspielt. Es haengt am Body, nicht am Dashboard-Markup —
+  // sonst risse es jedes Neuzeichnen mit.
+  voiceAudio = document.createElement('audio');
+  voiceAudio.autoplay = true;
+  voiceAudio.setAttribute('playsinline', '');
+  document.body.appendChild(voiceAudio);
+  voiceKern = SymDoVoiceKern.erzeuge({
+    post: voicePost,
+    audioEl: voiceAudio,
+    onState: function (z, detail) {
+      voiceZustand = z;
+      voiceMikSetzen(z);
+      if (voiceBlase) voiceBlase.zustand(z);
+      if (z === 'fehler' && detail) showToast(detail);
+    }
+  });
+  return voiceKern;
+}
+
+/* Der Kasten mit der Blase lebt LAENGER als das Dashboard-Markup: renderDashboard
+   ersetzt innerHTML, und das wuerfe SVG, Analyser und laufende Animation jedes
+   Mal weg. Deshalb ein dauerhaftes Element, das nach jedem Zeichnen in den
+   gerade SICHTBAREN Platz gehaengt wird (schmal: neben den Aufgaben, breit:
+   eigene Karte darunter). */
+function voiceMount() {
+  if (!voiceMoeglich()) return;
+  const plaetze = Array.prototype.slice.call(document.querySelectorAll('[data-voice-slot]'));
+  const platz = plaetze.filter(p => p.offsetParent !== null)[0] || plaetze[0];
+  if (!platz) return;
+  if (!voiceBox) {
+    voiceBox = document.createElement('div');
+    voiceBox.style.cssText = 'position:absolute;inset:0;';
+    voiceBlase = SymDoVoiceBlase.erzeuge(voiceBox, voiceKernHolen());
+    voiceBlase.an(true);
+  }
+  if (voiceBox.parentNode !== platz) platz.appendChild(voiceBox);
+  voiceBlase.zustand(voiceZustand);
+  voiceMikSetzen(voiceZustand);
+}
+
+/** Ein Tippen startet das Gespraech, das naechste beendet es. */
+function voiceUmschalten() {
+  const k = voiceKernHolen();
+  if (k.istOffen()) { k.stop('vom Nutzer beendet'); } else { k.start(); }
+}
+
 // Sichtbare Bereiche — Quelle wie bei aiEnabled: Standalone window.__SYMDO__,
 // Kachel der State. Fehlende Felder bedeuten „sichtbar", nie umgekehrt.
 function normalizeTabs(raw) {
@@ -7048,7 +7178,8 @@ function renderDashboard() {
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
   const zeroOverdue = overdueCount === 0;
-  html += '<div class="kpi-grid">';
+  const mitVoice = voiceMoeglich();
+  html += '<div class="kpi-grid' + (mitVoice ? ' mit-voice' : '') + '">';
   if (withTodos) {
     // Auf schmalen Anzeigen tragen DREI Aufgaben-Kacheln nebeneinander kaum noch eine
     // Zahl. Deshalb steht dort eine Kachel mit den drei Zahlen untereinander, ab 820px
@@ -7066,6 +7197,14 @@ function renderDashboard() {
       // ihres, ohne dieses saehe die Reihe wie zwei Gestaltungen aus. Die Zahlen
       // liegen darueber (.kpi-rows hat z-index 1).
       `</span><i class="fa-light fa-list-check kpi-glyph"></i></button>`;
+    // Sprachdialog gleich daneben: die Aufgaben-Kachel gibt dafür die halbe
+    // Breite ab. Der Kasten bleibt leer — die Blase wird nach dem Zeichnen
+    // hineingehängt (voiceMount), damit sie ein Neuzeichnen überlebt.
+    if (mitVoice) {
+      html += `<button class="kpi kpi-voice" aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
+        `<span class="voice-slot" data-voice-slot></span>` +
+        `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i></span></button>`;
+    }
     html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
       `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
@@ -7091,6 +7230,14 @@ function renderDashboard() {
       `<i class="fa-light fa-calendar-day kpi-glyph"></i></button>`;
   }
   html += '</div>';
+  // Ab 820 px ist die KPI-Reihe voll — dort bekommt die Blase eine eigene
+  // halbbreite Karte (CSS entscheidet, welcher der beiden Plätze sichtbar ist).
+  if (mitVoice) {
+    html += `<div class="card voice-card" role="button" tabindex="0" ` +
+      `aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
+      `<span class="voice-slot" data-voice-slot></span>` +
+      `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i></span></div>`;
+  }
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
   // darueber nur zaehlen. Ohne Text keine Karte — eine leere waere Ballast.
@@ -7442,6 +7589,9 @@ function renderDashboard() {
       if (item) openTodoEditor(instanceID, item);
     });
   });
+  // Sprach-Kachel: ein Tippen startet, das naechste beendet das Gespraech.
+  el.querySelectorAll('[data-voice]').forEach(k => k.addEventListener('click', voiceUmschalten));
+  voiceMount();
   applyMarquees(el);
   // Nach dem Einfuegen: erst jetzt haben die Stundenplan-Balken eine Breite.
   // Reihenfolge zaehlt — die Labels messen gegen die ENDGUELTIGE Breite.

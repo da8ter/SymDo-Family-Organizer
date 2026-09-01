@@ -1061,6 +1061,9 @@ trait AppCore
         // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",
         // das Gateway hängt also nicht von ihr ab (siehe Kommentar bei WsResubscribe).
         $symdo['tabs'] = $this->GetWebAppTabs();
+        // Sprachdialog: die Web-App zeigt ihre Blasen-Kachel NUR, wenn er im
+        // Backend eingeschaltet und beiden Einwilligungen zugestimmt wurde.
+        $symdo['voiceEnabled'] = $this->VoiceUsable();
         // Oeffentlicher VAPID-Schluessel gleich mit: Safari erlaubt
         // Notification.requestPermission() nur mit gueltiger Nutzeraktivierung, und
         // JEDES await davor verbraucht sie. Muesste die Seite den Schluessel erst
@@ -1093,6 +1096,19 @@ trait AppCore
         $iconV = $symdo['iconVersion'] !== '' ? '?v=' . $symdo['iconVersion'] : '';
         $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
             . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
+
+        /* Sprachdialog: Gesprächskern und Blase kommen aus denselben Quellen wie
+           in der Visu-Kachel. Nur mitliefern, wenn er benutzbar ist — sonst
+           trägt jede Seite rund 30 kB ungenutztes Skript, und die Web-App findet
+           SymDoVoiceKern gar nicht erst vor (daran hängt ihre Kachel). */
+        if (($symdo['voiceEnabled'] ?? false) === true) {
+            foreach (['voice-core.js', 'voice-blob.js'] as $datei) {
+                $js = @file_get_contents(__DIR__ . '/' . $datei);
+                if (is_string($js)) {
+                    $config .= '<script>' . $js . '</script>';
+                }
+            }
+        }
 
         // App-Icon wie in der iOS-App: 32 px für den Browser-Tab, 180 px für den
         // iOS-Homescreen. Root-absolut wie /icons.js, damit die URL auch über

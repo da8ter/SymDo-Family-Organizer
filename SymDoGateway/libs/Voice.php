@@ -139,6 +139,21 @@ trait Voice
     }
 
     /** @return array<string,mixed> */
+    /**
+     * Ist der Sprachdialog überhaupt benutzbar? Dieselben Riegel wie in
+     * VoiceOpen, nur als Ja/Nein — die Web-App blendet ihre Kachel danach ein
+     * oder aus. Der Tagesdeckel zählt hier NICHT mit: ein aufgebrauchtes Budget
+     * ist morgen wieder da, die Kachel soll deshalb nicht verschwinden.
+     */
+    private function VoiceUsable(): bool
+    {
+        return $this->VoiceEnabledProp()
+            && $this->AiPrivacyAccepted()
+            && (bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')
+            && trim($this->ReadPropertyString('AiOpenAIKey')) !== '';
+    }
+
+    /** @return array<string,mixed> */
     private function VoiceOpen(array $body): array
     {
         // Riegel in fester Reihenfolge — alle VOR dem Prägen der Marke.
