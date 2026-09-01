@@ -471,6 +471,16 @@ class SymDoMealPlan extends IPSModuleStrict
         if (IPS_GetKernelRunlevel() !== KR_READY) {
             return;
         }
+        /* Ohne Kernel-Neustart nach dem Update ist NICHTS von beidem da: weder die
+           Elternangabe des Moduls (module.json wird nur beim Start gelesen) noch
+           das Attribut (entsteht in Create()). Dann hier aussteigen, bevor der
+           Attribut-Zugriff eine Warnung ins Protokoll schreibt — verbinden liesse
+           sich ohnehin nicht, IPS_ConnectInstance antwortet dann nur false. */
+        $eigeneGuid = (string)(@IPS_GetInstance($this->InstanceID)['ModuleInfo']['ModuleID'] ?? '');
+        $modulInfo  = $eigeneGuid !== '' ? @IPS_GetModule($eigeneGuid) : null;
+        if (!is_array($modulInfo) || empty($modulInfo['ParentRequirements'])) {
+            return;
+        }
         if ((bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
             return;
         }
