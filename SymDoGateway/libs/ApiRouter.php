@@ -144,6 +144,17 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'voice':
+                // Sprachdialog der Web-App (die Kachel nimmt das Relay). Das
+                // Stundenfenster je Gerät gilt hier wie bei jeder KI-Route.
+                if ($method === 'POST') {
+                    if (!$this->AiRateLimitOk($device)) {
+                        return;
+                    }
+                    $this->SendJson($this->VoiceHandleAction($this->ReadJsonBody(), $device));
+                    return;
+                }
+                break;
             case 'mail':
                 // Vorschlaege aus weitergeleiteten E-Mails. Angelegt wird die Aufgabe
                 // NICHT hier — dafuer ruft die Oberflaeche wie bisher AppCall/AddItem

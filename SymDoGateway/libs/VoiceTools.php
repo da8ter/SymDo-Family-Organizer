@@ -1,0 +1,432 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Sprachdialog — Werkzeugschicht.
+ *
+ * Das Modell ruft Werkzeuge aus diesem Katalog; ausgeführt wird ausschließlich
+ * hier, gegen die vorhandenen Modulwege. Drei Regeln, die alle Werkzeuge
+ * einhalten:
+ *   1. Der Katalog ist die Weißliste — kein Aktionsname aus dem Modell wird
+ *      je durchgereicht, jede Nutzlast wird feldweise gebaut.
+ *   2. Antworten sind sprachgerecht schmal (VoiceCap): niemals ganze Zustände,
+ *      der volle Einkaufszustand hat 166.000 Zeichen.
+ *   3. Jede Antwort trägt `sag` — der Server formuliert den Satz, das Modell
+ *      liest vor. Ein Modell, das aus rohen Fehlercodes selbst Sätze baut,
+ *      erfindet Erklärungen.
+ *
+ * Stand: Etappe 1 — die lesenden Werkzeuge. Schreiben, Auflösen und Löschen
+ * folgen in den nächsten Etappen.
+ */
+trait VoiceTools
+{
+    /** Obergrenze je Werkzeugantwort in Zeichen (json_encode-Länge). */
+    private static int $VOICE_CAP = 2000;
+
+    /**
+     * Der Katalog. `schema` ist das OpenAI-Function-Schema; `art` steuert
+     * Protokoll und (später) die Bestätigungspflicht.
+     */
+    private function VoiceKatalog(): array
+    {
+        return [
+            'tag_uebersicht' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Übersicht eines Tages: Termine, fällige und überfällige Aufgaben, Geburtstage, Schulzeiten, Abendessen und die Zahl der Einkäufe. Für Fragen wie "Was steht heute/morgen an?".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'tag' => ['type' => 'string', 'description' => '"heute", "morgen" oder ein Datum JJJJ-MM-TT'],
+                    ],
+                    'required' => ['tag'],
+                ],
+            ],
+            'einkaufsliste_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Liest die Einkaufsliste: was noch zu kaufen ist und was schon im Wagen liegt.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'liste' => ['type' => ['string', 'null'], 'description' => 'Name der Einkaufsliste; null = Standardliste'],
+                    ],
+                    'required' => ['liste'],
+                ],
+            ],
+            'aufgaben_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Liest die Aufgabenliste: offene, heutige oder überfällige Aufgaben.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'filter' => ['type' => 'string', 'enum' => ['offen', 'heute', 'ueberfaellig', 'alle']],
+                        'liste'  => ['type' => ['string', 'null'], 'description' => 'Name der Aufgabenliste; null = Standardliste'],
+                    ],
+                    'required' => ['filter', 'liste'],
+                ],
+            ],
+        ];
+    }
+
+    /** Das `tools`-Feld der Realtime-Sitzung, direkt aus dem Katalog. */
+    private function VoiceToolSpec(): array
+    {
+        $spec = [];
+        foreach ($this->VoiceKatalog() as $name => $def) {
+            $spec[] = [
+                'type'        => 'function',
+                'name'        => $name,
+                'description' => (string)$def['beschreibung'],
+                'parameters'  => $def['schema'],
+            ];
+        }
+        return $spec;
+    }
+
+    /**
+     * Ausführung: Weißliste, Argumente dekodieren, Werkzeugzweig, Deckel.
+     * @param array{userId:string,defaults:array} $ctx
+     * @return array<string,mixed>
+     */
+    private function VoiceRunTool(string $name, string $argsJson, array $ctx): array
+    {
+        $katalog = $this->VoiceKatalog();
+        if (!isset($katalog[$name])) {
+            // Zeichen für Manipulation oder ein halluziniertes Werkzeug.
+            $this->VoiceLogEintrag($name, 'unbekanntes Werkzeug', false);
+            return $this->VoiceErr('unknown_tool', $this->Translate('I cannot do that.'));
+        }
+        $args = json_decode($argsJson, true);
+        if (!is_array($args)) {
+            $args = [];
+        }
+        try {
+            $antwort = match ($name) {
+                'tag_uebersicht'      => $this->VoiceToolTag($args),
+                'einkaufsliste_lesen' => $this->VoiceToolEinkauf($args, $ctx),
+                'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
+            };
+        } catch (\Throwable $e) {
+            $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
+            $antwort = $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
+        }
+        $this->VoiceLogEintrag($name, (string)($antwort['sag'] ?? ''), ($antwort['ok'] ?? false) === true);
+        return $this->VoiceCap($antwort);
+    }
+
+    // ------------------------------------------------------------------
+    // Die Werkzeuge
+    // ------------------------------------------------------------------
+
+    /** @return array<string,mixed> */
+    private function VoiceToolTag(array $args): array
+    {
+        $tage = $this->VoiceTagOffset((string)($args['tag'] ?? 'heute'));
+        if ($tage === null) {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I can only look up to seven days ahead.'));
+        }
+        // BriefingCollect sammelt alles ohne KI-Aufruf — genau die Auskunft,
+        // aus der das Modell die gestellte Frage beantwortet.
+        $b = $this->BriefingCollect($tage);
+        $deckel = static fn($v, int $n): array => array_slice(array_values(array_filter(
+            is_array($v) ? array_map('strval', $v) : [], static fn(string $z): bool => trim($z) !== ''
+        )), 0, $n);
+        return [
+            'ok'  => true,
+            'tag' => date('Y-m-d', strtotime('+' . $tage . ' day')),
+            'termine'      => $deckel($b['termine'] ?? [], 8),
+            'aufgaben'     => $deckel($b['aufgaben'] ?? [], 8),
+            'ueberfaellig' => $deckel($b['ueberfaellig'] ?? [], 5),
+            'anlaesse'     => $deckel($b['geburtstage'] ?? [], 3),
+            'schule'       => $deckel($b['schule'] ?? [], 4),
+            'essen'        => $deckel($b['essen'] ?? [], 2),
+            'einkauf'      => is_array($b['einkauf'] ?? null)
+                ? $deckel($b['einkauf'], 2)
+                : (trim((string)($b['einkauf'] ?? '')) !== '' ? [(string)$b['einkauf']] : []),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolEinkauf(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $items = json_decode((string)@SL_GetItems((int)$ziel['id']), true);
+        if (!is_array($items)) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The shopping list is not answering right now.'));
+        }
+        $offenListe = [];
+        $imWagen = 0;
+        foreach ($items as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            if (($it['inCart'] ?? false) === true) {
+                $imWagen++;
+                continue;
+            }
+            $name  = trim((string)($it['name'] ?? ''));
+            $menge = trim((string)($it['amount'] ?? ''));
+            if ($name !== '') {
+                $offenListe[] = $menge !== '' ? ($name . ' (' . $menge . ')') : $name;
+            }
+        }
+        $gesamt = count($offenListe);
+        $gezeigt = array_slice($offenListe, 0, 25);
+        return [
+            'ok'       => true,
+            'liste'    => (string)$ziel['name'],
+            'offen'    => $gesamt,
+            'im_wagen' => $imWagen,
+            'artikel'  => $gezeigt,
+            'gekuerzt' => $gesamt > count($gezeigt),
+            'sag'      => $gesamt === 0
+                ? sprintf($this->Translate('Nothing left to buy on %s.'), (string)$ziel['name'])
+                : sprintf($this->Translate('%d items still to buy on %s.'), $gesamt, (string)$ziel['name']),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolAufgaben(array $args, array $ctx): array
+    {
+        $ziel = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
+        if (!($ziel['ok'] ?? false)) {
+            return $ziel;
+        }
+        $st = json_decode((string)@TDL_GetAppState((int)$ziel['id']), true);
+        $items = is_array($st) ? (($st['state'] ?? [])['items'] ?? null) : null;
+        if (!is_array($items)) {
+            return $this->VoiceErr('nicht_bereit', $this->Translate('The task list is not answering right now.'));
+        }
+        $filter = (string)($args['filter'] ?? 'offen');
+        $heute  = date('Y-m-d');
+        $raus   = [];
+        foreach ($items as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $erledigt = ($it['done'] ?? false) === true;
+            $due      = (int)($it['due'] ?? 0);
+            $tag      = $due > 0 ? date('Y-m-d', $due) : '';
+            $passt = match ($filter) {
+                'alle'         => true,
+                'heute'        => !$erledigt && $tag === $heute,
+                'ueberfaellig' => !$erledigt && $tag !== '' && $tag < $heute,
+                default        => !$erledigt,
+            };
+            if (!$passt) {
+                continue;
+            }
+            $raus[] = [
+                'titel'   => mb_substr(trim((string)($it['title'] ?? '')), 0, 60),
+                'frist'   => $tag !== '' ? $tag : null,
+                'wichtig' => (string)($it['priority'] ?? 'normal') === 'high',
+            ];
+        }
+        $gesamt = count($raus);
+        return [
+            'ok'       => true,
+            'liste'    => (string)$ziel['name'],
+            'anzahl'   => $gesamt,
+            'aufgaben' => array_slice($raus, 0, 20),
+            'gekuerzt' => $gesamt > 20,
+            'sag'      => $gesamt === 0
+                ? $this->Translate('Nothing there — all done.')
+                : sprintf($this->Translate('%d task(s) on %s.'), $gesamt, (string)$ziel['name']),
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Helfer
+    // ------------------------------------------------------------------
+
+    /**
+     * Liste nach Name oder Vorgabe finden. Passt ein Name nicht eindeutig,
+     * kommt die Auswahl zurück, damit das Modell nachfragen kann statt zu raten.
+     * @return array<string,mixed> ok:true+id+name | Fehlerform
+     */
+    private function VoiceListeFinden(string $art, mixed $name, array $ctx): array
+    {
+        $alle = [];
+        foreach ($this->GetListInstances() as $inst) {
+            if ((string)($inst['kind'] ?? '') === $art) {
+                // GetListInstances liefert nur id+kind — der Name haengt am Objekt.
+                // Namenlose Instanzen bekommen einen Notnamen: ein leerer Name
+                // passt sonst per str_contains auf JEDE Suche und macht alles
+                // mehrdeutig (live an einer unbenannten ToDo-Liste gemessen).
+                $id = (int)$inst['id'];
+                $n  = trim((string)@IPS_GetName($id));
+                $alle[] = ['id' => $id, 'name' => $n !== '' ? $n : ('Liste ' . $id)];
+            }
+        }
+        if ($alle === []) {
+            return $this->VoiceErr('nicht_erlaubt', $art === 'shopping'
+                ? $this->Translate('There is no shopping list here.')
+                : $this->Translate('There is no task list here.'));
+        }
+        $such = is_string($name) ? trim($name) : '';
+        if ($such === '') {
+            $vorgabe = (int)($ctx['defaults'][$art] ?? 0);
+            foreach ($alle as $l) {
+                if ($l['id'] === $vorgabe) {
+                    return ['ok' => true] + $l;
+                }
+            }
+            return ['ok' => true] + $alle[0];
+        }
+        $suchNorm = $this->VoiceNorm($such);
+        $treffer  = [];
+        foreach ($alle as $l) {
+            $kandNorm = $this->VoiceNorm($l['name']);
+            if ($kandNorm === $suchNorm
+                || str_contains($kandNorm, $suchNorm) || str_contains($suchNorm, $kandNorm)) {
+                $treffer[] = $l;
+            }
+        }
+        if (count($treffer) === 1) {
+            return ['ok' => true] + $treffer[0];
+        }
+        $namen = array_map(static fn(array $l): string => $l['name'], $treffer !== [] ? $treffer : $alle);
+        return [
+            'ok'  => false,
+            'error' => ['code' => 'unbekannte_liste', 'message' => 'Liste nicht eindeutig'],
+            'sag' => sprintf($this->Translate('Which list do you mean? There is: %s.'), implode(', ', $namen)),
+            'listen' => $namen,
+        ];
+    }
+
+    /** Kleinschreibung + Umlautfaltung — levenshtein/Vergleiche sind sonst falsch geeicht. */
+    private function VoiceNorm(string $t): string
+    {
+        $t = mb_strtolower(trim($t));
+        return strtr($t, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+    }
+
+    /** „heute"/„morgen"/Datum → Tagesabstand 0..7, sonst null. */
+    private function VoiceTagOffset(string $tag): ?int
+    {
+        $t = $this->VoiceNorm($tag);
+        if ($t === '' || $t === 'heute') {
+            return 0;
+        }
+        if ($t === 'morgen') {
+            return 1;
+        }
+        if ($t === 'uebermorgen') {
+            return 2;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $t, $m) === 1
+            && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+            $diff = (int)floor((strtotime($t . ' 12:00') - strtotime(date('Y-m-d') . ' 12:00')) / 86400);
+            return ($diff >= 0 && $diff <= 7) ? $diff : null;
+        }
+        return null;
+    }
+
+    /**
+     * Der Systemteil der Sitzung: wer spricht, wer zum Haushalt gehört, welche
+     * Listen es gibt — KEINE Kennungen, KEINE Inhalte. Deckel 1200 Zeichen.
+     */
+    private function VoiceInstructions(string $userId): string
+    {
+        $wer = '';
+        $familie = [];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                $n = trim((string)($u['name'] ?? ''));
+                if ($n === '') {
+                    continue;
+                }
+                $familie[] = $n;
+                if ((string)($u['id'] ?? '') === $userId && $userId !== '') {
+                    $wer = $n;
+                }
+            }
+        } catch (\Throwable $e) {
+            // ohne Gateway-Benutzer eben ohne Namen
+        }
+        $einkauf = [];
+        $aufgaben = [];
+        foreach ($this->GetListInstances() as $inst) {
+            $n = (string)@IPS_GetName((int)($inst['id'] ?? 0));
+            if ($n === '') {
+                continue;
+            }
+            if ((string)($inst['kind'] ?? '') === 'shopping') {
+                $einkauf[] = $n;
+            } else {
+                $aufgaben[] = $n;
+            }
+        }
+        $zeilen = [
+            'Du bist SymDo, der Sprachassistent dieses Haushalts. Sprich Deutsch, antworte in ein bis zwei kurzen Sätzen, außer man bittet um mehr.',
+            'Heute ist ' . $this->VoiceDatumZeile() . '.',
+        ];
+        if ($wer !== '') {
+            $zeilen[] = 'Du sprichst mit ' . $wer . '. „ich", „mir" und „meine Aufgaben" heißen: ' . $wer . '.';
+        }
+        if ($familie !== []) {
+            $zeilen[] = 'Zum Haushalt gehören: ' . implode(', ', array_slice($familie, 0, 10)) . '.';
+        }
+        if ($einkauf !== []) {
+            $zeilen[] = 'Einkaufslisten: ' . implode(', ', array_slice($einkauf, 0, 6)) . '.';
+        }
+        if ($aufgaben !== []) {
+            $zeilen[] = 'Aufgabenlisten: ' . implode(', ', array_slice($aufgaben, 0, 6)) . '.';
+        }
+        $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
+        $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
+        $text = implode("\n", $zeilen);
+        return mb_strlen($text) > 1200 ? mb_substr($text, 0, 1200) : $text;
+    }
+
+    private function VoiceDatumZeile(): string
+    {
+        $tage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+        return $tage[(int)date('w')] . ', der ' . date('d.m.Y') . ', ' . date('H:i') . ' Uhr';
+    }
+
+    /** Antwort auf die Obergrenze stutzen: Listenfelder von hinten kürzen. */
+    private function VoiceCap(array $antwort): array
+    {
+        $mess = static fn(array $a): int => strlen((string)json_encode($a, JSON_UNESCAPED_UNICODE));
+        $runden = 0;
+        // Je Runde faellt die HAELFTE der laengsten Liste — eintragsweises Kappen
+        // braeuchte bei grossen Antworten hunderte Runden (gemessen: 19k Zeichen).
+        while ($mess($antwort) > self::$VOICE_CAP && $runden < 24) {
+            $runden++;
+            $laengste = '';
+            $max = 0;
+            foreach ($antwort as $k => $v) {
+                if (is_array($v) && array_is_list($v) && count($v) > $max) {
+                    $max = count($v);
+                    $laengste = (string)$k;
+                }
+            }
+            if ($laengste === '' || $max === 0) {
+                break;
+            }
+            $behalten = ($max > 1) ? intdiv($max, 2) : 0;
+            $antwort[$laengste] = array_slice($antwort[$laengste], 0, $behalten);
+            $antwort['gekuerzt'] = true;
+        }
+        return $antwort;
+    }
+
+    /** Ringpuffer „Was hat die KI getan?" — 50 Einträge, auch Fehlschläge. */
+    private function VoiceLogEintrag(string $werkzeug, string $text, bool $ok): void
+    {
+        try {
+            $log = json_decode((string)@$this->ReadAttributeString('VoiceLog'), true);
+            $log = is_array($log) ? $log : [];
+            array_unshift($log, ['t' => time(), 'werkzeug' => $werkzeug,
+                'text' => mb_substr($text, 0, 160), 'ok' => $ok]);
+            @$this->WriteAttributeString('VoiceLog',
+                (string)json_encode(array_slice($log, 0, 50), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        } catch (\Throwable $e) {
+            // Protokoll darf nie die Ausführung reißen.
+        }
+    }
+}

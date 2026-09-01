@@ -15,6 +15,8 @@ require_once __DIR__ . '/libs/NotesAi.php';
 require_once __DIR__ . '/libs/TimetableBridge.php';
 require_once __DIR__ . '/libs/MealPlanBridge.php';
 require_once __DIR__ . '/libs/DishImages.php';
+require_once __DIR__ . '/libs/Voice.php';
+require_once __DIR__ . '/libs/VoiceTools.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -44,6 +46,8 @@ class SymDoGateway extends IPSModuleStrict
     use TimetableBridge;
     use MealPlanBridge;
     use DishImages;
+    use Voice;
+    use VoiceTools;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -128,6 +132,7 @@ class SymDoGateway extends IPSModuleStrict
         // KI-Gerichtsbilder der Rezept-Favoritenlisten: Schalter, Warteschlange
         // und ihr Timer
         $this->DishCreate();
+        $this->VoiceCreate();
         // Stundenplan: nur der Schalter, ob die App die Karte zeigt
         $this->TimetableCreate();
     }
@@ -157,6 +162,7 @@ class SymDoGateway extends IPSModuleStrict
             // Kennungen, die AppApplyChanges ueber EnsureUserIDs vergibt.
             $this->NotesApplyChanges();
             $this->DishApplyChanges();
+            $this->VoiceApplyChanges();
             // Bestand: die Rezeptfoto-Kategorie lag frueher unter der Web-App —
             // sie gehoert unter die Instanz, die sie fuellt. Legt keine an.
             $this->AiRecipePhotoMigrate();
@@ -200,6 +206,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->DishRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->VoiceRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->AppRequestAction($Ident, $Value)) {
@@ -322,6 +331,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppendFormItem($elements, 'AiPanel', $this->GetMailFormElements());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetDishPanel());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetVoicePanel());
             $this->AppFormOverrides($elements);
         }
 

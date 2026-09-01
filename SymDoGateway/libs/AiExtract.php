@@ -287,6 +287,13 @@ trait AiExtract
             return json_encode($this->NotesHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
+        /* Sprachdialog: Sitzung, Herzschlag, Werkzeuge. VOR dem KI-Riegel, damit
+           close/tool auch bei mitten im Gespräch abgeschalteter KI noch
+           durchkommen — die open-Riegel sitzen im Handler selbst. */
+        if (str_ends_with($path, 'voice')) {
+            return json_encode($this->VoiceHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         if (!$this->ReadPropertyBoolean('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }

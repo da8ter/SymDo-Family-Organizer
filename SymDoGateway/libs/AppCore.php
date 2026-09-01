@@ -32,6 +32,7 @@ trait AppCore
     private const TODO_MODULE_GUID     = '{E0E38D9B-31BC-4F5E-A6CA-91A2A60C7C46}';
     private const CONNECT_MODULE_GUID  = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
     private const SDWA_MODULE_GUID     = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
+    private const VOICE_MODULE_GUID    = '{1F413A34-452C-4A8D-BEFC-CA7CB9DBB1BB}';
     private const HOOK_PATH            = 'lists/app';
     private const WEBAPP_HOOK_PATH     = 'lists/webapp';
     // Eigener Pfad für den Push-WebSocket. Bewusst getrennt von HOOK_PATH, damit
@@ -695,6 +696,11 @@ trait AppCore
             }
             $sdwa = (int)($req['sdwa'] ?? 0);
             $txn  = (string)($req['txn'] ?? '');
+            /* Aufrufer-Probe VOR der Ausführung: sonst kann jedes Skript hier
+               kostenpflichtige KI-Aufrufe auslösen und die Antwort verwerfen. */
+            if ($sdwa <= 0 || !$this->IsSymDoWebAppInstance($sdwa)) {
+                return true;
+            }
             // Die Kachel wartet synchron auf ein AiResult. Wirft hier irgendetwas
             // (IPS_CreateMedia & Co. können das), darf die Antwort NICHT ausfallen —
             // sonst hängt das txn-Promise der Web-App bis zum Timeout.
@@ -733,7 +739,7 @@ trait AppCore
             return false;
         }
         $guid = (string)(IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '');
-        return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID], true);
+        return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID, self::VOICE_MODULE_GUID], true);
     }
 
     /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */
