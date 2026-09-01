@@ -1548,6 +1548,11 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-row.selected .ai-box i { opacity: 1; }
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
+/* Titelzeile: Name links, Abzeichen rechts. Der Titel darf umbrechen, die
+   Abzeichen bleiben oben rechts und werden nie gequetscht. */
+.ai-kopf { display: flex; align-items: flex-start; gap: 8px; }
+.ai-kopf .ai-title { flex: 1; min-width: 0; }
+.ai-kopf .ai-meta { flex: none; margin-top: 0; margin-left: auto; justify-content: flex-end; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 /* KI-Rezeptkopf: Titel + Portionen mit Mengen-Stepper */
 .ai-recipe-head { padding: 2px 0 12px; margin-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent); }
@@ -7531,8 +7536,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-        '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>';
+        '<div class="ai-main">' +
+        '<div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' +
+        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>' + info + '</div>';
       row.__todo = it;
       row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
       aiBody.appendChild(row);
@@ -7564,13 +7570,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return s;
   }
+  /* „2" ist eine Stueckzahl und liest sich als „x2"; „5 kg" oder „3 Teeloeffel"
+     tragen ihre Einheit schon bei sich und bleiben, wie sie sind. Komma und
+     Punkt zaehlen als Zahl (1,5). */
+  function mengeMitMal(wert) {
+    const m = String(wert == null ? '' : wert).trim();
+    return /^\d+([.,]\d+)?$/.test(m) ? '\u00d7' + m : m;
+  }
   function aiShopRowInner(it, factor) {
     const amt = scaleAmount(String(it.amount || ''), factor);
-    const amtChip = amt ? '<span class="badge ai-amt">' + escapeHtml(amt) + '</span>' : '';
+    const amtChip = amt ? '<span class="badge ai-amt">' + escapeHtml(mengeMitMal(amt)) + '</span>' : '';
     const catChip = it.category ? '<span class="badge">' + escapeHtml(String(it.category)) + '</span>' : '';
     const meta = (amtChip || catChip) ? '<div class="ai-meta">' + amtChip + catChip + '</div>' : '';
     return '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-      '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div>';
+      '<div class="ai-main"><div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div></div>';
   }
   function renderAiShopping(data) {
     aiReviewMode = 'shopping';

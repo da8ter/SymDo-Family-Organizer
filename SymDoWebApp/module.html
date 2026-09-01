@@ -2315,6 +2315,11 @@ html[data-symdo-theme="dark"] .member-bar {
 .ai-row.selected .ai-box i { opacity: 1; }
 .ai-main { flex: 1; min-width: 0; }
 .ai-title { font-size: 15px; font-weight: 600; }
+/* Titelzeile: Name links, Abzeichen rechts. Der Titel darf umbrechen, die
+   Abzeichen bleiben oben rechts und werden nie gequetscht. */
+.ai-kopf { display: flex; align-items: flex-start; gap: 8px; }
+.ai-kopf .ai-title { flex: 1; min-width: 0; }
+.ai-kopf .ai-meta { flex: none; margin-top: 0; margin-left: auto; justify-content: flex-end; }
 .ai-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 /* KI-Leiste ohne Eingabefeld (KI-Bereich): der Knopf steht rechts, wo er in
    den anderen Leisten auch sitzt. */
@@ -13527,7 +13532,12 @@ document.addEventListener('DOMContentLoaded', () => {
       row.__kind = (kannEinkauf && it.kind === 'shopping') ? 'shopping'
         : (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
-      const amtChip = (it.kind === 'shopping' && it.amount) ? '<span class="badge ai-amt">' + escapeHtml(String(it.amount)) + '</span>' : '';
+      /* „2" ist eine Stueckzahl und liest sich als „x2"; „5 kg" oder
+         „3 Teeloeffel" tragen ihre Einheit schon bei sich und bleiben, wie sie
+         sind. Komma und Punkt zaehlen als Zahl (1,5). */
+      const menge = String(it.amount == null ? '' : it.amount).trim();
+      const mengeText = mengeMitMal(menge);
+      const amtChip = (it.kind === 'shopping' && menge) ? '<span class="badge ai-amt">' + escapeHtml(mengeText) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
       const knopf = (k, wort) => '<button type="button" data-k="' + k + '">' + escapeHtml(translate(wort)) + '</button>';
       const wahl = (kannTermin || kannNotiz || kannEinkauf)
@@ -13538,11 +13548,20 @@ document.addEventListener('DOMContentLoaded', () => {
         : '';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-        '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' + info +
-        '<div class="ai-meta">' + dueChip + amtChip + prioChip + '</div>' + wahl + '</div>';
+        '<div class="ai-main">' +
+        // Titel und Abzeichen in EINER Zeile, die Abzeichen rechts.
+        '<div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' +
+        '<div class="ai-meta">' + dueChip + amtChip + prioChip + '</div></div>' +
+        info + wahl + '</div>';
       row.__todo = it;
-      const zeigeWahl = () => row.querySelectorAll('.ai-kind button').forEach(b =>
-        b.classList.toggle('on', b.dataset.k === row.__kind));
+      const zeigeWahl = () => {
+        row.querySelectorAll('.ai-kind button').forEach(b =>
+          b.classList.toggle('on', b.dataset.k === row.__kind));
+        // Ein Einkauf hat keine Prioritaet — sein Abzeichen faellt weg, und
+        // zwar bei jedem Wechsel der Art, nicht nur beim ersten Zeichnen.
+        const prio = row.querySelector('.ai-meta .badge:last-child');
+        if (prio) { prio.style.display = (row.__kind === 'shopping') ? 'none' : ''; }
+      };
       zeigeWahl();
       row.querySelectorAll('.ai-kind button').forEach(b => b.addEventListener('click', (ev) => {
         // Die Wahl darf die Zeile nicht abwaehlen — ein Tipp, eine Bedeutung.
@@ -13584,13 +13603,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return s;
   }
+  /* „2" ist eine Stueckzahl und liest sich als „x2"; „5 kg" oder „3 Teeloeffel"
+     tragen ihre Einheit schon bei sich und bleiben, wie sie sind. Komma und
+     Punkt zaehlen als Zahl (1,5). */
+  function mengeMitMal(wert) {
+    const m = String(wert == null ? '' : wert).trim();
+    return /^\d+([.,]\d+)?$/.test(m) ? '\u00d7' + m : m;
+  }
   function aiShopRowInner(it, factor) {
     const amt = scaleAmount(String(it.amount || ''), factor);
-    const amtChip = amt ? '<span class="badge ai-amt">' + escapeHtml(amt) + '</span>' : '';
+    const amtChip = amt ? '<span class="badge ai-amt">' + escapeHtml(mengeMitMal(amt)) + '</span>' : '';
     const catChip = it.category ? '<span class="badge">' + escapeHtml(String(it.category)) + '</span>' : '';
     const meta = (amtChip || catChip) ? '<div class="ai-meta">' + amtChip + catChip + '</div>' : '';
     return '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
-      '<div class="ai-main"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div>';
+      '<div class="ai-main"><div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.name || '')) + '</div>' + meta + '</div></div>';
   }
   function renderAiShopping(data) {
     aiReviewMode = 'shopping';
