@@ -8090,7 +8090,9 @@ function aiUebernahmeWeiter() {
       return;
     }
     aiUebernahmeWartet = 'calEditOverlay';
-    openCalEditor(Object.assign({}, e.t, { userId: me || '' }));
+    // Beim Termin traegt der Editor EINE Person — die erkannte, sonst der Anmelder.
+    const wem = (Array.isArray(e.t.assignedTo) && e.t.assignedTo.length) ? String(e.t.assignedTo[0]) : (me || '');
+    openCalEditor(Object.assign({}, e.t, { userId: wem }));
     return;
   }
   const ziel = selectedTodoID();
@@ -8102,7 +8104,9 @@ function aiUebernahmeWeiter() {
   const entwurf = Object.assign({
     id: null, title: String(e.t.title || ''), info: e.t.info ? String(e.t.info) : '',
     priority: e.t.priority || 'normal', quantity: 0,
-    assignedTo: me ? [me] : [], recurrence: 'none', notification: false
+    // Hat die KI eine Person erkannt, gilt sie; sonst wie bisher der Anmelder.
+    assignedTo: (Array.isArray(e.t.assignedTo) && e.t.assignedTo.length) ? e.t.assignedTo.slice()
+              : (me ? [me] : []), recurrence: 'none', notification: false
   }, mailDueFields(e.t.due, e.t.time));
   aiUebernahmeWartet = 'todoOverlay';
   openTodoEditor(ziel, entwurf);
@@ -13617,6 +13621,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const mengeText = mengeMitMal(menge);
       const amtChip = (it.kind === 'shopping' && menge) ? '<span class="badge ai-amt">' + escapeHtml(mengeText) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
+      /* Hat die KI eine Person erkannt (z.B. „Friseurtermin Mia"), steht deren
+         Bild bei den Abzeichen — so ist vor dem Uebernehmen sichtbar, wem der
+         Eintrag zufaellt. Unbekannte Namen kommen serverseitig nicht durch. */
+      const avatar = renderAvatarStack(it.assignedTo);
       const knopf = (k, wort) => '<button type="button" data-k="' + k + '">' + escapeHtml(translate(wort)) + '</button>';
       const wahl = (kannTermin || kannNotiz || kannEinkauf)
         ? '<div class="ai-kind-row"><span class="ai-kind">' + knopf('task', 'Task') +
@@ -13629,7 +13637,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div class="ai-main">' +
         // Titel und Abzeichen in EINER Zeile, die Abzeichen rechts.
         '<div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' +
-        '<div class="ai-meta">' + dueChip + amtChip + prioChip + '</div></div>' +
+        '<div class="ai-meta">' + dueChip + amtChip + prioChip + avatar + '</div></div>' +
         info + wahl + '</div>';
       row.__todo = it;
       const zeigeWahl = () => {

@@ -7540,11 +7540,15 @@ document.addEventListener('DOMContentLoaded', () => {
       row.className = 'ai-row selected';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due)) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
+      /* Hat die KI eine Person erkannt (z.B. „Friseurtermin Mia"), steht deren
+         Bild bei den Abzeichen — so ist vor dem Uebernehmen sichtbar, wem der
+         Eintrag zufaellt. Unbekannte Namen kommen serverseitig nicht durch. */
+      const avatar = renderAvatarStack(it.assignedTo);
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
       row.innerHTML = '<span class="ai-box"><i class="fa-light fa-check"></i></span>' +
         '<div class="ai-main">' +
         '<div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' +
-        '<div class="ai-meta">' + dueChip + prioChip + '</div></div>' + info + '</div>';
+        '<div class="ai-meta">' + dueChip + prioChip + avatar + '</div></div>' + info + '</div>';
       row.__todo = it;
       row.addEventListener('click', () => { row.classList.toggle('selected'); updateAiAdd(); });
       aiBody.appendChild(row);

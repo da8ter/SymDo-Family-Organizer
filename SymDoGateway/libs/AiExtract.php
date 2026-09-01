@@ -1410,9 +1410,14 @@ trait AiExtract
                 $end = null;
             }
 
+            // Erkannte Person → Benutzerkennung. Die Oberflaeche zeigt sie als
+            // Avatar am Fund und belegt damit den Editor vor; findet sich kein
+            // eindeutiger Benutzer, bleibt es wie bisher beim Anmelder.
+            $zugeordnet = $this->AiPersonZuBenutzer($this->AiRowStr($row, 'person'));
+
             $eintrag = ['title' => $title, 'info' => $info, 'due' => $due, 'time' => $time,
                         'priority' => $priority, 'kind' => $kind, 'end' => $end, 'allDay' => $allDay,
-                        'recurrence' => $recurrence];
+                        'recurrence' => $recurrence, 'assignedTo' => $zugeordnet];
             if ($kind === 'shopping') {
                 // Ein Artikel hat eine Menge, aber weder Frist noch Takt.
                 $amount = mb_substr(trim($this->AiRowStr($row, 'amount')), 0, 40);
@@ -2122,6 +2127,73 @@ trait AiExtract
 
     // ────────────────────────────── Prompts ──────────────────────────────
 
+    /**
+     * Nennt dem Modell die Personen des Haushalts, damit es „Friseurtermin Mia"
+     * der richtigen zuordnen kann. Ohne bekannte Namen entfaellt der Absatz —
+     * dann gibt es nichts zuzuordnen, und das Feld bleibt leer.
+     *
+     * Bewusst nur die NAMEN, keine Kennungen: Kennungen im Prompt laedt das
+     * Modell zum Erfinden ein. Die Zuordnung Name → Benutzer macht der Server
+     * danach selbst, und nur bei eindeutigem Treffer.
+     */
+    private function AiPersonenRegel(): string
+    {
+        $namen = [];
+        foreach ($this->AiHaushaltsNamen() as $name) {
+            $namen[] = $name;
+        }
+        if ($namen === []) {
+            return '';
+        }
+        return 'Zum Haushalt gehoeren: ' . implode(', ', $namen) . '. Nennt ein Eintrag '
+            . 'eindeutig eine dieser Personen (z.B. „Friseurtermin Mia", „Mia zum Zahnarzt", '
+            . '„Turnbeutel fuer Tim"), setze "person" auf genau diesen Namen. Sonst null. '
+            . 'Rate nicht und erfinde keine Namen. ';
+    }
+
+    /** @return list<string> Namen der Haushaltsmitglieder, leer wenn keine gepflegt sind. */
+    private function AiHaushaltsNamen(): array
+    {
+        $namen = [];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                $name = trim((string)($u['name'] ?? ''));
+                if ($name !== '') {
+                    $namen[] = $name;
+                }
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+        return $namen;
+    }
+
+    /**
+     * Name aus der Modellantwort → Benutzerkennung. Nur bei GENAU EINEM Treffer;
+     * zwei „Mia" im Haushalt bleiben unzugeordnet, statt die falsche zu waehlen.
+     *
+     * @return list<string>
+     */
+    private function AiPersonZuBenutzer(string $name): array
+    {
+        $suche = mb_strtolower(trim($name));
+        if ($suche === '') {
+            return [];
+        }
+        $treffer = [];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                if (mb_strtolower(trim((string)($u['name'] ?? ''))) === $suche) {
+                    $treffer[] = (string)($u['id'] ?? '');
+                }
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $treffer = array_values(array_filter($treffer, static fn(string $id): bool => $id !== ''));
+        return count($treffer) === 1 ? $treffer : [];
+    }
+
     private function AiSystemPrompt(string $today): string
     {
         return 'Du extrahierst Aufgaben (ToDos) aus Dokumenten: Briefe, Behörden- und Bankschreiben, '
@@ -2160,7 +2232,8 @@ trait AiExtract
             . 'exakt diese Felder: {"title": string, "info": string oder null, "due": "YYYY-MM-DD" oder '
             . 'null, "time": "HH:MM" oder null, "priority": "high" oder "normal" oder "low", '
             . '"kind": "task" oder "event" oder "shopping", "end": "YYYY-MM-DD" oder null, '
-            . '"allDay": true oder false, "amount": string oder null}. '
+            . '"allDay": true oder false, "amount": string oder null, "person": string oder null}. '
+            . $this->AiPersonenRegel()
             // Ohne diesen Satz liefert ein kleines Modell bei einer freundlichen
             // Einladung eine leere Liste: Es sucht die Aufforderung („bitte
             // zurücksenden") und findet keine (gemessen an „Angebot Segelboot bauen
