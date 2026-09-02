@@ -1026,6 +1026,17 @@ html[data-symdo-theme="dark"] .member-bar {
   transition: color 1.4s ease;
 }
 .voice-mic i, .voice-mic svg { color: inherit; fill: currentColor; }
+/* Zwei Symbole, eines sichtbar: das Icon-Kit ersetzt jedes <i> durch ein <svg>
+   und behält dabei den Icon-Namen als Klasse — daran wird umgeschaltet. Ein
+   nachträglicher Klassentausch am <i> ginge nicht, das Element existiert dann
+   nicht mehr. Ruhezustand, Ende und Fehler zeigen das durchgestrichene. */
+.voice-mic .fa-microphone-slash { display: none; }
+.voice-mic.z-bereit .fa-microphone,
+.voice-mic.z-ende   .fa-microphone,
+.voice-mic.z-fehler .fa-microphone { display: none; }
+.voice-mic.z-bereit .fa-microphone-slash,
+.voice-mic.z-ende   .fa-microphone-slash,
+.voice-mic.z-fehler .fa-microphone-slash { display: inline-block; }
 .voice-mic.z-verbinde   { color: #9a7bff; }
 .voice-mic.z-hoert      { color: #6fe9ff; }
 .voice-mic.z-duSprichst { color: #2bffd0; }
@@ -1035,7 +1046,23 @@ html[data-symdo-theme="dark"] .member-bar {
 .voice-mic.z-fehler     { color: #ff5c5c; }
 html[data-symdo-theme="light"] .kpi-voice,
 html[data-symdo-theme="light"] .voice-card { background: #eef1f8; }
-html[data-symdo-theme="light"] .voice-mic { color: rgba(20, 26, 48, .45); }
+/* NUR die ruhenden Zustände umfärben. Eine pauschale Regel
+   `html[data-symdo-theme="light"] .voice-mic` hat höhere Spezifität als
+   `.voice-mic.z-hoert` und überstimmte damit JEDE Zustandsfarbe — im hellen
+   Thema war das Mikrofon immer grau (im Prüflauf gemessen). */
+html[data-symdo-theme="light"] .voice-mic.z-bereit,
+html[data-symdo-theme="light"] .voice-mic.z-ende { color: rgba(20, 26, 48, .45); }
+/* Die Zustandsfarben oben sind fuer den dunklen Grund gemischt; auf der hellen
+   Kachel (#eef1f8) verschwinden sie fast (Cyan kam auf Kontrast 1,3). Hier
+   dieselben Farbtoene abgedunkelt, jede auf mindestens 3,6 zu #eef1f8 gerechnet
+   (test_mik_kontrast.mjs). */
+html[data-symdo-theme="light"] .voice-mic.z-verbinde,
+html[data-symdo-theme="light"] .voice-mic.z-denkt      { color: #835cff; }
+html[data-symdo-theme="light"] .voice-mic.z-hoert      { color: #0089a2; }
+html[data-symdo-theme="light"] .voice-mic.z-duSprichst { color: #008c6d; }
+html[data-symdo-theme="light"] .voice-mic.z-spricht    { color: #0088a2; }
+html[data-symdo-theme="light"] .voice-mic.z-werkzeug   { color: #a37300; }
+html[data-symdo-theme="light"] .voice-mic.z-fehler     { color: #d32f2f; }
 .kpi-rows {
   position: relative;
   z-index: 1;
@@ -7209,7 +7236,8 @@ function renderDashboard() {
     if (mitVoice) {
       html += `<button class="kpi kpi-voice" aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
         `<span class="voice-slot" data-voice-slot></span>` +
-        `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i></span></button>`;
+        `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i>` +
+      `<i class="fa-light fa-microphone-slash"></i></span></button>`;
     }
     html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
@@ -7242,7 +7270,8 @@ function renderDashboard() {
     html += `<div class="card voice-card" role="button" tabindex="0" ` +
       `aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
       `<span class="voice-slot" data-voice-slot></span>` +
-      `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i></span></div>`;
+      `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i>` +
+      `<i class="fa-light fa-microphone-slash"></i></span></div>`;
   }
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
