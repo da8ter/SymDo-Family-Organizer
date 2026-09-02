@@ -46,6 +46,10 @@ trait Voice
            Browser deutsche Spracherkennung auf dem Geraet rechnen kann
            (Chrome/Edge ab 139). Standard aus. */
         $this->RegisterPropertyBoolean('VoiceHandsFreeAllowed', false);
+        /* Wer die Handbuch-Fundstellen liest und die Antwort formuliert. Leer =
+           niemand, dann bleibt es beim Satzanfang plus Auszug (Verhalten vor
+           dem 02.09.2026). Messwerte stehen in SymconDoku.php. */
+        $this->RegisterPropertyString('VoiceDocModel', 'gpt-4.1');
 
         $this->RegisterAttributeBoolean('VoicePrivacyAccepted', false);
         $this->RegisterAttributeString('VoicePrivacyAcceptedAt', '');
@@ -683,6 +687,15 @@ trait Voice
                 ['type' => 'Label', 'name' => 'VoicePrivacyStatus', 'caption' => $zustimmung
                     ? $this->Translate('Voice privacy consent given.')
                     : $this->Translate('Consent required: during a conversation the room audio streams directly from the device to the AI provider (WebRTC), including voices of anyone present. Tool answers can carry excerpts of lists, appointments and plans. No audio is stored on this server.')],
+                ['type' => 'Select', 'name' => 'VoiceDocModel',
+                 'caption' => $this->Translate('Reader for manual questions'),
+                 'options' => [
+                     ['caption' => 'gpt-4.1 (Standard, ~1,1 s)', 'value' => 'gpt-4.1'],
+                     ['caption' => 'gpt-5 (~1,5 s, genauer)',    'value' => 'gpt-5'],
+                     ['caption' => 'gpt-4.1-mini (~2 s)',        'value' => 'gpt-4.1-mini'],
+                     ['caption' => 'gpt-5-mini (~1,7 s)',        'value' => 'gpt-5-mini'],
+                     ['caption' => $this->Translate('— none: read out excerpt —'), 'value' => ''],
+                 ]],
                 ['type' => 'CheckBox', 'name' => 'VoiceHandsFreeAllowed',
                  'caption' => $this->Translate('Allow hands-free with the wake word "Hey SymDo" (experiment)')],
                 ['type' => 'Label', 'name' => 'VoiceHandsFreeStatus', 'caption' => $freihand

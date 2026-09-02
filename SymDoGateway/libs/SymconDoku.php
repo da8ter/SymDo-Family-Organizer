@@ -25,6 +25,26 @@ trait SymconDoku
     private const DOKU_HOST      = 'https://www.symcon.de';
     private const DOKU_WURZEL    = '/de/service/dokumentation/';
     /** So lange gilt ein fertiges Verzeichnis (Sekunden). */
+    /* Der LESER: ein Textmodell formuliert aus den Fundstellen die Antwort, und
+       das Sprachmodell liest sie nur vor. Damit folgt das Handbuch derselben
+       Regel wie jedes andere Werkzeug — der Server formuliert, das Modell
+       spricht. Vorher war „sag" hier nur ein Satzanfang, und genau das ging
+       schief: gpt-realtime-mini beantwortete „Skript alle 5 Minuten" mit dem
+       Vorwort der FAQ-Seite, und ein kleines Modell schrieb sogar das Wort
+       „sag" mit in den Text.
+
+       Am 02.09.2026 auf derselben Werkzeugausgabe gemessen (Frist im Browser
+       liegt bei 8 s, deshalb zaehlt jede Sekunde):
+         gpt-4.1              1,1 s   64 Token   richtig, sauberster Satz
+         gpt-5 (minimal)      1,5 s   65 Token   richtig, nennt mehr Details
+         gpt-5-mini (minimal) 1,7 s   52 Token   richtig, aber holprig
+         gpt-5-mini (low)     5,4 s  418 Token   320 davon nur Nachdenken
+       Ohne `reasoning_effort` verbraucht die gpt-5-Reihe das ganze Token-
+       Budget im Nachdenken und antwortet LEER. */
+    private const DOKU_LESER_VORGABE = 'gpt-4.1';
+    private const DOKU_LESER_FRIST   = 6;
+    private const DOKU_LESER_TOKEN   = 700;
+
     private const DOKU_HALTBAR   = 7 * 86400;
     /** Bis zu dieser Tiefe werden Seiten ABGERUFEN; Verweise darunter landen
      *  trotzdem im Verzeichnis. Muss bis 8 reichen: die Befehlsreferenz endet
@@ -684,6 +704,71 @@ trait SymconDoku
         return $treffer;
     }
 
+    /** Welches Modell liest? Leer heisst: gar keins (dann bleibt der Satzanfang). */
+    private function DokuLeserModell(): string
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        // Property gibt es erst nach dem naechsten Kernel-Start; bis dahin die Vorgabe.
+        return is_array($cfg) && array_key_exists('VoiceDocModel', $cfg)
+            ? trim((string)$cfg['VoiceDocModel']) : self::DOKU_LESER_VORGABE;
+    }
+
+    /**
+     * Aus Frage und Fundstellen eine fertige, vorlesbare Antwort machen.
+     * Leerer Rueckgabewert heisst: hat nicht geklappt — dann bleibt es beim
+     * Satzanfang samt Auszug, also beim Verhalten von vorher.
+     */
+    private function DokuAntwortFormulieren(string $frage, string $auszug): string
+    {
+        $modell = $this->DokuLeserModell();
+        $key    = trim($this->ReadPropertyString('AiOpenAIKey'));
+        if ($modell === '' || $key === '' || trim($auszug) === '') {
+            return '';
+        }
+        $anweisung = 'Du beantwortest eine Frage zu IP-Symcon AUSSCHLIESSLICH aus den unten '
+            . 'gelieferten Auszuegen des offiziellen Handbuchs. Die Auszuege stammen von mehreren '
+            . 'Seiten; jeder ist mit seinem Seitennamen in eckigen Klammern beschriftet. Waehle den '
+            . 'Teil, der die Frage wirklich beantwortet — der erste ist nicht immer der richtige. '
+            . 'Antworte auf Deutsch in drei bis fuenf kurzen Saetzen, die VORGELESEN werden: keine '
+            . 'Aufzaehlungszeichen, keine Adressen, keine Klammer-Beschriftungen, kein Code-Block. '
+            . 'Nenne konkrete Namen von Funktionen, Feldern oder Menuepunkten, wenn sie im Auszug '
+            . 'stehen. VERWEISE NICHT auf andere Seiten oder Abschnitte des Handbuchs und nicht '
+            . 'auf die Befehlsreferenz — sage, was zu tun ist, oder sage, dass es im Auszug nicht '
+            . 'steht. Steht die Antwort NICHT in den Auszuegen, sage genau das in einem Satz und '
+            . 'erfinde nichts.';
+        $rumpf = [
+            'model'    => $modell,
+            'messages' => [
+                ['role' => 'system', 'content' => $anweisung],
+                ['role' => 'user',   'content' => 'Frage: ' . $frage . "\n\nAuszuege:\n" . $auszug],
+            ],
+            'max_completion_tokens' => self::DOKU_LESER_TOKEN,
+        ];
+        /* Nur die gpt-5-Reihe kennt reasoning_effort — und braucht es: ohne die
+           Angabe steckt sie das ganze Budget ins Nachdenken und liefert nichts.
+           gpt-4.1 wuerde den unbekannten Parameter mit HTTP 400 abweisen. */
+        if (str_starts_with($modell, 'gpt-5') || str_starts_with($modell, 'o4')) {
+            $rumpf['reasoning_effort'] = 'minimal';
+        }
+        try {
+            $a = $this->AiHttpPost('https://api.openai.com/v1/chat/completions',
+                ['Content-Type: application/json', 'Authorization: Bearer ' . $key],
+                (string)json_encode($rumpf, JSON_UNESCAPED_UNICODE), self::DOKU_LESER_FRIST);
+        } catch (\Throwable $e) {
+            $this->SendDebug('Doku', 'Leser warf: ' . $e->getMessage(), 0);
+            return '';
+        }
+        if ((int)($a['status'] ?? 0) !== 200) {
+            $this->SendDebug('Doku', 'Leser HTTP ' . (int)($a['status'] ?? 0) . ' '
+                . mb_substr((string)($a['err'] ?? '') . (string)($a['body'] ?? ''), 0, 200), 0);
+            return '';
+        }
+        $d = json_decode((string)($a['body'] ?? ''), true);
+        $text = trim((string)((($d['choices'][0]['message']['content']) ?? '')));
+        // Ein leerer Text ist kein Erfolg — dann lieber der alte Weg.
+        return $text;
+    }
+
     /**
      * Das Werkzeug: eine Frage zum Handbuch beantworten.
      * @return array<string,mixed>
@@ -760,7 +845,11 @@ trait SymconDoku
         /* Den Text IMMER live nachladen: die Abschnitte stammen aus dem letzten
            Aufbau, die Seite kann sich seither geändert haben. Gelingt das nicht,
            bleiben die abgelegten Abschnitte — besser als keine Antwort. */
-        $html = $this->DokuHol($seite);
+        /* Kürzere Frist als die Vorgabe (12 s): in dieses Werkzeug passen
+           Einbettung, Seitenabruf UND Leser zusammen in die 8 Sekunden, die der
+           Browser dem Werkzeug lässt. Bleibt die Seite hängen, gelten die
+           abgelegten Abschnitte. */
+        $html = $this->DokuHol($seite, 3);
         if ($html !== '') {
             $inhalt = $this->DokuInhalt($html);
             if (trim($inhalt['text']) !== '') {
@@ -822,16 +911,34 @@ trait SymconDoku
            der Antwort, verwies es darauf, statt den Auszug zu benutzen — und
            eine vorgelesene Internetadresse kann sich ohnehin niemand merken. */
         $this->SendDebug('Doku', 'Quelle: ' . self::DOKU_HOST . $seite, 0);
+
+        /* Jetzt liest ein Textmodell die Fundstellen und formuliert die Antwort.
+           Gelingt das, geht NUR sie hinaus — der Auszug bleibt hier, sonst
+           faengt das Sprachmodell an, ihn ein zweites Mal zu deuten. */
+        $antwort = $this->DokuAntwortFormulieren($frage, $text);
+        if ($antwort !== '') {
+            /* Ohne „weitere": vorgelesene Seitennamen sind Rauschen, und sie
+               verleiten das Sprachmodell dazu, sie aufzuzählen statt die
+               Antwort zu sagen. Der Titel bleibt als Zusammenhang. */
+            return [
+                'ok'    => true,
+                'titel' => $titel,
+                // Fertige Auskunft, wie bei jedem anderen Werkzeug.
+                'sag'   => $antwort,
+            ];
+        }
+
+        /* Rückfall auf das alte Verhalten, wenn der Leser nicht erreichbar ist:
+           Satzanfang plus Auszug ist schlechter, aber besser als keine Antwort. */
         return [
             'ok'      => true,
             'titel'   => $titel,
             'auszug'  => $text,
             'weitere' => $weitereTitel,
-            /* Anders als bei allen anderen Werkzeugen ist „sag" hier keine
-               fertige Auskunft, sondern nur der ANFANG des Satzes: die Antwort
-               steht im Auszug und muss von dort kommen. Ein abgeschlossenes
-               „Ich habe X gefunden." lud das Modell dazu ein, genau dort
-               aufzuhören. */
+            /* Hier ist „sag" kein fertiger Satz, sondern nur der ANFANG: die
+               Antwort steht im Auszug und muss von dort kommen. Ein
+               abgeschlossenes „Ich habe X gefunden." lud das Modell dazu ein,
+               genau dort aufzuhören. */
             'sag'     => sprintf($this->Translate('The manual says about "%s":'), $titel),
         ];
     }
