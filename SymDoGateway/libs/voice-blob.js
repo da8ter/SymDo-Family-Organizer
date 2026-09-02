@@ -248,6 +248,101 @@ function stilEinmal(dok) {
   (dok.head || dok.documentElement).appendChild(s);
 }
 
+/* ── Lage des Geräts ───────────────────────────────────────────────────────
+   Kippt man das iPhone, soll das Wesen weiter den Betrachter ansehen. Dazu
+   wird die Blickrichtung GEGEN die Drehung verschoben — wie ein Kopf, der die
+   Bewegung des Halters ausgleicht.
+
+   Drei Dinge, die man dabei wissen muss:
+
+   1. iOS gibt die Lage erst nach einer ausdrücklichen Erlaubnis heraus
+      (`DeviceOrientationEvent.requestPermission`), und die Frage muss aus
+      einer NUTZERGESTE kommen — sonst antwortet sie mit „denied", ohne dass
+      jemand gefragt wurde. Deshalb löst der Klick `kreisel(true)` aus, nicht
+      der Seitenaufbau.
+   2. Nur im sicheren Kontext (https), wie beim Mikrofon.
+   3. Gemessen wird gegen einen NULLPUNKT, nicht absolut: niemand hält ein
+      Telefon senkrecht. Der Nullpunkt ist die Lage beim Einschalten und
+      wandert danach sehr langsam nach — wer die Haltung ändert, bekommt so
+      wieder einen mittigen Blick, ohne dass die Wirkung verschwindet. */
+var LAGE = { x: 0, y: 0, an: false, roh: null, null0: null };
+var LAGE_GRAD = 22;      // dieser Ausschlag gilt als „voll"
+var LAGE_GLATT = 0.12;   // Trägheit je Ereignis
+var LAGE_NACH = 0.0006;  // Nachwandern des Nullpunkts je Ereignis
+
+function lageMoeglich() {
+  return typeof wurzel.DeviceOrientationEvent !== 'undefined'
+    && (wurzel.isSecureContext === true
+        || (wurzel.location && wurzel.location.protocol === 'file:'));
+}
+
+function lageFrist(wert) {
+  return Math.max(-1, Math.min(1, wert / LAGE_GRAD));
+}
+
+function lageEreignis(ev) {
+  /* beta = vor/zurück kippen, gamma = seitlich kippen, alpha = Drehung um die
+     senkrechte Achse. alpha springt bei 0/360 — deshalb über die kürzeste
+     Differenz zum Nullpunkt rechnen. */
+  var beta = typeof ev.beta === 'number' ? ev.beta : 0;
+  var gamma = typeof ev.gamma === 'number' ? ev.gamma : 0;
+  var alpha = typeof ev.alpha === 'number' ? ev.alpha : 0;
+  if (LAGE.null0 === null) {
+    LAGE.null0 = { beta: beta, gamma: gamma, alpha: alpha };
+  }
+  var dBeta = beta - LAGE.null0.beta;
+  var dGamma = gamma - LAGE.null0.gamma;
+  var dAlpha = ((alpha - LAGE.null0.alpha + 540) % 360) - 180;
+  /* Seitliches Kippen UND Drehen um die Senkrechte wirken beide waagerecht;
+     das Drehen zählt schwächer, weil man dabei den ganzen Körper mitdreht und
+     der Blickwinkel sich weniger ändert als der Sensorwert. */
+  var zielX = -(lageFrist(dGamma) + lageFrist(dAlpha) * 0.5);
+  var zielY = -lageFrist(dBeta);
+  LAGE.x += (Math.max(-1, Math.min(1, zielX)) - LAGE.x) * LAGE_GLATT;
+  LAGE.y += (Math.max(-1, Math.min(1, zielY)) - LAGE.y) * LAGE_GLATT;
+  // Nullpunkt langsam der neuen Haltung nachführen.
+  LAGE.null0.beta  += dBeta  * LAGE_NACH;
+  LAGE.null0.gamma += dGamma * LAGE_NACH;
+  LAGE.null0.alpha += dAlpha * LAGE_NACH;
+  LAGE.roh = { beta: beta, gamma: gamma, alpha: alpha };
+}
+
+/** Lauschen an/aus. Gibt zurück, ob es läuft. */
+function lage(ja) {
+  if (ja === false) {
+    if (LAGE.an) { wurzel.removeEventListener('deviceorientation', lageEreignis); }
+    LAGE.an = false; LAGE.null0 = null; LAGE.x = 0; LAGE.y = 0;
+    return Promise.resolve(false);
+  }
+  if (LAGE.an) { return Promise.resolve(true); }
+  if (!lageMoeglich()) { return Promise.resolve(false); }
+  /* Wer Bewegung im Betriebssystem abgeschaltet hat, bekommt sie auch hier
+     nicht — dieselbe Ruecksicht wie beim Pulsieren des Lausch-Punkts. */
+  try {
+    if (wurzel.matchMedia && wurzel.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return Promise.resolve(false);
+    }
+  } catch (e) { /* ohne matchMedia eben ohne Ruecksicht */ }
+  var K = wurzel.DeviceOrientationEvent;
+  var anmelden = function () {
+    /* Nullpunkt VERWERFEN: Einschalten heisst „jetzt ist die Mitte". Ohne das
+       trug er Werte aus einer Zeit, in der noch niemand die Erlaubnis gegeben
+       hatte — im Pruefstand sass das Wesen danach dauerhaft schief
+       (rotate 1,99 statt 0). */
+    LAGE.null0 = null; LAGE.x = 0; LAGE.y = 0;
+    wurzel.addEventListener('deviceorientation', lageEreignis);
+    LAGE.an = true;
+    return true;
+  };
+  // iOS ab 13: erst fragen. Andere Browser haben die Funktion nicht.
+  if (typeof K.requestPermission === 'function') {
+    return K.requestPermission()
+      .then(function (a) { return a === 'granted' ? anmelden() : false; })
+      .catch(function () { return false; });
+  }
+  return Promise.resolve(anmelden());
+}
+
 function erzeuge(behaelter, kern) {
   if (!behaelter) { return null; }
   var dok = behaelter.ownerDocument || document;
@@ -470,7 +565,14 @@ function erzeuge(behaelter, kern) {
        bei echtem Licht von oben. Dazu ein langsames Wiegen, damit es auch in
        der Stille nicht klebt. */
     var hub = energie * 7 + Math.sin(t * .0009) * 2.5;
-    koerper.setAttribute('transform', 'translate(0 ' + (-hub).toFixed(1) + ')');
+    /* Ausgleich der Gerätelage: der Körper wandert ein wenig MIT der Drehung
+       (wie eine Figur, die im Raum stehen bleibt, während man das Fenster
+       dreht), die Augen dagegen sehen weiter geradeaus — das zusammen macht
+       den Eindruck, angesehen zu werden. Ohne Erlaubnis sind beide Werte 0 und
+       alles bleibt wie vorher. */
+    var lx = LAGE.x * 7, ly = LAGE.y * 5;
+    koerper.setAttribute('transform', 'translate(' + lx.toFixed(1) + ' '
+      + (-hub + ly).toFixed(1) + ') rotate(' + (LAGE.x * -4).toFixed(2) + ')');
     var naehe = 1 - Math.min(1, hub / 12);         // 1 = am Boden, 0 = weit oben
     schatten.setAttribute('rx', (38 * sx * (0.82 + naehe * 0.18)).toFixed(1));
     schatten.setAttribute('ry', (7.5 * (0.78 + naehe * 0.22)).toFixed(1));
@@ -540,9 +642,12 @@ function erzeuge(behaelter, kern) {
     /* Auf die Fixation ein winziges Zittern: ein völlig stehendes Auge sieht
        aus wie ein Standbild. Amplitude bewusst unter einem Pixel. */
     var zit = Math.sin(t * .0071) * .35 + Math.sin(t * .0123) * .2;
-    setz('--augeX', (blickVon[0] + (blickZu[0] - blickVon[0]) * f + zit).toFixed(2) + 'px');
+    /* Die Augen gehen der Körperbewegung ENTGEGEN und noch ein Stück weiter:
+       zusammen ergibt das den Blick, der am Betrachter kleben bleibt. */
+    var augeLx = -LAGE.x * 4.5, augeLy = -LAGE.y * 3.2;
+    setz('--augeX', (blickVon[0] + (blickZu[0] - blickVon[0]) * f + zit + augeLx).toFixed(2) + 'px');
     setz('--augeY', (blickVon[1] + (blickZu[1] - blickVon[1]) * f
-                     + Math.sin(t * .0091) * .25 - energie * .6).toFixed(2) + 'px');
+                     + Math.sin(t * .0091) * .25 - energie * .6 + augeLy).toFixed(2) + 'px');
   }
 
   function blinzeln() {
@@ -584,9 +689,20 @@ function erzeuge(behaelter, kern) {
       if (zustandJetzt === 'ende' || zustandJetzt === 'fehler') { verbunden = []; }
       anwerfen();
     },
-    istAn: function () { return aktiv; }
+    istAn: function () { return aktiv; },
+    /* Lagesensor an/aus. MUSS aus einer Nutzergeste heraus aufgerufen werden,
+       sonst verweigert iOS die Erlaubnis ungefragt. */
+    kreisel: lage,
+    kreiselMoeglich: lageMoeglich,
+    /* Nur für den Prüfstand: der geglättete Ausschlag −1..1. */
+    lage: function () { return { x: LAGE.x, y: LAGE.y, an: LAGE.an }; }
   };
 }
 
-wurzel.SymDoVoiceBlase = { erzeuge: erzeuge };
+wurzel.SymDoVoiceBlase = {
+  erzeuge: erzeuge,
+  // Damit die Oberflächen den Schalter nur zeigen, wo es ihn gibt.
+  kreiselMoeglich: lageMoeglich,
+  kreisel: lage
+};
 })(typeof window !== 'undefined' ? window : globalThis);

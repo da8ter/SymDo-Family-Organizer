@@ -4061,8 +4061,22 @@ function voiceMount() {
 
 /** Ein Tippen startet das Gespraech, das naechste beendet es. */
 function voiceUmschalten() {
+  voiceKreiselFragen();
   const k = voiceKernHolen();
   if (k.istOffen()) { k.stop('vom Nutzer beendet'); } else { k.start(); }
+}
+
+/* Lagesensor: das Wesen soll einen weiter ansehen, wenn man das Telefon kippt
+   oder dreht. iOS gibt die Lage nur nach ausdruecklicher Erlaubnis heraus, und
+   die Frage MUSS aus einer Nutzergeste kommen — deshalb haengt sie am Tippen
+   auf die Kachel und nicht am Seitenaufbau. Genau einmal fragen: eine zweite
+   Frage beantwortet iOS ohne Dialog mit dem alten Ergebnis. */
+let voiceKreiselGefragt = false;
+function voiceKreiselFragen() {
+  if (voiceKreiselGefragt || !voiceBlase || !window.SymDoVoiceBlase) return;
+  if (!SymDoVoiceBlase.kreiselMoeglich()) return;
+  voiceKreiselGefragt = true;
+  try { voiceBlase.kreisel(true); } catch (e) { /* Zierde, kein Grund zu klagen */ }
 }
 
 /* ── Freisprechen ────────────────────────────────────────────────────────────

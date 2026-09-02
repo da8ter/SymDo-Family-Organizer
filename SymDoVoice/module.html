@@ -466,7 +466,19 @@ var Freihand = (function () {
 window.__voiceKern = kern;
 window.__freihand = Freihand;
 
+/* Lagesensor beim ersten Druck mitfragen: iOS verlangt dafuer eine
+   Nutzergeste. In der Visu steckt die Kachel in einem fremden iframe — ohne
+   allow="gyroscope" bleibt es dort still, und das ist in Ordnung: die Wirkung
+   ist Zierde, kein Bedienelement. */
+var kreiselGefragt = false;
+function kreiselFragen() {
+  if (kreiselGefragt || !window.SymDoVoiceBlase || !SymDoVoiceBlase.kreiselMoeglich()) { return; }
+  kreiselGefragt = true;
+  try { SymDoVoiceBlase.kreisel(true); } catch (e) { /* still bleiben */ }
+}
+
 knopf.addEventListener('click', function () {
+  kreiselFragen();
   if (kern.istOffen()) { kern.stop('vom Nutzer beendet'); return; }
   kern.start();
 });
