@@ -283,6 +283,9 @@ function erzeuge(behaelter, kern) {
   var aktiv = false, laeuft = false, raf = 0, letzteForm = 0;
   var ac = null, analyser = null, roh = null, verbunden = [];
   var zustandJetzt = 'bereit', stummSeit = 0, kunst = false, blinzelt = false, blinzelUhr = 0;
+  /* Blick: Von-Position, Ziel, Beginn und Dauer der Sakkade sowie das Ende
+     der anschließenden Fixation. */
+  var blickVon = [0, 0], blickZu = [0, 0], blickAb = 0, blickDauer = 110, blickHalt = 0;
   var N = 56, TAU = Math.PI * 2;
 
   function setz(name, wert) { behaelter.style.setProperty(name, wert); }
@@ -480,14 +483,74 @@ function erzeuge(behaelter, kern) {
     lichtfleck.setAttribute('ry', (12.5 * (1.0 + (1 - naehe) * 0.15)).toFixed(1));
     setz('--licht', (0.78 + energie * 0.22 - (1 - naehe) * 0.12).toFixed(3));
 
-    setz('--augeX', (Math.sin(t * .0011) * 3) + 'px');
-    setz('--augeY', (Math.sin(t * .0017) * 2) + 'px');
+    blick(t, energie);
     // Während des Blinzelns NICHT überschreiben — sonst bliebe es unsichtbar.
     if (!blinzelt) { setz('--augeAuf', 1 - energie * .12); }
   }
 
+  /* Blickrichtung. Echte Augen driften nicht gleichmäßig, sie SPRINGEN: eine
+     Sakkade von rund einer Zehntelsekunde, dann eine Fixation von einer halben
+     bis gut zwei Sekunden. Vorher lag hier eine Sinuskurve — die läuft ewig
+     dieselbe Acht und liest sich als Maschine.
+
+     Je Zustand ein anderer Charakter, weil Blickverhalten Bedeutung trägt:
+     beim Zuhören bleibt der Blick beim Gegenüber (kleine Ausschläge, oft in
+     die Mitte), beim Denken wandert er weg und nach oben (so schaut jeder,
+     der etwas sucht), beim Sprechen liegt er ruhig vorn, und im Leerlauf
+     schaut das Wesen sich um. Werte: Ausschlag x/y, Anteil Mitte,
+     Aufwärtsneigung (positiv = nach oben, y zeigt in SVG nach unten),
+     Haltedauer von/bis. */
+  var BLICK = {
+    hoert:      [3.4, 1.8, .45,  .10,  900, 2600],
+    duSprichst: [3.0, 1.6, .55,  .05, 1100, 2800],
+    denkt:      [5.0, 3.0, .10,  .55,  700, 1900],
+    verbinde:   [4.2, 2.6, .15,  .35,  600, 1500],
+    spricht:    [2.6, 1.5, .50,  .00,  800, 2200],
+    werkzeug:   [4.6, 2.8, .12,  .45,  600, 1600],
+    fehler:     [2.2, 2.4, .30,  .40, 1200, 3000],
+    bereit:     [4.4, 2.6, .22,  .00, 1000, 3200],
+    ende:       [3.6, 2.2, .25,  .15, 1400, 3600]
+  };
+
+  function blick(t, energie) {
+    var b = BLICK[zustandJetzt] || BLICK.bereit;
+    if (t >= blickHalt) {
+      blickVon = [blickZu[0], blickZu[1]];
+      if (Math.random() < b[2]) {
+        blickZu = [0, 0];                       // zurück zur Mitte
+      } else {
+        /* Nicht rein zufällig: ein Ziel nah am eben verlassenen wäre kein
+           sichtbarer Blickwechsel. Daher mindestens ein Drittel Ausschlag
+           Abstand, und die Seite wird gewechselt, wenn es zu nah wäre. */
+        var zx = (Math.random() * 2 - 1) * b[0];
+        if (Math.abs(zx - blickVon[0]) < b[0] * .55) { zx = -zx; }
+        var zy = (Math.random() * 2 - 1) * b[1] - b[3] * b[1];
+        blickZu = [zx, Math.max(-b[1] * 1.4, Math.min(b[1] * 1.4, zy))];
+      }
+      /* Weite Sprünge dauern länger — und ziehen oft ein Blinzeln mit sich,
+         genau wie beim Menschen (blickgekoppeltes Blinzeln). */
+      var weg = Math.abs(blickZu[0] - blickVon[0]) + Math.abs(blickZu[1] - blickVon[1]);
+      blickDauer = 70 + Math.min(90, weg * 11);
+      blickAb    = t;
+      blickHalt  = t + blickDauer + b[4] + Math.random() * (b[5] - b[4]);
+      if (weg > b[0] * 1.1 && !blinzelt && Math.random() < .45) { blinzeln(); }
+    }
+    var f = Math.min(1, (t - blickAb) / blickDauer);
+    f = f * f * (3 - 2 * f);                    // sanft an- und abbremsen
+    /* Auf die Fixation ein winziges Zittern: ein völlig stehendes Auge sieht
+       aus wie ein Standbild. Amplitude bewusst unter einem Pixel. */
+    var zit = Math.sin(t * .0071) * .35 + Math.sin(t * .0123) * .2;
+    setz('--augeX', (blickVon[0] + (blickZu[0] - blickVon[0]) * f + zit).toFixed(2) + 'px');
+    setz('--augeY', (blickVon[1] + (blickZu[1] - blickVon[1]) * f
+                     + Math.sin(t * .0091) * .25 - energie * .6).toFixed(2) + 'px');
+  }
+
   function blinzeln() {
     if (!aktiv) { return; }
+    /* Die eigene Uhr zuerst löschen: seit der Blick bei weiten Sprüngen selbst
+       blinzeln lässt, käme sonst je Aufruf eine ZWEITE Kette dazu und die
+       Blinzelrate würde immer weiter steigen. */
+    if (blinzelUhr) { clearTimeout(blinzelUhr); blinzelUhr = 0; }
     blinzelt = true;
     setz('--augeAuf', .08);
     setTimeout(function () { blinzelt = false; setz('--augeAuf', 1); }, 120);
