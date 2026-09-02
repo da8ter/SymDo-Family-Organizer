@@ -469,6 +469,26 @@ trait SymconDoku
         }
     }
 
+    /**
+     * Zu welchem Bereich des Handbuchs gehoert eine Seite? Die Adresse sagt es
+     * zuverlaessig — dafuer braucht es kein Modell.
+     *
+     * Das ist wichtiger, als es klingt: die meisten Fragenden BEDIENEN Symcon,
+     * sie programmieren keine Module. Gemessen am 02.09.2026 fand „Wie reagiere
+     * ich auf eine Wertaenderung?" in den besten vier AUSSCHLIESSLICH
+     * Entwicklerseiten (MessageSink, WD_GetAlertTargets), waehrend die Antwort
+     * fuer einen Endnutzer schlicht „ein Ereignis vom Typ Bei Aenderung" lautet.
+     */
+    private function DokuBereich(string $pfad): string
+    {
+        foreach (['entwicklerbereich', 'befehlsreferenz', 'modulreferenz'] as $teil) {
+            if (str_contains($pfad, $teil)) {
+                return 'entwickler';
+            }
+        }
+        return 'bedienung';
+    }
+
     /** Kleinschreibung + Umlautfaltung, wie beim Auflösen von Titeln. */
     private function DokuNorm(string $t): string
     {
@@ -729,7 +749,24 @@ trait SymconDoku
                 $jeSeite[$pfad] = $t;
             }
         }
-        $treffer = array_slice(array_values($jeSeite), 0, self::DOKU_TOP);
+        $liste = array_values($jeSeite);
+        /* Beide Bereiche vertreten, wenn es sie gibt: sonst liegen dem Leser
+           nur Entwicklerseiten vor und er KANN nicht fuer einen Endnutzer
+           antworten, selbst wenn er wollte. Ein Platz von vieren wird dafuer
+           freigehalten — mehr nicht, damit die Rangfolge bestimmend bleibt. */
+        $treffer = array_slice($liste, 0, self::DOKU_TOP);
+        $bereiche = array_unique(array_map(
+            fn(array $t): string => $this->DokuBereich((string)$t['pfad']), $treffer));
+        if (count($bereiche) === 1) {
+            $fehlt = reset($bereiche) === 'entwickler' ? 'bedienung' : 'entwickler';
+            foreach (array_slice($liste, self::DOKU_TOP) as $t) {
+                if ($this->DokuBereich((string)$t['pfad']) === $fehlt) {
+                    array_pop($treffer);
+                    $treffer[] = $t;
+                    break;
+                }
+            }
+        }
         /* Ein zu schwacher Bestwert heisst „nichts Passendes" — sonst kaeme auf
            jede Frage irgendein Abschnitt, und das klaenge nach Antwort. Der
            Wert ist ein Skalarprodukt aus einem Byte-Vektor gegen einen
@@ -778,6 +815,15 @@ trait SymconDoku
             . 'Abkuerzungen aus („zum Beispiel" statt „z. B.", „Grad Celsius" statt „°C"), denn '
             . 'eine Stimme liest sie sonst falsch vor. Sage NICHT, woher du es weisst — kein „im '
             . 'Auszug steht", kein „laut Handbuch": antworte einfach. '
+            . 'WER FRAGT: fast immer jemand, der Symcon BEDIENT, nicht jemand, der ein Modul '
+            . 'programmiert. Die Auszuege sind mit „Bedienung" oder „Entwickler" beschriftet. '
+            . 'Passen beide auf die Frage, antworte aus der BEDIENUNG und biete den Weg fuer '
+            . 'Entwickler in einem Halbsatz an („in einem Modul geht das mit RegisterTimer"). '
+            . 'Fragt jemand ausdruecklich nach Modul, PHP, SDK oder einer Funktion, antworte '
+            . 'direkt aus dem Entwicklerteil und lass diesen Halbsatz WEG — er waere dann eine '
+            . 'Wiederholung. '
+            . 'Nur wenn du ohne Klaerung nicht antworten kannst, stelle GENAU EINE kurze '
+            . 'Rueckfrage und sonst nichts. '
             . 'Nenne konkrete Namen von Funktionen, Feldern oder Menuepunkten, wenn sie im Auszug '
             . 'stehen. VERWEISE NICHT auf andere Seiten oder Abschnitte des Handbuchs und nicht '
             . 'auf die Befehlsreferenz — sage, was zu tun ist, oder sage, dass es im Auszug nicht '
@@ -860,7 +906,11 @@ trait SymconDoku
                     continue;
                 }
                 $ueber = trim((string)$a['titel']);
-                $teile[] = ($ueber !== '' ? '[' . $ueber . '] ' : '') . $stueck;
+                // Der Bereich steht dabei: der Leser soll wissen, ob ein Absatz
+                // die Bedienung erklaert oder die Programmierung.
+                $wo = $this->DokuBereich((string)$a['pfad']) === 'entwickler'
+                    ? ' · Entwickler' : ' · Bedienung';
+                $teile[] = ($ueber !== '' ? '[' . $ueber . $wo . '] ' : '') . $stueck;
                 if ($a['titel'] !== $titel && !in_array($a['titel'], $weitereTitel, true)) {
                     $weitereTitel[] = $a['titel'];
                 }
@@ -927,7 +977,9 @@ trait SymconDoku
                             max(0, (int)$wo - 200), (int)(self::DOKU_AUSZUG * 0.55))));
                         $rest = array_slice($teile, 1);
                         // Auch das frische Fenster bekommt seine Ueberschrift.
-                        $fenster = '[' . $titel . '] ' . $fenster;
+                        $fenster = '[' . $titel
+                            . ($this->DokuBereich($seite) === 'entwickler' ? ' · Entwickler' : ' · Bedienung')
+                            . '] ' . $fenster;
                         $auszug = $rest === [] ? $fenster
                             : $fenster . "\n\n" . implode("\n\n", $rest);
                     }
