@@ -999,7 +999,95 @@ html[data-symdo-theme="dark"] .member-bar {
    mit den drei Zahlen untereinander, darunter Einkauf und Termine als Paar. Die drei
    einzelnen Kacheln sind hier ausgeblendet und uebernehmen ab 820px. */
 .kpi-tasks { grid-column: 1 / -1; }
+/* Steht die Sprach-Kachel daneben, teilen sich beide die Reihe. Nur DANN —
+   ohne sie bliebe sonst ein Loch neben den Aufgaben. */
+.kpi-grid.mit-voice .kpi-tasks { grid-column: span 1; }
 .kpi-single { display: none; }
+
+/* ── Sprachdialog: die Blase als Kachel ───────────────────────────────────
+   Auf dem Telefon neben der halbierten Aufgaben-Kachel; ab 820 px ist die
+   KPI-Reihe voll, dort bekommt sie eine eigene halbbreite Karte darunter
+   (das Dashboard-Raster hat dort zwei Spalten). */
+.kpi-voice, .voice-card {
+  position: relative; overflow: hidden; padding: 0;
+  /* Nur der Grundton — die eigentliche Bühne samt Schatten bringt die Blase
+     selbst mit (voice-blob.js) und richtet sich dabei nach hell/dunkel. Ein
+     fest dunkler Verlauf hier hätte den hellen Modus überstimmt. */
+  background: #0a0c14;
+  border-radius: var(--radius); cursor: pointer; overflow: hidden;
+}
+.voice-card { display: none; min-height: 200px; }
+.voice-slot { position: absolute; inset: 0; }
+.voice-mic {
+  position: absolute; top: 10px; right: 12px; z-index: 2;
+  font-size: 15px; line-height: 1; pointer-events: none;
+  color: rgba(255, 255, 255, .45);
+  /* Dieselbe Trägheit wie die Blase: der Status soll überblenden, nicht blinken. */
+  transition: color 1.4s ease;
+}
+.voice-mic i, .voice-mic svg { color: inherit; fill: currentColor; }
+/* Zwei Symbole, eines sichtbar: das Icon-Kit ersetzt jedes <i> durch ein <svg>
+   und behält dabei den Icon-Namen als Klasse — daran wird umgeschaltet. Ein
+   nachträglicher Klassentausch am <i> ginge nicht, das Element existiert dann
+   nicht mehr. Ruhezustand, Ende und Fehler zeigen das durchgestrichene. */
+.voice-mic .fa-microphone-slash { display: none; }
+.voice-mic.z-bereit .fa-microphone,
+.voice-mic.z-ende   .fa-microphone,
+.voice-mic.z-fehler .fa-microphone { display: none; }
+.voice-mic.z-bereit .fa-microphone-slash,
+.voice-mic.z-ende   .fa-microphone-slash,
+.voice-mic.z-fehler .fa-microphone-slash { display: inline-block; }
+.voice-mic.z-verbinde   { color: #9a7bff; }
+.voice-mic.z-hoert      { color: #6fe9ff; }
+.voice-mic.z-duSprichst { color: #2bffd0; }
+.voice-mic.z-denkt      { color: #9a7bff; }
+.voice-mic.z-spricht    { color: #28dcff; }
+.voice-mic.z-werkzeug   { color: #ffd36b; }
+.voice-mic.z-fehler     { color: #ff5c5c; }
+html[data-symdo-theme="light"] .kpi-voice,
+html[data-symdo-theme="light"] .voice-card { background: #eef1f8; }
+/* NUR die ruhenden Zustände umfärben. Eine pauschale Regel
+   `html[data-symdo-theme="light"] .voice-mic` hat höhere Spezifität als
+   `.voice-mic.z-hoert` und überstimmte damit JEDE Zustandsfarbe — im hellen
+   Thema war das Mikrofon immer grau (im Prüflauf gemessen). */
+html[data-symdo-theme="light"] .voice-mic.z-bereit,
+html[data-symdo-theme="light"] .voice-mic.z-ende { color: rgba(20, 26, 48, .45); }
+/* Die Zustandsfarben oben sind fuer den dunklen Grund gemischt; auf der hellen
+   Kachel (#eef1f8) verschwinden sie fast (Cyan kam auf Kontrast 1,3). Hier
+   dieselben Farbtoene abgedunkelt, jede auf mindestens 3,6 zu #eef1f8 gerechnet
+   (test_mik_kontrast.mjs). */
+html[data-symdo-theme="light"] .voice-mic.z-verbinde,
+html[data-symdo-theme="light"] .voice-mic.z-denkt      { color: #835cff; }
+html[data-symdo-theme="light"] .voice-mic.z-hoert      { color: #0089a2; }
+html[data-symdo-theme="light"] .voice-mic.z-duSprichst { color: #008c6d; }
+html[data-symdo-theme="light"] .voice-mic.z-spricht    { color: #0088a2; }
+html[data-symdo-theme="light"] .voice-mic.z-werkzeug   { color: #a37300; }
+html[data-symdo-theme="light"] .voice-mic.z-fehler     { color: #d32f2f; }
+/* Freisprech-Symbol: links neben dem Mikrofon, eigener Klick. Bernstein statt
+   Akzent, weil der Akzent dem laufenden Gespräch gehört, und nicht Rot — das
+   heißt Aufnahme. Es pulst nur, WÄHREND wirklich gelauscht wird. */
+.voice-ear {
+  position: absolute; top: 8px; right: 34px; z-index: 3;
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: rgba(255, 255, 255, .45);
+  font-size: 13px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .3s ease, background-color .3s ease;
+}
+.voice-ear.an { color: #ffb020; }
+.voice-ear.lauscht {
+  color: #ffb020; background: rgba(255, 176, 32, .16);
+  animation: voiceLauschen 1.9s ease-out infinite;
+}
+@keyframes voiceLauschen {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 176, 32, .55); }
+  70%  { box-shadow: 0 0 0 9px rgba(255, 176, 32, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 176, 32, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .voice-ear.lauscht { animation: none; } }
+html[data-symdo-theme="light"] .voice-ear { color: rgba(20, 26, 48, .45); }
+html[data-symdo-theme="light"] .voice-ear.an,
+html[data-symdo-theme="light"] .voice-ear.lauscht { color: #a35c00; }
 .kpi-rows {
   position: relative;
   z-index: 1;
@@ -2884,6 +2972,11 @@ html[data-symdo-theme="dark"] .member-bar {
   .kpi-tasks { display: none; }
   .kpi-single { display: flex; }
 
+  /* Die Sprach-Kachel verlaesst die volle KPI-Reihe und wird zur eigenen Karte
+     im Zweispalter — also halbe Breite, wie besprochen. */
+  .kpi-voice { display: none; }
+  .voice-card { display: block; }
+
   /* Vier Ringe in einer Reihe (Telefon: 2 x 2, siehe .ring-row) */
   .ring-row { grid-template-columns: repeat(4, 1fr); }
 
@@ -3888,6 +3981,209 @@ function aiPost(path, payload) {
     setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
   });
 }
+// ── Sprachdialog: die Blase als Dashboard-Kachel ────────────────────────────
+// Kern und Aussehen kommen aus denselben Quellen wie in der Visu-Kachel
+// (voice-core.js / voice-blob.js); der Gateway haengt sie nur an, wenn der
+// Sprachdialog im Backend eingeschaltet und beiden Einwilligungen zugestimmt ist.
+let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null, voiceMik = null;
+let voiceOhr = null, voiceLauscher = null, voiceFreihandGewuenscht = false;
+let voiceZustand = 'bereit';
+
+function voiceMoeglich() {
+  return !!(window.__SYMDO__ && window.__SYMDO__.voiceEnabled
+    && window.SymDoVoiceKern && window.SymDoVoiceBlase
+    && window.isSecureContext && navigator.mediaDevices);
+}
+
+/* Darf hier freigesprochen werden? Der Schalter samt dritter Einwilligung
+   kommt vom Gateway (voiceHandsFree); ob das GERAET es kann, entscheidet
+   voice-wake.js — und sagt es, statt stumm nicht zu lauschen. Auf iPhones ist
+   die Antwort immer Nein: lokale Spracherkennung gibt es dort nicht. */
+function freihandMoeglich() {
+  return !!(voiceMoeglich() && window.__SYMDO__.voiceHandsFree && window.SymDoVoiceWeckwort);
+}
+
+/* Eine Kennung je Geraet: das Gateway laesst je „Kachel" nur EIN Gespraech zu.
+   Aus dem Token abgeleitet, damit sie ein Neuladen ueberlebt — sonst hielte der
+   Server das alte Gespraech noch fuer fremd und liesse beide nebeneinander. */
+function voiceKennung() {
+  let t = ''; try { t = ls.get('symdo.token') || ''; } catch (e) {}
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) { h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; }
+  return (h % 900000) + 100000;
+}
+
+/* Sprecher und Standardlisten setzt hier der Client — in der Visu-Kachel macht
+   das serverseitig das Modul. Sie reisen bei JEDEM Aufruf mit, weil 'open' und
+   'opened' sie getrennt auswerten. Sprecher ist dasselbe „ich" wie sonst in der
+   App (currentUserID), Listen sind die gerade gewaehlten. */
+function voicePost(payload) {
+  const voll = Object.assign({}, payload, {
+    tile: voiceKennung(),
+    userId: currentUserID(),
+    defaults: { shopping: selectedShoppingID(), todo: selectedTodoID() }
+  });
+  return aiPost('/voice', voll).then(a => (a && a.json) || { ok: false });
+}
+
+/* Nur die FARBE schaltet um, nicht das Symbol: das Icon-Kit (FontAwesome)
+   ersetzt jedes <i> durch ein <svg> und nimmt Klassen wie Datenattribute mit.
+   Deshalb sitzt der Zustand auf einer eigenen Huelle, die es nie anfasst — das
+   SVG darin erbt die Farbe (fill: currentColor). */
+function voiceMikSetzen(z) {
+  document.querySelectorAll('[data-voice-mic]').forEach(h => {
+    h.className = 'voice-mic z-' + z;
+  });
+}
+
+function voiceKernHolen() {
+  if (voiceKern) return voiceKern;
+  // Eigenes Audio-Element: die Stimme der KI kommt als WebRTC-Strom und braucht
+  // etwas, das sie abspielt. Es haengt am Body, nicht am Dashboard-Markup —
+  // sonst risse es jedes Neuzeichnen mit.
+  voiceAudio = document.createElement('audio');
+  voiceAudio.autoplay = true;
+  voiceAudio.setAttribute('playsinline', '');
+  document.body.appendChild(voiceAudio);
+  voiceKern = SymDoVoiceKern.erzeuge({
+    post: voicePost,
+    audioEl: voiceAudio,
+    onState: function (z, detail) {
+      voiceZustand = z;
+      voiceMikSetzen(z);
+      if (voiceBlase) voiceBlase.zustand(z);
+      if (z === 'fehler' && detail) showToast(detail);
+      // Waehrend des Gespraechs lauscht niemand (das Mikrofon gehoert ihm, und
+      // der Erkenner spraenge auf die Stimme aus dem Lautsprecher an).
+      if (z === 'ende' || z === 'fehler') voiceFreihandZurueck();
+    }
+  });
+  return voiceKern;
+}
+
+/* Der Kasten mit der Blase lebt LAENGER als das Dashboard-Markup: renderDashboard
+   ersetzt innerHTML, und das wuerfe SVG, Analyser und laufende Animation jedes
+   Mal weg. Deshalb ein dauerhaftes Element, das nach jedem Zeichnen in den
+   gerade SICHTBAREN Platz gehaengt wird (schmal: neben den Aufgaben, breit:
+   eigene Karte darunter). */
+function voiceMount() {
+  if (!voiceMoeglich()) return;
+  const plaetze = Array.prototype.slice.call(document.querySelectorAll('[data-voice-slot]'));
+  const platz = plaetze.filter(p => p.offsetParent !== null)[0] || plaetze[0];
+  if (!platz) return;
+  if (!voiceBox) {
+    voiceBox = document.createElement('div');
+    voiceBox.style.cssText = 'position:absolute;inset:0;';
+    voiceBlase = SymDoVoiceBlase.erzeuge(voiceBox, voiceKernHolen());
+    voiceBlase.an(true);
+  }
+  if (voiceBox.parentNode !== platz) platz.appendChild(voiceBox);
+  /* Dasselbe Spiel fuer das Mikrofonsymbol: waere es Teil des Markups, baute
+     renderDashboard es bei jedem Zeichnen neu -- und das Icon-Kit ersetzt sein
+     <i> erst einen Tick spaeter durch ein <svg>. In dieser Luecke ist gar
+     nichts da, und genau das sah man als Blinken. */
+  if (!voiceMik) {
+    voiceMik = document.createElement('span');
+    voiceMik.setAttribute('data-voice-mic', '');
+    voiceMik.innerHTML = '<i class="fa-light fa-microphone"></i>' +
+                         '<i class="fa-light fa-microphone-slash"></i>';
+  }
+  const kachel = platz.closest('[data-voice]') || platz.parentNode;
+  if (voiceMik.parentNode !== kachel) kachel.appendChild(voiceMik);
+  /* Freisprechen: ein zweites, dauerhaftes Symbol links neben dem Mikrofon.
+     Es traegt seinen eigenen Klick (Antippen der Kachel startet ein Gespraech,
+     Antippen des Ohrs schaltet das Lauschen) und ist nur da, wo es erlaubt
+     ist. */
+  if (freihandMoeglich()) {
+    if (!voiceOhr) {
+      voiceOhr = document.createElement('button');
+      voiceOhr.type = 'button';
+      voiceOhr.className = 'voice-ear';
+      voiceOhr.setAttribute('data-voice-ear', '');
+      voiceOhr.setAttribute('aria-label', translate('Hands-free'));
+      voiceOhr.innerHTML = '<i class="fa-light fa-ear-listen"></i>';
+      voiceOhr.addEventListener('click', ev => { ev.stopPropagation(); voiceFreihandUmschalten(); });
+    }
+    if (voiceOhr.parentNode !== kachel) kachel.appendChild(voiceOhr);
+    voiceOhrSetzen();
+  }
+  voiceBlase.zustand(voiceZustand);
+  voiceMikSetzen(voiceZustand);
+}
+
+/** Ein Tippen startet das Gespraech, das naechste beendet es. */
+function voiceUmschalten() {
+  const k = voiceKernHolen();
+  if (k.istOffen()) { k.stop('vom Nutzer beendet'); } else { k.start(); }
+}
+
+/* ── Freisprechen ────────────────────────────────────────────────────────────
+   Dieselbe Ordnung wie in der Kachel: der Knopf folgt dem WILLEN des Nutzers,
+   die Anzeige dem Zustand des Lauschers. Nach dem Weckwort ist der Lauscher
+   aus, Freisprechen aber weiter eingeschaltet. */
+function voiceOhrSetzen() {
+  if (!voiceOhr) return;
+  const lauscht = !!(voiceLauscher && voiceLauscher.istAn());
+  voiceOhr.classList.toggle('an', voiceFreihandGewuenscht);
+  voiceOhr.classList.toggle('lauscht', lauscht);
+  voiceOhr.setAttribute('aria-pressed', voiceFreihandGewuenscht ? 'true' : 'false');
+  voiceOhr.title = lauscht ? translate('Listening for "Hey SymDo"')
+    : (voiceFreihandGewuenscht ? translate('Hands-free is on') : translate('Hands-free'));
+}
+
+function voiceFreihandZurueck() {
+  if (voiceFreihandGewuenscht && voiceLauscher && !voiceLauscher.istAn()
+      && !(voiceKern && voiceKern.istOffen())) {
+    voiceLauscher.an(true).then(voiceOhrSetzen);
+  }
+}
+
+async function voiceFreihandUmschalten() {
+  if (voiceFreihandGewuenscht) {
+    voiceFreihandGewuenscht = false;
+    if (voiceLauscher) voiceLauscher.aus();
+    voiceOhrSetzen();
+    return;
+  }
+  // Erst der Server: die Einwilligung liegt in einem Attribut, im Browser ist
+  // sie weder lesbar noch faelschbar.
+  const r = await voicePost({ action: 'handsfree' });
+  if (!r || r.erlaubt !== true) {
+    showToast((r && r.grund) || translate('Hands-free is not enabled.'));
+    return;
+  }
+  const v = await SymDoVoiceWeckwort.verfuegbar();
+  if (!v.moeglich) {
+    // Ehrlich sagen, was fehlt — und beim fehlenden Sprachpaket fragen, ob es
+    // geladen werden soll. Von selbst laedt hier nichts: es sind hunderte MB.
+    if (v.stand === 'ladbar' && confirm(v.grund + ' ' + translate('Download now?'))) {
+      showToast(translate('Loading speech recognition …'));
+      const ok = await SymDoVoiceWeckwort.laden();
+      showToast(ok ? translate('Ready — hands-free can start.') : translate('The download did not work.'));
+    } else {
+      showToast(v.grund);
+    }
+    return;
+  }
+  if (!voiceLauscher) {
+    voiceLauscher = SymDoVoiceWeckwort.erzeuge({
+      onWake: function () {
+        voiceOhrSetzen();
+        const k = voiceKernHolen();
+        if (!k.istOffen()) k.start();
+      },
+      onZustand: function (z, grund) {
+        if (z === 'fehler' && grund) showToast(grund);
+        voiceOhrSetzen();
+      }
+    });
+  }
+  const an = await voiceLauscher.an(true);
+  voiceFreihandGewuenscht = an === true;
+  if (an) showToast(translate('Listening for "Hey SymDo"'));
+  voiceOhrSetzen();
+}
+
 // Sichtbare Bereiche — Quelle wie bei aiEnabled: Standalone window.__SYMDO__,
 // Kachel der State. Fehlende Felder bedeuten „sichtbar", nie umgekehrt.
 function normalizeTabs(raw) {
@@ -4456,21 +4752,44 @@ function dayDiff(from, to) {
 }
 // Farbige Untertitel-Segmente wie auf dem App-Dashboard: nur der Zeit-Teil
 // ist rot/orange, der Listenname bleibt sekundär
+/* Fälligkeit: EINE Regel für ganztägige Aufgaben und solche mit Uhrzeit.
+   Vorher entschied die Uhrzeit über die ganze Darstellung — ganztägig bekam
+   „1. Okt.", mit Uhrzeit „in 5 Tagen". Zwei Aufgaben am selben Tag lasen sich
+   damit verschieden, und der Grund dafür stand nirgends in der Zeile. Von
+   einem Nutzer gemeldet, und er hat recht.
+
+   Jetzt gilt: je näher, desto genauer — und die Uhrzeit fügt nur Genauigkeit
+   hinzu, wo es sie gibt.
+     unter einer Stunde   „in 20 Min."      (nur mit Uhrzeit möglich)
+     heute/morgen/gestern „Morgen, 9:00"    (Zeit nur, wenn vorhanden)
+     bis eine Woche       „in 5 Tagen"
+     darüber              „22. Okt."        („in 21 Tagen" liest sich schlecht)
+   Die iOS-App und die Kachel folgen derselben Regel. */
 function formatDueChip(item) {
   const due = parseInt(item.due) || 0;
   if (due <= 0) return null;
-  if (item.dueAllDay) {
-    const d = dueDateOf(item);
-    if (!d) return null;
-    if (localDayStr(d) === todayStr()) return translate('Today');
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  }
-  const diffSec = due - Math.floor(Date.now() / 1000);
+  const d = dueDateOf(item);
+  if (!d) return null;
+  const jetzt = new Date();
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
-  const abs = Math.abs(diffSec);
-  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
-  if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour');
-  return rtf.format(Math.round(diffSec / 86400), 'day');
+  /* hour: 'numeric', nicht '2-digit': die iOS-App schreibt „9:00" (Foundation,
+     .shortened), und drei Oberflaechen sollen dasselbe zeigen. */
+  const zeit = item.dueAllDay ? '' :
+    ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  // Unter einer Stunde: Minuten. Nur Aufgaben mit Uhrzeit koennen so nah sein.
+  if (!item.dueAllDay) {
+    const diffSec = due - Math.floor(jetzt.getTime() / 1000);
+    if (Math.abs(diffSec) < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
+  }
+  // Ab hier in KALENDERTAGEN rechnen, nicht in 24-Stunden-Schritten: „morgen
+  // frueh" ist morgen, auch wenn es nur 14 Stunden hin sind.
+  const tage = dayDiff(jetzt, d);
+  if (tage === 0)  return translate('Today') + zeit;
+  if (tage === 1)  return translate('Tomorrow') + zeit;
+  if (tage === -1) return translate('Yesterday') + zeit;
+  if (Math.abs(tage) <= 7) return rtf.format(tage, 'day');
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 // ── Prioritäten / Wiederholungen (Codes wie im ToDoList-Modul) ─────────────
@@ -6576,7 +6895,11 @@ function stundenplanKarte() {
          ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
       const breite = Math.max((b - a) * 100, 0.2);
       const r = '12px', erster = i === 0, letzter = i === slots.length - 1;
-      stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
+      /* Raum und Lehrer aus dem Stundenplan-Modul, nur wenn gepflegt. Im
+         Balken ist Platz fuer das Symbol, sonst nichts — beides gehoert also
+         in den Tipp, genau wie in der Modul-Kachel. */
+      const wo = [s.room, s.teacher].filter(t => t).join(' · ');
+      stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : ''))}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
         `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
@@ -7100,7 +7423,8 @@ function renderDashboard() {
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;
   const zeroOverdue = overdueCount === 0;
-  html += '<div class="kpi-grid">';
+  const mitVoice = voiceMoeglich();
+  html += '<div class="kpi-grid' + (mitVoice ? ' mit-voice' : '') + '">';
   if (withTodos) {
     // Auf schmalen Anzeigen tragen DREI Aufgaben-Kacheln nebeneinander kaum noch eine
     // Zahl. Deshalb steht dort eine Kachel mit den drei Zahlen untereinander, ab 820px
@@ -7118,6 +7442,13 @@ function renderDashboard() {
       // ihres, ohne dieses saehe die Reihe wie zwei Gestaltungen aus. Die Zahlen
       // liegen darueber (.kpi-rows hat z-index 1).
       `</span><i class="fa-light fa-list-check kpi-glyph"></i></button>`;
+    // Sprachdialog gleich daneben: die Aufgaben-Kachel gibt dafür die halbe
+    // Breite ab. Der Kasten bleibt leer — die Blase wird nach dem Zeichnen
+    // hineingehängt (voiceMount), damit sie ein Neuzeichnen überlebt.
+    if (mitVoice) {
+      html += `<button class="kpi kpi-voice" aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
+        `<span class="voice-slot" data-voice-slot></span></button>`;
+    }
     html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
       `<i class="fa-light fa-list-check kpi-glyph"></i></button>`;
@@ -7143,6 +7474,13 @@ function renderDashboard() {
       `<i class="fa-light fa-calendar-day kpi-glyph"></i></button>`;
   }
   html += '</div>';
+  // Ab 820 px ist die KPI-Reihe voll — dort bekommt die Blase eine eigene
+  // halbbreite Karte (CSS entscheidet, welcher der beiden Plätze sichtbar ist).
+  if (mitVoice) {
+    html += `<div class="card voice-card" role="button" tabindex="0" ` +
+      `aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
+      `<span class="voice-slot" data-voice-slot></span></div>`;
+  }
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
   // darueber nur zaehlen. Ohne Text keine Karte — eine leere waere Ballast.
@@ -7494,6 +7832,9 @@ function renderDashboard() {
       if (item) openTodoEditor(instanceID, item);
     });
   });
+  // Sprach-Kachel: ein Tippen startet, das naechste beendet das Gespraech.
+  el.querySelectorAll('[data-voice]').forEach(k => k.addEventListener('click', voiceUmschalten));
+  voiceMount();
   applyMarquees(el);
   // Nach dem Einfuegen: erst jetzt haben die Stundenplan-Balken eine Breite.
   // Reihenfolge zaehlt — die Labels messen gegen die ENDGUELTIGE Breite.
