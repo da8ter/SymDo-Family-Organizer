@@ -3908,7 +3908,7 @@ function aiPost(path, payload) {
 // Kern und Aussehen kommen aus denselben Quellen wie in der Visu-Kachel
 // (voice-core.js / voice-blob.js); der Gateway haengt sie nur an, wenn der
 // Sprachdialog im Backend eingeschaltet und beiden Einwilligungen zugestimmt ist.
-let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null;
+let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null, voiceMik = null;
 let voiceZustand = 'bereit';
 
 function voiceMoeglich() {
@@ -3989,6 +3989,18 @@ function voiceMount() {
     voiceBlase.an(true);
   }
   if (voiceBox.parentNode !== platz) platz.appendChild(voiceBox);
+  /* Dasselbe Spiel fuer das Mikrofonsymbol: waere es Teil des Markups, baute
+     renderDashboard es bei jedem Zeichnen neu -- und das Icon-Kit ersetzt sein
+     <i> erst einen Tick spaeter durch ein <svg>. In dieser Luecke ist gar
+     nichts da, und genau das sah man als Blinken. */
+  if (!voiceMik) {
+    voiceMik = document.createElement('span');
+    voiceMik.setAttribute('data-voice-mic', '');
+    voiceMik.innerHTML = '<i class="fa-light fa-microphone"></i>' +
+                         '<i class="fa-light fa-microphone-slash"></i>';
+  }
+  const kachel = platz.closest('[data-voice]') || platz.parentNode;
+  if (voiceMik.parentNode !== kachel) kachel.appendChild(voiceMik);
   voiceBlase.zustand(voiceZustand);
   voiceMikSetzen(voiceZustand);
 }
@@ -7235,9 +7247,7 @@ function renderDashboard() {
     // hineingehängt (voiceMount), damit sie ein Neuzeichnen überlebt.
     if (mitVoice) {
       html += `<button class="kpi kpi-voice" aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
-        `<span class="voice-slot" data-voice-slot></span>` +
-        `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i>` +
-      `<i class="fa-light fa-microphone-slash"></i></span></button>`;
+        `<span class="voice-slot" data-voice-slot></span></button>`;
     }
     html += `<button class="kpi kpi-single" data-goto="todos" style="${kpiTint('var(--accent)')}">` +
       `<span class="kpi-label">${translate('Open tasks')}</span><span class="kpi-value">${memberTasks.length}</span>` +
@@ -7269,9 +7279,7 @@ function renderDashboard() {
   if (mitVoice) {
     html += `<div class="card voice-card" role="button" tabindex="0" ` +
       `aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
-      `<span class="voice-slot" data-voice-slot></span>` +
-      `<span class="voice-mic" data-voice-mic><i class="fa-light fa-microphone"></i>` +
-      `<i class="fa-light fa-microphone-slash"></i></span></div>`;
+      `<span class="voice-slot" data-voice-slot></span></div>`;
   }
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen
