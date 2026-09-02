@@ -124,6 +124,11 @@ trait TimetableBridge
                 'from'  => (int)($s['from'] ?? 0),
                 'to'    => (int)($s['to'] ?? 0),
                 'care'  => (bool)($s['care'] ?? false),
+                // Freitext aus dem Stundenplan-Modul. Ohne diese zwei Zeilen
+                // kaeme beides nie in der App an: die Projektion hier ist eine
+                // Weissliste, kein Durchreichen.
+                'room'    => (string)($s['room'] ?? ''),
+                'teacher' => (string)($s['teacher'] ?? ''),
             ];
             foreach ($plan['children'] as $kind) {
                 if (!is_array($kind)) {

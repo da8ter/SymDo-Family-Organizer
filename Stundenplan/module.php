@@ -333,6 +333,10 @@ class SymDoTimetable extends IPSModuleStrict
                 'subject' => trim((string)($z['subject'] ?? '')),
                 'start'   => trim((string)($z['start'] ?? '')),
                 'end'     => trim((string)($z['end'] ?? '')),
+                // Die alte Sammelliste kannte beides nicht; wer sie doch
+                // gefuellt hat, verliert es hier nicht.
+                'room'    => trim((string)($z['room'] ?? '')),
+                'teacher' => trim((string)($z['teacher'] ?? '')),
             ];
         }
 
@@ -947,6 +951,15 @@ class SymDoTimetable extends IPSModuleStrict
                              'add' => TimetableCalc::ZeitFeld('07:45'), 'edit' => ['type' => 'SelectTime']],
                             ['caption' => $this->Translate('To'), 'name' => 'end', 'width' => '105px',
                              'add' => TimetableCalc::ZeitFeld('08:30'), 'edit' => ['type' => 'SelectTime']],
+                            /* Raum und Lehrer als Freitext: Schulen kuerzen beides
+                               auf eigene Weise („121", „Halle L", „Fa", „Frau
+                               Fabian"), und eine Auswahlliste muesste erst
+                               gepflegt werden, bevor man die erste Stunde
+                               eintragen kann. */
+                            ['caption' => $this->Translate('Room'), 'name' => 'room', 'width' => '90px',
+                             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                            ['caption' => $this->Translate('Teacher'), 'name' => 'teacher', 'width' => '90px',
+                             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                         ],
                     ],
                     [

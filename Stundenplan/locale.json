@@ -28,6 +28,8 @@
             "Odd weeks": "Ungerade Wochen",
             "The family member links this child to SymDo — the card in the app then appears under the right name. Saturday only shows in the plan when it is switched on here; \"every other week\" follows the parity of the ISO calendar week, exactly like a school notice (\"lessons in odd weeks\").": "Das Familienmitglied verbindet dieses Kind mit SymDo — die Karte in der App steht dann unter dem richtigen Namen. Der Samstag erscheint nur, wenn er hier eingeschaltet ist; „nur alle zwei Wochen\" folgt der Parität der ISO-Kalenderwoche, genau wie ein Schulaushang („Unterricht in ungeraden KWs\").",
             "Subjects": "Fächer",
+            "Room": "Raum",
+            "Teacher": "Lehrer",
             "Subject": "Fach",
             "Icon": "Symbol",
             "Add subjects from the lessons": "Fächer aus den Stunden ergänzen",

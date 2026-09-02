@@ -252,6 +252,13 @@ trait TimetableStore
                         'subject'   => $fach,
                         'start'     => $von,
                         'end'       => $bis,
+                        /* Raum und Lehrer sind FREITEXT je Stunde — dasselbe Fach
+                           kann in verschiedenen Raeumen und bei verschiedenen
+                           Lehrern liegen, sie gehoeren also an die Stunde und
+                           nicht an das Fach. Leer bleibt leer: die Kachel zeigt
+                           die Zeile dann gar nicht. */
+                        'room'      => trim((string)($zeile['room'] ?? '')),
+                        'teacher'   => trim((string)($zeile['teacher'] ?? '')),
                         // Keine Farbe je Stunde mehr — sie kommt vom Fach.
                         'color'     => null,
                     ];
@@ -514,6 +521,9 @@ trait TimetableStore
                             ? '#9E9E9E' : $stil['color'],
                         'start'  => $s['start'],
                         'end'    => $s['end'],
+                        // Die Betreuung hat beides nicht; dort bleibt es leer.
+                        'room'    => (string)($s['room'] ?? ''),
+                        'teacher' => (string)($s['teacher'] ?? ''),
                         'from'   => $beginn,
                         'to'     => TimetableCalc::Minuten((string)$s['end']),
                         'gap'    => TimetableCalc::LueckeHoehe($vorher, $beginn),

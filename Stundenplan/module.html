@@ -269,6 +269,13 @@
   }
   .stunde .fach { font-size: 13px; font-weight: 600; line-height: 1.2; }
   .stunde .zeit { font-size: 10px; font-weight: 500; opacity: .82; margin-top: 2px; }
+  /* Raum und Lehrer: dritte Zeile, schwaecher als die Zeit. Sie darf fehlen —
+     bei kurzen Stunden schneidet das overflow:hidden des Blocks sie ab, und
+     das ist besser als ein Block, der aus dem Raster waechst. */
+  .stunde .wo {
+    font-size: 10px; font-weight: 500; opacity: .70; margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -1488,12 +1495,20 @@
              und als Untergrenze holt sie genau die Aufrundung zurueck, die hier
              verschwinden soll (gemessen: 12px zu viel bei der Betreuung). */
           const h = Math.max(y(s.to) - y(s.from), proViertel * 3);
+          /* Raum und Lehrer stehen mit Mittelpunkt getrennt und nur, wenn
+             gepflegt — eine Zeile „ · " waere schlimmer als keine. Derselbe
+             Text steht im title, denn in schmalen Spalten wird gekuerzt. */
+          const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
-            + (s.care ? ' betreuung' : '') + '" style="background:' + esc(s.color)
+            + (s.care ? ' betreuung' : '') + '" title="'
+            + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : ''))
+            + '" style="background:' + esc(s.color)
             + ';top:' + y(s.from) + 'px;height:' + h + 'px">'
             + (s.icon ? '<span class="sym">' + symbol(s.icon) + '</span>' : '')
             + '<div><div class="fach">' + esc(s.name) + '</div>'
-            + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div></div></div>';
+            + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div>'
+            + (wo ? '<div class="wo">' + esc(wo) + '</div>' : '')
+            + '</div></div>';
           vorher = Math.max(vorher, s.to);
         });
         spalten += luecke(vorher, bis);
@@ -1675,8 +1690,11 @@
         const breite = Math.max((b - a) * 100, 0.2);
         const erster = i === 0, letzter = i === slots.length - 1;
         const r = '13px';
+        /* Im Balken ist nur Platz fuer das Symbol; Raum und Lehrer gehoeren
+           deshalb in den Tipp, wo schon Fach und Zeit stehen. */
+        const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
         stuecke += '<div class="stueck' + (erster ? ' erst' : '') + '" title="'
-          + esc(s.name + ' ' + s.start + '–' + s.end) + '"'
+          + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')) + '"'
           + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(s.color)
           + ';border-top-left-radius:' + (erster ? r : '0')
           + ';border-bottom-left-radius:' + (erster ? r : '0')

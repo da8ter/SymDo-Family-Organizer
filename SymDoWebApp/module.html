@@ -6820,7 +6820,11 @@ function stundenplanKarte() {
          ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
       const breite = Math.max((b - a) * 100, 0.2);
       const r = '12px', erster = i === 0, letzter = i === slots.length - 1;
-      stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end)}"` +
+      /* Raum und Lehrer aus dem Stundenplan-Modul, nur wenn gepflegt. Im
+         Balken ist Platz fuer das Symbol, sonst nichts — beides gehoert also
+         in den Tipp, genau wie in der Modul-Kachel. */
+      const wo = [s.room, s.teacher].filter(t => t).join(' · ');
+      stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : ''))}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(s.color)}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
         `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
