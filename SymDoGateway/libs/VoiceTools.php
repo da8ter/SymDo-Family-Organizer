@@ -363,9 +363,13 @@ trait VoiceTools
         $deckel = static fn($v, int $n): array => array_slice(array_values(array_filter(
             is_array($v) ? array_map('strval', $v) : [], static fn(string $z): bool => trim($z) !== ''
         )), 0, $n);
+        $ts = (int)strtotime('+' . $tage . ' day 12:00');
         return [
             'ok'  => true,
-            'tag' => date('Y-m-d', strtotime('+' . $tage . ' day')),
+            // AUSGESCHRIEBEN, nicht als ISO-Datum: aus „2026-09-02" bastelte das
+            // Modell eigene Kurzformen und las „Me 02.09.2026" vor.
+            'tag'   => $this->VoiceGesprochenesDatum($ts),
+            'datum' => date('Y-m-d', $ts),   // nur für weitere Werkzeugaufrufe
             'termine'      => $deckel($b['termine'] ?? [], 8),
             'aufgaben'     => $deckel($b['aufgaben'] ?? [], 8),
             'ueberfaellig' => $deckel($b['ueberfaellig'] ?? [], 5),
@@ -504,15 +508,45 @@ trait VoiceTools
         ];
     }
 
+    /**
+     * Ein Datum, wie man es SAGT. „Mi 02.09." ist eine Anzeige-Konvention; im
+     * Gespräch liest das Modell daraus eigene Abkürzungen zusammen — gemeldet
+     * wurde „Me 02.09.2026" für einen Mittwoch (romanische Kurzform, weil es
+     * ein rohes ISO-Datum bekam). Deshalb hier ausgeschrieben, und heute und
+     * morgen heißen einfach so.
+     */
+    private function VoiceGesprochenesDatum(int $ts, bool $mitZeit = false, bool $ganztags = false): string
+    {
+        if ($ts <= 0) {
+            return '';
+        }
+        $tag = date('Y-m-d', $ts);
+        $wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+        $monate = ['', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+                   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+        if ($tag === date('Y-m-d')) {
+            $wann = $this->Translate('today');
+        } elseif ($tag === date('Y-m-d', (int)strtotime('+1 day'))) {
+            $wann = $this->Translate('tomorrow');
+        } elseif ($tag === date('Y-m-d', (int)strtotime('+2 days'))) {
+            $wann = $this->Translate('the day after tomorrow');
+        } else {
+            $wann = $wochentage[(int)date('w', $ts)] . ', ' . (int)date('j', $ts) . '. ' . $monate[(int)date('n', $ts)];
+        }
+        if ($mitZeit && !$ganztags) {
+            $wann .= ', ' . (int)date('G', $ts) . ' Uhr'
+                   . ((int)date('i', $ts) !== 0 ? ' ' . date('i', $ts) : '');
+        }
+        return $wann;
+    }
+
     /** Ein Termin als sprachgerechte Zeile: „Fr 05.09. 15:00 Zahnarzt (Praxis)". */
     private function VoiceTerminZeile(array $e): string
     {
         $start = (int)($e['start'] ?? 0);
-        $wo    = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-        $wann  = $start > 0
-            ? ($wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
-               . (($e['allDay'] ?? false) === true ? ' ganztägig' : ' ' . date('H:i', $start)))
-            : '';
+        $ganz  = ($e['allDay'] ?? false) === true;
+        $wann  = $this->VoiceGesprochenesDatum($start, true, $ganz)
+               . ($ganz ? ' ' . $this->Translate('all day') : '');
         $titel = trim((string)($e['title'] ?? ''));
         $ort   = trim((string)($e['location'] ?? ''));
         return trim($wann . ' ' . $titel . ($ort !== '' ? ' (' . $ort . ')' : ''));
@@ -521,13 +555,8 @@ trait VoiceTools
     /** Nur Wochentag + Datum (+ Uhrzeit) eines Termins — ohne Titel, für Rückfragen. */
     private function VoiceTerminWann(array $e): string
     {
-        $start = (int)($e['start'] ?? 0);
-        if ($start <= 0) {
-            return '';
-        }
-        $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-        return $wo[(int)date('w', $start)] . ' ' . date('d.m.', $start)
-            . (($e['allDay'] ?? false) === true ? '' : ' um ' . date('H:i', $start));
+        return $this->VoiceGesprochenesDatum((int)($e['start'] ?? 0), true,
+            ($e['allDay'] ?? false) === true);
     }
 
     /** @return array<string,mixed> */
@@ -672,6 +701,27 @@ trait VoiceTools
             }
         }
         $erg = $this->VoiceAufloesen($was, $kand);
+        /* Eine Wochenserie liefert fünf gleich heißende Treffer — „Kickboxen"
+           kam als „Welchen Termin meinst du? Mi 02.09.; Mi 09.09.; …" zurück
+           und war damit nicht löschbar. Tragen alle Treffer DENSELBEN Titel und
+           gehören zu einer Serie, ist es EIN Termin: der nächste zählt, und
+           worüber wirklich zu reden ist, ist die Reichweite (dieses Vorkommen
+           oder die ganze Serie) — danach fragt der Aufrufer ohnehin. */
+        if (($erg['status'] ?? '') === 'mehrdeutig') {
+            $titel = null; $alleGleich = true; $alleSerie = true;
+            foreach ($erg['treffer'] as $t) {
+                $n = $this->VoiceNorm((string)$t['titel']);
+                if ($titel === null) { $titel = $n; }
+                if ($n !== $titel) { $alleGleich = false; }
+                if ((((array)$t['event'])['recurring'] ?? false) !== true) { $alleSerie = false; }
+            }
+            if ($alleGleich && $alleSerie) {
+                $sortiert = $erg['treffer'];
+                usort($sortiert, static fn(array $a, array $b): int
+                    => (int)(((array)$a['event'])['start'] ?? 0) <=> (int)(((array)$b['event'])['start'] ?? 0));
+                return ['ok' => true, 'event' => (array)$sortiert[0]['event']];
+            }
+        }
         $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('upcoming appointments'));
         if ($fehler !== null) {
             if (($erg['status'] ?? '') === 'mehrdeutig') {
@@ -1067,16 +1117,7 @@ trait VoiceTools
     /** Wie ein Tag im Gespräch heißt: „heute", „morgen" oder „Do 04.09.". */
     private function VoicePlanTagName(string $datum): string
     {
-        $heute = date('Y-m-d');
-        if ($datum === $heute) {
-            return $this->Translate('today');
-        }
-        if ($datum === date('Y-m-d', (int)strtotime('+1 day'))) {
-            return $this->Translate('tomorrow');
-        }
-        $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-        $ts = (int)strtotime($datum);
-        return $wo[(int)date('w', $ts)] . ' ' . date('d.m.', $ts);
+        return $this->VoiceGesprochenesDatum((int)strtotime($datum . ' 12:00'));
     }
 
     /** @return array<string,mixed> */
@@ -1960,7 +2001,7 @@ trait VoiceTools
         if ($rezAnzahl > 0) {
             $zeilen[] = 'Es gibt ' . $rezAnzahl . ' gespeicherte Rezepte; frag sie mit dem Werkzeug rezepte_lesen ab.';
         }
-        $zeilen[] = 'Bevor du ein Werkzeug aufrufst, sage in einem kurzen Satz, was du tust.';
+        $zeilen[] = 'Sprich wie ein Mensch, nicht wie ein Programm. Erzähle NIEMALS, was du technisch tust: keine Werkzeug- oder Funktionsnamen, keine Kennungen, keine Bestätigungscodes, kein "ich suche den Termin über den Titel", kein "ich bereite das Löschen vor". Wenn etwas einen Moment dauert, sage höchstens "einen Moment" — und sonst nichts.';
         $zeilen[] = 'Beim Hinzufügen von Einkäufen teile jeden Artikel in drei Felder: "name" nur der reine Artikel, "menge" nur die Zahl bzw. Maßangabe, "info" das Gebinde und alle Zusätze. Beispiel: "5 Dosen Cola im Karton" → name "Cola", menge "5", info "Dosen im Karton". "2 Liter Milch" → name "Milch", menge "2 Liter", info null.';
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';

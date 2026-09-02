@@ -523,7 +523,9 @@
       "Nothing is planned in that period.": "In dem Zeitraum ist nichts geplant.",
       "%d days are planned.": "An %d Tagen ist etwas geplant.",
       "%s is cleared from the meal plan.": "%s ist aus dem Essensplan gestrichen.",
-      "%s: %s is on the meal plan.": "%s steht %s auf dem Essensplan."
+      "%s: %s is on the meal plan.": "%s steht %s auf dem Essensplan.",
+      "the day after tomorrow": "übermorgen",
+      "all day": "ganztägig"
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",
