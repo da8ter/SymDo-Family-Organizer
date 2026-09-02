@@ -1010,8 +1010,11 @@ html[data-symdo-theme="dark"] .member-bar {
    (das Dashboard-Raster hat dort zwei Spalten). */
 .kpi-voice, .voice-card {
   position: relative; overflow: hidden; padding: 0;
-  background: linear-gradient(160deg, #171a2e 0%, #0b0d18 62%, #05060d 100%);
-  border-radius: var(--radius); cursor: pointer;
+  /* Nur der Grundton — die eigentliche Bühne samt Schatten bringt die Blase
+     selbst mit (voice-blob.js) und richtet sich dabei nach hell/dunkel. Ein
+     fest dunkler Verlauf hier hätte den hellen Modus überstimmt. */
+  background: #0a0c14;
+  border-radius: var(--radius); cursor: pointer; overflow: hidden;
 }
 .voice-card { display: none; min-height: 200px; }
 .voice-slot { position: absolute; inset: 0; }
@@ -1030,6 +1033,9 @@ html[data-symdo-theme="dark"] .member-bar {
 .voice-mic.z-spricht    { color: #28dcff; }
 .voice-mic.z-werkzeug   { color: #ffd36b; }
 .voice-mic.z-fehler     { color: #ff5c5c; }
+html[data-symdo-theme="light"] .kpi-voice,
+html[data-symdo-theme="light"] .voice-card { background: #eef1f8; }
+html[data-symdo-theme="light"] .voice-mic { color: rgba(20, 26, 48, .45); }
 .kpi-rows {
   position: relative;
   z-index: 1;

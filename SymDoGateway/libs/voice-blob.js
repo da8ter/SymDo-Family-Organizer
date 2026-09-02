@@ -22,7 +22,13 @@
 var STIL_ID = 'symdo-blase-stil';
 
 var STIL = [
+  /* Die Bühne. Sie läuft zu den Rändern hin aus, statt als Rechteck zu enden —
+     in der Visu-Kachel füllt sie nur die Mitte, ein harter Kasten mitten im
+     Tile sähe nach Fehler aus. Hell und dunkel kommen aus derselben Kennung,
+     die beide Oberflächen ohnehin setzen (data-symdo-theme). */
   '.sym-blase{position:relative;display:flex;align-items:center;justify-content:center;',
+  '  background:radial-gradient(120% 92% at 50% 34%,',
+  '    rgba(40,48,86,.85) 0%,rgba(14,17,30,.75) 52%,rgba(6,7,14,0) 78%);',
   /* Die vier Toene setzt JS je Zustand aus der Akzentfarbe (siehe palette()) —
      hier stehen nur Rueckfallwerte, falls das Skript nicht dazu kommt. */
   '  --c1:#7fe3d8;--c2:#00cdab;--c3:#2f7f8f;--c4:#7a86c8;',
@@ -45,6 +51,20 @@ var STIL = [
   '.sym-blase .augen{transform-box:fill-box;transform-origin:center;',
   '  transform:translate(var(--augeX,0px),var(--augeY,0px)) scaleY(var(--augeAuf,1));}',
   '.sym-blase .auge{fill:#0b1030;}',
+  /* Der Schatten macht den räumlichen Eindruck: das Wesen steht nicht IM Bild,
+     es schwebt darüber. Er schrumpft und verblasst, wenn es sich hebt. */
+  '.sym-blase .schatten{fill:#070a14;opacity:var(--schatten,.42);}',
+  '.sym-blase .lichtfleck{opacity:var(--licht,.35);mix-blend-mode:screen;}',
+  'html[data-symdo-theme="light"] .sym-blase{background:radial-gradient(120% 92% at 50% 34%,',
+  '    rgba(255,255,255,.95) 0%,rgba(233,238,248,.9) 52%,rgba(214,222,238,0) 78%);}',
+  /* Auf hellem Grund braucht der Schatten mehr Weichheit und weniger Schwärze,
+     sonst wirkt er wie ein Fleck; das Leuchten dagegen darf zurücktreten. */
+  'html[data-symdo-theme="light"] .sym-blase .schatten{fill:#3a4568;opacity:var(--schattenHell,.26);}',
+  'html[data-symdo-theme="light"] .sym-blase .schein{opacity:calc(var(--schein,.55) * .62);}',
+  /* Auf Weiß trägt „screen" nichts bei, und „multiply" macht aus dem Leuchten
+     einen grauen Fleck (im Bild verglichen). Also normal mischen: eine farbige
+     Lichtpfütze auf hellem Boden. */
+  'html[data-symdo-theme="light"] .sym-blase .lichtfleck{mix-blend-mode:normal;opacity:calc(var(--licht,.35) * .9);}',
   '.sym-blase .glanz{fill:rgba(180,220,255,.75);}',
   /* Zustandsfarben — dieselbe Sprache wie die Statuszeile der Kachel. */
   /* „bereit" traegt die volle Palette: nach dem Laden soll das Wesen leuchten
@@ -72,6 +92,12 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<stop class="s4" offset="0%" stop-opacity=".75"/>'
   +   '<stop class="s3" offset="45%" stop-opacity=".45"/>'
   +   '<stop class="s1" offset="100%" stop-opacity="0"/></radialGradient>'
+  /* Das Licht, das das Wesen auf den Boden wirft — in SEINEN Farben, nicht
+     grau. Innen die Akzentfarbe, nach außen auslaufend. */
+  + '<radialGradient class="gl" cx="50%" cy="50%" r="50%">'
+  +   '<stop class="s2" offset="0%" stop-opacity="1"/>'
+  +   '<stop class="s4" offset="42%" stop-opacity=".6"/>'
+  +   '<stop class="s1" offset="100%" stop-opacity="0"/></radialGradient>'
   + '<radialGradient class="gv" cx="60%" cy="70%" r="70%">'
   +   '<stop class="s4" offset="0%" stop-opacity=".42"/>'
   +   '<stop class="s2" offset="60%" stop-opacity=".22"/>'
@@ -84,14 +110,24 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<feGaussianBlur stdDeviation="3"/></filter>'
   + '<filter class="fk" x="-25%" y="-25%" width="150%" height="150%">'
   +   '<feGaussianBlur stdDeviation=".7"/></filter>'
+  + '<filter class="fsch" x="-60%" y="-160%" width="220%" height="420%">'
+  +   '<feGaussianBlur stdDeviation="6"/></filter>'
+  + '<filter class="flicht" x="-70%" y="-200%" width="240%" height="500%">'
+  +   '<feGaussianBlur stdDeviation="5.5"/></filter>'
   + '</defs>'
+  /* Zuunterst der Lichtfleck, darin der enge Kontaktschatten: ein leuchtender
+     Körper wirft Licht auf den Boden, und die dunkle Stelle bleibt nur dort,
+     wo er ihn fast berührt. */
+  + '<ellipse class="lichtfleck" cx="0" cy="80" rx="56" ry="13"/>'
+  + '<ellipse class="schatten" cx="0" cy="79" rx="40" ry="8"/>'
+  + '<g class="koerper">'
   + '<path class="schein"/><path class="schleier"/><path class="kern"/>'
   + '<g class="augen">'
   +   '<ellipse class="auge" cx="-19" cy="-5" rx="6.1" ry="7.3"/>'
   +   '<ellipse class="auge" cx="19" cy="-5" rx="6.1" ry="7.3"/>'
   +   '<ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>'
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
-  + '</g></svg>';
+  + '</g></g></svg>';
 
 /* ── Farben aus der Akzentfarbe ───────────────────────────────────────────
    Das Wesen traegt die Akzentfarbe des Hauses. Die Zustaende sind Abwandlungen
@@ -224,10 +260,16 @@ function erzeuge(behaelter, kern) {
      geben. Deshalb je Blase ein eigener Zählerwert. */
   var nr = ++zaehler;
   var svg = behaelter.firstChild;
-  ['gk', 'gs', 'gv', 'fs', 'fv', 'fk'].forEach(function (k) {
+  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht'].forEach(function (k) {
     var e = svg.querySelector('.' + k);
     if (e) { e.setAttribute('id', 'symblase-' + k + '-' + nr); }
   });
+  var lichtfleck = svg.querySelector('.lichtfleck');
+  lichtfleck.setAttribute('fill', 'url(#symblase-gl-' + nr + ')');
+  lichtfleck.setAttribute('filter', 'url(#symblase-flicht-' + nr + ')');
+  var schatten = svg.querySelector('.schatten');
+  var koerper = svg.querySelector('.koerper');
+  schatten.setAttribute('filter', 'url(#symblase-fsch-' + nr + ')');
   var pKern = svg.querySelector('.kern');
   var pSchleier = svg.querySelector('.schleier');
   var pSchein = svg.querySelector('.schein');
@@ -419,6 +461,24 @@ function erzeuge(behaelter, kern) {
         [5, .026 + bass * .040, -.00047, 5.1]
       ], t));
     }
+
+    /* Anheben und Schatten: beides zusammen macht den Raum. Je lauter, desto
+       höher schwebt es — und der Schatten wird kleiner und blasser, genau wie
+       bei echtem Licht von oben. Dazu ein langsames Wiegen, damit es auch in
+       der Stille nicht klebt. */
+    var hub = energie * 7 + Math.sin(t * .0009) * 2.5;
+    koerper.setAttribute('transform', 'translate(0 ' + (-hub).toFixed(1) + ')');
+    var naehe = 1 - Math.min(1, hub / 12);         // 1 = am Boden, 0 = weit oben
+    schatten.setAttribute('rx', (38 * sx * (0.82 + naehe * 0.18)).toFixed(1));
+    schatten.setAttribute('ry', (7.5 * (0.78 + naehe * 0.22)).toFixed(1));
+    setz('--schatten', (0.42 + naehe * 0.20).toFixed(3));
+    setz('--schattenHell', (0.18 + naehe * 0.12).toFixed(3));
+    /* Steigt das Wesen, wird sein Lichtfleck GRÖSSER und schwächer — wie bei
+       einer Lampe, die man anhebt. Und er atmet mit der Lautstärke, weil das
+       Wesen selbst heller wird. */
+    lichtfleck.setAttribute('rx', (54 * sx * (1.0 + (1 - naehe) * 0.18)).toFixed(1));
+    lichtfleck.setAttribute('ry', (12.5 * (1.0 + (1 - naehe) * 0.15)).toFixed(1));
+    setz('--licht', (0.78 + energie * 0.22 - (1 - naehe) * 0.12).toFixed(3));
 
     setz('--augeX', (Math.sin(t * .0011) * 3) + 'px');
     setz('--augeY', (Math.sin(t * .0017) * 2) + 'px');
