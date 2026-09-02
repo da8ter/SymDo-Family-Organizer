@@ -561,6 +561,29 @@ trait SymconDoku
      *
      * @return list<array{pfad:string,titel:string,text:string,punkte:float}>|null
      */
+    /**
+     * Einen Auszug an Wortgrenzen beginnen lassen. Die Abschnitte werden nach
+     * ZEICHENZAHL geschnitten, nicht nach Saetzen — vorgelesen fing die
+     * Antwort damit gern mitten im Wort an („s PHP einen Timer & Variable
+     * anlegen"). Faengt der Text nicht sauber an, wird bis zum naechsten
+     * Satzende vorgerueckt, wenn eines in Reichweite liegt, sonst wenigstens
+     * bis zur naechsten Wortgrenze.
+     */
+    private function DokuRand(string $t): string
+    {
+        $t = trim($t);
+        if ($t === '' || preg_match('/^["„(\[]?[A-ZÄÖÜ0-9]/u', $t) === 1) {
+            return $t;
+        }
+        // Nur echte Satzenden: der Doppelpunkt steht in Code ueberall
+        // (`mixed $Value): void`, `case "X":`) und schnitte mitten hinein.
+        if (preg_match('/^.{0,90}?[.!?]\s+/su', $t, $m) === 1) {
+            return ltrim(mb_substr($t, mb_strlen($m[0])));
+        }
+        $p = mb_strpos($t, ' ');
+        return ($p !== false && $p < 40) ? ltrim(mb_substr($t, $p + 1)) : $t;
+    }
+
     private function DokuBedeutungssuche(string $frage): ?array
     {
         $vekDatei  = $this->DokuDatei('vek');
@@ -628,9 +651,15 @@ trait SymconDoku
         /* Ein zu schwacher Bestwert heisst „nichts Passendes" — sonst kaeme auf
            jede Frage irgendein Abschnitt, und das klaenge nach Antwort. Der
            Wert ist ein Skalarprodukt aus einem Byte-Vektor gegen einen
-           Einheitsvektor; bei 512 Dimensionen liegen gute Treffer deutlich
-           ueber 20. */
-        if ($treffer === [] || $treffer[0]['punkte'] < 20.0) {
+           Einheitsvektor, entspricht also dem 127-fachen Kosinus.
+
+           Am fertigen Verzeichnis (4677 Abschnitte) gemessen: echte Fragen
+           kamen auf 74 bis 96 Punkte (Kosinus 0,58-0,76), abwegige auf 35 bis
+           46 (0,27-0,36) — „Wie backe ich einen Kuchen?" landete bei 43,5 auf
+           der Seite „Aufzaehlung". Die Schwelle liegt darum mitten in der
+           Luecke; die alten 20 (Kosinus 0,16) lagen unter dem Rauschen und
+           liessen JEDE Frage beantwortet aussehen. */
+        if ($treffer === [] || $treffer[0]['punkte'] < 60.0) {
             return [];
         }
         return $treffer;
@@ -669,7 +698,7 @@ trait SymconDoku
                Seiten brauchen. */
             $teile = [];
             foreach ($abschnitte as $a) {
-                $teile[] = $a['text'];
+                $teile[] = $this->DokuRand($a['text']);
                 if ($a['titel'] !== $titel && !in_array($a['titel'], $weitereTitel, true)) {
                     $weitereTitel[] = $a['titel'];
                 }
@@ -717,7 +746,7 @@ trait SymconDoku
                         ? (int)mb_strpos($abschnitte[0]['text'], '—') + 1 : 0, 120));
                     $wo = $kern !== '' ? mb_strpos($inhalt['text'], $kern) : false;
                     if ($wo !== false) {
-                        $auszug = trim(mb_substr($inhalt['text'], max(0, (int)$wo - 200), self::DOKU_AUSZUG));
+                        $auszug = $this->DokuRand(mb_substr($inhalt['text'], max(0, (int)$wo - 200), self::DOKU_AUSZUG));
                     }
                 }
             }
@@ -725,8 +754,25 @@ trait SymconDoku
         if (trim($auszug) === '') {
             return $this->VoiceErr('nicht_bereit', $this->Translate('The Symcon manual is not reachable right now.'));
         }
-        $text = mb_strlen($auszug) > self::DOKU_AUSZUG
-            ? mb_substr($auszug, 0, self::DOKU_AUSZUG) . ' …' : $auszug;
+        /* Vorne ist schon geschnitten — je Abschnitt beziehungsweise beim
+           Ausschnitt aus der frischen Seite. Ein zweites Mal DokuRand haette
+           bei CODE weitergeknabbert: aus „Beispiel:" wurde erst „// IPSModule
+           Strict …", dann „void { switch(…". */
+        $text = $auszug;
+        if (mb_strlen($text) > self::DOKU_AUSZUG) {
+            $text = mb_substr($text, 0, self::DOKU_AUSZUG);
+            /* Hinten am LETZTEN Satzende kappen (der Ausdruck ist absichtlich
+               gierig), sonst wenigstens am letzten Leerzeichen. Ein mitten im
+               Wort endender Auszug klingt vorgelesen wie ein Abbruch. */
+            if (preg_match('/^(.*[.!?])\s/su', $text, $m) === 1
+                && mb_strlen($m[1]) > (int)(self::DOKU_AUSZUG * 0.6)) {
+                $text = $m[1];
+            } else {
+                $p = mb_strrpos($text, ' ');
+                if ($p !== false) { $text = mb_substr($text, 0, $p); }
+            }
+            $text .= ' …';
+        }
 
         /* Die Adresse geht NUR ins Protokoll, nicht an das Modell. Lag sie in
            der Antwort, verwies es darauf, statt den Auszug zu benutzen — und
