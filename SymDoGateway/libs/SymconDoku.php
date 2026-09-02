@@ -605,6 +605,13 @@ trait SymconDoku
             return null;
         }
         $anzahl = intdiv(strlen($blob), self::DOKU_DIM);
+        /* Mehr sammeln als am Ende gebraucht wird: eine grosse Seite (die FAQ
+           „Wie kann ich…?" hat hunderte Abschnitte) belegt sonst alle Plaetze,
+           und die Seite mit der eigentlichen Antwort fliegt heraus. Gemessen an
+           „Skript zyklisch alle 5 Minuten": 6 der besten 10 Abschnitte kamen von
+           dieser einen FAQ-Seite, „Zyklisch" stand auf Platz 2 und fiel damit
+           unter den Tisch. */
+        $vorrat = self::DOKU_TOP * 8;
         $beste = [];   // Rang → [index, punkte]
         for ($n = 0; $n < $anzahl; $n++) {
             $v = unpack('c' . self::DOKU_DIM, substr($blob, $n * self::DOKU_DIM, self::DOKU_DIM));
@@ -612,7 +619,7 @@ trait SymconDoku
             for ($i = 1; $i <= self::DOKU_DIM; $i++) {
                 $summe += $v[$i] * $q[$i - 1];
             }
-            if (count($beste) < self::DOKU_TOP) {
+            if (count($beste) < $vorrat) {
                 $beste[] = [$n, $summe];
                 usort($beste, static fn(array $a, array $b): int => $a[1] <=> $b[1]);
             } elseif ($summe > $beste[0][1]) {
@@ -648,6 +655,18 @@ trait SymconDoku
         }
         fclose($zeiger);
         usort($treffer, static fn(array $a, array $b): int => $b['punkte'] <=> $a['punkte']);
+        /* Je SEITE nur der beste Abschnitt. So stehen in der Antwort vier
+           verschiedene Seiten statt vier Ausschnitte derselben — bei einer
+           Frage, die mehrere Wege hat (Ereignis ODER IPS_SetScriptTimer), ist
+           genau das der Unterschied zwischen richtig und unbrauchbar. */
+        $jeSeite = [];
+        foreach ($treffer as $t) {
+            $pfad = (string)$t['pfad'];
+            if (!isset($jeSeite[$pfad])) {
+                $jeSeite[$pfad] = $t;
+            }
+        }
+        $treffer = array_slice(array_values($jeSeite), 0, self::DOKU_TOP);
         /* Ein zu schwacher Bestwert heisst „nichts Passendes" — sonst kaeme auf
            jede Frage irgendein Abschnitt, und das klaenge nach Antwort. Der
            Wert ist ein Skalarprodukt aus einem Byte-Vektor gegen einen
@@ -696,9 +715,20 @@ trait SymconDoku
                bei der Adress-Suche, die nur auf eine Seite zeigt und dann deren
                Anfang schickt. Mehrere Abschnitte erlauben auch Fragen, die zwei
                Seiten brauchen. */
+            /* JEDER Abschnitt mit seiner Seite beschriftet. Vorher waren die
+               Fundstellen unbeschriftet aneinandergeklebt — das Modell konnte
+               nicht erkennen, dass der zweite Absatz von der Seite „Zyklisch"
+               kommt und die eigentliche Antwort ist, und blieb entsprechend
+               vage. Der Name der Seite ist der billigste Hinweis darauf, was
+               ein Absatz beantwortet. */
             $teile = [];
             foreach ($abschnitte as $a) {
-                $teile[] = $this->DokuRand($a['text']);
+                $stueck = $this->DokuRand($a['text']);
+                if ($stueck === '') {
+                    continue;
+                }
+                $ueber = trim((string)$a['titel']);
+                $teile[] = ($ueber !== '' ? '[' . $ueber . '] ' : '') . $stueck;
                 if ($a['titel'] !== $titel && !in_array($a['titel'], $weitereTitel, true)) {
                     $weitereTitel[] = $a['titel'];
                 }
@@ -746,7 +776,21 @@ trait SymconDoku
                         ? (int)mb_strpos($abschnitte[0]['text'], '—') + 1 : 0, 120));
                     $wo = $kern !== '' ? mb_strpos($inhalt['text'], $kern) : false;
                     if ($wo !== false) {
-                        $auszug = $this->DokuRand(mb_substr($inhalt['text'], max(0, (int)$wo - 200), self::DOKU_AUSZUG));
+                        /* Die frische Fassung gilt — aber NUR fuer die fuehrende
+                           Seite, und sie darf die anderen Fundstellen nicht
+                           verdraengen. Vorher wurde $auszug hier komplett
+                           ersetzt: die Antwort bestand dann aus einem Fenster
+                           der erstbesten Seite, und die Abschnitte der anderen
+                           (oft die eigentliche Antwort) waren weg. Deshalb ein
+                           Deckel auf das Fenster, damit fuer den Rest Platz
+                           bleibt. */
+                        $fenster = $this->DokuRand(mb_substr($inhalt['text'],
+                            max(0, (int)$wo - 200), (int)(self::DOKU_AUSZUG * 0.55)));
+                        $rest = array_slice($teile, 1);
+                        // Auch das frische Fenster bekommt seine Ueberschrift.
+                        $fenster = '[' . $titel . '] ' . $fenster;
+                        $auszug = $rest === [] ? $fenster
+                            : $fenster . "\n\n" . implode("\n\n", $rest);
                     }
                 }
             }
