@@ -512,7 +512,8 @@
       "The manual index is still being built — please ask again in a moment.": "Das Inhaltsverzeichnis des Handbuchs wird gerade aufgebaut — frag gleich noch einmal.",
       "The Symcon manual is not reachable right now.": "Das Symcon-Handbuch ist gerade nicht erreichbar.",
       "I found the page but no readable text on it.": "Ich habe die Seite gefunden, aber keinen lesbaren Text darauf.",
-      "I found \"%s\" in the manual.": "Ich habe „%s“ im Handbuch gefunden."
+      "I found \"%s\" in the manual.": "Ich habe „%s“ im Handbuch gefunden.",
+      "The manual says about \"%s\":": "Im Handbuch steht zu „%s“:"
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

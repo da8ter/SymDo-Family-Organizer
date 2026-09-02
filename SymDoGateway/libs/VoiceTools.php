@@ -1744,7 +1744,7 @@ trait VoiceTools
             }
         }
         $zeilen = [
-            'Du bist SymDo, der Sprachassistent dieses Haushalts. Sprich Deutsch, antworte in ein bis zwei kurzen Sätzen, außer man bittet um mehr.',
+            'Du bist SymDo, der Sprachassistent dieses Haushalts. Sprich Deutsch, antworte in ein bis zwei kurzen Sätzen, außer man bittet um mehr oder es geht um eine Erklärung aus dem Handbuch — dort nimmst du drei bis fünf Sätze.',
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
@@ -1778,9 +1778,9 @@ trait VoiceTools
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
         $zeilen[] = 'Für einen wiederkehrenden Termin setze bei termin_anlegen "wiederholung" (woechentlich/zweiwoechentlich/monatlich) und dazu entweder "wiederhol_anzahl" (wie oft) oder "wiederhol_bis" (bis wann). Bei wöchentlich lege "datum" auf den gewünschten Wochentag. Fehlt Anzahl und Enddatum, frag kurz nach.';
-        $zeilen[] = 'Bei Fragen zu Symcon rufe symcon_handbuch auf und antworte AUSSCHLIESSLICH aus dem Feld "auszug" der Antwort — kurz und in eigenen Worten. Rate nie einen Funktionsnamen oder Parameter, und erfinde nichts dazu. Steht die Antwort nicht im Auszug, sage genau das und nenne den Titel der gefundenen Seite.';
+        $zeilen[] = 'Bei Fragen zu Symcon rufe symcon_handbuch auf. Das Feld "sag" ist dort NUR der Satzanfang — die eigentliche Erklärung formulierst du in drei bis fünf Sätzen AUS DEM FELD "auszug", in eigenen Worten und mit den konkreten Angaben daraus (Funktionsname, Parameter, Besonderheiten). Verweise den Nutzer NIEMALS auf die Dokumentation oder eine Internetadresse, statt selbst zu antworten: er fragt gerade dich. Rate nie einen Funktionsnamen oder Parameter. Steht die Antwort nicht im Auszug, sage genau das und nenne den Titel der gefundenen Seite.';
         $zeilen[] = 'Für eine Notiz denk dir aus dem Gesagten einen kurzen, treffenden Titel selbst aus (der Nutzer nennt selten einen). Nennt der Nutzer eine Person ("für Max", "in Annas Ordner"), setze "person" auf diesen Namen; ohne Person landet die Notiz beim Kachel-Benutzer.';
-        $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen oder technische Fehlermeldungen.';
+        $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen, technische Fehlermeldungen oder Internetadressen — im Gespräch kann sich niemand eine Adresse merken.';
         $text = implode("\n", $zeilen);
         /* Der Deckel ist eine REISSLEINE gegen ausufernde Listen (Mitglieder,
            Listennamen, Rezeptzahl), kein Sparzwang: Die Anweisungen reisen EINMAL

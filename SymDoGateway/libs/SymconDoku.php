@@ -335,15 +335,21 @@ trait SymconDoku
             $teile = array_values(array_filter(explode('/', trim($t['pfad'], '/'))));
             $weitere[] = (string)end($teile);
         }
+        /* Die Adresse geht NUR ins Protokoll, nicht an das Modell. Lag sie in
+           der Antwort, verwies es darauf, statt den Auszug zu benutzen — und
+           eine vorgelesene Internetadresse kann sich ohnehin niemand merken. */
+        $this->SendDebug('Doku', 'Quelle: ' . self::DOKU_HOST . $seite, 0);
         return [
             'ok'      => true,
             'titel'   => $inhalt['titel'],
             'auszug'  => $text,
-            'quelle'  => self::DOKU_HOST . $seite,
             'weitere' => $weitere,
-            // Der Server sagt nur, WAS er gefunden hat — die Antwort selbst
-            // formuliert das Modell aus dem Auszug (siehe VoiceInstructions).
-            'sag'     => sprintf($this->Translate('I found "%s" in the manual.'), $inhalt['titel']),
+            /* Anders als bei allen anderen Werkzeugen ist „sag" hier keine
+               fertige Auskunft, sondern nur der ANFANG des Satzes: die Antwort
+               steht im Auszug und muss von dort kommen. Ein abgeschlossenes
+               „Ich habe X gefunden." lud das Modell dazu ein, genau dort
+               aufzuhören. */
+            'sag'     => sprintf($this->Translate('The manual says about "%s":'), $inhalt['titel']),
         ];
     }
 }
