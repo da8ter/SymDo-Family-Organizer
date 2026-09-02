@@ -60,9 +60,14 @@ trait SymconDoku
        der Kachel und jeder Werkzeugaufruf muss dahinter warten. Deshalb jetzt
        kurze Haeppchen mit Luft dazwischen: rund ein Achtel Auslastung. Der
        Aufbau dauert damit laenger, ist aber eine Sache von Minuten pro Woche —
-       die Bedienung ist jede Sekunde wichtig. */
-    private const DOKU_BUDGET    = 2.0;
-    private const DOKU_TAKT      = 15000;
+       die Bedienung ist jede Sekunde wichtig.
+       Nachgemessen am 02.09.2026: bei 2 s alle 15 s antworteten die Hooks in
+       10 bis 30 ms, der Aufbau brauchte aber 2,5 Stunden. Der Ausfall kam nicht
+       vom Takt, sondern von einem haengenden Ueberrest-Timer. Deshalb jetzt
+       3 s alle 8 s (rund 37 % Auslastung) — die Hook-Zeiten werden danach
+       erneut gemessen. */
+    private const DOKU_BUDGET    = 3.0;
+    private const DOKU_TAKT      = 8000;
     private const DOKU_SEITEN_MAX = 2500;
     /** So viel Text darf ein Auszug haben — der Rest ist für ein Gespräch ohnehin zu viel. */
     private const DOKU_AUSZUG    = 1800;
