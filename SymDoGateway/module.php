@@ -240,9 +240,18 @@ class SymDoGateway extends IPSModuleStrict
     /** @return int Instanz, die die App bedient; 0, wenn keine ermittelbar ist. */
     private function AppApiOwnerID(): int
     {
-        $ids = IPS_GetInstanceListByModuleID(self::MODULE_GUID);
+        $ids = @IPS_GetInstanceListByModuleID(self::MODULE_GUID);
+        /* Leere Liste heisst NICHT „ich bin es nicht": waehrend eines
+           Modul-Neuladens kann der Kernel sie kurz leer zurueckgeben. Faellt ein
+           ApplyChanges genau in dieses Fenster, wuerden die Hooks nicht wieder
+           angemeldet — und die App waere weg („Hook not found"), bis jemand von
+           Hand uebernimmt. Eine Instanz, die sich selbst fragt, ist per
+           Definition vorhanden. */
+        if (!is_array($ids) || $ids === []) {
+            return $this->InstanceID;
+        }
         sort($ids);
-        return (int)($ids[0] ?? 0);
+        return (int)$ids[0];
     }
 
     protected function ProcessHookData(): void
