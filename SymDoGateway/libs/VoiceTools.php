@@ -207,6 +207,30 @@ trait VoiceTools
                     'required' => ['was', 'bereich', 'liste', 'umfang', 'marke'],
                 ],
             ],
+            'essensplan_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Liest den Essensplan: was an einem Tag oder in den nächsten Tagen gekocht wird.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'von'  => ['type' => 'string', 'description' => '"heute", "morgen", ein Wochentag oder JJJJ-MM-TT'],
+                        'tage' => ['type' => 'integer', 'description' => 'Anzahl Tage ab "von", 1 bis 14'],
+                    ],
+                    'required' => ['von', 'tage'],
+                ],
+            ],
+            'essen_planen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Legt fest, was an einem Tag gekocht wird — oder streicht den Eintrag. Ein gespeichertes Rezept wird als Rezept eingetragen (dann hängen die Zutaten daran), alles andere als freier Text wie "Reste" oder "Essen gehen".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'tag'     => ['type' => 'string', 'description' => '"heute", "morgen", ein Wochentag oder JJJJ-MM-TT'],
+                        'gericht' => ['type' => ['string', 'null'], 'description' => 'Name des Gerichts; null oder "" streicht den Tag'],
+                    ],
+                    'required' => ['tag', 'gericht'],
+                ],
+            ],
             'symcon_handbuch' => [
                 'art' => 'lesen',
                 'beschreibung' => 'Schlägt eine Frage zu Symcon im offiziellen Handbuch nach — Benutzerteil (Einführung, Grundlagen, Komponenten, Vorgehensweisen) und Entwicklerbereich samt Befehlsreferenz aller PHP-Funktionen. Nutze das IMMER, wenn jemand etwas über Symcon selbst wissen will, statt aus dem Gedächtnis zu antworten.',
@@ -307,6 +331,8 @@ trait VoiceTools
                 'termin_anlegen'      => $this->VoiceToolTerminAnlegen($args, $ctx),
                 'termin_aendern'      => $this->VoiceToolTerminAendern($args, $ctx),
                 'loeschen'            => $this->VoiceToolLoeschen($args, $ctx),
+                'essensplan_lesen'    => $this->VoiceToolEssensplanLesen($args, $ctx),
+                'essen_planen'        => $this->VoiceToolEssenPlanen($args, $ctx),
                 'symcon_handbuch'     => $this->VoiceToolHandbuch($args, $ctx),
                 'notizen_lesen'       => $this->VoiceToolNotizenLesen($args, $ctx),
                 'notiz_anlegen'       => $this->VoiceToolNotizAnlegen($args, $ctx),
@@ -983,6 +1009,167 @@ trait VoiceTools
             }
         }
         return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Essensplan
+    // ------------------------------------------------------------------
+
+    /** Die Essensplan-Instanz — die erste, mehrere je Haushalt sind kein Fall. */
+    private function VoiceEssensplanId(): int
+    {
+        foreach ((array)@IPS_GetInstanceListByModuleID(self::MEALPLAN_MODULE_GUID) as $id) {
+            return (int)$id;
+        }
+        return 0;
+    }
+
+    /**
+     * Ein Tag für den Essensplan. Kennt mehr als VoiceTagOffset: auch
+     * Wochentagsnamen („Donnerstag") und Daten bis drei Wochen voraus — ein
+     * Wochenplan wird nun einmal für die Zukunft gemacht.
+     *
+     * @return string JJJJ-MM-TT, oder '' wenn unverständlich
+     */
+    private function VoicePlanTag(string $tag): string
+    {
+        $t = $this->VoiceNorm($tag);
+        if ($t === '' || $t === 'heute') {
+            return date('Y-m-d');
+        }
+        if ($t === 'morgen') {
+            return date('Y-m-d', (int)strtotime('+1 day'));
+        }
+        if ($t === 'uebermorgen') {
+            return date('Y-m-d', (int)strtotime('+2 days'));
+        }
+        $wochentage = ['montag' => 1, 'dienstag' => 2, 'mittwoch' => 3, 'donnerstag' => 4,
+                       'freitag' => 5, 'samstag' => 6, 'sonnabend' => 6, 'sonntag' => 7];
+        foreach ($wochentage as $name => $nr) {
+            if ($t === $name || $t === ('naechsten ' . $name) || $t === ('am ' . $name)) {
+                // Heute zählt mit: „am Dienstag" an einem Dienstag meint heute.
+                $heute = (int)date('N');
+                $diff  = ($nr - $heute + 7) % 7;
+                if (str_starts_with($t, 'naechsten') && $diff === 0) {
+                    $diff = 7;
+                }
+                return date('Y-m-d', (int)strtotime('+' . $diff . ' days'));
+            }
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $t, $m) === 1
+            && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+            $diff = (int)floor((strtotime($t . ' 12:00') - strtotime(date('Y-m-d') . ' 12:00')) / 86400);
+            return ($diff >= -7 && $diff <= 21) ? $t : '';
+        }
+        return '';
+    }
+
+    /** Wie ein Tag im Gespräch heißt: „heute", „morgen" oder „Do 04.09.". */
+    private function VoicePlanTagName(string $datum): string
+    {
+        $heute = date('Y-m-d');
+        if ($datum === $heute) {
+            return $this->Translate('today');
+        }
+        if ($datum === date('Y-m-d', (int)strtotime('+1 day'))) {
+            return $this->Translate('tomorrow');
+        }
+        $wo = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        $ts = (int)strtotime($datum);
+        return $wo[(int)date('w', $ts)] . ' ' . date('d.m.', $ts);
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolEssensplanLesen(array $args, array $ctx): array
+    {
+        $mpl = $this->VoiceEssensplanId();
+        if ($mpl === 0 || !function_exists('MPL_GetMealForDate')) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no meal plan here.'));
+        }
+        $start = $this->VoicePlanTag((string)($args['von'] ?? 'heute'));
+        if ($start === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the day.'));
+        }
+        $tage = max(1, min(14, (int)($args['tage'] ?? 7)));
+        $zeilen = [];
+        $geplant = 0;
+        for ($i = 0; $i < $tage; $i++) {
+            $datum = date('Y-m-d', (int)strtotime($start . ' +' . $i . ' day'));
+            $g = json_decode((string)@MPL_GetMealForDate($mpl, $datum), true);
+            $titel = is_array($g) ? trim((string)($g['title'] ?? '')) : '';
+            if ($titel !== '') {
+                $geplant++;
+                $zeilen[] = $this->VoicePlanTagName($datum) . ': ' . $titel;
+            }
+        }
+        return [
+            'ok'      => true,
+            'anzahl'  => $geplant,
+            'gerichte'=> $zeilen,
+            'sag'     => $geplant === 0
+                ? ($tage === 1
+                    ? sprintf($this->Translate('Nothing is planned for %s.'), $this->VoicePlanTagName($start))
+                    : $this->Translate('Nothing is planned in that period.'))
+                : ($geplant === 1 ? $zeilen[0]
+                    : sprintf($this->Translate('%d days are planned.'), $geplant)),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceToolEssenPlanen(array $args, array $ctx): array
+    {
+        $mpl = $this->VoiceEssensplanId();
+        if ($mpl === 0) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no meal plan here.'));
+        }
+        $datum = $this->VoicePlanTag((string)($args['tag'] ?? ''));
+        if ($datum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('For which day?'));
+        }
+        $tagName = $this->VoicePlanTagName($datum);
+        $gericht = is_string($args['gericht'] ?? null) ? trim((string)$args['gericht']) : '';
+
+        // Leer heißt: den Tag streichen.
+        if ($gericht === '') {
+            @IPS_RequestAction($mpl, 'SetMeal', (string)json_encode(
+                ['date' => $datum, 'listId' => '', 'text' => ''], JSON_UNESCAPED_UNICODE));
+            return ['ok' => true, 'tag' => $tagName,
+                    'sag' => sprintf($this->Translate('%s is cleared from the meal plan.'), $tagName)];
+        }
+
+        /* Erst unter den gespeicherten Rezepten suchen: nur so hängen später die
+           Zutaten am Tag. Findet sich keins, ist es freier Text — „Reste" oder
+           „Essen gehen" sind gewollte Einträge, kein Fehler. */
+        $listId = '';
+        $titel  = $gericht;
+        $slId   = (int)@IPS_GetProperty($mpl, 'ShoppingListInstanceID');
+        if ($slId > 0) {
+            /* VoiceRezeptFinden liefert einen STATUS, keine Trefferliste — ein
+               count() darauf zaehlt die Schluessel des Statusfeldes und ergibt
+               Unsinn (gemessen: „Reste" landete in der Mehrdeutigkeits-Antwort
+               statt als Freitext). */
+            $erg = $this->VoiceRezeptFinden($rezepte = $this->VoiceRezeptListe($slId), $gericht);
+            $status = (string)($erg['status'] ?? 'nichts');
+            if ($status === 'mehrdeutig') {
+                return $this->VoiceRezeptMehrdeutig($erg, $gericht);
+            }
+            if ($status === 'eindeutig' && is_array($erg['rezept'] ?? null)) {
+                $listId = (string)$erg['rezept']['id'];
+                $titel  = (string)$erg['rezept']['name'];
+            }
+            // 'nichts' → bleibt Freitext. „Reste" oder „Essen gehen" sind
+            // gewollte Eintraege und kein Fehler.
+        }
+        @IPS_RequestAction($mpl, 'SetMeal', (string)json_encode(
+            ['date' => $datum, 'listId' => $listId, 'text' => $listId === '' ? $titel : ''],
+            JSON_UNESCAPED_UNICODE));
+        return [
+            'ok'      => true,
+            'tag'     => $tagName,
+            'gericht' => $titel,
+            'rezept'  => $listId !== '',
+            'sag'     => sprintf($this->Translate('%s: %s is on the meal plan.'), $tagName, $titel),
+        ];
     }
 
     // ------------------------------------------------------------------
@@ -1748,7 +1935,7 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; einen Tagesüberblick geben; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; einen Tagesüberblick geben; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {

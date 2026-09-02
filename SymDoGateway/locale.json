@@ -513,7 +513,17 @@
       "The Symcon manual is not reachable right now.": "Das Symcon-Handbuch ist gerade nicht erreichbar.",
       "I found the page but no readable text on it.": "Ich habe die Seite gefunden, aber keinen lesbaren Text darauf.",
       "I found \"%s\" in the manual.": "Ich habe „%s“ im Handbuch gefunden.",
-      "The manual says about \"%s\":": "Im Handbuch steht zu „%s“:"
+      "The manual says about \"%s\":": "Im Handbuch steht zu „%s“:",
+      "There is no meal plan here.": "Hier gibt es keinen Essensplan.",
+      "I did not understand the day.": "Ich habe den Tag nicht verstanden.",
+      "For which day?": "Für welchen Tag?",
+      "today": "heute",
+      "tomorrow": "morgen",
+      "Nothing is planned for %s.": "Für %s ist nichts geplant.",
+      "Nothing is planned in that period.": "In dem Zeitraum ist nichts geplant.",
+      "%d days are planned.": "An %d Tagen ist etwas geplant.",
+      "%s is cleared from the meal plan.": "%s ist aus dem Essensplan gestrichen.",
+      "%s: %s is on the meal plan.": "%s steht %s auf dem Essensplan."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",
