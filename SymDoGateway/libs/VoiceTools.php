@@ -21,6 +21,11 @@ declare(strict_types=1);
  */
 trait VoiceTools
 {
+    /* Routinen sind ein eigenes Modul; das Sprachwerkzeug spricht sie ueber die
+       Instanzliste an, nicht ueber eine Property -- es koennen mehrere sein
+       (eine je Kind), und alle sind gleichberechtigt. */
+    private const VOICE_ROUTINES_GUID = '{B1DF065E-80F5-49DF-B2B8-3CE657ED23BB}';
+
     /** Obergrenze je Werkzeugantwort in Zeichen (json_encode-Länge). */
     private static int $VOICE_CAP = 2000;
 
@@ -130,13 +135,13 @@ trait VoiceTools
             ],
             'abhaken' => [
                 'art' => 'schreiben',
-                'beschreibung' => 'Hakt eine Aufgabe ab oder legt einen Einkaufsartikel in den Wagen (bzw. macht das rückgängig).',
+                'beschreibung' => 'Hakt eine Aufgabe ab, legt einen Einkaufsartikel in den Wagen oder setzt einen Schritt in einer Routine auf erledigt (jeweils auch rückgängig).',
                 'schema' => [
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
                         'was'      => ['type' => 'string', 'description' => 'Titel der Aufgabe oder Name des Artikels'],
-                        'bereich'  => ['type' => ['string', 'null'], 'enum' => ['aufgabe', 'einkauf', null],
-                                       'description' => 'Wo suchen; null = zuerst Aufgaben, dann Einkauf'],
+                        'bereich'  => ['type' => ['string', 'null'], 'enum' => ['aufgabe', 'einkauf', 'routine', null],
+                                       'description' => 'Wo suchen; null = zuerst Aufgaben, dann Einkauf, dann Routinen'],
                         'erledigt' => ['type' => 'boolean', 'description' => 'true = abhaken/in den Wagen, false = zurück'],
                         'liste'    => ['type' => ['string', 'null']],
                     ],
@@ -194,13 +199,13 @@ trait VoiceTools
             ],
             'loeschen' => [
                 'art' => 'gefaehrlich',
-                'beschreibung' => 'Löscht endgültig eine Aufgabe, einen Einkaufsartikel oder einen Termin. IMMER zweistufig: Der erste Aufruf (marke = null) löscht NICHTS, sondern liefert eine Rückfrage und eine "marke". Sprich die Rückfrage, warte auf ein klares Ja und rufe dann GENAU DIESES Werkzeug erneut mit derselben marke auf. Bei Nein rufe nicht erneut auf.',
+                'beschreibung' => 'Löscht endgültig eine Aufgabe, einen Einkaufsartikel, einen Termin oder eine Notiz. IMMER zweistufig: Der erste Aufruf (marke = null) löscht NICHTS, sondern liefert eine Rückfrage und eine "marke". Sprich die Rückfrage, warte auf ein klares Ja und rufe dann GENAU DIESES Werkzeug erneut mit derselben marke auf. Bei Nein rufe nicht erneut auf.',
                 'schema' => [
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
-                        'was'     => ['type' => 'string', 'description' => 'Titel der Aufgabe, Name des Artikels oder Titel des Termins'],
-                        'bereich' => ['type' => 'string', 'enum' => ['aufgabe', 'einkauf', 'termin'], 'description' => 'Was gelöscht werden soll'],
-                        'liste'   => ['type' => ['string', 'null'], 'description' => 'Liste bei Aufgabe/Einkauf; null = Standardliste'],
+                        'was'     => ['type' => 'string', 'description' => 'Titel der Aufgabe, Name des Artikels, Titel des Termins oder der Notiz'],
+                        'bereich' => ['type' => 'string', 'enum' => ['aufgabe', 'einkauf', 'termin', 'notiz'], 'description' => 'Was gelöscht werden soll'],
+                        'liste'   => ['type' => ['string', 'null'], 'description' => 'Liste bei Aufgabe/Einkauf, Ordner beziehungsweise Person bei Notiz; null = Standard'],
                         'umfang'  => ['type' => ['string', 'null'], 'enum' => ['einzeln', 'serie', null], 'description' => 'Nur bei Serienterminen: "einzeln" = dieses Vorkommen, "serie" = ganze Serie. Sonst null — bei einer Serie fragt das Werkzeug von selbst nach.'],
                         'marke'   => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der ersten Antwort'],
                     ],
@@ -282,6 +287,19 @@ trait VoiceTools
                     'required' => ['welche', 'person', 'neuer_titel', 'neuer_text', 'neue_person'],
                 ],
             ],
+            'nachricht_senden' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Schickt eine kurze Mitteilung als Push auf die Geräte des Haushalts oder einer einzelnen Person. Für Ausrichten und Erinnern („sag Max, er soll den Müll rausbringen"). NICHT für Antworten an den Sprechenden selbst — die sagst du einfach.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'text'   => ['type' => 'string', 'description' => 'Der Text der Mitteilung, höchstens 200 Zeichen'],
+                        'an'     => ['type' => ['string', 'null'], 'description' => 'Name der Person; null = alle Geräte des Haushalts'],
+                        'titel'  => ['type' => ['string', 'null'], 'description' => 'Kurze Überschrift oder null'],
+                    ],
+                    'required' => ['text', 'an', 'titel'],
+                ],
+            ],
         ];
     }
 
@@ -317,6 +335,19 @@ trait VoiceTools
         if (!is_array($args)) {
             $args = [];
         }
+        /* Doppelte Ausfuehrung abwehren — nur bei schreibenden Werkzeugen, denn
+           zweimal lesen schadet nicht. Zwei Ebenen, weil sie verschiedene
+           Faelle treffen (Begruendung in VoiceDoppelt). */
+        $schreibt = in_array((string)($katalog[$name]['art'] ?? 'lesen'), ['schreiben', 'gefaehrlich'], true);
+        $fnId = trim((string)($ctx['fnId'] ?? ''));
+        $wiederholt = null;
+        if ($schreibt) {
+            $wiederholt = $this->VoiceDoppelt($name, $argsJson, $ctx, $fnId);
+            if ($wiederholt !== null) {
+                $this->VoiceLogEintrag($name, 'doppelter Aufruf abgewiesen', true);
+                return $this->VoiceCap($wiederholt);
+            }
+        }
         try {
             $antwort = match ($name) {
                 'tag_uebersicht'      => $this->VoiceToolTag($args),
@@ -337,13 +368,103 @@ trait VoiceTools
                 'notizen_lesen'       => $this->VoiceToolNotizenLesen($args, $ctx),
                 'notiz_anlegen'       => $this->VoiceToolNotizAnlegen($args, $ctx),
                 'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
+                'nachricht_senden'    => $this->VoiceToolNachricht($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
             $antwort = $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
         }
+        if ($schreibt) {
+            if (($antwort['ok'] ?? false) === true) {
+                $this->VoiceDedupMerken($name, $argsJson, $ctx, (string)($antwort['sag'] ?? ''));
+            } elseif ($fnId !== '') {
+                // Gescheitert heisst: ein ehrlicher zweiter Versuch darf laufen.
+                $this->ReleaseAction('voice:' . $fnId);
+            }
+        }
         $this->VoiceLogEintrag($name, (string)($antwort['sag'] ?? ''), ($antwort['ok'] ?? false) === true);
         return $this->VoiceCap($antwort);
+    }
+
+    /* Fenster fuer die Inhaltssperre. Kurz genug, dass „setz noch eine Milch
+       drauf" nach zwei Minuten wieder durchgeht, lang genug fuer den Fall, um
+       den es geht: Antwort verloren, Modell fragt gleich nochmal. */
+    private const VOICE_DEDUP_FENSTER = 90;
+
+    /**
+     * Ist das ein doppelter Aufruf? Dann die ERSTE Antwort noch einmal, sonst null.
+     *
+     * Zwei Ebenen, weil sie verschiedene Faelle treffen:
+     *
+     * 1. Die `call_id` des Modellaufrufs, ueber die vorhandene Aktionssperre
+     *    (`ReserveAction`, 24 h): faengt eine doppelt ZUGESTELLTE Anfrage —
+     *    dieselbe Anfrage zweimal, etwa weil der Transport sie wiederholt.
+     * 2. Ein Fingerabdruck aus Werkzeug, Argumenten und Benutzer, 90 Sekunden:
+     *    faengt den Fall, um den es im Plan eigentlich geht. Geht die Antwort
+     *    verloren, laeuft die Werkzeugfrist ab und das Modell versucht es
+     *    erneut — dann aber mit einer NEUEN call_id. Ebene 1 allein wuerde das
+     *    also gar nicht sehen, und der Termin waere zweimal im Kalender.
+     *
+     * Die vorhandene Sperre laesst sich fuer Ebene 2 nicht nutzen: ihre
+     * Haltbarkeit ist ein Tag (ACTION_DEDUP_TTL), damit waere „Milch" am Abend
+     * blockiert, weil es morgens schon einmal draufstand.
+     *
+     * @param array<string,mixed> $ctx
+     * @return array<string,mixed>|null
+     */
+    private function VoiceDoppelt(string $name, string $argsJson, array $ctx, string $fnId): ?array
+    {
+        if ($fnId !== '' && !$this->ReserveAction('voice:' . $fnId)) {
+            return ['ok' => true, 'doppelt' => true,
+                    'sag' => $this->Translate('I just did that — nothing was done twice.')];
+        }
+        $topf = $this->VoiceDedupLesen();
+        $eintrag = $topf[$this->VoiceDedupSchluessel($name, $argsJson, $ctx)] ?? null;
+        if (!is_array($eintrag)) {
+            return null;
+        }
+        $satz = trim((string)($eintrag['sag'] ?? ''));
+        return ['ok' => true, 'doppelt' => true,
+                'sag' => $satz !== '' ? $satz : $this->Translate('I just did that — nothing was done twice.')];
+    }
+
+    private function VoiceDedupSchluessel(string $name, string $argsJson, array $ctx): string
+    {
+        /* Argumente normalisiert: dasselbe Anliegen darf nicht an der
+           Schluesselreihenfolge oder an Leerzeichen vorbeirutschen. */
+        $args = json_decode($argsJson, true);
+        if (is_array($args)) {
+            ksort($args);
+            $argsJson = (string)json_encode($args, JSON_UNESCAPED_UNICODE);
+        }
+        return substr(sha1($name . '|' . mb_strtolower(trim($argsJson)) . '|' . (string)($ctx['userId'] ?? '')), 0, 16);
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private function VoiceDedupLesen(): array
+    {
+        $topf = json_decode((string)@$this->ReadAttributeString('VoiceDedup'), true);
+        if (!is_array($topf)) {
+            return [];
+        }
+        $jetzt = time();
+        $frisch = [];
+        foreach ($topf as $k => $e) {
+            if (is_array($e) && ($jetzt - (int)($e['t'] ?? 0)) < self::VOICE_DEDUP_FENSTER) {
+                $frisch[(string)$k] = $e;
+            }
+        }
+        return $frisch;
+    }
+
+    private function VoiceDedupMerken(string $name, string $argsJson, array $ctx, string $sag): void
+    {
+        $topf = $this->VoiceDedupLesen();      // raeumt beim Lesen gleich auf
+        $topf[$this->VoiceDedupSchluessel($name, $argsJson, $ctx)] = ['t' => time(), 'sag' => $sag];
+        if (count($topf) > 40) {
+            $topf = array_slice($topf, -40, null, true);
+        }
+        @$this->WriteAttributeString('VoiceDedup', (string)json_encode($topf, JSON_UNESCAPED_UNICODE));
     }
 
     // ------------------------------------------------------------------
@@ -962,8 +1083,39 @@ trait VoiceTools
                         : sprintf($this->Translate('I will delete the appointment "%s" (%s). This cannot be undone. Shall I?'), (string)($e['title'] ?? ''), $wann));
                 break;
 
+            case 'notiz':
+                $daten = $this->VoiceNotizDaten();
+                if (($daten['ok'] ?? false) !== true) {
+                    return $this->VoiceErr('nicht_bereit', $this->Translate('The notes are not available right now.'));
+                }
+                /* „liste" traegt bei Notizen den ORDNER beziehungsweise die
+                   Person — dasselbe Feld, weil das Modell sonst zwei fast
+                   gleiche Felder auseinanderhalten muesste. */
+                $ordnerId = '';
+                $ordnerName = '';
+                $wo = is_string($args['liste'] ?? null) ? trim((string)$args['liste']) : '';
+                if ($wo !== '') {
+                    $o = $this->VoiceNotizOrdner($wo, $daten);
+                    if (($o['ok'] ?? false) !== true) {
+                        return $o;
+                    }
+                    $ordnerId = (string)$o['id'];
+                    $ordnerName = (string)$o['name'];
+                }
+                $n = $this->VoiceNotizFinden($was, $ordnerId, $daten);
+                if (($n['ok'] ?? false) !== true) {
+                    return $n;
+                }
+                $ziel = ['bereich' => 'notiz', 'id' => (string)$n['id'], 'titel' => (string)$n['titel']];
+                $frage = $ordnerName !== ''
+                    ? sprintf($this->Translate('I will delete the note "%1$s" from %2$s. This cannot be undone. Shall I?'),
+                              (string)$n['titel'], $ordnerName)
+                    : sprintf($this->Translate('I will delete the note "%s". This cannot be undone. Shall I?'),
+                              (string)$n['titel']);
+                break;
+
             default:
-                return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I can only delete tasks, shopping items or appointments.'));
+                return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I can only delete tasks, shopping items, appointments or notes.'));
         }
 
         $ttl = (($ziel['serie'] ?? false) === true) ? self::$VOICE_MARKE_TTL_SERIE : self::$VOICE_MARKE_TTL;
@@ -1023,6 +1175,16 @@ trait VoiceTools
                         : sprintf($this->Translate('The appointment "%s" is deleted.'), $titel);
                     break;
 
+                case 'notiz':
+                    $id = (string)($ziel['id'] ?? '');
+                    $r = $this->NotesHandleAction(['action' => 'noteDelete', 'id' => $id]);
+                    // Auch hier gegenlesen statt dem ok zu glauben.
+                    if (($r['ok'] ?? false) !== true || $this->VoiceNotizExistiert($id)) {
+                        return $this->VoiceErr('nicht_geloescht', $this->Translate('I could not delete that — nothing was removed.'));
+                    }
+                    $satz = sprintf($this->Translate('The note "%s" is deleted.'), $titel);
+                    break;
+
                 default:
                     return $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
             }
@@ -1043,6 +1205,18 @@ trait VoiceTools
         $items = is_array($st) ? (($st['state'] ?? [])['items'] ?? []) : [];
         foreach ((array)$items as $it) {
             if (is_array($it) && (int)($it['id'] ?? 0) === $id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Existiert die Notiz noch? Gegenprobe nach dem Löschen. */
+    private function VoiceNotizExistiert(string $id): bool
+    {
+        $daten = $this->VoiceNotizDaten();
+        foreach ((array)($daten['notes'] ?? []) as $n) {
+            if (is_array($n) && (string)($n['id'] ?? '') === $id) {
                 return true;
             }
         }
@@ -1460,6 +1634,82 @@ trait VoiceTools
         ];
     }
 
+    /**
+     * Eine kurze Mitteilung als Push verschicken — an alle Geraete des
+     * Haushalts oder an die einer Person.
+     *
+     * Der Push ist die einzige Stelle, an der der Sprachdialog aus dem Haus
+     * heraus etwas an FREMDE Geraete schickt. Deshalb drei Riegel: 200 Zeichen
+     * hart gekappt, der Empfaenger wird gegen die Mitgliederliste aufgeloest
+     * (kein Durchreichen eines Namens aus dem Modell), und wenn kein Geraet
+     * angemeldet ist, wird das ehrlich gesagt statt Erfolg zu melden.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceToolNachricht(array $args, array $ctx): array
+    {
+        $text = trim((string)($args['text'] ?? ''));
+        if ($text === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What should the message say?'));
+        }
+        if (mb_strlen($text) > 200) {
+            $text = rtrim(mb_substr($text, 0, 200));
+        }
+        $titel = is_string($args['titel'] ?? null) ? trim((string)$args['titel']) : '';
+        if ($titel === '') {
+            $titel = 'SymDo';
+        }
+
+        $an = is_string($args['an'] ?? null) ? trim((string)$args['an']) : '';
+        $userId = '';
+        $wer    = '';
+        if ($an !== '') {
+            $kand = [];
+            try {
+                foreach ($this->LoadUsers() as $u) {
+                    $n = trim((string)($u['name'] ?? ''));
+                    if ($n !== '') {
+                        $kand[] = ['schluessel' => (string)($u['id'] ?? ''), 'titel' => $n];
+                    }
+                }
+            } catch (\Throwable $e) {
+                $kand = [];
+            }
+            $erg = $this->VoiceAufloesen($an, $kand);
+            $fehler = $this->VoiceAufloeseFehler($erg, $an, $this->Translate('household members'));
+            if ($fehler !== null) {
+                return $fehler;
+            }
+            $userId = (string)$erg['treffer'][0]['schluessel'];
+            $wer    = (string)$erg['treffer'][0]['titel'];
+        }
+
+        try {
+            $gesendet = $this->SendPush($titel, $text, $userId, '');
+        } catch (\Throwable $e) {
+            $this->SendDebug('Voice', 'Push warf: ' . $e->getMessage(), 0);
+            return $this->VoiceErr('nicht_gesendet', $this->Translate('The message could not be sent.'));
+        }
+        if ($gesendet <= 0) {
+            /* Kein angemeldetes Geraet ist kein Fehler des Nutzers, aber auch
+               kein Erfolg — sonst glaubt er, die Nachricht sei angekommen. */
+            return [
+                'ok' => false, 'error' => ['code' => 'kein_geraet', 'message' => 'no device registered'],
+                'sag' => $wer !== ''
+                    ? sprintf($this->Translate('%s has no device registered for messages yet.'), $wer)
+                    : $this->Translate('No device is registered for messages yet.'),
+            ];
+        }
+        return [
+            'ok'       => true,
+            'gesendet' => $gesendet,
+            'an'       => $wer,
+            'sag'      => $wer !== ''
+                ? sprintf($this->Translate('Message sent to %s.'), $wer)
+                : $this->Translate('Message sent to everyone.'),
+        ];
+    }
+
     /** @return array<string,mixed> */
     private function VoiceToolEinkaufHinzu(array $args, array $ctx): array
     {
@@ -1562,6 +1812,126 @@ trait VoiceTools
         ];
     }
 
+    /**
+     * Alle Routinenschritte als Kandidaten fuer die Titelauflösung.
+     *
+     * Der Titel traegt die Routine mit („Zähne putzen (Morgen, Max)"), weil es
+     * denselben Schritt in jeder Kinderroutine gibt — ohne den Zusatz wäre die
+     * Rückfrage bei Mehrdeutigkeit unverständlich („Meintest du Zähne putzen,
+     * Zähne putzen oder Zähne putzen?"). Fürs Treffen schadet der Zusatz nicht:
+     * die Suche findet ihn als Teilzeichenkette.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function VoiceRoutineKandidaten(bool $offeneNur, string $nurMitglied = ''): array
+    {
+        $aus = [];
+        $instanzen = @IPS_GetInstanceListByModuleID(self::VOICE_ROUTINES_GUID);
+        foreach (is_array($instanzen) ? $instanzen : [] as $inst) {
+            $st = json_decode((string)@RTN_GetState((int)$inst), true);
+            foreach ((array)(is_array($st) ? ($st['routines'] ?? []) : []) as $r) {
+                if (!is_array($r)) {
+                    continue;
+                }
+                $mitglied = (string)($r['memberId'] ?? '');
+                if ($nurMitglied !== '' && $mitglied !== $nurMitglied) {
+                    continue;
+                }
+                foreach ((array)($r['steps'] ?? []) as $i => $sch) {
+                    if (!is_array($sch)) {
+                        continue;
+                    }
+                    $text = trim((string)($sch['text'] ?? ''));
+                    $fertig = ($sch['done'] ?? false) === true;
+                    if ($text === '' || ($offeneNur && $fertig)) {
+                        continue;
+                    }
+                    $aus[] = [
+                        'schluessel' => (int)$inst . '|' . (string)($r['id'] ?? '') . '|' . (int)$i,
+                        'titel'      => $text . ' (' . trim((string)($r['name'] ?? '')) . ')',
+                        'schritt'    => $text,
+                        'routine'    => trim((string)($r['name'] ?? '')),
+                        'inst'       => (int)$inst,
+                        'rid'        => (string)($r['id'] ?? ''),
+                        'idx'        => (int)$i,
+                        'done'       => $fertig,
+                    ];
+                }
+            }
+        }
+        return $aus;
+    }
+
+    /** Steht der Schritt jetzt auf erledigt? Gegenprobe statt Vertrauen ins Ziel. */
+    private function VoiceRoutineSchrittStand(int $inst, string $rid, int $idx): ?bool
+    {
+        $st = json_decode((string)@RTN_GetState($inst), true);
+        foreach ((array)(is_array($st) ? ($st['routines'] ?? []) : []) as $r) {
+            if (is_array($r) && (string)($r['id'] ?? '') === $rid) {
+                $sch = ((array)($r['steps'] ?? []))[$idx] ?? null;
+                return is_array($sch) ? (($sch['done'] ?? false) === true) : null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Einen Routinenschritt setzen. Rueckgabe wie die anderen Abhak-Zweige oder
+     * null, wenn nichts Passendes gefunden wurde (dann sucht der Aufrufer weiter).
+     *
+     * @return array<string,mixed>|null
+     */
+    private function VoiceRoutineAbhaken(string $was, bool $erledigt, array $ctx): ?array
+    {
+        /* Zuerst NUR die Routinen der Person, der die Kachel gehoert: „hak Zähne
+           putzen ab" von Max' Kachel meint Max' Routine, auch wenn derselbe
+           Schritt bei drei Kindern steht. Erst wenn das nichts Eindeutiges
+           ergibt, wird der ganze Haushalt durchsucht. */
+        $eigen = trim((string)($ctx['userId'] ?? ''));
+        $runden = $eigen !== '' ? [$eigen, ''] : [''];
+        $letzter = null;
+        foreach ($runden as $mitglied) {
+            /* Gegen ALLE Schritte auflösen, nicht nur die offenen: sonst
+               antwortet ein zweites „hak Zähne putzen ab" mit „finde ich
+               nicht", obwohl der Schritt sehr wohl da ist — er ist nur schon
+               erledigt. Der Unterschied wird unten gesagt. */
+            $kand = $this->VoiceRoutineKandidaten(false, $mitglied);
+            if ($kand === []) {
+                continue;
+            }
+            $erg = $this->VoiceAufloesen($was, $kand);
+            if (($erg['status'] ?? '') !== 'eindeutig') {
+                $letzter = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('routine steps'));
+                continue;
+            }
+            $t = $erg['treffer'][0];
+            if ((($t['done'] ?? false) === true) === $erledigt) {
+                return ['ok' => true, 'unveraendert' => true, 'bereich' => 'routine',
+                    'titel' => (string)$t['schritt'], 'routine' => (string)$t['routine'],
+                    'sag' => sprintf($erledigt ? $this->Translate('"%1$s" in %2$s was already done.')
+                                               : $this->Translate('"%1$s" in %2$s was already open.'),
+                                     (string)$t['schritt'], (string)$t['routine'])];
+            }
+            try {
+                IPS_RequestAction((int)$t['inst'], 'Check', (string)json_encode(
+                    ['routine' => (string)$t['rid'], 'step' => (int)$t['idx'], 'done' => $erledigt]));
+            } catch (\Throwable $e) {
+                $this->SendDebug('Voice', 'Routine Check warf: ' . $e->getMessage(), 0);
+                return $this->VoiceErr('intern', $this->Translate('Something went wrong — nothing was changed.'));
+            }
+            $stand = $this->VoiceRoutineSchrittStand((int)$t['inst'], (string)$t['rid'], (int)$t['idx']);
+            if ($stand !== null && $stand !== $erledigt) {
+                return $this->VoiceErr('nicht_gesetzt', $this->Translate('I could not change that — nothing happened.'));
+            }
+            return ['ok' => true, 'bereich' => 'routine', 'titel' => (string)$t['schritt'],
+                'routine' => (string)$t['routine'],
+                'sag' => sprintf($erledigt ? $this->Translate('"%1$s" in %2$s is done.')
+                                           : $this->Translate('"%1$s" in %2$s is open again.'),
+                                 (string)$t['schritt'], (string)$t['routine'])];
+        }
+        return $letzter;
+    }
+
     /** @return array<string,mixed> */
     private function VoiceToolAbhaken(array $args, array $ctx): array
     {
@@ -1572,12 +1942,21 @@ trait VoiceTools
         $erledigt = ($args['erledigt'] ?? true) !== false;
         $bereich = (string)($args['bereich'] ?? '');
 
-        // Reihenfolge: ausdrücklicher Bereich zuerst; sonst Aufgaben, dann Einkauf.
-        $versuche = $bereich === 'einkauf' ? ['einkauf']
-                  : ($bereich === 'aufgabe' ? ['aufgabe'] : ['aufgabe', 'einkauf']);
+        /* Reihenfolge: ausdrücklicher Bereich zuerst; sonst Aufgaben, dann
+           Einkauf, dann Routinen. Routinen zuletzt, weil ihre Schritte kurze
+           Alltagswörter sind („aufräumen", „anziehen") und sonst Aufgaben mit
+           gleichem Namen wegschnappen würden. */
+        $versuche = in_array($bereich, ['aufgabe', 'einkauf', 'routine'], true)
+                  ? [$bereich] : ['aufgabe', 'einkauf', 'routine'];
         $letzterFehler = null;
         foreach ($versuche as $b) {
-            if ($b === 'aufgabe') {
+            if ($b === 'routine') {
+                $erg = $this->VoiceRoutineAbhaken($was, $erledigt, $ctx);
+                if ($erg !== null && ($erg['ok'] ?? false) === true) {
+                    return $erg;
+                }
+                $letzterFehler = $erg ?? $letzterFehler;
+            } elseif ($b === 'aufgabe') {
                 $ziel = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
                 if (!($ziel['ok'] ?? false)) { $letzterFehler = $ziel; continue; }
                 $erg = $this->VoiceAufgabeAufloesen((int)$ziel['id'], $was);
@@ -1976,8 +2355,8 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen und ändern und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; einen Tagesüberblick geben; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
-            'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
             $zeilen[] = 'Du sprichst mit ' . $wer . '. „ich", „mir" und „meine Aufgaben" heißen: ' . $wer . '.';
@@ -1990,6 +2369,18 @@ trait VoiceTools
         }
         if ($aufgaben !== []) {
             $zeilen[] = 'Aufgabenlisten: ' . implode(', ', array_slice($aufgaben, 0, 6)) . '.';
+        }
+        /* Routinen nur nennen, wenn es welche gibt — und mit Namen, damit „hak
+           bei Max die Zähne ab" ohne Rückfrage sitzt. */
+        $routinen = [];
+        foreach ($this->VoiceRoutineKandidaten(false) as $k) {
+            $r = (string)$k['routine'];
+            if ($r !== '' && !in_array($r, $routinen, true)) {
+                $routinen[] = $r;
+            }
+        }
+        if ($routinen !== []) {
+            $zeilen[] = 'Routinen: ' . implode(', ', array_slice($routinen, 0, 6)) . '.';
         }
         // Gibt es Rezepte, dem Modell sagen, dass es sie abfragen kann.
         $rezAnzahl = 0;

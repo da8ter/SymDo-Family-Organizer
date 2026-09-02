@@ -51,6 +51,8 @@ trait Voice
         // Reserven der späteren Etappen (Auflöser-Merkzettel, Löschmarken).
         $this->RegisterAttributeString('VoiceRefs', '{}');
         $this->RegisterAttributeString('VoiceMarks', '{}');
+        // Kurzzeitgedaechtnis gegen doppelte Ausfuehrung (siehe VoiceDoppelt).
+        $this->RegisterAttributeString('VoiceDedup', '{}');
 
         $this->RegisterTimer('VoiceWatchdog', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'VoiceTick\', 0);');
     }
@@ -253,6 +255,9 @@ trait Voice
             'defaults' => is_array($anruf['defaults'] ?? null) ? $anruf['defaults']
                         : (is_array($body['defaults'] ?? null) ? $body['defaults'] : []),
         ];
+        /* Die call_id des MODELLAUFRUFS (nicht die der Sitzung): sie ist der
+           Schluessel gegen eine doppelt zugestellte Anfrage. */
+        $ctx['fnId'] = (string)($body['fnId'] ?? '');
         $name = (string)($body['name'] ?? '');
         $args = $body['arguments'] ?? '{}';
         return $this->VoiceRunTool($name, is_string($args) ? $args : (string)json_encode($args), $ctx);

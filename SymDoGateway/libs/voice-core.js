@@ -270,7 +270,10 @@ function erzeuge(opt) {
       liefern({ ok: false, error: { code: 'timeout' },
                 sag: 'Das dauert zu lange — prüfe lesend nach, bevor du es erneut versuchst.' });
     }, werkzeugDeckelMs);
-    post({ action: 'tool', callId: callId, name: name, arguments: argumente })
+    /* callIdFn mitschicken: das ist die Kennung DIESES Modellaufrufs (callId
+       ist die der Sitzung). Der Server weist damit eine doppelt zugestellte
+       Anfrage ab, statt zweimal einzutragen. */
+    post({ action: 'tool', callId: callId, fnId: callIdFn, name: name, arguments: argumente })
       .then(function (r) { clearTimeout(deckel); liefern(r || { ok: false, sag: 'Keine Antwort.' }); })
       .catch(function () {
         clearTimeout(deckel);
