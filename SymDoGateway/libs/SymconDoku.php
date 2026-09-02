@@ -604,6 +604,49 @@ trait SymconDoku
         return ($p !== false && $p < 40) ? ltrim(mb_substr($t, $p + 1)) : $t;
     }
 
+    /**
+     * Einen Abschnitt am letzten SATZENDE beenden.
+     *
+     * Die Abschnitte werden nach Zeichenzahl geschnitten und hoeren deshalb
+     * mitten im Satz auf. Das Lesemodell vervollstaendigt so einen Satz dann
+     * aus eigenem Wissen — am 02.09.2026 beobachtet: der Auszug endete mit
+     * „Kopie einer beliebigen (z.B. die", die Antwort ergaenzte „in die
+     * Konfigurationsdatei settings.json". Das war zufaellig richtig, ist aber
+     * genau die Stelle, an der Erfundenes entsteht.
+     *
+     * Gekappt wird nur, wenn genug uebrig bleibt: ein Abschnitt ohne jedes
+     * Satzende (Code, Tabellen) bleibt lieber ganz.
+     */
+    private function DokuSatzEnde(string $t): string
+    {
+        $t = rtrim($t);
+        if ($t === '') {
+            return $t;
+        }
+        /* Abkuerzungen sind KEIN Satzende. Ohne diese Liste endete der Auszug
+           bei „Kopie einer beliebigen (z.B." — genauso mitten im Satz wie
+           vorher, nur mit Punkt. */
+        $abk = '/(?:\s\p{L}\.|z\.\s?B\.|ca\.|bzw\.|usw\.|etc\.|Nr\.|Abs\.|vgl\.|ggf\.|evtl\.)$/u';
+        if (preg_match('/[.!?:]$/u', $t) === 1 && preg_match($abk, $t) !== 1) {
+            return $t;
+        }
+        if (preg_match_all('/[.!?](?=\s)/u', $t, $m, PREG_OFFSET_CAPTURE) > 0) {
+            $mindest = (int)(mb_strlen($t) * 0.5);
+            for ($i = count($m[0]) - 1; $i >= 0; $i--) {
+                // PREG_OFFSET_CAPTURE liefert BYTE-Positionen — also substr, nicht mb_substr.
+                $kand = rtrim(substr($t, 0, (int)$m[0][$i][1] + 1));
+                if (mb_strlen($kand) < $mindest) {
+                    break;
+                }
+                if (preg_match($abk, $kand) === 1) {
+                    continue;
+                }
+                return $kand;
+            }
+        }
+        return $t;
+    }
+
     private function DokuBedeutungssuche(string $frage): ?array
     {
         $vekDatei  = $this->DokuDatei('vek');
@@ -730,7 +773,11 @@ trait SymconDoku
             . 'Seiten; jeder ist mit seinem Seitennamen in eckigen Klammern beschriftet. Waehle den '
             . 'Teil, der die Frage wirklich beantwortet — der erste ist nicht immer der richtige. '
             . 'Antworte auf Deutsch in drei bis fuenf kurzen Saetzen, die VORGELESEN werden: keine '
-            . 'Aufzaehlungszeichen, keine Adressen, keine Klammer-Beschriftungen, kein Code-Block. '
+            . 'Aufzaehlungszeichen, keine Zeilenumbrueche, keine Adressen, keine '
+            . 'Klammer-Beschriftungen, kein Code-Block. Sprich den Fragenden mit DU an. Schreibe '
+            . 'Abkuerzungen aus („zum Beispiel" statt „z. B.", „Grad Celsius" statt „°C"), denn '
+            . 'eine Stimme liest sie sonst falsch vor. Sage NICHT, woher du es weisst — kein „im '
+            . 'Auszug steht", kein „laut Handbuch": antworte einfach. '
             . 'Nenne konkrete Namen von Funktionen, Feldern oder Menuepunkten, wenn sie im Auszug '
             . 'stehen. VERWEISE NICHT auf andere Seiten oder Abschnitte des Handbuchs und nicht '
             . 'auf die Befehlsreferenz — sage, was zu tun ist, oder sage, dass es im Auszug nicht '
@@ -808,7 +855,7 @@ trait SymconDoku
                ein Absatz beantwortet. */
             $teile = [];
             foreach ($abschnitte as $a) {
-                $stueck = $this->DokuRand($a['text']);
+                $stueck = $this->DokuSatzEnde($this->DokuRand($a['text']));
                 if ($stueck === '') {
                     continue;
                 }
@@ -873,8 +920,11 @@ trait SymconDoku
                            (oft die eigentliche Antwort) waren weg. Deshalb ein
                            Deckel auf das Fenster, damit fuer den Rest Platz
                            bleibt. */
-                        $fenster = $this->DokuRand(mb_substr($inhalt['text'],
-                            max(0, (int)$wo - 200), (int)(self::DOKU_AUSZUG * 0.55)));
+                        // Vorne an der Wortgrenze, HINTEN am Satzende — sonst
+                        // vervollstaendigt der Leser den abgebrochenen Satz aus
+                        // eigenem Wissen.
+                        $fenster = $this->DokuSatzEnde($this->DokuRand(mb_substr($inhalt['text'],
+                            max(0, (int)$wo - 200), (int)(self::DOKU_AUSZUG * 0.55))));
                         $rest = array_slice($teile, 1);
                         // Auch das frische Fenster bekommt seine Ueberschrift.
                         $fenster = '[' . $titel . '] ' . $fenster;
