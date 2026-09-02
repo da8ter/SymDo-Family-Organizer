@@ -447,7 +447,15 @@
       "The gateway has not answered yet.": "Das Gateway hat noch nicht geantwortet.",
       "Try again": "Erneut versuchen",
       "Show subjects": "Fächer anzeigen",
-      "Voice dialog": "Sprachdialog"
+      "Voice dialog": "Sprachdialog",
+      "Hands-free": "Freisprechen",
+      "Hands-free is on": "Freisprechen ist an",
+      "Listening for \"Hey SymDo\"": "Ich höre auf „Hey SymDo\"",
+      "Hands-free is not enabled.": "Freisprechen ist nicht freigegeben.",
+      "Download now?": "Jetzt laden?",
+      "Loading speech recognition …": "Die Spracherkennung wird geladen …",
+      "Ready — hands-free can start.": "Geladen — Freisprechen kann losgehen.",
+      "The download did not work.": "Das Laden hat nicht geklappt."
     }
   }
 }

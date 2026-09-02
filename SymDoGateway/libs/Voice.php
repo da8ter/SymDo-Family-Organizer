@@ -42,9 +42,17 @@ trait Voice
         $this->RegisterPropertyInteger('VoiceMaxSessionSeconds', 180);
         // Reserve für den unified-Handschlag (Etappe 0 hat ihn nicht gebraucht).
         $this->RegisterPropertyString('VoiceHandshake', 'ephemeral');
+        /* Freisprechen ist ein gekennzeichneter Versuch: es laeuft NUR, wo der
+           Browser deutsche Spracherkennung auf dem Geraet rechnen kann
+           (Chrome/Edge ab 139). Standard aus. */
+        $this->RegisterPropertyBoolean('VoiceHandsFreeAllowed', false);
 
         $this->RegisterAttributeBoolean('VoicePrivacyAccepted', false);
         $this->RegisterAttributeString('VoicePrivacyAcceptedAt', '');
+        /* DRITTE Einwilligung, mit Absicht getrennt: wer dem Knopf zugestimmt
+           hat, hat nicht dem Dauerlauschen zugestimmt. */
+        $this->RegisterAttributeBoolean('VoiceHandsFreeAccepted', false);
+        $this->RegisterAttributeString('VoiceHandsFreeAcceptedAt', '');
         $this->RegisterAttributeString('VoiceOpenCalls', '{}');
         $this->RegisterAttributeString('VoiceDayCount', '{}');
         $this->RegisterAttributeString('VoiceLog', '[]');
@@ -92,7 +100,22 @@ trait Voice
                 // zurückzunehmen, während der Ton weiterläuft, wäre genau der
                 // Fehler, den der Riegel verhindern soll.
                 $this->VoiceHangupAll('Einwilligung widerrufen');
+                /* Und das Dauerlauschen faellt mit: es ist die WEITERGEHENDE
+                   Einwilligung, sie kann die engere nicht ueberleben. */
+                @$this->WriteAttributeBoolean('VoiceHandsFreeAccepted', false);
+                @$this->WriteAttributeString('VoiceHandsFreeAcceptedAt', '');
             }
+            $this->ReloadForm();
+            return true;
+        }
+        if ($Ident === 'VoiceHandsFreeConsent') {
+            $ja = ($Value === true || $Value === 1 || $Value === '1' || $Value === 'true');
+            // Ohne die Sprach-Einwilligung gibt es die weitergehende nicht.
+            if ($ja && !(bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')) {
+                $ja = false;
+            }
+            @$this->WriteAttributeBoolean('VoiceHandsFreeAccepted', $ja);
+            @$this->WriteAttributeString('VoiceHandsFreeAcceptedAt', $ja ? date('c') : '');
             $this->ReloadForm();
             return true;
         }
@@ -131,6 +154,15 @@ trait Voice
                 return $this->VoicePing($body);
             case 'tool':
                 return $this->VoiceTool($body);
+            case 'handsfree':
+                /* Der Lauscher fragt VOR dem Anschalten, ob er darf. Die
+                   Prüfung gehört hierher, nicht in den Browser: dort ließe sich
+                   die Einwilligung umgehen, und das Attribut ist von außen
+                   ohnehin nicht lesbar. */
+                return $this->VoiceHandsFreeOk()
+                    ? ['ok' => true, 'erlaubt' => true]
+                    : ['ok' => true, 'erlaubt' => false,
+                       'grund' => $this->Translate('Hands-free is not enabled for this household.')];
             case 'close':
                 return $this->VoiceClose($body);
             case 'log':
@@ -153,6 +185,20 @@ trait Voice
             && $this->AiPrivacyAccepted()
             && (bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')
             && trim($this->ReadPropertyString('AiOpenAIKey')) !== '';
+    }
+
+    /**
+     * Darf dieses Haus freisprechen? Property UND die dritte Einwilligung UND
+     * alles, was der Knopf ohnehin braucht. Ob das GERAET es kann, entscheidet
+     * erst der Browser (voice-wake.js) — hier steht nur die Erlaubnis.
+     */
+    private function VoiceHandsFreeOk(): bool
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $erlaubt = is_array($cfg) && ($cfg['VoiceHandsFreeAllowed'] ?? false) === true;
+        return $erlaubt
+            && $this->VoiceUsable()
+            && (bool)@$this->ReadAttributeBoolean('VoiceHandsFreeAccepted');
     }
 
     /** @return array<string,mixed> */
@@ -606,6 +652,7 @@ trait Voice
             ];
         }
         $zustimmung = (bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted');
+        $freihand = (bool)@$this->ReadAttributeBoolean('VoiceHandsFreeAccepted');
         $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
         $heute = (is_array($stand) && ($stand['d'] ?? '') === date('Y-m-d')) ? $stand : ['secs' => 0, 'sessions' => 0];
         $offen = $this->VoiceCalls();
@@ -636,6 +683,18 @@ trait Voice
                 ['type' => 'Label', 'name' => 'VoicePrivacyStatus', 'caption' => $zustimmung
                     ? $this->Translate('Voice privacy consent given.')
                     : $this->Translate('Consent required: during a conversation the room audio streams directly from the device to the AI provider (WebRTC), including voices of anyone present. Tool answers can carry excerpts of lists, appointments and plans. No audio is stored on this server.')],
+                ['type' => 'CheckBox', 'name' => 'VoiceHandsFreeAllowed',
+                 'caption' => $this->Translate('Allow hands-free with the wake word "Hey SymDo" (experiment)')],
+                ['type' => 'Label', 'name' => 'VoiceHandsFreeStatus', 'caption' => $freihand
+                    ? $this->Translate('Hands-free consent given. The wake word is recognised ON the device; no audio leaves it until the conversation starts.')
+                    : $this->Translate('Hands-free needs its own consent: the microphone then stays open and listens for the wake word. Recognition runs on the device (Chrome or Edge 139 and newer, German speech pack required) — nothing is sent anywhere until the wake word is heard. On devices without local recognition the tile says so instead of listening; there is no fallback to cloud recognition.')],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'Button', 'caption' => $this->Translate('I consent to hands-free'),
+                     'enabled' => $zustimmung && !$freihand,
+                     'onClick' => 'IPS_RequestAction($id, "VoiceHandsFreeConsent", true);'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Revoke hands-free'), 'enabled' => $freihand,
+                     'onClick' => 'IPS_RequestAction($id, "VoiceHandsFreeConsent", false);'],
+                ]],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('I consent'), 'enabled' => !$zustimmung,
                      'onClick' => 'IPS_RequestAction($id, "VoicePrivacyConsent", true);'],

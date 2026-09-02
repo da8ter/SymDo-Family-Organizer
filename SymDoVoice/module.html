@@ -13,6 +13,9 @@
   --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
   --rot: #ff4d4d;
+  /* Bernstein fuer das Lauschen: nicht der Akzent (der gehoert dem laufenden
+     Gespraech) und nicht Rot (das heisst Aufnahme). */
+  --lausch: #ffb020;
   --sym-mt: 0px; --sym-ms: 0px; --sym-mb: 0px;
   --sbw: 6px;
   --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
@@ -101,12 +104,30 @@ body {
   cursor: pointer; display: none;
 }
 #nebenzeile button.zeigen { display: inline-block; }
+#nebenzeile button#freihand:not([hidden]),
+#nebenzeile button#wortLaden:not([hidden]) { display: inline-block; }
+#nebenzeile button#freihand.an { background: color-mix(in srgb, var(--lausch) 26%, transparent); }
+#lauschAn { display: none; align-items: center; gap: 5px; font-size: 11px; color: var(--lausch);
+  white-space: nowrap; }
+#lauschAn:not([hidden]) { display: inline-flex; }
+#lauschAn .welle { width: 8px; height: 8px; border-radius: 999px; background: var(--lausch);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--lausch) 70%, transparent);
+  animation: lauschen 1.9s ease-out infinite; }
+@keyframes lauschen {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lausch) 70%, transparent); }
+  70%  { box-shadow: 0 0 0 9px color-mix(in srgb, var(--lausch) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lausch) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { #lauschAn .welle { animation: none; } }
 </style>
 <div id="wrap">
   <div id="kopf">
     <h2>Sprachassistent</h2>
     <span id="mikPunkt" title="Mikrofon offen"></span>
     <span id="status">bereit</span>
+    <!-- Unuebersehbar, solange das Mikrofon fuer das Weckwort offen steht. Der
+         Plan verlangt das ausdruecklich: Dauerlauschen darf man nie uebersehen. -->
+    <span id="lauschAn" hidden><span class="welle"></span>hört auf „Hey SymDo"</span>
   </div>
   <div id="verlauf"><div id="leer">Tippe auf den Knopf und sprich — zum Beispiel:
 „Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
@@ -119,6 +140,8 @@ body {
     </button>
     <div id="nebenzeile">
       <button type="button" id="ruhe">Ruhe</button>
+      <button type="button" id="freihand" hidden>Freisprechen</button>
+      <button type="button" id="wortLaden" hidden>Spracherkennung laden</button>
     </div>
   </div>
   <audio id="ton" autoplay playsinline></audio>
@@ -297,11 +320,13 @@ var kern = SymDoVoiceKern.erzeuge({
       case 'ende':
         statusZeigen('bereit', false);
         hinweis.textContent = detail ? ('Gespräch beendet — ' + detail) : '';
+        Freihand.nachGespraech();
         break;
       case 'fehler':
         statusZeigen('bereit', false);
         hinweis.textContent = detail || 'Fehler';
         hinweis.classList.add('fehler');
+        Freihand.nachGespraech();
         break;
     }
   },
@@ -339,8 +364,107 @@ var kern = SymDoVoiceKern.erzeuge({
   }
 });
 
+/* ── Freisprechen ─────────────────────────────────────────────────────────
+   Der Lauscher (voice-wake.js) hoert das Weckwort AUF DEM GERAET; erst danach
+   geht ueberhaupt Ton nach draussen. Drei Riegel liegen davor: der Schalter am
+   Gateway (sonst wird die Datei gar nicht erst mitgeliefert), die dritte
+   Einwilligung (serverseitig geprueft, weil sie in einem Attribut liegt) und
+   die Faehigkeit des Geraets — kann es nicht lokal erkennen, wird das GESAGT
+   statt stumm nicht zu lauschen. */
+var Freihand = (function () {
+  var knopfF = el('freihand'), ladeKnopf = el('wortLaden'), anzeige = el('lauschAn');
+  var lauscher = null, gewuenscht = false, erlaubtHier = false;
+
+  /* Der Knopf richtet sich nach dem WILLEN, die Anzeige nach dem Zustand: nach
+     dem Weckwort ist der Lauscher aus (das Mikrofon gehoert dann dem Gespraech),
+     Freisprechen aber weiter eingeschaltet. Ohne diese Trennung schaltete der
+     naechste Druck wieder AN statt aus — im Pruefstand aufgefallen. */
+  function anzeigen() {
+    var lauscht = !!(lauscher && lauscher.istAn());
+    anzeige.hidden = !lauscht;
+    knopfF.classList.toggle('an', gewuenscht);
+    knopfF.textContent = gewuenscht ? 'Freisprechen aus' : 'Freisprechen';
+  }
+  function sagen(text, schlimm) {
+    hinweis.textContent = text || '';
+    hinweis.classList.toggle('fehler', schlimm === true);
+  }
+
+  function anschalten() {
+    if (!window.SymDoVoiceWeckwort) { sagen('Freisprechen ist hier nicht eingebaut.', true); return; }
+    // Erst der Server: die Einwilligung liegt in einem Attribut und ist im
+    // Browser weder lesbar noch faelschbar.
+    post({ action: 'handsfree' }).then(function (r) {
+      if (!r || r.erlaubt !== true) {
+        sagen((r && r.grund) || 'Freisprechen ist nicht freigegeben.', true);
+        return;
+      }
+      return SymDoVoiceWeckwort.verfuegbar().then(function (v) {
+        ladeKnopf.hidden = (v.stand !== 'ladbar');
+        if (!v.moeglich) { sagen(v.grund, v.stand === 'unmoeglich'); return; }
+        if (!lauscher) {
+          lauscher = SymDoVoiceWeckwort.erzeuge({
+            onWake: function () {
+              sagen('');
+              anzeigen();
+              if (!kern.istOffen()) { kern.start(); }
+            },
+            onZustand: function (z, grund) {
+              if (z === 'fehler' && grund) { sagen(grund, true); }
+              anzeigen();
+            }
+          });
+        }
+        return lauscher.an(true).then(function (ok) {
+          gewuenscht = ok === true;
+          if (ok) { sagen('Ich höre auf „Hey SymDo".'); }
+          anzeigen();
+        });
+      });
+    });
+  }
+
+  function ausschalten() {
+    gewuenscht = false;
+    if (lauscher) { lauscher.aus(); }
+    anzeigen();
+    sagen('');
+  }
+
+  knopfF.addEventListener('click', function () {
+    if (gewuenscht) { ausschalten(); } else { anschalten(); }
+  });
+  ladeKnopf.addEventListener('click', function () {
+    sagen('Die Spracherkennung wird geladen — das dauert einen Moment.');
+    ladeKnopf.disabled = true;
+    SymDoVoiceWeckwort.laden().then(function (ok) {
+      ladeKnopf.disabled = false;
+      ladeKnopf.hidden = ok === true;
+      sagen(ok ? 'Geladen. Freisprechen kann losgehen.' : 'Das Laden hat nicht geklappt.', !ok);
+    });
+  });
+
+  return {
+    /* Der Schalter am Gateway entscheidet, ob der Knopf ueberhaupt erscheint. */
+    erlauben: function (ja) {
+      erlaubtHier = ja === true;
+      knopfF.hidden = !erlaubtHier;
+      if (!erlaubtHier) { ausschalten(); }
+    },
+    /* Nach dem Gespraech zurueck ins Lauschen — waehrend des Gespraechs NICHT,
+       sonst spraenge der Erkenner auf die Stimme aus dem Lautsprecher an. */
+    nachGespraech: function () {
+      if (gewuenscht && lauscher && !lauscher.istAn() && !kern.istOffen()) {
+        lauscher.an(true).then(anzeigen);
+      }
+    },
+    laeuft: function () { return !!(lauscher && lauscher.istAn()); }
+  };
+})();
+
 /* Debug-Haken fuer Pruefstaende und die Browser-Konsole. */
 window.__voiceKern = kern;
+window.__freihand = Freihand;
 
 knopf.addEventListener('click', function () {
   if (kern.istOffen()) { kern.stop('vom Nutzer beendet'); return; }
@@ -360,6 +484,9 @@ function handleMessage(daten) {
   }
   /* type 'state': bislang trägt er nur die gewählte Darstellung. */
   if (daten.darstellung) { Blase.modus(daten.darstellung); }
+  if (Object.prototype.hasOwnProperty.call(daten, 'freisprechen')) {
+    Freihand.erlauben(daten.freisprechen === true);
+  }
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;

@@ -1064,6 +1064,7 @@ trait AppCore
         // Sprachdialog: die Web-App zeigt ihre Blasen-Kachel NUR, wenn er im
         // Backend eingeschaltet und beiden Einwilligungen zugestimmt wurde.
         $symdo['voiceEnabled'] = $this->VoiceUsable();
+        $symdo['voiceHandsFree'] = $this->VoiceHandsFreeOk();
         // Oeffentlicher VAPID-Schluessel gleich mit: Safari erlaubt
         // Notification.requestPermission() nur mit gueltiger Nutzeraktivierung, und
         // JEDES await davor verbraucht sie. Muesste die Seite den Schluessel erst
@@ -1102,7 +1103,13 @@ trait AppCore
            trägt jede Seite rund 30 kB ungenutztes Skript, und die Web-App findet
            SymDoVoiceKern gar nicht erst vor (daran hängt ihre Kachel). */
         if (($symdo['voiceEnabled'] ?? false) === true) {
-            foreach (['voice-core.js', 'voice-blob.js'] as $datei) {
+            $dateien = ['voice-core.js', 'voice-blob.js'];
+            if (($symdo['voiceHandsFree'] ?? false) === true) {
+                // Der Lauscher nur, wo er auch erlaubt ist — sonst waere es
+                // Skript fuer eine Funktion, die niemand einschalten kann.
+                $dateien[] = 'voice-wake.js';
+            }
+            foreach ($dateien as $datei) {
                 $js = @file_get_contents(__DIR__ . '/' . $datei);
                 if (is_string($js)) {
                     $config .= '<script>' . $js . '</script>';

@@ -161,6 +161,14 @@ class SymDoVoice extends IPSModuleStrict
         if (is_string($blase)) {
             $kopf .= '<script>' . $blase . '</script>';
         }
+        /* Der Weckwort-Lauscher, wenn das Haus ihn erlaubt hat. Ob das GERAET
+           ihn kann, entscheidet er selbst und sagt es. */
+        if ($this->FreisprechenErlaubt()) {
+            $wake = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-wake.js');
+            if (is_string($wake)) {
+                $kopf .= '<script>' . $wake . '</script>';
+            }
+        }
         $payload = json_encode($this->PayloadBauen(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
@@ -310,7 +318,29 @@ class SymDoVoice extends IPSModuleStrict
             // Antwort und zerlegte das HTML.
             'darstellung' => $this->PropertyExistiert('Darstellung')
                 ? $this->ReadPropertyString('Darstellung') : 'gespraech',
+            'freisprechen' => $this->FreisprechenErlaubt(),
         ];
+    }
+
+    /**
+     * Steht der Freisprech-SCHALTER am Gateway? Nur danach entscheidet sich, ob
+     * der Lauscher überhaupt mitgeliefert wird.
+     *
+     * Bewusst über die Konfiguration und nicht über eine neue TGW_-Funktion:
+     * öffentliche Modulfunktionen entstehen erst beim Kernel-Start, eine neue
+     * wäre bis dahin unbekannt. Die EINWILLIGUNG liegt in einem Attribut und
+     * ist von außen nicht lesbar — sie wird beim Anschalten über das Relais
+     * geprüft (VoiceHandleAction, action „handsfree"), also serverseitig, wo
+     * sie hingehört.
+     */
+    private function FreisprechenErlaubt(): bool
+    {
+        $gw = $this->GatewayID();
+        if ($gw <= 0) {
+            return false;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($gw), true);
+        return is_array($cfg) && ($cfg['VoiceHandsFreeAllowed'] ?? false) === true;
     }
 
     private function Push(array $daten): void

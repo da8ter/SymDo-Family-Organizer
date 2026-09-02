@@ -543,7 +543,13 @@
       "%s has no device registered for messages yet.": "%s hat noch kein Gerät für Nachrichten angemeldet.",
       "No device is registered for messages yet.": "Es ist noch kein Gerät für Nachrichten angemeldet.",
       "Message sent to %s.": "Nachricht an %s ist unterwegs.",
-      "Message sent to everyone.": "Nachricht an alle ist unterwegs."
+      "Message sent to everyone.": "Nachricht an alle ist unterwegs.",
+      "Allow hands-free with the wake word \"Hey SymDo\" (experiment)": "Freisprechen mit dem Weckwort „Hey SymDo\" erlauben (Versuch)",
+      "Hands-free consent given. The wake word is recognised ON the device; no audio leaves it until the conversation starts.": "Einwilligung zum Freisprechen liegt vor. Das Weckwort wird AUF dem Gerät erkannt; bis zum Gesprächsbeginn verlässt kein Ton das Gerät.",
+      "Hands-free needs its own consent: the microphone then stays open and listens for the wake word. Recognition runs on the device (Chrome or Edge 139 and newer, German speech pack required) — nothing is sent anywhere until the wake word is heard. On devices without local recognition the tile says so instead of listening; there is no fallback to cloud recognition.": "Freisprechen braucht eine eigene Einwilligung: das Mikrofon bleibt dann offen und lauscht auf das Weckwort. Die Erkennung läuft auf dem Gerät (Chrome oder Edge ab 139, deutsches Sprachpaket nötig) — bis zum Weckwort wird nichts irgendwohin geschickt. Auf Geräten ohne lokale Erkennung sagt die Kachel das, statt zu lauschen; einen Rückfall auf Erkennung in der Cloud gibt es nicht.",
+      "I consent to hands-free": "Freisprechen: ich stimme zu",
+      "Revoke hands-free": "Freisprechen widerrufen",
+      "Hands-free is not enabled for this household.": "Freisprechen ist für diesen Haushalt nicht freigegeben."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",
