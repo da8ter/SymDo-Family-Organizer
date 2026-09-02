@@ -43,7 +43,7 @@ class SymDoShoppingListOverview extends IPSModuleStrict
         }
 
         // 1. Alte Abos/Referenzen sauber lösen (kein Leak bei Instanzwechsel)
-        $previous = json_decode($this->ReadAttributeString('SubscribedVarIDs'), true);
+        $previous = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
         if (is_array($previous)) {
             foreach ($previous as $oldID) {
                 $oldID = (int) $oldID;

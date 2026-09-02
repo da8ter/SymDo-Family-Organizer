@@ -152,7 +152,7 @@ trait DeviceRegistry
             return false;
         }
         try {
-            $pending = json_decode($this->ReadAttributeString('PendingPairings'), true);
+            $pending = json_decode((string)@$this->ReadAttributeString('PendingPairings'), true);
             if (!is_array($pending)) {
                 $pending = [];
             }
@@ -459,7 +459,7 @@ trait DeviceRegistry
 
     private function LoadPairedDevices(): array
     {
-        $data = json_decode($this->ReadAttributeString('PairedDevices'), true);
+        $data = json_decode((string)@$this->ReadAttributeString('PairedDevices'), true);
         if (!is_array($data)) {
             return [];
         }

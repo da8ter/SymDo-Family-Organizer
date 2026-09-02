@@ -1768,7 +1768,7 @@ trait CalDAVSync
     {
         $options = [['caption' => $this->Translate('Please select...'), 'value' => '']];
 
-        $stored = json_decode($this->ReadAttributeString('CalDAVCalendarOptions'), true);
+        $stored = json_decode((string)@$this->ReadAttributeString('CalDAVCalendarOptions'), true);
         if (is_array($stored)) {
             foreach ($stored as $cal) {
                 $name = $cal['name'] ?? 'Untitled';

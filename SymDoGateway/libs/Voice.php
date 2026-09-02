@@ -74,7 +74,7 @@ trait Voice
         // Nach einem Kernel-Start kann kein vermerkter Anruf überlebt haben —
         // auflegen ist harmlos, offen stehen lassen kostet Geld.
         try {
-            $offen = json_decode($this->ReadAttributeString('VoiceOpenCalls'), true);
+            $offen = json_decode((string)@$this->ReadAttributeString('VoiceOpenCalls'), true);
             foreach (is_array($offen) ? array_keys($offen) : [] as $callId) {
                 $this->VoiceHangup((string)$callId);
             }
@@ -170,7 +170,7 @@ trait Voice
             case 'close':
                 return $this->VoiceClose($body);
             case 'log':
-                $log = json_decode($this->ReadAttributeString('VoiceLog'), true);
+                $log = json_decode((string)@$this->ReadAttributeString('VoiceLog'), true);
                 return ['ok' => true, 'log' => array_slice(is_array($log) ? $log : [], 0, 20)];
         }
         return $this->VoiceErr('invalid_payload', $this->Translate('Invalid call'));
@@ -471,7 +471,7 @@ trait Voice
         if ($minuten <= 0) {
             return PHP_INT_MAX;
         }
-        $stand = json_decode($this->ReadAttributeString('VoiceDayCount'), true);
+        $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
         $heute = (is_array($stand) && ($stand['d'] ?? '') === date('Y-m-d')) ? (int)($stand['secs'] ?? 0) : 0;
         return $minuten * 60 - $heute;
     }
@@ -487,7 +487,7 @@ trait Voice
             return; // Nicht zählen ist besser als falsch zählen.
         }
         try {
-            $stand = json_decode($this->ReadAttributeString('VoiceDayCount'), true);
+            $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
             if (!is_array($stand) || ($stand['d'] ?? '') !== date('Y-m-d')) {
                 $stand = ['d' => date('Y-m-d'), 'secs' => 0, 'sessions' => 0];
             }

@@ -1863,7 +1863,7 @@ trait Tts
     /** @return array<string, array{id:int,at:int}> */
     private function TtsCacheRead(): array
     {
-        $data = json_decode($this->ReadAttributeString('TtsCache'), true);
+        $data = json_decode((string)@$this->ReadAttributeString('TtsCache'), true);
         return is_array($data) ? $data : [];
     }
 

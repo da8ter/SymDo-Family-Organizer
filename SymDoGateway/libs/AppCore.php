@@ -183,7 +183,7 @@ trait AppCore
      */
     private function EnsureUserIDs(): void
     {
-        $users = json_decode($this->ReadPropertyString('Users'), true);
+        $users = json_decode((string)@$this->ReadPropertyString('Users'), true);
         if (!is_array($users)) {
             return;
         }
@@ -349,7 +349,7 @@ trait AppCore
      */
     public function GetUsersForTile(): string
     {
-        $cache    = json_decode($this->ReadAttributeString('AvatarCache'), true);
+        $cache    = json_decode((string)@$this->ReadAttributeString('AvatarCache'), true);
         $cache    = is_array($cache) ? $cache : [];
         $newCache = [];
         $result   = [];
@@ -1504,7 +1504,7 @@ trait AppCore
     /** @return int[] Instanz-IDs, die in der App ausgeblendet sind (familienweit) */
     private function GetHiddenInstances(): array
     {
-        $decoded = json_decode($this->ReadAttributeString('HiddenInstances'), true);
+        $decoded = json_decode((string)@$this->ReadAttributeString('HiddenInstances'), true);
         if (!is_array($decoded)) {
             return [];
         }

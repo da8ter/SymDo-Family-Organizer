@@ -79,7 +79,7 @@ class SymDoMealPlan extends IPSModuleStrict
         $this->GatewayEinmaligVerbinden();
 
         // Alte Abos/Referenzen sauber lösen (kein Leak bei Quellen-Wechsel)
-        $vorher = json_decode($this->ReadAttributeString('SubscribedVarIDs'), true);
+        $vorher = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
         foreach (is_array($vorher) ? $vorher : [] as $altID) {
             if ((int)$altID > 0) {
                 $this->UnregisterMessage((int)$altID, VM_UPDATE);

@@ -265,11 +265,35 @@ class SymDoToDoList extends IPSModuleStrict
         $this->UpdateStatistics();
         $this->UpdateTaskListHtml();
         $this->UpdateStatisticsTimer();
-        $this->SendState();
 
+        /* Ab hier werden FREMDE Instanzen angefasst: SendState holt Namen und
+           Gesichter per TGW_GetUsersForTile aus dem Gateway. Im Hochlauf ist
+           dessen Create() womoeglich noch nicht gelaufen — dann liefert dort
+           jeder Attribut-Zugriff false, und ein json_decode(false) ist ein
+           FATAL, der die Instanzerzeugung abbricht. Genau so gemeldet am
+           01.09.2026 von einer Windows-Installation („Kann Schnittstellen-
+           Instanz nicht erstellen", AppCore.php:351).
+
+           Die Geschwistermodule steigen dafuer ganz oben aus ApplyChanges aus;
+           hier geht das nicht, weil MessageSink ApplyChanges bewusst NICHT
+           wiederholt — Sync und Benachrichtigungen liefen sonst doppelt.
+           Deshalb nur dieser Teil, und der Nachzug steht in MessageSink. */
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+        $this->NachlaufNachHochlauf();
+    }
+
+    /**
+     * Der Teil von ApplyChanges, der fertige FREMDE Instanzen braucht. Steht in
+     * einer eigenen Methode, damit ApplyChanges und der Nachzug in MessageSink
+     * nicht auseinanderlaufen koennen.
+     */
+    private function NachlaufNachHochlauf(): void
+    {
+        $this->SendState();
         $this->ProcessNotifications();
         $this->ProcessRecurrences();
-
         $this->ExtListBindTrigger();
     }
 
@@ -285,6 +309,9 @@ class SymDoToDoList extends IPSModuleStrict
             // ApplyChanges laeuft hier waehrend des Hochlaufs, da ist Verbinden
             // noch nicht erlaubt — deshalb der Nachzug an dieser Stelle.
             $this->GatewayEinmaligVerbinden();
+            // Und der Rest, den ApplyChanges im Hochlauf uebersprungen hat:
+            // Zustand, Benachrichtigungen, Wiederholungen, Fremdlisten-Abo.
+            $this->NachlaufNachHochlauf();
             return;
         }
 
@@ -627,7 +654,7 @@ class SymDoToDoList extends IPSModuleStrict
                     }
                 }
                 if (count($colors) === 3) {
-                    $theme = json_decode($this->ReadAttributeString('VisuTheme'), true);
+                    $theme = json_decode((string)@$this->ReadAttributeString('VisuTheme'), true);
                     if (!is_array($theme)) {
                         $theme = [];
                     }
@@ -1309,7 +1336,7 @@ class SymDoToDoList extends IPSModuleStrict
 
     private function LoadItems(): array
     {
-        $data = json_decode($this->ReadAttributeString('Items'), true);
+        $data = json_decode((string)@$this->ReadAttributeString('Items'), true);
         if (!is_array($data)) {
             return [];
         }

@@ -733,7 +733,7 @@ trait ApiRouter
             return true; // best effort: im Zweifel ausführen (wie bisher)
         }
         try {
-            $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
+            $dedup = json_decode((string)@$this->ReadAttributeString('ActionDedup'), true);
             if (!is_array($dedup)) {
                 $dedup = [];
             }
@@ -756,7 +756,7 @@ trait ApiRouter
             return;
         }
         try {
-            $dedup = json_decode($this->ReadAttributeString('ActionDedup'), true);
+            $dedup = json_decode((string)@$this->ReadAttributeString('ActionDedup'), true);
             if (is_array($dedup) && isset($dedup[$key])) {
                 unset($dedup[$key]);
                 $this->WriteAttributeString('ActionDedup', json_encode($dedup));

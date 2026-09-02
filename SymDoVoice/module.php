@@ -215,7 +215,7 @@ class SymDoVoice extends IPSModuleStrict
 
         // Die Messergebnisse der Machbarkeitsprobe (Etappe 0) bleiben ablesbar.
         $zeilen = [];
-        foreach ((array)json_decode($this->ReadAttributeString('ProbeResult'), true) as $b) {
+        foreach ((array)json_decode((string)@$this->ReadAttributeString('ProbeResult'), true) as $b) {
             if (is_array($b)) {
                 $zeilen[] = ['type' => 'Label', 'caption' => $this->ProbeZeile($b)];
             }
@@ -360,7 +360,7 @@ class SymDoVoice extends IPSModuleStrict
         $iframe = ($neu['umgebung']['iframe'] ?? false) === true;
         $kennung = substr(md5($agent . '|' . ($iframe ? '1' : '0')), 0, 8);
 
-        $alle = json_decode($this->ReadAttributeString('ProbeResult'), true);
+        $alle = json_decode((string)@$this->ReadAttributeString('ProbeResult'), true);
         $alle = is_array($alle) ? $alle : [];
         $alle = array_values(array_filter($alle,
             static fn($b): bool => is_array($b) && ($b['kennung'] ?? '') !== $kennung));

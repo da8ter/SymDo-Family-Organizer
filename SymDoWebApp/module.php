@@ -207,7 +207,7 @@ class SymDoWebApp extends IPSModuleStrict
      */
     private function SyncListVisibility(): void
     {
-        $rows = json_decode($this->ReadPropertyString('Lists'), true);
+        $rows = json_decode((string)@$this->ReadPropertyString('Lists'), true);
         if (!is_array($rows) || $rows === []) {
             return;
         }
@@ -341,7 +341,7 @@ class SymDoWebApp extends IPSModuleStrict
                     }
                 }
                 if (count($colors) === 3) {
-                    $theme = json_decode($this->ReadAttributeString('VisuTheme'), true);
+                    $theme = json_decode((string)@$this->ReadAttributeString('VisuTheme'), true);
                     if (!is_array($theme)) {
                         $theme = [];
                     }
@@ -386,7 +386,7 @@ class SymDoWebApp extends IPSModuleStrict
 
         // Listen-Zeilen: aktuelles Discovery-Set, gespeicherte Ausblenden-Flags mergen
         $savedHide = [];
-        $savedRows = json_decode($this->ReadPropertyString('Lists'), true);
+        $savedRows = json_decode((string)@$this->ReadPropertyString('Lists'), true);
         if (is_array($savedRows)) {
             foreach ($savedRows as $row) {
                 if (is_array($row) && isset($row['instanceID'])) {
@@ -685,7 +685,7 @@ class SymDoWebApp extends IPSModuleStrict
     private function ResubscribeAll(): void
     {
         // Alte Abos/Referenzen sauber lösen (kein Leak bei Instanz-Änderungen)
-        $previous = json_decode($this->ReadAttributeString('SubscribedVarIDs'), true);
+        $previous = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
         if (is_array($previous)) {
             foreach ($previous as $oldID) {
                 $oldID = (int)$oldID;
@@ -725,7 +725,7 @@ class SymDoWebApp extends IPSModuleStrict
     {
         $current = array_map(static fn(array $inst): int => $inst['id'], $this->DiscoverInstances());
         sort($current);
-        $known = json_decode($this->ReadAttributeString('KnownInstanceIDs'), true);
+        $known = json_decode((string)@$this->ReadAttributeString('KnownInstanceIDs'), true);
         $known = is_array($known) ? array_map('intval', $known) : [];
         if ($current === $known) {
             return false;
@@ -1049,7 +1049,7 @@ class SymDoWebApp extends IPSModuleStrict
     /** @return int[] Ausblendungen dieser Kachel (Formular-Liste) */
     private function GetTileHiddenIDs(): array
     {
-        $rows = json_decode($this->ReadPropertyString('Lists'), true);
+        $rows = json_decode((string)@$this->ReadPropertyString('Lists'), true);
         if (!is_array($rows)) {
             return [];
         }
@@ -1216,7 +1216,7 @@ class SymDoWebApp extends IPSModuleStrict
     /** VM_UPDATE: nur Instanzen pushen, deren Revision sich seit dem letzten Push geändert hat. */
     private function PushChangedInstanceStates(): void
     {
-        $pushed = json_decode($this->ReadAttributeString('LastPushedRevisions'), true);
+        $pushed = json_decode((string)@$this->ReadAttributeString('LastPushedRevisions'), true);
         $pushed = is_array($pushed) ? $pushed : [];
 
         $hiddenIDs = $this->GetAllHiddenIDs();
@@ -1308,7 +1308,7 @@ class SymDoWebApp extends IPSModuleStrict
     {
         $current = $this->GetAllHiddenIDs();
         sort($current);
-        $last = json_decode($this->ReadAttributeString('LastHiddenIDs'), true);
+        $last = json_decode((string)@$this->ReadAttributeString('LastHiddenIDs'), true);
         $last = is_array($last) ? array_values(array_map('intval', $last)) : [];
         sort($last);
         return $current !== $last;
@@ -1324,7 +1324,7 @@ class SymDoWebApp extends IPSModuleStrict
 
     private function RememberRevision(int $instanceID, int $revision): void
     {
-        $pushed = json_decode($this->ReadAttributeString('LastPushedRevisions'), true);
+        $pushed = json_decode((string)@$this->ReadAttributeString('LastPushedRevisions'), true);
         $pushed = is_array($pushed) ? $pushed : [];
         if ((int)($pushed[(string)$instanceID] ?? -1) === $revision) {
             return;

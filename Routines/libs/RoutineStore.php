@@ -180,7 +180,7 @@ trait RoutineStore
      */
     private function ZustandAktuell(int $jetzt): array
     {
-        $roh = json_decode($this->ReadAttributeString('State'), true);
+        $roh = json_decode((string)@$this->ReadAttributeString('State'), true);
         $tag = $this->TagKennung($jetzt);
         if (!is_array($roh) || (string)($roh['day'] ?? '') !== $tag) {
             return ['day' => $tag, 'done' => []];
@@ -260,7 +260,7 @@ trait RoutineStore
         if ($beutel === '') {
             return 0;
         }
-        $karte = json_decode($this->ReadAttributeString('Coins'), true);
+        $karte = json_decode((string)@$this->ReadAttributeString('Coins'), true);
         if (!is_array($karte)) {
             $karte = [];
         }
@@ -274,7 +274,7 @@ trait RoutineStore
     /** @return array<string,int> Geldbeutel-Kennung => Stand */
     private function MuenzenLesen(): array
     {
-        $karte = json_decode($this->ReadAttributeString('Coins'), true);
+        $karte = json_decode((string)@$this->ReadAttributeString('Coins'), true);
         return is_array($karte) ? array_map('intval', $karte) : [];
     }
 
@@ -482,7 +482,7 @@ trait RoutineStore
     private function PayloadBauen(int $jetzt): array
     {
         $zustand = $this->ZustandAktuell($jetzt);
-        $gespeichert = json_decode($this->ReadAttributeString('State'), true);
+        $gespeichert = json_decode((string)@$this->ReadAttributeString('State'), true);
         if ((string)(is_array($gespeichert) ? ($gespeichert['day'] ?? '') : '') !== $zustand['day']) {
             // Der gespeicherte Tag ist vorbei: Variablen jetzt mit umlegen,
             // nicht erst beim nächsten Häkchen.

@@ -538,7 +538,7 @@ class SymDoShoppingList extends IPSModuleStrict
                     }
                 }
                 if (count($colors) === 3) {
-                    $theme = json_decode($this->ReadAttributeString('VisuTheme'), true);
+                    $theme = json_decode((string)@$this->ReadAttributeString('VisuTheme'), true);
                     if (!is_array($theme)) {
                         $theme = [];
                     }
@@ -922,7 +922,7 @@ class SymDoShoppingList extends IPSModuleStrict
         // 1. Eingestelltes einsammeln, dabei die Reihenfolge der Tabelle behalten
         $konfiguriert = [];
         $namen        = [];
-        $decoded      = json_decode($this->ReadPropertyString('CategoryOrder'), true);
+        $decoded      = json_decode((string)@$this->ReadPropertyString('CategoryOrder'), true);
         foreach ((array)$decoded as $entry) {
             $name = trim(is_string($entry) ? $entry : (string)($entry['category'] ?? ''));
             if ($name === '') {
@@ -1067,7 +1067,7 @@ class SymDoShoppingList extends IPSModuleStrict
 
     private function ReadBooleanPropertyOrDefault(string $name, bool $default): bool
     {
-        $config = json_decode(IPS_GetConfiguration($this->InstanceID), true);
+        $config = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
         if (!is_array($config) || !array_key_exists($name, $config)) {
             return $default;
         }
@@ -2185,7 +2185,7 @@ class SymDoShoppingList extends IPSModuleStrict
 
     private function BuildCookieHeader(string $host): string
     {
-        $jar = json_decode($this->ReadAttributeString('ExtApiCookies'), true);
+        $jar = json_decode((string)@$this->ReadAttributeString('ExtApiCookies'), true);
         if (!is_array($jar) || !isset($jar[$host]) || !is_array($jar[$host])) {
             return '';
         }
@@ -2198,7 +2198,7 @@ class SymDoShoppingList extends IPSModuleStrict
 
     private function StoreCookies(string $host, array $setCookieLines): void
     {
-        $jar = json_decode($this->ReadAttributeString('ExtApiCookies'), true);
+        $jar = json_decode((string)@$this->ReadAttributeString('ExtApiCookies'), true);
         if (!is_array($jar)) {
             $jar = [];
         }

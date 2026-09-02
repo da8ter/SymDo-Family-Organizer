@@ -81,7 +81,7 @@ trait MicrosoftToDoSync
     {
         $options = [['caption' => $this->Translate('Please select...'), 'value' => '']];
 
-        $stored = json_decode($this->ReadAttributeString('MicrosoftListOptions'), true);
+        $stored = json_decode((string)@$this->ReadAttributeString('MicrosoftListOptions'), true);
         if (is_array($stored)) {
             foreach ($stored as $item) {
                 $options[] = [

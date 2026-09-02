@@ -79,7 +79,7 @@ class SymDoRoutines extends IPSModuleStrict
         $this->RoutinenNachtragen();
 
         // 1. Alte Abos/Referenzen sauber lösen (kein Leak bei Konfig-Wechsel)
-        $vorher = json_decode($this->ReadAttributeString('SubscribedVarIDs'), true);
+        $vorher = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
         foreach (is_array($vorher) ? $vorher : [] as $altID) {
             if ((int)$altID > 0) {
                 $this->UnregisterMessage((int)$altID, VM_UPDATE);
@@ -382,7 +382,7 @@ class SymDoRoutines extends IPSModuleStrict
         }
 
         // Was dieses Modul früher angelegt hat und jetzt nicht mehr braucht, fliegt.
-        $bekannt = json_decode($this->ReadAttributeString('KnownVarIdents'), true);
+        $bekannt = json_decode((string)@$this->ReadAttributeString('KnownVarIdents'), true);
         foreach (is_array($bekannt) ? $bekannt : [] as $alt) {
             if (!isset($gewollt[(string)$alt])) {
                 $this->MaintainVariable((string)$alt, '', VARIABLETYPE_BOOLEAN, '', 0, false);

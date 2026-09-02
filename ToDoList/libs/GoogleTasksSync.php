@@ -99,7 +99,7 @@ trait GoogleTasksSync
     {
         $options = [['caption' => $this->Translate('Please select...'), 'value' => '']];
 
-        $stored = json_decode($this->ReadAttributeString('GoogleTaskListOptions'), true);
+        $stored = json_decode((string)@$this->ReadAttributeString('GoogleTaskListOptions'), true);
         if (is_array($stored)) {
             foreach ($stored as $item) {
                 $options[] = [

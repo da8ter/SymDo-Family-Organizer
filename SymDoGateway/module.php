@@ -695,7 +695,7 @@ class SymDoGateway extends IPSModuleStrict
     public function MicrosoftDeviceFinish(): string
     {
         $clientId = trim($this->ReadPropertyString('MicrosoftClientID'));
-        $stand = json_decode($this->ReadAttributeString('MicrosoftDeviceFlow'), true);
+        $stand = json_decode((string)@$this->ReadAttributeString('MicrosoftDeviceFlow'), true);
         if (!is_array($stand) || ($stand['code'] ?? '') === '') {
             return $this->Translate('No sign-in running — request a device code first.');
         }

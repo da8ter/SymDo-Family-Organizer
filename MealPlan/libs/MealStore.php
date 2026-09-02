@@ -39,7 +39,7 @@ trait MealStore
     /** @return array<string, array{listId:string,text:string}> Datum => Gericht */
     private function PlanLesen(): array
     {
-        $roh = json_decode($this->ReadAttributeString('Plan'), true);
+        $roh = json_decode((string)@$this->ReadAttributeString('Plan'), true);
         $tage = is_array($roh['days'] ?? null) ? $roh['days'] : [];
         $raus = [];
         foreach ($tage as $datum => $g) {
