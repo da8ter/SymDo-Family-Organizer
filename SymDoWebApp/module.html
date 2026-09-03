@@ -642,6 +642,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    vom Nutzer gemeldet. Links markiert sie den Beginn der vertretenen Stunde und
    laesst die Hoehe in Ruhe; die Wochenkachel macht es genauso. */
 .plan-stueck.vertretung { box-shadow: inset 3px 0 0 0 rgba(255,255,255,.85); }
+/* Pfad in der Ordner-Kopfzeile: „Tim › " vor dem Namen, leiser als er. Ohne
+   ihn sieht ein Unterordner aus wie einer von oben. */
+.note-path { color: var(--muted); font-weight: 600; }
 /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
    Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
@@ -10947,6 +10950,9 @@ function notizenFehlertext(j) {
   // Kernel-Neustart, und „Aktion fehlgeschlagen" schickt auf die falsche Faehrte.
   if (code === 'store_unwritable') return translate('Restart the Symcon kernel once, then notes can be stored.');
   if (code === 'quota_exceeded') return translate('No more room — please delete something first.');
+  // Beide Faelle kommen erst mit verschachtelten Ordnern vor.
+  if (code === 'has_children') return translate('This folder still contains folders — empty it first.');
+  if (code === 'too_deep') return translate('Three levels of folders are the limit.');
   if (code === 'file_too_large') return translate('File too large.');
   if (code === 'unsupported_file') return translate('Only JPEG, PNG and PDF are supported.');
   if (code === 'no_consent') return translate('AI analysis is disabled.');
@@ -10963,6 +10969,23 @@ function notesOrdner(id) {
 }
 function notesImOrdner(id) {
   return notizen.notes.filter(n => n.folderId === id);
+}
+/* Verschachtelung: Ordner tragen seit dem 03.09.2026 ein parentId. Leer heisst
+   oberste Ebene — und ein parentId, das auf einen geloeschten Ordner zeigt,
+   liefert der Server bereits als leer, damit kein Ordner unerreichbar wird. */
+function notesUnterordner(id) {
+  return notizen.folders.filter(f => (f.parentId || '') === (id || ''));
+}
+/* Der Weg von oben bis zu diesem Ordner — fuer die Kopfzeile. Gegen Zyklen
+   gedeckelt, nicht gegen Tiefe: ein kaputter Bestand wuerde sonst ewig laufen. */
+function notesPfad(id) {
+  const weg = [];
+  let f = notesOrdner(id);
+  for (let i = 0; f && i < 8; i++) {
+    weg.unshift(f);
+    f = f.parentId ? notesOrdner(f.parentId) : null;
+  }
+  return weg;
 }
 
 function renderNotizen() {
@@ -11026,12 +11049,13 @@ function renderNotizenMaster(el) {
     bindeNotizenMaster(renderRows(el, html));
     return;
   }
-  if (notizen.folders.length === 0) {
+  if (notesUnterordner('').length === 0) {
     html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
       translate('No folders yet') + '</div>';
   }
   const users = usersById();
-  for (const f of notizen.folders) {
+  // NUR die oberste Ebene; Unterordner stehen in ihrem Elternteil.
+  for (const f of notesUnterordner('')) {
     const anzahl = f.count === 1 ? translate('1 note') : translate('%1 notes').replace('%1', String(f.count));
     const u = f.memberId ? users[f.memberId] : null;
     const auf = notesOrdnerId === f.id ? ' is-open' : '';
@@ -11145,14 +11169,35 @@ function renderNotizenDetail(el, ordner) {
       translate('Select a folder') + '</div>');
     return;
   }
+  /* Der Pfad, nicht nur der Name: „Tim › Edumaps" sagt, wo man ist — ohne ihn
+     sieht ein Unterordner aus wie ein Ordner von oben. */
+  const weg = notesPfad(ordner.id);
+  const pfad = weg.length > 1
+    ? '<span class="note-path">' + weg.slice(0, -1).map(f => escapeHtml(f.name)).join(' › ') + ' › </span>'
+    : '';
   let html = '<div class="screen-head" data-key="detailhead">' +
     '<button class="icon-btn" id="btnNotesBack" aria-label="' + translate('Back') + '">' +
     '<i class="fa-light fa-chevron-left"></i></button>' +
-    '<h2>' + escapeHtml(ordner.name) + '</h2>' +
+    '<h2>' + pfad + escapeHtml(ordner.name) + '</h2>' +
+    '<button class="icon-btn" id="btnNotesSubCreate" aria-label="' + translate('New folder') + '">' +
+    '<i class="fa-light fa-folder-plus"></i></button>' +
     '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
     '<i class="fa-light fa-plus"></i></button></div>';
+  /* Unterordner ÜBER den Notizen: sie sind Wege, die Notizen sind Inhalt. */
+  for (const f of notesUnterordner(ordner.id)) {
+    const anzahl = f.count === 1 ? translate('1 note') : translate('%1 notes').replace('%1', String(f.count));
+    html += '<div class="fav-card note-folder note-sub" data-key="nsub:' + escapeHtml(f.id) + '">' +
+      '<div class="swipe-under"><i class="fa-light fa-trash"></i></div>' +
+      '<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>' +
+      '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
+      '<span class="fav-badge"><i class="fa-light fa-folder"></i></span>' +
+      '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
+      '<span class="fav-count">' + anzahl + '</span></span>' +
+      '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
+      '</div></div>';
+  }
   const liste = notesImOrdner(ordner.id);
-  if (liste.length === 0) {
+  if (liste.length === 0 && notesUnterordner(ordner.id).length === 0) {
     html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-note-sticky"></i>' +
       translate('No notes yet') + '</div>';
   }
@@ -11181,7 +11226,33 @@ function renderNotizenDetail(el, ordner) {
   };
   // Auch hier nur die frischen Knoten — siehe bindeNotizenMaster.
   const zurueck = suche('#btnNotesBack')[0];
-  if (zurueck) zurueck.addEventListener('click', () => { notesOrdnerId = null; renderNotizen(); });
+  // Eine Ebene hoch, nicht gleich zur Wurzel: aus „Tim › Edumaps" fuehrt der
+  // Weg zurueck nach „Tim".
+  if (zurueck) zurueck.addEventListener('click', () => {
+    notesOrdnerId = ordner.parentId || null;
+    renderNotizen();
+  });
+  const neuOrdner = suche('#btnNotesSubCreate')[0];
+  if (neuOrdner) neuOrdner.addEventListener('click', () => {
+    showPrompt(translate('New folder'), '', translate('Create'), (name) => {
+      if (name.trim()) notizenAktion({ action: 'folderCreate', name: name.trim(), parentId: ordner.id });
+    });
+  });
+  suche('.note-sub').forEach(card => {
+    const zeile = card.querySelector('.fav-row');
+    if (!zeile) return;
+    const fid = zeile.dataset.folder;
+    zeile.addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      notesOrdnerId = fid;
+      renderNotizen();
+    });
+    bindCardSwipe(card, '.fav-row',
+      () => { restoreCard(card); notesOrdnerLoeschen(fid); },
+      () => { restoreCard(card); notesOrdnerUmbenennen(fid); },
+      { dissolve: false });
+  });
   const neu = suche('#btnNoteCreate')[0];
   if (neu) neu.addEventListener('click', () => noteEditorOeffnen({ folderId: ordner.id }));
   suche('.note-card').forEach(card => {

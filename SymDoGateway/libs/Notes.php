@@ -43,6 +43,10 @@ trait Notes
     private const NOTE_TITLE_MAX   = 120;
     private const NOTES_FOLDERS_MAX = 40;
     private const NOTE_FOLDER_NAME_MAX = 60;
+    /** Wie tief Ordner ineinander liegen duerfen. Zwei Ebenen reichen fuer den
+     *  Fall, um den es geht (Mitglied → „Edumaps"), drei sind Reserve; tiefer
+     *  wird eine Liste auf dem Telefon unbedienbar. */
+    private const NOTE_FOLDER_DEPTH_MAX = 3;
     private const NOTE_ATTACH_MAX  = 5;
     /** Laenge der Vorschau in der Uebersicht — der volle Text kommt erst mit `get`. */
     private const NOTE_PREVIEW_MAX = 160;
@@ -218,6 +222,8 @@ trait Notes
                 'id'        => $this->NotesNewId(),
                 'name'      => (string)$u['name'],
                 'memberId'  => $id,
+                // Mitglieder-Ordner stehen immer oben.
+                'parentId'  => '',
                 'createdAt' => $jetzt,
                 'updatedAt' => $jetzt,
             ];
@@ -248,6 +254,24 @@ trait Notes
             $f = (string)($n['folderId'] ?? '');
             $zahl[$f] = ($zahl[$f] ?? 0) + 1;
         }
+        /* Unterordner zaehlen mit: an einem Mitglieder-Ordner mit dem
+           Edumaps-Ordner darin stuende sonst „0", obwohl 16 Notizen darin
+           liegen. Nur EINE Ebene tief aufaddieren reicht nicht — es wird die
+           ganze Kette hochgezaehlt. */
+        foreach ($store['folders'] as $f) {
+            $eigene = (int)($zahl[(string)$f['id']] ?? 0);
+            if ($eigene === 0) {
+                continue;
+            }
+            $eltern = (string)($f['parentId'] ?? '');
+            $tiefe = 0;
+            while ($eltern !== '' && $tiefe < self::NOTE_FOLDER_DEPTH_MAX) {
+                $zahl[$eltern] = ($zahl[$eltern] ?? 0) + $eigene;
+                $i = $this->NotesIndexOf($store['folders'], $eltern);
+                $eltern = $i < 0 ? '' : (string)($store['folders'][$i]['parentId'] ?? '');
+                $tiefe++;
+            }
+        }
         $rows = [];
         foreach ($store['folders'] as $f) {
             $mid = (string)($f['memberId'] ?? '');
@@ -255,6 +279,10 @@ trait Notes
             $rows[] = [
                 'id'         => (string)$f['id'],
                 'name'       => (string)($f['name'] ?? ''),
+                /* Verschachtelung: leer heisst „oberste Ebene". Zeigt der Wert
+                   auf einen Ordner, den es nicht mehr gibt, gilt der Ordner als
+                   oberste Ebene — sonst waere er unerreichbar. */
+                'parentId'   => $this->NotesParentAlive($store, (string)($f['parentId'] ?? '')),
                 // Nur wenn das Mitglied noch existiert. Sonst ist der Ordner ein
                 // gewöhnlicher: kein Foto, frei umbenennbar, löschbar.
                 'memberId'   => $u ? $mid : '',
@@ -271,6 +299,52 @@ trait Notes
             return strcasecmp($a['name'], $b['name']);
         });
         return $rows;
+    }
+
+    /** Elternteil, sofern es den Ordner noch gibt — sonst leer (oberste Ebene). */
+    private function NotesParentAlive(array $store, string $parentId): string
+    {
+        if ($parentId === '') {
+            return '';
+        }
+        return $this->NotesIndexOf($store['folders'], $parentId) >= 0 ? $parentId : '';
+    }
+
+    /**
+     * Wie tief liegt dieser Ordner? Oberste Ebene = 1.
+     *
+     * Die Schleife ist gegen Zyklen gedeckelt, nicht gegen Tiefe: ein Zyklus
+     * kann nur durch einen kaputten Bestand entstehen, wuerde hier aber ewig
+     * laufen.
+     */
+    private function NotesFolderDepth(array $store, string $folderId): int
+    {
+        $tiefe = 1;
+        $id = $folderId;
+        for ($schritt = 0; $schritt < 32; $schritt++) {
+            $i = $this->NotesIndexOf($store['folders'], $id);
+            if ($i < 0) {
+                break;
+            }
+            $eltern = (string)($store['folders'][$i]['parentId'] ?? '');
+            if ($eltern === '') {
+                break;
+            }
+            $tiefe++;
+            $id = $eltern;
+        }
+        return $tiefe;
+    }
+
+    /** Hat der Ordner Unterordner? */
+    private function NotesHasChildren(array $store, string $folderId): bool
+    {
+        foreach ($store['folders'] as $f) {
+            if ((string)($f['parentId'] ?? '') === $folderId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function NotesRow(array $n, bool $mitText): array
@@ -410,8 +484,19 @@ trait Notes
                 if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
                     return $this->NotesFehler('quota_exceeded');
                 }
+                $eltern = (string)($body['parentId'] ?? '');
+                if ($eltern !== '') {
+                    if ($this->NotesIndexOf($store['folders'], $eltern) < 0) {
+                        return $this->NotesFehler('not_found');
+                    }
+                    // Ein Ordner IM Ordner IM Ordner reicht; tiefer wird die
+                    // Liste auf dem Telefon unbedienbar.
+                    if ($this->NotesFolderDepth($store, $eltern) >= self::NOTE_FOLDER_DEPTH_MAX) {
+                        return $this->NotesFehler('too_deep');
+                    }
+                }
                 $ordner = ['id' => $this->NotesNewId(), 'name' => $name, 'memberId' => '',
-                           'createdAt' => $jetzt, 'updatedAt' => $jetzt];
+                           'parentId' => $eltern, 'createdAt' => $jetzt, 'updatedAt' => $jetzt];
                 $store['folders'][] = $ordner;
                 return $this->NotesWriteStore($store)
                     ? ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'folder' => $ordner]
@@ -498,6 +583,13 @@ trait Notes
         // Datenverlust-Automat.
         $mode = (string)($body['mode'] ?? '');
         $fid = (string)$store['folders'][$i]['id'];
+        /* Mit Unterordnern wird NICHT geloescht. Rekursiv waere ein
+           Datenverlust-Automat (derselbe Grund, aus dem `mode` Pflicht ist),
+           und ein stilles Hochziehen der Kinder auf die oberste Ebene waere
+           eine Ueberraschung. Der Nutzer raeumt sie selbst weg. */
+        if ($this->NotesHasChildren($store, $fid)) {
+            return $this->NotesFehler('has_children');
+        }
         if ($mode === 'move') {
             $ziel = (string)($body['targetId'] ?? '');
             if ($ziel === $fid || $this->NotesIndexOf($store['folders'], $ziel) < 0) {

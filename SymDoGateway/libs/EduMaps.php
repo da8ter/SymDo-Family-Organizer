@@ -48,6 +48,11 @@ trait EduMaps
 
     private ?array $eduConfigCache = null;
 
+    /** Setzt EduNotizOrdner, wenn es den Bestand angefasst hat (Ordner angelegt
+     *  oder nachtraeglich in den Kindordner gehoben). Dann muss geschrieben
+     *  werden, auch wenn an der Notiz selbst nichts zu tun war. */
+    private bool $eduOrdnerGeaendert = false;
+
     // ────────────────────────────── Lebenszyklus ──────────────────────────────
 
     private function EduCreate(): void
@@ -235,9 +240,8 @@ trait EduMaps
      * auch beim ERSTEN Lauf, der sonst nur vermerkt. Wer den Schalter umlegt,
      * will den Bestand sehen, nicht in sechs Stunden die Haelfte davon.
      *
-     * FLACHES MODELL: Notizen-Ordner haben kein Elternteil. Ein „Edumaps"-Ordner
-     * IM Kindordner gibt es also nicht — je Kind entsteht ein eigener Ordner
-     * „Edumaps <Name>" neben dessen Mitglieder-Ordner.
+     * Der Ordner liegt IM Ordner des Kindes (Notizen kennen seit dem 03.09.2026
+     * Verschachtelung). Hat das Kind keinen Mitglieder-Ordner, liegt er oben.
      *
      * Wiedererkannt wird die Karte an `srcId` in der Notiz selbst, nicht an einem
      * eigenen Merker: ein neues Attribut braeuchte einen Kernel-Neustart, und ein
@@ -259,6 +263,7 @@ trait EduMaps
         }
         try {
             $store = $this->NotesStore();
+            $this->eduOrdnerGeaendert = false;
             $ordnerId = $this->EduNotizOrdner($store, $seite);
             if ($ordnerId === '') {
                 return false;
@@ -272,8 +277,15 @@ trait EduMaps
                     break;
                 }
             }
-            // Unveraendert? Dann nichts anfassen — kein Schreiben, keine neuen Medien.
+            // Unveraendert? Dann nichts anfassen — kein Schreiben, keine neuen
+            // Medien. Nur wenn der ORDNER sich bewegt hat, muss der Bestand
+            // trotzdem einmal geschrieben werden.
             if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['updated']) {
+                if ($this->eduOrdnerGeaendert) {
+                    $store['notes'][$i]['folderId'] = $ordnerId;
+                    $this->NotesWriteStore($store);
+                    $this->eduOrdnerGeaendert = false;
+                }
                 return false;
             }
             if ($i < 0 && count($store['notes']) >= self::NOTES_MAX) {
@@ -335,30 +347,56 @@ trait EduMaps
     {
         $userId = trim((string)($seite['userId'] ?? ''));
         $schluessel = 'edu:' . ($userId !== '' ? $userId : md5((string)$seite['url']));
+        $mitgliedsOrdner = '';
         foreach ($store['folders'] as $f) {
-            if ((string)($f['eduKey'] ?? '') === $schluessel) {
-                return (string)$f['id'];
+            if ($userId !== '' && (string)($f['memberId'] ?? '') === $userId) {
+                $mitgliedsOrdner = (string)$f['id'];
+                break;
             }
+        }
+        foreach ($store['folders'] as $k => $f) {
+            if ((string)($f['eduKey'] ?? '') !== $schluessel) {
+                continue;
+            }
+            /* Nachziehen: der Ordner ist vor der Verschachtelung entstanden und
+               liegt noch oben. Einmal in den Kindordner heben — der Name bleibt,
+               den darf der Nutzer selbst aendern. */
+            if ((string)($f['parentId'] ?? '') === '' && $mitgliedsOrdner !== ''
+                && $mitgliedsOrdner !== (string)$f['id']) {
+                $store['folders'][$k]['parentId'] = $mitgliedsOrdner;
+                $store['folders'][$k]['updatedAt'] = time();
+                $this->eduOrdnerGeaendert = true;
+                $this->SendDebug('EduMaps', 'Edumaps-Ordner in den Kindordner verschoben', 0);
+            }
+            return (string)$f['id'];
         }
         if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
             $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Edumaps-Ordner angelegt', 0);
             return '';
         }
+        /* IM Ordner des Kindes, wenn es einen hat — dann heisst er einfach
+           „Edumaps", der Name des Kindes steht schon darueber. Ohne
+           Mitglieder-Ordner liegt er oben und traegt den Namen mit. */
+        $eltern = $mitgliedsOrdner;
         $name = 'Edumaps';
-        foreach ($this->LoadUsers() as $u) {
-            if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
-                $name = 'Edumaps ' . trim((string)$u['name']);
-                break;
+        if ($eltern === '') {
+            foreach ($this->LoadUsers() as $u) {
+                if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
+                    $name = 'Edumaps ' . trim((string)$u['name']);
+                    break;
+                }
             }
-        }
-        if ($name === 'Edumaps' && trim((string)($seite['name'] ?? '')) !== '') {
-            // Ohne Mitglied: der Seitenname ist besser als nichts.
-            $name = 'Edumaps ' . trim((string)$seite['name']);
+            if ($name === 'Edumaps' && trim((string)($seite['name'] ?? '')) !== '') {
+                // Ohne Mitglied: der Seitenname ist besser als nichts.
+                $name = 'Edumaps ' . trim((string)$seite['name']);
+            }
         }
         $jetzt = time();
         $ordner = ['id' => $this->NotesNewId(), 'name' => $this->NotesTrim($name, self::NOTE_FOLDER_NAME_MAX),
-                   'memberId' => '', 'eduKey' => $schluessel, 'createdAt' => $jetzt, 'updatedAt' => $jetzt];
+                   'memberId' => '', 'parentId' => $eltern, 'eduKey' => $schluessel,
+                   'createdAt' => $jetzt, 'updatedAt' => $jetzt];
         $store['folders'][] = $ordner;
+        $this->eduOrdnerGeaendert = true;
         return (string)$ordner['id'];
     }
 
