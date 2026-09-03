@@ -280,6 +280,13 @@ trait WebUntis
      */
     private function UntisKindLesen(array $kind, array $raster, bool $trocken): string
     {
+        /* Ohne Zuordnung in der Zielinstanz wuerde der Import mit
+           „unknown_child" abgewiesen — dann lieber gleich sagen, was fehlt,
+           und die Anfrage an die Schule sparen. */
+        if ((int)$kind['stpl'] > 0 && (string)$kind['child'] === '') {
+            return sprintf($this->Translate('%s: no child of that member in the timetable instance — link the member there.'),
+                $kind['name']);
+        }
         $von = (int)date('Ymd');
         $bis = (int)date('Ymd', strtotime('+' . self::UNTIS_TAGE_VOR . ' days'));
         $params = ['options' => [
@@ -545,7 +552,7 @@ trait WebUntis
             return 0;
         }
         $rumpf = (string)json_encode([
-            'child'  => $kind['child'] !== '' ? $kind['child'] : $kind['name'],
+            'child'  => $kind['child'],
             'source' => 'WebUntis',
             'days'   => (object)$tage,
         ], JSON_UNESCAPED_UNICODE);
@@ -669,26 +676,108 @@ trait WebUntis
     private function UntisKinder(): array
     {
         $roh = json_decode((string)$this->UntisProp('UntisStudents', '[]'), true);
+        $mitglieder = $this->UntisMitglieder();
         $raus = [];
         foreach (is_array($roh) ? $roh : [] as $z) {
             if (!is_array($z)) {
                 continue;
             }
-            $name = trim((string)($z['name'] ?? ''));
+            $userId = trim((string)($z['userId'] ?? ''));
+            $stpl   = (int)($z['stpl'] ?? 0);
+            /* EIN Feld bestimmt das Kind: das Familienmitglied. Daraus folgen
+               der Anzeigename, das Kind in der Zielinstanz und das Ziel der
+               Meldung. Frueher standen dafuer drei Spalten da (name, child,
+               userId) — dreimal dasselbe Kind, und ein Tippfehler im Freitext
+               „child" endete in „unknown_child". Die alten Felder gelten
+               weiter als Rueckfall, damit vorhandene Zeilen nicht ausfallen. */
+            $name = $userId !== '' ? (string)($mitglieder[$userId] ?? '') : '';
+            if ($name === '') {
+                $name = trim((string)($z['name'] ?? ''));
+            }
+            if ($name === '' && $userId !== '') {
+                /* Mitglied geloescht oder umbenannt: die Zeile trotzdem
+                   mitnehmen. Still uebergehen waere schlimmer — dann fehlte der
+                   Plan, und in der Statuszeile stuende nicht, warum. */
+                $name = '#' . $userId;
+            }
             if ($name === '') {
                 continue;
             }
+            $kind = $this->UntisKindImPlan($stpl, $userId, $name);
+            if ($kind === '') {
+                $kind = trim((string)($z['child'] ?? ''));
+            }
             $raus[] = [
                 'name'   => $name,
-                'stpl'   => (int)($z['stpl'] ?? 0),
-                'child'  => trim((string)($z['child'] ?? '')),
+                'stpl'   => $stpl,
+                'child'  => $kind,
                 'type'   => (int)($z['type'] ?? 0),
                 'id'     => (int)($z['elementId'] ?? 0),
                 'kurse'  => trim((string)($z['kurse'] ?? '')),
-                'userId' => trim((string)($z['userId'] ?? '')),
+                'userId' => $userId,
             ];
         }
         return $raus;
+    }
+
+    /**
+     * Familienmitglieder als id => Name.
+     *
+     * @return array<string, string>
+     */
+    private function UntisMitglieder(): array
+    {
+        $raus = [];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                $id = trim((string)($u['id'] ?? ''));
+                $n  = trim((string)($u['name'] ?? ''));
+                if ($id !== '' && $n !== '') {
+                    $raus[$id] = $n;
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->SendDebug('WebUntis', 'Mitgliederliste nicht lesbar: ' . $e->getMessage(), 0);
+        }
+        return $raus;
+    }
+
+    /**
+     * Wie heisst das Kind in der Ziel-Instanz?
+     *
+     * Das Stundenplan-Modul verknuepft seine Kinder selbst mit Mitgliedern
+     * (`Children[].userId`) — dieselbe Zuordnung, die auch die App benutzt.
+     * Darum wird zuerst darueber gesucht und nur zweitens ueber den Namen: ein
+     * Kind kann in der Instanz anders heissen als das Mitglied.
+     */
+    private function UntisKindImPlan(int $stpl, string $userId, string $name): string
+    {
+        if ($stpl <= 0 || !IPS_InstanceExists($stpl)) {
+            return '';
+        }
+        $kinder = json_decode((string)@IPS_GetProperty($stpl, 'Children'), true);
+        if (!is_array($kinder)) {
+            return '';
+        }
+        $ueberNamen = '';
+        foreach ($kinder as $k) {
+            if (!is_array($k)) {
+                continue;
+            }
+            $n = trim((string)($k['name'] ?? ''));
+            if ($n === '') {
+                continue;
+            }
+            // Die Kennungen sind unterschiedlich entstanden: einmal Ziffern,
+            // einmal Hex — deshalb als Zeichenkette vergleichen.
+            if ($userId !== '' && trim((string)($k['userId'] ?? '')) === $userId) {
+                return $n;
+            }
+            if (mb_strtolower($n) === mb_strtolower($name)) {
+                $ueberNamen = $n;
+            }
+        }
+        return $ueberNamen;
     }
 
     private function UntisIsEnabled(): bool

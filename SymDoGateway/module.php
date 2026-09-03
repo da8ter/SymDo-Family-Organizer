@@ -1769,13 +1769,12 @@ class SymDoGateway extends IPSModuleStrict
                  'add' => true, 'delete' => true,
                  'caption' => $this->Translate('Students'),
                  'columns' => [
-                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '120px',
-                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                      ['caption' => $this->Translate('Timetable instance'), 'name' => 'stpl', 'width' => '220px',
                       'add' => 0, 'edit' => ['type' => 'SelectInstance']],
-                     ['caption' => $this->Translate('Child in it'), 'name' => 'child', 'width' => '120px',
-                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                     ['caption' => $this->Translate('Notify'), 'name' => 'userId', 'width' => '120px',
+                     /* EIN Feld fuer das Kind. Daraus folgen Anzeigename, das Kind in
+                        der Zielinstanz (ueber Children[].userId) und das Ziel der
+                        Meldung — statt dreier Spalten, die alle dasselbe meinten. */
+                     ['caption' => $this->Translate('Family member'), 'name' => 'userId', 'width' => '160px',
                       'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
                      /* Leer = der Plan des angemeldeten Kontos. Gefuellt nur,
                         wenn ein Konto mehrere Kinder sieht (Elternzugang). */
