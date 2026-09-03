@@ -637,7 +637,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    einem stundenlangen Block, der sie sonst verdeckt. */
 .plan-stueck.entfall { opacity: .85; z-index: 1; }
 .plan-stueck.entfall > * { opacity: .6; }
-.plan-stueck.vertretung { box-shadow: inset 0 3px 0 0 rgba(255,255,255,.85); }
+/* Die Kante sitzt LINKS, nicht oben. Oben hat sie die blaue Flaeche um drei
+   Pixel gekuerzt, und der Balken sah dadurch niedriger aus als seine Nachbarn —
+   vom Nutzer gemeldet. Links markiert sie den Beginn der vertretenen Stunde und
+   laesst die Hoehe in Ruhe; die Wochenkachel macht es genauso. */
+.plan-stueck.vertretung { box-shadow: inset 3px 0 0 0 rgba(255,255,255,.85); }
 /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
    Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
