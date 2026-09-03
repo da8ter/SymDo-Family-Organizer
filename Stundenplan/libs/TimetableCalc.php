@@ -381,8 +381,13 @@ class TimetableCalc
      *  Ende der letzten Stunde. Freistunden zaehlen mit, Betreuung nicht. */
     public static function TagesDauer(array $tagSlots): int
     {
+        /* Weder Betreuung noch Entfall: „6 Schulstunden" waere falsch, wenn
+           die Haelfte ausfaellt — und seit der Plan datierte Tage kennt, steht
+           der Entfall wirklich im Tag. Dieselbe Regel wie in der Schulzeile
+           des Briefings. */
         $unterricht = array_values(array_filter($tagSlots,
-            static fn(array $s): bool => !(bool)($s['care'] ?? false)));
+            static fn(array $s): bool => !(bool)($s['care'] ?? false)
+                && (string)($s['status'] ?? '') !== 'entfall'));
         if ($unterricht === []) {
             return 0;
         }

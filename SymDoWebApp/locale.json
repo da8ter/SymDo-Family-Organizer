@@ -456,7 +456,10 @@
       "Download now?": "Jetzt laden?",
       "Loading speech recognition …": "Die Spracherkennung wird geladen …",
       "Ready — hands-free can start.": "Geladen — Freisprechen kann losgehen.",
-      "The download did not work.": "Das Laden hat nicht geklappt."
+      "The download did not work.": "Das Laden hat nicht geklappt.",
+      "cancelled": "entfällt",
+      "substitution": "Vertretung",
+      "lessons cancelled": "Unterricht entfällt"
     }
   }
 }
