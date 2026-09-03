@@ -10976,6 +10976,29 @@ function notesImOrdner(id) {
 function notesUnterordner(id) {
   return notizen.folders.filter(f => (f.parentId || '') === (id || ''));
 }
+/**
+ * Die Ordner fuer ein Auswahlfeld — in ihrer HIERARCHIE, nicht in einer Reihe.
+ *
+ * Vom Nutzer gemeldet: im Dropdown stand „Edumaps Max" zwischen „Doro" und
+ * „Test", als waere es ein Ordner von oben. Ein <select> laesst sich kaum
+ * gestalten, aber die Reihenfolge und der Text gehoeren uns: jedes Kind steht
+ * direkt unter seinem Elternteil und traegt je Ebene eine Einrueckung mit
+ * Pfeil. Geschuetzte Leerzeichen, weil der Browser normale am Anfang
+ * wegwirft.
+ */
+function notesOrdnerOptionen() {
+  const zeilen = [];
+  const baue = (elternId, tiefe) => {
+    for (const f of notesUnterordner(elternId)) {
+      const vor = tiefe === 0 ? '' : '\u00A0\u00A0'.repeat(tiefe) + '↳ ';
+      zeilen.push('<option value="' + escapeHtml(f.id) + '">' + vor + escapeHtml(f.name) + '</option>');
+      if (tiefe < 4) { baue(f.id, tiefe + 1); }
+    }
+  };
+  baue('', 0);
+  return zeilen.join('');
+}
+
 /* Der Weg von oben bis zu diesem Ordner — fuer die Kopfzeile. Gegen Zyklen
    gedeckelt, nicht gegen Tiefe: ein kaputter Bestand wuerde sonst ewig laufen. */
 function notesPfad(id) {
@@ -11427,8 +11450,7 @@ function noteEditorOeffnen(notiz) {
   document.getElementById('noteOverlayTitle').textContent =
     noteCtx.noteId ? translate('Edit note') : translate('New note');
   const wahl = document.getElementById('ntFolder');
-  wahl.innerHTML = notizen.folders
-    .map(f => '<option value="' + escapeHtml(f.id) + '">' + escapeHtml(f.name) + '</option>').join('');
+  wahl.innerHTML = notesOrdnerOptionen();
   wahl.value = noteCtx.folderId || '';
   document.getElementById('ntTitle').value = notiz.title || '';
   document.getElementById('ntText').value = notiz.text || '';
