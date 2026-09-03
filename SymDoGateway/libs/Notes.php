@@ -43,6 +43,8 @@ trait Notes
     private const NOTE_TITLE_MAX   = 120;
     private const NOTES_FOLDERS_MAX = 40;
     private const NOTE_FOLDER_NAME_MAX = 60;
+    /** So viele Notizen liefert `list` hoechstens MIT Text (Kartenansicht). */
+    private const NOTES_FULLTEXT_MAX = 60;
     /** Wie tief Ordner ineinander liegen duerfen. Zwei Ebenen reichen fuer den
      *  Fall, um den es geht (Mitglied → „Edumaps"), drei sind Reserve; tiefer
      *  wird eine Liste auf dem Telefon unbedienbar. */
@@ -289,6 +291,10 @@ trait Notes
                 'hasAvatar'  => $u ? (bool)$u['hasAvatar'] : false,
                 'count'      => (int)($zahl[(string)$f['id']] ?? 0),
                 'updatedAt'  => (int)($f['updatedAt'] ?? 0),
+                /* Woher der Ordner stammt. Daran erkennt die App, dass sie
+                   Karten statt Zeilen zeichnen soll — am NAMEN duerfte sie es
+                   nicht festmachen, der Nutzer darf ihn aendern. */
+                'source'     => ($f['eduKey'] ?? '') !== '' ? 'edumaps' : '',
             ];
         }
         usort($rows, static function (array $a, array $b): int {
@@ -365,6 +371,16 @@ trait Notes
             'updatedAt' => (int)($n['updatedAt'] ?? 0),
             'source'    => (string)($n['source'] ?? 'manual'),
         ];
+        /* Nur wenn gesetzt: eine von Hand geschriebene Notiz hat keinen
+           Abschnitt, und ein leeres Feld waere nur Ballast in der Antwort.
+           Die Projektion ist eine WEISSLISTE — ohne diese Zeilen kaeme beides
+           nie in der App an (dieselbe Falle wie beim `status` der Stunde). */
+        if (($n['section'] ?? '') !== '') {
+            $row['section'] = (string)$n['section'];
+        }
+        if (isset($n['pos'])) {
+            $row['pos'] = (int)$n['pos'];
+        }
         if ($mitText) {
             $row['text'] = $text;
         } else {
@@ -395,9 +411,21 @@ trait Notes
             // still scheiterte (Attribut noch nicht bekannt).
             $this->NotesEnsureMemberFolders();
             $store = $this->NotesStore();
+            /* Volltext auf Wunsch, aber nur fuer EINEN Ordner: die Kartenansicht
+               braucht ihn, die Uebersicht nicht. Ueber alle Notizen waere die
+               Antwort um ein Vielfaches groesser, ohne dass jemand den Text
+               liest. Gedeckelt, damit ein voller Ordner die Antwort nicht
+               sprengt — der Rest kommt wie immer als Vorschau. */
+            $volltextOrdner = (string)($body['folderId'] ?? '');
+            $mitText = ($body['withText'] ?? false) === true && $volltextOrdner !== '';
+            $rest = self::NOTES_FULLTEXT_MAX;
             $notes = [];
             foreach ($store['notes'] as $n) {
-                $notes[] = $this->NotesRow($n, false);
+                $voll = $mitText && (string)($n['folderId'] ?? '') === $volltextOrdner && $rest > 0;
+                if ($voll) {
+                    $rest--;
+                }
+                $notes[] = $this->NotesRow($n, $voll);
             }
             usort($notes, static fn(array $a, array $b): int => $b['updatedAt'] <=> $a['updatedAt']);
             $ordner = $this->NotesFolderRows($store);

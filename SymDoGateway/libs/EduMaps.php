@@ -182,12 +182,12 @@ trait EduMaps
         $analysiert = 0;
         $gedeckelt = false;
         $gespiegelt = 0;
-        foreach ($karten as $karte) {
+        foreach ($karten as $nr => $karte) {
             /* Spiegeln zuerst und fuer JEDE Karte: es kostet keinen KI-Aufruf,
                haengt also an keinem Deckel und auch nicht daran, ob die Karte
                als „geaendert" gilt. Die Notiz selbst entscheidet, ob es etwas
                zu tun gibt (srcRev). */
-            if ($this->EduNotizSpiegeln($seite, $karte)) {
+            if ($this->EduNotizSpiegeln($seite, $karte, (int)$nr)) {
                 $gespiegelt++;
             }
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
@@ -247,7 +247,7 @@ trait EduMaps
      * eigenen Merker: ein neues Attribut braeuchte einen Kernel-Neustart, und ein
      * zweiter Bestand kann mit dem ersten auseinanderlaufen.
      */
-    private function EduNotizSpiegeln(array $seite, array $karte): bool
+    private function EduNotizSpiegeln(array $seite, array $karte, int $nr = 0): bool
     {
         if (!(bool)$this->EduProp('EduToNotes', false)) {
             return false;
@@ -281,8 +281,42 @@ trait EduMaps
             // Medien. Nur wenn der ORDNER sich bewegt hat, muss der Bestand
             // trotzdem einmal geschrieben werden.
             if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['updated']) {
-                if ($this->eduOrdnerGeaendert) {
+                /* Nichts Neues an der Karte. Zwei Dinge koennen trotzdem fehlen:
+                   der verschobene Ordner und — bei Notizen aus der Zeit vor der
+                   Kartenansicht — Abschnitt und Platz. Beides nachziehen, ohne
+                   die Anhaenge anzufassen. */
+                $fehlt = !array_key_exists('section', $store['notes'][$i])
+                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr;
+                /* Anhaenge, die noch die rohe Kennung als Namen tragen, bekommen
+                   den Klarnamen — ohne die Datei neu zu laden. Zuordnung ueber
+                   die Reihenfolge: die Anhaenge sind in genau der Reihenfolge
+                   angelegt worden, in der sie auf der Karte stehen. */
+                $alteAtt = is_array($store['notes'][$i]['att'] ?? null) ? $store['notes'][$i]['att'] : [];
+                $kartenNamen = array_values(array_map(
+                    static fn(array $a): string => (string)$a['name'],
+                    array_filter((array)$karte['anhaenge'],
+                        fn(array $a): bool => $this->EduArt((string)$a['name']) !== '')));
+                if (count($alteAtt) === count($kartenNamen)) {
+                    foreach ($alteAtt as $k => $a) {
+                        if (preg_match('/^\d{6,}\./', (string)$a['name']) === 1
+                            && $kartenNamen[$k] !== (string)$a['name']) {
+                            $store['notes'][$i]['att'][$k]['name'] = $kartenNamen[$k];
+                            $fehlt = true;
+                        }
+                    }
+                }
+                // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
+                $neuerText = $this->EduNotizText($karte);
+                if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
+                    && $neuerText !== (string)($store['notes'][$i]['text'] ?? '')) {
+                    $store['notes'][$i]['text'] = $neuerText;
+                    $fehlt = true;
+                }
+                if ($this->eduOrdnerGeaendert || $fehlt) {
                     $store['notes'][$i]['folderId'] = $ordnerId;
+                    $store['notes'][$i]['section'] = $this->NotesTrim(
+                        (string)($karte['abschnitt'] ?? ''), self::NOTE_TITLE_MAX);
+                    $store['notes'][$i]['pos'] = $nr;
                     $this->NotesWriteStore($store);
                     $this->eduOrdnerGeaendert = false;
                 }
@@ -293,7 +327,7 @@ trait EduMaps
                 return false;
             }
 
-            $text = (string)$karte['text'];
+            $text = $this->EduNotizText($karte);
             if (mb_strlen($text) > self::NOTE_TEXT_MAX) {
                 /* Gekuerzt wird SICHTBAR. Eine still gekappte Notiz waere
                    schlimmer als eine fehlende — man sieht ihr nicht an, dass
@@ -314,6 +348,11 @@ trait EduMaps
                 'source'    => 'edumaps',
                 'srcId'     => $srcId,
                 'srcRev'    => (int)$karte['updated'],
+                /* Abschnitt und Platz auf der Seite: erst damit kann die App die
+                   Karten so zeigen, wie sie auf der Klassenseite stehen. Ohne
+                   sie waere es eine Liste nach Aenderungsdatum. */
+                'section'   => $this->NotesTrim((string)($karte['abschnitt'] ?? ''), self::NOTE_TITLE_MAX),
+                'pos'       => $nr,
             ];
             if ($i >= 0) {
                 $store['notes'][$i] = $satz;
@@ -334,6 +373,39 @@ trait EduMaps
         } finally {
             IPS_SemaphoreLeave($lock);
         }
+    }
+
+    /**
+     * Der Kartentext, wie er in der Notiz stehen soll.
+     *
+     * Zwei Zeilen muessen raus, die auf der Karte selbst richtig sind, in der
+     * Notiz aber doppelt: der TITEL (er steht schon als Titel darueber) und
+     * die blossen DATEINAMEN (sie stehen als Anhang darunter). Gemessen an der
+     * Karte „Regeln": Text begann mit „Regeln", dann „Unsere Schulregeln
+     * TER.pdf", dann „Unsere Schulregeln.pdf" — dreimal dasselbe im Blick.
+     */
+    private function EduNotizText(array $karte): string
+    {
+        $namen = [];
+        foreach ((array)$karte['anhaenge'] as $a) {
+            $namen[mb_strtolower(trim((string)$a['name']))] = true;
+        }
+        $titel = mb_strtolower(trim((string)$karte['titel']));
+        $zeilen = [];
+        $ersteWeg = false;
+        foreach (explode("\n", (string)$karte['text']) as $zeile) {
+            $roh = trim($zeile);
+            $klein = mb_strtolower($roh);
+            if (!$ersteWeg && $klein === $titel) {
+                $ersteWeg = true;   // nur die ERSTE Zeile, nicht jede Wiederholung
+                continue;
+            }
+            if ($roh !== '' && isset($namen[$klein])) {
+                continue;
+            }
+            $zeilen[] = $zeile;
+        }
+        return trim(implode("\n", $zeilen));
     }
 
     /**
@@ -615,6 +687,20 @@ trait EduMaps
      */
     private function EduDateien(string $rumpf): array
     {
+        /* Der SICHTBARE Name steht nicht in der Adresse — die traegt nur eine
+           Zahl —, sondern im Etikett unter der Vorschau:
+           <span class="medialabel"><a href="…/file/<id>/<token>">Regeln.pdf</a></span>.
+           Ohne ihn hiess die Datei in der App „2284251677130317565.pdf". */
+        $namen = [];
+        if (preg_match_all('#<span class="medialabel">\s*<a[^>]*/file/([^"\'/]+)/([a-z0-9]+)[^>]*>(.*?)</a>#su',
+                $rumpf, $mn, PREG_SET_ORDER) > 0) {
+            foreach ($mn as $t) {
+                $klar = $this->EduText($t[3]);
+                if ($klar !== '') {
+                    $namen[$t[1] . '/' . $t[2]] = $klar;
+                }
+            }
+        }
         $raus = [];
         $gesehen = [];
         if (preg_match_all('#https://[^"\']+/file/([^"\'/]+)/([a-z0-9]+)(?:/(?:preview|fd))?#i',
@@ -628,7 +714,7 @@ trait EduMaps
                 $gesehen[$schluessel] = true;
                 // „/fd" liefert die Datei mit Dateinamen; die nackte Adresse
                 // liefert eine Ansichtsseite.
-                $raus[] = ['name' => $name,
+                $raus[] = ['name' => $namen[$schluessel] ?? $name,
                            'url'  => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/fd'];
             }
         }

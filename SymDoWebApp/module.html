@@ -645,6 +645,45 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Pfad in der Ordner-Kopfzeile: „Tim › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
+/* Klassenseite als Karten. Eine Spalte auf dem Telefon, zwei, sobald Platz
+   ist — die Karten sind kurz, und nebeneinander sieht man mehr auf einen
+   Blick. Die Abschnittsueberschrift laeuft ueber beide Spalten. */
+.edu-abschnitt {
+  grid-column: 1 / -1; margin: 14px 2px 2px; font-size: 13px; font-weight: 700;
+  color: var(--muted); letter-spacing: .02em;
+}
+.edu-karte {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.edu-kopf { display: flex; align-items: baseline; gap: 8px; }
+.edu-titel { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; }
+.edu-datum { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+/* min-width:0 und overflow-wrap: die Karte ist ein Flex-Container, und ein
+   Flex-Kind waechst ohne beides ueber den Rand hinaus statt umzubrechen —
+   gemessen: die Regeln-Karte lief rechts aus dem Bild. Dieselbe Vorsorge wie
+   in .nv-v der Notiz-Ansicht. */
+.edu-text { font-size: 14px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+/* Die nv-Regeln der Notiz-Ansicht gelten dort nur unter .note-view. In der
+   Karte brauchen wir dieselbe Form noch einmal. */
+.edu-text .nv-p { margin: 0 0 6px; }
+.edu-text .nv-p:last-child { margin-bottom: 0; }
+.edu-text .nv-row { display: flex; gap: 8px; padding: 3px 0; }
+.edu-text .nv-k { flex: 0 0 auto; max-width: 45%; font-weight: 600; color: var(--muted); }
+.edu-text .nv-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.edu-karte .note-file { min-width: 0; }
+.edu-text:empty { display: none; }
+.edu-bild {
+  width: 100%; max-width: 100%; height: auto; border-radius: 12px; display: block;
+  background: var(--surface); cursor: pointer;
+}
+#notesDetail .edu-karte + .edu-karte { margin-top: 10px; }
+@media (min-width: 760px) {
+  #notesDetail:has(.edu-karte) { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+  #notesDetail .screen-head { grid-column: 1 / -1; }
+  #notesDetail .note-folder { grid-column: 1 / -1; }
+  #notesDetail .edu-karte + .edu-karte { margin-top: 0; }
+}
 /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
    Kartenfarbe haelt ihn sichtbar, wenn er gerade auf einem Fach steht — die
@@ -10906,14 +10945,24 @@ function ladeNotizen(danach) {
     notizenWartende = [];
     warten.forEach(f => { try { f(); } catch (e) {} });
   };
-  aiPost('/notes', { action: 'list' }).then(r => {
+  /* Der offene Edumaps-Ordner braucht den VOLLEN Text seiner Notizen — die
+     Kartenansicht zeigt ihn, die Vorschau von 160 Zeichen reicht dafuer nicht.
+     Nur dieser eine Ordner, sonst waere jede Antwort um ein Vielfaches
+     groesser, ohne dass jemand den Text liest. */
+  const wunsch = notesVolltextWunsch();
+  aiPost('/notes', wunsch ? { action: 'list', folderId: wunsch, withText: true }
+                          : { action: 'list' }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) { fertig(); return; }
     /* Unveraendert? Dann NICHTS anfassen. Der Abruf laeuft jetzt im Minutentakt
        (fremde Geraete), und ein blindes Neusetzen wuerde bei jedem Takt den
        Bestand ersetzen und neu zeichnen — auch wenn sich nichts getan hat. Die
        Revision zaehlt serverseitig bei jeder Aenderung hoch (Notes.php). */
-    if (notizenGeladen && (j.rev || 0) === (notizen.rev || 0)) { fertig(); return; }
+    // Auch bei gleicher Revision uebernehmen, wenn jetzt ein ANDERER Ordner
+    // seinen Volltext braucht — sonst blieben die Karten bei der Vorschau.
+    if (notizenGeladen && (j.rev || 0) === (notizen.rev || 0) && notesTextOrdner === wunsch) {
+      fertig(); return;
+    }
     notizen = {
       rev: j.rev || 0,
       folders: Array.isArray(j.folders) ? j.folders : [],
@@ -10922,6 +10971,7 @@ function ladeNotizen(danach) {
       limits: j.limits || {}
     };
     notizenGeladen = true;
+    notesTextOrdner = wunsch;
     // Ein inzwischen geloeschter Ordner darf nicht offen bleiben.
     if (notesOrdnerId && !notizen.folders.some(f => f.id === notesOrdnerId)) notesOrdnerId = null;
     if (activeTab === 'notes') renderNotizen();
@@ -10962,6 +11012,31 @@ function notizenFehlertext(j) {
   // „Aktion fehlgeschlagen" da, und zwar bei jedem weiteren Versuch genauso.
   if (code === 'invalid_payload') return translate('Title (max. 120) or text (max. 3000 characters) is too long.');
   return translate('Action failed');
+}
+
+/**
+ * Einen Ordner oeffnen.
+ *
+ * Bei einer Klassenseite fehlt jetzt der volle Text — die Liste kam mit
+ * Vorschauen. Also gleich nachladen: die Ansicht steht sofort (mit Vorschau)
+ * und wird beim Eintreffen scharf. Ohne diesen Aufruf blieben die Karten
+ * dauerhaft bei 160 Zeichen.
+ */
+function notesOrdnerOeffnen(fid) {
+  notesOrdnerId = fid;
+  renderNotizen();
+  if (notesVolltextWunsch() && notesTextOrdner !== notesVolltextWunsch()) {
+    ladeNotizen();
+  }
+}
+
+/** Welcher Ordner steht mit vollem Text im Bestand? '' = keiner. */
+let notesTextOrdner = '';
+
+/** Der offene Ordner, wenn er von der Klassenseite stammt — sonst ''. */
+function notesVolltextWunsch() {
+  const f = notesOrdnerId ? notesOrdner(notesOrdnerId) : null;
+  return (f && (f.source || '') === 'edumaps') ? f.id : '';
 }
 
 function notesOrdner(id) {
@@ -11142,8 +11217,7 @@ function bindeNotizenMaster(frisch) {
     zeile.addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button')) return;
-      notesOrdnerId = fid;
-      renderNotizen();
+      notesOrdnerOeffnen(fid);
     });
     // Nur selbst angelegte Ordner: links loeschen, rechts umbenennen.
     if (!card.classList.contains('note-folder-user')) {
@@ -11186,6 +11260,85 @@ function notesOrdnerLoeschen(fid) {
   });
 }
 
+/**
+ * Die Karten einer Klassenseite, gruppiert wie dort: Abschnitt als
+ * Ueberschrift, darunter die Karten in der Reihenfolge der Seite (`pos`).
+ *
+ * Bilder stehen IM Kartenfuss, nicht als Dateizeile — genau darum geht es.
+ * Nur wenn keine direkte Adresse zu haben ist (Symcon-Kachel: dort liegt kein
+ * Token), faellt die Karte auf die Zeile mit Symbol zurueck. Kein Sonderweg
+ * und keine kaputten Bilder.
+ */
+function edumapsKartenHtml(ordner) {
+  const karten = notesImOrdner(ordner.id)
+    .slice()
+    .sort((a, b) => (a.pos || 0) - (b.pos || 0));
+  if (karten.length === 0) {
+    return '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
+      translate('Nothing here yet') + '</div>';
+  }
+  let html = '';
+  let abschnitt = null;
+  for (const n of karten) {
+    const a = n.section || '';
+    if (a !== abschnitt) {
+      abschnitt = a;
+      if (a) {
+        html += '<h3 class="edu-abschnitt" data-key="ea:' + escapeHtml(n.id) + '">' +
+          escapeHtml(a) + '</h3>';
+      }
+    }
+    const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
+    const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
+    html += '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '">' +
+      '<div class="edu-kopf"><span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
+      '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
+      // Volltext, wenn er da ist; sonst die Vorschau — die Ansicht steht damit
+      // sofort und wird schaerfer, statt leer zu bleiben.
+      '<div class="edu-text">' + notizTextHtml(String(n.text || n.preview || '')) + '</div>';
+    for (const b of bilder) {
+      html += '<img class="edu-bild" loading="lazy" data-media="' + escapeHtml(String(b.id)) + '"' +
+        ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
+    }
+    for (const d of rest) {
+      html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
+        '<i class="fa-light ' + (d.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+        '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
+        '<i class="fa-light fa-chevron-right nv-chev"></i></div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+/** Bilder und Dateien der Karten antippbar machen — sonst ist die Ansicht zum Lesen. */
+function bindeEdumapsKarten(frisch) {
+  if (!Array.isArray(frisch)) return;
+  const suche = (sel) => {
+    const raus = [];
+    for (const n of frisch) {
+      if (n.matches && n.matches(sel)) raus.push(n);
+      if (n.querySelectorAll) raus.push(...n.querySelectorAll(sel));
+    }
+    return raus;
+  };
+  suche('.edu-karte').forEach(karte => {
+    const nid = karte.dataset.note;
+    const notiz = (notizen.notes || []).find(n => n.id === nid);
+    if (!notiz) return;
+    const oeffne = (mid) => {
+      // noteAnhangOeffnen liest die Notiz aus noteCtx; hier einen schmalen
+      // Zustand aufsetzen, genau wie in der Notiz-Ansicht.
+      noteCtx = { noteId: nid, files: notiz.att || [], warten: [], wahl: [], proposal: null };
+      noteAnhangOeffnen(parseInt(mid, 10));
+    };
+    karte.querySelectorAll('.edu-bild').forEach(b =>
+      b.addEventListener('click', () => oeffne(b.dataset.media)));
+    karte.querySelectorAll('.note-file').forEach(z =>
+      z.addEventListener('click', () => oeffne(z.dataset.media)));
+  });
+}
+
 function renderNotizenDetail(el, ordner) {
   if (!ordner) {
     renderRows(el, '<div class="empty-state" data-key="waehlen"><i class="fa-light fa-folder-open"></i>' +
@@ -11218,6 +11371,14 @@ function renderNotizenDetail(el, ordner) {
       '<span class="fav-count">' + anzahl + '</span></span>' +
       '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
       '</div></div>';
+  }
+  /* Ordner der Klassenseite werden als KARTEN gezeichnet, nicht als Zeilen:
+     der Inhalt ist zum Lesen da, nicht zum Anklicken. Alles ausserhalb dieses
+     Zweigs (Kopfzeile, Unterordner, die beiden Plus-Knoepfe) bleibt gleich. */
+  if ((ordner.source || '') === 'edumaps') {
+    html += edumapsKartenHtml(ordner);
+    bindeEdumapsKarten(renderRows(el, html));
+    return;
   }
   const liste = notesImOrdner(ordner.id);
   if (liste.length === 0 && notesUnterordner(ordner.id).length === 0) {
@@ -11268,8 +11429,7 @@ function renderNotizenDetail(el, ordner) {
     zeile.addEventListener('click', (e) => {
       if (card.dataset.swiped === '1') return;
       if (e.target.closest('button')) return;
-      notesOrdnerId = fid;
-      renderNotizen();
+      notesOrdnerOeffnen(fid);
     });
     bindCardSwipe(card, '.fav-row',
       () => { restoreCard(card); notesOrdnerLoeschen(fid); },
