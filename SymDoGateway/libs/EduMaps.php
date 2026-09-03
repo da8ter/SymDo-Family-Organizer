@@ -56,6 +56,9 @@ trait EduMaps
         /* Liste statt Einzeladresse: eine zweite Klasse kommt absehbar dazu, und
            eine Liste kostet jetzt dasselbe wie ein Feld. */
         $this->RegisterPropertyString('EduPages', '[]');
+        /* 1:1-Spiegel der Karten als Notizen. Getrennt vom Vorschlagsweg: der
+           eine wertet aus (kostet KI), der andere legt nur ab. */
+        $this->RegisterPropertyBoolean('EduToNotes', false);
         $this->RegisterPropertyInteger('EduIntervalHours', self::EDU_INTERVALL_STD);
         /* Eigener Merker, NICHT MailSeenUIDs: die Toepfe dort sind auf 500
            Eintraege gedeckelt und werden vom Mailweg beschrieben. Eine
@@ -120,12 +123,14 @@ trait EduMaps
         $karten = 0;
         $geaendert = 0;
         $analysiert = 0;
+        $gespiegelt = 0;
         $fehler = [];
         foreach ($seiten as $seite) {
             $erg = $this->EduSeiteLesen($seite, $analysiert, $alles);
             $karten     += $erg['karten'];
             $geaendert  += $erg['geaendert'];
             $analysiert += $erg['analysiert'];
+            $gespiegelt += (int)($erg['gespiegelt'] ?? 0);
             if (($erg['fehler'] ?? '') !== '') {
                 $fehler[] = $seite['name'] . ': ' . $erg['fehler'];
             }
@@ -134,6 +139,9 @@ trait EduMaps
             $this->Translate('%1$d card(s) on %2$d page(s), %3$d changed, %4$d analysed.'),
             $karten, count($seiten), $geaendert, $analysiert
         );
+        if ($gespiegelt > 0) {
+            $bericht .= ' ' . sprintf($this->Translate('%d saved as note(s).'), $gespiegelt);
+        }
         if ($fehler !== []) {
             $bericht .= ' — ' . implode(' | ', $fehler);
         }
@@ -168,7 +176,15 @@ trait EduMaps
         $geaendert = 0;
         $analysiert = 0;
         $gedeckelt = false;
+        $gespiegelt = 0;
         foreach ($karten as $karte) {
+            /* Spiegeln zuerst und fuer JEDE Karte: es kostet keinen KI-Aufruf,
+               haengt also an keinem Deckel und auch nicht daran, ob die Karte
+               als „geaendert" gilt. Die Notiz selbst entscheidet, ob es etwas
+               zu tun gibt (srcRev). */
+            if ($this->EduNotizSpiegeln($seite, $karte)) {
+                $gespiegelt++;
+            }
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
             /* „Alles auswerten" nimmt auch die Karten, die schon im Merker
                stehen — sonst waere nach dem ersten Lauf, der nur vermerkt,
@@ -199,7 +215,7 @@ trait EduMaps
             }
         }
         return ['karten' => count($karten), 'geaendert' => $geaendert,
-                'analysiert' => $analysiert,
+                'analysiert' => $analysiert, 'gespiegelt' => $gespiegelt,
                 // Ein abgebrochener Lauf darf nicht wie ein vollstaendiger aussehen.
                 'fehler' => $gedeckelt ? $this->Translate('daily AI limit reached — the rest follows later') : ''];
     }
@@ -211,6 +227,182 @@ trait EduMaps
      * @param array{name:string,url:string,userId:string} $seite
      * @param array<string,mixed> $karte
      */
+    /**
+     * Eine Karte 1:1 als Notiz ablegen — voller Text, Bilder und Dateien.
+     *
+     * Das ist ABSICHTLICH von der KI-Auswertung getrennt: Spiegeln kostet nichts,
+     * also haengt es weder am Tagesdeckel noch am Deckel je Lauf, und es laeuft
+     * auch beim ERSTEN Lauf, der sonst nur vermerkt. Wer den Schalter umlegt,
+     * will den Bestand sehen, nicht in sechs Stunden die Haelfte davon.
+     *
+     * FLACHES MODELL: Notizen-Ordner haben kein Elternteil. Ein „Edumaps"-Ordner
+     * IM Kindordner gibt es also nicht — je Kind entsteht ein eigener Ordner
+     * „Edumaps <Name>" neben dessen Mitglieder-Ordner.
+     *
+     * Wiedererkannt wird die Karte an `srcId` in der Notiz selbst, nicht an einem
+     * eigenen Merker: ein neues Attribut braeuchte einen Kernel-Neustart, und ein
+     * zweiter Bestand kann mit dem ersten auseinanderlaufen.
+     */
+    private function EduNotizSpiegeln(array $seite, array $karte): bool
+    {
+        if (!(bool)$this->EduProp('EduToNotes', false)) {
+            return false;
+        }
+        if (!$this->NotesStorable()) {
+            $this->SendDebug('EduMaps', 'Notizen-Bestand nicht beschreibbar — Kernel-Neustart nötig', 0);
+            return false;
+        }
+        $lock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 2000)) {
+            $this->SendDebug('EduMaps', 'Notizen belegt — Karte beim naechsten Lauf', 0);
+            return false;
+        }
+        try {
+            $store = $this->NotesStore();
+            $ordnerId = $this->EduNotizOrdner($store, $seite);
+            if ($ordnerId === '') {
+                return false;
+            }
+            $srcId = 'edu:' . $karte['boxid'];
+            $jetzt = time();
+            $i = -1;
+            foreach ($store['notes'] as $k => $n) {
+                if ((string)($n['srcId'] ?? '') === $srcId) {
+                    $i = (int)$k;
+                    break;
+                }
+            }
+            // Unveraendert? Dann nichts anfassen — kein Schreiben, keine neuen Medien.
+            if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['updated']) {
+                return false;
+            }
+            if ($i < 0 && count($store['notes']) >= self::NOTES_MAX) {
+                $this->SendDebug('EduMaps', 'Notizgrenze erreicht — Karte nicht gespiegelt: ' . $karte['titel'], 0);
+                return false;
+            }
+
+            $text = (string)$karte['text'];
+            if (mb_strlen($text) > self::NOTE_TEXT_MAX) {
+                /* Gekuerzt wird SICHTBAR. Eine still gekappte Notiz waere
+                   schlimmer als eine fehlende — man sieht ihr nicht an, dass
+                   die Haelfte fehlt. */
+                $text = mb_substr($text, 0, self::NOTE_TEXT_MAX - 40) . "\n\n… (gekürzt)";
+            }
+            $alteMedien = $i >= 0 ? $this->NotesAttachmentIds([$store['notes'][$i]]) : [];
+            $anhaenge = $this->EduNotizAnhaenge($karte);
+
+            $satz = [
+                'id'        => $i >= 0 ? (string)$store['notes'][$i]['id'] : $this->NotesNewId(),
+                'folderId'  => $ordnerId,
+                'title'     => $this->NotesTrim((string)$karte['titel'], self::NOTE_TITLE_MAX),
+                'text'      => $text,
+                'att'       => $anhaenge,
+                'createdAt' => $i >= 0 ? (int)($store['notes'][$i]['createdAt'] ?? $jetzt) : $jetzt,
+                'updatedAt' => $jetzt,
+                'source'    => 'edumaps',
+                'srcId'     => $srcId,
+                'srcRev'    => (int)$karte['updated'],
+            ];
+            if ($i >= 0) {
+                $store['notes'][$i] = $satz;
+            } else {
+                $store['notes'][] = $satz;
+            }
+            if (!$this->NotesWriteStore($store)) {
+                // Die eben angelegten Medien gehoeren jetzt niemandem.
+                $this->NotesDeleteMedia(array_map(static fn(array $a): int => (int)$a['id'], $anhaenge));
+                return false;
+            }
+            // ERST der Bestand, DANN die alten Medien — und nur, was keine andere
+            // Notiz und kein offener Vorschlag mehr nennt.
+            if ($alteMedien !== []) {
+                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($store, $alteMedien));
+            }
+            return true;
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /**
+     * Der Ordner dieses Kindes, angelegt falls noetig. Erkannt wird er an der
+     * Mitgliedskennung im Datensatz, nicht am Namen: der Nutzer darf ihn
+     * umbenennen, ohne dass beim naechsten Lauf ein zweiter entsteht.
+     *
+     * @param array<string,mixed> $store wird bei Bedarf ergaenzt (noch nicht geschrieben)
+     */
+    private function EduNotizOrdner(array &$store, array $seite): string
+    {
+        $userId = trim((string)($seite['userId'] ?? ''));
+        $schluessel = 'edu:' . ($userId !== '' ? $userId : md5((string)$seite['url']));
+        foreach ($store['folders'] as $f) {
+            if ((string)($f['eduKey'] ?? '') === $schluessel) {
+                return (string)$f['id'];
+            }
+        }
+        if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
+            $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Edumaps-Ordner angelegt', 0);
+            return '';
+        }
+        $name = 'Edumaps';
+        foreach ($this->LoadUsers() as $u) {
+            if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
+                $name = 'Edumaps ' . trim((string)$u['name']);
+                break;
+            }
+        }
+        if ($name === 'Edumaps' && trim((string)($seite['name'] ?? '')) !== '') {
+            // Ohne Mitglied: der Seitenname ist besser als nichts.
+            $name = 'Edumaps ' . trim((string)$seite['name']);
+        }
+        $jetzt = time();
+        $ordner = ['id' => $this->NotesNewId(), 'name' => $this->NotesTrim($name, self::NOTE_FOLDER_NAME_MAX),
+                   'memberId' => '', 'eduKey' => $schluessel, 'createdAt' => $jetzt, 'updatedAt' => $jetzt];
+        $store['folders'][] = $ordner;
+        return (string)$ordner['id'];
+    }
+
+    /**
+     * Die Dateien der Karte als Notiz-Anhaenge. Bilder und PDF, mehr kann die
+     * Notiz nicht halten; der Deckel je Notiz gilt auch hier.
+     *
+     * @return list<array{id:int,kind:string,name:string,bytes:int}>
+     */
+    private function EduNotizAnhaenge(array $karte): array
+    {
+        $raus = [];
+        $speicherVorher = (string)@ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+        try {
+            foreach ((array)$karte['anhaenge'] as $a) {
+                if (count($raus) >= self::NOTE_ATTACH_MAX) {
+                    $this->SendDebug('EduMaps', 'Mehr als ' . self::NOTE_ATTACH_MAX
+                        . ' Dateien an der Karte — die weiteren bleiben in der Notiz weg: ' . $karte['titel'], 0);
+                    break;
+                }
+                if ($this->EduArt((string)$a['name']) === '') {
+                    continue;
+                }
+                $antwort = $this->AiFetchPublicPage((string)$a['url']);
+                if (($antwort['ok'] ?? false) !== true) {
+                    $this->SendDebug('EduMaps', 'Datei nicht ladbar: ' . $a['name'], 0);
+                    continue;
+                }
+                $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), (string)$a['name']);
+                if (($r['ok'] ?? false) !== true) {
+                    $this->SendDebug('EduMaps', 'Datei nicht ablegbar (' . (string)($r['error']['code'] ?? '?')
+                        . '): ' . $a['name'], 0);
+                    continue;
+                }
+                $raus[] = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'],
+                           'name' => (string)$r['name'], 'bytes' => (int)$r['bytes']];
+            }
+        } finally {
+            @ini_set('memory_limit', $speicherVorher);
+        }
+        return $raus;
+    }
+
     private function EduKarteAnalysieren(array $seite, array $karte): bool
     {
         $betreff = trim((string)$karte['abschnitt']) !== ''

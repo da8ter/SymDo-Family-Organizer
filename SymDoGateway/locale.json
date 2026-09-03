@@ -613,7 +613,10 @@
       "%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved": "%1$s: %2$d Stunde(n), %3$d Änderung(en), %4$d neu, %5$d Wochentag(e) + %6$d Datum/Daten geschrieben, %7$d Überschneidung(en) offen",
       "Evaluate all cards": "Alle Karten auswerten",
       "Every card is sent to the AI, including the ones already noted. That costs one request per card. Continue?": "Jede Karte geht an die KI, auch die schon gemerkten. Das kostet einen Aufruf je Karte. Fortfahren?",
-      "daily AI limit reached — the rest follows later": "Tagesdeckel der KI erreicht — der Rest folgt später"
+      "daily AI limit reached — the rest follows later": "Tagesdeckel der KI erreicht — der Rest folgt später",
+      "Also keep every card as a note": "Jede Karte zusätzlich als Notiz ablegen",
+      "Each card becomes one note with its full text and its files, in a folder „Edumaps <name>\" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.": "Jede Karte wird eine Notiz mit vollem Text und ihren Dateien, je Kind in einem Ordner „Edumaps <Name>\". Notiz-Ordner können nicht verschachtelt werden — der Ordner liegt also neben dem Mitglieder-Ordner, nicht darin. Geänderte Karten aktualisieren ihre Notiz; gelöscht wird nichts.",
+      "%d saved as note(s).": "%d als Notiz abgelegt."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

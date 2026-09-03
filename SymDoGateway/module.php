@@ -1853,6 +1853,11 @@ class SymDoGateway extends IPSModuleStrict
                  ]],
                 ['type' => 'NumberSpinner', 'name' => 'EduIntervalHours', 'minimum' => 1, 'maximum' => 48,
                  'caption' => $this->Translate('Check every … hours'), 'suffix' => ' h'],
+                /* Zweiter, unabhaengiger Weg: 1:1 ablegen statt auswerten. Kostet
+                   keinen KI-Aufruf und laeuft deshalb auch beim ersten Lauf. */
+                ['type' => 'CheckBox', 'name' => 'EduToNotes',
+                 'caption' => $this->Translate('Also keep every card as a note')],
+                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files, in a folder „Edumaps <name>" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.')],
                 ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Check now'),
