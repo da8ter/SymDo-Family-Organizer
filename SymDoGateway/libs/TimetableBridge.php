@@ -129,6 +129,11 @@ trait TimetableBridge
                 // Weissliste, kein Durchreichen.
                 'room'    => (string)($s['room'] ?? ''),
                 'teacher' => (string)($s['teacher'] ?? ''),
+                /* normal | vertretung | entfall. Ohne diese Zeile stuende die
+                   entfallene Stunde in der App wie eine normale da — und der
+                   Ganztagsblock daneben sähe aus wie eine zweite Stunde zur
+                   selben Zeit. */
+                'status'  => (string)($s['status'] ?? ''),
             ];
             foreach ($plan['children'] as $kind) {
                 if (!is_array($kind)) {
