@@ -2253,7 +2253,27 @@ trait AiExtract
             . '"amount" („2", „500 g"), sonst ist "amount" null; "due", "time", "end" und "recurrence" '
             . 'bleiben bei Einkaeufen null. Eine REINE ARTIKELLISTE ohne Handlung und ohne Datum '
             . '(„Milch, Butter, Klopapier") ist deshalb KEINE leere Liste, sondern lauter '
-            . '"shopping"-Eintraege.';
+            . '"shopping"-Eintraege.'
+            /* Gemessen am 03.09.2026 an der Materialliste der Klasse 5a: aus einem
+               PDF wurden 35 Einzelaufgaben („Geodreieck", „Radiergummi",
+               „Schnellhefter DIN A4" achtmal). Das Modell hat die Mitbringsel-Regel
+               und die Einkaufs-Regel vermischt. Ohne diese Abgrenzung muesste der
+               Nutzer 35 Zeilen einzeln ablehnen. */
+            . ' ABGRENZUNG: Gehoert die Aufzaehlung zu EINER Gelegenheit — Materialliste '
+            . 'fuer das Schuljahr, Mitbringsel fuer einen Kurs, Ausruestung fuer eine '
+            . 'Fahrt, Unterlagen fuer einen Termin —, dann ist das EINE Aufgabe mit der '
+            . 'vollstaendigen Liste in "info" und NICHT ein Eintrag je Gegenstand. '
+            . '"shopping" gilt nur fuer den laufenden Haushaltseinkauf ohne Anlass. Im '
+            . 'Zweifel: EINE Aufgabe.'
+            /* Ebenfalls gemessen: aus dem Stundenplan-PDF wurden vier datumslose
+               „Termine" (Sportunterricht Montag, AG Bas Freitag). Ein Wochenplan ist
+               kein Kalender. */
+            . ' SCHULSTUNDEN SIND KEINE TERMINE: Ein Stundenplan, eine Kursuebersicht '
+            . 'oder eine Liste wiederkehrender Stunden ergibt NIEMALS ein "event" — '
+            . 'weder je Fach noch je Wochentag noch als Ganzes. Der Stundenplan steht '
+            . 'im Stundenplan, nicht im Kalender. Wenn ueberhaupt, gib EINE Notiz '
+            . 'zurueck ("kind": "note"), und auch die nur, wenn im Dokument etwas '
+            . 'Merkenswuerdiges steht, das ueber den Plan selbst hinausgeht.';
     }
 
     /**
@@ -2418,8 +2438,26 @@ trait AiExtract
             . 'DAUERT (Ferien, Schliesszeit) — ein Kurs dauert nicht, er wiederholt sich.';
     }
 
-    private function AiMailSystemPrompt(string $today, bool $mitAnhang = false): string
+    private function AiMailSystemPrompt(string $today, bool $mitAnhang = false, string $quelle = 'IMAP'): string
     {
+        /* Nicht jede Quelle ist eine Mail. Eine Karte der Klassenseite lief bisher
+           durch denselben Text — und das Modell schrieb es in „info": „E-Mail
+           „5a Joshua — Willkommen an der TER"". Das steht dann so in der App. */
+        if ($quelle === 'Edumaps') {
+            return $this->AiSystemPrompt($today)
+                . ' ZUSATZ: Der Text stammt von der KLASSENSEITE der Schule (eine Karte '
+                . 'mit Titel und Text), NICHT aus einer E-Mail — nenne sie in "info" '
+                . 'entsprechend („Klassenseite", „Elternbrief"), niemals „E-Mail".'
+                . ($mitAnhang
+                    ? ' Die beigefuegte Datei liegt dir VOR und gehoert zu derselben Karte: '
+                        . 'lies Kartentext und Datei zusammen. Meist steht die Aufforderung auf '
+                        . 'der Karte und die Einzelheiten (Termine, Fristen, Betraege, Listen) '
+                        . 'in der Datei — uebernimm sie von dort.'
+                    : ' Ein Verweis auf eine Datei hebt die Aufgabe NICHT auf — er ist selbst '
+                        . 'die Handlungsaufforderung. Erfinde aber keine Angaben, die nur in der '
+                        . 'Datei stehen koennen.')
+                . $this->AiKindRule(true);
+        }
         if ($mitAnhang) {
             return $this->AiSystemPrompt($today)
                 . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '

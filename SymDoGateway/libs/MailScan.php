@@ -756,7 +756,7 @@ trait MailScan
         try {
 
             $r = $this->AiRunCompletion(
-                $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null),
+                $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null, $quelle),
                 $eingabe,
                 $bild,
                 $pdf
@@ -767,7 +767,8 @@ trait MailScan
             if (($r['ok'] ?? false) !== true && (string)($r['code'] ?? '') === 'ai_pdf_unsupported') {
                 $this->SendDebug('MailScan', 'Anbieter kann kein PDF — zweiter Versuch ohne Anhang', 0);
                 $anhang = null;
-                $r = $this->AiRunCompletion($this->AiMailSystemPrompt(date('Y-m-d')), $eingabe, null);
+                $r = $this->AiRunCompletion(
+                    $this->AiMailSystemPrompt(date('Y-m-d'), false, $quelle), $eingabe, null);
             }
             $this->MailCountDay();
             if (($r['ok'] ?? false) !== true) {
