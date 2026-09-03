@@ -1249,6 +1249,12 @@ trait Briefing
                 . 'dort steht — je Kind ein kurzer Satz. Steht dort, dass keine Schule '
                 . 'ist, sage NUR das (mit dem Namen der Ferien) und nenne keine '
                 . 'Unterrichtszeiten. '
+                // Aenderungen sind der GRUND, warum jemand das Briefing liest. Ohne
+                // diesen Satz laesst das Modell sie weg: am 03.09.2026 stand in der
+                // Zeile „4 Stunden entfallen", im Text kam es nicht vor.
+                . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '
+                . 'einen anderen Raum —, MUSS sie in den Satz; sie ist wichtiger als '
+                . 'die Uhrzeit und darf nie weggelassen werden. '
                 . 'Steht unten ein ABENDESSEN, erwähne es in einem kurzen Satz '
                 . '(„Heute Abend gibt es …" bzw. in der Vorschau „Morgen gibt es …"). '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
@@ -1267,6 +1273,11 @@ trait Briefing
                 // ohne diesen Satz laesst das Modell sie einfach weg.
                 . 'Stehen unten SCHULZEITEN, sage auch, wie lange die Kinder Schule '
                 . 'haben — je Kind kurz, und Betreuung getrennt vom Unterricht. '
+                // Siehe oben: ohne die ausdrueckliche Pflicht faellt die Aenderung
+                // beim Zusammenfassen als Erstes weg.
+                . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '
+                . 'einen anderen Raum —, MUSS sie in den Satz; sie ist wichtiger als '
+                . 'die Uhrzeit und darf nie weggelassen werden. '
                 // In den Ferien steht dort keine Zeit, sondern die Ferienlage. Ohne
                 // diesen Satz erfindet ein kleines Modell gern trotzdem eine.
                 . 'Steht dort, dass keine Schule ist, erwaehne nur das und den Namen '
