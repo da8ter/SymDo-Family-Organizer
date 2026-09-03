@@ -386,6 +386,12 @@ trait Notes
         if (isset($n['pos'])) {
             $row['pos'] = (int)$n['pos'];
         }
+        // Farben der Quelle (Klassenseite): Abschnitt und Karte.
+        foreach (['sectionColor', 'color'] as $feld) {
+            if (($n[$feld] ?? '') !== '') {
+                $row[$feld] = (string)$n[$feld];
+            }
+        }
         if ($mitText) {
             $row['text'] = $text;
         } else {

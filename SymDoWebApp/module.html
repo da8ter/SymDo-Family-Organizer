@@ -648,10 +648,24 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Klassenseite als Karten. Eine Spalte auf dem Telefon, zwei, sobald Platz
    ist — die Karten sind kurz, und nebeneinander sieht man mehr auf einen
    Blick. Die Abschnittsueberschrift laeuft ueber beide Spalten. */
+/* Der Bereich ist ein KNOPF: er klappt seine Karten auf und zu. Deshalb
+   Zeigefinger, Pfeil und die Zahl der Karten — zugeklappt ist die Vorgabe, und
+   dann muss die Zeile allein sagen, was dahintersteckt. */
 .edu-abschnitt {
-  grid-column: 1 / -1; margin: 14px 2px 2px; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  margin: 14px 2px 2px; font-size: 13px; font-weight: 700;
   color: var(--muted); letter-spacing: .02em;
 }
+/* Mit Farbe wird aus der Zeile ein Band — so steht der Bereich auch auf der
+   Klassenseite da. */
+.edu-abschnitt.bunt {
+  margin: 16px 0 8px; padding: 9px 12px; border-radius: 10px; font-size: 14px;
+}
+.edu-bname { flex: 1 1 auto; min-width: 0; }
+.edu-zahl { flex: 0 0 auto; font-weight: 600; opacity: .75; }
+.edu-pfeil { flex: 0 0 auto; width: 14px; text-align: center; }
+.edu-gruppe { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.edu-gruppe[hidden] { display: none; }
 .edu-karte {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
@@ -684,12 +698,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   width: 120px; height: auto; border-radius: 8px; display: block; cursor: pointer;
   background: #fff; border: 1px solid var(--border);
 }
-#notesDetail .edu-karte + .edu-karte { margin-top: 10px; }
+/* Zwei Spalten, sobald Platz ist — das Raster sitzt an der GRUPPE, nicht an
+   der Bahn: sonst muesste jede Ueberschrift ueber beide Spalten gespannt
+   werden, und ein zugeklappter Bereich risse eine Luecke. */
 @media (min-width: 760px) {
-  #notesDetail:has(.edu-karte) { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
-  #notesDetail .screen-head { grid-column: 1 / -1; }
-  #notesDetail .note-folder { grid-column: 1 / -1; }
-  #notesDetail .edu-karte + .edu-karte { margin-top: 0; }
+  .edu-gruppe { grid-template-columns: 1fr 1fr; align-items: start; }
 }
 /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
@@ -11276,6 +11289,15 @@ function notesOrdnerLoeschen(fid) {
  * Token), faellt die Karte auf die Zeile mit Symbol zurueck. Kein Sonderweg
  * und keine kaputten Bilder.
  */
+/** Schwarz oder Weiss auf dieser Flaeche — nach der Helligkeit (wie im Kachel-Theme). */
+function eduLesefarbe(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return '#fff';
+  const v = parseInt(m[1], 16);
+  const l = 0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
+  return l < 150 ? '#fff' : '#1c1c1e';
+}
+
 function edumapsKartenHtml(ordner) {
   const karten = notesImOrdner(ordner.id)
     .slice()
@@ -11284,48 +11306,96 @@ function edumapsKartenHtml(ordner) {
     return '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
       translate('Nothing here yet') + '</div>';
   }
-  let html = '';
-  let abschnitt = null;
+  /* Nach Abschnitten gruppieren, in der Reihenfolge der Seite. Die Karten
+     liegen IM Bereich und werden erst mit ihm sichtbar. */
+  const gruppen = [];
   for (const n of karten) {
     const a = n.section || '';
-    if (a !== abschnitt) {
-      abschnitt = a;
-      if (a) {
-        html += '<h3 class="edu-abschnitt" data-key="ea:' + escapeHtml(n.id) + '">' +
-          escapeHtml(a) + '</h3>';
-      }
+    const letzte = gruppen[gruppen.length - 1];
+    if (!letzte || letzte.name !== a) {
+      gruppen.push({ name: a, farbe: n.sectionColor || '', karten: [n] });
+    } else {
+      letzte.karten.push(n);
     }
-    const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
-    const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
-    html += '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '">' +
-      '<div class="edu-kopf"><span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
-      '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
-      // Volltext, wenn er da ist; sonst die Vorschau — die Ansicht steht damit
-      // sofort und wird schaerfer, statt leer zu bleiben.
-      '<div class="edu-text">' + notizTextHtml(String(n.text || n.preview || '')) + '</div>';
-    for (const b of bilder) {
-      html += '<img class="edu-bild" loading="lazy" data-media="' + escapeHtml(String(b.id)) + '"' +
-        ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
+  }
+  let html = '';
+  for (const g of gruppen) {
+    const auf = eduBereichOffen(g.name);
+    if (g.name) {
+      /* Der Bereich traegt die Farbe, die er auf der Klassenseite hat. Die
+         Schriftfarbe folgt der Helligkeit: auf #0000FF ist Weiss lesbar, auf
+         #E49600 Schwarz — fest gesetzt waere die eine oder die andere immer
+         falsch. */
+      const stil = g.farbe
+        ? ' style="background:' + escapeHtml(g.farbe) + ';color:' + eduLesefarbe(g.farbe) + '"' : '';
+      html += '<h3 class="edu-abschnitt' + (g.farbe ? ' bunt' : '') + (auf ? ' auf' : '') +
+        '" data-key="ea:' + escapeHtml(g.name) + '" data-bereich="' + escapeHtml(g.name) + '"' + stil + '>' +
+        '<i class="fa-light fa-chevron-' + (auf ? 'down' : 'right') + ' edu-pfeil"></i>' +
+        '<span class="edu-bname">' + escapeHtml(g.name) + '</span>' +
+        '<span class="edu-zahl">' + g.karten.length + '</span></h3>';
     }
-    for (const d of rest) {
-      /* Seitenvorschau des PDF, wenn die Quelle eine mitliefert — dasselbe
-         Bild, das die Klassenseite zeigt. Sie steht VOR dem Namen: man erkennt
-         den Elternbrief am Aussehen schneller als am Dateinamen. Ohne
-         Vorschau (oder ohne Token, also in der Kachel) bleibt es bei der
-         Zeile mit Symbol. */
-      const mini = d.thumb ? notesMediaUrl(d.thumb) : '';
-      if (mini) {
-        html += '<img class="edu-vorschau" loading="lazy" data-media="' + escapeHtml(String(d.id)) + '"' +
-          ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
-      }
-      html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
-        '<i class="fa-light ' + (d.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
-        '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
-        '<i class="fa-light fa-chevron-right nv-chev"></i></div>';
+    html += '<div class="edu-gruppe" data-key="eg:' + escapeHtml(g.name) + '"' +
+      (auf || !g.name ? '' : ' hidden') + '>';
+    for (const n of g.karten) {
+      html += edumapsKarteHtml(n);
     }
     html += '</div>';
   }
   return html;
+}
+
+/** Eine einzelne Karte. */
+function edumapsKarteHtml(n) {
+  const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
+  const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
+  // Die Kontur traegt die Farbe der Karte — auf der Klassenseite hat jede eine,
+  // und die Faecher unterscheiden sich darin (Mathe blau, Deutsch rot).
+  const kf = n.color || n.sectionColor || '';
+  let html = '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '"' +
+    (kf ? ' style="border-color:' + escapeHtml(kf) + '"' : '') + '>' +
+    '<div class="edu-kopf"><span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
+    '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
+    // Volltext, wenn er da ist; sonst die Vorschau — die Ansicht steht damit
+    // sofort und wird schaerfer, statt leer zu bleiben.
+    '<div class="edu-text">' + notizTextHtml(String(n.text || n.preview || '')) + '</div>';
+  for (const b of bilder) {
+    html += '<img class="edu-bild" loading="lazy" data-media="' + escapeHtml(String(b.id)) + '"' +
+      ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
+  }
+  for (const d of rest) {
+    /* Seitenvorschau des PDF, wenn die Quelle eine mitliefert — dasselbe Bild,
+       das die Klassenseite zeigt. Ohne Vorschau (oder ohne Token, also in der
+       Kachel) bleibt es bei der Zeile mit Symbol. */
+    const mini = d.thumb ? notesMediaUrl(d.thumb) : '';
+    if (mini) {
+      html += '<img class="edu-vorschau" loading="lazy" data-media="' + escapeHtml(String(d.id)) + '"' +
+        ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
+    }
+    html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
+      '<i class="fa-light ' + (d.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
+      '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
+      '<i class="fa-light fa-chevron-right nv-chev"></i></div>';
+  }
+  return html + '</div>';
+}
+
+/**
+ * Welche Bereiche sind aufgeklappt? Zugeklappt ist die Vorgabe — die Seite hat
+ * vier Bereiche mit sechzehn Karten, und der erste Blick soll die Uebersicht
+ * sein, nicht die Wand. Die Wahl haelt ueber den Neustart hinweg.
+ */
+let eduOffeneBereiche = null;
+function eduBereichOffen(name) {
+  if (eduOffeneBereiche === null) {
+    try { eduOffeneBereiche = JSON.parse(ls.get('symdo.eduOffen') || '{}') || {}; }
+    catch (e) { eduOffeneBereiche = {}; }
+  }
+  return eduOffeneBereiche[name] === true;
+}
+function eduBereichUmschalten(name) {
+  eduBereichOffen(name);   // sorgt fuer das Laden
+  eduOffeneBereiche[name] = !eduOffeneBereiche[name];
+  try { ls.set('symdo.eduOffen', JSON.stringify(eduOffeneBereiche)); } catch (e) {}
 }
 
 /** Bilder und Dateien der Karten antippbar machen — sonst ist die Ansicht zum Lesen. */
@@ -11339,6 +11409,12 @@ function bindeEdumapsKarten(frisch) {
     }
     return raus;
   };
+  suche('.edu-abschnitt').forEach(kopf => {
+    kopf.addEventListener('click', () => {
+      eduBereichUmschalten(kopf.dataset.bereich || '');
+      renderNotizen();
+    });
+  });
   suche('.edu-karte').forEach(karte => {
     const nid = karte.dataset.note;
     const notiz = (notizen.notes || []).find(n => n.id === nid);

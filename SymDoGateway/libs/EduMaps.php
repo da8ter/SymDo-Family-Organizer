@@ -286,7 +286,11 @@ trait EduMaps
                    Kartenansicht — Abschnitt und Platz. Beides nachziehen, ohne
                    die Anhaenge anzufassen. */
                 $fehlt = !array_key_exists('section', $store['notes'][$i])
-                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr;
+                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr
+                    || (string)($store['notes'][$i]['sectionColor'] ?? '') !== (string)($karte['abschnittFarbe'] ?? '')
+                    || (string)($store['notes'][$i]['color'] ?? '') !== (string)($karte['farbe'] ?? '');
+                $store['notes'][$i]['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
+                $store['notes'][$i]['color'] = (string)($karte['farbe'] ?? '');
                 /* Anhaenge, die noch die rohe Kennung als Namen tragen, bekommen
                    den Klarnamen — ohne die Datei neu zu laden. Zuordnung ueber
                    die Reihenfolge: die Anhaenge sind in genau der Reihenfolge
@@ -371,6 +375,9 @@ trait EduMaps
                    sie waere es eine Liste nach Aenderungsdatum. */
                 'section'   => $this->NotesTrim((string)($karte['abschnitt'] ?? ''), self::NOTE_TITLE_MAX),
                 'pos'       => $nr,
+                // Farben der Seite: Abschnitt und Karte, beide als #RRGGBB.
+                'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
+                'color'     => (string)($karte['farbe'] ?? ''),
             ];
             if ($i >= 0) {
                 $store['notes'][$i] = $satz;
@@ -664,10 +671,18 @@ trait EduMaps
         }
         /* Abschnittsnamen stehen in der Spalte UEBER den Karten. Ihre Position im
            Text entscheidet, welche Karte dazugehoert. */
+        /* Der Spaltenkopf traegt seine Farbe als Inline-Stil:
+           <h2 class="pathhead" style="background:#FF851B;"><span class="pathlabel">…
+           Sie kommt mit, damit die App die Abschnitte so faerben kann wie die
+           Seite selbst — sonst waeren alle Bereiche gleich grau. */
         $spalten = [];
-        if (preg_match_all('/<span class="pathlabel">(.*?)<\/span>/su', $html, $m, PREG_OFFSET_CAPTURE) > 0) {
-            foreach ($m[1] as $treffer) {
-                $spalten[] = ['pos' => (int)$treffer[1], 'name' => $this->EduText((string)$treffer[0])];
+        if (preg_match_all('/<h2[^>]*class="pathhead"[^>]*>\s*<span class="pathlabel">(.*?)<\/span>/su',
+                $html, $m, PREG_OFFSET_CAPTURE) > 0) {
+            foreach ($m[1] as $k => $treffer) {
+                $kopf = (string)$m[0][$k][0];
+                $farbe = preg_match('/background:\s*(#[0-9A-Fa-f]{6})/', $kopf, $f) === 1 ? strtoupper($f[1]) : '';
+                $spalten[] = ['pos' => (int)$treffer[1], 'name' => $this->EduText((string)$treffer[0]),
+                              'farbe' => $farbe];
             }
         }
         $karten = [];
@@ -708,15 +723,25 @@ trait EduMaps
             }
             $pos = strpos($html, 'data-boxid="' . $boxid . '"');
             $abschnitt = '';
+            $abschnittFarbe = '';
             foreach ($spalten as $sp) {
                 if ($pos !== false && $sp['pos'] < $pos) {
                     $abschnitt = $sp['name'];
+                    $abschnittFarbe = (string)$sp['farbe'];
                 }
             }
+            /* Auch die Karte selbst hat eine Farbe („boxlabel customcolor").
+               Meist ist es die der Spalte, aber nicht immer — genommen wird die
+               ERSTE im Kartenkopf, also vor dem Inhalt. */
+            $kopfTeil = ($e = strpos($teil, 'boxcontent-wrap')) !== false ? substr($teil, 0, $e) : $teil;
+            $eigeneFarbe = preg_match('/background:\s*(#[0-9A-Fa-f]{6})/', $kopfTeil, $ff) === 1
+                ? strtoupper($ff[1]) : '';
             $karten[] = [
                 'boxid'     => $boxid,
                 'updated'   => $updated,
                 'abschnitt' => $abschnitt,
+                'farbe'     => $eigeneFarbe !== '' ? $eigeneFarbe : $abschnittFarbe,
+                'abschnittFarbe' => $abschnittFarbe,
                 'titel'     => $titel,
                 'text'      => $this->EduText($rumpf),
                 'anhaenge'  => $anhaenge,
