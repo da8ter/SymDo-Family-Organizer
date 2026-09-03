@@ -1254,7 +1254,10 @@ trait Briefing
                 // Zeile „4 Stunden entfallen", im Text kam es nicht vor.
                 . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '
                 . 'einen anderen Raum —, MUSS sie in den Satz; sie ist wichtiger als '
-                . 'die Uhrzeit und darf nie weggelassen werden. '
+                . 'die Uhrzeit und darf nie weggelassen werden. Zähle dabei ALLE dort '
+                . 'genannten Fächer auf, nicht nur eines davon, und stelle keine '
+                . 'Beziehung her, die dort nicht steht („statt X" nur, wenn es dort '
+                . 'so steht). '
                 . 'Steht unten ein ABENDESSEN, erwähne es in einem kurzen Satz '
                 . '(„Heute Abend gibt es …" bzw. in der Vorschau „Morgen gibt es …"). '
                 . 'VIERTENS zum Schluss ein kurzer Hinweis, wie viele Artikel auf der '
@@ -1277,7 +1280,10 @@ trait Briefing
                 // beim Zusammenfassen als Erstes weg.
                 . 'Nennt die Zeile eine Änderung — entfallene Stunden, eine Vertretung, '
                 . 'einen anderen Raum —, MUSS sie in den Satz; sie ist wichtiger als '
-                . 'die Uhrzeit und darf nie weggelassen werden. '
+                . 'die Uhrzeit und darf nie weggelassen werden. Zähle dabei ALLE dort '
+                . 'genannten Fächer auf, nicht nur eines davon, und stelle keine '
+                . 'Beziehung her, die dort nicht steht („statt X" nur, wenn es dort '
+                . 'so steht). '
                 // In den Ferien steht dort keine Zeit, sondern die Ferienlage. Ohne
                 // diesen Satz erfindet ein kleines Modell gern trotzdem eine.
                 . 'Steht dort, dass keine Schule ist, erwaehne nur das und den Namen '

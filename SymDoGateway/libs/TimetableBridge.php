@@ -356,8 +356,32 @@ trait TimetableBridge
                 && (string)($s['status'] ?? '') !== 'entfall'));
         $betreuung  = array_values(array_filter($stunden,
             static fn(array $s): bool => (bool)($s['care'] ?? false)));
-        $entfall    = (array)($meldung['entfall'] ?? []);
-        $vertretung = (array)($meldung['vertretung'] ?? []);
+        /* Was ausfaellt und was STATTDESSEN laeuft, kommt aus dem Tag selbst —
+           seit er datiert ist, steht beides dort mit Uhrzeit. Der Merker aus
+           WebUntis ist nur noch der Rueckfall fuer Plaene ohne datierte Tage. */
+        $entfallSlots = array_values(array_filter($stunden,
+            static fn(array $s): bool => (string)($s['status'] ?? '') === 'entfall'));
+        $ersatzSlots  = array_values(array_filter($stunden,
+            static fn(array $s): bool => (string)($s['status'] ?? '') === 'vertretung'));
+        /* Mit Uhrzeit nur, solange es ein oder zwei sind — bei vieren wird die
+           Zeile sonst zur Aufzaehlung von Zahlen. Welche Faecher ausfallen,
+           steht IMMER da: „4 Stunden entfallen" sagt niemandem, ob das Buch
+           eingepackt werden muss. */
+        $entfall = $entfallSlots !== []
+            ? array_map(static fn(array $s): string => trim((string)($s['name'] ?? ''))
+                . (count($entfallSlots) <= 2 ? ' ' . (string)($s['start'] ?? '') : ''), $entfallSlots)
+            : array_map('strval', (array)($meldung['entfall'] ?? []));
+        /* Die Zeit bleibt weg, wenn der Ersatz GENAU die Schulzeit fuellt: sie
+           stuende sonst zweimal im selben Satz („Schule von 08:00 bis 13:00 …
+           dafuer Projekttag von 08:00 bis 13:00"). */
+        $ganzerTag = count($ersatzSlots) === 1 && $unterricht !== []
+            && (string)$ersatzSlots[0]['start'] === (string)$unterricht[0]['start']
+            && (string)$ersatzSlots[0]['end'] === (string)$unterricht[count($unterricht) - 1]['end'];
+        $ersatz = $ersatzSlots !== []
+            ? array_map(static fn(array $s): string => trim((string)($s['name'] ?? ''))
+                . ($ganzerTag ? '' : ' von ' . (string)($s['start'] ?? '') . ' bis ' . (string)($s['end'] ?? '')),
+                $ersatzSlots)
+            : array_map('strval', (array)($meldung['vertretung'] ?? []));
 
         if ($unterricht === []) {
             // Alles abgesagt ist etwas anderes als schulfrei.
@@ -374,29 +398,56 @@ trait TimetableBridge
         }
 
         if ($entfall !== []) {
-            /* Ab drei Ausfaellen die Zahl statt der Liste: an einem Projekttag
-               waeren es sechs Faecher, und die Zeile soll man im Vorbeigehen
-               hoeren koennen. */
-            $zeile .= count($entfall) > 2
-                ? sprintf(', %d Stunden entfallen', count($entfall))
-                : ', es entfällt ' . implode(', ', $entfall);
+            /* Ab sechs wird auch die schoenste Aufzaehlung unzumutbar — dann
+               die ersten vier und der Rest als Zahl. */
+            $liste = $entfall;
+            if (count($liste) > 5) {
+                $rest  = count($liste) - 4;
+                $liste = array_slice($liste, 0, 4);
+                $liste[] = sprintf('%d weitere', $rest);
+            }
+            $zeile .= count($liste) === 1
+                ? ', es entfällt ' . $liste[0]
+                : ', ' . $this->TimetableUnd($liste) . ' entfallen';
         }
-        /* Nur nennen, was im Plan nicht ohnehin steht: seit der Plan datierte
-           Tage kennt, IST die Vertretung dort schon die Stunde. */
-        $imPlan = array_map(static fn(array $s): string => mb_strtolower(trim((string)($s['name'] ?? ''))),
-            $unterricht);
-        $offen = array_values(array_filter($vertretung, static function (string $v) use ($imPlan): bool {
-            foreach ($imPlan as $fach) {
-                if ($fach !== '' && str_starts_with(mb_strtolower($v), $fach)) {
-                    return false;
+        if ($ersatz !== []) {
+            /* „dafür" nur, wenn der Ersatz die ausgefallenen Stunden auch
+               wirklich abdeckt. Sonst sind es zwei Dinge am selben Tag, und
+               ein „dafür" behauptete einen Zusammenhang, den es nicht gibt.
+
+               Frueher stand hier, dass eine Vertretung wegbleibt, wenn sie
+               ohnehin als Stunde im Plan steht. Im BILD stimmt das — dort
+               sieht man den Block. Im Briefing gibt es kein Bild: „bis 13 Uhr
+               Schule, 4 Stunden entfallen" klang nach einer Luecke statt nach
+               einem Projekttag. Vom Nutzer gemeldet. */
+            $deckt = false;
+            foreach ($ersatzSlots as $e) {
+                foreach ($entfallSlots as $a) {
+                    if ((int)($a['from'] ?? -1) >= (int)($e['from'] ?? 0)
+                        && (int)($a['from'] ?? -1) < (int)($e['to'] ?? 0)) {
+                        $deckt = true;
+                        break 2;
+                    }
                 }
             }
-            return true;
-        }));
-        if ($offen !== []) {
-            $zeile .= ', vertreten wird ' . implode(', ', $offen);
+            $zeile .= ($deckt ? ', dafür ' : ', vertreten wird ') . $this->TimetableUnd($ersatz);
         }
         return $zeile;
+    }
+
+    /**
+     * „A, B und C" — eine Aufzaehlung, wie man sie spricht. Das Briefing wird
+     * auch VORGELESEN, und „A, B, C" klingt dort wie eine abgebrochene Liste.
+     *
+     * @param list<string> $teile
+     */
+    private function TimetableUnd(array $teile): string
+    {
+        if (count($teile) < 2) {
+            return implode('', $teile);
+        }
+        $letztes = array_pop($teile);
+        return implode(', ', $teile) . ' und ' . $letztes;
     }
 
     /**
