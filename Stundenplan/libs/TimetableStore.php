@@ -272,6 +272,132 @@ trait TimetableStore
         return $slots;
     }
 
+    // ───────────────────────── Datierte Tage (Import) ─────────────────────────
+
+    /**
+     * Die datierten Tage, die ein Import geschrieben hat.
+     *
+     * WARUM eine zweite Ebene und nicht statt des Wochenplans: der Wochenplan
+     * ist die von Hand gepflegte Wahrheit. Er gilt fuer jede Woche, auch fuer
+     * die, die kein Import kennt, und er traegt weiter, wenn die Schule ihre
+     * Schnittstelle zumacht. Die Ebene darueber sagt nur, was an EINEM Tag
+     * wirklich war — Entfall, Vertretung, ein Projekttag.
+     *
+     * Bewusst ein ATTRIBUT und keine Eigenschaft: es sind Maschinendaten. Im
+     * Formular haetten sie nichts zu suchen, und ein Formular-Neuaufbau darf
+     * sie nicht anfassen koennen (genau daran hat sich die ToDo-Liste schon
+     * einmal die Kennungen verschluckt).
+     *
+     * Schluessel ist der KINDERNAME, wie ueberall in diesem Modul — eine
+     * Umbenennung loest die Zuordnung, der naechste Import stellt sie her.
+     *
+     * @return array<string, array<string, list<array<string,mixed>>>>
+     */
+    private function ImportierteTage(): array
+    {
+        // (string) davor: fehlt das Attribut noch (Kernel-Neustart), gibt
+        // ReadAttributeString false zurueck, und json_decode(false) ist in
+        // PHP 8 ein Fatal.
+        $roh = json_decode((string)@$this->ReadAttributeString('ImportedDays'), true);
+        return is_array($roh) ? $roh : [];
+    }
+
+    /**
+     * Datierte Tage EINES Kindes ablegen. Genannte Daten werden ersetzt, nicht
+     * genannte bleiben stehen, Vergangenes fliegt weg — sonst waechst das
+     * Attribut endlos.
+     *
+     * @param array<string, list<array<string,mixed>>> $jeDatum
+     * @return array{0:list<string>, 1:bool} geschriebene Daten, und ob es ankam
+     */
+    private function ImportierteTageSetzen(string $kind, array $jeDatum): array
+    {
+        $alles = $this->ImportierteTage();
+        $stand = is_array($alles[$kind] ?? null) ? $alles[$kind] : [];
+        foreach ($jeDatum as $datum => $slots) {
+            $stand[(string)$datum] = $slots;
+        }
+        $heute = date('Y-m-d');
+        foreach (array_keys($stand) as $datum) {
+            if ((string)$datum < $heute) {
+                unset($stand[$datum]);
+            }
+        }
+        ksort($stand);
+        $alles[$kind] = $stand;
+        $text = (string)json_encode($alles, JSON_UNESCAPED_UNICODE);
+        /* Schreiben und GEGENLESEN: ohne Kernel-Neustart gibt es das Attribut
+           nicht, und Symcon wirft dann keine Ausnahme, sondern eine PHP-Warnung
+           — die faengt kein try/catch, und der Aufrufer haelte den Import fuer
+           gelungen. */
+        @$this->WriteAttributeString('ImportedDays', $text);
+        $angekommen = (string)@$this->ReadAttributeString('ImportedDays') === $text;
+        return [array_map('strval', array_keys($jeDatum)), $angekommen];
+    }
+
+    /**
+     * Der Wochenplan, an den Tagen dieser Woche ersetzt durch das, was der
+     * Import fuer GENAU dieses Datum kennt.
+     *
+     * Die Betreuung bleibt aussen vor: sie kommt aus den Schaltern des
+     * Formulars und steht nicht in WebUntis.
+     *
+     * @param list<array<string,mixed>> $slots
+     * @param list<array<string,mixed>> $kinder
+     * @return list<array<string,mixed>>
+     */
+    private function StundenMitImport(array $slots, string $heute, array $kinder): array
+    {
+        $importiert = $this->ImportierteTage();
+        if ($importiert === []) {
+            return $slots;
+        }
+        foreach ($kinder as $kind) {
+            $jeDatum = $importiert[(string)($kind['name'] ?? '')] ?? null;
+            if (!is_array($jeDatum) || $jeDatum === []) {
+                continue;
+            }
+            foreach (TimetableCalc::Wochentage(true) as $tag) {
+                $datum = TimetableCalc::DatumInWoche($heute, $tag);
+                if (!is_array($jeDatum[$datum] ?? null)) {
+                    continue;
+                }
+                $kennung = (string)($kind['id'] ?? '');
+                $slots = array_values(array_filter($slots, static fn(array $s): bool
+                    => !((string)($s['childId'] ?? '') === $kennung
+                         && (int)($s['weekday'] ?? 0) === $tag)));
+                foreach (array_values($jeDatum[$datum]) as $i => $zeile) {
+                    if (!is_array($zeile)) {
+                        continue;
+                    }
+                    $von = TimetableCalc::ZeitText($zeile['start'] ?? '');
+                    $bis = TimetableCalc::ZeitText($zeile['end'] ?? '');
+                    $fach = trim((string)($zeile['subject'] ?? ''));
+                    if ($von === '' || $bis === '' || $fach === '') {
+                        continue;
+                    }
+                    $slots[] = [
+                        'id'        => sprintf('i%sd%dr%d', $kennung, $tag, $i),
+                        'childId'   => $kennung,
+                        'childName' => (string)($kind['name'] ?? ''),
+                        'weekday'   => $tag,
+                        'subjectId' => $fach,
+                        'subject'   => $fach,
+                        'start'     => $von,
+                        'end'       => $bis,
+                        'room'      => trim((string)($zeile['room'] ?? '')),
+                        'teacher'   => trim((string)($zeile['teacher'] ?? '')),
+                        'status'    => trim((string)($zeile['status'] ?? '')),
+                        'color'     => null,
+                        // Damit die Kachel sagen kann, woher die Stunde kommt.
+                        'dated'     => $datum,
+                    ];
+                }
+            }
+        }
+        return $slots;
+    }
+
     // ────────────────────────── Aufbereiteter Zustand ──────────────────────────
 
     /**
@@ -457,6 +583,10 @@ trait TimetableStore
         // beziehen — sonst behauptet die Abendvorschau mitten in den Ferien
         // Unterricht.
         $heute   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum) === 1 ? $datum : date('Y-m-d');
+        /* Ab hier gilt fuer jeden Tag dieser Woche das, was ein Import fuer
+           GENAU dieses Datum kennt — und nur dort. Der Wochenplan bleibt die
+           Grundlage, auch fuer die Wochen, die kein Import erreicht hat. */
+        $slots   = $this->StundenMitImport($slots, $heute, $kinder);
         /* Die Zeitachse richtet sich nach den SICHTBAREN Kindern. Sonst zoege ein
            ausgeblendetes Kind mit spaeter Betreuung die Achse in die Laenge und
            der Plan der anderen schrumpfte auf ein Drittel der Kachel. */

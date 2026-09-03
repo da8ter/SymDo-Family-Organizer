@@ -568,7 +568,6 @@
       "Pages": "Seiten",
       "Watch class pages": "Klassenseiten beobachten",
       "Watches the class pages of the school. A changed card goes through the same analysis as a school mail and lands as a suggestion in the app — nothing is created unasked. The first check only notes what is there.": "Beobachtet die Klassenseiten der Schule. Eine geänderte Karte läuft durch dieselbe Auswertung wie eine Schulmail und landet als Vorschlag in der App — nichts entsteht ungefragt. Die erste Prüfung merkt sich nur den Bestand.",
-      "%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d day(s) written, %6$d overlap(s) unresolved": "%1$s: %2$d Stunde(n), %3$d Änderung(en), %4$d neu, %5$d Tag(e) geschrieben, %6$d Überschneidung(en) offen",
       "%1$s: %2$d lesson(s), %3$d change(s), %4$d unresolved overlap(s) — dry run, nothing written": "%1$s: %2$d Stunde(n), %3$d Änderung(en), %4$d offene Überschneidung(en) — Trockenlauf, nichts geschrieben",
       "%s cancelled": "%s entfällt",
       "%s substituted": "%s als Vertretung",
@@ -610,7 +609,8 @@
       "Paused after repeated login failures — save the form once to try again.": "Angehalten nach wiederholt falschen Zugangsdaten — einmal speichern, dann geht es wieder.",
       "Family member": "Familienmitglied",
       "%s: no child of that member in the timetable instance — link the member there.": "%s: in der Stundenplan-Instanz ist diesem Mitglied kein Kind zugeordnet — dort verknüpfen.",
-      "Student": "Schüler"
+      "Student": "Schüler",
+      "%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved": "%1$s: %2$d Stunde(n), %3$d Änderung(en), %4$d neu, %5$d Wochentag(e) + %6$d Datum/Daten geschrieben, %7$d Überschneidung(en) offen"
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

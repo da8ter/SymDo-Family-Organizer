@@ -87,7 +87,10 @@
             "A lesson is not an object.": "Eine Stunde ist kein Objekt.",
             "A lesson has no subject.": "Eine Stunde hat kein Fach.",
             "Lesson \"%s\" has no valid time (expected HH:MM).": "Stunde „%s\" hat keine gültige Zeit (erwartet HH:MM).",
-            "Lesson \"%s\" ends before it starts.": "Stunde „%s\" endet vor ihrem Beginn."
+            "Lesson \"%s\" ends before it starts.": "Stunde „%s\" endet vor ihrem Beginn.",
+            "Either weekdays or dates — not both in one payload.": "Entweder Wochentage oder Datumsangaben — nicht beides in einem Rumpf.",
+            "\"%s\" is not a date.": "„%s\" ist kein Datum.",
+            "The dated days need a kernel restart first — the attribute does not exist yet.": "Die datierten Tage brauchen erst einen Kernel-Neustart — das Attribut gibt es noch nicht."
         }
     }
 }

@@ -314,7 +314,7 @@ trait WebUntis
             return sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']);
         }
 
-        [$tage, $auffaellig, $offen] = $this->UntisAbbilden($stunden, $raster, (string)$kind['kurse']);
+        [$tage, $datiert, $auffaellig, $offen] = $this->UntisAbbilden($stunden, $raster, (string)$kind['kurse']);
         if ($trocken) {
             /* Trockenlauf: NICHTS schreiben, NICHT melden und den Merker nicht
                anfassen. Sonst gaelten die Aenderungen als gemeldet, ohne dass
@@ -323,10 +323,15 @@ trait WebUntis
                 $kind['name'], count($stunden), count($auffaellig), $offen);
         }
         $eingespielt = ((int)$kind['stpl'] > 0 && $tage !== []) ? $this->UntisEinspielen($kind, $tage) : 0;
+        /* Zweiter Aufruf, datiert: der Wochenplan zeigt die REGELWOCHE, die
+           Ebene darueber den einzelnen Tag mit Entfall, Vertretung und
+           Projekttag. Beides zusammen, weil beides etwas anderes beantwortet:
+           „wie sieht ein Dienstag aus" und „was ist am Dienstag". */
+        $datierteTage = ((int)$kind['stpl'] > 0 && $datiert !== []) ? $this->UntisEinspielen($kind, $datiert) : 0;
         $neu = $this->UntisAenderungenMelden($kind, $auffaellig);
 
-        return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d day(s) written, %6$d overlap(s) unresolved'),
-            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $offen);
+        return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved'),
+            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen);
     }
 
     /**
@@ -337,7 +342,7 @@ trait WebUntis
      * genauer geht es nicht, ohne das Modul auf Datumsbasis umzubauen. Die
      * Vertretungen dagegen werden ueber den ganzen Zeitraum gemeldet.
      *
-     * @return array{0:array<int,list<array<string,mixed>>>, 1:list<array<string,mixed>>, 2:int}
+     * @return array{0:array<int,list<array<string,mixed>>>, 1:array<string,list<array<string,mixed>>>, 2:list<array<string,mixed>>, 3:int}
      */
     private function UntisAbbilden(array $stunden, array $raster, string $kurse): array
     {
@@ -376,17 +381,13 @@ trait WebUntis
                 'room'    => $this->UntisFeld($st, 'ro', 'name'),
                 'teacher' => $this->UntisFeld($st, 'te', 'name'),
                 'status'  => $status,
+                // Grund der Abweichung, fuer Meldung und Briefing.
+                'grund'   => trim((string)($st['substText'] ?? ($st['info'] ?? ''))),
             ];
             if ($slot['start'] === '' || $slot['end'] === '') {
                 continue;
             }
             $ersteWoche[$wochentag][$datum][] = $slot;
-            if ($status !== 'normal') {
-                $auffaellig[] = $slot + [
-                    'datum' => $datum,
-                    'grund' => trim((string)($st['substText'] ?? ($st['info'] ?? ''))),
-                ];
-            }
         }
         /* Je Wochentag EIN Termin. Genommen wird der fruehste — das ist die
            laufende oder kommende Woche und damit der Plan, der gilt.
@@ -394,6 +395,33 @@ trait WebUntis
            Am 03.09.2026 lag genau so ein Tag vor: „Projekttag" von 8 bis 13
            Uhr, alle Fachstunden entfallen. Wer den nimmt, hat eine Woche lang
            einen Donnerstag ohne Unterricht im Plan stehen. */
+        /* Alle Tage des Zeitraums, jeder unter seinem Datum — die Ebene ueber
+           dem Wochenplan. Dieselbe Kurswahl wie unten, sonst staenden auch
+           hier fuenf Religionskurse uebereinander. */
+        $datiert = [];
+        foreach ($ersteWoche as $termine) {
+            foreach ($termine as $datum => $slots) {
+                [$gewaehlt] = $this->UntisKurseWaehlen($slots, $kurse);
+                if ($gewaehlt !== []) {
+                    $datiert[substr((string)$datum, 0, 4) . '-' . substr((string)$datum, 4, 2)
+                        . '-' . substr((string)$datum, 6, 2)] = $gewaehlt;
+                }
+            }
+        }
+        ksort($datiert);
+
+        /* Gemeldet wird, was das Kind BETRIFFT — also aus den gewaehlten
+           Stunden, nicht aus dem Rohplan. Sonst zaehlt der Klassenplan mit:
+           am 03.09.2026 waeren es 12 Ausfaelle gewesen, darunter vier fremde
+           Religionskurse, beide AGs und der andere Foerderkurs. */
+        foreach ($datiert as $datum => $slots) {
+            foreach ($slots as $s) {
+                if ((string)$s['status'] !== 'normal') {
+                    $auffaellig[] = $s + ['datum' => str_replace('-', '', (string)$datum)];
+                }
+            }
+        }
+
         foreach ($ersteWoche as $wt => $termine) {
             ksort($termine);
             $genommen = '';
@@ -418,7 +446,7 @@ trait WebUntis
             [$tage[$wt], $n] = $this->UntisKurseWaehlen($slots, $kurse);
             $offen += $n;
         }
-        return [$tage, $auffaellig, $offen];
+        return [$tage, $datiert, $auffaellig, $offen];
     }
 
     /**
@@ -481,6 +509,17 @@ trait WebUntis
                 $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
             }
             $gruppe = array_values($nachFach);
+            /* Ein Entfall und ein Ersatz zur selben Zeit sind keine Wahl
+               zwischen Kursen — beides ist wahr. Am Projekttag stand um 8 Uhr
+               der Block „Projekttag" NEBEN der entfallenen Mathematik; die
+               Kursliste kannte beides nicht und hat die Zeit geleert.
+               Also: was stattfindet, schlaegt was ausfaellt. Faellt alles aus,
+               bleibt der Entfall stehen — durchgestrichen ist die Auskunft. */
+            $stattfindend = array_values(array_filter($gruppe,
+                static fn(array $s): bool => (string)$s['status'] !== 'entfall'));
+            if ($stattfindend !== []) {
+                $gruppe = $stattfindend;
+            }
             if (count($gruppe) === 1) {
                 $raus[] = $gruppe[0];
                 continue;

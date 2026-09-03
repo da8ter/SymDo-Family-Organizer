@@ -88,6 +88,10 @@ class SymDoTimetable extends IPSModuleStrict
         $this->RegisterPropertyString('HolidayRegion', 'DE-HE');
         $this->RegisterPropertyInteger('AlmanacInstanceID', 0);
 
+        /* Datierte Tage aus einem Import (WebUntis): Ebene UEBER dem
+           Wochenplan, nur fuer die Tage, die eine Quelle wirklich gesehen hat.
+           Siehe TimetableStore::ImportierteTage(). */
+        $this->RegisterAttributeString('ImportedDays', '{}');
         $this->RegisterAttributeString('Holidays', '[]');
         $this->RegisterAttributeInteger('HolidaysFetched', 0);
 
@@ -627,11 +631,29 @@ class SymDoTimetable extends IPSModuleStrict
         if (!is_array($tage) || $tage === []) {
             return $fehler('no_days', $this->Translate('No days in the payload.'));
         }
+        /* Zwei Formen, eine Funktion: Wochentage (1–6) schreiben den
+           WOCHENPLAN, Datumsangaben (JJJJ-MM-TT) die datierte Ebene darueber.
+           Gemischt waere nur verwirrend — dann lieber eine klare Absage. */
+        $datiert = null;
+        foreach (array_keys($tage) as $k) {
+            $istDatum = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$k) === 1;
+            if ($datiert === null) {
+                $datiert = $istDatum;
+            } elseif ($datiert !== $istDatum) {
+                return $fehler('mixed_days', $this->Translate('Either weekdays or dates — not both in one payload.'));
+            }
+        }
+
         $fertig = [];
         $anzahl = 0;
         foreach ($tage as $tag => $zeilen) {
             $t = (int)$tag;
-            if ($t < 1 || $t > 6) {
+            if ($datiert) {
+                [$j, $m, $d] = array_map('intval', explode('-', (string)$tag));
+                if (!checkdate($m, $d, $j)) {
+                    return $fehler('bad_date', sprintf($this->Translate('"%s" is not a date.'), (string)$tag));
+                }
+            } elseif ($t < 1 || $t > 6) {
                 return $fehler('bad_weekday', sprintf($this->Translate('Weekday %s is not between 1 and 6.'), (string)$tag));
             }
             if (!is_array($zeilen)) {
@@ -673,27 +695,57 @@ class SymDoTimetable extends IPSModuleStrict
             usort($slots, static fn(array $a, array $b): int
                 => TimetableCalc::Minuten(TimetableCalc::ZeitText($a['start']))
                 <=> TimetableCalc::Minuten(TimetableCalc::ZeitText($b['start'])));
-            $fertig[$t] = $slots;
+            $fertig[$datiert ? (string)$tag : $t] = $slots;
         }
 
         // ── Erst jetzt schreiben ──
-        foreach ($fertig as $t => $slots) {
-            @IPS_SetProperty($this->InstanceID, self::SlotProp($nr, (int)$t),
-                (string)json_encode($slots, JSON_UNESCAPED_UNICODE));
+        $verworfen = [];
+        if ($datiert) {
+            $heute = date('Y-m-d');
+            foreach (array_keys($fertig) as $datum) {
+                if ((string)$datum < $heute) {
+                    // Vergangenes wird nicht abgelegt — der Plan zeigt nach vorn.
+                    $verworfen[] = (string)$datum;
+                    unset($fertig[$datum]);
+                }
+            }
+            [$geschrieben, $angekommen] = $this->ImportierteTageSetzen(
+                (string)($kinder[$nr - 1]['name'] ?? ''), $fertig);
+            if (!$angekommen) {
+                return $fehler('needs_restart', $this->Translate(
+                    'The dated days need a kernel restart first — the attribute does not exist yet.'));
+            }
+            // Attribute loesen kein ApplyChanges aus; die Kachel muss also
+            // ausdruecklich neu bespielt werden.
+            $this->PushState();
+        } else {
+            foreach ($fertig as $t => $slots) {
+                @IPS_SetProperty($this->InstanceID, self::SlotProp($nr, (int)$t),
+                    (string)json_encode($slots, JSON_UNESCAPED_UNICODE));
+            }
+            @IPS_ApplyChanges($this->InstanceID);
         }
-        @IPS_ApplyChanges($this->InstanceID);
 
         $quelle = trim((string)($rumpf['source'] ?? ''));
-        $this->SendDebug('ImportSlots', sprintf('%s: Kind %d, %d Tag(e), %d Stunde(n)',
-            $quelle !== '' ? $quelle : 'unbekannte Quelle', $nr, count($fertig), $anzahl), 0);
+        $this->SendDebug('ImportSlots', sprintf('%s: Kind %d, %d %s, %d Stunde(n)',
+            $quelle !== '' ? $quelle : 'unbekannte Quelle', $nr, count($fertig),
+            $datiert ? 'Datum/Daten' : 'Wochentag(e)', $anzahl), 0);
 
-        return (string)json_encode([
+        $antwort = [
             'ok'      => true,
             'kind'    => (string)($kinder[$nr - 1]['name'] ?? ''),
-            'tage'    => array_map('intval', array_keys($fertig)),
+            'tage'    => $datiert ? array_map('strval', array_keys($fertig))
+                                  : array_map('intval', array_keys($fertig)),
             'slots'   => $anzahl,
             'ersetzt' => true,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            'datiert' => (bool)$datiert,
+        ];
+        if ($verworfen !== []) {
+            // Nicht still schlucken: der Aufrufer soll sehen, dass sein Fenster
+            // in der Vergangenheit anfing.
+            $antwort['verworfen'] = $verworfen;
+        }
+        return (string)json_encode($antwort, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** Ferien erneuern und die Anzeige nachziehen. Haengt am Timer. */

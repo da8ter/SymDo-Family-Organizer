@@ -298,7 +298,7 @@ trait TimetableBridge
                 // gar kein Tag für dieses Datum), gilt die Angabe des Plans.
                 $ferien = is_array($tag['holiday'] ?? null) ? $tag['holiday'] : $planFerien;
                 if (!isset($kinder[$name])) {
-                    $kinder[$name] = ['ferien' => null, 'zeile' => ''];
+                    $kinder[$name] = ['ferien' => null, 'zeile' => '', 'datiert' => false];
                 }
                 if (is_array($ferien)) {
                     /* Ferien schlagen den Unterricht: die Angabe ist eine Aussage
@@ -308,9 +308,22 @@ trait TimetableBridge
                     $kinder[$name]['ferien'] = $ferien;
                     continue;
                 }
-                if ($kinder[$name]['zeile'] !== '') {
+                /* Steht dasselbe Kind in zwei Instanzen, gewinnt die mit den
+                   DATIERTEN Stunden: dort hat ein Import gesagt, was an diesem
+                   Tag wirklich ist. Gemessen am 03.09.2026 — die eine Instanz
+                   meldete „bis 14:05 Schule", waehrend die andere den
+                   Projekttag und vier Ausfaelle kannte. */
+                $datiert = false;
+                foreach ((array)($tag['slots'] ?? []) as $s) {
+                    if (is_array($s) && ($s['status'] ?? '') !== '' && ($s['status'] ?? '') !== 'normal') {
+                        $datiert = true;
+                        break;
+                    }
+                }
+                if ($kinder[$name]['zeile'] !== '' && !($datiert && !$kinder[$name]['datiert'])) {
                     continue;
                 }
+                $kinder[$name]['datiert'] = $datiert;
                 $kinder[$name]['zeile'] = $this->TimetableSchoolLine($name, is_array($tag) ? $tag : [], $meldungen[$name] ?? []);
             }
         }
@@ -328,39 +341,55 @@ trait TimetableBridge
         if ($stunden === []) {
             return $name . ': keine Schule';
         }
-        // Unterricht und Betreuung getrennt nennen: „bis 16 Uhr Schule"
-        // waere falsch, wenn davon dreieinhalb Stunden Hort sind.
+        /* Zur Schulzeit zaehlt weder die Betreuung noch, was ausfaellt:
+           „bis 16 Uhr Schule" waere falsch, wenn davon dreieinhalb Stunden
+           Hort sind — und „bis 14:05" ebenso, wenn die letzten beiden Stunden
+           entfallen. Letzteres steht erst seit den datierten Tagen wirklich
+           im Tag. */
         $unterricht = array_values(array_filter($stunden,
-            static fn(array $s): bool => !(bool)($s['care'] ?? false)));
+            static fn(array $s): bool => !(bool)($s['care'] ?? false)
+                && (string)($s['status'] ?? '') !== 'entfall'));
         $betreuung  = array_values(array_filter($stunden,
             static fn(array $s): bool => (bool)($s['care'] ?? false)));
-        if ($unterricht === []) {
-            return $name . ': keine Schule';
-        }
-        $zeile = sprintf('%s: Schule von %s bis %s', $name,
-            (string)$unterricht[0]['start'],
-            (string)$unterricht[count($unterricht) - 1]['end']);
-        if ($betreuung !== []) {
-            $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
-        }
-
         $entfall    = (array)($meldung['entfall'] ?? []);
         $vertretung = (array)($meldung['vertretung'] ?? []);
-        if ($entfall === [] && $vertretung === []) {
-            return $zeile;
+
+        if ($unterricht === []) {
+            // Alles abgesagt ist etwas anderes als schulfrei.
+            $zeile = $entfall !== []
+                ? $name . ': heute kein regulärer Unterricht'
+                : $name . ': keine Schule';
+        } else {
+            $zeile = sprintf('%s: Schule von %s bis %s', $name,
+                (string)$unterricht[0]['start'],
+                (string)$unterricht[count($unterricht) - 1]['end']);
+            if ($betreuung !== []) {
+                $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
+            }
         }
-        /* Faellt der ganze Tag aus, waeren die Uhrzeiten oben eine Luege: sie
-           stammen vom Wochenplan, nicht vom heutigen Tag. Dann steht nur, was
-           wirklich gilt. */
-        if (count($entfall) >= count($unterricht)) {
-            $zeile = $name . ': heute kein regulärer Unterricht';
-            return $vertretung !== [] ? $zeile . ', stattdessen ' . implode(', ', $vertretung) : $zeile;
-        }
+
         if ($entfall !== []) {
-            $zeile .= ', es entfällt ' . implode(', ', $entfall);
+            /* Ab drei Ausfaellen die Zahl statt der Liste: an einem Projekttag
+               waeren es sechs Faecher, und die Zeile soll man im Vorbeigehen
+               hoeren koennen. */
+            $zeile .= count($entfall) > 2
+                ? sprintf(', %d Stunden entfallen', count($entfall))
+                : ', es entfällt ' . implode(', ', $entfall);
         }
-        if ($vertretung !== []) {
-            $zeile .= ', vertreten wird ' . implode(', ', $vertretung);
+        /* Nur nennen, was im Plan nicht ohnehin steht: seit der Plan datierte
+           Tage kennt, IST die Vertretung dort schon die Stunde. */
+        $imPlan = array_map(static fn(array $s): string => mb_strtolower(trim((string)($s['name'] ?? ''))),
+            $unterricht);
+        $offen = array_values(array_filter($vertretung, static function (string $v) use ($imPlan): bool {
+            foreach ($imPlan as $fach) {
+                if ($fach !== '' && str_starts_with(mb_strtolower($v), $fach)) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        if ($offen !== []) {
+            $zeile .= ', vertreten wird ' . implode(', ', $offen);
         }
         return $zeile;
     }
@@ -372,7 +401,7 @@ trait TimetableBridge
      * interessiert dann niemanden. Haben alle Kinder dieselben Ferien, steht eine
      * einzige Zeile da statt derselben Aussage je Kind.
      *
-     * @param array<string, array{ferien: array<string,mixed>|null, zeile: string}> $kinder
+     * @param array<string, array{ferien: array<string,mixed>|null, zeile: string, datiert: bool}> $kinder
      * @return list<string>
      */
     private function TimetableSchoolText(array $kinder): array
