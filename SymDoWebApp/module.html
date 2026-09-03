@@ -677,6 +677,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   width: 100%; max-width: 100%; height: auto; border-radius: 12px; display: block;
   background: var(--surface); cursor: pointer;
 }
+/* Die PDF-Vorschau bleibt klein: sie ist ein Hinweis, kein Inhalt. Weisser
+   Grund, weil die Seite selbst weiss ist — auf dunklem Grund saehe das
+   Papier sonst wie ein Loch aus. */
+.edu-vorschau {
+  width: 120px; height: auto; border-radius: 8px; display: block; cursor: pointer;
+  background: #fff; border: 1px solid var(--border);
+}
 #notesDetail .edu-karte + .edu-karte { margin-top: 10px; }
 @media (min-width: 760px) {
   #notesDetail:has(.edu-karte) { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
@@ -11301,6 +11308,16 @@ function edumapsKartenHtml(ordner) {
         ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
     }
     for (const d of rest) {
+      /* Seitenvorschau des PDF, wenn die Quelle eine mitliefert — dasselbe
+         Bild, das die Klassenseite zeigt. Sie steht VOR dem Namen: man erkennt
+         den Elternbrief am Aussehen schneller als am Dateinamen. Ohne
+         Vorschau (oder ohne Token, also in der Kachel) bleibt es bei der
+         Zeile mit Symbol. */
+      const mini = d.thumb ? notesMediaUrl(d.thumb) : '';
+      if (mini) {
+        html += '<img class="edu-vorschau" loading="lazy" data-media="' + escapeHtml(String(d.id)) + '"' +
+          ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
+      }
       html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
         '<i class="fa-light ' + (d.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
         '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
@@ -11332,7 +11349,7 @@ function bindeEdumapsKarten(frisch) {
       noteCtx = { noteId: nid, files: notiz.att || [], warten: [], wahl: [], proposal: null };
       noteAnhangOeffnen(parseInt(mid, 10));
     };
-    karte.querySelectorAll('.edu-bild').forEach(b =>
+    karte.querySelectorAll('.edu-bild, .edu-vorschau').forEach(b =>
       b.addEventListener('click', () => oeffne(b.dataset.media)));
     karte.querySelectorAll('.note-file').forEach(z =>
       z.addEventListener('click', () => oeffne(z.dataset.media)));

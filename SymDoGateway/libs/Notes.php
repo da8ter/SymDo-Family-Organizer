@@ -361,12 +361,17 @@ trait Notes
             'folderId'  => (string)($n['folderId'] ?? ''),
             'title'     => (string)($n['title'] ?? ''),
             'att'       => array_values(array_map(static function (array $a): array {
-                return [
+                $raus = [
                     'id'    => (int)($a['id'] ?? 0),
                     'kind'  => (string)($a['kind'] ?? ''),
                     'name'  => (string)($a['name'] ?? ''),
                     'bytes' => (int)($a['bytes'] ?? 0),
                 ];
+                // Vorschaubild eines PDF, wenn es eines gibt (Klassenseite).
+                if ((int)($a['thumb'] ?? 0) > 0) {
+                    $raus['thumb'] = (int)$a['thumb'];
+                }
+                return $raus;
             }, is_array($n['att'] ?? null) ? $n['att'] : [])),
             'updatedAt' => (int)($n['updatedAt'] ?? 0),
             'source'    => (string)($n['source'] ?? 'manual'),

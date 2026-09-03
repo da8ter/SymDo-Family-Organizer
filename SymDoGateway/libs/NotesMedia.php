@@ -137,6 +137,15 @@ trait NotesMedia
                 if ($id > 0) {
                     $ids[] = $id;
                 }
+                /* Das Vorschaubild eines PDF gehoert zum Anhang, nicht daneben.
+                   Es MUSS hier mitgezaehlt werden: dieselbe Liste entscheidet,
+                   was die Datei-Route ausliefert UND was als verwaist geloescht
+                   wird. Fehlte es, waere die Vorschau nicht abrufbar und beim
+                   naechsten Aufraeumen weg. */
+                $mini = (int)($a['thumb'] ?? 0);
+                if ($mini > 0) {
+                    $ids[] = $mini;
+                }
             }
         }
         return array_values(array_unique($ids));

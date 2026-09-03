@@ -305,6 +305,24 @@ trait EduMaps
                         }
                     }
                 }
+                /* Vorschaubilder nachtragen: Anhaenge aus der Zeit davor haben
+                   keine. Nur fuer PDF und nur, wenn die Karte eine Adresse
+                   dafuer nennt — die Zuordnung wieder ueber die Reihenfolge. */
+                $kartenDateien = array_values(array_filter((array)$karte['anhaenge'],
+                    fn(array $a): bool => $this->EduArt((string)$a['name']) !== ''));
+                if (count($alteAtt) === count($kartenDateien)) {
+                    foreach ($alteAtt as $k => $a) {
+                        if ((string)($a['kind'] ?? '') !== 'pdf' || (int)($a['thumb'] ?? 0) > 0) {
+                            continue;
+                        }
+                        $mini = $this->EduVorschau((string)($kartenDateien[$k]['preview'] ?? ''),
+                            (string)$a['name']);
+                        if ($mini > 0) {
+                            $store['notes'][$i]['att'][$k]['thumb'] = $mini;
+                            $fehlt = true;
+                        }
+                    }
+                }
                 // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
                 $neuerText = $this->EduNotizText($karte);
                 if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
@@ -373,6 +391,31 @@ trait EduMaps
         } finally {
             IPS_SemaphoreLeave($lock);
         }
+    }
+
+    /**
+     * Das Vorschaubild eines PDF holen und ablegen.
+     *
+     * Es haengt AM ANHANG (`thumb`) und ist kein zweiter Anhang: sonst waere
+     * der Deckel von fuenf Anhaengen je Notiz nach zwei PDF erreicht, und in
+     * der Liste stuende jede Datei doppelt.
+     *
+     * @return int Medien-Kennung, 0 wenn es keine gibt
+     */
+    private function EduVorschau(string $url, string $name): int
+    {
+        if ($url === '') {
+            return 0;
+        }
+        $antwort = $this->AiFetchPublicPage($url);
+        if (($antwort['ok'] ?? false) !== true) {
+            $this->SendDebug('EduMaps', 'Keine Vorschau zu ' . $name, 0);
+            return 0;
+        }
+        // Derselbe Weg wie fuer jeden anderen Anhang: er prueft die Magic Bytes,
+        // rechnet auf JPEG um und legt das Medienobjekt an.
+        $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), 'vorschau.jpg');
+        return ($r['ok'] ?? false) === true ? (int)$r['id'] : 0;
     }
 
     /**
@@ -504,8 +547,15 @@ trait EduMaps
                         . '): ' . $a['name'], 0);
                     continue;
                 }
-                $raus[] = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'],
+                $anhang = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'],
                            'name' => (string)$r['name'], 'bytes' => (int)$r['bytes']];
+                if ($anhang['kind'] === 'pdf') {
+                    $mini = $this->EduVorschau((string)($a['preview'] ?? ''), (string)$a['name']);
+                    if ($mini > 0) {
+                        $anhang['thumb'] = $mini;
+                    }
+                }
+                $raus[] = $anhang;
             }
         } finally {
             @ini_set('memory_limit', $speicherVorher);
@@ -715,7 +765,13 @@ trait EduMaps
                 // „/fd" liefert die Datei mit Dateinamen; die nackte Adresse
                 // liefert eine Ansichtsseite.
                 $raus[] = ['name' => $namen[$schluessel] ?? $name,
-                           'url'  => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/fd'];
+                           'url'  => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/fd',
+                           /* edumaps rendert von jedem PDF eine Seitenvorschau
+                              und liefert sie unter „/preview" (gemessen:
+                              180×255 JPEG, rund 11 KB). Selbst rendern koennten
+                              wir sie nicht — dafuer fehlt in Symcon ein
+                              PDF-Renderer. */
+                           'preview' => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/preview'];
             }
         }
         return $raus;
