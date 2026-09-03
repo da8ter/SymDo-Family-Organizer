@@ -669,12 +669,25 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    bringt die seiner Datei mit (hier ueber 1000 px). Ohne beides wird die
    Spalte so breit wie das Bild — auf dem Telefon lief die Karte rechts aus
    dem Bild. Vom Nutzer gemeldet. */
-.edu-gruppe { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+/* Der aufgeklappte Bereich liegt auf derselben grauen Flaeche wie die Karten
+   des Dashboards (.card → var(--surface)) — so gehoert sichtbar zusammen, was
+   unter einem Band steht. Oben ohne Rundung und ohne Abstand, damit Band und
+   Flaeche EIN Block sind. */
+.edu-gruppe {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
+  background: var(--surface); padding: 10px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  /* Kein negativer Rand: das Band setzt seinen unteren Abstand im offenen
+     Zustand selbst auf 0 (.edu-abschnitt.auf). */
+  margin: 0 0 var(--gap);
+}
 .edu-gruppe[hidden] { display: none; }
+/* Ohne Band (Karten ohne Abschnitt) traegt die Flaeche ihre Rundung selbst. */
+.edu-abschnitt.auf { margin-bottom: 0; border-radius: 10px 10px 0 0; }
 .edu-karte {
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card); border: 0; border-radius: var(--radius);
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
-  min-width: 0;
+  min-width: 0; overflow: hidden;
 }
 .edu-kopf { display: flex; align-items: baseline; gap: 8px; }
 /* Mit Farbe fuellt der Kopf die Karte bis an ihre Kanten: die negativen Raender
@@ -682,7 +695,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    stehen bleibt. */
 .edu-kopf.bunt {
   margin: -12px -14px 2px; padding: 9px 14px;
-  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 .edu-titel { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; }
 .edu-datum { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
@@ -11376,14 +11389,14 @@ function edumapsKartenHtml(ordner) {
 function edumapsKarteHtml(n) {
   const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
   const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
-  // Die Kontur traegt die Farbe der Karte — auf der Klassenseite hat jede eine,
-  // und die Faecher unterscheiden sich darin (Mathe blau, Deutsch rot).
+  // Die Farbe der Karte traegt jetzt der KOPF; eine Kontur dazu waere zuviel
+  // (auf Wunsch entfernt) — die weisse Flaeche hebt sich vom grauen Bereich
+  // ohnehin ab.
   const kf = n.color || n.sectionColor || '';
   // Der Kartenkopf traegt die Farbe als FLAECHE — so steht er auch auf der
   // Klassenseite da. Die Schrift richtet sich nach der Helligkeit.
   const kopfStil = kf ? ' style="background:' + escapeHtml(kf) + ';color:' + eduLesefarbe(kf) + '"' : '';
-  let html = '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '"' +
-    (kf ? ' style="border-color:' + escapeHtml(kf) + '"' : '') + '>' +
+  let html = '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '">' +
     '<div class="edu-kopf' + (kf ? ' bunt' : '') + '"' + kopfStil + '>' +
     '<span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
     '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
@@ -11435,6 +11448,33 @@ function eduBereichUmschalten(name) {
 }
 
 /**
+ * Die Knoepfe der Kopfzeile und die Unterordner — BEIDE Zweige der
+ * Detailansicht brauchen sie.
+ *
+ * Sie standen frueher hinter dem Klassenseiten-Zweig, und der steigt vorher
+ * aus: dort waren Zurueck, „Neuer Ordner" und „Neue Notiz" tot. Vom Nutzer
+ * gemeldet — zweimal, erst fuer die Ordner, dann fuer den Zurueck-Knopf.
+ */
+function bindeDetailKopf(suche, ordner) {
+  const zurueck = suche('#btnNotesBack')[0];
+  // Eine Ebene hoch, nicht gleich zur Wurzel: aus „Tim › Edumaps" fuehrt der
+  // Weg zurueck nach „Tim".
+  if (zurueck) zurueck.addEventListener('click', () => {
+    notesOrdnerId = ordner.parentId || null;
+    renderNotizen();
+  });
+  const neuOrdner = suche('#btnNotesSubCreate')[0];
+  if (neuOrdner) neuOrdner.addEventListener('click', () => {
+    showPrompt(translate('New folder'), '', translate('Create'), (name) => {
+      if (name.trim()) notizenAktion({ action: 'folderCreate', name: name.trim(), parentId: ordner.id });
+    });
+  });
+  bindeUnterordner(suche('.note-sub'));
+  const neu = suche('#btnNoteCreate')[0];
+  if (neu) neu.addEventListener('click', () => noteEditorOeffnen({ folderId: ordner.id }));
+}
+
+/**
  * Unterordner-Zeilen antippbar machen (oeffnen, wischen zum Loeschen bzw.
  * Umbenennen). Eigene Funktion, weil BEIDE Zweige der Detailansicht sie
  * brauchen — im Klassenseiten-Zweig fehlte sie, und dort waren die Ordner zwar
@@ -11458,7 +11498,7 @@ function bindeUnterordner(karten) {
 }
 
 /** Bilder und Dateien der Karten antippbar machen — sonst ist die Ansicht zum Lesen. */
-function bindeEdumapsKarten(frisch) {
+function bindeEdumapsKarten(frisch, ordner) {
   if (!Array.isArray(frisch)) return;
   const suche = (sel) => {
     const raus = [];
@@ -11468,7 +11508,7 @@ function bindeEdumapsKarten(frisch) {
     }
     return raus;
   };
-  bindeUnterordner(suche('.note-sub'));
+  bindeDetailKopf(suche, ordner);
   suche('.edu-abschnitt').forEach(kopf => {
     kopf.addEventListener('click', () => {
       eduBereichUmschalten(kopf.dataset.bereich || '');
@@ -11530,7 +11570,7 @@ function renderNotizenDetail(el, ordner) {
      Zweigs (Kopfzeile, Unterordner, die beiden Plus-Knoepfe) bleibt gleich. */
   if ((ordner.source || '') === 'edumaps') {
     html += edumapsKartenHtml(ordner);
-    bindeEdumapsKarten(renderRows(el, html));
+    bindeEdumapsKarten(renderRows(el, html), ordner);
     return;
   }
   const liste = notesImOrdner(ordner.id);
@@ -11562,22 +11602,7 @@ function renderNotizenDetail(el, ordner) {
     return raus;
   };
   // Auch hier nur die frischen Knoten — siehe bindeNotizenMaster.
-  const zurueck = suche('#btnNotesBack')[0];
-  // Eine Ebene hoch, nicht gleich zur Wurzel: aus „Tim › Edumaps" fuehrt der
-  // Weg zurueck nach „Tim".
-  if (zurueck) zurueck.addEventListener('click', () => {
-    notesOrdnerId = ordner.parentId || null;
-    renderNotizen();
-  });
-  const neuOrdner = suche('#btnNotesSubCreate')[0];
-  if (neuOrdner) neuOrdner.addEventListener('click', () => {
-    showPrompt(translate('New folder'), '', translate('Create'), (name) => {
-      if (name.trim()) notizenAktion({ action: 'folderCreate', name: name.trim(), parentId: ordner.id });
-    });
-  });
-  bindeUnterordner(suche('.note-sub'));
-  const neu = suche('#btnNoteCreate')[0];
-  if (neu) neu.addEventListener('click', () => noteEditorOeffnen({ folderId: ordner.id }));
+  bindeDetailKopf(suche, ordner);
   suche('.note-card').forEach(card => {
     const nid = card.dataset.note;
     const inhalt = card.querySelector('.item-card-content');
