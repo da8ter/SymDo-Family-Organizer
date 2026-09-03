@@ -307,7 +307,7 @@ trait EduMaps
                 $kartenNamen = array_values(array_map(
                     static fn(array $a): string => (string)$a['name'],
                     array_filter((array)$karte['anhaenge'],
-                        fn(array $a): bool => $this->EduArt((string)$a['name']) !== '')));
+                        fn(array $a): bool => $this->EduArt((string)($a['datei'] ?? $a['name'])) !== '')));
                 if (count($alteAtt) === count($kartenNamen)) {
                     foreach ($alteAtt as $k => $a) {
                         if (preg_match('/^\d{6,}\./', (string)$a['name']) === 1
@@ -321,7 +321,7 @@ trait EduMaps
                    keine. Nur fuer PDF und nur, wenn die Karte eine Adresse
                    dafuer nennt — die Zuordnung wieder ueber die Reihenfolge. */
                 $kartenDateien = array_values(array_filter((array)$karte['anhaenge'],
-                    fn(array $a): bool => $this->EduArt((string)$a['name']) !== ''));
+                    fn(array $a): bool => $this->EduArt((string)($a['datei'] ?? $a['name'])) !== ''));
                 if (count($alteAtt) === count($kartenDateien)) {
                     foreach ($alteAtt as $k => $a) {
                         if ((string)($a['kind'] ?? '') !== 'pdf' || (int)($a['thumb'] ?? 0) > 0) {
@@ -669,7 +669,7 @@ trait EduMaps
                         . ' Dateien an der Karte — die weiteren bleiben in der Notiz weg: ' . $karte['titel'], 0);
                     break;
                 }
-                if ($this->EduArt((string)$a['name']) === '') {
+                if ($this->EduArt((string)($a['datei'] ?? $a['name'])) === '') {
                     continue;
                 }
                 $antwort = $this->AiFetchPublicPage((string)$a['url']);
@@ -745,7 +745,7 @@ trait EduMaps
         @ini_set('memory_limit', '192M');
         try {
             foreach ((array)$karte['anhaenge'] as $a) {
-                $art = $this->EduArt((string)$a['name']);
+                $art = $this->EduArt((string)($a['datei'] ?? $a['name']));
                 if ($art === '') {
                     continue;   // weder Bild noch PDF — die KI kann damit nichts
                 }
@@ -919,7 +919,15 @@ trait EduMaps
                 $gesehen[$schluessel] = true;
                 // „/fd" liefert die Datei mit Dateinamen; die nackte Adresse
                 // liefert eine Ansichtsseite.
-                $raus[] = ['name' => $namen[$schluessel] ?? $name,
+                $raus[] = [/* Anzeigename fuer den Menschen … */
+                           'name' => $namen[$schluessel] ?? $name,
+                           /* … und der technische aus der Adresse. NUR er traegt
+                              die Endung: das Etikett der Seite kann jeder Text
+                              sein („Einladung Pflegschaftssitzung 1. Hj"), und
+                              wer daraus den Dateityp ableitet, haelt ein PDF
+                              fuer nichts und laesst es weg. Genau so ist die
+                              Einladung ohne Vorschau und ohne Namen geblieben. */
+                           'datei' => $name,
                            'url'  => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/fd',
                            /* edumaps rendert von jedem PDF eine Seitenvorschau
                               und liefert sie unter „/preview" (gemessen:
