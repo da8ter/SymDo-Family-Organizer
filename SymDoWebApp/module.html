@@ -664,15 +664,31 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .edu-bname { flex: 1 1 auto; min-width: 0; }
 .edu-zahl { flex: 0 0 auto; font-weight: 600; opacity: .75; }
 .edu-pfeil { flex: 0 0 auto; width: 14px; text-align: center; }
-.edu-gruppe { display: grid; grid-template-columns: 1fr; gap: 10px; }
+/* minmax(0, 1fr) statt 1fr, und min-width:0 an der Karte: ein Rasterfeld
+   schrumpft NICHT unter die natuerliche Breite seines Inhalts, und ein Bild
+   bringt die seiner Datei mit (hier ueber 1000 px). Ohne beides wird die
+   Spalte so breit wie das Bild — auf dem Telefon lief die Karte rechts aus
+   dem Bild. Vom Nutzer gemeldet. */
+.edu-gruppe { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .edu-gruppe[hidden] { display: none; }
 .edu-karte {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
 }
 .edu-kopf { display: flex; align-items: baseline; gap: 8px; }
+/* Mit Farbe fuellt der Kopf die Karte bis an ihre Kanten: die negativen Raender
+   heben genau das Polster der Karte auf (12/14), damit kein heller Streifen
+   stehen bleibt. */
+.edu-kopf.bunt {
+  margin: -12px -14px 2px; padding: 9px 14px;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+}
 .edu-titel { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; }
 .edu-datum { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+/* Im farbigen Kopf erbt das Datum die Schriftfarbe — „grau auf blau" waere
+   nicht zu lesen. */
+.edu-kopf.bunt .edu-datum { color: inherit; opacity: .75; }
 /* min-width:0 und overflow-wrap: die Karte ist ein Flex-Container, und ein
    Flex-Kind waechst ohne beides ueber den Rand hinaus statt umzubrechen —
    gemessen: die Regeln-Karte lief rechts aus dem Bild. Dieselbe Vorsorge wie
@@ -685,6 +701,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .edu-text .nv-row { display: flex; gap: 8px; padding: 3px 0; }
 .edu-text .nv-k { flex: 0 0 auto; max-width: 45%; font-weight: 600; color: var(--muted); }
 .edu-text .nv-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+/* Die uebernommene Formatierung der Klassenseite: Absaetze eng, Listen mit
+   ihrer Nummer bzw. ihrem Punkt. Ohne eigene Regeln stuenden die Zahlen der
+   Klassenregeln am Rand ausserhalb der Karte. */
+.edu-text p { margin: 0 0 6px; }
+.edu-text p:last-child { margin-bottom: 0; }
+.edu-text ol, .edu-text ul { margin: 4px 0 6px; padding-left: 22px; }
+.edu-text li { margin: 2px 0; }
+.edu-text a { color: var(--accent); }
 .edu-karte .note-file { min-width: 0; }
 .edu-text:empty { display: none; }
 .edu-bild {
@@ -702,7 +726,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    der Bahn: sonst muesste jede Ueberschrift ueber beide Spalten gespannt
    werden, und ein zugeklappter Bereich risse eine Luecke. */
 @media (min-width: 760px) {
-  .edu-gruppe { grid-template-columns: 1fr 1fr; align-items: start; }
+  .edu-gruppe { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
 }
 /* Jetzt-Strich: laeuft ueber den Balken UND die Tick-Zeile darunter, damit
    ablesbar bleibt, an welcher Viertelstunde er steht. Der Ring aus der
@@ -11351,13 +11375,21 @@ function edumapsKarteHtml(n) {
   // Die Kontur traegt die Farbe der Karte — auf der Klassenseite hat jede eine,
   // und die Faecher unterscheiden sich darin (Mathe blau, Deutsch rot).
   const kf = n.color || n.sectionColor || '';
+  // Der Kartenkopf traegt die Farbe als FLAECHE — so steht er auch auf der
+  // Klassenseite da. Die Schrift richtet sich nach der Helligkeit.
+  const kopfStil = kf ? ' style="background:' + escapeHtml(kf) + ';color:' + eduLesefarbe(kf) + '"' : '';
   let html = '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '"' +
     (kf ? ' style="border-color:' + escapeHtml(kf) + '"' : '') + '>' +
-    '<div class="edu-kopf"><span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
+    '<div class="edu-kopf' + (kf ? ' bunt' : '') + '"' + kopfStil + '>' +
+    '<span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
     '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
-    // Volltext, wenn er da ist; sonst die Vorschau — die Ansicht steht damit
-    // sofort und wird schaerfer, statt leer zu bleiben.
-    '<div class="edu-text">' + notizTextHtml(String(n.text || n.preview || '')) + '</div>';
+    /* Die formatierte Fassung, wenn die Quelle eine liefert — dann bleiben
+       Nummerierung und Fettdruck der Klassenseite erhalten. Sie ist SERVERSEITIG
+       auf eine Weissliste reduziert (EduMaps::EduHtml); hier wird nichts mehr
+       geprueft, weil hier nichts mehr geprueft werden kann. Sonst der Klartext,
+       und ohne Volltext die Vorschau — die Ansicht steht damit sofort und wird
+       schaerfer, statt leer zu bleiben. */
+    '<div class="edu-text">' + (n.html || notizTextHtml(String(n.text || n.preview || ''), true)) + '</div>';
   for (const b of bilder) {
     html += '<img class="edu-bild" loading="lazy" data-media="' + escapeHtml(String(b.id)) + '"' +
       ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
@@ -11631,7 +11663,13 @@ function noteAnsichtOeffnen(notiz) {
  * Reihenfolge ist wichtig: ZUERST maskieren, dann verlinken. Umgekehrt wuerde die
  * Maskierung die eben erzeugten Tags zerlegen.
  */
-function notizTextHtml(text) {
+/**
+ * @param {boolean} [ohnePaare] Die Regel „Bezeichnung: Wert" abschalten.
+ *   Sie ist fuer Notizen gedacht, die die KI als Feldliste schreibt. Auf einem
+ *   Text der Klassenseite greift sie falsch: aus „HA: Bitte ausfuellen …" wurde
+ *   eine graue Spalte „HA" neben dem Satz. Vom Nutzer gemeldet.
+ */
+function notizTextHtml(text, ohnePaare) {
   // EIN Durchlauf mit Alternativen, nicht drei hintereinander. Drei Laeufe
   // greifen naemlich in die href-Werte, die der vorige gerade erzeugt hat:
   // aus „https://schule.de/id/123456789" wurde
@@ -11672,7 +11710,7 @@ function notizTextHtml(text) {
       // „Bezeichnung: Wert" nur, wenn die Bezeichnung kurz ist und keinen Punkt
       // traegt — sonst wird aus „Wir starten am 07.09.2026: alles neu" ein Paar,
       // und aus einer Adresse mit „https://" erst recht.
-      const m = zeile.match(/^([^:]{2,32}):\s+(.+)$/);
+      const m = ohnePaare ? null : zeile.match(/^([^:]{2,32}):\s+(.+)$/);
       if (m && !/[.!?]$/.test(m[1]) && !/^https?$/i.test(m[1])) {
         return '<div class="nv-row"><span class="nv-k">' + escapeHtml(m[1]) + '</span>' +
                '<span class="nv-v">' + verlinken(escapeHtml(m[2])) + '</span></div>';

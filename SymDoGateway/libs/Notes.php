@@ -386,6 +386,11 @@ trait Notes
         if (isset($n['pos'])) {
             $row['pos'] = (int)$n['pos'];
         }
+        /* Die formatierte Fassung geht nur mit dem VOLLTEXT heraus: sie ist so
+           lang wie er, und in der Uebersicht liest sie niemand. */
+        if ($mitText && ($n['html'] ?? '') !== '') {
+            $row['html'] = (string)$n['html'];
+        }
         // Farben der Quelle (Klassenseite): Abschnitt und Karte.
         foreach (['sectionColor', 'color'] as $feld) {
             if (($n[$feld] ?? '') !== '') {

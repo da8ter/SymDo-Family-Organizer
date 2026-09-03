@@ -37,6 +37,10 @@ trait EduMaps
     /** Zeichen je Karte, die an die KI gehen (wie MAIL_TEXT_MAX, nur kleiner). */
     private const EDU_TEXT_MAX = 8000;
 
+    /** Laenger wird die formatierte Fassung nicht abgelegt — dann bleibt es beim
+     *  Klartext, der ohnehin daneben steht. */
+    private const EDU_HTML_MAX = 8000;
+
     /** Gesamtgroesse der Anhaenge je Karte, base64 (wie beim Webhook-Weg). */
     private const EDU_ANHANG_MAX_B64 = 8000000;
 
@@ -291,6 +295,10 @@ trait EduMaps
                     || (string)($store['notes'][$i]['color'] ?? '') !== (string)($karte['farbe'] ?? '');
                 $store['notes'][$i]['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
                 $store['notes'][$i]['color'] = (string)($karte['farbe'] ?? '');
+                if ((string)($store['notes'][$i]['html'] ?? '') !== (string)($karte['html'] ?? '')) {
+                    $store['notes'][$i]['html'] = (string)($karte['html'] ?? '');
+                    $fehlt = true;
+                }
                 /* Anhaenge, die noch die rohe Kennung als Namen tragen, bekommen
                    den Klarnamen — ohne die Datei neu zu laden. Zuordnung ueber
                    die Reihenfolge: die Anhaenge sind in genau der Reihenfolge
@@ -378,6 +386,9 @@ trait EduMaps
                 // Farben der Seite: Abschnitt und Karte, beide als #RRGGBB.
                 'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
                 'color'     => (string)($karte['farbe'] ?? ''),
+                // Formatierte Fassung fuer die Kartenansicht; der Klartext
+                // daneben bleibt, er traegt Editor, Suche und KI-Auswertung.
+                'html'      => (string)($karte['html'] ?? ''),
             ];
             if ($i >= 0) {
                 $store['notes'][$i] = $satz;
@@ -424,6 +435,124 @@ trait EduMaps
         $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), 'vorschau.jpg');
         return ($r['ok'] ?? false) === true ? (int)$r['id'] : 0;
     }
+
+    /**
+     * Der Kartentext MIT seiner Formatierung — als sehr enge Auswahl an Tags.
+     *
+     * Der Klartext verliert, was die Karte ausmacht: die Klassenregeln sind auf
+     * der Seite NUMMERIERT (`<ol class="list">`), Wichtiges steht fett. Nach
+     * `strip_tags` stand dort eine Reihe gleichrangiger Zeilen.
+     *
+     * WEISSLISTE, kein Aufraeumen: erlaubt sind Absatz, Umbruch, Liste,
+     * Aufzaehlung, fett, kursiv, unterstrichen und der Verweis. Alles andere
+     * faellt weg, und von den Attributen ueberlebt nur `href` mit http, https
+     * oder mailto. Das Ergebnis geht in der App durch `innerHTML` — deshalb
+     * entscheidet DIESE Funktion ueber die Sicherheit, nicht der Browser.
+     *
+     * Die Dateizeilen fliegen raus: die Anhaenge stehen in der Karte ohnehin
+     * darunter, mit Vorschau und Namen.
+     */
+    private function EduHtml(string $rumpf): string
+    {
+        if (!class_exists('DOMDocument')) {
+            return '';
+        }
+        $doc = new \DOMDocument();
+        // Ohne den Kopf haelt DOMDocument den Text fuer Latin-1 und macht aus
+        // „für" ein „fÃ¼r". libxml meckert ueber jedes fremde Attribut — das
+        // interessiert hier nicht, deshalb der Riegel davor.
+        $vorher = libxml_use_internal_errors(true);
+        $doc->loadHTML('<?xml encoding="UTF-8"><div>' . $rumpf . '</div>', LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+        libxml_use_internal_errors($vorher);
+        $wurzel = $doc->getElementsByTagName('div')->item(0);
+        if ($wurzel === null) {
+            return '';
+        }
+        $h = trim($this->EduHtmlKnoten($wurzel, false));
+        $h = (string)preg_replace('#<p>(\s|&nbsp;|<br>)*</p>#i', '', $h);
+        $h = trim((string)preg_replace('#\s+#u', ' ', $h));
+        return mb_strlen($h) > self::EDU_HTML_MAX ? '' : $h;
+    }
+
+    /**
+     * Ein Knoten und seine Kinder, auf die Weissliste reduziert.
+     *
+     * Die Zeilen der Seite (`li.itemline` in einer Huelle) sind KEINE
+     * Aufzaehlung, sondern das Layout — sie werden zu Absaetzen. Eine echte
+     * Liste erkennt man an `class="list"`; nur ihre `li` bleiben `li`. Ohne
+     * diese Unterscheidung bekaeme jede Zeile der Karte einen Punkt.
+     *
+     * @param bool $inListe steht dieser Knoten in einer ECHTEN Liste?
+     */
+    private function EduHtmlKnoten(\DOMNode $knoten, bool $inListe): string
+    {
+        $raus = '';
+        foreach ($knoten->childNodes as $kind) {
+            if ($kind->nodeType === XML_TEXT_NODE) {
+                $raus .= htmlspecialchars((string)$kind->nodeValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                continue;
+            }
+            if (!($kind instanceof \DOMElement)) {
+                continue;
+            }
+            $tag = strtolower($kind->tagName);
+            $klasse = strtolower((string)$kind->getAttribute('class'));
+            // Dateiblöcke fallen ganz weg — sie stehen als Anhang unter der Karte.
+            if (str_contains($kind->C14N(), '/file/')
+                && ($tag === 'a' || str_contains($klasse, 'media') || str_contains($klasse, 'pdf'))) {
+                continue;
+            }
+            switch ($tag) {
+                case 'script': case 'style': case 'iframe': case 'img': case 'h3':
+                    break;                                   // ohne Inhalt weiter
+                case 'br':
+                    $raus .= '<br>';
+                    break;
+                case 'b': case 'strong': case 'i': case 'em': case 'u':
+                    $raus .= '<' . $tag . '>' . $this->EduHtmlKnoten($kind, $inListe) . '</' . $tag . '>';
+                    break;
+                case 'a':
+                    $ziel = (string)$kind->getAttribute('href');
+                    $inhalt = $this->EduHtmlKnoten($kind, $inListe);
+                    $raus .= preg_match('#^(https?://|mailto:)#i', $ziel) === 1
+                        ? '<a href="' . htmlspecialchars($ziel, ENT_QUOTES, 'UTF-8')
+                          . '" target="_blank" rel="noopener noreferrer">' . $inhalt . '</a>'
+                        : $inhalt;
+                    break;
+                case 'ol': case 'ul':
+                    /* Nur die ECHTE Liste bleibt eine; die Zeilenhuelle nicht.
+                       Die Klasse muss GENAU „list" heissen — mit str_contains
+                       passte auch die Huelle („boxcontent-list"), und dann
+                       bekam jede Zeile der Karte einen Punkt. */
+                    if (preg_match('/(^|\s)list(\s|$)/', $klasse) === 1) {
+                        $raus .= '<' . $tag . '>' . $this->EduHtmlKnoten($kind, true) . '</' . $tag . '>';
+                    } else {
+                        $raus .= $this->EduHtmlKnoten($kind, false);
+                    }
+                    break;
+                case 'li':
+                    $raus .= $inListe
+                        ? '<li>' . $this->EduHtmlKnoten($kind, true) . '</li>'
+                        : $this->EduHtmlKnoten($kind, false);
+                    break;
+                case 'p':
+                    $raus .= '<p>' . $this->EduHtmlKnoten($kind, $inListe) . '</p>';
+                    break;
+                case 'div':
+                    // Die Textzeile der Seite wird ein Absatz, jede andere Huelle
+                    // reicht ihren Inhalt nur durch.
+                    $raus .= str_contains($klasse, 'line-puretext')
+                        ? '<p>' . $this->EduHtmlKnoten($kind, $inListe) . '</p>'
+                        : $this->EduHtmlKnoten($kind, $inListe);
+                    break;
+                default:
+                    $raus .= $this->EduHtmlKnoten($kind, $inListe);
+            }
+        }
+        return $raus;
+    }
+
 
     /**
      * Der Kartentext, wie er in der Notiz stehen soll.
@@ -739,6 +868,7 @@ trait EduMaps
             $karten[] = [
                 'boxid'     => $boxid,
                 'updated'   => $updated,
+                'html'      => $this->EduHtml($rumpf),
                 'abschnitt' => $abschnitt,
                 'farbe'     => $eigeneFarbe !== '' ? $eigeneFarbe : $abschnittFarbe,
                 'abschnittFarbe' => $abschnittFarbe,
