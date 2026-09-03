@@ -566,6 +566,136 @@ class SymDoTimetable extends IPSModuleStrict
         }
     }
 
+    /**
+     * Einen Stundenplan von aussen einspielen.
+     *
+     * Gedacht fuer Zulieferer wie WebUntis, aber ausdruecklich auch fuer eigene
+     * Skripte: STPL_ImportSlots($id, $json). Deshalb eine offene Funktion und
+     * kein RequestAction — sie ist auffindbar, hat eine gepruefte Signatur und
+     * ANTWORTET, statt Fehler zu schlucken.
+     *
+     * Rumpf:
+     *   {"child": "Joshua" | 1,
+     *    "source": "WebUntis",
+     *    "days": {"1": [{"subject":"Mathematik","start":"08:00","end":"09:00",
+     *                    "room":"121","teacher":"Gue","status":"normal"}], ...}}
+     *
+     * „child" darf der NAME oder die Nummer sein: wer die Funktion ruft, soll
+     * die interne Reihenfolge der Kinder nicht kennen muessen. Wochentage sind
+     * 1 = Montag bis 6 = Samstag. „status": normal | vertretung | entfall.
+     *
+     * Geprueft wird ALLES vor dem ersten Schreiben. Ein halber Plan darf einen
+     * guten nie ueberschreiben — lieber gar nichts und eine ehrliche Antwort.
+     * Tage, die der Rumpf nicht nennt, bleiben unangetastet.
+     *
+     * @return string JSON: {ok, kind, tage, slots, ersetzt} oder {ok:false, error}
+     */
+    public function ImportSlots(string $Json): string
+    {
+        $fehler = function (string $code, string $text): string {
+            return (string)json_encode(['ok' => false, 'error' => ['code' => $code, 'message' => $text]],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        };
+        $rumpf = json_decode($Json, true);
+        if (!is_array($rumpf)) {
+            return $fehler('invalid_payload', $this->Translate('The payload is not valid JSON.'));
+        }
+
+        // ── Kind bestimmen: Name oder Nummer ──
+        $kinder = array_values($this->Kinder());
+        $wunsch = $rumpf['child'] ?? '';
+        $nr = 0;
+        if (is_int($wunsch) || (is_string($wunsch) && ctype_digit(trim($wunsch)) && trim($wunsch) !== '')) {
+            $nr = (int)$wunsch;
+        } else {
+            $gesucht = mb_strtolower(trim((string)$wunsch));
+            foreach ($kinder as $i => $k) {
+                if (mb_strtolower(trim((string)($k['name'] ?? ''))) === $gesucht && $gesucht !== '') {
+                    $nr = $i + 1;
+                    break;
+                }
+            }
+        }
+        if ($nr < 1 || $nr > count($kinder) || $nr > self::MAX_KINDER) {
+            return $fehler('unknown_child', sprintf(
+                $this->Translate('No child "%s" — known are: %s.'), (string)$wunsch,
+                implode(', ', array_map(static fn(array $k): string => (string)($k['name'] ?? '?'), $kinder))));
+        }
+
+        // ── Tage und Stunden pruefen, noch nichts schreiben ──
+        $tage = $rumpf['days'] ?? null;
+        if (!is_array($tage) || $tage === []) {
+            return $fehler('no_days', $this->Translate('No days in the payload.'));
+        }
+        $fertig = [];
+        $anzahl = 0;
+        foreach ($tage as $tag => $zeilen) {
+            $t = (int)$tag;
+            if ($t < 1 || $t > 6) {
+                return $fehler('bad_weekday', sprintf($this->Translate('Weekday %s is not between 1 and 6.'), (string)$tag));
+            }
+            if (!is_array($zeilen)) {
+                return $fehler('bad_day', sprintf($this->Translate('Day %s is not a list.'), (string)$tag));
+            }
+            $slots = [];
+            foreach ($zeilen as $z) {
+                if (!is_array($z)) {
+                    return $fehler('bad_slot', $this->Translate('A lesson is not an object.'));
+                }
+                $fach = trim((string)($z['subject'] ?? ''));
+                if ($fach === '') {
+                    return $fehler('empty_subject', $this->Translate('A lesson has no subject.'));
+                }
+                $von = TimetableCalc::Minuten(trim((string)($z['start'] ?? '')));
+                $bis = TimetableCalc::Minuten(trim((string)($z['end'] ?? '')));
+                if ($von < 0 || $bis < 0) {
+                    return $fehler('bad_time', sprintf(
+                        $this->Translate('Lesson "%s" has no valid time (expected HH:MM).'), $fach));
+                }
+                if ($bis <= $von) {
+                    return $fehler('end_before_start', sprintf(
+                        $this->Translate('Lesson "%s" ends before it starts.'), $fach));
+                }
+                $status = mb_strtolower(trim((string)($z['status'] ?? 'normal')));
+                if (!in_array($status, ['normal', 'vertretung', 'entfall'], true)) {
+                    $status = 'normal';
+                }
+                $slots[] = [
+                    'subject' => $fach,
+                    'start'   => TimetableCalc::ZeitFeld(trim((string)$z['start'])),
+                    'end'     => TimetableCalc::ZeitFeld(trim((string)$z['end'])),
+                    'room'    => trim((string)($z['room'] ?? '')),
+                    'teacher' => trim((string)($z['teacher'] ?? '')),
+                    'status'  => $status,
+                ];
+                $anzahl++;
+            }
+            usort($slots, static fn(array $a, array $b): int
+                => TimetableCalc::Minuten(TimetableCalc::ZeitText($a['start']))
+                <=> TimetableCalc::Minuten(TimetableCalc::ZeitText($b['start'])));
+            $fertig[$t] = $slots;
+        }
+
+        // ── Erst jetzt schreiben ──
+        foreach ($fertig as $t => $slots) {
+            @IPS_SetProperty($this->InstanceID, self::SlotProp($nr, (int)$t),
+                (string)json_encode($slots, JSON_UNESCAPED_UNICODE));
+        }
+        @IPS_ApplyChanges($this->InstanceID);
+
+        $quelle = trim((string)($rumpf['source'] ?? ''));
+        $this->SendDebug('ImportSlots', sprintf('%s: Kind %d, %d Tag(e), %d Stunde(n)',
+            $quelle !== '' ? $quelle : 'unbekannte Quelle', $nr, count($fertig), $anzahl), 0);
+
+        return (string)json_encode([
+            'ok'      => true,
+            'kind'    => (string)($kinder[$nr - 1]['name'] ?? ''),
+            'tage'    => array_map('intval', array_keys($fertig)),
+            'slots'   => $anzahl,
+            'ersetzt' => true,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     /** Ferien erneuern und die Anzeige nachziehen. Haengt am Timer. */
     public function Refresh(): void
     {

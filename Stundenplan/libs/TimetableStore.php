@@ -259,6 +259,10 @@ trait TimetableStore
                            die Zeile dann gar nicht. */
                         'room'      => trim((string)($zeile['room'] ?? '')),
                         'teacher'   => trim((string)($zeile['teacher'] ?? '')),
+                        /* normal | vertretung | entfall — gesetzt von
+                           ImportSlots aus WebUntis. Von Hand gepflegte Stunden
+                           haben das Feld nicht; leer heisst normal. */
+                        'status'    => trim((string)($zeile['status'] ?? '')),
                         // Keine Farbe je Stunde mehr — sie kommt vom Fach.
                         'color'     => null,
                     ];
@@ -524,6 +528,7 @@ trait TimetableStore
                         // Die Betreuung hat beides nicht; dort bleibt es leer.
                         'room'    => (string)($s['room'] ?? ''),
                         'teacher' => (string)($s['teacher'] ?? ''),
+                        'status'  => (string)($s['status'] ?? ''),
                         'from'   => $beginn,
                         'to'     => TimetableCalc::Minuten((string)$s['end']),
                         'gap'    => TimetableCalc::LueckeHoehe($vorher, $beginn),
