@@ -871,7 +871,15 @@ trait MailScan
 
             $gespeichert = $this->MailStoreProposal([
                 'id'        => $vorschlagsId,
+                // Datum des DOKUMENTS — es steht in der App und sortiert die Liste.
                 'at'        => (int)($kopf['Date'] ?? time()),
+                /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
+                   Aufbewahrung, und nur danach: sonst verschwindet ein gerade
+                   erst ausgewerteter alter Elternbrief noch im selben Atemzug.
+                   Genau das ist am 03.09.2026 passiert — die Karte
+                   „Anschaffungen: Material" (Seitendatum 16.07.) lief durch die
+                   KI, kostete einen Aufruf und war danach nirgends zu sehen. */
+                'created'   => time(),
                 'from'      => (string)($kopf['SenderAddress'] ?? ''),
                 'fromName'  => (string)($kopf['SenderName'] ?? ''),
                 'subject'   => $betreff,
@@ -1871,7 +1879,14 @@ trait MailScan
         $grenze = time() - self::MAIL_RETENTION_DAYS * 86400;
         $raus = [];
         foreach ($alle as $p) {
-            if (is_array($p) && (int)($p['at'] ?? 0) >= $grenze) {
+            if (!is_array($p)) {
+                continue;
+            }
+            /* Gemessen wird am Zeitpunkt des VORSCHLAGS, nicht am Datum des
+               Dokuments. Aeltere Saetze kennen das Feld nicht — fuer sie gilt
+               weiter das Dokumentdatum, damit sie nicht ploetzlich ewig leben. */
+            $wann = (int)($p['created'] ?? $p['at'] ?? 0);
+            if ($wann >= $grenze) {
                 $raus[] = $p;
             }
         }
@@ -1904,7 +1919,11 @@ trait MailScan
 
     private function MailWriteProposals(array $alle): bool
     {
-        usort($alle, static fn(array $a, array $b): int => (int)($a['at'] ?? 0) <=> (int)($b['at'] ?? 0));
+        /* Nach VORSCHLAGSZEIT sortieren, nicht nach Dokumentdatum: gedeckelt
+           wird vorne, und sonst faellt der eben erst ausgewertete alte
+           Elternbrief als Erstes heraus. */
+        usort($alle, static fn(array $a, array $b): int
+            => (int)($a['created'] ?? $a['at'] ?? 0) <=> (int)($b['created'] ?? $b['at'] ?? 0));
         if (count($alle) > self::MAIL_PROPOSALS_MAX) {
             $alle = array_slice($alle, -self::MAIL_PROPOSALS_MAX);
         }
