@@ -19,6 +19,7 @@ require_once __DIR__ . '/libs/Voice.php';
 require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
+require_once __DIR__ . '/libs/EduMaps.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -52,6 +53,7 @@ class SymDoGateway extends IPSModuleStrict
     use VoiceTools;
     use VoiceResolve;
     use SymconDoku;
+    use EduMaps;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -125,6 +127,7 @@ class SymDoGateway extends IPSModuleStrict
         $this->AppCreate();
         // Aufgaben aus weitergeleiteten E-Mails (eigener Trait, nutzt die KI der App-Seite)
         $this->MailCreate();
+        $this->EduCreate();
         // Kalender: Zuordnung, Erinnerungen und ihr Timer
         $this->CalCreateProps();
         // Tagesbriefing: Einstellungen, Ablage und sein Timer
@@ -160,6 +163,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::PWA_HOOK_PATH);
             $this->AppApplyChanges();
             $this->MailApplyChanges();
+            $this->EduApplyChanges();
             $this->CalApplyChanges();
             $this->BriefingApplyChanges();
             $this->PushApplyChanges();
@@ -197,6 +201,9 @@ class SymDoGateway extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         if ($this->MailRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->EduRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->CalRequestAction($Ident, $Value)) {
@@ -350,6 +357,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetDishPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetVoicePanel());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetEduPanel());
             $this->AppFormOverrides($elements);
         }
 
@@ -1709,6 +1717,65 @@ class SymDoGateway extends IPSModuleStrict
      * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
      * nirgends, und ein falsch abgetippter Token kostet eine Stunde Suche.
      */
+    /**
+     * Klassenseiten (Edumaps).
+     *
+     * Eigenes Panel unter der Mailanalyse: es ist derselbe Weg in dieselben
+     * Vorschlaege, nur eine andere Quelle — und beim Suchen eines Fehlers soll
+     * klar sein, welche gemeint ist.
+     */
+    private function GetEduPanel(): array
+    {
+        $mitglieder = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                $name = trim((string)($u['name'] ?? ''));
+                if ($name !== '') {
+                    $mitglieder[] = ['caption' => $name, 'value' => (string)($u['id'] ?? '')];
+                }
+            }
+        } catch (Throwable $e) {
+            // ohne Mitgliederliste eben nur „keins"
+        }
+        $stand = json_decode((string)$this->MailAttr('EduStatus', '{}'), true);
+        $zeile = is_array($stand) && ($stand['text'] ?? '') !== ''
+            ? sprintf($this->Translate('Last check %1$s: %2$s'),
+                date('d.m.Y H:i', (int)($stand['t'] ?? 0)), (string)$stand['text'])
+            : $this->Translate('Not checked yet.');
+
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('Class pages (Edumaps)'),
+            'expanded' => false,
+            'items'    => [
+                ['type' => 'Label', 'caption' => $this->Translate('Watches the class pages of the school. A changed card goes through the same analysis as a school mail and lands as a suggestion in the app — nothing is created unasked. The first check only notes what is there.')],
+                ['type' => 'CheckBox', 'name' => 'EduEnabled',
+                 'caption' => $this->Translate('Watch class pages')],
+                ['type' => 'List', 'name' => 'EduPages', 'rowCount' => 3,
+                 'add' => true, 'delete' => true,
+                 'caption' => $this->Translate('Pages'),
+                 'columns' => [
+                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '140px',
+                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                     // Die Adresse ist der Zugang — sie steht hier und nirgends sonst.
+                     ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto',
+                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                     ['caption' => $this->Translate('For'), 'name' => 'userId', 'width' => '140px',
+                      'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
+                 ]],
+                ['type' => 'NumberSpinner', 'name' => 'EduIntervalHours', 'minimum' => 1, 'maximum' => 48,
+                 'caption' => $this->Translate('Check every … hours'), 'suffix' => ' h'],
+                ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'Button', 'caption' => $this->Translate('Check now'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduScanNow\', 0);'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Forget noted cards'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
+                ]],
+            ],
+        ];
+    }
+
     private function GetMailHookPanel(): array
     {
         $teile   = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
