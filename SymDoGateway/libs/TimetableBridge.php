@@ -270,6 +270,9 @@ trait TimetableBridge
            schlechteren Fall einmal mit „Ferien" und einmal mit Unterricht, weil
            die eine Instanz eine Ferienquelle hat und die andere nicht. */
         $kinder = [];
+        // Entfall und Vertretung des Tages kommen aus WebUntis, nicht aus dem
+        // Wochenplan: nur sie sind auf den TAG bezogen.
+        $meldungen = $this->UntisTagesmeldungen($datum);
         foreach ($this->TimetableOwnInstances() as $id) {
             $plan = json_decode((string)@STPL_GetPlanForDate($id, $datum), true);
             if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
@@ -308,7 +311,7 @@ trait TimetableBridge
                 if ($kinder[$name]['zeile'] !== '') {
                     continue;
                 }
-                $kinder[$name]['zeile'] = $this->TimetableSchoolLine($name, is_array($tag) ? $tag : []);
+                $kinder[$name]['zeile'] = $this->TimetableSchoolLine($name, is_array($tag) ? $tag : [], $meldungen[$name] ?? []);
             }
         }
         return $this->TimetableSchoolText($kinder);
@@ -319,7 +322,7 @@ trait TimetableBridge
      *
      * @param array<string, mixed> $tag
      */
-    private function TimetableSchoolLine(string $name, array $tag): string
+    private function TimetableSchoolLine(string $name, array $tag, array $meldung = []): string
     {
         $stunden = is_array($tag['slots'] ?? null) ? $tag['slots'] : [];
         if ($stunden === []) {
@@ -339,6 +342,25 @@ trait TimetableBridge
             (string)$unterricht[count($unterricht) - 1]['end']);
         if ($betreuung !== []) {
             $zeile .= ', danach Betreuung bis ' . (string)$betreuung[count($betreuung) - 1]['end'];
+        }
+
+        $entfall    = (array)($meldung['entfall'] ?? []);
+        $vertretung = (array)($meldung['vertretung'] ?? []);
+        if ($entfall === [] && $vertretung === []) {
+            return $zeile;
+        }
+        /* Faellt der ganze Tag aus, waeren die Uhrzeiten oben eine Luege: sie
+           stammen vom Wochenplan, nicht vom heutigen Tag. Dann steht nur, was
+           wirklich gilt. */
+        if (count($entfall) >= count($unterricht)) {
+            $zeile = $name . ': heute kein regulärer Unterricht';
+            return $vertretung !== [] ? $zeile . ', stattdessen ' . implode(', ', $vertretung) : $zeile;
+        }
+        if ($entfall !== []) {
+            $zeile .= ', es entfällt ' . implode(', ', $entfall);
+        }
+        if ($vertretung !== []) {
+            $zeile .= ', vertreten wird ' . implode(', ', $vertretung);
         }
         return $zeile;
     }

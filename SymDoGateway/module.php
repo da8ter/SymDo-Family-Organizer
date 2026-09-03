@@ -20,6 +20,7 @@ require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
+require_once __DIR__ . '/libs/WebUntis.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -54,6 +55,7 @@ class SymDoGateway extends IPSModuleStrict
     use VoiceResolve;
     use SymconDoku;
     use EduMaps;
+    use WebUntis;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -128,6 +130,7 @@ class SymDoGateway extends IPSModuleStrict
         // Aufgaben aus weitergeleiteten E-Mails (eigener Trait, nutzt die KI der App-Seite)
         $this->MailCreate();
         $this->EduCreate();
+        $this->UntisCreate();
         // Kalender: Zuordnung, Erinnerungen und ihr Timer
         $this->CalCreateProps();
         // Tagesbriefing: Einstellungen, Ablage und sein Timer
@@ -164,6 +167,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppApplyChanges();
             $this->MailApplyChanges();
             $this->EduApplyChanges();
+            $this->UntisApplyChanges();
             $this->CalApplyChanges();
             $this->BriefingApplyChanges();
             $this->PushApplyChanges();
@@ -204,6 +208,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->EduRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->UntisRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->CalRequestAction($Ident, $Value)) {
@@ -358,6 +365,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppendFormItem($elements, 'AiPanel', $this->GetDishPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetVoicePanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetEduPanel());
+            $this->AppendFormItem($elements, 'AiPanel', $this->GetUntisPanel());
             $this->AppFormOverrides($elements);
         }
 
@@ -1708,15 +1716,96 @@ class SymDoGateway extends IPSModuleStrict
     }
 
     /**
-     * Zweites Panel: Mail per Webhook (Mailgun).
-     *
-     * Bewusst ein eigenes Panel und nicht zwischen die Postfach-Felder gemischt
-     * — es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll
-     * beim Suchen eines Fehlers wissen, welcher davon gemeint ist.
-     *
-     * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
-     * nirgends, und ein falsch abgetippter Token kostet eine Stunde Suche.
+     * WebUntis. Eigenes Panel neben den Klassenseiten: dieselbe Schule, aber
+     * eine ganz andere Quelle — und beim Suchen eines Fehlers soll klar sein,
+     * welche gemeint ist.
      */
+    private function GetUntisPanel(): array
+    {
+        $mitglieder = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                $n = trim((string)($u['name'] ?? ''));
+                if ($n !== '') {
+                    $mitglieder[] = ['caption' => $n, 'value' => (string)($u['id'] ?? '')];
+                }
+            }
+        } catch (Throwable $e) {
+            // ohne Mitgliederliste eben nur „keins"
+        }
+        $stand = json_decode((string)$this->MailAttr('UntisStatus', '{}'), true);
+        $zeile = is_array($stand) && ($stand['text'] ?? '') !== ''
+            ? sprintf($this->Translate('Last run %1$s: %2$s'),
+                date('d.m.Y H:i', (int)($stand['t'] ?? 0)), (string)$stand['text'])
+            : $this->Translate('Not run yet.');
+
+        return [
+            'type'     => 'ExpansionPanel',
+            'caption'  => $this->Translate('WebUntis (timetable and substitutions)'),
+            'expanded' => false,
+            'items'    => [
+                ['type' => 'Label', 'caption' => $this->Translate('Fetches the timetable including substitutions and cancellations and writes it into a SymDo Timetable instance. Server and school name come from the Untis school search — the address in the browser shows both: https://SERVER/WebUntis/?school=SCHOOL')],
+                ['type' => 'CheckBox', 'name' => 'UntisEnabled', 'caption' => $this->Translate('Fetch from WebUntis')],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'ValidationTextBox', 'name' => 'UntisServer', 'width' => '280px',
+                     'caption' => $this->Translate('Server (e.g. xyz.webuntis.com)')],
+                    ['type' => 'ValidationTextBox', 'name' => 'UntisSchool', 'width' => '220px',
+                     'caption' => $this->Translate('School name in the address')],
+                ]],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'ValidationTextBox', 'name' => 'UntisUser', 'width' => '220px',
+                     'caption' => $this->Translate('User')],
+                    ['type' => 'PasswordTextBox', 'name' => 'UntisPassword', 'width' => '220px',
+                     'caption' => $this->Translate('Password')],
+                    ['type' => 'NumberSpinner', 'name' => 'UntisIntervalMinutes', 'minimum' => 15,
+                     'maximum' => 1440, 'suffix' => ' min',
+                     'caption' => $this->Translate('Fetch every')],
+                ]],
+                /* Der Hinweis steht ABSICHTLICH im Formular und nicht nur in der
+                   Dokumentation: wer hier Zugangsdaten eintraegt, soll wissen,
+                   wo sie liegen. */
+                ['type' => 'Label', 'caption' => $this->Translate('Note: like every other password in Symcon, this one is stored in plain text in settings.json. With school credentials one can report a child sick — use a separate read-only account if the school offers one.')],
+                ['type' => 'List', 'name' => 'UntisStudents', 'rowCount' => 3,
+                 'add' => true, 'delete' => true,
+                 'caption' => $this->Translate('Students'),
+                 'columns' => [
+                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '120px',
+                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                     ['caption' => $this->Translate('Timetable instance'), 'name' => 'stpl', 'width' => '220px',
+                      'add' => 0, 'edit' => ['type' => 'SelectInstance']],
+                     ['caption' => $this->Translate('Child in it'), 'name' => 'child', 'width' => '120px',
+                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                     ['caption' => $this->Translate('Notify'), 'name' => 'userId', 'width' => '120px',
+                      'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
+                     /* Leer = der Plan des angemeldeten Kontos. Gefuellt nur,
+                        wenn ein Konto mehrere Kinder sieht (Elternzugang). */
+                     ['caption' => $this->Translate('Element type'), 'name' => 'type', 'width' => '110px',
+                      'add' => 0, 'edit' => ['type' => 'Select', 'options' => [
+                          ['caption' => $this->Translate('— own timetable —'), 'value' => 0],
+                          ['caption' => $this->Translate('Class'), 'value' => 1],
+                          ['caption' => $this->Translate('Student'), 'value' => 5],
+                      ]]],
+                     ['caption' => $this->Translate('Element ID'), 'name' => 'elementId', 'width' => '100px',
+                      'add' => 0, 'edit' => ['type' => 'NumberSpinner']],
+                     /* Der Plan des Kontos ist der KLASSENplan: Religions- und
+                        Foerderkurse stehen alle nebeneinander. Hier steht, welche
+                        das Kind besucht — nur bei Ueberschneidungen wird gewaehlt. */
+                     ['caption' => $this->Translate('Courses (chosen course, or -Subject to drop)'), 'name' => 'kurse',
+                      'width' => 'auto', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                 ]],
+                ['type' => 'Label', 'name' => 'UntisStatusLabel', 'caption' => $zeile],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'Button', 'caption' => $this->Translate('Test connection'),
+                     'onClick' => 'IPS_RequestAction($id, \'UntisTest\', 0);'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Dry run'),
+                     'onClick' => 'IPS_RequestAction($id, \'UntisScanNow\', 0);'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Fetch and apply now'),
+                     'onClick' => 'IPS_RequestAction($id, \'UntisScanApply\', 0);'],
+                ]],
+            ],
+        ];
+    }
+
     /**
      * Klassenseiten (Edumaps).
      *
@@ -1776,6 +1865,16 @@ class SymDoGateway extends IPSModuleStrict
         ];
     }
 
+    /**
+     * Zweites Panel: Mail per Webhook (Mailgun).
+     *
+     * Bewusst ein eigenes Panel und nicht zwischen die Postfach-Felder gemischt
+     * — es sind zwei getrennte Wege in dieselbe Analyse, und der Nutzer soll
+     * beim Suchen eines Fehlers wissen, welcher davon gemeint ist.
+     *
+     * Die Adresse und der Routen-Ausdruck werden hier berechnet: Sie stehen sonst
+     * nirgends, und ein falsch abgetippter Token kostet eine Stunde Suche.
+     */
     private function GetMailHookPanel(): array
     {
         $teile   = $this->MailHookSetupParts(trim((string)$this->MailProp('MailHookSecret', '')));
