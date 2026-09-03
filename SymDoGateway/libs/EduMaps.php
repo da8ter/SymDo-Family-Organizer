@@ -50,6 +50,9 @@ trait EduMaps
     /** Hoechstens so viele Analysen je Lauf — der Rest kommt beim naechsten. */
     private const EDU_JE_LAUF_MAX = 5;
 
+    /** So viele verlinkte Karten werden hoechstens aufgenommen. */
+    private const EDU_GEFUNDEN_MAX = 20;
+
     private ?array $eduConfigCache = null;
 
     /** Setzt EduNotizOrdner, wenn es den Bestand angefasst hat (Ordner angelegt
@@ -72,6 +75,12 @@ trait EduMaps
         /* Eigener Merker, NICHT MailSeenUIDs: die Toepfe dort sind auf 500
            Eintraege gedeckelt und werden vom Mailweg beschrieben. Eine
            Klassenseite mit zwoelf Karten braucht ihren eigenen Platz. */
+        /* Verlinkte Karten mitnehmen: eine Klassenseite verweist auf weitere
+           Karten (etwa „Englisch Grammatik"). Sie werden nur GESPIEGELT, nie
+           ausgewertet — es sind Nachschlagewerke, keine Elternbriefe, und
+           jede Auswertung kostet einen KI-Aufruf. */
+        $this->RegisterPropertyBoolean('EduFollowLinks', false);
+        $this->RegisterAttributeString('EduFound', '[]');
         $this->RegisterAttributeString('EduSeen', '{}');
         $this->RegisterAttributeString('EduStatus', '{}');
         $this->RegisterTimer('EduScan', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'EduScan\', 0);');
@@ -88,6 +97,12 @@ trait EduMaps
     {
         if ($Ident === 'EduScan') {
             $this->EduScanRun();
+            return true;
+        }
+        if ($Ident === 'EduForgetFound') {
+            @$this->WriteAttributeString('EduFound', '[]');
+            $this->UpdateFormField('EduStatusLabel', 'caption',
+                $this->Translate('Linked maps forgotten — the next check finds them again.'));
             return true;
         }
         if ($Ident === 'EduScanAll') {
@@ -128,6 +143,13 @@ trait EduMaps
         $seiten = $this->EduSeiten();
         if ($seiten === []) {
             return $this->Translate('No class page entered yet.');
+        }
+        /* Die verlinkten Karten hinten anstellen und NUR spiegeln: sie sind
+           Nachschlagewerke („Englisch Grammatik"), keine Elternbriefe. Eine
+           Auswertung wuerde daraus Aufgaben wie „Present" machen und je Karte
+           einen KI-Aufruf kosten. */
+        foreach ($this->EduGefundene() as $g) {
+            $seiten[] = $g + ['nurSpiegeln' => true];
         }
         $karten = 0;
         $geaendert = 0;
@@ -174,7 +196,12 @@ trait EduMaps
             // Die Adresse NICHT ins Protokoll: sie ist der Zugang.
             return ['fehler' => (string)($antwort['message'] ?? $antwort['code'] ?? 'Abruf fehlgeschlagen')] + $leer;
         }
-        $karten = $this->EduKarten((string)($antwort['body'] ?? ''));
+        $rumpfSeite = (string)($antwort['body'] ?? '');
+        // Verweise nur von den EINGETRAGENEN Seiten verfolgen, eine Ebene tief.
+        if (($seite['nurSpiegeln'] ?? false) !== true) {
+            $this->EduGefundeneErgaenzen($seite, $rumpfSeite);
+        }
+        $karten = $this->EduKarten($rumpfSeite);
         if ($karten === []) {
             /* Kein stilles Schweigen: bricht Edumaps das Markup, sieht es sonst
                aus wie „nichts Neues". */
@@ -217,6 +244,11 @@ trait EduMaps
             if (!$alles && $schonAnalysiert + $analysiert >= self::EDU_JE_LAUF_MAX) {
                 $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Rest beim naechsten Lauf', 0);
                 break;
+            }
+            if (($seite['nurSpiegeln'] ?? false) === true) {
+                // Gespiegelt ist sie schon; ausgewertet wird sie nicht.
+                $this->EduMerken($topf, $schluessel);
+                continue;
             }
             if ($this->EduKarteAnalysieren($seite, $karte)) {
                 $this->EduMerken($topf, $schluessel);
@@ -340,6 +372,10 @@ trait EduMaps
                 if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
                     && $neuerText !== (string)($store['notes'][$i]['text'] ?? '')) {
                     $store['notes'][$i]['text'] = $neuerText;
+                    $fehlt = true;
+                }
+                if ((string)($store['notes'][$i]['folderId'] ?? '') !== $ordnerId) {
+                    // Der Ordner je Karte ist neu — die vorhandenen Notizen ziehen um.
                     $fehlt = true;
                 }
                 if ($this->eduOrdnerGeaendert || $fehlt) {
@@ -605,6 +641,8 @@ trait EduMaps
                 break;
             }
         }
+        // ── 1. Ebene: der Ordner „Edumaps" beim Kind ──
+        $edu = '';
         foreach ($store['folders'] as $k => $f) {
             if ((string)($f['eduKey'] ?? '') !== $schluessel) {
                 continue;
@@ -619,29 +657,53 @@ trait EduMaps
                 $this->eduOrdnerGeaendert = true;
                 $this->SendDebug('EduMaps', 'Edumaps-Ordner in den Kindordner verschoben', 0);
             }
-            return (string)$f['id'];
+            $edu = (string)$f['id'];
+            break;
         }
-        if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
-            $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Edumaps-Ordner angelegt', 0);
-            return '';
-        }
-        /* IM Ordner des Kindes, wenn es einen hat — dann heisst er einfach
-           „Edumaps", der Name des Kindes steht schon darueber. Ohne
-           Mitglieder-Ordner liegt er oben und traegt den Namen mit. */
-        $eltern = $mitgliedsOrdner;
-        $name = 'Edumaps';
-        if ($eltern === '') {
-            foreach ($this->LoadUsers() as $u) {
-                if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
-                    $name = 'Edumaps ' . trim((string)$u['name']);
-                    break;
+        if ($edu === '') {
+            if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
+                $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Edumaps-Ordner angelegt', 0);
+                return '';
+            }
+            /* IM Ordner des Kindes, wenn es einen hat — dann heisst er einfach
+               „Edumaps", der Name des Kindes steht schon darueber. Ohne
+               Mitglieder-Ordner liegt er oben und traegt den Namen mit. */
+            $name = 'Edumaps';
+            if ($mitgliedsOrdner === '') {
+                foreach ($this->LoadUsers() as $u) {
+                    if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
+                        $name = 'Edumaps ' . trim((string)$u['name']);
+                        break;
+                    }
                 }
             }
-            if ($name === 'Edumaps' && trim((string)($seite['name'] ?? '')) !== '') {
-                // Ohne Mitglied: der Seitenname ist besser als nichts.
-                $name = 'Edumaps ' . trim((string)$seite['name']);
+            $edu = $this->EduOrdnerAnlegen($store, $name, $mitgliedsOrdner, $schluessel);
+        }
+
+        /* ── 2. Ebene: je KARTE ein eigener Ordner ──
+           Eine Klassenseite und ein Nachschlagewerk gehoeren nicht in denselben
+           Topf; mit zwei Karten laegen sonst vierunddreissig Notizen
+           durcheinander. Der Schluessel haengt an der ADRESSE, nicht am Namen:
+           beide darf der Nutzer aendern, die Adresse nicht. */
+        $seiteSchluessel = 'edupage:' . md5((string)$seite['url']);
+        foreach ($store['folders'] as $f) {
+            if ((string)($f['eduKey'] ?? '') === $seiteSchluessel) {
+                return (string)$f['id'];
             }
         }
+        if ($edu === '' || count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
+            return $edu;
+        }
+        return $this->EduOrdnerAnlegen($store, (string)($seite['name'] ?? 'Karte'), $edu, $seiteSchluessel);
+    }
+
+    /**
+     * Einen Ordner anlegen und merken, dass der Bestand geschrieben werden muss.
+     *
+     * @param array<string,mixed> $store wird ergaenzt (noch nicht geschrieben)
+     */
+    private function EduOrdnerAnlegen(array &$store, string $name, string $eltern, string $schluessel): string
+    {
         $jetzt = time();
         $ordner = ['id' => $this->NotesNewId(), 'name' => $this->NotesTrim($name, self::NOTE_FOLDER_NAME_MAX),
                    'memberId' => '', 'parentId' => $eltern, 'eduKey' => $schluessel,
@@ -957,6 +1019,93 @@ trait EduMaps
     // ─────────────────────────────── Kleinkram ───────────────────────────────
 
     /** @return list<array{name:string,url:string,userId:string}> */
+    /**
+     * Verweise auf ANDERE Karten derselben Anlage.
+     *
+     * Eine Adresse hat vier Abschnitte („/176181/94492/qmz5o2s2ctwn/yfq8mzyd…").
+     * Dateien (`/file/…`) und die eigene Seite bleiben draussen.
+     *
+     * @return list<string>
+     */
+    private function EduKartenLinks(string $html, string $eigene): array
+    {
+        if (preg_match_all('#https://nrw\.edumaps\.de/(\d+)/(\d+)/([a-z0-9]+)/([a-z0-9]+)#i',
+                $html, $m, PREG_SET_ORDER) === 0) {
+            return [];
+        }
+        $raus = [];
+        foreach ($m as $t) {
+            $url = rtrim($t[0], '/');
+            if ($url !== rtrim($eigene, '/') && !isset($raus[$url])) {
+                $raus[$url] = true;
+            }
+        }
+        return array_keys($raus);
+    }
+
+    /**
+     * Gefundene Karten: die vom Nutzer eingetragenen bleiben unberuehrt, diese
+     * hier stehen im Attribut. So kann der Nutzer sie im Formular sehen und
+     * vergessen lassen, ohne dass das Modul in seine Liste schreibt — ein
+     * IPS_ApplyChanges auf die EIGENE Instanz mitten im Lauf waere ein Griff
+     * ins eigene Getriebe (Timer, Formular, Wiedereintritt).
+     *
+     * @return list<array{name:string,url:string,userId:string,von:string}>
+     */
+    private function EduGefundene(): array
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString('EduFound'), true);
+        $raus = [];
+        foreach (is_array($roh) ? $roh : [] as $z) {
+            if (!is_array($z) || !str_starts_with((string)($z['url'] ?? ''), 'https://')) {
+                continue;
+            }
+            $raus[] = ['name' => (string)($z['name'] ?? ''), 'url' => (string)$z['url'],
+                       'userId' => (string)($z['userId'] ?? ''), 'von' => (string)($z['von'] ?? '')];
+        }
+        return $raus;
+    }
+
+    /**
+     * Neue Verweise einer Seite aufnehmen. Nur EINE Ebene tief: die gefundenen
+     * Karten werden selbst nicht mehr durchsucht, sonst zoege eine Verweiskette
+     * das halbe Netz herein.
+     */
+    private function EduGefundeneErgaenzen(array $seite, string $html): int
+    {
+        if (!(bool)$this->EduProp('EduFollowLinks', false)) {
+            return 0;
+        }
+        $bekannt = [];
+        foreach (array_merge($this->EduSeiten(), $this->EduGefundene()) as $s) {
+            $bekannt[rtrim((string)$s['url'], '/')] = true;
+        }
+        $liste = $this->EduGefundene();
+        $neu = 0;
+        foreach ($this->EduKartenLinks($html, (string)$seite['url']) as $url) {
+            if (isset($bekannt[$url]) || count($liste) >= self::EDU_GEFUNDEN_MAX) {
+                continue;
+            }
+            $antwort = $this->AiFetchPublicPage($url);
+            if (($antwort['ok'] ?? false) !== true) {
+                continue;
+            }
+            // Der Name steht im Seitentitel: „Englisch Grammatik - Edumaps".
+            $name = '';
+            if (preg_match('#<title>(.*?)</title>#su', (string)($antwort['body'] ?? ''), $t) === 1) {
+                $name = trim((string)preg_replace('/\s*[-–]\s*Edumaps\s*$/ui', '', $this->EduText($t[1])));
+            }
+            $liste[] = ['name' => $name !== '' ? $name : $this->Translate('Linked map'),
+                        'url' => $url, 'userId' => (string)$seite['userId'], 'von' => (string)$seite['name']];
+            $bekannt[$url] = true;
+            $neu++;
+        }
+        if ($neu > 0) {
+            @$this->WriteAttributeString('EduFound', (string)json_encode($liste, JSON_UNESCAPED_UNICODE));
+        }
+        return $neu;
+    }
+
     private function EduSeiten(): array
     {
         $roh = json_decode((string)$this->EduProp('EduPages', '[]'), true);

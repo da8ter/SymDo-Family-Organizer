@@ -616,7 +616,12 @@
       "daily AI limit reached — the rest follows later": "Tagesdeckel der KI erreicht — der Rest folgt später",
       "Also keep every card as a note": "Jede Karte zusätzlich als Notiz ablegen",
       "Each card becomes one note with its full text and its files, in a folder „Edumaps <name>\" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.": "Jede Karte wird eine Notiz mit vollem Text und ihren Dateien, je Kind in einem Ordner „Edumaps <Name>\". Notiz-Ordner können nicht verschachtelt werden — der Ordner liegt also neben dem Mitglieder-Ordner, nicht darin. Geänderte Karten aktualisieren ihre Notiz; gelöscht wird nichts.",
-      "%d saved as note(s).": "%d als Notiz abgelegt."
+      "%d saved as note(s).": "%d als Notiz abgelegt.",
+      "Also take maps linked from these pages": "Verlinkte Karten ebenfalls mitnehmen",
+      "Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps\".": "Verlinkte Karten werden nur als Notizen gespiegelt, nie ausgewertet: es sind Nachschlagewerke, und jede Auswertung kostet einen KI-Aufruf. Jede Karte bekommt einen eigenen Ordner in „Edumaps\".",
+      "Forget linked maps": "Verlinkte Karten vergessen",
+      "Linked maps forgotten — the next check finds them again.": "Verlinkte Karten vergessen — die nächste Prüfung findet sie wieder.",
+      "Linked map": "Verlinkte Karte"
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

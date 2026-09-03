@@ -1857,6 +1857,9 @@ class SymDoGateway extends IPSModuleStrict
                    keinen KI-Aufruf und laeuft deshalb auch beim ersten Lauf. */
                 ['type' => 'CheckBox', 'name' => 'EduToNotes',
                  'caption' => $this->Translate('Also keep every card as a note')],
+                ['type' => 'CheckBox', 'name' => 'EduFollowLinks',
+                 'caption' => $this->Translate('Also take maps linked from these pages')],
+                ['type' => 'Label', 'caption' => $this->Translate('Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps".')],
                 ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files, in a folder „Edumaps <name>" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.')],
                 ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
@@ -1869,6 +1872,8 @@ class SymDoGateway extends IPSModuleStrict
                      'onClick' => 'IPS_RequestAction($id, \'EduScanAll\', 0);'],
                     ['type' => 'Button', 'caption' => $this->Translate('Forget noted cards'),
                      'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Forget linked maps'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduForgetFound\', 0);'],
                 ]],
             ],
         ];

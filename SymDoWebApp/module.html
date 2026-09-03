@@ -11327,8 +11327,12 @@ function edumapsKartenHtml(ordner) {
     .slice()
     .sort((a, b) => (a.pos || 0) - (b.pos || 0));
   if (karten.length === 0) {
-    return '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
-      translate('Nothing here yet') + '</div>';
+    /* „Hier ist noch nichts" nur, wenn wirklich nichts da ist. Der Ordner
+       „Edumaps" selbst traegt keine Notizen mehr — sie liegen in den Ordnern
+       der einzelnen Karten, und die stehen darueber. */
+    return notesUnterordner(ordner.id).length > 0 ? ''
+      : '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
+        translate('Nothing here yet') + '</div>';
   }
   /* Nach Abschnitten gruppieren, in der Reihenfolge der Seite. Die Karten
      liegen IM Bereich und werden erst mit ihm sichtbar. */
@@ -11430,6 +11434,29 @@ function eduBereichUmschalten(name) {
   try { ls.set('symdo.eduOffen', JSON.stringify(eduOffeneBereiche)); } catch (e) {}
 }
 
+/**
+ * Unterordner-Zeilen antippbar machen (oeffnen, wischen zum Loeschen bzw.
+ * Umbenennen). Eigene Funktion, weil BEIDE Zweige der Detailansicht sie
+ * brauchen — im Klassenseiten-Zweig fehlte sie, und dort waren die Ordner zwar
+ * zu sehen, aber tot.
+ */
+function bindeUnterordner(karten) {
+  (karten || []).forEach(card => {
+    const zeile = card.querySelector('.fav-row');
+    if (!zeile) return;
+    const fid = zeile.dataset.folder;
+    zeile.addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button')) return;
+      notesOrdnerOeffnen(fid);
+    });
+    bindCardSwipe(card, '.fav-row',
+      () => { restoreCard(card); notesOrdnerLoeschen(fid); },
+      () => { restoreCard(card); notesOrdnerUmbenennen(fid); },
+      { dissolve: false });
+  });
+}
+
 /** Bilder und Dateien der Karten antippbar machen — sonst ist die Ansicht zum Lesen. */
 function bindeEdumapsKarten(frisch) {
   if (!Array.isArray(frisch)) return;
@@ -11441,6 +11468,7 @@ function bindeEdumapsKarten(frisch) {
     }
     return raus;
   };
+  bindeUnterordner(suche('.note-sub'));
   suche('.edu-abschnitt').forEach(kopf => {
     kopf.addEventListener('click', () => {
       eduBereichUmschalten(kopf.dataset.bereich || '');
@@ -11547,20 +11575,7 @@ function renderNotizenDetail(el, ordner) {
       if (name.trim()) notizenAktion({ action: 'folderCreate', name: name.trim(), parentId: ordner.id });
     });
   });
-  suche('.note-sub').forEach(card => {
-    const zeile = card.querySelector('.fav-row');
-    if (!zeile) return;
-    const fid = zeile.dataset.folder;
-    zeile.addEventListener('click', (e) => {
-      if (card.dataset.swiped === '1') return;
-      if (e.target.closest('button')) return;
-      notesOrdnerOeffnen(fid);
-    });
-    bindCardSwipe(card, '.fav-row',
-      () => { restoreCard(card); notesOrdnerLoeschen(fid); },
-      () => { restoreCard(card); notesOrdnerUmbenennen(fid); },
-      { dissolve: false });
-  });
+  bindeUnterordner(suche('.note-sub'));
   const neu = suche('#btnNoteCreate')[0];
   if (neu) neu.addEventListener('click', () => noteEditorOeffnen({ folderId: ordner.id }));
   suche('.note-card').forEach(card => {
