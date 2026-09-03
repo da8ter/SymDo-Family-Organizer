@@ -1857,6 +1857,11 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Check now'),
                      'onClick' => 'IPS_RequestAction($id, \'EduScanNow\', 0);'],
+                    /* Auswerten, was schon im Merker steht — ein Griff von Hand
+                       fuer den Bestand. Jede Karte kostet einen KI-Aufruf. */
+                    ['type' => 'Button', 'caption' => $this->Translate('Evaluate all cards'),
+                     'confirm' => $this->Translate('Every card is sent to the AI, including the ones already noted. That costs one request per card. Continue?'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduScanAll\', 0);'],
                     ['type' => 'Button', 'caption' => $this->Translate('Forget noted cards'),
                      'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
                 ]],

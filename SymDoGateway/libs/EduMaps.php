@@ -78,6 +78,11 @@ trait EduMaps
             $this->EduScanRun();
             return true;
         }
+        if ($Ident === 'EduScanAll') {
+            // Alles auswerten, auch schon Gesehenes. Teuer, darum ein eigener Knopf.
+            $this->UpdateFormField('EduStatusLabel', 'caption', $this->EduScanRun(true, true));
+            return true;
+        }
         if ($Ident === 'EduScanNow') {
             $bericht = $this->EduScanRun(true);
             $this->UpdateFormField('EduStatusLabel', 'caption', $bericht);
@@ -103,7 +108,7 @@ trait EduMaps
      * @param bool $vonHand aus dem Formular angestossen — dann ist die Rueckgabe
      *                      der Text fuer die Statuszeile.
      */
-    private function EduScanRun(bool $vonHand = false): string
+    private function EduScanRun(bool $vonHand = false, bool $alles = false): string
     {
         if (!$this->EduIsEnabled()) {
             return $this->Translate('Class pages are switched off.');
@@ -117,7 +122,7 @@ trait EduMaps
         $analysiert = 0;
         $fehler = [];
         foreach ($seiten as $seite) {
-            $erg = $this->EduSeiteLesen($seite, $analysiert);
+            $erg = $this->EduSeiteLesen($seite, $analysiert, $alles);
             $karten     += $erg['karten'];
             $geaendert  += $erg['geaendert'];
             $analysiert += $erg['analysiert'];
@@ -144,7 +149,7 @@ trait EduMaps
      * @param array{name:string,url:string,userId:string} $seite
      * @return array{karten:int,geaendert:int,analysiert:int,fehler:string}
      */
-    private function EduSeiteLesen(array $seite, int $schonAnalysiert): array
+    private function EduSeiteLesen(array $seite, int $schonAnalysiert, bool $alles = false): array
     {
         $leer = ['karten' => 0, 'geaendert' => 0, 'analysiert' => 0, 'fehler' => ''];
         $antwort = $this->AiFetchPublicPage($seite['url']);
@@ -162,13 +167,18 @@ trait EduMaps
         $ersterLauf = !$this->EduTopfHatEintraege($topf);
         $geaendert = 0;
         $analysiert = 0;
+        $gedeckelt = false;
         foreach ($karten as $karte) {
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
-            if ($this->EduGesehen($topf, $schluessel)) {
+            /* „Alles auswerten" nimmt auch die Karten, die schon im Merker
+               stehen — sonst waere nach dem ersten Lauf, der nur vermerkt,
+               nie etwas auszuwerten. Das ist ein Griff von Hand und teuer:
+               jede Karte kostet einen KI-Aufruf, hier also sechzehn. */
+            if (!$alles && $this->EduGesehen($topf, $schluessel)) {
                 continue;
             }
             $geaendert++;
-            if ($ersterLauf) {
+            if ($ersterLauf && !$alles) {
                 /* Erster Lauf: nur vermerken. Sonst stuenden beim Einschalten
                    zwoelf Vorschlaege auf einmal da, und jeder kostet Geld. */
                 $this->EduMerken($topf, $schluessel);
@@ -176,9 +186,10 @@ trait EduMaps
             }
             if ($this->MailDayLimitReached()) {
                 $this->SendDebug('EduMaps', 'Tagesdeckel erreicht — Rest beim naechsten Lauf', 0);
+                $gedeckelt = true;
                 break;
             }
-            if ($schonAnalysiert + $analysiert >= self::EDU_JE_LAUF_MAX) {
+            if (!$alles && $schonAnalysiert + $analysiert >= self::EDU_JE_LAUF_MAX) {
                 $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Rest beim naechsten Lauf', 0);
                 break;
             }
@@ -188,7 +199,9 @@ trait EduMaps
             }
         }
         return ['karten' => count($karten), 'geaendert' => $geaendert,
-                'analysiert' => $analysiert, 'fehler' => ''];
+                'analysiert' => $analysiert,
+                // Ein abgebrochener Lauf darf nicht wie ein vollstaendiger aussehen.
+                'fehler' => $gedeckelt ? $this->Translate('daily AI limit reached — the rest follows later') : ''];
     }
 
     /**
