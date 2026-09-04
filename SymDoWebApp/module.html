@@ -11444,7 +11444,15 @@ function edumapsKartenHtml(ordner) {
   return html;
 }
 
-/** Eine einzelne Karte. */
+/**
+ * Eine einzelne Karte.
+ *
+ * Bilder und Seitenvorschauen laden EAGER, nicht lazy. Die Karten stehen schon
+ * im Baum, waehrend ihr Bereich zugeklappt ist — ein `loading="lazy"`-Bild
+ * darin faengt aber erst an zu laden, wenn es sichtbar wird. Genau das sah man
+ * beim Aufklappen: erst leere Flaechen, dann die Bilder. So sind sie da, bevor
+ * der Bereich aufgeht.
+ */
 function edumapsKarteHtml(n) {
   const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
   const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
@@ -11467,7 +11475,7 @@ function edumapsKarteHtml(n) {
        schaerfer, statt leer zu bleiben. */
     '<div class="edu-text">' + (n.html || notizTextHtml(String(n.text || n.preview || ''), true)) + '</div>';
   for (const b of bilder) {
-    html += '<img class="edu-bild" loading="lazy" data-media="' + escapeHtml(String(b.id)) + '"' +
+    html += '<img class="edu-bild" loading="eager" data-media="' + escapeHtml(String(b.id)) + '"' +
       ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
   }
   for (const d of rest) {
@@ -11476,7 +11484,7 @@ function edumapsKarteHtml(n) {
        Kachel) bleibt es bei der Zeile mit Symbol. */
     const mini = d.thumb ? notesMediaUrl(d.thumb) : '';
     if (mini) {
-      html += '<img class="edu-vorschau" loading="lazy" data-media="' + escapeHtml(String(d.id)) + '"' +
+      html += '<img class="edu-vorschau" loading="eager" data-media="' + escapeHtml(String(d.id)) + '"' +
         ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
     }
     html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
