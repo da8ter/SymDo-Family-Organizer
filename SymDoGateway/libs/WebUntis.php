@@ -28,6 +28,11 @@ trait WebUntis
     private const UNTIS_CLIENT      = 'SymDo';   // Selbstauskunft in den Zugriffen der Schule
     private const UNTIS_TAGE_VOR    = 14;        // so weit im Voraus wird geholt
     private const UNTIS_FEHLER_MAX  = 3;         // danach steht der Timer (Kontosperre!)
+    /* Element-Typen von WebUntis. Nur diese beiden taugen als „wessen Plan?":
+       ein Erziehungsberechtigten-Konto meldet Personentyp 12 und ist selbst
+       KEIN Element — getTimetable antwortet dort „invalid elementType: 12". */
+    private const UNTIS_TYP_KLASSE   = 1;
+    private const UNTIS_TYP_SCHUELER = 5;
     private const UNTIS_HTTP_FRIST  = 20;
     private const UNTIS_INTERVALL_STD = 60;      // Minuten
 
@@ -56,6 +61,8 @@ trait WebUntis
         /* Je Kind: Anzeigename, Ziel-Stundenplan und wessen Plan geholt wird.
            Leerer Elementtyp = der Plan des angemeldeten Kontos selbst. */
         $this->RegisterPropertyString('UntisStudents', '[]');
+        // Suchfeld im Formular: findet die Element-Nummer eines Kindes.
+        $this->RegisterPropertyString('UntisSearchName', '');
         $this->RegisterAttributeString('UntisLast', '{}');    // letzter Stand je Kind
         $this->RegisterAttributeString('UntisStatus', '{}');  // Statuszeile im Formular
         $this->RegisterAttributeInteger('UntisFails', 0);
@@ -90,6 +97,10 @@ trait WebUntis
         }
         if ($Ident === 'UntisTest') {
             $this->UpdateFormField('UntisStatusLabel', 'caption', $this->UntisTestverbindung());
+            return true;
+        }
+        if ($Ident === 'UntisFindStudent') {
+            $this->UpdateFormField('UntisStatusLabel', 'caption', $this->UntisSchuelerSuchen());
             return true;
         }
         return false;
@@ -216,6 +227,62 @@ trait WebUntis
     }
 
     /**
+     * Schueler suchen und ihre Element-Nummer nennen.
+     *
+     * Mit einem Erziehungsberechtigten-Konto ist das der einzige Weg zur Nummer:
+     * das Konto selbst ist kein Element, und ohne Nummer fragt der Abruf
+     * niemanden. `getStudents` darf ein Elternkonto lesen (gemessen: 1094
+     * Eintraege) — deshalb geht es hier und muss niemand in WebUntis suchen.
+     */
+    private function UntisSchuelerSuchen(): string
+    {
+        $suche = trim((string)$this->UntisProp('UntisSearchName', ''));
+        if (mb_strlen($suche) < 2) {
+            return $this->Translate('Enter at least two letters of the name.');
+        }
+        if ((int)@$this->ReadAttributeInteger('UntisFails') >= self::UNTIS_FEHLER_MAX) {
+            return $this->Translate('Paused after repeated login failures — save the form once to try again.');
+        }
+        $an = $this->UntisLogin();
+        if (($an['ok'] ?? false) !== true) {
+            $this->UntisFehlerZaehlen((int)($an['code'] ?? 0));
+            return $this->Translate('Login failed: ') . (string)($an['message'] ?? '?');
+        }
+        $r = $this->UntisRpc('getStudents');
+        $this->UntisLogout();
+        if (($r['ok'] ?? false) !== true) {
+            /* Darf ein Konto die Schuelerliste nicht lesen (-8509), hilft nur die
+               Klasse: deren Nummer steht in der Adresse des Stundenplans in
+               WebUntis. Das gehoert in die Antwort, nicht ins Wiki. */
+            return sprintf($this->Translate('Student list not readable (%s) — then use type „Class" and the class number instead.'),
+                (string)($r['message'] ?? '?'));
+        }
+        $treffer = [];
+        foreach ((array)($r['result'] ?? []) as $sch) {
+            if (!is_array($sch)) {
+                continue;
+            }
+            $name = trim((string)($sch['foreName'] ?? '') . ' ' . (string)($sch['longName'] ?? ''));
+            if ($name === '' || mb_stripos($name, $suche) === false) {
+                continue;
+            }
+            $treffer[] = sprintf('%d · %s', (int)($sch['id'] ?? 0), $name);
+            if (count($treffer) >= 12) {
+                break;
+            }
+        }
+        /* Auch merken, nicht nur ins offene Formular schreiben — genau wie beim
+           Verbindungstest: sonst ist die Nummer beim naechsten Oeffnen weg, und
+           man sucht zweimal. */
+        $text = $treffer === []
+            ? sprintf($this->Translate('No student found for „%s".'), $suche)
+            : sprintf($this->Translate('Element number · name (type „Student"): %s'),
+                implode('   |   ', $treffer));
+        $this->UntisStatusSchreiben($text);
+        return $text;
+    }
+
+    /**
      * Fehlschlaege zaehlen und ab dem dritten den Timer abstellen.
      *
      * WebUntis SPERRT Konten nach mehreren Fehlversuchen. Ein Timer, der alle
@@ -301,11 +368,24 @@ trait WebUntis
             'roomFields'    => ['id', 'name'],
             'teacherFields' => ['id', 'name'],
         ]];
-        // Ohne Angabe in der Liste: der Plan des angemeldeten Kontos.
-        $typ = (int)$kind['type'] > 0 ? (int)$kind['type'] : (int)$this->untisIch['type'];
-        $nr  = (int)$kind['id']   > 0 ? (int)$kind['id']   : (int)$this->untisIch['id'];
+        $typ = (int)$kind['type'];
+        $nr  = (int)$kind['id'];
+        /* Ohne JEDE Angabe: der Plan des angemeldeten Kontos. Vorher wurden die
+           beiden Felder EINZELN aufgefuellt — bei „Typ Schueler, Nummer leer"
+           trug der Abruf damit die Personennummer des ELTERNKONTOS als
+           Schuelernummer ein, und WebUntis antwortete „no such element
+           elementId:2683, elementType:5". Beides kommt jetzt aus derselben
+           Quelle. */
+        if ($typ <= 0 && $nr <= 0) {
+            $typ = (int)$this->untisIch['type'];
+            $nr  = (int)$this->untisIch['id'];
+            if (!in_array($typ, [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true) || $nr <= 0) {
+                return sprintf($this->Translate('%1$s: the account itself is not a timetable element (person type %2$d) — enter element type and number of the child; the search in the form finds it.'),
+                    $kind['name'], $typ);
+            }
+        }
         if ($typ <= 0 || $nr <= 0) {
-            return sprintf($this->Translate('%s: no element — the account has none of its own, enter type and ID.'),
+            return sprintf($this->Translate('%s: element type and number belong together — enter both, or leave both empty.'),
                 $kind['name']);
         }
         $params['options']['element'] = ['id' => $nr, 'type' => $typ];

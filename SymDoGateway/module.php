@@ -1798,6 +1798,19 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'UntisPush',
                  'caption' => $this->Translate('Push on cancellations and substitutions')],
                 ['type' => 'Label', 'caption' => $this->Translate('Goes to the devices of the assigned family member, once per lesson — not again on every fetch.')],
+                /* Element-Typ und -Nummer sind die Frage „WESSEN Plan?". Leer heisst
+                   „der des angemeldeten Kontos" — das geht nur, wenn das Konto
+                   selbst ein Element ist (Schuelerkonto). Ein
+                   Erziehungsberechtigten-Konto ist keines (Personentyp 12), dort
+                   MUSS das Kind genannt werden. Die Suche darunter findet seine
+                   Nummer. */
+                ['type' => 'Label', 'caption' => $this->Translate('Element type and number answer „whose timetable?". Leave them empty for the plan of the account itself — that works with a student login. A guardian account is not a timetable element, so enter the child there: type „Student" and its element number, or type „Class" and the class number. The search below finds the number.')],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'ValidationTextBox', 'name' => 'UntisSearchName', 'width' => '260px',
+                     'caption' => $this->Translate('Find student (name or part of it)')],
+                    ['type' => 'Button', 'caption' => $this->Translate('Search'),
+                     'onClick' => 'IPS_RequestAction($id, \'UntisFindStudent\', 0);'],
+                ]],
                 ['type' => 'Label', 'name' => 'UntisStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Test connection'),
