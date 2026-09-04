@@ -7003,13 +7003,13 @@ function stundenplanKarte() {
          FACHFARBE und nicht Weiss: weiss war auf dem hellen Grund zwischen
          den Streifen unsichtbar und nur da zu sehen, wo zufaellig ein
          Ganztagsblock darunter lag. */
-      /* Entfallen heisst: gestrichelte Kontur in der Fachfarbe und eine leichte
-         Fuellung derselben Farbe (20 %). Die stattfindende Stunde bleibt
+      /* Entfallen heisst: gestrichelte Kontur in der Fachfarbe und eine
+         Fuellung derselben Farbe (50 %). Die stattfindende Stunde bleibt
          kraeftig — der Unterschied ist damit auf einen Blick zu sehen, und was
          unter der entfallenen liegt (an einem Projekttag der Ganztagsblock)
          scheint weiter durch. */
       const fuellung = s.status === 'entfall'
-        ? 'color-mix(in srgb, ' + s.color + ' 20%, transparent)'
+        ? 'color-mix(in srgb, ' + s.color + ' 50%, transparent)'
         : s.color;
       const kontur = s.status === 'entfall'
         ? ';border:1px dashed ' + s.color : '';
