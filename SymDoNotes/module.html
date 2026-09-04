@@ -665,6 +665,16 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Pfad in der Ordner-Kopfzeile: „Tim › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
+/* Der Weg ist bedienbar, sieht aber weiter wie Text aus: ein Knopf mit Rahmen
+   oder Flaeche wuerde die Kopfzeile in drei Schaltflaechen zerlegen. */
+.note-path-up {
+  border: 0; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.note-path-up:hover { color: var(--text); text-decoration: underline; }
+.note-path-up:active { opacity: .7; }
+.note-path-sep { pointer-events: none; }
 /* Klassenseite als Karten. Eine Spalte auf dem Telefon, zwei, sobald Platz
    ist — die Karten sind kurz, und nebeneinander sieht man mehr auf einen
    Blick. Die Abschnittsueberschrift laeuft ueber beide Spalten. */
@@ -11315,6 +11325,17 @@ function renderNotizen() {
   renderNotizenMaster(elMaster);
   renderNotizenDetail(elDetail, offen);
   document.getElementById('notesContent').classList.toggle('detail-open', !!offen);
+  /* In einem Ordner der Klassenseite wird nichts angelegt — dann muss auch die
+     Eingabezeile weg, nicht nur die beiden Knoepfe in der Kopfzeile: sie ist der
+     kuerzeste Weg zu einer neuen Notiz. Mit ihr faellt das Scroll-Polster des
+     Bereichs, sonst bliebe unten eine leere Flaeche in Zeilenhoehe. */
+  const spiegel = !!offen && (offen.source || '') === 'edumaps';
+  const zeile = document.getElementById('notesInputbar');
+  if (zeile) {
+    zeile.style.display = spiegel ? 'none' : '';
+    const bereich = document.getElementById('screen-notes');
+    if (bereich) bereich.classList.toggle('bar-hidden', spiegel);
+  }
   notizenEingabePruefen();
 }
 
@@ -11642,6 +11663,10 @@ function bindeDetailKopf(suche, ordner) {
     notesOrdnerId = ordner.parentId || null;
     renderNotizen();
   });
+  // Der Weg oben: jede Stufe fuehrt in ihren Ordner.
+  suche('.note-path-up').forEach(knopf => knopf.addEventListener('click', () => {
+    notesOrdnerOeffnen(knopf.dataset.up || null);
+  }));
   const neuOrdner = suche('#btnNotesSubCreate')[0];
   if (neuOrdner) neuOrdner.addEventListener('click', () => {
     showPrompt(translate('New folder'), '', translate('Create'), (name) => {
@@ -11723,16 +11748,31 @@ function renderNotizenDetail(el, ordner) {
      sieht ein Unterordner aus wie ein Ordner von oben. */
   const weg = notesPfad(ordner.id);
   const pfad = weg.length > 1
-    ? '<span class="note-path">' + weg.slice(0, -1).map(f => escapeHtml(f.name)).join(' › ') + ' › </span>'
+    /* Jede Stufe des Weges ist ein Knopf: „Max › Edumaps › 5a Joshua" — ein
+       Tipp auf „Edumaps" fuehrt genau dorthin. Der Zurueck-Pfeil geht nur EINE
+       Ebene hoch; bei drei Stufen war die erste sonst nur ueber zweimal
+       Zurueck erreichbar. Der letzte Name ist der OFFENE Ordner und steht als
+       Ueberschrift daneben, deshalb endet die Kette vor ihm. */
+    ? '<span class="note-path">' + weg.slice(0, -1).map(f =>
+        '<button type="button" class="note-path-up" data-up="' + escapeHtml(f.id) + '">' +
+        escapeHtml(f.name) + '</button>').join('<span class="note-path-sep"> › </span>') +
+      '<span class="note-path-sep"> › </span></span>'
     : '';
+  /* In einem Ordner der Klassenseite wird NICHTS angelegt: sein Inhalt ist ein
+     Spiegel der Seite. Eine Notiz von Hand daneben sähe wie eine Karte aus, ist
+     aber keine — und ein Unterordner wäre ein Fach, das die nächste Spiegelung
+     nicht kennt. Beide Knöpfe bleiben deshalb weg; im eigenen Ordner stehen sie
+     wie bisher. */
+  const fremd = (ordner.source || '') === 'edumaps';
   let html = '<div class="screen-head" data-key="detailhead">' +
     '<button class="icon-btn" id="btnNotesBack" aria-label="' + translate('Back') + '">' +
     '<i class="fa-light fa-chevron-left"></i></button>' +
     '<h2>' + pfad + escapeHtml(ordner.name) + '</h2>' +
-    '<button class="icon-btn" id="btnNotesSubCreate" aria-label="' + translate('New folder') + '">' +
-    '<i class="fa-light fa-folder-plus"></i></button>' +
-    '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
-    '<i class="fa-light fa-plus"></i></button></div>';
+    (fremd ? '' :
+      '<button class="icon-btn" id="btnNotesSubCreate" aria-label="' + translate('New folder') + '">' +
+      '<i class="fa-light fa-folder-plus"></i></button>' +
+      '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
+      '<i class="fa-light fa-plus"></i></button>') + '</div>';
   /* Unterordner ÜBER den Notizen: sie sind Wege, die Notizen sind Inhalt. */
   for (const f of notesUnterordner(ordner.id)) {
     const anzahl = f.count === 1 ? translate('1 note') : translate('%1 notes').replace('%1', String(f.count));
