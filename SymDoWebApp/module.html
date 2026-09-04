@@ -748,6 +748,15 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   width: 100%; max-width: 100%; height: auto; border-radius: 12px; display: block;
   background: var(--surface); cursor: pointer;
 }
+/* Ohne Datei-Adresse (Kachel: kein Token) steht das Bild zunaechst leer da und
+   wird ueber attachData nachgeladen. Solange — und wenn es misslingt — braucht
+   es eine sichtbare Flaeche, sonst faellt die Karte in sich zusammen. */
+.edu-bild:not([src]), .edu-bild[src=""] {
+  min-height: 88px; border: 1px dashed var(--line);
+}
+.edu-bild-leer {
+  min-height: 44px; border: 1px dashed var(--line); background: var(--surface);
+}
 /* Die PDF-Vorschau bleibt klein: sie ist ein Hinweis, kein Inhalt. Weisser
    Grund, weil die Seite selbst weiss ist — auf dunklem Grund saehe das
    Papier sonst wie ein Loch aus. */
@@ -11454,7 +11463,10 @@ function edumapsKartenHtml(ordner) {
  * der Bereich aufgeht.
  */
 function edumapsKarteHtml(n) {
-  const bilder = (n.att || []).filter(x => x.kind === 'image' && notesMediaUrl(x.id));
+  /* Frueher fielen Bilder ohne Datei-Adresse hier heraus und standen unten als
+     Dateizeile — in JEDER Kachel, denn dort gibt es keinen Token. Jetzt werden
+     sie gezeichnet und ihre Daten einzeln nachgeladen (notesBilderNachladen). */
+  const bilder = (n.att || []).filter(x => x.kind === 'image');
   const rest = (n.att || []).filter(x => bilder.indexOf(x) < 0);
   // Die Farbe der Karte traegt jetzt der KOPF; eine Kontur dazu waere zuviel
   // (auf Wunsch entfernt) — die weisse Flaeche hebt sich vom grauen Bereich
@@ -11475,16 +11487,21 @@ function edumapsKarteHtml(n) {
        schaerfer, statt leer zu bleiben. */
     '<div class="edu-text">' + (n.html || notizTextHtml(String(n.text || n.preview || ''), true)) + '</div>';
   for (const b of bilder) {
+    const quelle = notesBildQuelle(b.id);
     html += '<img class="edu-bild" loading="eager" data-media="' + escapeHtml(String(b.id)) + '"' +
-      ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(notesMediaUrl(b.id)) + '">';
+      (quelle ? '' : ' data-nachladen="1"') +
+      ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(quelle) + '">';
   }
   for (const d of rest) {
     /* Seitenvorschau des PDF, wenn die Quelle eine mitliefert — dasselbe Bild,
        das die Klassenseite zeigt. Ohne Vorschau (oder ohne Token, also in der
        Kachel) bleibt es bei der Zeile mit Symbol. */
-    const mini = d.thumb ? notesMediaUrl(d.thumb) : '';
-    if (mini) {
+    const mini = d.thumb ? notesBildQuelle(d.thumb) : '';
+    if (d.thumb) {
+      /* data-mini traegt die Kennung des VORSCHAUBILDES; data-media bleibt die
+         der Datei, denn ein Tipp soll das PDF oeffnen, nicht das Miniaturbild. */
       html += '<img class="edu-vorschau" loading="eager" data-media="' + escapeHtml(String(d.id)) + '"' +
+        ' data-mini="' + escapeHtml(String(d.thumb)) + '"' + (mini ? '' : ' data-nachladen="1"') +
         ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
     }
     html += '<div class="note-file" data-media="' + escapeHtml(String(d.id)) + '">' +
@@ -11597,6 +11614,8 @@ function bindeEdumapsKarten(frisch, ordner) {
     karte.querySelectorAll('.note-file').forEach(z =>
       z.addEventListener('click', () => oeffne(z.dataset.media)));
   });
+  // In der Kachel steht in den Bildern noch nichts — die Daten kommen einzeln.
+  suche('.edu-karte').forEach(karte => notesBilderNachladen(karte));
 }
 
 function renderNotizenDetail(el, ordner) {
@@ -11999,6 +12018,68 @@ function noteAnhangOeffnen(mediaId, ausVorschlag) {
  * damit auf iOS bei Seite 1. Der Rezept-Weg (mediaFileUrl) las von Anfang an
  * `apiBase` und war deshalb nie betroffen — genau daran fiel es auf.
  */
+/* Bilddaten, die schon einmal geholt wurden — mediaId → data:-URL.
+   Gebraucht in JEDER Kachel: dort liegt kein Token, notesMediaUrl() liefert
+   also nichts, und ohne diesen Weg blieben die Karten der Klassenseite ohne
+   Bilder. Der Speicher lebt so lange wie die Seite. */
+const notesMediaCache = {};
+const notesBildWarte = [];
+let notesBilderLaeuft = false;
+
+/** Die Adresse fuer ein Bild: die Datei-Route, sonst das schon Geholte. */
+function notesBildQuelle(mediaId) {
+  return notesMediaUrl(mediaId) || notesMediaCache[String(mediaId)] || '';
+}
+
+/**
+ * Bilder ohne Adresse nachladen — eines nach dem anderen.
+ *
+ * NICHT alle auf einmal: jedes Bild reist als base64 durch das Relay (das
+ * Gateway verkleinert zu grosse fuer die Ausgabegrenze), und ein Dutzend
+ * gleichzeitig belegte die Instanz, die ihre Aufrufe ohnehin nacheinander
+ * abarbeitet.
+ */
+function notesBilderNachladen(wurzel) {
+  (wurzel || document).querySelectorAll('img[data-nachladen]').forEach(img => {
+    const id = String(img.dataset.mini || img.dataset.media || '');
+    if (!id) return;
+    if (notesMediaCache[id]) {
+      img.src = notesMediaCache[id];
+      img.removeAttribute('data-nachladen');
+      return;
+    }
+    notesBildWarte.push(img);
+  });
+  if (notesBilderLaeuft || !notesBildWarte.length) return;
+  notesBilderLaeuft = true;
+  const naechstes = () => {
+    const img = notesBildWarte.shift();
+    if (!img) { notesBilderLaeuft = false; return; }
+    // Zwischendurch neu gezeichnet? Dann haengt das Element nicht mehr im
+    // Dokument und die Arbeit waere umsonst.
+    if (!img.isConnected) { naechstes(); return; }
+    const id = String(img.dataset.mini || img.dataset.media || '');
+    const karte = img.closest('[data-note]');
+    aiPost('/notes', {
+      action: 'attachData',
+      attachmentId: parseInt(id, 10),
+      noteId: karte ? (karte.dataset.note || '') : '',
+    }).then(r => {
+      const j = r && r.json;
+      if (j && j.ok === true && j.dataUrl) {
+        notesMediaCache[id] = j.dataUrl;
+        img.src = j.dataUrl;
+        img.removeAttribute('data-nachladen');
+      } else {
+        // Kein Bild zu holen: eine leere Flaeche waere ein Raetsel, ein
+        // gestrichelter Kasten sagt „hier fehlt etwas".
+        img.classList.add('edu-bild-leer');
+      }
+    }).catch(() => img.classList.add('edu-bild-leer')).then(naechstes);
+  };
+  naechstes();
+}
+
 function notesMediaUrl(mediaId) {
   const basis = (window.__SYMDO__ && window.__SYMDO__.apiBase) ? String(window.__SYMDO__.apiBase) : '';
   if (!basis) return '';
