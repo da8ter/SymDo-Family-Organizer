@@ -43,6 +43,10 @@ trait WebUntis
        („no element provided"). Das ist der Rueckfall, wenn in der Kinderliste
        nichts steht. */
     private array $untisIch = ['id' => 0, 'type' => 0];
+    /* Der Bearer der REST-Ansicht (siehe UntisRest). Er entsteht aus der
+       laufenden Sitzung und lebt genauso lange — einmal je Anmeldung holen
+       genuegt. */
+    private string $untisBearer = '';
 
     // ────────────────────────────── Lebenszyklus ──────────────────────────────
 
@@ -166,6 +170,7 @@ trait WebUntis
     private function UntisLogin(): array
     {
         $this->untisSession = '';
+        $this->untisBearer  = '';
         $benutzer = trim((string)$this->UntisProp('UntisUser', ''));
         $kennwort = (string)$this->UntisProp('UntisPassword', '');
         if ($benutzer === '' || $kennwort === '') {
@@ -215,6 +220,13 @@ trait WebUntis
         }
         $jahr = $this->UntisRpc('getCurrentSchoolyear');
         $name = (string)(($jahr['result']['name']) ?? '');
+        /* Die Kinder des Kontos gleich mitnennen: bei einem Elternzugang ist das
+           die Auskunft, die man sucht — und der Abruf braucht dann nichts weiter.
+           Sie stehen NUR im offenen Formular; der gemerkte Status wuerde die
+           Namen in die weltlesbare settings.json schreiben. */
+        $kinder = in_array((int)$this->untisIch['type'],
+            [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true)
+            ? [] : $this->UntisKinderDesKontos();
         $this->UntisLogout();
         @$this->WriteAttributeInteger('UntisFails', 0);
         $text = $name !== ''
@@ -223,7 +235,105 @@ trait WebUntis
         // Auch merken, nicht nur ins offene Formular schreiben: sonst ist das
         // Ergebnis beim naechsten Oeffnen weg.
         $this->UntisStatusSchreiben($text);
+        if ($kinder !== []) {
+            $text .= ' ' . sprintf($this->Translate('Children on the account: %s — nothing to enter, the fetch takes them itself.'),
+                implode(', ', array_map(
+                    static fn(array $k): string => $k['id'] . ' · ' . $k['name'], $kinder)));
+        }
         return $text;
+    }
+
+    /**
+     * Trifft ein Suchwort einen Namen? Verglichen wird am WORTANFANG.
+     *
+     * Irgendwo im Namen zu suchen, ergab Unsinn: „Tim" traf auch „Fatima"
+     * (fa-tim-a) — und die Liste einer ganzen Schule liefert damit Namen, die
+     * niemand gesucht hat.
+     */
+    private function UntisNameTrifft(string $name, string $suche): bool
+    {
+        $suche = trim($suche);
+        if ($suche === '' || $name === '') {
+            return false;
+        }
+        foreach (preg_split('/\s+/u', $name) ?: [] as $wort) {
+            if ($wort !== '' && mb_stripos($wort, $suche) === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Ein Lesezugriff auf die REST-Ansicht von WebUntis (die, die die
+     * Untis-App benutzt).
+     *
+     * Der alte JSON-RPC weiss von Kindern nichts: ein Erziehungsberechtigten-
+     * Konto ist dort Personentyp 12 und kein Element. Die REST-Ansicht kennt
+     * sie — unter `user.students`, genau wie die App sie zeigt. Der Weg dorthin
+     * ist ein Bearer, den `/WebUntis/api/token/new` gegen die laufende Sitzung
+     * ausgibt; der JSESSIONID-Keks allein genuegt dafuer (gemessen 04.09.2026).
+     *
+     * @return array<string,mixed>|null null bei jedem Fehlschlag — der Aufrufer
+     *         faellt dann auf die Angaben im Formular zurueck.
+     */
+    private function UntisRest(string $pfad): ?array
+    {
+        $server = trim((string)$this->UntisProp('UntisServer', ''));
+        if ($server === '' || $this->untisSession === '') {
+            return null;
+        }
+        $basis = 'https://' . $server;
+        $keks  = 'Cookie: JSESSIONID=' . $this->untisSession;
+        $hol = function (string $url, array $kopf) use (&$hol): array {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => $kopf,
+                CURLOPT_TIMEOUT        => self::UNTIS_HTTP_FRIST,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_USERAGENT      => self::UNTIS_CLIENT,
+            ]);
+            $antwort = curl_exec($ch);
+            $status  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            return ['status' => $status, 'text' => $antwort === false ? '' : (string)$antwort];
+        };
+        if ($this->untisBearer === '') {
+            $t = $hol($basis . '/WebUntis/api/token/new', [$keks]);
+            if ($t['status'] !== 200 || trim($t['text']) === '') {
+                $this->SendDebug('WebUntis', 'token/new: HTTP ' . $t['status'], 0);
+                return null;
+            }
+            $this->untisBearer = trim($t['text']);
+        }
+        $r = $hol($basis . '/WebUntis/api/rest/view/v1/' . ltrim($pfad, '/'),
+            [$keks, 'Authorization: Bearer ' . $this->untisBearer, 'Accept: application/json']);
+        if ($r['status'] !== 200) {
+            $this->SendDebug('WebUntis', $pfad . ': HTTP ' . $r['status'], 0);
+            return null;
+        }
+        $d = json_decode($r['text'], true);
+        return is_array($d) ? $d : null;
+    }
+
+    /**
+     * Die Kinder, die AM KONTO haengen — bei einem Elternzugang genau die, die
+     * die Untis-App anzeigt.
+     *
+     * @return list<array{id:int,name:string}>
+     */
+    private function UntisKinderDesKontos(): array
+    {
+        $d = $this->UntisRest('app/data');
+        $raus = [];
+        foreach ((array)((($d['user'] ?? [])['students']) ?? []) as $k) {
+            if (!is_array($k) || (int)($k['id'] ?? 0) <= 0) {
+                continue;
+            }
+            $raus[] = ['id' => (int)$k['id'], 'name' => trim((string)($k['displayName'] ?? ''))];
+        }
+        return $raus;
     }
 
     /**
@@ -267,17 +377,7 @@ trait WebUntis
             if ($vor === '' && $nach === '') {
                 continue;
             }
-            /* Am WORTANFANG suchen, nicht irgendwo im Namen. „Tim" traf sonst
-               auch „Fatima" (fa-tim-a) — die Liste einer ganzen Schule liefert
-               damit Namen, die niemand gesucht hat. */
-            $passt = false;
-            foreach (preg_split('/\s+/u', $vor . ' ' . $nach) ?: [] as $wort) {
-                if ($wort !== '' && mb_stripos($wort, $suche) === 0) {
-                    $passt = true;
-                    break;
-                }
-            }
-            if (!$passt) {
+            if (!$this->UntisNameTrifft($vor . ' ' . $nach, $suche)) {
                 continue;
             }
             $treffer[] = sprintf('%d · %s', (int)($sch['id'] ?? 0), trim($vor . ' ' . $nach));
@@ -393,8 +493,31 @@ trait WebUntis
             $typ = (int)$this->untisIch['type'];
             $nr  = (int)$this->untisIch['id'];
             if (!in_array($typ, [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true) || $nr <= 0) {
-                return sprintf($this->Translate('%1$s: the account itself is not a timetable element (person type %2$d) — enter element type and number of the child; the search in the form finds it.'),
-                    $kind['name'], $typ);
+                /* Elternzugang: das Konto ist kein Element, aber es HAT Kinder —
+                   dieselben, die die Untis-App zeigt. Also selbst nachsehen,
+                   statt eine Nummer zu verlangen. Bei mehreren entscheidet der
+                   Name aus der Zeile; passt keiner, sagt die Meldung, welche
+                   Nummern es gibt. */
+                $kinder = $this->UntisKinderDesKontos();
+                if (count($kinder) === 1) {
+                    $typ = self::UNTIS_TYP_SCHUELER;
+                    $nr  = (int)$kinder[0]['id'];
+                } elseif (count($kinder) > 1) {
+                    $passend = array_values(array_filter($kinder,
+                        fn(array $k): bool => $this->UntisNameTrifft($k['name'], (string)$kind['name'])));
+                    if (count($passend) === 1) {
+                        $typ = self::UNTIS_TYP_SCHUELER;
+                        $nr  = (int)$passend[0]['id'];
+                    } else {
+                        return sprintf($this->Translate('%1$s: the account has several children — enter the element number: %2$s'),
+                            $kind['name'],
+                            implode(', ', array_map(
+                                static fn(array $k): string => $k['id'] . ' · ' . $k['name'], $kinder)));
+                    }
+                } else {
+                    return sprintf($this->Translate('%1$s: the account itself is not a timetable element (person type %2$d) and names no child — enter element type and number; the search in the form finds it.'),
+                        $kind['name'], $typ);
+                }
             }
         }
         if ($typ <= 0 || $nr <= 0) {

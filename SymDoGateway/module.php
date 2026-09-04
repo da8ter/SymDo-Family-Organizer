@@ -1804,7 +1804,7 @@ class SymDoGateway extends IPSModuleStrict
                    Erziehungsberechtigten-Konto ist keines (Personentyp 12), dort
                    MUSS das Kind genannt werden. Die Suche darunter findet seine
                    Nummer. */
-                ['type' => 'Label', 'caption' => $this->Translate('Element type and number answer „whose timetable?". Leave them empty for the plan of the account itself — that works with a student login. A guardian account is not a timetable element, so enter the child there: type „Student" and its element number, or type „Class" and the class number. The search below finds the number.')],
+                ['type' => 'Label', 'caption' => $this->Translate('Element type and number answer „whose timetable?" — and in most cases they can stay EMPTY. With a student login the account is the element itself; with a guardian login the fetch takes the children hanging on the account, exactly like the Untis app. Enter something only if the account has several children whose names do not match, or if you want the class plan instead: type „Class" with the class number. The search below finds a student number.')],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'ValidationTextBox', 'name' => 'UntisSearchName', 'width' => '260px',
                      'caption' => $this->Translate('Find student (name or part of it)')],
