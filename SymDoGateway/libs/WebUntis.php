@@ -20,8 +20,9 @@ declare(strict_types=1);
  * erste sieht, haelt die Anmeldung faelschlich fuer abgeschaltet und baut einen
  * Umweg ueber das Web-Formular, den es nicht braucht.
  *
- * Am 03.09.2026 an der Schule th-ed-rs-dusseldorf (WebUntis 2027.1.3) und zum
- * Vergleich an vier weiteren Duesseldorfer Schulen geprueft.
+ * Am 03.09.2026 an fuenf Schulen mit WebUntis 2027.1.3 geprueft. Welche, steht
+ * hier bewusst nicht: die Datei liegt in einem oeffentlichen Repo, und die
+ * Schule des Nutzers geht niemanden etwas an.
  */
 trait WebUntis
 {
@@ -376,7 +377,8 @@ trait WebUntis
      *
      * Mit einem Erziehungsberechtigten-Konto ist das der einzige Weg zur Nummer:
      * das Konto selbst ist kein Element, und ohne Nummer fragt der Abruf
-     * niemanden. `getStudents` darf ein Elternkonto lesen (gemessen: 1094
+     * niemanden. `getStudents` darf ein Elternkonto je nach Einstellung der
+     * Schule lesen (gemessen: die vollstaendige Schuelerliste
      * Eintraege) — deshalb geht es hier und muss niemand in WebUntis suchen.
      */
     private function UntisSchuelerSuchen(): string

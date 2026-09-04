@@ -2385,9 +2385,10 @@ trait AiExtract
             . '„Kosten: 12 EUR", „Frist: 10.09.2026", „Kontakt: Frau Weber, '
             . '0221 4711-99", „Aktenzeichen: 4711/26". Nur Angaben, die wirklich im '
             . 'Dokument stehen; erfinde keine Zeile und lass keine wichtige weg. '
-            // Beobachtet am 21.08.2026: aus „Hoffeldstrasse 79, 40235 Duesseldorf"
-            // wurde „Neanderstrasse 18, 40233 Duesseldorf" — eine frei erfundene
-            // Anschrift, mitten in einer sonst korrekten Notiz. Bei Anschriften,
+            // Beobachtet am 21.08.2026: aus der Anschrift im Dokument wurde eine
+            // ANDERE, frei erfundene — richtige Stadt, richtige Postleitzahl,
+            // falsche Strasse und Hausnummer, mitten in einer sonst korrekten
+            // Notiz. (Die echte steht hier nicht: oeffentliches Repo.) Bei Anschriften,
             // Nummern und Aktenzeichen genuegt „erfinde nichts" offenbar nicht;
             // es braucht die ausdrueckliche Anweisung, ZU KOPIEREN.
             . 'ANSCHRIFTEN, TELEFONNUMMERN, IBANs, AKTENZEICHEN, ADRESSEN UND DATEN '
