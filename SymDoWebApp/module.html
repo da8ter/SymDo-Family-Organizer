@@ -642,7 +642,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    liegt nur einen Pixel breit an der Kante. */
 .plan-stueck.entfall {
   opacity: .75; z-index: 1;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 85%, transparent);
+  /* Eine HELLE gestrichelte Linie, keine farbige: die Fachfarbe war auf einem
+     Block derselben Farbe unsichtbar (gemessen an Physik auf dem
+     Methodentag). Hell haelt gegen jeden Untergrund — und ein Saum aus
+     box-shadow kann nicht gestrichelt sein, deshalb ist es ein Rahmen. */
+  border: 1px dashed color-mix(in srgb, var(--card) 85%, transparent);
   /* Ein Viertel niedriger als der Balken (24px → 18px) und mittig darin: die
      ausgefallene Stunde steht damit sichtbar UNTER der Reihe der
      stattfindenden, ohne ihren Platz auf der Zeitachse aufzugeben. */
@@ -6995,6 +6999,11 @@ function stundenplanKarte() {
       const r = '12px';
       const erster = s.from <= fruehesteZeit;   // beginnt der Balken hier?
       const letzter = s.to >= spaetesteZeit;    // endet er hier?
+      /* Die entfallene Stunde ist ein eigener, niedrigerer Kasten mitten im
+         Balken — sie rundet an BEIDEN Enden voll, unabhaengig davon, wo sie im
+         Tag liegt. Die stattfindenden Stunden bilden dagegen zusammen einen
+         Strang und runden nur aussen. */
+      const rundum = s.status === 'entfall';
       /* Raum und Lehrer aus dem Stundenplan-Modul, nur wenn gepflegt. Im
          Balken ist Platz fuer das Symbol, sonst nichts — beides gehoert also
          in den Tipp, genau wie in der Modul-Kachel. */
@@ -7013,8 +7022,10 @@ function stundenplanKarte() {
       const fuellung = s.status === 'entfall'
         ? 'color-mix(in srgb, ' + s.color + ' 50%, transparent)'
         : s.color;
-      const kontur = s.status === 'entfall'
-        ? ';border:1px dashed ' + s.color : '';
+      /* Keine Kontur im Inline-Stil mehr: die entfallene Stunde traegt eine
+         HELLE gestrichelte Linie, und die steht im Stylesheet — sie haengt an
+         der Kartenfarbe, nicht am Fach. */
+      const kontur = '';
       /* Der Titel darf nur den FREIEN Teil des Blocks benutzen. An einem
          Projekttag liegen die entfallenen Stunden mitten auf dem Ganztagsblock
          — der Text lief darunter weiter und wurde von ihnen ueberdeckt
@@ -7031,8 +7042,10 @@ function stundenplanKarte() {
       }
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}${zustand}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '') + zustandText)}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${kontur}` +
-        `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
-        `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
+        `;border-top-left-radius:${rundum || erster ? (rundum ? '999px' : r) : '0'}` +
+        `;border-bottom-left-radius:${rundum || erster ? (rundum ? '999px' : r) : '0'}` +
+        `;border-top-right-radius:${rundum || letzter ? (rundum ? '999px' : r) : '0'}` +
+        `;border-bottom-right-radius:${rundum || letzter ? (rundum ? '999px' : r) : '0'}">` +
         /* Bei einer VERTRETUNG steht der Titel im Balken: „Projekttag" oder
            „1. Methodentag" sagt mehr als jedes Symbol, und ein Ganztagsblock
            hat den Platz dafuer. Davor ein Tausch-Zeichen statt des Fachsymbols
