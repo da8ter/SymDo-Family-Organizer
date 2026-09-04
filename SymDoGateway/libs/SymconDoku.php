@@ -88,6 +88,8 @@ trait SymconDoku
        erneut gemessen. */
     private const DOKU_BUDGET    = 3.0;
     private const DOKU_TAKT      = 8000;
+    /** So oft darf die Einbettung hintereinander scheitern, dann haelt der Bau an. */
+    private const DOKU_FEHLER_MAX = 3;
     private const DOKU_SEITEN_MAX = 2500;
     /** So viel Text darf ein Auszug haben — der Rest ist für ein Gespräch ohnehin zu viel. */
     private const DOKU_AUSZUG    = 1800;
@@ -110,12 +112,27 @@ trait SymconDoku
         $this->RegisterTimer('DokuIndex', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'DokuTick\', 0);');
     }
 
+    /**
+     * Kann das Verzeichnis ueberhaupt gebaut werden?
+     *
+     * Die Einbettung laeuft ueber OpenAI; ohne Schluessel gibt DokuEinbetten()
+     * sofort null zurueck, die Lesephase legt die Seite zurueck — und der Timer
+     * holte dieselbe Seite alle acht Sekunden neu, fuer immer. Das sind rund
+     * 10.000 Abrufe am Tag bei symcon.de, fuer nichts. Also gar nicht erst
+     * anfangen. Die Stichwortsuche ueber die Adressen bleibt davon unberuehrt,
+     * sie braucht kein Verzeichnis.
+     */
+    private function DokuBaubar(): bool
+    {
+        return trim($this->ReadPropertyString('AiOpenAIKey')) !== '';
+    }
+
     /** Beim Start (und nach jedem Reload) den Aufbau anstoßen, falls nötig. */
     private function DokuApplyChanges(): void
     {
         $s = $this->DokuStand();
         $frisch = $s['fertig'] && (time() - $s['stand']) < self::DOKU_HALTBAR;
-        @$this->SetTimerInterval('DokuIndex', $frisch ? 0 : self::DOKU_TAKT);
+        @$this->SetTimerInterval('DokuIndex', ($frisch || !$this->DokuBaubar()) ? 0 : self::DOKU_TAKT);
     }
 
     /** Der Timer-Rückruf. Eigener Zweig in der RequestAction-Kette des Gateways. */
@@ -134,6 +151,13 @@ trait SymconDoku
         /* Waehrend eines laufenden Gespraechs GAR NICHT bauen: dort zaehlt jede
            Zehntelsekunde, und die Werkzeugfrist des Sprachkerns liegt bei 8 s. */
         if ($this->VoiceCalls() !== []) {
+            return;
+        }
+        /* Der Schluessel kann im Betrieb verschwinden (Anbieterwechsel). Dann
+           haelt der Bau an, statt in die Schleife von oben zu laufen. */
+        if (!$this->DokuBaubar()) {
+            @$this->SetTimerInterval('DokuIndex', 0);
+            $this->SendDebug('Doku', 'Kein OpenAI-Schluessel — Aufbau angehalten.', 0);
             return;
         }
         $s = $this->DokuIndexPflegen();
@@ -172,7 +196,7 @@ trait SymconDoku
         @unlink($this->DokuDatei('bau_text'));
         @unlink($this->DokuDatei('bau_vek'));
         return ['phase' => 'crawl', 'pos' => 0, 'liste' => [], 'stuecke' => 0,
-                'stand' => 0, 'fertig' => false,
+                'stand' => 0, 'fertig' => false, 'fehler' => 0,
                 'seiten' => [self::DOKU_WURZEL => 1], 'schlange' => [self::DOKU_WURZEL]];
     }
 
@@ -198,6 +222,8 @@ trait SymconDoku
             'stuecke'  => (int)($roh['stuecke'] ?? 0),
             'stand'    => (int)($roh['stand'] ?? 0),
             'fertig'   => ($roh['fertig'] ?? false) === true,
+            // Fehlerkette der Einbettung; siehe DOKU_FEHLER_MAX.
+            'fehler'   => (int)($roh['fehler'] ?? 0),
             'seiten'   => $roh['seiten'],
             'schlange' => is_array($roh['schlange'] ?? null) ? array_values($roh['schlange']) : [],
         ];
@@ -397,13 +423,27 @@ trait SymconDoku
             }
             $vektoren = $this->DokuEinbetten($stuecke);
             if ($vektoren === null) {
-                // Ohne Einbettung keine halben Daten: Seite überspringen, es
-                // bleibt die Stichwortsuche. Ein Abbruch der ganzen Etappe wäre
-                // schlimmer — ein einzelner Aussetzer darf nicht alles kosten.
+                /* Ohne Einbettung keine halben Daten: die Seite bleibt liegen
+                   und kommt beim naechsten Schlag wieder dran — ein einzelner
+                   Aussetzer darf nicht die ganze Etappe kosten.
+                   Aber NICHT endlos: geht es dreimal hintereinander nicht (kein
+                   Guthaben, gesperrter Schluessel, Anbieter weg), haelt der Bau
+                   an. Sonst holt der Timer dieselbe Seite alle acht Sekunden,
+                   Tag und Nacht — gemessen waeren das ueber 10.000 Abrufe bei
+                   symcon.de am Tag. Der Zaehler faellt beim naechsten Erfolg. */
+                $s['fehler'] = (int)($s['fehler'] ?? 0) + 1;
+                if ($s['fehler'] >= self::DOKU_FEHLER_MAX) {
+                    @$this->SetTimerInterval('DokuIndex', 0);
+                    $this->SendDebug('Doku', sprintf(
+                        '%dx keine Einbettung — Aufbau angehalten. Naechster Anlauf beim naechsten Uebernehmen.',
+                        $s['fehler']), 0);
+                }
                 $s['pos']--;
                 $this->DokuStandSchreiben($s);
                 return $s;
             }
+            // Ein Erfolg loescht die Fehlerkette.
+            $s['fehler'] = 0;
             $zeilen = '';
             $bytes  = '';
             foreach ($stuecke as $i => $text) {
@@ -873,8 +913,9 @@ trait SymconDoku
             return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What would you like to know about Symcon?'));
         }
         $s = $this->DokuStand();
-        if (!$s['fertig'] || (time() - $s['stand']) >= self::DOKU_HALTBAR) {
-            // Nicht hier bauen — das sprengte die Werkzeugfrist. Nur anstoßen.
+        if ((!$s['fertig'] || (time() - $s['stand']) >= self::DOKU_HALTBAR) && $this->DokuBaubar()) {
+            // Nicht hier bauen — das sprengte die Werkzeugfrist. Nur anstoßen,
+            // und nur, wenn der Bau überhaupt gelingen kann (siehe DokuBaubar).
             @$this->SetTimerInterval('DokuIndex', self::DOKU_TAKT);
         }
 

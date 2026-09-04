@@ -149,7 +149,11 @@ class SymDoNotes extends IPSModuleStrict
             'images'           => (object)[],
             'brands'           => (object)[],
             'shoppingExtras'   => (object)[],
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        /* JSON_HEX_TAG ist PFLICHT: der Zustand wird in einen <script>-Block
+           gehaengt (GetVisualizationTile), und mit JSON_UNESCAPED_SLASHES bliebe
+           ein „</script>" in einem Mitgliedsnamen woertlich stehen — der Block
+           endete dort. */
+        ], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     private function PushState(): void

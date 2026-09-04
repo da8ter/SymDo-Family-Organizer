@@ -775,9 +775,18 @@ class SymDoTimetable extends IPSModuleStrict
             $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $pfad, KL_WARNING);
             return '';
         }
-        // Anfangszustand inline: die Kachel zeigt sofort etwas, ohne auf den
-        // ersten Push zu warten.
-        return $html . '<script>handleMessage(' . $this->GetPlan() . ');</script>';
+        /* Anfangszustand inline: die Kachel zeigt sofort etwas, ohne auf den
+           ersten Push zu warten.
+           Das „</" wird dabei maskiert, wie es json_encode OHNE
+           JSON_UNESCAPED_SLASHES taete: die Nutzlast steht in einem
+           <script>-Block, und ein „</script>" in einem Fach- oder Kindnamen
+           beendete ihn woertlich — handleMessage liefe nie, der Rest landete als
+           HTML in der Visu. In JSON ist „<\/" ausserhalb von Zeichenketten
+           unmoeglich und innerhalb die gueltige Schreibweise fuer „</", die
+           Ersetzung ist also verlustfrei. GetPlan() selbst bleibt unberuehrt —
+           es ist die oeffentliche Auskunft fuer Skripte. */
+        $zustand = str_replace('</', '<\\/', $this->GetPlan());
+        return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
 
     public function RequestAction(string $Ident, mixed $Value): void

@@ -176,7 +176,11 @@ class SymDoShoppingListOverview extends IPSModuleStrict
         }
 
         // Initial-Payload inline mitgeben, damit die Kachel sofort rendert
-        $payload = json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        /* JSON_HEX_TAG ist hier PFLICHT: die Nutzlast steht in einem <script>-Block,
+           und mit JSON_UNESCAPED_SLASHES bliebe ein „</script>" in einem Namen oder
+           Titel woertlich stehen — der Block endete dort, handleMessage liefe nie, und
+           der Rest landete als HTML in der Visu. */
+        $payload = json_encode($this->BuildPayload(), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE);
         $html .= '<script>handleMessage(' . $payload . ');</script>';
 
         return $html;

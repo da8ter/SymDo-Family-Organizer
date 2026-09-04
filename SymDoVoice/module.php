@@ -169,8 +169,12 @@ class SymDoVoice extends IPSModuleStrict
                 $kopf .= '<script>' . $wake . '</script>';
             }
         }
+        /* JSON_HEX_TAG ist hier PFLICHT: die Nutzlast steht in einem <script>-Block,
+           und mit JSON_UNESCAPED_SLASHES bliebe ein „</script>" in einem Namen oder
+           Titel woertlich stehen — der Block endete dort, handleMessage liefe nie, und
+           der Rest landete als HTML in der Visu. */
         $payload = json_encode($this->PayloadBauen(),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 

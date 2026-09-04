@@ -606,7 +606,6 @@
       "WebUntis sent no valid answer.": "WebUntis hat keine gültige Antwort geschickt.",
       "and %d more": "und %d weitere",
       "— own timetable —": "— eigener Plan —",
-      "Paused after repeated login failures — save the form once to try again.": "Angehalten nach wiederholt falschen Zugangsdaten — einmal speichern, dann geht es wieder.",
       "Family member": "Familienmitglied",
       "%s: no child of that member in the timetable instance — link the member there.": "%s: in der Stundenplan-Instanz ist diesem Mitglied kein Kind zugeordnet — dort verknüpfen.",
       "Student": "Schüler",
@@ -646,7 +645,8 @@
       "%1$s: the account has several children — enter the element number: %2$s": "%1$s: am Konto hängen mehrere Kinder — Element-Nummer eintragen: %2$s",
       "%1$s: the account itself is not a timetable element (person type %2$d) and names no child — enter element type and number; the search in the form finds it.": "%1$s: das Konto selbst ist kein Stundenplan-Element (Personentyp %2$d) und nennt kein Kind — Element-Typ und -Nummer eintragen; die Suche im Formular findet sie.",
       "Children on the account: %s — nothing to enter, the fetch takes them itself.": "Kinder am Konto: %s — nichts einzutragen, der Abruf nimmt sie selbst.",
-      "Element type and number answer „whose timetable?\" — and in most cases they can stay EMPTY. With a student login the account is the element itself; with a guardian login the fetch takes the children hanging on the account, exactly like the Untis app. Enter something only if the account has several children whose names do not match, or if you want the class plan instead: type „Class\" with the class number. The search below finds a student number.": "Element-Typ und -Nummer beantworten „wessen Stundenplan?\" — und können in der Regel LEER bleiben. Mit einem Schülerkonto ist das Konto selbst das Element; mit einem Erziehungsberechtigten-Zugang nimmt der Abruf die Kinder, die am Konto hängen, genau wie die Untis-App. Etwas eintragen muss man nur, wenn am Konto mehrere Kinder hängen, deren Namen nicht passen, oder wenn statt dessen der Klassenplan gewollt ist: Typ „Klasse\" mit der Klassennummer. Die Suche darunter findet eine Schülernummer."
+      "Element type and number answer „whose timetable?\" — and in most cases they can stay EMPTY. With a student login the account is the element itself; with a guardian login the fetch takes the children hanging on the account, exactly like the Untis app. Enter something only if the account has several children whose names do not match, or if you want the class plan instead: type „Class\" with the class number. The search below finds a student number.": "Element-Typ und -Nummer beantworten „wessen Stundenplan?\" — und können in der Regel LEER bleiben. Mit einem Schülerkonto ist das Konto selbst das Element; mit einem Erziehungsberechtigten-Zugang nimmt der Abruf die Kinder, die am Konto hängen, genau wie die Untis-App. Etwas eintragen muss man nur, wenn am Konto mehrere Kinder hängen, deren Namen nicht passen, oder wenn statt dessen der Klassenplan gewollt ist: Typ „Klasse\" mit der Klassennummer. Die Suche darunter findet eine Schülernummer.",
+      "Paused after repeated login failures — press „Test connection\" to try again.": "Nach wiederholten Fehlanmeldungen angehalten — „Verbindung testen\" drücken, um es erneut zu versuchen."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

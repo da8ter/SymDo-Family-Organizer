@@ -28,6 +28,10 @@ trait WebUntis
     private const UNTIS_CLIENT      = 'SymDo';   // Selbstauskunft in den Zugriffen der Schule
     private const UNTIS_TAGE_VOR    = 14;        // so weit im Voraus wird geholt
     private const UNTIS_FEHLER_MAX  = 3;         // danach steht der Timer (Kontosperre!)
+    /* So lange bleibt der Riegel zu, wenn ihn niemand von Hand loest. Danach
+       gibt es wieder DREI Versuche, mehr nicht. Ohne diese Frist muesste man das
+       Formular aufsuchen, nur weil das Kennwort einmal falsch stand. */
+    private const UNTIS_SPERRE_FRIST = 6 * 3600;
     /* Element-Typen von WebUntis. Nur diese beiden taugen als „wessen Plan?":
        ein Erziehungsberechtigten-Konto meldet Personentyp 12 und ist selbst
        KEIN Element — getTimetable antwortet dort „invalid elementType: 12". */
@@ -70,18 +74,48 @@ trait WebUntis
         $this->RegisterAttributeString('UntisLast', '{}');    // letzter Stand je Kind
         $this->RegisterAttributeString('UntisStatus', '{}');  // Statuszeile im Formular
         $this->RegisterAttributeInteger('UntisFails', 0);
+        // Wann der Riegel zufiel — er oeffnet sich nach einer Frist von selbst
+        // wieder (siehe UntisGesperrt).
+        $this->RegisterAttributeInteger('UntisFailAt', 0);
         $this->RegisterTimer('UntisScan', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'UntisScan\', 0);');
     }
 
     private function UntisApplyChanges(): void
     {
-        /* Ein Speichern im Formular ist die Ansage „ich habe etwas geaendert" —
-           also den Fehlerzaehler zuruecksetzen und den Timer wieder anwerfen.
-           Ohne das bliebe eine korrigierte Anmeldung wirkungslos. */
-        @$this->WriteAttributeInteger('UntisFails', 0);
+        /* HIER faellt der Fehlerzaehler NICHT mehr.
+           Frueher tat er es, mit der Begruendung „Speichern heisst, jemand hat
+           etwas geaendert". Das stimmt nur fuers Formular: IPS_ApplyChanges auf
+           dieser Instanz laeuft auch, wenn die App einen Namen oder ein
+           Profilbild aendert (AppCore::UpdateAppUser) — und bei jedem
+           Kernelstart. Jedes Mal fiel damit der Riegel gegen die WebUntis-
+           KONTOSPERRE, und der Abruf klopfte mit demselben falschen Kennwort
+           wieder an. Geloest wird er jetzt nur dort, wo wirklich jemand handelt
+           („Verbindung testen") oder genug Zeit vergangen ist (UntisGesperrt). */
         $minuten = max(15, (int)$this->UntisProp('UntisIntervalMinutes', self::UNTIS_INTERVALL_STD));
         $an = $this->UntisIsEnabled() && $this->UntisKinder() !== [];
-        @$this->SetTimerInterval('UntisScan', $an ? $minuten * 60000 : 0);
+        @$this->SetTimerInterval('UntisScan', ($an && !$this->UntisGesperrt()) ? $minuten * 60000 : 0);
+    }
+
+    /**
+     * Steht der Abruf wegen falscher Zugangsdaten?
+     *
+     * Der Riegel oeffnet sich nach UNTIS_SPERRE_FRIST von selbst — dann gibt es
+     * wieder drei Versuche. Damit kostet ein falsches Kennwort hoechstens drei
+     * Fehlanmeldungen alle sechs Stunden, statt drei bei jedem Kernelstart und
+     * jeder Profilaenderung in der App.
+     */
+    private function UntisGesperrt(): bool
+    {
+        if ((int)@$this->ReadAttributeInteger('UntisFails') < self::UNTIS_FEHLER_MAX) {
+            return false;
+        }
+        $seit = (int)@$this->ReadAttributeInteger('UntisFailAt');
+        if ($seit > 0 && (time() - $seit) >= self::UNTIS_SPERRE_FRIST) {
+            @$this->WriteAttributeInteger('UntisFails', 0);
+            @$this->WriteAttributeInteger('UntisFailAt', 0);
+            return false;
+        }
+        return true;
     }
 
     private function UntisRequestAction(string $Ident, mixed $Value): bool
@@ -205,12 +239,13 @@ trait WebUntis
     /** „Verbindung testen": anmelden, Schuljahr lesen, wieder abmelden. */
     private function UntisTestverbindung(): string
     {
-        /* Auch der Knopf steht still, wenn die Anmeldung dreimal scheiterte.
-           Sonst waere er das Schlupfloch, durch das man das Konto des Kindes
-           doch noch sperrt — der Zaehler faellt beim Speichern des Formulars. */
-        if ((int)@$this->ReadAttributeInteger('UntisFails') >= self::UNTIS_FEHLER_MAX) {
-            return $this->Translate('Paused after repeated login failures — save the form once to try again.');
-        }
+        /* Dieser Knopf IST die Ansage „ich habe die Zugangsdaten geprueft" —
+           also faellt der Riegel hier, und nur hier von Hand. Ein Fehlversuch
+           zaehlt danach sofort wieder (UntisFehlerZaehlen), das Schlupfloch zum
+           Sperren des Kontos ist damit nicht offen: drei Knopfdruecke, dann
+           steht es wieder. */
+        @$this->WriteAttributeInteger('UntisFails', 0);
+        @$this->WriteAttributeInteger('UntisFailAt', 0);
         $an = $this->UntisLogin();
         if (($an['ok'] ?? false) !== true) {
             $this->UntisFehlerZaehlen((int)($an['code'] ?? 0));
@@ -350,8 +385,8 @@ trait WebUntis
         if (mb_strlen($suche) < 2) {
             return $this->Translate('Enter at least two letters of the name.');
         }
-        if ((int)@$this->ReadAttributeInteger('UntisFails') >= self::UNTIS_FEHLER_MAX) {
-            return $this->Translate('Paused after repeated login failures — save the form once to try again.');
+        if ($this->UntisGesperrt()) {
+            return $this->Translate('Paused after repeated login failures — press „Test connection" to try again.');
         }
         $an = $this->UntisLogin();
         if (($an['ok'] ?? false) !== true) {
@@ -411,10 +446,12 @@ trait WebUntis
         }
         $n = (int)@$this->ReadAttributeInteger('UntisFails') + 1;
         @$this->WriteAttributeInteger('UntisFails', $n);
+        // Der Zeitpunkt entscheidet, wann der Riegel von selbst wieder aufgeht.
+        @$this->WriteAttributeInteger('UntisFailAt', time());
         if ($n >= self::UNTIS_FEHLER_MAX) {
             @$this->SetTimerInterval('UntisScan', 0);
             $this->LogMessage(sprintf(
-                'SymDo WebUntis: %d× falsche Zugangsdaten — Abruf angehalten, damit das Konto nicht gesperrt wird. Zugangsdaten prüfen und im Formular speichern.',
+                'SymDo WebUntis: %d× falsche Zugangsdaten — Abruf angehalten, damit das Konto nicht gesperrt wird. Zugangsdaten prüfen und „Verbindung testen" drücken.',
                 $n), KL_ERROR);
         }
     }
@@ -430,8 +467,11 @@ trait WebUntis
         if ($kinder === []) {
             return $this->Translate('No student entered yet.');
         }
-        if ((int)@$this->ReadAttributeInteger('UntisFails') >= self::UNTIS_FEHLER_MAX && !$trocken) {
-            return $this->Translate('Paused after repeated login failures.');
+        /* Auch der Trockenlauf steht still. Frueher lief er weiter (`&& !$trocken`)
+           — und weil er sich anmeldet, war der Knopf das Schlupfloch, durch das
+           man das Konto trotz Riegel sperren konnte. */
+        if ($this->UntisGesperrt()) {
+            return $this->Translate('Paused after repeated login failures — press „Test connection" to try again.');
         }
         $an = $this->UntisLogin();
         if (($an['ok'] ?? false) !== true) {

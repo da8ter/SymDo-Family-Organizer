@@ -700,8 +700,12 @@ class SymDoToDoList extends IPSModuleStrict
            steht sofort.
            INVALID_UTF8_SUBSTITUTE: ein kaputtes Byte in einem Aufgabennamen darf
            nicht die ganze Kachel leeren. */
+        /* JSON_HEX_TAG ist hier PFLICHT, nicht Geschmack: die Nutzlast steht in einem
+           <script>-Block, und mit JSON_UNESCAPED_SLASHES bleibt ein „</script>" in
+           einem Namen oder Titel woertlich stehen — der Block endet dort, handleMessage
+           laeuft nie, und der Rest landet als HTML in der Visu. */
         $zustand = (string)json_encode($this->BuildStatePayload(),
-            JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE);
         return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
 

@@ -1057,7 +1057,10 @@ trait AppCore
         $translations = '{}';
         $dec = json_decode((string)@file_get_contents(dirname(__DIR__, 2) . '/SymDoWebApp/locale.json'), true);
         if (is_array($dec) && isset($dec['translations'])) {
-            $translations = json_encode($dec['translations'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            // JSON_HEX_TAG: beides landet in einem <script>-Block (unten), und ein
+            // „</script>" in einer Uebersetzung beendete ihn woertlich.
+            $translations = json_encode($dec['translations'],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         }
 
         // Lokale HTTPS-Basis (optional): die Web-App probt sie und schaltet im
@@ -1105,7 +1108,11 @@ trait AppCore
         $iconHash = @md5_file(dirname(__DIR__, 2) . '/SymDoWebApp/assets/appicon-180.png');
         $symdo['iconVersion'] = is_string($iconHash) ? substr($iconHash, 0, 8) : '';
         $iconV = $symdo['iconVersion'] !== '' ? '?v=' . $symdo['iconVersion'] : '';
-        $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES)
+        /* JSON_HEX_TAG in beiden Nutzlasten: sie stehen in einem <script>-Block.
+           Heute steckt in $symdo nur Eigenes (Schalter, Adressen) — aber es ist
+           EIN Feld Abstand zu einem Haushaltsnamen, und dann beendete ein
+           „</script>" darin die ganze Seite. */
+        $config = '<script>window.__SYMDO__=' . json_encode($symdo, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG)
             . ';window.__SYMDO_I18N__=' . $translations . ';</script>';
 
         /* Sprachdialog: Gesprächskern und Blase kommen aus denselben Quellen wie

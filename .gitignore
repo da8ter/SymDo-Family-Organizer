@@ -6,3 +6,6 @@ keys.txt
 # Ausleitungen aus WebUntis: Schuelerlisten der Schule. Fremde
 # personenbezogene Daten — gehoeren nie in ein Store-Repo.
 /SymDoGateway/schueler*.csv
+
+# Python-Zwischenstand der Übernahme-Skripte.
+__pycache__/
