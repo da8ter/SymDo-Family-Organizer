@@ -641,7 +641,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    (#1E88E5): die Kante war blau auf blau. Der Saum ist keine Fuellung; er
    liegt nur einen Pixel breit an der Kante. */
 .plan-stueck.entfall {
-  opacity: .5; z-index: 1;
+  opacity: .75; z-index: 1;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 85%, transparent);
 }
 /* Die Kante sitzt LINKS, nicht oben. Oben hat sie die blaue Flaeche um drei
@@ -649,6 +649,13 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    vom Nutzer gemeldet. Links markiert sie den Beginn der vertretenen Stunde und
    laesst die Hoehe in Ruhe; die Wochenkachel macht es genauso. */
 .plan-stueck.vertretung { box-shadow: inset 3px 0 0 0 rgba(255,255,255,.85); }
+/* Der Titel der Vertretung. Er darf den Balken nicht sprengen: was nicht
+   passt, kuerzt der Browser mit Auslassungspunkten — und `min-width: 0` muss
+   sein, sonst waechst das Flex-Kind ueber das Stueck hinaus statt zu kuerzen. */
+.plan-titel {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600;
+}
 /* Pfad in der Ordner-Kopfzeile: „Tim › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
@@ -6996,13 +7003,6 @@ function stundenplanKarte() {
         : (s.status === 'vertretung' ? ' vertretung' : '');
       const zustandText = s.status === 'entfall' ? ', ' + translate('cancelled')
         : (s.status === 'vertretung' ? ', ' + translate('substitution') : '');
-      /* Durchgestrichen und gestreift, aus der Fachfarbe gebaut: der weisse
-         Strich in der Mitte ist das, was in der Wochenkachel das Wort
-         „ENTFÄLLT" leistet, und zwischen den Streifen scheint die Bahn
-         durch — die Stunde sieht dadurch „leer" aus. Der Strich hat die
-         FACHFARBE und nicht Weiss: weiss war auf dem hellen Grund zwischen
-         den Streifen unsichtbar und nur da zu sehen, wo zufaellig ein
-         Ganztagsblock darunter lag. */
       /* Entfallen heisst: gestrichelte Kontur in der Fachfarbe und eine
          Fuellung derselben Farbe (50 %). Die stattfindende Stunde bleibt
          kraeftig — der Unterschied ist damit auf einen Blick zu sehen, und was
@@ -7017,7 +7017,15 @@ function stundenplanKarte() {
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${kontur}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
         `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
-        (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '') + `</div>`;
+        /* Bei einer VERTRETUNG steht der Titel im Balken: „Projekttag" oder
+           „1. Methodentag" sagt mehr als jedes Symbol, und ein Ganztagsblock
+           hat den Platz dafuer. Davor ein Tausch-Zeichen statt des Fachsymbols
+           — die Stunde findet ja gerade NICHT wie geplant statt. Wird es eng,
+           kuerzt der Browser mit Auslassungspunkten; ganz schmale Stuecke
+           zeigen nur noch das Zeichen. */
+        (s.status === 'vertretung'
+          ? `<i class="fa-light fa-right-left"></i><span class="plan-titel">${escapeHtml(s.name || '')}</span>`
+          : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
     const ersterTick = Math.ceil(von / 15) * 15;
