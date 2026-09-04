@@ -5465,6 +5465,14 @@ function setTab(tab) {
      Die Legende geht dabei zu: sie ist ein Blatt ueber der Karte, und ein
      offenes Blatt beim Zurueckkommen sieht aus wie ein haengengebliebener
      Dialog. */
+  /* Derselbe Gedanke fuer den Stundenplan-Bereich: beim BETRETEN faengt er
+     wieder bei heute an. Wer gestern abend die naechste Woche angesehen hat,
+     will heute frueh nicht dort landen — und das Raster rollt einmal zur
+     heutigen Spalte, statt am Montag zu beginnen. */
+  if (tab === 'plan') {
+    planWoche = 0;
+    planZuHeute = true;
+  }
   if (tab === 'dashboard') {
     stundenplanTag = 0;
     stundenplanLegende = false;
@@ -7490,6 +7498,10 @@ function planStundenText(m) {
 /* 0 = laufende Woche, 1 = die kommende. Nur mit Import erreichbar (dated) —
    ohne ihn wiederholt sich die Vorlage, beide Wochen saehen gleich aus. */
 let planWoche = 0;
+/* Einmal zur heutigen Spalte rollen — beim Betreten des Bereichs, NICHT bei
+   jedem Zeichnen: sonst risse ein Push die Ansicht unter dem Finger zurueck,
+   waehrend jemand gerade durch die Woche schiebt. */
+let planZuHeute = true;
 
 /** Die Tage der gewaehlten Woche eines Kindes. */
 function planWochenTage(kind) {
@@ -7624,6 +7636,23 @@ function renderWochenplan() {
   renderInto(el, '<div class="wp-raster"><div class="wp-achse">' +
     '<div class="wp-innen" style="height:' + hoehe + 'px;margin-top:34px">' + achse + '</div></div>' +
     '<div class="wp-spalten">' + spalten + '</div></div>');
+
+  /* Zur heutigen Spalte. Gerechnet wird ueber die Rechtecke, nicht ueber
+     offsetLeft: das zaehlt ab dem naechsten positionierten Vorfahren, und der
+     ist hier nicht der Rollbereich. In der kommenden Woche gibt es kein Heute —
+     dort bleibt der Blick am Wochenanfang. */
+  if (planZuHeute) {
+    planZuHeute = false;
+    const bereich = el.querySelector('.wp-spalten');
+    const heute = planWoche === 0 ? el.querySelector('.wp-spalte.heute') : null;
+    if (bereich && heute) {
+      const weg = heute.getBoundingClientRect().left - bereich.getBoundingClientRect().left
+        + bereich.scrollLeft - 8;
+      bereich.scrollLeft = Math.max(0, weg);
+    } else if (bereich) {
+      bereich.scrollLeft = 0;
+    }
+  }
 }
 
 function loadBriefing() {
