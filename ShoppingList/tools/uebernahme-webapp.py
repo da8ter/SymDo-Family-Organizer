@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""
+Uebernimmt SymDoWebApp/module.html als ShoppingList-Kachel.
+
+Die Kachel IST die Web-App, wortgleich uebernommen. Damit sie in der Kachel
+EINER ShoppingList-Instanz statt am Gateway laeuft, aendert dieses Skript genau
+fuenf Stellen — dieselben, die die ToDo-Kachel anpasst. Alles darueber bleibt
+unberuehrt, damit die naechste Uebernahme wieder wortgleich moeglich ist.
+
+Vorgeschichte (04.09.2026): bis dahin war ShoppingList/module.html eine von
+Hand nachgezogene Abspaltung — 371 kB gegen 720 kB, ohne Ladeschirm, mit den
+Favoriten noch als eigenem Bereich. Das Drucken, die einzige Funktion, die es
+nur in der Kachel gab, ist in die Web-App gewandert; deshalb braucht dieses
+Skript keine Sonder-Einfuegungen.
+
+Aufruf aus dem Repo-Wurzelverzeichnis (List/):
+    python3 ShoppingList/tools/uebernahme-webapp.py
+"""
+
+import io
+import os
+import sys
+
+WEBAPP = 'SymDoWebApp/module.html'
+ZIEL = 'ShoppingList/module.html'
+
+ADAPTER = '''
+/* ── Kachel-Adapter ────────────────────────────────────────────────────────────
+   Diese Datei IST die Web-App, wortgleich uebernommen — damit die Einkaufsliste in
+   der Kachel genauso aussieht und sich genauso verhaelt. Sie laeuft hier aber in
+   der Kachel EINER ShoppingList-Instanz statt am Gateway:
+
+   - kein Payload mit mehreren Instanzen, sondern der Zustand dieser einen Liste,
+   - kein Call-Relay mit instanceID, sondern requestAction direkt an diese Instanz,
+   - keine Dashboard-, Aufgaben-, Kalender-, Notiz- und KI-Bereiche.
+
+   Der Adapter setzt genau diese Beruehrungspunkte um; alles darueber bleibt
+   unangetastet, damit die naechste Uebernahme wieder wortgleich moeglich ist
+   (siehe ShoppingList/tools/uebernahme-webapp.py). Die anderen Bereiche werden
+   NICHT herausgeschnitten, sondern ueber tabs abgeschaltet:
+   applyTabVisibility() blendet Knopf und Bereich aus und laesst bei nur einem
+   Bereich die Leiste ganz weg. Herausschneiden haette in 15000 Zeilen mit hoher
+   Wahrscheinlichkeit Behaltenes mitgerissen.
+
+   AppCall des Moduls delegiert intern an RequestAction — dieselben Aktionsnamen
+   und dieselben Nutzlasten. Deshalb genuegt in sdCall ein direkter
+   requestAction. */
+const SELF_ID = 'self';
+
+/** Zustand dieser Liste in die Form bringen, die die Web-App erwartet. */
+function kachelZustand(daten) {
+  const bilder = daten.availableImages || {};
+  return {
+    type: 'state',
+    // Die Nutzer liefert die Kachel im Zustand mit (GetTileUsers); einen
+    // "aktuellen Nutzer" wie in der App gibt es in der Visu nicht.
+    users: daten.users || [],
+    defaultUserID: '',
+    gatewayAvailable: false,
+    // Keine KI in der Kachel: sie lief in der Web-App ueber das Gateway.
+    aiEnabled: false,
+    tabs: { dashboard: false, shopping: true, todos: false, calendar: false, notes: false, ki: false },
+    hiddenIDs: [],
+    instances: [{ id: SELF_ID, kind: 'shopping', name: daten.listName || '' }],
+    states: { [SELF_ID]: { kind: 'shopping', revision: 0, state: daten } },
+    images: bilder,
+    brands: daten.availableBrands || {},
+    /* Die Basis-URLs kommen AUS DEM ZUSTAND. Das injizierte window.__imageHookUrl
+       ist nur noch Rueckfall fuer aeltere Modulfassungen: syncCompat() setzt die
+       Variable selbst, und traf der erste Zustand ein, bevor das an das HTML
+       angehaengte <script> gelaufen war, schrieb sie sich dauerhaft leer — die
+       Kachel zeigte dann bis zum naechsten Push keine Produktbilder.
+       imagesEnabled leitet sich aus dem Bestand ab: ist "Produktbilder anzeigen"
+       aus, kommt eine leere Bildliste. */
+    shoppingExtras: { [SELF_ID]: {
+      imagesEnabled: Object.keys(bilder).length > 0,
+      imageBase: daten.imageBase || window.__imageHookUrl || '',
+      extApiBase: daten.extApiBase || window.__extApiHookUrl || '',
+    } },
+  };
+}
+'''
+
+# (Suchtext, Ersetzung, Beschreibung)
+EDITS = [
+    (
+        "// ── Store: Aggregat aller Listen (Schema siehe module.php BuildFullPayload) ─",
+        ADAPTER.strip() + "\n\n// ── Store: Aggregat aller Listen (Schema siehe module.php BuildFullPayload) ─",
+        'Adapter eingefuegt',
+    ),
+    (
+        "function sdCall(instanceID, action, payload) {\n"
+        "  const txn = 'tx' + (++txnCounter);\n"
+        "  requestAction('Call', JSON.stringify({ instanceID, action, payload, txn }));\n"
+        "}",
+        "function sdCall(instanceID, action, payload) {\n"
+        "  // instanceID ist in der Kachel bedeutungslos — es gibt genau diese eine Liste.\n"
+        "  // Skalare Nutzlasten gehen unveraendert durch: DeleteItem erwartet im Modul\n"
+        "  // einen String, kein Objekt.\n"
+        "  requestAction(action, typeof payload === 'string' ? payload : JSON.stringify(payload || {}));\n"
+        "}",
+        'sdCall auf requestAction',
+    ),
+    (
+        "  const revisions = {};\n"
+        "  for (const inst of store.instances) {\n"
+        "    if (inst.hidden) continue;\n"
+        "    const entry = store.states[String(inst.id)];\n"
+        "    revisions[String(inst.id)] = entry ? entry.revision : -1;\n"
+        "  }\n"
+        "  if (Object.keys(revisions).length > 0) {\n"
+        "    requestAction('CheckRevisions', JSON.stringify({ revisions }));\n"
+        "  } else {\n"
+        "    requestState();\n"
+        "  }",
+        "  // Kein Revisionsabgleich ueber mehrere Instanzen: die Kachel holt schlicht den\n"
+        "  // Zustand ihrer eigenen Liste.\n"
+        "  requestState();",
+        'checkRevisions vereinfacht',
+    ),
+    (
+        "  if (!data || typeof data !== 'object') return;",
+        "  if (!data || typeof data !== 'object') return;\n"
+        "  // Die Kachel bekommt den Zustand ihrer Liste flach (items, categories, …), die\n"
+        "  // Web-App erwartet ihn in store-Form. Erkennungsmerkmal ist items: das Gateway\n"
+        "  // schickt an dieser Stelle instances/states.\n"
+        "  if (data.type === 'state' && Array.isArray(data.items)) {\n"
+        "    data = kachelZustand(data);\n"
+        "  }",
+        'handleMessage erkennt den flachen Zustand',
+    ),
+    (
+        "  // Visu-Kachel (kein Token): über requestAction relayen; Antwort kommt via handleMessage('aiResult').",
+        "  // In DIESER Kachel gibt es kein Gateway: das ShoppingList-Modul kennt den Ident\n"
+        "  // 'AiCall' nicht und wuerde \"Ungueltiger Ident\" werfen. Deshalb hier still\n"
+        "  // scheitern statt zu relayen; die Aufrufer behandeln ein leeres Ergebnis (status 0).\n"
+        "  if (!window.__symdoApiPost && !window.__SYMDO__) {\n"
+        "    return Promise.resolve({ status: 0, json: null });\n"
+        "  }",
+        'aiPost scheitert still',
+    ),
+]
+
+
+def main() -> int:
+    if not os.path.exists(WEBAPP):
+        print(f'FEHLER: {WEBAPP} nicht gefunden — aus List/ heraus aufrufen.', file=sys.stderr)
+        return 1
+
+    html = io.open(WEBAPP, encoding='utf-8').read()
+    for such, ersatz, was in EDITS:
+        if such not in html:
+            print(f'FEHLER: Ankerstelle fehlt ({was}). Die Web-App hat sich geaendert —\n'
+                  f'        das Skript muss angepasst werden, bevor uebernommen wird.', file=sys.stderr)
+            return 1
+        if html.count(such) != 1:
+            print(f'FEHLER: Ankerstelle {html.count(such)}x vorhanden ({was}) — nicht eindeutig.', file=sys.stderr)
+            return 1
+        html = html.replace(such, ersatz)
+        print(f'  ok  {was}')
+
+    io.open(ZIEL, 'w', encoding='utf-8').write(html)
+    print(f'\n{ZIEL} geschrieben ({len(html.splitlines())} Zeilen).')
+    print('Danach: fehlende Uebersetzungen aus SymDoWebApp/locale.json nach '
+          'ShoppingList/locale.json uebernehmen und die Kachel gegenpruefen.')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
