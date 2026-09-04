@@ -643,12 +643,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-stueck.entfall {
   opacity: .75; z-index: 1;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 85%, transparent);
+  /* Ein Viertel niedriger als der Balken (24px → 18px) und mittig darin: die
+     ausgefallene Stunde steht damit sichtbar UNTER der Reihe der
+     stattfindenden, ohne ihren Platz auf der Zeitachse aufzugeben. */
+  height: 18px; top: 3px;
 }
-/* Die Kante sitzt LINKS, nicht oben. Oben hat sie die blaue Flaeche um drei
-   Pixel gekuerzt, und der Balken sah dadurch niedriger aus als seine Nachbarn —
-   vom Nutzer gemeldet. Links markiert sie den Beginn der vertretenen Stunde und
-   laesst die Hoehe in Ruhe; die Wochenkachel macht es genauso. */
-.plan-stueck.vertretung { box-shadow: inset 3px 0 0 0 rgba(255,255,255,.85); }
+/* Die Vertretung braucht keine helle Kante mehr: sie traegt seit dem Umbau
+   ihren Titel und davor das Tausch-Zeichen, und DAS ist die Markierung. Zwei
+   Zeichen fuer dieselbe Aussage sind eins zu viel. */
 /* Der Titel der Vertretung. Er darf den Balken nicht sprengen: was nicht
    passt, kuerzt der Browser mit Auslassungspunkten — und `min-width: 0` muss
    sein, sonst waechst das Flex-Kind ueber das Stueck hinaus statt zu kuerzen. */
