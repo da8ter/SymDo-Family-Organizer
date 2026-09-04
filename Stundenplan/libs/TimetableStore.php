@@ -303,6 +303,28 @@ trait TimetableStore
     }
 
     /**
+     * Ob ein Import vorliegt, der diese Woche noch etwas aussagt.
+     *
+     * Nicht schlicht „das Attribut ist nicht leer": aufgeraeumt wird nur beim
+     * SCHREIBEN. Hoert der Import auf — Schalter aus, WebUntis gesperrt —,
+     * stuenden dort auf ewig die Tage der letzten Woche, und die Kachel zeigte
+     * weiter Datum und Wochenwechsler, ohne dass ein einziger Tag dahinter
+     * steht.
+     */
+    private function ImportStandVorhanden(): bool
+    {
+        $grenze = TimetableCalc::DatumInWoche(date('Y-m-d'), 1);
+        foreach ($this->ImportierteTage() as $tage) {
+            foreach (is_array($tage) ? array_keys($tage) : [] as $datum) {
+                if ((string)$datum >= $grenze) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Datierte Tage EINES Kindes ablegen. Genannte Daten werden ersetzt, nicht
      * genannte bleiben stehen, Vergangenes fliegt weg — sonst waechst das
      * Attribut endlos.
@@ -330,7 +352,13 @@ trait TimetableStore
             }
         }
         ksort($stand);
-        $alles[$kind] = $stand;
+        /* Bleibt nichts uebrig, faellt das Kind ganz raus — ein leerer Eintrag
+           zaehlte in ImportStandVorhanden() sonst als „es gibt einen Import". */
+        if ($stand === []) {
+            unset($alles[$kind]);
+        } else {
+            $alles[$kind] = $stand;
+        }
         $text = (string)json_encode($alles, JSON_UNESCAPED_UNICODE);
         /* Schreiben und GEGENLESEN: ohne Kernel-Neustart gibt es das Attribut
            nicht, und Symcon wirft dann keine Ausnahme, sondern eine PHP-Warnung
@@ -723,7 +751,7 @@ trait TimetableStore
             'span'     => [$von, $bis],
             /* Ob ueberhaupt ein Import vorliegt. Daran haengt in der Kachel
                beides: das Datum im Spaltenkopf und der Wochenwechsler. */
-            'dated'    => $this->ImportierteTage() !== [],
+            'dated'    => $this->ImportStandVorhanden(),
             'holiday'  => $ferien,
             'children' => $ausgabe,
             'empty'    => $kinder === [] || $slots === [],
