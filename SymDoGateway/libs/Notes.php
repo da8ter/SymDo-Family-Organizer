@@ -717,6 +717,14 @@ trait Notes
                 return $this->NotesFehler('invalid_payload');
             }
             $store['notes'][$i]['text'] = trim((string)$body['text']);
+            /* Die formatierte Fassung MUSS weg, sobald jemand den Text von Hand
+               aendert: die Ansicht zeigt `html`, wenn es da ist (edumapsKarteHtml),
+               und der Klartext daneben waere unsichtbar. Wer eine gespiegelte
+               Karte bearbeitet hat, sah bisher gar nichts von seiner Aenderung.
+               Die naechste Spiegelung setzt `html` wieder — dann steht wieder da,
+               was auf der Klassenseite steht, und das ist richtig so: die Quelle
+               gewinnt. */
+            unset($store['notes'][$i]['html']);
         }
         if (array_key_exists('folderId', $body)) {
             $fid = (string)$body['folderId'];

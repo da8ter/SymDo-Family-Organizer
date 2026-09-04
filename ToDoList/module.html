@@ -4377,8 +4377,24 @@ function freihandMoeglich() {
 /* Eine Kennung je Geraet: das Gateway laesst je „Kachel" nur EIN Gespraech zu.
    Aus dem Token abgeleitet, damit sie ein Neuladen ueberlebt — sonst hielte der
    Server das alte Gespraech noch fuer fremd und liesse beide nebeneinander. */
+/* Die Kennung der KACHEL — das Gateway laesst je Kennung nur EIN Gespraech zu
+   (VoiceOpen). In der ausgelieferten Web-App ist sie der Hash des Tokens, also
+   je Geraet eine andere. In der Visu-Kachel gibt es keinen Token: dort hatten
+   alle Kacheln dieselbe Kennung (den Hash der leeren Zeichenkette), und die
+   zweite Kachel bekam „Auf dieser Kachel läuft schon ein Gespräch" zu hoeren,
+   obwohl das Gespraech in einer anderen lief. Deshalb dort eine eigene,
+   bleibende Kennung je Browser. */
 function voiceKennung() {
   let t = ''; try { t = ls.get('symdo.token') || ''; } catch (e) {}
+  if (t === '') {
+    try {
+      t = ls.get('symdo.kachelKennung') || '';
+      if (t === '') {
+        t = 'k' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        ls.set('symdo.kachelKennung', t);
+      }
+    } catch (e) { t = 'kachel'; }
+  }
   let h = 5381;
   for (let i = 0; i < t.length; i++) { h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; }
   return (h % 900000) + 100000;

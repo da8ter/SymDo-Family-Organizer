@@ -317,9 +317,15 @@ trait TimetableStore
         foreach ($jeDatum as $datum => $slots) {
             $stand[(string)$datum] = $slots;
         }
-        $heute = date('Y-m-d');
+        /* Weggeworfen wird erst, was VOR dieser Woche liegt — nicht alles vor
+           heute. Das Wochenraster zeigt die ganze Woche, auch den Montag am
+           Freitag: mit dem alten Schnitt standen dort ab Dienstag wieder die
+           Zeiten der Vorlage statt der importierten Stunden, samt verschwundener
+           Entfaelle. Aelter als der Wochenanfang braucht niemand mehr; endlos
+           wachsen darf das Attribut ja nicht. */
+        $grenze = TimetableCalc::DatumInWoche(date('Y-m-d'), 1);
         foreach (array_keys($stand) as $datum) {
-            if ((string)$datum < $heute) {
+            if ((string)$datum < $grenze) {
                 unset($stand[$datum]);
             }
         }

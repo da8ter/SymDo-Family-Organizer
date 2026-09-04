@@ -359,14 +359,21 @@ trait EduMaps
                 $this->EduMerken($topf, $schluessel);
                 continue;
             }
+            /* Deckel: ab hier wird NICHT mehr ausgewertet — aber weiter
+               gespiegelt. `break` liess frueher die ganze Schleife fallen, und
+               damit blieben die restlichen Karten auch UNGESPIEGELT liegen,
+               obwohl das Spiegeln keinen KI-Aufruf kostet und oben in derselben
+               Runde schon gelaufen waere. Also `continue`: die Karte ist
+               gespiegelt, sie bleibt nur unvermerkt und kommt beim naechsten
+               Lauf zur Auswertung. */
             if ($this->MailDayLimitReached()) {
-                $this->SendDebug('EduMaps', 'Tagesdeckel erreicht — Rest beim naechsten Lauf', 0);
+                $this->SendDebug('EduMaps', 'Tagesdeckel erreicht — Auswertung wartet, Spiegel laeuft weiter', 0);
                 $gedeckelt = true;
-                break;
+                continue;
             }
             if (!$alles && $schonAnalysiert + $analysiert >= self::EDU_JE_LAUF_MAX) {
-                $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Rest beim naechsten Lauf', 0);
-                break;
+                $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Auswertung wartet, Spiegel laeuft weiter', 0);
+                continue;
             }
             if (($seite['nurSpiegeln'] ?? false) === true) {
                 // Gespiegelt ist sie schon; ausgewertet wird sie nicht.

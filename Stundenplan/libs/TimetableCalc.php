@@ -370,6 +370,14 @@ class TimetableCalc
             return null;
         }
         foreach ($tagSlots as $s) {
+            /* Eine AUSGEFALLENE Stunde ist nicht das, was als naechstes kommt —
+               sie faellt ja gerade aus. Vorher stand in der Kachel „Als
+               naechstes: Physik", waehrend im selben Bild darunter „entfällt"
+               stand. Dieselbe Regel wie bei TagesDauer, die den Entfall seit den
+               datierten Tagen auch nicht mitzaehlt. */
+            if ((string)($s['status'] ?? '') === 'entfall') {
+                continue;
+            }
             if (self::Minuten((string)($s['end'] ?? '')) >= $nun) {
                 return $s;
             }

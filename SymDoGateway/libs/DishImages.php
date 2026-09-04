@@ -392,10 +392,16 @@ trait DishImages
             $this->SendDebug('DishImages', sprintf('%s: %s — neuer Versuch in 30 s', $listId, $code), 0);
             return 30000;
         }
-        if (in_array($code, ['ai_disabled', 'ai_not_configured', 'ai_unauthorized', 'ai_quota'], true)) {
+        if (in_array($code, ['ai_disabled', 'ai_not_configured', 'ai_unauthorized', 'ai_quota',
+                             // Leeres Guthaben beim Anbieter. Der Code kam mit
+                             // „KI: leeres Guthaben ist kein Rate-Limit" dazu und
+                             // fehlte hier — die Warteschlange lief damit weiter
+                             // und sammelte im Sekundentakt denselben Fehlschlag,
+                             // obwohl kein Bild mehr entstehen kann.
+                             'ai_no_credit'], true)) {
             // Aussichtslos (abgeschaltet, kein Key, Organisation nicht verifiziert,
-            // Budget leer): die ganze Warteschlange leeren statt Anbieter-Fehler
-            // im Sekundentakt zu sammeln.
+            // Budget leer, kein Guthaben): die ganze Warteschlange leeren statt
+            // Anbieter-Fehler im Sekundentakt zu sammeln.
             $this->DishQueueEntnehmen(true);
             $this->DishAufgeben($slID, $listId);
             $this->SendDebug('DishImages', sprintf('%s: %s — Warteschlange geleert', $listId, $code), 0);
