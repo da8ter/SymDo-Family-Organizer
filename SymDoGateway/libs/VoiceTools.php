@@ -563,6 +563,10 @@ trait VoiceTools
                     'im_wagen' => ($it['inCart'] ?? false) === true,
                 ];
             }
+            $offeneTreffer = array_values(array_filter(
+                $treffer,
+                static fn(array $t): bool => $t['im_wagen'] !== true
+            ));
             return [
                 'ok'      => true,
                 'liste'   => (string)$ziel['name'],
@@ -571,9 +575,15 @@ trait VoiceTools
                 // Vollstaendig, nicht gekuerzt: ein Suchwort trifft selten hundert
                 // Artikel, und eine halbe Antwort waere hier keine.
                 'treffer' => array_slice($treffer, 0, 25),
+                /* Was im Wagen liegt, ist erledigt — „steht auf der Liste"
+                   waere dann falsch und schickte jemanden ein zweites Mal
+                   danach los. Genannt wird darum der erste noch OFFENE Treffer;
+                   liegt alles schon im Wagen, sagt die Antwort genau das. */
                 'sag'     => $treffer === []
                     ? sprintf($this->Translate('%1$s is not on %2$s.'), $suche, (string)$ziel['name'])
-                    : sprintf($this->Translate('%1$s is on %2$s.'), $treffer[0]['name'], (string)$ziel['name']),
+                    : ($offeneTreffer === []
+                        ? sprintf($this->Translate('%1$s is already in the cart on %2$s.'), $treffer[0]['name'], (string)$ziel['name'])
+                        : sprintf($this->Translate('%1$s is on %2$s.'), $offeneTreffer[0]['name'], (string)$ziel['name'])),
             ];
         }
 
@@ -1965,7 +1975,11 @@ trait VoiceTools
                                      (string)$t['schritt'], (string)$t['routine'])];
             }
             try {
-                IPS_RequestAction((int)$t['inst'], 'Check', (string)json_encode(
+                /* Mit @: eine noch nicht fertige Instanz laesst Symcon nicht
+                   werfen, sondern eine PHP-Warnung AUSGEBEN — im Hook landet die
+                   mitten in der JSON-Antwort, und der Anrufer bekommt Bruch
+                   statt Ergebnis. Das try bleibt fuer alles, was doch wirft. */
+                @IPS_RequestAction((int)$t['inst'], 'Check', (string)json_encode(
                     ['routine' => (string)$t['rid'], 'step' => (int)$t['idx'], 'done' => $erledigt]));
             } catch (\Throwable $e) {
                 $this->SendDebug('Voice', 'Routine Check warf: ' . $e->getMessage(), 0);

@@ -633,6 +633,7 @@
       "%d cards updated": "%d Karten aktualisiert",
       "%1$s is not on %2$s.": "%1$s steht nicht auf %2$s.",
       "%1$s is on %2$s.": "%1$s steht auf %2$s.",
+      "%1$s is already in the cart on %2$s.": "%1$s liegt auf %2$s schon im Wagen.",
       "Only the first items are listed — for a specific item ask with „suche\".": "Es sind nur die ersten Artikel aufgeführt — nach einem bestimmten Artikel mit „suche\" fragen.",
       "Find student (name or part of it)": "Schüler suchen (Name oder Teil davon)",
       "Search": "Suchen",
