@@ -107,6 +107,10 @@ class SymDoGateway extends IPSModuleStrict
         $this->RegisterAttributeInteger('MicrosoftRetryAfter', 0);
         $this->RegisterAttributeInteger('CalDAVRetryAfter', 0);
 
+        /* Wer die App-Schnittstelle fuehrt. Gemerkt, weil die Instanzliste waehrend
+           eines Modul-Neuladens kurz leer zurueckkommt — siehe AppApiOwnerID(). */
+        $this->RegisterAttributeInteger('AppApiOwner', 0);
+
         // R5: pending OAuth state parameters (one-time, validated in ProcessHookData)
         $this->RegisterAttributeString('GoogleOAuthState', '');
         $this->RegisterAttributeString('MicrosoftOAuthState', '');
@@ -255,17 +259,28 @@ class SymDoGateway extends IPSModuleStrict
     private function AppApiOwnerID(): int
     {
         $ids = @IPS_GetInstanceListByModuleID(self::MODULE_GUID);
+        if (is_array($ids) && $ids !== []) {
+            sort($ids);
+            $besitzer = (int)$ids[0];
+            // Nur schreiben, wenn er sich aendert: die Methode laeuft in jedem Hook.
+            if ($besitzer !== (int)@$this->ReadAttributeInteger('AppApiOwner')) {
+                @$this->WriteAttributeInteger('AppApiOwner', $besitzer);
+            }
+            return $besitzer;
+        }
         /* Leere Liste heisst NICHT „ich bin es nicht": waehrend eines
            Modul-Neuladens kann der Kernel sie kurz leer zurueckgeben. Faellt ein
            ApplyChanges genau in dieses Fenster, wuerden die Hooks nicht wieder
            angemeldet — und die App waere weg („Hook not found"), bis jemand von
-           Hand uebernimmt. Eine Instanz, die sich selbst fragt, ist per
-           Definition vorhanden. */
-        if (!is_array($ids) || $ids === []) {
-            return $this->InstanceID;
-        }
-        sort($ids);
-        return (int)$ids[0];
+           Hand uebernimmt.
+
+           Sich in diesem Fenster selbst zum Besitzer zu erklaeren, war aber falsch:
+           bei ZWEI Gateways meldet dann auch das zweite die Hooks auf sich an. Die
+           App bekaeme von ihm HTTP 401 — und die iOS-App verwirft bei 401
+           ungesendete Offline-Aenderungen. Deshalb der zuletzt GESEHENE Besitzer;
+           nur wenn es noch keinen gibt (erster Start), ist es diese Instanz. */
+        $gemerkt = (int)@$this->ReadAttributeInteger('AppApiOwner');
+        return $gemerkt > 0 ? $gemerkt : $this->InstanceID;
     }
 
     protected function ProcessHookData(): void
@@ -312,8 +327,9 @@ class SymDoGateway extends IPSModuleStrict
         // form.json traegt die App-Seite. Symcon mergt NICHT: ist
         // GetConfigurationForm ueberschrieben, gewinnt die Methode vollstaendig —
         // die Datei muss also selbst gelesen werden.
+        // AppApiOwnerID() liefert immer eine Instanz — im Zweifel diese hier.
         $owner   = $this->AppApiOwnerID();
-        $isOwner = ($owner === 0 || $owner === $this->InstanceID);
+        $isOwner = ($owner === $this->InstanceID);
         if (!$isOwner) {
             // Zweites Gateway: die App-Panels gehören hier nicht hin. Kopplung, Nutzer
             // und KI wirken ausschließlich auf der bedienenden Instanz — Knöpfe, die
