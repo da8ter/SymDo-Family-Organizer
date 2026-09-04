@@ -3243,6 +3243,15 @@ html[data-symdo-theme="light"] .voice-ear.lauscht { color: #a35c00; }
    `position:fixed` + `inset:0` statt einer Flaeche im Fluss: der Schirm liegt
    ueber allem, was der Aufbau nach und nach sichtbar macht. */
 #ladeschirm { display: none; }
+/* ── Erstes Bild einer KACHEL ────────────────────────────────────────────────
+   Eine Kachel hat keinen Ladeschirm (siehe oben), startet aber mit der
+   Vorbelegung: die kennt alle Bereiche, und der gemerkte Bereich faellt auf die
+   Uebersicht zurueck. In einer Listenkachel ist die abgeschaltet — ihre Karten
+   blitzten deshalb beim Oeffnen kurz auf, gemessen 175 ms ohne und noch ein
+   Bild mit dem eingebetteten Zustand.
+   visibility statt display: das Malen bleibt aus, Maße und Zeichenlauf sind
+   trotzdem dieselben — die Karten messen ihre Breite beim ersten Zeichnen. */
+html.kachel-warte .app { visibility: hidden; }
 html.web-app #ladeschirm {
   position: fixed; inset: 0; z-index: 900;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
@@ -3306,7 +3315,17 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    ihn SOFORT — nicht erst, wenn das Skript am Ende der Seite gelesen ist. */
 (function () {
   var s = window.__SYMDO__;
-  if (!s) { return; }
+  if (!s) {
+    /* Kachel. Bis der Zustand da ist (eingebettet am Ende der Seite oder einen
+       Rundgang spaeter ueber GetState) bleibt der Inhalt ungemalt. Der
+       Notausgang ist Pflicht: eine Kachel ohne Zustand — Instanz nicht bereit,
+       Push verschluckt — darf nicht dauerhaft leer bleiben. */
+    document.documentElement.classList.add('kachel-warte');
+    setTimeout(function () {
+      document.documentElement.classList.remove('kachel-warte');
+    }, 2000);
+    return;
+  }
   document.documentElement.classList.add('web-app');
   var bild = document.querySelector('#ladeschirm .lade-symbol');
   // Ohne Symbolpfad (aeltere Gateway-Version) bleibt es beim Namen — ein
@@ -5060,6 +5079,8 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
+    // Jetzt steht der richtige Bereich — die Kachel darf gemalt werden.
+    document.documentElement.classList.remove('kachel-warte');
     // Erst hier, nicht beim Start: vorher sind weder gatewayAvailable noch die
     // Nutzer bekannt — die Mitglieder-Zuordnung haette kein Gesicht.
     loadMailProposals();

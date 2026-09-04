@@ -75,6 +75,13 @@ select option { color: #111; background: #fff; }
 /* height:100% + eigenes System-Rand-Padding oben/seitlich, damit der Inhalt
    nicht unter die vom System überlagerten Kachel-Steuerelemente rutscht.
    Unten kein Rand: die Tab-Leiste sitzt an der Kachel-Unterkante. */
+/* ── Erstes Bild der Kachel ──────────────────────────────────────────────────
+   Die Oberflaeche startet mit ihrer Vorbelegung: die kennt alle Bereiche, und
+   der gemerkte faellt auf die Uebersicht zurueck. In einer Listenkachel ist die
+   abgeschaltet — ihre Karten blitzten deshalb beim Oeffnen kurz auf. Bis der
+   Zustand da ist, wird nicht gemalt. visibility statt display: Maße und
+   Zeichenlauf bleiben, nur das Malen faellt aus. */
+html.kachel-warte .app { visibility: hidden; }
 .app {
   height: 100%;
   display: flex;
@@ -1991,6 +1998,18 @@ html[data-symdo-theme="dark"] .member-bar {
   </style>
 </head>
 <body>
+<script>
+/* Ganz am Anfang des Rumpfes, damit gar kein falsches Bild entsteht: die Seite
+   ist rund 370 kB, und waehrend sie gelesen wird, malt der Browser schon. Der
+   Notausgang ist Pflicht — eine Kachel ohne Zustand darf nicht leer bleiben. */
+(function () {
+  if (window.__SYMDO__) { return; }
+  document.documentElement.classList.add('kachel-warte');
+  setTimeout(function () {
+    document.documentElement.classList.remove('kachel-warte');
+  }, 2000);
+})();
+</script>
 <div class="app">
   <main style="display:flex; flex-direction:column; flex:1; min-height:0;">
 
@@ -3074,6 +3093,8 @@ function handleMessage(data) {
     applyTabVisibility();
     renderAll();
     applyAiEnabled();
+    // Jetzt steht der richtige Bereich — die Kachel darf gemalt werden.
+    document.documentElement.classList.remove('kachel-warte');
   } else if (data.type === 'instanceState') {
     if (data.ok === false) {
       showToast(translate('Action failed'));

@@ -697,7 +697,15 @@ class SymDoShoppingList extends IPSModuleStrict
         // alte Fassung.
         $hookUrl = $this->GetTileImageBase();
         $extApiHookUrl = $this->GetTileExtApiBase();
-        return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl) . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';</script>';
+        /* Anfangszustand INLINE — nach den Bild-Adressen, denn die Zeilen
+           brauchen sie beim ersten Zeichnen. Ohne ihn startet die Oberflaeche
+           mit ihrer Vorbelegung und zeigt einen Augenblick die Uebersicht, die
+           in einer Listenkachel abgeschaltet ist. */
+        $zustand = (string)json_encode($this->BuildStatePayload(),
+            JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        return $html . '<script>window.__imageHookUrl=' . json_encode($hookUrl)
+            . ';window.__extApiHookUrl=' . json_encode($extApiHookUrl) . ';'
+            . 'handleMessage(' . $zustand . ');</script>';
     }
 
     private function GetAssetHookPath(): string

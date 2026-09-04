@@ -692,7 +692,17 @@ class SymDoToDoList extends IPSModuleStrict
         if (strlen($html) < 200) {
             $this->LogMessage('GetVisualizationTile: module.html gelesen, aber auffaellig kurz. Bytes=' . strlen($html) . ' head=' . substr($html, 0, 80), KL_WARNING);
         }
-        return $html;
+        /* Anfangszustand INLINE, wie es die Web-App-Kachel tut. Ohne ihn startet
+           die Oberflaeche mit ihrer Vorbelegung — und die kennt alle Bereiche und
+           faellt auf die Uebersicht zurueck. Deren Karten blitzten deshalb bei
+           jedem Oeffnen kurz auf, bevor der Zustand („nur Aufgaben") einen
+           Rundgang spaeter eintraf. Nebenbei faellt der Rundgang weg: die Kachel
+           steht sofort.
+           INVALID_UTF8_SUBSTITUTE: ein kaputtes Byte in einem Aufgabennamen darf
+           nicht die ganze Kachel leeren. */
+        $zustand = (string)json_encode($this->BuildStatePayload(),
+            JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
 
     public function Export(): string
