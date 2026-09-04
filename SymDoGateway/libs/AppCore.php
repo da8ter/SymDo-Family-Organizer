@@ -33,6 +33,7 @@ trait AppCore
     private const CONNECT_MODULE_GUID  = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
     private const SDWA_MODULE_GUID     = '{6703A24A-E9E9-44D3-AB21-27176BF224AA}';
     private const VOICE_MODULE_GUID    = '{1F413A34-452C-4A8D-BEFC-CA7CB9DBB1BB}';
+    private const NOTES_MODULE_GUID    = '{061491BA-F95D-425A-95FA-C3D0D1CFFB7B}';
     private const HOOK_PATH            = 'lists/app';
     private const WEBAPP_HOOK_PATH     = 'lists/webapp';
     // Eigener Pfad für den Push-WebSocket. Bewusst getrennt von HOOK_PATH, damit
@@ -730,8 +731,11 @@ trait AppCore
 
     /**
      * Rückkanal nur an eigene Kachel-Module (der Ident kommt von außen):
-     * die SymDo-Web-App-Kachel und die Essensplan-Kachel — beide nutzen das
+     * Web-App-, Essensplan-, Sprach- und Notizkachel — alle nutzen dasselbe
      * AiCall/AiResult-Relay. Weiter eine GUID-Weißliste, nie ein Freibrief.
+     *
+     * Wer hier fehlt, bekommt KEINE Antwort: das Relay ist synchron, die Kachel
+     * wartet auf ihr AiResult und läuft in den Zeitablauf.
      */
     private function IsSymDoWebAppInstance(int $instanceID): bool
     {
@@ -739,7 +743,8 @@ trait AppCore
             return false;
         }
         $guid = (string)(IPS_GetInstance($instanceID)['ModuleInfo']['ModuleID'] ?? '');
-        return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID, self::VOICE_MODULE_GUID], true);
+        return in_array($guid, [self::SDWA_MODULE_GUID, self::MEALPLAN_MODULE_GUID,
+                                self::VOICE_MODULE_GUID, self::NOTES_MODULE_GUID], true);
     }
 
     /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */
