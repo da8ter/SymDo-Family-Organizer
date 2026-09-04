@@ -1100,11 +1100,16 @@ trait EduMaps
         }
         $raus = [];
         $gesehen = [];
-        if (preg_match_all('#https://[^"\']+/file/([^"\'/]+)/([a-z0-9]+)(?:/(?:preview|fd))?#i',
+        /* Der Rumpf der Adresse wird MITGENOMMEN statt fest verdrahtet: edumaps
+           laeuft je Bundesland auf einem eigenen Namen (nrw., hh., …). Mit fest
+           „nrw." zeigten Datei- und Vorschauadresse anderswo ins Leere — und
+           zwar lautlos, denn gefunden wurde die Datei ja. */
+        if (preg_match_all('#(https://[^"\']+?)/file/([^"\'/]+)/([a-z0-9]+)(?:/(?:preview|fd))?#i',
                 $rumpf, $m, PREG_SET_ORDER) > 0) {
             foreach ($m as $treffer) {
-                $name = urldecode((string)$treffer[1]);
-                $schluessel = $name . '/' . $treffer[2];
+                $basis = rtrim((string)$treffer[1], '/');
+                $name = urldecode((string)$treffer[2]);
+                $schluessel = $name . '/' . $treffer[3];
                 if (isset($gesehen[$schluessel])) {
                     continue;
                 }
@@ -1120,13 +1125,13 @@ trait EduMaps
                               fuer nichts und laesst es weg. Genau so ist die
                               Einladung ohne Vorschau und ohne Namen geblieben. */
                            'datei' => $name,
-                           'url'  => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/fd',
+                           'url'  => $basis . '/file/' . $treffer[2] . '/' . $treffer[3] . '/fd',
                            /* edumaps rendert von jedem PDF eine Seitenvorschau
                               und liefert sie unter „/preview" (gemessen:
                               180×255 JPEG, rund 11 KB). Selbst rendern koennten
                               wir sie nicht — dafuer fehlt in Symcon ein
                               PDF-Renderer. */
-                           'preview' => 'https://nrw.edumaps.de/file/' . $treffer[1] . '/' . $treffer[2] . '/preview'];
+                           'preview' => $basis . '/file/' . $treffer[2] . '/' . $treffer[3] . '/preview'];
             }
         }
         return $raus;
@@ -1159,7 +1164,9 @@ trait EduMaps
      */
     private function EduKartenLinks(string $html, string $eigene): array
     {
-        if (preg_match_all('#https://nrw\.edumaps\.de/(\d+)/(\d+)/([a-z0-9]+)/([a-z0-9]+)#i',
+        // Jeder edumaps-Name, nicht nur „nrw." — jedes Bundesland hat seinen
+        // eigenen, und eine Anlage aus Hamburg verwies sonst auf nichts.
+        if (preg_match_all('#https://[a-z0-9.-]+\.edumaps\.de/(\d+)/(\d+)/([a-z0-9]+)/([a-z0-9]+)#i',
                 $html, $m, PREG_SET_ORDER) === 0) {
             return [];
         }
