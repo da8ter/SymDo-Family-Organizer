@@ -6,6 +6,8 @@
       "Badge: due date": "Due date",
       "Badge: notification": "Notification",
       "Badge: priority": "Priority",
+      "Choose print layout": "Choose print layout",
+      "For the WAF ;-)": "For the WAF ;-)",
       "SymDo Notes": "SymDo - Notes"
     },
     "de": {
@@ -462,6 +464,14 @@
       "This folder still contains folders — empty it first.": "In diesem Ordner liegen noch Ordner — die zuerst wegräumen.",
       "Three levels of folders are the limit.": "Drei Ordner-Ebenen sind das Maximum.",
       "Nothing here yet": "Hier ist noch nichts",
+      "Print": "Drucken",
+      "Choose print layout": "Drucklayout wählen",
+      "Ultra Compact": "Ultra Kompakt",
+      "Compact": "Kompakt",
+      "Detailed": "Detailliert",
+      "For the WAF ;-)": "Für den WAF ;-)",
+      "Shopping List": "Einkaufsliste",
+      "Items": "Artikel",
       "SymDo Notes": "SymDo - Notizen",
       "Shows the notes of the SymDo app as a tile — the same notes, the same view. There is nothing to set up: the notes come from the SymDo Gateway.": "Zeigt die Notizen der SymDo-App als Kachel — dieselben Notizen, dieselbe Ansicht. Einzurichten ist nichts: die Notizen kommen aus dem SymDo Gateway.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",

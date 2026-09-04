@@ -641,7 +641,14 @@
       "lessons cancelled": "Unterricht entfällt",
       "This folder still contains folders — empty it first.": "In diesem Ordner liegen noch Ordner — die zuerst wegräumen.",
       "Three levels of folders are the limit.": "Drei Ordner-Ebenen sind das Maximum.",
-      "Nothing here yet": "Hier ist noch nichts"
+      "Nothing here yet": "Hier ist noch nichts",
+      "Print": "Drucken",
+      "Choose print layout": "Drucklayout wählen",
+      "Ultra Compact": "Ultra Kompakt",
+      "Compact": "Kompakt",
+      "Detailed": "Detailliert",
+      "For the WAF ;-)": "Für den WAF ;-)",
+      "Shopping List": "Einkaufsliste"
     },
     "en": {
       "SymDo ToDo List": "SymDo - ToDo List",
@@ -847,7 +854,9 @@
       "Badge: repeat": "Repeat",
       "Badge: due date": "Due date",
       "Badge: notification": "Notification",
-      "Badge: priority": "Priority"
+      "Badge: priority": "Priority",
+      "Choose print layout": "Choose print layout",
+      "For the WAF ;-)": "For the WAF ;-)"
     }
   }
 }
