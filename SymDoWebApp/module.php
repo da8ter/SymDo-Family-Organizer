@@ -673,6 +673,21 @@ class SymDoWebApp extends IPSModuleStrict
            laeuft nie, und der Rest landet als HTML in der Visu. */
         $payload = (string)json_encode($this->BuildFullPayload(),
             JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        /* Der Kopf gehört IN das Dokument, nicht davor: module.html beginnt mit
+           <!doctype html>, und was davor steht, schiebt den Browser in den
+           Quirks-Modus — dort rechnet das Kastenmodell anders, und die ganze
+           Kachel säße daneben. Also hinter <head>. Fehlt der (dann ist es kein
+           vollständiges Dokument mehr), bleibt es beim Voranstellen. */
+        if ($kopf !== '') {
+            /* NUR das erste <head>: ein zweites steht in der Druckvorlage
+               (buildPrintHtml), und dort hat der Gesprächskern nichts zu suchen.
+               str_replace kennt keine Obergrenze — also von Hand schneiden. */
+            $stelle = strpos($html, '<head>');
+            $html = $stelle === false
+                ? $kopf . $html
+                : substr_replace($html, '<head>' . $kopf, $stelle, strlen('<head>'));
+            $kopf = '';
+        }
         return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 
