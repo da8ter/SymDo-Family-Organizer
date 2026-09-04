@@ -622,7 +622,8 @@
       "Forget linked maps": "Verlinkte Karten vergessen",
       "Linked maps forgotten — the next check finds them again.": "Verlinkte Karten vergessen — die nächste Prüfung findet sie wieder.",
       "Linked map": "Verlinkte Karte",
-      "Too many voice requests — please wait a moment.": "Zu viele Anfragen im Sprachdialog — einen Moment warten."
+      "Too many voice requests — please wait a moment.": "Zu viele Anfragen im Sprachdialog — einen Moment warten.",
+      "No credit left at the AI provider — top up the account.": "Beim KI-Anbieter ist kein Guthaben mehr — bitte das Konto aufladen."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

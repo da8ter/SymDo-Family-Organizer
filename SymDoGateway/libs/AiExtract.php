@@ -1038,8 +1038,15 @@ trait AiExtract
         $daten  = json_decode((string)($resp['body'] ?? ''), true);
         if ($status < 200 || $status >= 300) {
             $detail = is_array($daten) ? trim((string)($daten['error']['message'] ?? '')) : '';
+            /* 429 heisst beim Anbieter ZWEIERLEI: „zu schnell" (wartet kurz)
+               oder „kein Guthaben" (wartet ewig). Beides „Rate-Limit" zu
+               nennen schickt auf die falsche Faehrte — genau das ist am
+               04.09.2026 passiert. Der Anbieter nennt den Unterschied im
+               Feld `code`. */
+            $anbieterCode = is_array($daten) ? (string)($daten['error']['code'] ?? '') : '';
             $code   = match (true) {
                 $status === 401 || $status === 403 => 'ai_unauthorized',
+                $anbieterCode === 'insufficient_quota' => 'ai_no_credit',
                 $status === 429                    => 'ai_rate_limited',
                 default                            => 'ai_upstream',
             };
@@ -1236,6 +1243,16 @@ trait AiExtract
             return ['ok' => false, 'code' => 'ai_unauthorized', 'message' => $this->Translate('AI rejected the API key.'), 'status' => 502];
         }
         if ($status === 429) {
+            /* Leeres Guthaben sieht aus wie ein Rate-Limit, ist aber das
+               Gegenteil: Warten hilft nicht. Der Anbieter unterscheidet es im
+               Feld `code` — ohne diese Zeile stand tagelang „versuch es
+               spaeter nochmal" an einem Konto ohne Guthaben. */
+            $d = json_decode((string)($resp['body'] ?? ''), true);
+            if (is_array($d) && (string)($d['error']['code'] ?? '') === 'insufficient_quota') {
+                return ['ok' => false, 'code' => 'ai_no_credit',
+                    'message' => $this->Translate('No credit left at the AI provider — top up the account.'),
+                    'status' => 502];
+            }
             return ['ok' => false, 'code' => 'ai_rate_limited', 'message' => $this->Translate('AI rate limit reached — try again later.'), 'status' => 502];
         }
         if ($status < 200 || $status >= 300) {

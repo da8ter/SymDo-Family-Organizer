@@ -204,8 +204,12 @@ function erzeuge(opt) {
           // Schliessen weg, im Protokoll steht sie noch morgen.
           post({ action: 'fehler', stelle: 'realtime/calls', status: r.status,
                  grund: String(grund).slice(0, 300) }).catch(function () {});
-          throw { eigene: true, message: 'OpenAI lehnte die Verbindung ab (HTTP ' + r.status + ')'
-                    + (grund ? ': ' + String(grund).slice(0, 160) : '.') };
+          // „insufficient_quota" sagt einem Menschen nichts — der Satz schon.
+          var klartext = /insufficient_quota/i.test(String(grund))
+            ? 'Beim KI-Anbieter ist kein Guthaben mehr — bitte das Konto aufladen.'
+            : 'OpenAI lehnte die Verbindung ab (HTTP ' + r.status + ')'
+              + (grund ? ': ' + String(grund).slice(0, 160) : '.');
+          throw { eigene: true, message: klartext };
         });
       }
       callId = ((r.headers.get('Location') || '').split('/').pop()) || '';
