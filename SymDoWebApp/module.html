@@ -622,9 +622,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-stueck > * { margin-left: 6px; flex: 0 0 auto; }
 .plan-stueck.erst > * { margin-left: 9px; }
 /* Entfall und Vertretung. Im Balken ist kein Platz fuer ein Wort — in der
-   Wochenkachel steht dort „ENTFÄLLT", hier muss die Flaeche selbst es sagen:
-   die entfallene Stunde wird schraeg gestreift und durchgestrichen, die
-   Vertretung bekommt eine helle Oberkante.
+   Wochenkachel steht dort „ENTFÄLLT", hier sagt es die Form: die entfallene
+   Stunde ist nur noch ein halbdurchsichtiger Umriss, gestrichelt in der
+   Fachfarbe und OHNE Fuellung; die Vertretung bekommt eine helle Kante.
 
    ACHTUNG: die FUELLUNG kann hier nicht stehen. Sie wird je Stunde als
    Inline-Stil geschrieben (`background:` mit der Fachfarbe), und ein
@@ -635,8 +635,15 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 
    Entfallene Stunden nach vorn (z-index): an einem Projekttag liegen sie IN
    einem stundenlangen Block, der sie sonst verdeckt. */
-.plan-stueck.entfall { opacity: .85; z-index: 1; }
-.plan-stueck.entfall > * { opacity: .6; }
+/* Halber Deckungsgrad, und ein heller Saum aussen UM die gestrichelte Kante.
+   Ohne ihn verschwindet der Umriss, sobald die Stunde dieselbe Farbe hat wie
+   das, worauf sie liegt — gemessen an „Physik" (#1E88E5) auf dem Methodentag
+   (#1E88E5): die Kante war blau auf blau. Der Saum ist keine Fuellung; er
+   liegt nur einen Pixel breit an der Kante. */
+.plan-stueck.entfall {
+  opacity: .5; z-index: 1;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--card) 85%, transparent);
+}
 /* Die Kante sitzt LINKS, nicht oben. Oben hat sie die blaue Flaeche um drei
    Pixel gekuerzt, und der Balken sah dadurch niedriger aus als seine Nachbarn —
    vom Nutzer gemeldet. Links markiert sie den Beginn der vertretenen Stunde und
@@ -6996,13 +7003,15 @@ function stundenplanKarte() {
          FACHFARBE und nicht Weiss: weiss war auf dem hellen Grund zwischen
          den Streifen unsichtbar und nur da zu sehen, wo zufaellig ein
          Ganztagsblock darunter lag. */
-      const fuellung = s.status === 'entfall'
-        ? 'linear-gradient(to bottom, rgba(0,0,0,0) 45%, ' + s.color + ' 45%, '
-          + s.color + ' 55%, rgba(0,0,0,0) 55%),'
-          + ' repeating-linear-gradient(135deg, ' + s.color + ' 0 3px, rgba(0,0,0,0) 3px 8px)'
-        : s.color;
+      /* Entfallen heisst: KEINE Flaeche, nur eine gestrichelte Kontur in der
+         Fachfarbe, halb durchscheinend. Die Stunde ist damit als Umriss
+         erkennbar, ohne den Balken zu beanspruchen — und was darunter liegt
+         (an einem Projekttag der Ganztagsblock) bleibt sichtbar. */
+      const fuellung = s.status === 'entfall' ? 'transparent' : s.color;
+      const kontur = s.status === 'entfall'
+        ? ';border:1px dashed ' + s.color : '';
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}${zustand}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '') + zustandText)}"` +
-        ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}` +
+        ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${kontur}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
         `;border-top-right-radius:${letzter ? r : '0'};border-bottom-right-radius:${letzter ? r : '0'}">` +
         (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '') + `</div>`;
