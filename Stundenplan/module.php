@@ -608,6 +608,14 @@ class SymDoTimetable extends IPSModuleStrict
         // ── Kind bestimmen: Name oder Nummer ──
         $kinder = array_values($this->Kinder());
         $wunsch = $rumpf['child'] ?? '';
+        /* Alles ausser Zahl und Zeichenkette wird hier zu ''. Ein Feld „child"
+           mit einer Liste darin — die Web-App schickt schon mal ein Objekt —
+           landete sonst in (string)$wunsch, und das ist in PHP keine Ausnahme,
+           sondern eine WARNUNG in der Ausgabe: sie stand mitten in der
+           JSON-Antwort des Hooks und machte sie unlesbar. */
+        if (!is_int($wunsch) && !is_string($wunsch)) {
+            $wunsch = '';
+        }
         $nr = 0;
         if (is_int($wunsch) || (is_string($wunsch) && ctype_digit(trim($wunsch)) && trim($wunsch) !== '')) {
             $nr = (int)$wunsch;
@@ -719,11 +727,37 @@ class SymDoTimetable extends IPSModuleStrict
             // ausdruecklich neu bespielt werden.
             $this->PushState();
         } else {
+            $erwartet = [];
             foreach ($fertig as $t => $slots) {
-                @IPS_SetProperty($this->InstanceID, self::SlotProp($nr, (int)$t),
-                    (string)json_encode($slots, JSON_UNESCAPED_UNICODE));
+                $feld = self::SlotProp($nr, (int)$t);
+                $text = (string)json_encode($slots, JSON_UNESCAPED_UNICODE);
+                @IPS_SetProperty($this->InstanceID, $feld, $text);
+                $erwartet[$feld] = $text;
             }
             @IPS_ApplyChanges($this->InstanceID);
+            /* GEGENLESEN. Der Rueckgabewert von IPS_SetProperty taugt nicht als
+               Beweis: er ist auch dann false, wenn sich der Wert schlicht nicht
+               geaendert hat (gemessen an #22469). Gibt es die Eigenschaft nicht
+               — etwa weil das Modul nach einer Erweiterung noch nicht neu
+               geladen wurde —, schrieb die Schleife ins Nichts, und der Import
+               meldete trotzdem „ok". Der Nutzer suchte den Fehler dann in
+               WebUntis. */
+            $fehlend = [];
+            foreach ($erwartet as $feld => $text) {
+                try {
+                    $ist = (string)IPS_GetProperty($this->InstanceID, $feld);
+                } catch (\Throwable $e) {
+                    $ist = null;
+                }
+                if ($ist !== $text) {
+                    $fehlend[] = $feld;
+                }
+            }
+            if ($fehlend !== []) {
+                return $fehler('not_written', sprintf($this->Translate(
+                    '%1$d weekday(s) could not be written (%2$s) — reload the module (MC_ReloadModule).'),
+                    count($fehlend), implode(', ', array_slice($fehlend, 0, 3))));
+            }
         }
 
         $quelle = trim((string)($rumpf['source'] ?? ''));

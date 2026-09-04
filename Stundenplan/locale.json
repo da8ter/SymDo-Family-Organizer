@@ -83,6 +83,7 @@
             "No child \"%s\" — known are: %s.": "Kein Kind „%s\" — bekannt sind: %s.",
             "No days in the payload.": "Im Rumpf stehen keine Tage.",
             "Weekday %s is not between 1 and 6.": "Wochentag %s liegt nicht zwischen 1 und 6.",
+            "%1$d weekday(s) could not be written (%2$s) — reload the module (MC_ReloadModule).": "%1$d Wochentag(e) konnten nicht geschrieben werden (%2$s) — das Modul neu laden (MC_ReloadModule).",
             "Day %s is not a list.": "Tag %s ist keine Liste.",
             "A lesson is not an object.": "Eine Stunde ist kein Objekt.",
             "A lesson has no subject.": "Eine Stunde hat kein Fach.",
