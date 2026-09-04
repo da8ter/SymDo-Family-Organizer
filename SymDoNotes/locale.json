@@ -8,6 +8,7 @@
       "Badge: priority": "Priority",
       "Choose print layout": "Choose print layout",
       "For the WAF ;-)": "For the WAF ;-)",
+      "No timetable": "No timetable",
       "SymDo Notes": "SymDo - Notes"
     },
     "de": {
@@ -472,6 +473,8 @@
       "For the WAF ;-)": "Für den WAF ;-)",
       "Shopping List": "Einkaufsliste",
       "Items": "Artikel",
+      "free": "frei",
+      "No timetable": "Kein Stundenplan",
       "SymDo Notes": "SymDo - Notizen",
       "Shows the notes of the SymDo app as a tile — the same notes, the same view. There is nothing to set up: the notes come from the SymDo Gateway.": "Zeigt die Notizen der SymDo-App als Kachel — dieselben Notizen, dieselbe Ansicht. Einzurichten ist nichts: die Notizen kommen aus dem SymDo Gateway.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",

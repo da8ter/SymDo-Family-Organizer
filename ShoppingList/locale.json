@@ -73,7 +73,8 @@
       "Delivery not available for this ZIP": "Delivery not available for this ZIP",
       "No pickup markets": "No pickup markets",
       "Donation / Gift": "Donation / Gift",
-      "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:"
+      "Say thanks and support the developer of this module:": "Say thanks and support the developer of this module:",
+      "No timetable": "No timetable"
     },
     "de": {
       "Store order": "Laden-Reihenfolge",
@@ -582,7 +583,9 @@
       "lessons cancelled": "Unterricht entfällt",
       "This folder still contains folders — empty it first.": "In diesem Ordner liegen noch Ordner — die zuerst wegräumen.",
       "Three levels of folders are the limit.": "Drei Ordner-Ebenen sind das Maximum.",
-      "Nothing here yet": "Hier ist noch nichts"
+      "Nothing here yet": "Hier ist noch nichts",
+      "free": "frei",
+      "No timetable": "Kein Stundenplan"
     }
   }
 }

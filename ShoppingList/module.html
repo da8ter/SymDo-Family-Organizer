@@ -3355,6 +3355,83 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   font-size: 11px;
   color: var(--muted);
 }
+/* ── Wochenplan ──────────────────────────────────────────────────────────────
+   Das Raster eines Kindes, uebernommen aus dem Stundenplan-Modul (dort
+   `woche()`): Zeitachse links, je Wochentag eine Spalte, jede Stunde an ihrer
+   Uhrzeit. Eigene Klassennamen mit wp-, denn `.stunde`, `.frei` und `.marke`
+   heissen in dieser Datei schon anders. */
+.wp-summe { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); }
+.wp-raster { display: flex; gap: 8px; }
+/* Die Achse steht MIT IM Scrollbereich — nur so tragen Achse und Spalten
+   denselben senkrechten Weg. Waagerecht bleibt sie durch sticky stehen. */
+.wp-achse { position: sticky; left: 0; z-index: 2; flex: 0 0 44px; background: var(--card); }
+.wp-achse .wp-innen { position: relative; }
+.wp-marke {
+  position: absolute; right: 0; display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.wp-marke.stark { color: var(--text); font-weight: 700; }
+.wp-marke i { display: block; width: 6px; height: 1px; background: currentColor; opacity: .6; }
+/* Waagerecht schiebbar: unter 140px je Spalte passt „Mathematik" neben dem
+   Symbolkreis nicht mehr, und ein unleserlicher Name ist schlechter als eine
+   Geste. Auf dem Telefon schiebt man also — so wie in der Kachel. */
+.wp-spalten {
+  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px;
+  overflow-x: auto; overflow-y: hidden;
+}
+.wp-spalte {
+  flex: 1 1 0; min-width: 140px;
+  border-radius: var(--radius); background: var(--surface); overflow: hidden;
+}
+.wp-spalte.heute { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+/* FESTE Hoehe, nicht min-height: der Kopf ist zugleich der Versatz, mit dem die
+   Zeitachse beginnt — beide muessen gleich sein, sonst stehen Achse und Stunden
+   gegeneinander versetzt. */
+.wp-kopf {
+  display: flex; align-items: center; gap: 6px; height: 34px; overflow: hidden;
+  padding: 8px 10px; background: var(--surface2);
+}
+.wp-kopf .wp-tag { font-size: 13px; font-weight: 700; }
+.wp-kopf .wp-datum { font-size: 11px; font-weight: 600; color: var(--muted); }
+.wp-kopf .wp-heute {
+  margin-left: auto; padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; color: #fff; background: var(--accent);
+}
+.wp-koerper { position: relative; }
+.wp-frei {
+  position: absolute; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--faint); font-size: 10px;
+}
+.wp-stunde {
+  position: absolute; left: 0; right: 0; overflow: hidden;
+  padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start;
+}
+/* min-width: 0 ist die Bedingung fuers Kuerzen: ein Flex-Kind ist von Haus aus
+   mindestens so breit wie sein Inhalt, text-overflow kaeme nie zum Zug. */
+.wp-stunde > div { min-width: 0; }
+.wp-stunde .wp-sym {
+  flex: 0 0 22px; height: 22px; border-radius: 50%;
+  background: rgba(255,255,255,.22);
+  display: flex; align-items: center; justify-content: center; font-size: 11px;
+}
+.wp-stunde .wp-fach, .wp-stunde .wp-zeit, .wp-stunde .wp-wo {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wp-stunde .wp-fach { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.wp-stunde .wp-zeit { font-size: 10px; font-weight: 500; opacity: .82; margin-top: 2px; }
+.wp-stunde .wp-wo { font-size: 10px; font-weight: 500; opacity: .70; margin-top: 1px; }
+.wp-stunde .wp-zustand {
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; opacity: .9;
+}
+/* Entfall bleibt sichtbar — die Luecke im Plan IST die Nachricht —, wird aber
+   blasser und durchgestrichen. Vertretung behaelt die Fachfarbe und bekommt
+   einen Balken an der Kante; eine zweite Farbe hier hiesse, mit der
+   Faecherfarbe zu streiten. */
+.wp-stunde.entfall { opacity: .55; }
+.wp-stunde.entfall .wp-fach { text-decoration: line-through; }
+.wp-stunde.vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
   </style>
 </head>
 <body>
@@ -3541,10 +3618,21 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </section>
 
+    <!-- Der Wochenplan EINES Kindes. Der Bereich erscheint nur im Kindmodus
+         (siehe visibleTabs): ohne gewaehltes Kind waere „der Wochenplan" die
+         Frage, wessen. -->
+    <section id="screen-plan" class="screen">
+      <div class="content">
+        <div class="screen-head"><h2 id="planTitle"></h2><span id="planSum" class="wp-summe"></span></div>
+        <div id="planArea"></div>
+      </div>
+    </section>
+
   </main>
 
   <nav class="tabbar">
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
+    <button id="tab-plan"><i class="fa-light fa-table-columns"></i><span></span></button>
     <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
@@ -4472,13 +4560,19 @@ function visibleTabs() {
   // Direkt hinter der Uebersicht: der KI-Bereich ist ein Eingangskorb. Er bleibt
   // sichtbar, auch wenn nichts vorliegt — ein Tab, der beim Uebernehmen des letzten
   // Vorschlags unter den Fingern verschwindet, wuerfe den Nutzer aus dem Bereich.
-  if (t.ki && mailAiAvailable()) out.push('ki');
+  /* Kindmodus: ein gewaehltes Kind macht die Oberflaeche zu seiner. Einkauf und
+     KI gehoeren dem Haushalt, nicht dem Kind — sie fallen weg; dafuer kommt
+     sein Stundenplan, wenn einer eingerichtet ist. Ohne Auswahl und bei einem
+     Erwachsenen bleibt alles, wie es eingerichtet ist. */
+  const kindTab = kindGewaehlt();
+  if (kindTab && planKinder().length > 0) out.push('plan');
+  if (!kindTab && t.ki && mailAiAvailable()) out.push('ki');
   // Die Reihenfolge hier ist zugleich die des Rückfalls, wenn der gespeicherte Tab
   // abgeschaltet wurde (vis[0] in setTab).
   // Favoriten sind kein Bereich mehr: sie gehören zur Einkaufsliste und gehen als
   // Blatt über das Herz in ihrer Kopfzeile auf. Ohne Einkauf sind sie damit
   // unerreichbar — dieselbe Kopplung wie vorher, nur ohne Platz in der Leiste.
-  if (t.shopping) out.push('shopping');
+  if (!kindTab && t.shopping) out.push('shopping');
   if (t.todos) out.push('todos');
   // Kalender ganz hinten und nur, wenn OpenCalendar wirklich Kalender liefert:
   // ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist schlimmer als keiner.
@@ -5313,7 +5407,8 @@ window.addEventListener('message', (event) => {
 });
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const TABS = ['dashboard', 'ki', 'shopping', 'todos', 'calendar', 'notes'];
+// 'plan' ist der Wochenplan eines Kindes — nur im Kindmodus sichtbar.
+const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -6000,6 +6095,54 @@ function allTodoTasks() {
   }
   return tasks;
 }
+/**
+ * EIN Avatar, nicht viele.
+ *
+ * Bis zum 04.09.2026 war die Leiste eine Mehrfachauswahl (ein Tipp schaltete
+ * eine Kennung an oder aus). Sie ist jetzt eine Einzelauswahl: ein Tipp waehlt,
+ * ein zweiter auf denselben waehlt ab. Der Grund ist der Kindmodus — „die
+ * Oberflaeche von Tim" gibt es, „die von Tim UND Mia" nicht.
+ *
+ * memberFilterIds bleibt trotzdem ein Set: neun Stellen lesen es, und die
+ * Vereinigungs-Filter (Aufgaben, Termine) bleiben damit unveraendert richtig.
+ */
+function mitgliedWaehlen(id) {
+  const schon = memberFilterIds.size === 1 && memberFilterIds.has(id);
+  memberFilterIds.clear();
+  if (!schon) memberFilterIds.add(id);
+  /* Die Wahl entscheidet ueber die BEREICHE (siehe visibleTabs): Einkauf und KI
+     fallen bei einem Kind weg, sein Stundenplan kommt dazu. Deshalb die Leiste
+     unten nachziehen — sie zeichnet selbst, wenn der offene Bereich dabei
+     verschwindet. */
+  applyTabVisibility();
+}
+
+/**
+ * Das gewaehlte KIND — '' wenn keins gewaehlt ist.
+ *
+ * „Kind" ist die Rolle aus der Mitgliederliste des Gateways (persona), nicht
+ * etwa „hat einen Stundenplan": ein Kind ohne Plan ist auch ein Kind, und dort
+ * gehoeren Einkauf und KI genauso nicht hin.
+ */
+function kindGewaehlt() {
+  if (memberFilterIds.size !== 1) return '';
+  const id = [...memberFilterIds][0];
+  const u = (store.users || []).find(x => x.id === id);
+  return (u && String(u.persona || '') === 'child') ? id : '';
+}
+
+/**
+ * Die Kinder, die der Stundenplan zeigen soll: alle — oder nur das gewaehlte.
+ *
+ * Ein gewaehltes Kind OHNE Stundenplan ergibt eine leere Liste, keinen Rueckfall
+ * auf alle: sonst stuende unter „Tim" der Plan seiner Schwester.
+ */
+function planKinder() {
+  const alle = (stundenplan && Array.isArray(stundenplan.children)) ? stundenplan.children : [];
+  const kind = kindGewaehlt();
+  return kind ? alle.filter(k => k.userId === kind) : alle;
+}
+
 function memberFiltered(tasks) {
   // Ohne sichtbare Leiste filtert die Uebersicht nicht — die Auswahl bleibt aber
   // bestehen, denn sie ist bereichsuebergreifend und gehoert auch den anderen Tabs.
@@ -6177,6 +6320,7 @@ function renderAll() {
     renderCalendar();
   }
   if (activeTab === 'notes') renderNotizen();
+  if (activeTab === 'plan') renderWochenplan();
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
@@ -6522,7 +6666,7 @@ const PLAN_ZUSATZ_RUNDEN = 3;
    aufzieht. */
 function planTagesSpanne(gewaehlt) {
   let von = Infinity, bis = -Infinity;
-  (stundenplan.children || []).forEach(k => {
+  planKinder().forEach(k => {
     const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
     ((tag && tag.slots) || []).forEach(s => {
       von = Math.min(von, s.from); bis = Math.max(bis, s.to);
@@ -6547,7 +6691,7 @@ function planBalkenBreite() {
   const tagSpan = planTagesSpanne(gewaehlt);
   const spanne = Math.max(tagSpan[1] - tagSpan[0], 60);
   let kuerzeste = Infinity;
-  (stundenplan.children || []).forEach(k => {
+  planKinder().forEach(k => {
     const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
     ((tag && tag.slots) || []).forEach(s => {
       kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
@@ -6974,7 +7118,7 @@ function loadTimetable() {
    dann „keine Schule", was richtig ist und nicht fehlt. */
 function stundenplanTage() {
   const gesehen = new Set();
-  ((stundenplan && stundenplan.children) || []).forEach(k => {
+  planKinder().forEach(k => {
     (k.days || []).forEach(t => gesehen.add(t.weekday));
   });
   return Array.from(gesehen).sort((a, b) => a - b);
@@ -6987,7 +7131,7 @@ function stundenplanGewaehlt() {
   const tage = stundenplanTage();
   if (tage.indexOf(stundenplanTag) >= 0) { return stundenplanTag; }
   let heute = 0;
-  ((stundenplan && stundenplan.children) || []).forEach(k => {
+  planKinder().forEach(k => {
     (k.days || []).forEach(t => { if (t.today) { heute = t.weekday; } });
   });
   stundenplanTag = tage.indexOf(heute) >= 0 ? heute : (tage[0] || 1);
@@ -6995,7 +7139,7 @@ function stundenplanGewaehlt() {
 }
 
 function stundenplanIstHeute(weekday) {
-  return ((stundenplan && stundenplan.children) || []).some(k =>
+  return planKinder().some(k =>
     (k.days || []).some(t => t.today && t.weekday === weekday));
 }
 
@@ -7027,7 +7171,7 @@ function stundenplanBlaettern(richtung) {
 function stundenplanFaecher() {
   const karte = new Map();
   const gewaehlt = stundenplanGewaehlt();
-  ((stundenplan && stundenplan.children) || []).forEach(kind => {
+  planKinder().forEach(kind => {
     const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
     ((tag && tag.slots) || []).forEach(s => {
       const da = karte.get(s.name);
@@ -7047,7 +7191,7 @@ function stundenplanLegendeHtml() {
   /* Kein Hinweis „Fächer anzeigen" mehr am Fuss: er stand dauerhaft da, um eine
      Geste zu erklaeren, die man ohnehin probiert — und nahm der Karte eine
      Zeile. Ein Tipp auf die Karte oeffnet die Legende weiterhin. */
-  const mehrere = ((stundenplan && stundenplan.children) || []).length > 1;
+  const mehrere = planKinder().length > 1;
   /* KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
      Doppelstunde. Statt dessen, WESSEN Fach es ist — auch wenn es alle haben,
      mehrere durch Schraegstrich getrennt („Mia / Tim"). Stand der Name nur bei
@@ -7097,27 +7241,16 @@ function stundenplanFreiText(f) {
 }
 
 function stundenplanKarte() {
-  if (!stundenplan || !Array.isArray(stundenplan.children) || !stundenplan.children.length) {
+  if (!stundenplan || planKinder().length === 0) {
     return '';
   }
   const tagSpan = planTagesSpanne(stundenplanGewaehlt());
   const von = tagSpan[0], bis = tagSpan[1];
   const spanne = Math.max(bis - von, 60);
-  const stundenText = (m) => {
-    const h = m / 60;
-    if (Math.abs(Math.round(h) - h) < 0.05) {
-      const g = Math.round(h);
-      // EIGENE Schluessel: „1 hour" ist in der ToDo-Kachel schon vergeben und
-      // heisst dort „1 Stunde vorher" — eine Erinnerungs-Vorlaufzeit. Derselbe
-      // Schluessel haette hier „1 Stunde vorher Schule" ergeben.
-      return g === 1 ? translate('1 school hour')
-        : translate('%1 school hours').replace('%1', String(g));
-    }
-    return translate('%1 school hours').replace('%1', h.toFixed(1).replace('.', ','));
-  };
+  const stundenText = planStundenText;
   const gewaehlt = stundenplanGewaehlt();
   let zeilen = '';
-  for (const kind of stundenplan.children) {
+  for (const kind of planKinder()) {
     const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
     const slots = (tag && Array.isArray(tag.slots)) ? tag.slots : [];
     // Gesicht vor den Namen, wenn das Kind einem Familienmitglied zugeordnet
@@ -7283,6 +7416,136 @@ function stundenplanKarte() {
   return `<div class="card plan-card" data-plan="karte"><div class="card-head">` +
     `<h3>${translate('Timetable')}</h3>${legendeKnopf}${stundenplanTagwahl()}</div>${zeilen}` +
     stundenplanLegendeHtml() + `</div>`;
+}
+
+/**
+ * „4,5 Stunden" — die Schulstunden eines Tages oder einer Woche.
+ *
+ * Stand als lokale Funktion in stundenplanKarte(); der Wochenplan braucht sie
+ * genauso, und zweimal dieselbe Rechnung waere zweimal dieselbe Falle mit den
+ * EIGENEN Schluesseln: „1 hour" ist in der ToDo-Kachel schon vergeben und
+ * heisst dort „1 Stunde vorher" — eine Erinnerungs-Vorlaufzeit.
+ */
+function planStundenText(m) {
+  const h = m / 60;
+  if (Math.abs(Math.round(h) - h) < 0.05) {
+    const g = Math.round(h);
+    return g === 1 ? translate('1 school hour')
+      : translate('%1 school hours').replace('%1', String(g));
+  }
+  return translate('%1 school hours').replace('%1', h.toFixed(1).replace('.', ','));
+}
+
+/**
+ * Der Wochenplan des gewaehlten Kindes — der Bereich hinter dem Tab
+ * „Stundenplan" (nur im Kindmodus, siehe visibleTabs).
+ *
+ * Uebernommen aus dem Stundenplan-Modul (`woche()`), mit denselben
+ * Entscheidungen:
+ *
+ *  - Die Skala reicht so weit wie der laengste Unterrichtstag DIESES Kindes,
+ *    nicht wie stundenplan.span: das umspannt die ganze Woche samt Terminen und
+ *    liesse den Nachmittag leer stehen.
+ *  - Jeder Block sitzt an SEINER Uhrzeit, statt auf dem vorigen zu stehen —
+ *    gestapelt summieren sich die Aufrundungen der einzelnen Stunden, und der
+ *    Montag waere hoeher als der Rest.
+ *  - Untergrenze drei Viertelstunden: eine Kurzstunde waere sonst ein Streifen,
+ *    in dem weder Fach noch Zeit lesbar sind. Der ANFANG stimmt trotzdem immer.
+ */
+function renderWochenplan() {
+  const el = document.getElementById('planArea');
+  if (!el) return;
+  const kind = planKinder()[0] || null;
+  const titel = document.getElementById('planTitle');
+  const summe = document.getElementById('planSum');
+  if (!kind) {
+    if (titel) titel.textContent = translate('Timetable');
+    if (summe) summe.textContent = '';
+    renderInto(el, '<div class="empty-state"><i class="fa-light fa-table-columns"></i>' +
+      translate('No timetable') + '</div>');
+    return;
+  }
+  const tage = Array.isArray(kind.days) ? kind.days : [];
+  if (titel) titel.textContent = kind.name || translate('Timetable');
+  if (summe) {
+    const woche = tage.reduce((n, t) => n + (t.minutes || 0), 0);
+    summe.textContent = woche > 0 ? planStundenText(woche) : '';
+  }
+
+  let von = Infinity, bis = -Infinity;
+  for (const t of tage) {
+    for (const sl of (t.slots || [])) { von = Math.min(von, sl.from); bis = Math.max(bis, sl.to); }
+  }
+  if (!isFinite(von) || bis <= von) {
+    const sp = (stundenplan && stundenplan.span) || [8 * 60, 16 * 60];
+    von = sp[0]; bis = sp[1];
+  }
+  const proViertel = 18;
+  const hoehe = Math.max(Math.ceil((bis - von) / 15), 1) * proViertel;
+  const y = (m) => (m - von) / 15 * proViertel;
+  const uhr = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' +
+    String(m % 60).padStart(2, '0');
+
+  // Zeitachse: volle Stunden, dazu die tatsaechliche Anfangszeit — krumme
+  // Startzeiten wie 07:45 sieht man sonst nirgends.
+  let achse = '';
+  for (let st = Math.ceil(von / 60); st * 60 <= bis; st++) {
+    achse += '<div class="wp-marke" style="top:' + (y(st * 60) - 6) + 'px">' + st + ':00<i></i></div>';
+  }
+  if (von % 60 !== 0) {
+    achse += '<div class="wp-marke stark" style="top:-6px">' + uhr(von) + '<i></i></div>';
+  }
+
+  const luecke = (a, b) => (b - a < 1) ? ''
+    : '<div class="wp-frei" style="top:' + y(a) + 'px;height:' + (y(b) - y(a)) + 'px">' +
+      translate('free') + '</div>';
+
+  let spalten = '';
+  for (const t of tage) {
+    const datum = t.date ? stundenplanDatumKurz(t.date) : '';
+    spalten += '<div class="wp-spalte' + (t.today ? ' heute' : '') + '">' +
+      '<div class="wp-kopf"><span class="wp-tag">' + escapeHtml(t.label || '') +
+      (datum ? ' <span class="wp-datum">' + escapeHtml(datum) + '</span>' : '') + '</span>' +
+      (t.today ? '<span class="wp-heute">' + translate('Today') + '</span>' : '') + '</div>' +
+      '<div class="wp-koerper" style="height:' + hoehe + 'px">';
+    const slots = Array.isArray(t.slots) ? t.slots : [];
+    if (slots.length === 0) {
+      // Ferien und Feiertage sagen, WARUM frei ist — dieselbe Auskunft wie auf
+      // der Karte im Dashboard.
+      const text = t.holiday ? stundenplanFreiText(t.holiday) : translate('free');
+      spalten += '<div class="wp-frei" style="top:0;height:' + hoehe + 'px">' +
+        escapeHtml(text) + '</div>';
+    } else {
+      let vorher = von;
+      for (const sl of slots) {
+        spalten += luecke(vorher, sl.from);
+        const h = Math.max(y(sl.to) - y(sl.from), proViertel * 3);
+        const wo = [sl.room, sl.teacher].filter(x => x).join(' · ');
+        const lage = (sl.status === 'entfall' || sl.status === 'vertretung') ? ' ' + sl.status : '';
+        const marke = sl.status === 'entfall' ? translate('cancelled')
+          : (sl.status === 'vertretung' ? translate('substitution') : '');
+        // Derselbe Text im title: in schmalen Spalten wird gekuerzt.
+        const hinweis = sl.name + ', ' + sl.start + ' – ' + sl.end +
+          (wo ? ', ' + wo : '') + (marke ? ' — ' + marke : '');
+        spalten += '<div class="wp-stunde' + lage + '" title="' + escapeHtml(hinweis) + '"' +
+          ' style="background:' + escapeHtml(sl.color || '#607D8B') + ';top:' + y(sl.from) +
+          'px;height:' + h + 'px">' +
+          (sl.icon ? '<span class="wp-sym"><i class="fa-light ' + escapeHtml(sl.icon) + '"></i></span>' : '') +
+          '<div><div class="wp-fach">' + escapeHtml(sl.name || '') + '</div>' +
+          '<div class="wp-zeit">' + escapeHtml(sl.start || '') + ' – ' + escapeHtml(sl.end || '') + '</div>' +
+          (marke ? '<div class="wp-wo wp-zustand">' + escapeHtml(marke) + '</div>' : '') +
+          (wo ? '<div class="wp-wo">' + escapeHtml(wo) + '</div>' : '') +
+          '</div></div>';
+        vorher = Math.max(vorher, sl.to);
+      }
+      spalten += luecke(vorher, bis);
+    }
+    spalten += '</div></div>';
+  }
+
+  renderInto(el, '<div class="wp-raster"><div class="wp-achse">' +
+    '<div class="wp-innen" style="height:' + hoehe + 'px;margin-top:34px">' + achse + '</div></div>' +
+    '<div class="wp-spalten">' + spalten + '</div></div>');
 }
 
 function loadBriefing() {
@@ -8107,9 +8370,7 @@ function renderDashboard() {
   briefingKlappHinweis(el);
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    const id = b.dataset.member;
-    if (memberFilterIds.has(id)) memberFilterIds.delete(id);
-    else memberFilterIds.add(id);
+    mitgliedWaehlen(b.dataset.member);
     renderDashboard();
   }));
   el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
@@ -8598,9 +8859,7 @@ function renderTodoMembers() {
   if (!renderInto(el, membersHtml)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    const mid = b.dataset.member;
-    if (memberFilterIds.has(mid)) memberFilterIds.delete(mid);
-    else memberFilterIds.add(mid);
+    mitgliedWaehlen(b.dataset.member);
     renderTodos();
   }));
 }
@@ -8633,9 +8892,7 @@ function renderCalMembers() {
   if (!renderInto(el, html)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    const mid = b.dataset.member;
-    if (memberFilterIds.has(mid)) memberFilterIds.delete(mid);
-    else memberFilterIds.add(mid);
+    mitgliedWaehlen(b.dataset.member);
     renderCalendar();
   }));
 }
@@ -13605,6 +13862,7 @@ function initCaptions() {
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.querySelector('#tab-notes span').textContent = translate('Notes');
+  document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
   document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');

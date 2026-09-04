@@ -648,7 +648,9 @@
       "Compact": "Kompakt",
       "Detailed": "Detailliert",
       "For the WAF ;-)": "Für den WAF ;-)",
-      "Shopping List": "Einkaufsliste"
+      "Shopping List": "Einkaufsliste",
+      "free": "frei",
+      "No timetable": "Kein Stundenplan"
     },
     "en": {
       "SymDo ToDo List": "SymDo - ToDo List",
@@ -856,7 +858,8 @@
       "Badge: notification": "Notification",
       "Badge: priority": "Priority",
       "Choose print layout": "Choose print layout",
-      "For the WAF ;-)": "For the WAF ;-)"
+      "For the WAF ;-)": "For the WAF ;-)",
+      "No timetable": "No timetable"
     }
   }
 }
