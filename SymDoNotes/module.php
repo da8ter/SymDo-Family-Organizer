@@ -163,7 +163,14 @@ class SymDoNotes extends IPSModuleStrict
 
     private function Push(array $payload): void
     {
-        $this->UpdateVisualizationValue((string)json_encode($payload, JSON_UNESCAPED_SLASHES));
+        /* JSON_INVALID_UTF8_SUBSTITUTE ist Pflicht: ein einziges kaputtes Byte —
+           aus einem Dateinamen, einer KI-Antwort — laesst json_encode sonst false
+           liefern, und die Kachel bekaeme eine leere Nachricht statt des
+           Ergebnisses (das Versprechen dort liefe in den Zeitablauf). */
+        $this->UpdateVisualizationValue((string)json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        ));
     }
 
     // ────────────────────────────── Das Relay ──────────────────────────────
@@ -229,17 +236,16 @@ class SymDoNotes extends IPSModuleStrict
     // ─────────────────────────────── Kleinkram ───────────────────────────────
 
     /**
-     * Das zustaendige Gateway: die verbundene Eltern-Instanz, sonst die
-     * niedrigste. Die App-Haelfte des Gateways gibt es nur einmal (ihre
-     * Hook-Pfade sind fest) — fragte die Kachel eine andere, zeigte sie andere
-     * Mitglieder und andere Notizen als die App.
+     * Das zustaendige Gateway: das mit der NIEDRIGSTEN Instanz-ID. Alles, was
+     * dieses Modul tut — Notizen, Mitglieder, KI —, liegt in der App-Haelfte des
+     * Gateways, und die gibt es nur einmal (ihre Hook-Pfade sind fest, siehe
+     * SymDoGateway::OwnsAppApi). Das eigene Eltern-Gateway ist BEWUSST nicht
+     * bevorzugt: wer zwei Gateways fuehrt, kann die Kachel an das zweite gehaengt
+     * haben — sie zeigte dann andere Mitglieder und andere Notizen als die App.
+     * Genauso halten es SymDoWebApp und ToDoList (GetAppGatewayID).
      */
     private function GatewayID(): int
     {
-        $eltern = (int)(IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
-        if ($eltern > 0 && IPS_InstanceExists($eltern)) {
-            return $eltern;
-        }
         $ids = @IPS_GetInstanceListByModuleID(self::GATEWAY_MODULE_GUID);
         if (!is_array($ids) || $ids === []) {
             return 0;
