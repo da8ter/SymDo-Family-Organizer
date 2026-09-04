@@ -3073,10 +3073,20 @@ html[data-symdo-theme="light"] .voice-ear.lauscht { color: #a35c00; }
        allein in ihrer Reihe steht, wirkt es nicht. */
     align-items: stretch;
   }
-  /* Überschriften, Filter, Aktionen und die Eingabezeile spannen über alle Spalten */
+  /* Überschriften, Filter, Aktionen und die Eingabezeile spannen über alle Spalten.
+     Wer hier fehlt, wird ein gewöhnliches Rasterfeld — und weil align-items:start
+     gilt, klebt der NACHBAR oben in einer Reihe, die so hoch ist wie das hohe
+     Feld daneben. Genau so stand das Gerichtsbild einer Rezeptliste links und die
+     erste Zutat allein oben rechts, mit einer Handbreit Luft darunter. */
   .cat-header, .section-toggle, .empty-state, .screen-head,
   .dash-head, .member-bar, .kpi-grid, .segmented, .fav-actions,
-  .suggestions, .composer { grid-column: 1 / -1; }
+  .suggestions, .composer,
+  /* Das Gerichtsbild steht ÜBER den Zutaten, nicht neben ihnen. */
+  .fav-hero,
+  /* Die Klassenseite bringt ihr eigenes Raster mit (.edu-gruppe, zwei Spalten ab
+     760px): Bereichsband und Gruppe gehören deshalb über die ganze Breite, sonst
+     stünde ein zweispaltiger Block in einer halben Spalte. */
+  .edu-abschnitt, .edu-gruppe { grid-column: 1 / -1; }
 
   /* Wochenring und Einkaufsvorschau bekommen im Raster jeweils eine eigene
      Zeile in voller Breite: der Ring ist eine breite, flache Karte, und die
