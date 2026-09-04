@@ -260,8 +260,14 @@ trait Notes
            Edumaps-Ordner darin stuende sonst „0", obwohl 16 Notizen darin
            liegen. Nur EINE Ebene tief aufaddieren reicht nicht — es wird die
            ganze Kette hochgezaehlt. */
+        /* Gezaehlt wird aus einer KOPIE: $zahl waechst waehrend der Schleife, und
+           wer den Wert von dort nimmt, addiert das schon Hochgezaehlte ein
+           zweites Mal weiter nach oben. Bei Grossvater ← Vater ← Kind stand am
+           Grossvater die Summe doppelt, sobald das Kind vor dem Vater dran war —
+           also je nach Reihenfolge in der Liste. */
+        $eigenAnzahl = $zahl;
         foreach ($store['folders'] as $f) {
-            $eigene = (int)($zahl[(string)$f['id']] ?? 0);
+            $eigene = (int)($eigenAnzahl[(string)$f['id']] ?? 0);
             if ($eigene === 0) {
                 continue;
             }
