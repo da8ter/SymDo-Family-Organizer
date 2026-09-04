@@ -1070,7 +1070,8 @@ trait VoiceTools
                 if (!($liste['ok'] ?? false)) {
                     return $liste;
                 }
-                $erg = $this->VoiceAufgabeAufloesen((int)$liste['id'], $was);
+                // null = auch erledigte: geloescht wird unabhaengig vom Zustand.
+                $erg = $this->VoiceAufgabeAufloesen((int)$liste['id'], $was, null);
                 $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('tasks'));
                 if ($fehler !== null) {
                     return $fehler;
@@ -2010,7 +2011,9 @@ trait VoiceTools
             } elseif ($b === 'aufgabe') {
                 $ziel = $this->VoiceListeFinden('todo', $args['liste'] ?? null, $ctx);
                 if (!($ziel['ok'] ?? false)) { $letzterFehler = $ziel; continue; }
-                $erg = $this->VoiceAufgabeAufloesen((int)$ziel['id'], $was);
+                /* Gesucht wird dort, wo die Aufgabe JETZT steht: zum Abhaken unter
+                   den offenen, zum Wiederoeffnen unter den erledigten. */
+                $erg = $this->VoiceAufgabeAufloesen((int)$ziel['id'], $was, $erledigt);
                 $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('tasks'));
                 if ($fehler === null) {
                     $t = $erg['treffer'][0];
@@ -2024,7 +2027,9 @@ trait VoiceTools
             } else {
                 $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
                 if (!($ziel['ok'] ?? false)) { $letzterFehler = $ziel; continue; }
-                $erg = $this->VoiceArtikelAufloesen((int)$ziel['id'], $was);
+                // Dasselbe beim Einkauf: in den Wagen legen sucht auf der Liste,
+                // herausnehmen sucht im Wagen.
+                $erg = $this->VoiceArtikelAufloesen((int)$ziel['id'], $was, $erledigt);
                 $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('shopping items'));
                 if ($fehler === null) {
                     $t = $erg['treffer'][0];

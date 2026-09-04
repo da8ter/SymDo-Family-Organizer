@@ -3,9 +3,12 @@
 /ShoppingList/examples/
 keys.txt
 
-# Ausleitungen aus WebUntis: Schuelerlisten der Schule. Fremde
-# personenbezogene Daten — gehoeren nie in ein Store-Repo.
-/SymDoGateway/schueler*.csv
+# Ausleitungen aus WebUntis und alles andere Tabellarische: Schuelerlisten der
+# Schule, Klassenlisten, Exporte. Fremde personenbezogene Daten — die gehoeren
+# nie in ein Store-Repo. Das Muster fasst die ENDUNG, nicht einen Dateinamen:
+# ein „klasse5a.csv" waere sonst wieder drin. Braucht ein Modul einmal eine
+# eigene CSV als Beigabe, kommt sie mit „!Pfad/datei.csv" gezielt zurueck.
+*.csv
 
 # Python-Zwischenstand der Übernahme-Skripte.
 __pycache__/

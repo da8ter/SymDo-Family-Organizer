@@ -7151,6 +7151,11 @@ function loadTimetable() {
     }
     stundenplanSignatur = signatur;
     stundenplan = frisch;
+    /* Erst die Bereiche, dann zeichnen: ob es den Bereich „Stundenplan" gibt,
+       haengt am Plan (visibleTabs → planKinder). Der Plan kommt aber SPAETER als
+       der erste Zustand — ohne diese Zeile stand der Tab im Kindmodus erst da,
+       wenn irgendetwas anderes ein Neuzeichnen ausloeste. */
+    applyTabVisibility();
     renderAll();
     stundenplanTickerStellen();
   }).catch(() => { stundenplanLaeuft = false; });

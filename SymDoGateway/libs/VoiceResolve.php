@@ -85,32 +85,57 @@ trait VoiceResolve
     /**
      * Eine Aufgabe in einer ToDo-Liste finden. @return array{status,treffer,beinah,items?}
      * treffer-Einträge: ['schluessel'=>id, 'titel'=>…]
+     *
+     * $nurOffen entscheidet, WORIN gesucht wird:
+     *   true  offene Aufgaben  — „hak die Mülltonne ab"
+     *   false erledigte        — „die Aufgabe ist doch noch offen"
+     *   null  alle             — Löschen fragt nicht nach dem Zustand
+     *
+     * Vorher wurde IMMER nur unter den offenen gesucht. Damit konnte „mach das
+     * wieder auf" nichts finden (die Aufgabe ist ja erledigt) und Löschen kam an
+     * eine erledigte Aufgabe gar nicht heran — die Antwort lautete jedes Mal
+     * „ich finde das nicht", obwohl es dastand.
      */
-    private function VoiceAufgabeAufloesen(int $tdlId, string $such): array
+    private function VoiceAufgabeAufloesen(int $tdlId, string $such, ?bool $nurOffen = true): array
     {
         $st = json_decode((string)@TDL_GetAppState($tdlId), true);
         $items = is_array($st) ? (($st['state'] ?? [])['items'] ?? null) : null;
         $kand = [];
         foreach (is_array($items) ? $items : [] as $it) {
-            if (is_array($it) && ($it['done'] ?? false) !== true) {
-                $kand[] = ['schluessel' => (int)($it['id'] ?? 0), 'titel' => (string)($it['title'] ?? '')];
+            if (!is_array($it)) {
+                continue;
             }
+            $erledigt = ($it['done'] ?? false) === true;
+            if ($nurOffen !== null && $erledigt === $nurOffen) {
+                continue;
+            }
+            $kand[] = ['schluessel' => (int)($it['id'] ?? 0), 'titel' => (string)($it['title'] ?? '')];
         }
         return $this->VoiceAufloesen($such, $kand);
     }
 
     /**
-     * Einen Artikel in einer Einkaufsliste finden (nur nicht im Wagen).
+     * Einen Artikel in einer Einkaufsliste finden.
      * @return array{status,treffer,beinah}
+     *
+     * $nurOffen wie bei den Aufgaben:
+     *   true  noch zu kaufen — „leg die Milch in den Wagen"
+     *   false schon im Wagen — „nimm die Milch wieder raus"
+     *   null  alles          — Löschen
      */
-    private function VoiceArtikelAufloesen(int $slId, string $such): array
+    private function VoiceArtikelAufloesen(int $slId, string $such, ?bool $nurOffen = true): array
     {
         $items = json_decode((string)@SL_GetItems($slId), true);
         $kand = [];
         foreach (is_array($items) ? $items : [] as $it) {
-            if (is_array($it) && ($it['inCart'] ?? false) !== true) {
-                $kand[] = ['schluessel' => (string)($it['id'] ?? ''), 'titel' => (string)($it['name'] ?? '')];
+            if (!is_array($it)) {
+                continue;
             }
+            $imWagen = ($it['inCart'] ?? false) === true;
+            if ($nurOffen !== null && $imWagen === $nurOffen) {
+                continue;
+            }
+            $kand[] = ['schluessel' => (string)($it['id'] ?? ''), 'titel' => (string)($it['name'] ?? '')];
         }
         return $this->VoiceAufloesen($such, $kand);
     }

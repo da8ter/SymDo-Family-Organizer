@@ -549,10 +549,15 @@ trait WebUntis
                         $typ = self::UNTIS_TYP_SCHUELER;
                         $nr  = (int)$passend[0]['id'];
                     } else {
-                        return sprintf($this->Translate('%1$s: the account has several children — enter the element number: %2$s'),
+                        /* NUR die Nummern, keine Namen: diese Zeile wird gemerkt
+                           (UntisStatusSchreiben) und landet damit in der
+                           settings.json — die ist Klartext und weltlesbar. Die
+                           Namen nennt „Verbindung testen", und die stehen nur im
+                           offenen Formular. */
+                        return sprintf($this->Translate('%1$s: the account has several children — enter the element number (%2$s); „Test connection" names them.'),
                             $kind['name'],
                             implode(', ', array_map(
-                                static fn(array $k): string => $k['id'] . ' · ' . $k['name'], $kinder)));
+                                static fn(array $k): string => (string)$k['id'], $kinder)));
                     }
                 } else {
                     return sprintf($this->Translate('%1$s: the account itself is not a timetable element (person type %2$d) and names no child — enter element type and number; the search in the form finds it.'),

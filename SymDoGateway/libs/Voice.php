@@ -71,18 +71,36 @@ trait Voice
 
     private function VoiceApplyChanges(): void
     {
-        // Nach einem Kernel-Start kann kein vermerkter Anruf überlebt haben —
-        // auflegen ist harmlos, offen stehen lassen kostet Geld.
+        /* Nach einem Kernel-Start kann kein vermerkter Anruf überlebt haben —
+           auflegen ist harmlos, offen stehen lassen kostet Geld.
+           ABER: ApplyChanges läuft nicht nur beim Start. Es läuft auch, wenn
+           jemand das Formular speichert oder die App ein Profil ändert
+           (AppCore::UpdateAppUser) — und legte bis hierher ein LAUFENDES Gespräch
+           mitten im Satz auf. Deshalb wird der Herzschlag befragt: Wer innerhalb
+           der Ping-Frist noch da war, lebt und bleibt; alles Ältere ist eine
+           Leiche aus der Zeit vor dem Neustart. */
         try {
             $offen = json_decode((string)@$this->ReadAttributeString('VoiceOpenCalls'), true);
-            foreach (is_array($offen) ? array_keys($offen) : [] as $callId) {
+            $offen = is_array($offen) ? $offen : [];
+            $jetzt = time();
+            $tot   = 0;
+            foreach ($offen as $callId => $c) {
+                if (($jetzt - (int)($c['lastPing'] ?? 0)) <= self::$VOICE_PING_MAX) {
+                    continue;   // spricht noch
+                }
                 $this->VoiceHangup((string)$callId);
+                unset($offen[$callId]);
+                $tot++;
             }
-            if (is_array($offen) && $offen !== []) {
-                $this->WriteAttributeString('VoiceOpenCalls', '{}');
-                $this->LogMessage('SymDo Sprache: ' . count($offen) . ' Altsitzung(en) nach Neustart aufgelegt', KL_NOTIFY);
+            if ($tot > 0) {
+                $this->WriteAttributeString('VoiceOpenCalls', (string)json_encode($offen));
+                $this->LogMessage('SymDo Sprache: ' . $tot . ' Altsitzung(en) aufgelegt', KL_NOTIFY);
             }
-            @$this->SetTimerInterval('VoiceWatchdog', 0);
+            /* Der Wachhund muss weiterlaufen, solange noch jemand spricht: er
+               bucht die Sekunden und zieht den Sitzungsdeckel. Ihn hier blind
+               abzustellen hiess, ein laufendes Gespräch ungezählt und ungedeckelt
+               weiterlaufen zu lassen. */
+            @$this->SetTimerInterval('VoiceWatchdog', $offen === [] ? 0 : self::$VOICE_TICK_MS);
         } catch (\Throwable $e) {
             // Attribute/Timer existieren vor dem ersten Kernel-Neustart noch nicht.
         }
@@ -295,6 +313,19 @@ trait Voice
             return $this->VoiceErr('invalid_payload', $this->Translate('Invalid call'));
         }
         $offen = $this->VoiceCalls();
+        /* Dieselbe Kennung ein zweites Mal? Dann NUR den Herzschlag auffrischen.
+           Frueher wurde der Eintrag ueberschrieben — mit startedAt und accrued
+           auf jetzt. Damit fielen die Sekunden seit der letzten Buchung
+           ersatzlos weg, der Sitzungsdeckel ($jetzt - startedAt) wurde nie
+           erreicht und das Tagesbudget wuchs nie: ein Client, der alle 20
+           Sekunden „opened" schickt, telefonierte unbegrenzt auf Rechnung des
+           Hauses. Auch der Sitzungszaehler stieg bei jedem Aufruf. */
+        if (isset($offen[$callId])) {
+            $offen[$callId]['lastPing'] = time();
+            $this->VoiceCallsSchreiben($offen);
+            @$this->SetTimerInterval('VoiceWatchdog', self::$VOICE_TICK_MS);
+            return ['ok' => true];
+        }
         $offen[$callId] = [
             'tile'      => (int)($body['tile'] ?? 0),
             'userId'    => (string)($body['userId'] ?? ''),
