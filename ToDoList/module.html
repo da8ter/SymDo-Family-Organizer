@@ -13297,6 +13297,12 @@ function buildPrintHtml(mode) {
   const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const baseUrl = window.location.origin || '';
+  /* Der Rumpf gehoert NUR vor eine Adresse, die mit „/" anfaengt. Die Bilder
+     kommen in drei Formen: als zwischengespeicherter blob:/data:-Verweis, als
+     vollstaendige Hook-Adresse und als Pfad. Vor die ersten beiden gesetzt,
+     ergab er „http://host/data:image/…" — im Ausdruck fehlten dann genau die
+     Bilder, die schon geladen waren. */
+  const mitRumpf = (u) => (u && u.charAt(0) === '/' && u.charAt(1) !== '/') ? baseUrl + u : (u || '');
 
   let body = '';
   if (mode === 'ultra') {
@@ -13326,7 +13332,7 @@ function buildPrintHtml(mode) {
           const amt = item.amount || '1';
           const amtStr = /^\d+$/.test(amt) ? amt + 'x' : amt;
           const imgUrl = getProductImageUrl(item.name, item.imageUrl);
-          const imgTag = imgUrl ? `<img class="d-img" src="${esc(baseUrl + imgUrl)}" />` : '';
+          const imgTag = imgUrl ? `<img class="d-img" src="${esc(mitRumpf(imgUrl))}" />` : '';
           const notes = item.notes ? `<div class="notes">${esc(item.notes)}</div>` : '';
           body += `<div class="d-item"><span class="cb">&#x2610;</span>${imgTag}<div><strong>${esc(amtStr)}</strong> ${esc(item.name)}${notes}</div></div>`;
         }
