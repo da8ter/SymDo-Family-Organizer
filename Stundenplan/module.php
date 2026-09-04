@@ -997,6 +997,17 @@ class SymDoTimetable extends IPSModuleStrict
         if ($ausGateway === []) {
             $spalten[] = ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => 'auto',
                           'add' => '', 'edit' => ['type' => 'ValidationTextBox']];
+        } else {
+            /* MIT Gateway steht der Name hier nur noch da — er kommt aus SymDo und
+               wird bei jedem Abgleich in die Zeile geschrieben (KinderAbgleichen).
+               Ohne diese Spalte war die Liste eine Reihe gleich aussehender Zeilen,
+               in denen erst das Aufklappen der Auswahl verriet, wer gemeint ist.
+               KEIN `edit` — hier wird nichts getippt.
+               ABER `save` => true: eine Spalte ohne `edit` schreibt Symcon beim
+               Speichern NICHT zurueck, und der Name fiele bei jedem Uebernehmen
+               lautlos aus der Zeile. */
+            $spalten[] = ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '150px',
+                          'add' => '', 'save' => true];
         }
         // Wer, dann wie: das Kind steht vor seiner Farbe. Wert ist die KENNUNG,
         // angezeigt wird der Name. Vorher stand hier der Name auch als Wert —
