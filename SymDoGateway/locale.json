@@ -631,7 +631,19 @@
       "Class page %s": "Klassenseite %s",
       "New from the class page": "Neues von der Klassenseite",
       "1 card updated": "1 Karte aktualisiert",
-      "%d cards updated": "%d Karten aktualisiert"
+      "%d cards updated": "%d Karten aktualisiert",
+      "%1$s is not on %2$s.": "%1$s steht nicht auf %2$s.",
+      "%1$s is on %2$s.": "%1$s steht auf %2$s.",
+      "Only the first items are listed — for a specific item ask with „suche\".": "Es sind nur die ersten Artikel aufgeführt — nach einem bestimmten Artikel mit „suche\" fragen.",
+      "Element type and number answer „whose timetable?\". Leave them empty for the plan of the account itself — that works with a student login. A guardian account is not a timetable element, so enter the child there: type „Student\" and its element number, or type „Class\" and the class number. The search below finds the number.": "Element-Typ und -Nummer beantworten „wessen Stundenplan?\". Leer lassen für den Plan des angemeldeten Kontos — das geht mit einem Schülerkonto. Ein Erziehungsberechtigten-Konto ist selbst kein Stundenplan-Element; dort das Kind eintragen: Typ „Schüler\" mit seiner Element-Nummer, oder Typ „Klasse\" mit der Klassennummer. Die Suche darunter findet die Nummer.",
+      "Find student (name or part of it)": "Schüler suchen (Name oder Teil davon)",
+      "Search": "Suchen",
+      "Enter at least two letters of the name.": "Mindestens zwei Buchstaben des Namens eingeben.",
+      "Student list not readable (%s) — then use type „Class\" and the class number instead.": "Die Schülerliste ist nicht lesbar (%s) — dann statt dessen Typ „Klasse\" mit der Klassennummer verwenden.",
+      "No student found for „%s\".": "Kein Schüler zu „%s\" gefunden.",
+      "Element number · name (type „Student\"): %s": "Element-Nummer · Name (Typ „Schüler\"): %s",
+      "%1$s: the account itself is not a timetable element (person type %2$d) — enter element type and number of the child; the search in the form finds it.": "%1$s: das Konto selbst ist kein Stundenplan-Element (Personentyp %2$d) — Element-Typ und -Nummer des Kindes eintragen; die Suche im Formular findet sie.",
+      "%s: element type and number belong together — enter both, or leave both empty.": "%s: Element-Typ und -Nummer gehören zusammen — beides eintragen oder beides leer lassen."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

@@ -49,13 +49,21 @@ trait VoiceTools
             ],
             'einkaufsliste_lesen' => [
                 'art' => 'lesen',
-                'beschreibung' => 'Liest die Einkaufsliste: was noch zu kaufen ist und was schon im Wagen liegt.',
+                'beschreibung' => 'Liest die Einkaufsliste: was noch zu kaufen ist und was schon im Wagen liegt. '
+                    . 'Für die Frage nach EINEM Artikel („steht Butter drauf?") den Namen in suche angeben — '
+                    . 'die Antwort ist dann vollständig, auch bei einer langen Liste.',
                 'schema' => [
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
                         'liste' => ['type' => ['string', 'null'], 'description' => 'Name der Einkaufsliste; null = Standardliste'],
+                        /* Ohne diese Suche war die Frage „steht X drauf?" nicht zu
+                           beantworten: die Liste kam auf 25 Artikel gekuerzt, und
+                           bei 150 Artikeln sagte das Modell zu Recht, es koenne
+                           nichts Sicheres sagen. */
+                        'suche' => ['type' => ['string', 'null'],
+                                    'description' => 'Nach diesem Artikel suchen (Teilwort genügt); null = ganze Liste'],
                     ],
-                    'required' => ['liste'],
+                    'required' => ['liste', 'suche'],
                 ],
             ],
             'aufgaben_lesen' => [
@@ -531,6 +539,44 @@ trait VoiceTools
             }
         }
         $gesamt = count($offenListe);
+
+        /* Nach EINEM Artikel gefragt: dann zaehlt die vollstaendige Antwort, nicht
+           die Uebersicht. Gesucht wird im ganzen Bestand — auch im Wagen, denn
+           „hab ich das schon?" ist dieselbe Frage. Ohne diesen Zweig kam die
+           Liste auf 25 Artikel gekuerzt, und bei 150 Artikeln konnte das Modell
+           nicht sagen, ob etwas drauf steht. */
+        $suche = trim((string)($args['suche'] ?? ''));
+        if ($suche !== '') {
+            $treffer = [];
+            foreach ($items as $it) {
+                if (!is_array($it)) {
+                    continue;
+                }
+                $name = trim((string)($it['name'] ?? ''));
+                if ($name === '' || mb_stripos($name, $suche) === false) {
+                    continue;
+                }
+                $menge = trim((string)($it['amount'] ?? ''));
+                $treffer[] = [
+                    'name'     => $name,
+                    'menge'    => $menge,
+                    'im_wagen' => ($it['inCart'] ?? false) === true,
+                ];
+            }
+            return [
+                'ok'      => true,
+                'liste'   => (string)$ziel['name'],
+                'suche'   => $suche,
+                'gefunden' => count($treffer),
+                // Vollstaendig, nicht gekuerzt: ein Suchwort trifft selten hundert
+                // Artikel, und eine halbe Antwort waere hier keine.
+                'treffer' => array_slice($treffer, 0, 25),
+                'sag'     => $treffer === []
+                    ? sprintf($this->Translate('%1$s is not on %2$s.'), $suche, (string)$ziel['name'])
+                    : sprintf($this->Translate('%1$s is on %2$s.'), $treffer[0]['name'], (string)$ziel['name']),
+            ];
+        }
+
         $gezeigt = array_slice($offenListe, 0, 25);
         return [
             'ok'       => true,
@@ -539,6 +585,11 @@ trait VoiceTools
             'im_wagen' => $imWagen,
             'artikel'  => $gezeigt,
             'gekuerzt' => $gesamt > count($gezeigt),
+            /* Der Hinweis gehoert MIT in die Antwort: sonst zaehlt das Modell die
+               25 gezeigten Artikel auf und behauptet, das sei die Liste. */
+            'hinweis'  => $gesamt > count($gezeigt)
+                ? $this->Translate('Only the first items are listed — for a specific item ask with „suche".')
+                : '',
             'sag'      => $gesamt === 0
                 ? sprintf($this->Translate('Nothing left to buy on %s.'), (string)$ziel['name'])
                 : sprintf($this->Translate('%d items still to buy on %s.'), $gesamt, (string)$ziel['name']),

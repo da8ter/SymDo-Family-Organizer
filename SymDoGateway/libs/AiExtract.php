@@ -275,6 +275,15 @@ trait AiExtract
         if (str_ends_with($path, 'calendar')) {
             return json_encode($this->CalHandleAction($body), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        /* Der Stundenplan der Kinder. Rein lesend und ohne KI — er stand
+           trotzdem nicht hier, und deshalb zeigte JEDE Kachel keine
+           Stundenplan-Karte: die Web-App fragt ihn ueber diesen einen Weg, und
+           ohne Zweig lief die Anfrage in den KI-Riegel und endete mit
+           „ai_disabled" bzw. unbekannter Route. Ueber REST ging es immer, weil
+           dort der Router den Fall kennt (ApiRouter, case 'timetable'). */
+        if (str_ends_with($path, 'timetable')) {
+            return json_encode($this->TimetablePublic(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         // Notizen: lesen und bearbeiten hat mit der KI nichts zu tun, muss also auch
         // bei abgeschalteter Analyse gehen. Der Riegel steckt in der Aktion selbst —
         // 'analyse' prueft NotesAiAllowed(), alles andere nicht.
