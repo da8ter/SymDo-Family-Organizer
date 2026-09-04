@@ -146,6 +146,11 @@ trait Voice
     // ------------------------------------------------------------------
 
     /** @param array<string,mixed> $body @return array<string,mixed> */
+    /** Anfragen je Stunde und Geraet auf dem Sprachweg (ohne `open`). Eine
+     *  Stunde ununterbrochenes Reden sind rund 120 Herzschlaege plus
+     *  Werkzeuge; alles darueber ist keine Unterhaltung mehr. */
+    private const VOICE_RATE_MAX = 900;
+
     private function VoiceHandleAction(array $body, ?array $device): array
     {
         $action = (string)($body['action'] ?? '');
@@ -242,8 +247,32 @@ trait Voice
             return $r;
         }
         $r['sessionSeconds'] = max(30, $sitzung);
-        $r['pingSeconds']    = 15;
+        /* 30 statt 15 Sekunden: der Herzschlag zaehlt die Minuten mit und haelt
+           die Sitzung wach — die Genauigkeit leidet nicht, denn gezaehlt wird
+           die tatsaechlich vergangene Zeit. Er halbiert damit die Anfragen. */
+        $r['pingSeconds']    = 30;
         return $r;
+    }
+
+    /**
+     * Eigenes Stundenfenster fuer den Sprachweg. false = die 429 ist gesendet.
+     *
+     * Der Sprachdialog ist von Natur aus gespraechig: der Browser meldet sich
+     * waehrend eines Gespraechs alle paar Sekunden (Herzschlag, zaehlt die
+     * Minuten mit), dazu kommen die Werkzeugaufrufe. Am KI-Fenster (60 je
+     * Stunde) war deshalb nach einer Viertelstunde Reden Schluss — der Nutzer
+     * sah „Verbindungsstatus 429". Der eigene Topf faengt eine SCHLEIFE, nicht
+     * ein Gespraech; `open` bleibt am KI-Fenster, denn nur dort entsteht eine
+     * bezahlte Sitzung.
+     */
+    private function VoiceRateLimitOk(?array $device): bool
+    {
+        if ($this->DeviceRateAllows((string)($device['id'] ?? ''), 'voice', self::VOICE_RATE_MAX, 3600)) {
+            return true;
+        }
+        $this->SendApiError('rate_limited',
+            $this->Translate('Too many voice requests — please wait a moment.'), 429);
+        return false;
     }
 
     /** @return array<string,mixed> */

@@ -148,10 +148,18 @@ trait ApiRouter
                 // Sprachdialog der Web-App (die Kachel nimmt das Relay). Das
                 // Stundenfenster je Gerät gilt hier wie bei jeder KI-Route.
                 if ($method === 'POST') {
-                    if (!$this->AiRateLimitOk($device)) {
+                    $rumpf = $this->ReadJsonBody();
+                    /* Eigener Topf fuer den GANZEN Sprachweg, auch fuer `open`.
+                       Am KI-Fenster (60 je Stunde) war nach einer Viertelstunde
+                       Reden Schluss: der Browser meldet sich waehrend eines
+                       Gespraechs im Takt, und jede Meldung zaehlte dort mit.
+                       Die Kosten deckelt `open` selbst — Einwilligung,
+                       Schluessel und vor allem das TAGESBUDGET an Sprechzeit
+                       (VoiceBudgetLeft); dieser Topf faengt nur eine Schleife. */
+                    if (!$this->VoiceRateLimitOk($device)) {
                         return;
                     }
-                    $this->SendJson($this->VoiceHandleAction($this->ReadJsonBody(), $device));
+                    $this->SendJson($this->VoiceHandleAction($rumpf, $device));
                     return;
                 }
                 break;

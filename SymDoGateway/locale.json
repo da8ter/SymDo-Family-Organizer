@@ -621,7 +621,8 @@
       "Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps\".": "Verlinkte Karten werden nur als Notizen gespiegelt, nie ausgewertet: es sind Nachschlagewerke, und jede Auswertung kostet einen KI-Aufruf. Jede Karte bekommt einen eigenen Ordner in „Edumaps\".",
       "Forget linked maps": "Verlinkte Karten vergessen",
       "Linked maps forgotten — the next check finds them again.": "Verlinkte Karten vergessen — die nächste Prüfung findet sie wieder.",
-      "Linked map": "Verlinkte Karte"
+      "Linked map": "Verlinkte Karte",
+      "Too many voice requests — please wait a moment.": "Zu viele Anfragen im Sprachdialog — einen Moment warten."
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",
