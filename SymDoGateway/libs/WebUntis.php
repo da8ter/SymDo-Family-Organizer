@@ -581,13 +581,22 @@ trait WebUntis
             return sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']);
         }
 
-        [$tage, $datiert, $auffaellig, $offen] = $this->UntisAbbilden($stunden, $raster, (string)$kind['kurse']);
+        [$tage, $datiert, $auffaellig, $offen, $verworfen] = $this->UntisAbbilden($stunden, $raster, (string)$kind['kurse']);
+        /* Was eine ungeklaerte Ueberschneidung an Meldungen verschluckt hat,
+           steht in der Statuszeile — sonst faellt der Entfall aus Push und
+           Briefing weg, und niemand erfaehrt, dass es ihn gab. Die Abhilfe ist
+           immer dieselbe: den Kurs in die Kursliste des Kindes eintragen. */
+        $verlust = $verworfen === [] ? '' : ' — ' . sprintf(
+            $this->Translate('%1$d message(s) unassigned (%2$s) — add the course to the child\'s course list'),
+            count($verworfen),
+            implode(', ', array_slice($verworfen, 0, 3)) . (count($verworfen) > 3 ? ' …' : '')
+        );
         if ($trocken) {
             /* Trockenlauf: NICHTS schreiben, NICHT melden und den Merker nicht
                anfassen. Sonst gaelten die Aenderungen als gemeldet, ohne dass
                jemand sie gesehen hat — und der echte Lauf schwiege dann. */
             return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d unresolved overlap(s) — dry run, nothing written'),
-                $kind['name'], count($stunden), count($auffaellig), $offen);
+                $kind['name'], count($stunden), count($auffaellig), $offen) . $verlust;
         }
         $eingespielt = ((int)$kind['stpl'] > 0 && $tage !== []) ? $this->UntisEinspielen($kind, $tage) : 0;
         /* Zweiter Aufruf, datiert: der Wochenplan zeigt die REGELWOCHE, die
@@ -598,7 +607,7 @@ trait WebUntis
         $neu = $this->UntisAenderungenMelden($kind, $auffaellig);
 
         return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved'),
-            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen);
+            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen) . $verlust;
     }
 
     /**
@@ -609,7 +618,7 @@ trait WebUntis
      * genauer geht es nicht, ohne das Modul auf Datumsbasis umzubauen. Die
      * Vertretungen dagegen werden ueber den ganzen Zeitraum gemeldet.
      *
-     * @return array{0:array<int,list<array<string,mixed>>>, 1:array<string,list<array<string,mixed>>>, 2:list<array<string,mixed>>, 3:int}
+     * @return array{0:array<int,list<array<string,mixed>>>, 1:array<string,list<array<string,mixed>>>, 2:list<array<string,mixed>>, 3:int, 4:list<string>}
      */
     private function UntisAbbilden(array $stunden, array $raster, string $kurse): array
     {
@@ -666,9 +675,16 @@ trait WebUntis
            dem Wochenplan. Dieselbe Kurswahl wie unten, sonst staenden auch
            hier fuenf Religionskurse uebereinander. */
         $datiert = [];
+        /* Die verworfenen Meldungen kommen aus DIESEM Durchgang, nicht aus dem
+           Wochenplan: gemeldet wird, was an einem DATUM geschieht. */
+        $verworfen = [];
         foreach ($ersteWoche as $termine) {
             foreach ($termine as $datum => $slots) {
-                [$gewaehlt] = $this->UntisKurseWaehlen($slots, $kurse);
+                [$gewaehlt, , $weg] = $this->UntisKurseWaehlen($slots, $kurse);
+                foreach ($weg as $w) {
+                    $verworfen[] = date('d.m.', (int)strtotime(substr((string)$datum, 0, 4) . '-'
+                        . substr((string)$datum, 4, 2) . '-' . substr((string)$datum, 6, 2))) . ' ' . $w;
+                }
                 if ($gewaehlt !== []) {
                     $datiert[substr((string)$datum, 0, 4) . '-' . substr((string)$datum, 4, 2)
                         . '-' . substr((string)$datum, 6, 2)] = $gewaehlt;
@@ -713,7 +729,7 @@ trait WebUntis
             [$tage[$wt], $n] = $this->UntisKurseWaehlen($slots, $kurse);
             $offen += $n;
         }
-        return [$tage, $datiert, $auffaellig, $offen];
+        return [$tage, $datiert, $auffaellig, $offen, $verworfen];
     }
 
     /**
@@ -729,7 +745,7 @@ trait WebUntis
      * Ein Eintrag mit MINUS davor („-AG") wirft ein Fach immer raus, auch wenn
      * es allein steht.
      *
-     * @return array{0:list<array<string,mixed>>, 1:int}
+     * @return array{0:list<array<string,mixed>>, 1:int, 2:list<string>}
      */
     private function UntisKurseWaehlen(array $slots, string $kurse): array
     {
@@ -766,6 +782,12 @@ trait WebUntis
         }
         $raus = [];
         $offen = 0;
+        /* Was beim Verwerfen an MELDUNGEN verloren geht. Eine ungeklaerte
+           Ueberschneidung leert die Zeit — steckte darin ein Entfall oder eine
+           Vertretung, faellt damit auch die Nachricht darueber weg. Das durfte
+           nicht lautlos passieren: der Nutzer sah einen freien Platz im Plan und
+           erfuhr nie, dass zu dieser Zeit etwas ausfiel. */
+        $verworfen = [];
         foreach ($nachZeit as $zeit => $gruppe) {
             /* ZUERST gleiche Faecher zusammenfassen: zweimal derselbe Name zur
                selben Zeit ist keine Wahl, sondern eine Doppelung (gemessen:
@@ -782,6 +804,10 @@ trait WebUntis
                Kursliste kannte beides nicht und hat die Zeit geleert.
                Also: was stattfindet, schlaegt was ausfaellt. Faellt alles aus,
                bleibt der Entfall stehen — durchgestrichen ist die Auskunft. */
+            // Vor dem Filtern merken: bleibt die Zeit spaeter ganz ungeklaert,
+            // zaehlt fuer den Verlust ALLES, was hier stand — auch der Entfall,
+            // den dieser Filter gerade weggenommen hat.
+            $alle = $gruppe;
             $stattfindend = array_values(array_filter($gruppe,
                 static fn(array $s): bool => (string)$s['status'] !== 'entfall'));
             if ($stattfindend !== []) {
@@ -805,6 +831,11 @@ trait WebUntis
                 $offen++;
                 $this->SendDebug('WebUntis', 'Ueberschneidung ' . $zeit . ' ungeklaert: '
                     . implode(', ', array_map(static fn(array $s): string => (string)$s['subject'], $gruppe)), 0);
+                foreach ($alle as $s) {
+                    if ((string)$s['status'] !== 'normal') {
+                        $verworfen[] = (string)$zeit . ' ' . (string)$s['subject'];
+                    }
+                }
                 continue;
             }
             if (count($passend) > 1) {
@@ -818,7 +849,7 @@ trait WebUntis
             $raus[] = $passend[0];
         }
         usort($raus, static fn(array $a, array $b): int => strcmp((string)$a['start'], (string)$b['start']));
-        return [$raus, $offen];
+        return [$raus, $offen, $verworfen];
     }
 
     /** Ein Feld aus der Elementliste einer Stunde („su", „ro", „te"). */
