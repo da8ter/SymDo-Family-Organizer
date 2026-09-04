@@ -6961,6 +6961,14 @@ function stundenplanKarte() {
       + (echte.length ? stundenText(tag.minutes || 0) : translate('lessons cancelled'));
     zeilen += `<span class="was">${escapeHtml(wann)}</span>` +
       `<span class="spanne">${escapeHtml(beginn)}–${escapeHtml(ende)}</span></div>`;
+    /* Gerundet wird nach der LAGE, nicht nach der Stelle im Feld: seit der Plan
+       datierte Tage kennt, kann ein Ganztagsblock („Projekttag" 8–13 Uhr) bis
+       ans Ende der Bahn reichen und trotzdem als ERSTES Stueck kommen. Nach
+       der alten Regel („das letzte Stueck rundet rechts") blieb dort eine
+       scharfe Kante, und der Balken sah abgeschnitten aus — vom Nutzer
+       gemeldet. */
+    const fruehesteZeit = Math.min(...slots.map(x => x.from));
+    const spaetesteZeit = Math.max(...slots.map(x => x.to));
     let stuecke = '';
     slots.forEach((s, i) => {
       const a = Math.min(Math.max((s.from - von) / spanne, 0), 1);
@@ -6968,7 +6976,9 @@ function stundenplanKarte() {
       /* Kein Prozent-Boden mehr: die Mindestbreite steht in PIXELN und wird
          ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
       const breite = Math.max((b - a) * 100, 0.2);
-      const r = '12px', erster = i === 0, letzter = i === slots.length - 1;
+      const r = '12px';
+      const erster = s.from <= fruehesteZeit;   // beginnt der Balken hier?
+      const letzter = s.to >= spaetesteZeit;    // endet er hier?
       /* Raum und Lehrer aus dem Stundenplan-Modul, nur wenn gepflegt. Im
          Balken ist Platz fuer das Symbol, sonst nichts — beides gehoert also
          in den Tipp, genau wie in der Modul-Kachel. */
