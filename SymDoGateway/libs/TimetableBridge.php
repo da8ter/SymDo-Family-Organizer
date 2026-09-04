@@ -91,6 +91,7 @@ trait TimetableBridge
         $spanne  = null;
         $ferien  = null;
         $jetzt   = null;
+        $datiert = false;
         foreach ($this->TimetableInstances() as $id) {
             $plan = json_decode((string)@STPL_GetPlan($id), true);
             if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
@@ -99,6 +100,8 @@ trait TimetableBridge
             if ($ferien === null && is_array($plan['holiday'] ?? null)) {
                 $ferien = $plan['holiday'];
             }
+            // Eine Instanz mit Import genuegt: dann sind Daten im Spiel.
+            $datiert = $datiert || (($plan['dated'] ?? false) === true);
             // Die aktuelle Minute fuer den Jetzt-Strich. Sie kommt aus der
             // Instanz und nicht aus der App: die Uhr des Betrachters muss nicht
             // die des Servers sein. Alle Instanzen stehen auf derselben Uhr,
@@ -135,15 +138,12 @@ trait TimetableBridge
                    selben Zeit. */
                 'status'  => (string)($s['status'] ?? ''),
             ];
-            foreach ($plan['children'] as $kind) {
-                if (!is_array($kind)) {
-                    continue;
-                }
-                // Die GANZE Woche, nicht nur heute: die Karte in der App laesst
-                // sich durch die Wochentage blaettern. Der Aufwand ist gering —
-                // ein Stundenplan hat ein paar Dutzend Eintraege.
+            /* Die Abbildung EINER Woche. Sie steht als Funktion da, weil es
+               zwei sind: die laufende und — mit Import — die kommende, die der
+               Wochenplan im Stundenplan-Bereich zeigt. */
+            $wocheAbbilden = function (array $rohTage) use ($stunde): array {
                 $tage = [];
-                foreach ((array)($kind['days'] ?? []) as $tag) {
+                foreach ($rohTage as $tag) {
                     if (!is_array($tag)) {
                         continue;
                     }
@@ -191,16 +191,31 @@ trait TimetableBridge
                         'events'  => $marker,
                     ];
                 }
+                return $tage;
+            };
+
+            foreach ($plan['children'] as $kind) {
+                if (!is_array($kind)) {
+                    continue;
+                }
                 // Kinder ohne Unterricht bleiben DRIN, aber mit leerer Liste:
                 // „Mia hat heute frei" ist eine Auskunft, ein fehlender Name
                 // dagegen sieht nach einem Fehler aus.
-                $kinder[] = [
+                $satz = [
                     'name'   => (string)($kind['name'] ?? ''),
                     'color'  => (string)($kind['color'] ?? '#1E88E5'),
                     'userId' => (string)($kind['userId'] ?? ''),
                     'next'   => (string)($kind['next'] ?? ''),
-                    'days'   => $tage,
+                    'days'   => $wocheAbbilden((array)($kind['days'] ?? [])),
                 ];
+                /* Die kommende Woche, wenn das Modul sie liefert — das tut es
+                   nur mit Import (siehe FolgewocheAnhaengen dort). Ohne Import
+                   waere sie dieselbe Vorlage noch einmal, und der Wechsler im
+                   Stundenplan-Bereich zeigte zweimal dasselbe Bild. */
+                if (is_array($kind['nextDays'] ?? null) && $kind['nextDays'] !== []) {
+                    $satz['nextDays'] = $wocheAbbilden((array)$kind['nextDays']);
+                }
+                $kinder[] = $satz;
             }
         }
         if ($kinder === []) {
@@ -210,6 +225,9 @@ trait TimetableBridge
             'span'     => $spanne ?? [8 * 60, 16 * 60],
             'now'      => $jetzt,
             'holiday'  => $ferien,
+            // Liegt ein Import vor? Daran haengt in der App dasselbe wie in der
+            // Kachel: das Datum im Spaltenkopf und der Wochenwechsler.
+            'dated'    => $datiert,
             'children' => $kinder,
         ]];
     }

@@ -3387,7 +3387,13 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .wp-spalten {
   flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px;
   overflow-x: auto; overflow-y: hidden;
+  /* Ohne sichtbaren Balken — geschoben wird mit dem Finger, und auf der Maus
+     mit dem Rad. Dasselbe Mittel wie bei der Timeline-Bahn (.plan-bahn): die
+     Eigenschaft für Firefox, das Pseudoelement für die WebKit-Familie. Es MUSS
+     je Selektor stehen, geerbt wird da nichts. */
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
+.wp-spalten::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .wp-spalte {
   flex: 1 1 0; min-width: 140px;
   border-radius: var(--radius); background: var(--surface); overflow: hidden;
@@ -7421,6 +7427,34 @@ function planStundenText(m) {
  *  - Untergrenze drei Viertelstunden: eine Kurzstunde waere sonst ein Streifen,
  *    in dem weder Fach noch Zeit lesbar sind. Der ANFANG stimmt trotzdem immer.
  */
+/* 0 = laufende Woche, 1 = die kommende. Nur mit Import erreichbar (dated) —
+   ohne ihn wiederholt sich die Vorlage, beide Wochen saehen gleich aus. */
+let planWoche = 0;
+
+/** Die Tage der gewaehlten Woche eines Kindes. */
+function planWochenTage(kind) {
+  return (planWoche === 1 && Array.isArray(kind.nextDays)) ? kind.nextDays : (kind.days || []);
+}
+
+/** Gibt es fuer dieses Kind ueberhaupt eine Folgewoche? */
+function planFolgewocheDa(kind) {
+  return !!(stundenplan && stundenplan.dated && kind && Array.isArray(kind.nextDays) && kind.nextDays.length);
+}
+
+/* Der Wochenwechsler oben rechts — dieselbe Form wie die Tageswahl auf der
+   Karte im Dashboard: fester Kasten, beide Namen uebereinander in derselben
+   Rasterzelle, sichtbar ist einer. So wandern die Pfeile beim Umschalten
+   nicht. */
+function planWochenwahlHtml(kind) {
+  if (!planFolgewocheDa(kind)) { return ''; }
+  const namen = [translate('This week'), translate('Next week')].map((t, i) =>
+    `<span class="${i === planWoche ? 'an' : ''}">${escapeHtml(t)}</span>`).join('');
+  return `<span class="plan-tagwahl" id="planWochenwahl">` +
+    `<button data-planwoche="zurueck" aria-label="${translate('Previous week')}">‹</button>` +
+    `<span class="plan-tagname">${namen}</span>` +
+    `<button data-planwoche="vor" aria-label="${translate('Next week')}">›</button></span>`;
+}
+
 function renderWochenplan() {
   const el = document.getElementById('planArea');
   if (!el) return;
@@ -7434,11 +7468,26 @@ function renderWochenplan() {
       translate('No timetable') + '</div>');
     return;
   }
-  const tage = Array.isArray(kind.days) ? kind.days : [];
+  // Kommt ein Plan ohne Folgewoche (Import abgeschaltet), zurueck auf jetzt.
+  if (planWoche === 1 && !planFolgewocheDa(kind)) { planWoche = 0; }
+  const tage = planWochenTage(kind);
   if (titel) titel.textContent = kind.name || translate('Timetable');
   if (summe) {
     const woche = tage.reduce((n, t) => n + (t.minutes || 0), 0);
     summe.textContent = woche > 0 ? planStundenText(woche) : '';
+  }
+  /* Der Wechsler sitzt in der Kopfzeile, rechts neben der Stundensumme. Er wird
+     bei jedem Zeichnen neu gesetzt: die Auswahl steht in seinem Markup. */
+  const kopf = document.querySelector('#screen-plan .screen-head');
+  if (kopf) {
+    const alt = document.getElementById('planWochenwahl');
+    if (alt) alt.remove();
+    const html = planWochenwahlHtml(kind);
+    if (html) kopf.insertAdjacentHTML('beforeend', html);
+    kopf.querySelectorAll('[data-planwoche]').forEach(k => k.addEventListener('click', () => {
+      planWoche = k.dataset.planwoche === 'vor' ? 1 : 0;
+      renderWochenplan();
+    }));
   }
 
   let von = Infinity, bis = -Infinity;
