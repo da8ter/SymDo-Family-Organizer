@@ -643,11 +643,33 @@ class SymDoWebApp extends IPSModuleStrict
             return '';
         }
 
+        /* Gesprächskern und Blase VOR dem Dokument — dieselbe Quelle wie in der
+           ausgelieferten Web-App und in der Sprach-Kachel, damit nichts von Hand
+           nachgezogen werden muss. Nur wenn das Haus den Sprachdialog überhaupt
+           anhat: sonst wären es 40 kB für nichts.
+           Ob die Blase dann erscheint, entscheidet der Browser — ohne https gibt
+           es kein Mikrofon (voiceMoeglich prüft isSecureContext). */
+        $kopf = '';
+        if ($this->VoiceInHaus('VoiceEnabled')) {
+            foreach (['voice-core.js', 'voice-blob.js'] as $datei) {
+                $js = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/' . $datei);
+                if (is_string($js) && $js !== '') {
+                    $kopf .= '<script>' . $js . '</script>';
+                }
+            }
+            if ($this->VoiceInHaus('VoiceHandsFreeAllowed')) {
+                $wake = @file_get_contents(__DIR__ . '/../SymDoGateway/libs/voice-wake.js');
+                if (is_string($wake) && $wake !== '') {
+                    $kopf .= '<script>' . $wake . '</script>';
+                }
+            }
+        }
+
         // Initial-Payload inline mitgeben, damit die Kachel ohne Roundtrip rendert
         // Siehe GetTilePayload: ein kaputtes Byte darf nicht die ganze Kachel leeren.
         $payload = (string)json_encode($this->BuildFullPayload(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        return $html . '<script>handleMessage(' . $payload . ');</script>';
+        return $kopf . $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 
     // ---------------------------------------------------------------------
@@ -801,6 +823,14 @@ class SymDoWebApp extends IPSModuleStrict
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
             'gatewayAvailable' => $gatewayID > 0,
             'aiEnabled'       => ($gatewayID > 0 ? (bool)@IPS_GetProperty($gatewayID, 'AiEnabled') : false),
+            /* Sprachdialog. Gelesen wird die PROPERTY des Gateways — die
+               Einwilligungen liegen in Attributen und sind von außen nicht
+               lesbar; geprüft werden sie serverseitig beim Öffnen der Sitzung
+               (VoiceHandleAction). Genau so macht es die Sprach-Kachel auch.
+               Ohne diese zwei Zeilen fehlte die Sprechblase in der Kachel,
+               obwohl Kern und Blase unten mitgeliefert werden. */
+            'voiceEnabled'    => $this->VoiceInHaus('VoiceEnabled'),
+            'voiceHandsFree'  => $this->VoiceInHaus('VoiceHandsFreeAllowed'),
             'tabs'            => $this->GetVisibleTabs(),
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
@@ -1012,6 +1042,23 @@ class SymDoWebApp extends IPSModuleStrict
             'responsiveLayout'  => true,
         ];
         return $this->buttonFlagsCache;
+    }
+
+    /**
+     * Ein Schalter des Sprachdialogs am Gateway.
+     *
+     * Property, nicht Attribut: Attribute sind von außen nicht lesbar. Die
+     * Einwilligung steckt in einem Attribut und wird deshalb dort geprüft, wo
+     * sie hingehört — im Relais beim Öffnen der Sitzung.
+     */
+    private function VoiceInHaus(string $name): bool
+    {
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0) {
+            return false;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($gatewayID), true);
+        return is_array($cfg) && ($cfg[$name] ?? false) === true;
     }
 
     private function GetAppGatewayID(): int

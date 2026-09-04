@@ -1175,6 +1175,15 @@ html[data-symdo-theme="dark"] .member-bar {
   background: #0a0c14;
   border-radius: var(--radius); cursor: pointer; overflow: hidden;
 }
+/* Der Hinweis steht an der Stelle der Blase und sieht aus wie eine Karte, nicht
+   wie ein Fehler: die Sache ist in Ordnung, nur die Adresse passt nicht. */
+.voice-hinweis {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  cursor: default;
+}
+.voice-hinweis i { font-size: 16px; flex: 0 0 auto; }
+
 .voice-card { display: none; min-height: 200px; }
 .voice-slot { position: absolute; inset: 0; }
 .voice-mic {
@@ -4282,6 +4291,8 @@ const store = {
   defaultUserID: '',
   gatewayAvailable: false,
   aiEnabled: false,
+  voiceEnabled: false,
+  voiceHandsFree: false,
   // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
   // nichts verschwinden.
   tabs: { dashboard: true, shopping: true, todos: true },
@@ -4329,9 +4340,22 @@ let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null, voi
 let voiceOhr = null, voiceLauscher = null, voiceFreihandGewuenscht = false;
 let voiceZustand = 'bereit';
 
+/* Der Schalter kommt aus der ausgelieferten Web-App (window.__SYMDO__) ODER aus
+   dem Zustand der Kachel — dort steht er seit dem 04.09.2026 mit drin. Vorher
+   hing die Blase an __SYMDO__ selbst und fehlte damit in JEDER Kachel, obwohl
+   Kern und Blase dort inzwischen mitgeliefert werden.
+   isSecureContext bleibt Bedingung, und zwar unverhandelbar: ohne https gibt
+   es kein navigator.mediaDevices, und der Mikrofonzugriff wirft SYNCHRON —
+   eine Blase, die beim Antippen einen Fehler wirft, ist schlimmer als keine.
+   In der Visu heisst das: über die Connect-Adresse ja, über die lokale
+   http-Adresse nein. */
+/** Hat das Haus den Sprachdialog überhaupt an? (Ohne die Frage nach dem Gerät.) */
+function voiceAngeschaltet() {
+  return window.__SYMDO__ ? window.__SYMDO__.voiceEnabled !== false : !!store.voiceEnabled;
+}
+
 function voiceMoeglich() {
-  return !!(window.__SYMDO__ && window.__SYMDO__.voiceEnabled
-    && window.SymDoVoiceKern && window.SymDoVoiceBlase
+  return !!(voiceAngeschaltet() && window.SymDoVoiceKern && window.SymDoVoiceBlase
     && window.isSecureContext && navigator.mediaDevices);
 }
 
@@ -4340,7 +4364,8 @@ function voiceMoeglich() {
    voice-wake.js — und sagt es, statt stumm nicht zu lauschen. Auf iPhones ist
    die Antwort immer Nein: lokale Spracherkennung gibt es dort nicht. */
 function freihandMoeglich() {
-  return !!(voiceMoeglich() && window.__SYMDO__.voiceHandsFree && window.SymDoVoiceWeckwort);
+  const erlaubt = window.__SYMDO__ ? window.__SYMDO__.voiceHandsFree : !!store.voiceHandsFree;
+  return !!(voiceMoeglich() && erlaubt && window.SymDoVoiceWeckwort);
 }
 
 /* Eine Kennung je Geraet: das Gateway laesst je „Kachel" nur EIN Gespraech zu.
@@ -5297,6 +5322,10 @@ function handleMessage(data) {
     store.defaultUserID = data.defaultUserID || '';
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.aiEnabled = !!data.aiEnabled;
+    // Sprachdialog: Schalter und Freisprechen-Erlaubnis des Hauses (nur Kachel;
+    // die ausgelieferte Web-App liest beides aus window.__SYMDO__).
+    store.voiceEnabled = !!data.voiceEnabled;
+    store.voiceHandsFree = !!data.voiceHandsFree;
     store.tabs = normalizeTabs(data.tabs);
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];
@@ -8060,6 +8089,13 @@ function renderDashboard() {
     html += `<div class="card voice-card" role="button" tabindex="0" ` +
       `aria-label="${escapeHtml(translate('Voice dialog'))}" data-voice>` +
       `<span class="voice-slot" data-voice-slot></span></div>`;
+  } else if (voiceAngeschaltet() && !window.isSecureContext) {
+    /* Der Sprachdialog ist im Haus an, aber diese Seite ist keine sichere
+       Herkunft — dann gibt es kein Mikrofon, und die Blase bliebe einfach weg.
+       „Einfach weg" ist die schlechteste Auskunft: genau daran hat schon zweimal
+       jemand gesucht. Also sagen, was fehlt und wo es geht. */
+    html += `<div class="card voice-card voice-hinweis"><i class="fa-light fa-lock"></i>` +
+      `<span>${escapeHtml(translate('The voice dialog needs a secure connection (https) — open the visualization over the Connect address.'))}</span></div>`;
   }
 
   // Das Briefing direkt unter den Kacheln: Es erzaehlt genau das, was die Zahlen

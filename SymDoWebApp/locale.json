@@ -475,7 +475,8 @@
       "Shopping List": "Einkaufsliste",
       "Items": "Artikel",
       "free": "frei",
-      "No timetable": "Kein Stundenplan"
+      "No timetable": "Kein Stundenplan",
+      "The voice dialog needs a secure connection (https) — open the visualization over the Connect address.": "Der Sprachdialog braucht eine sichere Verbindung (https) — die Visualisierung über die Connect-Adresse öffnen."
     }
   }
 }

@@ -650,7 +650,8 @@
       "For the WAF ;-)": "Für den WAF ;-)",
       "Shopping List": "Einkaufsliste",
       "free": "frei",
-      "No timetable": "Kein Stundenplan"
+      "No timetable": "Kein Stundenplan",
+      "The voice dialog needs a secure connection (https) — open the visualization over the Connect address.": "Der Sprachdialog braucht eine sichere Verbindung (https) — die Visualisierung über die Connect-Adresse öffnen."
     },
     "en": {
       "SymDo ToDo List": "SymDo - ToDo List",
