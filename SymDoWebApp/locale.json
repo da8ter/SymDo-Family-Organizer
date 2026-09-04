@@ -8,7 +8,8 @@
       "Badge: notification": "Notification",
       "Badge: priority": "Priority",
       "Choose print layout": "Choose print layout",
-      "For the WAF ;-)": "For the WAF ;-)"
+      "For the WAF ;-)": "For the WAF ;-)",
+      "No timetable": "No timetable"
     },
     "de": {
       "Purchase": "Einkauf",
@@ -472,7 +473,9 @@
       "Detailed": "Detailliert",
       "For the WAF ;-)": "Für den WAF ;-)",
       "Shopping List": "Einkaufsliste",
-      "Items": "Artikel"
+      "Items": "Artikel",
+      "free": "frei",
+      "No timetable": "Kein Stundenplan"
     }
   }
 }
