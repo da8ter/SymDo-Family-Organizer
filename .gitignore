@@ -2,3 +2,7 @@
 /Referenzen/
 /ShoppingList/examples/
 keys.txt
+
+# Ausleitungen aus WebUntis: Schuelerlisten der Schule. Fremde
+# personenbezogene Daten — gehoeren nie in ein Store-Repo.
+/SymDoGateway/schueler*.csv
