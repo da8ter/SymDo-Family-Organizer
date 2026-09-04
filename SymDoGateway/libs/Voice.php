@@ -172,6 +172,18 @@ trait Voice
                     ? ['ok' => true, 'erlaubt' => true]
                     : ['ok' => true, 'erlaubt' => false,
                        'grund' => $this->Translate('Hands-free is not enabled for this household.')];
+            case 'fehler':
+                /* Der Browser meldet, was ihm der Anbieter geantwortet hat. Ohne
+                   diesen Weg endet die Begruendung im Browser und ist beim
+                   Nachsehen weg — genau der Fall „429 Verbindungsstatus", bei
+                   dem hinterher niemand sagen konnte, warum. */
+                $this->VoiceLogEintrag(
+                    'Verbindung ' . mb_substr((string)($body['stelle'] ?? '?'), 0, 40),
+                    'HTTP ' . (int)($body['status'] ?? 0) . ' — '
+                        . mb_substr((string)($body['grund'] ?? ''), 0, 300),
+                    false
+                );
+                return ['ok' => true];
             case 'close':
                 return $this->VoiceClose($body);
             case 'log':

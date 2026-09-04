@@ -188,7 +188,24 @@ function erzeuge(opt) {
     }).then(function (r) {
       if (!r.ok) {
         return r.text().then(function (t) {
-          throw { eigene: true, message: 'OpenAI lehnte die Verbindung ab (HTTP ' + r.status + ').' };
+          /* Der Grund STAND schon hier und wurde weggeworfen: der Text wurde
+             gelesen und nicht benutzt. Beim Nutzer stand deshalb nur „HTTP
+             429", und niemand konnte sagen, ob das Guthaben leer ist, zu viele
+             Sitzungen offen sind oder das Modell ausgelastet ist. */
+          var grund = '';
+          try {
+            var j = JSON.parse(t);
+            grund = (j && j.error && (j.error.code || j.error.type || j.error.message)) || '';
+            if (j && j.error && j.error.message && grund !== j.error.message) {
+              grund += ' — ' + j.error.message;
+            }
+          } catch (e) { grund = String(t || '').slice(0, 160); }
+          // Auch dem Gateway melden: im Browser ist die Meldung nach dem
+          // Schliessen weg, im Protokoll steht sie noch morgen.
+          post({ action: 'fehler', stelle: 'realtime/calls', status: r.status,
+                 grund: String(grund).slice(0, 300) }).catch(function () {});
+          throw { eigene: true, message: 'OpenAI lehnte die Verbindung ab (HTTP ' + r.status + ')'
+                    + (grund ? ': ' + String(grund).slice(0, 160) : '.') };
         });
       }
       callId = ((r.headers.get('Location') || '').split('/').pop()) || '';
