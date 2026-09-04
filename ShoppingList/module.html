@@ -4461,6 +4461,7 @@ function voiceKernHolen() {
    Mal weg. Deshalb ein dauerhaftes Element, das nach jedem Zeichnen in den
    gerade SICHTBAREN Platz gehaengt wird (schmal: neben den Aufgaben, breit:
    eigene Karte darunter). */
+let voicePlatzTimer = 0;
 function voiceMount() {
   if (!voiceMoeglich()) return;
   const plaetze = Array.prototype.slice.call(document.querySelectorAll('[data-voice-slot]'));
@@ -7140,6 +7141,19 @@ function stundenplanNeuMessen(sofort) {
 window.addEventListener('resize', () => stundenplanNeuMessen(false));
 // Safari meldet orientationchange vor dem neuen Layout — deshalb beide.
 window.addEventListener('orientationchange', () => stundenplanNeuMessen(true));
+
+/* Der Sprachknopf haengt in dem Platz, der bei DIESER Breite sichtbar ist —
+   schmal neben den Aufgaben, ab 820px in der eigenen Karte. Beim Wechsel der
+   Breite zeichnet nichts neu, also blieb die Blase im inzwischen verborgenen
+   Platz haengen und war weg, bis das Dashboard das naechste Mal baute. Deshalb
+   nach jeder Groessenaenderung nachsehen, ob der belegte Platz noch sichtbar
+   ist — und nur dann neu einhaengen. */
+function voicePlatzPruefen() {
+  if (!voiceBox || !voiceBox.parentNode) return;
+  if (voiceBox.parentNode.offsetParent === null) voiceMount();
+}
+window.addEventListener('resize', () => { clearTimeout(voicePlatzTimer); voicePlatzTimer = setTimeout(voicePlatzPruefen, 150); });
+window.addEventListener('orientationchange', () => { clearTimeout(voicePlatzTimer); voicePlatzTimer = setTimeout(voicePlatzPruefen, 150); });
 
 function loadTimetable() {
   // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
