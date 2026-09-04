@@ -829,12 +829,71 @@ class SymDoTimetable extends IPSModuleStrict
             $plan = json_decode((string)$roh, true);
             if (is_array($plan)) {
                 $plan['mode'] = $this->Darstellung();
-                return $plan;
+                return $this->FolgewocheAnhaengen($plan);
             }
             // Nicht lesbar: lieber der eigene (meist leere) Plan als eine
             // Kachel, die gar nichts zeichnet.
         }
-        return $this->PlanAufbauen();
+        return $this->FolgewocheAnhaengen($this->PlanAufbauen());
+    }
+
+    /**
+     * Die kommende Woche an den Plan haengen.
+     *
+     * NUR mit Import: ohne WebUntis ist der Plan eine Wochenvorlage, die sich
+     * jede Woche wiederholt — ein Wechsler zeigte dann zweimal dasselbe Bild.
+     * Mit Import lohnt es sich: WebUntis liefert vierzehn Tage im Voraus,
+     * Entfaelle und Vertretungen der naechsten Woche stehen also laengst da.
+     *
+     * @param array<string,mixed> $plan
+     * @return array<string,mixed>
+     */
+    private function FolgewocheAnhaengen(array $plan): array
+    {
+        if (($plan['dated'] ?? false) !== true || !is_array($plan['children'] ?? null)) {
+            return $plan;
+        }
+        $datum  = date('Y-m-d', strtotime('+7 days'));
+        $quelle = $this->ReadPropertyInteger('SourceInstanceID');
+        /* Beim Spiegel kommt auch die zweite Woche von der QUELLE — sonst
+           zeigte er eine Woche aus seinem eigenen (leeren) Bestand. Die
+           oeffentliche Funktion dafuer gibt es schon; das Briefing benutzt sie. */
+        if ($quelle > 0 && $quelle !== $this->InstanceID && IPS_InstanceExists($quelle)
+            && function_exists('STPL_GetPlanForDate')) {
+            $naechste = json_decode((string)@STPL_GetPlanForDate($quelle, $datum), true);
+        } else {
+            // Ohne Termine: das Raster zeigt keine Marker, und ein zweiter
+            // Kalenderabruf je Kachelaufbau waere umsonst bezahlt.
+            $naechste = $this->PlanAufbauen($datum, false);
+        }
+        if (!is_array($naechste) || !is_array($naechste['children'] ?? null)) {
+            return $plan;
+        }
+        // Zuordnung ueber den NAMEN, nicht ueber die Reihenfolge: ein
+        // ausgeblendetes Kind faellt in beiden Plaenen weg, aber darauf zu
+        // bauen hiesse, sich auf eine Nebenwirkung zu verlassen.
+        $jeName = [];
+        foreach ($naechste['children'] as $kind) {
+            $jeName[(string)($kind['name'] ?? '')] = (array)($kind['days'] ?? []);
+        }
+        foreach ($plan['children'] as $i => $kind) {
+            $tage = $jeName[(string)($kind['name'] ?? '')] ?? null;
+            if (!is_array($tage)) {
+                continue;
+            }
+            /* Heute-Marke und „naechste Stunde" gehoeren zur laufenden Woche.
+               PlanAufbauen setzt beides relativ zu SEINEM Datum — unbesehen
+               uebernommen staende in der Folgewoche ein zweites „Heute". */
+            foreach ($tage as $j => $tag) {
+                $tage[$j]['today'] = false;
+                foreach ((array)($tag['slots'] ?? []) as $n => $slot) {
+                    $tage[$j]['slots'][$n]['next'] = false;
+                }
+            }
+            $plan['children'][$i]['nextDays'] = array_values($tage);
+        }
+        $plan['nextDate'] = $datum;
+        return $plan;
     }
 
     private function Darstellung(): string

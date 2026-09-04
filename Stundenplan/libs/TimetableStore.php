@@ -572,7 +572,7 @@ trait TimetableStore
      * Timeline und in der Web-App herauskommen, und die Rechenregeln stehen
      * unter Prueflauf.
      */
-    private function PlanAufbauen(string $datum = ''): array
+    private function PlanAufbauen(string $datum = '', bool $mitTerminen = true): array
     {
         $kinder  = $this->Kinder();
         $bilder  = $this->Gesichter();
@@ -600,7 +600,7 @@ trait TimetableStore
            hinter dem Ende der Betreuung; ohne die Erweiterung laege der Marker
            unsichtbar hinter dem Achsenende. 15 Minuten Vorlauf fuer den Punkt,
            45 Nachlauf als Platz fuer das Label. */
-        $termine = $this->TermineFuerWoche($kinder, $heute);
+        $termine = $mitTerminen ? $this->TermineFuerWoche($kinder, $heute) : [];
         foreach ($termine as $jeTag) {
             foreach ($jeTag as $liste) {
                 foreach ($liste as $marker) {
@@ -671,6 +671,11 @@ trait TimetableStore
                 $tage[] = [
                     'weekday' => $tag,
                     'label'   => TimetableCalc::TagKurz($tag),
+                    /* Das DATUM dieses Wochentags in der gezeigten Woche. Die
+                       Kachel schreibt es hinter das Kuerzel, sobald ein Import
+                       laeuft — ohne Import ist der Plan eine Vorlage, und ein
+                       Datum an einer Vorlage behauptet mehr, als sie weiss. */
+                    'date'    => TimetableCalc::DatumInWoche($heute, $tag),
                     // Ferien oder Feiertag AN DIESEM Tag, oder null.
                     'holiday' => $ferienJeTag[$tag] ?? null,
                     // Dauer JE TAG, nicht nur fuer heute: die Timeline laesst
@@ -710,6 +715,9 @@ trait TimetableStore
             // sei gerade Dienstagvormittag, obwohl der Dienstag noch bevorsteht.
             'now'      => $heute === date('Y-m-d') ? TimetableCalc::Minuten($jetzt) : null,
             'span'     => [$von, $bis],
+            /* Ob ueberhaupt ein Import vorliegt. Daran haengt in der Kachel
+               beides: das Datum im Spaltenkopf und der Wochenwechsler. */
+            'dated'    => $this->ImportierteTage() !== [],
             'holiday'  => $ferien,
             'children' => $ausgabe,
             'empty'    => $kinder === [] || $slots === [],

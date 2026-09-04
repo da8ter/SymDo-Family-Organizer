@@ -241,6 +241,10 @@
   }
   .spaltenkopf .tag { font-size: 13px; font-weight: 700; }
   .spaltenkopf .kw { font-size: 9px; font-weight: 600; color: var(--muted); }
+  /* Das Datum steht IM Kuerzel-Element, damit es auf derselben Zeile bleibt
+     und der feste Kopf nicht wächst: „Mo 08.09." — schwächer gesetzt als der
+     Wochentag, denn der bleibt die Hauptauskunft. */
+  .spaltenkopf .datum { font-size: 11px; font-weight: 600; color: var(--muted); }
   .heute {
     margin-left: auto; padding: 2px 7px; border-radius: 999px;
     font-size: 10px; font-weight: 700; color: #fff;
@@ -1299,12 +1303,20 @@
     }, 30000);
   }
 
+  /* 0 = laufende Woche, 1 = die kommende. Nur mit Import erreichbar (dated),
+     denn ohne ihn wiederholt sich die Vorlage und beide Wochen saehen gleich
+     aus. Die Wahl ueberlebt einen Push — sonst spraenge die Kachel alle fuenf
+     Minuten zurueck, waehrend jemand die naechste Woche liest. */
+  let wocheNr = 0;
+
   function handleMessage(daten) {
     if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
     if (!daten || !Array.isArray(daten.children)) { return; }
     zustand = daten;
     planAn = Date.now();
     if (kindNr >= daten.children.length) { kindNr = 0; }
+    // Kommt ein Plan ohne Folgewoche (Import abgeschaltet), zurueck auf jetzt.
+    if (wocheNr === 1 && !folgewocheDa()) { wocheNr = 0; }
     zeichne();
     tickerStellen();
   }
@@ -1333,6 +1345,18 @@
     document.querySelectorAll('.chip').forEach(function (b) {
       b.addEventListener('click', function () {
         kindNr = parseInt(b.dataset.nr, 10) || 0;
+        /* Ein anderes Kind kann eine Folgewoche haben oder nicht — zeigt der
+           Wechsler auf eine, die es hier nicht gibt, bleibt sonst ein leeres
+           Raster stehen. */
+        if (wocheNr === 1 && !folgewocheDa()) { wocheNr = 0; }
+        zeichne();
+      });
+    });
+    // Der Wochenwechsler sitzt in der Kinderzeile und wird darum hier gebunden,
+    // nicht im Klickweg der Timeline (den gibt es im Raster gar nicht).
+    document.querySelectorAll('[data-woche]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        wocheNr = b.dataset.woche === 'vor' ? 1 : 0;
         zeichne();
       });
     });
@@ -1374,8 +1398,11 @@
       ziel.onclick = null;
     }
     // Beim Oeffnen zum heutigen Tag: die Woche faengt sonst am Montag an, und
-    // am Donnerstag sieht man zuerst, was vorbei ist.
-    const heute = document.querySelector('.spalte.istHeute');
+    // am Donnerstag sieht man zuerst, was vorbei ist. In der KOMMENDEN Woche
+    // gibt es kein Heute — dort gehoert der Blick an den Wochenanfang.
+    const spalten = document.querySelector('.spalten');
+    if (wocheNr === 1 && spalten) { spalten.scrollLeft = 0; }
+    const heute = wocheNr === 1 ? null : document.querySelector('.spalte.istHeute');
     if (heute && heute.parentElement) {
       // Die Breite der Zeitachse MUSS abgezogen werden: sie steht seit dem
       // Umbau mit im Scrollbereich, Montag beginnt also nicht mehr bei 0.
@@ -1412,6 +1439,34 @@
 
      NUR ueber dem Wochenraster: in der Timeline sagt es der Balken selbst — er
      wird grau und traegt den Hinweis in der Mitte. */
+  /* Traegt der gewaehlte Plan eine Folgewoche? Sie kommt nur mit Import
+     (siehe FolgewocheAnhaengen im Modul) und nur fuer sichtbare Kinder. */
+  function folgewocheDa() {
+    const kind = zustand && zustand.children ? zustand.children[kindNr] : null;
+    return !!(zustand && zustand.dated && kind && Array.isArray(kind.nextDays)
+              && kind.nextDays.length);
+  }
+
+  /** Die Tage der gewaehlten Woche. */
+  function wocheTage(kind) {
+    return (wocheNr === 1 && Array.isArray(kind.nextDays)) ? kind.nextDays : (kind.days || []);
+  }
+
+  /* Wochenwechsler in der Form der Tageswahl aus der Timeline: fester Kasten,
+     margin-left:auto schiebt ihn nach rechts. Beide Namen liegen uebereinander
+     in derselben Rasterzelle, sichtbar ist einer — so wandern die Pfeile beim
+     Umschalten nicht. */
+  function wochenwahlHtml() {
+    if (!folgewocheDa()) { return ''; }
+    const namen = ['Diese Woche', 'Nächste Woche'].map(function (t, i) {
+      return '<span class="' + (i === wocheNr ? 'an' : '') + '">' + esc(t) + '</span>';
+    }).join('');
+    return '<span class="tagwahl">'
+      + '<button data-woche="zurueck" aria-label="Vorherige Woche">‹</button>'
+      + '<span class="tagname">' + namen + '</span>'
+      + '<button data-woche="vor" aria-label="Nächste Woche">›</button></span>';
+  }
+
   function kinderZeile() {
     const gesichter = kinderLeiste();
     const frei = zustand.holiday
@@ -1419,8 +1474,11 @@
         + '<span>' + esc(zustand.holiday.name) + ' — bis '
         + esc(datumKurz(zustand.holiday.until)) + '</span></div>'
       : '';
-    if (!gesichter && !frei) { return ''; }
-    return '<div class="kinderzeile">' + gesichter + frei + '</div>';
+    /* Der Wochenwechsler nur im Raster: die Timeline hat oben rechts schon die
+       Tageswahl, zwei Kaesten nebeneinander waeren eine Wahl zu viel. */
+    const wochen = zustand.mode === 'timeline' ? '' : wochenwahlHtml();
+    if (!gesichter && !frei && !wochen) { return ''; }
+    return '<div class="kinderzeile">' + gesichter + frei + wochen + '</div>';
   }
 
   function kinderLeiste() {
@@ -1446,8 +1504,10 @@
        21:00 das Raster bis 22:15 auf. Der Nachmittag stand dann leer im Bild
        und drueckte die Stunden zusammen; Termine zeigt das Raster ohnehin
        nicht. */
+    // Die Tage der gewaehlten Woche — die laufende oder die kommende.
+    const tage = wocheTage(kind);
     let von = Infinity, bis = -Infinity;
-    (kind.days || []).forEach(function (tag) {
+    tage.forEach(function (tag) {
       (tag.slots || []).forEach(function (s) {
         von = Math.min(von, s.from);
         bis = Math.max(bis, s.to);
@@ -1476,9 +1536,13 @@
     }
 
     let spalten = '';
-    kind.days.forEach(function (tag) {
+    tage.forEach(function (tag) {
+      /* Das Datum nur mit Import: ohne ihn ist der Plan eine Vorlage, die fuer
+         jede Woche gilt — ein Datum daran waere eine Behauptung. */
+      const datum = (zustand.dated && tag.date) ? datumKurz(tag.date) : '';
       spalten += '<div class="spalte' + (tag.today ? ' istHeute' : '') + '">'
-        + '<div class="spaltenkopf"><div><div class="tag">' + esc(tag.label) + '</div>'
+        + '<div class="spaltenkopf"><div><div class="tag">' + esc(tag.label)
+        + (datum ? ' <span class="datum">' + esc(datum) + '</span>' : '') + '</div>'
         + (tag.parity ? '<div class="kw">' + esc(tag.parity) + '</div>' : '')
         + '</div>'
         + (tag.today ? '<span class="heute">Heute</span>' : '')
