@@ -946,6 +946,22 @@ trait WebUntis
         foreach ($raus as $name => $eintrag) {
             $raus[$name] = ['entfall' => $eintrag['entfall'] ?? [], 'vertretung' => $eintrag['vertretung'] ?? []];
         }
+        /* Der Merker ist nach dem Namen des FAMILIENMITGLIEDS abgelegt; das
+           Briefing fragt aber mit dem Namen, den das Kind in der
+           Stundenplan-Instanz traegt. Heissen die beiden verschieden („Tim" hier,
+           „Tim Luca" dort), fand die Abfrage nichts — und im Briefing fehlten
+           Entfall und Vertretung genau des Tages, wortlos. Deshalb liegen die
+           Meldungen zusaetzlich unter dem Plan-Namen. */
+        foreach ($this->UntisKinder() as $k) {
+            $planName = (string)($k['child'] ?? '');
+            $eigen    = (string)($k['name'] ?? '');
+            if ($planName === '' || $planName === $eigen) {
+                continue;
+            }
+            if (isset($raus[$eigen]) && !isset($raus[$planName])) {
+                $raus[$planName] = $raus[$eigen];
+            }
+        }
         return $raus;
     }
 
