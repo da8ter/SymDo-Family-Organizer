@@ -901,7 +901,7 @@ trait MailScan
                     . '" konnte nicht gespeichert werden — die Mail bleibt unerledigt.', KL_ERROR);
                 return false;
             }
-            $this->MailNotifyProposal(count($aufgaben) - $termine - $notizen, $termine, $notizen, $userId);
+            $this->MailNotifyProposal(count($aufgaben) - $termine - $notizen, $termine, $notizen, $userId, $quelle);
             return true;
 
         } finally {
@@ -1744,8 +1744,17 @@ trait MailScan
      * die Sperrbildschirme der Familie schreiben. Die Ratenbegrenzung je Geraet in
      * PushBroadcast deckelt zusaetzlich, wie oft das ueberhaupt gehen kann.
      */
-    private function MailNotifyProposal(int $aufgaben, int $termine, int $notizen, string $userId): void
+    private function MailNotifyProposal(int $aufgaben, int $termine, int $notizen, string $userId,
+        string $quelle = 'IMAP'): void
     {
+        /* Klassenseiten haben ihren eigenen Schalter — und ihre eigene Nachricht:
+           der Durchgang sammelt und schickt EINE Meldung fuer alle Karten. Sonst
+           kaeme je ausgewerteter Karte eine, und die Ratenbremse je Geraet
+           verschluckte den Rest. */
+        if ($quelle === 'Edumaps') {
+            $this->EduPushMerken($userId, $aufgaben, $termine, $notizen);
+            return;
+        }
         if (!(bool)$this->PushProp('PushOnMailProposal', false)) {
             return;
         }

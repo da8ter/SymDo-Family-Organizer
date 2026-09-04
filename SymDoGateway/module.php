@@ -1792,6 +1792,12 @@ class SymDoGateway extends IPSModuleStrict
                      ['caption' => $this->Translate('Courses (chosen course, or -Subject to drop)'), 'name' => 'kurse',
                       'width' => 'auto', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                  ]],
+                /* Die Meldung haengt an keinem der Mail-Schalter: sie kommt aus
+                   Untis und soll auch dann gehen koennen, wenn die Mailanalyse
+                   schweigt. */
+                ['type' => 'CheckBox', 'name' => 'UntisPush',
+                 'caption' => $this->Translate('Push on cancellations and substitutions')],
+                ['type' => 'Label', 'caption' => $this->Translate('Goes to the devices of the assigned family member, once per lesson — not again on every fetch.')],
                 ['type' => 'Label', 'name' => 'UntisStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Test connection'),
@@ -1860,7 +1866,10 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'EduFollowLinks',
                  'caption' => $this->Translate('Also take maps linked from these pages')],
                 ['type' => 'Label', 'caption' => $this->Translate('Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps".')],
-                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files, in a folder „Edumaps <name>" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.')],
+                ['type' => 'CheckBox', 'name' => 'EduPush',
+                 'caption' => $this->Translate('Push on changes to the class page')],
+                ['type' => 'Label', 'caption' => $this->Translate('One message per check, not one per card: how many cards were updated and how many suggestions are waiting.')],
+                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps", and inside it one folder per map. Changed cards update their note; nothing is deleted.')],
                 ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Check now'),

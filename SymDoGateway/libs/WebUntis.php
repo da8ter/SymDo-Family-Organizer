@@ -49,6 +49,10 @@ trait WebUntis
         $this->RegisterPropertyString('UntisUser', '');
         $this->RegisterPropertyString('UntisPassword', '');
         $this->RegisterPropertyInteger('UntisIntervalMinutes', self::UNTIS_INTERVALL_STD);
+        /* Eigener Schalter fuer die Meldung aufs Telefon. Der Merker UntisLast
+           wird trotzdem gefuehrt: wer sie spaeter einschaltet, bekommt nicht
+           nachtraeglich alles, was in der Zwischenzeit war. */
+        $this->RegisterPropertyBoolean('UntisPush', true);
         /* Je Kind: Anzeigename, Ziel-Stundenplan und wessen Plan geholt wird.
            Leerer Elementtyp = der Plan des angemeldeten Kontos selbst. */
         $this->RegisterPropertyString('UntisStudents', '[]');
@@ -684,6 +688,9 @@ trait WebUntis
 
     private function UntisPushen(array $kind, array $neu): void
     {
+        if (!(bool)$this->UntisProp('UntisPush', true)) {
+            return;
+        }
         $zeilen = [];
         foreach (array_slice($neu, 0, 4) as $a) {
             $tag = strtotime((string)$a['datum']);

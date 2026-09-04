@@ -615,7 +615,6 @@
       "Every card is sent to the AI, including the ones already noted. That costs one request per card. Continue?": "Jede Karte geht an die KI, auch die schon gemerkten. Das kostet einen Aufruf je Karte. Fortfahren?",
       "daily AI limit reached — the rest follows later": "Tagesdeckel der KI erreicht — der Rest folgt später",
       "Also keep every card as a note": "Jede Karte zusätzlich als Notiz ablegen",
-      "Each card becomes one note with its full text and its files, in a folder „Edumaps <name>\" per child. Notes folders cannot be nested, so the folder sits next to the member folder, not inside it. Changed cards update their note; nothing is deleted.": "Jede Karte wird eine Notiz mit vollem Text und ihren Dateien, je Kind in einem Ordner „Edumaps <Name>\". Notiz-Ordner können nicht verschachtelt werden — der Ordner liegt also neben dem Mitglieder-Ordner, nicht darin. Geänderte Karten aktualisieren ihre Notiz; gelöscht wird nichts.",
       "%d saved as note(s).": "%d als Notiz abgelegt.",
       "Also take maps linked from these pages": "Verlinkte Karten ebenfalls mitnehmen",
       "Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps\".": "Verlinkte Karten werden nur als Notizen gespiegelt, nie ausgewertet: es sind Nachschlagewerke, und jede Auswertung kostet einen KI-Aufruf. Jede Karte bekommt einen eigenen Ordner in „Edumaps\".",
@@ -623,7 +622,16 @@
       "Linked maps forgotten — the next check finds them again.": "Verlinkte Karten vergessen — die nächste Prüfung findet sie wieder.",
       "Linked map": "Verlinkte Karte",
       "Too many voice requests — please wait a moment.": "Zu viele Anfragen im Sprachdialog — einen Moment warten.",
-      "No credit left at the AI provider — top up the account.": "Beim KI-Anbieter ist kein Guthaben mehr — bitte das Konto aufladen."
+      "No credit left at the AI provider — top up the account.": "Beim KI-Anbieter ist kein Guthaben mehr — bitte das Konto aufladen.",
+      "Push on cancellations and substitutions": "Push bei Entfall und Vertretung",
+      "Goes to the devices of the assigned family member, once per lesson — not again on every fetch.": "Geht an die Geräte des zugeordneten Familienmitglieds, je Stunde einmal — nicht bei jedem Abruf erneut.",
+      "Push on changes to the class page": "Push bei Änderungen auf der Klassenseite",
+      "One message per check, not one per card: how many cards were updated and how many suggestions are waiting.": "Eine Nachricht je Durchgang, nicht je Karte: wie viele Karten aktualisiert wurden und wie viele Vorschläge warten.",
+      "Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps\", and inside it one folder per map. Changed cards update their note; nothing is deleted.": "Jede Karte wird eine Notiz mit vollem Text und ihren Dateien. Jedes Kind bekommt einen Ordner „Edumaps\" und darin je Karte einen eigenen Ordner. Geänderte Karten aktualisieren ihre Notiz; gelöscht wird nichts.",
+      "Class page %s": "Klassenseite %s",
+      "New from the class page": "Neues von der Klassenseite",
+      "1 card updated": "1 Karte aktualisiert",
+      "%d cards updated": "%d Karten aktualisiert"
     },
     "en": {
       "SymDo Gateway": "SymDo - Gateway",

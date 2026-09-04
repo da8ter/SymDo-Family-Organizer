@@ -50,6 +50,10 @@ trait EduMaps
     /** Hoechstens so viele Analysen je Lauf — der Rest kommt beim naechsten. */
     private const EDU_JE_LAUF_MAX = 5;
 
+    /** Leerer Sammeleintrag je Familienmitglied — siehe EduPushSenden(). */
+    private const EDU_PUSH_LEER = ['karten' => 0, 'aufgaben' => 0, 'termine' => 0,
+                                   'notizen' => 0, 'seiten' => []];
+
     /** So viele verlinkte Karten werden hoechstens aufgenommen. */
     private const EDU_GEFUNDEN_MAX = 20;
 
@@ -59,6 +63,11 @@ trait EduMaps
      *  oder nachtraeglich in den Kindordner gehoben). Dann muss geschrieben
      *  werden, auch wenn an der Notiz selbst nichts zu tun war. */
     private bool $eduOrdnerGeaendert = false;
+
+    /** Die Meldungen EINES Durchgangs, je Familienmitglied: aktualisierte Karten,
+     *  neue Vorschlaege und die Namen der beteiligten Seiten. Null heisst, dass
+     *  gerade kein Durchgang laeuft. */
+    private ?array $eduPushSammlung = null;
 
     // ────────────────────────────── Lebenszyklus ──────────────────────────────
 
@@ -72,6 +81,10 @@ trait EduMaps
            eine wertet aus (kostet KI), der andere legt nur ab. */
         $this->RegisterPropertyBoolean('EduToNotes', false);
         $this->RegisterPropertyInteger('EduIntervalHours', self::EDU_INTERVALL_STD);
+        /* Meldung aufs Telefon — EINE je Durchgang, nicht eine je Karte. Sonst
+           staenden nach dem ersten Lauf sechzehn Nachrichten auf dem
+           Sperrbildschirm, eine je gespiegelter Karte. */
+        $this->RegisterPropertyBoolean('EduPush', true);
         /* Eigener Merker, NICHT MailSeenUIDs: die Toepfe dort sind auf 500
            Eintraege gedeckelt und werden vom Mailweg beschrieben. Eine
            Klassenseite mit zwoelf Karten braucht ihren eigenen Platz. */
@@ -127,6 +140,111 @@ trait EduMaps
         return false;
     }
 
+    // ───────────────────────────── Meldung ─────────────────────────────
+
+    /**
+     * Aktualisierte Karten einer Seite vormerken.
+     *
+     * Gezaehlt wird, was der Spiegel WIRKLICH geschrieben hat — eine unveraenderte
+     * Karte gibt nichts zurueck und taucht hier nie auf.
+     */
+    private function EduPushKarten(string $userId, string $seite, int $karten): void
+    {
+        if ($this->eduPushSammlung === null || $karten <= 0) {
+            return;
+        }
+        $e = $this->eduPushSammlung[$userId] ?? self::EDU_PUSH_LEER;
+        $e['karten'] += $karten;
+        if ($seite !== '' && !in_array($seite, $e['seiten'], true)) {
+            $e['seiten'][] = $seite;
+        }
+        $this->eduPushSammlung[$userId] = $e;
+    }
+
+    /**
+     * Neue Vorschlaege einer Karte vormerken. Gerufen aus MailNotifyProposal,
+     * sobald die Quelle „Edumaps" heisst.
+     */
+    private function EduPushMerken(string $userId, int $aufgaben, int $termine, int $notizen): void
+    {
+        // Ausserhalb eines Durchgangs (denkbar, wenn eine Karte einzeln laeuft)
+        // wird nicht gesammelt, sondern sofort gemeldet.
+        $sofort = $this->eduPushSammlung === null;
+        if ($sofort) {
+            $this->eduPushSammlung = [];
+        }
+        $e = $this->eduPushSammlung[$userId] ?? self::EDU_PUSH_LEER;
+        $e['aufgaben'] += $aufgaben;
+        $e['termine']  += $termine;
+        $e['notizen']  += $notizen;
+        $this->eduPushSammlung[$userId] = $e;
+        if ($sofort) {
+            $this->EduPushSenden();
+        }
+    }
+
+    /**
+     * Eine Nachricht je Familienmitglied, dann ist der Durchgang zu Ende.
+     *
+     * Inhalt bewusst NUR Zahlen und der Name der Seite: der Text der Karten ist
+     * nichts fuer einen Sperrbildschirm.
+     */
+    private function EduPushSenden(): void
+    {
+        $sammlung = $this->eduPushSammlung ?? [];
+        $this->eduPushSammlung = null;
+        if ($sammlung === [] || !(bool)$this->EduProp('EduPush', true)) {
+            return;
+        }
+        foreach ($sammlung as $userId => $e) {
+            $teile = [];
+            if ($e['karten'] > 0) {
+                $teile[] = $e['karten'] === 1
+                    ? $this->Translate('1 card updated')
+                    : sprintf($this->Translate('%d cards updated'), $e['karten']);
+            }
+            $wartet = [];
+            if ($e['notizen'] > 0) {
+                $wartet[] = $e['notizen'] === 1
+                    ? $this->Translate('1 note')
+                    : sprintf($this->Translate('%d notes'), $e['notizen']);
+            }
+            if ($e['termine'] > 0) {
+                $wartet[] = $e['termine'] === 1
+                    ? $this->Translate('1 appointment')
+                    : sprintf($this->Translate('%d appointments'), $e['termine']);
+            }
+            if ($e['aufgaben'] > 0) {
+                $wartet[] = $e['aufgaben'] === 1
+                    ? $this->Translate('1 task')
+                    : sprintf($this->Translate('%d tasks'), $e['aufgaben']);
+            }
+            if ($wartet !== []) {
+                $teile[] = sprintf($this->Translate('%s waiting to be accepted'), implode(', ', $wartet));
+            }
+            if ($teile === []) {
+                continue;
+            }
+            /* Der Name der Seite steht im Titel, solange nur eine beteiligt war —
+               „Klassenseite 5a Joshua" sagt mehr als „Neues von der Klassenseite".
+               Bei mehreren waere er irrefuehrend. */
+            $titel = count($e['seiten']) === 1
+                ? sprintf($this->Translate('Class page %s'), (string)$e['seiten'][0])
+                : $this->Translate('New from the class page');
+            // Antippen fuehrt dorthin, wo das Neue liegt: Vorschlaege in den
+            // KI-Bereich, gespiegelte Karten in die Notizen.
+            $vorschlaege = ($e['aufgaben'] + $e['termine'] + $e['notizen']) > 0;
+            $this->PushBroadcast(
+                $titel,
+                implode(' · ', $teile),
+                (string)$userId,
+                $vorschlaege ? 'ki' : 'notes',
+                // Aufs App-Symbol kommt nur, was auch wirklich wartet.
+                $vorschlaege ? $this->MailPendingCount() : -1
+            );
+        }
+    }
+
     // ──────────────────────────────── Ablauf ────────────────────────────────
 
     /**
@@ -156,12 +274,16 @@ trait EduMaps
         $analysiert = 0;
         $gespiegelt = 0;
         $fehler = [];
+        // Ab hier wird gesammelt statt gemeldet — EINE Nachricht am Ende.
+        $this->eduPushSammlung = [];
         foreach ($seiten as $seite) {
             $erg = $this->EduSeiteLesen($seite, $analysiert, $alles);
             $karten     += $erg['karten'];
             $geaendert  += $erg['geaendert'];
             $analysiert += $erg['analysiert'];
             $gespiegelt += (int)($erg['gespiegelt'] ?? 0);
+            $this->EduPushKarten((string)($seite['userId'] ?? ''), (string)$seite['name'],
+                (int)($erg['gespiegelt'] ?? 0));
             if (($erg['fehler'] ?? '') !== '') {
                 $fehler[] = $seite['name'] . ': ' . $erg['fehler'];
             }
@@ -179,6 +301,7 @@ trait EduMaps
         @$this->WriteAttributeString('EduStatus', (string)json_encode(
             ['t' => time(), 'text' => $bericht], JSON_UNESCAPED_UNICODE));
         $this->SendDebug('EduMaps', $bericht, 0);
+        $this->EduPushSenden();
         return $bericht;
     }
 
