@@ -528,6 +528,10 @@
       return {
         id: u.id,
         name: u.name,
+        // Die Rolle in der Familie. Die Oberflaeche richtet sich danach: ein
+        // gewaehltes Kind blendet Einkauf und KI aus und bekommt seinen
+        // Stundenplan. Ohne diese Zeile kaeme sie in der Web-App nie an.
+        persona: u.persona || '',
         avatar: u.hasAvatar
           ? (API + '/users/' + encodeURIComponent(u.id) + '/avatar?t=' + encodeURIComponent(token()))
           : ''

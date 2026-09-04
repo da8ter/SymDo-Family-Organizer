@@ -177,6 +177,12 @@ trait TimetableBridge
                     $tage[] = [
                         'weekday' => (int)($tag['weekday'] ?? 0),
                         'label'   => (string)($tag['label'] ?? ''),
+                        /* Das DATUM dieses Wochentags. Das Wochenraster in der
+                           App schreibt es hinter das Kuerzel („Mo 08.09."), und
+                           mit Import ist es die halbe Auskunft: ohne Datum sieht
+                           ein datierter Plan wie eine Vorlage aus. Leer, solange
+                           das Stundenplan-Modul aelter ist als c295585. */
+                        'date'    => (string)($tag['date'] ?? ''),
                         'today'   => (bool)($tag['today'] ?? false),
                         'minutes' => (int)($tag['minutes'] ?? 0),
                         'holiday' => $frei,

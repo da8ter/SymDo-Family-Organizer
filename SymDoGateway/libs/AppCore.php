@@ -355,7 +355,12 @@ trait AppCore
         $newCache = [];
         $result   = [];
         foreach ($this->LoadUsers() as $u) {
-            $entry = ['id' => $u['id'], 'name' => $u['name'], 'avatar' => ''];
+            /* persona gehoert MIT: die Oberflaeche richtet sich danach (ein
+               gewaehltes Kind blendet Einkauf und KI aus und bekommt seinen
+               Stundenplan). Ohne diese Zeile kaeme das Feld nie in der Kachel
+               an — die Projektion hier ist eine Weissliste. */
+            $entry = ['id' => $u['id'], 'name' => $u['name'],
+                      'persona' => $u['persona'], 'avatar' => ''];
             if ($u['hasAvatar']) {
                 $media = IPS_GetMedia($u['mediaID']);
                 $key   = $u['mediaID'] . ':' . (string)($media['MediaUpdated'] ?? 0);
