@@ -262,24 +262,37 @@ trait WebUntis
             if (!is_array($sch)) {
                 continue;
             }
-            $name = trim((string)($sch['foreName'] ?? '') . ' ' . (string)($sch['longName'] ?? ''));
-            if ($name === '' || mb_stripos($name, $suche) === false) {
+            $vor  = trim((string)($sch['foreName'] ?? ''));
+            $nach = trim((string)($sch['longName'] ?? ''));
+            if ($vor === '' && $nach === '') {
                 continue;
             }
-            $treffer[] = sprintf('%d · %s', (int)($sch['id'] ?? 0), $name);
+            /* Am WORTANFANG suchen, nicht irgendwo im Namen. „Tim" traf sonst
+               auch „Fatima" (fa-tim-a) — die Liste einer ganzen Schule liefert
+               damit Namen, die niemand gesucht hat. */
+            $passt = false;
+            foreach (preg_split('/\s+/u', $vor . ' ' . $nach) ?: [] as $wort) {
+                if ($wort !== '' && mb_stripos($wort, $suche) === 0) {
+                    $passt = true;
+                    break;
+                }
+            }
+            if (!$passt) {
+                continue;
+            }
+            $treffer[] = sprintf('%d · %s', (int)($sch['id'] ?? 0), trim($vor . ' ' . $nach));
             if (count($treffer) >= 12) {
                 break;
             }
         }
-        /* Auch merken, nicht nur ins offene Formular schreiben — genau wie beim
-           Verbindungstest: sonst ist die Nummer beim naechsten Oeffnen weg, und
-           man sucht zweimal. */
-        $text = $treffer === []
+        /* NICHT merken, anders als beim Verbindungstest: die Antwort enthaelt die
+           Namen fremder Kinder, und der gemerkte Status landet in der
+           settings.json — die ist Klartext und weltlesbar. Sie steht deshalb nur
+           im offenen Formular, so lange man sie braucht. */
+        return $treffer === []
             ? sprintf($this->Translate('No student found for „%s".'), $suche)
             : sprintf($this->Translate('Element number · name (type „Student"): %s'),
                 implode('   |   ', $treffer));
-        $this->UntisStatusSchreiben($text);
-        return $text;
     }
 
     /**
