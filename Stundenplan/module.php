@@ -652,6 +652,13 @@ class SymDoTimetable extends IPSModuleStrict
             }
         }
 
+        /* Jedes Feld einer Stunde durch DIESEN Trichter. Steht dort eine Liste
+           statt eines Textes — die Web-App schickt schon mal ein Objekt —, ist
+           (string)$x in PHP keine Ausnahme, sondern eine WARNUNG in der
+           Ausgabe; im Hook stand sie mitten in der JSON-Antwort. Leer heisst
+           hier „fehlt", und das faengt die Pruefung darunter ab. */
+        $text = static fn(mixed $v): string => is_scalar($v) ? trim((string)$v) : '';
+
         $fertig = [];
         $anzahl = 0;
         foreach ($tage as $tag => $zeilen) {
@@ -672,12 +679,12 @@ class SymDoTimetable extends IPSModuleStrict
                 if (!is_array($z)) {
                     return $fehler('bad_slot', $this->Translate('A lesson is not an object.'));
                 }
-                $fach = trim((string)($z['subject'] ?? ''));
+                $fach = $text($z['subject'] ?? '');
                 if ($fach === '') {
                     return $fehler('empty_subject', $this->Translate('A lesson has no subject.'));
                 }
-                $von = TimetableCalc::Minuten(trim((string)($z['start'] ?? '')));
-                $bis = TimetableCalc::Minuten(trim((string)($z['end'] ?? '')));
+                $von = TimetableCalc::Minuten($text($z['start'] ?? ''));
+                $bis = TimetableCalc::Minuten($text($z['end'] ?? ''));
                 if ($von < 0 || $bis < 0) {
                     return $fehler('bad_time', sprintf(
                         $this->Translate('Lesson "%s" has no valid time (expected HH:MM).'), $fach));
@@ -686,16 +693,16 @@ class SymDoTimetable extends IPSModuleStrict
                     return $fehler('end_before_start', sprintf(
                         $this->Translate('Lesson "%s" ends before it starts.'), $fach));
                 }
-                $status = mb_strtolower(trim((string)($z['status'] ?? 'normal')));
+                $status = mb_strtolower($text($z['status'] ?? 'normal'));
                 if (!in_array($status, ['normal', 'vertretung', 'entfall'], true)) {
                     $status = 'normal';
                 }
                 $slots[] = [
                     'subject' => $fach,
-                    'start'   => TimetableCalc::ZeitFeld(trim((string)$z['start'])),
-                    'end'     => TimetableCalc::ZeitFeld(trim((string)$z['end'])),
-                    'room'    => trim((string)($z['room'] ?? '')),
-                    'teacher' => trim((string)($z['teacher'] ?? '')),
+                    'start'   => TimetableCalc::ZeitFeld($text($z['start'])),
+                    'end'     => TimetableCalc::ZeitFeld($text($z['end'])),
+                    'room'    => $text($z['room'] ?? ''),
+                    'teacher' => $text($z['teacher'] ?? ''),
                     'status'  => $status,
                 ];
                 $anzahl++;
