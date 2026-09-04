@@ -7013,6 +7013,20 @@ function stundenplanKarte() {
         : s.color;
       const kontur = s.status === 'entfall'
         ? ';border:1px dashed ' + s.color : '';
+      /* Der Titel darf nur den FREIEN Teil des Blocks benutzen. An einem
+         Projekttag liegen die entfallenen Stunden mitten auf dem Ganztagsblock
+         — der Text lief darunter weiter und wurde von ihnen ueberdeckt
+         („1. Methodenta⚛"). Also bis zur naechsten Stunde, die auf ihm liegt,
+         und 26 px ab fuer Zeichen und Abstaende. */
+      let titelBreite = '';
+      if (s.status === 'vertretung') {
+        let naechst = s.to;
+        for (const x of slots) {
+          if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
+        }
+        const anteil = Math.max(0, naechst - s.from) / Math.max(1, s.to - s.from);
+        titelBreite = ` style="max-width:calc(${(anteil * 100).toFixed(1)}% - 26px)"`;
+      }
       stuecke += `<div class="plan-stueck${erster ? ' erst' : ''}${zustand}" title="${escapeHtml(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '') + zustandText)}"` +
         ` style="left:${a * 100}%;width:${breite}%;background:${escapeHtml(fuellung)}${kontur}` +
         `;border-top-left-radius:${erster ? r : '0'};border-bottom-left-radius:${erster ? r : '0'}` +
@@ -7024,7 +7038,7 @@ function stundenplanKarte() {
            kuerzt der Browser mit Auslassungspunkten; ganz schmale Stuecke
            zeigen nur noch das Zeichen. */
         (s.status === 'vertretung'
-          ? `<i class="fa-light fa-right-left"></i><span class="plan-titel">${escapeHtml(s.name || '')}</span>`
+          ? `<i class="fa-light fa-right-left"></i><span class="plan-titel"${titelBreite}>${escapeHtml(s.name || '')}</span>`
           : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
