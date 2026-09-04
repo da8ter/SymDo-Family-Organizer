@@ -241,14 +241,28 @@ trait Voice
     }
 
     /** @return array<string,mixed> */
-    private function VoiceOpen(array $body): array
+    /**
+     * Der gemeinsame Riegel des Sprachwegs: Schalter und Einwilligung.
+     *
+     * @return array<string,mixed>|null Fehlerantwort, oder null wenn offen
+     */
+    private function VoiceTorZu(): ?array
     {
-        // Riegel in fester Reihenfolge — alle VOR dem Prägen der Marke.
         if (!$this->VoiceEnabledProp()) {
             return $this->VoiceErr('voice_disabled', $this->Translate('The voice dialog is disabled.'));
         }
         if (!$this->AiPrivacyAccepted() || !(bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')) {
             return $this->VoiceErr('voice_privacy_required', $this->Translate('The privacy consent for the voice dialog is missing — open the gateway settings.'));
+        }
+        return null;
+    }
+
+    private function VoiceOpen(array $body): array
+    {
+        // Riegel in fester Reihenfolge — alle VOR dem Prägen der Marke.
+        $zu = $this->VoiceTorZu();
+        if ($zu !== null) {
+            return $zu;
         }
         if (trim($this->ReadPropertyString('AiOpenAIKey')) === '') {
             return $this->VoiceErr('ai_not_configured', $this->Translate('No OpenAI API key configured.'));
@@ -367,6 +381,15 @@ trait Voice
     /** @return array<string,mixed> */
     private function VoiceTool(array $body): array
     {
+        /* DERSELBE Riegel wie beim Verbinden. Er fehlte hier: Werkzeuge legen
+           Aufgaben an, streichen Artikel und schreiben Termine — wer den
+           Endpunkt erreichte, konnte das auch dann, wenn der Sprachdialog
+           abgeschaltet oder die Einwilligung nie erteilt war. Ein abgeschalteter
+           Dialog muss auch die Hand abschalten, nicht nur den Ton. */
+        $zu = $this->VoiceTorZu();
+        if ($zu !== null) {
+            return $zu;
+        }
         $callId = $this->VoiceCallId((string)($body['callId'] ?? ''));
         $offen  = $this->VoiceCalls();
         $anruf  = $offen[$callId] ?? null;
