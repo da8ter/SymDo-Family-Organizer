@@ -326,13 +326,13 @@ trait Briefing
         $titel = $viele ? $this->Translate('Your day (plural)') : $this->Translate('Your day');
         // Ganze Saetze, nicht die ersten 256 Zeichen: Ein Schnitt mitten im Wort
         // liest sich auf dem Sperrbildschirm wie ein Fehler. Ein Satz allein genuegt
-        // aber nicht — der erste ist oft nur „Guten Morgen, Max!" und sagt nichts.
+        // aber nicht — der erste ist oft nur „Guten Morgen, <Name>!" und sagt nichts.
         // Deshalb weitersammeln, bis der Text etwas traegt.
         $kurz = '';
         foreach ((preg_split('/(?<=[.!?])\s+/u', trim($text)) ?: []) as $satz) {
             $kurz = $kurz === '' ? (string)$satz : $kurz . ' ' . (string)$satz;
             // 60 Zeichen: Ein inhaltsvoller Satz steht damit allein, ein blosser
-            // Gruss („Guten Morgen, Max!") bekommt den naechsten dazu.
+            // Gruss („Guten Morgen, <Name>!") bekommt den naechsten dazu.
             if (mb_strlen($kurz) >= 60) {
                 break;
             }
