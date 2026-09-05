@@ -866,8 +866,8 @@
     });
   }
 
-  /* Alle Zeilen rollen gemeinsam. Getrennt gerollt zeigte Mias Zeile den
-     Vormittag und Tims den Nachmittag — nebeneinander gestellte Zeilen, die
+  /* Alle Zeilen rollen gemeinsam. Getrennt gerollt zeigte Lenas Zeile den
+     Vormittag und Jonas' den Nachmittag — nebeneinander gestellte Zeilen, die
      verschiedene Zeiten meinen, sind schlimmer als gar kein Rollen. */
   function scrollGleichziehen() {
     const bahnen = Array.prototype.slice.call(document.querySelectorAll('.scrollbahn'));
@@ -1703,7 +1703,7 @@
          Auch wenn es alle haben: bis hierher stand der Name nur bei einem Fach,
          das genau einem Kind gehoert. Fehlte er, musste man raten, ob das Fach
          beiden gehoert oder ob der Name bloss vergessen wurde. Jetzt steht er
-         immer, mehrere durch Schraegstrich getrennt („Mia / Tim"). */
+         immer, mehrere durch Schraegstrich getrennt („Jonas / Lena"). */
       const nur = mehrereKinder
         ? ' <span class="wessen">' + esc(f.wer.join(' / ')) + '</span>' : '';
       return '<span class="fach"><span class="tupfen" style="background:' + esc(f.color) + '">'

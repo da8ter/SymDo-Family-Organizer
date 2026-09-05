@@ -2161,7 +2161,7 @@ trait AiExtract
     // ────────────────────────────── Prompts ──────────────────────────────
 
     /**
-     * Nennt dem Modell die Personen des Haushalts, damit es „Friseurtermin Mia"
+     * Nennt dem Modell die Personen des Haushalts, damit es „Friseurtermin Lena"
      * der richtigen zuordnen kann. Ohne bekannte Namen entfaellt der Absatz —
      * dann gibt es nichts zuzuordnen, und das Feld bleibt leer.
      *
@@ -2179,8 +2179,8 @@ trait AiExtract
             return '';
         }
         return 'Zum Haushalt gehoeren: ' . implode(', ', $namen) . '. Nennt ein Eintrag '
-            . 'eindeutig eine dieser Personen (z.B. „Friseurtermin Mia", „Mia zum Zahnarzt", '
-            . '„Turnbeutel fuer Tim"), setze "person" auf genau diesen Namen. Sonst null. '
+            . 'eindeutig eine dieser Personen (z.B. „Friseurtermin Lena", „Lena zum Zahnarzt", '
+            . '„Turnbeutel fuer Jonas"), setze "person" auf genau diesen Namen. Sonst null. '
             . 'Rate nicht und erfinde keine Namen. ';
     }
 
@@ -2203,7 +2203,7 @@ trait AiExtract
 
     /**
      * Name aus der Modellantwort → Benutzerkennung. Nur bei GENAU EINEM Treffer;
-     * zwei „Mia" im Haushalt bleiben unzugeordnet, statt die falsche zu waehlen.
+     * zwei „Lena" im Haushalt bleiben unzugeordnet, statt die falsche zu waehlen.
      *
      * @return list<string>
      */
@@ -2469,7 +2469,7 @@ trait AiExtract
     {
         /* Nicht jede Quelle ist eine Mail. Eine Karte der Klassenseite lief bisher
            durch denselben Text — und das Modell schrieb es in „info": „E-Mail
-           „5a Joshua — Willkommen an der TER"". Das steht dann so in der App. */
+           „5b Musterklasse — Willkommen"". Das steht dann so in der App. */
         if ($quelle === 'Edumaps') {
             return $this->AiSystemPrompt($today)
                 . ' ZUSATZ: Der Text stammt von der KLASSENSEITE der Schule (eine Karte '

@@ -662,7 +662,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;
 }
-/* Pfad in der Ordner-Kopfzeile: „Tim › " vor dem Namen, leiser als er. Ohne
+/* Pfad in der Ordner-Kopfzeile: „Lena › " vor dem Namen, leiser als er. Ohne
    ihn sieht ein Unterordner aus wie einer von oben. */
 .note-path { color: var(--muted); font-weight: 600; }
 /* Der Weg ist bedienbar, sieht aber weiter wie Text aus: ein Knopf mit Rahmen
@@ -6163,7 +6163,7 @@ function allTodoTasks() {
  * Bis zum 04.09.2026 war die Leiste eine Mehrfachauswahl (ein Tipp schaltete
  * eine Kennung an oder aus). Sie ist jetzt eine Einzelauswahl: ein Tipp waehlt,
  * ein zweiter auf denselben waehlt ab. Der Grund ist der Kindmodus — „die
- * Oberflaeche von Tim" gibt es, „die von Tim UND Mia" nicht.
+ * Oberflaeche von Lena" gibt es, „die von Lena UND Jonas" nicht.
  *
  * memberFilterIds bleibt trotzdem ein Set: neun Stellen lesen es, und die
  * Vereinigungs-Filter (Aufgaben, Termine) bleiben damit unveraendert richtig.
@@ -6197,7 +6197,7 @@ function kindGewaehlt() {
  * Die Kinder, die der Stundenplan zeigen soll: alle — oder nur das gewaehlte.
  *
  * Ein gewaehltes Kind OHNE Stundenplan ergibt eine leere Liste, keinen Rueckfall
- * auf alle: sonst stuende unter „Tim" der Plan seiner Schwester.
+ * auf alle: sonst stuende unter „Lena" der Plan seiner Schwester.
  */
 function planKinder() {
   const alle = (stundenplan && Array.isArray(stundenplan.children)) ? stundenplan.children : [];
@@ -7274,7 +7274,7 @@ function stundenplanLegendeHtml() {
   const mehrere = planKinder().length > 1;
   /* KEINE Dauer: sie waere die Summe ueber alle Kinder und laese sich als
      Doppelstunde. Statt dessen, WESSEN Fach es ist — auch wenn es alle haben,
-     mehrere durch Schraegstrich getrennt („Mia / Tim"). Stand der Name nur bei
+     mehrere durch Schraegstrich getrennt („Jonas / Lena"). Stand der Name nur bei
      einem einzelnen Kind, musste man raten, ob ein fehlender Name „beide"
      heisst oder bloss vergessen wurde. */
   const eintraege = faecher.map(f => {
@@ -11752,7 +11752,7 @@ function notesUnterordner(id) {
 /**
  * Die Ordner fuer ein Auswahlfeld — in ihrer HIERARCHIE, nicht in einer Reihe.
  *
- * Vom Nutzer gemeldet: im Dropdown stand „Edumaps Max" zwischen „Doro" und
+ * Vom Nutzer gemeldet: im Dropdown stand „Edumaps Ben" zwischen „Nina" und
  * „Test", als waere es ein Ordner von oben. Ein <select> laesst sich kaum
  * gestalten, aber die Reihenfolge und der Text gehoeren uns: jedes Kind steht
  * direkt unter seinem Elternteil und traegt je Ebene eine Einrueckung mit
@@ -12125,8 +12125,8 @@ function eduBereichUmschalten(name) {
  */
 function bindeDetailKopf(suche, ordner) {
   const zurueck = suche('#btnNotesBack')[0];
-  // Eine Ebene hoch, nicht gleich zur Wurzel: aus „Tim › Edumaps" fuehrt der
-  // Weg zurueck nach „Tim".
+  // Eine Ebene hoch, nicht gleich zur Wurzel: aus „Lena › Edumaps" fuehrt der
+  // Weg zurueck nach „Lena".
   if (zurueck) zurueck.addEventListener('click', () => {
     notesOrdnerId = ordner.parentId || null;
     renderNotizen();
@@ -12212,11 +12212,11 @@ function renderNotizenDetail(el, ordner) {
       translate('Select a folder') + '</div>');
     return;
   }
-  /* Der Pfad, nicht nur der Name: „Tim › Edumaps" sagt, wo man ist — ohne ihn
+  /* Der Pfad, nicht nur der Name: „Lena › Edumaps" sagt, wo man ist — ohne ihn
      sieht ein Unterordner aus wie ein Ordner von oben. */
   const weg = notesPfad(ordner.id);
   const pfad = weg.length > 1
-    /* Jede Stufe des Weges ist ein Knopf: „Max › Edumaps › 5a Joshua" — ein
+    /* Jede Stufe des Weges ist ein Knopf: „Ben › Edumaps › 5b Musterklasse" — ein
        Tipp auf „Edumaps" fuehrt genau dorthin. Der Zurueck-Pfeil geht nur EINE
        Ebene hoch; bei drei Stufen war die erste sonst nur ueber zweimal
        Zurueck erreichbar. Der letzte Name ist der OFFENE Ordner und steht als
@@ -15282,7 +15282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const mengeText = mengeMitMal(menge);
       const amtChip = (it.kind === 'shopping' && menge) ? '<span class="badge ai-amt">' + escapeHtml(mengeText) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
-      /* Hat die KI eine Person erkannt (z.B. „Friseurtermin Mia"), steht deren
+      /* Hat die KI eine Person erkannt (z.B. „Friseurtermin Jonas"), steht deren
          Bild bei den Abzeichen — so ist vor dem Uebernehmen sichtbar, wem der
          Eintrag zufaellt. Unbekannte Namen kommen serverseitig nicht durch. */
       const avatar = renderAvatarStack(it.assignedTo);

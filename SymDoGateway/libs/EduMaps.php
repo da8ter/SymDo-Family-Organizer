@@ -226,7 +226,7 @@ trait EduMaps
                 continue;
             }
             /* Der Name der Seite steht im Titel, solange nur eine beteiligt war —
-               „Klassenseite 5a Joshua" sagt mehr als „Neues von der Klassenseite".
+               „Klassenseite 5b Musterklasse" sagt mehr als „Neues von der Klassenseite".
                Bei mehreren waere er irrefuehrend. */
             $titel = count($e['seiten']) === 1
                 ? sprintf($this->Translate('Class page %s'), (string)$e['seiten'][0])
@@ -906,7 +906,7 @@ trait EduMaps
            und der Vorschlag war sofort „zu alt" und unsichtbar. Genau so
            gemessen, bevor diese Zeile stand.
            Absender: der Name der Seite steht als Absendername, damit in der App
-           „5a Joshua" statt eines Fragezeichens erscheint. */
+           „5b Musterklasse" statt eines Fragezeichens erscheint. */
         $kopf = [
             'Subject'    => $seite['name'] . ' — ' . $betreff,
             'SenderName' => $seite['name'],

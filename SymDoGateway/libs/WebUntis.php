@@ -282,9 +282,9 @@ trait WebUntis
     /**
      * Trifft ein Suchwort einen Namen? Verglichen wird am WORTANFANG.
      *
-     * Irgendwo im Namen zu suchen, ergab Unsinn: „Tim" traf auch „Fatima"
-     * (fa-tim-a) — und die Liste einer ganzen Schule liefert damit Namen, die
-     * niemand gesucht hat.
+     * Irgendwo im Namen zu suchen, ergab Unsinn: ein kurzes Suchwort traf auch
+     * in der MITTE eines anderen Namens (etwa „Ina" in „Martina") — und die Liste
+     * einer ganzen Schule liefert damit Namen, die niemand gesucht hat.
      */
     private function UntisNameTrifft(string $name, string $suche): bool
     {

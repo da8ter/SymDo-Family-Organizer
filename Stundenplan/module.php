@@ -425,11 +425,11 @@ class SymDoTimetable extends IPSModuleStrict
         foreach ($ausGateway as $id => $name) {
             /* (string) ist PFLICHT: die Kennung ist der Array-SCHLUESSEL, und PHP
                macht aus einem Schluessel, der nur aus Ziffern besteht, still ein
-               int. Tims Kennung ist „57648139" — damit bekam die Closure ein int
-               statt eines string und warf unter strict_types einen TypeError,
-               der ApplyChanges des ganzen Moduls abbrach. Mias „fa0ad897" hat
-               Buchstaben und blieb ein string; deshalb traf es nur eines der
-               beiden Kinder. */
+               int. Eine rein numerische Kennung wie „10482137" bekam die Closure
+               damit als int statt als string und warf unter strict_types einen
+               TypeError, der ApplyChanges des ganzen Moduls abbrach. Eine Kennung
+               mit Buchstaben wie „a1b2c3d4" blieb ein string; deshalb traf es nur
+               eines der beiden Kinder. */
             $kennung = (string)$id;
             $neu[] = $zeile($nachKennung[$kennung] ?? $nachName[$name] ?? [], $kennung, $name);
         }
@@ -468,7 +468,7 @@ class SymDoTimetable extends IPSModuleStrict
         /* Wanderung des Bestands: bis hierher standen NAMEN in SlotOwners. Steht
            dort der Name eines Kindes, das heute eine Kennung hat, wird er still
            darauf gedreht — sonst meldete der Abgleich beim ersten Lauf eine
-           Umbenennung „Mia → fa0ad897" und die Statuszeile spraeche von etwas,
+           Umbenennung „Lena → a1b2c3d4" und die Statuszeile spraeche von etwas,
            das gar nicht passiert ist. */
         $nachName = array_flip($namen);
         foreach ($alt as $i => $e) {
@@ -579,7 +579,7 @@ class SymDoTimetable extends IPSModuleStrict
      * ANTWORTET, statt Fehler zu schlucken.
      *
      * Rumpf:
-     *   {"child": "Joshua" | 1,
+     *   {"child": "Lena" | 1,
      *    "source": "WebUntis",
      *    "days": {"1": [{"subject":"Mathematik","start":"08:00","end":"09:00",
      *                    "room":"121","teacher":"Gue","status":"normal"}], ...}}
@@ -1052,8 +1052,8 @@ class SymDoTimetable extends IPSModuleStrict
         }
         // Wer, dann wie: das Kind steht vor seiner Farbe. Wert ist die KENNUNG,
         // angezeigt wird der Name. Vorher stand hier der Name auch als Wert —
-        // wer ein Mitglied im Formular waehlte, speicherte damit „Mia" statt
-        // „fa0ad897", und das Gesicht in Kachel und App blieb leer, weil die
+        // wer ein Mitglied im Formular waehlte, speicherte damit „Lena" statt
+        // „a1b2c3d4", und das Gesicht in Kachel und App blieb leer, weil die
         // Avatare nach Kennung nachgeschlagen werden.
         $spalten[] = ['caption' => $this->Translate($ausGateway === [] ? 'Family member' : 'Child'),
                       'name' => 'userId', 'width' => $ausGateway === [] ? '190px' : 'auto',
