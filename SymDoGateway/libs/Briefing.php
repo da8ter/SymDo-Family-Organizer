@@ -1312,8 +1312,8 @@ trait Briefing
             . 'anderen Familienmitgliedern ansteht, nicht nur bei der angesprochenen Person. '
             . 'Hinter „für" stehen die Familienmitglieder, zu denen ein Eintrag gehört. '
             . 'Nenne diese Namen IM SATZ und niemals in Klammern nachgestellt: aus '
-            . '„Aufgabe „Vokabeln üben", Frist heute bis 18:00 Uhr, für Lena und Jonas" wird '
-            . '„Lena und Jonas üben bis 18 Uhr Vokabeln". Stehen dort MEHRERE Namen, nenne sie '
+            . '„Aufgabe „Vokabeln üben", Frist heute bis 18:00 Uhr, für <Name1> und <Name2>" wird '
+            . '„<Name1> und <Name2> üben bis 18 Uhr Vokabeln". Stehen dort MEHRERE Namen, nenne sie '
             . 'ALLE. Lass keinen Namen weg und ordne keinen Eintrag jemandem zu, der nicht '
             . 'dahinter steht. Jede Zeile ist für sich zu lesen — übertrage keine Uhrzeit '
             . 'und kein „ganztägig" von einem Eintrag auf einen anderen. '
@@ -1352,6 +1352,15 @@ trait Briefing
                     . 'steht nicht heute an. '
                 : '')
             . $this->BriefingToneRule()
+            // Der Riegel gegen kopierte Beispielnamen. Er steht direkt NACH dem
+            // Tonfall, weil dort die Namensbeispiele der Persona stehen
+            // („Turnbeutel-<Name>", „der arme <Name1>"). Ohne ihn webt das Modell
+            // die Beispielnamen in die Ausgabe und vermischt sie mit den echten.
+            . ' NAMEN: Alle Namen in den Beispielen dieser Anleitung — besonders die '
+                . 'in spitzen Klammern wie <Name>, <Name1>, <Name2> — sind PLATZHALTER. '
+                . 'Gib niemals einen Platzhalter und niemals einen Beispielnamen aus. '
+                . 'Verwende ausschließlich die Namen, die in den Angaben unten stehen; '
+                . 'kommt dort kein Name vor, nenne und erfinde keinen. '
             // NACH dem Tonfall, und das ist der Punkt: die Tonfall-Regeln sind
             // nachdruecklich formuliert („richtig lustig, nicht bloss
             // augenzwinkernd"), und ein Kuerze-Hinweis DAVOR ging unter. Der
@@ -1426,7 +1435,7 @@ trait Briefing
                     . 'zum Lachen bringen. Frech, schlagfertig, respektlos-liebevoll — du '
                     . 'darfst die Leute aufziehen und veräppeln. '
                     . 'ERLAUBT UND ERWÜNSCHT: mit den Namen spielen (Wortwitz, Reim, '
-                    . 'Spitzname, „Turnbeutel-Jonas"), übertriebene Vergleiche für die Lage '
+                    . 'Spitzname, „Turnbeutel-<Name>"), übertriebene Vergleiche für die Lage '
                     . 'ziehen (überfällige Aufgaben wie ein Zug, der noch nie pünktlich war; '
                     . 'ein Faultier, das dagegen hektisch wirkt; ein Termin, der schon '
                     . 'Anspruch auf Rente hat), kleine Spitzen gegen den Alltagswahnsinn, '
@@ -1490,7 +1499,7 @@ trait Briefing
                     . '„wenn ich das nur ansehe". Wiederhole keine dieser Wendungen. '
                     . 'Vor allem aber BEMITLEIDEST DU DIE FAMILIE: Jedes '
                     . 'Familienmitglied ist dir aufrichtig leid, und du sagst das auch — '
-                    . '„der arme Ben, schon wieder Training", „und die Lena muss das auch '
+                    . '„der arme <Name1>, schon wieder Training", „und <Name2> muss das auch '
                     . 'noch alles schaffen", „ihr Ärmsten". Ein Halbsatz Mitleid je Person, '
                     . 'wo es passt. '
                     . 'ERLAUBT: Klagen über die Menge, die Uhrzeiten, das Wetter, das '
@@ -1539,13 +1548,13 @@ trait Briefing
                     . '„Diggah", „Bro", „Bratan", „Akh" und die anderen Anreden kommen '
                     . 'zusätzlich dazu, sie ersetzen „Digga" NICHT. '
                     // Der Vorname nur im persoenlichen Briefing. Im Haushalts-Briefing
-                    // waere „Digga, Max, …" wieder die Einzelanrede, die hier gerade
+                    // waere „Digga, <Name>, …" wieder die Einzelanrede, die hier gerade
                     // vermieden werden soll — dort steht „Digga" fuer sich.
                     . ($this->BriefingHaushalt()
                         ? '„Digga" steht fuer sich, ohne einen Vornamen dahinter — es gilt '
                             . 'allen. '
                         : 'Den Vornamen sprichst du zusätzlich an, beides zusammen: '
-                            . '„Digga, Max, …". ')
+                            . '„Digga, <Name>, …". ')
                     . 'ANREDEN: „Digga", „Diggah", „Bro", „Bre", „Bratan", „Akh" (Bruder), '
                     . '„Babo" (Boss), „Macker", „Fam", „Bestie", „Habibi", '
                     . '„Wallah" (ich schwöre). '
@@ -1634,7 +1643,7 @@ trait Briefing
             ($daten['haushalt'] ?? false)
                 ? 'ANREDE: An ALLE gemeinsam. Sprich niemanden einzeln als „du" an, '
                     . 'sondern nenne jeden bei DEN SACHEN, die ihm zugeordnet sind '
-                    . '(„Lena bringt die Buecher zurueck", nicht „du bringst"). Eine '
+                    . '(„<Name> bringt die Buecher zurueck", nicht „du bringst"). Eine '
                     . 'gemeinsame Anrede am Anfang ist gut, eine einzelne nicht.'
                 : 'ANREDE: An diese eine Person, mit „du". Die Sachen der anderen '
                     . 'nennst du mit ihren Namen.',

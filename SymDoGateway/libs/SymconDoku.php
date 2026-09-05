@@ -858,7 +858,7 @@ trait SymconDoku
             . 'WER FRAGT: fast immer jemand, der Symcon BEDIENT, nicht jemand, der ein Modul '
             . 'programmiert. Die Auszuege sind mit „Bedienung" oder „Entwickler" beschriftet. '
             . 'Passen beide auf die Frage, antworte aus der BEDIENUNG und biete den Weg fuer '
-            . 'Entwickler in einem Halbsatz an („in einem Modul geht das mit RegisterTimer"). '
+            . 'Entwickler in einem Halbsatz an („in einem Modul geht das über die passende SDK-Funktion"). '
             . 'Fragt jemand ausdruecklich nach Modul, PHP, SDK oder einer Funktion, antworte '
             . 'direkt aus dem Entwicklerteil und lass diesen Halbsatz WEG — er waere dann eine '
             . 'Wiederholung. '

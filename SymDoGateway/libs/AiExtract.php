@@ -2161,7 +2161,7 @@ trait AiExtract
     // ────────────────────────────── Prompts ──────────────────────────────
 
     /**
-     * Nennt dem Modell die Personen des Haushalts, damit es „Friseurtermin Lena"
+     * Nennt dem Modell die Personen des Haushalts, damit es „Friseurtermin <Name>"
      * der richtigen zuordnen kann. Ohne bekannte Namen entfaellt der Absatz —
      * dann gibt es nichts zuzuordnen, und das Feld bleibt leer.
      *
@@ -2179,8 +2179,10 @@ trait AiExtract
             return '';
         }
         return 'Zum Haushalt gehoeren: ' . implode(', ', $namen) . '. Nennt ein Eintrag '
-            . 'eindeutig eine dieser Personen (z.B. „Friseurtermin Lena", „Lena zum Zahnarzt", '
-            . '„Turnbeutel fuer Jonas"), setze "person" auf genau diesen Namen. Sonst null. '
+            . 'eindeutig eine dieser Personen (z.B. „Friseurtermin <Name>", „<Name> zum Zahnarzt", '
+            . '„Turnbeutel fuer <Name>"), setze "person" auf genau diesen Namen. Sonst null. '
+            . 'Die Namen in den Beispielen (<Name>) sind Platzhalter — gib sie nicht aus '
+            . 'und verwende ausschließlich die oben genannten Haushaltsnamen. '
             . 'Rate nicht und erfinde keine Namen. ';
     }
 
@@ -2203,7 +2205,7 @@ trait AiExtract
 
     /**
      * Name aus der Modellantwort → Benutzerkennung. Nur bei GENAU EINEM Treffer;
-     * zwei „Lena" im Haushalt bleiben unzugeordnet, statt die falsche zu waehlen.
+     * zwei „<Name>" im Haushalt bleiben unzugeordnet, statt die falsche zu waehlen.
      *
      * @return list<string>
      */
@@ -2234,7 +2236,7 @@ trait AiExtract
             . 'als Liste im Dokument, sondern stecken implizit in Handlungsaufforderungen — z.B. „bitte '
             . 'bestätigen Sie…“, „senden Sie das Formular zurück“, „überweisen Sie bis…“, „vereinbaren Sie '
             . 'einen Termin“. Leite daraus die Aufgabe ab, die der Empfänger erledigen muss, aus dessen '
-            . 'Sicht formuliert (kurzer, prägnanter deutscher Titel, z.B. „Daten bei der Commerzbank '
+            . 'Sicht formuliert (kurzer, prägnanter deutscher Titel, z.B. „Daten beim Absender '
             . 'bestätigen“). Drohende Konsequenzen (Sperrung, Mahnung, Frist) → priority "high". Nutze '
             . '"info" für den wichtigsten Kontext (Absender, Referenz, Konsequenz, geforderter Weg). '
             // Gemeldet am 21.08.2026: bei „Mitbringsel fuer den Opti-Kurs vorbereiten"
@@ -2382,9 +2384,11 @@ trait AiExtract
         return ' AUFBAU DES NOTIZTEXTES. Erst EIN Satz, der die Sache zusammenfasst. '
             . 'Danach je Angabe eine eigene Zeile in der Form „Bezeichnung: Wert" — '
             . 'zum Beispiel „Termin: 12.09.2026, 19:30", „Ort: Raum 214", '
-            . '„Kosten: 12 EUR", „Frist: 10.09.2026", „Kontakt: Frau Weber, '
-            . '0221 4711-99", „Aktenzeichen: 4711/26". Nur Angaben, die wirklich im '
+            . '„Kosten: 12 EUR", „Frist: 10.09.2026", „Kontakt: <Name>, '
+            . '<Telefonnummer>", „Aktenzeichen: 4711/26". Nur Angaben, die wirklich im '
             . 'Dokument stehen; erfinde keine Zeile und lass keine wichtige weg. '
+            . 'Die Beispiele oben zeigen NUR die Form; uebernimm daraus keine Werte '
+            . '(Namen, Nummern, Orte, Daten, Aktenzeichen) — nur, was im Dokument steht. '
             // Beobachtet am 21.08.2026: aus der Anschrift im Dokument wurde eine
             // ANDERE, frei erfundene — richtige Stadt, richtige Postleitzahl,
             // falsche Strasse und Hausnummer, mitten in einer sonst korrekten

@@ -297,7 +297,7 @@ trait VoiceTools
             ],
             'nachricht_senden' => [
                 'art' => 'schreiben',
-                'beschreibung' => 'Schickt eine kurze Mitteilung als Push auf die Geräte des Haushalts oder einer einzelnen Person. Für Ausrichten und Erinnern („sag Max, er soll den Müll rausbringen"). NICHT für Antworten an den Sprechenden selbst — die sagst du einfach.',
+                'beschreibung' => 'Schickt eine kurze Mitteilung als Push auf die Geräte des Haushalts oder einer einzelnen Person. Für Ausrichten und Erinnern („sag <Name>, er soll etwas erledigen"). NICHT für Antworten an den Sprechenden selbst — die sagst du einfach.',
                 'schema' => [
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
@@ -2468,7 +2468,8 @@ trait VoiceTools
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
         $zeilen[] = 'Für einen wiederkehrenden Termin setze bei termin_anlegen "wiederholung" (woechentlich/zweiwoechentlich/monatlich) und dazu entweder "wiederhol_anzahl" (wie oft) oder "wiederhol_bis" (bis wann). Bei wöchentlich lege "datum" auf den gewünschten Wochentag. Fehlt Anzahl und Enddatum, frag kurz nach.';
         $zeilen[] = 'Bei Fragen zu Symcon rufe symcon_handbuch auf. Das Feld "sag" ist dort NUR der Satzanfang — die eigentliche Erklärung formulierst du in drei bis fünf Sätzen AUS DEM FELD "auszug", in eigenen Worten und mit den konkreten Angaben daraus (Funktionsname, Parameter, Besonderheiten). Verweise den Nutzer NIEMALS auf die Dokumentation oder eine Internetadresse, statt selbst zu antworten: er fragt gerade dich. Rate nie einen Funktionsnamen oder Parameter. Steht die Antwort nicht im Auszug, sage genau das und nenne den Titel der gefundenen Seite.';
-        $zeilen[] = 'Für eine Notiz denk dir aus dem Gesagten einen kurzen, treffenden Titel selbst aus (der Nutzer nennt selten einen). Nennt der Nutzer eine Person ("für Max", "in Annas Ordner"), setze "person" auf diesen Namen; ohne Person landet die Notiz beim Kachel-Benutzer.';
+        $zeilen[] = 'Für eine Notiz denk dir aus dem Gesagten einen kurzen, treffenden Titel selbst aus (der Nutzer nennt selten einen). Nennt der Nutzer eine Person ("für <Name>", "in <Name>s Ordner"), setze "person" auf diesen Namen; ohne Person landet die Notiz beim Kachel-Benutzer.';
+        $zeilen[] = 'Die Namen in den Werkzeug-Beispielen (<Name>) sind Platzhalter — gib sie nie aus und verwende nur Namen, die der Nutzer tatsächlich nennt.';
         $zeilen[] = 'Sage nie, etwas sei erledigt, bevor ein Werkzeug ok:true gemeldet hat. Erfinde keine Listeninhalte; wenn ein Werkzeug nichts findet, sage das. Lies das Feld "sag" einer Antwort sinngemäß vor. Nenne niemals Kennungen, technische Fehlermeldungen oder Internetadressen — im Gespräch kann sich niemand eine Adresse merken.';
         $text = implode("\n", $zeilen);
         /* Der Deckel ist eine REISSLEINE gegen ausufernde Listen (Mitglieder,

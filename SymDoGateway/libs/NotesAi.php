@@ -115,7 +115,7 @@ trait NotesAi
             . 'der Inhalt in eigenen Worten, beliebig viele Zeilen, hoechstens 2700 Zeichen' . "\n"
             . '### FUNDE' . "\n"
             . '[ ... ]' . "\n\n"
-            . 'ZUM TITEL: Er benennt die Sache, nicht die Gattung. „Elternabend 3b am 12.09." '
+            . 'ZUM TITEL: Er benennt die Sache, nicht die Gattung. „Elternabend <Gruppe> am <Datum>." '
             . 'ist gut, „Elternbrief" oder „Dokument" ist schlecht. '
             . 'ZUR NOTIZ: Gib alles wieder, was man spaeter nachschlagen will — Namen, '
             . 'Betraege, Fristen, Raeume, Telefonnummern, Anschriften, Aktenzeichen, '
