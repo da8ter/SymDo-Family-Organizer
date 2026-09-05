@@ -3371,8 +3371,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    heissen in dieser Datei schon anders. */
 .wp-summe { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); }
 .wp-raster { display: flex; gap: 8px; }
-/* Die Achse steht MIT IM Scrollbereich — nur so tragen Achse und Spalten
-   denselben senkrechten Weg. Waagerecht bleibt sie durch sticky stehen. */
+/* Die Achse steht NEBEN dem Schiebebereich (Geschwister von .wp-spalten) und
+   bleibt damit von selbst stehen; einen senkrechten Weg gibt es hier nicht.
+   Das sticky ist aus der Kachel uebernommen, wo die Achse mit im Rollbereich
+   liegt — hier ohne Wirkung, aber es traegt das z-index. */
 .wp-achse { position: sticky; left: 0; z-index: 2; flex: 0 0 44px; background: var(--card); }
 .wp-achse .wp-innen { position: relative; }
 .wp-marke {
@@ -14113,11 +14115,32 @@ function innererScroller(ziel, scrollEl, deltaY) {
   return null;
 }
 
+/**
+ * Sucht zwischen Ereignisziel und Scrollbereich ein Kind, das WAAGERECHT schieben
+ * kann und noch Weg hat — das Wochenraster, die Einkaufsleiste.
+ *
+ * Gegenstueck zu innererScroller(). Es entscheidet die Achse schon beim Aufsetzen
+ * des Fingers: die Eindaemmung nimmt dann von vornherein die Hand weg.
+ */
+function innererScrollerX(ziel, scrollEl) {
+  let el = (ziel instanceof Element) ? ziel : null;
+  while (el && el !== scrollEl) {
+    let eigen = false;
+    try { eigen = /(auto|scroll)/.test(getComputedStyle(el).overflowX); } catch (e) { eigen = false; }
+    if (eigen && (el.scrollWidth - el.clientWidth) > 1) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function bindScrollContainment(scrollEl) {
   if (!scrollEl) return;
   let lastTouchY = null;
   let startX = 0, startY = 0;
   let axis = null; // 'x' = horizontale Geste (z. B. Einkaufsvorschau) → durchlassen
+  let aufSchiene = false; // der Finger sitzt auf etwas waagerecht Schiebbarem
 
   scrollEl.addEventListener('wheel', (e) => {
     // Horizontales Wheel/Trackpad (z. B. auf der Artikelleiste) NICHT abfangen —
@@ -14146,6 +14169,9 @@ function bindScrollContainment(scrollEl) {
     startY = e.touches[0].clientY;
     lastTouchY = startY;
     axis = null;
+    /* Sitzt der Finger auf etwas waagerecht Schiebbarem (Wochenraster,
+       Einkaufsleiste), wird die Achse spaeter zu seinen Gunsten entschieden. */
+    aufSchiene = innererScrollerX(e.target, scrollEl) !== null;
     e.stopPropagation();
   }, { passive: true });
 
@@ -14157,7 +14183,25 @@ function bindScrollContainment(scrollEl) {
     if (axis === null) {
       const dx = Math.abs(currentX - startX);
       const dy = Math.abs(currentY - startY);
-      if (dx > 8 || dy > 8) axis = dx > dy ? 'x' : 'y';
+      if (dx > 8 || dy > 8) {
+        /* Auf einer Schiene muss die Geste DEUTLICH senkrecht sein, um als
+           senkrecht zu gelten: waagerecht schiebt kaum jemand exakt waagerecht,
+           und ein „y" waere hier das Ende der Geste — der Bereich hat ja keinen
+           senkrechten Weg. Anderswo entscheidet schlicht die groessere Strecke. */
+        axis = aufSchiene ? (dy > dx * 1.5 ? 'y' : 'x') : (dx > dy ? 'x' : 'y');
+      } else {
+        /* Achse noch offen: NUR die Weitergabe stoppen, nichts abwuergen.
+           Hier stand frueher schon die Eindaemmung — und die ruft in einem
+           Bereich ohne senkrechten Weg (der Wochenplan ist so einer)
+           preventDefault. Auf iOS entscheidet der Browser beim ERSTEN
+           touchmove, ob eine Geste eine Schiebegeste wird; ein preventDefault
+           darin nimmt ihr das fuer immer. Gemessen: wer langsam anschob, kam
+           nicht vom Fleck, wer schnell wischte, schon — „mal geht's, mal
+           nicht". Die ersten 8px Gummiband sind der Preis dafuer. */
+        lastTouchY = currentY;
+        e.stopPropagation();
+        return;
+      }
     }
     // Horizontale Geste (Einkaufsvorschau u. Ä.) unangetastet lassen — sonst
     // würde die vertikale Eindämmung das horizontale Scrollen blockieren.
