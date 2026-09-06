@@ -979,11 +979,16 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   font: inherit; line-height: 1; padding: 4px 8px; border-radius: 999px;
 }
 .plan-tagname { display: inline-grid; place-items: center; padding: 0 2px; }
-.plan-tagname span {
+/* NUR die direkten Kinder: alle Tagesnamen liegen uebereinander in derselben
+   Rasterzelle, sichtbar ist einer. */
+.plan-tagname > span {
   grid-area: 1 / 1; font-size: 13px; font-weight: 700; white-space: nowrap; visibility: hidden;
 }
-.plan-tagname span.an { visibility: visible; }
-.plan-tagname span.ist-heute { color: var(--accent, #0a84ff); }
+.plan-tagname > span.an { visibility: visible; }
+.plan-tagname > span.ist-heute { color: var(--accent, #0a84ff); }
+/* Das Datum steht INNERHALB des Namens und darf von der Regel darueber nicht
+   erfasst werden — sonst waere es mit versteckt. */
+.plan-tagdatum { font-weight: 600; color: var(--faint); }
 /* Das Blatt deckt die KARTE ab, nicht den Schirm: es gehoert zum Stundenplan
    und nicht zur ganzen Oberflaeche. Dafuer braucht die Karte einen Bezug. */
 /* Wahl der Reichweite: gestapelte, volle Schaltflaechen statt einer Fussleiste —
@@ -5600,7 +5605,9 @@ function setTab(tab) {
     planZuHeute = true;
   }
   if (tab === 'dashboard') {
-    stundenplanTag = 0;
+    // Nicht die WOCHE zuruecksetzen, nur die eigene Wahl: am Wochenende waehlt
+    // stundenplanGewaehlt die kommende Woche vor.
+    stundenplanGeblaettert = false;
     stundenplanLegende = false;
   }
   /* Beim BETRETEN des Kalenders frisch holen. renderAll holt nur bei leerer
@@ -6777,6 +6784,13 @@ let stundenplan = null;
 let stundenplanLaeuft = false;
 let stundenplanLegende = false;
 let stundenplanTag = 0;   // gewaehlter Wochentag, 0 = noch keiner
+/* In WELCHER Woche der gewaehlte Tag liegt: 0 = laufende, 1 = die kommende.
+   Die Karte bekommt keinen zweiten Kasten neben die Tageswahl — sie blaettert
+   stattdessen durch beide Wochen am Stueck. Dieselbe Loesung wie in der Kachel
+   des Stundenplan-Moduls. */
+let stundenplanWoche = 0;
+// Hat der Nutzer selbst geblaettert? Dann bleibt seine Wahl stehen.
+let stundenplanGeblaettert = false;
 /* Wann der Plan mit seiner Minutenangabe eintraf, und der Plan OHNE diese
    Minute. Beides gehoert zusammen: die Karte darf sich nicht jede Minute neu
    zeichnen, nur weil die Uhr weitergelaufen ist — ein renderAll() schloesse
@@ -6841,7 +6855,7 @@ const PLAN_ZUSATZ_RUNDEN = 3;
 function planTagesSpanne(gewaehlt) {
   let von = Infinity, bis = -Infinity;
   planKinder().forEach(k => {
-    const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
+    const tag = planTagVonKind(k, gewaehlt, stundenplanWoche);
     ((tag && tag.slots) || []).forEach(s => {
       von = Math.min(von, s.from); bis = Math.max(bis, s.to);
     });
@@ -6854,7 +6868,7 @@ function planTagesSpanne(gewaehlt) {
   // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
   // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
   if (!isFinite(von) || bis <= von) return [stundenplan.span[0], stundenplan.span[1]];
-  if (planZusatzTag === gewaehlt) bis += planZusatzMinuten;
+  if (planZusatzTag === stundenplanWoche + ':' + gewaehlt) bis += planZusatzMinuten;
   return [Math.max(0, von), Math.min(1440, bis)];
 }
 
@@ -6866,7 +6880,7 @@ function planBalkenBreite() {
   const spanne = Math.max(tagSpan[1] - tagSpan[0], 60);
   let kuerzeste = Infinity;
   planKinder().forEach(k => {
-    const tag = (k.days || []).filter(t => t.weekday === gewaehlt)[0];
+    const tag = planTagVonKind(k, gewaehlt, stundenplanWoche);
     ((tag && tag.slots) || []).forEach(s => {
       kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
     });
@@ -7065,7 +7079,7 @@ function planTermineBeschriften() {
        der Platz ja entstanden. Ohne diese Zeile klappte er weiter nach links
        und der gewonnene Raum blieb leer. */
     const letzter = posten.reduce((a, b) => (!a || b.barB > a.barB) ? b : a, null);
-    if (letzter && planZusatzTag === stundenplanGewaehlt() && planZusatzMinuten > 0) {
+    if (letzter && planZusatzTag === stundenplanWoche + ':' + stundenplanGewaehlt() && planZusatzMinuten > 0) {
       letzter.nachLinks = false;
       letzter.w = Math.min(letzter.natur, Math.max(letzter.platzR, 0));
       letzter.passt = letzter.platzR >= Math.min(letzter.natur, 32);
@@ -7185,7 +7199,8 @@ function planTermineBeschriften() {
 
   if (fehltAnteil <= 0) return;
   const gewaehlt = stundenplanGewaehlt();
-  if (planZusatzTag !== gewaehlt) { planZusatzTag = gewaehlt; planZusatzMinuten = 0; planZusatzRunden = 0; }
+  const planSchluessel = stundenplanWoche + ':' + gewaehlt;
+  if (planZusatzTag !== planSchluessel) { planZusatzTag = planSchluessel; planZusatzMinuten = 0; planZusatzRunden = 0; }
   if (planZusatzRunden >= PLAN_ZUSATZ_RUNDEN) return;
   const sp = planTagesSpanne(gewaehlt);
   const dazu = Math.ceil(fehltAnteil * Math.max(sp[1] - sp[0], 60));
@@ -7305,33 +7320,87 @@ function loadTimetable() {
   }).catch(() => { stundenplanLaeuft = false; });
 }
 
-/* Die Tage, die die Karte anbietet: die Vereinigung ueber alle Kinder. Hat ein
-   Kind Samstag und das andere nicht, gibt es den Samstag trotzdem — dort steht
-   dann „keine Schule", was richtig ist und nicht fehlt. */
-function stundenplanTage() {
-  const gesehen = new Set();
-  planKinder().forEach(k => {
-    (k.days || []).forEach(t => gesehen.add(t.weekday));
-  });
-  return Array.from(gesehen).sort((a, b) => a - b);
+/** Die Tage EINER Woche eines Kindes — die laufende oder die kommende. */
+function planTageDerWoche(kind, woche) {
+  return (woche === 1 && Array.isArray(kind.nextDays)) ? kind.nextDays : ((kind && kind.days) || []);
 }
 
-/* Beim ersten Zeichnen auf HEUTE — und wenn heute kein Schultag ist (Sonntag,
-   Ferien, abgeschalteter Samstag), auf den ersten angebotenen Tag. Danach
-   bleibt die Wahl des Nutzers stehen. */
+/** Der Datensatz des gewaehlten Tages bei diesem Kind, oder undefined. */
+function planTagVonKind(kind, weekday, woche) {
+  return planTageDerWoche(kind, woche).filter(t => t.weekday === weekday)[0];
+}
+
+/* Die Tage, die die Karte anbietet: die Vereinigung ueber alle Kinder, erst die
+   laufende Woche, dann — mit Import — die kommende. Hat ein Kind Samstag und
+   das andere nicht, gibt es den Samstag trotzdem; dort steht dann
+   „Wochenende", was richtig ist und nicht fehlt.
+
+   Die zweite Woche kommt nur mit Import (nextDays): ohne ihn wiederholt sich
+   die Vorlage, und man blaetterte durch dieselben Tage zweimal. */
+function stundenplanTage() {
+  const eintraege = [];
+  [0, 1].forEach(woche => {
+    const gesehen = new Set();
+    planKinder().forEach(k => {
+      if (woche === 1 && !Array.isArray(k.nextDays)) return;
+      planTageDerWoche(k, woche).forEach(t => gesehen.add(t.weekday));
+    });
+    Array.from(gesehen).sort((a, b) => a - b).forEach(d => eintraege.push({ woche, weekday: d }));
+  });
+  return eintraege;
+}
+
+function planTagIndex(tage, woche, weekday) {
+  for (let i = 0; i < tage.length; i++) {
+    if (tage[i].woche === woche && tage[i].weekday === weekday) return i;
+  }
+  return -1;
+}
+
+/** Das Kurzdatum eines Eintrags — aus dem Tag irgendeines Kindes. */
+function planTagDatum(eintrag) {
+  for (const k of planKinder()) {
+    const t = planTagVonKind(k, eintrag.weekday, eintrag.woche);
+    if (t && t.date) return stundenplanDatumKurz(t.date);
+  }
+  return '';
+}
+
+/* Beim ersten Zeichnen auf HEUTE. Ist heute kein Schultag, haengt es davon ab,
+   WARUM:
+
+     Wochenende  → der erste Tag der KOMMENDEN Woche. Sonst zeigte die Karte
+                   sonntags den Montag der Woche, die vorbei ist.
+     sonst       → der erste angebotene Tag (Ferien, abgeschalteter Samstag).
+
+   Ob die Woche durch ist, sagt der Server je Kind (weekOver): das haengt am
+   Datum des letzten Unterrichtstages, nicht an der Uhr des Betrachters.
+   Danach bleibt die Wahl des Nutzers stehen. */
 function stundenplanGewaehlt() {
   const tage = stundenplanTage();
-  if (tage.indexOf(stundenplanTag) >= 0) { return stundenplanTag; }
+  if (stundenplanGeblaettert && planTagIndex(tage, stundenplanWoche, stundenplanTag) >= 0) {
+    return stundenplanTag;
+  }
   let heute = 0;
   planKinder().forEach(k => {
     (k.days || []).forEach(t => { if (t.today) { heute = t.weekday; } });
   });
-  stundenplanTag = tage.indexOf(heute) >= 0 ? heute : (tage[0] || 1);
+  if (heute && planTagIndex(tage, 0, heute) >= 0) {
+    stundenplanWoche = 0; stundenplanTag = heute;
+    return stundenplanTag;
+  }
+  const wocheDurch = planKinder().some(k =>
+    k.weekOver === true && Array.isArray(k.nextDays) && k.nextDays.length);
+  const erster = tage.filter(t => t.woche === (wocheDurch ? 1 : 0))[0]
+    || tage[0] || { woche: 0, weekday: 1 };
+  stundenplanWoche = erster.woche; stundenplanTag = erster.weekday;
   return stundenplanTag;
 }
 
+/* „Heute" gilt nur in der LAUFENDEN Woche: blaettert man auf den Montag der
+   kommenden, ist derselbe Wochentag noch lange nicht heute. */
 function stundenplanIstHeute(weekday) {
-  return planKinder().some(k =>
+  return stundenplanWoche === 0 && planKinder().some(k =>
     (k.days || []).some(t => t.today && t.weekday === weekday));
 }
 
@@ -7342,9 +7411,17 @@ function stundenplanTagwahl() {
   if (tage.length < 2) { return ''; }
   const jetzt = stundenplanGewaehlt();
   // ALLE Namen ins Markup — daher die feste Breite; sichtbar ist einer.
-  const namen = tage.map(t => `<span class="${t === jetzt ? 'an' : ''}` +
-    `${t === jetzt && stundenplanIstHeute(t) ? ' ist-heute' : ''}">` +
-    `${escapeHtml(translate(PLAN_TAGE[t] || ''))}</span>`).join('');
+  const namen = tage.map(t => {
+    const an = t.woche === stundenplanWoche && t.weekday === jetzt;
+    /* Mit Import steht das DATUM dabei: seit die Wahl durch beide Wochen
+       laeuft, gaebe es sonst zweimal „Montag" und kein Merkmal, welcher
+       gemeint ist. Ohne Import ist der Plan eine Vorlage — ein Datum daran
+       waere eine Behauptung, und die zweite Woche gibt es dann ohnehin nicht. */
+    const datum = (stundenplan && stundenplan.dated) ? planTagDatum(t) : '';
+    return `<span class="${an ? 'an' : ''}${an && stundenplanIstHeute(t.weekday) ? ' ist-heute' : ''}">` +
+      `${escapeHtml(translate(PLAN_TAGE[t.weekday] || ''))}` +
+      `${datum ? ` <span class="plan-tagdatum">${escapeHtml(datum)}</span>` : ''}</span>`;
+  }).join('');
   return `<span class="plan-tagwahl">` +
     `<button data-plantag="zurueck" aria-label="${translate('Previous day')}">‹</button>` +
     `<span class="plan-tagname">${namen}</span>` +
@@ -7353,9 +7430,14 @@ function stundenplanTagwahl() {
 
 function stundenplanBlaettern(richtung) {
   const tage = stundenplanTage();
-  const i = tage.indexOf(stundenplanGewaehlt());
-  // Rundlauf: von Freitag weiter landet man wieder bei Montag.
-  stundenplanTag = tage[(i + richtung + tage.length) % tage.length];
+  stundenplanGewaehlt();               // stellt sicher, dass die Wahl in der Liste steht
+  const i = planTagIndex(tage, stundenplanWoche, stundenplanTag);
+  /* Rundlauf ueber BEIDE Wochen: von Sonntag weiter geht es in die kommende
+     Woche, und von deren Ende wieder auf den Anfang der laufenden. */
+  const ziel = tage[(i + richtung + tage.length) % tage.length];
+  stundenplanWoche = ziel.woche;
+  stundenplanTag = ziel.weekday;
+  stundenplanGeblaettert = true;
 }
 
 /* Die am gewaehlten Tag sichtbaren Faecher, ohne Wiederholung. Zusammengefasst
@@ -7364,7 +7446,7 @@ function stundenplanFaecher() {
   const karte = new Map();
   const gewaehlt = stundenplanGewaehlt();
   planKinder().forEach(kind => {
-    const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
+    const tag = planTagVonKind(kind, gewaehlt, stundenplanWoche);
     ((tag && tag.slots) || []).forEach(s => {
       const da = karte.get(s.name);
       if (da) {
@@ -7453,7 +7535,7 @@ function stundenplanKarte() {
   const gewaehlt = stundenplanGewaehlt();
   let zeilen = '';
   for (const kind of planKinder()) {
-    const tag = (kind.days || []).filter(t => t.weekday === gewaehlt)[0];
+    const tag = planTagVonKind(kind, gewaehlt, stundenplanWoche);
     const slots = (tag && Array.isArray(tag.slots)) ? tag.slots : [];
     // Gesicht vor den Namen, wenn das Kind einem Familienmitglied zugeordnet
     // ist. avatarHtml liefert das Foto als Data-URI oder ersatzweise den

@@ -152,12 +152,16 @@
   }
   .tagwahl button:hover { background: color-mix(in srgb, var(--content-color) 10%, transparent); }
   .tagname { display: inline-grid; place-items: center; padding: 0 2px; }
-  .tagname span {
+  /* NUR die direkten Kinder: alle Tagesnamen liegen uebereinander in derselben
+     Rasterzelle, sichtbar ist einer. Das Datum steht INNERHALB des Namens und
+     darf davon nicht erfasst werden — sonst waere es mit versteckt. */
+  .tagname > span {
     grid-area: 1 / 1; font-size: 12px; font-weight: 700; white-space: nowrap;
     visibility: hidden;
   }
-  .tagname span.an { visibility: visible; }
-  .tagname span.ist-heute { color: var(--accent); }
+  .tagname > span.an { visibility: visible; }
+  .tagname > span.ist-heute { color: var(--accent); }
+  .tagname .datum { font-weight: 600; color: var(--muted); }
   /* Eine Zeile: Gesichter, daneben das Ferienband ueber den Rest der Breite. */
   .kinderzeile { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .ferien {
@@ -707,6 +711,13 @@
   let kindNr  = 0;
   let legende = false;   // Legende der sichtbaren Faecher
   let tagNr   = 0;       // gewaehlter Wochentag in der Timeline, 0 = noch keiner
+  /* In WELCHER Woche der gewaehlte Tag liegt: 0 = laufende, 1 = die kommende.
+     Die Timeline bekommt keinen zweiten Kasten neben die Tageswahl — sie
+     blaettert stattdessen durch beide Wochen am Stueck. Ein Wochenwechsler
+     DANEBEN waere in dieser schmalen Kopfzeile eine Wahl zu viel. */
+  let tagWoche = 0;
+  // Hat der Nutzer selbst geblaettert? Dann bleibt seine Wahl stehen.
+  let tagGewaehlt = false;
   /* Wann der Plan mit seiner Minutenangabe eintraf. Der Strich laeuft zwischen
      zwei Sendungen weiter, sonst spraenge er alle fuenf Minuten. Gezaehlt wird
      die VERGANGENE Zeit seit dem Eintreffen, nicht die Uhr des Betrachters:
@@ -839,7 +850,7 @@
   function tagesSpanne(gewaehlt) {
     let von = Infinity, bis = -Infinity;
     (zustand.children || []).forEach(function (k) {
-      const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
+      const tag = tagVonKind(k, gewaehlt, tagWoche);
       ((tag && tag.slots) || []).forEach(function (s) {
         von = Math.min(von, s.from); bis = Math.max(bis, s.to);
       });
@@ -852,7 +863,7 @@
     // Ein Tag ohne alles bekommt gar keinen Balken; die Wochenspanne ist dann
     // nur noch ein Rueckfall, damit nirgends durch null geteilt wird.
     if (!isFinite(von) || bis <= von) { return [zustand.span[0], zustand.span[1]]; }
-    if (zusatzTag === gewaehlt) { bis += zusatzMinuten; }
+    if (zusatzTag === tagWoche + ':' + gewaehlt) { bis += zusatzMinuten; }
     return [Math.max(0, von), Math.min(1440, bis)];
   }
 
@@ -864,7 +875,7 @@
     const spanne = Math.max(tagSpan[1] - tagSpan[0], 60);
     let kuerzeste = Infinity;
     (zustand.children || []).forEach(function (k) {
-      const tag = (k.days || []).filter(function (t) { return t.weekday === gewaehlt; })[0];
+      const tag = tagVonKind(k, gewaehlt, tagWoche);
       ((tag && tag.slots) || []).forEach(function (s) {
         kuerzeste = Math.min(kuerzeste, Math.max(1, s.to - s.from));
       });
@@ -1101,7 +1112,7 @@
       const letzter = posten.reduce(function (a, b) {
         return (!a || b.barB > a.barB) ? b : a;
       }, null);
-      if (letzter && zusatzTag === tagWaehlen() && zusatzMinuten > 0) {
+      if (letzter && zusatzTag === tagWoche + ':' + tagWaehlen() && zusatzMinuten > 0) {
         letzter.nachLinks = false;
         letzter.w = Math.min(letzter.natur, Math.max(letzter.platzR, 0));
         letzter.passt = letzter.platzR >= Math.min(letzter.natur, 32);
@@ -1239,7 +1250,8 @@
 
     if (fehltAnteil <= 0) { return; }
     const gewaehlt = tagWaehlen();
-    if (zusatzTag !== gewaehlt) { zusatzTag = gewaehlt; zusatzMinuten = 0; zusatzRunden = 0; }
+    const schluessel = tagWoche + ':' + gewaehlt;
+    if (zusatzTag !== schluessel) { zusatzTag = schluessel; zusatzMinuten = 0; zusatzRunden = 0; }
     if (zusatzRunden >= ZUSATZ_RUNDEN) { return; }
     const sp = tagesSpanne(gewaehlt);
     const dazu = Math.ceil(fehltAnteil * Math.max(sp[1] - sp[0], 60));
@@ -1671,28 +1683,78 @@
 
   const TAGNAMEN = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
-  /* Die Tage, die die Timeline anbietet: die Vereinigung ueber alle Kinder.
-     Hat EIN Kind Samstag, gibt es den Samstag — dann steht beim anderen dort
-     „keine Schule", was richtig ist und nicht fehlt. */
-  function timelineTage() {
-    const gesehen = new Set();
-    (zustand.children || []).forEach(function (k) {
-      (k.days || []).forEach(function (t) { gesehen.add(t.weekday); });
-    });
-    return Array.from(gesehen).sort(function (a, b) { return a - b; });
+  /** Die Tage EINER Woche eines Kindes — die laufende oder die kommende. */
+  function tageDerWoche(kind, woche) {
+    return (woche === 1 && Array.isArray(kind.nextDays)) ? kind.nextDays : ((kind && kind.days) || []);
   }
 
-  /* Beim ersten Zeichnen auf HEUTE stellen — und wenn heute kein Schultag ist
-     (Sonntag, Ferien, abgeschalteter Samstag), auf den ersten angebotenen Tag.
+  /** Der Datensatz des gewaehlten Tages bei diesem Kind, oder undefined. */
+  function tagVonKind(kind, weekday, woche) {
+    return tageDerWoche(kind, woche).filter(function (t) { return t.weekday === weekday; })[0];
+  }
+
+  /* Die Tage, die die Timeline anbietet: die Vereinigung ueber alle Kinder,
+     erst die laufende Woche, dann — mit Import — die kommende. Hat EIN Kind
+     Samstag, gibt es den Samstag; beim anderen steht dort „Wochenende", was
+     richtig ist und nicht fehlt.
+
+     Die zweite Woche kommt nur mit Import (nextDays): ohne ihn wiederholt sich
+     die Vorlage, und man blaetterte durch dieselben Tage zweimal. */
+  function timelineTage() {
+    const eintraege = [];
+    [0, 1].forEach(function (woche) {
+      const gesehen = new Set();
+      (zustand.children || []).forEach(function (k) {
+        if (woche === 1 && !Array.isArray(k.nextDays)) { return; }
+        tageDerWoche(k, woche).forEach(function (t) { gesehen.add(t.weekday); });
+      });
+      Array.from(gesehen).sort(function (a, b) { return a - b; }).forEach(function (d) {
+        eintraege.push({ woche: woche, weekday: d });
+      });
+    });
+    return eintraege;
+  }
+
+  /** „1:3" — Woche und Wochentag als ein Wert, zum Vergleichen und Suchen. */
+  function tagSchluessel(eintrag) {
+    return eintrag.woche + ':' + eintrag.weekday;
+  }
+
+  function tagIndex(tage, woche, weekday) {
+    for (let i = 0; i < tage.length; i++) {
+      if (tage[i].woche === woche && tage[i].weekday === weekday) { return i; }
+    }
+    return -1;
+  }
+
+  /* Beim ersten Zeichnen auf HEUTE stellen. Ist heute kein Schultag, haengt es
+     davon ab, WARUM:
+
+       Wochenende  → der erste Tag der KOMMENDEN Woche. Sonst zeigte die
+                     Timeline sonntags den Montag der Woche, die vorbei ist —
+                     dieselbe Meldung, die schon das Wochenraster betraf.
+       sonst       → der erste angebotene Tag (Ferien, abgeschalteter Samstag).
+
+     Ob die Woche durch ist, sagt der Server je Kind (weekOver): das haengt am
+     Datum des letzten Unterrichtstages, nicht an der Uhr des Betrachters.
      Danach bleibt die Wahl des Nutzers stehen. */
   function tagWaehlen() {
     const tage = timelineTage();
-    if (tage.indexOf(tagNr) >= 0) { return tagNr; }
+    if (tagGewaehlt && tagIndex(tage, tagWoche, tagNr) >= 0) { return tagNr; }
     let heute = 0;
     (zustand.children || []).forEach(function (k) {
       (k.days || []).forEach(function (t) { if (t.today) { heute = t.weekday; } });
     });
-    tagNr = tage.indexOf(heute) >= 0 ? heute : (tage[0] || 1);
+    if (heute && tagIndex(tage, 0, heute) >= 0) {
+      tagWoche = 0; tagNr = heute;
+      return tagNr;
+    }
+    const wocheDurch = (zustand.children || []).some(function (k) {
+      return k.weekOver === true && Array.isArray(k.nextDays) && k.nextDays.length;
+    });
+    const erster = tage.filter(function (t) { return t.woche === (wocheDurch ? 1 : 0); })[0]
+      || tage[0] || { woche: 0, weekday: 1 };
+    tagWoche = erster.woche; tagNr = erster.weekday;
     return tagNr;
   }
 
@@ -1700,14 +1762,23 @@
     const tage = timelineTage();
     if (tage.length < 2) { return ''; }
     const jetzt = tagWaehlen();
-    const heute = (zustand.children || []).some(function (k) {
+    /* „Heute" gilt nur in der LAUFENDEN Woche: blaettert man auf den Montag
+       der kommenden, ist der gleiche Wochentag noch lange nicht heute. */
+    const heute = tagWoche === 0 && (zustand.children || []).some(function (k) {
       return (k.days || []).some(function (t) { return t.today && t.weekday === jetzt; });
     });
     // ALLE Namen stehen im Markup, damit der Kasten so breit ist wie der
     // laengste; sichtbar ist nur einer.
     const namen = tage.map(function (t) {
-      return '<span class="' + (t === jetzt ? 'an' : '')
-        + (t === jetzt && heute ? ' ist-heute' : '') + '">' + esc(TAGNAMEN[t]) + '</span>';
+      const an = t.woche === tagWoche && t.weekday === jetzt;
+      /* Mit Import steht das DATUM dabei: seit die Wahl durch beide Wochen
+         laeuft, gaebe es sonst zweimal „Montag" und kein Merkmal, welcher
+         gemeint ist. Ohne Import ist der Plan eine Vorlage — ein Datum daran
+         waere eine Behauptung, und die zweite Woche gibt es dann ohnehin nicht. */
+      const datum = zustand.dated ? tagDatum(t) : '';
+      return '<span class="' + (an ? 'an' : '') + (an && heute ? ' ist-heute' : '') + '">'
+        + esc(TAGNAMEN[t.weekday]) + (datum ? ' <span class="datum">' + esc(datum) + '</span>' : '')
+        + '</span>';
     }).join('');
     return '<span class="tagwahl">'
       + '<button data-tag="zurueck" aria-label="Vorheriger Tag">‹</button>'
@@ -1715,11 +1786,25 @@
       + '<button data-tag="vor" aria-label="Nächster Tag">›</button></span>';
   }
 
+  /** Das Kurzdatum eines Eintrags — aus dem Tag irgendeines Kindes. */
+  function tagDatum(eintrag) {
+    for (const k of (zustand.children || [])) {
+      const t = tagVonKind(k, eintrag.weekday, eintrag.woche);
+      if (t && t.date) { return datumKurz(t.date); }
+    }
+    return '';
+  }
+
   function tagBlaettern(richtung) {
     const tage = timelineTage();
-    const i = tage.indexOf(tagWaehlen());
-    // Rundlauf: von Freitag weiter landet man wieder bei Montag.
-    tagNr = tage[(i + richtung + tage.length) % tage.length];
+    tagWaehlen();                       // stellt sicher, dass die Wahl in der Liste steht
+    const i = tagIndex(tage, tagWoche, tagNr);
+    /* Rundlauf ueber BEIDE Wochen: von Sonntag weiter geht es in die kommende
+       Woche, und von deren Ende wieder auf den Anfang der laufenden. */
+    const ziel = tage[(i + richtung + tage.length) % tage.length];
+    tagWoche = ziel.woche;
+    tagNr = ziel.weekday;
+    tagGewaehlt = true;
   }
 
   /* Die im Balken sichtbaren Faecher, in der Reihenfolge des Tages und
@@ -1729,7 +1814,7 @@
     const karte = new Map();
     const gewaehlt = tagWaehlen();
     zustand.children.forEach(function (kind) {
-      const tag = kind.days.filter(function (t) { return t.weekday === gewaehlt; })[0];
+      const tag = tagVonKind(kind, gewaehlt, tagWoche);
       (tag ? tag.slots : []).forEach(function (s) {
         const da = karte.get(s.name);
         if (da) {
@@ -1768,10 +1853,14 @@
         + symbol(f.icon) + '</span>' + esc(f.name) + nur + '</span>';
     }).join('');
     const jetzt = tagWaehlen();
-    const istHeute = (zustand.children || []).some(function (k) {
+    const istHeute = tagWoche === 0 && (zustand.children || []).some(function (k) {
       return (k.days || []).some(function (t) { return t.today && t.weekday === jetzt; });
     });
-    const ueberschrift = istHeute ? 'Fächer heute' : 'Fächer am ' + TAGNAMEN[jetzt];
+    /* Beim Blaettern in die kommende Woche gehoert das Datum dazu: „Fächer am
+       Montag" waere sonst zweideutig, seit die Wahl durch beide Wochen laeuft. */
+    const wann = TAGNAMEN[jetzt]
+      + (tagWoche === 1 ? ' ' + tagDatum({ woche: 1, weekday: jetzt }) : '');
+    const ueberschrift = istHeute ? 'Fächer heute' : 'Fächer am ' + wann;
     /* Ueber dem Plan statt darunter: unten angehaengt schob die Legende die
        Balken nach oben aus der Kachel, und bei vielen Faechern sah man beides
        nur halb. Als Blatt verdeckt sie den Plan, solange man sie liest, und
@@ -1798,7 +1887,7 @@
     let html = '<div class="kopf">' + legendeKnopf + tagwahlHtml() + '</div>';
 
     zustand.children.forEach(function (kind) {
-      const tag = kind.days.filter(function (t) { return t.weekday === gewaehlt; })[0];
+      const tag = tagVonKind(kind, gewaehlt, tagWoche);
       const slots = tag ? tag.slots : [];
       html += '<div class="zeile">';
       html += '<div class="zeilenkopf">' + gesicht(kind, 'gesicht')
