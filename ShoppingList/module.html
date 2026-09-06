@@ -5240,26 +5240,32 @@ function dayDiff(from, to) {
 }
 // Farbige Untertitel-Segmente wie auf dem App-Dashboard: nur der Zeit-Teil
 // ist rot/orange, der Listenname bleibt sekundär
-/* Fälligkeit: EINE Regel für ganztägige Aufgaben und solche mit Uhrzeit.
-   Vorher entschied die Uhrzeit über die ganze Darstellung — ganztägig bekam
-   „1. Okt.", mit Uhrzeit „in 5 Tagen". Zwei Aufgaben am selben Tag lasen sich
-   damit verschieden, und der Grund dafür stand nirgends in der Zeile. Von
-   einem Nutzer gemeldet, und er hat recht.
-
-   Jetzt gilt: je näher, desto genauer — und die Uhrzeit fügt nur Genauigkeit
-   hinzu, wo es sie gibt.
-     unter einer Stunde   „in 20 Min."      (nur mit Uhrzeit möglich)
-     heute/morgen/gestern „Morgen, 9:00"    (Zeit nur, wenn vorhanden)
-     bis eine Woche       „in 5 Tagen"
-     darüber              „22. Okt."        („in 21 Tagen" liest sich schlecht)
-   Die iOS-App und die Kachel folgen derselben Regel. */
+/* Fälligkeit: EINE Regel für ganztägige Aufgaben und solche mit Uhrzeit, und
+   EINE Leiter für alle Oberflächen — je näher, desto genauer (Wortlaut
+   entschieden am 06.09.2026):
+     unter einer Stunde     „in 20 Min."      (nur mit Uhrzeit möglich)
+     heute                  „Heute" · „Heute, 14:00"
+     morgen                 „Morgen" · „Morgen, 9:00"
+     übermorgen und ferner  „22. Okt." · „22. Okt., 9:00"
+                            (Jahr nur außerhalb des laufenden: „15. Jan. 2027")
+     gestern                „Gestern"         (ohne Uhrzeit)
+     vorgestern und älter   „vor 34 Tagen"    (unbegrenzt relativ)
+   Die relative Zukunft („in 5 Tagen") entfällt: ab übermorgen steht das Datum.
+   Die Vergangenheit bleibt relativ, denn „15. Jan." verrät nicht, dass etwas
+   seit acht Monaten überfällig ist.
+   Die iOS-App folgt derselben Regel (ListsDomain.DueBadgeText) — wer hier
+   etwas ändert, ändert es auch dort. Die gemeinsamen Fälle prüft
+   tools/due-parity.mjs gegen DIESE Funktion, DueBadgeTextTests die Swift-Seite. */
 function formatDueChip(item) {
   const due = parseInt(item.due) || 0;
   if (due <= 0) return null;
   const d = dueDateOf(item);
   if (!d) return null;
   const jetzt = new Date();
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+  /* numeric:'always': die Leiter kennt nur Heute/Morgen/Gestern als Worte —
+     alles Ältere ist Zahl („vor 2 Tagen", nie „vorgestern"), wie in Swift
+     dateTimeStyle .numeric. */
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'always', style: 'short' });
   /* hour: 'numeric', nicht '2-digit': die iOS-App schreibt „9:00" (Foundation,
      .shortened), und drei Oberflaechen sollen dasselbe zeigen. */
   const zeit = item.dueAllDay ? '' :
@@ -5268,16 +5274,23 @@ function formatDueChip(item) {
   // Unter einer Stunde: Minuten. Nur Aufgaben mit Uhrzeit koennen so nah sein.
   if (!item.dueAllDay) {
     const diffSec = due - Math.floor(jetzt.getTime() / 1000);
-    if (Math.abs(diffSec) < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
+    if (Math.abs(diffSec) < 3600) {
+      // Geklemmt auf mindestens 1: „in 0 Min." zappelte bei jedem Refresh.
+      const min = Math.round(diffSec / 60);
+      return rtf.format(diffSec >= 0 ? Math.max(1, min) : Math.min(-1, min), 'minute');
+    }
   }
   // Ab hier in KALENDERTAGEN rechnen, nicht in 24-Stunden-Schritten: „morgen
   // frueh" ist morgen, auch wenn es nur 14 Stunden hin sind.
   const tage = dayDiff(jetzt, d);
   if (tage === 0)  return translate('Today') + zeit;
   if (tage === 1)  return translate('Tomorrow') + zeit;
-  if (tage === -1) return translate('Yesterday') + zeit;
-  if (Math.abs(tage) <= 7) return rtf.format(tage, 'day');
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (tage === -1) return translate('Yesterday'); // ohne Uhrzeit: bei Verpasstem zählt der Tag
+  if (tage < 0) return rtf.format(tage, 'day');   // Vergangenheit relativ, unbegrenzt
+  // Zukunft ab übermorgen: nur noch das Datum, Jahr nur außerhalb des laufenden.
+  const format = { day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== jetzt.getFullYear()) format.year = 'numeric';
+  return d.toLocaleDateString(undefined, format) + zeit;
 }
 
 // ── Prioritäten / Wiederholungen (Codes wie im ToDoList-Modul) ─────────────
