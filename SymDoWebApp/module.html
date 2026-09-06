@@ -10695,6 +10695,28 @@ function initCalendar() {
   });
 }
 
+/** Erlaubte Sortierungen im Sammelmodus — „manual" fehlt mit Absicht. */
+const SAMMEL_SORTEN = ['created', 'due', 'priority', 'title'];
+
+/**
+ * Sortierung der Sammelansicht: Vorliebe und Richtung, lokal gemerkt.
+ *
+ * Vorgabe ist „zuletzt angelegt zuerst". Sie war frueher fest auf „ueberfaellig,
+ * dann heute, dann Faelligkeit" — dabei rutschte eine gerade angelegte Aufgabe
+ * ohne Frist ans ENDE, hinter jede ueberfaellige. Wer etwas anlegt, will es
+ * sehen.
+ *
+ * @return {[string, string]} Modus und Richtung
+ */
+function sammelSortierung() {
+  const mode = String(ls.get('symdo.todoAlleSort') || '');
+  const dir = String(ls.get('symdo.todoAlleDir') || '');
+  return [
+    SAMMEL_SORTEN.includes(mode) ? mode : 'created',
+    dir === 'asc' ? 'asc' : 'desc',
+  ];
+}
+
 /**
  * Der Sammelmodus: die Aufgaben ALLER sichtbaren Listen in einer Ansicht.
  *
@@ -10723,8 +10745,8 @@ function renderTodosAlle(st) {
     const bereich = document.getElementById('screen-todos');
     if (bereich) { bereich.classList.toggle('bar-hidden', !showCreate); }
   }
-  /* Der "..."-Knopf bleibt: Sortieren entfaellt hier zwar (siehe unten), aber
-     „Neue Aufgabe mit Details" haengt am selben Menue. */
+  /* Der "..."-Knopf traegt beides: Sortierung (hier lokal gemerkt) und
+     „Neue Aufgabe mit Details". */
   const menuBtn = document.getElementById('btnTodoMenu');
   if (menuBtn) menuBtn.style.display = (st.showSorting !== false || showCreate) ? '' : 'none';
 
@@ -10750,20 +10772,20 @@ function renderTodosAlle(st) {
     }
   }
 
-  /* Sortiert wie die Uebersicht: ueberfaellig, dann heute, dann nach
-     Faelligkeit. BEWUSST nicht nach den Vorlieben der Listen — die stehen je
-     Liste im Zustand, und „manual" hiesse ueber zwei Listen eine willkuerliche
-     Verschachtelung, die mit abgeschaltetem Griff niemand mehr richten kann.
-     Der Gleichstand entscheidet ueber den zusammengesetzten Schluessel, damit
-     die Reihenfolge nicht springt, wenn zwei Listen dieselbe Item-ID vergeben. */
-  const rang = (t) => {
-    const c = classifyDue(t.item);
-    return c === 'overdue' ? 0 : (c === 'today' ? 1 : 2);
+  /* Sortiert wie eine einzelne Liste — mit DERSELBEN Funktion, damit sich die
+     Sammelansicht nicht anders verhaelt als die Listen darin. Die Vorliebe
+     steht aber lokal (symdo.todoAlleSort/-Dir) und NICHT im Zustand einer
+     Liste: ein SetSortPrefs aus der Sammelansicht aenderte still eine einzelne
+     Liste, die niemand gemeint hat.
+     „manual" gibt es hier nicht: ueber mehrere Listen ist die Handreihenfolge
+     bedeutungslos, und mit abgeschaltetem Griff koennte sie niemand richten. */
+  const [sortMode, sortDir] = sammelSortierung();
+  const sortieren = (liste) => {
+    // Ueber eine flache Kopie mit Rueckverweis: sortTodoItems arbeitet auf
+    // Aufgaben, hier haengt an jeder aber ihre Liste.
+    const kopien = liste.map(t => Object.assign({}, t.item, { __t: t }));
+    return sortTodoItems(kopien, sortMode, sortDir).map(k => k.__t);
   };
-  const sortieren = (liste) => liste.slice().sort((a, b) =>
-    (rang(a) - rang(b))
-    || ((parseInt(a.item.due) || Infinity) - (parseInt(b.item.due) || Infinity))
-    || String(a.key).localeCompare(String(b.key)));
 
   const open = sortieren(alle.filter(t => !t.item.done));
   /* „Erledigte verbergen" steht NICHT in den appweiten Schaltern, ist also
@@ -13641,19 +13663,32 @@ function openTodoMenu(anchor) {
   const st = id ? instState(id) : null;
   if (!st) return;
   const sammel = alleListen();
-  const sortMode = String(st.sortMode || 'created');
-  const sortDir = String(st.sortDir || 'asc');
-  const setPrefs = (mode, dir) => sdCall(id, 'SetSortPrefs', { mode, dir });
-  const modes = [['manual', translate('Manual')], ['created', translate('Created')], ['due', translate('Due')], ['priority', translate('Priority')], ['title', translate('Title')]];
+  /* Im Sammelmodus liegt die Sortierung LOKAL: ein SetSortPrefs von hier aus
+     aenderte still eine einzelne Liste, die niemand gemeint hat. Sonst kommt
+     sie wie gehabt aus dem Zustand der Liste. */
+  const [sammelMode, sammelDir] = sammelSortierung();
+  const sortMode = sammel ? sammelMode : String(st.sortMode || 'created');
+  const sortDir = sammel ? sammelDir : String(st.sortDir || 'asc');
+  const setPrefs = sammel
+    ? (mode, dir) => {
+        ls.set('symdo.todoAlleSort', mode);
+        ls.set('symdo.todoAlleDir', dir);
+        renderTodos();
+      }
+    : (mode, dir) => sdCall(id, 'SetSortPrefs', { mode, dir });
+  // „Von Hand" nur in einer einzelnen Liste: ueber mehrere Listen hinweg gibt es
+  // keine Handreihenfolge, und der Griff ist dort abgeschaltet.
+  const modes = [
+    ...(sammel ? [] : [['manual', translate('Manual')]]),
+    ['created', translate('Created')], ['due', translate('Due')],
+    ['priority', translate('Priority')], ['title', translate('Title')],
+  ];
   const entries = [];
   if (st.showCreateButton !== false) {
     // Die Zielliste waehlt man im Dialog selbst (tdList), nicht davor.
     entries.push({ label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) });
   }
-  /* Sortieren nur in der Einzelliste: die Vorlieben stehen JE LISTE im Zustand,
-     ein SetSortPrefs aus der Sammelansicht aenderte still eine einzelne Liste,
-     die niemand gemeint hat. Der Sammelmodus sortiert fest wie die Uebersicht. */
-  if (!sammel && st.showSorting !== false) {
+  if (st.showSorting !== false) {
     if (entries.length > 0) entries.push({ sep: true });
     entries.push({ header: true, label: translate('Sorting') });
     for (const [mode, label] of modes) {
