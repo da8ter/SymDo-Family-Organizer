@@ -542,6 +542,20 @@ trait EduMaps
                     $store['notes'][$i]['att'][$k]['qr'] = $this->EduQrCode($quelle);
                     $fehlt = true;
                 }
+                /* Die Buchungslage aendert sich, OHNE dass die Karte als
+                   geaendert gilt: bucht jemand einen Platz, bleibt data-updated
+                   stehen. Deshalb hier bei jedem Lauf nachziehen — sonst stuende
+                   „12 von 16" auch dann noch da, wenn die AG laengst voll ist. */
+                $buchungNeu = $karte['buchung'] ?? null;
+                if (($store['notes'][$i]['booking'] ?? null) != $buchungNeu) {
+                    $store['notes'][$i]['booking'] = $buchungNeu;
+                    $fehlt = true;
+                }
+                $weg = (string)$seite['url'] . '#box-' . (string)$karte['boxid'];
+                if ((string)($store['notes'][$i]['srcUrl'] ?? '') !== $weg) {
+                    $store['notes'][$i]['srcUrl'] = $weg;
+                    $fehlt = true;
+                }
                 // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
                 $neuerText = $this->EduNotizText($karte);
                 if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
@@ -600,6 +614,11 @@ trait EduMaps
                 // Formatierte Fassung fuer die Kartenansicht; der Klartext
                 // daneben bleibt, er traegt Editor, Suche und KI-Auswertung.
                 'html'      => (string)($karte['html'] ?? ''),
+                /* Buchungslage und der Weg zur Karte auf der Seite. Gebucht wird
+                   DORT — der Knopf der Seite haengt an deren JavaScript. Hier
+                   steht nur, wie voll es ist und wo man hinkommt. */
+                'booking'   => $karte['buchung'] ?? null,
+                'srcUrl'    => (string)$seite['url'] . '#box-' . (string)$karte['boxid'],
             ];
             if ($i >= 0) {
                 $store['notes'][$i] = $satz;
@@ -1244,12 +1263,45 @@ trait EduMaps
                 'titel'     => $titel,
                 'text'      => $this->EduText($rumpf),
                 'anhaenge'  => $anhaenge,
+                'buchung'   => $this->EduBuchung($teil),
             ];
             if (count($karten) >= self::EDU_KARTEN_MAX) {
                 break;
             }
         }
         return $karten;
+    }
+
+    /**
+     * Die Buchungslage einer Karte — Plaetze, Preis, Zeit.
+     *
+     * Manche Karten sind buchbar (AG-Wahl, Elternsprechtag). Der „Buchen"-Knopf
+     * der Seite ist ein <span> mit JavaScript dahinter, kein Verweis; buchen
+     * kann man nur DORT. Die Zahlen dazu stehen aber offen im Markup, und genau
+     * die sind beim Waehlen interessant: „12 von 16" sagt, dass es eng wird,
+     * „16 von 16", dass man sich den Weg sparen kann.
+     *
+     * Uebernommen wird nur, was eine echte Buchung kennzeichnet: ein Limit > 0.
+     * „Ansprechpartnerin" traegt zwar dieselben Attribute, aber alle auf 0 — das
+     * ist keine buchbare Karte, sondern nur dasselbe Kastenformat.
+     *
+     * @return array{anzahl:int,limit:int,preis:float,zeit:string}|null
+     */
+    private function EduBuchung(string $teil): ?array
+    {
+        $zahl = static function (string $name) use ($teil): string {
+            return preg_match('/data-book' . $name . '="([^"]*)"/', $teil, $m) === 1 ? trim($m[1]) : '';
+        };
+        $limit = (int)$zahl('limit');
+        if ($limit <= 0) {
+            return null;
+        }
+        return [
+            'anzahl' => max(0, (int)$zahl('count')),
+            'limit'  => $limit,
+            'preis'  => (float)str_replace(',', '.', $zahl('price')),
+            'zeit'   => mb_substr($zahl('time'), 0, 60),
+        ];
     }
 
     /**

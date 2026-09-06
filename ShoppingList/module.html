@@ -767,6 +767,22 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .edu-bild-leer {
   min-height: 44px; border: 1px dashed var(--line); background: var(--surface);
 }
+/* Buchungslage einer buchbaren Karte (AG-Wahl, Sprechtag). Eine ruhige Zeile
+   unter dem Text — links die Lage, rechts der Weg zur Seite. Ausgebucht faerbt
+   sich der Text, nicht die Flaeche: die Karte soll nicht schreien. */
+.edu-buchung {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px; padding: 7px 10px;
+  border-radius: 10px; background: var(--surface);
+  font-size: 12px; color: var(--muted);
+}
+.edu-buchung-lage { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.edu-buchung.voll .edu-buchung-lage { color: var(--red); font-weight: 600; }
+.edu-buchen {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap;
+}
 /* Der Verweis aus einem QR-Code im Bild. Er steht direkt UNTER seinem Bild und
    gehoert sichtbar dazu — deshalb der geringe Abstand nach oben und der
    groessere nach unten. Leiser als der Kartentext: er ist eine Zugabe, kein
@@ -12344,7 +12360,8 @@ function edumapsKarteHtml(n) {
        geprueft, weil hier nichts mehr geprueft werden kann. Sonst der Klartext,
        und ohne Volltext die Vorschau — die Ansicht steht damit sofort und wird
        schaerfer, statt leer zu bleiben. */
-    '<div class="edu-text">' + (n.html || notizTextHtml(String(n.text || n.preview || ''), true)) + '</div>';
+    '<div class="edu-text">' + (n.html || notizTextHtml(String(n.text || n.preview || ''), true)) + '</div>' +
+    eduBuchungHtml(n);
   for (const b of bilder) {
     const quelle = notesBildQuelle(b.id);
     html += '<img class="edu-bild" loading="eager" data-media="' + escapeHtml(String(b.id)) + '"' +
@@ -12371,6 +12388,47 @@ function edumapsKarteHtml(n) {
     html += eduQrZeile(d);
   }
   return html + '</div>';
+}
+
+/**
+ * Die Buchungslage einer buchbaren Karte — Plätze, Preis, Zeit.
+ *
+ * BEWUSST kein „Buchen"-Knopf: der Knopf der Klassenseite ist ein <span> mit
+ * deren JavaScript dahinter, und eine Buchung ist eine verbindliche Anmeldung
+ * des Kindes. Nachgebaut über eine undokumentierte Schnittstelle wäre sie ein
+ * Versprechen, das beim nächsten Umbau der Seite still bricht. Hier steht
+ * deshalb nur, wie voll es ist — und ein Verweis dorthin, wo der Knopf wirkt.
+ */
+function eduBuchungHtml(n) {
+  const b = n && n.booking;
+  if (!b || !(parseInt(b.limit) > 0)) return '';
+  const belegt = Math.max(0, parseInt(b.count) || 0);
+  const limit = parseInt(b.limit);
+  const frei = Math.max(0, limit - belegt);
+  const voll = frei === 0;
+  const teile = [];
+  teile.push(voll
+    ? translate('Fully booked')
+    : sprintfEins(translate('%s places left'), String(frei)));
+  teile.push(belegt + ' / ' + limit);
+  const preis = parseFloat(b.price) || 0;
+  if (preis > 0) teile.push(preis.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }));
+  if (b.time) teile.push(String(b.time));
+  // Der Verweis führt auf die Karte selbst (#box-…), nicht nur auf die Seite.
+  const ziel = String(n.srcUrl || '');
+  const knopf = /^https?:\/\//i.test(ziel)
+    ? '<a class="edu-buchen" href="' + escapeHtml(ziel) + '" target="_blank" rel="noopener noreferrer">' +
+      '<i class="fa-light fa-arrow-up-right-from-square"></i>' +
+      '<span>' + escapeHtml(translate('Book on the class page')) + '</span></a>'
+    : '';
+  return '<div class="edu-buchung' + (voll ? ' voll' : '') + '">' +
+    '<span class="edu-buchung-lage"><i class="fa-light fa-users"></i>' +
+    escapeHtml(teile.join(' · ')) + '</span>' + knopf + '</div>';
+}
+
+/** Ein einzelner %s-Platzhalter — die Übersetzungen tragen ihn, sprintf gibt es hier nicht. */
+function sprintfEins(vorlage, wert) {
+  return String(vorlage).replace('%s', wert);
 }
 
 /**

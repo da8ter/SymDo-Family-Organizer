@@ -13,6 +13,9 @@
     },
     "de": {
       "All lists": "Alle Listen",
+      "Fully booked": "Ausgebucht",
+      "%s places left": "%s Plätze frei",
+      "Book on the class page": "Auf der Klassenseite buchen",
       "Purchase": "Einkauf",
       "The swipe gestures switch appears after the next Symcon restart — it is a new setting, and those only exist once the kernel has loaded the module again.": "Der Schalter für die Wischgesten erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
       "Tap to finish": "Tippen zum Beenden",

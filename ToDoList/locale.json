@@ -1,6 +1,9 @@
 {
   "translations": {
     "de": {
+      "Fully booked": "Ausgebucht",
+      "%s places left": "%s Plätze frei",
+      "Book on the class page": "Auf der Klassenseite buchen",
       "All lists": "Alle Listen",
       "Purchase": "Einkauf",
       "Responsive Layout": "Responsive Layout",

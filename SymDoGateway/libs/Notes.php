@@ -409,6 +409,20 @@ trait Notes
                 $row[$feld] = (string)$n[$feld];
             }
         }
+        /* Buchungslage einer buchbaren Karte (AG-Wahl, Sprechtag) und der Weg
+           zur Karte auf der Klassenseite. Gebucht wird DORT — deshalb reist der
+           Verweis mit. Beides nur, wenn es die Quelle hergibt. */
+        if (is_array($n['booking'] ?? null) && (int)($n['booking']['limit'] ?? 0) > 0) {
+            $row['booking'] = [
+                'count' => (int)($n['booking']['anzahl'] ?? 0),
+                'limit' => (int)$n['booking']['limit'],
+                'price' => (float)($n['booking']['preis'] ?? 0),
+                'time'  => (string)($n['booking']['zeit'] ?? ''),
+            ];
+        }
+        if (($n['srcUrl'] ?? '') !== '') {
+            $row['srcUrl'] = (string)$n['srcUrl'];
+        }
         if ($mitText) {
             $row['text'] = $text;
         } else {

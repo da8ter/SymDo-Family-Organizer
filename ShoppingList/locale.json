@@ -77,6 +77,9 @@
       "No timetable": "No timetable"
     },
     "de": {
+      "Fully booked": "Ausgebucht",
+      "%s places left": "%s Plätze frei",
+      "Book on the class page": "Auf der Klassenseite buchen",
       "All lists": "Alle Listen",
       "Store order": "Laden-Reihenfolge",
       "Sort in store order (learned from the check-off order)": "In Laden-Reihenfolge sortieren (gelernt aus der Abhak-Reihenfolge)",
