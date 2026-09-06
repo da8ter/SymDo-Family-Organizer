@@ -1460,10 +1460,18 @@ trait VoiceTools
         if (($r['ok'] ?? false) !== true) {
             return ['ok' => false];
         }
+        /* ARCHIVIERTE Notizen bleiben draussen. Sie stehen auf der Klassenseite
+           nicht mehr — ihr Inhalt ist ueberholt, und im Gespraech waere „laut
+           deinen Notizen …" mit einer abgelaufenen Karte schlimmer als keine
+           Antwort. Sichtbar sind sie nur noch im Archiv der App. Hier gefiltert
+           und nicht in der Projektion, weil die App sie ja zeigen soll. */
+        $notizen = is_array($r['notes'] ?? null) ? $r['notes'] : [];
+        $notizen = array_values(array_filter($notizen,
+            static fn($n): bool => is_array($n) && (int)($n['archived'] ?? 0) <= 0));
         return [
             'ok'      => true,
             'folders' => is_array($r['folders'] ?? null) ? $r['folders'] : [],
-            'notes'   => is_array($r['notes'] ?? null) ? $r['notes'] : [],
+            'notes'   => $notizen,
             'memberFolders' => (array)($r['memberFolders'] ?? []),
         ];
     }
