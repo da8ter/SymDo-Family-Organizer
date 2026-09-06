@@ -767,6 +767,21 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .edu-bild-leer {
   min-height: 44px; border: 1px dashed var(--line); background: var(--surface);
 }
+/* Der Verweis aus einem QR-Code im Bild. Er steht direkt UNTER seinem Bild und
+   gehoert sichtbar dazu — deshalb der geringe Abstand nach oben und der
+   groessere nach unten. Leiser als der Kartentext: er ist eine Zugabe, kein
+   Inhalt der Karte. */
+.edu-qr {
+  display: flex; align-items: center; gap: 6px;
+  margin: 4px 0 10px; padding: 4px 8px;
+  border-radius: 8px; background: var(--surface);
+  font-size: 12px; color: var(--muted); text-decoration: none;
+  min-width: 0;
+}
+.edu-qr span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.edu-qr:hover { color: var(--accent); }
 /* Die PDF-Vorschau bleibt klein: sie ist ein Hinweis, kein Inhalt. Weisser
    Grund, weil die Seite selbst weiss ist — auf dunklem Grund saehe das
    Papier sonst wie ein Loch aus. */
@@ -12335,6 +12350,7 @@ function edumapsKarteHtml(n) {
     html += '<img class="edu-bild" loading="eager" data-media="' + escapeHtml(String(b.id)) + '"' +
       (quelle ? '' : ' data-nachladen="1"') +
       ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(quelle) + '">';
+    html += eduQrZeile(b);
   }
   for (const d of rest) {
     /* Seitenvorschau des PDF, wenn die Quelle eine mitliefert — dasselbe Bild,
@@ -12352,8 +12368,30 @@ function edumapsKarteHtml(n) {
       '<i class="fa-light ' + (d.kind === 'pdf' ? 'fa-file-pdf' : 'fa-file-image') + '"></i>' +
       '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
       '<i class="fa-light fa-chevron-right nv-chev"></i></div>';
+    html += eduQrZeile(d);
   }
   return html + '</div>';
+}
+
+/**
+ * Der Verweis aus einem QR-Code im Bild — als anklickbare Zeile darunter.
+ *
+ * Klassenseiten drucken ihre Verweise gern als QR-Code ins Bild. Am Telefon
+ * kann man ihn abfotografieren, am Rechner nicht; gelesen hat ihn ohnehin schon
+ * der Server beim Spiegeln (EduMaps::EduQrCode). Steht kein Code im Bild, fehlt
+ * das Feld — dann kommt hier nichts.
+ *
+ * Der angezeigte Text ist die Adresse ohne Schema und ohne „www.", sonst nimmt
+ * sie zwei Zeilen und sagt trotzdem nicht mehr. Die volle Adresse steht im
+ * title-Attribut.
+ */
+function eduQrZeile(anhang) {
+  const ziel = String((anhang && anhang.qr) || '').trim();
+  if (!/^https?:\/\//i.test(ziel)) return '';
+  const kurz = ziel.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  return '<a class="edu-qr" href="' + escapeHtml(ziel) + '" target="_blank" rel="noopener noreferrer"' +
+    ' title="' + escapeHtml(ziel) + '">' +
+    '<i class="fa-light fa-qrcode"></i><span>' + escapeHtml(kurz) + '</span></a>';
 }
 
 /**

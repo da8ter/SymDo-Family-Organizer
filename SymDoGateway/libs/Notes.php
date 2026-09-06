@@ -377,6 +377,12 @@ trait Notes
                 if ((int)($a['thumb'] ?? 0) > 0) {
                     $raus['thumb'] = (int)$a['thumb'];
                 }
+                /* Adresse aus einem QR-Code im Bild (Klassenseite). Nur wenn
+                   wirklich einer drin war: das leere Feld ist nur der Merker,
+                   dass schon nachgesehen wurde, und geht die App nichts an. */
+                if (trim((string)($a['qr'] ?? '')) !== '') {
+                    $raus['qr'] = (string)$a['qr'];
+                }
                 return $raus;
             }, is_array($n['att'] ?? null) ? $n['att'] : [])),
             'updatedAt' => (int)($n['updatedAt'] ?? 0),

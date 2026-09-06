@@ -57,6 +57,13 @@ trait EduMaps
     /** So viele verlinkte Karten werden hoechstens aufgenommen. */
     private const EDU_GEFUNDEN_MAX = 20;
 
+    /* Obergrenze fuer den QR-Leser, in Megapixel. Gemessen: rund 25 MB Speicher
+       je Megapixel, also gut 150 MB an dieser Grenze — das passt unter die
+       192 MB, die EduQrCode fuer die Dauer des Lesens setzt. Groessere Bilder
+       sind in Klassenseiten-Anhaengen ohnehin die Ausnahme, und ein gedruckter
+       QR-Code ist auch verkleinert noch lesbar. */
+    private const EDU_QR_MP_MAX = 6.0;
+
     private ?array $eduConfigCache = null;
 
     /** Setzt EduNotizOrdner, wenn es den Bestand angefasst hat (Ordner angelegt
@@ -497,6 +504,19 @@ trait EduMaps
                         }
                     }
                 }
+                /* QR-Codes nachtragen: Anhaenge aus der Zeit davor haben das Feld
+                   nicht. Geprueft wird GENAU EINMAL je Anhang — auch ein
+                   ergebnisloser Versuch wird als '' vermerkt, sonst liefe der
+                   Leser bei jedem Lauf ueber jedes Bild. */
+                foreach (($store['notes'][$i]['att'] ?? []) as $k => $a) {
+                    if (array_key_exists('qr', $a)) {
+                        continue;
+                    }
+                    $quelle = (string)($a['kind'] ?? '') === 'image'
+                        ? (int)($a['id'] ?? 0) : (int)($a['thumb'] ?? 0);
+                    $store['notes'][$i]['att'][$k]['qr'] = $this->EduQrCode($quelle);
+                    $fehlt = true;
+                }
                 // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
                 $neuerText = $this->EduNotizText($karte);
                 if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
@@ -901,12 +921,102 @@ trait EduMaps
                         $anhang['thumb'] = $mini;
                     }
                 }
+                /* Steckt im Bild ein QR-Code, haengt seine Adresse am Anhang.
+                   Beim PDF wird die VORSCHAU gelesen — die Seite selbst kann
+                   PHP ohne Imagick nicht rastern, und gemessen genuegt die
+                   Vorschau (175x255) fuer einen sauber gedruckten Code. */
+                $qrQuelle = $anhang['kind'] === 'image' ? $anhang['id'] : (int)($anhang['thumb'] ?? 0);
+                $qr = $this->EduQrCode($qrQuelle);
+                if ($qr !== '') {
+                    $anhang['qr'] = $qr;
+                    $this->SendDebug('EduMaps', 'QR im Anhang „' . $anhang['name'] . '": ' . $qr, 0);
+                }
                 $raus[] = $anhang;
             }
         } finally {
             @ini_set('memory_limit', $speicherVorher);
         }
         return $raus;
+    }
+
+    /**
+     * Die Adresse aus einem QR-Code im Bild — oder '' , wenn keiner drin ist.
+     *
+     * Klassenseiten drucken ihre Verweise gern als QR-Code ins Bild; wer die App
+     * am Rechner liest, kann ihn nicht abfotografieren. Deshalb einmal beim
+     * Spiegeln lesen und die Adresse an den Anhang haengen.
+     *
+     * NUR http(s) wird uebernommen: ein QR-Code kann auch WLAN-Zugangsdaten,
+     * eine vCard oder eine Zahlungsanweisung enthalten — nichts davon gehoert
+     * als anklickbarer Verweis in eine Notiz.
+     *
+     * Das `@` ist Pflicht, nicht Bequemlichkeit: die Bibliothek gibt bei einer
+     * fehlenden oder unlesbaren Datei eine PHP-WARNUNG aus (file_get_contents,
+     * imagecreatefromstring). Im Hook landete die mitten in der HTTP-Antwort.
+     */
+    private function EduQrCode(int $mediaId): string
+    {
+        if ($mediaId <= 0 || !IPS_MediaExists($mediaId)) {
+            return '';
+        }
+        $datei = IPS_GetKernelDir() . IPS_GetMedia($mediaId)['MediaFile'];
+        if (!is_file($datei) || filesize($datei) < 64) {
+            return '';
+        }
+        /* GEMESSEN am 06.09.2026: der Leser braucht rund 25 MB je Megapixel —
+           52 MB bei einem 1254x1254-Bild. Symcons PHP steht auf 32 MB, und ein
+           ueberschrittenes Limit ist kein Fehler, den man fangen kann: der
+           Prozess stirbt mitten im Spiegeln und laesst die Notiz-Sperre liegen
+           („Semaphore TGW_Notes_… wurde nicht korrekt verlassen"). Genau so
+           passiert, bevor diese beiden Riegel hier standen.
+           Deshalb: Grenze hochsetzen wie beim Laden der Anhaenge — und alles
+           ueber EDU_QR_MP_MAX gar nicht erst versuchen. */
+        $masse = @getimagesize($datei);
+        if (!is_array($masse) || $masse[0] < 1 || $masse[1] < 1) {
+            return '';
+        }
+        $megapixel = ($masse[0] * $masse[1]) / 1000000;
+        if ($megapixel > self::EDU_QR_MP_MAX) {
+            $this->SendDebug('EduMaps', sprintf('QR uebersprungen, Bild zu gross: %.1f MP (%s)',
+                $megapixel, basename($datei)), 0);
+            return '';
+        }
+        /* Erst hier laden, wie beim QR-Generator: das Paket sind 50 Dateien, und
+           gebraucht wird es nur beim Spiegeln von Bildanhaengen. */
+        static $geladen = false;
+        if (!$geladen) {
+            $basis = __DIR__ . '/vendor/zxing/';
+            if (!is_file($basis . 'QrReader.php')) {
+                return '';                       // Paket fehlt — dann eben ohne
+            }
+            spl_autoload_register(static function (string $klasse) use ($basis): void {
+                $p = 'da8ter\\SymDo\\Zxing\\';
+                if (!str_starts_with($klasse, $p)) {
+                    return;
+                }
+                $d = $basis . str_replace('\\', '/', substr($klasse, strlen($p))) . '.php';
+                if (is_file($d)) {
+                    require_once $d;
+                }
+            });
+            require_once $basis . 'Common/customFunctions.php';
+            $geladen = true;
+        }
+        $speicherVorher = (string)@ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+        try {
+            $text = @(new \da8ter\SymDo\Zxing\QrReader($datei))->text();
+        } catch (\Throwable $e) {
+            $this->SendDebug('EduMaps', 'QR-Leser warf: ' . $e->getMessage(), 0);
+            return '';
+        } finally {
+            @ini_set('memory_limit', $speicherVorher);
+        }
+        $text = is_string($text) ? trim($text) : '';
+        if ($text === '' || preg_match('#^https?://#i', $text) !== 1) {
+            return '';
+        }
+        return mb_strlen($text) > 500 ? '' : $text;
     }
 
     private function EduKarteAnalysieren(array $seite, array $karte): bool
