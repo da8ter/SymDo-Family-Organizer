@@ -429,7 +429,9 @@ trait EduMaps
             }
             $this->eduQrSeiten = [];
         }
+        $archiviert = $this->EduArchivAbgleichen($seite, $karten);
         return ['karten' => count($karten), 'geaendert' => $geaendert,
+                'archiviert' => $archiviert,
                 'analysiert' => $analysiert, 'gespiegelt' => $gespiegelt,
                 // Ein abgebrochener Lauf darf nicht wie ein vollstaendiger aussehen.
                 'fehler' => $gedeckelt ? $this->Translate('daily AI limit reached — the rest follows later') : ''];
@@ -1013,6 +1015,99 @@ trait EduMaps
      * fehlenden oder unlesbaren Datei eine PHP-WARNUNG aus (file_get_contents,
      * imagecreatefromstring). Im Hook landete die mitten in der HTTP-Antwort.
      */
+    /**
+     * Karten, die es auf der Seite nicht mehr gibt, ins Archiv legen — und
+     * zurueckgekehrte wieder herausholen.
+     *
+     * Geloescht wird NICHTS. Ein Elternbrief, den die Schule von der Seite
+     * nimmt, ist deswegen nicht wertlos; er soll nur nicht mehr zwischen den
+     * aktuellen Karten stehen. `section` und `pos` bleiben deshalb unberuehrt —
+     * kommt die Karte zurueck, steht sie wieder an ihrem alten Platz.
+     *
+     * Vier Riegel, ohne die es Datenmuell oder Fehlalarm gaebe:
+     *  1. Nur bei erfolgreich gelesener Seite. Die Fehlerfaelle kehren schon vor
+     *     der Kartenschleife zurueck, diese Funktion sieht sie also nie.
+     *  2. NICHT beim Kartendeckel: EduKarten bricht bei EDU_KARTEN_MAX ab, eine
+     *     laengere Seite saehe sonst aus, als waeren alle Karten ab Nummer 61
+     *     verschwunden.
+     *  3. Nur gespiegelte Karten (source „edumaps" MIT srcId) — eigene Notizen
+     *     im selben Ordner gehen das hier nichts an.
+     *  4. Geschrieben wird nur bei echter Aenderung.
+     *
+     * @param list<array<string,mixed>> $karten
+     * @return int wie viele Karten neu ins Archiv wanderten
+     */
+    private function EduArchivAbgleichen(array $seite, array $karten): int
+    {
+        if ($karten === [] || count($karten) >= self::EDU_KARTEN_MAX) {
+            if ($karten !== []) {
+                $this->SendDebug('EduMaps', 'Kartendeckel erreicht — kein Archiv-Abgleich: '
+                    . (string)$seite['name'], 0);
+            }
+            return 0;
+        }
+        if (!(bool)$this->EduProp('EduToNotes', false) || !$this->NotesStorable()) {
+            return 0;
+        }
+        $lock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 2000)) {
+            $this->SendDebug('EduMaps', 'Notizen belegt — Archiv-Abgleich beim naechsten Lauf', 0);
+            return 0;
+        }
+        try {
+            $store = $this->NotesStore();
+            $ordnerId = '';
+            $schluessel = 'edupage:' . md5((string)$seite['url']);
+            foreach ($store['folders'] as $f) {
+                if ((string)($f['eduKey'] ?? '') === $schluessel) {
+                    $ordnerId = (string)$f['id'];
+                    break;
+                }
+            }
+            if ($ordnerId === '') {
+                return 0;                       // noch nie gespiegelt
+            }
+            $aktuell = [];
+            foreach ($karten as $k) {
+                $aktuell['edu:' . (string)$k['boxid']] = true;
+            }
+            $jetzt = time();
+            $neu = 0;
+            $zurueck = 0;
+            foreach ($store['notes'] as $i => $n) {
+                if ((string)($n['folderId'] ?? '') !== $ordnerId
+                    || (string)($n['source'] ?? '') !== 'edumaps') {
+                    continue;
+                }
+                $srcId = (string)($n['srcId'] ?? '');
+                if ($srcId === '') {
+                    continue;                   // vom Nutzer selbst angelegt
+                }
+                $fehlt = !isset($aktuell[$srcId]);
+                $imArchiv = (int)($n['archived'] ?? 0) > 0;
+                if ($fehlt && !$imArchiv) {
+                    $store['notes'][$i]['archived'] = $jetzt;
+                    $neu++;
+                } elseif (!$fehlt && $imArchiv) {
+                    unset($store['notes'][$i]['archived']);
+                    $zurueck++;
+                }
+            }
+            if ($neu === 0 && $zurueck === 0) {
+                return 0;
+            }
+            if (!$this->NotesWriteStore($store)) {
+                $this->SendDebug('EduMaps', 'Archiv-Abgleich nicht schreibbar', 0);
+                return 0;
+            }
+            $this->SendDebug('EduMaps', sprintf('Archiv „%s": %d neu, %d zurueck',
+                (string)$seite['name'], $neu, $zurueck), 0);
+            return $neu;
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
     /**
      * Die von Hand geloeschten Klassenseiten.
      *

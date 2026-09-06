@@ -441,6 +441,13 @@ trait Notes
         if (($n['srcUrl'] ?? '') !== '') {
             $row['srcUrl'] = (string)$n['srcUrl'];
         }
+        /* Archiviert: die Karte gibt es auf der Klassenseite nicht mehr. Sie
+           bleibt im Bestand (geloescht wird nichts), zeigt sich in der App aber
+           nur noch im eingeklappten Archiv. Nur wenn gesetzt — sonst traegt
+           jede Notiz ein leeres Feld spazieren. */
+        if ((int)($n['archived'] ?? 0) > 0) {
+            $row['archived'] = (int)$n['archived'];
+        }
         if ($mitText) {
             $row['text'] = $text;
         } else {
