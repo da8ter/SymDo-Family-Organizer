@@ -3701,13 +3701,16 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <button class="btn-close-overlay" data-close="todoOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
-      <!-- Zielliste: nur im Sammelmodus („Alle Listen") sichtbar, damit beim
-           Sichern klar ist, wohin die Aufgabe geht. BEWUSST eine eigene Zeile
-           und nicht die Kopfzeile: die KI-Uebernahme und der Mail-Vorschlag
-           ueberschreiben todoOverlayTitle direkt nach openTodoEditor. -->
+      <!-- Zielliste: sichtbar, sobald es mehrere Listen gibt. Beim ANLEGEN ist
+           sie waehlbar — deshalb braucht es keinen Zwischenschritt vor dem
+           Dialog. Beim Bearbeiten steht sie fest (das Verschieben zwischen
+           Listen gibt es nicht; es waere Loeschen und Neuanlegen).
+           BEWUSST eine eigene Zeile und nicht die Kopfzeile: die KI-Uebernahme
+           und der Mail-Vorschlag ueberschreiben todoOverlayTitle direkt nach
+           openTodoEditor. -->
       <div class="form-row inline" id="tdListRow" style="display:none;">
         <label id="lblTodoList"></label>
-        <span class="muted" id="tdListName"></span>
+        <select id="tdList"></select>
       </div>
       <div class="form-row"><label id="lblTodoTitle"></label><input id="tdTitle" type="text" /></div>
       <div class="form-row"><label id="lblTodoInfo"></label><textarea id="tdInfo" rows="2"></textarea></div>
@@ -13322,16 +13325,32 @@ function toLocalInputValue(d, dateOnly) {
 function openTodoEditor(instanceID, item) {
   todoCtx = { instanceID, itemId: item ? item.id : null };
   document.getElementById('todoOverlayTitle').textContent = item ? translate('Edit') : translate('New task');
-  /* Zielliste anzeigen, solange mehrere im Spiel sind — im Sammelmodus ist sie
-     sonst nirgends abzulesen, und auch beim Bearbeiten einer Aufgabe aus der
-     Sammelansicht ist die Herkunft die erste Frage. */
+  /* Zielliste: waehlbar beim Anlegen, fest beim Bearbeiten.
+     Die Wahl steht IM Dialog statt als Menue davor — ein Zwischenschritt vor
+     jedem Anlegen kostet mehr, als er einbringt, und hier laesst sie sich auch
+     noch aendern, wenn man es sich anders ueberlegt. Beim Bearbeiten bleibt sie
+     stehen: eine Aufgabe zwischen Listen zu verschieben, gibt es nicht. */
   const listRow = document.getElementById('tdListRow');
-  if (listRow) {
-    const mehrere = visibleInstances('todo').length > 1;
-    const inst = (visibleInstances('todo').find(i => i.id === instanceID) || {});
-    listRow.style.display = (mehrere && inst.name) ? '' : 'none';
-    const nameEl = document.getElementById('tdListName');
-    if (nameEl) nameEl.textContent = inst.name || '';
+  const listSel = document.getElementById('tdList');
+  if (listRow && listSel) {
+    const listen = visibleInstances('todo');
+    const neu = todoCtx.itemId === null;
+    /* Im Sammelmodus gibt es keine Liste aus dem Zusammenhang — dort steht die
+       zuletzt BENUTZTE Zielliste vorne (nicht die zuletzt angesehene). Wer
+       mehrere Aufgaben hintereinander in dieselbe Liste legt, stellt sie damit
+       einmal ein statt jedes Mal. Ausserhalb des Sammelmodus gewinnt die Liste,
+       aus der der Dialog kommt: dort ist der Zusammenhang eindeutig. */
+    let vorwahl = instanceID;
+    if (neu && alleListen()) {
+      const gemerkt = parseInt(ls.get('symdo.todoZielListe')) || 0;
+      if (listen.some(i => i.id === gemerkt)) vorwahl = gemerkt;
+    }
+    listRow.style.display = listen.length > 1 ? '' : 'none';
+    listSel.innerHTML = listen.map(i =>
+      `<option value="${i.id}"${i.id === vorwahl ? ' selected' : ''}>${escapeHtml(i.name)}</option>`
+    ).join('');
+    listSel.value = String(vorwahl);
+    listSel.disabled = !neu;
   }
   // Beim Anlegen gibt es nichts zu loeschen — der Knopf erscheint erst an einer
   // bestehenden Aufgabe (wie im Notiz-Editor).
@@ -13518,7 +13537,17 @@ function saveTodoEditor() {
   if (todoCtx.itemId !== null) {
     sdCall(todoCtx.instanceID, 'UpdateItem', Object.assign({ id: todoCtx.itemId }, fields));
   } else {
-    sdCall(todoCtx.instanceID, 'AddItem', fields);
+    /* Beim Anlegen entscheidet die Auswahl IM Dialog. Sie ist nur sichtbar,
+       wenn es mehrere Listen gibt; sonst bleibt es bei der Liste, mit der der
+       Dialog geoeffnet wurde. Gegengeprueft wird gegen die sichtbaren Listen —
+       eine Auswahl, die inzwischen verschwunden ist, darf nicht ins Leere
+       schreiben. */
+    const gewaehlt = parseInt((document.getElementById('tdList') || {}).value) || 0;
+    const ziel = visibleInstances('todo').some(i => i.id === gewaehlt) ? gewaehlt : todoCtx.instanceID;
+    // Fuer das naechste Anlegen merken (siehe openTodoEditor): mehrere Aufgaben
+    // hintereinander gehen meist in dieselbe Liste.
+    ls.set('symdo.todoZielListe', String(ziel));
+    sdCall(ziel, 'AddItem', fields);
   }
   // Kam die Aufgabe aus einem Mail-Vorschlag, ist der jetzt erledigt — erst JETZT,
   // nach dem Speichern. Beim Abbrechen bleibt er stehen.
@@ -13678,28 +13707,6 @@ function openShoppingMenu(anchor) {
   }
   openMenu(anchor, entries);
 }
-/**
- * Zielliste fuer eine neue Aufgabe erfragen — nur im Sammelmodus noetig.
- *
- * Im Sammelmodus zeigt die Auswahl oben „Alle Listen"; welche Liste eine neue
- * Aufgabe aufnehmen soll, ist damit offen. Statt zu raten, fragt ein kleines
- * Menue. Ausserhalb des Sammelmodus gibt es nichts zu fragen: `weiter` laeuft
- * sofort mit der gewaehlten Liste.
- */
-function todoListeWaehlen(anchor, weiter) {
-  if (!alleListen()) { weiter(selectedTodoID()); return; }
-  const listen = visibleInstances('todo');
-  const zuletzt = selectedTodoID();
-  openMenu(anchor, [
-    { header: true, label: translate('Add to which list?') },
-    ...listen.map(i => ({
-      label: i.name,
-      checked: i.id === zuletzt,
-      onClick: () => weiter(i.id),
-    })),
-  ]);
-}
-
 function openTodoMenu(anchor) {
   const id = selectedTodoID();
   const st = id ? instState(id) : null;
@@ -13711,10 +13718,8 @@ function openTodoMenu(anchor) {
   const modes = [['manual', translate('Manual')], ['created', translate('Created')], ['due', translate('Due')], ['priority', translate('Priority')], ['title', translate('Title')]];
   const entries = [];
   if (st.showCreateButton !== false) {
-    entries.push({
-      label: translate('New task with details'), icon: 'fa-plus',
-      onClick: () => todoListeWaehlen(anchor, (ziel) => openTodoEditor(ziel, null)),
-    });
+    // Die Zielliste waehlt man im Dialog selbst (tdList), nicht davor.
+    entries.push({ label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) });
   }
   /* Sortieren nur in der Einzelliste: die Vorlieben stehen JE LISTE im Zustand,
      ein SetSortPrefs aus der Sammelansicht aenderte still eine einzelne Liste,
@@ -15021,19 +15026,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const quickAdd = () => {
     const title = todoInput.value.trim();
     if (!title) return;
-    /* Im Sammelmodus erst die Zielliste, dann der Editor. Das Feld wird ERST
-       geleert, wenn die Wahl steht — bricht jemand das Menue ab, ist das
-       Getippte sonst weg. Und der Fokus muss vorher raus: die Eingabezeile ist
-       unten fixiert, das Menue setzt sich darunter, und auf dem Telefon staende
-       es hinter der Bildschirmtastatur. */
-    todoInput.blur();
-    todoListeWaehlen(todoAdd, (ziel) => {
-      openTodoEditor(ziel, null);
-      // Nach dem Oeffnen: der Editor startet fuer neue Aufgaben mit leerem Titel.
-      document.getElementById('tdTitle').value = title;
-      todoInput.value = '';
-      todoAdd.disabled = true;
-    });
+    /* Ohne Zwischenschritt: der Dialog oeffnet mit der zuletzt gewaehlten
+       echten Liste (selectedTodoID liefert die auch im Sammelmodus), und wer
+       eine andere will, stellt sie dort in der Listen-Auswahl um. */
+    openTodoEditor(selectedTodoID(), null);
+    // Nach dem Oeffnen: der Editor startet fuer neue Aufgaben mit leerem Titel.
+    document.getElementById('tdTitle').value = title;
+    todoInput.value = '';
+    todoAdd.disabled = true;
   };
   todoInput.addEventListener('input', () => { todoAdd.disabled = todoInput.value.trim() === ''; });
   todoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') quickAdd(); });
