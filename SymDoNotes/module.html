@@ -2142,6 +2142,21 @@ html[data-symdo-theme="light"] .voice-ear.lauscht { color: #a35c00; }
   text-overflow: ellipsis;
 }
 .todo-card.done-row .todo-title { text-decoration: line-through; color: var(--muted); }
+/* Herkunfts-Etikett im Sammelmodus („Alle Listen"). Eigene Zeile unter dem
+   Titel, damit es weder den Titel abschneidet noch in die Chip-Messung
+   (layoutRowMeta) faellt. Leiser als der Titel: es beantwortet eine
+   Nebenfrage. */
+.todo-liste { display: block; margin-top: 3px; }
+.todo-liste .badge.liste {
+  font-size: 10px;
+  padding: 2px 7px;
+  background-color: color-mix(in srgb, var(--content-color) 8%, transparent);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: top;
+}
 .todo-info {
   font-size: 12.5px;
   color: var(--muted);
@@ -3686,6 +3701,14 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <button class="btn-close-overlay" data-close="todoOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
+      <!-- Zielliste: nur im Sammelmodus („Alle Listen") sichtbar, damit beim
+           Sichern klar ist, wohin die Aufgabe geht. BEWUSST eine eigene Zeile
+           und nicht die Kopfzeile: die KI-Uebernahme und der Mail-Vorschlag
+           ueberschreiben todoOverlayTitle direkt nach openTodoEditor. -->
+      <div class="form-row inline" id="tdListRow" style="display:none;">
+        <label id="lblTodoList"></label>
+        <span class="muted" id="tdListName"></span>
+      </div>
       <div class="form-row"><label id="lblTodoTitle"></label><input id="tdTitle" type="text" /></div>
       <div class="form-row"><label id="lblTodoInfo"></label><textarea id="tdInfo" rows="2"></textarea></div>
       <div class="form-row inline">
@@ -4820,6 +4843,18 @@ function selectedTodoID() {
   const saved = parseInt(ls.get('symdo.selectedTodoID')) || 0;
   if (vis.some(i => i.id === saved)) return saved;
   return vis.length ? vis[0].id : 0;
+}
+/* Sammelmodus im Aufgaben-Bereich: alle Listen in einer Ansicht.
+   BEWUSST ein eigener Zustand und KEIN Sentinel in selectedTodoID(): Eine
+   unechte ID (etwa -1) waere „truthy" und liefe damit durch alle vorhandenen
+   Wachen der Form `id ? instState(id) : null` und `if (!ziel)` hindurch — sie
+   pruefen auf falsy. Jede dieser Stellen muesste angefasst werden, und wo eine
+   vergessen wuerde, ginge die unechte ID still in ein sdCall.
+   So bleibt selectedTodoID() immer eine ECHTE Liste — und damit zugleich das
+   Schreibziel fuer Sprache, KI und Mail-Vorschlaege, die nicht nachfragen
+   koennen. Unter zwei Listen gibt es nichts zu sammeln. */
+function alleListen() {
+  return ls.get('symdo.todoAlle') === '1' && visibleInstances('todo').length > 1;
 }
 function currentUserID() { return String(store.defaultUserID || ''); }
 
@@ -6243,8 +6278,13 @@ function renderRows(el, html) {
 
   // Bestand nach Schlüssel indizieren. Mehrfach vorkommende Schlüssel (gleiches
   // Markup, z.B. zwei identische Überschriften) landen in einer Queue.
+  /* `data-inst` faellt mit in den Schluessel, wo es steht: Aufgaben-IDs werden
+     JE LISTE vergeben, im Sammelmodus („Alle Listen") kollidieren sie also
+     listenuebergreifend. Ohne die Instanz teilten sich zwei verschiedene
+     Aufgaben einen Eimer — der Abgleich baute Zeilen unnoetig neu auf und
+     toetete dabei die Wischgeste unter dem Finger. */
   const keyOf = (node) => node.dataset && node.dataset.id !== undefined
-    ? 'id:' + node.dataset.id
+    ? 'id:' + (node.dataset.inst !== undefined ? node.dataset.inst + '-' : '') + node.dataset.id
     : (node.dataset && node.dataset.key !== undefined ? 'key:' + node.dataset.key : 'html:' + node.outerHTML);
   const pool = new Map();
   for (const node of Array.from(el.children)) {
@@ -8854,18 +8894,40 @@ function renderSuggestions() {
   panel.classList.add('open');
 }
 
-// Listen-Umschalter (gemeinsam für Einkaufen/ToDos)
-function updateSwitcher(selectId, titleId, vis, currentId, storageKey) {
+/* Listen-Umschalter (gemeinsam für Einkaufen/ToDos).
+   `alleOption` schaltet den Sammeleintrag frei — NUR die Aufgaben nutzen ihn;
+   der Einkauf ruft die Funktion unverändert auf und bekommt ihn deshalb nicht.
+   Die Schwelle `vis.length > 1` bleibt, wie sie ist: daran haengt, dass der
+   Umschalter in den Kacheln (genau eine Liste) unsichtbar bleibt. */
+const SAMMEL_WERT = 'all';
+function updateSwitcher(selectId, titleId, vis, currentId, storageKey, alleOption = false) {
   const select = document.getElementById(selectId);
   const title = document.getElementById(titleId);
   if (vis.length > 1) {
     select.style.display = '';
     title.style.display = 'none';
-    select.innerHTML = vis.map(i =>
-      `<option value="${i.id}"${i.id === currentId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`
-    ).join('');
+    const sammelt = alleOption && alleListen();
+    select.innerHTML =
+      // Der Sammeleintrag traegt sein `selected` SELBST: die Zeile darunter
+      // vergleicht gegen die Instanz-ID, und die ist im Sammelmodus keine der
+      // Listen — ohne das Attribut zeigte das Feld die erste Liste an, waehrend
+      // in Wahrheit alle laufen.
+      (alleOption
+        ? `<option value="${SAMMEL_WERT}"${sammelt ? ' selected' : ''}>${escapeHtml(translate('All lists'))}</option>`
+        : '') +
+      vis.map(i =>
+        `<option value="${i.id}"${!sammelt && i.id === currentId ? ' selected' : ''}>${escapeHtml(i.name)}</option>`
+      ).join('');
     select.onchange = () => {
-      ls.set(storageKey, select.value);
+      if (alleOption) {
+        /* Im Sammelmodus bleibt die zuletzt gewaehlte ECHTE Liste stehen: sie
+           ist weiterhin das Ziel fuer Sprache, KI und Mail-Vorschlaege, die
+           nicht nachfragen koennen. */
+        ls.set('symdo.todoAlle', select.value === SAMMEL_WERT ? '1' : '0');
+        if (select.value !== SAMMEL_WERT) ls.set(storageKey, select.value);
+      } else {
+        ls.set(storageKey, select.value);
+      }
       syncCompat();
       renderAll();
     };
@@ -8938,8 +9000,13 @@ function renderTodoMembers() {
   const el = document.getElementById('todoMembers');
   if (!el) return;
   const st = instState(selectedTodoID());
-  // Je Liste abschaltbar. Ohne Nutzer gibt es ohnehin nichts zu zeigen.
-  if (!st || st.showMemberBar === false || store.users.length === 0) {
+  /* Je Liste abschaltbar. Ohne Nutzer gibt es ohnehin nichts zu zeigen.
+     Im Sammelmodus entscheidet nicht eine einzelne Liste, sondern
+     mitgliederLeisteSichtbar(): der Filter (memberFilterIds) ist
+     bereichsuebergreifend und filtert dort weiter: verschwaende die Leiste,
+     fehlten Aufgaben, ohne dass man die Auswahl noch abwaehlen koennte. */
+  const zeigen = alleListen() ? mitgliederLeisteSichtbar() : !!(st && st.showMemberBar !== false);
+  if (!zeigen || store.users.length === 0) {
     el.style.display = 'none'; renderInto(el, ''); return;
   }
   el.style.display = '';
@@ -10625,11 +10692,170 @@ function initCalendar() {
   });
 }
 
+/**
+ * Der Sammelmodus: die Aufgaben ALLER sichtbaren Listen in einer Ansicht.
+ *
+ * Er ist kein zweiter Aufgabenbereich, sondern die Uebersicht mit vollem
+ * Funktionsumfang — dieselben Bausteine (allTodoTasks, memberFiltered,
+ * todoRowHtml mit Instanz), nur mit Wischen, Bearbeiten und Loeschen.
+ *
+ * `st` ist der Zustand der GEWAEHLTEN Liste und liefert die Anzeige-Schalter;
+ * die Aufgaben kommen aus allen Listen.
+ */
+function renderTodosAlle(st) {
+  const area = document.getElementById('todoListArea');
+  area.classList.toggle('eine-spalte', st.responsiveLayout === false);
+
+  const badges = {
+    quantity:     st.showQuantityBadge !== false,
+    recurrence:   st.showRecurrenceBadge !== false,
+    due:          st.showDueBadge !== false,
+    notification: st.showNotificationBadge !== false,
+    priority:     st.showPriorityBadge !== false,
+  };
+  const showCreate = st.showCreateButton !== false;
+  const inputbar = document.getElementById('todoInputbar');
+  if (inputbar) {
+    inputbar.style.display = showCreate ? '' : 'none';
+    const bereich = document.getElementById('screen-todos');
+    if (bereich) { bereich.classList.toggle('bar-hidden', !showCreate); }
+  }
+  /* Der "..."-Knopf bleibt: Sortieren entfaellt hier zwar (siehe unten), aber
+     „Neue Aufgabe mit Details" haengt am selben Menue. */
+  const menuBtn = document.getElementById('btnTodoMenu');
+  if (menuBtn) menuBtn.style.display = (st.showSorting !== false || showCreate) ? '' : 'none';
+
+  // Aufgaben aller Listen, jede mit ihrer Instanz — dasselbe Tripel wie im
+  // Dashboard. Der Mitglieder-Filter ist bereichsuebergreifend.
+  const alle = mitgliederLeisteSichtbar() ? memberFiltered(allTodoTasks()) : allTodoTasks();
+
+  const stats = document.getElementById('todoStats');
+  if (stats) {
+    if (st.showOverview !== false) {
+      const offen = alle.filter(t => !t.item.done);
+      document.getElementById('statOpenLabel').textContent = translate('Open Tasks');
+      document.getElementById('statOverdueLabel').textContent = translate('Overdue');
+      document.getElementById('statTodayLabel').textContent = translate('Due today');
+      document.getElementById('statOpenValue').textContent = String(offen.length);
+      document.getElementById('statOverdueValue').textContent =
+        String(offen.filter(t => classifyDue(t.item) === 'overdue').length);
+      document.getElementById('statTodayValue').textContent =
+        String(offen.filter(t => classifyDue(t.item) === 'today').length);
+      stats.style.display = '';
+    } else {
+      stats.style.display = 'none';
+    }
+  }
+
+  /* Sortiert wie die Uebersicht: ueberfaellig, dann heute, dann nach
+     Faelligkeit. BEWUSST nicht nach den Vorlieben der Listen — die stehen je
+     Liste im Zustand, und „manual" hiesse ueber zwei Listen eine willkuerliche
+     Verschachtelung, die mit abgeschaltetem Griff niemand mehr richten kann.
+     Der Gleichstand entscheidet ueber den zusammengesetzten Schluessel, damit
+     die Reihenfolge nicht springt, wenn zwei Listen dieselbe Item-ID vergeben. */
+  const rang = (t) => {
+    const c = classifyDue(t.item);
+    return c === 'overdue' ? 0 : (c === 'today' ? 1 : 2);
+  };
+  const sortieren = (liste) => liste.slice().sort((a, b) =>
+    (rang(a) - rang(b))
+    || ((parseInt(a.item.due) || Infinity) - (parseInt(b.item.due) || Infinity))
+    || String(a.key).localeCompare(String(b.key)));
+
+  const open = sortieren(alle.filter(t => !t.item.done));
+  /* „Erledigte verbergen" steht NICHT in den appweiten Schaltern, ist also
+     echt je Liste — hier zaehlt deshalb die Einstellung der Liste, aus der die
+     Aufgabe stammt. */
+  const done = sortieren(alle.filter(t => t.item.done
+    && (instState(t.instanceID) || {}).hideCompletedTasks !== true));
+
+  const showEdit = st.showEditButton === true;
+  const showDelete = st.showDeleteButton === true;
+  const wischbar = st.swipeGestures !== false;
+
+  renderTodoMembers();
+
+  let html = '';
+  if (open.length === 0 && done.length === 0) {
+    const msg = memberFilterIds.size > 0 ? translate('No matches for this filter.') : translate('No tasks');
+    html += `<div class="empty-state" data-key="empty"><i class="fa-light fa-list-check"></i>${msg}</div>`;
+  }
+  // Kein Griff: Reorder schickt EINE Reihenfolge an EINE Instanz.
+  for (const t of open) html += todoRowHtml(t.item, false, badges, showEdit, showDelete, t.instanceID, '', wischbar, t.listName);
+  if (done.length > 0) {
+    html += `<button class="section-toggle${completedExpanded ? ' open' : ''}" data-key="doneToggle" id="doneToggle">` +
+      `<i class="fa-light fa-circle-check"></i>${translate('Completed')}` +
+      `<span class="count">${done.length}</span><i class="fa-light fa-chevron-right chev"></i></button>`;
+    if (completedExpanded) {
+      for (const t of done) html += todoRowHtml(t.item, false, badges, showEdit, showDelete, t.instanceID, '', wischbar, t.listName);
+    }
+  }
+  const freshNodes = renderRows(area, html);
+  if (freshNodes === false) return;
+
+  const doneToggle = freshNodes.find(n => n.id === 'doneToggle');
+  if (doneToggle) doneToggle.addEventListener('click', () => {
+    completedExpanded = !completedExpanded;
+    ls.set('symdo.completedExpanded', completedExpanded ? '1' : '0');
+    renderTodos();
+  });
+
+  /* Jede Karte kennt ihre eigene Liste (data-inst) — genau wie im Dashboard.
+     Die Handler holen sie beim Ereignis aus der Karte, nicht aus der Auswahl
+     oben: die zeigt hier auf „Alle Listen". */
+  freshNodes.filter(n => n.classList && n.classList.contains('todo-card')).forEach(card => {
+    const instanz = parseInt(card.dataset.inst) || 0;
+    const itemId = parseInt(card.dataset.item) || parseInt(card.dataset.id);
+    const holen = () => ((instState(instanz) || {}).items || []).find(i => i.id === itemId);
+    if (!instanz || !holen()) return;
+    // Ohne Reorder brauchen open/done der Geste nur leere Listen.
+    bindTodoGesture(card, instanz, area, () => [], () => [], false,
+      () => sdCall(instanz, 'DeleteItem', { id: itemId }),
+      () => { const it = holen(); if (it) openTodoEditor(instanz, it); },
+      wischbar);
+    const chk = card.querySelector('.chk');
+    chk.addEventListener('click', (e) => e.stopPropagation());
+    chk.addEventListener('change', () => {
+      if (card.dataset.animating === '1') return;
+      card.dataset.animating = '1';
+      const done = chk.checked;
+      checkOffCard(card, !done, () => sdCall(instanz, 'ToggleDone', { id: itemId, done: done }));
+    });
+    card.querySelector('.todo-content').addEventListener('click', (e) => {
+      if (card.dataset.swiped === '1') return;
+      if (e.target.closest('button, .chk')) return;
+      const it = holen();
+      if (it) openTodoEditor(instanz, it);
+    });
+    const editBtn = card.querySelector('[data-edit]');
+    if (editBtn) editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const it = holen();
+      if (it) openTodoEditor(instanz, it);
+    });
+    const delBtn = card.querySelector('[data-del]');
+    if (delBtn) delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdCall(instanz, 'DeleteItem', { id: itemId });
+    });
+  });
+
+  ensureTodoMetaObserver();
+  layoutTodoMeta();
+}
+
 function renderTodos() {
   const vis = visibleInstances('todo');
   const id = selectedTodoID();
   const st = id ? instState(id) : null;
-  updateSwitcher('todoSwitcher', 'todoTitle', vis, id, 'symdo.selectedTodoID');
+  /* Sammelmodus: alle Listen in einer Ansicht. `st` bleibt der Zustand der
+     GEWAEHLTEN Liste und liefert weiter die Anzeige-Schalter — bewusst nicht
+     rowButtonFlags(): das laeuft ueber store.states ohne Ruecksicht auf die
+     Sorte und landet schon bei einer niedrigeren Instanz-ID auf einer
+     EINKAUFSliste, in deren Zustand die Aufgaben-Schalter gar nicht vorkommen.
+     Alle `!== false`-Pruefungen waeren dann still wahr. */
+  const sammel = alleListen();
+  updateSwitcher('todoSwitcher', 'todoTitle', vis, id, 'symdo.selectedTodoID', true);
   // Der Listentitel ist je Liste abschaltbar (Backend-Schalter). Der Umschalter
   // bleibt davon unberuehrt: bei mehreren Listen ist er der einzige Weg zu
   // wechseln, und dann steht der Name ohnehin in ihm statt in der Ueberschrift.
@@ -10638,6 +10864,7 @@ function renderTodos() {
     const stTitel = id ? instState(id) : null;
     kopfTitel.style.display = (stTitel && stTitel.showListTitle === false) ? 'none' : '';
   }
+  if (sammel) { renderTodosAlle(st || {}); return; }
 
   const area = document.getElementById('todoListArea');
   // Mehrspaltig ist der Normalfall; die Liste kann es fuer ihre Kachel abstellen.
@@ -10988,7 +11215,7 @@ function ensureTodoMetaObserver() {
  * Liste, auf der Uebersicht mehrere. `zusatz` ist eine zusaetzliche Zeile unter dem
  * Titel; dort steht auf der Uebersicht der Listenname, wenn es mehrere Listen gibt.
  */
-function todoRowHtml(it, draggable, badges, showEdit, showDelete, instanzID = 0, zusatz = '', wischbar = true) {
+function todoRowHtml(it, draggable, badges, showEdit, showDelete, instanzID = 0, zusatz = '', wischbar = true, listenName = '') {
   // Jede Sorte hat ihren eigenen Schalter — auch die Prioritaet.
   const zeige = (sorte) => badges[sorte] !== false;
   const chip = zeige('due') ? formatDueChip(it) : '';
@@ -11027,6 +11254,14 @@ function todoRowHtml(it, draggable, badges, showEdit, showDelete, instanzID = 0,
     `<div class="todo-content">` +
     `<input type="checkbox" class="chk"${it.done ? ' checked' : ''} aria-label="${translate('Done')}" />` +
     `<span class="todo-main"><span class="todo-title">${escapeHtml(it.title)}</span>` +
+    /* Das Herkunfts-Etikett gehoert NICHT in .todo-meta: layoutTodoMeta misst
+       dort die Chip-Breite gegen META_ANTEIL (0,4) und schoebe die Zeile bei
+       einem langen Listennamen dauerhaft in `stacked` — und keine der drei
+       Verdichtungsstufen kuerzt ein Etikett, das sie nicht kennt. Es steht
+       auch nicht IM Titel: der schneidet mit Puenktchen ab, und das Etikett
+       fiele bei langen Titeln als Erstes weg. Also eine eigene, leise Zeile
+       unter dem Titel. */
+    (listenName ? `<span class="todo-liste"><span class="badge liste">${escapeHtml(listenName)}</span></span>` : '') +
     (unten ? `<span class="todo-info">${escapeHtml(unten)}</span>` : '') +
     `</span><span class="todo-side"><span class="todo-meta">` +
     renderAvatarStack(it.assignedTo) +
@@ -13027,6 +13262,17 @@ function toLocalInputValue(d, dateOnly) {
 function openTodoEditor(instanceID, item) {
   todoCtx = { instanceID, itemId: item ? item.id : null };
   document.getElementById('todoOverlayTitle').textContent = item ? translate('Edit') : translate('New task');
+  /* Zielliste anzeigen, solange mehrere im Spiel sind — im Sammelmodus ist sie
+     sonst nirgends abzulesen, und auch beim Bearbeiten einer Aufgabe aus der
+     Sammelansicht ist die Herkunft die erste Frage. */
+  const listRow = document.getElementById('tdListRow');
+  if (listRow) {
+    const mehrere = visibleInstances('todo').length > 1;
+    const inst = (visibleInstances('todo').find(i => i.id === instanceID) || {});
+    listRow.style.display = (mehrere && inst.name) ? '' : 'none';
+    const nameEl = document.getElementById('tdListName');
+    if (nameEl) nameEl.textContent = inst.name || '';
+  }
   // Beim Anlegen gibt es nichts zu loeschen — der Knopf erscheint erst an einer
   // bestehenden Aufgabe (wie im Notiz-Editor).
   document.getElementById('btnTodoDelete').style.display = (item && todoCtx.itemId) ? '' : 'none';
@@ -13361,19 +13607,48 @@ function openShoppingMenu(anchor) {
   }
   openMenu(anchor, entries);
 }
+/**
+ * Zielliste fuer eine neue Aufgabe erfragen — nur im Sammelmodus noetig.
+ *
+ * Im Sammelmodus zeigt die Auswahl oben „Alle Listen"; welche Liste eine neue
+ * Aufgabe aufnehmen soll, ist damit offen. Statt zu raten, fragt ein kleines
+ * Menue. Ausserhalb des Sammelmodus gibt es nichts zu fragen: `weiter` laeuft
+ * sofort mit der gewaehlten Liste.
+ */
+function todoListeWaehlen(anchor, weiter) {
+  if (!alleListen()) { weiter(selectedTodoID()); return; }
+  const listen = visibleInstances('todo');
+  const zuletzt = selectedTodoID();
+  openMenu(anchor, [
+    { header: true, label: translate('Add to which list?') },
+    ...listen.map(i => ({
+      label: i.name,
+      checked: i.id === zuletzt,
+      onClick: () => weiter(i.id),
+    })),
+  ]);
+}
+
 function openTodoMenu(anchor) {
   const id = selectedTodoID();
   const st = id ? instState(id) : null;
   if (!st) return;
+  const sammel = alleListen();
   const sortMode = String(st.sortMode || 'created');
   const sortDir = String(st.sortDir || 'asc');
   const setPrefs = (mode, dir) => sdCall(id, 'SetSortPrefs', { mode, dir });
   const modes = [['manual', translate('Manual')], ['created', translate('Created')], ['due', translate('Due')], ['priority', translate('Priority')], ['title', translate('Title')]];
   const entries = [];
   if (st.showCreateButton !== false) {
-    entries.push({ label: translate('New task with details'), icon: 'fa-plus', onClick: () => openTodoEditor(id, null) });
+    entries.push({
+      label: translate('New task with details'), icon: 'fa-plus',
+      onClick: () => todoListeWaehlen(anchor, (ziel) => openTodoEditor(ziel, null)),
+    });
   }
-  if (st.showSorting !== false) {
+  /* Sortieren nur in der Einzelliste: die Vorlieben stehen JE LISTE im Zustand,
+     ein SetSortPrefs aus der Sammelansicht aenderte still eine einzelne Liste,
+     die niemand gemeint hat. Der Sammelmodus sortiert fest wie die Uebersicht. */
+  if (!sammel && st.showSorting !== false) {
     if (entries.length > 0) entries.push({ sep: true });
     entries.push({ header: true, label: translate('Sorting') });
     for (const [mode, label] of modes) {
@@ -13977,6 +14252,7 @@ function initCaptions() {
   set('btnEditCancel', translate('Cancel'));
   set('btnEditSave', translate('Save'));
   set('lblTodoTitle', translate('Title'));
+  set('lblTodoList', translate('List'));
   set('lblTodoInfo', translate('Note'));
   set('lblTodoDue', translate('Due on'));
   set('lblTodoAllDay', translate('All day'));
@@ -14673,11 +14949,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const quickAdd = () => {
     const title = todoInput.value.trim();
     if (!title) return;
-    openTodoEditor(selectedTodoID(), null);
-    // Nach dem Oeffnen: der Editor startet fuer neue Aufgaben mit leerem Titel.
-    document.getElementById('tdTitle').value = title;
-    todoInput.value = '';
-    todoAdd.disabled = true;
+    /* Im Sammelmodus erst die Zielliste, dann der Editor. Das Feld wird ERST
+       geleert, wenn die Wahl steht — bricht jemand das Menue ab, ist das
+       Getippte sonst weg. Und der Fokus muss vorher raus: die Eingabezeile ist
+       unten fixiert, das Menue setzt sich darunter, und auf dem Telefon staende
+       es hinter der Bildschirmtastatur. */
+    todoInput.blur();
+    todoListeWaehlen(todoAdd, (ziel) => {
+      openTodoEditor(ziel, null);
+      // Nach dem Oeffnen: der Editor startet fuer neue Aufgaben mit leerem Titel.
+      document.getElementById('tdTitle').value = title;
+      todoInput.value = '';
+      todoAdd.disabled = true;
+    });
   };
   todoInput.addEventListener('input', () => { todoAdd.disabled = todoInput.value.trim() === ''; });
   todoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') quickAdd(); });

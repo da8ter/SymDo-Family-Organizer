@@ -1,6 +1,8 @@
 {
   "translations": {
     "de": {
+      "All lists": "Alle Listen",
+      "Add to which list?": "In welche Liste?",
       "Purchase": "Einkauf",
       "Responsive Layout": "Responsive Layout",
       "Responsive layout hint": "Auf breiten Schirmen ordnet die Kachel die Aufgaben in mehreren Spalten an. Ausgeschaltet bleibt es bei einer Spalte, egal wie breit die Kachel ist.",

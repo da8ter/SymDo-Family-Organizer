@@ -77,6 +77,8 @@
       "No timetable": "No timetable"
     },
     "de": {
+      "All lists": "Alle Listen",
+      "Add to which list?": "In welche Liste?",
       "Store order": "Laden-Reihenfolge",
       "Sort in store order (learned from the check-off order)": "In Laden-Reihenfolge sortieren (gelernt aus der Abhak-Reihenfolge)",
       "While shopping, the list watches in which order the categories get checked off (a 45-minute pause starts a new trip) and derives the walking order through the store. Recent trips weigh more; categories without data follow in their configured order. Learning is always on — this switch only applies the sorting.": "Beim Einkaufen merkt sich die Liste, in welcher Reihenfolge die Kategorien abgehakt werden (eine Pause von 45 Minuten beginnt einen neuen Einkauf), und leitet daraus den Laufweg durch den Markt ab. Jüngere Einkäufe zählen stärker; Kategorien ohne Daten folgen in ihrer eingestellten Reihenfolge. Gelernt wird immer — dieser Schalter wendet nur die Sortierung an.",
