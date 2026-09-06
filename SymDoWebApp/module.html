@@ -694,6 +694,21 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .edu-bname { flex: 1 1 auto; min-width: 0; }
 .edu-zahl { flex: 0 0 auto; font-weight: 600; opacity: .75; }
 .edu-pfeil { flex: 0 0 auto; width: 14px; text-align: center; }
+/* Das Archiv steht am Ende und soll sich nicht vordraengen: eine feine Linie
+   darueber trennt es vom Aktuellen, die Schrift bleibt leise. */
+.edu-abschnitt.edu-archiv {
+  margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+/* Archivierte Karten sind blasser — sie stehen nicht mehr auf der Seite. Beim
+   Lesen (hover/aktiv) kommen sie auf volle Deckkraft, sonst waere der Text
+   unnoetig schwer zu entziffern. */
+.edu-karte.im-archiv { opacity: .72; }
+.edu-karte.im-archiv:hover, .edu-karte.im-archiv:focus-within { opacity: 1; }
+.edu-weg {
+  flex: 0 0 auto; border: none; background: transparent; cursor: pointer;
+  color: inherit; opacity: .6; padding: 2px 6px; font-size: 13px;
+}
+.edu-weg:hover { opacity: 1; color: var(--red); }
 /* minmax(0, 1fr) statt 1fr, und min-width:0 an der Karte: ein Rasterfeld
    schrumpft NICHT unter die natuerliche Breite seines Inhalts, und ein Bild
    bringt die seiner Datei mit (hier ueber 1000 px). Ohne beides wird die
@@ -12230,10 +12245,15 @@ function edumapsKartenHtml(ordner) {
       : '<div class="empty-state" data-key="leer"><i class="fa-light fa-folder-open"></i>' +
         translate('Nothing here yet') + '</div>';
   }
+  /* Archivierte Karten stehen nicht mehr auf der Klassenseite (der Server hat
+     das beim Spiegeln festgestellt). Sie kommen unten in einen eigenen,
+     zugeklappten Bereich — und nicht mehr zwischen die aktuellen. */
+  const aktiv = karten.filter(n => !n.archived);
+  const archiv = karten.filter(n => !!n.archived);
   /* Nach Abschnitten gruppieren, in der Reihenfolge der Seite. Die Karten
      liegen IM Bereich und werden erst mit ihm sichtbar. */
   const gruppen = [];
-  for (const n of karten) {
+  for (const n of aktiv) {
     const a = n.section || '';
     const letzte = gruppen[gruppen.length - 1];
     if (!letzte || letzte.name !== a) {
@@ -12265,6 +12285,24 @@ function edumapsKartenHtml(ordner) {
     }
     html += '</div>';
   }
+  if (archiv.length > 0) {
+    /* Der Auf/Zu-Zustand haengt sonst nur am NAMEN des Bereichs — zwei
+       Klassenseiten mit gleichem Abschnittsnamen teilen ihn sich. Fuer das
+       Archiv waere das falsch: ein aufgeklapptes Archiv klappte alle anderen
+       mit auf. Deshalb ein Schluessel je Ordner. */
+    const schl = '__archiv:' + ordner.id;
+    const auf = eduBereichOffen(schl);
+    html += '<h3 class="edu-abschnitt edu-archiv' + (auf ? ' auf' : '') +
+      '" data-key="ea:' + escapeHtml(schl) + '" data-bereich="' + escapeHtml(schl) + '">' +
+      '<i class="fa-light fa-chevron-' + (auf ? 'down' : 'right') + ' edu-pfeil"></i>' +
+      '<span class="edu-bname"><i class="fa-light fa-box-archive"></i> ' + translate('Archive') + '</span>' +
+      '<span class="edu-zahl">' + archiv.length + '</span></h3>';
+    html += '<div class="edu-gruppe" data-key="eg:' + escapeHtml(schl) + '"' + (auf ? '' : ' hidden') + '>';
+    for (const n of archiv) {
+      html += edumapsKarteHtml(n, true);
+    }
+    html += '</div>';
+  }
   return html;
 }
 
@@ -12277,7 +12315,12 @@ function edumapsKartenHtml(ordner) {
  * beim Aufklappen: erst leere Flaechen, dann die Bilder. So sind sie da, bevor
  * der Bereich aufgeht.
  */
-function edumapsKarteHtml(n) {
+function edumapsKarteHtml(n, imArchiv = false) {
+  /* Im Archiv laden die Bilder FAUL. Zugeklappte Bereiche stehen trotzdem im
+     DOM (nur `hidden`), und die aktuellen Karten laden deshalb bewusst `eager`,
+     damit beim Aufklappen nichts nachzuckt. Fuer ein Archiv, das man selten
+     oeffnet, waere das verkehrt herum: es zoege sofort alle alten Bilder. */
+  const ladeArt = imArchiv ? 'lazy' : 'eager';
   /* Frueher fielen Bilder ohne Datei-Adresse hier heraus und standen unten als
      Dateizeile — in JEDER Kachel, denn dort gibt es keinen Token. Jetzt werden
      sie gezeichnet und ihre Daten einzeln nachgeladen (notesBilderNachladen). */
@@ -12290,9 +12333,17 @@ function edumapsKarteHtml(n) {
   // Der Kartenkopf traegt die Farbe als FLAECHE — so steht er auch auf der
   // Klassenseite da. Die Schrift richtet sich nach der Helligkeit.
   const kopfStil = kf ? ' style="background:' + escapeHtml(kf) + ';color:' + eduLesefarbe(kf) + '"' : '';
-  let html = '<div class="edu-karte" data-key="ek:' + escapeHtml(n.id) + '" data-note="' + escapeHtml(n.id) + '">' +
+  let html = '<div class="edu-karte' + (imArchiv ? ' im-archiv' : '') + '" data-key="ek:' + escapeHtml(n.id) +
+    '" data-note="' + escapeHtml(n.id) + '">' +
     '<div class="edu-kopf' + (kf ? ' bunt' : '') + '"' + kopfStil + '>' +
     '<span class="edu-titel">' + escapeHtml(n.title || '') + '</span>' +
+    // Nur im Archiv: der Weg, eine alte Karte endgueltig loszuwerden. In der
+    // normalen Ansicht gibt es ihn nicht — dort gewinnt immer die Quelle, eine
+    // geloeschte Karte waere beim naechsten Lauf wieder da.
+    (imArchiv
+      ? '<button class="edu-weg" data-weg="' + escapeHtml(n.id) + '" aria-label="' + translate('Delete') +
+        '" title="' + translate('Delete') + '"><i class="fa-light fa-trash"></i></button>'
+      : '') +
     '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
     /* Die formatierte Fassung, wenn die Quelle eine liefert — dann bleiben
        Nummerierung und Fettdruck der Klassenseite erhalten. Sie ist SERVERSEITIG
@@ -12304,7 +12355,7 @@ function edumapsKarteHtml(n) {
     eduBuchungHtml(n);
   for (const b of bilder) {
     const quelle = notesBildQuelle(b.id);
-    html += '<img class="edu-bild" loading="eager" data-media="' + escapeHtml(String(b.id)) + '"' +
+    html += '<img class="edu-bild" loading="' + ladeArt + '" data-media="' + escapeHtml(String(b.id)) + '"' +
       (quelle ? '' : ' data-nachladen="1"') +
       ' alt="' + escapeHtml(b.name || '') + '" src="' + escapeHtml(quelle) + '">';
     html += eduQrZeile(b);
@@ -12317,7 +12368,7 @@ function edumapsKarteHtml(n) {
     if (d.thumb) {
       /* data-mini traegt die Kennung des VORSCHAUBILDES; data-media bleibt die
          der Datei, denn ein Tipp soll das PDF oeffnen, nicht das Miniaturbild. */
-      html += '<img class="edu-vorschau" loading="eager" data-media="' + escapeHtml(String(d.id)) + '"' +
+      html += '<img class="edu-vorschau" loading="' + ladeArt + '" data-media="' + escapeHtml(String(d.id)) + '"' +
         ' data-mini="' + escapeHtml(String(d.thumb)) + '"' + (mini ? '' : ' data-nachladen="1"') +
         ' alt="' + escapeHtml(d.name || '') + '" src="' + escapeHtml(mini) + '">';
     }
@@ -12481,6 +12532,25 @@ function bindeEdumapsKarten(frisch, ordner) {
     kopf.addEventListener('click', () => {
       eduBereichUmschalten(kopf.dataset.bereich || '');
       renderNotizen();
+    });
+  });
+  /* Papierkorb an einer Archiv-Karte. BEWUSST ein Knopf und keine Wischgeste:
+     die Karten sind hoch und tragen Bilder — darauf zu wischen waere ein
+     Fehlgriff-Automat. Und bewusst nur im Archiv: in der normalen Ansicht
+     gewinnt die Quelle, eine geloeschte Karte waere beim naechsten Lauf
+     wieder da. */
+  suche('[data-weg]').forEach(knopf => {
+    knopf.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nid = knopf.dataset.weg;
+      const notiz = (notizen.notes || []).find(n => n.id === nid);
+      const titel = notiz ? (notiz.title || '') : '';
+      showConfirm(
+        titel ? translate('Delete "%1" for good?').replace('%1', titel)
+              : translate('Delete this note?'),
+        translate('Delete'),
+        () => notizenAktion({ action: 'noteDelete', id: nid })
+      );
     });
   });
   suche('.edu-karte').forEach(karte => {
