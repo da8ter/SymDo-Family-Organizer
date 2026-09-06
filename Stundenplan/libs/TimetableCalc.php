@@ -29,16 +29,35 @@ class TimetableCalc
 
     public const MONTAG     = 1;
     public const SAMSTAG    = 6;
+    public const SONNTAG    = 7;
 
-    /** @return list<int> Die Tage, die im Raster stehen. */
+    /**
+     * @return list<int> Die Tage, an denen UNTERRICHT stehen kann. Massstab
+     *         fuer den Import und fuer die Ueberlagerung datierter Tage.
+     */
     public static function Wochentage(bool $samstag): array
     {
         return $samstag ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
     }
 
+    /**
+     * Die Tage, die ANGEZEIGT werden — immer alle sieben.
+     *
+     * Das Wochenende gehoert dazu, obwohl dort nie Unterricht steht: ein Tag,
+     * der gar nicht auftaucht, sagt nichts; ein Tag mit „Wochenende" darauf
+     * sagt, warum nichts da ist. Dieselbe Ueberlegung wie bei Ferien und
+     * Feiertagen, die schon immer am Tag stehen.
+     *
+     * @return list<int>
+     */
+    public static function AnzeigeTage(): array
+    {
+        return [1, 2, 3, 4, 5, 6, 7];
+    }
+
     public static function TagKurz(int $tag): string
     {
-        return ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][$tag] ?? '';
+        return ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][$tag] ?? '';
     }
 
     // ────────────────────────────── Zeiten ──────────────────────────────

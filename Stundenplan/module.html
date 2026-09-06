@@ -255,6 +255,23 @@
     display: flex; align-items: center; justify-content: center;
     background: var(--frei); color: var(--muted); font-size: 10px;
   }
+  /* Die Begruendung eines ganz freien Tages steht QUER — in einer schmalen
+     Spalte („Wochenende", „Sommerferien bis 05.09.") passte sie sonst nicht
+     und wurde zu „Sommerf…". Gedreht hat sie die ganze Tageshoehe zur
+     Verfuegung. */
+  .frei.grund { padding: 6px 2px; }
+  .frei.grund > span {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    max-height: 100%; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; text-align: center;
+  }
+  /* Tage ohne Unterricht bekommen weniger Platz: seit das Wochenende immer
+     mitlaeuft, teilten sieben gleich breite Spalten die Kachel so auf, dass
+     von den Schultagen kaum etwas uebrig blieb. */
+  .spalte.ohne {
+    flex: 0 1 auto; min-width: 34px;
+    background: color-mix(in srgb, var(--spalte) 55%, transparent);
+  }
   .stunde {
     position: absolute; left: 0; right: 0; overflow: hidden;
     padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start;
@@ -1308,6 +1325,10 @@
      aus. Die Wahl ueberlebt einen Push — sonst spraenge die Kachel alle fuenf
      Minuten zurueck, waehrend jemand die naechste Woche liest. */
   let wocheNr = 0;
+  /* Hat der Nutzer selbst geblaettert? Dann bleibt seine Wahl stehen. Ohne
+     diese Unterscheidung setzte die Vorauswahl unten ihn bei jedem Push
+     zurueck. */
+  let wocheGewaehlt = false;
 
   function handleMessage(daten) {
     if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
@@ -1317,6 +1338,7 @@
     if (kindNr >= daten.children.length) { kindNr = 0; }
     // Kommt ein Plan ohne Folgewoche (Import abgeschaltet), zurueck auf jetzt.
     if (wocheNr === 1 && !folgewocheDa()) { wocheNr = 0; }
+    wochenVorauswahl();
     zeichne();
     tickerStellen();
   }
@@ -1347,8 +1369,10 @@
         kindNr = parseInt(b.dataset.nr, 10) || 0;
         /* Ein anderes Kind kann eine Folgewoche haben oder nicht — zeigt der
            Wechsler auf eine, die es hier nicht gibt, bleibt sonst ein leeres
-           Raster stehen. */
+           Raster stehen. Und die Vorauswahl gilt je Kind: das eine hat
+           samstags Unterricht, das andere nicht. */
         if (wocheNr === 1 && !folgewocheDa()) { wocheNr = 0; }
+        wochenVorauswahl();
         zeichne();
       });
     });
@@ -1357,6 +1381,7 @@
     document.querySelectorAll('[data-woche]').forEach(function (b) {
       b.addEventListener('click', function () {
         wocheNr = b.dataset.woche === 'vor' ? 1 : 0;
+        wocheGewaehlt = true;
         zeichne();
       });
     });
@@ -1427,6 +1452,23 @@
     return bis !== '' ? wort + ' bis ' + bis : wort;
   }
 
+  /* WARUM an diesem Tag nichts steht. Ein blosses „frei" liess offen, ob die
+     Schule ausfaellt, Ferien sind oder schlicht Sonntag ist. Reihenfolge:
+     Ferien und Feiertag stehen ueber dem Wochenende — ein Feiertag, der auf
+     einen Samstag faellt, ist die genauere Auskunft. */
+  function freiGrund(tag) {
+    if (!tag) { return 'kein Unterricht'; }
+    if (tag.holiday) { return ferienText(tag.holiday); }
+    return (tag.weekday >= 6) ? 'Wochenende' : 'kein Unterricht';
+  }
+
+  /* Ein Tag ohne Unterricht bekommt eine schmalere Spalte: das Wochenende
+     steht jetzt immer im Raster, und in voller Breite draengte es die
+     Schultage aus dem Bild. */
+  function tagOhneUnterricht(tag) {
+    return !tag || !(tag.slots || []).length;
+  }
+
   function datumKurz(iso) {
     const t = String(iso || '').split('-');
     return t.length === 3 ? t[2] + '.' + t[1] + '.' : iso;
@@ -1445,6 +1487,20 @@
     const kind = zustand && zustand.children ? zustand.children[kindNr] : null;
     return !!(zustand && zustand.dated && kind && Array.isArray(kind.nextDays)
               && kind.nextDays.length);
+  }
+
+  /* Am WOCHENENDE die kommende Woche zeigen. Die laufende Woche besteht dann
+     nur noch aus vergangenen Schultagen — man sah am Sonntag den Plan der
+     Woche, die vorbei war, obwohl die naechste laengst importiert ist. Die
+     Auskunft, dass die Woche durch ist, kommt vom Server (weekOver): sie haengt
+     am Datum des letzten Unterrichtstages, nicht an der Uhr des Betrachters,
+     und ein Kind mit Samstagsunterricht ist am Samstag noch mitten drin.
+
+     Nur die VORAUSWAHL: sobald jemand selbst blaettert, gilt seine Wahl. */
+  function wochenVorauswahl() {
+    if (wocheGewaehlt) { return; }
+    const kind = zustand && zustand.children ? zustand.children[kindNr] : null;
+    wocheNr = (kind && kind.weekOver === true && folgewocheDa()) ? 1 : 0;
   }
 
   /** Die Tage der gewaehlten Woche. */
@@ -1540,7 +1596,8 @@
       /* Das Datum nur mit Import: ohne ihn ist der Plan eine Vorlage, die fuer
          jede Woche gilt — ein Datum daran waere eine Behauptung. */
       const datum = (zustand.dated && tag.date) ? datumKurz(tag.date) : '';
-      spalten += '<div class="spalte' + (tag.today ? ' istHeute' : '') + '">'
+      spalten += '<div class="spalte' + (tag.today ? ' istHeute' : '')
+        + (tagOhneUnterricht(tag) ? ' ohne' : '') + '">'
         + '<div class="spaltenkopf"><div><div class="tag">' + esc(tag.label)
         + (datum ? ' <span class="datum">' + esc(datum) + '</span>' : '') + '</div>'
         + (tag.parity ? '<div class="kw">' + esc(tag.parity) + '</div>' : '')
@@ -1559,7 +1616,8 @@
       const y = function (m) { return (m - von) / 15 * proViertel; };
       spalten += '<div class="koerper" style="height:' + hoehe + 'px">';
       if (tag.slots.length === 0) {
-        spalten += '<div class="frei" style="top:0;height:' + hoehe + 'px">frei</div>';
+        spalten += '<div class="frei grund" style="top:0;height:' + hoehe + 'px">'
+          + '<span>' + esc(freiGrund(tag)) + '</span></div>';
       } else {
         const luecke = function (a, b) {
           if (b - a < 1) { return ''; }
@@ -1611,7 +1669,7 @@
     return html;
   }
 
-  const TAGNAMEN = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const TAGNAMEN = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
   /* Die Tage, die die Timeline anbietet: die Vereinigung ueber alle Kinder.
      Hat EIN Kind Samstag, gibt es den Samstag — dann steht beim anderen dort
@@ -1756,7 +1814,7 @@
         return;
       }
       if (!tag || slots.length === 0) {
-        html += '<span class="was">keine Schule</span></div>';
+        html += '<span class="was">' + esc(freiGrund(tag)) + '</span></div>';
         html += '<div class="keinTag">—</div></div>';
         return;
       }

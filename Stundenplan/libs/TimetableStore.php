@@ -653,7 +653,7 @@ trait TimetableStore
         // Kind.
         $abschnitte  = $this->Ferien();
         $ferienJeTag = [];
-        foreach ([1, 2, 3, 4, 5, 6] as $t) {
+        foreach (TimetableCalc::AnzeigeTage() as $t) {
             $ferienJeTag[$t] = HolidaySource::AmTag(
                 $abschnitte, TimetableCalc::DatumInWoche($heute, $t));
         }
@@ -669,8 +669,31 @@ trait TimetableStore
             $samstag  = $kind['saturday'];
             $heuteTag = $ferien === null ? TimetableCalc::Schultag($heute, $samstag) : null;
             $tage     = [];
-            foreach (TimetableCalc::Wochentage((bool)$samstag['enabled']) as $tag) {
-                $tages  = TimetableCalc::TagesSlots($tag, $kind, $slots);
+            /* ALLE sieben Tage, nicht nur die mit moeglichem Unterricht: ein
+               fehlender Samstag sagt nichts, ein Samstag mit „Wochenende"
+               darauf sagt, warum nichts da ist. Der Unterricht selbst kommt
+               weiter nur an den Tagen aus Wochentage() vor — an den uebrigen
+               findet TagesSlots() schlicht nichts. */
+            $unterrichtstage = TimetableCalc::Wochentage((bool)$samstag['enabled']);
+            foreach (TimetableCalc::AnzeigeTage() as $tag) {
+                /* An einem Tag OHNE Unterricht bleibt die Liste leer, auch wenn
+                   dort Stunden gespeichert sind. Gemessen an #22469: bei einem
+                   Kind mit abgeschaltetem Samstag lag noch eine Musikstunde in
+                   SlotsK2D6 — unsichtbar, solange der Samstag gar nicht im
+                   Raster stand. Seit alle sieben Tage angezeigt werden, waere
+                   sie ohne diesen Riegel wieder aufgetaucht, obwohl der Nutzer
+                   den Samstag ausdruecklich abgeschaltet hat. */
+                $tages  = in_array($tag, $unterrichtstage, true)
+                    ? TimetableCalc::TagesSlots($tag, $kind, $slots) : [];
+                /* FERIEN SCHLAGEN DEN UNTERRICHT. Die Ferienauskunft gilt fuer
+                   genau dieses Datum, der Wochenplan nur fuer die Woche im
+                   Allgemeinen — an einem Ferientag steht sonst die Vorlage da
+                   und behauptet sechs Stunden Unterricht. Timeline, Karte im
+                   Dashboard und die Schulzeile des Briefings halten es laengst
+                   so; das Wochenraster war die letzte Stelle, die es nicht tat. */
+                if (($ferienJeTag[$tag] ?? null) !== null) {
+                    $tages = [];
+                }
                 $naechste = $tag === $heuteTag
                     ? (TimetableCalc::NaechsteStunde($tages, $jetzt)['id'] ?? '')
                     : '';
@@ -725,12 +748,34 @@ trait TimetableStore
                 ];
             }
             $heuteSlots = $heuteTag === null ? [] : TimetableCalc::TagesSlots($heuteTag, $kind, $slots);
+            /* Ist die gezeigte Woche fuer dieses Kind schon durch? Gemessen am
+               DATUM des letzten Tages mit Unterricht — nicht an „heute ist
+               Samstag": ein Kind mit Samstagsunterricht ist am Samstag noch
+               mitten in seiner Woche.
+
+               Wozu: am Wochenende zeigte das Raster Montag bis Freitag der
+               VERGANGENEN Woche, obwohl die kommende laengst importiert ist.
+               Die Anzeige stellt sich damit von selbst auf die naechste Woche,
+               solange der Nutzer nicht selbst blaettert. In den Ferien bleibt
+               es beim aktuellen Bild: dort hat KEIN Tag Unterricht, der
+               Vergleich greift also nicht — und die naechste Woche waeren
+               vermutlich auch Ferien. */
+            $letzterMitUnterricht = '';
+            foreach ($tage as $t) {
+                foreach ((array)$t['slots'] as $k) {
+                    if (($k['care'] ?? false) !== true) {
+                        $letzterMitUnterricht = max($letzterMitUnterricht, (string)$t['date']);
+                        break;
+                    }
+                }
+            }
             $ausgabe[] = [
                 'name'    => $kind['name'],
                 'color'   => $kind['color'],
                 'userId'  => $kind['userId'],
                 'avatar'  => (string)($bilder[$kind['userId']] ?? ''),
                 'days'    => $tage,
+                'weekOver' => $letzterMitUnterricht !== '' && $letzterMitUnterricht < $heute,
                 'today'   => $heuteTag,
                 'todayLabel' => $heuteTag === null ? '' : TimetableCalc::TagKurz($heuteTag),
                 'minutes' => TimetableCalc::TagesDauer($heuteSlots),

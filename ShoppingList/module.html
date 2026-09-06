@@ -3481,6 +3481,22 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   display: flex; align-items: center; justify-content: center;
   color: var(--faint); font-size: 10px;
 }
+/* Die Begruendung eines ganz freien Tages steht QUER — in einer schmalen
+   Spalte („Wochenende", „Sommerferien bis 05.09.") passte sie sonst nicht.
+   Gedreht hat sie die ganze Tageshoehe zur Verfuegung. */
+.wp-frei.grund { padding: 6px 2px; }
+.wp-frei.grund > span {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  max-height: 100%; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-align: center;
+}
+/* Tage ohne Unterricht bekommen weniger Platz: seit das Wochenende immer
+   mitlaeuft, teilten sieben gleich breite Spalten den Bereich so auf, dass von
+   den Schultagen kaum etwas uebrig blieb. */
+.wp-spalte.ohne {
+  flex: 0 1 auto; min-width: 34px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
 .wp-stunde {
   position: absolute; left: 0; right: 0; overflow: hidden;
   padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start;
@@ -5586,7 +5602,9 @@ function setTab(tab) {
      will heute frueh nicht dort landen — und das Raster rollt einmal zur
      heutigen Spalte, statt am Montag zu beginnen. */
   if (tab === 'plan') {
-    planWoche = 0;
+    // Nicht hart auf 0: am Wochenende waehlt planWochenVorauswahl die kommende
+    // Woche. Zurueckgesetzt wird nur die eigene WAHL des Nutzers.
+    planWocheGewaehlt = false;
     planZuHeute = true;
   }
   if (tab === 'dashboard') {
@@ -7325,7 +7343,7 @@ function stundenplanIstHeute(weekday) {
     (k.days || []).some(t => t.today && t.weekday === weekday));
 }
 
-const PLAN_TAGE = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const PLAN_TAGE = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function stundenplanTagwahl() {
   const tage = stundenplanTage();
@@ -7422,6 +7440,16 @@ function stundenplanFreiText(f) {
   return bis !== '' ? translate('%1 until %2').replace('%1', wort).replace('%2', bis) : wort;
 }
 
+/* WARUM an diesem Tag nichts steht. Ein blosses „frei" liess offen, ob die
+   Schule ausfaellt, Ferien sind oder schlicht Sonntag ist. Ferien und Feiertag
+   stehen ueber dem Wochenende — ein Feiertag, der auf einen Samstag faellt,
+   ist die genauere Auskunft. */
+function stundenplanFreiGrund(tag) {
+  if (!tag) { return translate('no school'); }
+  if (tag.holiday) { return stundenplanFreiText(tag.holiday); }
+  return (tag.weekday >= 6) ? translate('Weekend') : translate('no school');
+}
+
 function stundenplanKarte() {
   if (!stundenplan || planKinder().length === 0) {
     return '';
@@ -7454,7 +7482,7 @@ function stundenplanKarte() {
       continue;
     }
     if (!slots.length) {
-      zeilen += `<span class="was">${escapeHtml(translate('no school'))}</span></div>` +
+      zeilen += `<span class="was">${escapeHtml(stundenplanFreiGrund(tag))}</span></div>` +
         `<div class="plan-frei">—</div></div>`;
       continue;
     }
@@ -7637,6 +7665,21 @@ function planStundenText(m) {
 /* 0 = laufende Woche, 1 = die kommende. Nur mit Import erreichbar (dated) —
    ohne ihn wiederholt sich die Vorlage, beide Wochen saehen gleich aus. */
 let planWoche = 0;
+/* Hat der Nutzer selbst geblaettert? Dann bleibt seine Wahl stehen, bis er den
+   Bereich verlaesst. Ohne die Unterscheidung setzte die Vorauswahl unten ihn
+   bei jedem Zeichnen zurueck. */
+let planWocheGewaehlt = false;
+
+/* Am WOCHENENDE die kommende Woche zeigen. Die laufende besteht dann nur noch
+   aus vergangenen Schultagen — man sah am Sonntag den Plan der Woche, die
+   vorbei war, obwohl die naechste laengst importiert ist. Ob die Woche durch
+   ist, sagt der Server (weekOver): das haengt am Datum des letzten
+   Unterrichtstages, nicht an der Uhr des Betrachters, und ein Kind mit
+   Samstagsunterricht ist am Samstag noch mitten drin. */
+function planWochenVorauswahl(kind) {
+  if (planWocheGewaehlt) { return; }
+  planWoche = (kind && kind.weekOver === true && planFolgewocheDa(kind)) ? 1 : 0;
+}
 /* Einmal zur heutigen Spalte rollen — beim Betreten des Bereichs, NICHT bei
    jedem Zeichnen: sonst risse ein Push die Ansicht unter dem Finger zurueck,
    waehrend jemand gerade durch die Woche schiebt. */
@@ -7681,6 +7724,7 @@ function renderWochenplan() {
   }
   // Kommt ein Plan ohne Folgewoche (Import abgeschaltet), zurueck auf jetzt.
   if (planWoche === 1 && !planFolgewocheDa(kind)) { planWoche = 0; }
+  planWochenVorauswahl(kind);
   const tage = planWochenTage(kind);
   if (titel) titel.textContent = kind.name || translate('Timetable');
   if (summe) {
@@ -7697,6 +7741,7 @@ function renderWochenplan() {
     if (html) kopf.insertAdjacentHTML('beforeend', html);
     kopf.querySelectorAll('[data-planwoche]').forEach(k => k.addEventListener('click', () => {
       planWoche = k.dataset.planwoche === 'vor' ? 1 : 0;
+      planWocheGewaehlt = true;
       renderWochenplan();
     }));
   }
@@ -7732,18 +7777,18 @@ function renderWochenplan() {
   let spalten = '';
   for (const t of tage) {
     const datum = t.date ? stundenplanDatumKurz(t.date) : '';
-    spalten += '<div class="wp-spalte' + (t.today ? ' heute' : '') + '">' +
+    const leer = !(Array.isArray(t.slots) && t.slots.length);
+    spalten += '<div class="wp-spalte' + (t.today ? ' heute' : '') + (leer ? ' ohne' : '') + '">' +
       '<div class="wp-kopf"><span class="wp-tag">' + escapeHtml(t.label || '') +
       (datum ? ' <span class="wp-datum">' + escapeHtml(datum) + '</span>' : '') + '</span>' +
       (t.today ? '<span class="wp-heute">' + translate('Today') + '</span>' : '') + '</div>' +
       '<div class="wp-koerper" style="height:' + hoehe + 'px">';
     const slots = Array.isArray(t.slots) ? t.slots : [];
     if (slots.length === 0) {
-      // Ferien und Feiertage sagen, WARUM frei ist — dieselbe Auskunft wie auf
-      // der Karte im Dashboard.
-      const text = t.holiday ? stundenplanFreiText(t.holiday) : translate('free');
-      spalten += '<div class="wp-frei" style="top:0;height:' + hoehe + 'px">' +
-        escapeHtml(text) + '</div>';
+      // Ferien, Feiertag oder Wochenende sagen, WARUM frei ist — dieselbe
+      // Auskunft wie auf der Karte im Dashboard.
+      spalten += '<div class="wp-frei grund" style="top:0;height:' + hoehe + 'px">' +
+        '<span>' + escapeHtml(stundenplanFreiGrund(t)) + '</span></div>';
     } else {
       let vorher = von;
       for (const sl of slots) {

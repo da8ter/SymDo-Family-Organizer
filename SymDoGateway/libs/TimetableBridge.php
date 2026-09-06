@@ -206,6 +206,11 @@ trait TimetableBridge
                     'color'  => (string)($kind['color'] ?? '#1E88E5'),
                     'userId' => (string)($kind['userId'] ?? ''),
                     'next'   => (string)($kind['next'] ?? ''),
+                    /* Ist die laufende Woche fuer dieses Kind schon durch?
+                       Am Wochenende stellt die App damit von selbst auf die
+                       kommende Woche um — ohne diese Zeile kaeme die Auskunft
+                       nie an, die Projektion hier ist eine Weissliste. */
+                    'weekOver' => ($kind['weekOver'] ?? false) === true,
                     'days'   => $wocheAbbilden((array)($kind['days'] ?? [])),
                 ];
                 /* Die kommende Woche, wenn das Modul sie liefert — das tut es
