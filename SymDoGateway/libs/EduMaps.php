@@ -282,6 +282,21 @@ trait EduMaps
         foreach ($this->EduGefundene() as $g) {
             $seiten[] = $g + ['nurSpiegeln' => true];
         }
+        /* Von Hand geloeschte Seiten fallen hier raus — eingetragene wie
+           gefundene. Der zweite Riegel sitzt in EduGefundeneAufnehmen und haelt
+           sie aus der Fundliste; dieser hier haelt sie aus dem LAUF, denn eine
+           eingetragene Seite steht weiter in der Konfiguration, und ein Eintrag,
+           der schon in EduFound stand, liefe sonst weiter mit. */
+        $vorher = count($seiten);
+        $seiten = array_values(array_filter($seiten,
+            fn(array $s): bool => !$this->EduGesperrt((string)$s['url'])));
+        if (count($seiten) < $vorher) {
+            $this->SendDebug('EduMaps', sprintf('%d gesperrte Seite(n) uebersprungen',
+                $vorher - count($seiten)), 0);
+        }
+        if ($seiten === []) {
+            return $this->Translate('All class pages are blocked — release one in the list below.');
+        }
         $karten = 0;
         $geaendert = 0;
         $analysiert = 0;
@@ -999,6 +1014,56 @@ trait EduMaps
      * imagecreatefromstring). Im Hook landete die mitten in der HTTP-Antwort.
      */
     /**
+     * Die von Hand geloeschten Klassenseiten.
+     *
+     * Sie stehen im NOTIZ-Bestand (`eduBlocked`), nicht in einem eigenen
+     * Attribut: Loeschen und Sperren muessen in denselben Schreibvorgang, und
+     * ein neues Attribut gaebe es erst nach einem Kernel-Neustart. Die
+     * Begruendung steht ausfuehrlich an NotesStore().
+     *
+     * @return list<array{key:string,url:string,name:string,at:int}>
+     */
+    private function EduGesperrteSeiten(): array
+    {
+        $store = $this->NotesStore();
+        $raus = [];
+        foreach ((array)($store['eduBlocked'] ?? []) as $b) {
+            if (is_array($b) && (string)($b['key'] ?? '') !== '') {
+                $raus[] = ['key' => (string)$b['key'], 'url' => (string)($b['url'] ?? ''),
+                           'name' => (string)($b['name'] ?? ''), 'at' => (int)($b['at'] ?? 0)];
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Ist diese Seite gesperrt?
+     *
+     * Geprueft wird gegen BEIDE Formen der Adresse: die Kandidaten aus Verweisen
+     * und QR-Codes kommen mit `rtrim($url, '/')`, der Ordnerschluessel benutzt
+     * die Adresse dagegen roh (EduNotizOrdner) — mit und ohne Schraegstrich
+     * ergaeben sonst zwei verschiedene Schluessel.
+     */
+    private function EduGesperrt(string $url): bool
+    {
+        $roh = trim($url);
+        if ($roh === '') {
+            return false;
+        }
+        $glatt = rtrim($roh, '/');
+        $schluessel = ['edupage:' . md5($roh), 'edupage:' . md5($glatt)];
+        foreach ($this->EduGesperrteSeiten() as $b) {
+            if (in_array($b['key'], $schluessel, true)) {
+                return true;
+            }
+            if ($b['url'] !== '' && rtrim($b['url'], '/') === $glatt) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Zeigt eine QR-Adresse auf eine ANDERE Anlage, fuer den Durchgang vormerken.
      *
      * Das ist derselbe Fund wie ein Verweis im Kartentext und wird genauso
@@ -1471,6 +1536,17 @@ trait EduMaps
         $bekannt = [];
         foreach (array_merge($this->EduSeiten(), $this->EduGefundene()) as $s) {
             $bekannt[rtrim((string)$s['url'], '/')] = true;
+        }
+        /* Gesperrte Seiten wie bekannte behandeln: dann greift der `continue`
+           unten unveraendert — und der teure AiFetchPublicPage-Abruf, der den
+           Namen der Seite holt, findet gar nicht erst statt. Beide Zubringer
+           (Verweise im Text und QR-Codes) muenden hier, es genuegt also diese
+           eine Stelle. */
+        foreach ($this->EduGesperrteSeiten() as $b) {
+            $u = rtrim((string)($b['url'] ?? ''), '/');
+            if ($u !== '') {
+                $bekannt[$u] = true;
+            }
         }
         $liste = $this->EduGefundene();
         $neu = 0;

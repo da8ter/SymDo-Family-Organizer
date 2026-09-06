@@ -81,14 +81,32 @@ trait Notes
     // ── Ablage ───────────────────────────────────────────────────────────────
 
     /** @return array{v:int,rev:int,seen:array,folders:array,notes:array} */
+    /**
+     * Der Notiz-Bestand.
+     *
+     * `eduBlocked` ist die Sperrliste der von Hand geloeschten Klassenseiten.
+     * Sie liegt BEWUSST hier und nicht in einem eigenen Attribut, aus zwei
+     * Gruenden:
+     *
+     * 1. Ein neu registriertes Attribut gibt es erst nach einem Kernel-Neustart
+     *    (dieselbe Falle, die EduMaps::EduNotizSpiegeln schon einmal umgangen
+     *    hat). Bis dahin kaeme eine geloeschte Seite weiter zurueck.
+     * 2. Loeschen und Sperren gehoeren in DENSELBEN Schreibvorgang — sonst gibt
+     *    es das Fenster „Ordner weg, Sperre nicht geschrieben, Ordner beim
+     *    naechsten Lauf wieder da". Genau diese Begruendung steht schon bei den
+     *    Mitglieder-Ordnern (NotesEnsureMemberFolders).
+     *
+     * Ein Eintrag: {key, url, name, at}. `key` ist der eduKey des Ordners
+     * ('edupage:<md5>'), `url` die Seitenadresse fuer das Formular.
+     */
     private function NotesStore(): array
     {
-        $leer = ['v' => 1, 'rev' => 0, 'seen' => [], 'folders' => [], 'notes' => []];
+        $leer = ['v' => 1, 'rev' => 0, 'seen' => [], 'folders' => [], 'notes' => [], 'eduBlocked' => []];
         $d = json_decode($this->ReadAttributeStringSafe(self::NOTES_ATTR, ''), true);
         if (!is_array($d)) {
             return $leer;
         }
-        foreach (['seen', 'folders', 'notes'] as $k) {
+        foreach (['seen', 'folders', 'notes', 'eduBlocked'] as $k) {
             if (!isset($d[$k]) || !is_array($d[$k])) {
                 $d[$k] = [];
             }
@@ -643,6 +661,75 @@ trait Notes
         return mb_substr(trim($wert), 0, $max);
     }
 
+    /**
+     * Die Adresse der Klassenseite aus den Notizen des Ordners.
+     *
+     * Am Ordner steht nur der Schluessel ('edupage:<md5>') — die Adresse selbst
+     * traegt jede gespiegelte Notiz als `srcUrl` („<Seite>#box-<Karte>"). Der
+     * Teil vor der Raute ist die Seite.
+     *
+     * @param list<array<string,mixed>> $notizen
+     */
+    private function NotesEduSeitenUrl(array $notizen): string
+    {
+        foreach ($notizen as $n) {
+            $u = (string)($n['srcUrl'] ?? '');
+            if ($u === '') {
+                continue;
+            }
+            $ohneAnker = explode('#', $u)[0];
+            if (preg_match('#^https?://#i', $ohneAnker) === 1) {
+                return rtrim($ohneAnker, '/');
+            }
+        }
+        return '';       // Notizen aus der Zeit vor srcUrl — dann zaehlt der Schluessel
+    }
+
+    /**
+     * Eine Klassenseite sperren. Nur den Bestand aendern, NICHT schreiben — der
+     * Aufrufer schreibt gleich, und beides gehoert in denselben Schreibvorgang.
+     *
+     * @return string der gesperrte Name (fuer die Rueckmeldung), '' wenn schon gesperrt
+     */
+    private function NotesEduSperren(array &$store, string $key, string $name, string $url): string
+    {
+        foreach ($store['eduBlocked'] as $b) {
+            if ((string)($b['key'] ?? '') === $key) {
+                return '';                      // steht schon drin
+            }
+        }
+        $store['eduBlocked'][] = [
+            'key'  => $key,
+            'url'  => $url,
+            'name' => $this->NotesTrim($name !== '' ? $name : $url, self::NOTE_TITLE_MAX),
+            'at'   => time(),
+        ];
+        /* Die Fundliste gleich mitraeumen: ein gesperrter Eintrag belegte dort
+           sonst dauerhaft einen der EDU_GEFUNDEN_MAX Plaetze. */
+        $this->NotesEduAusFundliste($url, $key);
+        return $name;
+    }
+
+    /** Eine gesperrte Seite aus EduFound entfernen (siehe NotesEduSperren). */
+    private function NotesEduAusFundliste(string $url, string $key): void
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString('EduFound'), true);
+        if (!is_array($roh) || $roh === []) {
+            return;
+        }
+        $bleibt = array_values(array_filter($roh, static function ($e) use ($url, $key): bool {
+            if (!is_array($e)) {
+                return false;
+            }
+            $u = rtrim((string)($e['url'] ?? ''), '/');
+            return !($u !== '' && ($u === $url || 'edupage:' . md5($u) === $key
+                || 'edupage:' . md5((string)$e['url']) === $key));
+        }));
+        if (count($bleibt) !== count($roh)) {
+            @$this->WriteAttributeString('EduFound', (string)json_encode($bleibt, JSON_UNESCAPED_UNICODE));
+        }
+    }
+
     private function NotesFolderDelete(array $store, array $body, int $jetzt): array
     {
         $i = $this->NotesIndexOf($store['folders'], (string)($body['id'] ?? ''));
@@ -660,6 +747,11 @@ trait Notes
         if ($this->NotesHasChildren($store, $fid)) {
             return $this->NotesFehler('has_children');
         }
+        // VOR den Zweigen: die Notizen dieses Ordners, solange sie noch hier
+        // stehen. Der 'move'-Zweig haengt sie um, der 'notes'-Zweig wirft sie
+        // weg — danach ist die Seitenadresse nicht mehr zu finden.
+        $eigene = array_values(array_filter($store['notes'],
+            static fn(array $n): bool => (string)($n['folderId'] ?? '') === $fid));
         if ($mode === 'move') {
             $ziel = (string)($body['targetId'] ?? '');
             if ($ziel === $fid || $this->NotesIndexOf($store['folders'], $ziel) < 0) {
@@ -687,13 +779,31 @@ trait Notes
         } else {
             return $this->NotesFehler('invalid_payload');
         }
+        /* Klassenseite? Dann im SELBEN Schreibvorgang sperren. Ohne das legt
+           EduNotizOrdner den Ordner beim naechsten Lauf ueber denselben eduKey
+           kommentarlos neu an — und seit der QR-Erkennung findet der Lauf die
+           Seite sogar dann wieder, wenn sie nirgends mehr verlinkt ist. Ein
+           Loeschen ohne Sperre waere also eine Geste ohne Wirkung. */
+        $eduKey = (string)($store['folders'][$i]['eduKey'] ?? '');
+        $gesperrt = '';
+        if (str_starts_with($eduKey, 'edupage:')) {
+            $gesperrt = $this->NotesEduSperren(
+                $store,
+                $eduKey,
+                (string)($store['folders'][$i]['name'] ?? ''),
+                // Die Adresse steht nicht am Ordner, aber an jeder gespiegelten
+                // Notiz (srcUrl = „<Seite>#box-<Karte>"). Das Formular braucht sie.
+                $this->NotesEduSeitenUrl($eigene)
+            );
+        }
         array_splice($store['folders'], $i, 1);
         if (!$this->NotesWriteStore($store)) {
             return $this->NotesFehler('store_unwritable');
         }
         $frei = $this->NotesUnreferencedMedia($store, $medien);
         $this->NotesDeleteMedia($frei);
-        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($frei)];
+        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($frei),
+                'blocked' => $gesperrt];
     }
 
     private function NotesNoteCreate(array $store, array $body, int $jetzt): array
