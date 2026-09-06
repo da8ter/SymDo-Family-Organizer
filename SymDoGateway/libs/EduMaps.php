@@ -76,6 +76,12 @@ trait EduMaps
      *  gerade kein Durchgang laeuft. */
     private ?array $eduPushSammlung = null;
 
+    /** Adressen ANDERER Anlagen, die in QR-Codes einer Seite steckten. Gesammelt
+     *  waehrend die Karten laufen und danach aufgenommen — mitten im Spiegeln
+     *  aufzunehmen hiesse, je Karte die Fundliste zu lesen und zu schreiben.
+     *  @var list<string> */
+    private array $eduQrSeiten = [];
+
     // ────────────────────────────── Lebenszyklus ──────────────────────────────
 
     private function EduCreate(): void
@@ -331,6 +337,9 @@ trait EduMaps
         if (($seite['nurSpiegeln'] ?? false) !== true) {
             $this->EduGefundeneErgaenzen($seite, $rumpfSeite);
         }
+        // Die QR-Funde gehoeren zu DIESER Seite; was eine vorige gesammelt hat,
+        // ist laengst aufgenommen.
+        $this->eduQrSeiten = [];
         $karten = $this->EduKarten($rumpfSeite);
         if ($karten === []) {
             /* Kein stilles Schweigen: bricht Edumaps das Markup, sieht es sonst
@@ -391,6 +400,19 @@ trait EduMaps
                 $this->EduMerken($topf, $schluessel);
                 $analysiert++;
             }
+        }
+        /* Was in QR-Codes auf ANDERE Anlagen zeigte, wird jetzt aufgenommen —
+           wie ein Verweis im Kartentext, mit denselben Grenzen. Erst hier, damit
+           die Fundliste einmal je Seite geschrieben wird und nicht je Karte.
+           Auch von einer nur gespiegelten Seite: der Code steht im BILD, ist also
+           kein Glied der Verweiskette, die eine Ebene tief bleiben soll. */
+        if ($this->eduQrSeiten !== []) {
+            $neu = $this->EduGefundeneAufnehmen($seite, $this->eduQrSeiten);
+            if ($neu > 0) {
+                $this->SendDebug('EduMaps', sprintf('%d Anlage(n) aus QR-Codes aufgenommen (%s)',
+                    $neu, $seite['name']), 0);
+            }
+            $this->eduQrSeiten = [];
         }
         return ['karten' => count($karten), 'geaendert' => $geaendert,
                 'analysiert' => $analysiert, 'gespiegelt' => $gespiegelt,
@@ -510,6 +532,9 @@ trait EduMaps
                    Leser bei jedem Lauf ueber jedes Bild. */
                 foreach (($store['notes'][$i]['att'] ?? []) as $k => $a) {
                     if (array_key_exists('qr', $a)) {
+                        // Schon gelesen — aber der Fund gehoert trotzdem in die
+                        // Fundliste, sonst kaeme er nach dem ersten Lauf nie an.
+                        $this->EduQrVormerken((string)$a['qr']);
                         continue;
                     }
                     $quelle = (string)($a['kind'] ?? '') === 'image'
@@ -954,6 +979,26 @@ trait EduMaps
      * fehlenden oder unlesbaren Datei eine PHP-WARNUNG aus (file_get_contents,
      * imagecreatefromstring). Im Hook landete die mitten in der HTTP-Antwort.
      */
+    /**
+     * Zeigt eine QR-Adresse auf eine ANDERE Anlage, fuer den Durchgang vormerken.
+     *
+     * Das ist derselbe Fund wie ein Verweis im Kartentext und wird genauso
+     * behandelt. Gerufen wird das fuer JEDEN bekannten Code — den gerade
+     * gelesenen wie den laengst gespeicherten: dekodiert wird nur einmal je
+     * Anhang, und ohne diesen zweiten Weg kaeme eine Adresse aus einem frueheren
+     * Lauf nie in die Fundliste.
+     */
+    private function EduQrVormerken(string $text): void
+    {
+        if (preg_match('#^https://[a-z0-9.-]+\.edumaps\.de/\d+/\d+/[a-z0-9]+/[a-z0-9]+#i', $text) !== 1) {
+            return;
+        }
+        $sauber = rtrim($text, '/');
+        if (!in_array($sauber, $this->eduQrSeiten, true)) {
+            $this->eduQrSeiten[] = $sauber;
+        }
+    }
+
     private function EduQrCode(int $mediaId): string
     {
         if ($mediaId <= 0 || !IPS_MediaExists($mediaId)) {
@@ -1016,7 +1061,11 @@ trait EduMaps
         if ($text === '' || preg_match('#^https?://#i', $text) !== 1) {
             return '';
         }
-        return mb_strlen($text) > 500 ? '' : $text;
+        if (mb_strlen($text) > 500) {
+            return '';
+        }
+        $this->EduQrVormerken($text);
+        return $text;
     }
 
     private function EduKarteAnalysieren(array $seite, array $karte): bool
@@ -1349,7 +1398,22 @@ trait EduMaps
      */
     private function EduGefundeneErgaenzen(array $seite, string $html): int
     {
-        if (!(bool)$this->EduProp('EduFollowLinks', false)) {
+        return $this->EduGefundeneAufnehmen($seite, $this->EduKartenLinks($html, (string)$seite['url']));
+    }
+
+    /**
+     * Verweise auf andere Anlagen aufnehmen — egal, woher sie kommen.
+     *
+     * Zwei Quellen muenden hier: die Verweise IM Kartentext (EduKartenLinks) und
+     * die Adressen aus QR-Codes in den Bildern (EduQrCode). Fuer beide gilt
+     * dasselbe: nur eine Ebene tief, nur bis EDU_GEFUNDEN_MAX, und nur was sich
+     * wirklich abrufen laesst — sonst stuende eine tote Adresse in der Liste.
+     *
+     * @param list<string> $adressen
+     */
+    private function EduGefundeneAufnehmen(array $seite, array $adressen): int
+    {
+        if ($adressen === [] || !(bool)$this->EduProp('EduFollowLinks', false)) {
             return 0;
         }
         $bekannt = [];
@@ -1358,7 +1422,7 @@ trait EduMaps
         }
         $liste = $this->EduGefundene();
         $neu = 0;
-        foreach ($this->EduKartenLinks($html, (string)$seite['url']) as $url) {
+        foreach ($adressen as $url) {
             if (isset($bekannt[$url]) || count($liste) >= self::EDU_GEFUNDEN_MAX) {
                 continue;
             }
