@@ -1449,6 +1449,12 @@ trait EduMaps
             if ($ende !== false) {
                 $rumpf = substr($rumpf, 0, $ende);
             }
+            /* Der Buchungskasten fliegt aus dem TEXT: „Buchen 12 / 16" stand
+               sonst als erste Zeile der Notiz — und dieselbe Angabe steht
+               darunter noch einmal als eigene Zeile (EduBuchung → booking).
+               Die Zahlen holt EduBuchung aus den data-Attributen der Karte,
+               nicht von hier; das Ausschneiden nimmt ihr also nichts weg. */
+            $rumpf = $this->EduBlockRaus($rumpf, 'booking-wrap');
             $anhaenge = [];
             foreach ($this->EduDateien($rumpf) as $datei) {
                 $anhaenge[] = $datei;
@@ -1485,6 +1491,46 @@ trait EduMaps
             }
         }
         return $karten;
+    }
+
+    /**
+     * Ein `div` samt Inhalt aus dem Markup schneiden, erkannt an seiner Klasse.
+     *
+     * BEWUSST kein regulaerer Ausdruck: die Kaesten von Edumaps sind
+     * verschachtelt, und `<div class="x">.*?</div>` schnitte am ERSTEN
+     * schliessenden Tag ab — der Rest des Blocks bliebe stehen, und die Karte
+     * verloere dazu ihr schliessendes Tag. Deshalb wird gezaehlt: von der
+     * Fundstelle an jedes `<div` hoch, jedes `</div>` runter, und beim
+     * Nullpunkt ist der Block zu Ende.
+     */
+    private function EduBlockRaus(string $html, string $klasse): string
+    {
+        while (preg_match('#<div[^>]*class="[^"]*\b' . preg_quote($klasse, '#') . '\b[^"]*"[^>]*>#i',
+                $html, $m, PREG_OFFSET_CAPTURE) === 1) {
+            $start = (int)$m[0][1];
+            $pos   = $start + strlen((string)$m[0][0]);
+            $tiefe = 1;
+            $laenge = strlen($html);
+            while ($tiefe > 0 && $pos < $laenge) {
+                $auf = stripos($html, '<div', $pos);
+                $zu  = stripos($html, '</div>', $pos);
+                if ($zu === false) {
+                    return $html;                 // unausgeglichen — lieber nichts anfassen
+                }
+                if ($auf !== false && $auf < $zu) {
+                    $tiefe++;
+                    $pos = $auf + 4;
+                } else {
+                    $tiefe--;
+                    $pos = $zu + 6;
+                }
+            }
+            if ($tiefe !== 0) {
+                return $html;
+            }
+            $html = substr($html, 0, $start) . substr($html, $pos);
+        }
+        return $html;
     }
 
     /**
