@@ -637,6 +637,24 @@ trait EduMaps
         }
         $h = trim($this->EduHtmlKnoten($wurzel, false));
         $h = (string)preg_replace('#<p>(\s|&nbsp;|<br>)*</p>#i', '', $h);
+        /* Edumaps haengt hinter jeden Verweis das Woertchen „LINK" und ein
+           Icon-Element. Auf der Seite ist das Wort fuer den Screenreader da und
+           per CSS versteckt; hier faellt das CSS weg, und es stand als nackter
+           Text in der Notiz. Das Icon wiederum verliert in der Weissliste seine
+           Klasse und blieb als leeres <i></i> uebrig — beides zusammen ergab
+           „… </a> LINK". Also: das Wort raus, dem Icon seine Klasse zurueck.
+           Am Bestand gemessen (06.09.2026): 10 von 10 Vorkommen folgen genau
+           diesem Muster, keines steht ohne vorangehenden Verweis. Aendert
+           Edumaps die Beschriftung, greift die Zeile nicht mehr — dann steht
+           dort wieder das Wort, es geht aber nichts kaputt. */
+        $h = (string)preg_replace(
+            '#</a>\s*LINK\s*(?:<i>\s*</i>)?#u',
+            '</a> <i class="fa-light fa-link"></i>',
+            $h
+        );
+        // Uebrige leere Inline-Elemente sind ausgezogene Icons — sie zeigen
+        // nichts und kosten nur Platz im Bestand.
+        $h = (string)preg_replace('#<(i|b|u|em|strong)>\s*</\1>#u', '', $h);
         $h = trim((string)preg_replace('#\s+#u', ' ', $h));
         return mb_strlen($h) > self::EDU_HTML_MAX ? '' : $h;
     }
@@ -1146,6 +1164,17 @@ trait EduMaps
         $t = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $t = str_replace("\xC2\xA0", ' ', $t);
         $t = preg_replace('/[ \t]+/u', ' ', $t) ?? $t;
+        /* Dasselbe „LINK" wie in EduHtml(): auf der Seite eine per CSS
+           versteckte Beschriftung fuer den Screenreader, im Klartext ein
+           sinnloses Wort hinter jedem Verweis. Ein Icon gibt es hier nicht — es
+           faellt ersatzlos weg.
+           Geprueft wird die ZEILE, nicht die Nachbarschaft zum </a>: im
+           Rohmarkup steht die Beschriftung in einer eigenen Huelle, das </a>
+           ist also nicht der direkte Vorgaenger (in der bereinigten Fassung
+           schon — daher die andere Regel dort). Nach dem Umbruch-Ersatz steht
+           sie als eigene Zeile da. Eine Zeile, die nur aus diesem Wort besteht,
+           traegt keine Aussage; ein „LINK" im Satz bleibt unberuehrt. */
+        $t = preg_replace('/^[ \t]*LINK[ \t]*$/mu', '', $t) ?? $t;
         // Mehr als eine Leerzeile bringt nichts und kostet Tokens.
         $t = preg_replace('/\n\s*\n\s*\n+/u', "\n\n", $t) ?? $t;
         return trim($t);
