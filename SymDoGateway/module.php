@@ -1866,6 +1866,30 @@ class SymDoGateway extends IPSModuleStrict
                 date('d.m.Y H:i', (int)($stand['t'] ?? 0)), (string)$stand['text'])
             : $this->Translate('Not checked yet.');
 
+        /* Die in der App geloeschten Seiten. Sie liegen im Notiz-Bestand, nicht
+           in einer Eigenschaft — deshalb `values` statt einer Property-Liste. */
+        $gesperrt = [];
+        $gesperrteAdressen = [];
+        foreach ($this->EduGesperrteSeitenPublic() as $b) {
+            $gesperrt[] = ['name' => $b['name'] !== '' ? $b['name'] : $this->Translate('Class page'),
+                           'url'  => $b['url'] !== '' ? $b['url'] : $b['key'],
+                           'key'  => $b['key']];
+            $gesperrteAdressen[rtrim($b['url'], '/')] = true;
+        }
+        /* Eine EINGETRAGENE Seite bleibt in der Liste oben stehen, wird aber
+           nicht mehr gespiegelt. Ohne diesen Hinweis waere das ein Raetsel:
+           Seite da, Haken gesetzt, und trotzdem passiert nichts. */
+        $gesperrtEingetragen = [];
+        foreach (json_decode((string)@IPS_GetProperty($this->InstanceID, 'EduPages'), true) ?: [] as $s) {
+            $u = rtrim((string)($s['url'] ?? ''), '/');
+            if ($u !== '' && isset($gesperrteAdressen[$u])) {
+                $gesperrtEingetragen[] = (string)($s['name'] ?? $u);
+            }
+        }
+        $hinweisGesperrt = $gesperrtEingetragen === [] ? '' : sprintf(
+            $this->Translate('Blocked despite being listed above: %s — deleted in the app. Release it below to mirror it again.'),
+            implode(', ', $gesperrtEingetragen));
+
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Class pages (Edumaps)'),
@@ -1898,8 +1922,22 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'EduPush',
                  'caption' => $this->Translate('Push on changes to the class page')],
                 ['type' => 'Label', 'caption' => $this->Translate('One message per check, not one per card: how many cards were updated and how many suggestions are waiting.')],
-                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps", and inside it one folder per map. Changed cards update their note; nothing is deleted.')],
+                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps", and inside it one folder per map. Cards that vanish from the page move to the „Archive" section at the end — nothing is deleted on its own.')],
                 ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
+                /* Gesperrte Seiten: in der App geloescht. Sie stehen NICHT als
+                   Eigenschaft da, sondern im Notiz-Bestand — die Liste wird
+                   deshalb mit `values` gefuellt und ist nicht bearbeitbar. */
+                ['type' => 'List', 'name' => 'EduBlockedList', 'rowCount' => 3,
+                 'caption' => $this->Translate('Blocked class pages (deleted in the app)'),
+                 'columns' => [
+                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '200px'],
+                     ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto'],
+                 ],
+                 'values' => $gesperrt],
+                ['type' => 'Button', 'caption' => $this->Translate('Release selected page'),
+                 'onClick' => 'IPS_RequestAction($id, \'EduUnblock\', json_encode($EduBlockedList));'],
+                ['type' => 'Label', 'caption' => $hinweisGesperrt,
+                 'visible' => $hinweisGesperrt !== ''],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Check now'),
                      'onClick' => 'IPS_RequestAction($id, \'EduScanNow\', 0);'],

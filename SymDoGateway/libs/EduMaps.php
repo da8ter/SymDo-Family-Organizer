@@ -141,6 +141,10 @@ trait EduMaps
             $this->UpdateFormField('EduStatusLabel', 'caption', $bericht);
             return true;
         }
+        if ($Ident === 'EduUnblock') {
+            $this->UpdateFormField('EduStatusLabel', 'caption', $this->EduSperreAufheben((string)$Value));
+            return true;
+        }
         if ($Ident === 'EduForget') {
             // Nach einer Fehlkonfiguration: alles vergessen, damit der naechste
             // Lauf wieder als erster gilt (also nur vermerkt, nicht analysiert).
@@ -1129,6 +1133,57 @@ trait EduMaps
             }
         }
         return $raus;
+    }
+
+    /** Die Sperrliste fuer das Formular — dieselben Daten, nur oeffentlich lesbar. */
+    private function EduGesperrteSeitenPublic(): array
+    {
+        return $this->EduGesperrteSeiten();
+    }
+
+    /**
+     * Eine Sperre aufheben. `$wahl` ist die in der Formularliste gewaehlte Zeile
+     * (JSON) — daraus zaehlt der Schluessel.
+     *
+     * Die Seite kommt danach beim naechsten Lauf zurueck: eine eingetragene ueber
+     * die Konfiguration, eine gefundene ueber den Verweis oder den QR-Code, der
+     * sie schon einmal gebracht hat.
+     */
+    private function EduSperreAufheben(string $wahl): string
+    {
+        $zeile = json_decode($wahl, true);
+        $key = is_array($zeile) ? (string)($zeile['key'] ?? '') : '';
+        if ($key === '') {
+            return $this->Translate('Select a page in the list first.');
+        }
+        $lock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 2000)) {
+            return $this->Translate('Notes are busy — try again in a moment.');
+        }
+        try {
+            $store = $this->NotesStore();
+            $name = '';
+            $bleibt = [];
+            foreach ((array)($store['eduBlocked'] ?? []) as $b) {
+                if (is_array($b) && (string)($b['key'] ?? '') === $key) {
+                    $name = (string)($b['name'] ?? '');
+                    continue;
+                }
+                $bleibt[] = $b;
+            }
+            if ($name === '' && count($bleibt) === count((array)($store['eduBlocked'] ?? []))) {
+                return $this->Translate('That page is not blocked.');
+            }
+            $store['eduBlocked'] = $bleibt;
+            if (!$this->NotesWriteStore($store)) {
+                return $this->Translate('Could not save — the notes store is full or unwritable.');
+            }
+            $this->ReloadForm();
+            return sprintf($this->Translate('„%s" released — it will be mirrored again at the next check.'),
+                $name !== '' ? $name : $key);
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
     }
 
     /**

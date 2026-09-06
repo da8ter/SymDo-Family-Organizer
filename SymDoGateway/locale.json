@@ -1,6 +1,15 @@
 {
   "translations": {
     "de": {
+      "Blocked class pages (deleted in the app)": "Gesperrte Klassenseiten (in der App gelöscht)",
+      "Release selected page": "Ausgewählte Seite freigeben",
+      "Blocked despite being listed above: %s — deleted in the app. Release it below to mirror it again.": "Trotz Eintrag oben gesperrt: %s — in der App gelöscht. Unten freigeben, dann wird sie wieder gespiegelt.",
+      "Select a page in the list first.": "Wähle zuerst eine Seite in der Liste.",
+      "That page is not blocked.": "Diese Seite ist nicht gesperrt.",
+      "Notes are busy — try again in a moment.": "Die Notizen sind gerade belegt — gleich noch einmal versuchen.",
+      "Could not save — the notes store is full or unwritable.": "Konnte nicht speichern — der Notizbestand ist voll oder nicht beschreibbar.",
+      "„%s\" released — it will be mirrored again at the next check.": "„%s“ freigegeben — beim nächsten Abruf wird sie wieder gespiegelt.",
+      "Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps\", and inside it one folder per map. Cards that vanish from the page move to the „Archive\" section at the end — nothing is deleted on its own.": "Jede Karte wird eine Notiz mit ihrem vollen Text und ihren Dateien. Jedes Kind bekommt einen Ordner „Edumaps“, darin je Map einen Ordner. Karten, die von der Seite verschwinden, wandern unten in den Bereich „Archiv“ — von selbst gelöscht wird nichts.",
       "All class pages are blocked — release one in the list below.": "Alle Klassenseiten sind gesperrt — gib unten in der Liste eine frei.",
       "No audio data.": "Keine Audiodaten.",
       "I did not understand the date.": "Das Datum habe ich nicht verstanden.",
