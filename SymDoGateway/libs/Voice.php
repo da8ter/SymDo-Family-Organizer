@@ -182,6 +182,16 @@ trait Voice
             $this->ReloadForm();
             return true;
         }
+        if ($Ident === 'VoiceGeraeteKatalogZeigen') {
+            $zeilen = [];
+            foreach (array_slice($this->VoiceGeraeteKatalog(), 0, 40) as $e) {
+                $zeilen[] = sprintf('%s / %s / %s%s', $e['raum'] !== '' ? $e['raum'] : '—', $e['name'],
+                    $e['typ'] === 'var' ? ($e['akt'] ? $this->Translate('device') : $this->Translate('read-only')) : $e['typ'],
+                    $this->VoiceGeraetMitRueckfrage((int)$e['id']) ? ' (' . $this->Translate('confirmation') . ')' : '');
+            }
+            echo $zeilen === [] ? $this->Translate('No devices found below the root categories.') : implode("\n", $zeilen);
+            return true;
+        }
         if ($Ident === 'VoiceTest') {
             // Testverbindung: 10-Sekunden-Marke prägen und verwerfen. Beweist
             // Schlüssel und Modellfreigabe, ohne eine Sekunde Ton zu bezahlen.
@@ -910,6 +920,69 @@ trait Voice
     // ------------------------------------------------------------------
 
     /** @return array<string,mixed> */
+    /**
+     * Der Geräteblock des Sprach-Panels. Eigener Neustart-Guard: die Properties
+     * sind jünger als die des Sprachdialogs und fehlen bis zum nächsten
+     * Kernelstart — ohne Guard zeigte das Formular Felder, die ins Leere
+     * schreiben.
+     *
+     * @param array<string,mixed> $cfg
+     * @return list<array<string,mixed>>
+     */
+    private function VoiceGeraetePanel(array $cfg, bool $zustimmung): array
+    {
+        if (!array_key_exists('VoiceDevicesEnabled', $cfg)) {
+            return [['type' => 'Label',
+                     'caption' => $this->Translate('Device control by voice appears after the next Symcon restart — these are new settings.')]];
+        }
+        $geraeteOk  = (bool)@$this->ReadAttributeBoolean('VoiceDevicesAccepted');
+        $stand      = $this->VoiceGeraeteKatalogStand();
+        $selectObj  = (float)IPS_GetKernelVersion() > 8.1;   // SelectObject erst ab 8.1 (RoomTile-Erfahrung)
+        $items = [
+            ['type' => 'Label', 'caption' => '—'],
+            ['type' => 'CheckBox', 'name' => 'VoiceDevicesEnabled',
+             'caption' => $this->Translate('Allow device control by voice')],
+            ['type' => 'List', 'name' => 'VoiceDeviceRoots', 'rowCount' => 4, 'add' => true, 'delete' => true,
+             'caption' => $this->Translate('Released areas (root categories) — everything below that is visible and has an action'),
+             'columns' => [[
+                 'caption' => $this->Translate('Category'), 'name' => 'objectID', 'width' => 'auto', 'add' => 0,
+                 'edit' => ['type' => $selectObj ? 'SelectObject' : 'SelectCategory'],
+             ]]],
+            ['type' => 'List', 'name' => 'VoiceDeviceConfirm', 'rowCount' => 4, 'add' => true, 'delete' => true,
+             'caption' => $this->Translate('Only after a spoken confirmation (children: never) — locks, alarm, garage'),
+             'columns' => [[
+                 'caption' => $this->Translate('Object'), 'name' => 'objectID', 'width' => 'auto', 'add' => 0,
+                 'edit' => ['type' => $selectObj ? 'SelectObject' : 'SelectVariable'],
+             ]]],
+            ['type' => 'Label', 'name' => 'VoiceDevicesStatus', 'caption' => $geraeteOk
+                ? sprintf($this->Translate('Device control consent given (%s).'),
+                    (string)@$this->ReadAttributeString('VoiceDevicesAcceptedAt'))
+                : $this->Translate('Own consent required: EVERYONE who talks to the tile — guests and children too — can then switch and read the released devices. Devices on the confirmation list are only switched after a spoken yes, never by children. Every switching command is logged in the Symcon message window.')],
+            ['type' => 'RowLayout', 'items' => [
+                ['type' => 'Button', 'caption' => $this->Translate('I consent to device control'),
+                 'enabled' => $zustimmung && !$geraeteOk,
+                 'onClick' => 'IPS_RequestAction($id, "VoiceDevicesConsent", true);'],
+                ['type' => 'Button', 'caption' => $this->Translate('Revoke device control'), 'enabled' => $geraeteOk,
+                 'onClick' => 'IPS_RequestAction($id, "VoiceDevicesConsent", false);'],
+                ['type' => 'Button', 'caption' => $this->Translate('Show catalog'),
+                 'onClick' => 'echo IPS_RequestAction($id, "VoiceGeraeteKatalogZeigen", "");'],
+            ]],
+            ['type' => 'Label', 'caption' => sprintf(
+                $this->Translate('%1$d devices and %2$d scenes/scripts in %3$d rooms released. This hour: %4$d of %5$d switching commands.'),
+                (int)$stand['geraete'], (int)$stand['skripte'], count($stand['raeume']),
+                $this->VoiceGeraeteStand(), self::$VOICE_GERAETE_MAX)],
+        ];
+        if ($stand['rueckfrageAusserhalb'] !== []) {
+            $items[] = ['type' => 'Label', 'caption' => sprintf(
+                $this->Translate('%d object(s) of the confirmation list lie outside the released areas and cannot be controlled.'),
+                count($stand['rueckfrageAusserhalb']))];
+        }
+        if ($stand['gedeckelt']) {
+            $items[] = ['type' => 'Label', 'caption' => $this->Translate('The device catalog is capped at 500 entries — choose narrower root categories.')];
+        }
+        return $items;
+    }
+
     private function GetVoicePanel(): array
     {
         $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
@@ -975,6 +1048,7 @@ trait Voice
                     ['type' => 'Button', 'caption' => $this->Translate('Revoke hands-free'), 'enabled' => $freihand,
                      'onClick' => 'IPS_RequestAction($id, "VoiceHandsFreeConsent", false);'],
                 ]],
+                ...$this->VoiceGeraetePanel($cfg, $zustimmung),
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('I consent'), 'enabled' => !$zustimmung,
                      'onClick' => 'IPS_RequestAction($id, "VoicePrivacyConsent", true);'],
