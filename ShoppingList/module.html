@@ -3477,7 +3477,19 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   flex: 1 1 0; min-width: 140px;
   border-radius: var(--radius); background: var(--surface); overflow: hidden;
 }
-.wp-spalte.heute { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+/* Der Rahmen des heutigen Tages gehoert IN DEN VORDERGRUND. Als `outline` lag
+   er hinter den Stunden: die sind absolut positioniert und werden nach dem
+   Rahmen ihres Elternteils gemalt — sichtbar blieb er nur in den Luecken
+   zwischen den Bloecken (vom Nutzer gemeldet). Jetzt ein Pseudoelement mit
+   z-index ueber den Stunden, aber UNTER der stickyen Zeitachse (z-index 2),
+   damit er beim Schieben nicht ueber ihr liegt. */
+.wp-spalte.heute { position: relative; }
+.wp-spalte.heute::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  border: 1.5px solid var(--accent);
+  border-radius: inherit;
+  pointer-events: none;
+}
 /* FESTE Hoehe, nicht min-height: der Kopf ist zugleich der Versatz, mit dem die
    Zeitachse beginnt — beide muessen gleich sein, sonst stehen Achse und Stunden
    gegeneinander versetzt. */
