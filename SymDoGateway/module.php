@@ -18,6 +18,7 @@ require_once __DIR__ . '/libs/DishImages.php';
 require_once __DIR__ . '/libs/Voice.php';
 require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
+require_once __DIR__ . '/libs/VoiceDevices.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/WebUntis.php';
@@ -53,6 +54,7 @@ class SymDoGateway extends IPSModuleStrict
     use Voice;
     use VoiceTools;
     use VoiceResolve;
+    use VoiceDevices;
     use SymconDoku;
     use EduMaps;
     use WebUntis;
