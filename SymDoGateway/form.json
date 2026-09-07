@@ -307,8 +307,8 @@
                 {
                     "type": "ValidationTextBox",
                     "name": "FamilyName",
-                    "caption": "Family name",
-                    "width": "320px"
+                    "caption": "Family name for the dashboard greeting",
+                    "width": "420px"
                 },
                 {
                     "type": "List",

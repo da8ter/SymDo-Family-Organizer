@@ -211,7 +211,7 @@
             "Family (general)": "Familie (allgemein)",
             "Family member": "Familienmitglied",
             "Family members": "Familienmitglieder",
-            "Family name": "Familienname",
+            "Family name for the dashboard greeting": "Familienname für Dashboardbegrüßung",
             "Father": "Vater",
             "Favorite lists marked as a recipe get a uniform dish image (plate seen from above, transparent background), generated once per list and shown instead of the heart. Needs an OpenAI API key above and costs about 4 cents per image.": "Als Rezept markierte Favoritenlisten bekommen ein einheitliches Gerichtsbild (Teller von oben, transparenter Hintergrund), einmal je Liste erzeugt und anstelle des Herzens angezeigt. Braucht den OpenAI-API-Key oben und kostet rund 4 Cent je Bild.",
             "Fetch German voices": "Deutsche Stimmen abrufen",
