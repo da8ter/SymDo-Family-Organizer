@@ -24,10 +24,13 @@ trait AiExtract
     private const AI_OPENAI_MODEL    = 'gpt-4o';
     // OpenAI-Modell für PDF-Dateien (nimmt PDF-file-Input an; gpt-4o kann kein PDF).
     private const AI_OPENAI_PDF_MODEL = 'gpt-5.6-terra';
-    private const AI_MAX_TOKENS      = 2000;
-    // Größeres Budget für PDF: bei Reasoning-Modellen zählt das versteckte
-    // Reasoning mit, ein zu kleiner Cap liefert sonst eine leere Antwort.
-    private const AI_MAX_TOKENS_PDF  = 32000;
+    // Ausgabe-Budget je Aufruf, seit 07.09.2026 einheitlich 32000 (vorher 2000
+    // ohne PDF): bei Reasoning-Modellen zählt das versteckte Denken mit, und ein
+    // kleiner Deckel lieferte eine leere oder abgeschnittene Antwort, die als
+    // „ai_truncated" verworfen wurde — bezahlt war sie trotzdem.
+    private const AI_MAX_TOKENS       = 32000;
+    // gpt-4o nimmt höchstens 16384 Ausgabe-Token an; mehr lehnt die API mit 400 ab.
+    private const AI_MAX_TOKENS_GPT4O = 16384;
     private const AI_TIMEOUT         = 45;
     /**
      * Der eigene Rechner darf laenger brauchen als eine Cloud: er rechnet mit dem,
@@ -1100,10 +1103,10 @@ trait AiExtract
     private function AiRunProviderCall(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
     {
         $provider = $this->ReadPropertyString('AiProvider');
-        // Ein lokales Reasoning-Modell verbraucht sein Budget zuerst im Denken
-        // (gemessen: 794 von 990 Tokens gingen in den Denktext) — mit dem kleinen
-        // Cap kaeme regelmaessig eine leere Antwort mit finish_reason „length".
-        $maxTokens = ($pdfBase64 !== null || $provider === 'local') ? self::AI_MAX_TOKENS_PDF : self::AI_MAX_TOKENS;
+        // Ein Reasoning-Modell verbraucht sein Budget zuerst im Denken (gemessen
+        // lokal: 794 von 990 Tokens gingen in den Denktext) — ein kleiner Deckel
+        // brachte regelmaessig eine leere Antwort mit finish_reason „length".
+        $maxTokens = self::AI_MAX_TOKENS;
 
         if ($provider === 'anthropic') {
             $key = trim($this->ReadPropertyString('AiAnthropicKey'));
@@ -1172,6 +1175,9 @@ trait AiExtract
                 $url   = 'https://api.openai.com/v1/chat/completions';
                 // PDF braucht ein Modell mit Datei-Input; gpt-4o kann kein PDF.
                 $model = ($pdfBase64 !== null) ? self::AI_OPENAI_PDF_MODEL : self::AI_OPENAI_MODEL;
+                if (str_starts_with($model, 'gpt-4o')) {
+                    $maxTokens = min($maxTokens, self::AI_MAX_TOKENS_GPT4O);
+                }
                 if ($key === '') {
                     return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 400];
                 }
