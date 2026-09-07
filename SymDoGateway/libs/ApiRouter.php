@@ -447,6 +447,10 @@ trait ApiRouter
             'server'       => $this->BuildServerInfo(),
             'capabilities' => ['barcode' => true, 'images' => true, 'websocket' => false],
             'users'        => json_decode($this->GetUsers(), true),
+            /* Der Familienname fuer die Begruessung („Hallo Familie Muster").
+               Muss MIT: die Auskunft hier ist eine Weissliste, und ohne diese
+               Zeile stuende auf dem Dashboard nur „Hallo Familie". */
+            'familyName'   => trim((string)@IPS_GetProperty($this->InstanceID, 'FamilyName')),
             /* Die sichtbaren Bereiche gehoeren MIT in die Auskunft. Sie standen
                bisher nur in window.__SYMDO__, also nur im Seitenaufbau — wer
                einen Bereich abschaltete, erreichte eine offene Web-App nie. Die

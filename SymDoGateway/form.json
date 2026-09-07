@@ -305,6 +305,12 @@
                     "caption": "Household members for task assignment. The photo is a Symcon media object (image)."
                 },
                 {
+                    "type": "ValidationTextBox",
+                    "name": "FamilyName",
+                    "caption": "Family name",
+                    "width": "320px"
+                },
+                {
                     "type": "List",
                     "name": "Users",
                     "rowCount": 6,

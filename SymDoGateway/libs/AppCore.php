@@ -80,6 +80,12 @@ trait AppCore
         $this->RegisterAttributeBoolean('AiPrivacyAccepted', false);
         $this->RegisterAttributeString('AiPrivacyAcceptedAt', '');
         $this->RegisterPropertyString('Users', '[]');
+        /* Der Familienname fuer die Begruessung auf dem Dashboard („Hallo
+           Familie Muster"). Ein eigenes Feld ueber der Mitgliederliste, nicht
+           aus deren Nachnamen abgeleitet: bei verschiedenen Nachnamen in einem
+           Haushalt gaebe es keine richtige Wahl, und wie die Familie ANGEREDET
+           werden will, weiss nur sie selbst. Leer heisst „Hallo Familie". */
+        $this->RegisterPropertyString('FamilyName', '');
         // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
         $this->RegisterPropertyString('LocalHttpsUrl', '');

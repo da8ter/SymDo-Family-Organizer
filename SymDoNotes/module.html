@@ -1055,6 +1055,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   min-height: 44px;
   margin-bottom: 16px;
 }
+/* Begruessung. Sie steht UNTER der Zeile mit Glocke und Avataren und ist damit
+   die erste Zeile des Inhalts. Umbrechen erlaubt: „Hallo Familie
+   Schmidt-Wagner" muss auf ein schmales Telefon passen, und abgeschnitten
+   waere ein Name schlimmer als zweizeilig. */
+.dash-hello {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 14px;
+  overflow-wrap: anywhere;
+}
 /* Die Glocke sitzt LINKS: rechts liegt die sticky Mitglieder-Leiste. */
 .dash-bell {
   flex: 0 0 auto;
@@ -4342,6 +4353,8 @@ function escapeHtml(s) {
 // ── Store: Aggregat aller Listen (Schema siehe module.php BuildFullPayload) ─
 const store = {
   users: [],
+  // Fuer die Begruessung auf dem Dashboard; leer heisst „Hallo Familie".
+  familyName: '',
   defaultUserID: '',
   gatewayAvailable: false,
   aiEnabled: false,
@@ -5410,6 +5423,7 @@ function handleMessage(data) {
   }
   if (data.type === 'state') {
     store.users = data.users || [];
+    store.familyName = data.familyName || '';
     store.defaultUserID = data.defaultUserID || '';
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.aiEnabled = !!data.aiEnabled;
@@ -5498,6 +5512,10 @@ function handleMessage(data) {
        Riegel ist noetig, weil ein Meta-Push ohne users sonst die vorhandenen
        loeschte — und den gibt es (die Kachel schickte lange keine). */
     if (Array.isArray(data.users)) { store.users = data.users; }
+    /* Derselbe Riegel wie bei den Mitgliedern: ein Meta-Push ohne das Feld
+       (aeltere Kachel, aelterer Adapter) darf den Namen nicht loeschen — die
+       Begruessung fiele sonst stumm auf „Hallo Familie" zurueck. */
+    if (typeof data.familyName === 'string') { store.familyName = data.familyName; }
     applyTabVisibility();
     for (const key of Object.keys(store.states)) {
       const inst = store.instances.find(i => String(i.id) === key);
@@ -6265,6 +6283,35 @@ function planKinder() {
   const alle = (stundenplan && Array.isArray(stundenplan.children)) ? stundenplan.children : [];
   const kind = kindGewaehlt();
   return kind ? alle.filter(k => k.userId === kind) : alle;
+}
+
+/**
+ * Die Begruessung ueber dem Dashboard.
+ *
+ * Ist ein Familienmitglied gewaehlt, gilt sie IHM („Hallo Mia") — die Ansicht
+ * ist dann seine. Ohne Auswahl gilt sie der ganzen Familie („Hallo Familie
+ * Muster"); der Name kommt aus dem Gateway und ist dort ein eigenes Feld ueber
+ * der Mitgliederliste. Ist er leer, bleibt es bei „Hallo Familie" — ein
+ * abgeschnittenes „Hallo Familie " waere schlechter als gar kein Name.
+ *
+ * Dieselbe Wache wie in memberFiltered: bei abgeschalteter Mitgliederleiste
+ * FILTERT die Auswahl nicht, also darf sie hier auch nicht angeredet werden.
+ */
+function dashBegruessung() {
+  const id = mitgliederLeisteSichtbar() && memberFilterIds.size === 1
+    ? [...memberFilterIds][0] : '';
+  const u = id ? (store.users || []).find(x => x.id === id) : null;
+  if (u) {
+    /* Nur der VORNAME: in der Mitgliederliste steht er in einer eigenen Spalte,
+       aber ein per API angelegtes Mitglied kann „Mia Muster" in einem Feld
+       tragen — dann waere „Hallo Mia Muster" zu steif fuer eine Begruessung. */
+    const vorname = String(u.name || '').trim().split(/\s+/)[0];
+    if (vorname) return translate('Hello %1').replace('%1', vorname);
+  }
+  const familie = String((store.familyName || '')).trim();
+  return familie
+    ? translate('Hello family %1').replace('%1', familie)
+    : translate('Hello family');
 }
 
 function memberFiltered(tasks) {
@@ -8320,6 +8367,12 @@ function renderDashboard() {
   // Mitglieder-Leiste wird per margin-bottom: -44px auf diese Zeile gezogen, seine
   // Hoehe ist also die Zeile, auf der die Avatare sitzen.
   html += `<div class="dash-head">${glocke}</div>`;
+
+  /* Die Begruessung UNTER der Avatar-Zeile: die Mitglieder-Leiste wird per
+     margin-bottom: -44px auf die Zeile der Glocke gezogen und liegt damit
+     ueber dieser Stelle — eine Ueberschrift in dash-head selbst waere den
+     Avataren in die Quere gekommen. */
+  html += `<h1 class="dash-hello">${escapeHtml(dashBegruessung())}</h1>`;
 
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;

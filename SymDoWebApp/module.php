@@ -842,6 +842,8 @@ class SymDoWebApp extends IPSModuleStrict
             'defaultUserID'   => $this->ReadPropertyString('DefaultUserID'),
             'gatewayAvailable' => $gatewayID > 0,
             'aiEnabled'       => ($gatewayID > 0 ? (bool)@IPS_GetProperty($gatewayID, 'AiEnabled') : false),
+            // Familienname fuer die Begruessung; leer heisst „Hallo Familie".
+            'familyName'      => $this->FamilyNameVomGateway(),
             /* Sprachdialog. Gelesen wird die PROPERTY des Gateways — die
                Einwilligungen liegen in Attributen und sind von außen nicht
                lesbar; geprüft werden sie serverseitig beim Öffnen der Sitzung
@@ -1088,6 +1090,19 @@ class SymDoWebApp extends IPSModuleStrict
         }
         sort($ids);
         return (int)$ids[0];
+    }
+
+    /**
+     * Der Familienname aus dem Gateway — fuer die Begruessung auf dem
+     * Dashboard („Hallo Familie Muster"). Leer heisst „Hallo Familie".
+     *
+     * Gelesen wird die PROPERTY des Gateways, genau wie bei AiEnabled: die
+     * Familie und ihre Mitglieder gehoeren dorthin, nicht in jede Kachel.
+     */
+    private function FamilyNameVomGateway(): string
+    {
+        $gateway = $this->GetAppGatewayID();
+        return $gateway > 0 ? trim((string)@IPS_GetProperty($gateway, 'FamilyName')) : '';
     }
 
     /** @return array<int, array{id: string, name: string, avatar: string}> */
@@ -1355,6 +1370,9 @@ class SymDoWebApp extends IPSModuleStrict
             // Und die Mitglieder: ein neu angelegtes Familienmitglied erreichte
             // eine offene Kachel bisher nie, es kam nur im vollen Zustand mit.
             'users'           => json_decode($this->GetUsers(), true),
+            // Aus demselben Grund der Familienname: wer ihn im Gateway aendert,
+            // soll die Begruessung ohne Neuladen nachziehen sehen.
+            'familyName'      => $this->FamilyNameVomGateway(),
         ]);
     }
 
