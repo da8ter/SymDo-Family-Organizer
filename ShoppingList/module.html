@@ -8403,10 +8403,11 @@ function renderDashboard() {
   let html = '';
   // Avatar-Menü zuerst: nur dieses ist sticky (oben rechts). Die Kopfzeile folgt
   // und scrollt normal (wird per CSS auf dieselbe Zeile gezogen).
-  // Die Mitglieder-Leiste filtert ausschließlich Aufgaben.
-  // Ist sie abgeschaltet, MUSS auch die Auswahl weg: sonst filterte eine zuvor
-  // gewaehlte Person unsichtbar weiter, und niemand kaeme mehr an den Filter.
-  if (withTodos && store.users.length > 0 && zeigeMitglieder) {
+  /* Die Mitglieder-Leiste steht unabhaengig von den Aufgaben: sie filtert sie
+     zwar, entscheidet aber auch ueber die Bereiche (Kindmodus) und ueber die
+     Begruessung. Ist sie per Listen-Schalter abgeschaltet, greift die Auswahl
+     nirgends — die Wachen sitzen in memberFiltered und dashBegruessung. */
+  if (store.users.length > 0 && zeigeMitglieder) {
     html += '<div class="member-bar">';
     for (const u of store.users) {
       html += `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
@@ -9290,10 +9291,21 @@ function sortTodoItems(items, sortMode, sortDir) {
 /** Gilt die Mitglieder-Leiste als sichtbar? Das Dashboard fasst ALLE Aufgaben-
  *  listen zusammen und hat deshalb keinen eigenen Zustand. In der Web-App ist der
  *  Schalter appweit, alle Listen antworten also gleich; sind sie sich doch einmal
- *  uneins, genuegt eine, die sie zeigt. */
+ *  uneins, genuegt eine, die sie zeigt.
+ *
+ *  OHNE Aufgabenliste bleibt die Leiste trotzdem stehen. Sie war lange nur der
+ *  Aufgabenfilter, ist es aber schon eine Weile nicht mehr: die Auswahl
+ *  entscheidet ueber die sichtbaren Bereiche (ein gewaehltes Kind bekommt
+ *  seinen Stundenplan, Einkauf und KI fallen weg) und ueber die Begruessung.
+ *  Wer keine Aufgabenliste fuehrt, kam an all das gar nicht heran.
+ *
+ *  Nur der Schalter EINER Liste schaltet sie weiter ab — wer sie ausdruecklich
+ *  nicht will, soll sie auch nicht bekommen. */
 function mitgliederLeisteSichtbar() {
+  // Ohne Mitglieder gibt es nichts zu zeigen.
+  if (!(store.users || []).length) return false;
   const listen = visibleInstances('todo');
-  if (listen.length === 0) return false;
+  if (listen.length === 0) return true;
   return listen.some(i => (instState(i.id) || {}).showMemberBar !== false);
 }
 
