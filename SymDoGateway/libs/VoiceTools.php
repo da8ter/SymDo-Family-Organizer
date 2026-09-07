@@ -325,6 +325,52 @@ trait VoiceTools
                     'required' => ['text', 'an', 'titel'],
                 ],
             ],
+            /* Geräte im Haus (Trait VoiceDevices). `tor` ist der Riegel: die
+               Werkzeuge stehen IMMER im Katalog, damit eine Sitzung, die vor dem
+               Abschalten geprägt wurde, „ausgeschaltet" hört statt „kann ich
+               nicht" — sichtbar für das Modell sind sie nur bei offenem Riegel
+               (VoiceToolSpec). `steuern` ist schreibend, aber ohne Inhaltssperre
+               (siehe VoiceRunTool). */
+            'geraete_lesen' => [
+                'art' => 'lesen', 'tor' => 'geraete',
+                'beschreibung' => 'Liest den Zustand von Geräten im Haus: eine Lampe, ein Thermostat, ein Rollladen — oder alle Geräte eines Raums („Was ist im Wohnzimmer an?", „Welche Geräte gibt es im Bad?"). Nur lesen, nichts ändern.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet' => ['type' => ['string', 'null'], 'description' => 'Name des Geräts wie gesprochen, z.B. "Deckenlampe", "Thermostat"; null = alle Geräte des Raums'],
+                        'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname, z.B. "Wohnzimmer"; null = überall'],
+                        'filter' => ['type' => 'string', 'enum' => ['alle', 'an', 'aus'], 'description' => '"an" = nur eingeschaltete, "aus" = nur ausgeschaltete, sonst "alle"'],
+                    ],
+                    'required' => ['geraet', 'raum', 'filter'],
+                ],
+            ],
+            'geraet_steuern' => [
+                'art' => 'steuern', 'tor' => 'geraete',
+                'beschreibung' => 'Schaltet oder stellt EIN Gerät im Haus: Licht oder Steckdose an/aus, Helligkeit oder Temperatur auf einen Wert, Rollladen hoch/runter/auf Prozent, eine Betriebsart wählen. "wert" ist das gesprochene Ziel, z.B. "an", "aus", "umschalten", "50 Prozent", "21,5 Grad", "hoch", "runter", "Auto" — das Werkzeug prüft selbst, was das Gerät kann. Manche Geräte verlangen eine Rückfrage: dann kommt eine Frage und eine "marke" zurück, und es ist NICHTS geschaltet.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet' => ['type' => 'string', 'description' => 'Name des Geräts wie gesprochen'],
+                        'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname zum Eingrenzen oder null'],
+                        'wert'   => ['type' => 'string', 'description' => 'Zielzustand oder -wert in Worten oder als Zahl'],
+                        'marke'  => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
+                    ],
+                    'required' => ['geraet', 'raum', 'wert', 'marke'],
+                ],
+            ],
+            'szene_starten' => [
+                'art' => 'steuern', 'tor' => 'geraete',
+                'beschreibung' => 'Startet eine Szene der Szenensteuerung („Szene Abend", „Kino") oder ein Skript („starte Gute Nacht"). Manche verlangen eine Rückfrage — dann kommt eine Frage und eine "marke" zurück, und es ist NICHTS gestartet.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'name'  => ['type' => 'string', 'description' => 'Name der Szene oder des Skripts'],
+                        'raum'  => ['type' => ['string', 'null'], 'description' => 'Raumname zum Eingrenzen oder null'],
+                        'marke' => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
+                    ],
+                    'required' => ['name', 'raum', 'marke'],
+                ],
+            ],
         ];
     }
 
@@ -332,7 +378,12 @@ trait VoiceTools
     private function VoiceToolSpec(): array
     {
         $spec = [];
+        // Einmal je Prägung, nicht je Eintrag: der Riegel liest Konfiguration und Attribute.
+        $geraete = $this->VoiceGeraeteOk();
         foreach ($this->VoiceKatalog() as $name => $def) {
+            if (($def['tor'] ?? '') === 'geraete' && !$geraete) {
+                continue;
+            }
             $spec[] = [
                 'type'        => 'function',
                 'name'        => $name,
@@ -356,18 +407,34 @@ trait VoiceTools
             $this->VoiceLogEintrag($name, 'unbekanntes Werkzeug', false);
             return $this->VoiceErr('unknown_tool', $this->Translate('I cannot do that.'));
         }
+        /* Der Riegel der Gerätesteuerung JE AUFRUF — die einzige Stelle, die eine
+           Sitzung aufhält, die geprägt wurde, bevor jemand den Schalter umlegte
+           oder die Einwilligung widerrief. */
+        if (($katalog[$name]['tor'] ?? '') === 'geraete') {
+            $zu = $this->VoiceGeraeteTorZu();
+            if ($zu !== null) {
+                $this->VoiceLogEintrag($name, 'Gerätesteuerung gesperrt: ' . (string)($zu['error']['code'] ?? '?'), false);
+                return $zu;
+            }
+        }
         $args = json_decode($argsJson, true);
         if (!is_array($args)) {
             $args = [];
         }
         /* Doppelte Ausfuehrung abwehren — nur bei schreibenden Werkzeugen, denn
            zweimal lesen schadet nicht. Zwei Ebenen, weil sie verschiedene
-           Faelle treffen (Begruendung in VoiceDoppelt). */
-        $schreibt = in_array((string)($katalog[$name]['art'] ?? 'lesen'), ['schreiben', 'gefaehrlich'], true);
+           Faelle treffen (Begruendung in VoiceDoppelt).
+           AUSNAHME Geräte (`steuern`): nur die erste Ebene (dieselbe call_id
+           doppelt zugestellt). Die Inhaltssperre würde „Licht an – aus – an"
+           binnen 90 s mit „habe ich gerade schon gemacht" beantworten und NICHT
+           schalten — Schalten ist umkehrbar und darf sich wiederholen. */
+        $art = (string)($katalog[$name]['art'] ?? 'lesen');
+        $schreibt = in_array($art, ['schreiben', 'gefaehrlich', 'steuern'], true);
+        $inhalt = $schreibt && $art !== 'steuern';
         $fnId = trim((string)($ctx['fnId'] ?? ''));
         $wiederholt = null;
         if ($schreibt) {
-            $wiederholt = $this->VoiceDoppelt($name, $argsJson, $ctx, $fnId);
+            $wiederholt = $this->VoiceDoppelt($name, $argsJson, $ctx, $fnId, $inhalt);
             if ($wiederholt !== null) {
                 $this->VoiceLogEintrag($name, 'doppelter Aufruf abgewiesen', true);
                 return $this->VoiceCap($wiederholt);
@@ -395,6 +462,9 @@ trait VoiceTools
                 'notiz_anlegen'       => $this->VoiceToolNotizAnlegen($args, $ctx),
                 'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
                 'nachricht_senden'    => $this->VoiceToolNachricht($args, $ctx),
+                'geraete_lesen'       => $this->VoiceToolGeraeteLesen($args, $ctx),
+                'geraet_steuern'      => $this->VoiceToolGeraetSteuern($args, $ctx, 'geraet'),
+                'szene_starten'       => $this->VoiceToolGeraetSteuern($args, $ctx, 'szene'),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -402,7 +472,9 @@ trait VoiceTools
         }
         if ($schreibt) {
             if (($antwort['ok'] ?? false) === true) {
-                $this->VoiceDedupMerken($name, $argsJson, $ctx, (string)($antwort['sag'] ?? ''));
+                if ($inhalt) {
+                    $this->VoiceDedupMerken($name, $argsJson, $ctx, (string)($antwort['sag'] ?? ''));
+                }
             } elseif ($fnId !== '') {
                 // Gescheitert heisst: ein ehrlicher zweiter Versuch darf laufen.
                 $this->ReleaseAction('voice:' . $fnId);
@@ -438,11 +510,14 @@ trait VoiceTools
      * @param array<string,mixed> $ctx
      * @return array<string,mixed>|null
      */
-    private function VoiceDoppelt(string $name, string $argsJson, array $ctx, string $fnId): ?array
+    private function VoiceDoppelt(string $name, string $argsJson, array $ctx, string $fnId, bool $inhalt = true): ?array
     {
         if ($fnId !== '' && !$this->ReserveAction('voice:' . $fnId)) {
             return ['ok' => true, 'doppelt' => true,
                     'sag' => $this->Translate('I just did that — nothing was done twice.')];
+        }
+        if (!$inhalt) {
+            return null;    // Geräte: nur die call_id zählt (Begründung in VoiceRunTool)
         }
         $topf = $this->VoiceDedupLesen();
         $eintrag = $topf[$this->VoiceDedupSchluessel($name, $argsJson, $ctx)] ?? null;
