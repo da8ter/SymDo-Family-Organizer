@@ -394,10 +394,12 @@ trait VoiceDevices
         $varianten = $this->VoiceGeraetSynonyme($sn);
         $bewertet = [];
         foreach ($eintraege as $e) {
+            /* Titel, Name, Aliasse — aber KEINE gedrehte Variante „Name Raum":
+               die Wortreihenfolge deckt die 80-Punkte-Regel („jedes Wort steckt
+               drin") ohnehin ab, und die gedrehte Form traf per similar_text mit
+               71 auf Fremdes („Prüfschalter Prüfraum" ~ „Außenschalter
+               Prüfstand") — genug, um zu schalten. Gemessen am Prüfstand. */
             $titel = array_merge([(string)$e['titel'], (string)$e['name']], (array)$e['alias']);
-            if ($e['raum'] !== '') {
-                $titel[] = $e['name'] . ' ' . $e['raum'];
-            }
             $best = 0;
             foreach ($titel as $t) {
                 $tn = $this->VoiceNorm($t);
@@ -408,10 +410,20 @@ trait VoiceDevices
             $bewertet[] = ['schluessel' => $e, 'titel' => (string)$e['titel'], 'punkte' => $best];
         }
         usort($bewertet, static fn(array $a, array $b): int => $b['punkte'] <=> $a['punkte']);
-        $treffer = array_values(array_filter($bewertet, static fn(array $b): bool => $b['punkte'] >= 60));
-        $beinah  = array_values(array_filter($bewertet, static fn(array $b): bool => $b['punkte'] >= 40 && $b['punkte'] < 60));
+        /* Treffer ab 70, nicht ab 60 wie beim Auflöser für Listen: 70 ist das
+           Levenshtein-Niveau, darunter trägt nur noch similar_text — und das
+           ist bei Geräten zu wenig, um zu SCHALTEN. Gemessen am Prüfstand:
+           „Außenschalter Prüfstand" (außerhalb der Wurzel) traf mit 60+ auf
+           „Prüfraum Prüfschalter" als einziger Treffer, galt als eindeutig
+           und wurde geschaltet. Ein schwacher Einzeltreffer wird jetzt zur
+           Rückfrage („Meintest du …?"), nie zur Handlung. */
+        $treffer = array_values(array_filter($bewertet, static fn(array $b): bool => $b['punkte'] >= 70));
+        $beinah  = array_values(array_filter($bewertet, static fn(array $b): bool => $b['punkte'] >= 45 && $b['punkte'] < 70));
         if ($treffer === []) {
-            return ['status' => 'nichts', 'treffer' => [], 'beinah' => array_slice($beinah, 0, 3)];
+            // Vertrag von VoiceAufloeseFehler: beinah sind TITEL, keine Zeilen — die
+            // Zeile trüge den ganzen Katalogeintrag samt Objektnummer ins Gespräch.
+            return ['status' => 'nichts', 'treffer' => [],
+                    'beinah' => array_map(static fn(array $b): string => (string)$b['titel'], array_slice($beinah, 0, 3))];
         }
         $eindeutig = count($treffer) === 1
             || ($treffer[0]['punkte'] >= 90 && $treffer[1]['punkte'] < 80);
