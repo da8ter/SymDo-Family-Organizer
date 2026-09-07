@@ -33,6 +33,11 @@ trait Voice
     /** Löschdeckel: so viele erfolgreiche Löschungen je Stunde — ein durchdrehendes Modell räumt keine Liste leer. */
     private static int $VOICE_LOESCH_MAX = 10;
 
+    /** Schaltdeckel: erfolgreiche Geräteschaltungen je Stunde. Höher als beim
+     *  Löschen, weil Schalten umkehrbar ist und ein Abend in der Familie 20–30
+     *  Schaltungen bringt; eine Schleife des Modells träfe die 60 in einer Minute. */
+    private static int $VOICE_GERAETE_MAX = 60;
+
     private function VoiceCreate(): void
     {
         $this->RegisterPropertyBoolean('VoiceEnabled', false);
@@ -50,6 +55,15 @@ trait Voice
            niemand, dann bleibt es beim Satzanfang plus Auszug (Verhalten vor
            dem 02.09.2026). Messwerte stehen in SymconDoku.php. */
         $this->RegisterPropertyString('VoiceDocModel', 'gpt-4.1');
+        /* Gerätesteuerung per Sprache. Standard AUS: der Assistent war bis zum
+           07.09.2026 ausdrücklich eingezäunt („Du steuerst NICHTS im Haus"),
+           und wer das ändert, soll es wissentlich tun. Die Reichweite sind
+           WURZEL-Kategorien — alles darunter, das sichtbar ist und eine Aktion
+           hat; die zweite Liste nennt, was nur nach gesprochener Rückfrage
+           geschaltet wird (Schloss, Alarm, Garage) — und von Kindern gar nicht. */
+        $this->RegisterPropertyBoolean('VoiceDevicesEnabled', false);
+        $this->RegisterPropertyString('VoiceDeviceRoots', '[]');     // [{"objectID": 12345}, …]
+        $this->RegisterPropertyString('VoiceDeviceConfirm', '[]');   // [{"objectID": 456}, …]
 
         $this->RegisterAttributeBoolean('VoicePrivacyAccepted', false);
         $this->RegisterAttributeString('VoicePrivacyAcceptedAt', '');
@@ -57,6 +71,11 @@ trait Voice
            hat, hat nicht dem Dauerlauschen zugestimmt. */
         $this->RegisterAttributeBoolean('VoiceHandsFreeAccepted', false);
         $this->RegisterAttributeString('VoiceHandsFreeAcceptedAt', '');
+        /* VIERTE Einwilligung, wieder getrennt: wer dem Reden zugestimmt hat,
+           hat nicht zugestimmt, dass jeder im Raum Licht, Rollläden oder Türen
+           schaltet. */
+        $this->RegisterAttributeBoolean('VoiceDevicesAccepted', false);
+        $this->RegisterAttributeString('VoiceDevicesAcceptedAt', '');
         $this->RegisterAttributeString('VoiceOpenCalls', '{}');
         $this->RegisterAttributeString('VoiceDayCount', '{}');
         $this->RegisterAttributeString('VoiceLog', '[]');
@@ -126,6 +145,28 @@ trait Voice
                    Einwilligung, sie kann die engere nicht ueberleben. */
                 @$this->WriteAttributeBoolean('VoiceHandsFreeAccepted', false);
                 @$this->WriteAttributeString('VoiceHandsFreeAcceptedAt', '');
+                // Und die Gerätesteuerung ebenso — aus demselben Grund.
+                @$this->WriteAttributeBoolean('VoiceDevicesAccepted', false);
+                @$this->WriteAttributeString('VoiceDevicesAcceptedAt', '');
+            }
+            $this->ReloadForm();
+            return true;
+        }
+        if ($Ident === 'VoiceDevicesConsent') {
+            $ja = ($Value === true || $Value === 1 || $Value === '1' || $Value === 'true');
+            // Ohne die Sprach-Einwilligung gibt es die weitergehende nicht.
+            if ($ja && !(bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')) {
+                $ja = false;
+            }
+            @$this->WriteAttributeBoolean('VoiceDevicesAccepted', $ja);
+            @$this->WriteAttributeString('VoiceDevicesAcceptedAt', $ja ? date('c') : '');
+            if (!$ja) {
+                /* Widerruf legt auf: Anweisungen und Werkzeuge werden je Gespräch
+                   EINMAL geprägt (VoiceMintSecret) — eine laufende Sitzung böte
+                   die Gerätewerkzeuge sonst bis zu ihrem Ende weiter an. Der
+                   Riegel je Aufruf hielte das ungefährlich, aber Auflegen ist
+                   billig und sagt dasselbe wie beim Widerruf der Sprache. */
+                $this->VoiceHangupAll('Geräte-Einwilligung widerrufen');
             }
             $this->ReloadForm();
             return true;
@@ -255,6 +296,137 @@ trait Voice
             return $this->VoiceErr('voice_privacy_required', $this->Translate('The privacy consent for the voice dialog is missing — open the gateway settings.'));
         }
         return null;
+    }
+
+    /**
+     * Der Riegel der Gerätesteuerung: Sprachdialog offen UND Schalter an UND
+     * die vierte Einwilligung. Gelesen wird die Property über
+     * IPS_GetConfiguration wie in VoiceHandsFreeOk — vor dem Kernel-Neustart
+     * gibt es sie nicht, und ReadPropertyBoolean würfe.
+     *
+     * Er sitzt an ZWEI Stellen: beim Prägen der Sitzung (VoiceToolSpec und
+     * VoiceInstructions blenden die Werkzeuge aus) und je Aufruf in
+     * VoiceRunTool — nur die zweite hält eine Sitzung auf, die geprägt wurde,
+     * bevor jemand den Schalter umlegte.
+     *
+     * @return array<string,mixed>|null Fehlerantwort, oder null wenn offen
+     */
+    private function VoiceGeraeteTorZu(): ?array
+    {
+        $zu = $this->VoiceTorZu();
+        if ($zu !== null) {
+            return $zu;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        if (!is_array($cfg) || ($cfg['VoiceDevicesEnabled'] ?? false) !== true) {
+            return $this->VoiceErr('geraete_aus', $this->Translate('Device control by voice is switched off.'));
+        }
+        if (!(bool)@$this->ReadAttributeBoolean('VoiceDevicesAccepted')) {
+            return $this->VoiceErr('geraete_einwilligung_fehlt', $this->Translate('The consent for device control is missing — open the gateway settings.'));
+        }
+        return null;
+    }
+
+    private function VoiceGeraeteOk(): bool
+    {
+        return $this->VoiceGeraeteTorZu() === null;
+    }
+
+    /**
+     * Die Rolle des Sprechenden aus der Mitgliederliste (father, mother, child,
+     * …) — '' wenn unbekannt. Die Kachel setzt die userId serverseitig aus
+     * ihrer Property (SymDoVoice/module.php), die Web-App schickt sie mit;
+     * eine LEERE userId zählt als Erwachsener: die Kopplung eines Geräts ist
+     * ein Erwachsenenakt, und die Kachel liefert immer eine.
+     */
+    private function VoicePersona(string $userId): string
+    {
+        if ($userId === '') {
+            return '';
+        }
+        try {
+            foreach ($this->LoadUsers() as $u) {
+                if ((string)($u['id'] ?? '') === $userId) {
+                    return (string)($u['persona'] ?? '');
+                }
+            }
+        } catch (\Throwable $e) {
+            // ohne Mitgliederliste eben ohne Rolle
+        }
+        return '';
+    }
+
+    /** @param array<string,mixed> $ctx */
+    private function VoiceIstKind(array $ctx): bool
+    {
+        return $this->VoicePersona((string)($ctx['userId'] ?? '')) === 'child';
+    }
+
+    /**
+     * Objektnummern aus einer Formularliste ([{"objectID": n}, …]). Über
+     * IPS_GetProperty statt ReadPropertyString — dieselbe Begründung wie in
+     * LoadUsers: sieht auch, was gerade erst gespeichert wurde.
+     *
+     * @return list<int>
+     */
+    private function VoiceObjektListe(string $property): array
+    {
+        $roh = json_decode((string)@IPS_GetProperty($this->InstanceID, $property), true);
+        $ids = [];
+        foreach (is_array($roh) ? $roh : [] as $zeile) {
+            $id = (int)(is_array($zeile) ? ($zeile['objectID'] ?? 0) : $zeile);
+            if ($id > 0 && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+        return $ids;
+    }
+
+    /** Steht dieses Objekt auf der Liste „nur mit Rückfrage"? */
+    private function VoiceGeraetMitRueckfrage(int $objectID): bool
+    {
+        return in_array($objectID, $this->VoiceObjektListe('VoiceDeviceConfirm'), true);
+    }
+
+    /** Ist der Schaltdeckel dieser Stunde noch offen? (Muster: VoiceLoeschDeckelOffen) */
+    private function VoiceGeraeteDeckelOffen(): bool
+    {
+        if (self::$VOICE_GERAETE_MAX <= 0) {
+            return true;
+        }
+        $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
+        $stunde = date('Y-m-d-H');
+        $n = (is_array($stand) && ($stand['gerh'] ?? '') === $stunde) ? (int)($stand['gern'] ?? 0) : 0;
+        return $n < self::$VOICE_GERAETE_MAX;
+    }
+
+    /** Eine erfolgreiche Schaltung auf die laufende Stunde buchen. */
+    private function VoiceGeraeteZaehlen(): void
+    {
+        $lock = 'SymDo_VoiceDay_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 1000)) {
+            return;
+        }
+        try {
+            $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
+            $stand = is_array($stand) ? $stand : [];
+            $stunde = date('Y-m-d-H');
+            if (($stand['gerh'] ?? '') !== $stunde) {
+                $stand['gerh'] = $stunde;
+                $stand['gern'] = 0;
+            }
+            $stand['gern'] = (int)($stand['gern'] ?? 0) + 1;
+            $this->WriteAttributeString('VoiceDayCount', (string)json_encode($stand));
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
+    }
+
+    /** Schaltungen dieser Stunde — für das Formular. */
+    private function VoiceGeraeteStand(): int
+    {
+        $stand = json_decode((string)@$this->ReadAttributeString('VoiceDayCount'), true);
+        return (is_array($stand) && ($stand['gerh'] ?? '') === date('Y-m-d-H')) ? (int)($stand['gern'] ?? 0) : 0;
     }
 
     private function VoiceOpen(array $body): array
