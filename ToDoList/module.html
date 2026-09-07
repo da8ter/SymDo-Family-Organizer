@@ -3509,22 +3509,16 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   display: flex; align-items: center; justify-content: center;
   color: var(--faint); font-size: 10px;
 }
-/* Die Begruendung eines ganz freien Tages steht QUER — in einer schmalen
-   Spalte („Wochenende", „Sommerferien bis 05.09.") passte sie sonst nicht.
-   Gedreht hat sie die ganze Tageshoehe zur Verfuegung. */
-.wp-frei.grund { padding: 6px 2px; }
-.wp-frei.grund > span {
-  writing-mode: vertical-rl; transform: rotate(180deg);
-  max-height: 100%; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; text-align: center;
-}
-/* Tage ohne Unterricht bekommen weniger Platz: seit das Wochenende immer
-   mitlaeuft, teilten sieben gleich breite Spalten den Bereich so auf, dass von
-   den Schultagen kaum etwas uebrig blieb. */
-.wp-spalte.ohne {
-  flex: 0 1 auto; min-width: 34px;
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-}
+/* Die Begruendung eines ganz freien Tages („Wochenende", „Sommerferien bis
+   05.09.") steht waagerecht und darf umbrechen. Sie stand kurz QUER in einer
+   schmalen Spalte — am 07.09.2026 gewuenscht: Samstag und Sonntag so breit wie
+   die Schultage, und in voller Breite liest sich Gedrehtes schlecht. */
+.wp-frei.grund { padding: 8px; }
+.wp-frei.grund > span { white-space: normal; text-align: center; overflow-wrap: anywhere; }
+/* Tage ohne Unterricht: GLEICHE Breite wie die Schultage (die schmalen Spalten
+   stachen heraus), nur die Flaeche leicht abgesetzt, damit ein freier Tag auf
+   einen Blick als frei zu lesen ist. */
+.wp-spalte.ohne { background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .wp-stunde {
   position: absolute; left: 0; right: 0; overflow: hidden;
   padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start;
