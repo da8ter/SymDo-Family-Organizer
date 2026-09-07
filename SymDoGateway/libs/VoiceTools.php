@@ -78,6 +78,23 @@ trait VoiceTools
                     'required' => ['filter', 'liste'],
                 ],
             ],
+            'stundenplan_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Der Stundenplan der Kinder an EINEM Tag: welche Fächer anstehen, '
+                    . 'mit Uhrzeit, Raum und Lehrer, samt Entfall und Vertretung — dazu Schulschluss '
+                    . 'und Betreuung. Für Fragen wie „Was hat Tim am Dienstag für Unterricht?", '
+                    . '„Wann hat Mia morgen Schluss?" oder „Fällt bei Tim etwas aus?".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'kind' => ['type' => ['string', 'null'],
+                                   'description' => 'Name des Kindes; null = alle Kinder'],
+                        'tag'  => ['type' => 'string',
+                                   'description' => '"heute", "morgen", ein Wochentag wie "Dienstag" oder ein Datum JJJJ-MM-TT'],
+                    ],
+                    'required' => ['kind', 'tag'],
+                ],
+            ],
             'rezepte_lesen' => [
                 'art' => 'lesen',
                 'beschreibung' => 'Die gespeicherten Rezepte (Rezept-Favoritenlisten): ohne Angabe alle Namen, mit einem Rezeptnamen dessen Zutaten.',
@@ -361,6 +378,7 @@ trait VoiceTools
                 'tag_uebersicht'      => $this->VoiceToolTag($args),
                 'einkaufsliste_lesen' => $this->VoiceToolEinkauf($args, $ctx),
                 'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
+                'stundenplan_lesen'   => $this->VoiceToolStundenplan($args, $ctx),
                 'rezepte_lesen'       => $this->VoiceToolRezepte($args, $ctx),
                 'rezept_einkaufen'    => $this->VoiceToolRezeptEinkaufen($args, $ctx),
                 'einkauf_hinzufuegen' => $this->VoiceToolEinkaufHinzu($args, $ctx),
@@ -654,6 +672,179 @@ trait VoiceTools
                 ? $this->Translate('Nothing there — all done.')
                 : sprintf($this->Translate('%d task(s) on %s.'), $gesamt, (string)$ziel['name']),
         ];
+    }
+
+
+    /**
+     * Der Stundenplan EINES Tages — die Faecher, nicht nur die Schulzeit.
+     *
+     * `tag_uebersicht` nennt bisher nur, wie lange Schule ist („Tim bis
+     * 13:00"). Die Frage „Was hat Tim am Dienstag fuer Unterricht?" braucht die
+     * Faecher, und die stehen nur hier.
+     *
+     * Gelesen wird JE DATUM (STPL_GetPlanForDate), nicht aus dem Wochenplan:
+     * nur der datierte Tag kennt Entfall und Vertretung, der Wochenplan ist
+     * eine Vorlage. Und der Tag wird ueber sein DATUM gesucht, nicht ueber den
+     * Wochentag: der Plan liefert die ganze Woche, und zwei Tage derselben
+     * Woche tragen dieselbe Nummer.
+     *
+     * Instanzen wie beim Briefing (TimetableOwnInstances): wer fragt, will die
+     * Antwort — auch wenn der Plan in der App ausgeblendet ist.
+     *
+     * @return array<string,mixed>
+     */
+    private function VoiceToolStundenplan(array $args, array $ctx): array
+    {
+        if (!function_exists('STPL_GetPlanForDate')) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no timetable here.'));
+        }
+        $datum = $this->VoicePlanTag((string)($args['tag'] ?? 'heute'));
+        if ($datum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the day.'));
+        }
+        $wunsch  = $this->VoiceNorm((string)($args['kind'] ?? ''));
+        $tagName = $this->VoicePlanTagName($datum);
+
+        $zeilen = [];
+        $bekannt = [];
+        foreach ($this->TimetableOwnInstances() as $id) {
+            $plan = json_decode((string)@STPL_GetPlanForDate($id, $datum), true);
+            if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
+                continue;
+            }
+            foreach ($plan['children'] as $kind) {
+                if (!is_array($kind)) {
+                    continue;
+                }
+                $name = trim((string)($kind['name'] ?? ''));
+                if ($name === '' || isset($zeilen[$name])) {
+                    continue;
+                }
+                $bekannt[$name] = true;
+                if ($wunsch !== '') {
+                    $k = $this->VoiceNorm($name);
+                    // Teilwort in BEIDE Richtungen: gesagt wird „Tim", „der Tim"
+                    // oder auch der ganze Name.
+                    if (!str_contains($k, $wunsch) && !str_contains($wunsch, $k)) {
+                        continue;
+                    }
+                }
+                $tag = null;
+                foreach ((array)($kind['days'] ?? []) as $t) {
+                    if (is_array($t) && (string)($t['date'] ?? '') === $datum) {
+                        $tag = $t;
+                        break;
+                    }
+                }
+                $zeilen[$name] = $this->VoiceStundenplanTag($name, $tag, $tagName);
+            }
+        }
+
+        if ($bekannt === []) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no timetable here.'));
+        }
+        if ($zeilen === []) {
+            return $this->VoiceErr('nicht_gefunden', sprintf(
+                $this->Translate('I do not know a child called "%1$s". Known are: %2$s.'),
+                trim((string)($args['kind'] ?? '')), implode(', ', array_keys($bekannt))));
+        }
+        return [
+            'ok'     => true,
+            'tag'    => $tagName,
+            'kinder' => array_values($zeilen),
+            /* Bei EINEM Kind ist die Zeile schon die Antwort. Bei mehreren nur
+               die Zahl: die Zeilen stehen oben, und das Modell formuliert sie
+               besser zusammen, als eine Aufzaehlung mit Semikolons klingt. */
+            'sag'    => count($zeilen) === 1
+                ? reset($zeilen)
+                : sprintf($this->Translate('Timetable for %1$s, %2$d children.'),
+                          $tagName, count($zeilen)),
+        ];
+    }
+
+    /**
+     * Ein Kind an einem Tag als SATZ. Die Reihenfolge folgt der Frage: erst,
+     * ob ueberhaupt Schule ist, dann wie lange, dann die Faecher.
+     *
+     * Ferien und Feiertag schlagen den Unterricht — dieselbe Regel wie im
+     * Wochenraster und im Briefing. Die Betreuung zaehlt NICHT als Unterricht,
+     * wird aber genannt: „Wann hat Mia Schluss?" meint das Ende des Tages.
+     *
+     * @param array<string,mixed>|null $tag
+     */
+    /**
+     * „08:00" → „8:00". Gesprochen gibt es keine fuehrende Null, und dieselbe
+     * Entscheidung traegt schon die Faelligkeits-Leiter der Oberflaechen.
+     */
+    private function VoiceUhr(mixed $zeit): string
+    {
+        $t = trim((string)$zeit);
+        return (string)preg_replace('/^0(\d:)/', '$1', $t);
+    }
+
+    private function VoiceStundenplanTag(string $name, ?array $tag, string $tagName): string
+    {
+        $frei = is_array($tag['holiday'] ?? null) ? $tag['holiday'] : null;
+        if ($frei !== null) {
+            $wort = trim((string)($frei['name'] ?? ''));
+            if ($wort === '') {
+                $wort = ($frei['public'] ?? false) === true
+                    ? $this->Translate('a public holiday') : $this->Translate('school holidays');
+            }
+            return sprintf($this->Translate('%1$s has no school on %2$s — %3$s.'),
+                           $name, $tagName, $wort);
+        }
+        $slots = array_values(array_filter((array)($tag['slots'] ?? []), 'is_array'));
+        $betreuung = array_values(array_filter($slots,
+            static fn(array $s): bool => ($s['care'] ?? false) === true));
+        $unterricht = array_values(array_filter($slots,
+            static fn(array $s): bool => ($s['care'] ?? false) !== true));
+        if ($unterricht === []) {
+            return sprintf($this->Translate('%1$s has no school on %2$s.'), $name, $tagName);
+        }
+
+        $faecher = [];
+        $entfall = [];
+        $vertretung = [];
+        $stattfindend = [];
+        foreach ($unterricht as $s) {
+            $fach   = trim((string)($s['name'] ?? ''));
+            $beginn = $this->VoiceUhr($s['start'] ?? '');
+            $status = (string)($s['status'] ?? '');
+            if ($fach === '') {
+                continue;
+            }
+            if ($status === 'entfall') {
+                $entfall[] = $fach;
+                // Entfallenes zaehlt nicht zur Schulzeit — sonst behauptete die
+                // Antwort Unterricht bis 15 Uhr, obwohl die letzten zwei
+                // Stunden ausfallen. Dieselbe Regel wie in TagesDauer.
+                $faecher[] = sprintf($this->Translate('%1$s %2$s (cancelled)'), $beginn, $fach);
+                continue;
+            }
+            if ($status === 'vertretung') {
+                $vertretung[] = $fach;
+                $faecher[] = sprintf($this->Translate('%1$s %2$s (substitution)'), $beginn, $fach);
+            } else {
+                $faecher[] = trim($beginn . ' ' . $fach);
+            }
+            $stattfindend[] = $s;
+        }
+        if ($stattfindend === []) {
+            return sprintf($this->Translate('%1$s has no lessons on %2$s — everything is cancelled: %3$s.'),
+                           $name, $tagName, implode(', ', $entfall));
+        }
+
+        $von  = $this->VoiceUhr($stattfindend[0]['start'] ?? '');
+        $bis  = $this->VoiceUhr($stattfindend[count($stattfindend) - 1]['end'] ?? '');
+        $satz = sprintf($this->Translate('%1$s on %2$s, %3$d lesson(s) from %4$s to %5$s: %6$s'),
+                        $name, $tagName, count($stattfindend), $von, $bis,
+                        implode(', ', $faecher)) . '.';
+        if ($betreuung !== []) {
+            $satz .= ' ' . sprintf($this->Translate('Care until %s.'),
+                                   $this->VoiceUhr($betreuung[count($betreuung) - 1]['end'] ?? ''));
+        }
+        return $satz;
     }
 
     /** @return array<string,mixed> */
@@ -2433,7 +2624,7 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
