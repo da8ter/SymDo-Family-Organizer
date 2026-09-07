@@ -457,11 +457,14 @@
         users: users,
         // Familienname fuer die Begruessung. Muss MIT: die Kachel bekommt ihn
         // aus ihrem Zustand, die ausgelieferte Web-App NUR ueber diesen Weg.
-        familyName: disc.familyName || ''
+        familyName: disc.familyName || '',
+        // Fehlt die Angabe (aeltere Bruecke), gilt die Begruessung als AN.
+        greeting: disc.greeting !== false
       };
       // Fingerabdruck ohne den Typ: nur bei echter Aenderung liefern, sonst
       // zeichnete die Oberflaeche bei jedem Takt neu (meta ruft renderAll).
-      var fp = JSON.stringify([instances, hiddenIDs, disc.tabs || null, users, disc.familyName || '']);
+      var fp = JSON.stringify([instances, hiddenIDs, disc.tabs || null, users,
+                               disc.familyName || '', disc.greeting !== false]);
       if (fp === lastMeta) { return; }
       lastMeta = fp;
       deliver(meta);
@@ -698,6 +701,7 @@
           type: 'state',
           users: mapUsers(disc.users),
           familyName: disc.familyName || '',
+          greeting: disc.greeting !== false,
           defaultUserID: '',
           gatewayAvailable: true,
           hiddenIDs: hiddenIDs,

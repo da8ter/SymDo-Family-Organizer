@@ -451,6 +451,10 @@ trait ApiRouter
                Muss MIT: die Auskunft hier ist eine Weissliste, und ohne diese
                Zeile stuende auf dem Dashboard nur „Hallo Familie". */
             'familyName'   => trim((string)@IPS_GetProperty($this->InstanceID, 'FamilyName')),
+            /* Ob die Begruessung ueberhaupt erscheint. Fehlt die Angabe (aeltere
+               Bridge), gilt sie als AN — so wie eine fehlende tabs-Angabe alle
+               Bereiche einschaltet. */
+            'greeting'     => (bool)@IPS_GetProperty($this->InstanceID, 'GreetingEnabled'),
             /* Die sichtbaren Bereiche gehoeren MIT in die Auskunft. Sie standen
                bisher nur in window.__SYMDO__, also nur im Seitenaufbau — wer
                einen Bereich abschaltete, erreichte eine offene Web-App nie. Die

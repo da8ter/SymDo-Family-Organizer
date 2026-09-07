@@ -305,6 +305,11 @@
                     "caption": "Household members for task assignment. The photo is a Symcon media object (image)."
                 },
                 {
+                    "type": "CheckBox",
+                    "name": "GreetingEnabled",
+                    "caption": "Show a greeting on the dashboard"
+                },
+                {
                     "type": "ValidationTextBox",
                     "name": "FamilyName",
                     "caption": "Family name for the dashboard greeting",

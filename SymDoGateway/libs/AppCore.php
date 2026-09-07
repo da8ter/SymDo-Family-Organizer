@@ -86,6 +86,8 @@ trait AppCore
            Haushalt gaebe es keine richtige Wahl, und wie die Familie ANGEREDET
            werden will, weiss nur sie selbst. Leer heisst „Hallo Familie". */
         $this->RegisterPropertyString('FamilyName', '');
+        // Die Begruessung selbst — abschaltbar, ohne den Namen zu verlieren.
+        $this->RegisterPropertyBoolean('GreetingEnabled', true);
         // Optionale lokale HTTPS-Basis-URL (browservertrautes Zertifikat), damit die
         // über Connect geladene Web-App im Heimnetz auf die lokale API umschaltet.
         $this->RegisterPropertyString('LocalHttpsUrl', '');

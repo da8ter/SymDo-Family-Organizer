@@ -4355,6 +4355,10 @@ const store = {
   users: [],
   // Fuer die Begruessung auf dem Dashboard; leer heisst „Hallo Familie".
   familyName: '',
+  /* Ob die Begruessung ueberhaupt erscheint. Vorgabe AN: fehlt die Angabe
+     (aeltere Kachel, aeltere Bruecke), soll nichts abgeschaltet sein, was
+     niemand abgeschaltet hat. */
+  greeting: true,
   defaultUserID: '',
   gatewayAvailable: false,
   aiEnabled: false,
@@ -5424,6 +5428,7 @@ function handleMessage(data) {
   if (data.type === 'state') {
     store.users = data.users || [];
     store.familyName = data.familyName || '';
+    store.greeting = data.greeting !== false;
     store.defaultUserID = data.defaultUserID || '';
     store.gatewayAvailable = !!data.gatewayAvailable;
     store.aiEnabled = !!data.aiEnabled;
@@ -5516,6 +5521,7 @@ function handleMessage(data) {
        (aeltere Kachel, aelterer Adapter) darf den Namen nicht loeschen — die
        Begruessung fiele sonst stumm auf „Hallo Familie" zurueck. */
     if (typeof data.familyName === 'string') { store.familyName = data.familyName; }
+    if (typeof data.greeting === 'boolean') { store.greeting = data.greeting; }
     applyTabVisibility();
     for (const key of Object.keys(store.states)) {
       const inst = store.instances.find(i => String(i.id) === key);
@@ -8373,7 +8379,9 @@ function renderDashboard() {
      margin-bottom: -44px auf die Zeile der Glocke gezogen und liegt damit
      ueber dieser Stelle — eine Ueberschrift in dash-head selbst waere den
      Avataren in die Quere gekommen. */
-  html += `<h1 class="dash-hello">${escapeHtml(dashBegruessung())}</h1>`;
+  if (store.greeting) {
+    html += `<h1 class="dash-hello">${escapeHtml(dashBegruessung())}</h1>`;
+  }
 
   // KPI-Kacheln
   const kpiTint = (c) => `background: linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 72%, #000));`;

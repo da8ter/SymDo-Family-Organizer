@@ -844,6 +844,7 @@ class SymDoWebApp extends IPSModuleStrict
             'aiEnabled'       => ($gatewayID > 0 ? (bool)@IPS_GetProperty($gatewayID, 'AiEnabled') : false),
             // Familienname fuer die Begruessung; leer heisst „Hallo Familie".
             'familyName'      => $this->FamilyNameVomGateway(),
+            'greeting'        => $this->GreetingVomGateway(),
             /* Sprachdialog. Gelesen wird die PROPERTY des Gateways — die
                Einwilligungen liegen in Attributen und sind von außen nicht
                lesbar; geprüft werden sie serverseitig beim Öffnen der Sitzung
@@ -1103,6 +1104,17 @@ class SymDoWebApp extends IPSModuleStrict
     {
         $gateway = $this->GetAppGatewayID();
         return $gateway > 0 ? trim((string)@IPS_GetProperty($gateway, 'FamilyName')) : '';
+    }
+
+    /**
+     * Soll das Dashboard eine Begruessung zeigen? Ohne Gateway gilt sie als AN
+     * — dieselbe Richtung wie bei einer fehlenden Angabe in der Bruecke: der
+     * Schalter soll nichts abschalten, was niemand abgeschaltet hat.
+     */
+    private function GreetingVomGateway(): bool
+    {
+        $gateway = $this->GetAppGatewayID();
+        return $gateway === 0 || (bool)@IPS_GetProperty($gateway, 'GreetingEnabled');
     }
 
     /** @return array<int, array{id: string, name: string, avatar: string}> */
@@ -1373,6 +1385,7 @@ class SymDoWebApp extends IPSModuleStrict
             // Aus demselben Grund der Familienname: wer ihn im Gateway aendert,
             // soll die Begruessung ohne Neuladen nachziehen sehen.
             'familyName'      => $this->FamilyNameVomGateway(),
+            'greeting'        => $this->GreetingVomGateway(),
         ]);
     }
 
