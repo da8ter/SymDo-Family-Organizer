@@ -269,6 +269,20 @@
      Spalten stachen heraus), nur die Flaeche leicht abgesetzt, damit ein
      freier Tag auf einen Blick als frei zu lesen ist. */
   .spalte.ohne { background: color-mix(in srgb, var(--spalte) 55%, transparent); }
+  /* Rahmen um den heutigen Tag, wie im Wochenraster der Web-App (dort seit
+     b34a6e9). Die Klasse istHeute war hier bisher nur Scroll-Anker und
+     Bedingung fuer den Jetzt-Strich, gekennzeichnet wurde der Tag allein durch
+     die Pille — die beiden Raster waren damit auseinandergelaufen.
+     Als Pseudoelement mit z-index 1: UEBER den absolut gesetzten Stunden (die
+     malten eine blosse outline weg), UNTER der stickyen Zeitachse (z-index 2)
+     und unter dem Jetzt-Strich (3). */
+  .spalte.istHeute { position: relative; }
+  .spalte.istHeute::after {
+    content: ''; position: absolute; inset: 0; z-index: 1;
+    border: 1.5px solid var(--accent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
   .stunde {
     position: absolute; left: 0; right: 0; overflow: hidden;
     padding: 8px 10px; color: #fff; display: flex; gap: 8px; align-items: flex-start;
