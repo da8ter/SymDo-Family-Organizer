@@ -975,7 +975,7 @@ trait Voice
                 $this->VoiceGeraeteStand(), self::$VOICE_GERAETE_MAX)],
             ['type' => 'Label', 'caption' => sprintf(
                 $this->Translate('%d voice schedules set up — hidden events at the devices themselves; they can be deleted there.'),
-                count($this->VoiceZeitplaene()))],
+                count($this->VoiceZeitplaeneOffen()))],
         ];
         if ($stand['rueckfrageAusserhalb'] !== []) {
             $items[] = ['type' => 'Label', 'caption' => sprintf(

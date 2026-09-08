@@ -35,6 +35,8 @@ trait VoiceZeitplan
     private static int $VOICE_ZEITPLAN_HORIZONT = 366 * 86400;
     /** Relativ („in n Minuten"): höchstens 7 Tage. */
     private static int $VOICE_ZEITPLAN_MINUTEN_MAX = 7 * 1440;
+    /** Erledigte Einmal-Aufträge bleiben so lange sichtbar („erledigt um 12:24"), dann räumt die Liste sie weg. */
+    private static int $VOICE_ZEITPLAN_ERLEDIGT_SEKUNDEN = 15 * 60;
 
     /* Eingebaute Aktionen (IPS_GetActions), wie sie die Konsole für „Auf Wert
        schalten" verwendet — am Prüfstand ausgeführt und gegengelesen. */
@@ -93,17 +95,36 @@ trait VoiceZeitplan
                 continue;
             }
             $ev = @IPS_GetEvent((int)$id);
-            if (($auftrag['art'] ?? '') === 'einmal'
-                && ((int)($ev['LastRun'] ?? 0) > 0 || (int)($auftrag['faellig'] ?? 0) < time() - 120)) {
-                @IPS_DeleteEvent((int)$id);   // hat gefeuert (oder ist verpasst) — einmal ist einmal
-                continue;
+            $erledigt = 0;
+            if (($auftrag['art'] ?? '') === 'einmal') {
+                /* Gefeuert (LastRun) oder verpasst (fällig und nie gelaufen): der
+                   Auftrag ist ERLEDIGT. Er bleibt 15 Minuten in der Liste, damit
+                   „Habe ich einen Timer?" drei Sekunden nach dem Feuern nicht
+                   „nichts geplant" hört, sondern „erledigt um 12:24". */
+                if ((int)($ev['LastRun'] ?? 0) > 0) {
+                    $erledigt = (int)$ev['LastRun'];
+                } elseif ((int)($auftrag['faellig'] ?? 0) < time() - 120) {
+                    $erledigt = (int)$auftrag['faellig'];
+                }
+                if ($erledigt > 0 && $erledigt < time() - self::$VOICE_ZEITPLAN_ERLEDIGT_SEKUNDEN) {
+                    @IPS_DeleteEvent((int)$id);   // einmal ist einmal
+                    continue;
+                }
             }
             $liste[] = ['id' => (int)$id, 'auftrag' => $auftrag,
                         'naechstes' => (int)($ev['NextRun'] ?? 0), 'letztes' => (int)($ev['LastRun'] ?? 0),
-                        'aktiv' => (bool)($ev['EventActive'] ?? false)];
+                        'aktiv' => (bool)($ev['EventActive'] ?? false), 'erledigt' => $erledigt];
         }
-        usort($liste, static fn(array $a, array $b): int => $a['naechstes'] <=> $b['naechstes']);
+        // Offene zuerst nach Fälligkeit, Erledigte dahinter (jüngste zuerst).
+        usort($liste, static fn(array $a, array $b): int => ($a['erledigt'] > 0) <=> ($b['erledigt'] > 0)
+            ?: ($a['erledigt'] > 0 ? $b['erledigt'] <=> $a['erledigt'] : $a['naechstes'] <=> $b['naechstes']));
         return $liste;
+    }
+
+    /** Nur die offenen Zeitpläne — für Deckel und Formular. @return list<array<string,mixed>> */
+    private function VoiceZeitplaeneOffen(): array
+    {
+        return array_values(array_filter($this->VoiceZeitplaene(), static fn(array $z): bool => $z['erledigt'] === 0));
     }
 
     /** Eine Zeile für Konsole und Werkzeugantwort: „Prüfraum Prüfschalter → An, täglich um 11:00 (nächstes Mal morgen um 11:00)". */
@@ -114,6 +135,10 @@ trait VoiceZeitplan
         $was = ($ziel['typ'] ?? '') === 'var'
             ? sprintf('%s → %s', (string)$ziel['titel'], (string)($ziel['text'] ?? ''))
             : sprintf($this->Translate('start %s'), (string)$ziel['titel']);
+        if (($z['erledigt'] ?? 0) > 0) {
+            $zeile = $was . ', ' . sprintf($this->Translate('done %s'), $this->VoiceZeitplanZeitpunkt((int)$z['erledigt']));
+            return ($a['wer'] ?? '') !== '' ? $zeile . ' — ' . sprintf($this->Translate('by %s'), (string)$a['wer']) : $zeile;
+        }
         $zeile = $was . ', ' . $this->VoiceZeitplanWann($a);
         if (($a['art'] ?? '') !== 'einmal' && (int)$z['naechstes'] > 0) {
             $zeile .= ' (' . sprintf($this->Translate('next time %s'), $this->VoiceZeitplanZeitpunkt((int)$z['naechstes'])) . ')';
@@ -335,7 +360,7 @@ trait VoiceZeitplan
         }
 
         // ---- Erster Aufruf ----
-        if (count($this->VoiceZeitplaene()) >= self::$VOICE_ZEITPLAN_MAX) {
+        if (count($this->VoiceZeitplaeneOffen()) >= self::$VOICE_ZEITPLAN_MAX) {
             return $this->VoiceErr('zeitplan_deckel', sprintf($this->Translate('There are already %d schedules — please delete one first.'), self::$VOICE_ZEITPLAN_MAX));
         }
         $zeit = $this->VoiceZeitplanZeit($args);
@@ -504,12 +529,20 @@ trait VoiceZeitplan
         if ($treffer === []) {
             return ['ok' => true, 'zeitplaene' => [], 'sag' => $this->Translate('Nothing is planned for that.')];
         }
-        $zeilen = array_map(fn(array $z): array => ['id' => $z['id'], 'text' => $this->VoiceZeitplanZeile($z)], array_slice($treffer, 0, 15));
-        $sag = count($treffer) <= 3
-            ? implode(' ', array_map(static fn(array $z): string => $z['text'] . '.', $zeilen))
-            : sprintf($this->Translate('%d schedules are set up. The next ones: %s.'), count($treffer),
-                implode('; ', array_map(static fn(array $z): string => $z['text'], array_slice($zeilen, 0, 3))));
-        return ['ok' => true, 'zeitplaene' => $zeilen, 'anzahl' => count($treffer), 'sag' => $sag];
+        $offen = array_values(array_filter($treffer, static fn(array $z): bool => $z['erledigt'] === 0));
+        $erledigt = array_values(array_filter($treffer, static fn(array $z): bool => $z['erledigt'] > 0));
+        $zeile = fn(array $z): array => ['id' => $z['id'], 'text' => $this->VoiceZeitplanZeile($z), 'erledigt' => $z['erledigt'] > 0];
+        $zeilen = array_map($zeile, array_slice(array_merge($offen, $erledigt), 0, 15));
+        $offenText = array_map(fn(array $z): string => $this->VoiceZeitplanZeile($z), array_slice($offen, 0, 3));
+        $sag = match (true) {
+            $offen === []       => sprintf($this->Translate('Nothing more is planned. Last done: %s.'), $this->VoiceZeitplanZeile($erledigt[0])),
+            count($offen) <= 3  => implode(' ', array_map(static fn(string $t): string => $t . '.', $offenText)),
+            default             => sprintf($this->Translate('%d schedules are set up. The next ones: %s.'), count($offen), implode('; ', $offenText)),
+        };
+        if ($offen !== [] && $erledigt !== []) {
+            $sag .= ' ' . sprintf($this->Translate('Done: %s.'), $this->VoiceZeitplanZeile($erledigt[0]));
+        }
+        return ['ok' => true, 'zeitplaene' => $zeilen, 'anzahl' => count($offen), 'erledigt' => count($erledigt), 'sag' => $sag];
     }
 
     /**
