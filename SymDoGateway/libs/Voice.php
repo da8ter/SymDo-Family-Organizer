@@ -974,7 +974,7 @@ trait Voice
                 (int)$stand['geraete'], (int)$stand['skripte'], count($stand['raeume']),
                 $this->VoiceGeraeteStand(), self::$VOICE_GERAETE_MAX)],
             ['type' => 'Label', 'caption' => sprintf(
-                $this->Translate('%d voice schedules set up — they are events below this instance and can be deleted there.'),
+                $this->Translate('%d voice schedules set up — hidden events at the devices themselves; they can be deleted there.'),
                 count($this->VoiceZeitplaene()))],
         ];
         if ($stand['rueckfrageAusserhalb'] !== []) {

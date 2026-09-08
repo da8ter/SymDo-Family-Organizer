@@ -437,7 +437,7 @@
             "%d schedules deleted.": "%d Zeitpläne gelöscht.",
             "planned devices": "geplanten Geräten",
             "Show schedules": "Zeitpläne anzeigen",
-            "%d voice schedules set up — they are events below this instance and can be deleted there.": "%d Zeitpläne per Sprache eingerichtet — sie liegen als Ereignisse unter dieser Instanz und lassen sich dort löschen.",
+            "%d voice schedules set up — hidden events at the devices themselves; they can be deleted there.": "%d Zeitpläne per Sprache eingerichtet — ausgeblendete Ereignisse an den Geräten selbst; dort lassen sie sich auch löschen.",
             "No devices found below the root categories.": "Unter den Wurzelkategorien wurden keine Geräte gefunden.",
             "No dish name provided.": "Kein Gerichtsname angegeben.",
             "No file provided.": "Keine Datei übermittelt.",

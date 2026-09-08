@@ -6,23 +6,26 @@ declare(strict_types=1);
  * Sprachdialog — Zeitpläne für Geräte („schalte in 55 Minuten das Wasser aus",
  * „jeden Tag um 11 Uhr die Lampe an").
  *
- * Jeder Zeitplan ist ein zyklisches Symcon-EREIGNIS unter der Gateway-Instanz:
- *   - er überlebt Kernel-Neustarts, ohne dass hier ein Timer nachgezogen wird,
- *   - er steht sichtbar in der Konsole und lässt sich dort löschen oder pausieren,
- *   - er trägt seine Nutzlast (Ziel, Wert, Person, Bestätigung) als JSON im
- *     Info-Feld — kein Attribut, das aus dem Tritt geraten kann, und keine
- *     Registrierung, die einen Kernel-Neustart bräuchte.
- * Das Ereignisskript ruft per IPS_RequestAction(<Gateway>, 'VoiceZeitplan',
- * <EreignisID>) zurück; die Instanznummer steht fest im Skript, weil
- * $_IPS['TARGET'] bei Ereignissen nicht verlässlich gesetzt ist.
+ * Ein Zeitplan ist ein ganz gewöhnliches zyklisches Symcon-EREIGNIS, so wie es
+ * die Konsole auch anlegen würde: es hängt AM ZIELOBJEKT (Variable, Skript,
+ * Szenenvariable), ist ausgeblendet (taucht in keiner Visualisierung auf) und
+ * schaltet mit der eingebauten Aktion „Auf Wert schalten" bzw. „Automation
+ * ausführen" DIREKT — kein Umweg über das Gateway. Damit gilt die Symcon-Logik
+ * vollständig: Referenzsuche, Ereignis-Reiter am Objekt, Pausieren und Löschen
+ * in der Konsole, Überleben von Kernel-Neustarts, Löschen mit dem Objekt.
  *
- * Beim FEUERN gilt dieselbe Prüfung wie beim gesprochenen Befehl: Riegel
- * (Schalter, Einwilligung), Umfang, Kinder und Rückfrage-Liste, Stundendeckel,
- * Gegenlesen, Protokoll. Ein Zeitplan kann nie mehr als ein sofortiger Aufruf.
+ * Der Sprachdialog erkennt seine Ereignisse an der Nutzlast im Info-Feld
+ * (`symdo: zeitplan`, dazu Ziel, Wert, Person, Bestätigung). Damit listet und
+ * löscht er sie auf Zuruf — mehr nicht. Einmal angelegt, gehören sie dem Haus
+ * wie jedes andere Ereignis: Widerruf der Einwilligung oder Abschalten der
+ * Gerätesteuerung lassen sie unangetastet (Entscheidung des Nutzers vom
+ * 08.09.2026). Die Riegel wirken beim ANLEGEN, nicht am Bestand.
  *
- * Kinder dürfen EINMALIGE Aufträge für freigegebene Geräte einplanen (das
- * Nachtlicht in zehn Minuten aus), aber keine dauerhaften: ein täglicher Plan
- * ist eine bleibende Änderung am Haus, und die legen Erwachsene an.
+ * Alle Prüfungen (Umfang, Wert, Rückfrage-Liste, Kinder) laufen beim ANLEGEN:
+ * ein ungültiger Wert scheitert beim Sprechen, nicht in 55 Minuten. Kinder
+ * dürfen EINMALIGES für freigegebene Geräte einplanen (das Nachtlicht in zehn
+ * Minuten aus), aber nichts Dauerhaftes: ein täglicher Plan ist eine bleibende
+ * Änderung am Haus, und die legen Erwachsene an.
  */
 trait VoiceZeitplan
 {
@@ -32,6 +35,16 @@ trait VoiceZeitplan
     private static int $VOICE_ZEITPLAN_HORIZONT = 366 * 86400;
     /** Relativ („in n Minuten"): höchstens 7 Tage. */
     private static int $VOICE_ZEITPLAN_MINUTEN_MAX = 7 * 1440;
+
+    /* Eingebaute Aktionen (IPS_GetActions), wie sie die Konsole für „Auf Wert
+       schalten" verwendet — am Prüfstand ausgeführt und gegengelesen. */
+    private static string $VOICE_AKT_BOOL   = '{46B65CA6-3098-4982-9A6C-B89DADBB0A96}';   // VALUE bool
+    private static string $VOICE_AKT_ZAHL   = '{A4C53C8D-795E-403A-9EEC-CC0D71E89A20}';   // VALUE int|float
+    private static string $VOICE_AKT_ENUM   = '{FCE37F48-DA3F-45DD-AC77-71343792CC2D}';   // VALUE aus den Optionen
+    private static string $VOICE_AKT_TEXT   = '{A4D52B67-BE4B-4AD0-964F-B9BA2556AAB0}';   // VALUE string
+    private static string $VOICE_AKT_SKRIPT = '{7938A5A2-0981-5FE0-BE6C-8AA610D654EB}';   // Automation ausführen
+    /** Szenensteuerung: die Szenenvariable auf 2 = „Aufrufen" (Profil SZS.SceneControl). */
+    private static int $VOICE_SZENE_AUFRUFEN = 2;
 
     /** Bitmaske der Wochentage wie in IPS_SetEventCyclic. */
     private static array $VOICE_ZEITPLAN_TAGE = [
@@ -47,10 +60,6 @@ trait VoiceZeitplan
     /** Glied der RequestAction-Kette des Gateways. */
     private function VoiceZeitplanRequestAction(string $Ident, mixed $Value): bool
     {
-        if ($Ident === 'VoiceZeitplan') {
-            $this->VoiceZeitplanFeuern((int)$Value);
-            return true;
-        }
         if ($Ident === 'VoiceZeitplaeneZeigen') {
             $zeilen = array_map(fn(array $z): string => $this->VoiceZeitplanZeile($z), $this->VoiceZeitplaene());
             echo $zeilen === [] ? $this->Translate('No voice schedules.') : implode("\n", $zeilen);
@@ -64,16 +73,18 @@ trait VoiceZeitplan
     // ------------------------------------------------------------------
 
     /**
-     * Alle Zeitpläne des Sprachdialogs: die Ereignisse unter der Instanz, deren
-     * Info-Feld unsere Nutzlast trägt. Fremde Ereignisse bleiben unangetastet.
+     * Alle Zeitpläne des Sprachdialogs: die Ereignisse im Haus, deren Info-Feld
+     * unsere Nutzlast trägt. Fremde Ereignisse bleiben unangetastet. Einmalige,
+     * die gefeuert haben, werden hier nebenbei weggeräumt — Symcon lässt ein
+     * abgelaufenes Einmal-Ereignis stehen.
      *
-     * @return list<array{id:int,auftrag:array<string,mixed>,naechstes:int,aktiv:bool}>
+     * @return list<array{id:int,auftrag:array<string,mixed>,naechstes:int,letztes:int,aktiv:bool}>
      */
     private function VoiceZeitplaene(): array
     {
         $liste = [];
-        foreach ((array)@IPS_GetChildrenIDs($this->InstanceID) as $kind) {
-            $o = @IPS_GetObject((int)$kind);
+        foreach ((array)@IPS_GetEventList() as $id) {
+            $o = @IPS_GetObject((int)$id);
             if (!is_array($o) || (int)($o['ObjectType'] ?? -1) !== 4) {
                 continue;
             }
@@ -81,9 +92,15 @@ trait VoiceZeitplan
             if (!is_array($auftrag) || ($auftrag['symdo'] ?? '') !== 'zeitplan' || !is_array($auftrag['ziel'] ?? null)) {
                 continue;
             }
-            $ev = @IPS_GetEvent((int)$kind);
-            $liste[] = ['id' => (int)$kind, 'auftrag' => $auftrag,
-                        'naechstes' => (int)($ev['NextRun'] ?? 0), 'aktiv' => (bool)($ev['EventActive'] ?? false)];
+            $ev = @IPS_GetEvent((int)$id);
+            if (($auftrag['art'] ?? '') === 'einmal'
+                && ((int)($ev['LastRun'] ?? 0) > 0 || (int)($auftrag['faellig'] ?? 0) < time() - 120)) {
+                @IPS_DeleteEvent((int)$id);   // hat gefeuert (oder ist verpasst) — einmal ist einmal
+                continue;
+            }
+            $liste[] = ['id' => (int)$id, 'auftrag' => $auftrag,
+                        'naechstes' => (int)($ev['NextRun'] ?? 0), 'letztes' => (int)($ev['LastRun'] ?? 0),
+                        'aktiv' => (bool)($ev['EventActive'] ?? false)];
         }
         usort($liste, static fn(array $a, array $b): int => $a['naechstes'] <=> $b['naechstes']);
         return $liste;
@@ -292,9 +309,9 @@ trait VoiceZeitplan
 
     /**
      * zeitplan_anlegen — Ziel und Wert wie geraet_steuern, dazu die Zeitform.
-     * Es wird JETZT nichts geschaltet; ungültige Werte scheitern beim Sprechen,
-     * nicht in 55 Minuten. Rückfrage-Geräte gehen über dieselbe Marke wie beim
-     * sofortigen Schalten (bereich=zeitplan), Kinder dürfen nur Einmaliges.
+     * Es wird JETZT nichts geschaltet. Rückfrage-Geräte gehen über dieselbe
+     * Marke wie beim sofortigen Schalten (bereich=zeitplan), Kinder dürfen nur
+     * Einmaliges.
      *
      * @param array{userId:string,defaults:array} $ctx
      * @return array<string,mixed>
@@ -356,7 +373,7 @@ trait VoiceZeitplan
         }
         $userId = (string)($ctx['userId'] ?? '');
         $auftrag = [
-            'symdo' => 'zeitplan', 'v' => 1, 'ziel' => $ziel,
+            'symdo' => 'zeitplan', 'v' => 2, 'ziel' => $ziel,
             'art' => (string)$zeit['art'], 'tage' => (int)$zeit['tage'], 'uhrzeit' => (string)$zeit['uhrzeit'],
             'faellig' => (int)$zeit['faellig'], 'userId' => $userId, 'wer' => $this->VoiceNutzerName($userId),
             'bestaetigt' => false, 'angelegt' => time(),
@@ -376,7 +393,41 @@ trait VoiceZeitplan
     }
 
     /**
-     * Das Ereignis anlegen. Alles, was das Feuern braucht, steht im Info-Feld.
+     * Die eingebaute Aktion für dieses Ziel — dieselbe, die die Konsole unter
+     * „Auf Wert schalten" anbietet. Null, wenn es keine passende gibt.
+     *
+     * @param array<string,mixed> $ziel
+     * @return array{0:string,1:array<string,mixed>}|null  [AktionsID, Parameter]
+     */
+    private function VoiceZeitplanAktion(array $ziel): ?array
+    {
+        $id = (int)$ziel['id'];
+        switch ((string)($ziel['typ'] ?? '')) {
+            case 'skript':
+                return @IPS_ScriptExists($id) ? [self::$VOICE_AKT_SKRIPT, ['TARGET' => $id]] : null;
+            case 'szene':
+                return @IPS_VariableExists($id) ? [self::$VOICE_AKT_ENUM, ['TARGET' => $id, 'VALUE' => self::$VOICE_SZENE_AUFRUFEN]] : null;
+        }
+        if (!@IPS_VariableExists($id)) {
+            return null;
+        }
+        $vt = (int)($ziel['vt'] ?? 0);
+        $wert = $ziel['wert'];
+        if ($vt === 0) {
+            return [self::$VOICE_AKT_BOOL, ['TARGET' => $id, 'VALUE' => (bool)$wert]];
+        }
+        if ($vt === 3) {
+            return [self::$VOICE_AKT_TEXT, ['TARGET' => $id, 'VALUE' => (string)$wert]];
+        }
+        $spec = $this->VoiceGeraetSpezifikation($id);
+        if ($spec['options'] !== [] && $vt === 1) {
+            return [self::$VOICE_AKT_ENUM, ['TARGET' => $id, 'VALUE' => (int)$wert]];
+        }
+        return [self::$VOICE_AKT_ZAHL, ['TARGET' => $id, 'VALUE' => $vt === 2 ? (float)$wert : (int)$wert]];
+    }
+
+    /**
+     * Das Ereignis anlegen: am Ziel, ausgeblendet, mit eingebauter Aktion.
      * @param array<string,mixed> $auftrag
      * @return array<string,mixed>
      */
@@ -384,14 +435,19 @@ trait VoiceZeitplan
     {
         $ziel = $auftrag['ziel'];
         $wann = $this->VoiceZeitplanWann($auftrag);
+        $aktion = $this->VoiceZeitplanAktion($ziel);
+        if ($aktion === null) {
+            return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I cannot find "%s" among the devices any more.'), (string)$ziel['titel']));
+        }
         $ev = 0;
         try {
             $ev = IPS_CreateEvent(1);   // zyklisch
-            IPS_SetParent($ev, $this->InstanceID);
+            IPS_SetParent($ev, (int)$ziel['id']);
+            IPS_SetHidden($ev, true);   // nie ungefragt in einer Visualisierung
             IPS_SetName($ev, mb_substr(sprintf('SymDo %s: %s%s, %s', $this->Translate('voice schedule'), (string)$ziel['titel'],
                 ($ziel['typ'] ?? '') === 'var' ? ' → ' . (string)($ziel['text'] ?? '') : '', $wann), 0, 120));
             IPS_SetInfo($ev, (string)json_encode($auftrag, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-            IPS_SetEventScript($ev, sprintf("IPS_RequestAction(%d, 'VoiceZeitplan', \$_IPS['EVENT']);", $this->InstanceID));
+            IPS_SetEventAction($ev, $aktion[0], $aktion[1]);
             [$h, $mi] = array_map('intval', explode(':', (string)$auftrag['uhrzeit']));
             switch ((string)$auftrag['art']) {
                 case 'taeglich':
@@ -423,8 +479,9 @@ trait VoiceZeitplan
             ? sprintf($this->Translate($einmal ? 'I will set %1$s to %2$s %3$s.' : 'From now on I set %1$s to %2$s %3$s.'),
                 (string)$ziel['titel'], (string)($ziel['text'] ?? ''), $wann)
             : sprintf($this->Translate($einmal ? 'I will start %1$s %2$s.' : 'From now on I start %1$s %2$s.'), (string)$ziel['titel'], $wann);
-        $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d angelegt — %s%s', $ev, $sag,
-            ($auftrag['wer'] ?? '') !== '' ? ' von ' . (string)$auftrag['wer'] : ''), KL_NOTIFY);
+        $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d angelegt — %s%s%s', $ev, $sag,
+            ($auftrag['wer'] ?? '') !== '' ? ' von ' . (string)$auftrag['wer'] : '',
+            ($auftrag['bestaetigt'] ?? false) ? ' (bestätigt)' : ''), KL_NOTIFY);
         return ['ok' => true, 'id' => $ev, 'geraet' => (string)$ziel['titel'], 'wert' => (string)($ziel['text'] ?? ''),
                 'wann' => $wann, 'dauerhaft' => !$einmal, 'sag' => $sag];
     }
@@ -500,9 +557,10 @@ trait VoiceZeitplan
             if ($kind && (string)($z['auftrag']['userId'] ?? '') !== $userId) {
                 return $this->VoiceErr('nicht_erlaubt', $this->Translate('That schedule was set up by someone else — please ask an adult.'));
             }
+            $zeile = $this->VoiceZeitplanZeile($z);
             if (@IPS_DeleteEvent((int)$z['id'])) {
-                $geloescht[] = $this->VoiceZeitplanZeile($z);
-                $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d gelöscht — %s', (int)$z['id'], end($geloescht)), KL_NOTIFY);
+                $geloescht[] = $zeile;
+                $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d gelöscht — %s', (int)$z['id'], $zeile), KL_NOTIFY);
             }
         }
         if ($geloescht === []) {
@@ -552,66 +610,6 @@ trait VoiceZeitplan
             $liste = array_values(array_filter($liste, static fn(array $z): bool => (int)$z['auftrag']['ziel']['id'] === $zielId));
         }
         return ['ok' => true, 'liste' => $liste];
-    }
-
-    // ------------------------------------------------------------------
-    // Feuern
-    // ------------------------------------------------------------------
-
-    /**
-     * Das Ereignis ist fällig. Dieselben Riegel wie beim gesprochenen Befehl —
-     * ein Zeitplan, der vor Wochen angelegt wurde, darf heute nicht mehr, als
-     * ein Aufruf heute dürfte. Einmaliges räumt sich danach selbst weg.
-     */
-    private function VoiceZeitplanFeuern(int $ev): void
-    {
-        if ($ev <= 0 || !@IPS_EventExists($ev)) {
-            return;
-        }
-        $auftrag = json_decode((string)(@IPS_GetObject($ev)['ObjectInfo'] ?? ''), true);
-        if (!is_array($auftrag) || ($auftrag['symdo'] ?? '') !== 'zeitplan' || !is_array($auftrag['ziel'] ?? null)) {
-            $this->LogMessage(sprintf('SymDo Sprachdialog: Ereignis #%d trägt keinen Zeitplan — nichts geschaltet.', $ev), KL_WARNING);
-            return;
-        }
-        $einmal = (string)($auftrag['art'] ?? '') === 'einmal';
-        $ziel = $auftrag['ziel'];
-        $ctx = ['userId' => (string)($auftrag['userId'] ?? ''), 'defaults' => []];
-        $zeile = $this->VoiceZeitplanZeile(['id' => $ev, 'auftrag' => $auftrag, 'naechstes' => 0, 'aktiv' => true]);
-        try {
-            $zu = $this->VoiceGeraeteTorZu();
-            if ($zu !== null) {
-                $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d nicht ausgeführt (%s) — %s', $ev,
-                    (string)($zu['error']['code'] ?? '?'), $zeile), KL_WARNING);
-                $this->VoiceLogEintrag('zeitplan', 'nicht ausgeführt: ' . (string)($zu['error']['code'] ?? '?'), false);
-                return;
-            }
-            $rueckfrage = $this->VoiceGeraetMitRueckfrage((int)$ziel['id'])
-                || ((int)($ziel['inst'] ?? 0) > 0 && $this->VoiceGeraetMitRueckfrage((int)$ziel['inst']));
-            if ($rueckfrage && ($this->VoiceIstKind($ctx) || ($auftrag['bestaetigt'] ?? false) !== true)) {
-                // Das Gerät kam NACH dem Anlegen auf die Rückfrage-Liste (oder der
-                // Anleger ist inzwischen Kind): ohne gesprochenes Ja wird nichts geschaltet.
-                $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d nicht ausgeführt (Rückfrage-Gerät ohne Bestätigung) — %s', $ev, $zeile), KL_WARNING);
-                $this->VoiceLogEintrag('zeitplan', 'nicht ausgeführt: Rückfrage-Gerät', false);
-                return;
-            }
-            $r = $this->VoiceGeraetSchalten($ziel, $ctx, (bool)($auftrag['bestaetigt'] ?? false), 'Zeitplan');
-            $ok = ($r['ok'] ?? false) === true;
-            if (!$ok) {
-                $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d fehlgeschlagen — %s: %s', $ev, $zeile,
-                    (string)($r['sag'] ?? ($r['error']['code'] ?? '?'))), KL_WARNING);
-            }
-            $this->VoiceLogEintrag('zeitplan', (string)($r['sag'] ?? $zeile), $ok);
-            if (!$einmal && @IPS_EventExists($ev)) {
-                $auftrag['letzte'] = ['t' => time(), 'ok' => $ok, 'text' => mb_substr((string)($r['sag'] ?? ''), 0, 120)];
-                @IPS_SetInfo($ev, (string)json_encode($auftrag, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-            }
-        } catch (\Throwable $e) {
-            $this->LogMessage(sprintf('SymDo Sprachdialog: Zeitplan #%d warf: %s', $ev, $e->getMessage()), KL_ERROR);
-        } finally {
-            if ($einmal && @IPS_EventExists($ev)) {
-                @IPS_DeleteEvent($ev);   // erledigt oder verworfen — einmal ist einmal
-            }
-        }
     }
 
     /** Anzeigename eines Mitglieds, '' wenn unbekannt. */
