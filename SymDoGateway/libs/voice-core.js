@@ -39,6 +39,34 @@ function erzeuge(opt) {
   var werkzeugDeckelJe = { symcon_handbuch: 15000 };
   var stilleMs = (opt.silenceSeconds || 45) * 1000;
 
+  /* Ein kurzer, freundlicher Zweiklang, sobald die Verbindung steht — das „Hi"
+     des Assistenten. Bis dahin geht Gesprochenes verloren (WebRTC puffert
+     nichts), und nach dem Weckwort schaut niemand auf die Blase: der Ton ist
+     die einzige Auskunft, dass man jetzt sprechen kann. Rein lokal aus
+     WebAudio, kein Netz, keine Datei; opt.tone === false schaltet ihn ab. */
+  var tonAn = opt.tone !== false;
+  var tonCtx = null;
+  function hiTon() {
+    if (!tonAn) { return; }
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { return; }
+      if (!tonCtx) { tonCtx = new AC(); }
+      if (tonCtx.state === 'suspended' && tonCtx.resume) { tonCtx.resume().catch(function () {}); }
+      var t0 = tonCtx.currentTime + 0.02;
+      // Zwei Töne aufwärts (E5 → A5), weich an- und abgeblendet, leicht überlappend.
+      [[659.25, 0, 0.16], [880, 0.11, 0.26]].forEach(function (n) {
+        var o = tonCtx.createOscillator(), g = tonCtx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0.0001, t0 + n[1]);
+        g.gain.exponentialRampToValueAtTime(0.2, t0 + n[1] + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + n[1] + n[2]);
+        o.connect(g); g.connect(tonCtx.destination);
+        o.start(t0 + n[1]); o.stop(t0 + n[1] + n[2] + 0.02);
+      });
+    } catch (e) {}
+  }
+
   /* Antwortzustand je response_id: Werkzeugaufrufe sammeln, Ergebnisse
      einstellen, und GENAU EIN response.create, wenn alles geliefert ist und
      die Antwort mit "completed" endete. Eine abgebrochene Antwort (der Nutzer
@@ -115,20 +143,34 @@ function erzeuge(opt) {
       ereignis({ art: 'fehler', text: text });
     }, 25000);
 
-    // ZUERST das Mikrofon, DANN die Marke: die Berechtigungsfrage kann
-    // Sekunden dauern, und die Marke verfällt nach 60 s.
-    return navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    }).then(function (strom) {
+    /* Mikrofon und Marke GLEICHZEITIG: nacheinander kostete es 0,3–1 s mehr,
+       und jede Zehntelsekunde hier ist Sprache, die verloren geht. Die Marke
+       verfällt nach 60 s — dauert die Berechtigungsfrage länger, wird eine
+       frische geholt statt mit der alten zu scheitern. Eine nicht benutzte
+       Marke kostet nichts: eine Sitzung entsteht erst mit dem Handschlag. */
+    var markeAb = Date.now();
+    var markeP = post({ action: 'open' }).catch(function () { return { ok: false, verbindung: true }; });
+    var frisch = function (r) {
+      if (!r || r.ok !== true || !r.value) {
+        var text = (r && r.verbindung) ? 'Das Gateway war nicht erreichbar.'
+          : ((r && (r.sag || (r.error && r.error.message))) || 'Keine Sitzung bekommen.');
+        throw { eigene: true, message: text };
+      }
+      return handschlag(r);
+    };
+    return Promise.all([
+      navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      }),
+      markeP
+    ]).then(function (paar) {
+      var strom = paar[0], r = paar[1];
       if (beendet) { strom.getTracks().forEach(function (t) { t.stop(); }); return false; }
       mic = strom;
-      return post({ action: 'open' }).then(function (r) {
-        if (!r || r.ok !== true || !r.value) {
-          var text = (r && (r.sag || (r.error && r.error.message))) || 'Keine Sitzung bekommen.';
-          throw { eigene: true, message: text };
-        }
-        return handschlag(r);
-      });
+      if (Date.now() - markeAb > 45000) {
+        return post({ action: 'open' }).then(frisch);
+      }
+      return frisch(r);
     }).then(function (ok) {
       if (ok === false) { return false; }
       return true;
@@ -164,7 +206,9 @@ function erzeuge(opt) {
       if (!pc) { return; }
       if (pc.connectionState === 'connected') {
         if (startUhr) { clearTimeout(startUhr); startUhr = 0; }
+        hiTon();
         zustand('hoert'); stilleZuruecksetzen();
+        ereignis({ art: 'bereit' });
       }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected'
           || pc.connectionState === 'closed') {
