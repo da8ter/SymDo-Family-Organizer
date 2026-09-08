@@ -340,8 +340,21 @@ trait VoiceTools
                         'geraet' => ['type' => ['string', 'null'], 'description' => 'Name des Geräts wie gesprochen, z.B. "Deckenlampe", "Thermostat"; null = alle Geräte des Raums'],
                         'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname, z.B. "Wohnzimmer"; null = überall'],
                         'filter' => ['type' => 'string', 'enum' => ['alle', 'an', 'aus'], 'description' => '"an" = nur eingeschaltete, "aus" = nur ausgeschaltete, sonst "alle"'],
+                        'id'     => ['type' => ['integer', 'null'], 'description' => 'Kennung aus einer Kandidatenliste; sonst null'],
                     ],
-                    'required' => ['geraet', 'raum', 'filter'],
+                    'required' => ['geraet', 'raum', 'filter', 'id'],
+                ],
+            ],
+            'geraete_suchen' => [
+                'art' => 'lesen', 'tor' => 'geraete',
+                'beschreibung' => 'Sucht freigegebene Geräte lose — wenn der Nutzer ein Gerät umschreibt („die Lampe über dem Esstisch"), eine Etage nennt („oben im Bad") oder geraet_steuern nichts Eindeutiges fand. Liefert Kandidaten mit Pfad (Etage › Raum › Gerät), Typ, möglichen Werten und "id"; mit der id rufst du dann geraet_steuern, geraete_lesen oder zeitplan_anlegen auf.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'suche' => ['type' => ['string', 'null'], 'description' => 'Gesprochene Bezeichnung, auch umschrieben; null = alle im Raum'],
+                        'raum'  => ['type' => ['string', 'null'], 'description' => 'Raum oder Etage, oder null'],
+                    ],
+                    'required' => ['suche', 'raum'],
                 ],
             ],
             'geraet_steuern' => [
@@ -353,9 +366,10 @@ trait VoiceTools
                         'geraet' => ['type' => 'string', 'description' => 'Name des Geräts wie gesprochen'],
                         'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname zum Eingrenzen oder null'],
                         'wert'   => ['type' => 'string', 'description' => 'Zielzustand oder -wert in Worten oder als Zahl'],
+                        'id'     => ['type' => ['integer', 'null'], 'description' => 'Kennung aus einer Kandidatenliste (geraete_suchen oder vorherige Antwort); sonst null'],
                         'marke'  => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
                     ],
-                    'required' => ['geraet', 'raum', 'wert', 'marke'],
+                    'required' => ['geraet', 'raum', 'wert', 'id', 'marke'],
                 ],
             ],
             'szene_starten' => [
@@ -366,9 +380,10 @@ trait VoiceTools
                     'properties' => [
                         'name'  => ['type' => 'string', 'description' => 'Name der Szene oder des Skripts'],
                         'raum'  => ['type' => ['string', 'null'], 'description' => 'Raumname zum Eingrenzen oder null'],
+                        'id'    => ['type' => ['integer', 'null'], 'description' => 'Kennung aus einer Kandidatenliste; sonst null'],
                         'marke' => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
                     ],
-                    'required' => ['name', 'raum', 'marke'],
+                    'required' => ['name', 'raum', 'id', 'marke'],
                 ],
             ],
             'zeitplan_anlegen' => [
@@ -385,9 +400,10 @@ trait VoiceTools
                         'datum'        => ['type' => ['string', 'null'], 'description' => 'Nur einmalig mit genanntem Datum: YYYY-MM-DD; sonst null (heute, wenn die Zeit noch kommt, sonst morgen)'],
                         'wiederholung' => ['type' => 'string', 'enum' => ['keine', 'taeglich', 'werktags', 'wochenende', 'woechentlich'], 'description' => '"keine" = einmalig; „jeden Tag" → taeglich; einzelne Tage → woechentlich mit wochentage'],
                         'wochentage'   => ['type' => ['array', 'null'], 'items' => ['type' => 'string', 'enum' => ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']], 'description' => 'nur bei woechentlich, sonst null'],
+                        'id'           => ['type' => ['integer', 'null'], 'description' => 'Kennung aus einer Kandidatenliste; sonst null'],
                         'marke'        => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
                     ],
-                    'required' => ['geraet', 'raum', 'wert', 'nach_minuten', 'uhrzeit', 'datum', 'wiederholung', 'wochentage', 'marke'],
+                    'required' => ['geraet', 'raum', 'wert', 'nach_minuten', 'uhrzeit', 'datum', 'wiederholung', 'wochentage', 'id', 'marke'],
                 ],
             ],
             'zeitplaene_lesen' => [
@@ -510,6 +526,7 @@ trait VoiceTools
                 'notiz_aendern'       => $this->VoiceToolNotizAendern($args, $ctx),
                 'nachricht_senden'    => $this->VoiceToolNachricht($args, $ctx),
                 'geraete_lesen'       => $this->VoiceToolGeraeteLesen($args, $ctx),
+                'geraete_suchen'      => $this->VoiceToolGeraeteSuchen($args, $ctx),
                 'geraet_steuern'      => $this->VoiceToolGeraetSteuern($args, $ctx, 'geraet'),
                 'szene_starten'       => $this->VoiceToolGeraetSteuern($args, $ctx, 'szene'),
                 'zeitplan_anlegen'    => $this->VoiceToolZeitplanAnlegen($args, $ctx),
@@ -2798,11 +2815,26 @@ trait VoiceTools
         if ($geraete) {
             $zeilen[] = 'Bei Geräten gilt: Nenne sie beim Namen und gib "raum" mit, wenn der Nutzer einen Raum sagt. Meldet das Werkzeug mehrere Treffer, frag, welches gemeint ist, und rate nie. Manche Geräte verlangen eine Rückfrage: geraet_steuern oder szene_starten antworten dann mit einer Frage und einer "marke", und es ist noch NICHTS geschaltet. Sprich die Frage, warte auf ein klares Ja und rufe dasselbe Werkzeug erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke. Sagt das Werkzeug, der Sprechende dürfe das nicht, sage genau das freundlich und suche keinen anderen Weg.';
             $zeilen[] = 'Für später oder regelmäßig nimm zeitplan_anlegen, nie geraet_steuern: "in 55 Minuten" → nach_minuten 55; eine Uhrzeit → uhrzeit als HH:MM; "jeden Tag"/"täglich" → wiederholung taeglich, "werktags", "am Wochenende" oder einzelne Tage → woechentlich mit wochentage; sonst "keine" (einmalig; ohne Datum heißt das heute, wenn die Zeit noch kommt, sonst morgen). Dabei wird JETZT nichts geschaltet; wiederhole in deiner Antwort, was wann geschaltet wird. "Licht an für 10 Minuten" sind zwei Schritte: sofort geraet_steuern an, dann zeitplan_anlegen aus mit nach_minuten 10. Geplantes zeigt zeitplaene_lesen, weg damit geht zeitplan_loeschen — bei mehreren Treffern nenne sie und frag, welcher gemeint ist.';
-            $raeume = $this->VoiceGeraeteRaeume();
-            if ($raeume !== []) {
-                // Nur Räume, keine Geräte: Namen löst das Werkzeug auf, und eine
-                // Geräteliste sprengte den Deckel der Anweisungen.
-                $zeilen[] = 'Räume mit Geräten: ' . implode(', ', array_slice($raeume, 0, 8)) . '.';
+            $zeilen[] = 'Findet ein Gerätewerkzeug nichts oder mehrere Treffer, kommen "kandidaten" zurück — mit Pfad (Etage › Raum › Gerät), Typ, möglichen Werten und "id". Wähle anhand von Raum, Etage, Bezeichnung und passendem Wert den richtigen und rufe dasselbe Werkzeug erneut mit dieser "id" auf. Passen zwei gleich gut, frag nach und nenne beide mit ihrem Pfad. Umschreibt der Nutzer ein Gerät ("die Lampe über dem Esstisch", "oben im Bad"), suche zuerst mit geraete_suchen. Eine id sprichst du nie aus — du nennst den Namen.';
+            $katalog = $this->VoiceGeraeteKatalog();
+            if (count($katalog) > 0 && count($katalog) <= 60) {
+                /* Ein kleiner Haushalt passt ganz hinein: dann kennt das Modell die
+                   Geräte samt Pfad von Anfang an und trifft ohne Suchlauf. Der
+                   Deckel unten ist dafür auf 12.000 gehoben — die Anweisungen
+                   reisen EINMAL je Gespräch. */
+                $liste = 'Freigegebene Geräte (Pfad, id): ' . implode('; ', array_map(
+                    static fn(array $e): string => ((string)($e['pfad'] ?? '') !== '' ? (string)$e['pfad'] : (string)$e['titel']) . ' (' . (int)$e['id'] . ')',
+                    $katalog)) . '.';
+            }
+            if (isset($liste) && mb_strlen($liste) <= 4000) {
+                $zeilen[] = $liste;
+            } else {
+                $raeume = $this->VoiceGeraeteRaeume();
+                if ($raeume !== []) {
+                    // Nur Räume, keine Geräte: Namen löst das Werkzeug auf, und eine
+                    // Geräteliste sprengte den Deckel der Anweisungen.
+                    $zeilen[] = 'Räume mit Geräten: ' . implode(', ', array_slice($raeume, 0, 8)) . '.';
+                }
             }
         }
         $zeilen[] = 'Ist ein Termin ein Serientermin, antworten termin_aendern und loeschen mit der Rückfrage, ob nur dieses eine Vorkommen oder die ganze Serie gemeint ist. Stelle diese Frage und rufe danach mit "umfang" gleich "einzeln" oder "serie" erneut auf.';
@@ -2819,7 +2851,7 @@ trait VoiceTools
            die wichtigsten Regeln weg („nie behaupten, etwas sei erledigt",
            Handbuch, Notizen). Gemessen: 2500 von 2500 Zeichen belegt.
            Deshalb weit genug, dass der feste Teil immer vollständig ankommt. */
-        return mb_strlen($text) > 8000 ? mb_substr($text, 0, 8000) : $text;
+        return mb_strlen($text) > 12000 ? mb_substr($text, 0, 12000) : $text;
     }
 
     private function VoiceDatumZeile(): string

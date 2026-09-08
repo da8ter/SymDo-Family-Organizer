@@ -92,7 +92,7 @@ trait VoiceDevices
      * @param array<int,int> $gesehen  Zielobjekt → Index im Katalog (Dedup über Links)
      */
     private function VoiceGeraeteLaufen(int $id, string $raum, int $tiefe, int $wurzel, bool $istWurzel,
-                                        array &$eintraege, array &$gesehen, bool &$voll): void
+                                        array &$eintraege, array &$gesehen, bool &$voll, array $pfad = []): void
     {
         if ($voll || $tiefe > self::VOICE_GERAETE_TIEFE) {
             return;
@@ -112,8 +112,11 @@ trait VoiceDevices
         }
         $typ = (int)($o['ObjectType'] ?? -1);
         switch ($typ) {
-            case 0: // Kategorie: der nächste Raumname
-                $raum = $istWurzel ? $raum : trim((string)($o['ObjectName'] ?? $raum));
+            case 0: // Kategorie: der nächste Raumname — und ein Glied des Pfads (Etage › Raum)
+                if (!$istWurzel) {
+                    $raum = trim((string)($o['ObjectName'] ?? $raum));
+                    $pfad[] = $raum;
+                }
                 break;
             case 6: // Link: das Ziel unter dem Namen des Links, ohne dessen Kinder zu laufen
                 $link = @IPS_GetLink($id);
@@ -121,17 +124,18 @@ trait VoiceDevices
                 if ($ziel > 0 && @IPS_ObjectExists($ziel)) {
                     $zo = @IPS_GetObject($ziel);
                     $zt = (int)($zo['ObjectType'] ?? -1);
+                    $linkPfad = array_merge($pfad, [trim((string)($o['ObjectName'] ?? ''))]);
                     if ($zt === 2) {
-                        $this->VoiceGeraetVariableAufnehmen($ziel, trim((string)($o['ObjectName'] ?? '')), $raum, $id, $wurzel, $eintraege, $gesehen);
+                        $this->VoiceGeraetVariableAufnehmen($ziel, trim((string)($o['ObjectName'] ?? '')), $raum, $id, $wurzel, $eintraege, $gesehen, '', $linkPfad);
                     } elseif ($zt === 3) {
-                        $this->VoiceGeraetSkriptAufnehmen($ziel, trim((string)($o['ObjectName'] ?? '')), $raum, $id, $wurzel, $eintraege, $gesehen);
+                        $this->VoiceGeraetSkriptAufnehmen($ziel, trim((string)($o['ObjectName'] ?? '')), $raum, $id, $wurzel, $eintraege, $gesehen, $linkPfad);
                     } elseif ($zt === 1) {
                         // Link auf eine Instanz: ihre Variablen unter dem Link-Namen
                         foreach ((array)($zo['ChildrenIDs'] ?? []) as $kind) {
                             $ko = @IPS_GetObject((int)$kind);
                             if (is_array($ko) && (int)($ko['ObjectType'] ?? -1) === 2 && ($ko['ObjectIsHidden'] ?? false) !== true) {
                                 $this->VoiceGeraetVariableAufnehmen((int)$kind, '', $raum, $id, $wurzel, $eintraege, $gesehen,
-                                    trim((string)($o['ObjectName'] ?? '')));
+                                    trim((string)($o['ObjectName'] ?? '')), $linkPfad);
                             }
                         }
                     }
@@ -139,21 +143,22 @@ trait VoiceDevices
                 return;
             case 1: // Instanz: Szenensteuerung gesondert, sonst die Variablen darunter
                 if ($this->VoiceIstSzenensteuerung($id)) {
-                    $this->VoiceSzenenAufnehmen($id, $raum, $wurzel, $eintraege, $gesehen);
+                    $this->VoiceSzenenAufnehmen($id, $raum, $wurzel, $eintraege, $gesehen, $pfad);
                     return;
                 }
+                $pfad[] = trim((string)($o['ObjectName'] ?? ''));
                 break;
             case 2:
-                $this->VoiceGeraetVariableAufnehmen($id, '', $raum, 0, $wurzel, $eintraege, $gesehen);
+                $this->VoiceGeraetVariableAufnehmen($id, '', $raum, 0, $wurzel, $eintraege, $gesehen, '', $pfad);
                 return;
             case 3:
-                $this->VoiceGeraetSkriptAufnehmen($id, '', $raum, 0, $wurzel, $eintraege, $gesehen);
+                $this->VoiceGeraetSkriptAufnehmen($id, '', $raum, 0, $wurzel, $eintraege, $gesehen, $pfad);
                 return;
             default: // Ereignisse, Medien
                 return;
         }
         foreach ((array)($o['ChildrenIDs'] ?? []) as $kind) {
-            $this->VoiceGeraeteLaufen((int)$kind, $raum, $tiefe + 1, $wurzel, false, $eintraege, $gesehen, $voll);
+            $this->VoiceGeraeteLaufen((int)$kind, $raum, $tiefe + 1, $wurzel, false, $eintraege, $gesehen, $voll, $pfad);
         }
     }
 
@@ -168,7 +173,7 @@ trait VoiceDevices
      * @param array<int,int> $gesehen
      */
     private function VoiceGeraetVariableAufnehmen(int $varId, string $anzeigeName, string $raum, int $via, int $wurzel,
-                                                  array &$eintraege, array &$gesehen, string $instanzName = ''): void
+                                                  array &$eintraege, array &$gesehen, string $instanzName = '', array $pfad = []): void
     {
         $name = $this->VoiceGeraetName($varId, $anzeigeName, $instanzName);
         if (isset($gesehen[$varId])) {
@@ -184,13 +189,25 @@ trait VoiceDevices
         if (!is_array($v)) {
             return;
         }
+        /* Die HÜLLE: liegt die Eltern-Instanz selbst in einer Instanz (Dummy
+           „Lampenschirm" mit Modbus-Kindern „Schalter" und „Dimmwert"), ist deren
+           Name das Gerät, das der Nutzer meint — „Lampenschirm an" muss beide
+           Variablen treffen; welche gemeint ist, entscheidet dann der Wert. */
+        $alias = [];
+        $huelle = $anzeigeName === '' ? $this->VoiceGeraetHuelle($varId) : '';
+        if ($huelle !== '' && !str_contains($this->VoiceNorm($name), $this->VoiceNorm($huelle))) {
+            $alias[] = $name;           // „Schalter" allein
+            $alias[] = $huelle;         // „Lampenschirm" allein — trifft beide, der Wert entscheidet
+            $name = $huelle . ' ' . $name;   // gesprochen: „Bad Lampenschirm Schalter"
+        }
         $eintraege[] = [
             'id'     => $varId,
             'typ'    => 'var',
             'name'   => $name,
             'raum'   => $raum,
             'titel'  => $this->VoiceGeraetTitel($raum, $name),
-            'alias'  => [],
+            'alias'  => $alias,
+            'pfad'   => $this->VoiceGeraetPfad($pfad, $varId),
             'vt'     => (int)($v['VariableType'] ?? 0),
             'akt'    => $this->VoiceGeraetAktionierbar($v),
             'via'    => $via,
@@ -199,12 +216,38 @@ trait VoiceDevices
         $gesehen[$varId] = count($eintraege) - 1;
     }
 
+    /** „Obergeschoss › Bad › Lampenschirm › Schalter › Wert" — der Weg unter der Wurzel, für die Kandidatenliste. */
+    private function VoiceGeraetPfad(array $pfad, int $objectID): string
+    {
+        $teile = array_values(array_filter(array_map('trim', $pfad), static fn(string $t): bool => $t !== ''));
+        $eigen = trim((string)@IPS_GetName($objectID));
+        if ($eigen !== '' && ($teile === [] || end($teile) !== $eigen)) {
+            $teile[] = $eigen;
+        }
+        return implode(' › ', $teile);
+    }
+
+    /** Name der Instanz, in der die Eltern-Instanz der Variable liegt — '' wenn es keine gibt. */
+    private function VoiceGeraetHuelle(int $varId): string
+    {
+        $o = @IPS_GetObject($varId);
+        $eo = @IPS_GetObject((int)($o['ParentID'] ?? 0));
+        if (!is_array($eo) || (int)($eo['ObjectType'] ?? -1) !== 1) {
+            return '';
+        }
+        $go = @IPS_GetObject((int)($eo['ParentID'] ?? 0));
+        if (!is_array($go) || (int)($go['ObjectType'] ?? -1) !== 1 || $this->VoiceIstSzenensteuerung((int)$go['ObjectID'])) {
+            return '';
+        }
+        return trim((string)($go['ObjectName'] ?? ''));
+    }
+
     /**
      * @param list<array<string,mixed>> $eintraege
      * @param array<int,int> $gesehen
      */
     private function VoiceGeraetSkriptAufnehmen(int $id, string $anzeigeName, string $raum, int $via, int $wurzel,
-                                                array &$eintraege, array &$gesehen): void
+                                                array &$eintraege, array &$gesehen, array $pfad = []): void
     {
         if (isset($gesehen[$id])) {
             return;
@@ -215,6 +258,7 @@ trait VoiceDevices
         }
         $eintraege[] = ['id' => $id, 'typ' => 'skript', 'name' => $name, 'raum' => $raum,
                         'titel' => $this->VoiceGeraetTitel($raum, $name), 'alias' => [],
+                        'pfad' => $this->VoiceGeraetPfad($pfad, $id),
                         'vt' => null, 'akt' => true, 'via' => $via, 'wurzel' => $wurzel];
         $gesehen[$id] = count($eintraege) - 1;
     }
@@ -223,9 +267,10 @@ trait VoiceDevices
      * @param list<array<string,mixed>> $eintraege
      * @param array<int,int> $gesehen
      */
-    private function VoiceSzenenAufnehmen(int $inst, string $raum, int $wurzel, array &$eintraege, array &$gesehen): void
+    private function VoiceSzenenAufnehmen(int $inst, string $raum, int $wurzel, array &$eintraege, array &$gesehen, array $pfad = []): void
     {
         $io = @IPS_GetObject($inst);
+        $pfad[] = trim((string)($io['ObjectName'] ?? ''));
         foreach ((array)($io['ChildrenIDs'] ?? []) as $kind) {
             $ko = @IPS_GetObject((int)$kind);
             if (!is_array($ko) || (int)($ko['ObjectType'] ?? -1) !== 2 || isset($gesehen[(int)$kind])) {
@@ -241,6 +286,7 @@ trait VoiceDevices
             $eintraege[] = ['id' => (int)$kind, 'typ' => 'szene', 'name' => $name, 'raum' => $raum,
                             'titel' => $this->VoiceGeraetTitel($raum, $name),
                             'alias' => [trim($this->Translate('Scene') . ' ' . $name)],
+                            'pfad' => $this->VoiceGeraetPfad($pfad, (int)$kind),
                             'vt' => null, 'akt' => true, 'via' => 0, 'wurzel' => $wurzel,
                             'inst' => $inst, 'nr' => (int)$m[1]];
             $gesehen[(int)$kind] = count($eintraege) - 1;
@@ -388,8 +434,7 @@ trait VoiceDevices
     {
         $sn = $this->VoiceGeraetSuchNorm($such);
         if ($raum !== '') {
-            $eintraege = array_values(array_filter($eintraege,
-                fn(array $e): bool => $this->VoiceRaumPasst((string)$e['raum'], $raum)));
+            $eintraege = array_values(array_filter($eintraege, fn(array $e): bool => $this->VoiceOrtPasst($e, $raum)));
         }
         $varianten = $this->VoiceGeraetSynonyme($sn);
         $bewertet = [];
@@ -471,6 +516,44 @@ trait VoiceDevices
         return array_values(array_unique($aus));
     }
 
+    /** Raum ODER ein Glied des Pfads (Etage, Hülle): „Bad oben", „im Obergeschoss", „am Lampenschirm". */
+    private function VoiceOrtPasst(array $e, string $gesagt): bool
+    {
+        $glieder = array_values(array_filter(array_merge([(string)$e['raum']], explode(' › ', (string)($e['pfad'] ?? ''))),
+            static fn(string $g): bool => $g !== ''));
+        $trifft = function (string $wort) use ($glieder): bool {
+            foreach ($glieder as $g) {
+                if ($this->VoiceRaumPasst($g, $wort)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        /* Als Ganzes nur, wenn ein Glied die ganze Angabe ENTHÄLT („Gäste-WC
+           oben" enthält „gäste wc") — nicht umgekehrt: „bad" steckt in „bad
+           oben", und das Bad unten passte sonst auch. */
+        $ganz = $this->VoiceGeraetSuchNorm($gesagt);
+        foreach ($glieder as $g) {
+            $gn = $this->VoiceNorm($g);
+            if ($ganz !== '' && ($gn === $ganz || str_contains($gn, $ganz))) {
+                return true;
+            }
+        }
+        /* „Bad oben", „Küche Erdgeschoss": JEDES Wort muss ein Glied treffen —
+           sonst passte „Bad oben" auch auf das Bad unten, weil „bad" in
+           „bad oben" steckt. */
+        $woerter = preg_split('/\s+/u', $this->VoiceGeraetSuchNorm($gesagt), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($woerter) < 2) {
+            return false;
+        }
+        foreach ($woerter as $w) {
+            if (!$trifft($w)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private function VoiceRaumPasst(string $raumEintrag, string $gesagt): bool
     {
         $a = $this->VoiceNorm($raumEintrag);
@@ -492,17 +575,31 @@ trait VoiceDevices
             ['kinderzimmer', 'kind', 'kids'],
             ['garten', 'draussen', 'aussen', 'terrasse', 'balkon', 'hof'],
             ['keller', 'garage', 'hwr', 'hauswirtschaftsraum', 'waschkueche'],
+            // Etagen — kurze Kürzel nur als ganzes Wort, sonst steckt „eg" in „Regal".
+            ['obergeschoss', 'oben', 'og', 'erster stock', '1. stock', 'dachgeschoss', 'dg', 'dach'],
+            ['erdgeschoss', 'unten', 'eg', 'parterre'],
+            ['untergeschoss', 'ug', 'souterrain'],
         ];
-        foreach ($synonyme as $g) {
+        $drin = static function (string $text, string $w): bool {
+            return mb_strlen($w) <= 3 ? (bool)preg_match('/(?<![\p{L}\d])' . preg_quote($w, '/') . '(?![\p{L}\d])/u', $text) : str_contains($text, $w);
+        };
+        $gruppeA = -1;
+        $gruppeB = -1;
+        foreach ($synonyme as $i => $g) {
             $ia = false;
             $ib = false;
             foreach ($g as $w) {
-                $ia = $ia || str_contains($a, $w);
-                $ib = $ib || str_contains($b, $w);
+                $ia = $ia || $drin($a, $w);
+                $ib = $ib || $drin($b, $w);
             }
             if ($ia && $ib) {
                 return true;
             }
+            $gruppeA = $ia ? $i : $gruppeA;
+            $gruppeB = $ib ? $i : $gruppeB;
+        }
+        if ($gruppeA >= 0 && $gruppeB >= 0 && $gruppeA !== $gruppeB) {
+            return false;   // „Erdgeschoss" ~ „Obergeschoss" sind sich zu 87 % ähnlich — und meinen das Gegenteil
         }
         return $this->VoicePunkte($b, $a) >= 80;
     }
@@ -894,21 +991,22 @@ trait VoiceDevices
         $filter = (string)($args['filter'] ?? 'alle');
         $raeume = $this->VoiceGeraeteRaeume();
 
+        $id = (int)($args['id'] ?? 0);
+        if ($id > 0) {
+            $e = $this->VoiceGeraetNachId($katalog, $id);
+            if ($e === null) {
+                return $this->VoiceErr('nicht_gefunden', $this->Translate('That device is not released for voice control.'));
+            }
+            return $this->VoiceGeraetZustandAntwort($e);
+        }
         if ($geraet !== '') {
             $erg = $this->VoiceGeraeteAufloesen($geraet, $katalog, $raum);
             $fehler = $this->VoiceAufloeseFehler($erg, $geraet, $this->Translate('devices'));
             if ($fehler !== null) {
+                $fehler['kandidaten'] = $this->VoiceGeraetKandidaten($geraet, $raum, $katalog, 8, 55);
                 return $fehler;
             }
-            $e = $erg['treffer'][0]['schluessel'];
-            if ($e['typ'] !== 'var') {
-                return ['ok' => true, 'geraet' => $e['titel'],
-                        'sag' => sprintf($this->Translate('%s is a scene or script — I can start it, but it has no state.'), $e['titel'])];
-            }
-            $spec = $this->VoiceGeraetSpezifikation((int)$e['id']);
-            $zustand = $this->VoiceGeraetZustandText($e, $spec);
-            return ['ok' => true, 'geraet' => $e['titel'], 'wert' => $zustand,
-                    'sag' => sprintf($this->Translate('%1$s: %2$s.'), $e['titel'], $zustand)];
+            return $this->VoiceGeraetZustandAntwort($erg['treffer'][0]['schluessel']);
         }
 
         if ($raum === '') {
@@ -952,6 +1050,129 @@ trait VoiceDevices
             default                            => sprintf($this->Translate('%1$d devices in %2$s, %3$d of them on.'), count($imRaum), $raum, $anzahlAn),
         };
         return ['ok' => true, 'raum' => $raum, 'geraete' => $zeilen, 'sag' => $sag];
+    }
+
+    /** @return array<string,mixed> */
+    private function VoiceGeraetZustandAntwort(array $e): array
+    {
+        if ($e['typ'] !== 'var') {
+            return ['ok' => true, 'geraet' => $e['titel'],
+                    'sag' => sprintf($this->Translate('%s is a scene or script — I can start it, but it has no state.'), $e['titel'])];
+        }
+        $spec = $this->VoiceGeraetSpezifikation((int)$e['id']);
+        $zustand = $this->VoiceGeraetZustandText($e, $spec);
+        return ['ok' => true, 'geraet' => $e['titel'], 'wert' => $zustand,
+                'sag' => sprintf($this->Translate('%1$s: %2$s.'), $e['titel'], $zustand)];
+    }
+
+    /** Der Katalogeintrag zu einer Kennung, die das Modell aus einer Kandidatenliste zurückgibt — oder null. */
+    private function VoiceGeraetNachId(array $katalog, int $id): ?array
+    {
+        foreach ($katalog as $e) {
+            if ((int)$e['id'] === $id) {
+                return $e;
+            }
+        }
+        return null;
+    }
+
+    // ────────────────────────────── Kandidaten fürs Modell ──────────────────────────────
+
+    /**
+     * Die LOSE Suche: was der strenge Auflöser nicht eindeutig trifft, bekommt
+     * das Modell als Kandidaten mit vollem Pfad (Etage › Raum › Gerät), Typ und
+     * möglichen Werten — es versteht „Lampenschirm" oder „oben im Bad", der
+     * Scorer nicht. Gewählt wird dann per Kennung, und die muss aus dem Katalog
+     * stammen: das Modell kann wählen, aber nichts erfinden.
+     *
+     * @param list<array<string,mixed>> $katalog
+     * @return list<array<string,mixed>>
+     */
+    private function VoiceGeraetKandidaten(string $such, string $raum, array $katalog, int $max = 10, int $mindestens = 45): array
+    {
+        $sn = $this->VoiceGeraetSuchNorm($such);
+        $varianten = $sn !== '' ? $this->VoiceGeraetSynonyme($sn) : [];
+        $woerter = preg_split('/\s+/', $sn, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $bewertet = [];
+        foreach ($katalog as $e) {
+            $imRaum = $raum !== '' && $this->VoiceOrtPasst($e, $raum);
+            $texte = array_merge([(string)$e['titel'], (string)$e['name'], (string)($e['pfad'] ?? '')], (array)$e['alias']);
+            $best = 0;
+            foreach ($texte as $t) {
+                $tn = $this->VoiceNorm($t);
+                foreach ($varianten as $v) {
+                    $best = max($best, $this->VoicePunkte($v, $tn));
+                }
+                // Einzelne Suchwörter im Pfad zählen — „Lampenschirm" steckt im Pfad, nicht im Titel.
+                foreach ($woerter as $w) {
+                    if (mb_strlen($w) >= 3 && str_contains($tn, $w)) {
+                        $best = max($best, 60);
+                    }
+                }
+            }
+            if ($imRaum) {
+                $best += 10;   // im genannten Raum vorn, aber nicht allein deshalb drin
+            }
+            if ($best >= $mindestens || ($sn === '' && $imRaum)) {
+                $bewertet[] = ['punkte' => $best, 'e' => $e];
+            }
+        }
+        usort($bewertet, static fn(array $a, array $b): int => $b['punkte'] <=> $a['punkte']);
+        return array_map(fn(array $b): array => $this->VoiceGeraetKurz($b['e']), array_slice($bewertet, 0, $max));
+    }
+
+    /** Ein Kandidat, wie ihn das Modell braucht: Kennung, Name, Pfad, Typ, mögliche Werte, Zustand. */
+    private function VoiceGeraetKurz(array $e): array
+    {
+        $k = ['id' => (int)$e['id'], 'name' => (string)$e['titel'], 'pfad' => (string)($e['pfad'] ?? '')];
+        if ($e['typ'] !== 'var') {
+            $k['typ'] = (string)$e['typ'];
+            $k['werte'] = $this->Translate('start');
+            return $k;
+        }
+        $spec = $this->VoiceGeraetSpezifikation((int)$e['id']);
+        $k['typ'] = (string)$spec['art'];
+        $k['werte'] = match ((string)$spec['art']) {
+            'schalter'   => $spec['an'] . '/' . $spec['aus'],
+            'auswahl'    => implode(', ', array_map(static fn(array $o): string => (string)$o[1], array_slice($spec['options'], 0, 8))),
+            'rollladen'  => $this->Translate('up/down or 0–100 %'),
+            'text'       => $this->Translate('free text'),
+            'regler'     => trim($this->VoiceGeraetZahlText((float)$spec['min'], $spec) . '–' . $this->VoiceGeraetZahlText((float)$spec['max'], $spec))
+                            . ($spec['step'] > 1 ? ', ' . sprintf($this->Translate('step %s'), $this->VoiceGeraetZahlText((float)$spec['step'], $spec)) : ''),
+            default      => $this->Translate('read-only'),
+        };
+        if (!$e['akt']) {
+            $k['typ'] = 'nur lesen';
+        }
+        $k['zustand'] = $this->VoiceGeraetZustandText($e, $spec);
+        return $k;
+    }
+
+    /**
+     * geraete_suchen — die lose Suche als eigenes Werkzeug, wenn der Nutzer ein
+     * Gerät umschreibt („die Lampe über dem Esstisch") oder eine Etage nennt.
+     * @return array<string,mixed>
+     */
+    private function VoiceToolGeraeteSuchen(array $args, array $ctx): array
+    {
+        $katalog = $this->VoiceGeraeteKatalog();
+        if ($katalog === []) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('No devices are released for voice control.'));
+        }
+        $such = trim((string)($args['suche'] ?? ''));
+        $raum = trim((string)($args['raum'] ?? ''));
+        if ($such === '' && $raum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What shall I look for — a device or a room?'));
+        }
+        $kandidaten = $this->VoiceGeraetKandidaten($such, $raum, $katalog, 10);
+        if ($kandidaten === []) {
+            return ['ok' => true, 'kandidaten' => [], 'sag' => sprintf($this->Translate('I find nothing matching "%s" among the devices.'), $such !== '' ? $such : $raum)];
+        }
+        $namen = array_map(static fn(array $k): string => $k['name'], array_slice($kandidaten, 0, 4));
+        return ['ok' => true, 'kandidaten' => $kandidaten,
+                'sag' => count($kandidaten) === 1
+                    ? sprintf($this->Translate('Found: %s.'), $kandidaten[0]['name'])
+                    : sprintf($this->Translate('%1$d possible devices, for example %2$s.'), count($kandidaten), implode(', ', $namen))];
     }
 
     // ────────────────────────────── Steuern ──────────────────────────────
@@ -1058,26 +1279,78 @@ trait VoiceDevices
             $such = trim((string)($args['geraet'] ?? ''));
             $wasArt = $this->Translate('devices');
         }
-        if ($such === '') {
-            return $this->VoiceErr('ungueltige_eingabe', $was === 'szene'
-                ? $this->Translate('Which scene or script?') : $this->Translate('Which device do you mean?'));
+        $wert = trim((string)($args['wert'] ?? ''));
+        $id = (int)($args['id'] ?? 0);
+        if ($id > 0) {
+            // Das Modell hat aus einer Kandidatenliste gewählt: nur, was im Katalog steht.
+            $e = $this->VoiceGeraetNachId($kandidaten, $id);
+            if ($e === null) {
+                return $this->VoiceErr('nicht_gefunden', $this->Translate('That device is not released for voice control.'));
+            }
+        } else {
+            if ($such === '') {
+                return $this->VoiceErr('ungueltige_eingabe', $was === 'szene'
+                    ? $this->Translate('Which scene or script?') : $this->Translate('Which device do you mean?'));
+            }
+            $erg = $this->VoiceGeraeteAufloesen($such, $kandidaten, $raum);
+            if ($erg['status'] === 'nichts' && $raum !== '' && !array_filter($katalog, fn(array $e): bool => $this->VoiceOrtPasst($e, $raum))) {
+                return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I know no room called "%1$s". Rooms are: %2$s.'),
+                    $raum, implode(', ', array_slice($this->VoiceGeraeteRaeume(), 0, 12))));
+            }
+            if ($erg['status'] === 'mehrdeutig' && $was !== 'szene' && $wert !== '') {
+                /* Der WERT entscheidet bei Gleichstand: „Lampenschirm an" trifft
+                   Schalter und Dimmwert derselben Hülle — an/aus nimmt nur der
+                   Schalter, „40 Prozent" nur der Regler. Bleibt genau einer, ist
+                   es der. */
+                $passend = array_values(array_filter($erg['treffer'], function (array $t) use ($wert): bool {
+                    $k = $t['schluessel'];
+                    $map = $this->VoiceGeraetWertMappen($k, $this->VoiceGeraetSpezifikation((int)$k['id']), $wert, @GetValue((int)$k['id']));
+                    return ($map['ok'] ?? false) === true;
+                }));
+                if (count($passend) > 1) {
+                    // Ein %-Regler nimmt „an" auch (= voll); bei an/aus ist trotzdem der Schalter gemeint, bei Zahlen der Regler.
+                    $wn = $this->VoiceNorm($wert);
+                    $art = preg_match('/\d/', $wn) === 1 || str_contains($wn, 'prozent') ? 'regler'
+                        : (preg_match('/^(an|ein|aus|einschalten|ausschalten|anmachen|ausmachen|umschalten|on|off)$/u', $wn) === 1 ? 'schalter' : '');
+                    if ($art !== '') {
+                        $eng = array_values(array_filter($passend, fn(array $t): bool
+                            => (string)$this->VoiceGeraetSpezifikation((int)$t['schluessel']['id'])['art'] === $art));
+                        if (count($eng) === 1) {
+                            $passend = $eng;
+                        }
+                    }
+                }
+                if (count($passend) === 1) {
+                    $erg = ['status' => 'eindeutig', 'treffer' => $passend, 'beinah' => []];
+                }
+            }
+            $fehler = $this->VoiceAufloeseFehler($erg, $such, $wasArt);
+            if ($fehler !== null) {
+                // Dem Modell die Wahl lassen: Kandidaten mit Pfad, Typ, Werten und Kennung.
+                $fehler['kandidaten'] = $this->VoiceGeraetKandidaten($such, $raum, $kandidaten, 8, 55);
+                if ($fehler['kandidaten'] !== [] && ($fehler['error']['code'] ?? '') === 'nicht_gefunden') {
+                    $fehler['sag'] = sprintf($this->Translate('I cannot find "%s" exactly — but there are similar devices.'), $such);
+                }
+                if (($fehler['error']['code'] ?? '') === 'mehrdeutig' && $erg['status'] === 'mehrdeutig'
+                    && count(array_unique($fehler['treffer'] ?? [])) < count($fehler['treffer'] ?? [])) {
+                    // Zwei „Bad Deckenlampe": erst der Weg dahin macht sie unterscheidbar.
+                    $mitWeg = array_map(function (array $t): string {
+                        $glieder = explode(' › ', (string)($t['schluessel']['pfad'] ?? ''));
+                        array_pop($glieder);
+                        return (string)$t['titel'] . ($glieder !== [] ? ' (' . implode(', ', $glieder) . ')' : '');
+                    }, $erg['treffer']);
+                    $fehler['treffer'] = $mitWeg;
+                    $fehler['sag'] = sprintf($this->Translate('Which one do you mean? For example: %s.'), implode('; ', $mitWeg));
+                }
+                return $fehler;
+            }
+            $e = $erg['treffer'][0]['schluessel'];
         }
-        $erg = $this->VoiceGeraeteAufloesen($such, $kandidaten, $raum);
-        if ($erg['status'] === 'nichts' && $raum !== '' && !array_filter($katalog, fn(array $e): bool => $this->VoiceRaumPasst((string)$e['raum'], $raum))) {
-            return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I know no room called "%1$s". Rooms are: %2$s.'),
-                $raum, implode(', ', array_slice($this->VoiceGeraeteRaeume(), 0, 12))));
-        }
-        $fehler = $this->VoiceAufloeseFehler($erg, $such, $wasArt);
-        if ($fehler !== null) {
-            return $fehler;
-        }
-        $e = $erg['treffer'][0]['schluessel'];
         $ziel = ['bereich' => 'geraet', 'id' => (int)$e['id'], 'typ' => (string)$e['typ'], 'titel' => (string)$e['titel'],
                  'via' => (int)$e['via'], 'vt' => (int)($e['vt'] ?? 0), 'inst' => (int)($e['inst'] ?? 0), 'nr' => (int)($e['nr'] ?? 0),
                  'raum' => (string)($e['raum'] ?? ''),
                  'wert' => null, 'text' => $this->Translate('run')];
         if ($was !== 'szene') {
-            $wert = trim((string)($args['wert'] ?? ''));
             if ($wert === '') {
                 return $this->VoiceErr('ungueltige_eingabe', sprintf($this->Translate('What should I set %s to?'), $e['titel']));
             }

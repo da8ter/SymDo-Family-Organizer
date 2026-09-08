@@ -346,7 +346,7 @@ trait VoiceZeitplan
         if ($wert === '' || strtolower($wert) === 'null') {
             // Ohne Wert ist eine Szene oder ein Skript gemeint. Trifft der Name
             // aber ein Gerät, fehlt schlicht der Zielwert — das sagen wir so.
-            $gebildet = $this->VoiceGeraetZielBilden(['name' => $args['geraet'] ?? '', 'raum' => $args['raum'] ?? null], 'szene');
+            $gebildet = $this->VoiceGeraetZielBilden(['name' => $args['geraet'] ?? '', 'raum' => $args['raum'] ?? null, 'id' => $args['id'] ?? null], 'szene');
             if (($gebildet['ok'] ?? false) !== true && ($gebildet['error']['code'] ?? '') === 'nicht_gefunden') {
                 $katalog = array_values(array_filter($this->VoiceGeraeteKatalog(), static fn(array $e): bool => $e['typ'] === 'var' && $e['akt'] === true));
                 $erg = $this->VoiceGeraeteAufloesen(trim((string)($args['geraet'] ?? '')), $katalog, trim((string)($args['raum'] ?? '')));
@@ -355,7 +355,7 @@ trait VoiceZeitplan
                 }
             }
         } else {
-            $gebildet = $this->VoiceGeraetZielBilden(['geraet' => $args['geraet'] ?? '', 'raum' => $args['raum'] ?? null, 'wert' => $wert], 'geraet');
+            $gebildet = $this->VoiceGeraetZielBilden(['geraet' => $args['geraet'] ?? '', 'raum' => $args['raum'] ?? null, 'wert' => $wert, 'id' => $args['id'] ?? null], 'geraet');
         }
         if (($gebildet['ok'] ?? false) !== true) {
             return $gebildet;
