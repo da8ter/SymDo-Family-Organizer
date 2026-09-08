@@ -2817,16 +2817,25 @@ trait VoiceTools
             $zeilen[] = 'Für später oder regelmäßig nimm zeitplan_anlegen, nie geraet_steuern: "in 55 Minuten" → nach_minuten 55; eine Uhrzeit → uhrzeit als HH:MM; "jeden Tag"/"täglich" → wiederholung taeglich, "werktags", "am Wochenende" oder einzelne Tage → woechentlich mit wochentage; sonst "keine" (einmalig; ohne Datum heißt das heute, wenn die Zeit noch kommt, sonst morgen). Dabei wird JETZT nichts geschaltet; wiederhole in deiner Antwort, was wann geschaltet wird. "Licht an für 10 Minuten" sind zwei Schritte: sofort geraet_steuern an, dann zeitplan_anlegen aus mit nach_minuten 10. Geplantes zeigt zeitplaene_lesen, weg damit geht zeitplan_loeschen — bei mehreren Treffern nenne sie und frag, welcher gemeint ist.';
             $zeilen[] = 'Findet ein Gerätewerkzeug nichts oder mehrere Treffer, kommen "kandidaten" zurück — mit Pfad (Etage › Raum › Gerät), Typ, möglichen Werten und "id". Wähle anhand von Raum, Etage, Bezeichnung und passendem Wert den richtigen und rufe dasselbe Werkzeug erneut mit dieser "id" auf. Passen zwei gleich gut, frag nach und nenne beide mit ihrem Pfad. Umschreibt der Nutzer ein Gerät ("die Lampe über dem Esstisch", "oben im Bad"), suche zuerst mit geraete_suchen. Eine id sprichst du nie aus — du nennst den Namen.';
             $katalog = $this->VoiceGeraeteKatalog();
-            if (count($katalog) > 0 && count($katalog) <= 60) {
-                /* Ein kleiner Haushalt passt ganz hinein: dann kennt das Modell die
-                   Geräte samt Pfad von Anfang an und trifft ohne Suchlauf. Der
-                   Deckel unten ist dafür auf 12.000 gehoben — die Anweisungen
-                   reisen EINMAL je Gespräch. */
-                $liste = 'Freigegebene Geräte (Pfad, id): ' . implode('; ', array_map(
-                    static fn(array $e): string => ((string)($e['pfad'] ?? '') !== '' ? (string)$e['pfad'] : (string)$e['titel']) . ' (' . (int)$e['id'] . ')',
-                    $katalog)) . '.';
+            if (count($katalog) > 0 && count($katalog) <= 120) {
+                /* Ein Haushalt bis 120 Geräte passt ganz hinein: dann kennt das
+                   Modell die Geräte samt Pfad von Anfang an und trifft ohne
+                   Suchlauf. Nach Etage › Raum gruppiert, damit sich die Präfixe
+                   nicht 60-mal wiederholen. Der Deckel unten ist dafür auf 16.000
+                   gehoben — die Anweisungen reisen EINMAL je Gespräch. */
+                $gruppen = [];
+                foreach ($katalog as $e) {
+                    $glieder = explode(' › ', (string)($e['pfad'] ?? ''));
+                    $raumPos = array_search((string)$e['raum'], $glieder, true);
+                    $kopf = $raumPos === false ? (string)$e['raum'] : implode(' › ', array_slice($glieder, 0, $raumPos + 1));
+                    $rest = $raumPos === false ? (string)$e['name'] : implode(' › ', array_slice($glieder, $raumPos + 1));
+                    $gruppen[$kopf][] = ($rest !== '' ? $rest : (string)$e['name']) . ' (' . (int)$e['id'] . ')';
+                }
+                $liste = 'Freigegebene Geräte (Etage › Raum: Gerät (id)): ' . implode(' | ', array_map(
+                    static fn(string $kopf, array $g): string => $kopf . ': ' . implode(', ', $g),
+                    array_keys($gruppen), $gruppen)) . '.';
             }
-            if (isset($liste) && mb_strlen($liste) <= 4000) {
+            if (isset($liste) && mb_strlen($liste) <= 8000) {
                 $zeilen[] = $liste;
             } else {
                 $raeume = $this->VoiceGeraeteRaeume();
@@ -2851,7 +2860,7 @@ trait VoiceTools
            die wichtigsten Regeln weg („nie behaupten, etwas sei erledigt",
            Handbuch, Notizen). Gemessen: 2500 von 2500 Zeichen belegt.
            Deshalb weit genug, dass der feste Teil immer vollständig ankommt. */
-        return mb_strlen($text) > 12000 ? mb_substr($text, 0, 12000) : $text;
+        return mb_strlen($text) > 16000 ? mb_substr($text, 0, 16000) : $text;
     }
 
     private function VoiceDatumZeile(): string
