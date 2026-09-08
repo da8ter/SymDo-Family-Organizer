@@ -371,6 +371,53 @@ trait VoiceTools
                     'required' => ['name', 'raum', 'marke'],
                 ],
             ],
+            'zeitplan_anlegen' => [
+                'art' => 'schreiben', 'tor' => 'geraete',
+                'beschreibung' => 'Plant eine Schaltung für SPÄTER — einmalig („in 55 Minuten", „um 22 Uhr", „morgen um 7") oder dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30", „samstags und sonntags um 9"). Gerät und "wert" wie bei geraet_steuern; für eine Szene oder ein Skript ist "wert" null. Es wird JETZT nichts geschaltet. Manche Geräte verlangen eine Rückfrage: dann kommt eine Frage und eine "marke" zurück, und es ist noch nichts geplant.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet'       => ['type' => 'string', 'description' => 'Name des Geräts, der Szene oder des Skripts wie gesprochen'],
+                        'raum'         => ['type' => ['string', 'null'], 'description' => 'Raumname zum Eingrenzen oder null'],
+                        'wert'         => ['type' => ['string', 'null'], 'description' => 'Zielzustand wie bei geraet_steuern ("an", "aus", "50 Prozent", "21 Grad"); null bei Szene oder Skript'],
+                        'nach_minuten' => ['type' => ['integer', 'null'], 'description' => '„in 55 Minuten" → 55, „in zwei Stunden" → 120; sonst null'],
+                        'uhrzeit'      => ['type' => ['string', 'null'], 'description' => 'Uhrzeit als HH:MM („um 11" → "11:00", „halb sieben" → "06:30"); null, wenn nach_minuten gesetzt ist'],
+                        'datum'        => ['type' => ['string', 'null'], 'description' => 'Nur einmalig mit genanntem Datum: YYYY-MM-DD; sonst null (heute, wenn die Zeit noch kommt, sonst morgen)'],
+                        'wiederholung' => ['type' => 'string', 'enum' => ['keine', 'taeglich', 'werktags', 'wochenende', 'woechentlich'], 'description' => '"keine" = einmalig; „jeden Tag" → taeglich; einzelne Tage → woechentlich mit wochentage'],
+                        'wochentage'   => ['type' => ['array', 'null'], 'items' => ['type' => 'string', 'enum' => ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']], 'description' => 'nur bei woechentlich, sonst null'],
+                        'marke'        => ['type' => ['string', 'null'], 'description' => 'null beim ersten Aufruf; beim zweiten die marke aus der Rückfrage'],
+                    ],
+                    'required' => ['geraet', 'raum', 'wert', 'nach_minuten', 'uhrzeit', 'datum', 'wiederholung', 'wochentage', 'marke'],
+                ],
+            ],
+            'zeitplaene_lesen' => [
+                'art' => 'lesen', 'tor' => 'geraete',
+                'beschreibung' => 'Liest die geplanten Schaltungen (Timer und Zeitpläne) — alle, die eines Geräts oder die eines Raums.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet' => ['type' => ['string', 'null'], 'description' => 'Gerätename oder null = alle'],
+                        'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname oder null'],
+                        'nur'    => ['type' => 'string', 'enum' => ['alle', 'einmal', 'dauerhaft'], 'description' => '"einmal" = nur Timer, "dauerhaft" = nur Wiederholungen'],
+                    ],
+                    'required' => ['geraet', 'raum', 'nur'],
+                ],
+            ],
+            'zeitplan_loeschen' => [
+                'art' => 'schreiben', 'tor' => 'geraete',
+                'beschreibung' => 'Löscht geplante Schaltungen: die eines Geräts, oder eine bestimmte über die "id" aus zeitplaene_lesen. Bei mehreren Treffern kommt die Liste als Rückfrage zurück — dann mit "id" oder mit umfang "alle" erneut aufrufen.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'geraet' => ['type' => ['string', 'null'], 'description' => 'Gerätename oder null, wenn id gesetzt ist'],
+                        'raum'   => ['type' => ['string', 'null'], 'description' => 'Raumname oder null'],
+                        'id'     => ['type' => ['integer', 'null'], 'description' => 'id eines Zeitplans aus zeitplaene_lesen oder der Rückfrage; sonst null'],
+                        'nur'    => ['type' => 'string', 'enum' => ['alle', 'einmal', 'dauerhaft'], 'description' => 'Eingrenzung wie bei zeitplaene_lesen'],
+                        'umfang' => ['type' => 'string', 'enum' => ['einer', 'alle'], 'description' => '"alle" = alle Treffer löschen, sonst "einer"'],
+                    ],
+                    'required' => ['geraet', 'raum', 'id', 'nur', 'umfang'],
+                ],
+            ],
         ];
     }
 
@@ -465,6 +512,9 @@ trait VoiceTools
                 'geraete_lesen'       => $this->VoiceToolGeraeteLesen($args, $ctx),
                 'geraet_steuern'      => $this->VoiceToolGeraetSteuern($args, $ctx, 'geraet'),
                 'szene_starten'       => $this->VoiceToolGeraetSteuern($args, $ctx, 'szene'),
+                'zeitplan_anlegen'    => $this->VoiceToolZeitplanAnlegen($args, $ctx),
+                'zeitplaene_lesen'    => $this->VoiceToolZeitplaeneLesen($args, $ctx),
+                'zeitplan_loeschen'   => $this->VoiceToolZeitplanLoeschen($args, $ctx),
             };
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Werkzeug ' . $name . ' warf: ' . $e->getMessage(), 0);
@@ -2702,10 +2752,10 @@ trait VoiceTools
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
             'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
-            . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht, Rollläden, Heizung, Steckdosen, Szenen und Skripte, ausschließlich mit geraete_lesen, geraet_steuern und szene_starten; ' : '')
+            . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht, Rollläden, Heizung, Steckdosen, Szenen und Skripte — sofort (geraete_lesen, geraet_steuern, szene_starten) oder zeitgesteuert, einmalig („in 55 Minuten", „um 22 Uhr") wie dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30"), mit zeitplan_anlegen, zeitplaene_lesen und zeitplan_loeschen; ' : '')
             . 'Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             $geraete
-                ? 'Im Haus steuerst du NUR, was dir geraete_lesen, geraet_steuern und szene_starten liefern — nichts anderes und nie ohne Werkzeug. Gib "wert" als gesprochenes Ziel weiter ("an", "aus", "50 Prozent", "21 Grad", "hoch", "Auto"), rechne nichts um; nennt der Nutzer einen Raum, setze "raum". Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.'
+                ? 'Im Haus steuerst du NUR, was dir geraete_lesen, geraet_steuern, szene_starten und die zeitplan-Werkzeuge liefern — nichts anderes und nie ohne Werkzeug. Gib "wert" als gesprochenes Ziel weiter ("an", "aus", "50 Prozent", "21 Grad", "hoch", "Auto"), rechne nichts um; nennt der Nutzer einen Raum, setze "raum". Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.'
                 : 'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
         if ($wer !== '') {
@@ -2747,6 +2797,7 @@ trait VoiceTools
         $zeilen[] = 'Beim Löschen gilt IMMER zwei Schritte: Rufe loeschen zuerst OHNE marke auf; du bekommst eine Rückfrage und eine "marke" zurück, aber es ist noch NICHTS gelöscht. Sprich die Rückfrage, warte auf ein klares Ja und rufe loeschen dann erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke.';
         if ($geraete) {
             $zeilen[] = 'Bei Geräten gilt: Nenne sie beim Namen und gib "raum" mit, wenn der Nutzer einen Raum sagt. Meldet das Werkzeug mehrere Treffer, frag, welches gemeint ist, und rate nie. Manche Geräte verlangen eine Rückfrage: geraet_steuern oder szene_starten antworten dann mit einer Frage und einer "marke", und es ist noch NICHTS geschaltet. Sprich die Frage, warte auf ein klares Ja und rufe dasselbe Werkzeug erneut mit genau dieser marke auf. Bei Nein oder Unsicherheit rufe nicht erneut auf und erfinde niemals eine marke. Sagt das Werkzeug, der Sprechende dürfe das nicht, sage genau das freundlich und suche keinen anderen Weg.';
+            $zeilen[] = 'Für später oder regelmäßig nimm zeitplan_anlegen, nie geraet_steuern: "in 55 Minuten" → nach_minuten 55; eine Uhrzeit → uhrzeit als HH:MM; "jeden Tag"/"täglich" → wiederholung taeglich, "werktags", "am Wochenende" oder einzelne Tage → woechentlich mit wochentage; sonst "keine" (einmalig; ohne Datum heißt das heute, wenn die Zeit noch kommt, sonst morgen). Dabei wird JETZT nichts geschaltet; wiederhole in deiner Antwort, was wann geschaltet wird. "Licht an für 10 Minuten" sind zwei Schritte: sofort geraet_steuern an, dann zeitplan_anlegen aus mit nach_minuten 10. Geplantes zeigt zeitplaene_lesen, weg damit geht zeitplan_loeschen — bei mehreren Treffern nenne sie und frag, welcher gemeint ist.';
             $raeume = $this->VoiceGeraeteRaeume();
             if ($raeume !== []) {
                 // Nur Räume, keine Geräte: Namen löst das Werkzeug auf, und eine

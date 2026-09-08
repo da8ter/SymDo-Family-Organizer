@@ -1074,6 +1074,7 @@ trait VoiceDevices
         $e = $erg['treffer'][0]['schluessel'];
         $ziel = ['bereich' => 'geraet', 'id' => (int)$e['id'], 'typ' => (string)$e['typ'], 'titel' => (string)$e['titel'],
                  'via' => (int)$e['via'], 'vt' => (int)($e['vt'] ?? 0), 'inst' => (int)($e['inst'] ?? 0), 'nr' => (int)($e['nr'] ?? 0),
+                 'raum' => (string)($e['raum'] ?? ''),
                  'wert' => null, 'text' => $this->Translate('run')];
         if ($was !== 'szene') {
             $wert = trim((string)($args['wert'] ?? ''));
@@ -1139,8 +1140,8 @@ trait VoiceDevices
         return $this->VoiceGeraetSchalten($ziel, $ctx, false);
     }
 
-    /** Deckel, Ausführung, Zählung, Protokoll — für beide Aufrufwege. */
-    private function VoiceGeraetSchalten(array $ziel, array $ctx, bool $bestaetigt): array
+    /** Deckel, Ausführung, Zählung, Protokoll — für beide Aufrufwege und den Zeitplan ($quelle im Protokoll). */
+    private function VoiceGeraetSchalten(array $ziel, array $ctx, bool $bestaetigt, string $quelle = ''): array
     {
         if (!$this->VoiceGeraeteDeckelOffen()) {
             return $this->VoiceErr('geraete_deckel', $this->Translate('Too many switching commands in a short time — please try again later.'));
@@ -1163,7 +1164,8 @@ trait VoiceDevices
             }
             $this->LogMessage(sprintf('SymDo Sprachdialog: %s „%s" (#%d) → %s%s%s',
                 ($ziel['typ'] ?? '') === 'var' ? 'geschaltet' : 'gestartet', (string)$ziel['titel'], (int)$ziel['id'],
-                (string)($ziel['text'] ?? ''), $wer !== '' ? ' von ' . $wer : '', $bestaetigt ? ' (bestätigt)' : ''), KL_NOTIFY);
+                (string)($ziel['text'] ?? ''), $wer !== '' ? ' von ' . $wer : '',
+                ($bestaetigt ? ' (bestätigt)' : '') . ($quelle !== '' ? ' [' . $quelle . ']' : '')), KL_NOTIFY);
         }
         return $antwort;
     }

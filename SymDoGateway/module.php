@@ -19,6 +19,7 @@ require_once __DIR__ . '/libs/Voice.php';
 require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
 require_once __DIR__ . '/libs/VoiceDevices.php';
+require_once __DIR__ . '/libs/VoiceZeitplan.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/WebUntis.php';
@@ -55,6 +56,7 @@ class SymDoGateway extends IPSModuleStrict
     use VoiceTools;
     use VoiceResolve;
     use VoiceDevices;
+    use VoiceZeitplan;
     use SymconDoku;
     use EduMaps;
     use WebUntis;
@@ -235,6 +237,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->VoiceRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->VoiceZeitplanRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->DokuRequestAction($Ident, $Value)) {
