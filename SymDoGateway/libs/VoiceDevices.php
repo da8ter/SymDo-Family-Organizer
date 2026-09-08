@@ -372,14 +372,34 @@ trait VoiceDevices
         return $aktion > 1 && (@IPS_InstanceExists($aktion) || @IPS_ScriptExists($aktion));
     }
 
+    /** Eltern-Kette hinauf bis zur Wurzel — eigener Lauf statt IPS_IsChild, damit der Prüfstand ohne Kernel läuft. */
+    private function VoiceUnterWurzel(int $objectID, int $wurzel): bool
+    {
+        $id = $objectID;
+        for ($i = 0; $i < 32; $i++) {
+            $o = @IPS_GetObject($id);
+            if (!is_array($o)) {
+                return false;
+            }
+            $id = (int)($o['ParentID'] ?? 0);
+            if ($id === $wurzel) {
+                return true;
+            }
+            if ($id <= 0) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     /** Liegt das Objekt (oder der Link, über den es kam) unter einer der Wurzeln? */
     private function VoiceGeraetImUmfang(int $objectID, int $via = 0): bool
     {
         foreach ($this->VoiceGeraeteWurzeln() as $wurzel) {
-            if ($objectID === $wurzel || @IPS_IsChild($objectID, $wurzel, true)) {
+            if ($objectID === $wurzel || $this->VoiceUnterWurzel($objectID, $wurzel)) {
                 return true;
             }
-            if ($via > 0 && @IPS_IsChild($via, $wurzel, true)) {
+            if ($via > 0 && $this->VoiceUnterWurzel($via, $wurzel)) {
                 $link = @IPS_GetLink($via);
                 if ((int)($link['TargetID'] ?? 0) === $objectID) {
                     return true;
