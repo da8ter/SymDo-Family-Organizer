@@ -1203,7 +1203,7 @@ trait VoiceDevices
             : $a === $b || (string)$a === (string)$b;
         $schonSo = $gleich($vorher, $ziel['wert']);
         try {
-            @RequestAction($id, $ziel['wert']);
+            $this->VoiceStill(static fn() => @RequestAction($id, $ziel['wert']));
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'RequestAction #' . $id . ' warf: ' . $e->getMessage(), 0);
             return str_contains($e->getMessage(), 'Action is invalid')
@@ -1226,6 +1226,24 @@ trait VoiceDevices
     }
 
     /**
+     * Fremden Code ohne Ausgabe laufen lassen: die Szenensteuerung ECHOT „Keine
+     * gespeicherten Daten für diese Szene vorhanden", und jedes Byte vor der
+     * JSON-Antwort zerlegt im Hook die HTTP-Kopfzeilen (gemessen am Musterhaus).
+     */
+    private function VoiceStill(callable $fn): mixed
+    {
+        ob_start();
+        try {
+            return $fn();
+        } finally {
+            $rest = trim((string)ob_get_clean());
+            if ($rest !== '') {
+                $this->SendDebug('Voice', 'Verschluckte Ausgabe: ' . mb_substr($rest, 0, 200), 0);
+            }
+        }
+    }
+
+    /**
      * Szene oder Skript starten. Beides ist asynchron — der Satz sagt „gestartet".
      * @param array<string,mixed> $ziel
      */
@@ -1240,16 +1258,18 @@ trait VoiceDevices
                     || !function_exists('SZS_CallScene')) {
                     return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I cannot find "%s" among the devices any more.'), $titel));
                 }
-                @SZS_CallScene($inst, (int)($ziel['nr'] ?? 0));
-                if (function_exists('SZS_UpdateActive')) {
-                    @SZS_UpdateActive($inst);
-                }
+                $this->VoiceStill(static function () use ($inst, $ziel): void {
+                    @SZS_CallScene($inst, (int)($ziel['nr'] ?? 0));
+                    if (function_exists('SZS_UpdateActive')) {
+                        @SZS_UpdateActive($inst);
+                    }
+                });
                 return ['ok' => true, 'szene' => $titel, 'sag' => sprintf($this->Translate('Scene %s started.'), $titel)];
             }
             if (!@IPS_ScriptExists($id) || !$this->VoiceGeraetImUmfang($id, (int)($ziel['via'] ?? 0))) {
                 return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I cannot find "%s" among the devices any more.'), $titel));
             }
-            @IPS_RunScript($id);
+            $this->VoiceStill(static fn() => @IPS_RunScript($id));
             return ['ok' => true, 'skript' => $titel, 'sag' => sprintf($this->Translate('I have started %s.'), $titel)];
         } catch (\Throwable $e) {
             $this->SendDebug('Voice', 'Szene/Skript #' . $id . ' warf: ' . $e->getMessage(), 0);
@@ -1293,6 +1313,16 @@ trait VoiceDevices
                     ? $this->Translate('Which scene or script?') : $this->Translate('Which device do you mean?'));
             }
             $erg = $this->VoiceGeraeteAufloesen($such, $kandidaten, $raum);
+            if ($erg['status'] === 'nichts' && $was !== 'szene') {
+                // Trifft der Name ein Gerät OHNE Aktion (Sensor, Kontakt), sagen wir das — statt „nicht gefunden".
+                $nurLesen = array_values(array_filter($katalog, static fn(array $e): bool => $e['typ'] === 'var' && $e['akt'] !== true));
+                $lese = $this->VoiceGeraeteAufloesen($such, $nurLesen, $raum);
+                if ($lese['status'] === 'eindeutig') {
+                    $le = $lese['treffer'][0]['schluessel'];
+                    return $this->VoiceErr('nicht_steuerbar', sprintf($this->Translate('%1$s I can only read, not switch — it is %2$s.'),
+                        (string)$le['titel'], $this->VoiceGeraetZustandText($le, $this->VoiceGeraetSpezifikation((int)$le['id']))));
+                }
+            }
             if ($erg['status'] === 'nichts' && $raum !== '' && !array_filter($katalog, fn(array $e): bool => $this->VoiceOrtPasst($e, $raum))) {
                 return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I know no room called "%1$s". Rooms are: %2$s.'),
                     $raum, implode(', ', array_slice($this->VoiceGeraeteRaeume(), 0, 12))));
