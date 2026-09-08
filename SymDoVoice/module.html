@@ -32,12 +32,14 @@ body {
   display: flex; flex-direction: column; flex: 1; min-height: 0;
 }
 #wrap {
+  position: relative;
   display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box;
   padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
            calc(var(--sym-mb) + 4px) var(--sym-ms);
 }
-#kopf { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
-#kopf h2 { margin: 0; font-size: 17px; flex: 1; }
+/* Keine Überschrift mehr: die Kachel IST der Sprachassistent. Oben rechts nur
+   Zustand, Mikrofon-Punkt und — unübersehbar — das Lauschzeichen. */
+#kopf { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 4px 0 8px; }
 #status {
   font-size: 12px; color: var(--dezent); border-radius: 999px; padding: 4px 10px;
   background: var(--zeile); white-space: nowrap;
@@ -54,6 +56,15 @@ body {
    Quelle für Kachel und Web-App. Hier steht nur, wo sie sitzt. */
 #buehne { flex: 1 1 auto; min-height: 0; }
 #buehne[hidden] { display: none; }
+/* Blasen-Darstellung: das Wesen füllt die GANZE Kachel, auch unter den Rändern
+   und hinter den Bedienelementen — Kopf und Fuß liegen als schmale Streifen
+   darüber und lassen Tipps auf die Blase durch. */
+body.blob #buehne { position: absolute; inset: 0; z-index: 0; }
+body.blob #kopf, body.blob #fuss { position: absolute; z-index: 2; margin: 0; pointer-events: none; }
+body.blob #kopf { top: max(var(--sym-mt), env(safe-area-inset-top, 0px)); right: var(--sb-pad); left: var(--sym-ms); padding: 6px 6px 0 0; }
+body.blob #fuss { bottom: calc(var(--sym-mb) + 6px); right: var(--sb-pad); left: var(--sym-ms); padding: 0 6px 0 6px; }
+body.blob #kopf > *, body.blob #fuss > * { pointer-events: auto; }
+body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); }
 #verlauf {
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain;
@@ -78,11 +89,15 @@ body {
 .aktion .z.ok { color: var(--akzent); } .aktion .z.nein { color: var(--rot); }
 #leer { color: var(--dezent); font-size: 13px; text-align: center; margin-top: 18px; }
 
-#fuss { padding-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-#hinweis { font-size: 12px; color: var(--dezent); min-height: 15px; text-align: center; }
+/* Fußzeile: Hinweis links, Knöpfe rechts — das Mikrofon klein in der Ecke. */
+#fuss { padding-top: 8px; display: flex; flex-direction: row; align-items: flex-end;
+  justify-content: space-between; gap: 8px; }
+#hinweis { flex: 1 1 auto; font-size: 12px; color: var(--dezent); min-height: 15px; text-align: left;
+  align-self: center; }
 #hinweis.fehler { color: var(--rot); }
 #knopf {
-  width: 74px; height: 74px; border-radius: 999px; border: 0; cursor: pointer;
+  flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer;
   background: var(--akzent); color: #fff;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 16px color-mix(in srgb, var(--akzent) 45%, transparent);
@@ -94,19 +109,17 @@ body {
 #knopf.hoert { animation: pulsieren 2.2s ease-in-out infinite; }
 @keyframes pulsieren {
   0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--akzent) 45%, transparent); }
-  50% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--akzent) 0%, transparent); }
+  50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--akzent) 0%, transparent); }
 }
-#knopf svg { width: 30px; height: 30px; fill: #fff; }
-#nebenzeile { display: flex; gap: 8px; }
+#knopf svg { width: 20px; height: 20px; fill: #fff; }
+#nebenzeile { display: flex; gap: 8px; align-items: center; }
 #nebenzeile button {
   border: 0; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600;
   background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text);
   cursor: pointer; display: none;
 }
 #nebenzeile button.zeigen { display: inline-block; }
-#nebenzeile button#freihand:not([hidden]),
 #nebenzeile button#wortLaden:not([hidden]) { display: inline-block; }
-#nebenzeile button#freihand.an { background: color-mix(in srgb, var(--lausch) 26%, transparent); }
 #lauschAn { display: none; align-items: center; gap: 5px; font-size: 11px; color: var(--lausch);
   white-space: nowrap; }
 #lauschAn:not([hidden]) { display: inline-flex; }
@@ -122,12 +135,11 @@ body {
 </style>
 <div id="wrap">
   <div id="kopf">
-    <h2>Sprachassistent</h2>
-    <span id="mikPunkt" title="Mikrofon offen"></span>
-    <span id="status">bereit</span>
     <!-- Unuebersehbar, solange das Mikrofon fuer das Weckwort offen steht. Der
          Plan verlangt das ausdruecklich: Dauerlauschen darf man nie uebersehen. -->
     <span id="lauschAn" hidden><span class="welle"></span>hört auf „Hey SymDo"</span>
+    <span id="mikPunkt" title="Mikrofon offen"></span>
+    <span id="status">bereit</span>
   </div>
   <div id="verlauf"><div id="leer">Tippe auf den Knopf und sprich — zum Beispiel:
 „Was steht morgen an?" oder „Was ist noch auf der Einkaufsliste?"</div></div>
@@ -135,14 +147,13 @@ body {
   <div id="buehne" hidden></div>
   <div id="fuss">
     <div id="hinweis"></div>
+    <div id="nebenzeile">
+      <button type="button" id="ruhe">Ruhe</button>
+      <button type="button" id="wortLaden" hidden>Spracherkennung laden</button>
+    </div>
     <button type="button" id="knopf" aria-label="Gespräch starten">
       <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5.3-3a.9.9 0 0 1 1.8.1 7.1 7.1 0 0 1-6.2 6.9V20h2.2a.9.9 0 1 1 0 1.8H8.9a.9.9 0 1 1 0-1.8h2.2v-2a7.1 7.1 0 0 1-6.2-6.9.9.9 0 0 1 1.8-.1 5.3 5.3 0 0 0 10.6 0z"/></svg>
     </button>
-    <div id="nebenzeile">
-      <button type="button" id="ruhe">Ruhe</button>
-      <button type="button" id="freihand" hidden>Freisprechen</button>
-      <button type="button" id="wortLaden" hidden>Spracherkennung laden</button>
-    </div>
   </div>
   <audio id="ton" autoplay playsinline></audio>
 </div>
@@ -288,6 +299,7 @@ var Blase = (function () {
       var an = (welche === 'blob');
       buehne.hidden = !an;
       verlauf.hidden = an;
+      document.body.classList.toggle('blob', an);
       if (an && !bild && window.SymDoVoiceBlase) {
         bild = SymDoVoiceBlase.erzeuge(buehne, kern);
       }
@@ -372,18 +384,16 @@ var kern = SymDoVoiceKern.erzeuge({
    die Faehigkeit des Geraets — kann es nicht lokal erkennen, wird das GESAGT
    statt stumm nicht zu lauschen. */
 var Freihand = (function () {
-  var knopfF = el('freihand'), ladeKnopf = el('wortLaden'), anzeige = el('lauschAn');
-  var lauscher = null, gewuenscht = false, erlaubtHier = false;
+  var ladeKnopf = el('wortLaden'), anzeige = el('lauschAn');
+  var lauscher = null, erlaubtHier = false, laeuftAnlauf = false, wartetAufTipp = false;
 
-  /* Der Knopf richtet sich nach dem WILLEN, die Anzeige nach dem Zustand: nach
-     dem Weckwort ist der Lauscher aus (das Mikrofon gehoert dann dem Gespraech),
-     Freisprechen aber weiter eingeschaltet. Ohne diese Trennung schaltete der
-     naechste Druck wieder AN statt aus — im Pruefstand aufgefallen. */
+  /* Kein Knopf mehr: Freisprechen ist AN, sobald das Haus es freigegeben hat
+     (Schalter und Einwilligung am Gateway). Was hier bleibt, ist die Anzeige —
+     Dauerlauschen darf man nie uebersehen — und der Umgang mit dem, was der
+     Browser nicht von selbst tut: Sprachpaket laden und beim ersten Mal die
+     Mikrofon-Erlaubnis, die eine Beruehrung braucht. */
   function anzeigen() {
-    var lauscht = !!(lauscher && lauscher.istAn());
-    anzeige.hidden = !lauscht;
-    knopfF.classList.toggle('an', gewuenscht);
-    knopfF.textContent = gewuenscht ? 'Freisprechen aus' : 'Freisprechen';
+    anzeige.hidden = !(lauscher && lauscher.istAn());
   }
   function sagen(text, schlimm) {
     hinweis.textContent = text || '';
@@ -391,7 +401,10 @@ var Freihand = (function () {
   }
 
   function anschalten() {
+    if (!erlaubtHier || laeuftAnlauf || kern.istOffen()) { return; }
+    if (lauscher && lauscher.istAn()) { return; }
     if (!window.SymDoVoiceWeckwort) { sagen('Freisprechen ist hier nicht eingebaut.', true); return; }
+    laeuftAnlauf = true;
     // Erst der Server: die Einwilligung liegt in einem Attribut und ist im
     // Browser weder lesbar noch faelschbar.
     post({ action: 'handsfree' }).then(function (r) {
@@ -401,7 +414,13 @@ var Freihand = (function () {
       }
       return SymDoVoiceWeckwort.verfuegbar().then(function (v) {
         ladeKnopf.hidden = (v.stand !== 'ladbar');
-        if (!v.moeglich) { sagen(v.grund, v.stand === 'unmoeglich'); return; }
+        if (!v.moeglich) {
+          // Ehrlich sagen, was fehlt. Das Sprachpaket sind hunderte MB — es
+          // laedt nur auf Knopfdruck, nie von selbst.
+          sagen(v.stand === 'ladbar' ? 'Für „Hey SymDo" fehlt die Spracherkennung — einmal laden, dann geht es von selbst.' : v.grund,
+                v.stand === 'unmoeglich');
+          return;
+        }
         if (!lauscher) {
           lauscher = SymDoVoiceWeckwort.erzeuge({
             onWake: function () {
@@ -410,53 +429,65 @@ var Freihand = (function () {
               if (!kern.istOffen()) { kern.start(); }
             },
             onZustand: function (z, grund) {
-              if (z === 'fehler' && grund) { sagen(grund, true); }
+              if (z === 'fehler' && grund) {
+                /* Ohne Beruehrung gibt der Browser das Mikrofon beim ersten Mal
+                   nicht her — dann wartet der Lauscher auf den ersten Tipp auf
+                   die Kachel und versucht es erneut. */
+                if (/erlaub|allowed|Berechtigung|permission/i.test(grund)) {
+                  wartetAufTipp = true;
+                  sagen('Tippe einmal auf die Kachel, damit ich auf „Hey SymDo" hören darf.');
+                } else {
+                  sagen(grund, true);
+                }
+              }
               anzeigen();
             }
           });
         }
         return lauscher.an(true).then(function (ok) {
-          gewuenscht = ok === true;
-          if (ok) { sagen('Ich höre auf „Hey SymDo".'); }
+          if (ok) { wartetAufTipp = false; sagen('Ich höre auf „Hey SymDo".'); }
           anzeigen();
         });
       });
-    });
+    }).catch(function () {
+      sagen('Freisprechen konnte nicht starten.', true);
+    }).then(function () { laeuftAnlauf = false; });
   }
 
   function ausschalten() {
-    gewuenscht = false;
     if (lauscher) { lauscher.aus(); }
     anzeigen();
-    sagen('');
   }
 
-  knopfF.addEventListener('click', function () {
-    if (gewuenscht) { ausschalten(); } else { anschalten(); }
-  });
   ladeKnopf.addEventListener('click', function () {
     sagen('Die Spracherkennung wird geladen — das dauert einen Moment.');
     ladeKnopf.disabled = true;
     SymDoVoiceWeckwort.laden().then(function (ok) {
       ladeKnopf.disabled = false;
       ladeKnopf.hidden = ok === true;
-      sagen(ok ? 'Geladen. Freisprechen kann losgehen.' : 'Das Laden hat nicht geklappt.', !ok);
+      sagen(ok ? 'Geladen — ich höre gleich auf „Hey SymDo".' : 'Das Laden hat nicht geklappt.', !ok);
+      if (ok) { anschalten(); }
     });
   });
 
+  /* Der erste Tipp irgendwo auf die Kachel ist die Beruehrung, die der Browser
+     fuer das Mikrofon verlangt — danach laeuft es ohne weiteres Zutun. */
+  el('wrap').addEventListener('click', function () {
+    if (erlaubtHier && wartetAufTipp && !kern.istOffen()) { anschalten(); }
+  });
+
   return {
-    /* Der Schalter am Gateway entscheidet, ob der Knopf ueberhaupt erscheint. */
+    /* Der Schalter am Gateway entscheidet — und startet das Lauschen von selbst. */
     erlauben: function (ja) {
+      var vorher = erlaubtHier;
       erlaubtHier = ja === true;
-      knopfF.hidden = !erlaubtHier;
-      if (!erlaubtHier) { ausschalten(); }
+      if (!erlaubtHier) { ausschalten(); ladeKnopf.hidden = true; if (vorher) { sagen(''); } return; }
+      anschalten();
     },
     /* Nach dem Gespraech zurueck ins Lauschen — waehrend des Gespraechs NICHT,
        sonst spraenge der Erkenner auf die Stimme aus dem Lautsprecher an. */
     nachGespraech: function () {
-      if (gewuenscht && lauscher && !lauscher.istAn() && !kern.istOffen()) {
-        lauscher.an(true).then(anzeigen);
-      }
+      if (erlaubtHier && !kern.istOffen()) { anschalten(); }
     },
     laeuft: function () { return !!(lauscher && lauscher.istAn()); }
   };
