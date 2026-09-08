@@ -31,6 +31,7 @@ Der Sprachdialog spricht Deutsch, versteht natürliche Sätze und kann **nur**, 
 | **Nachrichten** | „Sag Tim, er soll den Tisch decken" (Push auf die Geräte der Person) |
 | **Symcon-Handbuch** | „Wie funktioniert IPS_SetEventCyclic?" — die Antwort kommt aus dem offiziellen Handbuch, vorgelesen statt verlinkt |
 | **Geräte im Haus** | „Mach das Licht im Bad aus", „Stell die Heizung im Schlafzimmer auf 19,5 Grad", „Rollladen bei Tim runter", „Was ist im Wohnzimmer an?", „Starte die Szene Kinoabend" — nur für freigegebene Bereiche, siehe Gateway |
+| **Licht in Farbe** | „LED-Streifen rot", „Nachtlicht auf türkis", „Wohnzimmer warmweiß", „etwas wärmer", „heller" — Farbe, Farbtemperatur und Helligkeit, das Wort entscheidet, welche Variable gemeint ist |
 | **Zeitpläne** | „Schalte in 55 Minuten das Wasser aus", „Jeden Tag um 11 Uhr die Lampe an", „Werktags um 6:30 den Rollladen hoch", „Was ist geplant?", „Lösch den Timer für die Deckenlampe" |
 
 Heikle Aktionen — Löschen, Geräte auf der Rückfrage-Liste, Zeitpläne dafür — bestätigt der Assistent immer erst mit einer gesprochenen Rückfrage. Ohne klares Ja passiert nichts.

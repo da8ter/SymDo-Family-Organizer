@@ -284,6 +284,20 @@ Dazu die eigene Einwilligung: **Jeder**, der mit der Kachel spricht — Gäste u
 
 > **Tipp zur Benennung:** Der Assistent findet Geräte so gut, wie der Objektbaum sie benennt. Kategorien als Räume, sprechende Instanz- oder Link-Namen und Darstellungen mit Beschriftungen („Offen"/„Verriegelt" statt an/aus) machen den Unterschied. Drei Lampen, die alle „Licht" heißen, ergeben immer eine Rückfrage.
 
+### Licht: Farbe, Farbtemperatur, Helligkeit
+
+Symcon kennt bei Licht drei Dinge, und der Assistent bedient alle drei:
+
+| Was | Wie Symcon es abbildet | Was der Assistent versteht |
+|---|---|---|
+| **Farbe** | Darstellung **Farbe** an einer Integer-Variable — der Wert ist die Farbe als Zahl (`0xRRGGBB`); bei Integer ist RGB die einzige Kodierung, andere Farbräume (HSV, CMYK, xy) gibt es nur an Text-Variablen. Das alte Profil `~HexColor` ist gleichwertig | 36 Farbnamen von rot bis lavendel, dazu warmweiß und kaltweiß als Farbton, Hex-Werte („#00ff88"), Tippfehler wie „türkiss". Gelesen wird der nächste Farbname („Türkis"), nicht die Zahl — Symcons `GetValueFormatted` liefert für die Darstellung „Farbe" keinen Text |
+| **Farbtemperatur** | kein eigener Typ, sondern ein **Schieberegler in Kelvin** mit Verwendungsart „Farbtemperatur" oder Farbverlauf „Farbtemperatur"; alt das Profil `~TWColor` (1000–12000 K). Erkannt wird auch ein Regler mit Suffix „K" | warmweiß (2700 K), neutralweiß (4000 K), kaltweiß (6500 K), „wärmer" und „kälter" in 500-K-Schritten. Relative Worte werden am Anschlag geklemmt, eine ausdrückliche Zahl außerhalb („1000 Kelvin") weiter abgelehnt. Gelesen: „3200 K (Warmweiß)" |
+| **Helligkeit** | Schieberegler in Prozent | Zahlen, „voll", „halb", „heller" und „dunkler" in Zehntelschritten des Bereichs |
+
+**Ein Gerät, vier Variablen:** Eine Lampe ist in Symcon oft eine Instanz mit Schalter, Helligkeit, Farbe und Farbtemperatur darunter — oder ein Dummy mit vier Unterinstanzen. Der Assistent findet sie alle unter dem Gerätenamen, und **das Wort entscheidet**, welche gemeint ist: „LED-Streifen an" schaltet den Schalter, „LED-Streifen 40 Prozent" die Helligkeit, „LED-Streifen rot" die Farbe, „LED-Streifen warmweiß" die Farbtemperatur (nicht die Farbe). „An" an einer reinen Farbvariable setzt nichts, sondern fragt nach einer Farbe. Zeitpläne für Farben nutzen Symcons eigene Farbaktion („Nachtlicht Farbe um 19 Uhr auf rosa").
+
+**Nicht abgedeckt:** Farbvariablen vom Typ Text (HSV, CMYK, xy) meldet der Assistent als nicht unterstützt. Eine Farbtemperatur in **Mired** statt Kelvin erkennt er nur, wenn die Darstellung die Verwendungsart „Farbtemperatur" trägt. Geprüft wurde an Variablen, die den Wert nur zurückschreiben — wie das jeweilige Zielmodul (Hue, Zigbee, …) einen Farbwert annimmt, entscheidet dessen Aktion.
+
 ### Zeitpläne
 
 „Schalte in 55 Minuten das Wasser aus", „jeden Tag um 11 Uhr die Lampe an", „werktags um 6:30 den Rollladen hoch": Der Assistent legt dafür ein ganz gewöhnliches **zyklisches Symcon-Ereignis am Zielobjekt** an, ausgeblendet, mit der eingebauten Aktion „Auf Wert schalten" bzw. „Automation ausführen". Es schaltet direkt, ohne Umweg über das Gateway, steht in der Konsole am Gerät, lässt sich dort pausieren oder löschen und überlebt Neustarts. Der Sprachdialog erkennt seine Ereignisse an einer Kennung im Info-Feld; damit listet („Was ist geplant?") und löscht er sie auf Zuruf. Einmal angelegt, gehören sie dem Haus: Ein Widerruf der Einwilligung lässt sie stehen.

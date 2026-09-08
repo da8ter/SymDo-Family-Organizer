@@ -47,7 +47,8 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
   Unterricht?", „Mach das Licht im Bad aus, und in zehn Minuten das im Flur":
   ein Gespräch mit der KI in Echtzeit, als Kachel oder als Blase in der App.
   Geräte schaltet er nur in freigegebenen Bereichen, Heikles nur nach Rückfrage,
-  Zeitpläne legt er als gewöhnliche Symcon-Ereignisse an.
+  Zeitpläne legt er als gewöhnliche Symcon-Ereignisse an. Bei Licht versteht er
+  Farbe, Farbtemperatur und Helligkeit: „rot", „warmweiß", „wärmer", „heller".
 - **Die Schule kommt von selbst** — Stundenplan, Vertretungen und Entfall aus
   **WebUntis**, die **Klassenseite** (Edumaps) als KI-Vorschläge und gespiegelte
   Notizen. Das Briefing sagt morgens, was ausfällt.
