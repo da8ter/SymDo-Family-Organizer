@@ -33,6 +33,10 @@ function erzeuge(opt) {
      nach 5 s noch haengend). */
   var startUhr = 0;
   var werkzeugDeckelMs = opt.toolTimeoutMs || 8000;
+  /* Langsame Werkzeuge bekommen mehr Luft: das Handbuch fragt Einbettung und
+     Lesermodell beim Anbieter (gemessen 3,5–5 s, unter Last mehr). Ein Abbruch
+     nach 8 s waere hier ein Fehler ohne Not — die Antwort kommt ja noch. */
+  var werkzeugDeckelJe = { symcon_handbuch: 15000 };
   var stilleMs = (opt.silenceSeconds || 45) * 1000;
 
   /* Antwortzustand je response_id: Werkzeugaufrufe sammeln, Ergebnisse
@@ -290,7 +294,7 @@ function erzeuge(opt) {
     var deckel = setTimeout(function () {
       liefern({ ok: false, error: { code: 'timeout' },
                 sag: 'Das dauert zu lange — prüfe lesend nach, bevor du es erneut versuchst.' });
-    }, werkzeugDeckelMs);
+    }, werkzeugDeckelJe[name] || werkzeugDeckelMs);
     /* callIdFn mitschicken: das ist die Kennung DIESES Modellaufrufs (callId
        ist die der Sitzung). Der Server weist damit eine doppelt zugestellte
        Anfrage ab, statt zweimal einzutragen. */

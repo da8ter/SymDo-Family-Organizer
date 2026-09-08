@@ -43,7 +43,9 @@ trait SymconDoku
        Budget im Nachdenken und antwortet LEER. */
     private const DOKU_LESER_VORGABE = 'gpt-4.1';
     private const DOKU_LESER_FRIST   = 6;
-    private const DOKU_LESER_TOKEN   = 700;
+    /* 400 statt 700: die Antwort sind drei bis fuenf Saetze (150–250 Token); der
+       Rest des Budgets kostete nur Wartezeit, wenn das Modell weiterschrieb. */
+    private const DOKU_LESER_TOKEN   = 400;
 
     private const DOKU_HALTBAR   = 7 * 86400;
     /** Bis zu dieser Tiefe werden Seiten ABGERUFEN; Verweise darunter landen
@@ -912,6 +914,8 @@ trait SymconDoku
         if ($frage === '') {
             return $this->VoiceErr('ungueltige_eingabe', $this->Translate('What would you like to know about Symcon?'));
         }
+        $t0 = microtime(true);
+        $zeit = [];
         $s = $this->DokuStand();
         if ((!$s['fertig'] || (time() - $s['stand']) >= self::DOKU_HALTBAR) && $this->DokuBaubar()) {
             // Nicht hier bauen — das sprengte die Werkzeugfrist. Nur anstoßen,
@@ -923,6 +927,7 @@ trait SymconDoku
            Einbettung nicht erreichbar, bleibt die Stichwortsuche über die
            Adressen — sie ist schwächer, aber immer da. */
         $abschnitte = $this->DokuBedeutungssuche($frage);
+        $zeit['suche'] = (int)round((microtime(true) - $t0) * 1000);
         $seite = '';
         $auszug = '';
         $titel = '';
@@ -980,14 +985,14 @@ trait SymconDoku
             }
         }
 
-        /* Den Text IMMER live nachladen: die Abschnitte stammen aus dem letzten
-           Aufbau, die Seite kann sich seither geändert haben. Gelingt das nicht,
-           bleiben die abgelegten Abschnitte — besser als keine Antwort. */
-        /* Kürzere Frist als die Vorgabe (12 s): in dieses Werkzeug passen
-           Einbettung, Seitenabruf UND Leser zusammen in die 8 Sekunden, die der
-           Browser dem Werkzeug lässt. Bleibt die Seite hängen, gelten die
-           abgelegten Abschnitte. */
-        $html = $this->DokuHol($seite, 3);
+        /* Die Seite nur dann live laden, wenn die Stichwortsuche auf sie zeigt —
+           dann gibt es noch keinen Text. Liegen Abschnitte aus dem Index vor,
+           SIND sie die Antwortgrundlage: der frische Abruf kostete bis zu drei
+           Sekunden (gemessen 3,5–5,1 s je Aufruf bei 8 s Frist), und das
+           Handbuch aendert sich seltener als der Index (7 Tage) neu gebaut wird. */
+        $t1 = microtime(true);
+        $html = (is_array($abschnitte) && $abschnitte !== []) ? '' : $this->DokuHol($seite, 3);
+        $zeit['seite'] = (int)round((microtime(true) - $t1) * 1000);
         if ($html !== '') {
             $inhalt = $this->DokuInhalt($html);
             if (trim($inhalt['text']) !== '') {
@@ -1058,7 +1063,12 @@ trait SymconDoku
         /* Jetzt liest ein Textmodell die Fundstellen und formuliert die Antwort.
            Gelingt das, geht NUR sie hinaus — der Auszug bleibt hier, sonst
            faengt das Sprachmodell an, ihn ein zweites Mal zu deuten. */
+        $t2 = microtime(true);
         $antwort = $this->DokuAntwortFormulieren($frage, $text);
+        $zeit['leser'] = (int)round((microtime(true) - $t2) * 1000);
+        $zeit['gesamt'] = (int)round((microtime(true) - $t0) * 1000);
+        // Wo die Zeit bleibt, steht im Debug UND in der Antwort (die Kachel ignoriert das Feld).
+        $this->SendDebug('Doku', 'Zeiten ms: ' . json_encode($zeit), 0);
         if ($antwort !== '') {
             /* Ohne „weitere": vorgelesene Seitennamen sind Rauschen, und sie
                verleiten das Sprachmodell dazu, sie aufzuzählen statt die
@@ -1068,6 +1078,7 @@ trait SymconDoku
                 'titel' => $titel,
                 // Fertige Auskunft, wie bei jedem anderen Werkzeug.
                 'sag'   => $antwort,
+                'zeit'  => $zeit,
             ];
         }
 

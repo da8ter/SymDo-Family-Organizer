@@ -1035,10 +1035,11 @@ trait Voice
                 ['type' => 'Select', 'name' => 'VoiceDocModel',
                  'caption' => $this->Translate('Reader for manual questions'),
                  'options' => [
-                     ['caption' => 'gpt-4.1 (Standard, ~1,1 s)', 'value' => 'gpt-4.1'],
-                     ['caption' => 'gpt-5 (~1,5 s, genauer)',    'value' => 'gpt-5'],
-                     ['caption' => 'gpt-4.1-mini (~2 s)',        'value' => 'gpt-4.1-mini'],
-                     ['caption' => 'gpt-5-mini (~1,7 s)',        'value' => 'gpt-5-mini'],
+                     // Zeiten am 08.09.2026 gemessen (Leser allein, zwei Fragen je Modell).
+                     ['caption' => 'gpt-4.1 (Standard, ~1,3 s)',   'value' => 'gpt-4.1'],
+                     ['caption' => 'gpt-4.1-mini (~1,9 s)',        'value' => 'gpt-4.1-mini'],
+                     ['caption' => 'gpt-5 (~3–4 s, genauer)',       'value' => 'gpt-5'],
+                     ['caption' => 'gpt-5-mini (~3–4 s)',           'value' => 'gpt-5-mini'],
                      ['caption' => $this->Translate('— none: read out excerpt —'), 'value' => ''],
                  ]],
                 ['type' => 'CheckBox', 'name' => 'VoiceHandsFreeAllowed',
