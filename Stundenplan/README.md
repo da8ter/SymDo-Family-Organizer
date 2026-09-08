@@ -2,7 +2,9 @@
 
 Der Wochenplan der Kinder als Symcon-Kachel: Fächer, Zeiten, Betreuung, Ferien.
 Eingerichtet wird alles im Backend der Instanz — es gibt keine zweite Ablage und
-keine App, in der man den Plan pflegen müsste.
+keine App, in der man den Plan pflegen müsste. Wer **WebUntis** hat, lässt sich
+den Plan samt Vertretungen und Entfall vom Gateway einspielen (unten,
+*Datierte Tage aus WebUntis*).
 
 Zwei Darstellungen aus denselben Daten:
 
@@ -136,6 +138,32 @@ nicht ungefragt auf jedes gekoppelte Gerät schiebt.
 Die Statuszeile unten meldet Überschneidungen und Stunden, deren Kind oder Fach
 es nicht (mehr) gibt.
 
+## Datierte Tage aus WebUntis
+
+Die Vorlage gilt für jede Woche. Spielt das **SymDo - Gateway** den Plan aus
+**WebUntis** ein (oder ein eigenes Skript über `STPL_ImportSlots`), liegen
+darüber **datierte Tage** für die laufende und die kommende Woche — mit
+Vertretungen, Entfall, Raum und Lehrer. Dann ändert sich die Anzeige:
+
+- Im **Spaltenkopf** und im Tageswechsler der Timeline steht das **Datum**;
+  ohne Import fehlt es bewusst, denn ein Datum an einer Vorlage behauptet mehr,
+  als sie weiß.
+- Wochenraster und Timeline **blättern durch beide Wochen**; die Tageswahl
+  läuft von Montag dieser bis Sonntag der nächsten Woche.
+- Am **Wochenende** steht die kommende Woche, nicht die abgelaufene — ob eine
+  Woche durch ist, sagt der Server je Kind am Datum des letzten Unterrichtstags,
+  nicht die Uhr des Betrachters.
+- **Freie Tage sagen, warum**: Wochenende, Ferien mit Namen und Enddatum,
+  Feiertag mit Namen. Ferien schlagen dabei importierten Unterricht.
+- **Entfall** ist in der Kachel durchgestrichen und blasser, in der App eine
+  gestrichelte, halbdurchsichtige Kapsel; eine **Vertretung** trägt ihren Titel
+  und eine Kante. Die App zeigt beides auch im Stundenplan-Balken der Übersicht,
+  das Briefing nennt es morgens.
+
+Der Import ersetzt nur die genannten Tage; alles Ältere als der Wochenanfang
+wird beim nächsten Import weggeräumt. Fällt der Import weg, fällt die Anzeige
+nach der Woche von selbst auf die Vorlage zurück.
+
 ## Beide Ansichten gleichzeitig
 
 Eine zweite Instanz dieses Moduls anlegen, unter *Anzeige* auf **Timeline**
@@ -170,8 +198,9 @@ Schultag zum Ferientag machen und umgekehrt.
 
 ## Grenzen
 
-- Der Plan ist eine **Wochenvorlage, kein Kalender**: Vertretung, Ausfall und
-  einzelne Verschiebungen kennt er nicht.
+- Der Plan selbst ist eine **Wochenvorlage, kein Kalender**: Vertretung, Ausfall
+  und einzelne Verschiebungen kommen nur über den Import (WebUntis oder
+  `STPL_ImportSlots`) hinein und gelten dann für die beiden datierten Wochen.
 - In den Ferien blendet er den Unterricht aus, zeigt aber **keine
   Betreuungszeiten** — wer in den Ferien Hort hat, sieht ihn hier nicht.
 - Der 14-tägliche Samstag folgt der **Parität der ISO-Kalenderwoche**, nicht
@@ -188,7 +217,24 @@ Schultag zum Ferientag machen und umgekehrt.
 ## Öffentliche Funktionen
 
 ```php
-STPL_GetPlan(int $InstanzID): string        // der fertige Plan als JSON
-STPL_FetchHolidays(int $InstanzID): string  // Ferien abrufen, Meldung zurück
-STPL_Refresh(int $InstanzID): void          // Anzeige nachziehen (Timer)
+STPL_GetPlan(int $InstanzID): string                    // der fertige Plan als JSON (Vorlage + datierte Tage, Ferien, Termine)
+STPL_GetPlanForDate(int $InstanzID, string $Datum): string // der Plan eines Tages (YYYY-MM-DD) als JSON
+STPL_ImportSlots(int $InstanzID, string $Json): string  // datierte Stunden einspielen (siehe unten), Antwort als JSON
+STPL_FetchHolidays(int $InstanzID): string              // Ferien abrufen, Meldung zurück
+STPL_Refresh(int $InstanzID): void                      // Anzeige nachziehen (Timer)
 ```
+
+`STPL_ImportSlots` ist für Zulieferer wie WebUntis gedacht, ausdrücklich aber
+auch für eigene Skripte. Der Rumpf:
+
+```json
+{"child": "Lena", "source": "MeinSkript",
+ "days": {"1": [{"subject": "Mathematik", "start": "08:00", "end": "09:00",
+                 "room": "121", "teacher": "Gue", "status": "normal"}]}}
+```
+
+`child` ist der Name oder die Nummer des Kindes, Wochentage sind 1 = Montag
+bis 6 = Samstag, `status` ist `normal`, `vertretung` oder `entfall`. Geprüft
+wird alles vor dem ersten Schreiben — ein halber Plan überschreibt nie einen
+guten; Tage, die der Rumpf nicht nennt, bleiben unangetastet. Die Antwort nennt
+Kind, Tage, Stunden und Ersetztes oder den Fehler.

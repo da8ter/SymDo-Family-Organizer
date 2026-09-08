@@ -12,6 +12,8 @@ Das Beste daran: die KI nimmt euch die Tipparbeit ab.
 - **Ein Briefing wie vom persönlichen Assistenten** — jeden Morgen fasst die KI zusammen, was heute zählt: Termine, fällige Aufgaben, die Einkaufsliste. Auf Wunsch vorgelesen, im Ton eurer Wahl — vom höflichen Butler bis zum Drillsergeant, der die Familie aus dem Bett scheucht.
 - **Freihändig einkaufen** — im Laden sagt die Web-App die Einkaufsliste über die Kopfhörer an: ein Tastendruck hakt den Artikel ab und nennt den nächsten. Das Handy bleibt in der Tasche.
 - **Nichts geht mehr unter** — Push aufs Handy, wenn eine Aufgabe fällig wird, das Briefing bereitsteht oder die KI etwas Neues gefunden hat.
+- **Reden statt tippen** — der Sprachassistent (Kachel **SymDo - Sprachassistent** oder die Blase in der Web-App) versteht „Setz Milch auf die Liste", „Was hat Tim morgen für Unterricht?" und „Mach das Licht im Bad aus, und in zehn Minuten das im Flur" — und tut nur, was ihr im Gateway freigegeben habt.
+- **Die Schule kommt von selbst** — der Stundenplan samt Vertretungen und Entfall aus **WebUntis**, die **Klassenseite** (Edumaps) als Vorschläge und gespiegelte Notizen. Das Briefing sagt morgens, was ausfällt und was dafür läuft.
 - **Eure Daten bleiben eure** — die KI läuft mit dem eigenen Schlüssel beim Anbieter eurer Wahl oder komplett lokal im eigenen Netz. Und ohne eure ausdrückliche Einwilligung bleibt sie aus.
 
 Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt, als Home-Screen-App installierbar) und als Kachel für die Tile-Visualisierung — beide zeigen denselben Stand. Technisch besteht SymDo aus zwei Instanzen:
@@ -20,6 +22,8 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 |---|---|---|
 | **SymDo - Gateway** | Splitter (Präfix `TGW`) | Zentrale: liefert die Web-App aus, verwaltet Kopplung, Geräte und Familienmitglieder, KI, Briefing, Push. Zugleich Sync-Broker (Google Tasks, Microsoft To Do, CalDAV) für die ToDo-Listen |
 | **SymDo - Web App** | Device (Präfix `SDWA`) | Kachel für die Tile-Visualisierung mit derselben Oberfläche; steuert, welche Bereiche und Bedienelemente App und Kachel zeigen |
+| **SymDo - Sprachassistent** | Device (Präfix `SDVC`) | Sprechstelle des Sprachdialogs als Kachel — eingeschaltet, eingewilligt und begrenzt wird im Gateway ([Anleitung](../SymDoVoice/README.md)) |
+| **SymDo - Notizen** | Device (Präfix `SDNO`) | Der Notizbereich als eigene Kachel ([Anleitung](../SymDoNotes/README.md)) |
 
 > Die Einrichtung der Listen-Synchronisation (Google Tasks, Microsoft To Do, CalDAV) ist in der [ToDo-List-Anleitung](../ToDoList/README.md) beschrieben.
 
@@ -37,8 +41,11 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **10. Rezeptanalyse**
 - **11. KI-Funktionen und Datenschutz**
 - **12. Benachrichtigungen**
-- **13. Statusvariablen**
-- **14. PHP-Befehlsreferenz**
+- **13. Sprachdialog und Gerätesteuerung**
+- **14. Stundenplan aus WebUntis**
+- **15. Klassenseiten (Edumaps)**
+- **16. Statusvariablen**
+- **17. PHP-Befehlsreferenz**
 
 ## 1. Funktionsumfang
 
@@ -56,6 +63,13 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Jahresereignisse** — Geburtstag, Jahrestag, Hochzeits- und Todestag lassen sich im Termin-Dialog anlegen: ein Schalter, die Art und das Ursprungsdatum, mehr nicht. Beginn, Ende und Wiederholung rechnet der Kalender selbst aus. In der Agenda tragen sie ein eigenes Abzeichen mit der Zahl der Jahre, und das Briefing nennt sie am Tag selbst
 - **Web-Push** — Benachrichtigungen aufs gekoppelte Handy bei fälligen Aufgaben, neuem Briefing und neuen KI-Vorschlägen; Termin-Erinnerungen zusätzlich über die Kachel-Visualisierung
 - **Geräteverwaltung** — Liste aller gekoppelten Geräte, einzelne Geräte sperrbar
+- **Dashboard-Begrüßung** — „Hallo Familie Muster" ohne, „Hallo Tim" mit gewähltem Mitglied; abschaltbar (Kapitel 6)
+- **Kindmodus** — wählt man in der Mitglieder-Leiste ein Kind, gehört ihm die Oberfläche: Einkauf und KI-Eingang fallen weg, sein Stundenplan kommt dazu
+- **Sprachdialog** — 27 Werkzeuge vom Einkaufszettel bis zur Gerätesteuerung, mit Rückfragen bei allem Heiklen, Tageskontingent und drei getrennten Einwilligungen (Kapitel 13)
+- **Gerätesteuerung per Sprache** — Licht, Rollläden, Heizung, Steckdosen, Szenen und Skripte in freigegebenen Bereichen schalten und lesen, dazu einmalige und dauerhafte Zeitpläne als gewöhnliche Symcon-Ereignisse (Kapitel 13)
+- **Stundenplan aus WebUntis** — Unterricht, Vertretungen, Entfall, Raum und Lehrer je Kind, für die laufende und die kommende Woche (Kapitel 14)
+- **Klassenseiten (Edumaps)** — die Klassenseite der Schule als Quelle für KI-Vorschläge und, auf Wunsch, als gespiegelte Notizen mit Kartenansicht (Kapitel 15)
+- **Essensplan** — die Kachel **SymDo - Essensplan** hängt am Gateway: Gerichte je Tag, Zutaten in den Einkaufswagen, KI-Gerichtsbilder; der Sprachdialog liest und plant ihn mit
 
 ## 2. Voraussetzungen
 
@@ -67,6 +81,9 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - Für die E-Mail-Analyse: eine **E-Mail, Empfangen (IMAP)**-Instanz oder eine Mail-Weiterleitung, optional
 - Für die KI-Funktionen: ein eigener API-Schlüssel (**Anthropic** oder **OpenAI**) oder ein **lokaler, OpenAI-kompatibler Server** (z. B. LM Studio)
 - Für die Sprachausgabe (Briefing und Einkaufs-Ansage): **OpenAI**, **Microsoft Azure Speech**, **ElevenLabs** oder **Amazon Polly** (eigener Schlüssel; bei ElevenLabs ist ein kostenpflichtiger Zugang nötig, Polly rechnet je Zeichen ab)
+- Für den Sprachdialog: ein **OpenAI**-Schlüssel (Realtime-Modelle) und ein Gerät mit Mikrofon in einem sicheren Kontext (HTTPS, Symcon-App oder Connect), optional
+- Für den Stundenplan aus WebUntis: ein Eltern- oder Schülerkonto der Schule, optional
+- Für die Klassenseiten: die Adresse der Edumaps-Klassenseite, optional
 
 ## 3. Installation
 
@@ -99,7 +116,9 @@ Kopplungscodes werden nur als Hash gespeichert und verfallen nach 10 Minuten.
 
 ### Familienmitglieder (`Users`)
 
-Liste der Mitglieder mit Name, Nachname, Rolle, Geburtstag und Foto. Jedes Mitglied bekommt automatisch einen eigenen Notiz-Ordner mit seinem Foto.
+Liste der Mitglieder mit Name, Nachname, Rolle, Geburtstag und Foto. Jedes Mitglied bekommt automatisch einen eigenen Notiz-Ordner mit seinem Foto. Die Rolle **Kind** wirkt an mehreren Stellen: im Kindmodus der App, im Stundenplan (nur Kinder bekommen einen) und im Sprachdialog (Kinder schalten keine Geräte der Rückfrage-Liste).
+
+Darüber stehen **Begrüßung auf dem Dashboard anzeigen** (`GreetingEnabled`) und **Familienname für die Dashboard-Begrüßung** (`FamilyName`): ohne gewähltes Mitglied grüßt die Übersicht mit „Hallo Familie <Name>", mit gewähltem Mitglied mit dessen Vornamen.
 
 ### KI-Funktionen
 
@@ -232,11 +251,82 @@ Web-Push erreicht jedes gekoppelte Gerät, auf dem die Web-App als Home-Screen-A
 
 Termin-Erinnerungen aus dem Kalender lassen sich zusätzlich über eine Kachel-Visualisierungsinstanz zustellen (Kapitel 6, *Visualisierungs-Benachrichtigungen*).
 
-## 13. Statusvariablen
+## 13. Sprachdialog und Gerätesteuerung
 
-Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio und Notiz-Anhänge werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt, gespeicherte Rezeptdateien unter der Kategorie „Rezeptfotos" unterhalb der SymDo-Web-App-Instanz.
+Der Sprachdialog ist ein Gespräch mit der KI in Echtzeit (OpenAI Realtime über WebRTC): Die Kachel **SymDo - Sprachassistent** oder die Blase in der Web-App nimmt den Ton auf, das Modell antwortet mit Stimme und ruft für alles, was es tun soll, **Werkzeuge** dieses Gateways auf. Es kann ausschließlich, was diese Werkzeuge hergeben; die Liste steht in der [Anleitung der Sprach-Kachel](../SymDoVoice/README.md).
 
-## 14. PHP-Befehlsreferenz
+### Einschalten und begrenzen
+
+| Einstellung | Eigenschaft | Bedeutung |
+|---|---|---|
+| Sprachdialog aktivieren | `VoiceEnabled` | Hauptschalter; nutzt den OpenAI-Schlüssel der KI-Funktionen |
+| Modell, Stimme | `VoiceModel`, `VoiceVoice` | `gpt-realtime-mini` (Standard) oder `gpt-realtime`; Stimme des Anbieters |
+| Sprechzeit pro Tag | `VoiceDailyMinutes` | Kontingent für den ganzen Haushalt in Minuten (Standard 15, 0 = unbegrenzt) |
+| Höchstdauer je Gespräch | `VoiceMaxSessionSeconds` | danach legt die Kachel auf (Standard 180 s) |
+| Leser für Handbuchfragen | `VoiceDocModel` | ein Textmodell (Standard `gpt-4.1`) liest die Fundstellen aus dem Symcon-Handbuch und formuliert die Antwort; ohne Modell wird der Auszug vorgelesen |
+| Freihändig mit Weckwort | `VoiceHandsFreeAllowed` | Experiment: „Hey SymDo" startet das Gespräch; Erkennung auf dem Gerät, eigene Einwilligung nötig |
+
+**Drei Einwilligungen**, mit Absicht getrennt und einzeln widerrufbar: für den Dialog selbst (der Raumton geht während des Gesprächs zum Anbieter), fürs Dauerlauschen mit Weckwort und für die Gerätesteuerung. Ein Widerruf beendet laufende Gespräche sofort. Die **Testverbindung** prägt einen Zugang für zehn Sekunden und prüft Schlüssel und Modellfreigabe, ohne Sprechzeit zu bezahlen; **Alle Sitzungen beenden** legt überall auf. Die Statuszeile nennt die heutige Sprechzeit und die offenen Gespräche.
+
+### Gerätesteuerung
+
+| Einstellung | Eigenschaft | Bedeutung |
+|---|---|---|
+| Gerätesteuerung per Sprache erlauben | `VoiceDevicesEnabled` | Schalter; ohne ihn kennt der Assistent kein Gerät und sagt das auch |
+| Freigegebene Bereiche | `VoiceDeviceRoots` | **Wurzel-Kategorien**: alles darunter, das sichtbar ist und eine Aktion hat, ist steuerbar. Jede Kategorie darunter gilt als Raum, verschachtelte Kategorien als Etage und Raum („Obergeschoss › Bad"), Links werden verfolgt, Szenensteuerungen erkannt |
+| Nur nach gesprochener Rückfrage | `VoiceDeviceConfirm` | Schloss, Alarmanlage, Garage: erst nach einem klaren Ja, **von Kindern nie**. Die Objekte müssen unter einer Wurzel liegen |
+
+Dazu die eigene Einwilligung: **Jeder**, der mit der Kachel spricht — Gäste und Kinder eingeschlossen — kann danach die freigegebenen Geräte schalten und lesen. Deshalb bewusst eng freigeben und Heikles auf die Rückfrage-Liste. Es gilt ein Deckel von **60 Schaltungen je Stunde**; jede Schaltung steht mit Gerät, Wert und Person im **Meldungsfenster**. **Katalog anzeigen** listet, was der Assistent unter den Wurzeln gefunden hat, mit Raum, Namen und Rückfrage-Vermerk.
+
+**Was der Assistent versteht:** Schalter (an, aus, umschalten, auch die Beschriftungen der Darstellung: „verriegeln", „scharf", „öffnen"), Regler (Zahlen mit Einheit, „voll", „halb"; außerhalb des Bereichs wird abgelehnt statt geklemmt, Werte rasten auf die Schrittweite), Auswahl-Darstellungen über ihre Beschriftungen („Stufe 2", „Eco"), Rollläden (hoch, runter, Prozent), Text. Farbe und Wiedergabe liest er nur. Skripte startet er, Szenen der Szenensteuerung ruft er auf.
+
+**Wie er das Gerät findet:** Der Server baut bei jedem Aufruf den Katalog aus dem Objektbaum. Der gesprochene Name entsteht aus dem Baum — Link-Name, sonst Variablenname; heißt die Variable nur „Status" oder „Wert", ist die Instanz das Gerät, und liegt die Instanz selbst in einer Instanz (Dummy „Lampenschirm" mit Modbus-Kindern „Schalter" und „Dimmwert"), wird deren Name Teil des Namens. Ein strenger Abgleich mit Synonymen (Licht, Lampe, Leuchte; Bad, Badezimmer; oben, Obergeschoss) trifft die klaren Fälle sofort. Bei mehreren oder keinem Treffer bekommt das Modell **Kandidaten** mit vollem Pfad, Typ und möglichen Werten und wählt — aber nur aus dem Katalog, nichts Erfundenes. Bei zwei gleichnamigen Geräten fragt der Assistent mit dem Weg nach („Bad Deckenlampe im Obergeschoss oder im Erdgeschoss?"). Haushalte bis 120 Geräte bekommen den ganzen Katalog in den Systemprompt und treffen ohne Suchlauf.
+
+> **Tipp zur Benennung:** Der Assistent findet Geräte so gut, wie der Objektbaum sie benennt. Kategorien als Räume, sprechende Instanz- oder Link-Namen und Darstellungen mit Beschriftungen („Offen"/„Verriegelt" statt an/aus) machen den Unterschied. Drei Lampen, die alle „Licht" heißen, ergeben immer eine Rückfrage.
+
+### Zeitpläne
+
+„Schalte in 55 Minuten das Wasser aus", „jeden Tag um 11 Uhr die Lampe an", „werktags um 6:30 den Rollladen hoch": Der Assistent legt dafür ein ganz gewöhnliches **zyklisches Symcon-Ereignis am Zielobjekt** an, ausgeblendet, mit der eingebauten Aktion „Auf Wert schalten" bzw. „Automation ausführen". Es schaltet direkt, ohne Umweg über das Gateway, steht in der Konsole am Gerät, lässt sich dort pausieren oder löschen und überlebt Neustarts. Der Sprachdialog erkennt seine Ereignisse an einer Kennung im Info-Feld; damit listet („Was ist geplant?") und löscht er sie auf Zuruf. Einmal angelegt, gehören sie dem Haus: Ein Widerruf der Einwilligung lässt sie stehen.
+
+Höchstens 20 Pläne, relativ höchstens sieben Tage voraus, absolut höchstens ein Jahr. Gefeuerte Einmal-Aufträge bleiben 15 Minuten als „erledigt um 12:24" sichtbar, dann räumt die Liste sie weg. Kinder legen nur Einmaliges an und löschen nur Eigenes. Geräte der Rückfrage-Liste verlangen auch für einen Zeitplan das gesprochene Ja. Die Formularzeile nennt die Zahl der offenen Pläne, **Zeitpläne anzeigen** listet sie.
+
+## 14. Stundenplan aus WebUntis
+
+Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dort nie ankommt — Vertretung, Entfall, Raumwechsel — steht in **WebUntis**, das die Schule ohnehin führt. Das Gateway holt es dort über die offiziell vorgesehene JSON-RPC-Schnittstelle und spielt es datiert in die Stundenplan-Instanz ein, für die laufende und die kommende Woche.
+
+| Einstellung | Eigenschaft | Bedeutung |
+|---|---|---|
+| WebUntis aktivieren | `UntisEnabled` | Schalter |
+| Server, Schule | `UntisServer`, `UntisSchool` | wie in der WebUntis-Adresse der Schule (z. B. `mese.webuntis.com`, Schulkürzel) |
+| Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
+| Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
+| Schüler | `UntisStudents` | je Kind eine Zeile: Familienmitglied, dazu bei Elternkonten mit mehreren Kindern Elementtyp und -nummer; das **Suchfeld** (`UntisSearchName`) findet die Nummer über den Namen |
+| Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
+
+**Testverbindung** meldet das Schuljahr und nennt die Kinder des Kontos. Das Kind muss im Stundenplan-Modul als Familienmitglied verknüpft sein, sonst weiß niemand, wohin die Stunden gehören. Nach wiederholt fehlgeschlagener Anmeldung pausiert der Abruf, damit das Konto nicht gesperrt wird; die Testverbindung startet ihn wieder.
+
+Was daraus wird: Der Stundenplan zeigt **datierte Tage** mit Datum im Spaltenkopf und blättert durch beide Wochen; entfallene Stunden erscheinen als gestrichelte Kapsel, Vertretungen mit Kante; freie Tage nennen den Grund. Das **Briefing** nennt, was ausfällt und was dafür läuft. Der **Sprachdialog** beantwortet „Was hat Tim am Dienstag?" und „Fällt bei Mia etwas aus?". Eigene Zulieferer können denselben Weg nutzen: `STPL_ImportSlots()` im Stundenplan-Modul.
+
+## 15. Klassenseiten (Edumaps)
+
+Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termine, Elternbriefe mit Fristen, Materiallisten, den Stundenplan als PDF. Das Gateway liest die Seite regelmäßig, erkennt **geänderte Karten** und schickt jede einzeln durch dieselbe Kette wie eine Schulmail — KI-Analyse, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Nichts entsteht ungefragt.
+
+| Einstellung | Eigenschaft | Bedeutung |
+|---|---|---|
+| Klassenseiten aktivieren | `EduEnabled` | Schalter |
+| Klassenseiten | `EduPages` | je Seite die Adresse und das Kind, dem die Vorschläge gehören. **Die Adresse enthält den Zugang und wirkt wie ein Kennwort** — sie steht nur in dieser Instanz |
+| Prüfintervall | `EduIntervalHours` | wie oft nachgesehen wird |
+| Karten als Notizen spiegeln | `EduToNotes` | jede Karte 1:1 als Notiz, ein Ordner je Karte, Anhänge und QR-Codes als Verweise mit dabei; entfernte Karten wandern ins **Archiv** statt zu verschwinden |
+| Verlinkten Karten folgen | `EduFollowLinks` | Karten, auf die die Seite verweist, kommen mit |
+| Push bei Neuem | `EduPush` | meldet neue Vorschläge aufs Handy |
+
+In der App und in der Notiz-Kachel erscheint die Klassenseite als **Kartenansicht** mit den Farben der Seite, aufklappbaren Bereichen, PDF-Vorschau und, bei buchbaren Karten, der Buchungslage. Eine **Sperrliste** hält einzelne Karten oder ganze Seiten von der Auswertung fern, mit Einzelfreigabe; **Alle Karten auswerten** stößt eine vollständige Analyse an. Die Vorschläge zählen auf das KI-Tageslimit — ist es erreicht, folgt der Rest am nächsten Tag.
+
+## 16. Statusvariablen
+
+Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt. Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
+
+## 17. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 

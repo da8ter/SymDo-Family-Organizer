@@ -43,6 +43,18 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
   vor; ein Druck auf die Kopfhörer-Taste hakt ab und sagt den nächsten Artikel an.
 - **Rezeptanalyse** — Rezeptfoto, PDF oder Rezept-URL wird zur Zutatenliste,
   Portionen skalierbar, Zutaten direkt auf die Einkaufsliste.
+- **Sprachassistent** — „Setz Milch auf die Liste", „Was hat Tim morgen für
+  Unterricht?", „Mach das Licht im Bad aus, und in zehn Minuten das im Flur":
+  ein Gespräch mit der KI in Echtzeit, als Kachel oder als Blase in der App.
+  Geräte schaltet er nur in freigegebenen Bereichen, Heikles nur nach Rückfrage,
+  Zeitpläne legt er als gewöhnliche Symcon-Ereignisse an.
+- **Die Schule kommt von selbst** — Stundenplan, Vertretungen und Entfall aus
+  **WebUntis**, die **Klassenseite** (Edumaps) als KI-Vorschläge und gespiegelte
+  Notizen. Das Briefing sagt morgens, was ausfällt.
+- **Kindmodus** — ein Tipp auf das Kind in der Mitglieder-Leiste, und die
+  Oberfläche gehört ihm: seine Aufgaben, sein Stundenplan, keine Einkaufsliste.
+- **Essensplan** — was gibt es heute? Je Tag ein Gericht, Zutaten mit einem
+  Klick in den Einkaufswagen, KI-Gerichtsbilder.
 
 ## Die Module
 
@@ -56,6 +68,9 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - ToDo Übersicht** | Device | Kennzahlen einer Aufgabenliste als kleine Kachel |
 | **SymDo - Einkaufslisten Übersicht** | Device | Die offenen Artikel als Bild-Leiste |
 | **SymDo - Routinen** | Device | Tägliche Häkchen-Routinen für Kinder: Anzeigezeiten je Routine, optionale Belohnungs-Münzen, Konfetti — und die Heute-Aufgaben als Füller |
+| **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Gerichtsbilder |
+| **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
+| **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
 
 ## Schnellstart
 
@@ -84,6 +99,10 @@ KI-Eingang und Briefing kommen erst mit ihm.
   lokaler, OpenAI-kompatibler Server (z. B. LM Studio), optional
 - Für die Sprachausgabe: **OpenAI**, **Azure Speech**, **ElevenLabs** oder
   **Amazon Polly**, optional
+- Für den Sprachassistenten: ein **OpenAI**-Schlüssel und ein Gerät mit
+  Mikrofon in einem sicheren Kontext (HTTPS, Symcon-App oder Connect), optional
+- Für Stundenplan aus **WebUntis** und **Klassenseiten**: Zugang bzw. Adresse
+  der Schule, optional
 
 ---
 
@@ -161,6 +180,39 @@ Familienmitglieder, KI, Briefing, Push — und der Sync-Broker, über den die
 ToDo-Listen mit Google, Microsoft und CalDAV sprechen.
 
 → [Ausführliche Anleitung](SymDoGateway/README.md)
+
+## SymDo - Sprachassistent
+
+Ein Gespräch mit der SymDo-KI: Einkaufsliste, Aufgaben, Termine, Notizen,
+Essensplan, Stundenplan und Tagesüberblick per Stimme — und, wenn im Gateway
+freigegeben, Licht, Rollläden, Heizung, Szenen und Zeitpläne. Alles Heikle nur
+nach gesprochener Rückfrage; Kinder schalten nichts von der Rückfrage-Liste.
+Eingeschaltet, eingewilligt und begrenzt wird im Gateway.
+
+→ [Ausführliche Anleitung](SymDoVoice/README.md)
+
+## SymDo - Notizen
+
+Der Notizbereich der App als eigene Kachel: Ordner je Familienmitglied und
+eigene, Notizen mit Text und Anhängen, gespiegelte Klassenseiten. Nichts
+einzurichten — die Notizen liegen im Gateway.
+
+→ [Ausführliche Anleitung](SymDoNotes/README.md)
+
+## SymDo - Essensplan
+
+Ein Wochenraster für die Frage aller Fragen: Was gibt es heute? Je Tag ein
+Gericht, blätterbar zwischen dieser und der nächsten Woche, Zutaten mit einem
+Klick in den Einkaufswagen, Gerichtsbilder von der KI.
+
+→ [Ausführliche Anleitung](MealPlan/README.md)
+
+## SymDo - Routinen
+
+Tägliche Häkchenlisten für Kinder: große Zeilen, großes Häkchen, Konfetti, wenn
+alles geschafft ist — und die Heute-Aufgaben als Füller.
+
+→ [Ausführliche Anleitung](Routines/README.md)
 
 ## SymDo - ToDo Übersicht
 

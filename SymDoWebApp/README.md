@@ -26,7 +26,10 @@ den Zeilen erscheinen.
 
 ## 1. Funktionsumfang
 
-- **Dieselbe Oberfläche wie auf dem Handy** — Übersicht, Einkaufen, Favoriten, ToDos, Kalender, Notizen und KI-Eingang in einer Kachel, mit denselben Gesten (wischen zum Erledigen und Löschen) wie in der App
+- **Dieselbe Oberfläche wie auf dem Handy** — Übersicht, Einkaufen (Favoriten als Blatt über das Herz in der Kopfzeile), ToDos, Kalender, Notizen und KI-Eingang in einer Kachel, mit denselben Gesten (wischen zum Erledigen und Löschen) wie in der App
+- **Begrüßung** auf der Übersicht — „Hallo Familie Muster", mit gewähltem Mitglied „Hallo Tim"; Familienname und Schalter stehen im Gateway
+- **Kindmodus** — wählt man in der Mitglieder-Leiste ein Kind, gehört ihm die Oberfläche: Einkauf und KI-Eingang fallen weg, dafür kommt sein **Stundenplan** als eigener Bereich mit Tageskarte, Legende und Blättern durch beide Wochen. Bei einem Erwachsenen oder ohne Auswahl bleibt alles, wie es eingerichtet ist. Die Mitglieder-Leiste steht auch dann, wenn keine Aufgabenliste eingebunden ist
+- **Klassenseiten** aus dem Gateway als Kartenansicht im Notizbereich; **Sprachdialog** als Blase auf der Übersicht, wenn er im Gateway eingeschaltet ist
 - **Findet die Listen selbst** — alle **SymDo - ToDo Liste**- und **SymDo - Einkaufsliste**-Instanzen erscheinen im Formular; je Liste ein Schalter zum Ausblenden
 - **Einstellungen für App *und* Kachel** — sichtbare Bereiche, Bedienelemente und Info-Abzeichen gelten für beide Oberflächen gemeinsam
 - **Standard-Mitglied** — die Vorbelegung, wenn niemand ausdrücklich gewählt wird: schnell angelegte Aufgaben, aus dem KI-Eingang übernommene Einträge und E-Mail-Vorschläge ohne eigenen Empfänger
@@ -64,6 +67,8 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 | Notizen | `ShowNotes` | Ordner und Notizen aus dem Gateway |
 | KI-Eingang | `ShowKi` | Was die KI aus Mails und Dateien gelesen hat |
 | Stundenplan | `TimetableChoice` | Welche Stundenplan-Instanzen die Übersicht zeigt — je Instanz eine Zeile. Ohne Stundenplan-Modul fällt die Liste weg |
+| Aufgaben-Übersicht | `ShowOverview` | Die Sammelansicht aller Aufgabenlisten („Alle Listen" im Umschalter, sortierbar) |
+| Wischgesten | `EnableSwipeGestures` | Wischen zum Erledigen und Löschen an oder aus |
 | Bedienelemente | `ShowMemberBar`, `ShowCreateButton`, `ShowSorting`, `ShowFavoriteHeart`, `ShowRowEditButton`, `ShowRowDeleteButton`, `ShowReorderHandle` | Mitglieder-Leiste, Anlegen-Knopf, Sortierung, Favoriten-Herz, Zeilen-Knöpfe, Verschiebe-Griff |
 | Info-Abzeichen | `ShowQuantityBadge`, `ShowRecurrenceBadge`, `ShowDueBadge`, `ShowNotificationBadge`, `ShowPriorityBadge` | Menge, Wiederholung, Fälligkeit, Erinnerung, Priorität |
 
@@ -87,7 +92,7 @@ Bereich verschwindet die Tab-Leiste.
 | Bereich | Ohne Gateway | Mit Gateway |
 |---|---|---|
 | Einkaufen, ToDos, Favoriten | ja | ja |
-| Übersicht (Kennzahlen) | ja | ja, dazu Briefing und Stundenplan |
+| Übersicht (Kennzahlen) | ja | ja, dazu Begrüßung, Briefing, Stundenplan und Sprach-Blase |
 | Kalender, Notizen, KI-Eingang | nein — blenden sich aus | ja |
 | Familienmitglieder mit Foto | nein | ja |
 
