@@ -550,7 +550,7 @@ trait VoiceDevices
     {
         $gruppen = [
             ['licht', 'lampe', 'leuchte', 'beleuchtung'],
-            ['heizung', 'thermostat', 'temperatur', 'heizkoerper'],
+            ['heizung', 'thermostat', 'heizkoerper'],
             ['rollladen', 'rollo', 'jalousie', 'raffstore', 'markise'],
             ['steckdose', 'stecker', 'dose'],
             ['fernseher', 'tv', 'glotze'],
@@ -558,6 +558,13 @@ trait VoiceDevices
             ['tuer', 'haustuer', 'tuerschloss', 'schloss'],
         ];
         $aus = [$sn];
+        /* „Temperatur" meint die Heizung — aber nur in DIESE Richtung: „Heizung"
+           darf nicht zu „temperatur" werden, sonst trifft sie die
+           „Farbtemperatur" des LED-Streifens (gemessen im Prüfstand). */
+        if (str_contains($sn, 'temperatur') && !str_contains($sn, 'farbtemperatur')) {
+            $aus[] = str_replace('temperatur', 'heizung', $sn);
+            $aus[] = str_replace('temperatur', 'thermostat', $sn);
+        }
         foreach ($gruppen as $g) {
             foreach ($g as $wort) {
                 if (str_contains($sn, $wort)) {
@@ -688,7 +695,7 @@ trait VoiceDevices
         $vt = (int)($v['VariableType'] ?? 0);
         $spec = ['art' => 'lesen', 'vt' => $vt, 'min' => 0.0, 'max' => 0.0, 'step' => 0.0, 'digits' => -1,
                  'suffix' => '', 'options' => [], 'an' => $this->Translate('on'), 'aus' => $this->Translate('off'),
-                 'reversed' => false];
+                 'reversed' => false, 'kelvin' => false];
         $p = null;
         if (function_exists('IPS_GetVariablePresentation')) {
             try {
@@ -733,6 +740,10 @@ trait VoiceDevices
                     $spec['reversed'] = true;
                 }
             }
+            // Farbtemperatur: Verwendungsart 1 oder Farbverlauf 2 (Symcon-Doku „Schieberegler")
+            if ((int)($p['USAGE_TYPE'] ?? -1) === 1 || (int)($p['GRADIENT_TYPE'] ?? -1) === 2) {
+                $spec['kelvin'] = true;
+            }
         } else {
             $profil = trim((string)($v['VariableCustomProfile'] ?? '')) ?: trim((string)($v['VariableProfile'] ?? ''));
             if ($profil !== '' && @IPS_VariableProfileExists($profil)) {
@@ -756,8 +767,17 @@ trait VoiceDevices
                     if (str_starts_with($profil, '~Shutter')) {
                         $spec['art'] = 'rollladen';
                     }
+                    if ($profil === '~HexColor') {
+                        $spec['art'] = 'farbe';      // RGB als Zahl, wie die Darstellung „Farbe"
+                    }
+                    if ($profil === '~TWColor') {
+                        $spec['kelvin'] = true;
+                    }
                 }
             }
+        }
+        if (!$spec['kelvin'] && preg_match('/^\s*K\b/u', $spec['suffix']) === 1) {
+            $spec['kelvin'] = true;      // „ K" am Regler: Farbtemperatur
         }
         if ($spec['art'] === '' || $spec['art'] === 'lesen') {
             // Aus dem Typ ableiten, wenn die Darstellung nichts sagt
@@ -938,6 +958,32 @@ trait VoiceDevices
                 } elseif ($prozentig && $spec['min'] <= 0 && in_array($w, $aus, true)) {
                     $zahl = $spec['min'];
                 }
+                /* Relativ und in Worten — geklemmt statt abgelehnt, denn „wärmer" am
+                   Anschlag ist kein Fehler, sondern schon erfüllt. Farbtemperatur:
+                   warm ist WENIGER Kelvin. */
+                $spanne = $spec['max'] - $spec['min'];
+                $jetzt = is_numeric($aktuell) ? (float)$aktuell : ($spec['min'] + $spec['max']) / 2;
+                $relativ = null;
+                if ($spec['kelvin']) {
+                    $relativ = match ($w) {
+                        'warmweiss', 'warm', 'warmes weiss', 'gemuetlich', 'kerzenlicht' => 2700.0,
+                        'neutralweiss', 'neutral', 'neutrales weiss'                     => 4000.0,
+                        'kaltweiss', 'kalt', 'kaltes weiss', 'tageslicht', 'arbeitslicht' => 6500.0,
+                        'waermer', 'etwas waermer', 'gemuetlicher'                          => $jetzt - 500.0,
+                        'kaelter', 'etwas kaelter', 'kuehler'                                => $jetzt + 500.0,
+                        default                                                              => null,
+                    };
+                }
+                if ($relativ === null) {
+                    $relativ = match ($w) {
+                        'heller', 'etwas heller', 'mehr', 'hoeher', 'lauter'   => $jetzt + $spanne / 10,
+                        'dunkler', 'etwas dunkler', 'weniger', 'niedriger', 'leiser' => $jetzt - $spanne / 10,
+                        default                                                => null,
+                    };
+                }
+                if ($relativ !== null) {
+                    $zahl = max($spec['min'], min($spec['max'], $relativ));
+                }
                 if ($zahl === null) {
                     $beispiel = $this->VoiceGeraetZahlText(($spec['min'] + $spec['max']) / 2, $spec);
                     return $this->VoiceErr('ungueltiger_wert', sprintf($this->Translate('%1$s needs a number, for example %2$s.'), $name, $beispiel));
@@ -947,9 +993,91 @@ trait VoiceDevices
             case 'text':
                 return ['ok' => true, 'wert' => mb_substr(trim($wert), 0, 200), 'text' => mb_substr(trim($wert), 0, 60)];
 
-            default: // farbe, wiedergabe
+            case 'farbe':
+                if ((int)$spec['vt'] !== 1) {
+                    // Darstellung „Farbe" an einer Text-Variable kodiert HSV/CMYK/xy — hier nicht abgebildet.
+                    return $this->VoiceErr('nicht_unterstuetzt', sprintf($this->Translate('I cannot set %s by voice yet.'), $name));
+                }
+                $rgb = $this->VoiceFarbeAusWort($w);
+                if ($rgb === null) {
+                    return $this->VoiceErr('ungueltiger_wert', sprintf($this->Translate('For %s name a colour — for example red, warm white or #FF8800.'), $name));
+                }
+                return ['ok' => true, 'wert' => $rgb, 'text' => $this->VoiceFarbeText($rgb)];
+
+            default: // wiedergabe
                 return $this->VoiceErr('nicht_unterstuetzt', sprintf($this->Translate('I cannot set %s by voice yet.'), $name));
         }
+    }
+
+    /** Gesprochene Farben → RGB. Reihenfolge zählt bei der Rückübersetzung: der erste Treffer nennt die Farbe. */
+    private static array $VOICE_FARBEN = [
+        'rot' => 0xFF0000, 'gruen' => 0x00FF00, 'blau' => 0x0000FF, 'gelb' => 0xFFFF00, 'orange' => 0xFF8800,
+        'weiss' => 0xFFFFFF, 'warmweiss' => 0xFFD6AA, 'kaltweiss' => 0xE6F0FF, 'schwarz' => 0x000000,
+        'lila' => 0x8000FF, 'violett' => 0x8000FF, 'purpur' => 0x800080, 'magenta' => 0xFF00FF, 'pink' => 0xFF69B4, 'rosa' => 0xFFB6C1,
+        'tuerkis' => 0x40E0D0, 'cyan' => 0x00FFFF, 'petrol' => 0x006D77, 'mint' => 0x98FF98,
+        'hellblau' => 0x87CEFA, 'himmelblau' => 0x87CEEB, 'dunkelblau' => 0x00008B, 'marine' => 0x000080,
+        'hellgruen' => 0x90EE90, 'dunkelgruen' => 0x006400, 'oliv' => 0x808000,
+        'gold' => 0xFFD700, 'bernstein' => 0xFFBF00, 'aprikose' => 0xFFB347, 'lachs' => 0xFA8072, 'korall' => 0xFF7F50,
+        'braun' => 0x8B4513, 'beige' => 0xF5F5DC, 'grau' => 0x808080, 'silber' => 0xC0C0C0, 'lavendel' => 0xB57EDC,
+    ];
+
+    /** „rot", „warmweiß", „#FF8800", „ff8800" → RGB als Zahl; sonst null. */
+    private function VoiceFarbeAusWort(string $w): ?int
+    {
+        $w = trim((string)preg_replace('/^(?:farbe|auf|in|die farbe|nach)\s+/u', '', $this->VoiceNorm($w)));
+        $w = str_replace(['-', ' '], '', $w);
+        if (preg_match('/^#?([0-9a-f]{6})$/', $w, $m) === 1) {
+            return (int)hexdec($m[1]);
+        }
+        if (isset(self::$VOICE_FARBEN[$w])) {
+            return self::$VOICE_FARBEN[$w];
+        }
+        if (mb_strlen($w) >= 4) {
+            /* Tippfehler-Nähe, aber KEIN Teilwort: „an" steckt in „orange" — und
+               setzte das Nachtlicht auf Orange, statt nach einer Farbe zu fragen
+               (gemessen am Musterhaus). */
+            foreach (self::$VOICE_FARBEN as $name => $rgb) {
+                if (levenshtein($w, $name) <= 2) {
+                    return $rgb;    // „violet", „türkiss"
+                }
+            }
+        }
+        return null;
+    }
+
+    /** RGB → „Orange" oder, wenn keine Farbe nah genug liegt, „#FF8800". */
+    private function VoiceFarbeText(int $rgb): string
+    {
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $best = null;
+        $bestD = PHP_FLOAT_MAX;
+        foreach (self::$VOICE_FARBEN as $name => $c) {
+            $d = (($c >> 16 & 0xFF) - $r) ** 2 + (($c >> 8 & 0xFF) - $g) ** 2 + (($c & 0xFF) - $b) ** 2;
+            if ($d < $bestD) {
+                $bestD = $d;
+                $best = $name;
+            }
+        }
+        $hex = sprintf('#%06X', $rgb & 0xFFFFFF);
+        if ($best === null || $bestD > 60 * 60 * 3) {
+            return $hex;
+        }
+        $worte = ['rot' => 'red', 'gruen' => 'green', 'blau' => 'blue', 'gelb' => 'yellow', 'orange' => 'orange', 'weiss' => 'white',
+                  'warmweiss' => 'warm white', 'kaltweiss' => 'cold white', 'schwarz' => 'black (off)', 'lila' => 'purple', 'violett' => 'purple',
+                  'purpur' => 'purple', 'magenta' => 'magenta', 'pink' => 'pink', 'rosa' => 'rose', 'tuerkis' => 'turquoise', 'cyan' => 'cyan',
+                  'petrol' => 'petrol', 'mint' => 'mint', 'hellblau' => 'light blue', 'himmelblau' => 'sky blue', 'dunkelblau' => 'dark blue',
+                  'marine' => 'navy', 'hellgruen' => 'light green', 'dunkelgruen' => 'dark green', 'oliv' => 'olive', 'gold' => 'gold',
+                  'bernstein' => 'amber', 'aprikose' => 'apricot', 'lachs' => 'salmon', 'korall' => 'coral', 'braun' => 'brown',
+                  'beige' => 'beige', 'grau' => 'grey', 'silber' => 'silver', 'lavendel' => 'lavender'];
+        return $this->Translate($worte[$best] ?? $best);
+    }
+
+    /** Kelvin in Worten — die drei Stufen, die man beim Licht auch sagt. */
+    private function VoiceKelvinWort(float $k): string
+    {
+        return $k < 3300 ? $this->Translate('warm white') : ($k < 5000 ? $this->Translate('neutral white') : $this->Translate('cold white'));
     }
 
     /** Klemmen ist ein FEHLER, einrasten und runden sind Pflicht. */
@@ -1015,22 +1143,29 @@ trait VoiceDevices
     private function VoiceGeraetZustandText(array $e, array $spec): string
     {
         $id = (int)$e['id'];
+        $wert = @GetValue($id);
+        if ($spec['art'] === 'farbe' && is_numeric($wert)) {
+            // GetValueFormatted liefert für die Darstellung „Farbe" nichts (gemessen) — Farbname statt Zahl.
+            return $this->VoiceFarbeText((int)$wert);
+        }
         $text = '';
         try {
             $text = trim((string)@GetValueFormatted($id));
         } catch (\Throwable $ex) {
             $text = '';
         }
-        if ($text !== '') {
-            return $text;
+        if ($text === '') {
+            $text = match ($spec['art']) {
+                'schalter' => ((bool)$wert) ? $spec['an'] : $spec['aus'],
+                'auswahl'  => $this->VoiceGeraetOptionText($spec, $wert),
+                'text'     => mb_substr((string)$wert, 0, 120),
+                default    => is_numeric($wert) ? $this->VoiceGeraetZahlText((float)$wert, $spec) : (string)$wert,
+            };
         }
-        $wert = @GetValue($id);
-        return match ($spec['art']) {
-            'schalter' => ((bool)$wert) ? $spec['an'] : $spec['aus'],
-            'auswahl'  => $this->VoiceGeraetOptionText($spec, $wert),
-            'text'     => mb_substr((string)$wert, 0, 120),
-            default    => is_numeric($wert) ? $this->VoiceGeraetZahlText((float)$wert, $spec) : (string)$wert,
-        };
+        if ($spec['kelvin'] && is_numeric($wert)) {
+            $text .= ' (' . $this->VoiceKelvinWort((float)$wert) . ')';
+        }
+        return $text;
     }
 
     private function VoiceGeraetOptionText(array $spec, mixed $wert): string
@@ -1054,6 +1189,7 @@ trait VoiceDevices
             // Nur Dimmer und Prozentregler sind „an" — eine Heizung auf 21 °C ist es nicht.
             'regler'    => $e['akt'] === true && ($spec['suffix'] === '' || str_contains($spec['suffix'], '%'))
                            && is_numeric($wert) && (float)$wert > $spec['min'],
+            'farbe'     => is_numeric($wert) && (int)$wert > 0,
             default     => false,
         };
     }
@@ -1217,7 +1353,9 @@ trait VoiceDevices
             'rollladen'  => $this->Translate('up/down or 0–100 %'),
             'text'       => $this->Translate('free text'),
             'regler'     => trim($this->VoiceGeraetZahlText((float)$spec['min'], $spec) . '–' . $this->VoiceGeraetZahlText((float)$spec['max'], $spec))
-                            . ($spec['step'] > 1 ? ', ' . sprintf($this->Translate('step %s'), $this->VoiceGeraetZahlText((float)$spec['step'], $spec)) : ''),
+                            . ($spec['step'] > 1 ? ', ' . sprintf($this->Translate('step %s'), $this->VoiceGeraetZahlText((float)$spec['step'], $spec)) : '')
+                            . ($spec['kelvin'] ? ', ' . $this->Translate('warm white/cold white, warmer/colder') : ', ' . $this->Translate('brighter/darker')),
+            'farbe'      => $this->Translate('colour name or #RRGGBB, e.g. red, blue, warm white'),
             default      => $this->Translate('read-only'),
         };
         if (!$e['akt']) {
@@ -1419,11 +1557,24 @@ trait VoiceDevices
                 if (count($passend) > 1) {
                     // Ein %-Regler nimmt „an" auch (= voll); bei an/aus ist trotzdem der Schalter gemeint, bei Zahlen der Regler.
                     $wn = $this->VoiceNorm($wert);
-                    $art = preg_match('/\d/', $wn) === 1 || str_contains($wn, 'prozent') ? 'regler'
-                        : (preg_match('/^(an|ein|aus|einschalten|ausschalten|anmachen|ausmachen|umschalten|on|off)$/u', $wn) === 1 ? 'schalter' : '');
+                    $kelvinWort = preg_match('/^(warmweiss|neutralweiss|kaltweiss|tageslicht|waermer|kaelter|kuehler|warm|kalt)$/u', $wn) === 1;
+                    $art = match (true) {
+                        preg_match('/\d/', $wn) === 1 || str_contains($wn, 'prozent')                                          => 'regler',
+                        preg_match('/^(an|ein|aus|einschalten|ausschalten|anmachen|ausmachen|umschalten|on|off)$/u', $wn) === 1 => 'schalter',
+                        $kelvinWort                                                                                          => 'kelvin',
+                        preg_match('/^(heller|dunkler|etwas heller|etwas dunkler)$/u', $wn) === 1                              => 'dimmer',
+                        $this->VoiceFarbeAusWort($wn) !== null                                                               => 'farbe',
+                        default                                                                                              => '',
+                    };
                     if ($art !== '') {
-                        $eng = array_values(array_filter($passend, fn(array $t): bool
-                            => (string)$this->VoiceGeraetSpezifikation((int)$t['schluessel']['id'])['art'] === $art));
+                        $eng = array_values(array_filter($passend, function (array $t) use ($art): bool {
+                            $sp = $this->VoiceGeraetSpezifikation((int)$t['schluessel']['id']);
+                            return match ($art) {
+                                'kelvin' => $sp['art'] === 'regler' && $sp['kelvin'],
+                                'dimmer' => $sp['art'] === 'regler' && !$sp['kelvin'],
+                                default  => (string)$sp['art'] === $art,
+                            };
+                        }));
                         if (count($eng) === 1) {
                             $passend = $eng;
                         }

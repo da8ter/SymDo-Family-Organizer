@@ -172,6 +172,7 @@ const PRES_SWITCH  = '{60AE6B26-B3E2-BDB1-A3A1-BE232940664B}';
 const PRES_SLIDER  = '{6B9CAEEC-5958-C223-30F7-BD36569FC57A}';
 const PRES_ENUM    = '{52D9E126-D7D2-2CBB-5E62-4CF7BA7C5D82}';
 const PRES_SHUTTER = '{6075FC22-69AF-B110-3749-C24138883082}';
+const PRES_COLOR   = '{05CC3CC2-A0B2-5837-A4A7-A07EA0B9DDFB}';
 
 $aktion = IPS_CreateScript(0);
 IPS_SetName($aktion, 'Aktion');
@@ -222,6 +223,11 @@ $wz   = kat('Wohnzimmer', $eg);
 $steh = inst('Stehlampe', $wz);
 $stehSchalter = $schalter('Wert', inst('Schalter', $steh));
 $stehHell = var_('Wert', inst('Helligkeit', $steh), 1, ['PRESENTATION' => PRES_SLIDER, 'MIN' => 0, 'MAX' => 100, 'STEP_SIZE' => 5, 'SUFFIX' => ' %'], 0);
+$led = inst('LED-Streifen', $kue);   // in der Küche, damit „Schalter im Wohnzimmer" eindeutig bleibt
+$ledSchalter = $schalter('Wert', inst('Schalter', $led));
+$ledFarbe = var_('Wert', inst('Farbe', $led), 1, ['PRESENTATION' => PRES_COLOR], 0xFF8800);
+$ledCt = var_('Wert', inst('Farbtemperatur', $led), 1, ['PRESENTATION' => PRES_SLIDER, 'MIN' => 2000, 'MAX' => 6500, 'STEP_SIZE' => 100, 'SUFFIX' => ' K', 'USAGE_TYPE' => 1, 'GRADIENT_TYPE' => 2], 4000);
+$nachtFarbe = var_('Nachtlicht Farbe', $kue, 1, ['PRESENTATION' => PRES_COLOR], 0x0000FF);
 $tv   = $schalter('Fernseher', $wz);
 $heiz = var_('Heizung', $wz, 2, ['PRESENTATION' => PRES_SLIDER, 'MIN' => 5, 'MAX' => 30, 'STEP_SIZE' => 0.5, 'DIGITS' => 1, 'SUFFIX' => ' °C'], 21.0);
 $rollo = var_('Rollladen', $wz, 1, ['PRESENTATION' => PRES_SHUTTER, 'MIN' => 0, 'MAX' => 100, 'SUFFIX' => ' %'], 0);
@@ -341,6 +347,35 @@ $runter = GetValue($rollo);
 $r2 = $h->pSteuern(['geraet' => 'Rollladen', 'wert' => 'hoch']);
 pruefe('Wert: Rollladen runter/hoch sind die beiden Enden', $code($r) === 'ok' && $code($r2) === 'ok' && $runter !== GetValue($rollo) && in_array($runter, [0, 100], true) && in_array(GetValue($rollo), [0, 100], true), $kurz($r) . ' runter=' . $runter . ' hoch=' . GetValue($rollo));
 
+// ---- Farbe und Farbtemperatur ----
+$r = $h->pSteuern(['geraet' => 'LED-Streifen', 'wert' => 'rot']);
+pruefe('Farbe: „LED-Streifen rot" → Farbe, nicht Schalter', $code($r) === 'ok' && GetValue($ledFarbe) === 0xFF0000 && GetValue($ledSchalter) === false, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'LED-Streifen', 'wert' => 'an']);
+pruefe('Farbe: „an" bleibt beim Schalter, färbt nichts', $code($r) === 'ok' && GetValue($ledSchalter) === true && GetValue($ledFarbe) === 0xFF0000, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Nachtlicht Farbe', 'wert' => 'an']);
+pruefe('Farbe: „an" an reiner Farbvariable fragt nach einer Farbe', $code($r) === 'ungueltiger_wert' && GetValue($nachtFarbe) === 0x0000FF, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Nachtlicht Farbe', 'wert' => '#00ff88']);
+pruefe('Farbe: Hex-Wert', $code($r) === 'ok' && GetValue($nachtFarbe) === 0x00FF88, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Nachtlicht Farbe', 'wert' => 'türkiss']);
+pruefe('Farbe: Tippfehler „türkiss"', $code($r) === 'ok' && GetValue($nachtFarbe) === 0x40E0D0, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'LED-Streifen', 'wert' => 'warmweiß']);
+pruefe('Farbtemperatur: „warmweiß" → 2700 K, nicht die Farbe', $code($r) === 'ok' && GetValue($ledCt) === 2700 && GetValue($ledFarbe) === 0xFF0000, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Farbtemperatur', 'wert' => 'kälter']);
+pruefe('Farbtemperatur: „kälter" = +500 K', $code($r) === 'ok' && GetValue($ledCt) === 3200, $kurz($r) . ' ct=' . GetValue($ledCt));
+SetValue($ledCt, 2000);
+$r = $h->pSteuern(['geraet' => 'Farbtemperatur', 'wert' => 'wärmer']);
+pruefe('Farbtemperatur: „wärmer" am Anschlag klemmt statt abzulehnen', $code($r) === 'ok' && GetValue($ledCt) === 2000, $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Farbtemperatur', 'wert' => '1000 Kelvin']);
+pruefe('Farbtemperatur: Zahl außerhalb wird abgelehnt', $code($r) === 'ausserhalb', $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Helligkeit', 'wert' => 'heller']);
+pruefe('Dimmer: „heller" = +10 %', $code($r) === 'ok' && GetValue($stehHell) === 100, $kurz($r) . ' hell=' . GetValue($stehHell));
+$r = $h->pLesen(['geraet' => 'LED-Streifen Farbe']);
+pruefe('Farbe lesen: Name statt Zahl', $code($r) === 'ok' && ($r['wert'] ?? '') === 'Rot', $kurz($r));
+$r = $h->pLesen(['geraet' => 'Farbtemperatur']);
+pruefe('Farbtemperatur lesen: Kelvin mit Weißton', $code($r) === 'ok' && str_contains((string)$r['wert'], 'Warmweiß'), $kurz($r));
+$r = $h->pSteuern(['geraet' => 'Temperatur', 'raum' => 'Wohnzimmer', 'wert' => '22 Grad']);
+pruefe('Synonym: „Temperatur" meint die Heizung', $code($r) === 'ok' && abs(GetValue($heiz) - 22.0) < 1e-6, $kurz($r));
+
 // ---- Rückfrage, Marke, Kinder ----
 $r = $h->pSteuern(['geraet' => 'Fernseher', 'wert' => 'an'], 'e1');
 pruefe('Rückfrage: Fernseher verlangt Bestätigung, nichts geschaltet', $code($r) === 'bestaetigung_noetig' && ($r['marke'] ?? '') !== '' && GetValue($tv) === false, $kurz($r));
@@ -367,7 +402,7 @@ pruefe('Skript: startet', $code($r) === 'ok' && isset($r['skript']), $kurz($r));
 $r = $h->pLesen(['raum' => 'Wohnzimmer']);
 pruefe('Lesen: Raum listet Geräte', $code($r) === 'ok' && count($r['geraete'] ?? []) >= 5, $kurz($r));
 $r = $h->pLesen(['geraet' => 'Heizung']);
-pruefe('Lesen: Zustand eines Geräts', $code($r) === 'ok' && str_contains((string)$r['wert'], '21,5'), $kurz($r));
+pruefe('Lesen: Zustand eines Geräts („Heizung" trifft nicht die Farbtemperatur)', $code($r) === 'ok' && str_contains((string)$r['wert'], '22,0'), $kurz($r));
 $r = $h->pLesen(['id' => $terrasse]);
 pruefe('Lesen: per id', $code($r) === 'ok' && ($r['geraet'] ?? '') === 'Küche Terrassenstrahler', $kurz($r));
 $r = $h->pSuchen(['suche' => 'Stehlampe']);

@@ -44,6 +44,7 @@ trait VoiceZeitplan
     private static string $VOICE_AKT_ZAHL   = '{A4C53C8D-795E-403A-9EEC-CC0D71E89A20}';   // VALUE int|float
     private static string $VOICE_AKT_ENUM   = '{FCE37F48-DA3F-45DD-AC77-71343792CC2D}';   // VALUE aus den Optionen
     private static string $VOICE_AKT_TEXT   = '{A4D52B67-BE4B-4AD0-964F-B9BA2556AAB0}';   // VALUE string
+    private static string $VOICE_AKT_FARBE  = '{07DEB4D2-D32C-4226-8371-E8CD1A507D99}';   // VALUE RGB (Farbwähler)
     private static string $VOICE_AKT_SKRIPT = '{7938A5A2-0981-5FE0-BE6C-8AA610D654EB}';   // Automation ausführen
     /** Szenensteuerung: die Szenenvariable auf 2 = „Aufrufen" (Profil SZS.SceneControl). */
     private static int $VOICE_SZENE_AUFRUFEN = 2;
@@ -445,6 +446,9 @@ trait VoiceZeitplan
             return [self::$VOICE_AKT_TEXT, ['TARGET' => $id, 'VALUE' => (string)$wert]];
         }
         $spec = $this->VoiceGeraetSpezifikation($id);
+        if ($spec['art'] === 'farbe' && $vt === 1) {
+            return [self::$VOICE_AKT_FARBE, ['TARGET' => $id, 'VALUE' => (int)$wert]];
+        }
         if ($spec['options'] !== [] && $vt === 1) {
             return [self::$VOICE_AKT_ENUM, ['TARGET' => $id, 'VALUE' => (int)$wert]];
         }
