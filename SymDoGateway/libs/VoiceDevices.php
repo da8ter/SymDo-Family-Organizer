@@ -449,7 +449,7 @@ trait VoiceDevices
             foreach ($titel as $t) {
                 $tn = $this->VoiceNorm($t);
                 foreach ($varianten as $v) {
-                    $best = max($best, $this->VoicePunkte($v, $tn));
+                    $best = max($best, $this->VoiceGeraetPunkte($v, $tn));
                 }
             }
             $bewertet[] = ['schluessel' => $e, 'titel' => (string)$e['titel'], 'punkte' => $best];
@@ -474,6 +474,43 @@ trait VoiceDevices
             || ($treffer[0]['punkte'] >= 90 && $treffer[1]['punkte'] < 80);
         return ['status' => $eindeutig ? 'eindeutig' : 'mehrdeutig',
                 'treffer' => array_slice($treffer, 0, $eindeutig ? 1 : 5), 'beinah' => []];
+    }
+
+    /**
+     * Punkte wie VoicePunkte, aber mit zwei Geräte-Regeln (gemessen am Musterhaus):
+     *   - Ein KURZER Kandidat, der Anfang der Suche ist, zählt nicht als Präfix-
+     *     Treffer: „Heizung" ist nicht „Heizungsanlage" (fünf Heizungen mit 88).
+     *   - Reine Ähnlichkeit (similar_text) bleibt unter 70 und schaltet nie:
+     *     „stehlicht" ~ „licht" kam auf 71 und machte jedes Licht zum Treffer.
+     */
+    private function VoiceGeraetPunkte(string $such, string $kand): int
+    {
+        if ($kand === '') {
+            return 0;
+        }
+        if ($such === $kand) {
+            return 100;
+        }
+        if (mb_strlen($such) >= 4 && str_starts_with($kand, $such)) {
+            return 88;    // „auto put" ~ „auto putzen"
+        }
+        if (mb_strlen($kand) >= 4 && str_starts_with($such, $kand) && mb_strlen($kand) >= 0.75 * mb_strlen($such)) {
+            return 88;    // „deckenlamp" ~ „deckenlampe" — aber nicht „heizung" ~ „heizungsanlage"
+        }
+        $woerter = preg_split('/\s+/', $such, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($woerter !== [] && count(array_filter($woerter, static fn(string $w): bool => str_contains($kand, $w))) === count($woerter)) {
+            return 80;
+        }
+        if (str_contains($kand, $such)) {
+            return 74;
+        }
+        $d = levenshtein($such, $kand);
+        $grenze = max(1, min(4, (int)floor(mb_strlen($kand) * 0.2)));
+        if ($d <= $grenze) {
+            return 70;
+        }
+        similar_text($such, $kand, $prozent);
+        return min(69, (int)round($prozent));
     }
 
     /** Gesagtes ohne Artikel und Füllwörter, normalisiert. */
@@ -787,10 +824,30 @@ trait VoiceDevices
                     $neu = !((bool)$aktuell);
                     return ['ok' => true, 'wert' => $neu, 'text' => $neu ? $spec['an'] : $spec['aus']];
                 }
-                // Beschriftungen wie „offen"/„geschlossen"
+                // Beschriftungen wie „offen"/„geschlossen", „Verriegelt"/„Offen", „Scharf"/„Unscharf"
                 foreach ([[true, $spec['an']], [false, $spec['aus']]] as [$wertB, $caption]) {
-                    if ($caption !== '' && $this->VoicePunkte($w, $this->VoiceNorm($caption)) >= 80) {
-                        return ['ok' => true, 'wert' => $wertB, 'text' => $caption];
+                    if ($caption !== '' && $this->VoiceGeraetPunkte($w, $this->VoiceNorm($caption)) >= 70) {
+                        return ['ok' => true, 'wert' => $wertB, 'text' => $caption];   // „verriegeln" ~ „verriegelt"
+                    }
+                }
+                /* Wortfamilien: „aufschließen" meint die Beschriftung „Offen", „abschließen"
+                   die „Verriegelt" — ohne Beschriftung bleibt es bei an/aus, denn ob true
+                   bei einem Schloss „offen" oder „zu" heißt, weiß nur die Darstellung. */
+                $familien = [
+                    ['auf', 'oeffnen', 'aufschliessen', 'aufmachen', 'entriegeln', 'entsperren', 'offen', 'geoeffnet', 'unscharf', 'entschaerfen'],
+                    ['zu', 'schliessen', 'abschliessen', 'zumachen', 'verriegeln', 'sperren', 'geschlossen', 'verriegelt', 'abgeschlossen', 'scharf', 'schaerfen', 'scharfschalten'],
+                ];
+                foreach ($familien as $familie) {
+                    if (!in_array($w, $familie, true)) {
+                        continue;
+                    }
+                    foreach ([[true, $spec['an']], [false, $spec['aus']]] as [$wertB, $caption]) {
+                        $cn = $this->VoiceNorm($caption);
+                        foreach ($familie as $wort) {
+                            if ($cn !== '' && mb_strlen($wort) >= 4 && str_contains($cn, $wort)) {
+                                return ['ok' => true, 'wert' => $wertB, 'text' => $caption];
+                            }
+                        }
                     }
                 }
                 return $this->VoiceErr('ungueltiger_wert', sprintf($this->Translate('For %1$s I only know %2$s and %3$s.'), $name, $spec['an'], $spec['aus']));
@@ -974,7 +1031,9 @@ trait VoiceDevices
         return match ($spec['art']) {
             'schalter'  => (bool)$wert,
             'rollladen' => is_numeric($wert) && abs((float)$wert - ($spec['reversed'] ? $spec['max'] : $spec['min'])) > 1e-6,
-            'regler'    => is_numeric($wert) && (float)$wert > $spec['min'],
+            // Nur Dimmer und Prozentregler sind „an" — eine Heizung auf 21 °C ist es nicht.
+            'regler'    => $e['akt'] === true && ($spec['suffix'] === '' || str_contains($spec['suffix'], '%'))
+                           && is_numeric($wert) && (float)$wert > $spec['min'],
             default     => false,
         };
     }
@@ -1101,7 +1160,7 @@ trait VoiceDevices
             foreach ($texte as $t) {
                 $tn = $this->VoiceNorm($t);
                 foreach ($varianten as $v) {
-                    $best = max($best, $this->VoicePunkte($v, $tn));
+                    $best = max($best, $this->VoiceGeraetPunkte($v, $tn));
                 }
                 // Einzelne Suchwörter im Pfad zählen — „Lampenschirm" steckt im Pfad, nicht im Titel.
                 foreach ($woerter as $w) {
