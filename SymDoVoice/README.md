@@ -61,7 +61,7 @@ Für die **Gerätesteuerung** zusätzlich im Gateway: *Gerätesteuerung per Spra
 | Diese Kachel gehört | `UserID` | Das Familienmitglied, als das die Kachel spricht: „meine Aufgaben" meint dann diese Person, Notizen landen in ihrem Ordner. Die Rolle entscheidet mit — ein **Kind** darf keine Geräte der Rückfrage-Liste schalten und keine dauerhaften Zeitpläne anlegen |
 | Standard-Einkaufsliste | `DefaultShoppingID` | Wohin „setz Milch auf die Liste" schreibt, wenn keine Liste genannt wird |
 | Standard-Aufgabenliste | `DefaultTodoID` | Wohin neue Aufgaben ohne genannte Liste kommen |
-| Kacheldarstellung | `Darstellung` | **Gesprächsverlauf (Text)** zeigt Frage und Antwort als Text mit — oder **Animierte Blase**, die sich zur Stimme des Assistenten bewegt (nicht zur eigenen) und in der Akzentfarbe der Visualisierung leuchtet. Läuft 15 Sekunden kein Gespräch, schläft das Wesen ein: die Lider sinken über die Augen, es sinkt etwas Richtung Boden, kleine „z" in blassen Wölkchen steigen auf; ein Tipp oder das Weckwort weckt es sofort |
+| Kacheldarstellung | `Darstellung` | **Gesprächsverlauf (Text)** zeigt Frage und Antwort als Text mit — oder **Animierte Blase**, die auf die Stimme reagiert und in der Akzentfarbe der Visualisierung leuchtet. Läuft 15 Sekunden kein Gespräch, schläft das Wesen ein: die Lider sinken über die Augen, es sinkt etwas Richtung Boden, kleine „z" in blassen Wölkchen steigen auf; ein Tipp oder das Weckwort weckt es sofort |
 
 Alles Übrige — Gesprächsdauer, Tageskontingent, Weckwort, Geräte — wird im Gateway eingestellt und gilt für alle Sprach-Kacheln des Haushalts gemeinsam.
 

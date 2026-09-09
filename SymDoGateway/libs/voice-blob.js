@@ -449,14 +449,12 @@ function erzeuge(behaelter, kern) {
         roh = new Uint8Array(analyser.frequencyBinCount);
       }
       if (ac.state === 'suspended') { ac.resume(); }
-      /* NUR die Stimme der KI. Das eigene Mikrofon bleibt draußen: das Wesen
-         soll sich bewegen, wenn ES spricht — nicht mitzucken, wenn der Mensch
-         redet oder im Raum Geschirr klappert (Nutzerwunsch). */
-      var strom = kern.stroeme().fern;
-      if (strom && verbunden.indexOf(strom) === -1) {
+      var s = kern.stroeme();
+      [s.mikro, s.fern].forEach(function (strom) {
+        if (!strom || verbunden.indexOf(strom) !== -1) { return; }
         try { ac.createMediaStreamSource(strom).connect(analyser); verbunden.push(strom); }
         catch (e) { /* Ein Strom ohne Tonspur ist kein Grund aufzugeben. */ }
-      }
+      });
     } catch (e) { analyser = null; }
   }
 
@@ -508,7 +506,7 @@ function erzeuge(behaelter, kern) {
       bass = mittel(0, 8); mitten = mittel(8, 30); hoehen = mittel(30, 70);
     }
     var energie = bass * .45 + mitten * .40 + hoehen * .15;
-    var spricht = zustandJetzt === 'spricht';
+    var spricht = zustandJetzt === 'spricht' || zustandJetzt === 'duSprichst';
 
     /* Rückfall: manche Browser geben für einen ENTFERNTEN WebRTC-Strom dauerhaft
        Nullen zurück (bekannte WebKit-Eigenheit). Bleibt es beim Sprechen still,
@@ -529,12 +527,6 @@ function erzeuge(behaelter, kern) {
     if (!offen() || zustandJetzt === 'bereit') {
       var atem = (Math.sin(t * .0009) + 1) / 2;
       bass = atem * .13; mitten = atem * .09; hoehen = .02; energie = atem * .12;
-    } else if (!spricht) {
-      /* Zuhören, Denken, Nachschlagen: der Ton der Gegenseite schweigt, und das
-         Mikrofon zählt nicht mehr — ein aufmerksamer, etwas schnellerer Atem
-         statt eines Standbilds. */
-      var atemH = (Math.sin(t * .0016) + 1) / 2;
-      bass = atemH * .08; mitten = atemH * .06; hoehen = .015; energie = atemH * .07;
     }
 
     /* Schlaf. „Kein Gespräch" heißt: der Kern ist zu — NICHT der Zustand
