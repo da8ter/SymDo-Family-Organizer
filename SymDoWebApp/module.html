@@ -5632,7 +5632,7 @@ function setTab(tab) {
      auch wenn ein anderes Geraet inzwischen einen Termin angelegt hat.
      loadCalendarEvents hat seinen eigenen Riegel (calLoading), ein doppelter
      Aufruf kostet also nichts. */
-  if (tab === 'calendar') { loadCalendarEvents(); }
+  if (tab === 'calendar') { loadCalendarEvents(true); }
   for (const t of TABS) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
@@ -6543,7 +6543,7 @@ function renderAll() {
      // dieser Bedingung allein wurde nach dem ersten Laden nie wieder geholt,
     // auch beim Wiederbetreten nicht, und ein Termin von einem anderen Geraet
     // erschien nie.
-    if (calEvents.length === 0 && !calLoading) loadCalendarEvents();
+    if (calEvents.length === 0 && !calLoading) loadCalendarEvents(true);
     renderCalendar();
   }
   if (activeTab === 'notes') renderNotizen();
@@ -6820,7 +6820,7 @@ function gatewayNachladen() {
      fahren, den niemand ansieht, waere Verschwendung. Wer ihn ansieht, bekommt
      ihn frisch. */
   if (visibleTabs().includes('notes')) { ladeNotizen(); }
-  if (activeTab === 'calendar') { loadCalendarEvents(); }
+  if (activeTab === 'calendar') { loadCalendarEvents(true); }
 }
 
 /* Stundenplan der Kinder. Wie beim Briefing: still nichts, wenn es kein
@@ -9997,7 +9997,7 @@ function loadCalendars() {
     // wird durchgereicht, sonst waere der Kalender fuer den Ladeschirm schon
     // fertig, waehrend die Kachel auf der Uebersicht noch leer ist.
     const heutige = loadDashEvents();
-    if (activeTab === 'calendar') loadCalendarEvents();
+    if (activeTab === 'calendar') loadCalendarEvents(true);
     else renderCalendar();
     return heutige;
   }).catch(() => {});
@@ -10067,13 +10067,38 @@ function loadDashEvents() {
   }).catch(() => {});
 }
 
-function loadCalendarEvents() {
+/* Welches Fenster die offene Ansicht braucht, und welcher Block dafuer geholt
+   wird. Getrennt, weil die Wochenansicht mehr holt, als sie zeigt: der Abruf
+   arbeitet sich seitenweise durch OpenCalendar und ist teuer, ein Wochenschritt
+   soll ihn nicht jedes Mal kosten. */
+function calLadeFenster() {
+  const heute = calTagStart(Math.floor(Date.now() / 1000));
+  return { von: heute, bis: calTagPlus(heute, calSelectedRange()) };
+}
+
+function calAbrufFenster(gebraucht) {
+  return { von: gebraucht.von, bis: gebraucht.bis };
+}
+
+/* Das zuletzt GEHOLTE Fenster samt Kalender. Wer frische Daten will — Betreten,
+   Minutentakt, Speichern, Loeschen, Kalenderwechsel —, ruft mit force: sonst
+   erschiene ein Termin von einem anderen Geraet nie wieder. Ohne force wird
+   nur geholt, was noch fehlt. */
+let calGeladen = null;
+
+function loadCalendarEvents(force) {
   if (calLoading || !calAvailable() || calCalendars.length === 0) return;
   const id = calSelectedID();
-  const von = Math.floor(new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000);
+  const gebraucht = calLadeFenster();
+  if (force !== true && calGeladen && calGeladen.id === id
+      && calFensterDeckt(calGeladen, gebraucht.von, gebraucht.bis)) {
+    renderCalendar();
+    return;
+  }
+  const block = calAbrufFenster(gebraucht);
   calLoading = true;
   aiPost('/calendar', {
-    action: 'events', from: von, to: von + calSelectedRange() * 86400,
+    action: 'events', from: block.von, to: block.bis,
     ids: id ? [Number(id)] : []
   }).then(r => {
     calLoading = false;
@@ -10082,6 +10107,7 @@ function loadCalendarEvents() {
     calError = '';
     calEvents = j.events;
     calTruncated = j.truncated === true;
+    calGeladen = { von: block.von, bis: block.bis, id: id };
     renderCalendar();
   }).catch(() => {
     // Auch der Netzwerkfehler braucht den Hinweis — sonst steht still ein alter
@@ -10643,7 +10669,7 @@ function calDelete(e, scope) {
     showToast(translate('Appointment deleted'));
     // Der Anbieter ist die Wahrheit: neu holen statt lokal zu raten.
     calEvents = [];
-    loadCalendarEvents();
+    loadCalendarEvents(true);
   }).catch(() => showToast(translate('The calendar rejected the deletion.')));
 }
 
@@ -11085,7 +11111,7 @@ function calSpeichernSenden(bestand, kalenderID, ereignis, knopf) {
     }
     // Der neue Stand kommt erst nach dem naechsten Abruf aus OpenCalendar.
     calEvents = [];
-    loadCalendarEvents();
+    loadCalendarEvents(true);
     // Die Uebersicht zeigt dieselben Termine — ohne das stuende dort bis zum
     // naechsten Kalenderabruf der alte Stand.
     loadDashEvents();
@@ -11142,12 +11168,14 @@ function initCalendar() {
   const schalter = document.getElementById('calSwitcher');
   if (schalter) schalter.addEventListener('change', () => {
     ls.set('symdo.calID', schalter.value);
-    loadCalendarEvents();
+    // Die Deckung gilt je Kalender; der Merker muss weg, nicht nur ueberschrieben.
+    calGeladen = null;
+    loadCalendarEvents(true);
   });
   const spanne = document.getElementById('calRange');
   if (spanne) spanne.addEventListener('change', () => {
     ls.set('symdo.calRange', spanne.value);
-    loadCalendarEvents();
+    loadCalendarEvents(true);
   });
 }
 
