@@ -318,6 +318,31 @@ foreach ($eB['items'] as $i) {
     $nachB[(string)$i['id']] = $i;
 }
 pruefe('Haekchen der Schule traegt WebUntis', $nachB['b1']['doneBy'], 'untis');
+
+// Ein Haekchen aus der Zeit vor dem Urheberfeld: WebUntis sagt dasselbe, also
+// war es die Schule. Ohne diesen Nachtrag stuende es fuer immer als eigenes da.
+$alt = [
+    ['id' => 'c1', 'srcId' => 6001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => $jetzt - 900, 'note' => '', 'source' => 'untis',
+     'createdAt' => $jetzt - 900, 'updatedAt' => $jetzt - 900],
+];
+$eC = HomeworkCalc::Zusammenfuehren($alt, [
+    ['srcId' => 6001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => 0, 'doneBy' => 'untis', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+pruefe('altes Haekchen bekommt WebUntis nachgetragen', $eC['items'][0]['doneBy'], 'untis');
+pruefe('und zaehlt als Aenderung', $eC['geaendert'], 1);
+pruefe('der Zeitpunkt bleibt, wie er war', $eC['items'][0]['doneAt'], $jetzt - 900);
+// Sagt WebUntis dagegen „offen", bleibt das eigene Haekchen ohne Urheber
+// stehen — dann hat es hier jemand gesetzt, nur vor der Umstellung.
+$eD = HomeworkCalc::Zusammenfuehren($alt, [
+    ['srcId' => 6001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => false, 'doneAt' => 0, 'doneBy' => '', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+pruefe('ohne Bestaetigung kein Nachtrag', $eD['items'][0]['doneBy'] ?? '', '');
+pruefe('und keine Aenderung', $eD['geaendert'], 0);
 pruefe('das eigene Haekchen behaelt seinen Urheber', $nachB['b2']['doneBy'], 'user');
 pruefe('und bleibt erledigt', $nachB['b2']['done'], true);
 

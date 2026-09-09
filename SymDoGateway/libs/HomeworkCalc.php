@@ -316,6 +316,16 @@ class HomeworkCalc
             $satz['subject'] = (string)$n['subject'];
             $satz['due'] = (string)$n['due'];
             $satz['note'] = (string)$n['note'];
+            /* Ein Haekchen aus der Zeit VOR dem Urheberfeld: es steht auf
+               erledigt, aber ohne Angabe, wer es setzte. Sagt WebUntis
+               dasselbe, dann war es die Schule — sonst zeigte die Oberflaeche
+               diese Aufgaben fuer immer als von Hand abgehakt, weil die
+               Sperrklinke unten nur beim Uebergang von offen auf erledigt
+               greift und hier nie mehr feuert. */
+            if (($n['done'] ?? false) === true && ($satz['done'] ?? false) === true
+                && trim((string)($satz['doneBy'] ?? '')) === '') {
+                $satz['doneBy'] = self::BY_UNTIS;
+            }
             // Sperrklinke: erledigt bleibt erledigt.
             if (($n['done'] ?? false) === true && ($satz['done'] ?? false) !== true) {
                 $satz['done'] = true;
