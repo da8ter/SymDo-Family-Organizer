@@ -853,6 +853,7 @@ class SymDoWebApp extends IPSModuleStrict
                obwohl Kern und Blase unten mitgeliefert werden. */
             'voiceEnabled'    => $this->VoiceInHaus('VoiceEnabled'),
             'voiceHandsFree'  => $this->VoiceInHaus('VoiceHandsFreeAllowed'),
+            'voiceWakeWord'   => $this->VoiceInHausText('VoiceWakeWord', 'Hey SymDo'),
             'tabs'            => $this->GetVisibleTabs(),
             'hiddenIDs'       => $hiddenIDs,
             'instances'       => $instances,
@@ -1081,6 +1082,18 @@ class SymDoWebApp extends IPSModuleStrict
         }
         $cfg = json_decode((string)@IPS_GetConfiguration($gatewayID), true);
         return is_array($cfg) && ($cfg[$name] ?? false) === true;
+    }
+
+    /** Ein Text aus der Gateway-Konfiguration, mit Vorgabe vor dem Kernel-Neustart. */
+    private function VoiceInHausText(string $name, string $vorgabe): string
+    {
+        $gatewayID = $this->GetAppGatewayID();
+        if ($gatewayID <= 0) {
+            return $vorgabe;
+        }
+        $cfg = json_decode((string)@IPS_GetConfiguration($gatewayID), true);
+        $w = is_array($cfg) && array_key_exists($name, $cfg) ? trim((string)$cfg[$name]) : '';
+        return $w !== '' ? $w : $vorgabe;
     }
 
     private function GetAppGatewayID(): int

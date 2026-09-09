@@ -1,6 +1,9 @@
 {
     "translations": {
         "de": {
+            "I am listening for %s": "Ich höre auf %s",
+            "Tap once so I may listen for %s": "Tippe einmal auf die Seite, damit ich auf %s hören darf.",
+            "Load speech recognition": "Spracherkennung laden",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
             "\"%1\": %2 items added": "„%1“: %2 Artikel zur Einkaufsliste hinzugefügt",
             "%1 appointments": "%1 Termine",

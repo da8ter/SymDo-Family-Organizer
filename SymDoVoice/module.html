@@ -148,7 +148,7 @@ body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); 
     <!-- Unuebersehbar, solange das Mikrofon fuer das Weckwort offen steht. Der
          Plan verlangt das ausdruecklich: Dauerlauschen darf man nie uebersehen.
          Es steht unten links an der Stelle des Hinweises und verdraengt ihn. -->
-    <span id="lauschAn" hidden><span class="welle"></span>ich höre auf „Hey SymDo"</span>
+    <span id="lauschAn" hidden><span class="welle"></span><span id="lauschText">ich höre auf „Hey SymDo"</span></span>
     <div id="hinweis"></div>
     <div id="nebenzeile">
       <button type="button" id="ruhe">Ruhe</button>
@@ -392,8 +392,13 @@ var kern = SymDoVoiceKern.erzeuge({
    die Faehigkeit des Geraets — kann es nicht lokal erkennen, wird das GESAGT
    statt stumm nicht zu lauschen. */
 var Freihand = (function () {
-  var ladeKnopf = el('wortLaden'), anzeige = el('lauschAn');
+  var ladeKnopf = el('wortLaden'), anzeige = el('lauschAn'), lauschText = el('lauschText');
   var lauscher = null, erlaubtHier = false, laeuftAnlauf = false, wartetAufTipp = false;
+  var weckwortRoh = 'Hey SymDo', lauscherWort = '';
+  /* Das erste der eingestellten Wörter, fürs Sprechen und Anzeigen. */
+  function weckwortName() {
+    return (lauscher && lauscher.weckwort()) || String(weckwortRoh || 'Hey SymDo').split(',')[0].trim() || 'Hey SymDo';
+  }
 
   /* Kein Knopf mehr: Freisprechen ist AN, sobald das Haus es freigegeben hat
      (Schalter und Einwilligung am Gateway). Was hier bleibt, ist die Anzeige —
@@ -402,6 +407,7 @@ var Freihand = (function () {
      Mikrofon-Erlaubnis, die eine Beruehrung braucht. */
   function anzeigen() {
     anzeige.hidden = !(lauscher && lauscher.istAn());
+    lauschText.textContent = 'ich höre auf „' + weckwortName() + '"';
   }
   function sagen(text, schlimm) {
     hinweis.textContent = text || '';
@@ -425,12 +431,15 @@ var Freihand = (function () {
         if (!v.moeglich) {
           // Ehrlich sagen, was fehlt. Das Sprachpaket sind hunderte MB — es
           // laedt nur auf Knopfdruck, nie von selbst.
-          sagen(v.stand === 'ladbar' ? 'Für „Hey SymDo" fehlt die Spracherkennung — einmal laden, dann geht es von selbst.' : v.grund,
+          sagen(v.stand === 'ladbar' ? 'Für „' + weckwortName() + '" fehlt die Spracherkennung — einmal laden, dann geht es von selbst.' : v.grund,
                 v.stand === 'unmoeglich');
           return;
         }
+        if (lauscher && lauscherWort !== weckwortRoh) { lauscher.aus(); lauscher = null; }
         if (!lauscher) {
+          lauscherWort = weckwortRoh;
           lauscher = SymDoVoiceWeckwort.erzeuge({
+            weckwort: weckwortRoh,
             onWake: function (nachsatz) {
               sagen('');
               anzeigen();
@@ -443,9 +452,9 @@ var Freihand = (function () {
                 /* Ohne Beruehrung gibt der Browser das Mikrofon beim ersten Mal
                    nicht her — dann wartet der Lauscher auf den ersten Tipp auf
                    die Kachel und versucht es erneut. */
-                if (/erlaub|allowed|Berechtigung|permission/i.test(grund)) {
+                if (/erlaub|allowed|Berechtigung|permission|gesperrt/i.test(grund)) {
                   wartetAufTipp = true;
-                  sagen('Tippe einmal auf die Kachel, damit ich auf „Hey SymDo" hören darf.');
+                  sagen('Tippe einmal auf die Kachel, damit ich auf „' + weckwortName() + '" hören darf.');
                 } else {
                   sagen(grund, true);
                 }
@@ -478,7 +487,7 @@ var Freihand = (function () {
     SymDoVoiceWeckwort.laden().then(function (ok) {
       ladeKnopf.disabled = false;
       ladeKnopf.hidden = ok === true;
-      sagen(ok ? 'Geladen — ich höre gleich auf „Hey SymDo".' : 'Das Laden hat nicht geklappt.', !ok);
+      sagen(ok ? 'Geladen — ich höre gleich auf „' + weckwortName() + '".' : 'Das Laden hat nicht geklappt.', !ok);
       if (ok) { anschalten(); }
     });
   });
@@ -502,7 +511,15 @@ var Freihand = (function () {
     nachGespraech: function () {
       if (erlaubtHier && !kern.istOffen()) { anschalten(); }
     },
-    laeuft: function () { return !!(lauscher && lauscher.istAn()); }
+    laeuft: function () { return !!(lauscher && lauscher.istAn()); },
+    /* Ein anderes Weckwort: den Lauscher neu aufsetzen, wenn er gerade läuft. */
+    weckwort: function (wort) {
+      var neu = String(wort || 'Hey SymDo');
+      if (neu === weckwortRoh) { return; }
+      weckwortRoh = neu;
+      if (lauscher) { lauscher.aus(); lauscher = null; if (erlaubtHier) { anschalten(); } }
+      anzeigen();
+    }
   };
 })();
 
@@ -528,6 +545,7 @@ function handleMessage(daten) {
   }
   /* type 'state': bislang trägt er nur die gewählte Darstellung. */
   if (daten.darstellung) { Blase.modus(daten.darstellung); }
+  if (Object.prototype.hasOwnProperty.call(daten, 'weckwort')) { Freihand.weckwort(daten.weckwort); }
   if (Object.prototype.hasOwnProperty.call(daten, 'freisprechen')) {
     Freihand.erlauben(daten.freisprechen === true);
   }

@@ -1086,6 +1086,7 @@ trait AppCore
         // Backend eingeschaltet und beiden Einwilligungen zugestimmt wurde.
         $symdo['voiceEnabled'] = $this->VoiceUsable();
         $symdo['voiceHandsFree'] = $this->VoiceHandsFreeOk();
+        $symdo['voiceWakeWord'] = $this->VoiceWeckwortRoh();
         // Oeffentlicher VAPID-Schluessel gleich mit: Safari erlaubt
         // Notification.requestPermission() nur mit gueltiger Nutzeraktivierung, und
         // JEDES await davor verbraucht sie. Muesste die Seite den Schluessel erst

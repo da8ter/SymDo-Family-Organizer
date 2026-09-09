@@ -1293,20 +1293,17 @@ html[data-symdo-theme="light"] .voice-mic.z-duSprichst { color: #008c6d; }
 html[data-symdo-theme="light"] .voice-mic.z-spricht    { color: #0088a2; }
 html[data-symdo-theme="light"] .voice-mic.z-werkzeug   { color: #a37300; }
 html[data-symdo-theme="light"] .voice-mic.z-fehler     { color: #d32f2f; }
-/* Freisprech-Symbol: links neben dem Mikrofon, eigener Klick. Bernstein statt
-   Akzent, weil der Akzent dem laufenden Gespräch gehört, und nicht Rot — das
-   heißt Aufnahme. Es pulst nur, WÄHREND wirklich gelauscht wird. */
-.voice-ear {
-  position: absolute; top: 8px; right: 34px; z-index: 3;
-  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 999px;
-  background: transparent; color: rgba(255, 255, 255, .45);
-  font-size: 13px; line-height: 1; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: color .3s ease, background-color .3s ease;
+/* Lauschzeichen: unten links in der Blasen-Kachel, bernstein statt Akzent (der
+   gehört dem laufenden Gespräch) und nicht Rot (das heißt Aufnahme). Es steht
+   nur, WÄHREND wirklich gelauscht wird — Dauerlauschen darf man nie übersehen. */
+.voice-lausch {
+  position: absolute; left: 10px; bottom: 8px; z-index: 3; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #ffb020; white-space: nowrap;
 }
-.voice-ear.an { color: #ffb020; }
-.voice-ear.lauscht {
-  color: #ffb020; background: rgba(255, 176, 32, .16);
+.voice-lausch[hidden] { display: none; }
+.voice-lausch::before {
+  content: ''; width: 8px; height: 8px; border-radius: 999px; background: #ffb020;
   animation: voiceLauschen 1.9s ease-out infinite;
 }
 @keyframes voiceLauschen {
@@ -1314,10 +1311,16 @@ html[data-symdo-theme="light"] .voice-mic.z-fehler     { color: #d32f2f; }
   70%  { box-shadow: 0 0 0 9px rgba(255, 176, 32, 0); }
   100% { box-shadow: 0 0 0 0 rgba(255, 176, 32, 0); }
 }
-@media (prefers-reduced-motion: reduce) { .voice-ear.lauscht { animation: none; } }
-html[data-symdo-theme="light"] .voice-ear { color: rgba(20, 26, 48, .45); }
-html[data-symdo-theme="light"] .voice-ear.an,
-html[data-symdo-theme="light"] .voice-ear.lauscht { color: #a35c00; }
+@media (prefers-reduced-motion: reduce) { .voice-lausch::before { animation: none; } }
+/* Ladeknopf fürs Sprachpaket — nur, wenn es fehlt. */
+.voice-laden {
+  position: absolute; left: 10px; bottom: 8px; z-index: 3;
+  border: 0; border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 600;
+  background: rgba(255, 176, 32, .18); color: #ffb020; cursor: pointer;
+}
+.voice-laden[hidden] { display: none; }
+html[data-symdo-theme="light"] .voice-lausch,
+html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 .kpi-rows {
   position: relative;
   z-index: 1;
@@ -4370,6 +4373,7 @@ const store = {
   aiEnabled: false,
   voiceEnabled: false,
   voiceHandsFree: false,
+  voiceWakeWord: 'Hey SymDo',
   // Sichtbare Bereiche. Standard überall an: fehlt das Feld (ältere Kachel), darf
   // nichts verschwinden.
   tabs: { dashboard: true, shopping: true, todos: true },
@@ -4409,7 +4413,8 @@ function aiPost(path, payload) {
 // (voice-core.js / voice-blob.js); der Gateway haengt sie nur an, wenn der
 // Sprachdialog im Backend eingeschaltet und beiden Einwilligungen zugestimmt ist.
 let voiceKern = null, voiceBlase = null, voiceBox = null, voiceAudio = null, voiceMik = null;
-let voiceOhr = null, voiceLauscher = null, voiceFreihandGewuenscht = false;
+let voiceLausch = null, voiceLaden = null, voiceLauscher = null, voiceLauscherWort = '';
+let voiceFreihandGewuenscht = false, voiceFreihandAnlauf = false, voiceFreihandWartetTipp = false;
 let voiceZustand = 'bereit';
 
 /* Der Schalter kommt aus der ausgelieferten Web-App (window.__SYMDO__) ODER aus
@@ -4544,22 +4549,28 @@ function voiceMount() {
   }
   const kachel = platz.closest('[data-voice]') || platz.parentNode;
   if (voiceMik.parentNode !== kachel) kachel.appendChild(voiceMik);
-  /* Freisprechen: ein zweites, dauerhaftes Symbol links neben dem Mikrofon.
-     Es traegt seinen eigenen Klick (Antippen der Kachel startet ein Gespraech,
-     Antippen des Ohrs schaltet das Lauschen) und ist nur da, wo es erlaubt
-     ist. */
+  /* Freisprechen ohne Knopf: gibt das Haus es frei, lauscht die Kachel von
+     selbst (wie die Sprach-Kachel). Sichtbar bleibt das Lauschzeichen unten
+     links — Dauerlauschen darf man nie uebersehen — und, falls das Sprachpaket
+     fehlt, ein Ladeknopf; der Download sind hunderte MB und laeuft nie von selbst. */
   if (freihandMoeglich()) {
-    if (!voiceOhr) {
-      voiceOhr = document.createElement('button');
-      voiceOhr.type = 'button';
-      voiceOhr.className = 'voice-ear';
-      voiceOhr.setAttribute('data-voice-ear', '');
-      voiceOhr.setAttribute('aria-label', translate('Hands-free'));
-      voiceOhr.innerHTML = '<i class="fa-light fa-ear-listen"></i>';
-      voiceOhr.addEventListener('click', ev => { ev.stopPropagation(); voiceFreihandUmschalten(); });
+    if (!voiceLausch) {
+      voiceLausch = document.createElement('span');
+      voiceLausch.className = 'voice-lausch';
+      voiceLausch.hidden = true;
     }
-    if (voiceOhr.parentNode !== kachel) kachel.appendChild(voiceOhr);
-    voiceOhrSetzen();
+    if (voiceLausch.parentNode !== kachel) kachel.appendChild(voiceLausch);
+    if (!voiceLaden) {
+      voiceLaden = document.createElement('button');
+      voiceLaden.type = 'button';
+      voiceLaden.className = 'voice-laden';
+      voiceLaden.hidden = true;
+      voiceLaden.textContent = translate('Load speech recognition');
+      voiceLaden.addEventListener('click', ev => { ev.stopPropagation(); voiceFreihandLaden(); });
+    }
+    if (voiceLaden.parentNode !== kachel) kachel.appendChild(voiceLaden);
+    voiceLauschSetzen();
+    voiceFreihandAuto();
   }
   voiceBlase.zustand(voiceZustand);
   voiceMikSetzen(voiceZustand);
@@ -4572,70 +4583,97 @@ function voiceUmschalten() {
 }
 
 /* ── Freisprechen ────────────────────────────────────────────────────────────
-   Dieselbe Ordnung wie in der Kachel: der Knopf folgt dem WILLEN des Nutzers,
-   die Anzeige dem Zustand des Lauschers. Nach dem Weckwort ist der Lauscher
-   aus, Freisprechen aber weiter eingeschaltet. */
-function voiceOhrSetzen() {
-  if (!voiceOhr) return;
+   Kein Knopf mehr: Freisprechen ist AN, sobald das Haus es freigegeben hat. Die
+   Anzeige folgt dem Zustand des Lauschers — nach dem Weckwort ist er aus (das
+   Mikrofon gehoert dem Gespraech), danach geht es von selbst weiter. */
+function voiceWeckwortRoh() {
+  const w = window.__SYMDO__ ? window.__SYMDO__.voiceWakeWord : store.voiceWakeWord;
+  return String(w || 'Hey SymDo');
+}
+function voiceWeckwortName() {
+  return (voiceLauscher && voiceLauscher.weckwort()) || voiceWeckwortRoh().split(',')[0].trim() || 'Hey SymDo';
+}
+function voiceLauschSetzen() {
+  if (!voiceLausch) return;
   const lauscht = !!(voiceLauscher && voiceLauscher.istAn());
-  voiceOhr.classList.toggle('an', voiceFreihandGewuenscht);
-  voiceOhr.classList.toggle('lauscht', lauscht);
-  voiceOhr.setAttribute('aria-pressed', voiceFreihandGewuenscht ? 'true' : 'false');
-  voiceOhr.title = lauscht ? translate('Listening for "Hey SymDo"')
-    : (voiceFreihandGewuenscht ? translate('Hands-free is on') : translate('Hands-free'));
+  voiceLausch.hidden = !lauscht;
+  voiceLausch.textContent = translate('I am listening for %s').replace('%s', '„' + voiceWeckwortName() + '"');
 }
 
 function voiceFreihandZurueck() {
   if (voiceFreihandGewuenscht && voiceLauscher && !voiceLauscher.istAn()
       && !(voiceKern && voiceKern.istOffen())) {
-    voiceLauscher.an(true).then(voiceOhrSetzen);
+    voiceLauscher.an(true).then(voiceLauschSetzen);
   }
 }
 
-async function voiceFreihandUmschalten() {
-  if (voiceFreihandGewuenscht) {
-    voiceFreihandGewuenscht = false;
-    if (voiceLauscher) voiceLauscher.aus();
-    voiceOhrSetzen();
-    return;
-  }
-  // Erst der Server: die Einwilligung liegt in einem Attribut, im Browser ist
-  // sie weder lesbar noch faelschbar.
-  const r = await voicePost({ action: 'handsfree' });
-  if (!r || r.erlaubt !== true) {
-    showToast((r && r.grund) || translate('Hands-free is not enabled.'));
-    return;
-  }
-  const v = await SymDoVoiceWeckwort.verfuegbar();
-  if (!v.moeglich) {
-    // Ehrlich sagen, was fehlt — und beim fehlenden Sprachpaket fragen, ob es
-    // geladen werden soll. Von selbst laedt hier nichts: es sind hunderte MB.
-    if (v.stand === 'ladbar' && confirm(v.grund + ' ' + translate('Download now?'))) {
-      showToast(translate('Loading speech recognition …'));
-      const ok = await SymDoVoiceWeckwort.laden();
-      showToast(ok ? translate('Ready — hands-free can start.') : translate('The download did not work.'));
-    } else {
-      showToast(v.grund);
+/* Von selbst anlaufen, sobald die Kachel steht — und erneut nach dem ersten
+   Tipp, falls der Browser das Mikrofon ohne Beruehrung nicht hergab. */
+function voiceFreihandAuto() {
+  if (voiceFreihandGewuenscht || voiceFreihandAnlauf) return;
+  voiceFreihandStarten();
+}
+document.addEventListener('click', () => {
+  if (voiceFreihandWartetTipp && freihandMoeglich() && !(voiceKern && voiceKern.istOffen())) voiceFreihandStarten();
+});
+
+async function voiceFreihandLaden() {
+  if (!voiceLaden) return;
+  voiceLaden.disabled = true;
+  showToast(translate('Loading speech recognition …'));
+  const ok = await SymDoVoiceWeckwort.laden();
+  voiceLaden.disabled = false;
+  voiceLaden.hidden = ok === true;
+  showToast(ok ? translate('Ready — hands-free can start.') : translate('The download did not work.'));
+  if (ok) voiceFreihandStarten();
+}
+
+async function voiceFreihandStarten() {
+  if (voiceFreihandAnlauf) return;
+  voiceFreihandAnlauf = true;
+  try {
+    // Erst der Server: die Einwilligung liegt in einem Attribut, im Browser ist
+    // sie weder lesbar noch faelschbar.
+    const r = await voicePost({ action: 'handsfree' });
+    if (!r || r.erlaubt !== true) return;
+    const v = await SymDoVoiceWeckwort.verfuegbar();
+    if (voiceLaden) voiceLaden.hidden = (v.stand !== 'ladbar');
+    if (!v.moeglich) return;   // der Ladeknopf steht, oder das Geraet kann es nicht
+    const wort = voiceWeckwortRoh();
+    if (voiceLauscher && voiceLauscherWort !== wort) { voiceLauscher.aus(); voiceLauscher = null; }
+    if (!voiceLauscher) {
+      voiceLauscherWort = wort;
+      voiceLauscher = SymDoVoiceWeckwort.erzeuge({
+        weckwort: wort,
+        onWake: function (nachsatz) {
+          voiceLauschSetzen();
+          const k = voiceKernHolen();
+          // Was nach dem Weckwort gesagt wird, reicht der Kern als Text nach.
+          k.mitschrift(nachsatz);
+          if (!k.istOffen()) k.start();
+        },
+        onZustand: function (z, grund) {
+          if (z === 'fehler' && grund) {
+            if (/erlaub|allowed|Berechtigung|permission|gesperrt/i.test(grund)) {
+              voiceFreihandWartetTipp = true;
+              showToast(translate('Tap once so I may listen for %s').replace('%s', '„' + voiceWeckwortName() + '"'));
+            } else {
+              showToast(grund);
+            }
+          }
+          voiceLauschSetzen();
+        }
+      });
     }
-    return;
+    const an = await voiceLauscher.an(true);
+    voiceFreihandGewuenscht = an === true;
+    if (an) voiceFreihandWartetTipp = false;
+    // Solange gelauscht wird, liegt die Marke schon bereit — der Start spart den Gang zum Gateway.
+    voiceKernHolen().vorwaermen(an === true);
+    voiceLauschSetzen();
+  } finally {
+    voiceFreihandAnlauf = false;
   }
-  if (!voiceLauscher) {
-    voiceLauscher = SymDoVoiceWeckwort.erzeuge({
-      onWake: function () {
-        voiceOhrSetzen();
-        const k = voiceKernHolen();
-        if (!k.istOffen()) k.start();
-      },
-      onZustand: function (z, grund) {
-        if (z === 'fehler' && grund) showToast(grund);
-        voiceOhrSetzen();
-      }
-    });
-  }
-  const an = await voiceLauscher.an(true);
-  voiceFreihandGewuenscht = an === true;
-  if (an) showToast(translate('Listening for "Hey SymDo"'));
-  voiceOhrSetzen();
 }
 
 // Sichtbare Bereiche — Quelle wie bei aiEnabled: Standalone window.__SYMDO__,
@@ -5442,6 +5480,7 @@ function handleMessage(data) {
     // die ausgelieferte Web-App liest beides aus window.__SYMDO__).
     store.voiceEnabled = !!data.voiceEnabled;
     store.voiceHandsFree = !!data.voiceHandsFree;
+    store.voiceWakeWord = data.voiceWakeWord || 'Hey SymDo';
     store.tabs = normalizeTabs(data.tabs);
     store.hiddenIDs = data.hiddenIDs || [];
     store.instances = data.instances || [];

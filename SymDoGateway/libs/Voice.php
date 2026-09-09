@@ -51,6 +51,10 @@ trait Voice
            Browser deutsche Spracherkennung auf dem Geraet rechnen kann
            (Chrome/Edge ab 139). Standard aus. */
         $this->RegisterPropertyBoolean('VoiceHandsFreeAllowed', false);
+        /* Das Weckwort. Mehrere durch Komma; mindestens sechs Buchstaben, sonst
+           gilt „Hey SymDo" — die Regel wendet der Lauscher an (voice-wake.js),
+           der Server reicht den Text nur durch. */
+        $this->RegisterPropertyString('VoiceWakeWord', 'Hey SymDo');
         /* Wer die Handbuch-Fundstellen liest und die Antwort formuliert. Leer =
            niemand, dann bleibt es beim Satzanfang plus Auszug (Verhalten vor
            dem 02.09.2026). Messwerte stehen in SymconDoku.php. */
@@ -238,7 +242,7 @@ trait Voice
                    die Einwilligung umgehen, und das Attribut ist von außen
                    ohnehin nicht lesbar. */
                 return $this->VoiceHandsFreeOk()
-                    ? ['ok' => true, 'erlaubt' => true]
+                    ? ['ok' => true, 'erlaubt' => true, 'weckwort' => $this->VoiceWeckwortRoh()]
                     : ['ok' => true, 'erlaubt' => false,
                        'grund' => $this->Translate('Hands-free is not enabled for this household.')];
             case 'fehler':
@@ -282,6 +286,14 @@ trait Voice
      * alles, was der Knopf ohnehin braucht. Ob das GERAET es kann, entscheidet
      * erst der Browser (voice-wake.js) — hier steht nur die Erlaubnis.
      */
+    /** Das eingestellte Weckwort, roh — vor dem Kernel-Neustart die Vorgabe. */
+    private function VoiceWeckwortRoh(): string
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        $w = is_array($cfg) && array_key_exists('VoiceWakeWord', $cfg) ? trim((string)$cfg['VoiceWakeWord']) : '';
+        return $w !== '' ? $w : 'Hey SymDo';
+    }
+
     private function VoiceHandsFreeOk(): bool
     {
         $cfg = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
@@ -1051,7 +1063,11 @@ trait Voice
                      ['caption' => $this->Translate('— none: read out excerpt —'), 'value' => ''],
                  ]],
                 ['type' => 'CheckBox', 'name' => 'VoiceHandsFreeAllowed',
-                 'caption' => $this->Translate('Allow hands-free with the wake word "Hey SymDo" (experiment)')],
+                 'caption' => $this->Translate('Allow hands-free with a wake word (experiment)')],
+                array_key_exists('VoiceWakeWord', $cfg)
+                    ? ['type' => 'ValidationTextBox', 'name' => 'VoiceWakeWord',
+                       'caption' => $this->Translate('Wake word — at least six letters, several separated by commas; two or three syllables work best')]
+                    : ['type' => 'Label', 'caption' => $this->Translate('The wake word becomes configurable after the next Symcon restart — until then it is "Hey SymDo".')],
                 ['type' => 'Label', 'name' => 'VoiceHandsFreeStatus', 'caption' => $freihand
                     ? $this->Translate('Hands-free consent given. The wake word is recognised ON the device; no audio leaves it until the conversation starts.')
                     : $this->Translate('Hands-free needs its own consent: the microphone then stays open and listens for the wake word. Recognition runs on the device (Chrome or Edge 139 and newer, German speech pack required) — nothing is sent anywhere until the wake word is heard. On devices without local recognition the tile says so instead of listening; there is no fallback to cloud recognition.')],

@@ -323,7 +323,17 @@ class SymDoVoice extends IPSModuleStrict
             'darstellung' => $this->PropertyExistiert('Darstellung')
                 ? $this->ReadPropertyString('Darstellung') : 'gespraech',
             'freisprechen' => $this->FreisprechenErlaubt(),
+            'weckwort'     => $this->WeckwortImHaus(),
         ];
+    }
+
+    /** Das Weckwort aus der Gateway-Konfiguration — roh, die Regel wendet der Lauscher an. */
+    private function WeckwortImHaus(): string
+    {
+        $gw = $this->GatewayID();
+        $cfg = $gw > 0 ? json_decode((string)@IPS_GetConfiguration($gw), true) : null;
+        $w = is_array($cfg) && array_key_exists('VoiceWakeWord', $cfg) ? trim((string)$cfg['VoiceWakeWord']) : '';
+        return $w !== '' ? $w : 'Hey SymDo';
     }
 
     /**

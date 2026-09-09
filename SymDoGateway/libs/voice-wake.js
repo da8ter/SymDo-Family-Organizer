@@ -53,6 +53,67 @@ function restNach(text) {
   return m ? t.slice(m.index + m[0].length).trim() : '';
 }
 
+/* Ein frei gewähltes Weckwort. Ohne handgepflegte Silbenlisten bleibt nur die
+   Buchstabennähe: der erkannte Text und das Wort werden auf Kleinschrift ohne
+   Leerzeichen gebracht, und ein Fenster im Text darf um höchstens ein Fünftel
+   der Länge abweichen. Wörter unter sechs Buchstaben lösten ständig falsch aus
+   und gelten nicht — dann bleibt es bei „Hey SymDo". „Hey SymDo" selbst behält
+   sein bewährtes Muster mit den Fehlhörern. */
+function lev(a, b) {
+  var m = a.length, n = b.length, i, j, prev, cur, tmp;
+  if (!m) { return n; } if (!n) { return m; }
+  prev = []; for (j = 0; j <= n; j++) { prev[j] = j; }
+  for (i = 1; i <= m; i++) {
+    cur = [i];
+    for (j = 1; j <= n; j++) {
+      tmp = prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1);
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, tmp);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+function matcherFuer(weckwort) {
+  var worte = String(weckwort || '').split(',').map(function (w) { return w.trim(); }).filter(Boolean);
+  var eigene = worte.map(function (w) { return { roh: w, n: norm(w) }; })
+    .filter(function (w) { return w.n.length >= 6 && w.n !== 'heysymdo'; });
+  var standard = eigene.length === 0 || worte.some(function (w) { return norm(w) === 'heysymdo'; });
+  function tol(w) { return Math.max(1, Math.floor(w.n.length * 0.2)); }
+  function trifftEigen(text) {
+    var n = norm(text);
+    return eigene.some(function (w) {
+      var t = tol(w);
+      for (var L = Math.max(1, w.n.length - t); L <= w.n.length + t; L++) {
+        for (var i = 0; i + L <= n.length; i++) {
+          if (lev(n.substr(i, L), w.n) <= t) { return true; }
+        }
+      }
+      return false;
+    });
+  }
+  function restEigen(text) {
+    var woerter = String(text || '').trim().split(/\s+/);
+    for (var i = 0; i < woerter.length; i++) {
+      for (var j = i; j < Math.min(woerter.length, i + 6); j++) {
+        var cand = norm(woerter.slice(i, j + 1).join(''));
+        for (var k = 0; k < eigene.length; k++) {
+          var t = tol(eigene[k]);
+          if (Math.abs(cand.length - eigene[k].n.length) <= t && lev(cand, eigene[k].n) <= t) {
+            return woerter.slice(j + 1).join(' ').replace(/^[\s,.!?\-]+/, '').trim();
+          }
+        }
+      }
+    }
+    return '';
+  }
+  return {
+    trifft: function (t) { return (standard && trifft(t)) || (eigene.length > 0 && trifftEigen(t)); },
+    restNach: function (t) { return (standard && trifft(t)) ? restNach(t) : restEigen(t); },
+    phrasen: (standard ? ['Hey SymDo'] : []).concat(eigene.map(function (w) { return w.roh; })),
+    anzeige: standard ? 'Hey SymDo' : eigene[0].roh
+  };
+}
+
 /**
  * Kann dieses Gerät lokal lauschen?
  * @return Promise<{moeglich:boolean, stand:string, grund:string}>
@@ -108,6 +169,7 @@ function laden() {
  *                            so geht nichts verloren, was in die Aufbauzeit fällt.
  *   onZustand(z, grund)    — 'aus' | 'lauscht' | 'pause' | 'fehler'
  *   nachlaufMs             — wie lange nach dem Weckwort höchstens mitgeschrieben wird (10 s)
+ *   weckwort               — das eingestellte Weckwort (mehrere durch Komma); leer = „Hey SymDo"
  *   erkenner()             — nur für den Prüfstand: liefert einen Ersatz-Erkenner
  */
 function erzeuge(opt) {
@@ -116,6 +178,7 @@ function erzeuge(opt) {
   var aufZustand = opt.onZustand || function () {};
   var bauen = opt.erkenner || function () { return new KLASSE(); };
   var nachlaufMs = opt.nachlaufMs || 10000;
+  var matcher = matcherFuer(opt.weckwort);
 
   /* Mitschrift nach dem Weckwort: Index des Ergebnisses, in dem es fiel, der
      gesammelte Text und das Versprechen, das ihn liefert. */
@@ -139,7 +202,7 @@ function erzeuge(opt) {
       var r = ev.results[i];
       var alt = r && r[0];
       if (!alt) { continue; }
-      var t = i === wakeIndex ? restNach(alt.transcript) : String(alt.transcript || '').trim();
+      var t = i === wakeIndex ? matcher.restNach(alt.transcript) : String(alt.transcript || '').trim();
       if (t) { teile.push(t); }
       if (i === ev.results.length - 1 && r.isFinal && teile.length) { fertig = true; }
     }
@@ -177,15 +240,15 @@ function erzeuge(opt) {
       erk.maxAlternatives = 1;
       erk.processLocally = true;      // NIE ohne: sonst geht der Ton nach draußen
       if (PHRASE) {
-        // Betonung: „SymDo" steht in keinem Wörterbuch.
-        try { erk.phrases = [new PHRASE('Hey SymDo', 2)]; } catch (e) { /* egal */ }
+        // Betonung: „SymDo" steht in keinem Wörterbuch — ein eigenes Weckwort meist auch nicht.
+        try { erk.phrases = matcher.phrasen.map(function (p) { return new PHRASE(p, 2); }); } catch (e) { /* egal */ }
       }
       erk.onresult = function (ev) {
         if (!an) { return; }
         if (geweckt) { mitschriftSammeln(ev); return; }
         for (var i = ev.resultIndex; i < ev.results.length; i++) {
           var alt = ev.results[i][0];
-          if (alt && trifft(alt.transcript)) {
+          if (alt && matcher.trifft(alt.transcript)) {
             /* Geweckt — aber NICHT sofort aus: der Erkenner schreibt weiter
                mit, was direkt nach dem Weckwort kommt, denn die Verbindung
                zum Anbieter steht erst in ein bis zwei Sekunden, und bis dahin
@@ -194,7 +257,7 @@ function erzeuge(opt) {
                nichts doppelt ankommt. Wieder an geht es, wenn das Gespräch endet. */
             geweckt = true;
             wakeIndex = i;
-            mitText = restNach(alt.transcript);
+            mitText = matcher.restNach(alt.transcript);
             var nachsatz = mitschriftStart();
             if (ev.results[i].isFinal && mitText) { mitLoesen(mitText); aus(); }
             aufWake(nachsatz);
@@ -260,7 +323,9 @@ function erzeuge(opt) {
     },
     aus: aus,
     istAn: function () { return an; },
-    zustand: function () { return zustandJetzt; }
+    zustand: function () { return zustandJetzt; },
+    /** Das Weckwort, auf das dieser Lauscher hört — für die Anzeige. */
+    weckwort: function () { return matcher.anzeige; }
   };
 }
 
@@ -270,6 +335,7 @@ wurzel.SymDoVoiceWeckwort = {
   laden: laden,
   trifft: trifft,           // für den Prüfstand
   restNach: restNach,       // dito
+  matcherFuer: matcherFuer, // dito
   moeglichHier: !!KLASSE
 };
 
