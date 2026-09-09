@@ -63,7 +63,7 @@ erscheinen Kalender, Notizen, KI-Eingang und Briefing von selbst.
 | Übersicht | `ShowDashboard` | Der Bereich mit Kennzahlen, Briefing und Stundenplan |
 | Einkaufen | `ShowShopping` | Einkaufsliste samt Favoriten und Kaufhistorie |
 | ToDos | `ShowTodos` | Aufgabenlisten |
-| Kalender | `ShowCalendar` | Termine aus OpenCalendar |
+| Kalender | `ShowCalendar` | Termine aus OpenCalendar — als Agenda oder als Familientafel (eine Zeile je Mitglied, sieben Tage), umschaltbar in der Kopfzeile |
 | Notizen | `ShowNotes` | Ordner und Notizen aus dem Gateway |
 | KI-Eingang | `ShowKi` | Was die KI aus Mails und Dateien gelesen hat |
 | Stundenplan | `TimetableChoice` | Welche Stundenplan-Instanzen die Übersicht zeigt — je Instanz eine Zeile. Ohne Stundenplan-Modul fällt die Liste weg |
