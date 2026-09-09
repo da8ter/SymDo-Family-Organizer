@@ -1,0 +1,525 @@
+<style>
+/* Symcon injiziert --card-color, --content-color und --accent-color je nach
+   Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets.
+   Gerüst, Scrollrezept und Randmechanik sind wörtlich aus der Routinen-Kachel
+   übernommen: dieselben Fallen, dieselbe Lösung. */
+:root {
+  --bg: var(--card-color, #2b2c30);
+  --text: var(--content-color, #ffffff);
+  --akzent: var(--accent-color, #00cdab);
+  --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  --zeile-fertig: color-mix(in srgb, var(--card-color) 96%, var(--content-color) 4%);
+  --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
+  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+  --sym-mt: 0px;
+  --sym-ms: 0px;
+  --sym-mb: 0px;
+  --sbw: 6px;
+  --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
+}
+html[data-symdo-theme="light"] {
+  --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
+  --zeile-fertig: color-mix(in srgb, var(--card-color) 98%, var(--content-color) 2%);
+}
+html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; }
+body {
+  margin: 0 !important; padding: 0 !important;
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  background: transparent;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+#wrap {
+  display: flex; flex-direction: column; flex: 1; min-height: 0; box-sizing: border-box;
+  padding: max(var(--sym-mt), env(safe-area-inset-top, 0px)) var(--sb-pad)
+           calc(var(--sym-mb) + 4px) var(--sym-ms);
+}
+/* Alles, was NICHT scrollt, traegt den Rest des rechten Randes selbst. */
+.randrest { margin-right: calc(var(--sb-pad) + var(--sbw)); }
+
+/* ── Kopf: Titel und Wochenwahl ──────────────────────────────────────────── */
+#kopf { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
+#titel {
+  flex: 1 1 auto; min-width: 0;
+  font-size: clamp(16px, 5vmin, 22px); font-weight: 800;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#wochenwahl {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 2px;
+  border: 1px solid var(--rand); border-radius: 999px; padding: 2px;
+}
+#wochenwahl button {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; line-height: 1; padding: 4px 9px; border-radius: 999px;
+}
+#wochenwahl button:disabled { opacity: .35; cursor: default; }
+/* Feste Mindestbreite mit Ziffern gleicher Breite: sonst wandern die Pfeile
+   beim Umschalten, weil „Diese Woche" und ein Datum verschieden breit sind. */
+#wochenname {
+  min-width: 11ch; text-align: center; font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ── Fortschritt der Woche ───────────────────────────────────────────────── */
+#fortschritt { display: flex; align-items: center; gap: 10px; padding: 0 6px 10px; }
+#balken { flex: 1 1 auto; height: 12px; border-radius: 999px; background: var(--zeile); overflow: hidden; }
+#balkenfuellung {
+  height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--akzent), color-mix(in srgb, var(--akzent) 55%, #ffffff));
+  transition: width .45s cubic-bezier(.22,1.2,.36,1);
+}
+#zaehler { flex: 0 0 auto; font-weight: 700; font-size: clamp(11px, 3.4vmin, 14px); color: var(--dezent); }
+#hinweis { padding: 0 6px 8px; font-size: 12px; color: var(--dezent); }
+#hinweis:empty { display: none; }
+
+/* ── Liste, nach Person gruppiert ────────────────────────────────────────── */
+/* Unten KEIN Polster: ein padding-bottom am Scrollbereich zaehlt zu
+   scrollHeight und laesst den Griff erscheinen, obwohl optisch nichts fehlt. */
+#liste { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; padding: 0 var(--sb-pad) 0 0; }
+
+/* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
+   overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
+   rechte Abstand bleibt also gleich, ob der Balken gerade sichtbar ist oder
+   nicht (die Spur ist transparent, der Griff erscheint nur bei Bedarf).
+   scrollbar-color/-width und ::-webkit-scrollbar schliessen sich gegenseitig
+   aus: ist der Standard gesetzt, ignoriert WebKit die Pseudoelemente (gemessen
+   11px statt 6px, und die Spur wird in Safari hell gemalt). Deshalb bekommt
+   WebKit die Pseudoelemente, der Standard gilt nur, wo es sie nicht gibt.
+   Jeder Selektor braucht sein EIGENES Pseudoelement — in einer Liste haengt es
+   sonst nur am letzten. */
+#liste {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+#liste::-webkit-scrollbar { width: 6px; height: 6px; }
+#liste::-webkit-scrollbar-track { background: transparent; }
+#liste::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--akzent) 70%, transparent);
+  border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  #liste {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent;
+  }
+}
+
+.person { display: flex; flex-direction: column; gap: 6px; }
+.person .kopf { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.person .bild {
+  width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  border: 2px solid var(--akzent);
+  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;
+}
+.person .bild img { width: 100%; height: 100%; object-fit: cover; }
+.person .name {
+  flex: 1 1 auto; min-width: 0; font-size: clamp(13px, 4vmin, 16px); font-weight: 800;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.person .zahl { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--dezent); }
+.person .muenzen {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  background: color-mix(in srgb, #f6b73c 22%, var(--bg));
+  border: 1px solid color-mix(in srgb, #f6b73c 70%, var(--bg));
+  border-radius: 999px; padding: 2px 8px; font-weight: 800; font-size: 12px;
+}
+.person.pausiert { opacity: .55; }
+.person.niemand .bild { border-color: var(--rand); background: var(--zeile); }
+
+.aemtchen {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--zeile); border-radius: 16px; padding: 8px 10px;
+  min-height: 46px; box-sizing: border-box;
+}
+.aemtchen .bild {
+  width: 36px; height: 36px; border-radius: 12px; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--akzent) 14%, var(--bg));
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.aemtchen .titel {
+  flex: 1 1 auto; min-width: 0;
+  font-size: clamp(13px, 4.2vmin, 17px); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.aemtchen .punkte { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--dezent); }
+.aemtchen .plaetze { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.haken {
+  width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
+  border: 3px solid color-mix(in srgb, var(--content-color) 30%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 900; color: #fff; box-sizing: border-box;
+  background: transparent; cursor: pointer; padding: 0;
+}
+.haken span { transform: scale(0); transition: transform .25s cubic-bezier(.22,1.6,.36,1); }
+.haken.fertig { background: var(--akzent); border-color: var(--akzent); }
+.haken.fertig span { transform: scale(1); }
+.haken.uebertrag { border-style: dashed; }
+.haken:disabled { cursor: default; opacity: .5; }
+.aemtchen.fertig { background: var(--zeile-fertig); }
+.aemtchen.fertig .titel { color: var(--dezent); }
+
+#leer { padding: 18px 8px; text-align: center; color: var(--dezent); font-size: 13px; }
+#leer:empty { display: none; }
+</style>
+
+<div id="wrap">
+  <div id="kopf" class="randrest">
+    <div id="titel"></div>
+    <div id="wochenwahl">
+      <button type="button" data-schritt="-1" aria-label="Vorige Woche">&lsaquo;</button>
+      <span id="wochenname"></span>
+      <button type="button" data-schritt="1" aria-label="Nächste Woche">&rsaquo;</button>
+    </div>
+  </div>
+  <div id="fortschritt" class="randrest">
+    <div id="balken"><div id="balkenfuellung"></div></div>
+    <div id="zaehler"></div>
+  </div>
+  <div id="hinweis" class="randrest"></div>
+  <div id="liste"></div>
+  <div id="leer" class="randrest"></div>
+</div>
+
+<script>
+/* In einer IIFE gekapselt: die Tile-Visu injiziert selbst globale Bindungen
+   (const translate, const requestAction, openObject) — gleichnamige Top-Level-
+   Deklarationen braechen das ganze Script mit „Identifier already declared". */
+
+/* ── Scrollen in der Kachel halten ────────────────────────────────────────────
+   html-sdk.js von Symcon haengt an window ein `onwheel`, das JEDES deltaY an die
+   Visualisierung meldet (postScroll), und meldet touchstart/touchmove als
+   Position weiter. Die Visu scrollt daraufhin mit — unabhaengig davon, ob die
+   Kachel die Geste selbst verbraucht hat. Dagegen hilft kein CSS: weder
+   overscroll-behavior noch overflow greifen, weil es kein Ketten ist, sondern
+   eine ausdrueckliche Weitergabe.
+
+   Deshalb werden die Ereignisse in der ABFANG-Phase an document gestoppt. Das
+   liegt vor der Blasen-Phase an window, wo html-sdk.js zuhoert — die Meldung
+   unterbleibt also. Das Standardverhalten bleibt unberuehrt, die Kachel scrollt
+   normal weiter; nur an den Raendern wird zusaetzlich preventDefault gerufen,
+   damit dort nichts durchrutscht.
+
+   Wortgleich aus der Stundenplan-Kachel uebernommen, nur die Bereichsliste ist
+   eine andere. Ueber document und nicht ueber die Bereiche selbst, weil deren
+   Inhalt bei jedem Zeichnen neu entsteht. */
+(function scrollInDerKachelHalten() {
+  const SCROLL_BEREICHE = '#liste';
+
+  /* Der naechste Vorfahr, der in DIESER Richtung noch Weg hat. Ohne die
+     Richtungsfrage gaelte ein Bereich, der schon am Anschlag steht, als
+     zustaendig — und die Geste verpuffte. */
+  function zustaendigerScroller(ziel, dx, dy) {
+    let el = (ziel instanceof Element) ? ziel : null;
+    while (el && el !== document.body) {
+      if (el.matches && el.matches(SCROLL_BEREICHE)) {
+        const maxY = el.scrollHeight - el.clientHeight;
+        const maxX = el.scrollWidth - el.clientWidth;
+        const gehtY = maxY > 1 && ((dy < 0 && el.scrollTop > 0)
+                                || (dy > 0 && el.scrollTop < maxY - 1));
+        const gehtX = maxX > 1 && ((dx < 0 && el.scrollLeft > 0)
+                                || (dx > 0 && el.scrollLeft < maxX - 1));
+        if (gehtY || gehtX) { return el; }
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  document.addEventListener('wheel', function (e) {
+    if (!zustaendigerScroller(e.target, e.deltaX || 0, e.deltaY || 0)) {
+      // Nichts kann die Geste verbrauchen — dann soll sie auch nirgends wirken,
+      // statt als Ersatzhandlung die ganze Visu zu bewegen.
+      e.preventDefault();
+    }
+    e.stopPropagation();
+  }, { passive: false, capture: true });
+
+  let letzteY = null, letzteX = null;
+  document.addEventListener('touchstart', function (e) {
+    if (e.touches && e.touches.length === 1) {
+      letzteX = e.touches[0].clientX;
+      letzteY = e.touches[0].clientY;
+    } else {
+      letzteX = letzteY = null;
+    }
+    e.stopPropagation();
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!e.touches || e.touches.length !== 1 || letzteY === null) {
+      e.stopPropagation();
+      return;
+    }
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    // Umgekehrtes Vorzeichen: nach oben wischen heisst nach unten scrollen.
+    const dy = letzteY - y, dx = letzteX - x;
+    letzteX = x; letzteY = y;
+    if (!zustaendigerScroller(e.target, dx, dy)) { e.preventDefault(); }
+    e.stopPropagation();
+  }, { passive: false, capture: true });
+
+  document.addEventListener('touchend', function () {
+    letzteX = letzteY = null;
+  }, { passive: true, capture: true });
+})();
+
+(function () {
+'use strict';
+
+/* Systemraender aus der Adresse uebernehmen, so frueh wie moeglich — die
+   Variablen muessen vor dem ersten Zeichnen stehen. Dieselbe Mechanik wie in
+   der Stundenplan-Kachel: Der Rahmen traegt die Raender, damit der Scrollbalken
+   MITTIG im rechten Randstreifen sitzt statt daneben. */
+(function systemRaender() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const px = (name) => {
+      const v = parseInt(p.get(name), 10);
+      return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+    };
+    const wurzel = document.documentElement.style;
+    const mt = px('margintop');    if (mt !== null) { wurzel.setProperty('--sym-mt', mt); }
+    const ms = px('marginside');   if (ms !== null) { wurzel.setProperty('--sym-ms', ms); }
+    const mb = px('marginbottom'); if (mb !== null) { wurzel.setProperty('--sym-mb', mb); }
+  } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
+})();
+
+/* Hell/Dunkel aus der Luminanz der Kartenfarbe — wörtlich das Muster der
+   übrigen Kacheln (symdoLightTiles). */
+(function () {
+  function anwenden() { try {
+    var p = document.createElement('span');
+    p.style.cssText = 'position:absolute;left:-9999px;top:-9999px;color:var(--card-color)';
+    (document.body || document.documentElement).appendChild(p);
+    var c = getComputedStyle(p).color; p.remove();
+    var m = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (!m) return;
+    var l = 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+    document.documentElement.setAttribute('data-symdo-theme', l < 128 ? 'dark' : 'light');
+  } catch (e) {} }
+  anwenden();
+  try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', anwenden); } catch (e) {}
+})();
+
+let zustand = null;          // letzter Payload vom Modul
+let blick = 0;               // -1 Vorwoche, 0 laufende, +1 Vorschau
+let unterwegs = {};          // "chore:slot" => true, solange die Aktion laeuft
+
+function el(id) { return document.getElementById(id); }
+function txt(schluessel, vorgabe) {
+  const t = (zustand && zustand.texts) || {};
+  return t[schluessel] || vorgabe || schluessel;
+}
+function fuellen(vorlage, a, b) {
+  return String(vorlage).replace('%1$d', String(a)).replace('%2$d', String(b));
+}
+
+/** Der Anfangsbuchstabe als Ersatz, wenn kein Foto hinterlegt ist. */
+function bildHtml(person) {
+  if (person && person.avatar) {
+    return '<img src="' + person.avatar + '" alt="">';
+  }
+  const name = (person && person.name) || '';
+  return name ? name.slice(0, 1).toUpperCase() : '?';
+}
+
+/**
+ * Die Kachel zeigt die Woche, um die es geht — und beantwortet die eine Frage:
+ * wer ist diese Woche fuer was dran. Deshalb nach PERSON gruppiert und nicht
+ * nach Aemtchen: eine Liste von Aemtchen mit Namen dahinter muss man lesen,
+ * eine Liste von Personen mit ihren Aemtchen sieht man.
+ */
+function zeichnen() {
+  const liste = el('liste');
+  const leer = el('leer');
+  if (!zustand) { return; }
+
+  // Vorwoche und Vorschau nur, wenn das Modul sie mitgeschickt hat.
+  const hatLetzte = !!(zustand.last && zustand.last.week);
+  const hatNaechste = !!(zustand.next && zustand.next.week);
+  if (blick === -1 && !hatLetzte) { blick = 0; }
+  if (blick === 1 && !hatNaechste) { blick = 0; }
+
+  el('titel').textContent = txt('title', 'Chores');
+  el('wochenname').textContent = blick === 0 ? txt('thisWeek', 'This week')
+    : (blick === -1 ? txt('lastWeek', 'Last week') : txt('nextWeek', 'Next week'));
+  const knoepfe = el('wochenwahl').querySelectorAll('button');
+  knoepfe[0].disabled = blick === -1 || (blick === 0 && !hatLetzte);
+  knoepfe[1].disabled = blick === 1 || (blick === 0 && !hatNaechste);
+
+  /* Fortschritt und Haken gibt es nur fuer die laufende Woche: in der Vorschau
+     waere ein Haken eine Behauptung ueber die Zukunft, im Rueckblick eine
+     Einladung, Vergangenes zu aendern. */
+  const aktiv = blick === 0;
+  el('fortschritt').style.display = aktiv ? '' : 'none';
+  /* Der gestrichelte Kreis braucht auf einer Tippflaeche eine Erklaerung: ein
+     title-Text erscheint nur unter der Maus. */
+  const hatUebertrag = aemtchenMitUebertrag();
+  el('hinweis').textContent = aktiv
+    ? (hatUebertrag ? txt('carriedHint', '') : '')
+    : (blick === 1 ? txt('preview', '') : txt('review', ''));
+  if (aktiv) {
+    el('balkenfuellung').style.width = (zustand.progress || 0) + '%';
+    el('zaehler').textContent = fuellen(txt('of', '%1$d of %2$d'),
+      zustand.doneCount || 0, zustand.totalCount || 0);
+  }
+
+  const aemtchen = Array.isArray(zustand.chores) ? zustand.chores : [];
+  if (aemtchen.length === 0) {
+    liste.innerHTML = '';
+    leer.textContent = txt('empty', '');
+    return;
+  }
+  leer.textContent = '';
+
+  // Zuweisung der gezeigten Woche: laufende aus den Aemtchen selbst, sonst aus
+  // der mitgeschickten Vorschau bzw. dem Rueckblick.
+  const zuweisung = {};
+  aemtchen.forEach((a) => {
+    if (blick === 0) { zuweisung[a.id] = a.memberId || ''; }
+    else if (blick === 1) { zuweisung[a.id] = (zustand.next.assign || {})[a.id] || ''; }
+    else { zuweisung[a.id] = ''; }
+  });
+
+  /* Im Rueckblick gibt es keine Aemtchen-Zuordnung mehr (nur die Summe je
+     Person) — dort zeigt die Kachel eine schlichte Bilanz. */
+  if (blick === -1) {
+    const je = (zustand.last && zustand.last.perMember) || {};
+    liste.innerHTML = (zustand.order || []).map((id) => {
+      const p = (zustand.members || {})[id] || {};
+      const stand = je[id] || { done: 0, total: 0 };
+      return '<div class="person"><div class="kopf">' +
+        '<div class="bild">' + bildHtml(p) + '</div>' +
+        '<div class="name">' + (p.name || id) + '</div>' +
+        '<div class="zahl">' + fuellen(txt('of', '%1$d of %2$d'), stand.done, stand.total) + '</div>' +
+        '</div></div>';
+    }).join('');
+    return;
+  }
+
+  // Nach Person gruppieren; wer diese Woche nichts hat, faellt weg.
+  const gruppen = new Map();
+  (zustand.order || []).forEach((id) => gruppen.set(id, []));
+  const ohne = [];
+  aemtchen.forEach((a) => {
+    const wer = zuweisung[a.id];
+    if (wer && gruppen.has(wer)) { gruppen.get(wer).push(a); }
+    else { ohne.push(a); }
+  });
+
+  let html = '';
+  gruppen.forEach((liste2, id) => {
+    const p = (zustand.members || {})[id] || {};
+    /* Wer nichts hat, faellt weg — AUSSER er setzt aus: dass jemand Pause hat,
+       erklaert, warum ein anderer zwei Aemtchen traegt. Das zu verstecken
+       liesse die Verteilung willkuerlich aussehen. */
+    if (liste2.length === 0) {
+      if (p.paused) {
+        html += '<div class="person pausiert"><div class="kopf">' +
+          '<div class="bild">' + bildHtml(p) + '</div>' +
+          '<div class="name">' + (p.name || id) + ' · ' + txt('paused', 'Pause') + '</div>' +
+          '</div></div>';
+      }
+      return;
+    }
+    const fertig = liste2.reduce((s, a) => s + (aktiv ? a.doneCount : 0), 0);
+    const gesamt = liste2.reduce((s, a) => s + a.total, 0);
+    const verdient = (zustand.earned || {})[id] || 0;
+    const beutel = (zustand.purse || {})[id];
+    html += '<div class="person' + (p.paused ? ' pausiert' : '') + '"><div class="kopf">' +
+      '<div class="bild">' + bildHtml(p) + '</div>' +
+      '<div class="name">' + (p.name || id) + (p.paused ? ' · ' + txt('paused', 'Pause') : '') + '</div>' +
+      (aktiv ? '<div class="zahl">' + fuellen(txt('of', '%1$d of %2$d'), fertig, gesamt) + '</div>' : '') +
+      (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined)
+        ? '<div class="muenzen"><span>🪙</span>' + (beutel !== undefined ? beutel : verdient) + '</div>' : '') +
+      '</div>' + liste2.map((a) => aemtchenHtml(a, aktiv)).join('') + '</div>';
+  });
+  if (ohne.length > 0) {
+    html += '<div class="person niemand"><div class="kopf">' +
+      '<div class="bild">–</div><div class="name">' + txt('nobody', '—') + '</div></div>' +
+      ohne.map((a) => aemtchenHtml(a, false)).join('') + '</div>';
+  }
+  liste.innerHTML = html;
+  binden();
+}
+
+/** Gibt es in dieser Woche einen Uebertrag aus der Vorwoche? */
+function aemtchenMitUebertrag() {
+  return (Array.isArray(zustand.chores) ? zustand.chores : [])
+    .some((a) => (Array.isArray(a.slots) ? a.slots : []).some((s) => s.carried === true));
+}
+
+function aemtchenHtml(a, aktiv) {
+  const alle = a.total > 0 && a.doneCount >= a.total;
+  const plaetze = (Array.isArray(a.slots) ? a.slots : []).map((s) => {
+    const marke = a.id + ':' + s.key;
+    return '<button type="button" class="haken' + (s.done ? ' fertig' : '') +
+      (s.carried ? ' uebertrag' : '') + '" data-marke="' + marke + '"' +
+      ' data-chore="' + a.id + '" data-slot="' + s.key + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
+      (aktiv ? '' : ' disabled') +
+      ' title="' + (s.carried ? txt('carried', '') : '') + '"><span>✓</span></button>';
+  }).join('');
+  return '<div class="aemtchen' + (aktiv && alle ? ' fertig' : '') + '">' +
+    '<div class="bild">' + (a.emoji || '🧹') + '</div>' +
+    '<div class="titel">' + a.name + '</div>' +
+    (zustand.pointsMode === 'routines' && a.points > 0
+      ? '<div class="punkte">+' + a.points + '</div>' : '') +
+    '<div class="plaetze">' + plaetze + '</div></div>';
+}
+
+function binden() {
+  el('liste').querySelectorAll('.haken:not([disabled])').forEach((b) => {
+    b.addEventListener('click', () => tippen(b));
+  });
+}
+
+/**
+ * Ein Haken. Optimistisch zeichnen, dann melden — mit ZIELZUSTAND und einer
+ * Sperre gegen den Doppeltipp: eine zweite Zustellung darf das Haekchen nicht
+ * zuruecknehmen.
+ */
+function tippen(knopf) {
+  const marke = knopf.dataset.marke;
+  if (unterwegs[marke]) { return; }
+  unterwegs[marke] = true;
+  setTimeout(() => { delete unterwegs[marke]; }, 1500);
+  const ziel = knopf.dataset.ziel === '1';
+  knopf.classList.toggle('fertig', ziel);
+  knopf.dataset.ziel = ziel ? '0' : '1';
+  if (typeof requestAction === 'function') {
+    requestAction('Check', JSON.stringify({
+      week: zustand ? zustand.week : '',
+      chore: knopf.dataset.chore,
+      slot: knopf.dataset.slot,
+      done: ziel
+    }));
+  }
+}
+
+el('wochenwahl').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-schritt]');
+  if (!b || b.disabled) { return; }
+  blick = Math.max(-1, Math.min(1, blick + (parseInt(b.dataset.schritt, 10) || 0)));
+  zeichnen();
+});
+
+// ── Anbindung an die Visu ───────────────────────────────────────────────────
+function handleMessage(daten) {
+  if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
+  if (!daten || typeof daten !== 'object' || daten.type !== 'state') { return; }
+  zustand = daten;
+  zeichnen();
+}
+window.handleMessage = handleMessage;
+window.updateState = handleMessage;
+window.addEventListener('message', (event) => { if (event) { handleMessage(event.data); } });
+
+/* Minuten-Tick: die Wochengrenze ohne Serverhilfe nachziehen. Der Server
+   liefert beim naechsten Push die neue Woche; bis dahin bleibt die Anzeige
+   stehen, statt eine falsche Woche zu behaupten. */
+setInterval(() => { if (zustand) { zeichnen(); } }, 60000);
+})();
+</script>

@@ -69,6 +69,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - ToDo Übersicht** | Device | Kennzahlen einer Aufgabenliste als kleine Kachel |
 | **SymDo - Einkaufslisten Übersicht** | Device | Die offenen Artikel als Bild-Leiste |
 | **SymDo - Routinen** | Device | Tägliche Häkchen-Routinen für Kinder: Anzeigezeiten je Routine, optionale Belohnungs-Münzen, Konfetti — und die Heute-Aufgaben als Füller |
+| **SymDo - Ämtchenplan** | Device | Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln: Rotation, Häkchen je Erledigung, Punkte in den Münzbeutel der Routinen |
 | **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Gerichtsbilder |
 | **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
@@ -214,6 +215,14 @@ Tägliche Häkchenlisten für Kinder: große Zeilen, großes Häkchen, Konfetti,
 alles geschafft ist — und die Heute-Aufgaben als Füller.
 
 → [Ausführliche Anleitung](Routines/README.md)
+
+## SymDo - Ämtchenplan
+
+Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln —
+nach Person geordnet, mit Vorschau auf die nächste Woche und Punkten im
+Münzbeutel der Routinen.
+
+→ [Ausführliche Anleitung](Chores/README.md)
 
 ## SymDo - ToDo Übersicht
 
