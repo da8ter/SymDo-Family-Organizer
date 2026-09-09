@@ -3616,6 +3616,45 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .hw-gruppe { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px 0; }
 .hw-gruppe.spaet { color: var(--danger, #e5534b); }
 .hw-leer { font-size: 13px; color: var(--muted); padding: 6px 2px; }
+/* Wischen wie in den Listen und im Kalender: die Zeile liegt über zwei
+   Untergründen (links löschen, rechts bearbeiten) und wird darüber verschoben.
+   Die Hülle trägt Lage und Beschnitt, die Zeile eine DECKENDE Fläche — mit dem
+   durchscheinenden --surface wären beide Untergründe von Anfang an sichtbar
+   (derselbe Grund wie bei .todo-content und .cal-event).
+
+   Eine Hülle bekommen NUR Aufgaben, die hier entstanden sind. Was aus WebUntis
+   kommt, hat weder Löschen noch Bearbeiten: das Löschen holte der nächste
+   Abruf zurück, und geändert gewinnt ohnehin wieder die Schule. */
+.hw-card { position: relative; border-radius: 12px; overflow: hidden; }
+.hw-card .swipe-under {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--red); color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.hw-card .swipe-under-edit {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 18px;
+  background: #2f6fd4; color: #fff; font-size: 17px;
+  opacity: 0; transition: opacity .12s ease;
+}
+.hw-card.dragging-left .swipe-under,
+.hw-card.is-deleting .swipe-under { opacity: 1; }
+.hw-card.dragging-right .swipe-under-edit { opacity: 1; }
+.hw-card .hw-zeile {
+  position: relative;
+  background: var(--row);
+  transition: transform .18s ease;
+  /* pan-y: das senkrechte Scrollen bleibt nativ, waagerecht übernimmt die
+     Geste. Ohne das rollt die Seite mit, während die Zeile wandert. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.hw-card .hw-zeile.is-dragging { transition: none; }
 /* Herkunftszeichen an einer aus der Schule uebernommenen Aufgabe. Gedeckt und
    klein: es erklaert etwas, es meldet nichts. */
 .hw-schule { font-size: 11px; opacity: .5; margin-left: 5px; }
@@ -10838,7 +10877,7 @@ function renderHausaufgaben() {
   bloecke.forEach(([k, titel]) => {
     if (gruppen[k].length === 0) return;
     html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
-    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mehrere); });
+    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mehrere, true); });
   });
   /* Erledigte ganz unten in einem eingeklappten Abschnitt — dasselbe Muster
      wie in den Aufgabenlisten (.section-toggle), damit dieselbe Sache in der
@@ -10853,14 +10892,14 @@ function renderHausaufgaben() {
       `<span class="count">${fertig.length}</span>` +
       `<i class="fa-light fa-chevron-right chev"></i></button>`;
     if (hwDoneExpanded) {
-      fertig.forEach(i => { html += hwZeileHtml(i, subjects, mehrere); });
+      fertig.forEach(i => { html += hwZeileHtml(i, subjects, mehrere, true); });
     }
   }
   renderInto(bereich, html);
   hwBinden(bereich);
 }
 
-function hwZeileHtml(i, subjects, mitAvatar) {
+function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
   const fach = hwFachInfo(i.subject, subjects);
   const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
   const fertig = i.done === true;
@@ -10876,7 +10915,23 @@ function hwZeileHtml(i, subjects, mitAvatar) {
      Der Riegel selbst sitzt im Gateway — hier wird nur nicht angeboten, was
      dort ohnehin abgewiesen wird. */
   const gesperrt = vonUntis;
-  return `<div class="hw-zeile${fertig ? ' erledigt' : ''}" data-hw="${escapeHtml(String(i.id))}">` +
+  /* Gewischt wird nur an eigenen Aufgaben — und nur dort, wo die Liste selbst
+     steht. Auf der Übersicht wischt auch eine Aufgabenzeile nicht (dort steht
+     eine Vorschau, keine Liste).
+
+     Entscheidend ist die HERKUNFT und nicht, wer abgehakt hat: eine offene
+     Aufgabe aus WebUntis trägt kein doneBy und wäre sonst wischbar gewesen —
+     im ersten Anlauf war genau das der Fehler. Löschen holte der nächste Abruf
+     zurück, Ändern überschriebe er. */
+  const ausSchule = String(i.source || '') === 'untis';
+  const mitGeste = wischbar === true && !ausSchule;
+  const huelle = mitGeste
+    ? `<div class="hw-card">` +
+      `<div class="swipe-under"><i class="fa-light fa-trash"></i></div>` +
+      `<div class="swipe-under-edit"><i class="fa-light fa-pencil"></i></div>`
+    : '';
+  return huelle +
+    `<div class="hw-zeile${fertig ? ' erledigt' : ''}" data-hw="${escapeHtml(String(i.id))}">` +
     `<button type="button" class="hw-haken${fertig ? (vonUntis ? ' an schule' : ' an') : ''}"` +
     ` data-hw-done="${escapeHtml(String(i.id))}"` +
     ` data-hw-ziel="${fertig ? '0' : '1'}"` +
@@ -10899,7 +10954,7 @@ function hwZeileHtml(i, subjects, mitAvatar) {
     `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
     (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
       `${renderAvatarStack([String(i.childId)])}</span></span>` : '') +
-  `</div>`;
+  `</div>` + (mitGeste ? '</div>' : '');
 }
 
 function hwBinden(bereich) {
@@ -10916,10 +10971,45 @@ function hwBinden(bereich) {
     // Zielzustand, nicht umschalten — wie überall in dieser App.
     hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: b.dataset.hwZiel === '1' });
   }));
-  bereich.querySelectorAll('.hw-zeile').forEach(z => z.addEventListener('click', () => {
+  bereich.querySelectorAll('.hw-zeile').forEach(z => z.addEventListener('click', (ev) => {
+    /* Nach einer Wischgeste NICHT öffnen: bindCardSwipe setzt dafür 60 ms lang
+       dataset.swiped, sonst öffnete jedes Wischen nach rechts das Blatt
+       zweimal (dieselbe Wache wie an der Terminzeile). */
+    const huelle = z.closest('.hw-card');
+    if (huelle && huelle.dataset.swiped === '1') return;
+    if (ev.target.closest('button')) return;
     const eintrag = hausaufgaben.items.find(x => String(x.id) === z.dataset.hw);
     if (eintrag) hwEditorOeffnen(eintrag);
   }));
+  /* Links löschen, rechts bearbeiten — dieselbe Geste und dieselben Schwellen
+     wie in den Aufgabenlisten (bindCardSwipe). Gelöscht wird SOFORT, ohne
+     Rückfrage: so hält es die Aufgabenliste, die dieselbe Art Eintrag führt,
+     und eine Hausaufgabe ist eine Zeile Text. Der Termin fragt nach, weil er
+     beim Anbieter liegt und für alle sichtbar ist — das trifft hier nicht zu. */
+  bereich.querySelectorAll('.hw-card').forEach(karte => {
+    const zeile = karte.querySelector('.hw-zeile');
+    if (!zeile) return;
+    const id = String(zeile.dataset.hw || '');
+    const finde = () => hausaufgaben.items.find(x => String(x.id) === id);
+    bindCardSwipe(
+      karte,
+      '.hw-zeile',
+      () => {
+        hausaufgabenAktion({ action: 'delete', id: id }).then(j => {
+          /* Hat es NICHT geklappt (Sperre, Netz, „busy"), muss die Zeile
+             zurückkommen. Sonst wäre sie weg, ohne dass etwas gelöscht wurde —
+             und der Nutzer glaubte es bis zum nächsten Neuzeichnen. Bei Erfolg
+             lädt hausaufgabenAktion ohnehin neu. */
+          if (j) { return; }
+          karte.classList.remove('is-deleting');
+          delete karte.dataset.animating;
+          zeile.style.transform = '';
+          restoreCard(karte);
+        });
+      },
+      () => { const e = finde(); if (e) hwEditorOeffnen(e); }
+    );
+  });
 }
 
 /**
