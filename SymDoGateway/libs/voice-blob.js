@@ -104,6 +104,35 @@ var ANMELDUNG = [
   "@property --c4{syntax:'<color>';inherits:true;initial-value:#7a86c8;}"
 ].join('');
 
+/* Traumbilder: SELTEN erscheint zwischen den „z" ein Bild statt eines
+   Buchstabens — das Wesen träumt dann von etwas Bestimmtem. Absichtlich selten
+   (siehe TRAUM_CHANCE): ein Gag, der jedes Mal kommt, ist keiner mehr.
+
+   Eingebettet und nicht nachgeladen, weil die Kachel auch dort läuft, wo es
+   keinen Pfad zu Modul-Dateien gibt (Visu-Kachel, iOS-App): ein <img src>
+   auf eine Datei wäre je Oberfläche eine andere Adresse. WebP statt PNG —
+   dieselben drei Bilder wiegen so 5 statt 51 kB, und der Kachel-Quelltext
+   geht durch die Ausgabegrenze des Hooks.
+
+   Verkleinert auf 96 px Kantenlänge: gezeichnet werden sie mit rund 26
+   SVG-Einheiten, und mehr als das Doppelte an Bildpunkten bringt auf keinem
+   Schirm mehr etwas. */
+var TRAUM = [
+  'data:image/webp;base64,UklGRq4DAABXRUJQVlA4WAoAAAAQAAAATwAAXwAAQUxQSMAAAAABgGNt2/Hoi/FlI25TJa2qlHZ6O+mcKhmjs23PMmYNtvW1g2eMExETwDcEvDA9gR4zoWvsESjr5tMNBnVaSNexTH64enhoMgSN973z+BNCCsZDZJtYgsSyA4VtKQq3WFijfgemZZSBbR6GM/TvuEE4xVs0sSs0AwxN4BxN8gpMe/YGy6FHvo1lUSpdxZIndA3KowuO99cBNxoWgjMqQDMlRDMppBtYZoWSiWe5uXzppyUe0dRamp+8ZtXpX7hWSgBWUDggyAIAAJAPAJ0BKlAAYAA+XSSORSOiIRkctnQ4BcSgDGdHwuQD4dc9J23y58XTSR6AGgj+HEmgLctXVOLaQ0XnaA/rvtf4rhJLEXnSnrp1Z9W3KDHdKNo0VDcx+/5t/irRsYXA7nWZpgxtyJzrir4euP2gvG9DiDIqumCFySydzVQJ4sHiomNPOQAA/u0tAtMWv3okzuYAPmP11oY1RiZx+gcQ8we0bX/+VJNw/wWzN/hbfVlx9YVSUlv8WQG0exgbiWwxS/0e2iEUFFvfmUvhK/mQwjyf2ihZ+zfliMCzeaJkqu9mUA6K96iXDfS49iOIRqjqLbZ3GqND3TjgvAeuqkAlq5A4puwA/NIo8yIkmBu+vj84Aqn1kRbZAxo05xPaV8tWn6rz664E4eTvLtb2QgE4r/hapGOVckpMDhMALjpe//YDHoqUVRoTjQZKBFIUQLpbnWjUc2J+xoDMz25QeIE1f6BLYjZEEsTfSps4YEkBRfjmV0SSnfXfOjbLaL6VLZDt6ALezxU+y1b5ove1XK2tVaBHl7LmpjHd1dBnoT9uT93Iq5+qx2/EWc3R9p7nmQUSNEVnQ//ZQeiJwLMk+NqzpvmEFzZREVyMaVGMkiEAk/ejfyNjeBY9+/gNcbvPx999QhW36RNutyWN8Y8bc4N6Ac2d0JgQw3rX+Vz51dNNjoyHwy5s8M5eabCcfpmlooUQeeLV/Iuj01OHdQDrQPG013MgftX51RnWTAo6TxA6GRqC/j32cBLM7o7BAH21JBJnEQQAfRmu2rfgHD6Q3VZBrVT6B+fwB+ZXKRbE6VaQFzuJQuYCz/qA0O9JFIIlZRnhrhw9zkLcJCsmlselncgaYGsV1wZocy/sIJiLIko1eybijrLmCw41y8Y+3QGKCHNwcrGLiNCnj6GWW+n/ewOxCsNnyC2qdCYD/7AhO9uaED5U4Hyeh70AAAA=',
+  'data:image/webp;base64,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',
+  'data:image/webp;base64,UklGRjIJAABXRUJQVlA4ICYJAACwJACdASpgAGAAPl0kjUUjoiEaOndgOAXEsQBWHKCpDx1zN8SjxvOHFQtvekTbx+Zf9dvVE/IDW0JSfpX8m3zCSA39ajXdvALwC3wZdOnOyFcy9wNiWpaYcljI1KhBj4iF2+Oe/qJjaQr7MhdNHD8Af5V9lIgLEbw/ziHQXqJRSm8JOv9bGQQKS3H53Og8bPiq7zq5XsERLAj/ZUPTNkJpcvpZ3kk0+vxnfCdl+mGcM+9LSAhJw1yHa6z75o6vFjo/8FfuvQA5kBB64g62ZPX1mcHatfYR8mGug2hE+N+uqyYzSAaHesHJ3+V3M4RJhQAvQpHmb5jcKLL3FHr+zbc0/vYhVXYfa7hFXDeWy3y7xQvRpY7NdsFCNyzuRCESAcpGFnBUwJuWnT/4Q6lPAAD+82f+//ntP8TC6bsmPVFQcAxtNTghcx6mZepcJqzsqh88bxX74gJJOrzFvLbifu02WNOQ6c8fNpkPmTu09fBv7xZPiKskr4JZd2rkHdjDFMv7tk41TyMmIp+5vNCc/8cIcLE4E6lhhUe3DbNttLbOT72jMvaA6I2x5/T93AmGhokYbT+j7FWNnHZOYM6sYHB1jFUVJLpQu2uTiKyfozmmV3/NPEiv3N/o8pAeCRN6xyoZhApL/WjYyszHrGweeMInktnaZ3Ahzdu/XFJb9Q8PzE0+DO22D90IsAFiGCjRSRySVJHoEoTfXpoCR2sDUXb4csQAi1shyp5thvviGXGGZB5teGsQjBkppB0nE8GKubBMjz60aQR6paq0ZTifldIboqaLjxvrkMNMPWj7q97RopEmmonZopOJ0zxF3ZkEtnIpMKyzxFBoyxYt5DC821wUaZSSrdWkc18+RMXQZEze0i10mcjjFM8TwZ8O1mt18q6jeiUqysgdGcXgSrJ3hwnWCq1b8jrL+57vgG3MunH6cRGXTAHgPqZd52Zv7AwIVBQmmNgugbUbY91+IdDrsA5mdGCq1A1ryZzAYb3RIhly/StSZwI78tnQBD/E8oJh4oJxDSHZ/B4wt3u55T54Jr0bpIQwlVEGhCuz5eeWQdag2tBqvtAZhiLIQ1/YbDTvtCTLf+Pi3zbVuTih55DgkorYJBPRTPnjK2ETHa49EhrlXXMs3otwMQXwM0n/a5yXw8x62XhsqpWM54/sXLw+D5DkBWxAaM2vPgXsBssKhMLRiTsYdBxB9QBYdSzsuvFphhAVckO+DwNSpdp4kdDXVa33s/iAjzEHfjz6HjB6gRTX9jkpVPCR2ytSW6PC3ekG8/DixMBuJYe0//SCZBIUxd6JcxM6SPX3VqhUXdXUMhAKrZki/XDisq30MTsL+FeZIbjRXIddlfcUKPb/R7Hh84l5hV03bB6AFDbFxVaNrWCGdUFnC+p7e5BRw0PlPSsxlqadf8O5M9JzKSvYl+aZYAmtNISpUi0cFJm6IVaeGnQDgZlEWP/VGUox3ROCl7dGIFTdwYBSQISZpNPfZlPsoBAuo/GHByYsZ42bKCwENsvJXppHPLUpV2q6d8A0y/rxLtbNYTKMA1dkC5++EG64+ui3SMRLkPoYmA+z/JOyBcqxNl2ZHKstcCQKoCh6JdWA769zR/ceGpV/YsgYtiMguFl3SVDAx7dv0lPQOE2Wki6Ydm8ODl3gyrIPoWuARbsz0UVldJWllvmgYrlFa/rOIa2dUGErpNtGJYiaWipCiYclJqvL7HYOE69KhT2DLTaHtqi0y/YIc0VZJVBt3bka79ugnqXBJzoHXXT5zD5x5O1d3hVY5K+6JQMzr6nesPf5rBbo7OpeLOInKdUITGP8QtXBTcsBzWBhy+QVcU80Hocmw3+vH7D6ACS7OH9MTWe+He9G9DRLDI97PDn32WOVEcm4RWvynNqMd4gxVQN3m5o9NQmlsWUCixeR88pDJ4Pwc8mwdO8ZsERjC1X1+TcB55cQCIBTkHhXO0dighiGK2LIEt8rW0FXe6Helhyrwg+9xKuogY9zwwmRZywjiibS0sDF+KNK1U3F3eFka1PrfIOlNtTWQ38xCuVer5IaotWGOhqLFUGaiPfAHVi8iaGx0gWDxITifKu1Pz/TWu3ypaY4S87GLkT0hsfDy3RCKMk6D68K3ntAw2HHJ2WpFmfWyLVPJVLTGJ2cXShNS5HX7Z4ibfuBR8Ry65mUA7y0WBY/oGob2m95nZrZLtVoke0TLkDempQo36qWAhC11PrBN1TFCgD7mo0t3habzia3Bw87PRHlu0TQvv0gm4GFkiXqzKepXBh3hOW/3Yq4OuBZjM92vLLh/LWrz4Th1vZo881DxWH54ohSFlVdu6qSbqiUFmtOTDsaxN6AsDHnDfe2TdiXTSTCDhgYbqx14+O9zUEM1LX9gXYy9Mb3ebmlRUTzqZUqntCeBuGaiHUNVnVQCJoKIcWszw/01uAGqjVLNdrxGKbJABIGr9Ic8w+gebMpzNZ2zZ1TCG1VMHQsNcLWiafAz9kolz+Qo7HLFjwdkcXJQTcvCj79tDaXUojl90ogm1+OY2VOx70flBmuw/Monwa7ebLXdQ0ZE7lQJuQjl0wj4dQ+agofLalmeJ5W66odXc7anysk52v/ScLZgkbXOvZ2BYzIDFRZls7VI6Wg4ybIjWCg8aVpCBke183mtWiKLQhZAj2/FvBmC59rzOAJxnTIxKvvpWLsVPZ1Cj3BcoAEOIA+/EIkh6x2dL69Kv/7u73b/8atq9Nf/0kf5/0KgUnMnUBhbJIZK62CiLPzphnREOKEabnurjW4mD96QIu6XtXHw99AqNqLGZHvC6tCzoIqJ90HTX1gMviJp1urZX/kXVknWYQEVXSuF/lr9jIrGxV6NvqwHVe6hv5KaTBnGbCl1tpaw6tJQjQN32GKGRKrqi+lnpDN23HICrGb9G/goxcTU58NXbvjoeHwRy0yvByfv43LkE+hVsXcGxfMH0ez7+ARjkBVIa7Rsgdu7Wl3ZP7sw25Bh9x9wFO8LCnw5zC9DtxfUIrh4lB6yW5n/A7uV+311+gyyG7S6DFTwW3l+P3nJ9JcBOL0YYfVAbnjZQ2YWZwqIzwYIq3TDKCT3XnvZv3uEMh6RR3svhzI1vcTD/lckYW+hXZiiGE4+SKaOAl6E0JOBwAAAA=='
+];
+/* Wie oft ein Partikel ein Bild statt eines „z" zeigt (je Runde neu gelost). */
+var TRAUM_CHANCE = .14;
+/* Schräglage des Traumbildes, je Runde neu gelost: bis 20 Grad in jede
+   Richtung. Ein Bild, das immer gerade hängt, sieht gestellt aus. */
+var TRAUM_KIPP = 20;
+/* Ein Bild darf sich erst wiederholen, wenn seither so viele „z" geflogen sind
+   UND mindestens ein ANDERES Bild dran war. Ohne diese Sperre kommt bei drei
+   Bildern und blindem Losen dasselbe gern zweimal hintereinander — und dann
+   sieht es nicht nach Zufall aus, sondern nach Fehler. */
+var TRAUM_PAUSE_Z = 50;
+
 /* Ein „z" in seiner Wolke. Das z ist mittig gesetzt (Grundlinie bei 0, die
    Kleinbuchstabenhöhe reicht bis etwa −7), die Wolke aus Kreisen umschließt es
    locker. Die Größe der drei Partikel unterscheidet der Maßstab je Bild. */
@@ -113,6 +142,11 @@ var WOLKE_Z = '<g class="zz" opacity="0">'
   +     '<circle cx="6.4" cy="-2.4" r="5.2"/><ellipse cx="0" cy="-1" rx="9.8" ry="3.9"/>'
   +   '</g>'
   +   '<text class="z" font-size="14" text-anchor="middle">z</text>'
+  /* Etwas größer als das z (21 Einheiten gegen 14) und mittig auf der Wolke
+     (Kastenmitte 0/−4). Ohne href und verborgen: erst die Auslosung setzt
+     beides. */
+  +   '<image class="traum" x="-10.5" y="-14.5" width="21" height="21"'
+  +     ' preserveAspectRatio="xMidYMid meet" style="display:none"/>'
   + '</g>';
 
 /* Die Kuppel: Halbellipse über den oberen Bogen, unten ein flacher Bogen
@@ -155,6 +189,7 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   /* Die Lider leicht weich, damit sie wie Haut auf dem Körper liegen und nicht
      wie aufgeklebte Scheiben. Großzügiger Filterbereich: bei fast offenem Lid
      ist die Geometrie nur wenige Einheiten hoch. */
+  + '<clipPath class="ctraum"><rect x="-10.5" y="-14.5" width="21" height="21" rx="5"/></clipPath>'
   + '<filter class="flid" x="-30%" y="-100%" width="160%" height="300%">'
   +   '<feGaussianBlur stdDeviation=".55"/></filter>'
   + '</defs>'
@@ -331,7 +366,7 @@ function erzeuge(behaelter, kern) {
      geben. Deshalb je Blase ein eigener Zählerwert. */
   var nr = ++zaehler;
   var svg = behaelter.firstChild;
-  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht', 'fwolke', 'flid'].forEach(function (k) {
+  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht', 'fwolke', 'flid', 'ctraum'].forEach(function (k) {
     var e = svg.querySelector('.' + k);
     if (e) { e.setAttribute('id', 'symblase-' + k + '-' + nr); }
   });
@@ -356,6 +391,11 @@ function erzeuge(behaelter, kern) {
   Array.prototype.forEach.call(svg.querySelectorAll('.lid'), function (l) {
     l.setAttribute('filter', 'url(#symblase-flid-' + nr + ')');
   });
+  /* Weiche Ecken am Traumbild: ein hartes Rechteck mitten im Nebel sieht aus
+     wie ein Fehler in der Zeichnung. */
+  Array.prototype.forEach.call(svg.querySelectorAll('.traum'), function (b) {
+    b.setAttribute('clip-path', 'url(#symblase-ctraum-' + nr + ')');
+  });
 
   var aktiv = false, laeuft = false, raf = 0, letzteForm = 0;
   var ac = null, analyser = null, roh = null, verbunden = [];
@@ -369,6 +409,16 @@ function erzeuge(behaelter, kern) {
   var ruheSeit = 0, schlaf = 0, zzzStart = 0;
   var zzz = Array.prototype.slice.call(svg.querySelectorAll('.zzz .zz'));
   var ZZ_MASS = [.8, 1, 1.2];   // Grundgröße der drei Partikel
+  /* Je Partikel die Phase der letzten Runde: sinkt sie, hat eine neue begonnen
+     — und nur dann wird neu gelost, ob ein Bild kommt. Würde jedes Bild neu
+     gelost, flackerte es sechzig Mal je Sekunde. */
+  var zzzPhase = [];
+  /* Buchführung für die Wiederholungssperre: wie viele „z" bisher geflogen
+     sind, und je Bild der Zählerstand beim letzten Mal sowie die Zahl der
+     seither gezeigten ANDEREN Bilder. Sie läuft über das Aufwachen hinweg
+     weiter — ein Schläfchen dazwischen ist kein Grund, dasselbe Bild sofort
+     wieder zu zeigen. */
+  var zGeflogen = 0, traumZuletzt = [], traumAndere = [];
   /* Lider: 0 offen … 1 zu, je Bild weich zum Ziel geführt. Blinzeln und
      Schlaf laufen über dieselben Lider — das Blinzeln zieht sie kurz ganz zu. */
   var lider = Array.prototype.slice.call(svg.querySelectorAll('.lider'));
@@ -626,11 +676,64 @@ function erzeuge(behaelter, kern) {
      ein Drittel der Runde versetzt. Sie erscheinen erst, wenn das Wesen
      wirklich schläft, und verschwinden mit dem Aufwachen. Bei reduzierter
      Bewegung stehen sie still an ihrem Platz. */
+  /* Ein Partikel für die kommende Runde bestücken: meistens das „z" in seiner
+     Wolke, selten ein Traumbild statt beider. Beides gleichzeitig wäre ein
+     Bild mit einem Buchstaben darauf. */
+  function traumLosen(i) {
+    var el = zzz[i];
+    var wolke = el.querySelector('.wolke');
+    var z = el.querySelector('.z');
+    var bild = el.querySelector('.traum');
+    if (!bild) { return; }
+    var nimm = TRAUM.length > 0 && Math.random() < TRAUM_CHANCE;
+    var wahl = -1;
+    if (nimm) {
+      /* Nur unter den Bildern losen, die gerade dran sein DÜRFEN. Ist keines
+         frei, fliegt eben ein „z" — das ist die richtige Antwort, denn die
+         Sperre soll die Bilder seltener machen und nicht die Reihenfolge
+         erzwingen. */
+      var frei = [];
+      for (var k = 0; k < TRAUM.length; k++) {
+        if (traumZuletzt[k] === undefined
+            || (zGeflogen - traumZuletzt[k] >= TRAUM_PAUSE_Z && (traumAndere[k] || 0) >= 1)) {
+          frei.push(k);
+        }
+      }
+      if (frei.length > 0) { wahl = frei[Math.floor(Math.random() * frei.length)]; }
+      else { nimm = false; }
+    }
+    if (nimm) {
+      var quelle = TRAUM[wahl];
+      bild.setAttribute('href', quelle);
+      /* Auch das alte xlink:href setzen: manche WebKit-Fassungen zeichnen ein
+         SVG-Bild ohne es nicht, und die Kachel läuft auch in der iOS-App. */
+      bild.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', quelle);
+      /* Gedreht wird um die MITTE des Bildkastens (0/−4) und nicht um den
+         Ursprung des Partikels — sonst schwenkte das Bild weg statt sich zu
+         neigen. Die Maske dreht mit, sie liegt im selben Koordinatenraum. */
+      var kipp = (Math.random() * 2 - 1) * TRAUM_KIPP;
+      bild.setAttribute('transform', 'rotate(' + kipp.toFixed(1) + ' 0 -4)');
+      for (var j = 0; j < TRAUM.length; j++) {
+        if (j !== wahl) { traumAndere[j] = (traumAndere[j] || 0) + 1; }
+      }
+      traumZuletzt[wahl] = zGeflogen;
+      traumAndere[wahl] = 0;
+    } else {
+      zGeflogen++;
+    }
+    if (wolke) { wolke.style.display = nimm ? 'none' : ''; }
+    if (z) { z.style.display = nimm ? 'none' : ''; }
+    bild.style.display = nimm ? '' : 'none';
+  }
+
   function zzzZeichnen(t) {
     if (schlaf <= .3) {
       if (zzzStart) {
         zzzStart = 0;
         for (var k = 0; k < zzz.length; k++) { zzz[k].setAttribute('opacity', '0'); }
+        /* Beim Aufwachen die Auslosung vergessen: das nächste Einschlafen soll
+           nicht dieselben Bilder zeigen wie das letzte. */
+        zzzPhase = [];
       }
       return;
     }
@@ -640,6 +743,11 @@ function erzeuge(behaelter, kern) {
       var ph = (t - zzzStart) / RUNDE - i / zzz.length;
       if (ph < 0) { zzz[i].setAttribute('opacity', '0'); continue; }
       var p = ph % 1, x, y, s, o;
+      /* Neue Runde: einmal losen, ob dieses Partikel ein Bild trägt.
+         Bei reduzierter Bewegung nicht — dort stehen die Partikel still, und
+         ein Bild, das sich nie ändert, hängt dann für immer im Bild. */
+      if (!ruhig && (zzzPhase[i] === undefined || p < zzzPhase[i])) { traumLosen(i); }
+      zzzPhase[i] = p;
       if (ruhig) {
         x = 34 + i * 9; y = -62 - i * 12; s = .8 + i * .15; o = .35 * schlaf;
       } else {
