@@ -51,11 +51,10 @@ var STIL = [
   '.sym-blase .augen{transform-box:fill-box;transform-origin:center;',
   '  transform:translate(var(--augeX,0px),var(--augeY,0px)) scaleY(var(--augeAuf,1));}',
   '.sym-blase .auge{fill:#0b1030;}',
-  /* Lider: eine Haut in der Körperfarbe, die von oben über das Auge sinkt,
-     und die Wimpernlinie an ihrer Unterkante. Wie weit sie zu sind, setzt JS
-     je Bild als transform-Attribut (scale(1 lid), Ursprung = Oberkante). */
+  /* Lider: eine Haut in der Körperfarbe, die von oben über das Auge sinkt —
+     ohne Wimpernlinie, die Kante des Lids genügt. Wie weit sie zu sind, setzt
+     JS je Bild als transform-Attribut (scale(1 lid), Ursprung = Oberkante). */
   '.sym-blase .lid{fill:var(--c3);}',
-  '.sym-blase .wimper{fill:none;stroke:#0b1030;stroke-width:1.6;stroke-linecap:round;}',
   /* Der Schatten macht den räumlichen Eindruck: das Wesen steht nicht IM Bild,
      es schwebt darüber. Er schrumpft und verblasst, wenn es sich hebt. */
   '.sym-blase .schatten{fill:#070a14;opacity:var(--schatten,.42);}',
@@ -76,13 +75,13 @@ var STIL = [
   '.sym-blase .zzz{pointer-events:none;}',
   /* KEINE opacity im Stil: eine CSS-Eigenschaft schlägt das Attribut, das die
      Animation je Bild setzt — die „z" blieben unsichtbar (im Bild geprüft). */
-  '.sym-blase .zzz .z{fill:rgba(235,242,255,.9);font-weight:700;',
+  '.sym-blase .zzz .z{fill:rgba(235,242,255,.55);font-weight:700;',
   '  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}',
   /* Die Wolke um jedes „z": fast durchsichtig. Die Deckkraft liegt an der
      GRUPPE, damit sich die Kreise nicht gegenseitig verdunkeln, wo sie sich
      überlappen; die Flugbewegung animiert die äußere Gruppe. */
   '.sym-blase .wolke{fill:#eef3ff;opacity:.16;}',
-  'html[data-symdo-theme="light"] .sym-blase .zzz .z{fill:#3a4568;}',
+  'html[data-symdo-theme="light"] .sym-blase .zzz .z{fill:rgba(58,69,104,.55);}',
   'html[data-symdo-theme="light"] .sym-blase .wolke{fill:#3a4568;opacity:.09;}',
   /* Zustandsfarben — dieselbe Sprache wie die Statuszeile der Kachel. */
   /* „bereit" traegt die volle Palette: nach dem Laden soll das Wesen leuchten
@@ -160,15 +159,12 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
   /* Je Auge ein Lid, etwas größer als das Auge, damit im geschlossenen Zustand
      kein dunkler Rand hervorschaut. Der Ursprung (0,0) liegt an der Oberkante
-     des Auges; scale(1 lid) lässt es von dort herabsinken, die Wimpernlinie
-     ist die Unterkante und zeichnet zu die geschwungene Schlaf-Linie. */
+     des Auges; scale(1 lid) lässt es von dort herabsinken. */
   +   '<g class="lider" transform="translate(-19 -12.4)">'
   +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
-  +     '<path class="wimper" d="M-6.2 7.6A6.7 7.6 0 0 0 6.2 7.6"/>'
   +   '</g>'
   +   '<g class="lider" transform="translate(19 -12.4)">'
   +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
-  +     '<path class="wimper" d="M-6.2 7.6A6.7 7.6 0 0 0 6.2 7.6"/>'
   +   '</g>'
   + '</g></g>'
   /* Die „z" liegen AUSSERHALB des Körpers: sie sollen wegfliegen, nicht mit ihm
@@ -630,12 +626,12 @@ function erzeuge(behaelter, kern) {
       if (ph < 0) { zzz[i].setAttribute('opacity', '0'); continue; }
       var p = ph % 1, x, y, s, o;
       if (ruhig) {
-        x = 34 + i * 9; y = -62 - i * 12; s = .8 + i * .15; o = .45 * schlaf;
+        x = 34 + i * 9; y = -62 - i * 12; s = .8 + i * .15; o = .35 * schlaf;
       } else {
         x = 34 + 22 * p + Math.sin(p * 6) * 3;
         y = -58 - 38 * p;
         s = .7 + .5 * p;
-        o = Math.sin(p * Math.PI) * schlaf;
+        o = Math.sin(p * Math.PI) * .7 * schlaf;   // nie ganz deckend: Träume, kein Schild
       }
       s *= ZZ_MASS[i] || 1;
       zzz[i].setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + s.toFixed(2) + ')');
