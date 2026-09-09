@@ -127,6 +127,18 @@ trait Voice
         } catch (\Throwable $e) {
             // Attribute/Timer existieren vor dem ersten Kernel-Neustart noch nicht.
         }
+        /* Die Sprach-Kacheln bekommen ihren Zustand (Darstellung, Freisprechen,
+           Weckwort) beim Laden — ein geändertes Weckwort im Gateway käme sonst
+           erst mit dem nächsten Neuladen der Visualisierung an. Deshalb nach
+           jedem Speichern einmal anstoßen; die Kachel baut den Lauscher dann
+           mit dem neuen Wort neu auf. */
+        try {
+            foreach ((array)@IPS_GetInstanceListByModuleID(self::VOICE_MODULE_GUID) as $kachel) {
+                @IPS_RequestAction((int)$kachel, 'GetState', '');
+            }
+        } catch (\Throwable $e) {
+            // ohne Sprach-Kacheln nichts zu tun
+        }
     }
 
     /** Glied der RequestAction-Kette des Gateways. */
