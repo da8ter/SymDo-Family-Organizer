@@ -298,6 +298,13 @@ trait AiExtract
         if (str_ends_with($path, 'notes')) {
             return json_encode($this->NotesHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        /* Hausaufgaben: dieselbe Begruendung wie beim Stundenplan. Ohne diesen
+           Zweig ist der Bereich in JEDER Visu-Kachel leer und nur ueber REST
+           erreichbar — genau der Fehler, der oben beschrieben steht. Vor dem
+           KI-Riegel, weil Lesen und Abhaken mit der KI nichts zu tun haben. */
+        if (str_ends_with($path, 'homework')) {
+            return json_encode($this->HomeworkHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
 
         /* Sprachdialog: Sitzung, Herzschlag, Werkzeuge. VOR dem KI-Riegel, damit
            close/tool auch bei mitten im Gespräch abgeschalteter KI noch

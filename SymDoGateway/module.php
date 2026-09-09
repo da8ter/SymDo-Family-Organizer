@@ -10,6 +10,7 @@ require_once __DIR__ . '/libs/CalendarBridge.php';
 require_once __DIR__ . '/libs/Briefing.php';
 require_once __DIR__ . '/libs/WebPush.php';
 require_once __DIR__ . '/libs/Notes.php';
+require_once __DIR__ . '/libs/Homework.php';
 require_once __DIR__ . '/libs/NotesMedia.php';
 require_once __DIR__ . '/libs/NotesAi.php';
 require_once __DIR__ . '/libs/TimetableBridge.php';
@@ -47,6 +48,7 @@ class SymDoGateway extends IPSModuleStrict
     use Briefing;
     use WebPush;
     use Notes;
+    use Homework;
     use NotesMedia;
     use NotesAi;
     use TimetableBridge;
@@ -147,6 +149,7 @@ class SymDoGateway extends IPSModuleStrict
         $this->PushCreate();
         // Notizen: Ablage und die Kategorie der Anhaenge
         $this->NotesCreate();
+        $this->HomeworkCreate();
         // KI-Gerichtsbilder der Rezept-Favoritenlisten: Schalter, Warteschlange
         // und ihr Timer
         $this->DishCreate();

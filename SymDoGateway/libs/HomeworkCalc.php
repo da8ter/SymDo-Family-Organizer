@@ -1,0 +1,247 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Hausaufgaben — das Rechenwerk, ohne Symcon und ohne Zustand.
+ *
+ * Keine Symcon-Aufrufe, kein Attribut, keine Uhr: alles kommt als Parameter
+ * herein. Damit läuft es im Prüfstand (SymDoGateway/tests/HomeworkTest.php),
+ * und die Regeln — was gültig ist, was aufbewahrt wird, welche Stunde eine
+ * Aufgabe trägt — stehen an genau einer Stelle. Vorbild:
+ * Stundenplan/libs/TimetableCalc.php.
+ */
+class HomeworkCalc
+{
+    public const NOTE_MAX = 500;
+    public const SUBJECT_MAX = 60;
+    /** So viele Einträge hält der Bestand. Ältere fallen vorne heraus. */
+    public const ITEMS_MAX = 300;
+    /** Erledigte bleiben so lange sichtbar, dann räumt der Bestand sie weg. */
+    public const KEEP_DONE_DAYS = 14;
+    /** Offene, die nie erledigt wurden, verfallen nach dieser Zeit. */
+    public const KEEP_OPEN_DAYS = 60;
+    /** Weiter als ein Jahr voraus oder zurück ist ein Tipp- oder Modellfehler. */
+    public const DUE_WINDOW_DAYS = 365;
+
+    /** Ein Datum in der Form JJJJ-MM-TT, das es wirklich gibt. */
+    public static function DatumGueltig(string $datum): bool
+    {
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $datum, $m) !== 1) {
+            return false;
+        }
+        return checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
+    }
+
+    /** Liegt das Datum in einem sinnvollen Fenster um heute? */
+    public static function DatumImFenster(string $datum, string $heute): bool
+    {
+        if (!self::DatumGueltig($datum) || !self::DatumGueltig($heute)) {
+            return false;
+        }
+        $a = new \DateTimeImmutable($datum . ' 12:00:00');
+        $b = new \DateTimeImmutable($heute . ' 12:00:00');
+        return abs((int)$a->diff($b)->format('%r%a')) <= self::DUE_WINDOW_DAYS;
+    }
+
+    /**
+     * Zwei Fachnamen vergleichen: ohne Rücksicht auf Groß- und Kleinschreibung,
+     * und eine Kurzform trifft den Anfang des langen Namens („Mathe" trifft
+     * „Mathematik"). Nach drei Buchstaben wird nicht mehr geraten — „Deu" ist
+     * eindeutig, „De" wäre es nicht.
+     */
+    public static function FachTreffer(string $a, string $b): bool
+    {
+        $x = mb_strtolower(trim($a));
+        $y = mb_strtolower(trim($b));
+        if ($x === '' || $y === '') {
+            return false;
+        }
+        if ($x === $y) {
+            return true;
+        }
+        $kurz = mb_strlen($x) < mb_strlen($y) ? $x : $y;
+        $lang = $kurz === $x ? $y : $x;
+        return mb_strlen($kurz) >= 3 && mb_strpos($lang, $kurz) === 0;
+    }
+
+    /**
+     * Einen rohen Fachnamen gegen die Fachliste auflösen. Ein unbekannter Name
+     * ist KEIN Fehler: er wird nur getrimmt und durchgelassen. Ein Fach ohne
+     * Stunde (AG, Ersatzfach) hat trotzdem Hausaufgaben, und ein umbenanntes
+     * Fach soll die alte Aufgabe nicht verschwinden lassen.
+     *
+     * @param list<string> $faecher
+     */
+    public static function FachAufloesen(string $roh, array $faecher): string
+    {
+        $name = trim($roh);
+        if ($name === '') {
+            return '';
+        }
+        foreach ($faecher as $f) {
+            if (self::FachTreffer($name, (string)$f)) {
+                return (string)$f;
+            }
+        }
+        return mb_substr($name, 0, self::SUBJECT_MAX);
+    }
+
+    /**
+     * Einen Eintrag in Form bringen. Gibt null zurück, wenn er nicht taugt —
+     * der Aufrufer macht daraus einen Fehler oder überspringt ihn.
+     *
+     * @param list<string> $faecher
+     * @param list<string> $kinder Zulässige Kennungen (Mitglieder mit Rolle Kind)
+     */
+    public static function Normalisieren(array $roh, array $faecher, array $kinder, string $heute, int $jetzt): ?array
+    {
+        $kind = trim((string)($roh['childId'] ?? ''));
+        if ($kind === '' || !in_array($kind, $kinder, true)) {
+            return null;
+        }
+        $fach = self::FachAufloesen((string)($roh['subject'] ?? ''), $faecher);
+        if ($fach === '') {
+            return null;
+        }
+        $due = trim((string)($roh['due'] ?? ''));
+        if ($due !== '' && !self::DatumImFenster($due, $heute)) {
+            return null;
+        }
+        $erledigt = ($roh['done'] ?? false) === true;
+        return [
+            'id'        => trim((string)($roh['id'] ?? '')),
+            'childId'   => $kind,
+            'subject'   => $fach,
+            'due'       => $due,
+            'done'      => $erledigt,
+            'doneAt'    => $erledigt ? max(0, (int)($roh['doneAt'] ?? $jetzt)) : 0,
+            'note'      => mb_substr(trim((string)($roh['note'] ?? '')), 0, self::NOTE_MAX),
+            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps'], true)
+                ? (string)$roh['source'] : 'app',
+            'createdAt' => max(0, (int)($roh['createdAt'] ?? $jetzt)) ?: $jetzt,
+            'updatedAt' => max(0, (int)($roh['updatedAt'] ?? $jetzt)) ?: $jetzt,
+        ];
+    }
+
+    /**
+     * Was aufbewahrt wird. Gefiltert wird beim LESEN und nicht per Timer:
+     * geschrieben wird der gefilterte Stand erst bei der nächsten Änderung,
+     * damit kein Abruf ein Attribut schreibt.
+     *
+     * Gekappt wird nach Anlagezeit und nicht nach Fälligkeit — sonst fiele
+     * die eben eingetragene Nachholaufgabe von letzter Woche als erste weg.
+     *
+     * @param list<array> $items
+     * @return list<array>
+     */
+    public static function Aufbewahrung(array $items, int $jetzt): array
+    {
+        $grenzeErledigt = $jetzt - self::KEEP_DONE_DAYS * 86400;
+        $grenzeOffen = $jetzt - self::KEEP_OPEN_DAYS * 86400;
+        $raus = [];
+        foreach ($items as $i) {
+            if (!is_array($i)) {
+                continue;
+            }
+            if (($i['done'] ?? false) === true) {
+                if ((int)($i['doneAt'] ?? 0) >= $grenzeErledigt) {
+                    $raus[] = $i;
+                }
+                continue;
+            }
+            $bezug = trim((string)($i['due'] ?? '')) !== '' && self::DatumGueltig((string)$i['due'])
+                ? (int)strtotime((string)$i['due'] . ' 23:59:59')
+                : (int)($i['createdAt'] ?? 0);
+            if ($bezug >= $grenzeOffen) {
+                $raus[] = $i;
+            }
+        }
+        if (count($raus) > self::ITEMS_MAX) {
+            usort($raus, static fn(array $a, array $b): int => (int)$a['createdAt'] <=> (int)$b['createdAt']);
+            $raus = array_slice($raus, count($raus) - self::ITEMS_MAX);
+        }
+        return array_values($raus);
+    }
+
+    /**
+     * Offene Hausaufgaben je Kind, Tag und Fach — für das Abzeichen an der
+     * Stunde. Die Zuordnung fällt an die ERSTE Stunde des Fachs an diesem Tag;
+     * zwei Stunden desselben Fachs sollen die Zahl nicht verdoppeln.
+     *
+     * @param list<array> $items
+     * @param array $plan Ausgabe von STPL_GetPlan()
+     */
+    public static function FuerPlan(array $items, array $plan): array
+    {
+        $offen = [];
+        foreach ($items as $i) {
+            if (!is_array($i) || ($i['done'] ?? false) === true) {
+                continue;
+            }
+            $kind = trim((string)($i['childId'] ?? ''));
+            $tag = trim((string)($i['due'] ?? ''));
+            if ($kind === '' || $tag === '') {
+                continue;
+            }
+            $offen[] = $i;
+        }
+        $raus = ['slots' => [], 'frei' => []];
+        foreach ($offen as $i) {
+            $kind = (string)$i['childId'];
+            $tag = (string)$i['due'];
+            $treffer = '';
+            foreach ((array)($plan['children'] ?? []) as $k) {
+                if (trim((string)($k['userId'] ?? '')) !== $kind) {
+                    continue;
+                }
+                foreach ((array)($k['days'] ?? []) as $t) {
+                    if (trim((string)($t['date'] ?? '')) !== $tag) {
+                        continue;
+                    }
+                    foreach ((array)($t['slots'] ?? []) as $s) {
+                        if (self::FachTreffer((string)($s['name'] ?? ''), (string)$i['subject'])) {
+                            $treffer = (string)($s['id'] ?? '');
+                            break 3;
+                        }
+                    }
+                }
+            }
+            if ($treffer !== '') {
+                $raus['slots'][$treffer] = ($raus['slots'][$treffer] ?? 0) + 1;
+                continue;
+            }
+            /* Kein passender Slot (Fach fällt aus, hat an dem Tag keine Stunde
+               oder heißt anders): die Aufgabe wird am Tag gesammelt. Eine
+               Hausaufgabe, die NIRGENDS erscheint, wäre schlimmer als eine an
+               ungenauer Stelle. */
+            $raus['frei'][$kind . '|' . $tag] = ($raus['frei'][$kind . '|' . $tag] ?? 0) + 1;
+        }
+        return $raus;
+    }
+
+    /**
+     * Die Meldung am Vorabend: was für einen Tag noch offen ist, je Kind.
+     *
+     * @param list<array> $items
+     * @return array<string,list<array>> Kindkennung => Einträge
+     */
+    public static function FuerTag(array $items, string $tag): array
+    {
+        $raus = [];
+        foreach ($items as $i) {
+            if (!is_array($i) || ($i['done'] ?? false) === true) {
+                continue;
+            }
+            if (trim((string)($i['due'] ?? '')) !== $tag) {
+                continue;
+            }
+            $kind = trim((string)($i['childId'] ?? ''));
+            if ($kind === '') {
+                continue;
+            }
+            $raus[$kind][] = $i;
+        }
+        return $raus;
+    }
+}

@@ -214,6 +214,19 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'homework':
+                /* Hausaufgaben der Kinder. Ein Pfad, Aktion im Rumpf — wie
+                   Notizen und Kalender. Erscheint bewusst NICHT in /discovery
+                   (siehe Homework.php). */
+                if ($method === 'GET') {
+                    $this->SendJson($this->HomeworkHandleAction(['action' => 'list'], $device));
+                    return;
+                }
+                if ($method === 'POST') {
+                    $this->SendJson($this->HomeworkHandleAction($this->ReadJsonBody(), $device));
+                    return;
+                }
+                break;
             case 'push':
                 // Benachrichtigungen dieses Geraets. Der oeffentliche VAPID-Schluessel
                 // kommt NICHT von hier, sondern steht in window.__SYMDO__ — sonst
