@@ -152,6 +152,11 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<feGaussianBlur stdDeviation="5.5"/></filter>'
   + '<filter class="fwolke" x="-40%" y="-40%" width="180%" height="180%">'
   +   '<feGaussianBlur stdDeviation="1.1"/></filter>'
+  /* Die Lider leicht weich, damit sie wie Haut auf dem Körper liegen und nicht
+     wie aufgeklebte Scheiben. Großzügiger Filterbereich: bei fast offenem Lid
+     ist die Geometrie nur wenige Einheiten hoch. */
+  + '<filter class="flid" x="-30%" y="-100%" width="160%" height="300%">'
+  +   '<feGaussianBlur stdDeviation=".55"/></filter>'
   + '</defs>'
   /* Zuunterst der Lichtfleck, darin der enge Kontaktschatten: ein leuchtender
      Körper wirft Licht auf den Boden, und die dunkle Stelle bleibt nur dort,
@@ -326,7 +331,7 @@ function erzeuge(behaelter, kern) {
      geben. Deshalb je Blase ein eigener Zählerwert. */
   var nr = ++zaehler;
   var svg = behaelter.firstChild;
-  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht', 'fwolke'].forEach(function (k) {
+  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht', 'fwolke', 'flid'].forEach(function (k) {
     var e = svg.querySelector('.' + k);
     if (e) { e.setAttribute('id', 'symblase-' + k + '-' + nr); }
   });
@@ -347,6 +352,9 @@ function erzeuge(behaelter, kern) {
   pSchein.setAttribute('filter', 'url(#symblase-fs-' + nr + ')');
   Array.prototype.forEach.call(svg.querySelectorAll('.wolke'), function (w) {
     w.setAttribute('filter', 'url(#symblase-fwolke-' + nr + ')');
+  });
+  Array.prototype.forEach.call(svg.querySelectorAll('.lid'), function (l) {
+    l.setAttribute('filter', 'url(#symblase-flid-' + nr + ')');
   });
 
   var aktiv = false, laeuft = false, raf = 0, letzteForm = 0;
