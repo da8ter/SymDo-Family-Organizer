@@ -164,6 +164,30 @@ Der Import ersetzt nur die genannten Tage; alles Ältere als der Wochenanfang
 wird beim nächsten Import weggeräumt. Fällt der Import weg, fällt die Anzeige
 nach der Woche von selbst auf die Vorlage zurück.
 
+## Die Zeitachse zeigt dasselbe wie die App
+
+Die Darstellung *Zeitachse* ist ein **1:1-Abbild** der Stundenplan-Karte in der
+Web-App — dieselbe Bahn, dieselben Marken, dieselben Regeln:
+
+- **Entfall** ist ein halbdurchsichtiger Umriss in der Fachfarbe, gestrichelt
+  umrandet, etwas niedriger und mittig im Balken. So gibt er seinen Platz auf der
+  Zeitachse nicht auf und liegt doch sichtbar unter der Reihe der stattfindenden
+  Stunden. Was unter ihm liegt — an einem Projekttag der Ganztagsblock — scheint
+  durch.
+- **Vertretung** trägt ihren Titel im Balken und davor ein Tausch-Zeichen statt
+  des Fachsymbols: „1. Methodentag" sagt mehr als jedes Symbol. Der Titel endet,
+  wo die nächste Stunde auf dem Block beginnt.
+- **Termine** aus dem Kalender stehen als Punkt an ihrer Startzeit, mit Balken bis
+  zur Endzeit und einem Etikett daneben. Ohne Endzeit läuft der Balken aus.
+- **Uhrzeiten** stehen unter der Achse an ihrer Stelle: Beginn, Ende und die
+  Startzeit jedes Termins.
+- Die **Spanne** in der Kopfzeile zählt nur, was stattfindet: fallen die letzten
+  zwei Stunden aus, endet sie früher.
+- Gerundet wird nach der **Lage** im Tag, nicht nach der Reihenfolge im Plan —
+  ein Ganztagsblock kann als erstes Stück kommen und trotzdem rechts enden.
+
+Wer die Kachel und die App nebeneinander sieht, sieht dasselbe Bild.
+
 ## Beide Ansichten gleichzeitig
 
 Eine zweite Instanz dieses Moduls anlegen, unter *Anzeige* auf **Timeline**

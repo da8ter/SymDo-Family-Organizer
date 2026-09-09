@@ -346,8 +346,31 @@
     font-size: 9px; font-weight: 700; letter-spacing: .04em;
     text-transform: uppercase; opacity: .9;
   }
-  .stueck.entfall { opacity: .5; }
-  .stueck.vertretung { box-shadow: inset 0 3px 0 0 rgba(255,255,255,.85); }
+  /* Entfall und Vertretung — WORTGLEICH zur Web-App, die hier das Vorbild ist:
+     dieselbe Zeitachse soll in Kachel und App dasselbe Bild zeigen.
+
+     Die entfallene Stunde ist ein halbdurchsichtiger, gestrichelt umrandeter
+     Umriss, etwas niedriger und mittig im Balken — so gibt sie ihren Platz auf
+     der Zeitachse nicht auf und liegt doch sichtbar UNTER der Reihe der
+     stattfindenden Stunden. Die Linie ist HELL und nicht in der Fachfarbe: auf
+     einem Block derselben Farbe waere sie unsichtbar (in der App an Physik auf
+     dem Methodentag gemessen). Ein Rahmen, weil ein Saum aus box-shadow nicht
+     gestrichelt sein kann. */
+  .stueck.entfall {
+    opacity: .75; z-index: 1;
+    border: 1px dashed color-mix(in srgb, var(--bg) 85%, transparent);
+    height: 20px; top: 3px;
+  }
+  /* Die Vertretung braucht keine helle Kante: sie traegt ihren Titel und davor
+     das Tausch-Zeichen, und DAS ist die Markierung. Zwei Zeichen fuer dieselbe
+     Aussage sind eins zu viel. */
+  /* Der Titel darf den Balken nicht sprengen: was nicht passt, kuerzt der
+     Browser: min-width 0 muss sein, sonst waechst das Flex-Kind ueber das
+     Stueck hinaus, statt zu kuerzen. */
+  .stueck .titel {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 600;
+  }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -1949,13 +1972,26 @@
         html += '<div class="keinTag">—</div></div>';
         return;
       }
-      const beginn = slots[0].start, ende = slots[slots.length - 1].end;
+      /* Die Spanne zaehlt nur, was stattfindet: „08:00–14:05" waere falsch,
+         wenn die letzten beiden Stunden ausfallen. Die Dauer kommt schon ohne
+         Entfall vom Server (TimetableCalc::TagesDauer). */
+      const echte = slots.filter(function (s) { return s.status !== 'entfall'; });
+      const beginn = (echte[0] || slots[0]).start;
+      const ende = (echte[echte.length - 1] || slots[slots.length - 1]).end;
       // Der Tag steht im Umschalter; hier nur noch die Dauer, und „Heute" nur
       // dann, wenn der gewaehlte Tag auch heute ist.
       html += '<span class="was">' + (tag.today ? 'Heute · ' : '')
-        + esc(stundenText(tag.minutes || 0)) + '</span>'
+        + esc(echte.length ? stundenText(tag.minutes || 0) : 'Unterricht entfällt') + '</span>'
         + '<span class="spanne">' + esc(beginn) + '–' + esc(ende) + '</span></div>';
 
+      /* Gerundet wird nach der LAGE, nicht nach der Stelle im Feld: seit der
+         Plan datierte Tage kennt, kann ein Ganztagsblock („Projekttag" 8–13
+         Uhr) bis ans Ende der Bahn reichen und trotzdem als ERSTES Stueck
+         kommen. Nach der alten Regel („das letzte Stueck rundet rechts")
+         blieb dort eine scharfe Kante, und der Balken sah abgeschnitten aus —
+         in der App vom Nutzer gemeldet. */
+      const fruehesteZeit = Math.min.apply(null, slots.map(function (x) { return x.from; }));
+      const spaetesteZeit = Math.max.apply(null, slots.map(function (x) { return x.to; }));
       let stuecke = '';
       slots.forEach(function (s, i) {
         const a = Math.min(Math.max((s.from - von) / spanne, 0), 1);
@@ -1965,24 +2001,60 @@
            Ein Boden in Prozent log: er machte die kurze Stunde breiter, als
            sie ist, und verschob damit alles Folgende. */
         const breite = Math.max((b - a) * 100, 0.2);
-        const erster = i === 0, letzter = i === slots.length - 1;
+        const erster = s.from <= fruehesteZeit;   // beginnt der Balken hier?
+        const letzter = s.to >= spaetesteZeit;    // endet er hier?
         const r = '13px';
+        /* Die entfallene Stunde rundet an BEIDEN Enden voll, unabhaengig
+           davon, wo sie im Tag liegt: sie ist ein eigener Kasten mitten im
+           Balken. Die stattfindenden Stunden bilden dagegen einen Strang und
+           runden nur aussen. */
+        const rundum = s.status === 'entfall';
         /* Im Balken ist nur Platz fuer das Symbol; Raum und Lehrer gehoeren
            deshalb in den Tipp, wo schon Fach und Zeit stehen. */
         const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
         const lage = (s.status === 'entfall' || s.status === 'vertretung') ? s.status : '';
         const marke = lage === 'entfall' ? 'entfällt' : (lage === 'vertretung' ? 'Vertretung' : '');
+        /* Entfallen heisst: gestrichelte Kontur und eine Fuellung derselben
+           Fachfarbe zu 50 %. Die stattfindende Stunde bleibt kraeftig — der
+           Unterschied ist damit auf einen Blick zu sehen, und was unter der
+           entfallenen liegt (an einem Projekttag der Ganztagsblock) scheint
+           weiter durch. */
+        const fuellung = s.status === 'entfall'
+          ? 'color-mix(in srgb, ' + s.color + ' 50%, transparent)'
+          : s.color;
+        /* Der Titel der Vertretung darf nur den FREIEN Teil des Blocks
+           benutzen. An einem Projekttag liegen die entfallenen Stunden mitten
+           auf dem Ganztagsblock — der Text lief darunter weiter und wurde von
+           ihnen ueberdeckt. Also bis zur naechsten Stunde, die auf ihm liegt,
+           und 26 px ab fuer Zeichen und Abstaende. */
+        let titelBreite = '';
+        if (s.status === 'vertretung') {
+          let naechst = s.to;
+          slots.forEach(function (x) {
+            if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
+          });
+          const anteil = Math.max(0, naechst - s.from) / Math.max(1, s.to - s.from);
+          titelBreite = ' style="max-width:calc(' + (anteil * 100).toFixed(1) + '% - 26px)"';
+        }
         stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' ' + lage : '')
           + (s.hw ? ' hat-hw' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
                 + (marke ? ' — ' + marke : '')
                 + (s.hw ? ' — ' + s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '') : '')) + '"'
-          + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(s.color)
-          + ';border-top-left-radius:' + (erster ? r : '0')
-          + ';border-bottom-left-radius:' + (erster ? r : '0')
-          + ';border-top-right-radius:' + (letzter ? r : '0')
-          + ';border-bottom-right-radius:' + (letzter ? r : '0') + '">'
-          + symbol(s.icon) + '</div>';
+          + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(fuellung)
+          + ';border-top-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
+          + ';border-bottom-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
+          + ';border-top-right-radius:' + (rundum ? '999px' : (letzter ? r : '0'))
+          + ';border-bottom-right-radius:' + (rundum ? '999px' : (letzter ? r : '0')) + '">'
+          /* Bei einer VERTRETUNG steht der Titel IM Balken: „Projekttag" oder
+             „1. Methodentag" sagt mehr als jedes Symbol, und ein Ganztagsblock
+             hat den Platz dafuer. Davor ein Tausch-Zeichen statt des
+             Fachsymbols — die Stunde findet ja gerade NICHT wie geplant statt. */
+          + (s.status === 'vertretung'
+              ? symbol('fa-right-left') + '<span class="titel"' + titelBreite + '>'
+                + esc(s.name || '') + '</span>'
+              : symbol(s.icon))
+          + '</div>';
       });
 
       // 15-Minuten-Raster: erster, letzter und volle Stunden staerker, damit
