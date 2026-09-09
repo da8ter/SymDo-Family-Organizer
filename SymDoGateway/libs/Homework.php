@@ -298,8 +298,15 @@ trait Homework
         $satz = $store['items'][$pos];
         if ($action === 'done') {
             $ziel = ($body['done'] ?? false) === true;
-            // Zielzustand, nicht umschalten: eine doppelt zugestellte Anfrage
-            // darf das Häkchen nicht zurücknehmen.
+            /* Zielzustand, nicht umschalten: eine doppelt zugestellte Anfrage
+               darf das Häkchen nicht zurücknehmen. Und wenn der Zustand schon
+               stimmt, wird NICHT geschrieben — sonst zählt jede doppelte
+               Zustellung die Revision hoch, schickt ein Push und lässt die
+               Stundenplan-Kacheln neu zeichnen, ohne dass sich etwas geändert
+               hat (live gemessen). */
+            if (($satz['done'] ?? false) === $ziel) {
+                return ['ok' => true, 'rev' => (int)$store['rev'], 'item' => $satz];
+            }
             $satz['done'] = $ziel;
             $satz['doneAt'] = $ziel ? $jetzt : 0;
         } else {
