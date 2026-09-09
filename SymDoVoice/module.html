@@ -449,6 +449,8 @@ var Freihand = (function () {
         }
         return lauscher.an(true).then(function (ok) {
           if (ok) { wartetAufTipp = false; sagen(''); }
+          // Solange gelauscht wird, liegt die Marke schon bereit.
+          kern.vorwaermen(ok === true);
           anzeigen();
         });
       });
@@ -459,6 +461,7 @@ var Freihand = (function () {
 
   function ausschalten() {
     if (lauscher) { lauscher.aus(); }
+    kern.vorwaermen(false);
     anzeigen();
   }
 

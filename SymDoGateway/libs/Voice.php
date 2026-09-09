@@ -468,10 +468,18 @@ trait Voice
         }
 
         $sitzung = min($this->ReadPropertyInteger('VoiceMaxSessionSeconds'), $rest, 3540);
-        $r = $this->VoiceMintSecret(self::$VOICE_SECRET_TTL, (string)($body['userId'] ?? ''));
+        /* Vorgeprägt fürs Weckwort-Lauschen: längere Frist, damit der Lauscher
+           nicht jede Minute anfragt. Höchstens fünf Minuten — eine Marke im
+           Browser ist ein Zugang, und der soll kurz leben. */
+        $ttl = self::$VOICE_SECRET_TTL;
+        if (($body['warm'] ?? false) === true) {
+            $ttl = max(self::$VOICE_SECRET_TTL, min(300, (int)($body['ttl'] ?? 300)));
+        }
+        $r = $this->VoiceMintSecret($ttl, (string)($body['userId'] ?? ''));
         if (!($r['ok'] ?? false)) {
             return $r;
         }
+        $r['ttl'] = $ttl;
         $r['sessionSeconds'] = max(30, $sitzung);
         /* 30 statt 15 Sekunden: der Herzschlag zaehlt die Minuten mit und haelt
            die Sitzung wach — die Genauigkeit leidet nicht, denn gezaehlt wird

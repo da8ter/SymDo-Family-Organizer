@@ -4596,6 +4596,7 @@ async function voiceFreihandUmschalten() {
   if (voiceFreihandGewuenscht) {
     voiceFreihandGewuenscht = false;
     if (voiceLauscher) voiceLauscher.aus();
+    voiceKernHolen().vorwaermen(false);
     voiceOhrSetzen();
     return;
   }
@@ -4634,6 +4635,8 @@ async function voiceFreihandUmschalten() {
   }
   const an = await voiceLauscher.an(true);
   voiceFreihandGewuenscht = an === true;
+  // Solange gelauscht wird, liegt die Marke schon bereit — der Start spart den Gang zum Gateway.
+  voiceKernHolen().vorwaermen(an === true);
   if (an) showToast(translate('Listening for "Hey SymDo"'));
   voiceOhrSetzen();
 }

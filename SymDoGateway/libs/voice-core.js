@@ -44,6 +44,40 @@ function erzeuge(opt) {
      nichts), und nach dem Weckwort schaut niemand auf die Blase: der Ton ist
      die einzige Auskunft, dass man jetzt sprechen kann. Rein lokal aus
      WebAudio, kein Netz, keine Datei; opt.tone === false schaltet ihn ab. */
+  /* Vorgeprägte Marke: wer aufs Weckwort lauscht, hat sie schon in der Hand,
+     wenn es fällt — der Gang zum Gateway (und von dort zum Anbieter) entfällt
+     beim Start. Der Server prägt sie dafür mit längerer Frist (WARM_TTL); der
+     Kern holt rechtzeitig eine neue und wirft die alte weg, sobald ein Gespräch
+     läuft oder das Lauschen endet. Eine ungenutzte Marke kostet nichts. */
+  var WARM_TTL = 300, WARM_TAKT = 240000;
+  var warmGewuenscht = false, warmMarke = null, warmBis = 0, warmUhr = 0, warmLaeuft = false;
+  function warmHolen() {
+    if (!warmGewuenscht || !beendet || warmLaeuft) { return; }
+    warmLaeuft = true;
+    post({ action: 'open', warm: true, ttl: WARM_TTL }).then(function (r) {
+      if (r && r.ok === true && r.value) {
+        warmMarke = r;
+        warmBis = Date.now() + ((r.ttl || WARM_TTL) - 15) * 1000;
+      }
+    }).catch(function () {}).then(function () {
+      warmLaeuft = false;
+      if (warmUhr) { clearTimeout(warmUhr); warmUhr = 0; }
+      if (warmGewuenscht) { warmUhr = setTimeout(warmHolen, WARM_TAKT); }
+    });
+  }
+  function vorwaermen(an) {
+    warmGewuenscht = an === true;
+    if (warmUhr) { clearTimeout(warmUhr); warmUhr = 0; }
+    if (!warmGewuenscht) { warmMarke = null; return; }
+    warmHolen();
+  }
+  /* Die vorgeprägte Marke, wenn sie noch trägt — einmal genommen, ist sie weg. */
+  function warmNehmen() {
+    var r = (warmMarke && Date.now() < warmBis) ? warmMarke : null;
+    warmMarke = null;
+    return r;
+  }
+
   var tonAn = opt.tone !== false;
   var tonCtx = null;
   function hiTon() {
@@ -148,8 +182,10 @@ function erzeuge(opt) {
        verfällt nach 60 s — dauert die Berechtigungsfrage länger, wird eine
        frische geholt statt mit der alten zu scheitern. Eine nicht benutzte
        Marke kostet nichts: eine Sitzung entsteht erst mit dem Handschlag. */
-    var markeAb = Date.now();
-    var markeP = post({ action: 'open' }).catch(function () { return { ok: false, verbindung: true }; });
+    var vor = warmNehmen();
+    var markeBis = vor ? warmBis : Date.now() + 45000;
+    var markeP = vor ? Promise.resolve(vor)
+      : post({ action: 'open' }).catch(function () { return { ok: false, verbindung: true }; });
     var frisch = function (r) {
       if (!r || r.ok !== true || !r.value) {
         var text = (r && r.verbindung) ? 'Das Gateway war nicht erreichbar.'
@@ -167,7 +203,7 @@ function erzeuge(opt) {
       var strom = paar[0], r = paar[1];
       if (beendet) { strom.getTracks().forEach(function (t) { t.stop(); }); return false; }
       mic = strom;
-      if (Date.now() - markeAb > 45000) {
+      if (Date.now() > markeBis) {
         return post({ action: 'open' }).then(frisch);
       }
       return frisch(r);
@@ -443,6 +479,8 @@ function erzeuge(opt) {
     zustand('ende', grund || '');
     ereignis({ art: 'ende', grund: grund || '' });
     if (id) { post({ action: 'close', callId: id }).catch(function () {}); }
+    // Zurück ins Lauschen heißt: die nächste Marke schon bereitlegen.
+    if (warmGewuenscht) { warmUhr = setTimeout(warmHolen, 800); }
   }
 
   /* Kachel verlassen oder lange unsichtbar: schließen. Sofort wäre falsch
@@ -470,6 +508,8 @@ function erzeuge(opt) {
       return { mikro: mic, fern: (audioEl && audioEl.srcObject) || null };
     },
     laufzeit: function () { return offenSeit ? Math.floor((Date.now() - offenSeit) / 1000) : 0; },
+    /* Marke vorprägen, solange auf das Weckwort gelauscht wird (an/aus). */
+    vorwaermen: vorwaermen,
     handleServerEvent: handleServerEvent,
     _testSend: null
   };
