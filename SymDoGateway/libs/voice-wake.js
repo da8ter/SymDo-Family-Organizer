@@ -220,6 +220,11 @@ function erzeuge(opt) {
   var laeuft = false;        // läuft der Erkenner gerade?
   var neustartUhr = 0;
   var fehlerFolge = 0;
+  /* Von AUSSEN abgebrochen (Chrome lässt je Browser nur EINE Erkennung laufen:
+     eine zweite Kachel oder die Web-App im Nachbartab reißt diese hier ab —
+     und diese die andere, im Kreis, 400 ms um 400 ms). Nach drei fremden
+     Abbrüchen in Folge wartet dieser Lauscher lange und sagt, warum. */
+  var fremdAbbrueche = 0, eigenerAbbruch = false;
   var zustandJetzt = 'aus';
   /* Einmal geweckt, bis zum naechsten Anschalten Ruhe: `abort()` beendet die
      Erkennung, aber ein schon unterwegs befindliches Ergebnis kann noch
@@ -248,6 +253,7 @@ function erzeuge(opt) {
       }
       erk.onresult = function (ev) {
         if (!an) { return; }
+        fremdAbbrueche = 0;
         try {
           var letztes = ev.results[ev.results.length - 1];
           if (letztes && letztes[0]) { aufHoert(String(letztes[0].transcript || '').trim()); }
@@ -277,9 +283,16 @@ function erzeuge(opt) {
         if (geweckt && mitLoesen) { var t = mitText; mitLoesen(t); aus(); }
       };
       erk.onerror = function (ev) {
+        if (!an) { return; }          // wir haben selbst abgeschaltet
         var art = (ev && ev.error) || 'unbekannt';
-        if (art === 'no-speech' || art === 'aborted') {
-          return;                     // beides normal, der Neustart kommt über onend
+        if (art === 'no-speech') { return; }   // normal, der Neustart kommt über onend
+        if (art === 'aborted') {
+          if (eigenerAbbruch) { eigenerAbbruch = false; return; }
+          fremdAbbrueche++;
+          if (fremdAbbrueche === 3) {
+            melde('pause', 'Ein zweiter Lauscher (Web-App oder andere Kachel im selben Browser) nimmt das Mikrofon — hier pausiert die Erkennung.');
+          }
+          return;
         }
         if (art === 'not-allowed' || art === 'service-not-allowed') {
           an = false; laeuft = false;
@@ -295,8 +308,10 @@ function erzeuge(opt) {
         /* Der Erkenner endet von selbst, auch mit continuous. Neu anwerfen,
            aber mit wachsender Pause, damit ein dauerhafter Fehler nicht in
            eine Endlosschleife läuft. */
-        var pause = Math.min(30000, 400 * Math.pow(2, Math.min(6, fehlerFolge)));
-        melde(fehlerFolge > 0 ? 'pause' : 'lauscht');
+        var stufe = Math.min(6, fehlerFolge + Math.max(0, fremdAbbrueche - 2));
+        var pause = Math.min(30000, 400 * Math.pow(2, stufe));
+        if (dok && dok.hidden) { melde('pause'); return; }   // im Hintergrund nicht anwerfen — die Sichtbarkeit holt uns zurück
+        if (fehlerFolge === 0 && fremdAbbrueche < 3) { melde('lauscht'); } else { melde('pause'); }
         neustartUhr = wurzel.setTimeout(anwerfen, pause);
       };
       erk.onstart = function () { fehlerFolge = 0; melde('lauscht'); };
@@ -313,10 +328,27 @@ function erzeuge(opt) {
     if (mitLoesen) { var t = mitText; mitLoesen(t); }   // ein Versprechen bleibt nie offen
     if (neustartUhr) { wurzel.clearTimeout(neustartUhr); neustartUhr = 0; }
     if (erk) {
-      try { erk.onend = null; erk.abort(); } catch (e) { /* egal */ }
+      try { erk.onend = null; eigenerAbbruch = true; erk.abort(); } catch (e) { /* egal */ }
     }
     erk = null; laeuft = false;
     melde('aus');
+  }
+
+  /* Hintergrund-Tab: Chrome hält Erkennung dort ohnehin an — sauber pausieren
+     und beim Zurückkommen von selbst weiterlauschen. */
+  var dok = (typeof document !== 'undefined') ? document : null;
+  if (dok && dok.addEventListener) {
+    dok.addEventListener('visibilitychange', function () {
+      if (!an) { return; }
+      if (dok.hidden) {
+        if (erk && laeuft) { try { eigenerAbbruch = true; erk.onend = null; erk.abort(); } catch (e) { /* egal */ } erk = null; laeuft = false; }
+        if (neustartUhr) { wurzel.clearTimeout(neustartUhr); neustartUhr = 0; }
+        melde('pause');
+      } else if (!laeuft) {
+        fremdAbbrueche = 0;
+        anwerfen();
+      }
+    });
   }
 
   return {
