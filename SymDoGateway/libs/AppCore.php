@@ -51,6 +51,17 @@ trait AppCore
      * uebersteht, ist nirgends zugesagt.
      */
     private const PWA_HOOK_PATH        = 'lists/pwa';
+    /* Kompressionsstufe der Web-App-Seite. Gemessen am 09.09.2026 an der echten
+       Antwort (1.037.525 Bytes, fünf Läufe je Stufe, Median):
+
+         Stufe 1 → 386.634 Bytes, 9,8 ms
+         Stufe 4 → 336.221 Bytes, 13,2 ms
+         Stufe 6 → 320.566 Bytes, 28,2 ms
+         Stufe 9 → 319.708 Bytes, 44,9 ms
+
+       Stufe 4 ist der Knick: 15 ms mehr für 16 kB weniger wären schlecht
+       getauscht, und über Connect zählt die Zeit bis zum ersten Byte mit. */
+    private const WEBAPP_GZIP = 4;
     private const WEBHOOK_CONTROL_GUID = '{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}';
     private const API_VERSION          = 1;
     private const PAIRING_TTL          = 600;
@@ -839,16 +850,74 @@ trait AppCore
            und deckt damit auch den angehaengten Kopf mit — sichtbare Bereiche,
            KI-Schalter, Uebersetzungen, oeffentlicher Push-Schluessel. Ein Token
            steht nicht darin; den holt die Seite aus ihrem eigenen Speicher. */
-        $etag = '"' . md5($html) . '"';
+        /* Gepackt ausliefern, wenn der Browser es anbietet: die Seite ist reiner
+           Text und schrumpft auf knapp ein Drittel (1.037.525 → 336.221 Bytes,
+           gemessen). Das hat zwei Wirkungen, und die zweite ist die wichtigere:
+
+           1. Über Connect geht ein Drittel der Bytes über die Leitung — der
+              Kaltstart am Telefon ist der teuerste Weg, den diese App nimmt.
+           2. Die AUSGABE des Skripts bleibt weit unter der Grenze von Symcon
+              (ScriptOutputBufferLimit, Vorgabe 1.048.576). Ungepackt liegt die
+              Seite mit 1.037.525 Bytes elf Kilobyte darunter — auf einer
+              Installation mit der Vorgabe hätte die nächste Ergänzung die
+              Antwort STILL ersetzt, ohne Fehler irgendwo. */
+        $gz = $this->GzipErlaubt() ? @gzencode($html, self::WEBAPP_GZIP) : false;
+        /* Nur nehmen, wenn es wirklich kleiner ist. Bei einer kaputten zlib
+           kommt false zurück, und dann geht die Seite eben ungepackt hinaus —
+           lieber langsam als nicht. */
+        $gepackt = is_string($gz) && $gz !== '' && strlen($gz) < strlen($html);
+        /* Der ETag beschreibt die AUSLIEFERUNG, nicht nur den Inhalt: die
+           gepackte Fassung bekommt ein eigenes Kennzeichen. Sonst könnte ein
+           Zwischenspeicher beide Fassungen unter derselben Kennung führen und
+           einem Client ohne gzip die gepackten Bytes vorsetzen. Aus demselben
+           Grund steht `Vary` immer da, auch bei ungepackter Antwort. */
+        $etag = '"' . md5($html) . ($gepackt ? '-gz' : '') . '"';
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-cache');
+        header('Vary: Accept-Encoding');
         header('ETag: ' . $etag);
         if ($this->IfNoneMatchHits($etag)) {
+            /* Content-Encoding steht ABSICHTLICH nicht an der 304: sie trägt
+               keinen Rumpf, und die Kennung sagt dem Client schon, welche
+               Fassung er hat. */
             http_response_code(304);
             return;
         }
         http_response_code(200);
+        if ($gepackt) {
+            header('Content-Encoding: gzip');
+            echo $gz;
+            return;
+        }
         echo $html;
+    }
+
+    /**
+     * Darf die Antwort gepackt werden?
+     *
+     * Nur wenn der Browser es ANBIETET. Symcon komprimiert Hook-Antworten nicht
+     * selbst (die eigenen statischen Dateien schon — /icons.js kommt als gzip),
+     * also entscheidet das hier, und es muss richtig entschieden werden: ein
+     * Client ohne gzip bekäme sonst Binärmüll angezeigt.
+     *
+     * `gzip;q=0` heißt ausdrücklich NEIN und wird als solches gelesen — sonst
+     * würde die Zeichenkette „gzip" darin fälschlich als Zustimmung gelten.
+     *
+     * Gemessen mit einem Probe-Hook am 09.09.2026: die HTTP-Ebene von Symcon
+     * gibt `Content-Encoding` unverändert weiter, rechnet `Content-Length` aus
+     * den gepackten Bytes und packt nicht nach; der Client entpackt wieder
+     * byteidentisch. `HTTP_ACCEPT_ENCODING` ist im Hook sichtbar.
+     */
+    private function GzipErlaubt(): bool
+    {
+        if (!function_exists('gzencode')) {
+            return false;
+        }
+        $angebot = strtolower(trim((string)($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '')));
+        if ($angebot === '' || !str_contains($angebot, 'gzip')) {
+            return false;
+        }
+        return preg_match('/gzip\s*;\s*q\s*=\s*0(?:\.0+)?(?![.\d])/', $angebot) !== 1;
     }
 
     /**

@@ -115,6 +115,16 @@ Ohne Symcon Connect lässt sich unter *Lokale HTTPS-Adresse* (`LocalHttpsUrl`) e
 
 Kopplungscodes werden nur als Hash gespeichert und verfallen nach 10 Minuten.
 
+**Die Seite kommt komprimiert.** Bietet der Browser gzip an — jeder tut das —,
+geht die Web-App gepackt über die Leitung: aus 1.037.525 werden 336.221 Bytes.
+Über Symcon Connect gemessen dauert der Kaltstart damit 1,6 statt 4,2 Sekunden.
+Bietet ein Client keine Kompression an, bekommt er die Seite unverändert; beide
+Fassungen tragen eine eigene Kennung, damit kein Zwischenspeicher sie
+verwechselt. Nebenwirkung, die wichtiger ist als die Geschwindigkeit: die
+Ausgabe bleibt weit unter der Grenze, die Symcon für Skriptausgaben setzt
+(`ScriptOutputBufferLimit`, ab Werk 1.048.576 Bytes) — ungepackt lag die Seite
+nur elf Kilobyte darunter, und ein Überschreiten ersetzt die Antwort still.
+
 ## 6. Konfiguration: SymDo Gateway
 
 ### Familienmitglieder (`Users`)
