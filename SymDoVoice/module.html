@@ -148,7 +148,7 @@ body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); 
     <!-- Unuebersehbar, solange das Mikrofon fuer das Weckwort offen steht. Der
          Plan verlangt das ausdruecklich: Dauerlauschen darf man nie uebersehen.
          Es steht unten links an der Stelle des Hinweises und verdraengt ihn. -->
-    <span id="lauschAn" hidden><span class="welle"></span><span id="lauschText">ich höre auf „Hey SymDo"</span></span>
+    <span id="lauschAn" hidden><span class="welle"></span><span id="lauschText">sag: „Hey SymDo"</span></span>
     <div id="hinweis"></div>
     <div id="nebenzeile">
       <button type="button" id="ruhe">Ruhe</button>
@@ -407,7 +407,7 @@ var Freihand = (function () {
      Mikrofon-Erlaubnis, die eine Beruehrung braucht. */
   function anzeigen() {
     anzeige.hidden = !(lauscher && lauscher.istAn());
-    lauschText.textContent = 'ich höre auf „' + weckwortName() + '"';
+    lauschText.textContent = 'sag: „' + weckwortName() + '"';
   }
   function sagen(text, schlimm) {
     hinweis.textContent = text || '';

@@ -4649,7 +4649,7 @@ function voiceLauschSetzen() {
   if (!voiceLausch) return;
   const lauscht = !!(voiceLauscher && voiceLauscher.istAn());
   voiceLausch.hidden = !lauscht;
-  voiceLausch.textContent = translate('I am listening for %s').replace('%s', '„' + voiceWeckwortName() + '"');
+  voiceLausch.textContent = translate('Say: %s').replace('%s', '„' + voiceWeckwortName() + '"');
 }
 
 function voiceFreihandZurueck() {

@@ -223,7 +223,6 @@
             "Kind": "Art",
             "Lead time": "Vorlaufzeit",
             "List": "Liste",
-            "I am listening for %s": "Ich höre auf %s",
             "Tap once so I may listen for %s": "Tippe einmal auf die Seite, damit ich auf %s hören darf.",
             "Load speech recognition": "Spracherkennung laden",
             "Lists": "Listen",
@@ -491,7 +490,8 @@
             "until %1": "bis %1",
             "weekly": "wöchentlich",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Say: %s": "sag: %s"
         }
     }
 }

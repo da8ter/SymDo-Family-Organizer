@@ -1,7 +1,6 @@
 {
     "translations": {
         "de": {
-            "I am listening for %s": "Ich höre auf %s",
             "Tap once so I may listen for %s": "Tippe einmal auf die Seite, damit ich auf %s hören darf.",
             "Load speech recognition": "Spracherkennung laden",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
@@ -306,7 +305,6 @@
             "List ID": "Listen ID",
             "List title": "Listentitel",
             "List title restart hint": "Der Schalter für den Listentitel erscheint nach dem nächsten Symcon-Neustart — er ist neu, und neue Einstellungen gibt es erst, wenn der Kernel das Modul erneut geladen hat.",
-            "Listening for \"Hey SymDo\"": "Ich höre auf „Hey SymDo\"",
             "Lists": "Listen",
             "Loading decoder…": "Decoder wird geladen…",
             "Loading speech recognition …": "Die Spracherkennung wird geladen …",
@@ -667,7 +665,8 @@
             "until %1": "bis %1",
             "weekly": "wöchentlich",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Say: %s": "sag: %s"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

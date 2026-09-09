@@ -77,7 +77,6 @@
             "No timetable": "No timetable"
         },
         "de": {
-            "I am listening for %s": "Ich höre auf %s",
             "Tap once so I may listen for %s": "Tippe einmal auf die Seite, damit ich auf %s hören darf.",
             "Load speech recognition": "Spracherkennung laden",
             "\"%1\" contains no items": "„%1“ enthält keine Artikel",
@@ -314,7 +313,6 @@
             "List": "Liste",
             "List is empty": "Liste ist leer",
             "List name…": "Listenname…",
-            "Listening for \"Hey SymDo\"": "Ich höre auf „Hey SymDo\"",
             "Lists": "Listen",
             "Loading decoder…": "Decoder wird geladen…",
             "Loading speech recognition …": "Die Spracherkennung wird geladen …",
@@ -602,7 +600,8 @@
             "substitution": "Vertretung",
             "until %1": "bis %1",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
-            "„%1“: quantity increased": "„%1“: Menge erhöht"
+            "„%1“: quantity increased": "„%1“: Menge erhöht",
+            "Say: %s": "sag: %s"
         }
     }
 }
