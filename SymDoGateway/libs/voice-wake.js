@@ -170,11 +170,14 @@ function laden() {
  *   onZustand(z, grund)    — 'aus' | 'lauscht' | 'pause' | 'fehler'
  *   nachlaufMs             — wie lange nach dem Weckwort höchstens mitgeschrieben wird (10 s)
  *   weckwort               — das eingestellte Weckwort (mehrere durch Komma); leer = „Hey SymDo"
+ *   onHoert(text)          — was der Erkenner gerade versteht (Zwischenergebnis), zum Anzeigen:
+ *                            ohne diese Auskunft weiß niemand, WARUM ein Weckwort nicht zieht
  *   erkenner()             — nur für den Prüfstand: liefert einen Ersatz-Erkenner
  */
 function erzeuge(opt) {
   opt = opt || {};
   var aufWake = opt.onWake || function () {};
+  var aufHoert = opt.onHoert || function () {};
   var aufZustand = opt.onZustand || function () {};
   var bauen = opt.erkenner || function () { return new KLASSE(); };
   var nachlaufMs = opt.nachlaufMs || 10000;
@@ -245,6 +248,10 @@ function erzeuge(opt) {
       }
       erk.onresult = function (ev) {
         if (!an) { return; }
+        try {
+          var letztes = ev.results[ev.results.length - 1];
+          if (letztes && letztes[0]) { aufHoert(String(letztes[0].transcript || '').trim()); }
+        } catch (e) { /* nur Anzeige */ }
         if (geweckt) { mitschriftSammeln(ev); return; }
         for (var i = ev.resultIndex; i < ev.results.length; i++) {
           var alt = ev.results[i][0];

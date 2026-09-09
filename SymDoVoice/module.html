@@ -394,7 +394,7 @@ var kern = SymDoVoiceKern.erzeuge({
 var Freihand = (function () {
   var ladeKnopf = el('wortLaden'), anzeige = el('lauschAn'), lauschText = el('lauschText');
   var lauscher = null, erlaubtHier = false, laeuftAnlauf = false, wartetAufTipp = false;
-  var weckwortRoh = 'Hey SymDo', lauscherWort = '';
+  var weckwortRoh = 'Hey SymDo', lauscherWort = '', gehoertUhr = 0;
   /* Das erste der eingestellten Wörter, fürs Sprechen und Anzeigen. */
   function weckwortName() {
     return (lauscher && lauscher.weckwort()) || String(weckwortRoh || 'Hey SymDo').split(',')[0].trim() || 'Hey SymDo';
@@ -440,6 +440,15 @@ var Freihand = (function () {
           lauscherWort = weckwortRoh;
           lauscher = SymDoVoiceWeckwort.erzeuge({
             weckwort: weckwortRoh,
+            /* Was der Erkenner versteht, kurz unten anzeigen — der einzige Weg zu
+               sehen, warum ein Weckwort nicht zieht („hey Kompjuter" statt
+               „Hey Computer"). Verschwindet nach zwei Sekunden von selbst. */
+            onHoert: function (text) {
+              if (!text || kern.istOffen()) { return; }
+              sagen('gehört: „' + text.slice(-60) + '"');
+              if (gehoertUhr) { clearTimeout(gehoertUhr); }
+              gehoertUhr = setTimeout(function () { if (hinweis.textContent.indexOf('gehört:') === 0) { sagen(''); } }, 2500);
+            },
             onWake: function (nachsatz) {
               sagen('');
               anzeigen();
