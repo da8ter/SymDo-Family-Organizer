@@ -3592,6 +3592,52 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .wp-stunde.entfall .wp-fach { text-decoration: line-through; }
 .wp-stunde.vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
 
+/* ── Hausaufgaben ──────────────────────────────────────────────────────────
+   Eine Zeile ist Haken, Fachsymbol, Text und Faelligkeit — dieselbe Ordnung
+   wie eine Aufgabenzeile, damit man sie ohne Nachdenken liest. */
+.hw-bereich { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.hw-kopf {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 800; padding: 0 2px 2px;
+}
+.hw-kopf > span { flex: 1 1 auto; }
+.hw-neu {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 999px; border: 0;
+  background: var(--surface); color: var(--accent); cursor: pointer;
+}
+.hw-neu i, .hw-neu svg { width: 13px; height: 13px; }
+.hw-gruppe { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px 0; }
+.hw-gruppe.spaet { color: var(--danger, #e5534b); }
+.hw-leer { font-size: 13px; color: var(--muted); padding: 6px 2px; }
+.hw-zeile {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border-radius: 12px; padding: 8px 10px;
+  cursor: pointer;
+}
+.hw-zeile.klein { background: transparent; padding: 6px 2px; }
+.hw-haken {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px; padding: 0;
+  border: 2px solid var(--row-line, rgba(128,128,128,.45));
+  background: transparent; cursor: pointer;
+}
+.hw-haken:hover { border-color: var(--accent); }
+.hw-fach {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface2, rgba(128,128,128,.18)); color: #fff;
+}
+.hw-fach i, .hw-fach svg { width: 13px; height: 13px; }
+.hw-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.hw-name {
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hw-notiz {
+  font-size: 12px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hw-faellig { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--muted); }
+
 /* ── Familientafel: eine Zeile je Mitglied, sieben Spalten ──────────────────
    Praefix ct-, weil cal- schon der Agenda gehoert (cal-card, cal-event,
    cal-when, cal-side …) und deren Regeln sonst in die Tafel zoegen. Derselbe
@@ -3952,6 +3998,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <div class="content">
         <div class="screen-head"><h2 id="planTitle"></h2><span id="planSum" class="wp-summe"></span></div>
         <div id="planArea"></div>
+        <!-- Hausaufgaben unter dem Wochenraster. Kein eigener Bereich in der
+             Leiste: dieser Bereich haengt schon am Kindmodus, und ein neuer
+             Eintrag in TABS erschiene auch in der Notizen-Kachel. -->
+        <div id="hwArea" class="hw-bereich" style="display:none;"></div>
       </div>
     </section>
 
@@ -4105,6 +4155,31 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 </div>
 
 <!-- Termin anlegen (aus einem erkannten Vorschlag oder von Hand) -->
+<!-- Hausaufgaben anlegen und aendern. Vier Felder, mehr ist es nicht:
+     Kind, Fach, bis wann, und was zu tun ist. -->
+<div class="overlay" id="hwOverlay">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <span class="overlay-title" id="hwOverlayTitle"></span>
+      <button class="btn-close-overlay" data-close="hwOverlay"><i class="fa-light fa-xmark"></i></button>
+    </div>
+    <div class="overlay-body">
+      <div class="form-row inline" id="hwChildRow">
+        <label id="lblHwChild"></label>
+        <select id="hwChild"></select>
+      </div>
+      <div class="form-row inline"><label id="lblHwSubject"></label><select id="hwSubject"></select></div>
+      <div class="form-row inline"><label id="lblHwDue"></label><input id="hwDue" type="date" /></div>
+      <div class="form-row"><label id="lblHwNote"></label><textarea id="hwNote" rows="2" maxlength="500"></textarea></div>
+    </div>
+    <div class="overlay-footer">
+      <button class="destructive icon-only" id="btnHwDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
+      <button data-close="hwOverlay" id="btnHwCancel"></button>
+      <button class="primary" id="btnHwSave"></button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="calEditOverlay">
   <div class="overlay-card">
     <div class="overlay-head">
@@ -5778,6 +5853,11 @@ function handleMessage(data) {
     if (visibleTabs().includes('notes') && !notizenGeladen && !notizenLaden) {
       ladeNotizen();
     }
+    /* Hausaufgaben ebenfalls VORAB: die Karte der Uebersicht steht sonst beim
+       ersten Aufbau leer und erschiene erst eine Minute spaeter ueber
+       gatewayNachladen — derselbe Fehler, der beim Stundenplan schon gemacht
+       und behoben wurde. */
+    if (homeworkMoeglich()) { ladeHausaufgaben(); }
     // Erst hier: Vorher steht nicht fest, ob es ein Gateway gibt, und die
     // Mitgliederliste fuer die Zuordnung ist noch leer.
     pushInit();
@@ -6815,7 +6895,7 @@ function renderAll() {
     renderCalendar();
   }
   if (activeTab === 'notes') renderNotizen();
-  if (activeTab === 'plan') renderWochenplan();
+  if (activeTab === 'plan') { renderWochenplan(); renderHausaufgaben(); }
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
@@ -7088,6 +7168,9 @@ function gatewayNachladen() {
      fahren, den niemand ansieht, waere Verschwendung. Wer ihn ansieht, bekommt
      ihn frisch. */
   if (visibleTabs().includes('notes')) { ladeNotizen(); }
+  /* Billig und revisionsgesichert, deshalb bei JEDEM Takt: die Karte auf der
+     Uebersicht soll auch dann stimmen, wenn ein anderes Geraet abgehakt hat. */
+  if (homeworkMoeglich()) { ladeHausaufgaben(); }
   if (activeTab === 'calendar') { loadCalendarEvents(true); }
 }
 
@@ -8796,6 +8879,11 @@ function renderDashboard() {
   // sieht mein Tag aus", und beides steht oben, bevor es um Aufgaben geht.
   html += stundenplanKarte();
 
+  /* Hausaufgaben direkt danach: dieselbe Frage („wie sieht der Tag aus"), und
+     die Eltern sehen den Stundenplan-Bereich selbst nicht — der gehört dem
+     Kindmodus. */
+  html += hwKarteHtml();
+
   // Wochenring, Prioritaetsfilter, Heute-Karte und Aufgabenliste zeigen
   // ausschliesslich Aufgaben - ohne den ToDo-Bereich bliebe leere Statistik.
   if (withTodos) {
@@ -9113,6 +9201,14 @@ function renderDashboard() {
       if (item) openTodoEditor(instanceID, item);
     });
   });
+  el.querySelectorAll('.hw-karte [data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: true });
+  }));
+  el.querySelectorAll('.hw-karte .hw-zeile').forEach(z => z.addEventListener('click', () => {
+    const eintrag = hausaufgaben.items.find(x => String(x.id) === z.dataset.hw);
+    if (eintrag) hwEditorOeffnen(eintrag);
+  }));
   // Sprach-Kachel: ein Tippen startet, das naechste beendet das Gespraech.
   el.querySelectorAll('[data-voice]').forEach(k => k.addEventListener('click', voiceUmschalten));
   voiceMount();
@@ -10494,6 +10590,348 @@ function calDayLabel(ts) {
 function calDateLabel(ts) {
   const d = new Date(ts * 1000);
   return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+}
+
+/* ── Hausaufgaben: Bestand holen und ändern ────────────────────────────────
+   Zwilling zu ladeNotizen/notizenAktion: nach jeder Änderung ist der Server
+   die Wahrheit, es wird nichts lokal geraten. Die Revision verhindert, dass
+   der Minutentakt den Bestand blind ersetzt und neu zeichnet. */
+let hausaufgaben = { rev: 0, items: [], limits: {} };
+let hwGeladen = false, hwLaden = false, hwWartende = [];
+
+function homeworkMoeglich() {
+  if (window.__SYMDO__) return true;
+  return !!store.gatewayAvailable;
+}
+
+function ladeHausaufgaben(danach) {
+  if (typeof danach === 'function') hwWartende.push(danach);
+  if (!homeworkMoeglich()) { hwWartende = []; return; }
+  if (hwLaden) return;
+  hwLaden = true;
+  const fertig = () => {
+    hwLaden = false;
+    const warten = hwWartende;
+    hwWartende = [];
+    warten.forEach(f => { try { f(); } catch (e) {} });
+  };
+  aiPost('/homework', { action: 'list' }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) { fertig(); return; }
+    if (hwGeladen && (j.rev || 0) === (hausaufgaben.rev || 0)) { fertig(); return; }
+    hausaufgaben = {
+      rev: j.rev || 0,
+      items: Array.isArray(j.items) ? j.items : [],
+      limits: j.limits || {}
+    };
+    hwGeladen = true;
+    fertig();
+    renderAll();
+  }).catch(() => { fertig(); });
+}
+
+function hausaufgabenAktion(nutzlast, danach) {
+  return aiPost('/homework', nutzlast).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) {
+      showToast(hwFehlertext(j));
+      return null;
+    }
+    hwGeladen = false;
+    ladeHausaufgaben();
+    if (typeof danach === 'function') danach(j);
+    return j;
+  }).catch(() => { showToast(translate('Action failed')); return null; });
+}
+
+function hwFehlertext(j) {
+  const code = (j && j.error && j.error.code) || '';
+  if (code === 'no_child') return translate('Homework belongs to a child — add one in the gateway.');
+  if (code === 'quota_exceeded') return translate('Too many homework entries.');
+  if (code === 'busy') return translate('Action failed');
+  return translate('Action failed');
+}
+
+/** Das Kind, um das es gerade geht: im Kindmodus dieses, sonst das erste des Plans. */
+function hwKind() {
+  const kinder = planKinder();
+  return kinder.length ? kinder[0] : null;
+}
+
+/** Fälligkeit als Wort, mit der vorhandenen Leiter der Aufgaben. */
+function hwFaelligText(due) {
+  const s = String(due || '');
+  if (!s) return translate('no date');
+  const d = new Date(s + 'T12:00:00');
+  if (isNaN(d.getTime())) return s;
+  return formatDueChip({ due: Math.floor(d.getTime() / 1000), dueAllDay: true, dueDay: s }) || s;
+}
+
+/**
+ * Die Hausaufgaben des gezeigten Kindes, als Abschnitt unter dem Wochenraster.
+ *
+ * Bewusst KEIN eigener Bereich in der Leiste: der Stundenplan-Bereich hängt
+ * schon am Kindmodus (visibleTabs), und ein neuer Eintrag in TABS erschiene
+ * auch in der Notizen-Kachel und müsste von drei Übernahme-Skripten
+ * abgeschaltet werden.
+ */
+function renderHausaufgaben() {
+  const bereich = document.getElementById('hwArea');
+  if (!bereich) return;
+  const kind = hwKind();
+  if (!homeworkMoeglich() || !kind || !kind.userId) {
+    bereich.style.display = 'none';
+    renderInto(bereich, '');
+    return;
+  }
+  bereich.style.display = '';
+  const offen = hwOffene(hausaufgaben.items, kind.userId);
+  const gruppen = hwGruppen(offen, localDayStr(new Date()));
+  const subjects = (stundenplan && stundenplan.subjects) || [];
+  const bloecke = [
+    ['ueberfaellig', translate('Overdue')],
+    ['heute', translate('Today')],
+    ['morgen', translate('Tomorrow')],
+    ['spaeter', translate('Later')],
+    ['offen', translate('no date')]
+  ];
+  let html = `<div class="hw-kopf"><span>${escapeHtml(translate('Homework'))}</span>` +
+    `<button type="button" class="hw-neu" id="hwNeu" aria-label="${escapeHtml(translate('New homework'))}">` +
+    `<i class="fa-light fa-plus"></i></button></div>`;
+  const leer = bloecke.every(([k]) => gruppen[k].length === 0);
+  if (leer) {
+    html += `<div class="hw-leer">${escapeHtml(translate('Nothing to do — well done!'))}</div>`;
+  }
+  bloecke.forEach(([k, titel]) => {
+    if (gruppen[k].length === 0) return;
+    html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
+    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects); });
+  });
+  renderInto(bereich, html);
+  hwBinden(bereich);
+}
+
+function hwZeileHtml(i, subjects) {
+  const fach = hwFachInfo(i.subject, subjects);
+  const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+  return `<div class="hw-zeile" data-hw="${escapeHtml(String(i.id))}">` +
+    `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
+    ` aria-label="${escapeHtml(translate('Done'))}"></button>` +
+    `<span class="hw-fach"${farbe}>` +
+      (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
+    `</span>` +
+    `<span class="hw-text">` +
+      `<span class="hw-name">${escapeHtml(fach.name)}</span>` +
+      (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') +
+    `</span>` +
+    `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
+  `</div>`;
+}
+
+function hwBinden(bereich) {
+  const neu = bereich.querySelector('#hwNeu');
+  if (neu) neu.addEventListener('click', () => hwEditorOeffnen(null));
+  bereich.querySelectorAll('[data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    // Zielzustand, nicht umschalten — wie überall in dieser App.
+    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: true });
+  }));
+  bereich.querySelectorAll('.hw-zeile').forEach(z => z.addEventListener('click', () => {
+    const eintrag = hausaufgaben.items.find(x => String(x.id) === z.dataset.hw);
+    if (eintrag) hwEditorOeffnen(eintrag);
+  }));
+}
+
+/**
+ * Die Karte auf der Übersicht — der Ort für die ELTERN: der
+ * Stundenplan-Bereich ist ohne Kindmodus nicht sichtbar, das Dashboard schon.
+ *
+ * Liefert HTML und schreibt nicht selbst: die Übersicht entsteht als EIN
+ * String in renderDashboard, und ein zweiter Schreibweg in denselben Behälter
+ * würde ihn beim nächsten Zeichnen verlieren.
+ */
+function hwKarteHtml() {
+  const offen = hwOffene(hausaufgaben.items, '');
+  if (!homeworkMoeglich() || offen.length === 0) return '';
+  const namen = {};
+  (store.users || []).forEach(u => { namen[String(u.id)] = String(u.name || ''); });
+  const subjects = (stundenplan && stundenplan.subjects) || [];
+  const heute = localDayStr(new Date());
+  /* Nur was heute oder morgen fällig ist, und höchstens fünf Zeilen: die
+     Übersicht ist ein Blick, keine Liste. */
+  const gruppen = hwGruppen(offen, heute);
+  const dringend = gruppen.ueberfaellig.concat(gruppen.heute, gruppen.morgen).slice(0, 5);
+  if (dringend.length === 0) return '';
+  let html = `<div class="card hw-karte"><div class="card-head">` +
+    `<span class="card-title">${escapeHtml(translate('Homework'))}</span></div>`;
+  dringend.forEach(i => {
+    const fach = hwFachInfo(i.subject, subjects);
+    html += `<div class="hw-zeile klein" data-hw="${escapeHtml(String(i.id))}">` +
+      `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
+      ` aria-label="${escapeHtml(translate('Done'))}"></button>` +
+      `<span class="hw-text"><span class="hw-name">` +
+        escapeHtml((namen[String(i.childId)] || '') + ' · ' + fach.name) +
+      `</span>` + (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') + `</span>` +
+      `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
+    `</div>`;
+  });
+  return html + '</div>';
+}
+
+/* ── Hausaufgabe anlegen und ändern ──────────────────────────────────────── */
+let hwCtx = null;
+
+function hwEditorOeffnen(bestand, vorschlag) {
+  const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
+  if (kinder.length === 0) { showToast(hwFehlertext({ error: { code: 'no_child' } })); return; }
+  hwCtx = { id: bestand ? String(bestand.id) : '', proposal: (vorschlag && vorschlag.proposal) || null };
+  const kindWahl = document.getElementById('hwChild');
+  const kindZeile = document.getElementById('hwChildRow');
+  const imKindmodus = kindGewaehlt();
+  kindWahl.innerHTML = kinder.map(u =>
+    `<option value="${escapeHtml(String(u.id))}">${escapeHtml(String(u.name || ''))}</option>`).join('');
+  const vorbelegt = bestand ? String(bestand.childId)
+    : ((vorschlag && vorschlag.childId) || (imKindmodus ? String(Array.from(memberFilterIds)[0]) : String(kinder[0].id)));
+  kindWahl.value = vorbelegt;
+  if (!kindWahl.value) kindWahl.value = String(kinder[0].id);
+  /* Im Kindmodus steht das Kind fest: dort gehört die Oberfläche diesem Kind,
+     und eine Wahl wäre eine Einladung, es falsch einzutragen. */
+  kindZeile.style.display = (imKindmodus || kinder.length === 1) ? 'none' : '';
+
+  const kind = hwKind();
+  const faecher = hwFaecherFuerKind(kind, (stundenplan && stundenplan.subjects) || []);
+  const fachWahl = document.getElementById('hwSubject');
+  const gewaehlt = bestand ? String(bestand.subject) : String((vorschlag && vorschlag.subject) || '');
+  const liste = faecher.slice();
+  if (gewaehlt && !liste.some(n => hwFachTreffer(n, gewaehlt))) liste.unshift(gewaehlt);
+  fachWahl.innerHTML = liste.map(n =>
+    `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (gewaehlt) fachWahl.value = liste.find(n => hwFachTreffer(n, gewaehlt)) || gewaehlt;
+
+  document.getElementById('hwDue').value = bestand ? String(bestand.due || '')
+    : String((vorschlag && vorschlag.due) || '');
+  document.getElementById('hwNote').value = bestand ? String(bestand.note || '')
+    : String((vorschlag && vorschlag.note) || '');
+  document.getElementById('hwOverlayTitle').textContent =
+    bestand ? translate('Homework') : translate('New homework');
+  document.getElementById('btnHwDelete').style.display = bestand ? '' : 'none';
+  openOverlay('hwOverlay');
+}
+
+function hwLoeschen() {
+  if (!hwCtx || !hwCtx.id) return;
+  // Mit Rueckfrage, wie bei Notiz und Termin: ein Fehlgriff ist folgenlos.
+  showConfirm(translate('Delete this homework?'), translate('Delete'), () => {
+    hausaufgabenAktion({ action: 'delete', id: hwCtx.id }, () => {
+      closeOverlay('hwOverlay');
+      hwCtx = null;
+    });
+  });
+}
+
+function hwSpeichern() {
+  const kind = document.getElementById('hwChild').value;
+  const fach = document.getElementById('hwSubject').value;
+  const due = document.getElementById('hwDue').value;
+  const note = document.getElementById('hwNote').value;
+  if (!fach) { showToast(translate('Please pick a subject.')); return; }
+  const nutzlast = hwCtx && hwCtx.id
+    ? { action: 'update', id: hwCtx.id, subject: fach, due: due, note: note }
+    : { action: 'create', childId: kind, subject: fach, due: due, note: note, source: 'app' };
+  hausaufgabenAktion(nutzlast, () => {
+    const p = hwCtx && hwCtx.proposal;
+    closeOverlay('hwOverlay');
+    // Aus einem KI-Vorschlag übernommen? Dann ist er jetzt erledigt.
+    if (p && typeof mailForget === 'function') { mailForget(p.id, p.i); }
+    hwCtx = null;
+  });
+}
+
+/* ── Hausaufgaben: die Rechnung, DOM-frei ──────────────────────────────────
+   Wie bei der Wochenansicht steht jede Funktion dieses Blocks als
+   Top-Level-function da und greift auf nichts ausser den Parametern zu:
+   tools/homework-parity.mjs schneidet sie woertlich aus dieser Datei. */
+
+/** Zwei Fachnamen vergleichen — Kurzform trifft den Anfang („Mathe" trifft
+    „Mathematik"), ab drei Buchstaben. Dieselbe Regel wie im Gateway; sie steht
+    hier ein zweites Mal, weil der Client die Zuordnung zur Stunde selbst
+    rechnet (die Zahl darf NICHT je Stunde durch die Bruecke wandern, sonst
+    loest jedes Abhaken ein vollstaendiges Neuzeichnen aus). */
+function hwFachTreffer(a, b) {
+  const x = String(a || '').trim().toLowerCase();
+  const y = String(b || '').trim().toLowerCase();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const kurz = x.length < y.length ? x : y;
+  const lang = kurz === x ? y : x;
+  return kurz.length >= 3 && lang.indexOf(kurz) === 0;
+}
+
+/** Symbol und Farbe eines Fachs aus dem Katalog des Stundenplans. */
+function hwFachInfo(name, subjects) {
+  const liste = Array.isArray(subjects) ? subjects : [];
+  for (const f of liste) {
+    if (hwFachTreffer(name, f && f.name)) {
+      return { name: String(f.name || name), icon: String(f.icon || ''), color: String(f.color || '') };
+    }
+  }
+  return { name: String(name || ''), icon: '', color: '' };
+}
+
+/** Die offenen Eintraege eines Kindes (oder aller, wenn keines genannt ist). */
+function hwOffene(items, childId) {
+  const kind = String(childId || '');
+  return (Array.isArray(items) ? items : []).filter(i =>
+    i && i.done !== true && (kind === '' || String(i.childId) === kind));
+}
+
+/** Nach Faelligkeit gruppiert: ueberfaellig, heute, morgen, spaeter, ohne Datum.
+    Die Reihenfolge ist die Dringlichkeit, und leere Gruppen fallen weg. */
+function hwGruppen(items, heuteISO) {
+  const heute = String(heuteISO || '');
+  const morgen = (function () {
+    const d = new Date(heute + 'T12:00:00');
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  })();
+  const raus = { ueberfaellig: [], heute: [], morgen: [], spaeter: [], offen: [] };
+  (Array.isArray(items) ? items : []).forEach(i => {
+    const due = String((i && i.due) || '');
+    if (!due) { raus.offen.push(i); return; }
+    if (due < heute) { raus.ueberfaellig.push(i); return; }
+    if (due === heute) { raus.heute.push(i); return; }
+    if (due === morgen) { raus.morgen.push(i); return; }
+    raus.spaeter.push(i);
+  });
+  return raus;
+}
+
+/** Wie viele offene Hausaufgaben zu einer Stunde gehoeren.
+    Die Zuordnung faellt an die ERSTE Stunde des Fachs an diesem Tag: zwei
+    Stunden desselben Fachs sollen die Zahl nicht verdoppeln. */
+function hwFuerSlot(items, childId, datumISO, fachname, ersteId, slotId) {
+  if (String(ersteId || '') !== String(slotId || '')) return 0;
+  return (Array.isArray(items) ? items : []).filter(i =>
+    i && i.done !== true
+    && String(i.childId) === String(childId || '')
+    && String(i.due || '') === String(datumISO || '')
+    && hwFachTreffer(i.subject, fachname)).length;
+}
+
+/** Die Faecher zur Auswahl: die des Kindes zuerst, dann der Rest. Ein Fach
+    ohne Stunde (AG, Ersatzfach) hat trotzdem Hausaufgaben. */
+function hwFaecherFuerKind(kind, subjects) {
+  const alle = (Array.isArray(subjects) ? subjects : []).map(f => String((f && f.name) || '')).filter(Boolean);
+  const eigene = [];
+  ((kind && kind.days) || []).forEach(t => {
+    ((t && t.slots) || []).forEach(s => {
+      const n = String((s && s.name) || '');
+      if (n && eigene.indexOf(n) < 0) eigene.push(n);
+    });
+  });
+  const rest = alle.filter(n => eigene.indexOf(n) < 0);
+  return eigene.concat(rest);
 }
 
 /* ── Wochenansicht: die Rechnung, DOM-frei ──────────────────────────────────
@@ -15523,6 +15961,12 @@ function initCaptions() {
   set('lblEditCategory', translate('Category'));
   set('btnEditCancel', translate('Cancel'));
   set('btnEditSave', translate('Save'));
+  set('lblHwChild', translate('Child'));
+  set('lblHwSubject', translate('Subject'));
+  set('lblHwDue', translate('Due on'));
+  set('lblHwNote', translate('Note'));
+  set('btnHwCancel', translate('Cancel'));
+  set('btnHwSave', translate('Save'));
   set('lblTodoTitle', translate('Title'));
   set('lblTodoList', translate('List'));
   set('lblTodoInfo', translate('Note'));
@@ -16176,6 +16620,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (promptCb) { const cb = promptCb; promptCb = null; cb(document.getElementById('promptInput').value, document.getElementById('promptHaken').checked); }
   });
   document.getElementById('btnEditSave').addEventListener('click', saveItemEditor);
+  document.getElementById('btnHwSave').addEventListener('click', () => hwSpeichern());
+  const hwDel = document.getElementById('btnHwDelete');
+  hwDel.title = translate('Delete');
+  hwDel.setAttribute('aria-label', translate('Delete'));
+  hwDel.addEventListener('click', () => hwLoeschen());
   document.getElementById('btnTodoSave').addEventListener('click', saveTodoEditor);
   document.getElementById('btnTodoDelete').addEventListener('click', todoLoeschen);
 

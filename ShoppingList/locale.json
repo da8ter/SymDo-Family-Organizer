@@ -605,7 +605,17 @@
             "CW %1": "KW %1",
             "Family": "Familie",
             "continues": "läuft weiter",
-            "New appointment on %1": "Neuer Termin am %1"
+            "New appointment on %1": "Neuer Termin am %1",
+            "Homework": "Hausaufgaben",
+            "New homework": "Neue Hausaufgabe",
+            "Subject": "Fach",
+            "Later": "Später",
+            "no date": "ohne Datum",
+            "Nothing to do — well done!": "Nichts zu tun — gut gemacht!",
+            "Delete this homework?": "Diese Hausaufgabe löschen?",
+            "Please pick a subject.": "Bitte ein Fach wählen.",
+            "Homework belongs to a child — add one in the gateway.": "Hausaufgaben gehören zu einem Kind — im Gateway eines anlegen.",
+            "Too many homework entries.": "Zu viele Hausaufgaben."
         }
     }
 }
