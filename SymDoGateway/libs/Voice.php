@@ -205,22 +205,25 @@ trait Voice
                     $e['typ'] === 'var' ? ($e['akt'] ? $this->Translate('device') : $this->Translate('read-only')) : $e['typ'],
                     $this->VoiceGeraetMitRueckfrage((int)$e['id']) ? ' (' . $this->Translate('confirmation') . ')' : '');
             }
-            echo $zeilen === [] ? $this->Translate('No devices found below the root categories.') : implode("\n", $zeilen);
+            /* Kein echo: Ausgabe aus RequestAction zeigt die Konsole als Warnung samt
+               „in … on line 162". Das Ergebnis steht im Statusfeld unter den Knöpfen. */
+            $this->UpdateFormField('VoiceGeraeteErgebnis', 'caption',
+                $zeilen === [] ? $this->Translate('No devices found below the root categories.') : implode("\n", $zeilen));
             return true;
         }
         if ($Ident === 'VoiceTest') {
             // Testverbindung: 10-Sekunden-Marke prägen und verwerfen. Beweist
             // Schlüssel und Modellfreigabe, ohne eine Sekunde Ton zu bezahlen.
             $r = $this->VoiceMintSecret(10);
-            echo ($r['ok'] ?? false)
+            $this->UpdateFormField('VoiceErgebnis', 'caption', ($r['ok'] ?? false)
                 ? sprintf($this->Translate('Test connection OK — model %s, token expires in %d s.'),
                     (string)($r['model'] ?? '?'), max(0, (int)($r['expiresAt'] ?? 0) - time()))
-                : (string)($r['error']['message'] ?? 'Fehler');
+                : (string)($r['error']['message'] ?? 'Fehler'));
             return true;
         }
         if ($Ident === 'VoiceHangupAll') {
             $n = $this->VoiceHangupAll('von Hand beendet');
-            echo sprintf($this->Translate('%d session(s) ended.'), $n);
+            $this->UpdateFormField('VoiceErgebnis', 'caption', sprintf($this->Translate('%d session(s) ended.'), $n));
             return true;
         }
         return false;
@@ -997,10 +1000,11 @@ trait Voice
                 ['type' => 'Button', 'caption' => $this->Translate('Revoke device control'), 'enabled' => $geraeteOk,
                  'onClick' => 'IPS_RequestAction($id, "VoiceDevicesConsent", false);'],
                 ['type' => 'Button', 'caption' => $this->Translate('Show catalog'),
-                 'onClick' => 'echo IPS_RequestAction($id, "VoiceGeraeteKatalogZeigen", "");'],
+                 'onClick' => 'IPS_RequestAction($id, "VoiceGeraeteKatalogZeigen", "");'],
                 ['type' => 'Button', 'caption' => $this->Translate('Show schedules'),
-                 'onClick' => 'echo IPS_RequestAction($id, "VoiceZeitplaeneZeigen", "");'],
+                 'onClick' => 'IPS_RequestAction($id, "VoiceZeitplaeneZeigen", "");'],
             ]],
+            ['type' => 'Label', 'name' => 'VoiceGeraeteErgebnis', 'caption' => ' '],
             ['type' => 'Label', 'caption' => sprintf(
                 $this->Translate('%1$d devices and %2$d scenes/scripts in %3$d rooms released. This hour: %4$d of %5$d switching commands.'),
                 (int)$stand['geraete'], (int)$stand['skripte'], count($stand['raeume']),
@@ -1101,6 +1105,7 @@ trait Voice
                     ['type' => 'Button', 'caption' => $this->Translate('End all sessions'),
                      'onClick' => 'IPS_RequestAction($id, "VoiceHangupAll", "");'],
                 ]],
+                ['type' => 'Label', 'name' => 'VoiceErgebnis', 'caption' => ' '],
             ],
         ];
     }

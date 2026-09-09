@@ -65,7 +65,8 @@ trait VoiceZeitplan
     {
         if ($Ident === 'VoiceZeitplaeneZeigen') {
             $zeilen = array_map(fn(array $z): string => $this->VoiceZeitplanZeile($z), $this->VoiceZeitplaene());
-            echo $zeilen === [] ? $this->Translate('No voice schedules.') : implode("\n", $zeilen);
+            $this->UpdateFormField('VoiceGeraeteErgebnis', 'caption',
+                $zeilen === [] ? $this->Translate('No voice schedules.') : implode("\n", $zeilen));
             return true;
         }
         return false;
