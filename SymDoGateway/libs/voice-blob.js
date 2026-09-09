@@ -66,6 +66,14 @@ var STIL = [
      Lichtpfütze auf hellem Boden. */
   'html[data-symdo-theme="light"] .sym-blase .lichtfleck{mix-blend-mode:normal;opacity:calc(var(--licht,.35) * .9);}',
   '.sym-blase .glanz{fill:rgba(180,220,255,.75);}',
+  /* Schlaf: die „z", die nach oben wegfliegen. Deckkraft und Lage setzt JS je
+     Bild; hier nur Schrift und Farbe. Sie fangen keine Tipps ab. */
+  '.sym-blase .zzz{pointer-events:none;}',
+  /* KEINE opacity im Stil: eine CSS-Eigenschaft schlägt das Attribut, das die
+     Animation je Bild setzt — die „z" blieben unsichtbar (im Bild geprüft). */
+  '.sym-blase .zzz .z{fill:rgba(235,242,255,.9);font-weight:700;',
+  '  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}',
+  'html[data-symdo-theme="light"] .sym-blase .zzz .z{fill:#3a4568;}',
   /* Zustandsfarben — dieselbe Sprache wie die Statuszeile der Kachel. */
   /* „bereit" traegt die volle Palette: nach dem Laden soll das Wesen leuchten
      und nicht abgedunkelt dasitzen. Unterschieden wird der Zustand ohnehin
@@ -127,7 +135,29 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<ellipse class="auge" cx="19" cy="-5" rx="6.1" ry="7.3"/>'
   +   '<ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>'
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
-  + '</g></g></svg>';
+  + '</g></g>'
+  /* Die „z" liegen AUSSERHALB des Körpers: sie sollen wegfliegen, nicht mit ihm
+     wiegen. Drei Stück, versetzt, jedes eine Runde von unten rechts über dem
+     Kopf nach oben und weg. */
+  + '<g class="zzz">'
+  +   '<text class="z" font-size="11" opacity="0">z</text>'
+  +   '<text class="z" font-size="14" opacity="0">z</text>'
+  +   '<text class="z" font-size="17" opacity="0">z</text>'
+  + '</g></svg>';
+
+/* Einschlafen erst nach einer Weile ohne Gespräch — sonst nickte das Wesen
+   zwischen zwei Sätzen schon weg. Über SymDoVoiceBlase.schlafNach einstellbar
+   (der Prüfstand setzt Sekundenbruchteile). */
+function schlafNach() {
+  var v = wurzel.SymDoVoiceBlase && wurzel.SymDoVoiceBlase.schlafNach;
+  return (typeof v === 'number' && v >= 0) ? v : 15000;
+}
+function lerp(a, b, f) { return a + (b - a) * f; }
+/* Wer Bewegung reduziert haben will, bekommt stehende „z" statt fliegender. */
+var ruhig = false;
+try { ruhig = !!(wurzel.matchMedia && wurzel.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { ruhig = false; }
+/* Diese Zustände heißen „es passiert etwas" — sie wecken sofort. */
+var WACH = ['verbinde', 'hoert', 'duSprichst', 'denkt', 'spricht', 'werkzeug'];
 
 /* ── Farben aus der Akzentfarbe ───────────────────────────────────────────
    Das Wesen traegt die Akzentfarbe des Hauses. Die Zustaende sind Abwandlungen
@@ -287,6 +317,10 @@ function erzeuge(behaelter, kern) {
      der anschließenden Fixation. */
   var blickVon = [0, 0], blickZu = [0, 0], blickAb = 0, blickDauer = 110, blickHalt = 0;
   var N = 56, TAU = Math.PI * 2;
+  /* Schlaf: seit wann kein Gespräch läuft, wie tief es schläft (0 wach … 1
+     schläft, je Bild weich nachgeführt) und wann die „z" zu fliegen begannen. */
+  var ruheSeit = 0, schlaf = 0, zzzStart = 0;
+  var zzz = Array.prototype.slice.call(svg.querySelectorAll('.zzz .z'));
 
   function setz(name, wert) { behaelter.style.setProperty(name, wert); }
 
@@ -442,9 +476,30 @@ function erzeuge(behaelter, kern) {
       bass = atem * .13; mitten = atem * .09; hoehen = .02; energie = atem * .12;
     }
 
+    /* Schlaf. „Kein Gespräch" heißt: der Kern ist zu — NICHT der Zustand
+       „bereit", den der Kern nie meldet (nach einem Gespräch bleibt „ende").
+       Nach schlafNach() ohne Gespräch sinkt das Wesen langsam weg (rund 1,5 s),
+       ein Gespräch weckt es in einer Drittelsekunde; zustand() setzt bei den
+       WACH-Zuständen zusätzlich sofort auf null, damit schon der erste Frame
+       nach dem Weckwort offene Augen zeigt. */
+    var kernOffen = offen();
+    if (kernOffen || WACH.indexOf(zustandJetzt) >= 0) { ruheSeit = 0; }
+    else if (!ruheSeit) { ruheSeit = t; }
+    var schlafZiel = (!kernOffen && ruheSeit && t - ruheSeit > schlafNach()) ? 1 : 0;
+    schlaf = schlafZiel ? schlaf + (1 - schlaf) * .02 : schlaf * .82;
+    if (schlaf < .002) { schlaf = 0; }
+    var schlaeft = schlaf > .5;
+    if (schlaeft !== behaelter.classList.contains('schlaeft')) { behaelter.classList.toggle('schlaeft', schlaeft); }
+    if (schlaf > 0) {
+      // Im Schlaf ein langsamer, flacher Atem — Schein und Puls stehen fast still.
+      var atemS = (Math.sin(t * .0014) + 1) / 2;
+      bass = lerp(bass, atemS * .05, schlaf); mitten = lerp(mitten, atemS * .04, schlaf);
+      hoehen = lerp(hoehen, .01, schlaf); energie = lerp(energie, atemS * .05, schlaf);
+    }
+
     setz('--schein', .40 + energie * .60);
-    var sx = 1 + bass * .20;
-    var sy = (1 + mitten * .16) * .90;   // etwas breiter als hoch, wie in der Vorlage
+    var sx = (1 + bass * .20) * (1 + .04 * schlaf);            // im Schlaf etwas breiter …
+    var sy = (1 + mitten * .16) * .90 * (1 - .05 * schlaf);    // … und flacher, wie zusammengesunken
 
     /* Die Kontur wird seltener neu gerechnet als gezeichnet — sie soll fließen,
        nicht zappeln, und drei Pfade je Bild neu zu bauen wäre Verschwendung. */
@@ -470,8 +525,11 @@ function erzeuge(behaelter, kern) {
        bei echtem Licht von oben. Dazu ein langsames Wiegen, damit es auch in
        der Stille nicht klebt. */
     var hub = energie * 7 + Math.sin(t * .0009) * 2.5;
+    // Schlafend sinkt es unter die Ruhelage, Richtung Boden, und wiegt nur noch leicht.
+    hub = lerp(hub, -6 + Math.sin(t * .0014) * 1.2, schlaf);
     koerper.setAttribute('transform', 'translate(0 ' + (-hub).toFixed(1) + ')');
-    var naehe = 1 - Math.min(1, hub / 12);         // 1 = am Boden, 0 = weit oben
+    // Geklemmt: unter der Ruhelage (negativer Hub) bleibt „am Boden" am Boden.
+    var naehe = 1 - Math.max(0, Math.min(1, hub / 12));   // 1 = am Boden, 0 = weit oben
     schatten.setAttribute('rx', (38 * sx * (0.82 + naehe * 0.18)).toFixed(1));
     schatten.setAttribute('ry', (7.5 * (0.78 + naehe * 0.22)).toFixed(1));
     setz('--schatten', (0.42 + naehe * 0.20).toFixed(3));
@@ -483,9 +541,48 @@ function erzeuge(behaelter, kern) {
     lichtfleck.setAttribute('ry', (12.5 * (1.0 + (1 - naehe) * 0.15)).toFixed(1));
     setz('--licht', (0.78 + energie * 0.22 - (1 - naehe) * 0.12).toFixed(3));
 
-    blick(t, energie);
+    if (schlaf < .5) {
+      blick(t, energie);
+    } else {
+      // Geschlossene Augen wandern nicht: zur Mitte, ein wenig nach unten.
+      setz('--augeX', '0px');
+      setz('--augeY', '1.5px');
+    }
     // Während des Blinzelns NICHT überschreiben — sonst bliebe es unsichtbar.
-    if (!blinzelt) { setz('--augeAuf', 1 - energie * .12); }
+    if (!blinzelt) { setz('--augeAuf', lerp(1 - energie * .12, .07, schlaf).toFixed(3)); }
+    zzzZeichnen(t);
+  }
+
+  /* Die drei „z": jedes läuft eine Runde von rechts über dem Kopf nach oben
+     und weg, wird dabei größer, blendet ein und wieder aus; die drei sind um
+     ein Drittel der Runde versetzt. Sie erscheinen erst, wenn das Wesen
+     wirklich schläft, und verschwinden mit dem Aufwachen. Bei reduzierter
+     Bewegung stehen sie still an ihrem Platz. */
+  function zzzZeichnen(t) {
+    if (schlaf <= .3) {
+      if (zzzStart) {
+        zzzStart = 0;
+        for (var k = 0; k < zzz.length; k++) { zzz[k].setAttribute('opacity', '0'); }
+      }
+      return;
+    }
+    if (!zzzStart) { zzzStart = t; }
+    var RUNDE = 4200;
+    for (var i = 0; i < zzz.length; i++) {
+      var ph = (t - zzzStart) / RUNDE - i / zzz.length;
+      if (ph < 0) { zzz[i].setAttribute('opacity', '0'); continue; }
+      var p = ph % 1, x, y, s, o;
+      if (ruhig) {
+        x = 34 + i * 9; y = -62 - i * 12; s = .8 + i * .15; o = .45 * schlaf;
+      } else {
+        x = 34 + 22 * p + Math.sin(p * 6) * 3;
+        y = -58 - 38 * p;
+        s = .7 + .5 * p;
+        o = Math.sin(p * Math.PI) * schlaf;
+      }
+      zzz[i].setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + s.toFixed(2) + ')');
+      zzz[i].setAttribute('opacity', o.toFixed(3));
+    }
   }
 
   /* Blickrichtung. Echte Augen driften nicht gleichmäßig, sie SPRINGEN: eine
@@ -551,9 +648,13 @@ function erzeuge(behaelter, kern) {
        blinzeln lässt, käme sonst je Aufruf eine ZWEITE Kette dazu und die
        Blinzelrate würde immer weiter steigen. */
     if (blinzelUhr) { clearTimeout(blinzelUhr); blinzelUhr = 0; }
+    /* Im Schlaf kein Zwinkern — die Kette läuft aber weiter, damit sie beim
+       Aufwachen ohne neuen Anstoß wieder da ist. */
+    if (schlaf > .5) { blinzelUhr = setTimeout(blinzeln, 3000); return; }
     blinzelt = true;
     setz('--augeAuf', .08);
-    setTimeout(function () { blinzelt = false; setz('--augeAuf', 1); }, 120);
+    // Nicht hart auf 1: wer inzwischen eingeschlafen ist, behält die Augen zu.
+    setTimeout(function () { blinzelt = false; setz('--augeAuf', schlaf > .5 ? .07 : 1); }, 120);
     blinzelUhr = setTimeout(blinzeln, 2200 + Math.random() * 4500);
   }
 
@@ -576,6 +677,12 @@ function erzeuge(behaelter, kern) {
     },
     zustand: function (z) {
       zustandJetzt = z || 'bereit';
+      // Etwas passiert: sofort wach, nicht erst nach der weichen Nachführung.
+      if (WACH.indexOf(zustandJetzt) >= 0) {
+        ruheSeit = 0; schlaf = 0;
+        behaelter.classList.remove('schlaeft');
+        if (!blinzelt) { setz('--augeAuf', 1); }
+      }
       if (!aktiv) { return; }
       klasseSetzen();
       // Der Griff zum Ton braucht die Nutzergeste — 'verbinde' kommt noch
@@ -588,5 +695,5 @@ function erzeuge(behaelter, kern) {
   };
 }
 
-wurzel.SymDoVoiceBlase = { erzeuge: erzeuge };
+wurzel.SymDoVoiceBlase = { erzeuge: erzeuge, schlafNach: 15000 };
 })(typeof window !== 'undefined' ? window : globalThis);

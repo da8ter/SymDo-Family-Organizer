@@ -61,7 +61,7 @@ Für die **Gerätesteuerung** zusätzlich im Gateway: *Gerätesteuerung per Spra
 | Diese Kachel gehört | `UserID` | Das Familienmitglied, als das die Kachel spricht: „meine Aufgaben" meint dann diese Person, Notizen landen in ihrem Ordner. Die Rolle entscheidet mit — ein **Kind** darf keine Geräte der Rückfrage-Liste schalten und keine dauerhaften Zeitpläne anlegen |
 | Standard-Einkaufsliste | `DefaultShoppingID` | Wohin „setz Milch auf die Liste" schreibt, wenn keine Liste genannt wird |
 | Standard-Aufgabenliste | `DefaultTodoID` | Wohin neue Aufgaben ohne genannte Liste kommen |
-| Kacheldarstellung | `Darstellung` | **Gesprächsverlauf (Text)** zeigt Frage und Antwort als Text mit — oder **Animierte Blase**, die auf die Stimme reagiert und in der Akzentfarbe der Visualisierung leuchtet |
+| Kacheldarstellung | `Darstellung` | **Gesprächsverlauf (Text)** zeigt Frage und Antwort als Text mit — oder **Animierte Blase**, die auf die Stimme reagiert und in der Akzentfarbe der Visualisierung leuchtet. Läuft 15 Sekunden kein Gespräch, schläft das Wesen ein: Augen zu, etwas tiefer am Boden, kleine „z" steigen auf; ein Tipp oder das Weckwort weckt es sofort |
 
 Alles Übrige — Gesprächsdauer, Tageskontingent, Weckwort, Geräte — wird im Gateway eingestellt und gilt für alle Sprach-Kacheln des Haushalts gemeinsam.
 
@@ -75,7 +75,7 @@ Die Blase ist als Dashboard-Kachel auch in der **SymDo Web-App** enthalten; dort
 
 ## 6. Freihändig mit Weckwort
 
-Optional startet das Gespräch ohne Berührung: die Kachel lauscht auf das Weckwort, standardmäßig **„Hey SymDo"**. Das ist ein Experiment und braucht im Gateway zwei Dinge — den Schalter *Freihändig erlauben* und eine **eigene Einwilligung**, getrennt von der für den Dialog: wer dem Knopf zugestimmt hat, hat nicht dem Dauerlauschen zugestimmt. Sind beide gesetzt, lauscht die Kachel **von selbst**, sobald sie geöffnet ist; einen Knopf gibt es nicht mehr. Unten links steht dann „ich höre auf ‚Hey SymDo'". Verweigert der Browser das Mikrofon ohne Berührung, bittet die Kachel um einen Tipp; fehlt das Sprachpaket, bleibt ein Ladeknopf.
+Optional startet das Gespräch ohne Berührung: die Kachel lauscht auf das Weckwort, standardmäßig **„Hey SymDo"**. Das ist ein Experiment und braucht im Gateway zwei Dinge — den Schalter *Freihändig erlauben* und eine **eigene Einwilligung**, getrennt von der für den Dialog: wer dem Knopf zugestimmt hat, hat nicht dem Dauerlauschen zugestimmt. Sind beide gesetzt, lauscht die Kachel **von selbst**, sobald sie geöffnet ist. Unten links steht dann „ich höre auf ‚Hey SymDo'". Verweigert der Browser das Mikrofon ohne Berührung, bittet die Kachel um einen Tipp; fehlt das Sprachpaket, bleibt ein Ladeknopf.
 
 Das **Weckwort ist einstellbar** (Gateway, Feld *Weckwort*): mindestens sechs Buchstaben, mehrere durch Komma. Zwei bis drei Silben mit klarem Anfang treffen am besten; sehr kurze oder alltägliche Wörter lösten ständig falsch aus und gelten nicht. „Hey SymDo" behält sein bewährtes Muster mit den typischen Fehlhörern, eigene Wörter werden über Buchstabennähe erkannt.
 
