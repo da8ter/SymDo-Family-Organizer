@@ -95,6 +95,53 @@ trait VoiceTools
                     'required' => ['kind', 'tag'],
                 ],
             ],
+            'hausaufgaben_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Die Hausaufgaben der Kinder: welches Fach, bis wann, mit Notiz. '
+                    . 'Für Fragen wie „Was hat Tim für morgen auf?", „Hat Mia noch Hausaufgaben?" '
+                    . 'oder „Was ist überfällig?".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'kind' => ['type' => ['string', 'null'],
+                                   'description' => 'Name des Kindes; null = alle Kinder'],
+                        'tag'  => ['type' => 'string',
+                                   'description' => '"heute", "morgen", ein Wochentag, ein Datum JJJJ-MM-TT oder "alle" für offene ohne Einschränkung'],
+                    ],
+                    'required' => ['kind', 'tag'],
+                ],
+            ],
+            'hausaufgabe_anlegen' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Eine Hausaufgabe eintragen: Kind, Fach, bis wann, dazu was zu tun ist. '
+                    . 'Für Sätze wie „Tim hat in Mathe Seite 42 bis Donnerstag auf".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'kind'  => ['type' => 'string', 'description' => 'Name des Kindes'],
+                        'fach'  => ['type' => 'string', 'description' => 'Schulfach, wie gesagt („Mathe" reicht)'],
+                        'tag'   => ['type' => 'string',
+                                    'description' => 'Bis wann sie fertig sein muss: "heute", "morgen", ein Wochentag oder JJJJ-MM-TT'],
+                        'notiz' => ['type' => ['string', 'null'], 'description' => 'Was zu tun ist, z. B. „S. 42 Nr. 3-5"'],
+                    ],
+                    'required' => ['kind', 'fach', 'tag', 'notiz'],
+                ],
+            ],
+            'hausaufgabe_abhaken' => [
+                'art' => 'schreiben',
+                'beschreibung' => 'Eine Hausaufgabe als erledigt markieren (oder das zurücknehmen). '
+                    . 'Passen mehrere, kommen sie als Kandidaten zurück — dann nach dem Fach fragen.',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'kind'     => ['type' => 'string', 'description' => 'Name des Kindes'],
+                        'fach'     => ['type' => ['string', 'null'], 'description' => 'Schulfach; null = alle offenen des Kindes'],
+                        'tag'      => ['type' => ['string', 'null'], 'description' => 'Fälligkeit zur Einschränkung; null = ohne'],
+                        'erledigt' => ['type' => 'boolean', 'description' => 'true = abhaken, false = zurücknehmen'],
+                    ],
+                    'required' => ['kind', 'fach', 'tag', 'erledigt'],
+                ],
+            ],
             'rezepte_lesen' => [
                 'art' => 'lesen',
                 'beschreibung' => 'Die gespeicherten Rezepte (Rezept-Favoritenlisten): ohne Angabe alle Namen, mit einem Rezeptnamen dessen Zutaten.',
@@ -509,6 +556,9 @@ trait VoiceTools
                 'einkaufsliste_lesen' => $this->VoiceToolEinkauf($args, $ctx),
                 'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
                 'stundenplan_lesen'   => $this->VoiceToolStundenplan($args, $ctx),
+                'hausaufgaben_lesen'  => $this->VoiceToolHausaufgabenLesen($args, $ctx),
+                'hausaufgabe_anlegen' => $this->VoiceToolHausaufgabeAnlegen($args, $ctx),
+                'hausaufgabe_abhaken' => $this->VoiceToolHausaufgabeAbhaken($args, $ctx),
                 'rezepte_lesen'       => $this->VoiceToolRezepte($args, $ctx),
                 'rezept_einkaufen'    => $this->VoiceToolRezeptEinkaufen($args, $ctx),
                 'einkauf_hinzufuegen' => $this->VoiceToolEinkaufHinzu($args, $ctx),
@@ -2401,6 +2451,205 @@ trait VoiceTools
     }
 
     /** @return array<string,mixed> */
+    // ------------------------------------------------------------------
+    // Hausaufgaben
+    // ------------------------------------------------------------------
+
+    /**
+     * Ein Kind aus dem gesprochenen Namen. Teilwort in BEIDE Richtungen, wie
+     * beim Stundenplan: gesagt wird „Tim", „der Tim" oder der ganze Name.
+     *
+     * @return array{id:string,name:string}|null
+     */
+    private function VoiceHausaufgabenKind(string $name): ?array
+    {
+        $wunsch = $this->VoiceNorm($name);
+        if ($wunsch === '') {
+            return null;
+        }
+        foreach ($this->LoadUsers() as $u) {
+            if (strtolower(trim((string)($u['persona'] ?? ''))) !== 'child') {
+                continue;
+            }
+            $k = $this->VoiceNorm((string)($u['name'] ?? ''));
+            if ($k === '') {
+                continue;
+            }
+            if ($k === $wunsch || str_contains($k, $wunsch) || str_contains($wunsch, $k)) {
+                return ['id' => (string)$u['id'], 'name' => (string)$u['name']];
+            }
+        }
+        return null;
+    }
+
+    /** Ein Eintrag als gesprochener Satzteil: „Mathe (S. 42) bis Donnerstag". */
+    private function VoiceHausaufgabeText(array $i, bool $mitTag = true): string
+    {
+        $teil = (string)$i['subject'];
+        if (trim((string)$i['note']) !== '') {
+            $teil .= ' (' . trim((string)$i['note']) . ')';
+        }
+        $tag = trim((string)($i['due'] ?? ''));
+        if ($mitTag && $tag !== '') {
+            $heute = date('Y-m-d');
+            $morgen = date('Y-m-d', (int)strtotime('+1 day'));
+            if ($tag === $heute) {
+                $teil .= ' ' . $this->Translate('for today');
+            } elseif ($tag === $morgen) {
+                $teil .= ' ' . $this->Translate('for tomorrow');
+            } else {
+                $teil .= ' ' . sprintf($this->Translate('until %s'), date('d.m.', (int)strtotime($tag)));
+            }
+        }
+        return $teil;
+    }
+
+    private function VoiceToolHausaufgabenLesen(array $args, array $ctx): array
+    {
+        $tagRoh = trim((string)($args['tag'] ?? 'alle'));
+        $alle = ($tagRoh === '' || $this->VoiceNorm($tagRoh) === 'alle');
+        $datum = $alle ? '' : $this->VoicePlanTag($tagRoh);
+        if (!$alle && $datum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the day.'));
+        }
+        $wunsch = trim((string)($args['kind'] ?? ''));
+        $kind = $wunsch === '' ? null : $this->VoiceHausaufgabenKind($wunsch);
+        if ($wunsch !== '' && $kind === null) {
+            return $this->VoiceErr('nicht_gefunden', sprintf($this->Translate('I do not know a child named %s.'), $wunsch));
+        }
+
+        $namen = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namen[(string)($u['id'] ?? '')] = (string)($u['name'] ?? '');
+        }
+        $jeKind = [];
+        foreach ($this->HomeworkItems() as $i) {
+            if (($i['done'] ?? false) === true) {
+                continue;
+            }
+            if ($kind !== null && (string)$i['childId'] !== $kind['id']) {
+                continue;
+            }
+            if (!$alle && (string)($i['due'] ?? '') !== $datum) {
+                continue;
+            }
+            $jeKind[(string)$i['childId']][] = $i;
+        }
+
+        if ($jeKind === []) {
+            $wer = $kind !== null ? $kind['name'] : $this->Translate('the children');
+            return ['ok' => true, 'kinder' => [], 'sag' => sprintf(
+                $alle ? $this->Translate('%s has no open homework.') : $this->Translate('%s has nothing to do then.'),
+                $wer
+            )];
+        }
+
+        $saetze = [];
+        $liste = [];
+        foreach ($jeKind as $id => $items) {
+            $teile = [];
+            $eintraege = [];
+            foreach ($items as $i) {
+                $teile[] = $this->VoiceHausaufgabeText($i, $alle);
+                $eintraege[] = [
+                    'fach'     => (string)$i['subject'],
+                    'faellig'  => (string)($i['due'] ?? ''),
+                    'notiz'    => (string)$i['note'],
+                    'erledigt' => false,
+                ];
+            }
+            $name = $namen[$id] ?? $id;
+            $saetze[] = $name . ': ' . implode(', ', $teile);
+            $liste[] = ['kind' => $name, 'eintraege' => $eintraege];
+        }
+        return ['ok' => true, 'kinder' => $liste, 'sag' => implode('. ', $saetze) . '.'];
+    }
+
+    private function VoiceToolHausaufgabeAnlegen(array $args, array $ctx): array
+    {
+        $kind = $this->VoiceHausaufgabenKind((string)($args['kind'] ?? ''));
+        if ($kind === null) {
+            return $this->VoiceErr('nicht_gefunden', sprintf(
+                $this->Translate('I do not know a child named %s.'), trim((string)($args['kind'] ?? ''))));
+        }
+        $fach = trim((string)($args['fach'] ?? ''));
+        if ($fach === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('Which subject is it?'));
+        }
+        $datum = $this->VoicePlanTag((string)($args['tag'] ?? 'morgen'));
+        if ($datum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the day.'));
+        }
+        $antwort = $this->HomeworkHandleAction([
+            'action'  => 'create',
+            'childId' => $kind['id'],
+            'subject' => $fach,
+            'due'     => $datum,
+            'note'    => trim((string)($args['notiz'] ?? '')),
+            'source'  => 'voice',
+        ]);
+        if (($antwort['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('That did not work.'));
+        }
+        $satz = $this->VoiceHausaufgabeText((array)$antwort['item']);
+        return ['ok' => true, 'sag' => sprintf(
+            $this->Translate('Noted for %1$s: %2$s.'), $kind['name'], $satz)];
+    }
+
+    private function VoiceToolHausaufgabeAbhaken(array $args, array $ctx): array
+    {
+        $kind = $this->VoiceHausaufgabenKind((string)($args['kind'] ?? ''));
+        if ($kind === null) {
+            return $this->VoiceErr('nicht_gefunden', sprintf(
+                $this->Translate('I do not know a child named %s.'), trim((string)($args['kind'] ?? ''))));
+        }
+        $ziel = ($args['erledigt'] ?? true) !== false;
+        $fach = trim((string)($args['fach'] ?? ''));
+        $tagRoh = trim((string)($args['tag'] ?? ''));
+        $datum = $tagRoh === '' ? '' : $this->VoicePlanTag($tagRoh);
+
+        $treffer = [];
+        foreach ($this->HomeworkItems() as $i) {
+            if ((string)$i['childId'] !== $kind['id'] || ($i['done'] ?? false) === $ziel) {
+                continue;
+            }
+            if ($datum !== '' && (string)($i['due'] ?? '') !== $datum) {
+                continue;
+            }
+            if ($fach !== '' && !HomeworkCalc::FachTreffer($fach, (string)$i['subject'])) {
+                continue;
+            }
+            $treffer[] = $i;
+        }
+        if ($treffer === []) {
+            return ['ok' => true, 'sag' => sprintf(
+                $this->Translate('%s has nothing open for that.'), $kind['name'])];
+        }
+        /* Mehrere Kandidaten: NICHT raten. Die Fächer nennen und fragen — genau
+           wie bei einem mehrdeutigen Gerät. */
+        if (count($treffer) > 1) {
+            $kandidaten = [];
+            $namen = [];
+            foreach ($treffer as $i) {
+                $kandidaten[] = ['fach' => (string)$i['subject'], 'faellig' => (string)($i['due'] ?? '')];
+                $namen[] = (string)$i['subject'];
+            }
+            return ['ok' => true, 'kandidaten' => $kandidaten, 'sag' => sprintf(
+                $this->Translate('%1$s has several open: %2$s. Which one do you mean?'),
+                $kind['name'], implode(', ', array_unique($namen))
+            )];
+        }
+        $antwort = $this->HomeworkHandleAction([
+            'action' => 'done', 'id' => (string)$treffer[0]['id'], 'done' => $ziel,
+        ]);
+        if (($antwort['ok'] ?? false) !== true) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('That did not work.'));
+        }
+        return ['ok' => true, 'sag' => sprintf(
+            $ziel ? $this->Translate('%1$s: %2$s is done.') : $this->Translate('%1$s: %2$s is open again.'),
+            $kind['name'], (string)$treffer[0]['subject'])];
+    }
+
     private function VoiceToolRezepte(array $args, array $ctx): array
     {
         $ziel = $this->VoiceListeFinden('shopping', $args['liste'] ?? null, $ctx);
@@ -2768,13 +3017,22 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
             . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht samt Farbe und Farbtemperatur, Rollläden, Heizung, Steckdosen, Szenen und Skripte — sofort (geraete_lesen, geraet_steuern, szene_starten) oder zeitgesteuert, einmalig („in 55 Minuten", „um 22 Uhr") wie dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30"), mit zeitplan_anlegen, zeitplaene_lesen und zeitplan_loeschen; ' : '')
             . 'Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             $geraete
                 ? 'Im Haus steuerst du NUR, was dir geraete_lesen, geraet_steuern, szene_starten und die zeitplan-Werkzeuge liefern — nichts anderes und nie ohne Werkzeug. Gib "wert" als gesprochenes Ziel weiter ("an", "aus", "50 Prozent", "21 Grad", "hoch", "Auto", "rot", "warmweiß", "wärmer", "heller"), rechne nichts um; nennt der Nutzer einen Raum, setze "raum". Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.'
                 : 'Du steuerst NICHTS im Haus: kein Licht, keine Lampen, keine Heizung, keine Rollläden oder Jalousien, keine Steckdosen oder Schalter, keine Musik, keinen Fernseher, keine Türen oder Schlösser, keine Alarmanlage, keine Kamera. Du rufst niemanden an, schickst keine E-Mails (kurze Mitteilungen auf die Geräte im Haushalt gehen sehr wohl, mit nachricht_senden) und beantwortest keine allgemeinen Wissens- oder Rechenfragen — Fragen zu Symcon sind die einzige Ausnahme, und die beantwortest du NUR mit dem Werkzeug symcon_handbuch. Wirst du um so etwas gebeten, lehne freundlich in einem Satz ab und sage kurz, wobei du helfen kannst. Tu NIEMALS so, als hättest du etwas getan, für das du kein Werkzeug hast.',
         ];
+        /* Hausaufgaben sind die vierte Sache, die leicht in einer Aufgabenliste
+           landet — deshalb eine eigene Zeile. Ohne Fach ist eine Hausaufgabe
+           nicht anzeigbar, also lieber kurz nachfragen als raten. */
+        $zeilen[] = 'HAUSAUFGABEN SIND KEINE AUFGABEN. Was ein Kind für den Unterricht zu tun hat, '
+            . 'gehört zu den Hausaufgaben (hausaufgaben_lesen, hausaufgabe_anlegen, '
+            . 'hausaufgabe_abhaken) und NIE in eine Aufgabenliste. Nenne immer das Fach; ohne Fach '
+            . 'frag kurz nach. „bis morgen" ist der Tag, an dem die Aufgabe FERTIG sein muss. '
+            . 'Meldet hausaufgabe_abhaken mehrere Kandidaten, nenne die Fächer und frag, welches '
+            . 'gemeint ist — rate nicht.';
         if ($wer !== '') {
             $zeilen[] = 'Du sprichst mit ' . $wer . '. „ich", „mir" und „meine Aufgaben" heißen: ' . $wer . '.';
         }

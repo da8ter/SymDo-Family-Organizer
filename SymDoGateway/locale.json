@@ -848,7 +848,20 @@
             "— own timetable —": "— eigener Plan —",
             "— the voice set above —": "— die oben eingestellte Stimme —",
             "— the whole family —": "— die ganze Familie —",
-            "„%s\" released — it will be mirrored again at the next check.": "„%s“ freigegeben — beim nächsten Abruf wird sie wieder gespiegelt."
+            "„%s\" released — it will be mirrored again at the next check.": "„%s“ freigegeben — beim nächsten Abruf wird sie wieder gespiegelt.",
+            "for today": "für heute",
+            "for tomorrow": "für morgen",
+            "the children": "die Kinder",
+            "%s has no open homework.": "%s hat keine offenen Hausaufgaben.",
+            "%s has nothing to do then.": "%s hat dann nichts zu tun.",
+            "I do not know a child named %s.": "Ich kenne kein Kind namens %s.",
+            "Which subject is it?": "Um welches Fach geht es?",
+            "That did not work.": "Das hat nicht funktioniert.",
+            "Noted for %1$s: %2$s.": "Für %1$s notiert: %2$s.",
+            "%s has nothing open for that.": "%s hat dazu nichts offen.",
+            "%1$s has several open: %2$s. Which one do you mean?": "%1$s hat mehrere offen: %2$s. Welche meinst du?",
+            "%1$s: %2$s is done.": "%1$s: %2$s ist erledigt.",
+            "%1$s: %2$s is open again.": "%1$s: %2$s ist wieder offen."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",
