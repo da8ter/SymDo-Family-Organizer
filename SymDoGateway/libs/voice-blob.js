@@ -51,6 +51,11 @@ var STIL = [
   '.sym-blase .augen{transform-box:fill-box;transform-origin:center;',
   '  transform:translate(var(--augeX,0px),var(--augeY,0px)) scaleY(var(--augeAuf,1));}',
   '.sym-blase .auge{fill:#0b1030;}',
+  /* Lider: eine Haut in der Körperfarbe, die von oben über das Auge sinkt,
+     und die Wimpernlinie an ihrer Unterkante. Wie weit sie zu sind, setzt JS
+     je Bild als transform-Attribut (scale(1 lid), Ursprung = Oberkante). */
+  '.sym-blase .lid{fill:var(--c3);}',
+  '.sym-blase .wimper{fill:none;stroke:#0b1030;stroke-width:1.6;stroke-linecap:round;}',
   /* Der Schatten macht den räumlichen Eindruck: das Wesen steht nicht IM Bild,
      es schwebt darüber. Er schrumpft und verblasst, wenn es sich hebt. */
   '.sym-blase .schatten{fill:#070a14;opacity:var(--schatten,.42);}',
@@ -73,7 +78,12 @@ var STIL = [
      Animation je Bild setzt — die „z" blieben unsichtbar (im Bild geprüft). */
   '.sym-blase .zzz .z{fill:rgba(235,242,255,.9);font-weight:700;',
   '  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}',
+  /* Die Wolke um jedes „z": fast durchsichtig. Die Deckkraft liegt an der
+     GRUPPE, damit sich die Kreise nicht gegenseitig verdunkeln, wo sie sich
+     überlappen; die Flugbewegung animiert die äußere Gruppe. */
+  '.sym-blase .wolke{fill:#eef3ff;opacity:.16;}',
   'html[data-symdo-theme="light"] .sym-blase .zzz .z{fill:#3a4568;}',
+  'html[data-symdo-theme="light"] .sym-blase .wolke{fill:#3a4568;opacity:.09;}',
   /* Zustandsfarben — dieselbe Sprache wie die Statuszeile der Kachel. */
   /* „bereit" traegt die volle Palette: nach dem Laden soll das Wesen leuchten
      und nicht abgedunkelt dasitzen. Unterschieden wird der Zustand ohnehin
@@ -90,6 +100,17 @@ var ANMELDUNG = [
   "@property --c3{syntax:'<color>';inherits:true;initial-value:#2f7f8f;}",
   "@property --c4{syntax:'<color>';inherits:true;initial-value:#7a86c8;}"
 ].join('');
+
+/* Ein „z" in seiner Wolke. Das z ist mittig gesetzt (Grundlinie bei 0, die
+   Kleinbuchstabenhöhe reicht bis etwa −7), die Wolke aus Kreisen umschließt es
+   locker. Die Größe der drei Partikel unterscheidet der Maßstab je Bild. */
+var WOLKE_Z = '<g class="zz" opacity="0">'
+  +   '<g class="wolke">'
+  +     '<circle cx="0" cy="-4.8" r="7.2"/><circle cx="-6.2" cy="-2.2" r="5"/>'
+  +     '<circle cx="6.4" cy="-2.4" r="5.2"/><ellipse cx="0" cy="-1" rx="9.8" ry="3.9"/>'
+  +   '</g>'
+  +   '<text class="z" font-size="14" text-anchor="middle">z</text>'
+  + '</g>';
 
 var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
   + '<defs>'
@@ -122,6 +143,8 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<feGaussianBlur stdDeviation="6"/></filter>'
   + '<filter class="flicht" x="-70%" y="-200%" width="240%" height="500%">'
   +   '<feGaussianBlur stdDeviation="5.5"/></filter>'
+  + '<filter class="fwolke" x="-40%" y="-40%" width="180%" height="180%">'
+  +   '<feGaussianBlur stdDeviation="1.1"/></filter>'
   + '</defs>'
   /* Zuunterst der Lichtfleck, darin der enge Kontaktschatten: ein leuchtender
      Körper wirft Licht auf den Boden, und die dunkle Stelle bleibt nur dort,
@@ -135,15 +158,26 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<ellipse class="auge" cx="19" cy="-5" rx="6.1" ry="7.3"/>'
   +   '<ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>'
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
+  /* Je Auge ein Lid, etwas größer als das Auge, damit im geschlossenen Zustand
+     kein dunkler Rand hervorschaut. Der Ursprung (0,0) liegt an der Oberkante
+     des Auges; scale(1 lid) lässt es von dort herabsinken, die Wimpernlinie
+     ist die Unterkante und zeichnet zu die geschwungene Schlaf-Linie. */
+  +   '<g class="lider" transform="translate(-19 -12.4)">'
+  +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
+  +     '<path class="wimper" d="M-6.2 7.6A6.7 7.6 0 0 0 6.2 7.6"/>'
+  +   '</g>'
+  +   '<g class="lider" transform="translate(19 -12.4)">'
+  +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
+  +     '<path class="wimper" d="M-6.2 7.6A6.7 7.6 0 0 0 6.2 7.6"/>'
+  +   '</g>'
   + '</g></g>'
   /* Die „z" liegen AUSSERHALB des Körpers: sie sollen wegfliegen, nicht mit ihm
      wiegen. Drei Stück, versetzt, jedes eine Runde von unten rechts über dem
      Kopf nach oben und weg. */
   + '<g class="zzz">'
-  +   '<text class="z" font-size="11" opacity="0">z</text>'
-  +   '<text class="z" font-size="14" opacity="0">z</text>'
-  +   '<text class="z" font-size="17" opacity="0">z</text>'
+  +   WOLKE_Z + WOLKE_Z + WOLKE_Z
   + '</g></svg>';
+
 
 /* Einschlafen erst nach einer Weile ohne Gespräch — sonst nickte das Wesen
    zwischen zwei Sätzen schon weg. Über SymDoVoiceBlase.schlafNach einstellbar
@@ -290,7 +324,7 @@ function erzeuge(behaelter, kern) {
      geben. Deshalb je Blase ein eigener Zählerwert. */
   var nr = ++zaehler;
   var svg = behaelter.firstChild;
-  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht'].forEach(function (k) {
+  ['gk', 'gs', 'gv', 'gl', 'fs', 'fv', 'fk', 'fsch', 'flicht', 'fwolke'].forEach(function (k) {
     var e = svg.querySelector('.' + k);
     if (e) { e.setAttribute('id', 'symblase-' + k + '-' + nr); }
   });
@@ -309,6 +343,9 @@ function erzeuge(behaelter, kern) {
   pSchleier.setAttribute('filter', 'url(#symblase-fv-' + nr + ')');
   pSchein.setAttribute('fill', 'url(#symblase-gs-' + nr + ')');
   pSchein.setAttribute('filter', 'url(#symblase-fs-' + nr + ')');
+  Array.prototype.forEach.call(svg.querySelectorAll('.wolke'), function (w) {
+    w.setAttribute('filter', 'url(#symblase-fwolke-' + nr + ')');
+  });
 
   var aktiv = false, laeuft = false, raf = 0, letzteForm = 0;
   var ac = null, analyser = null, roh = null, verbunden = [];
@@ -320,7 +357,13 @@ function erzeuge(behaelter, kern) {
   /* Schlaf: seit wann kein Gespräch läuft, wie tief es schläft (0 wach … 1
      schläft, je Bild weich nachgeführt) und wann die „z" zu fliegen begannen. */
   var ruheSeit = 0, schlaf = 0, zzzStart = 0;
-  var zzz = Array.prototype.slice.call(svg.querySelectorAll('.zzz .z'));
+  var zzz = Array.prototype.slice.call(svg.querySelectorAll('.zzz .zz'));
+  var ZZ_MASS = [.8, 1, 1.2];   // Grundgröße der drei Partikel
+  /* Lider: 0 offen … 1 zu, je Bild weich zum Ziel geführt. Blinzeln und
+     Schlaf laufen über dieselben Lider — das Blinzeln zieht sie kurz ganz zu. */
+  var lider = Array.prototype.slice.call(svg.querySelectorAll('.lider'));
+  var liderTx = lider.map(function (l) { return l.getAttribute('transform'); });
+  var lidJetzt = 0;
 
   function setz(name, wert) { behaelter.style.setProperty(name, wert); }
 
@@ -548,9 +591,23 @@ function erzeuge(behaelter, kern) {
       setz('--augeX', '0px');
       setz('--augeY', '1.5px');
     }
-    // Während des Blinzelns NICHT überschreiben — sonst bliebe es unsichtbar.
-    if (!blinzelt) { setz('--augeAuf', lerp(1 - energie * .12, .07, schlaf).toFixed(3)); }
+    // Lauter Ton kneift die Augen ein wenig zusammen; das Schließen machen die Lider.
+    setz('--augeAuf', (1 - energie * .12).toFixed(3));
+    liderZeichnen();
     zzzZeichnen(t);
+  }
+
+  /* Lider je Bild nachführen: Blinzeln zieht sie ganz zu, sonst folgen sie der
+     Schlaftiefe. Schnell genug, dass ein Blinzeln in gut 100 ms zu und wieder
+     auf ist; als Kurve, damit es nicht klappt. */
+  function liderZeichnen() {
+    var ziel = blinzelt ? 1 : schlaf;
+    lidJetzt += (ziel - lidJetzt) * .45;
+    if (Math.abs(ziel - lidJetzt) < .004) { lidJetzt = ziel; }
+    var f = lidJetzt < .02 ? 0 : lidJetzt;   // ganz offen: keine Sichtkante
+    for (var i = 0; i < lider.length; i++) {
+      lider[i].setAttribute('transform', liderTx[i] + ' scale(1 ' + f.toFixed(3) + ')');
+    }
   }
 
   /* Die drei „z": jedes läuft eine Runde von rechts über dem Kopf nach oben
@@ -580,6 +637,7 @@ function erzeuge(behaelter, kern) {
         s = .7 + .5 * p;
         o = Math.sin(p * Math.PI) * schlaf;
       }
+      s *= ZZ_MASS[i] || 1;
       zzz[i].setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + s.toFixed(2) + ')');
       zzz[i].setAttribute('opacity', o.toFixed(3));
     }
@@ -652,9 +710,7 @@ function erzeuge(behaelter, kern) {
        Aufwachen ohne neuen Anstoß wieder da ist. */
     if (schlaf > .5) { blinzelUhr = setTimeout(blinzeln, 3000); return; }
     blinzelt = true;
-    setz('--augeAuf', .08);
-    // Nicht hart auf 1: wer inzwischen eingeschlafen ist, behält die Augen zu.
-    setTimeout(function () { blinzelt = false; setz('--augeAuf', schlaf > .5 ? .07 : 1); }, 120);
+    setTimeout(function () { blinzelt = false; }, 120);   // die Lider führt bild() nach
     blinzelUhr = setTimeout(blinzeln, 2200 + Math.random() * 4500);
   }
 
@@ -681,7 +737,6 @@ function erzeuge(behaelter, kern) {
       if (WACH.indexOf(zustandJetzt) >= 0) {
         ruheSeit = 0; schlaf = 0;
         behaelter.classList.remove('schlaeft');
-        if (!blinzelt) { setz('--augeAuf', 1); }
       }
       if (!aktiv) { return; }
       klasseSetzen();
