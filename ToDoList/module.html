@@ -10167,6 +10167,158 @@ function calDateLabel(ts) {
   return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
 }
 
+/* ── Wochenansicht: die Rechnung, DOM-frei ──────────────────────────────────
+   Jede Funktion dieses Blocks steht als Top-Level-function da und greift auf
+   nichts ausser Date zu: tools/cal-woche.mjs schneidet sie WOERTLICH aus dieser
+   Datei und fuehrt sie mit fester Zeitzone aus. Ein translate(), ein store oder
+   eine Konstante von aussen im Rumpf macht den Pruefstand blind — Grenzwerte
+   kommen als Parameter herein. */
+
+/** Ortsmitternacht des Tages, in dem der Zeitstempel liegt (Sekunden). */
+function calTagStart(ts) {
+  const d = new Date(ts * 1000);
+  d.setHours(0, 0, 0, 0);
+  return Math.floor(d.getTime() / 1000);
+}
+
+/** n Tage weiter — ueber setDate und NIE mit + 86400. Der Tag der
+    Zeitumstellung hat 23 bzw. 25 Stunden; mit einer festen Sekundenzahl
+    bekaeme die Woche zwei gleiche Tagesschluessel und einen fehlenden. */
+function calTagPlus(ts, n) {
+  const d = new Date(ts * 1000);
+  d.setDate(d.getDate() + n);
+  return Math.floor(d.getTime() / 1000);
+}
+
+/** Montag 00:00 der Woche, in der ts liegt, um offsetWochen verschoben. */
+function calWochenStart(ts, offsetWochen) {
+  const d = new Date(ts * 1000);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + (Number(offsetWochen) || 0) * 7);
+  return Math.floor(d.getTime() / 1000);
+}
+
+function calWochenTage(startTs) {
+  const tage = [];
+  for (let i = 0; i < 7; i++) tage.push(calTagPlus(startTs, i));
+  return tage;
+}
+
+/** Kalenderwoche nach ISO 8601: die Woche gehoert dem Jahr ihres Donnerstags.
+    Deshalb ueber den Donnerstag gerechnet und nicht ueber den 1. Januar —
+    sonst zaehlt der Jahreswechsel falsch. */
+function calKalenderwoche(ts) {
+  const d = new Date(ts * 1000);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const ersterDonnerstag = new Date(d.getFullYear(), 0, 4);
+  ersterDonnerstag.setHours(0, 0, 0, 0);
+  ersterDonnerstag.setDate(ersterDonnerstag.getDate() + 3 - ((ersterDonnerstag.getDay() + 6) % 7));
+  return 1 + Math.round((d.getTime() - ersterDonnerstag.getTime()) / 604800000);
+}
+
+/** Die letzte Sekunde, die der Termin wirklich belegt. Bei ganztaegigen
+    Terminen ist das Ende AUSSCHLIESSLICH (so rechnet auch die
+    Uebersichtskarte), und ein Termin, der genau auf Ortsmitternacht endet,
+    gehoert nicht in den naechsten Tag: 20 bis 24 Uhr ist EIN Abend. */
+function calEventEndeInklusiv(e) {
+  const start = Math.floor(Number((e && e.start) || 0));
+  const ende = Math.floor(Number((e && e.end) || 0));
+  if (!(ende > start)) return start;
+  const d = new Date(ende * 1000);
+  if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0) return ende - 1;
+  return (e && e.allDay === true) ? ende - 1 : ende;
+}
+
+/** Die Tagesschluessel, die der Termin schneidet. Die Agenda gruppiert nur
+    nach dem Beginn und zeigt einen Urlaub deshalb nur am ersten Tag; die
+    Tafel fragt je Tag, ob er getroffen ist. */
+function calEventTagKeys(e) {
+  const start = Math.floor(Number((e && e.start) || 0));
+  if (!start) return [];
+  const letzter = calTagStart(calEventEndeInklusiv(e));
+  const keys = [];
+  let tag = calTagStart(start);
+  let schutz = 0;
+  while (tag <= letzter && schutz++ < 400) {
+    keys.push(calDayKey(tag));
+    tag = calTagPlus(tag, 1);
+  }
+  return keys;
+}
+
+/** Ordnung in der Zelle: ganztaegig zuerst, dann nach Beginn. Titel und
+    Kennung entscheiden nur den Gleichstand — aber sie MUESSEN entscheiden,
+    sonst tauscht renderRows bei jedem Zeichnen die Reihenfolge. */
+function calTafelVergleich(a, b) {
+  const ga = (a && a.allDay === true) ? 0 : 1;
+  const gb = (b && b.allDay === true) ? 0 : 1;
+  if (ga !== gb) return ga - gb;
+  const sa = Math.floor(Number((a && a.start) || 0));
+  const sb = Math.floor(Number((b && b.start) || 0));
+  if (sa !== sb) return sa - sb;
+  const ta = String((a && a.title) || '');
+  const tb = String((b && b.title) || '');
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  const ia = String((a && a.id) || '');
+  const ib = String((b && b.id) || '');
+  return ia === ib ? 0 : (ia < ib ? -1 : 1);
+}
+
+/** Die Tafel: je Mitglied eine Zeile, zuletzt die Zeile fuer alles ohne
+    Zuordnung. Ein Termin steht in JEDER Zeile seiner Mitglieder — dieselbe
+    Kachel untereinander in einer Spalte ist die Auskunft „gemeinsam", und ein
+    zusaetzliches Zeichen dafuer kostete nur Breite.
+    Termine ohne Mitglied gehoeren NICHT zu allen, sondern zu niemandem: sie
+    stehen allein in der Familienzeile. Das sind alle, die nicht ueber diese
+    App angelegt wurden — die Zuordnung liegt im Gateway, nicht im Kalender. */
+function calTafelBauen(events, tagKeys, mitgliedIds) {
+  const keys = Array.isArray(tagKeys) ? tagKeys : [];
+  const inWoche = {};
+  keys.forEach(k => { inWoche[k] = true; });
+  const bekannt = {};
+  const zeilen = (Array.isArray(mitgliedIds) ? mitgliedIds : []).map(id => {
+    bekannt[String(id)] = true;
+    return { id: String(id), tage: {} };
+  });
+  const familie = { id: '', tage: {} };
+  zeilen.concat([familie]).forEach(z => { keys.forEach(k => { z.tage[k] = []; }); });
+  (Array.isArray(events) ? events : []).forEach(e => {
+    const treffer = calEventTagKeys(e).filter(k => inWoche[k] === true);
+    if (!treffer.length) return;
+    const mitglieder = (Array.isArray(e && e.members) ? e.members : [])
+      .map(m => String(m)).filter(m => bekannt[m] === true);
+    const ziele = mitglieder.length
+      ? zeilen.filter(z => mitglieder.indexOf(z.id) >= 0)
+      : [familie];
+    ziele.forEach(z => { treffer.forEach(k => { z.tage[k].push(e); }); });
+  });
+  zeilen.concat([familie]).forEach(z => { keys.forEach(k => { z.tage[k].sort(calTafelVergleich); }); });
+  return { zeilen: zeilen, familie: familie };
+}
+
+/** Was in eine Zelle passt. Kein halb abgeschnittener Chip — das sieht wie ein
+    Fehler aus; der Ueberlauf bekommt einen eigenen Platz und zaehlt den Rest. */
+function calZellenAufteilung(liste, max, offen) {
+  const alle = Array.isArray(liste) ? liste.slice() : [];
+  const deckel = Math.max(1, Number(max) || 1);
+  if (offen === true || alle.length <= deckel) return { sichtbar: alle, versteckt: 0 };
+  const zeigen = deckel - 1;
+  return { sichtbar: alle.slice(0, zeigen), versteckt: alle.length - zeigen };
+}
+
+/** Der Abrufblock einer Woche: eine Woche zurueck, vier nach vorn. Ein Abruf
+    deckt damit das Blaettern um mehrere Wochen ohne neuen Umlauf ab — und der
+    Umlauf ist teuer, er arbeitet sich seitenweise durch OpenCalendar. */
+function calWochenFenster(startTs) {
+  return { von: calTagPlus(startTs, -7), bis: calTagPlus(startTs, 35) };
+}
+
+function calFensterDeckt(geladen, von, bis) {
+  if (!geladen) return false;
+  return Number(geladen.von) <= Number(von) && Number(geladen.bis) >= Number(bis);
+}
+
 function renderCalendar() {
   const bereich = document.getElementById('calArea');
   if (!bereich) return;
