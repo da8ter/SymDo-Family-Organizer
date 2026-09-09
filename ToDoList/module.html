@@ -9749,10 +9749,14 @@ let mailLoading = false;
 function mailArt(it) {
   if (it && it.kind === 'event') return 'event';
   if (it && it.kind === 'note') return 'note';
+  /* Zusaetzlich und nicht ersetzend: ein Vorschlag ohne kind bleibt eine
+     Aufgabe. Wer das umbaut, laesst Vorschlaege lautlos verschwinden — das ist
+     hier schon einmal passiert. */
+  if (it && it.kind === 'homework') return 'homework';
   return 'task';
 }
 /** Die Reihenfolge unter einer Mail: erst zu tun, dann Termine, dann zum Behalten. */
-const MAIL_SORTEN = ['task', 'event', 'note'];
+const MAIL_SORTEN = ['task', 'event', 'homework', 'note'];
 
 function renderMailAlle() {
   renderMailAi();
@@ -9833,6 +9837,18 @@ function aiUebernahmeWeiter() {
     }
     return;
   }
+  if (e.art === 'homework') {
+    /* Wie bei der Notiz: NICHT direkt anlegen, sondern den Dialog vorbelegt
+       oeffnen. Das Kind kommt aus der Erkennung, sonst waehlt der Dialog. */
+    aiUebernahmeWartet = 'hwOverlay';
+    hwEditorOeffnen(null, {
+      childId: String(e.t.childId || ''),
+      subject: String(e.t.subject || ''),
+      due: String(e.t.due || ''),
+      note: String(e.t.note || e.t.info || '')
+    });
+    return;
+  }
   if (e.art === 'event') {
     // openCalEditor sagt ohne beschreibbaren Kalender selbst ab — dann darf
     // die Kette nicht auf ein Schliessen warten, das nie kommt.
@@ -9897,7 +9913,9 @@ function mailWhenText(due, time, end) {
  * anderen Sorte stehen, wenn nur ihre Liste leer wird.
  */
 function setMailBadges() {
-  const zahl = { task: 0, event: 0, note: 0 };
+  // Der neue Schluessel MUSS hier stehen: sonst wird zahl[mailArt(it)]++ zu NaN
+  // und das Abzeichen zeigt „NaN" auf allen Tabs und am App-Symbol.
+  const zahl = { task: 0, event: 0, note: 0, homework: 0 };
   mailProposals.forEach(p => (Array.isArray(p.items) ? p.items : []).forEach(it => {
     zahl[mailArt(it)]++;
   }));
@@ -9910,7 +9928,7 @@ function setMailBadges() {
   // EIN Abzeichen fuer alles, was im KI-Bereich auf eine Entscheidung wartet.
   // Vorher zaehlte jede Sorte an ihrem eigenen Tab — das verteilte eine Nachricht
   // auf drei Stellen, von denen keine die ganze Zahl nannte.
-  const offen = zahl.task + zahl.event + zahl.note;
+  const offen = zahl.task + zahl.event + zahl.note + zahl.homework;
   setzen('tabKiBadge', offen);
   appBadgeSetzen(offen);
 }
@@ -10024,9 +10042,10 @@ function renderMailAi() {
       // „Elternbrief unterschreiben" nicht zu unterscheiden.
       const sorte = mailArt(it);
       const artZeichen = {
-        task:  ['fa-list-check',  translate('Task')],
-        event: ['fa-calendar',    translate('Appointment')],
-        note:  ['fa-note-sticky', translate('Note')]
+        task:     ['fa-list-check',  translate('Task')],
+        event:    ['fa-calendar',    translate('Appointment')],
+        homework: ['fa-book',        translate('Homework')],
+        note:     ['fa-note-sticky', translate('Note')]
       }[sorte];
       // Die Art steht als eigene Zeile UEBER dem Titel (Symbol plus Wort), nicht
       // als Chip: ein weiterer Chip haette den knappen Platz in .mail-chips mit
@@ -10230,6 +10249,18 @@ function entwurfOeffnen(eintrag, userId, quelle) {
       }));
       noteDateienZeichnen();
     }
+    return;
+  }
+  if (eintrag.kind === 'homework') {
+    /* Das Kind kommt aus der Erkennung; bei einer Klassenseite ist das fast
+       immer schon das richtige, denn die Karte gehoert einem Kind. */
+    hwEditorOeffnen(null, {
+      childId: String(eintrag.childId || ''),
+      subject: String(eintrag.subject || ''),
+      due: String(eintrag.due || ''),
+      note: String(eintrag.note || eintrag.info || ''),
+      proposal: quelle || null
+    });
     return;
   }
   if (eintrag.kind === 'event') {
@@ -17204,6 +17235,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const kannTermin = calWritable().length > 0;
     const kannNotiz  = !!(notizen && Array.isArray(notizen.folders) && notizen.folders.length > 0);
     const kannEinkauf = (typeof selectedShoppingID === 'function') && selectedShoppingID() > 0;
+    // Hausaufgaben brauchen ein Kind im Haus — ohne eines gibt es die Wahl nicht.
+    const kannHausaufgabe = homeworkMoeglich()
+      && (store.users || []).some(u => String(u.persona || '') === 'child');
     document.getElementById('aiReviewTitle').textContent = translate((kannTermin || kannNotiz) ? 'Detected entries' : 'Detected tasks');
     if (!rows.length) { aiStatus(translate('No tasks detected.')); aiAdd.disabled = true; return; }
     aiBody.innerHTML = '';
@@ -17214,6 +17248,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // kann Termin oder Aufgabe sein (hingehen? Zettel zurueckgeben?), das
       // entscheidet, wer das Blatt vor sich hat.
       row.__kind = (kannEinkauf && it.kind === 'shopping') ? 'shopping'
+        : (kannHausaufgabe && it.kind === 'homework' && it.subject) ? 'homework'
         : (kannTermin && it.kind === 'event' && it.due) ? 'event' : 'task';
       const dueChip = it.due ? '<span class="badge due-badge">' + escapeHtml(String(it.due) + (it.time ? ' ' + String(it.time) : '')) + '</span>' : '';
       /* „2" ist eine Stueckzahl und liest sich als „x2"; „5 kg" oder
@@ -17222,16 +17257,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const menge = String(it.amount == null ? '' : it.amount).trim();
       const mengeText = mengeMitMal(menge);
       const amtChip = (it.kind === 'shopping' && menge) ? '<span class="badge ai-amt">' + escapeHtml(mengeText) + '</span>' : '';
+      const fachChip = it.subject ? '<span class="badge attr">' + escapeHtml(String(it.subject)) + '</span>' : '';
       const prioChip = '<span class="badge ' + priorityKey(it.priority || 'normal') + '">' + escapeHtml(priorityLabel(it.priority || 'normal')) + '</span>';
       /* Hat die KI eine Person erkannt (z.B. „Friseurtermin Jonas"), steht deren
          Bild bei den Abzeichen — so ist vor dem Uebernehmen sichtbar, wem der
          Eintrag zufaellt. Unbekannte Namen kommen serverseitig nicht durch. */
       const avatar = renderAvatarStack(it.assignedTo);
       const knopf = (k, wort) => '<button type="button" data-k="' + k + '">' + escapeHtml(translate(wort)) + '</button>';
-      const wahl = (kannTermin || kannNotiz || kannEinkauf)
+      const wahl = (kannTermin || kannNotiz || kannEinkauf || kannHausaufgabe)
         ? '<div class="ai-kind-row"><span class="ai-kind">' + knopf('task', 'Task') +
           (kannTermin ? knopf('event', 'Appointment') : '') +
           (kannEinkauf ? knopf('shopping', 'Purchase') : '') +
+          (kannHausaufgabe ? knopf('homework', 'Homework') : '') +
           (kannNotiz ? knopf('note', 'Note') : '') + '</span></div>'
         : '';
       const info = it.info ? '<div class="todo-info">' + escapeHtml(String(it.info)) + '</div>' : '';
@@ -17239,7 +17276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div class="ai-main">' +
         // Titel und Abzeichen in EINER Zeile, die Abzeichen rechts.
         '<div class="ai-kopf"><div class="ai-title">' + escapeHtml(String(it.title || '')) + '</div>' +
-        '<div class="ai-meta">' + dueChip + amtChip + prioChip + avatar + '</div></div>' +
+        '<div class="ai-meta">' + dueChip + fachChip + amtChip + prioChip + avatar + '</div></div>' +
         info + wahl + '</div>';
       row.__todo = it;
       const zeigeWahl = () => {

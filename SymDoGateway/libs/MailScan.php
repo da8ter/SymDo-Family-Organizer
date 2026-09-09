@@ -777,7 +777,13 @@ trait MailScan
                 $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
                 return false;
             }
-            $aufgaben = $this->AiParseTodos((string)$r['text'], ['task', 'event', 'note']);
+            /* Hausaufgaben als vierte Art — die Klassenseite ist ihre eigentliche
+               Quelle. Nur mit Kindern im Haus (siehe AiSystemPrompt). */
+            $arten = ['task', 'event', 'note'];
+            if ($this->HomeworkKinder() !== []) {
+                $arten[] = 'homework';
+            }
+            $aufgaben = $this->AiParseTodos((string)$r['text'], $arten);
             // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
             // unbeobachtet im Timer und kostet Geld beim Anbieter. Ohne diese Zeile
             // waere im Nachhinein nicht feststellbar, welche Mail wann verarbeitet wurde.
@@ -790,6 +796,9 @@ trait MailScan
             $mitDatum = 0;
             $termine = 0;
             $notizen = 0;
+            // Ohne eigenen Zaehler zaehlte die Differenz unten Hausaufgaben als
+            // Aufgaben — das Protokoll haette in die Irre geführt.
+            $hausaufgaben = 0;
             foreach ($aufgaben as $a) {
                 if (($a['due'] ?? null) !== null) {
                     $mitDatum++;
@@ -800,9 +809,13 @@ trait MailScan
                 if (($a['kind'] ?? 'task') === 'note') {
                     $notizen++;
                 }
+                if (($a['kind'] ?? 'task') === 'homework') {
+                    $hausaufgaben++;
+                }
             }
             $this->LogMessage(sprintf(
-                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), %d Notiz(en), davon %d mit Datum',
+                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), %d Notiz(en), '
+                . '%d Hausaufgabe(n), davon %d mit Datum',
                 $betreff !== '' ? $betreff : '(ohne Betreff)',
                 (string)($kopf['SenderAddress'] ?? '?'),
                 // Der IMAP-Weg bleibt wortgleich wie bisher; nur ein anderer Eingang
@@ -816,9 +829,10 @@ trait MailScan
                         $anhaenge
                     ))
                 ),
-                count($aufgaben) - $termine - $notizen,
+                count($aufgaben) - $termine - $notizen - $hausaufgaben,
                 $termine,
                 $notizen,
+                $hausaufgaben,
                 $mitDatum
             ), KL_NOTIFY);
             if ($aufgaben === []) {

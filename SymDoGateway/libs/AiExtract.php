@@ -148,7 +148,14 @@ trait AiExtract
         if (($r['ok'] ?? false) !== true) {
             return $r;
         }
-        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'], ['task', 'event', 'shopping'])];
+        /* Hausaufgaben nur, wenn es ueberhaupt ein Kind gibt: ohne Kinder kann
+           die vierte Art nur schaden (aus einer Aufgabe wuerde eine Hausaufgabe,
+           die niemandem gehoert). */
+        $arten = ['task', 'event', 'shopping'];
+        if ($this->HomeworkKinder() !== []) {
+            $arten[] = 'homework';
+        }
+        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'], $arten)];
     }
 
     // ─────────────────────── Einkaufsliste (Foto/URL → Zutaten) ───────────────────────
@@ -1475,6 +1482,30 @@ trait AiExtract
                 $eintrag['recurrence'] = null;
                 $eintrag['priority'] = 'normal';
             }
+            if ($kind === 'homework') {
+                /* Eine Hausaufgabe hat ein FACH und eine Faelligkeit, aber keinen
+                   Takt und keine Uhrzeit. Ohne Fach ist es keine Hausaufgabe: dann
+                   wird daraus wieder eine Aufgabe, damit der Fund nicht verloren
+                   geht (die Oberflaeche kann ihn danach umstimmen). */
+                $fach = HomeworkCalc::FachAufloesen($this->AiRowStr($row, 'subject'), $this->HomeworkFaecher());
+                if ($fach === '') {
+                    $eintrag['kind'] = 'task';
+                } else {
+                    $eintrag['subject'] = $fach;
+                    $eintrag['note'] = mb_substr(trim($this->AiRowText(
+                        $row['info'] ?? null, HomeworkCalc::NOTE_MAX)), 0, HomeworkCalc::NOTE_MAX);
+                    /* Nur KINDER: ein „Papa" im Text darf keine Hausaufgabe erben.
+                       assignedTo bleibt leer, damit der ToDo-Weg sie nicht
+                       versehentlich als Aufgabe anlegt. */
+                    $eintrag['childId'] = $this->HomeworkKindZuBenutzer($this->AiRowStr($row, 'person'));
+                    $eintrag['assignedTo'] = [];
+                    $eintrag['time'] = null;
+                    $eintrag['end'] = null;
+                    $eintrag['allDay'] = false;
+                    $eintrag['recurrence'] = null;
+                    $eintrag['priority'] = 'normal';
+                }
+            }
             if ($kind === 'note') {
                 // Eine Notiz hat keine Frist und keinen Takt — sie hat einen Text.
                 // Rueckfall auf "info", weil kleine Modelle die Zusammenfassung
@@ -2244,6 +2275,9 @@ trait AiExtract
 
     private function AiSystemPrompt(string $today): string
     {
+        // Die vierte Art nur anbieten, wenn es Kinder gibt — sonst entstehen
+        // Hausaufgaben, die niemandem gehoeren.
+        $mitHausaufgaben = $this->HomeworkKinder() !== [];
         return 'Du extrahierst Aufgaben (ToDos) aus Dokumenten: Briefe, Behörden- und Bankschreiben, '
             . 'Rechnungen, Notizen, Listen, E-Mails oder Fotos davon. Wichtig: Aufgaben stehen oft NICHT '
             . 'als Liste im Dokument, sondern stecken implizit in Handlungsaufforderungen — z.B. „bitte '
@@ -2279,14 +2313,17 @@ trait AiExtract
             . 'AUSSCHLIESSLICH mit einem JSON-Array, ohne Erklärungen und ohne Markdown. Jedes Element hat '
             . 'exakt diese Felder: {"title": string, "info": string oder null, "due": "YYYY-MM-DD" oder '
             . 'null, "time": "HH:MM" oder null, "priority": "high" oder "normal" oder "low", '
-            . '"kind": "task" oder "event" oder "shopping", "end": "YYYY-MM-DD" oder null, '
-            . '"allDay": true oder false, "amount": string oder null, "person": string oder null}. '
+            . '"kind": "task" oder "event" oder "shopping"' . ($mitHausaufgaben ? ' oder "homework"' : '') . ', '
+            . '"end": "YYYY-MM-DD" oder null, '
+            . '"allDay": true oder false, "amount": string oder null, "person": string oder null'
+            . ($mitHausaufgaben ? ', "subject": string oder null' : '') . '}. '
             . $this->AiPersonenRegel()
             // Ohne diesen Satz liefert ein kleines Modell bei einer freundlichen
             // Einladung eine leere Liste: Es sucht die Aufforderung („bitte
             // zurücksenden") und findet keine (gemessen an „Angebot Segelboot bauen
             // am 27.06." — 0 Einträge, obwohl Datum, Kosten und Anmeldung dastanden).
             . $this->AiKindRule()
+            . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '')
             . ' EINKAEUFE SIND EINE EIGENE ART: Nennt die Nachricht Dinge, die zu KAUFEN oder zu '
             . 'besorgen sind (Lebensmittel, Drogerie, „auf die Einkaufsliste", „wir brauchen noch"), '
             . 'gib JEDEN Artikel als eigenen Eintrag mit "kind": "shopping" zurueck. "title" ist dabei '
@@ -2431,6 +2468,48 @@ trait AiExtract
      * verschwinden ALLE Aufgaben und Termine derselben Mail. AiDecodeJsonArray
      * bessert das inzwischen nach, aber die Regel ist die erste Verteidigungslinie.
      */
+    /**
+     * Die vierte Moeglichkeit: eine Hausaufgabe.
+     *
+     * Steht bewusst NEBEN der Regel „Schulstunden sind keine Termine" und ist
+     * deren Gegenstueck: der Plan gehoert in den Stundenplan, die Aufgabe daran
+     * in die Hausaufgaben. Ohne Fach wird daraus wieder eine Aufgabe — eine
+     * Hausaufgabe ohne Fach laesst sich im Stundenplan nicht anzeigen.
+     */
+    private function AiHomeworkKindRule(): string
+    {
+        return ' VIERTE MOEGLICHKEIT — HAUSAUFGABE. Steht im Dokument, was ein KIND '
+            . 'fuer den Unterricht zu erledigen hat (Hausaufgabenheft, Wochenplan, '
+            . '„HA", „Aufgabe bis Freitag", Buchseiten, Arbeitsblatt, Vokabeln, Lesen '
+            . 'ueben), dann gib je Aufgabe EINEN Eintrag mit "kind":"homework" zurueck. '
+            . 'Setze "subject" auf das Schulfach so, wie es dasteht („Mathematik", '
+            . '„Mathe", „Ma"), "due" auf den Tag, an dem die Aufgabe FERTIG sein muss '
+            . '(Abgabetag oder naechster Unterrichtstag in diesem Fach), und "person" '
+            . 'auf den Namen des Kindes, wenn er genannt ist. "title" ist die Aufgabe '
+            . 'in wenigen Worten („S. 42 Nr. 3-5"), alles Weitere gehoert nach "info". '
+            . 'EINE Zeile im Heft ist EINE Hausaufgabe; fasse mehrere Faecher niemals '
+            . 'zusammen. ABGRENZUNG: Eine Hausaufgabe ist etwas, das das KIND fuer den '
+            . 'Unterricht tut. Elternbriefe, Zettel zum Unterschreiben, Beitraege, '
+            . 'Elternabende, Ausfluege und Materiallisten bleiben "task" bzw. "event" — '
+            . 'auch dann, wenn sie von der Schule kommen. Ist kein Fach erkennbar, gib '
+            . '"task" zurueck und nicht "homework".';
+    }
+
+    /**
+     * Wie AiPersonZuBenutzer, aber ausschliesslich Kinder — und als EINZELNE
+     * Kennung statt einer Liste: eine Hausaufgabe gehoert genau einem Kind.
+     */
+    private function HomeworkKindZuBenutzer(string $name): string
+    {
+        $treffer = $this->AiPersonZuBenutzer($name);
+        if (!is_array($treffer) || count($treffer) !== 1) {
+            return '';
+        }
+        $kinder = $this->HomeworkKinder();
+        $id = (string)$treffer[0];
+        return in_array($id, $kinder, true) ? $id : '';
+    }
+
     private function AiNoteKindRule(): string
     {
         return ' DRITTE MOEGLICHKEIT — NOTIZ. Enthaelt die Mail Angaben, die man '
@@ -2484,6 +2563,10 @@ trait AiExtract
 
     private function AiMailSystemPrompt(string $today, bool $mitAnhang = false, string $quelle = 'IMAP'): string
     {
+        /* Die Klassenseite ist die eigentliche Quelle von Hausaufgaben — dort
+           stehen Wochenplaene. Die Regel haengt trotzdem an BEIDEN Eingaengen:
+           ein Elternbrief kann ebenso eine Hausaufgabe nennen. */
+        $mitHausaufgaben = $this->HomeworkKinder() !== [];
         /* Nicht jede Quelle ist eine Mail. Eine Karte der Klassenseite lief bisher
            durch denselben Text — und das Modell schrieb es in „info": „E-Mail
            „5b Musterklasse — Willkommen"". Das steht dann so in der App. */
@@ -2500,7 +2583,8 @@ trait AiExtract
                     : ' Ein Verweis auf eine Datei hebt die Aufgabe NICHT auf — er ist selbst '
                         . 'die Handlungsaufforderung. Erfinde aber keine Angaben, die nur in der '
                         . 'Datei stehen koennen.')
-                . $this->AiKindRule(true);
+                . $this->AiKindRule(true)
+                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '');
         }
         if ($mitAnhang) {
             return $this->AiSystemPrompt($today)
@@ -2512,7 +2596,8 @@ trait AiExtract
                 . '(Termine, Fristen, Betraege, Formularfelder) im Anhang — uebernimm sie von '
                 . 'dort. Stehen im Anhang mehrere eigenstaendige Termine oder Aufgaben, gib sie '
                 . 'als eigene Eintraege zurueck.'
-                . $this->AiKindRule(true);
+                . $this->AiKindRule(true)
+                . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '');
         }
         return $this->AiSystemPrompt($today)
             . ' ZUSATZ FUER E-MAILS: Der Text ist eine E-Mail, oft weitergeleitet — der '
@@ -2520,7 +2605,8 @@ trait AiExtract
             . 'nicht in der Betreffzeile. Nenne diese Quelle in "info". Nennt die Mail '
             . 'einen konkreten Termin mit Uhrzeit (Elternabend, Sprechstunde, Abgabe um '
             . 'eine bestimmte Zeit), gib zusaetzlich das Feld "time" im Format "HH:MM" '
-            . 'an.' . $this->AiKindRule(true) . ' WICHTIG zum Anhang: '
+            . 'an.' . $this->AiKindRule(true)
+            . ($mitHausaufgaben ? $this->AiHomeworkKindRule() : '') . ' WICHTIG zum Anhang: '
             . 'Anhaenge liegen dir NICHT vor. Ein Verweis darauf („siehe Anhang“, „im '
             . 'beigefuegten Formular“) hebt die Aufgabe aber NICHT auf — er ist selbst die '
             . 'Handlungsaufforderung. Nennt die Mail ein Formular, eine Abfrage, eine Liste '
