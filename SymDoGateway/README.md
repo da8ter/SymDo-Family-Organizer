@@ -337,7 +337,7 @@ Notizen.
 
 | Ort | Was man sieht |
 |---|---|
-| Web-App, Stundenplan-Bereich | Alle offenen des gezeigten Kindes, gruppiert nach überfällig, heute, morgen, später und ohne Datum. Ein Plus legt eine an, ein Tipp auf die Zeile ändert sie, der Kreis links hakt sie ab |
+| Web-App, Stundenplan-Bereich | Alle offenen des gezeigten Kindes, gruppiert nach überfällig, heute, morgen, später und ohne Datum. Ein Plus legt eine an, ein Tipp auf die Zeile ändert sie, der Kreis links hakt sie ab. Abgehaktes wandert nach unten in einen eingeklappten Abschnitt **Erledigt** und lässt sich dort zurücknehmen |
 | Web-App, Übersicht | Eine Karte für die Eltern: was heute, morgen oder überfällig ist, mit Kind und Fach. Der Stundenplan-Bereich gehört dem Kindmodus, die Übersicht allen |
 | Stundenplan-Kachel | An der Stunde ein Abzeichen mit der Zahl (Wochenraster) bzw. ein Punkt am Balken (Zeitachse). Was zu keiner Stunde des Tages passt, steht als Fußzeile unter der Spalte |
 | Sprachassistent | „Was hat Tim für morgen auf?", „Tim hat in Mathe Seite 42 bis Donnerstag auf", „Hak bei Mia Deutsch ab" |
@@ -376,10 +376,21 @@ nicht in die Quere kommt:
   übernommene Aufgabe nicht mehr, verschwindet sie auch in SymDo. Eine Aufgabe
   vor dem Zeitraum stand nie in der Antwort und bleibt deshalb stehen.
 
-In der Web-App tragen übernommene Aufgaben ein kleines Schulzeichen, und der
-Editor sagt es: Fach, Fälligkeit und Text gewinnt beim nächsten Abruf wieder
-die Schule. Wer eine dieser Aufgaben umschreiben will, legt besser eine eigene
-an. Die Statuszeile im Formular nennt nach jedem Durchlauf, wie viele Aufgaben
+In der Web-App tragen übernommene Aufgaben ein kleines Schulzeichen, und ein
+Tipp darauf öffnet ein **Anzeigeblatt statt des Editors**: Fach, Fälligkeit und
+die Notiz in ganzer Länge, darunter *Quelle: UNTIS*. Bearbeiten geht dort nicht,
+und das ist kein Riegel aus Vorsicht — eine Änderung hielte nicht, weil der
+nächste Abruf wieder die Fassung der Schule schreibt. Ein Feld, dessen Inhalt
+stillschweigend zurückfällt, wäre schlimmer als eines, das es nicht gibt. Wer
+etwas anders braucht, legt eine eigene Aufgabe an; die zeigt *Quelle: SymDo* und
+bleibt vollständig bearbeitbar.
+
+**Wer abgehakt hat, steht in der Farbe des Häkchens**: orange, wenn es hier
+gesetzt wurde, in der Akzentfarbe, wenn es aus WebUntis kam. Damit ist ohne
+Nachfragen zu sehen, ob das Kind fertig ist oder die Lehrkraft die Aufgabe
+abgeschlossen hat.
+
+Die Statuszeile im Formular nennt nach jedem Durchlauf, wie viele Aufgaben
 kamen, wie viele neu und wie viele zurückgezogen waren.
 
 **Grenzen**: Hausaufgaben hängen an Mitgliedern mit der Rolle *Kind* und

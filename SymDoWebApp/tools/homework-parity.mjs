@@ -30,7 +30,8 @@ function schneide(name) {
     }
     return html.slice(start, i + 1);
 }
-const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwOffene', 'hwGruppen', 'hwFuerSlot', 'hwFaecherFuerKind'];
+const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwOffene', 'hwErledigte', 'hwGruppen',
+    'hwFuerSlot', 'hwFaecherFuerKind'];
 const F = new Function(NAMEN.map(schneide).join('\n') + '\nreturn {' + NAMEN.join(', ') + '};')();
 
 let fehler = 0, anzahl = 0;
@@ -136,6 +137,26 @@ pruefe('ohne Kind bleibt der Katalog',
     F.hwFaecherFuerKind(null, SUBJECTS), ['Mathematik', 'Deutsch', 'Sport']);
 pruefe('ohne Katalog nur die eigenen',
     F.hwFaecherFuerKind(kind, []), ['Mathematik', 'Sport', 'Deutsch']);
+
+// ── Erledigte: neueste zuerst, fuer den eingeklappten Abschnitt ────────────
+const fertig = [
+    { id: 'f1', childId: 'k1', subject: 'Mathematik', due: '2026-09-08', done: true, doneAt: 100 },
+    { id: 'f2', childId: 'k1', subject: 'Deutsch', due: '2026-09-09', done: true, doneAt: 300 },
+    { id: 'f3', childId: 'k1', subject: 'Sport', due: '2026-09-07', done: true, doneAt: 200 },
+    { id: 'f4', childId: 'k1', subject: 'Kunst', due: '2026-09-05', done: false, doneAt: 0 },
+    { id: 'f5', childId: 'k2', subject: 'Musik', due: '2026-09-09', done: true, doneAt: 999 },
+    // aus einem alten Bestand: ohne Zeitpunkt entscheidet die Faelligkeit
+    { id: 'f6', childId: 'k1', subject: 'Physik', due: '2026-09-06', done: true },
+    { id: 'f7', childId: 'k1', subject: 'Chemie', due: '2026-09-11', done: true },
+];
+pruefe('erledigte eines Kindes, neueste zuerst',
+    F.hwErledigte(fertig, 'k1').map(i => i.id), ['f2', 'f3', 'f1', 'f7', 'f6']);
+pruefe('offene sind nicht dabei', F.hwErledigte(fertig, 'k1').some(i => i.id === 'f4'), false);
+pruefe('fremdes Kind bleibt draussen', F.hwErledigte(fertig, 'k1').some(i => i.id === 'f5'), false);
+pruefe('ohne Kind alle erledigten', F.hwErledigte(fertig, '').length, 6);
+pruefe('ein leerer Bestand ist leer', F.hwErledigte([], 'k1'), []);
+pruefe('offene und erledigte ergeben zusammen den Bestand des Kindes',
+    F.hwOffene(fertig, 'k1').length + F.hwErledigte(fertig, 'k1').length, 6);
 
 console.log(`\n${anzahl} Zusicherungen, ${fehler} Abweichung(en).`);
 process.exit(fehler === 0 ? 0 : 1);

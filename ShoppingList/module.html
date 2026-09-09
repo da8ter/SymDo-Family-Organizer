@@ -3618,6 +3618,50 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    klein: es erklaert etwas, es meldet nichts. */
 .hw-schule { font-size: 11px; opacity: .5; margin-left: 5px; }
 .hw-quelle { font-size: 12px; line-height: 1.4; color: var(--muted); padding: 2px 2px 0; }
+/* Das Anzeigeblatt einer Aufgabe, die aus der Schule kam. Die Huelle #hwForm
+   erbt den Abstand des Blattes nicht (sie ist selbst der Flex-Kasten), deshalb
+   hier ihre eigene Spalte. */
+#hwForm { display: flex; flex-direction: column; gap: 12px; }
+#hwView { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.hw-view-kopf { display: flex; align-items: baseline; gap: 10px; }
+.hw-view-fach { font-size: 16px; font-weight: 700; flex: 1 1 auto; min-width: 0; }
+/* BEIDE Elementarten nennen: /icons.js ersetzt jedes <i> nachtraeglich durch
+   ein <svg> und uebernimmt dabei nur die Klassen. Mit „i" allein galt der
+   Abstand die ersten Millisekunden und danach nie wieder — im Bild klebte das
+   Symbol am Fachnamen. Dieselbe Falle wie bei .section-toggle .chev. */
+.hw-view-fach i, .hw-view-fach svg {
+  margin-right: 9px;
+  opacity: .7;
+  width: 15px; height: 15px;
+  vertical-align: -1px;
+}
+.hw-view-faellig { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
+.hw-view-notiz {
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Voll abgebildet, solange der Schirm reicht — erst danach ein Balken. Der
+     Deckel ist die halbe Schirmhoehe: das Blatt selbst darf 88 % hoch werden,
+     und Kopf, Quellenzeile und Fusszeile brauchen den Rest. */
+  max-height: 50vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Hausrezept, je Selektor eigen (Pseudoelemente erben nicht) und der Standard
+   nur dort, wo es die Pseudoelemente nicht gibt. */
+.hw-view-notiz::-webkit-scrollbar { width: 6px; height: 6px; }
+.hw-view-notiz::-webkit-scrollbar-track { background: transparent; }
+.hw-view-notiz::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .hw-view-notiz {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent) 70%, transparent) transparent;
+  }
+}
 .hw-zeile {
   display: flex; align-items: center; gap: 10px;
   background: var(--surface); border-radius: 12px; padding: 8px 10px;
@@ -3630,6 +3674,25 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   background: transparent; cursor: pointer;
 }
 .hw-haken:hover { border-color: var(--accent); }
+/* Abgehakt: gefuellter Kreis mit Haken, die Zeile tritt zurueck. Durchgestrichen
+   wird nur der Fachname — eine durchgestrichene Notiz ist schwer zu lesen, und
+   sie ist der Inhalt, den man nachschlagen will.
+
+   Die Farbe sagt, WER gehakt hat: orange, wenn es hier geschah, und die
+   Akzentfarbe, wenn es aus WebUntis kam. Andersherum waere es falsch — die
+   Akzentfarbe ist in dieser App die Farbe des eigenen Tuns, aber genau darum
+   soll das eigene Haekchen sich davon abheben und nicht mit jedem anderen
+   Knopf verschwimmen. */
+.hw-haken.an {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.hw-haken.an.schule { border-color: var(--accent); background: var(--accent); }
+.hw-haken.an i, .hw-haken.an svg { width: 11px; height: 11px; }
+.hw-zeile.erledigt { opacity: .62; }
+.hw-zeile.erledigt .hw-name { text-decoration: line-through; }
 .hw-fach {
   flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -4168,16 +4231,29 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <button class="btn-close-overlay" data-close="hwOverlay"><i class="fa-light fa-xmark"></i></button>
     </div>
     <div class="overlay-body">
-      <div class="form-row inline" id="hwChildRow">
-        <label id="lblHwChild"></label>
-        <select id="hwChild"></select>
+      <!-- Zwei Gesichter, ein Blatt: das Formular fuer eigene Aufgaben, das
+           Anzeigeblatt fuer die aus der Schule. Getrennt und nicht als
+           gesperrtes Formular, weil ein graues Eingabefeld aussieht wie ein
+           Fehler — hier ist es Absicht: was die Schule schickt, gehoert ihr. -->
+      <div id="hwForm">
+        <div class="form-row inline" id="hwChildRow">
+          <label id="lblHwChild"></label>
+          <select id="hwChild"></select>
+        </div>
+        <div class="form-row inline"><label id="lblHwSubject"></label><select id="hwSubject"></select></div>
+        <div class="form-row inline"><label id="lblHwDue"></label><input id="hwDue" type="date" /></div>
+        <div class="form-row"><label id="lblHwNote"></label><textarea id="hwNote" rows="2" maxlength="500"></textarea></div>
       </div>
-      <div class="form-row inline"><label id="lblHwSubject"></label><select id="hwSubject"></select></div>
-      <div class="form-row inline"><label id="lblHwDue"></label><input id="hwDue" type="date" /></div>
-      <div class="form-row"><label id="lblHwNote"></label><textarea id="hwNote" rows="2" maxlength="500"></textarea></div>
-      <!-- Nur bei einer Aufgabe, die aus der Schule kam: dann gewinnt beim
-           naechsten Abruf wieder deren Fassung, und das soll vorher dastehen
-           und nicht hinterher auffallen. -->
+      <div id="hwView" style="display:none">
+        <div class="hw-view-kopf">
+          <span class="hw-view-fach" id="hwViewSubject"></span>
+          <span class="hw-view-faellig" id="hwViewDue"></span>
+        </div>
+        <!-- Die Notiz in ganzer Laenge, und erst wenn der Schirm nicht mehr
+             reicht ein Balken IN ihr: so bleiben Fach, Faelligkeit und die
+             Knoepfe stehen, statt mit hinauszuwandern. -->
+        <div class="hw-view-notiz" id="hwViewNote"></div>
+      </div>
       <div class="hw-quelle" id="hwQuelle" style="display:none"></div>
     </div>
     <div class="overlay-footer">
@@ -5281,6 +5357,10 @@ let dashPriority = ls.get('symdo.dashboardPriority') || '';
 // loescht die Auswahl aber auch nicht mehr — sie gehoert allen Bereichen.
 const memberFilterIds = new Set();
 let completedExpanded = ls.get('symdo.completedExpanded') === '1';
+/* Eigener Merker fuer die Hausaufgaben: derselbe wie bei den Aufgabenlisten
+   waere eine Kopplung zwischen zwei Bereichen, die nichts miteinander zu tun
+   haben. Eingeklappt als Vorgabe — erledigt ist erledigt. */
+let hwDoneExpanded = ls.get('symdo.hwDoneExpanded') === '1';
 // „Zuletzt benutzt" startet wie in der App eingeklappt (nur In-Memory)
 let cartExpanded = false;
 
@@ -9236,7 +9316,9 @@ function renderDashboard() {
   });
   el.querySelectorAll('.hw-karte [data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
-    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: true });
+    // Zielzustand aus dem Attribut, mit „abhaken" als Rueckfall: die Karte
+    // zeigt nur Offenes, aber die Regel steht an EINER Stelle.
+    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: b.dataset.hwZiel !== '0' });
   }));
   el.querySelectorAll('.hw-karte .hw-zeile').forEach(z => z.addEventListener('click', () => {
     const eintrag = hausaufgaben.items.find(x => String(x.id) === z.dataset.hw);
@@ -10771,6 +10853,21 @@ function renderHausaufgaben() {
     html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
     gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects); });
   });
+  /* Erledigte ganz unten in einem eingeklappten Abschnitt — dasselbe Muster
+     wie in den Aufgabenlisten (.section-toggle), damit dieselbe Sache in der
+     App nicht zweimal anders aussieht. Sie verschwinden nicht: ein Kind soll
+     sehen, was es geschafft hat, und ein falsch gesetztes Haekchen muss
+     zurueckgenommen werden koennen. */
+  const fertig = hwErledigte(hausaufgaben.items, kind.userId);
+  if (fertig.length > 0) {
+    html += `<button type="button" class="section-toggle${hwDoneExpanded ? ' open' : ''}" id="hwDoneToggle">` +
+      `<i class="fa-light fa-circle-check"></i>${escapeHtml(translate('Completed'))}` +
+      `<span class="count">${fertig.length}</span>` +
+      `<i class="fa-light fa-chevron-right chev"></i></button>`;
+    if (hwDoneExpanded) {
+      fertig.forEach(i => { html += hwZeileHtml(i, subjects); });
+    }
+  }
   renderInto(bereich, html);
   hwBinden(bereich);
 }
@@ -10778,9 +10875,21 @@ function renderHausaufgaben() {
 function hwZeileHtml(i, subjects) {
   const fach = hwFachInfo(i.subject, subjects);
   const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
-  return `<div class="hw-zeile" data-hw="${escapeHtml(String(i.id))}">` +
-    `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
-    ` aria-label="${escapeHtml(translate('Done'))}"></button>` +
+  const fertig = i.done === true;
+  /* WER gehakt hat, steht in der Farbe: hier gesetzt orange, aus der Schule
+     uebernommen in der Akzentfarbe. Ein alter Eintrag ohne das Feld gilt als
+     hier gesetzt — das war er auch. */
+  const vonUntis = fertig && String(i.doneBy || '') === 'untis';
+  /* Der Zielzustand steht im Attribut, nicht im Code: derselbe Knopf hakt ab
+     und nimmt zurueck, und ein doppelt zugestellter Klick tut dasselbe wie
+     einer. */
+  return `<div class="hw-zeile${fertig ? ' erledigt' : ''}" data-hw="${escapeHtml(String(i.id))}">` +
+    `<button type="button" class="hw-haken${fertig ? (vonUntis ? ' an schule' : ' an') : ''}"` +
+    ` data-hw-done="${escapeHtml(String(i.id))}"` +
+    ` data-hw-ziel="${fertig ? '0' : '1'}"` +
+    ` aria-label="${escapeHtml(translate(fertig ? 'Not done yet' : 'Done'))}">` +
+      (fertig ? `<i class="fa-light fa-check"></i>` : '') +
+    `</button>` +
     `<span class="hw-fach"${farbe}>` +
       (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
     `</span>` +
@@ -10802,10 +10911,16 @@ function hwZeileHtml(i, subjects) {
 function hwBinden(bereich) {
   const neu = bereich.querySelector('#hwNeu');
   if (neu) neu.addEventListener('click', () => hwEditorOeffnen(null));
+  const klapp = bereich.querySelector('#hwDoneToggle');
+  if (klapp) klapp.addEventListener('click', () => {
+    hwDoneExpanded = !hwDoneExpanded;
+    ls.set('symdo.hwDoneExpanded', hwDoneExpanded ? '1' : '0');
+    renderHausaufgaben();
+  });
   bereich.querySelectorAll('[data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     // Zielzustand, nicht umschalten — wie überall in dieser App.
-    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: true });
+    hausaufgabenAktion({ action: 'done', id: b.dataset.hwDone, done: b.dataset.hwZiel === '1' });
   }));
   bereich.querySelectorAll('.hw-zeile').forEach(z => z.addEventListener('click', () => {
     const eintrag = hausaufgaben.items.find(x => String(x.id) === z.dataset.hw);
@@ -10839,7 +10954,7 @@ function hwKarteHtml() {
     const fach = hwFachInfo(i.subject, subjects);
     html += `<div class="hw-zeile klein" data-hw="${escapeHtml(String(i.id))}">` +
       `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
-      ` aria-label="${escapeHtml(translate('Done'))}"></button>` +
+      ` data-hw-ziel="1" aria-label="${escapeHtml(translate('Done'))}"></button>` +
       `<span class="hw-text"><span class="hw-name">` +
         escapeHtml((namen[String(i.childId)] || '') + ' · ' + fach.name) +
       `</span>` + (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') + `</span>` +
@@ -10855,7 +10970,16 @@ let hwCtx = null;
 function hwEditorOeffnen(bestand, vorschlag) {
   const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
   if (kinder.length === 0) { showToast(hwFehlertext({ error: { code: 'no_child' } })); return; }
-  hwCtx = { id: bestand ? String(bestand.id) : '', proposal: (vorschlag && vorschlag.proposal) || null };
+  /* Eine Aufgabe aus WebUntis wird ANGEZEIGT, nicht bearbeitet. Nicht aus
+     Vorsicht, sondern weil eine Aenderung hier nicht haelt: beim naechsten
+     Abruf gewinnt wieder die Fassung der Schule. Ein Feld, dessen Inhalt
+     stillschweigend zurueckfaellt, ist schlimmer als eines, das es nicht gibt.
+     Das Haekchen bleibt moeglich — es gehoert dem Kind und liegt in der
+     Zeile, nicht in diesem Blatt. */
+  const nurLesen = !!bestand && String(bestand.source || '') === 'untis';
+  hwCtx = { id: bestand ? String(bestand.id) : '', proposal: (vorschlag && vorschlag.proposal) || null,
+            nurLesen: nurLesen };
+  if (nurLesen) { hwAnzeigeblatt(bestand); return; }
   const kindWahl = document.getElementById('hwChild');
   const kindZeile = document.getElementById('hwChildRow');
   const imKindmodus = kindGewaehlt();
@@ -10885,20 +11009,50 @@ function hwEditorOeffnen(bestand, vorschlag) {
     : String((vorschlag && vorschlag.note) || '');
   document.getElementById('hwOverlayTitle').textContent =
     bestand ? translate('Homework') : translate('New homework');
+  document.getElementById('hwForm').style.display = '';
+  document.getElementById('hwView').style.display = 'none';
+  /* Die Herkunft steht an einer bestehenden Aufgabe, aber nicht an einer neuen:
+     dort ist sie noch nicht entschieden. */
   const quelle = document.getElementById('hwQuelle');
-  if (quelle) {
-    const fremd = !!bestand && String(bestand.source || '') === 'untis';
-    quelle.style.display = fremd ? '' : 'none';
-    quelle.textContent = fremd
-      ? translate('From the school. Subject, due date and text are taken from there again on the next fetch — the tick stays here.')
-      : '';
-  }
+  quelle.style.display = bestand ? '' : 'none';
+  quelle.textContent = bestand ? translate('Source: SymDo') : '';
   document.getElementById('btnHwDelete').style.display = bestand ? '' : 'none';
+  document.getElementById('btnHwSave').style.display = '';
+  document.getElementById('btnHwCancel').textContent = translate('Cancel');
+  openOverlay('hwOverlay');
+}
+
+/**
+ * Das Anzeigeblatt: Fach, Faelligkeit, die Notiz in ganzer Laenge, Quelle.
+ *
+ * Kein Speichern, kein Loeschen und kein einziges Eingabefeld — was die Schule
+ * schickt, gehoert ihr. Geloescht wird es dort, wo es entstand: verschwindet
+ * die Aufgabe in WebUntis, nimmt sie der naechste Abruf auch hier weg.
+ */
+function hwAnzeigeblatt(eintrag) {
+  const fach = hwFachInfo(eintrag.subject, (stundenplan && stundenplan.subjects) || []);
+  document.getElementById('hwOverlayTitle').textContent = translate('Homework');
+  document.getElementById('hwForm').style.display = 'none';
+  document.getElementById('hwView').style.display = '';
+  document.getElementById('hwViewSubject').innerHTML =
+    (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') + escapeHtml(fach.name);
+  document.getElementById('hwViewDue').textContent = hwFaelligText(eintrag.due);
+  /* textContent und nicht innerHTML: der Text kommt aus einem fremden System
+     und wird hier nur gezeigt. white-space: pre-wrap haelt die Absaetze. */
+  document.getElementById('hwViewNote').textContent = String(eintrag.note || '');
+  const quelle = document.getElementById('hwQuelle');
+  quelle.style.display = '';
+  quelle.textContent = translate('Source: UNTIS');
+  document.getElementById('btnHwDelete').style.display = 'none';
+  document.getElementById('btnHwSave').style.display = 'none';
+  document.getElementById('btnHwCancel').textContent = translate('Close');
   openOverlay('hwOverlay');
 }
 
 function hwLoeschen() {
-  if (!hwCtx || !hwCtx.id) return;
+  // Zweiter Riegel: der Knopf ist verborgen, aber ein Tastendruck oder ein
+  // spaeter angebauter Weg soll hier nicht durchkommen.
+  if (!hwCtx || !hwCtx.id || hwCtx.nurLesen) return;
   // Mit Rueckfrage, wie bei Notiz und Termin: ein Fehlgriff ist folgenlos.
   showConfirm(translate('Delete this homework?'), translate('Delete'), () => {
     hausaufgabenAktion({ action: 'delete', id: hwCtx.id }, () => {
@@ -10909,6 +11063,7 @@ function hwLoeschen() {
 }
 
 function hwSpeichern() {
+  if (hwCtx && hwCtx.nurLesen) return;
   const kind = document.getElementById('hwChild').value;
   const fach = document.getElementById('hwSubject').value;
   const due = document.getElementById('hwDue').value;
@@ -10962,6 +11117,20 @@ function hwOffene(items, childId) {
   const kind = String(childId || '');
   return (Array.isArray(items) ? items : []).filter(i =>
     i && i.done !== true && (kind === '' || String(i.childId) === kind));
+}
+
+/** Die erledigten eines Kindes, das zuletzt Abgehakte zuerst. Ohne Zeitpunkt
+    (aus einem alten Bestand) zaehlt die Faelligkeit, damit die Reihe nicht
+    zufaellig wird. */
+function hwErledigte(items, childId) {
+  const kind = String(childId || '');
+  return (Array.isArray(items) ? items : [])
+    .filter(i => i && i.done === true && (kind === '' || String(i.childId) === kind))
+    .sort((a, b) => {
+      const x = Number(a.doneAt || 0), y = Number(b.doneAt || 0);
+      if (x !== y) return y - x;
+      return String(b.due || '').localeCompare(String(a.due || ''));
+    });
 }
 
 /** Nach Faelligkeit gruppiert: ueberfaellig, heute, morgen, spaeter, ohne Datum.

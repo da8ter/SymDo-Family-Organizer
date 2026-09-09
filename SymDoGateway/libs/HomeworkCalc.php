@@ -23,6 +23,16 @@ class HomeworkCalc
     public const KEEP_OPEN_DAYS = 60;
     /** Weiter als ein Jahr voraus oder zurück ist ein Tipp- oder Modellfehler. */
     public const DUE_WINDOW_DAYS = 365;
+    /** Urheber eines Häkchens: hier gesetzt … */
+    public const BY_USER = 'user';
+    /** … oder aus WebUntis übernommen. */
+    public const BY_UNTIS = 'untis';
+
+    /** Ein Urheber, den es gibt. Alles andere gilt als hier gesetzt. */
+    public static function UrheberSauber(string $roh): string
+    {
+        return trim($roh) === self::BY_UNTIS ? self::BY_UNTIS : self::BY_USER;
+    }
 
     /** Ein Datum in der Form JJJJ-MM-TT, das es wirklich gibt. */
     public static function DatumGueltig(string $datum): bool
@@ -122,6 +132,11 @@ class HomeworkCalc
             'due'       => $due,
             'done'      => $erledigt,
             'doneAt'    => $erledigt ? max(0, (int)($roh['doneAt'] ?? $jetzt)) : 0,
+            /* WER abgehakt hat. Die Oberflaeche zeigt es in der Farbe des
+               Haekchens: hier gesetzt oder aus der Schule uebernommen. Ein
+               alter Eintrag ohne das Feld gilt als hier gesetzt — das war er
+               auch, denn vorher gab es nichts anderes. */
+            'doneBy'    => $erledigt ? self::UrheberSauber((string)($roh['doneBy'] ?? self::BY_USER)) : '',
             'note'      => mb_substr(trim((string)($roh['note'] ?? '')), 0, self::NOTE_MAX),
             'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis'], true)
                 ? (string)$roh['source'] : 'app',
@@ -305,6 +320,10 @@ class HomeworkCalc
             if (($n['done'] ?? false) === true && ($satz['done'] ?? false) !== true) {
                 $satz['done'] = true;
                 $satz['doneAt'] = $jetzt;
+                /* Dieses Haekchen kommt aus der Schule, nicht vom Kind. Die
+                   Oberflaeche faerbt es deshalb anders — sonst haette niemand
+                   eine Moeglichkeit zu sehen, wer es gesetzt hat. */
+                $satz['doneBy'] = self::BY_UNTIS;
             }
             if ($satz !== $alt) {
                 $satz['updatedAt'] = $jetzt;

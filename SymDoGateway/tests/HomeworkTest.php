@@ -275,5 +275,51 @@ pruefe('leerer Abruf zieht die drei im Fenster zurueck', $e5['entfernt'], 3);
 pruefe('der Handeintrag bleibt auch dann',
     count(array_filter($e5['items'], static fn(array $i): bool => (string)$i['id'] === 'a1')), 1);
 
+// ── Wer hat abgehakt? ───────────────────────────────────────────────────────
+$sauber = static fn(string $s): string => HomeworkCalc::UrheberSauber($s);
+pruefe('Urheber WebUntis bleibt', $sauber('untis'), 'untis');
+pruefe('alles andere gilt als hier gesetzt', [$sauber(''), $sauber('app'), $sauber('unfug')],
+    ['user', 'user', 'user']);
+$normOhne = HomeworkCalc::Normalisieren(
+    ['childId' => 'k1', 'subject' => 'Mathematik', 'due' => '2026-09-10', 'done' => true],
+    ['Mathematik'], ['k1'], '2026-09-09', $jetzt);
+pruefe('ein Haekchen ohne Angabe gilt als hier gesetzt', $normOhne['doneBy'], 'user');
+$normUntis = HomeworkCalc::Normalisieren(
+    ['childId' => 'k1', 'subject' => 'Mathematik', 'due' => '2026-09-10', 'done' => true,
+     'doneBy' => 'untis'],
+    ['Mathematik'], ['k1'], '2026-09-09', $jetzt);
+pruefe('mit Angabe bleibt es WebUntis', $normUntis['doneBy'], 'untis');
+$normOffen = HomeworkCalc::Normalisieren(
+    ['childId' => 'k1', 'subject' => 'Mathematik', 'due' => '2026-09-10', 'done' => false,
+     'doneBy' => 'untis'],
+    ['Mathematik'], ['k1'], '2026-09-09', $jetzt);
+pruefe('offen hat keinen Urheber', $normOffen['doneBy'], '');
+
+// Die Sperrklinke schreibt WebUntis als Urheber — und laesst ein vorhandenes
+// eigenes Haekchen samt Urheber in Ruhe.
+$mitOffen = [
+    ['id' => 'b1', 'srcId' => 5001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => false, 'doneAt' => 0, 'doneBy' => '', 'note' => '', 'source' => 'untis',
+     'createdAt' => $jetzt - 100, 'updatedAt' => $jetzt - 100],
+    ['id' => 'b2', 'srcId' => 5002, 'childId' => 'k1', 'subject' => 'Kunst', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => $jetzt - 50, 'doneBy' => 'user', 'note' => '', 'source' => 'untis',
+     'createdAt' => $jetzt - 100, 'updatedAt' => $jetzt - 50],
+];
+$eB = HomeworkCalc::Zusammenfuehren($mitOffen, [
+    ['srcId' => 5001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => 0, 'doneBy' => 'untis', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+    ['srcId' => 5002, 'childId' => 'k1', 'subject' => 'Kunst', 'due' => '2026-09-11',
+     'done' => false, 'doneAt' => 0, 'doneBy' => '', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+$nachB = [];
+foreach ($eB['items'] as $i) {
+    $nachB[(string)$i['id']] = $i;
+}
+pruefe('Haekchen der Schule traegt WebUntis', $nachB['b1']['doneBy'], 'untis');
+pruefe('das eigene Haekchen behaelt seinen Urheber', $nachB['b2']['doneBy'], 'user');
+pruefe('und bleibt erledigt', $nachB['b2']['done'], true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

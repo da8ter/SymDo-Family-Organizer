@@ -23,8 +23,8 @@ require_once __DIR__ . '/HomeworkCalc.php';
  * Ablageform im Attribut HomeworkStore:
  *
  *   { "v":1, "rev":12,
- *     "items":[{"id","srcId","childId","subject","due","done","doneAt","note",
- *               "source","createdAt","updatedAt"}] }
+ *     "items":[{"id","srcId","childId","subject","due","done","doneAt","doneBy",
+ *               "note","source","createdAt","updatedAt"}] }
  *
  * `srcId` ist die Nummer der Aufgabe in der fremden Quelle (heute WebUntis).
  * Sie ist der Schluessel, an dem ein zweiter Abruf denselben Eintrag
@@ -314,6 +314,10 @@ trait Homework
             }
             $satz['done'] = $ziel;
             $satz['doneAt'] = $ziel ? $jetzt : 0;
+            /* Hier hat ein Mensch gehakt — ueber die App, die Kachel oder den
+               Sprachdialog. Beim Zuruecknehmen faellt der Urheber weg, damit
+               ein spaeteres Haekchen der Schule nicht als das eigene erscheint. */
+            $satz['doneBy'] = $ziel ? HomeworkCalc::BY_USER : '';
         } else {
             if (array_key_exists('subject', $body)) {
                 $fach = HomeworkCalc::FachAufloesen((string)$body['subject'], $this->HomeworkFaecher());
@@ -383,6 +387,11 @@ trait Homework
             }
             $r['childId'] = $kind;
             $r['source'] = $quelle;
+            /* Ein Haekchen, das mit dem Abruf HEREINKOMMT, gehoert der Schule.
+               Ohne diese Zeile gaelte es beim ersten Abruf als hier gesetzt
+               (Normalisieren nimmt „hier" als Rueckfall), und die Oberflaeche
+               faerbte es falsch. */
+            $r['doneBy'] = HomeworkCalc::BY_UNTIS;
             $satz = HomeworkCalc::Normalisieren($r, $faecher, $kinder, $heute, $jetzt);
             if ($satz === null) {
                 // Ohne Fach oder mit unmöglicher Fälligkeit: übergehen, nicht
