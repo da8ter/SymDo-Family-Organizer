@@ -3687,6 +3687,16 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Der Anlege-Knopf haelt sich zurueck: auf dem Tablett schwach sichtbar, in
+   einer leeren Zelle etwas deutlicher, weil dort sonst nichts steht. */
+.ct-neu {
+  border: 0; background: transparent; color: var(--faint); cursor: pointer;
+  font: inherit; font-size: 14px; line-height: 1; text-align: left;
+  padding: 1px 5px; margin-top: auto; align-self: flex-start;
+}
+.ct-zelle.leer .ct-neu { color: var(--muted); }
+.ct-neu:hover { color: var(--accent); }
+
 @media (max-width: 420px) {
   /* Auf dem Handy bleibt die Woche eine Woche: sieben Spalten und schieben.
      Drei Tage waeren keine Wochenansicht, und ein Umbruch in zwei Reihen
@@ -10674,6 +10684,13 @@ function calTafelZelleHtml(zeileId, tagKey, liste, wochenende, heute, farben, sc
   if (wochenende) klassen.push('wochenende');
   if (heute) klassen.push('heute');
   if (!liste.length) klassen.push('leer');
+  /* Anlegen nur ueber einen KNOPF, nicht durch Tippen auf die freie Flaeche:
+     die Zelle liegt in einem waagerechten Rollbereich, und jeder Ansatz zum
+     Schieben endete sonst als Fehl-Anlage — auf einem geteilten Kuechentablett
+     besonders unschoen. */
+  const neu = `<button type="button" class="ct-neu" data-ct-neu="${escapeHtml(tagKey)}"` +
+    ` data-ct-mid="${escapeHtml(zeileId)}" aria-label="${escapeHtml(translate('New appointment on %1').replace('%1', tagKey))}"` +
+    ` title="${escapeHtml(translate('New appointment on %1').replace('%1', tagKey))}">+</button>`;
   const mehr = teil.versteckt > 0
     ? `<button type="button" class="ct-mehr" data-ct-mehr="${escapeHtml(zeileId + '|' + tagKey)}">` +
       escapeHtml(teil.versteckt === 1
@@ -10682,7 +10699,7 @@ function calTafelZelleHtml(zeileId, tagKey, liste, wochenende, heute, farben, sc
     : '';
   return `<div class="${klassen.join(' ')}" data-key="z:${escapeHtml(zeileId || 'familie')}:${escapeHtml(tagKey)}" data-nest="1">` +
     teil.sichtbar.map(e => calTafelChipHtml(e, tagKey, farben, schreibbar, zeigeWiederholung)).join('') +
-    mehr +
+    mehr + neu +
   `</div>`;
 }
 
@@ -10766,6 +10783,13 @@ function bindCalTafel(knoten) {
       const s = b.dataset.ctMehr;
       if (calTafelOffen.has(s)) calTafelOffen.delete(s); else calTafelOffen.add(s);
       renderCalTafel();
+    }));
+    const anlegen = n.classList && n.classList.contains('ct-neu') ? [n] : Array.from(n.querySelectorAll('.ct-neu'));
+    anlegen.forEach(b => b.addEventListener('click', () => {
+      if (calWritable().length === 0) { showToast(translate('No writable calendar available.')); return; }
+      const mid = b.dataset.ctMid || '';
+      openCalEditor({ due: b.dataset.ctNeu, time: '', allDay: false,
+                      members: mid ? [mid] : [], membersFest: true }, null, null);
     }));
   });
 }
@@ -11332,8 +11356,15 @@ function openCalEditor(entwurf, vorschlag, bestand) {
   // Mitglieder: aus dem Vorschlag das Mitglied der Empfaengeradresse, sonst der
   // Standardnutzer — genau wie bei einer Aufgabe. Beim Aendern gilt, was am Termin
   // steht, auch wenn das niemand ist.
-  ceAssigned = Array.isArray(e.members) && e.members.length ? e.members.slice()
-    : (bestand ? [] : (e.userId ? [e.userId] : (currentUserID() ? [currentUserID()] : [])));
+  /* Aus der Familientafel heraus ist die Zuordnung AUSDRUECKLICH gesetzt — auch
+     wenn sie leer ist. Ohne diesen Riegel faellt eine leere Liste bis
+     currentUserID() durch: ein aus der Zeile „Familie" angelegter Termin bekaeme
+     den aktuellen Nutzer und stuende danach in einer ANDEREN Zeile als der, aus
+     der er entstand. */
+  ceAssigned = (entwurf && entwurf.membersFest === true)
+    ? (Array.isArray(e.members) ? e.members.slice() : [])
+    : (Array.isArray(e.members) && e.members.length ? e.members.slice()
+      : (bestand ? [] : (e.userId ? [e.userId] : (currentUserID() ? [currentUserID()] : []))));
   renderAssignList('ceAssignList', ceAssigned);
 
   // Erinnerung: bei einem Termin mit Uhrzeit sinnvoll voreingestellt, ganztaegig

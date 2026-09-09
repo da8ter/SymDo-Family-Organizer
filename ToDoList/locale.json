@@ -669,7 +669,8 @@
             "Say: %s": "sag: %s",
             "CW %1": "KW %1",
             "Family": "Familie",
-            "continues": "läuft weiter"
+            "continues": "läuft weiter",
+            "New appointment on %1": "Neuer Termin am %1"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",
