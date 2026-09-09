@@ -43,9 +43,10 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **12. Benachrichtigungen**
 - **13. Sprachdialog und Gerätesteuerung**
 - **14. Stundenplan aus WebUntis**
-- **15. Klassenseiten (Edumaps)**
-- **16. Statusvariablen**
-- **17. PHP-Befehlsreferenz**
+- **15. Hausaufgaben**
+- **16. Klassenseiten (Edumaps)**
+- **17. Statusvariablen**
+- **18. PHP-Befehlsreferenz**
 
 ## 1. Funktionsumfang
 
@@ -69,6 +70,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Sprachdialog** — 27 Werkzeuge vom Einkaufszettel bis zur Gerätesteuerung, mit Rückfragen bei allem Heiklen, Tageskontingent und drei getrennten Einwilligungen (Kapitel 13)
 - **Gerätesteuerung per Sprache** — Licht, Rollläden, Heizung, Steckdosen, Szenen und Skripte in freigegebenen Bereichen schalten und lesen, dazu einmalige und dauerhafte Zeitpläne als gewöhnliche Symcon-Ereignisse (Kapitel 13)
 - **Stundenplan aus WebUntis** — Unterricht, Vertretungen, Entfall, Raum und Lehrer je Kind, für die laufende und die kommende Woche (Kapitel 14)
+- **Hausaufgaben** — Fach, Fälligkeit und Notiz je Kind: in der Web-App, an der Stunde in der Stundenplan-Kachel, per Sprache und als vierte Vorschlagsart der KI (Kapitel 15)
 - **Klassenseiten (Edumaps)** — die Klassenseite der Schule als Quelle für KI-Vorschläge und, auf Wunsch, als gespiegelte Notizen mit Kartenansicht (Kapitel 15)
 - **Essensplan** — die Kachel **SymDo - Essensplan** hängt am Gateway: Gerichte je Tag, Zutaten in den Einkaufswagen, KI-Gerichtsbilder; der Sprachdialog liest und plant ihn mit
 
@@ -323,7 +325,40 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 
 Was daraus wird: Der Stundenplan zeigt **datierte Tage** mit Datum im Spaltenkopf und blättert durch beide Wochen; entfallene Stunden erscheinen als gestrichelte Kapsel, Vertretungen mit Kante; freie Tage nennen den Grund. Das **Briefing** nennt, was ausfällt und was dafür läuft. Der **Sprachdialog** beantwortet „Was hat Tim am Dienstag?" und „Fällt bei Mia etwas aus?". Eigene Zulieferer können denselben Weg nutzen: `STPL_ImportSlots()` im Stundenplan-Modul.
 
-## 15. Klassenseiten (Edumaps)
+## 15. Hausaufgaben
+
+Fach, bis wann, was zu tun ist — je Eintrag genau ein Kind. Bewusst **keine
+Aufgabenliste**: eine Aufgabe hat kein Fach, und in einer Liste stünden
+Hausaufgaben zwischen „Zimmer aufräumen". Der Bestand liegt im Gateway, wie die
+Notizen.
+
+**Wo sie erscheinen**
+
+| Ort | Was man sieht |
+|---|---|
+| Web-App, Stundenplan-Bereich | Alle offenen des gezeigten Kindes, gruppiert nach überfällig, heute, morgen, später und ohne Datum. Ein Plus legt eine an, ein Tipp auf die Zeile ändert sie, der Kreis links hakt sie ab |
+| Web-App, Übersicht | Eine Karte für die Eltern: was heute, morgen oder überfällig ist, mit Kind und Fach. Der Stundenplan-Bereich gehört dem Kindmodus, die Übersicht allen |
+| Stundenplan-Kachel | An der Stunde ein Abzeichen mit der Zahl (Wochenraster) bzw. ein Punkt am Balken (Zeitachse). Was zu keiner Stunde des Tages passt, steht als Fußzeile unter der Spalte |
+| Sprachassistent | „Was hat Tim für morgen auf?", „Tim hat in Mathe Seite 42 bis Donnerstag auf", „Hak bei Mia Deutsch ab" |
+| KI-Auswertung | Ein Foto des Hausaufgabenhefts und die Klassenseite liefern Hausaufgaben als vierte Vorschlagsart neben Aufgabe, Termin und Notiz |
+| Push | Abends eine Meldung, wenn für morgen noch etwas offen ist (Kapitel 12) |
+
+**Das Fach** kommt aus dem Fachkatalog des Stundenplans, mit Symbol und Farbe.
+Gesagt oder geschrieben werden darf die Kurzform: „Mathe" wird zu
+„Mathematik". Ein Fach ohne Stunde (AG, Ersatzfach) ist zulässig — es hat
+trotzdem Hausaufgaben. Wird ein Fach umbenannt, verlieren alte Einträge Symbol
+und Zuordnung; der Name ist die Verbindung, hier wie im ganzen Stundenplan.
+
+**Aufbewahrung**: erledigte verschwinden nach 14 Tagen, offene ohne Erledigung
+nach 60. Höchstens 300 Einträge; darüber fallen die ältesten heraus. Gemessen
+wird beim Lesen, geschrieben erst bei der nächsten Änderung.
+
+**Grenzen**: Hausaufgaben hängen an Mitgliedern mit der Rolle *Kind* und
+brauchen deren Kennung. Sie erscheinen **nicht** in der Geräte-Erkundung der
+App — dieselbe Rücksicht wie bei den Notizen, deren Listenart die
+ausgelieferte iOS-App nicht kennt.
+
+## 16. Klassenseiten (Edumaps)
 
 Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termine, Elternbriefe mit Fristen, Materiallisten, den Stundenplan als PDF. Das Gateway liest die Seite regelmäßig, erkennt **geänderte Karten** und schickt jede einzeln durch dieselbe Kette wie eine Schulmail — KI-Analyse, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Nichts entsteht ungefragt.
 
@@ -338,11 +373,11 @@ Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termin
 
 In der App und in der Notiz-Kachel erscheint die Klassenseite als **Kartenansicht** mit den Farben der Seite, aufklappbaren Bereichen, PDF-Vorschau und, bei buchbaren Karten, der Buchungslage. Eine **Sperrliste** hält einzelne Karten oder ganze Seiten von der Auswertung fern, mit Einzelfreigabe; **Alle Karten auswerten** stößt eine vollständige Analyse an. Die Vorschläge zählen auf das KI-Tageslimit — ist es erreicht, folgt der Rest am nächsten Tag.
 
-## 16. Statusvariablen
+## 17. Statusvariablen
 
 Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt. Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
 
-## 17. PHP-Befehlsreferenz
+## 18. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 
@@ -369,6 +404,8 @@ int TGW_SendPush(int $InstanzID, string $Titel, string $Text, string $UserID = '
 // Listen in der App ausblenden
 string TGW_GetHiddenLists(int $InstanzID);
 void   TGW_SetListHidden(int $InstanzID, int $ListenID, bool $Versteckt);
+TGW_GetHomework(int $InstanzID, string $KindID): string  // Hausaufgaben als JSON (leer = alle Kinder)
+TGW_HomeworkRefreshTiles(int $InstanzID): void           // Stundenplan-Kacheln neu zeichnen lassen
 ```
 
 Beispiel — eigene Push-Nachricht aus einem Skript:

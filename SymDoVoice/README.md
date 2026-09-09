@@ -27,6 +27,7 @@ Der Sprachdialog spricht Deutsch, versteht natürliche Sätze und kann **nur**, 
 | **Notizen** | „Lies mir die Notiz zur Klassenfahrt vor", „Schreib eine Notiz für Tim: Sportzeug einpacken" |
 | **Essensplan** | „Was gibt es morgen zu essen?", „Plan für Freitag Pizza ein" |
 | **Stundenplan** | „Was hat Tim am Dienstag für Unterricht?", „Wann ist Mia morgen fertig?", „Fällt bei Tim etwas aus?" |
+| **Hausaufgaben** | „Was hat Tim für morgen auf?", „Tim hat in Mathe Seite 42 bis Donnerstag auf", „Hak bei Mia Deutsch ab" — Fach, Fälligkeit und Notiz je Kind |
 | **Tagesüberblick** | „Was steht heute an?" (Termine, fällige Aufgaben, Schule, Einkauf) |
 | **Nachrichten** | „Sag Tim, er soll den Tisch decken" (Push auf die Geräte der Person) |
 | **Symcon-Handbuch** | „Wie funktioniert IPS_SetEventCyclic?" — die Antwort kommt aus dem offiziellen Handbuch, vorgelesen statt verlinkt |

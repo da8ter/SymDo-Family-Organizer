@@ -196,6 +196,22 @@ Schultag zum Ferientag machen und umgekehrt.
 > Bedarf die Schule). Ob dort der Zeitraum im Namen steht, ist gleichgültig — der
 > Klammerzusatz wird entfernt.
 
+## Hausaufgaben an der Stunde
+
+Sind im Haus Hausaufgaben eingetragen (Bestand im **SymDo - Gateway**, siehe
+dessen Anleitung), zeigt die Kachel an der Stunde, ob dafür etwas zu tun ist:
+im Wochenraster ein Abzeichen mit der Zahl, in der Zeitachse ein Punkt am
+Balken. Die Notiz steht im Tipp, die Fachfarbe bleibt unberührt.
+
+Die Zahl fällt an die **erste** Stunde des Fachs an diesem Tag — zwei Stunden
+desselben Fachs verdoppeln sie nicht. Was zu keiner Stunde passt, weil das Fach
+an dem Tag keine hat, steht als Fußzeile unter der Spalte: eine Hausaufgabe,
+die nirgends erscheint, wäre schlimmer als eine an ungenauer Stelle.
+
+Angehängt wird das nur für die Kachel. `STPL_GetPlan()` bleibt unberührt, damit
+die Web-App und das Gateway denselben Plan wie bisher sehen; wer den Plan mit
+den Hausaufgaben braucht, nimmt `STPL_GetTilePlan()`.
+
 ## Grenzen
 
 - Der Plan selbst ist eine **Wochenvorlage, kein Kalender**: Vertretung, Ausfall
@@ -222,6 +238,8 @@ STPL_GetPlanForDate(int $InstanzID, string $Datum): string // der Plan eines Tag
 STPL_ImportSlots(int $InstanzID, string $Json): string  // datierte Stunden einspielen (siehe unten), Antwort als JSON
 STPL_FetchHolidays(int $InstanzID): string              // Ferien abrufen, Meldung zurück
 STPL_Refresh(int $InstanzID): void                      // Anzeige nachziehen (Timer)
+STPL_GetSubjects(int $InstanzID): string                // die Fächer als JSON: Name, Symbolklasse, Farbe
+STPL_GetTilePlan(int $InstanzID): string                // wie GetPlan, dazu offene Hausaufgaben je Stunde
 ```
 
 `STPL_ImportSlots` ist für Zulieferer wie WebUntis gedacht, ausdrücklich aber
