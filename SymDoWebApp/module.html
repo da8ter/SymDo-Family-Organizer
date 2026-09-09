@@ -547,8 +547,19 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   font: inherit; line-height: 1; padding: 4px 8px; border-radius: 999px;
 }
 .ct-wochenwahl > span {
-  min-width: 15ch; text-align: center; font-size: 13px; font-weight: 700;
+  min-width: 7ch; text-align: center; font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* In der Wochenansicht traegt der Wochenschritt schon die Auskunft; der
+   Kalendername darf die Kopfzeile nicht ueber drei Zeilen sprengen (am Handy
+   gemeldet). Unter 560px weicht er ganz — bei mehreren Kalendern steht der
+   Name ohnehin im Auswahlfeld. */
+.screen-head.ct-woche #calTitle {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+@media (max-width: 560px) {
+  .screen-head.ct-woche #calTitle { display: none; }
+  .ct-wochenspanne { display: none; }
 }
 .icon-btn {
   width: 38px; height: 38px;
@@ -3622,7 +3633,18 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   font-size: 12px; font-weight: 700; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
-.ct-name .avatar, .ct-name .avatar-fallback { flex: 0 0 auto; }
+/* BEIDE Formen, die avatarHtml() liefert: <img> mit Foto, <span> mit der
+   Initiale. Eine allgemeine .avatar-Regel gibt es in dieser Datei BEWUSST
+   nicht — jede Umgebung bemasst selbst (siehe den Kommentar bei
+   .note-folder .fav-badge img). Ohne diese Regel bleibt das Foto ein Quadrat in
+   ORIGINALGROESSE: am Handy gemeldet, jede Zeile war so hoch wie das Bild
+   breit und von der Woche waren zwei Personen zu sehen. */
+.ct-name img.avatar, .ct-name span.avatar {
+  flex: 0 0 auto;
+  width: 22px; height: 22px; border-radius: 999px; object-fit: cover;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
 .ct-name.familie .ct-vorname { color: var(--muted); }
 
 .ct-kopf {
@@ -3703,6 +3725,12 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 }
 .ct-zelle.leer .ct-neu { color: var(--muted); }
 .ct-neu:hover { color: var(--accent); }
+
+@media (max-width: 560px) {
+  /* Auf dem Handy nur dort ein Plus, wo sonst nichts steht: neben einem Termin
+     ist die Zelle 112px breit, und zwei Bedienelemente darin sind eines zu viel. */
+  .ct-zelle:not(.leer) .ct-neu { display: none; }
+}
 
 @media (max-width: 420px) {
   /* Auf dem Handy bleibt die Woche eine Woche: sieben Spalten und schieben.
@@ -10300,6 +10328,14 @@ function calWochenTitel(startTs) {
   return translate('CW %1').replace('%1', String(calKalenderwoche(startTs))) + ' · ' + spanne;
 }
 
+/** Dieselbe Beschriftung, aber zweiteilig: die Spanne weicht auf schmalen
+    Bildschirmen (per CSS), die Wochennummer bleibt. */
+function calWochenTitelHtml(startTs) {
+  const bis = calTagPlus(startTs, 6);
+  return `<span>${escapeHtml(translate('CW %1').replace('%1', String(calKalenderwoche(startTs))))}</span>` +
+    `<span class="ct-wochenspanne"> · ${escapeHtml(calDateLabel(startTs) + '–' + calDateLabel(bis))}</span>`;
+}
+
 /** Spanne oder Wochenschritt zeigen, und den gewaehlten Knopf kennzeichnen. */
 function renderCalKopfSteuerung() {
   const woche = calAnsicht() === 'woche';
@@ -10310,8 +10346,10 @@ function renderCalKopfSteuerung() {
   if (schritt) {
     schritt.style.display = woche ? '' : 'none';
     const name = document.getElementById('calWocheName');
-    if (name && woche) name.textContent = calWochenTitel(calWochenStart(Math.floor(Date.now() / 1000), calWochenOffset));
+    if (name && woche) name.innerHTML = calWochenTitelHtml(calWochenStart(Math.floor(Date.now() / 1000), calWochenOffset));
   }
+  const kopf = schritt ? schritt.closest('.screen-head') : null;
+  if (kopf) kopf.classList.toggle('ct-woche', woche);
   if (wahl) {
     wahl.querySelectorAll('button[data-cal-ansicht]').forEach(b => {
       b.setAttribute('aria-current', b.dataset.calAnsicht === calAnsicht() ? 'true' : 'false');
