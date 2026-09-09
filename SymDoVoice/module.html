@@ -120,8 +120,11 @@ body.blob #status { background: color-mix(in srgb, var(--bg) 70%, transparent); 
 }
 #nebenzeile button.zeigen { display: inline-block; }
 #nebenzeile button#wortLaden:not([hidden]) { display: inline-block; }
+/* Unten AUSGERICHTET, nicht mittig: mittig zum 44px-Knopf schwebte das Zeichen
+   auf halber Hoehe der Kachel-Ecke. An der Unterkante sitzt es so tief, wie der
+   sichere Rand es zulaesst. */
 #lauschAn { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--lausch);
-  white-space: nowrap; flex: 1 1 auto; align-self: center; }
+  white-space: nowrap; flex: 1 1 auto; align-self: flex-end; margin-bottom: 1px; }
 #lauschAn:not([hidden]) { display: inline-flex; }
 /* Solange gelauscht wird, ersetzt das Lauschzeichen den Hinweis unten links. */
 #fuss:has(#lauschAn:not([hidden])) #hinweis { display: none; }
