@@ -230,6 +230,12 @@ trait TimetableBridge
             'span'     => $spanne ?? [8 * 60, 16 * 60],
             'now'      => $jetzt,
             'holiday'  => $ferien,
+            /* Der Fachkatalog, EINE Ebene hoeher und nicht je Stunde: die
+               Hausaufgaben brauchen Symbol und Farbe auch fuer ein Fach, das an
+               diesem Tag keine Stunde hat. Diese Projektion ist eine
+               WEISSLISTE — ohne die Zeile kommt nichts an, egal was das
+               Stundenplan-Modul liefert. */
+            'subjects' => $this->TimetableSubjectRows(),
             // Liegt ein Import vor? Daran haengt in der App dasselbe wie in der
             // Kachel: das Datum im Spaltenkopf und der Wochenwechsler.
             'dated'    => $datiert,
@@ -267,6 +273,59 @@ trait TimetableBridge
      *
      * @return list<int>
      */
+    /**
+     * Die Faecher aller Stundenplan-Instanzen, vereinigt und projiziert.
+     *
+     * Rueckfall, wenn das Stundenplan-Modul noch aelter ist als GetSubjects:
+     * dann werden die Faecher aus den bereits projizierten Stunden abgeleitet.
+     * Der Rueckfall kennt nur bestundete Faecher, und das genuegt fuer die
+     * Anzeige — dieselbe Nachsicht, die diese Bruecke beim Feld 'date' schon
+     * uebt.
+     *
+     * @return list<array{name:string,icon:string,color:string}>
+     */
+    private function TimetableSubjectRows(array $rueckfall = []): array
+    {
+        $raus = [];
+        $gesehen = [];
+        if (function_exists('STPL_GetSubjects')) {
+            foreach ($this->TimetableInstances() as $id) {
+                try {
+                    $roh = json_decode((string)@STPL_GetSubjects((int)$id), true);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+                foreach (is_array($roh) ? $roh : [] as $f) {
+                    $name = is_array($f) ? trim((string)($f['name'] ?? '')) : '';
+                    if ($name === '' || isset($gesehen[$name])) {
+                        continue;
+                    }
+                    $gesehen[$name] = true;
+                    $raus[] = [
+                        'name'  => $name,
+                        'icon'  => trim((string)($f['icon'] ?? '')),
+                        'color' => trim((string)($f['color'] ?? '')),
+                    ];
+                }
+            }
+        }
+        if ($raus === []) {
+            foreach ($rueckfall as $f) {
+                $name = is_array($f) ? trim((string)($f['name'] ?? '')) : '';
+                if ($name === '' || isset($gesehen[$name])) {
+                    continue;
+                }
+                $gesehen[$name] = true;
+                $raus[] = [
+                    'name'  => $name,
+                    'icon'  => trim((string)($f['icon'] ?? '')),
+                    'color' => trim((string)($f['color'] ?? '')),
+                ];
+            }
+        }
+        return $raus;
+    }
+
     private function TimetableInstances(): array
     {
         $wahl = $this->TimetableChoiceMap();

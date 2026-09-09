@@ -152,6 +152,30 @@ class SymDoTimetable extends IPSModuleStrict
     }
 
     /**
+     * Die Faecher dieser Instanz, fertig aufgeloest: Name, Symbolklasse und
+     * Farbe als Hex.
+     *
+     * Fertig aufgeloest, damit der Aufrufer nichts ueber Symcons
+     * Symbol-Schreibweise und die Farbzahl wissen muss — die Hausaufgaben der
+     * Web-App brauchen genau diese drei Angaben, und sie sollen sie aus EINER
+     * Quelle bekommen.
+     */
+    public function GetSubjects(): string
+    {
+        $raus = [];
+        foreach ($this->Faecher() as $f) {
+            $raus[] = [
+                'name'  => (string)$f['name'],
+                'icon'  => TimetableSubjects::IconKlasse((string)$f['icon']),
+                // -1 heisst keine Farbe und ergibt null; ein leerer String ist
+                // fuer die Web-App einfacher, sie faellt dann auf ihre Vorgabe zurueck.
+                'color' => TimetableSubjects::FarbeHex((int)$f['color']) ?? '',
+            ];
+        }
+        return (string)json_encode($raus, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
      * Derselbe Plan, aber fuer einen bestimmten Tag („2026-08-25").
      *
      * Gebraucht vom Briefing: die Abendvorschau spricht ueber MORGEN, und Ferien
