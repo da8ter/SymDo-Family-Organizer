@@ -51,9 +51,13 @@ var STIL = [
   '.sym-blase .augen{transform-box:fill-box;transform-origin:center;',
   '  transform:translate(var(--augeX,0px),var(--augeY,0px)) scaleY(var(--augeAuf,1));}',
   '.sym-blase .auge{fill:#0b1030;}',
-  /* Lider: eine Haut in der Körperfarbe, die von oben über das Auge sinkt —
-     ohne Wimpernlinie, die Kante des Lids genügt. Wie weit sie zu sind, setzt
-     JS je Bild als transform-Attribut (scale(1 lid), Ursprung = Oberkante). */
+  /* Lider: eine Kuppel in der Körperfarbe — oben rund, unten nur leicht nach
+     unten gebogen —, die von der Oberkante her über das Auge sinkt. Sie liegen
+     NICHT in .augen, sonst drückte deren scaleY die Kuppel mit platt; den
+     Blick-Versatz bekommen sie über die eigene Lage-Gruppe (nur translate,
+     kein transform-box nötig). Wie weit sie zu sind, setzt JS je Bild als
+     transform-Attribut (scale(1 lid), Ursprung = Oberkante). */
+  '.sym-blase .liderLage{transform:translate(var(--augeX,0px),var(--augeY,0px));}',
   '.sym-blase .lid{fill:var(--c3);}',
   /* Der Schatten macht den räumlichen Eindruck: das Wesen steht nicht IM Bild,
      es schwebt darüber. Er schrumpft und verblasst, wenn es sich hebt. */
@@ -111,6 +115,10 @@ var WOLKE_Z = '<g class="zz" opacity="0">'
   +   '<text class="z" font-size="14" text-anchor="middle">z</text>'
   + '</g>';
 
+/* Die Kuppel: Halbellipse über den oberen Bogen, unten ein flacher Bogen
+   nach unten (Kontrollpunkt 2,3 Einheiten unter der Kante). */
+var LID = '<path class="lid" d="M-6.7 7.6A6.7 7.6 0 0 1 6.7 7.6Q0 9.9 -6.7 7.6Z"/>';
+
 var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
   + '<defs>'
   + '<radialGradient class="gk" cx="35%" cy="25%" r="78%">'
@@ -157,15 +165,13 @@ var SVG = '<svg viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet" 
   +   '<ellipse class="auge" cx="19" cy="-5" rx="6.1" ry="7.3"/>'
   +   '<ellipse class="glanz" cx="-20.8" cy="-7.4" rx="1.7" ry="1.8"/>'
   +   '<ellipse class="glanz" cx="17.2" cy="-7.4" rx="1.7" ry="1.8"/>'
-  /* Je Auge ein Lid, etwas größer als das Auge, damit im geschlossenen Zustand
-     kein dunkler Rand hervorschaut. Der Ursprung (0,0) liegt an der Oberkante
-     des Auges; scale(1 lid) lässt es von dort herabsinken. */
-  +   '<g class="lider" transform="translate(-19 -12.4)">'
-  +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
-  +   '</g>'
-  +   '<g class="lider" transform="translate(19 -12.4)">'
-  +     '<ellipse class="lid" cx="0" cy="7.6" rx="6.7" ry="7.6"/>'
-  +   '</g>'
+  + '</g>'
+  /* Je Auge ein Lid, etwas breiter als das Auge. Der Ursprung (0,0) liegt an
+     der Oberkante des Auges; scale(1 lid) lässt die Kuppel von dort herabsinken.
+     Das Auge selbst schließt sich dabei zur Linie, die unter der Kuppel liegt. */
+  + '<g class="liderLage">'
+  +   '<g class="lider" transform="translate(-19 -12.4)">' + LID + '</g>'
+  +   '<g class="lider" transform="translate(19 -12.4)">' + LID + '</g>'
   + '</g></g>'
   /* Die „z" liegen AUSSERHALB des Körpers: sie sollen wegfliegen, nicht mit ihm
      wiegen. Drei Stück, versetzt, jedes eine Runde von unten rechts über dem
@@ -587,9 +593,10 @@ function erzeuge(behaelter, kern) {
       setz('--augeX', '0px');
       setz('--augeY', '1.5px');
     }
-    // Lauter Ton kneift die Augen ein wenig zusammen; das Schließen machen die Lider.
-    setz('--augeAuf', (1 - energie * .12).toFixed(3));
     liderZeichnen();
+    /* Lauter Ton kneift die Augen ein wenig zusammen; mit den Lidern schließt
+       sich das Auge zur Linie, die unter der Kuppel verschwindet. */
+    setz('--augeAuf', lerp(1 - energie * .12, .07, lidJetzt).toFixed(3));
     zzzZeichnen(t);
   }
 
