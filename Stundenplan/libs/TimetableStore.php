@@ -259,10 +259,12 @@ trait TimetableStore
                            die Zeile dann gar nicht. */
                         'room'      => trim((string)($zeile['room'] ?? '')),
                         'teacher'   => trim((string)($zeile['teacher'] ?? '')),
-                        /* normal | vertretung | entfall — gesetzt von
+                        /* normal | vertretung | entfall | termin — gesetzt von
                            ImportSlots aus WebUntis. Von Hand gepflegte Stunden
                            haben das Feld nicht; leer heisst normal. */
                         'status'    => trim((string)($zeile['status'] ?? '')),
+                        // Ersetzte Lehrkraft, nur aus dem Import.
+                        'insteadOf' => trim((string)($zeile['insteadOf'] ?? '')),
                         // Keine Farbe je Stunde mehr — sie kommt vom Fach.
                         'color'     => null,
                     ];
@@ -422,6 +424,7 @@ trait TimetableStore
                         'room'      => trim((string)($zeile['room'] ?? '')),
                         'teacher'   => trim((string)($zeile['teacher'] ?? '')),
                         'status'    => trim((string)($zeile['status'] ?? '')),
+                        'insteadOf' => trim((string)($zeile['insteadOf'] ?? '')),
                         'color'     => null,
                         // Damit die Kachel sagen kann, woher die Stunde kommt.
                         'dated'     => $datum,
@@ -716,6 +719,8 @@ trait TimetableStore
                         'room'    => (string)($s['room'] ?? ''),
                         'teacher' => (string)($s['teacher'] ?? ''),
                         'status'  => (string)($s['status'] ?? ''),
+                        // Ersetzte Lehrkraft bei einer Vertretung (nur aus dem Import).
+                        'insteadOf' => (string)($s['insteadOf'] ?? ''),
                         'from'   => $beginn,
                         'to'     => TimetableCalc::Minuten((string)$s['end']),
                         'gap'    => TimetableCalc::LueckeHoehe($vorher, $beginn),

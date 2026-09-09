@@ -680,7 +680,9 @@
             "Delete this homework?": "Diese Hausaufgabe löschen?",
             "Please pick a subject.": "Bitte ein Fach wählen.",
             "Homework belongs to a child — add one in the gateway.": "Hausaufgaben gehören zu einem Kind — im Gateway eines anlegen.",
-            "Too many homework entries.": "Zu viele Hausaufgaben."
+            "Too many homework entries.": "Zu viele Hausaufgaben.",
+            "instead of %1": "statt %1",
+            "Event": "Termin"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

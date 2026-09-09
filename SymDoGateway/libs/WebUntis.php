@@ -571,12 +571,24 @@ trait WebUntis
             return sprintf($this->Translate('%s: element type and number belong together — enter both, or leave both empty.'),
                 $kind['name']);
         }
-        $params['options']['element'] = ['id' => $nr, 'type' => $typ];
-        $r = $this->UntisRpc('getTimetable', $params);
-        if (($r['ok'] ?? false) !== true) {
-            return $kind['name'] . ': ' . (string)($r['message'] ?? '?');
+        /* ERST die neue Ansicht: nur sie unterscheidet eine Veranstaltung von
+           einer Vertretung und nennt die ersetzte Lehrkraft. Sie ist nicht
+           öffentlich dokumentiert, deshalb bleibt die JSON-RPC als Rückfall
+           stehen — fällt die Ansicht aus, ändert sich am Plan nur, dass
+           Termine wieder wie Vertretungen aussehen. */
+        $stunden = $this->UntisPlanRest($typ, $nr, $von, $bis);
+        $quelle = 'rest';
+        if ($stunden === null || $stunden === []) {
+            $quelle = 'rpc';
+            $params['options']['element'] = ['id' => $nr, 'type' => $typ];
+            $r = $this->UntisRpc('getTimetable', $params);
+            if (($r['ok'] ?? false) !== true) {
+                return $kind['name'] . ': ' . (string)($r['message'] ?? '?');
+            }
+            $stunden = is_array($r['result'] ?? null) ? $r['result'] : [];
         }
-        $stunden = is_array($r['result'] ?? null) ? $r['result'] : [];
+        $this->SendDebug('WebUntis', sprintf('%s: %d Stunden über %s',
+            (string)$kind['name'], count($stunden), $quelle), 0);
         if ($stunden === []) {
             return sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']);
         }
@@ -620,6 +632,133 @@ trait WebUntis
      *
      * @return array{0:array<int,list<array<string,mixed>>>, 1:array<string,list<array<string,mixed>>>, 2:list<array<string,mixed>>, 3:int, 4:list<string>}
      */
+
+    /**
+     * Der Plan aus der NEUEN Ansicht (`timetable/entries`).
+     *
+     * Warum überhaupt: die alte JSON-RPC kann eine Veranstaltung nicht von
+     * einer Vertretung unterscheiden. Am 09.09.2026 gemessen — der Ausflug
+     * „Waldschule" kam als `code: irregular` mit `activityType: Unterricht`,
+     * also Zeichen für Zeichen wie eine Vertretung. Die neue Ansicht sagt
+     * `type: EVENT` und nennt die ersetzte Lehrkraft in `removed` mit.
+     *
+     * Die Antwort wird in die FORM der alten Schnittstelle gebracht, damit
+     * UntisAbbilden und die Kurswahl unverändert bleiben; zwei Felder kommen
+     * hinzu: `kind` (der Eintragstyp) und `insteadOf`.
+     *
+     * Nicht öffentlich dokumentiert: das ist der Weg, den die Weboberfläche
+     * von WebUntis selbst nimmt. Deshalb NUR als erster Versuch — schlägt er
+     * fehl, holt der Aufrufer den Plan wie bisher über die JSON-RPC.
+     *
+     * @return list<array<string,mixed>>|null null = nicht verfügbar
+     */
+    private function UntisPlanRest(int $typ, int $nr, int $von, int $bis): ?array
+    {
+        $art = $typ === self::UNTIS_TYP_KLASSE ? 'CLASS'
+            : ($typ === self::UNTIS_TYP_SCHUELER ? 'STUDENT' : '');
+        if ($art === '' || $nr <= 0) {
+            return null;
+        }
+        $iso = static fn(int $ymd): string => substr((string)$ymd, 0, 4) . '-'
+            . substr((string)$ymd, 4, 2) . '-' . substr((string)$ymd, 6, 2);
+        $d = $this->UntisRest('timetable/entries?start=' . $iso($von) . '&end=' . $iso($bis)
+            . '&format=2&resourceType=' . $art . '&resources=' . $nr
+            . '&periodTypes=&timetableType=MY_TIMETABLE');
+        if (!is_array($d) || !is_array($d['days'] ?? null)) {
+            return null;
+        }
+        $raus = [];
+        foreach ($d['days'] as $tag) {
+            if (!is_array($tag)) {
+                continue;
+            }
+            foreach ((array)($tag['gridEntries'] ?? []) as $e) {
+                if (!is_array($e)) {
+                    continue;
+                }
+                $zeile = $this->UntisRestEintrag($e);
+                if ($zeile !== null) {
+                    $raus[] = $zeile;
+                }
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Ein Eintrag der neuen Ansicht in der Form der alten.
+     *
+     * Die Reihen heißen dort position1..position7 und tragen je Reihe
+     * `current` und `removed`. Welche Reihe welches Element trägt, steht NICHT
+     * fest — jede Reihe nennt ihren `type` selbst (SUBJECT, TEACHER, ROOM,
+     * CLASS, INFO). Also alle Reihen durchgehen und nach Typ einsammeln.
+     */
+    private function UntisRestEintrag(array $e): ?array
+    {
+        $start = (string)($e['duration']['start'] ?? '');
+        $ende  = (string)($e['duration']['end'] ?? '');
+        if (strlen($start) < 16 || strlen($ende) < 16) {
+            return null;
+        }
+        $sammeln = [];
+        $ersetzt = [];
+        for ($i = 1; $i <= 7; $i++) {
+            foreach ((array)($e['position' . $i] ?? []) as $x) {
+                if (!is_array($x)) {
+                    continue;
+                }
+                $c = is_array($x['current'] ?? null) ? $x['current'] : [];
+                $r = is_array($x['removed'] ?? null) ? $x['removed'] : [];
+                $art = strtoupper(trim((string)($c['type'] ?? ($r['type'] ?? ''))));
+                if ($art === '') {
+                    continue;
+                }
+                if ($c !== []) {
+                    $sammeln[$art][] = [
+                        'name'     => trim((string)($c['shortName'] ?? '')),
+                        'longname' => trim((string)($c['longName'] ?? ($c['displayName'] ?? ''))),
+                    ];
+                }
+                /* Der ersetzte Wert. Nur bei Lehrkräften interessant: „statt
+                   Kais" ist eine Auskunft, ein ersetzter Raum ist ohnehin
+                   sichtbar. */
+                if ($r !== [] && $art === 'TEACHER') {
+                    $weg = trim((string)($r['longName'] ?? ($r['displayName'] ?? ($r['shortName'] ?? ''))));
+                    if ($weg !== '') {
+                        $ersetzt[] = $weg;
+                    }
+                }
+            }
+        }
+        $typ    = strtoupper(trim((string)($e['type'] ?? '')));
+        $status = strtoupper(trim((string)($e['status'] ?? '')));
+        $code   = $status === 'CANCELLED' ? 'cancelled' : ($status === 'CHANGED' ? 'irregular' : '');
+        $info   = trim((string)($e['lessonInfo'] ?? ''));
+        if ($info === '' && isset($sammeln['INFO'][0])) {
+            // Bei einer Veranstaltung steht der Name als INFO-Element dort,
+            // wo sonst der Raum steht.
+            $info = (string)($sammeln['INFO'][0]['longname'] ?: $sammeln['INFO'][0]['name']);
+        }
+        $zeit = static fn(string $iso): int
+            => (int)(substr($iso, 11, 2) . substr($iso, 14, 2));
+        return [
+            'date'      => (int)str_replace('-', '', substr($start, 0, 10)),
+            'startTime' => $zeit($start),
+            'endTime'   => $zeit($ende),
+            'code'      => $code,
+            'kind'      => $typ,
+            'su'        => $sammeln['SUBJECT'] ?? [],
+            'te'        => $sammeln['TEACHER'] ?? [],
+            'ro'        => $sammeln['ROOM'] ?? [],
+            'kl'        => $sammeln['CLASS'] ?? [],
+            'lstext'    => trim((string)($e['lessonText'] ?? '')),
+            'substText' => trim((string)($e['substitutionText'] ?? '')),
+            'info'      => $info,
+            'insteadOf' => implode(', ', array_unique($ersetzt)),
+            'activityType' => 'Unterricht',
+        ];
+    }
+
     private function UntisAbbilden(array $stunden, array $raster, string $kurse): array
     {
         usort($stunden, static fn(array $a, array $b): int
@@ -640,10 +779,25 @@ trait WebUntis
                 continue;                                    // Sonntag kennt das Modul nicht
             }
             $code = strtolower(trim((string)($st['code'] ?? '')));
-            $status = $code === 'cancelled' ? 'entfall' : ($code === 'irregular' ? 'vertretung' : 'normal');
+            /* Der Eintragstyp entscheidet ZUERST: eine Veranstaltung ist keine
+               Vertretung, auch wenn WebUntis sie als „geändert" führt. Das Feld
+               gibt es nur aus der neuen Ansicht; ohne es gilt wie bisher der
+               Code allein. */
+            $art = strtoupper(trim((string)($st['kind'] ?? '')));
+            if ($art === 'EVENT') {
+                $status = 'termin';
+            } else {
+                $status = $code === 'cancelled' ? 'entfall' : ($code === 'irregular' ? 'vertretung' : 'normal');
+            }
             /* Ganztagsblöcke wie „Projekttag" kommen OHNE Fach, aber mit Text.
                Ohne diesen Rueckfall stuende dort ein Fragezeichen im Plan. */
             $fach = $this->UntisFeld($st, 'su', 'longname') ?: $this->UntisFeld($st, 'su', 'name');
+            /* Bei einer Veranstaltung gewinnt IHR Name: der Ausflug heißt
+               „Waldschule" und nicht „Biologie", auch wenn er an der
+               Biologiestunde hängt. */
+            if ($status === 'termin' && trim((string)($st['info'] ?? '')) !== '') {
+                $fach = trim((string)$st['info']);
+            }
             if ($fach === '') {
                 $fach = trim((string)($st['substText'] ?? ($st['info'] ?? '')));
             }
@@ -657,6 +811,8 @@ trait WebUntis
                 'room'    => $this->UntisFeld($st, 'ro', 'name'),
                 'teacher' => $this->UntisFeld($st, 'te', 'name'),
                 'status'  => $status,
+                // Wer ersetzt wurde — nur die neue Ansicht nennt es.
+                'insteadOf' => trim((string)($st['insteadOf'] ?? '')),
                 // Grund der Abweichung, fuer Meldung und Briefing.
                 'grund'   => trim((string)($st['substText'] ?? ($st['info'] ?? ''))),
             ];

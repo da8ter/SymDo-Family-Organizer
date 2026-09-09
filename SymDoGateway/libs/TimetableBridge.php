@@ -137,6 +137,9 @@ trait TimetableBridge
                    Ganztagsblock daneben sähe aus wie eine zweite Stunde zur
                    selben Zeit. */
                 'status'  => (string)($s['status'] ?? ''),
+                /* Wer ersetzt wurde. Ohne diese Zeile stuende in der App nur
+                   „Vertretung" — die Projektion hier ist eine Weissliste. */
+                'insteadOf' => (string)($s['insteadOf'] ?? ''),
             ];
             /* Die Abbildung EINER Woche. Sie steht als Funktion da, weil es
                zwei sind: die laufende und — mit Import — die kommende, die der

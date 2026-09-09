@@ -610,7 +610,9 @@ class SymDoTimetable extends IPSModuleStrict
      *
      * „child" darf der NAME oder die Nummer sein: wer die Funktion ruft, soll
      * die interne Reihenfolge der Kinder nicht kennen muessen. Wochentage sind
-     * 1 = Montag bis 6 = Samstag. „status": normal | vertretung | entfall.
+     * 1 = Montag bis 6 = Samstag. „status": normal | vertretung | entfall |
+     * termin (eine Veranstaltung: Ausflug, Projekttag). „insteadOf" nennt bei
+     * einer Vertretung die ersetzte Lehrkraft.
      *
      * Geprueft wird ALLES vor dem ersten Schreiben. Ein halber Plan darf einen
      * guten nie ueberschreiben — lieber gar nichts und eine ehrliche Antwort.
@@ -718,7 +720,11 @@ class SymDoTimetable extends IPSModuleStrict
                         $this->Translate('Lesson "%s" ends before it starts.'), $fach));
                 }
                 $status = mb_strtolower($text($z['status'] ?? 'normal'));
-                if (!in_array($status, ['normal', 'vertretung', 'entfall'], true)) {
+                /* „termin" ist die vierte Art: eine Veranstaltung im Plan —
+                   Ausflug, Projekttag, Waldschule. WebUntis kennt sie als
+                   eigenen Eintragstyp (EVENT); die alte Schnittstelle konnte
+                   sie nicht von einer Vertretung unterscheiden. */
+                if (!in_array($status, ['normal', 'vertretung', 'entfall', 'termin'], true)) {
                     $status = 'normal';
                 }
                 $slots[] = [
@@ -728,6 +734,10 @@ class SymDoTimetable extends IPSModuleStrict
                     'room'    => $text($z['room'] ?? ''),
                     'teacher' => $text($z['teacher'] ?? ''),
                     'status'  => $status,
+                    /* Wer ersetzt wurde. WebUntis nennt bei einer Vertretung
+                       den weggefallenen Lehrer mit; ohne dieses Feld stuende
+                       in der Kachel nur „Vertretung" statt „statt Kais". */
+                    'insteadOf' => $text($z['insteadOf'] ?? ''),
                 ];
                 $anzahl++;
             }

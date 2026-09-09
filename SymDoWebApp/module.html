@@ -698,6 +698,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Der Titel der Vertretung. Er darf den Balken nicht sprengen: was nicht
    passt, kuerzt der Browser mit Auslassungspunkten — und `min-width: 0` muss
    sein, sonst waechst das Flex-Kind ueber das Stueck hinaus statt zu kuerzen. */
+/* Der Termin ist kein Unterricht: eine helle Kante hebt ihn von der Vertretung
+   ab, ohne die Fachfarbe anzutasten. */
+.plan-stueck.termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
+.wp-stunde.termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
+.wp-stunde.termin .wp-fach { font-style: italic; }
 .plan-titel {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-weight: 600;
@@ -7947,9 +7952,14 @@ function stundenplanKarte() {
       /* Entfall und Vertretung kommen aus dem Stundenplan-Modul (WebUntis).
          Von Hand gepflegte Stunden haben das Feld nicht — leer heisst normal. */
       const zustand = s.status === 'entfall' ? ' entfall'
-        : (s.status === 'vertretung' ? ' vertretung' : '');
+        : (s.status === 'vertretung' ? ' vertretung' : (s.status === 'termin' ? ' termin' : ''));
+      /* Bei einer Vertretung nennt WebUntis die weggefallene Lehrkraft mit —
+         „statt Kais" sagt mehr als „Vertretung" allein. */
       const zustandText = s.status === 'entfall' ? ', ' + translate('cancelled')
-        : (s.status === 'vertretung' ? ', ' + translate('substitution') : '');
+        : (s.status === 'vertretung'
+            ? ', ' + translate('substitution')
+              + (s.insteadOf ? ' ' + translate('instead of %1').replace('%1', s.insteadOf) : '')
+            : (s.status === 'termin' ? ', ' + translate('Event') : ''));
       /* Entfallen heisst: gestrichelte Kontur in der Fachfarbe und eine
          Fuellung derselben Farbe (50 %). Die stattfindende Stunde bleibt
          kraeftig — der Unterschied ist damit auf einen Blick zu sehen, und was
@@ -7968,7 +7978,7 @@ function stundenplanKarte() {
          („1. Methodenta⚛"). Also bis zur naechsten Stunde, die auf ihm liegt,
          und 26 px ab fuer Zeichen und Abstaende. */
       let titelBreite = '';
-      if (s.status === 'vertretung') {
+      if (s.status === 'vertretung' || s.status === 'termin') {
         let naechst = s.to;
         for (const x of slots) {
           if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -7988,8 +7998,12 @@ function stundenplanKarte() {
            — die Stunde findet ja gerade NICHT wie geplant statt. Wird es eng,
            kuerzt der Browser mit Auslassungspunkten; ganz schmale Stuecke
            zeigen nur noch das Zeichen. */
-        (s.status === 'vertretung'
-          ? `<i class="fa-light fa-right-left"></i><span class="plan-titel"${titelBreite}>${escapeHtml(s.name || '')}</span>`
+        /* Vertretung und Termin tragen ihren Titel IM Balken, davor ein eigenes
+           Zeichen: der Tausch bei der Vertretung, der Kalender beim Termin. Ein
+           Ausflug heisst „Waldschule" und nicht „Biologie". */
+        (s.status === 'vertretung' || s.status === 'termin'
+          ? `<i class="fa-light ${s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left'}"></i>` +
+            `<span class="plan-titel"${titelBreite}>${escapeHtml(s.name || '')}</span>`
           : (s.icon ? `<i class="fa-light ${escapeHtml(s.icon)}"></i>` : '')) + `</div>`;
     });
     let ticks = '<div class="plan-linie"></div>';
@@ -8214,9 +8228,12 @@ function renderWochenplan() {
         spalten += luecke(vorher, sl.from);
         const h = Math.max(y(sl.to) - y(sl.from), proViertel * 3);
         const wo = [sl.room, sl.teacher].filter(x => x).join(' · ');
-        const lage = (sl.status === 'entfall' || sl.status === 'vertretung') ? ' ' + sl.status : '';
+        const lage = ['entfall', 'vertretung', 'termin'].includes(sl.status) ? ' ' + sl.status : '';
         const marke = sl.status === 'entfall' ? translate('cancelled')
-          : (sl.status === 'vertretung' ? translate('substitution') : '');
+          : (sl.status === 'vertretung'
+              ? translate('substitution')
+                + (sl.insteadOf ? ' ' + translate('instead of %1').replace('%1', sl.insteadOf) : '')
+              : (sl.status === 'termin' ? translate('Event') : ''));
         // Derselbe Text im title: in schmalen Spalten wird gekuerzt.
         const hinweis = sl.name + ', ' + sl.start + ' – ' + sl.end +
           (wo ? ', ' + wo : '') + (marke ? ' — ' + marke : '');

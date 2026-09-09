@@ -371,6 +371,12 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-weight: 600;
   }
+  /* Der Termin ist kein Unterricht: eine helle Kante hebt ihn von der
+     Vertretung ab, und der Fachname steht kursiv — die Fachfarbe bleibt
+     unangetastet. */
+  .stunde.termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
+  .stunde.termin .fach { font-style: italic; }
+  .stueck.termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -1706,8 +1712,11 @@
           /* Entfall und Vertretung aus dem Import (WebUntis). Von Hand
              gepflegte Stunden tragen das Feld nicht — dann bleibt alles wie
              bisher. */
-          const lage = (s.status === 'entfall' || s.status === 'vertretung') ? s.status : '';
-          const marke = lage === 'entfall' ? 'entfällt' : (lage === 'vertretung' ? 'Vertretung' : '');
+          const lage = ['entfall', 'vertretung', 'termin'].indexOf(s.status) >= 0 ? s.status : '';
+          const marke = lage === 'entfall' ? 'entfällt'
+            : (lage === 'vertretung'
+                ? 'Vertretung' + (s.insteadOf ? ' statt ' + s.insteadOf : '')
+                : (lage === 'termin' ? 'Termin' : ''));
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + (lage ? ' ' + lage : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
@@ -2012,8 +2021,12 @@
         /* Im Balken ist nur Platz fuer das Symbol; Raum und Lehrer gehoeren
            deshalb in den Tipp, wo schon Fach und Zeit stehen. */
         const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
-        const lage = (s.status === 'entfall' || s.status === 'vertretung') ? s.status : '';
-        const marke = lage === 'entfall' ? 'entfällt' : (lage === 'vertretung' ? 'Vertretung' : '');
+        const lage = ['entfall', 'vertretung', 'termin'].indexOf(s.status) >= 0 ? s.status : '';
+        const marke = lage === 'entfall' ? 'entfällt'
+          : (lage === 'vertretung' ? 'Vertretung' : (lage === 'termin' ? 'Termin' : ''));
+        /* Bei einer Vertretung nennt WebUntis die weggefallene Lehrkraft mit —
+           „statt Kais" sagt mehr als „Vertretung" allein. */
+        const statt = (s.status === 'vertretung' && s.insteadOf) ? ' statt ' + s.insteadOf : '';
         /* Entfallen heisst: gestrichelte Kontur und eine Fuellung derselben
            Fachfarbe zu 50 %. Die stattfindende Stunde bleibt kraeftig — der
            Unterschied ist damit auf einen Blick zu sehen, und was unter der
@@ -2028,7 +2041,7 @@
            ihnen ueberdeckt. Also bis zur naechsten Stunde, die auf ihm liegt,
            und 26 px ab fuer Zeichen und Abstaende. */
         let titelBreite = '';
-        if (s.status === 'vertretung') {
+        if (s.status === 'vertretung' || s.status === 'termin') {
           let naechst = s.to;
           slots.forEach(function (x) {
             if (x !== s && x.from > s.from && x.from < naechst) { naechst = x.from; }
@@ -2039,7 +2052,7 @@
         stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' ' + lage : '')
           + (s.hw ? ' hat-hw' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
-                + (marke ? ' — ' + marke : '')
+                + (marke ? ' — ' + marke + statt : '')
                 + (s.hw ? ' — ' + s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '') : '')) + '"'
           + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(fuellung)
           + ';border-top-left-radius:' + (rundum ? '999px' : (erster ? r : '0'))
@@ -2050,9 +2063,12 @@
              „1. Methodentag" sagt mehr als jedes Symbol, und ein Ganztagsblock
              hat den Platz dafuer. Davor ein Tausch-Zeichen statt des
              Fachsymbols — die Stunde findet ja gerade NICHT wie geplant statt. */
-          + (s.status === 'vertretung'
-              ? symbol('fa-right-left') + '<span class="titel"' + titelBreite + '>'
-                + esc(s.name || '') + '</span>'
+          /* Vertretung und Termin tragen ihren Titel IM Balken, davor ein
+             eigenes Zeichen: der Tausch bei der Vertretung, der Kalender beim
+             Termin. Ein Ausflug heisst „Waldschule" und nicht „Biologie". */
+          + (s.status === 'vertretung' || s.status === 'termin'
+              ? symbol(s.status === 'termin' ? 'fa-calendar-star' : 'fa-right-left')
+                + '<span class="titel"' + titelBreite + '>' + esc(s.name || '') + '</span>'
               : symbol(s.icon))
           + '</div>';
       });
