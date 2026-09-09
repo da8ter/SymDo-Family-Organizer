@@ -3681,6 +3681,13 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .ct-chip.geht-weiter { border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
 .ct-chip.nur-lesen { cursor: default; opacity: .82; }
 
+/* Die Auswahl der Avatarleiste hebt Zeilen HERVOR und blendet sie nicht aus —
+   Begruendung an calTafelZeilenSicht(). */
+.ct-gedimmt { opacity: .40; }
+.ct-name.ct-gewaehlt { box-shadow: inset 2px 0 0 0 var(--accent); }
+.ct-zelle.ct-gewaehlt { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.ct-zelle.ct-gewaehlt.heute { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+
 .ct-mehr {
   border: 0; background: transparent; color: var(--muted); cursor: pointer;
   font: inherit; font-size: 11px; text-align: left; padding: 1px 4px;
@@ -10677,13 +10684,14 @@ function calTafelChipHtml(e, tagKey, farben, schreibbar, zeigeWiederholung) {
   `</button>`;
 }
 
-function calTafelZelleHtml(zeileId, tagKey, liste, wochenende, heute, farben, schreibbar, zeigeWiederholung) {
+function calTafelZelleHtml(zeileId, tagKey, liste, wochenende, heute, farben, schreibbar, zeigeWiederholung, sicht) {
   const offen = calTafelOffen.has(zeileId + '|' + tagKey);
   const teil = calZellenAufteilung(liste, CT_MAX_CHIPS, offen);
   const klassen = ['ct-zelle'];
   if (wochenende) klassen.push('wochenende');
   if (heute) klassen.push('heute');
   if (!liste.length) klassen.push('leer');
+  if (sicht) klassen.push(sicht.trim());
   /* Anlegen nur ueber einen KNOPF, nicht durch Tippen auf die freie Flaeche:
      die Zelle liegt in einem waagerechten Rollbereich, und jeder Ansatz zum
      Schieben endete sonst als Fehl-Anlage — auf einem geteilten Kuechentablett
@@ -10703,9 +10711,28 @@ function calTafelZelleHtml(zeileId, tagKey, liste, wochenende, heute, farben, sc
   `</div>`;
 }
 
+/** Wie die Auswahl der Avatarleiste auf eine Zeile wirkt.
+
+    Die Tafel FILTERT NICHT. Drei Gruende, jeder allein ausreichend: die Bauform
+    IST der Vergleich, und eine gefilterte Tafel ist eine einzeilige Tafel — wer
+    eine Person allein sehen will, hat dafuer die Agenda. Der Filter liesse
+    ausserdem genau die Termine verschwinden, die ohnehin das Problem sind: die
+    Zuordnung liegt im Gateway und fehlt allem, was nicht ueber diese App
+    angelegt wurde. Und die Auswahl ist bereichsuebergreifend, sie zu ignorieren
+    waere nicht neutral — hervorheben ist die Antwort, die nichts wegnimmt.
+
+    Das ist die EINE Stelle, an der aus „hervorheben" ein „ausblenden" wuerde. */
+function calTafelZeilenSicht(zeileId) {
+  const aktiv = rowButtonFlags().showMemberBar !== false
+    && store.users.length > 0 && memberFilterIds.size > 0;
+  if (!aktiv) return '';
+  // Die Familienzeile wird nie gedimmt: Termine ohne Mitglied betreffen jeden.
+  if (zeileId === '') return '';
+  return memberFilterIds.has(zeileId) ? ' ct-gewaehlt' : ' ct-gedimmt';
+}
+
 /** Die Familientafel: eine Zeile je Mitglied, sieben Spalten, zuletzt die
-    Zeile fuer alles ohne Zuordnung. Die Tafel FILTERT nicht — sie zeigt alle
-    Zeilen; die Auswahl der Avatarleiste hebt spaeter nur hervor. */
+    Zeile fuer alles ohne Zuordnung. */
 function renderCalTafel() {
   const tafel = document.getElementById('calTafel');
   if (!tafel) return;
@@ -10733,14 +10760,15 @@ function renderCalTafel() {
     .concat([{ id: '', tage: daten.familie.tage, nutzer: null }]);
   zeilen.forEach(z => {
     const name = z.nutzer ? (z.nutzer.name || '') : translate('Family');
-    html += `<div class="ct-name${z.nutzer ? '' : ' familie'}" data-key="name:${escapeHtml(z.id || 'familie')}"` +
+    const sicht = calTafelZeilenSicht(z.id);
+    html += `<div class="ct-name${z.nutzer ? '' : ' familie'}${sicht}" data-key="name:${escapeHtml(z.id || 'familie')}"` +
       ` title="${escapeHtml(name)}">` +
       (z.nutzer ? avatarHtml(z.nutzer, 'avatar') : '') +
       `<span class="ct-vorname">${escapeHtml(name)}</span></div>`;
     keys.forEach((k, i) => {
       const wochenende = i >= 5;
       html += calTafelZelleHtml(z.id, k, z.tage[k] || [], wochenende, k === heuteKey,
-        farben, schreibbar, zeigeWiederholung);
+        farben, schreibbar, zeigeWiederholung, sicht);
     });
   });
 
