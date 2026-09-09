@@ -37,6 +37,31 @@ class TimetableSubjects
      * Leer bleibt leer: ein <i> ohne Klasse waere ein leerer Kasten. Dasselbe
      * Verfahren wie in der Web-App (SymDoWebApp/module.html, categoryStyle).
      */
+    /**
+     * Zwei Fachnamen vergleichen: ohne Ruecksicht auf Gross- und
+     * Kleinschreibung, und eine Kurzform trifft den Anfang des langen Namens
+     * („Mathe" trifft „Mathematik"). Ab drei Buchstaben, denn „De" waere nicht
+     * eindeutig.
+     *
+     * Dieselbe Regel steht im Gateway (HomeworkCalc::FachTreffer) und in der
+     * Web-App (hwFachTreffer) — die drei Seiten muessen dasselbe sagen, sonst
+     * zeigt die Kachel eine Hausaufgabe an einer anderen Stunde als die App.
+     */
+    public static function FachGleich(string $a, string $b): bool
+    {
+        $x = mb_strtolower(trim($a));
+        $y = mb_strtolower(trim($b));
+        if ($x === '' || $y === '') {
+            return false;
+        }
+        if ($x === $y) {
+            return true;
+        }
+        $kurz = mb_strlen($x) < mb_strlen($y) ? $x : $y;
+        $lang = $kurz === $x ? $y : $x;
+        return mb_strlen($kurz) >= 3 && mb_strpos($lang, $kurz) === 0;
+    }
+
     public static function IconKlasse(string $icon): string
     {
         $icon = trim($icon);

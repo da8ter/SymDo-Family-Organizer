@@ -291,6 +291,29 @@
      aus mindestens so breit wie sein Inhalt, und text-overflow bekaeme nie
      Gelegenheit zu greifen — die Spalte waere statt dessen aufgegangen. */
   .stunde > div { min-width: 0; }
+  /* Hausaufgaben-Abzeichen in der Ecke der Stundenkarte. Eigene Farbe statt
+     eines Eingriffs in „background": die Fachfarbe bleibt die Fachfarbe. */
+  /* Zeitachse: im Balken ist kein Platz fuer eine Zahl. Ein Punkt in der Ecke
+     sagt „hier ist etwas zu tun", die Zahl steht im Tipp. */
+  .stueck.hat-hw::after {
+    content: ''; position: absolute; top: 2px; right: 3px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+  }
+  .stunde .hw {
+    position: absolute; top: 4px; right: 6px;
+    display: inline-flex; align-items: center; gap: 3px;
+    background: rgba(0,0,0,.32); border-radius: 999px; padding: 1px 6px;
+    font-size: 10px; font-weight: 800; line-height: 1.5;
+  }
+  .stunde .hw span { font-size: 11px; }
+  /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
+     Spalte — eine Hausaufgabe, die nirgends erscheint, waere schlimmer als
+     eine an ungenauer Stelle. */
+  .hwfrei {
+    margin-top: 4px; font-size: 10px; color: var(--dezent);
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .stunde .sym {
     flex: 0 0 22px; height: 22px; border-radius: 50%;
     background: rgba(255,255,255,.22);
@@ -1673,12 +1696,24 @@
             + '<div class="zeit">' + esc(s.start) + ' – ' + esc(s.end) + '</div>'
             + (marke ? '<div class="wo zustand">' + esc(marke) + '</div>' : '')
             + (wo ? '<div class="wo">' + esc(wo) + '</div>' : '')
-            + '</div></div>';
+            + '</div>'
+            /* Offene Hausaufgaben zu dieser Stunde. Die Zahl kommt vom Modul
+               (nur im Kachelpfad angehaengt), die Zuordnung liegt bei der
+               ERSTEN Stunde des Fachs an diesem Tag. */
+            + (s.hw ? '<span class="hw" title="' + esc(s.hwText || '') + '">'
+                      + '<span>\u270e</span>' + s.hw + '</span>' : '')
+            + '</div>';
           vorher = Math.max(vorher, s.to);
         });
         spalten += luecke(vorher, bis);
       }
-      spalten += '</div></div>';
+      spalten += '</div>'
+        /* Hausaufgaben, die zu keiner Stunde dieses Tages passen (Fach fällt
+           aus oder hat an dem Tag keine Stunde): als Fußzeile unter der Spalte
+           statt gar nicht. */
+        + (tag.hwFrei ? '<div class="hwfrei" title="' + esc('Hausaufgaben ohne Stunde') + '">\u270e '
+                        + tag.hwFrei + '</div>' : '')
+        + '</div>';
     });
 
     html += '<div class="raster"><div class="spalten">'
@@ -1937,9 +1972,11 @@
         const wo = [s.room, s.teacher].filter(function (t) { return t; }).join(' · ');
         const lage = (s.status === 'entfall' || s.status === 'vertretung') ? s.status : '';
         const marke = lage === 'entfall' ? 'entfällt' : (lage === 'vertretung' ? 'Vertretung' : '');
-        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' ' + lage : '') + '" title="'
+        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' ' + lage : '')
+          + (s.hw ? ' hat-hw' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
-                + (marke ? ' — ' + marke : '')) + '"'
+                + (marke ? ' — ' + marke : '')
+                + (s.hw ? ' — ' + s.hw + ' Hausaufgabe(n)' + (s.hwText ? ': ' + s.hwText : '') : '')) + '"'
           + ' style="left:' + (a * 100) + '%;width:' + breite + '%;background:' + esc(s.color)
           + ';border-top-left-radius:' + (erster ? r : '0')
           + ';border-bottom-left-radius:' + (erster ? r : '0')

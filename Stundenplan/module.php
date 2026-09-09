@@ -850,7 +850,7 @@ class SymDoTimetable extends IPSModuleStrict
            unmoeglich und innerhalb die gueltige Schreibweise fuer „</", die
            Ersetzung ist also verlustfrei. GetPlan() selbst bleibt unberuehrt —
            es ist die oeffentliche Auskunft fuer Skripte. */
-        $zustand = str_replace('</', '<\\/', $this->GetPlan());
+        $zustand = str_replace('</', '<\\/', $this->GetTilePlan());
         return $html . '<script>handleMessage(' . $zustand . ');</script>';
     }
 
@@ -880,10 +880,111 @@ class SymDoTimetable extends IPSModuleStrict
         /* Fuer die Kachel ohne UNESCAPED_UNICODE — siehe unten. GetPlan()
            selbst bleibt unveraendert, es ist die oeffentliche Auskunft fuer
            Skripte und soll dort lesbar bleiben. */
-        $plan = json_decode($this->GetPlan(), true);
+        $plan = json_decode($this->GetTilePlan(), true);
         $this->UpdateVisualizationValue(is_array($plan)
             ? (string)json_encode($plan, JSON_UNESCAPED_SLASHES)
-            : $this->GetPlan());
+            : $this->GetTilePlan());
+    }
+
+    /**
+     * Der Plan FUER DIE KACHEL: derselbe Plan, dazu die Zahl offener
+     * Hausaufgaben je Stunde. Oeffentlich, damit sie pruefbar ist und ein
+     * Skript sehen kann, was die Kachel sieht.
+     *
+     * Bewusst NICHT in GetPlan(): das ist die Funktion, die das Gateway in der
+     * Stundenplan-Bruecke aufruft. Hinge das Anhaengen dort, riefe das Gateway
+     * das Stundenplan-Modul, und dieses mitten im laufenden Hook das Gateway
+     * zurueck (TGW_GetHomework) — ein Rueckruf in die Instanz, die gerade
+     * arbeitet. Die Web-App braucht es auch nicht: sie rechnet die Zuordnung
+     * selbst, damit ein Abhaken nicht die Signatur des ganzen Plans aendert.
+     */
+    public function GetTilePlan(): string
+    {
+        $plan = json_decode($this->GetPlan(), true);
+        if (!is_array($plan)) {
+            return $this->GetPlan();
+        }
+        return (string)json_encode($this->HausaufgabenAnhaengen($plan),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Je Stundenkarte die Zahl offener Hausaufgaben, und je Tag, was sich
+     * keiner Stunde zuordnen liess.
+     *
+     * Eine Hausaufgabe, die NIRGENDS erscheint, waere schlimmer als eine an
+     * ungenauer Stelle: faellt das Fach aus oder hat es an dem Tag keine
+     * Stunde, sammelt der Tag sie in „hwFrei".
+     */
+    private function HausaufgabenAnhaengen(array $plan): array
+    {
+        $gw = $this->GatewayInstanz();
+        if ($gw <= 0 || !function_exists('TGW_GetHomework')) {
+            return $plan;
+        }
+        try {
+            $roh = json_decode((string)@TGW_GetHomework($gw, ''), true);
+        } catch (\Throwable $e) {
+            return $plan;
+        }
+        $items = is_array($roh['items'] ?? null) ? $roh['items'] : [];
+        if ($items === []) {
+            return $plan;
+        }
+        foreach ((array)($plan['children'] ?? []) as $ki => $kind) {
+            $userId = trim((string)($kind['userId'] ?? ''));
+            if ($userId === '') {
+                continue;
+            }
+            foreach ((array)($kind['days'] ?? []) as $ti => $tag) {
+                $datum = trim((string)($tag['date'] ?? ''));
+                if ($datum === '') {
+                    continue;
+                }
+                $offen = [];
+                foreach ($items as $i) {
+                    if (($i['done'] ?? false) === true) {
+                        continue;
+                    }
+                    if ((string)($i['childId'] ?? '') !== $userId
+                        || (string)($i['due'] ?? '') !== $datum) {
+                        continue;
+                    }
+                    $offen[] = $i;
+                }
+                if ($offen === []) {
+                    continue;
+                }
+                $erste = [];
+                $frei = 0;
+                foreach ($offen as $i) {
+                    $treffer = null;
+                    foreach ((array)($tag['slots'] ?? []) as $si => $slot) {
+                        if (TimetableSubjects::FachGleich((string)($slot['name'] ?? ''), (string)$i['subject'])) {
+                            // Die ERSTE Stunde des Fachs traegt die Zahl: zwei
+                            // Stunden desselben Fachs sollen sie nicht verdoppeln.
+                            $treffer = $erste[(string)$slot['name']] ?? $si;
+                            $erste[(string)$slot['name']] = $treffer;
+                            break;
+                        }
+                    }
+                    if ($treffer === null) {
+                        $frei++;
+                        continue;
+                    }
+                    $karte = $plan['children'][$ki]['days'][$ti]['slots'][$treffer];
+                    $karte['hw'] = (int)($karte['hw'] ?? 0) + 1;
+                    $vorher = trim((string)($karte['hwText'] ?? ''));
+                    $text = trim((string)$i['note']) !== '' ? trim((string)$i['note']) : (string)$i['subject'];
+                    $karte['hwText'] = $vorher === '' ? $text : ($vorher . ' · ' . $text);
+                    $plan['children'][$ki]['days'][$ti]['slots'][$treffer] = $karte;
+                }
+                if ($frei > 0) {
+                    $plan['children'][$ki]['days'][$ti]['hwFrei'] = $frei;
+                }
+            }
+        }
+        return $plan;
     }
 
     /**
