@@ -4622,9 +4622,11 @@ async function voiceFreihandUmschalten() {
   }
   if (!voiceLauscher) {
     voiceLauscher = SymDoVoiceWeckwort.erzeuge({
-      onWake: function () {
+      onWake: function (nachsatz) {
         voiceOhrSetzen();
         const k = voiceKernHolen();
+        // Was nach dem Weckwort gesagt wird, reicht der Kern als Text nach.
+        k.mitschrift(nachsatz);
         if (!k.istOffen()) k.start();
       },
       onZustand: function (z, grund) {

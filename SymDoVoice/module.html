@@ -365,6 +365,11 @@ var kern = SymDoVoiceKern.erzeuge({
         if (e.text) { s2.textContent = e.text; }
         runter(); break;
       }
+      case 'mitschrift': {
+        // Der Satz, den der Weckwort-Erkenner in der Aufbauzeit mitschrieb — als Text nachgereicht.
+        var m = blase('du', 'm' + Date.now(), duBlasen);
+        m.textContent = e.text || ''; runter(); break;
+      }
       case 'werkzeugFertig':
         aktion(e.ok === true, e.sag || e.name);
         break;
@@ -426,9 +431,11 @@ var Freihand = (function () {
         }
         if (!lauscher) {
           lauscher = SymDoVoiceWeckwort.erzeuge({
-            onWake: function () {
+            onWake: function (nachsatz) {
               sagen('');
               anzeigen();
+              // Was nach dem Weckwort gesagt wird, reicht der Kern als Text nach.
+              kern.mitschrift(nachsatz);
               if (!kern.istOffen()) { kern.start(); }
             },
             onZustand: function (z, grund) {

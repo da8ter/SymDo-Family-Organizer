@@ -43,6 +43,15 @@ function norm(t) {
 function trifft(text) {
   return MUSTER.test(norm(text));
 }
+/* Dasselbe Muster auf dem ROHEN Text (mit Leerzeichen und Satzzeichen zwischen
+   den Silben), um zu finden, wo das Weckwort endet — alles danach ist schon
+   die Frage: „Hey SymDo, was steht heute an" → „was steht heute an". */
+var ROH = /(hey|hei|hay|heu|hi|hallo|ok)[\s,.\-]*(sym|sim|zym|zim|sem|sam|sum)[\s,.\-]*(do|du|dow|doh|to|tu|dou)\b[\s,.!?\-]*/i;
+function restNach(text) {
+  var t = String(text || '');
+  var m = ROH.exec(t);
+  return m ? t.slice(m.index + m[0].length).trim() : '';
+}
 
 /**
  * Kann dieses Gerät lokal lauschen?
@@ -91,8 +100,14 @@ function laden() {
 
 /**
  * Ein Lauscher. opt:
- *   onWake()               — Weckwort gehört (danach ist der Lauscher AUS)
+ *   onWake(nachsatz)       — Weckwort gehört. `nachsatz` ist ein Promise<string>:
+ *                            der Erkenner schreibt noch mit, was direkt nach dem
+ *                            Weckwort gesagt wird (bis zum Satzende oder
+ *                            nachlaufMs), und löst damit auf. Der Gesprächskern
+ *                            reicht den Text nach, sobald die Verbindung steht —
+ *                            so geht nichts verloren, was in die Aufbauzeit fällt.
  *   onZustand(z, grund)    — 'aus' | 'lauscht' | 'pause' | 'fehler'
+ *   nachlaufMs             — wie lange nach dem Weckwort höchstens mitgeschrieben wird (10 s)
  *   erkenner()             — nur für den Prüfstand: liefert einen Ersatz-Erkenner
  */
 function erzeuge(opt) {
@@ -100,6 +115,39 @@ function erzeuge(opt) {
   var aufWake = opt.onWake || function () {};
   var aufZustand = opt.onZustand || function () {};
   var bauen = opt.erkenner || function () { return new KLASSE(); };
+  var nachlaufMs = opt.nachlaufMs || 10000;
+
+  /* Mitschrift nach dem Weckwort: Index des Ergebnisses, in dem es fiel, der
+     gesammelte Text und das Versprechen, das ihn liefert. */
+  var wakeIndex = -1, mitText = '', mitLoesen = null, mitUhr = 0;
+  function mitschriftStart() {
+    var loesen;
+    var p = new Promise(function (res) { loesen = res; });
+    mitLoesen = function (text) {
+      if (!mitLoesen) { return; }
+      mitLoesen = null;
+      if (mitUhr) { wurzel.clearTimeout(mitUhr); mitUhr = 0; }
+      loesen(String(text || '').trim());
+    };
+    mitUhr = wurzel.setTimeout(function () { var t = mitText; mitLoesen && mitLoesen(t); aus(); }, nachlaufMs);
+    return p;
+  }
+  function mitschriftSammeln(ev) {
+    var teile = [];
+    var fertig = false;
+    for (var i = wakeIndex; i < ev.results.length; i++) {
+      var r = ev.results[i];
+      var alt = r && r[0];
+      if (!alt) { continue; }
+      var t = i === wakeIndex ? restNach(alt.transcript) : String(alt.transcript || '').trim();
+      if (t) { teile.push(t); }
+      if (i === ev.results.length - 1 && r.isFinal && teile.length) { fertig = true; }
+    }
+    mitText = teile.join(' ').trim();
+    /* Ein abgeschlossener Satz mit Inhalt: übergeben und aus. Nur „Hey SymDo"
+       allein ist noch kein Satz — dann weiter zuhören, die Frage kommt gleich. */
+    if (fertig) { var text = mitText; mitLoesen && mitLoesen(text); aus(); }
+  }
 
   var erk = null;
   var an = false;            // will der Nutzer lauschen?
@@ -133,19 +181,30 @@ function erzeuge(opt) {
         try { erk.phrases = [new PHRASE('Hey SymDo', 2)]; } catch (e) { /* egal */ }
       }
       erk.onresult = function (ev) {
-        if (!an || geweckt) { return; }
+        if (!an) { return; }
+        if (geweckt) { mitschriftSammeln(ev); return; }
         for (var i = ev.resultIndex; i < ev.results.length; i++) {
           var alt = ev.results[i][0];
           if (alt && trifft(alt.transcript)) {
-            /* Sofort aus: ab hier gehört das Mikrofon dem Gespräch, und der
-               Erkenner würde sonst auf die Stimme der KI aus dem Lautsprecher
-               anspringen. Wieder an geht es, wenn das Gespräch endet. */
+            /* Geweckt — aber NICHT sofort aus: der Erkenner schreibt weiter
+               mit, was direkt nach dem Weckwort kommt, denn die Verbindung
+               zum Anbieter steht erst in ein bis zwei Sekunden, und bis dahin
+               ginge die Frage verloren. Aus geht er mit dem Satzende oder nach
+               nachlaufMs; der Kern hält das Mikrofon bis dahin stumm, damit
+               nichts doppelt ankommt. Wieder an geht es, wenn das Gespräch endet. */
             geweckt = true;
-            aus();
-            aufWake();
+            wakeIndex = i;
+            mitText = restNach(alt.transcript);
+            var nachsatz = mitschriftStart();
+            if (ev.results[i].isFinal && mitText) { mitLoesen(mitText); aus(); }
+            aufWake(nachsatz);
             return;
           }
         }
+      };
+      erk.onspeechend = function () {
+        // Der Sprecher ist fertig: was da ist, ist der Nachsatz.
+        if (geweckt && mitLoesen) { var t = mitText; mitLoesen(t); aus(); }
       };
       erk.onerror = function (ev) {
         var art = (ev && ev.error) || 'unbekannt';
@@ -181,6 +240,7 @@ function erzeuge(opt) {
 
   function aus() {
     an = false;
+    if (mitLoesen) { var t = mitText; mitLoesen(t); }   // ein Versprechen bleibt nie offen
     if (neustartUhr) { wurzel.clearTimeout(neustartUhr); neustartUhr = 0; }
     if (erk) {
       try { erk.onend = null; erk.abort(); } catch (e) { /* egal */ }
@@ -195,7 +255,7 @@ function erzeuge(opt) {
       if (ja === false) { aus(); return Promise.resolve(false); }
       return verfuegbar().then(function (v) {
         if (!v.moeglich) { melde('fehler', v.grund); return false; }
-        an = true; geweckt = false; fehlerFolge = 0; anwerfen(); return true;
+        an = true; geweckt = false; wakeIndex = -1; mitText = ''; fehlerFolge = 0; anwerfen(); return true;
       });
     },
     aus: aus,
@@ -209,6 +269,7 @@ wurzel.SymDoVoiceWeckwort = {
   verfuegbar: verfuegbar,
   laden: laden,
   trifft: trifft,           // für den Prüfstand
+  restNach: restNach,       // dito
   moeglichHier: !!KLASSE
 };
 

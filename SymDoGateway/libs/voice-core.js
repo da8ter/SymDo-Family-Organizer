@@ -78,6 +78,37 @@ function erzeuge(opt) {
     return r;
   }
 
+  /* Mitschrift des Weckwort-Erkenners: der Text, der in die Aufbauzeit fiel.
+     Bis er da ist, bleibt das Mikrofon stumm — sonst käme der Satz halb als
+     Text und halb als Ton an, und das Modell antwortete auf beides. */
+  var mitschrift = null;
+  function mitschriftSetzen(p) { mitschrift = (p && typeof p.then === 'function') ? p : null; }
+  function mikroFrei(ja) {
+    try { if (mic) { mic.getAudioTracks().forEach(function (t) { t.enabled = ja; }); } } catch (e) {}
+  }
+  function wennKanalOffen(fn) {
+    if (dc && dc.readyState === 'open') { fn(); return; }
+    if (dc) { dc.addEventListener('open', fn, { once: true }); }
+  }
+  function mitschriftAbschliessen() {
+    if (!mitschrift) { return; }
+    var p = mitschrift;
+    mitschrift = null;
+    var frist = new Promise(function (res) { setTimeout(function () { res(''); }, 12000); });
+    Promise.race([p.then(function (t) { return t || ''; }, function () { return ''; }), frist]).then(function (text) {
+      text = String(text || '').trim();
+      if (!beendet && text !== '') {
+        wennKanalOffen(function () {
+          senden({ type: 'conversation.item.create',
+                   item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: text }] } });
+          senden({ type: 'response.create' });
+          ereignis({ art: 'mitschrift', text: text });
+        });
+      }
+      mikroFrei(true);
+    });
+  }
+
   var tonAn = opt.tone !== false;
   var tonCtx = null;
   function hiTon() {
@@ -245,13 +276,14 @@ function erzeuge(opt) {
         hiTon();
         zustand('hoert'); stilleZuruecksetzen();
         ereignis({ art: 'bereit' });
+        mitschriftAbschliessen();
       }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected'
           || pc.connectionState === 'closed') {
         if (!beendet) { stop('Verbindung verloren'); }
       }
     };
-    mic.getAudioTracks().forEach(function (t) { pc.addTrack(t, mic); });
+    mic.getAudioTracks().forEach(function (t) { t.enabled = !mitschrift; pc.addTrack(t, mic); });
     // Der Datenkanal MUSS vor createOffer existieren — sonst fehlt die
     // m=application-Zeile im Angebot und der Kanal kommt nie zustande.
     dc = pc.createDataChannel('oai-events');
@@ -510,6 +542,8 @@ function erzeuge(opt) {
     laufzeit: function () { return offenSeit ? Math.floor((Date.now() - offenSeit) / 1000) : 0; },
     /* Marke vorprägen, solange auf das Weckwort gelauscht wird (an/aus). */
     vorwaermen: vorwaermen,
+    /* Vor start(): das Versprechen des Weckwort-Erkenners auf den Nachsatz. */
+    mitschrift: mitschriftSetzen,
     handleServerEvent: handleServerEvent,
     _testSend: null
   };
