@@ -303,6 +303,19 @@ trait Homework
         $satz = $store['items'][$pos];
         if ($action === 'done') {
             $ziel = ($body['done'] ?? false) === true;
+            /* Ein Haekchen, das die SCHULE gesetzt hat, nimmt hier niemand
+               weg. Es ist keine Angabe ueber das Kind, sondern eine ueber den
+               Unterricht: die Lehrkraft hat die Aufgabe abgeschlossen. Wer sie
+               hier wieder oeffnete, haette sie beim naechsten Abruf sofort
+               wieder zu — die Sperrklinke setzt sie erneut — und wuerde
+               denselben Klick jede Stunde neu machen.
+               Der Riegel steht HIER und nicht nur in der Oberflaeche: durch
+               diese Stelle gehen auch der Sprachdialog und die Kachel. */
+            if (!$ziel
+                && ($satz['done'] ?? false) === true
+                && HomeworkCalc::UrheberSauber((string)($satz['doneBy'] ?? '')) === HomeworkCalc::BY_UNTIS) {
+                return $this->HomeworkFehler('locked_by_school');
+            }
             /* Zielzustand, nicht umschalten: eine doppelt zugestellte Anfrage
                darf das Häkchen nicht zurücknehmen. Und wenn der Zustand schon
                stimmt, wird NICHT geschrieben — sonst zählt jede doppelte

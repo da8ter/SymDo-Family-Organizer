@@ -1875,7 +1875,8 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Die hellere Zeilenflaeche gilt nur auf der Uebersicht — in den Bereichen bleiben
    Aufgaben und Termine auf --row bzw. --surface. */
 #dashboardContent .todo-content,
-#dashboardContent .cal-event { background: var(--row-item); }
+#dashboardContent .cal-event,
+#dashboardContent .hw-zeile { background: var(--row-item); }
 
 /* Terminvorschau auf der Uebersicht: dieselben Zeilen wie im Kalender, nur ohne
    Wischen und Knoepfe. Der Abstand steckt dort am .cal-card-Behaelter, den es hier
@@ -1887,6 +1888,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 /* Zwischen einer Zeile und der naechsten Ueberschrift etwas mehr Luft, damit die
    Gruppen als Gruppen lesbar bleiben. */
 #dashboardContent .todo-card + .cal-day-head,
+#dashboardContent .hw-zeile + .cal-day-head,
 #dashboardContent .cal-event + .cal-day-head { margin-top: 12px; }
 .cal-event {
   display: flex; align-items: stretch; gap: 9px;
@@ -3667,30 +3669,60 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   background: var(--surface); border-radius: 12px; padding: 8px 10px;
   cursor: pointer;
 }
-.hw-zeile.klein { background: transparent; padding: 6px 2px; }
-.hw-haken {
-  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px; padding: 0;
-  border: 2px solid var(--row-line, rgba(128,128,128,.45));
-  background: transparent; cursor: pointer;
-}
-.hw-haken:hover { border-color: var(--accent); }
-/* Abgehakt: gefuellter Kreis mit Haken, die Zeile tritt zurueck. Durchgestrichen
-   wird nur der Fachname — eine durchgestrichene Notiz ist schwer zu lesen, und
-   sie ist der Inhalt, den man nachschlagen will.
+/* Auf der Uebersicht dieselbe Flaeche und derselbe Abstand wie eine
+   Terminzeile (.cal-event): der Kasten ist derselbe Blick, und zwei
+   Zeilenformen darin sahen aus wie zwei verschiedene Dinge. */
+.hw-karte .hw-zeile { padding: 9px 10px; margin-bottom: 6px; }
+.hw-karte .hw-zeile:last-child { margin-bottom: 0; }
+/* Die Klasse .klein kommt NUR im Kasten der Uebersicht vor; eine eigene Regel
+   dafuer waere heute toter Code und morgen eine Ueberraschung. */
+/* Dieselbe Form wie das Kaestchen der Aufgabenlisten (.chk): abgerundetes
+   Quadrat, 18 px, weisser Haken als Hintergrundbild. Ein zweites Aussehen fuer
+   dasselbe Tun waere nur Ballast — die App hat schon EIN Kaestchen.
 
-   Die Farbe sagt, WER gehakt hat: orange, wenn es hier geschah, und die
-   Akzentfarbe, wenn es aus WebUntis kam. Andersherum waere es falsch — die
-   Akzentfarbe ist in dieser App die Farbe des eigenen Tuns, aber genau darum
-   soll das eigene Haekchen sich davon abheben und nicht mit jedem anderen
-   Knopf verschwimmen. */
+   Ein <button> und kein <input>, weil der ZIELZUSTAND am Element haengt
+   (data-hw-ziel): ein Kaestchen, das sich selbst umschaltet, naehme bei einer
+   doppelt zugestellten Antwort das Haekchen wieder weg. */
+.hw-haken {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 18px; height: 18px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background-color: var(--row);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 13px 13px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row) 45%, transparent);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease, transform .04s ease;
+}
+.hw-haken:active { transform: scale(.94); }
+.hw-haken:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+/* Abgehakt: gefuelltes Kaestchen mit weissem Haken, die Zeile tritt zurueck.
+   Durchgestrichen wird nur der Fachname — eine durchgestrichene Notiz ist
+   schwer zu lesen, und sie ist der Inhalt, den man nachschlagen will.
+
+   Das FARBSCHEMA bleibt: orange, wenn hier gehakt wurde, Akzentfarbe, wenn es
+   aus WebUntis kam. */
 .hw-haken.an {
   border-color: var(--orange);
-  background: var(--orange);
-  color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
+  background-color: var(--orange);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.4 8.2 6.6 11.4 12.8 4.8' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
-.hw-haken.an.schule { border-color: var(--accent); background: var(--accent); }
-.hw-haken.an i, .hw-haken.an svg { width: 11px; height: 11px; }
+.hw-haken.an.schule { border-color: var(--accent); background-color: var(--accent); }
+/* Gesperrt, weil die Schule gehakt hat: kein Zeigefinger und kein Druckgefuehl.
+   NICHT blass gemacht — die Angabe stimmt ja, sie ist nur nicht von hier. */
+.hw-haken:disabled { cursor: default; }
+.hw-haken:disabled:active { transform: none; }
 .hw-zeile.erledigt { opacity: .62; }
 .hw-zeile.erledigt .hw-name { text-decoration: line-through; }
 .hw-fach {
@@ -5286,6 +5318,9 @@ const SHOW_PROGRESS_CARD = false;
 const SHOW_MY_TASKS_CARD = false;
 /** Hoechstens so viele Termine in der Vorschau unter den Aufgaben. */
 const DASH_EVENTS_MAX = 5;
+/* Genauso viele Zeilen wie beim Terminkasten: beide beantworten „was steht an",
+   und ein Kasten, der doppelt so lang wird, schiebt den anderen vom Schirm. */
+const DASH_HW_MAX = 5;
 /** Hoechstens so viele Aufgaben in der Heute-Karte — dieselbe Zahl wie bei den Terminen. */
 const DASH_TASKS_MAX = 5;
 let favDetailListId = null; // Favoriten: geöffnete Listen-Detailansicht
@@ -10735,6 +10770,9 @@ function hwFehlertext(j) {
   if (code === 'no_child') return translate('Homework belongs to a child — add one in the gateway.');
   if (code === 'quota_exceeded') return translate('Too many homework entries.');
   if (code === 'busy') return translate('Action failed');
+  if (code === 'locked_by_school') {
+    return translate('Ticked off in WebUntis — cannot be undone here.');
+  }
   return translate('Action failed');
 }
 
@@ -10764,14 +10802,23 @@ function hwFaelligText(due) {
 function renderHausaufgaben() {
   const bereich = document.getElementById('hwArea');
   if (!bereich) return;
-  const kind = hwKind();
-  if (!homeworkMoeglich() || !kind || !kind.userId) {
+  /* ALLE Kinder, die der Plan zeigt — nicht nur das erste. planKinder()
+     filtert schon auf das gewaehlte Mitglied; ohne Auswahl stehen dort beide
+     Kinder, und dann muessen auch beide Hausaufgabenlisten hier stehen. Vorher
+     nahm der Abschnitt kinder[0] und zeigte unter zwei Plaenen die Aufgaben
+     EINES Kindes — ohne zu sagen, welches. */
+  const kinder = planKinder().filter(k => k && k.userId);
+  if (!homeworkMoeglich() || kinder.length === 0) {
     bereich.style.display = 'none';
     renderInto(bereich, '');
     return;
   }
   bereich.style.display = '';
-  const offen = hwOffene(hausaufgaben.items, kind.userId);
+  const ids = kinder.map(k => String(k.userId));
+  /* Bei mehreren Kindern sagt ein Avatar an der Zeile, wessen Aufgabe es ist —
+     bei einem waere er nur Wiederholung. */
+  const mehrere = ids.length > 1;
+  const offen = hwOffene(hausaufgaben.items, '').filter(i => ids.includes(String(i.childId)));
   const gruppen = hwGruppen(offen, localDayStr(new Date()));
   const subjects = (stundenplan && stundenplan.subjects) || [];
   const bloecke = [
@@ -10791,28 +10838,29 @@ function renderHausaufgaben() {
   bloecke.forEach(([k, titel]) => {
     if (gruppen[k].length === 0) return;
     html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
-    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects); });
+    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mehrere); });
   });
   /* Erledigte ganz unten in einem eingeklappten Abschnitt — dasselbe Muster
      wie in den Aufgabenlisten (.section-toggle), damit dieselbe Sache in der
      App nicht zweimal anders aussieht. Sie verschwinden nicht: ein Kind soll
      sehen, was es geschafft hat, und ein falsch gesetztes Haekchen muss
      zurueckgenommen werden koennen. */
-  const fertig = hwErledigte(hausaufgaben.items, kind.userId);
+  const fertig = hwErledigte(hausaufgaben.items, '')
+    .filter(i => ids.includes(String(i.childId)));
   if (fertig.length > 0) {
     html += `<button type="button" class="section-toggle${hwDoneExpanded ? ' open' : ''}" id="hwDoneToggle">` +
       `<i class="fa-light fa-circle-check"></i>${escapeHtml(translate('Completed'))}` +
       `<span class="count">${fertig.length}</span>` +
       `<i class="fa-light fa-chevron-right chev"></i></button>`;
     if (hwDoneExpanded) {
-      fertig.forEach(i => { html += hwZeileHtml(i, subjects); });
+      fertig.forEach(i => { html += hwZeileHtml(i, subjects, mehrere); });
     }
   }
   renderInto(bereich, html);
   hwBinden(bereich);
 }
 
-function hwZeileHtml(i, subjects) {
+function hwZeileHtml(i, subjects, mitAvatar) {
   const fach = hwFachInfo(i.subject, subjects);
   const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
   const fertig = i.done === true;
@@ -10823,13 +10871,17 @@ function hwZeileHtml(i, subjects) {
   /* Der Zielzustand steht im Attribut, nicht im Code: derselbe Knopf hakt ab
      und nimmt zurueck, und ein doppelt zugestellter Klick tut dasselbe wie
      einer. */
+  /* Was die Schule abgehakt hat, bleibt abgehakt: das Kaestchen ist gesperrt.
+     Der Grund steht im Titel, damit niemand einen kaputten Knopf vermutet.
+     Der Riegel selbst sitzt im Gateway — hier wird nur nicht angeboten, was
+     dort ohnehin abgewiesen wird. */
+  const gesperrt = vonUntis;
   return `<div class="hw-zeile${fertig ? ' erledigt' : ''}" data-hw="${escapeHtml(String(i.id))}">` +
     `<button type="button" class="hw-haken${fertig ? (vonUntis ? ' an schule' : ' an') : ''}"` +
     ` data-hw-done="${escapeHtml(String(i.id))}"` +
     ` data-hw-ziel="${fertig ? '0' : '1'}"` +
-    ` aria-label="${escapeHtml(translate(fertig ? 'Not done yet' : 'Done'))}">` +
-      (fertig ? `<i class="fa-light fa-check"></i>` : '') +
-    `</button>` +
+    (gesperrt ? ` disabled title="${escapeHtml(translate('Ticked off in WebUntis — cannot be undone here.'))}"` : '') +
+    ` aria-label="${escapeHtml(translate(fertig ? 'Not done yet' : 'Done'))}"></button>` +
     `<span class="hw-fach"${farbe}>` +
       (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
     `</span>` +
@@ -10845,6 +10897,8 @@ function hwZeileHtml(i, subjects) {
       (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') +
     `</span>` +
     `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
+    (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
+      `${renderAvatarStack([String(i.childId)])}</span></span>` : '') +
   `</div>`;
 }
 
@@ -10877,30 +10931,79 @@ function hwBinden(bereich) {
  * würde ihn beim nächsten Zeichnen verlieren.
  */
 function hwKarteHtml() {
-  const offen = hwOffene(hausaufgaben.items, '');
+  /* Die Mitgliedsauswahl gilt AUCH hier. Ohne diese Zeile stand unter „Mia"
+     die Hausaufgabe ihres Bruders — gemeldet am 09.09.2026. Dieselbe Wache wie
+     in memberFiltered(): bei abgeschalteter Mitgliederleiste filtert die
+     Auswahl nirgends, sie bleibt aber bestehen, weil sie bereichsuebergreifend
+     ist. Ist ein Erwachsener gewaehlt, bleibt der Kasten leer — und das ist
+     richtig, denn er hat keine Hausaufgaben. */
+  const wahl = (mitgliederLeisteSichtbar() && memberFilterIds.size > 0) ? memberFilterIds : null;
+  const offen = hwOffene(hausaufgaben.items, '')
+    .filter(i => !wahl || wahl.has(String(i.childId)));
   if (!homeworkMoeglich() || offen.length === 0) return '';
-  const namen = {};
-  (store.users || []).forEach(u => { namen[String(u.id)] = String(u.name || ''); });
   const subjects = (stundenplan && stundenplan.subjects) || [];
   const heute = localDayStr(new Date());
-  /* Nur was heute oder morgen fällig ist, und höchstens fünf Zeilen: die
-     Übersicht ist ein Blick, keine Liste. */
+  /* Nur was überfällig, heute oder morgen fällig ist: die Übersicht ist ein
+     Blick, keine Liste. Was später kommt, steht im Stundenplan-Bereich. */
   const gruppen = hwGruppen(offen, heute);
-  const dringend = gruppen.ueberfaellig.concat(gruppen.heute, gruppen.morgen).slice(0, 5);
-  if (dringend.length === 0) return '';
+  const bloecke = [
+    ['ueberfaellig', translate('Overdue'), false],
+    ['heute', translate('Today'), true],
+    ['morgen', translate('Tomorrow'), false]
+  ];
+  const gesamt = bloecke.reduce((s, [k]) => s + gruppen[k].length, 0);
+  if (gesamt === 0) return '';
+  /* Der Sprung in den Stundenplan-Bereich nur, wenn es ihn für diesen Blick
+     gibt: er gehört dem Kindmodus. Ein Knopf auf einen abgeschalteten Bereich
+     wäre eine Sackgasse — dieselbe Regel wie bei den Zahlenkacheln oben. */
+  const sprung = visibleTabs().includes('plan');
   let html = `<div class="card hw-karte"><div class="card-head">` +
-    `<span class="card-title">${escapeHtml(translate('Homework'))}</span></div>`;
-  dringend.forEach(i => {
-    const fach = hwFachInfo(i.subject, subjects);
-    html += `<div class="hw-zeile klein" data-hw="${escapeHtml(String(i.id))}">` +
-      `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
-      ` data-hw-ziel="1" aria-label="${escapeHtml(translate('Done'))}"></button>` +
-      `<span class="hw-text"><span class="hw-name">` +
-        escapeHtml((namen[String(i.childId)] || '') + ' · ' + fach.name) +
-      `</span>` + (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') + `</span>` +
-      `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
+    `<h3>${escapeHtml(translate('Homework'))}</h3>` +
+    (sprung ? `<button class="link" data-goto="plan">${escapeHtml(translate('Open'))}</button>` : '') +
     `</div>`;
+  let gezeigt = 0;
+  bloecke.forEach(([k, titel, istHeute]) => {
+    if (gruppen[k].length === 0 || gezeigt >= DASH_HW_MAX) return;
+    /* Tagesüberschrift wie im Terminkasten (.cal-day-head): dieselbe Sache,
+       dieselbe Gestaltung. Weil die Überschrift den Tag nennt, steht er nicht
+       noch einmal in jeder Zeile — dort ist rechts Platz für den Avatar, und
+       damit sagt die Zeile, WESSEN Aufgabe es ist. */
+    html += `<div class="cal-day-head${istHeute ? ' is-today' : ''}">` +
+      `<span class="cal-weekday">${escapeHtml(titel)}</span></div>`;
+    gruppen[k].forEach(i => {
+      if (gezeigt >= DASH_HW_MAX) return;
+      gezeigt++;
+      const fach = hwFachInfo(i.subject, subjects);
+      const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
+      const wer = renderAvatarStack([String(i.childId)]);
+      html += `<div class="hw-zeile klein" data-hw="${escapeHtml(String(i.id))}">` +
+        `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
+        ` data-hw-ziel="1" aria-label="${escapeHtml(translate('Done'))}"></button>` +
+        `<span class="hw-fach"${farbe}>` +
+          (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
+        `</span>` +
+        `<span class="hw-text"><span class="hw-name">${escapeHtml(fach.name)}` +
+          (String(i.source || '') === 'untis'
+            ? ` <i class="fa-light fa-school hw-schule" title="${escapeHtml(translate('From the school'))}"></i>`
+            : '') +
+        `</span>` +
+        (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') + `</span>` +
+        (wer ? `<span class="cal-side"><span class="cal-chips">${wer}</span></span>` : '') +
+      `</div>`;
+    });
   });
+  const rest = gesamt - gezeigt;
+  if (rest > 0) {
+    const label = rest === 1
+      ? translate('1 more homework item')
+      : translate('%1 more homework items').replace('%1', String(rest));
+    /* Ohne Sprungziel bleibt es eine Auskunft und wird kein Knopf: ein Knopf,
+       der nichts tut, ist schlimmer als eine Zeile Text. */
+    html += sprung
+      ? `<button class="more-row" data-goto="plan"><span>${escapeHtml(label)}</span>` +
+        `<i class="fa-light fa-chevron-right"></i></button>`
+      : `<div class="more-row"><span>${escapeHtml(label)}</span></div>`;
+  }
   return html + '</div>';
 }
 
@@ -10933,7 +11036,13 @@ function hwEditorOeffnen(bestand, vorschlag) {
      und eine Wahl wäre eine Einladung, es falsch einzutragen. */
   kindZeile.style.display = (imKindmodus || kinder.length === 1) ? 'none' : '';
 
-  const kind = hwKind();
+  /* Die Fächer gehören dem Kind, um das es HIER geht — nicht dem ersten des
+     Plans. Bei zwei Kindern bot der Editor sonst unter „Tim" die Fächer seiner
+     Schwester an. Gesucht wird unter ALLEN Plankindern, nicht unter
+     planKinder(): das ist die gefilterte Sicht, und im Editor steht das Kind
+     schon in der Auswahl darüber. */
+  const planAlle = (stundenplan && Array.isArray(stundenplan.children)) ? stundenplan.children : [];
+  const kind = planAlle.find(k => k && String(k.userId) === String(kindWahl.value)) || hwKind();
   const faecher = hwFaecherFuerKind(kind, (stundenplan && stundenplan.subjects) || []);
   const fachWahl = document.getElementById('hwSubject');
   const gewaehlt = bestand ? String(bestand.subject) : String((vorschlag && vorschlag.subject) || '');

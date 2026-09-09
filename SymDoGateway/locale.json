@@ -872,7 +872,8 @@
             "homework: not available": "Hausaufgaben: nicht verfügbar",
             "homework: not taken over (%s)": "Hausaufgaben: nicht übernommen (%s)",
             "%d homework item(s), unchanged": "%d Hausaufgabe(n), unverändert",
-            "%1$d homework item(s): %2$d new, %3$d updated, %4$d withdrawn": "%1$d Hausaufgabe(n): %2$d neu, %3$d geändert, %4$d zurückgezogen"
+            "%1$d homework item(s): %2$d new, %3$d updated, %4$d withdrawn": "%1$d Hausaufgabe(n): %2$d neu, %3$d geändert, %4$d zurückgezogen",
+            "%1$s: %2$s was ticked off in WebUntis — that cannot be undone here.": "%1$s: %2$s wurde in WebUntis abgehakt — das lässt sich hier nicht zurücknehmen."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

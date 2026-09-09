@@ -2643,6 +2643,13 @@ trait VoiceTools
             'action' => 'done', 'id' => (string)$treffer[0]['id'], 'done' => $ziel,
         ]);
         if (($antwort['ok'] ?? false) !== true) {
+            /* Den GRUND nennen, wenn es einen zu nennen gibt: „hat nicht
+               geklappt" laesst den Sprecher es gleich noch einmal versuchen. */
+            if ((string)($antwort['error']['code'] ?? '') === 'locked_by_school') {
+                return $this->VoiceErr('nicht_erlaubt', sprintf(
+                    $this->Translate('%1$s: %2$s was ticked off in WebUntis — that cannot be undone here.'),
+                    $kind['name'], (string)$treffer[0]['subject']));
+            }
             return $this->VoiceErr('nicht_erlaubt', $this->Translate('That did not work.'));
         }
         return ['ok' => true, 'sag' => sprintf(

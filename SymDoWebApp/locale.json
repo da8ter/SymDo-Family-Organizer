@@ -511,7 +511,10 @@
             "From the school": "Von der Schule",
             "Source: UNTIS": "Quelle: UNTIS",
             "Source: SymDo": "Quelle: SymDo",
-            "Not done yet": "Noch nicht erledigt"
+            "Not done yet": "Noch nicht erledigt",
+            "1 more homework item": "1 weitere Hausaufgabe",
+            "%1 more homework items": "%1 weitere Hausaufgaben",
+            "Ticked off in WebUntis — cannot be undone here.": "In WebUntis abgehakt — hier nicht rücknehmbar."
         }
     }
 }
