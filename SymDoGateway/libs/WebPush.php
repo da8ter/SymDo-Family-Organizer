@@ -124,6 +124,9 @@ trait WebPush
         $this->RegisterPropertyBoolean('PushOnTaskDue', false);
         $this->RegisterPropertyBoolean('PushOnBriefing', false);
         $this->RegisterPropertyBoolean('PushOnMailProposal', false);
+        $this->RegisterPropertyBoolean('PushOnHomework', false);
+        // SelectTime traegt seinen Wert als JSON, wie im Briefing.
+        $this->RegisterPropertyString('PushHomeworkTime', '{"hour":18,"minute":0,"second":0}');
         $this->RegisterTimer(self::PUSH_TIMER, 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'' . self::PUSH_TIMER . '\', 0);');
     }
 
@@ -138,7 +141,12 @@ trait WebPush
      */
     private function PushArm(): void
     {
-        $an = (bool)$this->PushProp('PushOnTaskDue', false) && $this->PushSubscriptions() !== [];
+        /* ODER: laeuft der Timer nur fuer die Aufgaben-Erinnerung, bleibt die
+           Vorabend-Meldung fuer Hausaufgaben stumm — und NIRGENDS stuende ein
+           Fehler. Genau diese Kopplung war die Falle. */
+        $an = ((bool)$this->PushProp('PushOnTaskDue', false)
+               || (bool)$this->PushProp('PushOnHomework', false))
+              && $this->PushSubscriptions() !== [];
         try {
             // Der Klammeraffe wie beim Attribut-Schreiben: Fehlt der Timer (Trait neu,
             // Kernel noch nicht neu gestartet), WARNT Symcon nur — das try/catch
@@ -153,7 +161,11 @@ trait WebPush
     private function PushRequestAction(string $ident, mixed $value): bool
     {
         if ($ident === self::PUSH_TIMER) {
+            /* Beide Laeufe NEBENEINANDER, nicht verschachtelt: PushRemindRun
+               steigt bei abgeschalteter Aufgaben-Erinnerung gleich aus, und die
+               Hausaufgaben haengen an ihrem eigenen Schalter. */
             $this->PushRemindRun();
+            $this->PushHomeworkRun();
             return true;
         }
         if ($ident === 'PushTestAll') {
@@ -763,6 +775,118 @@ trait WebPush
      * geglueckt, Push nicht) oder wiederholt sie jede Minute (keine Visu
      * eingestellt). Ein eigener Merker je Kanal ist die einzige saubere Loesung.
      */
+    /**
+     * Die Vorabend-Meldung: was fuer MORGEN noch offen ist, je Kind eine
+     * Nachricht.
+     *
+     * Nur einmal je Kind und Kalendertag — der Merker liegt im vorhandenen
+     * Bestand, dessen Aufbewahrung (48 h) ihn von selbst wegraeumt. Ist alles
+     * erledigt, bleibt es still: eine Erinnerung an nichts erzieht zum
+     * Wegwischen. Und an einem Tag ohne folgenden Schultag entfaellt sie ganz.
+     */
+    private function PushHomeworkRun(): void
+    {
+        if (!(bool)$this->PushProp('PushOnHomework', false) || $this->PushSubscriptions() === []) {
+            return;
+        }
+        [$std, $min] = $this->PushHomeworkZeit();
+        $jetzt = time();
+        if ((int)date('H', $jetzt) * 60 + (int)date('i', $jetzt) < $std * 60 + $min) {
+            return;
+        }
+        $morgen = date('Y-m-d', (int)strtotime('+1 day', $jetzt));
+        $offen = HomeworkCalc::FuerTag($this->HomeworkItems(), $morgen);
+        if ($offen === []) {
+            return;
+        }
+        $namen = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namen[(string)$u['id']] = (string)$u['name'];
+        }
+        $merker = $this->PushSentStore();
+        $geaendert = false;
+        foreach ($offen as $kindId => $items) {
+            $schluessel = 'hw:' . $morgen . ':' . $kindId;
+            if ((int)($merker[$schluessel] ?? 0) > 0) {
+                continue;
+            }
+            if (!$this->PushHomeworkSchultag($kindId, $morgen)) {
+                continue;
+            }
+            $faecher = [];
+            foreach ($items as $i) {
+                $faecher[] = (string)$i['subject'];
+            }
+            $faecher = array_values(array_unique($faecher));
+            $name = $namen[$kindId] ?? '';
+            /* Eine Nachricht je Kind, nicht eine je Fach: an einem Mittwoch
+               waeren das sonst fuenf. Bei genau einer Aufgabe steht die Notiz
+               dabei, sonst die Faecher. */
+            if (count($items) === 1 && trim((string)$items[0]['note']) !== '') {
+                $text = $name . ': ' . $faecher[0] . ' — ' . trim((string)$items[0]['note']);
+            } else {
+                $text = $name . ': ' . implode(', ', $faecher);
+            }
+            /* Hat das Kind eigene Geraete, geht sie nur dorthin; sonst an den
+               Haushalt — Kinder haben oft keines. Sprungziel ist die
+               Uebersicht: 'plan' steht nicht in PUSH_TABS und faellt still weg,
+               und ausserhalb des Kindmodus ist der Bereich gar nicht sichtbar. */
+            $ziel = $this->PushSubscriptions($kindId) !== [] ? $kindId : '';
+            $this->PushBroadcast($this->Translate('Homework for tomorrow'), $text, $ziel, 'dashboard');
+            $merker[$schluessel] = $jetzt;
+            $geaendert = true;
+        }
+        if ($geaendert) {
+            $this->PushWriteSent($merker);
+        }
+    }
+
+    /** Uhrzeit der Vorabend-Meldung als [Stunde, Minute]. */
+    private function PushHomeworkZeit(): array
+    {
+        $roh = json_decode((string)$this->PushProp('PushHomeworkTime', ''), true);
+        if (is_array($roh)) {
+            return [max(0, min(23, (int)($roh['hour'] ?? 18))), max(0, min(59, (int)($roh['minute'] ?? 0)))];
+        }
+        return [18, 0];
+    }
+
+    /**
+     * Ist der Tag fuer dieses Kind ueberhaupt ein Schultag? An einem Ferien-
+     * oder Wochenendtag braucht niemand eine Erinnerung.
+     *
+     * Ohne Stundenplan-Modul wird die Frage mit ja beantwortet: die Aufgabe
+     * steht ja mit Faelligkeit da, und lieber eine Meldung zu viel als eine
+     * verschluckte.
+     */
+    private function PushHomeworkSchultag(string $kindId, string $datum): bool
+    {
+        if (!function_exists('STPL_GetPlanForDate')) {
+            return true;
+        }
+        $gesehen = false;
+        foreach ($this->TimetableInstances() as $id) {
+            try {
+                $plan = json_decode((string)@STPL_GetPlanForDate((int)$id, $datum), true);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            foreach ((array)($plan['children'] ?? []) as $k) {
+                if (trim((string)($k['userId'] ?? '')) !== $kindId) {
+                    continue;
+                }
+                $gesehen = true;
+                foreach ((array)($k['days'] ?? []) as $t) {
+                    if ((string)($t['date'] ?? '') === $datum && (array)($t['slots'] ?? []) !== []) {
+                        return true;
+                    }
+                }
+            }
+        }
+        // Kind im Plan gefunden, aber ohne Unterricht: dann ist morgen frei.
+        return !$gesehen;
+    }
+
     private function PushRemindRun(): void
     {
         if (!(bool)$this->PushProp('PushOnTaskDue', false)) {

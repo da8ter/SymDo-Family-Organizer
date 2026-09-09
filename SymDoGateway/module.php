@@ -2389,6 +2389,20 @@ class SymDoGateway extends IPSModuleStrict
                     'caption' => $this->Translate('When the mail analysis has found appointments or tasks')
                 ],
                 [
+                    'type'    => 'CheckBox',
+                    'name'    => 'PushOnHomework',
+                    'caption' => $this->Translate('In the evening, when a child still has homework for tomorrow')
+                ],
+                [
+                    'type'    => 'SelectTime',
+                    'name'    => 'PushHomeworkTime',
+                    'caption' => $this->Translate('Homework reminder at')
+                ],
+                [
+                    'type'    => 'Label',
+                    'caption' => $this->Translate('The homework reminder comes once per child and day, only if something is still open and only if there is school tomorrow.')
+                ],
+                [
                     'type'    => 'Label',
                     'caption' => $this->Translate('A task reminder goes to the devices of the member it is assigned to, plus every device that is not assigned to anyone. Assign a device in the web app under the bell.')
                 ],

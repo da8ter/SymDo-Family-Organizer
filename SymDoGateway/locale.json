@@ -861,7 +861,11 @@
             "%s has nothing open for that.": "%s hat dazu nichts offen.",
             "%1$s has several open: %2$s. Which one do you mean?": "%1$s hat mehrere offen: %2$s. Welche meinst du?",
             "%1$s: %2$s is done.": "%1$s: %2$s ist erledigt.",
-            "%1$s: %2$s is open again.": "%1$s: %2$s ist wieder offen."
+            "%1$s: %2$s is open again.": "%1$s: %2$s ist wieder offen.",
+            "In the evening, when a child still has homework for tomorrow": "Abends, wenn ein Kind noch Hausaufgaben für morgen hat",
+            "Homework reminder at": "Hausaufgaben-Erinnerung um",
+            "The homework reminder comes once per child and day, only if something is still open and only if there is school tomorrow.": "Die Hausaufgaben-Erinnerung kommt einmal je Kind und Tag, nur wenn noch etwas offen ist und nur wenn morgen Schule ist.",
+            "Homework for tomorrow": "Hausaufgaben für morgen"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",
