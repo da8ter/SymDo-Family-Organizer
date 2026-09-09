@@ -23,8 +23,13 @@ require_once __DIR__ . '/HomeworkCalc.php';
  * Ablageform im Attribut HomeworkStore:
  *
  *   { "v":1, "rev":12,
- *     "items":[{"id","childId","subject","due","done","doneAt","note",
+ *     "items":[{"id","srcId","childId","subject","due","done","doneAt","note",
  *               "source","createdAt","updatedAt"}] }
+ *
+ * `srcId` ist die Nummer der Aufgabe in der fremden Quelle (heute WebUntis).
+ * Sie ist der Schluessel, an dem ein zweiter Abruf denselben Eintrag
+ * wiedererkennt — und die Grenze, hinter der der Abruf nicht wirkt: ein
+ * Eintrag OHNE sie ist von Hand angelegt und wird niemals angefasst.
  *
  * Das Fach steht als NAME drin, nicht als Kennung: im Stundenplan ist die
  * Fachkennung schon der Name, und ein zweiter Name derselben Sache wäre eine
@@ -334,5 +339,80 @@ trait Homework
             return $this->HomeworkFehler('store_unwritable');
         }
         return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'item' => $satz];
+    }
+
+    /**
+     * Einen Abruf einer fremden Quelle einrechnen (heute: WebUntis).
+     *
+     * Absichtlich KEINE Präfix-Funktion: der Aufrufer sitzt im selben Gateway
+     * (Trait WebUntis), und eine neue öffentliche PREFIX_-Funktion würde einen
+     * Kernel-Neustart verlangen, bevor der Abruf überhaupt anläuft.
+     *
+     * Geschrieben wird nur, wenn sich wirklich etwas geändert hat. Sonst hebt
+     * jeder stündliche Abruf die Revision, schickt allen Geräten ein Signal und
+     * lässt die Stundenplan-Kacheln neu zeichnen — für nichts.
+     *
+     * @param list<array> $roh Einträge der Quelle, je Eintrag mindestens
+     *        `srcId`, `subject`, `due`; dazu `note` und `done`
+     * @return array{ok:bool,neu:int,geaendert:int,entfernt:int,uebergangen:int,fehler:string}
+     */
+    private function HomeworkImportieren(string $kind, array $roh, string $von, string $bis, string $quelle = 'untis'): array
+    {
+        $leer = ['ok' => false, 'neu' => 0, 'geaendert' => 0, 'entfernt' => 0, 'uebergangen' => 0, 'fehler' => ''];
+        $kind = trim($kind);
+        if ($kind === '') {
+            return array_merge($leer, ['fehler' => 'no_child']);
+        }
+        $kinder = $this->HomeworkKinder();
+        if (!in_array($kind, $kinder, true)) {
+            /* Das Mitglied ist nicht (mehr) als Kind geführt. Kein Grund für
+               einen Fehler im Log — aber auch kein Grund, irgendwo Aufgaben
+               anzulegen. */
+            return array_merge($leer, ['fehler' => 'no_child']);
+        }
+
+        $jetzt = time();
+        $heute = date('Y-m-d', $jetzt);
+        $faecher = $this->HomeworkFaecher();
+        $saetze = [];
+        $uebergangen = 0;
+        foreach ($roh as $r) {
+            if (!is_array($r) || (int)($r['srcId'] ?? 0) <= 0) {
+                $uebergangen++;
+                continue;
+            }
+            $r['childId'] = $kind;
+            $r['source'] = $quelle;
+            $satz = HomeworkCalc::Normalisieren($r, $faecher, $kinder, $heute, $jetzt);
+            if ($satz === null) {
+                // Ohne Fach oder mit unmöglicher Fälligkeit: übergehen, nicht
+                // raten. Die Zahl steht in der Statuszeile.
+                $uebergangen++;
+                continue;
+            }
+            $saetze[] = $satz;
+        }
+
+        $lock = self::HW_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($lock, 3000)) {
+            return array_merge($leer, ['fehler' => 'busy', 'uebergangen' => $uebergangen]);
+        }
+        try {
+            $store = $this->HomeworkStore();
+            $store['items'] = HomeworkCalc::Aufbewahrung($store['items'], $jetzt);
+            $e = HomeworkCalc::Zusammenfuehren($store['items'], $saetze, $kind, $von, $bis, $jetzt);
+            if ($e['neu'] === 0 && $e['geaendert'] === 0 && $e['entfernt'] === 0) {
+                return ['ok' => true, 'neu' => 0, 'geaendert' => 0, 'entfernt' => 0,
+                        'uebergangen' => $uebergangen, 'fehler' => ''];
+            }
+            $store['items'] = $e['items'];
+            if (!$this->HomeworkWriteStore($store)) {
+                return array_merge($leer, ['fehler' => 'store_unwritable', 'uebergangen' => $uebergangen]);
+            }
+            return ['ok' => true, 'neu' => (int)$e['neu'], 'geaendert' => (int)$e['geaendert'],
+                    'entfernt' => (int)$e['entfernt'], 'uebergangen' => $uebergangen, 'fehler' => ''];
+        } finally {
+            IPS_SemaphoreLeave($lock);
+        }
     }
 }

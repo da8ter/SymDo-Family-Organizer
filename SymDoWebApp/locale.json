@@ -507,7 +507,9 @@
             "Homework belongs to a child — add one in the gateway.": "Hausaufgaben gehören zu einem Kind — im Gateway eines anlegen.",
             "Too many homework entries.": "Zu viele Hausaufgaben.",
             "instead of %1": "statt %1",
-            "Event": "Termin"
+            "Event": "Termin",
+            "From the school": "Von der Schule",
+            "From the school. Subject, due date and text are taken from there again on the next fetch — the tick stays here.": "Von der Schule. Fach, Fälligkeit und Text werden beim nächsten Abruf wieder von dort übernommen — das Häkchen bleibt hier."
         }
     }
 }

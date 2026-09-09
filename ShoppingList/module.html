@@ -3614,6 +3614,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .hw-gruppe { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px 0; }
 .hw-gruppe.spaet { color: var(--danger, #e5534b); }
 .hw-leer { font-size: 13px; color: var(--muted); padding: 6px 2px; }
+/* Herkunftszeichen an einer aus der Schule uebernommenen Aufgabe. Gedeckt und
+   klein: es erklaert etwas, es meldet nichts. */
+.hw-schule { font-size: 11px; opacity: .5; margin-left: 5px; }
+.hw-quelle { font-size: 12px; line-height: 1.4; color: var(--muted); padding: 2px 2px 0; }
 .hw-zeile {
   display: flex; align-items: center; gap: 10px;
   background: var(--surface); border-radius: 12px; padding: 8px 10px;
@@ -4171,6 +4175,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       <div class="form-row inline"><label id="lblHwSubject"></label><select id="hwSubject"></select></div>
       <div class="form-row inline"><label id="lblHwDue"></label><input id="hwDue" type="date" /></div>
       <div class="form-row"><label id="lblHwNote"></label><textarea id="hwNote" rows="2" maxlength="500"></textarea></div>
+      <!-- Nur bei einer Aufgabe, die aus der Schule kam: dann gewinnt beim
+           naechsten Abruf wieder deren Fassung, und das soll vorher dastehen
+           und nicht hinterher auffallen. -->
+      <div class="hw-quelle" id="hwQuelle" style="display:none"></div>
     </div>
     <div class="overlay-footer">
       <button class="destructive icon-only" id="btnHwDelete" style="display:none"><i class="fa-light fa-trash"></i></button>
@@ -10777,7 +10785,14 @@ function hwZeileHtml(i, subjects) {
       (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
     `</span>` +
     `<span class="hw-text">` +
-      `<span class="hw-name">${escapeHtml(fach.name)}</span>` +
+      `<span class="hw-name">${escapeHtml(fach.name)}` +
+        /* Aus der Schule uebernommen. Ein Zeichen und kein Text: die Zeile ist
+           schmal, und die Auskunft ist eine Nebensache — sie erklaert nur,
+           warum eine Aenderung hier beim naechsten Abruf zurueckfaellt. */
+        (i.source === 'untis'
+          ? ` <i class="fa-light fa-school hw-schule" title="${escapeHtml(translate('From the school'))}"></i>`
+          : '') +
+      `</span>` +
       (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') +
     `</span>` +
     `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
@@ -10870,6 +10885,14 @@ function hwEditorOeffnen(bestand, vorschlag) {
     : String((vorschlag && vorschlag.note) || '');
   document.getElementById('hwOverlayTitle').textContent =
     bestand ? translate('Homework') : translate('New homework');
+  const quelle = document.getElementById('hwQuelle');
+  if (quelle) {
+    const fremd = !!bestand && String(bestand.source || '') === 'untis';
+    quelle.style.display = fremd ? '' : 'none';
+    quelle.textContent = fremd
+      ? translate('From the school. Subject, due date and text are taken from there again on the next fetch — the tick stays here.')
+      : '';
+  }
   document.getElementById('btnHwDelete').style.display = bestand ? '' : 'none';
   openOverlay('hwOverlay');
 }

@@ -1824,6 +1824,12 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'UntisPush',
                  'caption' => $this->Translate('Push on cancellations and substitutions')],
                 ['type' => 'Label', 'caption' => $this->Translate('Goes to the devices of the assigned family member, once per lesson — not again on every fetch.')],
+                /* Aus als Vorgabe: es ist ein Zugriff mehr je Durchlauf, und
+                   wer seine Hausaufgaben von Hand pflegt, soll das nach einem
+                   Modul-Update nicht anders vorfinden. */
+                ['type' => 'CheckBox', 'name' => 'UntisHomework',
+                 'caption' => $this->Translate('Also fetch homework')],
+                ['type' => 'Label', 'caption' => $this->Translate('Takes over what the school has entered — subject, due date, text and tick. Entries added by hand stay untouched, and a tick set at home is never removed by the fetch. The tick stays in SymDo: the account may only READ homework in WebUntis.')],
                 /* Element-Typ und -Nummer sind die Frage „WESSEN Plan?". Leer heisst
                    „der des angemeldeten Kontos" — das geht nur, wenn das Konto
                    selbst ein Element ist (Schuelerkonto). Ein

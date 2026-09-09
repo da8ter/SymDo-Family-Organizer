@@ -111,13 +111,19 @@ class HomeworkCalc
         $erledigt = ($roh['done'] ?? false) === true;
         return [
             'id'        => trim((string)($roh['id'] ?? '')),
+            /* Herkunftskennung: bei einem Eintrag aus WebUntis die Nummer der
+               Schule. Sie ist der Schlüssel, an dem der nächste Abruf denselben
+               Eintrag wiedererkennt, statt ihn zweimal anzulegen. Ein von Hand
+               angelegter Eintrag hat sie nicht — und wird vom Abruf niemals
+               angefasst. */
+            'srcId'     => max(0, (int)($roh['srcId'] ?? 0)),
             'childId'   => $kind,
             'subject'   => $fach,
             'due'       => $due,
             'done'      => $erledigt,
             'doneAt'    => $erledigt ? max(0, (int)($roh['doneAt'] ?? $jetzt)) : 0,
             'note'      => mb_substr(trim((string)($roh['note'] ?? '')), 0, self::NOTE_MAX),
-            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps'], true)
+            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis'], true)
                 ? (string)$roh['source'] : 'app',
             'createdAt' => max(0, (int)($roh['createdAt'] ?? $jetzt)) ?: $jetzt,
             'updatedAt' => max(0, (int)($roh['updatedAt'] ?? $jetzt)) ?: $jetzt,
@@ -218,6 +224,111 @@ class HomeworkCalc
             $raus['frei'][$kind . '|' . $tag] = ($raus['frei'][$kind . '|' . $tag] ?? 0) + 1;
         }
         return $raus;
+    }
+
+    /**
+     * Einen Abruf aus WebUntis in den Bestand einrechnen.
+     *
+     * Der Abruf ist NICHT der Besitzer des Bestands, er ist eine Quelle unter
+     * mehreren. Deshalb drei Regeln, und jede hat einen Fall hinter sich, der
+     * sonst wehtut:
+     *
+     *  1. **Wiedererkannt wird über `srcId`**, die Nummer der Aufgabe in
+     *     WebUntis. Ohne sie legte jeder Durchlauf dieselbe Aufgabe erneut an —
+     *     stündlich, bis der Deckel greift.
+     *  2. **Von Hand angelegtes bleibt unangetastet.** Ein Eintrag ohne
+     *     `srcId` wird weder geändert noch gelöscht, auch wenn er dieselbe
+     *     Aufgabe meint. Wer etwas selbst eingetragen hat, soll es wiederfinden.
+     *  3. **Das Häkchen ist eine Sperrklinke.** Erledigt aus WebUntis setzt
+     *     erledigt; ein zu Hause gesetztes Häkchen nimmt der Abruf NIE zurück.
+     *     Andernfalls hätte das Kind abgehakt, und eine Stunde später stünde
+     *     die Aufgabe wieder offen da, weil die Lehrkraft es in WebUntis nicht
+     *     nachgetragen hat.
+     *
+     * Gelöscht wird nur, was WebUntis im ABGERUFENEN Fenster nicht mehr nennt.
+     * Eine Aufgabe vor dem Fenster stand nie in dieser Antwort und ist deshalb
+     * kein Beweis dafür, dass die Schule sie zurückgezogen hat.
+     *
+     * @param list<array> $items Bestand
+     * @param list<array> $neu   normalisierte Einträge des Abrufs (mit srcId)
+     * @return array{items:list<array>,neu:int,geaendert:int,entfernt:int}
+     */
+    public static function Zusammenfuehren(array $items, array $neu, string $kind, string $von, string $bis, int $jetzt): array
+    {
+        $gesehen = [];
+        foreach ($neu as $n) {
+            $s = (int)($n['srcId'] ?? 0);
+            if ($s > 0) {
+                $gesehen[$s] = true;
+            }
+        }
+        $zahlNeu = 0;
+        $zahlAend = 0;
+        $zahlWeg = 0;
+
+        /* Wo liegt welche fremde Aufgabe? Nur Einträge DIESES Kindes mit einer
+           Herkunftsnummer zählen — alles andere gehört dem Nutzer. */
+        $stelle = [];
+        foreach ($items as $i => $satz) {
+            if (!is_array($satz) || (string)($satz['childId'] ?? '') !== $kind) {
+                continue;
+            }
+            $s = (int)($satz['srcId'] ?? 0);
+            if ($s > 0) {
+                $stelle[$s] = $i;
+            }
+        }
+
+        foreach ($neu as $n) {
+            $s = (int)($n['srcId'] ?? 0);
+            if ($s <= 0) {
+                continue;
+            }
+            if (!isset($stelle[$s])) {
+                if (count($items) >= self::ITEMS_MAX) {
+                    continue;
+                }
+                $n['id'] = bin2hex(random_bytes(4));
+                $n['createdAt'] = $jetzt;
+                $n['updatedAt'] = $jetzt;
+                $items[] = $n;
+                $stelle[$s] = count($items) - 1;
+                $zahlNeu++;
+                continue;
+            }
+            $alt = $items[$stelle[$s]];
+            $satz = $alt;
+            $satz['subject'] = (string)$n['subject'];
+            $satz['due'] = (string)$n['due'];
+            $satz['note'] = (string)$n['note'];
+            // Sperrklinke: erledigt bleibt erledigt.
+            if (($n['done'] ?? false) === true && ($satz['done'] ?? false) !== true) {
+                $satz['done'] = true;
+                $satz['doneAt'] = $jetzt;
+            }
+            if ($satz !== $alt) {
+                $satz['updatedAt'] = $jetzt;
+                $items[$stelle[$s]] = $satz;
+                $zahlAend++;
+            }
+        }
+
+        $raus = [];
+        foreach ($items as $satz) {
+            if (!is_array($satz)) {
+                continue;
+            }
+            $s = (int)($satz['srcId'] ?? 0);
+            $due = trim((string)($satz['due'] ?? ''));
+            $fremd = $s > 0 && (string)($satz['childId'] ?? '') === $kind;
+            if ($fremd && !isset($gesehen[$s]) && $due !== '' && $due >= $von && $due <= $bis) {
+                $zahlWeg++;
+                continue;
+            }
+            $raus[] = $satz;
+        }
+
+        return ['items' => array_values($raus), 'neu' => $zahlNeu, 'geaendert' => $zahlAend, 'entfernt' => $zahlWeg];
     }
 
     /**

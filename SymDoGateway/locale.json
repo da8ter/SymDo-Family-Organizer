@@ -865,7 +865,14 @@
             "In the evening, when a child still has homework for tomorrow": "Abends, wenn ein Kind noch Hausaufgaben für morgen hat",
             "Homework reminder at": "Hausaufgaben-Erinnerung um",
             "The homework reminder comes once per child and day, only if something is still open and only if there is school tomorrow.": "Die Hausaufgaben-Erinnerung kommt einmal je Kind und Tag, nur wenn noch etwas offen ist und nur wenn morgen Schule ist.",
-            "Homework for tomorrow": "Hausaufgaben für morgen"
+            "Homework for tomorrow": "Hausaufgaben für morgen",
+            "Also fetch homework": "Hausaufgaben mitholen",
+            "Takes over what the school has entered — subject, due date, text and tick. Entries added by hand stay untouched, and a tick set at home is never removed by the fetch. The tick stays in SymDo: the account may only READ homework in WebUntis.": "Übernimmt, was die Schule eingetragen hat — Fach, Fälligkeit, Text und Häkchen. Von Hand angelegte Einträge bleiben unangetastet, und ein zu Hause gesetztes Häkchen nimmt der Abruf nie zurück. Das Häkchen bleibt in SymDo: das Konto darf Hausaufgaben in WebUntis nur LESEN.",
+            "homework: no family member assigned": "Hausaufgaben: kein Familienmitglied zugeordnet",
+            "homework: not available": "Hausaufgaben: nicht verfügbar",
+            "homework: not taken over (%s)": "Hausaufgaben: nicht übernommen (%s)",
+            "%d homework item(s), unchanged": "%d Hausaufgabe(n), unverändert",
+            "%1$d homework item(s): %2$d new, %3$d updated, %4$d withdrawn": "%1$d Hausaufgabe(n): %2$d neu, %3$d geändert, %4$d zurückgezogen"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

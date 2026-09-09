@@ -320,6 +320,7 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
 | Schüler | `UntisStudents` | je Kind eine Zeile: Familienmitglied, dazu bei Elternkonten mit mehreren Kindern Elementtyp und -nummer; das **Suchfeld** (`UntisSearchName`) findet die Nummer über den Namen |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
+| Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
 
 **Testverbindung** meldet das Schuljahr und nennt die Kinder des Kontos. Das Kind muss im Stundenplan-Modul als Familienmitglied verknüpft sein, sonst weiß niemand, wohin die Stunden gehören. Nach wiederholt fehlgeschlagener Anmeldung pausiert der Abruf, damit das Konto nicht gesperrt wird; die Testverbindung startet ihn wieder.
 
@@ -352,6 +353,34 @@ und Zuordnung; der Name ist die Verbindung, hier wie im ganzen Stundenplan.
 **Aufbewahrung**: erledigte verschwinden nach 14 Tagen, offene ohne Erledigung
 nach 60. Höchstens 300 Einträge; darüber fallen die ältesten heraus. Gemessen
 wird beim Lesen, geschrieben erst bei der nächsten Änderung.
+
+**Von der Schule holen** (Schalter *Hausaufgaben mitholen* im WebUntis-Block,
+ab Werk **aus**): Was die Lehrkräfte in WebUntis eintragen, kommt mit Fach,
+Fälligkeit, Text und Häkchen herein — niemand muss es abtippen. Der Abruf
+läuft im selben Durchlauf wie der Stundenplan und in derselben Anmeldung, also
+ohne zusätzlichen Zugriff auf das Schulkonto. Vier Regeln, damit sich beides
+nicht in die Quere kommt:
+
+- **Von Hand angelegtes bleibt unangetastet.** Der Abruf ändert und löscht nur,
+  was er selbst hereingeholt hat. Eigene Einträge sind an keiner Stelle in
+  Gefahr, und **anlegen geht weiter wie bisher** — in der Web-App, per Sprache,
+  über die KI.
+- **Das Häkchen ist eine Sperrklinke.** Erledigt aus WebUntis setzt erledigt;
+  ein zu Hause gesetztes Häkchen nimmt der Abruf nie zurück. Sonst stünde eine
+  abgehakte Aufgabe eine Stunde später wieder offen da, nur weil die Lehrkraft
+  es in WebUntis nicht nachgetragen hat.
+- **Das Häkchen bleibt hier.** Es wird **nicht** nach WebUntis zurückgemeldet:
+  ein Elternkonto darf Hausaufgaben dort nur lesen. Wer den Haken auch in
+  WebUntis will, setzt ihn in WebUntis.
+- **Zurückgezogen wird nur im abgerufenen Zeitraum.** Nennt die Schule eine
+  übernommene Aufgabe nicht mehr, verschwindet sie auch in SymDo. Eine Aufgabe
+  vor dem Zeitraum stand nie in der Antwort und bleibt deshalb stehen.
+
+In der Web-App tragen übernommene Aufgaben ein kleines Schulzeichen, und der
+Editor sagt es: Fach, Fälligkeit und Text gewinnt beim nächsten Abruf wieder
+die Schule. Wer eine dieser Aufgaben umschreiben will, legt besser eine eigene
+an. Die Statuszeile im Formular nennt nach jedem Durchlauf, wie viele Aufgaben
+kamen, wie viele neu und wie viele zurückgezogen waren.
 
 **Grenzen**: Hausaufgaben hängen an Mitgliedern mit der Rolle *Kind* und
 brauchen deren Kennung. Sie erscheinen **nicht** in der Geräte-Erkundung der

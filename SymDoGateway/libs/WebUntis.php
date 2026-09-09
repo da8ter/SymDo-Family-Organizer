@@ -67,6 +67,11 @@ trait WebUntis
            wird trotzdem gefuehrt: wer sie spaeter einschaltet, bekommt nicht
            nachtraeglich alles, was in der Zwischenzeit war. */
         $this->RegisterPropertyBoolean('UntisPush', true);
+        /* Hausaufgaben von der Schule holen. AUS als Vorgabe: es ist ein
+           zusätzlicher Zugriff je Durchlauf, und wer seine Hausaufgaben von
+           Hand pflegt, soll das durch ein Modul-Update nicht anders
+           vorfinden. */
+        $this->RegisterPropertyBoolean('UntisHomework', false);
         /* Je Kind: Anzeigename, Ziel-Stundenplan und wessen Plan geholt wird.
            Leerer Elementtyp = der Plan des angemeldeten Kontos selbst. */
         $this->RegisterPropertyString('UntisStudents', '[]');
@@ -310,10 +315,16 @@ trait WebUntis
      * ist ein Bearer, den `/WebUntis/api/token/new` gegen die laufende Sitzung
      * ausgibt; der JSESSIONID-Keks allein genuegt dafuer (gemessen 04.09.2026).
      *
+     * Zwei Wurzeln, und der Unterschied ist keine Kosmetik: die neue Ansicht
+     * liegt unter `api/rest/view/v1/`, aeltere Endpunkte wie die Hausaufgaben
+     * unter `api/`. Unter der neuen Wurzel antwortet `homeworks` mit HTTP 404
+     * (am 09.09.2026 gemessen) — wer das fuer „gibt es nicht" nimmt, sucht an
+     * der falschen Stelle.
+     *
      * @return array<string,mixed>|null null bei jedem Fehlschlag — der Aufrufer
      *         faellt dann auf die Angaben im Formular zurueck.
      */
-    private function UntisRest(string $pfad): ?array
+    private function UntisRest(string $pfad, string $wurzel = 'api/rest/view/v1/'): ?array
     {
         $server = trim((string)$this->UntisProp('UntisServer', ''));
         if ($server === '' || $this->untisSession === '') {
@@ -343,7 +354,7 @@ trait WebUntis
             }
             $this->untisBearer = trim($t['text']);
         }
-        $r = $hol($basis . '/WebUntis/api/rest/view/v1/' . ltrim($pfad, '/'),
+        $r = $hol($basis . '/WebUntis/' . trim($wurzel, '/') . '/' . ltrim($pfad, '/'),
             [$keks, 'Authorization: Bearer ' . $this->untisBearer, 'Accept: application/json']);
         if ($r['status'] !== 200) {
             $this->SendDebug('WebUntis', $pfad . ': HTTP ' . $r['status'], 0);
@@ -607,6 +618,9 @@ trait WebUntis
             /* Trockenlauf: NICHTS schreiben, NICHT melden und den Merker nicht
                anfassen. Sonst gaelten die Aenderungen als gemeldet, ohne dass
                jemand sie gesehen hat — und der echte Lauf schwiege dann. */
+            /* Der Trockenlauf holt die Hausaufgaben ABSICHTLICH nicht: er
+               schreibt nichts, und ein Abruf, dessen Ergebnis niemand sieht,
+               ist nur ein Zugriff mehr auf das Konto der Schule. */
             return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d unresolved overlap(s) — dry run, nothing written'),
                 $kind['name'], count($stunden), count($auffaellig), $offen) . $verlust;
         }
@@ -617,9 +631,24 @@ trait WebUntis
            „wie sieht ein Dienstag aus" und „was ist am Dienstag". */
         $datierteTage = ((int)$kind['stpl'] > 0 && $datiert !== []) ? $this->UntisEinspielen($kind, $datiert) : 0;
         $neu = $this->UntisAenderungenMelden($kind, $auffaellig);
+        /* Die Hausaufgaben ZULETZT, und in derselben Sitzung. Zuletzt, weil der
+           Plan die Hauptsache ist: faellt der Zusatz aus, steht der Stundenplan
+           trotzdem. In derselben Sitzung, weil jede weitere Anmeldung an der
+           Kontosperre nach drei Fehlversuchen kratzt. */
+        $hausaufgaben = '';
+        if ((bool)$this->UntisProp('UntisHomework', false)) {
+            try {
+                $hausaufgaben = $this->UntisHausaufgabenLesen(
+                    $kind, $nr, $von, $bis, $this->UntisFachKurzformen($stunden));
+            } catch (\Throwable $e) {
+                $this->SendDebug('WebUntis', 'Hausaufgaben: ' . $e->getMessage(), 0);
+                $hausaufgaben = $this->Translate('homework: not available');
+            }
+        }
 
         return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved'),
-            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen) . $verlust;
+            $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen)
+            . $verlust . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben);
     }
 
     /**
@@ -757,6 +786,180 @@ trait WebUntis
             'insteadOf' => implode(', ', array_unique($ersetzt)),
             'activityType' => 'Unterricht',
         ];
+    }
+
+    /**
+     * Die Hausaufgaben eines Kindes aus WebUntis holen und einrechnen.
+     *
+     * Warum ueberhaupt: die Schule traegt sie dort ohnehin ein. Sieben Eintraege
+     * standen am 09.09.2026 im Konto des Nutzers, mit Faelligkeit, Text und
+     * Haekchen — Feld fuer Feld dasselbe, was der Hausaufgaben-Bestand von SymDo
+     * fuehrt. Abtippen ist dafuer kein guter Grund.
+     *
+     * Der Endpunkt liegt NICHT unter der neuen Ansicht, sondern unter
+     * `/WebUntis/api/homeworks/lessons` (unter `rest/view/v1` antwortet er 404).
+     * Er kostet EINEN Zugriff je Kind und laeuft in der Sitzung, die der Plan
+     * schon geoeffnet hat — keine zweite Anmeldung, denn nach drei
+     * Fehlanmeldungen sperrt WebUntis das Konto.
+     *
+     * Das Fach kommt als KUERZEL („M", „Bi"). Die Kurzform-Erkennung des
+     * Bestands greift erst ab drei Zeichen, „M" traefe „Mathematik" also nie.
+     * Deshalb wird die Zuordnung aus dem Plan mitgenommen, der beides nennt —
+     * das kostet keinen weiteren Zugriff.
+     *
+     * @param array<string,string> $kurz Kuerzel => langer Fachname, aus dem Plan
+     * @return string Zeile fuer die Statuszeile, leer wenn es nichts zu sagen gibt
+     */
+    private function UntisHausaufgabenLesen(array $kind, int $nr, int $von, int $bis, array $kurz): string
+    {
+        $userId = trim((string)($kind['userId'] ?? ''));
+        if ($userId === '') {
+            /* Ohne Familienmitglied gibt es kein Kind, an dem eine Hausaufgabe
+               haengen koennte. Der Plan geht auch ohne — deshalb ein Hinweis
+               und kein Fehler. */
+            return $this->Translate('homework: no family member assigned');
+        }
+        $d = $this->UntisRest('homeworks/lessons?startDate=' . $von . '&endDate=' . $bis, 'api/');
+        $daten = is_array($d['data'] ?? null) ? $d['data'] : (is_array($d) ? $d : []);
+        if ($daten === []) {
+            return $this->Translate('homework: not available');
+        }
+
+        /* Welche Liste die Hausaufgaben traegt, ist nicht dokumentiert. Erst am
+           Namen, dann am INHALT — und wenn sich WEDER das eine noch das andere
+           findet, wird ABGEBROCHEN.
+           Der Unterschied ist wichtig: eine leere Liste heisst „diese zwei
+           Wochen sind aufgabenfrei" und zieht die uebernommenen Aufgaben im
+           Fenster zurueck. Eine unverstaendliche Antwort heisst gar nichts —
+           sie darf auf keinen Fall dasselbe bewirken und den Bestand
+           ausraeumen. */
+        $hw = null;
+        foreach (['homeworks', 'homeWorks', 'homework'] as $name) {
+            if (is_array($daten[$name] ?? null)) {
+                $hw = array_values($daten[$name]);
+                break;
+            }
+        }
+        if ($hw === null) {
+            foreach ($daten as $wert) {
+                if (!is_array($wert) || $wert === []) {
+                    continue;
+                }
+                $erste = reset($wert);
+                if (is_array($erste) && (array_key_exists('dueDate', $erste) || array_key_exists('text', $erste))) {
+                    $hw = array_values($wert);
+                    break;
+                }
+            }
+        }
+        if ($hw === null) {
+            $this->SendDebug('WebUntis', 'Hausaufgaben: unbekannte Antwortform ('
+                . implode(', ', array_slice(array_keys($daten), 0, 8)) . ')', 0);
+            return $this->Translate('homework: not available');
+        }
+        $lektionen = [];
+        foreach ((array)($daten['lessons'] ?? []) as $l) {
+            if (!is_array($l)) {
+                continue;
+            }
+            $f = $l['subject'] ?? '';
+            $name = is_array($f)
+                ? trim((string)($f['longName'] ?? ($f['name'] ?? ($f['shortName'] ?? ''))))
+                : trim((string)$f);
+            if ((int)($l['id'] ?? 0) > 0 && $name !== '') {
+                $lektionen[(int)$l['id']] = $name;
+            }
+        }
+        /* Ein Elternkonto sieht bei mehreren Kindern alle Hausaufgaben in einer
+           Antwort. `records[]` sagt, zu welchem Element eine gehoert. Nennt
+           KEIN Datensatz die Nummer dieses Kindes, wird nicht gefiltert — dann
+           haengt das Konto an genau einem Kind, und ein Filter auf eine nirgends
+           genannte Nummer liesse alles verschwinden. */
+        $meine = [];
+        $fremdeGesehen = false;
+        foreach ((array)($daten['records'] ?? []) as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $ids = array_map('intval', (array)($r['elementIds'] ?? []));
+            if ($ids === []) {
+                continue;
+            }
+            if ($nr > 0 && in_array($nr, $ids, true)) {
+                $meine[(int)($r['homeworkId'] ?? 0)] = true;
+            } elseif ($nr > 0) {
+                $fremdeGesehen = true;
+            }
+        }
+
+        $roh = [];
+        foreach ($hw as $h) {
+            if (!is_array($h)) {
+                continue;
+            }
+            $id = (int)($h['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if ($meine !== [] && $fremdeGesehen && !isset($meine[$id])) {
+                continue;                       // gehoert einem Geschwisterkind
+            }
+            $tag = (int)($h['dueDate'] ?? 0) ?: (int)($h['date'] ?? 0);
+            if ($tag < 10000000) {
+                continue;                       // ohne Tag kein Platz im Plan
+            }
+            $datum = substr((string)$tag, 0, 4) . '-' . substr((string)$tag, 4, 2) . '-' . substr((string)$tag, 6, 2);
+            $kuerzel = (string)($lektionen[(int)($h['lessonId'] ?? 0)] ?? '');
+            $fach = $kurz[mb_strtolower($kuerzel)] ?? $kuerzel;
+            $text = trim((string)($h['text'] ?? ''));
+            $bem  = trim((string)($h['remark'] ?? ''));
+            if ($bem !== '' && $bem !== $text) {
+                $text = $text === '' ? $bem : ($text . ' — ' . $bem);
+            }
+            $roh[] = [
+                'srcId'   => $id,
+                'subject' => $fach,
+                'due'     => $datum,
+                'note'    => $text,
+                'done'    => ($h['completed'] ?? false) === true,
+            ];
+        }
+
+        $iso = static fn(int $ymd): string => substr((string)$ymd, 0, 4) . '-'
+            . substr((string)$ymd, 4, 2) . '-' . substr((string)$ymd, 6, 2);
+        $e = $this->HomeworkImportieren($userId, $roh, $iso((int)$von), $iso((int)$bis));
+        if (($e['ok'] ?? false) !== true) {
+            return sprintf($this->Translate('homework: not taken over (%s)'), (string)($e['fehler'] ?? '?'));
+        }
+        if ((int)$e['neu'] === 0 && (int)$e['geaendert'] === 0 && (int)$e['entfernt'] === 0) {
+            return sprintf($this->Translate('%d homework item(s), unchanged'), count($roh));
+        }
+        return sprintf($this->Translate('%1$d homework item(s): %2$d new, %3$d updated, %4$d withdrawn'),
+            count($roh), (int)$e['neu'], (int)$e['geaendert'], (int)$e['entfernt']);
+    }
+
+    /**
+     * Kuerzel => langer Fachname, aus den eben geholten Stunden.
+     *
+     * @param list<array<string,mixed>> $stunden
+     * @return array<string,string>
+     */
+    private function UntisFachKurzformen(array $stunden): array
+    {
+        $raus = [];
+        foreach ($stunden as $st) {
+            foreach ((array)($st['su'] ?? []) as $f) {
+                if (!is_array($f)) {
+                    continue;
+                }
+                $k = mb_strtolower(trim((string)($f['name'] ?? '')));
+                $l = trim((string)($f['longname'] ?? ''));
+                if ($k !== '' && $l !== '' && !isset($raus[$k])) {
+                    $raus[$k] = $l;
+                }
+            }
+        }
+        return $raus;
     }
 
     private function UntisAbbilden(array $stunden, array $raster, string $kurse): array
