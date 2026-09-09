@@ -521,6 +521,35 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 /* Letzter Icon-Button der Kopfzeile (z. B. das „…"-Menü) ganz nach rechts. */
 .screen-head .icon-btn:last-child { margin-left: auto; }
+/* Ansichtswahl des Kalenders. Bewusst KEIN .icon-btn: die Regel darueber gibt
+   dem letzten Icon-Button der Kopfzeile margin-left:auto, und bei zwei
+   Knoepfen nebeneinander bekaeme ihn nur der zweite — der Umschalter zerfiele
+   optisch in zwei Teile. Also eine Huelle, die den Rand selbst setzt. */
+.ct-ansichtwahl {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--row-line, rgba(128,128,128,.25)); border-radius: 999px; padding: 2px;
+}
+.ct-ansichtwahl button {
+  border: 0; background: transparent; color: var(--text-dim); cursor: pointer;
+  font: inherit; line-height: 1; padding: 5px 9px; border-radius: 999px;
+}
+.ct-ansichtwahl button[aria-current="true"] { background: var(--surface); color: var(--accent); }
+.ct-ansichtwahl button i, .ct-ansichtwahl button svg { width: 14px; height: 14px; }
+/* Wochenschritt. Die Beschriftung wechselt mit jeder Woche, deshalb ein festes
+   Mindestmass und Ziffern gleicher Breite: sonst wandern die Pfeile zwischen
+   dem 8. und dem 22. hin und her. */
+.ct-wochenwahl {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--row-line, rgba(128,128,128,.25)); border-radius: 999px; padding: 2px;
+}
+.ct-wochenwahl button {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; line-height: 1; padding: 4px 8px; border-radius: 999px;
+}
+.ct-wochenwahl > span {
+  min-width: 15ch; text-align: center; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 .icon-btn {
   width: 38px; height: 38px;
   border-radius: 999px;
@@ -3674,9 +3703,28 @@ html.web-app #ladeschirm.geht { opacity: 0; }
           <select id="calSwitcher" class="list-switcher" style="display:none;"></select>
           <h2 id="calTitle"></h2>
           <select id="calRange" class="list-switcher"></select>
+          <!-- Wochenschritt und Spanne teilen sich den Platz: in der Woche ist die
+               Spanne bedeutungslos, und ein Bedienelement ohne Wirkung ist
+               schlimmer als keines. Pfeile als TEXT, nicht als Symbol — so
+               stehen sie schon vor /icons.js richtig da. -->
+          <span id="calWoche" class="ct-wochenwahl" style="display:none;">
+            <button type="button" data-ct-woche="-1" aria-label="Vorige Woche">&lsaquo;</button>
+            <span id="calWocheName"></span>
+            <button type="button" data-ct-woche="1" aria-label="Nächste Woche">&rsaquo;</button>
+          </span>
+          <span id="calAnsichtWahl" class="ct-ansichtwahl">
+            <button type="button" data-cal-ansicht="agenda" aria-label="Agenda"><i class="fa-light fa-list"></i></button>
+            <button type="button" data-cal-ansicht="woche" aria-label="Woche"><i class="fa-light fa-table-cells"></i></button>
+          </span>
         </div>
         <div id="calStatus" class="cal-status" style="display:none;"></div>
         <div id="calArea"></div>
+        <!-- Die Tafel ist ein EIGENER, statischer Behaelter und selbst der
+             waagerechte Rollbereich. Laege sie als gerenderter Knoten in
+             #calArea, koennte renderRows sie ersetzen — und mit ihr die
+             Schiebeposition; der Minutentakt riss die Woche dann unter dem
+             Finger zurueck. -->
+        <div id="calTafel" class="ct-tafel" style="display:none;"></div>
         <!-- Schnellerfassung wie bei Aufgaben und Notizen. Das Plus legt hier aber
              NICHTS direkt an: ein Termin braucht mindestens einen Zeitpunkt, und den
              kann eine Titelzeile nicht liefern. Es oeffnet deshalb den
@@ -5632,7 +5680,15 @@ function setTab(tab) {
      auch wenn ein anderes Geraet inzwischen einen Termin angelegt hat.
      loadCalendarEvents hat seinen eigenen Riegel (calLoading), ein doppelter
      Aufruf kostet also nichts. */
-  if (tab === 'calendar') { loadCalendarEvents(true); }
+  if (tab === 'calendar') {
+    /* Beim BETRETEN faengt die Woche wieder bei heute an — derselbe Gedanke wie
+       beim Stundenplan drei Zeilen weiter unten. Das Blaettern selbst laeuft
+       hier nicht durch, die Wahl bleibt also innerhalb des Besuchs erhalten. */
+    calWochenOffset = 0;
+    calZuHeute = true;
+    calTafelOffen.clear();
+    loadCalendarEvents(true);
+  }
   for (const t of TABS) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
@@ -10067,16 +10123,85 @@ function loadDashEvents() {
   }).catch(() => {});
 }
 
+/* Zwei Ansichten: die Agenda (Tagesgruppen) und die Familientafel (Person mal
+   Tag). Die Wahl gehoert ins localStorage und damit ans GERAET — das Tablett in
+   der Kueche steht dauerhaft auf Woche, das Handy bleibt bei der Agenda.
+   Vorgabe Agenda, damit niemand seinen Bereich veraendert vorfindet. */
+const CAL_ANSICHTEN = ['agenda', 'woche'];
+/* Der Wochenschritt gehoert NICHT ins localStorage: wer abends bis Oktober
+   geblaettert hat, will morgens nicht dort landen. Gleiche Begruendung wie beim
+   Stundenplan. */
+let calWochenOffset = 0;
+let calZuHeute = true;
+const calTafelOffen = new Set();
+
+function calAnsicht() {
+  const v = String(ls.get('symdo.calView') || 'agenda');
+  return CAL_ANSICHTEN.includes(v) ? v : 'agenda';
+}
+
+function calAnsichtSetzen(welche) {
+  const v = CAL_ANSICHTEN.includes(String(welche)) ? String(welche) : 'agenda';
+  if (v === calAnsicht()) return;
+  ls.set('symdo.calView', v);
+  calWochenOffset = 0;
+  calZuHeute = true;
+  calTafelOffen.clear();
+  // Die Woche braucht ein anderes Fenster als die Agenda — erst holen, dann zeichnen.
+  loadCalendarEvents();
+  renderCalendar();
+}
+
+function calWocheBlaettern(delta) {
+  calWochenOffset += Number(delta) || 0;
+  calZuHeute = false;
+  calTafelOffen.clear();
+  // Ohne force: liegt die Woche im geholten Block, kostet der Schritt keinen Umlauf.
+  loadCalendarEvents();
+  renderCalendar();
+}
+
+/** Beschriftung des Wochenschritts: Kalenderwoche und die beiden Randtage. */
+function calWochenTitel(startTs) {
+  const bis = calTagPlus(startTs, 6);
+  const spanne = calDateLabel(startTs) + '–' + calDateLabel(bis);
+  return translate('CW %1').replace('%1', String(calKalenderwoche(startTs))) + ' · ' + spanne;
+}
+
+/** Spanne oder Wochenschritt zeigen, und den gewaehlten Knopf kennzeichnen. */
+function renderCalKopfSteuerung() {
+  const woche = calAnsicht() === 'woche';
+  const spanne = document.getElementById('calRange');
+  const schritt = document.getElementById('calWoche');
+  const wahl = document.getElementById('calAnsichtWahl');
+  if (spanne) spanne.style.display = woche ? 'none' : '';
+  if (schritt) {
+    schritt.style.display = woche ? '' : 'none';
+    const name = document.getElementById('calWocheName');
+    if (name && woche) name.textContent = calWochenTitel(calWochenStart(Math.floor(Date.now() / 1000), calWochenOffset));
+  }
+  if (wahl) {
+    wahl.querySelectorAll('button[data-cal-ansicht]').forEach(b => {
+      b.setAttribute('aria-current', b.dataset.calAnsicht === calAnsicht() ? 'true' : 'false');
+    });
+  }
+}
+
 /* Welches Fenster die offene Ansicht braucht, und welcher Block dafuer geholt
    wird. Getrennt, weil die Wochenansicht mehr holt, als sie zeigt: der Abruf
    arbeitet sich seitenweise durch OpenCalendar und ist teuer, ein Wochenschritt
    soll ihn nicht jedes Mal kosten. */
 function calLadeFenster() {
+  if (calAnsicht() === 'woche') {
+    const start = calWochenStart(Math.floor(Date.now() / 1000), calWochenOffset);
+    return { von: start, bis: calTagPlus(start, 7) };
+  }
   const heute = calTagStart(Math.floor(Date.now() / 1000));
   return { von: heute, bis: calTagPlus(heute, calSelectedRange()) };
 }
 
 function calAbrufFenster(gebraucht) {
+  if (calAnsicht() === 'woche') return calWochenFenster(gebraucht.von);
   return { von: gebraucht.von, bis: gebraucht.bis };
 }
 
@@ -10293,6 +10418,14 @@ function calFensterDeckt(geladen, von, bis) {
   return Number(geladen.von) <= Number(von) && Number(geladen.bis) >= Number(bis);
 }
 
+/** Die Familientafel. Fuellt sich im naechsten Schritt; bis dahin steht hier
+    dieselbe Auskunft wie in der leeren Agenda. */
+function renderCalTafel() {
+  const tafel = document.getElementById('calTafel');
+  if (!tafel) return;
+  renderRows(tafel, `<div class="empty-state" data-key="leer"><i class="fa-light fa-table-cells"></i>${translate('No appointments in this period')}</div>`);
+}
+
 function renderCalendar() {
   const bereich = document.getElementById('calArea');
   if (!bereich) return;
@@ -10341,6 +10474,30 @@ function renderCalendar() {
   // Gefiltert wird nur mit sichtbarer Leiste — die (bereichsuebergreifende)
   // Auswahl darf ohne Bedienelement nicht unsichtbar weiterwirken.
   renderCalMembers();
+  renderCalKopfSteuerung();
+  const tafel = document.getElementById('calTafel');
+
+  /* Die Tafel verzweigt VOR dem Mitgliedsfilter und vor dem Leerzustand: sie
+     filtert nicht (sie hebt hervor), und sieben leere Spalten sind eine
+     sinnvolle Auskunft — „diese Woche ist nichts" —, waehrend eine leere
+     Agenda keine ist. */
+  if (calAnsicht() === 'woche') {
+    bereich.style.display = 'none';
+    renderRows(bereich, '');
+    if (tafel) {
+      tafel.style.display = '';
+      renderCalTafel();
+    }
+    return;
+  }
+  if (tafel && tafel.style.display !== 'none') {
+    // Nichts Unsichtbares stehen lassen: ein verborgener Behaelter mit alten
+    // Terminen ist ein Hinterhalt fuer die naechste Messung.
+    tafel.style.display = 'none';
+    renderRows(tafel, '');
+  }
+  bereich.style.display = '';
+
   let alle = calEvents.slice();
   const gefiltert = rowButtonFlags().showMemberBar !== false
     && store.users.length > 0 && memberFilterIds.size > 0;
@@ -11176,6 +11333,19 @@ function initCalendar() {
   if (spanne) spanne.addEventListener('change', () => {
     ls.set('symdo.calRange', spanne.value);
     loadCalendarEvents(true);
+  });
+  /* Einmal gebunden, nicht je Zeichnen: die Knoepfe stehen statisch im Markup.
+     Beim Wochenplan wird die Wahl bei jedem Render neu injiziert und neu
+     gebunden — das braucht es hier nicht. */
+  const wahl = document.getElementById('calAnsichtWahl');
+  if (wahl) wahl.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-cal-ansicht]');
+    if (b) calAnsichtSetzen(b.dataset.calAnsicht);
+  });
+  const schritt = document.getElementById('calWoche');
+  if (schritt) schritt.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-ct-woche]');
+    if (b) calWocheBlaettern(parseInt(b.dataset.ctWoche, 10) || 0);
   });
 }
 

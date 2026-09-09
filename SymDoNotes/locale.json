@@ -491,6 +491,7 @@
       "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
       "„%1“: quantity increased": "„%1“: Menge erhöht",
       "Say: %s": "sag: %s",
+      "CW %1": "KW %1",
       "SymDo Notes": "SymDo - Notizen",
       "Shows the notes of the SymDo app as a tile — the same notes, the same view. There is nothing to set up: the notes come from the SymDo Gateway.": "Zeigt die Notizen der SymDo-App als Kachel — dieselben Notizen, dieselbe Ansicht. Einzurichten ist nichts: die Notizen kommen aus dem SymDo Gateway.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",

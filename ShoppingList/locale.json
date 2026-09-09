@@ -601,7 +601,8 @@
             "until %1": "bis %1",
             "„%1“ added to the shopping list": "„%1“ auf die Einkaufsliste gesetzt",
             "„%1“: quantity increased": "„%1“: Menge erhöht",
-            "Say: %s": "sag: %s"
+            "Say: %s": "sag: %s",
+            "CW %1": "KW %1"
         }
     }
 }
