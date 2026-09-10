@@ -1430,6 +1430,10 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   background: var(--surface2);
   color: var(--text);
 }
+/* Die Umschaltleiste des Bereichs „Schule": dieselbe .segmented wie im
+   Prioritaetsfilter, nur oben angeschlagen. Sie steht in DREI Bereichen (jeder
+   traegt seinen eigenen Behaelter) — deshalb eine Klasse und keine Kennung. */
+.school-seg { margin-top: 2px; }
 
 /* Aufgaben-Checkbox: identisch zur ToDoList-Kachel (native, gestylte Checkbox).
    Klassen-gescopt auf .chk, damit die iOS-Switch-Toggles im Editor
@@ -4160,6 +4164,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
          gehoerte. -->
     <section id="screen-edumaps" class="screen">
       <div class="content">
+        <div class="segmented school-seg" id="eduSchoolSeg" style="display:none;"></div>
         <div id="eduContent">
           <div id="eduMaster"></div>
           <div id="eduDetail"></div>
@@ -4176,6 +4181,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
          (#hwArea): zwei Orte fuer dieselbe Liste waeren eine Verdopplung. -->
     <section id="screen-homework" class="screen">
       <div class="content">
+        <div class="segmented school-seg" id="hwSchoolSeg" style="display:none;"></div>
         <div id="hwMembers" class="member-bar todo-members" style="display:none;"></div>
         <div class="screen-head"><h2 id="hwTitle"></h2></div>
         <div id="hwStats" class="todo-stats" style="display:none;">
@@ -4199,6 +4205,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
          Frage, wessen. -->
     <section id="screen-plan" class="screen">
       <div class="content">
+        <div class="segmented school-seg" id="planSchoolSeg" style="display:none;"></div>
         <div class="screen-head"><h2 id="planTitle"></h2><span id="planSum" class="wp-summe"></span></div>
         <div id="planArea"></div>
         <!-- Hausaufgaben unter dem Wochenraster. Kein eigener Bereich in der
@@ -4212,6 +4219,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 
   <nav class="tabbar">
     <button id="tab-dashboard" class="active"><i class="fa-light fa-grid-2"></i><span></span></button>
+    <!-- „Schule" buendelt die drei Kindsachen. Ein eigener Bereich ist es NICHT
+         (kein #screen-school): gebuendelt wird die Leiste, nicht der Inhalt —
+         siehe SCHOOL_TABS. -->
+    <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span></button>
     <button id="tab-plan"><i class="fa-light fa-table-columns"></i><span></span></button>
     <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
@@ -5322,15 +5333,81 @@ function visibleTabs() {
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
+/* ── Der Menuepunkt „Schule" ───────────────────────────────────────────────
+   EIN Knopf in der Leiste fuer die drei Sachen, die einem Kind gehoeren:
+   Hausaufgaben, Stundenplan, Klassenseiten. Im Bereich selbst steht oben eine
+   Umschaltleiste.
+
+   Gebuendelt wird die LEISTE, nicht der Inhalt: es bleiben drei Bereiche mit
+   drei Zeichenwegen, und es gibt kein #screen-school. Das hat zwei Gruende.
+   Erstens haengt an jedem der drei ein gewachsener Zeichenweg (Wochenraster,
+   Liste mit Wischgesten, zweispaltige Kartenansicht) — sie in einen Behaelter
+   zu ziehen hiesse, drei Oberflaechen umzubauen. Zweitens tragen die Kacheln
+   je genau EINEN dieser Bereiche: dort gibt es nichts zu buendeln, und der
+   Knopf muss wegbleiben. */
+const SCHOOL_TABS = ['homework', 'plan', 'edumaps'];
+
+/** Wird gebuendelt? Nur in der vollen Oberflaeche — die mit der Uebersicht. */
+function schuleGebuendelt() {
+  const t = normalizeTabs(window.__SYMDO__ ? window.__SYMDO__.tabs : store.tabs);
+  return t.dashboard === true;
+}
+
+/** Die Schul-Bereiche, die es gerade gibt — in der Reihenfolge der Leiste. */
+function schuleBereiche() {
+  const vis = visibleTabs();
+  return SCHOOL_TABS.filter(t => vis.includes(t));
+}
+
+/** Wohin der Knopf fuehrt: dorthin, wo man zuletzt war. */
+function schuleZuletzt() {
+  const da = schuleBereiche();
+  const gemerkt = ls.get('symdo.schuleTab');
+  return da.includes(gemerkt) ? gemerkt : (da[0] || 'homework');
+}
+
+/**
+ * Die Umschaltleiste oben im Bereich. Jeder der drei Bereiche hat seinen
+ * eigenen Behaelter — eine Kennung kommt in einem Dokument nur einmal vor, und
+ * einen Knoten zwischen den Bereichen hin und her zu tragen waere ein
+ * Sonderweg fuer nichts.
+ *
+ * Unter zwei Bereichen bleibt sie weg: eine Wahl ohne Alternative ist Laerm.
+ */
+function schuleLeisteZeichnen(id, aktiv) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const da = schuleGebuendelt() ? schuleBereiche() : [];
+  if (da.length < 2) { el.style.display = 'none'; renderInto(el, ''); return; }
+  el.style.display = '';
+  const namen = { homework: translate('Homework'), plan: translate('Timetable'),
+                  edumaps: translate('Class pages') };
+  const html = da.map(t => `<button data-schule="${t}"${t === aktiv ? ' class="active"' : ''}>` +
+    `${escapeHtml(namen[t] || t)}</button>`).join('');
+  if (!renderInto(el, html)) return;
+  el.querySelectorAll('[data-schule]').forEach(b =>
+    b.addEventListener('click', () => setTab(b.dataset.schule)));
+}
+
 function applyTabVisibility() {
   const vis = visibleTabs();
+  const buendel = schuleGebuendelt();
+  const schule = buendel ? schuleBereiche() : [];
   for (const t of TABS) {
     const btn = document.getElementById('tab-' + t);
-    if (btn) btn.style.display = vis.includes(t) ? '' : 'none';
+    // Gebuendelt haben die drei Kindsachen keinen eigenen Knopf mehr — sie
+    // bleiben aber sichtbare Bereiche (visibleTabs), erreichbar ueber „Schule".
+    if (btn) btn.style.display = (vis.includes(t) && !(buendel && SCHOOL_TABS.includes(t))) ? '' : 'none';
   }
+  const schulKnopf = document.getElementById('tab-school');
+  if (schulKnopf) schulKnopf.style.display = schule.length > 0 ? '' : 'none';
   // Ein einziger Bereich: die Leiste wäre ein Knopf ohne Wahl. Dann fällt sie weg und
   // der Inhalt bekommt die volle Höhe (siehe html.no-tabs im Stil).
-  document.documentElement.classList.toggle('no-tabs', vis.length <= 1);
+  // Gezaehlt werden die KNOEPFE und nicht die Bereiche: „Schule" ist einer fuer
+  // drei, sonst blieb die Leiste bei einem einzigen Knopf stehen.
+  const knoepfe = Array.from(document.querySelectorAll('.tabbar button'))
+    .filter(b => b.style.display !== 'none').length;
+  document.documentElement.classList.toggle('no-tabs', knoepfe <= 1);
   // Den Rückfall NICHT selbst wählen, sondern setTab(activeTab) rufen: dort wird er
   // gewählt UND als Rückfall erkannt, also nicht als Wunsch gemerkt. Mit setTab(vis[0])
   // wäre der Rückfall hier der Wunsch und würde die Erinnerung überschreiben.
@@ -6259,6 +6336,15 @@ function setTab(tab) {
     document.getElementById('screen-' + t).classList.toggle('active', t === tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   }
+  /* Gebuendelt leuchtet der Schulknopf — der Knopf des Unterbereichs ist ja
+     verborgen, und eine Leiste ohne markierten Knopf sieht aus wie ein
+     Fehler. */
+  const schulKnopf = document.getElementById('tab-school');
+  if (schulKnopf) {
+    schulKnopf.classList.toggle('active', schuleGebuendelt() && SCHOOL_TABS.includes(tab));
+  }
+  // Wo man in der Schule war, damit der Knopf beim naechsten Mal dorthin fuehrt.
+  if (SCHOOL_TABS.includes(tab)) ls.set('symdo.schuleTab', tab);
   renderAll();
 }
 
@@ -8484,6 +8570,7 @@ function planWochenwahlHtml(kind) {
 function renderWochenplan() {
   const el = document.getElementById('planArea');
   if (!el) return;
+  schuleLeisteZeichnen('planSchoolSeg', 'plan');
   const kind = planKinder()[0] || null;
   const titel = document.getElementById('planTitle');
   const summe = document.getElementById('planSum');
@@ -11121,6 +11208,7 @@ function hwListeHtml(ids, mitAvatar) {
 function renderHausaufgabenBereich() {
   const bereich = document.getElementById('hwListArea');
   if (!bereich) return;
+  schuleLeisteZeichnen('hwSchoolSeg', 'homework');
   hwBereichMitglieder();
   const titel = document.getElementById('hwTitle');
   if (titel) titel.textContent = translate('Homework');
@@ -14856,6 +14944,7 @@ function renderEdumaps() {
   const elMaster = document.getElementById('eduMaster');
   const elDetail = document.getElementById('eduDetail');
   if (!elMaster || !elDetail) return;
+  schuleLeisteZeichnen('eduSchoolSeg', 'edumaps');
   if (!edumapsGeladen && !edumapsLaden) ladeEdumaps();
   const offen = eduOrdnerId ? notesOrdner(eduOrdnerId) : null;
   if (eduOrdnerId && !offen) eduOrdnerId = null;
@@ -16854,6 +16943,7 @@ function initCaptions() {
   document.querySelector('#tab-notes span').textContent = translate('Notes');
   document.querySelector('#tab-edumaps span').textContent = translate('Class pages');
   document.querySelector('#tab-homework span').textContent = translate('Homework');
+  document.querySelector('#tab-school span').textContent = translate('School');
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
@@ -17513,6 +17603,9 @@ document.addEventListener('DOMContentLoaded', () => {
   for (const t of TABS) {
     document.getElementById('tab-' + t).addEventListener('click', () => setTab(t));
   }
+  // „Schule" ist kein Bereich, sondern ein Weg zu dreien: er fuehrt dorthin,
+  // wo man zuletzt war.
+  document.getElementById('tab-school').addEventListener('click', () => setTab(schuleZuletzt()));
   document.querySelectorAll('[data-close]').forEach(btn =>
     btn.addEventListener('click', () => closeOverlay(btn.dataset.close)));
 
