@@ -1203,7 +1203,9 @@ html[data-symdo-theme="dark"] .member-bar {
   }
   .member-bar.collapsed:hover .avatar-btn:not(:first-child) { margin-left: 0; }
   /* Subtiler Stagger: vordere Avatare zuerst, hintere leicht verzögert;
-     ab dem 6. teilen sie sich den letzten Delay (robust bei vielen Avataren). */
+     ab dem 6. teilen sie sich den letzten Delay (robust bei vielen Avataren).
+     Seit dem Haus-Knopf ist nth-child(1) das Haus — die Avatare fangen also
+     bei 22ms an. Reine Verzögerung, kein Layout. */
   .member-bar .avatar-btn:nth-child(1)   { --mb-d: 0ms;   }
   .member-bar .avatar-btn:nth-child(2)   { --mb-d: 22ms;  }
   .member-bar .avatar-btn:nth-child(3)   { --mb-d: 44ms;  }
@@ -1225,6 +1227,33 @@ html[data-symdo-theme="dark"] .member-bar {
   border: 2px solid var(--accent);
   border-radius: 999px;
 }
+/* Das Haus: die Familie. Kein Foto, deshalb ein eigener Grund und das Symbol
+   in Akzentfarbe — es soll als KNOPF lesbar sein, nicht als Person.
+   Beide Formen bemessen: /icons.js ersetzt das <i> nachtraeglich durch ein
+   <svg>, und die Regel darunter trifft nur img/span. */
+.member-bar .avatar-btn.familie-btn {
+  display: flex; align-items: center; justify-content: center;
+  /* WEISS (auf Wunsch), nicht die abgetoente Kartenfarbe: der Knopf steht auf
+     der halbtransparenten Pille, und nur ein deckendes Weiss macht ihn zu
+     einem Knopf statt zu einem Schatten. Das Symbol traegt die Akzentfarbe. */
+  background: #fff;
+  color: var(--accent);
+  border: 0;
+}
+.member-bar .avatar-btn.familie-btn i,
+.member-bar .avatar-btn.familie-btn svg { width: 18px; height: 18px; }
+/* Gewaehlt: die Flaeche traegt die Auswahl, nicht ein Ring um sie herum (auf
+   Wunsch). Beim Haus geht das, weil es kein Foto ist — bei einem Gesicht waere
+   eine Einfaerbung unlesbar, deshalb behalten die Mitglieder ihren Ring. */
+.member-bar .avatar-btn.familie-btn.selected {
+  background: var(--accent);
+  color: #fff;
+}
+.member-bar .avatar-btn.familie-btn.selected::after { content: none; }
+/* KEINE Sonderbehandlung beim Einklappen (auf Wunsch): das Haus ist ein Knopf
+   der Leiste wie jeder andere und schiebt sich mit zusammen. Es steht als
+   erstes Kind, also bleibt es stehen und die Mitglieder gleiten darueber —
+   genau das, was vorher der erste Avatar tat. */
 .member-bar .avatar-btn img,
 .member-bar .avatar-btn span {
   width: 100%; height: 100%;
@@ -4002,6 +4031,27 @@ html.web-app #ladeschirm.geht { opacity: 0; }
   .ct-tafel { --ct-namen: 40px; }
   .ct-name .ct-vorname { display: none; }
 }
+
+/* ── Das Haus als „Avatar" der Familie ─────────────────────────────────────
+   Drei Umgebungen, eine Regel: die Zuständigen-Auswahl (24px), die Zeile mit
+   dem Avatar-Stapel (24px) und die Familienzeile des Wochenrasters (28px). Die
+   GRÖSSE kommt jeweils von der .avatar-Regel dort; hier stehen nur Grund,
+   Farbe und das Symbol — in Prozent, damit es mitwächst.
+
+   Steht bewusst am ENDE des Stils: `.assign-chip .avatar` (Farbe #fff),
+   `.avatar-stack .avatar` und `.ct-name span.avatar` sind gleich stark bzw.
+   stärker, und bei gleicher Stärke gewinnt die spätere Regel. Der zweite
+   Selektor ist für das Raster nötig, weil dort ein Elementname mitspielt. */
+.avatar.familie-avatar,
+.ct-name span.avatar.familie-avatar {
+  background: #fff;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.familie-avatar i,
+.familie-avatar svg { width: 62%; height: 62%; }
   </style>
 </head>
 <body>
@@ -5867,6 +5917,22 @@ function avatarHtml(u, cls) {
   const initial = escapeHtml(String(u.name || '?').charAt(0).toUpperCase());
   return `<span class="${cls}" title="${escapeHtml(u.name)}" style="background:${avatarTint(u.name)}">${initial}</span>`;
 }
+/**
+ * Wer ist zustaendig — mit der Familie als Rueckfall.
+ *
+ * BEWUSST nicht in renderAvatarStack: die Funktion bedient acht Stellen, und
+ * an dreien heisst „leer" etwas anderes. In der Vorschlagszeile der KI und in
+ * ihrer Fundliste bedeutet es „die Auswertung hat niemanden erkannt" (siehe
+ * die Kommentare dort), und an einer Hausaufgabe steht immer genau ein Kind —
+ * ein Haus waere dort eine Behauptung statt einer Auskunft. Deshalb
+ * entscheidet der Aufrufer, ob „leer" die Familie meint.
+ */
+function zustaendigHtml(ids) {
+  const stapel = renderAvatarStack(ids);
+  if (stapel !== '') return stapel;
+  return '<div class="avatar-stack"><span class="avatar familie-avatar"' +
+    ` title="${escapeHtml(translate('Family'))}"><i class="fa-light fa-house"></i></span></div>`;
+}
 function renderAvatarStack(ids) {
   const byId = usersById();
   const resolved = (Array.isArray(ids) ? ids : []).map(id => byId[id]).filter(Boolean);
@@ -7015,6 +7081,47 @@ function mitgliedWaehlen(id) {
      Geschwisterkindes. Die Wahl gilt in JEDEM Bereich, also gehoert das
      Zeichnen hierher und nicht in die Aufrufer. */
   renderAll();
+}
+
+/**
+ * Die Familie — das eingebaute Mitglied, das keins ist.
+ *
+ * „Nichts gewaehlt" war schon immer der wichtigste Zustand: er zeigt alles, er
+ * ist der Start und die Rueckkehr. Nur hatte er kein Bedienelement — man
+ * verliess ihn mit einem Tipp und fand ihn nur zurueck, indem man denselben
+ * Avatar noch einmal tippte. Das Haus macht ihn sichtbar und gibt ihm einen
+ * Namen.
+ *
+ * Deshalb ist hier NICHTS zu erfinden: die Familie IST die leere Auswahl, und
+ * „ohne Zustaendigen" heisst „gehoert allen" — so sortiert das Wochenraster
+ * seit je jeden Termin ohne Mitglied in seine Familienzeile. Es gibt darum
+ * keine reservierte Kennung und kein Pseudo-Mitglied im Gateway; die Familie
+ * kann in der Mitgliederliste des Backends gar nicht auftauchen.
+ */
+function familieAktiv() {
+  return memberFilterIds.size === 0;
+}
+function familieWaehlen() {
+  memberFilterIds.clear();
+  // Dieselben drei Zeilen wie in mitgliedWaehlen — die Wahl entscheidet auch
+  // ueber die Bereiche (Kindmodus), deshalb applyTabVisibility vor renderAll.
+  applyTabVisibility();
+  renderAll();
+}
+/** Der Haus-Knopf der vier Avatarleisten — im Markup eines Avatars. */
+function familieKnopfHtml() {
+  const t = translate('Family');
+  return `<button class="avatar-btn familie-btn${familieAktiv() ? ' selected' : ''}" data-familie="1"` +
+    ` title="${escapeHtml(t)}" aria-label="${escapeHtml(t)}"><i class="fa-light fa-house"></i></button>`;
+}
+/** Das Haus antippbar machen. `nach` ist das Zeichnen der jeweiligen Leiste. */
+function familieKnopfBinden(el, nach) {
+  if (!el) return;
+  el.querySelectorAll('[data-familie]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    familieWaehlen();
+    if (typeof nach === 'function') nach();
+  }));
 }
 
 /**
@@ -9133,6 +9240,8 @@ function renderDashboard() {
      nirgends — die Wachen sitzen in memberFiltered und dashBegruessung. */
   if (store.users.length > 0 && zeigeMitglieder) {
     html += '<div class="member-bar">';
+    // Das Haus ganz links: der Zustand „alles zeigen" bekommt einen Knopf.
+    html += familieKnopfHtml();
     for (const u of store.users) {
       html += `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
         avatarHtml(u, '') + '</button>';
@@ -9409,7 +9518,9 @@ function renderDashboard() {
         : new Date(e.start * 1000).toTimeString().slice(0, 5);
       // Avatare rechts, wie im Kalender-Bereich und in der Aufgabenzeile: dieselbe
       // Spalte (.cal-side/.cal-chips), damit die Zeilen untereinander stehen.
-      const wer = e.members.length ? renderAvatarStack(e.members) : '';
+      // Ohne Mitglied gehoert der Termin der Familie — dieselbe Lesart, mit der
+      // ihn das Wochenraster seit je in die Familienzeile sortiert.
+      const wer = zustaendigHtml(e.members);
       const jahrestag = calAnnualBadge(e);
       html += `<div class="cal-event"><span class="cal-body">` +
         `<div class="cal-when">${escapeHtml(wann)}</div>` +
@@ -9538,6 +9649,7 @@ function renderDashboard() {
     mitgliedWaehlen(b.dataset.member);
     renderDashboard();
   }));
+  familieKnopfBinden(el, renderDashboard);
   el.querySelectorAll('#dashPrio [data-prio]').forEach(b => b.addEventListener('click', () => {
     dashPriority = b.dataset.prio;
     ls.set('symdo.dashboardPriority', dashPriority);
@@ -10065,7 +10177,7 @@ function renderTodoMembers() {
     el.style.display = 'none'; renderInto(el, ''); return;
   }
   el.style.display = '';
-  const membersHtml = store.users.map(u =>
+  const membersHtml = familieKnopfHtml() + store.users.map(u =>
     `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
   ).join('');
@@ -10075,6 +10187,7 @@ function renderTodoMembers() {
     mitgliedWaehlen(b.dataset.member);
     renderTodos();
   }));
+  familieKnopfBinden(el, renderTodos);
 }
 
 /**
@@ -10098,7 +10211,7 @@ function renderCalMembers() {
     return;
   }
   el.style.display = '';
-  const html = store.users.map(u =>
+  const html = familieKnopfHtml() + store.users.map(u =>
     `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>'
   ).join('');
@@ -10108,6 +10221,7 @@ function renderCalMembers() {
     mitgliedWaehlen(b.dataset.member);
     renderCalendar();
   }));
+  familieKnopfBinden(el, renderCalendar);
 }
 
 // ── Aufgaben aus weitergeleiteten E-Mails ────────────────────────────────────
@@ -11266,9 +11380,18 @@ function hwBereichMitglieder() {
   const el = document.getElementById('hwMembers');
   if (!el) return;
   const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
-  if (kinder.length < 2) { el.style.display = 'none'; renderInto(el, ''); return; }
+  /* Unter zwei Kindern faellt die Leiste weg — sie waere eine Wahl ohne
+     Alternative. ABER: steht eine bereichsuebergreifende Auswahl (etwa ein
+     Erwachsener, gewaehlt im Aufgaben-Tab), filtert dieser Bereich sie mit und
+     zeigt „Keine Treffer". Ohne Leiste gab es dann keinen Weg zurueck — eine
+     Sackgasse, die es schon vor dem Haus-Knopf gab. Das Haus ist der Ausgang,
+     also muss die Leiste in diesem Fall stehen. */
+  if (kinder.length < 2 && memberFilterIds.size === 0) {
+    el.style.display = 'none'; renderInto(el, ''); return;
+  }
   el.style.display = '';
-  const html = kinder.map(u =>
+  // Hier heisst das Haus „alle Kinder" — dasselbe leere Auswahlfeld.
+  const html = familieKnopfHtml() + kinder.map(u =>
     `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
     avatarHtml(u, '') + '</button>').join('');
   if (!renderInto(el, html)) return;
@@ -11277,6 +11400,7 @@ function hwBereichMitglieder() {
     mitgliedWaehlen(b.dataset.member);
     renderHausaufgabenBereich();
   }));
+  familieKnopfBinden(el, renderHausaufgabenBereich);
 }
 
 /**
@@ -12033,7 +12157,11 @@ function renderCalTafel() {
     const sicht = calTafelZeilenSicht(z.id);
     html += `<div class="ct-name${z.nutzer ? '' : ' familie'}${sicht}" data-key="name:${escapeHtml(z.id || 'familie')}"` +
       ` title="${escapeHtml(name)}">` +
-      (z.nutzer ? avatarHtml(z.nutzer, 'avatar') : '') +
+      /* Auch die Familienzeile bekommt ihr Bild — dasselbe Haus wie in der
+         Avatarleiste. Am Handy ist der Vorname ausgeblendet (Medienabfrage
+         ≤420px), und die Zelle stand dort LEER. */
+      (z.nutzer ? avatarHtml(z.nutzer, 'avatar')
+        : '<span class="avatar familie-avatar"><i class="fa-light fa-house"></i></span>') +
       `<span class="ct-vorname">${escapeHtml(name)}</span></div>`;
     keys.forEach((k, i) => {
       const wochenende = i >= 5;
@@ -12219,7 +12347,7 @@ function renderCalendar() {
         : new Date(e.start * 1000).toTimeString().slice(0, 5);
       const unten = [e.location, e.info].filter(Boolean).join(' · ');
       // Zugewiesene Mitglieder als Avatare, wie in der Aufgabenzeile.
-      const wer = Array.isArray(e.members) && e.members.length ? renderAvatarStack(e.members) : '';
+      const wer = zustaendigHtml(Array.isArray(e.members) ? e.members : []);
       // Wiederholung und Erinnerung als Abzeichen wie in der Aufgabenzeile
       // (.badge.attr, dieselben Symbole). Beim Termin sagt das Wiederholungs-
       // Abzeichen bewusst „Teil einer Serie" und nicht den Takt: den kennt nur der
@@ -13618,7 +13746,7 @@ function todoRowHtml(it, draggable, badges, showEdit, showDelete, instanzID = 0,
     (listenName ? `<span class="todo-liste"><span class="badge liste">${escapeHtml(listenName)}</span></span>` : '') +
     (unten ? `<span class="todo-info">${escapeHtml(unten)}</span>` : '') +
     `</span><span class="todo-side"><span class="todo-meta">` +
-    renderAvatarStack(it.assignedTo) +
+    zustaendigHtml(it.assignedTo) +
     (qty > 1 ? `<span class="badge quantity${combined ? ' meta-split' : ''}">${qty}×</span>` : '') +
     (recurs ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(recurrenceLabel(it.recurrence, it.recurrenceCustomUnit, it.recurrenceCustomValue))}"><i class="fa-light fa-repeat"></i></span>` : '') +
     (notifies ? `<span class="badge attr${combined ? ' meta-split' : ''}" title="${escapeHtml(translate('Notification'))}"><i class="fa-light fa-bell"></i></span>` : '') +
@@ -16140,15 +16268,28 @@ function renderAssignList(elId, auswahl) {
     return;
   }
   el.parentElement.style.display = '';
-  el.innerHTML = store.users.map(u =>
+  /* Die Familie steht VORN und ist markiert, solange niemand einzeln
+     zustaendig ist: „ohne Zustaendigen" und „Familie" sind dasselbe. Sie ist
+     damit auch kein zusaetzlicher Zustand, den man speichern muesste. */
+  const fam = `<div class="assign-chip familie-chip${ziel.length === 0 ? ' selected' : ''}" data-familie="1">` +
+    '<span class="avatar familie-avatar"><i class="fa-light fa-house"></i></span>' +
+    `<span>${escapeHtml(translate('Family'))}</span></div>`;
+  el.innerHTML = fam + store.users.map(u =>
     `<div class="assign-chip${ziel.includes(u.id) ? ' selected' : ''}" data-user="${escapeHtml(u.id)}">` +
     avatarHtml(u, 'avatar') + `<span>${escapeHtml(u.name)}</span></div>`
   ).join('');
   el.querySelectorAll('.assign-chip').forEach(row => row.addEventListener('click', () => {
-    const uid = row.dataset.user;
-    const idx = ziel.indexOf(uid);
-    if (idx === -1) ziel.push(uid); else ziel.splice(idx, 1);
-    row.classList.toggle('selected');
+    if (row.dataset.familie) {
+      ziel.length = 0;                    // Familie = niemand einzeln
+    } else {
+      const uid = row.dataset.user;
+      const idx = ziel.indexOf(uid);
+      if (idx === -1) ziel.push(uid); else ziel.splice(idx, 1);
+    }
+    /* Neu zeichnen statt nur die eigene Klasse umzuschalten: sonst blieben das
+       Haus und eine Person gleichzeitig markiert. Die Liste ist kurz, und
+       `ziel` bleibt dasselbe Array — der Aufrufer haelt es weiter in der Hand. */
+    renderAssignList(elId, ziel);
   }));
 }
 function renderPrioritySeg() {
