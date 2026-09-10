@@ -1957,7 +1957,7 @@ class SymDoGateway extends IPSModuleStrict
             'caption'  => $this->Translate('Class pages (Edumaps)'),
             'expanded' => false,
             'items'    => [
-                ['type' => 'Label', 'caption' => $this->Translate('The class page of the school as a source for SymDo: every card with its text, its files and its booking situation. Two things happen with it — the cards are mirrored so that app and tile can show them, and changed cards go to the AI as suggestions.')],
+                ['type' => 'Label', 'caption' => $this->Translate('The class page of the school as a source for SymDo: every card with its text, its files and its booking situation. Two things happen with it — the cards are mirrored so that app and tile can show them, and changed cards go to the AI for analysis, to find and suggest appointments, tasks and notes.')],
 
                 // ── 1. Welche Seiten, wie oft ──────────────────────────────
                 ['type' => 'ExpansionPanel', 'expanded' => true,

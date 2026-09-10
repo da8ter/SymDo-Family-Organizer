@@ -881,7 +881,7 @@
             "%d folder(s) stayed in the notes because something hand-written was in them.": "%d Ordner bleiben in den Notizen, weil etwas Handgeschriebenes darin lag.",
             "Move cards out of the notes": "Karten aus den Notizen holen",
             "Nothing to move — the cards are already in their own store.": "Nichts zu holen — die Karten liegen schon im eigenen Bestand.",
-            "The class page of the school as a source for SymDo: every card with its text, its files and its booking situation. Two things happen with it — the cards are mirrored so that app and tile can show them, and changed cards go to the AI as suggestions.": "Die Klassenseite der Schule als Quelle für SymDo: jede Karte mit ihrem Text, ihren Dateien und ihrer Buchungslage. Zwei Dinge passieren damit — die Karten werden gespiegelt, damit App und Kachel sie zeigen können, und geänderte Karten gehen als Vorschlag an die KI.",
+            "The class page of the school as a source for SymDo: every card with its text, its files and its booking situation. Two things happen with it — the cards are mirrored so that app and tile can show them, and changed cards go to the AI for analysis, to find and suggest appointments, tasks and notes.": "Die Klassenseite der Schule als Quelle für SymDo: jede Karte mit ihrem Text, ihren Dateien und ihrer Buchungslage. Zwei Dinge passieren damit — die Karten werden gespiegelt, damit App und Kachel sie zeigen können, und geänderte Karten gehen zur Analyse an die KI, um Termine, Aufgaben und Notizen zu finden und vorzuschlagen.",
             "1. Pages": "1. Seiten",
             "2. Show in SymDo": "2. In SymDo zeigen",
             "3. AI suggestions": "3. KI-Vorschläge",
