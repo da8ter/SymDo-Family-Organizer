@@ -332,9 +332,20 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Server, Schule | `UntisServer`, `UntisSchool` | wie in der WebUntis-Adresse der Schule (z. B. `mese.webuntis.com`, Schulkürzel) |
 | Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
-| Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name** und Kurse. Den Namen liefert der Knopf *Schüler abrufen*: die Kinder des Kontos, bei einem Schülerzugang das Konto selbst. Bleibt die Zeile leer, löst der Abruf sie weiter selbst auf |
+| Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name**. Den Namen liefert der Knopf *Schüler abrufen*: die Kinder des Kontos, bei einem Schülerzugang das Konto selbst. Bleibt die Zeile leer, löst der Abruf sie weiter selbst auf |
+| Kurswahl | `UntisCourses` | je Fach ein Häkchen **besucht**. Die Zeilen entstehen aus dem, was der letzte Abruf im Plan gefunden hat; *Hinweis* sagt, ob zu dieser Zeit mehrere Fächer stehen (dann entscheidet das Häkchen) oder ob es allein steht (dann nimmt das fehlende Häkchen es heraus) |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
+
+**Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie war nötig, weil
+mancher Plan Kurse enthält, die das Kind nicht besucht — bei einem Klassenplan
+alle parallelen (am 03.09.2026 gemessen: fünf Religionskurse zur selben Zeit),
+bei einem schülerbezogenen Plan höchstens einzelne. Getippte Fachnamen mussten
+dabei genau treffen; jetzt steht jedes gefundene Fach als Zeile da und wird
+abgehakt. Neu gefundene Fächer gelten als besucht — der Normalfall. Ohne einen
+einzigen Abruf ist die Liste leer, und das sagt sie auch. Bestandszeilen mit
+getippter Liste laufen unverändert weiter, solange für das Kind keine
+Kurswahl-Zeile existiert.
 
 **Schüler abrufen** (Knopf über der Liste) holt die Kinder, die am
 angemeldeten Konto hängen (`app/data`), und trägt sie als Auswahl in die Spalte

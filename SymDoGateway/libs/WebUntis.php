@@ -42,6 +42,11 @@ trait WebUntis
     private const UNTIS_INTERVALL_STD = 60;      // Minuten
 
     private ?array $untisConfigCache = null;
+    /* Die Faecher, die im Plan dieses Kindes vorkamen — gesammelt beim
+       Abbilden, damit die Kurswahl im Formular sie zum Ankreuzen anbieten
+       kann. Schluessel ist das kleingeschriebene Fach, damit dieselbe Stunde
+       aus Wochenraster UND datierten Tagen nur einmal zaehlt. */
+    private array $untisKurse = [];
     private string $untisSession = '';
     /* Wer ist angemeldet? `authenticate` liefert personId und personType mit —
        und getTimetable verlangt IMMER ein Element, auch fuer den eigenen Plan
@@ -80,6 +85,20 @@ trait WebUntis
            Formularfeld ohne Eigenschaft laesst „Uebernehmen" fuer die GANZE
            Konfiguration scheitern, eine Eigenschaft ohne Feld ist harmlos. */
         $this->RegisterPropertyString('UntisSearchName', '');
+        /* Die Kurswahl je Kind: eine Zeile je Fach, das im Plan vorkam, mit
+           Haekchen „besucht". Sie ersetzt die getippte Kursliste — Fachnamen
+           von Hand zu treffen war die haeufigste Fehlerquelle daran.
+
+           Die Zeilen entstehen beim Aufbau des Formulars aus dem, was der
+           letzte Durchlauf gefunden hat (Attribut unten), und werden beim
+           Uebernehmen zurueckgeschrieben. Dasselbe Verfahren wie bei
+           TimetableChoice. */
+        $this->RegisterPropertyString('UntisCourses', '[]');
+        /* Was der letzte Durchlauf im Plan gefunden hat: Fach, ob es zu einer
+           Zeit mit mehreren stand, und zu welchem Kind. Ein Attribut und keine
+           Eigenschaft — sonst muesste der Lauf IPS_ApplyChanges auf die eigene
+           Instanz rufen, und das ist ein Griff ins eigene Getriebe. */
+        $this->RegisterAttributeString('UntisCourseFound', '[]');
         /* Die Kinder des angemeldeten Kontos — id und Anzeigename, wie WebUntis
            sie nennt. Gefuellt vom Knopf „Schueler abrufen", gelesen von der
            Auswahl im Formular. Sie stehen damit in der settings.json; das ist
@@ -420,6 +439,151 @@ trait WebUntis
     }
 
     /**
+     * Die Formularzeilen der Kurswahl — Liste plus Erklaerung.
+     *
+     * Sie steht UNTER der Kinderliste: erst wer, dann was. Ohne einen einzigen
+     * Durchlauf ist sie leer, und dann sagt der Text, woran es liegt — eine
+     * leere Liste ohne Begruendung sieht nach einem Fehler aus.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function UntisKurswahlFelder(): array
+    {
+        $zeilen = $this->UntisKurseZeilen();
+        return [
+            ['type' => 'Label', 'caption' => $zeilen === []
+                ? $this->Translate('Course choice: appears after the first fetch — it lists the subjects found in the plan.')
+                : $this->Translate('Which of these subjects the child actually attends. Where several stand at the same time, the tick decides which lesson goes into the plan; a subject standing alone is taken out by unticking it. Newly found subjects start as attended.')],
+            ['type' => 'List', 'name' => 'UntisCourses', 'rowCount' => 6,
+             'add' => false, 'delete' => false,
+             'caption' => $this->Translate('Course choice'),
+             'columns' => [
+                 /* Ohne `edit` faellt eine Spalte beim Uebernehmen lautlos weg,
+                    wenn sie nicht `save` traegt — die Kennung des Kindes und
+                    das Fach MUESSEN mit. */
+                 ['caption' => $this->Translate('Child'), 'name' => 'kind', 'width' => '140px',
+                  'save' => true],
+                 ['caption' => $this->Translate('Subject'), 'name' => 'fach', 'width' => 'auto',
+                  'save' => true],
+                 ['caption' => $this->Translate('Note'), 'name' => 'hinweis', 'width' => '220px'],
+                 ['caption' => $this->Translate('Attends'), 'name' => 'besucht', 'width' => '100px',
+                  'edit' => ['type' => 'CheckBox']],
+                 // Die Kennung braucht das Modul, nicht der Mensch.
+                 ['caption' => $this->Translate('ID'), 'name' => 'userId', 'width' => '1px',
+                  'save' => true],
+             ],
+             'values' => $zeilen],
+        ];
+    }
+
+    /**
+     * Die Kurswahl eines Kindes als Kursliste in der alten Schreibweise.
+     *
+     * Angehakte Faecher werden „ja"-Eintraege, abgehakte „-Fach". Damit bleibt
+     * der geprueft Parser (UntisKurseWaehlen) unberuehrt: die Liste im Formular
+     * ist eine andere BEDIENUNG derselben Sache, keine andere Rechnung.
+     *
+     * Gibt es fuer dieses Kind keine Zeile, gilt die getippte Kursliste aus dem
+     * Datensatz — Bestandszeilen laufen unveraendert weiter.
+     */
+    private function UntisKurstext(array $kind): string
+    {
+        $userId = trim((string)($kind['userId'] ?? ''));
+        $teile = [];
+        foreach ((array)json_decode((string)$this->UntisProp('UntisCourses', '[]'), true) as $z) {
+            if (!is_array($z) || trim((string)($z['userId'] ?? '')) !== $userId) {
+                continue;
+            }
+            $fach = trim((string)($z['fach'] ?? ''));
+            if ($fach === '') {
+                continue;
+            }
+            $teile[] = (($z['besucht'] ?? true) ? '' : '-') . $fach;
+        }
+        return $teile === [] ? trim((string)($kind['kurse'] ?? '')) : implode('; ', $teile);
+    }
+
+    /**
+     * Die gefundenen Faecher dieses Kindes ins Attribut legen.
+     *
+     * Die Faecher der ANDEREN Kinder bleiben stehen: gelesen wird je Kind, und
+     * ein Lauf, der nur eines betrifft, darf die Wahl der anderen nicht
+     * wegnehmen.
+     */
+    private function UntisKurseMerken(string $userId): void
+    {
+        if ($userId === '' || $this->untisKurse === []) {
+            return;
+        }
+        $alt = (array)json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true);
+        $raus = [];
+        foreach ($alt as $z) {
+            if (is_array($z) && trim((string)($z['userId'] ?? '')) !== $userId) {
+                $raus[] = $z;
+            }
+        }
+        foreach ($this->untisKurse as $k) {
+            $raus[] = ['userId' => $userId, 'fach' => (string)$k['fach'],
+                       'kollision' => (bool)$k['kollision']];
+        }
+        @$this->WriteAttributeString('UntisCourseFound',
+            (string)json_encode($raus, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Die Zeilen der Kurswahl fuer das Formular: gefundene Faecher, mit der
+     * gespeicherten Wahl darueber.
+     *
+     * Neu gefundene Faecher stehen auf „besucht" — der Normalfall ist, dass ein
+     * Fach im Plan auch besucht wird. Abgewaehlt wird, was nicht stimmt.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function UntisKurseZeilen(): array
+    {
+        $wahl = [];
+        foreach ((array)json_decode((string)$this->UntisProp('UntisCourses', '[]'), true) as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $u = trim((string)($z['userId'] ?? ''));
+            $f = mb_strtolower(trim((string)($z['fach'] ?? '')));
+            if ($u === '' || $f === '') {
+                continue;
+            }
+            $wahl[$u . '|' . $f] = ($z['besucht'] ?? true) ? true : false;
+        }
+        $namen = $this->UntisMitglieder();
+        $zeilen = [];
+        foreach ((array)json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true) as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $u = trim((string)($z['userId'] ?? ''));
+            $f = trim((string)($z['fach'] ?? ''));
+            if ($u === '' || $f === '') {
+                continue;
+            }
+            $schluessel = $u . '|' . mb_strtolower($f);
+            $zeilen[] = [
+                'userId'    => $u,
+                'kind'      => (string)($namen[$u] ?? $u),
+                'fach'      => $f,
+                /* Der Hinweis sagt, WOFUER das Haekchen zaehlt: bei einer
+                   Ueberschneidung entscheidet es, welche Stunde in den Plan
+                   kommt; sonst nimmt es eine Stunde heraus. */
+                'hinweis'   => (bool)($z['kollision'] ?? false)
+                                   ? $this->Translate('choice — several at the same time')
+                                   : $this->Translate('alone in the plan'),
+                'besucht'   => $wahl[$schluessel] ?? true,
+            ];
+        }
+        usort($zeilen, static fn(array $a, array $b): int =>
+            [$a['kind'], $a['fach']] <=> [$b['kind'], $b['fach']]);
+        return $zeilen;
+    }
+
+    /**
      * Die Spalten der Schuelerliste. Sie stehen HIER und nicht im Formularbau,
      * weil der Knopf „Schueler abrufen" dieselben Spalten frisch setzen muss
      * (UpdateFormField) — zwei Fassungen liefen unweigerlich auseinander.
@@ -468,11 +632,6 @@ trait WebUntis
                nur, wenn das nicht eindeutig ist. */
             ['caption' => $this->Translate('WebUntis name'), 'name' => 'elementId', 'width' => '200px',
              'add' => 0, 'edit' => ['type' => 'Select', 'options' => $wahl]],
-            /* Der Plan des Kontos ist der KLASSENplan: Religions- und
-               Foerderkurse stehen alle nebeneinander. Hier steht, welche das
-               Kind besucht — nur bei Ueberschneidungen wird gewaehlt. */
-            ['caption' => $this->Translate('Courses (chosen course, or -Subject to drop)'), 'name' => 'kurse',
-             'width' => 'auto', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
         ];
     }
 
@@ -682,7 +841,12 @@ trait WebUntis
             return sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']);
         }
 
-        [$tage, $datiert, $auffaellig, $offen, $verworfen] = $this->UntisAbbilden($stunden, $raster, (string)$kind['kurse']);
+        /* Der Merker gilt je Kind: leeren, abbilden, wegschreiben. Auch im
+           Trockenlauf — er schreibt keinen Plan und meldet nichts, aber die
+           Kursliste im Formular ist eine Hilfe und keine Wirkung nach aussen. */
+        $this->untisKurse = [];
+        [$tage, $datiert, $auffaellig, $offen, $verworfen] = $this->UntisAbbilden($stunden, $raster, $this->UntisKurstext($kind));
+        $this->UntisKurseMerken((string)($kind['userId'] ?? ''));
         /* Was eine ungeklaerte Ueberschneidung an Meldungen verschluckt hat,
            steht in der Statuszeile — sonst faellt der Entfall aus Push und
            Briefing weg, und niemand erfaehrt, dass es ihn gab. Die Abhilfe ist
@@ -1186,6 +1350,43 @@ trait WebUntis
      */
     private function UntisKurseWaehlen(array $slots, string $kurse): array
     {
+        /* ZUERST sammeln, was ueberhaupt im Plan steht — und zwar bevor der
+           Minus-Filter zuschlaegt. Sonst faellt ein abgewaehltes Fach aus der
+           Auswahl im Formular heraus und liesse sich nie wieder anhaken.
+           „Kollision" heisst: zu dieser Zeit stand mehr als ein Fach; das ist
+           die Stelle, an der die Wahl wirklich etwas entscheidet. */
+        $zeiten = [];
+        foreach ($slots as $s) {
+            if (trim((string)($s['subject'] ?? '')) === '') {
+                continue;
+            }
+            $zeiten[(string)($s['start'] ?? '')][] = $s;
+        }
+        foreach ($zeiten as $gruppe) {
+            /* DIESELBE Reduktion wie unten im Filter, sonst verspricht der
+               Hinweis eine Wahl, die es nicht gibt: zweimal derselbe Fachname
+               ist eine Doppelung, und ein Entfall neben einer stattfindenden
+               Stunde ist keine Wahl zwischen Kursen. Ohne diese vier Zeilen
+               stand „Wahl — mehrere zur selben Zeit" an vier Faechern, von
+               denen keines eines war. */
+            $nachFach = [];
+            foreach ($gruppe as $s) {
+                $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
+            }
+            $stattfindend = array_filter($nachFach,
+                static fn(array $s): bool => (string)$s['status'] !== 'entfall');
+            $wahl = $stattfindend !== [] ? $stattfindend : $nachFach;
+            $mehrere = count($wahl) > 1;
+            foreach ($nachFach as $klein => $s) {
+                $fach = trim((string)$s['subject']);
+                $this->untisKurse[$klein] ??= ['fach' => $fach, 'kollision' => false];
+                // Das Merkmal traegt nur, wer wirklich mitbewirbt.
+                if ($mehrere && array_key_exists($klein, $wahl)) {
+                    $this->untisKurse[$klein]['kollision'] = true;
+                }
+            }
+        }
+
         $ja = $nein = [];
         foreach (preg_split('/[;,]/u', $kurse) ?: [] as $eintrag) {
             $e = mb_strtolower(trim((string)$eintrag));

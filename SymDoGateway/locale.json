@@ -181,7 +181,6 @@
             "Could not reach the AI service.": "KI-Dienst nicht erreichbar.",
             "Could not save — the notes store is full or unwritable.": "Konnte nicht speichern — der Notizbestand ist voll oder nicht beschreibbar.",
             "Counts every call that costs money at the provider: mail analysis, photo capture in the app, and the calls from the Symcon tile. The tile has no device token and therefore no hourly window — this daily limit is its only brake.": "Gezählt wird jeder Aufruf, der beim Anbieter Geld kostet: die Mailanalyse, die Foto-Erfassung in der App und die Aufrufe aus der Symcon-Kachel. Die Kachel bringt keinen Gerätetoken mit und hat deshalb kein Stundenfenster — dieser Tagesdeckel ist dort die einzige Bremse.",
-            "Courses (chosen course, or -Subject to drop)": "Kurse (gewählter Kurs, oder -Fach zum Weglassen)",
             "Create browser access": "Browser-Zugang erstellen",
             "Daily briefing": "Tägliches Briefing",
             "Daily limit for AI calls reached.": "Der Tagesdeckel für KI-Aufrufe ist erreicht.",
@@ -892,7 +891,15 @@
             "%d student(s) fetched — pick them in the column „WebUntis name\".": "%d Schüler abgerufen — in der Spalte „WebUntis Name\" auswählbar.",
             "One row per child. „WebUntis name\" answers „whose timetable?\": press „Fetch students\" once, then pick the name. Only the children of the entered account appear there — with a student login the account itself. An empty row still works: the fetch then resolves it on its own, the account or the child whose name matches the family member.": "Eine Zeile je Kind. „WebUntis Name\" beantwortet die Frage „wessen Plan?\": einmal „Schüler abrufen\" drücken, dann den Namen wählen. Dort erscheinen ausschließlich die Kinder des eingetragenen Kontos — bei einem Schülerzugang das Konto selbst. Eine leere Zeile geht weiterhin: der Abruf löst sie dann selbst auf, das Konto oder das Kind mit dem passenden Namen.",
             "Element %d": "Element %d",
-            "Nothing found on this account — neither children nor an own element.": "Auf diesem Konto ist nichts zu finden — weder Kinder noch ein eigenes Element."
+            "Nothing found on this account — neither children nor an own element.": "Auf diesem Konto ist nichts zu finden — weder Kinder noch ein eigenes Element.",
+            "Course choice": "Kurswahl",
+            "Course choice: appears after the first fetch — it lists the subjects found in the plan.": "Kurswahl: erscheint nach dem ersten Abruf — dort stehen dann die Fächer, die im Plan gefunden wurden.",
+            "Which of these subjects the child actually attends. Where several stand at the same time, the tick decides which lesson goes into the plan; a subject standing alone is taken out by unticking it. Newly found subjects start as attended.": "Welche dieser Fächer das Kind wirklich besucht. Stehen mehrere zur selben Zeit, entscheidet das Häkchen, welche Stunde in den Plan kommt; ein Fach, das allein steht, nimmt das fehlende Häkchen heraus. Neu gefundene Fächer stehen auf „besucht\".",
+            "Subject": "Fach",
+            "Note": "Hinweis",
+            "Attends": "besucht",
+            "choice — several at the same time": "Wahl — mehrere zur selben Zeit",
+            "alone in the plan": "steht allein im Plan"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

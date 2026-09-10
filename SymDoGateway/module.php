@@ -1831,6 +1831,8 @@ class SymDoGateway extends IPSModuleStrict
                  'caption' => $this->Translate('Students'),
                  // Spalten aus EINER Quelle: der Knopf oben setzt dieselben neu.
                  'columns' => $this->UntisStudentsSpalten()],
+                // Erst wer, dann was: die Kurswahl steht unter der Kinderliste.
+                ...$this->UntisKurswahlFelder(),
                 /* Die Meldung haengt an keinem der Mail-Schalter: sie kommt aus
                    Untis und soll auch dann gehen koennen, wenn die Mailanalyse
                    schweigt. */
