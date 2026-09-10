@@ -332,9 +332,23 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Server, Schule | `UntisServer`, `UntisSchool` | wie in der WebUntis-Adresse der Schule (z. B. `mese.webuntis.com`, Schulkürzel) |
 | Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
-| Schüler | `UntisStudents` | je Kind eine Zeile: Familienmitglied, dazu bei Elternkonten mit mehreren Kindern Elementtyp und -nummer; das **Suchfeld** (`UntisSearchName`) findet die Nummer über den Namen |
+| Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name** und Kurse. Der Name steht fast immer auf *— automatisch —*: bei einem Schülerkonto ist das Konto selbst das Kind, bei einem Elternkonto nimmt der Abruf das Kind, dessen Name zum Familienmitglied passt |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
+
+**Schüler abrufen** (Knopf über der Liste) holt die Kinder, die am
+angemeldeten Konto hängen (`app/data`), und trägt sie als Auswahl in die Spalte
+*WebUntis Name* ein — eine Anmeldung je Druck. Nötig ist das nur, wenn die
+automatische Zuordnung nicht eindeutig ist: Elternkonto, mehrere Kinder, und
+keiner der WebUntis-Namen passt zum Familienmitglied.
+
+> Bis zum 10.09.2026 stand hier eine **Schüler-Suche** über `getStudents`.
+> Sie ist entfernt: setzt die Schule die Rechte weit, liefert dieser Aufruf die
+> Schülerliste der GANZEN Schule — mehr, als dieses Modul braucht, und mehr,
+> als in einem Formularfeld stehen sollte. Der Kontoabruf sieht nur die eigenen
+> Kinder. Element-Typ und -Nummer sind damit aus dem Formular verschwunden;
+> vorhandene Zeilen (etwa ein Klassenplan) laufen unverändert weiter, weil die
+> alten Felder weiter gelesen werden.
 
 **Testverbindung** meldet das Schuljahr und nennt die Kinder des Kontos. Das Kind muss im Stundenplan-Modul als Familienmitglied verknüpft sein, sonst weiß niemand, wohin die Stunden gehören. Nach wiederholt fehlgeschlagener Anmeldung pausiert der Abruf, damit das Konto nicht gesperrt wird; die Testverbindung startet ihn wieder.
 

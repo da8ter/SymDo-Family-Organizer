@@ -75,8 +75,17 @@ trait WebUntis
         /* Je Kind: Anzeigename, Ziel-Stundenplan und wessen Plan geholt wird.
            Leerer Elementtyp = der Plan des angemeldeten Kontos selbst. */
         $this->RegisterPropertyString('UntisStudents', '[]');
-        // Suchfeld im Formular: findet die Element-Nummer eines Kindes.
+        /* Das alte Suchfeld. Es steht nicht mehr im Formular (die Suche las die
+           Schuelerliste der ganzen Schule), bleibt aber REGISTRIERT: ein
+           Formularfeld ohne Eigenschaft laesst „Uebernehmen" fuer die GANZE
+           Konfiguration scheitern, eine Eigenschaft ohne Feld ist harmlos. */
         $this->RegisterPropertyString('UntisSearchName', '');
+        /* Die Kinder des angemeldeten Kontos — id und Anzeigename, wie WebUntis
+           sie nennt. Gefuellt vom Knopf „Schueler abrufen", gelesen von der
+           Auswahl im Formular. Sie stehen damit in der settings.json; das ist
+           der Preis dafuer, dass die Spalte einen NAMEN zeigt und nicht eine
+           Nummer. Die Schuelerliste der Schule kommt hier nie hinein. */
+        $this->RegisterAttributeString('UntisAccountStudents', '[]');
         $this->RegisterAttributeString('UntisLast', '{}');    // letzter Stand je Kind
         $this->RegisterAttributeString('UntisStatus', '{}');  // Statuszeile im Formular
         $this->RegisterAttributeInteger('UntisFails', 0);
@@ -143,8 +152,8 @@ trait WebUntis
             $this->UpdateFormField('UntisStatusLabel', 'caption', $this->UntisTestverbindung());
             return true;
         }
-        if ($Ident === 'UntisFindStudent') {
-            $this->UpdateFormField('UntisStatusLabel', 'caption', $this->UntisSchuelerSuchen());
+        if ($Ident === 'UntisFetchStudents') {
+            $this->UntisKontoSchuelerHolen();
             return true;
         }
         return false;
@@ -384,63 +393,107 @@ trait WebUntis
     }
 
     /**
-     * Schueler suchen und ihre Element-Nummer nennen.
+     * Die Spalten der Schuelerliste. Sie stehen HIER und nicht im Formularbau,
+     * weil der Knopf „Schueler abrufen" dieselben Spalten frisch setzen muss
+     * (UpdateFormField) — zwei Fassungen liefen unweigerlich auseinander.
      *
-     * Mit einem Erziehungsberechtigten-Konto ist das der einzige Weg zur Nummer:
-     * das Konto selbst ist kein Element, und ohne Nummer fragt der Abruf
-     * niemanden. `getStudents` darf ein Elternkonto je nach Einstellung der
-     * Schule lesen (gemessen: die vollstaendige Schuelerliste
-     * Eintraege) — deshalb geht es hier und muss niemand in WebUntis suchen.
+     * @return list<array<string,mixed>>
      */
-    private function UntisSchuelerSuchen(): string
+    private function UntisStudentsSpalten(): array
     {
-        $suche = trim((string)$this->UntisProp('UntisSearchName', ''));
-        if (mb_strlen($suche) < 2) {
-            return $this->Translate('Enter at least two letters of the name.');
+        $mitglieder = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        foreach ($this->UntisMitglieder() as $id => $name) {
+            /* (string) ist PFLICHT: die Kennung ist eine Zeichenkette, aber als
+               ARRAYSCHLUESSEL macht PHP aus „57648139" die Zahl 57648139 — und
+               dann stimmt der Wert der Auswahl nicht mehr mit dem ueberein, was
+               in der Zeile steht. */
+            $mitglieder[] = ['caption' => $name, 'value' => (string)$id];
         }
+        /* Die Auswahl „WebUntis Name": „automatisch" und die Kinder DIESES
+           Kontos. Mehr gibt es hier nicht zu waehlen — die Schuelerliste der
+           Schule kommt nie in dieses Formular. */
+        $wahl = [['caption' => $this->Translate('— automatic —'), 'value' => 0]];
+        foreach ((array)json_decode((string)@$this->ReadAttributeString('UntisAccountStudents'), true) as $k) {
+            if (!is_array($k) || (int)($k['id'] ?? 0) <= 0) {
+                continue;
+            }
+            $name = trim((string)($k['name'] ?? ''));
+            $wahl[] = ['caption' => $name !== '' ? $name : (string)(int)$k['id'],
+                       'value'   => (int)$k['id']];
+        }
+        return [
+            ['caption' => $this->Translate('Timetable instance'), 'name' => 'stpl', 'width' => '220px',
+             'add' => 0, 'edit' => ['type' => 'SelectInstance']],
+            /* EIN Feld fuer das Kind. Daraus folgen Anzeigename, das Kind in der
+               Zielinstanz (ueber Children[].userId) und das Ziel der Meldung —
+               statt dreier Spalten, die alle dasselbe meinten. */
+            ['caption' => $this->Translate('Family member'), 'name' => 'userId', 'width' => '160px',
+             'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
+            /* „automatisch" deckt fast alles ab: bei einem Schuelerkonto ist das
+               Konto selbst das Element, bei einem Elternkonto nimmt der Abruf
+               das Kind, dessen Name zum Familienmitglied passt. Gewaehlt wird
+               nur, wenn das nicht eindeutig ist. */
+            ['caption' => $this->Translate('WebUntis name'), 'name' => 'elementId', 'width' => '200px',
+             'add' => 0, 'edit' => ['type' => 'Select', 'options' => $wahl]],
+            /* Der Plan des Kontos ist der KLASSENplan: Religions- und
+               Foerderkurse stehen alle nebeneinander. Hier steht, welche das
+               Kind besucht — nur bei Ueberschneidungen wird gewaehlt. */
+            ['caption' => $this->Translate('Courses (chosen course, or -Subject to drop)'), 'name' => 'kurse',
+             'width' => 'auto', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+        ];
+    }
+
+    /**
+     * Die Schueler DIESES Kontos holen und als Auswahl ins Formular schreiben.
+     *
+     * Vorher stand hier eine Suche ueber `getStudents` — und die liefert, wenn
+     * die Schule die Rechte weit gesetzt hat, die Schuelerliste der GANZEN
+     * Schule. Das ist mehr, als dieses Modul braucht, und mehr, als jemand
+     * ueber ein Formularfeld sehen sollte. Der Weg hier fragt stattdessen
+     * `app/data` und bekommt genau die Kinder, die am angemeldeten Konto
+     * haengen — dieselben, die die Untis-App zeigt.
+     *
+     * Eine Anmeldung je Druck. Der Riegel gilt: nach drei Fehlversuchen sperrt
+     * WebUntis das Konto, und dieser Knopf ist kein Schlupfloch daran vorbei.
+     */
+    private function UntisKontoSchuelerHolen(): void
+    {
         if ($this->UntisGesperrt()) {
-            return $this->Translate('Paused after repeated login failures — press „Test connection" to try again.');
+            $this->UpdateFormField('UntisStatusLabel', 'caption',
+                $this->Translate('Paused after repeated login failures — press „Test connection" to try again.'));
+            return;
         }
         $an = $this->UntisLogin();
         if (($an['ok'] ?? false) !== true) {
             $this->UntisFehlerZaehlen((int)($an['code'] ?? 0));
-            return $this->Translate('Login failed: ') . (string)($an['message'] ?? '?');
+            $this->UpdateFormField('UntisStatusLabel', 'caption',
+                $this->Translate('Login failed: ') . (string)($an['message'] ?? '?'));
+            return;
         }
-        $r = $this->UntisRpc('getStudents');
+        /* Ist das Konto selbst ein Element (Schuelerzugang), gibt es keine
+           weiteren Kinder — dann ist „automatisch" die richtige Antwort und
+           nicht eine leere Auswahl. */
+        $eigenes = in_array((int)$this->untisIch['type'],
+            [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true);
+        $kinder = $eigenes ? [] : $this->UntisKinderDesKontos();
         $this->UntisLogout();
-        if (($r['ok'] ?? false) !== true) {
-            /* Darf ein Konto die Schuelerliste nicht lesen (-8509), hilft nur die
-               Klasse: deren Nummer steht in der Adresse des Stundenplans in
-               WebUntis. Das gehoert in die Antwort, nicht ins Wiki. */
-            return sprintf($this->Translate('Student list not readable (%s) — then use type „Class" and the class number instead.'),
-                (string)($r['message'] ?? '?'));
+        @$this->WriteAttributeInteger('UntisFails', 0);
+
+        @$this->WriteAttributeString('UntisAccountStudents',
+            (string)json_encode($kinder, JSON_UNESCAPED_UNICODE));
+        // Die Auswahl der offenen Liste sofort nachziehen, damit niemand das
+        // Formular schliessen und wieder oeffnen muss.
+        $this->UpdateFormField('UntisStudents', 'columns',
+            (string)json_encode($this->UntisStudentsSpalten(), JSON_UNESCAPED_UNICODE));
+        if ($eigenes) {
+            $this->UpdateFormField('UntisStatusLabel', 'caption',
+                $this->Translate('This login is a student account — it has no further children. „— automatic —" is the right choice.'));
+            return;
         }
-        $treffer = [];
-        foreach ((array)($r['result'] ?? []) as $sch) {
-            if (!is_array($sch)) {
-                continue;
-            }
-            $vor  = trim((string)($sch['foreName'] ?? ''));
-            $nach = trim((string)($sch['longName'] ?? ''));
-            if ($vor === '' && $nach === '') {
-                continue;
-            }
-            if (!$this->UntisNameTrifft($vor . ' ' . $nach, $suche)) {
-                continue;
-            }
-            $treffer[] = sprintf('%d · %s', (int)($sch['id'] ?? 0), trim($vor . ' ' . $nach));
-            if (count($treffer) >= 12) {
-                break;
-            }
-        }
-        /* NICHT merken, anders als beim Verbindungstest: die Antwort enthaelt die
-           Namen fremder Kinder, und der gemerkte Status landet in der
-           settings.json — die ist Klartext und weltlesbar. Sie steht deshalb nur
-           im offenen Formular, so lange man sie braucht. */
-        return $treffer === []
-            ? sprintf($this->Translate('No student found for „%s".'), $suche)
-            : sprintf($this->Translate('Element number · name (type „Student"): %s'),
-                implode('   |   ', $treffer));
+        $this->UpdateFormField('UntisStatusLabel', 'caption', $kinder === []
+            ? $this->Translate('The account has no children — is it a guardian login?')
+            : sprintf($this->Translate('%d student(s) fetched — pick them in the column „WebUntis name".'),
+                count($kinder)));
     }
 
     /**
@@ -1422,12 +1475,21 @@ trait WebUntis
             if ($kind === '') {
                 $kind = trim((string)($z['child'] ?? ''));
             }
+            /* Steht eine Nummer da, ist es ein SCHUELER — die Auswahl im
+               Formular kennt nur Kinder des Kontos. Ein alter Datensatz mit
+               ausdruecklichem Typ (etwa „Klasse") behaelt seinen: das Feld gibt
+               es nicht mehr im Formular, seine Zeilen laufen aber weiter. */
+            $nummer = (int)($z['elementId'] ?? 0);
+            $typ    = (int)($z['type'] ?? 0);
+            if ($typ <= 0 && $nummer > 0) {
+                $typ = self::UNTIS_TYP_SCHUELER;
+            }
             $raus[] = [
                 'name'   => $name,
                 'stpl'   => $stpl,
                 'child'  => $kind,
-                'type'   => (int)($z['type'] ?? 0),
-                'id'     => (int)($z['elementId'] ?? 0),
+                'type'   => $typ,
+                'id'     => $nummer,
                 'kurse'  => trim((string)($z['kurse'] ?? '')),
                 'userId' => $userId,
             ];

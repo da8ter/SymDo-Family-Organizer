@@ -1783,17 +1783,8 @@ class SymDoGateway extends IPSModuleStrict
      */
     private function GetUntisPanel(): array
     {
-        $mitglieder = [['caption' => $this->Translate('— none —'), 'value' => '']];
-        try {
-            foreach ($this->LoadUsers() as $u) {
-                $n = trim((string)($u['name'] ?? ''));
-                if ($n !== '') {
-                    $mitglieder[] = ['caption' => $n, 'value' => (string)($u['id'] ?? '')];
-                }
-            }
-        } catch (Throwable $e) {
-            // ohne Mitgliederliste eben nur „keins"
-        }
+        // Die Mitgliederwahl der Liste steckt jetzt in UntisStudentsSpalten() —
+        // dieselbe Quelle, aus der der Knopf „Schueler abrufen" sie neu setzt.
         $stand = json_decode((string)$this->MailAttr('UntisStatus', '{}'), true);
         $zeile = is_array($stand) && ($stand['text'] ?? '') !== ''
             ? sprintf($this->Translate('Last run %1$s: %2$s'),
@@ -1826,33 +1817,20 @@ class SymDoGateway extends IPSModuleStrict
                    Dokumentation: wer hier Zugangsdaten eintraegt, soll wissen,
                    wo sie liegen. */
                 ['type' => 'Label', 'caption' => $this->Translate('Note: like every other password in Symcon, this one is stored in plain text in settings.json. With school credentials one can report a child sick — use a separate read-only account if the school offers one.')],
+                /* Was „automatisch" heisst, gehoert VOR den Knopf: die meisten
+                   muessen gar nichts abrufen und nichts waehlen. */
+                ['type' => 'Label', 'caption' => $this->Translate('One row per child. „WebUntis name" answers „whose timetable?" and stays on „— automatic —" in almost every case: with a student login the account is the child itself, with a guardian login the fetch takes the child whose name matches the family member. Only when that is ambiguous, fetch the students of the account below and pick one.')],
+                /* Der Knopf steht UEBER der Liste: er fuellt die Auswahl in
+                   ihrer Spalte „WebUntis Name", und man liest von oben nach
+                   unten. Er holt ausschliesslich die Kinder DIESES Kontos
+                   (app/data) — nicht die Schuelerliste der Schule. */
+                ['type' => 'Button', 'caption' => $this->Translate('Fetch students'),
+                 'onClick' => 'IPS_RequestAction($id, \'UntisFetchStudents\', 0);'],
                 ['type' => 'List', 'name' => 'UntisStudents', 'rowCount' => 3,
                  'add' => true, 'delete' => true,
                  'caption' => $this->Translate('Students'),
-                 'columns' => [
-                     ['caption' => $this->Translate('Timetable instance'), 'name' => 'stpl', 'width' => '220px',
-                      'add' => 0, 'edit' => ['type' => 'SelectInstance']],
-                     /* EIN Feld fuer das Kind. Daraus folgen Anzeigename, das Kind in
-                        der Zielinstanz (ueber Children[].userId) und das Ziel der
-                        Meldung — statt dreier Spalten, die alle dasselbe meinten. */
-                     ['caption' => $this->Translate('Family member'), 'name' => 'userId', 'width' => '160px',
-                      'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
-                     /* Leer = der Plan des angemeldeten Kontos. Gefuellt nur,
-                        wenn ein Konto mehrere Kinder sieht (Elternzugang). */
-                     ['caption' => $this->Translate('Element type'), 'name' => 'type', 'width' => '110px',
-                      'add' => 0, 'edit' => ['type' => 'Select', 'options' => [
-                          ['caption' => $this->Translate('— own timetable —'), 'value' => 0],
-                          ['caption' => $this->Translate('Class'), 'value' => 1],
-                          ['caption' => $this->Translate('Student'), 'value' => 5],
-                      ]]],
-                     ['caption' => $this->Translate('Element ID'), 'name' => 'elementId', 'width' => '100px',
-                      'add' => 0, 'edit' => ['type' => 'NumberSpinner']],
-                     /* Der Plan des Kontos ist der KLASSENplan: Religions- und
-                        Foerderkurse stehen alle nebeneinander. Hier steht, welche
-                        das Kind besucht — nur bei Ueberschneidungen wird gewaehlt. */
-                     ['caption' => $this->Translate('Courses (chosen course, or -Subject to drop)'), 'name' => 'kurse',
-                      'width' => 'auto', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                 ]],
+                 // Spalten aus EINER Quelle: der Knopf oben setzt dieselben neu.
+                 'columns' => $this->UntisStudentsSpalten()],
                 /* Die Meldung haengt an keinem der Mail-Schalter: sie kommt aus
                    Untis und soll auch dann gehen koennen, wenn die Mailanalyse
                    schweigt. */
@@ -1865,19 +1843,6 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'CheckBox', 'name' => 'UntisHomework',
                  'caption' => $this->Translate('Also fetch homework')],
                 ['type' => 'Label', 'caption' => $this->Translate('Takes over what the school has entered — subject, due date, text and tick. Entries added by hand stay untouched, and a tick set at home is never removed by the fetch. The tick stays in SymDo: the account may only READ homework in WebUntis.')],
-                /* Element-Typ und -Nummer sind die Frage „WESSEN Plan?". Leer heisst
-                   „der des angemeldeten Kontos" — das geht nur, wenn das Konto
-                   selbst ein Element ist (Schuelerkonto). Ein
-                   Erziehungsberechtigten-Konto ist keines (Personentyp 12), dort
-                   MUSS das Kind genannt werden. Die Suche darunter findet seine
-                   Nummer. */
-                ['type' => 'Label', 'caption' => $this->Translate('Element type and number answer „whose timetable?" — and in most cases they can stay EMPTY. With a student login the account is the element itself; with a guardian login the fetch takes the children hanging on the account, exactly like the Untis app. Enter something only if the account has several children whose names do not match, or if you want the class plan instead: type „Class" with the class number. The search below finds a student number.')],
-                ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'ValidationTextBox', 'name' => 'UntisSearchName', 'width' => '260px',
-                     'caption' => $this->Translate('Find student (name or part of it)')],
-                    ['type' => 'Button', 'caption' => $this->Translate('Search'),
-                     'onClick' => 'IPS_RequestAction($id, \'UntisFindStudent\', 0);'],
-                ]],
                 ['type' => 'Label', 'name' => 'UntisStatusLabel', 'caption' => $zeile],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Button', 'caption' => $this->Translate('Test connection'),
