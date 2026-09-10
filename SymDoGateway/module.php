@@ -23,6 +23,7 @@ require_once __DIR__ . '/libs/VoiceDevices.php';
 require_once __DIR__ . '/libs/VoiceZeitplan.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
+require_once __DIR__ . '/libs/EduStore.php';
 require_once __DIR__ . '/libs/WebUntis.php';
 
 /**
@@ -61,6 +62,7 @@ class SymDoGateway extends IPSModuleStrict
     use VoiceZeitplan;
     use SymconDoku;
     use EduMaps;
+    use EduStore;
     use WebUntis;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
@@ -140,6 +142,8 @@ class SymDoGateway extends IPSModuleStrict
         // Aufgaben aus weitergeleiteten E-Mails (eigener Trait, nutzt die KI der App-Seite)
         $this->MailCreate();
         $this->EduCreate();
+        // Klassenseiten: der eigene Bestand der Karten (vorher lagen sie in den Notizen)
+        $this->EduStoreCreate();
         $this->UntisCreate();
         // Kalender: Zuordnung, Erinnerungen und ihr Timer
         $this->CalCreateProps();

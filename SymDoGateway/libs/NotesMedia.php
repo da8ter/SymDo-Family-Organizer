@@ -152,6 +152,27 @@ trait NotesMedia
     }
 
     /**
+     * Alle Medien-Kennungen, auf die IRGENDWER zeigt.
+     *
+     * Drei Quellen, und alle drei müssen hier stehen: die Notizen, die noch
+     * offenen Mail-Vorschläge und die Karten der Klassenseiten. Seit die Karten
+     * einen eigenen Bestand haben, ist das die Stelle, an der beide
+     * zusammenlaufen — fehlte einer, sähe der Aufräumer dessen Anhänge als
+     * Waisen und löschte sie nach der Schonfrist. Bei den Klassenseiten wären
+     * das auf einen Schlag alle Kartenbilder.
+     *
+     * @return list<int>
+     */
+    private function NotesLiveMediaIds(): array
+    {
+        return array_values(array_unique(array_merge(
+            $this->NotesAttachmentIds($this->NotesStore()['notes']),
+            $this->NotesProposalAttachmentIds(),
+            $this->EduAttachmentIds()
+        )));
+    }
+
+    /**
      * Von den genannten Dateien die, auf die NIEMAND mehr zeigt.
      *
      * Noetig, weil eine Mail mit mehreren Notiz-Funden allen Eintraegen DIESELBE
@@ -166,9 +187,14 @@ trait NotesMedia
      */
     private function NotesUnreferencedMedia(array $store, array $ids): array
     {
+        /* Der übergebene Stand gilt für die NOTIZEN (dort steckt das gerade
+           Gelöschte schon drin); Vorschläge und Klassenseiten kommen frisch
+           dazu. Ohne den dritten Topf nähme ein Löschen in den Notizen einer
+           Karte die Datei weg, die beide teilen. */
         $benutzt = array_merge(
             $this->NotesAttachmentIds(is_array($store['notes'] ?? null) ? $store['notes'] : []),
-            $this->NotesProposalAttachmentIds()
+            $this->NotesProposalAttachmentIds(),
+            $this->EduAttachmentIds()
         );
         $frei = [];
         foreach ($ids as $id) {
@@ -292,6 +318,21 @@ trait NotesMedia
                 return $this->NotesFehler('forbidden');
             }
         }
+        return $this->NotesMediaAusgeben($mediaId, $nurArt);
+    }
+
+    /**
+     * Ein geprueftes Medienobjekt als data:-URL herausgeben.
+     *
+     * Herausgezogen, weil zwei Bestaende dieselbe Ausgabe brauchen: die Notizen
+     * und die Karten der Klassenseiten. Die BERECHTIGUNG prueft jeder Aufrufer
+     * selbst — er allein weiss, in welchem Bestand die Kennung stehen muss.
+     * Hier bleibt nur, was fuer beide gleich ist: liegt die Datei wirklich in
+     * der Notizen-Kategorie, und passt sie durch das Relay.
+     */
+    private function NotesMediaAusgeben(int $mediaId, bool $nurArt = false): array
+    {
+        $kat = $this->NotesMediaCategory(false);
         if ($mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
             return $this->NotesFehler('forbidden');
         }
@@ -338,8 +379,11 @@ trait NotesMedia
         // an die Notiz kommt. Keine weitere Einschraenkung nach Mitglied: der
         // KI-Bereich zeigt dieselben Vorschlaege ohnehin allen Geraeten, und die
         // Notizen sind bewusst gemeinsam.
-        $erlaubt = in_array($mediaId, $this->NotesAttachmentIds($this->NotesStore()['notes']), true)
-            || in_array($mediaId, $this->NotesProposalAttachmentIds(), true);
+        /* DREI Quellen, seit die Klassenseiten einen eigenen Bestand haben.
+           Ohne den dritten Topf antwortet jedes Kartenbild mit 403 — die
+           Adresse ist dieselbe (/v1/notes/media/<id>), weil die Dateien in
+           derselben Kategorie liegen und die Web-App sie fest verdrahtet. */
+        $erlaubt = in_array($mediaId, $this->NotesLiveMediaIds(), true);
         if (!$erlaubt || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
             $this->SendApiError('forbidden', 'Not a note attachment', 403);
             return;
@@ -420,12 +464,27 @@ trait NotesMedia
         // Mutation, ueberschreibt diese Wiederherstellung sie — die Notiz waere weg.
         // Ohne freie Sperre lieber gar nicht aufraeumen: die Schonfrist von zwei
         // Tagen laesst jede Menge weitere Gelegenheiten.
+        /* BEIDE Sperren, in der festgelegten Ordnung Notizen → Klassenseiten.
+           Grund wie unten bei NotesStorable: auch EduStorable schreibt einen
+           Probewert und stellt danach den ALTEN Stand wieder her. Läuft
+           gleichzeitig eine Spiegelung, überschreibt diese Wiederherstellung
+           sie — die Karte wäre weg. Ohne freie Sperren lieber gar nicht
+           aufräumen: die Schonfrist von zwei Tagen lässt jede Menge weitere
+           Gelegenheiten. */
         $lock = self::NOTES_LOCK . $this->InstanceID;
         if (!IPS_SemaphoreEnter($lock, 300)) {
             return 0;
         }
         try {
-            return $this->NotesSweepOrphansLocked($kat);
+            $eduLock = self::EDU_LOCK . $this->InstanceID;
+            if (!IPS_SemaphoreEnter($eduLock, 300)) {
+                return 0;
+            }
+            try {
+                return $this->NotesSweepOrphansLocked($kat);
+            } finally {
+                IPS_SemaphoreLeave($eduLock);
+            }
         } finally {
             IPS_SemaphoreLeave($lock);
         }
@@ -444,13 +503,14 @@ trait NotesMedia
         // darunter: ist der Vorschlagsbestand nicht lesbar, wird ebenfalls nichts
         // geloescht. (Fruehere Fassung dieses Kommentars behauptete, NotesStorable
         // deckte beides ab. Tat es nicht.)
-        if (!$this->NotesStorable() || !$this->MailProposalsReadable()) {
+        /* DRITTE Wache, aus demselben Grund wie die zweite: ein Attribut, das
+           der Kernel noch nicht kennt, liefert einen LEEREN Bestand — und dann
+           sähe jeder Anhang der Klassenseiten wie eine Waise aus. Genau dieser
+           Fall tritt nach einem Modul-Update vor dem Kernel-Neustart ein. */
+        if (!$this->NotesStorable() || !$this->MailProposalsReadable() || !$this->EduStorable()) {
             return 0;
         }
-        $lebt = array_merge(
-            $this->NotesAttachmentIds($this->NotesStore()['notes']),
-            $this->NotesProposalAttachmentIds()
-        );
+        $lebt = $this->NotesLiveMediaIds();
         // Zweites Netz: eine Schonfrist. Ein gerade abgelegter Anhang gehoert zu
         // einem Vorschlag, der noch keine Notiz ist — er darf nicht weggeraeumt
         // werden, bloss weil der Bestand ihn (noch) nicht nennt.

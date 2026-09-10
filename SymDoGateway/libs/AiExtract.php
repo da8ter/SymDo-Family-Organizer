@@ -305,6 +305,15 @@ trait AiExtract
         if (str_ends_with($path, 'notes')) {
             return json_encode($this->NotesHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        /* Klassenseiten: derselbe Grund wie bei Notizen und Stundenplan. Ohne
+           diesen Zweig wäre der Bereich in JEDER Visu-Kachel leer und liefe
+           stattdessen in den KI-Riegel weiter unten — die Antwort hieße dann
+           „ai_disabled", und man sucht den Fehler bei der KI. Der Pfad endet auf
+           „edumaps" und kollidiert mit keinem Zweig weiter oben (insbesondere
+           nicht mit „media"). */
+        if (str_ends_with($path, 'edumaps')) {
+            return json_encode($this->EduHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         /* Hausaufgaben: dieselbe Begruendung wie beim Stundenplan. Ohne diesen
            Zweig ist der Bereich in JEDER Visu-Kachel leer und nur ueber REST
            erreichbar — genau der Fehler, der oben beschrieben steht. Vor dem

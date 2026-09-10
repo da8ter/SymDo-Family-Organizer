@@ -214,6 +214,25 @@ trait ApiRouter
                     return;
                 }
                 break;
+
+            case 'edumaps':
+                /* Klassenseiten. Ein Pfad, Aktion im Rumpf — derselbe Vertrag wie
+                   bei den Notizen, damit dieselbe Oberfläche beides bedienen
+                   kann. Erscheint bewusst NICHT in /discovery: eine neue
+                   Listenart dort zerlegt die ausgelieferte iOS-App (ihr
+                   ListKind kennt nur shopping und todo und ist nicht optional).
+                   Die DATEIEN liegen weiter unter /notes/media/<id>: sie stehen
+                   in derselben Symcon-Kategorie, und die Adresse ist in Web-App
+                   und iOS fest verdrahtet. */
+                if ($method === 'GET') {
+                    $this->SendJson($this->EduHandleAction(['action' => 'list'], $device));
+                    return;
+                }
+                if ($method === 'POST') {
+                    $this->SendJson($this->EduHandleAction($this->ReadJsonBody(), $device));
+                    return;
+                }
+                break;
             case 'homework':
                 /* Hausaufgaben der Kinder. Ein Pfad, Aktion im Rumpf — wie
                    Notizen und Kalender. Erscheint bewusst NICHT in /discovery
