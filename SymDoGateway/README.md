@@ -349,6 +349,7 @@ Notizen.
 |---|---|
 | Web-App, Stundenplan-Bereich | Alle offenen des gezeigten Kindes, gruppiert nach überfällig, heute, morgen, später und ohne Datum. Ein Plus legt eine an, ein Tipp auf die Zeile ändert sie, der Kreis links hakt sie ab. Abgehaktes wandert nach unten in einen eingeklappten Abschnitt **Erledigt** und lässt sich dort zurücknehmen |
 | Web-App, Übersicht | Eine Karte für die Eltern: was heute, morgen oder überfällig ist, mit Kind und Fach. Der Stundenplan-Bereich gehört dem Kindmodus, die Übersicht allen |
+| Kachel **SymDo - Hausaufgaben** | Dieselbe Liste als eigene Kachel, im Aufbau der Aufgabenliste: Avatar-Leiste, drei Zahlen (offen, überfällig, heute fällig), die Liste, eine Eingabezeile. Für ein Tablett, das nur diese eine Frage beantworten soll |
 | Stundenplan-Kachel | An der Stunde ein Abzeichen mit der Zahl (Wochenraster) bzw. ein Punkt am Balken (Zeitachse). Was zu keiner Stunde des Tages passt, steht als Fußzeile unter der Spalte |
 | Sprachassistent | „Was hat Tim für morgen auf?", „Tim hat in Mathe Seite 42 bis Donnerstag auf", „Hak bei Mia Deutsch ab" |
 | KI-Auswertung | Ein Foto des Hausaufgabenhefts und die Klassenseite liefern Hausaufgaben als vierte Vorschlagsart neben Aufgabe, Termin und Notiz |

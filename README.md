@@ -74,6 +74,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
 | **SymDo - Edumaps** | Device | Die Klassenseiten der Schule als eigene Kachel: Karten mit Text, Bildern und Buchungslage, nur lesend |
+| **SymDo - Hausaufgaben** | Device | Die Hausaufgaben der Kinder als eigene Kachel: nach Fälligkeit gruppiert, mit Fachsymbolen, Häkchen und Erledigt-Abschnitt |
 
 ## Schnellstart
 
@@ -211,6 +212,17 @@ lesend, denn es ist ein Spiegel; entfernte Karten wandern ins Archiv. Nichts
 einzurichten — die Seiten werden im Gateway eingetragen.
 
 → [Ausführliche Anleitung](SymDoEdumaps/README.md)
+
+## SymDo - Hausaufgaben
+
+Die Hausaufgaben der Kinder als eigene Kachel, im Aufbau der Aufgabenliste:
+drei Zahlen (offen, überfällig, heute fällig), darunter die Liste nach
+Fälligkeit gruppiert — mit dem Symbol und der Farbe des Fachs, Häkchen, Wischen
+zum Löschen und Ändern und einem eingeklappten Abschnitt *Erledigt*. Was aus
+WebUntis kommt, wird gezeigt und nicht bearbeitet. Nichts einzurichten — die
+Aufgaben liegen im Gateway.
+
+→ [Ausführliche Anleitung](SymDoHomework/README.md)
 
 ## SymDo - Essensplan
 
