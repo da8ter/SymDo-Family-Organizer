@@ -2967,6 +2967,11 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
    Aufbau wie die Favoriten: links die Ordner, rechts ihr Inhalt. */
 #notesContent:not(.detail-open) #notesDetail { display: none; }
 #notesContent.detail-open #notesMaster { display: none; }
+/* Klassenseiten: dieselbe Mechanik, eigener Behaelter. Zwei Bereiche duerfen
+   NICHT in dieselben Knoten zeichnen — der Zeichen-Zwischenspeicher klebt am
+   Element (_lastHtml), und der zweite Bereich zeichnete nie. */
+#eduContent:not(.detail-open) #eduDetail { display: none; }
+#eduContent.detail-open #eduMaster { display: none; }
 
 /* Der Editor liegt unter den Dialogen, die aus ihm heraus aufgehen (Quellenwahl,
    Funde, Bestaetigung, Aufgaben- und Termin-Editor), und das Fundblatt wieder
@@ -3175,7 +3180,8 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
      row-gap MUSS 0 bleiben: die Abstände kommen weiter aus margin-bottom der
      Zeilen. Mit einem row-gap bliebe beim Löschen eine Lücke stehen, weil
      dissolveCard() Höhe und margin-bottom zusammenfährt, den gap aber nicht. */
-  #shoppingListArea, #todoListArea, #favMaster, #favDetail, #notesMaster, #notesDetail {
+  #shoppingListArea, #todoListArea, #favMaster, #favDetail, #notesMaster, #notesDetail,
+  #eduMaster, #eduDetail {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     column-gap: var(--gap);
@@ -3333,7 +3339,7 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
 }
 
 @media (min-width: 1100px) {
-  #favoritesContent, #notesContent {
+  #favoritesContent, #notesContent, #eduContent {
     display: grid;
     grid-template-columns: minmax(300px, 360px) 1fr;
     /* Doppelter Abstand: die beiden Spalten sind zwei getrennte Ansichten, kein
@@ -3348,9 +3354,11 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
   #favoritesContent:not(.detail-open) #favDetail,
   #favoritesContent.detail-open #favMaster,
   #notesContent:not(.detail-open) #notesDetail,
-  #notesContent.detail-open #notesMaster { display: block; }
+  #notesContent.detail-open #notesMaster,
+  #eduContent:not(.detail-open) #eduDetail,
+  #eduContent.detail-open #eduMaster { display: block; }
   /* Zurück-Pfeile haben nebeneinander keinen Sinn: die Auswahl steht ja links */
-  #btnFavBack, #btnBoughtBack, #btnNotesBack { display: none; }
+  #btnFavBack, #btnBoughtBack, #btnNotesBack, #btnEduBack { display: none; }
   /* Zeigt, welche Liste rechts steht. Als innerer Schatten auf der ZEILE, NICHT als
      outline auf der Karte: die Zeile ist positioniert und wird ueber dem Umriss der
      Karte gezeichnet, deckte ihn auf den Geraden also ab. Sichtbar blieben nur vier
@@ -3359,7 +3367,8 @@ html[data-symdo-theme="light"] .voice-laden { color: #a35c00; }
      also hervor. Der innere Schatten folgt der Rundung der Zeile exakt. */
   .fav-card.is-open .fav-row { box-shadow: inset 0 0 0 2px var(--accent); }
   /* Gleiche Kopfhoehe links und rechts, damit die Spalten auf einer Linie beginnen. */
-  #notesMaster .screen-head, #notesDetail .screen-head { min-height: 38px; }
+  #notesMaster .screen-head, #notesDetail .screen-head,
+  #eduMaster .screen-head, #eduDetail .screen-head { min-height: 38px; }
 }
 
 /* Grosse Schirme (1920 x 1080 und breiter): vier Spalten bei Artikeln und
@@ -4134,6 +4143,21 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </section>
 
+    <!-- Die Klassenseiten der Schule. Zwei Spalten wie die Notizen: links die
+         Kinder und ihre Seiten, rechts die Karten. Bewusst OHNE Eingabezeile —
+         der Bereich ist ein Spiegel, hier wird nichts angelegt. Bis zum
+         10.09.2026 stand er als Sonderansicht IM Notizbereich; dort zeigte er
+         neunzig Prozent fremder Inhalte in einem Ordnerbaum, der den Notizen
+         gehoerte. -->
+    <section id="screen-edumaps" class="screen">
+      <div class="content">
+        <div id="eduContent">
+          <div id="eduMaster"></div>
+          <div id="eduDetail"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Der Wochenplan EINES Kindes. Der Bereich erscheint nur im Kindmodus
          (siehe visibleTabs): ohne gewaehltes Kind waere „der Wochenplan" die
          Frage, wessen. -->
@@ -4158,6 +4182,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
+    <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span></button>
   </nav>
 </div>
 
@@ -5187,6 +5212,11 @@ function normalizeTabs(raw) {
     // Schluessel nicht, und mit dieser Regel bleibt der Bereich dort von selbst weg —
     // ohne dass das Uebernahme-Skript etwas davon wissen muss.
     notes:     t.notes      === true,
+    /* Klassenseiten: gleiche Regel, gleicher Grund. Wichtig fuer die drei
+       vorhandenen Kacheln — sie nennen den Schluessel nicht, und damit bleibt
+       der Bereich dort von selbst weg. Waere die Vorgabe „sichtbar", bekaeme
+       die Aufgaben-Kachel ploetzlich zwei Bereiche und ihre Leiste zurueck. */
+    edumaps:   t.edumaps    === true,
     // KI: gleiche Regel, gleicher Grund — die Vorschlaege liegen im Gateway.
     ki:        t.ki         === true
   };
@@ -5218,6 +5248,8 @@ function visibleTabs() {
   if (t.calendar && calCalendars.length > 0) out.push('calendar');
   // Notizen ganz hinten und nur mit Gateway — dort liegen sie.
   if (t.notes && notizenMoeglich()) out.push('notes');
+  // Die Klassenseiten dahinter, aus demselben Grund.
+  if (t.edumaps && edumapsMoeglich()) out.push('edumaps');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -5939,7 +5971,7 @@ function invalidateRenderCache() {
   // beiden Spalten, dort liegen also die _lastHtml-Marken. Der Elternknoten hat nie
   // eine — ihn zu leeren liess eine abgelehnte Favoriten-Aktion ungezeichnet, die
   // weggewischte Zeile blieb bei translateX(-110%) stehen.
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'todoMembers', 'calMembers', 'calArea', 'kiFinds'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'eduMaster', 'eduDetail', 'todoMembers', 'calMembers', 'calArea', 'kiFinds'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
@@ -6020,6 +6052,11 @@ function handleMessage(data) {
     if (visibleTabs().includes('notes') && !notizenGeladen && !notizenLaden) {
       ladeNotizen();
     }
+    /* Klassenseiten aus demselben Grund vorab: die Kachel zeigt NUR diesen
+       Bereich, und ohne den Vorablauf stuende sie beim Aufbau leer da. */
+    if (visibleTabs().includes('edumaps') && !edumapsGeladen && !edumapsLaden) {
+      ladeEdumaps();
+    }
     /* Hausaufgaben ebenfalls VORAB: die Karte der Uebersicht steht sonst beim
        ersten Aufbau leer und erschiene erst eine Minute spaeter ueber
        gatewayNachladen — derselbe Fehler, der beim Stundenplan schon gemacht
@@ -6096,7 +6133,7 @@ window.addEventListener('message', (event) => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 // 'plan' ist der Wochenplan eines Kindes — nur im Kindmodus sichtbar.
-const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes'];
+const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -7062,6 +7099,7 @@ function renderAll() {
     renderCalendar();
   }
   if (activeTab === 'notes') renderNotizen();
+  if (activeTab === 'edumaps') renderEdumaps();
   if (activeTab === 'plan') { renderWochenplan(); renderHausaufgaben(); }
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
@@ -7335,6 +7373,7 @@ function gatewayNachladen() {
      fahren, den niemand ansieht, waere Verschwendung. Wer ihn ansieht, bekommt
      ihn frisch. */
   if (visibleTabs().includes('notes')) { ladeNotizen(); }
+  if (visibleTabs().includes('edumaps')) { ladeEdumaps(); }
   /* Billig und revisionsgesichert, deshalb bei JEDEM Takt: die Karte auf der
      Uebersicht soll auch dann stimmen, wenn ein anderes Geraet abgehakt hat. */
   if (homeworkMoeglich()) { ladeHausaufgaben(); }
@@ -13787,6 +13826,40 @@ let noteFunde = [];         // von der KI erkannte Aufgaben/Termine, fluechtig
 // Uebernehmen-Knopf braucht dann seine Werte ein zweites Mal.
 let noteAiVorschlag = null;
 
+/* ── Klassenseiten: der zweite Bestand ────────────────────────────────────
+   Eigener Bereich, eigener Endpunkt (/edumaps), eigene Zustandsvariablen. Die
+   Karten lagen bis zum 10.09.2026 mit in `notizen`; seit sie ihren eigenen
+   Bestand haben, hat auch die Oberfläche einen eigenen Bereich. */
+let edumaps = { rev: 0, folders: [], notes: [], memberFolders: {}, limits: {} };
+let edumapsGeladen = false;
+let edumapsLaden = false;
+let edumapsWartende = [];
+let eduOrdnerId = null;     // geoeffnete Seite (null = Uebersicht)
+let eduTextOrdner = '';     // fuer welchen Ordner der Volltext geholt wurde
+
+/**
+ * WELCHER Bestand gerade gilt — geführt vom offenen Bereich.
+ *
+ * Die Nachschlage-Helfer bedienen beide Bestände über diese eine Stelle. Der
+ * naheliegende Weg, den Bestand als Parameter durchzureichen, scheitert an der
+ * EREIGNIS-Kette: ein Klick-Handler weiß nicht mehr, aus welchem Aufruf er
+ * stammt, und müsste Bestand, Zielvariable und Zeichen-Einstieg als Closure
+ * mitnehmen — drei Parameter an sieben Funktionen und vierzig Aufrufstellen.
+ * Der Bereich IST der Bestand; damit kann nichts abdriften.
+ *
+ * Editor und KI-Übernahme laufen bei aktivem Bereich 'notes' oder 'ki' und
+ * sehen deshalb immer die echten Notizen — richtig so: eine Karte der
+ * Klassenseite ist nie Ziel einer Übernahme.
+ */
+function notesB() {
+  return activeTab === 'edumaps' ? edumaps : notizen;
+}
+
+/** Ohne Gateway gibt es keine Klassenseiten — dann bleibt der Bereich weg. */
+function edumapsMoeglich() {
+  return notizenMoeglich();
+}
+
 /** Ohne Gateway gibt es keine Notizen — dann bleibt der Bereich ganz weg. */
 function notizenMoeglich() {
   if (window.__SYMDO__) return true;
@@ -13813,22 +13886,14 @@ function ladeNotizen(danach) {
     notizenWartende = [];
     warten.forEach(f => { try { f(); } catch (e) {} });
   };
-  /* Der offene Edumaps-Ordner braucht den VOLLEN Text seiner Notizen — die
-     Kartenansicht zeigt ihn, die Vorschau von 160 Zeichen reicht dafuer nicht.
-     Nur dieser eine Ordner, sonst waere jede Antwort um ein Vielfaches
-     groesser, ohne dass jemand den Text liest. */
-  const wunsch = notesVolltextWunsch();
-  aiPost('/notes', wunsch ? { action: 'list', folderId: wunsch, withText: true }
-                          : { action: 'list' }).then(r => {
+  aiPost('/notes', { action: 'list' }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true) { fertig(); return; }
     /* Unveraendert? Dann NICHTS anfassen. Der Abruf laeuft jetzt im Minutentakt
        (fremde Geraete), und ein blindes Neusetzen wuerde bei jedem Takt den
        Bestand ersetzen und neu zeichnen — auch wenn sich nichts getan hat. Die
        Revision zaehlt serverseitig bei jeder Aenderung hoch (Notes.php). */
-    // Auch bei gleicher Revision uebernehmen, wenn jetzt ein ANDERER Ordner
-    // seinen Volltext braucht — sonst blieben die Karten bei der Vorschau.
-    if (notizenGeladen && (j.rev || 0) === (notizen.rev || 0) && notesTextOrdner === wunsch) {
+    if (notizenGeladen && (j.rev || 0) === (notizen.rev || 0)) {
       fertig(); return;
     }
     notizen = {
@@ -13839,7 +13904,6 @@ function ladeNotizen(danach) {
       limits: j.limits || {}
     };
     notizenGeladen = true;
-    notesTextOrdner = wunsch;
     // Ein inzwischen geloeschter Ordner darf nicht offen bleiben.
     if (notesOrdnerId && !notizen.folders.some(f => f.id === notesOrdnerId)) notesOrdnerId = null;
     if (activeTab === 'notes') renderNotizen();
@@ -13882,42 +13946,31 @@ function notizenFehlertext(j) {
   return translate('Action failed');
 }
 
-/**
- * Einen Ordner oeffnen.
- *
- * Bei einer Klassenseite fehlt jetzt der volle Text — die Liste kam mit
- * Vorschauen. Also gleich nachladen: die Ansicht steht sofort (mit Vorschau)
- * und wird beim Eintreffen scharf. Ohne diesen Aufruf blieben die Karten
- * dauerhaft bei 160 Zeichen.
- */
+/** Einen Ordner oeffnen. */
 function notesOrdnerOeffnen(fid) {
   notesOrdnerId = fid;
   renderNotizen();
-  if (notesVolltextWunsch() && notesTextOrdner !== notesVolltextWunsch()) {
-    ladeNotizen();
-  }
 }
 
-/** Welcher Ordner steht mit vollem Text im Bestand? '' = keiner. */
-let notesTextOrdner = '';
+/* Der Volltext-Sonderweg stand hier, solange die Karten der Klassenseite
+   Notizen waren: nur sie brauchen den vollen Text, die Uebersicht kommt mit
+   Vorschauen von 160 Zeichen. Er lebt jetzt in ladeEdumaps/eduOrdnerOeffnen —
+   eine Notiz braucht ihn nie, ihr Text steht ohnehin im Editor. */
 
-/** Der offene Ordner, wenn er von der Klassenseite stammt — sonst ''. */
-function notesVolltextWunsch() {
-  const f = notesOrdnerId ? notesOrdner(notesOrdnerId) : null;
-  return (f && (f.source || '') === 'edumaps') ? f.id : '';
-}
-
+/* Die drei Nachschlage-Helfer lesen den Bestand über notesB() — damit bedienen
+   sie Notizen UND Klassenseiten, ohne dass ein Parameter durch die Ereignis-
+   Kette gefädelt werden muss. notesPfad und notesOrdnerOptionen erben es. */
 function notesOrdner(id) {
-  return notizen.folders.find(f => f.id === id) || null;
+  return notesB().folders.find(f => f.id === id) || null;
 }
 function notesImOrdner(id) {
-  return notizen.notes.filter(n => n.folderId === id);
+  return notesB().notes.filter(n => n.folderId === id);
 }
 /* Verschachtelung: Ordner tragen seit dem 03.09.2026 ein parentId. Leer heisst
    oberste Ebene — und ein parentId, das auf einen geloeschten Ordner zeigt,
    liefert der Server bereits als leer, damit kein Ordner unerreichbar wird. */
 function notesUnterordner(id) {
-  return notizen.folders.filter(f => (f.parentId || '') === (id || ''));
+  return notesB().folders.filter(f => (f.parentId || '') === (id || ''));
 }
 /**
  * Die Ordner fuer ein Auswahlfeld — in ihrer HIERARCHIE, nicht in einer Reihe.
@@ -13963,17 +14016,6 @@ function renderNotizen() {
   renderNotizenMaster(elMaster);
   renderNotizenDetail(elDetail, offen);
   document.getElementById('notesContent').classList.toggle('detail-open', !!offen);
-  /* In einem Ordner der Klassenseite wird nichts angelegt — dann muss auch die
-     Eingabezeile weg, nicht nur die beiden Knoepfe in der Kopfzeile: sie ist der
-     kuerzeste Weg zu einer neuen Notiz. Mit ihr faellt das Scroll-Polster des
-     Bereichs, sonst bliebe unten eine leere Flaeche in Zeilenhoehe. */
-  const spiegel = !!offen && (offen.source || '') === 'edumaps';
-  const zeile = document.getElementById('notesInputbar');
-  if (zeile) {
-    zeile.style.display = spiegel ? 'none' : '';
-    const bereich = document.getElementById('screen-notes');
-    if (bereich) bereich.classList.toggle('bar-hidden', spiegel);
-  }
   notizenEingabePruefen();
 }
 
@@ -14451,7 +14493,7 @@ function bindeEdumapsKarten(frisch, ordner) {
     }
     return raus;
   };
-  bindeDetailKopf(suche, ordner);
+  bindeEduKopf(suche, ordner);
   suche('.edu-abschnitt').forEach(kopf => {
     kopf.addEventListener('click', () => {
       eduBereichUmschalten(kopf.dataset.bereich || '');
@@ -14467,33 +14509,228 @@ function bindeEdumapsKarten(frisch, ordner) {
     knopf.addEventListener('click', (e) => {
       e.stopPropagation();
       const nid = knopf.dataset.weg;
-      const notiz = (notizen.notes || []).find(n => n.id === nid);
+      const notiz = (notesB().notes || []).find(n => n.id === nid);
       const titel = notiz ? (notiz.title || '') : '';
       showConfirm(
         titel ? translate('Delete "%1" for good?').replace('%1', titel)
               : translate('Delete this note?'),
         translate('Delete'),
-        () => notizenAktion({ action: 'noteDelete', id: nid })
+        () => edumapsAktion({ action: 'noteDelete', id: nid })
       );
     });
   });
   suche('.edu-karte').forEach(karte => {
     const nid = karte.dataset.note;
-    const notiz = (notizen.notes || []).find(n => n.id === nid);
+    const notiz = (notesB().notes || []).find(n => n.id === nid);
     if (!notiz) return;
     const oeffne = (mid) => {
       // noteAnhangOeffnen liest die Notiz aus noteCtx; hier einen schmalen
       // Zustand aufsetzen, genau wie in der Notiz-Ansicht.
       noteCtx = { noteId: nid, files: notiz.att || [], warten: [], wahl: [], proposal: null };
-      noteAnhangOeffnen(parseInt(mid, 10));
+      noteAnhangOeffnen(parseInt(mid, 10), false, '/edumaps');
     };
     karte.querySelectorAll('.edu-bild, .edu-vorschau').forEach(b =>
       b.addEventListener('click', () => oeffne(b.dataset.media)));
     karte.querySelectorAll('.note-file').forEach(z =>
       z.addEventListener('click', () => oeffne(z.dataset.media)));
   });
-  // In der Kachel steht in den Bildern noch nichts — die Daten kommen einzeln.
-  suche('.edu-karte').forEach(karte => notesBilderNachladen(karte));
+  // In der Kachel steht in den Bildern noch nichts — die Daten kommen einzeln,
+  // und zwar vom Endpunkt der Klassenseiten.
+  suche('.edu-karte').forEach(karte => notesBilderNachladen(karte, '/edumaps'));
+}
+
+/* ── Klassenseiten: laden, zeichnen, bedienen ─────────────────────────────
+   Eigene Einstiege statt eines Bestands-Parameters: renderNotizenDetail traegt
+   Editor, Wischgesten und zwei Anlegen-Knoepfe, die es hier nicht gibt. Ein
+   gemeinsamer Rumpf mit fuenf Weichen waere schwerer zu lesen als zwei Rumpfe.
+   Geteilt wird alles, was WIRKLICH gleich ist: die Kartenansicht, die
+   Nachschlage-Helfer, das Nachladen der Bilder. */
+
+/** Welche Seite ihren Volltext braucht — die offene, denn nur sie zeigt Karten. */
+function eduVolltextWunsch() {
+  return eduOrdnerId || '';
+}
+
+function ladeEdumaps(danach) {
+  if (typeof danach === 'function') edumapsWartende.push(danach);
+  if (edumapsLaden) return;
+  edumapsLaden = true;
+  const fertig = () => {
+    edumapsLaden = false;
+    const warten = edumapsWartende;
+    edumapsWartende = [];
+    warten.forEach(f => { try { f(); } catch (e) {} });
+  };
+  const wunsch = eduVolltextWunsch();
+  aiPost('/edumaps', wunsch ? { action: 'list', folderId: wunsch, withText: true }
+                            : { action: 'list' }).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) { fertig(); return; }
+    /* Unveraendert? Dann NICHTS anfassen — der Abruf laeuft im Minutentakt, und
+       ein blindes Neusetzen zeichnete bei jedem Takt neu. Aber bei gleicher
+       Revision doch uebernehmen, wenn jetzt ein ANDERER Ordner seinen Volltext
+       braucht: sonst blieben die Karten bei der Vorschau von 160 Zeichen. */
+    if (edumapsGeladen && (j.rev || 0) === (edumaps.rev || 0) && eduTextOrdner === wunsch) {
+      fertig(); return;
+    }
+    edumaps = {
+      rev: j.rev || 0,
+      folders: Array.isArray(j.folders) ? j.folders : [],
+      notes: Array.isArray(j.notes) ? j.notes : [],
+      memberFolders: j.memberFolders || {},
+      limits: j.limits || {}
+    };
+    edumapsGeladen = true;
+    eduTextOrdner = wunsch;
+    if (eduOrdnerId && !edumaps.folders.some(f => f.id === eduOrdnerId)) eduOrdnerId = null;
+    if (activeTab === 'edumaps') renderEdumaps();
+    fertig();
+  }).catch(() => { fertig(); });
+}
+
+/** Nach jeder Aenderung: der Server ist die Wahrheit, es wird nicht geraten. */
+function edumapsAktion(nutzlast, danach) {
+  return aiPost('/edumaps', nutzlast).then(r => {
+    const j = r && r.json;
+    if (!j || j.ok !== true) {
+      showToast(notizenFehlertext(j));
+      return null;
+    }
+    edumapsGeladen = false;
+    ladeEdumaps();
+    if (typeof danach === 'function') danach(j);
+    return j;
+  }).catch(() => { showToast(translate('Action failed')); return null; });
+}
+
+function eduOrdnerOeffnen(fid) {
+  eduOrdnerId = fid;
+  /* Der Volltext der eben geoeffneten Seite fehlt noch: die Uebersicht kam mit
+     Vorschauen. Nachladen, sonst stehen die Karten gekappt da. */
+  if (fid && eduTextOrdner !== fid) {
+    edumapsGeladen = false;
+    ladeEdumaps();
+  }
+  renderEdumaps();
+}
+
+function renderEdumaps() {
+  const elMaster = document.getElementById('eduMaster');
+  const elDetail = document.getElementById('eduDetail');
+  if (!elMaster || !elDetail) return;
+  if (!edumapsGeladen && !edumapsLaden) ladeEdumaps();
+  const offen = eduOrdnerId ? notesOrdner(eduOrdnerId) : null;
+  if (eduOrdnerId && !offen) eduOrdnerId = null;
+  renderEdumapsMaster(elMaster);
+  renderEdumapsDetail(elDetail, offen);
+  document.getElementById('eduContent').classList.toggle('detail-open', !!offen);
+}
+
+/**
+ * Die linke Spalte: die Kinder und ihre Seiten.
+ *
+ * Wie die Notizen-Spalte, aber ohne Anlegen-Knopf und ohne Wischgesten: was hier
+ * steht, ist ein Spiegel. Eigene data-key-Praefixe („em:", „es:") — renderRows
+ * ordnet ueber den Schluessel zu, und ein Knoten mit gleichem Schluessel wuerde
+ * samt seiner Handler wiederverwendet.
+ */
+function renderEdumapsMaster(el) {
+  let html = '<div class="screen-head" data-key="head"><h2>' + translate('Class pages') + '</h2></div>';
+  if (!edumapsGeladen) {
+    html += '<div class="empty-state" data-key="laden"><i class="fa-light fa-school"></i>' +
+      translate('Loading …') + '</div>';
+    bindeEdumapsMaster(renderRows(el, html));
+    return;
+  }
+  const oben = notesUnterordner('');
+  if (oben.length === 0) {
+    html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-school"></i>' +
+      translate('No class pages yet') + '</div>';
+  }
+  const users = usersById();
+  for (const f of oben) {
+    const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
+    const u = f.memberId ? users[f.memberId] : null;
+    const auf = eduOrdnerId === f.id ? ' is-open' : '';
+    html += '<div class="fav-card note-folder' + (u ? ' note-folder-user' : '') + auf +
+      '" data-key="em:' + escapeHtml(f.id) + '">' +
+      '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
+      '<span class="fav-badge">' + (u ? avatarHtml(u, '') : '<i class="fa-light fa-school"></i>') + '</span>' +
+      '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
+      '<span class="fav-count">' + anzahl + '</span></span>' +
+      '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
+      '</div></div>';
+  }
+  bindeEdumapsMaster(renderRows(el, html));
+}
+
+function bindeEdumapsMaster(frisch) {
+  if (!Array.isArray(frisch)) return;   // unveraendert: renderRows gab false zurueck
+  for (const n of frisch) {
+    const zeilen = [];
+    if (n.matches && n.matches('.fav-row[data-folder]')) zeilen.push(n);
+    if (n.querySelectorAll) zeilen.push(...n.querySelectorAll('.fav-row[data-folder]'));
+    zeilen.forEach(z => z.addEventListener('click', () => eduOrdnerOeffnen(z.dataset.folder)));
+  }
+}
+
+/**
+ * Die rechte Spalte: die Karten einer Seite, oder die Seiten eines Kindes.
+ *
+ * Der Kopf ist der der Notizen ohne die beiden Plus-Knoepfe. Unterordner (die
+ * Seiten eines Kindes) stehen UEBER den Karten: sie sind Wege, die Karten sind
+ * Inhalt.
+ */
+function renderEdumapsDetail(el, ordner) {
+  if (!ordner) {
+    renderRows(el, '<div class="empty-state" data-key="waehlen"><i class="fa-light fa-school"></i>' +
+      translate('Select a class page') + '</div>');
+    return;
+  }
+  const weg = notesPfad(ordner.id);
+  const pfad = weg.length > 1
+    ? '<span class="note-path">' + weg.slice(0, -1).map(f =>
+        '<button type="button" class="note-path-up" data-up="' + escapeHtml(f.id) + '">' +
+        escapeHtml(f.name) + '</button>').join('<span class="note-path-sep"> › </span>') +
+      '<span class="note-path-sep"> › </span></span>'
+    : '';
+  let html = '<div class="screen-head" data-key="detailhead">' +
+    '<button class="icon-btn" id="btnEduBack" aria-label="' + translate('Back') + '">' +
+    '<i class="fa-light fa-chevron-left"></i></button>' +
+    '<h2>' + pfad + escapeHtml(ordner.name) + '</h2></div>';
+  for (const f of notesUnterordner(ordner.id)) {
+    const anzahl = f.count === 1 ? translate('1 card') : translate('%1 cards').replace('%1', String(f.count));
+    html += '<div class="fav-card note-folder note-sub" data-key="es:' + escapeHtml(f.id) + '">' +
+      '<div class="fav-row" data-folder="' + escapeHtml(f.id) + '">' +
+      '<span class="fav-badge"><i class="fa-light fa-school"></i></span>' +
+      '<span class="fav-main"><span class="fav-name">' + escapeHtml(f.name) + '</span>' +
+      '<span class="fav-count">' + anzahl + '</span></span>' +
+      '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
+      '</div></div>';
+  }
+  html += edumapsKartenHtml(ordner);
+  bindeEdumapsKarten(renderRows(el, html), ordner);
+}
+
+/**
+ * Zurueck-Pfeil und Pfad-Stufen im Kopf der Klassenseiten.
+ *
+ * Eigene Funktion statt bindeDetailKopf: dort haengen die beiden Plus-Knoepfe
+ * und das Zeichnen der NOTIZEN dran. Die Trennung gibt bindeDetailKopf seine
+ * alte Eindeutigkeit zurueck — vorher bediente sie zwei Zweige.
+ */
+function bindeEduKopf(suche, ordner) {
+  const zurueck = suche('#btnEduBack')[0];
+  if (zurueck) {
+    zurueck.addEventListener('click', () => {
+      const weg = notesPfad(ordner.id);
+      eduOrdnerOeffnen(weg.length > 1 ? weg[weg.length - 2].id : null);
+    });
+  }
+  suche('.note-path-up').forEach(b =>
+    b.addEventListener('click', () => eduOrdnerOeffnen(b.dataset.up)));
+  suche('.fav-row[data-folder]').forEach(z =>
+    z.addEventListener('click', () => eduOrdnerOeffnen(z.dataset.folder)));
 }
 
 function renderNotizenDetail(el, ordner) {
@@ -14502,12 +14739,12 @@ function renderNotizenDetail(el, ordner) {
       translate('Select a folder') + '</div>');
     return;
   }
-  /* Der Pfad, nicht nur der Name: „Lena › Edumaps" sagt, wo man ist — ohne ihn
+  /* Der Pfad, nicht nur der Name: „Lena › Schule" sagt, wo man ist — ohne ihn
      sieht ein Unterordner aus wie ein Ordner von oben. */
   const weg = notesPfad(ordner.id);
   const pfad = weg.length > 1
-    /* Jede Stufe des Weges ist ein Knopf: „Ben › Edumaps › 5b Musterklasse" — ein
-       Tipp auf „Edumaps" fuehrt genau dorthin. Der Zurueck-Pfeil geht nur EINE
+    /* Jede Stufe des Weges ist ein Knopf: „Ben › Schule › Zettel" — ein
+       Tipp auf „Schule" fuehrt genau dorthin. Der Zurueck-Pfeil geht nur EINE
        Ebene hoch; bei drei Stufen war die erste sonst nur ueber zweimal
        Zurueck erreichbar. Der letzte Name ist der OFFENE Ordner und steht als
        Ueberschrift daneben, deshalb endet die Kette vor ihm. */
@@ -14516,21 +14753,14 @@ function renderNotizenDetail(el, ordner) {
         escapeHtml(f.name) + '</button>').join('<span class="note-path-sep"> › </span>') +
       '<span class="note-path-sep"> › </span></span>'
     : '';
-  /* In einem Ordner der Klassenseite wird NICHTS angelegt: sein Inhalt ist ein
-     Spiegel der Seite. Eine Notiz von Hand daneben sähe wie eine Karte aus, ist
-     aber keine — und ein Unterordner wäre ein Fach, das die nächste Spiegelung
-     nicht kennt. Beide Knöpfe bleiben deshalb weg; im eigenen Ordner stehen sie
-     wie bisher. */
-  const fremd = (ordner.source || '') === 'edumaps';
   let html = '<div class="screen-head" data-key="detailhead">' +
     '<button class="icon-btn" id="btnNotesBack" aria-label="' + translate('Back') + '">' +
     '<i class="fa-light fa-chevron-left"></i></button>' +
     '<h2>' + pfad + escapeHtml(ordner.name) + '</h2>' +
-    (fremd ? '' :
-      '<button class="icon-btn" id="btnNotesSubCreate" aria-label="' + translate('New folder') + '">' +
-      '<i class="fa-light fa-folder-plus"></i></button>' +
-      '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
-      '<i class="fa-light fa-plus"></i></button>') + '</div>';
+    '<button class="icon-btn" id="btnNotesSubCreate" aria-label="' + translate('New folder') + '">' +
+    '<i class="fa-light fa-folder-plus"></i></button>' +
+    '<button class="icon-btn" id="btnNoteCreate" aria-label="' + translate('New note') + '">' +
+    '<i class="fa-light fa-plus"></i></button></div>';
   /* Unterordner ÜBER den Notizen: sie sind Wege, die Notizen sind Inhalt. */
   for (const f of notesUnterordner(ordner.id)) {
     const anzahl = f.count === 1 ? translate('1 note') : translate('%1 notes').replace('%1', String(f.count));
@@ -14543,14 +14773,6 @@ function renderNotizenDetail(el, ordner) {
       '<span class="fav-count">' + anzahl + '</span></span>' +
       '<i class="fa-light fa-chevron-right fav-chevron"></i>' +
       '</div></div>';
-  }
-  /* Ordner der Klassenseite werden als KARTEN gezeichnet, nicht als Zeilen:
-     der Inhalt ist zum Lesen da, nicht zum Anklicken. Alles ausserhalb dieses
-     Zweigs (Kopfzeile, Unterordner, die beiden Plus-Knoepfe) bleibt gleich. */
-  if ((ordner.source || '') === 'edumaps') {
-    html += edumapsKartenHtml(ordner);
-    bindeEdumapsKarten(renderRows(el, html), ordner);
-    return;
   }
   const liste = notesImOrdner(ordner.id);
   if (liste.length === 0 && notesUnterordner(ordner.id).length === 0) {
@@ -14881,7 +15103,15 @@ function noteDateienZeichnen() {
  * einem offenen Vorschlag) — nur so kann man vor dem Uebernehmen hineinsehen,
  * statt blind anzukreuzen.
  */
-function noteAnhangOeffnen(mediaId, ausVorschlag) {
+/**
+ * Einen Anhang oeffnen.
+ *
+ * `pfad` sagt, WEN die Kachel nach den Daten fragt — die Notizen oder die
+ * Klassenseiten. Die DATEI-Adresse bleibt in beiden Faellen /notes/media/<id>:
+ * die Anhaenge liegen in derselben Symcon-Kategorie, und die Adresse ist in
+ * Web-App und iOS fest verdrahtet.
+ */
+function noteAnhangOeffnen(mediaId, ausVorschlag, pfad) {
   if (!mediaId || !noteCtx) return;
   const direkt = notesMediaUrl(mediaId);
   // Gibt es eine Datei-Adresse, uebernimmt der Browser — fuer Bilder genauso wie
@@ -14894,7 +15124,7 @@ function noteAnhangOeffnen(mediaId, ausVorschlag) {
     if (fenster) return;
     // Popup-Sperre: dann eben das Blatt, aber mit der Adresse am Knopf.
   }
-  aiPost('/notes', { action: 'attachData', attachmentId: mediaId,
+  aiPost(pfad || '/notes', { action: 'attachData', attachmentId: mediaId,
                      noteId: ausVorschlag ? '' : (noteCtx.noteId || '') }).then(r => {
     const j = r && r.json;
     if (!j || j.ok !== true || !j.dataUrl) { showToast(notizenFehlertext(j)); return; }
@@ -14932,8 +15162,20 @@ function notesBildQuelle(mediaId) {
  * gleichzeitig belegte die Instanz, die ihre Aufrufe ohnehin nacheinander
  * abarbeitet.
  */
-function notesBilderNachladen(wurzel) {
+/**
+ * Bilder nachladen, die in der Kachel noch leer sind.
+ *
+ * Der Endpunkt haengt AM BILD (`data-quelle`, Rueckfall '/notes'), nicht am
+ * Aufruf: Warteschlange, Zwischenspeicher und Laufmerker sind fuer beide
+ * Bereiche gemeinsam — und das soll so sein, das Relay arbeitet ohnehin
+ * nacheinander. Als Parameter wuerde der Laeufer den Pfad DES ERSTEN Aufrufs
+ * fuer alle folgenden Bilder benutzen; ein wartendes Notizbild kaeme dann gegen
+ * /edumaps. Die Medien-Kennungen sind systemweit eindeutig, der gemeinsame
+ * Zwischenspeicher stimmt also.
+ */
+function notesBilderNachladen(wurzel, pfad) {
   (wurzel || document).querySelectorAll('img[data-nachladen]').forEach(img => {
+    if (pfad && !img.dataset.quelle) img.dataset.quelle = pfad;
     const id = String(img.dataset.mini || img.dataset.media || '');
     if (!id) return;
     if (notesMediaCache[id]) {
@@ -14953,7 +15195,7 @@ function notesBilderNachladen(wurzel) {
     if (!img.isConnected) { naechstes(); return; }
     const id = String(img.dataset.mini || img.dataset.media || '');
     const karte = img.closest('[data-note]');
-    aiPost('/notes', {
+    aiPost(img.dataset.quelle || '/notes', {
       action: 'attachData',
       attachmentId: parseInt(id, 10),
       noteId: karte ? (karte.dataset.note || '') : '',
@@ -16383,6 +16625,7 @@ function initCaptions() {
   document.querySelector('#tab-todos span').textContent = translate('ToDos');
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.querySelector('#tab-notes span').textContent = translate('Notes');
+  document.querySelector('#tab-edumaps span').textContent = translate('Class pages');
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');

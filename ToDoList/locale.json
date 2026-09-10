@@ -689,7 +689,12 @@
             "Not done yet": "Noch nicht erledigt",
             "1 more homework item": "1 weitere Hausaufgabe",
             "%1 more homework items": "%1 weitere Hausaufgaben",
-            "Ticked off in WebUntis — cannot be undone here.": "In WebUntis abgehakt — hier nicht rücknehmbar."
+            "Ticked off in WebUntis — cannot be undone here.": "In WebUntis abgehakt — hier nicht rücknehmbar.",
+            "Class pages": "Klassenseiten",
+            "No class pages yet": "Noch keine Klassenseite",
+            "Select a class page": "Klassenseite wählen",
+            "1 card": "1 Karte",
+            "%1 cards": "%1 Karten"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

@@ -98,6 +98,11 @@
                 },
                 {
                     "type": "CheckBox",
+                    "name": "ShowEdumaps",
+                    "caption": "Show class pages (requires the SymDo Gateway)"
+                },
+                {
+                    "type": "CheckBox",
                     "name": "ShowKi",
                     "caption": "Show AI inbox (requires the SymDo Gateway)"
                 },

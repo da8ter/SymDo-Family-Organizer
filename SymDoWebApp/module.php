@@ -82,6 +82,12 @@ class SymDoWebApp extends IPSModuleStrict
         // Notizen: liegen im Gateway, brauchen also eines. Vorgabe an — ohne Gateway
         // blendet die Oberflaeche den Bereich selbst aus.
         $this->RegisterPropertyBoolean('ShowNotes', true);
+        /* Klassenseiten: liegen ebenfalls im Gateway und haengen zusaetzlich
+           daran, dass dort ueberhaupt eine Seite eingetragen ist — sonst waere
+           es ein Bereich, der beim Antippen „nichts eingerichtet" zeigt, und
+           das ist schlimmer als keiner. Deshalb reicht die Vorgabe „an" hier
+           nicht; das Gateway koppelt sie an seine eigene Konfiguration. */
+        $this->RegisterPropertyBoolean('ShowEdumaps', true);
         // KI-Eingangskorb: zeigt, was die Analyse aus Mails und Dateien gelesen hat.
         // Liegt im Gateway, deshalb blendet die Oberflaeche ihn ohne eines selbst aus.
         $this->RegisterPropertyBoolean('ShowKi', true);
@@ -1012,6 +1018,7 @@ class SymDoWebApp extends IPSModuleStrict
             'todos'     => $read('ShowTodos'),
             'calendar'  => $read('ShowCalendar'),
             'notes'     => $read('ShowNotes'),
+            'edumaps'   => $read('ShowEdumaps'),
             'ki'        => $read('ShowKi'),
         ];
     }
