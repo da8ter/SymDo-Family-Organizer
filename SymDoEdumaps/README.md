@@ -1,4 +1,4 @@
-# SymDo - Edumaps
+# SymDo - Klassenseiten (Edumaps)
 
 **Die Klassenseiten der Schule als eigene Kachel — dieselben Karten wie in der
 App, nur lesend.**
@@ -44,7 +44,7 @@ Karte endgültig wegwerfen lässt.
 
 ## 3. Einrichtung
 
-1. Instanz **SymDo - Edumaps** anlegen; als Eltern das vorhandene SymDo
+1. Instanz **SymDo - Klassenseiten (Edumaps)** anlegen; als Eltern das vorhandene SymDo
    Gateway wählen (die Konsole schlägt es vor).
 2. Fertig. Es gibt nichts einzustellen: die Seiten stehen im Gateway.
 

@@ -16,7 +16,7 @@ declare(strict_types=1);
  * ohnehin weg (html.no-tabs).
  *
  * Was diese Kachel NICHT hat: einen Urheber. In den Notizen braucht es ihn,
- * weil dort geschrieben wird; hier ist der Bestand ein Spiegel der Schulseite,
+ * weil dort geschrieben wird; hier ist der Bestand ein Spiegel der Klassenseite,
  * und niemand legt etwas an.
  *
  * Die Karten liegen im Gateway und reisen ueber dessen AiCall-Relay:
@@ -287,7 +287,7 @@ class SymDoEdumaps extends IPSModuleStrict
             'elements' => [
                 ['type' => 'Label', 'caption' => $this->Translate('Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.')],
                 ['type' => 'Label', 'caption' => $stand],
-                ['type' => 'Label', 'caption' => $this->Translate('Read only: the cards are a mirror of the school page. Renaming a page and deleting it (which blocks it) work; writing does not.')],
+                ['type' => 'Label', 'caption' => $this->Translate('Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.')],
             ],
             'actions' => [
                 ['type' => 'Button', 'caption' => $this->Translate('Refresh tile'),
