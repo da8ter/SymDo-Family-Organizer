@@ -114,6 +114,15 @@ trait EduMaps
 
     private function EduApplyChanges(): void
     {
+        /* Der Umzug der Karten aus den Notizen — einmal, gemerkt im Bestand.
+           Er steht hier und nicht im Timer, damit er nach dem Modul-Update beim
+           ersten Übernehmen läuft und nicht erst Stunden später.
+
+           WICHTIG für die Reihenfolge in module.php: der Medien-Aufräumer läuft
+           weiter unten in NotesApplyChanges() und muss BEIDE Bestände kennen,
+           bevor hier etwas umzieht — sonst sieht er die Anhänge der Karten als
+           Waisen. Deshalb wurde er in einem früheren Commit erweitert. */
+        $this->EduMigrate();
         $stunden = (int)$this->EduProp('EduIntervalHours', self::EDU_INTERVALL_STD);
         $an = $this->EduIsEnabled() && $this->EduSeiten() !== [];
         @$this->SetTimerInterval('EduScan', $an ? max(1, $stunden) * 3600000 : 0);
@@ -376,7 +385,7 @@ trait EduMaps
                haengt also an keinem Deckel und auch nicht daran, ob die Karte
                als „geaendert" gilt. Die Notiz selbst entscheidet, ob es etwas
                zu tun gibt (srcRev). */
-            if ($this->EduNotizSpiegeln($seite, $karte, (int)$nr)) {
+            if ($this->EduKarteSpiegeln($seite, $karte, (int)$nr)) {
                 $gespiegelt++;
             }
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
@@ -463,24 +472,24 @@ trait EduMaps
      * eigenen Merker: ein neues Attribut braeuchte einen Kernel-Neustart, und ein
      * zweiter Bestand kann mit dem ersten auseinanderlaufen.
      */
-    private function EduNotizSpiegeln(array $seite, array $karte, int $nr = 0): bool
+    private function EduKarteSpiegeln(array $seite, array $karte, int $nr = 0): bool
     {
         if (!(bool)$this->EduProp('EduToNotes', false)) {
             return false;
         }
-        if (!$this->NotesStorable()) {
-            $this->SendDebug('EduMaps', 'Notizen-Bestand nicht beschreibbar — Kernel-Neustart nötig', 0);
+        if (!$this->EduStorable()) {
+            $this->SendDebug('EduMaps', 'Klassenseiten-Bestand nicht beschreibbar — Kernel-Neustart nötig', 0);
             return false;
         }
-        $lock = self::NOTES_LOCK . $this->InstanceID;
+        $lock = self::EDU_LOCK . $this->InstanceID;
         if (!IPS_SemaphoreEnter($lock, 2000)) {
-            $this->SendDebug('EduMaps', 'Notizen belegt — Karte beim naechsten Lauf', 0);
+            $this->SendDebug('EduMaps', 'Bestand belegt — Karte beim naechsten Lauf', 0);
             return false;
         }
         try {
-            $store = $this->NotesStore();
+            $store = $this->EduStoreRead();
             $this->eduOrdnerGeaendert = false;
-            $ordnerId = $this->EduNotizOrdner($store, $seite);
+            $ordnerId = $this->EduOrdner($store, $seite);
             if ($ordnerId === '') {
                 return false;
             }
@@ -579,7 +588,7 @@ trait EduMaps
                 }
                 // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
                 $neuerText = $this->EduNotizText($karte);
-                if (mb_strlen($neuerText) <= self::NOTE_TEXT_MAX
+                if (mb_strlen($neuerText) <= EduStoreCalc::TEXT_MAX
                     && $neuerText !== (string)($store['notes'][$i]['text'] ?? '')) {
                     $store['notes'][$i]['text'] = $neuerText;
                     $fehlt = true;
@@ -590,33 +599,33 @@ trait EduMaps
                 }
                 if ($this->eduOrdnerGeaendert || $fehlt) {
                     $store['notes'][$i]['folderId'] = $ordnerId;
-                    $store['notes'][$i]['section'] = $this->NotesTrim(
-                        (string)($karte['abschnitt'] ?? ''), self::NOTE_TITLE_MAX);
+                    $store['notes'][$i]['section'] = EduStoreCalc::Kappen(
+                        (string)($karte['abschnitt'] ?? ''), EduStoreCalc::TITLE_MAX);
                     $store['notes'][$i]['pos'] = $nr;
-                    $this->NotesWriteStore($store);
+                    $this->EduWriteStore($store);
                     $this->eduOrdnerGeaendert = false;
                 }
                 return false;
             }
-            if ($i < 0 && count($store['notes']) >= self::NOTES_MAX) {
-                $this->SendDebug('EduMaps', 'Notizgrenze erreicht — Karte nicht gespiegelt: ' . $karte['titel'], 0);
+            if ($i < 0 && count($store['notes']) >= EduStoreCalc::KARTEN_MAX) {
+                $this->SendDebug('EduMaps', 'Kartengrenze erreicht — Karte nicht gespiegelt: ' . $karte['titel'], 0);
                 return false;
             }
 
             $text = $this->EduNotizText($karte);
-            if (mb_strlen($text) > self::NOTE_TEXT_MAX) {
+            if (mb_strlen($text) > EduStoreCalc::TEXT_MAX) {
                 /* Gekuerzt wird SICHTBAR. Eine still gekappte Notiz waere
                    schlimmer als eine fehlende — man sieht ihr nicht an, dass
                    die Haelfte fehlt. */
-                $text = mb_substr($text, 0, self::NOTE_TEXT_MAX - 40) . "\n\n… (gekürzt)";
+                $text = mb_substr($text, 0, EduStoreCalc::TEXT_MAX - 40) . "\n\n… (gekürzt)";
             }
-            $alteMedien = $i >= 0 ? $this->NotesAttachmentIds([$store['notes'][$i]]) : [];
+            $alteMedien = $i >= 0 ? EduStoreCalc::AnhangIds([$store['notes'][$i]]) : [];
             $anhaenge = $this->EduNotizAnhaenge($karte);
 
             $satz = [
                 'id'        => $i >= 0 ? (string)$store['notes'][$i]['id'] : $this->NotesNewId(),
                 'folderId'  => $ordnerId,
-                'title'     => $this->NotesTrim((string)$karte['titel'], self::NOTE_TITLE_MAX),
+                'title'     => EduStoreCalc::Kappen((string)$karte['titel'], EduStoreCalc::TITLE_MAX),
                 'text'      => $text,
                 'att'       => $anhaenge,
                 'createdAt' => $i >= 0 ? (int)($store['notes'][$i]['createdAt'] ?? $jetzt) : $jetzt,
@@ -627,7 +636,7 @@ trait EduMaps
                 /* Abschnitt und Platz auf der Seite: erst damit kann die App die
                    Karten so zeigen, wie sie auf der Klassenseite stehen. Ohne
                    sie waere es eine Liste nach Aenderungsdatum. */
-                'section'   => $this->NotesTrim((string)($karte['abschnitt'] ?? ''), self::NOTE_TITLE_MAX),
+                'section'   => EduStoreCalc::Kappen((string)($karte['abschnitt'] ?? ''), EduStoreCalc::TITLE_MAX),
                 'pos'       => $nr,
                 // Farben der Seite: Abschnitt und Karte, beide als #RRGGBB.
                 'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
@@ -646,15 +655,17 @@ trait EduMaps
             } else {
                 $store['notes'][] = $satz;
             }
-            if (!$this->NotesWriteStore($store)) {
+            if (!$this->EduWriteStore($store)) {
                 // Die eben angelegten Medien gehoeren jetzt niemandem.
                 $this->NotesDeleteMedia(array_map(static fn(array $a): int => (int)$a['id'], $anhaenge));
                 return false;
             }
-            // ERST der Bestand, DANN die alten Medien — und nur, was keine andere
-            // Notiz und kein offener Vorschlag mehr nennt.
+            /* ERST der Bestand, DANN die alten Medien — und nur, was weder eine
+               Notiz noch eine andere Karte noch ein offener Vorschlag nennt.
+               Uebergeben wird der NOTIZEN-Bestand: die Klassenseiten liest
+               NotesUnreferencedMedia selbst frisch dazu. */
             if ($alteMedien !== []) {
-                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($store, $alteMedien));
+                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($this->NotesStore(), $alteMedien));
             }
             return true;
         } finally {
@@ -863,59 +874,53 @@ trait EduMaps
      *
      * @param array<string,mixed> $store wird bei Bedarf ergaenzt (noch nicht geschrieben)
      */
-    private function EduNotizOrdner(array &$store, array $seite): string
+    private function EduOrdner(array &$store, array $seite): string
     {
         $userId = trim((string)($seite['userId'] ?? ''));
         $schluessel = 'edu:' . ($userId !== '' ? $userId : md5((string)$seite['url']));
-        $mitgliedsOrdner = '';
-        foreach ($store['folders'] as $f) {
-            if ($userId !== '' && (string)($f['memberId'] ?? '') === $userId) {
-                $mitgliedsOrdner = (string)$f['id'];
-                break;
-            }
-        }
-        // ── 1. Ebene: der Ordner „Edumaps" beim Kind ──
+
+        /* ── 1. Ebene: der Ordner des KINDES ──
+           Im eigenen Bestand gibt es keine Zwischenebene „Edumaps" mehr — der
+           ganze Bestand IST die Klassenseite. Ebene 1 ist deshalb der Ordner des
+           Kindes: er traegt `memberId`, damit die Oberflaeche ihn mit Foto
+           zeichnet, und heisst wie das Mitglied. */
         $edu = '';
         foreach ($store['folders'] as $k => $f) {
             if ((string)($f['eduKey'] ?? '') !== $schluessel) {
                 continue;
             }
-            /* Nachziehen: der Ordner ist vor der Verschachtelung entstanden und
-               liegt noch oben. Einmal in den Kindordner heben — der Name bleibt,
-               den darf der Nutzer selbst aendern. */
-            if ((string)($f['parentId'] ?? '') === '' && $mitgliedsOrdner !== ''
-                && $mitgliedsOrdner !== (string)$f['id']) {
-                $store['folders'][$k]['parentId'] = $mitgliedsOrdner;
+            /* Nachziehen: ein Ordner aus dem Notizen-Bestand kam ohne Mitglied
+               herueber (der Umzug setzt es, aber ein spaeter angelegtes Mitglied
+               fehlt dort noch). Der NAME bleibt, den darf der Nutzer aendern. */
+            if ($userId !== '' && (string)($f['memberId'] ?? '') !== $userId) {
+                $store['folders'][$k]['memberId'] = $userId;
                 $store['folders'][$k]['updatedAt'] = time();
                 $this->eduOrdnerGeaendert = true;
-                $this->SendDebug('EduMaps', 'Edumaps-Ordner in den Kindordner verschoben', 0);
             }
             $edu = (string)$f['id'];
             break;
         }
         if ($edu === '') {
-            if (count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
-                $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Edumaps-Ordner angelegt', 0);
+            if (count($store['folders']) >= EduStoreCalc::FOLDERS_MAX) {
+                $this->SendDebug('EduMaps', 'Ordnergrenze erreicht — kein Ordner angelegt', 0);
                 return '';
             }
-            /* IM Ordner des Kindes, wenn es einen hat — dann heisst er einfach
-               „Edumaps", der Name des Kindes steht schon darueber. Ohne
-               Mitglieder-Ordner liegt er oben und traegt den Namen mit. */
-            $name = 'Edumaps';
-            if ($mitgliedsOrdner === '') {
-                foreach ($this->LoadUsers() as $u) {
-                    if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
-                        $name = 'Edumaps ' . trim((string)$u['name']);
-                        break;
-                    }
+            /* Der Name des Kindes, wenn es eines gibt. Sonst „Klassenseiten" —
+               ein Ordner ohne Namen waere schlimmer als einer mit einem
+               allgemeinen. */
+            $name = $this->Translate('Class pages');
+            foreach ($this->LoadUsers() as $u) {
+                if ((string)($u['id'] ?? '') === $userId && trim((string)($u['name'] ?? '')) !== '') {
+                    $name = trim((string)$u['name']);
+                    break;
                 }
             }
-            $edu = $this->EduOrdnerAnlegen($store, $name, $mitgliedsOrdner, $schluessel);
+            $edu = $this->EduOrdnerAnlegen($store, $name, '', $schluessel, $userId);
         }
 
-        /* ── 2. Ebene: je KARTE ein eigener Ordner ──
+        /* ── 2. Ebene: je SEITE ein eigener Ordner ──
            Eine Klassenseite und ein Nachschlagewerk gehoeren nicht in denselben
-           Topf; mit zwei Karten laegen sonst vierunddreissig Notizen
+           Topf; mit zwei Karten laegen sonst vierunddreissig Karten
            durcheinander. Der Schluessel haengt an der ADRESSE, nicht am Namen:
            beide darf der Nutzer aendern, die Adresse nicht. */
         $seiteSchluessel = 'edupage:' . md5((string)$seite['url']);
@@ -924,7 +929,7 @@ trait EduMaps
                 return (string)$f['id'];
             }
         }
-        if ($edu === '' || count($store['folders']) >= self::NOTES_FOLDERS_MAX) {
+        if ($edu === '' || count($store['folders']) >= EduStoreCalc::FOLDERS_MAX) {
             return $edu;
         }
         return $this->EduOrdnerAnlegen($store, (string)($seite['name'] ?? 'Karte'), $edu, $seiteSchluessel);
@@ -935,11 +940,13 @@ trait EduMaps
      *
      * @param array<string,mixed> $store wird ergaenzt (noch nicht geschrieben)
      */
-    private function EduOrdnerAnlegen(array &$store, string $name, string $eltern, string $schluessel): string
+    private function EduOrdnerAnlegen(array &$store, string $name, string $eltern,
+        string $schluessel, string $memberId = ''): string
     {
         $jetzt = time();
-        $ordner = ['id' => $this->NotesNewId(), 'name' => $this->NotesTrim($name, self::NOTE_FOLDER_NAME_MAX),
-                   'memberId' => '', 'parentId' => $eltern, 'eduKey' => $schluessel,
+        $ordner = ['id' => $this->NotesNewId(),
+                   'name' => EduStoreCalc::Kappen($name, EduStoreCalc::TITLE_MAX),
+                   'memberId' => $memberId, 'parentId' => $eltern, 'eduKey' => $schluessel,
                    'createdAt' => $jetzt, 'updatedAt' => $jetzt];
         $store['folders'][] = $ordner;
         $this->eduOrdnerGeaendert = true;
@@ -959,8 +966,8 @@ trait EduMaps
         @ini_set('memory_limit', '192M');
         try {
             foreach ((array)$karte['anhaenge'] as $a) {
-                if (count($raus) >= self::NOTE_ATTACH_MAX) {
-                    $this->SendDebug('EduMaps', 'Mehr als ' . self::NOTE_ATTACH_MAX
+                if (count($raus) >= EduStoreCalc::ATTACH_MAX) {
+                    $this->SendDebug('EduMaps', 'Mehr als ' . EduStoreCalc::ATTACH_MAX
                         . ' Dateien an der Karte — die weiteren bleiben in der Notiz weg: ' . $karte['titel'], 0);
                     break;
                 }
@@ -1050,16 +1057,16 @@ trait EduMaps
             }
             return 0;
         }
-        if (!(bool)$this->EduProp('EduToNotes', false) || !$this->NotesStorable()) {
+        if (!(bool)$this->EduProp('EduToNotes', false) || !$this->EduStorable()) {
             return 0;
         }
-        $lock = self::NOTES_LOCK . $this->InstanceID;
+        $lock = self::EDU_LOCK . $this->InstanceID;
         if (!IPS_SemaphoreEnter($lock, 2000)) {
-            $this->SendDebug('EduMaps', 'Notizen belegt — Archiv-Abgleich beim naechsten Lauf', 0);
+            $this->SendDebug('EduMaps', 'Bestand belegt — Archiv-Abgleich beim naechsten Lauf', 0);
             return 0;
         }
         try {
-            $store = $this->NotesStore();
+            $store = $this->EduStoreRead();
             $ordnerId = '';
             $schluessel = 'edupage:' . md5((string)$seite['url']);
             foreach ($store['folders'] as $f) {
@@ -1100,7 +1107,7 @@ trait EduMaps
             if ($neu === 0 && $zurueck === 0) {
                 return 0;
             }
-            if (!$this->NotesWriteStore($store)) {
+            if (!$this->EduWriteStore($store)) {
                 $this->SendDebug('EduMaps', 'Archiv-Abgleich nicht schreibbar', 0);
                 return 0;
             }
@@ -1115,18 +1122,18 @@ trait EduMaps
     /**
      * Die von Hand geloeschten Klassenseiten.
      *
-     * Sie stehen im NOTIZ-Bestand (`eduBlocked`), nicht in einem eigenen
-     * Attribut: Loeschen und Sperren muessen in denselben Schreibvorgang, und
-     * ein neues Attribut gaebe es erst nach einem Kernel-Neustart. Die
-     * Begruendung steht ausfuehrlich an NotesStore().
+     * Sie stehen im eigenen Bestand (`blocked`), nicht in einem zweiten
+     * Attribut: Loeschen und Sperren muessen in DENSELBEN Schreibvorgang —
+     * sonst gibt es das Fenster „Ordner weg, Sperre nicht geschrieben, Ordner
+     * beim naechsten Lauf wieder da". Die Begruendung steht an EduStore.
      *
      * @return list<array{key:string,url:string,name:string,at:int}>
      */
     private function EduGesperrteSeiten(): array
     {
-        $store = $this->NotesStore();
+        $store = $this->EduStoreRead();
         $raus = [];
-        foreach ((array)($store['eduBlocked'] ?? []) as $b) {
+        foreach ((array)($store['blocked'] ?? []) as $b) {
             if (is_array($b) && (string)($b['key'] ?? '') !== '') {
                 $raus[] = ['key' => (string)$b['key'], 'url' => (string)($b['url'] ?? ''),
                            'name' => (string)($b['name'] ?? ''), 'at' => (int)($b['at'] ?? 0)];
@@ -1156,27 +1163,27 @@ trait EduMaps
         if ($key === '') {
             return $this->Translate('Select a page in the list first.');
         }
-        $lock = self::NOTES_LOCK . $this->InstanceID;
+        $lock = self::EDU_LOCK . $this->InstanceID;
         if (!IPS_SemaphoreEnter($lock, 2000)) {
-            return $this->Translate('Notes are busy — try again in a moment.');
+            return $this->Translate('Class pages are busy — try again in a moment.');
         }
         try {
-            $store = $this->NotesStore();
+            $store = $this->EduStoreRead();
             $name = '';
             $bleibt = [];
-            foreach ((array)($store['eduBlocked'] ?? []) as $b) {
+            foreach ((array)($store['blocked'] ?? []) as $b) {
                 if (is_array($b) && (string)($b['key'] ?? '') === $key) {
                     $name = (string)($b['name'] ?? '');
                     continue;
                 }
                 $bleibt[] = $b;
             }
-            if ($name === '' && count($bleibt) === count((array)($store['eduBlocked'] ?? []))) {
+            if ($name === '' && count($bleibt) === count((array)($store['blocked'] ?? []))) {
                 return $this->Translate('That page is not blocked.');
             }
-            $store['eduBlocked'] = $bleibt;
-            if (!$this->NotesWriteStore($store)) {
-                return $this->Translate('Could not save — the notes store is full or unwritable.');
+            $store['blocked'] = $bleibt;
+            if (!$this->EduWriteStore($store)) {
+                return $this->Translate('Could not save — the store is full or unwritable.');
             }
             $this->ReloadForm();
             return sprintf($this->Translate('„%s" released — it will be mirrored again at the next check.'),
@@ -1191,7 +1198,7 @@ trait EduMaps
      *
      * Geprueft wird gegen BEIDE Formen der Adresse: die Kandidaten aus Verweisen
      * und QR-Codes kommen mit `rtrim($url, '/')`, der Ordnerschluessel benutzt
-     * die Adresse dagegen roh (EduNotizOrdner) — mit und ohne Schraegstrich
+     * die Adresse dagegen roh (EduOrdner) — mit und ohne Schraegstrich
      * ergaeben sonst zwei verschiedene Schluessel.
      */
     private function EduGesperrt(string $url): bool

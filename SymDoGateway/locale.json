@@ -876,7 +876,20 @@
             "%1$s: %2$s was ticked off in WebUntis — that cannot be undone here.": "%1$s: %2$s wurde in WebUntis abgehakt — das lässt sich hier nicht zurücknehmen.",
             "until": "bis",
             "for %s": "für %s",
-            "No appointment called „%s\" in that period.": "In dem Zeitraum gibt es keinen Termin „%s\"."
+            "No appointment called „%s\" in that period.": "In dem Zeitraum gibt es keinen Termin „%s\".",
+            "Class pages": "Klassenseiten",
+            "Class pages are busy — try again in a moment.": "Die Klassenseiten sind gerade belegt — gleich noch einmal versuchen.",
+            "Could not save — the store is full or unwritable.": "Konnte nicht speichern — der Bestand ist voll oder nicht beschreibbar.",
+            "Class pages: a kernel restart is needed first.": "Klassenseiten: dafür muss der Kernel erst neu starten.",
+            "Class pages: the notes store is not readable — nothing moved.": "Klassenseiten: der Notizen-Bestand ist nicht lesbar — nichts umgezogen.",
+            "Class pages: notes are busy — trying again later.": "Klassenseiten: die Notizen sind belegt — später noch einmal.",
+            "Class pages: the store is busy — trying again later.": "Klassenseiten: der Bestand ist belegt — später noch einmal.",
+            "Class pages: could not write the new store — nothing moved.": "Klassenseiten: der neue Bestand ließ sich nicht schreiben — nichts umgezogen.",
+            "Class pages: the new store did not verify — nothing moved.": "Klassenseiten: der neue Bestand hat die Gegenprobe nicht bestanden — nichts umgezogen.",
+            "Class pages: moved, but the notes could not be tidied yet.": "Klassenseiten: umgezogen, aber die Notizen ließen sich noch nicht aufräumen.",
+            "Class pages moved: %1$d folder(s), %2$d card(s); %3$d note(s) stayed.": "Klassenseiten umgezogen: %1$d Ordner, %2$d Karten; %3$d Notizen bleiben.",
+            "%d hand-written note(s) moved up one level.": "%d von Hand geschriebene Notiz(en) eine Ebene höher gehängt.",
+            "%d folder(s) stayed in the notes because something hand-written was in them.": "%d Ordner bleiben in den Notizen, weil etwas Handgeschriebenes darin lag."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

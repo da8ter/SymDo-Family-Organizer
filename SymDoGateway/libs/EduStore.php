@@ -415,6 +415,163 @@ trait EduStore
         }
     }
 
+    // ── Der Umzug aus den Notizen ────────────────────────────────────────────
+
+    /**
+     * Die Karten der Klassenseiten aus dem Notizen-Bestand herüberholen.
+     *
+     * Läuft EINMAL, gemerkt im Bestand selbst (`migratedAt`). Ein eigenes
+     * Attribut wäre der falsche Ort: es kann von seinem Bestand abdriften — nach
+     * einer Rücksicherung stünde der Stempel, aber die Karten wären wieder in
+     * den Notizen.
+     *
+     * Die REIHENFOLGE ist der ganze Punkt. Erst wird der neue Bestand
+     * geschrieben und ZURÜCKGELESEN; nur wenn das stimmt, wird in den Notizen
+     * etwas entfernt. Scheitert irgendetwas dazwischen, sind die Notizen
+     * unangetastet — und ein zweiter Aufruf holt nach, was fehlt.
+     *
+     * Der halbe Lauf ist ausdrücklich vorgesehen: steht der Stempel, tragen die
+     * Notizen aber noch Klassenseiten-Ordner, wird NUR der Abtrag wiederholt.
+     * Ohne diesen Zweig bliebe ein Doppel für immer stehen.
+     *
+     * @return string Bericht für die Statuszeile ('' = es gab nichts zu tun)
+     */
+    private function EduMigrate(): string
+    {
+        $edu = $this->EduStoreRead();
+        $notizenRoh = $this->NotesStore();
+        $schonDa = $this->EduHatKlassenseiten($notizenRoh);
+        if ((int)$edu['migratedAt'] > 0 && !$schonDa) {
+            return '';                       // längst erledigt
+        }
+        if (!$this->EduStorable()) {
+            /* Vor dem Kernel-Neustart gibt es das Attribut nicht. Dann NICHTS
+               anfassen und auch nicht stempeln — sonst gälte der Umzug als
+               erledigt, obwohl kein Byte umgezogen ist. */
+            $this->LogMessage('SymDo: Die Klassenseiten können erst nach einem Kernel-Neustart '
+                . 'in ihren eigenen Bestand umziehen.', KL_NOTIFY);
+            return $this->Translate('Class pages: a kernel restart is needed first.');
+        }
+        if (!$this->NotesStorable()) {
+            /* Ein unlesbarer Notizen-Bestand sieht LEER aus. Würde jetzt
+               gestempelt, wäre der Umzug „erledigt" und die Karten für immer
+               dort, wo sie niemand mehr sucht. */
+            return $this->Translate('Class pages: the notes store is not readable — nothing moved.');
+        }
+
+        // Sperren in der festgelegten Ordnung: Notizen, dann Klassenseiten.
+        $notesLock = self::NOTES_LOCK . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($notesLock, 3000)) {
+            return $this->Translate('Class pages: notes are busy — trying again later.');
+        }
+        try {
+            $eduLock = self::EDU_LOCK . $this->InstanceID;
+            if (!IPS_SemaphoreEnter($eduLock, 3000)) {
+                return $this->Translate('Class pages: the store is busy — trying again later.');
+            }
+            try {
+                return $this->EduMigrateLocked();
+            } finally {
+                IPS_SemaphoreLeave($eduLock);
+            }
+        } finally {
+            IPS_SemaphoreLeave($notesLock);
+        }
+    }
+
+    /** Nur aufrufen, wenn BEIDE Sperren gehalten werden. */
+    private function EduMigrateLocked(): string
+    {
+        $jetzt = time();
+        $notizen = $this->NotesStore();
+        $edu = $this->EduStoreRead();
+
+        $e = EduStoreCalc::Umzug($notizen, $this->EduMitgliedsnamen(), $jetzt);
+        if ($e['stat']['ordner'] === 0 && $e['stat']['karten'] === 0) {
+            /* Nichts zu holen — auch das wird gestempelt, damit nie wieder
+               gesucht wird. Der Stempel geht durch den normalen Schreibweg,
+               damit die Rücklese-Probe auch hier greift. */
+            $edu['migratedAt'] = $jetzt;
+            $this->EduWriteStore($edu);
+            return '';
+        }
+
+        /* Ein zweiter Lauf auf einem halb fertigen Umzug: der neue Bestand ist
+           schon voll, nur der Abtrag fehlt. Dann NICHT erneut anhängen — sonst
+           stünde jede Karte zweimal. */
+        $schonUmgezogen = (int)$edu['migratedAt'] > 0 && $edu['notes'] !== [];
+        if (!$schonUmgezogen) {
+            $neu = $e['edu'];
+            $neu['rev'] = (int)$edu['rev'];
+            $neu['migratedAt'] = $jetzt;
+            if (!$this->EduWriteStore($neu)) {
+                $this->LogMessage('SymDo: Der Umzug der Klassenseiten ließ sich nicht schreiben — '
+                    . 'die Notizen bleiben unverändert.', KL_ERROR);
+                return $this->Translate('Class pages: could not write the new store — nothing moved.');
+            }
+            // GEGENPROBE, bevor in den Notizen etwas verschwindet.
+            $probe = $this->EduStoreRead();
+            if (count($probe['folders']) !== count($neu['folders'])
+                || count($probe['notes']) !== count($neu['notes'])) {
+                $this->LogMessage('SymDo: Der Umzug der Klassenseiten ist nicht vollständig '
+                    . 'angekommen — die Notizen bleiben unverändert.', KL_ERROR);
+                return $this->Translate('Class pages: the new store did not verify — nothing moved.');
+            }
+        }
+
+        if (!$this->NotesWriteStore($e['notes'])) {
+            /* Jetzt stehen die Karten in BEIDEN Beständen. Nichts ist verloren,
+               das Doppel ist sichtbar, und der nächste Aufruf wiederholt genau
+               diesen Schritt (siehe EduHatKlassenseiten). */
+            $this->LogMessage('SymDo: Die Klassenseiten stehen jetzt in BEIDEN Beständen — '
+                . 'der Abtrag in den Notizen ließ sich nicht schreiben. Der nächste Durchlauf '
+                . 'holt es nach.', KL_ERROR);
+            return $this->Translate('Class pages: moved, but the notes could not be tidied yet.');
+        }
+
+        $bericht = sprintf(
+            $this->Translate('Class pages moved: %1$d folder(s), %2$d card(s); %3$d note(s) stayed.'),
+            (int)$e['stat']['ordner'], (int)$e['stat']['karten'], (int)$e['stat']['notizen']);
+        if ((int)$e['stat']['umgehaengt'] > 0) {
+            $bericht .= ' ' . sprintf(
+                $this->Translate('%d hand-written note(s) moved up one level.'),
+                (int)$e['stat']['umgehaengt']);
+        }
+        if ((int)$e['stat']['verwaist'] > 0) {
+            $bericht .= ' ' . sprintf(
+                $this->Translate('%d folder(s) stayed in the notes because something hand-written was in them.'),
+                (int)$e['stat']['verwaist']);
+        }
+        $this->SendDebug('EduMaps', $bericht, 0);
+        $this->LogMessage('SymDo: ' . $bericht, KL_NOTIFY);
+        return $bericht;
+    }
+
+    /** Trägt der Notizen-Bestand (noch) Ordner der Klassenseiten? */
+    private function EduHatKlassenseiten(array $notizen): bool
+    {
+        foreach ((array)($notizen['folders'] ?? []) as $f) {
+            if (is_array($f) && (string)($f['eduKey'] ?? '') !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @return array<string,string> id => Name */
+    private function EduMitgliedsnamen(): array
+    {
+        $raus = [];
+        foreach ($this->LoadUsers() as $u) {
+            $id = trim((string)($u['id'] ?? ''));
+            $name = trim((string)($u['name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $raus[$id] = $name;
+            }
+        }
+        return $raus;
+    }
+
     /**
      * Eine Anhang-Datei als data:-URL — der Weg für die Kachel, die keinen Token
      * und damit keine Datei-Adresse hat. Dieselbe Prüfung wie bei den Notizen,

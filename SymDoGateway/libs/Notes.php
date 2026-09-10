@@ -45,10 +45,10 @@ trait Notes
     private const NOTE_FOLDER_NAME_MAX = 60;
     /** So viele Notizen liefert `list` hoechstens MIT Text (Kartenansicht). */
     private const NOTES_FULLTEXT_MAX = 60;
-    /** Wie tief Ordner ineinander liegen duerfen. Zwei Ebenen reichen fuer den
-     *  Fall, um den es geht (Mitglied → „Edumaps"), drei sind Reserve; tiefer
-     *  wird eine Liste auf dem Telefon unbedienbar. */
-    private const NOTE_FOLDER_DEPTH_MAX = 3;
+    /** Wie tief Ordner ineinander liegen duerfen. Die dritte Ebene war die
+     *  Klassenseite (Mitglied → „Edumaps" → Seite); seit die ausgezogen ist,
+     *  reichen zwei — tiefer wird eine Liste auf dem Telefon unbedienbar. */
+    private const NOTE_FOLDER_DEPTH_MAX = 2;
     private const NOTE_ATTACH_MAX  = 5;
     /** Laenge der Vorschau in der Uebersicht — der volle Text kommt erst mit `get`. */
     private const NOTE_PREVIEW_MAX = 160;
@@ -80,33 +80,25 @@ trait Notes
 
     // ── Ablage ───────────────────────────────────────────────────────────────
 
-    /** @return array{v:int,rev:int,seen:array,folders:array,notes:array} */
     /**
-     * Der Notiz-Bestand.
+     * Der Notiz-Bestand: { v, rev, seen, folders, notes }.
      *
-     * `eduBlocked` ist die Sperrliste der von Hand geloeschten Klassenseiten.
-     * Sie liegt BEWUSST hier und nicht in einem eigenen Attribut, aus zwei
-     * Gruenden:
+     * Hier stehen nur noch Notizen, die MENSCHEN angelegt haben. Die Karten der
+     * Klassenseiten lagen bis zum 10.09.2026 mit darin — zwei Ordnerebenen, 55
+     * von 64 Notizen und neun Felder, die nur der Spiegel schrieb. Sie haben
+     * jetzt ihren eigenen Bestand (EduStore), samt der Sperrliste gelöschter
+     * Seiten, die vorher als `eduBlocked` hier lag.
      *
-     * 1. Ein neu registriertes Attribut gibt es erst nach einem Kernel-Neustart
-     *    (dieselbe Falle, die EduMaps::EduNotizSpiegeln schon einmal umgangen
-     *    hat). Bis dahin kaeme eine geloeschte Seite weiter zurueck.
-     * 2. Loeschen und Sperren gehoeren in DENSELBEN Schreibvorgang — sonst gibt
-     *    es das Fenster „Ordner weg, Sperre nicht geschrieben, Ordner beim
-     *    naechsten Lauf wieder da". Genau diese Begruendung steht schon bei den
-     *    Mitglieder-Ordnern (NotesEnsureMemberFolders).
-     *
-     * Ein Eintrag: {key, url, name, at}. `key` ist der eduKey des Ordners
-     * ('edupage:<md5>'), `url` die Seitenadresse fuer das Formular.
+     * @return array{v:int,rev:int,seen:array,folders:array,notes:array}
      */
     private function NotesStore(): array
     {
-        $leer = ['v' => 1, 'rev' => 0, 'seen' => [], 'folders' => [], 'notes' => [], 'eduBlocked' => []];
+        $leer = ['v' => 1, 'rev' => 0, 'seen' => [], 'folders' => [], 'notes' => []];
         $d = json_decode($this->ReadAttributeStringSafe(self::NOTES_ATTR, ''), true);
         if (!is_array($d)) {
             return $leer;
         }
-        foreach (['seen', 'folders', 'notes', 'eduBlocked'] as $k) {
+        foreach (['seen', 'folders', 'notes'] as $k) {
             if (!isset($d[$k]) || !is_array($d[$k])) {
                 $d[$k] = [];
             }
@@ -274,10 +266,10 @@ trait Notes
             $f = (string)($n['folderId'] ?? '');
             $zahl[$f] = ($zahl[$f] ?? 0) + 1;
         }
-        /* Unterordner zaehlen mit: an einem Mitglieder-Ordner mit dem
-           Edumaps-Ordner darin stuende sonst „0", obwohl 16 Notizen darin
-           liegen. Nur EINE Ebene tief aufaddieren reicht nicht — es wird die
-           ganze Kette hochgezaehlt. */
+        /* Unterordner zaehlen mit: an einem Mitglieder-Ordner mit einem
+           Unterordner darin stuende sonst „0", obwohl Notizen darin liegen.
+           Nur EINE Ebene tief aufaddieren reicht nicht — es wird die ganze
+           Kette hochgezaehlt. */
         /* Gezaehlt wird aus einer KOPIE: $zahl waechst waehrend der Schleife, und
            wer den Wert von dort nimmt, addiert das schon Hochgezaehlte ein
            zweites Mal weiter nach oben. Bei Grossvater ← Vater ← Kind stand am
@@ -315,10 +307,11 @@ trait Notes
                 'hasAvatar'  => $u ? (bool)$u['hasAvatar'] : false,
                 'count'      => (int)($zahl[(string)$f['id']] ?? 0),
                 'updatedAt'  => (int)($f['updatedAt'] ?? 0),
-                /* Woher der Ordner stammt. Daran erkennt die App, dass sie
-                   Karten statt Zeilen zeichnen soll — am NAMEN duerfte sie es
-                   nicht festmachen, der Nutzer darf ihn aendern. */
-                'source'     => ($f['eduKey'] ?? '') !== '' ? 'edumaps' : '',
+                /* Bleibt im Vertrag, ist aber immer leer: hier gibt es nur noch
+                   Ordner, die Menschen angelegt haben. Die Klassenseiten
+                   sprechen denselben Vertrag über /edumaps und setzen dort
+                   'edumaps'. */
+                'source'     => '',
             ];
         }
         usort($rows, static function (array $a, array $b): int {
@@ -384,70 +377,20 @@ trait Notes
             'id'        => (string)$n['id'],
             'folderId'  => (string)($n['folderId'] ?? ''),
             'title'     => (string)($n['title'] ?? ''),
-            'att'       => array_values(array_map(static function (array $a): array {
-                $raus = [
-                    'id'    => (int)($a['id'] ?? 0),
-                    'kind'  => (string)($a['kind'] ?? ''),
-                    'name'  => (string)($a['name'] ?? ''),
-                    'bytes' => (int)($a['bytes'] ?? 0),
-                ];
-                // Vorschaubild eines PDF, wenn es eines gibt (Klassenseite).
-                if ((int)($a['thumb'] ?? 0) > 0) {
-                    $raus['thumb'] = (int)$a['thumb'];
-                }
-                /* Adresse aus einem QR-Code im Bild (Klassenseite). Nur wenn
-                   wirklich einer drin war: das leere Feld ist nur der Merker,
-                   dass schon nachgesehen wurde, und geht die App nichts an. */
-                if (trim((string)($a['qr'] ?? '')) !== '') {
-                    $raus['qr'] = (string)$a['qr'];
-                }
-                return $raus;
-            }, is_array($n['att'] ?? null) ? $n['att'] : [])),
+            'att'       => array_values(array_map(static fn(array $a): array => [
+                'id'    => (int)($a['id'] ?? 0),
+                'kind'  => (string)($a['kind'] ?? ''),
+                'name'  => (string)($a['name'] ?? ''),
+                'bytes' => (int)($a['bytes'] ?? 0),
+            ], is_array($n['att'] ?? null) ? array_filter($n['att'], 'is_array') : [])),
             'updatedAt' => (int)($n['updatedAt'] ?? 0),
             'source'    => (string)($n['source'] ?? 'manual'),
         ];
-        /* Nur wenn gesetzt: eine von Hand geschriebene Notiz hat keinen
-           Abschnitt, und ein leeres Feld waere nur Ballast in der Antwort.
-           Die Projektion ist eine WEISSLISTE — ohne diese Zeilen kaeme beides
-           nie in der App an (dieselbe Falle wie beim `status` der Stunde). */
-        if (($n['section'] ?? '') !== '') {
-            $row['section'] = (string)$n['section'];
-        }
-        if (isset($n['pos'])) {
-            $row['pos'] = (int)$n['pos'];
-        }
-        /* Die formatierte Fassung geht nur mit dem VOLLTEXT heraus: sie ist so
-           lang wie er, und in der Uebersicht liest sie niemand. */
-        if ($mitText && ($n['html'] ?? '') !== '') {
-            $row['html'] = (string)$n['html'];
-        }
-        // Farben der Quelle (Klassenseite): Abschnitt und Karte.
-        foreach (['sectionColor', 'color'] as $feld) {
-            if (($n[$feld] ?? '') !== '') {
-                $row[$feld] = (string)$n[$feld];
-            }
-        }
-        /* Buchungslage einer buchbaren Karte (AG-Wahl, Sprechtag) und der Weg
-           zur Karte auf der Klassenseite. Gebucht wird DORT — deshalb reist der
-           Verweis mit. Beides nur, wenn es die Quelle hergibt. */
-        if (is_array($n['booking'] ?? null) && (int)($n['booking']['limit'] ?? 0) > 0) {
-            $row['booking'] = [
-                'count' => (int)($n['booking']['anzahl'] ?? 0),
-                'limit' => (int)$n['booking']['limit'],
-                'price' => (float)($n['booking']['preis'] ?? 0),
-                'time'  => (string)($n['booking']['zeit'] ?? ''),
-            ];
-        }
-        if (($n['srcUrl'] ?? '') !== '') {
-            $row['srcUrl'] = (string)$n['srcUrl'];
-        }
-        /* Archiviert: die Karte gibt es auf der Klassenseite nicht mehr. Sie
-           bleibt im Bestand (geloescht wird nichts), zeigt sich in der App aber
-           nur noch im eingeklappten Archiv. Nur wenn gesetzt — sonst traegt
-           jede Notiz ein leeres Feld spazieren. */
-        if ((int)($n['archived'] ?? 0) > 0) {
-            $row['archived'] = (int)$n['archived'];
-        }
+        /* Was hier NICHT mehr steht: Abschnitt, Lage, formatiertes HTML, Farben,
+           Buchungslage, Quelladresse und der Archiv-Stempel. Das waren die
+           Felder der gespiegelten Klassenseiten-Karten; sie stehen jetzt in
+           EduStoreCalc::KarteZeile und reisen über /edumaps. Eine Notiz, die ein
+           Mensch geschrieben hat, hatte nie eines davon. */
         if ($mitText) {
             $row['text'] = $text;
         } else {
@@ -668,75 +611,6 @@ trait Notes
         return mb_substr(trim($wert), 0, $max);
     }
 
-    /**
-     * Die Adresse der Klassenseite aus den Notizen des Ordners.
-     *
-     * Am Ordner steht nur der Schluessel ('edupage:<md5>') — die Adresse selbst
-     * traegt jede gespiegelte Notiz als `srcUrl` („<Seite>#box-<Karte>"). Der
-     * Teil vor der Raute ist die Seite.
-     *
-     * @param list<array<string,mixed>> $notizen
-     */
-    private function NotesEduSeitenUrl(array $notizen): string
-    {
-        foreach ($notizen as $n) {
-            $u = (string)($n['srcUrl'] ?? '');
-            if ($u === '') {
-                continue;
-            }
-            $ohneAnker = explode('#', $u)[0];
-            if (preg_match('#^https?://#i', $ohneAnker) === 1) {
-                return rtrim($ohneAnker, '/');
-            }
-        }
-        return '';       // Notizen aus der Zeit vor srcUrl — dann zaehlt der Schluessel
-    }
-
-    /**
-     * Eine Klassenseite sperren. Nur den Bestand aendern, NICHT schreiben — der
-     * Aufrufer schreibt gleich, und beides gehoert in denselben Schreibvorgang.
-     *
-     * @return string der gesperrte Name (fuer die Rueckmeldung), '' wenn schon gesperrt
-     */
-    private function NotesEduSperren(array &$store, string $key, string $name, string $url): string
-    {
-        foreach ($store['eduBlocked'] as $b) {
-            if ((string)($b['key'] ?? '') === $key) {
-                return '';                      // steht schon drin
-            }
-        }
-        $store['eduBlocked'][] = [
-            'key'  => $key,
-            'url'  => $url,
-            'name' => $this->NotesTrim($name !== '' ? $name : $url, self::NOTE_TITLE_MAX),
-            'at'   => time(),
-        ];
-        /* Die Fundliste gleich mitraeumen: ein gesperrter Eintrag belegte dort
-           sonst dauerhaft einen der EDU_GEFUNDEN_MAX Plaetze. */
-        $this->NotesEduAusFundliste($url, $key);
-        return $name;
-    }
-
-    /** Eine gesperrte Seite aus EduFound entfernen (siehe NotesEduSperren). */
-    private function NotesEduAusFundliste(string $url, string $key): void
-    {
-        $roh = json_decode((string)@$this->ReadAttributeString('EduFound'), true);
-        if (!is_array($roh) || $roh === []) {
-            return;
-        }
-        $bleibt = array_values(array_filter($roh, static function ($e) use ($url, $key): bool {
-            if (!is_array($e)) {
-                return false;
-            }
-            $u = rtrim((string)($e['url'] ?? ''), '/');
-            return !($u !== '' && ($u === $url || 'edupage:' . md5($u) === $key
-                || 'edupage:' . md5((string)$e['url']) === $key));
-        }));
-        if (count($bleibt) !== count($roh)) {
-            @$this->WriteAttributeString('EduFound', (string)json_encode($bleibt, JSON_UNESCAPED_UNICODE));
-        }
-    }
-
     private function NotesFolderDelete(array $store, array $body, int $jetzt): array
     {
         $i = $this->NotesIndexOf($store['folders'], (string)($body['id'] ?? ''));
@@ -754,11 +628,6 @@ trait Notes
         if ($this->NotesHasChildren($store, $fid)) {
             return $this->NotesFehler('has_children');
         }
-        // VOR den Zweigen: die Notizen dieses Ordners, solange sie noch hier
-        // stehen. Der 'move'-Zweig haengt sie um, der 'notes'-Zweig wirft sie
-        // weg — danach ist die Seitenadresse nicht mehr zu finden.
-        $eigene = array_values(array_filter($store['notes'],
-            static fn(array $n): bool => (string)($n['folderId'] ?? '') === $fid));
         if ($mode === 'move') {
             $ziel = (string)($body['targetId'] ?? '');
             if ($ziel === $fid || $this->NotesIndexOf($store['folders'], $ziel) < 0) {
@@ -786,31 +655,18 @@ trait Notes
         } else {
             return $this->NotesFehler('invalid_payload');
         }
-        /* Klassenseite? Dann im SELBEN Schreibvorgang sperren. Ohne das legt
-           EduNotizOrdner den Ordner beim naechsten Lauf ueber denselben eduKey
-           kommentarlos neu an — und seit der QR-Erkennung findet der Lauf die
-           Seite sogar dann wieder, wenn sie nirgends mehr verlinkt ist. Ein
-           Loeschen ohne Sperre waere also eine Geste ohne Wirkung. */
-        $eduKey = (string)($store['folders'][$i]['eduKey'] ?? '');
-        $gesperrt = '';
-        if (str_starts_with($eduKey, 'edupage:')) {
-            $gesperrt = $this->NotesEduSperren(
-                $store,
-                $eduKey,
-                (string)($store['folders'][$i]['name'] ?? ''),
-                // Die Adresse steht nicht am Ordner, aber an jeder gespiegelten
-                // Notiz (srcUrl = „<Seite>#box-<Karte>"). Das Formular braucht sie.
-                $this->NotesEduSeitenUrl($eigene)
-            );
-        }
+        /* Das Sperren einer gelöschten Klassenseite stand hier, solange die
+           Karten Notizen waren. Es lebt jetzt in EduStore::EduMutate — mit
+           derselben Begründung: Löschen und Sperren gehören in denselben
+           Schreibvorgang, sonst legt der nächste Lauf den Ordner über denselben
+           Schlüssel kommentarlos neu an. */
         array_splice($store['folders'], $i, 1);
         if (!$this->NotesWriteStore($store)) {
             return $this->NotesFehler('store_unwritable');
         }
         $frei = $this->NotesUnreferencedMedia($store, $medien);
         $this->NotesDeleteMedia($frei);
-        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($frei),
-                'blocked' => $gesperrt];
+        return ['ok' => true, 'rev' => (int)$store['rev'] + 1, 'removedMedia' => count($frei)];
     }
 
     private function NotesNoteCreate(array $store, array $body, int $jetzt): array
@@ -861,12 +717,12 @@ trait Notes
             }
             $store['notes'][$i]['text'] = trim((string)$body['text']);
             /* Die formatierte Fassung MUSS weg, sobald jemand den Text von Hand
-               aendert: die Ansicht zeigt `html`, wenn es da ist (edumapsKarteHtml),
-               und der Klartext daneben waere unsichtbar. Wer eine gespiegelte
-               Karte bearbeitet hat, sah bisher gar nichts von seiner Aenderung.
-               Die naechste Spiegelung setzt `html` wieder — dann steht wieder da,
-               was auf der Klassenseite steht, und das ist richtig so: die Quelle
-               gewinnt. */
+               aendert: eine Ansicht, die `html` zeigt, wenn es da ist, liesse
+               den geaenderten Klartext unsichtbar.
+               Seit die Klassenseiten ausgezogen sind, traegt hier fast nie eine
+               Notiz `html`. Fast: der Umzug laesst eine Karte ausdruecklich als
+               Notiz stehen, wenn in ihrem Ordner etwas Handgeschriebenes lag
+               (siehe EduStoreCalc::Umzug). Fuer genau die bleibt diese Zeile. */
             unset($store['notes'][$i]['html']);
         }
         if (array_key_exists('folderId', $body)) {
