@@ -450,10 +450,16 @@ trait WebUntis
     private function UntisKurswahlFelder(): array
     {
         $zeilen = $this->UntisKurseZeilen();
+        /* Leer heisst zweierlei, und das ist ein Unterschied: noch nie geholt
+           — oder geholt und nichts zu waehlen. Ein Satz, der beides meint,
+           laesst den Nutzer suchen. */
+        $schonGeholt = json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true) !== [];
         return [
-            ['type' => 'Label', 'caption' => $zeilen === []
-                ? $this->Translate('Course choice: appears after the first fetch — it lists the subjects found in the plan.')
-                : $this->Translate('Which of these subjects the child actually attends. Where several stand at the same time, the tick decides which lesson goes into the plan; a subject standing alone is taken out by unticking it. Newly found subjects start as attended.')],
+            ['type' => 'Label', 'caption' => $zeilen !== []
+                ? $this->Translate('Several lessons stand at the same time here — the tick decides which of them goes into the plan. Unticked subjects are dropped entirely.')
+                : ($schonGeholt
+                    ? $this->Translate('No overlaps in the plan — nothing to choose. A personal timetable usually has none; a class plan has all parallel courses.')
+                    : $this->Translate('Course choice: appears after the first fetch, and only if lessons overlap.'))],
             ['type' => 'List', 'name' => 'UntisCourses', 'rowCount' => 6,
              'add' => false, 'delete' => false,
              'caption' => $this->Translate('Course choice'),
@@ -500,7 +506,15 @@ trait WebUntis
             }
             $teile[] = (($z['besucht'] ?? true) ? '' : '-') . $fach;
         }
-        return $teile === [] ? trim((string)($kind['kurse'] ?? '')) : implode('; ', $teile);
+        /* Die getippte Liste kommt HINZU und weicht nicht: seit die Auswahl
+           nur noch Ueberschneidungen zeigt, ist sie der einzige Weg, ein
+           einzeln stehendes Fach herauszunehmen („-AG"). Doppelte Eintraege
+           schaden nicht — der Parser sammelt Ja und Nein als Listen. */
+        $getippt = trim((string)($kind['kurse'] ?? ''));
+        if ($getippt !== '') {
+            $teile[] = $getippt;
+        }
+        return implode('; ', $teile);
     }
 
     /**
@@ -523,8 +537,12 @@ trait WebUntis
             }
         }
         foreach ($this->untisKurse as $k) {
+            $zeiten = array_keys((array)($k['zeiten'] ?? []));
+            sort($zeiten);
             $raus[] = ['userId' => $userId, 'fach' => (string)$k['fach'],
-                       'kollision' => (bool)$k['kollision']];
+                       'kollision' => (bool)$k['kollision'],
+                       // Drei genuegen: mehr ist eine Aufzaehlung, keine Auskunft.
+                       'zeiten' => array_slice($zeiten, 0, 3)];
         }
         @$this->WriteAttributeString('UntisCourseFound',
             (string)json_encode($raus, JSON_UNESCAPED_UNICODE));
@@ -564,17 +582,27 @@ trait WebUntis
             if ($u === '' || $f === '') {
                 continue;
             }
+            /* NUR die Ueberschneidungen. Ein Fach, das allein im Plan steht,
+               wird besucht — es in eine Liste mit Haekchen zu schreiben, hiess
+               siebzehn Zeilen fuer eine Entscheidung, die niemand trifft.
+
+               Ein einzelnes Fach TROTZDEM herauszunehmen bleibt moeglich: die
+               getippte Kursliste im Datensatz („-AG") wird weiter gelesen und
+               kommt zu dieser Wahl hinzu (siehe UntisKurstext). */
+            if (!(bool)($z['kollision'] ?? false)) {
+                continue;
+            }
             $schluessel = $u . '|' . mb_strtolower($f);
+            $zeitenText = implode(', ', array_map('strval', (array)($z['zeiten'] ?? [])));
             $zeilen[] = [
                 'userId'    => $u,
                 'kind'      => (string)($namen[$u] ?? $u),
                 'fach'      => $f,
-                /* Der Hinweis sagt, WOFUER das Haekchen zaehlt: bei einer
-                   Ueberschneidung entscheidet es, welche Stunde in den Plan
-                   kommt; sonst nimmt es eine Stunde heraus. */
-                'hinweis'   => (bool)($z['kollision'] ?? false)
+                /* Die Uhrzeit sagt, welche Zeilen miteinander konkurrieren —
+                   ohne sie steht zwoelfmal derselbe Satz da. */
+                'hinweis'   => $zeitenText === ''
                                    ? $this->Translate('choice — several at the same time')
-                                   : $this->Translate('alone in the plan'),
+                                   : sprintf($this->Translate('several at %s'), $zeitenText),
                 'besucht'   => $wahl[$schluessel] ?? true,
             ];
         }
@@ -1395,7 +1423,7 @@ trait WebUntis
             }
             $zeiten[(string)($s['start'] ?? '')][] = $s;
         }
-        foreach ($zeiten as $gruppe) {
+        foreach ($zeiten as $zeit => $gruppe) {
             /* DIESELBE Reduktion wie unten im Filter, sonst verspricht der
                Hinweis eine Wahl, die es nicht gibt: zweimal derselbe Fachname
                ist eine Doppelung, und ein Entfall neben einer stattfindenden
@@ -1412,10 +1440,14 @@ trait WebUntis
             $mehrere = count($wahl) > 1;
             foreach ($nachFach as $klein => $s) {
                 $fach = trim((string)$s['subject']);
-                $this->untisKurse[$klein] ??= ['fach' => $fach, 'kollision' => false];
+                $this->untisKurse[$klein] ??= ['fach' => $fach, 'kollision' => false, 'zeiten' => []];
                 // Das Merkmal traegt nur, wer wirklich mitbewirbt.
                 if ($mehrere && array_key_exists($klein, $wahl)) {
                     $this->untisKurse[$klein]['kollision'] = true;
+                    /* Die UHRZEIT dazu: sie sagt, WELCHE Zeilen miteinander
+                       konkurrieren. Bei zwoelf Kursen ist das die eigentliche
+                       Auskunft — „die drei um 13:05" statt „irgendwo". */
+                    $this->untisKurse[$klein]['zeiten'][(string)$zeit] = true;
                 }
             }
         }

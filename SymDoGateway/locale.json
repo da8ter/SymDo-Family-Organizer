@@ -893,14 +893,15 @@
             "Element %d": "Element %d",
             "Nothing found on this account — neither children nor an own element.": "Auf diesem Konto ist nichts zu finden — weder Kinder noch ein eigenes Element.",
             "Course choice": "Kurswahl",
-            "Course choice: appears after the first fetch — it lists the subjects found in the plan.": "Kurswahl: erscheint nach dem ersten Abruf — dort stehen dann die Fächer, die im Plan gefunden wurden.",
-            "Which of these subjects the child actually attends. Where several stand at the same time, the tick decides which lesson goes into the plan; a subject standing alone is taken out by unticking it. Newly found subjects start as attended.": "Welche dieser Fächer das Kind wirklich besucht. Stehen mehrere zur selben Zeit, entscheidet das Häkchen, welche Stunde in den Plan kommt; ein Fach, das allein steht, nimmt das fehlende Häkchen heraus. Neu gefundene Fächer stehen auf „besucht\".",
             "Subject": "Fach",
             "Note": "Hinweis",
             "Attends": "besucht",
             "choice — several at the same time": "Wahl — mehrere zur selben Zeit",
-            "alone in the plan": "steht allein im Plan",
-            "class %s": "Klasse %s"
+            "class %s": "Klasse %s",
+            "Several lessons stand at the same time here — the tick decides which of them goes into the plan. Unticked subjects are dropped entirely.": "Hier stehen mehrere Stunden zur selben Zeit — das Häkchen entscheidet, welche davon in den Plan kommt. Abgehakte Fächer fallen ganz weg.",
+            "No overlaps in the plan — nothing to choose. A personal timetable usually has none; a class plan has all parallel courses.": "Keine Überschneidungen im Plan — hier ist nichts zu wählen. Ein persönlicher Stundenplan hat meist keine; ein Klassenplan enthält alle parallelen Kurse.",
+            "Course choice: appears after the first fetch, and only if lessons overlap.": "Kurswahl: erscheint nach dem ersten Abruf, und nur wenn sich Stunden überschneiden.",
+            "several at %s": "mehrere um %s"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

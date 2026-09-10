@@ -333,7 +333,7 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
 | Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name**. Den Namen liefert der Knopf *Schüler abrufen*: die Kinder des Kontos, bei einem Schülerzugang das Konto selbst. Bleibt die Zeile leer, löst der Abruf sie weiter selbst auf |
-| Kurswahl | `UntisCourses` | je Fach ein Häkchen **besucht**. Die Zeilen entstehen aus dem, was der letzte Abruf im Plan gefunden hat; *Hinweis* sagt, ob zu dieser Zeit mehrere Fächer stehen (dann entscheidet das Häkchen) oder ob es allein steht (dann nimmt das fehlende Häkchen es heraus) |
+| Kurswahl | `UntisCourses` | **nur die Fächer, die sich überschneiden**, je eines mit Häkchen **besucht**. Die Zeilen entstehen aus dem, was der letzte Abruf gefunden hat; der *Hinweis* nennt die Uhrzeit und sagt damit, welche Zeilen miteinander konkurrieren. Ein abgehaktes Fach fällt ganz weg |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
 
@@ -346,15 +346,18 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 > schülerbezogenen Plan ist die Kurswahl also meist leer zu lassen; für einen
 > Klassenplan ist sie das Werkzeug, das ihn erst brauchbar macht.
 
-**Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie war nötig, weil
-mancher Plan Kurse enthält, die das Kind nicht besucht — bei einem Klassenplan
-alle parallelen (am 03.09.2026 gemessen: fünf Religionskurse zur selben Zeit),
-bei einem schülerbezogenen Plan höchstens einzelne. Getippte Fachnamen mussten
-dabei genau treffen; jetzt steht jedes gefundene Fach als Zeile da und wird
-abgehakt. Neu gefundene Fächer gelten als besucht — der Normalfall. Ohne einen
-einzigen Abruf ist die Liste leer, und das sagt sie auch. Bestandszeilen mit
-getippter Liste laufen unverändert weiter, solange für das Kind keine
-Kurswahl-Zeile existiert.
+**Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie zeigt **nur, was
+sich überschneidet** — dort und nur dort ist etwas zu entscheiden; ein Fach,
+das allein im Plan steht, wird besucht. Der Hinweis nennt die Uhrzeit, und
+daran erkennt man, welche Zeilen zusammengehören: im Klassenplan 05a etwa sechs
+Zeilen „mehrere um 13:05" (drei Religionen, zwei Praktische Philosophie, EU KL),
+vier „mehrere um 14:10" (die AGs) und zwei „mehrere um 09:30" (die
+Förderkurse). Neu gefundene Fächer gelten als besucht.
+
+Ein einzeln stehendes Fach **herausnehmen** geht weiter über die getippte Liste
+im Datensatz (`kurse`, nicht mehr im Formular): ein Eintrag mit Minus („`-AG`")
+wirft ein Fach immer heraus. Sie wird zur Kurswahl **hinzugelesen** und nicht
+von ihr ersetzt.
 
 **Schüler abrufen** (Knopf über der Liste) holt die Kinder, die am
 angemeldeten Konto hängen (`app/data`), und trägt sie als Auswahl in die Spalte
