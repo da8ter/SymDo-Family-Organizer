@@ -627,7 +627,14 @@ trait Moodle
            beide Abrufe nennen ihre Kurse selbst. Deshalb hier, nach der
            Schleife, und in EINEM Aufruf je Konto. */
         if (!$trocken && (bool)$this->MoodleProp('MoodleHomework', true)) {
-            $hausaufgaben = $this->MoodleAufgaben($zugang, $kursListe);
+            $namen = array_map(static fn($f): string => (string)($f['name'] ?? ''),
+                (array)($info['functions'] ?? []));
+            $rueckmeldungen = $this->MoodleAbstimmungen($zugang, $kursListe, $namen);
+            $hausaufgaben = $this->MoodleAufgaben($zugang, $kursListe, $rueckmeldungen);
+            if ($rueckmeldungen !== []) {
+                $hausaufgaben = trim($hausaufgaben . ', ' . sprintf(
+                    $this->Translate('%d reply/replies with a deadline'), count($rueckmeldungen)), ', ');
+            }
         }
         if (!$trocken && (bool)$this->MoodleProp('MoodleEvents', true)) {
             $termine = $this->MoodleTermine($zugang, $kursListe);
@@ -686,6 +693,30 @@ trait Moodle
                 continue;
             }
             $wo = trim((string)($abschnitt['name'] ?? ''));
+            /* Die Beschreibung des Abschnitts. Sie steht schon in dieser
+               Antwort, kostet also keinen Aufruf — und dort steht oft das
+               Eigentliche („bitte bis Freitag zurueck").
+               NUR wenn Text uebrig bleibt: an der geprueften Grundschule
+               bestehen alle vier Beschreibungen ausschliesslich aus einem
+               Kopfbild (205-274 Zeichen HTML, 0 Zeichen Text). Eine Karte
+               daraus waere eine leere Karte, und das Bild haengt an einer
+               Adresse, die ohne Token nichts liefert. */
+            $vorwort = $this->EduText((string)($abschnitt['summary'] ?? ''));
+            if ($vorwort !== '' && $wo !== '') {
+                $raus[] = [
+                    'srcId'  => 'moodlesec:' . (int)($abschnitt['id'] ?? 0),
+                    /* Ein Abschnitt hat kein `timemodified`. Die Fassung ist
+                       deshalb der Fingerabdruck des Textes: aendert die Schule
+                       ihn, ist es eine neue Fassung — sonst nicht. */
+                    'srcRev'    => (int)crc32((string)($abschnitt['summary'] ?? '')),
+                    'titel'     => $wo,
+                    'text'      => $vorwort,
+                    'html'      => $this->EduHtml((string)($abschnitt['summary'] ?? '')),
+                    'abschnitt' => $wo,
+                    'dateien'   => [],
+                    'weg'       => '',
+                ];
+            }
             foreach ((array)($abschnitt['modules'] ?? []) as $modul) {
                 if (!is_array($modul)) {
                     continue;
@@ -739,7 +770,14 @@ trait Moodle
             'srcRev'    => $stand,
             'titel'     => trim((string)($modul['name'] ?? '')),
             'text'      => $text,
-            'html'      => (string)($modul['description'] ?? ''),
+            /* Durch die WEISSE LISTE, wie bei Edumaps. Die formatierte Fassung
+               geht in der App durch `innerHTML`, und dort wird nichts mehr
+               geprueft („weil hier nichts mehr geprueft werden kann", sagt der
+               Kommentar in der Web-App). Dieser Text ist von Lehrkraeften in
+               Moodle geschrieben — er darf kein Skript und kein Ereignis-
+               Attribut mitbringen. Vorher stand er hier ROH: mein Fehler von
+               heute Nachmittag. */
+            'html'      => $this->EduHtml((string)($modul['description'] ?? '')),
             'abschnitt' => $abschnitt,
             'dateien'   => $dateien,
             'weg'       => trim((string)($modul['url'] ?? '')),
@@ -793,7 +831,9 @@ trait Moodle
                     'srcRev'    => (int)($d['timemodified'] ?? ($d['modified'] ?? 0)),
                     'titel'     => trim((string)($d['subject'] ?? '')),
                     'text'      => $this->EduText((string)($d['message'] ?? '')),
-                    'html'      => (string)($d['message'] ?? ''),
+                    // Weisse Liste, siehe MoodleModulKarte: ein Forumsbeitrag
+                    // ist fremdes HTML.
+                    'html'      => $this->EduHtml((string)($d['message'] ?? '')),
                     'abschnitt' => $wo,
                     'dateien'   => $dateien,
                     'weg'       => (string)$zugang['site'] . '/mod/forum/discuss.php?d='
@@ -940,12 +980,20 @@ trait Moodle
             if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['srcRev']) {
                 $fehlt = (string)($store['notes'][$i]['folderId'] ?? '') !== $ordnerId
                     || (string)($store['notes'][$i]['section'] ?? '') !== (string)$karte['abschnitt']
-                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr;
+                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr
+                    /* Die formatierte Fassung nachziehen, auch wenn die Karte
+                       sich nicht geaendert hat. Sonst behielten die schon
+                       gespiegelten Karten ihr ROHES HTML fuer immer: die
+                       Weissliste greift erst beim naechsten Schreiben, und das
+                       kommt nur bei einer neuen Fassung. Genau dieselbe
+                       Nachtrag-Logik wie bei Edumaps (Vorschaubild, QR-Code). */
+                    || (string)($store['notes'][$i]['html'] ?? '') !== (string)$karte['html'];
                 if ($fehlt || $this->eduOrdnerGeaendert) {
                     $store['notes'][$i]['folderId'] = $ordnerId;
                     $store['notes'][$i]['section'] = EduStoreCalc::Kappen(
                         (string)$karte['abschnitt'], EduStoreCalc::TITLE_MAX);
                     $store['notes'][$i]['pos'] = $nr;
+                    $store['notes'][$i]['html'] = (string)$karte['html'];
                     $this->EduWriteStore($store);
                 }
                 return false;
@@ -1193,7 +1241,7 @@ trait Moodle
      * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
      * @return string Bericht, '' wenn es nichts zu berichten gibt
      */
-    private function MoodleAufgaben(array $zugang, array $kurse): string
+    private function MoodleAufgaben(array $zugang, array $kurse, array $zusatz = []): string
     {
         if ($kurse === []) {
             return '';
@@ -1240,6 +1288,22 @@ trait Moodle
                 ];
             }
         }
+        /* Die Abstimmungen kommen MIT — in EINEM Import.
+           Zwei Aufrufe von HomeworkImportieren mit derselben Quelle wuerden
+           sich gegenseitig aufraeumen: der zweite haelt die Zeilen des ersten
+           fuer verschwunden und loescht sie im Fenster. Genau dieser Fehler ist
+           heute zwischen UNTIS und LOGINEO aufgefallen; er gilt innerhalb einer
+           Quelle genauso. */
+        foreach ($zusatz as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $tag = (string)($z['due'] ?? '');
+            if ($tag < $von || $tag > $bis) {
+                continue;                       // dasselbe Fenster wie fuer Aufgaben
+            }
+            $roh[] = $z;
+        }
         $e = $this->HomeworkImportieren((string)$zugang['userId'], $roh, $von, $bis, 'moodle');
         if (($e['ok'] ?? false) !== true) {
             return sprintf($this->Translate('homework: %s'), (string)($e['fehler'] ?? '?'));
@@ -1249,6 +1313,63 @@ trait Moodle
         }
         return sprintf($this->Translate('%1$d homework item(s), %2$d new, %3$d withdrawn'),
             count($roh), (int)($e['neu'] ?? 0), (int)($e['entfernt'] ?? 0));
+    }
+
+    /**
+     * Abstimmungen als Aufgabe mit Frist.
+     *
+     * Eine Abstimmung ist das einzige, was diese Plattform an ECHTEN Fristen
+     * hergibt: „Fotos der Kinder auf LOGINEO?", „Betreuung in den
+     * Winterferien?". Ein Dokument kann man nachlesen, eine Frist verpasst man.
+     *
+     * Zwei Aufrufe, beide lesend: einmal alle Abstimmungen der Kurse, und je
+     * OFFENER Abstimmung ihre Optionen — denn nur dort steht, ob das eigene
+     * Konto schon geantwortet hat. Geschlossene kosten keinen zweiten Aufruf;
+     * die Frist wird VORHER geprueft.
+     *
+     * @param array<int,array<string,mixed>> $kurse       Kurskennung → Seite
+     * @param list<string>                   $funktionen  was der Server hergibt
+     * @return list<array<string,mixed>> Zeilen für HomeworkImportieren
+     */
+    private function MoodleAbstimmungen(array $zugang, array $kurse, array $funktionen): array
+    {
+        if ($kurse === [] || !MoodleCalc::KannAbstimmungen($funktionen)) {
+            return [];
+        }
+        $antwort = $this->MoodleRest($zugang, 'mod_choice_get_choices_by_courses',
+            ['courseids' => array_values(array_map('intval', array_keys($kurse)))]);
+        if (!is_array($antwort)) {
+            return [];
+        }
+        $jetzt = time();
+        $raus = [];
+        foreach ((array)($antwort['choices'] ?? []) as $ab) {
+            if (!is_array($ab)) {
+                continue;
+            }
+            // Erst die Frist, dann der Aufruf: eine abgelaufene Abstimmung
+            // interessiert niemanden mehr, und jeder Aufruf geht an die Schule.
+            if (MoodleCalc::AbstimmungAufgabe($ab, [], $jetzt) === null) {
+                continue;
+            }
+            $opt = $this->MoodleRest($zugang, 'mod_choice_get_choice_options',
+                ['choiceid' => (int)($ab['id'] ?? 0)]);
+            $zeile = MoodleCalc::AbstimmungAufgabe($ab,
+                is_array($opt) ? (array)($opt['options'] ?? []) : [], $jetzt);
+            if ($zeile === null) {
+                continue;
+            }
+            $kursId = (int)($ab['course'] ?? 0);
+            $fach = trim((string)($kurse[$kursId]['name'] ?? ''));
+            $raus[] = [
+                'srcId'   => (int)$zeile['srcId'],
+                'subject' => $fach !== '' ? $fach : $this->Translate('LOGINEO'),
+                'due'     => (string)$zeile['due'],
+                'note'    => $this->Translate('Reply needed:') . ' ' . (string)$zeile['name'],
+                'done'    => (bool)$zeile['done'],
+            ];
+        }
+        return $raus;
     }
 
     /**
@@ -1264,14 +1385,36 @@ trait Moodle
      */
     private function MoodleTermine(array $zugang, array $kurse): string
     {
-        $antwort = $this->MoodleRest($zugang, 'core_calendar_get_action_events_by_timesort',
-            ['timesortfrom' => time(), 'limitnum' => 20]);
-        if (!is_array($antwort)) {
+        $jetzt = time();
+        /* Weg 1: die Zeitleiste. Sie nennt FRISTEN von Aktivitaeten — Aufgaben,
+           Abstimmungen — und nur die des eigenen Kontos. */
+        $a = $this->MoodleRest($zugang, 'core_calendar_get_action_events_by_timesort',
+            ['timesortfrom' => $jetzt, 'limitnum' => 20]);
+        /* Weg 2: der Kalender. Hier liegen Kurs-, Nutzer- und SEITENtermine —
+           Schliesstage, Ferien, Elternabende. Zwei Wege, weil die Zeitleiste
+           davon nichts weiss.
+           An der geprueften Grundschule sind beide leer (gemessen ueber ein
+           Jahr in beide Richtungen: 0 Eintraege). Der Weg ist trotzdem da: er
+           kostet einen Aufruf, und eine Schule, die ihren Kalender pflegt,
+           braucht keine Codeaenderung dafuer. */
+        $kalender = $this->MoodleRest($zugang, 'core_calendar_get_calendar_events', [
+            'events'  => ['courseids' => array_values(array_map('intval', array_keys($kurse)))],
+            'options' => [
+                'userevents' => 1,
+                'siteevents' => 1,
+                'timestart'  => $jetzt,
+                'timeend'    => $jetzt + self::MOODLE_TAGE_VOR * 86400,
+            ],
+        ]);
+        if (!is_array($a) && !is_array($kalender)) {
             return '';
         }
+        $liste = MoodleCalc::TermineVereinen(
+            is_array($a) ? (array)($a['events'] ?? []) : [],
+            is_array($kalender) ? (array)($kalender['events'] ?? []) : []);
         $topf = 'moodleevents:' . mb_strtolower((string)$zugang['site']);
         $neu = 0;
-        foreach ((array)($antwort['events'] ?? []) as $e) {
+        foreach ($liste as $e) {
             if (!is_array($e)) {
                 continue;
             }

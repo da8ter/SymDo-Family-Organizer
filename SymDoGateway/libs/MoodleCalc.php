@@ -47,6 +47,12 @@ class MoodleCalc
         // Termine: die Zeitleiste und der Kalender.
         'core_calendar_get_action_events_by_timesort',
         'core_calendar_get_calendar_events',
+        /* Abstimmungen: Rückmeldungen mit Frist („Fotos auf LOGINEO?",
+           „Betreuung in den Winterferien?"). Beide Aufrufe sind lesend —
+           `mod_choice_submit_choice_response` steht bewusst NICHT hier: eine
+           Anmeldung des Kindes gehört nicht in einen Sechs-Stunden-Takt. */
+        'mod_choice_get_choices_by_courses',
+        'mod_choice_get_choice_options',
     ];
 
     /**
@@ -160,6 +166,20 @@ class MoodleCalc
     }
 
     /**
+     * Erlaubt, aber nicht nötig.
+     *
+     * Abstimmungen sind ein Modul, das eine Schule benutzen kann oder nicht.
+     * Fehlen sie, ist nichts kaputt — deshalb dürfen sie in der Statuszeile
+     * nicht unter „fehlt" stehen: das läse sich wie ein Defekt.
+     *
+     * @var list<string>
+     */
+    public const OPTIONAL = [
+        'mod_choice_get_choices_by_courses',
+        'mod_choice_get_choice_options',
+    ];
+
+    /**
      * Fehlt eine gebrauchte Funktion auf diesem Server?
      *
      * @param list<string> $vorhanden Namen aus core_webservice_get_site_info
@@ -173,10 +193,124 @@ class MoodleCalc
         }
         $fehlt = [];
         foreach (self::ERLAUBT as $f) {
-            if (!array_key_exists($f, $da)) {
+            if (!array_key_exists($f, $da) && !in_array($f, self::OPTIONAL, true)) {
                 $fehlt[] = $f;
             }
         }
         return $fehlt;
+    }
+
+    /** Gibt dieser Server Abstimmungen her? */
+    public static function KannAbstimmungen(array $vorhanden): bool
+    {
+        $da = [];
+        foreach ($vorhanden as $f) {
+            $da[trim((string)$f)] = true;
+        }
+        foreach (self::OPTIONAL as $f) {
+            if (!array_key_exists($f, $da)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Eigener Zahlenraum für Abstimmungen.
+     *
+     * Aufgaben und Abstimmungen sind zwei Moodle-Tabellen mit je eigener
+     * Zählung: Aufgabe 117 und Abstimmung 117 gibt es gleichzeitig. `srcId` im
+     * Hausaufgaben-Bestand ist aber eine ZAHL (HomeworkImportieren prüft
+     * `(int) > 0`), und beide Quellen heissen `moodle` — ohne diesen Abstand
+     * hielte die Zusammenführung die eine für die andere und löschte sie.
+     */
+    public const ID_ABSTIMMUNG = 1000000000;
+
+    /**
+     * Eine Abstimmung als Aufgabe mit Frist — oder gar nicht.
+     *
+     * Vier Gründe, nichts daraus zu machen:
+     *  - kein Name (dann ist auch nichts anzuzeigen),
+     *  - keine Frist: `timeclose` 0 heisst „unbegrenzt offen". Das ist keine
+     *    Aufgabe, sondern ein Angebot — es steht als Karte auf der Klassenseite,
+     *    und eine Fälligkeit dazu wäre erfunden.
+     *  - Frist vorbei: eine geschlossene Abstimmung kann niemand mehr
+     *    beantworten. (Gemessen an der Grundschule: die eine Abstimmung dort
+     *    lief bis 30.05.2025.)
+     *  - keine Kennung.
+     *
+     * Erledigt ist, was BEANTWORTET ist: `mod_choice_get_choice_options`
+     * liefert je Option `checked` für das eigene Konto. Kommt die Liste leer
+     * (Moodle antwortet bei einer geschlossenen oder gesperrten Abstimmung mit
+     * einer Warnung statt mit Optionen), gilt das als „nicht beantwortet" —
+     * lieber eine Erinnerung zu viel als eine verpasste Frist.
+     *
+     * @param array<string,mixed> $ab        eine Abstimmung aus mod_choice_get_choices_by_courses
+     * @param list<array<string,mixed>> $optionen aus mod_choice_get_choice_options
+     * @return array{srcId:int,name:string,due:string,done:bool}|null
+     */
+    public static function AbstimmungAufgabe(array $ab, array $optionen, int $jetzt): ?array
+    {
+        $cmid = (int)($ab['coursemodule'] ?? 0);
+        $name = trim((string)($ab['name'] ?? ''));
+        $bis  = (int)($ab['timeclose'] ?? 0);
+        if ($cmid <= 0 || $name === '' || $bis <= 0 || $bis < $jetzt) {
+            return null;
+        }
+        $erledigt = false;
+        foreach ($optionen as $o) {
+            if (is_array($o) && ($o['checked'] ?? false)) {
+                $erledigt = true;
+                break;
+            }
+        }
+        return [
+            'srcId' => self::ID_ABSTIMMUNG + $cmid,
+            'name'  => $name,
+            'due'   => date('Y-m-d', $bis),
+            'done'  => $erledigt,
+        ];
+    }
+
+    /**
+     * Zwei Terminlisten zu einer machen.
+     *
+     * Moodle hat zwei Wege zu Terminen, und sie überschneiden sich: die
+     * Zeitleiste (`core_calendar_get_action_events_by_timesort`) nennt nur
+     * FRISTEN von Aktivitäten, der Kalender (`core_calendar_get_calendar_events`)
+     * auch Kurs-, Nutzer- und Seitentermine — Schließungstage etwa. Dieselbe
+     * Kennung darf davon nur einmal ankommen.
+     *
+     * @param list<array<string,mixed>> $zeitleiste
+     * @param list<array<string,mixed>> $kalender
+     * @return list<array<string,mixed>>
+     */
+    public static function TermineVereinen(array $zeitleiste, array $kalender): array
+    {
+        $raus = [];
+        $da = [];
+        foreach ([$zeitleiste, $kalender] as $liste) {
+            foreach ($liste as $e) {
+                if (!is_array($e)) {
+                    continue;
+                }
+                $ts = (int)($e['timesort'] ?? ($e['timestart'] ?? 0));
+                $id = (int)($e['id'] ?? 0);
+                if ($ts <= 0 || trim((string)($e['name'] ?? '')) === '') {
+                    continue;
+                }
+                /* Ohne Kennung wird am Namen unterschieden: zwei Seitentermine
+                   zur selben Sekunde sind sonst einer. Moodle nummeriert seine
+                   Termine, aber verlassen sollte man sich darauf nicht. */
+                $schl = ($id > 0 ? 'i' . $id : 'n' . mb_strtolower(trim((string)$e['name'])))
+                    . ':' . $ts;
+                if (isset($da[$schl])) {
+                    continue;
+                }
+                $da[$schl] = true;
+                $raus[] = $e;
+            }
+        }
+        return $raus;
     }
 }

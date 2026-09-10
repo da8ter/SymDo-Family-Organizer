@@ -46,7 +46,8 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
 }
 
 // ── Die weisse Liste ───────────────────────────────────────────────────────
-pruefe('neun Funktionen sind erlaubt', count(MoodleCalc::ERLAUBT), 9);
+pruefe('elf Funktionen sind erlaubt — neun nötige und zwei optionale',
+    count(MoodleCalc::ERLAUBT), 11);
 pruefe('Standortauskunft erlaubt', MoodleCalc::Erlaubt('core_webservice_get_site_info'), true);
 pruefe('Kurse erlaubt', MoodleCalc::Erlaubt('core_enrol_get_users_courses'), true);
 pruefe('Kursinhalt erlaubt', MoodleCalc::Erlaubt('core_course_get_contents'), true);
@@ -134,6 +135,85 @@ pruefe('ein Kind an zwei Schulen ebenso',
 pruefe('Gross- und Kleinschreibung der Adresse trennt nicht',
     MoodleCalc::TokenSchluessel('12345.LOGINEONRW-LMS.de', 'aaa11111'),
     MoodleCalc::TokenSchluessel('12345.logineonrw-lms.de', 'aaa11111'));
+
+// ── Optionale Funktionen ─────────────────────────────────────────────────
+pruefe('die beiden Abstimmungs-Aufrufe sind optional',
+    MoodleCalc::OPTIONAL, ['mod_choice_get_choices_by_courses', 'mod_choice_get_choice_options']);
+pruefe('ein Server ohne Abstimmungen meldet nichts als fehlend',
+    MoodleCalc::FehlendeFunktionen(array_values(array_filter(MoodleCalc::ERLAUBT,
+        static fn(string $f): bool => !str_contains($f, 'choice')))), []);
+pruefe('… kann dafür aber keine Abstimmungen',
+    MoodleCalc::KannAbstimmungen(array_values(array_filter(MoodleCalc::ERLAUBT,
+        static fn(string $f): bool => !str_contains($f, 'choice')))), false);
+pruefe('ein vollständiger Server kann sie', MoodleCalc::KannAbstimmungen(MoodleCalc::ERLAUBT), true);
+pruefe('halb reicht nicht',
+    MoodleCalc::KannAbstimmungen(['mod_choice_get_choices_by_courses']), false);
+
+// ── Abstimmung → Aufgabe mit Frist ───────────────────────────────────────
+$jetzt = mktime(12, 0, 0, 9, 10, 2026);
+$offen = ['id' => 117, 'coursemodule' => 5331, 'course' => 99, 'name' => 'Fotos auf LOGINEO',
+          'timeopen' => $jetzt - 86400, 'timeclose' => $jetzt + 5 * 86400];
+
+$z = MoodleCalc::AbstimmungAufgabe($offen, [], $jetzt);
+pruefe('eine offene Abstimmung wird eine Aufgabe', $z !== null, true);
+pruefe('die Frist ist die Fälligkeit', $z['due'], date('Y-m-d', $jetzt + 5 * 86400));
+pruefe('ohne Antwort ist sie offen', $z['done'], false);
+pruefe('die Kennung liegt im eigenen Zahlenraum', $z['srcId'], MoodleCalc::ID_ABSTIMMUNG + 5331);
+pruefe('… und kann keiner Aufgabe gleichen', $z['srcId'] > 100000000, true);
+pruefe('der Name kommt unverändert mit', $z['name'], 'Fotos auf LOGINEO');
+
+pruefe('eine angekreuzte Option heisst erledigt',
+    MoodleCalc::AbstimmungAufgabe($offen, [['id' => 1, 'text' => 'ja', 'checked' => false],
+                                           ['id' => 2, 'text' => 'nein', 'checked' => true]], $jetzt)['done'], true);
+pruefe('keine angekreuzte Option heisst offen',
+    MoodleCalc::AbstimmungAufgabe($offen, [['id' => 1, 'text' => 'ja', 'checked' => false]], $jetzt)['done'], false);
+/* Moodle antwortet bei einer gesperrten Abstimmung mit einer WARNUNG und einer
+   leeren Optionsliste. Dann lieber erinnern als schweigen. */
+pruefe('leere Optionsliste gilt als „noch nicht beantwortet"',
+    MoodleCalc::AbstimmungAufgabe($offen, [], $jetzt)['done'], false);
+pruefe('Unsinn in der Optionsliste stürzt nicht',
+    MoodleCalc::AbstimmungAufgabe($offen, ['kaputt', 42], $jetzt)['done'], false);
+
+pruefe('ohne Frist ist es keine Aufgabe',
+    MoodleCalc::AbstimmungAufgabe(array_merge($offen, ['timeclose' => 0]), [], $jetzt), null);
+pruefe('eine abgelaufene Abstimmung ebenso',
+    MoodleCalc::AbstimmungAufgabe(array_merge($offen, ['timeclose' => $jetzt - 60]), [], $jetzt), null);
+pruefe('die Frist von heute Nacht gilt noch',
+    MoodleCalc::AbstimmungAufgabe(array_merge($offen, ['timeclose' => $jetzt + 60]), [], $jetzt) !== null, true);
+pruefe('ohne Namen nichts', MoodleCalc::AbstimmungAufgabe(array_merge($offen, ['name' => '  ']), [], $jetzt), null);
+pruefe('ohne Modulkennung nichts',
+    MoodleCalc::AbstimmungAufgabe(array_merge($offen, ['coursemodule' => 0]), [], $jetzt), null);
+pruefe('eine leere Antwort ergibt nichts', MoodleCalc::AbstimmungAufgabe([], [], $jetzt), null);
+
+// ── Zwei Terminwege, eine Liste ──────────────────────────────────────────
+$zeitleiste = [
+    ['id' => 5, 'name' => 'Abgabe Lesetagebuch', 'timesort' => $jetzt + 3600],
+    ['id' => 6, 'name' => 'Rückmeldung Fotos', 'timesort' => $jetzt + 7200],
+];
+$kalender = [
+    ['id' => 6, 'name' => 'Rückmeldung Fotos', 'timestart' => $jetzt + 7200],   // dasselbe Ereignis
+    ['id' => 9, 'name' => 'Schließtag OGS', 'timestart' => $jetzt + 86400],
+    ['id' => 0, 'name' => 'ohne Kennung', 'timestart' => $jetzt],
+    ['id' => 10, 'name' => '', 'timestart' => $jetzt],                          // ohne Namen
+    ['id' => 11, 'name' => 'ohne Zeit', 'timestart' => 0],
+    'unsinn',
+];
+$vereint = MoodleCalc::TermineVereinen($zeitleiste, $kalender);
+/* Vier: die beiden der Zeitleiste, der Schliesstag — und der Termin ohne
+   Kennung, der am Namen unterschieden wird. Ohne Namen oder ohne Zeit faellt
+   einer weg, Unsinn ebenso. */
+pruefe('vier Termine bleiben übrig', count($vereint), 4);
+pruefe('die Zeitleiste steht vorn', $vereint[0]['name'], 'Abgabe Lesetagebuch');
+pruefe('das doppelte Ereignis kommt nur einmal',
+    count(array_filter($vereint, static fn(array $e): bool => (int)$e['id'] === 6)), 1);
+pruefe('der Schließtag kommt aus dem Kalender', $vereint[2]['name'], 'Schließtag OGS');
+pruefe('ein Ereignis ohne Kennung fällt nicht weg, wenn es Name und Zeit hat',
+    count(MoodleCalc::TermineVereinen([], [['id' => 0, 'name' => 'x', 'timestart' => $jetzt]])), 1);
+pruefe('zwei verschiedene Zeiten desselben Termins sind zwei Einträge',
+    count(MoodleCalc::TermineVereinen(
+        [['id' => 7, 'name' => 'Serie', 'timesort' => $jetzt]],
+        [['id' => 7, 'name' => 'Serie', 'timestart' => $jetzt + 86400]])), 2);
+pruefe('zwei leere Listen ergeben nichts', MoodleCalc::TermineVereinen([], []), []);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

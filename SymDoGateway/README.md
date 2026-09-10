@@ -548,7 +548,7 @@ Dateien, Forumsbeiträge, Aufgaben mit Fälligkeit, Kalendertermine.
 | Updateintervall | `MoodleIntervalHours` | Stunden zwischen zwei Durchläufen |
 | Karten spiegeln | `MoodleToCards` | Dateien und Forumsbeiträge als Karten in den **Klassenseiten** |
 | Auswerten | `MoodleAnalyse` | neue Dokumente durch die KI, als Vorschlag im KI-Eingang |
-| Aufgaben | `MoodleHomework` | `mod_assign` mit Fälligkeit und Abgabestand in den Hausaufgaben-Bestand |
+| Aufgaben | `MoodleHomework` | `mod_assign` mit Fälligkeit und Abgabestand in den Hausaufgaben-Bestand — und **Abstimmungen mit Frist** als Rückmeldung |
 | Termine | `MoodleEvents` | Kalendertermine als Vorschlag — **ohne** KI-Aufruf |
 
 **Ein Konto je Kind, und nur der Token wird gespeichert.** LOGINEO kennt keine
@@ -564,9 +564,11 @@ Geschwister nicht an.
 **Es wird ausschließlich gelesen.** Auf dem geprüften Schulkonto sind auch
 Schreibfunktionen freigegeben — Termine anlegen und löschen, Forumsbeiträge
 schreiben, Noten speichern. Jeder Aufruf läuft deshalb durch eine **weiße Liste
-von neun lesenden Funktionen**; alles andere wird abgewiesen und landet als
-Fehler im Protokoll. Auch „gelesen"-Marken wie `mod_forum_view_forum` stehen
-nicht darauf: sie hinterlassen Spuren im Kurs.
+von elf lesenden Funktionen** (neun nötige, zwei optionale für Abstimmungen);
+alles andere wird abgewiesen und landet als Fehler im Protokoll. Auch
+„gelesen"-Marken wie `mod_forum_view_forum` stehen nicht darauf: sie
+hinterlassen Spuren im Kurs. `mod_choice_submit_choice_response` ebenso nicht —
+eine Anmeldung des Kindes gehört nicht in einen Sechs-Stunden-Takt.
 
 **Wo die Inhalte landen.** Im Bestand der **Klassenseiten**, neben Edumaps: je
 Kind ein Ordner (derselbe), je Kurs eine Seite, je Datei oder Beitrag eine
@@ -583,12 +585,45 @@ LOGINEO-Abruf die WebUntis-Aufgaben desselben Kindes für verschwunden gehalten.
 Das Fach ist der Kursname; erledigt ist, was abgegeben wurde — dieses Häkchen
 gehört damit der Schule und lässt sich zu Hause nicht zurücknehmen.
 
+**Fremdes HTML geht durch die weiße Liste.** Die formatierte Fassung einer
+Karte (`html`) landet in der App in `innerHTML`, und dort wird nichts mehr
+geprüft — geprüft wird hier. Beschreibungen und Forumsbeiträge aus Moodle laufen
+deshalb durch dieselbe DOM-Weißliste wie Edumaps-Karten (`EduHtml`): erlaubt
+sind Absatz, Umbruch, Liste, fett, kursiv, unterstrichen und der Verweis, von
+den Attributen überlebt nur `href`. Schon gespiegelte Karten werden beim
+nächsten Lauf **nachgezogen**, auch wenn ihre Fassung sich nicht geändert hat.
+
+**Abstimmungen sind die einzigen echten Fristen** dieser Plattform („Fotos der
+Kinder auf LOGINEO?", „Betreuung in den Winterferien?"). Eine Abstimmung mit
+`timeclose` in der Zukunft wird eine Hausaufgabe *Rückmeldung: …* mit dieser
+Fälligkeit; erledigt ist sie, sobald das eigene Konto eine Option angekreuzt hat
+(`mod_choice_get_choice_options` nennt das je Option). Ohne Frist wird nichts
+daraus — das wäre eine erfundene Fälligkeit; eine abgelaufene kostet nicht
+einmal einen Aufruf. Abstimmungen und Aufgaben gehen in **einem** Import in den
+Bestand: zwei Importe derselben Quelle im selben Lauf würden sich gegenseitig
+aufräumen. Gibt der Server die beiden Aufrufe nicht her, fehlt nichts — sie
+stehen als *optional* auf der weißen Liste und tauchen nicht unter „fehlt" auf.
+
+**Zwei Wege zu Terminen.** Die Zeitleiste
+(`core_calendar_get_action_events_by_timesort`) nennt nur Fristen von
+Aktivitäten; der Kalender (`core_calendar_get_calendar_events`) auch Kurs-,
+Nutzer- und Seitentermine — Schließtage etwa. Beide Listen werden vereint, jede
+Kennung kommt nur einmal an (ohne Kennung entscheidet der Name).
+
+**Die Beschreibung eines Abschnitts** wird eine Karte, wenn Text darin steht.
+Sie kostet keinen Aufruf (sie steht in `core_course_get_contents`), und ihre
+Fassung ist der Fingerabdruck des Textes, weil ein Abschnitt kein
+`timemodified` hat. Bilder fallen dabei weg: an der geprüften Grundschule
+bestehen alle vier Beschreibungen ausschließlich aus einem Kopfbild — daraus
+entsteht deshalb keine leere Karte.
+
 **Grenzen.** Ein PDF darf höchstens so groß sein, wie die Ausgabegrenze zulässt
 (`ScriptOutputBufferLimit` minus Reserve); die Elternabend-Präsentation der
 geprüften Schule hat 6,3 MB und passt damit nicht — die Karte behält Text und
 Verweis auf die Seite. Und was die Schule nicht pflegt, fehlt: an der geprüften
-Grundschule gibt es keine Aufgaben und keine Kalendertermine, und der Bericht
-sagt dann einfach nichts dazu.
+Grundschule gibt es keine Aufgaben, keine Kalendertermine (in beiden Wegen 0,
+gemessen über ein Jahr in beide Richtungen) und genau eine, längst geschlossene
+Abstimmung — der Bericht sagt dann einfach nichts dazu.
 
 ## 18. Statusvariablen
 

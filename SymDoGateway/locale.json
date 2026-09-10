@@ -962,6 +962,8 @@
             "homework: %s": "Hausaufgaben: %s",
             "%1$d homework item(s), %2$d new, %3$d withdrawn": "%1$d Hausaufgabe(n), %2$d neu, %3$d zurückgezogen",
             "%d date(s) suggested": "%d Termin(e) vorgeschlagen",
+            "Reply needed:": "Rückmeldung:",
+            "%d reply/replies with a deadline": "%d Rückmeldung(en) mit Frist",
             "LOGINEO": "LOGINEO"
         },
         "en": {
