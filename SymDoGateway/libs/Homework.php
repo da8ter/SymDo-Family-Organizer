@@ -422,7 +422,10 @@ trait Homework
         try {
             $store = $this->HomeworkStore();
             $store['items'] = HomeworkCalc::Aufbewahrung($store['items'], $jetzt);
-            $e = HomeworkCalc::Zusammenfuehren($store['items'], $saetze, $kind, $von, $bis, $jetzt);
+            /* Die Quelle geht MIT: Zuordnung und Loeschen gelten nur fuer
+               Eintraege derselben Herkunft. Sonst raeumte ein LOGINEO-Abruf die
+               WebUntis-Aufgaben desselben Kindes weg. */
+            $e = HomeworkCalc::Zusammenfuehren($store['items'], $saetze, $kind, $von, $bis, $jetzt, $quelle);
             if ($e['neu'] === 0 && $e['geaendert'] === 0 && $e['entfernt'] === 0) {
                 return ['ok' => true, 'neu' => 0, 'geaendert' => 0, 'entfernt' => 0,
                         'uebergangen' => $uebergangen, 'fehler' => ''];

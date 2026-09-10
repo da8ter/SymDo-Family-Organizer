@@ -346,5 +346,51 @@ pruefe('und keine Aenderung', $eD['geaendert'], 0);
 pruefe('das eigene Haekchen behaelt seinen Urheber', $nachB['b2']['doneBy'], 'user');
 pruefe('und bleibt erledigt', $nachB['b2']['done'], true);
 
+// ── Zwei Schulsysteme im selben Bestand ────────────────────────────────────
+/* Seit LOGINEO dazukommt, fuehren ZWEI Quellen eigene Nummern. Die Aufgabe 5
+   aus WebUntis und das Dokument 5 aus LOGINEO sind verschiedene Dinge — und der
+   Abruf der einen Quelle darf die Eintraege der anderen weder ueberschreiben
+   noch fuer verschwunden halten. Ohne den Quellen-Zuschnitt in
+   Zusammenfuehren() raeumte der erste LOGINEO-Lauf die WebUntis-Aufgaben des
+   Kindes weg; genau das prueft dieser Block. */
+$zwei = [
+    ['id' => 'u5', 'srcId' => 5, 'childId' => 'k1', 'subject' => 'Mathematik',
+     'due' => '2026-09-11', 'done' => false, 'doneAt' => 0, 'doneBy' => '',
+     'note' => 'aus WebUntis', 'source' => 'untis', 'createdAt' => 1, 'updatedAt' => 1],
+    ['id' => 'm5', 'srcId' => 5, 'childId' => 'k1', 'subject' => '1a Frau Frank',
+     'due' => '2026-09-11', 'done' => false, 'doneAt' => 0, 'doneBy' => '',
+     'note' => 'aus LOGINEO', 'source' => 'moodle', 'createdAt' => 1, 'updatedAt' => 1],
+];
+// Ein LOGINEO-Abruf, der seinen Eintrag NICHT mehr nennt.
+$q1 = HomeworkCalc::Zusammenfuehren($zwei, [], 'k1', '2026-09-11', '2026-09-11', $jetzt, 'moodle');
+pruefe('LOGINEO nimmt nur den eigenen weg', $q1['entfernt'], 1);
+pruefe('die WebUntis-Aufgabe bleibt',
+    array_values(array_map(static fn(array $i): string => (string)$i['id'], $q1['items'])), ['u5']);
+// Und umgekehrt.
+$q2 = HomeworkCalc::Zusammenfuehren($zwei, [], 'k1', '2026-09-11', '2026-09-11', $jetzt, 'untis');
+pruefe('WebUntis nimmt nur den eigenen weg',
+    array_values(array_map(static fn(array $i): string => (string)$i['id'], $q2['items'])), ['m5']);
+// Gleiche Nummer, andere Quelle: kein Ueberschreiben, sondern ein zweiter Eintrag.
+$q3 = HomeworkCalc::Zusammenfuehren(
+    [$zwei[0]],
+    [['srcId' => 5, 'childId' => 'k1', 'subject' => 'OGS', 'due' => '2026-09-11',
+      'done' => false, 'doneAt' => 0, 'doneBy' => '', 'note' => 'aus LOGINEO',
+      'source' => 'moodle', 'createdAt' => 0, 'updatedAt' => 0]],
+    'k1', '2026-09-11', '2026-09-11', $jetzt, 'moodle');
+pruefe('gleiche Nummer, andere Quelle: zwei Eintraege', count($q3['items']), 2);
+pruefe('davon einer neu', $q3['neu'], 1);
+pruefe('der WebUntis-Eintrag ist unberuehrt', $q3['items'][0]['note'], 'aus WebUntis');
+// „moodle" ist eine gueltige Herkunft und wird nicht zu „app" umgebogen.
+$m = HomeworkCalc::Normalisieren(
+    ['srcId' => 9, 'childId' => 'k1', 'subject' => 'OGS', 'due' => '2026-09-11',
+     'note' => 'Wochenplan', 'source' => 'moodle'],
+    ['Mathematik'], ['k1'], '2026-09-10', $jetzt);
+pruefe('Herkunft moodle bleibt erhalten', $m['source'] ?? '', 'moodle');
+pruefe('ein unbekanntes Fach bleibt als Text stehen', $m['subject'] ?? '', 'OGS');
+$x = HomeworkCalc::Normalisieren(
+    ['srcId' => 9, 'childId' => 'k1', 'subject' => 'OGS', 'due' => '2026-09-11', 'source' => 'lms'],
+    ['Mathematik'], ['k1'], '2026-09-10', $jetzt);
+pruefe('eine unbekannte Herkunft gilt als Handarbeit', $x['source'] ?? '', 'app');
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

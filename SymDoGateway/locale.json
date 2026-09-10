@@ -958,7 +958,11 @@
             "%d archived": "%d archiviert",
             "daily AI limit reached, the rest follows later": "KI-Tageslimit erreicht, der Rest folgt später",
             "Send new documents to the AI as suggestions": "Neue Dokumente als Vorschlag an die KI schicken",
-            "A new document goes through the same chain as a school mail: analysis, then a suggestion in the AI inbox that someone checks and accepts. The first check of a course only notes what is there — otherwise twenty suggestions would arrive at once. The suggestions count towards the daily AI limit.": "Ein neues Dokument läuft durch dieselbe Kette wie eine Schulmail: Auswertung, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Die erste Prüfung eines Kurses merkt sich nur den Bestand — sonst kämen zwanzig Vorschläge auf einmal. Die Vorschläge zählen auf das KI-Tageslimit."
+            "A new document goes through the same chain as a school mail: analysis, then a suggestion in the AI inbox that someone checks and accepts. The first check of a course only notes what is there — otherwise twenty suggestions would arrive at once. The suggestions count towards the daily AI limit.": "Ein neues Dokument läuft durch dieselbe Kette wie eine Schulmail: Auswertung, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Die erste Prüfung eines Kurses merkt sich nur den Bestand — sonst kämen zwanzig Vorschläge auf einmal. Die Vorschläge zählen auf das KI-Tageslimit.",
+            "homework: %s": "Hausaufgaben: %s",
+            "%1$d homework item(s), %2$d new, %3$d withdrawn": "%1$d Hausaufgabe(n), %2$d neu, %3$d zurückgezogen",
+            "%d date(s) suggested": "%d Termin(e) vorgeschlagen",
+            "LOGINEO": "LOGINEO"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

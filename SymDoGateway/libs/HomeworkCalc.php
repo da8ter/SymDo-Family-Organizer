@@ -138,7 +138,13 @@ class HomeworkCalc
                auch, denn vorher gab es nichts anderes. */
             'doneBy'    => $erledigt ? self::UrheberSauber((string)($roh['doneBy'] ?? self::BY_USER)) : '',
             'note'      => mb_substr(trim((string)($roh['note'] ?? '')), 0, self::NOTE_MAX),
-            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis'], true)
+            /* Die Herkunft ist mehr als ein Etikett: die Zuordnung und das
+               Loeschen in Zusammenfuehren() laufen JE QUELLE, und die
+               Oberflaeche macht daran fest, was aus der Schule kommt und
+               deshalb nicht von Hand geaendert werden darf. Eine unbekannte
+               Herkunft gilt als „app" — dann gehoert der Eintrag dem Nutzer,
+               und kein Abruf fasst ihn an. */
+            'source'    => in_array((string)($roh['source'] ?? ''), ['app', 'voice', 'ai', 'edumaps', 'untis', 'moodle'], true)
                 ? (string)$roh['source'] : 'app',
             'createdAt' => max(0, (int)($roh['createdAt'] ?? $jetzt)) ?: $jetzt,
             'updatedAt' => max(0, (int)($roh['updatedAt'] ?? $jetzt)) ?: $jetzt,
@@ -268,8 +274,14 @@ class HomeworkCalc
      * @param list<array> $neu   normalisierte Einträge des Abrufs (mit srcId)
      * @return array{items:list<array>,neu:int,geaendert:int,entfernt:int}
      */
-    public static function Zusammenfuehren(array $items, array $neu, string $kind, string $von, string $bis, int $jetzt): array
+    public static function Zusammenfuehren(array $items, array $neu, string $kind, string $von,
+        string $bis, int $jetzt, string $quelle = 'untis'): array
     {
+        /* JE QUELLE. Zwei Schulsysteme fuehren ihre Nummern unabhaengig: die
+           Aufgabe 5 aus WebUntis und das Dokument 5 aus LOGINEO sind
+           verschiedene Dinge. Ohne die Quelle im Schluessel wuerde das eine das
+           andere ueberschreiben — und schlimmer: der Abruf der einen Quelle
+           haelt die Einträge der anderen fuer verschwunden und loescht sie. */
         $gesehen = [];
         foreach ($neu as $n) {
             $s = (int)($n['srcId'] ?? 0);
@@ -286,6 +298,10 @@ class HomeworkCalc
         $stelle = [];
         foreach ($items as $i => $satz) {
             if (!is_array($satz) || (string)($satz['childId'] ?? '') !== $kind) {
+                continue;
+            }
+            // Nur Einträge DIESER Quelle — siehe oben.
+            if ((string)($satz['source'] ?? '') !== $quelle) {
                 continue;
             }
             $s = (int)($satz['srcId'] ?? 0);
@@ -349,7 +365,8 @@ class HomeworkCalc
             }
             $s = (int)($satz['srcId'] ?? 0);
             $due = trim((string)($satz['due'] ?? ''));
-            $fremd = $s > 0 && (string)($satz['childId'] ?? '') === $kind;
+            $fremd = $s > 0 && (string)($satz['childId'] ?? '') === $kind
+                && (string)($satz['source'] ?? '') === $quelle;
             if ($fremd && !isset($gesehen[$s]) && $due !== '' && $due >= $von && $due <= $bis) {
                 $zahlWeg++;
                 continue;

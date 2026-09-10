@@ -11280,6 +11280,26 @@ function hwBereichMitglieder() {
   }));
 }
 
+/**
+ * Kommt dieser Eintrag aus einem Schulsystem?
+ *
+ * Es sind inzwischen ZWEI: WebUntis und LOGINEO (Moodle). Beide gehoeren der
+ * Schule — was sie schickt, wird hier gezeigt und nicht bearbeitet, denn eine
+ * Aenderung faellt beim naechsten Abruf zurueck. Die Liste steht an EINER
+ * Stelle, damit eine dritte Quelle nicht vier Abfragen suchen muss.
+ */
+function hwAusSchule(eintrag) {
+  return ['untis', 'moodle'].includes(String((eintrag && eintrag.source) || ''));
+}
+
+/** Wie die Quelle im Anzeigeblatt heisst. */
+function hwQuellenText(eintrag) {
+  const q = String((eintrag && eintrag.source) || '');
+  if (q === 'untis') return translate('Source: UNTIS');
+  if (q === 'moodle') return translate('Source: LOGINEO');
+  return translate('Source: SymDo');
+}
+
 function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
   const fach = hwFachInfo(i.subject, subjects);
   const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
@@ -11304,7 +11324,7 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
      Aufgabe aus WebUntis trägt kein doneBy und wäre sonst wischbar gewesen —
      im ersten Anlauf war genau das der Fehler. Löschen holte der nächste Abruf
      zurück, Ändern überschriebe er. */
-  const ausSchule = String(i.source || '') === 'untis';
+  const ausSchule = hwAusSchule(i);
   const mitGeste = wischbar === true && !ausSchule;
   const huelle = mitGeste
     ? `<div class="hw-card">` +
@@ -11326,7 +11346,7 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
         /* Aus der Schule uebernommen. Ein Zeichen und kein Text: die Zeile ist
            schmal, und die Auskunft ist eine Nebensache — sie erklaert nur,
            warum eine Aenderung hier beim naechsten Abruf zurueckfaellt. */
-        (i.source === 'untis'
+        (hwAusSchule(i)
           ? ` <i class="fa-light fa-school hw-schule" title="${escapeHtml(translate('From the school'))}"></i>`
           : '') +
       `</span>` +
@@ -11461,7 +11481,7 @@ function hwKarteHtml() {
           (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
         `</span>` +
         `<span class="hw-text"><span class="hw-name">${escapeHtml(fach.name)}` +
-          (String(i.source || '') === 'untis'
+          (hwAusSchule(i)
             ? ` <i class="fa-light fa-school hw-schule" title="${escapeHtml(translate('From the school'))}"></i>`
             : '') +
         `</span>` +
@@ -11497,7 +11517,7 @@ function hwEditorOeffnen(bestand, vorschlag) {
      stillschweigend zurueckfaellt, ist schlimmer als eines, das es nicht gibt.
      Das Haekchen bleibt moeglich — es gehoert dem Kind und liegt in der
      Zeile, nicht in diesem Blatt. */
-  const nurLesen = !!bestand && String(bestand.source || '') === 'untis';
+  const nurLesen = !!bestand && hwAusSchule(bestand);
   hwCtx = { id: bestand ? String(bestand.id) : '', proposal: (vorschlag && vorschlag.proposal) || null,
             nurLesen: nurLesen };
   if (nurLesen) { hwAnzeigeblatt(bestand); return; }
@@ -11569,7 +11589,7 @@ function hwAnzeigeblatt(eintrag) {
   document.getElementById('hwViewNote').textContent = String(eintrag.note || '');
   const quelle = document.getElementById('hwQuelle');
   quelle.style.display = '';
-  quelle.textContent = translate('Source: UNTIS');
+  quelle.textContent = hwQuellenText(eintrag);
   document.getElementById('btnHwDelete').style.display = 'none';
   document.getElementById('btnHwSave').style.display = 'none';
   document.getElementById('btnHwCancel').textContent = translate('Close');

@@ -44,6 +44,10 @@ trait Moodle
        Klassenseiten. */
     private const MOODLE_JE_LAUF_MAX   = 5;
     private const MOODLE_TEXT_MAX      = 8000;
+    /* So weit im Voraus werden Aufgaben geholt — und genau dieses Fenster gilt
+       auch beim Zurueckziehen. Nicht das Jahr aus HomeworkCalc: ein halb
+       gelesener Abruf soll nicht ein Jahr Hausaufgaben wegnehmen koennen. */
+    private const MOODLE_TAGE_VOR      = 90;
     /* Anhaenge fuer die KI, zusammen als Base64. Groesseres schickt niemand
        durch: die Auswertung soll an einer Datei nicht scheitern. */
     private const MOODLE_ANHANG_MAX_B64 = 8000000;
@@ -546,6 +550,9 @@ trait Moodle
             && $this->AiPrivacyAccepted();
         $karten = 0;
         $neu = 0;
+        $kursListe = [];
+        $hausaufgaben = '';
+        $termine = '';
         $geaendert = 0;
         $analysiert = 0;
         $archiviert = 0;
@@ -614,12 +621,24 @@ trait Moodle
             if ($spiegeln && !$trocken) {
                 $archiviert += $this->MoodleArchivAbgleichen($seite, $liste);
             }
+            $kursListe[(int)$kurs['id']] = $seite;
+        }
+        /* Aufgaben und Termine hangen NICHT an einer Seite, sondern am Konto:
+           beide Abrufe nennen ihre Kurse selbst. Deshalb hier, nach der
+           Schleife, und in EINEM Aufruf je Konto. */
+        if (!$trocken && (bool)$this->MoodleProp('MoodleHomework', true)) {
+            $hausaufgaben = $this->MoodleAufgaben($zugang, $kursListe);
+        }
+        if (!$trocken && (bool)$this->MoodleProp('MoodleEvents', true)) {
+            $termine = $this->MoodleTermine($zugang, $kursListe);
         }
         return sprintf($this->Translate('%1$d course(s), %2$d card(s), %3$d written, %4$d changed, %5$d analysed%6$s'),
             count($kurse), $karten, $neu, $geaendert, $analysiert,
             ($archiviert > 0 ? ', ' . sprintf($this->Translate('%d archived'), $archiviert) : '')
             . ($gesperrt > 0 ? ', ' . sprintf($this->Translate('%d blocked'), $gesperrt) : '')
             . ($gedeckelt ? ' — ' . $this->Translate('daily AI limit reached, the rest follows later') : '')
+            . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben)
+            . ($termine === '' ? '' : ', ' . $termine)
             . ($trocken ? ' — ' . $this->Translate('dry run, nothing written') : ''));
     }
 
@@ -847,8 +866,16 @@ trait Moodle
                 /* Was der Deckel ueberschreitet, wird NICHT geladen. Die Karte
                    nennt die Datei dann im Text; der Weg zur Seite steht ohnehin
                    an der Karte. */
-                if ((int)($datei['bytes'] ?? 0) > self::MOODLE_DATEI_MAX) {
-                    $this->SendDebug('Moodle', 'Datei zu gross, nur verlinkt: ' . $datei['name'], 0);
+                /* Nicht groesser, als der Bestand annimmt: ein PDF darf hoechstens
+                   OutputLimit() Bytes haben (die Ausgabegrenze minus Reserve),
+                   sonst weist NotesSaveAttachment es mit „file_too_large" ab.
+                   Gemessen an dieser Schule: die Elternabend-Praesentation hat
+                   6,3 MB und passt damit nicht — sie waere umsonst geladen
+                   worden. Die Karte behaelt Text und Verweis auf die Seite. */
+                $deckel = min(self::MOODLE_DATEI_MAX, $this->OutputLimit());
+                if ((int)($datei['bytes'] ?? 0) > $deckel) {
+                    $this->SendDebug('Moodle', 'Datei zu gross fuer den Bestand, nur verlinkt: '
+                        . $datei['name'] . ' (' . (int)$datei['bytes'] . ' > ' . $deckel . ')', 0);
                     continue;
                 }
                 $roh = $this->MoodleDatei($zugang, (string)$datei['url']);
@@ -1152,6 +1179,149 @@ trait Moodle
             @ini_set('memory_limit', $speicherVorher);
         }
         return $raus;
+    }
+
+    /**
+     * Aufgaben der Plattform als Hausaufgaben.
+     *
+     * Das Fach ist der Kursname: eine Schule nennt ihren Kurs „Mathematik 5a",
+     * und HomeworkCalc::FachAufloesen findet daraus „Mathematik", wenn der
+     * Stundenplan es kennt — sonst bleibt der Kursname stehen. Erledigt ist,
+     * was abgegeben wurde; das Haekchen gehoert damit der Schule und laesst
+     * sich zu Hause nicht zuruecknehmen (Sperrklinke in HomeworkCalc).
+     *
+     * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
+     * @return string Bericht, '' wenn es nichts zu berichten gibt
+     */
+    private function MoodleAufgaben(array $zugang, array $kurse): string
+    {
+        if ($kurse === []) {
+            return '';
+        }
+        $antwort = $this->MoodleRest($zugang, 'mod_assign_get_assignments',
+            ['courseids' => array_values(array_map('intval', array_keys($kurse)))]);
+        if (!is_array($antwort)) {
+            return '';
+        }
+        $von = date('Y-m-d');
+        $bis = date('Y-m-d', strtotime('+' . self::MOODLE_TAGE_VOR . ' days'));
+        $roh = [];
+        foreach ((array)($antwort['courses'] ?? []) as $kurs) {
+            $fach = trim((string)($kurs['shortname'] ?? ($kurs['fullname'] ?? '')));
+            foreach ((array)($kurs['assignments'] ?? []) as $a) {
+                if (!is_array($a)) {
+                    continue;
+                }
+                $faellig = (int)($a['duedate'] ?? 0);
+                /* Ohne Faelligkeit ist es keine Hausaufgabe, sondern
+                   Kursmaterial — das steht als Karte schon da. */
+                if ($faellig <= 0) {
+                    continue;
+                }
+                $tag = date('Y-m-d', $faellig);
+                if ($tag < $von || $tag > $bis) {
+                    continue;
+                }
+                /* Der Abgabestand kostet einen Aufruf JE Aufgabe — deshalb erst
+                   hier, nachdem Fenster und Faelligkeit stimmen. */
+                $erledigt = false;
+                $stand = $this->MoodleRest($zugang, 'mod_assign_get_submission_status',
+                    ['assignid' => (int)($a['id'] ?? 0)]);
+                if (is_array($stand)) {
+                    $status = (string)((($stand['lastattempt']['submission']['status']) ?? ''));
+                    $erledigt = in_array($status, ['submitted', 'graded'], true);
+                }
+                $roh[] = [
+                    'srcId'   => (int)($a['id'] ?? 0),
+                    'subject' => $fach,
+                    'due'     => $tag,
+                    'note'    => trim((string)($a['name'] ?? '')),
+                    'done'    => $erledigt,
+                ];
+            }
+        }
+        $e = $this->HomeworkImportieren((string)$zugang['userId'], $roh, $von, $bis, 'moodle');
+        if (($e['ok'] ?? false) !== true) {
+            return sprintf($this->Translate('homework: %s'), (string)($e['fehler'] ?? '?'));
+        }
+        if ($roh === [] && (int)($e['entfernt'] ?? 0) === 0) {
+            return '';                          // diese Schule pflegt keine Aufgaben
+        }
+        return sprintf($this->Translate('%1$d homework item(s), %2$d new, %3$d withdrawn'),
+            count($roh), (int)($e['neu'] ?? 0), (int)($e['entfernt'] ?? 0));
+    }
+
+    /**
+     * Termine der Plattform als Vorschlag — OHNE KI-Aufruf.
+     *
+     * Ein Termin aus dem Kalender ist schon strukturiert: Name, Zeitpunkt,
+     * Kurs. Ihn durch die Auswertung zu schicken kostete Geld und koennte ihn
+     * nur schlechter machen. Er wird deshalb direkt zu einem Vorschlag —
+     * angelegt wird er erst, wenn jemand ihn uebernimmt („nichts entsteht
+     * ungefragt" gilt auch hier).
+     *
+     * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
+     */
+    private function MoodleTermine(array $zugang, array $kurse): string
+    {
+        $antwort = $this->MoodleRest($zugang, 'core_calendar_get_action_events_by_timesort',
+            ['timesortfrom' => time(), 'limitnum' => 20]);
+        if (!is_array($antwort)) {
+            return '';
+        }
+        $topf = 'moodleevents:' . mb_strtolower((string)$zugang['site']);
+        $neu = 0;
+        foreach ((array)($antwort['events'] ?? []) as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+            $ts = (int)($e['timesort'] ?? ($e['timestart'] ?? 0));
+            $titel = trim((string)($e['name'] ?? ''));
+            if ($ts <= 0 || $titel === '') {
+                continue;
+            }
+            $schluessel = 'ev:' . (int)($e['id'] ?? 0) . ':' . $ts;
+            if ($this->MoodleGesehen($topf, $schluessel)) {
+                continue;
+            }
+            $kursName = trim((string)((($e['course']['shortname']) ?? ($e['course']['fullname'] ?? ''))));
+            $gespeichert = $this->MailStoreProposal([
+                'id'        => 'moodleevent:' . (int)($e['id'] ?? 0) . ':' . $ts,
+                'at'        => $ts,
+                'created'   => time(),
+                'from'      => '',
+                'fromName'  => $kursName !== '' ? $kursName : $this->Translate('LOGINEO'),
+                'subject'   => $titel,
+                'recipient' => '',
+                'userId'    => (string)$zugang['userId'],
+                'origin'    => null,
+                'items'     => [[
+                    'title'      => mb_substr($titel, 0, 120),
+                    'info'       => $kursName,
+                    'due'        => date('Y-m-d', $ts),
+                    /* Mitternacht heisst „ganztaegig": Moodle setzt fuer einen
+                       Tagestermin 00:00, und eine Uhrzeit „0:00" im Kalender
+                       waere eine Behauptung. */
+                    'time'       => date('H:i', $ts) === '00:00' ? null : date('H:i', $ts),
+                    'priority'   => 'normal',
+                    'kind'       => 'event',
+                    'end'        => null,
+                    'allDay'     => date('H:i', $ts) === '00:00',
+                    'recurrence' => null,
+                    'assignedTo' => [(string)$zugang['userId']],
+                    'taken'      => false,
+                ]],
+            ]);
+            if ($gespeichert) {
+                $this->MoodleMerken($topf, $schluessel);
+                $neu++;
+            }
+        }
+        if ($neu === 0) {
+            return '';
+        }
+        $this->MailNotifyProposal(0, $neu, 0, (string)$zugang['userId'], 'LOGINEO');
+        return sprintf($this->Translate('%d date(s) suggested'), $neu);
     }
 
     private function MoodleStatusSchreiben(string $text): void
