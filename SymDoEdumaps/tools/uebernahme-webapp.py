@@ -54,14 +54,14 @@ ANKER = [
 # stillschweigend verliert.
 EIGEN = {
     'de': {
-        # Der Anzeigename nennt die SACHE zuerst und den Anbieter in Klammern:
-        # der Inhalt heisst ueberall „Klassenseiten" (Formular, Bereich der
-        # Web-App, Anleitung), und „Edumaps" bleibt darin auffindbar.
-        'SymDo Edumaps': 'SymDo - Klassenseiten (Edumaps)',
+        # Der Anzeigename nennt die SACHE und keinen Anbieter: seit LOGINEO
+        # dazugekommen ist, zeigt die Kachel ZWEI Quellen — „(Edumaps)" waere
+        # nur noch die halbe Wahrheit.
+        'SymDo Edumaps': 'SymDo - Klassenseiten',
         'Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.':
-            'Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Seiten werden im SymDo Gateway eingetragen.',
+            'Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Quellen (Edumaps und LOGINEO NRW LMS) werden im SymDo Gateway eingetragen.',
         'Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.':
-            'Nur lesend: die Karten sind ein Spiegel der Klassenseite. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.',
+            'Nur lesend: die Karten sind ein Spiegel der Schulseite — ob sie von Edumaps oder aus LOGINEO kommt. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.',
         'Gateway: %1$s (#%2$d)': 'Gateway: %1$s (#%2$d)',
         'No SymDo Gateway found — the class pages live there. Create one first.':
             'Kein SymDo Gateway gefunden — dort liegen die Klassenseiten. Erst eines anlegen.',
@@ -73,7 +73,7 @@ EIGEN = {
         'Inactive': 'Inaktiv',
     },
     'en': {
-        'SymDo Edumaps': 'SymDo - Class pages (Edumaps)',
+        'SymDo Edumaps': 'SymDo - Class pages',
     },
 }
 

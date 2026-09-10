@@ -5,6 +5,11 @@ declare(strict_types=1);
 /**
  * SymDoEdumaps — die Klassenseiten der Schule als eigene Kachel.
  *
+ * Zwei Quellen speisen sie: Edumaps und LOGINEO NRW LMS (Moodle). Der
+ * Ordnername des Moduls und die Klasse heissen weiter „Edumaps" — Symcon
+ * instanziiert die Klasse `name` minus Leerzeichen, daran darf nichts wackeln.
+ * Der ANZEIGENAME nennt nur die Sache: „SymDo - Klassenseiten".
+ *
  * KEINE eigene Codebase: module.html ist die Web-App, wortgleich uebernommen
  * (tools/uebernahme-webapp.py), samt locale.json. Wer an der Kartenansicht
  * etwas aendern will, aendert sie in SymDoWebApp/module.html und uebernimmt neu

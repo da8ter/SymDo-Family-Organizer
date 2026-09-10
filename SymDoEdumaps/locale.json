@@ -9,7 +9,7 @@
       "Choose print layout": "Choose print layout",
       "For the WAF ;-)": "For the WAF ;-)",
       "No timetable": "No timetable",
-      "SymDo Edumaps": "SymDo - Class pages (Edumaps)"
+      "SymDo Edumaps": "SymDo - Class pages"
     },
     "de": {
       "\"%1\" contains no items": "„%1“ enthält keine Artikel",
@@ -524,9 +524,9 @@
       "1 card": "1 Karte",
       "%1 cards": "%1 Karten",
       "Show class pages (requires the SymDo Gateway)": "Klassenseiten zeigen (braucht das SymDo Gateway)",
-      "SymDo Edumaps": "SymDo - Klassenseiten (Edumaps)",
-      "Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.": "Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Seiten werden im SymDo Gateway eingetragen.",
-      "Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.": "Nur lesend: die Karten sind ein Spiegel der Klassenseite. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.",
+      "SymDo Edumaps": "SymDo - Klassenseiten",
+      "Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.": "Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Quellen (Edumaps und LOGINEO NRW LMS) werden im SymDo Gateway eingetragen.",
+      "Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.": "Nur lesend: die Karten sind ein Spiegel der Schulseite — ob sie von Edumaps oder aus LOGINEO kommt. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.",
       "Gateway: %1$s (#%2$d)": "Gateway: %1$s (#%2$d)",
       "No SymDo Gateway found — the class pages live there. Create one first.": "Kein SymDo Gateway gefunden — dort liegen die Klassenseiten. Erst eines anlegen.",
       "Refresh tile": "Kachel neu laden",

@@ -1,7 +1,7 @@
-# SymDo - Klassenseiten (Edumaps)
+# SymDo - Klassenseiten
 
-**Die Klassenseiten der Schule als eigene Kachel — dieselben Karten wie in der
-App, nur lesend.**
+**Die Schulseiten als eigene Kachel — dieselben Karten wie in der App, nur
+lesend. Aus zwei Quellen: Edumaps und LOGINEO NRW LMS.**
 
 Viele Schulen führen ihre Klassenseiten bei Edumaps: eine Pinnwand mit Karten
 für Elternbriefe, Materiallisten, AG-Wahlen und Termine. Das SymDo Gateway sieht
@@ -40,11 +40,11 @@ Karte endgültig wegwerfen lässt.
 |---|---|
 | Symcon | ab 8.1 |
 | **SymDo Gateway** | Pflicht — dort liegen die Karten, dort werden die Seiten eingetragen |
-| Klassenseiten | im Gateway unter *Schule → Klassenseiten (Edumaps)* eingeschaltet, mit mindestens einer Seite |
+| Quelle | im Gateway unter *Schule* eingeschaltet: *Klassenseiten (Edumaps)* mit mindestens einer Seite und/oder *LOGINEO NRW LMS* mit mindestens einem Zugang |
 
 ## 3. Einrichtung
 
-1. Instanz **SymDo - Klassenseiten (Edumaps)** anlegen; als Eltern das vorhandene SymDo
+1. Instanz **SymDo - Klassenseiten** anlegen; als Eltern das vorhandene SymDo
    Gateway wählen (die Konsole schlägt es vor).
 2. Fertig. Es gibt nichts einzustellen: die Seiten stehen im Gateway.
 

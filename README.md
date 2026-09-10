@@ -73,7 +73,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Rezeptbilder |
 | **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
-| **SymDo - Klassenseiten** | Device | Die Klassenseiten der Schule (Edumaps) als eigene Kachel: Karten mit Text, Bildern und Buchungslage, nur lesend |
+| **SymDo - Klassenseiten** | Device | Die Klassenseiten der Schule als eigene Kachel — aus Edumaps und LOGINEO NRW LMS: Karten mit Text, Dateien und Buchungslage, nur lesend |
 | **SymDo - Hausaufgaben** | Device | Die Hausaufgaben der Kinder als eigene Kachel: nach Fälligkeit gruppiert, mit Fachsymbolen, Häkchen und Erledigt-Abschnitt |
 
 ## Schnellstart
@@ -203,13 +203,15 @@ im Gateway.
 
 → [Ausführliche Anleitung](SymDoNotes/README.md)
 
-## SymDo - Klassenseiten (Edumaps)
+## SymDo - Klassenseiten
 
-Die Pinnwand der Schule als eigene Kachel: je Kind seine Seiten, darin die
-Karten in der Reihenfolge und mit den Farben der echten Seite — Elternbriefe,
-Materiallisten, AG-Wahlen mit Buchungslage, Bilder und PDF-Vorschauen. Nur
-lesend, denn es ist ein Spiegel; entfernte Karten wandern ins Archiv. Nichts
-einzurichten — die Seiten werden im Gateway eingetragen.
+Die Schulseiten als eigene Kachel: je Kind seine Seiten, darin die Karten —
+Elternbriefe, Materiallisten, AG-Wahlen mit Buchungslage, Wochenpläne, Bilder
+und PDF. Zwei Quellen speisen sie: die Pinnwand **Edumaps** (mit den Farben und
+der Reihenfolge der echten Seite) und **LOGINEO NRW LMS** (Moodle: Kurse,
+Dateien, Forumsbeiträge). Nur lesend, denn es ist ein Spiegel; entfernte Karten
+wandern ins Archiv. Nichts einzurichten — die Quellen werden im Gateway
+eingetragen.
 
 → [Ausführliche Anleitung](SymDoEdumaps/README.md)
 

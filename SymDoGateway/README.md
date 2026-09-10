@@ -45,8 +45,9 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **14. Stundenplan aus WebUntis**
 - **15. Hausaufgaben**
 - **16. Klassenseiten (Edumaps)**
-- **17. Statusvariablen**
-- **18. PHP-Befehlsreferenz**
+- **17. LOGINEO NRW LMS (Moodle)**
+- **18. Statusvariablen**
+- **19. PHP-Befehlsreferenz**
 
 ## 1. Funktionsumfang
 
@@ -72,6 +73,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Stundenplan aus WebUntis** — Unterricht, Vertretungen, Entfall, Raum und Lehrer je Kind, für die laufende und die kommende Woche (Kapitel 14)
 - **Hausaufgaben** — Fach, Fälligkeit und Notiz je Kind: in der Web-App, an der Stunde in der Stundenplan-Kachel, per Sprache und als vierte Vorschlagsart der KI (Kapitel 15)
 - **Klassenseiten (Edumaps)** — die Klassenseite der Schule als Quelle für KI-Vorschläge und, auf Wunsch, als gespiegelte Notizen mit Kartenansicht (Kapitel 15)
+- **LOGINEO NRW LMS** — die Lernplattform der Schule als zweite Quelle derselben Klassenseiten: Kursdateien, Elternpost, Forumsbeiträge, Aufgaben mit Fälligkeit (Kapitel 17)
 - **Essensplan** — die Kachel **SymDo - Essensplan** hängt am Gateway: Gerichte je Tag, Zutaten in den Einkaufswagen, KI-Rezeptbilder; der Sprachdialog liest und plant ihn mit
 
 ## 2. Voraussetzungen
@@ -504,7 +506,7 @@ Notizen trugen Code, der nur für Klassenseiten da war.
 Sichtbar sind die Karten jetzt an drei Stellen: im eigenen Bereich
 **Klassenseiten** der Web-App (Schalter *Klassenseiten zeigen* an der Web-App-
 Instanz, zusätzlich gekoppelt an diese Konfiguration hier), in der neuen Kachel
-**SymDo - Klassenseiten (Edumaps)**, und als Kartenansicht mit den Farben der Seite,
+**SymDo - Klassenseiten**, und als Kartenansicht mit den Farben der Seite,
 aufklappbaren Bereichen, PDF-Vorschau und der Buchungslage buchbarer Karten. Die
 Ordnung ist zwei Ebenen tief: je Kind ein Ordner, darin seine Seiten.
 
@@ -529,11 +531,70 @@ archivierte Karte endgültig wegwerfen. Anlegen und Schreiben gibt es nicht — 
 hier von Hand entstünde, wäre beim nächsten Durchlauf entweder weg oder
 archiviert.
 
-## 17. Statusvariablen
+## 17. LOGINEO NRW LMS (Moodle)
+
+> Im Formular unter **Schule → LOGINEO NRW LMS (Moodle)**, in drei Gruppen:
+> *1. Zugang je Kind*, *2. Was übernommen wird*, *3. Stand und Wartung*.
+
+LOGINEO NRW LMS **ist** Moodle, und der Web-Service der Moodle-App ist auf den
+geprüften Installationen eingeschaltet. Damit liest das Gateway die Plattform
+über eine dokumentierte Schnittstelle statt über abgeschriebenes HTML — Kurse,
+Dateien, Forumsbeiträge, Aufgaben mit Fälligkeit, Kalendertermine.
+
+| Einstellung | Eigenschaft | Bedeutung |
+|---|---|---|
+| Von LOGINEO lesen | `MoodleEnabled` | Schalter |
+| Zugänge | `MoodleAccounts` | je Kind eine Zeile: Adresse der Schule, Benutzername, Familienmitglied. **Der Token steht nicht hier**, sondern im Attribut `MoodleTokens` |
+| Updateintervall | `MoodleIntervalHours` | Stunden zwischen zwei Durchläufen |
+| Karten spiegeln | `MoodleToCards` | Dateien und Forumsbeiträge als Karten in den **Klassenseiten** |
+| Auswerten | `MoodleAnalyse` | neue Dokumente durch die KI, als Vorschlag im KI-Eingang |
+| Aufgaben | `MoodleHomework` | `mod_assign` mit Fälligkeit und Abgabestand in den Hausaufgaben-Bestand |
+| Termine | `MoodleEvents` | Kalendertermine als Vorschlag — **ohne** KI-Aufruf |
+
+**Ein Konto je Kind, und nur der Token wird gespeichert.** LOGINEO kennt keine
+Elternzugänge: jedes Kind hat einen eigenen Login. Das Kennwort steht einmal im
+Formular, der Knopf *Anmelden und Token holen* tauscht es gegen den
+Web-Service-Token und leert das Feld sofort; in den Bestand kommt nur der Token.
+Er lässt sich in Moodle jederzeit widerrufen, ein Kennwort nicht — und weil der
+Takt sich nie anmeldet, kann er auch kein Konto sperren. *Token entfernen* nimmt
+ihn wieder weg (in Moodle sollte er zusätzlich widerrufen werden). Der
+Fehlerzähler läuft **je Zugang**: ein toter Token bei einem Kind hält die
+Geschwister nicht an.
+
+**Es wird ausschließlich gelesen.** Auf dem geprüften Schulkonto sind auch
+Schreibfunktionen freigegeben — Termine anlegen und löschen, Forumsbeiträge
+schreiben, Noten speichern. Jeder Aufruf läuft deshalb durch eine **weiße Liste
+von neun lesenden Funktionen**; alles andere wird abgewiesen und landet als
+Fehler im Protokoll. Auch „gelesen"-Marken wie `mod_forum_view_forum` stehen
+nicht darauf: sie hinterlassen Spuren im Kurs.
+
+**Wo die Inhalte landen.** Im Bestand der **Klassenseiten**, neben Edumaps: je
+Kind ein Ordner (derselbe), je Kurs eine Seite, je Datei oder Beitrag eine
+Karte. Der Schlüssel einer Kursseite ist ihre echte Kursadresse — dadurch
+greifen Sperrliste, Archiv und Anhang-Verwaltung unverändert. Archiviert wird
+**je Quelle**: ein LOGINEO-Lauf fasst eine Edumaps-Karte im selben Ordner nicht
+an. Eine Karte je *Modul* und nicht je Datei — ein Material kann mehrere Dateien
+tragen, und sie gehören zusammen.
+
+**Aufgaben** kommen mit `source: 'moodle'` in denselben Bestand wie die aus
+WebUntis. Zuordnung und Zurückziehen laufen **je Quelle**: zwei Schulsysteme
+führen ihre Nummern unabhängig, und ohne diesen Zuschnitt hätte ein
+LOGINEO-Abruf die WebUntis-Aufgaben desselben Kindes für verschwunden gehalten.
+Das Fach ist der Kursname; erledigt ist, was abgegeben wurde — dieses Häkchen
+gehört damit der Schule und lässt sich zu Hause nicht zurücknehmen.
+
+**Grenzen.** Ein PDF darf höchstens so groß sein, wie die Ausgabegrenze zulässt
+(`ScriptOutputBufferLimit` minus Reserve); die Elternabend-Präsentation der
+geprüften Schule hat 6,3 MB und passt damit nicht — die Karte behält Text und
+Verweis auf die Seite. Und was die Schule nicht pflegt, fehlt: an der geprüften
+Grundschule gibt es keine Aufgaben und keine Kalendertermine, und der Bericht
+sagt dann einfach nichts dazu.
+
+## 18. Statusvariablen
 
 Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt. Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
 
-## 18. PHP-Befehlsreferenz
+## 19. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 
