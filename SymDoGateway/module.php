@@ -25,6 +25,8 @@ require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/EduStore.php';
 require_once __DIR__ . '/libs/WebUntis.php';
+require_once __DIR__ . '/libs/MoodleCalc.php';
+require_once __DIR__ . '/libs/Moodle.php';
 
 /**
  * SymDo Gateway — die zentrale Dienst-Instanz der Listen-Familie.
@@ -64,6 +66,7 @@ class SymDoGateway extends IPSModuleStrict
     use EduMaps;
     use EduStore;
     use WebUntis;
+    use Moodle;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -145,6 +148,7 @@ class SymDoGateway extends IPSModuleStrict
         // Klassenseiten: der eigene Bestand der Karten (vorher lagen sie in den Notizen)
         $this->EduStoreCreate();
         $this->UntisCreate();
+        $this->MoodleCreate();
         // Kalender: Zuordnung, Erinnerungen und ihr Timer
         $this->CalCreateProps();
         // Tagesbriefing: Einstellungen, Ablage und sein Timer
@@ -183,6 +187,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->MailApplyChanges();
             $this->EduApplyChanges();
             $this->UntisApplyChanges();
+        $this->MoodleApplyChanges();
             $this->CalApplyChanges();
             $this->BriefingApplyChanges();
             $this->PushApplyChanges();
@@ -226,6 +231,9 @@ class SymDoGateway extends IPSModuleStrict
             return;
         }
         if ($this->UntisRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->MoodleRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->CalRequestAction($Ident, $Value)) {
@@ -409,7 +417,8 @@ class SymDoGateway extends IPSModuleStrict
                 'name'     => 'SchoolPanel',
                 'caption'  => $this->Translate('School'),
                 'expanded' => false,
-                'items'    => [$this->GetEduPanel(), $this->GetUntisPanel()],
+                'items'    => [$this->GetEduPanel(), $this->GetUntisPanel(),
+                                $this->GetMoodlePanel()],
             ];
             $stelle = null;
             foreach ($elements as $i => $e) {
