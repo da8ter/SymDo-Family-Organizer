@@ -3612,6 +3612,10 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    Eine Zeile ist Haken, Fachsymbol, Text und Faelligkeit — dieselbe Ordnung
    wie eine Aufgabenzeile, damit man sie ohne Nachdenken liest. */
 .hw-bereich { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+/* Dieselbe Liste als EIGENER Bereich (Kachel SymDoHomework). Ohne den Abstand
+   nach oben: dort steht die Uebersicht mit den drei Zahlen darueber, und der
+   Abstand kommt von ihr. */
+.hw-liste { display: flex; flex-direction: column; gap: 6px; }
 .hw-kopf {
   display: flex; align-items: center; gap: 8px;
   font-size: 15px; font-weight: 800; padding: 0 2px 2px;
@@ -3714,7 +3718,12 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 }
 .hw-zeile {
   display: flex; align-items: center; gap: 10px;
-  background: var(--surface); border-radius: 12px; padding: 8px 10px;
+  /* DECKEND (--row) und nicht --surface: eine Zeile mit Wischhuelle braucht
+     eine deckende Flaeche, sonst schienen die Untergruende durch. Vorher stand
+     das nur an .hw-card .hw-zeile — die UNTIS-Zeilen haben keine Huelle und
+     standen deshalb in einem anderen Ton als ihre Nachbarn. Dieselbe Liste in
+     zwei Toenen sah nach zwei verschiedenen Dingen aus. */
+  background: var(--row); border-radius: 12px; padding: 8px 10px;
   cursor: pointer;
 }
 /* Auf der Uebersicht dieselbe Flaeche und derselbe Abstand wie eine
@@ -4158,6 +4167,33 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </section>
 
+    <!-- Die Hausaufgaben als eigener Bereich, im Aufbau der Aufgabenliste:
+         Mitgliederleiste, Kopfzeile, drei Zahlen, Liste, Eingabezeile.
+
+         Sichtbar NUR, wo der Zustand ihn ausdruecklich nennt (tabs.homework) —
+         heute also allein in der Kachel des Moduls SymDoHomework. In der vollen
+         Web-App bleiben die Hausaufgaben unter dem Wochenraster des Kindes
+         (#hwArea): zwei Orte fuer dieselbe Liste waeren eine Verdopplung. -->
+    <section id="screen-homework" class="screen">
+      <div class="content">
+        <div id="hwMembers" class="member-bar todo-members" style="display:none;"></div>
+        <div class="screen-head"><h2 id="hwTitle"></h2></div>
+        <div id="hwStats" class="todo-stats" style="display:none;">
+          <div class="stat-box stat-open"><div class="stat-label" id="hwStatOpenLabel"></div><div class="stat-value" id="hwStatOpenValue">0</div></div>
+          <div class="stat-box stat-overdue"><div class="stat-label" id="hwStatOverdueLabel"></div><div class="stat-value" id="hwStatOverdueValue">0</div></div>
+          <div class="stat-box stat-today"><div class="stat-label" id="hwStatTodayLabel"></div><div class="stat-value" id="hwStatTodayValue">0</div></div>
+        </div>
+        <div id="hwListArea" class="hw-liste"></div>
+        <!-- Schnellerfassung wie im Kalender: das Plus legt NICHTS direkt an, es
+             oeffnet das Blatt mit dem Getippten als Notiz. Eine Hausaufgabe
+             braucht ein Fach, und das kann eine Zeile Text nicht liefern. -->
+        <div class="inputbar" id="hwInputbar">
+          <input id="hwInput" type="text" autocomplete="off" />
+          <button id="btnHwAdd" class="round-btn" aria-label="Hinzufügen" disabled><i class="fa-light fa-plus"></i></button>
+        </div>
+      </div>
+    </section>
+
     <!-- Der Wochenplan EINES Kindes. Der Bereich erscheint nur im Kindmodus
          (siehe visibleTabs): ohne gewaehltes Kind waere „der Wochenplan" die
          Frage, wessen. -->
@@ -4183,6 +4219,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <button id="tab-calendar"><i class="fa-light fa-calendar-days"></i><span></span></button>
     <button id="tab-notes"><i class="fa-light fa-note-sticky"></i><span></span></button>
     <button id="tab-edumaps"><i class="fa-light fa-school"></i><span></span></button>
+    <button id="tab-homework"><i class="fa-light fa-book-open-cover"></i><span></span></button>
   </nav>
 </div>
 
@@ -5217,6 +5254,12 @@ function normalizeTabs(raw) {
        der Bereich dort von selbst weg. Waere die Vorgabe „sichtbar", bekaeme
        die Aufgaben-Kachel ploetzlich zwei Bereiche und ihre Leiste zurueck. */
     edumaps:   t.edumaps    === true,
+    /* Hausaufgaben: gleiche Regel, und hier ist sie besonders wichtig. Die
+       volle Web-App nennt den Schluessel NICHT — dort stehen die Hausaufgaben
+       unter dem Wochenraster des Kindes, und ein zweiter Bereich daneben waere
+       dieselbe Liste ein zweites Mal. Ihn nennt nur die Kachel, die genau das
+       sein will. */
+    homework:  t.homework   === true,
     // KI: gleiche Regel, gleicher Grund — die Vorschlaege liegen im Gateway.
     ki:        t.ki         === true
   };
@@ -5234,7 +5277,13 @@ function visibleTabs() {
      sein Stundenplan, wenn einer eingerichtet ist. Ohne Auswahl und bei einem
      Erwachsenen bleibt alles, wie es eingerichtet ist. */
   const kindTab = kindGewaehlt();
-  if (kindTab && planKinder().length > 0) out.push('plan');
+  /* Der Stundenplan-Bereich gehoert zur vollen Oberflaeche (t.dashboard) und
+     nicht in eine Kachel mit EINER Aufgabe. Bis zum 10.09.2026 stand hier nur
+     planKinder(): in den Kacheln war die Liste immer leer, weil loadTimetable()
+     dort nie lief — der Riegel war also zufaellig richtig. Seit die
+     Hausaufgaben-Kachel den Plan HOLT (sie braucht Faecher und Symbole), waere
+     ihr sonst beim Antippen eines Kindes ein zweiter Bereich gewachsen. */
+  if (kindTab && t.dashboard && planKinder().length > 0) out.push('plan');
   if (!kindTab && t.ki && mailAiAvailable()) out.push('ki');
   // Die Reihenfolge hier ist zugleich die des Rückfalls, wenn der gespeicherte Tab
   // abgeschaltet wurde (vis[0] in setTab).
@@ -5250,6 +5299,8 @@ function visibleTabs() {
   if (t.notes && notizenMoeglich()) out.push('notes');
   // Die Klassenseiten dahinter, aus demselben Grund.
   if (t.edumaps && edumapsMoeglich()) out.push('edumaps');
+  // Die Hausaufgaben ebenso — sie liegen im Gateway.
+  if (t.homework && homeworkMoeglich()) out.push('homework');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -5971,14 +6022,15 @@ function invalidateRenderCache() {
   // beiden Spalten, dort liegen also die _lastHtml-Marken. Der Elternknoten hat nie
   // eine — ihn zu leeren liess eine abgelehnte Favoriten-Aktion ungezeichnet, die
   // weggewischte Zeile blieb bei translateX(-110%) stehen.
-  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'eduMaster', 'eduDetail', 'todoMembers', 'calMembers', 'calArea', 'kiFinds'].forEach(id => {
+  ['dashboardContent', 'shoppingListArea', 'todoListArea', 'favMaster', 'favDetail', 'notesMaster', 'notesDetail', 'eduMaster', 'eduDetail', 'todoMembers', 'calMembers', 'calArea', 'kiFinds',
+   'hwArea', 'hwListArea', 'hwMembers'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el._lastHtml = null;
   });
-  document.querySelectorAll('.item-card, .todo-card, .fav-card, .cal-card, .mail-item').forEach(card => {
+  document.querySelectorAll('.item-card, .todo-card, .fav-card, .cal-card, .mail-item, .hw-card').forEach(card => {
     card.classList.remove('is-deleting', 'dragging-left', 'dragging-right');
     delete card.dataset.animating;
-    const content = card.querySelector('.item-card-content, .todo-content, .fav-row, .cal-event, .mail-row');
+    const content = card.querySelector('.item-card-content, .todo-content, .fav-row, .cal-event, .mail-row, .hw-zeile');
     if (content) content.style.transform = '';
   });
 }
@@ -6133,7 +6185,7 @@ window.addEventListener('message', (event) => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 // 'plan' ist der Wochenplan eines Kindes — nur im Kindmodus sichtbar.
-const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps'];
+const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -7100,6 +7152,7 @@ function renderAll() {
   }
   if (activeTab === 'notes') renderNotizen();
   if (activeTab === 'edumaps') renderEdumaps();
+  if (activeTab === 'homework') renderHausaufgabenBereich();
   if (activeTab === 'plan') { renderWochenplan(); renderHausaufgaben(); }
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
@@ -7888,10 +7941,17 @@ window.addEventListener('resize', () => { clearTimeout(voicePlatzTimer); voicePl
 window.addEventListener('orientationchange', () => { clearTimeout(voicePlatzTimer); voicePlatzTimer = setTimeout(voicePlatzPruefen, 150); });
 
 function loadTimetable() {
-  // Nur wo es eine Uebersicht gibt. Die erzeugte ToDo-Kachel schaltet den
+  // Nur wo er gebraucht wird. Die erzeugte ToDo-Kachel schaltet den
   // Dashboard-Bereich ab; dort waere der Aufruf ein Rundlauf, der im Relay
   // ohnehin bei „unknown_route" endet — ohne Kosten, aber ohne Nutzen.
-  if (stundenplanLaeuft || !briefingAvailable() || !(store.tabs && store.tabs.dashboard)) { return; }
+  //
+  // Die Hausaufgaben-Kachel braucht ihn dagegen, obwohl sie kein Raster zeigt:
+  // Symbol und Farbe des Fachs stehen im Fachkatalog des Plans, und die
+  // Fachliste des Editors kommt aus dem Plan des Kindes. Ohne den Abruf waere
+  // dort jede Zeile ein grauer Kasten und die Fachwahl leer — man koennte in
+  // der Kachel nichts anlegen.
+  const brauchen = store.tabs && (store.tabs.dashboard || store.tabs.homework);
+  if (stundenplanLaeuft || !briefingAvailable() || !brauchen) { return; }
   stundenplanLaeuft = true;
   // Herausgegeben, damit der Ladeschirm darauf warten kann (ladeschirmWartenAuf).
   return aiPost('/timetable', {}).then(r => {
@@ -10945,12 +11005,36 @@ function renderHausaufgaben() {
   }
   bereich.style.display = '';
   const ids = kinder.map(k => String(k.userId));
+  let html = `<div class="hw-kopf"><span>${escapeHtml(translate('Homework'))}</span>` +
+    `<button type="button" class="hw-neu" id="hwNeu" aria-label="${escapeHtml(translate('New homework'))}">` +
+    `<i class="fa-light fa-plus"></i></button></div>`;
   /* Bei mehreren Kindern sagt ein Avatar an der Zeile, wessen Aufgabe es ist —
      bei einem waere er nur Wiederholung. */
-  const mehrere = ids.length > 1;
-  const offen = hwOffene(hausaufgaben.items, '').filter(i => ids.includes(String(i.childId)));
-  const gruppen = hwGruppen(offen, localDayStr(new Date()));
+  html += hwListeHtml(ids, ids.length > 1);
+  /* NUR binden, wenn wirklich neu gezeichnet wurde. renderInto laesst den
+     Inhalt stehen, wenn er sich nicht geaendert hat — die Handler von vorhin
+     haengen dann noch daran, und ein zweiter Satz kaeme obendrauf. Beim
+     Abschnitt „Erledigt" war das nicht harmlos: zwei Handler klappten ihn auf
+     UND wieder zu, der Knopf war tot. Dasselbe Muster wie in
+     renderTodoMembers(). */
+  if (renderInto(bereich, html)) hwBinden(bereich);
+}
+
+/**
+ * Die Liste selbst: offene Aufgaben nach Faelligkeit, darunter die Erledigten
+ * in einem eingeklappten Abschnitt.
+ *
+ * EINE Funktion fuer beide Orte — den Abschnitt unter dem Wochenraster und den
+ * eigenen Bereich der Kachel. Dieselbe Liste darf an zwei Stellen nicht anders
+ * aussehen, und zwei Faelle nachzupflegen hiesse, einen zu vergessen.
+ *
+ * `ids` sind die Kinder, um die es geht (leere Liste = niemand), `mitAvatar`
+ * sagt, ob an der Zeile stehen soll, wessen Aufgabe es ist.
+ */
+function hwListeHtml(ids, mitAvatar) {
   const subjects = (stundenplan && stundenplan.subjects) || [];
+  const gruppen = hwGruppen(hwOffene(hausaufgaben.items, '')
+    .filter(i => ids.includes(String(i.childId))), localDayStr(new Date()));
   const bloecke = [
     ['ueberfaellig', translate('Overdue')],
     ['heute', translate('Today')],
@@ -10958,17 +11042,14 @@ function renderHausaufgaben() {
     ['spaeter', translate('Later')],
     ['offen', translate('no date')]
   ];
-  let html = `<div class="hw-kopf"><span>${escapeHtml(translate('Homework'))}</span>` +
-    `<button type="button" class="hw-neu" id="hwNeu" aria-label="${escapeHtml(translate('New homework'))}">` +
-    `<i class="fa-light fa-plus"></i></button></div>`;
-  const leer = bloecke.every(([k]) => gruppen[k].length === 0);
-  if (leer) {
+  let html = '';
+  if (bloecke.every(([k]) => gruppen[k].length === 0)) {
     html += `<div class="hw-leer">${escapeHtml(translate('Nothing to do — well done!'))}</div>`;
   }
   bloecke.forEach(([k, titel]) => {
     if (gruppen[k].length === 0) return;
     html += `<div class="hw-gruppe${k === 'ueberfaellig' ? ' spaet' : ''}">${escapeHtml(titel)}</div>`;
-    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mehrere, true); });
+    gruppen[k].forEach(i => { html += hwZeileHtml(i, subjects, mitAvatar, true); });
   });
   /* Erledigte ganz unten in einem eingeklappten Abschnitt — dasselbe Muster
      wie in den Aufgabenlisten (.section-toggle), damit dieselbe Sache in der
@@ -10983,11 +11064,104 @@ function renderHausaufgaben() {
       `<span class="count">${fertig.length}</span>` +
       `<i class="fa-light fa-chevron-right chev"></i></button>`;
     if (hwDoneExpanded) {
-      fertig.forEach(i => { html += hwZeileHtml(i, subjects, mehrere, true); });
+      fertig.forEach(i => { html += hwZeileHtml(i, subjects, mitAvatar, true); });
     }
   }
-  renderInto(bereich, html);
-  hwBinden(bereich);
+  return html;
+}
+
+/**
+ * Die Hausaufgaben als EIGENER Bereich — der Aufbau der Aufgabenliste:
+ * Mitgliederleiste, Kopfzeile, drei Zahlen, Liste, Eingabezeile.
+ *
+ * Der Bereich ist nur dort sichtbar, wo der Zustand ihn ausdruecklich nennt
+ * (tabs.homework) — heute allein in der Kachel des Moduls SymDoHomework.
+ *
+ * Die Kinder kommen hier NICHT aus dem Stundenplan (planKinder), sondern aus
+ * der Mitgliederliste: eine Hausaufgabe gehoert einem Kind und nicht einem
+ * Plan, und die Kachel soll auch dann etwas zeigen, wenn noch kein Plan
+ * eingerichtet ist. Der Plan liefert nur Symbol und Farbe des Fachs.
+ */
+function renderHausaufgabenBereich() {
+  const bereich = document.getElementById('hwListArea');
+  if (!bereich) return;
+  hwBereichMitglieder();
+  const titel = document.getElementById('hwTitle');
+  if (titel) titel.textContent = translate('Homework');
+
+  const alleKinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
+  /* Die Mitgliederwahl gilt auch hier — sie ist bereichsuebergreifend. Ist ein
+     Erwachsener gewaehlt (moeglich, weil die Wahl aus einem anderen Bereich
+     stammen kann), bleibt die Liste leer: er hat keine Hausaufgaben. Kein
+     Rueckfall auf alle — dann stuende unter „Papa" die Aufgabe seiner
+     Tochter. */
+  const kinder = memberFilterIds.size > 0
+    ? alleKinder.filter(k => memberFilterIds.has(k.id))
+    : alleKinder;
+  const stats = document.getElementById('hwStats');
+  const bar = document.getElementById('hwInputbar');
+
+  if (alleKinder.length === 0 || kinder.length === 0) {
+    if (stats) stats.style.display = 'none';
+    // Ohne Kind gibt es nichts anzulegen: die Zeile waere ein Feld, dessen
+    // Plus nur eine Fehlermeldung zeigen kann.
+    if (bar) bar.style.display = alleKinder.length === 0 ? 'none' : '';
+    const text = alleKinder.length === 0
+      ? translate('Homework belongs to a child — add one in the gateway.')
+      : translate('No matches for this filter.');
+    renderInto(bereich, `<div class="empty-state"><i class="fa-light fa-book-open-cover"></i>${escapeHtml(text)}</div>`);
+    return;
+  }
+  if (bar) bar.style.display = '';
+
+  const ids = kinder.map(k => String(k.id));
+  /* Die drei Zahlen wie in der Aufgabenliste: offen, ueberfaellig, heute
+     faellig. Dieselben Toepfe, aus denen auch die Bloecke entstehen
+     (hwGruppen) — zwei Rechnungen fuer dieselbe Zahl liefen irgendwann
+     auseinander. */
+  if (stats) {
+    const gruppen = hwGruppen(hwOffene(hausaufgaben.items, '')
+      .filter(i => ids.includes(String(i.childId))), localDayStr(new Date()));
+    const offen = ['ueberfaellig', 'heute', 'morgen', 'spaeter', 'offen']
+      .reduce((n, k) => n + gruppen[k].length, 0);
+    /* „Open" waere hier falsch — dieser Schluessel heisst in der App
+       „Oeffnen" (der Knopf am Anhang). Deshalb ein eigener. */
+    document.getElementById('hwStatOpenLabel').textContent = translate('Open homework');
+    document.getElementById('hwStatOverdueLabel').textContent = translate('Overdue');
+    document.getElementById('hwStatTodayLabel').textContent = translate('Due today');
+    document.getElementById('hwStatOpenValue').textContent = String(offen);
+    document.getElementById('hwStatOverdueValue').textContent = String(gruppen.ueberfaellig.length);
+    document.getElementById('hwStatTodayValue').textContent = String(gruppen.heute.length);
+    stats.style.display = '';
+  }
+  // Binden nur beim echten Neuzeichnen — Begruendung in renderHausaufgaben().
+  if (renderInto(bereich, hwListeHtml(ids, ids.length > 1))) {
+    hwBinden(bereich, renderHausaufgabenBereich);
+  }
+}
+
+/**
+ * Die Avatar-Leiste des Bereichs — dieselbe Pille wie im Aufgaben-Tab.
+ *
+ * Nur KINDER: ein Erwachsener hat keine Hausaufgaben, und ein Knopf, der die
+ * Liste immer leert, ist kein Filter. Unter zwei Kindern faellt sie weg — sie
+ * waere eine Wahl ohne Alternative.
+ */
+function hwBereichMitglieder() {
+  const el = document.getElementById('hwMembers');
+  if (!el) return;
+  const kinder = (store.users || []).filter(u => String(u.persona || '') === 'child');
+  if (kinder.length < 2) { el.style.display = 'none'; renderInto(el, ''); return; }
+  el.style.display = '';
+  const html = kinder.map(u =>
+    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
+    avatarHtml(u, '') + '</button>').join('');
+  if (!renderInto(el, html)) return;
+  el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    mitgliedWaehlen(b.dataset.member);
+    renderHausaufgabenBereich();
+  }));
 }
 
 function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
@@ -11048,14 +11222,21 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
   `</div>` + (mitGeste ? '</div>' : '');
 }
 
-function hwBinden(bereich) {
+/**
+ * Die Bedienung der Liste. `neuzeichnen` ist der Ort, aus dem gerufen wurde:
+ * der Abschnitt unter dem Wochenraster oder der eigene Bereich. Ohne diesen
+ * Parameter klappte der Abschnitt „Erledigt" in der Kachel nicht auf — er
+ * zeichnete den Wochenplan neu, den es dort nicht gibt.
+ */
+function hwBinden(bereich, neuzeichnen) {
+  const zeichnen = typeof neuzeichnen === 'function' ? neuzeichnen : renderHausaufgaben;
   const neu = bereich.querySelector('#hwNeu');
   if (neu) neu.addEventListener('click', () => hwEditorOeffnen(null));
   const klapp = bereich.querySelector('#hwDoneToggle');
   if (klapp) klapp.addEventListener('click', () => {
     hwDoneExpanded = !hwDoneExpanded;
     ls.set('symdo.hwDoneExpanded', hwDoneExpanded ? '1' : '0');
-    renderHausaufgaben();
+    zeichnen();
   });
   bereich.querySelectorAll('[data-hw-done]').forEach(b => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
@@ -16626,12 +16807,14 @@ function initCaptions() {
   document.querySelector('#tab-calendar span').textContent = translate('Calendar');
   document.querySelector('#tab-notes span').textContent = translate('Notes');
   document.querySelector('#tab-edumaps span').textContent = translate('Class pages');
+  document.querySelector('#tab-homework span').textContent = translate('Homework');
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
   document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');
   document.getElementById('shoppingInput').placeholder = translate('Add item …');
   document.getElementById('todoInput').placeholder = translate('New task …');
+  document.getElementById('hwInput').placeholder = translate('New homework …');
   set('printOverlayTitle', translate('Choose print layout'));
   set('printUltraLabel', translate('Ultra Compact'));
   set('printCompactLabel', translate('Compact'));
@@ -17389,6 +17572,29 @@ document.addEventListener('DOMContentLoaded', () => {
     calInput.addEventListener('input', () => { calAdd.disabled = calInput.value.trim() === ''; });
     calInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calUebernehmen(); });
     calAdd.addEventListener('click', calUebernehmen);
+  }
+
+  // ── Schnellerfassung Hausaufgaben (eigener Bereich) ───────────────────────
+  // Wie beim Termin: das Getippte ist die NOTIZ, das Fach waehlt man im Blatt.
+  // Eine Hausaufgabe ohne Fach nimmt das Gateway nicht an, und ein Fach kann
+  // eine Titelzeile nicht raten.
+  const hwInput = document.getElementById('hwInput');
+  const hwAdd = document.getElementById('btnHwAdd');
+  if (hwInput && hwAdd) {
+    const hwUebernehmen = () => {
+      const text = hwInput.value.trim();
+      if (text === '') return;
+      hwEditorOeffnen(null, { note: text });
+      // Erst nach dem Oeffnen leeren: hwEditorOeffnen sagt ab, wenn es kein
+      // Kind gibt — dann soll das Getippte nicht weg sein.
+      if (document.getElementById('hwOverlay').classList.contains('open')) {
+        hwInput.value = '';
+        hwAdd.disabled = true;
+      }
+    };
+    hwInput.addEventListener('input', () => { hwAdd.disabled = hwInput.value.trim() === ''; });
+    hwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') hwUebernehmen(); });
+    hwAdd.addEventListener('click', hwUebernehmen);
   }
 
   // ── KI: Foto → Aufgaben (das Gateway leitet das Foto an die konfigurierte KI weiter) ──
