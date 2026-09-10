@@ -14515,6 +14515,31 @@ function notesOrdnerLoeschen(fid) {
  * Token), faellt die Karte auf die Zeile mit Symbol zurueck. Kein Sonderweg
  * und keine kaputten Bilder.
  */
+/**
+ * Eine Farbe fuer einen Abschnitt, der selbst keine nennt.
+ *
+ * Edumaps-Seiten faerben ihre Abschnitte und Karten selbst — die Farbe kommt
+ * von der Seite und steht in `sectionColor`/`color`. LOGINEO (Moodle) kennt
+ * keine Abschnittsfarbe: dort waere jede Karte weiss auf grau, und zwei
+ * Quellen sahen im selben Bereich verschieden aus. Deshalb wird sie hier
+ * ABGELEITET — reine Darstellung, nichts davon geht in den Bestand.
+ *
+ * Aus dem NAMEN, nicht aus der Reihenfolge: „Speisepläne" ist damit immer
+ * dieselbe Farbe, auch wenn die Schule einen Abschnitt davor einschiebt.
+ * Gleicht sie dem Vorgaenger, rueckt sie eins weiter — zwei gleichfarbige
+ * Ueberschriften uebereinander sind schlimmer als eine verschobene Farbe.
+ */
+const EDU_FARBEN = ['#0074D9', '#42782E', '#E49600', '#B12C21', '#7B51A8', '#0E7C86', '#C2185B', '#4E6472'];
+function eduBereichsFarbe(name, vorige) {
+  const s = String(name || '');
+  if (s === '') return '';
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+  let k = h % EDU_FARBEN.length;
+  if (EDU_FARBEN[k] === vorige) k = (k + 1) % EDU_FARBEN.length;
+  return EDU_FARBEN[k];
+}
+
 /** Schwarz oder Weiss auf dieser Flaeche — nach der Helligkeit (wie im Kachel-Theme). */
 function eduLesefarbe(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
@@ -14548,7 +14573,12 @@ function edumapsKartenHtml(ordner) {
     const a = n.section || '';
     const letzte = gruppen[gruppen.length - 1];
     if (!letzte || letzte.name !== a) {
-      gruppen.push({ name: a, farbe: n.sectionColor || '', karten: [n] });
+      const vorige = letzte ? letzte.farbe : '';
+      gruppen.push({
+        name: a,
+        farbe: n.sectionColor || eduBereichsFarbe(a, vorige),
+        karten: [n]
+      });
     } else {
       letzte.karten.push(n);
     }
@@ -14572,7 +14602,7 @@ function edumapsKartenHtml(ordner) {
     html += '<div class="edu-gruppe" data-key="eg:' + escapeHtml(g.name) + '"' +
       (auf || !g.name ? '' : ' hidden') + '>';
     for (const n of g.karten) {
-      html += edumapsKarteHtml(n);
+      html += edumapsKarteHtml(n, false, g.farbe);
     }
     html += '</div>';
   }
@@ -14606,7 +14636,7 @@ function edumapsKartenHtml(ordner) {
  * beim Aufklappen: erst leere Flaechen, dann die Bilder. So sind sie da, bevor
  * der Bereich aufgeht.
  */
-function edumapsKarteHtml(n, imArchiv = false) {
+function edumapsKarteHtml(n, imArchiv = false, ersatzFarbe = '') {
   /* Im Archiv laden die Bilder FAUL. Zugeklappte Bereiche stehen trotzdem im
      DOM (nur `hidden`), und die aktuellen Karten laden deshalb bewusst `eager`,
      damit beim Aufklappen nichts nachzuckt. Fuer ein Archiv, das man selten
@@ -14620,7 +14650,9 @@ function edumapsKarteHtml(n, imArchiv = false) {
   // Die Farbe der Karte traegt jetzt der KOPF; eine Kontur dazu waere zuviel
   // (auf Wunsch entfernt) — die weisse Flaeche hebt sich vom grauen Bereich
   // ohnehin ab.
-  const kf = n.color || n.sectionColor || '';
+  // Nennt die Quelle keine Farbe (LOGINEO), traegt die Karte die des
+  // Abschnitts — abgeleitet in eduBereichsFarbe, siehe dort.
+  const kf = n.color || n.sectionColor || ersatzFarbe;
   // Der Kartenkopf traegt die Farbe als FLAECHE — so steht er auch auf der
   // Klassenseite da. Die Schrift richtet sich nach der Helligkeit.
   const kopfStil = kf ? ' style="background:' + escapeHtml(kf) + ';color:' + eduLesefarbe(kf) + '"' : '';
@@ -14668,6 +14700,20 @@ function edumapsKarteHtml(n, imArchiv = false) {
       '<span>' + escapeHtml(d.name || translate('Attachment')) + '</span>' +
       '<i class="fa-light fa-chevron-right nv-chev"></i></div>';
     html += eduQrZeile(d);
+  }
+  /* Eine Karte, an der nichts haengt: kein Text, kein Bild, keine Datei. Bei
+     Edumaps gibt es das nicht — dort tragen die Karten immer etwas. Bei
+     LOGINEO schon: eine Datei ueber der Ablagegrenze wird BEWUSST nicht
+     geladen (die Elternabend-Praesentation der Grundschule hat 6,3 MB, die
+     Grenze liegt bei der Ausgabegrenze des Hooks). Ohne diesen Verweis stuende
+     dort nur eine Ueberschrift und die Datei waere von hier aus unerreichbar. */
+  const ziel = String(n.srcUrl || '');
+  const leer = (n.att || []).length === 0
+    && String(n.text || '').trim() === '' && String(n.html || '').trim() === '';
+  if (leer && /^https?:\/\//i.test(ziel)) {
+    html += '<a class="edu-qr" href="' + escapeHtml(ziel) + '" target="_blank" rel="noopener noreferrer">' +
+      '<i class="fa-light fa-arrow-up-right-from-square"></i>' +
+      '<span>' + translate('Open on the page') + '</span></a>';
   }
   return html + '</div>';
 }
@@ -14822,7 +14868,13 @@ function bindeEdumapsKarten(frisch, ordner) {
   suche('.edu-abschnitt').forEach(kopf => {
     kopf.addEventListener('click', () => {
       eduBereichUmschalten(kopf.dataset.bereich || '');
-      renderNotizen();
+      /* renderEdumaps, NICHT renderNotizen: diese Karten stehen im Bereich
+         Klassenseiten. Der falsche Renderer zeichnete die Notizen neu — der
+         Zustand kippte, die Ueberschrift blieb aber stehen. Sichtbar wurde es
+         erst beim naechsten Zeichnen von aussen (Umschaltung, Abruf), und
+         dann sprang ein Bereich scheinbar von selbst auf. Vom Nutzer
+         gemeldet: „warum kann ich Lernzeitplaene nicht ausklappen". */
+      renderEdumaps();
     });
   });
   /* Papierkorb an einer Archiv-Karte. BEWUSST ein Knopf und keine Wischgeste:
