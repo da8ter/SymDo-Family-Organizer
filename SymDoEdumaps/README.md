@@ -40,7 +40,7 @@ Karte endgültig wegwerfen lässt.
 |---|---|
 | Symcon | ab 8.1 |
 | **SymDo Gateway** | Pflicht — dort liegen die Karten, dort werden die Seiten eingetragen |
-| Klassenseiten | im Gateway unter *Klassenseiten (Edumaps)* eingeschaltet, mit mindestens einer Seite |
+| Klassenseiten | im Gateway unter *Schule → Klassenseiten (Edumaps)* eingeschaltet, mit mindestens einer Seite |
 
 ## 3. Einrichtung
 

@@ -394,8 +394,39 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppendFormItem($elements, 'AiPanel', $this->GetPushPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetDishPanel());
             $this->AppendFormItem($elements, 'AiPanel', $this->GetVoicePanel());
-            $this->AppendFormItem($elements, 'AiPanel', $this->GetEduPanel());
-            $this->AppendFormItem($elements, 'AiPanel', $this->GetUntisPanel());
+            /* Schule: Klassenseiten und WebUntis stehen zusammen und auf der
+               OBERSTEN Ebene. Sie hingen bis zum 10.09.2026 im KI-Bereich, weil
+               beide dessen Schalter und dessen Tagesdeckel gehorchen — gesucht
+               werden sie aber unter „Schule" und nicht unter „KI". An den
+               Riegeln aendert das nichts, nur an der Schublade.
+
+               Die Feldnamen bleiben, also finden UpdateFormField und
+               AppFormOverrides ihre Felder weiter: beide suchen ueber den Namen
+               und nicht ueber den Weg. Deshalb steht dieser Block auch VOR
+               AppFormOverrides. */
+            $schule = [
+                'type'     => 'ExpansionPanel',
+                'name'     => 'SchoolPanel',
+                'caption'  => $this->Translate('School'),
+                'expanded' => false,
+                'items'    => [$this->GetEduPanel(), $this->GetUntisPanel()],
+            ];
+            $stelle = null;
+            foreach ($elements as $i => $e) {
+                if (is_array($e) && ($e['name'] ?? '') === 'AiPanel') {
+                    $stelle = (int)$i;
+                    break;
+                }
+            }
+            /* Hinter den KI-Bereich, wo die beiden herkommen. Fehlt der (eine
+               fremde form.json, eine andere Rolle der Instanz), haengt „Schule"
+               hinten an — ein Panel, das gar nicht erscheint, waere schlimmer
+               als eines an unerwarteter Stelle. */
+            if ($stelle === null) {
+                $elements[] = $schule;
+            } else {
+                array_splice($elements, $stelle + 1, 0, [$schule]);
+            }
             $this->AppFormOverrides($elements);
         }
 
@@ -1771,7 +1802,7 @@ class SymDoGateway extends IPSModuleStrict
 
         return [
             'type'     => 'ExpansionPanel',
-            'caption'  => $this->Translate('WebUntis (timetable and substitutions)'),
+            'caption'  => $this->Translate('WebUntis (timetable, substitutions and homework)'),
             'expanded' => false,
             'items'    => [
                 ['type' => 'Label', 'caption' => $this->Translate('Fetches the timetable including substitutions and cancellations and writes it into a SymDo Timetable instance. Server and school name come from the Untis school search — the address in the browser shows both: https://SERVER/WebUntis/?school=SCHOOL')],

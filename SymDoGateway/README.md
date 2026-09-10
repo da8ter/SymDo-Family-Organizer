@@ -72,7 +72,7 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 - **Stundenplan aus WebUntis** — Unterricht, Vertretungen, Entfall, Raum und Lehrer je Kind, für die laufende und die kommende Woche (Kapitel 14)
 - **Hausaufgaben** — Fach, Fälligkeit und Notiz je Kind: in der Web-App, an der Stunde in der Stundenplan-Kachel, per Sprache und als vierte Vorschlagsart der KI (Kapitel 15)
 - **Klassenseiten (Edumaps)** — die Klassenseite der Schule als Quelle für KI-Vorschläge und, auf Wunsch, als gespiegelte Notizen mit Kartenansicht (Kapitel 15)
-- **Essensplan** — die Kachel **SymDo - Essensplan** hängt am Gateway: Gerichte je Tag, Zutaten in den Einkaufswagen, KI-Gerichtsbilder; der Sprachdialog liest und plant ihn mit
+- **Essensplan** — die Kachel **SymDo - Essensplan** hängt am Gateway: Gerichte je Tag, Zutaten in den Einkaufswagen, KI-Rezeptbilder; der Sprachdialog liest und plant ihn mit
 
 ## 2. Voraussetzungen
 
@@ -320,6 +320,10 @@ Höchstens 20 Pläne, relativ höchstens sieben Tage voraus, absolut höchstens 
 
 ## 14. Stundenplan aus WebUntis
 
+> Im Formular stehen WebUntis und die Klassenseiten zusammen unter
+> **Schule** — *WebUntis (Stundenplan, Vertretungen und Hausaufgaben)* und
+> *Klassenseiten (Edumaps)*.
+
 Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dort nie ankommt — Vertretung, Entfall, Raumwechsel — steht in **WebUntis**, das die Schule ohnehin führt. Das Gateway holt es dort über die offiziell vorgesehene JSON-RPC-Schnittstelle und spielt es datiert in die Stundenplan-Instanz ein, für die laufende und die kommende Woche.
 
 | Einstellung | Eigenschaft | Bedeutung |
@@ -365,7 +369,8 @@ und Zuordnung; der Name ist die Verbindung, hier wie im ganzen Stundenplan.
 nach 60. Höchstens 300 Einträge; darüber fallen die ältesten heraus. Gemessen
 wird beim Lesen, geschrieben erst bei der nächsten Änderung.
 
-**Von der Schule holen** (Schalter *Hausaufgaben mitholen* im WebUntis-Block,
+**Von der Schule holen** (Schalter *Hausaufgaben mitholen* unter *Schule →
+WebUntis*,
 ab Werk **aus**): Was die Lehrkräfte in WebUntis eintragen, kommt mit Fach,
 Fälligkeit, Text und Häkchen herein — niemand muss es abtippen. Der Abruf
 läuft im selben Durchlauf wie der Stundenplan und in derselben Anmeldung, also
@@ -410,6 +415,8 @@ App — dieselbe Rücksicht wie bei den Notizen, deren Listenart die
 ausgelieferte iOS-App nicht kennt.
 
 ## 16. Klassenseiten (Edumaps)
+
+> Im Formular unter **Schule → Klassenseiten (Edumaps)**.
 
 Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termine, Elternbriefe mit Fristen, Materiallisten, den Stundenplan als PDF. Das Gateway liest die Seite regelmäßig, erkennt **geänderte Karten** und schickt jede einzeln durch dieselbe Kette wie eine Schulmail — KI-Analyse, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Nichts entsteht ungefragt.
 
