@@ -899,7 +899,8 @@
             "Note": "Hinweis",
             "Attends": "besucht",
             "choice — several at the same time": "Wahl — mehrere zur selben Zeit",
-            "alone in the plan": "steht allein im Plan"
+            "alone in the plan": "steht allein im Plan",
+            "class %s": "Klasse %s"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

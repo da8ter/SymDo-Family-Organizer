@@ -837,6 +837,32 @@ trait WebUntis
         }
         $this->SendDebug('WebUntis', sprintf('%s: %d Stunden über %s',
             (string)$kind['name'], count($stunden), $quelle), 0);
+        /* Die Klasse steht in den Stunden des Kindes. Sie gehoert in den
+           Bericht: dort steht dann, WELCHER Plan geholt wurde — und wer den
+           Klassenplan statt des Kindplans will, findet die Nummer, ohne sie in
+           WebUntis zu suchen. */
+        $klassen = [];
+        foreach ($stunden as $st) {
+            foreach ((array)($st['kl'] ?? []) as $k) {
+                $kn = trim((string)($k['name'] ?? ''));
+                $ki = (int)($k['id'] ?? 0);
+                if ($kn !== '' && !array_key_exists($kn, $klassen)) {
+                    $klassen[$kn] = $ki;
+                }
+            }
+        }
+        /* GEKAPPT: im Klassenplan haengen an den Kursstunden alle beteiligten
+           Klassen — gemessen vierzehn (05a bis 08d). Der Bericht soll sagen,
+           welcher Plan geholt wurde, und nicht das halbe Schuljahrbuch. */
+        $teileK = [];
+        foreach ($klassen as $kn => $ki) {
+            $teileK[] = $kn . ($ki > 0 ? ' (' . $ki . ')' : '');
+        }
+        $klassenText = implode(', ', array_slice($teileK, 0, 3))
+            . (count($teileK) > 3 ? ' …' : '');
+        if ($klassenText !== '') {
+            $this->SendDebug('WebUntis', 'Klasse(n): ' . $klassenText, 0);
+        }
         if ($stunden === []) {
             return sprintf($this->Translate('%s: no lessons in the period.'), $kind['name']);
         }
@@ -864,7 +890,8 @@ trait WebUntis
                schreibt nichts, und ein Abruf, dessen Ergebnis niemand sieht,
                ist nur ein Zugriff mehr auf das Konto der Schule. */
             return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d unresolved overlap(s) — dry run, nothing written'),
-                $kind['name'], count($stunden), count($auffaellig), $offen) . $verlust;
+                $kind['name'], count($stunden), count($auffaellig), $offen) . $verlust
+                . ($klassenText === '' ? '' : ', ' . sprintf($this->Translate('class %s'), $klassenText));
         }
         $eingespielt = ((int)$kind['stpl'] > 0 && $tage !== []) ? $this->UntisEinspielen($kind, $tage) : 0;
         /* Zweiter Aufruf, datiert: der Wochenplan zeigt die REGELWOCHE, die
@@ -890,7 +917,8 @@ trait WebUntis
 
         return sprintf($this->Translate('%1$s: %2$d lesson(s), %3$d change(s), %4$d new, %5$d weekday(s) + %6$d date(s) written, %7$d overlap(s) unresolved'),
             $kind['name'], count($stunden), count($auffaellig), $neu, $eingespielt, $datierteTage, $offen)
-            . $verlust . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben);
+            . $verlust . ($klassenText === '' ? '' : ', ' . sprintf($this->Translate('class %s'), $klassenText))
+            . ($hausaufgaben === '' ? '' : ', ' . $hausaufgaben);
     }
 
     /**
@@ -986,6 +1014,11 @@ trait WebUntis
                 }
                 if ($c !== []) {
                     $sammeln[$art][] = [
+                        /* Die KENNUNG gehoert zum Element. Der REST-Weg liess sie
+                           fallen, und damit war die Klasse eines Kindes nur als
+                           Name bekannt — fuer den Klassenplan braucht es die
+                           Nummer. Kostet keinen Aufruf, sie steht schon da. */
+                        'id'       => (int)($c['id'] ?? 0),
                         'name'     => trim((string)($c['shortName'] ?? '')),
                         'longname' => trim((string)($c['longName'] ?? ($c['displayName'] ?? ''))),
                     ];

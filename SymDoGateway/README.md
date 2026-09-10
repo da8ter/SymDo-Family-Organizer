@@ -337,6 +337,15 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
 
+> **Gemessen am 10.09.2026, beide Pläne desselben Kindes.** Der Modul-Abruf
+> fragt `timetableType=MY_TIMETABLE`, also den **persönlichen** Plan: 55
+> Stunden, **keine** Überschneidung, 17 Fächer — dort ist nichts zu wählen.
+> Derselbe Zeitraum als **Klassenplan** (Elementtyp Klasse): 82 Stunden, 4
+> offene Überschneidungen, 26 Fächer, davon **12 als Wahl markiert** — die
+> Religions- und Philosophiekurse, die AGs und die Förderkurse. Für einen
+> schülerbezogenen Plan ist die Kurswahl also meist leer zu lassen; für einen
+> Klassenplan ist sie das Werkzeug, das ihn erst brauchbar macht.
+
 **Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie war nötig, weil
 mancher Plan Kurse enthält, die das Kind nicht besucht — bei einem Klassenplan
 alle parallelen (am 03.09.2026 gemessen: fünf Religionskurse zur selben Zeit),
