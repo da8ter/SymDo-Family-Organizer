@@ -228,7 +228,7 @@ Aufgaben liegen im Gateway.
 
 Ein Wochenraster für die Frage aller Fragen: Was gibt es heute? Je Tag ein
 Gericht, blätterbar zwischen dieser und der nächsten Woche, Zutaten mit einem
-Klick in den Einkaufswagen, Rezeptbilder von der KI.
+Klick in den Einkaufswagen, KI-Rezeptbilder.
 
 → [Ausführliche Anleitung](MealPlan/README.md)
 

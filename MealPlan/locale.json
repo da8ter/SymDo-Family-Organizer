@@ -49,7 +49,7 @@
             "Paste recipe URL": "Rezept-URL einfügen",
             "(recipe deleted)": "(Rezept gelöscht)",
             "Could not reach the AI service.": "Der KI-Dienst war nicht erreichbar.",
-            "A SymDo Gateway is required: it delivers the daily briefing, the recipe analysis and the dish images of the recipe lists.": "Ein SymDo Gateway wird benötigt: Es liefert das Tagesbriefing, die Rezept-Analyse und die Rezeptbilder der Rezeptlisten."
+            "A SymDo Gateway is required: it delivers the daily briefing, the recipe analysis and the dish images of the recipe lists.": "Ein SymDo Gateway wird benötigt: Es liefert das Tagesbriefing, die Rezept-Analyse und die KI-Rezeptbilder der Rezeptlisten."
         }
     }
 }
