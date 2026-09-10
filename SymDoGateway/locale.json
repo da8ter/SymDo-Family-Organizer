@@ -949,7 +949,16 @@
             "Remove token": "Token entfernen",
             "Remove the stored token of this row? Nothing is read afterwards until a new one is fetched.": "Den gespeicherten Token dieser Zeile entfernen? Danach wird nichts mehr gelesen, bis ein neuer geholt wird.",
             "There was no token for this row.": "Für diese Zeile war kein Token gespeichert.",
-            "%d token(s) removed — remember to revoke them in Moodle as well.": "%d Token entfernt — in Moodle sollte er zusätzlich widerrufen werden."
+            "%d token(s) removed — remember to revoke them in Moodle as well.": "%d Token entfernt — in Moodle sollte er zusätzlich widerrufen werden.",
+            "%1$d course(s), %2$d card(s), %3$d written, %4$d archived%5$s": "%1$d Kurs(e), %2$d Karte(n), %3$d geschrieben, %4$d archiviert%5$s",
+            "%d blocked": "%d gesperrt",
+            "Course": "Kurs",
+            "Document": "Dokument",
+            "%1$d course(s), %2$d card(s), %3$d written, %4$d changed, %5$d analysed%6$s": "%1$d Kurs(e), %2$d Karte(n), %3$d geschrieben, %4$d geändert, %5$d ausgewertet%6$s",
+            "%d archived": "%d archiviert",
+            "daily AI limit reached, the rest follows later": "KI-Tageslimit erreicht, der Rest folgt später",
+            "Send new documents to the AI as suggestions": "Neue Dokumente als Vorschlag an die KI schicken",
+            "A new document goes through the same chain as a school mail: analysis, then a suggestion in the AI inbox that someone checks and accepts. The first check of a course only notes what is there — otherwise twenty suggestions would arrive at once. The suggestions count towards the daily AI limit.": "Ein neues Dokument läuft durch dieselbe Kette wie eine Schulmail: Auswertung, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Die erste Prüfung eines Kurses merkt sich nur den Bestand — sonst kämen zwanzig Vorschläge auf einmal. Die Vorschläge zählen auf das KI-Tageslimit."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",
