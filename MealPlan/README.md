@@ -23,8 +23,8 @@ legt die Zutaten in den Einkaufswagen.
   🛒-Knopf; der Stift oben rechts führt in die Bearbeitung.
 - **Briefing:** das tägliche Briefing erwähnt das Gericht („Heute Abend:
   Lasagne"; die Abend-Vorschau nennt das von morgen).
-- **KI-Gerichtsbilder (optional):** Auf Wunsch bekommt jedes eingeplante
-  Rezept automatisch ein einheitliches Gerichtsbild — angerichteter Teller
+- **KI-Rezeptbilder (optional):** Auf Wunsch bekommt jedes eingeplante
+  Rezept automatisch ein einheitliches Rezeptbild — angerichteter Teller
   von oben, transparenter Hintergrund. Einmal je Rezept erzeugt und
   wiederverwendet; ein vorhandenes Rezeptfoto bleibt als Quelle erhalten
   („Rezept öffnen"). Braucht ein SymDo Gateway mit OpenAI-API-Key

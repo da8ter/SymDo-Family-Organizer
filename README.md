@@ -55,7 +55,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 - **Kindmodus** — ein Tipp auf das Kind in der Mitglieder-Leiste, und die
   Oberfläche gehört ihm: seine Aufgaben, sein Stundenplan, keine Einkaufsliste.
 - **Essensplan** — was gibt es heute? Je Tag ein Gericht, Zutaten mit einem
-  Klick in den Einkaufswagen, KI-Gerichtsbilder.
+  Klick in den Einkaufswagen, KI-Rezeptbilder.
 
 ## Die Module
 
@@ -70,7 +70,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Einkaufslisten Übersicht** | Device | Die offenen Artikel als Bild-Leiste |
 | **SymDo - Routinen** | Device | Tägliche Häkchen-Routinen für Kinder: Anzeigezeiten je Routine, optionale Belohnungs-Münzen, Konfetti — und die Heute-Aufgaben als Füller |
 | **SymDo - Ämtchenplan** | Device | Haushaltsaufgaben, die wochenweise zwischen den Familienmitgliedern wechseln: Rotation, Häkchen je Erledigung, Punkte in den Münzbeutel der Routinen |
-| **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Gerichtsbilder |
+| **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Rezeptbilder |
 | **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
 | **SymDo - Edumaps** | Device | Die Klassenseiten der Schule als eigene Kachel: Karten mit Text, Bildern und Buchungslage, nur lesend |
@@ -228,7 +228,7 @@ Aufgaben liegen im Gateway.
 
 Ein Wochenraster für die Frage aller Fragen: Was gibt es heute? Je Tag ein
 Gericht, blätterbar zwischen dieser und der nächsten Woche, Zutaten mit einem
-Klick in den Einkaufswagen, Gerichtsbilder von der KI.
+Klick in den Einkaufswagen, Rezeptbilder von der KI.
 
 → [Ausführliche Anleitung](MealPlan/README.md)
 
