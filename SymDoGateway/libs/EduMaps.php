@@ -934,15 +934,80 @@ trait EduMaps
            durcheinander. Der Schluessel haengt an der ADRESSE, nicht am Namen:
            beide darf der Nutzer aendern, die Adresse nicht. */
         $seiteSchluessel = 'edupage:' . md5((string)$seite['url']);
-        foreach ($store['folders'] as $f) {
-            if ((string)($f['eduKey'] ?? '') === $seiteSchluessel) {
-                return (string)$f['id'];
+        foreach ($store['folders'] as $k => $f) {
+            if ((string)($f['eduKey'] ?? '') !== $seiteSchluessel) {
+                continue;
             }
+            /* UMGEHAENGT: das Mitglied der Seite wurde in der Konfiguration
+               geaendert. Der Ordner der Seite selbst bleibt derselbe — er haengt
+               an der Adresse —, er zieht nur unter das neue Mitglied.
+
+               Ohne diese Zeilen stand die Seite mit allen Karten weiter beim
+               alten Mitglied, waehrend fuer das neue ein zweiter, leerer Ordner
+               entstand: der Ordner der ersten Ebene haengt an der
+               Mitgliedskennung, der der zweiten an der Adresse. Genau dieser
+               Fall trat am 10.09.2026 ein (Seite vom Vater auf das Kind
+               umgestellt) — und im Kindmodus zeigt die Oberflaeche nur die
+               Seiten des gewaehlten Kindes, die Karten waeren also unerreichbar
+               geworden. */
+            if ($edu !== '' && (string)($f['parentId'] ?? '') !== $edu) {
+                $alt = (string)($f['parentId'] ?? '');
+                $store['folders'][$k]['parentId'] = $edu;
+                $store['folders'][$k]['updatedAt'] = time();
+                $this->eduOrdnerGeaendert = true;
+                $this->EduLeerenOrdnerEntfernen($store, $alt, $edu);
+            }
+            return (string)$f['id'];
         }
         if ($edu === '' || count($store['folders']) >= EduStoreCalc::FOLDERS_MAX) {
             return $edu;
         }
         return $this->EduOrdnerAnlegen($store, (string)($seite['name'] ?? 'Karte'), $edu, $seiteSchluessel);
+    }
+
+    /**
+     * Den zurueckgelassenen Mitglieds-Ordner wegnehmen, WENN nichts mehr darin
+     * steht.
+     *
+     * Nur ein Ordner, den dieses Modul selbst angelegt hat (`eduKey` beginnt mit
+     * „edu:"), nur ohne Unterordner und ohne Karte, und nie der Ordner, unter
+     * dem die Seite gerade gelandet ist. Ein Ordner mit Inhalt bleibt stehen:
+     * lieber ein uebriger Ordner als eine verschwundene Karte — dieselbe
+     * Ruecksicht wie beim Umzug der Karten aus den Notizen.
+     *
+     * Gesperrt wird hier NICHTS. Die Sperre gehoert zum Loeschen von Hand
+     * (folderDelete): dort sagt der Nutzer „diese Seite will ich nicht mehr".
+     * Hier zieht dieselbe Seite nur um.
+     *
+     * @param array<string,mixed> $store wird geaendert (noch nicht geschrieben)
+     */
+    private function EduLeerenOrdnerEntfernen(array &$store, string $id, string $behalten): void
+    {
+        if ($id === '' || $id === $behalten) {
+            return;
+        }
+        foreach ($store['folders'] as $f) {
+            if ((string)($f['parentId'] ?? '') === $id) {
+                return;
+            }
+        }
+        foreach ((array)($store['notes'] ?? []) as $n) {
+            if ((string)($n['folderId'] ?? '') === $id) {
+                return;
+            }
+        }
+        foreach ($store['folders'] as $k => $f) {
+            if ((string)($f['id'] ?? '') !== $id) {
+                continue;
+            }
+            if (!str_starts_with((string)($f['eduKey'] ?? ''), 'edu:')) {
+                return;
+            }
+            unset($store['folders'][$k]);
+            $store['folders'] = array_values($store['folders']);
+            $this->eduOrdnerGeaendert = true;
+            return;
+        }
     }
 
     /**
@@ -1710,13 +1775,32 @@ trait EduMaps
     private function EduGefundene(): array
     {
         $roh = json_decode((string)@$this->ReadAttributeString('EduFound'), true);
+        /* Das Mitglied kommt bei JEDEM Lesen frisch aus der eingetragenen Seite,
+           auf der der Verweis gefunden wurde. Gespeichert ist es auch — aus der
+           Stunde des Fundes —, aber wer eine Seite einem anderen Kind zuordnet,
+           meint auch ihre verlinkten Seiten: sonst zoegen die Karten der einen
+           Seite zum neuen Kind und die der verlinkten blieben beim alten, jede
+           Haelfte in einem eigenen Ordner. Genau das stand am 10.09.2026 bevor
+           (eine eingetragene Seite, drei verlinkte).
+
+           Zugeordnet wird ueber den NAMEN der Herkunftsseite — mehr steht im
+           Fundeintrag nicht. Wird sie umbenannt, greift der Rueckfall auf das
+           gespeicherte Mitglied, und es bleibt beim Stand des Fundes. */
+        $vonMitglied = [];
+        foreach ($this->EduSeiten() as $s) {
+            if ((string)$s['userId'] !== '') {
+                $vonMitglied[(string)$s['name']] = (string)$s['userId'];
+            }
+        }
         $raus = [];
         foreach (is_array($roh) ? $roh : [] as $z) {
             if (!is_array($z) || !str_starts_with((string)($z['url'] ?? ''), 'https://')) {
                 continue;
             }
+            $von = (string)($z['von'] ?? '');
             $raus[] = ['name' => (string)($z['name'] ?? ''), 'url' => (string)$z['url'],
-                       'userId' => (string)($z['userId'] ?? ''), 'von' => (string)($z['von'] ?? '')];
+                       'userId' => $vonMitglied[$von] ?? (string)($z['userId'] ?? ''),
+                       'von' => $von];
         }
         return $raus;
     }
