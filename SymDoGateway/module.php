@@ -1938,76 +1938,120 @@ class SymDoGateway extends IPSModuleStrict
             }
         }
         $hinweisGesperrt = $gesperrtEingetragen === [] ? '' : sprintf(
-            $this->Translate('Blocked despite being listed above: %s — deleted in the app. Release it below to mirror it again.'),
+            $this->Translate('Blocked despite being listed above: %s — deleted in app or tile. Release it below to mirror it again.'),
             implode(', ', $gesperrtEingetragen));
+
+        /* Der Knopf fuer den Umzug erscheint nur, wenn im Notizen-Bestand
+           wirklich noch Klassenseiten-Ordner liegen. Der Umzug lief einmal von
+           selbst; ein Knopf, der jedes Mal „nichts zu holen" antwortet, ist
+           Ballast und laesst vermuten, es sei noch etwas zu tun. */
+        $umzugNoetig = true;
+        try {
+            $umzugNoetig = $this->EduHatKlassenseiten($this->NotesStore());
+        } catch (Throwable $e) {
+            // Bestand nicht lesbar: dann lieber anbieten als verstecken.
+        }
 
         return [
             'type'     => 'ExpansionPanel',
             'caption'  => $this->Translate('Class pages (Edumaps)'),
             'expanded' => false,
             'items'    => [
-                ['type' => 'Label', 'caption' => $this->Translate('Watches the class pages of the school. A changed card goes through the same analysis as a school mail and lands as a suggestion in the app — nothing is created unasked. The first check only notes what is there.')],
-                ['type' => 'CheckBox', 'name' => 'EduEnabled',
-                 'caption' => $this->Translate('Watch class pages')],
-                ['type' => 'List', 'name' => 'EduPages', 'rowCount' => 3,
-                 'add' => true, 'delete' => true,
-                 'caption' => $this->Translate('Pages'),
-                 'columns' => [
-                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '140px',
-                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                     // Die Adresse ist der Zugang — sie steht hier und nirgends sonst.
-                     ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto',
-                      'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                     ['caption' => $this->Translate('For'), 'name' => 'userId', 'width' => '140px',
-                      'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
+                ['type' => 'Label', 'caption' => $this->Translate('The class page of the school as a source for SymDo: every card with its text, its files and its booking situation. Two things happen with it — the cards are mirrored so that app and tile can show them, and changed cards go to the AI as suggestions.')],
+
+                // ── 1. Welche Seiten, wie oft ──────────────────────────────
+                ['type' => 'ExpansionPanel', 'expanded' => true,
+                 'caption' => $this->Translate('1. Pages'),
+                 'items' => [
+                    ['type' => 'CheckBox', 'name' => 'EduEnabled',
+                     'caption' => $this->Translate('Watch class pages')],
+                    ['type' => 'List', 'name' => 'EduPages', 'rowCount' => 3,
+                     'add' => true, 'delete' => true,
+                     'caption' => $this->Translate('Pages'),
+                     'columns' => [
+                         ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '140px',
+                          'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                         // Die Adresse ist der Zugang — sie steht hier und nirgends sonst.
+                         ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto',
+                          'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                         ['caption' => $this->Translate('For'), 'name' => 'userId', 'width' => '140px',
+                          'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
+                     ]],
+                    ['type' => 'NumberSpinner', 'name' => 'EduIntervalHours', 'minimum' => 1, 'maximum' => 48,
+                     'caption' => $this->Translate('Check every … hours'), 'suffix' => ' h'],
+                    ['type' => 'CheckBox', 'name' => 'EduFollowLinks',
+                     'caption' => $this->Translate('Also follow pages linked from these')],
+                    /* „Map" ist bei Edumaps die SEITE und nicht die Karte darauf.
+                       Die deutsche Fassung hat das lange verwechselt — deshalb
+                       heisst hier ueberall „Seite" die Seite und „Karte" nur der
+                       Kasten darauf. */
+                    ['type' => 'Label', 'caption' => $this->Translate('Linked pages are only mirrored, never analysed: they are reference material, and every analysis costs one AI request. Each of them gets its own folder.')],
                  ]],
-                ['type' => 'NumberSpinner', 'name' => 'EduIntervalHours', 'minimum' => 1, 'maximum' => 48,
-                 'caption' => $this->Translate('Check every … hours'), 'suffix' => ' h'],
-                /* Zweiter, unabhaengiger Weg: 1:1 ablegen statt auswerten. Kostet
-                   keinen KI-Aufruf und laeuft deshalb auch beim ersten Lauf. */
-                ['type' => 'CheckBox', 'name' => 'EduToNotes',
-                 'caption' => $this->Translate('Also keep every card as a note')],
-                ['type' => 'CheckBox', 'name' => 'EduFollowLinks',
-                 'caption' => $this->Translate('Also take maps linked from these pages')],
-                ['type' => 'Label', 'caption' => $this->Translate('Linked maps are only mirrored as notes, never analysed: they are reference material, and every analysis costs one AI request. Each map gets its own folder inside „Edumaps".')],
-                ['type' => 'CheckBox', 'name' => 'EduPush',
-                 'caption' => $this->Translate('Push on changes to the class page')],
-                ['type' => 'Label', 'caption' => $this->Translate('One message per check, not one per card: how many cards were updated and how many suggestions are waiting.')],
-                ['type' => 'Label', 'caption' => $this->Translate('Each card becomes one note with its full text and its files. Every child gets a folder „Edumaps", and inside it one folder per map. Cards that vanish from the page move to the „Archive" section at the end — nothing is deleted on its own.')],
-                ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
-                /* Gesperrte Seiten: in der App geloescht. Sie stehen NICHT als
-                   Eigenschaft da, sondern im Notiz-Bestand — die Liste wird
-                   deshalb mit `values` gefuellt und ist nicht bearbeitbar. */
-                ['type' => 'List', 'name' => 'EduBlockedList', 'rowCount' => 3,
-                 'caption' => $this->Translate('Blocked class pages (deleted in the app)'),
-                 'columns' => [
-                     ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '200px'],
-                     ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto'],
-                 ],
-                 'values' => $gesperrt],
-                ['type' => 'Button', 'caption' => $this->Translate('Release selected page'),
-                 'onClick' => 'IPS_RequestAction($id, \'EduUnblock\', json_encode($EduBlockedList));'],
-                ['type' => 'Label', 'caption' => $hinweisGesperrt,
-                 'visible' => $hinweisGesperrt !== ''],
-                ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'Button', 'caption' => $this->Translate('Check now'),
-                     'onClick' => 'IPS_RequestAction($id, \'EduScanNow\', 0);'],
+
+                // ── 2. Der Spiegel: was App und Kachel zeigen ─────────────
+                ['type' => 'ExpansionPanel', 'expanded' => false,
+                 'caption' => $this->Translate('2. Show in SymDo'),
+                 'items' => [
+                    /* Zweiter, unabhaengiger Weg neben der KI: 1:1 ablegen statt
+                       auswerten. Kostet keinen KI-Aufruf und laeuft deshalb auch
+                       beim ersten Lauf. */
+                    ['type' => 'CheckBox', 'name' => 'EduToNotes',
+                     'caption' => $this->Translate('Mirror cards into SymDo')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Each card comes over with its full text and its files: one folder per child, inside it one per page. Cards that vanish from the page move to the „Archive" section — nothing is deleted on its own.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Visible in the „Class pages" area of the app and in the tile of the same name. Without this switch nothing is stored, and both stay empty.')],
+                 ]],
+
+                // ── 3. Die KI: Vorschlaege und Meldung ────────────────────
+                ['type' => 'ExpansionPanel', 'expanded' => false,
+                 'caption' => $this->Translate('3. AI suggestions'),
+                 'items' => [
+                    ['type' => 'Label', 'caption' => $this->Translate('A changed card goes through the same chain as a school mail: analysis, then a suggestion in the AI inbox that someone checks and accepts — nothing is created unasked. The first check only notes what is there. The suggestions count towards the daily AI limit.')],
+                    ['type' => 'CheckBox', 'name' => 'EduPush',
+                     'caption' => $this->Translate('Push on changes to the class page')],
+                    ['type' => 'Label', 'caption' => $this->Translate('One message per check, not one per card: how many cards were updated and how many suggestions are waiting.')],
                     /* Auswerten, was schon im Merker steht — ein Griff von Hand
-                       fuer den Bestand. Jede Karte kostet einen KI-Aufruf. */
+                       fuer den Bestand. Jede Karte kostet einen KI-Aufruf,
+                       deshalb steht der Knopf HIER und nicht bei den
+                       Alltagsknoepfen. */
                     ['type' => 'Button', 'caption' => $this->Translate('Evaluate all cards'),
                      'confirm' => $this->Translate('Every card is sent to the AI, including the ones already noted. That costs one request per card. Continue?'),
                      'onClick' => 'IPS_RequestAction($id, \'EduScanAll\', 0);'],
-                    ['type' => 'Button', 'caption' => $this->Translate('Forget noted cards'),
-                     'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
-                    ['type' => 'Button', 'caption' => $this->Translate('Forget linked maps'),
-                     'onClick' => 'IPS_RequestAction($id, \'EduForgetFound\', 0);'],
-                    /* Der Umzug der Karten aus den Notizen. Er laeuft von selbst
-                       beim Uebernehmen; dieser Knopf zeigt seinen BERICHT — ob
-                       er etwas getan hat, ob er auf einen Kernel-Neustart wartet
-                       oder ob nichts zu holen war. */
-                    ['type' => 'Button', 'caption' => $this->Translate('Move cards out of the notes'),
-                     'onClick' => 'IPS_RequestAction($id, \'EduMigrateNow\', 0);'],
-                ]],
+                 ]],
+
+                // ── 4. Stand, Sperren, Eingriffe ──────────────────────────
+                ['type' => 'ExpansionPanel', 'expanded' => true,
+                 'caption' => $this->Translate('4. Status and maintenance'),
+                 'items' => [
+                    ['type' => 'Label', 'name' => 'EduStatusLabel', 'caption' => $zeile],
+                    ['type' => 'Button', 'caption' => $this->Translate('Check now'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduScanNow\', 0);'],
+                    /* Gesperrte Seiten: in App oder Kachel geloescht. Sie stehen
+                       NICHT als Eigenschaft da, sondern im Bestand — die Liste
+                       wird deshalb mit `values` gefuellt und ist nicht
+                       bearbeitbar. */
+                    ['type' => 'List', 'name' => 'EduBlockedList', 'rowCount' => 3,
+                     'caption' => $this->Translate('Blocked class pages (deleted in app or tile)'),
+                     'columns' => [
+                         ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '200px'],
+                         ['caption' => $this->Translate('Address'), 'name' => 'url', 'width' => 'auto'],
+                     ],
+                     'values' => $gesperrt],
+                    ['type' => 'Button', 'caption' => $this->Translate('Release selected page'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduUnblock\', json_encode($EduBlockedList));'],
+                    ['type' => 'Label', 'caption' => $hinweisGesperrt,
+                     'visible' => $hinweisGesperrt !== ''],
+                    ['type' => 'RowLayout', 'items' => [
+                        ['type' => 'Button', 'caption' => $this->Translate('Forget noted cards'),
+                         'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
+                        ['type' => 'Button', 'caption' => $this->Translate('Forget linked pages'),
+                         'onClick' => 'IPS_RequestAction($id, \'EduForgetFound\', 0);'],
+                        /* Einmaliger Umzug der Karten aus den Notizen — nur
+                           solange dort noch welche liegen. */
+                        ['type' => 'Button', 'caption' => $this->Translate('Move cards out of the notes'),
+                         'visible' => $umzugNoetig,
+                         'onClick' => 'IPS_RequestAction($id, \'EduMigrateNow\', 0);'],
+                    ]],
+                 ]],
             ],
         ];
     }

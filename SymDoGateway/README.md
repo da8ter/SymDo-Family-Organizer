@@ -416,7 +416,15 @@ ausgelieferte iOS-App nicht kennt.
 
 ## 16. Klassenseiten (Edumaps)
 
-> Im Formular unter **Schule → Klassenseiten (Edumaps)**.
+> Im Formular unter **Schule → Klassenseiten (Edumaps)**, dort in vier
+> Gruppen: *1. Seiten* (welche, wie oft, Verweise), *2. In SymDo zeigen* (der
+> Spiegel für Bereich und Kachel), *3. KI-Vorschläge* (Auswertung, Push) und
+> *4. Stand und Wartung* (Statuszeile, Sperren, Eingriffe).
+>
+> **Ein Wort je Sache:** die **Klassenseite** ist die Seite (bei Edumaps „Map"),
+> die **Karte** ist ein Kasten darauf. Bis zum 10.09.2026 nannte die deutsche
+> Oberfläche beides „Karte" — daher stand dort etwa „verlinkte Karten", wo
+> verlinkte *Seiten* gemeint waren.
 
 Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termine, Elternbriefe mit Fristen, Materiallisten, den Stundenplan als PDF. Das Gateway liest die Seite regelmäßig, erkennt **geänderte Karten** und schickt jede einzeln durch dieselbe Kette wie eine Schulmail — KI-Analyse, dann ein Vorschlag im KI-Eingang, den jemand prüft und übernimmt. Nichts entsteht ungefragt.
 
@@ -426,7 +434,7 @@ Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termin
 | Klassenseiten | `EduPages` | je Seite die Adresse und das Kind, dem die Vorschläge gehören. **Die Adresse enthält den Zugang und wirkt wie ein Kennwort** — sie steht nur in dieser Instanz |
 | Prüfintervall | `EduIntervalHours` | wie oft nachgesehen wird |
 | Karten spiegeln | `EduToNotes` | jede Karte 1:1 in den eigenen Bestand, ein Ordner je Seite, Anhänge und QR-Codes als Verweise mit dabei; entfernte Karten wandern ins **Archiv** statt zu verschwinden |
-| Verlinkten Karten folgen | `EduFollowLinks` | Karten, auf die die Seite verweist, kommen mit |
+| Verlinkten Seiten folgen | `EduFollowLinks` | Seiten, auf die eine eingetragene Seite verweist, kommen mit — nur gespiegelt, nie ausgewertet. Sie gehören dem Kind der Herkunftsseite |
 | Push bei Neuem | `EduPush` | meldet neue Vorschläge aufs Handy |
 
 **Wo die Karten liegen (seit 10.09.2026 anders).** Sie haben einen eigenen
@@ -439,7 +447,7 @@ Notizen trugen Code, der nur für Klassenseiten da war.
 Sichtbar sind die Karten jetzt an drei Stellen: im eigenen Bereich
 **Klassenseiten** der Web-App (Schalter *Klassenseiten zeigen* an der Web-App-
 Instanz, zusätzlich gekoppelt an diese Konfiguration hier), in der neuen Kachel
-**SymDo - Edumaps**, und als Kartenansicht mit den Farben der Seite,
+**SymDo - Klassenseiten (Edumaps)**, und als Kartenansicht mit den Farben der Seite,
 aufklappbaren Bereichen, PDF-Vorschau und der Buchungslage buchbarer Karten. Die
 Ordnung ist zwei Ebenen tief: je Kind ein Ordner, darin seine Seiten.
 

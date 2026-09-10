@@ -137,7 +137,7 @@ trait EduMaps
         if ($Ident === 'EduForgetFound') {
             @$this->WriteAttributeString('EduFound', '[]');
             $this->UpdateFormField('EduStatusLabel', 'caption',
-                $this->Translate('Linked maps forgotten — the next check finds them again.'));
+                $this->Translate('Linked pages forgotten — the next check finds them again.'));
             return true;
         }
         if ($Ident === 'EduScanAll') {
@@ -344,7 +344,7 @@ trait EduMaps
             $karten, count($seiten), $geaendert, $analysiert
         );
         if ($gespiegelt > 0) {
-            $bericht .= ' ' . sprintf($this->Translate('%d saved as note(s).'), $gespiegelt);
+            $bericht .= ' ' . sprintf($this->Translate('%d card(s) mirrored.'), $gespiegelt);
         }
         if ($fehler !== []) {
             $bericht .= ' — ' . implode(' | ', $fehler);
@@ -1860,7 +1860,7 @@ trait EduMaps
             if (preg_match('#<title>(.*?)</title>#su', (string)($antwort['body'] ?? ''), $t) === 1) {
                 $name = trim((string)preg_replace('/\s*[-–]\s*Edumaps\s*$/ui', '', $this->EduText($t[1])));
             }
-            $liste[] = ['name' => $name !== '' ? $name : $this->Translate('Linked map'),
+            $liste[] = ['name' => $name !== '' ? $name : $this->Translate('Linked page'),
                         'url' => $url, 'userId' => (string)$seite['userId'], 'von' => (string)$seite['name']];
             $bekannt[$url] = true;
             $neu++;
