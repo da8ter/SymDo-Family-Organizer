@@ -332,15 +332,16 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Server, Schule | `UntisServer`, `UntisSchool` | wie in der WebUntis-Adresse der Schule (z. B. `mese.webuntis.com`, Schulkürzel) |
 | Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
-| Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name** und Kurse. Der Name steht fast immer auf *— automatisch —*: bei einem Schülerkonto ist das Konto selbst das Kind, bei einem Elternkonto nimmt der Abruf das Kind, dessen Name zum Familienmitglied passt |
+| Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name** und Kurse. Den Namen liefert der Knopf *Schüler abrufen*: die Kinder des Kontos, bei einem Schülerzugang das Konto selbst. Bleibt die Zeile leer, löst der Abruf sie weiter selbst auf |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
 
 **Schüler abrufen** (Knopf über der Liste) holt die Kinder, die am
 angemeldeten Konto hängen (`app/data`), und trägt sie als Auswahl in die Spalte
-*WebUntis Name* ein — eine Anmeldung je Druck. Nötig ist das nur, wenn die
-automatische Zuordnung nicht eindeutig ist: Elternkonto, mehrere Kinder, und
-keiner der WebUntis-Namen passt zum Familienmitglied.
+*WebUntis Name* ein — eine Anmeldung je Druck. Hängt kein Kind am Konto, ist
+das Konto selbst das Element (Schülerzugang) und steht mit seinem Namen in der
+Auswahl. Eine Zeile ohne Wahl funktioniert weiter: dann löst der Abruf sie auf
+wie bisher — das Konto oder das Kind, dessen Name zum Familienmitglied passt.
 
 > Bis zum 10.09.2026 stand hier eine **Schüler-Suche** über `getStudents`.
 > Sie ist entfernt: setzt die Schule die Rechte weit, liefert dieser Aufruf die

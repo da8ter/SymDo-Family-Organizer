@@ -1819,7 +1819,7 @@ class SymDoGateway extends IPSModuleStrict
                 ['type' => 'Label', 'caption' => $this->Translate('Note: like every other password in Symcon, this one is stored in plain text in settings.json. With school credentials one can report a child sick — use a separate read-only account if the school offers one.')],
                 /* Was „automatisch" heisst, gehoert VOR den Knopf: die meisten
                    muessen gar nichts abrufen und nichts waehlen. */
-                ['type' => 'Label', 'caption' => $this->Translate('One row per child. „WebUntis name" answers „whose timetable?" and stays on „— automatic —" in almost every case: with a student login the account is the child itself, with a guardian login the fetch takes the child whose name matches the family member. Only when that is ambiguous, fetch the students of the account below and pick one.')],
+                ['type' => 'Label', 'caption' => $this->Translate('One row per child. „WebUntis name" answers „whose timetable?": press „Fetch students" once, then pick the name. Only the children of the entered account appear there — with a student login the account itself. An empty row still works: the fetch then resolves it on its own, the account or the child whose name matches the family member.')],
                 /* Der Knopf steht UEBER der Liste: er fuellt die Auswahl in
                    ihrer Spalte „WebUntis Name", und man liest von oben nach
                    unten. Er holt ausschliesslich die Kinder DIESES Kontos

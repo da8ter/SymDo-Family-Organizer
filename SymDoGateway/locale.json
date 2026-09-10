@@ -889,11 +889,10 @@
             "— none —": "— keins —",
             "Fetch students": "Schüler abrufen",
             "WebUntis name": "WebUntis Name",
-            "— automatic —": "— automatisch —",
-            "One row per child. „WebUntis name\" answers „whose timetable?\" and stays on „— automatic —\" in almost every case: with a student login the account is the child itself, with a guardian login the fetch takes the child whose name matches the family member. Only when that is ambiguous, fetch the students of the account below and pick one.": "Eine Zeile je Kind. „WebUntis Name\" beantwortet die Frage „wessen Plan?\" und bleibt fast immer auf „— automatisch —\": bei einem Schülerkonto ist das Konto selbst das Kind, bei einem Elternkonto nimmt der Abruf das Kind, dessen Name zum Familienmitglied passt. Nur wenn das nicht eindeutig ist, unten die Schüler des Kontos abrufen und eines auswählen.",
-            "This login is a student account — it has no further children. „— automatic —\" is the right choice.": "Dieses Konto ist ein Schülerzugang — es hat keine weiteren Kinder. „— automatisch —\" ist hier richtig.",
-            "The account has no children — is it a guardian login?": "Am Konto hängt kein Kind — ist es ein Elternzugang?",
-            "%d student(s) fetched — pick them in the column „WebUntis name\".": "%d Schüler abgerufen — in der Spalte „WebUntis Name\" auswählbar."
+            "%d student(s) fetched — pick them in the column „WebUntis name\".": "%d Schüler abgerufen — in der Spalte „WebUntis Name\" auswählbar.",
+            "One row per child. „WebUntis name\" answers „whose timetable?\": press „Fetch students\" once, then pick the name. Only the children of the entered account appear there — with a student login the account itself. An empty row still works: the fetch then resolves it on its own, the account or the child whose name matches the family member.": "Eine Zeile je Kind. „WebUntis Name\" beantwortet die Frage „wessen Plan?\": einmal „Schüler abrufen\" drücken, dann den Namen wählen. Dort erscheinen ausschließlich die Kinder des eingetragenen Kontos — bei einem Schülerzugang das Konto selbst. Eine leere Zeile geht weiterhin: der Abruf löst sie dann selbst auf, das Konto oder das Kind mit dem passenden Namen.",
+            "Element %d": "Element %d",
+            "Nothing found on this account — neither children nor an own element.": "Auf diesem Konto ist nichts zu finden — weder Kinder noch ein eigenes Element."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

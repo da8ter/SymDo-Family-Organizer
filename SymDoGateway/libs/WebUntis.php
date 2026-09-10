@@ -389,7 +389,34 @@ trait WebUntis
             }
             $raus[] = ['id' => (int)$k['id'], 'name' => trim((string)($k['displayName'] ?? ''))];
         }
-        return $raus;
+        if ($raus !== []) {
+            return $raus;
+        }
+        /* Kein Kind am Konto: dann ist das Konto SELBST das Element — ein
+           Schuelerzugang. Auch dessen Name gehoert in die Auswahl, denn die
+           Spalte soll einen Namen zeigen und keine Nummer; „automatisch" gibt
+           es dort nicht mehr.
+
+           Der Anzeigename steht je nach Fassung von WebUntis an verschiedenen
+           Stellen der Antwort. Die erste, die etwas hergibt, gewinnt; findet
+           sich keine, traegt die Auswahl die Elementnummer. Geraten wird hier
+           nichts: nur gelesen, was da ist. */
+        $ich = (int)$this->untisIch['id'];
+        if ($ich <= 0 || !in_array((int)$this->untisIch['type'],
+                [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true)) {
+            return [];
+        }
+        $u = (array)($d['user'] ?? []);
+        $p = (array)($u['person'] ?? []);
+        $name = '';
+        foreach ([$p['displayName'] ?? '', $u['displayName'] ?? '',
+                  $p['name'] ?? '', $u['name'] ?? ''] as $kandidat) {
+            if (trim((string)$kandidat) !== '') {
+                $name = trim((string)$kandidat);
+                break;
+            }
+        }
+        return [['id' => $ich, 'name' => $name]];
     }
 
     /**
@@ -409,16 +436,22 @@ trait WebUntis
                in der Zeile steht. */
             $mitglieder[] = ['caption' => $name, 'value' => (string)$id];
         }
-        /* Die Auswahl „WebUntis Name": „automatisch" und die Kinder DIESES
-           Kontos. Mehr gibt es hier nicht zu waehlen — die Schuelerliste der
-           Schule kommt nie in dieses Formular. */
-        $wahl = [['caption' => $this->Translate('— automatic —'), 'value' => 0]];
+        /* Die Auswahl „WebUntis Name": ausschliesslich die Kinder DIESES Kontos
+           — bei einem Schuelerzugang das Konto selbst. Kein „automatisch": die
+           Spalte soll einen NAMEN zeigen, auch wenn es nur einer ist. Die
+           Schuelerliste der Schule kommt nie in dieses Formular.
+
+           Steht in einer Zeile noch keine Nummer (0), aendert das nichts am
+           Abruf: der loest weiter selbst auf (Konto bzw. Kind mit passendem
+           Namen). Die Spalte zeigt bis zur Wahl die 0. */
+        $wahl = [];
         foreach ((array)json_decode((string)@$this->ReadAttributeString('UntisAccountStudents'), true) as $k) {
             if (!is_array($k) || (int)($k['id'] ?? 0) <= 0) {
                 continue;
             }
             $name = trim((string)($k['name'] ?? ''));
-            $wahl[] = ['caption' => $name !== '' ? $name : (string)(int)$k['id'],
+            $wahl[] = ['caption' => $name !== ''
+                           ? $name : sprintf($this->Translate('Element %d'), (int)$k['id']),
                        'value'   => (int)$k['id']];
         }
         return [
@@ -470,12 +503,9 @@ trait WebUntis
                 $this->Translate('Login failed: ') . (string)($an['message'] ?? '?'));
             return;
         }
-        /* Ist das Konto selbst ein Element (Schuelerzugang), gibt es keine
-           weiteren Kinder — dann ist „automatisch" die richtige Antwort und
-           nicht eine leere Auswahl. */
-        $eigenes = in_array((int)$this->untisIch['type'],
-            [self::UNTIS_TYP_KLASSE, self::UNTIS_TYP_SCHUELER], true);
-        $kinder = $eigenes ? [] : $this->UntisKinderDesKontos();
+        /* Elternzugang: die Kinder am Konto. Schuelerzugang: das Konto selbst,
+           mit seinem Namen — beides liefert UntisKinderDesKontos(). */
+        $kinder = $this->UntisKinderDesKontos();
         $this->UntisLogout();
         @$this->WriteAttributeInteger('UntisFails', 0);
 
@@ -485,13 +515,8 @@ trait WebUntis
         // Formular schliessen und wieder oeffnen muss.
         $this->UpdateFormField('UntisStudents', 'columns',
             (string)json_encode($this->UntisStudentsSpalten(), JSON_UNESCAPED_UNICODE));
-        if ($eigenes) {
-            $this->UpdateFormField('UntisStatusLabel', 'caption',
-                $this->Translate('This login is a student account — it has no further children. „— automatic —" is the right choice.'));
-            return;
-        }
         $this->UpdateFormField('UntisStatusLabel', 'caption', $kinder === []
-            ? $this->Translate('The account has no children — is it a guardian login?')
+            ? $this->Translate('Nothing found on this account — neither children nor an own element.')
             : sprintf($this->Translate('%d student(s) fetched — pick them in the column „WebUntis name".'),
                 count($kinder)));
     }
