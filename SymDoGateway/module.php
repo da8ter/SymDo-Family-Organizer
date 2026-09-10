@@ -1813,10 +1813,6 @@ class SymDoGateway extends IPSModuleStrict
                      'maximum' => 1440, 'suffix' => ' min',
                      'caption' => $this->Translate('Fetch every')],
                 ]],
-                /* Der Hinweis steht ABSICHTLICH im Formular und nicht nur in der
-                   Dokumentation: wer hier Zugangsdaten eintraegt, soll wissen,
-                   wo sie liegen. */
-                ['type' => 'Label', 'caption' => $this->Translate('Note: like every other password in Symcon, this one is stored in plain text in settings.json. With school credentials one can report a child sick — use a separate read-only account if the school offers one.')],
                 /* Was „automatisch" heisst, gehoert VOR den Knopf: die meisten
                    muessen gar nichts abrufen und nichts waehlen. */
                 ['type' => 'Label', 'caption' => $this->Translate('One row per child. „WebUntis name" answers „whose timetable?": press „Fetch students" once, then pick the name. Only the children of the entered account appear there — with a student login the account itself. An empty row still works: the fetch then resolves it on its own, the account or the child whose name matches the family member.')],
