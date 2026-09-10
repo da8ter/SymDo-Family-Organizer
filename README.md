@@ -73,7 +73,7 @@ Jedes Familienmitglied sieht sofort, was ansteht, wer zuständig ist und was noc
 | **SymDo - Essensplan** | Device | Wochenraster der Gerichte, Zutaten in den Einkaufswagen, KI-Gerichtsbilder |
 | **SymDo - Sprachassistent** | Device | Die Sprechstelle des Sprachdialogs als Kachel — Gesprächsverlauf oder animierte Blase |
 | **SymDo - Notizen** | Device | Der Notizbereich der App als eigene Kachel |
-| **SymDo - Klassenseiten** | Device | Die Klassenseiten der Schule als eigene Kachel: Karten mit Text, Bildern und Buchungslage, nur lesend |
+| **SymDo - Edumaps** | Device | Die Klassenseiten der Schule als eigene Kachel: Karten mit Text, Bildern und Buchungslage, nur lesend |
 
 ## Schnellstart
 
@@ -202,7 +202,7 @@ im Gateway.
 
 → [Ausführliche Anleitung](SymDoNotes/README.md)
 
-## SymDo - Klassenseiten
+## SymDo - Edumaps
 
 Die Pinnwand der Schule als eigene Kachel: je Kind seine Seiten, darin die
 Karten in der Reihenfolge und mit den Farben der echten Seite — Elternbriefe,

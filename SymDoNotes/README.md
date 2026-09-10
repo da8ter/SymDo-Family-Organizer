@@ -19,7 +19,7 @@ Es gibt **nichts einzurichten**: Die Notizen liegen im **SymDo Gateway**, die Ka
 - **Ordner und Notizen** aus dem Gateway: ein Ordner je Familienmitglied mit dessen Foto, dazu selbst angelegte Ordner, auch **Ordner in Ordnern**; der Pfad oben ist anklickbar
 - **Notizen mit Text und Anhängen** — Bilder und PDF-Dateien, aufgenommen oder aus der KI-Analyse übernommen; ein Anhang öffnet sich in der Kachel
 - **Anlegen, ändern, löschen** direkt in der Kachel; **Favoriten** verlassen die Ordner und stehen oben
-- **Klassenseiten** stehen seit September 2026 NICHT mehr hier: sie haben ihren eigenen Bestand, ihren eigenen Bereich in der App und eine eigene Kachel → [SymDo - Klassenseiten](../SymDoEdumaps/README.md)
+- **Klassenseiten** stehen seit September 2026 NICHT mehr hier: sie haben ihren eigenen Bestand, ihren eigenen Bereich in der App und eine eigene Kachel → [SymDo - Edumaps](../SymDoEdumaps/README.md)
 - **Sprachdialog**: Ist der Sprachassistent eingerichtet, liest und schreibt auch er in diese Notizen („Schreib eine Notiz für Tim …")
 
 ## 2. Voraussetzungen

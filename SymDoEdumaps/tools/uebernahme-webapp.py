@@ -54,7 +54,7 @@ ANKER = [
 # stillschweigend verliert.
 EIGEN = {
     'de': {
-        'SymDo Edumaps': 'SymDo - Klassenseiten',
+        'SymDo Edumaps': 'SymDo - Edumaps',
         'Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.':
             'Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Seiten werden im SymDo Gateway eingetragen.',
         'Read only: the cards are a mirror of the school page. Renaming a page and deleting it (which blocks it) work; writing does not.':
@@ -70,7 +70,7 @@ EIGEN = {
         'Inactive': 'Inaktiv',
     },
     'en': {
-        'SymDo Edumaps': 'SymDo - Class pages',
+        'SymDo Edumaps': 'SymDo - Edumaps',
     },
 }
 

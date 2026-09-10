@@ -431,7 +431,7 @@ Notizen trugen Code, der nur für Klassenseiten da war.
 Sichtbar sind die Karten jetzt an drei Stellen: im eigenen Bereich
 **Klassenseiten** der Web-App (Schalter *Klassenseiten zeigen* an der Web-App-
 Instanz, zusätzlich gekoppelt an diese Konfiguration hier), in der neuen Kachel
-**SymDo - Klassenseiten**, und als Kartenansicht mit den Farben der Seite,
+**SymDo - Edumaps**, und als Kartenansicht mit den Farben der Seite,
 aufklappbaren Bereichen, PDF-Vorschau und der Buchungslage buchbarer Karten. Die
 Ordnung ist zwei Ebenen tief: je Kind ein Ordner, darin seine Seiten.
 
