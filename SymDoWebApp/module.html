@@ -14607,7 +14607,11 @@ function edumapsKarteHtml(n, imArchiv = false, ersatzFarbe = '') {
       ? '<button class="edu-weg" data-weg="' + escapeHtml(n.id) + '" aria-label="' + translate('Delete') +
         '" title="' + translate('Delete') + '"><i class="fa-light fa-trash"></i></button>'
       : '') +
-    '<span class="edu-datum">' + escapeHtml(notesDatum(n.updatedAt)) + '</span></div>' +
+    /* Das Datum der QUELLE, wenn der Server eines mitschickt: wann die SCHULE
+       die Karte angefasst hat. `updatedAt` ist der Stand des Bestands — damit
+       stand hier bei jeder Karte der Tag des Spiegelns, bei allen also
+       derselbe. Karten aus der Zeit vor `srcAt` fallen darauf zurueck. */
+    '<span class="edu-datum">' + escapeHtml(notesDatum(n.srcAt || n.updatedAt)) + '</span></div>' +
     /* Die formatierte Fassung, wenn die Quelle eine liefert — dann bleiben
        Nummerierung und Fettdruck der Klassenseite erhalten. Sie ist SERVERSEITIG
        auf eine Weissliste reduziert (EduMaps::EduHtml); hier wird nichts mehr

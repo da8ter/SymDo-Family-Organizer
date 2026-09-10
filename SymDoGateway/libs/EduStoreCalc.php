@@ -138,6 +138,14 @@ class EduStoreCalc
                Feld hier. */
             'source'    => 'edumaps',
         ];
+        /* Das Datum der QUELLE, wenn es eines gibt: die Karte soll sagen, wann
+           die SCHULE sie angefasst hat. `updatedAt` bleibt daneben — es gehoert
+           dem Bestand und traegt Reihenfolge und Abgleich. Karten aus der Zeit
+           davor haben kein `srcAt`; dort bleibt es beim Bestandsdatum, bis der
+           naechste Lauf es nachtraegt. */
+        if ((int)($n['srcAt'] ?? 0) > 0) {
+            $row['srcAt'] = (int)$n['srcAt'];
+        }
         if (($n['section'] ?? '') !== '') {
             $row['section'] = (string)$n['section'];
         }

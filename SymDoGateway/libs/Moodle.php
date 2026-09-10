@@ -715,6 +715,8 @@ trait Moodle
                     'abschnitt' => $wo,
                     'dateien'   => [],
                     'weg'       => '',
+                    // Ein Abschnitt hat kein Datum — dann gilt das des Bestands.
+                    'stand'     => 0,
                 ];
             }
             foreach ((array)($abschnitt['modules'] ?? []) as $modul) {
@@ -781,6 +783,8 @@ trait Moodle
             'abschnitt' => $abschnitt,
             'dateien'   => $dateien,
             'weg'       => trim((string)($modul['url'] ?? '')),
+            // Wann die Schule das Modul (oder seine neueste Datei) angefasst hat.
+            'stand'     => $stand,
         ];
     }
 
@@ -838,6 +842,7 @@ trait Moodle
                     'dateien'   => $dateien,
                     'weg'       => (string)$zugang['site'] . '/mod/forum/discuss.php?d='
                                    . (int)($d['discussion'] ?? ($d['id'] ?? 0)),
+                    'stand'     => (int)($d['timemodified'] ?? ($d['modified'] ?? 0)),
                 ];
             }
         }
@@ -987,13 +992,16 @@ trait Moodle
                        Weissliste greift erst beim naechsten Schreiben, und das
                        kommt nur bei einer neuen Fassung. Genau dieselbe
                        Nachtrag-Logik wie bei Edumaps (Vorschaubild, QR-Code). */
-                    || (string)($store['notes'][$i]['html'] ?? '') !== (string)$karte['html'];
+                    || (string)($store['notes'][$i]['html'] ?? '') !== (string)$karte['html']
+                    // Dasselbe fuer das Quelldatum.
+                    || (int)($store['notes'][$i]['srcAt'] ?? 0) !== (int)($karte['stand'] ?? 0);
                 if ($fehlt || $this->eduOrdnerGeaendert) {
                     $store['notes'][$i]['folderId'] = $ordnerId;
                     $store['notes'][$i]['section'] = EduStoreCalc::Kappen(
                         (string)$karte['abschnitt'], EduStoreCalc::TITLE_MAX);
                     $store['notes'][$i]['pos'] = $nr;
                     $store['notes'][$i]['html'] = (string)$karte['html'];
+                    $store['notes'][$i]['srcAt'] = (int)($karte['stand'] ?? 0);
                     $this->EduWriteStore($store);
                 }
                 return false;
@@ -1024,6 +1032,10 @@ trait Moodle
                 'source'    => 'moodle',
                 'srcId'     => $srcId,
                 'srcRev'    => (int)$karte['srcRev'],
+                /* Das Datum der QUELLE. `srcRev` taugt dafuer NICHT: bei einer
+                   Abschnittskarte ist es der Fingerabdruck des Textes und keine
+                   Zeit. Steht hier 0, zeigt die Karte das Datum des Bestands. */
+                'srcAt'     => (int)($karte['stand'] ?? 0),
                 'section'   => EduStoreCalc::Kappen((string)$karte['abschnitt'], EduStoreCalc::TITLE_MAX),
                 'pos'       => $nr,
                 'sectionColor' => '',

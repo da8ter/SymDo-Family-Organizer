@@ -529,7 +529,10 @@ trait EduMaps
                 $fehlt = !array_key_exists('section', $store['notes'][$i])
                     || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr
                     || (string)($store['notes'][$i]['sectionColor'] ?? '') !== (string)($karte['abschnittFarbe'] ?? '')
-                    || (string)($store['notes'][$i]['color'] ?? '') !== (string)($karte['farbe'] ?? '');
+                    || (string)($store['notes'][$i]['color'] ?? '') !== (string)($karte['farbe'] ?? '')
+                    // Karten aus der Zeit davor haben kein Quelldatum.
+                    || (int)($store['notes'][$i]['srcAt'] ?? 0) !== (int)$karte['updated'];
+                $store['notes'][$i]['srcAt'] = (int)$karte['updated'];
                 $store['notes'][$i]['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
                 $store['notes'][$i]['color'] = (string)($karte['farbe'] ?? '');
                 if ((string)($store['notes'][$i]['html'] ?? '') !== (string)($karte['html'] ?? '')) {
@@ -649,6 +652,12 @@ trait EduMaps
                 'source'    => 'edumaps',
                 'srcId'     => $srcId,
                 'srcRev'    => (int)$karte['updated'],
+                /* Das Datum der QUELLE — wann die Schule die Karte angefasst
+                   hat, nicht wann wir sie gespiegelt haben. `updatedAt` ist das
+                   Zweite und gehoert dem Bestand (Reihenfolge, Abgleich); in der
+                   Karte stand damit bei allen Karten der Tag des Spiegelns.
+                   Vom Nutzer gemeldet: „warum steht bei allen Karten 10.09.?" */
+                'srcAt'     => (int)$karte['updated'],
                 /* Abschnitt und Platz auf der Seite: erst damit kann die App die
                    Karten so zeigen, wie sie auf der Klassenseite stehen. Ohne
                    sie waere es eine Liste nach Aenderungsdatum. */
