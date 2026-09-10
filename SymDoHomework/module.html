@@ -3814,7 +3814,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    hoch gehalten werden. Das Grid tut es von selbst. */
 .ct-tafel {
   --ct-namen: 84px;
-  --ct-spalte: 112px;
+  /* 168px statt 112: eine Spalte traegt jetzt „ganztaegig" und einen Titel in
+     lesbarer Laenge, statt beides abzuschneiden (auf Wunsch 50% breiter). */
+  --ct-spalte: 168px;
   --ct-zeile: 56px;
   display: grid;
   grid-template-columns: var(--ct-namen) repeat(7, minmax(var(--ct-spalte), 1fr));
@@ -3835,8 +3837,11 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .ct-ecke, .ct-name {
   position: sticky; left: 0; z-index: 2;
   background: var(--card);
-  display: flex; align-items: center; gap: 6px;
-  padding: 2px 6px 2px 0;
+  /* Mittig statt linksbuendig: in der schmalen Spalte des Handys (40px, ohne
+     Vornamen) klebte das Foto am linken Rand. Steht der Vorname daneben, wird
+     das Paar zentriert — deshalb auch der symmetrische Innenabstand. */
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 2px 3px;
   min-width: 0;
 }
 .ct-ecke { z-index: 3; }
@@ -3852,7 +3857,9 @@ html.web-app #ladeschirm.geht { opacity: 0; }
    breit und von der Woche waren zwei Personen zu sehen. */
 .ct-name img.avatar, .ct-name span.avatar {
   flex: 0 0 auto;
-  width: 22px; height: 22px; border-radius: 999px; object-fit: cover;
+  /* 28px = 22px + 25% (auf Wunsch): die Gesichter sind auf dem Handy das
+     einzige Erkennungsmerkmal der Zeile, denn der Vorname weicht dort. */
+  width: 28px; height: 28px; border-radius: 999px; object-fit: cover;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #fff;
 }
@@ -3899,7 +3906,18 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .ct-chip .ct-chip-zeit { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ct-chip .ct-chip-titel {
   font-size: 12px; font-weight: 600; line-height: 1.2;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  /* ZWEI Zeilen erlaubt (auf Wunsch): „Betreuung Ihres Kindes am …" endete
+     einzeilig nach zwei Woertern. Nach der zweiten Zeile wird abgeschnitten —
+     eine Kachel ohne Grenze zoege die Zeile beliebig hoch, und die Woche lebt
+     davon, dass alle Zeilen vergleichbar bleiben.
+     `-webkit-line-clamp` ist die Form, die WebKit UND Blink verstehen; die
+     Kachel und die iOS-App laufen beide auf WebKit. */
+  white-space: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; min-width: 0;
+  /* Ein einzelnes langes Wort (Kalendernamen aus der Schule koennen so sein)
+     bricht, statt aus der Kachel zu laufen. */
+  overflow-wrap: anywhere;
 }
 .ct-chip .ct-chip-abz { flex: 0 0 auto; display: inline-flex; align-items: center; }
 /* icons.js ersetzt jedes <i> nachtraeglich durch ein <svg> — jede Groessenregel
@@ -3937,9 +3955,42 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .ct-zelle.leer .ct-neu { color: var(--muted); }
 .ct-neu:hover { color: var(--accent); }
 
+/* ── Die Tafel nimmt die ganze Hoehe des Bereichs ──────────────────────────
+   Vorher endete das Raster unter der letzten Zeile und darunter blieb die halbe
+   Seite leer (auf Wunsch geaendert). Der Weg dorthin fuehrt NICHT ueber
+   Prozenthoehen: `.screen` rollt selbst und traegt Innenabstand, `min-height:
+   100%` haette also gerade eine Rollhoehe zu viel ergeben. Stattdessen wird der
+   Bereich in der Wochenansicht eine Flex-Spalte, und die Tafel ist das Kind,
+   das den Rest nimmt. Die Klasse setzt renderCalendar (ct-voll) — nur in dieser
+   Ansicht, denn die Agenda soll weiter mitwachsen und rollen.
+
+   `grid-template-rows: min-content` haelt die Kopfzeile schmal: ohne sie waere
+   sie so hoch wie eine Mitgliedszeile, weil `grid-auto-rows` auch fuer sie
+   gilt. Und die Zeilen bekommen `minmax(max-content, 1fr)` statt `1fr`: eine
+   Zelle mit vier Kacheln muss ihren Inhalt behalten duerfen, der Rest teilt
+   den Platz. */
+#screen-calendar.ct-voll.active { display: flex; flex-direction: column; }
+#screen-calendar.ct-voll > .content {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+#screen-calendar.ct-voll #calTafel {
+  flex: 1 1 auto; min-height: 0;
+  grid-template-rows: min-content;
+  grid-auto-rows: minmax(max-content, 1fr);
+  /* Passt die Woche doch nicht (viele Termine, kleines Fenster), rollt die
+     Tafel selbst — senkrecht wie waagerecht. Die klebende Namensspalte haelt
+     das aus, sie haengt am Rollbereich. */
+  overflow: auto;
+}
+/* Der Mindesthoehe der Zeile ihren Boden zurueckgeben: sie stand vorher in
+   grid-auto-rows, und dort steht jetzt max-content. */
+#screen-calendar.ct-voll .ct-zelle,
+#screen-calendar.ct-voll .ct-name { min-height: var(--ct-zeile); }
+
 @media (max-width: 560px) {
   /* Auf dem Handy nur dort ein Plus, wo sonst nichts steht: neben einem Termin
-     ist die Zelle 112px breit, und zwei Bedienelemente darin sind eines zu viel. */
+     bleiben zwei Bedienelemente in einer Zelle eines zu viel. */
   .ct-zelle:not(.leer) .ct-neu { display: none; }
 }
 
@@ -12096,6 +12147,7 @@ function renderCalendar() {
      filtert nicht (sie hebt hervor), und sieben leere Spalten sind eine
      sinnvolle Auskunft — „diese Woche ist nichts" —, waehrend eine leere
      Agenda keine ist. */
+  const schirm = document.getElementById('screen-calendar');
   if (calAnsicht() === 'woche') {
     bereich.style.display = 'none';
     renderRows(bereich, '');
@@ -12103,8 +12155,11 @@ function renderCalendar() {
       tafel.style.display = '';
       renderCalTafel();
     }
+    // Ganze Hoehe nur in dieser Ansicht — siehe #screen-calendar.ct-voll im Stil.
+    if (schirm) schirm.classList.add('ct-voll');
     return;
   }
+  if (schirm) schirm.classList.remove('ct-voll');
   if (tafel && tafel.style.display !== 'none') {
     // Nichts Unsichtbares stehen lassen: ein verborgener Behaelter mit alten
     // Terminen ist ein Hinterhalt fuer die naechste Messung.
