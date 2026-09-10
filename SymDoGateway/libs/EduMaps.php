@@ -150,6 +150,16 @@ trait EduMaps
             $this->UpdateFormField('EduStatusLabel', 'caption', $bericht);
             return true;
         }
+        if ($Ident === 'EduMigrateNow') {
+            /* Der Umzug der Karten aus den Notizen von Hand. Er laeuft ohnehin
+               beim Uebernehmen, aber dort sieht man seinen Bericht nicht — und
+               genau der sagt, ob er etwas getan hat, ob er auf einen
+               Kernel-Neustart wartet oder ob es nichts zu holen gab. */
+            $bericht = $this->EduMigrate();
+            $this->UpdateFormField('EduStatusLabel', 'caption',
+                $bericht !== '' ? $bericht : $this->Translate('Nothing to move — the cards are already in their own store.'));
+            return true;
+        }
         if ($Ident === 'EduUnblock') {
             $this->UpdateFormField('EduStatusLabel', 'caption', $this->EduSperreAufheben((string)$Value));
             return true;

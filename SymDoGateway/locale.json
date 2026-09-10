@@ -889,7 +889,9 @@
             "Class pages: moved, but the notes could not be tidied yet.": "Klassenseiten: umgezogen, aber die Notizen ließen sich noch nicht aufräumen.",
             "Class pages moved: %1$d folder(s), %2$d card(s); %3$d note(s) stayed.": "Klassenseiten umgezogen: %1$d Ordner, %2$d Karten; %3$d Notizen bleiben.",
             "%d hand-written note(s) moved up one level.": "%d von Hand geschriebene Notiz(en) eine Ebene höher gehängt.",
-            "%d folder(s) stayed in the notes because something hand-written was in them.": "%d Ordner bleiben in den Notizen, weil etwas Handgeschriebenes darin lag."
+            "%d folder(s) stayed in the notes because something hand-written was in them.": "%d Ordner bleiben in den Notizen, weil etwas Handgeschriebenes darin lag.",
+            "Move cards out of the notes": "Karten aus den Notizen holen",
+            "Nothing to move — the cards are already in their own store.": "Nichts zu holen — die Karten liegen schon im eigenen Bestand."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

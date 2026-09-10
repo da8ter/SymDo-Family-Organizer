@@ -1970,6 +1970,12 @@ class SymDoGateway extends IPSModuleStrict
                      'onClick' => 'IPS_RequestAction($id, \'EduForget\', 0);'],
                     ['type' => 'Button', 'caption' => $this->Translate('Forget linked maps'),
                      'onClick' => 'IPS_RequestAction($id, \'EduForgetFound\', 0);'],
+                    /* Der Umzug der Karten aus den Notizen. Er laeuft von selbst
+                       beim Uebernehmen; dieser Knopf zeigt seinen BERICHT — ob
+                       er etwas getan hat, ob er auf einen Kernel-Neustart wartet
+                       oder ob nichts zu holen war. */
+                    ['type' => 'Button', 'caption' => $this->Translate('Move cards out of the notes'),
+                     'onClick' => 'IPS_RequestAction($id, \'EduMigrateNow\', 0);'],
                 ]],
             ],
         ];
