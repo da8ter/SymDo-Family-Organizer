@@ -42,11 +42,12 @@ trait WebUntis
     private const UNTIS_INTERVALL_STD = 60;      // Minuten
 
     private ?array $untisConfigCache = null;
-    /* Die Faecher, die im Plan dieses Kindes vorkamen — gesammelt beim
-       Abbilden, damit die Kurswahl im Formular sie zum Ankreuzen anbieten
-       kann. Schluessel ist das kleingeschriebene Fach, damit dieselbe Stunde
-       aus Wochenraster UND datierten Tagen nur einmal zaehlt. */
-    private array $untisKurse = [];
+    /* Die Ueberschneidungen im Plan dieses Kindes: je Wochentag und Uhrzeit
+       die Faecher, die dort gleichzeitig stehen. Daraus baut das Formular eine
+       Zeile je Entscheidung. Gesammelt wird NUR auf dem Wochenraster-Weg — der
+       datierte Weg fuehrt durch dieselbe Funktion, und beide zusammen haetten
+       jede Ueberschneidung mehrfach gemeldet. */
+    private array $untisSlots = [];
     private string $untisSession = '';
     /* Wer ist angemeldet? `authenticate` liefert personId und personType mit —
        und getTimetable verlangt IMMER ein Element, auch fuer den eigenen Plan
@@ -456,7 +457,7 @@ trait WebUntis
         $schonGeholt = json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true) !== [];
         return [
             ['type' => 'Label', 'caption' => $zeilen !== []
-                ? $this->Translate('Several lessons stand at the same time here — the tick decides which of them goes into the plan. Unticked subjects are dropped entirely.')
+                ? $this->Translate('One row per overlap: on this weekday at this time several lessons stand at once. Pick the one the child attends — the others are left out.')
                 : ($schonGeholt
                     ? $this->Translate('No overlaps in the plan — nothing to choose. A personal timetable usually has none; a class plan has all parallel courses.')
                     : $this->Translate('Course choice: appears after the first fetch, and only if lessons overlap.'))],
@@ -465,18 +466,23 @@ trait WebUntis
              'caption' => $this->Translate('Course choice'),
              'columns' => [
                  /* Ohne `edit` faellt eine Spalte beim Uebernehmen lautlos weg,
-                    wenn sie nicht `save` traegt — die Kennung des Kindes und
-                    das Fach MUESSEN mit. */
-                 ['caption' => $this->Translate('Child'), 'name' => 'kind', 'width' => '140px',
+                    wenn sie nicht `save` traegt — Kennung, Wochentag und
+                    Uhrzeit MUESSEN mit, sonst weiss die Wahl nicht, wozu sie
+                    gehoert. */
+                 ['caption' => $this->Translate('Child'), 'name' => 'kind', 'width' => '110px',
                   'save' => true],
-                 ['caption' => $this->Translate('Subject'), 'name' => 'fach', 'width' => 'auto',
+                 ['caption' => $this->Translate('Weekday'), 'name' => 'tag', 'width' => '120px',
                   'save' => true],
-                 ['caption' => $this->Translate('Note'), 'name' => 'hinweis', 'width' => '220px'],
-                 ['caption' => $this->Translate('Attends'), 'name' => 'besucht', 'width' => '100px',
-                  'edit' => ['type' => 'CheckBox']],
-                 // Die Kennung braucht das Modul, nicht der Mensch.
+                 ['caption' => $this->Translate('Time'), 'name' => 'zeit', 'width' => '80px',
+                  'save' => true],
+                 ['caption' => $this->Translate('At the same time'), 'name' => 'stehen',
+                  'width' => 'auto'],
+                 ['caption' => $this->Translate('Attends'), 'name' => 'kurs', 'width' => '240px',
+                  'edit' => ['type' => 'Select', 'options' => $this->UntisKursOptionen()]],
+                 // Kennung und Wochentagszahl braucht das Modul, nicht der Mensch.
                  ['caption' => $this->Translate('ID'), 'name' => 'userId', 'width' => '1px',
                   'save' => true],
+                 ['caption' => '#', 'name' => 'wt', 'width' => '1px', 'save' => true],
              ],
              'values' => $zeilen],
         ];
@@ -500,16 +506,15 @@ trait WebUntis
             if (!is_array($z) || trim((string)($z['userId'] ?? '')) !== $userId) {
                 continue;
             }
-            $fach = trim((string)($z['fach'] ?? ''));
-            if ($fach === '') {
-                continue;
+            $kurs = trim((string)($z['kurs'] ?? ''));
+            if ($kurs !== '') {
+                $teile[] = $kurs;
             }
-            $teile[] = (($z['besucht'] ?? true) ? '' : '-') . $fach;
         }
-        /* Die getippte Liste kommt HINZU und weicht nicht: seit die Auswahl
-           nur noch Ueberschneidungen zeigt, ist sie der einzige Weg, ein
-           einzeln stehendes Fach herauszunehmen („-AG"). Doppelte Eintraege
-           schaden nicht — der Parser sammelt Ja und Nein als Listen. */
+        /* Die getippte Liste kommt HINZU und weicht nicht: die Auswahl loest
+           Ueberschneidungen, ein einzeln stehendes Fach nimmt nur ein
+           Minus-Eintrag heraus („-AG"). Doppelte schaden nicht — der Parser
+           sammelt Ja und Nein als Listen. */
         $getippt = trim((string)($kind['kurse'] ?? ''));
         if ($getippt !== '') {
             $teile[] = $getippt;
@@ -526,7 +531,7 @@ trait WebUntis
      */
     private function UntisKurseMerken(string $userId): void
     {
-        if ($userId === '' || $this->untisKurse === []) {
+        if ($userId === '') {
             return;
         }
         $alt = (array)json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true);
@@ -536,13 +541,13 @@ trait WebUntis
                 $raus[] = $z;
             }
         }
-        foreach ($this->untisKurse as $k) {
-            $zeiten = array_keys((array)($k['zeiten'] ?? []));
-            sort($zeiten);
-            $raus[] = ['userId' => $userId, 'fach' => (string)$k['fach'],
-                       'kollision' => (bool)$k['kollision'],
-                       // Drei genuegen: mehr ist eine Aufzaehlung, keine Auskunft.
-                       'zeiten' => array_slice($zeiten, 0, 3)];
+        $slots = $this->untisSlots;
+        ksort($slots);
+        foreach ($slots as $k) {
+            $faecher = array_keys((array)($k['faecher'] ?? []));
+            sort($faecher);
+            $raus[] = ['userId' => $userId, 'wt' => (int)$k['wt'],
+                       'zeit' => (string)$k['zeit'], 'faecher' => $faecher];
         }
         @$this->WriteAttributeString('UntisCourseFound',
             (string)json_encode($raus, JSON_UNESCAPED_UNICODE));
@@ -559,17 +564,18 @@ trait WebUntis
      */
     private function UntisKurseZeilen(): array
     {
+        /* Die getroffene Wahl: je Kind, Wochentag und Uhrzeit ein Fach. */
         $wahl = [];
         foreach ((array)json_decode((string)$this->UntisProp('UntisCourses', '[]'), true) as $z) {
             if (!is_array($z)) {
                 continue;
             }
             $u = trim((string)($z['userId'] ?? ''));
-            $f = mb_strtolower(trim((string)($z['fach'] ?? '')));
-            if ($u === '' || $f === '') {
+            if ($u === '' || (int)($z['wt'] ?? 0) <= 0) {
                 continue;
             }
-            $wahl[$u . '|' . $f] = ($z['besucht'] ?? true) ? true : false;
+            $wahl[$u . '|' . (int)$z['wt'] . '|' . trim((string)($z['zeit'] ?? ''))]
+                = trim((string)($z['kurs'] ?? ''));
         }
         $namen = $this->UntisMitglieder();
         $zeilen = [];
@@ -577,38 +583,66 @@ trait WebUntis
             if (!is_array($z)) {
                 continue;
             }
-            $u = trim((string)($z['userId'] ?? ''));
-            $f = trim((string)($z['fach'] ?? ''));
-            if ($u === '' || $f === '') {
+            $u  = trim((string)($z['userId'] ?? ''));
+            $wt = (int)($z['wt'] ?? 0);
+            $zeit = trim((string)($z['zeit'] ?? ''));
+            $faecher = array_values(array_filter(array_map('strval', (array)($z['faecher'] ?? []))));
+            if ($u === '' || $wt <= 0 || $zeit === '' || count($faecher) < 2) {
                 continue;
             }
-            /* NUR die Ueberschneidungen. Ein Fach, das allein im Plan steht,
-               wird besucht — es in eine Liste mit Haekchen zu schreiben, hiess
-               siebzehn Zeilen fuer eine Entscheidung, die niemand trifft.
-
-               Ein einzelnes Fach TROTZDEM herauszunehmen bleibt moeglich: die
-               getippte Kursliste im Datensatz („-AG") wird weiter gelesen und
-               kommt zu dieser Wahl hinzu (siehe UntisKurstext). */
-            if (!(bool)($z['kollision'] ?? false)) {
-                continue;
-            }
-            $schluessel = $u . '|' . mb_strtolower($f);
-            $zeitenText = implode(', ', array_map('strval', (array)($z['zeiten'] ?? [])));
             $zeilen[] = [
-                'userId'    => $u,
-                'kind'      => (string)($namen[$u] ?? $u),
-                'fach'      => $f,
-                /* Die Uhrzeit sagt, welche Zeilen miteinander konkurrieren —
-                   ohne sie steht zwoelfmal derselbe Satz da. */
-                'hinweis'   => $zeitenText === ''
-                                   ? $this->Translate('choice — several at the same time')
-                                   : sprintf($this->Translate('several at %s'), $zeitenText),
-                'besucht'   => $wahl[$schluessel] ?? true,
+                'userId'  => $u,
+                'kind'    => (string)($namen[$u] ?? $u),
+                'wt'      => $wt,
+                'tag'     => $this->UntisTagName($wt),
+                'zeit'    => $zeit,
+                /* Was hier gleichzeitig steht — als Text, damit die Zeile auch
+                   ohne aufgeklappte Auswahl vollstaendig ist. */
+                'stehen'  => implode(', ', $faecher),
+                'kurs'    => $wahl[$u . '|' . $wt . '|' . $zeit] ?? '',
             ];
         }
         usort($zeilen, static fn(array $a, array $b): int =>
-            [$a['kind'], $a['fach']] <=> [$b['kind'], $b['fach']]);
+            [$a['kind'], $a['wt'], $a['zeit']] <=> [$b['kind'], $b['wt'], $b['zeit']]);
         return $zeilen;
+    }
+
+    /** Der Wochentag als Wort. 1 = Montag, wie date('N'). */
+    private function UntisTagName(int $wt): string
+    {
+        $tage = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday',
+                 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
+        return array_key_exists($wt, $tage) ? $this->Translate($tage[$wt]) : (string)$wt;
+    }
+
+    /**
+     * Alle Faecher, die in irgendeiner Ueberschneidung dieses Bestands stehen.
+     *
+     * Eine Listenspalte hat EINE Auswahl fuer alle Zeilen — Symcon kann sie
+     * nicht je Zeile fuellen. Deshalb enthaelt das Dropdown die Faecher aller
+     * Ueberschneidungen; welche zu welcher Zeile gehoeren, steht in der Zeile
+     * („stehen"). Ein Griff daneben ist folgenlos: er trifft die Stunde nicht,
+     * die Ueberschneidung bleibt offen und die Statuszeile sagt es.
+     *
+     * @return list<array{caption:string,value:string}>
+     */
+    private function UntisKursOptionen(): array
+    {
+        $faecher = [];
+        foreach ((array)json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true) as $z) {
+            foreach ((array)($z['faecher'] ?? []) as $f) {
+                $f = trim((string)$f);
+                if ($f !== '') {
+                    $faecher[mb_strtolower($f)] = $f;
+                }
+            }
+        }
+        asort($faecher);
+        $raus = [['caption' => $this->Translate('— not chosen —'), 'value' => '']];
+        foreach ($faecher as $f) {
+            $raus[] = ['caption' => $f, 'value' => $f];
+        }
+        return $raus;
     }
 
     /**
@@ -898,7 +932,7 @@ trait WebUntis
         /* Der Merker gilt je Kind: leeren, abbilden, wegschreiben. Auch im
            Trockenlauf — er schreibt keinen Plan und meldet nichts, aber die
            Kursliste im Formular ist eine Hilfe und keine Wirkung nach aussen. */
-        $this->untisKurse = [];
+        $this->untisSlots = [];
         [$tage, $datiert, $auffaellig, $offen, $verworfen] = $this->UntisAbbilden($stunden, $raster, $this->UntisKurstext($kind));
         $this->UntisKurseMerken((string)($kind['userId'] ?? ''));
         /* Was eine ungeklaerte Ueberschneidung an Meldungen verschluckt hat,
@@ -1342,7 +1376,16 @@ trait WebUntis
         $verworfen = [];
         foreach ($ersteWoche as $termine) {
             foreach ($termine as $datum => $slots) {
-                [$gewaehlt, , $weg] = $this->UntisKurseWaehlen($slots, $kurse);
+                /* Der Wochentag kommt MIT: gesammelt wird ueber alle Termine
+                   und vereinigt je Wochentag und Uhrzeit. Nur die Musterwoche
+                   zu nehmen liess Konkurrenten fehlen — am 10.09.2026 standen
+                   donnerstags um 13:05 sechs Kurse, in der einen genommenen
+                   Woche aber nur zwei davon (die anderen entfallen oder in
+                   einer anderen Woche). Der Schluessel ist ein Wochentag, also
+                   zaehlt jede Wiederholung nur einmal. */
+                $wtDatum = (int)date('N', (int)strtotime(substr((string)$datum, 0, 4) . '-'
+                    . substr((string)$datum, 4, 2) . '-' . substr((string)$datum, 6, 2)));
+                [$gewaehlt, , $weg] = $this->UntisKurseWaehlen($slots, $kurse, $wtDatum);
                 foreach ($weg as $w) {
                     $verworfen[] = date('d.m.', (int)strtotime(substr((string)$datum, 0, 4) . '-'
                         . substr((string)$datum, 4, 2) . '-' . substr((string)$datum, 6, 2))) . ' ' . $w;
@@ -1388,7 +1431,7 @@ trait WebUntis
         // Ueberschneidungen aufloesen, bevor der Plan geschrieben wird.
         $offen = 0;
         foreach ($tage as $wt => $slots) {
-            [$tage[$wt], $n] = $this->UntisKurseWaehlen($slots, $kurse);
+            [$tage[$wt], $n] = $this->UntisKurseWaehlen($slots, $kurse, (int)$wt);
             $offen += $n;
         }
         return [$tage, $datiert, $auffaellig, $offen, $verworfen];
@@ -1409,45 +1452,44 @@ trait WebUntis
      *
      * @return array{0:list<array<string,mixed>>, 1:int, 2:list<string>}
      */
-    private function UntisKurseWaehlen(array $slots, string $kurse): array
+    private function UntisKurseWaehlen(array $slots, string $kurse, int $wochentag = 0): array
     {
-        /* ZUERST sammeln, was ueberhaupt im Plan steht — und zwar bevor der
-           Minus-Filter zuschlaegt. Sonst faellt ein abgewaehltes Fach aus der
-           Auswahl im Formular heraus und liesse sich nie wieder anhaken.
-           „Kollision" heisst: zu dieser Zeit stand mehr als ein Fach; das ist
-           die Stelle, an der die Wahl wirklich etwas entscheidet. */
-        $zeiten = [];
-        foreach ($slots as $s) {
-            if (trim((string)($s['subject'] ?? '')) === '') {
-                continue;
+        /* ZUERST sammeln, WO sich Stunden ueberschneiden — und zwar bevor der
+           Minus-Filter zuschlaegt: sonst faellt ein bereits abgewaehltes Fach
+           aus der Auswahl heraus und liesse sich nie wieder waehlen.
+
+           Der Schluessel ist Wochentag + Uhrzeit, kein Datum: derselbe
+           Donnerstag aus zwei Wochen ist EINE Entscheidung. Deshalb duerfen
+           beide Wege sammeln — das Wochenraster und die datierten Tage —, und
+           erst ihre Vereinigung nennt alle Konkurrenten. */
+        if ($wochentag > 0) {
+            $zeiten = [];
+            foreach ($slots as $s) {
+                if (trim((string)($s['subject'] ?? '')) === '') {
+                    continue;
+                }
+                $zeiten[(string)($s['start'] ?? '')][] = $s;
             }
-            $zeiten[(string)($s['start'] ?? '')][] = $s;
-        }
-        foreach ($zeiten as $zeit => $gruppe) {
-            /* DIESELBE Reduktion wie unten im Filter, sonst verspricht der
-               Hinweis eine Wahl, die es nicht gibt: zweimal derselbe Fachname
-               ist eine Doppelung, und ein Entfall neben einer stattfindenden
-               Stunde ist keine Wahl zwischen Kursen. Ohne diese vier Zeilen
-               stand „Wahl — mehrere zur selben Zeit" an vier Faechern, von
-               denen keines eines war. */
-            $nachFach = [];
-            foreach ($gruppe as $s) {
-                $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
-            }
-            $stattfindend = array_filter($nachFach,
-                static fn(array $s): bool => (string)$s['status'] !== 'entfall');
-            $wahl = $stattfindend !== [] ? $stattfindend : $nachFach;
-            $mehrere = count($wahl) > 1;
-            foreach ($nachFach as $klein => $s) {
-                $fach = trim((string)$s['subject']);
-                $this->untisKurse[$klein] ??= ['fach' => $fach, 'kollision' => false, 'zeiten' => []];
-                // Das Merkmal traegt nur, wer wirklich mitbewirbt.
-                if ($mehrere && array_key_exists($klein, $wahl)) {
-                    $this->untisKurse[$klein]['kollision'] = true;
-                    /* Die UHRZEIT dazu: sie sagt, WELCHE Zeilen miteinander
-                       konkurrieren. Bei zwoelf Kursen ist das die eigentliche
-                       Auskunft — „die drei um 13:05" statt „irgendwo". */
-                    $this->untisKurse[$klein]['zeiten'][(string)$zeit] = true;
+            foreach ($zeiten as $zeit => $gruppe) {
+                /* DIESELBE Reduktion wie unten im Filter, sonst verspricht die
+                   Liste eine Wahl, die es nicht gibt: zweimal derselbe
+                   Fachname ist eine Doppelung, und ein Entfall neben einer
+                   stattfindenden Stunde ist keine Wahl zwischen Kursen. */
+                $nachFach = [];
+                foreach ($gruppe as $s) {
+                    $nachFach[mb_strtolower((string)$s['subject'])] ??= $s;
+                }
+                $stattfindend = array_filter($nachFach,
+                    static fn(array $s): bool => (string)$s['status'] !== 'entfall');
+                $wahl = $stattfindend !== [] ? $stattfindend : $nachFach;
+                if (count($wahl) < 2) {
+                    continue;
+                }
+                $schluessel = $wochentag . '|' . (string)$zeit;
+                $this->untisSlots[$schluessel] ??= ['wt' => $wochentag,
+                                                    'zeit' => (string)$zeit, 'faecher' => []];
+                foreach ($wahl as $s) {
+                    $this->untisSlots[$schluessel]['faecher'][trim((string)$s['subject'])] = true;
                 }
             }
         }

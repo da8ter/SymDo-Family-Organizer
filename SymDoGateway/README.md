@@ -333,7 +333,7 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 | Benutzer, Passwort | `UntisUser`, `UntisPassword` | ein Eltern- oder Schülerkonto; das Passwort bleibt in der Instanz |
 | Abrufintervall | `UntisIntervalMinutes` | wie oft nachgesehen wird |
 | Kinder | `UntisStudents` | je Kind eine Zeile: Stundenplan-Instanz, Familienmitglied, **WebUntis Name**. Den Namen liefert der Knopf *Schüler abrufen*: die Kinder des Kontos, bei einem Schülerzugang das Konto selbst. Bleibt die Zeile leer, löst der Abruf sie weiter selbst auf |
-| Kurswahl | `UntisCourses` | **nur die Fächer, die sich überschneiden**, je eines mit Häkchen **besucht**. Die Zeilen entstehen aus dem, was der letzte Abruf gefunden hat; der *Hinweis* nennt die Uhrzeit und sagt damit, welche Zeilen miteinander konkurrieren. Ein abgehaktes Fach fällt ganz weg |
+| Kurswahl | `UntisCourses` | **eine Zeile je Überschneidung**: Wochentag, Uhrzeit, die gleichzeitig stehenden Kurse — und ein Dropdown, aus dem der besuchte gewählt wird. Die Zeilen entstehen aus dem, was der letzte Abruf gefunden hat |
 | Push bei Änderungen | `UntisPush` | meldet neue Vertretungen und Entfälle aufs Handy |
 | Hausaufgaben mitholen | `UntisHomework` | übernimmt die Hausaufgaben, die die Schule eingetragen hat (Kapitel 15) |
 
@@ -346,13 +346,27 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 > schülerbezogenen Plan ist die Kurswahl also meist leer zu lassen; für einen
 > Klassenplan ist sie das Werkzeug, das ihn erst brauchbar macht.
 
-**Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie zeigt **nur, was
-sich überschneidet** — dort und nur dort ist etwas zu entscheiden; ein Fach,
-das allein im Plan steht, wird besucht. Der Hinweis nennt die Uhrzeit, und
-daran erkennt man, welche Zeilen zusammengehören: im Klassenplan 05a etwa sechs
-Zeilen „mehrere um 13:05" (drei Religionen, zwei Praktische Philosophie, EU KL),
-vier „mehrere um 14:10" (die AGs) und zwei „mehrere um 09:30" (die
-Förderkurse). Neu gefundene Fächer gelten als besucht.
+**Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie zeigt **eine Zeile
+je Überschneidung** — dort und nur dort ist etwas zu entscheiden; ein Fach, das
+allein im Plan steht, wird besucht. Jede Zeile nennt Wochentag, Uhrzeit und die
+Kurse, die dort gleichzeitig stehen; im Dropdown wird der besuchte gewählt.
+Beispiel Klassenplan 05a, gemessen am 10.09.2026:
+
+| Wochentag | Zeit | Gleichzeitig |
+|---|---|---|
+| Mittwoch | 14:10 | Französisch-AG, Grüne Daumen-AG |
+| Donnerstag | 09:30 | Ergänzungsunterricht Leseförderung, Individuelle Förderung LRS |
+| Donnerstag | 13:05 | EU KL, Evangelische Religion, Islamische Religion, Katholische Religion, Praktische Philosophie 1, Praktische Philosophie 2 |
+| Donnerstag | 14:10 | Basketball-AG, Musik-AG |
+
+Gesammelt wird über **alle** Termine des Zeitraums und vereinigt je Wochentag
+und Uhrzeit: derselbe Donnerstag aus zwei Wochen ist eine Entscheidung, und
+erst die Vereinigung nennt alle Konkurrenten (nur die Musterwoche zu nehmen
+zeigte zwei der sechs). Eine Symcon-Grenze bleibt sichtbar: eine Listenspalte
+hat **eine** Auswahl für alle Zeilen, das Dropdown enthält also die Kurse aller
+Überschneidungen. Welche zu welcher Zeile gehören, steht in der Spalte
+*Gleichzeitig*; ein Griff daneben ist folgenlos — er trifft die Stunde nicht,
+die Überschneidung bleibt offen, und die Statuszeile sagt es.
 
 Ein einzeln stehendes Fach **herausnehmen** geht weiter über die getippte Liste
 im Datensatz (`kurse`, nicht mehr im Formular): ein Eintrag mit Minus („`-AG`")
