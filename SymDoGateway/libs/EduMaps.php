@@ -298,12 +298,23 @@ trait EduMaps
         if ($seiten === []) {
             return $this->Translate('No class page entered yet.');
         }
-        /* Die verlinkten Karten hinten anstellen und NUR spiegeln: sie sind
-           Nachschlagewerke („Englisch Grammatik"), keine Elternbriefe. Eine
-           Auswertung wuerde daraus Aufgaben wie „Present" machen und je Karte
-           einen KI-Aufruf kosten. */
+        /* Die verlinkten Seiten hinten anstellen. Sie werden wie die
+           eingetragenen behandelt — gespiegelt UND ausgewertet —, tragen aber
+           ein Merkmal: von ihnen aus wird kein Verweis weiterverfolgt (die
+           Kette bleibt eine Ebene tief, siehe unten).
+
+           Bis zum 10.09.2026 wurden sie ausdruecklich NICHT ausgewertet, mit
+           der Begruendung, es seien Nachschlagewerke. Das traf auf die eine
+           Grammatikseite zu und auf die Elternbrief-Seiten daneben nicht. Der
+           Nutzer entscheidet das jetzt ueber den Schalter „Verlinkten Seiten
+           folgen": wer sie mitnimmt, will sie auch ausgewertet haben.
+
+           Ein Ansturm entsteht dabei nicht: die Karten dieser Seiten stehen
+           schon im Merker (sie wurden bisher beim Spiegeln vermerkt), also
+           laeuft nur durch die KI, was sich AENDERT — und darueber liegen
+           weiterhin der Deckel je Lauf und der Tagesdeckel. */
         foreach ($this->EduGefundene() as $g) {
-            $seiten[] = $g + ['nurSpiegeln' => true];
+            $seiten[] = $g + ['verlinkt' => true];
         }
         /* Von Hand geloeschte Seiten fallen hier raus — eingetragene wie
            gefundene. Der zweite Riegel sitzt in EduGefundeneAufnehmen und haelt
@@ -372,7 +383,7 @@ trait EduMaps
         }
         $rumpfSeite = (string)($antwort['body'] ?? '');
         // Verweise nur von den EINGETRAGENEN Seiten verfolgen, eine Ebene tief.
-        if (($seite['nurSpiegeln'] ?? false) !== true) {
+        if (($seite['verlinkt'] ?? false) !== true) {
             $this->EduGefundeneErgaenzen($seite, $rumpfSeite);
         }
         // Die QR-Funde gehoeren zu DIESER Seite; was eine vorige gesammelt hat,
@@ -429,11 +440,6 @@ trait EduMaps
                 $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Auswertung wartet, Spiegel laeuft weiter', 0);
                 continue;
             }
-            if (($seite['nurSpiegeln'] ?? false) === true) {
-                // Gespiegelt ist sie schon; ausgewertet wird sie nicht.
-                $this->EduMerken($topf, $schluessel);
-                continue;
-            }
             if ($this->EduKarteAnalysieren($seite, $karte)) {
                 $this->EduMerken($topf, $schluessel);
                 $analysiert++;
@@ -442,8 +448,8 @@ trait EduMaps
         /* Was in QR-Codes auf ANDERE Anlagen zeigte, wird jetzt aufgenommen —
            wie ein Verweis im Kartentext, mit denselben Grenzen. Erst hier, damit
            die Fundliste einmal je Seite geschrieben wird und nicht je Karte.
-           Auch von einer nur gespiegelten Seite: der Code steht im BILD, ist also
-           kein Glied der Verweiskette, die eine Ebene tief bleiben soll. */
+           Auch von einer VERLINKTEN Seite: der Code steht im BILD, ist also kein
+           Glied der Verweiskette, die eine Ebene tief bleiben soll. */
         if ($this->eduQrSeiten !== []) {
             $neu = $this->EduGefundeneAufnehmen($seite, $this->eduQrSeiten);
             if ($neu > 0) {

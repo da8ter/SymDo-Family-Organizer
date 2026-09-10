@@ -434,7 +434,7 @@ Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termin
 | Klassenseiten | `EduPages` | je Seite die Adresse und das Kind, dem die Vorschläge gehören. **Die Adresse enthält den Zugang und wirkt wie ein Kennwort** — sie steht nur in dieser Instanz |
 | Prüfintervall | `EduIntervalHours` | wie oft nachgesehen wird |
 | Karten spiegeln | `EduToNotes` | jede Karte 1:1 in den eigenen Bestand, ein Ordner je Seite, Anhänge und QR-Codes als Verweise mit dabei; entfernte Karten wandern ins **Archiv** statt zu verschwinden |
-| Verlinkten Seiten folgen | `EduFollowLinks` | Seiten, auf die eine eingetragene Seite verweist, kommen mit — nur gespiegelt, nie ausgewertet. Sie gehören dem Kind der Herkunftsseite |
+| Verlinkten Seiten folgen | `EduFollowLinks` | Seiten, auf die eine eingetragene Seite verweist, kommen mit — gespiegelt **und** ausgewertet wie die eingetragenen. Die Kette bleibt eine Ebene tief; sie gehören dem Kind der Herkunftsseite |
 | Push bei Neuem | `EduPush` | meldet neue Vorschläge aufs Handy |
 
 **Wo die Karten liegen (seit 10.09.2026 anders).** Sie haben einen eigenen

@@ -1978,14 +1978,14 @@ class SymDoGateway extends IPSModuleStrict
                           'add' => '', 'edit' => ['type' => 'Select', 'options' => $mitglieder]],
                      ]],
                     ['type' => 'NumberSpinner', 'name' => 'EduIntervalHours', 'minimum' => 1, 'maximum' => 48,
-                     'caption' => $this->Translate('Check every … hours'), 'suffix' => ' h'],
+                     'caption' => $this->Translate('Update interval'), 'suffix' => ' h'],
                     ['type' => 'CheckBox', 'name' => 'EduFollowLinks',
                      'caption' => $this->Translate('Also follow pages linked from these')],
                     /* „Map" ist bei Edumaps die SEITE und nicht die Karte darauf.
                        Die deutsche Fassung hat das lange verwechselt — deshalb
                        heisst hier ueberall „Seite" die Seite und „Karte" nur der
                        Kasten darauf. */
-                    ['type' => 'Label', 'caption' => $this->Translate('Linked pages are only mirrored, never analysed: they are reference material, and every analysis costs one AI request. Each of them gets its own folder.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Linked pages are treated like the entered ones: mirrored and analysed. Only the chain stays one level deep — no links are followed from a linked page. Each of them gets its own folder and belongs to the child of the page it was found on.')],
                  ]],
 
                 // ── 2. Der Spiegel: was App und Kachel zeigen ─────────────
