@@ -347,8 +347,13 @@ Der Stundenplan im Modul **SymDo - Stundenplan** ist eine Wochenvorlage. Was dor
 > Klassenplan ist sie das Werkzeug, das ihn erst brauchbar macht.
 
 **Die Kurswahl** ersetzt die frühere getippte Kursliste. Sie zeigt **eine Zeile
-je Überschneidung** — dort und nur dort ist etwas zu entscheiden; ein Fach, das
-allein im Plan steht, wird besucht. Jede Zeile nennt Wochentag, Uhrzeit und die
+je Überschneidung** — und **erscheint gar nicht**, solange es keine gibt: kein
+Kasten, kein Hinweis, nichts zu entscheiden. Ob ein Plan Überschneidungen
+enthält, hängt an der Schule und lässt sich nicht allgemein sagen: fragt das
+Modul den persönlichen Plan und hat die Schule die Kurse je Schüler zugeordnet,
+ist nichts zu wählen; ein Klassenplan enthält dagegen alle parallelen Kurse.
+Beides kommt vor — deshalb zeigt sich die Wahl genau dort, wo es eine gibt.
+Ein Fach, das allein im Plan steht, wird besucht. Jede Zeile nennt Wochentag, Uhrzeit und die
 Kurse, die dort gleichzeitig stehen; im Dropdown wird der besuchte gewählt.
 Beispiel Klassenplan 05a, gemessen am 10.09.2026:
 

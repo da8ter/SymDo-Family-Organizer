@@ -895,8 +895,6 @@
             "Attends": "besucht",
             "choice — several at the same time": "Wahl — mehrere zur selben Zeit",
             "class %s": "Klasse %s",
-            "No overlaps in the plan — nothing to choose. A personal timetable usually has none; a class plan has all parallel courses.": "Keine Überschneidungen im Plan — hier ist nichts zu wählen. Ein persönlicher Stundenplan hat meist keine; ein Klassenplan enthält alle parallelen Kurse.",
-            "Course choice: appears after the first fetch, and only if lessons overlap.": "Kurswahl: erscheint nach dem ersten Abruf, und nur wenn sich Stunden überschneiden.",
             "One row per overlap: on this weekday at this time several lessons stand at once. Pick the one the child attends — the others are left out.": "Eine Zeile je Überschneidung: an diesem Wochentag stehen zu dieser Zeit mehrere Stunden gleichzeitig. Wähle die, die das Kind besucht — die anderen bleiben weg.",
             "Weekday": "Wochentag",
             "Time": "Zeit",

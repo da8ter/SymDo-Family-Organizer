@@ -451,16 +451,18 @@ trait WebUntis
     private function UntisKurswahlFelder(): array
     {
         $zeilen = $this->UntisKurseZeilen();
-        /* Leer heisst zweierlei, und das ist ein Unterschied: noch nie geholt
-           — oder geholt und nichts zu waehlen. Ein Satz, der beides meint,
-           laesst den Nutzer suchen. */
-        $schonGeholt = json_decode((string)@$this->ReadAttributeString('UntisCourseFound'), true) !== [];
+        /* KEINE Ueberschneidung, keine Kurswahl — und dann auch kein Kasten und
+           kein Satz darueber. Ob ein Plan Ueberschneidungen enthaelt, haengt an
+           der Schule: fragt das Modul den persoenlichen Plan und hat die Schule
+           die Kurse je Schueler zugeordnet, ist nichts zu waehlen; ein
+           Klassenplan enthaelt dagegen alle parallelen Kurse. Beides kommt vor,
+           und allgemein entscheiden laesst es sich nicht — also zeigt sich die
+           Wahl genau dort, wo es eine gibt. */
+        if ($zeilen === []) {
+            return [];
+        }
         return [
-            ['type' => 'Label', 'caption' => $zeilen !== []
-                ? $this->Translate('One row per overlap: on this weekday at this time several lessons stand at once. Pick the one the child attends — the others are left out.')
-                : ($schonGeholt
-                    ? $this->Translate('No overlaps in the plan — nothing to choose. A personal timetable usually has none; a class plan has all parallel courses.')
-                    : $this->Translate('Course choice: appears after the first fetch, and only if lessons overlap.'))],
+            ['type' => 'Label', 'caption' => $this->Translate('One row per overlap: on this weekday at this time several lessons stand at once. Pick the one the child attends — the others are left out.')],
             ['type' => 'List', 'name' => 'UntisCourses', 'rowCount' => 6,
              'add' => false, 'delete' => false,
              'caption' => $this->Translate('Course choice'),
