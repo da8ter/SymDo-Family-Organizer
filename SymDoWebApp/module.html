@@ -5232,6 +5232,16 @@ function visibleTabs() {
      Hausaufgaben-Kachel den Plan HOLT (sie braucht Faecher und Symbole), waere
      ihr sonst beim Antippen eines Kindes ein zweiter Bereich gewachsen. */
   if (kindTab && t.dashboard && planKinder().length > 0) out.push('plan');
+  /* Kindsachen: Stundenplan, Hausaufgaben und Klassenseiten gehoeren EINEM Kind.
+     In der vollen Oberflaeche erscheinen sie deshalb nur, solange eines gewaehlt
+     ist — sonst waere „die Hausaufgaben" die Frage, wessen, und der Bereich
+     zeigte die von Mia und Tim in einem Topf.
+
+     In einer Kachel, die nur diesen einen Bereich traegt, gibt es keine
+     Mitgliederwahl (und keine Uebersicht, an der man eine treffen koennte):
+     dort erscheint er immer, und die Avatarleiste im Bereich filtert. Deshalb
+     haengt die Regel an t.dashboard und nicht an „ist ein Kind gewaehlt". */
+  const kindSache = !t.dashboard || kindTab !== '';
   if (!kindTab && t.ki && mailAiAvailable()) out.push('ki');
   // Die Reihenfolge hier ist zugleich die des Rückfalls, wenn der gespeicherte Tab
   // abgeschaltet wurde (vis[0] in setTab).
@@ -5246,9 +5256,9 @@ function visibleTabs() {
   // Notizen ganz hinten und nur mit Gateway — dort liegen sie.
   if (t.notes && notizenMoeglich()) out.push('notes');
   // Die Klassenseiten dahinter, aus demselben Grund.
-  if (t.edumaps && edumapsMoeglich()) out.push('edumaps');
+  if (t.edumaps && edumapsMoeglich() && kindSache) out.push('edumaps');
   // Die Hausaufgaben ebenso — sie liegen im Gateway.
-  if (t.homework && homeworkMoeglich()) out.push('homework');
+  if (t.homework && homeworkMoeglich() && kindSache) out.push('homework');
   // Alles abgeschaltet: definierter Rückfall, damit die Oberfläche nie leer ist.
   return out.length ? out : ['dashboard'];
 }
@@ -6860,6 +6870,14 @@ function mitgliedWaehlen(id) {
      unten nachziehen — sie zeichnet selbst, wenn der offene Bereich dabei
      verschwindet. */
   applyTabVisibility();
+  /* Und den OFFENEN Bereich neu zeichnen. applyTabVisibility ruft setTab (und
+     damit renderAll) nur, wenn der aktive Bereich verschwunden ist — bleibt er
+     stehen, blieb bisher auch sein Inhalt stehen. Bisher fiel das nicht auf,
+     weil jede Avatarleiste hinter mitgliedWaehlen selbst zeichnet; bei den
+     Klassenseiten, die keine eigene Leiste haben, sah man danach die Seite des
+     Geschwisterkindes. Die Wahl gilt in JEDEM Bereich, also gehoert das
+     Zeichnen hierher und nicht in die Aufrufer. */
+  renderAll();
 }
 
 /**
@@ -10946,6 +10964,16 @@ function renderHausaufgaben() {
      nahm der Abschnitt kinder[0] und zeigte unter zwei Plaenen die Aufgaben
      EINES Kindes — ohne zu sagen, welches. */
   const kinder = planKinder().filter(k => k && k.userId);
+  /* Gibt es den EIGENEN Bereich, gehoert die Liste dorthin und nicht auch noch
+     hierher: zweimal dieselbe Liste in derselben Oberflaeche, einmal unter dem
+     Raster und einmal als Tab. Ist der Bereich abgeschaltet (ShowHomework aus),
+     bleibt dieser Abschnitt der Ort — so wie es bis zum 10.09.2026 der einzige
+     war. */
+  if (visibleTabs().includes('homework')) {
+    bereich.style.display = 'none';
+    renderInto(bereich, '');
+    return;
+  }
   if (!homeworkMoeglich() || kinder.length === 0) {
     bereich.style.display = 'none';
     renderInto(bereich, '');
@@ -14743,6 +14771,27 @@ function eduOrdnerOeffnen(fid) {
   renderEdumaps();
 }
 
+/**
+ * Gehoert dieser Ordner der GEZEIGTEN Person?
+ *
+ * Ohne gewaehltes Kind gehoert er allen. Mit einem gewaehlten Kind zaehlt der
+ * Mitglieds-Ordner an der Wurzel seines Weges — die Seiten haengen darunter.
+ *
+ * Ein Ordner der obersten Ebene OHNE Mitglied bleibt bewusst sichtbar: er
+ * gehoert niemandem, und da der Bereich in der vollen Oberflaeche nur im
+ * Kindmodus erscheint, waere er sonst gar nicht mehr erreichbar. Dieselbe
+ * Ruecksicht wie beim Umzug der Karten: lieber ein Ordner zu viel als ein
+ * unerreichbarer.
+ */
+function eduDemKindZuzuordnen(ordner) {
+  const kind = kindGewaehlt();
+  if (!kind || !ordner) return true;
+  const weg = notesPfad(ordner.id);
+  const wurzel = weg.length ? weg[0] : ordner;
+  const wem = String(wurzel.memberId || '');
+  return wem === '' || wem === kind;
+}
+
 function renderEdumaps() {
   const elMaster = document.getElementById('eduMaster');
   const elDetail = document.getElementById('eduDetail');
@@ -14750,6 +14799,14 @@ function renderEdumaps() {
   if (!edumapsGeladen && !edumapsLaden) ladeEdumaps();
   const offen = eduOrdnerId ? notesOrdner(eduOrdnerId) : null;
   if (eduOrdnerId && !offen) eduOrdnerId = null;
+  /* Beim Wechsel des Kindes die offene Seite loslassen: sonst stuende in der
+     rechten Spalte weiter die Seite des Geschwisterkindes, obwohl links nur
+     noch das gewaehlte Kind steht. */
+  if (offen && !eduDemKindZuzuordnen(offen)) {
+    eduOrdnerId = null;
+    renderEdumaps();
+    return;
+  }
   renderEdumapsMaster(elMaster);
   renderEdumapsDetail(elDetail, offen);
   document.getElementById('eduContent').classList.toggle('detail-open', !!offen);
@@ -14771,7 +14828,7 @@ function renderEdumapsMaster(el) {
     bindeEdumapsMaster(renderRows(el, html));
     return;
   }
-  const oben = notesUnterordner('');
+  const oben = notesUnterordner('').filter(eduDemKindZuzuordnen);
   if (oben.length === 0) {
     html += '<div class="empty-state" data-key="leer"><i class="fa-light fa-school"></i>' +
       translate('No class pages yet') + '</div>';

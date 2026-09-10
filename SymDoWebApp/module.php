@@ -88,6 +88,12 @@ class SymDoWebApp extends IPSModuleStrict
            das ist schlimmer als keiner. Deshalb reicht die Vorgabe „an" hier
            nicht; das Gateway koppelt sie an seine eigene Konfiguration. */
         $this->RegisterPropertyBoolean('ShowEdumaps', true);
+        /* Hausaufgaben: liegen im Gateway und gehoeren EINEM Kind. Die
+           Oberflaeche zeigt den Bereich deshalb nur, solange oben ein Kind
+           gewaehlt ist — ohne Auswahl waere „die Hausaufgaben" die Frage,
+           wessen. Vorgabe an; ohne Gateway und ohne Kind blendet die
+           Oberflaeche ihn selbst aus. */
+        $this->RegisterPropertyBoolean('ShowHomework', true);
         // KI-Eingangskorb: zeigt, was die Analyse aus Mails und Dateien gelesen hat.
         // Liegt im Gateway, deshalb blendet die Oberflaeche ihn ohne eines selbst aus.
         $this->RegisterPropertyBoolean('ShowKi', true);
@@ -1004,7 +1010,7 @@ class SymDoWebApp extends IPSModuleStrict
      * true, sonst wären alle Bereiche verschwunden, bevor sich der Schalter
      * überhaupt bedienen lässt.
      *
-     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool,ki:bool}
+     * @return array{dashboard:bool,shopping:bool,todos:bool,calendar:bool,notes:bool,edumaps:bool,homework:bool,ki:bool}
      */
     private function GetVisibleTabs(): array
     {
@@ -1019,6 +1025,7 @@ class SymDoWebApp extends IPSModuleStrict
             'calendar'  => $read('ShowCalendar'),
             'notes'     => $read('ShowNotes'),
             'edumaps'   => $read('ShowEdumaps'),
+            'homework'  => $read('ShowHomework'),
             'ki'        => $read('ShowKi'),
         ];
     }

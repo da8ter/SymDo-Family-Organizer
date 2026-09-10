@@ -1650,7 +1650,7 @@ trait AppCore
     private function GetWebAppTabs(): array
     {
         $all = ['dashboard' => true, 'shopping' => true, 'todos' => true, 'calendar' => true,
-                'notes' => true, 'edumaps' => true, 'ki' => true];
+                'notes' => true, 'edumaps' => true, 'homework' => true, 'ki' => true];
         $ids = IPS_GetInstanceListByModuleID(self::SDWA_MODULE_GUID);
         if (!$ids) {
             return $all;
@@ -1661,7 +1661,7 @@ trait AppCore
         }
         foreach (['dashboard' => 'ShowDashboard', 'shopping' => 'ShowShopping', 'todos' => 'ShowTodos',
                   'calendar' => 'ShowCalendar', 'notes' => 'ShowNotes', 'edumaps' => 'ShowEdumaps',
-                  'ki' => 'ShowKi'] as $key => $prop) {
+                  'homework' => 'ShowHomework', 'ki' => 'ShowKi'] as $key => $prop) {
             if (array_key_exists($prop, $cfg)) {
                 $all[$key] = (bool)$cfg[$prop];
             }
@@ -1675,6 +1675,11 @@ trait AppCore
         if ($all['edumaps'] && !$this->EdumapsVorhanden()) {
             $all['edumaps'] = false;
         }
+        /* Die Hausaufgaben brauchen kein Gegenstueck in der Konfiguration: sie
+           haengen an einem Mitglied mit der Rolle „Kind", und die Oberflaeche
+           zeigt den Bereich ohnehin nur, solange eines gewaehlt ist. Gibt es
+           kein Kind, gibt es keinen Kindmodus — und damit auch den Bereich
+           nicht. */
         return $all;
     }
 

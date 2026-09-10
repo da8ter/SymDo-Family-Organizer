@@ -103,6 +103,11 @@
                 },
                 {
                     "type": "CheckBox",
+                    "name": "ShowHomework",
+                    "caption": "Show homework (requires the SymDo Gateway; only while a child is selected)"
+                },
+                {
+                    "type": "CheckBox",
                     "name": "ShowKi",
                     "caption": "Show AI inbox (requires the SymDo Gateway)"
                 },
