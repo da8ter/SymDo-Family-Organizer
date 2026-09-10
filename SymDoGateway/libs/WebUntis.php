@@ -465,24 +465,30 @@ trait WebUntis
              'add' => false, 'delete' => false,
              'caption' => $this->Translate('Course choice'),
              'columns' => [
-                 /* Ohne `edit` faellt eine Spalte beim Uebernehmen lautlos weg,
-                    wenn sie nicht `save` traegt — Kennung, Wochentag und
-                    Uhrzeit MUESSEN mit, sonst weiss die Wahl nicht, wozu sie
-                    gehoert. */
+                 /* Zwei Fallen in einer Zeile, beide hier gemessen:
+                    - Eine Spalte OHNE `edit` faellt beim Uebernehmen lautlos
+                      weg, wenn sie nicht `save` traegt. Kennung, Wochentag und
+                      Uhrzeit muessen mit, sonst weiss die Wahl nicht, wozu sie
+                      gehoert.
+                    - Eine bearbeitbare Spalte braucht ZUSAETZLICH `add` — den
+                      Wert einer neuen Zeile. Beide Listen, die hier
+                      nachweislich bedienbar sind (UntisStudents und die des
+                      Aemtchenplans), tragen ihn; ohne ihn blieb das Dropdown
+                      unbedienbar. */
                  ['caption' => $this->Translate('Child'), 'name' => 'kind', 'width' => '110px',
-                  'save' => true],
+                  'add' => '', 'save' => true],
                  ['caption' => $this->Translate('Weekday'), 'name' => 'tag', 'width' => '120px',
-                  'save' => true],
+                  'add' => '', 'save' => true],
                  ['caption' => $this->Translate('Time'), 'name' => 'zeit', 'width' => '80px',
-                  'save' => true],
+                  'add' => '', 'save' => true],
                  ['caption' => $this->Translate('At the same time'), 'name' => 'stehen',
-                  'width' => 'auto'],
+                  'width' => 'auto', 'add' => '', 'save' => true],
                  ['caption' => $this->Translate('Attends'), 'name' => 'kurs', 'width' => '240px',
-                  'edit' => ['type' => 'Select', 'options' => $this->UntisKursOptionen()]],
+                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $this->UntisKursOptionen()]],
                  // Kennung und Wochentagszahl braucht das Modul, nicht der Mensch.
                  ['caption' => $this->Translate('ID'), 'name' => 'userId', 'width' => '1px',
-                  'save' => true],
-                 ['caption' => '#', 'name' => 'wt', 'width' => '1px', 'save' => true],
+                  'add' => '', 'save' => true],
+                 ['caption' => '#', 'name' => 'wt', 'width' => '1px', 'add' => 0, 'save' => true],
              ],
              'values' => $zeilen],
         ];
