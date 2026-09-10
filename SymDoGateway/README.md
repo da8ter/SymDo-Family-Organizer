@@ -417,11 +417,44 @@ Die Klassenseite der Schule trägt, was im Haushalt sonst abgetippt wird: Termin
 | Klassenseiten aktivieren | `EduEnabled` | Schalter |
 | Klassenseiten | `EduPages` | je Seite die Adresse und das Kind, dem die Vorschläge gehören. **Die Adresse enthält den Zugang und wirkt wie ein Kennwort** — sie steht nur in dieser Instanz |
 | Prüfintervall | `EduIntervalHours` | wie oft nachgesehen wird |
-| Karten als Notizen spiegeln | `EduToNotes` | jede Karte 1:1 als Notiz, ein Ordner je Karte, Anhänge und QR-Codes als Verweise mit dabei; entfernte Karten wandern ins **Archiv** statt zu verschwinden |
+| Karten spiegeln | `EduToNotes` | jede Karte 1:1 in den eigenen Bestand, ein Ordner je Seite, Anhänge und QR-Codes als Verweise mit dabei; entfernte Karten wandern ins **Archiv** statt zu verschwinden |
 | Verlinkten Karten folgen | `EduFollowLinks` | Karten, auf die die Seite verweist, kommen mit |
 | Push bei Neuem | `EduPush` | meldet neue Vorschläge aufs Handy |
 
-In der App und in der Notiz-Kachel erscheint die Klassenseite als **Kartenansicht** mit den Farben der Seite, aufklappbaren Bereichen, PDF-Vorschau und, bei buchbaren Karten, der Buchungslage. Eine **Sperrliste** hält einzelne Karten oder ganze Seiten von der Auswertung fern, mit Einzelfreigabe; **Alle Karten auswerten** stößt eine vollständige Analyse an. Die Vorschläge zählen auf das KI-Tageslimit — ist es erreicht, folgt der Rest am nächsten Tag.
+**Wo die Karten liegen (seit 10.09.2026 anders).** Sie haben einen eigenen
+Bestand (`EduStore`) und einen eigenen Endpunkt (`/edumaps`), der denselben
+Draht-Vertrag spricht wie die Notizen. Vorher lagen sie als Notizen mit im
+Notizen-Bestand — zwei Ordnerebenen, 55 von 64 Notizen und neun Felder, die nur
+der Spiegel schrieb. Der Notizbereich zeigte damit fast nur Fremdes, und die
+Notizen trugen Code, der nur für Klassenseiten da war.
+
+Sichtbar sind die Karten jetzt an drei Stellen: im eigenen Bereich
+**Klassenseiten** der Web-App (Schalter *Klassenseiten zeigen* an der Web-App-
+Instanz, zusätzlich gekoppelt an diese Konfiguration hier), in der neuen Kachel
+**SymDo - Klassenseiten**, und als Kartenansicht mit den Farben der Seite,
+aufklappbaren Bereichen, PDF-Vorschau und der Buchungslage buchbarer Karten. Die
+Ordnung ist zwei Ebenen tief: je Kind ein Ordner, darin seine Seiten.
+
+**Der Umzug lief einmal, von selbst.** Beim ersten Übernehmen nach dem Update
+zogen Ordner, Karten und die Sperrliste in den eigenen Bestand; die
+Medienobjekte der Anhänge blieben, wo sie sind, es zogen nur die Datensätze. Was
+ein Mensch von Hand in einen Klassenseiten-Ordner geschrieben hatte, blieb eine
+Notiz und hängt seither eine Ebene höher. Geschrieben wurde in dieser
+Reihenfolge: erst der neue Bestand samt Gegenprobe, dann der Abtrag in den
+Notizen — scheitert etwas dazwischen, sind die Notizen unangetastet, und der
+nächste Durchlauf holt nach. Gemerkt ist der Umzug im Bestand selbst, nicht in
+einem eigenen Schalter.
+
+Eine **Sperrliste** hält einzelne Karten oder ganze Seiten von der Auswertung
+fern, mit Einzelfreigabe; **Alle Karten auswerten** stößt eine vollständige
+Analyse an. Die Vorschläge zählen auf das KI-Tageslimit — ist es erreicht, folgt
+der Rest am nächsten Tag.
+
+**Was im Bereich möglich ist:** eine Seite umbenennen (wiedererkannt wird sie an
+ihrer Adresse, nicht am Namen), eine Seite löschen und damit sperren, und eine
+archivierte Karte endgültig wegwerfen. Anlegen und Schreiben gibt es nicht — was
+hier von Hand entstünde, wäre beim nächsten Durchlauf entweder weg oder
+archiviert.
 
 ## 17. Statusvariablen
 

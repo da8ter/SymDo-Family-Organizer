@@ -2,7 +2,7 @@
 
 **Der Notizbereich der SymDo-App als eigene Kachel für die Tile-Visualisierung.**
 
-Dieselben Notizen, dieselbe Ansicht wie in der Web-App — nur ohne die übrigen Bereiche. Die Kachel eignet sich für eine Wandvisualisierung, an der nur Notizen gebraucht werden: Einkaufszettel für den Nachmittag, die Liste fürs Wochenende, der Elternbrief als Bild oder PDF, oder die gespiegelte Klassenseite der Schule.
+Dieselben Notizen, dieselbe Ansicht wie in der Web-App — nur ohne die übrigen Bereiche. Die Kachel eignet sich für eine Wandvisualisierung, an der nur Notizen gebraucht werden: Einkaufszettel für den Nachmittag, die Liste fürs Wochenende, der Elternbrief als Bild oder PDF.
 
 Es gibt **nichts einzurichten**: Die Notizen liegen im **SymDo Gateway**, die Kachel findet es von selbst und zeigt, was dort ist.
 
@@ -19,7 +19,7 @@ Es gibt **nichts einzurichten**: Die Notizen liegen im **SymDo Gateway**, die Ka
 - **Ordner und Notizen** aus dem Gateway: ein Ordner je Familienmitglied mit dessen Foto, dazu selbst angelegte Ordner, auch **Ordner in Ordnern**; der Pfad oben ist anklickbar
 - **Notizen mit Text und Anhängen** — Bilder und PDF-Dateien, aufgenommen oder aus der KI-Analyse übernommen; ein Anhang öffnet sich in der Kachel
 - **Anlegen, ändern, löschen** direkt in der Kachel; **Favoriten** verlassen die Ordner und stehen oben
-- **Klassenseiten** (Edumaps) erscheinen, wenn im Gateway eingeschaltet, als Ordner je Karte mit derselben Kartenansicht wie in der App — dort wird nichts angelegt, nur gelesen
+- **Klassenseiten** stehen seit September 2026 NICHT mehr hier: sie haben ihren eigenen Bestand, ihren eigenen Bereich in der App und eine eigene Kachel → [SymDo - Klassenseiten](../SymDoEdumaps/README.md)
 - **Sprachdialog**: Ist der Sprachassistent eingerichtet, liest und schreibt auch er in diese Notizen („Schreib eine Notiz für Tim …")
 
 ## 2. Voraussetzungen
@@ -50,4 +50,4 @@ Die Kachel hat **keine eigene Oberfläche**: `module.html` ist die Web-App aus *
 
 Serverseitig sind nur drei Dinge anders als bei der Web-App-Kachel: Der Zustand nennt nur den Notizbereich, die Tab-Leiste fällt damit ganz weg; es gibt keine Listen-Instanzen; und die Notizen selbst liegen im Gateway und reisen über dessen Relay — einen eigenen Zugangs-Token hat die Kachel nicht, weil sie ohnehin im Haus hängt.
 
-Ausführlich beschrieben ist der Notizbereich — Ordner, Anhänge, KI-Übernahme, Klassenseiten — im README des [SymDo - Gateway](../SymDoGateway/README.md).
+Ausführlich beschrieben ist der Notizbereich — Ordner, Anhänge, KI-Übernahme — im README des [SymDo - Gateway](../SymDoGateway/README.md).
