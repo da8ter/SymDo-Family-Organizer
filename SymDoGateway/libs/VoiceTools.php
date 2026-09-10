@@ -222,12 +222,19 @@ trait VoiceTools
             ],
             'termine_lesen' => [
                 'art' => 'lesen',
-                'beschreibung' => 'Liest anstehende Termine aus dem Kalender.',
+                'beschreibung' => 'Liest anstehende Termine aus dem Kalender. Jede Zeile nennt '
+                    . 'Zeit, Titel, Ort und die Personen, für die der Termin eingetragen ist.',
                 'schema' => [
                     'type' => 'object', 'additionalProperties' => false,
                     'properties' => [
                         'von'  => ['type' => 'string', 'description' => '"heute", "morgen" oder ein Datum JJJJ-MM-TT'],
                         'tage' => ['type' => 'integer', 'description' => 'Anzahl Tage ab "von", 1 bis 31'],
+                        /* Fragt jemand nach EINEM Termin („für wen ist Powerfit?"),
+                           soll das Modell nicht einen Zeitraum vorlesen müssen. */
+                        'titel' => ['type' => ['string', 'null'], 'description' =>
+                            'Optional: nur Termine, deren Titel diesen Text enthält. '
+                            . 'Bei einer Frage nach einem einzelnen Termin damit suchen und '
+                            . '"tage" gross wählen (z. B. 31).'],
                     ],
                     'required' => ['von', 'tage'],
                 ],
@@ -1053,22 +1060,35 @@ trait VoiceTools
         if (($r['ok'] ?? false) !== true) {
             return $this->VoiceErr('nicht_bereit', $this->Translate('The calendar is not answering right now.'));
         }
+        $suche = mb_strtolower(trim((string)($args['titel'] ?? '')));
+        /* Die Namen kommen aus derselben Quelle wie im Briefing, damit „für wen
+           ist der Termin" hier und dort dieselbe Antwort ergibt. */
+        $mitglieder = $this->BriefingMembers();
         $termine = [];
         foreach ((array)($r['events'] ?? []) as $e) {
             if (!is_array($e)) {
                 continue;
             }
-            $termine[] = $this->VoiceTerminZeile($e);
+            if (!$this->VoiceTerminImFenster($e, $von, $bis)) {
+                continue;
+            }
+            if ($suche !== '' && mb_strpos(mb_strtolower(trim((string)($e['title'] ?? ''))), $suche) === false) {
+                continue;
+            }
+            $termine[] = $this->VoiceTerminZeile($e, $mitglieder);
         }
         $gesamt = count($termine);
+        $leer = $suche === ''
+            ? $this->Translate('No appointments in that period.')
+            : sprintf($this->Translate('No appointment called „%s" in that period.'), (string)$args['titel']);
         return [
             'ok'       => true,
             'zeitraum' => $tage === 1 ? date('d.m.', $von) : (date('d.m.', $von) . '–' . date('d.m.', $bis - 1)),
+            'gesucht'  => $suche === '' ? null : (string)$args['titel'],
             'anzahl'   => $gesamt,
             'termine'  => array_slice($termine, 0, 20),
             'gekuerzt' => $gesamt > 20,
-            'sag'      => $gesamt === 0
-                ? $this->Translate('No appointments in that period.')
+            'sag'      => $gesamt === 0 ? $leer
                 : sprintf($this->Translate('%d appointment(s).'), $gesamt),
         ];
     }
@@ -1099,22 +1119,83 @@ trait VoiceTools
             $wann = $wochentage[(int)date('w', $ts)] . ', ' . (int)date('j', $ts) . '. ' . $monate[(int)date('n', $ts)];
         }
         if ($mitZeit && !$ganztags) {
-            $wann .= ', ' . (int)date('G', $ts) . ' Uhr'
-                   . ((int)date('i', $ts) !== 0 ? ' ' . date('i', $ts) : '');
+            $wann .= ', ' . $this->VoiceGesprocheneUhrzeit($ts);
         }
         return $wann;
     }
 
-    /** Ein Termin als sprachgerechte Zeile: „Fr 05.09. 15:00 Zahnarzt (Praxis)". */
-    private function VoiceTerminZeile(array $e): string
+    /**
+     * Eine Uhrzeit, wie man sie SAGT: „18 Uhr", „18 Uhr 45".
+     *
+     * Eigene Funktion, weil sie an zwei Stellen gebraucht wird — Beginn und
+     * Ende eines Termins. Stand sie nur im Datum, kam das Ende geschrieben
+     * heraus („18 Uhr 45 bis 19:45"), und das liest sich vor wie zwei
+     * verschiedene Sorten Angabe.
+     */
+    private function VoiceGesprocheneUhrzeit(int $ts): string
+    {
+        return (int)date('G', $ts) . ' Uhr'
+             . ((int)date('i', $ts) !== 0 ? ' ' . date('i', $ts) : '');
+    }
+
+    /**
+     * Ein Termin als sprachgerechte Zeile: „heute, 18 Uhr 45 bis 19:45 Powerfit 3
+     * (Studio), für Anna, Max".
+     *
+     * Die PERSONEN gehören dazu: ohne sie konnte der Assistent die Frage „für wen
+     * ist dieser Termin" nicht beantworten, obwohl die Zuordnung gepflegt war —
+     * gemeldet am 10.09.2026. Sie steht im Gateway (CalMembers) und nicht im
+     * Kalender, kommt aber in der Projektion mit; verloren ging sie erst hier.
+     * Fehlt die Mitgliederliste, bleibt die Zeile wie zuvor.
+     *
+     * @param array<string,array{name:string}> $mitglieder id => Angaben, aus BriefingMembers()
+     */
+    private function VoiceTerminZeile(array $e, array $mitglieder = []): string
     {
         $start = (int)($e['start'] ?? 0);
+        $ende  = (int)($e['end'] ?? 0);
         $ganz  = ($e['allDay'] ?? false) === true;
         $wann  = $this->VoiceGesprochenesDatum($start, true, $ganz)
                . ($ganz ? ' ' . $this->Translate('all day') : '');
+        /* Ein Ende NUR, wenn es am selben Tag liegt. Eine Serie kann als EIN
+           verschmolzener Datensatz ankommen — am 20.08.2026 lieferte der
+           Kalender genau diesen Kurs von Do 20.08. 18:45 bis Do 03.09. 19:45.
+           „bis 19:45" wäre dann eine Erfindung, und dieselbe Falle ist im
+           Briefing schon dokumentiert. */
+        if (!$ganz && $ende > $start && (int)date('Ymd', $ende) === (int)date('Ymd', $start)) {
+            $wann .= ' ' . $this->Translate('until') . ' ' . $this->VoiceGesprocheneUhrzeit($ende);
+        }
         $titel = trim((string)($e['title'] ?? ''));
         $ort   = trim((string)($e['location'] ?? ''));
-        return trim($wann . ' ' . $titel . ($ort !== '' ? ' (' . $ort . ')' : ''));
+        $wer   = $mitglieder === []
+            ? '' : $this->BriefingNames((array)($e['members'] ?? []), $mitglieder);
+        return trim($wann . ' ' . $titel . ($ort !== '' ? ' (' . $ort . ')' : ''))
+            . ($wer !== '' ? ', ' . sprintf($this->Translate('for %s'), $wer) : '');
+    }
+
+    /**
+     * Gehört der Termin in das abgefragte Fenster?
+     *
+     * Dieselbe Regel wie im Briefing, und aus demselben Grund: der Kalender
+     * liefert alles, was das Fenster irgendwie berührt. Ein verschmolzener
+     * Seriendatensatz, der VOR dem Fenster beginnt, stünde sonst mit einem
+     * Datum aus der Vergangenheit in der Antwort — und das Modell liest es vor.
+     *
+     * Termine mit Uhrzeit gehören zu dem Tag, an dem sie BEGINNEN. Ganztägige
+     * enden ausschließlich: einer, der auf Mitternacht endet, gehört nicht mehr
+     * in den nächsten Tag.
+     */
+    private function VoiceTerminImFenster(array $e, int $von, int $bis): bool
+    {
+        $start = (int)($e['start'] ?? 0);
+        if ($start <= 0) {
+            return false;
+        }
+        if (($e['allDay'] ?? false) === true) {
+            $ende = max((int)($e['end'] ?? 0), $start + 1);
+            return $ende > $von && $start < $bis;
+        }
+        return $start >= $von && $start < $bis;
     }
 
     /** Nur Wochentag + Datum (+ Uhrzeit) eines Termins — ohne Titel, für Rückfragen. */
@@ -1290,7 +1371,10 @@ trait VoiceTools
         $fehler = $this->VoiceAufloeseFehler($erg, $was, $this->Translate('upcoming appointments'));
         if ($fehler !== null) {
             if (($erg['status'] ?? '') === 'mehrdeutig') {
-                $labels = array_map(fn(array $t): string => $this->VoiceTerminZeile((array)$t['event']), $erg['treffer']);
+                $mitgl = $this->BriefingMembers();
+                $labels = array_map(
+                    fn(array $t): string => $this->VoiceTerminZeile((array)$t['event'], $mitgl),
+                    $erg['treffer']);
                 $fehler['sag'] = sprintf($this->Translate('Which appointment do you mean? For example: %s.'), implode('; ', array_slice($labels, 0, 3)));
                 $fehler['treffer'] = $labels;
             }
