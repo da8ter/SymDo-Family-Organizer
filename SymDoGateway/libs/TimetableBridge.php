@@ -141,10 +141,21 @@ trait TimetableBridge
                    „Vertretung" — die Projektion hier ist eine Weissliste. */
                 'insteadOf' => (string)($s['insteadOf'] ?? ''),
             ];
+            /* Die Termin-Marker setzt das GATEWAY ein, nicht der Stundenplan.
+               Der holt sie sich sonst mit TGW_GetEventsForTile zurueck — und
+               genau dieser Rueckruf schlaegt fehl, wenn der Plan IM Hook des
+               Gateways abgerufen wird: Symcon laesst keinen Aufruf in die
+               Instanz, die gerade selbst arbeitet, die Antwort ist ein leerer
+               String. In der Kachel stand der Marker damit, in der Web-App nie
+               (am 11.09.2026 an einem Termin gemessen, der beiden Wegen
+               vorlag). Hier ist der Umweg unnoetig: die Termine liegen in
+               dieser Instanz. */
+            $marker = $this->TimetableMarker($plan, $id);
+
             /* Die Abbildung EINER Woche. Sie steht als Funktion da, weil es
                zwei sind: die laufende und — mit Import — die kommende, die der
                Wochenplan im Stundenplan-Bereich zeigt. */
-            $wocheAbbilden = function (array $rohTage) use ($stunde): array {
+            $wocheAbbilden = function (array $rohTage, string $kennung) use ($stunde, $marker): array {
                 $tage = [];
                 foreach ($rohTage as $tag) {
                     if (!is_array($tag)) {
@@ -160,13 +171,17 @@ trait TimetableBridge
                     ] : null;
                     /* Termin-Marker: diese Liste ist eine WEISSLISTE, kein
                        Durchreicher — ohne diese Zeilen kaeme der Schluessel nie
-                       in der App an. Dieselbe schlanke Form wie im Plan. */
-                    $marker = [];
-                    foreach ((array)($tag['events'] ?? []) as $e) {
+                       in der App an. Dieselbe schlanke Form wie im Plan.
+                       Quelle sind die Marker dieser Instanz; was das Modul
+                       selbst mitschickt, bleibt der Rueckfall. */
+                    $ausModul = (array)($tag['events'] ?? []);
+                    $eigene   = $marker[$kennung][(string)($tag['date'] ?? '')] ?? [];
+                    $termine = [];
+                    foreach ($eigene !== [] ? $eigene : $ausModul as $e) {
                         if (!is_array($e)) {
                             continue;
                         }
-                        $marker[] = [
+                        $termine[] = [
                             'title' => (string)($e['title'] ?? ''),
                             'time'  => (string)($e['time'] ?? ''),
                             'at'    => (int)($e['at'] ?? 0),
@@ -191,7 +206,7 @@ trait TimetableBridge
                         'holiday' => $frei,
                         'slots'   => array_values(array_map($stunde,
                             array_filter((array)($tag['slots'] ?? []), 'is_array'))),
-                        'events'  => $marker,
+                        'events'  => $termine,
                     ];
                 }
                 return $tage;
@@ -214,14 +229,16 @@ trait TimetableBridge
                        kommende Woche um — ohne diese Zeile kaeme die Auskunft
                        nie an, die Projektion hier ist eine Weissliste. */
                     'weekOver' => ($kind['weekOver'] ?? false) === true,
-                    'days'   => $wocheAbbilden((array)($kind['days'] ?? [])),
+                    'days'   => $wocheAbbilden((array)($kind['days'] ?? []),
+                                                (string)($kind['userId'] ?? '')),
                 ];
                 /* Die kommende Woche, wenn das Modul sie liefert — das tut es
                    nur mit Import (siehe FolgewocheAnhaengen dort). Ohne Import
                    waere sie dieselbe Vorlage noch einmal, und der Wechsler im
                    Stundenplan-Bereich zeigte zweimal dasselbe Bild. */
                 if (is_array($kind['nextDays'] ?? null) && $kind['nextDays'] !== []) {
-                    $satz['nextDays'] = $wocheAbbilden((array)$kind['nextDays']);
+                    $satz['nextDays'] = $wocheAbbilden((array)$kind['nextDays'],
+                                                       (string)($kind['userId'] ?? ''));
                 }
                 $kinder[] = $satz;
             }
@@ -244,6 +261,96 @@ trait TimetableBridge
             'dated'    => $datiert,
             'children' => $kinder,
         ]];
+    }
+
+    /**
+     * Termin-Marker fuer EINEN Plan: Kennung => Datum => Marker.
+     *
+     * Gerechnet wird nach denselben Regeln wie im Stundenplan-Modul
+     * (TimetableStore::TermineFuerWoche), nur ohne dessen Rueckruf: nur Termine
+     * MIT Uhrzeit, nur solche, denen das Mitglied zugeordnet ist, und jeder
+     * gehoert zu dem Tag, an dem er BEGINNT.
+     *
+     * Zugeordnet wird ueber das DATUM und nicht ueber den Wochentag: der Plan
+     * traegt zwei Wochen, und ein Wochentag kaeme darin zweimal vor.
+     *
+     * Den Schalter besitzt weiterhin die INSTANZ. Das Gateway setzt die Marker
+     * ein, es entscheidet nicht, ob sie jemand sehen will.
+     *
+     * @param array<string,mixed> $plan
+     * @return array<string, array<string, list<array<string,mixed>>>>
+     */
+    private function TimetableMarker(array $plan, int $instanz): array
+    {
+        $cfg = json_decode((string)@IPS_GetConfiguration($instanz), true);
+        if (!is_array($cfg) || ($cfg['ShowCalendarEvents'] ?? false) !== true) {
+            return [];
+        }
+        // Nur die Tage, die im Plan wirklich vorkommen — beide Wochen.
+        $tage = [];
+        foreach ((array)($plan['children'] ?? []) as $kind) {
+            foreach (['days', 'nextDays'] as $feld) {
+                foreach ((array)(is_array($kind) ? ($kind[$feld] ?? []) : []) as $t) {
+                    $datum = is_array($t) ? trim((string)($t['date'] ?? '')) : '';
+                    if ($datum !== '') {
+                        $tage[$datum] = true;
+                    }
+                }
+            }
+        }
+        if ($tage === []) {
+            // Ein Plan ohne Datum ist eine Wochenvorlage — dort gibt es keinen
+            // Tag, an den ein Termin gehoeren koennte.
+            return [];
+        }
+        $daten = array_keys($tage);
+        sort($daten);
+        $von = strtotime($daten[0] . ' 00:00:00');
+        $bis = strtotime($daten[count($daten) - 1] . ' 00:00:00');
+        if ($von === false || $bis === false) {
+            return [];
+        }
+        $bis += 86400;
+        $karte = [];
+        foreach ($this->CalEvents($von, $bis)['events'] as $e) {
+            if (!is_array($e) || ($e['allDay'] ?? false) === true) {
+                continue;
+            }
+            $start = (int)($e['start'] ?? 0);
+            if ($start < $von || $start >= $bis) {
+                continue;
+            }
+            $datum = date('Y-m-d', $start);
+            if (!isset($tage[$datum])) {
+                continue;
+            }
+            /* Dauer: der Termin wird als Balken gezeichnet. Ohne echtes Ende
+               (manche Kalender legen Termine mit Dauer null an) gilt EINE
+               Stunde, und der Balken laeuft aus — die App behauptet dann keine
+               Endzeit, die niemand gesetzt hat. */
+            $ende   = (int)($e['end'] ?? 0);
+            $offen  = $ende <= $start;
+            $vonMin = (int)date('G', $start) * 60 + (int)date('i', $start);
+            $bisMin = $offen ? $vonMin + 60 : $vonMin + (int)ceil(($ende - $start) / 60);
+            $eintrag = [
+                'title' => trim((string)($e['title'] ?? '')),
+                'time'  => date('H:i', $start),
+                'at'    => $vonMin,
+                // Gedeckelt: ein Termin ueber Mitternacht hinaus endet in
+                // dieser Darstellung um 24:00.
+                'bis'   => min($bisMin, 24 * 60),
+                'open'  => $offen,
+            ];
+            foreach ((array)($e['members'] ?? []) as $m) {
+                $karte[(string)$m][$datum][] = $eintrag;
+            }
+        }
+        foreach ($karte as &$proTag) {
+            foreach ($proTag as &$liste) {
+                usort($liste, static fn(array $a, array $b): int => $a['at'] <=> $b['at']);
+            }
+        }
+        return $karte;
     }
 
     /**
