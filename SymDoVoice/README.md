@@ -78,7 +78,7 @@ Die Blase ist als Dashboard-Kachel auch in der **SymDo Web-App** enthalten; dort
 
 Optional startet das Gespräch ohne Berührung: die Kachel lauscht auf das Weckwort, standardmäßig **„Hey SymDo"**. Das ist ein Experiment und braucht im Gateway zwei Dinge — den Schalter *Freihändig erlauben* und eine **eigene Einwilligung**, getrennt von der für den Dialog: wer dem Knopf zugestimmt hat, hat nicht dem Dauerlauschen zugestimmt. Sind beide gesetzt, lauscht die Kachel **von selbst**, sobald sie geöffnet ist. Unten links steht dann „sag: ‚Hey SymDo'". Verweigert der Browser das Mikrofon ohne Berührung, bittet die Kachel um einen Tipp; fehlt das Sprachpaket, bleibt ein Ladeknopf.
 
-Das **Weckwort ist einstellbar** (Gateway, Feld *Weckwort*): mindestens sechs Buchstaben, mehrere durch Komma. Zwei bis drei Silben mit klarem Anfang treffen am besten; sehr kurze oder alltägliche Wörter lösten ständig falsch aus und gelten nicht. „Hey SymDo" behält sein bewährtes Muster mit den typischen Fehlhörern, eigene Wörter werden über Buchstabennähe erkannt.
+Das **Weckwort ist einstellbar** (Gateway, Feld *Weckwort*): mindestens sechs Buchstaben, mehrere durch Komma. Zwei bis drei Silben mit klarem Anfang treffen am besten.
 
 Nach dem Weckwort **schreibt der Erkenner weiter mit**, was gesagt wird, und reicht es als Text nach, sobald die Verbindung zum Anbieter steht — „Hey SymDo, was steht heute an" in einem Atemzug verliert nichts. Ein kurzer Zweiklang meldet, wann die Leitung offen ist.
 
