@@ -384,7 +384,8 @@ class SymDoSetup extends IPSModuleStrict
             if (trim((string)($u['name'] ?? '')) === '') {
                 continue;
             }
-            $teile[] = $this->MitgliedZeile($u);
+            // Nur die Namen: wer schon steht, braucht hier keine Einzelheiten.
+            $teile[] = trim((string)$u['name'] . ' ' . (string)($u['lastName'] ?? ''));
         }
         return $teile === []
             ? $this->Translate('Nobody is set up yet.')

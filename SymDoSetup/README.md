@@ -13,8 +13,8 @@ Der Knopf *SymDo-Installationsassistenten starten* öffnet acht Seiten:
 
 1. **Willkommen bei SymDo** — was SymDo mitbringt, und was auf diesem Server
    schon steht.
-2. **Deine Familie** — die vorhandenen Mitglieder stehen oben, mit Rolle,
-   Geburtstag und Foto. Neue trägt man eines nach dem anderen ein, mit
+2. **Deine Familie** — die vorhandenen Mitglieder stehen oben beim Namen.
+   Neue trägt man eines nach dem anderen ein, mit
    **allen** Feldern der Mitgliederliste: Vorname, Nachname, Geburtsdatum,
    Rolle, Foto und Push-Visualisierung. Wer schon im Gateway steht, bleibt
    unverändert; leere Felder werden ergänzt.
