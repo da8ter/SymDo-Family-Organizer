@@ -42,12 +42,15 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             return;
         }
 
-        // 1. Alte Abos/Referenzen sauber lösen (kein Leak bei Instanzwechsel)
+        // 1. Alte Abos/Referenzen sauber lösen (kein Leak bei Instanzwechsel).
+        //    Nur, was es noch gibt: eine Kennung aus dem Merker kann auf ein
+        //    inzwischen geloeschtes Objekt zeigen, und ein Fehler hier liesse
+        //    die Instanz beim Erstellen haengen.
         $previous = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
         if (is_array($previous)) {
             foreach ($previous as $oldID) {
                 $oldID = (int) $oldID;
-                if ($oldID > 0) {
+                if ($oldID > 0 && @IPS_ObjectExists($oldID)) {
                     $this->UnregisterMessage($oldID, VM_UPDATE);
                 }
             }
@@ -56,25 +59,39 @@ class SymDoShoppingListOverview extends IPSModuleStrict
             $this->UnregisterReference($refID);
         }
 
-        // 2. Trigger-Variablen der Quell-Instanz abonnieren
+        /* 2. Trigger-Variablen der Quell-Instanz abonnieren — und die VARIABLEN
+           referenzieren, nicht die Instanz. Genau wie die ToDo-Uebersicht, und
+           aus einem Grund, der sich am 11.09.2026 zeigte: diese Kachel war die
+           einzige, die eine INSTANZ derselben Bibliothek referenzierte, und die
+           einzige, die bei jedem Neuladen der Bibliothek mit „Kann
+           Schnittstellen-Instanz nicht erstellen" hängen blieb (Status 101,
+           46 Mal an einem Tag) — die referenzierte Instanz ist in diesem
+           Moment selbst noch nicht wieder da. Die Variablen gehoeren der
+           Quell-Instanz; ihre Referenz schuetzt sie genauso vor dem Loeschen. */
         $instanceID = $this->ReadPropertyInteger('ShoppingListInstanceID');
         $subscribed = [];
 
         if ($instanceID > 0 && IPS_InstanceExists($instanceID)) {
-            $this->RegisterReference($instanceID);
             foreach (self::SRC_IDENTS as $ident) {
                 $varID = @IPS_GetObjectIDByIdent($ident, $instanceID);
                 if ($varID > 0 && IPS_VariableExists($varID)) {
+                    $this->RegisterReference($varID);
                     $this->RegisterMessage($varID, VM_UPDATE);
                     $subscribed[] = $varID;
                 }
             }
         }
 
-        // Klick-Ziel referenzieren, damit es nicht unbemerkt gelöscht wird
+        // Klick-Ziel referenzieren, damit es nicht unbemerkt geloescht wird.
+        // Darf das Erstellen nie aufhalten: das Ziel ist frei waehlbar und kann
+        // eine Instanz sein, die beim Neuladen gerade nicht greifbar ist.
         $openID = $this->ReadPropertyInteger('OpenObjectID');
         if ($openID > 0 && @IPS_ObjectExists($openID)) {
-            $this->RegisterReference($openID);
+            try {
+                $this->RegisterReference($openID);
+            } catch (\Throwable $e) {
+                $this->SendDebug('ApplyChanges', 'Referenz auf Klick-Ziel nicht moeglich: ' . $e->getMessage(), 0);
+            }
         }
 
         $this->WriteAttributeString('SubscribedVarIDs', json_encode($subscribed));
