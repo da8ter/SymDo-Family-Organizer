@@ -1,0 +1,595 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/Efa.php';
+require_once __DIR__ . '/TransitCalc.php';
+
+/**
+ * Bestand und Takt der VRR-Auskunft.
+ *
+ * Alles Zustandsbehaftete steht hier, damit `module.php` die Symcon-Anbindung
+ * bleibt und nichts weiter.
+ *
+ * Die eine Regel, der hier alles folgt: **geholt wird im eigenen Takt, gelesen
+ * wird nur der Bestand.** Symcon führt je Instanz genau eine Sache zur Zeit aus
+ * (am 11.09.2026 gemessen: 30 gleichzeitige Hook-Abrufe brauchten 874 ms statt
+ * 31). Läuft eine Auskunft durch den Hook des Gateways, ist das Gateway mit
+ * genau diesem Aufruf beschäftigt und lässt keinen Rückruf mehr hinein — ein
+ * `TGW_GetUsers` von hier aus antwortet dann mit einem leeren String. Deshalb
+ * stehen die Mitgliedsnamen und die Schulzeiten MIT im Bestand: sie werden
+ * geholt, wenn wir die Zeit dafür haben, und gelesen, wenn jemand fragt.
+ */
+trait TransitStore
+{
+    private const TRANSIT_ATTR = 'Board';
+
+    /** Abstand zwischen zwei Abrufen desselben Eintrags, solange jemand zusieht. */
+    private const TAKT_S = 60;
+
+    /** So lange nach dem letzten Zugriff gilt jemand als anwesend. */
+    private const ZUSCHAUER_S = 180;
+
+    /**
+     * Ohne Zuschauer läuft der Takt langsam weiter — aber nur, wenn es einen
+     * Schulweg gibt, und nur morgens: die Auskunft soll am Frühstückstisch schon
+     * dastehen und nicht erst auf einen Abruf warten.
+     */
+    private const MORGEN_VON = 5;
+    private const MORGEN_BIS = 9;
+    private const MORGEN_TAKT_S = 600;
+
+    /** Fehlerriegel: so viele Fehlschläge in Folge, dann Pause. */
+    private const FEHLER_MAX = 3;
+    private const SPERRE_S   = 3600;
+
+    private const STUNDENPLAN_GUID = '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}';
+
+    // ------------------------------------------------------------------
+    // Anlegen
+    // ------------------------------------------------------------------
+
+    private function TransitCreate(): void
+    {
+        $this->RegisterPropertyString('Stops', '[]');
+        $this->RegisterPropertyString('Routes', '[]');
+        $this->RegisterPropertyInteger('SchoolBuffer', 10);
+        $this->RegisterPropertyString('DefaultView', 'departures');
+        // 0 = die erste Stundenplan-Instanz mit eigenen Daten nehmen.
+        $this->RegisterPropertyInteger('TimetableInstanceID', 0);
+
+        $this->RegisterAttributeString(self::TRANSIT_ATTR, '{}');
+        $this->RegisterAttributeInteger('LastSeen', 0);
+        $this->RegisterAttributeInteger('Fails', 0);
+        $this->RegisterAttributeInteger('FailAt', 0);
+        $this->RegisterAttributeBoolean('ParentMigrated', false);
+
+        $this->RegisterTimer('Refresh', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Refresh\', 0);');
+    }
+
+    // ------------------------------------------------------------------
+    // Konfiguration
+    // ------------------------------------------------------------------
+
+    /**
+     * Die eigene Konfiguration — über IPS_GetConfiguration, nicht über
+     * ReadProperty*: so sind gestagte Werte sofort sichtbar, und es geht auch
+     * vor dem ersten Kernel-Neustart nach einer Erweiterung. Dasselbe Argument
+     * wie in ChoreStore und in der Web-App.
+     *
+     * @return array<string,mixed>
+     */
+    private function TransitKonfiguration(): array
+    {
+        $roh = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
+        return is_array($roh) ? $roh : [];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function TransitZeilen(string $feld): array
+    {
+        $cfg = $this->TransitKonfiguration();
+        $roh = json_decode((string)($cfg[$feld] ?? '[]'), true);
+        if (!is_array($roh)) {
+            return [];
+        }
+        return array_values(array_filter($roh, 'is_array'));
+    }
+
+    private function TransitZahl(string $feld, int $vorgabe): int
+    {
+        $cfg = $this->TransitKonfiguration();
+        return array_key_exists($feld, $cfg) ? (int)$cfg[$feld] : $vorgabe;
+    }
+
+    /**
+     * Der Schlüssel eines Eintrags im Bestand.
+     *
+     * Bewusst aus dem INHALT gebildet und nicht als eigene Kennung in der Liste:
+     * ändert jemand Start oder Ziel, ist es eine andere Strecke und die alte
+     * Auskunft gilt nicht mehr. Verwaiste Einträge räumt der Lauf selbst weg.
+     */
+    private function TransitSchluessel(string $art, array $zeile): string
+    {
+        if ($art === 'stop') {
+            return 'stop:' . trim((string)($zeile['stopId'] ?? ''));
+        }
+        return 'route:' . substr(md5(implode('|', [
+            trim((string)($zeile['from'] ?? '')),
+            trim((string)($zeile['to'] ?? '')),
+            trim((string)($zeile['mode'] ?? 'dep')),
+            trim((string)($zeile['member'] ?? '')),
+            trim((string)($zeile['time'] ?? '')),
+        ])), 0, 12);
+    }
+
+    // ------------------------------------------------------------------
+    // Bestand
+    // ------------------------------------------------------------------
+
+    /** @return array<string,mixed> */
+    private function TransitBestand(): array
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString(self::TRANSIT_ATTR), true);
+        if (!is_array($roh)) {
+            $roh = [];
+        }
+        return [
+            'v'       => 1,
+            'entries' => is_array($roh['entries'] ?? null) ? $roh['entries'] : [],
+            'members' => is_array($roh['members'] ?? null) ? $roh['members'] : [],
+        ];
+    }
+
+    /**
+     * Der einzige Schreiber — mit Rücklese-Probe.
+     *
+     * `WriteAttributeString` wirft nicht: vor dem ersten Kernel-Neustart tut es
+     * schlicht nichts, und die PHP-Warnung landet in der AUSGABE, wo sie im Hook
+     * die HTTP-Antwort zerlegt. Deshalb `@` davor und danach gegenlesen.
+     */
+    private function TransitBestandSchreiben(array $bestand): bool
+    {
+        $text = (string)json_encode($bestand, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        @$this->WriteAttributeString(self::TRANSIT_ATTR, $text);
+        return (string)@$this->ReadAttributeString(self::TRANSIT_ATTR) === $text;
+    }
+
+    // ------------------------------------------------------------------
+    // Zuschauer und Takt
+    // ------------------------------------------------------------------
+
+    /**
+     * „Jemand sieht hin." Gestempelt von der Kachel und vom Gateway.
+     *
+     * Geschrieben wird nur, wenn sich der Wert spürbar ändert: die Web-App fragt
+     * im Sekundentakt, und jedes Schreiben wäre ein Schreibzugriff für nichts.
+     */
+    private function TransitGesehen(int $jetzt): void
+    {
+        if ($jetzt - (int)@$this->ReadAttributeInteger('LastSeen') < 30) {
+            return;
+        }
+        @$this->WriteAttributeInteger('LastSeen', $jetzt);
+    }
+
+    private function TransitZuschauer(int $jetzt): bool
+    {
+        return $jetzt - (int)@$this->ReadAttributeInteger('LastSeen') <= self::ZUSCHAUER_S;
+    }
+
+    /** Morgens, wenn ein Schulweg eingerichtet ist: auch ohne Zuschauer. */
+    private function TransitMorgenlauf(int $jetzt): bool
+    {
+        $stunde = (int)date('G', $jetzt);
+        if ($stunde < self::MORGEN_VON || $stunde >= self::MORGEN_BIS) {
+            return false;
+        }
+        foreach ($this->TransitZeilen('Routes') as $z) {
+            if ((string)($z['mode'] ?? '') === 'school') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Der Takt: schnell mit Zuschauer, langsam für den Morgenlauf, sonst aus.
+     *
+     * Ein Dauerpoller wäre gegenüber einer Schnittstelle ohne Schlüssel und ohne
+     * zugesicherte Verfügbarkeit unhöflich — und nutzlos, solange niemand
+     * hinsieht.
+     */
+    private function TransitTaktSetzen(int $jetzt): void
+    {
+        if ($this->TransitZuschauer($jetzt)) {
+            $ms = self::TAKT_S * 1000;
+        } elseif ($this->TransitMorgenlauf($jetzt)) {
+            $ms = self::MORGEN_TAKT_S * 1000;
+        } else {
+            $ms = 0;
+        }
+        // Bei Sperre trotzdem langsam weiterlaufen, sonst öffnet sie sich nie.
+        if ($ms === 0 && $this->TransitGesperrt($jetzt)) {
+            $ms = self::MORGEN_TAKT_S * 1000;
+        }
+        @$this->SetTimerInterval('Refresh', $ms);
+    }
+
+    // ------------------------------------------------------------------
+    // Fehlerriegel
+    // ------------------------------------------------------------------
+
+    /**
+     * Nach drei Fehlschlägen in Folge eine Stunde Pause.
+     *
+     * Der Zähler wird NICHT in ApplyChanges zurückgesetzt — dieselbe Falle wie
+     * bei WebUntis: ApplyChanges läuft bei jedem Kernelstart und bei jeder
+     * Änderung am Formular, und ein Riegel, der sich dabei öffnet, ist keiner.
+     */
+    private function TransitGesperrt(int $jetzt): bool
+    {
+        if ((int)@$this->ReadAttributeInteger('Fails') < self::FEHLER_MAX) {
+            return false;
+        }
+        return ($jetzt - (int)@$this->ReadAttributeInteger('FailAt')) < self::SPERRE_S;
+    }
+
+    private function TransitFehlschlag(int $jetzt): void
+    {
+        @$this->WriteAttributeInteger('Fails', (int)@$this->ReadAttributeInteger('Fails') + 1);
+        @$this->WriteAttributeInteger('FailAt', $jetzt);
+    }
+
+    private function TransitErfolg(): void
+    {
+        if ((int)@$this->ReadAttributeInteger('Fails') !== 0) {
+            @$this->WriteAttributeInteger('Fails', 0);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Abrufen
+    // ------------------------------------------------------------------
+
+    /**
+     * Ein Lauf: alles holen, was fällig ist.
+     *
+     * Hier und nur hier wird auf fremde Dienste gewartet — in der eigenen
+     * Instanz, wo es niemanden aufhält.
+     */
+    private function TransitAbrufen(int $jetzt): void
+    {
+        if ($this->TransitGesperrt($jetzt)) {
+            return;
+        }
+        $zuschauer = $this->TransitZuschauer($jetzt);
+        $morgens   = $this->TransitMorgenlauf($jetzt);
+        if (!$zuschauer && !$morgens) {
+            return;
+        }
+        $bestand = $this->TransitBestand();
+        $alt     = $bestand;
+        $frist   = $zuschauer ? self::TAKT_S : self::MORGEN_TAKT_S;
+        $puffer  = max(0, $this->TransitZahl('SchoolBuffer', 10));
+        $lebend  = [];
+
+        foreach ($this->TransitZeilen('Stops') as $z) {
+            $stopId = trim((string)($z['stopId'] ?? ''));
+            if ($stopId === '') {
+                continue;
+            }
+            $key = $this->TransitSchluessel('stop', $z);
+            $lebend[$key] = true;
+            if (!$this->TransitFaellig($bestand, $key, $jetzt, $frist)) {
+                continue;
+            }
+            /* Grosszuegiger holen als gezeigt wird: die EFA liefert die Liste
+               UNSORTIERT und mit bereits abgefahrenen Verbindungen darin (am
+               11.09.2026 gemessen). Was davon übrig bleibt, entscheidet erst
+               das Rechenwerk. */
+            $antwort = Efa::Abfahrten($stopId, max(1, (int)($z['limit'] ?? 8)) + 8);
+            $bestand['entries'][$key] = $this->TransitEintrag(
+                $bestand['entries'][$key] ?? [], $antwort, $jetzt,
+                static fn(array $daten): array => ['raw' => $daten]
+            );
+        }
+
+        foreach ($this->TransitZeilen('Routes') as $z) {
+            $von  = trim((string)($z['from'] ?? ''));
+            $nach = trim((string)($z['to'] ?? ''));
+            if ($von === '' || $nach === '') {
+                continue;
+            }
+            $key = $this->TransitSchluessel('route', $z);
+            $lebend[$key] = true;
+            if (!$this->TransitFaellig($bestand, $key, $jetzt, $frist)) {
+                continue;
+            }
+            $modus = (string)($z['mode'] ?? 'dep');
+            $schule = null;
+            $wann = 0;
+
+            if ($modus === 'school') {
+                $eigenerPuffer = trim((string)($z['buffer'] ?? ''));
+                $schule = $this->TransitSchulweg(
+                    trim((string)($z['member'] ?? '')), $jetzt,
+                    $eigenerPuffer === '' ? $puffer : max(0, (int)$eigenerPuffer)
+                );
+                if ($schule === null) {
+                    // Ferien, kein Unterricht, kein Stundenplan: nichts zu holen.
+                    $bestand['entries'][$key] = [
+                        'at' => $jetzt, 'ok' => true, 'school' => null, 'raw' => null,
+                    ];
+                    continue;
+                }
+                // Für den Rückweg drehen sich Start und Ziel um.
+                if ($schule['direction'] === 'from') {
+                    [$von, $nach] = [$nach, $von];
+                }
+                $modus = $schule['mode'];
+                $wann  = $schule['targetAt'];
+            } elseif ($modus === 'arr') {
+                $wann = $this->TransitUhrzeit((string)($z['time'] ?? ''), $jetzt);
+            }
+
+            $antwort = Efa::Strecke($von, $nach, $modus, $wann, max(1, (int)($z['count'] ?? 3)));
+            $bestand['entries'][$key] = $this->TransitEintrag(
+                $bestand['entries'][$key] ?? [], $antwort, $jetzt,
+                static fn(array $daten): array => ['raw' => $daten, 'school' => $schule]
+            );
+        }
+
+        // Verwaiste Einträge weg: eine geänderte Strecke ist eine andere.
+        foreach (array_keys($bestand['entries']) as $key) {
+            if (!isset($lebend[$key])) {
+                unset($bestand['entries'][$key]);
+            }
+        }
+
+        $namen = $this->TransitMitglieder();
+        if ($namen !== []) {
+            $bestand['members'] = $namen;
+        }
+
+        if ($bestand !== $alt) {
+            $this->TransitBestandSchreiben($bestand);
+        }
+    }
+
+    /** @param array<string,mixed> $bestand */
+    private function TransitFaellig(array $bestand, string $key, int $jetzt, int $frist): bool
+    {
+        $eintrag = $bestand['entries'][$key] ?? null;
+        if (!is_array($eintrag)) {
+            return true;
+        }
+        return ($jetzt - (int)($eintrag['at'] ?? 0)) >= $frist;
+    }
+
+    /**
+     * Einen Eintrag aus einer Antwort bauen — oder den alten behalten.
+     *
+     * Bei Fehlschlag bleibt der alte Stand liegen und wird als `stale` markiert.
+     * Eine Abfahrt von vor zwei Minuten ist brauchbarer als ein leeres Feld,
+     * und ein leeres Feld sähe aus wie „heute fährt nichts".
+     *
+     * @param array<string,mixed> $alt
+     * @param array<string,mixed> $antwort
+     */
+    private function TransitEintrag(array $alt, array $antwort, int $jetzt, callable $formen): array
+    {
+        if (($antwort['ok'] ?? false) !== true) {
+            $this->TransitFehlschlag($jetzt);
+            $alt['stale']   = true;
+            $alt['ok']      = false;
+            $alt['message'] = (string)($antwort['message'] ?? '');
+            return $alt;
+        }
+        $this->TransitErfolg();
+        return array_merge(['at' => $jetzt, 'ok' => true, 'stale' => false, 'message' => ''],
+            $formen((array)($antwort['data'] ?? [])));
+    }
+
+    /** „07:30" am Tag von $jetzt; liegt es schon hinter uns, gilt morgen. */
+    private function TransitUhrzeit(string $hhmm, int $jetzt): int
+    {
+        if (preg_match('/^\s*(\d{1,2}):(\d{2})\s*$/', $hhmm, $t) !== 1) {
+            return 0;
+        }
+        $ziel = strtotime(date('Y-m-d', $jetzt) . ' ' . sprintf('%02d:%02d', (int)$t[1], (int)$t[2]));
+        if ($ziel === false) {
+            return 0;
+        }
+        return $ziel < $jetzt ? $ziel + 86400 : $ziel;
+    }
+
+    // ------------------------------------------------------------------
+    // Der Schulweg
+    // ------------------------------------------------------------------
+
+    /**
+     * Richtung und Zielzeit für ein Kind — aus dem Stundenplan.
+     *
+     * EIN Abruf genügt für die ganze Woche: `STPL_GetPlanForDate` liefert die
+     * Woche um das genannte Datum, und jeder Tag trägt sein eigenes (am
+     * 11.09.2026 gegengelesen). Erst wenn darin kein Schultag mehr übrig ist —
+     * freitagabends etwa —, wird die Folgewoche gefragt.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function TransitSchulweg(string $mitglied, int $jetzt, int $puffer): ?array
+    {
+        if ($mitglied === '' || !function_exists('STPL_GetPlanForDate')) {
+            return null;
+        }
+        foreach ([$jetzt, $jetzt + 7 * 86400] as $anker) {
+            foreach ($this->TransitStundenplaene() as $id) {
+                $plan = json_decode((string)@STPL_GetPlanForDate($id, date('Y-m-d', $anker)), true);
+                if (!is_array($plan) || !is_array($plan['children'] ?? null)) {
+                    continue;
+                }
+                foreach ($plan['children'] as $kind) {
+                    if (!is_array($kind) || (string)($kind['userId'] ?? '') !== $mitglied) {
+                        continue;
+                    }
+                    $tage = (array)($kind['days'] ?? []);
+                    usort($tage, static fn(array $a, array $b): int =>
+                        strcmp((string)($a['date'] ?? ''), (string)($b['date'] ?? '')));
+                    foreach ($tage as $tag) {
+                        $datum = trim((string)($tag['date'] ?? ''));
+                        if ($datum === '' || $datum < date('Y-m-d', $jetzt)) {
+                            continue;
+                        }
+                        $weg = TransitCalc::Schulweg($tag, $datum, $jetzt, $puffer);
+                        if ($weg !== null) {
+                            return $weg;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** @return list<int> */
+    private function TransitStundenplaene(): array
+    {
+        $gewaehlt = $this->TransitZahl('TimetableInstanceID', 0);
+        if ($gewaehlt > 0 && @IPS_InstanceExists($gewaehlt)) {
+            return [$gewaehlt];
+        }
+        $ids = [];
+        foreach ((array)@IPS_GetInstanceListByModuleID(self::STUNDENPLAN_GUID) as $id) {
+            // Spiegel-Instanzen übergehen: sie führen dieselben Kinder ein zweites Mal.
+            $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
+            if (is_array($cfg) && (int)($cfg['SourceInstanceID'] ?? 0) === 0) {
+                $ids[] = (int)$id;
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Die Mitgliedsnamen aus dem Gateway — im TAKT geholt, nicht beim Lesen.
+     *
+     * Leer heißt „keine Auskunft", nicht „keine Mitglieder": läuft der Lauf
+     * gerade im Hook des Gateways, kommt der Rückruf nicht hinein. Der Aufrufer
+     * behält dann den alten Stand.
+     *
+     * @return array<string,string>
+     */
+    private function TransitMitglieder(): array
+    {
+        $gw = $this->TransitGateway();
+        if ($gw <= 0 || !function_exists('TGW_GetUsers')) {
+            return [];
+        }
+        $roh = json_decode((string)@TGW_GetUsers($gw), true);
+        if (!is_array($roh)) {
+            return [];
+        }
+        $karte = [];
+        foreach ($roh as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $id = trim((string)($u['id'] ?? ''));
+            $name = trim((string)($u['name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $karte[$id] = $name;
+            }
+        }
+        return $karte;
+    }
+
+    private function TransitGateway(): int
+    {
+        $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($eltern > 0) {
+            return $eltern;
+        }
+        /* Sonst die Instanz mit der NIEDRIGSTEN Kennung: sie bedient die App,
+           und nur sie führt die Mitgliederliste. Dieselbe Regel wie im
+           Stundenplan. */
+        $ids = (array)@IPS_GetInstanceListByModuleID('{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}');
+        if ($ids === []) {
+            return 0;
+        }
+        sort($ids);
+        return (int)$ids[0];
+    }
+
+    // ------------------------------------------------------------------
+    // Auskunft
+    // ------------------------------------------------------------------
+
+    /**
+     * Der fertige Zustand für Kachel, App und Gateway — rein aus dem Bestand.
+     *
+     * Nichts hier ruft nach draußen. Das ist kein Zufall, sondern die
+     * Bedingung dafür, dass diese Funktion auch aus dem Hook des Gateways
+     * heraus vollständige Auskunft gibt.
+     *
+     * @return array<string,mixed>
+     */
+    private function TransitPayload(int $jetzt): array
+    {
+        $bestand = $this->TransitBestand();
+        $cfg     = $this->TransitKonfiguration();
+        $namen   = (array)$bestand['members'];
+
+        $haltestellen = [];
+        foreach ($this->TransitZeilen('Stops') as $z) {
+            $key = $this->TransitSchluessel('stop', $z);
+            $e   = $bestand['entries'][$key] ?? [];
+            $roh = is_array($e['raw'] ?? null) ? $e['raw'] : [];
+            $mitglied = trim((string)($z['member'] ?? ''));
+            $linien = array_values(array_filter(array_map('trim',
+                explode(',', (string)($z['lines'] ?? '')))));
+            $haltestellen[] = [
+                'key'        => $key,
+                'name'       => trim((string)($z['name'] ?? '')),
+                'member'     => $mitglied,
+                'memberName' => (string)($namen[$mitglied] ?? ''),
+                'walk'       => max(0, (int)($z['walk'] ?? 0)),
+                'stale'      => ($e['stale'] ?? false) === true,
+                'fetchedAt'  => (int)($e['at'] ?? 0),
+                'departures' => TransitCalc::Abfahrten($roh, $jetzt,
+                    max(0, (int)($z['walk'] ?? 0)), $linien, max(1, (int)($z['limit'] ?? 8))),
+            ];
+        }
+
+        $strecken = [];
+        foreach ($this->TransitZeilen('Routes') as $z) {
+            $key = $this->TransitSchluessel('route', $z);
+            $e   = $bestand['entries'][$key] ?? [];
+            $roh = is_array($e['raw'] ?? null) ? $e['raw'] : [];
+            $schule = is_array($e['school'] ?? null) ? $e['school'] : null;
+            $mitglied = trim((string)($z['member'] ?? ''));
+            // Eine Ankunftsvorgabe ist eine Zusage: was später kommt, zählt nicht.
+            $nichtNach = ($schule !== null && ($schule['mode'] ?? '') === 'arr')
+                ? (int)$schule['targetAt'] : 0;
+            $strecken[] = [
+                'key'        => $key,
+                'name'       => trim((string)($z['name'] ?? '')),
+                'member'     => $mitglied,
+                'memberName' => (string)($namen[$mitglied] ?? ''),
+                'mode'       => (string)($z['mode'] ?? 'dep'),
+                'school'     => $schule,
+                'stale'      => ($e['stale'] ?? false) === true,
+                'fetchedAt'  => (int)($e['at'] ?? 0),
+                'journeys'   => TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 3)), $nichtNach),
+            ];
+        }
+
+        return [
+            'v'        => 1,
+            'now'      => $jetzt,
+            'view'     => (string)($cfg['DefaultView'] ?? 'departures') === 'routes' ? 'routes' : 'departures',
+            'stops'    => $haltestellen,
+            'routes'   => $strecken,
+            'blocked'  => $this->TransitGesperrt($jetzt),
+        ];
+    }
+}

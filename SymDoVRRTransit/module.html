@@ -1,0 +1,291 @@
+<style>
+/* Symcon injiziert --card-color, --content-color und --accent-color je nach
+   Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets.
+   Gerüst und Scrollrezept sind aus den übrigen SymDo-Kacheln übernommen:
+   dieselben Fallen, dieselbe Lösung. */
+:root {
+  --bg: var(--card-color, #2b2c30);
+  --text: var(--content-color, #ffffff);
+  --akzent: var(--accent-color, #00cdab);
+  --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
+  --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+  --warn: #E53935;
+}
+html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; }
+body {
+  margin: 0 !important; padding: 0 !important;
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: transparent; color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+#wurzel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+
+/* Kopfzeile: Mitglieder links, Umschalter rechts */
+.kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.wer { display: flex; gap: 4px; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.wer button {
+  border: 0; border-radius: 999px; padding: 3px 10px; cursor: pointer;
+  background: var(--zeile); color: var(--text); font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+}
+.wer button.an { background: var(--akzent); color: #fff; }
+.umschalter { display: flex; flex: 0 0 auto; border-radius: 999px; overflow: hidden; background: var(--zeile); }
+.umschalter button {
+  border: 0; padding: 4px 12px; cursor: pointer; background: transparent;
+  color: var(--dezent); font-size: 11px; font-weight: 700;
+}
+.umschalter button.an { background: var(--akzent); color: #fff; }
+
+.liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+/* Hausrezept für Scrollleisten: schmal, Griff in der Akzentfarbe. */
+.liste::-webkit-scrollbar { width: 6px; }
+.liste::-webkit-scrollbar-thumb { background: var(--akzent); border-radius: 3px; }
+.liste::-webkit-scrollbar-track { background: transparent; }
+
+.karte { background: var(--zeile); border-radius: 12px; padding: 8px 10px; }
+.karte .titel {
+  display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;
+  font-size: 12px; font-weight: 700;
+}
+.karte .titel .neben { font-weight: 500; font-size: 11px; color: var(--dezent); }
+.veraltet { color: var(--warn); font-size: 10px; font-weight: 700; }
+
+/* ── Abfahrtstafel ─────────────────────────────────────────────────────── */
+.abfahrt {
+  display: grid; grid-template-columns: 20px 54px 1fr auto; align-items: center;
+  gap: 8px; padding: 4px 0; border-top: 1px solid var(--rand);
+}
+.abfahrt:first-of-type { border-top: 0; }
+.abfahrt .sym { color: var(--dezent); text-align: center; }
+.abfahrt .linie { font-weight: 800; font-size: 12px; }
+.abfahrt .ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.abfahrt .wann { text-align: right; font-weight: 700; white-space: nowrap; }
+.abfahrt .wann .spaet { color: var(--warn); font-size: 11px; margin-left: 3px; }
+.abfahrt .wann .steig { color: var(--dezent); font-weight: 500; font-size: 10px; margin-left: 4px; }
+/* Was mit dem eigenen Fußweg nicht mehr zu schaffen ist, tritt zurück —
+   weggelassen wird es nicht: „der wäre gegangen" ist auch eine Auskunft. */
+.abfahrt.weg { opacity: .45; }
+.abfahrt.entfaellt .linie, .abfahrt.entfaellt .ziel { text-decoration: line-through; }
+
+/* ── Streckenachse ─────────────────────────────────────────────────────── */
+.fahrt { margin-top: 8px; }
+.fahrt:first-of-type { margin-top: 0; }
+.fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 3px; }
+.fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
+.fahrt .zeilen .grund { color: var(--dezent); }
+.balken { position: relative; display: flex; height: 26px; border-radius: 13px; overflow: hidden; background: var(--rand); }
+.stueck {
+  display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;
+  padding: 0 7px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+}
+.stueck.ride { background: var(--akzent); }
+/* Der Fußweg ist kein Fahren: gestrichelt und blass, damit die Zeitachse auf
+   einen Blick sagt, wo man selbst läuft. */
+.stueck.walk {
+  background: color-mix(in srgb, var(--akzent) 22%, transparent);
+  color: var(--text);
+  border: 1px dashed color-mix(in srgb, var(--content-color) 35%, transparent);
+}
+.fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
+.leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
+</style>
+
+<div id="wurzel"><div class="leer">…</div></div>
+
+<script>
+/* In der Visu stehen `translate` und `requestAction` als Top-Level-Bindungen
+   bereit; hier nicht neu deklarieren, sonst kollidiert es. */
+let zustand = { v: 1, now: 0, view: 'departures', stops: [], routes: [], blocked: false };
+let ansicht = null;      // 'departures' | 'routes' — Wahl des Betrachters
+let werFilter = null;    // Mitglieds-Kennung, '' = alle
+
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function symbol(klasse) { return klasse ? '<i class="fa-light ' + esc(klasse) + '"></i>' : ''; }
+
+function merker(name, wert) {
+  try {
+    if (wert === undefined) return window.localStorage.getItem('symdo.vrr.' + name);
+    window.localStorage.setItem('symdo.vrr.' + name, wert);
+  } catch (e) { /* Privates Fenster: dann eben ohne Gedächtnis */ }
+  return null;
+}
+
+/** Alle Mitglieder, die überhaupt etwas haben — in der Reihenfolge des Bestands. */
+function mitglieder() {
+  const gesehen = {};
+  const raus = [];
+  (zustand.stops || []).concat(zustand.routes || []).forEach(function (e) {
+    const id = e.member || '';
+    if (id === '' || gesehen[id]) { return; }
+    gesehen[id] = true;
+    raus.push({ id: id, name: e.memberName || id });
+  });
+  return raus;
+}
+
+function passt(e) {
+  if (werFilter === null || werFilter === '') { return true; }
+  return (e.member || '') === werFilter;
+}
+
+function kopfHtml() {
+  const leute = mitglieder();
+  let wer = '';
+  if (leute.length > 0) {
+    wer = '<button data-wer="" class="' + (werFilter ? '' : 'an') + '">'
+        + symbol('fa-house') + '</button>';
+    leute.forEach(function (m) {
+      wer += '<button data-wer="' + esc(m.id) + '" class="' + (werFilter === m.id ? 'an' : '') + '">'
+           + esc(m.name) + '</button>';
+    });
+  }
+  const hatBeides = (zustand.stops || []).length > 0 && (zustand.routes || []).length > 0;
+  let um = '';
+  if (hatBeides) {
+    um = '<div class="umschalter">'
+       + '<button data-ansicht="departures" class="' + (ansicht === 'routes' ? '' : 'an') + '">'
+       + esc(translate('Departures')) + '</button>'
+       + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
+       + esc(translate('Routes')) + '</button></div>';
+  }
+  return '<div class="kopf"><div class="wer">' + wer + '</div>' + um + '</div>';
+}
+
+function abfahrtenHtml() {
+  const stops = (zustand.stops || []).filter(passt);
+  if (stops.length === 0) { return '<div class="leer">' + esc(translate('No stop set up')) + '</div>'; }
+  return stops.map(function (s) {
+    const zeilen = (s.departures || []).map(function (d) {
+      const klassen = 'abfahrt' + (d.reachable ? '' : ' weg') + (d.cancelled ? ' entfaellt' : '');
+      /* Mit gepflegtem Fußweg zählt „wann muss ich los", sonst „wann fährt es".
+         Das ist die Zahl, auf die man wirklich schaut. */
+      const min = s.walk > 0 ? d.leaveIn : d.countdown;
+      const wann = d.cancelled ? esc(translate('cancelled'))
+        : (min <= 0 ? esc(translate('now')) : min + '&nbsp;' + esc(translate('min')));
+      return '<div class="' + klassen + '" title="' + esc(d.product + ' ' + d.line + ' → ' + d.destination
+             + ', ' + translate('scheduled') + ' ' + d.planned) + '">'
+        + '<span class="sym">' + symbol(d.icon) + '</span>'
+        + '<span class="linie">' + esc(d.line) + '</span>'
+        + '<span class="ziel">' + esc(d.destination) + '</span>'
+        + '<span class="wann">' + wann
+        + (d.delay > 0 ? '<span class="spaet">+' + d.delay + '</span>' : '')
+        + (d.platform ? '<span class="steig">' + esc(translate('Pl.')) + ' ' + esc(d.platform) + '</span>' : '')
+        + '</span></div>';
+    }).join('');
+    return '<div class="karte">'
+      + '<div class="titel"><span>' + esc(s.name) + '</span>'
+      + (s.walk > 0 ? '<span class="neben">' + esc(translate('incl. %s min walk').replace('%s', s.walk)) + '</span>' : '')
+      + (s.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
+      + '</div>'
+      + (zeilen || '<div class="leer">' + esc(translate('no departures')) + '</div>')
+      + '</div>';
+  }).join('');
+}
+
+/** Die Zeitachse einer Verbindung: ein Stück je Abschnitt, breit nach Dauer. */
+function balkenHtml(v) {
+  const gesamt = Math.max(1, v.seconds);
+  return '<div class="balken">' + (v.legs || []).map(function (l) {
+    const anteil = Math.max(6, (l.seconds / gesamt) * 100);
+    const text = l.kind === 'walk' ? (Math.round(l.seconds / 60) + ' ' + translate('min'))
+                                   : (l.line || l.product);
+    return '<div class="stueck ' + esc(l.kind) + '" style="flex:0 0 ' + anteil.toFixed(1) + '%" title="'
+      + esc((l.line ? l.line + ' ' : '') + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
+      + symbol(l.icon) + '<span>' + esc(text) + '</span></div>';
+  }).join('') + '</div>';
+}
+
+function streckenHtml() {
+  const routen = (zustand.routes || []).filter(passt);
+  if (routen.length === 0) { return '<div class="leer">' + esc(translate('No route set up')) + '</div>'; }
+  return routen.map(function (r) {
+    const s = r.school;
+    /* Beim Schulweg sagt die Kopfzeile die Richtung — sie wechselt im Lauf des
+       Tages von selbst, und ohne das Wort wüsste niemand, welche man sieht. */
+    let hinweis = '';
+    if (s) {
+      hinweis = s.direction === 'to'
+        ? translate('to school, be there by %s').replace('%s', s.targetTime)
+        : translate('home, lessons end at %s').replace('%s', s.schoolEnd);
+    }
+    const fahrten = (r.journeys || []).map(function (v) {
+      return '<div class="fahrt">'
+        + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
+        + '<span class="grund">→</span><span class="stark">' + esc(v.arrivalText) + '</span>'
+        + '<span class="grund">' + Math.round(v.seconds / 60) + ' ' + esc(translate('min'))
+        + (v.interchanges > 0
+            ? ' · ' + v.interchanges + ' ' + esc(translate('changes'))
+            : ' · ' + esc(translate('direct'))) + '</span></div>'
+        + balkenHtml(v)
+        + '<div class="fuss"><span>' + esc((v.legs[0] || {}).from || '') + '</span>'
+        + '<span>' + esc((v.legs[v.legs.length - 1] || {}).to || '') + '</span></div>'
+        + '</div>';
+    }).join('');
+    return '<div class="karte">'
+      + '<div class="titel"><span>' + esc(r.name || r.memberName) + '</span>'
+      + (hinweis ? '<span class="neben">' + esc(hinweis) + '</span>' : '')
+      + (r.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
+      + '</div>'
+      + (fahrten || '<div class="leer">' + esc(translate('no journey found')) + '</div>')
+      + '</div>';
+  }).join('');
+}
+
+function zeichne() {
+  if (ansicht === null) {
+    ansicht = merker('ansicht') || zustand.view || 'departures';
+  }
+  if (werFilter === null) { werFilter = merker('wer') || ''; }
+  // Gibt es nur eine Sorte, ist der Umschalter Lärm — dann gilt sie.
+  let jetzt = ansicht;
+  if ((zustand.routes || []).length === 0) { jetzt = 'departures'; }
+  if ((zustand.stops || []).length === 0 && (zustand.routes || []).length > 0) { jetzt = 'routes'; }
+
+  document.getElementById('wurzel').innerHTML =
+      kopfHtml() + '<div class="liste">'
+    + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
+    + '</div>';
+
+  document.querySelectorAll('[data-ansicht]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      ansicht = b.dataset.ansicht; merker('ansicht', ansicht); zeichne();
+    });
+  });
+  document.querySelectorAll('[data-wer]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      werFilter = b.dataset.wer; merker('wer', werFilter); zeichne();
+    });
+  });
+  symboleErsetzen();
+}
+
+function symboleErsetzen() {
+  // Font Awesome ersetzt <i> erst nachträglich durch <svg>; über document.body
+  // und nicht über einen engeren Knoten — mit engerem blieb es im Prüflauf aus.
+  try {
+    if (window.FontAwesome && window.FontAwesome.dom) {
+      window.FontAwesome.dom.i2svg({ node: document.body });
+    }
+  } catch (e) { /* ohne Font Awesome bleiben die Kästchen leer */ }
+}
+
+function handleMessage(daten) {
+  if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
+  if (!daten || typeof daten !== 'object') { return; }
+  zustand = daten;
+  zeichne();
+}
+window.handleMessage = handleMessage;
+
+/* Beim Öffnen einmal melden: das setzt drüben den Zuschauer-Stempel und damit
+   den Minutentakt in Gang. Ohne das stünde die Kachel still, bis der nächste
+   Lauf zufällig vorbeikommt. */
+if (typeof requestAction === 'function') {
+  try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ }
+}
+</script>

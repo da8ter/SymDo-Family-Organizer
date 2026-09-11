@@ -72,6 +72,28 @@ final class TransitCalc
     public const RUECKWEG_NACHLAUF_S = 3 * 3600;
 
     /**
+     * Wie lange eine Abfahrt nach ihrer Zeit noch angezeigt wird.
+     *
+     * Die EFA liefert von sich aus Abfahrten, die schon weg sind — am
+     * 11.09.2026 um 17:02 stand eine von 16:50 in der Antwort, und sortiert war
+     * die Liste auch nicht (17:09, 17:02, 16:50, 17:54 …). Eine Tafel, die
+     * einen abgefahrenen Zug zeigt, ist schlimmer als eine kurze. Eine Minute
+     * Nachsicht bleibt: der Bus „um jetzt" soll noch dastehen.
+     */
+    private const VERGANGEN_S = 60;
+
+    /**
+     * Wie viele bereits verpasste Abfahrten oben stehen bleiben.
+     *
+     * Mit gepflegtem Fußweg sind die nächsten Abfahrten oft schon nicht mehr zu
+     * schaffen — an einem Hauptbahnhof mit fünf Minuten Weg waren es sechs von
+     * sechs. Sie ganz wegzulassen wäre falsch („der wäre gegangen" ist auch
+     * eine Auskunft), sie alle zu zeigen auch: dann steht auf der Tafel nichts,
+     * was man noch erreicht. Zwei bleiben, der Rest macht Platz.
+     */
+    private const VERPASST_MAX = 2;
+
+    /**
      * Abfahrten einer Haltestelle aus einer `XML_DM_REQUEST`-Antwort.
      *
      * @param array<string,mixed> $roh      die geparste Antwort
@@ -124,6 +146,9 @@ final class TransitCalc
                abgezogenem Fußweg ist es die Zahl, die wirklich zählt: wie lange
                man noch am Frühstückstisch sitzen darf. */
             $inMinuten = (int)floor(($ist - $jetzt) / 60);
+            if (($jetzt - $ist) > self::VERGANGEN_S) {
+                continue;
+            }
 
             $raus[] = [
                 'line'        => $linie,
@@ -145,7 +170,28 @@ final class TransitCalc
         }
 
         usort($raus, static fn(array $a, array $b): int => $a['at'] <=> $b['at']);
-        return $hoechstens > 0 ? array_slice($raus, 0, $hoechstens) : $raus;
+        if ($hoechstens <= 0) {
+            return $raus;
+        }
+        /* Die Obergrenze zählt das Erreichbare: was der Fußweg schon gefressen
+           hat, darf die Tafel nicht füllen. */
+        $gewaehlt = [];
+        $verpasst = 0;
+        foreach ($raus as $a) {
+            if (!$a['reachable'] && !$a['cancelled']) {
+                if ($verpasst >= self::VERPASST_MAX) {
+                    continue;
+                }
+                $verpasst++;
+                $gewaehlt[] = $a;
+                continue;
+            }
+            if (count($gewaehlt) - $verpasst >= $hoechstens) {
+                break;
+            }
+            $gewaehlt[] = $a;
+        }
+        return $gewaehlt;
     }
 
     /**

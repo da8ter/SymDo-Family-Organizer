@@ -1,0 +1,407 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/libs/TransitStore.php';
+
+/**
+ * SymDo VRR Transit — Abfahrten, Strecken und der Schulweg als HTML-Kachel.
+ *
+ * Die Rheinbahn hat keine eigene öffentliche Schnittstelle; die
+ * Fahrplanauskunft des VRR (EFA) liefert beides mit Echtzeit und ohne
+ * Schlüssel. Zwei Ansichten in einer Kachel: die Abfahrtstafel einer
+ * Haltestelle und die Zeitachse einer Verbindung.
+ *
+ * Das Stück, das eine Fahrplan-App nicht kann: **SymDo kennt den Stundenplan.**
+ * Eine Strecke mit dem Modus „Schulweg" fragt ihn nach Beginn und Ende des
+ * Schultags und zeigt von selbst die richtige Richtung — morgens die
+ * Verbindung, mit der das Kind pünktlich ankommt, ab Unterrichtsbeginn die für
+ * den Rückweg. Gezählt wird dabei nur, was wirklich stattfindet: fällt die
+ * erste Stunde aus, darf es später los.
+ *
+ * ABGERUFEN WIRD IN DIESER INSTANZ, nicht im Gateway. Symcon führt je Instanz
+ * genau eine Sache zur Zeit aus — ein Abruf von einer halben Sekunde im Gateway
+ * ließe jede Anfrage der App so lange warten.
+ */
+class SymDoVRRTransit extends IPSModuleStrict
+{
+    use TransitStore;
+
+    private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
+
+    /**
+     * „connect" statt „require": an EINEM Gateway hängen mehrere Kacheln.
+     * (ConnectParent/RequireParent gibt es für IPSModuleStrict nicht.)
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
+    public function Create(): void
+    {
+        parent::Create();
+
+        // Pflicht, damit Symcon die HTML-Kachel aus GetVisualizationTile() rendert
+        $this->SetVisualizationType(1);
+
+        $this->TransitCreate();
+    }
+
+    public function ApplyChanges(): void
+    {
+        parent::ApplyChanges();
+
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->RegisterMessage(0, IPS_KERNELSTARTED);
+            return;
+        }
+
+        $this->GatewayEinmaligVerbinden();
+        $this->TransitTaktSetzen(time());
+        $this->PushState();
+    }
+
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        if ($Message === IPS_KERNELSTARTED) {
+            $this->ApplyChanges();
+        }
+    }
+
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        $jetzt = time();
+        switch ($Ident) {
+            case 'Refresh':
+                $this->TransitAbrufen($jetzt);
+                /* Den Takt NEU setzen: der Zuschauer kann inzwischen weg sein,
+                   und ein Timer, der einmal feuert und dann steht, holt nie
+                   wieder etwas. */
+                $this->TransitTaktSetzen($jetzt);
+                $this->PushState();
+                return;
+
+            case 'GetState':
+                /* Die Kachel fragt beim Öffnen, und das Gateway stößt seine
+                   Kacheln hiermit an. Beides heißt: jemand sieht hin. */
+                $this->TransitGesehen($jetzt);
+                $this->TransitTaktSetzen($jetzt);
+                $this->PushState();
+                return;
+
+            case 'StopSearch':
+                $this->HaltestellenSuchen((string)$Value);
+                return;
+
+            case 'StopAdd':
+                $this->HaltestelleUebernehmen((string)$Value);
+                return;
+        }
+        parent::RequestAction($Ident, $Value);
+    }
+
+    // ------------------------------------------------------------------
+    // Öffentliche Auskunft
+    // ------------------------------------------------------------------
+
+    /**
+     * Der Zustand für andere Module — das Gateway holt ihn sich hier.
+     *
+     * Rein lesend und ohne Rückruf nach draußen: die Funktion läuft auch dann
+     * vollständig, wenn sie IM Hook des Gateways aufgerufen wird, wo kein
+     * Aufruf mehr in die beschäftigte Gateway-Instanz hineinkäme.
+     */
+    public function GetBoard(): string
+    {
+        $jetzt = time();
+        $this->TransitGesehen($jetzt);
+        $this->TransitTaktSetzen($jetzt);
+        return (string)json_encode($this->TransitPayload($jetzt),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    /** Von Hand abrufen — für Skripte und für den Knopf im Formular. */
+    public function Refresh(): void
+    {
+        $jetzt = time();
+        $this->TransitGesehen($jetzt);
+        $this->TransitAbrufen($jetzt);
+        $this->TransitTaktSetzen($jetzt);
+        $this->PushState();
+    }
+
+    // ------------------------------------------------------------------
+    // Kachel
+    // ------------------------------------------------------------------
+
+    public function GetVisualizationTile(): string
+    {
+        $pfad = __DIR__ . '/module.html';
+        $html = @file_get_contents($pfad);
+        if (!is_string($html)) {
+            $this->LogMessage('GetVisualizationTile: module.html nicht lesbar, Pfad=' . $pfad, KL_WARNING);
+            return '';
+        }
+        /* JSON_HEX_TAG ist PFLICHT: die Nutzlast steht in einem <script>-Block,
+           und ein „</script>" in einem Haltestellennamen beendete ihn —
+           handleMessage liefe nie, der Rest landete als HTML in der Visu. */
+        $zustand = json_encode($this->TransitPayload(time()),
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        return $html . '<script>handleMessage(' . $zustand . ');</script>';
+    }
+
+    private function PushState(): void
+    {
+        $this->UpdateVisualizationValue((string)json_encode($this->TransitPayload(time()),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    // ------------------------------------------------------------------
+    // Formular
+    // ------------------------------------------------------------------
+
+    public function GetConfigurationForm(): string
+    {
+        $kinder = $this->MitgliederOptionen();
+
+        $haltestellen = [
+            'type'    => 'List',
+            'name'    => 'Stops',
+            'caption' => $this->Translate('Stops'),
+            'rowCount' => 5,
+            'add'     => true,
+            'delete'  => true,
+            'columns' => [
+                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '180px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Stop id'), 'name' => 'stopId', 'width' => '200px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
+                ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
+                 'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
+                ['caption' => $this->Translate('Count'), 'name' => 'limit', 'width' => '90px',
+                 'add' => 6, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 20]],
+            ],
+            'values' => [],
+        ];
+
+        $strecken = [
+            'type'    => 'List',
+            'name'    => 'Routes',
+            'caption' => $this->Translate('Routes'),
+            'rowCount' => 5,
+            'add'     => true,
+            'delete'  => true,
+            'columns' => [
+                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '150px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '150px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
+                ['caption' => $this->Translate('From'), 'name' => 'from', 'width' => '190px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('To'), 'name' => 'to', 'width' => '190px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('When'), 'name' => 'mode', 'width' => '150px',
+                 'add' => 'school', 'edit' => ['type' => 'Select', 'options' => [
+                     ['caption' => $this->Translate('School run (from the timetable)'), 'value' => 'school'],
+                     ['caption' => $this->Translate('Leave now'), 'value' => 'dep'],
+                     ['caption' => $this->Translate('Arrive by …'), 'value' => 'arr'],
+                 ]]],
+                ['caption' => $this->Translate('Time'), 'name' => 'time', 'width' => '90px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Buffer (min)'), 'name' => 'buffer', 'width' => '100px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
+                 'add' => 3, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 6]],
+            ],
+            'values' => [],
+        ];
+
+        $form = [
+            'elements' => [
+                ['type' => 'Label', 'caption' =>
+                    $this->Translate('Departures and journeys from the VRR journey planner (EFA). ')
+                    . $this->Translate('It covers Rheinbahn and every other operator in the network, ')
+                    . $this->Translate('needs no key and delivers real-time data.')],
+
+                ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Find a stop'), 'expanded' => false,
+                 'items' => [
+                     ['type' => 'Label', 'caption' =>
+                         $this->Translate('Include the town — it narrows the hits a lot: "Düsseldorf Benrath" ')
+                         . $this->Translate('instead of just "Benrath".')],
+                     ['type' => 'RowLayout', 'items' => [
+                         ['type' => 'ValidationTextBox', 'name' => 'StopQuery', 'caption' => $this->Translate('Search'), 'width' => '320px'],
+                         ['type' => 'Button', 'caption' => $this->Translate('Find'),
+                          'onClick' => 'IPS_RequestAction($id, "StopSearch", $StopQuery);'],
+                     ]],
+                     ['type' => 'Select', 'name' => 'StopHit', 'caption' => $this->Translate('Hits'), 'width' => '520px',
+                      'options' => [['caption' => $this->Translate('— nothing searched yet —'), 'value' => '']]],
+                     ['type' => 'Button', 'caption' => $this->Translate('Add as a stop'),
+                      'onClick' => 'IPS_RequestAction($id, "StopAdd", $StopHit);'],
+                     ['type' => 'Label', 'name' => 'StopStatus', 'caption' => ' '],
+                     ['type' => 'Label', 'caption' =>
+                         $this->Translate('For a route, copy the id from here into the "From" and "To" columns. ')
+                         . $this->Translate('Instead of a stop you can put your own front door there as coordinates, ')
+                         . $this->Translate('in the form "51.2217,6.7763" (latitude, longitude — the way any map app shows them).')],
+                 ]],
+
+                $haltestellen,
+                $strecken,
+
+                ['type' => 'ExpansionPanel', 'caption' => $this->Translate('School run'), 'expanded' => false, 'items' => [
+                    ['type' => 'Label', 'caption' =>
+                        $this->Translate('A route in "school run" mode needs no time: it comes from the ')
+                        . $this->Translate('child\'s timetable. Before lessons start it shows the journey to ')
+                        . $this->Translate('school, afterwards the one home — start and destination swap over. ')
+                        . $this->Translate('Only what actually takes place counts: if the first lesson is cancelled, ')
+                        . $this->Translate('the child may leave later; if the last one is, it goes home earlier.')],
+                    ['type' => 'NumberSpinner', 'name' => 'SchoolBuffer', 'caption' => $this->Translate('Buffer (minutes)'),
+                     'minimum' => 0, 'maximum' => 60],
+                    ['type' => 'Label', 'caption' =>
+                        $this->Translate('On the way there it means "arrive this many minutes before lessons start", ')
+                        . $this->Translate('on the way back "this many minutes from the classroom to the stop". ')
+                        . $this->Translate('Each route may deviate from it.')],
+                    ['type' => 'SelectInstance', 'name' => 'TimetableInstanceID',
+                     'caption' => $this->Translate('Timetable (empty = automatic)')],
+                ]],
+
+                ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Appearance'), 'expanded' => false, 'items' => [
+                    ['type' => 'Select', 'name' => 'DefaultView', 'caption' => $this->Translate('View when opening'),
+                     'options' => [
+                         ['caption' => $this->Translate('Departures'), 'value' => 'departures'],
+                         ['caption' => $this->Translate('Routes'), 'value' => 'routes'],
+                     ]],
+                    ['type' => 'Label', 'caption' =>
+                        $this->Translate('Fetched once a minute, but only while the tile or the app is ')
+                        . $this->Translate('open. The school run is also fetched in the morning without anyone watching, so ')
+                        . $this->Translate('it is already there at the first glance.')],
+                ]],
+            ],
+            'actions' => [
+                ['type' => 'Button', 'caption' => $this->Translate('Fetch now'),
+                 'onClick' => 'SDVT_Refresh($id);'],
+            ],
+            'status' => [],
+        ];
+
+        return (string)json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Die Familienmitglieder als Auswahl.
+     *
+     * Im FORMULAR ist der Rückruf ins Gateway unbedenklich: es läuft in der
+     * Konsole und nicht im Hook. Kommt nichts, bleibt die Auswahl bei „alle" —
+     * eine leere Antwort heißt „keine Auskunft", nicht „keine Mitglieder".
+     *
+     * @return list<array{caption:string,value:string}>
+     */
+    private function MitgliederOptionen(): array
+    {
+        $raus = [['caption' => $this->Translate('Whole family'), 'value' => '']];
+        foreach ($this->TransitMitglieder() as $id => $name) {
+            $raus[] = ['caption' => $name, 'value' => $id];
+        }
+        return $raus;
+    }
+
+    private function HaltestellenSuchen(string $suche): void
+    {
+        $suche = trim($suche);
+        if ($suche === '') {
+            $this->UpdateFormField('StopStatus', 'caption', $this->Translate('Please enter a name.'));
+            return;
+        }
+        $antwort = Efa::Stopfinder($suche);
+        if (($antwort['ok'] ?? false) !== true) {
+            $this->UpdateFormField('StopStatus', 'caption',
+                $this->Translate('The journey planner is not answering: ') . (string)($antwort['message'] ?? ''));
+            return;
+        }
+        $treffer = TransitCalc::Haltestellen((array)($antwort['data'] ?? []), 20);
+        if ($treffer === []) {
+            $this->UpdateFormField('StopStatus', 'caption', $this->Translate('No stop found.'));
+            $this->UpdateFormField('StopHit', 'options',
+                json_encode([['caption' => $this->Translate('— nothing found —'), 'value' => '']]));
+            return;
+        }
+        $optionen = [];
+        foreach ($treffer as $t) {
+            $optionen[] = ['caption' => $t['name'] . '  (' . $t['id'] . ')', 'value' => $t['id']];
+        }
+        $this->UpdateFormField('StopHit', 'options', json_encode($optionen));
+        $this->UpdateFormField('StopHit', 'value', $treffer[0]['id']);
+        $this->UpdateFormField('StopStatus', 'caption',
+            count($treffer) . $this->Translate(' hits, the best one is at the top.'));
+    }
+
+    /**
+     * Den gewählten Treffer als Zeile in die Haltestellenliste schreiben.
+     *
+     * Geschrieben wird die EIGENSCHAFT und danach übernommen — dasselbe
+     * Vorgehen wie beim Nachtragen der Fächer im Stundenplan. Anders ginge es
+     * nicht: eine Liste im Formular lässt sich von außen nicht ergänzen, ohne
+     * die dort gerade bearbeiteten Zeilen zu überschreiben.
+     */
+    private function HaltestelleUebernehmen(string $stopId): void
+    {
+        $stopId = trim($stopId);
+        if ($stopId === '') {
+            $this->UpdateFormField('StopStatus', 'caption', $this->Translate('Search first and pick a hit.'));
+            return;
+        }
+        $zeilen = $this->TransitZeilen('Stops');
+        foreach ($zeilen as $z) {
+            if (trim((string)($z['stopId'] ?? '')) === $stopId) {
+                $this->UpdateFormField('StopStatus', 'caption', $this->Translate('This stop is already in the list.'));
+                return;
+            }
+        }
+        // Den Namen aus dem Treffer selbst holen — er steht in der Auswahl.
+        $name = $stopId;
+        $antwort = Efa::Stopfinder($stopId);
+        if (($antwort['ok'] ?? false) === true) {
+            foreach (TransitCalc::Haltestellen((array)($antwort['data'] ?? []), 5) as $t) {
+                if ($t['id'] === $stopId) {
+                    $name = $t['name'];
+                    break;
+                }
+            }
+        }
+        $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'member' => '',
+                     'lines' => '', 'walk' => 0, 'limit' => 6];
+        @IPS_SetProperty($this->InstanceID, 'Stops',
+            (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+        @IPS_ApplyChanges($this->InstanceID);
+        $this->UpdateFormField('StopStatus', 'caption',
+            $this->Translate('Added: ') . $name . $this->Translate('. Close the form once and open it again.'));
+    }
+
+    // ------------------------------------------------------------------
+
+    /**
+     * Einmalig das Gateway als Eltern-Instanz eintragen. Das Flag steht VOR dem
+     * Verbinden: IPS_ConnectInstance löst ApplyChanges erneut aus.
+     */
+    private function GatewayEinmaligVerbinden(): void
+    {
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+        if ((bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            return;
+        }
+        @$this->WriteAttributeBoolean('ParentMigrated', true);
+        if ((int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0) > 0) {
+            return;
+        }
+        $gateway = $this->TransitGateway();
+        if ($gateway > 0 && @IPS_InstanceExists($gateway)) {
+            @IPS_ConnectInstance($this->InstanceID, $gateway);
+        }
+    }
+}

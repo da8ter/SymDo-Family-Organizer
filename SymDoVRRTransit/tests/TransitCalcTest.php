@@ -100,6 +100,29 @@ $knapp = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 20);
 pruefe('20 Minuten Fußweg: genau erreichbar',
     [$knapp[2]['leaveIn'], $knapp[2]['reachable']], [0, true]);
 
+/* Die EFA liefert von sich aus Abfahrten, die schon weg sind — um 17:02 stand
+   eine von 16:50 in der Antwort. Sie gehören nicht auf eine Tafel. */
+$spaeter = TransitCalc::Abfahrten(fixture('abfahrten'), strtotime('2026-09-11 16:00:00'));
+pruefe('vergangene Abfahrten fallen weg', array_column($spaeter, 'line'), ['RE4']);
+pruefe('eine Minute Nachsicht: die Abfahrt „jetzt" bleibt',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), strtotime('2026-09-11 15:54:30'))), 3);
+pruefe('nach der Nachsicht ist sie weg',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), strtotime('2026-09-11 15:55:30'))), 2);
+
+/* Mit Fußweg sind die nächsten Abfahrten oft schon verpasst. Höchstens zwei
+   davon bleiben stehen; die Obergrenze zählt, was man noch erreicht. */
+// 20 Minuten Fußweg: die ersten beiden sind weg, der RE4 in 20 Minuten geht
+// gerade noch. Bestellt ist EINE erreichbare — dazu kommen die zwei verpassten.
+$gemischt = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 20, [], 1);
+pruefe('zwei verpasste und eine erreichbare',
+    array_map(static fn(array $a): bool => $a['reachable'], $gemischt), [false, false, true]);
+// 25 Minuten: gar nichts ist mehr zu schaffen — dann bleiben nur die zwei.
+pruefe('ist nichts erreichbar, bleiben zwei stehen',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 25, [], 6)), 2);
+// Ohne Fußweg zählt die Obergrenze ganz normal.
+pruefe('ohne Fußweg zählt die Obergrenze schlicht',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 2)), 2);
+
 /* Eine unbekannte Haltestelle antwortet mit HTTP 200 und einer leeren Liste,
    nicht mit einem Fehler. Der Aufrufer erkennt den Fall nur hieran. */
 pruefe('unbekannte Haltestelle: leere Liste statt Fehler',
