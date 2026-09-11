@@ -219,10 +219,14 @@ $wunsch = ['familyName' => 'Sprick',
            'access' => true, 'school' => 'untis'];
 $q = SetupPlan::Absichten($wunsch, $leer, ['id-anna', 'id-tim']);
 pruefe('das Gateway wird angelegt', $q['schritte'][0]['aktion'], 'anlegen');
-pruefe('die Reihenfolge steht', kurz($q), [
+/* Der Wunsch nennt fuenf Bausteine — im Plan stehen sieben: „untis" bringt
+   Stundenplan und Hausaufgaben mit, und beide stehen VOR dem, was sie braucht. */
+pruefe('die Reihenfolge steht, samt mitgezogener Voraussetzungen', kurz($q), [
     'gateway=anlegen', 'mitglieder=schreiben', 'gateway-daten=schreiben',
     'baustein:shopping=anlegen', 'baustein:todo=anlegen', 'baustein:meal=anlegen',
-    'baustein:voice=anlegen', 'baustein:webapp=anlegen', 'zugang=erzeugen',
+    'baustein:timetable=anlegen', 'baustein:homework=anlegen',
+    'baustein:voice=anlegen', 'baustein:webapp=anlegen',
+    'schule=einrichten', 'zugang=erzeugen',
 ]);
 pruefe('der Zugang ist der LETZTE Schritt',
     $q['schritte'][count($q['schritte']) - 1]['art'], 'zugang');
@@ -266,6 +270,67 @@ pruefe('nur der gewählte Baustein steht im Plan',
     ['baustein:notes=anlegen']);
 pruefe('ohne Zugangswunsch kein Zugangsschritt',
     in_array('zugang=erzeugen', kurz($s), true), false);
+
+// ── Abhängigkeiten ─────────────────────────────────────────────────────────
+$a = SetupPlan::AbhaengigkeitenSchliessen(['homework' => true]);
+pruefe('Hausaufgaben ziehen den Stundenplan mit',
+    array_keys($a['bausteine']), ['timetable', 'homework']);
+pruefe('… und sagen, was dazukam', $a['dazu'], ['timetable']);
+pruefe('der Essensplan zieht die Einkaufsliste mit',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['meal' => true])['bausteine']),
+    ['shopping', 'meal']);
+pruefe('der Ämtchenplan zieht die Routinen mit',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['chores' => true])['bausteine']),
+    ['routines', 'chores']);
+pruefe('der Sprachassistent zieht beide Listen mit',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['voice' => true])['bausteine']),
+    ['shopping', 'todo', 'voice']);
+pruefe('schon Gewähltes kommt nicht doppelt',
+    SetupPlan::AbhaengigkeitenSchliessen(['timetable' => true, 'homework' => true])['dazu'], []);
+pruefe('ein abgewähltes Kästchen zählt nicht',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['meal' => false])['bausteine']), []);
+pruefe('Unsinn wird ignoriert',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['gibtsnicht' => true])['bausteine']), []);
+pruefe('WebUntis braucht Stundenplan und Hausaufgaben',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen([], 'untis')['bausteine']),
+    ['timetable', 'homework']);
+pruefe('LOGINEO braucht Klassenseiten, Hausaufgaben — und über sie den Stundenplan',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen([], 'moodle')['bausteine']),
+    ['timetable', 'homework', 'edumaps']);
+pruefe('die Reihenfolge bleibt die der Tabelle',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['webapp' => true, 'shopping' => true])['bausteine']),
+    ['shopping', 'webapp']);
+
+// ── Der Plan zieht die Abhängigkeiten mit ──────────────────────────────────
+$k = SetupPlan::Absichten(
+    ['members' => [], 'bausteine' => ['homework' => true], 'school' => 'none'],
+    ['runlevel' => BEREIT, 'gateways' => [16011], 'users' => [['name' => 'Tim', 'id' => 't1']]]);
+pruefe('der Stundenplan steht im Plan, obwohl niemand ihn ankreuzte',
+    array_values(array_filter(kurz($k), static fn(string $x): bool => str_starts_with($x, 'baustein:'))),
+    ['baustein:timetable=anlegen', 'baustein:homework=anlegen']);
+
+// ── Schule und Einwilligung als eigene Schritte ────────────────────────────
+$sch = SetupPlan::Absichten(
+    ['members' => [], 'bausteine' => [], 'school' => 'moodle', 'schoolChild' => 't1',
+     'ai' => ['provider' => 'anthropic', 'hasKey' => true], 'aiConsent' => true],
+    ['runlevel' => BEREIT, 'gateways' => [16011], 'users' => [['name' => 'Tim', 'id' => 't1']]]);
+pruefe('die Schulanbindung ist ein Schritt',
+    in_array('schule=einrichten', kurz($sch), true), true);
+pruefe('… mit System und Kind',
+    array_values(array_filter($sch['schritte'], static fn(array $x): bool => $x['art'] === 'schule'))[0]['kind'], 't1');
+pruefe('die Einwilligung ist der letzte Schritt vor dem Zugang',
+    in_array('einwilligung=erteilen', kurz($sch), true), true);
+pruefe('mit Einwilligung darf die KI an',
+    $sch['schritte'][2]['ai'], ['provider' => 'anthropic', 'enabled' => true]);
+pruefe('ohne Einwilligung bleibt die KI aus',
+    SetupPlan::Absichten(
+        ['members' => [], 'bausteine' => [], 'ai' => ['provider' => 'anthropic', 'hasKey' => true]],
+        ['runlevel' => BEREIT, 'gateways' => [16011], 'users' => [['name' => 'T', 'id' => 't1']]]
+    )['schritte'][2]['ai'], ['provider' => 'anthropic', 'enabled' => false]);
+pruefe('ohne Einwilligung auch kein Einwilligungsschritt',
+    in_array('einwilligung=erteilen', kurz(SetupPlan::Absichten(
+        ['members' => [], 'bausteine' => []],
+        ['runlevel' => BEREIT, 'gateways' => [16011], 'users' => [['name' => 'T', 'id' => 't1']]])), true), false);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

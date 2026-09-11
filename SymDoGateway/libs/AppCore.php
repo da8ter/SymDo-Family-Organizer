@@ -350,6 +350,34 @@ trait AppCore
         return $result;
     }
 
+    /**
+     * Der Einrichtungsstand, rein lesend — für den Installationsassistenten.
+     *
+     * Er kann die ATTRIBUTE dieser Instanz nicht lesen und wüsste sonst nicht,
+     * ob seine Einwilligung wirklich angekommen ist. Alles hier ist eine
+     * Auskunft, nichts wird verändert.
+     */
+    public function GetSetupState(): string
+    {
+        $users = [];
+        foreach ($this->LoadUsers() as $u) {
+            $users[] = [
+                'id'      => (string)($u['id'] ?? ''),
+                'name'    => (string)($u['name'] ?? ''),
+                'persona' => (string)($u['persona'] ?? ''),
+            ];
+        }
+        return (string)json_encode([
+            'owner'       => $this->AppApiOwnerID(),
+            'isOwner'     => $this->OwnsAppApi(),
+            'users'       => $users,
+            'children'    => count(array_filter($users, static fn(array $u): bool => $u['persona'] === 'child')),
+            'aiAccepted'  => $this->AiPrivacyAccepted(),
+            'aiStorable'  => $this->AiPrivacyStorable(),
+            'connectUrl'  => $this->GetConnectUrl(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     /** Users as JSON for other modules (e.g. the tile visualization). */
     public function GetUsers(): string
     {

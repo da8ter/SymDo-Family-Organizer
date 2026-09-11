@@ -141,12 +141,9 @@ class SymDoSetup extends IPSModuleStrict
     private function Einleitung(): array
     {
         $zeilen = [
-            $this->Translate('This assistant asks what your family wants to use and sets it up in one go.'),
-            $this->Translate('1. Family members — first name, role, birthday. Without a member almost nothing in SymDo makes sense.'),
-            $this->Translate('2. What you want to use — the assistant creates exactly the missing instances.'),
-            $this->Translate('3. Access for the app and the browser.'),
-            $this->Translate('4. School and AI — the assistant prepares them; credentials stay in the gateway.'),
-            $this->Translate('Nothing is written until the last page. Existing instances and members are recognised and never duplicated, so running the assistant again is harmless.'),
+            $this->Translate('SymDo brings the whole family together: tasks, shopping, appointments, timetable, homework, notes — and a smart helper that turns letters from school into appointments.'),
+            $this->Translate('The assistant asks a handful of questions and sets everything up for you.'),
+            $this->Translate('You can start it again whenever you like. Nothing is created twice.'),
         ];
         if (!$this->KannSeiten()) {
             array_unshift($zeilen, $this->Translate('The guided pages with Back and Next need Symcon 9.1 — here the same steps are listed one below the other.'));
@@ -169,34 +166,30 @@ class SymDoSetup extends IPSModuleStrict
         return [
             [
                 'name'    => 'welcome',
-                'caption' => $this->Translate('Welcome'),
+                'caption' => $this->Translate('Welcome to SymDo'),
                 'items'   => [
+                    ['type' => 'Label', 'caption' => $this->Translate('The family centre for Symcon: tasks, shopping, appointments, timetable, homework and notes — on every phone, tablet and screen in the house.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('A few minutes and you are set up. Let us go.')],
                     ['type' => 'Label', 'name' => 'WelcomeState', 'caption' => $this->BestandText()],
-                    ['type' => 'Label', 'caption' => $this->Translate('Nothing is written until the last page.')],
                 ],
                 'nextPage' => 'family',
             ],
             [
                 'name'    => 'family',
-                'caption' => $this->Translate('Family'),
+                'caption' => $this->Translate('Your family'),
                 'items'   => [
-                    ['type' => 'Label', 'caption' => $this->Translate('Enter one member at a time and press Add. Members that already exist in the gateway are kept.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Everyone gets their own face, their own tasks and their own view. Add one member at a time.')],
+                    ['type' => 'Label', 'name' => 'MemberExisting', 'caption' => $this->VorhandeneMitgliederText()],
                     ['type' => 'ValidationTextBox', 'name' => 'MemberName', 'caption' => $this->Translate('First name')],
                     ['type' => 'ValidationTextBox', 'name' => 'MemberLastName', 'caption' => $this->Translate('Last name')],
                     ['type' => 'Select', 'name' => 'MemberPersona', 'caption' => $this->Translate('Role'),
                      'options' => $this->RollenOptionen()],
                     ['type' => 'Button', 'name' => 'MemberAdd', 'caption' => $this->Translate('Add member'),
-                     /* NUR Textfelder und Auswahlen: ein Datumsobjekt
-                        (SelectDate) laesst sich nicht als `$Feld` in ein
-                        PHP-Skript einsetzen. Der Geburtstag ist deshalb kein
-                        Teil des Assistenten — er gehoert ohnehin dorthin, wo
-                        SelectDate zu Hause ist: in die Mitgliederliste des
-                        Gateways. Ein zweiter Lauf traegt ihn dort nicht zu. */
                      'onClick' => 'IPS_RequestAction(' . $ich . ', "MemberAdd", json_encode(['
                         . '"name" => $MemberName, "lastName" => $MemberLastName,'
                         . '"persona" => $MemberPersona]));'],
                     ['type' => 'Label', 'name' => 'MemberList', 'caption' => $this->MitgliederText()],
-                    ['type' => 'Button', 'name' => 'MemberClear', 'caption' => $this->Translate('Clear the collected members'),
+                    ['type' => 'Button', 'name' => 'MemberClear', 'caption' => $this->Translate('Start the list over'),
                      'onClick' => 'IPS_RequestAction(' . $ich . ', "MemberClear", "");'],
                 ],
                 'validate' => 'return SDSU_ValidateFamily(' . $ich . ');',
@@ -204,66 +197,90 @@ class SymDoSetup extends IPSModuleStrict
             ],
             [
                 'name'    => 'modules',
-                'caption' => $this->Translate('What do you want to use?'),
+                'caption' => $this->Translate('What would you like to use?'),
                 'items'   => array_merge(
-                    [['type' => 'Label', 'caption' => $this->Translate('Only the missing instances are created. What already exists stays untouched.')]],
-                    $this->BausteinKaestchen()
+                    [['type' => 'Label', 'caption' => $this->Translate('Every building block is its own tile. Pick what fits — you can add more at any time.')]],
+                    $this->BausteinKaestchen(),
+                    [['type' => 'Label', 'name' => 'ModuleHint', 'caption' => $this->BausteinHinweis()]]
                 ),
                 'onConfirm' => 'IPS_RequestAction(' . $ich . ', "Modules", json_encode(' . $this->BausteinPayload() . '));',
                 'nextPage'  => 'access',
             ],
             [
                 'name'    => 'access',
-                'caption' => $this->Translate('Access'),
+                'caption' => $this->Translate('Your access'),
                 'items'   => [
-                    ['type' => 'Label', 'caption' => $this->Translate('The assistant can create one access at the end. The code is valid for ten minutes and replaces a pending pairing, so it is created last.')],
-                    ['type' => 'CheckBox', 'name' => 'WantAccess', 'caption' => $this->Translate('Create an access at the end')],
+                    ['type' => 'Label', 'caption' => $this->Translate('The SymDo web app needs an access: it is what opens SymDo on a phone, a tablet or any browser. Without it the app cannot connect.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('The assistant creates the code at the very end and shows it in the report. It is valid for ten minutes — scan it and you are in.')],
+                    ['type' => 'CheckBox', 'name' => 'WantAccess', 'caption' => $this->Translate('Create an access for the web app'), 'value' => true],
                 ],
                 'onConfirm' => 'IPS_RequestAction(' . $ich . ', "Access", json_encode(["want" => $WantAccess]));',
                 'nextPage'  => 'school',
             ],
             [
                 'name'    => 'school',
-                'caption' => $this->Translate('School and AI'),
+                'caption' => $this->Translate('School'),
                 'items'   => [
-                    ['type' => 'Label', 'caption' => $this->Translate('The assistant creates the instances. User names, passwords and the pupil assignment stay in the gateway — they need a human decision.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Timetable, substitutions and homework straight from school — every morning, without typing.')],
                     ['type' => 'Select', 'name' => 'School', 'caption' => $this->Translate('School system'),
                      'options' => [
-                         ['value' => 'none', 'caption' => $this->Translate('None')],
+                         ['value' => 'none', 'caption' => $this->Translate('Not now')],
                          ['value' => 'untis', 'caption' => 'WebUntis'],
                          ['value' => 'moodle', 'caption' => 'LOGINEO NRW LMS'],
                      ]],
+                    ['type' => 'Select', 'name' => 'SchoolChild', 'caption' => $this->Translate('For which child?'),
+                     'options' => $this->KinderOptionen()],
+                    ['type' => 'ValidationTextBox', 'name' => 'SchoolServer', 'caption' => $this->Translate('Server or address'),
+                     'validate' => '^$|^[A-Za-z0-9.\\-]+(/.*)?$'],
+                    ['type' => 'ValidationTextBox', 'name' => 'SchoolName', 'caption' => $this->Translate('School name (WebUntis)')],
+                    ['type' => 'ValidationTextBox', 'name' => 'SchoolUser', 'caption' => $this->Translate('User name')],
+                    ['type' => 'PasswordTextBox', 'name' => 'SchoolPassword', 'caption' => $this->Translate('Password')],
+                    ['type' => 'Label', 'caption' => $this->Translate('WebUntis: server such as herakles.webuntis.com and the school name. LOGINEO: the address of your school server.')],
+                ],
+                'validate'  => 'return SDSU_ValidateSchool(' . $ich . ', $School, $SchoolServer, $SchoolUser, $SchoolPassword);',
+                'onConfirm' => 'IPS_RequestAction(' . $ich . ', "School", json_encode(["school" => $School,'
+                    . ' "child" => $SchoolChild, "server" => $SchoolServer, "name" => $SchoolName,'
+                    . ' "user" => $SchoolUser, "password" => $SchoolPassword]));',
+                'nextPage'  => 'ai',
+            ],
+            [
+                'name'    => 'ai',
+                'caption' => $this->Translate('Smart helpers'),
+                'items'   => [
+                    ['type' => 'Label', 'caption' => $this->Translate('Photograph a letter from school, forward an e-mail, drop in a recipe link — SymDo turns it into appointments, tasks and notes. You confirm, SymDo files it.')],
                     ['type' => 'Select', 'name' => 'AiProvider', 'caption' => $this->Translate('AI provider'),
                      'options' => [
-                         ['value' => '', 'caption' => $this->Translate('None')],
-                         ['value' => 'anthropic', 'caption' => 'Anthropic'],
+                         ['value' => '', 'caption' => $this->Translate('Not now')],
+                         ['value' => 'anthropic', 'caption' => 'Anthropic (Claude)'],
                          ['value' => 'openai', 'caption' => 'OpenAI'],
-                         ['value' => 'local', 'caption' => $this->Translate('Local server')],
+                         ['value' => 'local', 'caption' => $this->Translate('My own server')],
                      ]],
                     ['type' => 'PasswordTextBox', 'name' => 'AiKey', 'caption' => $this->Translate('API key')],
-                    ['type' => 'Label', 'caption' => $this->Translate('The AI stays switched off: the consent belongs where its text stands, in the gateway.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Privacy notice')],
+                    ['type' => 'Label', 'name' => 'AiPrivacy', 'caption' => $this->DatenschutzText()],
+                    ['type' => 'CheckBox', 'name' => 'AiConsent', 'caption' => $this->Translate('I have read this and agree')],
                 ],
-                'validate'  => 'return SDSU_ValidateSchool(' . $ich . ', $AiProvider, $AiKey);',
-                'onConfirm' => 'IPS_RequestAction(' . $ich . ', "School", json_encode('
-                    . '["school" => $School, "provider" => $AiProvider, "key" => $AiKey]));',
+                'validate'  => 'return SDSU_ValidateAi(' . $ich . ', $AiProvider, $AiKey, $AiConsent);',
+                'onConfirm' => 'IPS_RequestAction(' . $ich . ', "Ai", json_encode(["provider" => $AiProvider,'
+                    . ' "key" => $AiKey, "consent" => $AiConsent]));',
                 'nextPage'  => 'summary',
             ],
             [
                 'name'    => 'summary',
-                'caption' => $this->Translate('Ready'),
+                'caption' => $this->Translate('All set?'),
                 'items'   => [
-                    ['type' => 'Label', 'name' => 'SummaryText', 'caption' => $this->Translate('Press Next to set everything up.')],
-                    ['type' => 'Label', 'caption' => $this->Translate('Rules: only missing instances are created, existing members are only completed, nothing is deleted. If a step fails, the others continue and the report says which.')],
+                    ['type' => 'Label', 'name' => 'SummaryText', 'caption' => $this->VorschauText()],
+                    ['type' => 'Label', 'caption' => $this->Translate('Press Next — SymDo does the rest.')],
                 ],
                 'onConfirm' => 'IPS_RequestAction(' . $ich . ', "SetupApply", "");',
                 'nextPage'  => 'result',
             ],
             [
                 'name'    => 'result',
-                'caption' => $this->Translate('Done'),
+                'caption' => $this->Translate('Ready to go'),
                 'items'   => [
                     ['type' => 'Label', 'name' => 'ResultText', 'caption' => $this->BerichtText()],
-                    ['type' => 'Label', 'name' => 'ResultHint', 'caption' => $this->Translate('Running the assistant again is harmless — what exists is recognised and never duplicated.')],
+                    ['type' => 'Label', 'name' => 'ResultHint', 'caption' => $this->Translate('Have fun with SymDo. You can start the assistant again at any time — nothing is created twice.')],
                 ],
             ],
         ];
@@ -321,18 +338,125 @@ class SymDoSetup extends IPSModuleStrict
         return $raus;
     }
 
-    /** Ein Kästchen je Baustein, in der Reihenfolge der Tabelle. */
+    /**
+     * Ein Kästchen je Baustein. Was es schon gibt, ist angehakt und gesperrt —
+     * der Assistent legt an, er räumt nicht ab.
+     */
     private function BausteinKaestchen(): array
     {
+        $gewaehlt = (array)($this->Antworten()['bausteine'] ?? []);
         $raus = [];
         foreach (SetupPlan::BAUSTEINE as $key => $baustein) {
+            $da = $this->Instanzen((string)$baustein['guid']) !== [];
             $raus[] = [
                 'type'    => 'CheckBox',
                 'name'    => 'Use_' . $key,
-                'caption' => (string)$baustein['name'],
+                'caption' => (string)$baustein['name']
+                    . ($da ? ' — ' . $this->Translate('already there') : ''),
+                'value'   => $da || (($gewaehlt[$key] ?? false) === true),
+                'enabled' => !$da,
+                'onChange' => 'IPS_RequestAction($id, "ModuleToggle", json_encode('
+                    . '["key" => "' . $key . '", "on" => $Use_' . $key . ']));',
             ];
         }
         return $raus;
+    }
+
+    /** Was beim Ankreuzen automatisch mitkam. */
+    private function BausteinHinweis(): string
+    {
+        return (string)($this->Antworten()['hinweis'] ?? '');
+    }
+
+    /** Die Mitglieder, die schon im Gateway stehen. */
+    private function VorhandeneMitgliederText(): string
+    {
+        $teile = [];
+        foreach ($this->GatewayMitglieder() as $u) {
+            $name = trim((string)($u['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $rolle = trim((string)($u['persona'] ?? ''));
+            $teile[] = $name . ($rolle !== '' ? ' (' . $this->Translate($rolle) . ')' : '');
+        }
+        return $teile === []
+            ? $this->Translate('Nobody is set up yet.')
+            : sprintf($this->Translate('Already set up: %s'), implode(', ', $teile));
+    }
+
+    /**
+     * Die Auswahl „für welches Kind" — vorhandene und gerade übernommene
+     * Mitglieder. Gewählt wird der NAME: die Kennung eines neuen Mitglieds
+     * entsteht erst im Lauf.
+     */
+    private function KinderOptionen(): array
+    {
+        $raus = [['value' => '', 'caption' => $this->Translate('Please select')]];
+        $gesehen = [];
+        $anhaengen = function (string $name, string $rolle) use (&$raus, &$gesehen): void {
+            $s = SetupPlan::Schluessel($name);
+            if ($name === '' || isset($gesehen[$s])) {
+                return;
+            }
+            $gesehen[$s] = true;
+            $raus[] = ['value' => $name,
+                       'caption' => $name . ($rolle !== '' ? ' (' . $this->Translate($rolle) . ')' : '')];
+        };
+        // Kinder zuerst — die Schule betrifft sie.
+        foreach ([true, false] as $nurKinder) {
+            foreach ($this->GatewayMitglieder() as $u) {
+                $rolle = trim((string)($u['persona'] ?? ''));
+                if (($rolle === 'child') === $nurKinder) {
+                    $anhaengen(trim((string)($u['name'] ?? '')), $rolle);
+                }
+            }
+            foreach ((array)($this->Antworten()['members'] ?? []) as $m) {
+                $rolle = trim((string)($m['persona'] ?? ''));
+                if (($rolle === 'child') === $nurKinder) {
+                    $anhaengen(trim((string)($m['name'] ?? '')), $rolle);
+                }
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Der Datenschutzhinweis — derselbe Text wie im Gateway, aus dessen
+     * Formular gelesen. So gibt es ihn nur einmal im Haus.
+     */
+    private function DatenschutzText(): string
+    {
+        try {
+            $roh = json_decode((string)@file_get_contents(__DIR__ . '/../SymDoGateway/form.json'), true);
+            $laengster = '';
+            $suche = function ($knoten) use (&$suche, &$laengster): void {
+                foreach (is_array($knoten) ? $knoten : [] as $k => $v) {
+                    if ($k === 'caption' && is_string($v) && mb_strlen($v) > mb_strlen($laengster)) {
+                        $laengster = $v;
+                    } elseif (is_array($v)) {
+                        $suche($v);
+                    }
+                }
+            };
+            $suche(is_array($roh) ? $roh : []);
+            if ($laengster === '') {
+                return $this->Translate('The full privacy notice stands in the gateway, under AI features.');
+            }
+            /* Übersetzt wird aus der locale.json des GATEWAYS: dort steht der
+               deutsche Text, und er soll nicht zweimal im Haus liegen. Ob
+               Deutsch gilt, verrät eine Probe an einem eigenen Schlüssel. */
+            if ($this->Translate('Cancel') === 'Abbrechen') {
+                $lok = json_decode((string)@file_get_contents(__DIR__ . '/../SymDoGateway/locale.json'), true);
+                $de = (array)((($lok['translations'] ?? [])['de']) ?? []);
+                if (isset($de[$laengster]) && is_string($de[$laengster])) {
+                    return (string)$de[$laengster];
+                }
+            }
+            return $laengster;
+        } catch (\Throwable $e) {
+            return $this->Translate('The full privacy notice stands in the gateway, under AI features.');
+        }
     }
 
     /** Das PHP-Fragment, das die Kästchen als Feldvariablen einsammelt. */
@@ -359,7 +483,13 @@ class SymDoSetup extends IPSModuleStrict
                 $this->UpdateFormField('MemberList', 'caption', $this->MitgliederText());
                 break;
 
+            case 'ModuleToggle':
+                $this->BausteinUmschalten($this->JsonArray((string)$Value));
+                break;
+
             case 'Modules':
+                /* Die Kästchen kommen gesammelt; Abhängigkeiten schliessen
+                   trotzdem, denn ein gesperrtes Kästchen meldet sich nie. */
                 $this->AntwortSetzen('bausteine', $this->JsonArray((string)$Value));
                 $this->UpdateFormField('SummaryText', 'caption', $this->VorschauText());
                 break;
@@ -371,15 +501,28 @@ class SymDoSetup extends IPSModuleStrict
             case 'School':
                 $roh = $this->JsonArray((string)$Value);
                 $this->AntwortSetzen('school', (string)($roh['school'] ?? 'none'));
-                $this->AntwortSetzen('ai', [
-                    'provider' => trim((string)($roh['provider'] ?? '')),
-                    /* Der Schlüssel liegt im Puffer, nicht in einer Property:
-                       Puffer sind Arbeitsspeicher der Instanz. Sein Ziel ist
-                       ohnehin die Gateway-Property — mehr Schutz als dort ist
-                       hier nicht zu haben, weniger aber auch nicht. Nach dem
-                       Lauf wird er gelöscht. */
-                    'key'      => (string)($roh['key'] ?? ''),
+                $this->AntwortSetzen('schoolChild', trim((string)($roh['child'] ?? '')));
+                /* Zugangsdaten liegen im Puffer — Arbeitsspeicher der Instanz,
+                   nicht die Konfiguration. Nach dem Lauf werden sie geleert. */
+                $this->AntwortSetzen('schoolAccess', [
+                    'server'   => trim((string)($roh['server'] ?? '')),
+                    'name'     => trim((string)($roh['name'] ?? '')),
+                    'user'     => trim((string)($roh['user'] ?? '')),
+                    'password' => (string)($roh['password'] ?? ''),
                 ]);
+                $this->UpdateFormField('SummaryText', 'caption', $this->VorschauText());
+                break;
+
+            case 'Ai':
+                $roh = $this->JsonArray((string)$Value);
+                $anbieter = trim((string)($roh['provider'] ?? ''));
+                $schluessel = (string)($roh['key'] ?? '');
+                $this->AntwortSetzen('ai', [
+                    'provider' => $anbieter,
+                    'key'      => $schluessel,
+                    'hasKey'   => trim($schluessel) !== '',
+                ]);
+                $this->AntwortSetzen('aiConsent', ($roh['consent'] ?? false) === true);
                 $this->UpdateFormField('SummaryText', 'caption', $this->VorschauText());
                 break;
 
@@ -398,6 +541,53 @@ class SymDoSetup extends IPSModuleStrict
             default:
                 throw new \InvalidArgumentException('Unknown ident: ' . $Ident);
         }
+    }
+
+    /**
+     * Ein Kästchen wurde umgelegt: merken — und die Voraussetzungen gleich
+     * mit ankreuzen, sichtbar im Formular.
+     */
+    private function BausteinUmschalten(array $roh): void
+    {
+        $key = trim((string)($roh['key'] ?? ''));
+        if ($key === '' || !isset(SetupPlan::BAUSTEINE[$key])) {
+            return;
+        }
+        $an = ($roh['on'] ?? false) === true;
+        $gewaehlt = (array)($this->Antworten()['bausteine'] ?? []);
+        $gewaehlt[$key] = $an;
+
+        $hinweis = '';
+        if ($an) {
+            $vorher = $gewaehlt;
+            $zu = SetupPlan::AbhaengigkeitenSchliessen($gewaehlt,
+                (string)($this->Antworten()['school'] ?? 'none'));
+            $namen = [];
+            foreach ($zu['bausteine'] as $k => $ignoriert) {
+                if (($vorher[$k] ?? false) === true) {
+                    continue;
+                }
+                $gewaehlt[$k] = true;
+                // Das Kästchen im offenen Formular mitziehen.
+                $this->UpdateFormField('Use_' . $k, 'value', true);
+                /* Was schon steht, ist angehakt und gesperrt — darauf muss
+                   niemand hingewiesen werden. */
+                if ($this->Instanzen((string)SetupPlan::BAUSTEINE[$k]['guid']) === []) {
+                    $namen[] = (string)SetupPlan::BAUSTEINE[$k]['name'];
+                }
+            }
+            if ($namen !== []) {
+                $hinweis = sprintf(
+                    count($namen) === 1
+                        ? $this->Translate('%1$s also needs %2$s — added for you.')
+                        : $this->Translate('%1$s also needs %2$s — added for you.'),
+                    (string)SetupPlan::BAUSTEINE[$key]['name'], implode(', ', $namen));
+            }
+        }
+        $this->AntwortSetzen('bausteine', $gewaehlt);
+        $this->AntwortSetzen('hinweis', $hinweis);
+        $this->UpdateFormField('ModuleHint', 'caption', $hinweis);
+        $this->UpdateFormField('SummaryText', 'caption', $this->VorschauText());
     }
 
     /** Ein Mitglied in den Puffer aufnehmen (und die Zeile darunter nachziehen). */
@@ -426,6 +616,9 @@ class SymDoSetup extends IPSModuleStrict
         ];
         $this->AntwortSetzen('members', $liste);
         $this->UpdateFormField('MemberList', 'caption', $this->MitgliederText());
+        // Die Schulseite fragt „für welches Kind" — die Auswahl wächst mit.
+        $this->UpdateFormField('SchoolChild', 'options',
+            (string)json_encode($this->KinderOptionen(), JSON_UNESCAPED_UNICODE));
         // Die Felder leeren, damit das nächste Mitglied nicht auf dem vorigen sitzt.
         foreach (['MemberName', 'MemberLastName'] as $feld) {
             $this->UpdateFormField($feld, 'value', '');
@@ -449,11 +642,32 @@ class SymDoSetup extends IPSModuleStrict
         return $this->Translate('Please add at least one family member.');
     }
 
-    /** KI-Anbieter ohne Schlüssel wäre ein Schalter ohne Wirkung. */
-    public function ValidateSchool(string $Provider, string $Key): string
+    /** Eine Schulanbindung braucht Adresse, Benutzer und Kennwort. */
+    public function ValidateSchool(string $School, string $Server, string $User, string $Password): string
     {
-        if (trim($Provider) !== '' && trim($Key) === '') {
+        if (trim($School) === '' || trim($School) === 'none') {
+            return '';
+        }
+        if (trim($Server) === '') {
+            return $this->Translate('Please enter the server or address of your school.');
+        }
+        if (trim($User) === '' || trim($Password) === '') {
+            return $this->Translate('Please enter user name and password.');
+        }
+        return '';
+    }
+
+    /** Die KI braucht Schlüssel und Einwilligung — oder gar nichts. */
+    public function ValidateAi(string $Provider, string $Key, bool $Consent): string
+    {
+        if (trim($Provider) === '') {
+            return '';
+        }
+        if (trim($Key) === '') {
             return $this->Translate('The chosen AI provider needs an API key.');
+        }
+        if (!$Consent) {
+            return $this->Translate('Please agree to the privacy notice to use the smart helpers.');
         }
         return '';
     }
@@ -471,6 +685,15 @@ class SymDoSetup extends IPSModuleStrict
     {
         $antworten = trim($AnswersJson) === '' ? $this->Antworten() : $this->JsonArray($AnswersJson);
         $bestand = $this->Bestand();
+        /* Was schon steht, gehört in die Wahl: sein Kästchen ist gesperrt und
+           meldet sich nie, im Bericht soll es aber auftauchen. */
+        $gewaehlt = (array)($antworten['bausteine'] ?? []);
+        foreach ((array)($bestand['instanzen'] ?? []) as $key => $ids) {
+            if (is_array($ids) && $ids !== []) {
+                $gewaehlt[$key] = true;
+            }
+        }
+        $antworten['bausteine'] = $gewaehlt;
 
         // Kennungen für neue Mitglieder: so viele, wie es Zeilen gibt. Selbst
         // gewürfelt, weil sie noch im selben Zug in fremde Properties müssen.
@@ -532,6 +755,14 @@ class SymDoSetup extends IPSModuleStrict
                         $this->SchrittBaustein($gateway, $schritt, $ids, $bericht);
                         break;
 
+                    case 'schule':
+                        $this->SchrittSchule($gateway, $schritt, $antworten, $users, $ids, $bericht);
+                        break;
+
+                    case 'einwilligung':
+                        $this->SchrittEinwilligung($gateway, $bericht);
+                        break;
+
                     case 'zugang':
                         $this->SchrittZugang($gateway, $bericht);
                         break;
@@ -548,11 +779,17 @@ class SymDoSetup extends IPSModuleStrict
                 $bericht['kennungen'][(string)$u['name']] = (string)$u['id'];
             }
         }
-        // Der Schlüssel hat seinen Weg genommen; im Puffer hat er nichts mehr zu suchen.
+        /* Schlüssel und Kennwörter haben ihren Weg genommen; im Puffer haben
+           sie nichts mehr zu suchen. */
         $ai = (array)($this->Antworten()['ai'] ?? []);
         if (($ai['key'] ?? '') !== '') {
             $ai['key'] = '';
             $this->AntwortSetzen('ai', $ai);
+        }
+        $zugang = (array)($this->Antworten()['schoolAccess'] ?? []);
+        if (($zugang['password'] ?? '') !== '') {
+            $zugang['password'] = '';
+            $this->AntwortSetzen('schoolAccess', $zugang);
         }
         return $this->BerichtSchreiben($bericht);
     }
@@ -701,6 +938,108 @@ class SymDoSetup extends IPSModuleStrict
             $rest = $id > 0 ? $this->InstanzWegraeumen($id) : true;
             $bericht['zeilen'][] = sprintf($this->Translate('%1$s: FAILED — %2$s'), $name, $e->getMessage())
                 . ($rest ? '' : ' ' . sprintf($this->Translate('The half-created instance #%d is still there and needs to be removed by hand.'), $id));
+        }
+    }
+
+    /**
+     * Die Schulanbindung: Zugangsdaten setzen und einschalten.
+     *
+     * @param list<array<string,mixed>> $users  die zusammengeführten Mitglieder
+     * @param array<string,int>         $ids    Baustein → Instanz
+     */
+    private function SchrittSchule(int $gateway, array $schritt, array $antworten,
+                                   array $users, array $ids, array &$bericht): void
+    {
+        $system = (string)$schritt['system'];
+        $zugang = (array)($antworten['schoolAccess'] ?? []);
+        $server = trim((string)($zugang['server'] ?? ''));
+        $benutzer = trim((string)($zugang['user'] ?? ''));
+        $kennwort = (string)($zugang['password'] ?? '');
+        if ($server === '' || $benutzer === '' || $kennwort === '') {
+            $bericht['zeilen'][] = $this->Translate('School: nothing entered, skipped.');
+            return;
+        }
+        // Das gewählte Kind steht als NAME da; seine Kennung gibt es erst jetzt.
+        $kind = SetupPlan::Schluessel((string)$schritt['kind']);
+        $kennung = '';
+        $kindName = '';
+        foreach ($users as $u) {
+            if (SetupPlan::Schluessel((string)($u['name'] ?? '')) === $kind && $kind !== '') {
+                $kennung = trim((string)($u['id'] ?? ''));
+                $kindName = trim((string)($u['name'] ?? ''));
+                break;
+            }
+        }
+
+        try {
+            if ($system === 'untis') {
+                $this->PropertySetzen($gateway, 'UntisServer', $server);
+                $this->PropertySetzen($gateway, 'UntisSchool', trim((string)($zugang['name'] ?? '')));
+                $this->PropertySetzen($gateway, 'UntisUser', $benutzer);
+                $this->PropertySetzen($gateway, 'UntisPassword', $kennwort);
+                $this->PropertySetzen($gateway, 'UntisHomework', true);
+                $this->PropertySetzen($gateway, 'UntisEnabled', true);
+                IPS_ApplyChanges($gateway);
+                $bericht['zeilen'][] = $this->Translate('WebUntis is set up. One step is left for you: in the gateway, fetch the pupils and pick your child — WebUntis needs that choice.');
+                return;
+            }
+
+            // LOGINEO: eine Zeile je Kind, und das Kennwort gegen einen Token tauschen.
+            $liste = json_decode((string)(json_decode((string)@IPS_GetConfiguration($gateway), true)['MoodleAccounts'] ?? '[]'), true);
+            $liste = is_array($liste) ? array_values(array_filter($liste, 'is_array')) : [];
+            $adresse = str_starts_with($server, 'http') ? $server : 'https://' . $server;
+            $schonDa = false;
+            foreach ($liste as $z) {
+                if (trim((string)($z['user'] ?? '')) === $benutzer) {
+                    $schonDa = true;
+                    break;
+                }
+            }
+            if (!$schonDa) {
+                $liste[] = [
+                    'name'   => $kindName !== '' ? $kindName : $benutzer,
+                    'site'   => $adresse,
+                    'user'   => $benutzer,
+                    'userId' => $kennung,
+                    'stpl'   => (int)($ids['timetable'] ?? 0),
+                ];
+                IPS_SetProperty($gateway, 'MoodleAccounts',
+                    (string)json_encode($liste, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
+            $this->PropertySetzen($gateway, 'MoodleEnabled', true);
+            IPS_ApplyChanges($gateway);
+            if ($kennung === '') {
+                $bericht['zeilen'][] = $this->Translate('LOGINEO is prepared. Pick the family member for the access in the gateway, then fetch the token.');
+                return;
+            }
+            // Der Knopf des Gateways tauscht Kennwort gegen Token.
+            @IPS_RequestAction($gateway, 'MoodleToken',
+                (string)json_encode(['account' => $kennung, 'password' => $kennwort]));
+            $bericht['zeilen'][] = sprintf(
+                $this->Translate('LOGINEO is set up for %s and the token has been fetched.'),
+                $kindName !== '' ? $kindName : $benutzer);
+        } catch (\Throwable $e) {
+            $bericht['zeilen'][] = sprintf($this->Translate('School setup failed: %s'), $e->getMessage());
+        }
+    }
+
+    /** Die Einwilligung — erteilt über denselben Weg wie der Knopf im Gateway. */
+    private function SchrittEinwilligung(int $gateway, array &$bericht): void
+    {
+        try {
+            @IPS_RequestAction($gateway, 'AiPrivacyConsent', true);
+            // Nachlesen, ob sie wirklich angekommen ist: das Attribut des
+            // Gateways ist von hier aus nur über diese Auskunft sichtbar.
+            if (function_exists('TGW_GetSetupState')) {
+                $stand = json_decode((string)@TGW_GetSetupState($gateway), true);
+                if (is_array($stand) && ($stand['aiAccepted'] ?? false) !== true) {
+                    $bericht['zeilen'][] = $this->Translate('The consent did not stick — please accept it once in the gateway, under AI features.');
+                    return;
+                }
+            }
+            $bericht['zeilen'][] = $this->Translate('Privacy notice accepted — the smart helpers are ready.');
+        } catch (\Throwable $e) {
+            $bericht['zeilen'][] = sprintf($this->Translate('The consent could not be stored: %s'), $e->getMessage());
         }
     }
 

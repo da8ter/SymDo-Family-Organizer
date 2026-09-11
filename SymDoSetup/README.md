@@ -9,37 +9,56 @@ braucht kein Gateway als Eltern, denn es richtet das Gateway erst ein.
 
 ## Ablauf
 
-Der Knopf *SymDo-Installationsassistenten starten* öffnet sieben Seiten:
+Der Knopf *SymDo-Installationsassistenten starten* öffnet acht Seiten:
 
-1. **Willkommen** — was schon da ist und was fehlt. Bis zur letzten Seite wird
-   nichts geschrieben.
-2. **Familie** — ein Mitglied eintragen, *Mitglied übernehmen* drücken,
-   nächstes. Wer im Gateway schon steht, bleibt unverändert; leere Felder werden
-   ergänzt.
-3. **Was möchtest du nutzen?** — ein Kästchen je Baustein. Angelegt wird nur,
-   was fehlt.
-4. **Zugänge** — auf Wunsch ein Browser-Zugang, erzeugt als letzter Schritt.
-5. **Schule und KI** — Schulsystem und KI-Anbieter samt Schlüssel.
-6. **Bereit** — eine Vorschau dessen, was gleich passiert.
-7. **Fertig** — der Bericht, Zeile für Zeile.
+1. **Willkommen bei SymDo** — was SymDo mitbringt, und was auf diesem Server
+   schon steht.
+2. **Deine Familie** — die vorhandenen Mitglieder stehen oben; neue trägt man
+   eines nach dem anderen ein. Wer schon im Gateway steht, bleibt unverändert;
+   leere Felder werden ergänzt.
+3. **Was möchtest du nutzen?** — ein Kästchen je Baustein. Was es schon gibt,
+   ist **angehakt und gesperrt** (der Assistent legt an, er räumt nicht ab).
+   Wählt man einen Baustein, kommen seine **Voraussetzungen automatisch mit** —
+   mit einem Hinweis darunter, welche das waren.
+4. **Dein Zugang** — der Zugang für die SymDo Web-App; er entsteht am Ende und
+   steht als Code im Bericht.
+5. **Schule** — WebUntis oder LOGINEO, mit Adresse, Benutzername und Kennwort,
+   und für welches Kind.
+6. **Kluge Helfer** — KI-Anbieter, Schlüssel, der vollständige
+   Datenschutzhinweis und die Zustimmung.
+7. **Alles bereit?** — eine Vorschau dessen, was gleich entsteht.
+8. **Fertig** — der Bericht, Zeile für Zeile.
 
 Der Bericht steht danach auch im Hauptformular und überlebt einen Neustart.
+
+## Abhängigkeiten
+
+Wer einen Baustein wählt, bekommt seine Voraussetzungen mit:
+
+| Baustein | braucht |
+|---|---|
+| Hausaufgaben | Stundenplan |
+| Essensplan | Einkaufsliste |
+| Ämtchenplan | Routinen |
+| Sprachassistent | ToDo-Liste und Einkaufsliste |
+| WebUntis | Stundenplan, Hausaufgaben |
+| LOGINEO | Klassenseiten, Hausaufgaben (und über sie den Stundenplan) |
 
 ## Was der Assistent nicht tut
 
 - **Kein zweites Gateway.** Findet er zwei, hält er an, bevor er etwas
   schreibt: welches die App bedient, entscheidet die *niedrigste* Instanz-ID,
-  und Symcon vergibt IDs zufällig. Er würde ins falsche schreiben, während die
-  Kacheln aus dem anderen lesen.
-- **Keine Schul-Zugangsdaten.** WebUntis braucht nach dem Login eine
-  Schülerauswahl, LOGINEO tauscht das Kennwort über einen Knopf gegen einen
-  Token — beides braucht eine menschliche Entscheidung und bleibt im Gateway.
-- **Keine KI-Einwilligung.** Anbieter und Schlüssel setzt er, den Schalter
-  lässt er aus: die Einwilligung gehört dorthin, wo ihr Text steht.
+  und Symcon vergibt IDs zufällig.
 - **Nichts löschen.** Mitglieder werden nur ergänzt, Instanzen nur angelegt.
   Eine Wahl, die schon getroffen ist, wird nie überschrieben.
 - **Keinen Geburtstag.** Ein Datumsfeld lässt sich nicht als Feldwert an ein
   Skript geben; der Geburtstag gehört in die Mitgliederliste des Gateways.
+
+Bei **WebUntis** bleibt genau ein Schritt beim Nutzer: im Gateway die Schüler
+abrufen und das Kind auswählen — diese Wahl verlangt WebUntis. Bei **LOGINEO**
+tauscht der Assistent das Kennwort selbst gegen einen Token; gespeichert wird
+nur der Token. Kennwörter liegen währenddessen im Arbeitsspeicher der Instanz
+(Puffer) und werden nach dem Lauf geleert.
 
 ## Reihenfolge des Laufs
 

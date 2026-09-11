@@ -91,6 +91,78 @@ class SetupPlan
         ],
     ];
 
+    /**
+     * Was ein Baustein zum Arbeiten braucht.
+     *
+     * Keine Geschmacksfragen, sondern harte Abhängigkeiten im Bestand:
+     *  - Hausaufgaben holen Fach und Farbe aus dem Stundenplan, und der Abruf
+     *    aus WebUntis legt seine Stunden in eine Stundenplan-Instanz.
+     *  - Essensplan und Ämtchenplan tragen die Kennung ihrer Quelle als
+     *    Eigenschaft (Einkaufsliste bzw. Routinen).
+     *  - Der Sprachassistent braucht die beiden Listen als Vorgabe.
+     *  - Klassenseiten zeigen, was die Schulanbindung spiegelt.
+     *
+     * Wer einen Baustein wählt, bekommt seine Voraussetzungen automatisch mit.
+     */
+    public const ABHAENGIG = [
+        'homework' => ['timetable'],
+        'meal'     => ['shopping'],
+        'chores'   => ['routines'],
+        'voice'    => ['todo', 'shopping'],
+    ];
+
+    /** Was eine Schulanbindung zusätzlich braucht. */
+    public const SCHULE_BRAUCHT = [
+        'untis'  => ['timetable', 'homework'],
+        'moodle' => ['edumaps', 'homework'],
+    ];
+
+    /**
+     * Die Wahl um ihre Voraussetzungen ergänzen — so oft, bis nichts mehr
+     * dazukommt (eine Voraussetzung kann selbst eine haben).
+     *
+     * @param array<string,bool> $gewaehlt
+     * @return array{bausteine:array<string,bool>,dazu:list<string>}
+     */
+    public static function AbhaengigkeitenSchliessen(array $gewaehlt, string $schule = 'none'): array
+    {
+        $an = [];
+        foreach ($gewaehlt as $key => $wert) {
+            if ($wert === true && isset(self::BAUSTEINE[$key])) {
+                $an[$key] = true;
+            }
+        }
+        foreach ((array)(self::SCHULE_BRAUCHT[$schule] ?? []) as $key) {
+            if (isset(self::BAUSTEINE[$key])) {
+                $an[$key] = true;
+            }
+        }
+        $dazu = [];
+        for ($runde = 0; $runde < 10; $runde++) {
+            $neu = false;
+            foreach (array_keys($an) as $key) {
+                foreach ((array)(self::ABHAENGIG[$key] ?? []) as $braucht) {
+                    if (!isset($an[$braucht]) && isset(self::BAUSTEINE[$braucht])) {
+                        $an[$braucht] = true;
+                        $dazu[] = $braucht;
+                        $neu = true;
+                    }
+                }
+            }
+            if (!$neu) {
+                break;
+            }
+        }
+        // In der Reihenfolge der Tabelle, damit der Plan planbar bleibt.
+        $sortiert = [];
+        foreach (array_keys(self::BAUSTEINE) as $key) {
+            if (isset($an[$key])) {
+                $sortiert[$key] = true;
+            }
+        }
+        return ['bausteine' => $sortiert, 'dazu' => array_values(array_unique($dazu))];
+    }
+
     /** Die Rollen aus der Mitgliederliste des Gateways (Spalte `persona`). */
     public const ROLLEN = ['', 'father', 'mother', 'child', 'grandmother', 'grandfather', 'uncle', 'aunt'];
 
@@ -355,10 +427,26 @@ class SetupPlan
 
         // ── Die Kacheln, in der Reihenfolge der Tabelle ─────────────────────
         $vorgabe = self::VorgabeKennung($zusammen['users']);
-        foreach (self::BAUSTEINE as $key => $baustein) {
-            if (((array)($antworten['bausteine'] ?? []))[$key] ?? false) {
-                $schritte[] = self::BausteinSchritt($key, $baustein, $bestand, $vorgabe);
-            }
+        $wahl = self::AbhaengigkeitenSchliessen(
+            (array)($antworten['bausteine'] ?? []), self::Schulwahl($antworten));
+        foreach ($wahl['bausteine'] as $key => $an) {
+            $schritte[] = self::BausteinSchritt($key, (array)self::BAUSTEINE[$key], $bestand, $vorgabe);
+        }
+
+        // ── Die Schulanbindung ──────────────────────────────────────────────
+        $schule = self::Schulwahl($antworten);
+        if ($schule !== 'none') {
+            $schritte[] = [
+                'art'    => 'schule',
+                'aktion' => 'einrichten',
+                'system' => $schule,
+                'kind'   => trim((string)($antworten['schoolChild'] ?? '')),
+            ];
+        }
+
+        // ── Die KI-Einwilligung, wenn sie auf der Seite erteilt wurde ───────
+        if (($antworten['aiConsent'] ?? false) === true) {
+            $schritte[] = ['art' => 'einwilligung', 'aktion' => 'erteilen'];
         }
 
         // ── Der Zugang: höchstens EINER, und zuletzt ────────────────────────
@@ -450,7 +538,11 @@ class SetupPlan
     {
         $ki = (array)($antworten['ai'] ?? []);
         $anbieter = trim((string)($ki['provider'] ?? ''));
-        return ['provider' => $anbieter, 'enabled' => false];
+        /* Der Schalter geht an, sobald Anbieter, Schlüssel UND Einwilligung
+           da sind — vorher sperrt ihn das Gateway ohnehin. */
+        $an = $anbieter !== '' && ($ki['hasKey'] ?? false) === true
+            && ($antworten['aiConsent'] ?? false) === true;
+        return ['provider' => $anbieter, 'enabled' => $an];
     }
 
     /** Die Schulwahl, auf die drei zulässigen Werte reduziert. */
