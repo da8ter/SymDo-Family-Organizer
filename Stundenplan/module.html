@@ -335,9 +335,9 @@
      bleibt sichtbar, weil die Lücke im Plan die eigentliche Nachricht ist.
      Vertretung behält die Farbe des Fachs und bekommt einen Balken an der
      Kante; eine zweite Farbe hier hieße, mit der Fächerfarbe zu streiten. */
-  .stunde.entfall { opacity: .55; }
-  .stunde.entfall .fach { text-decoration: line-through; }
-  .stunde.vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
+  .stunde.lage-entfall { opacity: .55; }
+  .stunde.lage-entfall .fach { text-decoration: line-through; }
+  .stunde.lage-vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
   /* NICHT „marke" nennen: so heissen seit jeher die Beschriftungen der
      Zeitachse (position:absolute; right:0), und der Zustand klebte damit am
      rechten Rand des Blocks statt unter der Uhrzeit zu stehen. Im Bild
@@ -356,7 +356,7 @@
      einem Block derselben Farbe waere sie unsichtbar (in der App an Physik auf
      dem Methodentag gemessen). Ein Rahmen, weil ein Saum aus box-shadow nicht
      gestrichelt sein kann. */
-  .stueck.entfall {
+  .stueck.lage-entfall {
     opacity: .75; z-index: 1;
     border: 1px dashed color-mix(in srgb, var(--bg) 85%, transparent);
     height: 20px; top: 3px;
@@ -374,9 +374,9 @@
   /* Der Termin ist kein Unterricht: eine helle Kante hebt ihn von der
      Vertretung ab, und der Fachname steht kursiv — die Fachfarbe bleibt
      unangetastet. */
-  .stunde.termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
-  .stunde.termin .fach { font-style: italic; }
-  .stueck.termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
+  .stunde.lage-termin { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); }
+  .stunde.lage-termin .fach { font-style: italic; }
+  .stueck.lage-termin { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); }
   .stunde.jetzt { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
   .stunde.betreuung { color: #fff; }
 
@@ -441,6 +441,12 @@
      die Akzentfarbe allein kann auf einem farbigen Block untergehen. */
   /* Termin-Marker: Punkt MITTIG im Balken, Label daneben. Unter dem
    Jetzt-Strich (z-index 2 < 3): der Strich ist die wichtigere Auskunft. */
+  /* Die Statusklassen der Stunden heissen „lage-termin", „lage-entfall",
+     „lage-vertretung" — NICHT „termin": so heisst der Terminmarker hier
+     unten, und ein Stueck der Zeitachse mit derselben Klasse erbte dessen
+     z-index 2. Der Ganztagsblock „Waldschule" lag damit UEBER den drei
+     entfallenen Stunden (z-index 1) und deckte sie zu — in der Kachel am
+     11.09.2026 gemessen, die Web-App zeigte denselben Tag richtig. */
   .termin {
     position: absolute; top: 0; height: 100%; z-index: 2;
     display: flex; align-items: center; gap: 3px;
@@ -1718,7 +1724,7 @@
                 ? 'Vertretung' + (s.insteadOf ? ' statt ' + s.insteadOf : '')
                 : (lage === 'termin' ? 'Termin' : ''));
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
-            + (s.care ? ' betreuung' : '') + (lage ? ' ' + lage : '') + '" title="'
+            + (s.care ? ' betreuung' : '') + (lage ? ' lage-' + lage : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
                   + (marke ? ' — ' + marke : ''))
             + '" style="background:' + esc(s.color)
@@ -2049,7 +2055,7 @@
           const anteil = Math.max(0, naechst - s.from) / Math.max(1, s.to - s.from);
           titelBreite = ' style="max-width:calc(' + (anteil * 100).toFixed(1) + '% - 26px)"';
         }
-        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' ' + lage : '')
+        stuecke += '<div class="stueck' + (erster ? ' erst' : '') + (lage ? ' lage-' + lage : '')
           + (s.hw ? ' hat-hw' : '') + '" title="'
           + esc(s.name + ' ' + s.start + '–' + s.end + (wo ? ', ' + wo : '')
                 + (marke ? ' — ' + marke + statt : '')
