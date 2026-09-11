@@ -130,6 +130,10 @@ class SymDoRoutines extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
+            case 'FormSync':
+                $this->FormularAbgleichen((string)$Value);
+                return;
+
             case 'Check':
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
                 if (is_array($daten)) {
@@ -214,34 +218,119 @@ class SymDoRoutines extends IPSModuleStrict
         return $html . '<script>handleMessage(' . $payload . ');</script>';
     }
 
-    public function GetConfigurationForm(): string
+    /**
+     * Die Routinen als Auswahl für die Schrittliste.
+     *
+     * @param list<array<string,mixed>>|null $zeilen  null = die gespeicherten.
+     *        Beim Abgleich im laufenden Formular kommen die LEBENDEN Zeilen
+     *        herein; die gespeicherten kennen die soeben angelegte Routine
+     *        noch nicht.
+     * @return list<array{caption:string,value:string}>
+     */
+    private function RoutinenAuswahl(?array $zeilen = null): array
     {
-        $mitglieder = $this->MitgliederOptionen();
-        $muenzenAn  = (bool)@IPS_GetProperty($this->InstanceID, 'CoinsEnabled');
-
-        $routinenOptionen = [];
-        foreach ($this->RoutinenLesen() as $r) {
-            $routinenOptionen[] = ['caption' => $r['name'], 'value' => $r['id']];
+        $raus = [];
+        if ($zeilen === null) {
+            foreach ($this->RoutinenLesen() as $r) {
+                $raus[] = ['caption' => $r['name'], 'value' => $r['id']];
+            }
+        } else {
+            foreach ($zeilen as $z) {
+                $id   = trim((string)($z['id'] ?? ''));
+                $name = trim((string)($z['name'] ?? ''));
+                if ($id !== '' && $name !== '') {
+                    $raus[] = ['caption' => $name, 'value' => $id];
+                }
+            }
         }
-        if ($routinenOptionen === []) {
-            $routinenOptionen[] = ['caption' => $this->Translate('— first add a routine above —'), 'value' => ''];
+        if ($raus === []) {
+            $raus[] = ['caption' => $this->Translate('— first add a routine above —'), 'value' => ''];
         }
+        return $raus;
+    }
 
-        $schrittSpalten = [
+    /**
+     * Die Spalten der Schrittliste. Eigene Methode, weil sie im laufenden
+     * Formular ersetzt werden — die Optionen stehen IN der Spaltendefinition.
+     *
+     * @param list<array{caption:string,value:string}> $routinen
+     * @return list<array<string,mixed>>
+     */
+    private function SchrittSpalten(array $routinen, bool $muenzenAn): array
+    {
+        $spalten = [
             // Die Kennung trägt die Zuordnung — unsichtbar, aber mit save,
             // sonst verwirft die Konsole sie beim Übernehmen.
             ['caption' => $this->Translate('Routine'), 'name' => 'routine', 'width' => '180px',
-             'add' => $routinenOptionen[0]['value'],
-             'edit' => ['type' => 'Select', 'options' => $routinenOptionen]],
+             'add' => $routinen[0]['value'],
+             'edit' => ['type' => 'Select', 'options' => $routinen]],
             ['caption' => $this->Translate('Emoji'), 'name' => 'emoji', 'width' => '80px',
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
             ['caption' => $this->Translate('Step'), 'name' => 'text', 'width' => 'auto',
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
         ];
         if ($muenzenAn) {
-            $schrittSpalten[] = ['caption' => $this->Translate('Coins'), 'name' => 'coins', 'width' => '90px',
+            $spalten[] = ['caption' => $this->Translate('Coins'), 'name' => 'coins', 'width' => '90px',
                 'add' => 5, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0]];
         }
+        return $spalten;
+    }
+
+    /**
+     * Nach jeder Änderung an der Routinenliste: Kennungen nachmünzen und die
+     * Auswahl der Schrittliste auffrischen — beides im laufenden Formular.
+     *
+     * Die Konsole legt vor jedem Formularskript jedes benannte Feld als
+     * PHP-Variable an, Listen als IPSList. `$Routines` ist darum der Stand,
+     * den der Nutzer gerade vor sich hat, mitsamt ungespeicherter Zeilen.
+     *
+     * Die Kennung wird HIER vergeben und nicht erst beim Übernehmen: ohne sie
+     * hätte die neue Routine keinen Wert, unter dem ein Schritt sie nennen
+     * könnte. RoutinenNachtragen() bleibt trotzdem — es fängt Zeilen ab, die
+     * an diesem Weg vorbei entstehen.
+     */
+    private function FormularAbgleichen(string $nutzlast): void
+    {
+        $roh = json_decode($nutzlast, true);
+        if (!is_array($roh)) {
+            return;
+        }
+        $felder  = ['id' => '', 'name' => '', 'emoji' => '', 'memberId' => '', 'von' => '', 'bis' => ''];
+        $zeilen  = [];
+        $gemuenzt = false;
+        foreach ($roh as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            /* Weisse Liste: die Konsole schickt je Zeile mehr, als die Liste an
+               Spalten hat (index_, editable, rowColor). Das gehoert nicht in
+               eine Eigenschaft. */
+            $zeile = [];
+            foreach ($felder as $feld => $vorgabe) {
+                $zeile[$feld] = array_key_exists($feld, $z) ? $z[$feld] : $vorgabe;
+            }
+            if (trim((string)$zeile['id']) === '' && trim((string)$zeile['name']) !== '') {
+                $zeile['id'] = bin2hex(random_bytes(8));
+                $gemuenzt = true;
+            }
+            $zeilen[] = $zeile;
+        }
+        if ($gemuenzt) {
+            $this->UpdateFormField('Routines', 'values',
+                (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+        }
+        $this->UpdateFormField('Steps', 'columns', (string)json_encode(
+            $this->SchrittSpalten($this->RoutinenAuswahl($zeilen),
+                (bool)@IPS_GetProperty($this->InstanceID, 'CoinsEnabled')),
+            JSON_UNESCAPED_UNICODE));
+    }
+
+    public function GetConfigurationForm(): string
+    {
+        $mitglieder = $this->MitgliederOptionen();
+        $muenzenAn  = (bool)@IPS_GetProperty($this->InstanceID, 'CoinsEnabled');
+
+        $schrittSpalten = $this->SchrittSpalten($this->RoutinenAuswahl(), $muenzenAn);
 
         $form = [
             'elements' => [
@@ -251,6 +340,17 @@ class SymDoRoutines extends IPSModuleStrict
                         [
                             'type' => 'List', 'name' => 'Routines', 'rowCount' => 4,
                             'add' => true, 'delete' => true,
+                            /* Jede Aenderung an den Routinen zieht die Auswahl in der
+                               Schrittliste sofort nach — und muenzt der neuen Routine
+                               ihre Kennung. Ohne das waere eine gerade angelegte
+                               Routine erst nach Uebernehmen UND Neuoeffnen des
+                               Formulars einem Schritt zuzuordnen; der Platzhalter
+                               „erst oben eine Routine anlegen" war die Beschreibung
+                               dieses Mangels, nicht seine Loesung. */
+                            'onAdd'         => 'IPS_RequestAction($id, "FormSync", json_encode(iterator_to_array($Routines)));',
+                            'onEdit'        => 'IPS_RequestAction($id, "FormSync", json_encode(iterator_to_array($Routines)));',
+                            'onDelete'      => 'IPS_RequestAction($id, "FormSync", json_encode(iterator_to_array($Routines)));',
+                            'onChangeOrder' => 'IPS_RequestAction($id, "FormSync", json_encode(iterator_to_array($Routines)));',
                             'columns' => [
                                 ['caption' => 'ID', 'name' => 'id', 'width' => '0px',
                                  'visible' => false, 'save' => true, 'add' => ''],
