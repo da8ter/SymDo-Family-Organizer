@@ -696,7 +696,12 @@
             "No class pages yet": "Noch keine Klassenseite",
             "Select a class page": "Klassenseite wählen",
             "1 card": "1 Karte",
-            "%1 cards": "%1 Karten"
+            "%1 cards": "%1 Karten",
+            "Child": "Kind",
+            "New homework …": "Neue Hausaufgabe …",
+            "Open homework": "Offen",
+            "School": "Schule",
+            "Source: LOGINEO": "Quelle: LOGINEO"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

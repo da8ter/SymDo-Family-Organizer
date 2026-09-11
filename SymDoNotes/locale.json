@@ -537,7 +537,8 @@
       "Could not reach the gateway.": "Das Gateway war nicht erreichbar.",
       "Creating": "Wird erstellt",
       "Active": "Aktiv",
-      "Inactive": "Inaktiv"
+      "Inactive": "Inaktiv",
+      "Child": "Kind"
     }
   }
 }

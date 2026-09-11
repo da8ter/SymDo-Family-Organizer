@@ -526,7 +526,8 @@
             "Select a class page": "Klassenseite wählen",
             "1 card": "1 Karte",
             "%1 cards": "%1 Karten",
-            "Show class pages (requires the SymDo Gateway)": "Klassenseiten zeigen (braucht das SymDo Gateway)"
+            "Show class pages (requires the SymDo Gateway)": "Klassenseiten zeigen (braucht das SymDo Gateway)",
+            "Child": "Kind"
         }
     }
 }
