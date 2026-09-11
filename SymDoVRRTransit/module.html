@@ -11,6 +11,10 @@
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
   --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
   --warn: #E53935;
+  /* Die Ränder, die Symcon der Kachel mitgibt — siehe den Leser unten. */
+  --sym-mt: 0px;
+  --sym-ms: 0px;
+  --sym-mb: 0px;
 }
 html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; }
 body {
@@ -20,7 +24,17 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
 }
-#wurzel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px; gap: 8px; }
+/* Die Polsterung trägt die Ränder von Symcon MIT: ohne sie schiebt sich der
+   Inhalt oben unter die Leiste der Visualisierung. `env(safe-area-inset-top)`
+   steht daneben für das iPhone mit Aussparung — es gilt, was größer ist. */
+#wurzel {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px;
+  box-sizing: border-box;
+  padding: calc(max(var(--sym-mt), env(safe-area-inset-top, 0px)) + 10px)
+           calc(var(--sym-ms) + 12px)
+           calc(var(--sym-mb) + 10px)
+           calc(var(--sym-ms) + 12px);
+}
 
 /* Kopfzeile: Mitglieder links, Umschalter rechts */
 .kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
@@ -100,6 +114,24 @@ body {
 let zustand = { v: 1, now: 0, view: 'departures', stops: [], routes: [], blocked: false };
 let ansicht = null;      // 'departures' | 'routes' — Wahl des Betrachters
 let werFilter = null;    // Mitglieds-Kennung, '' = alle
+
+/* Symcon reicht die Ränder der Kachel als Adresszusatz herein
+   (margintop/marginside/marginbottom). Ohne sie stünde der Inhalt oben unter
+   der Leiste der Visualisierung. Fehlen sie, bleibt es bei 0 — dasselbe
+   Vorgehen wie in den übrigen SymDo-Kacheln. */
+(function () {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const px = function (name) {
+      const v = parseInt(p.get(name), 10);
+      return (Number.isFinite(v) && v >= 0) ? v + 'px' : null;
+    };
+    const wurzel = document.documentElement.style;
+    const mt = px('margintop');    if (mt !== null) { wurzel.setProperty('--sym-mt', mt); }
+    const ms = px('marginside');   if (ms !== null) { wurzel.setProperty('--sym-ms', ms); }
+    const mb = px('marginbottom'); if (mb !== null) { wurzel.setProperty('--sym-mb', mb); }
+  } catch (e) { /* ohne Adresszusatz gelten die Vorgaben (0) */ }
+})();
 
 function esc(s) {
   return String(s === null || s === undefined ? '' : s)
