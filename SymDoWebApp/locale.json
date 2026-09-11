@@ -544,7 +544,8 @@
             "riding": "fahren",
             "walking": "laufen",
             "waiting": "warten",
-            "home, from now": "nach Hause, ab jetzt"
+            "home, from now": "nach Hause, ab jetzt",
+            "Homework to do": "Offene Hausaufgaben"
         }
     }
 }
