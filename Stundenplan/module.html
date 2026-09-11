@@ -311,7 +311,7 @@
   .stunde .hw {
     position: absolute; left: 10px; bottom: 8px;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; font-size: 15px; line-height: 1;
+    width: 16px; height: 16px; font-size: 11px; line-height: 1;
   }
   /* Die Zahl als rotes Abzeichen am Symbol — wie eine Mitteilung am App-Zeichen.
      Rot ist hier eine eigene Farbe und keine Fachfarbe: sie soll sich von der
@@ -325,8 +325,8 @@
     border-radius: 999px; background: #E53935; color: #fff;
     font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
   }
-  /* Enge Karte: das Abzeichen rutscht nach unten, sonst stiesse der rote Punkt
-     an das Fachsymbol darueber. */
+  /* Enge Karte: Symbol und Zaehler ruecken an die Kante, sonst stiesse der rote
+     Punkt an das Fachsymbol darueber. */
   .stunde.hw-eng .hw { bottom: 2px; }
   .stunde.hw-eng .hw b { top: auto; bottom: -2px; }
   /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
@@ -1745,12 +1745,14 @@
             : (lage === 'vertretung'
                 ? 'Vertretung' + (s.insteadOf ? ' statt ' + s.insteadOf : '')
                 : (lage === 'termin' ? 'Termin' : ''));
-          /* Fachsymbol und Abzeichen brauchen zusammen 8+22+22+8 = 60px. Die
-             kuerzeste Karte (45 Minuten) ist 54px hoch — dort saesse das
-             Abzeichen 6px AUF dem Symbol. Solche Karten bekommen deshalb den
-             knappen Abstand; ueberall sonst steht es so weit von der unteren
-             Kante wie das Symbol von der oberen. */
-          const engeKarte = s.hw && h < 60;
+          /* Zusammen brauchen sie 8 (Innenabstand) + 22 (Fachsymbol)
+             + 3 (Ueberstand des roten Punktes) + 16 (Hausaufgaben-Symbol)
+             + 8 (Innenabstand) = 57px. Die kuerzeste Karte ist 45 Minuten
+             hoch — und wie viele Pixel das sind, haengt an der Hoehe der
+             Kachel. Wird es zu eng, ruecken Symbol und Punkt an die Kante;
+             ueberall sonst steht das Symbol so weit von der unteren Kante wie
+             das Fachsymbol von der oberen. */
+          const engeKarte = s.hw && h < 57;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
             + (s.care ? ' betreuung' : '') + (lage ? ' lage-' + lage : '')
             + (engeKarte ? ' hw-eng' : '') + '" title="'
