@@ -300,13 +300,35 @@
     width: 5px; height: 5px; border-radius: 50%;
     background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35);
   }
+  /* Wochenansicht: links UNTEN, an der unteren Kante und buendig mit dem
+     Fachsymbol (dessen Spalte beginnt beim Innenabstand von 10px). Oben rechts
+     stand es ueber der laengsten Zeile — Fach und Zeit fangen oben an, unten
+     ist der Platz frei. */
+  /* Das Symbol der Hausaufgaben — dasselbe, das die App im Bereich „Schule"
+     zeigt —, links unten in der Spalte des Fachsymbols und ohne Kreis
+     darum. Es steht so weit von der unteren Kante, wie das Fachsymbol von der
+     oberen (der Innenabstand der Karte, 8px). */
   .stunde .hw {
-    position: absolute; top: 4px; right: 6px;
-    display: inline-flex; align-items: center; gap: 3px;
-    background: rgba(0,0,0,.32); border-radius: 999px; padding: 1px 6px;
-    font-size: 10px; font-weight: 800; line-height: 1.5;
+    position: absolute; left: 10px; bottom: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; font-size: 15px; line-height: 1;
   }
-  .stunde .hw span { font-size: 11px; }
+  /* Die Zahl als rotes Abzeichen am Symbol — wie eine Mitteilung am App-Zeichen.
+     Rot ist hier eine eigene Farbe und keine Fachfarbe: sie soll sich von der
+     Karte abheben, auf der sie liegt, und die kann jede Farbe haben. */
+  .stunde .hw b {
+    /* Sitzt AUF dem Symbol, nicht daneben: rechts buendig mit seinem Kasten,
+       damit die Ecke links unten nicht breiter wird als das Fachsymbol oben.
+       Ohne Saum — auf der Fachfarbe traegt das Rot allein. */
+    position: absolute; top: -3px; right: 0;
+    min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box;
+    border-radius: 999px; background: #E53935; color: #fff;
+    font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
+  }
+  /* Enge Karte: das Abzeichen rutscht nach unten, sonst stiesse der rote Punkt
+     an das Fachsymbol darueber. */
+  .stunde.hw-eng .hw { bottom: 2px; }
+  .stunde.hw-eng .hw b { top: auto; bottom: -2px; }
   /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
      Spalte — eine Hausaufgabe, die nirgends erscheint, waere schlimmer als
      eine an ungenauer Stelle. */
@@ -1723,8 +1745,15 @@
             : (lage === 'vertretung'
                 ? 'Vertretung' + (s.insteadOf ? ' statt ' + s.insteadOf : '')
                 : (lage === 'termin' ? 'Termin' : ''));
+          /* Fachsymbol und Abzeichen brauchen zusammen 8+22+22+8 = 60px. Die
+             kuerzeste Karte (45 Minuten) ist 54px hoch — dort saesse das
+             Abzeichen 6px AUF dem Symbol. Solche Karten bekommen deshalb den
+             knappen Abstand; ueberall sonst steht es so weit von der unteren
+             Kante wie das Symbol von der oberen. */
+          const engeKarte = s.hw && h < 60;
           spalten += '<div class="stunde' + (s.next ? ' jetzt' : '')
-            + (s.care ? ' betreuung' : '') + (lage ? ' lage-' + lage : '') + '" title="'
+            + (s.care ? ' betreuung' : '') + (lage ? ' lage-' + lage : '')
+            + (engeKarte ? ' hw-eng' : '') + '" title="'
             + esc(s.name + ', ' + s.start + ' – ' + s.end + (wo ? ', ' + wo : '')
                   + (marke ? ' — ' + marke : ''))
             + '" style="background:' + esc(s.color)
@@ -1738,8 +1767,11 @@
             /* Offene Hausaufgaben zu dieser Stunde. Die Zahl kommt vom Modul
                (nur im Kachelpfad angehaengt), die Zuordnung liegt bei der
                ERSTEN Stunde des Fachs an diesem Tag. */
-            + (s.hw ? '<span class="hw" title="' + esc(s.hwText || '') + '">'
-                      + '<span>\u270e</span>' + s.hw + '</span>' : '')
+            /* Das Hausaufgaben-Symbol mit rotem Zaehler. Der Tipp nennt
+               zusaetzlich den Text der Aufgabe. */
+            + (s.hw ? '<span class="hw" title="' + esc(s.hw + ' Hausaufgabe(n)'
+                      + (s.hwText ? ': ' + s.hwText : '')) + '">'
+                      + symbol('fa-book-open-cover') + '<b>' + s.hw + '</b></span>' : '')
             + '</div>';
           vorher = Math.max(vorher, s.to);
         });
