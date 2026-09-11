@@ -629,7 +629,31 @@ Abstimmung — der Bericht sagt dann einfach nichts dazu.
 
 Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt. Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
 
-## 19. PHP-Befehlsreferenz
+## 19. Belegung messen (für die Fehlersuche)
+
+Symcon führt je Instanz genau **eine** Sache zur Zeit aus. Alles, was im
+Gateway lange dauert — ein Scan, ein KI-Aufruf, das Abholen der Mails —, lässt
+jede Anfrage der App so lange warten. Gemessen am 11.09.2026: 30 gleichzeitige
+Abrufe brauchten 874 ms statt 31; der Hook einer *anderen* Instanz blieb dabei
+unbeeindruckt (2,7 → 3,0 ms). Die Sperre gilt also je Instanz, nicht für den
+ganzen Server.
+
+Wer wissen will, **wer** wie lange belegt: eine leere Datei
+`symdo-messung.an` im Datenverzeichnis von Symcon anlegen
+(`/var/lib/symcon/`). Ab dann schreibt das Gateway eine Zeile je Vorgang nach
+`symdo-belegung.log`:
+
+```
+2026-09-11 15:28:43	16011	aktion	EduScan	635.6
+2026-09-11 15:28:42	16011	hook	/v1/timetable	42.1
+```
+
+Zeit · Instanz · Art (`aktion` = Timer, `hook` = Anfrage der App) · Name ·
+Dauer in Millisekunden. Die Datei zu löschen schaltet die Messung wieder ab;
+bei 20 MB hört sie von selbst auf. Adressen stehen gekürzt darin, Kennungen
+und Parameter gar nicht.
+
+## 20. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
 

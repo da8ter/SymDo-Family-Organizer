@@ -819,6 +819,9 @@ trait AppCore
     /** Alles unter /hook/lists/… — die OAuth-Pfade hat die Fassade vorher abgefangen. */
     private function AppProcessHook(): void
     {
+        // Mitgemessen: der Hook ist der zweite Einstieg, der diese Instanz
+        // belegt — jede Anfrage der App laeuft hier durch (siehe Belegung()).
+        $messStart = microtime(true);
         try {
             $path = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
 
@@ -855,7 +858,25 @@ trait AppCore
             $this->SendDebug('Hook', 'Unhandled error: ' . $e->getMessage(), 0);
             $this->LogMessage($e->getMessage(), KL_ERROR);
             $this->SendApiError('internal', 'Internal server error', 500);
+        } finally {
+            /* Nach dem catch, nicht darin: gemessen wird jeder Durchgang, auch
+               der mit `return` mittendrin — davon gibt es in dieser Methode ein
+               Dutzend. */
+            $this->Belegung('hook', $this->BelegungPfad(), $messStart);
         }
+    }
+
+    /**
+     * Der Pfad fuer die Messung, auf das Wesentliche gekuerzt: „/v1/timetable"
+     * statt der vollen Adresse. Kennungen und Fragezeichen-Teile bleiben
+     * draussen — in einer Messdatei haben sie nichts zu suchen.
+     */
+    private function BelegungPfad(): string
+    {
+        $pfad = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+        $pfad = (string)preg_replace('#^/hook/[^/]+(/app)?#', '', $pfad);
+        $teile = array_slice(array_values(array_filter(explode('/', $pfad), 'strlen')), 0, 2);
+        return $teile === [] ? '/' : '/' . implode('/', $teile);
     }
 
     /**
