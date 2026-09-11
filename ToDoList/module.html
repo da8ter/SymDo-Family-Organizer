@@ -8581,9 +8581,18 @@ function nvSchienenBinden(wurzel) {
   /* Auch nach dem Drehen des Geraets oder einem Fensterwechsel: die Stuecke
      werden dann breiter oder schmaler, und was eben noch passte, passt nicht
      mehr. Ein Beobachter je Balken genuegt. */
-  if (window.ResizeObserver && !wurzel.__nvBeobachter) {
-    wurzel.__nvBeobachter = new ResizeObserver(() => nvEngePruefen(wurzel));
-    wurzel.querySelectorAll('.nv-balken').forEach(b => wurzel.__nvBeobachter.observe(b));
+  if (window.ResizeObserver) {
+    /* Beobachtet werden die STUECKE, nicht nur die Balken: der Balken behaelt
+       seine Breite, waehrend Fussweg und Wartezeit mit dem Symbolsatz breiter
+       werden und die Fahrten damit schmaler. Genau dieser Moment wurde sonst
+       verpasst. Eine Rueckkopplung gibt es nicht — das Aus- und Einblenden
+       aendert die Breite einer Fahrt nicht. */
+    if (wurzel.__nvBeobachter) {
+      wurzel.__nvBeobachter.disconnect();
+    } else {
+      wurzel.__nvBeobachter = new ResizeObserver(() => nvEngePruefen(wurzel));
+    }
+    wurzel.querySelectorAll('.nv-stueck').forEach(b => wurzel.__nvBeobachter.observe(b));
   }
   wurzel.querySelectorAll('[data-nv-schiene]').forEach(schiene => {
     const punkte = schiene.nextElementSibling;

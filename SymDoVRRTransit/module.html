@@ -420,6 +420,7 @@ function zeichne() {
     + '</div>';
 
   engePruefen();
+  messungLiveHalten();
 
   /* Die Punkte folgen dem Wischen. Gerechnet wird aus der Scrollposition und
      nicht über einen Beobachter: eine Schiene hat höchstens fünf Kinder, und
@@ -457,6 +458,35 @@ function engePruefen() {
     if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-symbol'); }
     if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-zeit'); }
   });
+}
+
+let messBeobachter = null;
+/**
+ * Die Messung LAUFEND halten, nicht nur ein paarmal nach dem Zeichnen.
+ *
+ * Zwei Dinge ändern die Breite eines Fahrstücks, nachdem gezeichnet wurde:
+ * die Kachel bekommt ihre endgültige Größe erst von der Visu, und sobald der
+ * Symbolsatz geladen ist, werden Fuß- und Wartestück breiter — was die
+ * Fahrten schmaler macht. Wer nur zweimal verzögert misst, trifft dann den
+ * falschen Moment: im Bild fehlte dem Stück „784" das Symbol, obwohl
+ * reichlich Platz war.
+ *
+ * Beobachtet werden die Stücke selbst. Eine Rückkopplung gibt es dabei nicht:
+ * das Aus- und Einblenden ändert die Breite einer Fahrt nicht — die bestimmt
+ * allein die Aufteilung des Balkens.
+ */
+function messungLiveHalten() {
+  if (!window.ResizeObserver) {
+    return;
+  }
+  if (messBeobachter) {
+    messBeobachter.disconnect();
+  } else {
+    messBeobachter = new ResizeObserver(function () { engePruefen(); });
+  }
+  const wurzel = document.getElementById('wurzel');
+  if (wurzel) { messBeobachter.observe(wurzel); }
+  document.querySelectorAll('.stueck').forEach(function (st) { messBeobachter.observe(st); });
 }
 
 function symboleErsetzen() {
