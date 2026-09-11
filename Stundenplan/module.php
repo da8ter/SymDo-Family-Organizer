@@ -24,6 +24,17 @@ class SymDoTimetable extends IPSModuleStrict
     private const EIGENE_GUID = '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}';
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
+    /** Wie lange die Mitgliederliste des Gateways gemerkt wird (Sekunden). */
+    private const MITGLIEDER_MERKER_S = 30;
+
+    /**
+     * Merker fuer GatewayMitgliederRoh: ['gw' => int, 'zeit' => float,
+     * 'liste' => list<array>]. Leer, solange nichts gemerkt ist.
+     *
+     * @var array<string, mixed>
+     */
+    private array $mitgliederMerker = [];
+
     /**
      * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
      * Gateway an oder legt auf Wunsch eines an. Damit entfaellt das
@@ -1738,19 +1749,50 @@ class SymDoTimetable extends IPSModuleStrict
         return $karte;
     }
 
-    /** Die Mitgliederliste des Gateways, roh — mit Rolle. */
+    /**
+     * Die Mitgliederliste des Gateways, roh — mit Rolle.
+     *
+     * Mit Merker, weil der Aufbau EINES Plans die Liste dutzendfach braucht:
+     * je Kind fuer die Kennung, noch einmal fuer die Fotos, noch einmal beim
+     * Zusammenstellen der Kinder. Am 11.09.2026 im Hook gezaehlt: 62 Aufrufe
+     * fuer einen Abruf, jeder liest im Gateway die Mitglieder samt Bildern.
+     *
+     * Sicher ist der Merker nur fuer die Dauer EINES Aufrufs — laenger lebt das
+     * Objekt nicht zwangslaeufig. Haelt die Laufzeit es doch (Timer, Kachel),
+     * begrenzen 30 Sekunden den Schaden: ein neu angelegtes oder umbenanntes
+     * Mitglied hinkt hoechstens so lange hinterher, und der Kachel-Takt ist
+     * ohnehin zehnmal so lang.
+     *
+     * GEMERKT WIRD NUR EINE ANTWORT MIT INHALT. Laeuft der Abruf im Hook des
+     * Gateways, laesst Symcon den Rueckruf nicht in die beschaeftigte Instanz
+     * und die Antwort ist leer. Diesen Fehlschlag festzuhalten hiesse, ihn an
+     * den naechsten Kachelaufbau weiterzureichen, dem dann die Fotos fehlten —
+     * und ein abgewiesener Aufruf kostet nichts: alle 62 lagen in derselben
+     * Sekunde.
+     */
     private function GatewayMitgliederRoh(): array
     {
         $gw = $this->GatewayInstanz();
         if ($gw <= 0 || !function_exists('TGW_GetUsers')) {
             return [];
         }
+        // Das Gateway MIT im Merker: wechselt die Eltern-Instanz, ist die
+        // gemerkte Liste die einer fremden Familie.
+        if ((int)($this->mitgliederMerker['gw'] ?? 0) === $gw
+            && (microtime(true) - (float)($this->mitgliederMerker['zeit'] ?? 0.0))
+               < self::MITGLIEDER_MERKER_S) {
+            return (array)$this->mitgliederMerker['liste'];
+        }
         try {
             $roh = json_decode((string)@TGW_GetUsers($gw), true);
         } catch (\Throwable $e) {
             return [];
         }
-        return is_array($roh) ? array_values(array_filter($roh, 'is_array')) : [];
+        $liste = is_array($roh) ? array_values(array_filter($roh, 'is_array')) : [];
+        if ($liste !== []) {
+            $this->mitgliederMerker = ['gw' => $gw, 'zeit' => microtime(true), 'liste' => $liste];
+        }
+        return $liste;
     }
 
     /**
