@@ -228,23 +228,19 @@ class SymDoSetup extends IPSModuleStrict
             [
                 'name'    => 'school',
                 'caption' => $this->Translate('School'),
-                'items'   => [
+                'items'   => array_merge([
                     ['type' => 'Label', 'caption' => $this->Translate('Timetable, substitutions and homework straight from school — every morning, without typing.')],
                     ['type' => 'Select', 'name' => 'School', 'caption' => $this->Translate('School system'),
+                     'value'  => $this->SchulWahl(),
                      'options' => [
                          ['value' => 'none', 'caption' => $this->Translate('Not now')],
                          ['value' => 'untis', 'caption' => 'WebUntis'],
                          ['value' => 'moodle', 'caption' => 'LOGINEO NRW LMS'],
-                     ]],
-                    ['type' => 'Select', 'name' => 'SchoolChild', 'caption' => $this->Translate('For which child?'),
-                     'options' => $this->KinderOptionen()],
-                    ['type' => 'ValidationTextBox', 'name' => 'SchoolServer', 'caption' => $this->Translate('Server or address'),
-                     'validate' => '^$|^[A-Za-z0-9.\\-]+(/.*)?$'],
-                    ['type' => 'ValidationTextBox', 'name' => 'SchoolName', 'caption' => $this->Translate('School name (WebUntis)')],
-                    ['type' => 'ValidationTextBox', 'name' => 'SchoolUser', 'caption' => $this->Translate('User name')],
-                    ['type' => 'PasswordTextBox', 'name' => 'SchoolPassword', 'caption' => $this->Translate('Password')],
-                    ['type' => 'Label', 'caption' => $this->Translate('WebUntis: server such as herakles.webuntis.com and the school name. LOGINEO: the address of your school server.')],
-                ],
+                     ],
+                     /* Nur die Felder, die dieses System braucht — dieselbe
+                        Quelle wie beim Zeichnen der Seite: SchulFelder(). */
+                     'onChange' => 'IPS_RequestAction(' . $ich . ', "SchoolPick", $School);'],
+                ], $this->SchulFelderItems()),
                 'validate'  => 'return SDSU_ValidateSchool(' . $ich . ', $School, $SchoolServer, $SchoolUser, $SchoolPassword);',
                 'onConfirm' => 'IPS_RequestAction(' . $ich . ', "School", json_encode(["school" => $School,'
                     . ' "child" => $SchoolChild, "server" => $SchoolServer, "name" => $SchoolName,'
@@ -392,6 +388,73 @@ class SymDoSetup extends IPSModuleStrict
             : sprintf($this->Translate('Already set up: %s'), implode(' · ', $teile));
     }
 
+    /** Das derzeit gewählte Schulsystem (aus dem Puffer). */
+    private function SchulWahl(): string
+    {
+        $w = trim((string)($this->Antworten()['school'] ?? 'none'));
+        return in_array($w, ['none', 'untis', 'moodle'], true) ? $w : 'none';
+    }
+
+    /**
+     * Welche Felder ein Schulsystem braucht — Sichtbarkeit und Beschriftung.
+     *
+     * EINE Quelle für beides: den Aufbau der Seite und das Umschalten im
+     * offenen Formular. Zwei Listen wären zwei Wahrheiten.
+     *
+     * @return array<string,array{visible:bool,caption?:string}>
+     */
+    private function SchulFelder(string $system): array
+    {
+        $untis = $system === 'untis';
+        $moodle = $system === 'moodle';
+        $an = $untis || $moodle;
+        return [
+            'SchoolChild'    => ['visible' => $an],
+            'SchoolServer'   => ['visible' => $an, 'caption' => $untis
+                ? $this->Translate('WebUntis server')
+                : $this->Translate('Address of your school server')],
+            // Den Schulnamen kennt nur WebUntis.
+            'SchoolName'     => ['visible' => $untis],
+            'SchoolUser'     => ['visible' => $an],
+            'SchoolPassword' => ['visible' => $an],
+            'SchoolHint'     => ['visible' => $an, 'caption' => $untis
+                ? $this->Translate('The server is the address WebUntis shows in your browser, for example herakles.webuntis.com. The school name is the one you pick when logging in.')
+                : $this->Translate('The address is the one your school server answers on, for example 12345.logineonrw-lms.de.')],
+        ];
+    }
+
+    /** Die Felder der Schulseite, im Zustand der aktuellen Wahl. */
+    private function SchulFelderItems(): array
+    {
+        $st = $this->SchulFelder($this->SchulWahl());
+        /* array_merge, NICHT `+`: die Vereinigung zweier Arrays behält in PHP
+           den VORHANDENEN Schlüssel — die Beschriftung des Systems hätte die
+           allgemeine nie ersetzt (im Prüflauf blieb „Server oder Adresse"
+           stehen, obwohl WebUntis gewählt war). */
+        $bau = static function (array $feld, array $zustand): array {
+            $zusatz = ['visible' => (bool)$zustand['visible']];
+            if (isset($zustand['caption'])) {
+                $zusatz['caption'] = (string)$zustand['caption'];
+            }
+            return array_merge($feld, $zusatz);
+        };
+        return [
+            $bau(['type' => 'Select', 'name' => 'SchoolChild',
+                  'caption' => $this->Translate('For which child?'),
+                  'options' => $this->KinderOptionen()], $st['SchoolChild']),
+            $bau(['type' => 'ValidationTextBox', 'name' => 'SchoolServer',
+                  'caption' => $this->Translate('Server or address'),
+                  'validate' => '^$|^[A-Za-z0-9.\\-]+(/.*)?$'], $st['SchoolServer']),
+            $bau(['type' => 'ValidationTextBox', 'name' => 'SchoolName',
+                  'caption' => $this->Translate('School name')], $st['SchoolName']),
+            $bau(['type' => 'ValidationTextBox', 'name' => 'SchoolUser',
+                  'caption' => $this->Translate('User name')], $st['SchoolUser']),
+            $bau(['type' => 'PasswordTextBox', 'name' => 'SchoolPassword',
+                  'caption' => $this->Translate('Password')], $st['SchoolPassword']),
+            $bau(['type' => 'Label', 'name' => 'SchoolHint', 'caption' => ''], $st['SchoolHint']),
+        ];
+    }
+
     /** Ein Mitglied in einer Zeile: Name, Rolle, Geburtstag, Foto, Push. */
     private function MitgliedZeile(array $m): string
     {
@@ -525,6 +588,18 @@ class SymDoSetup extends IPSModuleStrict
 
             case 'Access':
                 $this->AntwortSetzen('access', ($this->JsonArray((string)$Value)['want'] ?? false) === true);
+                break;
+
+            case 'SchoolPick':
+                $wahl = trim((string)$Value);
+                $this->AntwortSetzen('school', in_array($wahl, ['none', 'untis', 'moodle'], true) ? $wahl : 'none');
+                foreach ($this->SchulFelder($this->SchulWahl()) as $name => $st) {
+                    $this->UpdateFormField($name, 'visible', (bool)$st['visible']);
+                    if (isset($st['caption'])) {
+                        $this->UpdateFormField($name, 'caption', (string)$st['caption']);
+                    }
+                }
+                $this->UpdateFormField('SummaryText', 'caption', $this->VorschauText());
                 break;
 
             case 'School':

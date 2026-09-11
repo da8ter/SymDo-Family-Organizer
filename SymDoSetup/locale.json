@@ -105,10 +105,8 @@
             "Not now": "Jetzt nicht",
             "For which child?": "Für welches Kind?",
             "Server or address": "Server oder Adresse",
-            "School name (WebUntis)": "Schulname (WebUntis)",
             "User name": "Benutzername",
             "Password": "Kennwort",
-            "WebUntis: server such as herakles.webuntis.com and the school name. LOGINEO: the address of your school server.": "WebUntis: Server wie herakles.webuntis.com und der Schulname. LOGINEO: die Adresse des Schulservers.",
             "Please select": "Bitte wählen",
             "Please enter the server or address of your school.": "Bitte den Server oder die Adresse der Schule eintragen.",
             "Please enter user name and password.": "Bitte Benutzername und Kennwort eintragen.",
@@ -140,7 +138,12 @@
             "Push visualization": "Push-Visualisierung",
             "with photo": "mit Foto",
             "with push": "mit Push",
-            "Photo and push visualization are optional — you can add them later at any time. The push visualization decides which visualization receives the push messages for this family member.": "Foto und Push-Visualisierung sind freiwillig — du kannst sie jederzeit nachtragen. Die Push-Visualisierung legt fest, an welche Visualisierung die Push-Nachrichten für dieses Familienmitglied gesendet werden."
+            "Photo and push visualization are optional — you can add them later at any time. The push visualization decides which visualization receives the push messages for this family member.": "Foto und Push-Visualisierung sind freiwillig — du kannst sie jederzeit nachtragen. Die Push-Visualisierung legt fest, an welche Visualisierung die Push-Nachrichten für dieses Familienmitglied gesendet werden.",
+            "WebUntis server": "WebUntis-Server",
+            "Address of your school server": "Adresse des Schulservers",
+            "School name": "Schulname",
+            "The server is the address WebUntis shows in your browser, for example herakles.webuntis.com. The school name is the one you pick when logging in.": "Der Server ist die Adresse, die WebUntis im Browser zeigt, zum Beispiel herakles.webuntis.com. Der Schulname ist der, den du beim Anmelden auswählst.",
+            "The address is the one your school server answers on, for example 12345.logineonrw-lms.de.": "Die Adresse ist die, unter der der Schulserver antwortet, zum Beispiel 12345.logineonrw-lms.de."
         }
     }
 }

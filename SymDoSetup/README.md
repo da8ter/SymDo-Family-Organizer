@@ -24,8 +24,10 @@ Der Knopf *SymDo-Installationsassistenten starten* öffnet acht Seiten:
    mit einem Hinweis darunter, welche das waren.
 4. **Dein Zugang** — der Zugang für die SymDo Web-App; er entsteht am Ende und
    steht als Code im Bericht.
-5. **Schule** — WebUntis oder LOGINEO, mit Adresse, Benutzername und Kennwort,
-   und für welches Kind.
+5. **Schule** — WebUntis oder LOGINEO. Die Felder **richten sich nach der
+   Wahl**: ohne Schulsystem ist die Seite leer, bei WebUntis kommt der Schulname
+   dazu, und die Beschriftung des Servers sagt, was dort hingehört. Kennwort und
+   Kind werden hier mit abgefragt.
 6. **Kluge Helfer** — KI-Anbieter, Schlüssel, der vollständige
    Datenschutzhinweis und die Zustimmung.
 7. **Alles bereit?** — eine Vorschau dessen, was gleich entsteht.
@@ -92,7 +94,7 @@ derselbe Knopf dieselben Felder als Aufklapp-Panels mit einem
 ## Für Entwickler
 
 Die Entscheidungslogik steht in `libs/SetupPlan.php` — ohne Symcon, damit sie
-prüfbar ist (`tests/SetupPlanTest.php`, 66 Zusicherungen). Der Ausführer hängt
+prüfbar ist (`tests/SetupPlanTest.php`, 89 Zusicherungen). Der Ausführer hängt
 an keiner Stelle an `pages`; er nimmt ein Antwort-JSON:
 
 ```php
