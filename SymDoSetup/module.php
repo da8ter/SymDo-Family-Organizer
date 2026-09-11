@@ -187,7 +187,7 @@ class SymDoSetup extends IPSModuleStrict
                      'options' => $this->RollenOptionen()],
                     ['type' => 'SelectMedia', 'name' => 'MemberPhoto', 'caption' => $this->Translate('Photo')],
                     ['type' => 'SelectInstance', 'name' => 'MemberVisu', 'caption' => $this->Translate('Push visualization')],
-                    ['type' => 'Label', 'caption' => $this->Translate('Photo and push visualization are optional — you can add them later at any time.')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Photo and push visualization are optional — you can add them later at any time. The push visualization decides which visualization receives the push messages for this family member.')],
                     /* Alle sechs Felder der Mitgliederliste des Gateways. Der
                        Geburtstag ist ein SelectDate und kommt als PHP-Array im
                        Skript an — so indexiert OpenCalendar seine Listenzeile. */

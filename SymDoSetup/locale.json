@@ -138,9 +138,9 @@
             "Persona": "Rolle",
             "Photo": "Foto",
             "Push visualization": "Push-Visualisierung",
-            "Photo and push visualization are optional — you can add them later at any time.": "Foto und Push-Visualisierung sind freiwillig — du kannst sie jederzeit nachtragen.",
             "with photo": "mit Foto",
-            "with push": "mit Push"
+            "with push": "mit Push",
+            "Photo and push visualization are optional — you can add them later at any time. The push visualization decides which visualization receives the push messages for this family member.": "Foto und Push-Visualisierung sind freiwillig — du kannst sie jederzeit nachtragen. Die Push-Visualisierung legt fest, an welche Visualisierung die Push-Nachrichten für dieses Familienmitglied gesendet werden."
         }
     }
 }
