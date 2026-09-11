@@ -1,0 +1,257 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Offline-Prüfstand für das Rechenwerk der VRR-Auskunft.
+ *
+ * Die Prüfdaten in `fixtures/` sind ECHTE Antworten der EFA vom 11.09.2026, von
+ * neutralen Düsseldorfer Haltestellen — Hauptbahnhof und Benrath. Gekürzt sind
+ * sie nur dort, wo es um Umfang geht: am ersten Abschnitt der Umstiegs-Strecke
+ * steht der Ballast (`properties`, `coords`, `stopSequence`) absichtlich noch
+ * drin, damit die weiße Liste etwas zu verwerfen hat.
+ *
+ * Braucht keine Symcon-Attrappen: TransitCalc ruft keine einzige IPS-Funktion.
+ * Genau dafür ist es eine eigene Klasse.
+ *
+ *   php SymDoVRRTransit/tests/TransitCalcTest.php
+ */
+
+require_once __DIR__ . '/../libs/TransitCalc.php';
+
+date_default_timezone_set('Europe/Berlin');
+
+$fehler = 0;
+$anzahl = 0;
+function pruefe(string $name, mixed $ist, mixed $soll): void
+{
+    global $fehler, $anzahl;
+    $anzahl++;
+    $a = json_encode($ist, JSON_UNESCAPED_UNICODE);
+    $b = json_encode($soll, JSON_UNESCAPED_UNICODE);
+    $ok = $a === $b;
+    if (!$ok) {
+        $fehler++;
+    }
+    printf("%-4s %-62s%s\n", $ok ? 'OK' : 'FEHL', $name,
+        $ok ? '' : "\n     ist:  $a\n     soll: $b");
+}
+
+function fixture(string $name): array
+{
+    $roh = @file_get_contents(__DIR__ . '/fixtures/' . $name . '.json');
+    if (!is_string($roh)) {
+        fwrite(STDERR, "Prüfdatei $name.json fehlt.\n");
+        exit(2);
+    }
+    return (array)json_decode($roh, true);
+}
+
+// ── Abfahrten ──────────────────────────────────────────────────────────────
+// Bezugszeit ist der Moment des Abrufs: 11.09.2026, 15:54 Ortszeit.
+$jetzt = strtotime('2026-09-11 15:54:00');
+$ab = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt);
+
+pruefe('drei Abfahrten', count($ab), 3);
+pruefe('aufsteigend nach Abfahrt sortiert',
+    [$ab[0]['at'] <= $ab[1]['at'], $ab[1]['at'] <= $ab[2]['at']], [true, true]);
+
+/* Der RE4 ist der Beweis für die Zeitzone: die EFA schickt „13:41Z", das
+   klassische JSON derselben Abfrage nennt 15:41 Ortszeit. Rechnet man das Z als
+   Ortszeit, geht die Kachel im Sommer zwei Stunden falsch. */
+$re4 = $ab[2];
+pruefe('RE4: Planzeit in Ortszeit', $re4['planned'], '15:41');
+pruefe('RE4: Prognose in Ortszeit', $re4['estimated'], '16:14');
+/* Gegengelesen am klassischen JSON derselben Abfrage: dort steht delay 33 und
+   countdown 20. Wer beides selbst rechnet, muss auf dieselben Zahlen kommen. */
+pruefe('RE4: Verspätung wie von der EFA selbst gemeldet', $re4['delay'], 33);
+pruefe('RE4: Countdown wie von der EFA selbst gemeldet', $re4['countdown'], 20);
+pruefe('RE4: Steig', $re4['platform'], '10');
+pruefe('RE4: Echtzeit erkannt', $re4['realtime'], true);
+pruefe('RE4: nicht entfallen', $re4['cancelled'], false);
+pruefe('RE4: Symbol aus der Produktklasse 13', [$re4['class'], $re4['icon']], [13, 'fa-train']);
+
+/* Der Fernverkehr kam ohne `disassembledName`. Ohne Rückfall auf `number`
+   stünde in der Kachel eine leere Linie — gemessen, nicht vermutet. */
+$ic = $ab[1];
+pruefe('Fernzug ohne disassembledName: Rückfall auf number', $ic['line'], '2203');
+pruefe('Fernzug: Ziel steht trotzdem', $ic['destination'], 'Köln Hbf');
+
+$bus = $ab[0];
+pruefe('Bus: Symbol aus der Produktklasse 5', [$bus['class'], $bus['icon']], [5, 'fa-bus']);
+pruefe('Bus: pünktlich', $bus['delay'], 0);
+
+// Linienfilter — die Schreibweise darf nicht entscheiden
+pruefe('Filter auf eine Linie',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['RE4']), 'line'), ['RE4']);
+pruefe('Filter ist unempfindlich gegen Schreibweise',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['re 4']), 'line'), ['RE4']);
+pruefe('Filter auf eine Linie, die es hier nicht gibt',
+    TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['U79']), []);
+pruefe('Obergrenze greift',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 2)), 2);
+
+/* Der Fußweg ist die Zahl, die wirklich zählt: nicht „wann fährt der Zug",
+   sondern „wann muss ich vom Tisch aufstehen". */
+$mitWeg = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 25);
+pruefe('25 Minuten Fußweg: der RE4 in 20 Minuten ist nicht mehr zu schaffen',
+    [$mitWeg[2]['leaveIn'], $mitWeg[2]['reachable']], [-5, false]);
+$knapp = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 20);
+pruefe('20 Minuten Fußweg: genau erreichbar',
+    [$knapp[2]['leaveIn'], $knapp[2]['reachable']], [0, true]);
+
+/* Eine unbekannte Haltestelle antwortet mit HTTP 200 und einer leeren Liste,
+   nicht mit einem Fehler. Der Aufrufer erkennt den Fall nur hieran. */
+pruefe('unbekannte Haltestelle: leere Liste statt Fehler',
+    TransitCalc::Abfahrten(fixture('leer'), $jetzt), []);
+
+// ── Verbindungen ───────────────────────────────────────────────────────────
+$v = TransitCalc::Verbindungen(fixture('strecke-umstieg'));
+pruefe('eine Verbindung', count($v), 1);
+pruefe('ein Umstieg', $v[0]['interchanges'], 1);
+pruefe('drei Abschnitte: Fahrt, Fußweg, Fahrt',
+    array_column($v[0]['legs'], 'kind'), ['ride', 'walk', 'ride']);
+pruefe('Linien der beiden Fahrten',
+    [$v[0]['legs'][0]['line'], $v[0]['legs'][2]['line']], ['RE1', 'RE5']);
+pruefe('Abfahrt und Ankunft der ganzen Verbindung',
+    [$v[0]['departureText'], $v[0]['arrivalText']], ['15:35', '16:05']);
+
+/* Der Fußweg beim Umstieg dauert 240 s und liegt IN der Lücke zwischen 15:47
+   und 15:57 — er verlängert die Verbindung nicht. `footPathInfoRedundant` sagt
+   das, und in beiden gemessenen Auskünften stand es auf true. Ohne diese
+   Beachtung endete der Fußweg nach der Abfahrt des Anschlusses: eine Zeitachse,
+   die rückwärts läuft. */
+$umstieg = $v[0]['legs'][1];
+pruefe('Umstiegsfußweg: vier Minuten', $umstieg['seconds'], 240);
+pruefe('Umstiegsfußweg: liegt in der Lücke',
+    [$umstieg['depText'], $umstieg['arrText']], ['15:47', '15:51']);
+
+$vorwaerts = static function (array $verbindungen): bool {
+    foreach ($verbindungen as $x) {
+        $bis = 0;
+        foreach ($x['legs'] as $l) {
+            if ($l['depAt'] < $bis) {
+                return false;
+            }
+            $bis = $l['arrAt'];
+        }
+    }
+    return true;
+};
+pruefe('die Zeitachse läuft nie rückwärts (Umstieg)', $vorwaerts($v), true);
+
+$k = TransitCalc::Verbindungen(fixture('strecke-koordinate'));
+pruefe('Start an der Haustür: erster Abschnitt ist ein Fußweg',
+    [$k[0]['legs'][0]['kind'], $k[0]['legs'][0]['seconds']], ['walk', 360]);
+pruefe('die Zeitachse läuft nie rückwärts (ab Koordinate)', $vorwaerts($k), true);
+/* Der Fußweg, für den es keine Lücke gibt, fällt weg: er hat keine Zeit
+   gekostet, und ein Abschnitt ohne Dauer ist eine Behauptung. */
+pruefe('kein Scheinfußweg ohne Lücke', count($k[0]['legs']), 4);
+
+/* Bei einer Ankunftsvorgabe legt die EFA eine Verbindung dazu, die zu spät
+   kommt — zu „bis 08:00" kam neben 07:40 und 07:53 auch eine Ankunft um 08:03.
+   Für einen Schulweg ist das keine Alternative, sondern ein Zuspätkommen. */
+$anKommt = $v[0]['arrival'];
+pruefe('Ankunftsvorgabe genau auf die Ankunft: Verbindung bleibt',
+    count(TransitCalc::Verbindungen(fixture('strecke-umstieg'), 3, $anKommt)), 1);
+pruefe('Ankunftsvorgabe eine Minute früher: Verbindung fällt weg',
+    TransitCalc::Verbindungen(fixture('strecke-umstieg'), 3, $anKommt - 60), []);
+pruefe('ohne Vorgabe bleibt sie ohnehin',
+    count(TransitCalc::Verbindungen(fixture('strecke-umstieg'), 3, 0)), 1);
+
+// ── Die weisse Liste ───────────────────────────────────────────────────────
+/* Eine Streckenauskunft wog roh 247 KB, davon 176 KB `properties`. Was hier
+   durchkäme, stünde in jedem Bestand und in jeder Antwort an die App. */
+$text = json_encode(TransitCalc::Verbindungen(fixture('strecke-umstieg')), JSON_UNESCAPED_UNICODE);
+foreach (['properties', 'coords', 'stopSequence', 'pathDescriptions', 'hints', 'infos'] as $ballast) {
+    pruefe("Ballast bleibt draußen: $ballast", str_contains((string)$text, '"' . $ballast . '"'), false);
+}
+pruefe('und das Ergebnis ist klein', strlen((string)$text) < 4096, true);
+
+// ── Haltestellensuche ──────────────────────────────────────────────────────
+/* Die EFA sortiert NICHT nach Güte. In dieser echten Antwort steht der beste
+   Treffer (953) ganz hinten, hinter einem mit 166. Ohne Sortierung wählt der
+   Nutzer die falsche Haltestelle und sucht den Fehler später im Modul. */
+$h = TransitCalc::Haltestellen(fixture('haltestellen'));
+pruefe('nur Haltestellen, keine Stadtteile', count($h), 6);
+pruefe('der beste Treffer steht vorn', $h[0]['quality'], 953);
+pruefe('und der schlechteste hinten', $h[count($h) - 1]['quality'], 166);
+pruefe('Kennung und Name kommen mit',
+    [$h[0]['id'] !== '', $h[0]['name'] !== ''], [true, true]);
+pruefe('Obergrenze greift auch hier', count(TransitCalc::Haltestellen(fixture('haltestellen'), 2)), 2);
+
+// ── Der Schulweg ───────────────────────────────────────────────────────────
+/* Ein Montag mit drei Stunden. Die Richtung ergibt sich allein aus der Uhrzeit;
+   das ist die ganze Bedienung. */
+$stunde = static fn(string $von, string $bis, string $status = '', bool $care = false): array =>
+    ['start' => $von, 'end' => $bis, 'status' => $status, 'care' => $care];
+$tag = ['date' => '2026-09-14', 'slots' => [
+    $stunde('08:00', '08:45'),
+    $stunde('08:55', '09:40'),
+    $stunde('12:20', '13:05'),
+]];
+$frueh = strtotime('2026-09-14 07:00:00');
+$mittags = strtotime('2026-09-14 09:00:00');
+$abends = strtotime('2026-09-14 19:00:00');
+
+$hin = TransitCalc::Schulweg($tag, '2026-09-14', $frueh, 10);
+pruefe('morgens: Hinweg', [$hin['direction'], $hin['mode']], ['to', 'arr']);
+pruefe('morgens: ankommen zehn Minuten vor Unterrichtsbeginn', $hin['targetTime'], '07:50');
+pruefe('morgens: beide Schulzeiten stehen im Ergebnis',
+    [$hin['schoolStart'], $hin['schoolEnd']], ['08:00', '13:05']);
+pruefe('die Pufferzeit wird mitgegeben', $hin['bufferUsed'], 10);
+pruefe('ohne Puffer ist das Ziel der Beginn',
+    TransitCalc::Schulweg($tag, '2026-09-14', $frueh, 0)['targetTime'], '08:00');
+
+/* Fällt die erste Stunde aus, darf das Kind später los. Das ist der Fall, für
+   den sich die Kopplung an den Stundenplan überhaupt lohnt. */
+$ohneErste = $tag;
+$ohneErste['slots'][0]['status'] = 'entfall';
+$spaeter = TransitCalc::Schulweg($ohneErste, '2026-09-14', $frueh, 10);
+pruefe('erste Stunde entfällt: Beginn rutscht auf die zweite', $spaeter['schoolStart'], '08:55');
+pruefe('erste Stunde entfällt: Ziel entsprechend später', $spaeter['targetTime'], '08:45');
+
+$rueck = TransitCalc::Schulweg($tag, '2026-09-14', $mittags, 10);
+pruefe('ab Unterrichtsbeginn: Rückweg', [$rueck['direction'], $rueck['mode']], ['from', 'dep']);
+pruefe('Rückweg: losfahren zehn Minuten nach Schulschluss', $rueck['targetTime'], '13:15');
+
+/* Und umgekehrt: fällt die letzte Stunde aus, ist früher Schluss. */
+$ohneLetzte = $tag;
+$ohneLetzte['slots'][2]['status'] = 'entfall';
+$frueherHeim = TransitCalc::Schulweg($ohneLetzte, '2026-09-14', $mittags, 10);
+pruefe('letzte Stunde entfällt: Schluss ist früher', $frueherHeim['schoolEnd'], '09:40');
+pruefe('letzte Stunde entfällt: Rückweg entsprechend früher', $frueherHeim['targetTime'], '09:50');
+
+/* Betreuung zählt mit: ist sie der letzte Eintrag, fährt das Kind danach. */
+$mitBetreuung = $tag;
+$mitBetreuung['slots'][] = $stunde('13:05', '15:00', '', true);
+pruefe('Betreuung bis 15:00: Rückweg ab 15:10',
+    TransitCalc::Schulweg($mitBetreuung, '2026-09-14', $mittags, 10)['targetTime'], '15:10');
+
+pruefe('Ferien: kein Schulweg',
+    TransitCalc::Schulweg(['holiday' => ['name' => 'Herbstferien'], 'slots' => []], '2026-09-14', $frueh, 10), null);
+pruefe('Tag ohne Unterricht: kein Schulweg',
+    TransitCalc::Schulweg(['slots' => []], '2026-09-14', $frueh, 10), null);
+pruefe('alle Stunden entfallen: kein Schulweg',
+    TransitCalc::Schulweg(['slots' => [$stunde('08:00', '08:45', 'entfall')]], '2026-09-14', $frueh, 10), null);
+
+/* Abends ist der Schultag durch — dann gibt dieser Tag nichts mehr her, und der
+   Aufrufer fragt den nächsten. Weil mit Zeitstempeln gerechnet wird, liefert
+   derselbe Aufruf für morgen von selbst wieder den Hinweg. */
+pruefe('abends: dieser Tag ist durch',
+    TransitCalc::Schulweg($tag, '2026-09-14', $abends, 10), null);
+$morgen = TransitCalc::Schulweg($tag, '2026-09-15', $abends, 10);
+pruefe('abends: der nächste Schultag zeigt wieder den Hinweg',
+    [$morgen['direction'], $morgen['date'], $morgen['targetTime']], ['to', '2026-09-15', '07:50']);
+
+/* Die Grenze selbst: drei Stunden nach der Rückfahrt gilt sie noch, danach
+   nicht mehr. */
+$knappVorbei = strtotime('2026-09-14 16:14:00');   // 13:15 + 3 h minus eine Minute
+$knappDanach = strtotime('2026-09-14 16:16:00');
+pruefe('kurz vor der Nachlaufgrenze: Rückweg gilt noch',
+    TransitCalc::Schulweg($tag, '2026-09-14', $knappVorbei, 10)['direction'], 'from');
+pruefe('kurz danach: der Tag ist durch',
+    TransitCalc::Schulweg($tag, '2026-09-14', $knappDanach, 10), null);
+
+printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
+exit($fehler === 0 ? 0 : 1);
