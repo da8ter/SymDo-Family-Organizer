@@ -2154,7 +2154,9 @@ class SymDoGateway extends IPSModuleStrict
                 [
                     'type'    => 'Button',
                     'caption' => $this->Translate('Generate receiving addresses'),
-                    'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', 0);'
+                    /* Die LEBENDE Liste mitreichen: sonst ersetzte der Knopf gerade
+                       getippte Adressen durch den gespeicherten Stand. */
+                    'onClick' => 'IPS_RequestAction($id, \'MailHookFillAddresses\', json_encode(iterator_to_array($MailAddresses)));'
                 ],
                 [
                     // Rueckmeldung der beiden Knoepfe. Bewusst ein Label und kein

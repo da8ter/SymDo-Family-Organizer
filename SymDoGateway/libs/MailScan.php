@@ -219,7 +219,7 @@ trait MailScan
             return true;
         }
         if ($Ident === 'MailHookFillAddresses') {
-            $this->MailHookFillAddresses();
+            $this->MailHookFillAddresses((string)$Value);
             return true;
         }
         if ($Ident === 'MailScanNow') {
@@ -307,10 +307,13 @@ trait MailScan
      *
      * @return list<array{UserID: string, Name: string, Address: string, SenderAllow: string}>
      */
-    private function MailAddressRows(): array
+    private function MailAddressRows(?array $lebend = null): array
     {
+        /* $lebend = die Zeilen aus dem OFFENEN Formular. Ohne sie las diese
+           Stelle die gespeicherte Eigenschaft und ersetzte damit die Liste im
+           Formular — eine gerade getippte Adresse war weg. */
         $vorhanden = [];
-        foreach ((array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $zeile) {
+        foreach ($lebend ?? (array)json_decode((string)$this->MailProp('MailAddresses', '[]'), true) as $zeile) {
             if (!is_array($zeile)) {
                 continue;
             }
@@ -371,8 +374,10 @@ trait MailScan
         return $lokal === '' ? $tag . '@' . $domain : $lokal . '+' . $tag . '@' . $domain;
     }
 
-    private function MailHookFillAddresses(): void
+    private function MailHookFillAddresses(string $nutzlast = ''): void
     {
+        $roh    = json_decode($nutzlast, true);
+        $lebend = is_array($roh) ? array_values(array_filter($roh, 'is_array')) : null;
         $domain = $this->MailHookDomain();
         if ($domain === '') {
             $this->UpdateFormField('MailHookStatus', 'caption', $this->Translate('Please enter your Mailgun domain above first and press Apply.'));
@@ -383,7 +388,7 @@ trait MailScan
 
         $zeilen = [];
         $neu    = 0;
-        foreach ($this->MailAddressRows() as $zeile) {
+        foreach ($this->MailAddressRows($lebend) as $zeile) {
             // Eingetragenes bleibt: der Knopf fuellt Luecken, er ueberschreibt nicht.
             if ($zeile['Address'] === '') {
                 $zeile['Address'] = $this->MailHookAddressFor($lokal, $domain, $zeile['Name'], $zeile['UserID']);
