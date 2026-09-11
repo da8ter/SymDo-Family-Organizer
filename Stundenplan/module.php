@@ -886,7 +886,10 @@ class SymDoTimetable extends IPSModuleStrict
                 $this->FerienFelderZeigen((string)$Value);
                 return;
             case 'FillSubjects':
-                $this->UpdateFormField('SubjectStatus', 'caption', $this->FaecherNachtragen());
+                $this->UpdateFormField('SubjectStatus', 'caption', $this->FaecherNachtragen((string)$Value));
+                return;
+            case 'SubjectsSync':
+                $this->StundenAuswahlAuffrischen($this->FaecherNamen((string)$Value));
                 return;
             case 'GetState':
                 // Nur zeigen, nichts aendern — die Kachel fragt beim Oeffnen.
@@ -1267,6 +1270,14 @@ class SymDoTimetable extends IPSModuleStrict
                     'add'         => true,
                     'delete'      => true,
                     'changeOrder' => true,
+                    /* Jede Aenderung an den Faechern zieht die Auswahl in ALLEN
+                       Tageslisten nach. Ohne das ist ein gerade angelegtes Fach
+                       erst nach Uebernehmen UND Neuoeffnen des Formulars einer
+                       Stunde zuzuordnen. */
+                    'onAdd'         => 'IPS_RequestAction($id, "SubjectsSync", json_encode(iterator_to_array($Subjects)));',
+                    'onEdit'        => 'IPS_RequestAction($id, "SubjectsSync", json_encode(iterator_to_array($Subjects)));',
+                    'onDelete'      => 'IPS_RequestAction($id, "SubjectsSync", json_encode(iterator_to_array($Subjects)));',
+                    'onChangeOrder' => 'IPS_RequestAction($id, "SubjectsSync", json_encode(iterator_to_array($Subjects)));',
                     'columns'     => [
                         ['caption' => $this->Translate('Subject'), 'name' => 'name', 'width' => 'auto',
                          'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
@@ -1279,7 +1290,7 @@ class SymDoTimetable extends IPSModuleStrict
                 [
                     'type'    => 'Button',
                     'caption' => $this->Translate('Add subjects from the lessons'),
-                    'onClick' => 'IPS_RequestAction($id, "FillSubjects", 0);'
+                    'onClick' => 'IPS_RequestAction($id, "FillSubjects", json_encode(iterator_to_array($Subjects)));'
                 ],
                 [
                     'type'    => 'Label',
@@ -1391,24 +1402,7 @@ class SymDoTimetable extends IPSModuleStrict
                         // RowLayout fehlerhaft (bestaetigter Bug, Fix erst 9.1).
                         // Von und Bis sind breiter als frueher, weil ein
                         // Zeitwaehler drei Felder zeigt statt eines Textfelds.
-                        'columns'  => [
-                            ['caption' => $this->Translate('Subject'), 'name' => 'subject', 'width' => '110px',
-                             'add' => $faecher[0] ?? '',
-                             'edit' => ['type' => 'Select', 'options' => $auswahl($faecher, $this->Translate('— pick —'))]],
-                            ['caption' => $this->Translate('From'), 'name' => 'start', 'width' => '105px',
-                             'add' => TimetableCalc::ZeitFeld('07:45'), 'edit' => ['type' => 'SelectTime']],
-                            ['caption' => $this->Translate('To'), 'name' => 'end', 'width' => '105px',
-                             'add' => TimetableCalc::ZeitFeld('08:30'), 'edit' => ['type' => 'SelectTime']],
-                            /* Raum und Lehrer als Freitext: Schulen kuerzen beides
-                               auf eigene Weise („121", „Halle L", „Fa", „Frau
-                               Fabian"), und eine Auswahlliste muesste erst
-                               gepflegt werden, bevor man die erste Stunde
-                               eintragen kann. */
-                            ['caption' => $this->Translate('Room'), 'name' => 'room', 'width' => '90px',
-                             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                            ['caption' => $this->Translate('Teacher'), 'name' => 'teacher', 'width' => '90px',
-                             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                        ],
+                        'columns'  => $this->StundenSpalten($faecher),
                     ],
                     [
                         'type'  => 'RowLayout',
@@ -1429,6 +1423,62 @@ class SymDoTimetable extends IPSModuleStrict
             ];
         }
         return ['type' => 'RowLayout', 'items' => $spalten];
+    }
+
+    /**
+     * Die Spalten EINER Tagesliste.
+     *
+     * Eigene Methode, weil sie im laufenden Formular ersetzt werden: die
+     * Fächer-Auswahl steht IN der Spaltendefinition, und wer ein Fach anlegt,
+     * soll es sofort einer Stunde geben können — ohne Übernehmen und
+     * Neuöffnen.
+     *
+     * @param list<string> $faecher
+     * @return list<array<string,mixed>>
+     */
+    private function StundenSpalten(array $faecher): array
+    {
+        $auswahl = [['caption' => $this->Translate('— pick —'), 'value' => '']];
+        foreach ($faecher as $n) {
+            $auswahl[] = ['caption' => $n, 'value' => $n];
+        }
+        return [
+            ['caption' => $this->Translate('Subject'), 'name' => 'subject', 'width' => '110px',
+             'add' => $faecher[0] ?? '',
+             'edit' => ['type' => 'Select', 'options' => $auswahl]],
+            ['caption' => $this->Translate('From'), 'name' => 'start', 'width' => '105px',
+             'add' => TimetableCalc::ZeitFeld('07:45'), 'edit' => ['type' => 'SelectTime']],
+            ['caption' => $this->Translate('To'), 'name' => 'end', 'width' => '105px',
+             'add' => TimetableCalc::ZeitFeld('08:30'), 'edit' => ['type' => 'SelectTime']],
+            /* Raum und Lehrer als Freitext: Schulen kuerzen beides auf eigene
+               Weise („121", „Halle L", „Fa", „Frau Fabian"), und eine
+               Auswahlliste muesste erst gepflegt werden, bevor man die erste
+               Stunde eintragen kann. */
+            ['caption' => $this->Translate('Room'), 'name' => 'room', 'width' => '90px',
+             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+            ['caption' => $this->Translate('Teacher'), 'name' => 'teacher', 'width' => '90px',
+             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+        ];
+    }
+
+    /**
+     * Die Fächer-Auswahl JEDER Tagesliste auffrischen.
+     *
+     * Eine Liste je Kind und Wochentag — bis zu sechs Tage mal sechs Kinder.
+     * Die Konsole nimmt ein Feld, das sie nicht kennt, stillschweigend hin,
+     * deshalb schadet eine Liste zu viel nicht; eine zu wenig fiele dagegen
+     * erst auf, wenn jemand dort ein Fach sucht.
+     *
+     * @param list<string> $faecher
+     */
+    private function StundenAuswahlAuffrischen(array $faecher): void
+    {
+        $spalten = (string)json_encode($this->StundenSpalten($faecher), JSON_UNESCAPED_UNICODE);
+        foreach (array_slice($this->Kinder(), 0, self::MAX_KINDER) as $i => $kind) {
+            foreach (TimetableCalc::Wochentage((bool)($kind['saturday']['enabled'] ?? false)) as $tag) {
+                $this->UpdateFormField(self::SlotProp($i + 1, $tag), 'columns', $spalten);
+            }
+        }
     }
 
     private function FerienBereich(): array
@@ -1633,13 +1683,64 @@ class SymDoTimetable extends IPSModuleStrict
     }
 
     /**
-     * Traegt Faecher nach, die in den Stunden vorkommen, aber nicht in der
-     * Faecher-Liste stehen. Geschrieben wird ueber IPS_SetProperty, damit der
-     * Nutzer die Vorschlaege danach im Formular anpassen kann.
+     * Die Zeilen der Fächerliste aus dem Formular, auf die eigenen Spalten
+     * zurechtgestutzt.
+     *
+     * Die Konsole schickt je Zeile mehr, als die Liste an Spalten hat
+     * (`index_`, `editable`, `rowColor`). Was nicht namentlich hier steht, geht
+     * nicht zurück ins Formular.
+     *
+     * @return list<array{name:string,icon:string,color:int}>
      */
-    private function FaecherNachtragen(): string
+    private function FaecherZeilen(string $nutzlast): array
     {
-        $vorhanden = array_column($this->Faecher(), 'name');
+        $roh = json_decode($nutzlast, true);
+        if (!is_array($roh)) {
+            // Ohne Nutzlast (Aufruf aus einem Skript) gilt der gespeicherte Stand.
+            $roh = json_decode((string)@IPS_GetProperty($this->InstanceID, 'Subjects'), true);
+        }
+        $raus = [];
+        foreach ((array)$roh as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $raus[] = [
+                'name'  => trim((string)($z['name'] ?? '')),
+                'icon'  => (string)($z['icon'] ?? 'book'),
+                'color' => (int)($z['color'] ?? 0x1E88E5),
+            ];
+        }
+        return $raus;
+    }
+
+    /** @return list<string> die Fächernamen, leere Zeilen fallen weg. */
+    private function FaecherNamen(string $nutzlast): array
+    {
+        return array_values(array_filter(
+            array_column($this->FaecherZeilen($nutzlast), 'name'),
+            static fn(string $n): bool => $n !== ''
+        ));
+    }
+
+    /**
+     * Trägt Fächer nach, die in den Stunden vorkommen, aber nicht in der
+     * Fächer-Liste stehen.
+     *
+     * Gearbeitet wird auf der LEBENDEN Liste des Formulars und nichts wird
+     * gespeichert. Vorher schrieb diese Stelle die Eigenschaft und rief
+     * IPS_ApplyChanges — das warf dem Nutzer jede offene Änderung im ganzen
+     * Formular weg, auch in den Tageslisten, und die neuen Fächer standen
+     * trotzdem erst nach einem Neuöffnen in der Auswahl der Stunden.
+     *
+     * Die STUNDEN kommen weiter aus dem gespeicherten Stand: sie werden aus
+     * WebUntis übernommen, nicht in derselben Sitzung getippt, und sie alle
+     * (bis zu sechs Kinder mal sechs Tage) durch den Knopf zu reichen wäre ein
+     * Skript von einigen Kilobyte je Klick.
+     */
+    private function FaecherNachtragen(string $nutzlast = ''): string
+    {
+        $liste     = $this->FaecherZeilen($nutzlast);
+        $vorhanden = array_column($liste, 'name');
         $neu = [];
         foreach ($this->Stunden() as $s) {
             $name = trim((string)$s['subjectId']);
@@ -1651,16 +1752,13 @@ class SymDoTimetable extends IPSModuleStrict
         if ($neu === []) {
             return $this->Translate('Nothing to add — every subject in the lessons already exists.');
         }
-        $liste = json_decode((string)@IPS_GetProperty($this->InstanceID, 'Subjects'), true);
-        $liste = is_array($liste) ? $liste : [];
         foreach ($neu as $name => $v) {
             $liste[] = ['name' => $name, 'icon' => $v['icon'], 'color' => $v['color']];
         }
-        @IPS_SetProperty($this->InstanceID, 'Subjects',
-            (string)json_encode($liste, JSON_UNESCAPED_UNICODE));
-        @IPS_ApplyChanges($this->InstanceID);
         $this->UpdateFormField('Subjects', 'values', (string)json_encode($liste, JSON_UNESCAPED_UNICODE));
-        return sprintf($this->Translate('%d subjects added: %s'),
+        $this->StundenAuswahlAuffrischen(array_values(array_filter(
+            array_column($liste, 'name'), static fn(string $n): bool => $n !== '')));
+        return sprintf($this->Translate('%d subjects added: %s — press Apply to keep them.'),
             count($neu), implode(', ', array_keys($neu)));
     }
 
