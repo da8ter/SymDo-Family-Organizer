@@ -454,13 +454,24 @@ function zeichne() {
  */
 function engePruefen() {
   document.querySelectorAll('.stueck.ride').forEach(function (st) {
+    const passt = function () { return st.scrollWidth <= st.clientWidth + 1; };
     st.classList.remove('ohne-symbol', 'ohne-zeit');
-    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-symbol'); }
-    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-zeit'); }
+    if (passt()) { return; }                       // Symbol, Linie, Fahrzeit
+    st.classList.add('ohne-symbol');
+    if (passt()) { return; }                       // Linie und Fahrzeit
+    /* Das Symbol kommt ZURÜCK, sobald die Fahrzeit weicht: „784" allein
+       braucht 40 Pixel, mit Symbol 58 — bei 71 Pixeln Platz wäre es
+       Verschwendung, das Feld leer zu lassen. Gemessen in der laufenden
+       Kachel, die 351 Pixel breit ist. */
+    st.classList.remove('ohne-symbol');
+    st.classList.add('ohne-zeit');
+    if (passt()) { return; }                       // Symbol und Linie
+    st.classList.add('ohne-symbol');               // nur noch die Linie
   });
 }
 
 let messBeobachter = null;
+let tauschBeobachter = null;
 /**
  * Die Messung LAUFEND halten, nicht nur ein paarmal nach dem Zeichnen.
  *
@@ -487,6 +498,20 @@ function messungLiveHalten() {
   const wurzel = document.getElementById('wurzel');
   if (wurzel) { messBeobachter.observe(wurzel); }
   document.querySelectorAll('.stueck').forEach(function (st) { messBeobachter.observe(st); });
+
+  /* Und ein zweiter Beobachter für den Fall, den der erste NICHT sieht: Font
+     Awesome TAUSCHT das <i> gegen ein <svg> aus. Das ist keine Größenänderung
+     eines beobachteten Elements, sondern ein Austausch von Kindern — gemessen:
+     der ResizeObserver lief dabei kein einziges Mal nach. Auf Kinderwechsel
+     hört dieser hier.
+
+     Keine Rückkopplung: wir ändern nur Klassen (Attribute), und darauf achtet
+     er nicht. */
+  if (window.MutationObserver && wurzel) {
+    if (tauschBeobachter) { tauschBeobachter.disconnect(); }
+    tauschBeobachter = new MutationObserver(function () { engePruefen(); });
+    tauschBeobachter.observe(wurzel, { childList: true, subtree: true });
+  }
 }
 
 function symboleErsetzen() {

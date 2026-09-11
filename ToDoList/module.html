@@ -8563,9 +8563,18 @@ function renderTransit() {
  */
 function nvEngePruefen(wurzel) {
   wurzel.querySelectorAll('.nv-stueck.ride').forEach(st => {
+    const passt = () => st.scrollWidth <= st.clientWidth + 1;
     st.classList.remove('ohne-symbol', 'ohne-zeit');
-    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-symbol'); }
-    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-zeit'); }
+    if (passt()) { return; }                       // Symbol, Linie, Fahrzeit
+    st.classList.add('ohne-symbol');
+    if (passt()) { return; }                       // Linie und Fahrzeit
+    /* Das Symbol kommt ZURUECK, sobald die Fahrzeit weicht: „784" allein
+       braucht 40 Pixel, mit Symbol 58 — bei 71 Pixeln Platz waere es
+       Verschwendung, das Feld leer zu lassen. */
+    st.classList.remove('ohne-symbol');
+    st.classList.add('ohne-zeit');
+    if (passt()) { return; }                       // Symbol und Linie
+    st.classList.add('ohne-symbol');               // nur noch die Linie
   });
 }
 
@@ -8593,6 +8602,16 @@ function nvSchienenBinden(wurzel) {
       wurzel.__nvBeobachter = new ResizeObserver(() => nvEngePruefen(wurzel));
     }
     wurzel.querySelectorAll('.nv-stueck').forEach(b => wurzel.__nvBeobachter.observe(b));
+  }
+  /* Und ein zweiter Beobachter fuer den Fall, den der erste NICHT sieht:
+     /icons.js TAUSCHT das <i> gegen ein <svg> aus. Das ist keine
+     Groessenaenderung eines beobachteten Elements, sondern ein Austausch von
+     Kindern — gemessen: der ResizeObserver lief dabei kein einziges Mal nach.
+     Keine Rueckkopplung: wir aendern nur Klassen, und darauf achtet er nicht. */
+  if (window.MutationObserver) {
+    if (wurzel.__nvTausch) { wurzel.__nvTausch.disconnect(); }
+    wurzel.__nvTausch = new MutationObserver(() => nvEngePruefen(wurzel));
+    wurzel.__nvTausch.observe(wurzel, { childList: true, subtree: true });
   }
   wurzel.querySelectorAll('[data-nv-schiene]').forEach(schiene => {
     const punkte = schiene.nextElementSibling;
