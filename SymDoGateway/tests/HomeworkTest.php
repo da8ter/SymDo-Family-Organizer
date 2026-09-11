@@ -346,6 +346,48 @@ pruefe('und keine Aenderung', $eD['geaendert'], 0);
 pruefe('das eigene Haekchen behaelt seinen Urheber', $nachB['b2']['doneBy'], 'user');
 pruefe('und bleibt erledigt', $nachB['b2']['done'], true);
 
+/* ── Die Schule BESTAETIGT ein eigenes Haekchen ────────────────────────────
+   Das Kind hakt zu Hause ab (doneBy 'user'), Tage spaeter schliesst die
+   Lehrkraft die Aufgabe im Klassenbuch. Ab da gehoert das Haekchen der Schule.
+   Ohne diesen Uebergang bliebe der Urheber fuer immer 'user' — und die
+   Oberflaeche koennte nicht darauf warten, bevor sie die Aufgabe unter
+   „Erledigt" schiebt (Wunsch vom 11.09.2026). */
+$selbst = [
+    ['id' => 'e1', 'srcId' => 7001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => $jetzt - 900, 'doneBy' => 'user', 'note' => '', 'source' => 'untis',
+     'createdAt' => $jetzt - 900, 'updatedAt' => $jetzt - 900],
+];
+$eE = HomeworkCalc::Zusammenfuehren($selbst, [
+    ['srcId' => 7001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => 0, 'doneBy' => 'untis', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+pruefe('die Bestaetigung macht die Schule zum Urheber', $eE['items'][0]['doneBy'], 'untis');
+pruefe('sie zaehlt als Aenderung', $eE['geaendert'], 1);
+pruefe('der Zeitpunkt des Abhakens bleibt der eigene', $eE['items'][0]['doneAt'], $jetzt - 900);
+pruefe('erledigt bleibt erledigt', $eE['items'][0]['done'], true);
+// Solange die Schule „offen" meldet, bleibt es das eigene Haekchen.
+$eF = HomeworkCalc::Zusammenfuehren($selbst, [
+    ['srcId' => 7001, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => false, 'doneAt' => 0, 'doneBy' => '', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+pruefe('ohne Bestaetigung bleibt der Urheber beim Kind', $eF['items'][0]['doneBy'], 'user');
+pruefe('und die Sperrklinke haelt das Haekchen', $eF['items'][0]['done'], true);
+pruefe('nichts geaendert, also kein Schreiben', $eF['geaendert'], 0);
+// Auch LOGINEO bestaetigt auf demselben Weg (die Konstante heisst nur „untis").
+$moodleSelbst = [
+    ['id' => 'e2', 'srcId' => 7002, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => $jetzt - 700, 'doneBy' => 'user', 'note' => '', 'source' => 'moodle',
+     'createdAt' => $jetzt - 700, 'updatedAt' => $jetzt - 700],
+];
+$eG = HomeworkCalc::Zusammenfuehren($moodleSelbst, [
+    ['srcId' => 7002, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => 0, 'doneBy' => 'untis', 'note' => '', 'source' => 'moodle',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt, 'moodle');
+pruefe('LOGINEO bestaetigt genauso', $eG['items'][0]['doneBy'], 'untis');
+
 // ── Zwei Schulsysteme im selben Bestand ────────────────────────────────────
 /* Seit LOGINEO dazukommt, fuehren ZWEI Quellen eigene Nummern. Die Aufgabe 5
    aus WebUntis und das Dokument 5 aus LOGINEO sind verschiedene Dinge — und der

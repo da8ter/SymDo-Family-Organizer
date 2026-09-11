@@ -30,8 +30,8 @@ function schneide(name) {
     }
     return html.slice(start, i + 1);
 }
-const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwOffene', 'hwErledigte', 'hwGruppen',
-    'hwFuerSlot', 'hwFaecherFuerKind'];
+const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwAusSchule', 'hwWartetAufSchule',
+    'hwOffene', 'hwErledigte', 'hwGruppen', 'hwFuerSlot', 'hwFaecherFuerKind'];
 const F = new Function(NAMEN.map(schneide).join('\n') + '\nreturn {' + NAMEN.join(', ') + '};')();
 
 let fehler = 0, anzahl = 0;
@@ -155,6 +155,37 @@ pruefe('offene sind nicht dabei', F.hwErledigte(fertig, 'k1').some(i => i.id ===
 pruefe('fremdes Kind bleibt draussen', F.hwErledigte(fertig, 'k1').some(i => i.id === 'f5'), false);
 pruefe('ohne Kind alle erledigten', F.hwErledigte(fertig, '').length, 6);
 pruefe('ein leerer Bestand ist leer', F.hwErledigte([], 'k1'), []);
+
+/* ── Abgehakt, aber die Schule weiss noch nichts davon ─────────────────────
+   Eine WebUntis-Aufgabe, die das Kind zu Hause abhakt, bleibt bei den OFFENEN,
+   bis das Klassenbuch dasselbe sagt (doneBy === 'untis'). Eigene Aufgaben sind
+   sofort erledigt — dort gibt es niemanden, auf den man wartet. */
+const warten = [
+    { id: 'w1', childId: 'k1', subject: 'Mathematik', due: '2026-09-10', done: true, doneAt: 500,
+      source: 'untis', srcId: 11, doneBy: 'user' },
+    { id: 'w2', childId: 'k1', subject: 'Deutsch', due: '2026-09-10', done: true, doneAt: 600,
+      source: 'untis', srcId: 12, doneBy: 'untis' },
+    { id: 'w3', childId: 'k1', subject: 'Sport', due: '2026-09-10', done: true, doneAt: 700,
+      source: 'app', doneBy: 'user' },
+    { id: 'w4', childId: 'k1', subject: 'Kunst', due: '2026-09-10', done: true, doneAt: 800,
+      source: 'moodle', srcId: 13, doneBy: 'user' },
+    { id: 'w5', childId: 'k1', subject: 'Musik', due: '2026-09-10', done: false, doneAt: 0,
+      source: 'untis', srcId: 14 },
+];
+pruefe('selbst abgehakte Schulaufgabe bleibt offen',
+    F.hwOffene(warten, 'k1').map(i => i.id), ['w1', 'w4', 'w5']);
+// Reihenfolge ist die des Abhakens, nicht die der Kennungen: w3 (700) vor w2 (600).
+pruefe('… und steht noch nicht bei den erledigten',
+    F.hwErledigte(warten, 'k1').map(i => i.id), ['w3', 'w2']);
+pruefe('von der Schule bestaetigt wandert sie hinueber',
+    F.hwWartetAufSchule(warten[1]), false);
+pruefe('eine eigene Aufgabe wartet nie', F.hwWartetAufSchule(warten[2]), false);
+pruefe('LOGINEO zaehlt genauso als Schule', F.hwWartetAufSchule(warten[3]), true);
+pruefe('eine offene wartet nicht (sie ist ja nicht abgehakt)',
+    F.hwWartetAufSchule(warten[4]), false);
+pruefe('nichts ist nichts', F.hwWartetAufSchule(null), false);
+pruefe('offene und wartende zusammen bleiben der Bestand',
+    F.hwOffene(warten, 'k1').length + F.hwErledigte(warten, 'k1').length, warten.length);
 pruefe('offene und erledigte ergeben zusammen den Bestand des Kindes',
     F.hwOffene(fertig, 'k1').length + F.hwErledigte(fertig, 'k1').length, 6);
 

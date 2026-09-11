@@ -11499,6 +11499,10 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
      Der Riegel selbst sitzt im Gateway — hier wird nur nicht angeboten, was
      dort ohnehin abgewiesen wird. */
   const gesperrt = vonUntis;
+  /* Abgehakt, aber die Schule hat es noch nicht bestaetigt: die Zeile steht
+     weiter bei den offenen (siehe hwWartetAufSchule). Der Grund gehoert an das
+     Kaestchen — sonst sieht es aus, als haette der Klick nicht gewirkt. */
+  const wartet = hwWartetAufSchule(i);
   /* Gewischt wird nur an eigenen Aufgaben — und nur dort, wo die Liste selbst
      steht. Auf der Übersicht wischt auch eine Aufgabenzeile nicht (dort steht
      eine Vorschau, keine Liste).
@@ -11519,7 +11523,8 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
     `<button type="button" class="hw-haken${fertig ? (vonUntis ? ' an schule' : ' an') : ''}"` +
     ` data-hw-done="${escapeHtml(String(i.id))}"` +
     ` data-hw-ziel="${fertig ? '0' : '1'}"` +
-    (gesperrt ? ` disabled title="${escapeHtml(translate('Ticked off in WebUntis — cannot be undone here.'))}"` : '') +
+    (gesperrt ? ` disabled title="${escapeHtml(translate('Ticked off in WebUntis — cannot be undone here.'))}"`
+      : (wartet ? ` title="${escapeHtml(translate('Done — waiting for the school to tick it off too.'))}"` : '')) +
     ` aria-label="${escapeHtml(translate(fertig ? 'Not done yet' : 'Done'))}"></button>` +
     `<span class="hw-fach"${farbe}>` +
       (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
@@ -11657,9 +11662,18 @@ function hwKarteHtml() {
       const fach = hwFachInfo(i.subject, subjects);
       const farbe = fach.color ? ` style="background:${escapeHtml(fach.color)}"` : '';
       const wer = renderAvatarStack([String(i.childId)]);
-      html += `<div class="hw-zeile klein" data-hw="${escapeHtml(String(i.id))}">` +
-        `<button type="button" class="hw-haken" data-hw-done="${escapeHtml(String(i.id))}"` +
-        ` data-hw-ziel="1" aria-label="${escapeHtml(translate('Done'))}"></button>` +
+      /* Der Kasten zeigte bisher NUR offene Aufgaben, deshalb war das
+         Kaestchen hier fest leer. Seit eine selbst abgehakte Schulaufgabe bei
+         den offenen stehen bleibt (hwWartetAufSchule), kommt sie auch hier an
+         — und muss ihren Haken tragen. Sonst sieht es aus, als waere der Klick
+         verloren gegangen, und der Knopf zielte auf „abhaken", was schon
+         geschehen ist. */
+      const fertig = i.done === true;
+      html += `<div class="hw-zeile klein${fertig ? ' erledigt' : ''}" data-hw="${escapeHtml(String(i.id))}">` +
+        `<button type="button" class="hw-haken${fertig ? ' an' : ''}" data-hw-done="${escapeHtml(String(i.id))}"` +
+        ` data-hw-ziel="${fertig ? '0' : '1'}"` +
+        (fertig ? ` title="${escapeHtml(translate('Done — waiting for the school to tick it off too.'))}"` : '') +
+        ` aria-label="${escapeHtml(translate(fertig ? 'Not done yet' : 'Done'))}"></button>` +
         `<span class="hw-fach"${farbe}>` +
           (fach.icon ? `<i class="fa-light ${escapeHtml(fach.icon)}"></i>` : '') +
         `</span>` +
@@ -11843,10 +11857,27 @@ function hwFachInfo(name, subjects) {
 }
 
 /** Die offenen Eintraege eines Kindes (oder aller, wenn keines genannt ist). */
+/**
+ * Ein Haekchen, das noch auf die Schule wartet.
+ *
+ * Ein Kind hakt seine WebUntis-Aufgabe zu Hause ab — das Klassenbuch weiss
+ * davon nichts. Bis die Schule dasselbe sagt, bleibt die Zeile bei den OFFENEN
+ * stehen: abgehakt und sichtbar. „Erledigt" heisst in diesem Bereich, dass die
+ * SCHULE die Aufgabe abgeschlossen hat, und bis dahin darf sie nicht aus dem
+ * Blick geraten. Auf Wunsch des Nutzers, 11.09.2026.
+ *
+ * Gilt fuer beide Schulquellen (hwAusSchule): auch LOGINEO setzt sein Haekchen
+ * selbst, sobald die Abgabe da ist. Eigene Aufgaben sind sofort erledigt —
+ * dort gibt es niemanden, auf den man warten koennte.
+ */
+function hwWartetAufSchule(i) {
+  return !!i && i.done === true && hwAusSchule(i) && String(i.doneBy || '') !== 'untis';
+}
+
 function hwOffene(items, childId) {
   const kind = String(childId || '');
   return (Array.isArray(items) ? items : []).filter(i =>
-    i && i.done !== true && (kind === '' || String(i.childId) === kind));
+    i && (i.done !== true || hwWartetAufSchule(i)) && (kind === '' || String(i.childId) === kind));
 }
 
 /** Die erledigten eines Kindes, das zuletzt Abgehakte zuerst. Ohne Zeitpunkt
@@ -11855,7 +11886,8 @@ function hwOffene(items, childId) {
 function hwErledigte(items, childId) {
   const kind = String(childId || '');
   return (Array.isArray(items) ? items : [])
-    .filter(i => i && i.done === true && (kind === '' || String(i.childId) === kind))
+    .filter(i => i && i.done === true && !hwWartetAufSchule(i)
+      && (kind === '' || String(i.childId) === kind))
     .sort((a, b) => {
       const x = Number(a.doneAt || 0), y = Number(b.doneAt || 0);
       if (x !== y) return y - x;
