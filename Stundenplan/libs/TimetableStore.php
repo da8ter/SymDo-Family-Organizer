@@ -187,7 +187,21 @@ trait TimetableStore
         if ($wert === '') {
             return '';
         }
-        return isset($this->GatewayMitglieder()[$wert]) ? $wert : '';
+        $mitglieder = $this->GatewayMitglieder();
+        /* Eine LEERE Liste heisst „keine Auskunft", nicht „Kennung ungueltig".
+           Holt die Web-App ihren Stundenplan, laeuft der Abruf IM Hook des
+           Gateways: das Gateway ist mit genau diesem Aufruf beschaeftigt, und
+           Symcon laesst den Rueckruf TGW_GetUsers nicht hinein — er antwortet
+           mit einem leeren String (am 11.09.2026 im Hook gemessen, 62 Aufrufe
+           je Abruf, alle leer). Die gespeicherte Kennung daraufhin wegzuwerfen
+           kostete der App den GANZEN Stundenplan-Bereich: ihr Kindmodus zeigt
+           ihn nur, wenn ein Kind im Plan dieselbe userId traegt wie das
+           gewaehlte Mitglied. Ohne Auskunft gilt deshalb, was gespeichert
+           ist. */
+        if ($mitglieder === []) {
+            return $wert;
+        }
+        return isset($mitglieder[$wert]) ? $wert : '';
     }
 
     /** @return list<array{id:string,name:string,icon:string,color:int}> */
