@@ -180,25 +180,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             'rowCount' => 5,
             'add'     => true,
             'delete'  => true,
-            'columns' => [
-                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '180px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['caption' => $this->Translate('Stop id'), 'name' => 'stopId', 'width' => '200px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                /* Der Haken entscheidet ueber die Abfahrtstafel UND ueber den
-                   Abruf: eine Haltestelle, die nur als Start oder Ziel einer
-                   Strecke gebraucht wird, kostet so keine Anfrage je Minute. */
-                ['caption' => $this->Translate('Show in the tile'), 'name' => 'show', 'width' => '150px',
-                 'add' => true, 'edit' => ['type' => 'CheckBox']],
-                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
-                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
-                ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
-                 'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
-                ['caption' => $this->Translate('Count'), 'name' => 'limit', 'width' => '90px',
-                 'add' => 6, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 20]],
-            ],
+            'columns' => $this->HaltestellenSpalten($kinder),
             'values' => [],
         ];
 
@@ -209,41 +191,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             'rowCount' => 5,
             'add'     => true,
             'delete'  => true,
-            'columns' => [
-                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '150px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '150px',
-                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
-                /* Auswahl statt Textfeld: die Kennungen der EFA („de:05111:18235")
-                   tippt niemand ab, und ein Zahlendreher darin führt zu einer
-                   Verbindung von irgendwo. Was hier steht, ist eingerichtet.
-
-                   ACHTUNG: die Liste entsteht beim BAUEN des Formulars, aus der
-                   gespeicherten Eigenschaft. Eine soeben eingetragene
-                   Haltestelle taucht darum erst auf, wenn das Formular einmal
-                   geschlossen und neu geoeffnet wurde — dasselbe sagt der
-                   Hinweis nach dem Uebernehmen. */
-                ['caption' => $this->Translate('From'), 'name' => 'from', 'width' => '190px',
-                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
-                ['caption' => $this->Translate('From (map)'), 'name' => 'fromGeo', 'width' => '170px',
-                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
-                ['caption' => $this->Translate('To'), 'name' => 'to', 'width' => '190px',
-                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
-                ['caption' => $this->Translate('To (map)'), 'name' => 'toGeo', 'width' => '170px',
-                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
-                ['caption' => $this->Translate('When'), 'name' => 'mode', 'width' => '150px',
-                 'add' => 'school', 'edit' => ['type' => 'Select', 'options' => [
-                     ['caption' => $this->Translate('School run (from the timetable)'), 'value' => 'school'],
-                     ['caption' => $this->Translate('Leave now'), 'value' => 'dep'],
-                     ['caption' => $this->Translate('Arrive by …'), 'value' => 'arr'],
-                 ]]],
-                ['caption' => $this->Translate('Time'), 'name' => 'time', 'width' => '90px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['caption' => $this->Translate('Buffer (min)'), 'name' => 'buffer', 'width' => '100px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
-                 'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
-            ],
+            'columns' => $this->StreckenSpalten($kinder, $orte),
             'values' => [],
         ];
 
@@ -266,8 +214,12 @@ class SymDoVRRTransit extends IPSModuleStrict
                      ]],
                      ['type' => 'Select', 'name' => 'StopHit', 'caption' => $this->Translate('Hits'), 'width' => '520px',
                       'options' => [['caption' => $this->Translate('— nothing searched yet —'), 'value' => '']]],
+                     /* $Stops ist die LEBENDE Haltestellenliste: die Konsole legt
+                        vor jedem onClick jedes benannte Formularfeld als PHP-Variable
+                        an, Listen als IPSList. json_encode() darauf gäbe nur die
+                        ausgewählte Zeile (jsonSerialize), deshalb iterator_to_array. */
                      ['type' => 'Button', 'caption' => $this->Translate('Add as a stop'),
-                      'onClick' => 'IPS_RequestAction($id, "StopAdd", $StopHit);'],
+                      'onClick' => 'IPS_RequestAction($id, "StopAdd", json_encode(["hit" => $StopHit, "rows" => iterator_to_array($Stops)]));'],
                      ['type' => 'Label', 'name' => 'StopStatus', 'caption' => ' '],
                      ['type' => 'Label', 'caption' =>
                          $this->Translate('Every stop from this list can be picked as "From" or "To" in a route. ')
@@ -335,6 +287,87 @@ class SymDoVRRTransit extends IPSModuleStrict
     }
 
     /**
+     * Die Spalten der Haltestellenliste.
+     *
+     * Als eigene Methode, weil sie nicht nur beim Bauen des Formulars
+     * gebraucht wird: nach dem Übernehmen einer Haltestelle werden die Spalten
+     * der STRECKENLISTE im laufenden Formular ersetzt, damit die neue
+     * Haltestelle sofort in der Auswahl steht.
+     *
+     * @param list<array{caption:string,value:string}> $kinder
+     * @return list<array<string,mixed>>
+     */
+    private function HaltestellenSpalten(array $kinder): array
+    {
+        return [
+                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '180px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Stop id'), 'name' => 'stopId', 'width' => '200px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Der Haken entscheidet ueber die Abfahrtstafel UND ueber den
+                   Abruf: eine Haltestelle, die nur als Start oder Ziel einer
+                   Strecke gebraucht wird, kostet so keine Anfrage je Minute. */
+                ['caption' => $this->Translate('Show in the tile'), 'name' => 'show', 'width' => '150px',
+                 'add' => true, 'edit' => ['type' => 'CheckBox']],
+                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
+                ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
+                 'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
+                ['caption' => $this->Translate('Count'), 'name' => 'limit', 'width' => '90px',
+                 'add' => 6, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 20]],
+
+        ];
+    }
+
+    /**
+     * Die Spalten der Streckenliste.
+     *
+     * @param list<array{caption:string,value:string}> $kinder
+     * @param list<array{caption:string,value:string}> $orte
+     * @return list<array<string,mixed>>
+     */
+    private function StreckenSpalten(array $kinder, array $orte): array
+    {
+        return [
+                ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '150px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '150px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
+                /* Auswahl statt Textfeld: die Kennungen der EFA („de:05111:18235")
+                   tippt niemand ab, und ein Zahlendreher darin führt zu einer
+                   Verbindung von irgendwo. Was hier steht, ist eingerichtet.
+
+                   Die Optionen stehen IN der Spaltendefinition. Deshalb ersetzt
+                   HaltestelleUebernehmen() nach dem Uebernehmen die ganze
+                   Spaltenliste im laufenden Formular — sonst kaeme die neue
+                   Haltestelle hier erst nach einem Neuoeffnen an. */
+                ['caption' => $this->Translate('From'), 'name' => 'from', 'width' => '190px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
+                ['caption' => $this->Translate('From (map)'), 'name' => 'fromGeo', 'width' => '170px',
+                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
+                ['caption' => $this->Translate('To'), 'name' => 'to', 'width' => '190px',
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
+                ['caption' => $this->Translate('To (map)'), 'name' => 'toGeo', 'width' => '170px',
+                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
+                ['caption' => $this->Translate('When'), 'name' => 'mode', 'width' => '150px',
+                 'add' => 'school', 'edit' => ['type' => 'Select', 'options' => [
+                     ['caption' => $this->Translate('School run (from the timetable)'), 'value' => 'school'],
+                     ['caption' => $this->Translate('Leave now'), 'value' => 'dep'],
+                     ['caption' => $this->Translate('Arrive by …'), 'value' => 'arr'],
+                 ]]],
+                ['caption' => $this->Translate('Time'), 'name' => 'time', 'width' => '90px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Buffer (min)'), 'name' => 'buffer', 'width' => '100px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
+                 'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
+
+        ];
+    }
+
+    /**
      * Die eingerichteten Haltestellen als Auswahl für eine Strecke.
      *
      * Drei Gruppen stehen darin, und die dritte ist die wichtige: Werte, die in
@@ -344,13 +377,18 @@ class SymDoVRRTransit extends IPSModuleStrict
      * Ziel lautlos weg. Eine Auswahlliste darf nie weniger können als der
      * Bestand, den sie bearbeitet.
      *
+     * @param list<array<string,mixed>>|null $zeilen  die Haltestellen; null =
+     *        die gespeicherten. Beim Übernehmen im laufenden Formular werden
+     *        die LEBENDEN Zeilen übergeben — die gespeicherten kennen die
+     *        soeben hinzugefügte noch nicht.
+     *
      * @return list<array{caption:string,value:string}>
      */
-    private function OrtOptionen(): array
+    private function OrtOptionen(?array $zeilen = null): array
     {
         $raus    = [['caption' => $this->Translate('— please choose —'), 'value' => '']];
         $bekannt = [];
-        foreach ($this->TransitZeilen('Stops') as $z) {
+        foreach ($zeilen ?? $this->TransitZeilen('Stops') as $z) {
             $id = trim((string)($z['stopId'] ?? ''));
             if ($id === '' || isset($bekannt[$id])) {
                 continue;
@@ -404,21 +442,42 @@ class SymDoVRRTransit extends IPSModuleStrict
     }
 
     /**
-     * Den gewählten Treffer als Zeile in die Haltestellenliste schreiben.
+     * Den gewählten Treffer als Zeile in die Haltestellenliste eintragen —
+     * im LAUFENDEN Formular, ohne Speichern und ohne Neuöffnen.
      *
-     * Geschrieben wird die EIGENSCHAFT und danach übernommen — dasselbe
-     * Vorgehen wie beim Nachtragen der Fächer im Stundenplan. Anders ginge es
-     * nicht: eine Liste im Formular lässt sich von außen nicht ergänzen, ohne
-     * die dort gerade bearbeiteten Zeilen zu überschreiben.
+     * Das geht, weil die Konsole vor jedem `onClick` jedes benannte
+     * Formularfeld als PHP-Variable bereitstellt: `$Stops` ist der Stand, den
+     * der Nutzer gerade vor sich hat, samt seiner ungespeicherten Änderungen.
+     * Genau der geht hier um eine Zeile ergänzt zurück.
+     *
+     * Zwei Dinge werden aktualisiert, und das zweite ist der eigentliche
+     * Grund für diesen Umbau:
+     *
+     * 1. `Stops` → `values`: die Liste selbst.
+     * 2. `Routes` → `columns`: die Spalten der Streckenliste werden komplett
+     *    ersetzt, damit die Auswahl „Von"/„Nach" die neue Haltestelle sofort
+     *    kennt. Die Optionen einer Spalte stehen in ihrer Definition, und die
+     *    entsteht sonst nur beim Bauen des Formulars.
+     *
+     * Vorher wurde die EIGENSCHAFT geschrieben und angewendet — das überschrieb
+     * dem Nutzer seine offenen Änderungen und zwang ihn, das Formular zu
+     * schließen und neu zu öffnen. Jetzt bleibt das Speichern, wo es hingehört:
+     * beim Knopf „Übernehmen".
      */
-    private function HaltestelleUebernehmen(string $stopId): void
+    private function HaltestelleUebernehmen(string $nutzlast): void
     {
-        $stopId = trim($stopId);
+        $roh    = json_decode($nutzlast, true);
+        $stopId = trim((string)(is_array($roh) ? ($roh['hit'] ?? '') : $nutzlast));
+        /* Kommt die Liste nicht mit (ein Aufruf von aussen, ein Skript), gilt
+           der gespeicherte Stand — dann ist er auch der einzige. */
+        $zeilen = is_array($roh) && is_array($roh['rows'] ?? null)
+            ? $this->HaltestellenZeilen($roh['rows'])
+            : $this->TransitZeilen('Stops');
+
         if ($stopId === '') {
             $this->UpdateFormField('StopStatus', 'caption', $this->Translate('Search first and pick a hit.'));
             return;
         }
-        $zeilen = $this->TransitZeilen('Stops');
         foreach ($zeilen as $z) {
             if (trim((string)($z['stopId'] ?? '')) === $stopId) {
                 $this->UpdateFormField('StopStatus', 'caption', $this->Translate('This stop is already in the list.'));
@@ -438,11 +497,43 @@ class SymDoVRRTransit extends IPSModuleStrict
         }
         $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
                      'lines' => '', 'walk' => 0, 'limit' => 6];
-        @IPS_SetProperty($this->InstanceID, 'Stops',
-            (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
-        @IPS_ApplyChanges($this->InstanceID);
+
+        $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+        $this->UpdateFormField('Routes', 'columns', (string)json_encode(
+            $this->StreckenSpalten($this->MitgliederOptionen(), $this->OrtOptionen($zeilen)),
+            JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('StopStatus', 'caption',
-            $this->Translate('Added: ') . $name . $this->Translate('. Close the form once and open it again.'));
+            $this->Translate('Added: ') . $name . $this->Translate('. Press "Apply" to keep it.'));
+    }
+
+    /**
+     * Die Zeilen aus dem Formular auf die eigenen Spalten zurechtstutzen.
+     *
+     * Die Konsole schickt je Zeile mehr, als die Liste an Spalten hat
+     * (`index_`, `editable`, `rowColor` …). Was nicht namentlich hier steht,
+     * geht nicht zurück ins Formular — dieselbe weisse Liste wie überall im
+     * Modul, und der Schutz davor, Konsolen-Innenleben in einer Eigenschaft zu
+     * verewigen.
+     *
+     * @param array<mixed> $roh
+     * @return list<array<string,mixed>>
+     */
+    private function HaltestellenZeilen(array $roh): array
+    {
+        $felder = ['name' => '', 'stopId' => '', 'show' => true,
+                   'member' => '', 'lines' => '', 'walk' => 0, 'limit' => 6];
+        $raus = [];
+        foreach ($roh as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $zeile = [];
+            foreach ($felder as $feld => $vorgabe) {
+                $zeile[$feld] = array_key_exists($feld, $z) ? $z[$feld] : $vorgabe;
+            }
+            $raus[] = $zeile;
+        }
+        return $raus;
     }
 
     // ------------------------------------------------------------------

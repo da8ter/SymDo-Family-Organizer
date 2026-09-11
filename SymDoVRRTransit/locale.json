@@ -59,7 +59,6 @@
             "Search first and pick a hit.": "Erst suchen und einen Treffer wählen.",
             "This stop is already in the list.": "Diese Haltestelle steht schon in der Liste.",
             "Added: ": "Übernommen: ",
-            ". Close the form once and open it again.": ". Das Formular einmal schließen und neu öffnen.",
             "SymDo VRR Transit": "SymDo - VRR Nahverkehr",
             "No route set up": "Keine Strecke eingerichtet",
             "No stop set up": "Keine Haltestelle eingerichtet",
@@ -87,7 +86,8 @@
             "To (map)": "Nach (Karte)",
             "— please choose —": "— bitte wählen —",
             " (not in the list of stops)": " (nicht in der Haltestellenliste)",
-            "Map (own coordinate)": "Karte (eigene Koordinate)"
+            "Map (own coordinate)": "Karte (eigene Koordinate)",
+            ". Press \"Apply\" to keep it.": ". Zum Behalten auf „Übernehmen“ drücken."
         }
     }
 }
