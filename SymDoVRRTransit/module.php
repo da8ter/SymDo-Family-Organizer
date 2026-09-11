@@ -531,6 +531,11 @@ class SymDoVRRTransit extends IPSModuleStrict
             foreach ($felder as $feld => $vorgabe) {
                 $zeile[$feld] = array_key_exists($feld, $z) ? $z[$feld] : $vorgabe;
             }
+            /* Die Mitgliederkennung ist eine ZEICHENKETTE. Kommt sie als Zahl
+               (so stand sie in einer gespeicherten Zeile), findet die Konsole
+               keine passende Option — ihr Vergleich ist strikt — und zeigt die
+               Auswahl leer, obwohl das Modul die Zeile richtig zuordnet. */
+            $zeile['member'] = (string)$zeile['member'];
             $raus[] = $zeile;
         }
         return $raus;
