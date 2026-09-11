@@ -13,7 +13,6 @@
             "The guided pages with Back and Next need Symcon 9.1 — here the same steps are listed one below the other.": "Der geführte Ablauf mit Weiter und Zurück braucht Symcon 9.1 — hier stehen dieselben Schritte untereinander.",
             "First name": "Vorname",
             "Last name": "Nachname",
-            "Role": "Rolle",
             "Add member": "Mitglied übernehmen",
             "School system": "Schulsystem",
             "AI provider": "KI-Anbieter",
@@ -134,7 +133,14 @@
             "SymDo brings the whole family together: tasks, shopping, appointments, timetable, homework, notes — and a smart helper that turns letters from school into appointments.": "SymDo bringt die ganze Familie zusammen: Aufgaben, Einkauf, Termine, Stundenplan, Hausaufgaben, Notizen — und einen klugen Helfer, der aus Elternbriefen Termine macht.",
             "The assistant asks a handful of questions and sets everything up for you.": "Der Assistent stellt ein paar Fragen und richtet dann alles für dich ein.",
             "You can start it again whenever you like. Nothing is created twice.": "Du kannst ihn jederzeit erneut starten. Doppelt wird nichts angelegt.",
-            "The consent did not stick — please accept it once in the gateway, under AI features.": "Die Einwilligung ist nicht angekommen — bitte im Gateway unter „KI-Funktionen“ einmal zustimmen."
+            "The consent did not stick — please accept it once in the gateway, under AI features.": "Die Einwilligung ist nicht angekommen — bitte im Gateway unter „KI-Funktionen“ einmal zustimmen.",
+            "Date of birth": "Geburtsdatum",
+            "Persona": "Rolle",
+            "Photo": "Foto",
+            "Push visualization": "Push-Visualisierung",
+            "Photo and push visualization are optional — you can add them later at any time.": "Foto und Push-Visualisierung sind freiwillig — du kannst sie jederzeit nachtragen.",
+            "with photo": "mit Foto",
+            "with push": "mit Push"
         }
     }
 }

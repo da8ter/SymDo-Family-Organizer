@@ -109,7 +109,7 @@ pruefe('eine neu, eine ergänzt, zwei übergangen',
 pruefe('die Kennung des Kindes bleibt', $z['users'][0]['id'], '57648139');
 pruefe('der Nachname wird NICHT überschrieben', $z['users'][0]['lastName'], 'Sprick');
 pruefe('die Rolle wird NICHT überschrieben', $z['users'][0]['persona'], 'child');
-pruefe('Foto und Visu bleiben unberührt',
+pruefe('Foto und Visu bleiben unberührt, wenn sie gesetzt sind',
     [$z['users'][0]['photo'], $z['users'][0]['visu']], [4711, 815]);
 pruefe('bei Anna wird der leere Nachname ergänzt', $z['users'][1]['lastName'], 'Sprick');
 pruefe('… und die leere Rolle', $z['users'][1]['persona'], 'mother');
@@ -117,6 +117,32 @@ pruefe('die neue Zeile bekommt die vorgegebene Kennung', $z['users'][2]['id'], '
 pruefe('… und ihren Geburtstag als OBJEKT',
     $z['users'][2]['birthday'], ['year' => 2019, 'month' => 9, 'day' => 1]);
 pruefe('… und Foto/Visu auf 0', [$z['users'][2]['photo'], $z['users'][2]['visu']], [0, 0]);
+pruefe('die neue Zeile hat dieselben sieben Spalten wie das Gateway',
+    array_keys($z['users'][2]), ['name', 'lastName', 'birthday', 'persona', 'photo', 'visu', 'id']);
+
+/* ── Alle sechs Felder aus dem Gateway-Formular ───────────────────────────── */
+$voll = SetupPlan::MitgliederZusammenfuehren([], [[
+    'name' => 'Jonas', 'lastName' => 'Sprick', 'persona' => 'child',
+    'birthday' => ['year' => 2012, 'month' => 7, 'day' => 19],
+    'photo' => 4242, 'visu' => 1717,
+]], ['dd44ee55']);
+pruefe('eine vollständige Zeile kommt vollständig an', $voll['users'][0], [
+    'name' => 'Jonas', 'lastName' => 'Sprick',
+    'birthday' => ['year' => 2012, 'month' => 7, 'day' => 19],
+    'persona' => 'child', 'photo' => 4242, 'visu' => 1717, 'id' => 'dd44ee55',
+]);
+pruefe('ein leeres Foto wird nachgetragen',
+    SetupPlan::MitgliederZusammenfuehren(
+        [['name' => 'Ohne', 'photo' => 0, 'visu' => 0, 'id' => 'x2']],
+        [['name' => 'Ohne', 'photo' => 99, 'visu' => 88]], []
+    )['users'][0], ['name' => 'Ohne', 'photo' => 99, 'visu' => 88, 'id' => 'x2']);
+pruefe('ein gesetztes Foto wird NICHT ersetzt',
+    SetupPlan::MitgliederZusammenfuehren(
+        [['name' => 'Mit', 'photo' => 11, 'visu' => 22, 'id' => 'x3']],
+        [['name' => 'Mit', 'photo' => 99, 'visu' => 88]], []
+    )['users'][0], ['name' => 'Mit', 'photo' => 11, 'visu' => 22, 'id' => 'x3']);
+pruefe('eine negative Kennung wird zu 0',
+    SetupPlan::MitgliederZusammenfuehren([], [['name' => 'X', 'photo' => -5]], ['x4'])['users'][0]['photo'], 0);
 pruefe('gelöscht wird nie',
     array_column($z['users'], 'name'), ['Tim', 'Anna', 'Mia']);
 

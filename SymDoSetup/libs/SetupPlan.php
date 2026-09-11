@@ -202,10 +202,10 @@ class SetupPlan
      * Die Mitgliederliste zusammenführen.
      *
      * Drei Regeln, und sie sind alle defensiv:
-     *  - Eine vorhandene Zeile GEWINNT. Ergänzt werden nur LEERE Felder.
-     *  - `id`, `photo` und `visu` werden nie angefasst: an der Kennung hängt
-     *    jede Zuordnung (Aufgaben, Termine, Notizordner, Push), das Foto ist
-     *    ein eigenes Medienobjekt.
+     *  - Eine vorhandene Zeile GEWINNT. Ergänzt werden nur LEERE Felder —
+     *    Nachname, Geburtstag, Rolle, Foto und Push-Visualisierung.
+     *  - Die `id` wird NIE angefasst: an ihr hängt jede Zuordnung (Aufgaben,
+     *    Termine, Notizordner, Push).
      *  - Gelöscht wird nie. Es gibt im Gateway auch keine Funktion dafür.
      *
      * Die Kennungen für NEUE Zeilen kommen als Parameter herein (der Aufrufer
@@ -257,9 +257,9 @@ class SetupPlan
             if (isset($stelle[$s])) {
                 $i = $stelle[$s];
                 $vorher = $raus[$i];
-                foreach (['lastName', 'birthday', 'persona'] as $feld) {
+                foreach (['lastName', 'birthday', 'persona', 'photo', 'visu'] as $feld) {
                     if (self::Leer($raus[$i][$feld] ?? null) && !self::Leer($z[$feld] ?? null)) {
-                        $raus[$i][$feld] = $z[$feld];
+                        $raus[$i][$feld] = self::Feld($feld, $z[$feld]);
                     }
                 }
                 if ($raus[$i] !== $vorher) {
@@ -275,6 +275,8 @@ class SetupPlan
                 continue;
             }
             $naechste++;
+            /* Dieselben sieben Spalten wie die Mitgliederliste des Gateways —
+               `id` zuletzt und unsichtbar, genau wie dort. */
             $raus[] = [
                 'name'      => $name,
                 'lastName'  => trim((string)($z['lastName'] ?? '')),
@@ -282,8 +284,8 @@ class SetupPlan
                 // Listeneditor der Konsole.
                 'birthday'  => self::Geburtstag($z['birthday'] ?? null),
                 'persona'   => self::Rolle((string)($z['persona'] ?? '')),
-                'photo'     => 0,
-                'visu'      => 0,
+                'photo'     => max(0, (int)($z['photo'] ?? 0)),
+                'visu'      => max(0, (int)($z['visu'] ?? 0)),
                 'id'        => $kennung,
             ];
             $stelle[$s] = count($raus) - 1;
@@ -293,7 +295,18 @@ class SetupPlan
         return ['users' => $raus, 'neu' => $neuZahl, 'ergaenzt' => $ergaenzt, 'uebergangen' => $uebergangen];
     }
 
-    /** Leer heisst: nicht gesetzt, leerer Text — oder ein Datum aus Nullen. */
+    /** Ein Feld in der Form, die die Mitgliederliste des Gateways erwartet. */
+    private static function Feld(string $name, mixed $wert): mixed
+    {
+        return match ($name) {
+            'birthday' => self::Geburtstag($wert),
+            'persona'  => self::Rolle((string)$wert),
+            'photo', 'visu' => max(0, (int)$wert),
+            default    => trim((string)$wert),
+        };
+    }
+
+    /** Leer heisst: nicht gesetzt, leerer Text, eine Null — oder ein Datum aus Nullen. */
     private static function Leer(mixed $wert): bool
     {
         if ($wert === null) {
@@ -306,6 +319,10 @@ class SetupPlan
             return ((int)($wert['year'] ?? 0)) === 0
                 && ((int)($wert['month'] ?? 0)) === 0
                 && ((int)($wert['day'] ?? 0)) === 0;
+        }
+        if (is_int($wert)) {
+            // Foto und Push-Visualisierung sind Objekt-Kennungen: 0 = keine.
+            return $wert <= 0;
         }
         return false;
     }

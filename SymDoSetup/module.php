@@ -182,12 +182,20 @@ class SymDoSetup extends IPSModuleStrict
                     ['type' => 'Label', 'name' => 'MemberExisting', 'caption' => $this->VorhandeneMitgliederText()],
                     ['type' => 'ValidationTextBox', 'name' => 'MemberName', 'caption' => $this->Translate('First name')],
                     ['type' => 'ValidationTextBox', 'name' => 'MemberLastName', 'caption' => $this->Translate('Last name')],
-                    ['type' => 'Select', 'name' => 'MemberPersona', 'caption' => $this->Translate('Role'),
+                    ['type' => 'SelectDate', 'name' => 'MemberBirthday', 'caption' => $this->Translate('Date of birth')],
+                    ['type' => 'Select', 'name' => 'MemberPersona', 'caption' => $this->Translate('Persona'),
                      'options' => $this->RollenOptionen()],
+                    ['type' => 'SelectMedia', 'name' => 'MemberPhoto', 'caption' => $this->Translate('Photo')],
+                    ['type' => 'SelectInstance', 'name' => 'MemberVisu', 'caption' => $this->Translate('Push visualization')],
+                    ['type' => 'Label', 'caption' => $this->Translate('Photo and push visualization are optional — you can add them later at any time.')],
+                    /* Alle sechs Felder der Mitgliederliste des Gateways. Der
+                       Geburtstag ist ein SelectDate und kommt als PHP-Array im
+                       Skript an — so indexiert OpenCalendar seine Listenzeile. */
                     ['type' => 'Button', 'name' => 'MemberAdd', 'caption' => $this->Translate('Add member'),
                      'onClick' => 'IPS_RequestAction(' . $ich . ', "MemberAdd", json_encode(['
                         . '"name" => $MemberName, "lastName" => $MemberLastName,'
-                        . '"persona" => $MemberPersona]));'],
+                        . '"birthday" => $MemberBirthday, "persona" => $MemberPersona,'
+                        . '"photo" => $MemberPhoto, "visu" => $MemberVisu]));'],
                     ['type' => 'Label', 'name' => 'MemberList', 'caption' => $this->MitgliederText()],
                     ['type' => 'Button', 'name' => 'MemberClear', 'caption' => $this->Translate('Start the list over'),
                      'onClick' => 'IPS_RequestAction(' . $ich . ', "MemberClear", "");'],
@@ -373,16 +381,36 @@ class SymDoSetup extends IPSModuleStrict
     {
         $teile = [];
         foreach ($this->GatewayMitglieder() as $u) {
-            $name = trim((string)($u['name'] ?? ''));
-            if ($name === '') {
+            if (trim((string)($u['name'] ?? '')) === '') {
                 continue;
             }
-            $rolle = trim((string)($u['persona'] ?? ''));
-            $teile[] = $name . ($rolle !== '' ? ' (' . $this->Translate($rolle) . ')' : '');
+            $teile[] = $this->MitgliedZeile($u);
         }
         return $teile === []
             ? $this->Translate('Nobody is set up yet.')
-            : sprintf($this->Translate('Already set up: %s'), implode(', ', $teile));
+            : sprintf($this->Translate('Already set up: %s'), implode(' · ', $teile));
+    }
+
+    /** Ein Mitglied in einer Zeile: Name, Rolle, Geburtstag, Foto, Push. */
+    private function MitgliedZeile(array $m): string
+    {
+        $text = trim((string)($m['name'] ?? '') . ' ' . (string)($m['lastName'] ?? ''));
+        $zusatz = [];
+        $rolle = trim((string)($m['persona'] ?? ''));
+        if ($rolle !== '') {
+            $zusatz[] = $this->Translate($rolle);
+        }
+        $gb = SetupPlan::Geburtstag($m['birthday'] ?? null);
+        if ((int)$gb['year'] > 0) {
+            $zusatz[] = sprintf('%02d.%02d.%04d', (int)$gb['day'], (int)$gb['month'], (int)$gb['year']);
+        }
+        if ((int)($m['photo'] ?? 0) > 0) {
+            $zusatz[] = $this->Translate('with photo');
+        }
+        if ((int)($m['visu'] ?? 0) > 0) {
+            $zusatz[] = $this->Translate('with push');
+        }
+        return $text . ($zusatz === [] ? '' : ' (' . implode(', ', $zusatz) . ')');
     }
 
     /**
@@ -613,6 +641,8 @@ class SymDoSetup extends IPSModuleStrict
             'lastName' => trim((string)($roh['lastName'] ?? '')),
             'birthday' => SetupPlan::Geburtstag($roh['birthday'] ?? null),
             'persona'  => SetupPlan::Rolle((string)($roh['persona'] ?? '')),
+            'photo'    => max(0, (int)($roh['photo'] ?? 0)),
+            'visu'     => max(0, (int)($roh['visu'] ?? 0)),
         ];
         $this->AntwortSetzen('members', $liste);
         $this->UpdateFormField('MemberList', 'caption', $this->MitgliederText());
@@ -620,9 +650,14 @@ class SymDoSetup extends IPSModuleStrict
         $this->UpdateFormField('SchoolChild', 'options',
             (string)json_encode($this->KinderOptionen(), JSON_UNESCAPED_UNICODE));
         // Die Felder leeren, damit das nächste Mitglied nicht auf dem vorigen sitzt.
-        foreach (['MemberName', 'MemberLastName'] as $feld) {
+        foreach (['MemberName', 'MemberLastName', 'MemberPersona'] as $feld) {
             $this->UpdateFormField($feld, 'value', '');
         }
+        foreach (['MemberPhoto', 'MemberVisu'] as $feld) {
+            $this->UpdateFormField($feld, 'value', 0);
+        }
+        $this->UpdateFormField('MemberBirthday', 'value',
+            (string)json_encode(['year' => 0, 'month' => 0, 'day' => 0]));
     }
 
     // ────────────────── Öffentliche Funktionen für die Seiten ────────────────
@@ -1247,10 +1282,9 @@ class SymDoSetup extends IPSModuleStrict
         }
         $teile = [];
         foreach ($liste as $m) {
-            $rolle = (string)($m['persona'] ?? '');
-            $teile[] = trim((string)($m['name'] ?? '')) . ($rolle !== '' ? ' (' . $this->Translate($rolle) . ')' : '');
+            $teile[] = $this->MitgliedZeile($m);
         }
-        return sprintf($this->Translate('Collected: %s'), implode(', ', $teile));
+        return sprintf($this->Translate('Collected: %s'), implode(' · ', $teile));
     }
 
     /** Was der Zug tun würde — aus demselben Plan, der ihn danach ausführt. */

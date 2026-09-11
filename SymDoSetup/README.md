@@ -13,9 +13,11 @@ Der Knopf *SymDo-Installationsassistenten starten* öffnet acht Seiten:
 
 1. **Willkommen bei SymDo** — was SymDo mitbringt, und was auf diesem Server
    schon steht.
-2. **Deine Familie** — die vorhandenen Mitglieder stehen oben; neue trägt man
-   eines nach dem anderen ein. Wer schon im Gateway steht, bleibt unverändert;
-   leere Felder werden ergänzt.
+2. **Deine Familie** — die vorhandenen Mitglieder stehen oben, mit Rolle,
+   Geburtstag und Foto. Neue trägt man eines nach dem anderen ein, mit
+   **allen** Feldern der Mitgliederliste: Vorname, Nachname, Geburtsdatum,
+   Rolle, Foto und Push-Visualisierung. Wer schon im Gateway steht, bleibt
+   unverändert; leere Felder werden ergänzt.
 3. **Was möchtest du nutzen?** — ein Kästchen je Baustein. Was es schon gibt,
    ist **angehakt und gesperrt** (der Assistent legt an, er räumt nicht ab).
    Wählt man einen Baustein, kommen seine **Voraussetzungen automatisch mit** —
@@ -51,8 +53,6 @@ Wer einen Baustein wählt, bekommt seine Voraussetzungen mit:
   und Symcon vergibt IDs zufällig.
 - **Nichts löschen.** Mitglieder werden nur ergänzt, Instanzen nur angelegt.
   Eine Wahl, die schon getroffen ist, wird nie überschrieben.
-- **Keinen Geburtstag.** Ein Datumsfeld lässt sich nicht als Feldwert an ein
-  Skript geben; der Geburtstag gehört in die Mitgliederliste des Gateways.
 
 Bei **WebUntis** bleibt genau ein Schritt beim Nutzer: im Gateway die Schüler
 abrufen und das Kind auswählen — diese Wahl verlangt WebUntis. Bei **LOGINEO**
