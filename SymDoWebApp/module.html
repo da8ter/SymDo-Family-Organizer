@@ -734,6 +734,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   padding: 0 9px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap;
   background: var(--accent);
 }
+/* Die Wartezeit ist weder Fahren noch Laufen: neutral gefuellt, ohne Farbe.
+   Sie hat erst seit dem Warte-Abschnitt ein Stueck — vorher endete der Balken
+   zu frueh und niemand sah, dass am Umstieg gewartet wird. */
+.nv-stueck.wait {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--muted);
+}
+.nv-aufteilung { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .nv-stueck.walk {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--text);
@@ -8326,19 +8334,41 @@ function transitSchulweg() {
   return (nahverkehr.routes || []).find(r => r.school && (r.member || '') === kind) || null;
 }
 
-/** Ein Abschnittsbalken — dieselbe Funktion fuer den Bereich und die Uebersicht. */
+/**
+ * Ein Abschnittsbalken — dieselbe Funktion fuer den Bereich und die Uebersicht.
+ *
+ * IM Balken steht nur die Liniennummer, und auch die nur beim Fahren. Die
+ * Minuten der Fuss- und Wartewege standen dort frueher mit drin und wurden
+ * abgeschnitten, sobald das Stueck schmal war: bei einer Verbindung von 33
+ * Minuten blieben dem Fussweg 54 Pixel, von denen Symbol und Polsterung 39
+ * frassen. Wohin die Zeit geht, sagt jetzt die Zeile darunter.
+ */
 function nvBalken(v) {
   const gesamt = Math.max(1, v.seconds);
   return `<div class="nv-balken">` + (v.legs || []).map(l => {
-    const anteil = Math.max(6, (l.seconds / gesamt) * 100);
-    const text = l.kind === 'walk' ? `${Math.round(l.seconds / 60)} ${translate('min')}`
-                                   : (l.line || l.product);
-    const tipp = `${l.line ? l.line + ' ' : ''}${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
-    return `<div class="nv-stueck ${l.kind === 'walk' ? 'walk' : ''}" `
+    const anteil = Math.max(4, (l.seconds / gesamt) * 100);
+    const text = l.kind === 'ride' ? (l.line || l.product) : '';
+    const was = l.kind === 'walk' ? translate('walking')
+              : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
+    const tipp = `${was} ${Math.round(l.seconds / 60)} ${translate('min')}, `
+               + `${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
+    return `<div class="nv-stueck ${escapeHtml(l.kind)}" `
          + `style="flex:0 0 ${anteil.toFixed(1)}%" title="${escapeHtml(tipp)}">`
          + `<i class="fa-light ${escapeHtml(l.icon || 'fa-route')}"></i>`
-         + `<span>${escapeHtml(text)}</span></div>`;
-  }).join('') + `</div>`;
+         + (text ? `<span>${escapeHtml(text)}</span>` : '') + `</div>`;
+  }).join('') + `</div>` + nvAufteilung(v);
+}
+
+/** Wo die Zeit hingeht — fahren, laufen, warten, zusammengezaehlt. */
+function nvAufteilung(v) {
+  const summe = { ride: 0, walk: 0, wait: 0 };
+  (v.legs || []).forEach(l => { summe[l.kind] = (summe[l.kind] || 0) + l.seconds; });
+  const teile = [];
+  [['ride', 'riding'], ['walk', 'walking'], ['wait', 'waiting']].forEach(([k, wort]) => {
+    const m = Math.round(summe[k] / 60);
+    if (m > 0) { teile.push(`${m} ${translate('min')} ${translate(wort)}`); }
+  });
+  return teile.length ? `<div class="nv-aufteilung">${escapeHtml(teile.join(' · '))}</div>` : '';
 }
 
 /** Eine Verbindung mit Zeiten, Balken und den beiden Enden. */
@@ -8358,8 +8388,13 @@ function nvFahrt(v) {
 /** Die Zeile, die beim Schulweg die Richtung benennt. */
 function nvSchulzeile(r) {
   if (!r.school) { return ''; }
-  return r.school.direction === 'to'
-    ? translate('to school, be there by %s').replace('%s', r.school.targetTime)
+  if (r.school.direction === 'to') {
+    return translate('to school, be there by %s').replace('%s', r.school.targetTime);
+  }
+  /* „ab jetzt", wenn der Schulschluss schon vorbei ist — sonst wundert man sich,
+     warum die Zeiten nicht zur genannten Schlusszeit passen. */
+  return r.school.fromNow
+    ? translate('home, from now')
     : translate('home, lessons end at %s').replace('%s', r.school.schoolEnd);
 }
 

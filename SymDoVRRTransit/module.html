@@ -101,6 +101,13 @@ body {
   padding: 0 7px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
 }
 .stueck.ride { background: var(--akzent); }
+/* Die Wartezeit ist weder Fahren noch Laufen: neutral gefüllt, ohne Farbe. Sie
+   hat erst seit dem Warte-Abschnitt ein Stück — vorher endete der Balken zu
+   früh und niemand sah, dass am Umstieg gewartet wird. */
+.stueck.wait {
+  background: color-mix(in srgb, var(--content-color) 14%, transparent);
+  color: var(--dezent);
+}
 /* Der Fußweg ist kein Fahren: gestrichelt und blass, damit die Zeitachse auf
    einen Blick sagt, wo man selbst läuft. */
 .stueck.walk {
@@ -108,6 +115,7 @@ body {
   color: var(--text);
   border: 1px dashed color-mix(in srgb, var(--content-color) 35%, transparent);
 }
+.aufteilung { font-size: 10px; color: var(--dezent); margin-top: 3px; }
 .fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
 .leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
 </style>
@@ -225,17 +233,46 @@ function abfahrtenHtml() {
   }).join('');
 }
 
-/** Die Zeitachse einer Verbindung: ein Stück je Abschnitt, breit nach Dauer. */
+/**
+ * Die Zeitachse einer Verbindung: ein Stück je Abschnitt, breit nach Dauer.
+ *
+ * IM Balken steht nur die Liniennummer — und auch die nur beim Fahren. Die
+ * Minuten der Fuß- und Wartewege standen dort früher mit drin und wurden
+ * abgeschnitten, sobald das Stück schmal war: bei einer Verbindung von 33
+ * Minuten blieben dem Fußweg 54 Pixel, von denen Symbol und Polsterung 39
+ * fraßen. Wie viel Zeit wohin geht, sagt jetzt die Zeile darunter — die ist
+ * immer lesbar, egal wie schmal das Stück ist.
+ */
 function balkenHtml(v) {
   const gesamt = Math.max(1, v.seconds);
   return '<div class="balken">' + (v.legs || []).map(function (l) {
-    const anteil = Math.max(6, (l.seconds / gesamt) * 100);
-    const text = l.kind === 'walk' ? (Math.round(l.seconds / 60) + ' ' + translate('min'))
-                                   : (l.line || l.product);
+    const anteil = Math.max(4, (l.seconds / gesamt) * 100);
+    const text = l.kind === 'ride' ? (l.line || l.product) : '';
+    const was = l.kind === 'walk' ? translate('walking')
+              : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
     return '<div class="stueck ' + esc(l.kind) + '" style="flex:0 0 ' + anteil.toFixed(1) + '%" title="'
-      + esc((l.line ? l.line + ' ' : '') + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
-      + symbol(l.icon) + '<span>' + esc(text) + '</span></div>';
-  }).join('') + '</div>';
+      + esc(was + ' ' + Math.round(l.seconds / 60) + ' ' + translate('min') + ', '
+            + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
+      + symbol(l.icon) + (text ? '<span>' + esc(text) + '</span>' : '') + '</div>';
+  }).join('') + '</div>' + aufschluesselungHtml(v);
+}
+
+/**
+ * Wo die Zeit hingeht — fahren, laufen, warten, zusammengezählt.
+ *
+ * Erst mit dem Warte-Abschnitt ergibt das die volle Dauer: vorher waren von 33
+ * Minuten nur 86 % gezeichnet, und die viereinhalb Minuten auf dem Bahnsteig
+ * kamen nirgends vor.
+ */
+function aufschluesselungHtml(v) {
+  const summe = { ride: 0, walk: 0, wait: 0 };
+  (v.legs || []).forEach(function (l) { summe[l.kind] = (summe[l.kind] || 0) + l.seconds; });
+  const teile = [];
+  [['ride', 'riding'], ['walk', 'walking'], ['wait', 'waiting']].forEach(function (paar) {
+    const m = Math.round(summe[paar[0]] / 60);
+    if (m > 0) { teile.push(m + ' ' + translate('min') + ' ' + translate(paar[1])); }
+  });
+  return teile.length ? '<div class="aufteilung">' + esc(teile.join(' · ')) + '</div>' : '';
 }
 
 function streckenHtml() {
@@ -249,7 +286,9 @@ function streckenHtml() {
     if (s) {
       hinweis = s.direction === 'to'
         ? translate('to school, be there by %s').replace('%s', s.targetTime)
-        : translate('home, lessons end at %s').replace('%s', s.schoolEnd);
+        : (s.fromNow
+            ? translate('home, from now')
+            : translate('home, lessons end at %s').replace('%s', s.schoolEnd));
     }
     const fahrten = (r.journeys || []).map(function (v) {
       return '<div class="fahrt">'

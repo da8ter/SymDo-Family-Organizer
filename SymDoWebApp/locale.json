@@ -540,7 +540,11 @@
             "home, lessons end at %s": "nach Hause, Schluss um %s",
             "changes": "Umstiege",
             "direct": "direkt",
-            "no journey found": "keine Verbindung gefunden"
+            "no journey found": "keine Verbindung gefunden",
+            "riding": "fahren",
+            "walking": "laufen",
+            "waiting": "warten",
+            "home, from now": "nach Hause, ab jetzt"
         }
     }
 }

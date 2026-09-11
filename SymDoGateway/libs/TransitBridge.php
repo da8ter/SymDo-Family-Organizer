@@ -150,6 +150,9 @@ trait TransitBridge
             'schoolEnd'   => (string)($r['school']['schoolEnd'] ?? ''),
             'targetTime'  => (string)($r['school']['targetTime'] ?? ''),
             'bufferUsed'  => (int)($r['school']['bufferUsed'] ?? 0),
+            // Ohne diese Zeile wüsste die App nicht, dass die planmäßige
+            // Abfahrt schon vorbei war und ab jetzt gesucht wurde.
+            'fromNow'     => ($r['school']['fromNow'] ?? false) === true,
         ] : null;
 
         return [

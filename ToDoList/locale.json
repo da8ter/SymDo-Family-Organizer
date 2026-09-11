@@ -714,7 +714,10 @@
             "incl. %s min walk": "mit %s min Fußweg",
             "min": "min",
             "Transit": "Nahverkehr",
-            "now": "jetzt"
+            "now": "jetzt",
+            "home, from now": "nach Hause, ab jetzt",
+            "walking": "laufen",
+            "waiting": "warten"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

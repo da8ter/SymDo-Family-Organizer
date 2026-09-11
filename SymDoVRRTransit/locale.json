@@ -1,6 +1,8 @@
 {
     "translations": {
-        "en": {},
+        "en": {
+            "SymDo VRR Transit": "SymDo - VRR Transit"
+        },
         "de": {
             "Departures and journeys from the VRR journey planner (EFA). ": "Abfahrten und Verbindungen aus der Fahrplanauskunft des VRR (EFA). ",
             "It covers Rheinbahn and every other operator in the network, ": "Sie umfasst die Rheinbahn und alle anderen Verkehrsunternehmen im Verbund, ",
@@ -61,7 +63,7 @@
             "This stop is already in the list.": "Diese Haltestelle steht schon in der Liste.",
             "Added: ": "Übernommen: ",
             ". Close the form once and open it again.": ". Das Formular einmal schließen und neu öffnen.",
-            "SymDo VRR Transit": "SymDo - Nahverkehr",
+            "SymDo VRR Transit": "SymDo - VRR Nahverkehr",
             "No route set up": "Keine Strecke eingerichtet",
             "No stop set up": "Keine Haltestelle eingerichtet",
             "Pl.": "Gl.",
@@ -76,7 +78,11 @@
             "now": "jetzt",
             "outdated": "veraltet",
             "scheduled": "planmäßig",
-            "to school, be there by %s": "zur Schule, da sein um %s"
+            "to school, be there by %s": "zur Schule, da sein um %s",
+            "riding": "fahren",
+            "walking": "laufen",
+            "waiting": "warten",
+            "home, from now": "nach Hause, ab jetzt"
         }
     }
 }

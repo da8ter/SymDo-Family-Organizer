@@ -132,10 +132,26 @@ pruefe('unbekannte Haltestelle: leere Liste statt Fehler',
 $v = TransitCalc::Verbindungen(fixture('strecke-umstieg'));
 pruefe('eine Verbindung', count($v), 1);
 pruefe('ein Umstieg', $v[0]['interchanges'], 1);
-pruefe('drei Abschnitte: Fahrt, Fußweg, Fahrt',
-    array_column($v[0]['legs'], 'kind'), ['ride', 'walk', 'ride']);
+pruefe('vier Abschnitte: Fahrt, Fußweg, Warten, Fahrt',
+    array_column($v[0]['legs'], 'kind'), ['ride', 'walk', 'wait', 'ride']);
 pruefe('Linien der beiden Fahrten',
-    [$v[0]['legs'][0]['line'], $v[0]['legs'][2]['line']], ['RE1', 'RE5']);
+    [$v[0]['legs'][0]['line'], $v[0]['legs'][3]['line']], ['RE1', 'RE5']);
+
+/* Die Wartezeit MUSS mitgezeichnet werden, sonst endet die Zeitachse zu früh:
+   ohne sie waren von 33 Minuten nur 86,4 % gedeckt, und die viereinhalb
+   Minuten auf dem Bahnsteig kamen nirgends vor. */
+$deckung = static function (array $verbindung): float {
+    $summe = 0;
+    foreach ($verbindung['legs'] as $l) { $summe += $l['seconds']; }
+    return round($summe / max(1, $verbindung['seconds']) * 100, 1);
+};
+pruefe('die Abschnitte decken die ganze Verbindung', $deckung($v[0]), 100.0);
+$warten = array_values(array_filter($v[0]['legs'],
+    static fn(array $l): bool => $l['kind'] === 'wait'));
+pruefe('die Wartezeit steht zwischen Fußweg und Anschluss',
+    [$warten[0]['depText'], $warten[0]['arrText'], $warten[0]['seconds']], ['15:51', '15:57', 318]);
+pruefe('und sie trägt kein Fahrzeug', [$warten[0]['line'], $warten[0]['icon']],
+    ['', 'fa-hourglass-half']);
 pruefe('Abfahrt und Ankunft der ganzen Verbindung',
     [$v[0]['departureText'], $v[0]['arrivalText']], ['15:35', '16:05']);
 
@@ -169,7 +185,16 @@ pruefe('Start an der Haustür: erster Abschnitt ist ein Fußweg',
 pruefe('die Zeitachse läuft nie rückwärts (ab Koordinate)', $vorwaerts($k), true);
 /* Der Fußweg, für den es keine Lücke gibt, fällt weg: er hat keine Zeit
    gekostet, und ein Abschnitt ohne Dauer ist eine Behauptung. */
-pruefe('kein Scheinfußweg ohne Lücke', count($k[0]['legs']), 4);
+pruefe('kein Scheinfußweg ohne Lücke',
+    array_column($k[0]['legs'], 'kind'), ['walk', 'ride', 'walk', 'wait', 'ride']);
+pruefe('auch hier decken die Abschnitte alles', $deckung($k[0]), 100.0);
+// Unter einer Minute ist es Rundung, keine Wartezeit — ein Stück von zwei
+// Pixeln wäre nur Unruhe.
+foreach ($k[0]['legs'] as $l) {
+    if ($l['kind'] === 'wait') {
+        pruefe('keine Wartezeit unter einer Minute', $l['seconds'] >= 60, true);
+    }
+}
 
 /* Bei einer Ankunftsvorgabe legt die EFA eine Verbindung dazu, die zu spät
    kommt — zu „bis 08:00" kam neben 07:40 und 07:53 auch eine Ankunft um 08:03.
@@ -237,6 +262,16 @@ pruefe('erste Stunde entfällt: Ziel entsprechend später', $spaeter['targetTime
 $rueck = TransitCalc::Schulweg($tag, '2026-09-14', $mittags, 10);
 pruefe('ab Unterrichtsbeginn: Rückweg', [$rueck['direction'], $rueck['mode']], ['from', 'dep']);
 pruefe('Rückweg: losfahren zehn Minuten nach Schulschluss', $rueck['targetTime'], '13:15');
+
+/* Kommt das Kind später aus dem Gebäude, ist die planmäßige Abfahrt längst weg.
+   Dann gilt JETZT — sonst stünde um 15:40 noch der Zug von 13:15 da. */
+$verspaetet = strtotime('2026-09-14 15:40:00');
+$spaet = TransitCalc::Schulweg($tag, '2026-09-14', $verspaetet, 10);
+pruefe('Schulschluss vorbei: Verbindungen ab jetzt',
+    [$spaet['direction'], $spaet['targetTime'], $spaet['fromNow']], ['from', '15:40', true]);
+pruefe('der Schulschluss selbst bleibt stehen', $spaet['schoolEnd'], '13:05');
+pruefe('rechtzeitig gefragt: die planmäßige Zeit gilt',
+    [$rueck['targetTime'], $rueck['fromNow']], ['13:15', false]);
 
 /* Und umgekehrt: fällt die letzte Stunde aus, ist früher Schluss. */
 $ohneLetzte = $tag;

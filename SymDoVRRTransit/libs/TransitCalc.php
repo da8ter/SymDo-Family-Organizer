@@ -93,6 +93,9 @@ final class TransitCalc
      */
     private const VERPASST_MAX = 2;
 
+    /** Ab wann eine Lücke zwischen zwei Abschnitten als Wartezeit gilt. */
+    private const WARTEN_MIN_S = 60;
+
     /**
      * Abfahrten einer Haltestelle aus einer `XML_DM_REQUEST`-Antwort.
      *
@@ -386,6 +389,55 @@ final class TransitCalc
                 $raus[] = $w;
             }
         }
+        return self::MitWartezeiten($raus);
+    }
+
+    /**
+     * Die Wartezeiten zwischen den Abschnitten sichtbar machen.
+     *
+     * Ohne sie endet die Zeitachse zu früh: bei einer Verbindung von 33 Minuten
+     * waren nur 86,4 % gezeichnet — Fahren und Laufen. Die fehlenden viereinhalb
+     * Minuten standen niemandem zur Verfügung, obwohl sie das Kind auf dem
+     * Bahnsteig verbringt. Jetzt sind sie ein eigenes Stück: der Balken füllt
+     * die Breite, und es steht da, was beim Umstieg wirklich interessiert.
+     *
+     * Lücken unter einer Minute bleiben draußen — das ist Rundung, keine
+     * Wartezeit, und ein Stück von zwei Pixeln wäre nur Unruhe.
+     *
+     * @param list<array<string,mixed>> $abschnitte
+     * @return list<array<string,mixed>>
+     */
+    private static function MitWartezeiten(array $abschnitte): array
+    {
+        $raus = [];
+        foreach ($abschnitte as $i => $a) {
+            if ($i > 0) {
+                $vorher = $abschnitte[$i - 1];
+                $luecke = (int)$a['depAt'] - (int)$vorher['arrAt'];
+                if ($luecke >= self::WARTEN_MIN_S && (int)$vorher['arrAt'] > 0) {
+                    $raus[] = [
+                        'kind'        => 'wait',
+                        'line'        => '',
+                        'product'     => 'wait',
+                        'class'       => 98,
+                        'icon'        => 'fa-hourglass-half',
+                        'destination' => '',
+                        'from'        => (string)$vorher['to'],
+                        'to'          => (string)$vorher['to'],
+                        'depAt'       => (int)$vorher['arrAt'],
+                        'arrAt'       => (int)$a['depAt'],
+                        'depText'     => (string)$vorher['arrText'],
+                        'arrText'     => (string)$a['depText'],
+                        'depDelay'    => 0,
+                        'arrDelay'    => 0,
+                        'seconds'     => $luecke,
+                        'realtime'    => false,
+                        'platform'    => '',
+                    ];
+                }
+            }
+            $raus[] = $a;
+        }
         return $raus;
     }
 
@@ -455,6 +507,7 @@ final class TransitCalc
             return null;
         }
         $puffer = max(0, $puffer);
+        $abJetzt = false;
 
         if ($jetzt < $beginn) {
             $ziel = $beginn - $puffer * 60;
@@ -468,6 +521,15 @@ final class TransitCalc
             if ($jetzt > $ziel + self::RUECKWEG_NACHLAUF_S) {
                 return null;
             }
+            /* Liegt die Abfahrtszeit schon hinter uns, gilt JETZT. Wer später
+               aus dem Gebäude kommt — Gespräch mit der Lehrerin, vergessenes
+               Heft, Regen — braucht die Verbindung, die er noch bekommt, nicht
+               die, die er verpasst hat. Ohne das zeigte die Karte um 15:40 noch
+               immer den Zug von 15:10. */
+            if ($ziel < $jetzt) {
+                $ziel = $jetzt;
+                $abJetzt = true;
+            }
         }
 
         return [
@@ -479,6 +541,10 @@ final class TransitCalc
             'targetTime'  => date('H:i', $ziel),
             'targetAt'    => $ziel,
             'bufferUsed'  => $puffer,
+            /* Wahr, wenn der planmäßige Zeitpunkt schon vorbei war und statt
+               dessen ab jetzt gesucht wurde — die Oberfläche sagt das dann
+               auch, sonst wundert man sich über die Zeiten. */
+            'fromNow'     => $abJetzt,
         ];
     }
 
