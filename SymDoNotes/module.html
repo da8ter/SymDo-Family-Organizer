@@ -725,15 +725,24 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
 .nv-zeiten .nv-grund { color: var(--muted); }
+/* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer. Vorher waren die
+   Stuecke breit nach Minuten — dabei blieben dem Fussweg 54 Pixel, von denen
+   Symbol und Polsterung 39 frassen, und „4 min" wurde abgeschnitten. Jetzt
+   bekommen Fussweg und Wartezeit genau die Breite, die ihr Inhalt braucht; die
+   Fahrten teilen sich den Rest zu gleichen Teilen. Die Reihenfolge der Tour
+   bleibt, nur die Laenge sagt nichts mehr ueber die Dauer — die steht im
+   Stueck. */
 .nv-balken { display: flex; height: 30px; border-radius: 15px; overflow: hidden; background: var(--line); }
 .nv-stueck {
-  /* border-box, sonst addiert sich die Polsterung auf die Prozentbreite und die
-     Summe der Stuecke sprengt den Balken. */
   box-sizing: border-box;
-  display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden;
-  padding: 0 9px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap;
+  display: flex; align-items: center; gap: 5px; overflow: hidden;
+  padding: 0 10px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap;
   background: var(--accent);
+  flex: 0 0 auto;                 /* Fussweg und Warten: so breit wie ihr Inhalt */
 }
+/* Die Fahrten teilen sich den Rest — im Verhaeltnis ihrer Fahrzeit. Das
+   flex-grow je Stueck setzt das Markup (die Sekunden). */
+.nv-stueck.ride { flex: 1 1 0; min-width: 0; }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefuellt, ohne Farbe.
    Sie hat erst seit dem Warte-Abschnitt ein Stueck — vorher endete der Balken
    zu frueh und niemand sah, dass am Umstieg gewartet wird. */
@@ -741,7 +750,8 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   background: color-mix(in srgb, var(--text) 14%, transparent);
   color: var(--muted);
 }
-.nv-aufteilung { font-size: 11px; color: var(--muted); margin-top: 3px; }
+/* Die Minutenzeile spiegelt den Balken: gleiche Anteile, gleiche Polsterung —
+   so sitzt jede Zahl unter ihrem Stueck. Abgeschnitten statt umgebrochen. */
 .nv-stueck.walk {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--text);
@@ -8344,32 +8354,22 @@ function transitSchulweg() {
  * frassen. Wohin die Zeit geht, sagt jetzt die Zeile darunter.
  */
 function nvBalken(v) {
-  const gesamt = Math.max(1, v.seconds);
   return `<div class="nv-balken">` + (v.legs || []).map(l => {
-    const anteil = Math.max(4, (l.seconds / gesamt) * 100);
-    const text = l.kind === 'ride' ? (l.line || l.product) : '';
+    const min = `${Math.round(l.seconds / 60)} ${translate('min')}`;
+    const text = l.kind === 'ride' ? `${l.line || l.product} · ${min}` : min;
     const was = l.kind === 'walk' ? translate('walking')
               : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
-    const tipp = `${was} ${Math.round(l.seconds / 60)} ${translate('min')}, `
-               + `${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
-    return `<div class="nv-stueck ${escapeHtml(l.kind)}" `
-         + `style="flex:0 0 ${anteil.toFixed(1)}%" title="${escapeHtml(tipp)}">`
+    const tipp = `${was} ${min}, ${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
+    /* Nur die FAHRTEN wachsen, und zwar im Verhaeltnis ihrer Fahrzeit
+       zueinander: flex-grow bekommt die Sekunden. Fussweg und Warten behalten
+       die Breite, die ihr Inhalt braucht. */
+    const wachsen = l.kind === 'ride' ? ` style="flex-grow:${Math.max(1, l.seconds)}"` : '';
+    return `<div class="nv-stueck ${escapeHtml(l.kind)}"${wachsen} title="${escapeHtml(tipp)}">`
          + `<i class="fa-light ${escapeHtml(l.icon || 'fa-route')}"></i>`
-         + (text ? `<span>${escapeHtml(text)}</span>` : '') + `</div>`;
-  }).join('') + `</div>` + nvAufteilung(v);
+         + `<span>${escapeHtml(text)}</span></div>`;
+  }).join('') + `</div>`;
 }
 
-/** Wo die Zeit hingeht — fahren, laufen, warten, zusammengezaehlt. */
-function nvAufteilung(v) {
-  const summe = { ride: 0, walk: 0, wait: 0 };
-  (v.legs || []).forEach(l => { summe[l.kind] = (summe[l.kind] || 0) + l.seconds; });
-  const teile = [];
-  [['ride', 'riding'], ['walk', 'walking'], ['wait', 'waiting']].forEach(([k, wort]) => {
-    const m = Math.round(summe[k] / 60);
-    if (m > 0) { teile.push(`${m} ${translate('min')} ${translate(wort)}`); }
-  });
-  return teile.length ? `<div class="nv-aufteilung">${escapeHtml(teile.join(' · '))}</div>` : '';
-}
 
 /** Eine Verbindung mit Zeiten, Balken und den beiden Enden. */
 function nvFahrt(v) {

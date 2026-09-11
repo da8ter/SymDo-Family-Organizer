@@ -303,8 +303,8 @@ class SymDoVRRTransit extends IPSModuleStrict
     private function MitgliederOptionen(): array
     {
         $raus = [['caption' => $this->Translate('Whole family'), 'value' => '']];
-        foreach ($this->TransitMitglieder() as $id => $name) {
-            $raus[] = ['caption' => $name, 'value' => $id];
+        foreach ($this->TransitMitglieder() as $id => $m) {
+            $raus[] = ['caption' => (string)$m['name'], 'value' => $id];
         }
         return $raus;
     }

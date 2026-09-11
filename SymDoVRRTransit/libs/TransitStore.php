@@ -482,10 +482,13 @@ trait TransitStore
     private function TransitMitglieder(): array
     {
         $gw = $this->TransitGateway();
-        if ($gw <= 0 || !function_exists('TGW_GetUsers')) {
+        if ($gw <= 0 || !function_exists('TGW_GetUsersForTile')) {
             return [];
         }
-        $roh = json_decode((string)@TGW_GetUsers($gw), true);
+        /* GetUsersForTile und nicht GetUsers: nur dort liegt das FOTO als
+           Data-URI bei, und die Kachel zeigt das Kind mit Bild und Namen. Das
+           Gateway hält die Bilder selbst zwischengespeichert. */
+        $roh = json_decode((string)@TGW_GetUsersForTile($gw), true);
         if (!is_array($roh)) {
             return [];
         }
@@ -497,7 +500,7 @@ trait TransitStore
             $id = trim((string)($u['id'] ?? ''));
             $name = trim((string)($u['name'] ?? ''));
             if ($id !== '' && $name !== '') {
-                $karte[$id] = $name;
+                $karte[$id] = ['name' => $name, 'avatar' => (string)($u['avatar'] ?? '')];
             }
         }
         return $karte;
@@ -551,7 +554,8 @@ trait TransitStore
                 'key'        => $key,
                 'name'       => trim((string)($z['name'] ?? '')),
                 'member'     => $mitglied,
-                'memberName' => (string)($namen[$mitglied] ?? ''),
+                'memberName' => (string)($namen[$mitglied]['name'] ?? ''),
+                'memberAvatar' => (string)($namen[$mitglied]['avatar'] ?? ''),
                 'walk'       => max(0, (int)($z['walk'] ?? 0)),
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
@@ -574,7 +578,8 @@ trait TransitStore
                 'key'        => $key,
                 'name'       => trim((string)($z['name'] ?? '')),
                 'member'     => $mitglied,
-                'memberName' => (string)($namen[$mitglied] ?? ''),
+                'memberName' => (string)($namen[$mitglied]['name'] ?? ''),
+                'memberAvatar' => (string)($namen[$mitglied]['avatar'] ?? ''),
                 'mode'       => (string)($z['mode'] ?? 'dep'),
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,

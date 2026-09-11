@@ -1,3 +1,16 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<!-- Der Icon-Satz von Symcon. OHNE ihn bleiben alle <i> leere Kästen — die
+     Linien hätten kein Symbol, der Fußweg keins, das Kind keins.
+
+     Und es MUSS ein vollständiges Dokument sein, kein Fragment: wo ein Fragment
+     eingehängt wird, entscheidet der Wirt, und ein über innerHTML eingesetzter
+     script-Verweis läuft gar nicht. Genau daran hing es hier — die Kachel war
+     ein Fragment und blieb deshalb ohne jedes Symbol. Die übrigen Kacheln sind
+     seit jeher ganze Dokumente mit dem Verweis im Kopf. -->
+<script src="/icons.js"></script>
 <style>
 /* Symcon injiziert --card-color, --content-color und --accent-color je nach
    Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets.
@@ -36,15 +49,15 @@ body {
            calc(var(--sym-ms) + 12px);
 }
 
-/* Kopfzeile: Mitglieder links, Umschalter rechts */
-.kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.wer { display: flex; gap: 4px; flex: 1 1 auto; min-width: 0; overflow: hidden; }
-.wer button {
-  border: 0; border-radius: 999px; padding: 3px 10px; cursor: pointer;
-  background: var(--zeile); color: var(--text); font-size: 11px; font-weight: 600;
-  white-space: nowrap;
+/* Kopfzeile: nur der Umschalter, rechtsbündig. */
+.kopf { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+/* Wem gehört das? Bild und Name über den Karten des Kindes. */
+.wem { display: flex; align-items: center; gap: 7px; margin: 2px 0 4px 2px; font-size: 12px; font-weight: 700; }
+.wem .gesicht { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.wem .gesicht.ersatz {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--akzent); color: #fff; font-size: 11px; font-weight: 800;
 }
-.wer button.an { background: var(--akzent); color: #fff; }
 .umschalter { display: flex; flex: 0 0 auto; border-radius: 999px; overflow: hidden; background: var(--zeile); }
 .umschalter button {
   border: 0; padding: 4px 12px; cursor: pointer; background: transparent;
@@ -92,14 +105,23 @@ body {
 .fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 3px; }
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
+/* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer.
+   Vorher waren die Stücke breit nach Minuten — dabei blieben dem Fußweg 54
+   Pixel, von denen Symbol und Polsterung 39 fraßen, und „4 min" wurde
+   abgeschnitten. Jetzt bekommen Fußweg und Wartezeit genau die Breite, die ihr
+   Inhalt braucht; die Fahrten teilen sich den Rest zu gleichen Teilen. Damit
+   ist jede Angabe lesbar, und die Reihenfolge der Tour bleibt erhalten — nur
+   die Länge sagt nichts mehr über die Dauer. Die steht in den Stücken. */
 .balken { position: relative; display: flex; height: 26px; border-radius: 13px; overflow: hidden; background: var(--rand); }
 .stueck {
-  /* border-box, sonst addiert sich die Polsterung auf die Prozentbreite und die
-     Summe der Stücke sprengt den Balken. */
   box-sizing: border-box;
-  display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;
-  padding: 0 7px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+  display: flex; align-items: center; gap: 4px; overflow: hidden;
+  padding: 0 8px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+  flex: 0 0 auto;               /* Fußweg und Warten: so breit wie ihr Inhalt */
 }
+/* Die Fahrten teilen sich den Rest — im Verhältnis ihrer Fahrzeit. Das
+   flex-grow je Stück setzt das Markup (die Sekunden). */
+.stueck.ride { flex: 1 1 0; min-width: 0; }
 .stueck.ride { background: var(--akzent); }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefüllt, ohne Farbe. Sie
    hat erst seit dem Warte-Abschnitt ein Stück — vorher endete der Balken zu
@@ -115,10 +137,14 @@ body {
   color: var(--text);
   border: 1px dashed color-mix(in srgb, var(--content-color) 35%, transparent);
 }
-.aufteilung { font-size: 10px; color: var(--dezent); margin-top: 3px; }
+/* Die Minutenzeile spiegelt den Balken: gleiche Anteile, gleiche Polsterung —
+   so sitzt jede Zahl unter ihrem Stück. Abgeschnitten statt umgebrochen, sonst
+   verschiebt ein zu langes Wort die ganze Reihe. */
 .fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
 .leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
 </style>
+</head>
+<body>
 
 <div id="wurzel"><div class="leer">…</div></div>
 
@@ -127,7 +153,6 @@ body {
    bereit; hier nicht neu deklarieren, sonst kollidiert es. */
 let zustand = { v: 1, now: 0, view: 'departures', stops: [], routes: [], blocked: false };
 let ansicht = null;      // 'departures' | 'routes' — Wahl des Betrachters
-let werFilter = null;    // Mitglieds-Kennung, '' = alle
 
 /* Symcon reicht die Ränder der Kachel als Adresszusatz herein
    (margintop/marginside/marginbottom). Ohne sie stünde der Inhalt oben unter
@@ -161,51 +186,57 @@ function merker(name, wert) {
   return null;
 }
 
-/** Alle Mitglieder, die überhaupt etwas haben — in der Reihenfolge des Bestands. */
-function mitglieder() {
-  const gesehen = {};
-  const raus = [];
-  (zustand.stops || []).concat(zustand.routes || []).forEach(function (e) {
-    const id = e.member || '';
-    if (id === '' || gesehen[id]) { return; }
-    gesehen[id] = true;
-    raus.push({ id: id, name: e.memberName || id });
-  });
-  return raus;
-}
-
-function passt(e) {
-  if (werFilter === null || werFilter === '') { return true; }
-  return (e.member || '') === werFilter;
-}
-
+/**
+ * Die Kopfzeile: nur der Umschalter.
+ *
+ * Hier standen einmal Filterknöpfe — ein Haus für „alle" und je ein Knopf pro
+ * Mitglied. Das war zweimal falsch: es sah aus wie eine Auswahl, ohne eine zu
+ * brauchen (die Kachel zeigt ohnehin nur, was eingerichtet ist), und niemand
+ * konnte ihm ansehen, wozu es gut sein sollte. Wem eine Verbindung gehört,
+ * sagt jetzt die Überschrift über seinen Karten — mit Bild und Namen.
+ */
 function kopfHtml() {
-  const leute = mitglieder();
-  let wer = '';
-  if (leute.length > 0) {
-    wer = '<button data-wer="" class="' + (werFilter ? '' : 'an') + '">'
-        + symbol('fa-house') + '</button>';
-    leute.forEach(function (m) {
-      wer += '<button data-wer="' + esc(m.id) + '" class="' + (werFilter === m.id ? 'an' : '') + '">'
-           + esc(m.name) + '</button>';
-    });
-  }
   const hatBeides = (zustand.stops || []).length > 0 && (zustand.routes || []).length > 0;
-  let um = '';
-  if (hatBeides) {
-    um = '<div class="umschalter">'
-       + '<button data-ansicht="departures" class="' + (ansicht === 'routes' ? '' : 'an') + '">'
-       + esc(translate('Departures')) + '</button>'
-       + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
-       + esc(translate('Routes')) + '</button></div>';
-  }
-  return '<div class="kopf"><div class="wer">' + wer + '</div>' + um + '</div>';
+  if (!hatBeides) { return ''; }
+  return '<div class="kopf"><div class="umschalter">'
+    + '<button data-ansicht="departures" class="' + (ansicht === 'routes' ? '' : 'an') + '">'
+    + esc(translate('Departures')) + '</button>'
+    + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
+    + esc(translate('Routes')) + '</button></div></div>';
+}
+
+/** Bild und Name des Kindes — die Überschrift über seinen Karten. */
+function wemHtml(e) {
+  if (!e.member) { return ''; }
+  const name = e.memberName || '';
+  const bild = e.memberAvatar
+    ? '<img class="gesicht" src="' + esc(e.memberAvatar) + '" alt="">'
+    : '<span class="gesicht ersatz">' + esc((name || '?').slice(0, 1).toUpperCase()) + '</span>';
+  return '<div class="wem">' + bild + '<span>' + esc(name) + '</span></div>';
+}
+
+/**
+ * Die Karten nach Mitglied gruppiert, jede Gruppe mit Bild und Namen darüber.
+ * Was niemandem zugeordnet ist, steht ohne Überschrift oben — es gehört allen.
+ */
+function gruppiert(eintraege, karteBauen) {
+  const reihenfolge = [];
+  const gruppen = {};
+  eintraege.forEach(function (e) {
+    const id = e.member || '';
+    if (!gruppen[id]) { gruppen[id] = []; reihenfolge.push(id); }
+    gruppen[id].push(e);
+  });
+  reihenfolge.sort(function (a, b) { return (a === '' ? -1 : 0) - (b === '' ? -1 : 0); });
+  return reihenfolge.map(function (id) {
+    return (id ? wemHtml(gruppen[id][0]) : '') + gruppen[id].map(karteBauen).join('');
+  }).join('');
 }
 
 function abfahrtenHtml() {
-  const stops = (zustand.stops || []).filter(passt);
+  const stops = zustand.stops || [];
   if (stops.length === 0) { return '<div class="leer">' + esc(translate('No stop set up')) + '</div>'; }
-  return stops.map(function (s) {
+  return gruppiert(stops, function (s) {
     const zeilen = (s.departures || []).map(function (d) {
       const klassen = 'abfahrt' + (d.reachable ? '' : ' weg') + (d.cancelled ? ' entfaellt' : '');
       /* Mit gepflegtem Fußweg zählt „wann muss ich los", sonst „wann fährt es".
@@ -230,7 +261,7 @@ function abfahrtenHtml() {
       + '</div>'
       + (zeilen || '<div class="leer">' + esc(translate('no departures')) + '</div>')
       + '</div>';
-  }).join('');
+  });
 }
 
 /**
@@ -244,41 +275,28 @@ function abfahrtenHtml() {
  * immer lesbar, egal wie schmal das Stück ist.
  */
 function balkenHtml(v) {
-  const gesamt = Math.max(1, v.seconds);
   return '<div class="balken">' + (v.legs || []).map(function (l) {
-    const anteil = Math.max(4, (l.seconds / gesamt) * 100);
-    const text = l.kind === 'ride' ? (l.line || l.product) : '';
+    const min = Math.round(l.seconds / 60) + ' ' + translate('min');
+    const text = l.kind === 'ride' ? ((l.line || l.product) + ' · ' + min) : min;
     const was = l.kind === 'walk' ? translate('walking')
               : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
-    return '<div class="stueck ' + esc(l.kind) + '" style="flex:0 0 ' + anteil.toFixed(1) + '%" title="'
-      + esc(was + ' ' + Math.round(l.seconds / 60) + ' ' + translate('min') + ', '
-            + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
-      + symbol(l.icon) + (text ? '<span>' + esc(text) + '</span>' : '') + '</div>';
-  }).join('') + '</div>' + aufschluesselungHtml(v);
+    /* Nur die FAHRTEN wachsen, und zwar im Verhältnis ihrer Fahrzeit
+       zueinander: flex-grow bekommt die Sekunden. Der Rest des Balkens — was
+       Fußweg und Warten übrig lassen — verteilt sich damit so, wie die Fahrten
+       zueinander stehen. Eine Untergrenze gibt es bewusst nicht; sie würde
+       genau das Verhältnis verfälschen, um das es hier geht. */
+    const wachsen = l.kind === 'ride' ? ' style="flex-grow:' + Math.max(1, l.seconds) + '"' : '';
+    return '<div class="stueck ' + esc(l.kind) + '"' + wachsen + ' title="'
+      + esc(was + ' ' + min + ', ' + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
+      + symbol(l.icon) + '<span>' + esc(text) + '</span></div>';
+  }).join('') + '</div>';
 }
 
-/**
- * Wo die Zeit hingeht — fahren, laufen, warten, zusammengezählt.
- *
- * Erst mit dem Warte-Abschnitt ergibt das die volle Dauer: vorher waren von 33
- * Minuten nur 86 % gezeichnet, und die viereinhalb Minuten auf dem Bahnsteig
- * kamen nirgends vor.
- */
-function aufschluesselungHtml(v) {
-  const summe = { ride: 0, walk: 0, wait: 0 };
-  (v.legs || []).forEach(function (l) { summe[l.kind] = (summe[l.kind] || 0) + l.seconds; });
-  const teile = [];
-  [['ride', 'riding'], ['walk', 'walking'], ['wait', 'waiting']].forEach(function (paar) {
-    const m = Math.round(summe[paar[0]] / 60);
-    if (m > 0) { teile.push(m + ' ' + translate('min') + ' ' + translate(paar[1])); }
-  });
-  return teile.length ? '<div class="aufteilung">' + esc(teile.join(' · ')) + '</div>' : '';
-}
 
 function streckenHtml() {
-  const routen = (zustand.routes || []).filter(passt);
+  const routen = zustand.routes || [];
   if (routen.length === 0) { return '<div class="leer">' + esc(translate('No route set up')) + '</div>'; }
-  return routen.map(function (r) {
+  return gruppiert(routen, function (r) {
     const s = r.school;
     /* Beim Schulweg sagt die Kopfzeile die Richtung — sie wechselt im Lauf des
        Tages von selbst, und ohne das Wort wüsste niemand, welche man sieht. */
@@ -310,14 +328,13 @@ function streckenHtml() {
       + '</div>'
       + (fahrten || '<div class="leer">' + esc(translate('no journey found')) + '</div>')
       + '</div>';
-  }).join('');
+  });
 }
 
 function zeichne() {
   if (ansicht === null) {
     ansicht = merker('ansicht') || zustand.view || 'departures';
   }
-  if (werFilter === null) { werFilter = merker('wer') || ''; }
   // Gibt es nur eine Sorte, ist der Umschalter Lärm — dann gilt sie.
   let jetzt = ansicht;
   if ((zustand.routes || []).length === 0) { jetzt = 'departures'; }
@@ -331,11 +348,6 @@ function zeichne() {
   document.querySelectorAll('[data-ansicht]').forEach(function (b) {
     b.addEventListener('click', function () {
       ansicht = b.dataset.ansicht; merker('ansicht', ansicht); zeichne();
-    });
-  });
-  document.querySelectorAll('[data-wer]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      werFilter = b.dataset.wer; merker('wer', werFilter); zeichne();
     });
   });
   symboleErsetzen();
@@ -366,3 +378,5 @@ if (typeof requestAction === 'function') {
   try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ }
 }
 </script>
+</body>
+</html>
