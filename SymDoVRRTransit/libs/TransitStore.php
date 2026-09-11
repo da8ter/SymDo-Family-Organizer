@@ -96,6 +96,28 @@ trait TransitStore
         return array_values(array_filter($roh, 'is_array'));
     }
 
+    /**
+     * Gehört diese Haltestelle in die Abfahrtstafel?
+     *
+     * Eine Haltestelle wird aus zwei Gründen eingerichtet: weil man ihre
+     * Abfahrten sehen will, ODER nur, damit sie in einer Strecke als Start
+     * oder Ziel auswählbar ist. Der zweite Fall ist der häufigere — Schule und
+     * Umsteigepunkt interessieren als Tafel niemanden.
+     *
+     * Unsichtbare Haltestellen werden auch NICHT ABGERUFEN. Das ist der
+     * eigentliche Gewinn: jede Tafel kostet eine Anfrage an einen fremden
+     * Dienst pro Minute, und eine, die niemand sieht, ist eine Anfrage zu viel.
+     *
+     * Fehlt das Feld, gilt „ja" — Zeilen aus der Zeit vor dieser Spalte
+     * sollen nicht kommentarlos aus der Kachel verschwinden.
+     *
+     * @param array<string,mixed> $zeile
+     */
+    private function TransitStopSichtbar(array $zeile): bool
+    {
+        return !array_key_exists('show', $zeile) || (bool)$zeile['show'];
+    }
+
     private function TransitZahl(string $feld, int $vorgabe): int
     {
         $cfg = $this->TransitKonfiguration();
@@ -117,9 +139,12 @@ trait TransitStore
             return 'stop:' . trim((string)($zeile['stopId'] ?? ''))
                  . ':' . max(1, (int)($zeile['limit'] ?? 6));
         }
+        /* Der AUFGELOESTE Punkt gehört in den Schlüssel, nicht das Feld: wer
+           die Markierung auf der Karte verschiebt, hat eine andere Strecke und
+           bekäme sonst die Auskunft von der alten Stelle zu sehen. */
         return 'route:' . substr(md5(implode('|', [
-            trim((string)($zeile['from'] ?? '')),
-            trim((string)($zeile['to'] ?? '')),
+            TransitCalc::Punkt($zeile, 'from'),
+            TransitCalc::Punkt($zeile, 'to'),
             trim((string)($zeile['mode'] ?? 'dep')),
             trim((string)($zeile['member'] ?? '')),
             trim((string)($zeile['time'] ?? '')),
@@ -280,7 +305,7 @@ trait TransitStore
 
         foreach ($this->TransitZeilen('Stops') as $z) {
             $stopId = trim((string)($z['stopId'] ?? ''));
-            if ($stopId === '') {
+            if ($stopId === '' || !$this->TransitStopSichtbar($z)) {
                 continue;
             }
             $key = $this->TransitSchluessel('stop', $z);
@@ -300,8 +325,8 @@ trait TransitStore
         }
 
         foreach ($this->TransitZeilen('Routes') as $z) {
-            $von  = trim((string)($z['from'] ?? ''));
-            $nach = trim((string)($z['to'] ?? ''));
+            $von  = TransitCalc::Punkt($z, 'from');
+            $nach = TransitCalc::Punkt($z, 'to');
             if ($von === '' || $nach === '') {
                 continue;
             }
@@ -558,6 +583,9 @@ trait TransitStore
 
         $haltestellen = [];
         foreach ($this->TransitZeilen('Stops') as $z) {
+            if (!$this->TransitStopSichtbar($z)) {
+                continue;
+            }
             $key = $this->TransitSchluessel('stop', $z);
             $e   = $bestand['entries'][$key] ?? [];
             $roh = is_array($e['raw'] ?? null) ? $e['raw'] : [];

@@ -311,5 +311,42 @@ pruefe('kurz vor der Nachlaufgrenze: Rückweg gilt noch',
 pruefe('kurz danach: der Tag ist durch',
     TransitCalc::Schulweg($tag, '2026-09-14', $knappDanach, 10), null);
 
+/* ── Start und Ziel einer Strecke ───────────────────────────────────────────
+   Zwei Wege fuehren zu einem Punkt: die Auswahlliste mit der Kennung einer
+   eingerichteten Haltestelle, oder die Markierung auf der Karte. Der Fall, der
+   hier wirklich geprueft gehoert, ist die NULLINSEL: eine nie angefasste
+   Karte liefert 0/0, und die EFA sucht darauf klaglos eine Verbindung aus dem
+   Atlantik vor Ghana. */
+$karte = static fn(float $b, float $l): string => json_encode(['latitude' => $b, 'longitude' => $l]);
+
+pruefe('Auswahl: die Haltestellenkennung gewinnt',
+    TransitCalc::Punkt(['from' => 'de:05111:18235', 'fromGeo' => $karte(51.2, 6.7)], 'from'),
+    'de:05111:18235');
+pruefe('Auswahl „Karte": die Markierung gilt',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => $karte(51.22170, 6.77630)], 'from'),
+    '51.22170,6.77630');
+pruefe('leere Auswahl mit Markierung: die Markierung gilt',
+    TransitCalc::Punkt(['to' => '', 'toGeo' => $karte(51.0, 7.0)], 'to'),
+    '51.00000,7.00000');
+pruefe('Nullinsel: kein Punkt',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => $karte(0, 0)], 'from'), '');
+pruefe('Karte gewaehlt, aber nie gesetzt: kein Punkt',
+    TransitCalc::Punkt(['from' => 'geo'], 'from'), '');
+pruefe('unsinnige Breite: kein Punkt',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => $karte(96.0, 6.7)], 'from'), '');
+pruefe('unsinnige Laenge: kein Punkt',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => $karte(51.2, 200.0)], 'from'), '');
+pruefe('gar nichts eingetragen: kein Punkt',
+    TransitCalc::Punkt([], 'from'), '');
+pruefe('Schrott in der Kartenspalte: kein Punkt',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => 'kaputt'], 'from'), '');
+/* Die Reihenfolge ist die der Karten-Apps (Breite, Laenge) — Efa::Ort() dreht
+   sie fuer die EFA um. Wer hier tauscht, sucht Verbindungen in Somalia. */
+pruefe('Reihenfolge: Breite vor Laenge',
+    TransitCalc::Punkt(['from' => 'geo', 'fromGeo' => $karte(51.5, 6.5)], 'from'),
+    '51.50000,6.50000');
+pruefe('von Hand getippte Koordinate bleibt unveraendert',
+    TransitCalc::Punkt(['from' => '51.2217,6.7763'], 'from'), '51.2217,6.7763');
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

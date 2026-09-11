@@ -24,6 +24,13 @@ declare(strict_types=1);
 final class TransitCalc
 {
     /**
+     * Der Wert, mit dem die Auswahlliste einer Strecke auf die Karte verweist.
+     * Keine Haltestellen-Kennung der EFA sieht so aus (sie beginnen mit
+     * „de:"), eine Verwechslung ist also ausgeschlossen.
+     */
+    public const PUNKT_KARTE = 'geo';
+
+    /**
      * Symbol je Produktklasse der EFA. Gemessen am 11.09.2026: 1 = S-Bahn,
      * 5 = Niederflurbus, 13 = Regionalzug; U-Bahn und Fußweg kamen in den
      * Streckenauskünften dazu.
@@ -559,6 +566,52 @@ final class TransitCalc
                auch, sonst wundert man sich über die Zeiten. */
             'fromNow'     => $abJetzt,
         ];
+    }
+
+    /**
+     * Start oder Ziel einer Strecke aus einer Formularzeile.
+     *
+     * Zwei Wege führen zu einem Punkt, und sie schließen einander aus:
+     *
+     * - die Auswahlliste `from`/`to` trägt die Kennung einer eingerichteten
+     *   Haltestelle,
+     * - steht dort `geo`, gilt stattdessen die Markierung aus der Karte
+     *   (`fromGeo`/`toGeo`), die Symcon als `{"latitude":…,"longitude":…}`
+     *   ablegt.
+     *
+     * Zwei Fallen stecken darin. Die erste: eine nie angefasste Karte liefert
+     * 0/0 — die Nullinsel im Atlantik vor Ghana. Ohne die Prüfung suchte die
+     * EFA klaglos eine Verbindung von dort. Die zweite: die Karte gibt Breite
+     * und Länge, die EFA will sie andersherum — das dreht Efa::Ort() um, und
+     * deshalb entsteht hier die Schreibweise „Breite,Länge", die jede
+     * Karten-App anzeigt und die man auch von Hand eintippen kann.
+     *
+     * @param array<string,mixed> $zeile
+     * @param string              $feld  'from' oder 'to'
+     */
+    public static function Punkt(array $zeile, string $feld): string
+    {
+        $wert = trim((string)($zeile[$feld] ?? ''));
+        if ($wert !== '' && $wert !== self::PUNKT_KARTE) {
+            return $wert;
+        }
+        /* Auch bei leerer Auswahl gilt die Karte, sobald eine Markierung
+           gesetzt ist: wer sie gesetzt hat, meinte sie. */
+        $roh = $zeile[$feld . 'Geo'] ?? '';
+        $geo = is_array($roh) ? $roh : json_decode((string)$roh, true);
+        if (!is_array($geo)) {
+            return '';
+        }
+        $breite = (float)($geo['latitude'] ?? 0);
+        $laenge = (float)($geo['longitude'] ?? 0);
+        if (abs($breite) < 0.00001 && abs($laenge) < 0.00001) {
+            return '';                       // Nullinsel = nie gesetzt
+        }
+        if (abs($breite) > 90 || abs($laenge) > 180) {
+            return '';
+        }
+        // Fünf Nachkommastellen sind gut ein Meter — mehr braucht kein Haus.
+        return sprintf('%.5f,%.5f', $breite, $laenge);
     }
 
     /**

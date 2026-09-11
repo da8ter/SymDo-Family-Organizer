@@ -15,9 +15,6 @@
             "Hits": "Treffer",
             "— nothing searched yet —": "— noch nicht gesucht —",
             "Add as a stop": "Als Haltestelle übernehmen",
-            "For a route, copy the id from here into the \"From\" and \"To\" columns. ": "Für eine Strecke die Kennung von hier in die Spalten „Von\" und „Nach\" kopieren. ",
-            "Instead of a stop you can put your own front door there as coordinates, ": "Statt einer Haltestelle geht dort auch die eigene Haustür als Koordinate, ",
-            "in the form \"51.2217,6.7763\" (latitude, longitude — the way any map app shows them).": "in der Form „51.2217,6.7763\" (Breite, Länge — wie jede Karten-App sie anzeigt).",
             "Stops": "Haltestellen",
             "Name": "Name",
             "Stop id": "Haltestellen-Kennung",
@@ -82,7 +79,15 @@
             "riding": "fahren",
             "walking": "laufen",
             "waiting": "warten",
-            "home, from now": "nach Hause, ab jetzt"
+            "home, from now": "nach Hause, ab jetzt",
+            "Every stop from this list can be picked as \"From\" or \"To\" in a route. ": "Jede Haltestelle aus dieser Liste lässt sich in einer Strecke als „Von“ oder „Nach“ auswählen. ",
+            "For your own front door choose \"Map\" there instead and set the marker.": "Für die eigene Haustür dort stattdessen „Karte“ wählen und die Markierung auf der Karte setzen.",
+            "Show in the tile": "In der Kachel zeigen",
+            "From (map)": "Von (Karte)",
+            "To (map)": "Nach (Karte)",
+            "— please choose —": "— bitte wählen —",
+            " (not in the list of stops)": " (nicht in der Haltestellenliste)",
+            "Map (own coordinate)": "Karte (eigene Koordinate)"
         }
     }
 }

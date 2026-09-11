@@ -30,6 +30,13 @@ class SymDoVRRTransit extends IPSModuleStrict
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
     /**
+     * Der Startwert einer Kartenspalte. Symcon legt eine Position als
+     * `{"latitude":…,"longitude":…}` ab; 0/0 ist die Nullinsel im Atlantik und
+     * heisst hier „nie gesetzt" — TransitCalc::Punkt() prueft genau darauf.
+     */
+    private const KARTE_LEER = '{"latitude":0,"longitude":0}';
+
+    /**
      * „connect" statt „require": an EINEM Gateway hängen mehrere Kacheln.
      * (ConnectParent/RequireParent gibt es für IPSModuleStrict nicht.)
      */
@@ -164,6 +171,7 @@ class SymDoVRRTransit extends IPSModuleStrict
     public function GetConfigurationForm(): string
     {
         $kinder = $this->MitgliederOptionen();
+        $orte   = $this->OrtOptionen();
 
         $haltestellen = [
             'type'    => 'List',
@@ -177,6 +185,11 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Stop id'), 'name' => 'stopId', 'width' => '200px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Der Haken entscheidet ueber die Abfahrtstafel UND ueber den
+                   Abruf: eine Haltestelle, die nur als Start oder Ziel einer
+                   Strecke gebraucht wird, kostet so keine Anfrage je Minute. */
+                ['caption' => $this->Translate('Show in the tile'), 'name' => 'show', 'width' => '150px',
+                 'add' => true, 'edit' => ['type' => 'CheckBox']],
                 ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
                 ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
@@ -201,10 +214,23 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '150px',
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
+                /* Auswahl statt Textfeld: die Kennungen der EFA („de:05111:18235")
+                   tippt niemand ab, und ein Zahlendreher darin führt zu einer
+                   Verbindung von irgendwo. Was hier steht, ist eingerichtet.
+
+                   ACHTUNG: die Liste entsteht beim BAUEN des Formulars, aus der
+                   gespeicherten Eigenschaft. Eine soeben eingetragene
+                   Haltestelle taucht darum erst auf, wenn das Formular einmal
+                   geschlossen und neu geoeffnet wurde — dasselbe sagt der
+                   Hinweis nach dem Uebernehmen. */
                 ['caption' => $this->Translate('From'), 'name' => 'from', 'width' => '190px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
+                ['caption' => $this->Translate('From (map)'), 'name' => 'fromGeo', 'width' => '170px',
+                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
                 ['caption' => $this->Translate('To'), 'name' => 'to', 'width' => '190px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                 'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
+                ['caption' => $this->Translate('To (map)'), 'name' => 'toGeo', 'width' => '170px',
+                 'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
                 ['caption' => $this->Translate('When'), 'name' => 'mode', 'width' => '150px',
                  'add' => 'school', 'edit' => ['type' => 'Select', 'options' => [
                      ['caption' => $this->Translate('School run (from the timetable)'), 'value' => 'school'],
@@ -244,9 +270,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                       'onClick' => 'IPS_RequestAction($id, "StopAdd", $StopHit);'],
                      ['type' => 'Label', 'name' => 'StopStatus', 'caption' => ' '],
                      ['type' => 'Label', 'caption' =>
-                         $this->Translate('For a route, copy the id from here into the "From" and "To" columns. ')
-                         . $this->Translate('Instead of a stop you can put your own front door there as coordinates, ')
-                         . $this->Translate('in the form "51.2217,6.7763" (latitude, longitude — the way any map app shows them).')],
+                         $this->Translate('Every stop from this list can be picked as "From" or "To" in a route. ')
+                         . $this->Translate('For your own front door choose "Map" there instead and set the marker.')],
                  ]],
 
                 $haltestellen,
@@ -306,6 +331,45 @@ class SymDoVRRTransit extends IPSModuleStrict
         foreach ($this->TransitMitglieder() as $id => $m) {
             $raus[] = ['caption' => (string)$m['name'], 'value' => $id];
         }
+        return $raus;
+    }
+
+    /**
+     * Die eingerichteten Haltestellen als Auswahl für eine Strecke.
+     *
+     * Drei Gruppen stehen darin, und die dritte ist die wichtige: Werte, die in
+     * einer Strecke stehen, aber nicht (mehr) in der Haltestellenliste. Ohne
+     * sie hätte die Auswahl für so eine Zeile keinen passenden Eintrag — die
+     * Konsole zeigte ein leeres Feld, und beim nächsten Speichern wäre das
+     * Ziel lautlos weg. Eine Auswahlliste darf nie weniger können als der
+     * Bestand, den sie bearbeitet.
+     *
+     * @return list<array{caption:string,value:string}>
+     */
+    private function OrtOptionen(): array
+    {
+        $raus    = [['caption' => $this->Translate('— please choose —'), 'value' => '']];
+        $bekannt = [];
+        foreach ($this->TransitZeilen('Stops') as $z) {
+            $id = trim((string)($z['stopId'] ?? ''));
+            if ($id === '' || isset($bekannt[$id])) {
+                continue;
+            }
+            $bekannt[$id] = true;
+            $name = trim((string)($z['name'] ?? ''));
+            $raus[] = ['caption' => $name !== '' ? $name : $id, 'value' => $id];
+        }
+        foreach ($this->TransitZeilen('Routes') as $z) {
+            foreach (['from', 'to'] as $feld) {
+                $id = trim((string)($z[$feld] ?? ''));
+                if ($id === '' || $id === TransitCalc::PUNKT_KARTE || isset($bekannt[$id])) {
+                    continue;
+                }
+                $bekannt[$id] = true;
+                $raus[] = ['caption' => $id . $this->Translate(' (not in the list of stops)'), 'value' => $id];
+            }
+        }
+        $raus[] = ['caption' => $this->Translate('Map (own coordinate)'), 'value' => TransitCalc::PUNKT_KARTE];
         return $raus;
     }
 
@@ -372,7 +436,7 @@ class SymDoVRRTransit extends IPSModuleStrict
                 }
             }
         }
-        $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'member' => '',
+        $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
                      'lines' => '', 'walk' => 0, 'limit' => 6];
         @IPS_SetProperty($this->InstanceID, 'Stops',
             (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
