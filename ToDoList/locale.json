@@ -701,7 +701,20 @@
             "New homework …": "Neue Hausaufgabe …",
             "Open homework": "Offen",
             "School": "Schule",
-            "Source: LOGINEO": "Quelle: LOGINEO"
+            "Source: LOGINEO": "Quelle: LOGINEO",
+            "home, lessons end at %s": "nach Hause, Schluss um %s",
+            "no departures": "keine Abfahrten",
+            "direct": "direkt",
+            "School run": "Schulweg",
+            "changes": "Umstiege",
+            "no journey found": "keine Verbindung gefunden",
+            "to school, be there by %s": "zur Schule, da sein um %s",
+            "outdated": "veraltet",
+            "Pl.": "Gl.",
+            "incl. %s min walk": "mit %s min Fußweg",
+            "min": "min",
+            "Transit": "Nahverkehr",
+            "now": "jetzt"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

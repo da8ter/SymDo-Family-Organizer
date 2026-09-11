@@ -526,6 +526,20 @@
       "1 card": "1 Karte",
       "%1 cards": "%1 Karten",
       "Show class pages (requires the SymDo Gateway)": "Klassenseiten zeigen (braucht das SymDo Gateway)",
+      "Child": "Kind",
+      "Transit": "Nahverkehr",
+      "School run": "Schulweg",
+      "now": "jetzt",
+      "min": "min",
+      "Pl.": "Gl.",
+      "incl. %s min walk": "mit %s min Fußweg",
+      "outdated": "veraltet",
+      "no departures": "keine Abfahrten",
+      "to school, be there by %s": "zur Schule, da sein um %s",
+      "home, lessons end at %s": "nach Hause, Schluss um %s",
+      "changes": "Umstiege",
+      "direct": "direkt",
+      "no journey found": "keine Verbindung gefunden",
       "SymDo Edumaps": "SymDo - Klassenseiten",
       "Shows the class pages of the school as a tile — the same cards, the same view as in the app. There is nothing to set up here: the pages are entered in the SymDo Gateway.": "Zeigt die Klassenseiten der Schule als Kachel — dieselben Karten, dieselbe Ansicht wie in der App. Einzurichten ist hier nichts: die Quellen (Edumaps und LOGINEO NRW LMS) werden im SymDo Gateway eingetragen.",
       "Read only: the cards are a mirror of the class page. Renaming a page and deleting it (which blocks it) work; writing does not.": "Nur lesend: die Karten sind ein Spiegel der Schulseite — ob sie von Edumaps oder aus LOGINEO kommt. Eine Seite umbenennen und loeschen (womit sie gesperrt wird) geht, schreiben nicht.",
@@ -535,8 +549,7 @@
       "Could not reach the gateway.": "Das Gateway war nicht erreichbar.",
       "Creating": "Wird erstellt",
       "Active": "Aktiv",
-      "Inactive": "Inaktiv",
-      "Child": "Kind"
+      "Inactive": "Inaktiv"
     }
   }
 }

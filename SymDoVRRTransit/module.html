@@ -58,7 +58,7 @@ body {
 .liste::-webkit-scrollbar-thumb { background: var(--akzent); border-radius: 3px; }
 .liste::-webkit-scrollbar-track { background: transparent; }
 
-.karte { background: var(--zeile); border-radius: 12px; padding: 8px 10px; }
+.karte { background: var(--zeile); border-radius: 12px; padding: 8px 10px; overflow: hidden; }
 .karte .titel {
   display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;
   font-size: 12px; font-weight: 700;
@@ -68,7 +68,10 @@ body {
 
 /* ── Abfahrtstafel ─────────────────────────────────────────────────────── */
 .abfahrt {
-  display: grid; grid-template-columns: 20px 54px 1fr auto; align-items: center;
+  /* minmax(0,1fr), nicht 1fr: eine Grid-Spalte ist von Haus aus mindestens so
+     breit wie ihr längstes Wort — sonst wächst die Karte über die Kachel
+     hinaus, statt den Zielnamen zu kürzen. */
+  display: grid; grid-template-columns: 20px 54px minmax(0, 1fr) auto; align-items: center;
   gap: 8px; padding: 4px 0; border-top: 1px solid var(--rand);
 }
 .abfahrt:first-of-type { border-top: 0; }
@@ -91,6 +94,9 @@ body {
 .fahrt .zeilen .grund { color: var(--dezent); }
 .balken { position: relative; display: flex; height: 26px; border-radius: 13px; overflow: hidden; background: var(--rand); }
 .stueck {
+  /* border-box, sonst addiert sich die Polsterung auf die Prozentbreite und die
+     Summe der Stücke sprengt den Balken. */
+  box-sizing: border-box;
   display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden;
   padding: 0 7px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
 }

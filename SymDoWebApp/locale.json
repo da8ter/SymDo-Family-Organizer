@@ -527,7 +527,20 @@
             "1 card": "1 Karte",
             "%1 cards": "%1 Karten",
             "Show class pages (requires the SymDo Gateway)": "Klassenseiten zeigen (braucht das SymDo Gateway)",
-            "Child": "Kind"
+            "Child": "Kind",
+            "Transit": "Nahverkehr",
+            "School run": "Schulweg",
+            "now": "jetzt",
+            "min": "min",
+            "Pl.": "Gl.",
+            "incl. %s min walk": "mit %s min Fußweg",
+            "outdated": "veraltet",
+            "no departures": "keine Abfahrten",
+            "to school, be there by %s": "zur Schule, da sein um %s",
+            "home, lessons end at %s": "nach Hause, Schluss um %s",
+            "changes": "Umstiege",
+            "direct": "direkt",
+            "no journey found": "keine Verbindung gefunden"
         }
     }
 }

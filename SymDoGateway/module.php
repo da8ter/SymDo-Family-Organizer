@@ -14,6 +14,7 @@ require_once __DIR__ . '/libs/Homework.php';
 require_once __DIR__ . '/libs/NotesMedia.php';
 require_once __DIR__ . '/libs/NotesAi.php';
 require_once __DIR__ . '/libs/TimetableBridge.php';
+require_once __DIR__ . '/libs/TransitBridge.php';
 require_once __DIR__ . '/libs/MealPlanBridge.php';
 require_once __DIR__ . '/libs/DishImages.php';
 require_once __DIR__ . '/libs/Voice.php';
@@ -55,6 +56,7 @@ class SymDoGateway extends IPSModuleStrict
     use NotesMedia;
     use NotesAi;
     use TimetableBridge;
+    use TransitBridge;
     use MealPlanBridge;
     use DishImages;
     use Voice;

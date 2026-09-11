@@ -253,6 +253,11 @@ select option { color: #111; background: #fff; }
 }
 .tabbar button {
   flex: 1;
+  /* min-width: 0 ist die Bedingung fuers Schrumpfen: ein Flex-Kind ist von Haus
+     aus mindestens so breit wie sein Inhalt. Ohne das schob ein langes Wort
+     („Nahverkehr") die ganze Leiste ueber den Bildschirm hinaus und mit ihr den
+     Seiteninhalt — auf dem Handy waren die Uhrzeiten rechts abgeschnitten. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -261,6 +266,13 @@ select option { color: #111; background: #fff; }
   font-size: 10px;
   color: var(--muted);
   padding-top: 4px;
+}
+/* Und was dann nicht passt, kuerzt der Browser, statt zu draengeln. */
+.tabbar button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* /icons.js (Font Awesome SVG+JS) ersetzt <i> durch <svg class="svg-inline--fa">
    mit height:1em → deshalb MUSS die Icon-Größe auch das <svg> treffen, sonst
@@ -680,6 +692,55 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    das, worauf sie liegt — gemessen an „Physik" (#1E88E5) auf dem Methodentag
    (#1E88E5): die Kante war blau auf blau. Der Saum ist keine Fuellung; er
    liegt nur einen Pixel breit an der Kante. */
+/* ── Nahverkehr ─────────────────────────────────────────────────────────────
+   Formensprache wie der Stundenplan-Balken: ein Stueck je Abschnitt, Fusswege
+   gestrichelt und blass. Wer beides untereinander sieht, soll dieselbe Sprache
+   lesen. */
+.nv-karte { background: var(--card); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; overflow: hidden; }
+.nv-kopf { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.nv-kopf h3 { margin: 0; font-size: 15px; }
+.nv-kopf .nv-neben { font-size: 12px; color: var(--muted); }
+.nv-alt { color: #E53935; font-size: 11px; font-weight: 700; }
+.nv-zeile {
+  /* minmax(0,1fr), nicht 1fr: eine Grid-Spalte ist von Haus aus mindestens so
+     breit wie ihr laengstes Wort, und dann kuerzt kein text-overflow der Welt —
+     die Karte waechst statt dessen ueber den Bildschirm hinaus. */
+  display: grid; grid-template-columns: 22px 60px minmax(0, 1fr) auto; align-items: center;
+  gap: 10px; padding: 6px 0; border-top: 1px solid var(--line);
+}
+.nv-zeile:first-of-type { border-top: 0; }
+.nv-zeile .nv-sym { color: var(--muted); text-align: center; }
+.nv-zeile .nv-linie { font-weight: 800; }
+.nv-zeile .nv-ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-zeile .nv-wann { text-align: right; font-weight: 700; white-space: nowrap; }
+.nv-zeile .nv-wann .nv-spaet { color: #E53935; font-size: 12px; margin-left: 4px; }
+.nv-zeile .nv-wann .nv-gleis { color: var(--muted); font-weight: 500; font-size: 11px; margin-left: 5px; }
+/* Was der eigene Fussweg nicht mehr hergibt, tritt zurueck — weggelassen wird
+   es nicht: „der waere gegangen" ist auch eine Auskunft. */
+.nv-zeile.nv-weg { opacity: .45; }
+.nv-zeile.nv-entfaellt .nv-linie, .nv-zeile.nv-entfaellt .nv-ziel { text-decoration: line-through; }
+
+.nv-fahrt { margin-top: 10px; }
+.nv-fahrt:first-of-type { margin-top: 0; }
+.nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+.nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
+.nv-zeiten .nv-grund { color: var(--muted); }
+.nv-balken { display: flex; height: 30px; border-radius: 15px; overflow: hidden; background: var(--line); }
+.nv-stueck {
+  /* border-box, sonst addiert sich die Polsterung auf die Prozentbreite und die
+     Summe der Stuecke sprengt den Balken. */
+  box-sizing: border-box;
+  display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden;
+  padding: 0 9px; font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap;
+  background: var(--accent);
+}
+.nv-stueck.walk {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent);
+}
+.nv-enden { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
+
 .plan-stueck.entfall {
   opacity: .75; z-index: 1;
   /* Eine HELLE gestrichelte Linie, keine farbige: die Fachfarbe war auf einem
@@ -4316,6 +4377,15 @@ html.web-app #ladeschirm.geht { opacity: 0; }
       </div>
     </section>
 
+    <!-- Nahverkehr: Abfahrten und Strecken aus dem VRR. Geholt wird im
+         SymDo-VRR-Transit-Modul, die App liest nur mit. -->
+    <section id="screen-transit" class="screen">
+      <div class="content">
+        <div class="screen-head"><h2 id="transitTitle"></h2></div>
+        <div id="transitArea"></div>
+      </div>
+    </section>
+
   </main>
 
   <nav class="tabbar">
@@ -4325,6 +4395,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
          siehe SCHOOL_TABS. -->
     <button id="tab-school"><i class="fa-light fa-graduation-cap"></i><span></span></button>
     <button id="tab-plan"><i class="fa-light fa-table-columns"></i><span></span></button>
+    <button id="tab-transit"><i class="fa-light fa-bus"></i><span></span></button>
     <button id="tab-ki"><i class="fa-light fa-sparkles"></i><span></span><span id="tabKiBadge" class="tab-badge" style="display:none;"></span></button>
     <button id="tab-shopping"><i class="fa-light fa-basket-shopping"></i><span></span></button>
     <button id="tab-todos"><i class="fa-light fa-list-check"></i><span></span></button>
@@ -5344,6 +5415,15 @@ function visibleTabs() {
      Hausaufgaben-Kachel den Plan HOLT (sie braucht Faecher und Symbole), waere
      ihr sonst beim Antippen eines Kindes ein zweiter Bereich gewachsen. */
   if (kindTab && t.dashboard && planKinder().length > 0) out.push('plan');
+  /* Nahverkehr: erscheint, sobald eine Haltestelle oder Strecke eingerichtet
+     ist — kein eigener Haken im Formular. Dieselbe Begruendung wie beim
+     Stundenplan: ein Tab, der beim Antippen „nichts eingerichtet" zeigt, ist
+     schlimmer als keiner. Anders als der Plan haengt er NICHT am Kindmodus:
+     eine Haltestelle kann der ganzen Familie gehoeren. */
+  if (t.dashboard) {
+    const nv = transitEintraege();
+    if (nv.stops.length > 0 || nv.routes.length > 0) { out.push('transit'); }
+  }
   /* Kindsachen: Stundenplan, Hausaufgaben und Klassenseiten gehoeren EINEM Kind.
      In der vollen Oberflaeche erscheinen sie deshalb nur, solange eines gewaehlt
      ist — sonst waere „die Hausaufgaben" die Frage, wessen, und der Bereich
@@ -6244,7 +6324,7 @@ function handleMessage(data) {
        Zurueckkehren oder nach einer Minute. Nur dort eingehaengt, blieb die
        Karte beim Oeffnen leer und erschien erst eine Minute spaeter — im
        Prueflauf als „fehlt" sichtbar. */
-    ladeschirmWartenAuf([loadCalendars(), loadBriefing(), loadTimetable()]);
+    ladeschirmWartenAuf([loadCalendars(), loadBriefing(), loadTimetable(), loadTransit()]);
     /* Notizen VORAB holen, nicht erst beim Betreten des Bereichs.
        Bisher stiess renderNotizen() den Abruf beim ersten Zeichnen an — der
        Bereich stand also einen Moment leer da, jedes Mal beim ersten Oeffnen.
@@ -6337,7 +6417,7 @@ window.addEventListener('message', (event) => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 // 'plan' ist der Wochenplan eines Kindes — nur im Kindmodus sichtbar.
-const TABS = ['dashboard', 'plan', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
+const TABS = ['dashboard', 'plan', 'transit', 'ki', 'shopping', 'todos', 'calendar', 'notes', 'edumaps', 'homework'];
 function setTab(tab) {
   // Gegen die sichtbaren Tabs prüfen, nicht gegen TABS: der gespeicherte symdo.tab
   // kann auf einen inzwischen abgeschalteten Bereich zeigen.
@@ -7364,6 +7444,7 @@ function renderAll() {
   if (activeTab === 'edumaps') renderEdumaps();
   if (activeTab === 'homework') renderHausaufgabenBereich();
   if (activeTab === 'plan') { renderWochenplan(); renderHausaufgaben(); }
+  if (activeTab === 'transit') renderTransit();
   if (activeTab === 'ki') renderMailAlle();
   const active = document.querySelector('.screen.active');
   if (active) applyMemberCollapse(active);
@@ -7626,6 +7707,7 @@ function gatewayNachladen() {
   loadBriefing();
   loadMailProposals();
   loadTimetable();
+  loadTransit();
   /* Notizen und Termine ziehen jetzt auch nach. Sie standen bisher in KEINEM
      Takt: wer sie auf einem anderen Geraet aenderte, sah es hier erst nach dem
      Neuladen der App. Der Notiz-Abruf ist billig (gemessen 3,7 KB, 1,5 ms) und
@@ -7648,6 +7730,11 @@ function gatewayNachladen() {
    Karte waere schlechter als gar keine. */
 let stundenplan = null;
 let stundenplanLaeuft = false;
+/* Nahverkehr: Abfahrten und Strecken. Geholt wird im VRR-Modul, das Gateway
+   reicht nur weiter — hier liegt bloss der zuletzt gesehene Stand. */
+let nahverkehr = null;
+let nahverkehrLaeuft = false;
+let nahverkehrSignatur = '';
 let stundenplanLegende = false;
 let stundenplanTag = 0;   // gewaehlter Wochentag, 0 = noch keiner
 /* In WELCHER Woche der gewaehlte Tag liegt: 0 = laufende, 1 = die kommende.
@@ -8191,6 +8278,144 @@ function loadTimetable() {
     renderAll();
     stundenplanTickerStellen();
   }).catch(() => { stundenplanLaeuft = false; });
+}
+
+/**
+ * Den Nahverkehr holen — im selben Takt wie den Stundenplan.
+ *
+ * Jeder Abruf sagt drueben zugleich „jemand sieht hin" und haelt damit den
+ * Minutentakt des Moduls in Gang. Bleibt die App zu, hoert es von selbst auf
+ * zu fragen: die Fahrplanauskunft ist offen und ohne Zusicherung, ein
+ * Dauerpoller waere unhoeflich.
+ */
+function loadTransit() {
+  if (nahverkehrLaeuft || !briefingAvailable()) { return; }
+  nahverkehrLaeuft = true;
+  return aiPost('/transit', {}).then(r => {
+    nahverkehrLaeuft = false;
+    const j = r && r.json;
+    const frisch = (j && j.ok === true && j.transit) ? j.transit : null;
+    if (frisch === null && nahverkehr === null) { return; }
+    const signatur = frisch === null ? '' : JSON.stringify(frisch);
+    if (signatur === nahverkehrSignatur) { return; }
+    nahverkehrSignatur = signatur;
+    nahverkehr = frisch;
+    /* Erst die Bereiche, dann zeichnen — wie beim Stundenplan: ob es den
+       Bereich gibt, haengt an den Daten, und die kommen spaeter als der erste
+       Zustand. */
+    applyTabVisibility();
+    renderAll();
+  }).catch(() => { nahverkehrLaeuft = false; });
+}
+
+/** Die Haltestellen und Strecken, die zur aktuellen Mitgliedswahl passen. */
+function transitEintraege() {
+  if (!nahverkehr) { return { stops: [], routes: [] }; }
+  const kind = kindGewaehlt();
+  const passt = e => !kind || (e.member || '') === kind || (e.member || '') === '';
+  return {
+    stops:  (nahverkehr.stops  || []).filter(passt),
+    routes: (nahverkehr.routes || []).filter(passt)
+  };
+}
+
+/** Der Schulweg des gewaehlten Kindes — fuer die Karte auf der Uebersicht. */
+function transitSchulweg() {
+  const kind = kindGewaehlt();
+  if (!kind || !nahverkehr) { return null; }
+  return (nahverkehr.routes || []).find(r => r.school && (r.member || '') === kind) || null;
+}
+
+/** Ein Abschnittsbalken — dieselbe Funktion fuer den Bereich und die Uebersicht. */
+function nvBalken(v) {
+  const gesamt = Math.max(1, v.seconds);
+  return `<div class="nv-balken">` + (v.legs || []).map(l => {
+    const anteil = Math.max(6, (l.seconds / gesamt) * 100);
+    const text = l.kind === 'walk' ? `${Math.round(l.seconds / 60)} ${translate('min')}`
+                                   : (l.line || l.product);
+    const tipp = `${l.line ? l.line + ' ' : ''}${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
+    return `<div class="nv-stueck ${l.kind === 'walk' ? 'walk' : ''}" `
+         + `style="flex:0 0 ${anteil.toFixed(1)}%" title="${escapeHtml(tipp)}">`
+         + `<i class="fa-light ${escapeHtml(l.icon || 'fa-route')}"></i>`
+         + `<span>${escapeHtml(text)}</span></div>`;
+  }).join('') + `</div>`;
+}
+
+/** Eine Verbindung mit Zeiten, Balken und den beiden Enden. */
+function nvFahrt(v) {
+  const dauer = Math.round(v.seconds / 60);
+  const umstieg = v.interchanges > 0
+    ? `${v.interchanges} ${translate('changes')}` : translate('direct');
+  return `<div class="nv-fahrt">`
+    + `<div class="nv-zeiten"><span class="nv-stark">${escapeHtml(v.departureText)}</span>`
+    + `<span class="nv-grund">→</span><span class="nv-stark">${escapeHtml(v.arrivalText)}</span>`
+    + `<span class="nv-grund">${dauer} ${translate('min')} · ${escapeHtml(umstieg)}</span></div>`
+    + nvBalken(v)
+    + `<div class="nv-enden"><span>${escapeHtml((v.legs[0] || {}).from || '')}</span>`
+    + `<span>${escapeHtml((v.legs[v.legs.length - 1] || {}).to || '')}</span></div></div>`;
+}
+
+/** Die Zeile, die beim Schulweg die Richtung benennt. */
+function nvSchulzeile(r) {
+  if (!r.school) { return ''; }
+  return r.school.direction === 'to'
+    ? translate('to school, be there by %s').replace('%s', r.school.targetTime)
+    : translate('home, lessons end at %s').replace('%s', r.school.schoolEnd);
+}
+
+/**
+ * Die Schulweg-Karte der Uebersicht: dieselbe Zeitachse wie im Bereich, nur die
+ * naechste Verbindung statt aller.
+ */
+function schulwegKarte() {
+  const r = transitSchulweg();
+  if (!r || !(r.journeys || []).length) { return ''; }
+  const v = r.journeys[0];
+  return `<div class="card nv-karte">`
+    + `<div class="nv-kopf"><h3>${escapeHtml(r.name || translate('School run'))}</h3>`
+    + `<span class="nv-neben">${escapeHtml(nvSchulzeile(r))}</span>`
+    + (r.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
+    + `</div>` + nvFahrt(v) + `</div>`;
+}
+
+function renderTransit() {
+  const bereich = document.getElementById('transitArea');
+  if (!bereich) { return; }
+  const titel = document.getElementById('transitTitle');
+  if (titel) { titel.textContent = translate('Transit'); }
+  const nv = transitEintraege();
+
+  const tafeln = nv.stops.map(st => {
+    const zeilen = (st.departures || []).map(d => {
+      // Mit gepflegtem Fussweg zaehlt „wann muss ich los", sonst „wann faehrt es".
+      const min = st.walk > 0 ? d.leaveIn : d.countdown;
+      const wann = d.cancelled ? translate('cancelled')
+        : (min <= 0 ? translate('now') : `${min}&nbsp;${translate('min')}`);
+      return `<div class="nv-zeile${d.reachable ? '' : ' nv-weg'}${d.cancelled ? ' nv-entfaellt' : ''}">`
+        + `<span class="nv-sym"><i class="fa-light ${escapeHtml(d.icon || 'fa-route')}"></i></span>`
+        + `<span class="nv-linie">${escapeHtml(d.line)}</span>`
+        + `<span class="nv-ziel">${escapeHtml(d.destination)}</span>`
+        + `<span class="nv-wann">${wann}`
+        + (d.delay > 0 ? `<span class="nv-spaet">+${d.delay}</span>` : '')
+        + (d.platform ? `<span class="nv-gleis">${translate('Pl.')} ${escapeHtml(d.platform)}</span>` : '')
+        + `</span></div>`;
+    }).join('');
+    return `<div class="nv-karte"><div class="nv-kopf"><h3>${escapeHtml(st.name)}</h3>`
+      + (st.walk > 0 ? `<span class="nv-neben">${escapeHtml(translate('incl. %s min walk').replace('%s', st.walk))}</span>` : '')
+      + (st.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
+      + `</div>${zeilen || `<div class="empty-state">${translate('no departures')}</div>`}</div>`;
+  }).join('');
+
+  const strecken = nv.routes.map(r => {
+    const fahrten = (r.journeys || []).map(nvFahrt).join('');
+    const hinweis = nvSchulzeile(r);
+    return `<div class="nv-karte"><div class="nv-kopf"><h3>${escapeHtml(r.name)}</h3>`
+      + (hinweis ? `<span class="nv-neben">${escapeHtml(hinweis)}</span>` : '')
+      + (r.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
+      + `</div>${fahrten || `<div class="empty-state">${translate('no journey found')}</div>`}</div>`;
+  }).join('');
+
+  renderInto(bereich, strecken + tafeln);
 }
 
 /** Die Tage EINER Woche eines Kindes — die laufende oder die kommende. */
@@ -9369,6 +9594,12 @@ function renderDashboard() {
   // Stundenplan direkt hinter dem Briefing: beides beantwortet die Frage „wie
   // sieht mein Tag aus", und beides steht oben, bevor es um Aufgaben geht.
   html += stundenplanKarte();
+
+  /* Der Schulweg direkt unter dem Stundenplan: er bezieht seine Zielzeit aus
+     genau diesem Plan, und beides zusammen beantwortet die Frage „wann muss
+     ich los". Nur bei gewaehltem Kind — ohne waere die Frage „wessen
+     Schulweg". Kein zweiter Abruf: die Daten liegen schon im Zustand. */
+  html += schulwegKarte();
 
   /* Hausaufgaben direkt danach: dieselbe Frage („wie sieht der Tag aus"), und
      die Eltern sehen den Stundenplan-Bereich selbst nicht — der gehört dem
@@ -17189,6 +17420,7 @@ function initCaptions() {
   document.querySelector('#tab-homework span').textContent = translate('Homework');
   document.querySelector('#tab-school span').textContent = translate('School');
   document.querySelector('#tab-plan span').textContent = translate('Timetable');
+  document.querySelector('#tab-transit span').textContent = translate('Transit');
   document.querySelector('#tab-ki span').textContent = translate('AI');
   document.getElementById('kiTitle').textContent = translate('Detected by AI');
   document.getElementById('kiEmptyText').textContent = translate('Nothing detected at the moment.');

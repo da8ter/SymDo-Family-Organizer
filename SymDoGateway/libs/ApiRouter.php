@@ -306,6 +306,14 @@ trait ApiRouter
                     return;
                 }
                 break;
+            case 'transit':
+                /* Abfahrten und Strecken. Rein lesend; geholt wird im
+                   VRR-Modul, nicht hier — siehe TransitBridge. */
+                if ($method === 'GET' || $method === 'POST') {
+                    $this->SendJson($this->TransitPublic());
+                    return;
+                }
+                break;
             case 'tts':
                 // POST /v1/tts        → Schnipsel vorbereiten (erzeugt fehlende)
                 // GET  /v1/tts/{hash} → die fertige Tondatei

@@ -294,6 +294,13 @@ trait AiExtract
         if (str_ends_with($path, 'timetable')) {
             return json_encode($this->TimetablePublic(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+        /* Derselbe Zweig für den Nahverkehr — und aus demselben Grund: eine
+           Kachel hat keinen Token und kennt nur diesen einen Weg nach draußen.
+           Ohne die Zeile liefe ihre Anfrage in den KI-Riegel, und die Karte
+           bliebe leer, obwohl sie über REST tadellos ankommt. */
+        if (str_ends_with($path, 'transit')) {
+            return json_encode($this->TransitPublic(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         // Notizen: lesen und bearbeiten hat mit der KI nichts zu tun, muss also auch
         // bei abgeschalteter Analyse gehen. Der Riegel steckt in der Aktion selbst —
         // 'analyse' prueft NotesAiAllowed(), alles andere nicht.
