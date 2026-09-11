@@ -757,11 +757,14 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 /* Die Fahrten teilen sich den Rest — im Verhaeltnis ihrer Fahrzeit. Das
    flex-grow je Stueck setzt das Markup (die Sekunden). */
-.nv-stueck.ride { flex: 1 1 0; min-width: 0; container-type: inline-size; }
+.nv-stueck.ride { flex: 1 1 0; min-width: 0; }
 /* Wird es eng, faellt zuerst das Symbol, dann die Fahrzeit. Die Liniennummer
-   bleibt: sie ist die Auskunft, alles andere ist Beiwerk. */
-@container (max-width: 112px) { .nv-stueck.ride > svg, .nv-stueck.ride > i { display: none; } }
-@container (max-width: 94px)  { .nv-stueck.ride .nv-zeit { display: none; } }
+   bleibt: sie ist die Auskunft, alles andere ist Beiwerk.
+   WER zu eng ist, entscheidet eine Messung je Stueck (nvEngePruefen) und keine
+   feste Schwelle: „S1 · 13 min" braucht 103 Pixel, „RE12 · 40 min" aber 121 —
+   eine Schwelle fuer beide nimmt einem von ihnen das Symbol grundlos weg. */
+.nv-stueck.ohne-symbol > svg, .nv-stueck.ohne-symbol > i { display: none; }
+.nv-stueck.ohne-zeit .nv-zeit { display: none; }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefuellt, ohne Farbe.
    Sie hat erst seit dem Warte-Abschnitt ein Stueck — vorher endete der Balken
    zu frueh und niemand sah, dass am Umstieg gewartet wird. */
@@ -8482,13 +8485,19 @@ function nvSchulzeile(r) {
  */
 function schulwegKarte() {
   const r = transitSchulweg();
-  if (!r || !(r.journeys || []).length) { return ''; }
-  const v = r.journeys[0];
+  const alle = (r && r.journeys) || [];
+  if (!alle.length) { return ''; }
+  /* Dieselbe Schiene wie im Bereich: alle Verbindungen nebeneinander, mit
+     Punkten darunter. Vorher stand hier nur die erste — wer die naechste wissen
+     wollte, musste den Bereich oeffnen. */
+  const punkte = alle.length > 1
+    ? `<div class="nv-punkte">${alle.map((_, i) => `<span class="${i === 0 ? 'an' : ''}"></span>`).join('')}</div>`
+    : '';
   return `<div class="card nv-karte">`
     + `<div class="nv-kopf"><h3>${escapeHtml(r.name || translate('School run'))}</h3>`
     + `<span class="nv-neben">${escapeHtml(nvSchulzeile(r))}</span>`
     + (r.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
-    + `</div>` + nvFahrt(v) + `</div>`;
+    + `</div><div class="nv-schiene" data-nv-schiene>${alle.map(nvFahrt).join('')}</div>${punkte}</div>`;
 }
 
 function renderTransit() {
@@ -8541,10 +8550,42 @@ function renderTransit() {
 
   renderInto(bereich, strecken + tafeln);
 
-  /* Die Punkte folgen dem Wischen. Gerechnet aus der Scrollposition — eine
-     Schiene hat hoechstens fuenf Kinder, ein Beobachter je Karte waere Aufwand
-     fuer nichts. */
-  bereich.querySelectorAll('[data-nv-schiene]').forEach(schiene => {
+  nvSchienenBinden(bereich);
+}
+
+/**
+ * Symbol und Fahrzeit ausblenden — aber nur, wo es wirklich nicht passt.
+ *
+ * Gemessen statt geschaetzt: scrollWidth > clientWidth heisst „passt nicht".
+ * Erst faellt das Symbol, dann die Fahrzeit; nach jedem Schritt wird neu
+ * gemessen, denn das Weglassen schafft Platz. Feste Schwellen taugen hier
+ * nicht — der Platzbedarf haengt am Liniennamen und an der Fahrzeit.
+ */
+function nvEngePruefen(wurzel) {
+  wurzel.querySelectorAll('.nv-stueck.ride').forEach(st => {
+    st.classList.remove('ohne-symbol', 'ohne-zeit');
+    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-symbol'); }
+    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-zeit'); }
+  });
+}
+
+/** Punkte an die Schienen haengen und die Enge pruefen — Bereich wie Uebersicht. */
+function nvSchienenBinden(wurzel) {
+  if (!wurzel) { return; }
+  nvEngePruefen(wurzel);
+  /* Und noch einmal verzoegert: /icons.js ersetzt die <i> erst nachtraeglich
+     durch <svg>. Wer nur einmal misst, misst mit null Pixel breiten Symbolen —
+     im Bild sah man das als angeschnittenes „784 · 9 r". */
+  setTimeout(() => nvEngePruefen(wurzel), 300);
+  setTimeout(() => nvEngePruefen(wurzel), 1200);
+  /* Auch nach dem Drehen des Geraets oder einem Fensterwechsel: die Stuecke
+     werden dann breiter oder schmaler, und was eben noch passte, passt nicht
+     mehr. Ein Beobachter je Balken genuegt. */
+  if (window.ResizeObserver && !wurzel.__nvBeobachter) {
+    wurzel.__nvBeobachter = new ResizeObserver(() => nvEngePruefen(wurzel));
+    wurzel.querySelectorAll('.nv-balken').forEach(b => wurzel.__nvBeobachter.observe(b));
+  }
+  wurzel.querySelectorAll('[data-nv-schiene]').forEach(schiene => {
     const punkte = schiene.nextElementSibling;
     if (!punkte || !punkte.classList.contains('nv-punkte')) { return; }
     schiene.addEventListener('scroll', () => {
@@ -9954,6 +9995,9 @@ function renderDashboard() {
   }
 
   if (!renderInto(el, html)) return;
+  /* Der Schulweg auf der Uebersicht braucht dieselbe Behandlung wie im Bereich:
+     Punkte an die Schiene, und Symbol/Fahrzeit nur weglassen, wo es klemmt. */
+  nvSchienenBinden(el);
   /* Chip-Zeilen messen wie in den anderen Bereichen. Die Beobachter wurden
      bisher nur aus Aufgaben-, Kalender- und KI-Bereich heraus eingerichtet — wer
      die App oeffnet und auf der Uebersicht bleibt, hatte gar keinen. Damit fiel

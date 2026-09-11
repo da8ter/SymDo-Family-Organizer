@@ -52,8 +52,11 @@ body {
            var(--sym-ms);
 }
 
-/* Kopfzeile: nur der Umschalter, rechtsbündig. */
-.kopf { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+/* Kopfzeile: Bild und Name links, Umschalter rechts — und bei zu langem Namen
+   rutscht der Umschalter in die nächste Zeile, statt den Namen zu kürzen. */
+.kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
+.kopf .umschalter { margin-left: auto; flex: 0 0 auto; }
+.kopf .wem { flex: 0 1 auto; min-width: 0; margin: 0; }
 /* Wem gehört das? Bild und Name über den Karten des Kindes.
    Maße wörtlich aus der Ämtchen-Kachel übernommen — dieselbe Familie soll in
    jeder Kachel gleich groß aussehen. */
@@ -144,11 +147,14 @@ body {
 }
 /* Die Fahrten teilen sich den Rest — im Verhältnis ihrer Fahrzeit. Das
    flex-grow je Stück setzt das Markup (die Sekunden). */
-.stueck.ride { flex: 1 1 0; min-width: 0; container-type: inline-size; }
+.stueck.ride { flex: 1 1 0; min-width: 0; }
 /* Wird es eng, fällt zuerst das Symbol, dann die Fahrzeit. Die Liniennummer
-   bleibt: sie ist die Auskunft, alles andere ist Beiwerk. */
-@container (max-width: 104px) { .stueck.ride > svg, .stueck.ride > i { display: none; } }
-@container (max-width: 88px)  { .stueck.ride .zeit { display: none; } }
+   bleibt: sie ist die Auskunft, alles andere ist Beiwerk.
+   WER zu eng ist, entscheidet eine Messung je Stück (engePruefen) und keine
+   feste Schwelle: „S1 · 13 min" braucht 103 Pixel, „RE12 · 40 min" aber 121 —
+   eine Schwelle für beide nähme einem von ihnen das Symbol grundlos weg. */
+.stueck.ohne-symbol > svg, .stueck.ohne-symbol > i { display: none; }
+.stueck.ohne-zeit .zeit { display: none; }
 .stueck.ride { background: var(--akzent); }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefüllt, ohne Farbe. Sie
    hat erst seit dem Warte-Abschnitt ein Stück — vorher endete der Balken zu
@@ -224,12 +230,29 @@ function merker(name, wert) {
  */
 function kopfHtml() {
   const hatBeides = (zustand.stops || []).length > 0 && (zustand.routes || []).length > 0;
-  if (!hatBeides) { return ''; }
-  return '<div class="kopf"><div class="umschalter">'
-    + '<button data-ansicht="departures" class="' + (ansicht === 'routes' ? '' : 'an') + '">'
-    + esc(translate('Departures')) + '</button>'
-    + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
-    + esc(translate('Routes')) + '</button></div></div>';
+  /* Gehört alles EINEM Kind, stehen Bild und Name hier oben neben dem
+     Umschalter statt über jeder Gruppe — eine Zeile statt zweier. Wird der Name
+     zu lang, rutscht der Umschalter darunter (flex-wrap), statt den Namen
+     abzuschneiden: der Name ist die Auskunft. */
+  const einer = alleinigesMitglied();
+  const wer = einer ? wemHtml(einer) : '';
+  const um = hatBeides
+    ? '<div class="umschalter">'
+      + '<button data-ansicht="departures" class="' + (ansicht === 'routes' ? '' : 'an') + '">'
+      + esc(translate('Departures')) + '</button>'
+      + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
+      + esc(translate('Routes')) + '</button></div>'
+    : '';
+  return (wer || um) ? '<div class="kopf">' + wer + um + '</div>' : '';
+}
+
+/** Der eine Eintrag, dem ALLES gehört — sonst null. */
+function alleinigesMitglied() {
+  const alle = (zustand.stops || []).concat(zustand.routes || []);
+  const ids = {};
+  alle.forEach(function (e) { ids[e.member || ''] = e; });
+  const schluessel = Object.keys(ids);
+  return (schluessel.length === 1 && schluessel[0] !== '') ? ids[schluessel[0]] : null;
 }
 
 /** Bild und Name des Kindes — die Überschrift über seinen Karten. */
@@ -258,8 +281,10 @@ function gruppiert(eintraege, karteBauen) {
     gruppen[id].push(e);
   });
   reihenfolge.sort(function (a, b) { return (a === '' ? -1 : 0) - (b === '' ? -1 : 0); });
+  // Steht der Name schon in der Kopfzeile, wäre die Überschrift eine Dopplung.
+  const oben = alleinigesMitglied() !== null;
   return reihenfolge.map(function (id) {
-    return (id ? wemHtml(gruppen[id][0]) : '') + gruppen[id].map(karteBauen).join('');
+    return (id && !oben ? wemHtml(gruppen[id][0]) : '') + gruppen[id].map(karteBauen).join('');
   }).join('');
 }
 
@@ -394,6 +419,8 @@ function zeichne() {
     + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
     + '</div>';
 
+  engePruefen();
+
   /* Die Punkte folgen dem Wischen. Gerechnet wird aus der Scrollposition und
      nicht über einen Beobachter: eine Schiene hat höchstens fünf Kinder, und
      ein IntersectionObserver je Karte wäre Aufwand für nichts. */
@@ -417,6 +444,21 @@ function zeichne() {
   symboleErsetzen();
 }
 
+/**
+ * Symbol und Fahrzeit ausblenden — aber nur, wo es wirklich nicht passt.
+ *
+ * Gemessen statt geschätzt: scrollWidth > clientWidth heißt „passt nicht".
+ * Erst fällt das Symbol, dann die Fahrzeit; nach jedem Schritt wird neu
+ * gemessen, denn das Weglassen schafft Platz.
+ */
+function engePruefen() {
+  document.querySelectorAll('.stueck.ride').forEach(function (st) {
+    st.classList.remove('ohne-symbol', 'ohne-zeit');
+    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-symbol'); }
+    if (st.scrollWidth > st.clientWidth + 1) { st.classList.add('ohne-zeit'); }
+  });
+}
+
 function symboleErsetzen() {
   // Font Awesome ersetzt <i> erst nachträglich durch <svg>; über document.body
   // und nicht über einen engeren Knoten — mit engerem blieb es im Prüflauf aus.
@@ -425,6 +467,17 @@ function symboleErsetzen() {
       window.FontAwesome.dom.i2svg({ node: document.body });
     }
   } catch (e) { /* ohne Font Awesome bleiben die Kästchen leer */ }
+  /* NACH dem Tausch noch einmal messen: ein <i> ohne Satz ist null Pixel breit,
+     das Symbol danach dreizehn — vorher gemessen hieße, mit der falschen
+     Breite zu rechnen.
+
+     UND NOCH EINMAL VERZÖGERT: lädt der Symbolsatz noch, tut i2svg gerade
+     nichts, und sein eigener Beobachter setzt die Symbole erst danach ein. Dann
+     wäre alles gemessen, bevor irgendetwas Breite hatte — im Bild sah man das
+     als angeschnittenes „784 · 9 r". */
+  engePruefen();
+  setTimeout(engePruefen, 300);
+  setTimeout(engePruefen, 1200);
 }
 
 function handleMessage(daten) {
