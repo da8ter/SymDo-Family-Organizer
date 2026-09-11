@@ -696,7 +696,10 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Formensprache wie der Stundenplan-Balken: ein Stueck je Abschnitt, Fusswege
    gestrichelt und blass. Wer beides untereinander sieht, soll dieselbe Sprache
    lesen. */
-.nv-karte { background: var(--card); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; overflow: hidden; }
+/* Den Kasten macht die Hausklasse .card — Hintergrund, Radius, Polsterung und
+   Abstand kommen von dort. Hier steht nur, was sie nicht kennt. Vorher setzte
+   diese Regel den Hintergrund selbst und liess den Kasten damit verschwinden. */
+.nv-karte { overflow: hidden; }
 .nv-kopf { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .nv-kopf h3 { margin: 0; font-size: 15px; }
 .nv-kopf .nv-neben { font-size: 12px; color: var(--muted); }
@@ -706,7 +709,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
      breit wie ihr laengstes Wort, und dann kuerzt kein text-overflow der Welt —
      die Karte waechst statt dessen ueber den Bildschirm hinaus. */
   display: grid; grid-template-columns: 22px 60px minmax(0, 1fr) auto; align-items: center;
-  gap: 10px; padding: 6px 0; border-top: 1px solid var(--line);
+  gap: 10px; padding: 6px 0; border-top: 1px solid var(--border);
 }
 .nv-zeile:first-of-type { border-top: 0; }
 .nv-zeile .nv-sym { color: var(--muted); text-align: center; }
@@ -720,8 +723,20 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .nv-zeile.nv-weg { opacity: .45; }
 .nv-zeile.nv-entfaellt .nv-linie, .nv-zeile.nv-entfaellt .nv-ziel { text-decoration: line-through; }
 
-.nv-fahrt { margin-top: 10px; }
-.nv-fahrt:first-of-type { margin-top: 0; }
+/* Die Schiene: eine Verbindung je Bildbreite, mit Einrasten. */
+.nv-schiene {
+  display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+}
+.nv-schiene::-webkit-scrollbar { display: none; }
+.nv-fahrt { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
+/* Die Punkte: mittig, der aktuelle in der Akzentfarbe. */
+.nv-punkte { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.nv-punkte span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+.nv-punkte span.an { background: var(--accent); }
 .nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
 .nv-zeiten .nv-grund { color: var(--muted); }
@@ -732,7 +747,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
    Fahrten teilen sich den Rest zu gleichen Teilen. Die Reihenfolge der Tour
    bleibt, nur die Laenge sagt nichts mehr ueber die Dauer — die steht im
    Stueck. */
-.nv-balken { display: flex; height: 30px; border-radius: 15px; overflow: hidden; background: var(--line); }
+.nv-balken { display: flex; height: 30px; border-radius: 15px; overflow: hidden; background: var(--border); }
 .nv-stueck {
   box-sizing: border-box;
   display: flex; align-items: center; gap: 5px; overflow: hidden;
@@ -742,7 +757,11 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 }
 /* Die Fahrten teilen sich den Rest — im Verhaeltnis ihrer Fahrzeit. Das
    flex-grow je Stueck setzt das Markup (die Sekunden). */
-.nv-stueck.ride { flex: 1 1 0; min-width: 0; }
+.nv-stueck.ride { flex: 1 1 0; min-width: 0; container-type: inline-size; }
+/* Wird es eng, faellt zuerst das Symbol, dann die Fahrzeit. Die Liniennummer
+   bleibt: sie ist die Auskunft, alles andere ist Beiwerk. */
+@container (max-width: 112px) { .nv-stueck.ride > svg, .nv-stueck.ride > i { display: none; } }
+@container (max-width: 94px)  { .nv-stueck.ride .nv-zeit { display: none; } }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefuellt, ohne Farbe.
    Sie hat erst seit dem Warte-Abschnitt ein Stueck — vorher endete der Balken
    zu frueh und niemand sah, dass am Umstieg gewartet wird. */
@@ -821,7 +840,7 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 /* Das Archiv steht am Ende und soll sich nicht vordraengen: eine feine Linie
    darueber trennt es vom Aktuellen, die Schrift bleibt leise. */
 .edu-abschnitt.edu-archiv {
-  margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+  margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 /* Archivierte Karten sind blasser — sie stehen nicht mehr auf der Seite. Beim
    Lesen (hover/aktiv) kommen sie auf volle Deckkraft, sonst waere der Text
@@ -8408,7 +8427,14 @@ function transitSchulweg() {
 function nvBalken(v) {
   return `<div class="nv-balken">` + (v.legs || []).map(l => {
     const min = `${Math.round(l.seconds / 60)} ${translate('min')}`;
-    const text = l.kind === 'ride' ? `${l.line || l.product} · ${min}` : min;
+    /* Bei der Fahrt stehen Linie und Fahrzeit in EIGENEN Kaestchen: wird das
+       Stueck eng, verschwindet erst das Symbol und dann die Fahrzeit — die
+       Liniennummer bleibt bis zuletzt. Das entscheidet eine Container-Abfrage
+       am Stueck selbst, ohne Messung im Skript. */
+    const text = l.kind === 'ride'
+      ? `<span class="nv-linie-i">${escapeHtml(l.line || l.product)}</span>`
+        + `<span class="nv-zeit">· ${escapeHtml(min)}</span>`
+      : `<span>${escapeHtml(min)}</span>`;
     const was = l.kind === 'walk' ? translate('walking')
               : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
     const tipp = `${was} ${min}, ${l.from} ${l.depText} → ${l.to} ${l.arrText}`;
@@ -8418,7 +8444,7 @@ function nvBalken(v) {
     const wachsen = l.kind === 'ride' ? ` style="flex-grow:${Math.max(1, l.seconds)}"` : '';
     return `<div class="nv-stueck ${escapeHtml(l.kind)}"${wachsen} title="${escapeHtml(tipp)}">`
          + `<i class="fa-light ${escapeHtml(l.icon || 'fa-route')}"></i>`
-         + `<span>${escapeHtml(text)}</span></div>`;
+         + text + `</div>`;
   }).join('') + `</div>`;
 }
 
@@ -8487,22 +8513,45 @@ function renderTransit() {
         + (d.platform ? `<span class="nv-gleis">${translate('Pl.')} ${escapeHtml(d.platform)}</span>` : '')
         + `</span></div>`;
     }).join('');
-    return `<div class="nv-karte"><div class="nv-kopf"><h3>${escapeHtml(st.name)}</h3>`
+    return `<div class="card nv-karte"><div class="nv-kopf"><h3>${escapeHtml(st.name)}</h3>`
       + (st.walk > 0 ? `<span class="nv-neben">${escapeHtml(translate('incl. %s min walk').replace('%s', st.walk))}</span>` : '')
       + (st.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
       + `</div>${zeilen || `<div class="empty-state">${translate('no departures')}</div>`}</div>`;
   }).join('');
 
   const strecken = nv.routes.map(r => {
-    const fahrten = (r.journeys || []).map(nvFahrt).join('');
+    const alle = r.journeys || [];
+    const fahrten = alle.map(nvFahrt).join('');
     const hinweis = nvSchulzeile(r);
-    return `<div class="nv-karte"><div class="nv-kopf"><h3>${escapeHtml(r.name)}</h3>`
+    /* Die Verbindungen liegen NEBENEINANDER und werden gewischt — untereinander
+       fuellten fuenf Stueck den ganzen Bildschirm. Die Punkte darunter sagen,
+       wo man ist. */
+    const punkte = alle.length > 1
+      ? `<div class="nv-punkte">${alle.map((_, i) => `<span class="${i === 0 ? 'an' : ''}"></span>`).join('')}</div>`
+      : '';
+    return `<div class="card nv-karte"><div class="nv-kopf"><h3>${escapeHtml(r.name)}</h3>`
       + (hinweis ? `<span class="nv-neben">${escapeHtml(hinweis)}</span>` : '')
       + (r.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
-      + `</div>${fahrten || `<div class="empty-state">${translate('no journey found')}</div>`}</div>`;
+      + `</div>`
+      + (fahrten
+          ? `<div class="nv-schiene" data-nv-schiene>${fahrten}</div>${punkte}`
+          : `<div class="empty-state">${translate('no journey found')}</div>`)
+      + `</div>`;
   }).join('');
 
   renderInto(bereich, strecken + tafeln);
+
+  /* Die Punkte folgen dem Wischen. Gerechnet aus der Scrollposition — eine
+     Schiene hat hoechstens fuenf Kinder, ein Beobachter je Karte waere Aufwand
+     fuer nichts. */
+  bereich.querySelectorAll('[data-nv-schiene]').forEach(schiene => {
+    const punkte = schiene.nextElementSibling;
+    if (!punkte || !punkte.classList.contains('nv-punkte')) { return; }
+    schiene.addEventListener('scroll', () => {
+      const n = Math.round(schiene.scrollLeft / (schiene.clientWidth || 1));
+      punkte.querySelectorAll('span').forEach((p, i) => p.classList.toggle('an', i === n));
+    }, { passive: true });
+  });
 }
 
 /** Die Tage EINER Woche eines Kindes — die laufende oder die kommende. */

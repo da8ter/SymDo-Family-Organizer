@@ -112,7 +112,10 @@ trait TransitStore
     private function TransitSchluessel(string $art, array $zeile): string
     {
         if ($art === 'stop') {
-            return 'stop:' . trim((string)($zeile['stopId'] ?? ''));
+            // Die Anzahl gehört MIT hinein: wer sie erhöht, bekäme sonst bis zum
+            // nächsten fälligen Lauf die alte, kürzere Antwort zu sehen.
+            return 'stop:' . trim((string)($zeile['stopId'] ?? ''))
+                 . ':' . max(1, (int)($zeile['limit'] ?? 6));
         }
         return 'route:' . substr(md5(implode('|', [
             trim((string)($zeile['from'] ?? '')),
@@ -120,6 +123,7 @@ trait TransitStore
             trim((string)($zeile['mode'] ?? 'dep')),
             trim((string)($zeile['member'] ?? '')),
             trim((string)($zeile['time'] ?? '')),
+            (string)max(1, (int)($zeile['count'] ?? 4)),
         ])), 0, 12);
     }
 
@@ -333,7 +337,17 @@ trait TransitStore
                 $wann = $this->TransitUhrzeit((string)($z['time'] ?? ''), $jetzt);
             }
 
-            $antwort = Efa::Strecke($von, $nach, $modus, $wann, max(1, (int)($z['count'] ?? 3)));
+            /* Großzügiger anfragen als gezeigt wird: bei einer Ankunftsvorgabe
+               fallen hinterher alle Verbindungen weg, die zu SPÄT kommen — von
+               fünf angefragten blieben so drei übrig. Drei Reserve decken das
+               ab, ohne die fremde Schnittstelle unnötig zu belasten. */
+            /* Vier ist die Obergrenze der Schnittstelle: mit
+               calcNumberOfTrips 5, 8 und 10 kamen am 11.09.2026 immer vier
+               Verbindungen zurück, in beiden Richtungen. Für mehr müsste ein
+               zweites Mal gefragt werden — das ist es gegenüber einem Dienst
+               ohne Schlüssel und ohne Zusicherung nicht wert. */
+            $antwort = Efa::Strecke($von, $nach, $modus, $wann,
+                max(1, (int)($z['count'] ?? 4)));
             $bestand['entries'][$key] = $this->TransitEintrag(
                 $bestand['entries'][$key] ?? [], $antwort, $jetzt,
                 static fn(array $daten): array => ['raw' => $daten, 'school' => $schule]
@@ -584,7 +598,7 @@ trait TransitStore
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
-                'journeys'   => TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 3)), $nichtNach),
+                'journeys'   => TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
             ];
         }
 

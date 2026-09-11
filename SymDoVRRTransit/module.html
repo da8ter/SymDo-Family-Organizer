@@ -43,20 +43,31 @@ body {
 #wurzel {
   flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px;
   box-sizing: border-box;
-  padding: calc(max(var(--sym-mt), env(safe-area-inset-top, 0px)) + 10px)
-           calc(var(--sym-ms) + 12px)
-           calc(var(--sym-mb) + 10px)
-           calc(var(--sym-ms) + 12px);
+  /* Seitlich GENAU der Rand von Symcon, ohne eigenen Zuschlag: der eigene kam
+     obendrauf und ließ die Kachel viel zu schmal wirken. Den Innenabstand
+     tragen die Karten selbst. So halten es die übrigen Kacheln auch. */
+  padding: calc(max(var(--sym-mt), env(safe-area-inset-top, 0px)) + 8px)
+           var(--sym-ms)
+           calc(var(--sym-mb) + 6px)
+           var(--sym-ms);
 }
 
 /* Kopfzeile: nur der Umschalter, rechtsbündig. */
 .kopf { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
-/* Wem gehört das? Bild und Name über den Karten des Kindes. */
-.wem { display: flex; align-items: center; gap: 7px; margin: 2px 0 4px 2px; font-size: 12px; font-weight: 700; }
-.wem .gesicht { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
-.wem .gesicht.ersatz {
-  display: flex; align-items: center; justify-content: center;
-  background: var(--akzent); color: #fff; font-size: 11px; font-weight: 800;
+/* Wem gehört das? Bild und Name über den Karten des Kindes.
+   Maße wörtlich aus der Ämtchen-Kachel übernommen — dieselbe Familie soll in
+   jeder Kachel gleich groß aussehen. */
+.wem { display: flex; align-items: center; gap: 8px; padding: 0 4px; margin: 2px 0 6px; }
+.wem .gesicht {
+  width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  border: 2px solid var(--akzent);
+  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;
+}
+.wem .gesicht img { width: 100%; height: 100%; object-fit: cover; }
+.wem .name {
+  flex: 1 1 auto; min-width: 0; font-size: clamp(13px, 4vmin, 16px); font-weight: 800;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .umschalter { display: flex; flex: 0 0 auto; border-radius: 999px; overflow: hidden; background: var(--zeile); }
 .umschalter button {
@@ -100,8 +111,20 @@ body {
 .abfahrt.entfaellt .linie, .abfahrt.entfaellt .ziel { text-decoration: line-through; }
 
 /* ── Streckenachse ─────────────────────────────────────────────────────── */
-.fahrt { margin-top: 8px; }
-.fahrt:first-of-type { margin-top: 0; }
+/* Die Schiene: eine Verbindung je Bildbreite, mit Einrasten. */
+.fahrten {
+  display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+}
+.fahrten::-webkit-scrollbar { display: none; }
+.fahrt { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
+/* Die Punkte: mittig, der aktuelle in der Akzentfarbe. */
+.punkte { display: flex; justify-content: center; gap: 5px; margin-top: 6px; }
+.punkte span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: color-mix(in srgb, var(--content-color) 25%, transparent);
+}
+.punkte span.an { background: var(--akzent); }
 .fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 3px; }
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
@@ -121,7 +144,11 @@ body {
 }
 /* Die Fahrten teilen sich den Rest — im Verhältnis ihrer Fahrzeit. Das
    flex-grow je Stück setzt das Markup (die Sekunden). */
-.stueck.ride { flex: 1 1 0; min-width: 0; }
+.stueck.ride { flex: 1 1 0; min-width: 0; container-type: inline-size; }
+/* Wird es eng, fällt zuerst das Symbol, dann die Fahrzeit. Die Liniennummer
+   bleibt: sie ist die Auskunft, alles andere ist Beiwerk. */
+@container (max-width: 104px) { .stueck.ride > svg, .stueck.ride > i { display: none; } }
+@container (max-width: 88px)  { .stueck.ride .zeit { display: none; } }
 .stueck.ride { background: var(--akzent); }
 /* Die Wartezeit ist weder Fahren noch Laufen: neutral gefüllt, ohne Farbe. Sie
    hat erst seit dem Warte-Abschnitt ein Stück — vorher endete der Balken zu
@@ -209,10 +236,13 @@ function kopfHtml() {
 function wemHtml(e) {
   if (!e.member) { return ''; }
   const name = e.memberName || '';
-  const bild = e.memberAvatar
-    ? '<img class="gesicht" src="' + esc(e.memberAvatar) + '" alt="">'
-    : '<span class="gesicht ersatz">' + esc((name || '?').slice(0, 1).toUpperCase()) + '</span>';
-  return '<div class="wem">' + bild + '<span>' + esc(name) + '</span></div>';
+  // Das Bild steckt IM Kreis, nicht als Kreis — wie in der Ämtchen-Kachel:
+  // so trägt der Rand auch den Anfangsbuchstaben, wenn kein Foto hinterlegt ist.
+  const inhalt = e.memberAvatar
+    ? '<img src="' + esc(e.memberAvatar) + '" alt="">'
+    : esc((name || '?').slice(0, 1).toUpperCase());
+  return '<div class="wem"><div class="gesicht">' + inhalt + '</div>'
+    + '<span class="name">' + esc(name) + '</span></div>';
 }
 
 /**
@@ -277,7 +307,15 @@ function abfahrtenHtml() {
 function balkenHtml(v) {
   return '<div class="balken">' + (v.legs || []).map(function (l) {
     const min = Math.round(l.seconds / 60) + ' ' + translate('min');
-    const text = l.kind === 'ride' ? ((l.line || l.product) + ' · ' + min) : min;
+    /* Bei der Fahrt stehen Linie und Fahrzeit in EIGENEN Kästchen: wird das
+       Stück eng, verschwindet erst das Symbol und dann die Fahrzeit — die
+       Liniennummer bleibt bis zuletzt, denn sie ist die eigentliche Auskunft.
+       Das entscheidet eine Container-Abfrage am Stück selbst, ohne Messung im
+       Skript und ohne dass beim Ändern der Fenstergröße etwas nachlaufen muss. */
+    const text = l.kind === 'ride'
+      ? '<span class="linie">' + esc(l.line || l.product) + '</span>'
+        + '<span class="zeit">· ' + esc(min) + '</span>'
+      : '<span>' + esc(min) + '</span>';
     const was = l.kind === 'walk' ? translate('walking')
               : (l.kind === 'wait' ? translate('waiting') : (l.line || l.product));
     /* Nur die FAHRTEN wachsen, und zwar im Verhältnis ihrer Fahrzeit
@@ -288,7 +326,7 @@ function balkenHtml(v) {
     const wachsen = l.kind === 'ride' ? ' style="flex-grow:' + Math.max(1, l.seconds) + '"' : '';
     return '<div class="stueck ' + esc(l.kind) + '"' + wachsen + ' title="'
       + esc(was + ' ' + min + ', ' + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
-      + symbol(l.icon) + '<span>' + esc(text) + '</span></div>';
+      + symbol(l.icon) + text + '</div>';
   }).join('') + '</div>';
 }
 
@@ -308,7 +346,8 @@ function streckenHtml() {
             ? translate('home, from now')
             : translate('home, lessons end at %s').replace('%s', s.schoolEnd));
     }
-    const fahrten = (r.journeys || []).map(function (v) {
+    const alle = (r.journeys || []);
+    const fahrten = alle.map(function (v) {
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
         + '<span class="grund">→</span><span class="stark">' + esc(v.arrivalText) + '</span>'
@@ -321,12 +360,22 @@ function streckenHtml() {
         + '<span>' + esc((v.legs[v.legs.length - 1] || {}).to || '') + '</span></div>'
         + '</div>';
     }).join('');
+    /* Die Verbindungen liegen NEBENEINANDER und werden gewischt — untereinander
+       füllten fünf Stück die ganze Kachel, und die nächste Haltestelle wäre
+       niemals ins Bild gekommen. Die Punkte darunter sagen, wo man ist. */
+    const punkte = alle.length > 1
+      ? '<div class="punkte">' + alle.map(function (_, i) {
+          return '<span class="' + (i === 0 ? 'an' : '') + '"></span>';
+        }).join('') + '</div>'
+      : '';
     return '<div class="karte">'
       + '<div class="titel"><span>' + esc(r.name || r.memberName) + '</span>'
       + (hinweis ? '<span class="neben">' + esc(hinweis) + '</span>' : '')
       + (r.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
       + '</div>'
-      + (fahrten || '<div class="leer">' + esc(translate('no journey found')) + '</div>')
+      + (fahrten
+          ? '<div class="fahrten" data-schiene>' + fahrten + '</div>' + punkte
+          : '<div class="leer">' + esc(translate('no journey found')) + '</div>')
       + '</div>';
   });
 }
@@ -344,6 +393,21 @@ function zeichne() {
       kopfHtml() + '<div class="liste">'
     + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
     + '</div>';
+
+  /* Die Punkte folgen dem Wischen. Gerechnet wird aus der Scrollposition und
+     nicht über einen Beobachter: eine Schiene hat höchstens fünf Kinder, und
+     ein IntersectionObserver je Karte wäre Aufwand für nichts. */
+  document.querySelectorAll('[data-schiene]').forEach(function (schiene) {
+    const punkte = schiene.nextElementSibling;
+    if (!punkte || !punkte.classList.contains('punkte')) { return; }
+    schiene.addEventListener('scroll', function () {
+      const breite = schiene.clientWidth || 1;
+      const n = Math.round(schiene.scrollLeft / breite);
+      punkte.querySelectorAll('span').forEach(function (p, i) {
+        p.classList.toggle('an', i === n);
+      });
+    }, { passive: true });
+  });
 
   document.querySelectorAll('[data-ansicht]').forEach(function (b) {
     b.addEventListener('click', function () {

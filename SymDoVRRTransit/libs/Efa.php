@@ -124,7 +124,7 @@ final class Efa
                auswerten und es hier nachweislich nicht stört. */
             'depArrMacro'        => $modus,
             'itdTripDateTimeDepArr' => $modus,
-            'calcNumberOfTrips'  => (string)max(1, min(6, $anzahl)),
+            'calcNumberOfTrips'  => (string)max(1, min(10, $anzahl)),
             'useRealtime'        => '1',
         ];
         if ($wann > 0) {

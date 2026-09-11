@@ -216,7 +216,7 @@ class SymDoVRRTransit extends IPSModuleStrict
                 ['caption' => $this->Translate('Buffer (min)'), 'name' => 'buffer', 'width' => '100px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
-                 'add' => 3, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 6]],
+                 'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
             ],
             'values' => [],
         ];

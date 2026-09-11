@@ -242,7 +242,20 @@ final class TransitCalc
             ];
         }
         usort($raus, static fn(array $a, array $b): int => $a['departure'] <=> $b['departure']);
-        return $hoechstens > 0 ? array_slice($raus, 0, $hoechstens) : $raus;
+        /* Doppelte fallen weg. Die EFA liefert sie zwar in der Regel nicht,
+           aber eine Verbindung zweimal untereinander wäre ein Fehler, den
+           niemand sich erklären kann — und die Prüfung kostet nichts. */
+        $sauber = [];
+        $gesehen = [];
+        foreach ($raus as $v) {
+            $marke = $v['departure'] . '-' . $v['arrival'];
+            if (isset($gesehen[$marke])) {
+                continue;
+            }
+            $gesehen[$marke] = true;
+            $sauber[] = $v;
+        }
+        return $hoechstens > 0 ? array_slice($sauber, 0, $hoechstens) : $sauber;
     }
 
     /**
