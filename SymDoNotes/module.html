@@ -8841,7 +8841,11 @@ function stundenplanKarte() {
       /* Kein Prozent-Boden mehr: die Mindestbreite steht in PIXELN und wird
          ueber die Breite des ganzen Balkens hergestellt (planBalkenBreite). */
       const breite = Math.max((b - a) * 100, 0.2);
-      const r = '12px';
+      /* Die HALBE Balkenhoehe — nur dann ist die Kappe eine echte
+         Halbkugel. Der Wert haengt an .plan-balken (30px); wer dort die
+         Hoehe aendert, muss ihn mitziehen, sonst sitzen an den Enden
+         abgeflachte Ecken. */
+      const r = '15px';
       const erster = s.from <= fruehesteZeit;   // beginnt der Balken hier?
       const letzter = s.to >= spaetesteZeit;    // endet er hier?
       /* Die entfallene Stunde ist ein eigener, niedrigerer Kasten mitten im
