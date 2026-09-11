@@ -1,0 +1,12 @@
+{
+    "id": "{3E8B7DC5-D4E7-465D-8B53-66A426EEFE40}",
+    "name": "SymDo Setup",
+    "type": 5,
+    "vendor": "Stephan Sprick",
+    "aliases": [],
+    "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/SymDoSetup",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "SDSU"
+}
