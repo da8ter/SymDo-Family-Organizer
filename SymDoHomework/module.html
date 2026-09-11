@@ -663,9 +663,12 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .plan-kopf .wer { font-size: 14px; font-weight: 700; }
 .plan-kopf .was { font-size: 12px; color: var(--muted-color, #888); }
 .plan-kopf .spanne { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted-color, #888); }
-.plan-balken { position: relative; height: 24px; border-radius: 12px;
+/* 30px — dieselbe Hoehe wie der Fahrplanbalken (.nv-balken). Auf der
+   Uebersicht stehen Stundenplan und Schulweg untereinander; zwei Balken, die
+   fast, aber nicht ganz gleich hoch sind, sehen nach Versehen aus. */
+.plan-balken { position: relative; height: 30px; border-radius: 15px;
   background: color-mix(in srgb, currentColor 8%, transparent); }
-.plan-stueck { position: absolute; top: 0; height: 24px; display: flex; align-items: center;
+.plan-stueck { position: absolute; top: 0; height: 30px; display: flex; align-items: center;
   color: #fff; font-size: 10px; overflow: hidden; }
 /* Der Abstand muss BEIDE Formen treffen: /icons.js ersetzt das <i> durch ein
    <svg>, und eine Regel nur auf `i` greift danach nicht mehr. Genau daran klebte
@@ -788,10 +791,10 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
      Methodentag). Hell haelt gegen jeden Untergrund — und ein Saum aus
      box-shadow kann nicht gestrichelt sein, deshalb ist es ein Rahmen. */
   border: 1px dashed color-mix(in srgb, var(--card) 85%, transparent);
-  /* Ein Viertel niedriger als der Balken (24px → 18px) und mittig darin: die
+  /* Ein Viertel niedriger als der Balken (30px → 22px) und mittig darin: die
      ausgefallene Stunde steht damit sichtbar UNTER der Reihe der
      stattfindenden, ohne ihren Platz auf der Zeitachse aufzugeben. */
-  height: 18px; top: 3px;
+  height: 22px; top: 4px;
 }
 /* Die Vertretung braucht keine helle Kante mehr: sie traegt seit dem Umbau
    ihren Titel und davor das Tausch-Zeichen, und DAS ist die Markierung. Zwei
