@@ -1687,6 +1687,76 @@ trait CalendarBridge
      * @param array<string, mixed> $body
      * @return array<string, mixed>
      */
+    /**
+     * Die Stundenplan-Kacheln nach einem Kalender-Schreibvorgang neu zeichnen
+     * lassen.
+     *
+     * Ueber den Einmal-Timer und damit AUSSERHALB des Hooks: Symcon
+     * serialisiert je Instanz, und ein direkter Aufruf mitten im Hook hiesse,
+     * dass das Gateway das Stundenplan-Modul ruft, waehrend es selbst arbeitet
+     * (dasselbe Muster wie HomeworkRefreshTiles).
+     *
+     * Erneutes Anstossen setzt den Einmal-Timer nur zurueck. Eine Reihe mit
+     * sechzig Terminen entsteht in EINEM Hook-Aufruf und loest deshalb ein
+     * Nachziehen aus, nicht sechzig.
+     */
+    private function CalTimetablesAnstossen(): void
+    {
+        if ($this->CalTimetableTiles() === []) {
+            return;
+        }
+        $this->RegisterOnceTimer('CalNachziehen', 'TGW_CalRefreshTimetables($_IPS[\'TARGET\']);');
+    }
+
+    /** Oeffentlich, weil der Einmal-Timer sie als Praefix-Funktion ruft. */
+    public function CalRefreshTimetables(): void
+    {
+        if (!function_exists('STPL_Refresh')) {
+            return;
+        }
+        foreach ($this->CalTimetableTiles() as $id) {
+            try {
+                @STPL_Refresh($id);
+            } catch (\Throwable $e) {
+                // eine Kachel, die nicht mag, haelt die anderen nicht auf
+            }
+        }
+    }
+
+    /**
+     * Stundenplan-Instanzen, die Termine UEBERHAUPT zeigen — sonst waere das
+     * Nachziehen Arbeit ohne Wirkung.
+     *
+     * Anders als TimetableOwnInstances() sind die SPIEGEL ausdruecklich dabei:
+     * sie zeichnen dieselben Marker, bekommen aber keinen Push ihrer Quelle und
+     * haengen sonst bis zu fuenf Minuten hinterher (am 11.09.2026 an der
+     * Timeline-Instanz gemessen). Ob ein Spiegel Termine zeigt, entscheidet
+     * dabei seine QUELLE: er baut seinen Plan aus deren Auskunft, sein eigener
+     * Schalter bleibt dabei unbeachtet.
+     *
+     * @return list<int>
+     */
+    private function CalTimetableTiles(): array
+    {
+        $zeigt  = [];
+        $quelle = [];
+        foreach ((array)@IPS_GetInstanceListByModuleID(self::TIMETABLE_MODULE_GUID) as $id) {
+            $cfg = json_decode((string)@IPS_GetConfiguration((int)$id), true);
+            if (!is_array($cfg)) {
+                continue;
+            }
+            $zeigt[(int)$id]  = (bool)($cfg['ShowCalendarEvents'] ?? false);
+            $quelle[(int)$id] = (int)($cfg['SourceInstanceID'] ?? 0);
+        }
+        $ids = [];
+        foreach ($quelle as $id => $von) {
+            if ($zeigt[$von > 0 ? $von : $id] ?? false) {
+                $ids[] = (int)$id;
+            }
+        }
+        return $ids;
+    }
+
     private function CalHandleAction(array $body): array
     {
         $aktion = strtolower(trim((string)($body['action'] ?? 'calendars')));
@@ -1721,14 +1791,23 @@ trait CalendarBridge
                 'truncated' => $ergebnis['truncated'],
             ];
         }
-        if ($aktion === 'create') {
-            return $this->CalCreateEvent((int)($body['calendarID'] ?? 0), is_array($body['event'] ?? null) ? $body['event'] : []);
-        }
-        if ($aktion === 'update') {
-            return $this->CalUpdateEvent((int)($body['calendarID'] ?? 0), is_array($body['event'] ?? null) ? $body['event'] : []);
-        }
-        if ($aktion === 'delete') {
-            return $this->CalDeleteEvent((int)($body['calendarID'] ?? 0), is_array($body['event'] ?? null) ? $body['event'] : []);
+        if ($aktion === 'create' || $aktion === 'update' || $aktion === 'delete') {
+            $kalender = (int)($body['calendarID'] ?? 0);
+            $termin   = is_array($body['event'] ?? null) ? $body['event'] : [];
+            $ergebnis = match ($aktion) {
+                'create' => $this->CalCreateEvent($kalender, $termin),
+                'update' => $this->CalUpdateEvent($kalender, $termin),
+                default  => $this->CalDeleteEvent($kalender, $termin),
+            };
+            /* Nach einem Schreibvorgang stehen die Termin-Marker der
+               Stundenplan-Kacheln falsch, bis deren Fuenf-Minuten-Takt sie neu
+               zeichnet. Was man gerade selbst eingetragen hat, soll aber sofort
+               dastehen. Nur bei Erfolg: ein abgelehnter Schreibvorgang hat
+               nichts veraendert, das nachzuziehen waere. */
+            if (($ergebnis['ok'] ?? false) === true) {
+                $this->CalTimetablesAnstossen();
+            }
+            return $ergebnis;
         }
         return ['ok' => false, 'error' => ['code' => 'invalid_payload', 'message' => $this->Translate('Unknown action.')]];
     }

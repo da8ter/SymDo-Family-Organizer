@@ -178,7 +178,11 @@ Web-App — dieselbe Bahn, dieselben Marken, dieselben Regeln:
   des Fachsymbols: „1. Methodentag" sagt mehr als jedes Symbol. Der Titel endet,
   wo die nächste Stunde auf dem Block beginnt.
 - **Termine** aus dem Kalender stehen als Punkt an ihrer Startzeit, mit Balken bis
-  zur Endzeit und einem Etikett daneben. Ohne Endzeit läuft der Balken aus.
+  zur Endzeit und einem Etikett daneben. Ohne Endzeit läuft der Balken aus. Ein
+  Termin, der über App, Kachel oder Sprache angelegt, geändert oder gelöscht
+  wird, erscheint **sofort** — das Gateway stößt danach jede Kachel an, die
+  Termine zeigt, Spiegel eingeschlossen. Was von außen in den Kalender kommt
+  (CalDAV, ein anderes Programm), zieht der Fünf-Minuten-Takt nach.
 - **Uhrzeiten** stehen unter der Achse an ihrer Stelle: Beginn, Ende und die
   Startzeit jedes Termins.
 - Die **Spanne** in der Kopfzeile zählt nur, was stattfindet: fallen die letzten
