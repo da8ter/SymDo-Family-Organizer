@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/../libs/Belegung.php';
+require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
@@ -48,6 +49,8 @@ class SymDoGateway extends IPSModuleStrict
     use OAuthHelper;
     use AppCore;
     use Belegung;
+    // Der passive Weg zu den Scanner-Instanzen: Auftraege hin, Ergebnisse zurueck.
+    use ScanKanal;
     use MailScan;
     use MailFetch;
     use CalendarBridge;
