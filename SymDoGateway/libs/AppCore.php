@@ -7,6 +7,7 @@ require_once __DIR__ . '/DeviceRegistry.php';
 require_once __DIR__ . '/QrRenderer.php';
 require_once __DIR__ . '/AiExtract.php';
 require_once __DIR__ . '/Tts.php';
+require_once __DIR__ . '/../../libs/Konfig.php';
 
 /**
  * Die App-Seite des Gateways: REST-API für iOS- und Web-App, Kopplung, Nutzer,
@@ -22,6 +23,8 @@ require_once __DIR__ . '/Tts.php';
  */
 trait AppCore
 {
+    // Wessen Konfiguration gilt und wo der Bestand liegt — geteilt mit dem Scanner.
+    use Konfig;
     use ApiRouter;
     use DeviceRegistry;
     use QrRenderer;
@@ -315,52 +318,6 @@ trait AppCore
         }
     }
 
-    /**
-     * Die Instanz, deren KONFIGURATION gilt. Im Gateway die eigene; ein
-     * ausgelagerter Scanner ueberschreibt das mit der Gateway-ID, damit er
-     * dieselben Zugaenge (KI-Schluessel, Scan-Einstellungen) benutzt, ohne sie
-     * zu duplizieren. Kern des Umbaus „Gateway frei halten".
-     */
-    protected function KonfigID(): int
-    {
-        return $this->InstanceID;
-    }
-
-    /**
-     * Die Instanz, unter der der BESTAND liegt (Medienobjekte, Kategorien,
-     * Zwischendateien). Im Gateway die eigene; der Scanner zeigt hierher, damit
-     * ein von ihm angelegtes Medienobjekt am selben Ort landet wie bisher.
-     */
-    protected function BestandID(): int
-    {
-        return $this->InstanceID;
-    }
-
-    /** @var array<string,mixed>|null Zwischenspeicher der Fremdkonfiguration je Aufruf. */
-    private ?array $konfigCache = null;
-
-    /**
-     * Eine Eigenschaft der KonfigID lesen — die eine Stelle, ueber die aller
-     * Zugriff auf die Gateway-Konfiguration laeuft.
-     *
-     * Fuer die eigene Instanz `IPS_GetProperty` (sieht gestagte Werte sofort,
-     * wie `LoadUsers`); fuer eine fremde Instanz einmal `IPS_GetConfiguration`
-     * und danach aus dem Zwischenspeicher. Der Cache lebt nur, solange dieser
-     * PHP-Aufruf laeuft — Symcon baut je Hook/Aktion einen frischen Kontext,
-     * also nie ein veralteter Wert ueber Aufrufe hinweg.
-     */
-    protected function AiProp(string $name): mixed
-    {
-        $ziel = $this->KonfigID();
-        if ($ziel === $this->InstanceID) {
-            return @IPS_GetProperty($ziel, $name);
-        }
-        if ($this->konfigCache === null) {
-            $roh = json_decode((string) @IPS_GetConfiguration($ziel), true);
-            $this->konfigCache = is_array($roh) ? $roh : [];
-        }
-        return $this->konfigCache[$name] ?? null;
-    }
 
     private function LoadUsers(): array
     {

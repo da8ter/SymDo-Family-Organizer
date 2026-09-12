@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
-require_once __DIR__ . '/libs/Belegung.php';
+require_once __DIR__ . '/../libs/Belegung.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';

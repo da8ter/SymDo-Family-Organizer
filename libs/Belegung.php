@@ -11,11 +11,12 @@ declare(strict_types=1);
  * Arbeit in einer Spur ist deshalb eine Wartezeit fuer alles andere in
  * DERSELBEN Spur.
  *
- * Als eigener Trait, weil beide Seiten des Umbaus „Gateway frei halten"
+ * Liegt in `List/libs/`, weil beide Seiten des Umbaus „Gateway frei halten"
  * dasselbe Log schreiben: das Gateway (Hook, Aktion) und die ausgelagerten
- * Scanner-Instanzen. Die Zeile traegt die Instanz-ID, also ist im Log
- * ablesbar, WELCHE Spur wie lange belegt war — genau der Beweis, dass ein Scan
- * nicht mehr die Hooks blockiert.
+ * Scanner-Instanzen. Die Zeile traegt die Instanz-ID — im Log ist damit
+ * ablesbar, WELCHE Spur wie lange belegt war. Genau das ist der Beweis, dass
+ * ein Scan die Hooks nicht mehr aufhaelt: dieselbe Vorgangskette steht mit
+ * zwei verschiedenen Instanz-IDs da, die lange Zeile unter der des Scanners.
  */
 trait Belegung
 {
@@ -24,14 +25,20 @@ trait Belegung
      * den Dauerbetrieb. Bewusst eine Datei und keine Eigenschaft — die gaebe es
      * erst nach einem Kernel-Neustart, und ein Schreibzugriff auf ein noch
      * nicht registriertes Attribut zerlegt im Hook die HTTP-Antwort.
+     *
+     * Der Pfad kommt aus `IPS_GetKernelDir()` und nicht mehr fest aus
+     * `/var/lib/symcon/`: auf der SymBox liegt das Verzeichnis anderswo, und
+     * eine Messung, die dort still nichts schreibt, waere schlimmer als keine.
+     * `rtrim` davor, weil der Kernel den Schraegstrich je nach Umgebung mit
+     * oder ohne liefert (in den Pruefstands-Attrappen ohne).
      */
     private function Belegung(string $art, string $name, float $start): void
     {
-        $marke = '/var/lib/symcon/symdo-messung.an';
-        if (!@is_file($marke)) {
+        $wurzel = rtrim((string) @IPS_GetKernelDir(), '/\\') . DIRECTORY_SEPARATOR;
+        if (!@is_file($wurzel . 'symdo-messung.an')) {
             return;
         }
-        $datei = '/var/lib/symcon/symdo-belegung.log';
+        $datei = $wurzel . 'symdo-belegung.log';
         // Deckel gegen eine Messung, die jemand anzuschalten vergisst.
         if ((int)@filesize($datei) > 20 * 1024 * 1024) {
             return;
