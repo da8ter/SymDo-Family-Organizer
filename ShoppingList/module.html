@@ -4108,9 +4108,20 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 #screen-calendar.ct-voll > .content {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column;
+  /* Breite ausdruecklich setzen. `margin: 0 auto` (aus .content) schaltet an
+     einem Flex-Kind das Strecken ab: die Spalte wurde dann so breit, wie ihr
+     breitestes Kind sie haben will — die Tafel mit sieben Tagen, gedeckelt
+     durch max-width. Auf dem Handy ragte der Inhalt damit ueber den Schirm
+     hinaus, und alles Rechtsbuendige im Kopf stand ausserhalb: die
+     Avatar-Pille bei x=520 und die Ansichtswahl bei x=664 auf einem 500 px
+     breiten Schirm — oben sah man nur noch die Wochenwahl. Gemeldet am
+     12.09.2026 („hier fehlt oben alles"), im Browser nachgemessen.
+     `min-width: 0` haelt die Tafel davon ab, die Spalte von innen
+     aufzuspreizen; sie rollt ohnehin selbst. */
+  width: 100%; min-width: 0;
 }
 #screen-calendar.ct-voll #calTafel {
-  flex: 1 1 auto; min-height: 0;
+  flex: 1 1 auto; min-height: 0; min-width: 0;
   grid-template-rows: min-content;
   grid-auto-rows: minmax(max-content, 1fr);
   /* Passt die Woche doch nicht (viele Termine, kleines Fenster), rollt die
