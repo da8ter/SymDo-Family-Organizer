@@ -227,6 +227,10 @@ class SymDoVRRTransit extends IPSModuleStrict
                  ]],
 
                 $haltestellen,
+                ['type' => 'Label', 'caption' =>
+                    $this->Translate('Direction: the destination as shown on the vehicle ("Hbf, Hospital"), ')
+                    . $this->Translate('several separated by commas, or a platform ("Platform 1"). ')
+                    . $this->Translate('Empty shows both directions.')],
                 $strecken,
 
                 ['type' => 'ExpansionPanel', 'caption' => $this->Translate('School run'), 'expanded' => false, 'items' => [
@@ -312,6 +316,11 @@ class SymDoVRRTransit extends IPSModuleStrict
                 ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
                 ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Die Richtung ist das Ziel, wie es vorn am Fahrzeug steht, oder
+                   ein Steig — kommagetrennt. Leer = beide Richtungen; sonst
+                   stünde morgens auch auf der Tafel, was von der Schule WEG fährt. */
+                ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => '200px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
                  'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
@@ -496,7 +505,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             }
         }
         $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
-                     'lines' => '', 'walk' => 0, 'limit' => 6];
+                     'lines' => '', 'direction' => '', 'walk' => 0, 'limit' => 6];
 
         $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('Routes', 'columns', (string)json_encode(
@@ -521,7 +530,7 @@ class SymDoVRRTransit extends IPSModuleStrict
     private function HaltestellenZeilen(array $roh): array
     {
         $felder = ['name' => '', 'stopId' => '', 'show' => true,
-                   'member' => '', 'lines' => '', 'walk' => 0, 'limit' => 6];
+                   'member' => '', 'lines' => '', 'direction' => '', 'walk' => 0, 'limit' => 6];
         $raus = [];
         foreach ($roh as $z) {
             if (!is_array($z)) {

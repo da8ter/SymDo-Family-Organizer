@@ -111,10 +111,12 @@ final class TransitCalc
      * @param int                 $fussweg  Minuten bis zur Haltestelle
      * @param list<string>        $linien   nur diese Linien; leer = alle
      * @param int                 $hoechstens 0 = alle
+     * @param list<string>        $richtungen nur diese Ziele oder Steige; leer = beide Richtungen
      * @return list<array<string,mixed>>
      */
     public static function Abfahrten(array $roh, int $jetzt, int $fussweg = 0,
-                                     array $linien = [], int $hoechstens = 0): array
+                                     array $linien = [], int $hoechstens = 0,
+                                     array $richtungen = []): array
     {
         $nurDiese = [];
         foreach ($linien as $l) {
@@ -151,6 +153,14 @@ final class TransitCalc
 
             $eigen = is_array($e['location']['properties'] ?? null)
                 ? $e['location']['properties'] : [];
+
+            /* Die Gegenrichtung interessiert meist nicht: wer morgens zur Schule
+               will, braucht die Fahrten in die andere Richtung nicht auf der
+               Tafel. Gesiebt wird nach Ziel oder Steig, siehe RichtungPasst(). */
+            if (!self::RichtungPasst((string)($t['destination']['name'] ?? ''),
+                                     (string)($eigen['platformName'] ?? ''), $richtungen)) {
+                continue;
+            }
 
             /* Der Countdown zählt ab JETZT, nicht ab der Planzeit — und mit
                abgezogenem Fußweg ist es die Zahl, die wirklich zählt: wie lange
@@ -697,5 +707,54 @@ final class TransitCalc
     private static function Schluessel(string $wert): string
     {
         return strtolower((string)preg_replace('/\s+/', '', trim($wert)));
+    }
+
+    /**
+     * Passt eine Abfahrt zur gewünschten Richtung?
+     *
+     * Eine Richtung ist das ZIEL, wie es vorn am Fahrzeug steht („Hbf",
+     * „Krankenhaus") — oder ein Steig („Steig 1", „Gl. 10"), denn an vielen
+     * Haltestellen trennt der Steig die Fahrtrichtungen sauberer als jedes
+     * Ziel. Verglichen wird ohne Groß/Klein, Leerzeichen, Punkte und
+     * Bindestriche: „st vinzenz" trifft „D-St.-Vinzenz-Krankenhaus". Eine
+     * Abfahrt bleibt, wenn EINE der Angaben passt; ohne Angabe bleiben alle.
+     *
+     * Als Steig gilt nur, was nach dem Wort einen Punkt oder ein Leerzeichen
+     * hat: „Gladbeck" und „Gleisdreieck" sind Orte, kein Gleis.
+     *
+     * @param list<string> $richtungen
+     */
+    public static function RichtungPasst(string $ziel, string $steig, array $richtungen): bool
+    {
+        $offen = true;
+        foreach ($richtungen as $r) {
+            $r = trim((string)$r);
+            if ($r === '') {
+                continue;
+            }
+            $offen = false;
+            if (preg_match(self::STEIG_MUSTER, $r, $m) === 1) {
+                $soll = self::Wortschluessel($m[1]);
+                $ist  = self::Wortschluessel((string)preg_replace(self::STEIG_MUSTER, '$1', trim($steig)));
+                if ($soll !== '' && $soll === $ist) {
+                    return true;
+                }
+                continue;
+            }
+            $wunsch = self::Wortschluessel($r);
+            if ($wunsch !== '' && str_contains(self::Wortschluessel($ziel), $wunsch)) {
+                return true;
+            }
+        }
+        return $offen;
+    }
+
+    /** „Steig 1", „Bstg. 2", „Gleis 10", „Gl.10", „Platform 3" — der Rest ist die Nummer. */
+    private const STEIG_MUSTER = '/^(?:steig|bstg|bahnsteig|gleis|gl|platform|pl)(?:\.\s*|\s+)(\S.*)$/iu';
+
+    /** Nur Buchstaben und Ziffern, klein — so vergleichen sich Ziele und Steige. */
+    private static function Wortschluessel(string $wert): string
+    {
+        return mb_strtolower((string)preg_replace('/[^\p{L}\p{N}]+/u', '', $wert));
     }
 }

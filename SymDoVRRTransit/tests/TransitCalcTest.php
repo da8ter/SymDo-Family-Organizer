@@ -91,6 +91,31 @@ pruefe('Filter auf eine Linie, die es hier nicht gibt',
 pruefe('Obergrenze greift',
     count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 2)), 2);
 
+// Richtungsfilter — das Ziel wie vorn am Fahrzeug, oder der Steig
+pruefe('Richtung nach Ziel',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['Köln']), 'line'), ['2203']);
+pruefe('Richtung: mehrere Ziele, Schreibweise und Leerraum egal',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['dortmund hbf', ' köln ']), 'line'),
+    ['2203', 'RE4']);
+pruefe('Richtung: Bindestriche und Punkte zählen nicht',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['theodor heuss']), 'line'), ['834']);
+pruefe('Richtung nach Steig',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['Steig 12']), 'line'), ['834']);
+pruefe('Richtung nach Gleis mit Punkt und ohne Leerzeichen',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['Gl.10']), 'line'), ['RE4']);
+pruefe('Richtung, die es hier nicht gibt',
+    TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['Wuppertal']), []);
+pruefe('Ein Ort, der wie ein Gleis anfängt, ist ein Ziel',
+    [TransitCalc::RichtungPasst('Gladbeck Bf', '3', ['Gladbeck']), TransitCalc::RichtungPasst('Gleisdreieck', '3', ['Gleisdreieck'])],
+    [true, true]);
+pruefe('Steig mit Präfix in der Antwort der EFA',
+    TransitCalc::RichtungPasst('Irgendwo', 'Bstg. 2', ['Steig 2']), true);
+pruefe('Leere Angaben lassen alles durch',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, ['', ' '])), 3);
+pruefe('Richtung und Linie zusammen',
+    array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['RE4', '2203'], 0, ['Hbf']), 'line'),
+    ['2203', 'RE4']);
+
 /* Der Fußweg ist die Zahl, die wirklich zählt: nicht „wann fährt der Zug",
    sondern „wann muss ich vom Tisch aufstehen". */
 $mitWeg = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 25);

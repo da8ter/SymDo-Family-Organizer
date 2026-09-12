@@ -118,6 +118,21 @@ trait TransitStore
         return !array_key_exists('show', $zeile) || (bool)$zeile['show'];
     }
 
+    /**
+     * Die gewünschten Richtungen einer Haltestelle — Ziele oder Steige,
+     * kommagetrennt in der Spalte „Richtung"; leer = beide Richtungen.
+     *
+     * @param array<string,mixed> $zeile
+     * @return list<string>
+     */
+    private function TransitRichtungen(array $zeile): array
+    {
+        return array_values(array_filter(
+            array_map('trim', explode(',', (string)($zeile['direction'] ?? ''))),
+            static fn(string $r): bool => $r !== ''
+        ));
+    }
+
     private function TransitZahl(string $feld, int $vorgabe): int
     {
         $cfg = $this->TransitKonfiguration();
@@ -136,8 +151,12 @@ trait TransitStore
         if ($art === 'stop') {
             // Die Anzahl gehört MIT hinein: wer sie erhöht, bekäme sonst bis zum
             // nächsten fälligen Lauf die alte, kürzere Antwort zu sehen.
+            // Der Richtungsfilter als Merker ebenso: mit ihm wird großzügiger
+            // geholt, und wer ihn setzt, soll nicht bis zum nächsten Lauf die
+            // alte, nach dem Sieben halbe Antwort sehen.
             return 'stop:' . trim((string)($zeile['stopId'] ?? ''))
-                 . ':' . max(1, (int)($zeile['limit'] ?? 6));
+                 . ':' . max(1, (int)($zeile['limit'] ?? 6))
+                 . ($this->TransitRichtungen($zeile) !== [] ? ':r' : '');
         }
         /* Der AUFGELOESTE Punkt gehört in den Schlüssel, nicht das Feld: wer
            die Markierung auf der Karte verschiebt, hat eine andere Strecke und
@@ -317,7 +336,10 @@ trait TransitStore
                UNSORTIERT und mit bereits abgefahrenen Verbindungen darin (am
                11.09.2026 gemessen). Was davon übrig bleibt, entscheidet erst
                das Rechenwerk. */
-            $antwort = Efa::Abfahrten($stopId, max(1, (int)($z['limit'] ?? 8)) + 8);
+            /* Mit Richtungsfilter fällt etwa die Hälfte weg — dann doppelt holen,
+               sonst bliebe die Tafel nach dem Sieben zu kurz. */
+            $faktor  = $this->TransitRichtungen($z) !== [] ? 2 : 1;
+            $antwort = Efa::Abfahrten($stopId, max(1, (int)($z['limit'] ?? 8)) * $faktor + 8);
             $bestand['entries'][$key] = $this->TransitEintrag(
                 $bestand['entries'][$key] ?? [], $antwort, $jetzt,
                 static fn(array $daten): array => ['raw' => $daten]
@@ -602,7 +624,8 @@ trait TransitStore
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
                 'departures' => TransitCalc::Abfahrten($roh, $jetzt,
-                    max(0, (int)($z['walk'] ?? 0)), $linien, max(1, (int)($z['limit'] ?? 8))),
+                    max(0, (int)($z['walk'] ?? 0)), $linien, max(1, (int)($z['limit'] ?? 8)),
+                    $this->TransitRichtungen($z)),
             ];
         }
 
