@@ -126,7 +126,7 @@ trait SymconDoku
      */
     private function DokuBaubar(): bool
     {
-        return trim($this->ReadPropertyString('AiOpenAIKey')) !== '';
+        return trim((string) $this->AiProp('AiOpenAIKey')) !== '';
     }
 
     /** Beim Start (und nach jedem Reload) den Aufbau anstoßen, falls nötig. */
@@ -357,7 +357,7 @@ trait SymconDoku
      */
     private function DokuEinbetten(array $texte): ?array
     {
-        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '' || $texte === []) {
             return null;
         }
@@ -843,7 +843,7 @@ trait SymconDoku
     private function DokuAntwortFormulieren(string $frage, string $auszug): string
     {
         $modell = $this->DokuLeserModell();
-        $key    = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key    = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($modell === '' || $key === '' || trim($auszug) === '') {
             return '';
         }

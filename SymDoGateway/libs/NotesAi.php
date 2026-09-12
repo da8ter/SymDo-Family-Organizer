@@ -30,7 +30,7 @@ trait NotesAi
     private function NotesAiAllowed(): bool
     {
         try {
-            if (!$this->ReadPropertyBoolean('AiEnabled')) {
+            if (!(bool) $this->AiProp('AiEnabled')) {
                 return false;
             }
         } catch (Throwable $e) {

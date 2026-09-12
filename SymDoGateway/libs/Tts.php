@@ -273,8 +273,8 @@ trait Tts
             return $this->TtsSetting('TtsAzureKey', '') !== ''
                 && $this->TtsSetting('TtsAzureRegion', '') !== '';
         }
-        return $this->ReadPropertyString('AiProvider') === 'openai'
-            && trim($this->ReadPropertyString('AiOpenAIKey')) !== ''
+        return (string) $this->AiProp('AiProvider') === 'openai'
+            && trim((string) $this->AiProp('AiOpenAIKey')) !== ''
             && true;
     }
 
@@ -846,7 +846,7 @@ trait Tts
         if ($this->TtsProvider() === 'polly') {
             return $this->TtsRequestPolly($text, $stimme, $anweisung, $format);
         }
-        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '') {
             return '';
         }

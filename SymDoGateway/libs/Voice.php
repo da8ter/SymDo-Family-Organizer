@@ -293,7 +293,7 @@ trait Voice
         return $this->VoiceEnabledProp()
             && $this->AiPrivacyAccepted()
             && (bool)@$this->ReadAttributeBoolean('VoicePrivacyAccepted')
-            && trim($this->ReadPropertyString('AiOpenAIKey')) !== '';
+            && trim((string) $this->AiProp('AiOpenAIKey')) !== '';
     }
 
     /**
@@ -473,7 +473,7 @@ trait Voice
         if ($zu !== null) {
             return $zu;
         }
-        if (trim($this->ReadPropertyString('AiOpenAIKey')) === '') {
+        if (trim((string) $this->AiProp('AiOpenAIKey')) === '') {
             return $this->VoiceErr('ai_not_configured', $this->Translate('No OpenAI API key configured.'));
         }
         $rest = $this->VoiceBudgetLeft();
@@ -642,7 +642,7 @@ trait Voice
     /** @return array<string,mixed> */
     private function VoiceMintSecret(int $seconds, string $userId = ''): array
     {
-        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '') {
             return $this->VoiceErr('ai_not_configured', $this->Translate('No OpenAI API key configured.'));
         }
@@ -697,7 +697,7 @@ trait Voice
     /** Auflegen beim Anbieter — best effort, ein toter Anruf antwortet mit Fehler und ist trotzdem tot. */
     private function VoiceHangup(string $callId): void
     {
-        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '' || $callId === '') {
             return;
         }

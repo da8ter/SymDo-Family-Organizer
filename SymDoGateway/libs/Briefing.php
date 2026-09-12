@@ -221,7 +221,7 @@ trait Briefing
     private function BriefingIsEnabled(): bool
     {
         return (bool)$this->BriefingProp('BriefingEnabled', false)
-            && $this->ReadPropertyBoolean('AiEnabled')
+            && (bool) $this->AiProp('AiEnabled')
             && $this->AiPrivacyAccepted();
     }
 

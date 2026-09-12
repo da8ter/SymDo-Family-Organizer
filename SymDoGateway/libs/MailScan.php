@@ -2100,7 +2100,7 @@ trait MailScan
     private function MailIsEnabled(): bool
     {
         return (bool)$this->MailProp('MailEnabled', false)
-            && $this->ReadPropertyBoolean('AiEnabled')
+            && (bool) $this->AiProp('AiEnabled')
             && $this->AiPrivacyAccepted();
     }
 
@@ -2112,7 +2112,7 @@ trait MailScan
     private function MailHookIsEnabled(): bool
     {
         return (bool)$this->MailProp('MailHookEnabled', false)
-            && $this->ReadPropertyBoolean('AiEnabled')
+            && (bool) $this->AiProp('AiEnabled')
             && $this->AiPrivacyAccepted();
     }
 

@@ -315,6 +315,53 @@ trait AppCore
         }
     }
 
+    /**
+     * Die Instanz, deren KONFIGURATION gilt. Im Gateway die eigene; ein
+     * ausgelagerter Scanner ueberschreibt das mit der Gateway-ID, damit er
+     * dieselben Zugaenge (KI-Schluessel, Scan-Einstellungen) benutzt, ohne sie
+     * zu duplizieren. Kern des Umbaus „Gateway frei halten".
+     */
+    protected function KonfigID(): int
+    {
+        return $this->InstanceID;
+    }
+
+    /**
+     * Die Instanz, unter der der BESTAND liegt (Medienobjekte, Kategorien,
+     * Zwischendateien). Im Gateway die eigene; der Scanner zeigt hierher, damit
+     * ein von ihm angelegtes Medienobjekt am selben Ort landet wie bisher.
+     */
+    protected function BestandID(): int
+    {
+        return $this->InstanceID;
+    }
+
+    /** @var array<string,mixed>|null Zwischenspeicher der Fremdkonfiguration je Aufruf. */
+    private ?array $konfigCache = null;
+
+    /**
+     * Eine Eigenschaft der KonfigID lesen — die eine Stelle, ueber die aller
+     * Zugriff auf die Gateway-Konfiguration laeuft.
+     *
+     * Fuer die eigene Instanz `IPS_GetProperty` (sieht gestagte Werte sofort,
+     * wie `LoadUsers`); fuer eine fremde Instanz einmal `IPS_GetConfiguration`
+     * und danach aus dem Zwischenspeicher. Der Cache lebt nur, solange dieser
+     * PHP-Aufruf laeuft — Symcon baut je Hook/Aktion einen frischen Kontext,
+     * also nie ein veralteter Wert ueber Aufrufe hinweg.
+     */
+    protected function AiProp(string $name): mixed
+    {
+        $ziel = $this->KonfigID();
+        if ($ziel === $this->InstanceID) {
+            return @IPS_GetProperty($ziel, $name);
+        }
+        if ($this->konfigCache === null) {
+            $roh = json_decode((string) @IPS_GetConfiguration($ziel), true);
+            $this->konfigCache = is_array($roh) ? $roh : [];
+        }
+        return $this->konfigCache[$name] ?? null;
+    }
+
     private function LoadUsers(): array
     {
         // IPS_GetProperty statt ReadPropertyString: sieht per API gestagte
@@ -576,7 +623,7 @@ trait AppCore
         $this->SetFormElementProperty($form['elements'], 'PairedDevicesList', 'values', $this->BuildDeviceRows());
 
         // KI-Formular: nur die Felder des gewählten Anbieters zeigen (Anfangszustand).
-        foreach ($this->AiFieldVisibility($this->ReadPropertyString('AiProvider')) as $name => $visible) {
+        foreach ($this->AiFieldVisibility((string) $this->AiProp('AiProvider')) as $name => $visible) {
             $this->SetFormElementProperty($form['elements'], $name, 'visible', $visible);
         }
 
@@ -718,7 +765,7 @@ trait AppCore
             }
             // Widerruf schaltet die KI ab: sie ohne Einwilligung weiterlaufen zu
             // lassen wäre genau das, was die Sperre verhindern soll.
-            if (!$accepted && $this->ReadPropertyBoolean('AiEnabled')) {
+            if (!$accepted && (bool) $this->AiProp('AiEnabled')) {
                 IPS_SetProperty($this->InstanceID, 'AiEnabled', false);
                 IPS_ApplyChanges($this->InstanceID);
             }
@@ -1211,7 +1258,7 @@ trait AppCore
         $localBase = rtrim(trim($this->ReadPropertyString('LocalHttpsUrl')), '/');
         $symdo = ['apiBase' => '/hook/' . self::HOOK_PATH . '/v' . self::API_VERSION];
         // KI-Schalter: die Web-App blendet die KI-Buttons aus, wenn deaktiviert.
-        $symdo['aiEnabled'] = $this->ReadPropertyBoolean('AiEnabled');
+        $symdo['aiEnabled'] = (bool) $this->AiProp('AiEnabled');
         // Sichtbare Bereiche. Die Schalter stehen im Formular der SymDoWebApp-Kachel,
         // weil sie deren Oberfläche betreffen — diese Seite hier IST diese Oberfläche.
         // Gelesen mit sicherem Standard: ohne Kachel-Instanz gilt „alles sichtbar",

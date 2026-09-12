@@ -336,7 +336,7 @@ trait AiExtract
             return json_encode($this->VoiceHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
-        if (!$this->ReadPropertyBoolean('AiEnabled')) {
+        if (!(bool) $this->AiProp('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }
 
@@ -492,18 +492,18 @@ trait AiExtract
      */
     private function AiTranscribe(string $bytes, string $mime): array
     {
-        $openAiKey = trim($this->ReadPropertyString('AiOpenAIKey'));
-        $lokalBase = rtrim(trim($this->ReadPropertyString('AiLocalBaseUrl')), '/');
+        $openAiKey = trim((string) $this->AiProp('AiOpenAIKey'));
+        $lokalBase = rtrim(trim((string) $this->AiProp('AiLocalBaseUrl')), '/');
         if ($openAiKey !== '') {
             $url     = 'https://api.openai.com/v1/audio/transcriptions';
             $modell  = self::AI_TRANSCRIBE_MODEL;
             $kopfAuth = ['Authorization: Bearer ' . $openAiKey];
-        } elseif ($this->ReadPropertyString('AiProvider') === 'local' && $lokalBase !== '') {
+        } elseif ((string) $this->AiProp('AiProvider') === 'local' && $lokalBase !== '') {
             // Dieselbe Basis-Ergaenzung wie beim Chat: das Formular fragt nach
             // der BASIS, die Server bedienen /v1.
             $url    = (preg_match('#/v\d+$#', $lokalBase) === 1 ? $lokalBase : $lokalBase . '/v1') . '/audio/transcriptions';
             $modell = 'whisper-1';
-            $lokalKey = trim($this->ReadPropertyString('AiLocalKey'));
+            $lokalKey = trim((string) $this->AiProp('AiLocalKey'));
             $kopfAuth = $lokalKey !== '' ? ['Authorization: Bearer ' . $lokalKey] : [];
         } else {
             return ['ok' => false, 'code' => 'ai_not_configured',
@@ -1007,7 +1007,7 @@ trait AiExtract
         if ($name === '') {
             return ['ok' => false, 'code' => 'invalid_payload', 'message' => $this->Translate('No dish name provided.'), 'status' => 400];
         }
-        $key = trim($this->ReadPropertyString('AiOpenAIKey'));
+        $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '') {
             return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 503];
         }
@@ -1132,14 +1132,14 @@ trait AiExtract
     /** @return array ok:true+text | ok:false+code+message+status */
     private function AiRunProviderCall(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
     {
-        $provider = $this->ReadPropertyString('AiProvider');
+        $provider = (string) $this->AiProp('AiProvider');
         // Ein Reasoning-Modell verbraucht sein Budget zuerst im Denken (gemessen
         // lokal: 794 von 990 Tokens gingen in den Denktext) — ein kleiner Deckel
         // brachte regelmaessig eine leere Antwort mit finish_reason „length".
         $maxTokens = self::AI_MAX_TOKENS;
 
         if ($provider === 'anthropic') {
-            $key = trim($this->ReadPropertyString('AiAnthropicKey'));
+            $key = trim((string) $this->AiProp('AiAnthropicKey'));
             if ($key === '') {
                 return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No Anthropic API key configured.'), 'status' => 400];
             }
@@ -1201,7 +1201,7 @@ trait AiExtract
                 $pdfBase64 = null;   // ab hier ist es Text bzw. sind es Bilder
             }
             if ($provider === 'openai') {
-                $key   = trim($this->ReadPropertyString('AiOpenAIKey'));
+                $key   = trim((string) $this->AiProp('AiOpenAIKey'));
                 $url   = 'https://api.openai.com/v1/chat/completions';
                 // PDF braucht ein Modell mit Datei-Input; gpt-4o kann kein PDF.
                 $model = ($pdfBase64 !== null) ? self::AI_OPENAI_PDF_MODEL : self::AI_OPENAI_MODEL;
@@ -1212,9 +1212,9 @@ trait AiExtract
                     return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 400];
                 }
             } else {
-                $key     = trim($this->ReadPropertyString('AiLocalKey'));
-                $baseUrl = rtrim(trim($this->ReadPropertyString('AiLocalBaseUrl')), '/');
-                $model   = trim($this->ReadPropertyString('AiLocalModel'));
+                $key     = trim((string) $this->AiProp('AiLocalKey'));
+                $baseUrl = rtrim(trim((string) $this->AiProp('AiLocalBaseUrl')), '/');
+                $model   = trim((string) $this->AiProp('AiLocalModel'));
                 if ($baseUrl === '' || $model === '') {
                     return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('Local server URL and model must be configured.'), 'status' => 400];
                 }
@@ -2181,7 +2181,7 @@ trait AiExtract
 
     private function AiIsEnabled(): bool
     {
-        if ($this->ReadPropertyBoolean('AiEnabled')) {
+        if ((bool) $this->AiProp('AiEnabled')) {
             return true;
         }
         $this->SendApiError('ai_disabled', $this->Translate('AI analysis is disabled.'), 403);
