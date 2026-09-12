@@ -1336,23 +1336,19 @@ html[data-symdo-theme="dark"] .member-bar {
    <svg>, und die Regel darunter trifft nur img/span. */
 .member-bar .avatar-btn.familie-btn {
   display: flex; align-items: center; justify-content: center;
-  /* WEISS (auf Wunsch), nicht die abgetoente Kartenfarbe: der Knopf steht auf
-     der halbtransparenten Pille, und nur ein deckendes Weiss macht ihn zu
-     einem Knopf statt zu einem Schatten. Das Symbol traegt die Akzentfarbe. */
-  background: #fff;
-  color: var(--accent);
+  /* Akzentfarbene Flaeche, weisses Haus (auf Wunsch, 12.09.2026). Vorher war
+     es umgekehrt und nur der gewaehlte Zustand trug den Akzent — jetzt ist der
+     Knopf immer als solcher zu sehen, und die Auswahl markiert wie bei den
+     Gesichtern der Ring darum. */
+  background: var(--accent);
+  color: #fff;
   border: 0;
 }
 .member-bar .avatar-btn.familie-btn i,
 .member-bar .avatar-btn.familie-btn svg { width: 18px; height: 18px; }
-/* Gewaehlt: die Flaeche traegt die Auswahl, nicht ein Ring um sie herum (auf
-   Wunsch). Beim Haus geht das, weil es kein Foto ist — bei einem Gesicht waere
-   eine Einfaerbung unlesbar, deshalb behalten die Mitglieder ihren Ring. */
-.member-bar .avatar-btn.familie-btn.selected {
-  background: var(--accent);
-  color: #fff;
-}
-.member-bar .avatar-btn.familie-btn.selected::after { content: none; }
+/* Gewaehlt: derselbe Ring wie bei den Gesichtern. Er sitzt 3px AUSSERHALB der
+   Flaeche, mit der Pille dazwischen — deshalb bleibt er auch auf dem
+   akzentfarbenen Haus-Knopf sichtbar. */
 /* KEINE Sonderbehandlung beim Einklappen (auf Wunsch): das Haus ist ein Knopf
    der Leiste wie jeder andere und schiebt sich mit zusammen. Es steht als
    erstes Kind, also bleibt es stehen und die Mitglieder gleiten darueber —
