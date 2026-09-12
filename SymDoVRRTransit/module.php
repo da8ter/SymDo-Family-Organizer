@@ -65,6 +65,8 @@ class SymDoVRRTransit extends IPSModuleStrict
         }
 
         $this->GatewayEinmaligVerbinden();
+        // Nach einem Kernelstart ist der Timer aus, der gemerkte Wert aber noch da.
+        $this->TransitTaktVergessen();
         $this->TransitTaktSetzen(time());
         $this->PushState();
     }
@@ -92,8 +94,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             case 'GetState':
                 /* Die Kachel fragt beim Öffnen, und das Gateway stößt seine
                    Kacheln hiermit an. Beides heißt: jemand sieht hin. */
-                $this->TransitGesehen($jetzt);
-                $this->TransitTaktSetzen($jetzt);
+                $this->TransitTaktSetzen($jetzt, $this->TransitGesehen($jetzt));
                 $this->PushState();
                 return;
 
@@ -122,8 +123,7 @@ class SymDoVRRTransit extends IPSModuleStrict
     public function GetBoard(): string
     {
         $jetzt = time();
-        $this->TransitGesehen($jetzt);
-        $this->TransitTaktSetzen($jetzt);
+        $this->TransitTaktSetzen($jetzt, $this->TransitGesehen($jetzt));
         return (string)json_encode($this->TransitPayload($jetzt),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }

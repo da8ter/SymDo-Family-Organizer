@@ -63,6 +63,9 @@ trait TransitStore
         $this->RegisterAttributeInteger('Fails', 0);
         $this->RegisterAttributeInteger('FailAt', 0);
         $this->RegisterAttributeBoolean('ParentMigrated', false);
+        /* Der zuletzt GESETZTE Takt. Ohne ihn wird der Timer verhungert:
+           siehe TransitTaktSetzen(). -1 heißt „noch nie gesetzt". */
+        $this->RegisterAttributeInteger('TimerMs', -1);
 
         $this->RegisterTimer('Refresh', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Refresh\', 0);');
     }
@@ -213,12 +216,18 @@ trait TransitStore
      * Geschrieben wird nur, wenn sich der Wert spürbar ändert: die Web-App fragt
      * im Sekundentakt, und jedes Schreiben wäre ein Schreibzugriff für nichts.
      */
-    private function TransitGesehen(int $jetzt): void
+    /**
+     * „Jemand sieht hin." Gibt zurück, ob vorher NIEMAND hinsah — dann ist der
+     * Bestand womöglich von gestern, und der Aufrufer laesst gleich holen
+     * statt erst in einer Minute.
+     */
+    private function TransitGesehen(int $jetzt): bool
     {
-        if ($jetzt - (int)@$this->ReadAttributeInteger('LastSeen') < 30) {
-            return;
+        $kalt = !$this->TransitZuschauer($jetzt);
+        if ($kalt || $jetzt - (int)@$this->ReadAttributeInteger('LastSeen') >= 30) {
+            @$this->WriteAttributeInteger('LastSeen', $jetzt);
         }
-        @$this->WriteAttributeInteger('LastSeen', $jetzt);
+        return $kalt;
     }
 
     private function TransitZuschauer(int $jetzt): bool
@@ -233,12 +242,7 @@ trait TransitStore
         if ($stunde < self::MORGEN_VON || $stunde >= self::MORGEN_BIS) {
             return false;
         }
-        foreach ($this->TransitZeilen('Routes') as $z) {
-            if ((string)($z['mode'] ?? '') === 'school') {
-                return true;
-            }
-        }
-        return false;
+        return $this->TransitSchulwegVorhanden();
     }
 
     /**
@@ -248,11 +252,26 @@ trait TransitStore
      * zugesicherte Verfügbarkeit unhöflich — und nutzlos, solange niemand
      * hinsieht.
      */
-    private function TransitTaktSetzen(int $jetzt): void
+    private function TransitTaktSetzen(int $jetzt, bool $sofort = false): void
     {
+        if ($sofort) {
+            /* Erster Blick nach einer Pause: der Bestand kann von gestern sein.
+               Einmal kurz anschlagen, damit die zweite Frage der App — eine
+               Minute später — schon das Frische bekommt. Geholt wird weiter im
+               eigenen Thread, nicht im Hook des Gateways. */
+            $this->TransitTimer(1000);
+            return;
+        }
         if ($this->TransitZuschauer($jetzt)) {
             $ms = self::TAKT_S * 1000;
-        } elseif ($this->TransitMorgenlauf($jetzt)) {
+        } elseif ($this->TransitSchulwegVorhanden()) {
+            /* Mit eingerichtetem Schulweg NIE ganz aus: der Morgenlauf kann
+               sich sonst nicht selbst wecken. Ein Timer auf 0 feuert nicht
+               mehr, und nichts setzt ihn um 5 Uhr wieder — gemessen am
+               12.09.2026: nach einem Kernel-Neustart am Abend stand der
+               Schulweg beim ersten Blick am Morgen noch auf dem Stand der
+               Nacht. Der langsame Schlag kostet nichts: ohne Zuschauer und
+               außerhalb des Morgenfensters kehrt TransitAbrufen sofort um. */
             $ms = self::MORGEN_TAKT_S * 1000;
         } else {
             $ms = 0;
@@ -261,7 +280,48 @@ trait TransitStore
         if ($ms === 0 && $this->TransitGesperrt($jetzt)) {
             $ms = self::MORGEN_TAKT_S * 1000;
         }
+        $this->TransitTimer($ms);
+    }
+
+    /**
+     * Den Takt setzen — aber NUR, wenn er sich ändert.
+     *
+     * `SetTimerInterval` startet in Symcon 9.1 die Uhr neu, auch beim selben
+     * Wert. Und gesetzt wird er bei JEDEM Blick: die Kachel und die App fragen
+     * im Minutentakt, jede Frage lief durch TransitTaktSetzen. Der Timer stand
+     * damit ständig wieder auf 60 Sekunden und feuerte nie — gemessen am
+     * 12.09.2026: sechs Abrufe im 50-Sekunden-Takt, vier Minuten lang
+     * unveränderte Abrufzeit. Wer hinsah, verhinderte das Nachladen; der
+     * Schulweg blieb auf „keine Verbindung gefunden" stehen.
+     *
+     * Der zuletzt gesetzte Wert steht im Attribut. Nach einem Kernel-Neustart
+     * steht dort noch der alte, der Timer selbst ist aber aus — deshalb setzt
+     * ApplyChanges ihn über TransitTaktVergessen() zurück.
+     */
+    private function TransitTimer(int $ms): void
+    {
+        if ((int)@$this->ReadAttributeInteger('TimerMs') === $ms) {
+            return;
+        }
         @$this->SetTimerInterval('Refresh', $ms);
+        @$this->WriteAttributeInteger('TimerMs', $ms);
+    }
+
+    /** Nach einem Kernelstart weiß niemand mehr, was der Timer tut. */
+    private function TransitTaktVergessen(): void
+    {
+        @$this->WriteAttributeInteger('TimerMs', -1);
+    }
+
+    /** Ist überhaupt ein Schulweg eingerichtet? */
+    private function TransitSchulwegVorhanden(): bool
+    {
+        foreach ($this->TransitZeilen('Routes') as $z) {
+            if ((string)($z['mode'] ?? '') === 'school') {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------
