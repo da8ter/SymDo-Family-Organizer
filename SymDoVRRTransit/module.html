@@ -542,11 +542,23 @@ function handleMessage(daten) {
 }
 window.handleMessage = handleMessage;
 
-/* Beim Öffnen einmal melden: das setzt drüben den Zuschauer-Stempel und damit
-   den Minutentakt in Gang. Ohne das stünde die Kachel still, bis der nächste
-   Lauf zufällig vorbeikommt. */
+/* Melden, dass jemand hinsieht — beim Öffnen und dann weiter im Minutentakt.
+   Der Stempel drüben verfällt nach drei Minuten, und ohne ihn hört das Modul
+   auf, bei der Fahrplanauskunft zu fragen: gemessen am 12.09.2026 stand die
+   Tafel nach einer einzigen Meldung 2:50 nach dem letzten Abruf still,
+   während die Kachel offen war. Das ist der EINZIGE Zyklus hier — die Daten
+   selbst kommen geschoben (UpdateVisualizationValue → handleMessage).
+
+   Nur bei sichtbarer Kachel: eine, die hinter einer anderen Seite liegt, soll
+   keine fremde Schnittstelle beschäftigen. Und die Antwort auf jede Meldung
+   zeichnet mit, was ohnehin nötig ist — die Minuten laufen weiter. */
 if (typeof requestAction === 'function') {
-  try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ }
+  const melden = () => { try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ } };
+  melden();
+  setInterval(() => { if (document.visibilityState === 'visible') melden(); }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') melden();
+  });
 }
 </script>
 </body>
