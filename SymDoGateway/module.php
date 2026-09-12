@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
+require_once __DIR__ . '/libs/Belegung.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
@@ -46,6 +47,7 @@ class SymDoGateway extends IPSModuleStrict
 {
     use OAuthHelper;
     use AppCore;
+    use Belegung;
     use MailScan;
     use MailFetch;
     use CalendarBridge;
@@ -282,37 +284,6 @@ class SymDoGateway extends IPSModuleStrict
         parent::RequestAction($Ident, $Value);
     }
 
-    /**
-     * Ein Messpunkt fuer die Belegung dieser Instanz.
-     *
-     * Symcon fuehrt je Instanz genau EINE Sache zur Zeit aus — am 11.09.2026
-     * gemessen: 30 gleichzeitige Hook-Abrufe brauchten 874 ms statt 31, der
-     * Hook einer fremden Instanz blieb dabei unbeeindruckt (2,7 -> 3,0 ms).
-     * Jede lange Arbeit hier ist deshalb eine Wartezeit fuer alle anderen.
-     * Diese Zeile sagt, WER wie lange belegt hat.
-     *
-     * Aus, solange die Markierungsdatei fehlt: eine Messung gehoert nicht in
-     * den Dauerbetrieb. Bewusst eine Datei und keine Eigenschaft — die gaebe es
-     * erst nach einem Kernel-Neustart, und ein Schreibzugriff auf ein noch
-     * nicht registriertes Attribut zerlegt im Hook die HTTP-Antwort.
-     */
-    private function Belegung(string $art, string $name, float $start): void
-    {
-        $marke = '/var/lib/symcon/symdo-messung.an';
-        if (!@is_file($marke)) {
-            return;
-        }
-        $datei = '/var/lib/symcon/symdo-belegung.log';
-        // Deckel gegen eine Messung, die jemand anzuschalten vergisst.
-        if ((int)@filesize($datei) > 20 * 1024 * 1024) {
-            return;
-        }
-        $dauer = (microtime(true) - $start) * 1000;
-        @file_put_contents($datei, sprintf(
-            "%s\t%d\t%s\t%s\t%.1f\n",
-            date('Y-m-d H:i:s'), $this->InstanceID, $art, $name, $dauer
-        ), FILE_APPEND);
-    }
 
     /**
      * Die App-Seite hängt an festen Hook-Pfaden, kann also nur einmal im System
