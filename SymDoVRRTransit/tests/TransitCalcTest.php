@@ -116,6 +116,53 @@ pruefe('Richtung und Linie zusammen',
     array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['RE4', '2203'], 0, ['Hbf']), 'line'),
     ['2203', 'RE4']);
 
+// ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
+pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');
+pruefe('Zeitwaehler als JSON-Text', TransitCalc::ZeitText('{"hour":16,"minute":5,"second":0}'), '16:05');
+pruefe('alter Text mit Doppelpunkt', TransitCalc::ZeitText('7:05'), '07:05');
+pruefe('alter Text ohne Minuten', TransitCalc::ZeitText('8'), '08:00');
+pruefe('alter Text mit Punkt', TransitCalc::ZeitText('08.30'), '08:30');
+pruefe('leer bleibt leer', [TransitCalc::ZeitText(''), TransitCalc::ZeitText('Unsinn'), TransitCalc::ZeitText([])], ['', '', '']);
+pruefe('unmoegliche Werte werden gekappt', TransitCalc::ZeitText(['hour' => 99, 'minute' => 88]), '23:59');
+pruefe('Zelle zurueck', TransitCalc::ZeitFeld('07:50'), '{"hour":7,"minute":50,"second":0}');
+pruefe('Zelle aus Unsinn ist Mitternacht', TransitCalc::ZeitFeld('x'), '{"hour":0,"minute":0,"second":0}');
+pruefe('und wieder zurueck', TransitCalc::ZeitText(TransitCalc::ZeitFeld('16:05')), '16:05');
+
+// ── Eigene Namen an den Enden ──────────────────────────────────────────────
+$fahrten = TransitCalc::Verbindungen(fixture('strecke-umstieg'), 3);
+$benannt = TransitCalc::EndenBenennen($fahrten, 'Zuhause', 'Schule');
+pruefe('erstes Ende umbenannt', $benannt[0]['legs'][0]['from'], 'Zuhause');
+pruefe('letztes Ende umbenannt', $benannt[0]['legs'][count($benannt[0]['legs']) - 1]['to'], 'Schule');
+pruefe('Umstieg dazwischen bleibt, wie er heisst',
+    $benannt[0]['legs'][1]['from'], $fahrten[0]['legs'][1]['from']);
+pruefe('ohne Namen bleibt alles gleich', TransitCalc::EndenBenennen($fahrten, '', ''), $fahrten);
+$nurZiel = TransitCalc::EndenBenennen($fahrten, '', 'Schule');
+pruefe('nur das Ziel benannt',
+    [$nurZiel[0]['legs'][0]['from'], $nurZiel[0]['legs'][count($nurZiel[0]['legs']) - 1]['to']],
+    [$fahrten[0]['legs'][0]['from'], 'Schule']);
+pruefe('leere Verbindungsliste', TransitCalc::EndenBenennen([], 'a', 'b'), []);
+
+// ── Adressen und Umkreis ───────────────────────────────────────────────────
+$adresse = ['locations' => [
+    ['type' => 'street', 'name' => 'Düsseldorf, Musterweg', 'coord' => [51.258054, 6.86798], 'matchQuality' => 250],
+    ['type' => 'stop', 'name' => 'Woanders', 'id' => 'de:05111:1', 'coord' => [51.1, 6.1], 'matchQuality' => 900],
+    ['type' => 'poi', 'name' => 'Ohne Koordinate', 'coord' => [0, 0], 'matchQuality' => 500],
+]];
+pruefe('Haltestellen bleiben Haltestellen',
+    array_column(TransitCalc::Haltestellen($adresse), 'name'), ['Woanders']);
+pruefe('Orte sind alles andere MIT Koordinate',
+    array_map(static fn(array $o): array => [$o['name'], $o['lat'], $o['lon']], TransitCalc::Orte($adresse)),
+    [['Düsseldorf, Musterweg', 51.258054, 6.86798]]);
+$nah = ['locations' => [
+    ['type' => 'stop', 'name' => 'Weiter weg', 'id' => 'de:05111:3', 'properties' => ['distance' => 1151]],
+    ['type' => 'stop', 'name' => 'Ganz nah', 'id' => 'de:05111:2', 'properties' => ['distance' => 337]],
+    ['type' => 'street', 'name' => 'Keine Haltestelle', 'id' => 'x'],
+]];
+pruefe('Umkreis: nach Entfernung, die naechste zuerst',
+    array_map(static fn(array $h): array => [$h['name'], $h['distance']], TransitCalc::Umkreis($nah)),
+    [['Ganz nah', 337], ['Weiter weg', 1151]]);
+
+
 /* Der Fußweg ist die Zahl, die wirklich zählt: nicht „wann fährt der Zug",
    sondern „wann muss ich vom Tisch aufstehen". */
 $mitWeg = TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 25);

@@ -34,6 +34,9 @@ class SymDoVRRTransit extends IPSModuleStrict
      * `{"latitude":…,"longitude":…}` ab; 0/0 ist die Nullinsel im Atlantik und
      * heisst hier „nie gesetzt" — TransitCalc::Punkt() prueft genau darauf.
      */
+    /** Wie weit die Umkreissuche um eine Adresse schaut. */
+    private const UMKREIS_M = 1200;
+
     private const KARTE_LEER = '{"latitude":0,"longitude":0}';
 
     /**
@@ -67,6 +70,7 @@ class SymDoVRRTransit extends IPSModuleStrict
         $this->GatewayEinmaligVerbinden();
         // Nach einem Kernelstart ist der Timer aus, der gemerkte Wert aber noch da.
         $this->TransitTaktVergessen();
+        $this->TransitZeitenWandern();
         $this->TransitTaktSetzen(time());
         $this->PushState();
     }
@@ -356,18 +360,28 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
                 ['caption' => $this->Translate('From (map)'), 'name' => 'fromGeo', 'width' => '170px',
                  'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
+                /* Eigener Name fuer das Ende der Verbindung. Leer = wie bisher,
+                   also das, was die Auskunft nennt — bei einer Koordinate ist
+                   das die Adresse, und „Zuhause" liest sich besser. */
+                ['caption' => $this->Translate('From (label)'), 'name' => 'fromName', 'width' => '130px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('To'), 'name' => 'to', 'width' => '190px',
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $orte]],
                 ['caption' => $this->Translate('To (map)'), 'name' => 'toGeo', 'width' => '170px',
                  'add' => self::KARTE_LEER, 'edit' => ['type' => 'SelectLocation']],
+                ['caption' => $this->Translate('To (label)'), 'name' => 'toName', 'width' => '130px',
+                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('When'), 'name' => 'mode', 'width' => '150px',
                  'add' => 'school', 'edit' => ['type' => 'Select', 'options' => [
                      ['caption' => $this->Translate('School run (from the timetable)'), 'value' => 'school'],
                      ['caption' => $this->Translate('Leave now'), 'value' => 'dep'],
                      ['caption' => $this->Translate('Arrive by …'), 'value' => 'arr'],
                  ]]],
-                ['caption' => $this->Translate('Time'), 'name' => 'time', 'width' => '90px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Zeitwaehler statt Textfeld: „8" oder „08.00" waren erlaubt,
+                   verstanden hat das Modul nur „08:00" — und schwieg sonst.
+                   Gilt nur fuer „Ankommen bis …"; 00:00 heisst „nicht gesetzt". */
+                ['caption' => $this->Translate('Time'), 'name' => 'time', 'width' => '110px',
+                 'add' => TransitCalc::ZeitFeld('08:00'), 'edit' => ['type' => 'SelectTime']],
                 ['caption' => $this->Translate('Buffer (min)'), 'name' => 'buffer', 'width' => '100px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
@@ -433,7 +447,28 @@ class SymDoVRRTransit extends IPSModuleStrict
                 $this->Translate('The journey planner is not answering: ') . (string)($antwort['message'] ?? ''));
             return;
         }
-        $treffer = TransitCalc::Haltestellen((array)($antwort['data'] ?? []), 20);
+        $daten   = (array)($antwort['data'] ?? []);
+        $treffer = TransitCalc::Haltestellen($daten, 20);
+        $hinweis = count($treffer) . $this->Translate(' hits, the best one is at the top.');
+
+        if ($treffer === []) {
+            /* Keine Haltestelle dieses Namens — aber vielleicht eine ADRESSE.
+               Die EFA kennt „Duesseldorf, Kissbergweg" als Strasse mit
+               Koordinate; was dort haelt, sagt erst die Umkreissuche. Genau
+               das erwartet, wer seine eigene Strasse eintippt. */
+            $ort = TransitCalc::Orte($daten, 1)[0] ?? null;
+            if ($ort !== null) {
+                $nah = Efa::Umkreis($ort['lat'], $ort['lon'], self::UMKREIS_M, 10);
+                if (($nah['ok'] ?? false) === true) {
+                    $treffer = TransitCalc::Umkreis((array)($nah['data'] ?? []), 10);
+                }
+                $hinweis = $treffer === []
+                    ? $this->Translate('Nothing stops near ') . $ort['name'] . '.'
+                    : $this->Translate('No stop of that name. Nearest to ') . $ort['name']
+                      . $this->Translate(', closest first.');
+            }
+        }
+
         if ($treffer === []) {
             $this->UpdateFormField('StopStatus', 'caption', $this->Translate('No stop found.'));
             $this->UpdateFormField('StopHit', 'options',
@@ -442,12 +477,14 @@ class SymDoVRRTransit extends IPSModuleStrict
         }
         $optionen = [];
         foreach ($treffer as $t) {
-            $optionen[] = ['caption' => $t['name'] . '  (' . $t['id'] . ')', 'value' => $t['id']];
+            // Die Entfernung nur bei der Umkreissuche — sonst gibt es keine.
+            $weite = isset($t['distance']) && (int)$t['distance'] > 0
+                ? '  (' . (int)$t['distance'] . ' m)' : '';
+            $optionen[] = ['caption' => $t['name'] . $weite . '  (' . $t['id'] . ')', 'value' => $t['id']];
         }
         $this->UpdateFormField('StopHit', 'options', json_encode($optionen));
         $this->UpdateFormField('StopHit', 'value', $treffer[0]['id']);
-        $this->UpdateFormField('StopStatus', 'caption',
-            count($treffer) . $this->Translate(' hits, the best one is at the top.'));
+        $this->UpdateFormField('StopStatus', 'caption', $hinweis);
     }
 
     /**

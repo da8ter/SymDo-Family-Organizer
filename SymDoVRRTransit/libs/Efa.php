@@ -55,6 +55,39 @@ final class Efa
             'language'     => 'de',
             'type_sf'      => 'any',
             'name_sf'      => $suche,
+            /* Ohne diese Angabe kommen die Koordinaten in Mercator („5332932,
+               764540") — unbrauchbar fuer die Umkreissuche und nicht als
+               Fehler erkennbar, weil es Zahlen sind. */
+            'coordOutputFormat' => 'WGS84[dd.ddddd]',
+        ]);
+    }
+
+    /**
+     * Haltestellen im Umkreis einer Koordinate.
+     *
+     * Fuer Adressen: die EFA kennt „Duesseldorf, Kissbergweg" als Strasse, aber
+     * nicht als Haltestelle. Mit ihrer Koordinate findet diese Abfrage, was in
+     * der Naehe haelt — und zwar mit Entfernung in Metern.
+     *
+     * Achtung, wie ueberall bei der EFA: LAENGE:BREITE, andersherum als jede
+     * Karten-App es zeigt.
+     *
+     * @return array{ok:bool,data?:array<string,mixed>,message?:string}
+     */
+    public static function Umkreis(float $breite, float $laenge, int $radius = 1200, int $anzahl = 10): array
+    {
+        if (abs($breite) < 0.00001 && abs($laenge) < 0.00001) {
+            return ['ok' => false, 'message' => 'Koordinate fehlt'];
+        }
+        return self::Holen('XML_COORD_REQUEST', [
+            'outputFormat' => 'rapidJSON',
+            'language'     => 'de',
+            'coordOutputFormat' => 'WGS84[dd.ddddd]',
+            'coord'        => sprintf('%.5f:%.5f:WGS84[dd.ddddd]', $laenge, $breite),
+            'type_1'       => 'STOP',
+            'radius_1'     => (string)max(100, min(5000, $radius)),
+            'inclFilter'   => '1',
+            'max'          => (string)max(1, min(30, $anzahl)),
         ]);
     }
 

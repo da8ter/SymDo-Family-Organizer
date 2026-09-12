@@ -169,7 +169,8 @@ trait TransitStore
             TransitCalc::Punkt($zeile, 'to'),
             trim((string)($zeile['mode'] ?? 'dep')),
             trim((string)($zeile['member'] ?? '')),
-            trim((string)($zeile['time'] ?? '')),
+            // Der Zeitwaehler legt ein Objekt ab — als Text waere das „Array".
+            TransitCalc::ZeitText($zeile['time'] ?? ''),
             (string)max(1, (int)($zeile['count'] ?? 4)),
         ])), 0, 12);
     }
@@ -441,7 +442,7 @@ trait TransitStore
                 $modus = $schule['mode'];
                 $wann  = $schule['targetAt'];
             } elseif ($modus === 'arr') {
-                $wann = $this->TransitUhrzeit((string)($z['time'] ?? ''), $jetzt);
+                $wann = $this->TransitUhrzeit($z['time'] ?? '', $jetzt);
             }
 
             /* Großzügiger anfragen als gezeigt wird: bei einer Ankunftsvorgabe
@@ -513,16 +514,61 @@ trait TransitStore
     }
 
     /** „07:30" am Tag von $jetzt; liegt es schon hinter uns, gilt morgen. */
-    private function TransitUhrzeit(string $hhmm, int $jetzt): int
+    private function TransitUhrzeit(mixed $wert, int $jetzt): int
     {
-        if (preg_match('/^\s*(\d{1,2}):(\d{2})\s*$/', $hhmm, $t) !== 1) {
+        $hhmm = TransitCalc::ZeitText($wert);
+        if ($hhmm === '' || $hhmm === '00:00') {
+            // Mitternacht heisst „nicht gesetzt": ankommen um 0 Uhr will niemand.
             return 0;
         }
-        $ziel = strtotime(date('Y-m-d', $jetzt) . ' ' . sprintf('%02d:%02d', (int)$t[1], (int)$t[2]));
+        $ziel = strtotime(date('Y-m-d', $jetzt) . ' ' . $hhmm);
         if ($ziel === false) {
             return 0;
         }
         return $ziel < $jetzt ? $ziel + 86400 : $ziel;
+    }
+
+    /**
+     * Einmalige Umschrift der Uhrzeit auf die Form des Zeitwaehlers.
+     *
+     * Die Spalte ist seit dem 12.09.2026 ein `SelectTime`, und die Konsole
+     * liest eine solche Zelle mit JSON.parse: in einer gewachsenen Liste stuende
+     * sonst „ungueltig", obwohl das Modul den Text noch versteht. Dieselbe
+     * Wanderung wie im Stundenplan, und genau wie dort schreibt sie nur, wenn
+     * wirklich etwas zu aendern ist — sonst liefe ApplyChanges im Kreis.
+     */
+    private function TransitZeitenWandern(): void
+    {
+        static $laeuft = false;
+        if ($laeuft) {
+            return;
+        }
+        $zeilen = $this->TransitZeilen('Routes');
+        $geaendert = false;
+        foreach ($zeilen as $i => $z) {
+            $wert = $z['time'] ?? '';
+            // Schon eine Zelle des Zeitwaehlers? Dann nichts tun.
+            if (is_string($wert) && str_starts_with(trim($wert), '{')) {
+                continue;
+            }
+            $zeilen[$i]['time'] = TransitCalc::ZeitFeld(TransitCalc::ZeitText($wert));
+            $geaendert = true;
+        }
+        if (!$geaendert) {
+            return;
+        }
+        $laeuft = true;
+        try {
+            @IPS_SetProperty($this->InstanceID, 'Routes',
+                (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+            /* Uebernehmen NACHTRAEGLICH: IPS_ApplyChanges aus ApplyChanges
+               heraus laeuft nicht. Derselbe Weg wie im Stundenplan. */
+            @$this->RegisterOnceTimer('RoutesMigrated', 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
+        } finally {
+            $laeuft = false;
+        }
+        $this->LogMessage('SymDo VRR Transit: Uhrzeit der Strecken auf den Zeitwaehler umgeschrieben',
+            KL_NOTIFY);
     }
 
     // ------------------------------------------------------------------
@@ -699,6 +745,14 @@ trait TransitStore
             // Eine Ankunftsvorgabe ist eine Zusage: was später kommt, zählt nicht.
             $nichtNach = ($schule !== null && ($schule['mode'] ?? '') === 'arr')
                 ? (int)$schule['targetAt'] : 0;
+            $vonName  = trim((string)($z['fromName'] ?? ''));
+            $nachName = trim((string)($z['toName'] ?? ''));
+            /* Auf dem Rueckweg drehen sich Start und Ziel um — dann steht am
+               Anfang die Schule und am Ende das Zuhause. Die Namen gehoeren an
+               den PUNKT, nicht an die Stelle in der Verbindung. */
+            if ($schule !== null && ($schule['direction'] ?? '') === 'from') {
+                [$vonName, $nachName] = [$nachName, $vonName];
+            }
             $strecken[] = [
                 'key'        => $key,
                 'name'       => trim((string)($z['name'] ?? '')),
@@ -709,7 +763,9 @@ trait TransitStore
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
-                'journeys'   => TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
+                'journeys'   => TransitCalc::EndenBenennen(
+                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
+                    $vonName, $nachName),
             ];
         }
 

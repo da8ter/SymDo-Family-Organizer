@@ -752,6 +752,149 @@ final class TransitCalc
     /** „Steig 1", „Bstg. 2", „Gleis 10", „Gl.10", „Platform 3" — der Rest ist die Nummer. */
     private const STEIG_MUSTER = '/^(?:steig|bstg|bahnsteig|gleis|gl|platform|pl)(?:\.\s*|\s+)(\S.*)$/iu';
 
+    /**
+     * Eine Uhrzeit aus einer Formularzelle als „HH:MM" — leer, wenn keine
+     * brauchbare darin steht.
+     *
+     * Die Spalte ist ein Zeitwaehler (`SelectTime`), und der legt ein OBJEKT
+     * ab: `{"hour":7,"minute":50,"second":0}`. Aeltere Bestaende tragen dort
+     * noch Text („07:50", „8"). Beides wird gelesen, damit eine gewachsene
+     * Liste nicht stillschweigend auf „jetzt" zurueckfaellt — dieselbe Falle
+     * wie im Stundenplan, wo die Konsole eine Textzelle als „ungueltig" zeigte.
+     */
+    public static function ZeitText(mixed $wert): string
+    {
+        if (is_string($wert) && str_starts_with(trim($wert), '{')) {
+            $wert = json_decode(trim($wert), true);
+        }
+        if (is_array($wert)) {
+            if (!isset($wert['hour']) && !isset($wert['minute'])) {
+                return '';
+            }
+            return sprintf('%02d:%02d', max(0, min(23, (int)($wert['hour'] ?? 0))),
+                                        max(0, min(59, (int)($wert['minute'] ?? 0))));
+        }
+        $text = trim((string)$wert);
+        if ($text === '') {
+            return '';
+        }
+        if (preg_match('/^(\d{1,2})[:.\s]?(\d{2})?$/', $text, $t) !== 1) {
+            return '';
+        }
+        return sprintf('%02d:%02d', max(0, min(23, (int)$t[1])), max(0, min(59, (int)($t[2] ?? 0))));
+    }
+
+    /**
+     * Dieselbe Uhrzeit, wie der Zeitwaehler sie ablegt: als JSON-TEXT.
+     *
+     * Nicht als Feld: die Konsole legt eine `SelectTime`-Zelle als Zeichenkette
+     * mit JSON darin ab — im Stundenplan gegengelesen. Ein echtes Feld kommt
+     * beim Speichern anders zurueck, und die Zelle zeigte „ungueltig".
+     */
+    public static function ZeitFeld(string $hhmm): string
+    {
+        $text = self::ZeitText($hhmm);
+        [$h, $m] = $text === '' ? [0, 0] : array_map('intval', explode(':', $text));
+        return (string)json_encode(['hour' => $h, 'minute' => $m, 'second' => 0]);
+    }
+
+    /**
+     * Die beiden Enden einer Verbindung ueberschreiben.
+     *
+     * Was die EFA als Start und Ziel nennt, ist die HALTESTELLE — bei einer
+     * Koordinate steht dort die Adresse, und die will niemand lesen („51.25790,
+     * 6.86770" oder „Duesseldorf, Kissbergweg 12"). Traegt die Strecke eigene
+     * Namen („Zuhause", „Schule"), gelten die; sonst bleibt alles, wie es war.
+     *
+     * Ueberschrieben wird nur das ERSTE `from` und das LETZTE `to` — die
+     * Umstiege dazwischen sind echte Haltestellen und heissen weiter so.
+     *
+     * @param list<array<string,mixed>> $verbindungen
+     * @return list<array<string,mixed>>
+     */
+    public static function EndenBenennen(array $verbindungen, string $start, string $ziel): array
+    {
+        $start = trim($start);
+        $ziel  = trim($ziel);
+        if ($start === '' && $ziel === '') {
+            return $verbindungen;
+        }
+        foreach ($verbindungen as $i => $v) {
+            $legs = is_array($v['legs'] ?? null) ? $v['legs'] : [];
+            if ($legs === []) {
+                continue;
+            }
+            $erste = array_key_first($legs);
+            $letzte = array_key_last($legs);
+            if ($start !== '') {
+                $verbindungen[$i]['legs'][$erste]['from'] = $start;
+            }
+            if ($ziel !== '') {
+                $verbindungen[$i]['legs'][$letzte]['to'] = $ziel;
+            }
+        }
+        return $verbindungen;
+    }
+
+    /**
+     * Treffer der Suche, die KEINE Haltestelle sind — Strassen, Adressen, Orte.
+     *
+     * Die EFA kennt „Duesseldorf, Kissbergweg" als `street` mit Koordinate,
+     * aber als Haltestelle gibt es sie nicht. Aus der Koordinate laesst sich
+     * die naechste Haltestelle finden; dafuer kommen die Treffer hier heraus.
+     *
+     * @param array<string,mixed> $roh
+     * @return list<array{name:string,lat:float,lon:float,type:string,quality:int}>
+     */
+    public static function Orte(array $roh, int $hoechstens = 5): array
+    {
+        $raus = [];
+        foreach ((array)($roh['locations'] ?? []) as $l) {
+            if (!is_array($l) || (string)($l['type'] ?? '') === 'stop') {
+                continue;
+            }
+            $koord = (array)($l['coord'] ?? []);
+            // WGS84 kommt als [Breite, Laenge]; ohne coordOutputFormat stuende
+            // hier Mercator, und die Zahlen waeren um Groessenordnungen daneben.
+            $breite = (float)($koord[0] ?? 0);
+            $laenge = (float)($koord[1] ?? 0);
+            $name = trim((string)($l['name'] ?? ''));
+            if ($name === '' || abs($breite) > 90 || abs($laenge) > 180
+                || (abs($breite) < 0.00001 && abs($laenge) < 0.00001)) {
+                continue;
+            }
+            $raus[] = ['name' => $name, 'lat' => $breite, 'lon' => $laenge,
+                       'type' => (string)($l['type'] ?? ''), 'quality' => (int)($l['matchQuality'] ?? 0)];
+        }
+        usort($raus, static fn(array $a, array $b): int => $b['quality'] <=> $a['quality']);
+        return $hoechstens > 0 ? array_slice($raus, 0, $hoechstens) : $raus;
+    }
+
+    /**
+     * Haltestellen aus einer Umkreissuche — nach Entfernung, die naechste oben.
+     *
+     * @param array<string,mixed> $roh
+     * @return list<array{id:string,name:string,distance:int}>
+     */
+    public static function Umkreis(array $roh, int $hoechstens = 10): array
+    {
+        $raus = [];
+        foreach ((array)($roh['locations'] ?? []) as $l) {
+            if (!is_array($l) || (string)($l['type'] ?? '') !== 'stop') {
+                continue;
+            }
+            $id = trim((string)($l['id'] ?? ''));
+            $name = trim((string)($l['name'] ?? ''));
+            if ($id === '' || $name === '') {
+                continue;
+            }
+            $raus[] = ['id' => $id, 'name' => $name,
+                       'distance' => (int)($l['properties']['distance'] ?? 0)];
+        }
+        usort($raus, static fn(array $a, array $b): int => $a['distance'] <=> $b['distance']);
+        return $hoechstens > 0 ? array_slice($raus, 0, $hoechstens) : $raus;
+    }
+
     /** Nur Buchstaben und Ziffern, klein — so vergleichen sich Ziele und Steige. */
     private static function Wortschluessel(string $wert): string
     {
