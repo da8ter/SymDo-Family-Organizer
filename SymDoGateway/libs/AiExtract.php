@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 // Der HTTP-Griff liegt geteilt in List/libs — der Scanner braucht ihn ohne diese Datei.
 require_once __DIR__ . '/../../libs/AiHttp.php';
+require_once __DIR__ . '/../../libs/AiProvider.php';
+require_once __DIR__ . '/../../libs/AiRecipePage.php';
 
 /**
  * KI-Extraktion für die Web-App. Zwei Einsatzzwecke, gemeinsame Provider-Logik:
@@ -22,38 +24,6 @@ require_once __DIR__ . '/../../libs/AiHttp.php';
  */
 trait AiExtract
 {
-    // Vision-fähige Default-Modelle der Cloud-Anbieter (wie die iOS-App).
-    private const AI_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
-    private const AI_OPENAI_MODEL    = 'gpt-4o';
-    // OpenAI-Modell für PDF-Dateien (nimmt PDF-file-Input an; gpt-4o kann kein PDF).
-    private const AI_OPENAI_PDF_MODEL = 'gpt-5.6-terra';
-    // Ausgabe-Budget je Aufruf, seit 07.09.2026 einheitlich 32000 (vorher 2000
-    // ohne PDF): bei Reasoning-Modellen zählt das versteckte Denken mit, und ein
-    // kleiner Deckel lieferte eine leere oder abgeschnittene Antwort, die als
-    // „ai_truncated" verworfen wurde — bezahlt war sie trotzdem.
-    private const AI_MAX_TOKENS       = 32000;
-    // gpt-4o nimmt höchstens 16384 Ausgabe-Token an; mehr lehnt die API mit 400 ab.
-    private const AI_MAX_TOKENS_GPT4O = 16384;
-    private const AI_TIMEOUT         = 45;
-    /**
-     * Der eigene Rechner darf laenger brauchen als eine Cloud: er rechnet mit dem,
-     * was da ist, und ein Reasoning-Modell denkt vor der Antwort sichtbar lange
-     * (gemessen: 23 s fuer einen einseitigen Elternbrief). 45 s waeren hier ein
-     * Abbruch mitten in der Arbeit.
-     */
-    private const AI_LOCAL_TIMEOUT   = 300;
-    private const AI_CONNECT_TIMEOUT = 5;
-    /**
-     * PDF fuer einen lokalen Server aufbereiten (der nimmt keine PDF-Dateien an).
-     * Erst der Textweg — schnell, genau und billig; er traegt jedes digital
-     * erzeugte PDF. Bleibt zu wenig Text uebrig, ist es ein Scan, und die Seiten
-     * gehen als Bilder an ein Vision-Modell.
-     */
-    private const AI_PDF_MIN_TEXT     = 200;
-    /** So viele Seiten gehen als Bild mit — ein Halbjahresplaner sprengt sonst jede Zeit. */
-    private const AI_PDF_PAGES_MAX    = 3;
-    /** Kantenlaenge der Seitenbilder: mehr kostet Tokens und Zeit, ohne mehr zu zeigen. */
-    private const AI_PDF_IMAGE_WIDTH  = 1400;
     // Missbrauchsschutz: pro Gerät N KI-Aufrufe je Zeitfenster; zusätzlich darf
     // immer nur EIN Anbieter-Aufruf gleichzeitig laufen (sonst blockieren
     // parallele Requests den Symcon-Webserver).
@@ -64,18 +34,12 @@ trait AiExtract
     // Anbieter. 20.000 Zeichen sind ~5 Druckseiten.
     private const AI_TEXT_MAX = 20000;
 
-    // Rezept-URL-Analyse
-    private const AI_MAX_INGREDIENTS  = 100;
-    private const AI_HTTP_GET_TIMEOUT = 15;
-    private const AI_RECIPE_TEXT_MAX  = 12000;
     // PDF-Upload: base64-Größenlimit (Datei ~3/4 davon).
     private const AI_MAX_PDF_B64      = 20 * 1024 * 1024;
     // Diktat: Audio-Obergrenze (Base64) und Transkriptionsmodell. 14 MB Base64
     // sind rund 10 MB Ton — bei Opus ueber 20 Minuten Sprache, mehr ist kein
     // Diktat mehr. Laengere Aufnahmen brauchen auch mehr Geduld als AI_TIMEOUT.
     private const AI_MAX_AUDIO_B64     = 14 * 1024 * 1024;
-    private const AI_TRANSCRIBE_MODEL  = 'gpt-4o-mini-transcribe';
-    private const AI_TRANSCRIBE_TIMEOUT = 120;
     private const AI_MAX_IMAGE_B64    = 12 * 1024 * 1024;
     // Obergrenze für gespeicherte Rezeptfotos/-dateien unter „Rezeptfotos".
     private const AI_MEDIA_MAX        = 200;
@@ -482,74 +446,6 @@ trait AiExtract
             return;
         }
         $this->SendJson(['ok' => true, 'text' => (string)$result['text']]);
-    }
-
-    /**
-     * Sprache -> Text ueber eine OpenAI-kompatible /audio/transcriptions.
-     *
-     * Anbieterwahl unabhaengig vom Chat-Anbieter: ein OpenAI-Schluessel gewinnt
-     * (auch wenn die Extraktion bei Anthropic oder lokal laeuft — Anthropic hat
-     * keine Transkription), sonst der lokale Server, sonst eine klare Ansage.
-     *
-     * @return array{ok:bool, text?:string, code?:string, message?:string, status?:int}
-     */
-    private function AiTranscribe(string $bytes, string $mime): array
-    {
-        $openAiKey = trim((string) $this->AiProp('AiOpenAIKey'));
-        $lokalBase = rtrim(trim((string) $this->AiProp('AiLocalBaseUrl')), '/');
-        if ($openAiKey !== '') {
-            $url     = 'https://api.openai.com/v1/audio/transcriptions';
-            $modell  = self::AI_TRANSCRIBE_MODEL;
-            $kopfAuth = ['Authorization: Bearer ' . $openAiKey];
-        } elseif ((string) $this->AiProp('AiProvider') === 'local' && $lokalBase !== '') {
-            // Dieselbe Basis-Ergaenzung wie beim Chat: das Formular fragt nach
-            // der BASIS, die Server bedienen /v1.
-            $url    = (preg_match('#/v\d+$#', $lokalBase) === 1 ? $lokalBase : $lokalBase . '/v1') . '/audio/transcriptions';
-            $modell = 'whisper-1';
-            $lokalKey = trim((string) $this->AiProp('AiLocalKey'));
-            $kopfAuth = $lokalKey !== '' ? ['Authorization: Bearer ' . $lokalKey] : [];
-        } else {
-            return ['ok' => false, 'code' => 'ai_not_configured',
-                'message' => $this->Translate('Dictation needs an OpenAI API key or a local AI server with transcription.'), 'status' => 400];
-        }
-
-        $endung = match (strtolower(strtok($mime, ';') ?: '')) {
-            'audio/mp4', 'audio/x-m4a', 'audio/m4a', 'audio/aac' => 'm4a',
-            'audio/mpeg', 'audio/mp3'                            => 'mp3',
-            'audio/ogg'                                          => 'ogg',
-            'audio/wav', 'audio/x-wav'                           => 'wav',
-            default                                              => 'webm',
-        };
-        // Multipart von Hand: AiHttpPost nimmt einen fertigen Rumpf, und curl
-        // braucht fuer form-data nur die passende Grenze im Content-Type.
-        $grenze = '----symdo' . bin2hex(random_bytes(12));
-        $rumpf  = '--' . $grenze . "\r\n"
-            . "Content-Disposition: form-data; name=\"model\"\r\n\r\n" . $modell . "\r\n"
-            . '--' . $grenze . "\r\n"
-            . "Content-Disposition: form-data; name=\"file\"; filename=\"diktat." . $endung . "\"\r\n"
-            . 'Content-Type: ' . $mime . "\r\n\r\n"
-            . $bytes . "\r\n"
-            . '--' . $grenze . "--\r\n";
-        $kopf = array_merge(['Content-Type: multipart/form-data; boundary=' . $grenze], $kopfAuth);
-
-        $resp = $this->AiHttpPost($url, $kopf, $rumpf, self::AI_TRANSCRIBE_TIMEOUT);
-        if ($resp['err'] !== '' || $resp['status'] < 200 || $resp['status'] >= 300) {
-            $daten = json_decode((string)$resp['body'], true);
-            $grund = is_array($daten) ? (string)($daten['error']['message'] ?? '') : '';
-            if ($grund === '') {
-                $grund = $resp['err'] !== '' ? $resp['err'] : ('HTTP ' . $resp['status']);
-            }
-            $this->SendDebug('AI', 'Transkription fehlgeschlagen: ' . $grund, 0);
-            return ['ok' => false, 'code' => 'ai_failed',
-                'message' => $this->Translate('Transcription failed.') . ' ' . mb_substr($grund, 0, 200), 'status' => 502];
-        }
-        $daten = json_decode((string)$resp['body'], true);
-        $text  = is_array($daten) ? trim((string)($daten['text'] ?? '')) : '';
-        if ($text === '') {
-            return ['ok' => false, 'code' => 'ai_failed',
-                'message' => $this->Translate('Transcription came back empty.'), 'status' => 502];
-        }
-        return ['ok' => true, 'text' => $text];
     }
 
     private function AiStripImage(string $image): string
@@ -1132,200 +1028,175 @@ trait AiExtract
         }
     }
 
+    // ──────────────── Durchreichen auf die symcon-freien Klassen ────────────────
+    //
+    // Der WIE-Teil (Rumpf, Kopfzeilen, Modelle, Fristen, das Holen fremder
+    // Seiten) steht seit September 2026 in `List/libs/AiProvider.php` und
+    // `List/libs/AiRecipePage.php`. Zwei Gruende: ein Laufwerk ausserhalb des
+    // Gateways soll ihn benutzen koennen, ohne diese 2000 Zeilen mitzunehmen —
+    // und der Rumpf einer Anfrage soll sich pruefen lassen, ohne dass ein
+    // Kernel laeuft.
+    //
+    // Die Griffe hier behalten ihre Signatur, damit keiner der Aufrufer in
+    // Briefing, MailScan, NotesAi, EduMaps und Moodle sich aendert. Sie tun nur
+    // dreierlei: Konfiguration hineinreichen, Debugzeilen ins Protokoll heben
+    // und aus einem Codewort einen Satz machen.
+
+    /** Den Anbieter mit der Konfiguration des Gateways bestuecken. */
+    private function AiAnbieter(): AiProvider
+    {
+        return AiProvider::ausKonfiguration([
+            'AiProvider'     => (string) $this->AiProp('AiProvider'),
+            'AiAnthropicKey' => (string) $this->AiProp('AiAnthropicKey'),
+            'AiOpenAIKey'    => (string) $this->AiProp('AiOpenAIKey'),
+            'AiLocalBaseUrl' => (string) $this->AiProp('AiLocalBaseUrl'),
+            'AiLocalModel'   => (string) $this->AiProp('AiLocalModel'),
+            'AiLocalKey'     => (string) $this->AiProp('AiLocalKey'),
+        ]);
+    }
+
     /** @return array ok:true+text | ok:false+code+message+status */
     private function AiRunProviderCall(string $system, string $userText, ?string $imageBase64, ?string $pdfBase64 = null): array
     {
-        $provider = (string) $this->AiProp('AiProvider');
-        // Ein Reasoning-Modell verbraucht sein Budget zuerst im Denken (gemessen
-        // lokal: 794 von 990 Tokens gingen in den Denktext) — ein kleiner Deckel
-        // brachte regelmaessig eine leere Antwort mit finish_reason „length".
-        $maxTokens = self::AI_MAX_TOKENS;
-
-        if ($provider === 'anthropic') {
-            $key = trim((string) $this->AiProp('AiAnthropicKey'));
-            if ($key === '') {
-                return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No Anthropic API key configured.'), 'status' => 400];
-            }
-            if ($pdfBase64 !== null) {
-                $content = [
-                    ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => $pdfBase64]],
-                    ['type' => 'text', 'text' => $userText],
-                ];
-            } elseif ($imageBase64 !== null) {
-                $content = [
-                    ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $this->AiImageMime($imageBase64), 'data' => $imageBase64]],
-                    ['type' => 'text', 'text' => $userText],
-                ];
-            } else {
-                $content = $userText;
-            }
-            $bodyArr = [
-                'model'      => self::AI_ANTHROPIC_MODEL,
-                'max_tokens' => $maxTokens,
-                'system'     => $system,
-                'messages'   => [['role' => 'user', 'content' => $content]],
-            ];
-            $headers = ['Content-Type: application/json', 'x-api-key: ' . $key, 'anthropic-version: 2023-06-01'];
-            // JSON_INVALID_UTF8_SUBSTITUTE: ein einzelnes kaputtes Byte im Text
-            // (byteweise gekuerzte oder falsch deklarierte Mail) darf den Aufruf
-            // nicht in `false` und damit einen TypeError kippen.
-            $resp = $this->AiHttpPost('https://api.anthropic.com/v1/messages', $headers, json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
-            return $this->AiFinishText($resp, static function (array $data): string {
-                $text = '';
-                foreach (($data['content'] ?? []) as $block) {
-                    if (($block['type'] ?? '') === 'text') {
-                        $text .= (string)($block['text'] ?? '');
-                    }
-                }
-                return $text;
-            });
-        }
-
-        if ($provider === 'openai' || $provider === 'local') {
-            // Ein lokaler Server nimmt keine PDF-Datei an, also wird sie hier
-            // aufbereitet: erst der Textweg (schnell, genau, traegt jedes digital
-            // erzeugte PDF), und nur wenn zu wenig Text herauskommt — also bei
-            // einem Scan — gehen die ersten Seiten als Bilder mit. Dafuer braucht
-            // es ein Modell mit Bildverstaendnis; hat es keines, kommt eine leere
-            // oder fantasierte Antwort zurueck, weshalb der Textweg Vorrang hat.
-            $seitenBilder = [];
-            if ($provider === 'local' && $pdfBase64 !== null) {
-                $pdfText = $this->AiPdfToText($pdfBase64);
-                if (strlen($pdfText) >= self::AI_PDF_MIN_TEXT) {
-                    $this->SendDebug('AI', sprintf('PDF als Text uebergeben (%d Zeichen)', strlen($pdfText)), 0);
-                    $userText .= "\n\n--- Inhalt der beigefuegten PDF-Datei ---\n" . $pdfText;
-                } else {
-                    $seitenBilder = $this->AiPdfToImages($pdfBase64);
-                    if ($seitenBilder === []) {
-                        return ['ok' => false, 'code' => 'ai_pdf_unsupported', 'message' => $this->Translate('PDF is not supported by this AI provider.'), 'status' => 400];
-                    }
-                    $this->SendDebug('AI', sprintf('PDF als %d Seitenbild(er) uebergeben (kein Text im PDF)', count($seitenBilder)), 0);
-                }
-                $pdfBase64 = null;   // ab hier ist es Text bzw. sind es Bilder
-            }
-            if ($provider === 'openai') {
-                $key   = trim((string) $this->AiProp('AiOpenAIKey'));
-                $url   = 'https://api.openai.com/v1/chat/completions';
-                // PDF braucht ein Modell mit Datei-Input; gpt-4o kann kein PDF.
-                $model = ($pdfBase64 !== null) ? self::AI_OPENAI_PDF_MODEL : self::AI_OPENAI_MODEL;
-                if (str_starts_with($model, 'gpt-4o')) {
-                    $maxTokens = min($maxTokens, self::AI_MAX_TOKENS_GPT4O);
-                }
-                if ($key === '') {
-                    return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No OpenAI API key configured.'), 'status' => 400];
-                }
-            } else {
-                $key     = trim((string) $this->AiProp('AiLocalKey'));
-                $baseUrl = rtrim(trim((string) $this->AiProp('AiLocalBaseUrl')), '/');
-                $model   = trim((string) $this->AiProp('AiLocalModel'));
-                if ($baseUrl === '' || $model === '') {
-                    return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('Local server URL and model must be configured.'), 'status' => 400];
-                }
-                // „http://127.0.0.1:1234" und „…:1234/v1" muessen beide gehen: die
-                // Server (LM Studio, Ollama, llama.cpp, vLLM) bedienen alle den
-                // Pfad /v1, aber das Formular fragt nach der BASIS. Ohne diese
-                // Ergaenzung antwortet LM Studio mit „Unexpected endpoint or
-                // method. (POST /chat/completions)" — und die leere Antwort sah
-                // aus wie ein Modellfehler (am 19.08.2026 genau so gemessen).
-                $url = (preg_match('#/v\d+$#', $baseUrl) === 1 ? $baseUrl : $baseUrl . '/v1') . '/chat/completions';
-            }
-            if ($seitenBilder !== []) {
-                // Jede Seite ein eigener Bildblock, danach die Aufgabe — dieselbe
-                // Reihenfolge wie beim Einzelbild.
-                $userContent = [];
-                foreach ($seitenBilder as $seite) {
-                    $userContent[] = ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . $seite]];
-                }
-                $userContent[] = ['type' => 'text', 'text' => $userText];
-            } elseif ($pdfBase64 !== null) {
-                $userContent = [
-                    ['type' => 'file', 'file' => ['filename' => 'dokument.pdf', 'file_data' => 'data:application/pdf;base64,' . $pdfBase64]],
-                    ['type' => 'text', 'text' => $userText],
-                ];
-            } elseif ($imageBase64 !== null) {
-                $userContent = [
-                    ['type' => 'image_url', 'image_url' => ['url' => 'data:' . $this->AiImageMime($imageBase64) . ';base64,' . $imageBase64]],
-                    ['type' => 'text', 'text' => $userText],
-                ];
-            } else {
-                $userContent = $userText;
-            }
-            // Neuere OpenAI-Modelle (PDF) erwarten max_completion_tokens statt max_tokens.
-            $tokenKey = ($provider === 'openai' && $pdfBase64 !== null) ? 'max_completion_tokens' : 'max_tokens';
-            $bodyArr = [
-                'model'    => $model,
-                $tokenKey  => $maxTokens,
-                'messages' => [
-                    ['role' => 'system', 'content' => $system],
-                    ['role' => 'user', 'content' => $userContent],
-                ],
-            ];
-            $headers = ['Content-Type: application/json'];
-            if ($key !== '') {
-                $headers[] = 'Authorization: Bearer ' . $key;
-            }
-            // Siehe Anthropic-Zweig: kaputte UTF-8-Bytes ersetzen statt scheitern.
-            // Der eigene Rechner bekommt mehr Zeit als eine Cloud (AI_LOCAL_TIMEOUT).
-            $resp = $this->AiHttpPost(
-                $url,
-                $headers,
-                json_encode($bodyArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
-                $provider === 'local' ? self::AI_LOCAL_TIMEOUT : self::AI_TIMEOUT
-            );
-            return $this->AiFinishText($resp, static function (array $data): string {
-                return (string)($data['choices'][0]['message']['content'] ?? '');
-            });
-        }
-
-        return ['ok' => false, 'code' => 'ai_not_configured', 'message' => $this->Translate('No AI provider configured.'), 'status' => 400];
+        $anbieter = $this->AiAnbieter();
+        $antwort  = $anbieter->complete($system, $userText, $imageBase64, $pdfBase64);
+        $this->AiDebugUebernehmen($anbieter);
+        return $this->AiAntwortDeuten($antwort);
     }
 
-    /** Wertet die HTTP-Antwort aus: Fehler mappen, sonst den Antworttext liefern. */
-    private function AiFinishText(array $resp, callable $extractText): array
+    /** @return array ok:true+text | ok:false+code+message+status */
+    private function AiTranscribe(string $bytes, string $mime): array
     {
-        if (($resp['err'] ?? '') !== '') {
-            return ['ok' => false, 'code' => 'ai_unreachable', 'message' => $this->Translate('Could not reach the AI service.') . ' ' . $resp['err'], 'status' => 502];
+        $anbieter = $this->AiAnbieter();
+        $antwort  = $anbieter->transcribe($bytes, $mime);
+        $this->AiDebugUebernehmen($anbieter);
+        return $this->AiAntwortDeuten($antwort);
+    }
+
+    /** Was dem Anbieter unterwegs aufgefallen ist, gehoert ins Protokoll. */
+    private function AiDebugUebernehmen(AiProvider $anbieter): void
+    {
+        foreach ($anbieter->debugZeilen() as $zeile) {
+            $this->SendDebug('AI', $zeile, 0);
         }
-        $status = (int)($resp['status'] ?? 0);
-        if ($status === 401 || $status === 403) {
-            return ['ok' => false, 'code' => 'ai_unauthorized', 'message' => $this->Translate('AI rejected the API key.'), 'status' => 502];
+    }
+
+    /**
+     * Aus `{ok:false, code, grund, detail}` die Antwort, die die Aufrufer
+     * kennen: mit Satz und HTTP-Status.
+     *
+     * @param array<string,mixed> $antwort
+     * @return array<string,mixed>
+     */
+    private function AiAntwortDeuten(array $antwort): array
+    {
+        if (($antwort['ok'] ?? false) === true) {
+            return $antwort;
         }
-        if ($status === 429) {
-            /* Leeres Guthaben sieht aus wie ein Rate-Limit, ist aber das
-               Gegenteil: Warten hilft nicht. Der Anbieter unterscheidet es im
-               Feld `code` — ohne diese Zeile stand tagelang „versuch es
-               spaeter nochmal" an einem Konto ohne Guthaben. */
-            $d = json_decode((string)($resp['body'] ?? ''), true);
-            if (is_array($d) && (string)($d['error']['code'] ?? '') === 'insufficient_quota') {
-                return ['ok' => false, 'code' => 'ai_no_credit',
-                    'message' => $this->Translate('No credit left at the AI provider — top up the account.'),
-                    'status' => 502];
-            }
-            return ['ok' => false, 'code' => 'ai_rate_limited', 'message' => $this->Translate('AI rate limit reached — try again later.'), 'status' => 502];
+        return $this->AiErrorMessage(
+            (string)($antwort['code'] ?? 'ai_failed'),
+            (string)($antwort['grund'] ?? ''),
+            (string)($antwort['detail'] ?? ''));
+    }
+
+    /**
+     * Aus einem Codewort ein Satz — die EINE Stelle, an der das geschieht.
+     *
+     * `grund` unterscheidet mehrere Saetze unter demselben Code (es gibt vier
+     * verschiedene „nicht eingerichtet"), `detail` traegt das Bewegliche.
+     * Alle Texte stehen woertlich so in der locale.json wie vorher; wer hier
+     * einen aendert, aendert ihn fuer die App, die Web-App UND die Kachel.
+     *
+     * @return array{ok:false,code:string,message:string,status:int}
+     */
+    private function AiErrorMessage(string $code, string $grund = '', string $detail = ''): array
+    {
+        $status = 502;
+        switch ($code) {
+            case 'ai_not_configured':
+                $status = 400;
+                $text = match ($grund) {
+                    'anthropic' => $this->Translate('No Anthropic API key configured.'),
+                    'openai'    => $this->Translate('No OpenAI API key configured.'),
+                    'local'     => $this->Translate('Local server URL and model must be configured.'),
+                    'diktat'    => $this->Translate('Dictation needs an OpenAI API key or a local AI server with transcription.'),
+                    default     => $this->Translate('No AI provider configured.'),
+                };
+                break;
+            case 'ai_pdf_unsupported':
+                $status = 400;
+                $text   = $this->Translate('PDF is not supported by this AI provider.');
+                break;
+            case 'ai_unreachable':
+                $text = $this->Translate('Could not reach the AI service.') . ' ' . $detail;
+                break;
+            case 'ai_unauthorized':
+                $text = $this->Translate('AI rejected the API key.');
+                break;
+            case 'ai_no_credit':
+                $text = $this->Translate('No credit left at the AI provider — top up the account.');
+                break;
+            case 'ai_rate_limited':
+                $text = $this->Translate('AI rate limit reached — try again later.');
+                break;
+            case 'ai_upstream':
+                $text = $this->Translate('AI request failed.') . ' (HTTP ' . $detail . ')';
+                break;
+            case 'ai_bad_response':
+                $text = $this->Translate('Unexpected AI response.');
+                break;
+            case 'ai_truncated':
+                $text = $this->Translate('The AI answer was cut off — try a smaller document.');
+                break;
+            case 'ai_empty':
+                $text = $this->Translate('The AI returned an empty answer.');
+                break;
+            case 'ai_failed':
+                $text = $grund === 'leer'
+                    ? $this->Translate('Transcription came back empty.')
+                    : $this->Translate('Transcription failed.') . ' ' . $detail;
+                break;
+            case 'invalid_url':
+                $status = 422;
+                $text   = $this->Translate('Invalid or non-public URL.');
+                break;
+            case 'ai_url_fetch':
+                $text = $this->Translate('Could not load the page.')
+                      . ($detail !== '' ? ' (HTTP ' . $detail . ')' : '');
+                break;
+            default:
+                $text = $this->Translate('AI request failed.');
         }
-        if ($status < 200 || $status >= 300) {
-            return ['ok' => false, 'code' => 'ai_upstream', 'message' => $this->Translate('AI request failed.') . ' (HTTP ' . $status . ')', 'status' => 502];
-        }
-        $data = json_decode((string)($resp['body'] ?? ''), true);
-        if (!is_array($data)) {
-            return ['ok' => false, 'code' => 'ai_bad_response', 'message' => $this->Translate('Unexpected AI response.'), 'status' => 502];
-        }
-        // Abgeschnittene Antwort erkennen: sonst degradiert eine am Token-Limit
-        // gekappte Ausgabe still zu einer leeren/halben Liste („nichts erkannt"),
-        // obwohl Tokens abgerechnet wurden.
-        $stop = (string)($data['stop_reason'] ?? ($data['choices'][0]['finish_reason'] ?? ''));
-        if ($stop === 'max_tokens' || $stop === 'length') {
-            return ['ok' => false, 'code' => 'ai_truncated', 'message' => $this->Translate('The AI answer was cut off — try a smaller document.'), 'status' => 502];
-        }
-        $text = $extractText($data);
-        if (trim($text) === '') {
-            // Die Rohantwort mitschreiben: ein Server, der den Pfad nicht kennt,
-            // oder ein Modell ohne Ausgabe sehen von aussen gleich aus — ohne diese
-            // Zeile sucht man am falschen Ende (siehe Kommentar zum /v1-Pfad).
-            $this->SendDebug('AI', 'Leere Antwort, Rohdaten: ' . mb_substr(json_encode($data, JSON_UNESCAPED_UNICODE) ?: '', 0, 400), 0);
-            return ['ok' => false, 'code' => 'ai_empty', 'message' => $this->Translate('The AI returned an empty answer.'), 'status' => 502];
-        }
-        return ['ok' => true, 'text' => $text];
+        return ['ok' => false, 'code' => $code, 'message' => $text, 'status' => $status];
+    }
+
+    /**
+     * Eine oeffentliche Seite holen — SSRF-sicher, siehe `AiRecipePage`.
+     *
+     * @return array ok:true+body | ok:false+code+message+status
+     */
+    private function AiFetchPublicPage(string $url): array
+    {
+        $antwort = AiRecipePage::holen($url);
+        return ($antwort['ok'] ?? false) === true ? $antwort : $this->AiAntwortDeuten($antwort);
+    }
+
+    /** Schema + oeffentlicher (nicht privater/reservierter) Host? */
+    private function AiIsPublicUrl(string $url, ?array &$resolvedIps = null): bool
+    {
+        return AiRecipePage::istOeffentlich($url, $resolvedIps);
+    }
+
+    /** Macht aus Roh-HTML den fuer die KI relevanten Text. */
+    private function AiRecipeText(string $html): string
+    {
+        return AiRecipePage::text($html);
+    }
+
+    /** Grob entschlacktes HTML als Fliesstext. */
+    private function AiHtmlToText(string $html): string
+    {
+        return AiRecipePage::htmlZuText($html);
     }
 
     // ────────────────────────────── Parser ──────────────────────────────
@@ -1628,7 +1499,7 @@ trait AiExtract
             $amount   = is_string($amount) ? trim($amount) : '';
             $category = trim((string)($row['category'] ?? ''));
             $out[] = ['name' => $name, 'amount' => $amount, 'category' => $category];
-            if (count($out) >= self::AI_MAX_INGREDIENTS) {
+            if (count($out) >= AiRecipePage::MAX_INGREDIENTS) {
                 break;
             }
         }
@@ -1728,157 +1599,6 @@ trait AiExtract
         return $aus;
     }
 
-    /**
-     * Bildtyp aus den Daten selbst bestimmen.
-     *
-     * Bewusst an den Magic Bytes und nicht am Dateinamen oder an einer
-     * durchgereichten Angabe: Das Bild kommt aus drei Richtungen (Kamera der App,
-     * Mailanhang, Kachel-Relay), und nur die Bytes wissen sicher, was es ist. Eine
-     * falsche Etikettierung weisen die Anbieter zurueck.
-     *
-     * @return string image/jpeg, image/png, image/gif oder image/webp — im Zweifel
-     *                JPEG, denn das war bis dahin die einzige Annahme im Modul.
-     */
-    private function AiImageMime(string $base64): string
-    {
-        // 24 base64-Zeichen (Vielfaches von 4) ergeben 18 Bytes — genug für jede Signatur.
-        $kopf = (string)base64_decode(substr($base64, 0, 24), false);
-        if (str_starts_with($kopf, "\x89PNG\r\n\x1a\n")) {
-            return 'image/png';
-        }
-        if (str_starts_with($kopf, 'GIF87a') || str_starts_with($kopf, 'GIF89a')) {
-            return 'image/gif';
-        }
-        if (str_starts_with($kopf, 'RIFF') && substr($kopf, 8, 4) === 'WEBP') {
-            return 'image/webp';
-        }
-        return 'image/jpeg';
-    }
-
-    // ────────────────────────────── PDF für lokale Server ──────────────────────────────
-
-    /**
-     * Werkzeug im Dateisystem suchen. Symcon erbt keinen brauchbaren PATH, deshalb
-     * absolute Pfade — Homebrew (Apple Silicon und Intel) und die Systemablage.
-     */
-    private function AiToolPath(string $name): ?string
-    {
-        foreach (['/opt/homebrew/bin/', '/usr/local/bin/', '/usr/bin/'] as $ordner) {
-            $pfad = $ordner . $name;
-            if (is_executable($pfad)) {
-                return $pfad;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Textebene eines PDFs lesen. Leer bei einem Scan — dann ist der Bildweg dran.
-     *
-     * Bewusst ueber Dateien und exec statt ueber Pipes: proc_open bleibt in Symcons
-     * Umgebung haengen (gemessen — das Skript kam nie zurueck), exec dagegen laeuft
-     * zuverlaessig. Beide Dateien verschwinden in jedem Fall wieder.
-     */
-    private function AiPdfToText(string $pdfBase64): string
-    {
-        $werkzeug = $this->AiToolPath('pdftotext');
-        if ($werkzeug === null) {
-            $this->SendDebug('AI', 'pdftotext nicht gefunden — PDF-Text entfaellt', 0);
-            return '';
-        }
-        $roh = base64_decode($pdfBase64, true);
-        if (!is_string($roh) || $roh === '') {
-            return '';
-        }
-        $stamm  = sys_get_temp_dir() . '/symdo_pdftxt_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        $quelle = $stamm . '.pdf';
-        $ziel   = $stamm . '.txt';
-        $text   = '';
-        try {
-            if (@file_put_contents($quelle, $roh) === false) {
-                return '';
-            }
-            unset($roh);
-            $rc = 0;
-            $ausgabe = [];
-            @exec(escapeshellarg($werkzeug) . ' -layout -enc UTF-8 '
-                . escapeshellarg($quelle) . ' ' . escapeshellarg($ziel) . ' 2>/dev/null', $ausgabe, $rc);
-            if ($rc !== 0) {
-                $this->SendDebug('AI', 'pdftotext meldet Fehler ' . $rc, 0);
-            }
-            $text = (string)@file_get_contents($ziel);
-        } catch (Throwable $e) {
-            $this->SendDebug('AI', 'PDF-Textauszug fehlgeschlagen: ' . $e->getMessage(), 0);
-        } finally {
-            @unlink($quelle);
-            @unlink($ziel);
-        }
-
-        $text = trim(preg_replace("/\n{3,}/", "\n\n", $text) ?? '');
-        if (strlen($text) > self::AI_RECIPE_TEXT_MAX) {
-            // mb_strcut, damit kein Multibyte-Zeichen zerschnitten wird (siehe MailPrepareText).
-            $text = mb_strcut($text, 0, self::AI_RECIPE_TEXT_MAX, 'UTF-8');
-        }
-        return $text;
-    }
-
-    /**
-     * Die ersten Seiten eines PDFs als JPEG — für Scans ohne Textebene.
-     *
-     * pdftoppm rendert direkt in Zielbreite; GD bleibt bewusst außen vor, denn das
-     * Laden einer A4-Seite kostet dort 16 MB von 32 MB memory_limit (gemessen).
-     *
-     * @return list<string> base64-kodierte JPEGs, leer wenn nichts ging
-     */
-    private function AiPdfToImages(string $pdfBase64, int $maxSeiten = self::AI_PDF_PAGES_MAX): array
-    {
-        $werkzeug = $this->AiToolPath('pdftoppm');
-        if ($werkzeug === null) {
-            $this->SendDebug('AI', 'pdftoppm nicht gefunden — PDF-Bildweg entfaellt', 0);
-            return [];
-        }
-        $roh = base64_decode($pdfBase64, true);
-        if (!is_string($roh) || $roh === '') {
-            return [];
-        }
-        $stamm = sys_get_temp_dir() . '/symdo_pdf_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        $quelle = $stamm . '.pdf';
-        $bilder = [];
-        try {
-            if (@file_put_contents($quelle, $roh) === false) {
-                return [];
-            }
-            unset($roh);
-            $cmd = escapeshellarg($werkzeug) . ' -jpeg -jpegopt quality=82'
-                 . ' -f 1 -l ' . max(1, $maxSeiten)
-                 . ' -scale-to-x ' . self::AI_PDF_IMAGE_WIDTH . ' -scale-to-y -1 '
-                 . escapeshellarg($quelle) . ' ' . escapeshellarg($stamm) . ' 2>/dev/null';
-            $rc = 0;
-            $ausgabe = [];
-            @exec($cmd, $ausgabe, $rc);
-            if ($rc !== 0) {
-                $this->SendDebug('AI', 'pdftoppm meldet Fehler ' . $rc, 0);
-            }
-            $seiten = glob($stamm . '-*.jpg') ?: [];
-            sort($seiten, SORT_NATURAL);
-            foreach (array_slice($seiten, 0, $maxSeiten) as $datei) {
-                $inhalt = (string)@file_get_contents($datei);
-                if ($inhalt !== '') {
-                    $bilder[] = base64_encode($inhalt);
-                }
-            }
-        } catch (Throwable $e) {
-            $this->SendDebug('AI', 'PDF-Bildwandlung fehlgeschlagen: ' . $e->getMessage(), 0);
-        } finally {
-            // Nichts auf der Platte zurücklassen — auch nicht bei einem Abbruch.
-            @unlink($quelle);
-            foreach (glob($stamm . '-*.jpg') ?: [] as $datei) {
-                @unlink($datei);
-            }
-        }
-        return $bilder;
-    }
-
     // ────────────────────────────── HTTP ──────────────────────────────
 
     /**
@@ -1887,259 +1607,9 @@ trait AiExtract
      * ohne diese ganze Datei mitzunehmen. Die Signatur bleibt, damit keiner der
      * dreizehn Aufrufer sich aendert.
      */
-    private function AiHttpPost(string $url, array $headers, string $bodyJson, int $timeout = self::AI_TIMEOUT): array
+    private function AiHttpPost(string $url, array $headers, string $bodyJson, int $timeout = AiProvider::TIMEOUT): array
     {
-        return AiHttp::post($url, $headers, $bodyJson, $timeout, self::AI_CONNECT_TIMEOUT);
-    }
-
-    /**
-     * Holt eine öffentliche Webseite server-seitig — SSRF-sicher: jede Weiterleitung
-     * wird einzeln gegen private/reservierte Adressbereiche geprüft (kein blindes
-     * FOLLOWLOCATION). Nur http/https, Zeit-/Größen-Limits.
-     * @return array ok:true+body | ok:false+code+message+status
-     */
-    private function AiFetchPublicPage(string $url): array
-    {
-        $urlErr = ['ok' => false, 'code' => 'invalid_url', 'message' => $this->Translate('Invalid or non-public URL.'), 'status' => 422];
-        for ($hop = 0; $hop < 4; $hop++) {
-            $validIps = [];
-            if (!$this->AiIsPublicUrl($url, $validIps)) {
-                return $urlErr;
-            }
-            // Die geprüfte IP wird an cURL gebunden: sonst löst cURL den Namen ein
-            // zweites Mal auf und ein 0-TTL-Rebinding könnte auf 127.0.0.1 zeigen.
-            $resp   = $this->AiHttpGet($url, $validIps);
-            $status = (int)$resp['status'];
-            if (($resp['err'] ?? '') !== '') {
-                return ['ok' => false, 'code' => 'ai_url_fetch', 'message' => $this->Translate('Could not load the page.'), 'status' => 502];
-            }
-            if ($status >= 300 && $status < 400 && (string)$resp['location'] !== '' && $hop < 3) {
-                $url = $this->AiResolveRedirect($url, (string)$resp['location']);
-                continue;
-            }
-            if ($status < 200 || $status >= 300) {
-                return ['ok' => false, 'code' => 'ai_url_fetch', 'message' => $this->Translate('Could not load the page.') . ' (HTTP ' . $status . ')', 'status' => 502];
-            }
-            return ['ok' => true, 'body' => (string)$resp['body']];
-        }
-        return $urlErr;
-    }
-
-    /** Schema + öffentlicher (nicht privater/reservierter) Host? */
-    private function AiIsPublicUrl(string $url, ?array &$resolvedIps = null): bool
-    {
-        $resolvedIps = [];
-        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
-            return false;
-        }
-        $parts  = parse_url($url);
-        $scheme = strtolower((string)($parts['scheme'] ?? ''));
-        $host   = (string)($parts['host'] ?? '');
-        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
-            return false;
-        }
-        // Credentials in der URL (http://user:pass@host) ablehnen und nur die
-        // Standard-Ports zulassen — sonst wird das Gateway zum Port-Scanner.
-        if (isset($parts['user']) || isset($parts['pass'])) {
-            return false;
-        }
-        $port = (int)($parts['port'] ?? 0);
-        if ($port !== 0 && $port !== 80 && $port !== 443) {
-            return false;
-        }
-        $host = trim($host, '[]'); // IPv6-Literale
-        $ips  = [];
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            $ips = [$host];
-        } else {
-            $a = @gethostbynamel($host);
-            if (is_array($a)) {
-                $ips = $a;
-            }
-            $aaaa = @dns_get_record($host, DNS_AAAA);
-            if (is_array($aaaa)) {
-                foreach ($aaaa as $rec) {
-                    if (!empty($rec['ipv6'])) {
-                        $ips[] = (string)$rec['ipv6'];
-                    }
-                }
-            }
-        }
-        if ($ips === []) {
-            return false; // nicht auflösbar → ablehnen
-        }
-        foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                return false; // privat / loopback / link-local / reserviert
-            }
-            // PHPs Filter lässt diese durch, sie sind aber nicht „öffentlich":
-            // 100.64.0.0/10 (CGNAT), 198.18.0.0/15 (Benchmark), 64:ff9b::/96 (NAT64,
-            // mappt u.a. 127.0.0.1) und IPv4-mapped IPv6.
-            if ($this->AiIsBlockedIp($ip)) {
-                return false;
-            }
-        }
-        $resolvedIps = array_values(array_unique($ips));
-        return true;
-    }
-
-    /** Zusätzliche Deny-Liste für Bereiche, die FILTER_FLAG_NO_PRIV_RANGE nicht erfasst. */
-    private function AiIsBlockedIp(string $ip): bool
-    {
-        $blocked = ['100.64.0.0/10', '198.18.0.0/15', '64:ff9b::/96', '::ffff:0:0/96'];
-        foreach ($blocked as $cidr) {
-            [$net, $bits] = explode('/', $cidr);
-            $ipBin  = @inet_pton($ip);
-            $netBin = @inet_pton($net);
-            if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
-                continue;
-            }
-            $bytes = intdiv((int)$bits, 8);
-            $rest  = (int)$bits % 8;
-            if ($bytes > 0 && strncmp($ipBin, $netBin, $bytes) !== 0) {
-                continue;
-            }
-            if ($rest === 0) {
-                return true;
-            }
-            $mask = chr((0xFF << (8 - $rest)) & 0xFF);
-            if ((($ipBin[$bytes] ?? "\0") & $mask) === (($netBin[$bytes] ?? "\0") & $mask)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function AiResolveRedirect(string $base, string $location): string
-    {
-        if (preg_match('#^https?://#i', $location)) {
-            return $location;
-        }
-        $p      = parse_url($base);
-        $scheme = (string)($p['scheme'] ?? 'https');
-        $host   = (string)($p['host'] ?? '');
-        $port   = isset($p['port']) ? ':' . $p['port'] : '';
-        if ($host === '') {
-            return $location;
-        }
-        if ($location !== '' && $location[0] === '/') {
-            return $scheme . '://' . $host . $port . $location;
-        }
-        $path = (string)($p['path'] ?? '/');
-        $slash = strrpos($path, '/');
-        $dir   = $slash === false ? '/' : substr($path, 0, $slash + 1);
-        return $scheme . '://' . $host . $port . $dir . $location;
-    }
-
-    private function AiHttpGet(string $url, array $pinnedIps = []): array
-    {
-        $body     = '';
-        $location = '';
-        $max      = 2 * 1024 * 1024;
-        $ch = curl_init($url);
-        if ($pinnedIps !== []) {
-            $parts = parse_url($url);
-            $host  = (string)($parts['host'] ?? '');
-            $port  = (int)($parts['port'] ?? (strtolower((string)($parts['scheme'] ?? '')) === 'https' ? 443 : 80));
-            if ($host !== '') {
-                curl_setopt($ch, CURLOPT_RESOLVE, [$host . ':' . $port . ':' . implode(',', $pinnedIps)]);
-            }
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_TIMEOUT        => self::AI_HTTP_GET_TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_ENCODING       => '',
-            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; SymDoGateway/1.0)',
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-            CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$location): int {
-                if (stripos($line, 'location:') === 0) {
-                    $location = trim(substr($line, 9));
-                }
-                return strlen($line);
-            },
-            CURLOPT_WRITEFUNCTION => function ($ch, string $chunk) use (&$body, $max): int {
-                $body .= $chunk;
-                return (strlen($body) > $max) ? 0 : strlen($chunk);
-            },
-        ]);
-        $ok    = curl_exec($ch);
-        $errno = curl_errno($ch);
-        // Abbruch durch die Größenbegrenzung (CURLE_WRITE_ERROR) ist kein Fehler:
-        // der bis dahin geladene Body reicht.
-        $err    = ($ok === false && $errno !== CURLE_WRITE_ERROR) ? curl_error($ch) : '';
-        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ['status' => $status, 'body' => $body, 'err' => $err, 'location' => $location];
-    }
-
-    // ────────────────────────────── Rezept-Text ──────────────────────────────
-
-    /** Macht aus Roh-HTML den für die KI relevanten Text (JSON-LD-Zutaten bevorzugt). */
-    private function AiRecipeText(string $html): string
-    {
-        $prefix      = '';
-        $ingredients = $this->AiExtractJsonLdIngredients($html);
-        if ($ingredients !== []) {
-            $prefix = "Zutaten (aus strukturierten Daten der Seite):\n- " . implode("\n- ", $ingredients) . "\n\n";
-        }
-        $combined = $prefix . $this->AiHtmlToText($html);
-        if (strlen($combined) > self::AI_RECIPE_TEXT_MAX) {
-            $combined = substr($combined, 0, self::AI_RECIPE_TEXT_MAX);
-        }
-        return trim($combined);
-    }
-
-    /** schema.org/Recipe „recipeIngredient" aus JSON-LD-Blöcken (rekursiv). */
-    private function AiExtractJsonLdIngredients(string $html): array
-    {
-        if (!preg_match_all('#<script[^>]*type\s*=\s*["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', $html, $m)) {
-            return [];
-        }
-        $out = [];
-        foreach ($m[1] as $block) {
-            $data = json_decode(trim($block), true);
-            if (is_array($data)) {
-                $this->AiCollectRecipeIngredients($data, $out);
-            }
-        }
-        $clean = [];
-        foreach ($out as $line) {
-            $line = trim((string)preg_replace('/\s+/', ' ', (string)$line));
-            if ($line !== '') {
-                $clean[$line] = true;
-            }
-        }
-        return array_slice(array_keys($clean), 0, self::AI_MAX_INGREDIENTS);
-    }
-
-    private function AiCollectRecipeIngredients(array $node, array &$out): void
-    {
-        foreach ($node as $key => $val) {
-            if ($key === 'recipeIngredient' && is_array($val)) {
-                foreach ($val as $ing) {
-                    if (is_string($ing)) {
-                        $out[] = $ing;
-                    }
-                }
-            } elseif (is_array($val)) {
-                $this->AiCollectRecipeIngredients($val, $out);
-            }
-        }
-    }
-
-    private function AiHtmlToText(string $html): string
-    {
-        // Skripte/Styles/versteckte Blöcke zuerst raus, sonst landet JS/CSS im Text.
-        $t = preg_replace('#<(script|style|noscript|template|svg)\b[^>]*>.*?</\1>#is', ' ', $html) ?? $html;
-        $t = preg_replace('#<!--.*?-->#s', ' ', $t) ?? $t;
-        $t = preg_replace('/<\s*br\s*\/?\s*>/i', "\n", $t) ?? $t;
-        $t = preg_replace('/<\/\s*(p|div|li|tr|h[1-6])\s*>/i', "\n", $t) ?? $t;
-        $t = strip_tags($t);
-        $t = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $t = preg_replace("/[ \t]+\n/", "\n", $t) ?? $t;
-        $t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;
-        return trim($t);
+        return AiHttp::post($url, $headers, $bodyJson, $timeout, AiProvider::CONNECT_TIMEOUT);
     }
 
     // ────────────────────────────── Helfer ──────────────────────────────
