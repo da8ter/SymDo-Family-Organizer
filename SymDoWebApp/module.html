@@ -5127,7 +5127,17 @@ const store = {
 // ── KI-Transport: Standalone nutzt REST/Adapter, die Visu-Kachel relayt über requestAction ──
 let __aiTxn = 0;
 const __aiPending = {};
-function aiPost(path, payload) {
+
+/* Diese drei Wege dürfen als AUFTRAG laufen: der Server nimmt sie an, antwortet
+   mit 202 und einer Kennung, und wir holen das Ergebnis später ab. Alles andere
+   (Listen, Termine, Notizen) ist in Millisekunden beantwortet und hat damit
+   nichts zu tun — ein `async` daran wäre nur ein Feld, das niemand liest. */
+const AI_AUFTRAG_WEGE = { '/ai/extract': 1, '/ai/ingredients': 1, '/ai/transcribe': 1 };
+
+/** Die Wecker der laufenden Aufträge: Kennung → „hör auf zu warten". */
+const __aiJobWecker = {};
+
+function aiPostRoh(path, payload) {
   if (typeof window.__symdoApiPost === 'function') {
     return window.__symdoApiPost(path, payload);
   }
@@ -5146,6 +5156,94 @@ function aiPost(path, payload) {
     requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
     setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
   });
+}
+
+/**
+ * Derselbe Aufruf wie immer — nur dass die drei KI-Wege ihn als Auftrag stellen
+ * dürfen, wenn der Server das anbietet.
+ *
+ * Der Grund: ein KI-Aufruf dauert bis zu 45 Sekunden, und solange stand die
+ * ganze App, weil Symcon je Instanz nur eine Sache zur Zeit tut. Jetzt kommt
+ * sofort eine Kennung zurück, und das Warten passiert hier.
+ *
+ * Die Rückgabe behält ihre Form `{status, json}`. Kein Aufrufer ändert sich —
+ * `runAiExtract`, `runAiIngredients` und `diktatFertig` merken nichts davon.
+ * Und wer einen alten Server vor sich hat, bekommt seine Antwort wie bisher
+ * direkt: dann fehlt `queued`, und wir reichen sie unverändert durch.
+ */
+async function aiPost(path, payload) {
+  if (!AI_AUFTRAG_WEGE[path] || !aiWegMitAuftrag()) {
+    return aiPostRoh(path, payload);
+  }
+  const antwort = await aiPostRoh(path, Object.assign({}, payload || {}, { async: true }));
+  return aiAuftragAbwarten(antwort);
+}
+
+/**
+ * Nur die beiden HTTP-Wege können Aufträge stellen. Die Visu-Kachel relayt über
+ * requestAction und bleibt vorerst synchron: dort gehört das Warten dem Relay,
+ * und das ist ein eigener Schritt.
+ */
+function aiWegMitAuftrag() {
+  return typeof window.__symdoApiPost === 'function' || !!window.__SYMDO__;
+}
+
+/**
+ * Auf ein Ergebnis warten, das unter einer Kennung liegt.
+ *
+ * Gefragt wird im Takt, den der Server vorgibt — aber nur als Rückfall: kommt
+ * über die Klingel (WebSocket) die Meldung „dieser Auftrag ist fertig", wird
+ * sofort nachgesehen. Ohne die Klingel wartete man im ungünstigsten Fall zwei
+ * Sekunden länger als nötig, mit ihr sind es Millisekunden.
+ */
+async function aiAuftragAbwarten(antwort) {
+  const j = antwort && antwort.json;
+  if (!j || j.queued !== true || !j.id) {
+    return antwort;                      // alter Server, oder schon fertig
+  }
+  const id = String(j.id);
+  const los = Date.now();
+  const frist = los + Math.max(15, Number(j.maxWait) || 130) * 1000;
+  let takt = Math.max(1, Number(j.pollAfter) || 2) * 1000;
+  aiWartenMelden(j);
+  try {
+    while (Date.now() < frist) {
+      await aiJobSchlafen(id, takt);
+      const a = await aiPostRoh('/ai/jobs', { id: id });
+      if (!a || a.status !== 202) {
+        return a || { status: 504, json: null };
+      }
+      if (a.json) { aiWartenMelden(a.json); }
+      /* Nach zwanzig Sekunden seltener fragen. Wer so lange wartet, wartet an
+         einem langen Aufruf — jede Sekunde Takt kostet dann nur Anfragen. */
+      if (Date.now() - los > 20000) { takt = 5000; }
+    }
+  } finally {
+    delete __aiJobWecker[id];
+    aiWartenMelden(null);
+  }
+  return { status: 504, json: { ok: false, error: { code: 'ai_timeout',
+    message: translate('The AI is taking unusually long. Please try again.') } } };
+}
+
+/** Warten, bis die Zeit um ist ODER der Wecker klingelt. */
+function aiJobSchlafen(id, ms) {
+  return new Promise((fertig) => {
+    const uhr = setTimeout(() => { delete __aiJobWecker[id]; fertig(); }, ms);
+    __aiJobWecker[id] = () => { clearTimeout(uhr); delete __aiJobWecker[id]; fertig(); };
+  });
+}
+
+/**
+ * Dem Rest der Oberfläche sagen, wie es um den Auftrag steht.
+ *
+ * Bewusst über ein Ereignis und nicht über einen Aufruf: so muss keiner der
+ * Aufrufer etwas davon wissen, und wer nichts anzeigt, merkt auch nichts.
+ */
+function aiWartenMelden(stand) {
+  try {
+    window.dispatchEvent(new CustomEvent('symdo:ai-warten', { detail: stand }));
+  } catch (e) {}
 }
 // ── Sprachdialog: die Blase als Dashboard-Kachel ────────────────────────────
 // Kern und Aussehen kommen aus denselben Quellen wie in der Visu-Kachel
@@ -6336,6 +6434,13 @@ function handleMessage(data) {
   if (data.type === 'aiResult') {
     const cb = __aiPending[data.txn];
     if (cb) { delete __aiPending[data.txn]; cb({ status: data.status || 200, json: data.json || null }); }
+    return;
+  }
+  /* „Dieser KI-Auftrag ist fertig." Kein Nachladen — nur den wecken, der auf
+     genau diese Kennung wartet. */
+  if (data.type === 'aiJobDone') {
+    const wecker = __aiJobWecker[String(data.id || '')];
+    if (wecker) { wecker(); }
     return;
   }
   if (data.type === 'state') {
@@ -18814,6 +18919,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function aiStatus(html) { aiBody.innerHTML = '<div class="ai-status">' + html + '</div>'; }
+
+  /* Wartet der Aufruf als Auftrag, sagt die Prüfansicht, WORAUF gewartet wird.
+     Über ein Ereignis und nicht über einen Aufruf: so muss kein Aufrufer etwas
+     davon wissen, und wo nichts offen ist, passiert auch nichts. Ohne diese
+     Zeilen stünde dort minutenlang „Foto wird ausgewertet…", ohne dass jemand
+     wüsste, ob überhaupt etwas geschieht. */
+  window.addEventListener('symdo:ai-warten', (ev) => {
+    const stand = ev && ev.detail;
+    const ov = document.getElementById('aiReviewOverlay');
+    if (!stand || !ov || !ov.classList.contains('open')) { return; }
+    const platz = Number(stand.position) || 1;
+    const text = platz > 1
+      ? translate('Waiting in line (%d ahead)…').replace('%d', String(platz - 1))
+      : translate('Being analyzed…');
+    aiStatus('<div class="ai-spinner"></div>' + escapeHtml(text));
+  });
 
   function runAiExtract(payload) {
     aiAdd.disabled = true;

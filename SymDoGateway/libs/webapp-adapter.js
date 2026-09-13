@@ -802,7 +802,17 @@
       try { sock = new WebSocket(url); } catch (e) { sock = null; retry(); return; }
 
       sock.onopen = function () { backoff = 2000; };
-      sock.onmessage = function () {
+      sock.onmessage = function (ereignis) {
+        /* Eine Meldung „dieser KI-Auftrag ist fertig" ist KEIN Anlass für einen
+           Abgleich: sie ändert keine Liste, sie weckt nur den, der auf genau
+           diese Kennung wartet. Ein Abgleich wäre hier reine Arbeit — und er
+           käme obendrein mitten in eine laufende eigene Aktion. */
+        var nachricht = null;
+        try { nachricht = JSON.parse(String((ereignis && ereignis.data) || '')); } catch (e) { nachricht = null; }
+        if (nachricht && nachricht.t === 'job' && nachricht.id) {
+          deliver({ type: 'aiJobDone', id: String(nachricht.id) });
+          return;
+        }
         // Mehrere Signale kurz hintereinander zu einem Abgleich zusammenfassen.
         if (debounce) { return; }
         debounce = window.setTimeout(function () {

@@ -718,7 +718,10 @@
             "home, from now": "nach Hause, ab jetzt",
             "walking": "laufen",
             "waiting": "warten",
-            "Homework to do": "Offene Hausaufgaben"
+            "Homework to do": "Offene Hausaufgaben",
+            "Waiting in line (%d ahead)…": "Wartet in der Schlange (%d davor)…",
+            "Being analyzed…": "Wird ausgewertet…",
+            "The AI is taking unusually long. Please try again.": "Die KI braucht ungewöhnlich lange. Bitte noch einmal versuchen."
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",
