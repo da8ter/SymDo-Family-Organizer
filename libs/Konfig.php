@@ -57,11 +57,18 @@ trait Konfig
      * Eine Eigenschaft der KonfigID lesen — die eine Stelle, ueber die aller
      * Zugriff auf die Gateway-Konfiguration laeuft.
      *
-     * Fuer die eigene Instanz `IPS_GetProperty` (sieht gestagte Werte sofort,
-     * wie `LoadUsers`); fuer eine fremde Instanz einmal `IPS_GetConfiguration`
-     * und danach aus dem Zwischenspeicher. Der Cache lebt nur, solange dieser
-     * PHP-Aufruf laeuft — Symcon baut je Hook/Aktion einen frischen Kontext,
-     * also nie ein veralteter Wert ueber Aufrufe hinweg.
+     * Fuer die eigene Instanz `IPS_GetProperty`, fuer eine fremde einmal
+     * `IPS_GetConfiguration` und danach aus dem Zwischenspeicher. Der Cache
+     * lebt nur, solange dieser PHP-Aufruf laeuft — Symcon baut je Hook/Aktion
+     * einen frischen Kontext, also nie ein veralteter Wert ueber Aufrufe
+     * hinweg.
+     *
+     * Beide Griffe liefern den AKTIVEN Stand, nicht den hinterlegten. Hier
+     * stand einmal das Gegenteil; am 13.09.2026 in der 9.1 nachgemessen:
+     * nach `IPS_SetProperty` liefert `IPS_GetProperty` unveraendert den alten
+     * Wert, und `IPS_GetConfiguration` ebenso. Das ist die gute Nachricht —
+     * ein eingetippter, aber nicht uebernommener Schluessel wird nicht
+     * benutzt.
      */
     protected function AiProp(string $name): mixed
     {
