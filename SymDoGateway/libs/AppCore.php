@@ -777,7 +777,12 @@ trait AppCore
             try {
                 $payload     = $req['payload'] ?? [];
                 $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''), (string)$payloadJson), true);
+                /* Kennung und Vorgang reisen mit: an ihnen haengt, ob der Aufruf
+                   als AUFTRAG hinausgehen darf. Tut er das, kommt hier der
+                   Rumpf „angenommen" zurueck, und das Ergebnis stellt spaeter
+                   `AiJobTileAntwort()` als zweites AiResult zu. */
+                $body        = json_decode($this->AiRelayBody((string)($req['path'] ?? ''),
+                    (string)$payloadJson, $sdwa, $txn), true);
             } catch (\Throwable $e) {
                 $this->LogMessage('SymDo: KI-Weiterleitung fehlgeschlagen — ' . $e->getMessage(), KL_ERROR);
                 $body = ['ok' => false, 'error' => ['code' => 'internal', 'message' => $this->Translate('AI request failed.')]];
@@ -788,8 +793,11 @@ trait AppCore
             if ($sdwa > 0 && $this->IsSymDoWebAppInstance($sdwa)) {
                 @IPS_RequestAction($sdwa, 'AiResult', json_encode([
                     'txn' => $txn,
-                    // Status spiegelt das Ergebnis, statt immer 200 zu behaupten.
-                    'status' => (($body['ok'] ?? false) === true) ? 200 : 502,
+                    /* Status spiegelt das Ergebnis, statt immer 200 zu behaupten.
+                       Ein angenommener Auftrag ist 202 — die Kachel erkennt ihn
+                       am Feld `queued` und wartet dann auf das zweite AiResult. */
+                    'status' => (($body['queued'] ?? false) === true) ? 202
+                              : ((($body['ok'] ?? false) === true) ? 200 : 502),
                     'json'   => $body,
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             }

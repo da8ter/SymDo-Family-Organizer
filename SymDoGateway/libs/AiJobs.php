@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../libs/AiJobStore.php';
+require_once __DIR__ . '/../../libs/AiJobRunner.php';
 
 /**
  * KI-Auftraege: einreihen, abholen, fertigmelden.
@@ -194,11 +195,12 @@ trait AiJobs
         $this->SendJson($this->AiJobWartetBody($laden, $id, $kopf ?? []), 202);
     }
 
-    /** @param array<string,mixed> $kopf */
+    /**
+     * @param array<string,mixed> $kopf
+     */
     private function AiJobWartetBody(AiJobStore $laden, string $id, array $kopf): array
     {
         $position = max(1, $laden->position($id));
-        $jeAufruf = $this->AiAnbieter()->istLokal() ? 320 : 65;
         return [
             'ok'        => true,
             'queued'    => true,
@@ -206,8 +208,147 @@ trait AiJobs
             'state'     => (string)($kopf['state'] ?? AiJobStore::OFFEN),
             'position'  => $position,
             'pollAfter' => self::AI_JOB_POLL_S,
-            'maxWait'   => min(600, $position * $jeAufruf + 15),
+            'maxWait'   => $this->AiJobDauerSchaetzung((string)($kopf['kind'] ?? ''), $position),
         ];
+    }
+
+    /**
+     * Wie lange es hoechstens dauern kann — die Zahl, aus der die App ihre
+     * eigene Frist macht.
+     *
+     * Sie muss EHRLICH sein. Eine zu knappe Schaetzung ist teurer als eine zu
+     * grosszuegige: der Aufruf laeuft weiter, wird bezahlt und aufs Tagesbudget
+     * gebucht, aber niemand holt ihn ab — der Nutzer sieht „nichts gefunden".
+     * Deshalb stehen hier die echten Obergrenzen und nicht Daumenwerte:
+     *
+     *   der Anbieteraufruf selbst   45 s, lokal 300 s, ein Diktat 120 s
+     *   eine Vertagung bei „belegt" 30 s
+     *   bis der Sammler noch einmal klingelt   35 s
+     *
+     * Mal der Position in der Schlange, plus etwas Luft — und gedeckelt, denn
+     * eine Frist von einer halben Stunde hilft niemandem mehr.
+     */
+    private function AiJobDauerSchaetzung(string $kind, int $position): int
+    {
+        $anbieter = $this->AiAnbieter();
+        if ($kind === 'transcribe') {
+            $jeAufruf = $anbieter->istLokal() ? AiProvider::LOCAL_TIMEOUT : AiProvider::TRANSCRIBE_TIMEOUT;
+        } else {
+            $jeAufruf = $anbieter->istLokal() ? AiProvider::LOCAL_TIMEOUT : AiProvider::TIMEOUT;
+        }
+        $jeAufruf += AiJobRunner::BREMSE_S + (int)(self::AI_JOB_SWEEP_MS / 1000);
+        return min(600, max(1, $position) * $jeAufruf + 15);
+    }
+
+    // ------------------------------------------------------------------
+    // Der Weg der Visu-Kachel
+    // ------------------------------------------------------------------
+
+    /**
+     * Darf dieser Kachel-Aufruf als Auftrag hinausgehen?
+     *
+     * Eine Kachel hat keinen Token und kennt nur den Weg ueber `requestAction`.
+     * Bisher hing sie waehrend des ganzen Anbieteraufrufs an der Gateway-Spur —
+     * und mit ihr die App, die Web-App und jede andere Kachel.
+     *
+     * Anders als beim HTTP-Weg gibt es hier kein Opt-in: die Kachel wird mit
+     * dem Gateway ausgeliefert, beide Seiten wechseln zusammen. Bedingung ist
+     * nur, dass ein Laeufer bereitsteht.
+     */
+    private function AiKachelAuftrag(int $sdwa, string $txn): bool
+    {
+        return $sdwa > 0 && $txn !== '' && $this->AiJobMoeglich();
+    }
+
+    /**
+     * Den Auftrag einreihen und der Kachel sofort Bescheid geben.
+     *
+     * Der Rueckgabewert ist der Rumpf, den das Relay zurueckgibt — er wird der
+     * Kachel als ERSTES `AiResult` zugestellt. Das ZWEITE, mit dem Ergebnis,
+     * kommt spaeter aus `AiJobTileAntwort()`.
+     *
+     * @param array<string,mixed> $job
+     * @param array<string,mixed> $parse
+     */
+    private function AiRelayAuftrag(string $kind, int $sdwa, string $txn,
+        array $job, array $parse, string $nutzlast): string
+    {
+        $r = $this->AiJobEnqueue($kind, $job, $parse,
+            ['type' => 'tile', 'sdwa' => $sdwa, 'txn' => $txn], $nutzlast, '');
+        if (($r['ok'] ?? false) !== true) {
+            return $this->AiRelayError((string)($r['code'] ?? 'internal'), (string)($r['message'] ?? ''));
+        }
+        $laden = $this->AiJobLaden(false);
+        $id    = (string)$r['id'];
+        return (string)json_encode($this->AiJobWartetBody($laden, $id, $laden->lesen($id) ?? []),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Die Nachfrage einer Kachel nach ihrem Auftrag.
+     *
+     * Gebunden an die KACHEL, die ihn gestellt hat — nicht an ein Geraet, denn
+     * eines hat sie nicht. Eine fremde Kachel bekommt ihn so wenig zu sehen
+     * wie ein fremdes Telefon.
+     *
+     * @return array<string,mixed>
+     */
+    private function AiJobKachelStand(string $id, int $sdwa): array
+    {
+        $laden = $this->AiJobLaden(false);
+        $kopf  = $laden->lesen($id);
+        if ($kopf === null || (int)(($kopf['origin']['sdwa'] ?? 0)) !== $sdwa) {
+            return ['ok' => false, 'error' => ['code' => 'job_not_found',
+                'message' => $this->Translate('This AI job is unknown or has expired.')]];
+        }
+        if ((string)$kopf['state'] === AiJobStore::ROH) {
+            $this->AiJobFinish($id);
+            $kopf = $laden->lesen($id) ?? $kopf;
+        }
+        $zustand = (string)($kopf['state'] ?? '');
+        if ($zustand === AiJobStore::OFFEN || $zustand === AiJobStore::LAEUFT) {
+            return $this->AiJobWartetBody($laden, $id, $kopf);
+        }
+        $rumpf = (array)((($kopf['result'] ?? [])['body']) ?? []);
+        if ($zustand === AiJobStore::GESCHEITERT) {
+            return ['ok' => false, 'error' => ['code' => (string)($rumpf['code'] ?? 'ai_failed'),
+                'message' => (string)($rumpf['message'] ?? $this->Translate('AI request failed.'))]];
+        }
+        return $rumpf;
+    }
+
+    /**
+     * Das ZWEITE `AiResult`: das Ergebnis, unter derselben Kennung des
+     * Vorgangs. Die Kachel hat das erste (die Annahme) bekommen und wartet
+     * seitdem auf dieses hier.
+     *
+     * Der Ruf geht in die Spur der Kachel. Das ist dieselbe Richtung, die das
+     * Relay immer schon genommen hat — nur dauert er jetzt Millisekunden statt
+     * dreiviertel Minuten.
+     *
+     * @param array<string,mixed> $kopf
+     */
+    private function AiJobTileAntwort(array $kopf): void
+    {
+        $sdwa = (int)(($kopf['origin']['sdwa'] ?? 0));
+        $txn  = (string)(($kopf['origin']['txn'] ?? ''));
+        /* Die weisse Liste ein zweites Mal: zwischen Einreihen und Antwort
+           koennen Minuten liegen, und in dieser Zeit kann aus der Kennung eine
+           ganz andere Instanz geworden sein. */
+        if ($sdwa <= 0 || $txn === '' || !$this->IsSymDoWebAppInstance($sdwa)) {
+            return;
+        }
+        $ergebnis = is_array($kopf['result'] ?? null) ? $kopf['result'] : [];
+        $rumpf    = is_array($ergebnis['body'] ?? null) ? $ergebnis['body'] : [];
+        if ((string)($kopf['state'] ?? '') === AiJobStore::GESCHEITERT) {
+            $rumpf = ['ok' => false, 'error' => ['code' => (string)($rumpf['code'] ?? 'ai_failed'),
+                'message' => (string)($rumpf['message'] ?? $this->Translate('AI request failed.'))]];
+        }
+        @IPS_RequestAction($sdwa, 'AiResult', (string)json_encode([
+            'txn'    => $txn,
+            'status' => (($rumpf['ok'] ?? false) === true) ? 200 : 502,
+            'json'   => $rumpf,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     // ------------------------------------------------------------------
@@ -323,7 +464,14 @@ trait AiJobs
         unset($kopf['raw']);
         $laden->schreiben($kopf);
 
-        $this->WsPushJob($id);
+        /* Wer den Auftrag gestellt hat, erfaehrt es auf seinem Weg: die App und
+           die Web-App ueber die Klingel, die Visu-Kachel ueber ein zweites
+           `AiResult` mit derselben Vorgangskennung. */
+        if ((string)((($kopf['origin'] ?? [])['type']) ?? '') === 'tile') {
+            $this->AiJobTileAntwort($kopf);
+        } else {
+            $this->WsPushJob($id);
+        }
         $this->AiJobSweepSetzen(self::AI_JOB_SWEEP_MS);
     }
 

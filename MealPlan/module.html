@@ -525,14 +525,48 @@ const __aiPending = {};
 function aiPost(path, payload) {
   const txn = 'ai' + (++__aiTxn);
   return new Promise((resolve) => {
-    __aiPending[txn] = resolve;
+    const eintrag = { fertig: resolve, uhr: 0, nachfrage: 0 };
+    __aiPending[txn] = eintrag;
     if (typeof requestAction === 'function') {
       requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
     }
-    setTimeout(() => {
-      if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); }
-    }, 130000);
+    eintrag.uhr = setTimeout(() => aiAufgeben(txn), 130000);
   });
+}
+
+/** Warten beenden und dem Aufrufer sagen, dass nichts kam. */
+function aiAufgeben(txn) {
+  const e = __aiPending[txn];
+  if (!e) { return; }
+  delete __aiPending[txn];
+  clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+  e.fertig({ status: 504, json: null });
+}
+
+/**
+ * Das Gateway hat den Aufruf als AUFTRAG angenommen — seit September 2026 tut
+ * es das, wenn ein Läufer bereitsteht. Dann kommt das Ergebnis als ZWEITES
+ * `aiResult` mit derselben Vorgangskennung.
+ *
+ * Wer hier auflöst, gibt dem Aufrufer eine Antwort ohne Zutaten — für ihn
+ * dasselbe wie „darin war nichts zu finden". Also weiterwarten, die Frist auf
+ * die Schätzung des Servers setzen und auf halber Strecke EINMAL selbst
+ * nachfragen, falls die zweite Meldung verlorengeht.
+ */
+function aiWartet(txn, stand) {
+  const e = __aiPending[txn];
+  if (!e) { return; }
+  clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+  /* NIE kürzer als die Uhr, die vorher lief (130 s): die Schätzung des Servers
+     kennt weder die Vertagung bei belegtem Anbieter noch den Takt des
+     Sammlers. Und jede neue Meldung „wartet noch" stellt sie neu. */
+  const frist = Math.max(130, Number(stand.maxWait) || 0) * 1000;
+  e.uhr = setTimeout(() => aiAufgeben(txn), frist);
+  e.nachfrage = setTimeout(() => {
+    if (!__aiPending[txn] || typeof requestAction !== 'function') { return; }
+    requestAction('AiCall', JSON.stringify({
+      path: '/ai/jobs', payload: { id: String(stand.id || '') }, txn: txn }));
+  }, Math.round(frist / 2));
 }
 
 // ── Zeichnen ────────────────────────────────────────────────────────────────
@@ -1085,8 +1119,17 @@ function handleMessage(daten) {
   if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
   if (!daten || typeof daten !== 'object') { return; }
   if (daten.type === 'aiResult') {
-    const cb = __aiPending[daten.txn];
-    if (cb) { delete __aiPending[daten.txn]; cb({ status: daten.status || 200, json: daten.json || null }); }
+    const e = __aiPending[daten.txn];
+    if (!e) { return; }
+    const j = daten.json || null;
+    // „Angenommen" ist noch keine Antwort — siehe aiWartet().
+    if (j && j.queued === true && j.id) {
+      aiWartet(daten.txn, j);
+      return;
+    }
+    delete __aiPending[daten.txn];
+    clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+    e.fertig({ status: daten.status || 200, json: j });
     return;
   }
   if (daten.type === 'cartDone') {

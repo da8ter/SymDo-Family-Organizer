@@ -257,7 +257,7 @@ trait AiExtract
      * bzw. {url}. Rückgabe: JSON-Body wie ihn die Web-App erwartet
      * ({ok:true,…} oder {ok:false,error:{code,message}}).
      */
-    private function AiRelayBody(string $path, string $payloadJson): string
+    private function AiRelayBody(string $path, string $payloadJson, int $sdwa = 0, string $txn = ''): string
     {
         $body = json_decode($payloadJson, true);
         if (!is_array($body)) {
@@ -364,6 +364,15 @@ trait AiExtract
             return json_encode($this->VoiceHandleAction($body, null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
 
+        /* Die Nachfrage nach einem eingereihten Auftrag. Sie steht VOR dem
+           KI-Riegel, und das mit Absicht: wer ein Ergebnis abholt, hat es
+           vorher bestellt. Schaltet der Nutzer die KI dazwischen ab, soll er
+           trotzdem erfahren, was aus seinem Foto geworden ist. */
+        if (str_ends_with($path, 'jobs')) {
+            return (string)json_encode($this->AiJobKachelStand($this->BodyStr($body, 'id'), $sdwa),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
         if (!(bool) $this->AiProp('AiEnabled')) {
             return $this->AiRelayError('ai_disabled', $this->Translate('AI analysis is disabled.'));
         }
@@ -398,15 +407,28 @@ trait AiExtract
         if (str_ends_with($path, 'ingredients')) {
             $url        = trim($this->BodyStr($body, 'url'));
             $kategorien = $this->AiAllowedCategories($body);
-            if ($pdf !== '') {
-                $r = $this->AiExtractIngredientsFromPdf($pdf, $kategorien);
-            } elseif ($image !== '') {
-                $r = $this->AiExtractIngredientsFromImage($image, $kategorien);
-            } elseif ($url !== '') {
-                $r = $this->AiExtractIngredientsFromUrl($url, $kategorien);
-            } else {
+            $weg = $pdf !== '' ? 'pdf' : ($image !== '' ? 'image' : ($url !== '' ? 'url' : ''));
+            if ($weg === '') {
                 return $this->AiRelayError('invalid_payload', $this->Translate('No image or URL provided.'));
             }
+            /* Ab hier ist alles geprueift. Kann ein Laeufer den Aufruf
+               uebernehmen, geht er als Auftrag hinaus und die Kachel bekommt
+               sofort Bescheid — statt das Gateway fuenfundvierzig Sekunden zu
+               belegen. */
+            if ($this->AiKachelAuftrag($sdwa, $txn)) {
+                $auftrag = $this->AiIngredientsAuftrag($weg, $kategorien);
+                return $this->AiRelayAuftrag('ingredients', $sdwa, $txn,
+                    ['system' => $auftrag['system'], 'user' => $auftrag['user'],
+                     'payloadKind' => $weg === 'url' ? '' : $weg, 'mime' => '',
+                     'url' => $weg === 'url' ? $url : ''],
+                    ['type' => 'recipe', 'arten' => []],
+                    $weg === 'image' ? $image : ($weg === 'pdf' ? $pdf : ''));
+            }
+            $r = match ($weg) {
+                'pdf'   => $this->AiExtractIngredientsFromPdf($pdf, $kategorien),
+                'image' => $this->AiExtractIngredientsFromImage($image, $kategorien),
+                default => $this->AiExtractIngredientsFromUrl($url, $kategorien),
+            };
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
             }
@@ -425,14 +447,25 @@ trait AiExtract
                 if (mb_strlen($text) > self::AI_TEXT_MAX) {
                     return $this->AiRelayError('invalid_payload', $this->Translate('Text too long.'));
                 }
-                $r = $this->AiExtractTodos('', '', $text);
+                // Der Text schlaegt alles andere — und was nicht mitgeht, wird
+                // auch nicht geprueft, darf also nicht stehen bleiben.
+                $pdf = '';
+                $image = '';
             } elseif ($pdf !== '') {
-                $r = $this->AiExtractTodos('', $pdf);
-            } elseif ($image !== '') {
-                $r = $this->AiExtractTodos($image);
-            } else {
+                $image = '';
+            } elseif ($image === '') {
                 return $this->AiRelayError('invalid_payload', $this->Translate('No image provided.'));
             }
+            if ($this->AiKachelAuftrag($sdwa, $txn)) {
+                $auftrag = $this->AiExtractAuftrag($image, $pdf, $text);
+                return $this->AiRelayAuftrag('extract', $sdwa, $txn,
+                    ['system' => $auftrag['system'], 'user' => $auftrag['user'],
+                     'payloadKind' => $image !== '' ? 'image' : ($pdf !== '' ? 'pdf' : ''),
+                     'mime' => '', 'url' => ''],
+                    ['type' => 'todos', 'arten' => $auftrag['arten']],
+                    $image !== '' ? $image : $pdf);
+            }
+            $r = $this->AiExtractTodos($image, $pdf, $text);
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_error'), (string)($r['message'] ?? 'AI error'));
             }
@@ -457,6 +490,13 @@ trait AiExtract
                 return $this->AiRelayError('invalid_payload', $this->Translate('No audio data.'));
             }
             $mime = trim($this->BodyStr($body, 'mime'));
+            if ($this->AiKachelAuftrag($sdwa, $txn)) {
+                return $this->AiRelayAuftrag('transcribe', $sdwa, $txn,
+                    ['system' => '', 'user' => '', 'payloadKind' => 'audio',
+                     'mime' => $mime !== '' ? $mime : 'audio/webm', 'url' => ''],
+                    ['type' => 'text', 'arten' => []],
+                    $bytes);
+            }
             $r = $this->AiTranscribe($bytes, $mime !== '' ? $mime : 'audio/webm');
             if (($r['ok'] ?? false) !== true) {
                 return $this->AiRelayError((string)($r['code'] ?? 'ai_failed'), (string)($r['message'] ?? 'AI error'));

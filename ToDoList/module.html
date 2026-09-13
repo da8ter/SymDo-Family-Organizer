@@ -5184,6 +5184,11 @@ const AI_AUFTRAG_WEGE = { '/ai/extract': 1, '/ai/ingredients': 1, '/ai/transcrib
 /** Die Wecker der laufenden Aufträge: Kennung → „hör auf zu warten". */
 const __aiJobWecker = {};
 
+/* Die Untergrenze jeder Wartezeit, in Sekunden. Genau die Uhr, die hier lief,
+   bevor es Aufträge gab — kürzer darf keine Frist werden, sonst verliert ein
+   Aufruf sein Ergebnis, der vorher durchkam. */
+const AI_KACHEL_FRIST_S = 130;
+
 function aiPostRoh(path, payload) {
   if (typeof window.__symdoApiPost === 'function') {
     return window.__symdoApiPost(path, payload);
@@ -5204,10 +5209,53 @@ function aiPostRoh(path, payload) {
   }
   const txn = 'ai' + (++__aiTxn);
   return new Promise((resolve) => {
-    __aiPending[txn] = resolve;
+    const eintrag = { fertig: resolve, uhr: 0, nachfrage: 0 };
+    __aiPending[txn] = eintrag;
     requestAction('AiCall', JSON.stringify({ path: path, payload: payload, txn: txn }));
-    setTimeout(() => { if (__aiPending[txn]) { delete __aiPending[txn]; resolve({ status: 504, json: null }); } }, 130000);
+    eintrag.uhr = setTimeout(() => aiKachelAufgeben(txn), 130000);
   });
+}
+
+/** Warten beenden und dem Aufrufer sagen, dass nichts kam. */
+function aiKachelAufgeben(txn) {
+  const e = __aiPending[txn];
+  if (!e) { return; }
+  delete __aiPending[txn];
+  clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+  aiWartenMelden(null);
+  e.fertig({ status: 504, json: null });
+}
+
+/**
+ * Das Gateway hat den Aufruf als AUFTRAG angenommen.
+ *
+ * Dann kommt das Ergebnis als ZWEITES `AiResult` mit derselben
+ * Vorgangskennung — der Eintrag bleibt also stehen, statt aufgelöst zu werden.
+ * Nur die Frist wächst auf das, was der Server schätzt.
+ *
+ * Dazu EINE Rückfall-Nachfrage auf halber Strecke: geht die zweite Meldung
+ * verloren (Kachel neu geladen, Relay verschluckt), fragen wir selbst nach.
+ * Sie läuft unter derselben Kennung und löst denselben Eintrag auf.
+ */
+function aiKachelWartet(txn, stand) {
+  const e = __aiPending[txn];
+  if (!e) { return; }
+  clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+  /* NIE kürzer als die Uhr, die vorher lief. Die Schätzung des Servers kennt
+     weder die Vertagung bei belegtem Anbieter noch den Takt des Sammlers —
+     wer ihr blind folgt, wirft ein fertiges, bezahltes Ergebnis weg, und der
+     Nutzer sieht „nichts gefunden". */
+  const frist = Math.max(AI_KACHEL_FRIST_S, Number(stand.maxWait) || 0) * 1000;
+  e.uhr = setTimeout(() => aiKachelAufgeben(txn), frist);
+  /* Und jede neue Meldung „wartet noch" stellt die Uhr neu — sie ist der
+     Beweis, dass drüben jemand arbeitet. Endlos wird das nicht: ein Auftrag
+     gibt irgendwann selbst auf und antwortet dann mit einem Fehler, und
+     schweigt das Gateway, läuft die aktuelle Frist ab. */
+  e.nachfrage = setTimeout(() => {
+    if (!__aiPending[txn]) { return; }
+    requestAction('AiCall', JSON.stringify({
+      path: '/ai/jobs', payload: { id: String(stand.id || '') }, txn: txn }));
+  }, Math.round(frist / 2));
 }
 
 /**
@@ -5255,7 +5303,8 @@ async function aiAuftragAbwarten(antwort) {
   }
   const id = String(j.id);
   const los = Date.now();
-  const frist = los + Math.max(15, Number(j.maxWait) || 130) * 1000;
+  // Dieselbe Untergrenze wie in der Kachel, und aus demselben Grund.
+  let frist = los + Math.max(AI_KACHEL_FRIST_S, Number(j.maxWait) || 0) * 1000;
   let takt = Math.max(1, Number(j.pollAfter) || 2) * 1000;
   aiWartenMelden(j);
   try {
@@ -5265,7 +5314,16 @@ async function aiAuftragAbwarten(antwort) {
       if (!a || a.status !== 202) {
         return a || { status: 504, json: null };
       }
-      if (a.json) { aiWartenMelden(a.json); }
+      if (a.json) {
+        aiWartenMelden(a.json);
+        /* „Wartet noch" ist der Beweis, dass drüben jemand arbeitet — dann
+           läuft die Frist ab jetzt neu. Ohne das gäbe eine zu knappe
+           Schätzung ein fertiges Ergebnis verloren. */
+        const rest = Number(a.json.maxWait) || 0;
+        if (rest > 0) {
+          frist = Math.max(frist, Date.now() + Math.max(AI_KACHEL_FRIST_S, rest) * 1000);
+        }
+      }
       /* Nach zwanzig Sekunden seltener fragen. Wer so lange wartet, wartet an
          einem langen Aufruf — jede Sekunde Takt kostet dann nur Anfragen. */
       if (Date.now() - los > 20000) { takt = 5000; }
@@ -6484,8 +6542,21 @@ function handleMessage(data) {
     return;
   }
   if (data.type === 'aiResult') {
-    const cb = __aiPending[data.txn];
-    if (cb) { delete __aiPending[data.txn]; cb({ status: data.status || 200, json: data.json || null }); }
+    const e = __aiPending[data.txn];
+    if (!e) { return; }
+    const j = data.json || null;
+    /* „Angenommen" ist noch keine Antwort: der Eintrag bleibt stehen, bis das
+       Ergebnis kommt. Löste man ihn hier auf, sähe der Aufrufer eine Antwort
+       ohne Inhalt — für ihn dasselbe wie „darin war nichts zu finden". */
+    if (j && j.queued === true && j.id) {
+      aiWartenMelden(j);
+      aiKachelWartet(data.txn, j);
+      return;
+    }
+    delete __aiPending[data.txn];
+    clearTimeout(e.uhr); clearTimeout(e.nachfrage);
+    aiWartenMelden(null);
+    e.fertig({ status: data.status || 200, json: j });
     return;
   }
   /* „Dieser KI-Auftrag ist fertig." Kein Nachladen — nur den wecken, der auf
