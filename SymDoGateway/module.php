@@ -7,6 +7,7 @@ require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/../libs/Belegung.php';
 require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/libs/ScanBridge.php';
+require_once __DIR__ . '/libs/AiJobs.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
@@ -55,6 +56,8 @@ class SymDoGateway extends IPSModuleStrict
     // Der passive Weg zu den Scanner-Instanzen: Auftraege hin, Ergebnisse zurueck.
     use ScanKanal;
     use ScanBridge;
+    // KI-Auftraege: einreihen, abholen, fertigmelden
+    use AiJobs;
     use MailScan;
     use MailFetch;
     use CalendarBridge;
@@ -183,6 +186,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->TimetableCreate();
         // Scan-Kanal: die Zeitgeber der zweiten Spur
         $this->ScanCreate();
+        $this->AiJobCreate();
+        $this->RegisterAttributeInteger('AiJobSweepMs', -1);
     }
 
     public function ApplyChanges(): void
@@ -204,6 +209,7 @@ class SymDoGateway extends IPSModuleStrict
             $this->AppApplyChanges();
             // Vor den Scans: sie duerfen ab jetzt Auftraege in den Kanal legen.
             $this->ScanApplyChanges();
+            $this->AiJobApplyChanges();
             $this->MailApplyChanges();
             $this->EduApplyChanges();
             $this->UntisApplyChanges();
@@ -261,6 +267,9 @@ class SymDoGateway extends IPSModuleStrict
         /* Zuerst: der Weckruf eines Scanners soll die kuerzeste Strecke haben.
            Er ist der einzige Einstieg, der von einer FREMDEN Spur kommt. */
         if ($this->ScanRequestAction($Ident, $Value)) {
+            return;
+        }
+        if ($this->AiJobRequestAction($Ident, $Value)) {
             return;
         }
         if ($this->MailRequestAction($Ident, $Value)) {

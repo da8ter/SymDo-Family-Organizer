@@ -131,6 +131,23 @@ trait ApiRouter
                     $this->HandleAiIngredients($device);
                     return;
                 }
+                /* Die Nachfrage nach einem Auftrag steht VOR allem anderen und
+                   prueft absichtlich NICHT, ob die KI eingeschaltet ist: wer ein
+                   Ergebnis abholt, hat es vorher bestellt — und wenn der Nutzer
+                   die KI inzwischen abgeschaltet hat, soll er trotzdem erfahren,
+                   was aus seinem Foto geworden ist.
+                   Den POST-Weg gibt es, weil die Visu-Kachel nur POSTs auf EINEN
+                   Pfad weiterreichen kann. */
+                if (($route[2] ?? '') === 'jobs') {
+                    if ($method === 'GET') {
+                        $this->HandleAiJobStatus($device, (string)($route[3] ?? ''));
+                        return;
+                    }
+                    if ($method === 'POST') {
+                        $this->HandleAiJobStatus($device, (string)($this->ReadJsonBody()['id'] ?? ''));
+                        return;
+                    }
+                }
                 if ($method === 'POST' && ($route[2] ?? '') === 'savephoto') {
                     $this->HandleAiSavePhoto($device);
                     return;

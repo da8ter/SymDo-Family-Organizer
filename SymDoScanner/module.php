@@ -10,6 +10,7 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
    App kommen im Gateway an, und dort bleiben sie auch. */
 require_once __DIR__ . '/../SymDoGateway/libs/DokuGemein.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuBau.php';
+require_once __DIR__ . '/../libs/AiJobRunner.php';
 
 /**
  * SymDo Scanner — die Arbeitsspur neben dem Gateway.
@@ -344,6 +345,20 @@ class SymDoScanner extends IPSModuleStrict
                     $verweilen, (string)$auftrag['anlass']);
                 break;
 
+            case 'auftrag':
+                /* Die KI-Auftraege. Das Gateway hat den Prompt gebaut und den
+                   Auftrag abgelegt; hier laeuft nur das Langsame — der Anruf
+                   beim Anbieter, bis zu 45 Sekunden, lokal bis zu 300. Genau
+                   dafuer gibt es diese Instanz. */
+                $n = $this->AuftraegeAbarbeiten();
+                if ($n === 0) {
+                    // Nichts zu tun, oder alles vertagt: keine Meldung noetig.
+                    $melden = false;
+                    break;
+                }
+                $text = sprintf($this->Translate('%d AI jobs answered'), $n);
+                break;
+
             case 'doku':
                 /* Das Handbuch-Verzeichnis. Frueher baute es das Gateway
                    selbst: drei Sekunden alle acht, eine Woche lang — 37 %
@@ -396,6 +411,60 @@ class SymDoScanner extends IPSModuleStrict
             $this->GatewayWecken();
         }
         return $text;
+    }
+
+    /**
+     * Die Warteschlange der KI-Auftraege abarbeiten.
+     *
+     * Der Laeufer selbst kennt kein Symcon — er bekommt eine Uhr, die
+     * Anbieter-Sperre, einen Weg den Anbieter zu bauen und einen, das Ergebnis
+     * zu melden. Alles vier wird hier hereingereicht.
+     *
+     * Die Sperre traegt einen EIGENEN Namen, nicht den der Gateway-Sperre.
+     * Das ist wichtiger, als es aussieht: die Gateway-Sperre wird auf allen
+     * synchronen Wegen mit Frist NULL geholt — Sprachdialog, Briefing,
+     * Postauswertung, Kachel. Teilten wir sie, bekaeme jeder dieser Wege
+     * waehrend eines laufenden Auftrags sofort „belegt" (bis zu fuenf Minuten
+     * bei einem lokalen Server), und die Postauswertung buchte dafuer sogar
+     * Tagesbudget. Vorher war das unerreichbar, weil nur die Gateway-Spur
+     * selbst die Sperre halten konnte — und die ist in sich serialisiert.
+     *
+     * Der Grund der Sperre bleibt gewahrt: sie verhindert, dass sich ZWEI
+     * Anbieteraufrufe aus der Warteschlange ueberholen. Ein gleichzeitiger
+     * Aufruf aus dem Gateway belegt keinen Webhook-Arbeiter mehr als vorher.
+     */
+    private function AuftraegeAbarbeiten(): int
+    {
+        $gateway = $this->GatewayID();
+        $laden = AiJobStore::in(rtrim((string) @IPS_GetKernelDir(), '/\\') . DIRECTORY_SEPARATOR
+            . 'symdo_aijobs' . DIRECTORY_SEPARATOR . $gateway . DIRECTORY_SEPARATOR, false);
+        if (!$laden->nutzbar()) {
+            return 0;
+        }
+        $sperre = 'SDSC_AiJob_' . $gateway;
+
+        $laeufer = new AiJobRunner(
+            $laden,
+            function (): AiProvider {
+                $konfig = [];
+                foreach (AiProvider::KONFIG_FELDER as $feld) {
+                    $konfig[$feld] = (string) $this->AiProp($feld);
+                }
+                return AiProvider::ausKonfiguration($konfig);
+            },
+            static fn(int $ms): bool => (bool) @IPS_SemaphoreEnter($sperre, $ms),
+            static function () use ($sperre): void { @IPS_SemaphoreLeave($sperre); },
+            function (string $id) use ($gateway): void {
+                /* Der kurze Ruf zurueck. Erlaubte Richtung: er kostet das
+                   Gateway die Dauer eines Hooks, also Millisekunden — und die
+                   App wartet auf genau diese Meldung. */
+                if ($gateway > 0 && @IPS_InstanceExists($gateway)) {
+                    @IPS_RequestAction($gateway, 'AiJobDone', $id);
+                }
+            },
+            static fn(): int => time()
+        );
+        return $laeufer->abarbeiten();
     }
 
     /**

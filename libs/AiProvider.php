@@ -59,6 +59,18 @@ final class AiProvider
     /** So viel Text vertraegt ein Aufruf — gilt fuer PDF-Auszug wie Rezeptseite. */
     public const TEXT_MAX = 12000;
 
+    /**
+     * Die Namen, unter denen die Zugaenge im Formular des Gateways stehen.
+     *
+     * An EINER Stelle, weil ZWEI Seiten sie brauchen: das Gateway und die
+     * Scanner-Instanz, die den Anbieter in ihrer eigenen Spur ruft. Faellt hier
+     * spaeter ein Feld dazu und eine Seite vergisst es, laeuft der eine Weg
+     * weiter und der andere sagt „nicht eingerichtet" — ein Fehler, den man
+     * lange sucht.
+     */
+    public const KONFIG_FELDER = ['AiProvider', 'AiAnthropicKey', 'AiOpenAIKey',
+        'AiLocalBaseUrl', 'AiLocalModel', 'AiLocalKey'];
+
     /** @var array<string,mixed> die Einstellungen des Gateways, einmal gelesen */
     private array $konfig;
 

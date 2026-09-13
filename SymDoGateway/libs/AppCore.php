@@ -740,6 +740,15 @@ trait AppCore
                 if ($this->BriefingClear()) {
                     $this->LogMessage('SymDo: Tagesbriefing nach Einwilligungs-Widerruf verworfen', KL_NOTIFY);
                 }
+                /* Und die eingereihten KI-Auftraege. Dort liegen Fotos, PDFs und
+                   Tonaufnahmen — genau das, wofuer die Einwilligung galt. Sie
+                   nach dem Widerruf noch abzuschicken waere der eine Aufruf, den
+                   der Nutzer gerade untersagt hat. Der Laeufer prueft vor jedem
+                   Anruf, ob es seinen Auftrag noch gibt. */
+                $weg = $this->AiJobLaden(false)->alleLoeschen();
+                if ($weg > 0) {
+                    $this->LogMessage(sprintf('SymDo: %d wartende KI-Auftrag/Auftraege nach Einwilligungs-Widerruf verworfen', $weg), KL_NOTIFY);
+                }
             }
             $this->UpdateFormField('AiEnabled', 'enabled', $accepted);
             if (!$accepted) {

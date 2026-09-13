@@ -67,8 +67,9 @@ trait AiExtract
             return;
         }
         $body = $this->ReadJsonBody();
-        $pdf  = $this->AiStripImage($this->BodyStr($body, 'pdf'));
-        $text = trim($this->BodyStr($body, 'text'));
+        $pdf   = $this->AiStripImage($this->BodyStr($body, 'pdf'));
+        $text  = trim($this->BodyStr($body, 'text'));
+        $image = '';
         if ($text !== '') {
             // Eingefuegter Text (z. B. eine WhatsApp-Nachricht) — derselbe Weg
             // wie Foto und PDF, nur reist der Inhalt direkt im Nutzer-Teil.
@@ -76,20 +77,40 @@ trait AiExtract
                 $this->SendApiError('invalid_payload', $this->Translate('Text too long.'), 413);
                 return;
             }
-            $result = $this->AiExtractTodos('', '', $text);
+            /* Der Text schlaegt alles andere — so war es immer. Ein daneben
+               mitgeschicktes PDF wird NICHT gesendet, und weil es nicht
+               gesendet wird, ist es auch nie auf seine Groesse geprueft
+               worden. Es hier stehen zu lassen hiesse, genau diese ungeprueifte
+               Datei an den Anbieter zu schicken. */
+            $pdf = '';
         } elseif ($pdf !== '') {
             if (strlen($pdf) > self::AI_MAX_PDF_B64) {
                 $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
                 return;
             }
-            $result = $this->AiExtractTodos('', $pdf);
         } else {
-            $image = $this->AiReadImage($body);
-            if ($image === null) {
+            $gelesen = $this->AiReadImage($body);
+            if ($gelesen === null) {
                 return; // Fehler wurde bereits gesendet
             }
-            $result = $this->AiExtractTodos($image);
+            $image = $gelesen;
         }
+
+        /* Die Weiche. ALLE Riegel oben bleiben synchron — sie kosten nichts und
+           eine Absage soll sofort kommen, nicht erst nach dem Warten. Erst
+           danach entscheidet sich, wer den Anbieter ruft. */
+        if ($this->AiJobWeg($body)) {
+            $auftrag = $this->AiExtractAuftrag($image, $pdf, $text);
+            $this->AiJobStarten('extract',
+                ['system' => $auftrag['system'], 'user' => $auftrag['user'],
+                 'payloadKind' => $image !== '' ? 'image' : ($pdf !== '' ? 'pdf' : ''),
+                 'mime' => '', 'url' => ''],
+                ['type' => 'todos', 'arten' => $auftrag['arten']],
+                $device, $image !== '' ? $image : $pdf);
+            return;
+        }
+
+        $result = $this->AiExtractTodos($image, $pdf, $text);
         if (($result['ok'] ?? false) !== true) {
             $this->SendAiErrorResult($result);
             return;
@@ -98,22 +119,23 @@ trait AiExtract
         $this->SendJson(['ok' => true, 'todos' => $result['todos']]);
     }
 
-    /** @return array ok:true+todos | ok:false+code+message+status */
-    private function AiExtractTodos(string $imageBase64 = '', string $pdfBase64 = '', string $text = ''): array
+    /**
+     * Was der Anbieter zu hoeren bekommt — und welche Arten von Eintrag
+     * ueberhaupt entstehen duerfen.
+     *
+     * Eigener Griff, weil ihn ZWEI Wege brauchen: der synchrone hier und der
+     * Auftrag, den eine andere Instanz abarbeitet. Gebaut wird er in beiden
+     * Faellen HIER, denn er braucht den Bestand — die Namen des Haushalts und
+     * die Frage, ob es Kinder gibt. Der Laeufer kennt beides nicht.
+     *
+     * @return array{system:string,user:string,arten:list<string>}
+     */
+    private function AiExtractAuftrag(string $imageBase64 = '', string $pdfBase64 = '', string $text = ''): array
     {
         $auftrag = $pdfBase64 !== '' ? 'Extrahiere die Aufgaben aus dieser Datei.' : 'Extrahiere die Aufgaben aus diesem Dokument.';
         if ($text !== '') {
             // Kein Bild, keine Datei: der Text selbst ist das Dokument.
             $auftrag = "Extrahiere die Aufgaben aus dieser Nachricht.\n\n--- Nachricht ---\n" . $text;
-        }
-        $r = $this->AiRunCompletion(
-            $this->AiSystemPrompt(date('Y-m-d')),
-            $auftrag,
-            $imageBase64 !== '' ? $imageBase64 : null,
-            $pdfBase64 !== '' ? $pdfBase64 : null
-        );
-        if (($r['ok'] ?? false) !== true) {
-            return $r;
         }
         /* Hausaufgaben nur, wenn es ueberhaupt ein Kind gibt: ohne Kinder kann
            die vierte Art nur schaden (aus einer Aufgabe wuerde eine Hausaufgabe,
@@ -122,7 +144,23 @@ trait AiExtract
         if ($this->HomeworkKinder() !== []) {
             $arten[] = 'homework';
         }
-        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'], $arten)];
+        return ['system' => $this->AiSystemPrompt(date('Y-m-d')), 'user' => $auftrag, 'arten' => $arten];
+    }
+
+    /** @return array ok:true+todos | ok:false+code+message+status */
+    private function AiExtractTodos(string $imageBase64 = '', string $pdfBase64 = '', string $text = ''): array
+    {
+        $auftrag = $this->AiExtractAuftrag($imageBase64, $pdfBase64, $text);
+        $r = $this->AiRunCompletion(
+            $auftrag['system'],
+            $auftrag['user'],
+            $imageBase64 !== '' ? $imageBase64 : null,
+            $pdfBase64 !== '' ? $pdfBase64 : null
+        );
+        if (($r['ok'] ?? false) !== true) {
+            return $r;
+        }
+        return ['ok' => true, 'todos' => $this->AiParseTodos((string)$r['text'], $auftrag['arten'])];
     }
 
     // ─────────────────────── Einkaufsliste (Foto/URL → Zutaten) ───────────────────────
@@ -139,24 +177,47 @@ trait AiExtract
         // Kategorien, aus denen das Modell waehlen darf — siehe AiAllowedCategories().
         $kategorien = $this->AiAllowedCategories($body);
 
+        $image = '';
+        $weg   = '';
         if ($pdf !== '') {
             if (strlen($pdf) > self::AI_MAX_PDF_B64) {
                 $this->SendApiError('invalid_payload', $this->Translate('File too large.'), 413);
                 return;
             }
-            $result = $this->AiExtractIngredientsFromPdf($pdf, $kategorien);
+            $weg = 'pdf';
         } elseif (($body['image'] ?? '') !== '') {
-            $image = $this->AiReadImage($body);
-            if ($image === null) {
+            $gelesen = $this->AiReadImage($body);
+            if ($gelesen === null) {
                 return;
             }
-            $result = $this->AiExtractIngredientsFromImage($image, $kategorien);
+            $image = $gelesen;
+            $weg   = 'image';
         } elseif ($url !== '') {
-            $result = $this->AiExtractIngredientsFromUrl($url, $kategorien);
+            $weg = 'url';
         } else {
             $this->SendApiError('invalid_payload', $this->Translate('No image or URL provided.'), 422);
             return;
         }
+
+        if ($this->AiJobWeg($body)) {
+            /* Beim Weg ueber eine Adresse holt der LAEUFER die Seite: das
+               dauert bis zu fuenfzehn Sekunden und hat im Hook nichts verloren.
+               Er haengt ihren Text an den Nutzer-Teil an. */
+            $auftrag = $this->AiIngredientsAuftrag($weg, $kategorien);
+            $this->AiJobStarten('ingredients',
+                ['system' => $auftrag['system'], 'user' => $auftrag['user'],
+                 'payloadKind' => $weg === 'url' ? '' : $weg, 'mime' => '',
+                 'url' => $weg === 'url' ? $url : ''],
+                ['type' => 'recipe', 'arten' => []],
+                $device, $weg === 'image' ? $image : ($weg === 'pdf' ? $pdf : ''));
+            return;
+        }
+
+        $result = match ($weg) {
+            'pdf'   => $this->AiExtractIngredientsFromPdf($pdf, $kategorien),
+            'image' => $this->AiExtractIngredientsFromImage($image, $kategorien),
+            default => $this->AiExtractIngredientsFromUrl($url, $kategorien),
+        };
 
         if (($result['ok'] ?? false) !== true) {
             $this->SendAiErrorResult($result);
@@ -440,6 +501,18 @@ trait AiExtract
             $this->SendApiError('invalid_payload', $this->Translate('No audio data.'), 422);
             return;
         }
+        if ($this->AiJobWeg($body)) {
+            /* Die Tonaufnahme reist als ROHE Bytes in die Nutzlast, nicht als
+               Base64: sie ist schon dekodiert, und ein zweites Mal zu kodieren
+               kostete ein Drittel mehr Platz auf der Platte. */
+            $this->AiJobStarten('transcribe',
+                ['system' => '', 'user' => '', 'payloadKind' => 'audio',
+                 'mime' => $mime !== '' ? $mime : 'audio/webm', 'url' => ''],
+                ['type' => 'text', 'arten' => []],
+                $device, $bytes);
+            return;
+        }
+
         $result = $this->AiTranscribe($bytes, $mime !== '' ? $mime : 'audio/webm');
         if (!($result['ok'] ?? false)) {
             $this->SendApiError((string)($result['code'] ?? 'ai_failed'), (string)($result['message'] ?? ''), (int)($result['status'] ?? 502));
@@ -855,6 +928,79 @@ trait AiExtract
         return ['ok' => true] + $this->AiParseRecipe((string)$r['text']);
     }
 
+    /**
+     * Der Prompt fuer die Zutatenwege — wieder fuer beide Wege derselbe.
+     *
+     * Die Adresse ist der Sonderfall: ihr Text steht beim Bauen noch gar nicht
+     * fest, denn die Seite wird erst geholt. Der Nutzer-Teil endet deshalb
+     * offen, und wer die Seite holt, haengt ihren Text an.
+     *
+     * @param list<string> $kategorien
+     * @return array{system:string,user:string}
+     */
+    private function AiIngredientsAuftrag(string $weg, array $kategorien): array
+    {
+        if ($weg === 'url') {
+            return ['system' => $this->AiRecipeSystemPrompt($kategorien),
+                    'user'   => "Extrahiere Titel, Portionen und die Zutatenliste aus diesem Rezept:\n\n"];
+        }
+        return ['system' => $this->AiIngredientsSystemPrompt($kategorien),
+                'user'   => $weg === 'pdf'
+                    ? 'Extrahiere die Artikel bzw. Zutaten aus dieser Datei.'
+                    : 'Extrahiere die Artikel bzw. Zutaten aus diesem Bild.'];
+    }
+
+    // ──────────────── Der zweite Weg: einreihen statt warten ────────────────
+
+    /**
+     * Soll dieser Aufruf eingereiht werden?
+     *
+     * Zwei Bedingungen, und beide muessen stimmen. Der Aufrufer muss es
+     * WOLLEN — die schon installierte App wuerde eine 202-Antwort als „darin
+     * war nichts zu finden" deuten. Und es muss jemanden geben, der die
+     * Schlange abarbeitet; sonst laege der Auftrag nur herum, und synchron
+     * antworten ist immer noch besser als gar nicht.
+     *
+     * @param array<string,mixed> $body
+     */
+    private function AiJobWeg(array $body): bool
+    {
+        return ($body['async'] ?? false) === true && $this->AiJobMoeglich();
+    }
+
+    /**
+     * Einreihen und mit 202 antworten.
+     *
+     * Eine fehlende Einrichtung wird VORHER abgefangen: einen Auftrag
+     * einzureihen, der nie gelingen kann, hiesse den Nutzer zwei Minuten auf
+     * eine Absage warten zu lassen, die sofort feststand.
+     *
+     * @param array<string,mixed> $job
+     * @param array<string,mixed> $parse
+     * @param array<string,mixed> $device
+     */
+    private function AiJobStarten(string $kind, array $job, array $parse, array $device, string $nutzlast): void
+    {
+        if ($kind !== 'transcribe') {
+            // Das Diktat hat seinen eigenen Anbieter-Weg (OpenAI oder lokal) und
+            // prueft selbst; der Chat-Anbieter sagt darueber nichts.
+            $grund = $this->AiAnbieter()->konfigurationsfehler();
+            if ($grund !== null) {
+                $meldung = $this->AiErrorMessage('ai_not_configured', $grund);
+                $this->SendApiError((string)$meldung['code'], (string)$meldung['message'], (int)$meldung['status']);
+                return;
+            }
+        }
+        $r = $this->AiJobEnqueue($kind, $job, $parse, ['type' => 'rest'],
+            $nutzlast, (string)($device['id'] ?? ''));
+        if (($r['ok'] ?? false) !== true) {
+            $this->SendApiError((string)($r['code'] ?? 'internal'),
+                (string)($r['message'] ?? ''), (int)($r['status'] ?? 500));
+            return;
+        }
+        $this->AiJobAccept((string)$r['id']);
+    }
+
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
     private function AiExtractIngredientsFromUrl(string $url, array $erlaubteKategorien = []): array
     {
@@ -1045,14 +1191,11 @@ trait AiExtract
     /** Den Anbieter mit der Konfiguration des Gateways bestuecken. */
     private function AiAnbieter(): AiProvider
     {
-        return AiProvider::ausKonfiguration([
-            'AiProvider'     => (string) $this->AiProp('AiProvider'),
-            'AiAnthropicKey' => (string) $this->AiProp('AiAnthropicKey'),
-            'AiOpenAIKey'    => (string) $this->AiProp('AiOpenAIKey'),
-            'AiLocalBaseUrl' => (string) $this->AiProp('AiLocalBaseUrl'),
-            'AiLocalModel'   => (string) $this->AiProp('AiLocalModel'),
-            'AiLocalKey'     => (string) $this->AiProp('AiLocalKey'),
-        ]);
+        $konfig = [];
+        foreach (AiProvider::KONFIG_FELDER as $feld) {
+            $konfig[$feld] = (string) $this->AiProp($feld);
+        }
+        return AiProvider::ausKonfiguration($konfig);
     }
 
     /** @return array ok:true+text | ok:false+code+message+status */

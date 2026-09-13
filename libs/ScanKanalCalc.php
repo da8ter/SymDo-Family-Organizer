@@ -25,7 +25,7 @@ final class ScanKanalCalc
      * Woher ein Ergebnis stammt. „probe" ist der Selbsttest des Kanals: er
      * beweist den Weg, bevor ein echter Scan darauf faehrt.
      */
-    public const QUELLEN = ['probe', 'doku', 'edu', 'moodle', 'mail', 'briefing', 'untis'];
+    public const QUELLEN = ['probe', 'doku', 'edu', 'moodle', 'mail', 'briefing', 'untis', 'auftrag'];
 
     /** Die Nutzlastfelder eines Ergebnisses. Jedes ist eine Liste oder fehlt. */
     public const NUTZLAST = ['seiten', 'spiegel', 'vorschlaege', 'hausaufgaben', 'push', 'dateien'];

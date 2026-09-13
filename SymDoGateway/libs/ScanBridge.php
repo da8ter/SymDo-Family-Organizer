@@ -48,7 +48,7 @@ trait ScanBridge
      * @var array<string,list<string>>
      */
     private const SCAN_ROLLEN = [
-        'jobs'     => ['probe'],   // + KI-Auftraege, sobald Teil A steht
+        'jobs'     => ['probe', 'auftrag'],
         'schule'   => ['doku'],    // + edu, moodle, mail
         'briefing' => [],          // + briefing
     ];
@@ -265,6 +265,14 @@ trait ScanBridge
                 $this->SendDebug('Scan-Kanal', sprintf('Probe von %d: %s (%d ms)',
                     (int)$umschlag['scanner'], (string)$umschlag['status']['text'],
                     (int)$umschlag['status']['dauerMs']), 0);
+                return true;
+
+            case 'auftrag':
+                /* Der Laeufer meldet jeden fertigen Auftrag einzeln und sofort
+                   (IPS_RequestAction 'AiJobDone') — die App wartet ja. Dieser
+                   Umschlag ist nur die Schlussmeldung einer Runde. */
+                $this->SendDebug('Scan-Kanal', sprintf('KI-Auftraege von %d: %s',
+                    (int)$umschlag['scanner'], (string)$umschlag['status']['text']), 0);
                 return true;
 
             case 'doku':
