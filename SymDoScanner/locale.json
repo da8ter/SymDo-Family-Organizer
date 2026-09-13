@@ -1,0 +1,15 @@
+{
+    "translations": {
+        "en": {
+            "SymDo Scanner": "SymDo - Scanner"
+        },
+        "de": {
+            "SymDo Scanner": "SymDo - Scanner",
+            "Unknown source": "Unbekannte Quelle",
+            "This instance does not handle that source": "Diese Instanz bedient diese Quelle nicht",
+            "Channel checked (%d s dwell, reason %s)": "Kanal geprüft (%d s Verweildauer, Anlass %s)",
+            "Source %s not moved yet": "Die Quelle %s ist noch nicht umgezogen",
+            "No gateway found": "Kein Gateway gefunden"
+        }
+    }
+}
