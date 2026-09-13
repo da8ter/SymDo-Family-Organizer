@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// Der HTTP-Griff liegt geteilt in List/libs — der Scanner braucht ihn ohne diese Datei.
+require_once __DIR__ . '/../../libs/AiHttp.php';
+
 /**
  * KI-Extraktion für die Web-App. Zwei Einsatzzwecke, gemeinsame Provider-Logik:
  *
@@ -1878,20 +1881,15 @@ trait AiExtract
 
     // ────────────────────────────── HTTP ──────────────────────────────
 
+    /**
+     * Durchreiche auf `AiHttp::post`. Der Rumpf ist nach `List/libs/AiHttp.php`
+     * gezogen, damit der Handbuch-Bau ihn in der Scanner-Instanz benutzen kann,
+     * ohne diese ganze Datei mitzunehmen. Die Signatur bleibt, damit keiner der
+     * dreizehn Aufrufer sich aendert.
+     */
     private function AiHttpPost(string $url, array $headers, string $bodyJson, int $timeout = self::AI_TIMEOUT): array
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::AI_CONNECT_TIMEOUT);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $bodyJson);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $body = curl_exec($ch);
-        $err  = ($body === false) ? curl_error($ch) : '';
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ['status' => $code, 'body' => is_string($body) ? $body : '', 'err' => $err];
+        return AiHttp::post($url, $headers, $bodyJson, $timeout, self::AI_CONNECT_TIMEOUT);
     }
 
     /**

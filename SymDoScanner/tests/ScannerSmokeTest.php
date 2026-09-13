@@ -145,11 +145,17 @@ $noetig = ['KonfigID', 'BestandID', 'AiProp', 'Belegung', 'ScanDir', 'ScanAuftra
 $fehlend = array_values(array_filter($noetig, static fn(string $m): bool => !method_exists('SymDoScanner', $m)));
 pruefe('Der Scanner findet alles, was er ruft', $fehlend, []);
 
-/* Der Scanner bringt bewusst KEINE Hooks mit: er bindet nur die drei
-   geteilten Dateien ein, nicht AppCore. Wer hier spaeter AppCore ergaenzt,
-   holt sich die Hook-Registrierung in die zweite Spur zurueck. */
+/* Der Scanner bringt bewusst KEINE Hooks mit. Er darf Fachteile aus dem
+   Gateway-Ordner einbinden — aber nie AppCore oder den Router: mit denen
+   kaeme die Hook-Anmeldung in die zweite Spur, und beide Instanzen stritten
+   um dieselben Pfade. */
 preg_match_all('/require_once __DIR__ \. \'([^\']+)\'/', (string)file_get_contents($modul . '/module.php'), $t);
-pruefe('Bindet nur die drei geteilten Dateien ein', $t[1],
+$verboten = array_values(array_filter($t[1], static fn(string $d): bool =>
+    (bool)preg_match('#(AppCore|ApiRouter|WebPush|DeviceRegistry)\.php$#', $d)));
+pruefe('Bindet nichts ein, was Hooks mitbraechte', $verboten, []);
+pruefe('Und die geteilten Grundlagen schon',
+    array_values(array_intersect($t[1],
+        ['/../libs/Konfig.php', '/../libs/Belegung.php', '/../libs/ScanKanal.php'])),
     ['/../libs/Konfig.php', '/../libs/Belegung.php', '/../libs/ScanKanal.php']);
 
 // ── Zwei Instanzen, Gateway zuerst, damit der Scanner es findet ────────────

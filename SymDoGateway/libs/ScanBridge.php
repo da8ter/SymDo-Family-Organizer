@@ -49,7 +49,7 @@ trait ScanBridge
      */
     private const SCAN_ROLLEN = [
         'jobs'     => ['probe'],   // + KI-Auftraege, sobald Teil A steht
-        'schule'   => [],          // + doku, edu, moodle, mail
+        'schule'   => ['doku'],    // + edu, moodle, mail
         'briefing' => [],          // + briefing
     ];
 
@@ -266,6 +266,23 @@ trait ScanBridge
                     (int)$umschlag['scanner'], (string)$umschlag['status']['text'],
                     (int)$umschlag['status']['dauerMs']), 0);
                 return true;
+
+            case 'doku':
+                /* Der Handbuch-Bau bringt nichts mit: Verzeichnis und
+                   Bauzustand liegen als Dateien unter der BestandID, und der
+                   Leser findet sie dort von selbst. Der Umschlag ist nur die
+                   Auskunft — durch, oder warum nicht. Eine Stoerung gehoert
+                   ins Protokoll: sonst faellt es niemandem auf, dass die
+                   Handbuchfragen seit Tagen aus einem alten Verzeichnis
+                   beantwortet werden. */
+                if (((bool)($umschlag['status']['ok'] ?? false)) === true) {
+                    $this->SendDebug('Scan-Kanal', sprintf('Handbuch von %d: %s',
+                        (int)$umschlag['scanner'], (string)$umschlag['status']['text']), 0);
+                } else {
+                    $this->ScanMelden('Handbuch-Verzeichnis: '
+                        . (string)$umschlag['status']['text'], KL_WARNING);
+                }
+                return true;
         }
         return false;
     }
@@ -315,6 +332,31 @@ trait ScanBridge
         return $raus;
     }
 
+    /** @var array<string,bool>|null Welche Quelle ist umgezogen — einmal je PHP-Aufruf. */
+    private ?array $scanUebernommen = null;
+
+    /**
+     * Bedient ein Scanner diese Quelle bereits?
+     *
+     * Daran haengt jede Weiche des Umzugs: solange die Antwort nein ist,
+     * arbeitet das Gateway weiter wie immer. Es gibt bewusst KEINEN Schalter
+     * dafuer — die Wahrheit steht in den Instanzen selbst, und ein Schalter,
+     * der danebenliegt, waere schlimmer als die Frage.
+     */
+    private function ScanQuelleUebernommen(string $quelle): bool
+    {
+        if ($this->scanUebernommen === null) {
+            $alle = [];
+            foreach ($this->ScannerInstanzen() as $s) {
+                foreach ($s['quellen'] as $q) {
+                    $alle[$q] = true;
+                }
+            }
+            $this->scanUebernommen = $alle;
+        }
+        return ($this->scanUebernommen[$quelle] ?? false) === true;
+    }
+
     /** Fehlt einer Rolle noch ihre Instanz oder eine ihrer Quellen? */
     private function ScannerFehlt(): bool
     {
@@ -348,6 +390,8 @@ trait ScanBridge
      */
     private function ScannerAnlegen(): void
     {
+        $this->scanUebernommen = null;   // gleich aendert sich, was hier steht
+
         if (!@IPS_ModuleExists(self::SCANNER_MODULE_GUID)) {
             /* Kein Scanner-Modul (aeltere Installation, Ordner fehlt): alles
                laeuft weiter wie bisher im Gateway. Nur sagen muss man es. */

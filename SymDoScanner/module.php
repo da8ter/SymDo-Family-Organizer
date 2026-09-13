@@ -5,6 +5,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../libs/Konfig.php';
 require_once __DIR__ . '/../libs/Belegung.php';
 require_once __DIR__ . '/../libs/ScanKanal.php';
+/* Die Fachteile kommen aus dem Gateway-Ordner — dieselben Dateien, nicht
+   Kopien. Eingebunden wird immer nur der BAU, nie der Leser: die Fragen der
+   App kommen im Gateway an, und dort bleiben sie auch. */
+require_once __DIR__ . '/../SymDoGateway/libs/DokuGemein.php';
+require_once __DIR__ . '/../SymDoGateway/libs/DokuBau.php';
 
 /**
  * SymDo Scanner — die Arbeitsspur neben dem Gateway.
@@ -31,15 +36,21 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
  * synchron hier herein.** Umgekehrt ist es erlaubt — ein Ruf ins Gateway
  * kostet die Dauer eines Hooks, also Millisekunden.
  *
- * Heute kennt der Scanner nur die Quelle „probe": den Selbsttest des Kanals.
- * Er beweist den Weg, bevor ein echter Scan darauf faehrt. Die echten Quellen
- * (doku, edu, moodle, mail, briefing) ziehen danach einzeln um.
+ * Zwei Quellen kennt er heute:
+ *   „probe" — der Selbsttest des Kanals, wahlweise mit Verweildauer. Er
+ *             beweist den Weg, bevor ein echter Scan darauf faehrt.
+ *   „doku"  — das Handbuch-Verzeichnis. Es kroch frueher im Gateway: drei
+ *             Sekunden alle acht, eine Woche lang, also 37 % Dauerlast in
+ *             genau der Spur, die auch die App bedient.
+ * Die uebrigen (edu, moodle, mail, briefing) ziehen einzeln nach.
  */
 class SymDoScanner extends IPSModuleStrict
 {
     use Konfig;
     use Belegung;
     use ScanKanal;
+    use DokuGemein;
+    use DokuBau;
 
     private const GATEWAY_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
 
@@ -87,6 +98,11 @@ class SymDoScanner extends IPSModuleStrict
         $this->RegisterAttributeInteger('SignalAbo', 0);
 
         $this->RegisterTimer('Takt', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Takt\', 0);');
+        /* Ein zweiter Zeitgeber fuer Arbeit, die in Etappen laeuft: der
+           Handbuch-Bau kriecht tausend Seiten ab, jede Etappe vier Sekunden.
+           Er ist bewusst NICHT der Takt — der ist das Sicherheitsnetz und
+           soll traege bleiben. */
+        $this->RegisterTimer('Weiter', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Weiter\', 0);');
     }
 
     /**
@@ -178,6 +194,10 @@ class SymDoScanner extends IPSModuleStrict
                 case 'Takt':
                 case 'Weck':
                     $this->Lauf();
+                    return;
+                case 'Weiter':
+                    // Die naechste Etappe einer Arbeit, die in Stuecken laeuft.
+                    $this->Etappe();
                     return;
                 case 'Verbinden':
                     $this->GatewayEinmaligVerbinden();
@@ -299,6 +319,11 @@ class SymDoScanner extends IPSModuleStrict
         $start = microtime(true);
         $text = '';
         $ok = true;
+        /* Nicht jede Etappe ist ein Ergebnis. Der Handbuch-Bau laeuft ueber
+           Stunden in Vier-Sekunden-Stuecken; ein Umschlag je Stueck waeren
+           vierhundert Umschlaege fuer EINE Auskunft. Gemeldet wird, wenn etwas
+           fertig ist oder schiefging. */
+        $melden = true;
 
         switch ($quelle) {
             case 'probe':
@@ -319,6 +344,36 @@ class SymDoScanner extends IPSModuleStrict
                     $verweilen, (string)$auftrag['anlass']);
                 break;
 
+            case 'doku':
+                /* Das Handbuch-Verzeichnis. Frueher baute es das Gateway
+                   selbst: drei Sekunden alle acht, eine Woche lang — 37 %
+                   Dauerlast in genau der Spur, die auch die App bedient.
+                   Hier stoert es niemanden, und der Blick auf laufende
+                   Gespraeche entfaellt deshalb. */
+                if (!$this->DokuBaubar()) {
+                    $ok = false;
+                    $text = $this->Translate('No OpenAI key — the handbook index cannot be built');
+                    $this->EtappeSetzen(0);
+                    break;
+                }
+                $stand = $this->DokuIndexPflegen();
+                if ((int)($stand['fehler'] ?? 0) >= self::DOKU_FEHLER_MAX) {
+                    $ok = false;
+                    $text = $this->Translate('Embedding failed repeatedly — build halted');
+                    $this->EtappeSetzen(0);
+                    break;
+                }
+                if (!$stand['fertig']) {
+                    // Noch nicht durch: in acht Sekunden weiter, ohne Umschlag.
+                    $this->EtappeSetzen(self::DOKU_TAKT);
+                    $melden = false;
+                    break;
+                }
+                $this->EtappeSetzen(0);
+                $text = sprintf($this->Translate('Handbook index ready: %d pages, %d sections'),
+                    count($stand['seiten']), (int)$stand['stuecke']);
+                break;
+
             default:
                 // Die echten Quellen ziehen einzeln um; bis dahin laeuft der
                 // Scan weiter im Gateway und dieser Auftrag ist ein Irrlaeufer.
@@ -337,10 +392,42 @@ class SymDoScanner extends IPSModuleStrict
 
         $this->Belegung('scan', $quelle, $start);
 
-        if ($this->ScanErgebnisSchreiben($umschlag)) {
+        if ($melden && $this->ScanErgebnisSchreiben($umschlag)) {
             $this->GatewayWecken();
         }
         return $text;
+    }
+
+    /**
+     * Die naechste Etappe einer Arbeit, die in Stuecken laeuft.
+     *
+     * Heute gibt es genau eine: den Handbuch-Bau. Er braucht keinen neuen
+     * Auftrag je Stueck — der erste hat gereicht, ab dann traegt ihn dieser
+     * Zeitgeber, bis das Verzeichnis steht.
+     */
+    private function Etappe(): void
+    {
+        if (IPS_GetKernelRunlevel() !== KR_READY || $this->GatewayID() <= 0) {
+            return;
+        }
+        if (!in_array('doku', $this->Quellen(), true)) {
+            $this->EtappeSetzen(0);
+            return;
+        }
+        $this->Ausfuehren('doku', ScanKanalCalc::AuftragBlock(['anlass' => 'timer']), [], 0);
+    }
+
+    /**
+     * Den Etappen-Zeitgeber stellen.
+     *
+     * Hier steht ABSICHTLICH kein Merker wie bei `TaktSetzen`: dort verhindert
+     * er, dass ein wiederholtes Setzen die Uhr immer wieder von vorn starten
+     * laesst. Hier ist genau das gewollt — gesetzt wird am ENDE einer Etappe,
+     * und die naechste soll acht Sekunden SPAETER kommen.
+     */
+    private function EtappeSetzen(int $ms): void
+    {
+        @$this->SetTimerInterval('Weiter', $ms);
     }
 
     // ------------------------------------------------------------------

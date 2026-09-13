@@ -29,6 +29,9 @@ require_once __DIR__ . '/../../libs/Konfig.php';
 require_once __DIR__ . '/../../libs/Belegung.php';
 require_once __DIR__ . '/../../libs/ScanKanal.php';
 require_once __DIR__ . '/../libs/ScanBridge.php';
+require_once __DIR__ . '/../libs/DokuGemein.php';
+require_once __DIR__ . '/../libs/DokuBau.php';
+require_once __DIR__ . '/../libs/SymconDoku.php';
 require_once __DIR__ . '/../../SymDoScanner/module.php';
 
 IPS\Kernel::reset();
@@ -62,11 +65,18 @@ final class BrueckeProbe extends IPSModuleStrict
     use Belegung;
     use ScanKanal;
     use ScanBridge;
+    /* Das Handbuch kommt mit, weil an ihm die Weiche haengt: baut ein Scanner,
+       darf das Gateway NICHT mitbauen. Dass die drei Traits ueberhaupt
+       zusammenpassen, prueft sich hier gleich mit. */
+    use DokuGemein;
+    use DokuBau;
+    use SymconDoku;
 
     public function Create(): void
     {
         parent::Create();
         $this->ScanCreate();
+        $this->DokuCreate();
     }
 
     public function ApplyChanges(): void
@@ -94,6 +104,10 @@ final class BrueckeProbe extends IPSModuleStrict
     public function pListe(): array { return $this->ScanErgebnisse(); }
     public function pStand(): array { return $this->ScanStand(); }
     public function pSchreiben(array $u): bool { return $this->ScanErgebnisSchreiben($u); }
+    public function pDokuTick(): void { $this->DokuTick(); }
+    public function pDokuTakt(): int { return (int)$this->GetTimerInterval('DokuIndex'); }
+    public function pDokuTaktAn(): void { $this->SetTimerInterval('DokuIndex', 8000); }
+    public function pFehlerListe(): array { return $this->ScanErgebnisse(); }
 
     protected function getTime(): int
     {
@@ -189,19 +203,31 @@ $gateway->pSignalGeben();
 pruefe('Klingeln erhoeht sie', $gateway->pSignal() - $vorher, 1);
 
 // ── 3. Die Scanner-Instanzen ───────────────────────────────────────────────
-/* Angelegt hat das Gateway ihn schon beim Uebernehmen: ApplyChanges setzt
+/* Angelegt hat das Gateway sie schon beim Uebernehmen: ApplyChanges setzt
    dafuer einen Einmal-Zeitgeber, und die Attrappen fuehren den sofort aus
    (in Symcon vergehen ein paar Millisekunden — genau darum steht er dort,
-   statt mitten im ApplyChanges zu laufen). */
+   statt mitten im ApplyChanges zu laufen). Eine Instanz je Rolle, die schon
+   eine Quelle hat; „briefing" ist noch leer und bekommt deshalb keine. */
+$nachRolle = static function (array $liste, string $rolle): int {
+    foreach ($liste as $id => $s) {
+        if ($s['rolle'] === $rolle) {
+            return (int)$id;
+        }
+    }
+    return 0;
+};
 $scanner = $gateway->pScanner();
-pruefe('Das Gateway legt seinen Scanner beim Uebernehmen selbst an',
-    [count($scanner), array_values($scanner)[0]], [1, ['rolle' => 'jobs', 'quellen' => ['probe']]]);
+pruefe('Das Gateway legt seine Scanner beim Uebernehmen selbst an',
+    [count($scanner),
+     $scanner[$nachRolle($scanner, 'jobs')] ?? null,
+     $scanner[$nachRolle($scanner, 'schule')] ?? null],
+    [2, ['rolle' => 'jobs', 'quellen' => ['probe']], ['rolle' => 'schule', 'quellen' => ['doku']]]);
 pruefe('Danach fehlt nichts mehr', $gateway->pFehlt(), false);
 
 $gateway->pAnlegen();
-pruefe('Ein zweiter Durchgang legt nichts nach', count($gateway->pScanner()), 1);
+pruefe('Ein zweiter Durchgang legt nichts nach', count($gateway->pScanner()), 2);
 
-$sc = (int)array_keys($scanner)[0];
+$sc = $nachRolle($scanner, 'jobs');
 pruefe('Der Scanner haengt am Gateway', (int)IPS_GetInstance($sc)['ConnectionID'], $gw);
 pruefe('Und traegt einen Namen, der seine Rolle nennt',
     IPS_GetName($sc), 'SymDo - Scanner (jobs)');
@@ -209,11 +235,11 @@ pruefe('Und traegt einen Namen, der seine Rolle nennt',
 /* Wer seinen Scanner loescht, soll beim naechsten Uebernehmen einen neuen
    bekommen — sonst liefe nach einem Versehen nie wieder ein Scan. */
 IPS_DeleteInstance($sc);
-pruefe('Ohne Scanner faellt das sofort auf', [$gateway->pFehlt(), count($gateway->pScanner())], [true, 0]);
+pruefe('Ohne Scanner faellt das sofort auf', [$gateway->pFehlt(), count($gateway->pScanner())], [true, 1]);
 $gateway->pAnlegen();
 $scanner = $gateway->pScanner();
-pruefe('Und er wird nachgelegt', count($scanner), 1);
-$sc = (int)array_keys($scanner)[0];
+pruefe('Und er wird nachgelegt', count($scanner), 2);
+$sc = $nachRolle($scanner, 'jobs');
 
 // ── 4. Die ganze Kette, beide Seiten echt ──────────────────────────────────
 $signalVor = $gateway->pSignal();
@@ -272,7 +298,7 @@ pruefe('Und sie hat die verlangte Sekunde wirklich verweilt',
    Gateway `IPS_ApplyChanges` auf sie ruft: das wuerde auf ihre Spur warten,
    und faehrt die gerade einen langen Scan, stuende solange die App. */
 IPS_DeleteInstance($sc);
-$hand = IPS_CreateInstance((string)$scJson['id']);   // Rolle '' wie vorher
+$hand = IPS_CreateInstance((string)$scJson['id']);   // Rolle '' wie vorher — die Rolle „jobs" fehlt jetzt
 $handObj = IPS\InstanceManager::getInstanceInterface($hand);
 $vorAnw = $handObj->anwendungen;
 $markierung = rtrim(sys_get_temp_dir(), '/\\') . '/symdo_scankanal/' . $gw . '/nachtrag/' . $hand . '.json';
@@ -282,7 +308,7 @@ $markierung = rtrim(sys_get_temp_dir(), '/\\') . '/symdo_scankanal/' . $gw . '/n
    Hand — geprueft wird ja, WAS er tut, nicht wer ihn anstoesst. */
 $gateway->pAnlegen();
 
-pruefe('Kein zweiter Scanner daneben', count($gateway->pScanner()), 1);
+pruefe('Kein zweiter Scanner daneben', count($gateway->pScanner()), 2);
 pruefe('Er heisst jetzt nach seiner Rolle', IPS_GetName($hand), 'SymDo - Scanner (jobs)');
 pruefe('Das Gateway hat nur Bescheid gegeben, nicht uebernehmen lassen',
     [$handObj->anwendungen - $vorAnw, is_file($markierung)], [0, true]);
@@ -290,6 +316,36 @@ pruefe('Das Gateway hat nur Bescheid gegeben, nicht uebernehmen lassen',
 IPS_RequestAction($hand, 'Takt', 0);
 pruefe('Der Scanner uebernimmt selbst und raeumt die Markierung weg',
     [$handObj->anwendungen > $vorAnw, is_file($markierung)], [true, false]);
+
+// ── 9. Das Handbuch: der Umschlag des Baus wird eingepflegt ───────────────
+/* Ohne einen eigenen Zweig faellt jede Rueckmeldung des Handbuch-Baus als
+   „niemand zustaendig" in den Fehlerordner — und der Nutzer erfuehre nie,
+   dass sein Verzeichnis steht. */
+$gateway->pSchreiben(ScanKanalCalc::LeererUmschlag('doku', $gw, $hand, time(),
+    'Handbuch-Verzeichnis fertig: 1356 Seiten, 4681 Abschnitte'));
+pruefe('Die Rueckmeldung des Handbuch-Baus wird eingepflegt, nicht abgelegt',
+    [$gateway->pEinpflegen(), $gateway->pStand()['ergebnisse'], $gateway->pStand()['fehler']],
+    [1, 0, 1]);
+
+// ── 10. Kein zweiter Bau im Gateway ───────────────────────────────────────
+/* Der gefaehrlichste Fall des Umzugs: der alte Zeitgeber des Gateways laeuft
+   weiter, waehrend der Scanner schon baut. Beide haengen dann an dieselben
+   Zwischendateien an — Text und Vektor stehen dort Zeile fuer Zeile gepaart,
+   und ein fremder Anhang dazwischen verschiebt die Paarung dauerhaft. Danach
+   antwortet das Handbuch mit den Abschnitten der falschen Seiten.
+
+   Die Probe traegt sich selbst: faellt die Wache weg, laeuft DokuTick in
+   `VoiceCalls()` — eine Methode, die dieser Klasse fehlt. Der Fehler ist dann
+   also sichtbar, statt sich als stiller Doppelbau zu verstecken. */
+$gateway->pDokuTaktAn();
+$wurf = '';
+try {
+    $gateway->pDokuTick();
+} catch (\Throwable $e) {
+    $wurf = $e->getMessage();
+}
+pruefe('Bedient ein Scanner die Quelle, baut das Gateway nicht mit',
+    [$wurf, $gateway->pDokuTakt()], ['', 0]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -25,6 +25,8 @@ require_once __DIR__ . '/libs/VoiceTools.php';
 require_once __DIR__ . '/libs/VoiceResolve.php';
 require_once __DIR__ . '/libs/VoiceDevices.php';
 require_once __DIR__ . '/libs/VoiceZeitplan.php';
+require_once __DIR__ . '/libs/DokuGemein.php';
+require_once __DIR__ . '/libs/DokuBau.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/EduStore.php';
@@ -71,6 +73,11 @@ class SymDoGateway extends IPSModuleStrict
     use VoiceResolve;
     use VoiceDevices;
     use VoiceZeitplan;
+    /* Handbuch: Gemeinsames, Bau und Leser. Der Bau steht hier nur noch als
+       Rueckfall — sobald ein Scanner die Quelle „doku" bedient, laeuft er
+       drueben. */
+    use DokuGemein;
+    use DokuBau;
     use SymconDoku;
     use EduMaps;
     use EduStore;
