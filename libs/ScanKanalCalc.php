@@ -47,6 +47,9 @@ final class ScanKanalCalc
     /** Hoechstwert fuer kiAufrufe; darueber wird gekappt, nicht abgelehnt. */
     public const KI_MAX = 500;
 
+    /** Wie lange die Selbstprobe hoechstens verweilen darf (Sekunden). */
+    public const VERWEIL_MAX = 60;
+
     public static function QuelleGueltig(string $quelle): bool
     {
         return in_array($quelle, self::QUELLEN, true);
@@ -315,7 +318,15 @@ final class ScanKanalCalc
         return ['ok' => true, 'umschlag' => $umschlag, 'fehler' => $geprueft['fehler']];
     }
 
-    /** @return array{anlass:string,alles:bool,nur:list<string>,tage:int} */
+    /**
+     * Die weisse Liste des Auftragsblocks. Was hier nicht steht, kommt beim
+     * Scanner nicht an — und zwar lautlos. Genau das ist einmal passiert:
+     * `verweilen` fehlte, und die Selbstprobe ueber das Gateway verweilte
+     * immer null Sekunden. Der Beweis „die App bleibt schnell" haette dann
+     * gegen eine Spur gemessen, die gar nicht belegt war.
+     *
+     * @return array{anlass:string,alles:bool,nur:list<string>,tage:int,verweilen:int}
+     */
     public static function AuftragBlock(array $a): array
     {
         $anlass = (string)($a['anlass'] ?? 'timer');
@@ -324,6 +335,9 @@ final class ScanKanalCalc
             'alles'  => (bool)($a['alles'] ?? false),
             'nur'    => self::TextListe($a['nur'] ?? []),
             'tage'   => max(0, (int)($a['tage'] ?? 0)),
+            /* Nur fuer die Quelle „probe": wie lange sie ihre Spur ABSICHTLICH
+               belegt. Ein Messwerkzeug, kein Fachfeld — deshalb gedeckelt. */
+            'verweilen' => max(0, min(self::VERWEIL_MAX, (int)($a['verweilen'] ?? 0))),
         ];
     }
 
@@ -351,6 +365,8 @@ final class ScanKanalCalc
             'alles'  => $alles,
             'nur'    => $alles ? [] : $nur,
             'tage'   => max($a['tage'], $b['tage']),
+            // Zwei Proben kurz hintereinander: die laengere gewinnt.
+            'verweilen' => max($a['verweilen'], $b['verweilen']),
         ];
     }
 

@@ -60,6 +60,8 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
  */
 final class ScannerProbe extends SymDoScanner
 {
+    public function pTakt(): int { return (int)$this->GetTimerInterval('Takt'); }
+
     protected function getTime(): int
     {
         return time();
@@ -245,8 +247,22 @@ pruefe('Ein Leertakt schreibt nichts', count($gateway->gListe()), 0);
 // ── Die Richtungsregel ─────────────────────────────────────────────────────
 // Das Gateway darf nie synchron in den Scanner rufen: es wuerde auf dessen
 // Spur warten und damit genau das Problem verschieben, das der Umbau loest.
-exec('grep -rl "SDSC_" ' . escapeshellarg(dirname($modul) . '/SymDoGateway') . ' 2>/dev/null', $treffer);
+// Gesucht wird der AUFRUF (Praefix samt Klammer), nicht das Wort: in den
+// Kommentaren der Bruecke steht die Regel ja ausgeschrieben.
+exec('grep -rlE "SDSC_[A-Za-z]+ *\\(" ' . escapeshellarg(dirname($modul) . '/SymDoGateway') . ' 2>/dev/null', $treffer);
 pruefe('Keine Gateway-Datei ruft eine Scanner-Funktion', $treffer, []);
+
+// ── Ohne Gateway stumm, aber nicht tot ─────────────────────────────────────
+/* Die Instanzliste des Gateways kommt waehrend eines Modul-Neuladens kurz
+   leer zurueck — das Gateway selbst faengt genau diese Falle ab. Faellt das
+   Uebernehmen des Scanners in dieses Fenster, DARF der Takt nicht ausgehen:
+   er ist der einzige Rueckweg, denn hereinrufen darf hier niemand. */
+IPS_DeleteInstance($gw);
+IPS_ApplyChanges($sc);
+pruefe('Ohne Gateway laeuft der Takt weiter — er ist der einzige Rueckweg',
+    $scanner->pTakt() > 0, true);
+pruefe('Und ein Lauf schreibt trotzdem nichts',
+    json_decode($scanner->Stand(), true)['gateway'], 0);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

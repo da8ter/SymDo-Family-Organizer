@@ -6,6 +6,7 @@ require_once __DIR__ . '/libs/OAuthHelper.php';
 require_once __DIR__ . '/libs/AppCore.php';
 require_once __DIR__ . '/../libs/Belegung.php';
 require_once __DIR__ . '/../libs/ScanKanal.php';
+require_once __DIR__ . '/libs/ScanBridge.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';
@@ -51,6 +52,7 @@ class SymDoGateway extends IPSModuleStrict
     use Belegung;
     // Der passive Weg zu den Scanner-Instanzen: Auftraege hin, Ergebnisse zurueck.
     use ScanKanal;
+    use ScanBridge;
     use MailScan;
     use MailFetch;
     use CalendarBridge;
@@ -172,6 +174,8 @@ class SymDoGateway extends IPSModuleStrict
         $this->DokuCreate();
         // Stundenplan: nur der Schalter, ob die App die Karte zeigt
         $this->TimetableCreate();
+        // Scan-Kanal: die Zeitgeber der zweiten Spur
+        $this->ScanCreate();
     }
 
     public function ApplyChanges(): void
@@ -191,6 +195,8 @@ class SymDoGateway extends IPSModuleStrict
             $this->RegisterHook(self::WS_HOOK_PATH);
             $this->RegisterHook(self::PWA_HOOK_PATH);
             $this->AppApplyChanges();
+            // Vor den Scans: sie duerfen ab jetzt Auftraege in den Kanal legen.
+            $this->ScanApplyChanges();
             $this->MailApplyChanges();
             $this->EduApplyChanges();
             $this->UntisApplyChanges();
@@ -245,6 +251,11 @@ class SymDoGateway extends IPSModuleStrict
 
     private function RequestActionIntern(string $Ident, mixed $Value): void
     {
+        /* Zuerst: der Weckruf eines Scanners soll die kuerzeste Strecke haben.
+           Er ist der einzige Einstieg, der von einer FREMDEN Spur kommt. */
+        if ($this->ScanRequestAction($Ident, $Value)) {
+            return;
+        }
         if ($this->MailRequestAction($Ident, $Value)) {
             return;
         }

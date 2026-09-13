@@ -121,12 +121,12 @@ pruefe('Jede Kappung steht im Status', count($v['umschlag']['status']['fehler'])
 // ── Auftraege ──────────────────────────────────────────────────────────────
 $auftrag = $leer;
 $auftrag['quelle'] = 'edu';
-$auftrag['auftrag'] = ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2];
+$auftrag['auftrag'] = ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0];
 $pa = ScanKanalCalc::PruefeAuftrag($auftrag, 16011);
 pruefe('Auftrag geht durch und behaelt seinen Block',
-    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2]]);
+    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0]]);
 pruefe('Auftrag ohne Block bekommt Vorgaben',
-    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0]);
+    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0]);
 pruefe('Unbekannter Anlass faellt auf den Zeitgeber zurueck',
     ScanKanalCalc::AuftragBlock(['anlass' => 'unfug'])['anlass'], 'timer');
 
@@ -135,7 +135,7 @@ pruefe('Von Hand schlaegt Zeitgeber, alles bleibt alles',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'hand', 'alles' => true],
         ['anlass' => 'timer', 'alles' => false]),
-    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0]);
+    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0]);
 pruefe('Eine Einschraenkung faellt, sobald einer ohne sie kommt',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'timer', 'nur' => ['seite-1']],
@@ -144,6 +144,20 @@ pruefe('Zwei Einschraenkungen werden vereinigt',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'timer', 'nur' => ['a']],
         ['anlass' => 'timer', 'nur' => ['b', 'a']])['nur'], ['a', 'b']);
+
+/* Die Verweildauer der Selbstprobe. Sie stand einmal NICHT in der weissen
+   Liste — dann kam sie beim Scanner nie an, und der Beweislauf des ganzen
+   Umbaus („die App bleibt schnell, waehrend der Scanner steht") mass gegen
+   eine Spur, die gar nicht belegt war. Deshalb steht sie jetzt hier. */
+pruefe('Die Verweildauer kommt durch und wird gedeckelt',
+    [ScanKanalCalc::AuftragBlock(['verweilen' => 10])['verweilen'],
+     ScanKanalCalc::AuftragBlock(['verweilen' => 9999])['verweilen'],
+     ScanKanalCalc::AuftragBlock(['verweilen' => -5])['verweilen']],
+    [10, ScanKanalCalc::VERWEIL_MAX, 0]);
+pruefe('Von zwei Proben gewinnt die laengere',
+    ScanKanalCalc::AuftragVerschmelzen(
+        ['anlass' => 'hand', 'verweilen' => 3],
+        ['anlass' => 'hand', 'verweilen' => 8])['verweilen'], 8);
 pruefe('Der groessere Briefing-Slot gewinnt',
     ScanKanalCalc::AuftragVerschmelzen(['tage' => 0], ['tage' => 1])['tage'], 1);
 

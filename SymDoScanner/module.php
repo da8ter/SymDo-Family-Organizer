@@ -63,6 +63,11 @@ class SymDoScanner extends IPSModuleStrict
            Quelle abschalten laesst, ohne sie zu verlieren. Das Gateway legt
            die Instanzen mit der passenden Liste an. */
         $this->RegisterPropertyString('Jobs', '[{"role":"probe","active":true}]');
+        /* Wofuer diese Instanz da ist — „jobs", „schule", „briefing". Nicht
+           Zierde: daran erkennt das Gateway seine eigenen Scanner wieder und
+           traegt spaeter umgezogene Quellen nach, statt eine zweite Instanz
+           danebenzustellen. */
+        $this->RegisterPropertyString('Rolle', '');
 
         /* Absturzwaechter: steht hier ein Lauf, der nie geendet hat, faengt
            der naechste Takt ihn ab, statt ewig zu schweigen. */
@@ -75,6 +80,11 @@ class SymDoScanner extends IPSModuleStrict
            der Merkerstaende aus dem Gateway). */
         $this->RegisterAttributeString('EinmalErledigt', '[]');
         $this->RegisterAttributeBoolean('ParentMigrated', false);
+        /* Auf WELCHE Variable wir uns in diesem Kernel-Lauf angemeldet haben.
+           0 heisst „noch keine" — dann versucht es jeder Takt erneut. Das
+           deckt den einen Fall ab, in dem das Gateway seine Signalvariable
+           erst nach unserem Uebernehmen anlegt. */
+        $this->RegisterAttributeInteger('SignalAbo', 0);
 
         $this->RegisterTimer('Takt', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Takt\', 0);');
     }
@@ -97,7 +107,14 @@ class SymDoScanner extends IPSModuleStrict
             return;
         }
 
-        $this->GatewayEinmaligVerbinden();
+        /* KEIN Rueckruf ins Gateway aus ApplyChanges. IPS_ConnectInstance
+           loest drueben ein ApplyChanges aus — und wenn das GATEWAY uns gerade
+           erst angelegt hat, liefe das mitten in seinem eigenen Lauf. Der
+           Einmal-Zeitgeber schiebt es in unsere Spur, wo es niemanden stoert. */
+        if (!(bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            @$this->RegisterOnceTimer('Verbinden', 'IPS_RequestAction($_IPS[\'TARGET\'], \'Verbinden\', 0);');
+        }
+        @$this->WriteAttributeInteger('SignalAbo', 0);
         $this->SignalAbonnieren();
 
         /* Nach einem Kernelstart ist der Timer aus, der gemerkte Wert aber noch
@@ -109,8 +126,16 @@ class SymDoScanner extends IPSModuleStrict
         if ($this->GatewayID() <= 0) {
             /* Ohne Gateway gibt es keinen Kanal: sein Verzeichnis haengt an
                dessen Kennung. Lieber sichtbar stumm als in einen Topf „0"
-               schreiben, den nie jemand leert. */
-            $this->TaktSetzen(0);
+               schreiben, den nie jemand leert.
+
+               Der Takt bleibt aber AN. Er ist der einzige Rueckweg: die
+               Instanzliste des Gateways kommt waehrend eines Modul-Neuladens
+               kurz leer zurueck (das Gateway selbst faengt genau diese Falle
+               in AppApiOwnerID ab). Faellt unser Uebernehmen in dieses
+               Fenster und schalteten wir den Takt ab, waere die Instanz bis
+               zum naechsten Kernelstart tot: kein Zeitgeber, kein Abo, und
+               hereinrufen darf uns wegen der Richtungsregel niemand. */
+            $this->TaktSetzen(self::TAKT_MS);
             $this->SetStatus(104);
             return;
         }
@@ -119,6 +144,9 @@ class SymDoScanner extends IPSModuleStrict
         $this->ScanAnspruchVerwaist();
 
         $this->SetStatus(102);
+
+        // Was das Gateway hinterlegt hatte, ist mit diesem Lauf uebernommen.
+        $this->NachtragWeg();
 
         /* Wer beim Uebernehmen einen Auftrag liegen hat, soll nicht bis zum
            naechsten Takt warten. */
@@ -150,6 +178,9 @@ class SymDoScanner extends IPSModuleStrict
                 case 'Takt':
                 case 'Weck':
                     $this->Lauf();
+                    return;
+                case 'Verbinden':
+                    $this->GatewayEinmaligVerbinden();
                     return;
             }
             parent::RequestAction($Ident, $Value);
@@ -191,8 +222,10 @@ class SymDoScanner extends IPSModuleStrict
     public function Stand(): string
     {
         return (string)json_encode([
+            'rolle'    => (string)@$this->ReadPropertyString('Rolle'),
             'quellen'  => $this->Quellen(),
             'gateway'  => $this->GatewayID(),
+            'signal'   => (int)@$this->ReadAttributeInteger('SignalAbo'),
             'wartend'  => $this->ScanAuftraegeOffen($this->Quellen()),
             'kanal'    => $this->ScanStand(),
             'laeuft'   => (string)@$this->ReadAttributeString('Laeuft'),
@@ -213,10 +246,30 @@ class SymDoScanner extends IPSModuleStrict
         if (IPS_GetKernelRunlevel() !== KR_READY) {
             return;
         }
+        /* Hat das Gateway uns eine Quelle nachgetragen, uebernehmen wir sie
+           SELBST — in unserer Spur. Das Gateway darf das nicht tun: sein
+           IPS_ApplyChanges wartete auf uns, und liefe hier gerade ein langer
+           Scan, stuende solange die ganze App. */
+        if ($this->NachtragOffen()) {
+            /* Blank IPS_ApplyChanges im Zeitgeber-Skript, nicht von hier aus:
+               ein Uebernehmen aus der eigenen laufenden Aktion heraus wuerde
+               die Spur von innen betreten. Dasselbe Muster wie im Gateway
+               („UebernehmenNachtragen"). */
+            @$this->RegisterOnceTimer('Uebernehmen', 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
+            return;   // ApplyChanges weckt gleich selbst nach, falls etwas wartet
+        }
         $quellen = $this->Quellen();
         if ($quellen === [] || $this->GatewayID() <= 0) {
             return;
         }
+        if ($this->GetStatus() !== 102) {
+            // Das Gateway ist wieder da — sonst bliebe die Instanz auf 104 stehen.
+            $this->SetStatus(102);
+        }
+        /* Nachholen, falls das Gateway seine Signalvariable erst nach unserem
+           Uebernehmen angelegt hat — sonst weckte uns bis zum naechsten
+           Kernelstart nur noch der Takt. */
+        $this->SignalAbonnieren();
         // Kein zweiter Lauf in derselben Spur — die serialisiert zwar ohnehin,
         // aber der Waechter macht einen Abbruch sichtbar.
         @$this->WriteAttributeString('Laeuft', (string)json_encode(['at' => time()]));
@@ -252,8 +305,13 @@ class SymDoScanner extends IPSModuleStrict
                 /* Der Selbsttest. Er tut absichtlich nichts Fachliches — er
                    beweist nur, dass der Weg traegt. „verweilen" ist der
                    Beweislauf: waehrend diese Spur steht, muss die Gateway-Spur
-                   weiter in Millisekunden antworten. */
-                $verweilen = max(0, min(self::PROBE_VERWEIL_MAX, (int)($roh['verweilen'] ?? 0)));
+                   weiter in Millisekunden antworten.
+                   Zuerst aus dem AUFTRAG, dann aus den Rohangaben: ueber den
+                   Kanal kommt nur der geprueifte Block an, von Hand auch das
+                   Rohe. Stuende hier nur `$roh`, verweilte der Weg ueber das
+                   Gateway immer null Sekunden — und der Beweis waere keiner. */
+                $verweilen = max(0, min(self::PROBE_VERWEIL_MAX,
+                    (int)($auftrag['verweilen'] ?? $roh['verweilen'] ?? 0)));
                 if ($verweilen > 0) {
                     sleep($verweilen);
                 }
@@ -303,8 +361,11 @@ class SymDoScanner extends IPSModuleStrict
 
     private function GatewayID(): int
     {
+        /* Die Kennung des Elternknotens ueberlebt dessen Loeschung — sie zeigt
+           dann auf nichts. Ungeprueft uebernommen, schriebe der Kanal in ein
+           Verzeichnis, das kein Gateway je liest. */
         $eltern = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
-        if ($eltern > 0) {
+        if ($eltern > 0 && @IPS_InstanceExists($eltern)) {
             return $eltern;
         }
         /* Sonst die Instanz mit der NIEDRIGSTEN Kennung: sie bedient die App.
@@ -348,6 +409,9 @@ class SymDoScanner extends IPSModuleStrict
      */
     private function SignalAbonnieren(): void
     {
+        if ((int)@$this->ReadAttributeInteger('SignalAbo') > 0) {
+            return;   // in diesem Kernel-Lauf schon geschehen
+        }
         $gateway = $this->GatewayID();
         if ($gateway <= 0) {
             return;
@@ -355,7 +419,45 @@ class SymDoScanner extends IPSModuleStrict
         $var = @IPS_GetObjectIDByIdent(self::SCAN_SIGNAL_IDENT, $gateway);
         if (is_int($var) && $var > 0 && @IPS_VariableExists($var)) {
             $this->RegisterMessage($var, VM_UPDATE);
+            @$this->WriteAttributeInteger('SignalAbo', $var);
         }
+    }
+
+    /**
+     * Hat das Gateway uns etwas hinterlegt, das wir noch nicht uebernommen
+     * haben?
+     *
+     * Erkannt wird das an einer Markierung im Kanal, NICHT am Vergleich von
+     * hinterlegtem und aktivem Stand: `IPS_GetProperty` zeigt hinterlegte
+     * Werte nicht (am 13.09.2026 in der 9.1 nachgemessen — nach
+     * `IPS_SetProperty` liefert es unveraendert den alten Stand). Ein
+     * Vergleich haette also immer „nichts Neues" gesagt, und das Gateway
+     * haette `IPS_ApplyChanges` auf uns rufen muessen: der eine Griff, der
+     * es auf unsere Spur warten laesst.
+     */
+    private function NachtragOffen(): bool
+    {
+        $pfad = $this->NachtragPfad();
+        return $pfad !== '' && @is_file($pfad);
+    }
+
+    /**
+     * Die Markierung wegraeumen — erst NACH dem Uebernehmen, deshalb am Ende
+     * von ApplyChanges. Bliebe sie liegen, kostete das eine ueberfluessige
+     * Uebernahme; verschwaende sie zu frueh, ginge ein Nachtrag verloren.
+     */
+    private function NachtragWeg(): void
+    {
+        $pfad = $this->NachtragPfad();
+        if ($pfad !== '') {
+            @unlink($pfad);
+        }
+    }
+
+    private function NachtragPfad(): string
+    {
+        $dir = $this->ScanDir('nachtrag');
+        return $dir === '' ? '' : $dir . $this->InstanceID . '.json';
     }
 
     /** Den Einmal-Timer setzen — die Arbeit gehoert in die eigene Spur, nicht hierher. */
@@ -398,7 +500,7 @@ class SymDoScanner extends IPSModuleStrict
      */
     private function Quellen(): array
     {
-        $roh = json_decode((string)@IPS_GetProperty($this->InstanceID, 'Jobs'), true);
+        $roh = json_decode((string)@$this->ReadPropertyString('Jobs'), true);
         if (!is_array($roh) || $roh === []) {
             return ['probe'];
         }
