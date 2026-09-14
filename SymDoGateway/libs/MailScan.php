@@ -737,8 +737,82 @@ trait MailScan
         string $userId,
         string $quelle = 'IMAP'
     ): bool {
-        // Der eine fuer die KI. Ab hier heisst er wie immer, damit der Analyseteil
-        // unveraendert bleibt: er hat nie mehr als einen gelesen.
+        /* Luft fuer den Anbieter-Aufruf: das base64 des Anhangs liegt im
+           JSON-Rumpf ein zweites Mal.
+
+           Das Fenster umschliesst BEIDE Haelften, und das ist keine Bequemlichkeit:
+           `IPS_SetMediaContent` dekodiert das base64 intern, die Spitze liegt bei
+           etwa 2,3x der Dateigroesse. Legte das Einpflegen die Anhaenge ausserhalb
+           dieses Fensters ab, waere das Limit schon zurueckgesetzt und der Aufruf
+           ein Abbruch.
+
+           Eigener Merker, nicht „$anhang !== null": der Notfallpfad fuer Anbieter
+           ohne PDF setzt den Anhang beim Rechnen auf null, und dann fiel die
+           Ruecknahme aus — das erhoehte Limit blieb fuer den REST der Anfrage stehen. */
+        $speicherVorher = (string)@ini_get('memory_limit');
+        $speicherAngehoben = false;
+        if (($anhaenge[0] ?? null) !== null) {
+            @ini_set('memory_limit', '192M');
+            $speicherAngehoben = true;
+        }
+        try {
+            $erg = $this->MailAnalyseRechnen($kopf, $text, $anhaenge, $quelle);
+
+            /* Gezaehlt wird JEDER Versuch, auch der gescheiterte — und der
+               Notfall-Doppelaufruf nur EINMAL. Der Zaehler bleibt beim Gateway:
+               zieht das Rechnen spaeter in eine eigene Instanz, zaehlte es dort
+               in einem eigenen Attribut, und `MailDayLimitReached` waere
+               wirkungslos. Eine dauerhaft scheiternde Mail liefe dann bis zur
+               Fehlergrenze durch und kostete bei jedem Lauf Geld. */
+            for ($i = 0; $i < (int)$erg['kiAufrufe']; $i++) {
+                $this->MailCountDay();
+            }
+
+            if (($erg['ok'] ?? false) !== true) {
+                $this->SendDebug('MailScan', 'KI-Fehler: ' . (string)$erg['meldung'], 0);
+                $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . (string)$erg['meldung'], KL_ERROR);
+                return false;
+            }
+            $this->LogMessage((string)$erg['protokoll'], KL_NOTIFY);
+            if ($erg['aufgaben'] === []) {
+                return true; // sauber analysiert, nur nichts zu tun gefunden
+            }
+            return $this->MailVorschlagEinpflegen($vorschlagsId, $kopf, $text, $anhaenge,
+                $userId, $quelle, $erg);
+        } finally {
+            if ($speicherVorher !== '' && $speicherAngehoben) {
+                @ini_set('memory_limit', $speicherVorher);
+            }
+        }
+    }
+
+    /**
+     * Die RECHNENDE Haelfte: den Anbieter fragen und das Ergebnis deuten.
+     *
+     * Alles Langsame steht hier und nichts Schreibendes — kein Attribut, kein
+     * Medienobjekt, keine Sperre. Genau deshalb kann diese Haelfte spaeter in
+     * einer eigenen Instanz laufen, waehrend das Gateway Hooks bedient.
+     *
+     * Was sie NICHT tut, obwohl es naheliegt:
+     *
+     *  - **Zaehlen.** Der Tagesdeckel haengt am Gateway-Attribut; sie meldet die
+     *    Zahl der Aufrufe zurueck, gezaehlt wird dort.
+     *  - **Protokollieren.** Die Zeile wird gebaut, nicht geschrieben: sie
+     *    gehoert ins Meldungsfenster DER Instanz, die den Bestand fuehrt.
+     *
+     * @param array<string,mixed>       $kopf
+     * @param list<array<string,mixed>> $anhaenge
+     * @return array{ok:bool,kiAufrufe:int,meldung:string,protokoll:string,
+     *               aufgaben:list<array<string,mixed>>,zahlen:array<string,int>}
+     */
+    private function MailAnalyseRechnen(array $kopf, string $text, array $anhaenge,
+        string $quelle): array
+    {
+        $leer = ['ok' => false, 'kiAufrufe' => 0, 'meldung' => '', 'protokoll' => '',
+                 'aufgaben' => [], 'zahlen' => MailAnalyseCalc::Zaehlen([])];
+
+        /* Der eine fuer die KI. Er heisst wie immer, damit der Analyseteil
+           unveraendert bleibt: er hat nie mehr als einen gelesen. */
         $anhang  = $anhaenge[0] ?? null;
         $betreff = trim((string)($kopf['Subject'] ?? ''));
         $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
@@ -747,121 +821,139 @@ trait MailScan
         if ($anhang !== null && ($anhang['name'] ?? '') !== '') {
             $eingabe .= "\n\n(Beigefuegte Datei: " . $anhang['name'] . ')';
         }
-        // Auch hier Luft fuer den Anbieter-Aufruf: das base64 des Anhangs liegt im
-        // JSON-Rumpf ein zweites Mal. Zurueckgesetzt wird in jedem Fall (finally).
-        $speicherVorher = (string)@ini_get('memory_limit');
-        // Eigener Merker, nicht „$anhang !== null": der Notfallpfad fuer Anbieter
-        // ohne PDF setzt $anhang unten auf null, und dann fiel die Ruecknahme im
-        // finally aus — das erhoehte Limit blieb fuer den REST der Anfrage stehen.
-        $speicherAngehoben = false;
-        if ($anhang !== null) {
-            @ini_set('memory_limit', '192M');
-            $speicherAngehoben = true;
-        }
-        try {
 
+        $r = $this->AiRunCompletion(
+            $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null, $quelle),
+            $eingabe,
+            $bild,
+            $pdf
+        );
+        /* Kann der eingestellte Anbieter kein PDF (lokaler Server), scheitert der
+           Aufruf dauerhaft. Dann lieber der Text allein als eine Mail, die bei
+           jedem Lauf erneut ins Leere greift. Gezaehlt wird das trotzdem nur
+           einmal — es ist derselbe Vorgang, nicht zwei. */
+        if (($r['ok'] ?? false) !== true && (string)($r['code'] ?? '') === 'ai_pdf_unsupported') {
+            $this->SendDebug('MailScan', 'Anbieter kann kein PDF — zweiter Versuch ohne Anhang', 0);
+            $anhang = null;
             $r = $this->AiRunCompletion(
-                $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null, $quelle),
-                $eingabe,
-                $bild,
-                $pdf
-            );
-            // Kann der eingestellte Anbieter kein PDF (lokaler Server), scheitert der
-            // Aufruf dauerhaft. Dann lieber der Text allein als eine Mail, die bei jedem
-            // Lauf erneut ins Leere greift.
-            if (($r['ok'] ?? false) !== true && (string)($r['code'] ?? '') === 'ai_pdf_unsupported') {
-                $this->SendDebug('MailScan', 'Anbieter kann kein PDF — zweiter Versuch ohne Anhang', 0);
-                $anhang = null;
-                $r = $this->AiRunCompletion(
-                    $this->AiMailSystemPrompt(date('Y-m-d'), false, $quelle), $eingabe, null);
-            }
-            $this->MailCountDay();
-            if (($r['ok'] ?? false) !== true) {
-                $meldung = (string)($r['message'] ?? $r['code'] ?? '?');
-                $this->SendDebug('MailScan', 'KI-Fehler: ' . $meldung, 0);
-                $this->LogMessage('SymDo: E-Mail-Analyse fehlgeschlagen — ' . $meldung, KL_ERROR);
-                return false;
-            }
-            /* Hausaufgaben als vierte Art — die Klassenseite ist ihre eigentliche
-               Quelle. Nur mit Kindern im Haus (siehe AiSystemPrompt): sonst
-               verwirft AiValidateTodoRows die Zeile still, und die Hausaufgabe
-               verschwindet zwischen Anbieter und Bestand. */
-            $arten = MailAnalyseCalc::Arten($this->HomeworkKinder() !== []);
-            $aufgaben = $this->AiParseTodos((string)$r['text'], $arten);
-            $zahlen = MailAnalyseCalc::Zaehlen($aufgaben);
-            $this->LogMessage(MailAnalyseCalc::Meldung($betreff,
-                (string)($kopf['SenderAddress'] ?? '?'), $quelle, $anhaenge, $zahlen), KL_NOTIFY);
-            if ($aufgaben === []) {
-                return true; // sauber analysiert, nur nichts zu tun gefunden
-            }
-
-            // Anhang dauerhaft ablegen, damit die Notiz ihn spaeter tragen kann. Muss
-            // HIER stehen, innerhalb des try: das base64 liegt noch im Speicher und
-            // IPS_SetMediaContent dekodiert intern, die Spitze liegt also bei etwa
-            // 2,3x der Dateigroesse. Nach dem finally waere das erhoehte memory_limit
-            // schon zurueckgesetzt und der Aufruf ein Abbruch.
-            //
-            // Nur die Medien-ID reist im Vorschlag mit, NIEMALS das base64 — der
-            // Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen.
-            if ($zahlen['notizen'] > 0 && $anhaenge !== [] && (bool)$this->PushProp('MailNoteAttachments', false)) {
-                $abgelegt = [];
-                foreach ($anhaenge as $a) {
-                    $ablage = $this->NotesSaveAttachment((string)$a['base64'], (string)($a['name'] ?? ''));
-                    if (($ablage['ok'] ?? false) !== true) {
-                        // Kein Abbruch: die Notiz ohne diesen Anhang ist besser als keine,
-                        // und die uebrigen koennen trotzdem ankommen.
-                        $this->SendDebug('MailScan', 'Anhang „' . (string)($a['name'] ?? '?') . '" nicht ablegbar: '
-                            . (string)($ablage['error']['code'] ?? '?'), 0);
-                        continue;
-                    }
-                    // Art und Groesse aus der ABLAGE, nicht aus der Mail-Deklaration:
-                    // NotesSaveAttachment skaliert Bilder und normalisiert sie auf
-                    // JPEG. Aus der Mail gerechnet stand in der Auswahlliste die
-                    // Groesse des Originals — bei einem Handyfoto leicht das
-                    // Zehnfache — und bei einer als „.pdf" benannten JPEG die
-                    // falsche Art.
-                    $abgelegt[] = [
-                        'id'    => (int)$ablage['id'],
-                        'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)($ablage['kind'] ?? ''),
-                        'kind'  => (string)($ablage['kind'] ?? $a['kind']),
-                        'bytes' => (int)($ablage['bytes'] ?? (strlen((string)$a['base64']) * 3 / 4)),
-                    ];
-                }
-                $aufgaben = MailAnalyseCalc::AnhaengeEinhaengen($aufgaben, $abgelegt);
-            }
-
-            $gespeichert = $this->MailStoreProposal(
-                MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
-                    $this->MailDetectOrigin($text), $aufgaben, time())
-                /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
-                   Aufbewahrung, und nur danach: sonst verschwindet ein gerade
-                   erst ausgewerteter alter Elternbrief noch im selben Atemzug.
-                   Genau das ist am 03.09.2026 passiert — die Karte
-                   „Anschaffungen: Material" (Seitendatum 16.07.) lief durch die
-                   KI, kostete einen Aufruf und war danach nirgends zu sehen.
-                   Gestempelt wird beim SCHREIBEN, nicht beim Rechnen: sonst
-                   zaehlte bei einem ausgelagerten Lauf die Wartezeit mit. */
-                + ['created' => time()]
-            );
-            // Nicht gespeichert heisst NICHT erledigt. Sonst merkt MailRemember die
-            // Mail als abgearbeitet und „nach Auswertung loeschen" wirft sie aus dem
-            // Postfach — waehrend der bezahlte Anbieter-Aufruf verloren ist und die
-            // gerade angelegten Anhaenge niemandem gehoeren.
-            if (!$gespeichert) {
-                $this->LogMessage('SymDo: Vorschlag zu „' . mb_substr($betreff, 0, 60)
-                    . '" konnte nicht gespeichert werden — die Mail bleibt unerledigt.', KL_ERROR);
-                return false;
-            }
-            // Hier werden Hausaufgaben NICHT abgezogen — anders als im Protokoll.
-            $this->MailNotifyProposal($zahlen['aufgabenPush'], $zahlen['termine'],
-                $zahlen['notizen'], $userId, $quelle);
-            return true;
-
-        } finally {
-            if ($speicherVorher !== '' && $speicherAngehoben) {
-                @ini_set('memory_limit', $speicherVorher);
-            }
+                $this->AiMailSystemPrompt(date('Y-m-d'), false, $quelle), $eingabe, null);
         }
+        if (($r['ok'] ?? false) !== true) {
+            return ['kiAufrufe' => 1,
+                    'meldung' => (string)($r['message'] ?? $r['code'] ?? '?')] + $leer;
+        }
+
+        /* Ab hier ist der Aufruf BEZAHLT. Was jetzt noch schiefgeht, darf ihn
+           nicht ungezaehlt machen: der Aufrufer bucht `kiAufrufe`, und er bucht
+           nur, was zurueckkommt. Ein Wurf verliesse MailAnalyseRecord ohne
+           `catch` — dann liefe weder MailRemember noch MailCountFailure, die
+           Mailliste ist nach Datum sortiert, und dieselbe Mail waere bei jedem
+           Lauf wieder die erste. Bis zum 14.09.2026 stand der Zaehler VOR dem
+           Deuten; seit der Teilung liegt er dahinter, und diese Klammer ist der
+           Ersatz dafuer. */
+        try {
+            /* Hausaufgaben als vierte Art — die Klassenseite ist ihre
+               eigentliche Quelle. Nur mit Kindern im Haus (siehe
+               AiSystemPrompt): sonst verwirft AiValidateTodoRows die Zeile
+               still, und die Hausaufgabe verschwindet zwischen Anbieter und
+               Bestand. */
+            $aufgaben = $this->AiParseTodos((string)$r['text'],
+                MailAnalyseCalc::Arten($this->HomeworkKinder() !== []));
+        } catch (\Throwable $e) {
+            return ['kiAufrufe' => 1,
+                    'meldung' => 'Antwort nicht deutbar: ' . $e->getMessage()] + $leer;
+        }
+        $zahlen = MailAnalyseCalc::Zaehlen($aufgaben);
+
+        return [
+            'ok'        => true,
+            'kiAufrufe' => 1,
+            'meldung'   => '',
+            'protokoll' => MailAnalyseCalc::Meldung($betreff,
+                (string)($kopf['SenderAddress'] ?? '?'), $quelle, $anhaenge, $zahlen),
+            'aufgaben'  => $aufgaben,
+            'zahlen'    => $zahlen,
+        ];
+    }
+
+    /**
+     * Die SCHREIBENDE Haelfte: Anhaenge ablegen, Vorschlag speichern, melden.
+     *
+     * Muss beim Gateway bleiben, auch wenn das Rechnen auswandert. Der Grund ist
+     * nicht Bequemlichkeit: `NotesMediaCategory` haengt die Medien-Kategorie
+     * unter die eigene Instanz. In einem Scanner entstuenden die Anhaenge unter
+     * DESSEN Instanz — die Datei-Route und der Waisen-Aufraeumer des Gateways
+     * schauen dort nie hin, und die Notiz zeigte auf eine Kennung, die niemand
+     * mehr findet.
+     *
+     * @param array<string,mixed>       $kopf
+     * @param list<array<string,mixed>> $anhaenge mit `base64`
+     * @param array<string,mixed>       $erg      aus `MailAnalyseRechnen`
+     */
+    private function MailVorschlagEinpflegen(string $vorschlagsId, array $kopf, string $text,
+        array $anhaenge, string $userId, string $quelle, array $erg): bool
+    {
+        $aufgaben = $erg['aufgaben'];
+        $zahlen   = $erg['zahlen'];
+        $betreff  = trim((string)($kopf['Subject'] ?? ''));
+
+        /* Anhang dauerhaft ablegen, damit die Notiz ihn spaeter tragen kann.
+           Nur die Medien-Kennung reist im Vorschlag mit, NIEMALS das base64 —
+           der Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen. */
+        if ($zahlen['notizen'] > 0 && $anhaenge !== []
+            && (bool)$this->PushProp('MailNoteAttachments', false)) {
+            $abgelegt = [];
+            foreach ($anhaenge as $a) {
+                $ablage = $this->NotesSaveAttachment((string)$a['base64'], (string)($a['name'] ?? ''));
+                if (($ablage['ok'] ?? false) !== true) {
+                    /* Kein Abbruch: die Notiz ohne diesen Anhang ist besser als
+                       keine, und die uebrigen koennen trotzdem ankommen. */
+                    $this->SendDebug('MailScan', 'Anhang „' . (string)($a['name'] ?? '?') . '" nicht ablegbar: '
+                        . (string)($ablage['error']['code'] ?? '?'), 0);
+                    continue;
+                }
+                /* Art und Groesse aus der ABLAGE, nicht aus der Mail-Deklaration:
+                   NotesSaveAttachment skaliert Bilder und normalisiert sie auf
+                   JPEG. Aus der Mail gerechnet stand in der Auswahlliste die
+                   Groesse des Originals — bei einem Handyfoto leicht das
+                   Zehnfache — und bei einer als „.pdf" benannten JPEG die
+                   falsche Art. */
+                $abgelegt[] = [
+                    'id'    => (int)$ablage['id'],
+                    'name'  => (string)($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)($ablage['kind'] ?? ''),
+                    'kind'  => (string)($ablage['kind'] ?? $a['kind']),
+                    'bytes' => (int)($ablage['bytes'] ?? (strlen((string)$a['base64']) * 3 / 4)),
+                ];
+            }
+            $aufgaben = MailAnalyseCalc::AnhaengeEinhaengen($aufgaben, $abgelegt);
+        }
+
+        $gespeichert = $this->MailStoreProposal(
+            MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
+                $this->MailDetectOrigin($text), $aufgaben, time())
+            /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
+               Aufbewahrung, und nur danach: sonst verschwindet ein gerade erst
+               ausgewerteter alter Elternbrief noch im selben Atemzug. Genau das
+               ist am 03.09.2026 passiert — die Karte „Anschaffungen: Material"
+               (Seitendatum 16.07.) lief durch die KI, kostete einen Aufruf und
+               war danach nirgends zu sehen. Gestempelt wird beim SCHREIBEN,
+               nicht beim Rechnen: sonst zaehlte bei einem ausgelagerten Lauf die
+               Wartezeit in der Schlange mit. */
+            + ['created' => time()]
+        );
+        /* Nicht gespeichert heisst NICHT erledigt. Sonst merkt MailRemember die
+           Mail als abgearbeitet und „nach Auswertung loeschen" wirft sie aus dem
+           Postfach — waehrend der bezahlte Anbieter-Aufruf verloren ist und die
+           gerade angelegten Anhaenge niemandem gehoeren. */
+        if (!$gespeichert) {
+            $this->LogMessage('SymDo: Vorschlag zu „' . mb_substr($betreff, 0, 60)
+                . '" konnte nicht gespeichert werden — die Mail bleibt unerledigt.', KL_ERROR);
+            return false;
+        }
+        // Hier werden Hausaufgaben NICHT abgezogen — anders als im Protokoll.
+        $this->MailNotifyProposal($zahlen['aufgabenPush'], $zahlen['termine'],
+            $zahlen['notizen'], $userId, $quelle);
+        return true;
     }
 
     /**

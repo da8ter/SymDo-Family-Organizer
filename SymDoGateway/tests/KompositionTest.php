@@ -67,6 +67,7 @@ $k = new ReflectionClass('SymDoGateway');
    `EduSeiteLesen` zaehlt dann einfach null gespiegelte Karten. */
 foreach (['EduSeiteSpiegeln', 'EduKarteEinpflegen', 'EduNachzug',
           'EduSeiteLesen', 'EduScanRun', 'EduOrdner', 'EduWriteStore',
+          'MailAnalyseRecord', 'MailAnalyseRechnen', 'MailVorschlagEinpflegen',
           'ScanEinpflegen', 'AiJobEnqueue', 'DokuStand'] as $m) {
     pruefe('Die Klasse kennt ' . $m, $k->hasMethod($m), true);
 }
@@ -104,6 +105,46 @@ foreach ($vertraege as [$klasse, $methode, $nr, $quelle]) {
     pruefe($quelle . '() passt auf ' . $klasse . '::' . $methode . '() Parameter ' . ($nr + 1),
         (string)$ziel, (string)$her);
 }
+
+/* Die rechnende Haelfte darf NICHTS schreiben — das ist der ganze Sinn der
+   Teilung. Schleicht sich hier ein Attribut-, Medien- oder Sperrzugriff ein,
+   laesst sich die Haelfte nicht mehr auslagern, und niemand merkt es, bis der
+   Umzug im Betrieb Medien unter der falschen Instanz anlegt. */
+$quelle = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
+$von = strpos($quelle, 'private function MailAnalyseRechnen(');
+$bis = strpos($quelle, 'private function MailVorschlagEinpflegen(');
+pruefe('Beide Haelften stehen in der Datei', $von !== false && $bis !== false && $bis > $von, true);
+$rechnen = substr($quelle, (int)$von, (int)$bis - (int)$von);
+foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'NotesSaveAttachment',
+          'MailStoreProposal', 'MailCountDay', 'MailNotifyProposal',
+          'IPS_CreateMedia', 'LogMessage'] as $verboten) {
+    pruefe('MailAnalyseRechnen fasst ' . $verboten . ' nicht an',
+        str_contains($rechnen, $verboten), false);
+}
+
+/* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.
+ *
+ * Der Aufrufer bucht `kiAufrufe`, und er bucht nur, was zurueckkommt. Bis zum
+ * 14.09.2026 stand der Zaehler vor dem Deuten der Antwort; seit der Teilung
+ * liegt er dahinter. Verliesse ein Wurf beim Deuten die Funktion, waere der
+ * Aufruf bezahlt und unsichtbar — und schlimmer: MailAnalyseRecord hat kein
+ * `catch`, also liefe weder MailRemember noch MailCountFailure, und dieselbe
+ * Mail waere bei jedem Lauf wieder die erste. */
+pruefe('Das Deuten der Antwort faengt seine Wuerfe',
+    str_contains($rechnen, 'catch (\\Throwable'), true);
+/* Geprueft wird JEDES `return`, nicht nur die mit einem Array-Literal:
+   `return $leer;` traegt kiAufrufe = 0 und waere genau der Fehler. */
+$ohneZaehler = [];
+foreach (explode('return ', $rechnen) as $nr => $stueck) {
+    if ($nr === 0) {
+        continue;   // der Kopf vor dem ersten return
+    }
+    $kopf = substr($stueck, 0, (int)max(1, strpos($stueck . ';', ';')));
+    if (!str_contains($kopf, 'kiAufrufe')) {
+        $ohneZaehler[] = 'return ' . trim(preg_replace('/\s+/', ' ', $kopf));
+    }
+}
+pruefe('Jeder Rueckweg meldet die Zahl der Anbieter-Aufrufe', $ohneZaehler, []);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
