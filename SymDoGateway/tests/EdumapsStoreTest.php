@@ -229,5 +229,108 @@ pruefe('fehlende Listen werden ergänzt',
     ['rev', 'folders', 'notes', 'blocked', 'v', 'migratedAt']);
 pruefe('der Umzugsstempel beginnt bei null', EduStoreCalc::Leer()['migratedAt'], 0);
 
+// ══ Eine Karte in den Bestand ════════════════════════════════════════════
+/* Die drei Griffe, mit denen ein Lauf entscheidet, was eine Karte kostet.
+   Sie stehen hier und nicht im Trait, weil ein ausgelagerter Scanner sie
+   stellen muss, ohne den Bestand zu kennen — und weil genau hier das Geld
+   haengt: „voll" heisst Anhaenge laden, Vorschau holen, QR lesen. */
+
+$karte = [
+    'boxid' => 'b7', 'updated' => 1757000000, 'titel' => 'Kopiergeld',
+    'abschnitt' => 'Elternbriefe', 'abschnittFarbe' => '#ffcc00', 'farbe' => '#ffffff',
+    'html' => '<p>Bitte 5 €</p>', 'buchung' => null, 'anhaenge' => [],
+];
+$notiz = [
+    'id' => 'n1', 'folderId' => 'f-seite', 'title' => 'Kopiergeld', 'text' => 'Bitte 5 €',
+    'att' => [], 'createdAt' => 1756000000, 'updatedAt' => 1756000000, 'source' => 'edumaps',
+    'srcId' => 'edu:b7', 'srcRev' => 1757000000, 'srcAt' => 1757000000,
+    'section' => 'Elternbriefe', 'pos' => 3, 'sectionColor' => '#ffcc00', 'color' => '#ffffff',
+    'html' => '<p>Bitte 5 €</p>', 'booking' => null, 'srcUrl' => 'https://x.test/s#box-b7',
+];
+
+pruefe('Eine neue Karte braucht den vollen Satz', EduStoreCalc::Bedarf(null, $karte), 'voll');
+pruefe('Dieselbe Fassung braucht nur den Nachzug',
+    EduStoreCalc::Bedarf($notiz, $karte), 'nachzug');
+pruefe('Eine neue Fassung der Schule braucht wieder alles',
+    EduStoreCalc::Bedarf($notiz, ['updated' => 1757000099] + $karte), 'voll');
+
+// ── Der volle Satz ─────────────────────────────────────────────────────────
+$neu = EduStoreCalc::SatzBauen(null, $karte, 3, 'f-seite', 'https://x.test/s',
+    'Bitte 5 €', [], 'neu123', $jetzt);
+pruefe('Eine neue Karte bekommt die gereichte Kennung', $neu['id'], 'neu123');
+pruefe('… und wird jetzt angelegt', [$neu['createdAt'], $neu['updatedAt']], [$jetzt, $jetzt]);
+/* Vom Nutzer gemeldet: „warum steht bei allen Karten 10.09.?" — `srcAt` ist
+   das Datum der SCHULE, nicht das des Spiegelns. */
+pruefe('Das Quelldatum ist das der Schule, nicht das des Spiegelns',
+    $neu['srcAt'], 1757000000);
+pruefe('Der Weg zeigt auf die Karte, nicht nur auf die Seite',
+    $neu['srcUrl'], 'https://x.test/s#box-b7');
+
+$ersetzt = EduStoreCalc::SatzBauen($notiz, $karte, 3, 'f-seite', 'https://x.test/s',
+    'Bitte 5 €', [], 'DARF-NICHT', $jetzt);
+pruefe('Eine ersetzte Karte behaelt Kennung und Anlagedatum',
+    [$ersetzt['id'], $ersetzt['createdAt']], ['n1', 1756000000]);
+
+// ── Der Nachzug ────────────────────────────────────────────────────────────
+[$n, $g] = EduStoreCalc::NachzugRechnen($notiz, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', []);
+pruefe('Eine wirklich unveraenderte Karte schreibt nicht', $g, false);
+
+/* Die Buchungslage aendert sich, OHNE dass `data-updated` weiterspringt.
+   Ohne diesen Nachzug stuende „12 von 16" da, wenn die AG laengst voll ist. */
+[$n, $g] = EduStoreCalc::NachzugRechnen($notiz, ['buchung' => ['frei' => 0, 'max' => 16]] + $karte,
+    3, 'f-seite', 'https://x.test/s', 'Bitte 5 €', []);
+pruefe('Eine geaenderte Buchungslage wird nachgezogen', [$g, $n['booking']['frei']], [true, 0]);
+
+$ohneAbschnitt = $notiz; unset($ohneAbschnitt['section']);
+[$n, $g] = EduStoreCalc::NachzugRechnen($ohneAbschnitt, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', []);
+pruefe('Eine Karte aus der Zeit vor der Kartenansicht bekommt ihren Abschnitt',
+    [$g, $n['section']], [true, 'Elternbriefe']);
+
+[$n, $g] = EduStoreCalc::NachzugRechnen($notiz, $karte, 9, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', []);
+pruefe('Ein anderer Platz auf der Seite zaehlt als Aenderung', [$g, $n['pos']], [true, 9]);
+
+[$n, $g] = EduStoreCalc::NachzugRechnen($notiz, $karte, 3, 'f-ANDERS',
+    'https://x.test/s', 'Bitte 5 €', []);
+pruefe('Ein Ordnerwechsel zaehlt — und wird auch gesetzt',
+    [$g, $n['folderId']], [true, 'f-ANDERS']);
+
+/* Klarnamen nur bei GLEICHER Anzahl: sonst bekaeme ein Anhang den Namen
+   eines anderen — die Zuordnung laeuft ueber die Reihenfolge. */
+$mitAnhang = ['att' => [['id' => 9, 'name' => '1757001234.pdf', 'kind' => 'pdf', 'thumb' => 0, 'qr' => '']]] + $notiz;
+[$n, $g] = EduStoreCalc::NachzugRechnen($mitAnhang, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', ['Elternbrief.pdf']);
+pruefe('Ein roher Dateiname bekommt den Klarnamen',
+    [$g, $n['att'][0]['name']], [true, 'Elternbrief.pdf']);
+[$n, $g] = EduStoreCalc::NachzugRechnen($mitAnhang, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', ['A.pdf', 'B.pdf']);
+pruefe('Bei ungleicher Anzahl bleibt der Name, wie er ist',
+    [$g, $n['att'][0]['name']], [false, '1757001234.pdf']);
+
+/* Ein ergebnisloser QR-Versuch wird als '' vermerkt — sonst liefe der Leser
+   bei JEDEM Lauf ueber jedes Bild. */
+$ohneQr = $mitAnhang; unset($ohneQr['att'][0]['qr']);
+[$n, $g] = EduStoreCalc::NachzugRechnen($ohneQr, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', ['1757001234.pdf'], [], [0 => '']);
+pruefe('Auch ein leerer QR-Fund wird vermerkt',
+    [$g, array_key_exists('qr', $n['att'][0])], [true, true]);
+[$n, $g] = EduStoreCalc::NachzugRechnen($n, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', ['1757001234.pdf'], [], [0 => 'https://y.test']);
+pruefe('… und beim naechsten Lauf nicht noch einmal ueberschrieben',
+    [$g, $n['att'][0]['qr']], [false, '']);
+
+[$n, $g] = EduStoreCalc::NachzugRechnen($mitAnhang, $karte, 3, 'f-seite',
+    'https://x.test/s', 'Bitte 5 €', ['1757001234.pdf'], [0 => 4711]);
+pruefe('Ein nachgeholtes Vorschaubild haengt AM Anhang',
+    [$g, $n['att'][0]['thumb']], [true, 4711]);
+
+/* Zu langer Text wird NICHT uebernommen: das Kappen ist Sache des vollen
+   Satzes, der Nachzug darf keinen halben Text hinterlassen. */
+[$n, $g] = EduStoreCalc::NachzugRechnen($notiz, $karte, 3, 'f-seite',
+    'https://x.test/s', str_repeat('x', EduStoreCalc::TEXT_MAX + 1), []);
+pruefe('Ein zu langer Text bleibt draussen', [$g, $n['text']], [false, 'Bitte 5 €']);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

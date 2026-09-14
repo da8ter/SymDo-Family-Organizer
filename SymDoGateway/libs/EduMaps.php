@@ -518,109 +518,63 @@ trait EduMaps
                     break;
                 }
             }
-            // Unveraendert? Dann nichts anfassen — kein Schreiben, keine neuen
-            // Medien. Nur wenn der ORDNER sich bewegt hat, muss der Bestand
-            // trotzdem einmal geschrieben werden.
-            if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['updated']) {
-                /* Nichts Neues an der Karte. Zwei Dinge koennen trotzdem fehlen:
-                   der verschobene Ordner und — bei Notizen aus der Zeit vor der
-                   Kartenansicht — Abschnitt und Platz. Beides nachziehen, ohne
-                   die Anhaenge anzufassen. */
-                $fehlt = !array_key_exists('section', $store['notes'][$i])
-                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr
-                    || (string)($store['notes'][$i]['sectionColor'] ?? '') !== (string)($karte['abschnittFarbe'] ?? '')
-                    || (string)($store['notes'][$i]['color'] ?? '') !== (string)($karte['farbe'] ?? '')
-                    // Karten aus der Zeit davor haben kein Quelldatum.
-                    || (int)($store['notes'][$i]['srcAt'] ?? 0) !== (int)$karte['updated'];
-                $store['notes'][$i]['srcAt'] = (int)$karte['updated'];
-                $store['notes'][$i]['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
-                $store['notes'][$i]['color'] = (string)($karte['farbe'] ?? '');
-                if ((string)($store['notes'][$i]['html'] ?? '') !== (string)($karte['html'] ?? '')) {
-                    $store['notes'][$i]['html'] = (string)($karte['html'] ?? '');
-                    $fehlt = true;
-                }
-                /* Anhaenge, die noch die rohe Kennung als Namen tragen, bekommen
-                   den Klarnamen — ohne die Datei neu zu laden. Zuordnung ueber
-                   die Reihenfolge: die Anhaenge sind in genau der Reihenfolge
-                   angelegt worden, in der sie auf der Karte stehen. */
-                $alteAtt = is_array($store['notes'][$i]['att'] ?? null) ? $store['notes'][$i]['att'] : [];
-                $kartenNamen = array_values(array_map(
-                    static fn(array $a): string => (string)$a['name'],
-                    array_filter((array)$karte['anhaenge'],
-                        fn(array $a): bool => $this->EduArt((string)($a['datei'] ?? $a['name'])) !== '')));
-                if (count($alteAtt) === count($kartenNamen)) {
-                    foreach ($alteAtt as $k => $a) {
-                        if (preg_match('/^\d{6,}\./', (string)$a['name']) === 1
-                            && $kartenNamen[$k] !== (string)$a['name']) {
-                            $store['notes'][$i]['att'][$k]['name'] = $kartenNamen[$k];
-                            $fehlt = true;
-                        }
-                    }
-                }
-                /* Vorschaubilder nachtragen: Anhaenge aus der Zeit davor haben
-                   keine. Nur fuer PDF und nur, wenn die Karte eine Adresse
-                   dafuer nennt — die Zuordnung wieder ueber die Reihenfolge. */
+            /* Unveraendert? Dann die Anhaenge NICHT anfassen — kein Laden,
+               keine neuen Medien. Was trotzdem fehlen kann, traegt der Nachzug
+               nach; ob dabei etwas herauskam, sagt der Rechenkern. */
+            $alt = $i >= 0 ? $store['notes'][$i] : null;
+            if (EduStoreCalc::Bedarf($alt, $karte) === 'nachzug') {
+                $att = is_array($alt['att'] ?? null) ? $alt['att'] : [];
+                /* Die Anhaenge der KARTE in derselben Ordnung wie die
+                   abgelegten: gefiltert nach denen, die ueberhaupt eine Datei
+                   sind. Zugeordnet wird ueber die Reihenfolge. */
                 $kartenDateien = array_values(array_filter((array)$karte['anhaenge'],
                     fn(array $a): bool => $this->EduArt((string)($a['datei'] ?? $a['name'])) !== ''));
-                if (count($alteAtt) === count($kartenDateien)) {
-                    foreach ($alteAtt as $k => $a) {
+                $namen = array_map(static fn(array $a): string => (string)$a['name'], $kartenDateien);
+
+                /* Das Teure: Vorschaubild und QR-Code. Beides holt EINMAL je
+                   Anhang und nur dort, wo es fehlt — der Rechenkern bekommt
+                   nur die Ergebnisse. */
+                $thumbs = [];
+                if (count($att) === count($kartenDateien)) {
+                    foreach ($att as $k => $a) {
                         if ((string)($a['kind'] ?? '') !== 'pdf' || (int)($a['thumb'] ?? 0) > 0) {
                             continue;
                         }
                         $mini = $this->EduVorschau((string)($kartenDateien[$k]['preview'] ?? ''),
                             (string)$a['name']);
                         if ($mini > 0) {
-                            $store['notes'][$i]['att'][$k]['thumb'] = $mini;
-                            $fehlt = true;
+                            $thumbs[$k] = $mini;
                         }
                     }
                 }
-                /* QR-Codes nachtragen: Anhaenge aus der Zeit davor haben das Feld
-                   nicht. Geprueft wird GENAU EINMAL je Anhang — auch ein
-                   ergebnisloser Versuch wird als '' vermerkt, sonst liefe der
-                   Leser bei jedem Lauf ueber jedes Bild. */
-                foreach (($store['notes'][$i]['att'] ?? []) as $k => $a) {
+                $qr = [];
+                foreach ($att as $k => $a) {
                     if (array_key_exists('qr', $a)) {
-                        // Schon gelesen — aber der Fund gehoert trotzdem in die
-                        // Fundliste, sonst kaeme er nach dem ersten Lauf nie an.
+                        /* Schon gelesen — aber der Fund gehoert trotzdem in die
+                           Fundliste, sonst kaeme er nach dem ersten Lauf nie an. */
                         $this->EduQrVormerken((string)$a['qr']);
                         continue;
                     }
+                    /* Das GERADE geholte Vorschaubild zaehlt mit. Ohne
+                       `$thumbs[$k]` bekaeme ein PDF, dessen Vorschau in
+                       diesem Lauf entstanden ist, die Quelle 0 — und damit
+                       ein leeres Ergebnis, das als „geprueft" vermerkt wird
+                       und nie wieder angefasst wird. Der QR-Code auf diesem
+                       Elternbrief waere dann fuer immer verloren. */
                     $quelle = (string)($a['kind'] ?? '') === 'image'
-                        ? (int)($a['id'] ?? 0) : (int)($a['thumb'] ?? 0);
-                    $store['notes'][$i]['att'][$k]['qr'] = $this->EduQrCode($quelle);
-                    $fehlt = true;
+                        ? (int)($a['id'] ?? 0)
+                        : (int)($thumbs[$k] ?? $a['thumb'] ?? 0);
+                    $qr[$k] = $this->EduQrCode($quelle);
                 }
-                /* Die Buchungslage aendert sich, OHNE dass die Karte als
-                   geaendert gilt: bucht jemand einen Platz, bleibt data-updated
-                   stehen. Deshalb hier bei jedem Lauf nachziehen — sonst stuende
-                   „12 von 16" auch dann noch da, wenn die AG laengst voll ist. */
-                $buchungNeu = $karte['buchung'] ?? null;
-                if (($store['notes'][$i]['booking'] ?? null) != $buchungNeu) {
-                    $store['notes'][$i]['booking'] = $buchungNeu;
-                    $fehlt = true;
-                }
-                $weg = (string)$seite['url'] . '#box-' . (string)$karte['boxid'];
-                if ((string)($store['notes'][$i]['srcUrl'] ?? '') !== $weg) {
-                    $store['notes'][$i]['srcUrl'] = $weg;
-                    $fehlt = true;
-                }
-                // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
-                $neuerText = $this->EduNotizText($karte);
-                if (mb_strlen($neuerText) <= EduStoreCalc::TEXT_MAX
-                    && $neuerText !== (string)($store['notes'][$i]['text'] ?? '')) {
-                    $store['notes'][$i]['text'] = $neuerText;
-                    $fehlt = true;
-                }
-                if ((string)($store['notes'][$i]['folderId'] ?? '') !== $ordnerId) {
-                    // Der Ordner je Karte ist neu — die vorhandenen Notizen ziehen um.
-                    $fehlt = true;
-                }
-                if ($this->eduOrdnerGeaendert || $fehlt) {
-                    $store['notes'][$i]['folderId'] = $ordnerId;
-                    $store['notes'][$i]['section'] = EduStoreCalc::Kappen(
-                        (string)($karte['abschnitt'] ?? ''), EduStoreCalc::TITLE_MAX);
-                    $store['notes'][$i]['pos'] = $nr;
+
+                [$satz, $geaendert] = EduStoreCalc::NachzugRechnen(
+                    $alt, $karte, $nr, $ordnerId, (string)$seite['url'],
+                    $this->EduNotizText($karte), $namen, $thumbs, $qr);
+
+                /* Der verschobene ORDNER ist ein Grund fuer sich: an der Karte
+                   selbst hat sich dann nichts geaendert. */
+                if ($this->eduOrdnerGeaendert || $geaendert) {
+                    $store['notes'][$i] = $satz;
                     $this->EduWriteStore($store);
                     $this->eduOrdnerGeaendert = false;
                 }
@@ -641,40 +595,13 @@ trait EduMaps
             $alteMedien = $i >= 0 ? EduStoreCalc::AnhangIds([$store['notes'][$i]]) : [];
             $anhaenge = $this->EduNotizAnhaenge($karte);
 
-            $satz = [
-                'id'        => $i >= 0 ? (string)$store['notes'][$i]['id'] : $this->NotesNewId(),
-                'folderId'  => $ordnerId,
-                'title'     => EduStoreCalc::Kappen((string)$karte['titel'], EduStoreCalc::TITLE_MAX),
-                'text'      => $text,
-                'att'       => $anhaenge,
-                'createdAt' => $i >= 0 ? (int)($store['notes'][$i]['createdAt'] ?? $jetzt) : $jetzt,
-                'updatedAt' => $jetzt,
-                'source'    => 'edumaps',
-                'srcId'     => $srcId,
-                'srcRev'    => (int)$karte['updated'],
-                /* Das Datum der QUELLE — wann die Schule die Karte angefasst
-                   hat, nicht wann wir sie gespiegelt haben. `updatedAt` ist das
-                   Zweite und gehoert dem Bestand (Reihenfolge, Abgleich); in der
-                   Karte stand damit bei allen Karten der Tag des Spiegelns.
-                   Vom Nutzer gemeldet: „warum steht bei allen Karten 10.09.?" */
-                'srcAt'     => (int)$karte['updated'],
-                /* Abschnitt und Platz auf der Seite: erst damit kann die App die
-                   Karten so zeigen, wie sie auf der Klassenseite stehen. Ohne
-                   sie waere es eine Liste nach Aenderungsdatum. */
-                'section'   => EduStoreCalc::Kappen((string)($karte['abschnitt'] ?? ''), EduStoreCalc::TITLE_MAX),
-                'pos'       => $nr,
-                // Farben der Seite: Abschnitt und Karte, beide als #RRGGBB.
-                'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
-                'color'     => (string)($karte['farbe'] ?? ''),
-                // Formatierte Fassung fuer die Kartenansicht; der Klartext
-                // daneben bleibt, er traegt Editor, Suche und KI-Auswertung.
-                'html'      => (string)($karte['html'] ?? ''),
-                /* Buchungslage und der Weg zur Karte auf der Seite. Gebucht wird
-                   DORT — der Knopf der Seite haengt an deren JavaScript. Hier
-                   steht nur, wie voll es ist und wo man hinkommt. */
-                'booking'   => $karte['buchung'] ?? null,
-                'srcUrl'    => (string)$seite['url'] . '#box-' . (string)$karte['boxid'],
-            ];
+            /* Zusammengesetzt wird im Rechenkern — dieselbe Form, die auch
+               ein ausgelagerter Scanner liefert. Das Teure steht darueber:
+               Text kappen, Anhaenge holen, Medien anlegen. */
+            $satz = EduStoreCalc::SatzBauen($alt, $karte, $nr, $ordnerId,
+                (string)$seite['url'], $text, $anhaenge,
+                $alt === null ? $this->NotesNewId() : '', $jetzt);
+
             if ($i >= 0) {
                 $store['notes'][$i] = $satz;
             } else {

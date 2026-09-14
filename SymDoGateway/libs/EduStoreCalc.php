@@ -446,4 +446,181 @@ class EduStoreCalc
             ],
         ];
     }
+
+    // ------------------------------------------------------------------
+    // Eine Karte in den Bestand — die Entscheidung, ohne Symcon
+    // ------------------------------------------------------------------
+
+    /**
+     * Was diese Karte braucht: den VOLLEN Satz oder nur einen Nachzug?
+     *
+     * Die Frage entscheidet ueber Geld und Zeit. „Voll" heisst: Anhaenge
+     * laden, Vorschaubilder holen, QR-Codes lesen, Medienobjekte anlegen.
+     * „Nachzug" heisst: an den Anhaengen wird NICHTS angefasst, nur Felder
+     * nachgetragen, die es frueher noch nicht gab.
+     *
+     * Wiedererkannt wird an `srcRev` — dem `data-updated` der Schule. Steht
+     * dort dieselbe Zahl, hat die Schule die Karte nicht angefasst.
+     *
+     * Getrennt vom Bestand, damit sie ein Scanner in einer FREMDEN Spur
+     * stellen kann: er bekommt vom Gateway nur den Stand je `srcId`, nicht den
+     * ganzen Bestand.
+     *
+     * @param array<string,mixed>|null $alt   die vorhandene Notiz, null = neu
+     * @param array<string,mixed>      $karte die frisch gelesene Karte
+     */
+    public static function Bedarf(?array $alt, array $karte): string
+    {
+        if ($alt === null) {
+            return 'voll';
+        }
+        return (int)($alt['srcRev'] ?? -1) === (int)($karte['updated'] ?? 0) ? 'nachzug' : 'voll';
+    }
+
+    /**
+     * Der volle Satz einer Karte.
+     *
+     * Reine Formung: Text, Anhaenge und die neue Kennung sind schon besorgt
+     * (das ist der teure Teil und gehoert in die Scanner-Spur), hier wird nur
+     * zusammengesetzt.
+     *
+     * @param array<string,mixed>|null   $alt      die vorhandene Notiz, null = neu
+     * @param array<string,mixed>        $karte
+     * @param list<array<string,mixed>>  $anhaenge
+     * @return array<string,mixed>
+     */
+    public static function SatzBauen(?array $alt, array $karte, int $nr, string $ordnerId,
+        string $seitenUrl, string $text, array $anhaenge, string $neueId, int $jetzt): array
+    {
+        return [
+            'id'        => $alt !== null ? (string)($alt['id'] ?? $neueId) : $neueId,
+            'folderId'  => $ordnerId,
+            'title'     => self::Kappen((string)($karte['titel'] ?? ''), self::TITLE_MAX),
+            'text'      => $text,
+            'att'       => $anhaenge,
+            'createdAt' => $alt !== null ? (int)($alt['createdAt'] ?? $jetzt) : $jetzt,
+            'updatedAt' => $jetzt,
+            'source'    => 'edumaps',
+            'srcId'     => 'edu:' . (string)($karte['boxid'] ?? ''),
+            'srcRev'    => (int)($karte['updated'] ?? 0),
+            /* Das Datum der QUELLE — wann die Schule die Karte angefasst hat,
+               nicht wann wir sie gespiegelt haben. */
+            'srcAt'     => (int)($karte['updated'] ?? 0),
+            'section'   => self::Kappen((string)($karte['abschnitt'] ?? ''), self::TITLE_MAX),
+            'pos'       => $nr,
+            'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
+            'color'     => (string)($karte['farbe'] ?? ''),
+            'html'      => (string)($karte['html'] ?? ''),
+            'booking'   => $karte['buchung'] ?? null,
+            'srcUrl'    => $seitenUrl . '#box-' . (string)($karte['boxid'] ?? ''),
+        ];
+    }
+
+    /**
+     * Der Nachzug: was an einer UNVERAENDERTEN Karte trotzdem nachgetragen
+     * werden muss.
+     *
+     * Die Anhaenge selbst werden NICHT neu geladen — nur Felder ergaenzt, die
+     * es zum Zeitpunkt des Spiegelns noch nicht gab (Abschnitt, Platz, Farben,
+     * Klarnamen, Vorschaubilder, QR-Codes), und solche, die sich ohne
+     * `data-updated` aendern: die Buchungslage vor allem. Bucht jemand einen
+     * Platz, bleibt `data-updated` stehen — ohne diesen Nachzug stuende „12 von
+     * 16" auch dann noch da, wenn die AG laengst voll ist.
+     *
+     * Das Teure ist ausgelagert: `$thumbs` und `$qr` sind die ERGEBNISSE von
+     * Vorschau-Abruf und QR-Lesung, je Anhang-Index. Wer nichts holen konnte,
+     * reicht leere Listen herein.
+     *
+     * @param array<string,mixed>       $alt    die vorhandene Notiz
+     * @param array<string,mixed>       $karte
+     * @param list<string>              $namen  Klarnamen der Karte, in Kartenreihenfolge
+     * @param array<int,int>            $thumbs Index => neue Vorschau-Medien-ID
+     * @param array<int,string>         $qr     Index => gelesener QR-Text ('' = nichts drin)
+     * @return array{0:array<string,mixed>,1:bool} Notiz und ob sich etwas geaendert hat
+     */
+    public static function NachzugRechnen(array $alt, array $karte, int $nr, string $ordnerId,
+        string $seitenUrl, string $text, array $namen, array $thumbs = [], array $qr = []): array
+    {
+        /* Diese fuenf werden immer gesetzt, aber nur als ÄNDERUNG gewertet,
+           wenn sie vorher anders waren — sonst schriebe jeder Lauf den ganzen
+           Bestand neu. `section` zaehlt ueber die EXISTENZ des Schluessels:
+           Karten aus der Zeit vor der Kartenansicht haben ihn gar nicht. */
+        $fehlt = !array_key_exists('section', $alt)
+            || (int)($alt['pos'] ?? -1) !== $nr
+            || (string)($alt['sectionColor'] ?? '') !== (string)($karte['abschnittFarbe'] ?? '')
+            || (string)($alt['color'] ?? '') !== (string)($karte['farbe'] ?? '')
+            || (int)($alt['srcAt'] ?? 0) !== (int)($karte['updated'] ?? 0);
+
+        $alt['srcAt']        = (int)($karte['updated'] ?? 0);
+        $alt['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
+        $alt['color']        = (string)($karte['farbe'] ?? '');
+
+        if ((string)($alt['html'] ?? '') !== (string)($karte['html'] ?? '')) {
+            $alt['html'] = (string)($karte['html'] ?? '');
+            $fehlt = true;
+        }
+
+        $att = is_array($alt['att'] ?? null) ? $alt['att'] : [];
+
+        /* Klarnamen: Anhaenge, die noch die rohe Kennung tragen, bekommen den
+           Namen von der Karte — ohne die Datei neu zu laden. Zugeordnet ueber
+           die REIHENFOLGE, und nur wenn die Zahlen passen: sonst bekaeme ein
+           Anhang den Namen eines anderen. */
+        if (count($att) === count($namen)) {
+            foreach ($att as $k => $a) {
+                if (preg_match('/^\d{6,}\./', (string)($a['name'] ?? '')) === 1
+                    && $namen[$k] !== (string)($a['name'] ?? '')) {
+                    $att[$k]['name'] = $namen[$k];
+                    $fehlt = true;
+                }
+            }
+        }
+
+        foreach ($thumbs as $k => $mid) {
+            if (isset($att[$k]) && (int)$mid > 0) {
+                $att[$k]['thumb'] = (int)$mid;
+                $fehlt = true;
+            }
+        }
+
+        /* QR wird GENAU EINMAL je Anhang geprueft — auch ein ergebnisloser
+           Versuch wird als '' vermerkt, sonst liefe der Leser bei jedem Lauf
+           ueber jedes Bild. */
+        foreach ($qr as $k => $text2) {
+            if (isset($att[$k]) && !array_key_exists('qr', $att[$k])) {
+                $att[$k]['qr'] = (string)$text2;
+                $fehlt = true;
+            }
+        }
+        $alt['att'] = $att;
+
+        // Lose verglichen: `null` und ein fehlendes Feld sind dasselbe.
+        if (($alt['booking'] ?? null) != ($karte['buchung'] ?? null)) {
+            $alt['booking'] = $karte['buchung'] ?? null;
+            $fehlt = true;
+        }
+
+        $weg = $seitenUrl . '#box-' . (string)($karte['boxid'] ?? '');
+        if ((string)($alt['srcUrl'] ?? '') !== $weg) {
+            $alt['srcUrl'] = $weg;
+            $fehlt = true;
+        }
+
+        // Der Text kann sich ebenfalls geaendert haben (Titelzeile raus).
+        if (mb_strlen($text) <= self::TEXT_MAX && $text !== (string)($alt['text'] ?? '')) {
+            $alt['text'] = $text;
+            $fehlt = true;
+        }
+
+        if ((string)($alt['folderId'] ?? '') !== $ordnerId) {
+            // Der Ordner je Karte ist neu — die vorhandenen Notizen ziehen um.
+            $fehlt = true;
+        }
+
+        $alt['folderId'] = $ordnerId;
+        $alt['section']  = self::Kappen((string)($karte['abschnitt'] ?? ''), self::TITLE_MAX);
+        $alt['pos']      = $nr;
+
+        return [$alt, $fehlt];
+    }
 }
