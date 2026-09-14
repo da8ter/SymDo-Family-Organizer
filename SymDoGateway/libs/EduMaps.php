@@ -498,7 +498,7 @@ trait EduMaps
             return false;
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 2000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             $this->SendDebug('EduMaps', 'Bestand belegt — Karte beim naechsten Lauf', 0);
             return false;
         }
@@ -1151,7 +1151,7 @@ trait EduMaps
             return 0;
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 2000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             $this->SendDebug('EduMaps', 'Bestand belegt — Archiv-Abgleich beim naechsten Lauf', 0);
             return 0;
         }
@@ -1254,7 +1254,7 @@ trait EduMaps
             return $this->Translate('Select a page in the list first.');
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 2000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return $this->Translate('Class pages are busy — try again in a moment.');
         }
         try {

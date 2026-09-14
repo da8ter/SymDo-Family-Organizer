@@ -802,7 +802,7 @@ trait ApiRouter
     private function ReserveAction(string $key): bool
     {
         $semaphoreKey = 'TGW_Dedup_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+        if (!IPS_SemaphoreEnter($semaphoreKey, 0)) {
             return true; // best effort: im Zweifel ausführen (wie bisher)
         }
         try {
@@ -825,7 +825,7 @@ trait ApiRouter
     private function ReleaseAction(string $key): void
     {
         $semaphoreKey = 'TGW_Dedup_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($semaphoreKey, 500)) {
+        if (!IPS_SemaphoreEnter($semaphoreKey, 0)) {
             return;
         }
         try {

@@ -258,6 +258,21 @@ pruefe('Ein Leertakt schreibt nichts', count($gateway->gListe()), 0);
 exec('grep -rlE "SDSC_[A-Za-z]+ *\\(" ' . escapeshellarg(dirname($modul) . '/SymDoGateway') . ' 2>/dev/null', $treffer);
 pruefe('Keine Gateway-Datei ruft eine Scanner-Funktion', $treffer, []);
 
+// ── Keine Wartezeit an einer Gateway-Sperre ────────────────────────────────
+/* Alle Arbeit des Gateways laeuft in EINER Spur. Eine Sperre, die dort belegt
+   ist, kann in derselben Spur nicht frei werden — das Warten laeuft also
+   garantiert ins Leere und verzoegert nur. Jede Stelle beantwortet ein
+   besetztes Schloss ohnehin mit „busy"; das ist die richtige Antwort, und zwar
+   sofort. Vor dem 14.09.2026 standen hier 300 bis 10 000 ms.
+
+   Wer eine Sperre spaeter AUCH aus der Scanner-Spur nimmt, muss sie auf
+   KonfigID() taufen und darf dort warten — dieser Riegel gilt nur fuer den
+   Gateway-Ordner. */
+$sperrZeilen = [];
+exec('grep -rnE "IPS_SemaphoreEnter\\([^,()]+, *[1-9]" '
+    . escapeshellarg(dirname($modul) . '/SymDoGateway') . ' 2>/dev/null', $sperrZeilen);
+pruefe('Keine Gateway-Sperre wartet', $sperrZeilen, []);
+
 // ── Ohne Gateway stumm, aber nicht tot ─────────────────────────────────────
 /* Die Instanzliste des Gateways kommt waehrend eines Modul-Neuladens kurz
    leer zurueck — das Gateway selbst faengt genau diese Falle ab. Faellt das

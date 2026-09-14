@@ -441,7 +441,7 @@ trait Voice
     private function VoiceGeraeteZaehlen(): void
     {
         $lock = 'SymDo_VoiceDay_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return;
         }
         try {
@@ -795,7 +795,7 @@ trait Voice
             return;
         }
         $lock = 'SymDo_VoiceDay_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return; // Nicht zählen ist besser als falsch zählen.
         }
         try {
@@ -826,7 +826,7 @@ trait Voice
     private function VoiceMarkeErzeugen(array $ziel, int $ttl): string
     {
         $lock = 'SymDo_VoiceMarks_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return '';
         }
         try {
@@ -856,7 +856,7 @@ trait Voice
             return null;
         }
         $lock = 'SymDo_VoiceMarks_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return null;
         }
         try {
@@ -908,7 +908,7 @@ trait Voice
     private function VoiceLoeschZaehlen(): void
     {
         $lock = 'SymDo_VoiceDay_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return;
         }
         try {

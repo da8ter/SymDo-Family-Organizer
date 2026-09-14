@@ -217,7 +217,7 @@ trait DishImages
             return;
         }
         $lock = 'TGW_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return;
         }
         $neu = false;
@@ -246,7 +246,7 @@ trait DishImages
     private function DishQueueEntnehmen(bool $leeren): ?array
     {
         $lock = 'TGW_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return null;
         }
         try {
@@ -267,7 +267,7 @@ trait DishImages
     private function DishWiederAnstellen(int $slID, string $listId, int $tries): void
     {
         $lock = 'TGW_DishQ_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 500)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return;
         }
         try {

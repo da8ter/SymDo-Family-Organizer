@@ -364,5 +364,38 @@ if (is_file($stubs . '/autoload.php')) {
     printf("%-4s %s\n", '--', 'Fehlertabelle uebersprungen: Attrappen nicht gefunden');
 }
 
+// ── Die Frist einer fremden Seite ──────────────────────────────────────────
+/* Vier Weiterleitungen sind erlaubt. Galt die Frist je Sprung, konnte ein
+   einziger Abruf das Vierfache kosten — in der Gateway-Spur, die so lange
+   keinen Hook bedient. Geprueft wird deshalb der VERTRAG, nicht das Netz:
+   dass es eine Frist gibt, dass sie als Gesamtwert gemeint ist, und dass der
+   Hook-Wert darunter liegt. */
+$holen = new ReflectionMethod(AiRecipePage::class, 'holen');
+pruefe('holen() nimmt eine Frist entgegen', $holen->getNumberOfParameters(), 2);
+pruefe('… und zwar mit der vollen Frist als Vorgabe',
+    $holen->getParameters()[1]->getDefaultValue(), AiRecipePage::GET_TIMEOUT);
+pruefe('Der Hook wartet kuerzer als ein Scan',
+    AiRecipePage::GET_TIMEOUT_HOOK < AiRecipePage::GET_TIMEOUT, true);
+
+/* Das Gesamtbudget steht in der Schleife, nicht in cURL: `hol` bekommt den
+   REST. Ohne das Weiterreichen waere die Konstante Zierde. */
+$quelle = (string)file_get_contents(__DIR__ . '/../../libs/AiRecipePage.php');
+pruefe('Der Rest wird an den naechsten Sprung weitergereicht',
+    str_contains($quelle, 'self::hol($url, $validIps, $rest)'), true);
+pruefe('Und er schrumpft um die verbrauchte Zeit',
+    (bool)preg_match('/\$rest\s*=\s*\(int\)max\(self::HOP_MIN, \$rest -/', $quelle), true);
+
+/* Und die Frist ist eine OBERGRENZE: ist das Budget alle, wird der naechsten
+   Weiterleitung nicht mehr gefolgt. Ohne diesen Riegel legte jeder der bis zu
+   vier Spruenge sein Mindestmass drauf. */
+pruefe('Ein aufgebrauchtes Budget bricht die Weiterleitungskette ab',
+    (bool)preg_match('/if \(\$rest <= self::HOP_MIN\) \{\s*\n\s*return \[.ok. => false/', $quelle), true);
+
+/* Der synchrone Rueckfallweg der Zutaten holt SELBST — er muss die kurze
+   Frist mitgeben. Mit `async` holt der Laeufer und nimmt sich die vollen 15. */
+$trait = (string)file_get_contents(__DIR__ . '/../libs/AiExtract.php');
+pruefe('Der Zutaten-Hook gibt die kurze Frist mit',
+    str_contains($trait, 'AiFetchPublicPage($url, AiRecipePage::GET_TIMEOUT_HOOK)'), true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

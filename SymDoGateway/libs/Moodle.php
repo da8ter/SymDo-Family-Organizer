@@ -959,7 +959,7 @@ trait Moodle
             return false;
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 2000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             $this->SendDebug('Moodle', 'Bestand belegt — Karte beim naechsten Lauf', 0);
             return false;
         }
@@ -1080,7 +1080,7 @@ trait Moodle
             return 0;
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 2000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return 0;
         }
         try {

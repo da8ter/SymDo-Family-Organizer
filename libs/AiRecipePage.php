@@ -21,8 +21,31 @@ require_once __DIR__ . '/AiProvider.php';
  */
 final class AiRecipePage
 {
-    /** Wie lange auf eine fremde Seite gewartet wird. */
+    /**
+     * Wie lange auf eine fremde Seite gewartet wird — INSGESAMT, ueber alle
+     * Weiterleitungen hinweg.
+     *
+     * Bis zum 14.09.2026 galt die Zahl je Sprung. Vier Spruenge sind erlaubt,
+     * der schlimmste Fall waren also 60 Sekunden plus Verbindungsaufbau — in
+     * der Gateway-Spur, die waehrenddessen keinen Hook bedient. Eine Seite, die
+     * ihre Weiterleitungskette nicht in fuenfzehn Sekunden durchlaeuft, gibt
+     * auch nach einer Minute nichts her.
+     */
     public const GET_TIMEOUT = 15;
+
+    /**
+     * Dieselbe Frage im HOOK: dort wartet ein Mensch. Gilt fuer den
+     * synchronen Rueckfallweg von `/v1/ai/ingredients` — mit `async` holt
+     * laengst der Laeufer, und der nimmt sich die vollen fuenfzehn.
+     */
+    public const GET_TIMEOUT_HOOK = 8;
+
+    /**
+     * Unter so viel Rest lohnt kein weiterer Sprung mehr — die Kette bricht
+     * dann ab, statt ein Mindestmass draufzulegen. Nur so ist die Frist eine
+     * echte Obergrenze und keine Richtgroesse.
+     */
+    private const HOP_MIN = 2;
 
     /**
      * So viel Text geht hoechstens an die KI. Bewusst DIESELBE Zahl wie beim
@@ -44,9 +67,12 @@ final class AiRecipePage
      * FOLLOWLOCATION). Nur http/https, Zeit-/Größen-Limits.
      * @return array ok:true+body | ok:false+code+message+status
      */
-    public static function holen(string $url): array
+    public static function holen(string $url, int $frist = self::GET_TIMEOUT): array
     {
         $urlErr = ['ok' => false, 'code' => 'invalid_url'];
+        /* Das Budget wird VERBRAUCHT, nicht je Sprung neu vergeben: sonst
+           koennte eine Kette aus vier Weiterleitungen das Vierfache kosten. */
+        $rest = max(self::HOP_MIN, $frist);
         for ($hop = 0; $hop < 4; $hop++) {
             $validIps = [];
             if (!self::istOeffentlich($url, $validIps)) {
@@ -54,12 +80,21 @@ final class AiRecipePage
             }
             // Die geprüfte IP wird an cURL gebunden: sonst löst cURL den Namen ein
             // zweites Mal auf und ein 0-TTL-Rebinding könnte auf 127.0.0.1 zeigen.
-            $resp   = self::hol($url, $validIps);
+            $begonnen = microtime(true);
+            $resp   = self::hol($url, $validIps, $rest);
+            $rest   = (int)max(self::HOP_MIN, $rest - (int)ceil(microtime(true) - $begonnen));
             $status = (int)$resp['status'];
             if (($resp['err'] ?? '') !== '') {
                 return ['ok' => false, 'code' => 'ai_url_fetch'];
             }
             if ($status >= 300 && $status < 400 && (string)$resp['location'] !== '' && $hop < 3) {
+                /* Ist das Budget aufgebraucht, wird der Weiterleitung NICHT
+                   mehr gefolgt. Sonst kaeme zur Frist je Sprung ein Mindestmass
+                   hinzu, und aus der Obergrenze waere wieder eine Richtgroesse
+                   geworden — genau der Fehler, den dieser Umbau abstellt. */
+                if ($rest <= self::HOP_MIN) {
+                    return ['ok' => false, 'code' => 'ai_url_fetch', 'detail' => 'timeout'];
+                }
                 $url = self::umleitung($url, (string)$resp['location']);
                 continue;
             }
@@ -181,7 +216,7 @@ final class AiRecipePage
     }
 
 
-    private static function hol(string $url, array $pinnedIps = []): array
+    private static function hol(string $url, array $pinnedIps = [], int $frist = self::GET_TIMEOUT): array
     {
         $body     = '';
         $location = '';
@@ -196,8 +231,10 @@ final class AiRecipePage
             }
         }
         curl_setopt_array($ch, [
-            CURLOPT_TIMEOUT        => self::GET_TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => max(self::HOP_MIN, $frist),
+            /* Der Verbindungsaufbau steckt IM Gesamtwert, darf ihn aber nicht
+               allein aufbrauchen — sonst bliebe fuer die Antwort nichts. */
+            CURLOPT_CONNECTTIMEOUT => (int)min(5, max(1, intdiv(max(self::HOP_MIN, $frist), 2))),
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_ENCODING       => '',
             CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; SymDoGateway/1.0)',

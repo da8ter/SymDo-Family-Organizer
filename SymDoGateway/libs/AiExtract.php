@@ -1044,7 +1044,9 @@ trait AiExtract
     /** @return array ok:true+title+servings+items | ok:false+code+message+status */
     private function AiExtractIngredientsFromUrl(string $url, array $erlaubteKategorien = []): array
     {
-        $page = $this->AiFetchPublicPage($url);
+        // Rueckfallweg ohne `async`: der Hook holt selbst und darf deshalb nur
+        // kurz warten. Mit `async` holt der Laeufer — der nimmt sich die vollen 15.
+        $page = $this->AiFetchPublicPage($url, AiRecipePage::GET_TIMEOUT_HOOK);
         if (($page['ok'] ?? false) !== true) {
             return $page;
         }
@@ -1356,11 +1358,16 @@ trait AiExtract
     /**
      * Eine oeffentliche Seite holen — SSRF-sicher, siehe `AiRecipePage`.
      *
+     * Die Frist ist ein GESAMTBUDGET ueber alle Weiterleitungen. Wer im Hook
+     * ruft, gibt weniger mit: dort wartet ein Mensch, und die Gateway-Spur
+     * bedient waehrenddessen keinen anderen Abruf. Die Scan-Wege
+     * (Klassenseiten, Anhaenge) bleiben bei den vollen fuenfzehn Sekunden.
+     *
      * @return array ok:true+body | ok:false+code+message+status
      */
-    private function AiFetchPublicPage(string $url): array
+    private function AiFetchPublicPage(string $url, int $frist = AiRecipePage::GET_TIMEOUT): array
     {
-        $antwort = AiRecipePage::holen($url);
+        $antwort = AiRecipePage::holen($url, $frist);
         return ($antwort['ok'] ?? false) === true ? $antwort : $this->AiAntwortDeuten($antwort);
     }
 

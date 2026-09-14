@@ -46,6 +46,21 @@ trait WebPush
     private const PUSH_REMIND_MS  = 60000;
 
     /**
+     * Der ERSTE Schlag nach ApplyChanges kommt schon nach dreissig Sekunden.
+     *
+     * Nicht aus Eile, sondern aus Versatz: `CalNotify` laeuft ebenfalls im
+     * Minutentakt und wird in derselben ApplyChanges gestellt. Seit Symcon 9.1
+     * zaehlt `SetTimerInterval` ab dem Aufruf — beide Timer starten damit in
+     * derselben Sekunde und feuern von da an fuer immer gemeinsam in die eine
+     * Gateway-Spur. Ein halber Takt dazwischen entzerrt das dauerhaft.
+     *
+     * Nur der Schlag NACH ApplyChanges ist versetzt; danach stellt
+     * `PushRemindRun` den vollen Takt wieder her, und der Versatz bleibt, weil
+     * `SetTimerInterval` ab dem Aufruf zaehlt.
+     */
+    private const PUSH_REMIND_FIRST_MS = 30000;
+
+    /**
      * Wie lange ein Merker fuer eine gemeldete Erinnerung liegen bleibt. Zwei Tage
      * genuegen: Danach ist die Frist so weit vorbei, dass eine erneute Meldung
      * ohnehin nicht mehr stoert — und die Ablage bleibt klein.
@@ -132,14 +147,14 @@ trait WebPush
 
     private function PushApplyChanges(): void
     {
-        $this->PushArm();
+        $this->PushArm(true);
     }
 
     /**
      * Der Erinnerungs-Timer laeuft nur, wenn er etwas zu tun hat: Schalter an UND
      * mindestens ein Geraet angemeldet. Sonst waere es ein Minutentakt fuer nichts.
      */
-    private function PushArm(): void
+    private function PushArm(bool $ersterSchlag = false): void
     {
         /* ODER: laeuft der Timer nur fuer die Aufgaben-Erinnerung, bleibt die
            Vorabend-Meldung fuer Hausaufgaben stumm — und NIRGENDS stuende ein
@@ -152,7 +167,9 @@ trait WebPush
             // Kernel noch nicht neu gestartet), WARNT Symcon nur — das try/catch
             // greift dann nicht, und die Warnung stuende bei jedem ApplyChanges im
             // Meldungsprotokoll. Gemessen genau so.
-            @$this->SetTimerInterval(self::PUSH_TIMER, $an ? self::PUSH_REMIND_MS : 0);
+            @$this->SetTimerInterval(self::PUSH_TIMER, $an
+                ? ($ersterSchlag ? self::PUSH_REMIND_FIRST_MS : self::PUSH_REMIND_MS)
+                : 0);
         } catch (Throwable $e) {
             $this->SendDebug('WebPush', 'Timer fehlt, Lauf entfaellt', 0);
         }
@@ -164,6 +181,8 @@ trait WebPush
             /* Beide Laeufe NEBENEINANDER, nicht verschachtelt: PushRemindRun
                steigt bei abgeschalteter Aufgaben-Erinnerung gleich aus, und die
                Hausaufgaben haengen an ihrem eigenen Schalter. */
+            /* Den Takt stellt PushRemindRun selbst — auf JEDEM seiner Wege,
+               auch den beiden vorzeitigen. Hier deshalb nichts. */
             $this->PushRemindRun();
             $this->PushHomeworkRun();
             return true;

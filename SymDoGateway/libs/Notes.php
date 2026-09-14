@@ -195,7 +195,7 @@ trait Notes
         // Bekommt sie die Sperre nicht, wird NICHT gewartet: das Nachziehen ist eine
         // Heilung, die beim naechsten Aufruf ohnehin wieder ansteht.
         $lock = self::NOTES_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 300)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return true;
         }
         try {
@@ -485,7 +485,7 @@ trait Notes
         // (ReserveAction führt im Zweifel aus; das ist für eine Dedup-Tabelle
         // richtig und für Nutzertext falsch, dort wäre es ein verlorener Schreibvorgang.)
         $lock = self::NOTES_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 800)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return $this->NotesFehler('busy');
         }
         try {

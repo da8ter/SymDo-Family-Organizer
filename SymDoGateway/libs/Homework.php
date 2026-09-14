@@ -236,7 +236,7 @@ trait Homework
         }
 
         $lock = self::HW_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 800)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return $this->HomeworkFehler('busy');
         }
         try {
@@ -416,7 +416,7 @@ trait Homework
         }
 
         $lock = self::HW_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 3000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return array_merge($leer, ['fehler' => 'busy', 'uebergangen' => $uebergangen]);
         }
         try {

@@ -472,12 +472,12 @@ trait NotesMedia
            aufräumen: die Schonfrist von zwei Tagen lässt jede Menge weitere
            Gelegenheiten. */
         $lock = self::NOTES_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 300)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return 0;
         }
         try {
             $eduLock = self::EDU_LOCK . $this->InstanceID;
-            if (!IPS_SemaphoreEnter($eduLock, 300)) {
+            if (!IPS_SemaphoreEnter($eduLock, 0)) {
                 return 0;
             }
             try {

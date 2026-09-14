@@ -676,7 +676,25 @@ class SymDoGateway extends IPSModuleStrict
         return $this->Translate('Disconnected from Google.');
     }
 
+    /**
+     * Gemessen wird der GANZE Ruf, samt Token-Erneuerung und Weiterleitungen.
+     *
+     * Er laeuft in der Gateway-Spur und darf bis zu fuenfzehn Sekunden dauern —
+     * so lange bedient das Gateway keinen Hook. Bis zum 14.09.2026 stand diese
+     * Last in keiner Messung: das Belegungslog kannte nur `hook` und `aktion`,
+     * und der Listen-Abgleich versteckte sich dazwischen.
+     */
     public function GoogleApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
+    {
+        $start = microtime(true);
+        try {
+            return $this->GoogleApiRequestIntern($Method, $Endpoint, $Body, $Headers);
+        } finally {
+            $this->Belegung('api', 'google ' . $Method, $start);
+        }
+    }
+
+    private function GoogleApiRequestIntern(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
         $url = 'https://tasks.googleapis.com' . $Endpoint;
         $meta = $this->OAuthAuthorizedRequest(
@@ -967,7 +985,25 @@ class SymDoGateway extends IPSModuleStrict
         return $this->Translate('Disconnected from Microsoft.');
     }
 
+    /**
+     * Gemessen wird der GANZE Ruf, samt Token-Erneuerung und Weiterleitungen.
+     *
+     * Er laeuft in der Gateway-Spur und darf bis zu fuenfzehn Sekunden dauern —
+     * so lange bedient das Gateway keinen Hook. Bis zum 14.09.2026 stand diese
+     * Last in keiner Messung: das Belegungslog kannte nur `hook` und `aktion`,
+     * und der Listen-Abgleich versteckte sich dazwischen.
+     */
     public function MicrosoftApiRequest(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
+    {
+        $start = microtime(true);
+        try {
+            return $this->MicrosoftApiRequestIntern($Method, $Endpoint, $Body, $Headers);
+        } finally {
+            $this->Belegung('api', 'microsoft ' . $Method, $start);
+        }
+    }
+
+    private function MicrosoftApiRequestIntern(string $Method, string $Endpoint, mixed $Body = null, array $Headers = []): ?array
     {
         $tenant = $this->MicrosoftGetTenant();
         // Follow opaque absolute Graph URLs (@odata.nextLink / @odata.deltaLink) verbatim;
@@ -1074,7 +1110,25 @@ class SymDoGateway extends IPSModuleStrict
         return $this->Translate('Connection failed') . ' (HTTP ' . $statusCode . ')';
     }
 
+    /**
+     * Gemessen wird der GANZE Ruf, samt Token-Erneuerung und Weiterleitungen.
+     *
+     * Er laeuft in der Gateway-Spur und darf bis zu fuenfzehn Sekunden dauern —
+     * so lange bedient das Gateway keinen Hook. Bis zum 14.09.2026 stand diese
+     * Last in keiner Messung: das Belegungslog kannte nur `hook` und `aktion`,
+     * und der Listen-Abgleich versteckte sich dazwischen.
+     */
     public function CalDAVRequest(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
+    {
+        $start = microtime(true);
+        try {
+            return $this->CalDAVRequestIntern($Method, $Url, $User, $Pass, $Headers, $Body, $Timeout);
+        } finally {
+            $this->Belegung('api', 'caldav ' . $Method, $start);
+        }
+    }
+
+    private function CalDAVRequestIntern(string $Method, string $Url, string $User, string $Pass, array $Headers, string $Body = '', int $Timeout = 15): array
     {
         // A2: honor an active back-off window without hitting the server.
         if ($this->OAuthIsThrottled('CalDAVRetryAfter')) {

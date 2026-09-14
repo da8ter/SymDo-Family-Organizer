@@ -73,6 +73,12 @@ trait DokuGemein
        unpack je Abschnitt — sparsamer als ein unpack über alles: 20 statt
        52 MB Spitzenspeicher). */
     private const DOKU_DIM       = 512;
+
+    /** Frist der Einbettung im BAU (Scanner-Spur, niemand wartet). */
+    private const DOKU_EINBETT_S = 30;
+
+    /** Frist der Einbettung in der SPRACHSUCHE (Gateway-Spur, Budget 8 s). */
+    private const DOKU_EINBETT_SPRACHE_S = 6;
     private const DOKU_STUECK    = 800;
     private const DOKU_UEBERLAPP = 120;
     private const DOKU_MODELL    = 'text-embedding-3-small';
@@ -234,10 +240,15 @@ trait DokuGemein
      * einmal) — das sind rund tausend Aufrufe für die ganze Doku und kostet
      * etwa anderthalb Cent.
      *
+     * Die Frist trennt die beiden Aufrufer: der BAU laeuft im Scanner und darf
+     * sich Zeit lassen, die SPRACHSUCHE laeuft im Gateway, waehrend jemand auf
+     * eine Antwort wartet. Dort gilt ein Sprachbudget von acht Sekunden — mit
+     * dreissig waere es allein von dieser einen Frage aufgebraucht.
+     *
      * @param list<string> $texte
      * @return list<list<float>>|null null = fehlgeschlagen
      */
-    private function DokuEinbetten(array $texte): ?array
+    private function DokuEinbetten(array $texte, int $frist = self::DOKU_EINBETT_S): ?array
     {
         $key = trim((string) $this->AiProp('AiOpenAIKey'));
         if ($key === '' || $texte === []) {
@@ -250,7 +261,7 @@ trait DokuGemein
             ['Authorization: Bearer ' . $key, 'Content-Type: application/json'],
             (string)json_encode(['model' => self::DOKU_MODELL, 'input' => array_values($texte),
                                  'dimensions' => self::DOKU_DIM], JSON_UNESCAPED_UNICODE),
-            30);
+            $frist);
         if ((int)($antwort['status'] ?? 0) !== 200) {
             $this->SendDebug('Doku', 'Einbettung fehlgeschlagen: ' . (string)($antwort['err'] ?? $antwort['status'] ?? '?'), 0);
             return null;
@@ -268,8 +279,7 @@ trait DokuGemein
     /* Die beiden folgenden Griffe braucht auch der LESER: er holt die beste
        Seite live und schaelt ihren Fliesstext heraus. Sie stehen deshalb hier
        und nicht im Bau — sonst faehrt der Leser gegen eine Wand, sobald der
-       Rueckfall im Gateway entfaellt.
-
+       Rueckfall im Gateway entfaellt. */
 
     /**
      * Eine Doku-Seite holen. Bewusst schlank und ohne Weiterleitungs-Ketten in

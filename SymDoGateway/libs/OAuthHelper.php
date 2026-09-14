@@ -84,7 +84,11 @@ trait OAuthHelper
                 'content' => $bodyStr,
                 'ignore_errors' => true,
                 'follow_location' => 0, // R15: no auto-follow — status/headers must belong to the final response
-                'timeout' => 30
+                /* 15 s, vorher 30. Der Ruf laeuft in der Gateway-Spur, und die
+                   bedient waehrenddessen keinen Hook. Kein Anbieter braucht fuer
+                   einen Token-Tausch eine halbe Minute; wer so lange schweigt,
+                   antwortet auch nach 30 s nicht mehr. */
+                'timeout' => 15
             ]
         ];
 
@@ -127,7 +131,11 @@ trait OAuthHelper
                 'content' => $bodyStr,
                 'ignore_errors' => true,
                 'follow_location' => 0, // R15: no auto-follow — status/headers must belong to the final response
-                'timeout' => 30
+                /* 15 s, vorher 30. Der Ruf laeuft in der Gateway-Spur, und die
+                   bedient waehrenddessen keinen Hook. Kein Anbieter braucht fuer
+                   einen Token-Tausch eine halbe Minute; wer so lange schweigt,
+                   antwortet auch nach 30 s nicht mehr. */
+                'timeout' => 15
             ]
         ];
         $context = stream_context_create($opts);
@@ -231,7 +239,7 @@ trait OAuthHelper
         // reauthorization). Microsoft rotates refresh tokens, so this is not hypothetical.
         $preAccessToken = $this->OAuthGetDecryptedToken($AccessAttr, $KeyPrefix);
         $sem = 'TGW_Refresh_' . $this->InstanceID . '_' . $KeyPrefix;
-        if (!IPS_SemaphoreEnter($sem, 10000)) {
+        if (!IPS_SemaphoreEnter($sem, 0)) {
             $this->SendDebug($DebugLabel, 'Refresh skipped – another refresh is in progress', 0);
             return false;
         }
@@ -239,7 +247,11 @@ trait OAuthHelper
             if ($RefreshTokenOverride === null) {
                 $current = $this->OAuthGetDecryptedToken($AccessAttr, $KeyPrefix);
                 if ($current !== '' && $current !== $preAccessToken) {
-                    return true; // another caller completed a refresh while we waited for the lock
+                    /* Das Schloss wartet nicht mehr (0 ms), in EINER Spur kann
+                       dazwischen also nichts passieren. Die Probe bleibt
+                       trotzdem: sie kostet einen Attributzugriff und ist der
+                       einzige Schutz, falls je eine zweite Spur refresht. */
+                    return true;
                 }
             }
             return $this->OAuthRefreshTokenLocked($TokenUrl, $KeyPrefix, $AccessAttr, $RefreshAttr, $ExpiresAttr, $ClientId, $ClientSecret, $DebugLabel, $Scope, $RefreshTokenOverride);

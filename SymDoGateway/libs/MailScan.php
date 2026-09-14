@@ -1846,7 +1846,7 @@ trait MailScan
     private function MailWithProposalLock(callable $fn, mixed $wennBesetzt): mixed
     {
         $lock = 'SymDo_MailProposals_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             $this->SendDebug('MailScan', 'Vorschlagsliste belegt — Aenderung nicht ausgefuehrt', 0);
             return $wennBesetzt;
         }
@@ -2299,7 +2299,7 @@ trait MailScan
     private function MailCountDay(): void
     {
         $lock = 'SymDo_MailDay_' . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 1000)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             // Nicht zaehlen ist besser als falsch zaehlen; der Aufruf laeuft
             // trotzdem. Ein verlorener Zaehlschritt ist bei einem Tagesdeckel
             // harmlos.

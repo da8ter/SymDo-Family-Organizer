@@ -307,7 +307,10 @@ trait SymconDoku
         if (!is_file($vekDatei) || !is_file($textDatei)) {
             return null;
         }
-        $einbettung = $this->DokuEinbetten([$frage]);
+        /* Kurze Frist: hier wartet jemand auf eine gesprochene Antwort, und das
+           Sprachbudget sind acht Sekunden insgesamt. Der BAU nimmt sich die
+           vollen dreissig — er laeuft im Scanner, wo niemand zusieht. */
+        $einbettung = $this->DokuEinbetten([$frage], self::DOKU_EINBETT_SPRACHE_S);
         if ($einbettung === null) {
             return null;
         }

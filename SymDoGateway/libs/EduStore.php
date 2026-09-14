@@ -270,7 +270,7 @@ trait EduStore
         }
 
         $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 800)) {
+        if (!IPS_SemaphoreEnter($lock, 0)) {
             return $this->EduFehler('busy');
         }
         try {
@@ -461,12 +461,12 @@ trait EduStore
 
         // Sperren in der festgelegten Ordnung: Notizen, dann Klassenseiten.
         $notesLock = self::NOTES_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($notesLock, 3000)) {
+        if (!IPS_SemaphoreEnter($notesLock, 0)) {
             return $this->Translate('Class pages: notes are busy — trying again later.');
         }
         try {
             $eduLock = self::EDU_LOCK . $this->InstanceID;
-            if (!IPS_SemaphoreEnter($eduLock, 3000)) {
+            if (!IPS_SemaphoreEnter($eduLock, 0)) {
                 return $this->Translate('Class pages: the store is busy — trying again later.');
             }
             try {
