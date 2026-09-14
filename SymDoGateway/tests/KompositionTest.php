@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Laesst sich die Gateway-Klasse ueberhaupt zusammensetzen?
  *
- * `SymDoGateway` besteht aus zweiunddreissig Traits. Zwei davon duerfen keine
+ * `SymDoGateway` besteht aus ueber dreissig Traits. Zwei davon duerfen keine
  * Methode und keine Konstante desselben Namens mitbringen — PHP meldet das
  * nicht als Warnung, sondern als **fatalen Fehler beim Laden der Klasse**. Und
  * weil Symcon alle Module einer Bibliothek zusammen laedt, steht danach nicht
@@ -60,6 +60,7 @@ pruefe('Die Klasse laedt ohne Warnung', $warnungen, []);
 pruefe('SymDoGateway existiert', class_exists('SymDoGateway', false), true);
 
 $k = new ReflectionClass('SymDoGateway');
+printf("%-4s %s\n", '--', sprintf('%d Traits, %d Methoden', count($k->getTraitNames()), count($k->getMethods())));
 
 /* Die Haelften des Klassenseiten-Laufs. `EduSeiteSpiegeln` ist die
    Gateway-Haelfte: sie schreibt EINMAL je Seite. Faellt sie beim Aufraeumen
@@ -145,6 +146,23 @@ foreach (explode('return ', $rechnen) as $nr => $stueck) {
     }
 }
 pruefe('Jeder Rueckweg meldet die Zahl der Anbieter-Aufrufe', $ohneZaehler, []);
+
+/* Die LESENDE Haelfte der Klassenseiten darf nichts anfassen, was einer
+   Instanz gehoert — kein Attribut, kein Medienobjekt, keine Sperre, keine
+   Eigenschaft. Nur so kann sie in einer Scanner-Instanz laufen. Schleicht sich
+   eines davon ein, faellt es sonst erst im Betrieb auf: als Medienobjekt unter
+   der falschen Instanz oder als Sperre, die die Gateway-Hooks nicht ausschliesst. */
+$lesen = (string)file_get_contents(__DIR__ . '/../libs/EduLesen.php');
+foreach (['ReadAttribute', 'WriteAttribute', 'ReadProperty', 'IPS_', 'EduProp',
+          'EduStoreRead', 'EduWriteStore', 'NotesSaveAttachment', 'Semaphore',
+          'InstanceID', 'SendDebug'] as $verboten) {
+    pruefe('EduLesen fasst ' . $verboten . ' nicht an', str_contains($lesen, $verboten), false);
+}
+/* Und sie traegt die eine Weissliste fuer HTML. Das Feld landet in einem
+   innerHTML der App; es gibt keinen CSP-Kopf und der Token liegt im
+   localStorage. */
+pruefe('Die HTML-Weissliste steht in der lesenden Haelfte',
+    $k->hasMethod('EduHtml') && str_contains($lesen, 'private function EduHtml('), true);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -30,6 +30,7 @@ require_once __DIR__ . '/libs/VoiceZeitplan.php';
 require_once __DIR__ . '/libs/DokuGemein.php';
 require_once __DIR__ . '/libs/DokuBau.php';
 require_once __DIR__ . '/libs/SymconDoku.php';
+require_once __DIR__ . '/libs/EduLesen.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/EduEinpflegen.php';
 require_once __DIR__ . '/libs/EduStore.php';
@@ -84,6 +85,7 @@ class SymDoGateway extends IPSModuleStrict
     use DokuGemein;
     use DokuBau;
     use SymconDoku;
+    use EduLesen;
     use EduMaps;
     use EduEinpflegen;
     use EduStore;

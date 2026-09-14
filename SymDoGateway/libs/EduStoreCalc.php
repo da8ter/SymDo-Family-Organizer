@@ -16,7 +16,7 @@ class EduStoreCalc
     /** Die Karten tragen `html`; der Notizen-Deckel von 786 kB wäre zu knapp. */
     public const STORE_MAX    = 1048576;
     public const FOLDERS_MAX  = 40;
-    /** Über alle Seiten zusammen. Je Seite deckelt EduMaps::EDU_KARTEN_MAX. */
+    /** Über alle Seiten zusammen. Je Seite deckelt EduLesen::EDU_KARTEN_MAX. */
     public const KARTEN_MAX   = 300;
     public const TEXT_MAX     = 8000;
     public const TITLE_MAX    = 120;
