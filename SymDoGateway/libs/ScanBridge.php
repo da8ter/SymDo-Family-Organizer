@@ -232,7 +232,24 @@ trait ScanBridge
                 $this->ScanErgebnisInFehler($pfad, 'Umschlag nicht lesbar');
                 continue;
             }
-            if (!$this->ScanUmschlagVerarbeiten($umschlag)) {
+            /* Ein Wurf beim Einpflegen darf den Kanal NICHT verkeilen. Ohne
+               diese Klammer bliebe die Datei als aeltestes Ergebnis liegen,
+               jeder Netz-Takt und jeder Weckruf wuerfe an derselben Stelle
+               erneut, und weil das Aufraeumen nur laeuft, wenn ein Durchgang
+               NICHTS eingepflegt hat, verfiele sie auch nach sieben Tagen nie.
+               Nach fuenfzig Dateien verwirft der Kanal dann jedes neue Ergebnis
+               JEDER Quelle — ein einziger kaputter Umschlag haette den ganzen
+               Umbau stillgelegt. */
+            try {
+                $genommen = $this->ScanUmschlagVerarbeiten($umschlag);
+            } catch (\Throwable $e) {
+                $this->ScanErgebnisInFehler($pfad, 'Quelle ' . (string)$umschlag['quelle']
+                    . ' warf: ' . mb_substr($e->getMessage(), 0, 200));
+                $this->ScanMelden('Umschlag der Quelle ' . (string)$umschlag['quelle']
+                    . ' liess sich nicht einpflegen: ' . $e->getMessage(), KL_WARNING);
+                continue;
+            }
+            if (!$genommen) {
                 $this->ScanErgebnisInFehler($pfad, 'Quelle ' . (string)$umschlag['quelle'] . ' nicht eingepflegt');
                 continue;
             }
@@ -289,6 +306,23 @@ trait ScanBridge
                 } else {
                     $this->ScanMelden('Handbuch-Verzeichnis: '
                         . (string)$umschlag['status']['text'], KL_WARNING);
+                }
+                return true;
+
+            case 'edu':
+                /* Klassenseiten. Der Scanner holt und zerlegt, das Gateway
+                   pflegt ein — Medien, Sperre und Sperrliste haengen alle an
+                   DIESER Instanz, siehe EduEinpflegen.
+
+                   Die Statuszeile kommt mit: das Konfigurationsformular liest
+                   sie aus dem Gateway-Attribut. Schriebe der Scanner sie bei
+                   sich, stuende dort dauerhaft „Noch nicht nachgesehen". */
+                $gespiegelt = $this->EduUmschlagEinpflegen($umschlag);
+                $text = (string)($umschlag['status']['text'] ?? '');
+                $this->SendDebug('Scan-Kanal', sprintf('Klassenseiten von %d: %s (%d gespiegelt)',
+                    (int)$umschlag['scanner'], $text, $gespiegelt), 0);
+                if (((bool)($umschlag['status']['ok'] ?? false)) !== true) {
+                    $this->ScanMelden('Klassenseiten: ' . $text, KL_WARNING);
                 }
                 return true;
         }

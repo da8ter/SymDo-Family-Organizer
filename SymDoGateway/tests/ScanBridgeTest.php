@@ -93,6 +93,24 @@ final class BrueckeProbe extends IPSModuleStrict
         parent::RequestAction($Ident, $Value);
     }
 
+    /* Die Gegenstelle der Klassenseiten. Im echten Gateway liefert sie das
+       Trait EduEinpflegen; hier zaehlt sie nur mit, WAS ankommt — geprueft
+       wird die Bruecke, nicht das Einpflegen. Ohne diese Attrappe faellt der
+       Prueflauf mit „Call to undefined method" um, und genau das ist der
+       Hinweis: die Bruecke haengt jetzt an der Edu-Haelfte. */
+    public array $eduUmschlaege = [];
+    public string $eduStatus = '';
+    public bool $eduWirft = false;
+    private function EduUmschlagEinpflegen(array $umschlag): int
+    {
+        if ($this->eduWirft) {
+            throw new RuntimeException('Cannot access offset of type string on string');
+        }
+        $this->eduUmschlaege[] = $umschlag;
+        $this->eduStatus = (string)($umschlag['status']['text'] ?? '');
+        return count((array)($umschlag['seiten'] ?? []));
+    }
+
     // Tueren fuer den Pruefstand — die Griffe selbst sind privat.
     public function pFehlt(): bool { return $this->ScannerFehlt(); }
     public function pAnlegen(): void { $this->ScannerAnlegen(); }
@@ -259,7 +277,9 @@ pruefe('Ergebnis eingepflegt, Kanal wieder leer',
     [0, 0, 0]);
 
 // ── 5. Was das Gateway (noch) nicht kennt ──────────────────────────────────
-$fremd = ScanKanalCalc::LeererUmschlag('edu', $gw, $sc, time(), 'zu frueh');
+/* `moodle` ist heute noch nicht umgezogen — `edu` war es bis zum 14.09.2026
+   auch, und diese Zusicherung stand davor auf `edu`. */
+$fremd = ScanKanalCalc::LeererUmschlag('moodle', $gw, $sc, time(), 'zu frueh');
 $gateway->pSchreiben($fremd);
 pruefe('Eine noch nicht umgezogene Quelle landet sichtbar im Fehlerordner',
     [$gateway->pEinpflegen(), $gateway->pStand()['ergebnisse'], $gateway->pStand()['fehler']],
@@ -346,6 +366,55 @@ try {
 }
 pruefe('Bedient ein Scanner die Quelle, baut das Gateway nicht mit',
     [$wurf, $gateway->pDokuTakt()], ['', 0]);
+
+// ── Ein Klassenseiten-Umschlag ─────────────────────────────────────────────
+/* Der Weg, den der Umbau eroeffnet: ein Scanner holt die Seiten und schickt
+   sie als Umschlag zurueck. Bis zum 14.09.2026 landete genau dieser Umschlag
+   im FEHLERORDNER, weil das Gateway die Quelle nicht kannte — jede
+   Rueckmeldung waere still liegengeblieben. */
+$gateway->pSchreiben([
+    'v' => ScanKanalCalc::VERSION, 'quelle' => 'edu', 'gateway' => $gw,
+    'scanner' => $sc, 'at' => time(),
+    'status' => ['ok' => true, 'text' => '3 Karte(n) auf 1 Seite(n), 0 geaendert, 0 analysiert.'],
+    'seiten' => [[
+        'seite'  => ['name' => '5b', 'url' => 'https://beispiel.test/s', 'userId' => 'u1'],
+        'quelle' => 'edu',
+        'karten' => [['boxid' => 'b1', 'updated' => 1757000000, 'titel' => 'Kopiergeld']],
+    ]],
+]);
+/* Der eine im Fehlerordner ist der `moodle`-Umschlag aus Abschnitt 5 — die
+   Quelle ist noch nicht umgezogen und soll dort sichtbar liegen bleiben. */
+pruefe('Ein Klassenseiten-Umschlag wird eingepflegt',
+    [$gateway->pEinpflegen(), $gateway->pStand()['ergebnisse'], $gateway->pStand()['fehler']],
+    [1, 0, 1]);
+pruefe('… und erreicht die Edu-Haelfte', count($gateway->eduUmschlaege), 1);
+pruefe('… mit seiner Seite', count($gateway->eduUmschlaege[0]['seiten'] ?? []), 1);
+/* Die Statuszeile gehoert ins GATEWAY-Attribut: das Konfigurationsformular
+   liest sie dort. Schriebe der Scanner sie bei sich, stuende im Formular
+   dauerhaft „Noch nicht nachgesehen". */
+pruefe('Die Statuszeile geht an die Edu-Haelfte, nicht an die Bruecke',
+    $gateway->eduStatus, '3 Karte(n) auf 1 Seite(n), 0 geaendert, 0 analysiert.');
+
+// ── Ein werfender Umschlag ────────────────────────────────────────────────
+/* Ohne Klammer bliebe die Datei als AELTESTES Ergebnis liegen: jeder Netz-Takt
+   und jeder Weckruf wuerfe an derselben Stelle erneut, und weil das Aufraeumen
+   nur laeuft, wenn ein Durchgang NICHTS eingepflegt hat, verfiele sie auch nach
+   sieben Tagen nie. Nach fuenfzig Dateien verwirft der Kanal dann jedes neue
+   Ergebnis JEDER Quelle — ein einziger kaputter Umschlag haette den ganzen
+   Umbau stillgelegt. */
+$vorherFehler = $gateway->pStand()['fehler'];
+$gateway->eduWirft = true;
+$gateway->pSchreiben([
+    'v' => ScanKanalCalc::VERSION, 'quelle' => 'edu', 'gateway' => $gw,
+    'scanner' => $sc, 'at' => time(),
+    'status' => ['ok' => true, 'text' => 'kaputt'],
+    'seiten' => [['seite' => ['url' => 'https://beispiel.test/s'], 'karten' => [['boxid' => 'b1']]]],
+]);
+pruefe('Ein werfender Umschlag verkeilt den Kanal nicht',
+    [$gateway->pEinpflegen(), $gateway->pStand()['ergebnisse']], [0, 0]);
+pruefe('… sondern liegt sichtbar im Fehlerordner',
+    $gateway->pStand()['fehler'], $vorherFehler + 1);
+$gateway->eduWirft = false;
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -34,6 +34,8 @@ if (!is_file($stubs . '/autoload.php')) {
 }
 require_once $stubs . '/autoload.php';
 require_once __DIR__ . '/../libs/EduStoreCalc.php';
+require_once __DIR__ . '/../../libs/AiProvider.php';
+require_once __DIR__ . '/../../libs/AiRecipePage.php';
 require_once __DIR__ . '/../libs/EduEinpflegen.php';
 
 $fehler = 0;
@@ -61,6 +63,19 @@ final class Spiegelprobe
 
     /** Die Sperre traegt im echten Modul diesen Namen; sie kommt aus EduStore. */
     private const EDU_LOCK = 'TGW_Edu_';
+    /** Der Kartendeckel je Seite — im echten Modul aus EduMaps. */
+    private const EDU_KARTEN_MAX = 60;
+
+    /* Die Weissliste fuer HTML. Im echten Modul zerlegt sie den Rumpf und
+       laesst nur Absatz, Liste, fett, kursiv und http/https/mailto-Verweise
+       stehen. Hier genuegt eine Markierung: geprueft wird, DASS der Umschlag
+       hindurchgeht — was die Weissliste kann, ist ihre eigene Sache. */
+    public array $gefiltert = [];
+    private function EduHtml(string $rumpf): string
+    {
+        $this->gefiltert[] = $rumpf;
+        return $rumpf === '' ? '' : '[weissliste]';
+    }
 
     public int $InstanceID = 4711;
     private bool $eduOrdnerGeaendert = false;
@@ -83,6 +98,12 @@ final class Spiegelprobe
 
     // ── was der Trait an Symcon braucht ──────────────────────────────────
     private function EduProp(string $n, mixed $v): mixed { return true; }
+    /** Die Statuszeile des Konfigurationsformulars. */
+    public string $status = '';
+    public function WriteAttributeString(string $n, string $w): void
+    {
+        if ($n === 'EduStatus') { $this->status = $w; }
+    }
     private function EduStorable(): bool { return true; }
     private function EduStoreRead(): array { return $this->bestand; }
     private function SendDebug(string $a, string $b, int $c): void {}
@@ -140,11 +161,19 @@ final class Spiegelprobe
         return $id;
     }
 
+    /** Gesperrte Seiten — im echten Gateway aus dem Bestand (`blocked`). */
+    public array $gesperrt = [];
+    private function EduGesperrt(string $url): bool { return in_array($url, $this->gesperrt, true); }
+    private function EduArchivAbgleichen(array $seite, array $karten): int { $this->archiv[] = $seite['url']; return 0; }
+    public array $archiv = [];
+
     // ── Zugaenge fuer den Prueflauf ──────────────────────────────────────
     public function Spiegle(array $seite, array $karten): int
     {
         return $this->EduSeiteSpiegeln($seite, $karten);
     }
+    public function Umschlag(array $u): int { return $this->EduUmschlagEinpflegen($u); }
+    public function Seite(mixed $roh): ?array { return $this->EduUmschlagSeite($roh); }
 }
 
 $seite = ['name' => '5b', 'url' => 'https://x.test/s', 'userId' => 'u1'];
@@ -241,6 +270,125 @@ function EduEinpflegen_schub(Spiegelprobe $p, int $nr): int
     $vorher = $nr === 0 ? 0 : (int)$p->geschrieben[$nr - 1]['notizen'];
     return ((int)$p->geschrieben[$nr]['notizen'] - $vorher) * 2;
 }
+
+// ══ Der Umschlag aus der Scanner-Spur ════════════════════════════════════
+/* Er kommt als DATEI von einer fremden Instanz. Die weisse Liste des Kanals
+   prueft nur, dass `seiten` eine Liste von Objekten ist — was DRIN steht,
+   prueft niemand ausser dieser Stelle. */
+$p = new Spiegelprobe();
+
+pruefe('Kein Objekt — kein Einpflegen', $p->Seite('kaputt'), null);
+pruefe('Ohne Adresse kein Einpflegen',
+    $p->Seite(['seite' => ['name' => '5b'], 'karten' => [['boxid' => 'b1']]]), null);
+/* Die Adresse wird als `srcUrl` an der Karte abgelegt, und die Oberflaeche
+   macht daraus einen Verweis — ein fremdes Schema waere fremder Code in der
+   App. Gegen Rufe ins eigene Netz schuetzt der Abruf selbst, nicht diese
+   Stelle: eine DNS-Abfrage je Seite laege in der Gateway-Spur. */
+pruefe('Eine Datei-Adresse wird abgewiesen',
+    $p->Seite(['seite' => ['url' => 'file:///etc/passwd'], 'karten' => [['boxid' => 'b1']]]), null);
+pruefe('Und ein Skript-Schema erst recht',
+    $p->Seite(['seite' => ['url' => 'javascript:alert(1)'], 'karten' => [['boxid' => 'b1']]]), null);
+pruefe('Eine Adresse ohne Rechner auch',
+    $p->Seite(['seite' => ['url' => 'https:///pfad'], 'karten' => [['boxid' => 'b1']]]), null);
+
+/* Null Karten heisst NICHT „alles archivieren": bricht das Markup der Schule,
+   saehe der Archiv-Abgleich jede Karte der Seite als verschwunden an. */
+pruefe('Eine Seite ohne Karten wird uebersprungen',
+    $p->Seite(['seite' => ['url' => 'https://beispiel.test/s'], 'karten' => []]), null);
+
+/* Eine Karte ohne `boxid` bekaeme die Kennung `edu:` — beim naechsten
+   Umschlag faende sie sich selbst wieder und ueberschriebe sich. */
+$e = $p->Seite(['seite' => ['url' => 'https://beispiel.test/s', 'name' => '5b', 'userId' => 'u1'],
+                'karten' => [['boxid' => ''], ['boxid' => 'b2', 'titel' => 'Kopiergeld'], ['titel' => 'ohne']]]);
+pruefe('Karten ohne Kennung fallen weg', count($e[1]), 1);
+pruefe('Die uebrige bleibt', $e[1][0]['boxid'], 'b2');
+/* Das Spiegeln greift ungeprueft auf diese Felder zu — eine fehlende Zelle
+   waere dort eine PHP-Warnung mitten im Hook, und die zerlegt die Antwort. */
+pruefe('Die Pflichtfelder sind belegt',
+    [$e[1][0]['anhaenge'], $e[1][0]['updated'], $e[1][0]['html'], $e[1][0]['buchung']],
+    [[], 0, '', null]);
+pruefe('Name und Mitglied kommen mit', [$e[0]['name'], $e[0]['userId']], ['5b', 'u1']);
+
+// ── Gesperrte Seiten ───────────────────────────────────────────────────────
+/* Zwischen dem Auftrag und seinem Ergebnis koennen Minuten liegen. Loescht
+   jemand in dieser Zeit den Seitenordner in der App, darf die Seite NICHT
+   ueber den Umschlag zurueckkommen. Die Sperrliste steht im Bestand des
+   Gateways — der Scanner kann sie gar nicht kennen. */
+$umschlag = ['quelle' => 'edu', 'status' => ['ok' => true, 'text' => 'Bericht'],
+    'seiten' => [[
+        'seite'  => ['url' => 'https://beispiel.test/s', 'name' => '5b', 'userId' => 'u1'],
+        'karten' => [['boxid' => 'b1', 'updated' => 1, 'titel' => 'K', 'text' => 'T']],
+    ]]];
+
+$p = new Spiegelprobe();
+$p->gesperrt = ['https://beispiel.test/s'];
+pruefe('Eine gesperrte Seite kommt nicht zurueck', $p->Umschlag($umschlag), 0);
+pruefe('… und wird auch nicht archiviert', $p->archiv, []);
+pruefe('… es wird nichts geschrieben', count($p->geschrieben), 0);
+
+$p = new Spiegelprobe();
+pruefe('Eine freie Seite wird gespiegelt', $p->Umschlag($umschlag), 1);
+pruefe('… und einmal archiviert', $p->archiv, ['https://beispiel.test/s']);
+/* Der Bericht gehoert ins Attribut DIESER Instanz — das Formular liest ihn
+   hier. Schriebe der Scanner ihn bei sich, stuende dort dauerhaft
+   „Noch nicht nachgesehen". */
+pruefe('Der Bericht landet in der Statuszeile',
+    json_decode($p->status, true)['text'] ?? '', 'Bericht');
+
+// ══ Die harte Formpruefung der Karten ════════════════════════════════════
+/* Vorgaben ZU ERGAENZEN genuegt nicht: der PHP-Plus-Operator laesst einen
+   vorhandenen Schluessel unberuehrt, ein FALSCHER Typ bliebe also stehen.
+   Und was hier durchkommt, wird gleich darauf ungeprueft benutzt. */
+$p = new Spiegelprobe();
+function seite(array $karten): array
+{
+    return ['seite' => ['url' => 'https://beispiel.test/s', 'name' => '5b'], 'karten' => $karten];
+}
+
+/* `html` landet ueber den Bestand in einem innerHTML der App. Heute entsteht
+   es AUSSCHLIESSLICH in EduHtml — einer Weissliste. Der Umschlagweg darf
+   diese eine Pruefstelle nicht umgehen: sonst fuehrt jeder, der die
+   Klassenseiten oeffnet, fremden Code aus, mit dem Token der Sitzung. */
+$e = $p->Seite(seite([['boxid' => 'b1', 'html' => '<img src=x onerror=alert(1)>']]));
+pruefe('Das HTML geht durch die Weissliste', $e[1][0]['html'], '[weissliste]');
+pruefe('… und zwar genau einmal', count($p->gefiltert), 1);
+
+/* Eine Zeichenkette statt einer Liste: EduNotizText macht daraus
+   `(array)"keine"` = `["keine"]`, und `$a['name']` auf einer Zeichenkette
+   wirft in PHP 8. Der Wurf verliesse das Einpflegen ungefangen. */
+$e = $p->Seite(seite([['boxid' => 'b1', 'anhaenge' => 'keine']]));
+pruefe('Anhaenge als Zeichenkette werden zu einer leeren Liste', $e[1][0]['anhaenge'], []);
+$e = $p->Seite(seite([['boxid' => 'b1', 'anhaenge' => ['Elternbrief.pdf', ['name' => 'echt.pdf']]]]));
+pruefe('Eintraege ohne Form fallen weg', count($e[1][0]['anhaenge']), 1);
+pruefe('Der echte bleibt', $e[1][0]['anhaenge'][0]['name'], 'echt.pdf');
+
+/* Jeder Eintrag kostet einen Abruf von bis zu fuenfzehn Sekunden in der
+   Gateway-Spur — auch der, der scheitert. Ohne Deckel haengt die Spur
+   stundenlang und die App bekommt keinen Hook mehr beantwortet. */
+$viele = array_fill(0, 500, ['name' => 'a.pdf', 'url' => 'https://langsam.test/x']);
+$e = $p->Seite(seite([['boxid' => 'b1', 'anhaenge' => $viele]]));
+pruefe('Die Anhaenge sind gedeckelt',
+    count($e[1][0]['anhaenge']), EduStoreCalc::ATTACH_MAX);
+
+/* Die Kennung wird zu `edu:<boxid>` und traegt die Wiedererkennung UND den
+   Sprung auf die Seite (`#box-<boxid>`). */
+foreach (['<script>', '../andere', "a\nb", str_repeat('x', 65)] as $boese) {
+    $e = $p->Seite(seite([['boxid' => $boese], ['boxid' => 'gut']]));
+    pruefe('Eine unsaubere Kennung faellt weg: ' . mb_substr($boese, 0, 12),
+        count($e[1]), 1);
+}
+
+/* Die Farben gehen in ein style-Attribut. */
+$e = $p->Seite(seite([['boxid' => 'b1', 'farbe' => 'red;background:url(x)', 'abschnittFarbe' => '#FFCC00']]));
+pruefe('Eine Farbe ist #RRGGBB oder gar nichts',
+    [$e[1][0]['farbe'], $e[1][0]['abschnittFarbe']], ['', '#FFCC00']);
+
+$e = $p->Seite(seite([['boxid' => 'b1', 'buchung' => 'voll']]));
+pruefe('Eine Buchung ist ein Objekt oder null', $e[1][0]['buchung'], null);
+
+/* Derselbe Deckel, den EduKarten beim Zerlegen zieht. */
+$e = $p->Seite(seite(array_map(static fn(int $i): array => ['boxid' => 'b' . $i], range(1, 200))));
+pruefe('Die Karten sind gedeckelt', count($e[1]), 60);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

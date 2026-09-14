@@ -313,4 +313,203 @@ trait EduEinpflegen
         return EduStoreCalc::NachzugRechnen($alt, $karte, $nr, $ordnerId,
             (string)$seite['url'], $this->EduNotizText($karte), $namen, $thumbs, $qr);
     }
+
+    // ------------------------------------------------------------------
+    // Der Weg von aussen: ein Umschlag aus der Scanner-Spur
+    // ------------------------------------------------------------------
+
+    /**
+     * Die `seiten` eines Umschlags einpflegen.
+     *
+     * Der Scanner holt und zerlegt, das Gateway pflegt ein. Diese Teilung ist
+     * nicht frei gewaehlt, sondern von drei Dingen erzwungen:
+     *
+     *  - **Medienobjekte.** `NotesSaveAttachment` haengt sie unter die EIGENE
+     *    Instanz, und `NotesDeleteMedia` loescht nur, was im eigenen
+     *    Kategorie-Knoten haengt. Im Scanner angelegte Anhaenge waeren
+     *    dauerhaft unaufraeumbare Leichen gegen eine Quote von 300.
+     *  - **Die Sperre.** `EDU_LOCK` traegt die Instanzkennung im Namen. Ein
+     *    Scanner naehme eine ANDERE Sperre und schloesse die Hooks des
+     *    Gateways damit gar nicht aus.
+     *  - **Die Sperrliste.** Sie steht als `blocked` IM Bestand, nicht in einem
+     *    eigenen Attribut, und wird aus dem Hook geschrieben, wenn jemand in
+     *    der App einen Seitenordner loescht. Nur hier ist sie aktuell.
+     *
+     * @param array<string,mixed> $umschlag der bereits geprueifte Umschlag
+     * @return int wie viele Karten den vollen Satz bekommen haben
+     */
+    private function EduUmschlagEinpflegen(array $umschlag): int
+    {
+        /* Die Statuszeile gehoert ins Attribut DIESER Instanz: das
+           Konfigurationsformular liest sie hier. Schriebe der Scanner sie bei
+           sich, stuende dort dauerhaft „Noch nicht nachgesehen".
+           Der Klammeraffe, weil das Attribut nach einem Modul-Reload ohne
+           Kernel-Neustart noch nicht registriert ist — Symcon wirft dann nicht,
+           es WARNT, und eine Warnung zerlegt im Hook die HTTP-Antwort. */
+        $text = trim((string)($umschlag['status']['text'] ?? ''));
+        if ($text !== '') {
+            @$this->WriteAttributeString('EduStatus', (string)json_encode(
+                ['t' => time(), 'text' => $text], JSON_UNESCAPED_UNICODE));
+        }
+
+        $gespiegelt = 0;
+        foreach ((array)($umschlag['seiten'] ?? []) as $roh) {
+            $eintrag = $this->EduUmschlagSeite($roh);
+            if ($eintrag === null) {
+                continue;
+            }
+            [$seite, $karten] = $eintrag;
+
+            /* Die Sperrliste gilt HIER, nicht dort. Zwischen dem Auftrag und
+               seinem Ergebnis koennen Minuten liegen, und in dieser Zeit kann
+               jemand die Seite in der App geloescht haben. Ohne diese Probe
+               kaeme sie mit dem naechsten Umschlag zurueck. */
+            if ($this->EduGesperrt((string)$seite['url'])) {
+                $this->SendDebug('EduMaps', 'Seite ist gesperrt — Umschlag uebersprungen: '
+                    . (string)$seite['name'], 0);
+                continue;
+            }
+
+            $gespiegelt += $this->EduSeiteSpiegeln($seite, $karten);
+            $this->EduArchivAbgleichen($seite, $karten);
+        }
+        return $gespiegelt;
+    }
+
+    /**
+     * Eine Seite aus dem Umschlag pruefen und in Form bringen.
+     *
+     * Der Umschlag kommt als DATEI von einer fremden Instanz. Die weisse Liste
+     * von `ScanKanalCalc` prueft nur, dass `seiten` eine Liste von Objekten ist
+     * — was DRIN steht, prueft niemand. Eine Karte ohne `boxid` legte eine
+     * Notiz mit der Kennung `edu:` an; beim naechsten Umschlag faende sie sich
+     * selbst wieder und ueberschriebe sich gegenseitig.
+     *
+     * @return array{0:array<string,mixed>,1:list<array<string,mixed>>}|null
+     */
+    private function EduUmschlagSeite(mixed $roh): ?array
+    {
+        if (!is_array($roh)) {
+            return null;
+        }
+        $s = is_array($roh['seite'] ?? null) ? $roh['seite'] : [];
+        $url = trim((string)($s['url'] ?? ''));
+        /* Nur die FORM, kein Namensdienst. Zwei Gruende: eine DNS-Abfrage je
+           Seite laegen in der Gateway-Spur, und der eigentliche Riegel gegen
+           Rufe ins eigene Netz sitzt ohnehin am Abruf selbst — `AiFetchPublicPage`
+           prueft JEDE Weiterleitung einzeln.
+           Das Schema muss trotzdem hier geprueft werden: die Adresse wird als
+           `srcUrl` an der Karte abgelegt, und die Oberflaeche macht daraus
+           einen Verweis. Ein `javascript:` darin waere fremder Code in der App. */
+        $teile  = parse_url($url);
+        $schema = strtolower((string)($teile['scheme'] ?? ''));
+        if ($url === '' || !in_array($schema, ['http', 'https'], true)
+            || trim((string)($teile['host'] ?? '')) === '') {
+            $this->SendDebug('EduMaps', 'Umschlag ohne brauchbare Adresse — uebersprungen', 0);
+            return null;
+        }
+        $seite = [
+            'name'   => EduStoreCalc::Kappen(trim((string)($s['name'] ?? '')), EduStoreCalc::TITLE_MAX),
+            'url'    => $url,
+            'userId' => trim((string)($s['userId'] ?? '')),
+        ];
+
+        $karten = [];
+        foreach ((array)($roh['karten'] ?? []) as $k) {
+            $karte = $this->EduUmschlagKarte($k);
+            if ($karte !== null) {
+                $karten[] = $karte;
+            }
+            if (count($karten) >= self::EDU_KARTEN_MAX) {
+                /* Derselbe Deckel, den `EduKarten` beim Zerlegen zieht. Ohne ihn
+                   brächte ein Umschlag beliebig viele Karten mit — und jede
+                   kostet Abrufe in der Gateway-Spur. */
+                $this->SendDebug('EduMaps', 'Kartendeckel im Umschlag erreicht: ' . $seite['name'], 0);
+                break;
+            }
+        }
+
+        if ($karten === []) {
+            /* Kein stilles Schweigen: bricht das Markup der Schule, sieht es
+               sonst aus wie „nichts Neues" — und der Archiv-Abgleich haette
+               jede Karte der Seite archiviert. */
+            $this->SendDebug('EduMaps', '0 Karten im Umschlag fuer ' . $seite['name']
+                . ' — Seite uebersprungen', 0);
+            return null;
+        }
+        return [$seite, array_values($karten)];
+    }
+
+    /**
+     * Eine Karte aus dem Umschlag hart in Form bringen.
+     *
+     * Vorgaben ZU ERGAENZEN genuegt nicht — der PHP-Plus-Operator laesst einen
+     * vorhandenen Schluessel unberuehrt, ein FALSCHER Typ bleibt also stehen.
+     * Und was hier durchkommt, wird gleich darauf ungeprueft benutzt:
+     *
+     *  - `anhaenge` als Zeichenkette ergibt in `EduNotizText` ein
+     *    `(array)"keine"` = `["keine"]`, und `$a['name']` auf einer
+     *    Zeichenkette wirft in PHP 8. Der Wurf verliesse `ScanEinpflegen`
+     *    ungefangen — der Umschlag bliebe als aeltester liegen und verkeilte
+     *    den ganzen Kanal.
+     *  - `html` landet ueber den Bestand in einem `innerHTML` der App. Heute
+     *    entsteht es AUSSCHLIESSLICH in `EduHtml()`, einer Weissliste; der
+     *    Umschlagweg umgeht genau diese eine Pruefstelle. Deshalb geht es hier
+     *    noch einmal hindurch — mitsamt dem Laengendeckel.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function EduUmschlagKarte(mixed $k): ?array
+    {
+        if (!is_array($k)) {
+            return null;
+        }
+        $boxid = trim((string)($k['boxid'] ?? ''));
+        /* Die Kennung wird zu `edu:<boxid>` und traegt die Wiedererkennung UND
+           den Sprung auf die Seite (`#box-<boxid>`). Sie darf deshalb nichts
+           anderes sein als das, was die Schule vergibt. */
+        if ($boxid === '' || preg_match('/^[A-Za-z0-9_.:-]{1,64}$/', $boxid) !== 1) {
+            return null;
+        }
+
+        $anhaenge = [];
+        foreach ((array)($k['anhaenge'] ?? []) as $a) {
+            if (!is_array($a)) {
+                continue;   // eine Zeichenkette hier wirft weiter unten
+            }
+            $anhaenge[] = [
+                'name'    => EduStoreCalc::Kappen((string)($a['name'] ?? ''), EduStoreCalc::TITLE_MAX),
+                'datei'   => EduStoreCalc::Kappen((string)($a['datei'] ?? ''), EduStoreCalc::TITLE_MAX),
+                'url'     => trim((string)($a['url'] ?? '')),
+                'preview' => trim((string)($a['preview'] ?? '')),
+            ];
+            if (count($anhaenge) >= EduStoreCalc::ATTACH_MAX) {
+                /* Der Deckel zaehlt hier ENTWUERFE, nicht Erfolge: jeder
+                   Eintrag kostet einen Abruf von bis zu fuenfzehn Sekunden in
+                   der Gateway-Spur, auch der, der scheitert. */
+                break;
+            }
+        }
+
+        return [
+            'boxid'          => $boxid,
+            'updated'        => (int)($k['updated'] ?? 0),
+            'titel'          => EduStoreCalc::Kappen((string)($k['titel'] ?? ''), EduStoreCalc::TITLE_MAX),
+            'text'           => (string)($k['text'] ?? ''),
+            // Durch dieselbe Weissliste wie eine frisch gelesene Karte.
+            'html'           => $this->EduHtml((string)($k['html'] ?? '')),
+            'abschnitt'      => EduStoreCalc::Kappen((string)($k['abschnitt'] ?? ''), EduStoreCalc::TITLE_MAX),
+            'abschnittFarbe' => $this->EduFarbe($k['abschnittFarbe'] ?? ''),
+            'farbe'          => $this->EduFarbe($k['farbe'] ?? ''),
+            'buchung'        => is_array($k['buchung'] ?? null) ? $k['buchung'] : null,
+            'anhaenge'       => $anhaenge,
+        ];
+    }
+
+    /** Eine Farbe ist `#RRGGBB` oder gar nichts — sie geht in ein style-Attribut. */
+    private function EduFarbe(mixed $roh): string
+    {
+        $f = trim((string)$roh);
+        return preg_match('/^#[0-9A-Fa-f]{6}$/', $f) === 1 ? $f : '';
+    }
 }

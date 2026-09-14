@@ -832,7 +832,20 @@ trait EduMaps
         $speicherVorher = (string)@ini_get('memory_limit');
         @ini_set('memory_limit', '192M');
         try {
+            $versuche = 0;
             foreach ((array)$karte['anhaenge'] as $a) {
+                /* Der Deckel zaehlt VERSUCHE mit, nicht nur Erfolge. Jeder
+                   Eintrag kostet einen Abruf von bis zu fuenfzehn Sekunden in
+                   dieser Spur — auch der, der scheitert. Bei einer Liste aus
+                   lauter unerreichbaren Adressen brach die Schleife sonst nie
+                   ab, und das Gateway antwortete stundenlang auf keinen Hook.
+                   Auf einer echten Klassenseite faellt das nie auf: dort haengt
+                   an einer Karte eine Handvoll Dateien. */
+                if (++$versuche > EduStoreCalc::ATTACH_MAX * 2) {
+                    $this->SendDebug('EduMaps', 'Zu viele Anhangs-Versuche an der Karte: '
+                        . (string)($karte['titel'] ?? ''), 0);
+                    break;
+                }
                 if (count($raus) >= EduStoreCalc::ATTACH_MAX) {
                     $this->SendDebug('EduMaps', 'Mehr als ' . EduStoreCalc::ATTACH_MAX
                         . ' Dateien an der Karte — die weiteren bleiben in der Notiz weg: ' . $karte['titel'], 0);
