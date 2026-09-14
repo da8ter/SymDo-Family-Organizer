@@ -1012,7 +1012,7 @@ trait Moodle
             }
             $text = (string)$karte['text'];
             if (mb_strlen($text) > EduStoreCalc::TEXT_MAX) {
-                // Gekuerzt wird SICHTBAR — siehe EduKarteSpiegeln.
+                // Gekuerzt wird SICHTBAR — siehe EduEinpflegen::EduKarteEinpflegen.
                 $text = mb_substr($text, 0, EduStoreCalc::TEXT_MAX - 40) . "
 
 … (gekürzt)";

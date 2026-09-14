@@ -400,15 +400,16 @@ trait EduMaps
         $geaendert = 0;
         $analysiert = 0;
         $gedeckelt = false;
-        $gespiegelt = 0;
+        /* Spiegeln zuerst und fuer die GANZE Seite auf einmal: es kostet keinen
+           KI-Aufruf, haengt also an keinem Deckel und auch nicht daran, ob eine
+           Karte als „geaendert" gilt. Die Notiz selbst entscheidet je Karte, ob
+           es etwas zu tun gibt (srcRev).
+
+           In EINEM Schreibvorgang, nicht in einem je Karte: der Bestand wird
+           bis zu ein Megabyte gross, und er lag in derselben Spur, die die App
+           bedient. Fuenfundfuenfzig Karten waren fuenfundfuenfzig Mal alles. */
+        $gespiegelt = $this->EduSeiteSpiegeln($seite, $karten);
         foreach ($karten as $nr => $karte) {
-            /* Spiegeln zuerst und fuer JEDE Karte: es kostet keinen KI-Aufruf,
-               haengt also an keinem Deckel und auch nicht daran, ob die Karte
-               als „geaendert" gilt. Die Notiz selbst entscheidet, ob es etwas
-               zu tun gibt (srcRev). */
-            if ($this->EduKarteSpiegeln($seite, $karte, (int)$nr)) {
-                $gespiegelt++;
-            }
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
             /* „Alles auswerten" nimmt auch die Karten, die schon im Merker
                stehen — sonst waere nach dem ersten Lauf, der nur vermerkt,
@@ -470,160 +471,9 @@ trait EduMaps
      * Eine Karte durch die Mail-Kette schicken. Titel und Abschnitt bilden den
      * „Betreff", damit die KI den Zusammenhang hat („Elternbriefe · Kopiergeld").
      *
-     * @param array{name:string,url:string,userId:string} $seite
-     * @param array<string,mixed> $karte
+     * Das SPIEGELN steht nicht mehr hier, sondern in `EduEinpflegen` — es ist
+     * die Gateway-Haelfte des Laufs und schreibt einmal je Seite.
      */
-    /**
-     * Eine Karte 1:1 als Notiz ablegen — voller Text, Bilder und Dateien.
-     *
-     * Das ist ABSICHTLICH von der KI-Auswertung getrennt: Spiegeln kostet nichts,
-     * also haengt es weder am Tagesdeckel noch am Deckel je Lauf, und es laeuft
-     * auch beim ERSTEN Lauf, der sonst nur vermerkt. Wer den Schalter umlegt,
-     * will den Bestand sehen, nicht in sechs Stunden die Haelfte davon.
-     *
-     * Der Ordner liegt IM Ordner des Kindes (Notizen kennen seit dem 03.09.2026
-     * Verschachtelung). Hat das Kind keinen Mitglieder-Ordner, liegt er oben.
-     *
-     * Wiedererkannt wird die Karte an `srcId` in der Notiz selbst, nicht an einem
-     * eigenen Merker: ein neues Attribut braeuchte einen Kernel-Neustart, und ein
-     * zweiter Bestand kann mit dem ersten auseinanderlaufen.
-     */
-    private function EduKarteSpiegeln(array $seite, array $karte, int $nr = 0): bool
-    {
-        if (!(bool)$this->EduProp('EduToNotes', false)) {
-            return false;
-        }
-        if (!$this->EduStorable()) {
-            $this->SendDebug('EduMaps', 'Klassenseiten-Bestand nicht beschreibbar — Kernel-Neustart nötig', 0);
-            return false;
-        }
-        $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 0)) {
-            $this->SendDebug('EduMaps', 'Bestand belegt — Karte beim naechsten Lauf', 0);
-            return false;
-        }
-        try {
-            $store = $this->EduStoreRead();
-            $this->eduOrdnerGeaendert = false;
-            $ordnerId = $this->EduOrdner($store, $seite);
-            if ($ordnerId === '') {
-                return false;
-            }
-            $srcId = 'edu:' . $karte['boxid'];
-            $jetzt = time();
-            $i = -1;
-            foreach ($store['notes'] as $k => $n) {
-                if ((string)($n['srcId'] ?? '') === $srcId) {
-                    $i = (int)$k;
-                    break;
-                }
-            }
-            /* Unveraendert? Dann die Anhaenge NICHT anfassen — kein Laden,
-               keine neuen Medien. Was trotzdem fehlen kann, traegt der Nachzug
-               nach; ob dabei etwas herauskam, sagt der Rechenkern. */
-            $alt = $i >= 0 ? $store['notes'][$i] : null;
-            if (EduStoreCalc::Bedarf($alt, $karte) === 'nachzug') {
-                $att = is_array($alt['att'] ?? null) ? $alt['att'] : [];
-                /* Die Anhaenge der KARTE in derselben Ordnung wie die
-                   abgelegten: gefiltert nach denen, die ueberhaupt eine Datei
-                   sind. Zugeordnet wird ueber die Reihenfolge. */
-                $kartenDateien = array_values(array_filter((array)$karte['anhaenge'],
-                    fn(array $a): bool => $this->EduArt((string)($a['datei'] ?? $a['name'])) !== ''));
-                $namen = array_map(static fn(array $a): string => (string)$a['name'], $kartenDateien);
-
-                /* Das Teure: Vorschaubild und QR-Code. Beides holt EINMAL je
-                   Anhang und nur dort, wo es fehlt — der Rechenkern bekommt
-                   nur die Ergebnisse. */
-                $thumbs = [];
-                if (count($att) === count($kartenDateien)) {
-                    foreach ($att as $k => $a) {
-                        if ((string)($a['kind'] ?? '') !== 'pdf' || (int)($a['thumb'] ?? 0) > 0) {
-                            continue;
-                        }
-                        $mini = $this->EduVorschau((string)($kartenDateien[$k]['preview'] ?? ''),
-                            (string)$a['name']);
-                        if ($mini > 0) {
-                            $thumbs[$k] = $mini;
-                        }
-                    }
-                }
-                $qr = [];
-                foreach ($att as $k => $a) {
-                    if (array_key_exists('qr', $a)) {
-                        /* Schon gelesen — aber der Fund gehoert trotzdem in die
-                           Fundliste, sonst kaeme er nach dem ersten Lauf nie an. */
-                        $this->EduQrVormerken((string)$a['qr']);
-                        continue;
-                    }
-                    /* Das GERADE geholte Vorschaubild zaehlt mit. Ohne
-                       `$thumbs[$k]` bekaeme ein PDF, dessen Vorschau in
-                       diesem Lauf entstanden ist, die Quelle 0 — und damit
-                       ein leeres Ergebnis, das als „geprueft" vermerkt wird
-                       und nie wieder angefasst wird. Der QR-Code auf diesem
-                       Elternbrief waere dann fuer immer verloren. */
-                    $quelle = (string)($a['kind'] ?? '') === 'image'
-                        ? (int)($a['id'] ?? 0)
-                        : (int)($thumbs[$k] ?? $a['thumb'] ?? 0);
-                    $qr[$k] = $this->EduQrCode($quelle);
-                }
-
-                [$satz, $geaendert] = EduStoreCalc::NachzugRechnen(
-                    $alt, $karte, $nr, $ordnerId, (string)$seite['url'],
-                    $this->EduNotizText($karte), $namen, $thumbs, $qr);
-
-                /* Der verschobene ORDNER ist ein Grund fuer sich: an der Karte
-                   selbst hat sich dann nichts geaendert. */
-                if ($this->eduOrdnerGeaendert || $geaendert) {
-                    $store['notes'][$i] = $satz;
-                    $this->EduWriteStore($store);
-                    $this->eduOrdnerGeaendert = false;
-                }
-                return false;
-            }
-            if ($i < 0 && count($store['notes']) >= EduStoreCalc::KARTEN_MAX) {
-                $this->SendDebug('EduMaps', 'Kartengrenze erreicht — Karte nicht gespiegelt: ' . $karte['titel'], 0);
-                return false;
-            }
-
-            $text = $this->EduNotizText($karte);
-            if (mb_strlen($text) > EduStoreCalc::TEXT_MAX) {
-                /* Gekuerzt wird SICHTBAR. Eine still gekappte Notiz waere
-                   schlimmer als eine fehlende — man sieht ihr nicht an, dass
-                   die Haelfte fehlt. */
-                $text = mb_substr($text, 0, EduStoreCalc::TEXT_MAX - 40) . "\n\n… (gekürzt)";
-            }
-            $alteMedien = $i >= 0 ? EduStoreCalc::AnhangIds([$store['notes'][$i]]) : [];
-            $anhaenge = $this->EduNotizAnhaenge($karte);
-
-            /* Zusammengesetzt wird im Rechenkern — dieselbe Form, die auch
-               ein ausgelagerter Scanner liefert. Das Teure steht darueber:
-               Text kappen, Anhaenge holen, Medien anlegen. */
-            $satz = EduStoreCalc::SatzBauen($alt, $karte, $nr, $ordnerId,
-                (string)$seite['url'], $text, $anhaenge,
-                $alt === null ? $this->NotesNewId() : '', $jetzt);
-
-            if ($i >= 0) {
-                $store['notes'][$i] = $satz;
-            } else {
-                $store['notes'][] = $satz;
-            }
-            if (!$this->EduWriteStore($store)) {
-                // Die eben angelegten Medien gehoeren jetzt niemandem.
-                $this->NotesDeleteMedia(array_map(static fn(array $a): int => (int)$a['id'], $anhaenge));
-                return false;
-            }
-            /* ERST der Bestand, DANN die alten Medien — und nur, was weder eine
-               Notiz noch eine andere Karte noch ein offener Vorschlag nennt.
-               Uebergeben wird der NOTIZEN-Bestand: die Klassenseiten liest
-               NotesUnreferencedMedia selbst frisch dazu. */
-            if ($alteMedien !== []) {
-                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($this->NotesStore(), $alteMedien));
-            }
-            return true;
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-    }
 
     /**
      * Das Vorschaubild eines PDF holen und ablegen.
