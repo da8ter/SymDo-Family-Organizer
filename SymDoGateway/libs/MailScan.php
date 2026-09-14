@@ -783,63 +783,14 @@ trait MailScan
                 return false;
             }
             /* Hausaufgaben als vierte Art — die Klassenseite ist ihre eigentliche
-               Quelle. Nur mit Kindern im Haus (siehe AiSystemPrompt). */
-            $arten = ['task', 'event', 'note'];
-            if ($this->HomeworkKinder() !== []) {
-                $arten[] = 'homework';
-            }
+               Quelle. Nur mit Kindern im Haus (siehe AiSystemPrompt): sonst
+               verwirft AiValidateTodoRows die Zeile still, und die Hausaufgabe
+               verschwindet zwischen Anbieter und Bestand. */
+            $arten = MailAnalyseCalc::Arten($this->HomeworkKinder() !== []);
             $aufgaben = $this->AiParseTodos((string)$r['text'], $arten);
-            // Bewusst ins Statusprotokoll und nicht nur ins Debug: die Analyse laeuft
-            // unbeobachtet im Timer und kostet Geld beim Anbieter. Ohne diese Zeile
-            // waere im Nachhinein nicht feststellbar, welche Mail wann verarbeitet wurde.
-            // Mit Datumsangabe: daran erkennt man, ob der Anhang wirklich ausgewertet
-            // wurde — Fristen und Termine stehen fast immer nur dort. Bewusst nur
-            // Zahlen, keine Aufgabentitel: das Protokoll ist kein Ort fuer Inhalte.
-            // Aufgaben und Termine getrennt zaehlen, dazu wie viele ein Datum tragen.
-            // Daran erkennt man ohne Blick in die App, ob der Anhang ausgewertet wurde
-            // und ob die Unterscheidung greift. Bewusst nur Zahlen, keine Titel.
-            $mitDatum = 0;
-            $termine = 0;
-            $notizen = 0;
-            // Ohne eigenen Zaehler zaehlte die Differenz unten Hausaufgaben als
-            // Aufgaben — das Protokoll haette in die Irre geführt.
-            $hausaufgaben = 0;
-            foreach ($aufgaben as $a) {
-                if (($a['due'] ?? null) !== null) {
-                    $mitDatum++;
-                }
-                if (($a['kind'] ?? 'task') === 'event') {
-                    $termine++;
-                }
-                if (($a['kind'] ?? 'task') === 'note') {
-                    $notizen++;
-                }
-                if (($a['kind'] ?? 'task') === 'homework') {
-                    $hausaufgaben++;
-                }
-            }
-            $this->LogMessage(sprintf(
-                'SymDo: E-Mail „%s" von %s analysiert%s%s → %d Aufgabe(n), %d Termin(e), %d Notiz(en), '
-                . '%d Hausaufgabe(n), davon %d mit Datum',
-                $betreff !== '' ? $betreff : '(ohne Betreff)',
-                (string)($kopf['SenderAddress'] ?? '?'),
-                // Der IMAP-Weg bleibt wortgleich wie bisher; nur ein anderer Eingang
-                // nennt sich, damit im Protokoll unterscheidbar ist, woher die Mail kam.
-                $quelle === 'IMAP' ? '' : ' (' . $quelle . ')',
-                $anhaenge === [] ? '' : sprintf(
-                    ' (mit %d Anhang/Anhaengen: %s)',
-                    count($anhaenge),
-                    implode(', ', array_map(
-                        static fn(array $a): string => ($a['name'] ?? '') !== '' ? (string)$a['name'] : (string)$a['kind'],
-                        $anhaenge
-                    ))
-                ),
-                count($aufgaben) - $termine - $notizen - $hausaufgaben,
-                $termine,
-                $notizen,
-                $hausaufgaben,
-                $mitDatum
-            ), KL_NOTIFY);
+            $zahlen = MailAnalyseCalc::Zaehlen($aufgaben);
+            $this->LogMessage(MailAnalyseCalc::Meldung($betreff,
+                (string)($kopf['SenderAddress'] ?? '?'), $quelle, $anhaenge, $zahlen), KL_NOTIFY);
             if ($aufgaben === []) {
                 return true; // sauber analysiert, nur nichts zu tun gefunden
             }
@@ -852,7 +803,7 @@ trait MailScan
             //
             // Nur die Medien-ID reist im Vorschlag mit, NIEMALS das base64 — der
             // Vorschlagsbestand ist ein Attribut mit bis zu 50 Datensaetzen.
-            if ($notizen > 0 && $anhaenge !== [] && (bool)$this->PushProp('MailNoteAttachments', false)) {
+            if ($zahlen['notizen'] > 0 && $anhaenge !== [] && (bool)$this->PushProp('MailNoteAttachments', false)) {
                 $abgelegt = [];
                 foreach ($anhaenge as $a) {
                     $ablage = $this->NotesSaveAttachment((string)$a['base64'], (string)($a['name'] ?? ''));
@@ -876,41 +827,22 @@ trait MailScan
                         'bytes' => (int)($ablage['bytes'] ?? (strlen((string)$a['base64']) * 3 / 4)),
                     ];
                 }
-                if ($abgelegt !== []) {
-                    foreach ($aufgaben as $k => $a) {
-                        if (($a['kind'] ?? '') === 'note') {
-                            // Die Liste ist das Neue; „mediaId" bleibt daneben stehen,
-                            // damit Vorschlaege aus der Zeit davor weiter uebernommen
-                            // werden koennen — NotesAdopt liest beides.
-                            $aufgaben[$k]['atts']    = $abgelegt;
-                            $aufgaben[$k]['mediaId'] = (int)$abgelegt[0]['id'];
-                        }
-                    }
-                }
+                $aufgaben = MailAnalyseCalc::AnhaengeEinhaengen($aufgaben, $abgelegt);
             }
 
-            $gespeichert = $this->MailStoreProposal([
-                'id'        => $vorschlagsId,
-                // Datum des DOKUMENTS — es steht in der App und sortiert die Liste.
-                'at'        => (int)($kopf['Date'] ?? time()),
+            $gespeichert = $this->MailStoreProposal(
+                MailAnalyseCalc::Satz($vorschlagsId, $kopf, $betreff, $userId,
+                    $this->MailDetectOrigin($text), $aufgaben, time())
                 /* Wann WIR den Vorschlag gemacht haben. Danach richtet sich die
                    Aufbewahrung, und nur danach: sonst verschwindet ein gerade
                    erst ausgewerteter alter Elternbrief noch im selben Atemzug.
                    Genau das ist am 03.09.2026 passiert — die Karte
                    „Anschaffungen: Material" (Seitendatum 16.07.) lief durch die
-                   KI, kostete einen Aufruf und war danach nirgends zu sehen. */
-                'created'   => time(),
-                'from'      => (string)($kopf['SenderAddress'] ?? ''),
-                'fromName'  => (string)($kopf['SenderName'] ?? ''),
-                'subject'   => $betreff,
-                'recipient' => (string)($kopf['Recipient'] ?? ''),
-                'userId'    => $userId,
-                // Wer die Mail urspruenglich geschrieben hat und wie sie damals hiess.
-                // Der aeussere Kopf nennt immer nur das weiterleitende Familienmitglied und ein
-                // „Fwd:" davor — beides sagt dem Nutzer nichts.
-                'origin'    => $this->MailDetectOrigin($text),
-                'items'     => array_map(static fn(array $a): array => $a + ['taken' => false], $aufgaben),
-            ]);
+                   KI, kostete einen Aufruf und war danach nirgends zu sehen.
+                   Gestempelt wird beim SCHREIBEN, nicht beim Rechnen: sonst
+                   zaehlte bei einem ausgelagerten Lauf die Wartezeit mit. */
+                + ['created' => time()]
+            );
             // Nicht gespeichert heisst NICHT erledigt. Sonst merkt MailRemember die
             // Mail als abgearbeitet und „nach Auswertung loeschen" wirft sie aus dem
             // Postfach — waehrend der bezahlte Anbieter-Aufruf verloren ist und die
@@ -920,7 +852,9 @@ trait MailScan
                     . '" konnte nicht gespeichert werden — die Mail bleibt unerledigt.', KL_ERROR);
                 return false;
             }
-            $this->MailNotifyProposal(count($aufgaben) - $termine - $notizen, $termine, $notizen, $userId, $quelle);
+            // Hier werden Hausaufgaben NICHT abgezogen — anders als im Protokoll.
+            $this->MailNotifyProposal($zahlen['aufgabenPush'], $zahlen['termine'],
+                $zahlen['notizen'], $userId, $quelle);
             return true;
 
         } finally {

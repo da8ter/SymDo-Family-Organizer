@@ -8,6 +8,7 @@ require_once __DIR__ . '/../libs/Belegung.php';
 require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/libs/ScanBridge.php';
 require_once __DIR__ . '/libs/AiJobs.php';
+require_once __DIR__ . '/libs/MailAnalyseCalc.php';
 require_once __DIR__ . '/libs/MailScan.php';
 require_once __DIR__ . '/libs/MailFetch.php';
 require_once __DIR__ . '/libs/CalendarBridge.php';

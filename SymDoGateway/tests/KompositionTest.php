@@ -82,5 +82,28 @@ pruefe('… sondern steht in EduStoreCalc',
     [method_exists('EduStoreCalc', 'Bedarf'), method_exists('EduStoreCalc', 'SatzBauen'),
      method_exists('EduStoreCalc', 'NachzugRechnen')], [true, true, true]);
 
+/* Vertraege zwischen Trait und Rechenkern.
+ *
+ * Ein Rechenkern liegt in einer eigenen Datei und weiss nichts von dem Trait,
+ * der ihn fuettert. Aendert sich dort ein Rueckgabetyp, meldet das NIEMAND —
+ * bis es zur Laufzeit knallt, und zwar an der teuersten Stelle: hinter dem
+ * bezahlten Anbieter-Aufruf, in einer Funktion ohne `catch`. Die Mail waere
+ * danach weder als erledigt noch als gescheitert vermerkt und bei jedem Lauf
+ * wieder die erste.
+ *
+ * Genau so geschehen am 14.09.2026: `MailDetectOrigin` liefert ein Array,
+ * `MailAnalyseCalc::Satz` verlangte einen String. Der eigene Prueflauf war
+ * gruen, weil er einen String hereinreichte. */
+$vertraege = [
+    // [Klasse, Methode, Nr des Parameters, Trait-Methode, die ihn fuellt]
+    ['MailAnalyseCalc', 'Satz', 4, 'MailDetectOrigin'],
+];
+foreach ($vertraege as [$klasse, $methode, $nr, $quelle]) {
+    $ziel = (new ReflectionMethod($klasse, $methode))->getParameters()[$nr]->getType();
+    $her  = $k->getMethod($quelle)->getReturnType();
+    pruefe($quelle . '() passt auf ' . $klasse . '::' . $methode . '() Parameter ' . ($nr + 1),
+        (string)$ziel, (string)$her);
+}
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
