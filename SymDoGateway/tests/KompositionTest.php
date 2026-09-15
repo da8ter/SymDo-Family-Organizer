@@ -187,23 +187,27 @@ pruefe('Die HTML-Weissliste steht in der lesenden Haelfte',
 
 /* Die Uebergabe der Klassenseiten an einen Scanner.
  *
- * Sie schaltet einen Zeitgeber ab — und wenn dabei der Auftrag ausbleibt, faellt
- * der Lauf ERSATZLOS aus: kein Fehler, keine Meldung, die Karten veralten still.
+ * Bleibt dabei der Auftrag aus, faellt der Lauf ERSATZLOS aus: kein Fehler,
+ * keine Meldung, die Karten veralten still. Und der Zeitgeber muss LAUFEN
+ * bleiben — er ist die einzige Uhr dieses Laufs, der Scanner hat keine eigene.
  * Genau diese Kombination wird hier festgenagelt. Ein voller Prueflauf dafuer
  * hiesse, die ganze Gateway-Klasse mit Kernel zu fahren; die Teile darunter
- * (Umschlag pruefen, Sperrliste, Einpflegen) haben ihre eigenen. */
-foreach (['EduAuftragGeben', 'EduVonHand'] as $m) {
+ * (Umschlag pruefen, Sperrliste, Einpflegen, Auswerten) haben ihre eigenen. */
+foreach (['EduAuftragGeben', 'EduVonHand', 'EduKartenAuswerten'] as $m) {
     pruefe('Die Klasse kennt ' . $m, $k->hasMethod($m), true);
 }
 $edu = (string)file_get_contents(__DIR__ . '/../libs/EduMaps.php');
 $von = strpos($edu, "if (\$Ident === 'EduScan') {");
-$zweig = substr($edu, (int)$von, 600);
+$zweig = substr($edu, (int)$von, 1200);
 pruefe('Der eigene Lauf fragt, ob ein Scanner uebernommen hat',
     str_contains($zweig, "ScanQuelleUebernommen('edu')"), true);
-pruefe('… schaltet dann seinen Zeitgeber ab',
-    str_contains($zweig, "SetTimerInterval('EduScan', 0)"), true);
-pruefe('… und legt statt dessen einen Auftrag ab',
-    str_contains($zweig, 'EduAuftragGeben('), true);
+pruefe('… und legt dann einen Auftrag ab',
+    str_contains($zweig, "EduAuftragGeben('timer')"), true);
+/* Nicht abschalten: der Scanner arbeitet nur ab, was im Kanal liegt. Ohne
+   diesen Schlag legte niemand je etwas hinein, und die Klassenseiten
+   schliefen nach genau einem Lauf ein. */
+pruefe('… ohne seinen Zeitgeber abzuschalten',
+    str_contains($zweig, "SetTimerInterval('EduScan', 0)"), false);
 
 $auftrag = rumpf($edu, 'EduAuftragGeben');
 /* Die Sperrliste steht im Bestand des Gateways — ein Scanner kann sie gar

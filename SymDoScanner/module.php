@@ -408,6 +408,10 @@ class SymDoScanner extends IPSModuleStrict
                    sie also weder lesen noch merken, ob sie aktuell sind. */
                 $erg = $this->EduSeitenLesen((array)($auftrag['seiten'] ?? []));
                 $nutzlast['seiten'] = $erg['seiten'];
+                /* „Alles auswerten" reist zurueck: auswerten tut das Gateway,
+                   und nur dieses Feld sagt ihm, dass auch schon Gemerktes
+                   drankommen soll. */
+                $nutzlast['alles'] = ($auftrag['alles'] ?? false) === true;
                 $ok = $erg['fehler'] === [];
                 $text = $erg['text'];
                 if ($erg['seiten'] === [] && $erg['fehler'] === []) {

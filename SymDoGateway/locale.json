@@ -890,6 +890,7 @@
             "Forget linked pages": "Verlinkte Seiten vergessen",
             "Linked pages forgotten — the next check finds them again.": "Verlinkte Seiten vergessen — die nächste Prüfung findet sie wieder.",
             "%d card(s) mirrored.": "%d Karte(n) gespiegelt.",
+            "%1$d changed, %2$d analysed.": "%1$d geändert, %2$d ausgewertet.",
             "Linked page": "Verlinkte Seite",
             "— none —": "— keins —",
             "Fetch students": "Schüler abrufen",

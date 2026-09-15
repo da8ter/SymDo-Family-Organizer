@@ -347,19 +347,24 @@ trait EduEinpflegen
      */
     private function EduUmschlagEinpflegen(array $umschlag): int
     {
-        /* Die Statuszeile gehoert ins Attribut DIESER Instanz: das
-           Konfigurationsformular liest sie hier. Schriebe der Scanner sie bei
-           sich, stuende dort dauerhaft „Noch nicht nachgesehen".
-           Der Klammeraffe, weil das Attribut nach einem Modul-Reload ohne
-           Kernel-Neustart noch nicht registriert ist — Symcon wirft dann nicht,
-           es WARNT, und eine Warnung zerlegt im Hook die HTTP-Antwort. */
+        // Was der Scanner gemeldet hat („12 Karten auf 4 Seiten gelesen").
+        // Die vollstaendige Zeile entsteht unten, wenn auch feststeht, was aus
+        // den Karten geworden ist.
         $text = trim((string)($umschlag['status']['text'] ?? ''));
-        if ($text !== '') {
-            @$this->WriteAttributeString('EduStatus', (string)json_encode(
-                ['t' => time(), 'text' => $text], JSON_UNESCAPED_UNICODE));
-        }
+
+        /* Der Knopf „Alles auswerten" reist mit dem Auftrag hinueber und mit dem
+           Ergebnis zurueck (ScanKanalCalc haelt das Feld in seiner weissen
+           Liste). Ohne ihn haette er nach der Uebergabe dieselbe Wirkung wie
+           „Jetzt pruefen". */
+        $alles = ($umschlag['alles'] ?? false) === true;
 
         $gespiegelt = 0;
+        $geaendert  = 0;
+        $analysiert = 0;
+        $gedeckelt  = false;
+        /* Ab hier wird gesammelt statt gemeldet — EINE Nachricht am Ende, genau
+           wie im eigenen Lauf. Ohne das kaeme je Seite eine eigene Meldung. */
+        $this->eduPushSammlung = [];
         foreach ((array)($umschlag['seiten'] ?? []) as $roh) {
             $eintrag = $this->EduUmschlagSeite($roh);
             if ($eintrag === null) {
@@ -386,8 +391,23 @@ trait EduEinpflegen
                 continue;
             }
 
-            $gespiegelt += $this->EduSeiteSpiegeln($seite, $karten);
+            $dieseSeite = $this->EduSeiteSpiegeln($seite, $karten);
+            $gespiegelt += $dieseSeite;
+            $this->EduPushKarten((string)($seite['userId'] ?? ''), (string)$seite['name'], $dieseSeite);
             $this->EduArchivAbgleichen($seite, $karten);
+
+            /* Und die Auswertung. Sie gehoert HIERHER, nicht zum Scanner: den
+               Prompt baut nur diese Instanz (sie hat den Bestand), der Merker
+               `EduSeen` ist ihr Attribut, und die Tagesdeckel zaehlen bei ihr.
+               Genau dieselbe Funktion wie im eigenen Lauf — sonst waeren es
+               zwei Politiken, und die teurere faellt erst auf der Rechnung auf.
+
+               `$analysiert` laeuft ueber ALLE Seiten dieses Umschlags: der
+               Deckel je Lauf gilt fuer den Durchgang, nicht je Seite. */
+            $aus = $this->EduKartenAuswerten($seite, $karten, $analysiert, $alles);
+            $geaendert  += $aus['geaendert'];
+            $analysiert += $aus['analysiert'];
+            $gedeckelt   = $gedeckelt || $aus['gedeckelt'];
 
             /* Verweise aus dem Seitenrumpf UND Adressen aus QR-Codes muenden in
                dieselbe Aufnahme — sie prueft den Schalter, den Deckel und ob
@@ -402,6 +422,33 @@ trait EduEinpflegen
                 }
             }
         }
+
+        /* Die Statuszeile gehoert ins Attribut DIESER Instanz: das
+           Konfigurationsformular liest sie hier. Schriebe der Scanner sie bei
+           sich, stuende dort dauerhaft „Noch nicht nachgesehen". Was er
+           geschickt hat, sagt nur „gelesen" — was daraus wurde, weiss erst
+           diese Haelfte, und der Nutzer will beide Zahlen sehen.
+           Der Klammeraffe, weil das Attribut nach einem Modul-Reload ohne
+           Kernel-Neustart noch nicht registriert ist — Symcon wirft dann nicht,
+           es WARNT, und eine Warnung zerlegt im Hook die HTTP-Antwort. */
+        $teile = [];
+        if ($text !== '') {
+            $teile[] = $text;
+        }
+        $teile[] = sprintf($this->Translate('%1$d changed, %2$d analysed.'), $geaendert, $analysiert);
+        if ($gespiegelt > 0) {
+            $teile[] = sprintf($this->Translate('%d card(s) mirrored.'), $gespiegelt);
+        }
+        if ($gedeckelt) {
+            $teile[] = $this->Translate('daily AI limit reached — the rest follows later');
+        }
+        @$this->WriteAttributeString('EduStatus', (string)json_encode(
+            ['t' => time(), 'text' => implode(' ', $teile)], JSON_UNESCAPED_UNICODE));
+
+        /* Und jetzt die eine Nachricht. Wartet noch ein Auswerte-Auftrag, legt
+           `EduPushAbschluss` den Stand beiseite und der letzte fertige Auftrag
+           schickt alles zusammen. */
+        $this->EduPushAbschluss();
         return $gespiegelt;
     }
 

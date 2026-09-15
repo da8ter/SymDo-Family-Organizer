@@ -188,6 +188,44 @@ final class Spiegelprobe
     private function EduArchivAbgleichen(array $seite, array $karten): int { $this->archiv[] = $seite['url']; return 0; }
     public array $archiv = [];
 
+    /* Die Auswertung selbst hat ihren eigenen Prueflauf (EduAuswertungTest).
+       Hier zaehlt nur, DASS der Umschlag-Weg sie ruft — und mit welchen
+       Angaben: der Zaehler muss ueber die Seiten laufen, sonst gaelte der
+       Deckel je Lauf je Seite und ein Umschlag mit vier Seiten kostete das
+       Vierfache. */
+    public array $auswertungen = [];
+    public int $analysiertJeSeite = 0;
+    private function EduKartenAuswerten(array $seite, array $karten, int $schon, bool $alles): array
+    {
+        $this->auswertungen[] = ['seite' => $seite['url'], 'karten' => count($karten),
+                                 'schon' => $schon, 'alles' => $alles];
+        return ['geaendert' => count($karten), 'analysiert' => $this->analysiertJeSeite,
+                'gedeckelt' => false];
+    }
+
+    /* Die Sammelmeldung. Im Betrieb wird je Seite vorgemerkt und am Ende EINE
+       Nachricht geschickt; hier wird nur mitgeschrieben. */
+    private ?array $eduPushSammlung = null;
+    public array $push = [];
+    public int $pushAbschluss = 0;
+    private function EduPushKarten(string $userId, string $seite, int $karten): void
+    {
+        if ($this->eduPushSammlung === null) {
+            $this->push[] = 'AUSSERHALB';   // waere ein Fehler: je Seite eine Meldung
+            return;
+        }
+        if ($karten <= 0) {
+            return;   // wie im Original: eine Seite ohne Aenderung meldet nichts
+        }
+        $this->push[] = $seite . ':' . $karten;
+    }
+    private function EduPushAbschluss(): void
+    {
+        $this->pushAbschluss++;
+        $this->eduPushSammlung = null;
+    }
+    public function Translate(string $t): string { return $t; }
+
     // ── Zugaenge fuer den Prueflauf ──────────────────────────────────────
     public function Spiegle(array $seite, array $karten): int
     {
@@ -352,9 +390,47 @@ pruefe('Eine freie Seite wird gespiegelt', $p->Umschlag($umschlag), 1);
 pruefe('… und einmal archiviert', $p->archiv, ['https://beispiel.test/s']);
 /* Der Bericht gehoert ins Attribut DIESER Instanz — das Formular liest ihn
    hier. Schriebe der Scanner ihn bei sich, stuende dort dauerhaft
-   „Noch nicht nachgesehen". */
+   „Noch nicht nachgesehen". Was ER schickt, sagt nur „gelesen"; was daraus
+   wurde, weiss erst diese Haelfte, und beide Zahlen gehoeren in die Zeile. */
 pruefe('Der Bericht landet in der Statuszeile',
-    json_decode($p->status, true)['text'] ?? '', 'Bericht');
+    json_decode($p->status, true)['text'] ?? '',
+    'Bericht 1 changed, 0 analysed. 1 card(s) mirrored.');
+
+// ══ Die Auswertung haengt am Umschlag-Weg ════════════════════════════════
+/* Ohne sie spiegelte der Umzug nur noch und wertete NIE etwas aus — die
+   Vorschlaege aus den Klassenseiten waeren lautlos verschwunden, und zwar
+   genau in dem Moment, in dem ein Scanner die Quelle uebernimmt. */
+$p = new Spiegelprobe();
+$p->Umschlag($umschlag);
+pruefe('Der Umschlag-Weg wertet aus', count($p->auswertungen), 1);
+pruefe('… mit den Karten dieser Seite', $p->auswertungen[0]['karten'], 1);
+pruefe('… und einer Sammelmeldung', [$p->push, $p->pushAbschluss], [['5b:1'], 1]);
+
+/* Der Deckel je Lauf gilt fuer den DURCHGANG. Liefe der Zaehler nicht ueber
+   die Seiten, kostete ein Umschlag mit vier Seiten das Vierfache. */
+$p = new Spiegelprobe();
+$p->analysiertJeSeite = 2;
+$zwei = $umschlag;
+/* Eigene Karten, nicht dieselben: eine Karte, die schon im Bestand steht,
+   wird nicht noch einmal gespiegelt — die zweite Seite haette sonst nichts zu
+   melden und der Vergleich pruefte nichts. */
+$andere = $umschlag['seiten'][0]['karten'];
+$andere[0]['boxid'] = 'box-6a';
+$zwei['seiten'][] = ['seite' => ['name' => '6a', 'url' => 'https://beispiel.test/t', 'userId' => 'u2'],
+                     'karten' => $andere];
+$p->Umschlag($zwei);
+pruefe('Der Zaehler laeuft ueber die Seiten',
+    array_column($p->auswertungen, 'schon'), [0, 2]);
+pruefe('Beide Seiten melden ihre Karten', $p->push, ['5b:1', '6a:1']);
+pruefe('Und es gibt EINE Sammelmeldung', $p->pushAbschluss, 1);
+
+/* „Alles auswerten" reist mit dem Ergebnis zurueck. */
+$p = new Spiegelprobe();
+$p->Umschlag($umschlag + ['alles' => true]);
+pruefe('„Alles auswerten" kommt an', $p->auswertungen[0]['alles'], true);
+$p = new Spiegelprobe();
+$p->Umschlag($umschlag);
+pruefe('… und ohne Angabe gilt es nicht', $p->auswertungen[0]['alles'], false);
 
 // ══ Die harte Formpruefung der Karten ════════════════════════════════════
 /* Vorgaben ZU ERGAENZEN genuegt nicht: der PHP-Plus-Operator laesst einen

@@ -270,6 +270,14 @@ final class ScanKanalCalc
         if (isset($roh['anlass']) && in_array((string)$roh['anlass'], self::ANLAESSE, true)) {
             $raus['anlass'] = (string)$roh['anlass'];
         }
+        /* Gehoert zum Anlass: „alles auswerten" ist ein Griff von Hand, und die
+           Haelfte, die auswertet, sitzt beim Gateway. Ohne dieses Feld im
+           Ergebnis wuesste sie nicht, dass auch schon Gemerktes drankommen
+           soll — der Knopf „Alles auswerten" haette nach der Uebergabe
+           dieselbe Wirkung wie „Jetzt pruefen". */
+        if (isset($roh['alles'])) {
+            $raus['alles'] = (bool)$roh['alles'];
+        }
 
         $ki = max(0, (int)($roh['kiAufrufe'] ?? 0));
         if ($ki > self::KI_MAX) {

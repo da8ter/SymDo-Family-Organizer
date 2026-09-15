@@ -131,12 +131,19 @@ trait EduMaps
     private function EduRequestAction(string $Ident, mixed $Value): bool
     {
         if ($Ident === 'EduScan') {
-            /* Bedient ein Scanner die Klassenseiten, laeuft hier NICHTS mehr —
-               sonst holte jeder Lauf die Seiten zweimal und beide Haelften
-               schrieben gegeneinander in denselben Bestand. Der eigene
-               Zeitgeber geht dabei aus: er ist nicht mehr der Auftraggeber. */
+            /* Bedient ein Scanner die Klassenseiten, wird hier nur noch ein
+               AUFTRAG abgelegt — sonst holte jeder Lauf die Seiten zweimal und
+               beide Haelften schrieben gegeneinander in denselben Bestand.
+
+               Der Zeitgeber bleibt dabei AN, und das ist wichtiger, als es
+               aussieht: er ist die einzige Uhr dieses Laufs. Der Scanner hat
+               keine eigene — er arbeitet ab, was im Kanal liegt, und ohne
+               diesen Schlag legte niemand je etwas hinein. Ihn abzuschalten
+               hiesse, die Klassenseiten nach genau einem Lauf einschlafen zu
+               lassen (bis zum naechsten Uebernehmen, das ihn wieder stellt).
+               Das Auftraggeben selbst kostet Millisekunden: eine Datei und ein
+               Zaehler. */
             if ($this->ScanQuelleUebernommen('edu')) {
-                @$this->SetTimerInterval('EduScan', 0);
                 $this->EduAuftragGeben('timer');
                 return true;
             }
@@ -491,11 +498,6 @@ trait EduMaps
                aus wie „nichts Neues". */
             return ['fehler' => $this->Translate('0 cards found — has the page changed?')] + $leer;
         }
-        $topf = 'edu:' . md5($seite['url']);
-        $ersterLauf = !$this->EduTopfHatEintraege($topf);
-        $geaendert = 0;
-        $analysiert = 0;
-        $gedeckelt = false;
         /* Spiegeln zuerst und fuer die GANZE Seite auf einmal: es kostet keinen
            KI-Aufruf, haengt also an keinem Deckel und auch nicht daran, ob eine
            Karte als „geaendert" gilt. Die Notiz selbst entscheidet je Karte, ob
@@ -505,7 +507,59 @@ trait EduMaps
            bis zu ein Megabyte gross, und er lag in derselben Spur, die die App
            bedient. Fuenfundfuenfzig Karten waren fuenfundfuenfzig Mal alles. */
         $gespiegelt = $this->EduSeiteSpiegeln($seite, $karten);
-        foreach ($karten as $nr => $karte) {
+        $aus = $this->EduKartenAuswerten($seite, $karten, $schonAnalysiert, $alles);
+        $geaendert  = $aus['geaendert'];
+        $analysiert = $aus['analysiert'];
+        $gedeckelt  = $aus['gedeckelt'];
+        /* Was in QR-Codes auf ANDERE Anlagen zeigte, wird jetzt aufgenommen —
+           wie ein Verweis im Kartentext, mit denselben Grenzen. Erst hier, damit
+           die Fundliste einmal je Seite geschrieben wird und nicht je Karte.
+           Auch von einer VERLINKTEN Seite: der Code steht im BILD, ist also kein
+           Glied der Verweiskette, die eine Ebene tief bleiben soll. */
+        if ($this->eduQrSeiten !== []) {
+            $neu = $this->EduGefundeneAufnehmen($seite, $this->eduQrSeiten);
+            if ($neu > 0) {
+                $this->SendDebug('EduMaps', sprintf('%d Anlage(n) aus QR-Codes aufgenommen (%s)',
+                    $neu, $seite['name']), 0);
+            }
+            $this->eduQrSeiten = [];
+        }
+        $archiviert = $this->EduArchivAbgleichen($seite, $karten);
+        return ['karten' => count($karten), 'geaendert' => $geaendert,
+                'archiviert' => $archiviert,
+                'analysiert' => $analysiert, 'gespiegelt' => $gespiegelt,
+                // Ein abgebrochener Lauf darf nicht wie ein vollstaendiger aussehen.
+                'fehler' => $gedeckelt ? $this->Translate('daily AI limit reached — the rest follows later') : ''];
+    }
+
+    /**
+     * Welche Karten einer Seite ausgewertet werden — und die Auswertung anstossen.
+     *
+     * DIE Stelle, an der Geld ausgegeben wird. Sie steht hier eigens, weil es
+     * seit der Uebergabe an den Scanner ZWEI Wege zu ihr gibt: den eigenen Lauf
+     * (`EduSeiteLesen`) und den Umschlag aus der zweiten Spur
+     * (`EduUmschlagEinpflegen`). Beide muessen dieselben Deckel ziehen und
+     * denselben Merker fuehren — zwei Abschriften waeren zwei Politiken, und
+     * die teurere faellt erst auf der Rechnung auf.
+     *
+     * Ausgewertet wird IMMER hier, nie beim Scanner: den Prompt baut nur diese
+     * Instanz (sie hat den Bestand), der Merker ist ihr Attribut, und die
+     * Tagesdeckel zaehlen bei ihr. Der Scanner liest und zerlegt, mehr nicht.
+     *
+     * @param array{name:string,url:string,userId:string} $seite
+     * @param list<array<string,mixed>> $karten
+     * @param int  $schonAnalysiert  was in DIESEM Lauf schon durch die KI ging
+     * @param bool $alles            der Knopf „Alles auswerten"
+     * @return array{geaendert:int,analysiert:int,gedeckelt:bool}
+     */
+    private function EduKartenAuswerten(array $seite, array $karten, int $schonAnalysiert, bool $alles): array
+    {
+        $topf = 'edu:' . md5((string)$seite['url']);
+        $ersterLauf = !$this->EduTopfHatEintraege($topf);
+        $geaendert  = 0;
+        $analysiert = 0;
+        $gedeckelt  = false;
+        foreach ($karten as $karte) {
             $schluessel = $karte['boxid'] . ':' . $karte['updated'];
             /* „Alles auswerten" nimmt auch die Karten, die schon im Merker
                stehen — sonst waere nach dem ersten Lauf, der nur vermerkt,
@@ -542,25 +596,7 @@ trait EduMaps
                 $analysiert++;
             }
         }
-        /* Was in QR-Codes auf ANDERE Anlagen zeigte, wird jetzt aufgenommen —
-           wie ein Verweis im Kartentext, mit denselben Grenzen. Erst hier, damit
-           die Fundliste einmal je Seite geschrieben wird und nicht je Karte.
-           Auch von einer VERLINKTEN Seite: der Code steht im BILD, ist also kein
-           Glied der Verweiskette, die eine Ebene tief bleiben soll. */
-        if ($this->eduQrSeiten !== []) {
-            $neu = $this->EduGefundeneAufnehmen($seite, $this->eduQrSeiten);
-            if ($neu > 0) {
-                $this->SendDebug('EduMaps', sprintf('%d Anlage(n) aus QR-Codes aufgenommen (%s)',
-                    $neu, $seite['name']), 0);
-            }
-            $this->eduQrSeiten = [];
-        }
-        $archiviert = $this->EduArchivAbgleichen($seite, $karten);
-        return ['karten' => count($karten), 'geaendert' => $geaendert,
-                'archiviert' => $archiviert,
-                'analysiert' => $analysiert, 'gespiegelt' => $gespiegelt,
-                // Ein abgebrochener Lauf darf nicht wie ein vollstaendiger aussehen.
-                'fehler' => $gedeckelt ? $this->Translate('daily AI limit reached — the rest follows later') : ''];
+        return ['geaendert' => $geaendert, 'analysiert' => $analysiert, 'gedeckelt' => $gedeckelt];
     }
 
     /**

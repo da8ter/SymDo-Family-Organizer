@@ -45,11 +45,22 @@ trait ScanBridge
      * leere Liste heisst „hier ist noch nichts umgezogen" und legt deshalb
      * auch keine Instanz an.
      *
+     * Eine MITGIFT braucht bisher keine Quelle. Der Plan sah einen Handschlag
+     * vor — Merker hinueberreichen, zurueckgelesen bestaetigen, erst dann den
+     * eigenen Lauf abschalten —, und er war fuer einen anderen Schnitt gedacht:
+     * dort haette der Scanner gemerkt, was er schon ausgewertet hat. Gebaut ist
+     * es andersherum. Der Scanner LIEST nur; wer schon ausgewertet wurde
+     * (`EduSeen`), was verlinkt gefunden wurde (`EduFound`) und was das am Tag
+     * kosten darf, steht weiter hier. Ein Besitzer, kein Handschlag — und damit
+     * auch kein Doppelscan in der Uebergangszeit. Wer spaeter eine Quelle
+     * umzieht, deren Zustand drueben leben MUSS (Untis: `UntisFails`,
+     * `UntisLast`), braucht den Handschlag doch: dann hier vermerken.
+     *
      * @var array<string,list<string>>
      */
     private const SCAN_ROLLEN = [
         'jobs'     => ['probe', 'auftrag'],
-        'schule'   => ['doku'],    // + edu, moodle, mail
+        'schule'   => ['doku', 'edu'],    // + moodle, mail
         'briefing' => [],          // + briefing
     ];
 
