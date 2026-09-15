@@ -508,6 +508,7 @@ trait ScanBridge
                         $haben = $s['quellen'];
                         unset($da[$sid]);   // nicht zweimal uebernehmen
                         @IPS_SetName($id, $this->ScannerName((string)$rolle));
+                        @IPS_SetHidden($id, true);
                         $this->ScanMelden(sprintf('Scanner #%d als „%s" uebernommen.',
                             $id, $this->ScannerName((string)$rolle)), KL_NOTIFY);
                         break;
@@ -536,6 +537,11 @@ trait ScanBridge
                     if ($eltern > 0) {
                         @IPS_SetParent($id, $eltern);
                     }
+                    /* AUSGEBLENDET. Der Nutzer hat sie nicht angelegt und muss
+                       sie nicht bedienen — eingerichtet wird alles am Gateway.
+                       Nur BEIM ANLEGEN, nicht bei jedem Uebernehmen: wer sie
+                       zum Nachsehen sichtbar macht, soll sie sichtbar behalten. */
+                    @IPS_SetHidden($id, true);
                     $this->ScanMelden(sprintf('Scanner „%s" angelegt (#%d).',
                         $this->ScannerName((string)$rolle), $id), KL_NOTIFY);
                 }

@@ -242,6 +242,13 @@ pruefe('Das Gateway legt seine Scanner beim Uebernehmen selbst an',
     [2, ['rolle' => 'jobs', 'quellen' => ['probe', 'auftrag']],
         ['rolle' => 'schule', 'quellen' => ['doku', 'edu', 'moodle', 'untis']]]);
 pruefe('Danach fehlt nichts mehr', $gateway->pFehlt(), false);
+/* Ausgeblendet: der Nutzer hat sie nicht angelegt und muss sie nicht bedienen.
+   Stuenden sie sichtbar im Baum, waere die erste Frage immer „was ist das und
+   darf ich das loeschen". */
+pruefe('Die angelegten Scanner sind ausgeblendet',
+    array_values(array_map(static fn(int $id): bool
+        => (bool)IPS_GetObject($id)['ObjectIsHidden'], array_keys($scanner))),
+    array_fill(0, count($scanner), true));
 
 $gateway->pAnlegen();
 pruefe('Ein zweiter Durchgang legt nichts nach', count($gateway->pScanner()), 2);
@@ -331,6 +338,9 @@ $gateway->pAnlegen();
 
 pruefe('Kein zweiter Scanner daneben', count($gateway->pScanner()), 2);
 pruefe('Er heisst jetzt nach seiner Rolle', IPS_GetName($hand), 'SymDo - Scanner (jobs)');
+/* Auch ein UEBERNOMMENER wird ausgeblendet: er ist von da an eine Instanz, die
+   das Gateway fuehrt, und keine, die jemand bedient. */
+pruefe('… und ist ausgeblendet', (bool)IPS_GetObject($hand)['ObjectIsHidden'], true);
 pruefe('Das Gateway hat nur Bescheid gegeben, nicht uebernehmen lassen',
     [$handObj->anwendungen - $vorAnw, is_file($markierung)], [0, true]);
 
