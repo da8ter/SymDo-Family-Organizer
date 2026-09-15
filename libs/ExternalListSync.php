@@ -25,6 +25,9 @@ trait ExternalListSync
     /** Kennung eines lokal angelegten, noch nicht uebertragenen Eintrags. */
     private const EXT_PENDING = 'pending_';
 
+    /** Wie viele stillgelegte Fremdkennungen je Dienst aufgehoben werden. */
+    private const EXT_FREMD_MAX = 2000;
+
     /**
      * Einheiten, die zur Menge gehoeren duerfen.
      *
@@ -98,6 +101,67 @@ trait ExternalListSync
     {
         $d = json_decode((string)@$this->ReadAttributeString('ExtListKnownIds'), true);
         return is_array($d) ? $d : [];
+    }
+
+    /** @return array<string, array<string, int>> Kennungen aus frueheren Gegenstellen */
+    private function ExtListFremdRead(): array
+    {
+        $d = json_decode((string)@$this->ReadAttributeString('ExtListFremdIds'), true);
+        return is_array($d) ? $d : [];
+    }
+
+    /**
+     * Einen Wechsel der Gegenstelle erkennen und die alten Kennungen stilllegen.
+     *
+     * Aufgeraeumt wird NICHT: die Kennungen stehen an den lokalen Eintraegen,
+     * und der einzige Haken dorthin (`ExtListSetId`) kann nur anhaengen. Sie
+     * werden deshalb vermerkt und fortan uebergangen — das kostet ein paar
+     * hundert Byte und ist der Preis dafuer, dass niemandes Einkaufszettel
+     * verschwindet.
+     */
+    private function ExtListQuelleWechsel(string $key, int $instanz): void
+    {
+        $quellen = json_decode((string)@$this->ReadAttributeString('ExtListQuellen'), true);
+        $quellen = is_array($quellen) ? $quellen : [];
+        $bisher  = (int)($quellen[$key] ?? 0);
+        if ($bisher === $instanz) {
+            return;
+        }
+        $quellen[$key] = $instanz;
+        @$this->WriteAttributeString('ExtListQuellen', (string)json_encode($quellen));
+        if ($bisher === 0) {
+            return;   // erste Einrichtung, es gibt nichts Altes
+        }
+
+        $fremd = $this->ExtListFremdRead();
+        $alt   = $fremd[$key] ?? [];
+        /* Der Merkposten des letzten Laufs ist die vollstaendige Liste der
+           lokalen Fremdkennungen dieses Dienstes — er wird am Ende jedes Laufs
+           aus dem GANZEN Bestand geschrieben. */
+        foreach (array_keys((array)($this->ExtListKnownRead()[$key] ?? [])) as $id) {
+            $alt[(string)$id] = 1;
+        }
+        /* Deckel, damit der Merkposten nicht ewig waechst: bei Ueberlauf
+           fallen die AELTESTEN Kennungen heraus (Einfuegereihenfolge). Sie
+           koennen dann wieder als „verschwunden" zaehlen — aber nur, wenn sie
+           nach EXT_FREMD_MAX spaeteren Kennungen immer noch an einem lokalen
+           Eintrag haengen, und das heisst: nach vielen Listenwechseln. */
+        if (count($alt) > self::EXT_FREMD_MAX) {
+            $alt = array_slice($alt, count($alt) - self::EXT_FREMD_MAX, null, true);
+        }
+        $fremd[$key] = $alt;
+        @$this->WriteAttributeString('ExtListFremdIds', (string)json_encode($fremd));
+
+        $gemerkt = $this->ExtListKnownRead();
+        unset($gemerkt[$key]);
+        @$this->WriteAttributeString('ExtListKnownIds', (string)json_encode($gemerkt));
+        $weg = $this->ExtListRemovedRead();
+        unset($weg[$key]);
+        @$this->WriteAttributeString('ExtListRemovedIds', (string)json_encode($weg));
+
+        $this->SendDebug('ExtListSync', sprintf(
+            'Gegenstelle %s gewechselt (%d → %d) — %d alte Kennung(en) stillgelegt, keine Loeschung',
+            $key, $bisher, $instanz, count($alt)), 0);
     }
 
     /** @return array<string, array<string, int>> Kennungen, die hier geloescht wurden */
@@ -234,6 +298,20 @@ trait ExternalListSync
 
         $lokal   = $this->ExtListLoad();
         $key     = $quelle->Key();
+
+        /* Hat der Nutzer die Gegenstelle GEWECHSELT? Die Zuordnungen sind nur
+           nach DIENST abgelegt (`alexa`, `bring`) — welche Liste gemeint war,
+           steht nirgends. Nach einem Wechsel traegt jeder lokale Eintrag noch
+           die Kennungen der ALTEN Liste, die neue kennt sie nicht, und der
+           Abgleich hielt sie fuer geloescht: alle zuvor verknuepften offenen
+           Eintraege verschwanden. In der Aufgabenliste ruft das ausserdem den
+           normalen Loeschweg, der die Loeschung an Google, Microsoft oder
+           CalDAV weiterreicht.
+
+           Ein Wechsel ist KEINE Loeschung. Die Kennungen der alten Liste werden
+           deshalb dauerhaft als fremd vermerkt und zaehlen von da an nicht mehr
+           als „verschwunden" — sie gehoeren einer anderen Gegenstelle. */
+        $this->ExtListQuelleWechsel($key, $quelle->InstanceID());
         // Die Kennungen gelten JE DIENST — und es sind MEHRERE moeglich.
         //
         // Warum eine Menge und nicht eine Kennung: Alexa dedupliziert nicht, dort
@@ -260,6 +338,15 @@ trait ExternalListSync
             }
             return $raus;
         };
+        /* Kennungen aus einer frueheren Gegenstelle zaehlen nicht mit: sie
+           koennen in der jetzigen gar nicht vorkommen, und „nicht vorhanden"
+           waere dort kein Beweis fuer „geloescht". */
+        $fremde = $this->ExtListFremdRead()[$key] ?? [];
+        if ($fremde !== []) {
+            $vorher = $kennungen;
+            $kennungen = static fn(array $e): array => array_values(array_filter($vorher($e),
+                static fn(string $id): bool => !isset($fremde[$id])));
+        }
         $echte = static function (array $ids): array {
             return array_values(array_filter($ids, static fn(string $i): bool => strpos($i, self::EXT_PENDING) !== 0));
         };

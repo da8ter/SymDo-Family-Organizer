@@ -27,6 +27,12 @@ trait ExtListHooksTodo
         // der naechste, dass hier etwas geloescht wurde.
         $this->RegisterAttributeString('ExtListKnownIds', '{}');
         $this->RegisterAttributeString('ExtListRemovedIds', '{}');
+        /* Welche Fremdinstanz zuletzt je Dienst befragt wurde, und welche
+           Kennungen aus einer FRUEHEREN Liste stammen. Beides zusammen
+           macht einen Quellwechsel von einer Loeschung unterscheidbar —
+           siehe ExtListQuelleWechsel. */
+        $this->RegisterAttributeString('ExtListQuellen', '{}');
+        $this->RegisterAttributeString('ExtListFremdIds', '{}');
     }
 
     /**

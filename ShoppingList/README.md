@@ -169,6 +169,11 @@ Hinweis, was dafür zu installieren ist.
 - Hier gelöschte Einträge werden an der externen Liste entfernt. Erkannt wird das
   am Vergleich mit dem letzten Lauf — läuft der Abgleich nie, bleibt die Löschung
   dort stehen.
+- **Eine andere Instanz zu wählen ist kein Löschen.** Zeigt das Feld plötzlich
+  auf eine andere Liste, kennt die neue die alten Kennungen nicht — früher galten
+  alle verknüpften Einträge damit als dort entfernt und verschwanden auch hier.
+  Jetzt werden die Kennungen der alten Liste stillgelegt: nichts wird gelöscht,
+  und die offenen Einträge werden stattdessen in die neue Liste hochgeladen.
 - Ist die Liste gerade nicht lesbar (Netz, Anmeldung), wird **nichts** geändert.
 - Neue Einstellungen brauchen einen **Kernel-Neustart**, bevor sie sich
   speichern lassen.
