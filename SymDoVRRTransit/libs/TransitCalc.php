@@ -239,13 +239,14 @@ final class TransitCalc
             if (!is_array($v) || !is_array($v['legs'] ?? null)) {
                 continue;
             }
-            /* „Nur ohne Umsteigen" siebt HIER, an derselben Zahl, die die
-               Kachel als „direkt" oder „1 Umstieg" ausschreibt — sonst stuende
-               dort „direkt" an einer Verbindung, die der Filter durchgelassen
-               hat, oder umgekehrt. Mehr nachholen laesst sich nicht: die EFA
-               liefert hoechstens vier Verbindungen je Anfrage, egal was man
-               fragt (am 11.09.2026 mit 5, 8 und 10 gemessen). Bleibt nichts
-               uebrig, sagt die Kachel das ausdruecklich. */
+            /* Das ZWEITE Netz. Gesucht wird umsteigefrei schon bei der
+               Auskunft (`maxChanges=0` in Efa::Strecke) — das ist der bessere
+               Weg, weil sie dann andere Verbindungen findet statt uns nur die
+               Reste zu lassen. Hier wird trotzdem noch einmal gesiebt: nicht
+               jede EFA-Installation muss den Parameter auswerten, und dann
+               stuenden Umstiege in einer Kachel, an der „nur ohne Umsteigen"
+               angehakt ist. Gesiebt wird an derselben Zahl, die die Kachel als
+               „direkt" oder „1 Umstieg" ausschreibt. */
             if ($nurDirekt && (int)($v['interchanges'] ?? 0) > 0) {
                 continue;
             }

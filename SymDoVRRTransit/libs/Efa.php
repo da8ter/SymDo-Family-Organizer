@@ -130,7 +130,7 @@ final class Efa
      * @return array{ok:bool,data?:array<string,mixed>,message?:string}
      */
     public static function Strecke(string $von, string $nach, string $modus = 'dep',
-                                   int $wann = 0, int $anzahl = 3): array
+                                   int $wann = 0, int $anzahl = 3, bool $nurDirekt = false): array
     {
         $von  = trim($von);
         $nach = trim($nach);
@@ -160,6 +160,16 @@ final class Efa
             'calcNumberOfTrips'  => (string)max(1, min(10, $anzahl)),
             'useRealtime'        => '1',
         ];
+        /* Umsteigefrei laesst die Auskunft SELBST suchen, statt aus einer
+           gemischten Antwort wegzuwerfen. Am 15.09.2026 gemessen, Benrath →
+           Duesseldorf Hbf: ohne den Parameter vier Verbindungen, davon zwei mit
+           Umstieg; mit ihm vier umsteigefreie — darunter zwei Abfahrten, die in
+           der ungefilterten Antwort gar nicht vorkamen. Wo es keine gibt
+           (Benrath → Ratingen Mitte), kommt eine leere Liste zurueck, und das
+           ist die richtige Auskunft. */
+        if ($nurDirekt) {
+            $felder['maxChanges'] = '0';
+        }
         if ($wann > 0) {
             // Die EFA will Datum und Uhrzeit getrennt, in Ortszeit.
             $felder['itdDate'] = date('Ymd', $wann);

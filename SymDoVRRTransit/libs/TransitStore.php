@@ -177,6 +177,11 @@ trait TransitStore
             // Der Zeitwaehler legt ein Objekt ab — als Text waere das „Array".
             TransitCalc::ZeitText($zeile['time'] ?? ''),
             (string)max(1, (int)($zeile['count'] ?? 4)),
+            /* MUSS mit hinein: „nur ohne Umsteigen" geht als `maxChanges=0` an
+               die Auskunft, die Antwort ist also eine ANDERE. Ohne den
+               Schluesselanteil saehe man nach dem Haken bis zum naechsten
+               faelligen Lauf noch die alte, gemischte. */
+            ($zeile['direct'] ?? false) === true ? 'direkt' : '',
         ])), 0, 12);
     }
 
@@ -460,7 +465,7 @@ trait TransitStore
                zweites Mal gefragt werden — das ist es gegenüber einem Dienst
                ohne Schlüssel und ohne Zusicherung nicht wert. */
             $antwort = Efa::Strecke($von, $nach, $modus, $wann,
-                max(1, (int)($z['count'] ?? 4)));
+                max(1, (int)($z['count'] ?? 4)), ($z['direct'] ?? false) === true);
             $bestand['entries'][$key] = $this->TransitEintrag(
                 $bestand['entries'][$key] ?? [], $antwort, $jetzt,
                 static fn(array $daten): array => ['raw' => $daten, 'school' => $schule]
