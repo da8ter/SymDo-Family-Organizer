@@ -1018,11 +1018,11 @@ class SymDoSetup extends IPSModuleStrict
         $id = 0;
         try {
             $id = $this->InstanzAnlegen((string)$schritt['guid'], $name, $gateway);
-            /* Verbinden, BEVOR die Eigenschaften gesetzt werden — und immer
-               selbst: vier Kacheln verbinden sich gar nicht, und bei den
-               übrigen ist das Einmal-Recht nach dem ersten ApplyChanges
-               verbraucht. */
-            @IPS_ConnectInstance($id, $gateway);
+            /* KEIN IPS_ConnectInstance mehr. Bis zum 15.09.2026 wurde jede
+               angelegte Kachel ans Gateway gehängt; genau dieser Anschluss hat
+               an diesem Tag das Gateway gekostet, weil die Konsole beim
+               Löschen einer Kachel ihre übergeordnete Instanz mit anbietet.
+               Die Kacheln finden das Gateway über die niedrigste Kennung. */
             foreach ((array)($schritt['verweise'] ?? []) as $prop => $ziel) {
                 $zielId = (int)($ids[(string)$ziel] ?? 0);
                 if ($zielId > 0) {

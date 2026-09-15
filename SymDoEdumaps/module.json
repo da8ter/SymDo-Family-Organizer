@@ -1,16 +1,14 @@
 {
-    "id": "{60BD47B7-215A-4198-8CA9-417B549E3969}",
-    "name": "SymDo Edumaps",
-    "type": 3,
-    "vendor": "Stephan Sprick",
-    "aliases": [],
-    "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/SymDoEdumaps",
-    "parentRequirements": [
-        "{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"
-    ],
-    "childRequirements": [],
-    "implemented": [
-        "{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"
-    ],
-    "prefix": "SDEM"
+  "id": "{60BD47B7-215A-4198-8CA9-417B549E3969}",
+  "name": "SymDo Edumaps",
+  "type": 3,
+  "vendor": "Stephan Sprick",
+  "aliases": [],
+  "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/SymDoEdumaps",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [
+    "{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"
+  ],
+  "prefix": "SDEM"
 }

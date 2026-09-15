@@ -5,8 +5,10 @@
   "vendor": "Stephan Sprick",
   "aliases": [],
   "url": "https://github.com/da8ter/SymDo-Family-Organizer/tree/main/Chores",
-  "parentRequirements": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
+  "parentRequirements": [],
   "childRequirements": [],
-  "implemented": ["{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"],
+  "implemented": [
+    "{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}"
+  ],
   "prefix": "CHR"
 }

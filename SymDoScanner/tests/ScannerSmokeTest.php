@@ -145,10 +145,14 @@ pruefe('Der Klassenname folgt aus name ohne Leerzeichen',
 pruefe('Typ, Praefix, Hersteller, keine Aliase',
     [$json['type'], $json['prefix'], $json['vendor'], $json['aliases']],
     [3, 'SDSC', 'Stephan Sprick', []]);
-/* Beides zusammen, sonst meldet Symcon „inkompatibel": der Scanner VERLANGT
-   die Schnittstelle des Gateways und meldet sie selbst — wie das VRR-Modul. */
-pruefe('Er verlangt die Gateway-Schnittstelle und meldet sie',
-    [$json['parentRequirements'], $json['implemented']], [[$schnitt], [$schnitt]]);
+/* KEINE `parentRequirements` mehr — und das ist die Zusicherung, nicht ein
+   vergessener Eintrag. Sie waren der einzige Weg zu einem Elternanschluss, und
+   der Anschluss hat am 15.09.2026 das Gateway gekostet: die Konsole bietet
+   beim Loeschen einer Instanz ihre uebergeordnete mit an. `implemented` bleibt
+   stehen — es sagt nur, was der Scanner ist, und kostet nichts. Ausfuehrlich
+   in SymDoGateway/tests/ElternanschlussTest.php. */
+pruefe('Er verlangt keinen Elternknoten mehr, meldet sich aber',
+    [$json['parentRequirements'], $json['implemented']], [[], [$schnitt]]);
 pruefe('Und das Gateway bietet genau diese an',
     [$gwJson['childRequirements'], $gwJson['implemented']], [[$schnitt], [$schnitt]]);
 
@@ -273,15 +277,18 @@ $anmelden = static function (string $ordner, string $guid, string $klasse, array
     IPS\ModuleLoader::loadSingleModule($pfad, '{SMOKE-LIB}');
 };
 $anmelden('Gateway', $gwJson['id'], 'GatewayAttrappe', ['implemented' => [$schnitt]]);
-$anmelden('Scanner', $json['id'], 'ScannerProbe', ['parentRequirements' => [$schnitt]]);
+$anmelden('Scanner', $json['id'], 'ScannerProbe', ['implemented' => [$schnitt]]);
 
 $gw = IPS_CreateInstance((string)$gwJson['id']);
 $sc = IPS_CreateInstance((string)$json['id']);
 $scanner = IPS\InstanceManager::getInstanceInterface($sc);
 $gateway = IPS\InstanceManager::getInstanceInterface($gw);
 
-pruefe('Der Scanner haengt nach dem ersten Uebernehmen am Gateway',
-    (int)IPS_GetInstance($sc)['ConnectionID'], $gw);
+/* Er haengt NICHT am Gateway — und findet es trotzdem. Genau darum geht es:
+   der Anschluss ist weg, die Zuordnung bleibt (niedrigste Gateway-Kennung).
+   Vor dem 15.09.2026 stand hier die umgekehrte Zusicherung. */
+pruefe('Der Scanner haengt nicht am Gateway',
+    (int)IPS_GetInstance($sc)['ConnectionID'], 0);
 
 $stand = json_decode($scanner->Stand(), true);
 pruefe('Er kennt heute nur die Selbstprobe und sein Gateway',
