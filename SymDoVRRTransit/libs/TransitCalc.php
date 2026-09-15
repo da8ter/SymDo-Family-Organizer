@@ -749,6 +749,61 @@ final class TransitCalc
         return $offen;
     }
 
+    /**
+     * Die Ziele, die an dieser Haltestelle wirklich vorkommen.
+     *
+     * Fuer den Knopf „Richtungen vorschlagen". Das Feld `direction` ist ein
+     * Textfeld, und bis hierher musste man wissen, wie die EFA ein Ziel
+     * SCHREIBT — „D-Benrath Betriebshof" trifft, „Benrath" auch, „Benrath Bf"
+     * nicht mehr. Wer das raet, sieht eine leere Tafel und sucht den Fehler
+     * beim Abruf. Mit den echten Zielen im Feld bleibt nur noch das Loeschen.
+     *
+     * Die Reihenfolge ist die der naechsten Abfahrten, nicht das Alphabet: was
+     * gleich faehrt, steht vorn, und das ist meist auch das Gewollte.
+     * Doppelte fallen ueber denselben Schluessel weg, mit dem auch
+     * `RichtungPasst` vergleicht — sonst stuenden „Hbf" und „Hbf " beide da.
+     *
+     * Ein KOMMA im Ziel wird zum Leerzeichen — „Aachen, Hbf" gibt es wirklich.
+     * Unveraendert uebernommen zerfiele es im kommagetrennten Feld in zwei
+     * Filter, und „Hbf" passt dann auf JEDEN Hauptbahnhof. Der Vergleich stoert
+     * sich nicht daran: `Wortschluessel` wirft ohnehin alles weg, was kein
+     * Buchstabe und keine Ziffer ist, „Aachen Hbf" trifft „Aachen, Hbf" also
+     * weiterhin genau.
+     *
+     * @param array<string,mixed> $roh die geparste `XML_DM_REQUEST`-Antwort
+     * @return list<string>
+     */
+    /** So viele Ziele passen sinnvoll in ein Textfeld. Darueber wird gekuerzt — sichtbar. */
+    public const RICHTUNGEN_MAX = 20;
+
+    public static function Richtungen(array $roh, int $hoechstens = self::RICHTUNGEN_MAX): array
+    {
+        $raus    = [];
+        $gesehen = [];
+        foreach ((array)($roh['stopEvents'] ?? []) as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+            $t    = is_array($e['transportation'] ?? null) ? $e['transportation'] : [];
+            $ziel = (string)($t['destination']['name'] ?? '');
+            // Komma und Semikolon trennen im Feld die Richtungen — im Ziel nicht.
+            $ziel = trim((string)preg_replace('/\s+/u', ' ', str_replace([',', ';'], ' ', $ziel)));
+            if ($ziel === '') {
+                continue;
+            }
+            $schluessel = self::Wortschluessel($ziel);
+            if ($schluessel === '' || isset($gesehen[$schluessel])) {
+                continue;
+            }
+            $gesehen[$schluessel] = true;
+            $raus[] = $ziel;
+            if (count($raus) >= max(1, $hoechstens)) {
+                break;
+            }
+        }
+        return $raus;
+    }
+
     /** „Steig 1", „Bstg. 2", „Gleis 10", „Gl.10", „Platform 3" — der Rest ist die Nummer. */
     private const STEIG_MUSTER = '/^(?:steig|bstg|bahnsteig|gleis|gl|platform|pl)(?:\.\s*|\s+)(\S.*)$/iu';
 

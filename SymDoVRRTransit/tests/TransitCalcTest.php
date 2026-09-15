@@ -116,6 +116,58 @@ pruefe('Richtung und Linie zusammen',
     array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['RE4', '2203'], 0, ['Hbf']), 'line'),
     ['2203', 'RE4']);
 
+// ── Richtungen vorschlagen ─────────────────────────────────────────────────
+/* Der Knopf im Formular fuellt die Spalte „Richtung" mit dem, was an der
+   Haltestelle wirklich faehrt. Die eigentliche Zusicherung ist NICHT die Liste
+   selbst, sondern der Rundgang: was hier vorgeschlagen wird, muss die zugehoerige
+   Abfahrt danach auch wirklich auswaehlen. Ein Vorschlag, der nichts trifft,
+   waere schlimmer als gar keiner — der Nutzer saehe eine leere Tafel und
+   suchte den Fehler beim Abruf. */
+$vorschlag = TransitCalc::Richtungen(fixture('abfahrten'));
+pruefe('Ein Vorschlag je Ziel, in der Reihenfolge der naechsten Abfahrten',
+    count($vorschlag), count(array_unique($vorschlag)));
+pruefe('Keiner ist leer',
+    array_values(array_filter($vorschlag, static fn(string $z): bool => trim($z) === '')), []);
+foreach ($vorschlag as $z) {
+    pruefe('Der Vorschlag „' . $z . '" waehlt auch wirklich etwas aus',
+        count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [$z])) > 0, true);
+}
+pruefe('Alle zusammen lassen jede Abfahrt durch',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, $vorschlag)),
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt)));
+
+/* Doppelte fallen ueber denselben Schluessel weg, mit dem auch RichtungPasst
+   vergleicht — sonst stuenden „Hbf", „hbf " und „H-b-f" alle drei im Feld. */
+$doppelt = ['stopEvents' => [
+    ['transportation' => ['destination' => ['name' => 'Düsseldorf Hbf']]],
+    ['transportation' => ['destination' => ['name' => 'düsseldorf  hbf ']]],
+    ['transportation' => ['destination' => ['name' => 'D-Benrath Betriebshof']]],
+    ['transportation' => ['destination' => ['name' => '']]],
+    ['transportation' => []],
+    'kein Feld',
+]];
+pruefe('Doppelte, leere und kaputte Eintraege fallen weg',
+    TransitCalc::Richtungen($doppelt), ['Düsseldorf Hbf', 'D-Benrath Betriebshof']);
+pruefe('Der Deckel greift', count(TransitCalc::Richtungen($doppelt, 1)), 1);
+
+/* „Aachen, Hbf" gibt es wirklich. Unveraendert uebernommen zerfiele das Ziel im
+   kommagetrennten Feld in zwei Filter — und „Hbf" passt dann auf JEDEN
+   Hauptbahnhof. Am 15.09.2026 im Livelauf gegen die echte EFA aufgefallen. */
+$komma = ['stopEvents' => [
+    ['transportation' => ['destination' => ['name' => 'Aachen, Hbf']]],
+    ['transportation' => ['destination' => ['name' => "D-G'heim, Krankenhaus"]]],
+]];
+$ohneKomma = TransitCalc::Richtungen($komma);
+pruefe('Ein Komma im Ziel wird zum Leerzeichen',
+    $ohneKomma, ['Aachen Hbf', "D-G'heim Krankenhaus"]);
+pruefe('… und trifft das Ziel trotzdem noch genau',
+    [TransitCalc::RichtungPasst('Aachen, Hbf', '', [$ohneKomma[0]]),
+     TransitCalc::RichtungPasst("D-G'heim, Krankenhaus", '', [$ohneKomma[1]])],
+    [true, true]);
+pruefe('… und „Aachen Hbf" ist nicht plötzlich jeder Hauptbahnhof',
+    TransitCalc::RichtungPasst('Köln Hbf', '', [$ohneKomma[0]]), false);
+pruefe('Eine leere Antwort gibt nichts', TransitCalc::Richtungen(fixture('leer')), []);
+
 // ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
 pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');
 pruefe('Zeitwaehler als JSON-Text', TransitCalc::ZeitText('{"hour":16,"minute":5,"second":0}'), '16:05');

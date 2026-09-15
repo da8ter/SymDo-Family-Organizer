@@ -90,6 +90,20 @@ dann allerdings keine Zeiten und bleibt leer.
    Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
+**Richtungen muss man nicht raten.** Der Knopf **Richtungen vorschlagen** unter
+der Haltestellenliste fragt jede eingetragene Haltestelle ab und trägt ein, was
+dort wirklich fährt — in der Reihenfolge der nächsten Abfahrten. Übrig bleibt
+das Löschen dessen, was nicht gewünscht ist. Gefüllt werden nur **leere**
+Zellen; eine gesetzte Richtung ist eine Entscheidung und bleibt stehen (wer neu
+vorschlagen lassen will, leert die Zelle). Gespeichert wird nichts, bis
+*Übernehmen* gedrückt ist.
+
+Das nimmt die häufigste Falle: die Schreibweise. Trifft der eingetippte Text
+nicht, bleibt die Tafel leer — und das sieht aus wie ein kaputter Abruf, nicht
+wie ein Tippfehler. An einer großen Station wird die Liste bei zwanzig Zielen
+gekürzt; die Statuszeile sagt es dann ausdrücklich, damit niemand eine
+unvollständige Liste für vollständig hält.
+
 Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
 Einrichtung, nicht zur Bedienung.
 

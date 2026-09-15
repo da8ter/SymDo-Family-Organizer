@@ -117,6 +117,10 @@ class SymDoVRRTransit extends IPSModuleStrict
                 $this->HaltestellenSuchen((string)$Value);
                 return;
 
+            case 'StopDirections':
+                $this->RichtungenVorschlagen((string)$Value);
+                return;
+
             case 'StopAdd':
                 $this->HaltestelleUebernehmen((string)$Value);
                 return;
@@ -246,6 +250,15 @@ class SymDoVRRTransit extends IPSModuleStrict
                     $this->Translate('Direction: the destination as shown on the vehicle ("Hbf, Hospital"), ')
                     . $this->Translate('several separated by commas, or a platform ("Platform 1"). ')
                     . $this->Translate('Empty shows both directions.')],
+                /* Der Knopf fuellt die Spalte mit dem, was dort wirklich faehrt.
+                   Er arbeitet auf der LEBENDEN Liste ($Stops) und schreibt sie
+                   ueber UpdateFormField zurueck — nichts wird gespeichert, bis
+                   der Nutzer „Uebernehmen" drueckt. */
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'Button', 'caption' => $this->Translate('Suggest directions'),
+                     'onClick' => 'IPS_RequestAction($id, "StopDirections", json_encode(iterator_to_array($Stops)));'],
+                    ['type' => 'Label', 'name' => 'DirStatus', 'caption' => ' '],
+                ]],
                 $strecken,
 
                 ['type' => 'ExpansionPanel', 'caption' => $this->Translate('School run'), 'expanded' => false, 'items' => [
@@ -561,6 +574,97 @@ class SymDoVRRTransit extends IPSModuleStrict
             JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('StopStatus', 'caption',
             $this->Translate('Added: ') . $name . $this->Translate('. Press "Apply" to keep it.'));
+    }
+
+    /**
+     * Hoechstens so viele Haltestellen je Druck.
+     *
+     * Jede kostet einen Abruf von bis zu funfzehn Sekunden, und der laeuft in
+     * der Spur DIESER Instanz — solange steht die Kachel. Acht sind
+     * ertraeglich; wer mehr Haltestellen hat, drueckt zweimal.
+     */
+    private const RICHTUNGEN_STOPS_MAX = 8;
+
+    /**
+     * Die Spalte „Richtung" mit dem fuellen, was an der Haltestelle wirklich faehrt.
+     *
+     * Bis hierher musste man wissen, wie die EFA ein Ziel schreibt. Trifft der
+     * eingetippte Text nicht, bleibt die Tafel leer — und das sieht aus wie ein
+     * kaputter Abruf, nicht wie ein Tippfehler. Jetzt steht alles da, was dort
+     * faehrt, und der Nutzer loescht, was er nicht will.
+     *
+     * Gefuellt werden nur LEERE Zellen. Eine gesetzte Richtung ist eine
+     * Entscheidung; sie zu ueberschreiben waere genau der Datenverlust, den
+     * niemand erwartet. Wer neu vorschlagen lassen will, leert die Zelle.
+     *
+     * Wie bei „Als Haltestelle uebernehmen" wird die LEBENDE Liste bearbeitet
+     * und ueber `UpdateFormField` zurueckgegeben: die ungespeicherten
+     * Aenderungen des Nutzers bleiben erhalten, und gespeichert wird erst mit
+     * „Uebernehmen".
+     */
+    private function RichtungenVorschlagen(string $nutzlast): void
+    {
+        $roh    = json_decode($nutzlast, true);
+        /* Kommt die Liste nicht mit (ein Aufruf von aussen), gilt der
+           gespeicherte Stand — dann ist er auch der einzige. */
+        $zeilen = is_array($roh) ? $this->HaltestellenZeilen($roh) : $this->TransitZeilen('Stops');
+        if ($zeilen === []) {
+            $this->UpdateFormField('DirStatus', 'caption', $this->Translate('No stop in the list yet.'));
+            return;
+        }
+
+        $gefuellt  = 0;
+        $behalten  = 0;
+        $ohne      = 0;
+        $gekuerzt  = 0;
+        $abgefragt = 0;
+        foreach ($zeilen as $i => $z) {
+            $stopId = trim((string)($z['stopId'] ?? ''));
+            if ($stopId === '') {
+                continue;
+            }
+            if (trim((string)($z['direction'] ?? '')) !== '') {
+                $behalten++;
+                continue;
+            }
+            if ($abgefragt >= self::RICHTUNGEN_STOPS_MAX) {
+                break;
+            }
+            $abgefragt++;
+            /* Vierzig statt der sechs der Tafel: mit sechs Abfahrten saehe man
+               an einer belebten Haltestelle nur EINE Richtung, und genau die
+               andere sucht man meistens. */
+            $antwort = Efa::Abfahrten($stopId, 40);
+            if (($antwort['ok'] ?? false) !== true) {
+                $ohne++;
+                continue;
+            }
+            $ziele = TransitCalc::Richtungen((array)($antwort['data'] ?? []));
+            if ($ziele === []) {
+                $ohne++;
+                continue;
+            }
+            /* Am Hauptbahnhof gibt es mehr Ziele, als in ein Textfeld gehoeren.
+               Gekuerzt wird — aber SICHTBAR: eine still gekappte Liste sieht
+               vollstaendig aus, und wer daraus loescht, verliert eine Richtung,
+               die er nie zu sehen bekam. */
+            if (count($ziele) >= TransitCalc::RICHTUNGEN_MAX) {
+                $gekuerzt++;
+            }
+            $zeilen[$i]['direction'] = implode(', ', $ziele);
+            $gefuellt++;
+        }
+
+        $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+        $text = sprintf(
+            $this->Translate('%1$d filled in, %2$d already set, %3$d without an answer. Delete what you do not want, then press "Apply".'),
+            $gefuellt, $behalten, $ohne);
+        if ($gekuerzt > 0) {
+            $text .= ' ' . sprintf(
+                $this->Translate('At %1$d stop(s) the list was cut off at %2$d destinations — there are more.'),
+                $gekuerzt, TransitCalc::RICHTUNGEN_MAX);
+        }
+        $this->UpdateFormField('DirStatus', 'caption', $text);
     }
 
     /**
