@@ -124,9 +124,9 @@ $auftrag['quelle'] = 'edu';
 $auftrag['auftrag'] = ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0];
 $pa = ScanKanalCalc::PruefeAuftrag($auftrag, 16011);
 pruefe('Auftrag geht durch und behaelt seinen Block',
-    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0, 'seiten' => []]]);
+    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]]);
 pruefe('Auftrag ohne Block bekommt Vorgaben',
-    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => []]);
+    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]);
 pruefe('Unbekannter Anlass faellt auf den Zeitgeber zurueck',
     ScanKanalCalc::AuftragBlock(['anlass' => 'unfug'])['anlass'], 'timer');
 
@@ -135,7 +135,7 @@ pruefe('Von Hand schlaegt Zeitgeber, alles bleibt alles',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'hand', 'alles' => true],
         ['anlass' => 'timer', 'alles' => false]),
-    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => []]);
+    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]);
 pruefe('Eine Einschraenkung faellt, sobald einer ohne sie kommt',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'timer', 'nur' => ['seite-1']],
@@ -199,6 +199,55 @@ pruefe('Die juengere Seitenliste gewinnt',
 pruefe('Eine fehlende Liste laesst die alte stehen',
     ScanKanalCalc::AuftragVerschmelzen($a1, ['anlass' => 'hand'])['seiten'][0]['url'],
     'https://beispiel.test/alt');
+
+// ══ Die Zugaenge eines LOGINEO-Auftrags ══════════════════════════════════
+/* Sie tragen einen TOKEN. Was hier durchkommt, ruft der Scanner anschliessend
+   im Netz auf — ein fremdes Schema waere ein Aufruf, den niemand gewollt hat. */
+$k = ScanKanalCalc::KontenListe([
+    ['site' => 'https://lms.test/', 'userId' => 'u1', 'name' => 'Kind', 'token' => 'abc123'],
+]);
+pruefe('Ein sauberer Zugang kommt durch', $k,
+    [['site' => 'https://lms.test', 'userId' => 'u1', 'name' => 'Kind', 'token' => 'abc123']]);
+
+foreach ([
+    'ohne Schema'        => ['site' => 'lms.test', 'token' => 't'],
+    'file'               => ['site' => 'file:///etc/passwd', 'token' => 't'],
+    'ohne Rechnernamen'  => ['site' => 'https:///x', 'token' => 't'],
+    'ohne Token'         => ['site' => 'https://lms.test', 'token' => ''],
+    'Zeilenumbruch drin' => ['site' => 'https://lms.test', 'token' => "a\nb"],
+    'Leerzeichen drin'   => ['site' => 'https://lms.test', 'token' => 'a b'],
+] as $name => $z) {
+    pruefe('Abgewiesen (' . $name . ')', ScanKanalCalc::KontenListe([$z]), []);
+}
+pruefe('Ein zu langer Token faellt weg',
+    ScanKanalCalc::KontenListe([['site' => 'https://lms.test', 'token' => str_repeat('a', 257)]]), []);
+pruefe('Kein Objekt faellt weg', ScanKanalCalc::KontenListe(['x', 5, null]), []);
+pruefe('Die Liste ist gedeckelt',
+    count(ScanKanalCalc::KontenListe(array_fill(0, 30,
+        ['site' => 'https://lms.test', 'token' => 't']))), 20);
+
+/* Und die Sperrliste: nur Adressen, nichts anderes. */
+pruefe('Die Sperrliste nimmt nur Adressen',
+    ScanKanalCalc::AdressListe(['https://a.test/x', 'javascript:1', '', 'http://b.test/y', 42]),
+    ['https://a.test/x', 'http://b.test/y']);
+
+/* Beides muss auch im Auftragsblock ankommen — was dort nicht steht, kommt
+   beim Scanner LAUTLOS nicht an. Genau so ist einmal `verweilen` verloren
+   gegangen. */
+$block = ScanKanalCalc::AuftragBlock([
+    'anlass' => 'timer',
+    'konten' => [['site' => 'https://lms.test', 'userId' => 'u1', 'name' => 'K', 'token' => 't1']],
+    'gesperrt' => ['https://lms.test/course/view.php?id=9'],
+]);
+pruefe('Der Auftragsblock traegt die Zugaenge', count($block['konten']), 1);
+pruefe('… und die Sperrliste', $block['gesperrt'], ['https://lms.test/course/view.php?id=9']);
+/* Beim Verschmelzen gewinnt der JUENGERE Stand — sonst braechte ein alter
+   Auftrag einen widerrufenen Token oder eine geloeschte Sperre zurueck. */
+$v = ScanKanalCalc::AuftragVerschmelzen($block, ['anlass' => 'hand',
+    'konten' => [['site' => 'https://lms.test', 'userId' => 'u2', 'name' => 'Z', 'token' => 't2']]]);
+pruefe('Der juengere Zugang gewinnt', $v['konten'][0]['token'], 't2');
+pruefe('… eine fehlende Sperrliste laesst die alte stehen',
+    $v['gesperrt'], ['https://lms.test/course/view.php?id=9']);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

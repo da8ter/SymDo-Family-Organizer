@@ -240,7 +240,7 @@ pruefe('Das Gateway legt seine Scanner beim Uebernehmen selbst an',
      $scanner[$nachRolle($scanner, 'jobs')] ?? null,
      $scanner[$nachRolle($scanner, 'schule')] ?? null],
     [2, ['rolle' => 'jobs', 'quellen' => ['probe', 'auftrag']],
-        ['rolle' => 'schule', 'quellen' => ['doku', 'edu']]]);
+        ['rolle' => 'schule', 'quellen' => ['doku', 'edu', 'moodle']]]);
 pruefe('Danach fehlt nichts mehr', $gateway->pFehlt(), false);
 
 $gateway->pAnlegen();

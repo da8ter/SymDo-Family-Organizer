@@ -342,7 +342,7 @@ final class ScanKanalCalc
      * immer null Sekunden. Der Beweis „die App bleibt schnell" haette dann
      * gegen eine Spur gemessen, die gar nicht belegt war.
      *
-     * @return array{anlass:string,alles:bool,nur:list<string>,tage:int,verweilen:int}
+     * @return array{anlass:string,alles:bool,nur:list<string>,tage:int,verweilen:int,seiten:list<array<string,string>>,konten:list<array<string,string>>,gesperrt:list<string>}
      */
     public static function AuftragBlock(array $a): array
     {
@@ -361,7 +361,88 @@ final class ScanKanalCalc
                eingetippten, noch nicht uebernommenen Wert nicht — der Scanner
                koennte sie also weder lesen noch merken, ob sie aktuell sind. */
             'seiten' => self::SeitenListe($a['seiten'] ?? []),
+            /* Die LOGINEO-Zugaenge samt Token. Auch sie MUESSEN mitreisen: der
+               Token liegt in einem Attribut des Gateways, und ein Attribut ist
+               von einer anderen Instanz aus nicht zu lesen. */
+            'konten' => self::KontenListe($a['konten'] ?? []),
+            /* Adressen, die der Nutzer in der App geloescht hat. Ohne sie holte
+               der Leser die Inhalte eines Kurses, den es hier nicht mehr geben
+               soll. Geprueft wird beim Einpflegen ein zweites Mal. */
+            'gesperrt' => self::AdressListe($a['gesperrt'] ?? []),
         ];
+    }
+
+    /**
+     * Die Zugaenge eines LOGINEO-Auftrags in Form bringen.
+     *
+     * Eine weisse Liste je Zugang, nicht nur fuer die Liste als Ganzes: was
+     * hier durchkommt, ruft der Scanner anschliessend im Netz auf — mit einem
+     * Token im Gepaeck. Ein fremdes Schema waere ein Aufruf, den niemand
+     * gewollt hat, und ein zu langer Token blaehte nur die Datei.
+     *
+     * Der Token steht damit in der Auftragsdatei. Sie liegt mit 0600 im
+     * Kernel-Verzeichnis — strenger als der Ort, an dem er ohnehin schon steht:
+     * `settings.json` ist weltlesbar.
+     *
+     * @return list<array{site:string,userId:string,name:string,token:string}>
+     */
+    public static function KontenListe(mixed $roh): array
+    {
+        $raus = [];
+        foreach (is_array($roh) ? $roh : [] as $z) {
+            if (!is_array($z)) {
+                continue;
+            }
+            $site  = trim((string)($z['site'] ?? ''));
+            $token = trim((string)($z['token'] ?? ''));
+            $teile = parse_url($site);
+            if (!is_array($teile)
+                || !in_array(strtolower((string)($teile['scheme'] ?? '')), ['http', 'https'], true)
+                || trim((string)($teile['host'] ?? '')) === '') {
+                continue;
+            }
+            /* Ein Moodle-Token ist hexadezimal. Enger als noetig zu pruefen
+               waere hier riskant (andere Installationen, andere Laengen) —
+               aber Steuerzeichen und Zeilenumbrueche haben in einer Adresse
+               nichts zu suchen. */
+            if ($token === '' || strlen($token) > 256
+                || preg_match('/^[A-Za-z0-9._~-]+$/', $token) !== 1) {
+                continue;
+            }
+            $raus[] = [
+                'site'   => mb_substr(rtrim($site, '/'), 0, self::URL_MAX),
+                'userId' => mb_substr(trim((string)($z['userId'] ?? '')), 0, 64),
+                'name'   => mb_substr(trim((string)($z['name'] ?? '')), 0, self::TEXT_MAX),
+                'token'  => $token,
+            ];
+            if (count($raus) >= 20) {
+                break;   // mehr Kinder hat kein Haushalt
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Eine Liste von Adressen — nur http/https, gedeckelt.
+     *
+     * @return list<string>
+     */
+    public static function AdressListe(mixed $roh): array
+    {
+        $raus = [];
+        foreach (is_array($roh) ? $roh : [] as $u) {
+            $a = trim((string)$u);
+            $t = parse_url($a);
+            if (is_array($t)
+                && in_array(strtolower((string)($t['scheme'] ?? '')), ['http', 'https'], true)
+                && trim((string)($t['host'] ?? '')) !== '') {
+                $raus[] = mb_substr($a, 0, self::URL_MAX);
+            }
+            if (count($raus) >= self::SEITEN_MAX * 2) {
+                break;
+            }
+        }
+        return $raus;
     }
 
     /**
@@ -434,6 +515,10 @@ final class ScanKanalCalc
                Eine leere Liste ist dabei keine Aussage, sondern eine fehlende
                (etwa bei einem Auftrag von Hand) — dann bleibt die alte. */
             'seiten' => $b['seiten'] !== [] ? $b['seiten'] : $a['seiten'],
+            // Dieselbe Regel: der juengere Stand gewinnt, eine leere Liste ist
+            // keine Aussage.
+            'konten' => $b['konten'] !== [] ? $b['konten'] : $a['konten'],
+            'gesperrt' => $b['gesperrt'] !== [] ? $b['gesperrt'] : $a['gesperrt'],
         ];
     }
 

@@ -218,6 +218,29 @@ foreach (['ReadAttribute', 'WriteAttribute', 'IPS_Semaphore', 'MoodleTokenVon',
 /* Die Probe selbst muss beissen: ein leerer Rumpf darf nicht als „da" gelten. */
 pruefe('Ein leerer Rumpf bleibt leer', ohneKommentare(''), '');
 
+/* Der Umzug von LOGINEO in die zweite Spur — dieselben drei Riegel wie bei den
+   Klassenseiten, denn es sind dieselben Fallen. */
+$bruecke = (string)file_get_contents(__DIR__ . '/../libs/ScanBridge.php');
+pruefe('Die Rolle „Schule" bedient auch LOGINEO',
+    str_contains($bruecke, "'schule'   => ['doku', 'edu', 'moodle'],"), true);
+pruefe('Das Gateway kennt den LOGINEO-Umschlag',
+    str_contains($bruecke, "case 'moodle':"), true);
+$lauf = ohneKommentare(rumpf($moodle, 'MoodleScanRun'));
+pruefe('LOGINEO fragt, ob ein Scanner uebernommen hat',
+    str_contains($lauf, "ScanQuelleUebernommen('moodle')"), true);
+pruefe('LOGINEO legt dann einen Auftrag ab',
+    str_contains($lauf, "MoodleAuftragGeben('timer')"), true);
+/* Nicht abschalten: der Scanner hat keine eigene Uhr, er arbeitet nur ab, was
+   im Kanal liegt. */
+pruefe('LOGINEO schaltet seinen Zeitgeber NICHT ab',
+    str_contains($lauf, "SetTimerInterval('MoodleScan', 0)"), false);
+/* Der Token MUSS mitreisen: ein Attribut ist von einer fremden Instanz aus
+   nicht zu lesen. */
+pruefe('Der Auftrag traegt die Zugaenge samt Token',
+    str_contains(rumpf($moodle, 'MoodleAuftragGeben'), "'token'  => \$token,"), true);
+pruefe('… und die Sperrliste mit', str_contains(rumpf($moodle, 'MoodleAuftragGeben'),
+    "'gesperrt' => \$this->MoodleGesperrte(),"), true);
+
 /* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.
  *
  * Der Aufrufer bucht `kiAufrufe`, und er bucht nur, was zurueckkommt. Bis zum

@@ -102,7 +102,15 @@ trait Moodle
             return true;
         }
         if ($Ident === 'MoodleScanNow') {
-            // Trockenlauf: lesen und berichten, nichts ablegen und nichts melden.
+            /* Trockenlauf: lesen und berichten, nichts ablegen und nichts
+               melden. Er bleibt AUCH NACH DER UEBERGABE hier — und das ist eine
+               Entscheidung, keine Nachlaessigkeit: der Knopf soll pruefen, ob
+               Zugang und Token stimmen, und darauf wartet jemand vor dem
+               Formular. Ein Auftrag an den Scanner haette zwei Nachteile: die
+               Antwort kaeme Minuten spaeter in die Statuszeile, und er wuerde
+               wirklich SCHREIBEN — genau das, was ein Trockenlauf nicht tut.
+               Der Preis ist bekannt: dieser eine Knopf belegt die Gateway-Spur,
+               solange er laeuft. */
             $this->UpdateFormField('MoodleStatusLabel', 'caption', $this->MoodleScanRun(true));
             return true;
         }
@@ -386,6 +394,20 @@ trait Moodle
         if ($konten === []) {
             return $this->Translate('No access entered yet.');
         }
+
+        /* Bedient ein Scanner LOGINEO, wird hier nur noch ein AUFTRAG abgelegt.
+           Der Zeitgeber bleibt dabei AN — er ist die einzige Uhr dieses Laufs;
+           der Scanner arbeitet nur ab, was im Kanal liegt. Dieselbe
+           Ueberlegung wie bei den Klassenseiten, und derselbe Fehler, der dort
+           beinahe stehen geblieben waere. Auftraggeben kostet Millisekunden:
+           eine Datei und ein Zaehler. */
+        if (!$trocken && $this->ScanQuelleUebernommen('moodle')) {
+            return $this->MoodleAuftragGeben('timer')
+                ? $this->Translate('Order placed — the scanner is working on it. '
+                    . 'The report appears here when it is done.')
+                : $this->Translate('No access entered yet.');
+        }
+
         $teile = [];
         foreach ($konten as $zugang) {
             $name = $this->MoodleName($zugang);
@@ -413,6 +435,77 @@ trait Moodle
         if (!$trocken) {
             $this->MoodleStatusSchreiben($text);
         }
+        return $text;
+    }
+
+    /**
+     * Einen LOGINEO-Lauf an den Scanner geben.
+     *
+     * Die Zugaenge reisen MIT dem Auftrag, samt Token: er steht in einem
+     * Attribut dieser Instanz, und ein Attribut ist von einer anderen aus
+     * nicht zu lesen. Dasselbe gilt fuer die Sperrliste, die im
+     * Klassenseiten-Bestand liegt.
+     *
+     * Ruhende Zugaenge bleiben hier: der Fehlerzaehler steht im Gateway, und
+     * ein toter Token soll nicht sechsmal am Tag angeklopft werden.
+     *
+     * @param string $anlass 'timer' | 'hand'
+     */
+    private function MoodleAuftragGeben(string $anlass): bool
+    {
+        if (!$this->MoodleIsEnabled()) {
+            return false;
+        }
+        $mit = [];
+        foreach ($this->MoodleKonten() as $zugang) {
+            $token = $this->MoodleTokenVon($zugang);
+            if ($token === '' || $this->MoodleRuht($zugang)) {
+                continue;
+            }
+            $mit[] = [
+                'site'   => (string)$zugang['site'],
+                'userId' => (string)$zugang['userId'],
+                'name'   => $this->MoodleName($zugang),
+                'token'  => $token,
+            ];
+        }
+        if ($mit === []) {
+            return false;
+        }
+        return $this->ScanAuftragGeben('moodle', [
+            'anlass'   => $anlass,
+            'konten'   => $mit,
+            'gesperrt' => $this->MoodleGesperrte(),
+        ]);
+    }
+
+    /**
+     * Den Umschlag eines LOGINEO-Laufs einpflegen.
+     *
+     * Er traegt dieselben Felder, die eine Ernte hier auch selbst erzeugt —
+     * nur kommen sie aus einer Datei und sind deshalb schon durch die weisse
+     * Liste des Kanals gegangen. Gezaehlt wird nicht noch einmal: die Zahlen
+     * fuer die Statuszeile stehen im Text des Scanners.
+     *
+     * @param array<string,mixed> $umschlag
+     */
+    private function MoodleUmschlagEinpflegen(array $umschlag): string
+    {
+        $bericht = $this->MoodleErnteEinpflegen([
+            'ok'           => true,
+            'kurse'        => 0,
+            'karten'       => 0,
+            'seiten'       => (array)($umschlag['seiten'] ?? []),
+            'hausaufgaben' => (array)($umschlag['hausaufgaben'] ?? []),
+            'vorschlaege'  => (array)($umschlag['vorschlaege'] ?? []),
+            'gesperrt'     => 0,
+            'rueckmeldungen' => 0,
+        ]);
+        /* Die Statuszeile gehoert ins Attribut DIESER Instanz — das
+           Konfigurationsformular liest sie hier. Was der Scanner geschickt hat,
+           sagt „gelesen"; was daraus wurde, weiss erst diese Haelfte. */
+        $text = trim(trim((string)($umschlag['status']['text'] ?? '')) . ' ' . $bericht);
+        $this->MoodleStatusSchreiben($text);
         return $text;
     }
 

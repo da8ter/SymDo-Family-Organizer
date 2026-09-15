@@ -165,6 +165,11 @@ final class MoodleSpiegelProbe
     {
         return $this->MoodleModulKarte($modul, $abschnitt);
     }
+    /** Die harte Formpruefung einer Karte aus dem Umschlag. */
+    public function Karte(mixed $roh): ?array
+    {
+        return $this->EduUmschlagKarte($roh);
+    }
 }
 
 $seite = ['name' => 'Mathe 5b', 'url' => 'https://lms.test/course/view.php?id=7', 'userId' => 'u1'];
@@ -304,6 +309,52 @@ pruefe('… den eigenen Weg', $k['srcUrl'] ?? null, 'https://lms.test/mod/resour
 pruefe('… und die Dateien als `anhaenge`', $k['anhaenge'] ?? null, [
     ['name' => 'brief.pdf', 'datei' => 'brief.pdf',
      'url' => 'https://lms.test/pluginfile.php/1/brief.pdf', 'preview' => '', 'bytes' => 5000]]);
+
+// ══ Der Weg ueber den Scanner ════════════════════════════════════════════
+/* Der Umschlag kommt als DATEI von einer fremden Instanz. Was drinsteht, muss
+   durch dieselbe harte Form wie eine Klassenseiten-Karte — und dabei duerfen
+   die vier Quellenfelder nicht verlorengehen, sonst laege eine LOGINEO-Karte
+   als `edumaps` im Bestand und der Archiv-Abgleich fasste die falsche Haelfte
+   des Ordners an. */
+$u = new MoodleSpiegelProbe();
+$k = $u->Karte([
+    'quelle' => 'moodle', 'srcId' => 'moodle:42', 'updated' => 1700, 'srcAt' => 1650,
+    'srcUrl' => 'https://lms.test/mod/resource/view.php?id=42',
+    'titel' => 'Elternbrief', 'text' => 'Text', 'html' => '<p>x</p>', 'abschnitt' => 'Orga',
+    'anhaenge' => [['name' => 'a.pdf', 'datei' => 'a.pdf', 'url' => 'https://lms.test/a.pdf',
+                    'preview' => '', 'bytes' => 4711]],
+]);
+pruefe('Die Quelle ueberlebt den Umschlag', $k['quelle'] ?? null, 'moodle');
+pruefe('… die Kennung auch', $k['srcId'] ?? null, 'moodle:42');
+pruefe('… das Quelldatum getrennt von der Fassung',
+    [$k['updated'] ?? null, $k['srcAt'] ?? null], [1700, 1650]);
+pruefe('… der eigene Weg', $k['srcUrl'] ?? null, 'https://lms.test/mod/resource/view.php?id=42');
+pruefe('… und die Groesse des Anhangs', $k['anhaenge'][0]['bytes'] ?? null, 4711);
+
+/* Eine erfundene Quelle waere `source` im Bestand — und der Archiv-Abgleich
+   arbeitet danach. */
+pruefe('Eine unbekannte Quelle faellt weg',
+    $u->Karte(['quelle' => 'erfunden', 'srcId' => 'moodle:1', 'updated' => 1]), null);
+
+/* Eine erfundene Kennung koennte die Notiz einer ANDEREN Karte ueberschreiben. */
+foreach (['edu:b1', 'moodle:', 'moodle:abc', '../x', 'moodle:1 2', str_repeat('9', 30)] as $bad) {
+    pruefe('Unsaubere LOGINEO-Kennung faellt weg: ' . $bad,
+        $u->Karte(['quelle' => 'moodle', 'srcId' => $bad, 'updated' => 1]), null);
+}
+foreach (['moodle:42', 'moodlesec:7', 'moodlepost:13'] as $gut) {
+    pruefe('Gueltige LOGINEO-Kennung: ' . $gut,
+        ($u->Karte(['quelle' => 'moodle', 'srcId' => $gut, 'updated' => 1]) ?? [])['srcId'] ?? null, $gut);
+}
+/* Eine Klassenseiten-Karte bleibt, wie sie war: `boxid` verlangt, `srcId` leer. */
+$e = $u->Karte(['boxid' => 'b12', 'updated' => 99]);
+pruefe('Eine Klassenseiten-Karte braucht weiter ihre boxid',
+    [$e['quelle'] ?? null, $e['srcId'] ?? null, $e['boxid'] ?? null], ['edumaps', '', 'b12']);
+pruefe('… und ohne boxid faellt sie weg', $u->Karte(['updated' => 99]), null);
+
+/* Ein `javascript:` im eigenen Weg wuerde in der App zu einem Verweis. */
+pruefe('Ein unbrauchbarer Weg faellt weg',
+    ($u->Karte(['quelle' => 'moodle', 'srcId' => 'moodle:9', 'updated' => 1,
+                'srcUrl' => 'javascript:alert(1)']) ?? [])['srcUrl'] ?? null, '');
 
 // ── Der alte, eigene Spiegel ist weg ─────────────────────────────────────
 $quelle = (string)file_get_contents(__DIR__ . '/../libs/Moodle.php');

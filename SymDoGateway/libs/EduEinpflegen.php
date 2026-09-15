@@ -557,12 +557,35 @@ trait EduEinpflegen
         if (!is_array($k)) {
             return null;
         }
-        $boxid = trim((string)($k['boxid'] ?? ''));
-        /* Die Kennung wird zu `edu:<boxid>` und traegt die Wiedererkennung UND
-           den Sprung auf die Seite (`#box-<boxid>`). Sie darf deshalb nichts
-           anderes sein als das, was die Schule vergibt. */
-        if ($boxid === '' || preg_match('/^[A-Za-z0-9_.:-]{1,64}$/', $boxid) !== 1) {
+        /* Die QUELLE entscheidet, wie die Kennung aussieht. Sie kommt aus einer
+           fremden Datei und wird deshalb gegen eine feste Liste gehalten —
+           ein erfundener Wert landete sonst als `source` im Bestand und der
+           Archiv-Abgleich fasste eine ganze Ordnerhaelfte nicht mehr an. */
+        $quelle = (string)($k['quelle'] ?? 'edumaps');
+        if (!in_array($quelle, ['edumaps', 'moodle'], true)) {
             return null;
+        }
+
+        $boxid = trim((string)($k['boxid'] ?? ''));
+        $srcId = trim((string)($k['srcId'] ?? ''));
+        /* Die Kennung traegt die Wiedererkennung im Bestand. Sie darf deshalb
+           nichts anderes sein als das, was die Quelle vergibt: eine
+           Klassenseite nennt ihre `boxid` (daraus wird `edu:<boxid>`, und der
+           Sprung auf die Seite haengt daran), LOGINEO bringt sie fertig mit
+           (`moodle:<id>`, `moodlesec:<id>`, `moodlepost:<id>`).
+
+           Ohne diese Probe koennte ein Umschlag die Kennung einer BELIEBIGEN
+           Karte tragen — auch die einer fremden Quelle — und deren Notiz
+           ueberschreiben. */
+        if ($quelle === 'moodle') {
+            if (preg_match('/^moodle(sec|post)?:[0-9]{1,18}$/', $srcId) !== 1) {
+                return null;
+            }
+        } else {
+            if ($boxid === '' || preg_match('/^[A-Za-z0-9_.:-]{1,64}$/', $boxid) !== 1) {
+                return null;
+            }
+            $srcId = '';   // wird aus der boxid gebildet
         }
 
         $anhaenge = [];
@@ -575,6 +598,10 @@ trait EduEinpflegen
                 'datei'   => EduStoreCalc::Kappen((string)($a['datei'] ?? ''), EduStoreCalc::TITLE_MAX),
                 'url'     => trim((string)($a['url'] ?? '')),
                 'preview' => trim((string)($a['preview'] ?? '')),
+                /* Die Groesse, wenn die Quelle sie kennt. LOGINEO nennt sie
+                   vorab, und dann wird eine zu grosse Datei gar nicht erst
+                   geholt (`EduDateiDeckel`). */
+                'bytes'   => max(0, (int)($a['bytes'] ?? 0)),
             ];
             if (count($anhaenge) >= EduStoreCalc::ATTACH_MAX) {
                 /* Der Deckel zaehlt hier ENTWUERFE, nicht Erfolge: jeder
@@ -585,8 +612,18 @@ trait EduEinpflegen
         }
 
         return [
+            'quelle'         => $quelle,
             'boxid'          => $boxid,
+            /* Nur bei einer fremden Quelle gesetzt; bei einer Klassenseite
+               bildet `EduStoreCalc::SrcId` sie aus der `boxid`. */
+            'srcId'          => $srcId,
             'updated'        => (int)($k['updated'] ?? 0),
+            /* Das Datum der QUELLE. Fehlt es, gilt die Fassung — bei einer
+               Klassenseite ist das dieselbe Zahl. */
+            'srcAt'          => max(0, (int)($k['srcAt'] ?? ($k['updated'] ?? 0))),
+            /* Der eigene Weg der Karte. Er landet als Verweis in der App —
+               deshalb nur http/https, wie bei der Seitenadresse. */
+            'srcUrl'         => self::EduUmschlagWeg($k['srcUrl'] ?? ''),
             'titel'          => EduStoreCalc::Kappen((string)($k['titel'] ?? ''), EduStoreCalc::TITLE_MAX),
             'text'           => (string)($k['text'] ?? ''),
             // Durch dieselbe Weissliste wie eine frisch gelesene Karte.
@@ -597,6 +634,26 @@ trait EduEinpflegen
             'buchung'        => is_array($k['buchung'] ?? null) ? $k['buchung'] : null,
             'anhaenge'       => $anhaenge,
         ];
+    }
+
+    /**
+     * Der eigene Weg einer Karte — oder gar keiner.
+     *
+     * Er wird in der App zu einem Verweis. Ein `javascript:` darin waere
+     * fremder Code; dieselbe Probe wie fuer die Seitenadresse.
+     */
+    private static function EduUmschlagWeg(mixed $roh): string
+    {
+        $u = trim((string)$roh);
+        if ($u === '') {
+            return '';
+        }
+        $t = parse_url($u);
+        if (!is_array($t) || !in_array(strtolower((string)($t['scheme'] ?? '')), ['http', 'https'], true)
+            || trim((string)($t['host'] ?? '')) === '') {
+            return '';
+        }
+        return mb_substr($u, 0, 2000);
     }
 
     /** Eine Farbe ist `#RRGGBB` oder gar nichts — sie geht in ein style-Attribut. */

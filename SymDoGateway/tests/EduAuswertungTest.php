@@ -344,8 +344,8 @@ pruefe('… stattdessen gibt er den Auftrag',
     str_contains($maps, "if (\$this->ScanQuelleUebernommen('edu')) {\n                \$this->EduAuftragGeben('timer');"), true);
 pruefe('Der Scanner schickt „alles" zurueck',
     str_contains($sc, "\$nutzlast['alles'] = (\$auftrag['alles'] ?? false) === true;"), true);
-pruefe('Die Rolle „Schule" bedient jetzt auch die Klassenseiten',
-    str_contains($br, "'schule'   => ['doku', 'edu'],"), true);
+pruefe('Die Rolle „Schule" bedient Klassenseiten UND LOGINEO',
+    str_contains($br, "'schule'   => ['doku', 'edu', 'moodle'],"), true);
 /* Der Scanner darf die Merker NICHT anfassen: sie sind Attribute des Gateways,
    und zwei Besitzer hiessen doppelte Auswertung und zurueckgesetzte Haken. */
 pruefe('Der Scanner fuehrt keinen eigenen Merker',

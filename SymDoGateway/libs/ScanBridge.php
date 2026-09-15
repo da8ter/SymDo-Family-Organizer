@@ -60,7 +60,7 @@ trait ScanBridge
      */
     private const SCAN_ROLLEN = [
         'jobs'     => ['probe', 'auftrag'],
-        'schule'   => ['doku', 'edu'],    // + moodle, mail
+        'schule'   => ['doku', 'edu', 'moodle'],    // + mail
         'briefing' => [],          // + briefing
     ];
 
@@ -334,6 +334,21 @@ trait ScanBridge
                     (int)$umschlag['scanner'], $text, $gespiegelt), 0);
                 if (((bool)($umschlag['status']['ok'] ?? false)) !== true) {
                     $this->ScanMelden('Klassenseiten: ' . $text, KL_WARNING);
+                }
+                return true;
+
+            case 'moodle':
+                /* LOGINEO. Dasselbe Bild wie bei den Klassenseiten, nur bringt
+                   der Umschlag mehr mit: Karten, Hausaufgaben-Rohzeilen und
+                   Termin-Vorschlaege. Eingepflegt wird alles hier — Bestand,
+                   Merker, Tagesdeckel und die Hausaufgaben haengen an DIESER
+                   Instanz. */
+                $bericht = $this->MoodleUmschlagEinpflegen($umschlag);
+                $this->SendDebug('Scan-Kanal', sprintf('LOGINEO von %d: %s',
+                    (int)$umschlag['scanner'], $bericht), 0);
+                if (((bool)($umschlag['status']['ok'] ?? false)) !== true) {
+                    $this->ScanMelden('LOGINEO: '
+                        . (string)($umschlag['status']['text'] ?? ''), KL_WARNING);
                 }
                 return true;
         }

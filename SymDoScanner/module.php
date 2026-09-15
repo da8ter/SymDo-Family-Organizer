@@ -9,6 +9,8 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
    Kopien. Eingebunden wird immer nur der BAU, nie der Leser: die Fragen der
    App kommen im Gateway an, und dort bleiben sie auch. */
 require_once __DIR__ . '/../SymDoGateway/libs/EduLesen.php';
+require_once __DIR__ . '/../SymDoGateway/libs/MoodleCalc.php';
+require_once __DIR__ . '/../SymDoGateway/libs/MoodleLesen.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuGemein.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuBau.php';
 require_once __DIR__ . '/../libs/AiJobRunner.php';
@@ -52,6 +54,7 @@ class SymDoScanner extends IPSModuleStrict
     use Belegung;
     use ScanKanal;
     use EduLesen;
+    use MoodleLesen;
     use DokuGemein;
     use DokuBau;
 
@@ -420,6 +423,32 @@ class SymDoScanner extends IPSModuleStrict
                 }
                 break;
 
+            case 'moodle':
+                /* LOGINEO. Dasselbe Bild wie bei den Klassenseiten: hier wird
+                   nur GEHOLT und zerlegt, eingepflegt wird im Gateway. Der
+                   Unterschied ist die Menge — ein Konto kostet einen Abruf fuer
+                   den Standort, einen fuer die Kurse, einen je Kurs fuer die
+                   Inhalte, und je Aufgabe noch einen fuer den Abgabestand. Ein
+                   Abruf darf 25 Sekunden brauchen.
+
+                   Die ZUGAENGE reisen mit dem Auftrag, samt Token: er liegt in
+                   einem Attribut des Gateways, und ein Attribut ist von hier
+                   aus nicht zu lesen. Dasselbe gilt fuer die Sperrliste. */
+                $erg = $this->MoodleErnten((array)($auftrag['konten'] ?? []),
+                    (array)($auftrag['gesperrt'] ?? []));
+                foreach (['seiten', 'hausaufgaben', 'vorschlaege'] as $feld) {
+                    if ($erg[$feld] !== []) {
+                        $nutzlast[$feld] = $erg[$feld];
+                    }
+                }
+                $ok = $erg['ok'];
+                $text = $erg['text'];
+                if ($erg['konten'] === 0) {
+                    // Nichts eingerichtet: kein Umschlag, keine Meldung.
+                    $melden = false;
+                }
+                break;
+
             default:
                 // Die echten Quellen ziehen einzeln um; bis dahin laeuft der
                 // Scan weiter im Gateway und dieser Auftrag ist ein Irrlaeufer.
@@ -511,6 +540,57 @@ class SymDoScanner extends IPSModuleStrict
             $text .= ' — ' . implode(' | ', $fehler);
         }
         return ['seiten' => $raus, 'fehler' => $fehler, 'text' => $text];
+    }
+
+    /**
+     * Alle LOGINEO-Konten ernten.
+     *
+     * Ein Konto, das nicht lesbar ist, haelt die anderen NICHT auf — genau
+     * dafuer zaehlt das Gateway die Fehlschlaege je Zugang. Und ein Konto ohne
+     * Token kommt hier gar nicht erst an: die weisse Liste des Auftrags laesst
+     * es nicht durch.
+     *
+     * @param list<array<string,mixed>> $konten
+     * @param list<string>              $gesperrt
+     * @return array{ok:bool,konten:int,text:string,seiten:list<array<string,mixed>>,
+     *               hausaufgaben:list<array<string,mixed>>,vorschlaege:list<array<string,mixed>>}
+     */
+    private function MoodleErnten(array $konten, array $gesperrt): array
+    {
+        $seiten = [];
+        $hausaufgaben = [];
+        $vorschlaege = [];
+        $teile = [];
+        $ok = true;
+        foreach ($konten as $zugang) {
+            if (!is_array($zugang)) {
+                continue;
+            }
+            $name = trim((string)($zugang['name'] ?? '')) !== ''
+                ? (string)$zugang['name'] : ('#' . (string)($zugang['userId'] ?? '?'));
+            $ernte = $this->MoodleKontoErnten($zugang, $gesperrt);
+            if (($ernte['ok'] ?? false) !== true) {
+                $ok = false;
+                $teile[] = $name . ': ' . $this->Translate('nothing readable');
+                continue;
+            }
+            foreach ($ernte['seiten'] as $e) {
+                $seiten[] = $e;
+            }
+            foreach ($ernte['hausaufgaben'] as $e) {
+                $hausaufgaben[] = $e;
+            }
+            foreach ($ernte['vorschlaege'] as $e) {
+                $vorschlaege[] = $e;
+            }
+            $teile[] = $name . ': ' . sprintf(
+                $this->Translate('%1$d course(s), %2$d card(s) read'),
+                (int)$ernte['kurse'], (int)$ernte['karten']);
+        }
+        return ['ok' => $ok, 'konten' => count($konten),
+                'text' => implode(' | ', $teile),
+                'seiten' => $seiten, 'hausaufgaben' => $hausaufgaben,
+                'vorschlaege' => $vorschlaege];
     }
 
     /**
