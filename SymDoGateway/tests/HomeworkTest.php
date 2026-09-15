@@ -434,5 +434,132 @@ $x = HomeworkCalc::Normalisieren(
     ['Mathematik'], ['k1'], '2026-09-10', $jetzt);
 pruefe('eine unbekannte Herkunft gilt als Handarbeit', $x['source'] ?? '', 'app');
 
+// ── Das spaete Haekchen der Schule ────────────────────────────────────────
+/* Eine Lehrkraft hakt waehrend oder NACH der Stunde ab, also fruehestens am
+   Faelligkeitstag. Wurde nur ab heute geholt, war die Aufgabe in genau diesem
+   Augenblick schon aus dem Fenster gefallen: das Haekchen kam nie an, die Zeile
+   blieb fuer immer bei den offenen stehen (sie wartet auf die Bestaetigung) und
+   verschwand irgendwann ungeklaert. Gemeldet am 15.09.2026.
+
+   Geholt wird jetzt mit sieben Tagen Rueckgriff, ZURUECKGEZOGEN aber nur im
+   Vorwaertsfenster — beides wird hier festgenagelt. */
+$jetzt2 = (int)strtotime('2026-09-15 07:00:00');
+$gestern = [[
+    'id' => 'alt1', 'srcId' => 4711, 'childId' => 'k1', 'source' => 'untis',
+    'subject' => 'Mathematik', 'due' => '2026-09-14', 'note' => 'Seite 10',
+    'done' => true, 'doneAt' => $jetzt2 - 7200, 'doneBy' => HomeworkCalc::BY_USER,
+    'createdAt' => $jetzt2 - 86400, 'updatedAt' => $jetzt2 - 7200,
+]];
+
+/* Der Abruf bringt die Aufgabe von GESTERN mit — sie liegt vor dem engen
+   Fenster, wird aber ueber ihre Herkunftsnummer zusammengefuehrt. */
+$spaet = HomeworkCalc::Zusammenfuehren($gestern, [[
+    'srcId' => 4711, 'childId' => 'k1', 'source' => 'untis', 'subject' => 'Mathematik',
+    'due' => '2026-09-14', 'note' => 'Seite 10', 'done' => true, 'doneBy' => HomeworkCalc::BY_UNTIS,
+]], 'k1', '2026-09-15', '2026-09-29', $jetzt2);
+pruefe('Das spaete Haekchen der Schule kommt an', $spaet['geaendert'], 1);
+pruefe('… der Urheber wandert auf die Schule',
+    $spaet['items'][0]['doneBy'], HomeworkCalc::BY_UNTIS);
+/* Erst damit rutscht die Zeile in der Oberflaeche nach „Erledigt" und bekommt
+   die Akzentfarbe — hwWartetAufSchule prueft genau dieses Feld. */
+pruefe('… und nichts wurde dabei geloescht', $spaet['entfernt'], 0);
+
+/* Die andere Haelfte: was VOR dem engen Fenster liegt und im Abruf FEHLT, darf
+   nicht verschwinden. Sonst loeschte eine Antwort, die einen alten Tag einmal
+   nicht mitbringt, die Aufgaben dieses Tages aus dem Bestand. */
+$ohne = HomeworkCalc::Zusammenfuehren($gestern, [], 'k1', '2026-09-15', '2026-09-29', $jetzt2);
+pruefe('Eine Aufgabe vor dem Fenster wird NICHT zurueckgezogen',
+    [$ohne['entfernt'], count($ohne['items'])], [0, 1]);
+
+/* Im Fenster gilt der Rueckzug weiter — sonst blieben abgezogene Aufgaben
+   ewig stehen. */
+$drin = [[
+    'id' => 'neu1', 'srcId' => 4712, 'childId' => 'k1', 'source' => 'untis',
+    'subject' => 'Deutsch', 'due' => '2026-09-16', 'note' => 'S. 8',
+    'done' => false, 'doneAt' => 0, 'doneBy' => '',
+    'createdAt' => $jetzt2, 'updatedAt' => $jetzt2,
+]];
+$weg = HomeworkCalc::Zusammenfuehren($drin, [], 'k1', '2026-09-15', '2026-09-29', $jetzt2);
+pruefe('Im Fenster wird weiterhin zurueckgezogen',
+    [$weg['entfernt'], count($weg['items'])], [1, 0]);
+
+// ── Ein Kuerzel darf keinen guten Fachnamen ueberschreiben ────────────────
+/* WebUntis nennt das Fach als Kuerzel („M", „Bi"); uebersetzt wird es ueber den
+   Stundenplan des VORWAERTS-Fensters. Seit die Hausaufgaben mit Rueckgriff
+   geholt werden, kann eine Aufgabe an einer Stunde haengen, deren Fach in den
+   naechsten vierzehn Tagen gar nicht mehr stattfindet — Blockfach, abgewaehlter
+   Kurs, oder schlicht Ferien vor dem Vorwaertsfenster. Dann greift die
+   Uebersetzung nicht.
+
+   Ohne Riegel fiele der Bestandssatz von „Mathematik" auf „M", und zwar
+   DAUERHAFT: eine Woche spaeter liegt er auch ausserhalb des Rueckgriffs.
+   Zurueck bliebe eine Zeile ohne Fachsymbol und ohne Farbe — FachTreffer
+   verlangt drei Zeichen, „M" trifft „Mathematik" nie. */
+$faecher = ['Mathematik', 'Deutsch', 'Englisch'];
+$gut = [[
+    'id' => 'f1', 'srcId' => 4713, 'childId' => 'k1', 'source' => 'untis',
+    'subject' => 'Mathematik', 'due' => '2026-09-11', 'note' => 'Seite 9',
+    'done' => false, 'doneAt' => 0, 'doneBy' => '',
+    'createdAt' => $jetzt2 - 86400, 'updatedAt' => $jetzt2 - 86400,
+]];
+$kuerzel = [[
+    'srcId' => 4713, 'childId' => 'k1', 'source' => 'untis', 'subject' => 'M',
+    'due' => '2026-09-11', 'note' => 'Seite 9', 'done' => false,
+]];
+$k = HomeworkCalc::Zusammenfuehren($gut, $kuerzel, 'k1', '2026-09-15', '2026-09-29',
+    $jetzt2, 'untis', $faecher);
+pruefe('Ein Kuerzel ueberschreibt den guten Fachnamen NICHT',
+    $k['items'][0]['subject'], 'Mathematik');
+pruefe('… und der Satz gilt deshalb als unveraendert', $k['geaendert'], 0);
+
+/* Die Gegenrichtung muss weiter gehen: ein aufgeloester Name ersetzt ein
+   Kuerzel sehr wohl — sonst bliebe ein einmal verdorbener Satz fuer immer so. */
+$schlecht = [[
+    'id' => 'f2', 'srcId' => 4714, 'childId' => 'k1', 'source' => 'untis',
+    'subject' => 'M', 'due' => '2026-09-16', 'note' => 'x',
+    'done' => false, 'doneAt' => 0, 'doneBy' => '',
+    'createdAt' => $jetzt2, 'updatedAt' => $jetzt2,
+]];
+$heilung = HomeworkCalc::Zusammenfuehren($schlecht, [[
+    'srcId' => 4714, 'childId' => 'k1', 'source' => 'untis', 'subject' => 'Mathematik',
+    'due' => '2026-09-16', 'note' => 'x', 'done' => false,
+]], 'k1', '2026-09-15', '2026-09-29', $jetzt2, 'untis', $faecher);
+pruefe('Ein guter Name ersetzt ein Kuerzel sehr wohl',
+    $heilung['items'][0]['subject'], 'Mathematik');
+
+/* Und ein echter Fachwechsel bleibt moeglich. */
+$wechsel = HomeworkCalc::Zusammenfuehren($gut, [[
+    'srcId' => 4713, 'childId' => 'k1', 'source' => 'untis', 'subject' => 'Deutsch',
+    'due' => '2026-09-11', 'note' => 'Seite 9', 'done' => false,
+]], 'k1', '2026-09-15', '2026-09-29', $jetzt2, 'untis', $faecher);
+pruefe('Ein echter Fachwechsel kommt durch', $wechsel['items'][0]['subject'], 'Deutsch');
+
+/* Ohne Faecherliste (Stundenplan-Modul fehlt) darf der Riegel nicht greifen —
+   sonst liesse sich ein Fach nie mehr aendern. */
+$ohneListe = HomeworkCalc::Zusammenfuehren($gut, $kuerzel, 'k1', '2026-09-15',
+    '2026-09-29', $jetzt2, 'untis', []);
+pruefe('Ohne Faecherliste bleibt es beim alten Verhalten',
+    $ohneListe['items'][0]['subject'], 'M');
+
+/* Die Faecherliste geht wirklich mit — sonst waere der Riegel Zierde. */
+$hw = (string)file_get_contents(__DIR__ . '/../libs/Homework.php');
+pruefe('HomeworkImportieren reicht die Faecher weiter',
+    str_contains($hw, '$jetzt, $quelle, $faecher);'), true);
+
+/* Die beiden Fenster muessen VERSCHIEDEN bleiben. Zieht jemand sie wieder
+   zusammen, faellt es offline nicht auf: der WebUntis-Abruf laesst sich hier
+   nicht fahren, und beide Fassungen laufen gruen durch. */
+$untis = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
+pruefe('Der Rueckgriff ist gesetzt',
+    (bool)preg_match('/UNTIS_TAGE_ZURUECK\s*=\s*([1-9]\d*)\s*;/', $untis), true);
+pruefe('Geholt wird mit Rueckgriff',
+    str_contains($untis, "startDate=' . \$holVon . '&endDate=' . \$bis"), true);
+pruefe('Zurueckgezogen wird nur im engen Fenster',
+    str_contains($untis, 'HomeworkImportieren($userId, $roh, $iso((int)$von), $iso((int)$bis))'), true);
+/* Der STUNDENPLAN bleibt draussen: er wird geschrieben, und ein Rueckgriff
+   ueberschriebe vergangene Tage im Stundenplan-Modul. */
+pruefe('Der Stundenplan holt weiter erst ab heute',
+    (bool)preg_match("/\\\$von = \\(int\\)date\\('Ymd'\\);/", $untis), true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

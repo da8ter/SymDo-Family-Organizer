@@ -28,6 +28,26 @@ trait WebUntis
 {
     private const UNTIS_CLIENT      = 'SymDo';   // Selbstauskunft in den Zugriffen der Schule
     private const UNTIS_TAGE_VOR    = 14;        // so weit im Voraus wird geholt
+
+    /**
+     * So weit ZURUECK werden die Hausaufgaben geholt — und NUR sie.
+     *
+     * Eine Lehrkraft hakt waehrend oder nach der Stunde ab, also fruehestens am
+     * Faelligkeitstag, oft am Tag darauf. Holte man nur ab heute, waere die
+     * Aufgabe in genau diesem Augenblick schon aus dem Fenster gefallen: das
+     * Haekchen der Schule kaeme nie an, die Zeile bliebe fuer immer bei den
+     * offenen stehen (sie wartet ja auf die Bestaetigung) und verschwaende
+     * schliesslich ungeklaert. Gemeldet am 15.09.2026.
+     *
+     * Gemessen am selben Tag: `homeworks/lessons` beantwortet einen vergangenen
+     * Zeitraum VOLLSTAENDIG — 4 Aufgaben ab heute, 13 ab minus sieben Tagen,
+     * 16 ab minus einundzwanzig. Das Rueckgriff-Fenster laesst also nichts
+     * verschwinden.
+     *
+     * Der STUNDENPLAN bleibt bewusst draussen: er wird geschrieben, und ein
+     * Rueckgriff ueberschriebe vergangene Tage im Stundenplan-Modul.
+     */
+    private const UNTIS_TAGE_ZURUECK = 7;
     private const UNTIS_FEHLER_MAX  = 3;         // danach steht der Timer (Kontosperre!)
     /* So lange bleibt der Riegel zu, wenn ihn niemand von Hand loest. Danach
        gibt es wieder DREI Versuche, mehr nicht. Ohne diese Frist muesste man das
@@ -1164,7 +1184,18 @@ trait WebUntis
                und kein Fehler. */
             return $this->Translate('homework: no family member assigned');
         }
-        $d = $this->UntisRest('homeworks/lessons?startDate=' . $von . '&endDate=' . $bis, 'api/');
+        /* GEHOLT wird mit Rueckgriff, ZURUECKGEZOGEN nur im Vorwaertsfenster —
+           die beiden Fenster sind absichtlich verschieden.
+
+           `Zusammenfuehren` fuehrt jeden hereinkommenden Satz ueber seine
+           Herkunftsnummer zusammen, ganz gleich wo er liegt; das Fenster
+           entscheidet allein darueber, was als VERSCHWUNDEN gilt und geloescht
+           wird. Waere der Rueckgriff auch dort gueltig, loeschte eine Antwort,
+           die einen alten Tag einmal nicht mitbringt, die Aufgaben dieses Tages
+           aus dem Bestand. So kommt das spaete Haekchen an, und nichts Altes
+           kann dabei verlorengehen. */
+        $holVon = (int)date('Ymd', strtotime('-' . self::UNTIS_TAGE_ZURUECK . ' days'));
+        $d = $this->UntisRest('homeworks/lessons?startDate=' . $holVon . '&endDate=' . $bis, 'api/');
         $daten = is_array($d['data'] ?? null) ? $d['data'] : (is_array($d) ? $d : []);
         if ($daten === []) {
             return $this->Translate('homework: not available');
@@ -1272,6 +1303,7 @@ trait WebUntis
 
         $iso = static fn(int $ymd): string => substr((string)$ymd, 0, 4) . '-'
             . substr((string)$ymd, 4, 2) . '-' . substr((string)$ymd, 6, 2);
+        // Das enge Fenster: nur hier darf zurueckgezogen werden (siehe oben).
         $e = $this->HomeworkImportieren($userId, $roh, $iso((int)$von), $iso((int)$bis));
         if (($e['ok'] ?? false) !== true) {
             return sprintf($this->Translate('homework: not taken over (%s)'), (string)($e['fehler'] ?? '?'));

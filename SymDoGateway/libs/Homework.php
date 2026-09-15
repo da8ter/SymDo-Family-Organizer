@@ -425,7 +425,11 @@ trait Homework
             /* Die Quelle geht MIT: Zuordnung und Loeschen gelten nur fuer
                Eintraege derselben Herkunft. Sonst raeumte ein LOGINEO-Abruf die
                WebUntis-Aufgaben desselben Kindes weg. */
-            $e = HomeworkCalc::Zusammenfuehren($store['items'], $saetze, $kind, $von, $bis, $jetzt, $quelle);
+            /* Die Fächerliste geht MIT: nur damit kann das Zusammenführen
+               erkennen, ob ein hereinkommender Fachname aufgelöst ist — und ein
+               bloßes Kürzel keinen guten Namen überschreiben lassen. */
+            $e = HomeworkCalc::Zusammenfuehren($store['items'], $saetze, $kind, $von, $bis,
+                $jetzt, $quelle, $faecher);
             if ($e['neu'] === 0 && $e['geaendert'] === 0 && $e['entfernt'] === 0) {
                 return ['ok' => true, 'neu' => 0, 'geaendert' => 0, 'entfernt' => 0,
                         'uebergangen' => $uebergangen, 'fehler' => ''];

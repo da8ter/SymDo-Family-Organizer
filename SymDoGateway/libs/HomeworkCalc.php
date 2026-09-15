@@ -275,7 +275,7 @@ class HomeworkCalc
      * @return array{items:list<array>,neu:int,geaendert:int,entfernt:int}
      */
     public static function Zusammenfuehren(array $items, array $neu, string $kind, string $von,
-        string $bis, int $jetzt, string $quelle = 'untis'): array
+        string $bis, int $jetzt, string $quelle = 'untis', array $faecher = []): array
     {
         /* JE QUELLE. Zwei Schulsysteme fuehren ihre Nummern unabhaengig: die
            Aufgabe 5 aus WebUntis und das Dokument 5 aus LOGINEO sind
@@ -329,7 +329,26 @@ class HomeworkCalc
             }
             $alt = $items[$stelle[$s]];
             $satz = $alt;
-            $satz['subject'] = (string)$n['subject'];
+            /* Ein KUERZEL darf einen aufgeloesten Fachnamen nicht ueberschreiben.
+               WebUntis nennt das Fach als Kuerzel („M", „Bi"); uebersetzt wird
+               es ueber den Stundenplan des VORWAERTS-Fensters. Seit die
+               Hausaufgaben mit Rueckgriff geholt werden, kann eine Aufgabe an
+               einer Stunde haengen, deren Fach in den naechsten vierzehn Tagen
+               gar nicht mehr stattfindet — Blockfach, abgewaehlter Kurs, oder
+               schlicht Ferien. Dann greift die Uebersetzung nicht, und ohne
+               diesen Riegel fiele der Bestandssatz von „Mathematik" auf „M".
+               Dauerhaft: eine Woche spaeter liegt er auch ausserhalb des
+               Rueckgriffs. Zurueck bliebe eine Zeile ohne Fachsymbol und ohne
+               Farbe — `FachTreffer` verlangt drei Zeichen, „M" trifft nie.
+               Gilt nur in DIESE Richtung: ein aufgeloester Name ersetzt einen
+               unaufgeloesten sehr wohl. */
+            $neuFach = (string)$n['subject'];
+            $altFach = (string)($satz['subject'] ?? '');
+            $neuKennt = $faecher === [] || in_array($neuFach, $faecher, true);
+            $altKennt = $altFach !== '' && in_array($altFach, $faecher, true);
+            if ($neuKennt || !$altKennt) {
+                $satz['subject'] = $neuFach;
+            }
             $satz['due'] = (string)$n['due'];
             $satz['note'] = (string)$n['note'];
             /* Die Schule BESTAETIGT ein Haekchen, das hier schon stand.
