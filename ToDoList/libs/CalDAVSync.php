@@ -383,15 +383,44 @@ trait CalDAVSync
                sagt nur, dass eine Multi-Status-Antwort kommt, nicht dass alle
                Eintraege geklappt haben (RFC 4918 §13).
 
-               404 bleibt draussen: eine Ressource, die zwischen Abfrage und
-               Lesen verschwindet, IST geloescht. Alles andere ab 400 — 403,
-               500, 503 — ist ein Fehler der Gegenstelle, und dann wird der
-               ganze Abruf verworfen. Ein ausgelassener Durchgang kostet
-               nichts; eine falsche Loeschung kostet die lokale Fassung. */
-            foreach ($this->CalDAVStatusCodes($response) as $code) {
-                if ($code >= 400 && $code !== 404) {
+               WO die Zahl steht, entscheidet ihre Bedeutung — das ist der Kern
+               dieser Stelle:
+
+                 - direkt unter `response` gilt sie der RESSOURCE. Ein 404 heisst
+                   dort „gibt es nicht mehr": zwischen Abfrage und Lesen
+                   geloescht, und der Abgleich darf sie hier auslassen.
+                 - in einem `propstat` gilt sie den EIGENSCHAFTEN in genau diesem
+                   Block (RFC 4918 §9.1.2/§13). Ein 404 heisst dort „diese
+                   Eigenschaft hat die Ressource nicht" — die Ressource SELBST
+                   ist da. Fehlen damit die Kalenderdaten, wissen wir ueber die
+                   Aufgabe nichts; „nichts" ist aber kein Beweis fuer „geloescht".
+
+               Die erste Fassung behandelte beide 404 gleich und liess damit
+               genau den zweiten Fall zur Loeschung durch. Nachgefasst von einem
+               externen Codereview am 15.09.2026.
+
+               Ein ausgelassener Durchgang kostet nichts; eine falsche Loeschung
+               kostet die lokale Fassung. */
+            $stati = $this->CalDAVStatusCodes($response);
+            $weg = false;
+            foreach ($stati['response'] as $code) {
+                if ($code === 404 || $code === 410) {
+                    $weg = true;   // die Ressource selbst ist fort
+                    continue;
+                }
+                if ($code >= 400) {
                     $this->SendDebug('CalDAV', sprintf(
-                        'Teilfehler %d im Multistatus – Abruf verworfen: %s', $code, $href), 0);
+                        'Teilfehler %d an der Ressource – Abruf verworfen: %s', $code, $href), 0);
+                    return null;
+                }
+            }
+            if ($weg) {
+                continue;
+            }
+            foreach ($stati['propstat'] as $code) {
+                if ($code >= 400) {
+                    $this->SendDebug('CalDAV', sprintf(
+                        'Eigenschaftsfehler %d ohne Kalenderdaten – Abruf verworfen: %s', $code, $href), 0);
                     return null;
                 }
             }
@@ -401,21 +430,23 @@ trait CalDAVSync
     }
 
     /**
-     * Alle Statusangaben EINER `response` als Zahlen.
+     * Die Statusangaben EINER `response` — getrennt nach ihrer Bedeutung.
      *
-     * WebDAV schreibt sie als „HTTP/1.1 500 Internal Server Error" — sowohl im
-     * `propstat` als auch, bei einem Fehler der ganzen Ressource, direkt unter
-     * `response`.
+     * WebDAV schreibt sie als „HTTP/1.1 500 Internal Server Error", und der Ort
+     * sagt, worauf sie sich beziehen: direkt unter `response` auf die RESSOURCE,
+     * in einem `propstat` auf die EIGENSCHAFTEN dieses Blocks (RFC 4918
+     * §9.1.2/§13). Der Unterschied traegt hier eine Loeschung, deshalb kommen
+     * sie getrennt zurueck.
      *
-     * @return list<int>
+     * @return array{response: list<int>, propstat: list<int>}
      */
     private function CalDAVStatusCodes(SimpleXMLElement $response): array
     {
-        $raus = [];
-        foreach (['d:propstat/d:status', 'd:status'] as $weg) {
+        $raus = ['response' => [], 'propstat' => []];
+        foreach (['propstat' => 'd:propstat/d:status', 'response' => 'd:status'] as $topf => $weg) {
             foreach ((array)$response->xpath($weg) as $knoten) {
                 if (preg_match('#\b([1-5][0-9]{2})\b#', (string)$knoten, $m) === 1) {
-                    $raus[] = (int)$m[1];
+                    $raus[$topf][] = (int)$m[1];
                 }
             }
         }

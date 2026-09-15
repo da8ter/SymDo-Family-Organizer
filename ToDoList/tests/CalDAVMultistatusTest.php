@@ -102,12 +102,52 @@ foreach (['500 Internal Server Error', '503 Service Unavailable', '403 Forbidden
             fehlschlag('/cal/2.ics', $status))), null);
 }
 
-/* 404 bleibt draußen: eine Ressource, die zwischen Abfrage und Lesen
-   verschwindet, IST gelöscht — das ist eine Aussage, kein Fehler. */
-pruefe('404 verwirft den Abruf NICHT',
+/* WO die Zahl steht, entscheidet ihre Bedeutung — und daran hängt hier eine
+   Löschung. Die erste Fassung behandelte beide 404 gleich; nachgefasst von
+   einem externen Codereview am 15.09.2026. */
+foreach (['404 Not Found', '410 Gone'] as $status) {
+    pruefe('Ressourcen-' . substr($status, 0, 3) . ': die Aufgabe ist wirklich fort',
+        count((array)$lesen->invoke($modul, antwort(
+            aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
+            '<d:response><d:href>/cal/2.ics</d:href>'
+            . '<d:status>HTTP/1.1 ' . $status . '</d:status></d:response>'))), 1);
+}
+
+/* Im `propstat` gilt die Zahl den EIGENSCHAFTEN dieses Blocks (RFC 4918
+   §9.1.2): „404" heißt dort „diese Eigenschaft hat die Ressource nicht" — die
+   Ressource SELBST ist da. Fehlen damit die Kalenderdaten, wissen wir über die
+   Aufgabe nichts, und „nichts" ist kein Beweis für „gelöscht". Genau dieser
+   Fall löschte vorher weiter. */
+pruefe('Eigenschafts-404 verwirft den Abruf',
+    $lesen->invoke($modul, antwort(
+        aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
+        fehlschlag('/cal/2.ics', '404 Not Found'))), null);
+pruefe('… auch als einziger Eintrag',
+    $lesen->invoke($modul, antwort(fehlschlag('/cal/2.ics', '404 Not Found'))), null);
+
+/* Der gemischte Block: der Server meldet die vorhandenen Eigenschaften mit 200
+   und die fehlenden mit 404 — so schreibt es RFC 4918 vor. Ohne Kalenderdaten
+   bleibt das trotzdem ein unvollständiger Eintrag. */
+pruefe('Zwei propstat-Bloecke, Kalenderdaten im 404er',
+    $lesen->invoke($modul, antwort(
+        aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
+        '<d:response><d:href>/cal/2.ics</d:href>'
+        . '<d:propstat><d:prop><d:getetag>"e2"</d:getetag></d:prop>'
+        . '<d:status>HTTP/1.1 200 OK</d:status></d:propstat>'
+        . '<d:propstat><d:prop><c:calendar-data/></d:prop>'
+        . '<d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>')), null);
+
+/* Umgekehrt: kommen die Daten im 200er-Block, ist der Eintrag vollständig —
+   ein 404 für irgendeine andere Eigenschaft darf ihn nicht verwerfen. */
+pruefe('Kalenderdaten da, 404 nur fuer eine andere Eigenschaft',
     count((array)$lesen->invoke($modul, antwort(
         aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
-        fehlschlag('/cal/2.ics', '404 Not Found')))), 1);
+        '<d:response><d:href>/cal/2.ics</d:href>'
+        . '<d:propstat><d:prop><d:getetag>"e2"</d:getetag>'
+        . '<c:calendar-data>' . htmlspecialchars("BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:u2\nSUMMARY:Anrufen\nEND:VTODO\nEND:VCALENDAR")
+        . '</c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>'
+        . '<d:propstat><d:prop><d:displayname/></d:prop>'
+        . '<d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>'))), 2);
 
 /* Auch ein Fehler an der ganzen Ressource (ohne propstat) zählt. */
 pruefe('Ein Fehler direkt an der Ressource zaehlt auch',
