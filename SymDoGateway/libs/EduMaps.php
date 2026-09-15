@@ -696,9 +696,10 @@ trait EduMaps
      * der Deckel von fuenf Anhaengen je Notiz nach zwei PDF erreicht, und in
      * der Liste stuende jede Datei doppelt.
      *
+     * @param string $quelle wohin die Datei gehoert — `EduStoreCalc::Quelle` der Karte
      * @return int Medien-Kennung, 0 wenn es keine gibt
      */
-    private function EduVorschau(string $url, string $name): int
+    private function EduVorschau(string $url, string $name, string $quelle): int
     {
         if ($url === '') {
             return 0;
@@ -710,7 +711,7 @@ trait EduMaps
         }
         // Derselbe Weg wie fuer jeden anderen Anhang: er prueft die Magic Bytes,
         // rechnet auf JPEG um und legt das Medienobjekt an.
-        $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), 'vorschau.jpg');
+        $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), 'vorschau.jpg', $quelle);
         return ($r['ok'] ?? false) === true ? (int)$r['id'] : 0;
     }
 
@@ -945,6 +946,10 @@ trait EduMaps
 
     private function EduNotizAnhaenge(array $karte): array
     {
+        /* Wohin die Dateien dieser Karte gehoeren. Einmal hier, nicht an jeder
+           der drei Ablagestellen darunter — sonst bekaeme das Vorschaubild
+           eines PDF einen anderen Ordner als das PDF selbst. */
+        $quelle = EduStoreCalc::Quelle($karte);
         $raus = [];
         $speicherVorher = (string)@ini_get('memory_limit');
         @ini_set('memory_limit', '192M');
@@ -986,7 +991,7 @@ trait EduMaps
                     $this->SendDebug('EduMaps', 'Datei nicht ladbar: ' . $a['name'], 0);
                     continue;
                 }
-                $r = $this->NotesSaveAttachment(base64_encode($roh), (string)$a['name']);
+                $r = $this->NotesSaveAttachment(base64_encode($roh), (string)$a['name'], $quelle);
                 if (($r['ok'] ?? false) !== true) {
                     $this->SendDebug('EduMaps', 'Datei nicht ablegbar (' . (string)($r['error']['code'] ?? '?')
                         . '): ' . $a['name'], 0);
@@ -995,7 +1000,7 @@ trait EduMaps
                 $anhang = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'],
                            'name' => (string)$r['name'], 'bytes' => (int)$r['bytes']];
                 if ($anhang['kind'] === 'pdf') {
-                    $mini = $this->EduVorschau((string)($a['preview'] ?? ''), (string)$a['name']);
+                    $mini = $this->EduVorschau((string)($a['preview'] ?? ''), (string)$a['name'], $quelle);
                     if ($mini > 0) {
                         $anhang['thumb'] = $mini;
                     }

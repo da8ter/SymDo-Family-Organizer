@@ -110,7 +110,11 @@ final class MoodleSpiegelProbe
     private function EduText(string $h): string { return strip_tags($h); }
     private function EduHtml(string $h): string { return $h === '' ? '' : '[weiss]' . strip_tags($h); }
     private function EduGesperrt(string $u): bool { return false; }
-    private function EduVorschau(string $url, string $name): int { return 0; }
+    private function EduVorschau(string $url, string $name, string $quelle): int
+    {
+        $this->toepfe[] = $quelle;
+        return 0;
+    }
     private function EduQrCode(int $id): string { return ''; }
     private function EduQrVormerken(string $t): void { $this->eduQrSeiten[] = $t; }
     private function NotesNewId(): string { return 'n' . (++$this->medien); }
@@ -120,8 +124,11 @@ final class MoodleSpiegelProbe
     {
         foreach ($ids as $id) { $this->geloescht[] = (int)$id; }
     }
-    private function NotesSaveAttachment(string $b64, string $name): array
+    /** Welcher Topf je abgelegter Datei verlangt wurde — die Quelle der Karte. */
+    public array $toepfe = [];
+    private function NotesSaveAttachment(string $b64, string $name, string $quelle = ''): array
     {
+        $this->toepfe[] = $quelle;
         $id = ++$this->medien;
         return ['ok' => true, 'id' => $id, 'kind' => $this->EduArt($name),
                 'name' => $name, 'bytes' => strlen($b64)];

@@ -520,6 +520,22 @@ Notizen — scheitert etwas dazwischen, sind die Notizen unangetastet, und der
 nächste Durchlauf holt nach. Gemerkt ist der Umzug im Bestand selbst, nicht in
 einem eigenen Schalter.
 
+**Wo die Dateien liegen (seit 15.09.2026 anders).** Bilder und PDF der
+Schulseiten liegen nicht mehr in der Kategorie **Notizen**, sondern je Quelle in
+einem eigenen Ordner: **Schule/Edumaps**, **Schule/Logineo**, **Schule/WebUntis**
+(letzterer entsteht erst, wenn WebUntis einmal eine Datei mitbringt — heute tut
+es das nicht). Dahinter stecken zwei Gründe: im Notizbereich lag ein Foto vom
+Handy neben einem Elternbrief der Schule, und beide teilten sich **eine** Quote
+von 300 Objekten — eine große Klassenseite konnte den Notizen den Platz nehmen.
+Jetzt hat jeder Ordner seine eigene.
+
+Zu tun ist nichts. Der Umzug läuft bei jedem Übernehmen und bei jedem
+Kernelstart mit, und er ist keine einmalige Wanderung, sondern eine Zusage:
+jede Datei liegt im Ordner ihrer Quelle. Wechselt eine Seite die Quelle, folgt
+ihre Datei. Die **Objekt-ID bleibt dabei unverändert**, also bleibt jeder
+Verweis gültig — in der App, in der Kachel und unter `/v1/notes/media/{id}`.
+Anhänge von Notizen und aus Mails bleiben, wo sie sind: unter **Notizen**.
+
 Eine **Sperrliste** hält einzelne Karten oder ganze Seiten von der Auswertung
 fern, mit Einzelfreigabe; **Alle Karten auswerten** stößt eine vollständige
 Analyse an. Die Vorschläge zählen auf das KI-Tageslimit — ist es erreicht, folgt
@@ -576,7 +592,9 @@ Karte. Der Schlüssel einer Kursseite ist ihre echte Kursadresse — dadurch
 greifen Sperrliste, Archiv und Anhang-Verwaltung unverändert. Archiviert wird
 **je Quelle**: ein LOGINEO-Lauf fasst eine Edumaps-Karte im selben Ordner nicht
 an. Eine Karte je *Modul* und nicht je Datei — ein Material kann mehrere Dateien
-tragen, und sie gehören zusammen.
+tragen, und sie gehören zusammen. Die **Dateien** liegen dabei getrennt von
+denen der Klassenseite: unter **Schule/Logineo**, nicht unter Schule/Edumaps
+(Kapitel 16).
 
 **Aufgaben** kommen mit `source: 'moodle'` in denselben Bestand wie die aus
 WebUntis. Zuordnung und Zurückziehen laufen **je Quelle**: zwei Schulsysteme
@@ -627,7 +645,7 @@ Abstimmung — der Bericht sagt dann einfach nichts dazu.
 
 ## 18. Statusvariablen
 
-Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt. Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
+Das Gateway pflegt **eine** Statusvariable: **Briefing-Text** (`BriefingText`, String) trägt immer den Text des aktuell gezeigten Briefings — tagsüber das heutige, ab der Vorschauzeit das morgige — und eignet sich für eigene Automationen. Sie erscheint mit eingeschaltetem Briefing und verschwindet mit dem Schalter. Variablenprofile werden keine angelegt. Briefing-Audio, Notiz-Anhänge und gespeicherte Rezeptdateien werden als Medienobjekte in eigenen Kategorien unterhalb des Gateways abgelegt; die Dateien der Schulseiten liegen getrennt davon unter **Schule/Edumaps**, **Schule/Logineo** und **Schule/WebUntis** (Kapitel 16). Zeitpläne des Sprachdialogs sind ausgeblendete Ereignisse **an den Geräten selbst**, nicht unter dem Gateway (Kapitel 13).
 
 ## 19. Belegung messen (für die Fehlersuche)
 

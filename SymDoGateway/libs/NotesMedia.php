@@ -28,6 +28,23 @@ trait NotesMedia
 {
     private const NOTES_CATEGORY_NAME = 'Notizen';
     private const NOTES_MEDIA_ATTR    = 'NotesMediaCategory';
+    /** Der Knoten ueber den Schul-Toepfen. Er entsteht mit dem ersten von ihnen. */
+    private const SCHULE_CATEGORY_NAME = 'Schule';
+    /**
+     * Wohin die Dateien EINER Quelle gehoeren — der Name des Topfes unter „Schule".
+     *
+     * Der Schluessel ist die Quelle der Karte, wie `EduStoreCalc::Quelle` sie
+     * liefert. Was hier nicht steht, gehoert zu den Notizen: Mail-Anhaenge und
+     * alles, was jemand in der App an eine Notiz haengt. `untis` steht mit drin,
+     * obwohl WebUntis heute keine einzige Datei ablegt — der Topf entstuende
+     * sonst spaeter unter einem anderen Namen, und die Regel waere nur halb
+     * aufgeschrieben.
+     */
+    private const NOTES_TOPF_NAMEN = [
+        'edumaps' => 'Edumaps',
+        'moodle'  => 'Logineo',
+        'untis'   => 'WebUntis',
+    ];
     /** Eigene Kategorie, eigene Quote (AiSaveMedia hat 200 fuer die Rezeptfotos). */
     private const NOTES_MEDIA_MAX     = 300;
     /** Laengste Kante eines abgelegten Bildes. Groesser kostet Platz ohne mehr zu zeigen. */
@@ -39,6 +56,11 @@ trait NotesMedia
      * laesst sich nicht verkleinern, und ueber der Ausgabegrenze waere es abgelegt,
      * aber nie wieder abrufbar.
      */
+
+    /** @var array<string,int> Aufgeloeste Schul-Toepfe; der Namensdurchlauf kostet sonst je Datei. */
+    private array $notesTopfCache = [];
+    /** Und ihr gemeinsamer Vater — sonst durchsucht jeder der drei die Instanz erneut. */
+    private int $notesSchuleCache = 0;
 
     private function NotesMediaCreate(): void
     {
@@ -56,9 +78,68 @@ trait NotesMedia
         if ($id > 0 && IPS_CategoryExists($id)) {
             return $id;
         }
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $kind) {
-            if (IPS_CategoryExists($kind) && IPS_GetName($kind) === self::NOTES_CATEGORY_NAME) {
-                @$this->WriteAttributeString(self::NOTES_MEDIA_ATTR, (string)$kind);
+        /* BestandID() und nicht InstanceID: sie ist die dafuer vorgesehene
+           Antwort auf „unter welcher Instanz liegen Medien und Kategorien".
+           Im Gateway ist das dieselbe Zahl — aber nur so steht die Notizen-
+           Kategorie unter derselben Regel wie die Schul-Toepfe darunter. */
+        $id = $this->NotesKategorieUnter($this->BestandID(), self::NOTES_CATEGORY_NAME, $anlegen);
+        if ($id > 0) {
+            @$this->WriteAttributeString(self::NOTES_MEDIA_ATTR, (string)$id);
+        }
+        return $id;
+    }
+
+    /**
+     * Der Topf einer Quelle.
+     *
+     * Die Dateien der Schulseiten liegen NICHT bei den Notizen. Ein Elternbrief
+     * aus Edumaps, ein Arbeitsblatt aus LOGINEO und ein Foto, das jemand selbst
+     * an eine Notiz gehaengt hat, sahen im Objektbaum bis zum 15.09.2026 gleich
+     * aus — und teilten sich EINE Quote von 300. Eine grosse Klassenseite konnte
+     * damit den Notizen den Platz nehmen; jetzt hat jede Quelle ihre eigene.
+     *
+     * Eine unbekannte Quelle landet bewusst bei den Notizen statt in einem
+     * eigenen Topf: ein Tippfehler soll keine Kategorie erzeugen, die danach
+     * niemand mehr liest und kein Aufraeumer kennt.
+     */
+    private function NotesMedienTopf(string $quelle, bool $anlegen): int
+    {
+        $name = self::NOTES_TOPF_NAMEN[$quelle] ?? '';
+        if ($name === '') {
+            return $this->NotesMediaCategory($anlegen);
+        }
+        $gemerkt = (int)($this->notesTopfCache[$quelle] ?? 0);
+        if ($gemerkt > 0 && IPS_CategoryExists($gemerkt)) {
+            return $gemerkt;
+        }
+        $schule = $this->notesSchuleCache > 0 && IPS_CategoryExists($this->notesSchuleCache)
+            ? $this->notesSchuleCache
+            : $this->NotesKategorieUnter($this->BestandID(), self::SCHULE_CATEGORY_NAME, $anlegen);
+        $this->notesSchuleCache = $schule;
+        if ($schule <= 0) {
+            return 0;
+        }
+        $id = $this->NotesKategorieUnter($schule, $name, $anlegen);
+        if ($id > 0) {
+            $this->notesTopfCache[$quelle] = $id;
+        }
+        return $id;
+    }
+
+    /**
+     * Eine Kategorie dieses Namens unter diesem Vater — finden oder anlegen.
+     *
+     * Ueber den NAMEN und nicht ueber ein Attribut: ein neu registriertes
+     * Attribut existiert vor dem Kernel-Neustart nicht, und dann entstuende bei
+     * jedem Abruf ein weiterer Topf. Der Name ueberlebt auch ein Modul-Update.
+     */
+    private function NotesKategorieUnter(int $vater, string $name, bool $anlegen): int
+    {
+        if ($vater <= 0) {
+            return 0;
+        }
+        foreach (IPS_GetChildrenIDs($vater) as $kind) {
+            if (IPS_CategoryExists($kind) && IPS_GetName($kind) === $name) {
                 return $kind;
             }
         }
@@ -66,10 +147,36 @@ trait NotesMedia
             return 0;
         }
         $id = IPS_CreateCategory();
-        IPS_SetParent($id, $this->InstanceID);
-        IPS_SetName($id, self::NOTES_CATEGORY_NAME);
-        @$this->WriteAttributeString(self::NOTES_MEDIA_ATTR, (string)$id);
+        IPS_SetParent($id, $vater);
+        IPS_SetName($id, $name);
         return $id;
+    }
+
+    /**
+     * Alle Toepfe, die uns gehoeren — Notizen und die drei Schul-Toepfe.
+     *
+     * Die EINE Stelle, an der „liegt diese Datei bei uns" beantwortet wird.
+     * Vier Lesewege und der Aufraeumer fragten das vorher jeder fuer sich, und
+     * zwar gegen die EINE Notizen-Kategorie. Mit dem zweiten Topf haette jeder
+     * von ihnen stillschweigend „nein" gesagt: jedes Kartenbild waere mit 403
+     * geendet, und geloescht worden waere nie wieder eines.
+     *
+     * @return list<int>
+     */
+    private function NotesMedienToepfe(): array
+    {
+        $ids = [$this->NotesMediaCategory(false)];
+        foreach (array_keys(self::NOTES_TOPF_NAMEN) as $quelle) {
+            $ids[] = $this->NotesMedienTopf((string)$quelle, false);
+        }
+        return array_values(array_unique(array_filter($ids, static fn($id): bool => (int)$id > 0)));
+    }
+
+    /** Gehoert dieses Medienobjekt uns? Die eine Frage hinter jeder Berechtigung. */
+    private function NotesMedienUnser(int $mediaId): bool
+    {
+        return $mediaId > 0 && IPS_MediaExists($mediaId)
+            && in_array(IPS_GetParent($mediaId), $this->NotesMedienToepfe(), true);
     }
 
     /**
@@ -77,7 +184,7 @@ trait NotesMedia
      *
      * @return array{ok:bool,id?:int,kind?:string,name?:string,bytes?:int,error?:array}
      */
-    private function NotesSaveAttachment(string $base64, string $name): array
+    private function NotesSaveAttachment(string $base64, string $name, string $quelle = ''): array
     {
         $roh = base64_decode($this->AiStripImage($base64), true);
         if (!is_string($roh) || $roh === '') {
@@ -110,7 +217,10 @@ trait NotesMedia
                 $roh = $klein;
             }
         }
-        $kat = $this->NotesMediaCategory(true);
+        /* Die eine Tuer, durch die jedes Medienobjekt entsteht — deshalb steht
+           hier und nur hier, in welchen Topf es kommt. Die Quote gilt JE Topf:
+           eine Klassenseite kann den Notizen keinen Platz mehr wegnehmen. */
+        $kat = $this->NotesMedienTopf($quelle, true);
         if ($kat <= 0) {
             return $this->NotesFehler('no_category');
         }
@@ -205,11 +315,11 @@ trait NotesMedia
         return $frei;
     }
 
-    /** Loescht nur, was wirklich in der Notizen-Kategorie liegt. */
+    /** Loescht nur, was wirklich in einem unserer Toepfe liegt. */
     private function NotesDeleteMedia(array $ids): void
     {
-        $kat = $this->NotesMediaCategory(false);
-        if ($kat <= 0) {
+        $toepfe = $this->NotesMedienToepfe();
+        if ($toepfe === []) {
             return;
         }
         foreach ($ids as $id) {
@@ -217,7 +327,7 @@ trait NotesMedia
             if ($id <= 0 || !IPS_MediaExists($id)) {
                 continue;
             }
-            if (IPS_GetParent($id) !== $kat) {
+            if (!in_array(IPS_GetParent($id), $toepfe, true)) {
                 continue;
             }
             @IPS_DeleteMedia($id, true);
@@ -303,7 +413,6 @@ trait NotesMedia
      */
     private function NotesAttachData(string $noteId, int $mediaId, bool $nurArt = false): array
     {
-        $kat = $this->NotesMediaCategory(false);
         if ($noteId === '') {
             if (!in_array($mediaId, $this->NotesProposalAttachmentIds(), true)) {
                 return $this->NotesFehler('forbidden');
@@ -328,12 +437,11 @@ trait NotesMedia
      * und die Karten der Klassenseiten. Die BERECHTIGUNG prueft jeder Aufrufer
      * selbst — er allein weiss, in welchem Bestand die Kennung stehen muss.
      * Hier bleibt nur, was fuer beide gleich ist: liegt die Datei wirklich in
-     * der Notizen-Kategorie, und passt sie durch das Relay.
+     * einem unserer Toepfe, und passt sie durch das Relay.
      */
     private function NotesMediaAusgeben(int $mediaId, bool $nurArt = false): array
     {
-        $kat = $this->NotesMediaCategory(false);
-        if ($mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
+        if (!$this->NotesMedienUnser($mediaId)) {
             return $this->NotesFehler('forbidden');
         }
         $b64 = (string)IPS_GetMediaContent($mediaId);
@@ -366,13 +474,12 @@ trait NotesMedia
      * nur als erste, nicht scrollbare Seite rendert; ueber diese Adresse uebernimmt
      * der System-Viewer.
      *
-     * ZWEI Pruefungen: Die ID muss in einer Notiz stehen UND ihr Vater muss die
-     * Notizen-Kategorie sein. Die erste allein reicht nicht — sie faengt keinen
+     * ZWEI Pruefungen: Die ID muss in einer Notiz stehen UND ihr Vater muss einer
+     * unserer Toepfe sein. Die erste allein reicht nicht — sie faengt keinen
      * verdorbenen Index, der auf einen Avatar oder einen Tonschnipsel zeigt.
      */
     private function HandleNotesMediaFile(int $mediaId): void
     {
-        $kat = $this->NotesMediaCategory(false);
         // Zwei Quellen sind erlaubt: die Anhaenge bestehender Notizen UND die
         // Anhaenge noch offener Mail-Vorschlaege. Letztere braucht man, um VOR dem
         // Uebernehmen hineinzusehen — ohne das waehlt man blind aus, welche Datei
@@ -381,10 +488,10 @@ trait NotesMedia
         // Notizen sind bewusst gemeinsam.
         /* DREI Quellen, seit die Klassenseiten einen eigenen Bestand haben.
            Ohne den dritten Topf antwortet jedes Kartenbild mit 403 — die
-           Adresse ist dieselbe (/v1/notes/media/<id>), weil die Dateien in
-           derselben Kategorie liegen und die Web-App sie fest verdrahtet. */
+           Adresse ist dieselbe (/v1/notes/media/<id>), egal in welcher Kategorie
+           die Datei liegt, und die Web-App hat sie fest verdrahtet. */
         $erlaubt = in_array($mediaId, $this->NotesLiveMediaIds(), true);
-        if (!$erlaubt || $mediaId <= 0 || !IPS_MediaExists($mediaId) || $kat <= 0 || IPS_GetParent($mediaId) !== $kat) {
+        if (!$erlaubt || !$this->NotesMedienUnser($mediaId)) {
             $this->SendApiError('forbidden', 'Not a note attachment', 403);
             return;
         }
@@ -455,8 +562,8 @@ trait NotesMedia
 
     private function NotesSweepOrphans(): int
     {
-        $kat = $this->NotesMediaCategory(false);
-        if ($kat <= 0) {
+        $toepfe = $this->NotesMedienToepfe();
+        if ($toepfe === []) {
             return 0;
         }
         // Unter der Notizen-Sperre, denn NotesStorable() schreibt einen Probewert und
@@ -481,7 +588,8 @@ trait NotesMedia
                 return 0;
             }
             try {
-                return $this->NotesSweepOrphansLocked($kat);
+                $this->NotesMedienEinsortieren();
+                return $this->NotesSweepOrphansLocked($this->NotesMedienToepfe());
             } finally {
                 IPS_SemaphoreLeave($eduLock);
             }
@@ -490,8 +598,75 @@ trait NotesMedia
         }
     }
 
-    /** Nur aufrufen, wenn die Notizen-Sperre gehalten wird. */
-    private function NotesSweepOrphansLocked(int $kat): int
+    /**
+     * Jede Datei in den Topf ihrer Quelle.
+     *
+     * Kein einmaliger Umzug, sondern eine Zusicherung, die bei jedem Durchgang
+     * wieder gilt: eine Seite darf die Quelle wechseln (eine Klassenseite, die
+     * es spaeter auch in LOGINEO gibt), und dann folgt ihre Datei. Der Umzug
+     * selbst ist ein `IPS_SetParent` — die KENNUNG bleibt, also bleibt auch
+     * jeder Verweis darauf gueltig: im Bestand, in der App, in der Kachel und
+     * in der Datei-Route. Es gibt nichts nachzuziehen.
+     *
+     * Angefasst wird NUR, was schon in einem unserer Toepfe liegt. Eine
+     * verdorbene Kennung im Bestand risse sonst ein fremdes Medienobjekt aus
+     * seinem Baum — ein Avatar, ein Tonschnipsel.
+     *
+     * Nur aufrufen, wenn beide Sperren gehalten werden.
+     */
+    private function NotesMedienEinsortieren(): int
+    {
+        /* Ohne die Wachen des Aufraeumers (NotesStorable & Co.), und das mit
+           Absicht: ein unlesbarer Bestand liefert hier eine LEERE Kartenliste,
+           und die heisst „nichts verschieben". Beim Loeschen hiesse dieselbe
+           leere Liste „alles ist eine Waise" — deshalb steht die Wache dort. */
+        $eigene = $this->NotesMedienToepfe();
+        if ($eigene === []) {
+            return 0;
+        }
+        $umgezogen = 0;
+        foreach ($this->EduStoreRead()['notes'] as $karte) {
+            if (!is_array($karte)) {
+                continue;
+            }
+            $ids = EduStoreCalc::AnhangIds([$karte]);
+            if ($ids === []) {
+                continue;
+            }
+            /* Erst hier anlegen, nicht je Karte: eine Karte ohne Datei soll
+               keinen Topf erzeugen, den nie etwas fuellt. */
+            $ziel = $this->NotesMedienTopf(EduStoreCalc::Quelle($karte), true);
+            if ($ziel <= 0) {
+                continue;
+            }
+            foreach ($ids as $mid) {
+                $mid = (int)$mid;
+                if ($mid <= 0 || !IPS_MediaExists($mid)) {
+                    continue;
+                }
+                $vater = IPS_GetParent($mid);
+                if ($vater === $ziel || !in_array($vater, $eigene, true)) {
+                    continue;
+                }
+                @IPS_SetParent($mid, $ziel);
+                $umgezogen++;
+            }
+        }
+        if ($umgezogen > 0) {
+            $this->LogMessage(sprintf(
+                'SymDo Notizen: %d Datei(en) der Schulseiten in ihren Ordner unter „%s" verschoben.',
+                $umgezogen, self::SCHULE_CATEGORY_NAME
+            ), KL_NOTIFY);
+        }
+        return $umgezogen;
+    }
+
+    /**
+     * Nur aufrufen, wenn die Notizen-Sperre gehalten wird.
+     *
+     * @param list<int> $toepfe alle Kategorien, die uns gehoeren
+     */
+    private function NotesSweepOrphansLocked(array $toepfe): int
     {
         // Ohne benutzbaren Bestand NICHT aufraeumen. Ein unlesbares Attribut liefert
         // eine leere Notizliste — dann saehe JEDER Anhang wie eine Waise aus und der
@@ -516,16 +691,18 @@ trait NotesMedia
         // werden, bloss weil der Bestand ihn (noch) nicht nennt.
         $grenze = time() - self::NOTES_SWEEP_GRACE;
         $weg = 0;
-        foreach (IPS_GetChildrenIDs($kat) as $kind) {
-            if (!IPS_MediaExists($kind) || in_array($kind, $lebt, true)) {
-                continue;
+        foreach ($toepfe as $kat) {
+            foreach (IPS_GetChildrenIDs((int)$kat) as $kind) {
+                if (!IPS_MediaExists($kind) || in_array($kind, $lebt, true)) {
+                    continue;
+                }
+                $m = @IPS_GetMedia($kind);
+                if (is_array($m) && (int)($m['MediaUpdated'] ?? 0) > $grenze) {
+                    continue;
+                }
+                @IPS_DeleteMedia($kind, true);
+                $weg++;
             }
-            $m = @IPS_GetMedia($kind);
-            if (is_array($m) && (int)($m['MediaUpdated'] ?? 0) > $grenze) {
-                continue;
-            }
-            @IPS_DeleteMedia($kind, true);
-            $weg++;
         }
         if ($weg > 0) {
             $this->LogMessage(sprintf(

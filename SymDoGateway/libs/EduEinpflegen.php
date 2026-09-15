@@ -286,7 +286,7 @@ trait EduEinpflegen
                     continue;
                 }
                 $mini = $this->EduVorschau((string)($kartenDateien[$k]['preview'] ?? ''),
-                    (string)$a['name']);
+                    (string)$a['name'], EduStoreCalc::Quelle($karte));
                 if ($mini > 0) {
                     $thumbs[$k] = $mini;
                     /* AUCH das ist ein frisch angelegtes Medienobjekt. Es fehlte

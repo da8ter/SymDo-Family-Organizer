@@ -161,8 +161,11 @@ final class Spiegelprobe
         return $raus;
     }
 
-    private function EduVorschau(string $url, string $name): int
+    /** Welcher Topf je Vorschaubild verlangt wurde. */
+    public array $toepfe = [];
+    private function EduVorschau(string $url, string $name, string $quelle): int
     {
+        $this->toepfe[] = $quelle;
         $id = ++$this->naechsteMedienId;
         $this->angelegt[] = $id;
         return $id;

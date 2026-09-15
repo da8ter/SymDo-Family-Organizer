@@ -270,7 +270,7 @@ trait NotesAi
             if (!in_array($mid, $gewuenscht, true)) {
                 continue;
             }
-            if ($mid <= 0 || !IPS_MediaExists($mid) || $this->NotesMediaCategory(false) !== IPS_GetParent($mid)) {
+            if (!$this->NotesMedienUnser($mid)) {
                 continue;
             }
             if (count($att) >= self::NOTE_ATTACH_MAX) {
