@@ -68,7 +68,13 @@ function ohneKommentare(string $php): string
     $raus = '';
     foreach (token_get_all('<?php ' . $php) as $t) {
         if (is_array($t)) {
-            if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) {
+            /* T_OPEN_TAG muss MIT raus: sonst gibt diese Funktion fuer einen
+               LEEREN Rumpf „<?php " zurueck, und jede Probe der Form
+               „$rumpf !== ''" ist von da an wahr — auch wenn es die Funktion
+               gar nicht mehr gibt. Genau so ist der LOGINEO-Riegel am
+               15.09.2026 gruen geblieben, nachdem seine Haelften in eine
+               andere Datei gezogen waren. */
+            if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT || $t[0] === T_OPEN_TAG) {
                 continue;
             }
             $raus .= $t[1];
@@ -174,11 +180,20 @@ foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'NotesSaveAttachment',
    Bestand anfasst, macht das unmoeglich — und es faellt erst auf, wenn der
    Umzug im Betrieb in die falsche Instanz schreibt. */
 $moodle = (string)file_get_contents(__DIR__ . '/../libs/Moodle.php');
+$lesenDatei = (string)file_get_contents(__DIR__ . '/../libs/MoodleLesen.php');
+/* Und sie stehen in VERSCHIEDENEN Dateien: die lesende Haelfte in
+   `MoodleLesen.php`, die der Scanner einbindet, die schreibende in
+   `Moodle.php`, die nur das Gateway hat. Steht eine im falschen Haus, faellt
+   das erst beim Deploy auf — als „Call to undefined method" mitten im Lauf. */
 foreach (['MoodleAufgabenZeilen' => 'MoodleAufgabenEinpflegen',
-          'MoodleTermineZeilen'  => 'MoodleTermineEinpflegen'] as $liest => $schreibt) {
-    $lesen = ohneKommentare(rumpf($moodle, $liest));
-    pruefe('Beide Haelften stehen in der Datei: ' . $liest,
-        $lesen !== '' && rumpf($moodle, $schreibt) !== '', true);
+          'MoodleTermineZeilen'  => 'MoodleTermineEinpflegen',
+          'MoodleKontoErnten'    => 'MoodleErnteEinpflegen'] as $liest => $schreibt) {
+    $lesen = ohneKommentare(rumpf($lesenDatei, $liest));
+    pruefe('Die lesende Haelfte steht in MoodleLesen: ' . $liest, $lesen !== '', true);
+    pruefe('… und die schreibende in Moodle: ' . $schreibt,
+        rumpf($moodle, $schreibt) !== '', true);
+    pruefe('… und nicht umgekehrt',
+        [rumpf($moodle, $liest), rumpf($lesenDatei, $schreibt)], ['', '']);
     foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'HomeworkImportieren',
               'MailStoreProposal', 'MailNotifyProposal', 'MoodleMerken',
               'MoodleGesehen', 'NotesSaveAttachment'] as $verboten) {
@@ -189,8 +204,19 @@ foreach (['MoodleAufgabenZeilen' => 'MoodleAufgabenEinpflegen',
 /* Und die alten, schreibenden Namen sind weg — sonst bliebe ein zweiter Weg
    stehen, den niemand mehr pflegt. */
 foreach (['function MoodleAufgaben(', 'function MoodleTermine('] as $alt) {
-    pruefe('Kein alter Mischweg mehr: ' . $alt, str_contains($moodle, $alt), false);
+    pruefe('Kein alter Mischweg mehr: ' . $alt,
+        str_contains($moodle . $lesenDatei, $alt), false);
 }
+/* Die lesende Haelfte darf nirgends an einen Speicher fassen — sie laeuft in
+   einer Instanz, die keinen hat. */
+$lesenOhne = ohneKommentare($lesenDatei);
+foreach (['ReadAttribute', 'WriteAttribute', 'IPS_Semaphore', 'MoodleTokenVon',
+          'MoodleProp', 'EduStoreRead', 'NotesSaveAttachment'] as $verboten) {
+    pruefe('MoodleLesen fasst ' . $verboten . ' nicht an',
+        str_contains($lesenOhne, $verboten), false);
+}
+/* Die Probe selbst muss beissen: ein leerer Rumpf darf nicht als „da" gelten. */
+pruefe('Ein leerer Rumpf bleibt leer', ohneKommentare(''), '');
 
 /* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.
  *

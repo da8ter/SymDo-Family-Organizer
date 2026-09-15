@@ -29,6 +29,7 @@ require_once __DIR__ . '/../libs/EduStoreCalc.php';
 require_once __DIR__ . '/../../libs/AiProvider.php';
 require_once __DIR__ . '/../../libs/AiRecipePage.php';
 require_once __DIR__ . '/../libs/MoodleCalc.php';
+require_once __DIR__ . '/../libs/MoodleLesen.php';
 require_once __DIR__ . '/../libs/EduLesen.php';
 require_once __DIR__ . '/../libs/EduMaps.php';
 require_once __DIR__ . '/../libs/Moodle.php';
@@ -58,6 +59,7 @@ final class MoodleSpiegelProbe
        Zähler — eine Klassenmethode schlägt die gleichnamige ihres Traits. */
     use EduLesen;
     use EduMaps;
+    use MoodleLesen;
     use Moodle;
     use EduEinpflegen;
 

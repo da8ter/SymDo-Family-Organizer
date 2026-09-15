@@ -36,6 +36,7 @@ require_once __DIR__ . '/libs/EduEinpflegen.php';
 require_once __DIR__ . '/libs/EduStore.php';
 require_once __DIR__ . '/libs/WebUntis.php';
 require_once __DIR__ . '/libs/MoodleCalc.php';
+require_once __DIR__ . '/libs/MoodleLesen.php';
 require_once __DIR__ . '/libs/Moodle.php';
 
 /**
@@ -90,6 +91,7 @@ class SymDoGateway extends IPSModuleStrict
     use EduEinpflegen;
     use EduStore;
     use WebUntis;
+    use MoodleLesen;
     use Moodle;
 
     private const MODULE_GUID = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
