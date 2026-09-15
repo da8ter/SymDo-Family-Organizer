@@ -295,6 +295,24 @@ pruefe('Abgeschaltet: nichts ausgewertet', $q->moodleAnalysiert, []);
 pruefe('… und NICHTS vermerkt', $q->moodleGemerkt, []);
 pruefe('… gezaehlt wird die Aenderung trotzdem', $erg['geaendert'], 2);
 
+// ── 9b. Ein VERSPAETETES Ergebnis nach dem Widerruf ──────────────────────
+/* Der Auftrag an den Scanner geht raus, waehrend die KI noch erlaubt ist; sein
+   Ergebnis trifft Minuten spaeter ein — und bis dahin kann der Nutzer seine
+   Einwilligung zurueckgezogen haben. Der Widerruf leert die Warteschlange, aber
+   er kann nicht verhindern, dass der Umschlag danach NEUE Auftraege erzeugt.
+   Deshalb wird die Freigabe beim EINPFLEGEN geprueft, nicht nur beim
+   Beauftragen. Gemeldet von einem externen Codereview am 15.09.2026 (F9). */
+$w = new Auswerteprobe();
+$w->gesehen = ['edu:' . md5($seite['url']) . '|alt:1'];   // nicht der erste Lauf
+$w->an = false;                                            // die Einwilligung ist weg
+$erg = $w->Auswerten($seite, karten(3, 9000));
+pruefe('Widerruf vor dem Umschlag: keine Auswertung', $w->analysiert, []);
+pruefe('… und NICHTS vermerkt (die Karten kommen wieder)', $w->gemerkt, []);
+pruefe('… die Aenderung wird trotzdem gezaehlt', $erg['geaendert'], 3);
+$w->an = true;
+$erg = $w->Auswerten($seite, karten(3, 9000));
+pruefe('Nach erneuter Einwilligung laeuft es wieder', count($w->analysiert), 3);
+
 // ── 10. Beide Wege gehen durch DIESELBE Tuer ─────────────────────────────
 $maps = (string)file_get_contents(__DIR__ . '/../libs/EduMaps.php');
 $pfl  = (string)file_get_contents(__DIR__ . '/../libs/EduEinpflegen.php');
@@ -304,6 +322,10 @@ pruefe('Der eigene Lauf ruft die Auswertung',
     str_contains($maps, '$aus = $this->EduKartenAuswerten($seite, $karten, $schonAnalysiert, $alles);'), true);
 pruefe('Der Umschlag-Weg auch',
     str_contains($pfl, '$aus = $this->EduKartenAuswerten($seite, $karten, $analysiert, $alles);'), true);
+/* Und die Freigabe wird IN der Schleife geprueft, nicht davor: nur dann gilt
+   sie auch fuer ein Ergebnis, das nach dem Widerruf eintrifft. */
+pruefe('Die Freigabe wird beim Auswerten geprueft',
+    str_contains($maps, '$auswerten  = $this->EduAuswertenAn($quelle);'), true);
 /* Es darf nur EINE Schleife geben, die `EduKarteAnalysieren` ruft. Eine zweite
    waere eine zweite Politik. */
 pruefe('Nur eine Stelle ruft die Auswertung einer Karte',
