@@ -40,13 +40,20 @@ require_once __DIR__ . '/../libs/AiJobRunner.php';
  * synchron hier herein.** Umgekehrt ist es erlaubt — ein Ruf ins Gateway
  * kostet die Dauer eines Hooks, also Millisekunden.
  *
- * Zwei Quellen kennt er heute:
- *   „probe" — der Selbsttest des Kanals, wahlweise mit Verweildauer. Er
- *             beweist den Weg, bevor ein echter Scan darauf faehrt.
- *   „doku"  — das Handbuch-Verzeichnis. Es kroch frueher im Gateway: drei
- *             Sekunden alle acht, eine Woche lang, also 37 % Dauerlast in
- *             genau der Spur, die auch die App bedient.
- * Die uebrigen (edu, moodle, mail, briefing) ziehen einzeln nach.
+ * Was er heute bedient:
+ *   „probe"   — der Selbsttest des Kanals, wahlweise mit Verweildauer. Er
+ *               beweist den Weg, bevor ein echter Scan darauf faehrt.
+ *   „auftrag" — die Warteschlange der KI-Aufrufe. Ueber sie laufen inzwischen
+ *               auch Klassenseiten, LOGINEO, Postfach und Briefing.
+ *   „doku"    — das Handbuch-Verzeichnis. Es kroch frueher im Gateway: drei
+ *               Sekunden alle acht, eine Woche lang, also 37 % Dauerlast in
+ *               genau der Spur, die auch die App bedient.
+ *   „edu"     — die Klassenseiten holen und zerlegen.
+ *   „moodle"  — LOGINEO: Kurse, Karten, Aufgaben, Abstimmungen, Termine.
+ *
+ * Draussen bleibt WebUntis (die Anmeldung ist die einzige unumkehrbare
+ * Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto) und
+ * der Mail-Webhook (sein Zustand IST die Spool-Datei).
  */
 class SymDoScanner extends IPSModuleStrict
 {

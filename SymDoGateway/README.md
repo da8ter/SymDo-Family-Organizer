@@ -653,6 +653,32 @@ Dauer in Millisekunden. Die Datei zu löschen schaltet die Messung wieder ab;
 bei 20 MB hört sie von selbst auf. Adressen stehen gekürzt darin, Kennungen
 und Parameter gar nicht.
 
+## 19a. Die zweite Spur (SymDo Scanner)
+
+Alles Lange läuft seit dem 15.09.2026 **nicht mehr hier**. Das Gateway legt
+einen Auftrag ab, eine Instanz des Moduls **SymDo Scanner** arbeitet ihn in
+ihrer eigenen Reihe ab, und das Gateway pflegt das Ergebnis in einem kurzen
+Griff ein — Millisekunden statt Minuten.
+
+Die Instanzen legt das Gateway beim Übernehmen **selbst** an; sie stehen neben
+ihm im Objektbaum. Einzurichten ist nichts. Was sie tun und wie man sie wieder
+abschaltet, steht im Handbuch des Scanners.
+
+Umgezogen sind: die Warteschlange der KI-Aufrufe (Foto, Zutaten, Diktat und im
+Hintergrund Klassenseiten, LOGINEO, Postfach, Briefing), das Handbuch-
+Verzeichnis, die Klassenseiten und LOGINEO.
+
+**Bewusst hiergeblieben**, jeweils mit Grund:
+
+- **WebUntis.** Die Anmeldung ist die einzige unumkehrbare Handlung des ganzen
+  Umbaus — drei Fehlversuche sperren das Schulkonto.
+- **Der Mail-Webhook.** Sein Zustand *ist* die Spool-Datei: sie trägt den
+  vollen Text und ist zugleich der Wiederholungsvermerk.
+- **Die Trockenläufe und Vorschauen.** „Jetzt prüfen", „Verbindung testen", die
+  Briefing-Vorschau: dort wartet jemand vor dem Formular auf eine Antwort.
+- **Jede Ablage.** Notizen, Aufgaben, Termine, Medien, Vorschläge und die
+  Merker bleiben hier — ein Bestand, ein Besitzer.
+
 ## 20. PHP-Befehlsreferenz
 
 ### SymDo Gateway (`TGW_`)
