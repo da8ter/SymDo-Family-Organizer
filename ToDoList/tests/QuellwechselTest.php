@@ -58,9 +58,10 @@ final class WechselProbe extends IPSModuleStrict
     }
 
     /** @param list<array{id:string}> $fremd der Bestand der Gegenstelle */
-    public function pWechsel(string $key, int $instanz, array $fremd = []): void
+    public function pWechsel(string $key, int $instanz, array $fremd = [], bool $eindeutig = true): void
     {
-        (new ReflectionMethod(self::class, 'ExtListQuelleWechsel'))->invoke($this, $key, $instanz, $fremd);
+        (new ReflectionMethod(self::class, 'ExtListQuelleWechsel'))
+            ->invoke($this, $key, $instanz, $fremd, $eindeutig);
     }
     public array $debug = [];
     public function SendDebug(string $Message, string $Data, int $Format): bool
@@ -139,7 +140,9 @@ pruefe('Der Abgleich uebergeht stillgelegte Kennungen',
     str_contains($quelle, '$fremde = $this->ExtListFremdRead()[$key] ?? [];')
     && str_contains($quelle, '!isset($fremde[$id])'), true);
 pruefe('Und er erkennt den Wechsel vor dem Vergleich',
-    str_contains($quelle, '$this->ExtListQuelleWechsel($key, $quelle->InstanceID(), $fremd);'), true);
+    str_contains($quelle, '$this->ExtListQuelleWechsel($key, $quelle->InstanceID(), $fremd,'), true);
+pruefe('… und fragt die Quelle, ob ihre Kennungen eindeutig sind',
+    str_contains($quelle, '$quelle->KennungenEindeutig());'), true);
 
 // ══ Der Altbestand ═══════════════════════════════════════════════════════
 /* Die Quellkennung gibt es erst seit dieser Fassung. Beim ersten Lauf danach
@@ -179,6 +182,33 @@ $c->pSetzen('ExtListKnownIds', ['alexa' => ['a1' => 1]]);
 $c->pWechsel('alexa', 300, []);
 pruefe('Altbestand, leere Antwort: vorsichtig stillgelegt',
     array_keys((array)($c->pFremd()['alexa'] ?? [])), ['a1']);
+
+/* Bring benutzt den ARTIKELNAMEN als Kennung. „Milch" steht in jeder zweiten
+   Einkaufsliste — eine gemeinsame Kennung beweist dort also gar nichts. Ohne
+   diese Unterscheidung hielt der Altbestands-Schutz eine fremde Liste fuer
+   dieselbe und loeschte alles, was nicht zufaellig gleich heisst. Gemeldet von
+   einem externen Codereview am 15.09.2026. */
+$b2 = new WechselProbe(8816);
+$b2->Create();
+$b2->pSetzen('ExtListKnownIds', ['bring' => ['Milch' => 1, 'Brot' => 1]]);
+$b2->pWechsel('bring', 500, dort('Milch', 'Butter'), false);
+pruefe('Bring, Altbestand: gemeinsamer NAME beweist nichts',
+    array_keys((array)($b2->pFremd()['bring'] ?? [])), ['Milch', 'Brot']);
+pruefe('… und der Merkposten ist weg', $b2->pBekannt(), []);
+
+/* Bei Alexa ist die Kennung vergeben und weltweit eindeutig — dort zaehlt die
+   Ueberschneidung weiterhin. */
+$b3 = new WechselProbe(8817);
+$b3->Create();
+$b3->pSetzen('ExtListKnownIds', ['alexa' => ['uuid-1' => 1, 'uuid-2' => 1]]);
+$b3->pWechsel('alexa', 500, dort('uuid-1', 'uuid-9'), true);
+pruefe('Alexa, Altbestand: gemeinsame Kennung zaehlt', $b3->pFremd(), []);
+
+/* Und die Quellen sagen selbst, was fuer sie gilt. */
+require_once __DIR__ . '/../../libs/ListSource.php';
+pruefe('Alexa nennt seine Kennungen eindeutig',
+    (new ListSourceAlexa(1))->KennungenEindeutig(), true);
+pruefe('Bring nicht', (new ListSourceBring(1))->KennungenEindeutig(), false);
 
 $d = new WechselProbe(8815);
 $d->Create();

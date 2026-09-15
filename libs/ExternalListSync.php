@@ -140,7 +140,8 @@ trait ExternalListSync
      * @param list<array{id:string,name:string,done:bool,at:int}> $fremd der eben
      *        gelesene Bestand der Gegenstelle
      */
-    private function ExtListQuelleWechsel(string $key, int $instanz, array $fremd): void
+    private function ExtListQuelleWechsel(string $key, int $instanz, array $fremd,
+        bool $kennungenEindeutig = true): void
     {
         $quellen = json_decode((string)@$this->ReadAttributeString('ExtListQuellen'), true);
         $quellen = is_array($quellen) ? $quellen : [];
@@ -156,17 +157,36 @@ trait ExternalListSync
             return;   // nichts Altes — erste Einrichtung im Wortsinn
         }
         if ($bisher === 0) {
-            $dort = [];
-            foreach ($fremd as $f) {
-                $dort[] = (string)($f['id'] ?? '');
+            /* Sind die Kennungen NICHT weltweit eindeutig, beweist eine
+               gemeinsame gar nichts: bei Bring IST der Artikelname die
+               Kennung, und „Milch" steht in jeder zweiten Einkaufsliste. Dann
+               bleibt nur die vorsichtige Richtung — stilllegen.
+
+               Sie kostet dort auch fast nichts: die offenen Eintraege gehen
+               ueber den normalen Weg hinaus, und weil die Kennung der Name ist,
+               findet der naechste Lauf sie unter demselben Namen wieder und
+               verknuepft sie. Ein Duplikat kann dabei gar nicht entstehen —
+               zwei Eintraege mit demselben Namen waeren dieselbe Kennung. */
+            if (!$kennungenEindeutig) {
+                $this->SendDebug('ExtListSync', sprintf(
+                    '%s: Kennungen sind nicht eindeutig — die %d gemerkten werden '
+                    . 'vorsichtshalber stillgelegt', $key, count($gemerkt)), 0);
+                $dort = [];
+            } else {
+                $dort = [];
+                foreach ($fremd as $f) {
+                    $dort[] = (string)($f['id'] ?? '');
+                }
             }
-            if (array_intersect($gemerkt, $dort) !== []) {
+            if ($kennungenEindeutig && array_intersect($gemerkt, $dort) !== []) {
                 // Mindestens eine bekannte Kennung liegt dort: dieselbe Liste.
                 return;
             }
-            $this->SendDebug('ExtListSync', sprintf(
-                '%s: keine der %d gemerkten Kennungen steht in der gewaehlten Liste — '
-                . 'als Wechsel gewertet', $key, count($gemerkt)), 0);
+            if ($kennungenEindeutig) {
+                $this->SendDebug('ExtListSync', sprintf(
+                    '%s: keine der %d gemerkten Kennungen steht in der gewaehlten Liste — '
+                    . 'als Wechsel gewertet', $key, count($gemerkt)), 0);
+            }
         }
 
         $fremdIds = $this->ExtListFremdRead();
@@ -347,7 +367,8 @@ trait ExternalListSync
            Ein Wechsel ist KEINE Loeschung. Die Kennungen der alten Liste werden
            deshalb dauerhaft als fremd vermerkt und zaehlen von da an nicht mehr
            als „verschwunden" — sie gehoeren einer anderen Gegenstelle. */
-        $this->ExtListQuelleWechsel($key, $quelle->InstanceID(), $fremd);
+        $this->ExtListQuelleWechsel($key, $quelle->InstanceID(), $fremd,
+            $quelle->KennungenEindeutig());
         // Die Kennungen gelten JE DIENST — und es sind MEHRERE moeglich.
         //
         // Warum eine Menge und nicht eine Kennung: Alexa dedupliziert nicht, dort

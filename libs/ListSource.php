@@ -105,6 +105,25 @@ abstract class ListSource
     abstract public function Key(): string;
 
     /**
+     * Ist eine Kennung dieser Gegenstelle WELTWEIT eindeutig?
+     *
+     * Bei Alexa ja: `itemId` ist eine vergebene Kennung, sie kommt in keiner
+     * zweiten Liste vor. Bei Bring nein — dort IST der Artikelname die
+     * Kennung, und „Milch" steht in jeder zweiten Einkaufsliste.
+     *
+     * Daran haengt genau eine Entscheidung, aber eine teure: beim ERSTEN
+     * Abgleich nach der Modul-Aktualisierung gibt es noch keine gespeicherte
+     * Quellinstanz, und dann wird am Bestand der Gegenstelle gemessen, ob es
+     * noch dieselbe Liste ist. Eine gemeinsame Kennung heisst dort „dieselbe
+     * Liste" — was bei Bring nichts beweist. Gemeldet von einem externen
+     * Codereview am 15.09.2026.
+     */
+    public function KennungenEindeutig(): bool
+    {
+        return true;
+    }
+
+    /**
      * Der Bestand der Gegenstelle, vereinheitlicht auf
      * `[['id' => string, 'name' => string, 'done' => bool, 'at' => int], …]`.
      *
@@ -242,6 +261,12 @@ class ListSourceBring extends ListSource
     public function Key(): string
     {
         return 'bring';
+    }
+
+    /** Bei Bring IST der Artikelname die Kennung — siehe Read(). */
+    public function KennungenEindeutig(): bool
+    {
+        return false;
     }
 
     public function Read(): array|false
