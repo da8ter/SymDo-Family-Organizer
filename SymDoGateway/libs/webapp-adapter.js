@@ -187,17 +187,32 @@
     if (window.__symdoUnauthorized) { window.__symdoUnauthorized(); }
   }
 
-  // Netzwerkfehler auf der lokalen Basis (z. B. Heimnetz verlassen) → einmal auf
-  // Connect zurückfallen und dort bleiben.
-  function fetchEP(path, opt) {
+  // Netzwerkfehler auf der lokalen Basis (z. B. Heimnetz verlassen) → auf Connect
+  // umschalten und dort bleiben.
+  //
+  // WIEDERHOLT wird dabei nur, was eine Wiederholung auch verträgt. Ein
+  // Netzwerkfehler heißt „keine Antwort erhalten", nicht „nicht ausgeführt": der
+  // Server kann den Schreibvorgang längst erledigt haben, während die Antwort auf
+  // dem abbrechenden WLAN verlorenging. Ein blinder zweiter Anlauf legte dann eine
+  // zweite Notiz an oder reihte einen zweiten — bezahlten — KI-Auftrag ein. Genau
+  // das hat ein externer Codereview am 14.09.2026 gemeldet (F3).
+  //
+  // Lesende Abrufe sind unbedenklich. Bei den Listenaktionen ist es die
+  // `clientActionId`: der Server merkt sich sie und führt dieselbe Aktion kein
+  // zweites Mal aus (ApiRouter::ReserveAction). Alles andere — /pair, Notizen,
+  // KI-Aufträge — meldet den Fehler nach oben; die Basis steht dann schon auf
+  // Connect, der nächste Versuch des Nutzers läuft also dort.
+  function fetchEP(path, opt, wiederholbar) {
     return fetch(EP + path, opt).catch(function (e) {
-      if (EP !== API) { EP = API; return fetch(EP + path, opt); }
-      throw e;
+      if (EP === API) { throw e; }
+      EP = API;
+      if (!wiederholbar) { throw e; }
+      return fetch(EP + path, opt);
     });
   }
   function apiGet(path) {
     return ensureBase().then(function () {
-      return fetchEP(path, { headers: baseHeaders(), credentials: 'omit' }).then(function (r) {
+      return fetchEP(path, { headers: baseHeaders(), credentials: 'omit' }, true).then(function (r) {
         if (r.status === 401) { onUnauthorized(); throw new Error('unauthorized'); }
         return r.json();
       });
@@ -206,8 +221,12 @@
   function apiPost(path, body) {
     var h = baseHeaders(); h['Content-Type'] = 'application/json';
     var opt = { method: 'POST', headers: h, credentials: 'omit', body: JSON.stringify(body || {}) };
+    // Nur mit Wiederholungsschutz auf dem Server darf ein Schreibvorgang erneut
+    // hinausgehen (siehe fetchEP).
+    var sicher = !!(body && Object.prototype.hasOwnProperty.call(body, 'clientActionId')
+      && String(body.clientActionId || '') !== '');
     return ensureBase().then(function () {
-      return fetchEP(path, opt).then(function (r) {
+      return fetchEP(path, opt, sicher).then(function (r) {
         if (r.status === 401) { onUnauthorized(); throw new Error('unauthorized'); }
         return r.json().then(function (j) { return { status: r.status, json: j }; });
       });
