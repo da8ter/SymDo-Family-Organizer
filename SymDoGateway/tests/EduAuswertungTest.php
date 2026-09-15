@@ -31,6 +31,9 @@ require_once __DIR__ . '/../../libs/AiProvider.php';
 require_once __DIR__ . '/../../libs/AiRecipePage.php';
 require_once __DIR__ . '/../../libs/ScanKanalCalc.php';
 require_once __DIR__ . '/../libs/EduMaps.php';
+require_once __DIR__ . '/../libs/MoodleCalc.php';
+require_once __DIR__ . '/../libs/MoodleLesen.php';
+require_once __DIR__ . '/../libs/Moodle.php';
 
 $fehler = 0;
 $anzahl = 0;
@@ -56,6 +59,10 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
 final class Auswerteprobe
 {
     use EduMaps;
+    /* Die Ruecknahme greift in BEIDE Merker — dafuer muss der echte
+       LOGINEO-Teil mit dabei sein. */
+    use MoodleLesen;
+    use Moodle;
 
     /** @var list<string> Was im Merker steht ("topf|schluessel"). */
     public array $gesehen = [];
@@ -117,6 +124,38 @@ final class Auswerteprobe
     {
         $this->moodleAnalysiert[] = (string)$karte['srcId'];
         return $this->erfolg;
+    }
+    private function MoodleSeenKarte(): array
+    {
+        $raus = [];
+        foreach ($this->moodleGesehen as $e) {
+            [$topf, $s] = explode('|', $e, 2);
+            $raus[$topf][] = $s;
+        }
+        return $raus;
+    }
+    public function WriteAttributeString(string $name, string $wert): void
+    {
+        if ($name !== 'MoodleSeen') {
+            return;
+        }
+        $neu = [];
+        foreach ((array)json_decode($wert, true) as $topf => $liste) {
+            foreach ((array)$liste as $s) {
+                $neu[] = $topf . '|' . $s;
+            }
+        }
+        $this->moodleGesehen = $neu;
+    }
+    /** Die Ruecknahme eines gescheiterten Auftrags. */
+    public function Zuruecknehmen(array $merker): void
+    {
+        (new ReflectionMethod(self::class, 'EduMerkerZuruecknehmen'))->invoke($this, $merker);
+    }
+    private function EduVergessen(string $topf, string $s): void
+    {
+        $this->gesehen = array_values(array_filter($this->gesehen,
+            static fn(string $e): bool => $e !== $topf . '|' . $s));
     }
     private function EduKarteAnalysieren(array $seite, array $karte): bool
     {
@@ -313,6 +352,29 @@ $w->an = true;
 $erg = $w->Auswerten($seite, karten(3, 9000));
 pruefe('Nach erneuter Einwilligung laeuft es wieder', count($w->analysiert), 3);
 
+// ── 9c. Der gescheiterte Auftrag gibt den Merker zurueck ─────────────────
+/* Gemerkt wird beim EINREIHEN — sonst zahlte der naechste Lauf doppelt.
+   Scheitert der Auftrag, muss der Merker zurueck, und zwar in den RICHTIGEN
+   Bestand. Wer hier den falschen anfasst, erreicht zweierlei auf einmal: die
+   gescheiterte Karte bleibt fuer immer „gesehen" (der Elternbrief kaeme nie
+   wieder), und eine fremde, erfolgreich ausgewertete Karte laeuft noch einmal
+   durch die KI. */
+$r = new Auswerteprobe();
+$mtopf = 'moodle:' . md5($mseite['url']);
+$etopf = 'edu:' . md5($seite['url']);
+$r->moodleGesehen = [$mtopf . '|moodle:1:4000', $mtopf . '|moodle:2:4000'];
+$r->gesehen       = [$etopf . '|b1:1000'];
+
+$r->Zuruecknehmen(['quelle' => 'moodle', 'topf' => $mtopf, 'schluessel' => 'moodle:1:4000']);
+pruefe('Der LOGINEO-Merker gibt seine Karte frei',
+    $r->moodleGesehen, [$mtopf . '|moodle:2:4000']);
+pruefe('… und der Klassenseiten-Merker bleibt unberuehrt',
+    $r->gesehen, [$etopf . '|b1:1000']);
+
+$r->Zuruecknehmen(['topf' => $etopf, 'schluessel' => 'b1:1000']);
+pruefe('Ohne Quellenangabe gilt die Klassenseite', $r->gesehen, []);
+pruefe('… und LOGINEO bleibt, wie es war', $r->moodleGesehen, [$mtopf . '|moodle:2:4000']);
+
 // ── 10. Beide Wege gehen durch DIESELBE Tuer ─────────────────────────────
 $maps = (string)file_get_contents(__DIR__ . '/../libs/EduMaps.php');
 $pfl  = (string)file_get_contents(__DIR__ . '/../libs/EduEinpflegen.php');
@@ -333,6 +395,13 @@ pruefe('Nur eine Stelle ruft die Auswertung einer Karte',
 $mo = (string)file_get_contents(__DIR__ . '/../libs/Moodle.php');
 pruefe('LOGINEO hat keine eigene Auswerteschleife mehr',
     str_contains($mo, 'MoodleKarteAnalysieren($'), false);
+/* Und LOGINEO wertet als AUFTRAG aus. Ohne diese Weiche stuenden beim
+   Einpflegen eines Umschlags bis zu fuenf Anbieteraufrufe in der Gateway-Spur
+   — je bis zu fuenfundvierzig Sekunden. */
+pruefe('LOGINEO reiht die Auswertung ein',
+    str_contains($mo, "if (\$this->AiJobMoeglich()) {\n            return \$this->MailAnalyseAuftrag(\$vorschlag,"), true);
+pruefe('… und nennt dabei seine Merker-Quelle',
+    str_contains($mo, "['quelle' => 'moodle',"), true);
 pruefe('… sondern ruft die gemeinsame',
     str_contains($mo, '$aus = $this->EduKartenAuswerten($seite, $liste, $analysiert, false);'), true);
 /* Die Uhr bleibt beim Gateway: der Scanner hat keine eigene, er arbeitet nur

@@ -1701,7 +1701,17 @@ trait EduMaps
         if ($topf === '' || $schluessel === '') {
             return;
         }
-        $this->EduVergessen($topf, $schluessel);
+        /* In den RICHTIGEN Merker zurueck. Es gibt zwei Bestaende, und wer
+           hier den falschen anfasst, erreicht zweierlei auf einmal: die
+           gescheiterte Karte bleibt fuer immer als „gesehen" liegen (der
+           Elternbrief kaeme nie wieder), und eine fremde, erfolgreich
+           ausgewertete Karte laeuft beim naechsten Lauf noch einmal durch die
+           KI. */
+        if ((string)($merker['quelle'] ?? '') === 'moodle') {
+            $this->MoodleVergessen($topf, $schluessel);
+        } else {
+            $this->EduVergessen($topf, $schluessel);
+        }
         $this->SendDebug('EduMaps', 'Auswertung gescheitert — Karte kommt wieder dran: '
             . $schluessel, 0);
     }

@@ -755,14 +755,46 @@ trait Moodle
             'SenderName' => $seite['name'],
             'Date'       => (int)$karte['updated'],
         ];
-        return $this->MailAnalyseRecord(
-            (string)$karte['srcId'] . ':' . (int)$karte['updated'],
-            $kopf,
-            $text,
-            $this->MoodleAnhaengeFuerKi($karte),
-            (string)$seite['userId'],
-            'LOGINEO'
-        );
+        $vorschlag = (string)$karte['srcId'] . ':' . (int)$karte['updated'];
+        $anhaenge  = $this->MoodleAnhaengeFuerKi($karte);
+        /* Als AUFTRAG, sobald ein Laeufer die Warteschlange bedient — dieselbe
+           Weiche wie bei den Klassenseiten. Sie fehlte hier bis zum 15.09.2026,
+           und seit der Lauf ein Umschlag ist, faellt das ins Gewicht: bis zu
+           fuenf Karten werden am Stueck eingepflegt, und jede haette bis zu
+           fuenfundvierzig Sekunden in der Spur gestanden, die auch die App
+           bedient.
+
+           Der Merker reist MIT und nennt seine Quelle: gemerkt wird beim
+           Einreihen (sonst zahlte der naechste Lauf doppelt), zurueckgenommen
+           beim Scheitern — und zwar im LOGINEO-Merker, nicht im Klassenseiten-
+           Merker. */
+        if ($this->AiJobMoeglich()) {
+            return $this->MailAnalyseAuftrag($vorschlag, $kopf, $text, $anhaenge,
+                (string)$seite['userId'], 'LOGINEO',
+                ['quelle' => 'moodle',
+                 'topf' => $this->EduMerkerTopf('moodle', (string)$seite['url']),
+                 'schluessel' => $vorschlag]);
+        }
+        return $this->MailAnalyseRecord($vorschlag, $kopf, $text, $anhaenge,
+            (string)$seite['userId'], 'LOGINEO');
+    }
+
+    /** Einen LOGINEO-Merker wieder wegnehmen (Gegenstueck zu MoodleMerken). */
+    private function MoodleVergessen(string $topf, string $schluessel): void
+    {
+        $karte = $this->MoodleSeenKarte();
+        if (!isset($karte[$topf])) {
+            return;
+        }
+        $liste = array_values(array_filter(array_map('strval', (array)$karte[$topf]),
+            static fn(string $s): bool => $s !== $schluessel));
+        if ($liste === []) {
+            unset($karte[$topf]);
+        } else {
+            $karte[$topf] = $liste;
+        }
+        @$this->WriteAttributeString('MoodleSeen',
+            (string)json_encode($karte, JSON_UNESCAPED_UNICODE));
     }
 
     /**
