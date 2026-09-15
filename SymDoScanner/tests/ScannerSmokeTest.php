@@ -61,6 +61,20 @@ function pruefe(string $name, mixed $ist, mixed $soll): void
 final class ScannerProbe extends SymDoScanner
 {
     public function pTakt(): int { return (int)$this->GetTimerInterval('Takt'); }
+    /**
+     * Der Klassenseiten-Leser — im Rauchtest ohne Netz, also nur die Wege.
+     *
+     * Ueber Reflection und nicht ueber eine gelockerte Sichtbarkeit: was im
+     * Produktivcode `private` ist, soll es bleiben. Eine Unterklasse kommt an
+     * eine private Methode ihrer Elternklasse nicht heran.
+     */
+    public function pSeiten(array $seiten): array
+    {
+        // Seit PHP 8.1 greift Reflection ohne setAccessible — das ist seit 8.5
+        // sogar abgekuendigt und wuerde hier nur eine Warnung erzeugen.
+        return (array)(new ReflectionMethod(SymDoScanner::class, 'EduSeitenLesen'))
+            ->invoke($this, $seiten);
+    }
 
     protected function getTime(): int
     {
@@ -284,6 +298,39 @@ pruefe('Ohne Gateway laeuft der Takt weiter — er ist der einzige Rueckweg',
     $scanner->pTakt() > 0, true);
 pruefe('Und ein Lauf schreibt trotzdem nichts',
     json_decode($scanner->Stand(), true)['gateway'], 0);
+
+// ── Klassenseiten lesen ───────────────────────────────────────────────────
+/* Ohne Netz laesst sich der Zerleger hier nicht fahren — geprueft wird der
+   Weg, auf dem eine Seite NICHT in den Umschlag kommt. Das ist der wichtige:
+   das Gateway gleicht je Seite ab, welche Karten verschwunden sind, und eine
+   leere Seite hiesse dort „alle Karten dieser Klassenseite sind weg". */
+pruefe('Ohne eingerichtete Seiten kommt nichts heraus',
+    $scanner->pSeiten([])['seiten'], []);
+
+$nichtErreichbar = $scanner->pSeiten([
+    ['name' => '5b', 'url' => 'https://gibt-es-nicht.invalid/seite', 'userId' => 'u1'],
+]);
+pruefe('Eine unlesbare Seite kommt NICHT in den Umschlag', $nichtErreichbar['seiten'], []);
+pruefe('… sie wird aber gemeldet', count($nichtErreichbar['fehler']), 1);
+/* Die ADRESSE gehoert nicht in die Meldung: sie ist der Zugang zur
+   Klassenseite, und das Protokoll ist weltlesbar. */
+pruefe('… ohne die Adresse zu nennen',
+    str_contains($nichtErreichbar['fehler'][0], 'gibt-es-nicht.invalid'), false);
+pruefe('… und der Name steht davor',
+    str_starts_with($nichtErreichbar['fehler'][0], '5b: '), true);
+
+/* Der rohe Seitenrumpf wird ZWEIMAL gebraucht: fuer die Karten und fuer
+   Verweise auf ANDERE Anlagen. Nur der Scanner hat ihn — das Gateway bekommt
+   die Karten. Faellt die Verweis-Suche hier weg, findet niemand mehr eine neu
+   verlinkte Klassenseite, ohne Fehler und ohne Meldung. Ein Prueflauf mit Netz
+   ginge hier nicht, deshalb am Quelltext. Von den Pruefagenten gefunden. */
+$leser = (string)file_get_contents($modul . '/module.php');
+$lVon = (int)strpos($leser, 'private function EduSeitenLesen(');
+$lBis = (int)strpos($leser, '    private function ', $lVon + 10);
+$lesen = substr($leser, $lVon, $lBis - $lVon);
+pruefe('Der Leser holt die Verweise aus dem rohen Rumpf',
+    str_contains($lesen, 'EduKartenLinks($rumpf, $url)'), true);
+pruefe('… und legt sie in den Umschlag', str_contains($lesen, "'funde'"), true);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -50,6 +50,15 @@ final class ScanKanalCalc
     /** Wie lange die Selbstprobe hoechstens verweilen darf (Sekunden). */
     public const VERWEIL_MAX = 60;
 
+    /** So viele Seiten traegt ein Auftrag hoechstens. */
+    public const SEITEN_MAX = 40;
+
+    /** Deckel fuer einen Namen im Auftrag. */
+    public const TEXT_MAX = 200;
+
+    /** Deckel fuer eine Adresse im Auftrag. */
+    public const URL_MAX = 2000;
+
     public static function QuelleGueltig(string $quelle): bool
     {
         return in_array($quelle, self::QUELLEN, true);
@@ -338,7 +347,51 @@ final class ScanKanalCalc
             /* Nur fuer die Quelle „probe": wie lange sie ihre Spur ABSICHTLICH
                belegt. Ein Messwerkzeug, kein Fachfeld — deshalb gedeckelt. */
             'verweilen' => max(0, min(self::VERWEIL_MAX, (int)($a['verweilen'] ?? 0))),
+            /* Die Seiten, die ein Scan abklappern soll. Sie MUESSEN mit dem
+               Auftrag reisen: sie stehen als Eigenschaft am Gateway, und
+               `IPS_GetProperty` auf eine fremde Instanz zeigt einen nur
+               eingetippten, noch nicht uebernommenen Wert nicht — der Scanner
+               koennte sie also weder lesen noch merken, ob sie aktuell sind. */
+            'seiten' => self::SeitenListe($a['seiten'] ?? []),
         ];
+    }
+
+    /**
+     * Die Seitenliste eines Auftrags in Form bringen.
+     *
+     * Eine weisse Liste je Seite, nicht nur fuer die Liste als Ganzes: der
+     * Auftrag ist eine Datei, und was hier durchkommt, ruft der Scanner
+     * anschliessend im Netz ab. Ein fremdes Schema waere ein Abruf, den
+     * niemand gewollt hat.
+     *
+     * @return list<array{name:string,url:string,userId:string}>
+     */
+    public static function SeitenListe(mixed $roh): array
+    {
+        if (!is_array($roh)) {
+            return [];
+        }
+        $raus = [];
+        foreach ($roh as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $url = trim((string)($s['url'] ?? ''));
+            $teile = parse_url($url);
+            if (!in_array(strtolower((string)($teile['scheme'] ?? '')), ['http', 'https'], true)
+                || trim((string)($teile['host'] ?? '')) === '') {
+                continue;
+            }
+            $raus[] = [
+                'name'   => mb_substr(trim((string)($s['name'] ?? '')), 0, self::TEXT_MAX),
+                'url'    => mb_substr($url, 0, self::URL_MAX),
+                'userId' => mb_substr(trim((string)($s['userId'] ?? '')), 0, 64),
+            ];
+            if (count($raus) >= self::SEITEN_MAX) {
+                break;
+            }
+        }
+        return $raus;
     }
 
     /**
@@ -367,6 +420,12 @@ final class ScanKanalCalc
             'tage'   => max($a['tage'], $b['tage']),
             // Zwei Proben kurz hintereinander: die laengere gewinnt.
             'verweilen' => max($a['verweilen'], $b['verweilen']),
+            /* Die JUENGERE Liste gewinnt, nicht die Vereinigung: das Gateway
+               schickt jedes Mal seinen aktuellen Stand mit. Wer vereinigte,
+               brachte eine geloeschte Seite mit dem naechsten Auftrag zurueck.
+               Eine leere Liste ist dabei keine Aussage, sondern eine fehlende
+               (etwa bei einem Auftrag von Hand) — dann bleibt die alte. */
+            'seiten' => $b['seiten'] !== [] ? $b['seiten'] : $a['seiten'],
         ];
     }
 

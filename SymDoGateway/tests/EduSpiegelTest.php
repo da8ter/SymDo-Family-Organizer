@@ -124,7 +124,7 @@ final class Spiegelprobe
     private function EduOrdner(array &$store, array $seite): string { return 'f1'; }
     private function EduNotizText(array $karte): string { return (string)($karte['text'] ?? ''); }
     private function EduArt(string $name): string { return str_ends_with($name, '.pdf') ? 'pdf' : ''; }
-    private function EduQrVormerken(string $t): void {}
+    private function EduQrVormerken(string $t): void { $this->eduQrSeiten[] = $t; }
     private function EduQrCode(int $id): string { return ''; }
     private function NotesNewId(): string { return 'n' . (++$this->naechsteMedienId); }
     private function NotesStore(): array { return ['notes' => []]; }
@@ -143,6 +143,10 @@ final class Spiegelprobe
     private function EduNotizAnhaenge(array $karte): array
     {
         $raus = [];
+        if ($this->qrImAnhang !== '' && (array)($karte['anhaenge'] ?? []) !== []) {
+            // Wie im Betrieb: EduQrCode liest das Bild und merkt den Fund vor.
+            $this->eduQrSeiten[] = $this->qrImAnhang;
+        }
         foreach ((array)($karte['anhaenge'] ?? []) as $a) {
             $id = ++$this->naechsteMedienId;
             $th = ++$this->naechsteMedienId;
@@ -163,6 +167,23 @@ final class Spiegelprobe
 
     /** Gesperrte Seiten — im echten Gateway aus dem Bestand (`blocked`). */
     public array $gesperrt = [];
+    /** Was als verlinkte Anlage aufgenommen wurde. */
+    public array $aufgenommen = [];
+    private function EduGefundeneAufnehmen(array $seite, array $adressen): int
+    {
+        $this->aufgenommen[] = $adressen;
+        return count($adressen);
+    }
+    /**
+     * Was der QR-Leser beim naechsten Anhang findet.
+     *
+     * Gesetzt wird der Merker WAEHREND des Spiegelns, nicht davor: im Betrieb
+     * laeuft `EduQrCode` aus `EduNotizAnhaenge` heraus, also mitten im Lauf.
+     * Wer davor saet, wird vom Leeren am Seitenanfang erwischt — genau das ist
+     * meinem ersten Prueflauf passiert.
+     */
+    public string $qrImAnhang = '';
+    private array $eduQrSeiten = [];
     private function EduGesperrt(string $url): bool { return in_array($url, $this->gesperrt, true); }
     private function EduArchivAbgleichen(array $seite, array $karten): int { $this->archiv[] = $seite['url']; return 0; }
     public array $archiv = [];
@@ -389,6 +410,50 @@ pruefe('Eine Buchung ist ein Objekt oder null', $e[1][0]['buchung'], null);
 /* Derselbe Deckel, den EduKarten beim Zerlegen zieht. */
 $e = $p->Seite(seite(array_map(static fn(int $i): array => ['boxid' => 'b' . $i], range(1, 200))));
 pruefe('Die Karten sind gedeckelt', count($e[1]), 60);
+
+// ══ Verlinkte Anlagen und QR-Funde ═══════════════════════════════════════
+/* Im Gateway-Weg wertet EduSeiteLesen den ROHEN Seitenrumpf zweimal aus: einmal
+   fuer die Karten, einmal fuer Verweise auf ANDERE Anlagen. Der Scanner hat den
+   Rumpf, das Gateway nicht — die Funde muessen also mitreisen. Sonst faende
+   niemand mehr eine neu verlinkte Klassenseite, ohne Fehler und ohne Meldung.
+   Von den Pruefagenten gefunden, 15.09.2026. */
+$p = new Spiegelprobe();
+$mitFunden = ['quelle' => 'edu', 'status' => ['ok' => true, 'text' => 'x'],
+    'seiten' => [[
+        'seite'  => ['url' => 'https://beispiel.test/s', 'name' => '5b'],
+        'karten' => [['boxid' => 'b1', 'updated' => 1, 'titel' => 'K']],
+        'funde'  => ['https://nrw.edumaps.de/1/2/abc/def'],
+    ]]];
+$p->Umschlag($mitFunden);
+pruefe('Ein Verweis aus dem Umschlag wird aufgenommen',
+    $p->aufgenommen, [['https://nrw.edumaps.de/1/2/abc/def']]);
+
+/* Dieselbe weisse Liste wie bei der Seitenadresse: der Umschlag ist eine Datei
+   einer fremden Instanz, und was hier durchkommt, ruft das Gateway ab. */
+$p = new Spiegelprobe();
+$p->Umschlag(['quelle' => 'edu', 'status' => ['ok' => true, 'text' => 'x'],
+    'seiten' => [[
+        'seite'  => ['url' => 'https://beispiel.test/s', 'name' => '5b'],
+        'karten' => [['boxid' => 'b1', 'updated' => 1, 'titel' => 'K']],
+        'funde'  => ['file:///etc/passwd', 'javascript:alert(1)', 42],
+    ]]]);
+pruefe('Unbrauchbare Verweise fallen weg', $p->aufgenommen, []);
+
+/* Der QR-Vormerker fuellt sich waehrend des Spiegelns (EduQrCode laeuft beim
+   Anlegen eines Anhangs und beim Nachzug). Geleert und abgeholt wird er im
+   Gateway-Weg von EduSeiteLesen — und das laeuft nach der Uebergabe nicht
+   mehr. Ohne diese Abholung fuellte sich die Liste immer weiter und die
+   Adresse im QR-Code kaeme nie an. */
+$p = new Spiegelprobe();
+$p->qrImAnhang = 'https://nrw.edumaps.de/9/9/qr/code';
+$p->Umschlag(['quelle' => 'edu', 'status' => ['ok' => true, 'text' => 'x'],
+    'seiten' => [[
+        'seite'  => ['url' => 'https://beispiel.test/s', 'name' => '5b'],
+        'karten' => [['boxid' => 'b1', 'updated' => 1, 'titel' => 'K',
+                      'anhaenge' => [['name' => 'plakat.pdf']]]],
+    ]]]);
+pruefe('Ein QR-Fund wird abgeholt',
+    $p->aufgenommen, [['https://nrw.edumaps.de/9/9/qr/code']]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

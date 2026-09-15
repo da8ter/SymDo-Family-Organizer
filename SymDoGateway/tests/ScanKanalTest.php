@@ -124,9 +124,9 @@ $auftrag['quelle'] = 'edu';
 $auftrag['auftrag'] = ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0];
 $pa = ScanKanalCalc::PruefeAuftrag($auftrag, 16011);
 pruefe('Auftrag geht durch und behaelt seinen Block',
-    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0]]);
+    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0, 'seiten' => []]]);
 pruefe('Auftrag ohne Block bekommt Vorgaben',
-    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0]);
+    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => []]);
 pruefe('Unbekannter Anlass faellt auf den Zeitgeber zurueck',
     ScanKanalCalc::AuftragBlock(['anlass' => 'unfug'])['anlass'], 'timer');
 
@@ -135,7 +135,7 @@ pruefe('Von Hand schlaegt Zeitgeber, alles bleibt alles',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'hand', 'alles' => true],
         ['anlass' => 'timer', 'alles' => false]),
-    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0]);
+    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => []]);
 pruefe('Eine Einschraenkung faellt, sobald einer ohne sie kommt',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'timer', 'nur' => ['seite-1']],
@@ -156,10 +156,49 @@ pruefe('Die Verweildauer kommt durch und wird gedeckelt',
     [10, ScanKanalCalc::VERWEIL_MAX, 0]);
 pruefe('Von zwei Proben gewinnt die laengere',
     ScanKanalCalc::AuftragVerschmelzen(
-        ['anlass' => 'hand', 'verweilen' => 3],
-        ['anlass' => 'hand', 'verweilen' => 8])['verweilen'], 8);
+        ['anlass' => 'hand', 'verweilen' => 3, 'seiten' => []],
+        ['anlass' => 'hand', 'verweilen' => 8, 'seiten' => []])['verweilen'], 8);
 pruefe('Der groessere Briefing-Slot gewinnt',
     ScanKanalCalc::AuftragVerschmelzen(['tage' => 0], ['tage' => 1])['tage'], 1);
+
+// ── Die Seitenliste im Auftrag ────────────────────────────────────────────
+/* Sie MUSS mit dem Auftrag reisen: die Seiten stehen als Eigenschaft am
+   Gateway, und IPS_GetProperty auf eine fremde Instanz zeigt einen nur
+   eingetippten, noch nicht uebernommenen Wert nicht. Faellt sie aus der weissen
+   Liste, klappert der Scanner gar nichts ab — und es faellt niemandem auf.
+   Genau so ist die Verweildauer der Selbstprobe einmal verschwunden. */
+$mitSeiten = ScanKanalCalc::AuftragBlock(['seiten' => [
+    ['name' => '5b', 'url' => 'https://beispiel.test/s', 'userId' => 'u1'],
+]]);
+pruefe('Die Seitenliste kommt durch', count($mitSeiten['seiten']), 1);
+pruefe('… mit Name, Adresse und Mitglied',
+    $mitSeiten['seiten'][0], ['name' => '5b', 'url' => 'https://beispiel.test/s', 'userId' => 'u1']);
+
+/* Der Auftrag ist eine Datei, und was hier durchkommt, ruft der Scanner
+   anschliessend im Netz ab. Ein fremdes Schema waere ein Abruf, den niemand
+   gewollt hat. */
+foreach (['file:///etc/passwd', 'javascript:alert(1)', 'https:///ohne-rechner', ''] as $boese) {
+    pruefe('Eine unbrauchbare Adresse faellt weg: ' . ($boese === '' ? '(leer)' : mb_substr($boese, 0, 16)),
+        ScanKanalCalc::AuftragBlock(['seiten' => [['url' => $boese]]])['seiten'], []);
+}
+pruefe('Kein Objekt, keine Seite',
+    ScanKanalCalc::AuftragBlock(['seiten' => 'alle'])['seiten'], []);
+pruefe('Die Zahl der Seiten ist gedeckelt',
+    count(ScanKanalCalc::AuftragBlock(['seiten' => array_fill(0, 200,
+        ['url' => 'https://beispiel.test/s'])])['seiten']), ScanKanalCalc::SEITEN_MAX);
+
+/* Beim Verschmelzen gewinnt die JUENGERE Liste, nicht die Vereinigung: das
+   Gateway schickt jedes Mal seinen aktuellen Stand mit. Wer vereinigte,
+   brachte eine geloeschte Seite mit dem naechsten Auftrag zurueck. */
+$a1 = ['seiten' => [['url' => 'https://beispiel.test/alt']]];
+$a2 = ['seiten' => [['url' => 'https://beispiel.test/neu']]];
+pruefe('Die juengere Seitenliste gewinnt',
+    ScanKanalCalc::AuftragVerschmelzen($a1, $a2)['seiten'][0]['url'], 'https://beispiel.test/neu');
+/* Eine leere Liste ist keine Aussage, sondern eine fehlende — etwa bei einem
+   Auftrag von Hand. Dann bleibt die alte stehen. */
+pruefe('Eine fehlende Liste laesst die alte stehen',
+    ScanKanalCalc::AuftragVerschmelzen($a1, ['anlass' => 'hand'])['seiten'][0]['url'],
+    'https://beispiel.test/alt');
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

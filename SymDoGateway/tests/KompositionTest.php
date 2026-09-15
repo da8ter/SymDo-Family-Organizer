@@ -164,5 +164,45 @@ foreach (['ReadAttribute', 'WriteAttribute', 'ReadProperty', 'IPS_', 'EduProp',
 pruefe('Die HTML-Weissliste steht in der lesenden Haelfte',
     $k->hasMethod('EduHtml') && str_contains($lesen, 'private function EduHtml('), true);
 
+/* Die Uebergabe der Klassenseiten an einen Scanner.
+ *
+ * Sie schaltet einen Zeitgeber ab — und wenn dabei der Auftrag ausbleibt, faellt
+ * der Lauf ERSATZLOS aus: kein Fehler, keine Meldung, die Karten veralten still.
+ * Genau diese Kombination wird hier festgenagelt. Ein voller Prueflauf dafuer
+ * hiesse, die ganze Gateway-Klasse mit Kernel zu fahren; die Teile darunter
+ * (Umschlag pruefen, Sperrliste, Einpflegen) haben ihre eigenen. */
+foreach (['EduAuftragGeben', 'EduVonHand'] as $m) {
+    pruefe('Die Klasse kennt ' . $m, $k->hasMethod($m), true);
+}
+$edu = (string)file_get_contents(__DIR__ . '/../libs/EduMaps.php');
+$von = strpos($edu, "if (\$Ident === 'EduScan') {");
+$zweig = substr($edu, (int)$von, 600);
+pruefe('Der eigene Lauf fragt, ob ein Scanner uebernommen hat',
+    str_contains($zweig, "ScanQuelleUebernommen('edu')"), true);
+pruefe('… schaltet dann seinen Zeitgeber ab',
+    str_contains($zweig, "SetTimerInterval('EduScan', 0)"), true);
+pruefe('… und legt statt dessen einen Auftrag ab',
+    str_contains($zweig, 'EduAuftragGeben('), true);
+
+/* Bis zur NAECHSTEN Funktion, nicht eine feste Zeichenzahl: sonst rutscht das
+   Fenster beim Kuerzen in den Nachbarn und der Riegel greift ins Leere.
+   Genau das ist beim ersten Anlauf passiert. */
+$aVon = (int)strpos($edu, 'private function EduAuftragGeben(');
+$aBis = (int)strpos($edu, '    private function ', $aVon + 10);
+$auftrag = substr($edu, $aVon, $aBis - $aVon);
+/* Die Sperrliste steht im Bestand des Gateways — ein Scanner kann sie gar
+   nicht kennen. Ohne diesen Filter klapperte er eine Seite ab, die in der App
+   geloescht wurde. (Die zweite Probe beim Einpflegen faengt, was sich zwischen
+   Auftrag und Ergebnis noch aendert.) */
+pruefe('Der Auftrag laesst gesperrte Seiten weg',
+    str_contains($auftrag, 'EduGesperrt('), true);
+pruefe('… und traegt die Seiten mit',
+    str_contains($auftrag, "'seiten' => \$seiten"), true);
+/* Ohne Einwilligung und ohne eingeschaltete Klassenseiten wird gar nichts
+   beauftragt — sonst liefe der Scanner gegen die Schule, obwohl der Nutzer
+   abgeschaltet hat. */
+pruefe('… nur bei eingeschalteten Klassenseiten',
+    str_contains($auftrag, 'EduIsEnabled()'), true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

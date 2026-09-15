@@ -68,6 +68,13 @@ trait EduEinpflegen
     private const EDU_MEDIEN_SCHUB = 20;
 
     /**
+     * So viele Verweise traegt ein Umschlag je Seite hoechstens. Die eigentliche
+     * Grenze zieht `EduGefundeneAufnehmen` (EDU_GEFUNDEN_MAX ueber ALLE Seiten);
+     * dieser Deckel haelt nur eine Datei klein, die von aussen kommt.
+     */
+    private const EDU_FUNDE_MAX = 50;
+
+    /**
      * Eine ganze Seite in den Bestand — Sperre und Lesen genau einmal,
      * geschrieben in Schueben.
      *
@@ -358,7 +365,16 @@ trait EduEinpflegen
             if ($eintrag === null) {
                 continue;
             }
-            [$seite, $karten] = $eintrag;
+            [$seite, $karten, $funde] = $eintrag;
+
+            /* Die QR-Funde gehoeren zu DIESER Seite. Geleert wird VOR dem
+               Spiegeln, denn gefuellt wird waehrenddessen: `EduQrCode` laeuft
+               beim Anlegen eines Anhangs und beim Nachzug. Ohne das Leeren
+               truege die naechste Seite die Funde der vorigen; ohne das
+               Aufnehmen unten fuellte sich die Liste immer weiter und niemand
+               holte sie ab — im Gateway-Weg tut das `EduSeiteLesen`, und das
+               laeuft nach der Uebergabe nicht mehr. */
+            $this->eduQrSeiten = [];
 
             /* Die Sperrliste gilt HIER, nicht dort. Zwischen dem Auftrag und
                seinem Ergebnis koennen Minuten liegen, und in dieser Zeit kann
@@ -372,6 +388,19 @@ trait EduEinpflegen
 
             $gespiegelt += $this->EduSeiteSpiegeln($seite, $karten);
             $this->EduArchivAbgleichen($seite, $karten);
+
+            /* Verweise aus dem Seitenrumpf UND Adressen aus QR-Codes muenden in
+               dieselbe Aufnahme — sie prueft den Schalter, den Deckel und ob
+               sich die Adresse ueberhaupt abrufen laesst. */
+            $adressen = array_values(array_unique(array_merge($funde, $this->eduQrSeiten)));
+            $this->eduQrSeiten = [];
+            if ($adressen !== []) {
+                $neu = $this->EduGefundeneAufnehmen($seite, $adressen);
+                if ($neu > 0) {
+                    $this->SendDebug('EduMaps', sprintf('%d verlinkte Anlage(n) aufgenommen (%s)',
+                        $neu, (string)$seite['name']), 0);
+                }
+            }
         }
         return $gespiegelt;
     }
@@ -385,7 +414,7 @@ trait EduEinpflegen
      * Notiz mit der Kennung `edu:` an; beim naechsten Umschlag faende sie sich
      * selbst wieder und ueberschriebe sich gegenseitig.
      *
-     * @return array{0:array<string,mixed>,1:list<array<string,mixed>>}|null
+     * @return array{0:array<string,mixed>,1:list<array<string,mixed>>,2:list<string>}|null
      */
     private function EduUmschlagSeite(mixed $roh): ?array
     {
@@ -414,6 +443,23 @@ trait EduEinpflegen
             'userId' => trim((string)($s['userId'] ?? '')),
         ];
 
+        /* Verweise auf ANDERE Anlagen, vom Scanner aus dem rohen Rumpf geholt.
+           Aufgenommen werden sie hier: die Fundliste ist ein Attribut DIESER
+           Instanz, und hier haengt auch der Schalter „Verlinkten Seiten folgen"
+           samt Deckel und Erreichbarkeitsprobe. */
+        $funde = [];
+        foreach ((array)($roh['funde'] ?? []) as $f) {
+            $a = trim((string)$f);
+            $t = parse_url($a);
+            if (in_array(strtolower((string)($t['scheme'] ?? '')), ['http', 'https'], true)
+                && trim((string)($t['host'] ?? '')) !== '') {
+                $funde[] = mb_substr($a, 0, 2000);
+            }
+            if (count($funde) >= self::EDU_FUNDE_MAX) {
+                break;
+            }
+        }
+
         $karten = [];
         foreach ((array)($roh['karten'] ?? []) as $k) {
             $karte = $this->EduUmschlagKarte($k);
@@ -437,7 +483,7 @@ trait EduEinpflegen
                 . ' — Seite uebersprungen', 0);
             return null;
         }
-        return [$seite, array_values($karten)];
+        return [$seite, array_values($karten), $funde];
     }
 
     /**

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
 /* Die Fachteile kommen aus dem Gateway-Ordner — dieselben Dateien, nicht
    Kopien. Eingebunden wird immer nur der BAU, nie der Leser: die Fragen der
    App kommen im Gateway an, und dort bleiben sie auch. */
+require_once __DIR__ . '/../SymDoGateway/libs/EduLesen.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuGemein.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuBau.php';
 require_once __DIR__ . '/../libs/AiJobRunner.php';
@@ -50,6 +51,7 @@ class SymDoScanner extends IPSModuleStrict
     use Konfig;
     use Belegung;
     use ScanKanal;
+    use EduLesen;
     use DokuGemein;
     use DokuBau;
 
@@ -320,6 +322,10 @@ class SymDoScanner extends IPSModuleStrict
         $start = microtime(true);
         $text = '';
         $ok = true;
+        /* Was der Umschlag ausser der Auskunft mitbringt. Die meisten Quellen
+           bringen nichts — sie legen ihr Ergebnis dort ab, wo der Leser es
+           ohnehin sucht (der Handbuch-Bau etwa als Datei unter der BestandID). */
+        $nutzlast = [];
         /* Nicht jede Etappe ist ein Ergebnis. Der Handbuch-Bau laeuft ueber
            Stunden in Vier-Sekunden-Stuecken; ein Umschlag je Stueck waeren
            vierhundert Umschlaege fuer EINE Auskunft. Gemeldet wird, wenn etwas
@@ -389,6 +395,27 @@ class SymDoScanner extends IPSModuleStrict
                     count($stand['seiten']), (int)$stand['stuecke']);
                 break;
 
+            case 'edu':
+                /* Die Klassenseiten HOLEN und ZERLEGEN. Mehr nicht: Medien,
+                   Sperre und Sperrliste haengen alle an der Gateway-Instanz,
+                   und der Bestand wird dort gepflegt (siehe EduEinpflegen).
+                   Hier laeuft nur das Langsame — vier Seiten a einer halben bis
+                   fuenfzehn Sekunden.
+
+                   Die Seiten kommen MIT dem Auftrag. Sie stehen als Eigenschaft
+                   am Gateway, und `IPS_GetProperty` auf eine fremde Instanz
+                   zeigt einen nur eingetippten Wert nicht — der Scanner koennte
+                   sie also weder lesen noch merken, ob sie aktuell sind. */
+                $erg = $this->EduSeitenLesen((array)($auftrag['seiten'] ?? []));
+                $nutzlast['seiten'] = $erg['seiten'];
+                $ok = $erg['fehler'] === [];
+                $text = $erg['text'];
+                if ($erg['seiten'] === [] && $erg['fehler'] === []) {
+                    // Nichts eingerichtet: kein Umschlag, keine Meldung.
+                    $melden = false;
+                }
+                break;
+
             default:
                 // Die echten Quellen ziehen einzeln um; bis dahin laeuft der
                 // Scan weiter im Gateway und dieser Auftrag ist ein Irrlaeufer.
@@ -401,6 +428,9 @@ class SymDoScanner extends IPSModuleStrict
         $umschlag['status']['ok'] = $ok;
         $umschlag['status']['dauerMs'] = (int)round((microtime(true) - $start) * 1000);
         $umschlag['anlass'] = (string)$auftrag['anlass'];
+        foreach ($nutzlast as $feld => $wert) {
+            $umschlag[$feld] = $wert;
+        }
         if ($gestellt > 0) {
             $umschlag['auftragAt'] = $gestellt;
         }
@@ -411,6 +441,72 @@ class SymDoScanner extends IPSModuleStrict
             $this->GatewayWecken();
         }
         return $text;
+    }
+
+    /**
+     * Die Klassenseiten holen und zerlegen.
+     *
+     * Das Teure und das einzige, was hier laeuft: je Seite ein Abruf von einer
+     * halben bis fuenfzehn Sekunden, dann der Zerleger aus `EduLesen`.
+     * Eingepflegt wird im Gateway — die Karten reisen als Umschlag hinueber.
+     *
+     * Eine Seite, die NICHT gelesen werden konnte, kommt gar nicht erst in den
+     * Umschlag. Das ist kein Detail: das Gateway gleicht je Seite ab, welche
+     * Karten verschwunden sind, und eine leere Seite hiesse dort „alle Karten
+     * dieser Klassenseite sind weg". Der Fehler wird gemeldet, die Seite bleibt
+     * beim vorigen Stand, und der naechste Lauf versucht es erneut.
+     *
+     * @param list<array{name:string,url:string,userId:string}> $seiten
+     * @return array{seiten:list<array<string,mixed>>,fehler:list<string>,text:string}
+     */
+    private function EduSeitenLesen(array $seiten): array
+    {
+        $raus = [];
+        $fehler = [];
+        $karten = 0;
+        foreach ($seiten as $s) {
+            $url  = trim((string)($s['url'] ?? ''));
+            $name = trim((string)($s['name'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $antwort = AiRecipePage::holen($url);
+            if (($antwort['ok'] ?? false) !== true) {
+                /* Die ADRESSE nicht ins Protokoll: sie ist der Zugang zur
+                   Klassenseite, und das Protokoll ist weltlesbar. */
+                $fehler[] = $name . ': ' . (string)($antwort['code'] ?? 'Abruf fehlgeschlagen');
+                continue;
+            }
+            $rumpf = (string)($antwort['body'] ?? '');
+            $kartenDerSeite = $this->EduKarten($rumpf);
+            if ($kartenDerSeite === []) {
+                /* Kein stilles Schweigen: bricht das Markup der Schule, saehe es
+                   sonst aus wie „nichts Neues" — und das Gateway haette die
+                   ganze Seite archiviert. */
+                $fehler[] = $name . ': 0 Karten — hat sich die Seite geaendert?';
+                continue;
+            }
+            $raus[] = [
+                'seite'  => ['name' => $name, 'url' => $url,
+                             'userId' => trim((string)($s['userId'] ?? ''))],
+                'quelle' => 'edu',
+                'karten' => array_values($kartenDerSeite),
+                /* Verweise auf ANDERE Anlagen. Sie muessen HIER heraus, denn nur
+                   hier liegt der rohe Rumpf: das Gateway bekommt die Karten,
+                   und ein Verweis kann auch neben ihnen stehen.
+                   Aufgenommen wird drueben — die Fundliste ist ein Attribut des
+                   Gateways, und dort haengt auch der Schalter „Verlinkten
+                   Seiten folgen" samt Deckel und Erreichbarkeitsprobe. */
+                'funde'  => $this->EduKartenLinks($rumpf, $url),
+            ];
+            $karten += count($kartenDerSeite);
+        }
+
+        $text = sprintf($this->Translate('%1$d card(s) on %2$d page(s) read'), $karten, count($raus));
+        if ($fehler !== []) {
+            $text .= ' — ' . implode(' | ', $fehler);
+        }
+        return ['seiten' => $raus, 'fehler' => $fehler, 'text' => $text];
     }
 
     /**

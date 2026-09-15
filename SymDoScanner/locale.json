@@ -9,6 +9,7 @@
             "This instance does not handle that source": "Diese Instanz bedient diese Quelle nicht",
             "Channel checked (%d s dwell, reason %s)": "Kanal geprüft (%d s Verweildauer, Anlass %s)",
             "Source %s not moved yet": "Die Quelle %s ist noch nicht umgezogen",
+            "%1$d card(s) on %2$d page(s) read": "%1$d Karte(n) auf %2$d Seite(n) gelesen",
             "No gateway found": "Kein Gateway gefunden",
             "No OpenAI key — the handbook index cannot be built": "Kein OpenAI-Schlüssel — das Handbuch-Verzeichnis lässt sich nicht bauen",
             "Embedding failed repeatedly — build halted": "Die Einbettung schlug mehrfach fehl — der Aufbau ist angehalten",

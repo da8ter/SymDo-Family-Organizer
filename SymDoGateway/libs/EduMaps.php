@@ -125,6 +125,15 @@ trait EduMaps
     private function EduRequestAction(string $Ident, mixed $Value): bool
     {
         if ($Ident === 'EduScan') {
+            /* Bedient ein Scanner die Klassenseiten, laeuft hier NICHTS mehr —
+               sonst holte jeder Lauf die Seiten zweimal und beide Haelften
+               schrieben gegeneinander in denselben Bestand. Der eigene
+               Zeitgeber geht dabei aus: er ist nicht mehr der Auftraggeber. */
+            if ($this->ScanQuelleUebernommen('edu')) {
+                @$this->SetTimerInterval('EduScan', 0);
+                $this->EduAuftragGeben('timer');
+                return true;
+            }
             $this->EduScanRun();
             return true;
         }
@@ -136,12 +145,13 @@ trait EduMaps
         }
         if ($Ident === 'EduScanAll') {
             // Alles auswerten, auch schon Gesehenes. Teuer, darum ein eigener Knopf.
-            $this->UpdateFormField('EduStatusLabel', 'caption', $this->EduScanRun(true, true));
+            $this->UpdateFormField('EduStatusLabel', 'caption',
+                $this->EduVonHand(true));
             return true;
         }
         if ($Ident === 'EduScanNow') {
-            $bericht = $this->EduScanRun(true);
-            $this->UpdateFormField('EduStatusLabel', 'caption', $bericht);
+            $this->UpdateFormField('EduStatusLabel', 'caption',
+                $this->EduVonHand(false));
             return true;
         }
         if ($Ident === 'EduMigrateNow') {
@@ -1231,6 +1241,70 @@ trait EduMaps
     // ─────────────────────────────── Kleinkram ───────────────────────────────
 
     /** @return list<array{name:string,url:string,userId:string}> */
+    /**
+     * Der Knopf im Formular.
+     *
+     * Bedient ein Scanner die Klassenseiten, wird hier nur ein AUFTRAG
+     * abgelegt — der Lauf dauert Minuten, und das Formular haengt so lange am
+     * Knopf. Der Bericht kommt spaeter mit dem Umschlag und landet in derselben
+     * Statuszeile; das Formular zeigt ihn beim naechsten Oeffnen.
+     */
+    private function EduVonHand(bool $alles): string
+    {
+        if (!$this->ScanQuelleUebernommen('edu')) {
+            return $this->EduScanRun(true, $alles);
+        }
+        if (!$this->EduAuftragGeben('hand', $alles)) {
+            return $this->Translate('Nothing to scan — no page entered, or class pages are off.');
+        }
+        return $this->Translate('Order placed — the scanner is working on it. '
+            . 'The report appears here when it is done.');
+    }
+
+    /**
+     * Einen Klassenseiten-Lauf an den Scanner geben.
+     *
+     * Die Seiten reisen MIT dem Auftrag. Sie stehen als Eigenschaft an dieser
+     * Instanz, und `IPS_GetProperty` auf eine fremde Instanz zeigt einen nur
+     * eingetippten, noch nicht uebernommenen Wert nicht — der Scanner koennte
+     * sie also weder lesen noch merken, ob sie aktuell sind.
+     *
+     * Die Sperrliste wird HIER angewandt und nicht dort: sie steht als
+     * `blocked` im Bestand und wird aus dem Hook geschrieben, wenn jemand in
+     * der App einen Seitenordner loescht. Eine zweite Probe beim Einpflegen
+     * faengt, was sich zwischen Auftrag und Ergebnis noch aendert.
+     *
+     * @param string $anlass 'timer' | 'hand'
+     */
+    private function EduAuftragGeben(string $anlass, bool $alles = false): bool
+    {
+        if (!$this->EduIsEnabled()) {
+            return false;
+        }
+        $seiten = $this->EduSeiten();
+        /* Die verlinkten Seiten hinten an — wie im eigenen Lauf. Von ihnen aus
+           wird kein Verweis weiterverfolgt; die Kette bleibt eine Ebene tief. */
+        foreach ($this->EduGefundene() as $g) {
+            $seiten[] = ['name' => (string)$g['name'], 'url' => (string)$g['url'],
+                         'userId' => (string)($g['userId'] ?? '')];
+        }
+        $vorher = count($seiten);
+        $seiten = array_values(array_filter($seiten,
+            fn(array $s): bool => !$this->EduGesperrt((string)$s['url'])));
+        if (count($seiten) < $vorher) {
+            $this->SendDebug('EduMaps', sprintf('%d gesperrte Seite(n) nicht beauftragt',
+                $vorher - count($seiten)), 0);
+        }
+        if ($seiten === []) {
+            return false;
+        }
+        return $this->ScanAuftragGeben('edu', [
+            'anlass' => $anlass,
+            'alles'  => $alles,
+            'seiten' => $seiten,
+        ]);
+    }
+
     private function EduSeiten(): array
     {
         $roh = json_decode((string)$this->EduProp('EduPages', '[]'), true);
