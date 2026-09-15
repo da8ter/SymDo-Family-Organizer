@@ -363,15 +363,63 @@ trait CalDAVSync
 
             if ($calData !== '') {
                 $vtodo = $this->CalDAVParseVTodo($calData);
-                if ($vtodo !== null) {
-                    $vtodo['caldavHref'] = $href;
-                    $vtodo['caldavEtag'] = $this->CalDAVNormalizeEtag($etag);
-                    $items[] = $vtodo;
+                if ($vtodo === null) {
+                    /* Kalenderdaten da, aber unlesbar. Weglassen hiesse „diese
+                       Aufgabe gibt es nicht mehr" — und der Abgleich loeschte
+                       sie samt der lokalen Bearbeitung. */
+                    $this->SendDebug('CalDAV', 'Unlesbares VTODO – Abruf verworfen: ' . $href, 0);
+                    return null;
+                }
+                $vtodo['caldavHref'] = $href;
+                $vtodo['caldavEtag'] = $this->CalDAVNormalizeEtag($etag);
+                $items[] = $vtodo;
+                continue;
+            }
+
+            /* KEINE Kalenderdaten. Das ist harmlos, solange der Server das auch
+               so meint — die Sammlung selbst antwortet mit 200 und ohne Daten.
+               Meldet er dagegen einen Fehler, ist die Antwort UNVOLLSTAENDIG,
+               und genau das darf nicht wie eine Loeschung aussehen: HTTP 207
+               sagt nur, dass eine Multi-Status-Antwort kommt, nicht dass alle
+               Eintraege geklappt haben (RFC 4918 §13).
+
+               404 bleibt draussen: eine Ressource, die zwischen Abfrage und
+               Lesen verschwindet, IST geloescht. Alles andere ab 400 — 403,
+               500, 503 — ist ein Fehler der Gegenstelle, und dann wird der
+               ganze Abruf verworfen. Ein ausgelassener Durchgang kostet
+               nichts; eine falsche Loeschung kostet die lokale Fassung. */
+            foreach ($this->CalDAVStatusCodes($response) as $code) {
+                if ($code >= 400 && $code !== 404) {
+                    $this->SendDebug('CalDAV', sprintf(
+                        'Teilfehler %d im Multistatus – Abruf verworfen: %s', $code, $href), 0);
+                    return null;
                 }
             }
         }
 
         return $items;
+    }
+
+    /**
+     * Alle Statusangaben EINER `response` als Zahlen.
+     *
+     * WebDAV schreibt sie als „HTTP/1.1 500 Internal Server Error" — sowohl im
+     * `propstat` als auch, bei einem Fehler der ganzen Ressource, direkt unter
+     * `response`.
+     *
+     * @return list<int>
+     */
+    private function CalDAVStatusCodes(SimpleXMLElement $response): array
+    {
+        $raus = [];
+        foreach (['d:propstat/d:status', 'd:status'] as $weg) {
+            foreach ((array)$response->xpath($weg) as $knoten) {
+                if (preg_match('#\b([1-5][0-9]{2})\b#', (string)$knoten, $m) === 1) {
+                    $raus[] = (int)$m[1];
+                }
+            }
+        }
+        return $raus;
     }
 
     private function CalDAVParseVTodo(string $ICalData): ?array
