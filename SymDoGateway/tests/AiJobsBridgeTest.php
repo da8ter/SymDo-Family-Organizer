@@ -564,5 +564,49 @@ $g->pLaden()->alleLoeschen();
 $h->pLaden()->alleLoeschen();
 $b->pLaden()->alleLoeschen();
 
+// ══ Wer den Anbieter noch DIREKT ruft ════════════════════════════════════
+/* Vier Wege fuehren zur Auswertung: Klassenseiten, LOGINEO, Postfach und
+   Webhook. Drei davon gehen ueber die Warteschlange; der Webhook bleibt
+   bewusst synchron, weil sein Zustand die Spool-Datei ist (Begruendung steht
+   dort im Kommentar). Die Zahl steht hier ausdruecklich, damit ein FUENFTER
+   Weg auffaellt — und damit auffaellt, wenn einer der drei seine Weiche
+   verliert. */
+$dateien = [
+    'EduMaps.php' => __DIR__ . '/../libs/EduMaps.php',
+    'Moodle.php'  => __DIR__ . '/../libs/Moodle.php',
+    'MailScan.php' => __DIR__ . '/../libs/MailScan.php',
+];
+$direkt = 0;
+$eingereiht = 0;
+foreach ($dateien as $datei) {
+    $q = (string)file_get_contents($datei);
+    $direkt     += substr_count($q, '$this->MailAnalyseRecord(');
+    $eingereiht += substr_count($q, '$this->MailAnalyseAuftrag(');
+}
+pruefe('Drei Wege reihen ein', $eingereiht, 3);
+pruefe('… und vier rufen im Rueckfall direkt', $direkt, 4);
+$mail = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
+pruefe('Das Postfach fragt nach einem Laeufer',
+    str_contains($mail, "if (\$this->AiJobMoeglich()) {\n            \$grund = '';\n            \$ok = \$this->MailAnalyseAuftrag(\$imapID . ':' . \$uid,"), true);
+/* Loeschen erst NACH der Analyse: vorher waere die Mail weg und die Aufgabe
+   mit ihr, falls der Auftrag scheitert. */
+pruefe('Das Loeschen im Postfach reist mit dem Merker',
+    str_contains($mail, "'loeschen' => \$loeschen], \$grund);"), true);
+pruefe('… und passiert erst beim Abschluss',
+    str_contains($mail, 'private function MailMerkerAbschliessen(array $merker): void'), true);
+/* Und die Ruecknahme kennt alle drei Bestaende. */
+pruefe('Die Ruecknahme unterscheidet die Quellen',
+    str_contains($mail, "if (\$quelle === 'mail') {"), true);
+/* Eine volle Schlange ist KEIN Fehlversuch der Mail. Wer sie als einen
+   zaehlte, haette sie nach dreimal „gerade kein Platz" endgueltig
+   uebersprungen — und die Aufgabe darin waere weg, obwohl nie jemand sie
+   gelesen hat. */
+pruefe('Eine volle Schlange meldet sich getrennt',
+    str_contains($mail, "if (!\$ok && \$grund === 'ai_busy') {\n                return null;"), true);
+pruefe('… und der Aufrufer zaehlt sie nicht als Fehlversuch',
+    str_contains($mail, "if (\$ergebnis === null) {"), true);
+pruefe('… die Analyse darf das ueberhaupt melden',
+    str_contains($mail, 'private function MailAnalyse(int $imapID, array $kopf, string $userId): ?bool'), true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

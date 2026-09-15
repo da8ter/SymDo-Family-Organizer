@@ -516,7 +516,16 @@ trait MailScan
                 // Fehlversuchen gilt sie trotzdem als erledigt: eine dauerhaft
                 // scheiternde Mail (zu grosses PDF, kaputter Inhalt) darf nicht
                 // alle neueren blockieren.
-                if ($this->MailAnalyse($imapID, $mail, $urteil['userId'])) {
+                $ergebnis = $this->MailAnalyse($imapID, $mail, $urteil['userId']);
+                if ($ergebnis === null) {
+                    /* Die Warteschlange ist gerade voll. Weder vermerken noch
+                       als Fehlversuch zaehlen — nur spaeter noch einmal
+                       anklopfen. */
+                    $this->SendDebug('MailScan', 'Warteschlange voll, Analyse verschoben', 0);
+                    $this->MailArm(self::MAIL_RETRY_MS);
+                    return;
+                }
+                if ($ergebnis) {
                     $this->MailRemember((string)$imapID, $uid);
                     $offen = true;
                 } else {
@@ -674,7 +683,7 @@ trait MailScan
      * @return bool true, wenn die Mail fertig behandelt ist (auch bei 0 Aufgaben).
      *              false bei einem Fehler, der einen zweiten Versuch verdient.
      */
-    private function MailAnalyse(int $imapID, array $kopf, string $userId): bool
+    private function MailAnalyse(int $imapID, array $kopf, string $userId): ?bool
     {
         $uid  = (string)($kopf['UID'] ?? '');
         $voll = @IMAP_GetMailEx($imapID, $uid);
@@ -710,10 +719,43 @@ trait MailScan
             }
         }
 
+        $loeschen = (bool)$this->MailProp('MailDeleteAfter', false);
+
+        /* Als AUFTRAG, sobald ein Laeufer die Warteschlange bedient — dieselbe
+           Weiche wie bei den Klassenseiten. Der Anbieteraufruf dauert bis zu
+           fuenfundvierzig Sekunden und lief bisher hier, in der Spur, die auch
+           die App bedient.
+
+           Der Merker reist MIT. Vermerkt wird beim EINREIHEN — sonst griffe der
+           naechste Lauf dieselbe Mail und bezahlte sie ein zweites Mal —, und
+           er wird zurueckgenommen, wenn der Auftrag scheitert. Auch das
+           Loeschen im Postfach wandert mit: es darf erst passieren, wenn die
+           Analyse wirklich durch ist, sonst waere die Mail weg und die Aufgabe
+           mit ihr. */
+        if ($this->AiJobMoeglich()) {
+            $grund = '';
+            $ok = $this->MailAnalyseAuftrag($imapID . ':' . $uid, $kopf, $text, $anhaenge,
+                $userId, 'IMAP',
+                ['quelle' => 'mail', 'topf' => (string)$imapID, 'schluessel' => $uid,
+                 'loeschen' => $loeschen], $grund);
+            /* Eine volle Schlange ist KEIN Fehlversuch. Wer sie als einen
+               zaehlte, haette die Mail nach dreimal „gerade kein Platz"
+               endgueltig uebersprungen — und die Aufgabe darin waere weg,
+               obwohl nie jemand sie gelesen hat. */
+            if (!$ok && $grund === 'ai_busy') {
+                return null;
+            }
+            /* Eine volle Schlange ist KEIN Fehlversuch. Wer sie als einen
+               zaehlte, haette die Mail nach dreimal „gerade kein Platz"
+               endgueltig uebersprungen — und die Aufgabe darin waere weg,
+               obwohl nie jemand sie gelesen hat. */
+            return $ok;
+        }
+
         $fertig = $this->MailAnalyseRecord($imapID . ':' . $uid, $kopf, $text, $anhaenge, $userId);
         // Loeschen nur auf dem IMAP-Weg und nur nach einer abgeschlossenen Analyse:
         // eine Mail, die noch einen zweiten Versuch verdient, muss im Postfach bleiben.
-        if ($fertig && (bool)$this->MailProp('MailDeleteAfter', false)) {
+        if ($fertig && $loeschen) {
             @IMAP_DeleteMail($imapID, $uid);
         }
         return $fertig;
@@ -922,8 +964,10 @@ trait MailScan
      * @param list<array{kind:string,name:string,base64:string,url?:string}> $anhaenge
      */
     private function MailAnalyseAuftrag(string $vorschlagsId, array $kopf, string $text,
-        array $anhaenge, string $userId, string $quelle, array $merker = []): bool
+        array $anhaenge, string $userId, string $quelle, array $merker = [],
+        ?string &$grund = null): bool
     {
+        $grund = '';
         [$eingabe, $anhang] = $this->MailAnalyseEingabe($kopf, $text, $anhaenge);
 
         /* Die Beschreibung der Anhaenge reist mit, nicht ihr Inhalt: der
@@ -966,8 +1010,8 @@ trait MailScan
             $anhang === null ? '' : (string)$anhang['base64']);
 
         if (($r['ok'] ?? false) !== true) {
-            $this->SendDebug('MailScan', 'Auswertung nicht eingereiht: '
-                . (string)($r['code'] ?? '?'), 0);
+            $grund = (string)($r['code'] ?? '?');
+            $this->SendDebug('MailScan', 'Auswertung nicht eingereiht: ' . $grund, 0);
             return false;
         }
         return true;
@@ -997,6 +1041,83 @@ trait MailScan
         }
     }
 
+    /**
+     * Den Merker eines gescheiterten Auftrags zuruecknehmen.
+     *
+     * Drei Quellen teilen sich diesen Weg, und jede hat ihren EIGENEN Bestand:
+     * die Klassenseiten (`EduSeen`), LOGINEO (`MoodleSeen`) und die Post
+     * (`MailSeenUIDs`). Wer hier den falschen anfasst, erreicht zweierlei auf
+     * einmal — das Gescheiterte bleibt fuer immer als „gesehen" liegen, und
+     * etwas Fremdes, das durchgelaufen ist, kostet beim naechsten Lauf noch
+     * einmal Geld.
+     *
+     * @param array<string,mixed> $merker
+     */
+    private function MailMerkerZuruecknehmen(array $merker): void
+    {
+        $topf = trim((string)($merker['topf'] ?? ''));
+        $schluessel = trim((string)($merker['schluessel'] ?? ''));
+        if ($topf === '' || $schluessel === '') {
+            return;
+        }
+        $quelle = (string)($merker['quelle'] ?? '');
+        if ($quelle === 'mail') {
+            /* Der Fehlversuchs-Zaehler laeuft weiter: eine dauerhaft
+               scheiternde Mail (kaputtes PDF) darf nicht ewig wiederkommen und
+               alle neueren blockieren. Ab MAIL_FAIL_MAX gilt sie als erledigt. */
+            $versuche = $this->MailCountFailure($topf, $schluessel);
+            if ($versuche >= self::MAIL_FAIL_MAX) {
+                $this->LogMessage(sprintf(
+                    'SymDo: E-Mail nach %d fehlgeschlagenen Analysen uebersprungen (%s:%s)',
+                    $versuche, $topf, $schluessel), KL_ERROR);
+                return;   // vermerkt bleibt vermerkt
+            }
+            $this->MailVergessen($topf, $schluessel);
+            return;
+        }
+        $this->EduMerkerZuruecknehmen($merker);
+    }
+
+    /**
+     * Was nach einem GELUNGENEN Auftrag noch zu tun ist.
+     *
+     * Bisher nur eines: die Mail im Postfach loeschen, wenn der Nutzer das so
+     * eingestellt hat. Es darf erst JETZT passieren — vorher waere die Mail weg
+     * und die Aufgabe mit ihr, falls der Auftrag scheitert.
+     *
+     * @param array<string,mixed> $merker
+     */
+    private function MailMerkerAbschliessen(array $merker): void
+    {
+        if ((string)($merker['quelle'] ?? '') !== 'mail'
+            || ($merker['loeschen'] ?? false) !== true) {
+            return;
+        }
+        $imapID = (int)($merker['topf'] ?? 0);
+        $uid    = trim((string)($merker['schluessel'] ?? ''));
+        if ($imapID > 0 && $uid !== '') {
+            @IMAP_DeleteMail($imapID, $uid);
+        }
+    }
+
+    /** Einen Mail-Merker wieder wegnehmen (Gegenstueck zu MailRemember). */
+    private function MailVergessen(string $topf, string $schluessel): void
+    {
+        $karte = json_decode($this->MailAttr('MailSeenUIDs', '{}'), true);
+        $karte = is_array($karte) ? $karte : [];
+        if (!isset($karte[$topf])) {
+            return;
+        }
+        $liste = array_values(array_filter(array_map('strval', (array)$karte[$topf]),
+            static fn(string $s): bool => $s !== $schluessel));
+        if ($liste === []) {
+            unset($karte[$topf]);
+        } else {
+            $karte[$topf] = $liste;
+        }
+        $this->MailWriteJsonAttr('MailSeenUIDs', $karte);
+    }
+
     /** @param array<string,mixed> $h die Herkunft des Auftrags */
     private function MailAuftragDeuten(array $kopf, array $h): void
     {
@@ -1011,9 +1132,14 @@ trait MailScan
                 . (string)((($kopf['result'] ?? [])['body']['error']['message'] ?? '')
                     ?: ($kopf['result']['body']['error']['code'] ?? '?')), KL_ERROR);
             if (is_array($h['merker'] ?? null)) {
-                $this->EduMerkerZuruecknehmen($h['merker']);
+                $this->MailMerkerZuruecknehmen($h['merker']);
             }
             return;
+        }
+        /* Durch. Was jetzt noch zu tun ist, haengt an der Quelle — die Post
+           loescht die Mail im Postfach, wenn der Nutzer das so eingestellt hat. */
+        if (is_array($h['merker'] ?? null)) {
+            $this->MailMerkerAbschliessen($h['merker']);
         }
         $aufgaben = is_array($rumpf['todos'] ?? null) ? $rumpf['todos'] : [];
         $mkopf    = is_array($h['kopf'] ?? null) ? $h['kopf'] : [];
@@ -1907,6 +2033,22 @@ trait MailScan
             @ini_set('memory_limit', $speicherVorher);
         }
 
+        /* Der Webhook-Weg bleibt SYNCHRON — bewusst, und das ist die einzige
+           Quelle, die nicht in die Warteschlange geht.
+
+           Sein Zustand ist die Spool-DATEI: sie traegt den vollen Text und die
+           Anhaenge und ist zugleich der Wiederholungsvermerk. Ein Auftrag
+           muesste sie entweder mitnehmen (dann geht bei einem Fehlschlag die
+           Mail verloren, denn der Auftragskopf traegt den Text nur gekuerzt) —
+           oder liegen lassen, und dann griffe der naechste Takt dieselbe Datei
+           und bezahlte sie ein zweites Mal. Beides waere schlimmer als die
+           Wartezeit.
+
+           Der Preis ist bekannt und klein: eine Schulmail kommt ein paarmal die
+           Woche, und sie belegt die Spur einmal fuer die Dauer ihrer
+           Auswertung. Die beiden haeufigen Wege — Postfach-Takt und
+           Klassenseiten — sind draussen. Gehoert in die Nachlese, zusammen mit
+           einem Spool, der einen laufenden Auftrag kennt. */
         $fertig = $this->MailAnalyseRecord(
             'hook:' . $key,
             (array)$satz['kopf'],
