@@ -134,6 +134,13 @@ final class AiJobRunner
                 return true;
             }
             $anbieter = ($this->anbieterBauen)();
+            /* Der Waechter an der Transportgrenze. Die Proben in `ausfuehren`
+               sind billige Abkuerzungen; DIESER hier sitzt unmittelbar vor dem
+               Netzaufruf, also hinter jeder Aufbereitung — ein PDF fuer einen
+               lokalen Server wird erst in Text oder Seitenbilder verwandelt,
+               und das dauert. Faellt der Widerruf in diese Zeit, sahen ihn die
+               Proben davor noch nicht. */
+            $anbieter->abbruchWaechter(fn(): bool => $this->laden->lesen($id) !== null);
             $roh = $this->ausfuehren($kopf, $anbieter);
             if ($roh === null) {
                 /* Waehrend der Vorarbeit widerrufen — `ausfuehren` hat dann
@@ -141,6 +148,13 @@ final class AiJobRunner
                    ist weg, und weg heisst weg. */
                 return true;
             }
+        } catch (AiWiderrufen $e) {
+            /* Widerrufen, waehrend der Anbieter noch aufbereitete. Nichts
+               schreiben, nichts melden — der Auftrag ist weg, und weg heisst
+               weg. Ausdruecklich KEIN Vertagen: ein Fehlercode wuerde als
+               voruebergehende Stoerung gewertet und der Auftrag erneut
+               versucht. */
+            return true;
         } catch (\Throwable $e) {
             /* Ein Wurf darf NIE einen Auftrag als „laeuft" liegen lassen: er
                waere dann bis zum naechsten Aufraeumen unsichtbar, und der

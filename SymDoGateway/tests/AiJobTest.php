@@ -406,6 +406,104 @@ foreach ([['Text',     ['system' => 'SYS', 'user' => 'GEHEIM', 'payloadKind' => 
     pruefe('… der Auftrag bleibt weg (' . $name . ')', $laden->lesen($x), null);
 }
 
+// ── Widerruf waehrend der AUFBEREITUNG im Anbieter ───────────────────────
+/* Die Probe unmittelbar vor `complete()` ist noch zu frueh. Ein PDF fuer einen
+   lokalen Server wird DARIN erst in Text oder Seitenbilder verwandelt, und das
+   dauert; der Netzaufruf kommt erst danach. Faellt der Widerruf in dieses
+   Fenster, ging der Inhalt trotzdem hinaus. Nachgefasst von einem externen
+   Codereview am 15.09.2026.
+
+   Der Waechter sitzt deshalb an der TRANSPORTGRENZE — in `post()`, der einzigen
+   Stelle, durch die jeder Anbieteraufruf geht. */
+{
+    $geschickt = 0;
+    $bauen2 = static function () use (&$geschickt): AiProvider {
+        return AiProvider::ausKonfiguration(
+            ['AiProvider' => 'openai', 'AiOpenAIKey' => 'k'],
+            static function () use (&$geschickt): array {
+                $geschickt++;
+                return ['status' => 200, 'body' => (string)json_encode(
+                    ['choices' => [['message' => ['content' => 'X'], 'finish_reason' => 'stop']]]), 'err' => ''];
+            });
+    };
+
+    $a = $bauen2();
+    $a->abbruchWaechter(static fn(): bool => true);
+    pruefe('Mit gueltigem Auftrag geht der Ruf hinaus',
+        [(bool)($a->complete('s', 'u', null)['ok'] ?? false), $geschickt], [true, 1]);
+
+    $geschickt = 0;
+    $b = $bauen2();
+    $b->abbruchWaechter(static fn(): bool => false);
+    $gefangen = '';
+    try {
+        $b->complete('s', 'u', null);
+    } catch (AiWiderrufen $e) {
+        $gefangen = 'AiWiderrufen';
+    }
+    pruefe('Nach dem Widerruf wirft die Transportgrenze', $gefangen, 'AiWiderrufen');
+    pruefe('… und NICHTS geht hinaus', $geschickt, 0);
+
+    $geschickt = 0;
+    $c = $bauen2();
+    pruefe('Ohne Waechter sendet der synchrone Weg wie bisher',
+        [(bool)($c->complete('s', 'u', null)['ok'] ?? false), $geschickt], [true, 1]);
+}
+
+/* Und der Laeufer muss den Wurf als WIDERRUF behandeln, nicht als Stoerung:
+   ein Fehlercode wuerde vertagt und der Auftrag erneut versucht. */
+{
+    $laden->alleLoeschen();
+    $gemeldet = [];
+    $z = AiJobStore::neueKennung();
+    $laden->anlegen(kopf($z, 4000, ['job' => ['system' => 'SYS', 'user' => 'GEHEIM',
+        'payloadKind' => '', 'mime' => '', 'url' => '']]), '');
+    $werfer = new AiJobRunner($laden,
+        static function () use ($laden, $z): AiProvider {
+            /* Der Sender loescht den Auftrag und wirft — genau der Ablauf, den
+               der Waechter an der Transportgrenze ausloest, wenn der Nutzer
+               waehrend der PDF-Aufbereitung widerruft. */
+            return AiProvider::ausKonfiguration(
+                ['AiProvider' => 'openai', 'AiOpenAIKey' => 'k'],
+                static function () use ($laden, $z): array {
+                    $laden->loeschen($z);
+                    throw new AiWiderrufen('waehrend der Aufbereitung widerrufen');
+                });
+        },
+        $holen, $geben,
+        static function (string $id) use (&$gemeldet): void { $gemeldet[] = $id; },
+        $uhr);
+    $kopfZ = $laden->naechsten($uhrzeit);
+    pruefe('Der Laeufer meldet den Durchgang als erledigt', $werfer->einen($kopfZ), true);
+    pruefe('… meldet aber NICHTS zurueck', $gemeldet, []);
+    pruefe('… und legt den geloeschten Auftrag NICHT wieder an', $laden->lesen($z), null);
+    pruefe('… und vertagt ihn auch nicht', count($laden->koepfe()), 0);
+
+    /* Und der Wurf darf auch dann keine Antwort erfinden, wenn der Auftrag
+       noch dasteht. Der Unterschied zum allgemeinen `catch` ist genau das: ein
+       `internal`-Fehler wuerde geschrieben UND gemeldet, und der Nutzer saehe
+       „Auswertung fehlgeschlagen" fuer etwas, das er selbst abgebrochen hat. */
+    $laden->alleLoeschen();
+    $gemeldet = [];
+    $w = AiJobStore::neueKennung();
+    $laden->anlegen(kopf($w, 4000, ['job' => ['system' => 'SYS', 'user' => 'GEHEIM',
+        'payloadKind' => '', 'mime' => '', 'url' => '']]), '');
+    $werfer2 = new AiJobRunner($laden,
+        static function (): AiProvider {
+            return AiProvider::ausKonfiguration(
+                ['AiProvider' => 'openai', 'AiOpenAIKey' => 'k'],
+                static function (): array {
+                    throw new AiWiderrufen('waehrend der Aufbereitung widerrufen');
+                });
+        },
+        $holen, $geben,
+        static function (string $id) use (&$gemeldet): void { $gemeldet[] = $id; },
+        $uhr);
+    $werfer2->einen($laden->naechsten($uhrzeit));
+    pruefe('Ein Widerruf erfindet keine Fehlerantwort',
+        [(string)($laden->lesen($w)['state'] ?? '-'), $gemeldet], [AiJobStore::LAEUFT, []]);
+}
+
 /* Der Rezept-Weg laesst sich hier nicht bis zum Anbieter fahren — der Abruf
    ginge ins Netz. Fuer IHN wird die Reihenfolge am Quelltext festgenagelt:
    VOR dem Abruf und VOR dem Aufruf muss nachgesehen werden, sonst holt das

@@ -31,6 +31,17 @@ require_once __DIR__ . '/AiHttp.php';
  *  - **Kein Zugriff auf Eigenschaften.** Die Konfiguration kommt einmal
  *    herein (`ausKonfiguration`) und wird nicht nachgeladen.
  */
+/**
+ * „Den Auftrag gibt es nicht mehr" — geworfen an der Transportgrenze.
+ *
+ * Eine eigene Ausnahme und kein Fehlercode: ein Code liefe durch die Deutung,
+ * wuerde als voruebergehende Stoerung gewertet und der Auftrag vertagt. Genau
+ * das darf ein Widerruf nicht ausloesen.
+ */
+final class AiWiderrufen extends \RuntimeException
+{
+}
+
 final class AiProvider
 {
     // ── Modelle ──────────────────────────────────────────────────────────
@@ -91,6 +102,33 @@ final class AiProvider
     private $senden;
 
     /**
+     * Darf noch gesendet werden?
+     *
+     * Zwischen der Entscheidung „los" und dem tatsaechlichen Netzaufruf liegt
+     * ARBEIT: ein PDF wird fuer einen lokalen Server erst in Text oder in
+     * Seitenbilder verwandelt, und das dauert. Zieht der Nutzer in dieser Zeit
+     * seine Einwilligung zurueck, ging der Inhalt bisher trotzdem hinaus — die
+     * Probe davor hatte den Widerruf noch nicht sehen koennen. Gemeldet von
+     * einem externen Codereview am 15.09.2026 (F7, zweite Nachfassung).
+     *
+     * Der Waechter sitzt deshalb an der TRANSPORTGRENZE, nicht davor: `post()`
+     * ist die einzige Stelle, durch die jeder Anbieteraufruf geht.
+     *
+     * @var null|callable():bool
+     */
+    private $weiter = null;
+
+    /**
+     * Den Waechter setzen. Wer keinen setzt, sendet wie bisher.
+     *
+     * @param null|callable():bool $weiter false = nicht mehr senden
+     */
+    public function abbruchWaechter(?callable $weiter): void
+    {
+        $this->weiter = $weiter;
+    }
+
+    /**
      * @param array<string,mixed> $konfig
      * @param null|callable(string,list<string>,string,int,int):array $senden
      */
@@ -106,6 +144,13 @@ final class AiProvider
      */
     private function post(string $url, array $kopf, string $rumpf, int $frist): array
     {
+        /* Die LETZTE Probe, unmittelbar vor dem Netz. Sie wirft, statt einen
+           Fehler zurueckzugeben: ein Rueckgabewert liefe durch die Deutung,
+           wuerde als „nicht erreichbar" gewertet und der Auftrag noch einmal
+           versucht. Weg heisst weg. */
+        if ($this->weiter !== null && !($this->weiter)()) {
+            throw new AiWiderrufen('Auftrag waehrend der Aufbereitung widerrufen');
+        }
         if ($this->senden !== null) {
             return ($this->senden)($url, $kopf, $rumpf, $frist, self::CONNECT_TIMEOUT);
         }
