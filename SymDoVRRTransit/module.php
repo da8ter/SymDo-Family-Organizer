@@ -565,15 +565,53 @@ class SymDoVRRTransit extends IPSModuleStrict
                 }
             }
         }
+        /* Die Richtungen gleich mit — sie kosten denselben einen Abruf, den der
+           Nutzer sonst gleich darauf mit dem Knopf ausloesen wuerde. Bleibt die
+           Zelle leer (Haltestelle gerade ohne Abfahrten, Nachtstunde, Stoerung),
+           ist das kein Fehlschlag: der Knopf holt es spaeter nach. */
+        [$richtung, $knapp] = $this->RichtungenZelle($stopId);
         $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
-                     'lines' => '', 'direction' => '', 'walk' => 0, 'limit' => 6];
+                     'lines' => '', 'direction' => $richtung, 'walk' => 0, 'limit' => 6];
 
         $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('Routes', 'columns', (string)json_encode(
             $this->StreckenSpalten($this->MitgliederOptionen(), $this->OrtOptionen($zeilen)),
             JSON_UNESCAPED_UNICODE));
+        $hinweis = $this->Translate('Added: ') . $name;
+        if ($richtung !== '') {
+            $hinweis .= sprintf($this->Translate(', %d direction(s) filled in'),
+                count(explode(', ', $richtung)));
+            if ($knapp) {
+                $hinweis .= ' ' . sprintf(
+                    $this->Translate('(cut off at %d — there are more)'), TransitCalc::RICHTUNGEN_MAX);
+            }
+            $hinweis .= $this->Translate('. Delete what you do not want');
+        }
         $this->UpdateFormField('StopStatus', 'caption',
-            $this->Translate('Added: ') . $name . $this->Translate('. Press "Apply" to keep it.'));
+            $hinweis . $this->Translate('. Press "Apply" to keep it.'));
+    }
+
+    /**
+     * Die Richtungen EINER Haltestelle als fertige Zelle.
+     *
+     * Eine Stelle fuer beide Wege — den Knopf „Richtungen vorschlagen" und das
+     * Uebernehmen einer neuen Haltestelle. Zwei Kopien waeren beim naechsten
+     * Fund auseinandergelaufen; das Komma im Ziel und der Deckel sind schon
+     * zwei davon gewesen.
+     *
+     * @return array{0:string,1:bool} die Zelle, und ob gekuerzt werden musste
+     */
+    private function RichtungenZelle(string $stopId): array
+    {
+        /* Vierzig statt der sechs der Tafel: mit sechs Abfahrten saehe man an
+           einer belebten Haltestelle nur EINE Richtung, und genau die andere
+           sucht man meistens. */
+        $antwort = Efa::Abfahrten($stopId, 40);
+        if (($antwort['ok'] ?? false) !== true) {
+            return ['', false];
+        }
+        $ziele = TransitCalc::Richtungen((array)($antwort['data'] ?? []));
+        return [implode(', ', $ziele), count($ziele) >= TransitCalc::RICHTUNGEN_MAX];
     }
 
     /**
@@ -631,16 +669,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                 break;
             }
             $abgefragt++;
-            /* Vierzig statt der sechs der Tafel: mit sechs Abfahrten saehe man
-               an einer belebten Haltestelle nur EINE Richtung, und genau die
-               andere sucht man meistens. */
-            $antwort = Efa::Abfahrten($stopId, 40);
-            if (($antwort['ok'] ?? false) !== true) {
-                $ohne++;
-                continue;
-            }
-            $ziele = TransitCalc::Richtungen((array)($antwort['data'] ?? []));
-            if ($ziele === []) {
+            [$zelle, $knapp] = $this->RichtungenZelle($stopId);
+            if ($zelle === '') {
                 $ohne++;
                 continue;
             }
@@ -648,10 +678,10 @@ class SymDoVRRTransit extends IPSModuleStrict
                Gekuerzt wird — aber SICHTBAR: eine still gekappte Liste sieht
                vollstaendig aus, und wer daraus loescht, verliert eine Richtung,
                die er nie zu sehen bekam. */
-            if (count($ziele) >= TransitCalc::RICHTUNGEN_MAX) {
+            if ($knapp) {
                 $gekuerzt++;
             }
-            $zeilen[$i]['direction'] = implode(', ', $ziele);
+            $zeilen[$i]['direction'] = $zelle;
             $gefuellt++;
         }
 

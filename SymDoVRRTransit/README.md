@@ -90,10 +90,11 @@ dann allerdings keine Zeiten und bleibt leer.
    Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
-**Richtungen muss man nicht raten.** Der Knopf **Richtungen vorschlagen** unter
-der Haltestellenliste fragt jede eingetragene Haltestelle ab und trägt ein, was
-dort wirklich fährt — in der Reihenfolge der nächsten Abfahrten. Übrig bleibt
-das Löschen dessen, was nicht gewünscht ist. Gefüllt werden nur **leere**
+**Richtungen muss man nicht raten.** Schon beim **Übernehmen einer
+Haltestelle** wird die Spalte gefüllt: mit dem, was dort wirklich fährt, in der
+Reihenfolge der nächsten Abfahrten. Übrig bleibt das Löschen dessen, was nicht
+gewünscht ist. Für Haltestellen, die schon in der Liste stehen, tut der Knopf
+**Richtungen vorschlagen** darunter dasselbe. Gefüllt werden nur **leere**
 Zellen; eine gesetzte Richtung ist eine Entscheidung und bleibt stehen (wer neu
 vorschlagen lassen will, leert die Zelle). Gespeichert wird nichts, bis
 *Übernehmen* gedrückt ist.
