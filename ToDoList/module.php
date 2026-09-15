@@ -2248,27 +2248,53 @@ class SymDoToDoList extends IPSModuleStrict
                 $u = $this->NormalizeRecurrenceCustomUnit($CustomUnit);
                 $v = $this->NormalizeRecurrenceCustomValue($CustomValue);
                 switch ($u) {
+                    // Stunden sind echte Zeitdauern — dort ist die Sekundenrechnung richtig.
                     case 'h': $next = $Due + (3600 * $v); break;
-                    case 'd': $next = $Due + (86400 * $v); break;
-                    case 'w': $next = $Due + (604800 * $v); break;
+                    case 'd': $next = $this->AddDaysLocal($Due, $v); break;
+                    case 'w': $next = $this->AddDaysLocal($Due, 7 * $v); break;
                     case 'm': $next = $this->AddMonthsClamped($Due, $v); break;
                     case 'y': $next = $this->AddMonthsClamped($Due, 12 * $v); break;
                 }
                 break;
-            case 'w1': $next = $Due + 604800; break;
-            case 'w2': $next = $Due + 1209600; break;
-            case 'w3': $next = $Due + 1814400; break;
+            case 'w1': $next = $this->AddDaysLocal($Due, 7); break;
+            case 'w2': $next = $this->AddDaysLocal($Due, 14); break;
+            case 'w3': $next = $this->AddDaysLocal($Due, 21); break;
             case 'm1': $next = $this->AddMonthsClamped($Due, 1); break;
             case 'q1': $next = $this->AddMonthsClamped($Due, 3); break;
             case 'y1': $next = $this->AddMonthsClamped($Due, 12); break;
         }
-        // Re-floor an all-day due to local midnight: the fixed-seconds advance (e.g. +604800 for
-        // a week) shifts the wall-clock by an hour across a DST boundary, which would move the
-        // calendar day of a midnight-anchored all-day task.
+        /* Sicherheitsnetz: eine ganztaegige Faelligkeit steht auf Mitternacht.
+           Die Kalenderrechnung oben haelt die Uhrzeit ohnehin fest; kam das
+           Datum aber nicht exakt von Mitternacht (alter Bestand), zieht das
+           hier nach. */
         if ($AllDay && $next > 0) {
             $next = (int)strtotime(date('Y-m-d 00:00:00', $next));
         }
         return $next;
+    }
+
+    /**
+     * Tage KALENDARISCH weiterzaehlen, nicht in Sekunden.
+     *
+     * Eine Woche sind nicht immer 604800 Sekunden: an der Zeitumstellung sind
+     * es 604800 ± 3600. Mit fester Sekundenzahl landete der 19.10. plus eine
+     * Woche auf dem 25.10. statt dem 26.10., und — schlimmer — eine TAEGLICHE
+     * ganztaegige Aufgabe am 25.10. bekam als naechsten Termin wieder den
+     * 25.10.: sie rueckte nie vor, und auch die Nachholschleife kam nicht
+     * daran vorbei. Eine Aufgabe mit Uhrzeit sprang von 09:00 auf 10:00.
+     * Gemeldet von einem externen Codereview (F4, 14.09.2026), alle drei Faelle
+     * nachgerechnet.
+     *
+     * `modify()` haelt die WANDUHR fest und ueberquert die Umstellung richtig.
+     */
+    private function AddDaysLocal(int $Due, int $Days): int
+    {
+        if ($Days === 0) {
+            return $Due;
+        }
+        $zone = new DateTimeZone(date_default_timezone_get());
+        return (new DateTimeImmutable('@' . $Due))->setTimezone($zone)
+            ->modify(($Days > 0 ? '+' : '-') . abs($Days) . ' days')->getTimestamp();
     }
 
     private function AddMonthsClamped(int $Due, int $Months): int
