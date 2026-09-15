@@ -469,6 +469,49 @@ class EduStoreCalc
      * @param array<string,mixed>|null $alt   die vorhandene Notiz, null = neu
      * @param array<string,mixed>      $karte die frisch gelesene Karte
      */
+    /**
+     * Woher die Karte stammt. Die Klassenseite ist die Vorgabe — ihre Karten
+     * tragen das Feld gar nicht, und das soll so bleiben: ihre Form ist der
+     * Vertrag des Umschlags, und den aendert man nicht fuer eine zweite Quelle.
+     */
+    public static function Quelle(array $karte): string
+    {
+        $q = (string)($karte['quelle'] ?? '');
+        return $q !== '' ? $q : 'edumaps';
+    }
+
+    /**
+     * Die Kennung, unter der die Karte im Bestand wiedererkannt wird.
+     *
+     * LOGINEO bringt sie fertig mit (`moodle:<id>`); eine Klassenseite nennt nur
+     * ihre `boxid`, das Praefix kommt von hier. An dieser Kennung haengt ALLES:
+     * sie entscheidet, ob eine Karte wiedergefunden oder ein zweites Mal
+     * angelegt wird.
+     */
+    public static function SrcId(array $karte): string
+    {
+        $id = trim((string)($karte['srcId'] ?? ''));
+        return $id !== '' ? $id : 'edu:' . (string)($karte['boxid'] ?? '');
+    }
+
+    /**
+     * Worauf die Karte zeigt.
+     *
+     * Ihr eigener Weg, wenn sie einen nennt (LOGINEO: die Modulseite). Sonst
+     * der Sprung auf ihre Stelle in der Seite — und wenn sie auch keine Stelle
+     * hat (ein LOGINEO-Abschnitt), schlicht die Seite selbst. Ein `#box-` ohne
+     * Kennung waere ein Verweis, der nirgends landet.
+     */
+    public static function KartenWeg(array $karte, string $seitenUrl): string
+    {
+        $eigen = trim((string)($karte['srcUrl'] ?? ''));
+        if ($eigen !== '') {
+            return $eigen;
+        }
+        $boxid = (string)($karte['boxid'] ?? '');
+        return $boxid !== '' ? $seitenUrl . '#box-' . $boxid : $seitenUrl;
+    }
+
     public static function Bedarf(?array $alt, array $karte): string
     {
         if ($alt === null) {
@@ -500,19 +543,25 @@ class EduStoreCalc
             'att'       => $anhaenge,
             'createdAt' => $alt !== null ? (int)($alt['createdAt'] ?? $jetzt) : $jetzt,
             'updatedAt' => $jetzt,
-            'source'    => 'edumaps',
-            'srcId'     => 'edu:' . (string)($karte['boxid'] ?? ''),
+            'source'    => self::Quelle($karte),
+            'srcId'     => self::SrcId($karte),
             'srcRev'    => (int)($karte['updated'] ?? 0),
             /* Das Datum der QUELLE — wann die Schule die Karte angefasst hat,
-               nicht wann wir sie gespiegelt haben. */
-            'srcAt'     => (int)($karte['updated'] ?? 0),
+               nicht wann wir sie gespiegelt haben. Bei einer Klassenseite ist
+               das dieselbe Zahl wie die Fassung; bei LOGINEO nicht, denn dort
+               ist die Fassung einer Abschnittskarte ein Fingerabdruck des
+               Textes und keine Zeit. */
+            'srcAt'     => (int)($karte['srcAt'] ?? $karte['updated'] ?? 0),
             'section'   => self::Kappen((string)($karte['abschnitt'] ?? ''), self::TITLE_MAX),
             'pos'       => $nr,
             'sectionColor' => (string)($karte['abschnittFarbe'] ?? ''),
             'color'     => (string)($karte['farbe'] ?? ''),
             'html'      => (string)($karte['html'] ?? ''),
             'booking'   => $karte['buchung'] ?? null,
-            'srcUrl'    => $seitenUrl . '#box-' . (string)($karte['boxid'] ?? ''),
+            /* Der eigene Weg der Karte, sonst der Sprung auf ihre Stelle in der
+               Seite. LOGINEO nennt ihn (die Modulseite), eine Klassenseite
+               nicht — dort ist der Anker die Kartenkennung. */
+            'srcUrl'    => self::KartenWeg($karte, $seitenUrl),
         ];
     }
 
@@ -546,12 +595,18 @@ class EduStoreCalc
            Bestand neu. `section` zaehlt ueber die EXISTENZ des Schluessels:
            Karten aus der Zeit vor der Kartenansicht haben ihn gar nicht. */
         $fehlt = !array_key_exists('section', $alt)
+            /* Ein UMGEZOGENER Abschnitt zaehlt mit. Bisher wurde er zwar unten
+               gesetzt, aber nicht als Aenderung gewertet — der Satz wurde also
+               gar nicht erst geschrieben, und die Karte blieb fuer immer unter
+               der alten Ueberschrift, solange die Schule ihre Fassung nicht
+               anfasste. Der LOGINEO-Weg hatte das richtig, bevor beide Quellen
+               durch dieselbe Tuer gingen. */
+            || (string)($alt['section'] ?? '') !== self::Kappen((string)($karte['abschnitt'] ?? ''), self::TITLE_MAX)
             || (int)($alt['pos'] ?? -1) !== $nr
             || (string)($alt['sectionColor'] ?? '') !== (string)($karte['abschnittFarbe'] ?? '')
             || (string)($alt['color'] ?? '') !== (string)($karte['farbe'] ?? '')
-            || (int)($alt['srcAt'] ?? 0) !== (int)($karte['updated'] ?? 0);
+            ;
 
-        $alt['srcAt']        = (int)($karte['updated'] ?? 0);
         $alt['sectionColor'] = (string)($karte['abschnittFarbe'] ?? '');
         $alt['color']        = (string)($karte['farbe'] ?? '');
 
@@ -594,13 +649,22 @@ class EduStoreCalc
         }
         $alt['att'] = $att;
 
+        /* Das Quelldatum kann sich ohne neue Fassung bewegen: bei LOGINEO ist
+           die Fassung einer Abschnittskarte ein Fingerabdruck des Textes, das
+           Datum aber eine echte Zeit. */
+        $srcAt = (int)($karte['srcAt'] ?? $karte['updated'] ?? 0);
+        if ((int)($alt['srcAt'] ?? 0) !== $srcAt) {
+            $alt['srcAt'] = $srcAt;
+            $fehlt = true;
+        }
+
         // Lose verglichen: `null` und ein fehlendes Feld sind dasselbe.
         if (($alt['booking'] ?? null) != ($karte['buchung'] ?? null)) {
             $alt['booking'] = $karte['buchung'] ?? null;
             $fehlt = true;
         }
 
-        $weg = $seitenUrl . '#box-' . (string)($karte['boxid'] ?? '');
+        $weg = self::KartenWeg($karte, $seitenUrl);
         if ((string)($alt['srcUrl'] ?? '') !== $weg) {
             $alt['srcUrl'] = $weg;
             $fehlt = true;

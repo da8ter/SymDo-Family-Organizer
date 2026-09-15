@@ -822,6 +822,45 @@ trait EduMaps
      *
      * @return list<array{id:int,kind:string,name:string,bytes:int}>
      */
+    /**
+     * Schreibt DIESE Quelle ueberhaupt in den Bestand?
+     *
+     * Zwei Schalter, ein Weg: die Klassenseiten haben „in die Notizen
+     * spiegeln", LOGINEO hat „als Karten ablegen". Beide meinen dasselbe, und
+     * seit beide Quellen durch `EduEinpflegen` gehen, muss die Frage an EINER
+     * Stelle beantwortet werden — sonst richtete sich LOGINEO nach dem Schalter
+     * der Klassenseiten.
+     */
+    private function EduSpiegelnAn(string $quelle): bool
+    {
+        return $quelle === 'moodle'
+            ? (bool)$this->MoodleProp('MoodleToCards', true)
+            : (bool)$this->EduProp('EduToNotes', false);
+    }
+
+    /**
+     * Eine Datei der Karte holen — je nach Quelle auf verschiedenen Wegen.
+     *
+     * Eine Klassenseite ist oeffentlich, ihre Dateien kommen ueber den
+     * SSRF-sicheren Abruf (Deckel 2 MB, bricht darueber ab). LOGINEO verlangt
+     * den Token in der Adresse und darf bis 8 MB liefern — der Weg dorthin
+     * steht im Moodle-Teil und traegt seine eigenen Fristen.
+     */
+    private function EduDateiHolen(array $karte, string $url): ?string
+    {
+        if (EduStoreCalc::Quelle($karte) === 'moodle') {
+            return $this->MoodleDateiVonUrl($url);
+        }
+        $antwort = $this->AiFetchPublicPage($url);
+        return ($antwort['ok'] ?? false) === true ? (string)($antwort['body'] ?? '') : null;
+    }
+
+    /** Groesse, ab der gar nicht erst geladen wird. 0 = die Quelle sagt sie nicht. */
+    private function EduDateiDeckel(array $karte): int
+    {
+        return EduStoreCalc::Quelle($karte) === 'moodle' ? $this->MoodleDateiDeckel() : 0;
+    }
+
     private function EduNotizAnhaenge(array $karte): array
     {
         $raus = [];
@@ -850,12 +889,22 @@ trait EduMaps
                 if ($this->EduArt((string)($a['datei'] ?? $a['name'])) === '') {
                     continue;
                 }
-                $antwort = $this->AiFetchPublicPage((string)$a['url']);
-                if (($antwort['ok'] ?? false) !== true) {
+                /* Was der Bestand ohnehin nicht annimmt, wird gar nicht erst
+                   geladen. Nur LOGINEO nennt die Groesse vorher — gemessen an
+                   dieser Schule: die Elternabend-Praesentation hat 6,3 MB und
+                   passt nicht, sie waere umsonst geholt worden. */
+                $deckel = $this->EduDateiDeckel($karte);
+                if ($deckel > 0 && (int)($a['bytes'] ?? 0) > $deckel) {
+                    $this->SendDebug('EduMaps', sprintf('Datei zu gross fuer den Bestand, nur verlinkt: %s (%d > %d)',
+                        (string)$a['name'], (int)($a['bytes'] ?? 0), $deckel), 0);
+                    continue;
+                }
+                $roh = $this->EduDateiHolen($karte, (string)$a['url']);
+                if ($roh === null) {
                     $this->SendDebug('EduMaps', 'Datei nicht ladbar: ' . $a['name'], 0);
                     continue;
                 }
-                $r = $this->NotesSaveAttachment(base64_encode((string)($antwort['body'] ?? '')), (string)$a['name']);
+                $r = $this->NotesSaveAttachment(base64_encode($roh), (string)$a['name']);
                 if (($r['ok'] ?? false) !== true) {
                     $this->SendDebug('EduMaps', 'Datei nicht ablegbar (' . (string)($r['error']['code'] ?? '?')
                         . '): ' . $a['name'], 0);
@@ -933,7 +982,8 @@ trait EduMaps
             }
             return 0;
         }
-        if (!(bool)$this->EduProp('EduToNotes', false) || !$this->EduStorable()) {
+        $quelle = EduStoreCalc::Quelle($karten[0]);
+        if (!$this->EduSpiegelnAn($quelle) || !$this->EduStorable()) {
             return 0;
         }
         $lock = self::EDU_LOCK . $this->InstanceID;
@@ -956,14 +1006,17 @@ trait EduMaps
             }
             $aktuell = [];
             foreach ($karten as $k) {
-                $aktuell['edu:' . (string)$k['boxid']] = true;
+                $aktuell[EduStoreCalc::SrcId($k)] = true;
             }
             $jetzt = time();
             $neu = 0;
             $zurueck = 0;
             foreach ($store['notes'] as $i => $n) {
+                /* JE ORDNER UND JE QUELLE. Eine LOGINEO-Karte im selben
+                   Kind-Ordner darf ein Klassenseiten-Lauf nicht anfassen — und
+                   umgekehrt. */
                 if ((string)($n['folderId'] ?? '') !== $ordnerId
-                    || (string)($n['source'] ?? '') !== 'edumaps') {
+                    || (string)($n['source'] ?? '') !== $quelle) {
                     continue;
                 }
                 $srcId = (string)($n['srcId'] ?? '');

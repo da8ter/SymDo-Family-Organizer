@@ -542,7 +542,10 @@ trait Moodle
         if (!is_array($kurse)) {
             return '';
         }
-        $spiegeln  = (bool)$this->MoodleProp('MoodleToCards', true);
+        /* Der Schalter „als Karten ablegen" wird nicht mehr hier gelesen: er
+           steht jetzt in `EduSpiegelnAn`, zusammen mit dem der Klassenseiten —
+           beide Quellen gehen durch dieselbe Tuer, und die Frage gehoert an
+           EINE Stelle. */
         /* Auswerten kostet Geld — deshalb haengt es an der KI-Einwilligung und
            am eigenen Schalter, genau wie bei den Klassenseiten. */
         $auswerten = (bool)$this->MoodleProp('MoodleAnalyse', true)
@@ -572,23 +575,25 @@ trait Moodle
             }
             $liste = $this->MoodleKarten($zugang, (int)$kurs['id']);
             $karten += count($liste);
+            /* Spiegeln fuer die GANZE Seite auf einmal — derselbe Weg wie bei
+               den Klassenseiten, seit dem 15.09.2026 auch hier. Vorher gab es
+               dafuer 190 eigene Zeilen: ein Schreibvorgang JE KARTE, ohne
+               Medien-Schuebe und ohne Ruecknahme bei Fehlschlag. Der Bestand
+               wird bis zu ein Megabyte gross, und er liegt in derselben Spur,
+               die die App bedient. */
+            if (!$trocken) {
+                $neu += $this->EduSeiteSpiegeln($seite, $liste);
+            }
             /* Der ERSTE Lauf einer Seite merkt sich nur. Sonst stuenden beim
                Einschalten zwanzig Vorschlaege auf einmal da, und jeder kostet
                Geld. Erkannt am leeren Topf dieser Seite. */
             $topf = 'moodle:' . md5((string)$seite['url']);
             $ersterLauf = !$this->MoodleTopfHatEintraege($topf);
-            foreach ($liste as $nr => $karte) {
-                /* Spiegeln ZUERST und fuer jede Karte: es kostet keinen
-                   KI-Aufruf, haengt also an keinem Deckel. Der Bestand selbst
-                   entscheidet, ob es etwas zu tun gibt (srcRev). */
-                if ($spiegeln && !$trocken
-                    && $this->MoodleKarteSpiegeln($zugang, $seite, $karte, (int)$nr)) {
-                    $neu++;
-                }
+            foreach ($liste as $karte) {
                 if ($trocken) {
                     continue;
                 }
-                $schluessel = (string)$karte['srcId'] . ':' . (int)$karte['srcRev'];
+                $schluessel = (string)$karte['srcId'] . ':' . (int)$karte['updated'];
                 if ($this->MoodleGesehen($topf, $schluessel)) {
                     continue;
                 }
@@ -618,8 +623,8 @@ trait Moodle
                     $analysiert++;
                 }
             }
-            if ($spiegeln && !$trocken) {
-                $archiviert += $this->MoodleArchivAbgleichen($seite, $liste);
+            if (!$trocken) {
+                $archiviert += $this->EduArchivAbgleichen($seite, $liste);
             }
             $kursListe[(int)$kurs['id']] = $seite;
         }
@@ -704,19 +709,28 @@ trait Moodle
             $vorwort = $this->EduText((string)($abschnitt['summary'] ?? ''));
             if ($vorwort !== '' && $wo !== '') {
                 $raus[] = [
+                    // Dieselbe Form wie in MoodleModulKarte, siehe dort.
+                    'quelle' => 'moodle',
                     'srcId'  => 'moodlesec:' . (int)($abschnitt['id'] ?? 0),
                     /* Ein Abschnitt hat kein `timemodified`. Die Fassung ist
                        deshalb der Fingerabdruck des Textes: aendert die Schule
                        ihn, ist es eine neue Fassung — sonst nicht. */
-                    'srcRev'    => (int)crc32((string)($abschnitt['summary'] ?? '')),
+                    'updated'   => (int)crc32((string)($abschnitt['summary'] ?? '')),
+                    /* Ein Abschnitt hat kein Datum — dann gilt das des Bestands.
+                       AUSDRUECKLICH 0, nicht weggelassen: sonst faellt das Feld
+                       auf die Fassung zurueck, und die ist hier ein
+                       Fingerabdruck und keine Zeit. */
+                    'srcAt'     => 0,
+                    // Kein eigener Weg — dann zeigt die Karte auf die Kursseite.
+                    'srcUrl'    => '',
                     'titel'     => $wo,
                     'text'      => $vorwort,
                     'html'      => $this->EduHtml((string)($abschnitt['summary'] ?? '')),
                     'abschnitt' => $wo,
-                    'dateien'   => [],
-                    'weg'       => '',
-                    // Ein Abschnitt hat kein Datum — dann gilt das des Bestands.
-                    'stand'     => 0,
+                    'abschnittFarbe' => '',
+                    'farbe'     => '',
+                    'buchung'   => null,
+                    'anhaenge'  => [],
                 ];
             }
             foreach ((array)($abschnitt['modules'] ?? []) as $modul) {
@@ -760,7 +774,11 @@ trait Moodle
                 // Nur Bild und PDF: mehr kann die Karte nicht halten.
                 continue;
             }
-            $dateien[] = ['name' => $name, 'url' => $url, 'bytes' => (int)($c['filesize'] ?? 0)];
+            /* In der Form, die `EduNotizAnhaenge` erwartet. `preview` bleibt
+               leer: LOGINEO liefert kein Vorschaubild, und der Nachzug fragt
+               dann gar nicht erst danach. */
+            $dateien[] = ['name' => $name, 'datei' => $name, 'url' => $url,
+                          'preview' => '', 'bytes' => (int)($c['filesize'] ?? 0)];
             $stand = max($stand, (int)($c['timemodified'] ?? 0));
         }
         $text = $this->EduText((string)($modul['description'] ?? ''));
@@ -768,8 +786,17 @@ trait Moodle
             return null;
         }
         return [
+            /* Die Form der KLASSENSEITEN-Karte, plus die vier Felder, die eine
+               fremde Quelle mitbringen muss. Nur so geht LOGINEO durch dieselbe
+               Tuer in den Bestand (`EduEinpflegen`) — vorher hatte es einen
+               eigenen Spiegel, und jede Korrektur musste zweimal gemacht
+               werden. */
+            'quelle'    => 'moodle',
             'srcId'     => 'moodle:' . (int)($modul['id'] ?? 0),
-            'srcRev'    => $stand,
+            'updated'   => $stand,
+            // Wann die Schule das Modul (oder seine neueste Datei) angefasst hat.
+            'srcAt'     => $stand,
+            'srcUrl'    => trim((string)($modul['url'] ?? '')),
             'titel'     => trim((string)($modul['name'] ?? '')),
             'text'      => $text,
             /* Durch die WEISSE LISTE, wie bei Edumaps. Die formatierte Fassung
@@ -781,10 +808,10 @@ trait Moodle
                heute Nachmittag. */
             'html'      => $this->EduHtml((string)($modul['description'] ?? '')),
             'abschnitt' => $abschnitt,
-            'dateien'   => $dateien,
-            'weg'       => trim((string)($modul['url'] ?? '')),
-            // Wann die Schule das Modul (oder seine neueste Datei) angefasst hat.
-            'stand'     => $stand,
+            'abschnittFarbe' => '',
+            'farbe'     => '',
+            'buchung'   => null,
+            'anhaenge'  => $dateien,
         ];
     }
 
@@ -826,23 +853,29 @@ trait Moodle
                     $name = trim((string)($a['filename'] ?? ''));
                     $url  = trim((string)($a['fileurl'] ?? ''));
                     if ($name !== '' && $url !== '' && $this->EduArt($name) !== '') {
-                        $dateien[] = ['name' => $name, 'url' => $url,
-                                      'bytes' => (int)($a['filesize'] ?? 0)];
+                        $dateien[] = ['name' => $name, 'datei' => $name, 'url' => $url,
+                                      'preview' => '', 'bytes' => (int)($a['filesize'] ?? 0)];
                     }
                 }
+                $stand = (int)($d['timemodified'] ?? ($d['modified'] ?? 0));
                 $raus[] = [
+                    // Dieselbe Form wie in MoodleModulKarte, siehe dort.
+                    'quelle'    => 'moodle',
                     'srcId'     => 'moodlepost:' . (int)($d['discussion'] ?? ($d['id'] ?? 0)),
-                    'srcRev'    => (int)($d['timemodified'] ?? ($d['modified'] ?? 0)),
+                    'updated'   => $stand,
+                    'srcAt'     => $stand,
+                    'srcUrl'    => (string)$zugang['site'] . '/mod/forum/discuss.php?d='
+                                   . (int)($d['discussion'] ?? ($d['id'] ?? 0)),
                     'titel'     => trim((string)($d['subject'] ?? '')),
                     'text'      => $this->EduText((string)($d['message'] ?? '')),
                     // Weisse Liste, siehe MoodleModulKarte: ein Forumsbeitrag
                     // ist fremdes HTML.
                     'html'      => $this->EduHtml((string)($d['message'] ?? '')),
                     'abschnitt' => $wo,
-                    'dateien'   => $dateien,
-                    'weg'       => (string)$zugang['site'] . '/mod/forum/discuss.php?d='
-                                   . (int)($d['discussion'] ?? ($d['id'] ?? 0)),
-                    'stand'     => (int)($d['timemodified'] ?? ($d['modified'] ?? 0)),
+                    'abschnittFarbe' => '',
+                    'farbe'     => '',
+                    'buchung'   => null,
+                    'anhaenge'  => $dateien,
                 ];
             }
         }
@@ -862,9 +895,36 @@ trait Moodle
         if ($token === '' || $url === '') {
             return null;
         }
-        $voll = $url . (str_contains($url, '?') ? '&' : '?') . 'token=' . rawurlencode($token);
+        return $this->MoodleDateiVonUrl(
+            $url . (str_contains($url, '?') ? '&' : '?') . 'token=' . rawurlencode($token));
+    }
+
+    /** Groesse, ab der eine LOGINEO-Datei gar nicht erst geholt wird. */
+    private function MoodleDateiDeckel(): int
+    {
+        /* Nicht groesser, als der Bestand annimmt: ein PDF darf hoechstens
+           OutputLimit() Bytes haben (die Ausgabegrenze minus Reserve), sonst
+           weist NotesSaveAttachment es mit „file_too_large" ab. Gemessen an
+           dieser Schule: die Elternabend-Praesentation hat 6,3 MB und passt
+           damit nicht — sie waere umsonst geladen worden. Die Karte behaelt
+           Text und Verweis auf die Seite. */
+        return min(self::MOODLE_DATEI_MAX, $this->OutputLimit());
+    }
+
+    /**
+     * Dieselbe Datei, aber die Adresse traegt den Token schon.
+     *
+     * Getrennt, seit der Spiegel beider Quellen in `EduEinpflegen` liegt: dort
+     * steht kein Zugang mehr zur Verfuegung, wohl aber die fertige Adresse an
+     * der Karte. Der Groessendeckel und die Fristen bleiben, wo sie waren.
+     */
+    private function MoodleDateiVonUrl(string $voll): ?string
+    {
+        if ($voll === '') {
+            return null;
+        }
         if (!$this->AiIsPublicUrl($voll)) {
-            $this->SendDebug('Moodle', 'Dateiadresse nicht zulaessig: ' . $url, 0);
+            $this->SendDebug('Moodle', 'Dateiadresse nicht zulaessig', 0);
             return null;
         }
         $ch = curl_init($voll);
@@ -889,251 +949,6 @@ trait Moodle
             return null;
         }
         return $body;
-    }
-
-    /**
-     * Die Dateien einer Karte als Anhaenge ablegen.
-     *
-     * @return list<array{id:int,kind:string,name:string,bytes:int}>
-     */
-    private function MoodleAnhaenge(array $zugang, array $karte): array
-    {
-        $raus = [];
-        $speicherVorher = (string)@ini_get('memory_limit');
-        @ini_set('memory_limit', '192M');
-        try {
-            foreach ((array)$karte['dateien'] as $datei) {
-                if (count($raus) >= EduStoreCalc::ATTACH_MAX) {
-                    $this->SendDebug('Moodle', 'mehr als ' . EduStoreCalc::ATTACH_MAX
-                        . ' Dateien an der Karte — die weiteren bleiben weg: ' . $karte['titel'], 0);
-                    break;
-                }
-                /* Was der Deckel ueberschreitet, wird NICHT geladen. Die Karte
-                   nennt die Datei dann im Text; der Weg zur Seite steht ohnehin
-                   an der Karte. */
-                /* Nicht groesser, als der Bestand annimmt: ein PDF darf hoechstens
-                   OutputLimit() Bytes haben (die Ausgabegrenze minus Reserve),
-                   sonst weist NotesSaveAttachment es mit „file_too_large" ab.
-                   Gemessen an dieser Schule: die Elternabend-Praesentation hat
-                   6,3 MB und passt damit nicht — sie waere umsonst geladen
-                   worden. Die Karte behaelt Text und Verweis auf die Seite. */
-                $deckel = min(self::MOODLE_DATEI_MAX, $this->OutputLimit());
-                if ((int)($datei['bytes'] ?? 0) > $deckel) {
-                    $this->SendDebug('Moodle', 'Datei zu gross fuer den Bestand, nur verlinkt: '
-                        . $datei['name'] . ' (' . (int)$datei['bytes'] . ' > ' . $deckel . ')', 0);
-                    continue;
-                }
-                $roh = $this->MoodleDatei($zugang, (string)$datei['url']);
-                if ($roh === null) {
-                    continue;
-                }
-                $r = $this->NotesSaveAttachment(base64_encode($roh), (string)$datei['name']);
-                if (($r['ok'] ?? false) !== true) {
-                    $this->SendDebug('Moodle', 'Datei nicht ablegbar ('
-                        . (string)($r['error']['code'] ?? '?') . '): ' . $datei['name'], 0);
-                    continue;
-                }
-                $raus[] = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'],
-                           'name' => (string)$r['name'], 'bytes' => (int)$r['bytes']];
-            }
-        } finally {
-            @ini_set('memory_limit', $speicherVorher);
-        }
-        return $raus;
-    }
-
-    /**
-     * Eine Karte in den Klassenseiten-Bestand legen.
-     *
-     * Derselbe Bestand, dieselben Ordner, dieselbe Sperrliste wie bei Edumaps —
-     * nur eine andere Quelle (`source: 'moodle'`). Wiedererkannt wird sie an
-     * `srcId`, die Fassung steht in `srcRev`: gleiche Fassung, kein Schreiben,
-     * keine neu geladene Datei.
-     *
-     * @return bool true = geschrieben
-     */
-    private function MoodleKarteSpiegeln(array $zugang, array $seite, array $karte, int $nr): bool
-    {
-        if (!$this->EduStorable()) {
-            $this->SendDebug('Moodle', 'Klassenseiten-Bestand nicht beschreibbar', 0);
-            return false;
-        }
-        $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 0)) {
-            $this->SendDebug('Moodle', 'Bestand belegt — Karte beim naechsten Lauf', 0);
-            return false;
-        }
-        try {
-            $store = $this->EduStoreRead();
-            $this->eduOrdnerGeaendert = false;
-            $ordnerId = $this->EduOrdner($store, $seite);
-            if ($ordnerId === '') {
-                return false;
-            }
-            $srcId = (string)$karte['srcId'];
-            $jetzt = time();
-            $i = -1;
-            foreach ($store['notes'] as $k => $n) {
-                if ((string)($n['srcId'] ?? '') === $srcId) {
-                    $i = (int)$k;
-                    break;
-                }
-            }
-            /* Unveraendert? Dann nichts anfassen — kein Schreiben, keine neuen
-               Medien. Nur Ordner, Abschnitt und Platz werden nachgezogen: die
-               koennen sich bewegen, ohne dass die Karte sich aendert. */
-            if ($i >= 0 && (int)($store['notes'][$i]['srcRev'] ?? -1) === (int)$karte['srcRev']) {
-                $fehlt = (string)($store['notes'][$i]['folderId'] ?? '') !== $ordnerId
-                    || (string)($store['notes'][$i]['section'] ?? '') !== (string)$karte['abschnitt']
-                    || (int)($store['notes'][$i]['pos'] ?? -1) !== $nr
-                    /* Die formatierte Fassung nachziehen, auch wenn die Karte
-                       sich nicht geaendert hat. Sonst behielten die schon
-                       gespiegelten Karten ihr ROHES HTML fuer immer: die
-                       Weissliste greift erst beim naechsten Schreiben, und das
-                       kommt nur bei einer neuen Fassung. Genau dieselbe
-                       Nachtrag-Logik wie bei Edumaps (Vorschaubild, QR-Code). */
-                    || (string)($store['notes'][$i]['html'] ?? '') !== (string)$karte['html']
-                    // Dasselbe fuer das Quelldatum.
-                    || (int)($store['notes'][$i]['srcAt'] ?? 0) !== (int)($karte['stand'] ?? 0);
-                if ($fehlt || $this->eduOrdnerGeaendert) {
-                    $store['notes'][$i]['folderId'] = $ordnerId;
-                    $store['notes'][$i]['section'] = EduStoreCalc::Kappen(
-                        (string)$karte['abschnitt'], EduStoreCalc::TITLE_MAX);
-                    $store['notes'][$i]['pos'] = $nr;
-                    $store['notes'][$i]['html'] = (string)$karte['html'];
-                    $store['notes'][$i]['srcAt'] = (int)($karte['stand'] ?? 0);
-                    $this->EduWriteStore($store);
-                }
-                return false;
-            }
-            if ($i < 0 && count($store['notes']) >= EduStoreCalc::KARTEN_MAX) {
-                $this->SendDebug('Moodle', 'Kartengrenze erreicht: ' . $karte['titel'], 0);
-                return false;
-            }
-            $text = (string)$karte['text'];
-            if (mb_strlen($text) > EduStoreCalc::TEXT_MAX) {
-                // Gekuerzt wird SICHTBAR — siehe EduEinpflegen::EduKarteEinpflegen.
-                $text = mb_substr($text, 0, EduStoreCalc::TEXT_MAX - 40) . "
-
-… (gekürzt)";
-            }
-            $alteMedien = $i >= 0 ? EduStoreCalc::AnhangIds([$store['notes'][$i]]) : [];
-            $anhaenge = $this->MoodleAnhaenge($zugang, $karte);
-            $titel = trim((string)$karte['titel']);
-            $satz = [
-                'id'        => $i >= 0 ? (string)$store['notes'][$i]['id'] : $this->NotesNewId(),
-                'folderId'  => $ordnerId,
-                'title'     => EduStoreCalc::Kappen($titel !== '' ? $titel : $this->Translate('Document'),
-                    EduStoreCalc::TITLE_MAX),
-                'text'      => $text,
-                'att'       => $anhaenge,
-                'createdAt' => $i >= 0 ? (int)($store['notes'][$i]['createdAt'] ?? $jetzt) : $jetzt,
-                'updatedAt' => $jetzt,
-                'source'    => 'moodle',
-                'srcId'     => $srcId,
-                'srcRev'    => (int)$karte['srcRev'],
-                /* Das Datum der QUELLE. `srcRev` taugt dafuer NICHT: bei einer
-                   Abschnittskarte ist es der Fingerabdruck des Textes und keine
-                   Zeit. Steht hier 0, zeigt die Karte das Datum des Bestands. */
-                'srcAt'     => (int)($karte['stand'] ?? 0),
-                'section'   => EduStoreCalc::Kappen((string)$karte['abschnitt'], EduStoreCalc::TITLE_MAX),
-                'pos'       => $nr,
-                'sectionColor' => '',
-                'color'     => '',
-                'html'      => (string)$karte['html'],
-                'booking'   => null,
-                'srcUrl'    => (string)($karte['weg'] !== '' ? $karte['weg'] : $seite['url']),
-            ];
-            if ($i >= 0) {
-                $store['notes'][$i] = $satz;
-            } else {
-                $store['notes'][] = $satz;
-            }
-            if (!$this->EduWriteStore($store)) {
-                // Die eben angelegten Medien gehoeren jetzt niemandem.
-                $this->NotesDeleteMedia(array_map(static fn(array $a): int => (int)$a['id'], $anhaenge));
-                return false;
-            }
-            // ERST der Bestand, DANN die alten Medien — und nur die Waisen.
-            if ($alteMedien !== []) {
-                $this->NotesDeleteMedia($this->NotesUnreferencedMedia($this->NotesStore(), $alteMedien));
-            }
-            return true;
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
-    }
-
-    /**
-     * Was von der Seite verschwunden ist, wandert ins Archiv.
-     *
-     * Abgeglichen wird JE ORDNER UND JE QUELLE: eine Edumaps-Karte im selben
-     * Kind-Ordner darf ein LOGINEO-Lauf nicht anfassen. Das ist derselbe
-     * Zuschnitt wie bei EduArchivAbgleichen, nur mit `source: 'moodle'`.
-     */
-    private function MoodleArchivAbgleichen(array $seite, array $karten): int
-    {
-        if ($karten === [] || !$this->EduStorable()) {
-            /* Keine Karten heisst hier NICHT „alles weg": eher hat der Abruf
-               nichts gelesen. Wer bei leerer Liste archiviert, raeumt bei einer
-               Stoerung den ganzen Kurs ab. */
-            return 0;
-        }
-        $lock = self::EDU_LOCK . $this->InstanceID;
-        if (!IPS_SemaphoreEnter($lock, 0)) {
-            return 0;
-        }
-        try {
-            $store = $this->EduStoreRead();
-            $ordnerId = '';
-            $schluessel = 'edupage:' . md5((string)$seite['url']);
-            foreach ($store['folders'] as $f) {
-                if ((string)($f['eduKey'] ?? '') === $schluessel) {
-                    $ordnerId = (string)$f['id'];
-                    break;
-                }
-            }
-            if ($ordnerId === '') {
-                return 0;                       // noch nie gespiegelt
-            }
-            $aktuell = [];
-            foreach ($karten as $k) {
-                $aktuell[(string)$k['srcId']] = true;
-            }
-            $jetzt = time();
-            $neu = 0;
-            $zurueck = 0;
-            foreach ($store['notes'] as $i => $n) {
-                if ((string)($n['folderId'] ?? '') !== $ordnerId
-                    || (string)($n['source'] ?? '') !== 'moodle') {
-                    continue;
-                }
-                $srcId = (string)($n['srcId'] ?? '');
-                if ($srcId === '') {
-                    continue;                   // vom Nutzer selbst angelegt
-                }
-                $fehlt = !isset($aktuell[$srcId]);
-                $imArchiv = (int)($n['archived'] ?? 0) > 0;
-                if ($fehlt && !$imArchiv) {
-                    $store['notes'][$i]['archived'] = $jetzt;
-                    $neu++;
-                } elseif (!$fehlt && $imArchiv) {
-                    unset($store['notes'][$i]['archived']);
-                    $zurueck++;
-                }
-            }
-            if ($neu === 0 && $zurueck === 0) {
-                return 0;
-            }
-            if (!$this->EduWriteStore($store)) {
-                return 0;
-            }
-            $this->SendDebug('Moodle', sprintf('Archiv „%s": %d neu, %d zurueck',
-                (string)$seite['name'], $neu, $zurueck), 0);
-            return $neu;
-        } finally {
-            IPS_SemaphoreLeave($lock);
-        }
     }
 
     /** @return array<string,list<string>> Topf → gesehene Schlüssel */
@@ -1193,10 +1008,10 @@ trait Moodle
         $kopf = [
             'Subject'    => $seite['name'] . ' — ' . $betreff,
             'SenderName' => $seite['name'],
-            'Date'       => (int)$karte['srcRev'],
+            'Date'       => (int)$karte['updated'],
         ];
         return $this->MailAnalyseRecord(
-            (string)$karte['srcId'] . ':' . (int)$karte['srcRev'],
+            (string)$karte['srcId'] . ':' . (int)$karte['updated'],
             $kopf,
             $text,
             $this->MoodleAnhaengeFuerKi($zugang, $karte),
@@ -1217,7 +1032,7 @@ trait Moodle
         $speicherVorher = (string)@ini_get('memory_limit');
         @ini_set('memory_limit', '192M');
         try {
-            foreach ((array)$karte['dateien'] as $datei) {
+            foreach ((array)$karte['anhaenge'] as $datei) {
                 $art = $this->EduArt((string)$datei['name']);
                 if ($art === '') {
                     continue;   // weder Bild noch PDF — die KI kann damit nichts

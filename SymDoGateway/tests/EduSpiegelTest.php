@@ -98,6 +98,9 @@ final class Spiegelprobe
 
     // ── was der Trait an Symcon braucht ──────────────────────────────────
     private function EduProp(string $n, mixed $v): mixed { return true; }
+    /* Zwei Quellen, ein Weg: der Schalter „in den Bestand" haengt seit dem
+       15.09.2026 an der QUELLE der Karte (EduMaps::EduSpiegelnAn). */
+    private function EduSpiegelnAn(string $quelle): bool { return true; }
     /** Die Statuszeile des Konfigurationsformulars. */
     public string $status = '';
     public function WriteAttributeString(string $n, string $w): void

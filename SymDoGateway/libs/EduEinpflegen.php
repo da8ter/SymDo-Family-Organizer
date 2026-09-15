@@ -85,7 +85,7 @@ trait EduEinpflegen
      */
     private function EduSeiteSpiegeln(array $seite, array $karten): int
     {
-        if (!(bool)$this->EduProp('EduToNotes', false)) {
+        if ($karten === [] || !$this->EduSpiegelnAn(EduStoreCalc::Quelle($karten[0]))) {
             return 0;
         }
         if (!$this->EduStorable()) {
@@ -206,7 +206,7 @@ trait EduEinpflegen
     private function EduKarteEinpflegen(array &$store, array $seite, array $karte, int $nr,
         string $ordnerId, array &$neueMedien, array &$alteMedien): string
     {
-        $srcId = 'edu:' . (string)($karte['boxid'] ?? '');
+        $srcId = EduStoreCalc::SrcId($karte);
         $i = -1;
         foreach ($store['notes'] as $k => $n) {
             if ((string)($n['srcId'] ?? '') === $srcId) {
