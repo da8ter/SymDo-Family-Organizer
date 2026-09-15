@@ -178,6 +178,35 @@ pruefe('… aber nicht dieselbe Linie in eine andere Richtung',
 pruefe('Der Deckel greift', count(TransitCalc::Touren(fixture('abfahrten'), 1)), 1);
 pruefe('Eine leere Antwort gibt nichts', TransitCalc::Touren(fixture('leer')), []);
 
+// ── Nur ohne Umsteigen ─────────────────────────────────────────────────────
+/* Der Haken „Nur ohne Umsteigen" siebt an derselben Zahl, die die Kachel als
+   „direkt" oder „1 Umstieg" ausschreibt. Beide Prüfdateien tragen genau eine
+   Verbindung, und die hat einen Umstieg — nach dem Sieben bleibt nichts. */
+foreach (['strecke-umstieg', 'strecke-koordinate'] as $datei) {
+    pruefe('Ohne Haken kommt die Verbindung mit Umstieg durch (' . $datei . ')',
+        count(TransitCalc::Verbindungen(fixture($datei), 4)), 1);
+    pruefe('Mit Haken bleibt sie draussen (' . $datei . ')',
+        TransitCalc::Verbindungen(fixture($datei), 4, 0, true), []);
+}
+
+/* Und die Gegenrichtung: eine umsteigefreie Verbindung muss bleiben. Gebaut
+   statt geholt — beide echten Prüfdateien haben keine. */
+$direkt = ['journeys' => [[
+    'interchanges' => 0,
+    'legs' => [['duration' => 600,
+        'origin'      => ['name' => 'A', 'departureTimePlanned' => '2026-09-11T05:40:00Z'],
+        'destination' => ['name' => 'B', 'arrivalTimePlanned'  => '2026-09-11T05:50:00Z'],
+        'transportation' => ['number' => '779', 'product' => ['name' => 'Bus', 'class' => 5],
+                             'destination' => ['name' => 'B']]]],
+]]];
+pruefe('Eine umsteigefreie Verbindung ueberlebt den Haken',
+    count(TransitCalc::Verbindungen($direkt, 4, 0, true)), 1);
+pruefe('… und ihre Umstiegszahl bleibt null',
+    TransitCalc::Verbindungen($direkt, 4, 0, true)[0]['interchanges'], 0);
+/* Der Haken darf die Ankunftsvorgabe nicht aushebeln: beides muss greifen. */
+pruefe('Haken und Ankunftsvorgabe zusammen',
+    TransitCalc::Verbindungen($direkt, 4, strtotime('2026-09-11 07:45:00'), true), []);
+
 // ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
 pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');
 pruefe('Zeitwaehler als JSON-Text', TransitCalc::ZeitText('{"hour":16,"minute":5,"second":0}'), '16:05');

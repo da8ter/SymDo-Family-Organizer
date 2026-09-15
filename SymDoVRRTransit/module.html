@@ -416,7 +416,8 @@ function streckenHtml() {
       + '</div>'
       + (fahrten
           ? '<div class="fahrten" data-schiene>' + fahrten + '</div>' + punkte
-          : '<div class="leer">' + esc(translate('no journey found')) + '</div>')
+          : '<div class="leer">' + esc(translate(r.directOnly
+              ? 'no journey without changes' : 'no journey found')) + '</div>')
       + '</div>';
   });
 }

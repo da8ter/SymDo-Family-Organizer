@@ -422,6 +422,12 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
                  'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
+                /* Nachgeholt wird nichts: die EFA gibt hoechstens vier
+                   Verbindungen je Anfrage her. Wer nur umsteigefreie will,
+                   sieht also unter Umstaenden gar keine — und die Kachel sagt
+                   dann auch genau das, statt „keine Verbindung gefunden". */
+                ['caption' => $this->Translate('Direct only'), 'name' => 'direct', 'width' => '110px',
+                 'add' => false, 'edit' => ['type' => 'CheckBox']],
 
         ];
     }

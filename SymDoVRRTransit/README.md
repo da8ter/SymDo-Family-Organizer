@@ -88,6 +88,10 @@ dann allerdings keine Zeiten und bleibt leer.
    (Name)** / **Nach (Name)** überschreiben, was die Auskunft nennt — bei einer
    Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
+6. **Nur ohne Umsteigen**: der Haken lässt nur umsteigefreie Verbindungen durch.
+   Nachgeholt wird dabei nichts — die Auskunft gibt höchstens vier Verbindungen
+   je Anfrage her. Bleibt keine übrig, sagt die Karte „keine umsteigefreie
+   Verbindung" statt „keine Verbindung gefunden".
 
 **Linien und Richtungen muss man nicht tippen.** Jede Haltestellenzeile trägt
 eine eigene kleine Liste **Linien und Richtungen**: je Linie und Ziel eine Zeile

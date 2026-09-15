@@ -771,8 +771,12 @@ trait TransitStore
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
+                /* Damit die Kachel „keine umsteigefreie" von „keine" trennen
+                   kann: leer ist nicht gleich leer. */
+                'directOnly' => ($z['direct'] ?? false) === true,
                 'journeys'   => TransitCalc::EndenBenennen(
-                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
+                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
+                        ($z['direct'] ?? false) === true),
                     $vonName, $nachName),
             ];
         }

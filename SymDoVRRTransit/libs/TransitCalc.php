@@ -231,11 +231,22 @@ final class TransitCalc
      *                       fallen weg. 0 = alle behalten.
      * @return list<array<string,mixed>>
      */
-    public static function Verbindungen(array $roh, int $hoechstens = 3, int $nichtNach = 0): array
+    public static function Verbindungen(array $roh, int $hoechstens = 3, int $nichtNach = 0,
+                                       bool $nurDirekt = false): array
     {
         $raus = [];
         foreach ((array)($roh['journeys'] ?? []) as $v) {
             if (!is_array($v) || !is_array($v['legs'] ?? null)) {
+                continue;
+            }
+            /* „Nur ohne Umsteigen" siebt HIER, an derselben Zahl, die die
+               Kachel als „direkt" oder „1 Umstieg" ausschreibt — sonst stuende
+               dort „direkt" an einer Verbindung, die der Filter durchgelassen
+               hat, oder umgekehrt. Mehr nachholen laesst sich nicht: die EFA
+               liefert hoechstens vier Verbindungen je Anfrage, egal was man
+               fragt (am 11.09.2026 mit 5, 8 und 10 gemessen). Bleibt nichts
+               uebrig, sagt die Kachel das ausdruecklich. */
+            if ($nurDirekt && (int)($v['interchanges'] ?? 0) > 0) {
                 continue;
             }
             $roh_abschnitte = [];

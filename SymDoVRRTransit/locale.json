@@ -104,7 +104,9 @@
             "%1$d filled in, %2$d already set, %3$d without an answer. Untick what you do not want to see, then press \"Apply\".": "%1$d gefüllt, %2$d schon gesetzt, %3$d ohne Antwort. Haken entfernen, was nicht zu sehen sein soll, dann „Übernehmen\" drücken.",
             "At %1$d stop(s) the list was cut off at %2$d entries — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Einträgen gekürzt — es gibt mehr.",
             "Lines and directions: one tick per line and destination. ": "Linien und Richtungen: je Linie und Ziel ein Haken. ",
-            "Without a tick that one stays off the board; what is not listed keeps running.": "Ohne Haken bleibt diese Tour von der Tafel weg; was nicht in der Liste steht, fährt weiter."
+            "Without a tick that one stays off the board; what is not listed keeps running.": "Ohne Haken bleibt diese Tour von der Tafel weg; was nicht in der Liste steht, fährt weiter.",
+            "Direct only": "Nur ohne Umsteigen",
+            "no journey without changes": "keine umsteigefreie Verbindung"
         }
     }
 }
