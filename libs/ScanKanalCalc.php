@@ -313,6 +313,18 @@ final class ScanKanalCalc
         if (isset($roh['briefing']) && is_array($roh['briefing'])) {
             $raus['briefing'] = $roh['briefing'];
         }
+        /* WebUntis ebenso: der Block traegt `ok`, den Fehlercode und die Ernte
+           je Kind. Der CODE ist wichtig — nur mit ihm kann das Gateway den
+           Fehlerzaehler richtig fuehren, und an dem haengt der Schutz vor der
+           Kontosperre. */
+        if (isset($roh['untis']) && is_array($roh['untis'])) {
+            $raus['untis'] = [
+                'ok'     => ($roh['untis']['ok'] ?? false) === true,
+                'code'   => (int)($roh['untis']['code'] ?? 0),
+                'kinder' => array_values(array_filter(
+                    (array)($roh['untis']['kinder'] ?? []), 'is_array')),
+            ];
+        }
 
         return ['ok' => true, 'umschlag' => $raus, 'fehler' => $raus['status']['fehler']];
     }
@@ -342,7 +354,7 @@ final class ScanKanalCalc
      * immer null Sekunden. Der Beweis „die App bleibt schnell" haette dann
      * gegen eine Spur gemessen, die gar nicht belegt war.
      *
-     * @return array{anlass:string,alles:bool,nur:list<string>,tage:int,verweilen:int,seiten:list<array<string,string>>,konten:list<array<string,string>>,gesperrt:list<string>}
+     * @return array{anlass:string,alles:bool,nur:list<string>,tage:int,verweilen:int,seiten:list<array<string,string>>,konten:list<array<string,string>>,gesperrt:list<string>,kinder:list<array<string,mixed>>}
      */
     public static function AuftragBlock(array $a): array
     {
@@ -369,7 +381,52 @@ final class ScanKanalCalc
                der Leser die Inhalte eines Kurses, den es hier nicht mehr geben
                soll. Geprueft wird beim Einpflegen ein zweites Mal. */
             'gesperrt' => self::AdressListe($a['gesperrt'] ?? []),
+            /* Die WebUntis-Kinder. Sie stehen als Eigenschaft am Gateway und
+               werden dort um die Zuordnung zur Stundenplan-Instanz ergaenzt
+               (`UntisKinder`) — der Leser kann das nicht nachbauen.
+               ZUGANGSDATEN reisen bewusst NICHT mit: Server, Schule, Benutzer
+               und Kennwort sind Eigenschaften, und die liest der Scanner ueber
+               `IPS_GetConfiguration` selbst. Ein Kennwort in einer Datei waere
+               ein Risiko ohne Gegenwert. */
+            'kinder' => self::KinderListe($a['kinder'] ?? []),
         ];
+    }
+
+    /**
+     * Die Kinder eines WebUntis-Auftrags in Form bringen.
+     *
+     * Jede Zeile nennt die Stundenplan-Instanz, in die eingespielt wird, das
+     * Familienmitglied und die Elementnummer bei der Schule. Was hier
+     * durchkommt, fragt der Scanner anschliessend bei WebUntis ab — und jede
+     * Abfrage geht an das Konto der Familie.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function KinderListe(mixed $roh): array
+    {
+        $raus = [];
+        foreach (is_array($roh) ? $roh : [] as $k) {
+            if (!is_array($k)) {
+                continue;
+            }
+            $name = trim((string)($k['name'] ?? ''));
+            if ($name === '') {
+                continue;   // ohne Namen liesse sich kein Bericht zuordnen
+            }
+            $raus[] = [
+                'name'   => mb_substr($name, 0, self::TEXT_MAX),
+                'stpl'   => max(0, (int)($k['stpl'] ?? 0)),
+                'child'  => mb_substr(trim((string)($k['child'] ?? '')), 0, 64),
+                'userId' => mb_substr(trim((string)($k['userId'] ?? '')), 0, 64),
+                'type'   => max(0, (int)($k['type'] ?? 0)),
+                'id'     => max(0, (int)($k['id'] ?? 0)),
+                'kurse'  => mb_substr((string)($k['kurse'] ?? ''), 0, 4000),
+            ];
+            if (count($raus) >= 20) {
+                break;   // mehr Kinder hat kein Haushalt
+            }
+        }
+        return $raus;
     }
 
     /**
@@ -519,6 +576,7 @@ final class ScanKanalCalc
             // keine Aussage.
             'konten' => $b['konten'] !== [] ? $b['konten'] : $a['konten'],
             'gesperrt' => $b['gesperrt'] !== [] ? $b['gesperrt'] : $a['gesperrt'],
+            'kinder' => $b['kinder'] !== [] ? $b['kinder'] : $a['kinder'],
         ];
     }
 

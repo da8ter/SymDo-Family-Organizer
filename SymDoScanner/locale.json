@@ -16,7 +16,8 @@
             "Handbook index ready: %d pages, %d sections": "Handbuch-Verzeichnis fertig: %d Seiten, %d Abschnitte",
             "%d AI jobs answered": "%d KI-Aufträge beantwortet",
             "nothing readable": "nichts lesbar",
-            "%1$d course(s), %2$d card(s) read": "%1$d Kurs(e), %2$d Karte(n) gelesen"
+            "%1$d course(s), %2$d card(s) read": "%1$d Kurs(e), %2$d Karte(n) gelesen",
+            "%d student(s) read": "%d Schüler gelesen"
         }
     }
 }

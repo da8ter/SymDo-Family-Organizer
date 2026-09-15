@@ -67,10 +67,16 @@ Foto-Scan, Zutatenliste, Diktat, und im Hintergrund die Auswertung von
 Klassenseiten-Karten, LOGINEO-Karten, Postfach-Mails und dem Briefing. Takt:
 alle zwei Sekunden, geweckt wird sie aber sofort.
 
-**`schule` — Klassenseiten, LOGINEO, Handbuch.** Das Langsame, das nach
-Minuten zählt: vier Klassenseiten abrufen und zerlegen, ein LOGINEO-Konto mit
-allen Kursen lesen (je Aufgabe ein eigener Abruf für den Abgabestand), das
-Handbuch-Verzeichnis bauen.
+**`schule` — Klassenseiten, LOGINEO, WebUntis, Handbuch.** Das Langsame: vier
+Klassenseiten abrufen und zerlegen, ein LOGINEO-Konto mit allen Kursen lesen
+(je Aufgabe ein eigener Abruf für den Abgabestand), den Stundenplan samt
+Hausaufgaben holen, das Handbuch-Verzeichnis bauen.
+
+Bei **WebUntis** gilt eine Regel, die sonst nirgends nötig ist: **genau eine
+Anmeldung je Lauf.** Drei Fehlanmeldungen sperren das Schulkonto der Familie,
+also klammert `UntisKontoErnten` alle Kinder in eine Sitzung und meldet sich am
+Ende ab — auch wenn dazwischen etwas wirft. Ob überhaupt angemeldet werden
+darf, hat das Gateway vorher entschieden.
 
 **`briefing`** — heute noch leer. Das Briefing läuft als KI-Auftrag über die
 Rolle `jobs`; die eigene Instanz entsteht erst, wenn eine Quelle sie braucht.
@@ -106,11 +112,18 @@ nicht, und an ein Attribut kommt er gar nicht heran. Also reisen mit:
 
 - die **Seitenliste** der Klassenseiten,
 - die **Zugänge** von LOGINEO **samt Token**,
+- die **Kinder** von WebUntis (Zuordnung zur Stundenplan-Instanz, Mitglied,
+  Elementnummer),
 - die **Sperrliste** — Adressen, die jemand in der App gelöscht hat.
 
 Der Token liegt damit in der Auftragsdatei. Sie hat 0600 im
 Kernel-Verzeichnis — strenger als der Ort, an dem er ohnehin steht:
 `settings.json` ist weltlesbar.
+
+**Zugangsdaten reisen nicht mit.** Server, Schule, Benutzer und Kennwort von
+WebUntis sind *Eigenschaften* des Gateways, und `IPS_GetConfiguration` auf eine
+fremde Instanz liefert sie — der Scanner liest sie selbst. Ein Kennwort in
+einer Datei wäre ein Risiko ohne Gegenwert.
 
 ## 5. Was beim Gateway bleibt — und warum
 
@@ -122,7 +135,7 @@ Nicht alles ist umgezogen, und das ist jeweils eine Entscheidung mit Grund:
 | **Die Merker** (`EduSeen`, `MoodleSeen`, `MailSeenUIDs`) | Ein Bestand, ein Besitzer. Zwei wären ein doppelter Scan und doppelte Kosten. |
 | **Die Tagesdeckel** | Sie zählen an einem Attribut dieser Instanz. |
 | **Der Prompt** | Er braucht den Bestand: Mitglieder, Kinder, erlaubte Arten. |
-| **WebUntis** | Zwei Gründe. Die Anmeldung ist die einzige unumkehrbare Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto. Und der Gewinn wäre klein: ein vollständiger Lauf kostet **1,5–2,0 s** (gemessen am 15.09.2026), nicht die 20 s, mit denen der Plan rechnete. |
+| **Der WebUntis-Fehlerzähler** | An ihm hängt der Schutz vor der Kontosperre: drei Fehlanmeldungen sperren das Schulkonto. Er ist ein Attribut dieser Instanz, und nur sie führt ihn — der Scanner meldet, *was* passiert ist. |
 | **Der Mail-Webhook** | Sein Zustand *ist* die Spool-Datei: sie trägt den vollen Text und ist zugleich der Wiederholungsvermerk. |
 | **„Jetzt prüfen" (LOGINEO)** | Ein Trockenlauf schreibt nichts, und jemand wartet davor. |
 | **Die Briefing-Vorschau** | Sie läuft im Hook und antwortet dem Wartenden sofort. |

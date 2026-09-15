@@ -60,7 +60,7 @@ trait ScanBridge
      */
     private const SCAN_ROLLEN = [
         'jobs'     => ['probe', 'auftrag'],
-        'schule'   => ['doku', 'edu', 'moodle'],    // + mail
+        'schule'   => ['doku', 'edu', 'moodle', 'untis'],    // + mail
         'briefing' => [],          // + briefing
     ];
 
@@ -334,6 +334,19 @@ trait ScanBridge
                     (int)$umschlag['scanner'], $text, $gespiegelt), 0);
                 if (((bool)($umschlag['status']['ok'] ?? false)) !== true) {
                     $this->ScanMelden('Klassenseiten: ' . $text, KL_WARNING);
+                }
+                return true;
+
+            case 'untis':
+                /* WebUntis. Der Scanner hat sich angemeldet und gelesen; hier
+                   wird eingespielt, gemeldet und der Fehlerzaehler gefuehrt —
+                   an dem haengt der Schutz vor der Kontosperre. */
+                $bericht = $this->UntisUmschlagEinpflegen($umschlag);
+                $this->SendDebug('Scan-Kanal', sprintf('WebUntis von %d: %s',
+                    (int)$umschlag['scanner'], $bericht), 0);
+                if (((bool)($umschlag['status']['ok'] ?? false)) !== true) {
+                    $this->ScanMelden('WebUntis: '
+                        . (string)($umschlag['status']['text'] ?? ''), KL_WARNING);
                 }
                 return true;
 

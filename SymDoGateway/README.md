@@ -666,14 +666,17 @@ abschaltet, steht im Handbuch des Scanners.
 
 Umgezogen sind: die Warteschlange der KI-Aufrufe (Foto, Zutaten, Diktat und im
 Hintergrund Klassenseiten, LOGINEO, Postfach, Briefing), das Handbuch-
-Verzeichnis, die Klassenseiten und LOGINEO.
+Verzeichnis, die Klassenseiten, LOGINEO und WebUntis.
+
+Gemessen am 15.09.2026, jeweils Gateway-Anteil statt der ganzen Arbeit:
+Klassenseiten **72 ms** (statt 478), LOGINEO **54 ms** (statt 13 553),
+WebUntis **81 ms** (statt 1 514–2 003).
 
 **Bewusst hiergeblieben**, jeweils mit Grund:
 
-- **WebUntis.** Zwei Gründe. Die Anmeldung ist die einzige unumkehrbare
-  Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto. Und
-  der Gewinn wäre klein: ein vollständiger Lauf (Anmeldung, Plan, Hausaufgaben,
-  Einspielen) kostet **1,5–2,0 Sekunden**, am 15.09.2026 gemessen.
+- **Der WebUntis-Fehlerzähler.** An ihm hängt der Schutz vor der Kontosperre —
+  drei Fehlanmeldungen sperren das Schulkonto. Der Scanner meldet nur, *was*
+  passiert ist; gezählt wird hier.
 - **Der Mail-Webhook.** Sein Zustand *ist* die Spool-Datei: sie trägt den
   vollen Text und ist zugleich der Wiederholungsvermerk.
 - **Die Trockenläufe und Vorschauen.** „Jetzt prüfen", „Verbindung testen", die

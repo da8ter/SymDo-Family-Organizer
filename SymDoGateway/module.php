@@ -34,6 +34,7 @@ require_once __DIR__ . '/libs/EduLesen.php';
 require_once __DIR__ . '/libs/EduMaps.php';
 require_once __DIR__ . '/libs/EduEinpflegen.php';
 require_once __DIR__ . '/libs/EduStore.php';
+require_once __DIR__ . '/libs/UntisLesen.php';
 require_once __DIR__ . '/libs/WebUntis.php';
 require_once __DIR__ . '/libs/MoodleCalc.php';
 require_once __DIR__ . '/libs/MoodleLesen.php';
@@ -90,6 +91,7 @@ class SymDoGateway extends IPSModuleStrict
     use EduMaps;
     use EduEinpflegen;
     use EduStore;
+    use UntisLesen;
     use WebUntis;
     use MoodleLesen;
     use Moodle;

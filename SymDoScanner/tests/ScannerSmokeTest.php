@@ -180,11 +180,22 @@ $ohneKommentare = static function (string $php): string {
     }
     return $raus;
 };
+/* Und die DATEILISTE wird ebenfalls abgeleitet — aus den `require_once` des
+   Moduls. Sie stand hier zuerst von Hand, mit acht Eintraegen, und beim naechsten
+   Umzug (WebUntis) fehlte der neunte: der Riegel war gruen, waehrend
+   `UntisLesen` eine Methode rief, die es in einer Scanner-Instanz nicht gibt.
+   Zweimal derselbe Fehler an derselben Stelle — deshalb jetzt gar keine Liste
+   mehr. */
+$konstanten = (new ReflectionClass('SymDoScanner'))->getConstants();
 $wurzel = dirname(__DIR__, 2) . '/';
-$teile = ['libs/Konfig.php', 'libs/Belegung.php', 'libs/ScanKanal.php',
-    'SymDoGateway/libs/EduLesen.php', 'SymDoGateway/libs/MoodleLesen.php',
-    'SymDoGateway/libs/DokuGemein.php', 'SymDoGateway/libs/DokuBau.php',
-    'SymDoScanner/module.php'];
+preg_match_all('/require_once __DIR__ \. \'([^\']+)\'/',
+    (string)file_get_contents($wurzel . 'SymDoScanner/module.php'), $req);
+$teile = ['SymDoScanner/module.php'];
+foreach ($req[1] as $pfad) {
+    /* '/../libs/X.php' und '/../SymDoGateway/libs/X.php' — beide relativ zum
+       Modulordner. */
+    $teile[] = ltrim(str_replace('/../', '', $pfad), '/');
+}
 $fehlend = [];
 foreach ($teile as $datei) {
     $q = (string)@file_get_contents($wurzel . $datei);
@@ -192,10 +203,28 @@ foreach ($teile as $datei) {
         $fehlend[] = 'Datei nicht lesbar: ' . $datei;
         continue;
     }
-    preg_match_all('/\$this->([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $ohneKommentare($q), $m);
+    /* Nur was in die Klasse KOMPONIERT wird. Eine eigene Klasse (AiJobRunner)
+       bringt ihre Methoden selbst mit; ihr `$this` ist ein anderes. */
+    if ($datei !== 'SymDoScanner/module.php' && !preg_match('/^\s*trait\s+\w+/m', $q)) {
+        continue;
+    }
+    $rein = $ohneKommentare($q);
+    preg_match_all('/\$this->([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $rein, $m);
     foreach (array_unique($m[1]) as $name) {
         if (!method_exists('SymDoScanner', $name)) {
-            $fehlend[] = $name . ' (' . basename($datei) . ')';
+            $fehlend[] = $name . '() (' . basename($datei) . ')';
+        }
+    }
+    /* KONSTANTEN genauso. Eine undefinierte Konstante ist derselbe stille
+       Fatal wie eine undefinierte Methode — und genau daran ist der
+       WebUntis-Umzug gescheitert, NACHDEM dieser Riegel die Methoden schon
+       prueifte: `self::UNTIS_HTTP_FRIST` stand in `WebUntis.php`, das eine
+       Scanner-Instanz nicht hat. Zweimal derselbe Tod, einmal ueber eine
+       Methode und einmal ueber eine Konstante. */
+    preg_match_all('/self::([A-Z][A-Z0-9_]*)\b/', $rein, $c);
+    foreach (array_unique($c[1]) as $name) {
+        if (!array_key_exists($name, $konstanten)) {
+            $fehlend[] = 'self::' . $name . ' (' . basename($datei) . ')';
         }
     }
 }
@@ -204,6 +233,11 @@ pruefe('Der Scanner findet alles, was er ruft', $fehlend, []);
 /* Und die Probe muss beissen: ein erfundener Name darf nicht durchgehen. */
 pruefe('Die Probe erkennt eine fehlende Methode',
     method_exists('SymDoScanner', 'GibtEsNichtAlsMethode'), false);
+pruefe('… und eine fehlende Konstante',
+    array_key_exists('GIBT_ES_NICHT', $konstanten), false);
+/* Und die Dateiliste muss vollstaendig sein: sie kommt aus den `require_once`
+   des Moduls, nicht aus einer Handnotiz. */
+pruefe('Jede eingebundene Datei wird geprueft', count($teile) >= 9, true);
 
 /* Der Scanner bringt bewusst KEINE Hooks mit. Er darf Fachteile aus dem
    Gateway-Ordner einbinden — aber nie AppCore oder den Router: mit denen

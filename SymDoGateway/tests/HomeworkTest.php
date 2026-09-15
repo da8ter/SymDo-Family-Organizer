@@ -549,7 +549,10 @@ pruefe('HomeworkImportieren reicht die Faecher weiter',
 /* Die beiden Fenster muessen VERSCHIEDEN bleiben. Zieht jemand sie wieder
    zusammen, faellt es offline nicht auf: der WebUntis-Abruf laesst sich hier
    nicht fahren, und beide Fassungen laufen gruen durch. */
-$untis = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
+/* Seit B7 stehen die Haelften in zwei Dateien; die Riegel gelten fuer beide
+   zusammen. */
+$untis = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php')
+       . (string)file_get_contents(__DIR__ . '/../libs/UntisLesen.php');
 pruefe('Der Rueckgriff ist gesetzt',
     (bool)preg_match('/UNTIS_TAGE_ZURUECK\s*=\s*([1-9]\d*)\s*;/', $untis), true);
 pruefe('Geholt wird mit Rueckgriff',
@@ -566,12 +569,24 @@ pruefe('… und die schreibende beide Grenzen',
     str_contains($untis, 'private function UntisHausaufgabenEinpflegen(string $userId, array $roh, int $von, int $bis): string'), true);
 /* Der Unterschied zwischen „unverstaendlich" und „nichts da" traegt eine
    Loeschung: `null` darf NICHTS bewirken, `[]` zieht im Fenster zurueck. */
-pruefe('Eine unverstaendliche Antwort pflegt gar nicht erst ein',
-    str_contains($untis, "\$zeilen = \$this->UntisHausaufgabenZeilen(\$nr, \$bis, \$kurz);\n        if (\$zeilen === null) {"), true);
+/* Seit dem Umzug in die Scanner-Spur (B7) stehen die Haelften in
+   verschiedenen Dateien: geholt wird beim Ernten, eingepflegt im Gateway. Der
+   Unterschied zwischen „unverstaendlich" und „nichts da" traegt weiterhin die
+   Loeschung — `null` darf NICHTS bewirken. */
+pruefe('Die Ernte reicht `null` durch',
+    str_contains($untis, '$hausaufgaben = null;'), true);
+pruefe('Und das Einpflegen pflegt nur ein, was eine Liste ist',
+    str_contains($untis, 'if (is_array($zeilen)) {'), true);
 /* Der STUNDENPLAN bleibt draussen: er wird geschrieben, und ein Rueckgriff
    ueberschriebe vergangene Tage im Stundenplan-Modul. */
+/* Der STUNDENPLAN bleibt draussen: er wird geschrieben, und ein Rueckgriff
+   ueberschriebe vergangene Tage im Stundenplan-Modul. Das Fenster steht jetzt
+   an EINER Stelle (`UntisFenster`) — Ernte und Einpflegen muessen dasselbe
+   meinen, sonst zoege ein Lauf Aufgaben zurueck, die er gar nicht geholt hat. */
 pruefe('Der Stundenplan holt weiter erst ab heute',
-    (bool)preg_match("/\\\$von = \\(int\\)date\\('Ymd'\\);/", $untis), true);
+    str_contains($untis, "return [(int)date('Ymd'), (int)date('Ymd', strtotime('+' . self::UNTIS_TAGE_VOR . ' days'))];"), true);
+pruefe('… und beide Haelften fragen dieselbe Stelle',
+    substr_count($untis, '$this->UntisFenster()'), 2);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

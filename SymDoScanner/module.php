@@ -11,6 +11,7 @@ require_once __DIR__ . '/../libs/ScanKanal.php';
 require_once __DIR__ . '/../SymDoGateway/libs/EduLesen.php';
 require_once __DIR__ . '/../SymDoGateway/libs/MoodleCalc.php';
 require_once __DIR__ . '/../SymDoGateway/libs/MoodleLesen.php';
+require_once __DIR__ . '/../SymDoGateway/libs/UntisLesen.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuGemein.php';
 require_once __DIR__ . '/../SymDoGateway/libs/DokuBau.php';
 require_once __DIR__ . '/../libs/AiJobRunner.php';
@@ -62,6 +63,7 @@ class SymDoScanner extends IPSModuleStrict
     use ScanKanal;
     use EduLesen;
     use MoodleLesen;
+    use UntisLesen;
     use DokuGemein;
     use DokuBau;
 
@@ -454,6 +456,39 @@ class SymDoScanner extends IPSModuleStrict
                     // Nichts eingerichtet: kein Umschlag, keine Meldung.
                     $melden = false;
                 }
+                break;
+
+            case 'untis':
+                /* WebUntis. Hier wird angemeldet — die einzige unumkehrbare
+                   Handlung dieses Moduls: drei Fehlanmeldungen sperren das
+                   Konto der Familie. Deshalb GENAU EINE Anmeldung je Lauf
+                   (`UntisKontoErnten` klammert alle Kinder), und ob ueberhaupt
+                   angemeldet werden darf, hat das Gateway vorher entschieden
+                   (`UntisGesperrt`) — der Fehlerzaehler ist ein Attribut und
+                   von hier aus nicht zu lesen.
+
+                   Zugangsdaten reisen NICHT mit dem Auftrag: Server, Schule,
+                   Benutzer und Kennwort sind Eigenschaften des Gateways, und
+                   die liest `UntisProp` ueber `KonfigID()` selbst. */
+                $kinder = (array)($auftrag['kinder'] ?? []);
+                if ($kinder === []) {
+                    $melden = false;
+                    break;
+                }
+                $erg = $this->UntisKontoErnten($kinder, ($auftrag['alles'] ?? false) !== true);
+                $ok = ($erg['ok'] ?? false) === true;
+                if (!$ok) {
+                    /* Der Grund reist mit: nur das Gateway darf den
+                       Fehlerzaehler hochsetzen, und es braucht dafuer den
+                       Code, den WebUntis geliefert hat. */
+                    $nutzlast['untis'] = ['ok' => false, 'code' => (int)($erg['code'] ?? 0),
+                                          'kinder' => []];
+                    $text = (string)($erg['meldung'] ?? '');
+                    break;
+                }
+                $nutzlast['untis'] = ['ok' => true, 'code' => 0,
+                                      'kinder' => (array)($erg['kinder'] ?? [])];
+                $text = sprintf($this->Translate('%d student(s) read'), count($erg['kinder']));
                 break;
 
             default:

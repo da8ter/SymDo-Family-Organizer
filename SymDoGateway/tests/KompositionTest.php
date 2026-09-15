@@ -221,10 +221,28 @@ pruefe('Ein leerer Rumpf bleibt leer', ohneKommentare(''), '');
 /* Der Umzug von LOGINEO in die zweite Spur — dieselben drei Riegel wie bei den
    Klassenseiten, denn es sind dieselben Fallen. */
 $bruecke = (string)file_get_contents(__DIR__ . '/../libs/ScanBridge.php');
-pruefe('Die Rolle „Schule" bedient auch LOGINEO',
-    str_contains($bruecke, "'schule'   => ['doku', 'edu', 'moodle'],"), true);
-pruefe('Das Gateway kennt den LOGINEO-Umschlag',
-    str_contains($bruecke, "case 'moodle':"), true);
+pruefe('Die Rolle „Schule" bedient alle drei Schulquellen',
+    str_contains($bruecke, "'schule'   => ['doku', 'edu', 'moodle', 'untis'],"), true);
+foreach (['moodle', 'untis'] as $q) {
+    pruefe('Das Gateway kennt den Umschlag von ' . $q,
+        str_contains($bruecke, "case '" . $q . "':"), true);
+}
+/* WebUntis ist der heikelste Umzug: die Anmeldung ist unumkehrbar. Der
+   Fehlerzaehler, an dem der Schutz vor der Kontosperre haengt, darf NUR im
+   Gateway gefuehrt werden — der Scanner meldet, was passiert ist. */
+$untisGw    = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
+$untisLesen = (string)file_get_contents(__DIR__ . '/../libs/UntisLesen.php');
+$untisRun = ohneKommentare(rumpf($untisGw, 'UntisScanRun'));
+pruefe('WebUntis fragt, ob ein Scanner uebernommen hat',
+    str_contains($untisRun, "ScanQuelleUebernommen('untis')"), true);
+pruefe('WebUntis schaltet seinen Zeitgeber NICHT ab',
+    str_contains($untisRun, "SetTimerInterval('UntisScan', 0)"), false);
+pruefe('Der Trockenlauf bleibt im Gateway',
+    str_contains($untisRun, 'if (!$trocken && $this->ScanQuelleUebernommen(\'untis\')) {'), true);
+pruefe('Der Fehlerzaehler steht nur im Gateway',
+    str_contains(ohneKommentare($untisLesen), 'UntisFehlerZaehlen'), false);
+pruefe('… und der Umschlag-Weg fuehrt ihn',
+    str_contains(rumpf($untisGw, 'UntisUmschlagEinpflegen'), 'UntisFehlerZaehlen'), true);
 $lauf = ohneKommentare(rumpf($moodle, 'MoodleScanRun'));
 pruefe('LOGINEO fragt, ob ein Scanner uebernommen hat',
     str_contains($lauf, "ScanQuelleUebernommen('moodle')"), true);
@@ -241,18 +259,31 @@ pruefe('Der Auftrag traegt die Zugaenge samt Token',
 pruefe('… und die Sperrliste mit', str_contains(rumpf($moodle, 'MoodleAuftragGeben'),
     "'gesperrt' => \$this->MoodleGesperrte(),"), true);
 
-/* Dieselbe Regel fuer WebUntis. Der Umzug steht noch aus (B7 wartet auf einen
-   Lauf am lebenden System), aber die Naht ist geschnitten — und sie soll
-   geschnitten bleiben: die lesende Haelfte darf nichts schreiben, sonst
-   waechst sie wieder zu. */
-$untis = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
-$untisLesen = ohneKommentare(rumpf($untis, 'UntisHausaufgabenZeilen'));
-pruefe('Beide Haelften stehen in der Datei: UntisHausaufgabenZeilen',
-    $untisLesen !== '' && rumpf($untis, 'UntisHausaufgabenEinpflegen') !== '', true);
-foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'HomeworkImportieren',
-          'STPL_ImportSlots', 'MailStoreProposal', 'LogMessage'] as $verboten) {
-    pruefe('UntisHausaufgabenZeilen fasst ' . $verboten . ' nicht an',
-        str_contains($untisLesen, $verboten), false);
+/* Dieselbe Regel fuer WebUntis, seit B7 auch hier mit zwei Dateien: die
+   lesende Haelfte in `UntisLesen.php`, die der Scanner einbindet, die
+   schreibende in `WebUntis.php`, die nur das Gateway hat. */
+$untis      = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
+$untisDatei = (string)file_get_contents(__DIR__ . '/../libs/UntisLesen.php');
+foreach (['UntisHausaufgabenZeilen' => 'UntisHausaufgabenEinpflegen',
+          'UntisKindErnten'         => 'UntisKindEinpflegen',
+          'UntisKontoErnten'        => 'UntisErnteEinpflegen'] as $liest => $schreibt) {
+    pruefe('Die lesende Haelfte steht in UntisLesen: ' . $liest,
+        rumpf($untisDatei, $liest) !== '', true);
+    pruefe('… und die schreibende in WebUntis: ' . $schreibt,
+        rumpf($untis, $schreibt) !== '', true);
+    pruefe('… und nicht umgekehrt',
+        [rumpf($untis, $liest), rumpf($untisDatei, $schreibt)], ['', '']);
+}
+/* Die lesende Haelfte darf NICHTS anfassen, was es in einer Scanner-Instanz
+   nicht gibt — und nichts schreiben. `STPL_ImportSlots` steht ausdruecklich
+   dabei: der Stundenplan ist eine andere Instanz, und ein Import von der
+   falschen Seite waere eine Schreiboperation aus der zweiten Spur. */
+$untisOhne = ohneKommentare($untisDatei);
+foreach (['ReadAttribute', 'WriteAttribute', 'IPS_Semaphore', 'HomeworkImportieren',
+          'STPL_ImportSlots', 'MailStoreProposal', 'UntisPushen', 'UntisKurseMerken',
+          'UntisFehlerZaehlen', 'UntisStatusSchreiben'] as $verboten) {
+    pruefe('UntisLesen fasst ' . $verboten . ' nicht an',
+        str_contains($untisOhne, $verboten), false);
 }
 
 /* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.

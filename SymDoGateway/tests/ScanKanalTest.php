@@ -124,9 +124,9 @@ $auftrag['quelle'] = 'edu';
 $auftrag['auftrag'] = ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0];
 $pa = ScanKanalCalc::PruefeAuftrag($auftrag, 16011);
 pruefe('Auftrag geht durch und behaelt seinen Block',
-    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]]);
+    [$pa['ok'], $pa['umschlag']['auftrag']], [true, ['anlass' => 'hand', 'alles' => true, 'nur' => ['a', 'b'], 'tage' => 2, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => [], 'kinder' => []]]);
 pruefe('Auftrag ohne Block bekommt Vorgaben',
-    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]);
+    ScanKanalCalc::AuftragBlock([]), ['anlass' => 'timer', 'alles' => false, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => [], 'kinder' => []]);
 pruefe('Unbekannter Anlass faellt auf den Zeitgeber zurueck',
     ScanKanalCalc::AuftragBlock(['anlass' => 'unfug'])['anlass'], 'timer');
 
@@ -135,7 +135,7 @@ pruefe('Von Hand schlaegt Zeitgeber, alles bleibt alles',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'hand', 'alles' => true],
         ['anlass' => 'timer', 'alles' => false]),
-    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => []]);
+    ['anlass' => 'hand', 'alles' => true, 'nur' => [], 'tage' => 0, 'verweilen' => 0, 'seiten' => [], 'konten' => [], 'gesperrt' => [], 'kinder' => []]);
 pruefe('Eine Einschraenkung faellt, sobald einer ohne sie kommt',
     ScanKanalCalc::AuftragVerschmelzen(
         ['anlass' => 'timer', 'nur' => ['seite-1']],
@@ -225,6 +225,44 @@ pruefe('Kein Objekt faellt weg', ScanKanalCalc::KontenListe(['x', 5, null]), [])
 pruefe('Die Liste ist gedeckelt',
     count(ScanKanalCalc::KontenListe(array_fill(0, 30,
         ['site' => 'https://lms.test', 'token' => 't']))), 20);
+
+// ══ Die Kinder eines WebUntis-Auftrags ═══════════════════════════════════
+/* Jede Zeile nennt die Stundenplan-Instanz, in die eingespielt wird, und die
+   Elementnummer bei der Schule. Was hier durchkommt, fragt der Scanner bei
+   WebUntis ab — und jede Abfrage geht an das Konto der Familie. */
+$k = ScanKanalCalc::KinderListe([
+    ['name' => 'Kind', 'stpl' => 22469, 'child' => 'c1', 'userId' => 'u1',
+     'type' => 5, 'id' => 4744, 'kurse' => 'Mathe'],
+]);
+pruefe('Eine saubere Kinderzeile kommt durch', $k,
+    [['name' => 'Kind', 'stpl' => 22469, 'child' => 'c1', 'userId' => 'u1',
+      'type' => 5, 'id' => 4744, 'kurse' => 'Mathe']]);
+pruefe('Ohne Namen faellt sie weg — der Bericht liesse sich nicht zuordnen',
+    ScanKanalCalc::KinderListe([['stpl' => 1, 'id' => 2]]), []);
+pruefe('Negative Kennungen werden zu 0',
+    ScanKanalCalc::KinderListe([['name' => 'X', 'stpl' => -5, 'id' => -9]])[0],
+    ['name' => 'X', 'stpl' => 0, 'child' => '', 'userId' => '', 'type' => 0,
+     'id' => 0, 'kurse' => '']);
+pruefe('Kein Objekt faellt weg', ScanKanalCalc::KinderListe(['x', 5, null]), []);
+pruefe('Die Liste ist gedeckelt',
+    count(ScanKanalCalc::KinderListe(array_fill(0, 30, ['name' => 'X']))), 20);
+/* Und sie muss im Auftragsblock ankommen — was dort nicht steht, kommt beim
+   Scanner LAUTLOS nicht an. */
+pruefe('Der Auftragsblock traegt die Kinder',
+    count(ScanKanalCalc::AuftragBlock(['anlass' => 'timer',
+        'kinder' => [['name' => 'Kind', 'stpl' => 1, 'id' => 2]]])['kinder']), 1);
+
+/* Der WebUntis-Block des ERGEBNISSES traegt den Fehlercode zurueck. Ohne ihn
+   koennte das Gateway den Fehlerzaehler nicht fuehren — und an dem haengt der
+   Schutz vor der Kontosperre. */
+$u = ScanKanalCalc::PruefeErgebnis(['v' => ScanKanalCalc::VERSION, 'quelle' => 'untis',
+    'gateway' => 77, 'scanner' => 5, 'at' => time(),
+    'status' => ['ok' => false, 'text' => 'Anmeldung fehlgeschlagen'],
+    'untis' => ['ok' => false, 'code' => -8520, 'kinder' => ['kaputt', ['name' => 'K']]]], 77);
+pruefe('Der WebUntis-Block kommt durch',
+    [$u['umschlag']['untis']['ok'], $u['umschlag']['untis']['code']], [false, -8520]);
+pruefe('… und nur Objekte bleiben in den Kindern',
+    $u['umschlag']['untis']['kinder'], [['name' => 'K']]);
 
 /* Und die Sperrliste: nur Adressen, nichts anderes. */
 pruefe('Die Sperrliste nimmt nur Adressen',
