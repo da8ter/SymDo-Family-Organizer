@@ -359,7 +359,10 @@ trait CalDAVSync
             $etag = !empty($etagNodes) ? (string)$etagNodes[0] : '';
             
             $calDataNodes = $response->xpath('d:propstat/d:prop/c:calendar-data');
-            $calData = !empty($calDataNodes) ? (string)$calDataNodes[0] : '';
+            /* Ob das Feld DA ist, ist eine andere Frage als ob etwas DRINSTEHT
+               — und an dieser Unterscheidung haengt eine Loeschung. */
+            $hatFeld = !empty($calDataNodes);
+            $calData = $hatFeld ? (string)$calDataNodes[0] : '';
 
             if ($calData !== '') {
                 $vtodo = $this->CalDAVParseVTodo($calData);
@@ -374,6 +377,23 @@ trait CalDAVSync
                 $vtodo['caldavEtag'] = $this->CalDAVNormalizeEtag($etag);
                 $items[] = $vtodo;
                 continue;
+            }
+
+            /* Das Feld ist DA, aber LEER — und der Server meldet dazu keinen
+               Fehler. Das ist die unangenehmste Antwort von allen: er hat ueber
+               genau diese Ressource gesprochen und nichts geliefert. Ueber die
+               Aufgabe wissen wir damit nichts, und „nichts" ist kein Beweis
+               fuer „geloescht". Frueher lief der Abruf hier weiter, die Aufgabe
+               fehlte in der Liste, und der Abgleich loeschte sie samt der
+               lokalen Bearbeitung. Nachgefasst von einem externen Codereview am
+               15.09.2026.
+
+               Die SAMMLUNG selbst nennt das Feld gar nicht — sie faellt also
+               nicht hierher, sondern in den Zweig darunter. */
+            if ($hatFeld) {
+                $this->SendDebug('CalDAV',
+                    'Leere Kalenderdaten ohne Fehlermeldung – Abruf verworfen: ' . $href, 0);
+                return null;
             }
 
             /* KEINE Kalenderdaten. Das ist harmlos, solange der Server das auch

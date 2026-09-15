@@ -77,6 +77,22 @@ function fehlschlag(string $href, string $status): string
         . '<d:status>HTTP/1.1 ' . $status . '</d:status></d:propstat></d:response>';
 }
 
+/** Dasselbe, aber der Server nennt die Eigenschaft gar nicht erst. */
+function ohneFeld(string $href, string $status): string
+{
+    return '<d:response><d:href>' . $href . '</d:href><d:propstat>'
+        . '<d:prop><d:getetag>"e"</d:getetag></d:prop>'
+        . '<d:status>HTTP/1.1 ' . $status . '</d:status></d:propstat></d:response>';
+}
+
+/** Der teuflische Fall: Feld da, leer, und der Server meldet ERFOLG. */
+function leerAberOk(string $href): string
+{
+    return '<d:response><d:href>' . $href . '</d:href><d:propstat>'
+        . '<d:prop><d:getetag>"e"</d:getetag><c:calendar-data/></d:prop>'
+        . '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>';
+}
+
 // ── Der gewöhnliche Fall ──────────────────────────────────────────────────
 $gut = (array)$lesen->invoke($modul, antwort(
     aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
@@ -100,7 +116,25 @@ foreach (['500 Internal Server Error', '503 Service Unavailable', '403 Forbidden
         $lesen->invoke($modul, antwort(
             aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
             fehlschlag('/cal/2.ics', $status))), null);
+    /* Manche Server nennen die fehlende Eigenschaft gar nicht — dann traegt
+       allein der Status die Aussage. */
+    pruefe('… auch wenn das Feld ganz fehlt (' . substr($status, 0, 3) . ')',
+        $lesen->invoke($modul, antwort(
+            aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
+            ohneFeld('/cal/2.ics', $status))), null);
 }
+
+/* DER teuflische Fall: das Feld ist da, es ist LEER, und der Server meldet
+   ERFOLG. Er hat also ueber genau diese Ressource gesprochen und nichts
+   geliefert. Frueher lief der Abruf weiter, die Aufgabe fehlte in der Liste,
+   und der Abgleich loeschte sie samt der lokalen Bearbeitung. Nachgefasst von
+   einem externen Codereview am 15.09.2026. */
+pruefe('Leere Kalenderdaten mit Status 200 verwerfen den Abruf',
+    $lesen->invoke($modul, antwort(
+        aufgabe('/cal/1.ics', 'u1', 'Einkaufen'),
+        leerAberOk('/cal/2.ics'))), null);
+pruefe('… auch als einziger Eintrag',
+    $lesen->invoke($modul, antwort(leerAberOk('/cal/2.ics'))), null);
 
 /* WO die Zahl steht, entscheidet ihre Bedeutung — und daran hängt hier eine
    Löschung. Die erste Fassung behandelte beide 404 gleich; nachgefasst von
@@ -169,6 +203,16 @@ pruefe('Ein unlesbarer Rumpf verwirft weiterhin',
     $lesen->invoke($modul, '<d:multistatus><kaputt'), null);
 pruefe('Eine leere, aber gueltige Antwort ist eine leere Liste',
     $lesen->invoke($modul, antwort()), []);
+
+/* Und `null` muss beim Aufrufer wirklich ein Abbruch sein — sonst waere die
+   ganze Sorgfalt hier umsonst. */
+$sync = (string)file_get_contents(__DIR__ . '/../libs/CalDAVSync.php');
+pruefe('Der Aufrufer bricht bei null ab',
+    preg_match('/\$serverItems = \$this->CalDAVFetchItems\([^;]*;\s*\n\s*\n?\s*if \(\$serverItems === null\) \{\s*\n[^\n]*\n\s*return false;/', $sync), 1);
+/* Und der Abruf reicht ein `null` des Zerlegers wirklich durch — sonst waere
+   die ganze Sorgfalt im Zerleger umsonst. */
+pruefe('… und der Abruf reicht null durch',
+    str_contains($sync, 'return $this->CalDAVParseMultiStatus((string)($res[\'body\'] ?? \'\'));'), true);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
