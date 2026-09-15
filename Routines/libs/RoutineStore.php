@@ -151,11 +151,40 @@ trait RoutineStore
     /**
      * Der logische Tag: er kippt zur Reset-Zeit, nicht um Mitternacht.
      * Um 02:59 gehört die Nacht noch zum Vortag (Reset-Vorgabe 03:00).
+     *
+     * Gerechnet wird an der KALENDERUHR, nicht mit abgezogenen Sekunden. Der
+     * alte Weg (`$jetzt - $std*3600 - $min*60`) und der Timer (`mktime`) waren
+     * zwei verschiedene Grenzen, und an den Zeitumstellungen lagen sie
+     * auseinander: bei Reset 03:00 lieferte die Kennung am 29.03.2026 um 03:30
+     * noch den 28.03., am 25.10.2026 um 02:30 CET dagegen schon den 25.10.,
+     * obwohl der Reset erst bevorstand. Zustand und Timer liefen damit
+     * auseinander — Häkchen aus dem Zwischenraum gingen verloren, und weil
+     * Münzen den Tagesreset überleben, konnte erneutes Abhaken erneut Münzen
+     * erzeugen. Gemeldet von einem externen Codereview am 14.09.2026 (F5).
      */
     private function TagKennung(int $jetzt): string
     {
+        $grenze = $this->ResetGrenze($jetzt);
+        if ($jetzt >= $grenze) {
+            return date('Y-m-d', $jetzt);
+        }
+        // Noch vor der heutigen Grenze: der laufende Tag ist der vorige.
+        // `strtotime('-1 day')` und nicht `- 86400`: an der Umstellung hat ein
+        // Tag 23 oder 25 Stunden.
+        return date('Y-m-d', (int)strtotime('-1 day', $grenze));
+    }
+
+    /**
+     * Die heutige Reset-Grenze als Zeitpunkt — die EINE Quelle für Tageskennung
+     * und Timer.
+     */
+    private function ResetGrenze(int $jetzt): int
+    {
         [$std, $min] = $this->ResetZeit();
-        return date('Y-m-d', $jetzt - ($std * 3600 + $min * 60));
+        $grenze = mktime($std, $min, 0, (int)date('n', $jetzt), (int)date('j', $jetzt), (int)date('Y', $jetzt));
+        // Kann nur bei unsinnigen Argumenten fehlschlagen; dann lieber die
+        // Mitternachtsgrenze als eine Ausnahme im Kachel-Aufbau.
+        return $grenze === false ? (int)strtotime('today', $jetzt) : (int)$grenze;
     }
 
     /** @return array{0:int,1:int} Stunde und Minute der Reset-Zeit */
@@ -466,13 +495,11 @@ trait RoutineStore
     /** Millisekunden bis zur nächsten Reset-Zeit, heute oder morgen. */
     private function NaechsteResetMs(int $jetzt): int
     {
-        [$std, $min] = $this->ResetZeit();
-        $heute = mktime($std, $min, 0, (int)date('n', $jetzt), (int)date('j', $jetzt), (int)date('Y', $jetzt));
-        if ($heute === false) {
-            return 3600000;
-        }
+        // Dieselbe Grenze, die auch die Tageskennung benutzt — sonst laufen
+        // Zustand und Timer an den Zeitumstellungen auseinander.
+        $heute = $this->ResetGrenze($jetzt);
         // strtotime rechnet über die Zeitumstellung richtig, +86400 nicht.
-        $ziel = $heute > $jetzt ? (int)$heute : (int)strtotime('+1 day', (int)$heute);
+        $ziel = $heute > $jetzt ? $heute : (int)strtotime('+1 day', $heute);
         // Mindestabstand, damit ein Grenzfall (Zielzeit genau jetzt) den Timer
         // nicht in eine Schleife schickt.
         return max(60000, ($ziel - $jetzt) * 1000);
