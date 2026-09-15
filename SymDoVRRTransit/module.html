@@ -56,6 +56,9 @@ body {
    rutscht der Umschalter in die nächste Zeile, statt den Namen zu kürzen. */
 .kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
 .kopf .umschalter { margin-left: auto; flex: 0 0 auto; }
+/* Der zweite Schalter haengt sich an den ersten, statt sich mit `auto` von ihm
+   wegzudruecken. */
+.kopf .umschalter + .umschalter { margin-left: 6px; }
 .kopf .wem { flex: 0 1 auto; min-width: 0; margin: 0; }
 /* Wem gehört das? Bild und Name über den Karten des Kindes.
    Maße wörtlich aus der Ämtchen-Kachel übernommen — dieselbe Familie soll in
@@ -201,6 +204,11 @@ body {
    bereit; hier nicht neu deklarieren, sonst kollidiert es. */
 let zustand = { v: 1, now: 0, view: 'departures', stops: [], routes: [], blocked: false };
 let ansicht = null;      // 'departures' | 'routes' — Wahl des Betrachters
+/* Nur umsteigefreie zeigen? Wahl des BETRACHTERS, im localStorage gemerkt —
+   sie aendert nichts an dem, was geholt wird, und gilt deshalb nur an diesem
+   Geraet. Der Haken „Nur ohne Umsteigen" an der Strecke ist die andere Sache:
+   er laesst die Auskunft gar nicht erst nach Umstiegen suchen. */
+let nurDirekt = null;    // true | false
 
 /* Symcon reicht die Ränder der Kachel als Adresszusatz herein
    (margintop/marginside/marginbottom). Ohne sie stünde der Inhalt oben unter
@@ -243,7 +251,7 @@ function merker(name, wert) {
  * konnte ihm ansehen, wozu es gut sein sollte. Wem eine Verbindung gehört,
  * sagt jetzt die Überschrift über seinen Karten — mit Bild und Namen.
  */
-function kopfHtml() {
+function kopfHtml(jetzt) {
   const hatBeides = (zustand.stops || []).length > 0 && (zustand.routes || []).length > 0;
   /* Gehört alles EINEM Kind, stehen Bild und Name hier oben neben dem
      Umschalter statt über jeder Gruppe — eine Zeile statt zweier. Wird der Name
@@ -258,7 +266,16 @@ function kopfHtml() {
       + '<button data-ansicht="routes" class="' + (ansicht === 'routes' ? 'an' : '') + '">'
       + esc(translate('Routes')) + '</button></div>'
     : '';
-  return (wer || um) ? '<div class="kopf">' + wer + um + '</div>' : '';
+  /* Nur bei den Strecken, und nur wenn es welche gibt: bei den Abfahrten
+     gaebe es nichts umzuschalten. */
+  const direkt = (jetzt === 'routes' && (zustand.routes || []).length > 0)
+    ? '<div class="umschalter">'
+      + '<button data-direkt="0" class="' + (nurDirekt ? '' : 'an') + '">'
+      + esc(translate('All')) + '</button>'
+      + '<button data-direkt="1" class="' + (nurDirekt ? 'an' : '') + '">'
+      + esc(translate('Direct')) + '</button></div>'
+    : '';
+  return (wer || um || direkt) ? '<div class="kopf">' + wer + um + direkt + '</div>' : '';
 }
 
 /** Der eine Eintrag, dem ALLES gehört — sonst null. */
@@ -387,7 +404,12 @@ function streckenHtml() {
             ? translate('home, from now')
             : translate('home, lessons end at %s').replace('%s', s.schoolEnd));
     }
-    const alle = (r.journeys || []);
+    /* Der Schalter im Kopf siebt, was schon da ist. Er kann keine Verbindung
+       herbeizaubern, die die Auskunft nicht mitgeschickt hat — dafuer ist der
+       Haken an der Strecke da, der `maxChanges=0` mitschickt. */
+    const alle = (r.journeys || []).filter(function (v) {
+      return !nurDirekt || (v.interchanges || 0) === 0;
+    });
     const fahrten = alle.map(function (v) {
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
@@ -416,7 +438,7 @@ function streckenHtml() {
       + '</div>'
       + (fahrten
           ? '<div class="fahrten" data-schiene>' + fahrten + '</div>' + punkte
-          : '<div class="leer">' + esc(translate(r.directOnly
+          : '<div class="leer">' + esc(translate((nurDirekt || r.directOnly)
               ? 'no journey without changes' : 'no journey found')) + '</div>')
       + '</div>';
   });
@@ -426,13 +448,14 @@ function zeichne() {
   if (ansicht === null) {
     ansicht = merker('ansicht') || zustand.view || 'departures';
   }
+  if (nurDirekt === null) { nurDirekt = merker('nurdirekt') === '1'; }
   // Gibt es nur eine Sorte, ist der Umschalter Lärm — dann gilt sie.
   let jetzt = ansicht;
   if ((zustand.routes || []).length === 0) { jetzt = 'departures'; }
   if ((zustand.stops || []).length === 0 && (zustand.routes || []).length > 0) { jetzt = 'routes'; }
 
   document.getElementById('wurzel').innerHTML =
-      kopfHtml() + '<div class="liste">'
+      kopfHtml(jetzt) + '<div class="liste">'
     + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
     + '</div>';
 
@@ -492,6 +515,14 @@ function zeichne() {
        Stelle schon an, ohne dass man ihn benutzen konnte. */
     punkte.querySelectorAll('span').forEach(function (p, i) {
       p.addEventListener('click', function () { zurKarte(i); });
+    });
+  });
+
+  document.querySelectorAll('[data-direkt]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      nurDirekt = b.dataset.direkt === '1';
+      merker('nurdirekt', nurDirekt ? '1' : '0');
+      zeichne();
     });
   });
 

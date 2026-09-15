@@ -119,6 +119,14 @@ weiter auf der Tafel, statt still zu verschwinden, weil eine Liste von
 vorgestern sie nicht kennt. An einer großen Station wird bei vierzig Einträgen
 gekürzt; die Statuszeile sagt es dann ausdrücklich.
 
+**In der Kachel** steht bei den Strecken ein zweiter kleiner Schalter neben
+*Abfahrten / Strecken*: **Alle** oder **Ohne Umsteigen**. Er siebt, was schon da
+ist, gilt nur an diesem Gerät (im Browser gemerkt) und kostet keine Anfrage.
+Bleibt auf einer Strecke nichts übrig, sagt die Karte es. Der Unterschied zum
+Haken an der Strecke: der Schalter kann keine Verbindung herbeiholen, die die
+Auskunft nicht mitgeschickt hat — der Haken schon, weil er `maxChanges=0`
+mitschickt.
+
 Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
 Einrichtung, nicht zur Bedienung.
 
