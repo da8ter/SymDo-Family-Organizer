@@ -148,6 +148,12 @@ pruefe('Eine leere Liste versteckt nichts',
 pruefe('Was nicht in der Liste steht, faehrt weiter',
     count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [],
         [['line' => 'X99', 'direction' => 'Nirgendwo', 'show' => false]])), $alle);
+/* Ein Ueberbleibsel im Bestand — am 15.09.2026 entstanden, als die inneren
+   Spalten noch kein `edit` hatten und die Konsole beim Speichern nur den Haken
+   zurueckschickte. Es darf nichts stilllegen. */
+pruefe('Eine Zeile ohne Linie und ohne Ziel versteckt nichts',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [],
+        [['show' => false], ['show' => false]])), $alle);
 pruefe('Eine Zeile ohne Haken-Feld versteckt nichts',
     TransitCalc::TourVersteckt($touren[0]['line'], $touren[0]['direction'],
         [['line' => $touren[0]['line'], 'direction' => $touren[0]['direction']]]), false);

@@ -247,9 +247,8 @@ class SymDoVRRTransit extends IPSModuleStrict
 
                 $haltestellen,
                 ['type' => 'Label', 'caption' =>
-                    $this->Translate('Direction: the destination as shown on the vehicle ("Hbf, Hospital"), ')
-                    . $this->Translate('several separated by commas, or a platform ("Platform 1"). ')
-                    . $this->Translate('Empty shows both directions.')],
+                    $this->Translate('Lines and directions: one tick per line and destination. ')
+                    . $this->Translate('Without a tick that one stays off the board; what is not listed keeps running.')],
                 /* Der Knopf fuellt die Spalte mit dem, was dort wirklich faehrt.
                    Er arbeitet auf der LEBENDEN Liste ($Stops) und schreibt sie
                    ueber UpdateFormField zurueck — nichts wird gespeichert, bis
@@ -343,26 +342,25 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => true, 'edit' => ['type' => 'CheckBox']],
                 ['caption' => $this->Translate('For whom'), 'name' => 'member', 'width' => '160px',
                  'add' => '', 'edit' => ['type' => 'Select', 'options' => $kinder]],
-                ['caption' => $this->Translate('Only these lines'), 'name' => 'lines', 'width' => '160px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-                /* Die Richtung ist das Ziel, wie es vorn am Fahrzeug steht, oder
-                   ein Steig — kommagetrennt. Leer = beide Richtungen; sonst
-                   stünde morgens auch auf der Tafel, was von der Schule WEG fährt. */
-                ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => '200px',
-                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 /* Die Touren als LISTE IN DER ZEILE. Eine Spalte darf `edit`
                    vom Typ List tragen; ihr Wert wird dann nicht noch einmal
-                   JSON-kodiert, die Zelle ist also direkt ein Array. Linie und
-                   Richtung stehen ohne `edit` da — sie kommen von der Auskunft
-                   und sind nichts zum Tippen; geaendert wird nur der Haken. */
-                ['caption' => $this->Translate('Lines and directions'), 'name' => 'tours', 'width' => '260px',
+                   JSON-kodiert, die Zelle ist also direkt ein Array.
+                   JEDE innere Spalte braucht ein `edit`, auch die, die niemand
+                   aendern soll. Ohne `edit` bleibt die Zelle im Zeilen-Editor
+                   nicht nur leer — die Konsole schickt sie beim Speichern gar
+                   nicht erst zurueck, und was dann ankommt, sind Zeilen, die
+                   NUR den Haken tragen. Am 15.09.2026 genau so passiert: vier
+                   Zeilen mit Haken, Linie und Richtung weg. */
+                ['caption' => $this->Translate('Lines and directions'), 'name' => 'tours', 'width' => '300px',
                  'add' => [],
-                 'edit' => ['type' => 'List', 'rowCount' => 8, 'add' => false, 'delete' => true,
+                 'edit' => ['type' => 'List', 'rowCount' => 10, 'add' => false, 'delete' => true,
                             'columns' => [
-                                ['caption' => $this->Translate('Line'), 'name' => 'line', 'width' => '90px'],
-                                ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => 'auto'],
-                                ['caption' => $this->Translate('Show'), 'name' => 'show', 'width' => '80px',
-                                 'edit' => ['type' => 'CheckBox']],
+                                ['caption' => $this->Translate('Line'), 'name' => 'line', 'width' => '90px',
+                                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                                ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => 'auto',
+                                 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                                ['caption' => $this->Translate('Show'), 'name' => 'show', 'width' => '90px',
+                                 'add' => true, 'edit' => ['type' => 'CheckBox']],
                             ]]],
                 ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
                  'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
@@ -585,7 +583,7 @@ class SymDoVRRTransit extends IPSModuleStrict
            ist das kein Fehlschlag: der Knopf holt es spaeter nach. */
         [$touren, $knapp] = $this->TourenZelle($stopId);
         $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
-                     'lines' => '', 'direction' => '', 'tours' => $touren, 'walk' => 0, 'limit' => 6];
+                     'tours' => $touren, 'walk' => 0, 'limit' => 6];
 
         $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('Routes', 'columns', (string)json_encode(
@@ -617,9 +615,20 @@ class SymDoVRRTransit extends IPSModuleStrict
             if (!is_array($t)) {
                 continue;
             }
+            $linie = trim((string)($t['line'] ?? ''));
+            $ziel  = trim((string)($t['direction'] ?? ''));
+            /* Eine Zeile ohne Linie UND ohne Ziel ist keine Tour, sondern ein
+               Rest. Genau so sah es am 15.09.2026 aus, als die inneren Spalten
+               noch kein `edit` hatten: die Konsole schickte beim Speichern nur
+               den Haken zurueck, und uebrig blieben vier leere Zeilen. Der
+               `edit`-Fehler ist behoben; diese Wache bleibt, damit so etwas
+               nicht noch einmal still in den Bestand wandert. */
+            if ($linie === '' && $ziel === '') {
+                continue;
+            }
             $raus[] = [
-                'line'      => trim((string)($t['line'] ?? '')),
-                'direction' => trim((string)($t['direction'] ?? '')),
+                'line'      => $linie,
+                'direction' => $ziel,
                 /* Fehlt der Haken, gilt „sichtbar" — dieselbe Lesart wie in
                    TransitCalc::TourVersteckt. Eine Zeile ohne Haken darf nichts
                    verstecken, sonst verschwaende eine Linie, die niemand
@@ -745,7 +754,7 @@ class SymDoVRRTransit extends IPSModuleStrict
     private function HaltestellenZeilen(array $roh): array
     {
         $felder = ['name' => '', 'stopId' => '', 'show' => true, 'member' => '',
-                   'lines' => '', 'direction' => '', 'tours' => [], 'walk' => 0, 'limit' => 6];
+                   'tours' => [], 'walk' => 0, 'limit' => 6];
         $raus = [];
         foreach ($roh as $z) {
             if (!is_array($z)) {

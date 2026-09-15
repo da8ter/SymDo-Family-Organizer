@@ -827,6 +827,13 @@ final class TransitCalc
             if (!is_array($t)) {
                 continue;
             }
+            /* Eine Zeile ohne Linie UND ohne Ziel ist ein Rest, keine Tour. Sie
+               darf nichts verstecken — sonst legte ein Ueberbleibsel im Bestand
+               eine Abfahrt still, deren Linie und Ziel zufaellig auch leer
+               waeren. */
+            if ((string)($t['line'] ?? '') === '' && (string)($t['direction'] ?? '') === '') {
+                continue;
+            }
             if (self::Wortschluessel((string)($t['line'] ?? '')) !== $l) {
                 continue;
             }

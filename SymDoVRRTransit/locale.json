@@ -19,16 +19,12 @@
             "Name": "Name",
             "Stop id": "Haltestellen-Kennung",
             "For whom": "Für wen",
-            "Only these lines": "Nur diese Linien",
             "Direction": "Richtung",
             "From (label)": "Von (Name)",
             "To (label)": "Nach (Name)",
             "Nothing stops near ": "Nichts hält in der Nähe von ",
             "No stop of that name. Nearest to ": "Keine Haltestelle dieses Namens. Am nächsten an ",
             ", closest first.": ", die nächste zuerst.",
-            "Direction: the destination as shown on the vehicle (\"Hbf, Hospital\"), ": "Richtung: das Ziel, wie es vorn am Fahrzeug steht („Hbf, Krankenhaus“), ",
-            "several separated by commas, or a platform (\"Platform 1\"). ": "mehrere durch Komma getrennt, oder ein Steig („Steig 1“). ",
-            "Empty shows both directions.": "Leer zeigt beide Richtungen.",
             "Walk (min)": "Fußweg (min)",
             "Count": "Anzahl",
             "Routes": "Strecken",
@@ -106,7 +102,9 @@
             ", %d line(s) and direction(s) found": ", %d Linie(n) und Richtung(en) gefunden",
             ". Untick what you do not want to see": ". Haken entfernen, was nicht zu sehen sein soll",
             "%1$d filled in, %2$d already set, %3$d without an answer. Untick what you do not want to see, then press \"Apply\".": "%1$d gefüllt, %2$d schon gesetzt, %3$d ohne Antwort. Haken entfernen, was nicht zu sehen sein soll, dann „Übernehmen\" drücken.",
-            "At %1$d stop(s) the list was cut off at %2$d entries — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Einträgen gekürzt — es gibt mehr."
+            "At %1$d stop(s) the list was cut off at %2$d entries — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Einträgen gekürzt — es gibt mehr.",
+            "Lines and directions: one tick per line and destination. ": "Linien und Richtungen: je Linie und Ziel ein Haken. ",
+            "Without a tick that one stays off the board; what is not listed keeps running.": "Ohne Haken bleibt diese Tour von der Tafel weg; was nicht in der Liste steht, fährt weiter."
         }
     }
 }

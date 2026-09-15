@@ -122,18 +122,23 @@ trait TransitStore
     }
 
     /**
-     * Die gewünschten Richtungen einer Haltestelle — Ziele oder Steige,
-     * kommagetrennt in der Spalte „Richtung"; leer = beide Richtungen.
+     * Siebt diese Haltestelle ueberhaupt etwas weg?
+     *
+     * Wahr, sobald an EINER Tour der Haken fehlt. Zwei Stellen fragen danach:
+     * der Zwischenspeicher-Schluessel (ein geaenderter Filter muss den alten
+     * Stand verwerfen) und die Abrufmenge (nach dem Sieben bleibt weniger
+     * uebrig, also wird grosszuegiger geholt).
      *
      * @param array<string,mixed> $zeile
-     * @return list<string>
      */
-    private function TransitRichtungen(array $zeile): array
+    private function TransitTourenSieben(array $zeile): bool
     {
-        return array_values(array_filter(
-            array_map('trim', explode(',', (string)($zeile['direction'] ?? ''))),
-            static fn(string $r): bool => $r !== ''
-        ));
+        foreach ((array)($zeile['tours'] ?? []) as $t) {
+            if (is_array($t) && array_key_exists('show', $t) && !$t['show']) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function TransitZahl(string $feld, int $vorgabe): int
@@ -159,7 +164,7 @@ trait TransitStore
             // alte, nach dem Sieben halbe Antwort sehen.
             return 'stop:' . trim((string)($zeile['stopId'] ?? ''))
                  . ':' . max(1, (int)($zeile['limit'] ?? 6))
-                 . ($this->TransitRichtungen($zeile) !== [] ? ':r' : '');
+                 . ($this->TransitTourenSieben($zeile) ? ':r' : '');
         }
         /* Der AUFGELOESTE Punkt gehört in den Schlüssel, nicht das Feld: wer
            die Markierung auf der Karte verschiebt, hat eine andere Strecke und
@@ -397,9 +402,9 @@ trait TransitStore
                UNSORTIERT und mit bereits abgefahrenen Verbindungen darin (am
                11.09.2026 gemessen). Was davon übrig bleibt, entscheidet erst
                das Rechenwerk. */
-            /* Mit Richtungsfilter fällt etwa die Hälfte weg — dann doppelt holen,
-               sonst bliebe die Tafel nach dem Sieben zu kurz. */
-            $faktor  = $this->TransitRichtungen($z) !== [] ? 2 : 1;
+            /* Mit abgewaehlten Touren fällt etwa die Hälfte weg — dann doppelt
+               holen, sonst bliebe die Tafel nach dem Sieben zu kurz. */
+            $faktor  = $this->TransitTourenSieben($z) ? 2 : 1;
             $antwort = Efa::Abfahrten($stopId, max(1, (int)($z['limit'] ?? 8)) * $faktor + 8);
             $bestand['entries'][$key] = $this->TransitEintrag(
                 $bestand['entries'][$key] ?? [], $antwort, $jetzt,
@@ -718,8 +723,6 @@ trait TransitStore
             $e   = $bestand['entries'][$key] ?? [];
             $roh = is_array($e['raw'] ?? null) ? $e['raw'] : [];
             $mitglied = trim((string)($z['member'] ?? ''));
-            $linien = array_values(array_filter(array_map('trim',
-                explode(',', (string)($z['lines'] ?? '')))));
             $haltestellen[] = [
                 'key'        => $key,
                 'name'       => trim((string)($z['name'] ?? '')),
@@ -729,12 +732,13 @@ trait TransitStore
                 'walk'       => max(0, (int)($z['walk'] ?? 0)),
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
-                /* Drei Siebe, vom groben zum feinen: die beiden Textfelder
-                   „Nur diese Linien" und „Richtung", und zuletzt die Haken der
-                   Tourenliste aus dem Zeilen-Editor. */
+                /* Gesiebt wird nur noch ueber die Haken der Tourenliste aus dem
+                   Zeilen-Editor. Die beiden Textfelder „Nur diese Linien" und
+                   „Richtung" sind am 15.09.2026 entfallen: sie wurden
+                   UND-verknuepft und konnten „diese Linie in DIESE Richtung"
+                   nie ausdruecken. */
                 'departures' => TransitCalc::Abfahrten($roh, $jetzt,
-                    max(0, (int)($z['walk'] ?? 0)), $linien, max(1, (int)($z['limit'] ?? 8)),
-                    $this->TransitRichtungen($z),
+                    max(0, (int)($z['walk'] ?? 0)), [], max(1, (int)($z['limit'] ?? 8)), [],
                     is_array($z['tours'] ?? null) ? $z['tours'] : []),
             ];
         }

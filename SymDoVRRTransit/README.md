@@ -78,8 +78,6 @@ dann allerdings keine Zeiten und bleibt leer.
 | Haltestellen-Kennung | kommt aus der Suche |
 | Zeigen | ohne Haken erscheint sie nicht auf der Tafel — **und kostet keinen Abruf**; genau richtig für eine Haltestelle, die nur Start oder Ziel einer Strecke ist |
 | Für wen | leer = die ganze Familie |
-| Nur diese Linien | leer = alle |
-| Richtung | das Ziel, wie es vorn am Fahrzeug steht („Hbf, Krankenhaus"), mehrere durch Komma, oder ein Steig („Steig 1"). Leer = beide Richtungen. Für den Steig weiter nötig, sonst reicht die Liste darunter |
 | Linien und Richtungen | je Linie und Ziel ein Haken — ohne Haken erscheint diese Tour nicht auf der Tafel |
 | Fußweg (min) | Zeit bis zur Haltestelle; schaltet die Anzeige auf „wann muss ich los" |
 | Anzahl | wie viele Abfahrten die Karte zeigt |
@@ -101,11 +99,12 @@ Richtungen holen** darunter dasselbe. Gefüllt werden nur **leere** Listen; eine
 gepflegte Liste ist eine Entscheidung und bleibt stehen (wer neu holen will,
 löscht ihre Zeilen). Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
 
-Das nimmt die häufigste Falle: die Schreibweise. Ein getippter Text, der nicht
-trifft, lässt die Tafel leer — und das sieht aus wie ein kaputter Abruf, nicht
-wie ein Tippfehler. Es trifft auch genauer als die beiden Textfelder: die
-werden **und**-verknüpft, „789 nach Monheim" zusammen mit „834 zum Hbf" ergibt
-dort vier Kombinationen statt zwei. Ein Haken meint genau ein Paar.
+Die beiden Textfelder **Nur diese Linien** und **Richtung** sind damit
+entfallen. Sie nahmen die häufigste Falle nicht: ein getippter Text, der die
+Schreibweise der Auskunft nicht trifft, lässt die Tafel leer — und das sieht
+aus wie ein kaputter Abruf, nicht wie ein Tippfehler. Und sie wurden
+**und**-verknüpft: „789 nach Monheim" zusammen mit „834 zum Hbf" ergab dort
+vier Kombinationen statt der zwei gemeinten. Ein Haken meint genau ein Paar.
 
 Die Liste ist eine **Sperre, keine Freigabe**: versteckt wird nur, was dasteht
 und keinen Haken hat. Eine Linie, die neu an die Haltestelle kommt, fährt also
