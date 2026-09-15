@@ -555,7 +555,19 @@ pruefe('Der Rueckgriff ist gesetzt',
 pruefe('Geholt wird mit Rueckgriff',
     str_contains($untis, "startDate=' . \$holVon . '&endDate=' . \$bis"), true);
 pruefe('Zurueckgezogen wird nur im engen Fenster',
-    str_contains($untis, 'HomeworkImportieren($userId, $roh, $iso((int)$von), $iso((int)$bis))'), true);
+    str_contains($untis, 'HomeworkImportieren($userId, $roh, $iso($von), $iso($bis))'), true);
+/* Seit die Haelften getrennt sind, gilt das doppelt: die LESENDE bekommt das
+   weite Fenster gar nicht mehr als Parameter, sie baut den Rueckgriff selbst —
+   und die SCHREIBENDE sieht nur das enge. Wer sie wieder zusammenlegt, muesste
+   dafuer eine Signatur aendern, und das faellt auf. */
+pruefe('Die lesende Haelfte kennt nur das Ende des Fensters',
+    str_contains($untis, 'private function UntisHausaufgabenZeilen(int $nr, int $bis, array $kurz): ?array'), true);
+pruefe('… und die schreibende beide Grenzen',
+    str_contains($untis, 'private function UntisHausaufgabenEinpflegen(string $userId, array $roh, int $von, int $bis): string'), true);
+/* Der Unterschied zwischen „unverstaendlich" und „nichts da" traegt eine
+   Loeschung: `null` darf NICHTS bewirken, `[]` zieht im Fenster zurueck. */
+pruefe('Eine unverstaendliche Antwort pflegt gar nicht erst ein',
+    str_contains($untis, "\$zeilen = \$this->UntisHausaufgabenZeilen(\$nr, \$bis, \$kurz);\n        if (\$zeilen === null) {"), true);
 /* Der STUNDENPLAN bleibt draussen: er wird geschrieben, und ein Rueckgriff
    ueberschriebe vergangene Tage im Stundenplan-Modul. */
 pruefe('Der Stundenplan holt weiter erst ab heute',

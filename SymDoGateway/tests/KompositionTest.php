@@ -241,6 +241,20 @@ pruefe('Der Auftrag traegt die Zugaenge samt Token',
 pruefe('… und die Sperrliste mit', str_contains(rumpf($moodle, 'MoodleAuftragGeben'),
     "'gesperrt' => \$this->MoodleGesperrte(),"), true);
 
+/* Dieselbe Regel fuer WebUntis. Der Umzug steht noch aus (B7 wartet auf einen
+   Lauf am lebenden System), aber die Naht ist geschnitten — und sie soll
+   geschnitten bleiben: die lesende Haelfte darf nichts schreiben, sonst
+   waechst sie wieder zu. */
+$untis = (string)file_get_contents(__DIR__ . '/../libs/WebUntis.php');
+$untisLesen = ohneKommentare(rumpf($untis, 'UntisHausaufgabenZeilen'));
+pruefe('Beide Haelften stehen in der Datei: UntisHausaufgabenZeilen',
+    $untisLesen !== '' && rumpf($untis, 'UntisHausaufgabenEinpflegen') !== '', true);
+foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'HomeworkImportieren',
+          'STPL_ImportSlots', 'MailStoreProposal', 'LogMessage'] as $verboten) {
+    pruefe('UntisHausaufgabenZeilen fasst ' . $verboten . ' nicht an',
+        str_contains($untisLesen, $verboten), false);
+}
+
 /* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.
  *
  * Der Aufrufer bucht `kiAufrufe`, und er bucht nur, was zurueckkommt. Bis zum

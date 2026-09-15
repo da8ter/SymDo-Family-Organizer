@@ -1184,6 +1184,28 @@ trait WebUntis
                und kein Fehler. */
             return $this->Translate('homework: no family member assigned');
         }
+        $zeilen = $this->UntisHausaufgabenZeilen($nr, $bis, $kurz);
+        if ($zeilen === null) {
+            return $this->Translate('homework: not available');
+        }
+        return $this->UntisHausaufgabenEinpflegen($userId, $zeilen, $von, $bis);
+    }
+
+    /**
+     * Die LESENDE Haelfte: die Hausaufgaben holen und in Zeilen bringen.
+     *
+     * Sie schreibt nichts — genau deshalb kann sie spaeter in einer eigenen
+     * Instanz laufen, waehrend das Gateway Hooks bedient. Der Unterschied
+     * zwischen `null` und `[]` traegt dabei eine Loeschung: `null` heisst „die
+     * Antwort war nicht zu verstehen" und darf NICHTS bewirken, `[]` heisst
+     * „diese zwei Wochen sind aufgabenfrei" und zieht die uebernommenen
+     * Aufgaben im Fenster zurueck.
+     *
+     * @param array<string,string> $kurz Kuerzel => langer Fachname
+     * @return list<array<string,mixed>>|null null = Antwort unverstaendlich
+     */
+    private function UntisHausaufgabenZeilen(int $nr, int $bis, array $kurz): ?array
+    {
         /* GEHOLT wird mit Rueckgriff, ZURUECKGEZOGEN nur im Vorwaertsfenster —
            die beiden Fenster sind absichtlich verschieden.
 
@@ -1198,7 +1220,7 @@ trait WebUntis
         $d = $this->UntisRest('homeworks/lessons?startDate=' . $holVon . '&endDate=' . $bis, 'api/');
         $daten = is_array($d['data'] ?? null) ? $d['data'] : (is_array($d) ? $d : []);
         if ($daten === []) {
-            return $this->Translate('homework: not available');
+            return null;
         }
 
         /* Welche Liste die Hausaufgaben traegt, ist nicht dokumentiert. Erst am
@@ -1231,7 +1253,7 @@ trait WebUntis
         if ($hw === null) {
             $this->SendDebug('WebUntis', 'Hausaufgaben: unbekannte Antwortform ('
                 . implode(', ', array_slice(array_keys($daten), 0, 8)) . ')', 0);
-            return $this->Translate('homework: not available');
+            return null;
         }
         $lektionen = [];
         foreach ((array)($daten['lessons'] ?? []) as $l) {
@@ -1301,10 +1323,23 @@ trait WebUntis
             ];
         }
 
+        return $roh;
+    }
+
+    /**
+     * Die SCHREIBENDE Haelfte: die gelesenen Zeilen uebernehmen.
+     *
+     * Sie bleibt beim Gateway — dort liegen die Hausaufgaben, und
+     * `HomeworkImportieren` raeumt im Fenster auf.
+     *
+     * @param list<array<string,mixed>> $roh
+     */
+    private function UntisHausaufgabenEinpflegen(string $userId, array $roh, int $von, int $bis): string
+    {
         $iso = static fn(int $ymd): string => substr((string)$ymd, 0, 4) . '-'
             . substr((string)$ymd, 4, 2) . '-' . substr((string)$ymd, 6, 2);
         // Das enge Fenster: nur hier darf zurueckgezogen werden (siehe oben).
-        $e = $this->HomeworkImportieren($userId, $roh, $iso((int)$von), $iso((int)$bis));
+        $e = $this->HomeworkImportieren($userId, $roh, $iso($von), $iso($bis));
         if (($e['ok'] ?? false) !== true) {
             return sprintf($this->Translate('homework: not taken over (%s)'), (string)($e['fehler'] ?? '?'));
         }
