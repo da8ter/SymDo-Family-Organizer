@@ -2527,10 +2527,13 @@ trait MailScan
         }
         $stand = json_decode($this->MailAttr('MailDayCount', '{}'), true);
         $stand = is_array($stand) ? $stand : [];
-        if ((string)($stand['d'] ?? '') !== date('Y-m-d')) {
-            return false;
-        }
-        return (int)($stand['n'] ?? 0) >= $grenze;
+        $heute = ((string)($stand['d'] ?? '') === date('Y-m-d')) ? (int)($stand['n'] ?? 0) : 0;
+        /* Die eingereihten Auftraege zaehlen MIT. Gebucht wird beim Deuten, und
+           bis dahin saehe jeder neue Auftrag denselben alten Stand — bei
+           Tagesdeckel 1 kamen zwei Fotos durch. Der synchrone Weg hatte das
+           nie: er prueft und bucht in derselben Runde. Eine Reservierung, kein
+           Buchen — scheitert ein Auftrag, faellt sie von selbst weg. */
+        return $heute + $this->AiJobUngebucht() >= $grenze;
     }
 
     /**

@@ -133,6 +133,30 @@ trait AiJobs
         return $this->ScanQuelleUebernommen('auftrag');
     }
 
+    /**
+     * Wie viele eingereihte Auftraege das Tagesbudget noch belasten werden.
+     *
+     * Die Bremse rechnet sie mit (`MailDayLimitReached`). Ohne das prueft jeder
+     * neue Auftrag gegen einen Stand, den die schon wartenden noch nicht
+     * erhoeht haben: bei Tagesdeckel 1 kamen ZWEI Fotos durch. Der synchrone
+     * Weg hatte das nie — er prueft und bucht in derselben Runde. Von einem
+     * externen Codereview gemeldet (F6, nachgefasst am 15.09.2026: die erste
+     * Fassung buchte nur die Hintergrundarbeit sofort).
+     *
+     * Eine RESERVIERUNG, kein Buchen: scheitert der Auftrag, faellt sie von
+     * selbst weg, und der Nutzer verliert nichts. Genau so verhaelt sich der
+     * synchrone Weg auch.
+     */
+    private function AiJobUngebucht(): int
+    {
+        if (!$this->AiJobMoeglich()) {
+            return 0;
+        }
+        /* `false`: das blosse Nachsehen darf kein Verzeichnis anlegen — diese
+           Frage stellt auch der Formularaufbau. */
+        return $this->AiJobLaden(false)->zaehleUngebucht();
+    }
+
     // ------------------------------------------------------------------
     // Einreihen
     // ------------------------------------------------------------------

@@ -157,6 +157,7 @@ final class JobProbe extends IPSModuleStrict
     public function pUebernehmen(): void { $this->AiJobApplyChanges(); }
     public function pTimerAus(): void { $this->SetTimerInterval('AiJobSweep', 0); }
     public function pFertigmelden(string $id): void { $this->AiJobFinish($id); }
+    public function pUngebucht(): int { return $this->AiJobUngebucht(); }
 
     protected function getTime(): int { return time(); }
 }
@@ -439,6 +440,75 @@ $b->pSweep();
 pruefe('Der Kehrgang deutet eine liegengebliebene Antwort',
     $b->hintergrund, [(string)$liegen['id']]);
 $b->pLaden()->alleLoeschen();
+
+// ── Der Tagesdeckel reserviert, was schon wartet ─────────────────────────
+/* Gebucht wird beim DEUTEN. Bis dahin sah jeder neue Auftrag denselben alten
+   Stand — bei Tagesdeckel 1 kamen ZWEI Fotos durch, bei 20 alle, die in der
+   Zeit eines Aufrufs eingereicht wurden. Der synchrone Weg hatte das nie: er
+   prueft und bucht in derselben Runde. Also zaehlt die Bremse das Ausstehende
+   mit; es ist eine RESERVIERUNG, kein Buchen — scheitert ein Auftrag, faellt
+   sie von selbst weg. Von einem externen Codereview gemeldet (F6,
+   nachgefasst am 15.09.2026). */
+$r = new JobProbe(9911);
+$r->Create();
+$r->pLaden()->alleLoeschen();
+pruefe('Nichts eingereiht, nichts reserviert', $r->pUngebucht(), 0);
+
+$e1 = $r->pEinreihen('extract', ['system' => 's', 'user' => 'u'],
+    ['type' => 'todos', 'arten' => ['task']], '', 'geraet1');
+pruefe('Der erste Auftrag reserviert', $r->pUngebucht(), 1);
+$e2 = $r->pEinreihen('extract', ['system' => 's', 'user' => 'u'],
+    ['type' => 'todos', 'arten' => ['task']], '', 'geraet2');
+pruefe('Der zweite auch — sie zaehlen zusammen', $r->pUngebucht(), 2);
+
+/* Ein Diktat zaehlt NICHT: es ist die halbe Miete, das Zerlegen kommt danach
+   als eigener Aufruf und wird dann gezaehlt. Wer es mitzaehlte, buchte dem
+   Nutzer jedes Diktat doppelt. */
+$r->pEinreihen('transcribe', ['system' => '', 'user' => '', 'mime' => 'audio/webm'],
+    ['type' => 'text'], 'TON', 'geraet3');
+pruefe('Ein Diktat reserviert nichts', $r->pUngebucht(), 2);
+
+/* Hintergrundarbeit bucht schon bei der Annahme — sie darf nicht doppelt
+   zaehlen. */
+$r->pHintergrund();
+pruefe('Hintergrundarbeit reserviert nichts mehr — sie hat gebucht',
+    [$r->pUngebucht(), $r->gezaehlt], [2, 1]);
+
+/* Eine Antwort, die noch nicht gedeutet ist, bleibt reserviert: gebucht wird
+   erst beim Deuten. */
+$k1 = $r->pLaden()->lesen((string)$e1['id']);
+$k1['state'] = AiJobStore::ROH;
+$k1['raw']   = ['ok' => true, 'text' => '[]', 'debug' => []];
+$r->pLaden()->schreiben($k1);
+pruefe('Eine ungedeutete Antwort bleibt reserviert', $r->pUngebucht(), 2);
+
+$r->pFertig((string)$e1['id']);
+pruefe('Erst das Deuten loest die Reservierung ab — und bucht',
+    [$r->pUngebucht(), $r->gezaehlt], [1, 2]);
+
+/* Ein gescheiterter Auftrag kostet den Nutzer nichts — die Reservierung faellt
+   weg, gebucht wurde nie. Genau wie beim synchronen Weg. */
+$k2 = $r->pLaden()->lesen((string)$e2['id']);
+$k2['state'] = AiJobStore::ROH;
+$k2['raw']   = ['ok' => false, 'code' => 'ai_unreachable', 'debug' => []];
+$r->pLaden()->schreiben($k2);
+$r->pFertig((string)$e2['id']);
+pruefe('Ein Fehlschlag kostet kein Budget', [$r->pUngebucht(), $r->gezaehlt], [0, 2]);
+
+/* Ohne Scanner gibt es gar keine Auftraege — dann darf die Bremse auch nichts
+   dazurechnen, sonst wuerde der synchrone Weg gegen einen Phantomstand
+   geprueft. */
+$r->pHintergrund();
+$r->uebernommen = false;
+pruefe('Ohne Laeufer wird nichts reserviert', $r->pUngebucht(), 0);
+$r->uebernommen = true;
+$r->pLaden()->alleLoeschen();
+
+/* Und die Bremse muss es auch wirklich benutzen. Sie steht in MailScan und
+   laesst sich hier nicht fahren — also am Quelltext festgenagelt. */
+$mail = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
+pruefe('Die Tagesbremse rechnet die Reservierungen mit',
+    str_contains($mail, '$heute + $this->AiJobUngebucht() >= $grenze'), true);
 
 $g->pLaden()->alleLoeschen();
 $h->pLaden()->alleLoeschen();

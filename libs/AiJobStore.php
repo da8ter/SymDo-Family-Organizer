@@ -307,6 +307,38 @@ final class AiJobStore
         return $n;
     }
 
+    /**
+     * Wie viele Auftraege das Tagesbudget noch BELASTEN werden.
+     *
+     * Gebucht wird beim Deuten, und bis dahin sieht jeder neue Auftrag denselben
+     * alten Stand: bei Deckel 1 kamen zwei Fotos durch, bei Deckel 20 alle, die
+     * in der Zeit eines Aufrufs eingereicht wurden. Der synchrone Weg hatte das
+     * nie — er prueft und bucht in derselben Runde.
+     *
+     * Deshalb zaehlt die Bremse das Ausstehende mit. Nicht gebucht wird: ein
+     * Diktat (es zaehlt erst als Zerlegung) und Hintergrundarbeit (die bucht
+     * schon bei der Annahme). `ROH` gehoert dazu — die Antwort ist da, gebucht
+     * wird erst beim Deuten.
+     */
+    public function zaehleUngebucht(): int
+    {
+        $n = 0;
+        foreach ($this->koepfe() as $kopf) {
+            $z = (string)($kopf['state'] ?? '');
+            if ($z !== self::OFFEN && $z !== self::LAEUFT && $z !== self::ROH) {
+                continue;
+            }
+            if ((string)($kopf['kind'] ?? '') === 'transcribe') {
+                continue;
+            }
+            if ((string)((($kopf['origin'] ?? [])['type']) ?? '') === self::HERKUNFT_HINTERGRUND) {
+                continue;
+            }
+            $n++;
+        }
+        return $n;
+    }
+
     public function hatWartende(): bool
     {
         foreach ($this->koepfe() as $kopf) {
