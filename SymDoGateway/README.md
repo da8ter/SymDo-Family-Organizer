@@ -670,8 +670,10 @@ Verzeichnis, die Klassenseiten und LOGINEO.
 
 **Bewusst hiergeblieben**, jeweils mit Grund:
 
-- **WebUntis.** Die Anmeldung ist die einzige unumkehrbare Handlung des ganzen
-  Umbaus — drei Fehlversuche sperren das Schulkonto.
+- **WebUntis.** Zwei Gründe. Die Anmeldung ist die einzige unumkehrbare
+  Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto. Und
+  der Gewinn wäre klein: ein vollständiger Lauf (Anmeldung, Plan, Hausaufgaben,
+  Einspielen) kostet **1,5–2,0 Sekunden**, am 15.09.2026 gemessen.
 - **Der Mail-Webhook.** Sein Zustand *ist* die Spool-Datei: sie trägt den
   vollen Text und ist zugleich der Wiederholungsvermerk.
 - **Die Trockenläufe und Vorschauen.** „Jetzt prüfen", „Verbindung testen", die

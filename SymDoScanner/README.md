@@ -122,7 +122,7 @@ Nicht alles ist umgezogen, und das ist jeweils eine Entscheidung mit Grund:
 | **Die Merker** (`EduSeen`, `MoodleSeen`, `MailSeenUIDs`) | Ein Bestand, ein Besitzer. Zwei wären ein doppelter Scan und doppelte Kosten. |
 | **Die Tagesdeckel** | Sie zählen an einem Attribut dieser Instanz. |
 | **Der Prompt** | Er braucht den Bestand: Mitglieder, Kinder, erlaubte Arten. |
-| **WebUntis** | Die Anmeldung ist die einzige unumkehrbare Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto. Wartet auf einen Lauf am lebenden System. |
+| **WebUntis** | Zwei Gründe. Die Anmeldung ist die einzige unumkehrbare Handlung des ganzen Umbaus — drei Fehlversuche sperren das Schulkonto. Und der Gewinn wäre klein: ein vollständiger Lauf kostet **1,5–2,0 s** (gemessen am 15.09.2026), nicht die 20 s, mit denen der Plan rechnete. |
 | **Der Mail-Webhook** | Sein Zustand *ist* die Spool-Datei: sie trägt den vollen Text und ist zugleich der Wiederholungsvermerk. |
 | **„Jetzt prüfen" (LOGINEO)** | Ein Trockenlauf schreibt nichts, und jemand wartet davor. |
 | **Die Briefing-Vorschau** | Sie läuft im Hook und antwortet dem Wartenden sofort. |

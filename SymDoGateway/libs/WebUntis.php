@@ -58,6 +58,15 @@ trait WebUntis
        KEIN Element — getTimetable antwortet dort „invalid elementType: 12". */
     private const UNTIS_TYP_KLASSE   = 1;
     private const UNTIS_TYP_SCHUELER = 5;
+    /* Die OBERGRENZE eines Aufrufs, keine Dauer. Am 15.09.2026 am lebenden
+       System gemessen: ein VOLLSTAENDIGER Lauf — Anmeldung, Wochenplan,
+       datierte Tage, Hausaufgaben und das Einspielen in den Stundenplan —
+       kostet 1,5 bis 2,0 Sekunden. Der Plan „Gateway frei halten" rechnete
+       hier mit 20 Sekunden und leitete daraus den Umzug in die Scanner-Spur
+       ab; die Zahl stammte aus genau dieser Konstante und war eine Frist, kein
+       Messwert. Fuer zwei Sekunden in der Stunde lohnt es nicht, die einzige
+       unumkehrbare Handlung des Moduls (drei Fehlanmeldungen sperren das
+       Schulkonto) in eine zweite Instanz zu verlegen. */
     private const UNTIS_HTTP_FRIST  = 20;
     private const UNTIS_INTERVALL_STD = 60;      // Minuten
 
