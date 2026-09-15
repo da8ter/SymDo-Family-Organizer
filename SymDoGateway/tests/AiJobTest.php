@@ -344,6 +344,32 @@ $laden->alleLoeschen();
 pruefe('Zurueckstellen legt einen geloeschten Auftrag nicht neu an',
     [$laden->zurueckstellen($genommen, $uhrzeit + 30), count($laden->koepfe())], [false, 0]);
 
+// ── Widerruf waehrend der Sperruebernahme ─────────────────────────────────
+/* Auf die Anbieter-Sperre wird bis zu FUENF Sekunden gewartet. Zieht der Nutzer
+   in diesem Fenster seine Einwilligung zurueck, wird die Warteschlange geleert
+   — die Probe VOR der Wartezeit hat den Widerruf dann noch nicht gesehen, und
+   der Text ginge trotzdem an den Anbieter. Genau der Aufruf, den er gerade
+   untersagt hat. Von einem externen Codereview gemeldet (F7, 14.09.2026). */
+$laden->alleLoeschen();
+AnbieterAttrappe::$rufe = [];
+$w = AiJobStore::neueKennung();
+$laden->anlegen(kopf($w, 4000, ['job' => ['system' => 'SYS', 'user' => 'GEHEIMER TEXT',
+    'payloadKind' => '', 'mime' => '', 'url' => '']]), '');
+
+/* Die Sperre loescht den Auftrag, BEVOR sie die Uebernahme meldet — so faellt
+   der Widerruf genau in das Fenster. */
+$widerrufen = new AiJobRunner($laden,
+    $bauen,
+    static function (int $ms) use ($laden, $w): bool { $laden->loeschen($w); return true; },
+    $geben,
+    $melden,
+    $uhr);
+$kopfW = $laden->naechsten($uhrzeit);
+pruefe('Der Auftrag wird genommen', (string)($kopfW['id'] ?? ''), $w);
+$widerrufen->einen($kopfW);
+pruefe('Nach dem Widerruf geht NICHTS an den Anbieter', count(AnbieterAttrappe::$rufe), 0);
+pruefe('Und der Auftrag bleibt geloescht', $laden->lesen($w), null);
+
 // ── Wer wartet, kommt zuerst ──────────────────────────────────────────────
 /* Der eigene Annahme-Topf verhindert nur, dass Hintergrundarbeit jemanden mit
    „belegt" abweist. Der Laeufer arbeitet aber unter der Anbieter-Sperre einen

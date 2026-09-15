@@ -122,6 +122,17 @@ final class AiJobRunner
 
         $anbieter = null;
         try {
+            /* NOCH EINMAL nachsehen, jetzt unter der Sperre.
+               Auf die Sperre wird bis zu fuenf Sekunden gewartet, und der
+               Widerruf der Einwilligung leert die Warteschlange — faellt er in
+               dieses Fenster, haette der Aufruf oben ihn nicht mehr gesehen und
+               der Text ginge trotzdem an den Anbieter. Genau der Aufruf, den
+               der Nutzer gerade untersagt hat. Die Probe VOR der Wartezeit
+               allein genuegt also nicht; von einem externen Codereview
+               gemeldet (F7, 14.09.2026). */
+            if ($this->laden->lesen($id) === null) {
+                return true;
+            }
             $anbieter = ($this->anbieterBauen)();
             $roh = $this->ausfuehren($kopf, $anbieter);
         } catch (\Throwable $e) {
