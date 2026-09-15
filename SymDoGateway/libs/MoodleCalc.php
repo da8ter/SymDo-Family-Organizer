@@ -313,4 +313,27 @@ class MoodleCalc
         }
         return $raus;
     }
+
+    /**
+     * Den Token an eine Dateiadresse haengen — so will es der Web-Service der
+     * Moodle-App.
+     *
+     * Das geschieht schon beim LESEN, nicht erst beim Herunterladen. Grund ist
+     * der Umzug in die Scanner-Spur: die Karte reist als Datei hinueber, und
+     * auf der anderen Seite gibt es keinen Zugang mehr — wohl aber die fertige
+     * Adresse. Dieselbe Adresse benutzen danach BEIDE Wege: der Spiegel
+     * (`EduDateiHolen`) und die KI-Nutzlast (`MoodleAnhaengeFuerKi`).
+     *
+     * Der Token steht damit in der Auftragsdatei. Die liegt mit 0600 im
+     * Kernel-Verzeichnis — strenger als der Ort, an dem er ohnehin schon steht:
+     * `settings.json` ist weltlesbar.
+     */
+    public static function MitToken(string $url, string $token): string
+    {
+        $url = trim($url);
+        if ($url === '' || $token === '' || str_contains($url, 'token=')) {
+            return $url;
+        }
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'token=' . rawurlencode($token);
+    }
 }

@@ -554,25 +554,37 @@ trait EduMaps
      */
     private function EduKartenAuswerten(array $seite, array $karten, int $schonAnalysiert, bool $alles): array
     {
-        $topf = 'edu:' . md5((string)$seite['url']);
-        $ersterLauf = !$this->EduTopfHatEintraege($topf);
+        $leer = ['geaendert' => 0, 'analysiert' => 0, 'gedeckelt' => false];
+        if ($karten === []) {
+            return $leer;
+        }
+        $quelle = EduStoreCalc::Quelle($karten[0]);
+        $topf = $this->EduMerkerTopf($quelle, (string)$seite['url']);
+        $ersterLauf = !$this->EduMerkerFrisch($quelle, $topf);
+        $auswerten  = $this->EduAuswertenAn($quelle);
         $geaendert  = 0;
         $analysiert = 0;
         $gedeckelt  = false;
         foreach ($karten as $karte) {
-            $schluessel = $karte['boxid'] . ':' . $karte['updated'];
+            $schluessel = $this->EduMerkerSchluessel($karte);
             /* „Alles auswerten" nimmt auch die Karten, die schon im Merker
                stehen — sonst waere nach dem ersten Lauf, der nur vermerkt,
                nie etwas auszuwerten. Das ist ein Griff von Hand und teuer:
                jede Karte kostet einen KI-Aufruf, hier also sechzehn. */
-            if (!$alles && $this->EduGesehen($topf, $schluessel)) {
+            if (!$alles && $this->EduMerkerGesehen($quelle, $topf, $schluessel)) {
                 continue;
             }
             $geaendert++;
             if ($ersterLauf && !$alles) {
                 /* Erster Lauf: nur vermerken. Sonst stuenden beim Einschalten
                    zwoelf Vorschlaege auf einmal da, und jeder kostet Geld. */
-                $this->EduMerken($topf, $schluessel);
+                $this->EduMerkerSetzen($quelle, $topf, $schluessel);
+                continue;
+            }
+            if (!$auswerten) {
+                /* Die Auswertung ist abgeschaltet. NICHT vermerken: sonst
+                   waere die Karte beim Einschalten schon „gesehen" und kaeme
+                   nie mehr an die Reihe. */
                 continue;
             }
             /* Deckel: ab hier wird NICHT mehr ausgewertet — aber weiter
@@ -591,12 +603,82 @@ trait EduMaps
                 $this->SendDebug('EduMaps', 'Deckel je Lauf erreicht — Auswertung wartet, Spiegel laeuft weiter', 0);
                 continue;
             }
-            if ($this->EduKarteAnalysieren($seite, $karte)) {
-                $this->EduMerken($topf, $schluessel);
+            if ($this->EduKarteAnalysierenJe($quelle, $seite, $karte)) {
+                $this->EduMerkerSetzen($quelle, $topf, $schluessel);
                 $analysiert++;
             }
         }
         return ['geaendert' => $geaendert, 'analysiert' => $analysiert, 'gedeckelt' => $gedeckelt];
+    }
+
+    // ── Was die beiden Quellen wirklich unterscheidet ────────────────────
+    //
+    // Sechs kleine Weichen statt zweier Schleifen. Die Schleife selbst ist die
+    // teure Entscheidung (jede Karte kostet einen KI-Aufruf), und die gab es
+    // zweimal — mit verschiedenen Deckeln und verschiedenen Meldungen. Was sich
+    // wirklich unterscheidet, steht jetzt hier, in sechs Zeilen.
+
+    /** Darf diese Quelle ueberhaupt auswerten? */
+    private function EduAuswertenAn(string $quelle): bool
+    {
+        if ($quelle === 'moodle') {
+            return (bool)$this->MoodleProp('MoodleAnalyse', true)
+                && (bool)$this->MoodleProp('AiEnabled', false)
+                && $this->AiPrivacyAccepted();
+        }
+        return $this->EduIsEnabled();
+    }
+
+    /** Der Merker-Topf DIESER Seite. Je Quelle ein eigener Bestand. */
+    private function EduMerkerTopf(string $quelle, string $url): string
+    {
+        return ($quelle === 'moodle' ? 'moodle:' : 'edu:') . md5($url);
+    }
+
+    /**
+     * Der Schluessel einer Karte im Merker.
+     *
+     * Bewusst NICHT vereinheitlicht: die Klassenseiten merken sich
+     * `<boxid>:<fassung>`, LOGINEO `<moodle:id>:<fassung>`. Wer das anglich,
+     * entwertete JEDEN vorhandenen Merker — und beim naechsten Lauf liefe jede
+     * bereits ausgewertete Karte noch einmal durch die KI. Das kostet Geld und
+     * traegt nichts ein.
+     */
+    private function EduMerkerSchluessel(array $karte): string
+    {
+        return EduStoreCalc::Quelle($karte) === 'moodle'
+            ? (string)($karte['srcId'] ?? '') . ':' . (int)($karte['updated'] ?? 0)
+            : (string)($karte['boxid'] ?? '') . ':' . (int)($karte['updated'] ?? 0);
+    }
+
+    /** Steht in diesem Topf schon etwas? Leer heisst „erster Lauf". */
+    private function EduMerkerFrisch(string $quelle, string $topf): bool
+    {
+        return $quelle === 'moodle'
+            ? $this->MoodleTopfHatEintraege($topf) : $this->EduTopfHatEintraege($topf);
+    }
+
+    private function EduMerkerGesehen(string $quelle, string $topf, string $schluessel): bool
+    {
+        return $quelle === 'moodle'
+            ? $this->MoodleGesehen($topf, $schluessel) : $this->EduGesehen($topf, $schluessel);
+    }
+
+    private function EduMerkerSetzen(string $quelle, string $topf, string $schluessel): void
+    {
+        if ($quelle === 'moodle') {
+            $this->MoodleMerken($topf, $schluessel);
+            return;
+        }
+        $this->EduMerken($topf, $schluessel);
+    }
+
+    /** Die Karte durch die Mail-Kette schicken — je Quelle mit eigenem Absender. */
+    private function EduKarteAnalysierenJe(string $quelle, array $seite, array $karte): bool
+    {
+        return $quelle === 'moodle'
+            ? $this->MoodleKarteAnalysieren($seite, $karte)
+            : $this->EduKarteAnalysieren($seite, $karte);
     }
 
     /**

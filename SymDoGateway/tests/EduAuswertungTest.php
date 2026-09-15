@@ -85,6 +85,39 @@ final class Auswerteprobe
         $this->gesehen[] = $topf . '|' . $s;
     }
     private function MailDayLimitReached(): bool { return $this->deckel; }
+
+    /* Die sechs Weichen zwischen den Quellen bleiben ECHT — geprueft wird ja
+       gerade, dass sie greifen. Nur ihre Blaetter sind hier Zaehler. */
+    public bool $an = true;
+    private function EduIsEnabled(): bool { return $this->an; }
+    private function AiPrivacyAccepted(): bool { return true; }
+    private function MoodleProp(string $n, mixed $v): mixed { return $n === 'AiEnabled' ? true : $this->an; }
+    public array $moodleGesehen = [];
+    public array $moodleGemerkt = [];
+    public array $moodleAnalysiert = [];
+    private function MoodleTopfHatEintraege(string $topf): bool
+    {
+        foreach ($this->moodleGesehen as $e) {
+            if (str_starts_with($e, $topf . '|')) {
+                return true;
+            }
+        }
+        return false;
+    }
+    private function MoodleGesehen(string $topf, string $s): bool
+    {
+        return in_array($topf . '|' . $s, $this->moodleGesehen, true);
+    }
+    private function MoodleMerken(string $topf, string $s): void
+    {
+        $this->moodleGemerkt[] = $s;
+        $this->moodleGesehen[] = $topf . '|' . $s;
+    }
+    private function MoodleKarteAnalysieren(array $seite, array $karte): bool
+    {
+        $this->moodleAnalysiert[] = (string)$karte['srcId'];
+        return $this->erfolg;
+    }
     private function EduKarteAnalysieren(array $seite, array $karte): bool
     {
         $this->analysiert[] = (string)$karte['boxid'];
@@ -209,7 +242,60 @@ $roh['alles'] = 'ja';
 pruefe('Ein Text wird zu einem Wahrheitswert',
     ScanKanalCalc::PruefeErgebnis($roh, 77)['umschlag']['alles'], true);
 
-// ── 9. Beide Wege gehen durch DIESELBE Tuer ──────────────────────────────
+// ── 9. LOGINEO geht durch dieselbe Schleife — mit eigenem Merker ─────────
+/* Bis zum 15.09.2026 gab es diese Schleife ZWEIMAL: einmal fuer die
+   Klassenseiten, einmal fuer LOGINEO, mit verschiedenen Deckeln und
+   verschiedenen Meldungen. Was die Quellen wirklich unterscheidet, sind sechs
+   Weichen — und die wichtigste ist der MERKER: er darf nicht angeglichen
+   werden, sonst liefe jede bereits ausgewertete Karte noch einmal durch die
+   KI. */
+function mkarten(int $n, int $rev = 4000): array
+{
+    $raus = [];
+    for ($i = 1; $i <= $n; $i++) {
+        $raus[] = ['quelle' => 'moodle', 'srcId' => 'moodle:' . $i, 'updated' => $rev,
+                   'titel' => 'M' . $i, 'text' => '', 'abschnitt' => ''];
+    }
+    return $raus;
+}
+$mseite = ['name' => 'Mathe 5b', 'url' => 'https://lms.test/course/view.php?id=7', 'userId' => 'u1'];
+
+$p = new Auswerteprobe();
+$p->Auswerten($mseite, mkarten(3));
+pruefe('LOGINEO, erster Lauf: nichts ausgewertet', $p->moodleAnalysiert, []);
+pruefe('… und in DEN LOGINEO-Merker geschrieben',
+    $p->moodleGemerkt, ['moodle:1:4000', 'moodle:2:4000', 'moodle:3:4000']);
+pruefe('… der Klassenseiten-Merker bleibt leer', $p->gemerkt, []);
+
+$p->moodleGemerkt = [];
+$erg = $p->Auswerten($mseite, mkarten(3));
+pruefe('LOGINEO, nichts neu: keine Auswertung',
+    [$p->moodleAnalysiert, $erg['geaendert']], [[], 0]);
+
+$p->moodleGemerkt = [];
+$erg = $p->Auswerten($mseite, mkarten(2, 5000));
+pruefe('LOGINEO, neue Fassung: ausgewertet',
+    $p->moodleAnalysiert, ['moodle:1', 'moodle:2']);
+pruefe('… und die Klassenseiten-Auswertung blieb unberuehrt', $p->analysiert, []);
+
+/* Der Schluessel traegt die volle LOGINEO-Kennung, der einer Klassenseite nur
+   die boxid. Angeglichen entwertete das JEDEN vorhandenen Merker. */
+pruefe('Die Schluessel bleiben quellen-eigen',
+    [$p->moodleGemerkt, str_contains(json_encode($p->moodleGemerkt), 'moodle:1:5000')],
+    [['moodle:1:5000', 'moodle:2:5000'], true]);
+
+/* Der eigene Schalter: ist die LOGINEO-Auswertung aus, wird NICHT vermerkt —
+   sonst waere die Karte beim Einschalten schon „gesehen" und kaeme nie mehr
+   an die Reihe. */
+$q = new Auswerteprobe();
+$q->moodleGesehen = ['moodle:' . md5($mseite['url']) . '|alt:1'];   // nicht der erste Lauf
+$q->an = false;
+$erg = $q->Auswerten($mseite, mkarten(2, 6000));
+pruefe('Abgeschaltet: nichts ausgewertet', $q->moodleAnalysiert, []);
+pruefe('… und NICHTS vermerkt', $q->moodleGemerkt, []);
+pruefe('… gezaehlt wird die Aenderung trotzdem', $erg['geaendert'], 2);
+
+// ── 10. Beide Wege gehen durch DIESELBE Tuer ─────────────────────────────
 $maps = (string)file_get_contents(__DIR__ . '/../libs/EduMaps.php');
 $pfl  = (string)file_get_contents(__DIR__ . '/../libs/EduEinpflegen.php');
 $sc   = (string)file_get_contents(__DIR__ . '/../../SymDoScanner/module.php');
@@ -221,7 +307,12 @@ pruefe('Der Umschlag-Weg auch',
 /* Es darf nur EINE Schleife geben, die `EduKarteAnalysieren` ruft. Eine zweite
    waere eine zweite Politik. */
 pruefe('Nur eine Stelle ruft die Auswertung einer Karte',
-    substr_count($maps . $pfl, '$this->EduKarteAnalysieren('), 1);
+    substr_count($maps . $pfl, '$this->EduKarteAnalysierenJe('), 1);
+$mo = (string)file_get_contents(__DIR__ . '/../libs/Moodle.php');
+pruefe('LOGINEO hat keine eigene Auswerteschleife mehr',
+    str_contains($mo, 'MoodleKarteAnalysieren($'), false);
+pruefe('… sondern ruft die gemeinsame',
+    str_contains($mo, '$aus = $this->EduKartenAuswerten($seite, $liste, $analysiert, false);'), true);
 /* Die Uhr bleibt beim Gateway: der Scanner hat keine eigene, er arbeitet nur
    ab, was im Kanal liegt. Ein abgeschalteter Zeitgeber liesse die
    Klassenseiten nach genau einem Lauf einschlafen. */

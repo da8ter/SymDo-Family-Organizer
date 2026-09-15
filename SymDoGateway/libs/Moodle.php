@@ -39,10 +39,9 @@ trait Moodle
     /* So viele Fehlschläge je Zugang, dann ruht er bis zum nächsten Griff von
        Hand. Ein toter Token soll nicht sechsmal am Tag angeklopft werden. */
     private const MOODLE_FEHLER_MAX    = 3;
-    /* So viele Karten gehen je Lauf an die KI. Jede kostet einen Aufruf beim
-       Anbieter; der Rest kommt beim naechsten Mal. Derselbe Wert wie bei den
-       Klassenseiten. */
-    private const MOODLE_JE_LAUF_MAX   = 5;
+    /* Wie viele Karten je Lauf an die KI gehen, steht nicht mehr hier: beide
+       Quellen teilen sich die Auswerteschleife, und damit `EDU_JE_LAUF_MAX`.
+       Die Werte waren ohnehin gleich (5). */
     private const MOODLE_TEXT_MAX      = 8000;
     /* So weit im Voraus werden Aufgaben geholt — und genau dieses Fenster gilt
        auch beim Zurueckziehen. Nicht das Jahr aus HomeworkCalc: ein halb
@@ -546,11 +545,8 @@ trait Moodle
            steht jetzt in `EduSpiegelnAn`, zusammen mit dem der Klassenseiten —
            beide Quellen gehen durch dieselbe Tuer, und die Frage gehoert an
            EINE Stelle. */
-        /* Auswerten kostet Geld — deshalb haengt es an der KI-Einwilligung und
-           am eigenen Schalter, genau wie bei den Klassenseiten. */
-        $auswerten = (bool)$this->MoodleProp('MoodleAnalyse', true)
-            && (bool)$this->MoodleProp('AiEnabled', false)
-            && $this->AiPrivacyAccepted();
+        /* „Auswerten kostet Geld" wird nicht mehr hier entschieden: die Frage
+           steht in `EduAuswertenAn`, zusammen mit der der Klassenseiten. */
         $karten = 0;
         $neu = 0;
         $kursListe = [];
@@ -584,44 +580,17 @@ trait Moodle
             if (!$trocken) {
                 $neu += $this->EduSeiteSpiegeln($seite, $liste);
             }
-            /* Der ERSTE Lauf einer Seite merkt sich nur. Sonst stuenden beim
-               Einschalten zwanzig Vorschlaege auf einmal da, und jeder kostet
-               Geld. Erkannt am leeren Topf dieser Seite. */
-            $topf = 'moodle:' . md5((string)$seite['url']);
-            $ersterLauf = !$this->MoodleTopfHatEintraege($topf);
-            foreach ($liste as $karte) {
-                if ($trocken) {
-                    continue;
-                }
-                $schluessel = (string)$karte['srcId'] . ':' . (int)$karte['updated'];
-                if ($this->MoodleGesehen($topf, $schluessel)) {
-                    continue;
-                }
-                $geaendert++;
-                if ($ersterLauf) {
-                    $this->MoodleMerken($topf, $schluessel);
-                    continue;
-                }
-                if (!$auswerten) {
-                    continue;
-                }
-                /* Deckel: ab hier wird nicht mehr ausgewertet — aber weiter
-                   gespiegelt, denn das kostet nichts. Die Karte bleibt
-                   unvermerkt und kommt beim naechsten Lauf an die Reihe. */
-                if ($this->MailDayLimitReached()) {
-                    $this->SendDebug('Moodle', 'Tagesdeckel erreicht — Auswertung wartet', 0);
-                    $gedeckelt = true;
-                    continue;
-                }
-                if ($analysiert >= self::MOODLE_JE_LAUF_MAX) {
-                    $this->SendDebug('Moodle', 'Deckel je Lauf erreicht — Auswertung wartet', 0);
-                    $gedeckelt = true;
-                    continue;
-                }
-                if ($this->MoodleKarteAnalysieren($zugang, $seite, $karte)) {
-                    $this->MoodleMerken($topf, $schluessel);
-                    $analysiert++;
-                }
+            /* Auswerten: dieselbe Schleife wie bei den Klassenseiten. Sie
+               entscheidet, wo Geld ausgegeben wird — erster Lauf merkt sich
+               nur, Gesehenes bleibt liegen, Deckel je Lauf und Tagesdeckel
+               gelten. Es gab sie zweimal, mit verschiedenen Deckeln und
+               verschiedenen Meldungen; was die Quellen wirklich unterscheidet,
+               steht jetzt in sechs Weichen in `EduMaps`. */
+            if (!$trocken) {
+                $aus = $this->EduKartenAuswerten($seite, $liste, $analysiert, false);
+                $geaendert  += $aus['geaendert'];
+                $analysiert += $aus['analysiert'];
+                $gedeckelt   = $gedeckelt || $aus['gedeckelt'];
             }
             if (!$trocken) {
                 $archiviert += $this->EduArchivAbgleichen($seite, $liste);
@@ -754,6 +723,18 @@ trait Moodle
         }
         foreach ($this->MoodleForenKarten($zugang, $kursId, $foren) as $k) {
             $raus[] = $k;
+        }
+        /* Der Token wandert JETZT in die Dateiadressen, nicht erst beim
+           Herunterladen: die Karte geht danach durch denselben Weg wie eine
+           Klassenseite (`EduDateiHolen`) und — nach dem Umzug — als Datei in
+           eine andere Instanz. Dort gibt es keinen Zugang mehr, wohl aber die
+           fertige Adresse. Begruendung und Ablageort: MoodleCalc::MitToken. */
+        $token = (string)($zugang['token'] ?? '') !== ''
+            ? (string)$zugang['token'] : $this->MoodleTokenVon($zugang);
+        foreach ($raus as $i => $karte) {
+            foreach ((array)($karte['anhaenge'] ?? []) as $k => $a) {
+                $raus[$i]['anhaenge'][$k]['url'] = MoodleCalc::MitToken((string)($a['url'] ?? ''), $token);
+            }
         }
         return $raus;
     }
@@ -994,7 +975,7 @@ trait Moodle
      * Aus dem Ergebnis wird ein Vorschlag im KI-Eingang, den jemand prueft und
      * uebernimmt — nichts entsteht ungefragt.
      */
-    private function MoodleKarteAnalysieren(array $zugang, array $seite, array $karte): bool
+    private function MoodleKarteAnalysieren(array $seite, array $karte): bool
     {
         $betreff = trim((string)$karte['abschnitt']) !== ''
             ? $karte['abschnitt'] . ' · ' . $karte['titel']
@@ -1017,7 +998,7 @@ trait Moodle
             (string)$karte['srcId'] . ':' . (int)$karte['updated'],
             $kopf,
             $text,
-            $this->MoodleAnhaengeFuerKi($zugang, $karte),
+            $this->MoodleAnhaengeFuerKi($karte),
             (string)$seite['userId'],
             'LOGINEO'
         );
@@ -1028,7 +1009,7 @@ trait Moodle
      *
      * @return list<array{kind:string,name:string,base64:string}>
      */
-    private function MoodleAnhaengeFuerKi(array $zugang, array $karte): array
+    private function MoodleAnhaengeFuerKi(array $karte): array
     {
         $raus = [];
         $summe = 0;
@@ -1040,7 +1021,8 @@ trait Moodle
                 if ($art === '') {
                     continue;   // weder Bild noch PDF — die KI kann damit nichts
                 }
-                $roh = $this->MoodleDatei($zugang, (string)$datei['url']);
+                // Der Token steckt seit dem Lesen in der Adresse (MoodleKarten).
+                $roh = $this->MoodleDateiVonUrl((string)$datei['url']);
                 if ($roh === null) {
                     continue;
                 }
