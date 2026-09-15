@@ -159,6 +159,67 @@ foreach ($vertraege as [$klasse, $methode, $nr, $quelle]) {
         (string)$ziel, (string)$her);
 }
 
+/* JEDE Methode und JEDE Konstante, die das Gateway ruft, muss es auch geben.
+ *
+ * Die Klasse traegt ueber dreissig Traits. Ruft einer davon etwas, das ein
+ * anderer mitbringen sollte und nicht mehr mitbringt, faellt das beim Laden
+ * NICHT auf — erst beim Aufruf, und wenn der in einem Zeitgeber steckt, stirbt
+ * er LAUTLOS: kein Ergebnis, keine Meldung, kein Logeintrag.
+ *
+ * Genau das ist am 15.09.2026 zweimal am lebenden System passiert, beide Male
+ * in der Scanner-Instanz: einmal ueber eine Methode (`AiIsPublicUrl`), einmal
+ * ueber eine Konstante (`self::UNTIS_HTTP_FRIST`). Der Rauchtest dort hatte
+ * dafuer eine HANDLISTE und war gruen. Hier gibt es deshalb keine Liste: die
+ * Dateien kommen aus den `require_once` des Moduls, und geprueft wird beides.
+ */
+$hatM = [];
+foreach ($k->getMethods() as $m) {
+    $hatM[$m->getName()] = true;
+}
+$hatC = $k->getConstants();
+preg_match_all('/require_once __DIR__ \. \'([^\']+)\'/',
+    (string)file_get_contents(__DIR__ . '/../module.php'), $req);
+$dateien = ['SymDoGateway/module.php'];
+foreach ($req[1] as $pfad) {
+    /* `/libs/X.php` liegt im Modulordner, `/../libs/X.php` daneben. Beides
+       kommt vor, und wer das verwechselt, prueift eine Datei, die es nicht
+       gibt — der Riegel meldet das ausdruecklich, statt sie zu ueberspringen. */
+    $dateien[] = str_starts_with($pfad, '/../')
+        ? substr($pfad, 4)
+        : 'SymDoGateway' . $pfad;
+}
+$luecken = [];
+foreach ($dateien as $datei) {
+    $q = (string)@file_get_contents(dirname(__DIR__, 2) . '/' . $datei);
+    if ($q === '') {
+        $luecken[] = 'Datei nicht lesbar: ' . $datei;
+        continue;
+    }
+    /* Nur was in die Klasse KOMPONIERT wird — eine eigene Klasse bringt ihre
+       Methoden selbst mit, ihr `$this` ist ein anderes. */
+    if ($datei !== 'SymDoGateway/module.php' && !preg_match('/^\s*trait\s+\w+/m', $q)) {
+        continue;
+    }
+    $rein = ohneKommentare($q);
+    preg_match_all('/\$this->([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $rein, $m);
+    foreach (array_unique($m[1]) as $name) {
+        if (!isset($hatM[$name])) {
+            $luecken[] = $name . '() (' . basename($datei) . ')';
+        }
+    }
+    preg_match_all('/self::([A-Z][A-Z0-9_]*)\b/', $rein, $c);
+    foreach (array_unique($c[1]) as $name) {
+        if (!array_key_exists($name, $hatC)) {
+            $luecken[] = 'self::' . $name . ' (' . basename($datei) . ')';
+        }
+    }
+}
+$luecken = array_values(array_unique($luecken));
+sort($luecken);
+pruefe('Das Gateway findet alles, was es ruft', $luecken, []);
+pruefe('… und die Probe schaut in alle eingebundenen Dateien',
+    count($dateien) >= 30, true);
+
 /* Die rechnende Haelfte darf NICHTS schreiben — das ist der ganze Sinn der
    Teilung. Schleicht sich hier ein Attribut-, Medien- oder Sperrzugriff ein,
    laesst sich die Haelfte nicht mehr auslagern, und niemand merkt es, bis der
