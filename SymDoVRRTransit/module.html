@@ -102,9 +102,17 @@ body {
   gap: 8px; padding: 4px 0; border-top: 1px solid var(--rand);
 }
 .abfahrt:first-of-type { border-top: 0; }
-.abfahrt .sym { color: var(--dezent); text-align: center; }
+/* Das Fahrzeug traegt die Akzentfarbe: es ist das einzige Zeichen in der Zeile,
+   das die Art der Fahrt nennt — Bus, Bahn, S-Bahn —, und in Grau ging es neben
+   der fetten Liniennummer unter. */
+.abfahrt .sym { color: var(--akzent); text-align: center; }
 .abfahrt .linie { font-weight: 800; font-size: 12px; }
 .abfahrt .ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Der Pfeil sagt „dorthin" und gehoert zum Ziel — aber nicht zu seinem Text:
+   als inline-block laeuft der Streichstrich einer entfallenen Fahrt nicht durch
+   ihn hindurch. Kleiner und zurueckhaltend, damit er die Zeile fuehrt statt sie
+   zu beherrschen. */
+.abfahrt .ziel .pfeil { display: inline-block; color: var(--dezent); font-size: 10px; margin-right: 5px; }
 .abfahrt .wann { text-align: right; font-weight: 700; white-space: nowrap; }
 .abfahrt .wann .spaet { color: var(--warn); font-size: 11px; margin-left: 3px; }
 .abfahrt .wann .steig { color: var(--dezent); font-weight: 500; font-size: 10px; margin-left: 4px; }
@@ -302,7 +310,8 @@ function abfahrtenHtml() {
              + ', ' + translate('scheduled') + ' ' + d.planned) + '">'
         + '<span class="sym">' + symbol(d.icon) + '</span>'
         + '<span class="linie">' + esc(d.line) + '</span>'
-        + '<span class="ziel">' + esc(d.destination) + '</span>'
+        + '<span class="ziel"><span class="pfeil">' + symbol('fa-arrow-right') + '</span>'
+        + esc(d.destination) + '</span>'
         + '<span class="wann">' + wann
         + (d.delay > 0 ? '<span class="spaet">+' + d.delay + '</span>' : '')
         + (d.platform ? '<span class="steig">' + esc(translate('Pl.')) + ' ' + esc(d.platform) + '</span>' : '')
