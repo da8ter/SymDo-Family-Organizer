@@ -73,6 +73,12 @@ class SymDoToDoList extends IPSModuleStrict
         return is_string($css) ? trim($css) : '';
     }
 
+    /**
+     * Wahr, solange dieser ApplyChanges-Durchlauf von einem Kernelstart kommt.
+     * Nicht dauerhaft — er lebt nur fuer diesen einen Aufruf.
+     */
+    private bool $applyFromKernelStart = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -308,7 +314,12 @@ class SymDoToDoList extends IPSModuleStrict
             $this->SetStatus(IS_ACTIVE);
             // ApplyChanges laeuft hier waehrend des Hochlaufs, da ist Verbinden
             // noch nicht erlaubt — deshalb der Nachzug an dieser Stelle.
-            $this->GatewayEinmaligVerbinden();
+            $this->applyFromKernelStart = true;
+            try {
+                $this->GatewayEinmaligVerbinden();
+            } finally {
+                $this->applyFromKernelStart = false;
+            }
             // Und der Rest, den ApplyChanges im Hochlauf uebersprungen hat:
             // Zustand, Benachrichtigungen, Wiederholungen, Fremdlisten-Abo.
             $this->NachlaufNachHochlauf();
@@ -2621,6 +2632,17 @@ class SymDoToDoList extends IPSModuleStrict
      */
     private function GatewayEinmaligVerbinden(): void
     {
+        /* NUR beim Kernelstart. Beim ANLEGEN einer Instanz laeuft ApplyChanges
+           ebenfalls — und zwar bevor die Konsole den vom Nutzer gewaehlten
+           Elternknoten eintraegt. Verbinden wir hier, faende die Konsole eine
+           Instanz vor, die schon einen Vater hat, und meldete „Konnte nicht zur
+           Instanz verbinden / Instanz #… hat bereits ein uebergeordnetes
+           Objekt". Dieser Umzug gilt ALTinstanzen; eine neue verbindet die
+           Konsole selbst, und wer den Dialog wegklickt, wird trotzdem bedient:
+           das Gateway wird ohnehin ueber die niedrigste Kennung gefunden. */
+        if (!$this->applyFromKernelStart) {
+            return;
+        }
         // Nie waehrend des Hochlaufs: IPS_ConnectInstance braucht fertige Objekte.
         // Das Flag bleibt dann ungesetzt, der naechste Anlauf holt es nach.
         if (IPS_GetKernelRunlevel() !== KR_READY) {

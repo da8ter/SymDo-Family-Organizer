@@ -110,6 +110,12 @@ class SymDoShoppingList extends IPSModuleStrict
         return json_encode(['type' => 'connect', 'moduleIDs' => ['{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}']]);
     }
 
+    /**
+     * Wahr, solange dieser ApplyChanges-Durchlauf von einem Kernelstart kommt.
+     * Nicht dauerhaft — er lebt nur fuer diesen einen Aufruf.
+     */
+    private bool $applyFromKernelStart = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -237,7 +243,12 @@ class SymDoShoppingList extends IPSModuleStrict
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         if ($Message === IPS_KERNELSTARTED) {
-            $this->ApplyChanges();
+            $this->applyFromKernelStart = true;
+            try {
+                $this->ApplyChanges();
+            } finally {
+                $this->applyFromKernelStart = false;
+            }
             return;
         }
 
@@ -4034,6 +4045,17 @@ class SymDoShoppingList extends IPSModuleStrict
      */
     private function GatewayEinmaligVerbinden(): void
     {
+        /* NUR beim Kernelstart. Beim ANLEGEN einer Instanz laeuft ApplyChanges
+           ebenfalls — und zwar bevor die Konsole den vom Nutzer gewaehlten
+           Elternknoten eintraegt. Verbinden wir hier, faende die Konsole eine
+           Instanz vor, die schon einen Vater hat, und meldete „Konnte nicht zur
+           Instanz verbinden / Instanz #… hat bereits ein uebergeordnetes
+           Objekt". Dieser Umzug gilt ALTinstanzen; eine neue verbindet die
+           Konsole selbst, und wer den Dialog wegklickt, wird trotzdem bedient:
+           das Gateway wird ohnehin ueber die niedrigste Kennung gefunden. */
+        if (!$this->applyFromKernelStart) {
+            return;
+        }
         // Nie waehrend des Hochlaufs: IPS_ConnectInstance braucht fertige Objekte.
         // Das Flag bleibt dann ungesetzt, der naechste Anlauf holt es nach.
         if (IPS_GetKernelRunlevel() !== KR_READY) {
