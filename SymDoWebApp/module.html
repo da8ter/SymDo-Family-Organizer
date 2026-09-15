@@ -715,7 +715,17 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   gap: 10px; padding: 6px 0; border-top: 1px solid var(--border);
 }
 .nv-zeile:first-of-type { border-top: 0; }
-.nv-zeile .nv-sym { color: var(--muted); text-align: center; }
+/* Das Fahrzeug traegt die Akzentfarbe: es ist das einzige Zeichen in der Zeile,
+   das die Art der Fahrt nennt — Bus, Bahn, S-Bahn —, und in Grau ging es neben
+   der fetten Liniennummer unter. Wie in der Kachel. */
+.nv-zeile .nv-sym { color: var(--accent); text-align: center; }
+/* Der Pfeil sagt „dorthin" und gehoert zum Ziel, aber nicht zu seinem Text:
+   als inline-block laeuft der Streichstrich einer entfallenen Fahrt nicht durch
+   ihn hindurch. */
+.nv-zeile .nv-ziel .nv-pfeil {
+  display: inline-block; color: var(--muted); font-size: 10px; margin-right: 5px;
+}
+.nv-seg { margin-top: 2px; }
 .nv-zeile .nv-linie { font-weight: 800; }
 .nv-zeile .nv-ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nv-zeile .nv-wann { text-align: right; font-weight: 700; white-space: nowrap; }
@@ -734,12 +744,19 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .nv-schiene::-webkit-scrollbar { display: none; }
 .nv-fahrt { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
 /* Die Punkte: mittig, der aktuelle in der Akzentfarbe. */
-.nv-punkte { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+/* Die Punkte sind auch der Mausweg zur naechsten Verbindung — dafuer brauchen
+   sie eine groessere Trefferflaeche als ihre sechs Pixel. */
+.nv-punkte { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 .nv-punkte span {
   width: 6px; height: 6px; border-radius: 50%;
   background: color-mix(in srgb, var(--text) 25%, transparent);
+  cursor: pointer; box-sizing: content-box; padding: 5px; margin: -5px;
+  background-clip: content-box;
 }
-.nv-punkte span.an { background: var(--accent); }
+/* background-COLOR, nicht die Kurzform: `background:` setzt `background-clip`
+   auf seinen Anfangswert zurueck, und aus dem Punkt wuerde die ganze
+   Trefferflaeche — ein Klecks. In der Kachel genau so gesehen. */
+.nv-punkte span.an { background-color: var(--accent); }
 .nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
 .nv-zeiten .nv-grund { color: var(--muted); }
@@ -4433,6 +4450,7 @@ html.web-app #ladeschirm.geht { opacity: 0; }
     <section id="screen-transit" class="screen">
       <div class="content">
         <div class="screen-head"><h2 id="transitTitle"></h2></div>
+        <div class="segmented nv-seg" id="nvDirektSeg" style="display:none;"></div>
         <div id="transitArea"></div>
       </div>
     </section>
@@ -7960,6 +7978,10 @@ let stundenplanLaeuft = false;
 /* Nahverkehr: Abfahrten und Strecken. Geholt wird im VRR-Modul, das Gateway
    reicht nur weiter — hier liegt bloss der zuletzt gesehene Stand. */
 let nahverkehr = null;
+/* Nur umsteigefreie Verbindungen zeigen? Wahl des BETRACHTERS, im Browser
+   gemerkt — geholt werden ohnehin immer beide Listen (journeys und
+   journeysDirect), hier wird nur gewaehlt. Wie in der VRR-Kachel. */
+let nvNurDirekt = ls.get('symdo.nv.direkt') === '1';
 let nahverkehrLaeuft = false;
 let nahverkehrSignatur = '';
 let stundenplanLegende = false;
@@ -8651,7 +8673,8 @@ function renderTransit() {
       return `<div class="nv-zeile${d.reachable ? '' : ' nv-weg'}${d.cancelled ? ' nv-entfaellt' : ''}">`
         + `<span class="nv-sym"><i class="fa-light ${escapeHtml(d.icon || 'fa-route')}"></i></span>`
         + `<span class="nv-linie">${escapeHtml(d.line)}</span>`
-        + `<span class="nv-ziel">${escapeHtml(d.destination)}</span>`
+        + `<span class="nv-ziel"><span class="nv-pfeil">`
+        + `<i class="fa-light fa-arrow-right"></i></span>${escapeHtml(d.destination)}</span>`
         + `<span class="nv-wann">${wann}`
         + (d.delay > 0 ? `<span class="nv-spaet">+${d.delay}</span>` : '')
         + (d.platform ? `<span class="nv-gleis">${translate('Pl.')} ${escapeHtml(d.platform)}</span>` : '')
@@ -8664,7 +8687,11 @@ function renderTransit() {
   }).join('');
 
   const strecken = nv.routes.map(r => {
-    const alle = r.journeys || [];
+    /* Zwei fertige Listen, eine je Schalterstellung. Gesiebt wird NICHT: die
+       Auskunft findet mit `maxChanges=0` andere Verbindungen, nicht bloss eine
+       Teilmenge (gemessen Benrath → Duesseldorf Hbf: 19:27 und 20:37 kommen
+       ungefiltert gar nicht vor). */
+    const alle = (nvNurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
     const fahrten = alle.map(nvFahrt).join('');
     const hinweis = nvSchulzeile(r);
     /* Die Verbindungen liegen NEBENEINANDER und werden gewischt — untereinander
@@ -8679,13 +8706,38 @@ function renderTransit() {
       + `</div>`
       + (fahrten
           ? `<div class="nv-schiene" data-nv-schiene>${fahrten}</div>${punkte}`
-          : `<div class="empty-state">${translate('no journey found')}</div>`)
+          : `<div class="empty-state">${translate(nvNurDirekt
+              ? 'no journey without changes' : 'no journey found')}</div>`)
       + `</div>`;
   }).join('');
 
   renderInto(bereich, strecken + tafeln);
 
+  nvDirektLeisteZeichnen(nv.routes.length > 0);
   nvSchienenBinden(bereich);
+}
+
+/**
+ * Der Schalter „Alle / Ohne Umsteigen" ueber dem Bereich.
+ *
+ * Nur wo es Strecken gibt: bei reinen Abfahrtstafeln gaebe es nichts
+ * umzuschalten, und ein Bedienelement ohne Wirkung ist schlimmer als keins.
+ */
+function nvDirektLeisteZeichnen(zeigen) {
+  const el = document.getElementById('nvDirektSeg');
+  if (!el) { return; }
+  if (!zeigen) { el.style.display = 'none'; renderInto(el, ''); return; }
+  el.style.display = '';
+  const html = [['0', translate('All')], ['1', translate('Direct')]]
+    .map(([wert, text]) => `<button data-nv-direkt="${wert}"`
+      + `${(wert === '1') === nvNurDirekt ? ' class="active"' : ''}>${escapeHtml(text)}</button>`)
+    .join('');
+  if (!renderInto(el, html)) { return; }
+  el.querySelectorAll('[data-nv-direkt]').forEach(b => b.addEventListener('click', () => {
+    nvNurDirekt = b.dataset.nvDirekt === '1';
+    ls.set('symdo.nv.direkt', nvNurDirekt ? '1' : '0');
+    renderTransit();
+  }));
 }
 
 /**
@@ -8755,6 +8807,38 @@ function nvSchienenBinden(wurzel) {
       const n = Math.round(schiene.scrollLeft / (schiene.clientWidth || 1));
       punkte.querySelectorAll('span').forEach((p, i) => p.classList.toggle('an', i === n));
     }, { passive: true });
+
+    /* Zur n-ten Verbindung. Gerechnet wird aus der KARTE, nicht aus der
+       Bildbreite: zwischen den Karten liegen zwoelf Pixel Abstand, und ein
+       Vielfaches der Breite laege ab der zweiten daneben. */
+    const zurKarte = n => {
+      const karten = schiene.children;
+      const ziel = karten[Math.max(0, Math.min(karten.length - 1, n))];
+      if (!ziel) { return; }
+      const sanft = !(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      schiene.scrollTo({ left: ziel.offsetLeft, behavior: sanft ? 'smooth' : 'auto' });
+    };
+
+    /* Mit dem Finger wischt man; mit der Maus gibt es keine Geste — ein Rad
+       kennt nur oben und unten, und das schickt der Browser an die Seite
+       weiter. Eine Raststufe schiebt deshalb um EINE Verbindung. Ein Trackpad,
+       das quer wischt, macht es selbst. */
+    let radSperre = 0;
+    schiene.addEventListener('wheel', e => {
+      if (schiene.scrollWidth <= schiene.clientWidth + 1) { return; }
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { return; }
+      e.preventDefault();
+      const jetzt = Date.now();
+      if (jetzt < radSperre) { return; }
+      radSperre = jetzt + 220;
+      zurKarte(Math.round(schiene.scrollLeft / (schiene.clientWidth || 1))
+        + (e.deltaY > 0 ? 1 : -1));
+    }, { passive: false });
+
+    /* Und der kurze Weg: auf einen Punkt tippen springt dorthin. */
+    punkte.querySelectorAll('span').forEach((p, i) =>
+      p.addEventListener('click', () => zurKarte(i)));
   });
 }
 
