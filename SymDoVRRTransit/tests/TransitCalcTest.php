@@ -116,57 +116,61 @@ pruefe('Richtung und Linie zusammen',
     array_column(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, ['RE4', '2203'], 0, ['Hbf']), 'line'),
     ['2203', 'RE4']);
 
-// ── Richtungen vorschlagen ─────────────────────────────────────────────────
-/* Der Knopf im Formular fuellt die Spalte „Richtung" mit dem, was an der
-   Haltestelle wirklich faehrt. Die eigentliche Zusicherung ist NICHT die Liste
-   selbst, sondern der Rundgang: was hier vorgeschlagen wird, muss die zugehoerige
-   Abfahrt danach auch wirklich auswaehlen. Ein Vorschlag, der nichts trifft,
-   waere schlimmer als gar keiner — der Nutzer saehe eine leere Tafel und
-   suchte den Fehler beim Abruf. */
-$vorschlag = TransitCalc::Richtungen(fixture('abfahrten'));
-pruefe('Ein Vorschlag je Ziel, in der Reihenfolge der naechsten Abfahrten',
-    count($vorschlag), count(array_unique($vorschlag)));
-pruefe('Keiner ist leer',
-    array_values(array_filter($vorschlag, static fn(string $z): bool => trim($z) === '')), []);
-foreach ($vorschlag as $z) {
-    pruefe('Der Vorschlag „' . $z . '" waehlt auch wirklich etwas aus',
-        count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [$z])) > 0, true);
+// ── Touren einer Haltestelle ───────────────────────────────────────────────
+/* Der Zeilen-Editor zeigt je Linie und Ziel eine Zeile mit einem Haken. Die
+   eigentliche Zusicherung ist NICHT die Liste selbst, sondern der Rundgang: was
+   hier als Tour steht, muss die zugehoerige Abfahrt danach auch wirklich
+   verstecken lassen. Eine Tour, die nichts trifft, waere schlimmer als keine —
+   der Haken taete dann nichts, und niemand wuesste warum. */
+$touren = TransitCalc::Touren(fixture('abfahrten'));
+pruefe('Je Linie und Ziel eine Tour', count($touren), 3);
+pruefe('Jede traegt Linie, Ziel und einen gesetzten Haken',
+    array_values(array_unique(array_map(
+        static fn(array $t): string => ($t['line'] !== '' ? 'L' : '-')
+            . ($t['direction'] !== '' ? 'Z' : '-') . ($t['show'] ? 'H' : '-'), $touren))),
+    ['LZH']);
+
+$alle = count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt));
+pruefe('Alle Haken gesetzt heisst: nichts wird versteckt',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [], $touren)), $alle);
+
+foreach ($touren as $nr => $t) {
+    $eine = $touren;
+    $eine[$nr]['show'] = false;
+    pruefe('Ohne Haken faellt genau „' . $t['line'] . ' → ' . $t['direction'] . '" weg',
+        count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [], $eine)), $alle - 1);
 }
-pruefe('Alle zusammen lassen jede Abfahrt durch',
-    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, $vorschlag)),
-    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt)));
 
-/* Doppelte fallen ueber denselben Schluessel weg, mit dem auch RichtungPasst
-   vergleicht — sonst stuenden „Hbf", „hbf " und „H-b-f" alle drei im Feld. */
-$doppelt = ['stopEvents' => [
-    ['transportation' => ['destination' => ['name' => 'Düsseldorf Hbf']]],
-    ['transportation' => ['destination' => ['name' => 'düsseldorf  hbf ']]],
-    ['transportation' => ['destination' => ['name' => 'D-Benrath Betriebshof']]],
-    ['transportation' => ['destination' => ['name' => '']]],
-    ['transportation' => []],
-    'kein Feld',
-]];
-pruefe('Doppelte, leere und kaputte Eintraege fallen weg',
-    TransitCalc::Richtungen($doppelt), ['Düsseldorf Hbf', 'D-Benrath Betriebshof']);
-pruefe('Der Deckel greift', count(TransitCalc::Richtungen($doppelt, 1)), 1);
+pruefe('Eine leere Liste versteckt nichts',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [], [])), $alle);
+/* SPERRE, nicht Freigabe: eine Linie, die neu an die Haltestelle kommt, steht
+   in keiner gespeicherten Liste — sie muss trotzdem fahren. */
+pruefe('Was nicht in der Liste steht, faehrt weiter',
+    count(TransitCalc::Abfahrten(fixture('abfahrten'), $jetzt, 0, [], 0, [],
+        [['line' => 'X99', 'direction' => 'Nirgendwo', 'show' => false]])), $alle);
+pruefe('Eine Zeile ohne Haken-Feld versteckt nichts',
+    TransitCalc::TourVersteckt($touren[0]['line'], $touren[0]['direction'],
+        [['line' => $touren[0]['line'], 'direction' => $touren[0]['direction']]]), false);
 
-/* „Aachen, Hbf" gibt es wirklich. Unveraendert uebernommen zerfiele das Ziel im
-   kommagetrennten Feld in zwei Filter — und „Hbf" passt dann auf JEDEN
-   Hauptbahnhof. Am 15.09.2026 im Livelauf gegen die echte EFA aufgefallen. */
+/* „Aachen, Hbf" gibt es wirklich. Das Komma wird zum Leerzeichen, damit die
+   Zelle nicht aussieht wie zwei Eintraege — und der Vergleich trifft trotzdem,
+   weil Wortschluessel ohnehin alles wirft, was kein Buchstabe ist. Am
+   15.09.2026 im Livelauf gegen die echte EFA aufgefallen. */
 $komma = ['stopEvents' => [
-    ['transportation' => ['destination' => ['name' => 'Aachen, Hbf']]],
-    ['transportation' => ['destination' => ['name' => "D-G'heim, Krankenhaus"]]],
+    ['transportation' => ['number' => '789', 'destination' => ['name' => 'Aachen, Hbf']]],
+    ['transportation' => ['number' => '789', 'destination' => ['name' => 'Aachen, Hbf']]],
 ]];
-$ohneKomma = TransitCalc::Richtungen($komma);
-pruefe('Ein Komma im Ziel wird zum Leerzeichen',
-    $ohneKomma, ['Aachen Hbf', "D-G'heim Krankenhaus"]);
-pruefe('… und trifft das Ziel trotzdem noch genau',
-    [TransitCalc::RichtungPasst('Aachen, Hbf', '', [$ohneKomma[0]]),
-     TransitCalc::RichtungPasst("D-G'heim, Krankenhaus", '', [$ohneKomma[1]])],
-    [true, true]);
-pruefe('… und „Aachen Hbf" ist nicht plötzlich jeder Hauptbahnhof',
-    TransitCalc::RichtungPasst('Köln Hbf', '', [$ohneKomma[0]]), false);
-pruefe('Eine leere Antwort gibt nichts', TransitCalc::Richtungen(fixture('leer')), []);
+$ausKomma = TransitCalc::Touren($komma);
+pruefe('Ein Komma im Ziel wird zum Leerzeichen, Doppelte fallen weg',
+    array_map(static fn(array $t): string => $t['direction'], $ausKomma), ['Aachen Hbf']);
+pruefe('… und der Haken trifft das Ziel MIT Komma',
+    TransitCalc::TourVersteckt('789', 'Aachen, Hbf',
+        [['line' => '789', 'direction' => 'Aachen Hbf', 'show' => false]]), true);
+pruefe('… aber nicht dieselbe Linie in eine andere Richtung',
+    TransitCalc::TourVersteckt('789', 'Köln Hbf',
+        [['line' => '789', 'direction' => 'Aachen Hbf', 'show' => false]]), false);
+pruefe('Der Deckel greift', count(TransitCalc::Touren(fixture('abfahrten'), 1)), 1);
+pruefe('Eine leere Antwort gibt nichts', TransitCalc::Touren(fixture('leer')), []);
 
 // ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
 pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');

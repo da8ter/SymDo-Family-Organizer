@@ -729,9 +729,13 @@ trait TransitStore
                 'walk'       => max(0, (int)($z['walk'] ?? 0)),
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
+                /* Drei Siebe, vom groben zum feinen: die beiden Textfelder
+                   „Nur diese Linien" und „Richtung", und zuletzt die Haken der
+                   Tourenliste aus dem Zeilen-Editor. */
                 'departures' => TransitCalc::Abfahrten($roh, $jetzt,
                     max(0, (int)($z['walk'] ?? 0)), $linien, max(1, (int)($z['limit'] ?? 8)),
-                    $this->TransitRichtungen($z)),
+                    $this->TransitRichtungen($z),
+                    is_array($z['tours'] ?? null) ? $z['tours'] : []),
             ];
         }
 

@@ -79,7 +79,8 @@ dann allerdings keine Zeiten und bleibt leer.
 | Zeigen | ohne Haken erscheint sie nicht auf der Tafel — **und kostet keinen Abruf**; genau richtig für eine Haltestelle, die nur Start oder Ziel einer Strecke ist |
 | Für wen | leer = die ganze Familie |
 | Nur diese Linien | leer = alle |
-| Richtung | das Ziel, wie es vorn am Fahrzeug steht („Hbf, Krankenhaus"), mehrere durch Komma, oder ein Steig („Steig 1"). Leer = beide Richtungen |
+| Richtung | das Ziel, wie es vorn am Fahrzeug steht („Hbf, Krankenhaus"), mehrere durch Komma, oder ein Steig („Steig 1"). Leer = beide Richtungen. Für den Steig weiter nötig, sonst reicht die Liste darunter |
+| Linien und Richtungen | je Linie und Ziel ein Haken — ohne Haken erscheint diese Tour nicht auf der Tafel |
 | Fußweg (min) | Zeit bis zur Haltestelle; schaltet die Anzeige auf „wann muss ich los" |
 | Anzahl | wie viele Abfahrten die Karte zeigt |
 
@@ -90,20 +91,27 @@ dann allerdings keine Zeiten und bleibt leer.
    Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
-**Richtungen muss man nicht raten.** Schon beim **Übernehmen einer
-Haltestelle** wird die Spalte gefüllt: mit dem, was dort wirklich fährt, in der
-Reihenfolge der nächsten Abfahrten. Übrig bleibt das Löschen dessen, was nicht
-gewünscht ist. Für Haltestellen, die schon in der Liste stehen, tut der Knopf
-**Richtungen vorschlagen** darunter dasselbe. Gefüllt werden nur **leere**
-Zellen; eine gesetzte Richtung ist eine Entscheidung und bleibt stehen (wer neu
-vorschlagen lassen will, leert die Zelle). Gespeichert wird nichts, bis
-*Übernehmen* gedrückt ist.
+**Linien und Richtungen muss man nicht tippen.** Jede Haltestellenzeile trägt
+eine eigene kleine Liste **Linien und Richtungen**: je Linie und Ziel eine Zeile
+mit einem Haken. Sie wird beim **Übernehmen einer Haltestelle** gleich gefüllt
+— mit dem, was dort wirklich fährt, in der Reihenfolge der nächsten Abfahrten.
+Übrig bleibt das Entfernen der Haken, die man nicht sehen will. Für
+Haltestellen, die schon in der Liste stehen, tut der Knopf **Linien und
+Richtungen holen** darunter dasselbe. Gefüllt werden nur **leere** Listen; eine
+gepflegte Liste ist eine Entscheidung und bleibt stehen (wer neu holen will,
+löscht ihre Zeilen). Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
 
-Das nimmt die häufigste Falle: die Schreibweise. Trifft der eingetippte Text
-nicht, bleibt die Tafel leer — und das sieht aus wie ein kaputter Abruf, nicht
-wie ein Tippfehler. An einer großen Station wird die Liste bei zwanzig Zielen
-gekürzt; die Statuszeile sagt es dann ausdrücklich, damit niemand eine
-unvollständige Liste für vollständig hält.
+Das nimmt die häufigste Falle: die Schreibweise. Ein getippter Text, der nicht
+trifft, lässt die Tafel leer — und das sieht aus wie ein kaputter Abruf, nicht
+wie ein Tippfehler. Es trifft auch genauer als die beiden Textfelder: die
+werden **und**-verknüpft, „789 nach Monheim" zusammen mit „834 zum Hbf" ergibt
+dort vier Kombinationen statt zwei. Ein Haken meint genau ein Paar.
+
+Die Liste ist eine **Sperre, keine Freigabe**: versteckt wird nur, was dasteht
+und keinen Haken hat. Eine Linie, die neu an die Haltestelle kommt, fährt also
+weiter auf der Tafel, statt still zu verschwinden, weil eine Liste von
+vorgestern sie nicht kennt. An einer großen Station wird bei vierzig Einträgen
+gekürzt; die Statuszeile sagt es dann ausdrücklich.
 
 Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
 Einrichtung, nicht zur Bedienung.

@@ -117,8 +117,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                 $this->HaltestellenSuchen((string)$Value);
                 return;
 
-            case 'StopDirections':
-                $this->RichtungenVorschlagen((string)$Value);
+            case 'StopTours':
+                $this->TourenHolen((string)$Value);
                 return;
 
             case 'StopAdd':
@@ -255,8 +255,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                    ueber UpdateFormField zurueck — nichts wird gespeichert, bis
                    der Nutzer „Uebernehmen" drueckt. */
                 ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'Button', 'caption' => $this->Translate('Suggest directions'),
-                     'onClick' => 'IPS_RequestAction($id, "StopDirections", json_encode(iterator_to_array($Stops)));'],
+                    ['type' => 'Button', 'caption' => $this->Translate('Fetch lines and directions'),
+                     'onClick' => 'IPS_RequestAction($id, "StopTours", json_encode(iterator_to_array($Stops)));'],
                     ['type' => 'Label', 'name' => 'DirStatus', 'caption' => ' '],
                 ]],
                 $strecken,
@@ -350,6 +350,20 @@ class SymDoVRRTransit extends IPSModuleStrict
                    stünde morgens auch auf der Tafel, was von der Schule WEG fährt. */
                 ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => '200px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Die Touren als LISTE IN DER ZEILE. Eine Spalte darf `edit`
+                   vom Typ List tragen; ihr Wert wird dann nicht noch einmal
+                   JSON-kodiert, die Zelle ist also direkt ein Array. Linie und
+                   Richtung stehen ohne `edit` da — sie kommen von der Auskunft
+                   und sind nichts zum Tippen; geaendert wird nur der Haken. */
+                ['caption' => $this->Translate('Lines and directions'), 'name' => 'tours', 'width' => '260px',
+                 'add' => [],
+                 'edit' => ['type' => 'List', 'rowCount' => 8, 'add' => false, 'delete' => true,
+                            'columns' => [
+                                ['caption' => $this->Translate('Line'), 'name' => 'line', 'width' => '90px'],
+                                ['caption' => $this->Translate('Direction'), 'name' => 'direction', 'width' => 'auto'],
+                                ['caption' => $this->Translate('Show'), 'name' => 'show', 'width' => '80px',
+                                 'edit' => ['type' => 'CheckBox']],
+                            ]]],
                 ['caption' => $this->Translate('Walk (min)'), 'name' => 'walk', 'width' => '110px',
                  'add' => 0, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 60]],
                 ['caption' => $this->Translate('Count'), 'name' => 'limit', 'width' => '90px',
@@ -565,53 +579,76 @@ class SymDoVRRTransit extends IPSModuleStrict
                 }
             }
         }
-        /* Die Richtungen gleich mit — sie kosten denselben einen Abruf, den der
+        /* Die Touren gleich mit — sie kosten denselben einen Abruf, den der
            Nutzer sonst gleich darauf mit dem Knopf ausloesen wuerde. Bleibt die
-           Zelle leer (Haltestelle gerade ohne Abfahrten, Nachtstunde, Stoerung),
+           Liste leer (Haltestelle gerade ohne Abfahrten, Nachtstunde, Stoerung),
            ist das kein Fehlschlag: der Knopf holt es spaeter nach. */
-        [$richtung, $knapp] = $this->RichtungenZelle($stopId);
+        [$touren, $knapp] = $this->TourenZelle($stopId);
         $zeilen[] = ['name' => $name, 'stopId' => $stopId, 'show' => true, 'member' => '',
-                     'lines' => '', 'direction' => $richtung, 'walk' => 0, 'limit' => 6];
+                     'lines' => '', 'direction' => '', 'tours' => $touren, 'walk' => 0, 'limit' => 6];
 
         $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $this->UpdateFormField('Routes', 'columns', (string)json_encode(
             $this->StreckenSpalten($this->MitgliederOptionen(), $this->OrtOptionen($zeilen)),
             JSON_UNESCAPED_UNICODE));
         $hinweis = $this->Translate('Added: ') . $name;
-        if ($richtung !== '') {
-            $hinweis .= sprintf($this->Translate(', %d direction(s) filled in'),
-                count(explode(', ', $richtung)));
+        if ($touren !== []) {
+            $hinweis .= sprintf($this->Translate(', %d line(s) and direction(s) found'), count($touren));
             if ($knapp) {
                 $hinweis .= ' ' . sprintf(
-                    $this->Translate('(cut off at %d — there are more)'), TransitCalc::RICHTUNGEN_MAX);
+                    $this->Translate('(cut off at %d — there are more)'), TransitCalc::TOUREN_MAX);
             }
-            $hinweis .= $this->Translate('. Delete what you do not want');
+            $hinweis .= $this->Translate('. Untick what you do not want to see');
         }
         $this->UpdateFormField('StopStatus', 'caption',
             $hinweis . $this->Translate('. Press "Apply" to keep it.'));
     }
 
     /**
-     * Die Richtungen EINER Haltestelle als fertige Zelle.
+     * Eine Tourenzelle auf ihre drei Felder zurechtstutzen.
      *
-     * Eine Stelle fuer beide Wege — den Knopf „Richtungen vorschlagen" und das
-     * Uebernehmen einer neuen Haltestelle. Zwei Kopien waeren beim naechsten
-     * Fund auseinandergelaufen; das Komma im Ziel und der Deckel sind schon
-     * zwei davon gewesen.
-     *
-     * @return array{0:string,1:bool} die Zelle, und ob gekuerzt werden musste
+     * @param mixed $roh der Zellwert, wie er aus Formular oder Bestand kommt
+     * @return list<array{line:string,direction:string,show:bool}>
      */
-    private function RichtungenZelle(string $stopId): array
+    private function TourenZeilen(mixed $roh): array
+    {
+        $raus = [];
+        foreach ((is_array($roh) ? $roh : []) as $t) {
+            if (!is_array($t)) {
+                continue;
+            }
+            $raus[] = [
+                'line'      => trim((string)($t['line'] ?? '')),
+                'direction' => trim((string)($t['direction'] ?? '')),
+                /* Fehlt der Haken, gilt „sichtbar" — dieselbe Lesart wie in
+                   TransitCalc::TourVersteckt. Eine Zeile ohne Haken darf nichts
+                   verstecken, sonst verschwaende eine Linie, die niemand
+                   abgewaehlt hat. */
+                'show'      => !array_key_exists('show', $t) || (bool)$t['show'],
+            ];
+        }
+        return $raus;
+    }
+
+    /**
+     * Die Touren EINER Haltestelle, fertig fuer die Zelle.
+     *
+     * Eine Stelle fuer beide Wege — den Knopf und das Uebernehmen einer neuen
+     * Haltestelle.
+     *
+     * @return array{0:list<array<string,mixed>>,1:bool} die Touren, und ob gekuerzt wurde
+     */
+    private function TourenZelle(string $stopId): array
     {
         /* Vierzig statt der sechs der Tafel: mit sechs Abfahrten saehe man an
            einer belebten Haltestelle nur EINE Richtung, und genau die andere
            sucht man meistens. */
         $antwort = Efa::Abfahrten($stopId, 40);
         if (($antwort['ok'] ?? false) !== true) {
-            return ['', false];
+            return [[], false];
         }
-        $ziele = TransitCalc::Richtungen((array)($antwort['data'] ?? []));
-        return [implode(', ', $ziele), count($ziele) >= TransitCalc::RICHTUNGEN_MAX];
+        $touren = TransitCalc::Touren((array)($antwort['data'] ?? []));
+        return [$touren, count($touren) >= TransitCalc::TOUREN_MAX];
     }
 
     /**
@@ -624,25 +661,21 @@ class SymDoVRRTransit extends IPSModuleStrict
     private const RICHTUNGEN_STOPS_MAX = 8;
 
     /**
-     * Die Spalte „Richtung" mit dem fuellen, was an der Haltestelle wirklich faehrt.
+     * Die Tourenlisten fuellen — was an der Haltestelle wirklich faehrt.
      *
-     * Bis hierher musste man wissen, wie die EFA ein Ziel schreibt. Trifft der
-     * eingetippte Text nicht, bleibt die Tafel leer — und das sieht aus wie ein
-     * kaputter Abruf, nicht wie ein Tippfehler. Jetzt steht alles da, was dort
-     * faehrt, und der Nutzer loescht, was er nicht will.
-     *
-     * Gefuellt werden nur LEERE Zellen. Eine gesetzte Richtung ist eine
-     * Entscheidung; sie zu ueberschreiben waere genau der Datenverlust, den
-     * niemand erwartet. Wer neu vorschlagen lassen will, leert die Zelle.
+     * Gefuellt werden nur LEERE Listen. Eine gepflegte Liste ist eine
+     * Entscheidung (dort stecken die entfernten Haken); sie zu ueberschreiben
+     * waere der Datenverlust, den niemand erwartet. Wer neu holen will, loescht
+     * die Zeilen der Liste.
      *
      * Wie bei „Als Haltestelle uebernehmen" wird die LEBENDE Liste bearbeitet
      * und ueber `UpdateFormField` zurueckgegeben: die ungespeicherten
      * Aenderungen des Nutzers bleiben erhalten, und gespeichert wird erst mit
      * „Uebernehmen".
      */
-    private function RichtungenVorschlagen(string $nutzlast): void
+    private function TourenHolen(string $nutzlast): void
     {
-        $roh    = json_decode($nutzlast, true);
+        $roh = json_decode($nutzlast, true);
         /* Kommt die Liste nicht mit (ein Aufruf von aussen), gilt der
            gespeicherte Stand — dann ist er auch der einzige. */
         $zeilen = is_array($roh) ? $this->HaltestellenZeilen($roh) : $this->TransitZeilen('Stops');
@@ -661,7 +694,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             if ($stopId === '') {
                 continue;
             }
-            if (trim((string)($z['direction'] ?? '')) !== '') {
+            if (is_array($z['tours'] ?? null) && $z['tours'] !== []) {
                 $behalten++;
                 continue;
             }
@@ -669,30 +702,30 @@ class SymDoVRRTransit extends IPSModuleStrict
                 break;
             }
             $abgefragt++;
-            [$zelle, $knapp] = $this->RichtungenZelle($stopId);
-            if ($zelle === '') {
+            [$touren, $knapp] = $this->TourenZelle($stopId);
+            if ($touren === []) {
                 $ohne++;
                 continue;
             }
-            /* Am Hauptbahnhof gibt es mehr Ziele, als in ein Textfeld gehoeren.
-               Gekuerzt wird — aber SICHTBAR: eine still gekappte Liste sieht
-               vollstaendig aus, und wer daraus loescht, verliert eine Richtung,
-               die er nie zu sehen bekam. */
+            /* Am Hauptbahnhof gibt es mehr Touren, als in den Zeilen-Editor
+               gehoeren. Gekuerzt wird — aber SICHTBAR: eine still gekappte
+               Liste sieht vollstaendig aus, und wer sich darauf verlaesst,
+               vermisst eine Linie, die er nie zu sehen bekam. */
             if ($knapp) {
                 $gekuerzt++;
             }
-            $zeilen[$i]['direction'] = $zelle;
+            $zeilen[$i]['tours'] = $touren;
             $gefuellt++;
         }
 
         $this->UpdateFormField('Stops', 'values', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
         $text = sprintf(
-            $this->Translate('%1$d filled in, %2$d already set, %3$d without an answer. Delete what you do not want, then press "Apply".'),
+            $this->Translate('%1$d filled in, %2$d already set, %3$d without an answer. Untick what you do not want to see, then press "Apply".'),
             $gefuellt, $behalten, $ohne);
         if ($gekuerzt > 0) {
             $text .= ' ' . sprintf(
-                $this->Translate('At %1$d stop(s) the list was cut off at %2$d destinations — there are more.'),
-                $gekuerzt, TransitCalc::RICHTUNGEN_MAX);
+                $this->Translate('At %1$d stop(s) the list was cut off at %2$d entries — there are more.'),
+                $gekuerzt, TransitCalc::TOUREN_MAX);
         }
         $this->UpdateFormField('DirStatus', 'caption', $text);
     }
@@ -711,8 +744,8 @@ class SymDoVRRTransit extends IPSModuleStrict
      */
     private function HaltestellenZeilen(array $roh): array
     {
-        $felder = ['name' => '', 'stopId' => '', 'show' => true,
-                   'member' => '', 'lines' => '', 'direction' => '', 'walk' => 0, 'limit' => 6];
+        $felder = ['name' => '', 'stopId' => '', 'show' => true, 'member' => '',
+                   'lines' => '', 'direction' => '', 'tours' => [], 'walk' => 0, 'limit' => 6];
         $raus = [];
         foreach ($roh as $z) {
             if (!is_array($z)) {
@@ -727,6 +760,10 @@ class SymDoVRRTransit extends IPSModuleStrict
                keine passende Option — ihr Vergleich ist strikt — und zeigt die
                Auswahl leer, obwohl das Modul die Zeile richtig zuordnet. */
             $zeile['member'] = (string)$zeile['member'];
+            /* Die Tourenliste ist eine Zelle vom Typ List — ihr Wert kommt als
+               Array. Was anderes darin steht (eine alte Zeile, ein Skript),
+               waere im Formular eine kaputte Liste. */
+            $zeile['tours'] = $this->TourenZeilen($zeile['tours']);
             $raus[] = $zeile;
         }
         return $raus;

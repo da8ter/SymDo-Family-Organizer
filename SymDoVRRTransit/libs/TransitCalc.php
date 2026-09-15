@@ -112,11 +112,12 @@ final class TransitCalc
      * @param list<string>        $linien   nur diese Linien; leer = alle
      * @param int                 $hoechstens 0 = alle
      * @param list<string>        $richtungen nur diese Ziele oder Steige; leer = beide Richtungen
+     * @param list<array<string,mixed>> $touren Paare Linie+Ziel; ein entfernter Haken versteckt
      * @return list<array<string,mixed>>
      */
     public static function Abfahrten(array $roh, int $jetzt, int $fussweg = 0,
                                      array $linien = [], int $hoechstens = 0,
-                                     array $richtungen = []): array
+                                     array $richtungen = [], array $touren = []): array
     {
         $nurDiese = [];
         foreach ($linien as $l) {
@@ -159,6 +160,14 @@ final class TransitCalc
                Tafel. Gesiebt wird nach Ziel oder Steig, siehe RichtungPasst(). */
             if (!self::RichtungPasst((string)($t['destination']['name'] ?? ''),
                                      (string)($eigen['platformName'] ?? ''), $richtungen)) {
+                continue;
+            }
+
+            /* Der einzelne Haken aus dem Zeilen-Editor. Er kommt NACH den
+               beiden Textfeldern, weil er das feinere Werkzeug ist: die Felder
+               sieben grob (eine Linie, eine Richtung), die Liste nimmt genau
+               ein Paar heraus. */
+            if (self::TourVersteckt($linie, (string)($t['destination']['name'] ?? ''), $touren)) {
                 continue;
             }
 
@@ -749,34 +758,25 @@ final class TransitCalc
         return $offen;
     }
 
+    /** So viele Touren passen sinnvoll in den Zeilen-Editor. */
+    public const TOUREN_MAX = 40;
+
     /**
-     * Die Ziele, die an dieser Haltestelle wirklich vorkommen.
+     * Die Touren einer Haltestelle: je Linie und Ziel eine Zeile.
      *
-     * Fuer den Knopf „Richtungen vorschlagen". Das Feld `direction` ist ein
-     * Textfeld, und bis hierher musste man wissen, wie die EFA ein Ziel
-     * SCHREIBT — „D-Benrath Betriebshof" trifft, „Benrath" auch, „Benrath Bf"
-     * nicht mehr. Wer das raet, sieht eine leere Tafel und sucht den Fehler
-     * beim Abruf. Mit den echten Zielen im Feld bleibt nur noch das Loeschen.
+     * Was an einer Haltestelle faehrt, ist nicht „Linie ODER Richtung", sondern
+     * ein PAAR. Die beiden Textfelder „Nur diese Linien" und „Richtung" konnten
+     * das nie ausdruecken: sie werden UND-verknuepft, und „789 nach Monheim"
+     * zusammen mit „834 nach Hbf" ergibt vier Kombinationen statt zwei. Diese
+     * Liste nennt die Paare, die es wirklich gibt, und jedes bekommt seinen
+     * Haken.
      *
-     * Die Reihenfolge ist die der naechsten Abfahrten, nicht das Alphabet: was
-     * gleich faehrt, steht vorn, und das ist meist auch das Gewollte.
-     * Doppelte fallen ueber denselben Schluessel weg, mit dem auch
-     * `RichtungPasst` vergleicht — sonst stuenden „Hbf" und „Hbf " beide da.
-     *
-     * Ein KOMMA im Ziel wird zum Leerzeichen — „Aachen, Hbf" gibt es wirklich.
-     * Unveraendert uebernommen zerfiele es im kommagetrennten Feld in zwei
-     * Filter, und „Hbf" passt dann auf JEDEN Hauptbahnhof. Der Vergleich stoert
-     * sich nicht daran: `Wortschluessel` wirft ohnehin alles weg, was kein
-     * Buchstabe und keine Ziffer ist, „Aachen Hbf" trifft „Aachen, Hbf" also
-     * weiterhin genau.
+     * `show` steht auf wahr: wer nichts tut, sieht alles wie bisher.
      *
      * @param array<string,mixed> $roh die geparste `XML_DM_REQUEST`-Antwort
-     * @return list<string>
+     * @return list<array{line:string,direction:string,show:bool}>
      */
-    /** So viele Ziele passen sinnvoll in ein Textfeld. Darueber wird gekuerzt — sichtbar. */
-    public const RICHTUNGEN_MAX = 20;
-
-    public static function Richtungen(array $roh, int $hoechstens = self::RICHTUNGEN_MAX): array
+    public static function Touren(array $roh, int $hoechstens = self::TOUREN_MAX): array
     {
         $raus    = [];
         $gesehen = [];
@@ -784,24 +784,59 @@ final class TransitCalc
             if (!is_array($e)) {
                 continue;
             }
-            $t    = is_array($e['transportation'] ?? null) ? $e['transportation'] : [];
-            $ziel = (string)($t['destination']['name'] ?? '');
-            // Komma und Semikolon trennen im Feld die Richtungen — im Ziel nicht.
-            $ziel = trim((string)preg_replace('/\s+/u', ' ', str_replace([',', ';'], ' ', $ziel)));
-            if ($ziel === '') {
+            $t     = is_array($e['transportation'] ?? null) ? $e['transportation'] : [];
+            $linie = self::Linie($t);
+            $ziel  = (string)($t['destination']['name'] ?? '');
+            // Komma und Semikolon trennen anderswo Richtungen — im Ziel nicht.
+            $ziel  = trim((string)preg_replace('/\s+/u', ' ', str_replace([',', ';'], ' ', $ziel)));
+            if ($linie === '' && $ziel === '') {
                 continue;
             }
-            $schluessel = self::Wortschluessel($ziel);
-            if ($schluessel === '' || isset($gesehen[$schluessel])) {
+            $schluessel = self::Wortschluessel($linie) . '|' . self::Wortschluessel($ziel);
+            if (isset($gesehen[$schluessel])) {
                 continue;
             }
             $gesehen[$schluessel] = true;
-            $raus[] = $ziel;
+            $raus[] = ['line' => $linie, 'direction' => $ziel, 'show' => true];
             if (count($raus) >= max(1, $hoechstens)) {
                 break;
             }
         }
         return $raus;
+    }
+
+    /**
+     * Ist diese Abfahrt durch einen entfernten Haken ausgeschlossen?
+     *
+     * Die Liste wirkt als SPERRE, nicht als Freigabe: versteckt wird nur, was
+     * ausdruecklich dasteht UND keinen Haken hat. Alles andere faehrt weiter —
+     * sonst verschwaende eine Linie, die neu an die Haltestelle kommt,
+     * stillschweigend aus der Kachel, und niemand kaeme darauf, dass eine
+     * Liste von vorgestern sie nicht kennt.
+     *
+     * @param list<array<string,mixed>> $touren
+     */
+    public static function TourVersteckt(string $linie, string $ziel, array $touren): bool
+    {
+        if ($touren === []) {
+            return false;
+        }
+        $l = self::Wortschluessel($linie);
+        $z = self::Wortschluessel($ziel);
+        foreach ($touren as $t) {
+            if (!is_array($t)) {
+                continue;
+            }
+            if (self::Wortschluessel((string)($t['line'] ?? '')) !== $l) {
+                continue;
+            }
+            if (self::Wortschluessel((string)($t['direction'] ?? '')) !== $z) {
+                continue;
+            }
+            // Fehlt der Haken ganz (aeltere Zeile), gilt „sichtbar".
+            return array_key_exists('show', $t) && !$t['show'];
+        }
+        return false;
     }
 
     /** „Steig 1", „Bstg. 2", „Gleis 10", „Gl.10", „Platform 3" — der Rest ist die Nummer. */

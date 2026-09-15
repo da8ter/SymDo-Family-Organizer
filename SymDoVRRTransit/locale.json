@@ -97,13 +97,16 @@
             " (not in the list of stops)": " (nicht in der Haltestellenliste)",
             "Map (own coordinate)": "Karte (eigene Koordinate)",
             ". Press \"Apply\" to keep it.": ". Zum Behalten auf „Übernehmen“ drücken.",
-            "Suggest directions": "Richtungen vorschlagen",
             "No stop in the list yet.": "Noch keine Haltestelle in der Liste.",
-            "%1$d filled in, %2$d already set, %3$d without an answer. Delete what you do not want, then press \"Apply\".": "%1$d gefüllt, %2$d schon gesetzt, %3$d ohne Antwort. Nicht Gewünschtes löschen, dann „Übernehmen\" drücken.",
-            "At %1$d stop(s) the list was cut off at %2$d destinations — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Zielen gekürzt — es gibt mehr.",
-            ", %d direction(s) filled in": ", %d Richtung(en) eingetragen",
             "(cut off at %d — there are more)": "(bei %d gekürzt — es gibt mehr)",
-            ". Delete what you do not want": ". Nicht Gewünschtes löschen"
+            "Lines and directions": "Linien und Richtungen",
+            "Line": "Linie",
+            "Show": "Anzeigen",
+            "Fetch lines and directions": "Linien und Richtungen holen",
+            ", %d line(s) and direction(s) found": ", %d Linie(n) und Richtung(en) gefunden",
+            ". Untick what you do not want to see": ". Haken entfernen, was nicht zu sehen sein soll",
+            "%1$d filled in, %2$d already set, %3$d without an answer. Untick what you do not want to see, then press \"Apply\".": "%1$d gefüllt, %2$d schon gesetzt, %3$d ohne Antwort. Haken entfernen, was nicht zu sehen sein soll, dann „Übernehmen\" drücken.",
+            "At %1$d stop(s) the list was cut off at %2$d entries — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Einträgen gekürzt — es gibt mehr."
         }
     }
 }
