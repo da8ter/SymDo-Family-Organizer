@@ -105,7 +105,6 @@
             "At %1$d stop(s) the list was cut off at %2$d entries — there are more.": "Bei %1$d Haltestelle(n) wurde bei %2$d Einträgen gekürzt — es gibt mehr.",
             "Lines and directions: one tick per line and destination. ": "Linien und Richtungen: je Linie und Ziel ein Haken. ",
             "Without a tick that one stays off the board; what is not listed keeps running.": "Ohne Haken bleibt diese Tour von der Tafel weg; was nicht in der Liste steht, fährt weiter.",
-            "Direct only": "Nur ohne Umsteigen",
             "no journey without changes": "keine umsteigefreie Verbindung",
             "All": "Alle",
             "Direct": "Ohne Umsteigen"

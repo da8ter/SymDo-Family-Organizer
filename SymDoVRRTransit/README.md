@@ -88,13 +88,6 @@ dann allerdings keine Zeiten und bleibt leer.
    (Name)** / **Nach (Name)** überschreiben, was die Auskunft nennt — bei einer
    Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
-6. **Nur ohne Umsteigen**: der Haken lässt die Auskunft selbst umsteigefrei
-   suchen (`maxChanges=0`) — sie findet dann andere Verbindungen, statt dass aus
-   einer gemischten Antwort etwas weggeworfen wird. Gemessen Benrath →
-   Düsseldorf Hbf: ohne den Haken vier Verbindungen, davon zwei mit Umstieg;
-   mit ihm vier umsteigefreie, darunter zwei Abfahrten, die vorher gar nicht
-   dabei waren. Gibt es auf der Strecke keine, sagt die Karte „keine
-   umsteigefreie Verbindung" statt „keine Verbindung gefunden".
 
 **Linien und Richtungen muss man nicht tippen.** Jede Haltestellenzeile trägt
 eine eigene kleine Liste **Linien und Richtungen**: je Linie und Ziel eine Zeile
@@ -119,13 +112,25 @@ weiter auf der Tafel, statt still zu verschwinden, weil eine Liste von
 vorgestern sie nicht kennt. An einer großen Station wird bei vierzig Einträgen
 gekürzt; die Statuszeile sagt es dann ausdrücklich.
 
-**In der Kachel** steht bei den Strecken ein zweiter kleiner Schalter neben
-*Abfahrten / Strecken*: **Alle** oder **Ohne Umsteigen**. Er siebt, was schon da
-ist, gilt nur an diesem Gerät (im Browser gemerkt) und kostet keine Anfrage.
-Bleibt auf einer Strecke nichts übrig, sagt die Karte es. Der Unterschied zum
-Haken an der Strecke: der Schalter kann keine Verbindung herbeiholen, die die
-Auskunft nicht mitgeschickt hat — der Haken schon, weil er `maxChanges=0`
-mitschickt.
+**Mit oder ohne Umsteigen** — bei den Strecken steht in der Kachel ein zweiter
+kleiner Schalter neben *Abfahrten / Strecken*: **Alle** oder **Ohne
+Umsteigen**. Er schaltet sofort um, weil das Modul jede Strecke **zweimal**
+abfragt: einmal normal und einmal mit `maxChanges=0`. Das ist kein Luxus,
+sondern nötig — die Auskunft findet mit dem Parameter *andere* Verbindungen,
+nicht bloß eine Teilmenge. Gemessen Benrath → Düsseldorf Hbf:
+
+| Schalter | Abfahrten |
+|---|---|
+| Alle | 19:28 (1 Umstieg), 20:02, 20:20 (1 Umstieg) |
+| Ohne Umsteigen | **19:27**, 20:02, **20:37** — alle direkt |
+
+19:27 und 20:37 kommen in der ungefilterten Antwort gar nicht vor. Aus ihr
+heraus zu sieben hätte also nur 20:02 übrig gelassen.
+
+Die Schalterstellung gehört dem Betrachter und wird im Browser gemerkt: zwei
+Leute vor zwei Kacheln sehen Verschiedenes, und niemand verstellt dem anderen
+die Anzeige. Gibt es auf einer Strecke keine umsteigefreie Verbindung, sagt die
+Karte „keine umsteigefreie Verbindung" statt „keine Verbindung gefunden".
 
 Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
 Einrichtung, nicht zur Bedienung.

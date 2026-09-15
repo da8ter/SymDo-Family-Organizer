@@ -177,11 +177,6 @@ trait TransitStore
             // Der Zeitwaehler legt ein Objekt ab — als Text waere das „Array".
             TransitCalc::ZeitText($zeile['time'] ?? ''),
             (string)max(1, (int)($zeile['count'] ?? 4)),
-            /* MUSS mit hinein: „nur ohne Umsteigen" geht als `maxChanges=0` an
-               die Auskunft, die Antwort ist also eine ANDERE. Ohne den
-               Schluesselanteil saehe man nach dem Haken bis zum naechsten
-               faelligen Lauf noch die alte, gemischte. */
-            ($zeile['direct'] ?? false) === true ? 'direkt' : '',
         ])), 0, 12);
     }
 
@@ -464,11 +459,24 @@ trait TransitStore
                Verbindungen zurück, in beiden Richtungen. Für mehr müsste ein
                zweites Mal gefragt werden — das ist es gegenüber einem Dienst
                ohne Schlüssel und ohne Zusicherung nicht wert. */
-            $antwort = Efa::Strecke($von, $nach, $modus, $wann,
-                max(1, (int)($z['count'] ?? 4)), ($z['direct'] ?? false) === true);
+            /* ZWEI Anfragen je Strecke: einmal wie gefragt, einmal mit
+               `maxChanges=0`. Der Schalter in der Kachel soll ohne Wartezeit
+               umschalten koennen, und aus der gemischten Antwort liesse sich
+               die umsteigefreie nicht herstellen — die Auskunft findet mit dem
+               Parameter ANDERE Verbindungen (gemessen Benrath → Duesseldorf
+               Hbf: 19:27 und 20:37 kamen ungefiltert gar nicht vor). */
+            $anzahl  = max(1, (int)($z['count'] ?? 4));
+            $antwort = Efa::Strecke($von, $nach, $modus, $wann, $anzahl);
+            $direkt  = Efa::Strecke($von, $nach, $modus, $wann, $anzahl, true);
+            /* Nur die erste Antwort entscheidet ueber Erfolg und Veralten: die
+               zweite ist eine Zugabe. Faellt sie aus, siebt die Kachel eben aus
+               der gemischten — weniger, aber nicht falsch. */
+            $direktDaten = ($direkt['ok'] ?? false) === true
+                ? (array)($direkt['data'] ?? []) : null;
             $bestand['entries'][$key] = $this->TransitEintrag(
                 $bestand['entries'][$key] ?? [], $antwort, $jetzt,
-                static fn(array $daten): array => ['raw' => $daten, 'school' => $schule]
+                static fn(array $daten): array => ['raw' => $daten, 'rawDirect' => $direktDaten,
+                                                   'school' => $schule]
             );
         }
 
@@ -776,12 +784,16 @@ trait TransitStore
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
-                /* Damit die Kachel „keine umsteigefreie" von „keine" trennen
-                   kann: leer ist nicht gleich leer. */
-                'directOnly' => ($z['direct'] ?? false) === true,
                 'journeys'   => TransitCalc::EndenBenennen(
-                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
-                        ($z['direct'] ?? false) === true),
+                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
+                    $vonName, $nachName),
+                /* Die zweite Liste fuer den Schalter „Ohne Umsteigen". Fehlt
+                   die eigene Antwort, wird aus der gemischten gesiebt — dann
+                   sind es weniger, aber keine falschen. */
+                'journeysDirect' => TransitCalc::EndenBenennen(
+                    TransitCalc::Verbindungen(
+                        is_array($e['rawDirect'] ?? null) ? $e['rawDirect'] : $roh,
+                        max(1, (int)($z['count'] ?? 4)), $nichtNach, true),
                     $vonName, $nachName),
             ];
         }

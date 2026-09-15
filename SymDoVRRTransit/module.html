@@ -205,9 +205,9 @@ body {
 let zustand = { v: 1, now: 0, view: 'departures', stops: [], routes: [], blocked: false };
 let ansicht = null;      // 'departures' | 'routes' — Wahl des Betrachters
 /* Nur umsteigefreie zeigen? Wahl des BETRACHTERS, im localStorage gemerkt —
-   sie aendert nichts an dem, was geholt wird, und gilt deshalb nur an diesem
-   Geraet. Der Haken „Nur ohne Umsteigen" an der Strecke ist die andere Sache:
-   er laesst die Auskunft gar nicht erst nach Umstiegen suchen. */
+   geholt werden ohnehin immer beide Listen, hier wird nur gewaehlt. Zwei Leute
+   vor zwei Kacheln sehen also Verschiedenes, und niemand verstellt dem anderen
+   die Anzeige. */
 let nurDirekt = null;    // true | false
 
 /* Symcon reicht die Ränder der Kachel als Adresszusatz herein
@@ -404,12 +404,12 @@ function streckenHtml() {
             ? translate('home, from now')
             : translate('home, lessons end at %s').replace('%s', s.schoolEnd));
     }
-    /* Der Schalter im Kopf siebt, was schon da ist. Er kann keine Verbindung
-       herbeizaubern, die die Auskunft nicht mitgeschickt hat — dafuer ist der
-       Haken an der Strecke da, der `maxChanges=0` mitschickt. */
-    const alle = (r.journeys || []).filter(function (v) {
-      return !nurDirekt || (v.interchanges || 0) === 0;
-    });
+    /* Zwei fertige Listen, eine je Schalterstellung: das Modul fragt die
+       Auskunft ohnehin zweimal — einmal normal, einmal mit `maxChanges=0`.
+       Hier wird deshalb nur noch GEWAEHLT und nicht gesiebt; gesiebt saehe man
+       die umsteigefreien Verbindungen nicht, die erst die zweite Anfrage
+       zutage foerdert. */
+    const alle = (nurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
     const fahrten = alle.map(function (v) {
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
@@ -438,7 +438,7 @@ function streckenHtml() {
       + '</div>'
       + (fahrten
           ? '<div class="fahrten" data-schiene>' + fahrten + '</div>' + punkte
-          : '<div class="leer">' + esc(translate((nurDirekt || r.directOnly)
+          : '<div class="leer">' + esc(translate(nurDirekt
               ? 'no journey without changes' : 'no journey found')) + '</div>')
       + '</div>';
   });

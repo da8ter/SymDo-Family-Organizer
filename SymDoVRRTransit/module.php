@@ -422,13 +422,6 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
                  'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
-                /* Gesucht wird umsteigefrei schon bei der Auskunft
-                   (`maxChanges=0`), nicht erst hier weggeworfen. Gibt es auf
-                   der Strecke keine, kommt eine leere Antwort — und die Kachel
-                   sagt dann „keine umsteigefreie Verbindung" statt „keine
-                   Verbindung gefunden". */
-                ['caption' => $this->Translate('Direct only'), 'name' => 'direct', 'width' => '110px',
-                 'add' => false, 'edit' => ['type' => 'CheckBox']],
 
         ];
     }
