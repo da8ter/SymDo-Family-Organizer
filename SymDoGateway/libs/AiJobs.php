@@ -36,6 +36,16 @@ trait AiJobs
     /** So viele Auftraege duerfen insgesamt warten. */
     private const AI_JOB_QUEUE_MAX = 8;
 
+    /**
+     * So viele HINTERGRUND-Auswertungen warten hoechstens.
+     *
+     * Ein eigener Topf neben `AI_JOB_QUEUE_MAX`, und etwas groesser als der
+     * Deckel je Klassenseiten-Lauf (EDU_JE_LAUF_MAX = 5): sonst faende ein Lauf
+     * seine eigene Schlange voll und meldete weniger ausgewertete Karten, als
+     * er haette auswerten duerfen.
+     */
+    private const AI_JOB_HINTERGRUND_MAX = 8;
+
     /** Und so viele je Absender — ein Geraet soll die Schlange nicht fuellen. */
     private const AI_JOB_PER_ORIGIN = 2;
 
@@ -162,11 +172,41 @@ trait AiJobs
         /* Zwei Deckel, und beide sind noetig. Der erste schuetzt den Anbieter
            und das Tagesbudget, der zweite die anderen Bewohner: ohne ihn
            fuellte ein Telefon mit einem Stapel Fotos die Schlange, und alle
-           anderen warteten hinter ihm. */
-        if ($laden->zaehleWartende() >= self::AI_JOB_QUEUE_MAX
-            || $laden->zaehleWartende(AiJobStore::herkunftVon($kopf)) >= self::AI_JOB_PER_ORIGIN) {
+           anderen warteten hinter ihm.
+
+           HINTERGRUNDARBEIT rechnet in einem EIGENEN Topf. Sonst haette sie
+           zwei Wirkungen, die beide falsch waeren: fuenf Klassenseiten-Karten
+           je Lauf kaemen am Deckel je Herkunft (zwei) nicht vorbei, und sie
+           fuellten die Schlange so weit, dass das Foto, das gerade jemand
+           hochlaedt, mit „belegt" abgewiesen wuerde. Was niemand angestossen
+           hat, darf niemandem im Weg stehen. */
+        $hintergrund = (string)($origin['type'] ?? '') === AiJobStore::HERKUNFT_HINTERGRUND;
+        $wartend = $hintergrund
+            ? $laden->zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND)
+            : $laden->zaehleWartende() - $laden->zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND);
+        $deckel = $hintergrund ? self::AI_JOB_HINTERGRUND_MAX : self::AI_JOB_QUEUE_MAX;
+        if ($wartend >= $deckel
+            || (!$hintergrund
+                && $laden->zaehleWartende(AiJobStore::herkunftVon($kopf)) >= self::AI_JOB_PER_ORIGIN)) {
             return ['ok' => false, 'code' => 'ai_busy',
                 'message' => $this->Translate('Another AI request is already running.'), 'status' => 429];
+        }
+
+        /* HINTERGRUNDARBEIT bucht das Tagesbudget SOFORT, nicht erst beim
+           Deuten. Der synchrone Weg prueft und bucht in derselben Runde — Karte
+           zwei sah also schon den Stand nach Karte eins. Ueber Auftraege laeuft
+           das Buchen aber erst, wenn der Ruf zurueckkommt, und der kommt
+           fruehestens nach dem Lauf: alle fuenf Karten pruefen sonst gegen
+           denselben veralteten Zaehler. Bei Deckel 20 und Stand 19 ginge
+           synchron genau EINER durch — hier fuenf, und der Tag endete bei 24.
+           Der Nutzer hat 20 eingestellt.
+
+           Gebucht wird bei der Annahme und beim Deuten NICHT noch einmal. Ein
+           Auftrag, der spaeter scheitert, hat seinen Platz damit verbraucht —
+           das ist die vorsichtige Richtung: lieber einer zu wenig als einer zu
+           viel. */
+        if ($hintergrund) {
+            $this->MailCountDay();
         }
 
         $id = $laden->anlegen($kopf, $nutzlast);
@@ -454,7 +494,10 @@ trait AiJobs
                die halbe Miete, das Zerlegen kommt danach als eigener Aufruf
                und wird dann gezaehlt. Wer hier mitzaehlte, buchte dem Nutzer
                jedes Diktat doppelt aufs Tagesbudget. */
-            if ((string)($kopf['kind'] ?? '') !== 'transcribe') {
+            /* Hintergrundarbeit hat schon bei der Annahme gebucht — sonst
+               zaehlte sie doppelt. */
+            if ((string)($kopf['kind'] ?? '') !== 'transcribe'
+                && (string)((($kopf['origin'] ?? [])['type']) ?? '') !== AiJobStore::HERKUNFT_HINTERGRUND) {
                 $this->MailCountDay();
             }
         }
@@ -467,8 +510,14 @@ trait AiJobs
         /* Wer den Auftrag gestellt hat, erfaehrt es auf seinem Weg: die App und
            die Web-App ueber die Klingel, die Visu-Kachel ueber ein zweites
            `AiResult` mit derselben Vorgangskennung. */
-        if ((string)((($kopf['origin'] ?? [])['type']) ?? '') === 'tile') {
+        $herkunft = (string)((($kopf['origin'] ?? [])['type']) ?? '');
+        if ($herkunft === 'tile') {
             $this->AiJobTileAntwort($kopf);
+        } elseif ($herkunft === AiJobStore::HERKUNFT_HINTERGRUND) {
+            /* Hintergrundarbeit: niemand wartet auf eine Antwort. Der Vorschlag
+               geht in den Bestand, und die App erfaehrt es ueber dessen eigenes
+               Signal — nicht ueber die Auftrags-Klingel. */
+            $this->MailAuftragEinpflegen($kopf);
         } else {
             $this->WsPushJob($id);
         }
@@ -517,6 +566,19 @@ trait AiJobs
     {
         $this->AiJobAufraeumen();
         $laden = $this->AiJobLaden(false);
+
+        /* Liegengebliebene ROH-Auftraege deuten.
+           Der Laeufer schreibt die Antwort und meldet sie mit einem Ruf ins
+           Gateway. Faellt dieser Ruf aus — Kernel-Neustart dazwischen, Instanz
+           kurz weg —, bleibt der Auftrag ROH liegen. Ein Geraet holt ihn per
+           Nachfrage nach, die Kachel ebenso; bei HINTERGRUNDARBEIT fragt aber
+           niemand nach. Ohne diesen Kehrgang waere die bezahlte Antwort fuer
+           immer verloren, und die Karte staende schon als gesehen im Merker. */
+        foreach ($laden->koepfe() as $kopf) {
+            if ((string)($kopf['state'] ?? '') === AiJobStore::ROH) {
+                $this->AiJobFinish((string)$kopf['id']);
+            }
+        }
         /* Abgestellt wird erst, wenn GAR NICHTS mehr da ist — nicht schon,
            wenn nichts mehr wartet. Ein fertiger Kopf muss noch verfallen
            (AI_JOB_KEEP_S); schaltete sich der Zeitgeber vorher ab, laege er

@@ -32,6 +32,28 @@ require_once $stubs . '/autoload.php';
 
 $fehler = 0;
 $anzahl = 0;
+
+/**
+ * Der Rumpf EINER Funktion aus einer Datei — von ihrer Signatur bis zur
+ * naechsten Funktion.
+ *
+ * Nicht an einer benannten Nachbarfunktion festmachen und keine feste
+ * Zeichenzahl: beides rutscht, sobald jemand dazwischen etwas einfuegt oder
+ * kuerzt, und der Riegel greift dann ins Leere, ohne dass es auffaellt. Genau
+ * das ist am 15.09.2026 zweimal passiert.
+ */
+function rumpf(string $quelle, string $name): string
+{
+    $von = strpos($quelle, 'private function ' . $name . '(');
+    if ($von === false) {
+        return '';
+    }
+    /* Bis zur schliessenden Klammer der Funktion, NICHT bis zur naechsten
+       Signatur: dazwischen laege deren Docblock, und ein `@return` darin
+       verfaelscht jede Zaehlung von Rueckwegen. */
+    $bis = strpos($quelle, "\n    }\n", $von);
+    return substr($quelle, $von, ($bis === false ? strlen($quelle) : $bis + 7) - $von);
+}
 function pruefe(string $name, mixed $ist, mixed $soll): void
 {
     global $fehler, $anzahl;
@@ -112,10 +134,9 @@ foreach ($vertraege as [$klasse, $methode, $nr, $quelle]) {
    laesst sich die Haelfte nicht mehr auslagern, und niemand merkt es, bis der
    Umzug im Betrieb Medien unter der falschen Instanz anlegt. */
 $quelle = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
-$von = strpos($quelle, 'private function MailAnalyseRechnen(');
-$bis = strpos($quelle, 'private function MailVorschlagEinpflegen(');
-pruefe('Beide Haelften stehen in der Datei', $von !== false && $bis !== false && $bis > $von, true);
-$rechnen = substr($quelle, (int)$von, (int)$bis - (int)$von);
+$rechnen = rumpf($quelle, 'MailAnalyseRechnen');
+pruefe('Beide Haelften stehen in der Datei',
+    $rechnen !== '' && rumpf($quelle, 'MailVorschlagEinpflegen') !== '', true);
 foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'NotesSaveAttachment',
           'MailStoreProposal', 'MailCountDay', 'MailNotifyProposal',
           'IPS_CreateMedia', 'LogMessage'] as $verboten) {
@@ -184,12 +205,7 @@ pruefe('… schaltet dann seinen Zeitgeber ab',
 pruefe('… und legt statt dessen einen Auftrag ab',
     str_contains($zweig, 'EduAuftragGeben('), true);
 
-/* Bis zur NAECHSTEN Funktion, nicht eine feste Zeichenzahl: sonst rutscht das
-   Fenster beim Kuerzen in den Nachbarn und der Riegel greift ins Leere.
-   Genau das ist beim ersten Anlauf passiert. */
-$aVon = (int)strpos($edu, 'private function EduAuftragGeben(');
-$aBis = (int)strpos($edu, '    private function ', $aVon + 10);
-$auftrag = substr($edu, $aVon, $aBis - $aVon);
+$auftrag = rumpf($edu, 'EduAuftragGeben');
 /* Die Sperrliste steht im Bestand des Gateways — ein Scanner kann sie gar
    nicht kennen. Ohne diesen Filter klapperte er eine Seite ab, die in der App
    geloescht wurde. (Die zweite Probe beim Einpflegen faengt, was sich zwischen
@@ -203,6 +219,40 @@ pruefe('… und traegt die Seiten mit',
    abgeschaltet hat. */
 pruefe('… nur bei eingeschalteten Klassenseiten',
     str_contains($auftrag, 'EduIsEnabled()'), true);
+
+/* Die Sammelmeldung eines Auswerte-Laufs.
+ *
+ * Der synchrone Lauf sammelt im Objektfeld und schickt am Ende EINE Meldung.
+ * Ueber Auftraege hinweg geht das nicht — jeder fertige Auftrag kommt in einem
+ * eigenen Objekt an. Deshalb liegt der Zwischenstand im Attribut, und
+ * hinausgeschickt wird erst, wenn keine Hintergrundarbeit mehr wartet.
+ *
+ * Das Abraeumen MUSS auf jedem Weg laufen: findet der letzte Auftrag nichts
+ * oder scheitert er, bliebe die Meldung sonst fuer immer im Attribut liegen
+ * und die Karten davor waeren stumm eingepflegt. */
+foreach (['MailAnalyseAuftrag', 'MailAuftragEinpflegen', 'MailAnhaengeNachladen',
+          'EduPushAuftrag', 'EduPushAuftragFertig'] as $m) {
+    pruefe('Die Klasse kennt ' . $m, $k->hasMethod($m), true);
+}
+$einpflegen = rumpf($quelle, 'MailAuftragEinpflegen');
+pruefe('Das Abraeumen der Meldung haengt an einem finally',
+    (bool)preg_match('/finally \{.*EduPushAuftragFertig\(\)/s', $einpflegen), true);
+$fertig = rumpf($edu, 'EduPushAuftragFertig');
+pruefe('Geschickt wird erst, wenn keine Hintergrundarbeit mehr wartet',
+    str_contains($fertig, 'zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND)'), true);
+/* Und der Zwischenstand liegt auf der Platte, nicht im Objektfeld. */
+/* Geschrieben wird ueber EduPushUebertragen — eine Stelle fuer beide Wege:
+   den Lauf, der noch auf seine Auftraege wartet, und den fertigen Auftrag. */
+pruefe('Der Zwischenstand steht im Attribut',
+    str_contains(rumpf($edu, 'EduPushUebertragen'), "WriteAttributeString('EduPushOffen'"), true);
+pruefe('Beide Wege schreiben ueber dieselbe Stelle',
+    [str_contains(rumpf($edu, 'EduPushAuftrag'), 'EduPushUebertragen('),
+     str_contains(rumpf($edu, 'EduPushAbschluss'), 'EduPushUebertragen(')], [true, true]);
+/* Und der Lauf schickt NICHT, solange noch Auswertungen unterwegs sind —
+   sonst kaemen zwei Meldungen, die zweite ohne den Namen der Seite. */
+pruefe('Der Lauf wartet, wenn noch Hintergrundarbeit laeuft',
+    str_contains(rumpf($edu, 'EduPushAbschluss'),
+        'zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND)'), true);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

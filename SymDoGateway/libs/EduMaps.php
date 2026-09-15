@@ -103,6 +103,12 @@ trait EduMaps
         $this->RegisterAttributeString('EduFound', '[]');
         $this->RegisterAttributeString('EduSeen', '{}');
         $this->RegisterAttributeString('EduStatus', '{}');
+        /* Die Sammelmeldung eines Laufs, ueber die Auftraege hinweg.
+           Sie MUSS auf der Platte liegen: jeder fertige Auftrag kommt in einem
+           eigenen RequestAction an, also in einem eigenen Objekt — ein Feld
+           ueberlebte das nicht. Ohne sie kaeme je ausgewerteter Karte eine
+           Meldung, und die Ratenbremse je Geraet verschluckte den Rest. */
+        $this->RegisterAttributeString('EduPushOffen', '{}');
         $this->RegisterTimer('EduScan', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'EduScan\', 0);');
     }
 
@@ -221,6 +227,92 @@ trait EduMaps
         if ($sofort) {
             $this->EduPushSenden();
         }
+    }
+
+    /**
+     * Das Ende eines Laufs: melden — oder warten, bis die Auswertung zurueck ist.
+     *
+     * Laeuft die Auswertung als Auftrag, sind ihre Zahlen jetzt noch nicht da.
+     * Wer hier trotzdem schickte, saehe zwei Meldungen: erst „3 Karten
+     * aktualisiert", Minuten spaeter „2 Termine warten" — die zweite ohne den
+     * Namen der Seite, weil sie den Sammler des Laufs nicht mehr kennt. Vorher
+     * war das EINE Nachricht, und genau darum geht es bei dieser Sammlung.
+     *
+     * Also: wartet noch Hintergrundarbeit, wandert der Stand des Laufs ins
+     * Attribut und der letzte fertige Auftrag schickt alles zusammen.
+     */
+    private function EduPushAbschluss(): void
+    {
+        $sammlung = $this->eduPushSammlung ?? [];
+        $this->eduPushSammlung = null;
+        if ($sammlung === []) {
+            return;
+        }
+        if (!$this->AiJobMoeglich()
+            || $this->AiJobLaden(false)->zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND) === 0) {
+            $this->eduPushSammlung = $sammlung;
+            $this->EduPushSenden();
+            return;
+        }
+        foreach ($sammlung as $userId => $e) {
+            $this->EduPushUebertragen((string)$userId, (array)$e);
+        }
+    }
+
+    /**
+     * Einen Posten in den Zwischenstand auf der Platte einrechnen.
+     *
+     * @param array<string,mixed> $e
+     */
+    private function EduPushUebertragen(string $userId, array $e): void
+    {
+        $offen = json_decode((string)@$this->ReadAttributeString('EduPushOffen'), true);
+        $offen = is_array($offen) ? $offen : [];
+        $alt = is_array($offen[$userId] ?? null) ? $offen[$userId] : self::EDU_PUSH_LEER;
+        foreach (['karten', 'aufgaben', 'termine', 'notizen'] as $feld) {
+            $alt[$feld] = (int)($alt[$feld] ?? 0) + (int)($e[$feld] ?? 0);
+        }
+        foreach ((array)($e['seiten'] ?? []) as $name) {
+            if ((string)$name !== '' && !in_array((string)$name, (array)$alt['seiten'], true)) {
+                $alt['seiten'][] = (string)$name;
+            }
+        }
+        $offen[$userId] = $alt;
+        @$this->WriteAttributeString('EduPushOffen', (string)json_encode($offen, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Die Sammelmeldung eines AUFTRAGS-Laufs fortschreiben.
+     *
+     * Der synchrone Lauf sammelt im Objektfeld und schickt am Ende; ueber
+     * Auftraege hinweg geht das nicht — jeder kommt in einem eigenen Objekt an.
+     * Deshalb liegt der Zwischenstand im Attribut, und geschickt wird erst,
+     * wenn keine Hintergrundarbeit mehr wartet.
+     */
+    private function EduPushAuftrag(string $userId, int $aufgaben, int $termine, int $notizen): void
+    {
+        $this->EduPushUebertragen($userId, ['aufgaben' => $aufgaben, 'termine' => $termine,
+                                            'notizen' => $notizen]);
+    }
+
+    /**
+     * Ist die Hintergrundarbeit durch, geht EINE Meldung hinaus.
+     *
+     * Aufgerufen nach jedem fertigen Auftrag: solange noch einer wartet,
+     * passiert nichts.
+     */
+    private function EduPushAuftragFertig(): void
+    {
+        if ($this->AiJobLaden(false)->zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND) > 0) {
+            return;   // es kommt noch etwas
+        }
+        $offen = json_decode((string)@$this->ReadAttributeString('EduPushOffen'), true);
+        if (!is_array($offen) || $offen === []) {
+            return;
+        }
+        @$this->WriteAttributeString('EduPushOffen', '{}');
+        $this->eduPushSammlung = $offen;
+        $this->EduPushSenden();
     }
 
     /**
@@ -367,7 +459,7 @@ trait EduMaps
         @$this->WriteAttributeString('EduStatus', (string)json_encode(
             ['t' => time(), 'text' => $bericht], JSON_UNESCAPED_UNICODE));
         $this->SendDebug('EduMaps', $bericht, 0);
-        $this->EduPushSenden();
+        $this->EduPushAbschluss();
         return $bericht;
     }
 
@@ -1078,11 +1170,25 @@ trait EduMaps
             'SenderName' => $seite['name'],
             'Date'       => (int)$karte['updated'],
         ];
+        $anhaenge = $this->EduAnhaenge($karte);
+        /* Als AUFTRAG, sobald eine Scanner-Instanz die Warteschlange bedient:
+           der Anbieteraufruf dauert bis zu fuenfundvierzig Sekunden und lief
+           bisher hier, in der Spur, die auch die App bedient. Den Prompt baut
+           weiterhin diese Instanz — dafuer braucht es ihren Bestand. */
+        if ($this->AiJobMoeglich()) {
+            /* Der Merker reist MIT: gemerkt wird beim Einreihen (sonst zahlte
+               der naechste Lauf doppelt), zurueckgenommen beim Scheitern. */
+            return $this->MailAnalyseAuftrag(
+                'edu:' . $karte['boxid'] . ':' . $karte['updated'],
+                $kopf, $text, $anhaenge, (string)$seite['userId'], 'Edumaps',
+                ['topf' => 'edu:' . md5((string)$seite['url']),
+                 'schluessel' => $karte['boxid'] . ':' . $karte['updated']]);
+        }
         return $this->MailAnalyseRecord(
             'edu:' . $karte['boxid'] . ':' . $karte['updated'],
             $kopf,
             $text,
-            $this->EduAnhaenge($karte),
+            $anhaenge,
             (string)$seite['userId'],
             'Edumaps'
         );
@@ -1122,7 +1228,11 @@ trait EduMaps
                     continue;
                 }
                 $summe += strlen($base64);
-                $raus[] = ['kind' => $art, 'name' => (string)$a['name'], 'base64' => $base64];
+                /* Die ADRESSE geht mit. Der Auftragsweg loescht die Nutzlast,
+                   sobald der Anbieter geantwortet hat — die Datei fuer die
+                   Notiz wird darueber neu geholt. */
+                $raus[] = ['kind' => $art, 'name' => (string)$a['name'],
+                           'url' => (string)$a['url'], 'base64' => $base64];
             }
         } finally {
             @ini_set('memory_limit', $speicherVorher);
@@ -1378,5 +1488,50 @@ trait EduMaps
         }
         $karte[$topf] = array_values(array_unique($liste));
         @$this->WriteAttributeString('EduSeen', (string)json_encode($karte, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Einen Merker wieder wegnehmen.
+     *
+     * Gebraucht, seit die Auswertung ein AUFTRAG ist: gemerkt wird beim
+     * Einreihen, denn sonst reihte der naechste Lauf dieselbe Karte noch einmal
+     * ein und zahlte doppelt. Scheitert der Auftrag aber, waere die Karte fuer
+     * immer als gesehen abgelegt, ohne je ausgewertet worden zu sein — der
+     * Elternbrief kaeme nie wieder, nur „Alles auswerten" holte ihn zurueck.
+     * Der synchrone Weg hatte das Problem nicht: dort hiess „fertig" wirklich
+     * fertig.
+     */
+    private function EduVergessen(string $topf, string $schluessel): void
+    {
+        $karte = $this->EduSeenKarte();
+        if (!isset($karte[$topf])) {
+            return;
+        }
+        $liste = array_values(array_filter(array_map('strval', (array)$karte[$topf]),
+            static fn(string $s): bool => $s !== $schluessel));
+        if ($liste === []) {
+            unset($karte[$topf]);
+        } else {
+            $karte[$topf] = $liste;
+        }
+        @$this->WriteAttributeString('EduSeen', (string)json_encode($karte, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * Ein gescheiterter Auswerte-Auftrag: den Merker zuruecknehmen, damit die
+     * Karte beim naechsten Lauf wieder drankommt.
+     *
+     * @param array<string,mixed> $merker aus der Herkunft des Auftrags
+     */
+    private function EduMerkerZuruecknehmen(array $merker): void
+    {
+        $topf = trim((string)($merker['topf'] ?? ''));
+        $schluessel = trim((string)($merker['schluessel'] ?? ''));
+        if ($topf === '' || $schluessel === '') {
+            return;
+        }
+        $this->EduVergessen($topf, $schluessel);
+        $this->SendDebug('EduMaps', 'Auswertung gescheitert — Karte kommt wieder dran: '
+            . $schluessel, 0);
     }
 }

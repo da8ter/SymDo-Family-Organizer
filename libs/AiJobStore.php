@@ -39,6 +39,12 @@ final class AiJobStore
     public const FERTIG   = 'done';      // gedeutet, abholbereit
     public const GESCHEITERT = 'failed'; // endgueltig schiefgegangen
 
+    /**
+     * Die Herkunft der Hintergrundarbeit: Auswertungen, die kein Mensch
+     * angestossen hat (Klassenseiten, spaeter Moodle und Post).
+     */
+    public const HERKUNFT_HINTERGRUND = 'analyse';
+
     /** So gross darf ein Kopf werden — ohne Nutzlast ist das reichlich. */
     private const KOPF_MAX = 262144;
 
@@ -173,7 +179,7 @@ final class AiJobStore
             if ((int)($kopf['notBefore'] ?? 0) > $jetzt) {
                 continue;
             }
-            if ($bester === null || (int)($kopf['createdAt'] ?? 0) < (int)($bester['createdAt'] ?? 0)) {
+            if ($bester === null || self::gehtVor($kopf, $bester)) {
                 $bester = $kopf;
             }
         }
@@ -184,6 +190,33 @@ final class AiJobStore
         $bester['startedAt'] = $jetzt;
         $bester['attempts']  = (int)($bester['attempts'] ?? 0) + 1;
         return $this->schreiben($bester) ? $bester : null;
+    }
+
+    /**
+     * Wer zuerst drankommt.
+     *
+     * VORRANG hat, worauf ein MENSCH wartet. Innerhalb derselben Klasse
+     * entscheidet das Alter — wer laenger wartet, kommt zuerst.
+     *
+     * Ohne diesen Vorrang genuegte der eigene Annahme-Topf nicht: er verhindert
+     * zwar, dass Hintergrundarbeit jemanden mit „belegt" abweist, aber der
+     * Laeufer arbeitet unter der Anbieter-Sperre einen nach dem anderen ab.
+     * Reiht der Klassenseiten-Lauf um 6:00 fuenf Karten ein und fotografiert um
+     * 6:01 jemand einen Elternbrief, stuende sein Auftrag an sechster Stelle —
+     * beim Cloud-Anbieter rund vier Minuten, bei einem lokalen Server bis zu
+     * fuenfundzwanzig. Die App gibt nach zehn Minuten auf.
+     *
+     * @param array<string,mixed> $a
+     * @param array<string,mixed> $b
+     */
+    private static function gehtVor(array $a, array $b): bool
+    {
+        $aHintergrund = self::herkunftVon($a) === self::HERKUNFT_HINTERGRUND;
+        $bHintergrund = self::herkunftVon($b) === self::HERKUNFT_HINTERGRUND;
+        if ($aHintergrund !== $bHintergrund) {
+            return !$aHintergrund;
+        }
+        return (int)($a['createdAt'] ?? 0) < (int)($b['createdAt'] ?? 0);
     }
 
     /**
@@ -290,9 +323,17 @@ final class AiJobStore
     {
         $h = is_array($kopf['origin'] ?? null) ? $kopf['origin'] : [];
         $art = (string)($h['type'] ?? 'rest');
-        return $art === 'tile'
-            ? 'tile:' . (string)($h['sdwa'] ?? '')
-            : 'rest:' . (string)($kopf['device'] ?? '');
+        if ($art === 'tile') {
+            return 'tile:' . (string)($h['sdwa'] ?? '');
+        }
+        /* Hintergrundarbeit hat eine EIGENE Herkunft — ohne Geraet. Sie stammt
+           von keinem Menschen, der wartet, und darf deshalb weder den Deckel je
+           Geraet aufbrauchen noch in denselben Topf fallen wie das Foto, das
+           gerade jemand hochgeladen hat. */
+        if ($art === self::HERKUNFT_HINTERGRUND) {
+            return self::HERKUNFT_HINTERGRUND;
+        }
+        return 'rest:' . (string)($kopf['device'] ?? '');
     }
 
     public function loeschen(string $id): void
@@ -367,6 +408,13 @@ final class AiJobStore
                     }
                     $n++;
                 }
+                continue;
+            }
+            /* ROH heisst: der Anbieter hat geantwortet, die Antwort ist bezahlt
+               und steht in `raw` — sie wartet nur noch aufs Deuten. Wer sie hier
+               mit `ai_timeout` ueberschriebe, wuerfe Geld weg. Sie bleibt
+               liegen; das Deuten holt der Kehrgang nach. */
+            if ($zustand === self::ROH) {
                 continue;
             }
             if ($alter > $schlangeMaxS) {

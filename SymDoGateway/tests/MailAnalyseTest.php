@@ -23,7 +23,62 @@ declare(strict_types=1);
  *   php SymDoGateway/tests/MailAnalyseTest.php
  */
 
+$stubs = getenv('SYMCON_STUBS') ?: __DIR__ . '/../../../TileVisu-Raum-Titel-Kachel/tests/stubs';
+if (!is_file($stubs . '/autoload.php')) {
+    fwrite(STDERR, "Symcon-Stubs nicht gefunden unter $stubs — Pfad über SYMCON_STUBS setzen.\n");
+    exit(2);
+}
+require_once $stubs . '/autoload.php';
 require_once __DIR__ . '/../libs/MailAnalyseCalc.php';
+require_once __DIR__ . '/../../libs/AiJobStore.php';
+require_once __DIR__ . '/../libs/MailScan.php';
+
+/**
+ * Die rechnende Hälfte wirklich FAHREN, nicht nur ihren Quelltext ansehen.
+ *
+ * Warum das nötig ist: `$betreff` verschwand beim Herauslösen von
+ * `MailAnalyseEingabe` aus dem Rumpf, die Verwendung blieb stehen. Mit
+ * `strict_types` ist das ein TypeError — **nach** dem bezahlten Anbieteraufruf,
+ * in einer Funktion ohne `catch`. Weder `MailRemember` noch `MailCountFailure`
+ * liefen dann, und dieselbe Mail wäre bei jedem Lauf wieder die erste gewesen.
+ *
+ * Gemerkt hat es niemand: siebenundzwanzig Zusicherungen prüften den
+ * Rechenkern, Quelltext-Riegel prüften, was die Funktion NICHT anfasst — aber
+ * ausgeführt hat sie keiner. Ein externer Codereview fand es (15.09.2026).
+ */
+final class RechnenProbe extends IPSModuleStrict
+{
+    use MailScan;
+
+    /** Was der Anbieter zu sehen bekam, und was er antwortet. */
+    public array $anbieterRufe = [];
+    public string $antwort = '[]';
+    public array $protokoll = [];
+
+    private function AiRunCompletion(string $system, string $user, ?string $bild = null,
+        ?string $pdf = null): array
+    {
+        $this->anbieterRufe[] = ['user' => $user, 'bild' => $bild !== null, 'pdf' => $pdf !== null];
+        return ['ok' => true, 'text' => $this->antwort];
+    }
+    private function AiMailSystemPrompt(string $heute, bool $mitAnhang, string $quelle): string
+    {
+        return 'System(' . ($mitAnhang ? 'mit' : 'ohne') . ',' . $quelle . ')';
+    }
+    private function AiParseTodos(string $t, array $arten = []): array
+    {
+        return is_array($d = json_decode($t, true)) ? $d : [];
+    }
+    private function HomeworkKinder(): array { return ['k1']; }
+
+    public function pRechnen(array $kopf, string $text, array $anhaenge, string $quelle): array
+    {
+        return (array)(new ReflectionMethod(self::class, 'MailAnalyseRechnen'))
+            ->invoke($this, $kopf, $text, $anhaenge, $quelle);
+    }
+
+    protected function getTime(): int { return time(); }
+}
 
 $fehler = 0;
 $anzahl = 0;
@@ -145,6 +200,53 @@ pruefe('Anhaenge haengen NUR an Notizen',
 pruefe('mediaId steht weiter daneben', $mit[1]['mediaId'], 42);
 pruefe('Ohne abgelegte Anhaenge bleibt alles unberuehrt',
     MailAnalyseCalc::AnhaengeEinhaengen([['kind' => 'note']], []), [['kind' => 'note']]);
+
+// ══ Die rechnende Haelfte, wirklich gefahren ═════════════════════════════
+IPS\Kernel::reset();
+$r = new RechnenProbe(777);
+$r->Create();
+
+/* Jede undefinierte Zelle in diesem Rumpf faellt hier auf — sie wird zur
+   Warnung, und die Warnung macht der Prueflauf zum Fehler. */
+set_error_handler(static function (int $n, string $m): bool {
+    throw new RuntimeException($m);
+});
+try {
+    $r->antwort = '[{"kind":"task","title":"Turnbeutel"},{"kind":"event","title":"Fest"}]';
+    $e = $r->pRechnen(['Subject' => 'Kopiergeld', 'SenderAddress' => 'a@b.test', 'Date' => 1],
+        'Bitte 5 Euro', [], 'Edumaps');
+    pruefe('Der Lauf kommt ohne Warnung durch', true, true);
+} catch (Throwable $t) {
+    pruefe('Der Lauf kommt ohne Warnung durch', $t->getMessage(), true);
+    $e = ['ok' => false, 'kiAufrufe' => 0, 'protokoll' => '', 'aufgaben' => [], 'zahlen' => []];
+} finally {
+    restore_error_handler();
+}
+
+pruefe('Er meldet Erfolg und genau einen Anbieter-Aufruf',
+    [$e['ok'], $e['kiAufrufe']], [true, 1]);
+pruefe('Der Betreff steht in der Protokollzeile',
+    str_contains((string)$e['protokoll'], '„Kopiergeld"'), true);
+pruefe('Die Zahlen stimmen',
+    [$e['zahlen']['aufgabenProtokoll'], $e['zahlen']['termine']], [1, 1]);
+/* Der Betreff geht AUCH an den Anbieter — davor stand er im Rumpf. */
+pruefe('Der Betreff steht in der Eingabe an den Anbieter',
+    str_starts_with((string)$r->anbieterRufe[0]['user'], 'Betreff: Kopiergeld'), true);
+pruefe('Ohne Anhang wird der Systemtext ohne Anhang gebaut',
+    [$r->anbieterRufe[0]['bild'], $r->anbieterRufe[0]['pdf']], [false, false]);
+
+/* Ein Bild geht als Bild mit, ein PDF als PDF — und der Dateiname steht im
+   Text, damit die KI weiss, dass etwas beiliegt. */
+$r->anbieterRufe = [];
+$r->antwort = '[]';
+$e = $r->pRechnen(['Subject' => 'Elternbrief'], 'Text',
+    [['kind' => 'pdf', 'name' => 'brief.pdf', 'base64' => 'AAA']], 'Edumaps');
+pruefe('Ein PDF geht als PDF mit',
+    [$r->anbieterRufe[0]['bild'], $r->anbieterRufe[0]['pdf']], [false, true]);
+pruefe('Der Dateiname steht in der Eingabe',
+    str_contains((string)$r->anbieterRufe[0]['user'], '(Beigefuegte Datei: brief.pdf)'), true);
+/* Nichts gefunden ist kein Fehler — nur nichts zu tun. */
+pruefe('Ohne Funde bleibt es ein Erfolg', [$e['ok'], $e['aufgaben']], [true, []]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

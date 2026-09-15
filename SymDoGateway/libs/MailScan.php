@@ -32,6 +32,13 @@ trait MailScan
     /** Das Kernmodul kappt seinen Cache; die Vorgabe 10 verliert Mails unbemerkt. */
     private const MAIL_MIN_CACHE_SIZE = 50;
 
+    /**
+     * So viel Text eines Dokuments reist im Auftragskopf mit. Er wird beim
+     * Einpflegen nur noch fuer `MailDetectOrigin` gebraucht — den urspruenglichen
+     * Absender findet der in den ersten Zeilen.
+     */
+    private const MAIL_ORIGIN_TEXT_MAX = 4000;
+
     /** Ein Anbieter-Aufruf darf 45 s dauern — deshalb eine Mail pro Timerlauf. */
     private const MAIL_TIMER_MS = 1500;
 
@@ -811,16 +818,15 @@ trait MailScan
         $leer = ['ok' => false, 'kiAufrufe' => 0, 'meldung' => '', 'protokoll' => '',
                  'aufgaben' => [], 'zahlen' => MailAnalyseCalc::Zaehlen([])];
 
-        /* Der eine fuer die KI. Er heisst wie immer, damit der Analyseteil
-           unveraendert bleibt: er hat nie mehr als einen gelesen. */
-        $anhang  = $anhaenge[0] ?? null;
+        [$eingabe, $anhang] = $this->MailAnalyseEingabe($kopf, $text, $anhaenge);
+        /* Wird unten fuer die Protokollzeile gebraucht. Beim Herausloesen von
+           MailAnalyseEingabe ist diese Zuweisung einmal verschwunden, die
+           Verwendung blieb stehen — ein TypeError NACH dem bezahlten Aufruf, in
+           einer Funktion ohne catch. Weder MailRemember noch MailCountFailure
+           liefen dann, und dieselbe Mail waere bei jedem Lauf wieder die erste. */
         $betreff = trim((string)($kopf['Subject'] ?? ''));
-        $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
         $bild = ($anhang !== null && $anhang['kind'] === 'image') ? $anhang['base64'] : null;
         $pdf  = ($anhang !== null && $anhang['kind'] === 'pdf') ? $anhang['base64'] : null;
-        if ($anhang !== null && ($anhang['name'] ?? '') !== '') {
-            $eingabe .= "\n\n(Beigefuegte Datei: " . $anhang['name'] . ')';
-        }
 
         $r = $this->AiRunCompletion(
             $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null, $quelle),
@@ -874,6 +880,211 @@ trait MailScan
             'aufgaben'  => $aufgaben,
             'zahlen'    => $zahlen,
         ];
+    }
+
+    /**
+     * Was die KI zu lesen bekommt, und welcher Anhang mitgeht.
+     *
+     * Nur EINER — der Analyseteil hat nie mehr als einen gelesen.
+     *
+     * @param array<string,mixed>       $kopf
+     * @param list<array<string,mixed>> $anhaenge
+     * @return array{0:string,1:array<string,mixed>|null}
+     */
+    private function MailAnalyseEingabe(array $kopf, string $text, array $anhaenge): array
+    {
+        $anhang  = $anhaenge[0] ?? null;
+        $betreff = trim((string)($kopf['Subject'] ?? ''));
+        $eingabe = ($betreff !== '' ? 'Betreff: ' . $betreff . "\n\n" : '') . $text;
+        if ($anhang !== null && ($anhang['name'] ?? '') !== '') {
+            $eingabe .= "\n\n(Beigefuegte Datei: " . $anhang['name'] . ')';
+        }
+        return [$eingabe, $anhang];
+    }
+
+    /**
+     * Die Analyse als AUFTRAG einreihen, statt sie hier zu fahren.
+     *
+     * Der Anbieteraufruf dauert bis zu fuenfundvierzig Sekunden, lokal bis zu
+     * fuenf Minuten — und er lief bisher in der Gateway-Spur, die derweil
+     * keinen Hook bedient. Als Auftrag laeuft er in der Scanner-Instanz; das
+     * Gateway baut hier den Prompt (dafuer braucht es seinen Bestand:
+     * Mitglieder, Kinder, Faecher) und deutet die Antwort spaeter in
+     * Millisekunden.
+     *
+     * NUR FUER QUELLEN MIT ABRUFBAREN ANHAENGEN. Die Nutzlast eines Auftrags
+     * wird geloescht, sobald der Anbieter geantwortet hat (64 MB Speicher) —
+     * beim Einpflegen ist das base64 also weg und wird ueber die ADRESSE neu
+     * geholt. Der IMAP-Weg kann das nicht: dort steckt der Anhang in der Mail
+     * und nirgends sonst. Er bleibt deshalb beim synchronen Weg.
+     *
+     * @param array<string,mixed>                          $kopf
+     * @param list<array{kind:string,name:string,base64:string,url?:string}> $anhaenge
+     */
+    private function MailAnalyseAuftrag(string $vorschlagsId, array $kopf, string $text,
+        array $anhaenge, string $userId, string $quelle, array $merker = []): bool
+    {
+        [$eingabe, $anhang] = $this->MailAnalyseEingabe($kopf, $text, $anhaenge);
+
+        /* Die Beschreibung der Anhaenge reist mit, nicht ihr Inhalt: der
+           Auftragskopf ist eine kleine Datei, und ein Elternbrief hat zwei
+           Megabyte. */
+        $beschreibung = [];
+        foreach ($anhaenge as $a) {
+            if (trim((string)($a['url'] ?? '')) === '') {
+                continue;
+            }
+            $beschreibung[] = ['kind' => (string)$a['kind'], 'name' => (string)($a['name'] ?? ''),
+                               'url'  => (string)$a['url']];
+        }
+
+        $r = $this->AiJobEnqueue('extract',
+            [
+                'system'      => $this->AiMailSystemPrompt(date('Y-m-d'), $anhang !== null, $quelle),
+                'user'        => $eingabe,
+                'payloadKind' => $anhang === null ? '' : (string)$anhang['kind'],
+            ],
+            [
+                'type'  => 'todos',
+                /* Die erlaubten Arten werden JETZT bestimmt, nicht beim Deuten:
+                   ohne Kinder im Haus verwirft die Pruefung eine Hausaufgabe
+                   still, und ob es Kinder gibt, weiss nur diese Instanz. */
+                'arten' => MailAnalyseCalc::Arten($this->HomeworkKinder() !== []),
+            ],
+            [
+                'type'      => AiJobStore::HERKUNFT_HINTERGRUND,
+                'vorschlag' => $vorschlagsId,
+                'kopf'      => $kopf,
+                'userId'    => $userId,
+                'quelle'    => $quelle,
+                'text'      => mb_substr($text, 0, self::MAIL_ORIGIN_TEXT_MAX),
+                'anhaenge'  => $beschreibung,
+                /* Woran der Aufrufer erkennt, welche Karte das war — er nimmt
+                   seinen Merker zurueck, wenn der Auftrag scheitert. */
+                'merker'    => $merker,
+            ],
+            $anhang === null ? '' : (string)$anhang['base64']);
+
+        if (($r['ok'] ?? false) !== true) {
+            $this->SendDebug('MailScan', 'Auswertung nicht eingereiht: '
+                . (string)($r['code'] ?? '?'), 0);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Ein fertiger Auswerte-Auftrag kommt zurueck.
+     *
+     * Ab hier ist es derselbe Weg wie beim synchronen Lauf — nur dass die
+     * Antwort schon gedeutet ist und die Anhaenge neu geholt werden muessen.
+     *
+     * @param array<string,mixed> $kopf der Auftragskopf mit `result`
+     */
+    private function MailAuftragEinpflegen(array $kopf): void
+    {
+        $h = is_array($kopf['origin'] ?? null) ? $kopf['origin'] : [];
+        try {
+            $this->MailAuftragDeuten($kopf, $h);
+        } finally {
+            /* AUF JEDEM WEG. Faende der letzte Auftrag eines Laufs nichts — oder
+               scheiterte er —, bliebe die gesammelte Meldung sonst fuer immer
+               im Attribut liegen, und die Karten davor waeren stumm
+               eingepflegt. */
+            if ((string)($h['quelle'] ?? '') === 'Edumaps') {
+                $this->EduPushAuftragFertig();
+            }
+        }
+    }
+
+    /** @param array<string,mixed> $h die Herkunft des Auftrags */
+    private function MailAuftragDeuten(array $kopf, array $h): void
+    {
+        $rumpf = is_array(($kopf['result'] ?? [])['body'] ?? null) ? $kopf['result']['body'] : [];
+        if (($rumpf['ok'] ?? false) !== true) {
+            /* Bei Hintergrundarbeit liest den Auftrag NIEMAND — kein Geraet
+               fragt nach, keine Kachel. „Die Meldung steht schon im Auftrag"
+               hiesse hier: sie steht nirgends. Also ins Protokoll, wie auf dem
+               synchronen Weg, und den Merker zuruecknehmen, damit die Karte
+               beim naechsten Lauf wieder drankommt. */
+            $this->LogMessage('SymDo: Auswertung fehlgeschlagen — '
+                . (string)((($kopf['result'] ?? [])['body']['error']['message'] ?? '')
+                    ?: ($kopf['result']['body']['error']['code'] ?? '?')), KL_ERROR);
+            if (is_array($h['merker'] ?? null)) {
+                $this->EduMerkerZuruecknehmen($h['merker']);
+            }
+            return;
+        }
+        $aufgaben = is_array($rumpf['todos'] ?? null) ? $rumpf['todos'] : [];
+        $mkopf    = is_array($h['kopf'] ?? null) ? $h['kopf'] : [];
+        $quelle   = (string)($h['quelle'] ?? 'IMAP');
+        $zahlen   = MailAnalyseCalc::Zaehlen($aufgaben);
+
+        $this->LogMessage(MailAnalyseCalc::Meldung(trim((string)($mkopf['Subject'] ?? '')),
+            (string)($mkopf['SenderAddress'] ?? '?'), $quelle, (array)($h['anhaenge'] ?? []),
+            $zahlen), KL_NOTIFY);
+        if ($aufgaben === []) {
+            return;   // sauber ausgewertet, nur nichts zu tun gefunden
+        }
+
+        /* Die Anhaenge erst JETZT holen, und nur wenn eine Notiz dabei ist: die
+           Nutzlast des Auftrags ist laengst geloescht, und fuer eine Aufgabe
+           oder einen Termin braucht niemand die Datei. Der synchrone Weg holt
+           sie frueher — dafuer bei JEDER Karte. */
+        if ($zahlen['notizen'] <= 0) {
+            $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
+                (string)($h['text'] ?? ''), [], (string)($h['userId'] ?? ''), $quelle,
+                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
+            return;
+        }
+
+        /* Das erhoehte Limit umschliesst HOLEN UND ABLEGEN. Genau davor warnt
+           der synchrone Weg: `IPS_SetMediaContent` dekodiert das base64
+           intern, die Spitze liegt bei etwa 2,3x der Dateigroesse. Wer das
+           Limit nach dem Holen zuruecksetzt und erst danach ablegt, faengt sich
+           mitten im Einpflegen ein „Allowed memory size exhausted" — und ein
+           Fatal laesst sich nicht fangen: der Auftrag stuende schon als FERTIG
+           auf der Platte, der Vorschlag waere nie entstanden. */
+        $speicherVorher = (string)@ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+        try {
+            $anhaenge = $this->MailAnhaengeNachladen((array)($h['anhaenge'] ?? []));
+            $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
+                (string)($h['text'] ?? ''), $anhaenge, (string)($h['userId'] ?? ''), $quelle,
+                ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
+        } finally {
+            if ($speicherVorher !== '') {
+                @ini_set('memory_limit', $speicherVorher);
+            }
+        }
+    }
+
+    /**
+     * Die Anhaenge eines Auftrags ueber ihre Adresse neu holen.
+     *
+     * @param list<array{kind:string,name:string,url:string}> $beschreibung
+     * @return list<array{kind:string,name:string,base64:string}>
+     */
+    private function MailAnhaengeNachladen(array $beschreibung): array
+    {
+        /* Das erhoehte Speicherlimit haelt der AUFRUFER: es muss auch noch
+           stehen, wenn die Datei abgelegt wird. */
+        $raus = [];
+        foreach ($beschreibung as $a) {
+            $url = trim((string)($a['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $antwort = $this->AiFetchPublicPage($url);
+            if (($antwort['ok'] ?? false) !== true) {
+                $this->SendDebug('MailScan', 'Anhang nicht nachladbar: '
+                    . (string)($a['name'] ?? '?'), 0);
+                continue;
+            }
+            $raus[] = ['kind' => (string)($a['kind'] ?? ''), 'name' => (string)($a['name'] ?? ''),
+                       'base64' => base64_encode((string)($antwort['body'] ?? ''))];
+        }
+        return $raus;
     }
 
     /**
@@ -1797,6 +2008,13 @@ trait MailScan
            kaeme je ausgewerteter Karte eine, und die Ratenbremse je Geraet
            verschluckte den Rest. */
         if ($quelle === 'Edumaps') {
+            /* Aus einem AUFTRAG heraus wird auf der Platte gesammelt: jeder
+               fertige Auftrag kommt in einem eigenen Objekt an, ein Feld
+               ueberlebte das nicht. Geschickt wird, wenn keiner mehr wartet. */
+            if ($this->eduPushSammlung === null && $this->AiJobMoeglich()) {
+                $this->EduPushAuftrag($userId, $aufgaben, $termine, $notizen);
+                return;
+            }
             $this->EduPushMerken($userId, $aufgaben, $termine, $notizen);
             return;
         }

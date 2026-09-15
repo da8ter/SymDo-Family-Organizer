@@ -125,10 +125,27 @@ final class JobProbe extends IPSModuleStrict
             'body' => ['ok' => false, 'error' => ['code' => $code, 'message' => $message]]];
     }
 
+    /* Die Gegenstelle der Hintergrundarbeit. Im echten Gateway pflegt sie den
+       Vorschlag ein (MailScan); hier zaehlt sie nur mit, WAS ankommt. */
+    public array $hintergrund = [];
+    private function MailAuftragEinpflegen(array $kopf): void
+    {
+        $this->hintergrund[] = (string)$kopf['id'];
+    }
+
     // ── Tueren fuer den Pruefstand ────────────────────────────────────────
     public function pEinreihen(string $kind, array $job, array $parse, string $nutzlast, string $geraet): array
     {
         return $this->AiJobEnqueue($kind, $job, $parse, ['type' => 'rest'], $nutzlast, $geraet);
+    }
+    /** Ein Auftrag, den kein Mensch angestossen hat. */
+    public function pHintergrund(string $quelle = 'Edumaps'): array
+    {
+        return $this->AiJobEnqueue('extract',
+            ['system' => 's', 'user' => 'u'],
+            ['type' => 'todos', 'arten' => ['task']],
+            ['type' => AiJobStore::HERKUNFT_HINTERGRUND, 'quelle' => $quelle,
+             'vorschlag' => 'edu:1:2', 'kopf' => [], 'userId' => 'u1']);
     }
     public function pAccept(string $id): void { $this->AiJobAccept($id); }
     public function pStatus(array $device, string $id): void { $this->HandleAiJobStatus($device, $id); }
@@ -320,6 +337,112 @@ $laden->schreiben($k);
 $probe->pFertigmelden($diktat);
 pruefe('Ein Diktat kostet kein Tagesbudget — wie auf dem synchronen Weg',
     [$probe->gezaehlt, $laden->lesen($diktat)['result']['body']['text']], [0, 'gesprochen']);
+
+// ── Hintergrundarbeit hat ihren eigenen Topf ──────────────────────────────
+/* Ohne den haette sie zwei Wirkungen, die beide falsch waeren: fuenf
+   Klassenseiten-Karten je Lauf kaemen am Deckel je Herkunft (zwei) nicht
+   vorbei, und sie fuellten die Schlange so weit, dass das Foto, das gerade
+   jemand hochlaedt, mit „belegt" abgewiesen wuerde. Was niemand angestossen
+   hat, darf niemandem im Weg stehen. */
+$g = new JobProbe(9911);
+$g->Create();
+$g->pUebernehmen();
+/* Der Spool liegt auf der Platte und ueberlebt den Prueflauf. Ohne dieses
+   Leeren traegt ein Durchgang den Stand des vorigen — und der naechste meldet
+   „Schlange voll", ohne dass sich etwas geaendert haette. */
+$g->pLaden()->alleLoeschen();
+
+$eingereiht = 0;
+for ($i = 0; $i < 8; $i++) {
+    if (($g->pHintergrund()['ok'] ?? false) === true) {
+        $eingereiht++;
+    }
+}
+pruefe('Acht Hintergrund-Auswertungen kommen durch', $eingereiht, 8);
+pruefe('… und sie zaehlen alle auf dieselbe Herkunft',
+    $g->pLaden()->zaehleWartende(AiJobStore::HERKUNFT_HINTERGRUND), 8);
+
+/* Der entscheidende Fall: die Schlange ist voll mit Hintergrundarbeit, und
+   jemand fotografiert einen Elternbrief. */
+$mensch = $g->pEinreihen('extract', ['system' => 's', 'user' => 'u'],
+    ['type' => 'todos'], '', 'geraet-a');
+pruefe('Ein Mensch kommt trotzdem dran', $mensch['ok'] ?? false, true);
+
+/* Umgekehrt gilt der Deckel je Geraet weiter — ein Telefon mit einem Stapel
+   Fotos soll die Schlange nicht fuellen. */
+$g->pEinreihen('extract', ['system' => 's', 'user' => 'u'], ['type' => 'todos'], '', 'geraet-a');
+$dritter = $g->pEinreihen('extract', ['system' => 's', 'user' => 'u'],
+    ['type' => 'todos'], '', 'geraet-a');
+pruefe('Der Deckel je Geraet gilt weiter', $dritter['code'] ?? '', 'ai_busy');
+/* … und er gilt NICHT fuer die Hintergrundarbeit, sonst waere bei zwei
+   Karten Schluss. */
+pruefe('Ein neunter Hintergrund-Auftrag wird abgewiesen, nicht der zweite',
+    $g->pHintergrund()['code'] ?? '', 'ai_busy');
+
+// ── Ein fertiger Hintergrund-Auftrag geht in den Bestand ──────────────────
+/* Niemand wartet auf eine Antwort: der Vorschlag wird eingepflegt, statt eine
+   Klingel an die App zu schicken. */
+$h = new JobProbe(9912);
+$h->Create();
+$h->pUebernehmen();
+$h->pLaden()->alleLoeschen();
+$neu = $h->pHintergrund();
+$kopf = $h->pLaden()->lesen((string)$neu['id']);
+$kopf['state'] = AiJobStore::ROH;
+$kopf['raw'] = ['ok' => true, 'text' => '[]', 'debug' => []];
+$h->pLaden()->schreiben($kopf);
+$h->pFertig((string)$neu['id']);
+pruefe('Der fertige Auftrag erreicht das Einpflegen', $h->hintergrund, [(string)$neu['id']]);
+
+// ── Das Tagesbudget wird bei der ANNAHME gebucht ──────────────────────────
+/* Der synchrone Weg prueft und bucht in derselben Runde — Karte zwei sieht
+   schon den Stand nach Karte eins. Ueber Auftraege laeuft das Buchen erst,
+   wenn der Ruf zurueckkommt, und der kommt fruehestens nach dem Lauf: alle
+   fuenf Karten pruefen sonst gegen denselben veralteten Zaehler. Bei Deckel 20
+   und Stand 19 ginge synchron genau EINER durch — sonst fuenf, und der Tag
+   endete bei 24. Vom externen Codereview gemeldet (F6), durch den
+   Auftragsweg verschaerft. */
+$b = new JobProbe(9913);
+$b->Create();
+$b->pUebernehmen();
+$b->pLaden()->alleLoeschen();
+$b->gezaehlt = 0;
+$b->pHintergrund();
+$b->pHintergrund();
+pruefe('Zwei Hintergrund-Auftraege buchen sofort zwei Aufrufe', $b->gezaehlt, 2);
+
+/* Und beim Deuten NICHT noch einmal — sonst zaehlte jeder doppelt. */
+$eins = $b->pHintergrund();
+$b->gezaehlt = 0;
+$kopfB = $b->pLaden()->lesen((string)$eins['id']);
+$kopfB['state'] = AiJobStore::ROH;
+$kopfB['raw'] = ['ok' => true, 'text' => '[]', 'debug' => []];
+$b->pLaden()->schreiben($kopfB);
+$b->pFertig((string)$eins['id']);
+pruefe('Beim Deuten wird nicht noch einmal gebucht', $b->gezaehlt, 0);
+
+// ── Eine bezahlte Antwort bleibt liegen, bis sie gedeutet ist ─────────────
+/* Der Laeufer schreibt die Antwort als ROH und meldet sie mit einem Ruf ins
+   Gateway. Faellt der Ruf aus — Kernel-Neustart dazwischen —, fragt bei
+   Hintergrundarbeit NIEMAND nach: kein Geraet, keine Kachel. Ohne den Kehrgang
+   waere die bezahlte Antwort fuer immer verloren. */
+$b->pLaden()->alleLoeschen();
+$liegen = $b->pHintergrund();
+$kopfL = $b->pLaden()->lesen((string)$liegen['id']);
+$kopfL['state'] = AiJobStore::ROH;
+$kopfL['raw'] = ['ok' => true, 'text' => '[]', 'debug' => []];
+/* Aelter als die Schlangenfrist — das Aufraeumen sieht ihn sich an. */
+$kopfL['createdAt'] = time() - 4000;
+$b->pLaden()->schreiben($kopfL);
+$b->hintergrund = [];
+$b->pSweep();
+pruefe('Der Kehrgang deutet eine liegengebliebene Antwort',
+    $b->hintergrund, [(string)$liegen['id']]);
+$b->pLaden()->alleLoeschen();
+
+$g->pLaden()->alleLoeschen();
+$h->pLaden()->alleLoeschen();
+$b->pLaden()->alleLoeschen();
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

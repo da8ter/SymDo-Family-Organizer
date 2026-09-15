@@ -344,5 +344,56 @@ $laden->alleLoeschen();
 pruefe('Zurueckstellen legt einen geloeschten Auftrag nicht neu an',
     [$laden->zurueckstellen($genommen, $uhrzeit + 30), count($laden->koepfe())], [false, 0]);
 
+// ── Wer wartet, kommt zuerst ──────────────────────────────────────────────
+/* Der eigene Annahme-Topf verhindert nur, dass Hintergrundarbeit jemanden mit
+   „belegt" abweist. Der Laeufer arbeitet aber unter der Anbieter-Sperre einen
+   nach dem anderen ab: reiht der Klassenseiten-Lauf um 6:00 fuenf Karten ein
+   und fotografiert um 6:01 jemand einen Elternbrief, stuende sein Auftrag an
+   sechster Stelle — bei einem lokalen Server bis zu fuenfundzwanzig Minuten,
+   waehrend die App nach zehn aufgibt. */
+$v = AiJobStore::in(sys_get_temp_dir() . '/symdo-vorrang-' . getmypid() . '/', true);
+$v->alleLoeschen();
+$hinten = static fn(int $at, array $origin): array => [
+    'id' => AiJobStore::neueKennung(), 'kind' => 'extract', 'state' => AiJobStore::OFFEN,
+    'createdAt' => $at, 'startedAt' => 0, 'finishedAt' => 0, 'notBefore' => 0,
+    'attempts' => 0, 'device' => 'geraet-a', 'origin' => $origin, 'job' => [], 'parse' => [],
+];
+for ($i = 0; $i < 3; $i++) {
+    $v->anlegen($hinten(1000 + $i, ['type' => AiJobStore::HERKUNFT_HINTERGRUND]), '');
+}
+$v->anlegen($hinten(2000, ['type' => 'rest']), '');   // JUENGER, aber ein Mensch wartet
+
+$erster = $v->naechsten(3000);
+pruefe('Der Auftrag eines Menschen geht vor, auch wenn er juenger ist',
+    (string)(($erster['origin'] ?? [])['type'] ?? ''), 'rest');
+$zweiter = $v->naechsten(3000);
+pruefe('Danach kommt die aelteste Hintergrundarbeit',
+    [(string)(($zweiter['origin'] ?? [])['type'] ?? ''), (int)$zweiter['createdAt']],
+    [AiJobStore::HERKUNFT_HINTERGRUND, 1000]);
+
+// ── Eine bezahlte Antwort wirft das Aufraeumen nicht weg ──────────────────
+/* ROH heisst: der Anbieter hat geantwortet, die Antwort steht in `raw` und ist
+   bezahlt. Wer sie nach der Schlangenfrist mit `ai_timeout` ueberschriebe,
+   wuerfe Geld weg — und die Karte steht schon als gesehen im Merker. */
+$v->alleLoeschen();
+$rohKopf = $hinten(time() - 5000, ['type' => AiJobStore::HERKUNFT_HINTERGRUND]);
+$rohKopf['state'] = AiJobStore::ROH;
+$rohKopf['raw'] = ['ok' => true, 'text' => '[{"kind":"task"}]'];
+$v->anlegen($rohKopf, '');
+$v->aufraeumen(time(), 600, 900, 400);
+$danach = $v->lesen((string)$rohKopf['id']);
+pruefe('Ein ROH-Auftrag ueberlebt das Aufraeumen',
+    [(string)($danach['state'] ?? ''), (bool)($danach['raw']['ok'] ?? false)],
+    [AiJobStore::ROH, true]);
+/* Ein OFFENER Auftrag derselben Frist verfaellt dagegen weiterhin — sonst
+   liefe eine Schlange nie leer. */
+$v->alleLoeschen();
+$offenKopf = $hinten(time() - 5000, ['type' => AiJobStore::HERKUNFT_HINTERGRUND]);
+$v->anlegen($offenKopf, '');
+$v->aufraeumen(time(), 600, 900, 400);
+pruefe('Ein offener Auftrag verfaellt weiterhin',
+    (string)($v->lesen((string)$offenKopf['id'])['state'] ?? ''), AiJobStore::GESCHEITERT);
+$v->alleLoeschen();
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);
