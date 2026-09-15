@@ -130,12 +130,20 @@ body {
 .fahrten::-webkit-scrollbar { display: none; }
 .fahrt { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
 /* Die Punkte: mittig, der aktuelle in der Akzentfarbe. */
-.punkte { display: flex; justify-content: center; gap: 5px; margin-top: 6px; }
+.punkte { display: flex; justify-content: center; gap: 12px; margin-top: 6px; }
+/* Die Punkte sind auch der Mausweg zur naechsten Verbindung — dafuer brauchen
+   sie eine groessere Trefferflaeche als ihre fuenf Pixel: der Punkt ist das,
+   was man sieht, das Kaestchen drumherum das, was man trifft. */
 .punkte span {
   width: 5px; height: 5px; border-radius: 50%;
   background: color-mix(in srgb, var(--content-color) 25%, transparent);
+  cursor: pointer; box-sizing: content-box; padding: 5px; margin: -5px;
+  background-clip: content-box;
 }
-.punkte span.an { background: var(--akzent); }
+/* background-COLOR, nicht die Kurzform: `background:` setzt `background-clip`
+   auf seinen Anfangswert zurueck, und aus dem Punkt wuerde die ganze
+   Trefferflaeche — ein Klecks von fuenfzehn Pixeln. Genau so gesehen. */
+.punkte span.an { background-color: var(--akzent); }
 .fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 3px; }
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
@@ -443,6 +451,47 @@ function zeichne() {
         p.classList.toggle('an', i === n);
       });
     }, { passive: true });
+
+    /* Zur n-ten Verbindung. Gerechnet wird aus der KARTE, nicht aus der
+       Kachelbreite: zwischen den Karten liegen zehn Pixel Abstand, und mit
+       `n * clientWidth` haette der Sprung ab der zweiten Karte danebengelegen
+       (gemessen: Rastpunkte bei 510 und 1020, nicht 500 und 1000). Das
+       Einrasten zog es zwar wieder gerade — aber auf eine Rechnung, die schon
+       stimmt, muss man sich nicht erst zurechtruecken lassen. */
+    const zurKarte = function (n) {
+      const karten = schiene.children;
+      const ziel = karten[Math.max(0, Math.min(karten.length - 1, n))];
+      if (!ziel) { return; }
+      /* Wer Bewegung abbestellt hat, bekommt den Sprung ohne Animation. */
+      const sanft = !(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      schiene.scrollTo({ left: ziel.offsetLeft, behavior: sanft ? 'smooth' : 'auto' });
+    };
+
+    /* Mit der Maus gibt es keine Wischgeste, und ein Rad kennt nur oben und
+       unten: der Browser schickt das an die SEITE weiter, die Schiene bleibt
+       stehen. Also uebersetzt: eine Raststufe schiebt um EINE Verbindung
+       weiter. Schrittweise am scrollLeft zu ziehen waere falsch — das
+       Einrasten (scroll-snap) zoege jeden Teilschritt sofort zurueck.
+       Ein Trackpad, das quer wischt, macht es selbst; dann halten wir uns
+       heraus. */
+    let radSperre = 0;
+    schiene.addEventListener('wheel', function (e) {
+      if (schiene.scrollWidth <= schiene.clientWidth + 1) { return; }
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { return; }
+      e.preventDefault();
+      const jetzt = Date.now();
+      if (jetzt < radSperre) { return; }
+      radSperre = jetzt + 220;
+      const breite = schiene.clientWidth || 1;
+      zurKarte(Math.round(schiene.scrollLeft / breite) + (e.deltaY > 0 ? 1 : -1));
+    }, { passive: false });
+
+    /* Und der kurze Weg: auf einen Punkt tippen springt dorthin. Er zeigte die
+       Stelle schon an, ohne dass man ihn benutzen konnte. */
+    punkte.querySelectorAll('span').forEach(function (p, i) {
+      p.addEventListener('click', function () { zurKarte(i); });
+    });
   });
 
   document.querySelectorAll('[data-ansicht]').forEach(function (b) {
