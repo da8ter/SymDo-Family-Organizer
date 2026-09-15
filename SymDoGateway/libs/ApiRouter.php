@@ -1258,8 +1258,18 @@ trait ApiRouter
         $keys = is_array($rumpf['keys'] ?? null) ? $rumpf['keys'] : [];
         $p256dh = $this->BodyStr($keys, 'p256dh');
         $auth   = $this->BodyStr($keys, 'auth');
-        if (!str_starts_with($endpunkt, 'https://') || $p256dh === '' || $auth === '') {
+        if ($endpunkt === '' || $p256dh === '' || $auth === '') {
             $this->SendApiError('invalid_payload', 'Subscription incomplete', 422);
+            return;
+        }
+        /* Das Praefix `https://` war bis zum 15.09.2026 die GANZE Pruefung. Ein
+           gekoppeltes Geraet konnte damit jede erreichbare Adresse angeben und
+           das Gateway dorthin schicken lassen — ueber /push/test samt Status und
+           Transportfehler zurueck (SSRF, gemeldet als F8). Siehe PushZiel. */
+        $ziel = PushZiel::pruefen($endpunkt);
+        if (!$ziel['ok']) {
+            $this->SendDebug('WebPush', 'Endpunkt abgelehnt (' . $ziel['grund'] . ')', 0);
+            $this->SendApiError('invalid_payload', 'Push endpoint not accepted', 422);
             return;
         }
         // Das Mitglied darf gesetzt werden, muss aber existieren — eine Nachricht

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../libs/PushZiel.php';
+
 trait DeviceRegistry
 {
     /**
@@ -328,7 +330,10 @@ trait DeviceRegistry
      */
     private function PushStoreSubscription(string $deviceId, string $endpoint, string $p256dh, string $auth, string $userId): bool
     {
-        if ($deviceId === '' || !str_starts_with($endpoint, 'https://')) {
+        /* Der Weg hierher (HandlePushSubscribe) prueft das Ziel schon gruendlich;
+           diese Wache bleibt trotzdem, damit ein spaeterer zweiter Aufrufer nicht
+           an PushZiel vorbei in den Bestand schreibt. */
+        if ($deviceId === '' || !PushZiel::erlaubt($endpoint)) {
             return false;
         }
         // Kennung des Schluessels, unter dem dieses Abo entstanden ist. Wechselt der

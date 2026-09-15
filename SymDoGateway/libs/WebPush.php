@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../libs/PushZiel.php';
+
 /**
  * Web Push — Benachrichtigungen an die Web-App, auch wenn sie zu ist.
  *
@@ -604,8 +606,15 @@ trait WebPush
     private function PushSendOne(array $abo, array $nutzlast, string $kontakt, string $dringlichkeit = 'normal'): array
     {
         $endpunkt = (string)($abo['endpoint'] ?? '');
-        if (!str_starts_with($endpunkt, 'https://')) {
-            return ['ok' => false, 'status' => 0, 'gone' => true, 'retry' => false, 'error' => 'bad_endpoint'];
+        /* Auch hier, nicht nur beim Anmelden: ein Abo im Bestand ueberlebt jede
+           Aktualisierung, und ein Name kann nach der Anmeldung auf eine andere
+           Adresse zeigen (DNS-Wechsel). Weggeworfen wird das Abo nur, wenn der
+           Endpunkt als solcher unbrauchbar ist — eine DNS-Stoerung darf kein
+           gueltiges Abo kosten. */
+        $ziel = PushZiel::pruefen($endpunkt);
+        if (!$ziel['ok']) {
+            return ['ok' => false, 'status' => 0, 'gone' => $ziel['grund'] === 'form',
+                'retry' => false, 'error' => 'bad_endpoint_' . $ziel['grund']];
         }
 
         $klartext = (string)json_encode($nutzlast, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -621,7 +630,7 @@ trait WebPush
             return ['ok' => false, 'status' => 0, 'gone' => false, 'retry' => false, 'error' => 'no_vapid'];
         }
 
-        $antwort = $this->PushHttp($endpunkt, (string)$ver['body'], [
+        $antwort = $this->PushHttp($endpunkt, (string)$ver['body'], $ziel['ips'], [
             'Content-Encoding: aes128gcm',
             'Content-Type: application/octet-stream',
             'TTL: ' . self::PUSH_TTL,
@@ -664,12 +673,22 @@ trait WebPush
      * POST an den Push-Dienst. Eigener Helfer statt AiHttpPost, weil der Koerper
      * hier binaer ist und keine JSON-Kopfzeile tragen darf.
      *
+     * @param list<string> $ips        die bei der Pruefung aufgeloesten Adressen
      * @param list<string> $kopfzeilen
      * @return array{status: int, err: string}
      */
-    private function PushHttp(string $url, string $koerper, array $kopfzeilen): array
+    private function PushHttp(string $url, string $koerper, array $ips, array $kopfzeilen): array
     {
         $c = curl_init($url);
+        /* Die geprueften Adressen FESTNAGELN. Sonst loest curl den Namen noch
+           einmal auf, und zwischen Pruefung und Verbindung koennte eine andere
+           Antwort stehen (DNS-Rebinding) — die Pruefung waere dann Zierde. */
+        if ($ips !== []) {
+            $host = (string)(parse_url($url, PHP_URL_HOST) ?? '');
+            if ($host !== '') {
+                curl_setopt($c, CURLOPT_RESOLVE, [$host . ':' . PushZiel::PORT . ':' . implode(',', $ips)]);
+            }
+        }
         curl_setopt_array($c, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
@@ -680,6 +699,9 @@ trait WebPush
             // Ein Push-Dienst leitet nicht um; einer Umleitung zu folgen hiesse,
             // die verschluesselte Nutzlast irgendwohin zu tragen.
             CURLOPT_FOLLOWLOCATION => false,
+            // Die Adresse ist geprueft; der Riegel steht trotzdem, damit kein
+            // spaeterer Umbau hier ein anderes Protokoll hereinlaesst.
+            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
         ]);
         $ergebnis = curl_exec($c);
         $status   = (int)curl_getinfo($c, CURLINFO_RESPONSE_CODE);
