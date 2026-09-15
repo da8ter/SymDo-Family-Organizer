@@ -784,6 +784,8 @@ trait TransitStore
                 'school'     => $schule,
                 'stale'      => ($e['stale'] ?? false) === true,
                 'fetchedAt'  => (int)($e['at'] ?? 0),
+                /* Fuer die Uebersichtskarte, die keinen Schalter hat. */
+                'directOnly' => ($z['direct'] ?? false) === true,
                 'journeys'   => TransitCalc::EndenBenennen(
                     TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
                     $vonName, $nachName),

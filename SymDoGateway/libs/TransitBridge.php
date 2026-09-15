@@ -137,6 +137,10 @@ trait TransitBridge
             'mode'     => (string)($r['mode'] ?? 'dep'),
             'school'   => $schule,
             'stale'    => ($r['stale'] ?? false) === true,
+            /* Auch dieses Feld MUSS durch die Weissliste — ohne es zeigte die
+               Uebersichtskarte wieder die gemischte Liste, und niemand saehe,
+               warum der Haken nichts tut. */
+            'directOnly' => ($r['directOnly'] ?? false) === true,
             'journeys' => $fahrten,
             'journeysDirect' => $direkt,
         ];

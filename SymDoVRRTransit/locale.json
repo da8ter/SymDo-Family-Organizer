@@ -107,7 +107,8 @@
             "Without a tick that one stays off the board; what is not listed keeps running.": "Ohne Haken bleibt diese Tour von der Tafel weg; was nicht in der Liste steht, fährt weiter.",
             "no journey without changes": "keine umsteigefreie Verbindung",
             "All": "Alle",
-            "Direct": "Ohne Umsteigen"
+            "Direct": "Ohne Umsteigen",
+            "Overview without changes": "Übersicht ohne Umsteigen"
         }
     }
 }

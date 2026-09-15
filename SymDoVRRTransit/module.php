@@ -422,6 +422,13 @@ class SymDoVRRTransit extends IPSModuleStrict
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 ['caption' => $this->Translate('Suggestions'), 'name' => 'count', 'width' => '100px',
                  'add' => 4, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 4]],
+                /* Steuert NICHT mehr den Abruf — geholt wird ohnehin beides.
+                   Sie entscheidet, was die Karte dieser Strecke auf der
+                   UEBERSICHT zeigt: dort gibt es keinen Schalter, die Karte
+                   soll ohne Bedienung das Richtige zeigen. Im Bereich selbst
+                   waehlt weiter der Betrachter. */
+                ['caption' => $this->Translate('Overview without changes'), 'name' => 'direct',
+                 'width' => '190px', 'add' => false, 'edit' => ['type' => 'CheckBox']],
 
         ];
     }

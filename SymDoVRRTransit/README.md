@@ -132,6 +132,12 @@ Leute vor zwei Kacheln sehen Verschiedenes, und niemand verstellt dem anderen
 die Anzeige. Gibt es auf einer Strecke keine umsteigefreie Verbindung, sagt die
 Karte „keine umsteigefreie Verbindung" statt „keine Verbindung gefunden".
 
+**Auf der Übersicht** gibt es keinen Schalter — dort soll die Schulweg-Karte
+ohne Bedienung das Richtige zeigen. Was sie zeigt, entscheidet der Haken
+**Übersicht ohne Umsteigen** an der Strecke. Er steuert nur diese eine Karte;
+im Bereich wählt weiter der Betrachter, und am Abruf ändert er nichts — geholt
+wird ohnehin beides.
+
 Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
 Einrichtung, nicht zur Bedienung.
 

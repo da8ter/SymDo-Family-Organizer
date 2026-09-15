@@ -8642,7 +8642,11 @@ function nvSchulzeile(r) {
  */
 function schulwegKarte() {
   const r = transitSchulweg();
-  const alle = (r && r.journeys) || [];
+  /* Die Uebersicht hat keinen Schalter — hier entscheidet der Haken „Uebersicht
+     ohne Umsteigen" an der Strecke. Er gehoert zur Einrichtung: die Karte soll
+     ohne Bedienung das Richtige zeigen. Im Bereich waehlt weiter der
+     Betrachter. */
+  const alle = (r && (r.directOnly ? r.journeysDirect : r.journeys)) || [];
   if (!alle.length) { return ''; }
   /* Dieselbe Schiene wie im Bereich: alle Verbindungen nebeneinander, mit
      Punkten darunter. Vorher stand hier nur die erste — wer die naechste wissen
