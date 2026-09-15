@@ -108,39 +108,14 @@ trait TransitBridge
      */
     private function TransitStrecke(array $r): array
     {
-        $fahrten = [];
-        foreach ((array)($r['journeys'] ?? []) as $v) {
-            if (!is_array($v)) {
-                continue;
-            }
-            $abschnitte = [];
-            foreach ((array)($v['legs'] ?? []) as $l) {
-                if (!is_array($l)) {
-                    continue;
-                }
-                $abschnitte[] = [
-                    'kind'     => (string)($l['kind'] ?? 'ride'),
-                    'line'     => (string)($l['line'] ?? ''),
-                    'product'  => (string)($l['product'] ?? ''),
-                    'icon'     => (string)($l['icon'] ?? ''),
-                    'from'     => (string)($l['from'] ?? ''),
-                    'to'       => (string)($l['to'] ?? ''),
-                    'depText'  => (string)($l['depText'] ?? ''),
-                    'arrText'  => (string)($l['arrText'] ?? ''),
-                    'depDelay' => (int)($l['depDelay'] ?? 0),
-                    'seconds'  => (int)($l['seconds'] ?? 0),
-                ];
-            }
-            $fahrten[] = [
-                'departureText' => (string)($v['departureText'] ?? ''),
-                'arrivalText'   => (string)($v['arrivalText'] ?? ''),
-                'departure'     => (int)($v['departure'] ?? 0),
-                'arrival'       => (int)($v['arrival'] ?? 0),
-                'seconds'       => (int)($v['seconds'] ?? 0),
-                'interchanges'  => (int)($v['interchanges'] ?? 0),
-                'legs'          => $abschnitte,
-            ];
-        }
+        $fahrten = $this->TransitFahrten($r['journeys'] ?? []);
+        /* Die zweite Liste MUSS mit durch diese Weissliste — sie ist der
+           Unterschied zwischen „Alle" und „Ohne Umsteigen" in der App. Am
+           15.09.2026 fehlte sie hier, und der Bereich meldete beim Schulweg
+           „keine umsteigefreie Verbindung", obwohl im Bestand der VRR-Instanz
+           drei standen. Die Kachel zeigte sie: die bekommt die Nutzlast direkt,
+           nur die App geht ueber diese Bruecke. */
+        $direkt  = $this->TransitFahrten($r['journeysDirect'] ?? []);
         /* Der Schulweg gehört MIT: an ihm hängt die Zeile „zur Schule, da sein
            um 07:50" und die Karte auf der Übersicht. Ohne diese Zeilen wüsste
            die App nicht einmal, in welche Richtung die Verbindung zeigt. */
@@ -163,6 +138,55 @@ trait TransitBridge
             'school'   => $schule,
             'stale'    => ($r['stale'] ?? false) === true,
             'journeys' => $fahrten,
+            'journeysDirect' => $direkt,
         ];
+    }
+
+    /**
+     * Eine Liste von Verbindungen auf die Felder stutzen, die die App kennt.
+     *
+     * Eigene Methode, weil es ZWEI Listen gibt — „Alle" und „Ohne Umsteigen".
+     * Zwei Kopien waeren beim naechsten neuen Feld auseinandergelaufen, und
+     * genau so ist die zweite Liste ueberhaupt erst verlorengegangen.
+     *
+     * @param mixed $roh
+     * @return list<array<string,mixed>>
+     */
+    private function TransitFahrten(mixed $roh): array
+    {
+        $raus = [];
+        foreach ((is_array($roh) ? $roh : []) as $v) {
+            if (!is_array($v)) {
+                continue;
+            }
+            $abschnitte = [];
+            foreach ((array)($v['legs'] ?? []) as $l) {
+                if (!is_array($l)) {
+                    continue;
+                }
+                $abschnitte[] = [
+                    'kind'     => (string)($l['kind'] ?? 'ride'),
+                    'line'     => (string)($l['line'] ?? ''),
+                    'product'  => (string)($l['product'] ?? ''),
+                    'icon'     => (string)($l['icon'] ?? ''),
+                    'from'     => (string)($l['from'] ?? ''),
+                    'to'       => (string)($l['to'] ?? ''),
+                    'depText'  => (string)($l['depText'] ?? ''),
+                    'arrText'  => (string)($l['arrText'] ?? ''),
+                    'depDelay' => (int)($l['depDelay'] ?? 0),
+                    'seconds'  => (int)($l['seconds'] ?? 0),
+                ];
+            }
+            $raus[] = [
+                'departureText' => (string)($v['departureText'] ?? ''),
+                'arrivalText'   => (string)($v['arrivalText'] ?? ''),
+                'departure'     => (int)($v['departure'] ?? 0),
+                'arrival'       => (int)($v['arrival'] ?? 0),
+                'seconds'       => (int)($v['seconds'] ?? 0),
+                'interchanges'  => (int)($v['interchanges'] ?? 0),
+                'legs'          => $abschnitte,
+            ];
+        }
+        return $raus;
     }
 }
