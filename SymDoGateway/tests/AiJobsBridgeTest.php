@@ -133,11 +133,29 @@ final class JobProbe extends IPSModuleStrict
         $this->hintergrund[] = (string)$kopf['id'];
     }
 
+    /* Das Briefing teilt sich den Hintergrund-Topf mit der Auswertung, landet
+       aber in einem anderen Bestand. */
+    public array $briefing = [];
+    private function BriefingAuftragEinpflegen(array $kopf): void
+    {
+        $this->briefing[] = (string)$kopf['id'];
+    }
+
     // ── Tueren fuer den Pruefstand ────────────────────────────────────────
     public function pEinreihen(string $kind, array $job, array $parse, string $nutzlast, string $geraet): array
     {
         return $this->AiJobEnqueue($kind, $job, $parse, ['type' => 'rest'], $nutzlast, $geraet);
     }
+    /** Ein Briefing-Auftrag — Hintergrund, aber ein anderer Bestand. */
+    public function pBriefing(string $zielTag = '2026-09-16'): array
+    {
+        return $this->AiJobEnqueue('extract',
+            ['system' => 's', 'user' => 'u'],
+            ['type' => 'text'],
+            ['type' => AiJobStore::HERKUNFT_HINTERGRUND, 'art' => 'briefing',
+             'quelle' => 'Briefing', 'tage' => 0, 'zielTag' => $zielTag, 'userId' => 'u1']);
+    }
+
     /** Ein Auftrag, den kein Mensch angestossen hat. */
     public function pHintergrund(string $quelle = 'Edumaps'): array
     {
@@ -509,6 +527,38 @@ $r->pLaden()->alleLoeschen();
 $mail = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
 pruefe('Die Tagesbremse rechnet die Reservierungen mit',
     str_contains($mail, '$heute + $this->AiJobUngebucht() >= $grenze'), true);
+
+// ── Das Briefing nimmt denselben Weg, landet aber woanders ───────────────
+/* Der Anbieteraufruf des Briefings dauert drei bis sechzig Sekunden und lief
+   bisher in der Gateway-Spur. Er geht jetzt als Hintergrund-Auftrag hinaus —
+   und muss beim Fertigwerden in den BRIEFING-Bestand, nicht in die
+   Vorschlagsliste. Eine Verwechslung faende niemand: der Text saehe wie ein
+   Mail-Vorschlag aus und das Briefing bliebe leer. */
+$br = new JobProbe(9912);
+$br->Create();
+$br->pLaden()->alleLoeschen();
+$eins = $br->pBriefing();
+pruefe('Das Briefing wird angenommen', (bool)($eins['ok'] ?? false), true);
+pruefe('… und bucht sofort wie jede Hintergrundarbeit', $br->gezaehlt, 1);
+$kopfBr = $br->pLaden()->lesen((string)$eins['id']);
+$kopfBr['state'] = AiJobStore::ROH;
+$kopfBr['raw']   = ['ok' => true, 'text' => 'Guten Morgen.', 'debug' => []];
+$br->pLaden()->schreiben($kopfBr);
+$br->pFertig((string)$eins['id']);
+pruefe('Es landet im Briefing-Bestand', $br->briefing, [(string)$eins['id']]);
+pruefe('… und NICHT in der Vorschlagsliste', $br->hintergrund, []);
+
+/* Umgekehrt ebenso: eine Auswertung darf nicht im Briefing landen. */
+$br->briefing = [];
+$zwei = $br->pHintergrund();
+$kopfZw = $br->pLaden()->lesen((string)$zwei['id']);
+$kopfZw['state'] = AiJobStore::ROH;
+$kopfZw['raw']   = ['ok' => true, 'text' => '[]', 'debug' => []];
+$br->pLaden()->schreiben($kopfZw);
+$br->pFertig((string)$zwei['id']);
+pruefe('Eine Auswertung bleibt in der Vorschlagsliste',
+    [$br->hintergrund, $br->briefing], [[(string)$zwei['id']], []]);
+$br->pLaden()->alleLoeschen();
 
 $g->pLaden()->alleLoeschen();
 $h->pLaden()->alleLoeschen();

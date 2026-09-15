@@ -538,10 +538,18 @@ trait AiJobs
         if ($herkunft === 'tile') {
             $this->AiJobTileAntwort($kopf);
         } elseif ($herkunft === AiJobStore::HERKUNFT_HINTERGRUND) {
-            /* Hintergrundarbeit: niemand wartet auf eine Antwort. Der Vorschlag
+            /* Hintergrundarbeit: niemand wartet auf eine Antwort. Das Ergebnis
                geht in den Bestand, und die App erfaehrt es ueber dessen eigenes
-               Signal — nicht ueber die Auftrags-Klingel. */
-            $this->MailAuftragEinpflegen($kopf);
+               Signal — nicht ueber die Auftrags-Klingel.
+
+               Zwei Arten teilen sich diesen Topf: die Auswertung einer Karte
+               oder Mail (der Regelfall) und das Briefing. Sie landen in
+               verschiedenen Bestaenden, deshalb die Weiche. */
+            if ((string)((($kopf['origin'] ?? [])['art']) ?? '') === 'briefing') {
+                $this->BriefingAuftragEinpflegen($kopf);
+            } else {
+                $this->MailAuftragEinpflegen($kopf);
+            }
         } else {
             $this->WsPushJob($id);
         }

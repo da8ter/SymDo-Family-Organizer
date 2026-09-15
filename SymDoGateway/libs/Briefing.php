@@ -27,6 +27,12 @@ trait Briefing
     /** Nach einem gescheiterten Anbieteraufruf: erneut versuchen statt bis morgen warten. */
     private const BRIEFING_RETRY_MS   = 1800000;
     private const BRIEFING_FAIL_MAX   = 3;
+    /* Wie lange ein eingereihter Auftrag als „unterwegs" gilt. Danach darf ein
+       neuer gestellt werden — sonst fiele das Briefing bis morgen aus, wenn ein
+       Kernelstart den Auftrag mitgenommen hat. Grosszuegig gewaehlt: ein
+       lokaler Anbieter darf fuenf Minuten je Aufruf brauchen, und Menschen
+       gehen in der Schlange vor. */
+    private const BRIEFING_AUFTRAG_FRIST = 1800;
     /** Deckel fuer den Prompt. Ein Tag mit 200 Terminen soll kein Vermoegen kosten. */
     private const BRIEFING_MAX_EVENTS = 30;
     private const BRIEFING_MAX_TASKS  = 30;
@@ -571,6 +577,14 @@ trait Briefing
         // (BriefingPreviewTomorrow zeigt nur an).
         $tage     = $this->BriefingShownSlot();
         $ergebnis = $this->BriefingErzeugen(true, $tage);
+        if (($ergebnis['message'] ?? '') === 'queued') {
+            /* Der Anbieteraufruf laeuft als Auftrag: der Text steht erst in
+               einer halben Minute da. Ihn hier abzuholen zeigte den ALTEN —
+               schlimmer als gar keiner, weil niemand den Unterschied sieht. */
+            $meldung($this->Translate('The briefing is being generated — '
+                . 'it appears here when it is ready.'));
+            return;
+        }
         if ($ergebnis['ok']) {
             $text = (string)$this->BriefingSlot($tage)['text'];
             $meldung($tage === 1
@@ -618,12 +632,117 @@ trait Briefing
             return ['ok' => true, 'message' => 'already_done', 'retry' => false];
         }
 
-        $daten   = $this->BriefingCollect($tage);
-        $antwort = $this->AiRunCompletion(
-            $this->BriefingSystemPrompt($this->BriefingDayWord($tage), $tage),
-            $this->BriefingUserText($daten),
-            null
-        );
+        $daten  = $this->BriefingCollect($tage);
+        $system = $this->BriefingSystemPrompt($this->BriefingDayWord($tage), $tage);
+        $nutzer = $this->BriefingUserText($daten);
+
+        /* Bedient ein Laeufer die Warteschlange, geht der Anbieteraufruf als
+           AUFTRAG hinaus. Er dauert drei bis sechzig Sekunden und lief bisher
+           hier — in der Spur, die auch die App bedient.
+
+           Gesammelt und formuliert wird weiter HIER, und das ist Absicht: der
+           Sammler liest ein Dutzend Bestaende dieser Instanz (Termine,
+           Aufgaben, Einkaufszettel, Stundenplan, Essensplan, Mitglieder). Ihn
+           mitzuschicken hiesse, den halben Haushalt in eine Datei zu schreiben.
+           Der Text und die Aufnahme kommen zurueck und werden hier abgelegt —
+           dieselbe Teilung wie bei den Klassenseiten. */
+        if ($this->AiJobMoeglich()) {
+            return $this->BriefingAuftragGeben($tage, $zielTag, (string)$daten['userId'],
+                $system, $nutzer);
+        }
+
+        $antwort = $this->AiRunCompletion($system, $nutzer, null);
+        return $this->BriefingErgebnisAblegen($tage, $zielTag, (string)$daten['userId'], $antwort);
+    }
+
+    /**
+     * Den Anbieteraufruf des Briefings einreihen.
+     *
+     * Doppelt einreihen waere teuer: der Zeitgeber schaut alle paar Minuten
+     * nach, und solange der Auftrag laeuft, ist das Fach noch leer — ohne
+     * Merker stuenden am Morgen fuenf bezahlte Briefings in der Schlange.
+     * Deshalb steht im Bestand, fuer welchen Tag gerade einer unterwegs ist.
+     *
+     * @return array{ok: bool, message: string, retry: bool}
+     */
+    private function BriefingAuftragGeben(int $tage, string $zielTag, string $userId,
+        string $system, string $nutzer): array
+    {
+        $stand = $this->BriefingStore();
+        $offen = is_array($stand['pending'] ?? null) ? $stand['pending'] : [];
+        /* Der Merker verfaellt: geht ein Auftrag verloren (Kernelstart mitten
+           im Lauf), soll das Briefing nicht bis morgen ausfallen. */
+        if ((string)($offen['d'] ?? '') === $zielTag
+            && time() - (int)($offen['at'] ?? 0) < self::BRIEFING_AUFTRAG_FRIST) {
+            $this->SendDebug('Briefing', 'fuer ' . $zielTag . ' laeuft schon ein Auftrag', 0);
+            return ['ok' => true, 'message' => 'queued', 'retry' => false];
+        }
+
+        $erg = $this->AiJobEnqueue('extract',
+            ['system' => $system, 'user' => $nutzer, 'payloadKind' => '', 'mime' => '', 'url' => ''],
+            ['type' => 'text'],
+            /* Hintergrundarbeit: niemand sitzt davor und wartet, und Menschen
+               gehen vor (AiJobStore::gehtVor). Die Kennung `art` sagt dem
+               Fertigmelder, wohin das Ergebnis gehoert. */
+            ['type' => AiJobStore::HERKUNFT_HINTERGRUND, 'art' => 'briefing',
+             'quelle' => 'Briefing', 'tage' => $tage, 'zielTag' => $zielTag,
+             'userId' => $userId]);
+        if (($erg['ok'] ?? false) !== true) {
+            $this->SendDebug('Briefing', 'Auftrag abgelehnt: ' . (string)($erg['code'] ?? '?'), 0);
+            return ['ok' => false, 'message' => (string)($erg['code'] ?? 'ai_busy'), 'retry' => true];
+        }
+        $stand = $this->BriefingStore();
+        $stand['pending'] = ['d' => $zielTag, 'at' => time(), 'id' => (string)($erg['id'] ?? '')];
+        $this->BriefingWriteStore($stand);
+        return ['ok' => true, 'message' => 'queued', 'retry' => false];
+    }
+
+    /**
+     * Die Antwort eines Auftrags ablegen. Gerufen aus `AiJobFinish`.
+     *
+     * @param array<string,mixed> $kopf
+     */
+    private function BriefingAuftragEinpflegen(array $kopf): void
+    {
+        $herkunft = is_array($kopf['origin'] ?? null) ? $kopf['origin'] : [];
+        $tage     = (int)($herkunft['tage'] ?? 0);
+        $zielTag  = (string)($herkunft['zielTag'] ?? '');
+        if ($zielTag === '') {
+            return;
+        }
+        /* Der Merker faellt IMMER weg — auch bei einem Fehlschlag. Sonst
+           bliebe das Briefing bis zum Verfall der Frist blockiert. */
+        $stand = $this->BriefingStore();
+        unset($stand['pending']);
+        $this->BriefingWriteStore($stand);
+
+        /* Der Riegel wird hier NEU genommen: der Auftrag kommt in einem eigenen
+           Aufruf zurueck, der des Einreihens ist laengst wieder frei. */
+        $riegel = 'SymDo_Briefing_' . $this->InstanceID;
+        if (!IPS_SemaphoreEnter($riegel, 0)) {
+            $this->SendDebug('Briefing', 'Bestand belegt — Ergebnis geht verloren', 0);
+            return;
+        }
+        try {
+            $roh = is_array($kopf['raw'] ?? null) ? $kopf['raw'] : [];
+            $erg = $this->BriefingErgebnisAblegen($tage, $zielTag,
+                (string)($herkunft['userId'] ?? ''), $roh);
+            $this->SendDebug('Briefing', 'Auftrag fertig: ' . (string)$erg['message'], 0);
+        } finally {
+            IPS_SemaphoreLeave($riegel);
+        }
+    }
+
+    /**
+     * Aus der Anbieterantwort wird ein Fach — der Weg, den BEIDE nehmen.
+     *
+     * @param array<string,mixed> $antwort {ok,text} | {ok:false,code}
+     * @return array{ok: bool, message: string, retry: bool}
+     */
+    private function BriefingErgebnisAblegen(int $tage, string $zielTag, string $userId,
+        array $antwort): array
+    {
+        $heute = date('Y-m-d');
         $fehlschlag = function (string $code) use ($heute): array {
             $stand = $this->BriefingStore();
             $stand['fails']   = (($stand['failDay'] ?? '') === $heute ? (int)($stand['fails'] ?? 0) : 0) + 1;
@@ -646,7 +765,7 @@ trait Briefing
             'd'      => $zielTag,
             'text'   => $text,
             'at'     => time(),
-            'userId' => (string)$daten['userId'],
+            'userId' => $userId,
             // Der Ton entsteht JETZT, nicht beim Tippen auf Vorlesen: Die Aufnahme
             // braucht gemessen um zehn Sekunden — die soll niemand vor einem
             // stummen Knopf abwarten.

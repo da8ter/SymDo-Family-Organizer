@@ -949,6 +949,7 @@
             "no token — fetch one": "kein Token — bitte holen",
             "resting after repeated failures": "ruht nach wiederholten Fehlschlägen",
             "nothing readable": "nichts lesbar",
+            "The briefing is being generated — it appears here when it is ready.": "Das Briefing wird erzeugt — es erscheint hier, sobald es fertig ist.",
             "%1$d course(s), %2$d card(s) read": "%1$d Kurs(e), %2$d Karte(n) gelesen",
             "%1$d course(s), %2$d file(s), %3$d forum(s)%4$s": "%1$d Kurs(e), %2$d Datei(en), %3$d Forum/Foren%4$s",
             "token since %s": "Token seit %s",
