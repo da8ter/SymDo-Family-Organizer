@@ -153,11 +153,57 @@ pruefe('Und das Gateway bietet genau diese an',
     [$gwJson['childRequirements'], $gwJson['implemented']], [[$schnitt], [$schnitt]]);
 
 // ── Kompositionsprobe ──────────────────────────────────────────────────────
-$noetig = ['KonfigID', 'BestandID', 'AiProp', 'Belegung', 'ScanDir', 'ScanAuftragAblegen',
-    'ScanAuftraegeOffen', 'ScanAuftragNehmen', 'ScanAnspruchVerwaist', 'ScanErgebnisSchreiben',
-    'ScanErgebnisse', 'ScanErgebnisLesen', 'ScanAufraeumen', 'ScanStand'];
-$fehlend = array_values(array_filter($noetig, static fn(string $m): bool => !method_exists('SymDoScanner', $m)));
+/* JEDE Methode, die der Scanner ruft, muss es auch geben.
+ *
+ * Diese Liste wird aus dem QUELLTEXT abgeleitet und nicht von Hand gepflegt —
+ * das ist der ganze Punkt. Eine Handliste prueft, woran jemand gedacht hat;
+ * sie stand hier mit vierzehn Namen und war gruen, waehrend
+ * `MoodleLesen::MoodleHttp` eine Gateway-Hilfe rief, die es in einer
+ * Scanner-Instanz gar nicht gibt (`AiIsPublicUrl`). Der erste LOGINEO-Lauf aus
+ * der zweiten Spur starb daran — „Call to undefined method", still, in einem
+ * Zeitgeber, ohne Umschlag und ohne Meldung. Am 15.09.2026 am lebenden System
+ * gefunden, nicht hier.
+ *
+ * Kommentare werden vorher entfernt: ein Methodenname in einer Erklaerung ist
+ * kein Aufruf. */
+$ohneKommentare = static function (string $php): string {
+    $raus = '';
+    foreach (token_get_all($php) as $t) {
+        if (is_array($t)) {
+            if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) {
+                continue;
+            }
+            $raus .= $t[1];
+            continue;
+        }
+        $raus .= $t;
+    }
+    return $raus;
+};
+$wurzel = dirname(__DIR__, 2) . '/';
+$teile = ['libs/Konfig.php', 'libs/Belegung.php', 'libs/ScanKanal.php',
+    'SymDoGateway/libs/EduLesen.php', 'SymDoGateway/libs/MoodleLesen.php',
+    'SymDoGateway/libs/DokuGemein.php', 'SymDoGateway/libs/DokuBau.php',
+    'SymDoScanner/module.php'];
+$fehlend = [];
+foreach ($teile as $datei) {
+    $q = (string)@file_get_contents($wurzel . $datei);
+    if ($q === '') {
+        $fehlend[] = 'Datei nicht lesbar: ' . $datei;
+        continue;
+    }
+    preg_match_all('/\$this->([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $ohneKommentare($q), $m);
+    foreach (array_unique($m[1]) as $name) {
+        if (!method_exists('SymDoScanner', $name)) {
+            $fehlend[] = $name . ' (' . basename($datei) . ')';
+        }
+    }
+}
+sort($fehlend);
 pruefe('Der Scanner findet alles, was er ruft', $fehlend, []);
+/* Und die Probe muss beissen: ein erfundener Name darf nicht durchgehen. */
+pruefe('Die Probe erkennt eine fehlende Methode',
+    method_exists('SymDoScanner', 'GibtEsNichtAlsMethode'), false);
 
 /* Der Scanner bringt bewusst KEINE Hooks mit. Er darf Fachteile aus dem
    Gateway-Ordner einbinden — aber nie AppCore oder den Router: mit denen

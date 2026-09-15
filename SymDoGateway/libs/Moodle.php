@@ -596,8 +596,16 @@ trait Moodle
                 (string)($zeilen[0]['userId'] ?? ''), $zeilen);
         }
 
-        return sprintf($this->Translate('%1$d course(s), %2$d card(s), %3$d written, %4$d changed, %5$d analysed%6$s'),
-            (int)($ernte['kurse'] ?? 0), $karten, $neu, $geaendert, $analysiert,
+        /* Die GELESENEN Zahlen nur, wenn dieser Lauf sie selbst kennt. Kommt
+           die Ernte als Umschlag, stehen sie schon im Text des Scanners — und
+           „2 Kurs(e), 37 Karte(n) gelesen 0 Kurs(e), 0 Karte(n)" in einer Zeile
+           liest sich wie ein Fehler. Am 15.09.2026 am lebenden System gesehen. */
+        $gelesen = ((int)($ernte['kurse'] ?? 0) > 0 || $karten > 0)
+            ? sprintf($this->Translate('%1$d course(s), %2$d card(s), '),
+                (int)($ernte['kurse'] ?? 0), $karten)
+            : '';
+        return $gelesen . sprintf($this->Translate('%1$d written, %2$d changed, %3$d analysed%4$s'),
+            $neu, $geaendert, $analysiert,
             ($archiviert > 0 ? ', ' . sprintf($this->Translate('%d archived'), $archiviert) : '')
             . ($gesperrt > 0 ? ', ' . sprintf($this->Translate('%d blocked'), $gesperrt) : '')
             . ($gedeckelt ? ' — ' . $this->Translate('daily AI limit reached, the rest follows later') : '')

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MoodleCalc.php';
+require_once __DIR__ . '/../../libs/AiRecipePage.php';
 
 /**
  * LOGINEO NRW LMS (Moodle) — die LESENDE Haelfte.
@@ -116,7 +117,12 @@ trait MoodleLesen
     {
         /* Dieselbe Wache wie beim Abruf fremder Seiten: die Adresse kommt aus
            dem Formular, sie darf nicht ins eigene Netz zeigen. */
-        if (!$this->AiIsPublicUrl($url)) {
+        /* Der SSRF-Riegel direkt aus dem Rechenkern, NICHT ueber die
+           Gateway-Hilfe `AiIsPublicUrl`: die steht in `AiExtract`, und dieser
+           Trait laeuft auch in einer Scanner-Instanz, die den nicht hat. Genau
+           daran ist der erste LOGINEO-Lauf aus der zweiten Spur gestorben —
+           „Call to undefined method", still, in einem Zeitgeber. */
+        if (!AiRecipePage::istOeffentlich($url)) {
             $this->SendDebug('Moodle', 'Adresse nicht zulässig: ' . $url, 0);
             return null;
         }
