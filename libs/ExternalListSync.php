@@ -118,8 +118,29 @@ trait ExternalListSync
      * werden deshalb vermerkt und fortan uebergangen — das kostet ein paar
      * hundert Byte und ist der Preis dafuer, dass niemandes Einkaufszettel
      * verschwindet.
+     *
+     * Der ALTBESTAND ist der schwierige Fall. Die Quellkennung gibt es erst
+     * seit dieser Fassung; beim ersten Lauf danach steht sie auf 0, und dann
+     * sagt sie nichts: „noch nie gesehen" heisst weder „dieselbe Liste" noch
+     * „eine andere". Wer in genau diesem Fenster umstellt — Modul aktualisiert,
+     * andere Liste gewaehlt, erster Abgleich —, verlaere ohne weitere Pruefung
+     * doch alles. Deshalb wird dann am BESTAND der Gegenstelle gemessen: teilt
+     * sie keine einzige Kennung mit dem Merkposten, ist es eine andere Liste.
+     *
+     * Der Preis dieser Annahme ist bewusst gewaehlt und faellt HOECHSTENS EINMAL
+     * an, beim allerersten Lauf je Dienst: wer seine Alexa-Liste kurz zuvor
+     * komplett geleert oder ausgetauscht hat, bekommt seine offenen Eintraege
+     * dorthin zurueckgeschrieben, statt sie hier geloescht zu sehen. Ein
+     * ueberzaehliger Eintrag laesst sich wegwischen, ein geloeschter
+     * Einkaufszettel nicht.
+     *
+     * Gemeldet von einem externen Codereview (F2, nachgefasst am 15.09.2026:
+     * die erste Fassung schuetzte nur ab dem ZWEITEN Lauf).
+     *
+     * @param list<array{id:string,name:string,done:bool,at:int}> $fremd der eben
+     *        gelesene Bestand der Gegenstelle
      */
-    private function ExtListQuelleWechsel(string $key, int $instanz): void
+    private function ExtListQuelleWechsel(string $key, int $instanz, array $fremd): void
     {
         $quellen = json_decode((string)@$this->ReadAttributeString('ExtListQuellen'), true);
         $quellen = is_array($quellen) ? $quellen : [];
@@ -129,17 +150,32 @@ trait ExternalListSync
         }
         $quellen[$key] = $instanz;
         @$this->WriteAttributeString('ExtListQuellen', (string)json_encode($quellen));
+
+        $gemerkt = array_map('strval', array_keys((array)($this->ExtListKnownRead()[$key] ?? [])));
+        if ($gemerkt === []) {
+            return;   // nichts Altes — erste Einrichtung im Wortsinn
+        }
         if ($bisher === 0) {
-            return;   // erste Einrichtung, es gibt nichts Altes
+            $dort = [];
+            foreach ($fremd as $f) {
+                $dort[] = (string)($f['id'] ?? '');
+            }
+            if (array_intersect($gemerkt, $dort) !== []) {
+                // Mindestens eine bekannte Kennung liegt dort: dieselbe Liste.
+                return;
+            }
+            $this->SendDebug('ExtListSync', sprintf(
+                '%s: keine der %d gemerkten Kennungen steht in der gewaehlten Liste — '
+                . 'als Wechsel gewertet', $key, count($gemerkt)), 0);
         }
 
-        $fremd = $this->ExtListFremdRead();
-        $alt   = $fremd[$key] ?? [];
+        $fremdIds = $this->ExtListFremdRead();
+        $alt      = $fremdIds[$key] ?? [];
         /* Der Merkposten des letzten Laufs ist die vollstaendige Liste der
            lokalen Fremdkennungen dieses Dienstes — er wird am Ende jedes Laufs
            aus dem GANZEN Bestand geschrieben. */
-        foreach (array_keys((array)($this->ExtListKnownRead()[$key] ?? [])) as $id) {
-            $alt[(string)$id] = 1;
+        foreach ($gemerkt as $id) {
+            $alt[$id] = 1;
         }
         /* Deckel, damit der Merkposten nicht ewig waechst: bei Ueberlauf
            fallen die AELTESTEN Kennungen heraus (Einfuegereihenfolge). Sie
@@ -149,8 +185,8 @@ trait ExternalListSync
         if (count($alt) > self::EXT_FREMD_MAX) {
             $alt = array_slice($alt, count($alt) - self::EXT_FREMD_MAX, null, true);
         }
-        $fremd[$key] = $alt;
-        @$this->WriteAttributeString('ExtListFremdIds', (string)json_encode($fremd));
+        $fremdIds[$key] = $alt;
+        @$this->WriteAttributeString('ExtListFremdIds', (string)json_encode($fremdIds));
 
         $gemerkt = $this->ExtListKnownRead();
         unset($gemerkt[$key]);
@@ -311,7 +347,7 @@ trait ExternalListSync
            Ein Wechsel ist KEINE Loeschung. Die Kennungen der alten Liste werden
            deshalb dauerhaft als fremd vermerkt und zaehlen von da an nicht mehr
            als „verschwunden" — sie gehoeren einer anderen Gegenstelle. */
-        $this->ExtListQuelleWechsel($key, $quelle->InstanceID());
+        $this->ExtListQuelleWechsel($key, $quelle->InstanceID(), $fremd);
         // Die Kennungen gelten JE DIENST — und es sind MEHRERE moeglich.
         //
         // Warum eine Menge und nicht eine Kennung: Alexa dedupliziert nicht, dort
