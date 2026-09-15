@@ -370,6 +370,62 @@ $widerrufen->einen($kopfW);
 pruefe('Nach dem Widerruf geht NICHTS an den Anbieter', count(AnbieterAttrappe::$rufe), 0);
 pruefe('Und der Auftrag bleibt geloescht', $laden->lesen($w), null);
 
+// ── Widerruf waehrend der VORARBEIT ───────────────────────────────────────
+/* Die Probe unter der Sperre allein genuegt nicht. Zwischen ihr und dem
+   bezahlten Aufruf liegt Arbeit: eine fremde Rezeptseite holen darf bis zu
+   FUENFZEHN Sekunden dauern, danach wird noch die Nutzlast von der Platte
+   gelesen. Faellt der Widerruf in dieses Fenster, ging der Text bisher
+   trotzdem hinaus. Nachgefasst vom externen Codereview am 15.09.2026.
+
+   Nachgestellt ueber den Bau des Anbieters: er laeuft NACH der Probe unter der
+   Sperre und VOR dem Aufruf — genau das Fenster. */
+foreach ([['Text',     ['system' => 'SYS', 'user' => 'GEHEIM', 'payloadKind' => '', 'mime' => '', 'url' => '']],
+          ['Rezept',   ['system' => 'SYS', 'user' => '', 'payloadKind' => '', 'mime' => '',
+                        'url' => 'https://rezept.invalid/x']],
+          ['Diktat',   ['system' => '', 'user' => '', 'payloadKind' => '', 'mime' => 'audio/webm', 'url' => '']]] as [$name, $job]) {
+    $laden->alleLoeschen();
+    AnbieterAttrappe::$rufe = [];
+    $x = AiJobStore::neueKennung();
+    $extra = ['job' => $job];
+    if ($name === 'Diktat') {
+        $extra['kind'] = 'transcribe';
+    }
+    $laden->anlegen(kopf($x, 4000, $extra), $name === 'Diktat' ? 'TONDATEN' : '');
+    $spaet = new AiJobRunner($laden,
+        static function () use ($laden, $x): AiProvider {
+            $laden->loeschen($x);   // der Widerruf, mitten in der Vorarbeit
+            return AnbieterAttrappe::bauen();
+        },
+        $holen, $geben, $melden, $uhr);
+    $kopfX = $laden->naechsten($uhrzeit);
+    $spaet->einen($kopfX);
+    pruefe('Widerruf in der Vorarbeit (' . $name . '): kein Anbieteraufruf',
+        count(AnbieterAttrappe::$rufe), 0);
+    pruefe('… und nichts gemeldet (' . $name . ')',
+        in_array($x, $gemeldet, true), false);
+    pruefe('… der Auftrag bleibt weg (' . $name . ')', $laden->lesen($x), null);
+}
+
+/* Der Rezept-Weg laesst sich hier nicht bis zum Anbieter fahren — der Abruf
+   ginge ins Netz. Fuer IHN wird die Reihenfolge am Quelltext festgenagelt:
+   VOR dem Abruf und VOR dem Aufruf muss nachgesehen werden, sonst holt das
+   Gateway noch fuenfzehn Sekunden lang eine fremde Seite fuer einen Auftrag,
+   den es nicht mehr gibt. */
+$rumpf = (string)file_get_contents(__DIR__ . '/../../libs/AiJobRunner.php');
+$von = strpos($rumpf, 'private function ausfuehren(');
+$koerper = substr($rumpf, (int)$von);
+$PROBE = 'if ($this->laden->lesen($id) === null)';
+/* JEDE der drei Ausgangstueren braucht ihre EIGENE Probe. Die Zahl steht hier
+   ausdruecklich: ohne sie genuegte die Probe des Diktat-Zweigs, die weiter
+   oben steht, und der Rezept-Weg waere wieder ungeschuetzt — genau so ist mir
+   diese Zusicherung beim ersten Anlauf durchgerutscht. */
+pruefe('Drei Proben, eine je Ausgang', substr_count($koerper, $PROBE), 3);
+foreach (['AiRecipePage::holen(', '$anbieter->complete(', '$anbieter->transcribe('] as $ruf) {
+    $stelle = (int)strpos($koerper, $ruf);
+    $fenster = substr($koerper, max(0, $stelle - 300), min(300, $stelle));
+    pruefe('Unmittelbar vor ' . $ruf . ' wird nachgesehen', str_contains($fenster, $PROBE), true);
+}
+
 // ── Wer wartet, kommt zuerst ──────────────────────────────────────────────
 /* Der eigene Annahme-Topf verhindert nur, dass Hintergrundarbeit jemanden mit
    „belegt" abweist. Der Laeufer arbeitet aber unter der Anbieter-Sperre einen

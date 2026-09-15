@@ -135,6 +135,12 @@ final class AiJobRunner
             }
             $anbieter = ($this->anbieterBauen)();
             $roh = $this->ausfuehren($kopf, $anbieter);
+            if ($roh === null) {
+                /* Waehrend der Vorarbeit widerrufen — `ausfuehren` hat dann
+                   NICHT gerufen. Nichts schreiben, nichts melden: der Auftrag
+                   ist weg, und weg heisst weg. */
+                return true;
+            }
         } catch (\Throwable $e) {
             /* Ein Wurf darf NIE einen Auftrag als „laeuft" liegen lassen: er
                waere dann bis zum naechsten Aufraeumen unsichtbar, und der
@@ -199,16 +205,29 @@ final class AiJobRunner
     /**
      * Der eigentliche Aufruf.
      *
+     * Zwischen der Probe unter der Sperre und dem Anbieteraufruf liegt ARBEIT:
+     * eine fremde Rezeptseite zu holen darf bis zu fuenfzehn Sekunden dauern,
+     * und danach wird noch die Nutzlast von der Platte gelesen. Der Widerruf
+     * der Einwilligung leert die Warteschlange — faellt er in dieses Fenster,
+     * ginge der Text trotzdem hinaus. Deshalb wird UNMITTELBAR vor jedem
+     * Anbieteraufruf noch einmal nachgesehen. Von einem externen Codereview
+     * gemeldet (F7, nachgefasst am 15.09.2026: die erste Fassung sicherte nur
+     * die Wartezeit auf die Sperre).
+     *
      * @param array<string,mixed> $kopf
-     * @return array<string,mixed> {ok:true,text} | {ok:false,code,grund,detail}
+     * @return array<string,mixed>|null {ok:true,text} | {ok:false,code,grund,detail};
+     *   null = der Auftrag ist verschwunden, es wurde NICHT gerufen
      */
-    private function ausfuehren(array $kopf, AiProvider $anbieter): array
+    private function ausfuehren(array $kopf, AiProvider $anbieter): ?array
     {
         $id  = (string)($kopf['id'] ?? '');
         $job = is_array($kopf['job'] ?? null) ? $kopf['job'] : [];
 
         if ((string)($kopf['kind'] ?? '') === 'transcribe') {
             $ton = $this->laden->nutzlastLesen($id);
+            if ($this->laden->lesen($id) === null) {
+                return null;
+            }
             $r = $anbieter->transcribe($ton, (string)($job['mime'] ?? 'audio/webm'));
             unset($ton);
             return $r;
@@ -220,6 +239,11 @@ final class AiJobRunner
            den Hook — sie darf bis zu fuenfzehn Sekunden brauchen. */
         $url = (string)($job['url'] ?? '');
         if ($url !== '') {
+            /* Vor dem Abruf: er kostet zwar nichts, geht aber an einen fremden
+               Rechner — und danach vergehen bis zu fuenfzehn Sekunden. */
+            if ($this->laden->lesen($id) === null) {
+                return null;
+            }
             $seite = AiRecipePage::holen($url);
             if (($seite['ok'] ?? false) !== true) {
                 return ['ok' => false, 'code' => (string)($seite['code'] ?? 'ai_url_fetch'),
@@ -250,6 +274,11 @@ final class AiJobRunner
             unset($roh);
         }
 
+        // Die letzte Probe vor dem bezahlten Aufruf.
+        if ($this->laden->lesen($id) === null) {
+            unset($bild, $pdf, $nutzertext);
+            return null;
+        }
         $r = $anbieter->complete((string)($job['system'] ?? ''), $nutzertext, $bild, $pdf);
         unset($bild, $pdf, $nutzertext);
         return $r;
