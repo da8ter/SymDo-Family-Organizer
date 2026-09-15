@@ -25,6 +25,30 @@ class SymDoMealPlan extends IPSModuleStrict
     private const SRC_IDENTS = ['ItemCount', 'LastUsed'];
 
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: ohne sie steht dort nur „keine
+     * passende Instanz", mit ihr bietet sie das vorhandene Gateway an oder legt
+     * auf Wunsch eines an.
+     *
+     * „connect" statt „require": an EINEM Gateway haengen ueblicherweise mehrere
+     * Kacheln — „require" boete nur Gateways ohne andere untergeordnete Instanz
+     * an und draengte so zu einem zweiten.
+     *
+     * Die Verbindung sortiert die Instanz NICHT in den Objektbaum um; sie ist
+     * reiner Datenfluss (gemessen: bei allen 43 verbundenen Instanzen dieses
+     * Systems liegt der Baum-Elter woanders).
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
+    /**
+     * Wahr, solange dieser ApplyChanges-Durchlauf von einem Kernelstart kommt.
+     * Nicht dauerhaft — er lebt nur fuer diesen einen Aufruf.
+     */
+    private bool $applyFromKernelStart = false;
+
     public function Create(): void
     {
         parent::Create();
@@ -58,7 +82,7 @@ class SymDoMealPlan extends IPSModuleStrict
             return;
         }
 
-        $this->ElternanschlussLoesen();
+        $this->GatewayEinmaligVerbinden();
 
         // Alte Abos/Referenzen sauber lösen (kein Leak bei Quellen-Wechsel)
         $vorher = json_decode((string)@$this->ReadAttributeString('SubscribedVarIDs'), true);
@@ -95,7 +119,12 @@ class SymDoMealPlan extends IPSModuleStrict
     {
         switch ($Message) {
             case IPS_KERNELSTARTED:
-                $this->ApplyChanges();
+                $this->applyFromKernelStart = true;
+                try {
+                    $this->ApplyChanges();
+                } finally {
+                    $this->applyFromKernelStart = false;
+                }
                 return;
             case VM_UPDATE:
                 $this->PushState();
@@ -438,31 +467,56 @@ class SymDoMealPlan extends IPSModuleStrict
     }
 
     /**
-     * Einen bestehenden Elternanschluss wieder aufloesen.
+     * Einmalig nach dem Update: die Gateway-Zuordnung, die dieses Modul ohnehin
+     * benutzt, als Eltern-Instanz eintragen.
      *
-     * Seit dem 15.09.2026 haengt keine Kachel mehr am Gateway. Der Grund ist
-     * kein Schoenheitsfehler, sondern ein Datenverlust: die Konsole bietet beim
-     * LOESCHEN einer Instanz ihre uebergeordnete mit an. So ist am 15.09.2026
-     * mit einer VRR-Instanz das Gateway mitgegangen — mit allen Notizen,
-     * gekoppelten Geraeten und Zugangsdaten. Im Protokoll stehen beide
-     * „Entferne..." in derselben Sekunde; sechs weitere Kacheln hingen daran,
-     * es half nichts.
+     * Ohne sie muesste sie nach dem Update von Hand in der Konsole gesetzt
+     * werden — bei jeder Instanz einzeln. Am Verhalten aendert sich nichts: Es
+     * wird genau das Gateway verbunden, das die Instanz vorher schon gefragt
+     * hat. Deshalb laeuft es still, ohne Meldung.
      *
-     * Einen Anschluss OHNE diese Gefahr gibt es nicht: ohne
-     * `parentRequirements` weist Symcon jedes `IPS_ConnectInstance` mit
-     * „Datenfluss ist inkompatibel" ab — auch dann, wenn zusaetzlich die
-     * `childRequirements` des Gateways leer sind (beides gemessen). Also faellt
-     * der Anschluss weg. Gefunden wird das Gateway ueber die niedrigste
-     * Kennung, so wie die beiden Uebersichts-Kacheln es immer schon tun.
-     *
-     * Ohne Merker und bei jedem Uebernehmen: Trennen ist idempotent, und beim
-     * zweiten Mal ist schon nichts mehr da. Wer von Hand wieder anschliesst,
-     * bekommt es wieder geloest — genau das ist gewollt.
+     * Das Flag steht VOR dem Verbinden: IPS_ConnectInstance loest ApplyChanges
+     * erneut aus. Wer die Verbindung spaeter bewusst loest, behaelt es so —
+     * die Migration greift genau einmal.
      */
-    private function ElternanschlussLoesen(): void
+    private function GatewayEinmaligVerbinden(): void
     {
+        /* NUR beim Kernelstart. Beim ANLEGEN einer Instanz laeuft ApplyChanges
+           ebenfalls — und zwar bevor die Konsole den vom Nutzer gewaehlten
+           Elternknoten eintraegt. Verbinden wir hier, faende die Konsole eine
+           Instanz vor, die schon einen Vater hat, und meldete „Konnte nicht zur
+           Instanz verbinden / Instanz #… hat bereits ein uebergeordnetes
+           Objekt". Dieser Umzug gilt ALTinstanzen; eine neue verbindet die
+           Konsole selbst, und wer den Dialog wegklickt, wird trotzdem bedient:
+           das Gateway wird ohnehin ueber die niedrigste Kennung gefunden. */
+        if (!$this->applyFromKernelStart) {
+            return;
+        }
+        // Nie waehrend des Hochlaufs: IPS_ConnectInstance braucht fertige Objekte.
+        // Das Flag bleibt dann ungesetzt, der naechste Anlauf holt es nach.
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+        /* Ohne Kernel-Neustart nach dem Update ist NICHTS von beidem da: weder die
+           Elternangabe des Moduls (module.json wird nur beim Start gelesen) noch
+           das Attribut (entsteht in Create()). Dann hier aussteigen, bevor der
+           Attribut-Zugriff eine Warnung ins Protokoll schreibt — verbinden liesse
+           sich ohnehin nicht, IPS_ConnectInstance antwortet dann nur false. */
+        $eigeneGuid = (string)(@IPS_GetInstance($this->InstanceID)['ModuleInfo']['ModuleID'] ?? '');
+        $modulInfo  = $eigeneGuid !== '' ? @IPS_GetModule($eigeneGuid) : null;
+        if (!is_array($modulInfo) || empty($modulInfo['ParentRequirements'])) {
+            return;
+        }
+        if ((bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            return;
+        }
+        @$this->WriteAttributeBoolean('ParentMigrated', true);
         if ((int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0) > 0) {
-            @IPS_DisconnectInstance($this->InstanceID);
+            return;
+        }
+        $gateway = $this->GatewayInstanz();
+        if ($gateway > 0 && @IPS_InstanceExists($gateway)) {
+            @IPS_ConnectInstance($this->InstanceID, $gateway);
         }
     }
 

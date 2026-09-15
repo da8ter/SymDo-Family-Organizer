@@ -254,11 +254,7 @@ $gateway->pAnlegen();
 pruefe('Ein zweiter Durchgang legt nichts nach', count($gateway->pScanner()), 2);
 
 $sc = $nachRolle($scanner, 'jobs');
-/* Er haengt NICHT am Gateway. Ein Anschluss waere die einzige Stelle, an der
-   die Konsole spaeter das Gateway zum Mitloeschen anbieten koennte — genau so
-   ist es am 15.09.2026 passiert. Gefunden wird es ueber die niedrigste
-   Kennung, und der Baum-Elternknoten stellt ihn trotzdem daneben. */
-pruefe('Der Scanner haengt nicht am Gateway', (int)IPS_GetInstance($sc)['ConnectionID'], 0);
+pruefe('Der Scanner haengt am Gateway', (int)IPS_GetInstance($sc)['ConnectionID'], $gw);
 pruefe('Und traegt einen Namen, der seine Rolle nennt',
     IPS_GetName($sc), 'SymDo - Scanner (jobs)');
 

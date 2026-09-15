@@ -19,6 +19,16 @@ class SymDoVoice extends IPSModuleStrict
     /** Höchstens so viele Proben-Berichte werden aufgehoben (je Umgebung einer). */
     private const PROBE_MAX = 8;
 
+    /**
+     * Vorschlagsliste der Konsole beim Anlegen: sie bietet ein vorhandenes
+     * Gateway an oder legt eines an. „connect" statt „require": an EINEM
+     * Gateway hängen mehrere Kacheln.
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
     public function Create(): void
     {
         parent::Create();
@@ -54,7 +64,6 @@ class SymDoVoice extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
-        $this->ElternanschlussLoesen();
 
         $this->SetStatus(IS_ACTIVE);
     }
@@ -405,33 +414,4 @@ class SymDoVoice extends IPSModuleStrict
             ($api['location'] ?? '') !== '' ? 'lesbar' : 'NICHT lesbar'
         );
     }
-
-    /**
-     * Einen bestehenden Elternanschluss wieder aufloesen.
-     *
-     * Seit dem 15.09.2026 haengt keine Kachel mehr am Gateway. Der Grund ist
-     * kein Schoenheitsfehler, sondern ein Datenverlust: die Konsole bietet beim
-     * LOESCHEN einer Instanz ihre uebergeordnete mit an. So ist am 15.09.2026
-     * mit einer VRR-Instanz das Gateway mitgegangen — mit allen Notizen,
-     * gekoppelten Geraeten und Zugangsdaten. Im Protokoll stehen beide
-     * „Entferne..." in derselben Sekunde; sechs weitere Kacheln hingen daran,
-     * es half nichts.
-     *
-     * Einen Anschluss OHNE diese Gefahr gibt es nicht: ohne
-     * `parentRequirements` weist Symcon jedes `IPS_ConnectInstance` mit
-     * „Datenfluss ist inkompatibel" ab — auch dann, wenn zusaetzlich die
-     * `childRequirements` des Gateways leer sind (beides gemessen). Also faellt
-     * der Anschluss weg. Gefunden wird das Gateway ueber die niedrigste
-     * Kennung, so wie die beiden Uebersichts-Kacheln es immer schon tun.
-     *
-     * Diese Kachel hat sich nie selbst angeschlossen — angeschlossen hat sie
-     * der Einrichtungs-Assistent. Geloest werden muss er trotzdem.
-     */
-    private function ElternanschlussLoesen(): void
-    {
-        if ((int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0) > 0) {
-            @IPS_DisconnectInstance($this->InstanceID);
-        }
-    }
-
 }

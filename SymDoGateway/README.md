@@ -105,22 +105,6 @@ Die Oberfläche gibt es doppelt: als Web-App fürs Handy (per QR-Code gekoppelt,
 
 Betreibt man mehrere Gateway-Instanzen (etwa für getrennte Synchronisation), bedient nur **eine** davon die App — die weiteren arbeiten als reine Sync-Broker und zeigen im Formular an, welche Instanz die App-Seite trägt.
 
-**Keine Kachel hängt am Gateway (seit 15.09.2026).** Früher trug jede Kachel das
-Gateway als *übergeordnete Instanz*; die Konsole schlug es beim Anlegen vor und
-verband beide. Das ist ersatzlos entfallen, und der Grund ist ein Datenverlust:
-**beim Löschen einer Instanz bietet die Konsole ihre übergeordnete mit an.** Am
-15.09.2026 ist so mit einer VRR-Instanz das ganze Gateway verschwunden — mit
-allen Notizen, gekoppelten Geräten und Zugangsdaten. Sechs weitere Kacheln
-hingen daran; es half nichts.
-
-Einen Anschluss ohne diese Gefahr gibt es in Symcon nicht: ohne
-`parentRequirements` wird jede Verbindung mit „Datenfluss ist inkompatibel"
-abgewiesen, auch bei leeren `childRequirements` am Gateway. Für die Einrichtung
-ändert sich nichts — **jede Kachel findet das Gateway von selbst** (die Instanz
-mit der niedrigsten Kennung), so wie die beiden Übersichts-Kacheln es immer
-schon taten. Ein vorhandener Anschluss wird beim nächsten Übernehmen
-automatisch gelöst.
-
 ## 5. Kopplung: Web-App und iOS-App
 
 **Web-App:** Im Gateway unter *Web-App verbinden* auf **Browser-Zugang erstellen** klicken. Es erscheint ein QR-Code — mit der Handy-Kamera scannen, die Web-App öffnet sich im Browser und koppelt sich selbst. Der Code ist **10 Minuten** gültig. Danach: *Teilen → Zum Home-Bildschirm* — beim ersten Start vom Home-Bildschirm fragt die App den Kopplungscode einmal von Hand ab (er steht unter dem QR-Code im Formular).

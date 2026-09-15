@@ -120,6 +120,15 @@ class SymDoScanner extends IPSModuleStrict
         $this->RegisterTimer('Weiter', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Weiter\', 0);');
     }
 
+    /**
+     * „connect" statt „require": an EINEM Gateway haengen mehrere Instanzen.
+     * (ConnectParent/RequireParent gibt es fuer IPSModuleStrict nicht.)
+     */
+    public function GetCompatibleParents(): string
+    {
+        return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
+    }
+
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -129,9 +138,13 @@ class SymDoScanner extends IPSModuleStrict
             return;
         }
 
-        /* Direkt und nicht mehr ueber einen Einmal-Zeitgeber: Trennen ruft
-           nicht ins Gateway hinein, es beruehrt nur die eigene Instanz. */
-        $this->ElternanschlussLoesen();
+        /* KEIN Rueckruf ins Gateway aus ApplyChanges. IPS_ConnectInstance
+           loest drueben ein ApplyChanges aus — und wenn das GATEWAY uns gerade
+           erst angelegt hat, liefe das mitten in seinem eigenen Lauf. Der
+           Einmal-Zeitgeber schiebt es in unsere Spur, wo es niemanden stoert. */
+        if (!(bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            @$this->RegisterOnceTimer('Verbinden', 'IPS_RequestAction($_IPS[\'TARGET\'], \'Verbinden\', 0);');
+        }
         @$this->WriteAttributeInteger('SignalAbo', 0);
         $this->SignalAbonnieren();
 
@@ -200,6 +213,9 @@ class SymDoScanner extends IPSModuleStrict
                 case 'Weiter':
                     // Die naechste Etappe einer Arbeit, die in Stuecken laeuft.
                     $this->Etappe();
+                    return;
+                case 'Verbinden':
+                    $this->GatewayEinmaligVerbinden();
                     return;
             }
             parent::RequestAction($Ident, $Value);
@@ -741,31 +757,23 @@ class SymDoScanner extends IPSModuleStrict
     }
 
     /**
-     * Einen bestehenden Elternanschluss wieder aufloesen.
-     *
-     * Seit dem 15.09.2026 haengt keine Kachel mehr am Gateway. Der Grund ist
-     * kein Schoenheitsfehler, sondern ein Datenverlust: die Konsole bietet beim
-     * LOESCHEN einer Instanz ihre uebergeordnete mit an. So ist am 15.09.2026
-     * mit einer VRR-Instanz das Gateway mitgegangen — mit allen Notizen,
-     * gekoppelten Geraeten und Zugangsdaten. Im Protokoll stehen beide
-     * „Entferne..." in derselben Sekunde; sechs weitere Kacheln hingen daran,
-     * es half nichts.
-     *
-     * Einen Anschluss OHNE diese Gefahr gibt es nicht: ohne
-     * `parentRequirements` weist Symcon jedes `IPS_ConnectInstance` mit
-     * „Datenfluss ist inkompatibel" ab — auch dann, wenn zusaetzlich die
-     * `childRequirements` des Gateways leer sind (beides gemessen). Also faellt
-     * der Anschluss weg. Gefunden wird das Gateway ueber die niedrigste
-     * Kennung, so wie die beiden Uebersichts-Kacheln es immer schon tun.
-     *
-     * Ohne Merker und bei jedem Uebernehmen: Trennen ist idempotent, und beim
-     * zweiten Mal ist schon nichts mehr da. Wer von Hand wieder anschliesst,
-     * bekommt es wieder geloest — genau das ist gewollt.
+     * Einmalig ans Gateway haengen. Der Merker steht VOR dem Verbinden:
+     * IPS_ConnectInstance loest auf beiden Seiten ApplyChanges aus, und das
+     * des Gateways ist teuer. Wer die Verbindung spaeter bewusst loest, behaelt
+     * sie geloest. Dieselbe Vorgehensweise wie im VRR-Modul.
      */
-    private function ElternanschlussLoesen(): void
+    private function GatewayEinmaligVerbinden(): void
     {
+        if ((bool)@$this->ReadAttributeBoolean('ParentMigrated')) {
+            return;
+        }
+        @$this->WriteAttributeBoolean('ParentMigrated', true);
         if ((int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0) > 0) {
-            @IPS_DisconnectInstance($this->InstanceID);
+            return;
+        }
+        $gateway = $this->GatewayID();
+        if ($gateway > 0 && @IPS_InstanceExists($gateway)) {
+            @IPS_ConnectInstance($this->InstanceID, $gateway);
         }
     }
 
