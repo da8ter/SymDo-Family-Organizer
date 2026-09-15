@@ -635,14 +635,17 @@ trait Moodle
             $namen = array_map(static fn($f): string => (string)($f['name'] ?? ''),
                 (array)($info['functions'] ?? []));
             $rueckmeldungen = $this->MoodleAbstimmungen($zugang, $kursListe, $namen);
-            $hausaufgaben = $this->MoodleAufgaben($zugang, $kursListe, $rueckmeldungen);
+            [$von, $bis] = $this->MoodleFenster();
+            $hausaufgaben = $this->MoodleAufgabenEinpflegen((string)$zugang['userId'],
+                $this->MoodleAufgabenZeilen($zugang, $kursListe, $rueckmeldungen), $von, $bis);
             if ($rueckmeldungen !== []) {
                 $hausaufgaben = trim($hausaufgaben . ', ' . sprintf(
                     $this->Translate('%d reply/replies with a deadline'), count($rueckmeldungen)), ', ');
             }
         }
         if (!$trocken && (bool)$this->MoodleProp('MoodleEvents', true)) {
-            $termine = $this->MoodleTermine($zugang, $kursListe);
+            $termine = $this->MoodleTermineEinpflegen((string)$zugang['userId'],
+                $this->MoodleTermineZeilen($zugang, $kursListe));
         }
         return sprintf($this->Translate('%1$d course(s), %2$d card(s), %3$d written, %4$d changed, %5$d analysed%6$s'),
             count($kurse), $karten, $neu, $geaendert, $analysiert,
@@ -1065,21 +1068,24 @@ trait Moodle
      * was abgegeben wurde; das Haekchen gehoert damit der Schule und laesst
      * sich zu Hause nicht zuruecknehmen (Sperrklinke in HomeworkCalc).
      *
+     * Diese Haelfte LIEST nur — sie laeuft dort, wo die Zeit verbraucht wird
+     * (je Aufgabe ein eigener Abruf fuer den Abgabestand). Eingepflegt wird in
+     * `MoodleAufgabenEinpflegen`, und zwar dort, wo die Hausaufgaben stehen.
+     *
      * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
-     * @return string Bericht, '' wenn es nichts zu berichten gibt
+     * @return list<array<string,mixed>> Zeilen fuer HomeworkImportieren
      */
-    private function MoodleAufgaben(array $zugang, array $kurse, array $zusatz = []): string
+    private function MoodleAufgabenZeilen(array $zugang, array $kurse, array $zusatz = []): array
     {
         if ($kurse === []) {
-            return '';
+            return [];
         }
         $antwort = $this->MoodleRest($zugang, 'mod_assign_get_assignments',
             ['courseids' => array_values(array_map('intval', array_keys($kurse)))]);
         if (!is_array($antwort)) {
-            return '';
+            return [];
         }
-        $von = date('Y-m-d');
-        $bis = date('Y-m-d', strtotime('+' . self::MOODLE_TAGE_VOR . ' days'));
+        [$von, $bis] = $this->MoodleFenster();
         $roh = [];
         foreach ((array)($antwort['courses'] ?? []) as $kurs) {
             $fach = trim((string)($kurs['shortname'] ?? ($kurs['fullname'] ?? '')));
@@ -1131,7 +1137,20 @@ trait Moodle
             }
             $roh[] = $z;
         }
-        $e = $this->HomeworkImportieren((string)$zugang['userId'], $roh, $von, $bis, 'moodle');
+        return $roh;
+    }
+
+    /**
+     * Die gelesenen Zeilen in die Hausaufgaben uebernehmen.
+     *
+     * Die schreibende Haelfte, und sie bleibt beim Gateway: dort liegen die
+     * Hausaufgaben, und `HomeworkImportieren` raeumt im Fenster auf.
+     *
+     * @param list<array<string,mixed>> $roh
+     */
+    private function MoodleAufgabenEinpflegen(string $userId, array $roh, string $von, string $bis): string
+    {
+        $e = $this->HomeworkImportieren($userId, $roh, $von, $bis, 'moodle');
         if (($e['ok'] ?? false) !== true) {
             return sprintf($this->Translate('homework: %s'), (string)($e['fehler'] ?? '?'));
         }
@@ -1140,6 +1159,12 @@ trait Moodle
         }
         return sprintf($this->Translate('%1$d homework item(s), %2$d new, %3$d withdrawn'),
             count($roh), (int)($e['neu'] ?? 0), (int)($e['entfernt'] ?? 0));
+    }
+
+    /** Das Fenster, in dem Aufgaben und Abstimmungen zaehlen. */
+    private function MoodleFenster(): array
+    {
+        return [date('Y-m-d'), date('Y-m-d', strtotime('+' . self::MOODLE_TAGE_VOR . ' days'))];
     }
 
     /**
@@ -1208,9 +1233,13 @@ trait Moodle
      * angelegt wird er erst, wenn jemand ihn uebernimmt („nichts entsteht
      * ungefragt" gilt auch hier).
      *
+     * Diese Haelfte LIEST nur — zwei Abrufe an die Schule. Abgelegt wird in
+     * `MoodleTermineEinpflegen`, dort steht der Vorschlagsbestand.
+     *
      * @param array<int,array<string,mixed>> $kurse Kurskennung → Seite
+     * @return list<array<string,mixed>> Vorschlaege, jeder mit seinem Merker
      */
-    private function MoodleTermine(array $zugang, array $kurse): string
+    private function MoodleTermineZeilen(array $zugang, array $kurse): array
     {
         $jetzt = time();
         /* Weg 1: die Zeitleiste. Sie nennt FRISTEN von Aktivitaeten — Aufgaben,
@@ -1234,13 +1263,13 @@ trait Moodle
             ],
         ]);
         if (!is_array($a) && !is_array($kalender)) {
-            return '';
+            return [];
         }
         $liste = MoodleCalc::TermineVereinen(
             is_array($a) ? (array)($a['events'] ?? []) : [],
             is_array($kalender) ? (array)($kalender['events'] ?? []) : []);
         $topf = 'moodleevents:' . mb_strtolower((string)$zugang['site']);
-        $neu = 0;
+        $raus = [];
         foreach ($liste as $e) {
             if (!is_array($e)) {
                 continue;
@@ -1251,11 +1280,8 @@ trait Moodle
                 continue;
             }
             $schluessel = 'ev:' . (int)($e['id'] ?? 0) . ':' . $ts;
-            if ($this->MoodleGesehen($topf, $schluessel)) {
-                continue;
-            }
             $kursName = trim((string)((($e['course']['shortname']) ?? ($e['course']['fullname'] ?? ''))));
-            $gespeichert = $this->MailStoreProposal([
+            $raus[] = ['topf' => $topf, 'schluessel' => $schluessel, 'satz' => [
                 'id'        => 'moodleevent:' . (int)($e['id'] ?? 0) . ':' . $ts,
                 'at'        => $ts,
                 'created'   => time(),
@@ -1281,8 +1307,36 @@ trait Moodle
                     'assignedTo' => [(string)$zugang['userId']],
                     'taken'      => false,
                 ]],
-            ]);
-            if ($gespeichert) {
+            ]];
+        }
+        return $raus;
+    }
+
+    /**
+     * Die gelesenen Termine als Vorschlaege ablegen.
+     *
+     * Die schreibende Haelfte, und sie bleibt beim Gateway: dort steht der
+     * Vorschlagsbestand, und dort haengt auch der Merker, der einen Termin
+     * nicht zweimal vorschlaegt.
+     *
+     * Der Merker wird ERST NACH dem Ablegen gesetzt — scheitert das Ablegen,
+     * soll der Termin beim naechsten Lauf wiederkommen.
+     *
+     * @param list<array<string,mixed>> $zeilen
+     */
+    private function MoodleTermineEinpflegen(string $userId, array $zeilen): string
+    {
+        $neu = 0;
+        foreach ($zeilen as $z) {
+            if (!is_array($z) || !is_array($z['satz'] ?? null)) {
+                continue;
+            }
+            $topf = (string)($z['topf'] ?? '');
+            $schluessel = (string)($z['schluessel'] ?? '');
+            if ($topf === '' || $schluessel === '' || $this->MoodleGesehen($topf, $schluessel)) {
+                continue;
+            }
+            if ($this->MailStoreProposal($z['satz'])) {
                 $this->MoodleMerken($topf, $schluessel);
                 $neu++;
             }
@@ -1290,7 +1344,7 @@ trait Moodle
         if ($neu === 0) {
             return '';
         }
-        $this->MailNotifyProposal(0, $neu, 0, (string)$zugang['userId'], 'LOGINEO');
+        $this->MailNotifyProposal(0, $neu, 0, $userId, 'LOGINEO');
         return sprintf($this->Translate('%d date(s) suggested'), $neu);
     }
 

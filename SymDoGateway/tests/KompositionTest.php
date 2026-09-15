@@ -54,6 +54,30 @@ function rumpf(string $quelle, string $name): string
     $bis = strpos($quelle, "\n    }\n", $von);
     return substr($quelle, $von, ($bis === false ? strlen($quelle) : $bis + 7) - $von);
 }
+/**
+ * Derselbe Rumpf ohne Kommentare.
+ *
+ * Ein Riegel, der nach Namen sucht, darf nicht auf die ERKLAERUNG anspringen.
+ * `MoodleAufgabenZeilen` sagt in einem Kommentar ausdruecklich, warum zwei
+ * Aufrufe von `HomeworkImportieren` mit derselben Quelle einander aufraeumen
+ * wuerden — und genau dieser Satz liess den Riegel „fasst HomeworkImportieren
+ * nicht an" fehlschlagen. Der Satz gehoert dorthin; die Suche nicht.
+ */
+function ohneKommentare(string $php): string
+{
+    $raus = '';
+    foreach (token_get_all('<?php ' . $php) as $t) {
+        if (is_array($t)) {
+            if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) {
+                continue;
+            }
+            $raus .= $t[1];
+            continue;
+        }
+        $raus .= $t;
+    }
+    return $raus;
+}
 function pruefe(string $name, mixed $ist, mixed $soll): void
 {
     global $fehler, $anzahl;
@@ -134,7 +158,7 @@ foreach ($vertraege as [$klasse, $methode, $nr, $quelle]) {
    laesst sich die Haelfte nicht mehr auslagern, und niemand merkt es, bis der
    Umzug im Betrieb Medien unter der falschen Instanz anlegt. */
 $quelle = (string)file_get_contents(__DIR__ . '/../libs/MailScan.php');
-$rechnen = rumpf($quelle, 'MailAnalyseRechnen');
+$rechnen = ohneKommentare(rumpf($quelle, 'MailAnalyseRechnen'));
 pruefe('Beide Haelften stehen in der Datei',
     $rechnen !== '' && rumpf($quelle, 'MailVorschlagEinpflegen') !== '', true);
 foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'NotesSaveAttachment',
@@ -142,6 +166,30 @@ foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'NotesSaveAttachment',
           'IPS_CreateMedia', 'LogMessage'] as $verboten) {
     pruefe('MailAnalyseRechnen fasst ' . $verboten . ' nicht an',
         str_contains($rechnen, $verboten), false);
+}
+
+/* Dieselbe Regel fuer LOGINEO: die lesenden Haelften sind das Teure (je
+   Aufgabe ein eigener Abruf fuer den Abgabestand, zwei Abrufe fuer die
+   Termine) und sollen in die Scanner-Spur. Wer hier ein Attribut oder einen
+   Bestand anfasst, macht das unmoeglich — und es faellt erst auf, wenn der
+   Umzug im Betrieb in die falsche Instanz schreibt. */
+$moodle = (string)file_get_contents(__DIR__ . '/../libs/Moodle.php');
+foreach (['MoodleAufgabenZeilen' => 'MoodleAufgabenEinpflegen',
+          'MoodleTermineZeilen'  => 'MoodleTermineEinpflegen'] as $liest => $schreibt) {
+    $lesen = ohneKommentare(rumpf($moodle, $liest));
+    pruefe('Beide Haelften stehen in der Datei: ' . $liest,
+        $lesen !== '' && rumpf($moodle, $schreibt) !== '', true);
+    foreach (['WriteAttribute', 'IPS_SemaphoreEnter', 'HomeworkImportieren',
+              'MailStoreProposal', 'MailNotifyProposal', 'MoodleMerken',
+              'MoodleGesehen', 'NotesSaveAttachment'] as $verboten) {
+        pruefe($liest . ' fasst ' . $verboten . ' nicht an',
+            str_contains($lesen, $verboten), false);
+    }
+}
+/* Und die alten, schreibenden Namen sind weg — sonst bliebe ein zweiter Weg
+   stehen, den niemand mehr pflegt. */
+foreach (['function MoodleAufgaben(', 'function MoodleTermine('] as $alt) {
+    pruefe('Kein alter Mischweg mehr: ' . $alt, str_contains($moodle, $alt), false);
 }
 
 /* Ein bezahlter Anbieter-Aufruf darf NIE ungezaehlt bleiben.
