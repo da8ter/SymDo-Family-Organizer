@@ -158,7 +158,7 @@ body {
    die Kachel hinaus, statt den Zielnamen zu kuerzen. */
 .abfahrten {
   display: grid;
-  grid-template-columns: 24px 54px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 26px 54px minmax(0, 1fr) auto auto auto;
   align-items: center; column-gap: 8px;
 }
 .abfahrt {
@@ -170,7 +170,7 @@ body {
 @supports not (grid-template-columns: subgrid) {
   .abfahrten { display: block; }
   .abfahrt {
-    grid-template-columns: 24px 54px minmax(0, 1fr) auto auto auto;
+    grid-template-columns: 26px 54px minmax(0, 1fr) auto auto auto;
     gap: 8px;
   }
 }
@@ -178,15 +178,16 @@ body {
 /* Das Fahrzeug traegt die Akzentfarbe: es ist das einzige Zeichen in der Zeile,
    das die Art der Fahrt nennt — Bus, Bahn, S-Bahn —, und in Grau ging es neben
    der fetten Liniennummer unter. */
-/* Das Zeichen sitzt in einem weissen Kaestchen — wie ein Liniensignet. Die
-   Farbe setzt das Markup je Zeile (Verkehrsmittel); hier steht nur der
-   Rueckfall auf den Akzent. */
+/* Dasselbe Kaestchen wie bei den Faechern der Hausaufgaben (`.hw-fach`):
+   26 Pixel im Quadrat, acht Pixel Eckenradius, Zeichen in Weiss — und die
+   FLAECHE in der Farbe des Verkehrsmittels. Die kommt je Zeile als Inline-Stil
+   aus dem Markup; hier steht nur der Rueckfall, falls keine mitkommt. */
 .abfahrt .sym {
-  display: flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 7px;
-  background: #fff; color: var(--akzent); font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px;
+  background: var(--akzent); color: #fff;
 }
-.abfahrt .sym svg { height: 1em; width: auto; }
+.abfahrt .sym i, .abfahrt .sym svg { width: 13px; height: 13px; }
 .abfahrt .linie { font-weight: 800; font-size: 12px; }
 .abfahrt .ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Der Pfeil sagt „dorthin" und gehoert zum Ziel — aber nicht zu seinem Text:
@@ -755,7 +756,7 @@ function abfahrtenHtml() {
         /* Das Zeichen traegt die Farbe seines Verkehrsmittels — dieselbe, die
            auch das Linienschild in den Streckenansichten hat. Sie kommt fertig
            aus dem Modul; fehlt sie (alte Nutzlast), bleibt es beim Akzent. */
-        + '<span class="sym" style="color:' + verkehrsmittelFarbe(d) + '">'
+        + '<span class="sym" style="background:' + verkehrsmittelFarbe(d) + '">'
         + symbol(d.icon) + '</span>'
         + '<span class="linie">' + esc(d.line) + '</span>'
         + '<span class="ziel"><span class="pfeil">' + symbol('fa-arrow-right') + '</span>'
