@@ -492,8 +492,16 @@ body {
   transform: translate(-50%, -50%); z-index: 1;
   width: 13px; height: 13px; border-radius: 50%; background: var(--text);
 }
-/* Der Umstieg: gepunktet, wie in der waagerechten Ansicht. */
-.vt-zeile.um .vt-schiene::before, .vt-zeile.um .vt-schiene::after {
+/* Der Umstieg: gepunktet, wie in der waagerechten Ansicht — und zwar DURCH,
+   vom Aussteige-Punkt bis zum Einsteige-Punkt. Dazwischen liegen drei Zeilen
+   (aussteigen, umsteigen, einsteigen); jede malt ihr Stueck.
+   `background-position: center top` an allen dreien: so faengt das Muster in
+   jedem Stueck an derselben Stelle an und die Naht faellt kaum auf. Ganz ohne
+   Naht ginge es nur mit einem einzigen Element — dafuer muessten die drei
+   Beschriftungen aus dem Fluss, und das waere teurer erkauft als der Gewinn. */
+.vt-zeile.um .vt-schiene::before, .vt-zeile.um .vt-schiene::after,
+.vt-zeile.o-punkte .vt-schiene::before,
+.vt-zeile.u-punkte .vt-schiene::after {
   background: none;
   background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
   background-size: 9px 9px; background-position: center top;
@@ -1027,8 +1035,15 @@ function senkrechtHtml(v, schluessel) {
      Farbe wechselt — an einem Halt genau am Punkt, sonst gar nicht. */
   const zeile = function (klasse, oben, unten, inhalt, knick, punkt, dauer) {
     const hoch = dauer ? ' style="min-height:' + laenge(dauer) + 'px"' : '';
-    return '<div class="vt-zeile ' + klasse + '"' + hoch + '>'
-      + '<div class="vt-schiene" style="--o:' + oben + ';--u:' + unten
+    /* „punkte" ist keine Farbe, sondern ein Muster — es haengt an einer Klasse.
+       Nur so laesst sich die Strichelung des Umstiegs ueber die Zeilengrenzen
+       hinweg fortsetzen: sie beginnt unter dem Aussteige-Punkt und endet am
+       Einsteige-Punkt, mit der Umstiegszeile dazwischen. */
+    const muster = (oben === 'punkte' ? ' o-punkte' : '')
+                 + (unten === 'punkte' ? ' u-punkte' : '');
+    return '<div class="vt-zeile ' + klasse + muster + '"' + hoch + '>'
+      + '<div class="vt-schiene" style="--o:' + (oben === 'punkte' ? 'transparent' : oben)
+      +   ';--u:' + (unten === 'punkte' ? 'transparent' : unten)
       +   (knick ? ';--knick:' + knick : '') + '">'
       +   (punkt ? '<div class="pkt"></div>' : '') + '</div>'
       + '<div class="vt-inhalt">' + inhalt + '</div></div>';
@@ -1050,7 +1065,7 @@ function senkrechtHtml(v, schluessel) {
 
   fahrten.forEach(function (idx, k) {
     const l = legs[idx];
-    const vorher = k === 0 ? (anlauf > 0 ? blass : 'transparent') : farbe(k - 1);
+    const vorher = k === 0 ? (anlauf > 0 ? blass : 'transparent') : 'punkte';
 
     /* Einsteigen */
     html += zeile('vt-halt', vorher, farbe(k),
@@ -1095,7 +1110,7 @@ function senkrechtHtml(v, schluessel) {
     const danach = letzteFahrt
       ? (sek(idx + 1, legs.length) > 0 ? blass : 'transparent')
       : 'transparent';
-    html += zeile('vt-halt', farbe(k), letzteFahrt ? danach : 'transparent',
+    html += zeile('vt-halt', farbe(k), letzteFahrt ? danach : 'punkte',
       '<div class="zeit">' + esc(l.arrText) + '</div>'
       + '<div class="name">' + esc(l.to) + '</div>'
       + (l.platformTo ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platformTo) + '</div>' : ''),
