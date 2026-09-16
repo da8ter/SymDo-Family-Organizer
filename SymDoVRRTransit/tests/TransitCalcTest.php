@@ -635,8 +635,24 @@ $gemalt = TransitCalc::VmAnmalen([
 ], $eigen);
 pruefe('Fahrt bekommt Farbe und Symbol',
     [$gemalt[0]['icon'], $gemalt[0]['color']], ['fa-van-shuttle', '#112233']);
-pruefe('Fussweg bleibt unberuehrt',
-    [$gemalt[1]['icon'], isset($gemalt[1]['color'])], ['fa-person-walking', false]);
+/* Der Fussweg hat seine EIGENE Zeile — er bekommt deshalb das Symbol und die
+   Farbe von dort, nicht die der Fahrt daneben. */
+pruefe('Fussweg bekommt sein eigenes Aussehen',
+    [$gemalt[1]['icon'], $gemalt[1]['color'] ?? ''], ['fa-person-walking', '#5E8C80']);
+
+/* Der Fussweg ist seit dem 16.09.2026 eine eigene Zeile der Tabelle: er wird
+   gezeichnet, also darf man ihm Farbe und Symbol geben. Die Wartezeit nicht —
+   Warten ist kein Weg. */
+$wege = TransitCalc::VmAnmalen([
+    ['kind' => 'walk', 'class' => 100, 'icon' => 'fa-person-walking'],
+    ['kind' => 'walk', 'class' => 99,  'icon' => 'fa-person-walking'],
+    ['kind' => 'wait', 'class' => 99,  'icon' => 'fa-hourglass-half'],
+], $vorgabe);
+pruefe('Fusspfad der Auskunft bekommt Farbe', $wege[0]['color'] ?? '', '#5E8C80');
+pruefe('eigener Fussweg ebenso', $wege[1]['color'] ?? '', '#5E8C80');
+pruefe('Warten bekommt keine', isset($wege[2]['color']), false);
+pruefe('beide Fussweg-Klassen zeigen auf dieselbe Zeile',
+    [TransitCalc::VmSchluessel(99), TransitCalc::VmSchluessel(100)], ['fuss', 'fuss']);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -65,6 +65,11 @@ final class TransitCalc
         ['key' => 'faehre', 'name' => 'Fähre',               'icon' => 'ship',         'color' => 0x127A8A, 'klassen' => [9]],
         ['key' => 'seil',   'name' => 'Seilbahn',            'icon' => 'cable-car',    'color' => 0x1E7A5A, 'klassen' => [8]],
         ['key' => 'sonst',  'name' => 'Sonstige',            'icon' => 'route',        'color' => 0x6E7781, 'klassen' => [0]],
+        /* Der Fussweg ist kein Verkehrsmittel — aber er wird gezeichnet, und
+           deshalb darf man ihm auch Farbe und Symbol geben. Seine Klassen sind
+           99 (die Wege, die das Modul selbst einsetzt) und 100 (die Fusspfade
+           der Auskunft). */
+        ['key' => 'fuss',   'name' => 'Fußweg',              'icon' => 'person-walking', 'color' => 0x5E8C80, 'klassen' => [99, 100]],
     ];
 
     /**
@@ -135,7 +140,10 @@ final class TransitCalc
     public static function VmAnmalen(array $eintraege, array $aussehen): array
     {
         foreach ($eintraege as $i => $e) {
-            if (!is_array($e) || ($e['kind'] ?? 'ride') !== 'ride') {
+            $art = is_array($e) ? (string)($e['kind'] ?? 'ride') : '';
+            /* Fahrten und Fusswege bekommen ihr Aussehen, Wartezeiten nicht:
+               Warten ist kein Weg, es hat kein Symbol und keine Farbe. */
+            if ($art !== 'ride' && $art !== 'walk') {
                 continue;
             }
             $stil = $aussehen[self::VmSchluessel((int)($e['class'] ?? -1))] ?? null;

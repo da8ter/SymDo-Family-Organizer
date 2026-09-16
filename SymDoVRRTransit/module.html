@@ -270,9 +270,12 @@ body {
 }
 /* Der Fußweg ist kein Fahren: blass statt kräftig, damit die Zeitachse auf
    einen Blick sagt, wo man selbst läuft. */
+/* Der Fussweg hat seit der Verkehrsmittel-Tabelle eine eigene Farbe; sie kommt
+   je Stueck als Inline-Stil. Hier steht nur der Rueckfall fuer alte Nutzlasten
+   — und die Schriftfarbe, die dann zur gefuellten Flaeche passt. */
 .stueck.walk {
   background: color-mix(in srgb, var(--akzent) 22%, transparent);
-  color: var(--text);
+  color: #fff;
 }
 /* Die Minutenzeile spiegelt den Balken: gleiche Anteile, gleiche Polsterung —
    so sitzt jede Zahl unter ihrem Stück. Abgeschnitten statt umgebrochen, sonst
@@ -825,10 +828,12 @@ function balkenHtml(v) {
        kein Fehler, den der Browser meldet — er nimmt das erste und wirft das
        zweite weg. Die Farbe des Verkehrsmittels fiel deshalb lautlos unter den
        Tisch und alle Stuecke blieben akzentfarben (in der Kachel gesehen). */
-    const stil = l.kind === 'ride'
-      ? ' style="flex-grow:' + Math.max(1, l.seconds)
-        + ';background:' + verkehrsmittelFarbe(l) + '"'
-      : '';
+    /* Nur die Fahrten wachsen; Farbe bekommen Fahrt UND Fussweg. Die Wartezeit
+       bleibt neutral — Warten ist kein Weg. */
+    const teile = [];
+    if (l.kind === 'ride') { teile.push('flex-grow:' + Math.max(1, l.seconds)); }
+    if (l.color) { teile.push('background:' + l.color); }
+    const stil = teile.length ? ' style="' + teile.join(';') + '"' : '';
     return '<div class="stueck ' + esc(l.kind) + '"' + stil + ' title="'
       + esc(was + ' ' + min + ', ' + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
       + symbol(l.icon) + text + '</div>';
@@ -899,9 +904,15 @@ function zeitachseHtml(v, jetzt) {
      Nachbarn, damit die Schiene durch ihn HINDURCH laeuft statt an der
      Spaltengrenze aufzuhoeren. `null` heisst „gepunktet" (Umstieg) und wird
      ueber eine Klasse geloest, weil ein Punktmuster keine Farbe ist. */
+  /* Die Farbe der Fusswege. Alle Wege einer Verbindung gehoeren derselben
+     Zeile der Tabelle an, deshalb genuegt der erste. Fehlt sie (alte Nutzlast),
+     bleibt es beim blassen Akzent wie frueher. */
+  const fussLeg = legs.find(function (l) { return l.kind === 'walk' && l.color; });
+  const fussFarbe = fussLeg ? fussLeg.color : 'color-mix(in srgb, var(--akzent) 22%, transparent)';
+
   const farbeVon = function (t) {
     if (!t) { return 'transparent'; }
-    if (t.typ === 'weg') { return 'color-mix(in srgb, var(--akzent) 22%, transparent)'; }
+    if (t.typ === 'weg') { return fussFarbe; }
     return verkehrsmittelFarbe(t.leg);
   };
 
@@ -1099,7 +1110,8 @@ function senkrechtHtml(v, schluessel) {
   };
   const min = function (s) { return Math.round(s / 60) + ' ' + translate('min'); };
   const farbe = function (k) { return verkehrsmittelFarbe(legs[fahrten[k]]); };
-  const blass = 'color-mix(in srgb, var(--akzent) 22%, transparent)';
+  const fussLeg = legs.find(function (l) { return l.kind === 'walk' && l.color; });
+  const blass = fussLeg ? fussLeg.color : 'color-mix(in srgb, var(--akzent) 22%, transparent)';
 
   /* Wie lang ist ein Abschnitt?
      Acht Pixel je Minute, hoechstens 280 — gemessen wird dabei der Abstand von

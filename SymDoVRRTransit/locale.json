@@ -150,7 +150,8 @@
             "Fernzug": "Fernzug",
             "Fähre": "Fähre",
             "Seilbahn": "Seilbahn",
-            "Sonstige": "Sonstige"
+            "Sonstige": "Sonstige",
+            "Fußweg": "Fußweg"
         }
     }
 }

@@ -74,7 +74,7 @@ Gattung — S-Bahn grün, U-Bahn blau, Straßenbahn rot, Bus violett, Regionalzu
 schiefergrau, Fernzug dunkelrot. So sieht man auf einen Blick, worin man sitzt.
 
 Unter *Darstellung* steht dafür eine Tabelle: je Verkehrsmittel ein Symbol und
-eine Farbe, beides frei wählbar. **Vorgaben wiederherstellen** holt die
+eine Farbe, beides frei wählbar — der Fußweg steht als eigene Zeile mit dabei. **Vorgaben wiederherstellen** holt die
 Ausgangswerte zurück. Der VRR selbst liefert keine Farben mit — das ist unsere
 Zuordnung, die im deutschen Nahverkehr übliche.
 
