@@ -208,14 +208,14 @@ body {
 .tl-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .tl-kopf .seite { min-width: 0; }
 .tl-kopf .seite.rechts { text-align: right; }
-.tl-kopf .was { font-size: 10px; color: var(--dezent); line-height: 1.2; }
-.tl-kopf .uhr { font-size: 21px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; }
-.tl-kopf .gleich { font-size: 11px; font-weight: 700; color: var(--akzent); }
-.tl-kopf .gesamt { font-size: 11px; color: var(--dezent); }
+.tl-kopf .was { font-size: 11px; color: var(--dezent); line-height: 1.2; }
+.tl-kopf .uhr { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; }
+.tl-kopf .gleich { font-size: 12px; font-weight: 700; color: var(--akzent); }
+.tl-kopf .gesamt { font-size: 12px; color: var(--dezent); }
 
 .tl-spur {
   display: grid; grid-auto-flow: column;
-  grid-template-rows: auto 16px auto;
+  grid-template-rows: auto 20px auto;
   align-items: center; column-gap: 0;
 }
 .tl-spur > * { min-width: 0; }
@@ -230,8 +230,8 @@ body {
    Angabe, auf die es ankommt, war weg. Untergrenze und Auslassungszeichen. */
 .tl-spur .marke { flex: 0 1 auto; min-width: 2.8em; text-overflow: ellipsis; }
 /* Zeile 1 und 3 duerfen leer sein — dann traegt die Spalte dort nichts bei. */
-.tl-spur .o, .tl-spur .u { font-size: 10px; line-height: 1.25; text-align: center; }
-.tl-spur .u b { display: block; font-size: 11px; font-weight: 700; color: var(--text); }
+.tl-spur .o, .tl-spur .u { font-size: 11px; line-height: 1.25; text-align: center; }
+.tl-spur .u b { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
 .tl-spur .u span, .tl-spur .o span { display: block; color: var(--dezent); }
 .tl-spur .o em { display: block; font-style: normal; font-weight: 700; color: var(--text); }
 
@@ -246,37 +246,43 @@ body {
 .tl-halt.m { position: relative; padding: 0; }
 .tl-halt.m::before, .tl-halt.m::after {
   content: ''; position: absolute; top: 50%; transform: translateY(-50%);
-  width: 50%; height: 7px; background: var(--l, transparent);
+  width: 50%; height: 9px; background: var(--l, transparent);
 }
 .tl-halt.m::before { left: 0; }
 .tl-halt.m::after  { right: 0; background: var(--r, transparent); }
 /* Zum Umstieg hin ist die Schiene gepunktet — dort laeuft man selbst. */
 .tl-halt.m.r-um::after {
   background: none;
-  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
-  background-size: 7px 7px; background-position: center;
+  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
+  background-size: 9px 9px; background-position: center;
 }
 .tl-halt.m.l-um::before {
   background: none;
-  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
-  background-size: 7px 7px; background-position: center;
+  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
+  background-size: 9px 9px; background-position: center;
 }
-.tl-halt.o, .tl-halt.u { padding: 0 3px; }
+/* Luft zwischen den Beschriftungen. Ohne sie stossen „6 min zu Fuss" und der
+   Haltestellenname aneinander und lesen sich als EIN Text — in der laufenden
+   Kachel stand da „6 min D-Rosmarinstrasse". Die Polsterung sitzt nur an den
+   Beschriftungszellen; die mittlere Reihe bleibt ohne, sonst risse die Schiene
+   wieder auf. */
+.tl-halt.o, .tl-halt.u { padding: 0 8px; }
+.tl-fahrt.o, .tl-fahrt.u, .tl-um.o, .tl-um.u, .tl-weg.o, .tl-weg.u { padding: 0 6px; }
 .tl-halt .pkt {
   position: relative; z-index: 1;
-  width: 11px; height: 11px; border-radius: 50%; margin: 0 auto;
+  width: 13px; height: 13px; border-radius: 50%; margin: 0 auto;
   background: var(--text); box-sizing: border-box; flex: 0 0 auto;
 }
 /* Der Umstieg bleibt ein Punkt, nur kleiner: die Unterscheidung traegt jetzt
    die Groesse und nicht mehr die Farbe. */
-.tl-halt.um .pkt { width: 9px; height: 9px; }
+.tl-halt.um .pkt { width: 11px; height: 11px; }
 /* Die Spalte eines Halts ist `max-content` — ihre Breite haengt also an diesem
    Deckel. Ohne ihn nahm „D-Unterbacher See / Strandbad Sued" 200 Pixel, und
    fuer die Schiene blieb ein Stummel (im Prueflauf gemessen). Zwei Zeilen,
    danach abgeschnitten; den Deckel zieht die Behaelterabfrage weiter unten
    enger, wenn die Kachel schmal wird. */
-.tl-halt.u, .tl-halt.o { max-width: 92px; }
-.tl-halt.um.o { max-width: 78px; }
+.tl-halt.u, .tl-halt.o { max-width: 108px; }
+.tl-halt.um.o { max-width: 92px; }
 /* Zwei Klassen im Selektor, nicht eine: `.tl-spur .u b` setzt weiter oben
    `display:block` und gewinnt sonst — die Klammer blieb wirkungslos, und
    „D-Unterbacher See / Strandbad Sued" stand ueber drei Zeilen (gemessen). */
@@ -287,12 +293,20 @@ body {
 
 /* Das Fahrstueck. Es waechst im Verhaeltnis seiner Dauer; die Farbe wechselt
    je Fahrt, damit zwei Linien nebeneinander auseinanderzuhalten sind. */
-.tl-fahrt .bahn { height: 7px; border-radius: 4px; background: var(--akzent); }
+/* KEINE Rundung an den Stossstellen: wo ein Fahrstueck auf die Schiene der
+   Haltespalte trifft, macht eine abgerundete Ecke aus dem Uebergang eine
+   sichtbare Kerbe. Rund wird deshalb nur das aeussere Ende der ganzen Schiene —
+   die erste und die letzte Zelle der mittleren Reihe. Die Zellen kommen in
+   Dreiergruppen (oben, Mitte, unten), die mittlere ist also das zweite Kind von
+   vorn und das zweite von hinten. */
+.tl-fahrt .bahn { height: 9px; border-radius: 0; background: var(--akzent); }
+.tl-spur .m:nth-child(2) .bahn { border-radius: 4px 0 0 4px; }
+.tl-spur .m:nth-last-child(2) .bahn { border-radius: 0 4px 4px 0; }
 .tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
 .tl-fahrt .marke {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 7px; border-radius: 7px; background: var(--akzent);
-  color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap;
+  padding: 3px 9px; border-radius: 8px; background: var(--akzent);
+  color: #fff; font-size: 12px; font-weight: 800; white-space: nowrap;
   max-width: 100%; overflow: hidden;
 }
 .tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
@@ -300,15 +314,15 @@ body {
 /* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft. */
 .tl-um b, .tl-weg b { white-space: nowrap; }
 .tl-um .bahn {
-  height: 7px; min-width: 26px;
-  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
-  background-size: 7px 7px; background-position: center;
+  height: 9px; min-width: 30px;
+  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
+  background-size: 9px 9px; background-position: center;
 }
 .tl-um b { white-space: nowrap; }
 
 /* Anlauf und Auslauf: der Fussweg vor der ersten und nach der letzten Fahrt. */
 .tl-weg .bahn {
-  height: 7px; min-width: 20px; border-radius: 4px;
+  height: 9px; min-width: 24px; border-radius: 0;
   background: color-mix(in srgb, var(--akzent) 22%, transparent);
 }
 
@@ -317,14 +331,27 @@ body {
 .tl-werte { display: flex; gap: 6px; }
 .tl-wert {
   flex: 1 1 0; min-width: 0;
+  display: flex; align-items: center; gap: 7px;
   background: color-mix(in srgb, var(--content-color) 6%, transparent);
-  border-radius: 8px; padding: 5px 7px;
+  border-radius: 10px; padding: 7px 9px;
 }
-.tl-wert .was { font-size: 9px; color: var(--dezent); white-space: nowrap;
+/* Das Sinnbild im runden Feld — dieselbe Machart wie die Knoepfe der Web-App:
+   Flaeche in der Akzentfarbe mit wenig Deckung, Zeichen in voller. */
+.tl-wert .sinn {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--akzent) 18%, transparent);
+  color: var(--akzent); font-size: 13px;
+}
+.tl-wert .text { min-width: 0; }
+.tl-wert .was { font-size: 10px; color: var(--dezent); white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; }
-.tl-wert .zahl { font-size: 12px; font-weight: 800; white-space: nowrap;
+.tl-wert .zahl { font-size: 14px; font-weight: 800; white-space: nowrap;
                  overflow: hidden; text-overflow: ellipsis; }
 .tl-wert.voll .zahl { color: var(--warn); }
+.tl-wert.voll .sinn {
+  background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn);
+}
 
 /* Wird die Kachel schmal, faellt zuerst die Zahl der Haltestellen, dann der
    Steig und zuletzt die Kennzahlenzeile. Die Uhrzeiten und die Linien bleiben:
@@ -332,12 +359,12 @@ body {
 /* Ist Platz da, darf der Haltestellenname mehr davon haben — 92 Pixel sind der
    Kompromiss fuer die schmale Kachel, nicht das Ziel. */
 @container (min-width: 520px) {
-  .tl-halt.u, .tl-halt.o { max-width: 124px; }
-  .tl-halt.um.o { max-width: 104px; }
+  .tl-halt.u, .tl-halt.o { max-width: 150px; }
+  .tl-halt.um.o { max-width: 126px; }
 }
 @container (max-width: 380px) {
-  .tl-halt.u, .tl-halt.o { max-width: 72px; }
-  .tl-halt.um.o { max-width: 64px; }
+  .tl-halt.u, .tl-halt.o { max-width: 86px; }
+  .tl-halt.um.o { max-width: 76px; }
   /* Das Symbol im Linienschild faellt zuerst — die Nummer traegt die Auskunft. */
   .tl-spur .marke { font-size: 10px; padding: 2px 5px; gap: 0; min-width: 0; }
   .tl-spur .marke i, .tl-spur .marke svg { display: none; }
@@ -345,7 +372,10 @@ body {
      span in der oberen Zeile, und ohne die Ausnahme verschwand sie hier mit —
      gemessen 0 Pixel breit, die Kachel zeigte Schienen ohne Linien. */
   .tl-spur .u span:not(.marke), .tl-spur .o span:not(.marke) { display: none; }
-  .tl-kopf .uhr { font-size: 18px; }
+  .tl-kopf .uhr { font-size: 22px; }
+}
+@container (max-width: 330px) {
+  .tl-wert .sinn { display: none; }
 }
 @container (max-width: 250px) {
   .tl-werte { display: none; }
@@ -702,10 +732,11 @@ function zeitachseHtml(v, jetzt) {
     standing: translate('standing only'), full: translate('very full'),
   }[voll] || '';
 
-  const wert = function (was, zahl, klasse) {
+  const wert = function (was, zahl, zeichen, klasse) {
     return '<div class="tl-wert' + (klasse ? ' ' + klasse : '') + '">'
-      + '<div class="was">' + esc(was) + '</div>'
-      + '<div class="zahl">' + esc(zahl) + '</div></div>';
+      + '<div class="sinn">' + symbol(zeichen) + '</div>'
+      + '<div class="text"><div class="was">' + esc(was) + '</div>'
+      + '<div class="zahl">' + esc(zahl) + '</div></div></div>';
   };
 
   return '<div class="tl">'
@@ -719,11 +750,11 @@ function zeitachseHtml(v, jetzt) {
     + '</div>'
     + '<div class="tl-spur" style="grid-template-columns:' + spalten.join(' ') + '">' + zellen + '</div>'
     + '<div class="tl-werte">'
-    +   wert(translate('Total time'), min(v.seconds))
+    +   wert(translate('Total time'), min(v.seconds), 'fa-stopwatch')
     +   wert(translate('Changes'), v.interchanges > 0
             ? v.interchanges + ' ' + translate(v.interchanges === 1 ? 'change' : 'changes')
-            : translate('direct'))
-    +   (auslastung ? wert(translate('Occupancy'), auslastung,
+            : translate('direct'), 'fa-arrow-right-arrow-left')
+    +   (auslastung ? wert(translate('Occupancy'), auslastung, 'fa-users',
             (voll === 'full' || voll === 'standing') ? 'voll' : '') : '')
     + '</div>'
     + '</div>';
