@@ -43,6 +43,13 @@
   --sym-mt: 0px;
   --sym-ms: 0px;
   --sym-mb: 0px;
+  /* Der Scrollbalken gehoert MITTIG IN DEN KACHELRAND, nicht innen an den
+     Inhalt (Hausrezept der grossen Kacheln). Dafuer wird der rechte Rand
+     geteilt: `--sb-pad` liegt zweimal an — einmal am Rahmen, einmal am
+     scrollenden Bereich —, dazwischen die sechs Pixel des Balkens. Zusammen
+     ergibt das wieder genau `--sym-ms`, und der Balken sitzt in dessen Mitte. */
+  --sbw: 6px;
+  --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 /* Die Kachel haelt das Rad bei sich. Ohne das reicht der Browser eine
    Radbewegung, die hier nichts mehr zu scrollen findet, an die Seite darueber
@@ -68,13 +75,17 @@ body {
      obendrauf und ließ die Kachel viel zu schmal wirken. Den Innenabstand
      tragen die Karten selbst. So halten es die übrigen Kacheln auch. */
   padding: calc(max(var(--sym-mt), env(safe-area-inset-top, 0px)) + 8px)
-           var(--sym-ms)
+           var(--sb-pad)
            calc(var(--sym-mb) + 6px)
            var(--sym-ms);
 }
 
 /* Kopfzeile: Bild und Name links, Umschalter rechts — und bei zu langem Namen
    rutscht der Umschalter in die nächste Zeile, statt den Namen zu kürzen. */
+/* Kopfzeile und Quellenangabe scrollen nicht — sie haengen direkt am Rahmen
+   und muessten sonst um `--sb-pad` plus Balkenbreite in den Randstreifen
+   hineinragen. Der Nachschlag holt den vollen Rand zurueck. */
+.kopf, .quelle { margin-right: calc(var(--sb-pad) + var(--sbw)); }
 .kopf { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
 .kopf .umschalter { margin-left: auto; flex: 0 0 auto; }
 /* Der zweite Schalter haengt sich an den ersten, statt sich mit `auto` von ihm
@@ -104,15 +115,18 @@ body {
 .umschalter button.an { background: var(--akzent); color: #fff; }
 
 .liste {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  flex: 1 1 auto; min-height: 0;
+  /* `scroll`, nicht `auto`: der Streifen ist immer reserviert, der rechte
+     Abstand springt also nicht, sobald der Inhalt lang genug wird. Die leere
+     Spur ist durchsichtig, der Griff erscheint nur bei Bedarf. */
+  overflow-y: scroll;
   display: flex; flex-direction: column; gap: 8px;
   /* Am Ende der Liste hoert es auf — die Bewegung wandert nicht weiter nach
      draussen in die Visualisierung. */
   overscroll-behavior: contain;
-  /* Der Scrollstreifen ist immer reserviert, wie in der ToDo- und der
-     Einkaufsliste: sonst springt der Inhalt um sechs Pixel, sobald er lang
-     genug zum Scrollen wird. */
-  scrollbar-gutter: stable;
+  /* Die zweite Haelfte des rechten Randes. Erst damit sitzt der Balken mittig
+     im Kachelrand und der Inhalt endet buendig wie links. */
+  padding-right: var(--sb-pad);
 }
 /* Und die Karten duerfen NICHT schrumpfen. Als Flex-Kinder tun sie das von
    Haus aus: sie pressen sich in die Liste hinein, statt sie ueberlaufen zu
@@ -122,9 +136,21 @@ body {
    zu scrollen, nur etwas zu sehen, das fehlte. */
 .liste > * { flex: 0 0 auto; }
 /* Hausrezept für Scrollleisten: schmal, Griff in der Akzentfarbe. */
-.liste::-webkit-scrollbar { width: 6px; }
-.liste::-webkit-scrollbar-thumb { background: var(--akzent); border-radius: 3px; }
+.liste::-webkit-scrollbar { width: var(--sbw); height: var(--sbw); }
 .liste::-webkit-scrollbar-track { background: transparent; }
+.liste::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--akzent) 70%, transparent);
+  border-radius: 999px;
+}
+/* Standard und Pseudoelemente schliessen sich aus: ist `scrollbar-width`
+   gesetzt, uebergeht WebKit die Pseudoelemente und malt elf Pixel statt sechs.
+   Deshalb der Riegel — nur wo es die Pseudoelemente NICHT gibt. */
+@supports not selector(::-webkit-scrollbar) {
+  .liste {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent;
+  }
+}
 
 .karte { background: var(--zeile); border-radius: 12px; padding: 8px 10px; overflow: hidden; }
 .karte .titel {
