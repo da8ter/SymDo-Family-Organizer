@@ -821,9 +821,15 @@ function balkenHtml(v) {
        Fußweg und Warten übrig lassen — verteilt sich damit so, wie die Fahrten
        zueinander stehen. Eine Untergrenze gibt es bewusst nicht; sie würde
        genau das Verhältnis verfälschen, um das es hier geht. */
-    const wachsen = l.kind === 'ride' ? ' style="flex-grow:' + Math.max(1, l.seconds) + '"' : '';
-    const farbe = l.kind === 'ride' ? ' style="background:' + verkehrsmittelFarbe(l) + '"' : '';
-    return '<div class="stueck ' + esc(l.kind) + '"' + wachsen + farbe + ' title="'
+    /* BEIDES in EINEM style-Attribut. Zwei `style="…"` am selben Element sind
+       kein Fehler, den der Browser meldet — er nimmt das erste und wirft das
+       zweite weg. Die Farbe des Verkehrsmittels fiel deshalb lautlos unter den
+       Tisch und alle Stuecke blieben akzentfarben (in der Kachel gesehen). */
+    const stil = l.kind === 'ride'
+      ? ' style="flex-grow:' + Math.max(1, l.seconds)
+        + ';background:' + verkehrsmittelFarbe(l) + '"'
+      : '';
+    return '<div class="stueck ' + esc(l.kind) + '"' + stil + ' title="'
       + esc(was + ' ' + min + ', ' + l.from + ' ' + l.depText + ' → ' + l.to + ' ' + l.arrText) + '">'
       + symbol(l.icon) + text + '</div>';
   }).join('') + '</div>';
