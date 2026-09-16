@@ -64,7 +64,10 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
 - **Senkrecht, mit Haltestellen** — die Fahrt von oben nach unten gelesen: je
   Halt die Uhrzeit, der Name und der Steig, dazwischen die Linie mit ihrer
   Richtung. Und je Fahrt lässt sich aufklappen, wo der Wagen überall hält —
-  mit Uhrzeit für jede Haltestelle. Am schönsten auf einer hohen Kachel.
+  mit Uhrzeit für jede Haltestelle. Die Striche dazwischen sind so lang, wie die
+  Fahrt dauert; nur unter einer knappen Viertelstunde gibt der Platzbedarf den
+  Ausschlag, weil Linie und Knopf hineinpassen müssen. Am schönsten auf einer
+  hohen Kachel.
 
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
 *Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung

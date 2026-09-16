@@ -961,10 +961,23 @@ function senkrechtHtml(v, schluessel) {
   };
   const blass = 'color-mix(in srgb, var(--akzent) 22%, transparent)';
 
+  /* Wie lang ist ein Abschnitt? Vier Pixel je Minute, hoechstens 200.
+     Das ist eine UNTERGRENZE, keine feste Hoehe: der Inhalt einer Fahrtzeile
+     (Linienschild und Ausklapp-Knopf) braucht rund 67 Pixel, und darunter geht
+     es nicht. Unterhalb von etwa siebzehn Minuten bestimmt deshalb weiter der
+     Inhalt die Hoehe, darueber die Fahrzeit — eine halbe Stunde ist dann
+     sichtbar laenger als eine Viertelstunde.
+     Die Halte selbst bekommen nichts: sie sind Zeitpunkte, keine Dauer, und
+     ihre Hoehe haengt am Namen, der lesbar bleiben muss. */
+  const laenge = function (sekunden) {
+    return Math.min(200, Math.round((sekunden || 0) / 60 * 4));
+  };
+
   /* Eine Zeile des Rasters. `knick` sagt, auf welcher Hoehe die Schiene die
      Farbe wechselt — an einem Halt genau am Punkt, sonst gar nicht. */
-  const zeile = function (klasse, oben, unten, inhalt, knick, punkt) {
-    return '<div class="vt-zeile ' + klasse + '">'
+  const zeile = function (klasse, oben, unten, inhalt, knick, punkt, dauer) {
+    const hoch = dauer ? ' style="min-height:' + laenge(dauer) + 'px"' : '';
+    return '<div class="vt-zeile ' + klasse + '"' + hoch + '>'
       + '<div class="vt-schiene" style="--o:' + oben + ';--u:' + unten
       +   (knick ? ';--knick:' + knick : '') + '">'
       +   (punkt ? '<div class="pkt"></div>' : '') + '</div>'
@@ -980,7 +993,7 @@ function senkrechtHtml(v, schluessel) {
        Kennzahlenzeile, und es sah aus, als liefe der Strich dahinter weiter. */
     html += zeile('weg', 'transparent', blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(anlauf)) + '</b> '
-      + esc(translate('on foot')), '34%', false);
+      + esc(translate('on foot')), '34%', false, anlauf);
   }
 
   fahrten.forEach(function (idx, k) {
@@ -1023,7 +1036,7 @@ function senkrechtHtml(v, schluessel) {
             : '')
       : '<div class="vt-knopf" style="cursor:default">' + text + '</div>';
     html += zeile('vt-fahrt' + (k % 2 === 1 ? ' zweit' : ''),
-                  farbe(k), farbe(k), inhalt, '0px', false);
+                  farbe(k), farbe(k), inhalt, '0px', false, l.seconds);
 
     /* Aussteigen und, wenn noch eine Fahrt folgt, der Umstieg */
     const letzteFahrt = k === fahrten.length - 1;
@@ -1040,7 +1053,7 @@ function senkrechtHtml(v, schluessel) {
       const pause = sek(idx + 1, fahrten[k + 1]);
       html += zeile('um', 'transparent', 'transparent',
         '<b>' + symbol('fa-person-walking') + ' ' + esc(min(pause)) + '</b> '
-        + esc(translate('change')), '0px', false);
+        + esc(translate('change')), '0px', false, pause);
     }
   });
 
@@ -1048,7 +1061,7 @@ function senkrechtHtml(v, schluessel) {
   if (auslauf > 0) {
     html += zeile('weg', blass, 'transparent',
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(auslauf)) + '</b> '
-      + esc(translate('on foot')), '66%', false);
+      + esc(translate('on foot')), '66%', false, auslauf);
   }
 
   return '<div class="vt">' + html + '</div>' + werteHtml(v);
