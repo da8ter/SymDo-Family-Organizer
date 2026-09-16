@@ -258,8 +258,12 @@ class SymDoChores extends IPSModuleStrict
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
             ['caption' => $this->Translate('Chore'), 'name' => 'name', 'width' => 'auto',
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
-            ['caption' => $this->Translate('Per week'), 'name' => 'perWeek', 'width' => '110px',
-             'add' => 1, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 1, 'maximum' => 7]],
+            // Die Wochentage als sieben Haken, in der Reihenfolge der Anzeige.
+            // Sie ersetzen die alte Spalte „pro Woche": wie oft etwas dran ist,
+            // sagen jetzt die Tage. Zeilen ohne einen einzigen Haken fallen im
+            // Modul auf die alte Angabe zurueck, damit bestehende Plaene nach
+            // dem Update genauso aussehen wie vorher.
+            ...$this->TagesSpalten(),
             ['caption' => $this->Translate('Who'), 'name' => 'circle', 'width' => '180px',
              'add' => 'all', 'edit' => ['type' => 'Select', 'options' => $wer]],
         ];
@@ -357,6 +361,34 @@ class SymDoChores extends IPSModuleStrict
      * gespeicherte, nicht mehr auffindbare Wahl wird so ehrlich angezeigt
      * statt still auf „bitte wählen" zu fallen.
      */
+    /**
+     * Die sieben Wochentage als Spalten der Ämtchen-Liste.
+     *
+     * Reihenfolge und Beschriftung folgen dem eingestellten ersten Wochentag —
+     * wer die Woche am Sonntag beginnt, sieht den Sonntag links. Der erste Tag
+     * ist bei einer neuen Zeile vorbelegt, damit ein frisch angelegtes Ämtchen
+     * sofort einen Platz hat statt lautlos aus dem Plan zu fallen.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function TagesSpalten(): array
+    {
+        $kuerzel = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        $start = max(1, min(7, (int)$this->ReadPropertyInteger('WeekStart')));
+        $raus = [];
+        for ($i = 0; $i < 7; $i++) {
+            $iso = (($start - 1 + $i) % 7) + 1;
+            $raus[] = [
+                'caption' => $this->Translate($kuerzel[$iso - 1]),
+                'name'    => 'd' . $iso,
+                'width'   => '52px',
+                'add'     => $i === 0,
+                'edit'    => ['type' => 'CheckBox'],
+            ];
+        }
+        return $raus;
+    }
+
     private function RoutinenOptionen(): array
     {
         $optionen = [['caption' => $this->Translate('— please select —'), 'value' => 0]];

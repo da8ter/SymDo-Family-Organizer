@@ -113,16 +113,59 @@ trait ChoreStore
             if ($id === '' || $name === '') {
                 continue;
             }
+            $tage = $this->TageEinesAemtchens($z);
             $raus[] = [
                 'id'      => $id,
                 'emoji'   => trim((string)($z['emoji'] ?? '')),
                 'name'    => $name,
                 'points'  => max(0, (int)($z['points'] ?? 5)),
-                'perWeek' => max(1, min(7, (int)($z['perWeek'] ?? 1))),
+                /* Wie oft in der Woche — das sagen jetzt die TAGE. Die alte
+                   Spalte bleibt nur als Rückfall für Zeilen, die noch keine
+                   Tage tragen. */
+                'perWeek' => count($tage),
+                'days'    => $tage,
                 'circle'  => trim((string)($z['circle'] ?? 'all')) ?: 'all',
             ];
         }
         return $raus;
+    }
+
+    /**
+     * An welchen Wochentagen ist dieses Ämtchen dran?
+     *
+     * Die Tage stehen als sieben Haken in der Zeile (`d1` = Montag … `d7` =
+     * Sonntag, nach ISO). Zurück kommt eine aufsteigende Liste dieser Nummern,
+     * in der REIHENFOLGE DER ANZEIGE — beginnt die Woche am Sonntag, steht die
+     * 7 also vorn. Daran hängt, in welcher Spalte ein Häkchen landet.
+     *
+     * **Zeilen aus der Zeit vor den Tagesspalten** tragen keinen einzigen
+     * Haken. Für sie gilt die alte Angabe „n-mal pro Woche": sie bekommen die
+     * ersten n Tage der Woche. So sieht ein bestehender Plan nach dem Update
+     * genauso aus wie vorher, nur eben in Spalten.
+     *
+     * @param array<string,mixed> $zeile
+     * @return list<int>
+     */
+    private function TageEinesAemtchens(array $zeile): array
+    {
+        $start = $this->WochenStartTag();
+        $tage = [];
+        for ($i = 0; $i < 7; $i++) {
+            $iso = (($start - 1 + $i) % 7) + 1;
+            if (($zeile['d' . $iso] ?? false) === true) {
+                $tage[] = $iso;
+            }
+        }
+        if ($tage !== []) {
+            return $tage;
+        }
+        /* Rückfall für Zeilen ohne Tage. Mindestens einer, sonst hätte das
+           Ämtchen gar keinen Platz mehr und verschwände lautlos aus dem Plan. */
+        $wie_oft = max(1, min(7, (int)($zeile['perWeek'] ?? 1)));
+        for ($i = 0; $i < $wie_oft; $i++) {
+            $tage[] = (($start - 1 + $i) % 7) + 1;
+        }
+        return $tage;
     }
 
     /**
@@ -528,12 +571,90 @@ trait ChoreStore
      *
      * @return list<array{key:string,done:bool,points:int,memberId:string,carried:bool}>
      */
+    /**
+     * Die sieben Wochentage als Kuerzel, beginnend beim eingestellten ersten
+     * Tag der Woche.
+     *
+     * Uebersetzt wie alles andere auch: die Kachel bekommt fertige Woerter und
+     * kennt keine Wochentagsnamen.
+     *
+     * @return list<string>
+     */
+    private function WochentagKuerzel(): array
+    {
+        $alle = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        $start = $this->WochenStartTag();
+        $raus = [];
+        for ($i = 0; $i < 7; $i++) {
+            $raus[] = $this->Translate($alle[(($start - 1 + $i) % 7)]);
+        }
+        return $raus;
+    }
+
+    /**
+     * Liegt diese Spalte dieser Woche noch in der Zukunft?
+     *
+     * Vergangene Wochen sind ganz frei — dort wird nachgetragen. Kuenftige
+     * Wochen sind ganz gesperrt. In der laufenden Woche zaehlt der Vergleich
+     * mit der Spalte von heute.
+     */
+    private function InDerZukunft(string $wochenKennung, int $spalte, int $jetzt): bool
+    {
+        if ($wochenKennung === '' || $spalte < 0) {
+            return false;
+        }
+        $heute = $this->WochenKennung($jetzt);
+        if ($wochenKennung < $heute) {
+            return false;
+        }
+        if ($wochenKennung > $heute) {
+            return true;
+        }
+        return $spalte > $this->SpalteHeute($wochenKennung, $jetzt);
+    }
+
+    /**
+     * In welcher Spalte steht der heutige Tag — und steht er ueberhaupt drin?
+     *
+     * Die Wochenkennung IST das Startdatum der Woche, die Spalten sind die
+     * sieben Tage danach. Gehoert „heute" nicht zu dieser Woche, kommt -1:
+     * dann ist es eine vergangene oder eine kuenftige Woche.
+     */
+    private function SpalteHeute(string $wochenKennung, int $jetzt): int
+    {
+        if ($wochenKennung === '') {
+            return -1;
+        }
+        $heute = $this->WochenKennung($jetzt);
+        if ($heute === $wochenKennung) {
+            /* Innerhalb der laufenden Woche: der Abstand in Tagen zwischen dem
+               Wochenstart und dem heutigen Tag — gerechnet auf derselben
+               verschobenen Uhr wie die Wochenkennung, damit Montag 02:59 bei
+               Wechsel um 03:00 noch als Sonntag zaehlt. */
+            [$std, $min] = $this->WechselZeit();
+            $tag = date('Y-m-d', $jetzt - ($std * 3600 + $min * 60));
+            $a = new \DateTimeImmutable($wochenKennung . ' 12:00:00');
+            $b = new \DateTimeImmutable($tag . ' 12:00:00');
+            $abstand = (int)$a->diff($b)->format('%r%a');
+            return ($abstand >= 0 && $abstand <= 6) ? $abstand : -1;
+        }
+        return -1;
+    }
+
     private function PlaetzeFuer(array $woche, array $a): array
     {
         $erledigt = is_array($woche['done'][$a['id']] ?? null) ? $woche['done'][$a['id']] : [];
         $zustaendig = trim((string)($woche['assign'][$a['id']] ?? ''));
+        $start = $this->WochenStartTag();
+        /* Die Tage eines Ämtchens stehen in der Reihenfolge der Anzeige. Der
+           i-te Platz gehört also zum i-ten Tag — und die Spalte ist der
+           Abstand dieses Tages zum Wochenstart. Die Platz-SCHLÜSSEL bleiben
+           „0", „1", … : an ihnen hängen die gespeicherten Häkchen und die
+           gebuchten Punkte vergangener Wochen, die darf ein Umbau nicht
+           anfassen. */
+        $tage = is_array($a['days'] ?? null) && $a['days'] !== [] ? $a['days'] : [$start];
         $raus = [];
-        for ($i = 0; $i < $a['perWeek']; $i++) {
+        foreach (array_values($tage) as $i => $iso) {
             $k = (string)$i;
             $satz = is_array($erledigt[$k] ?? null) ? $erledigt[$k] : null;
             $raus[] = [
@@ -542,7 +663,14 @@ trait ChoreStore
                 'points'   => $satz !== null ? (int)($satz['p'] ?? 0) : $a['points'],
                 'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $zustaendig,
                 'carried'  => false,
+                'day'      => (int)$iso,
+                'col'      => ((int)$iso - $start + 7) % 7,
             ];
+        }
+        $heuteSpalte = $this->SpalteHeute((string)($woche['week'] ?? ''), time());
+        if ($heuteSpalte < 0) {
+            $vorbei = (string)($woche['week'] ?? '') < $this->WochenKennung(time());
+            $heuteSpalte = $vorbei ? 6 : 0;
         }
         $uebertrag = is_array($woche['carry'][$a['id']] ?? null) ? $woche['carry'][$a['id']] : null;
         if ($uebertrag !== null) {
@@ -550,12 +678,18 @@ trait ChoreStore
             for ($i = 0; $i < max(0, (int)($uebertrag['count'] ?? 0)); $i++) {
                 $k = 'c' . $i;
                 $satz = is_array($erledigt[$k] ?? null) ? $erledigt[$k] : null;
+                /* Ein Übertrag gehört zu keinem Tag — er wird HEUTE nachgeholt.
+                   Ist die gezeigte Woche vorbei, steht er am letzten Tag; liegt
+                   sie noch vor uns, am ersten. Irgendwo muss er stehen, und
+                   unsichtbar wäre schlechter als an einer erklärbaren Stelle. */
                 $raus[] = [
                     'key'      => $k,
                     'done'     => $satz !== null,
                     'points'   => $satz !== null ? (int)($satz['p'] ?? 0) : $a['points'],
                     'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $halter,
                     'carried'  => true,
+                    'day'      => 0,
+                    'col'      => $heuteSpalte,
                 ];
             }
         }
@@ -595,10 +729,14 @@ trait ChoreStore
         $platzDa = false;
         $halter = '';
         $wert = $treffer['points'];
+        $spalte = -1;
+        $uebertrag = false;
         foreach ($this->PlaetzeFuer($woche, $treffer) as $p) {
             if ($p['key'] === $platz) {
                 $platzDa = true;
                 $halter = $p['memberId'];
+                $spalte = (int)($p['col'] ?? -1);
+                $uebertrag = ($p['carried'] ?? false) === true;
                 if (!$ziel) {
                     $wert = $p['points'];
                 }
@@ -606,6 +744,14 @@ trait ChoreStore
             }
         }
         if (!$platzDa) {
+            return false;
+        }
+        /* Was noch nicht dran war, kann auch nicht erledigt sein. Die Kachel
+           sperrt die kuenftigen Tage schon, aber darauf allein ist kein
+           Verlass: eine nachgereichte oder wiederholte Anfrage muss hier
+           scheitern, sonst haengen Punkte an einem Tag, der noch aussteht.
+           Der Uebertrag ist ausgenommen — er gehoert zu keinem Tag. */
+        if (!$uebertrag && $this->InDerZukunft((string)($woche['week'] ?? ''), $spalte, $jetzt)) {
             return false;
         }
         $erledigt = is_array($woche['done'][$choreId] ?? null) ? $woche['done'][$choreId] : [];
@@ -883,9 +1029,18 @@ trait ChoreStore
         $verdient = [];
         $gesamt = 0;
         $fertig = 0;
+        $heuteSpalte = $this->SpalteHeute((string)($woche['week'] ?? ''), $jetzt);
         foreach ($aemtchen as $a) {
             $plaetze = $this->PlaetzeFuer($woche, $a);
             $erledigt = 0;
+            foreach ($plaetze as $i => $p) {
+                /* Ob ein Platz noch aussteht, entscheidet das MODUL — die
+                   Kachel malt nur, was hier steht. Sie kann es gar nicht
+                   selbst wissen: die Wechselzeit und der erste Wochentag sind
+                   Einstellungen, und die Kachel bekommt nur die Nutzlast. */
+                $plaetze[$i]['locked'] = ($p['carried'] ?? false) !== true
+                    && $this->InDerZukunft((string)($woche['week'] ?? ''), (int)($p['col'] ?? -1), $jetzt);
+            }
             foreach ($plaetze as $p) {
                 $gesamt++;
                 if ($p['done']) {
@@ -937,6 +1092,11 @@ trait ChoreStore
             'week'       => (string)($woche['week'] ?? ''),
             'index'      => (int)($woche['index'] ?? 0),
             'start'      => $this->WochenStartTag(),
+            /* Die Spaltenueberschriften in der Reihenfolge der Anzeige und die
+               Spalte, in der heute steht (-1, wenn die gezeigte Woche nicht
+               die laufende ist). */
+            'dayNames'   => $this->WochentagKuerzel(),
+            'todayCol'   => $heuteSpalte,
             'pointsMode' => $modus,
             'carryOver'  => $this->EinstellungJa('CarryOver'),
             'order'      => $reihenfolge,
@@ -963,6 +1123,7 @@ trait ChoreStore
             'paused'   => $this->Translate('Pause'),
             'family'   => $this->Translate('All participants'),
             'carried'  => $this->Translate('from last week'),
+            'later'    => $this->Translate('not due yet'),
             'lastWeek' => $this->Translate('Last week'),
             'nextWeek' => $this->Translate('Next week'),
             'thisWeek' => $this->Translate('This week'),

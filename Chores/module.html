@@ -15,6 +15,9 @@
   --sym-ms: 0px;
   --sym-mb: 0px;
   --sbw: 6px;
+  /* Breite einer Tagesspalte. Schmal genug, dass sieben davon neben Name und
+     Punkten Platz finden. */
+  --tagbreite: 28px;
   --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 html[data-symdo-theme="light"] {
@@ -130,10 +133,41 @@ body {
 .person.pausiert { opacity: .55; }
 .person.niemand .bild { border-color: var(--rand); background: var(--zeile); }
 
+/* Ein Aemtchen ist eine Rasterzeile: Bild, Name, Punkte — und dann sieben
+   Tagesspalten. Feste Breiten, KEIN `auto`: nur so stehen die Haken aller
+   Zeilen und die Ueberschrift darueber wirklich untereinander, auch ueber die
+   Bloecke der einzelnen Familienmitglieder hinweg. Ein gemeinsames Raster
+   waere dafuer noetig gewesen, und das gibt es hier nicht — die Zeilen liegen
+   in verschiedenen Kaesten. */
 .aemtchen {
-  display: flex; align-items: center; gap: 10px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto repeat(7, var(--tagbreite));
+  align-items: center; gap: 0 10px;
   background: var(--zeile); border-radius: 16px; padding: 8px 10px;
   min-height: 46px; box-sizing: border-box;
+}
+/* Die Ueberschrift mit den Wochentagen — dasselbe Raster, nur ohne Kasten. */
+.tagekopf {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto repeat(7, var(--tagbreite));
+  align-items: center; gap: 0 10px;
+  padding: 0 10px 2px 10px;
+  font-size: 10px; font-weight: 700; color: var(--dezent);
+}
+.tagekopf .tag { text-align: center; }
+/* Der heutige Tag wird hervorgehoben — in der Ueberschrift kraeftig, in den
+   Zeilen als schwacher Streifen, damit er die Spalte durchzieht. */
+.tagekopf .tag.heute { color: var(--akzent); }
+.aemtchen .zelle.heute, .tagekopf .tag.heute {
+  background: color-mix(in srgb, var(--akzent) 12%, transparent);
+}
+.tagekopf .tag.heute { border-radius: 8px 8px 0 0; }
+/* Mehrere Haken an EINEM Tag stehen uebereinander, nicht nebeneinander: zwei
+   Kreise von 26 Pixeln passen nicht in eine Spalte von 28. Nebeneinander liefen
+   sie in den Nachbartag hinein (in der Kachel gesehen, beim Uebertrag). */
+.aemtchen .zelle {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; align-self: stretch;
 }
 .aemtchen .bild {
   width: 36px; height: 36px; border-radius: 12px; flex: 0 0 auto;
@@ -141,14 +175,15 @@ body {
   display: flex; align-items: center; justify-content: center; font-size: 20px;
 }
 .aemtchen .titel {
-  flex: 1 1 auto; min-width: 0;
+  min-width: 0;
   font-size: clamp(13px, 4.2vmin, 17px); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.aemtchen .punkte { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--dezent); }
-.aemtchen .plaetze { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.aemtchen .punkte { font-size: 11px; font-weight: 700; color: var(--dezent); }
+/* Der Haken sitzt jetzt in seiner Tagesspalte; etwas kleiner, damit sieben
+   davon nebeneinander passen. */
 .haken {
-  width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
   border: 3px solid color-mix(in srgb, var(--content-color) 30%, transparent);
   display: flex; align-items: center; justify-content: center;
   font-size: 17px; font-weight: 900; color: #fff; box-sizing: border-box;
@@ -158,7 +193,11 @@ body {
 .haken.fertig { background: var(--akzent); border-color: var(--akzent); }
 .haken.fertig span { transform: scale(1); }
 .haken.uebertrag { border-style: dashed; }
+/* Gesperrt heisst hier zweierlei: eine vergangene Woche (nur ansehen) und ein
+   Tag, der noch nicht dran war. Der kuenftige Tag bleibt sichtbar, aber blass
+   und ohne Rand — er ist ein Platzhalter, kein Angebot. */
 .haken:disabled { cursor: default; opacity: .5; }
+.haken.spaeter { opacity: .45; border-style: dotted; }
 .aemtchen.fertig { background: var(--zeile-fertig); }
 .aemtchen.fertig .titel { color: var(--dezent); }
 
@@ -410,7 +449,7 @@ function zeichnen() {
     else { ohne.push(a); }
   });
 
-  let html = '';
+  let html = tagekopfHtml();
   gruppen.forEach((liste2, id) => {
     const p = (zustand.members || {})[id] || {};
     /* Wer nichts hat, faellt weg — AUSSER er setzt aus: dass jemand Pause hat,
@@ -452,22 +491,54 @@ function aemtchenMitUebertrag() {
     .some((a) => (Array.isArray(a.slots) ? a.slots : []).some((s) => s.carried === true));
 }
 
+/**
+ * Die Ueberschrift ueber den Tagesspalten.
+ *
+ * Sie steht EINMAL ueber allen Bloecken — die Spalten sind fest breit, deshalb
+ * stehen die Haken aller Familienmitglieder darunter buendig. Die Kuerzel und
+ * die Reihenfolge kommen fertig aus dem Modul: welcher Tag die Woche beginnt,
+ * ist eine Einstellung, und die kennt die Kachel nicht.
+ */
+function tagekopfHtml() {
+  const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
+  if (namen.length !== 7) { return ''; }
+  /* Der heutige Tag wird nur in der LAUFENDEN Woche hervorgehoben. Im
+     Rueckblick und in der Vorschau gehoert „heute" nicht dazu. */
+  const heute = blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
+  return '<div class="tagekopf"><div></div><div></div><div></div>' +
+    namen.map((n, i) => '<div class="tag' + (i === heute ? ' heute' : '') + '">' + n + '</div>').join('') +
+    '</div>';
+}
+
 function aemtchenHtml(a, aktiv) {
   const alle = a.total > 0 && a.doneCount >= a.total;
-  const plaetze = (Array.isArray(a.slots) ? a.slots : []).map((s) => {
+  const heute = blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
+  /* Ein Platz je Tag — und die uebrigen Tage bleiben LEER. Genau dafuer sind
+     die Spalten da: man sieht auf einen Blick, an welchen Tagen ein Aemtchen
+     dran ist und an welchen nicht. */
+  const zellen = [];
+  for (let i = 0; i < 7; i++) { zellen[i] = ''; }
+  (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
+    const spalte = Math.max(0, Math.min(6, Number(s.col) || 0));
     const marke = a.id + ':' + s.key;
-    return '<button type="button" class="haken' + (s.done ? ' fertig' : '') +
-      (s.carried ? ' uebertrag' : '') + '" data-marke="' + marke + '"' +
+    /* Zwei Gruende, warum nicht getippt werden darf, und sie sehen anders aus:
+       eine fremde Woche (alles blass) und ein Tag, der noch nicht dran war
+       (nur dieser Haken blass und gepunktet). */
+    const spaeter = s.locked === true;
+    zellen[spalte] += '<button type="button" class="haken' + (s.done ? ' fertig' : '') +
+      (s.carried ? ' uebertrag' : '') + (spaeter ? ' spaeter' : '') + '" data-marke="' + marke + '"' +
       ' data-chore="' + a.id + '" data-slot="' + s.key + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
-      (aktiv ? '' : ' disabled') +
-      ' title="' + (s.carried ? txt('carried', '') : '') + '"><span>✓</span></button>';
-  }).join('');
+      (aktiv && !spaeter ? '' : ' disabled') +
+      ' title="' + (s.carried ? txt('carried', '') : (spaeter ? txt('later', '') : '')) +
+      '"><span>✓</span></button>';
+  });
   return '<div class="aemtchen' + (aktiv && alle ? ' fertig' : '') + '">' +
     '<div class="bild">' + (a.emoji || '🧹') + '</div>' +
     '<div class="titel">' + a.name + '</div>' +
     (zustand.pointsMode === 'routines' && a.points > 0
-      ? '<div class="punkte">+' + a.points + '</div>' : '') +
-    '<div class="plaetze">' + plaetze + '</div></div>';
+      ? '<div class="punkte">+' + a.points + '</div>' : '<div></div>') +
+    zellen.map((z, i) => '<div class="zelle' + (i === heute ? ' heute' : '') + '">' + z + '</div>').join('') +
+    '</div>';
 }
 
 function binden() {

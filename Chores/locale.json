@@ -63,7 +63,15 @@
             "No chores configured yet — add participants and chores in the instance settings.": "Noch keine Ämtchen eingerichtet — Teilnehmer und Ämtchen in den Instanz-Einstellungen anlegen.",
             "Preview — ticking starts on Monday": "Vorschau — abgehakt wird ab Montag",
             "Done and gone — this week is over": "Vorbei — diese Woche ist abgeschlossen",
-            "Dashed circle: carried over from last week": "Gestrichelter Kreis: aus der Vorwoche übrig"
+            "Dashed circle: carried over from last week": "Gestrichelter Kreis: aus der Vorwoche übrig",
+            "Mon": "Mo",
+            "Tue": "Di",
+            "Wed": "Mi",
+            "Thu": "Do",
+            "Fri": "Fr",
+            "Sat": "Sa",
+            "Sun": "So",
+            "not due yet": "Steht noch aus"
         }
     }
 }

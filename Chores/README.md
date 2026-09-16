@@ -20,7 +20,9 @@ Das Gegenstück für den Tag ist **SymDo - Routinen**: Häkchenlisten, die sich 
 
 Oben die Woche mit einem Schritt zurück und einem nach vorn, darunter der Fortschritt der Woche. Dann je Person ein Block: Foto, Name, „2 von 3" und das Guthaben, darunter ihre Ämtchen mit Symbol, Punktwert und den Häkchen.
 
-- **Ein Häkchen je Erledigung.** Ein Ämtchen, das zweimal in der Woche dran ist, hat zwei Kreise.
+- **Eine Spalte je Wochentag.** Oben stehen die Wochentage als Überschrift, und jedes Häkchen sitzt in der Spalte des Tages, an dem das Ämtchen dran ist. Der heutige Tag ist hervorgehoben.
+- **Was noch nicht dran war, lässt sich nicht abhaken.** Ein Tag, der noch aussteht, zeigt seinen Kreis blass und gepunktet. Nachtragen geht: vergangene Tage dieser Woche bleiben offen.
+- **Ein Häkchen je Erledigung.** Ein Ämtchen, das zweimal in der Woche dran ist, hat zwei Kreise — an zwei Tagen.
 - **Gestrichelter Kreis**: ein Platz, der aus der Vorwoche übrig ist (nur mit *Übertrag*, Kapitel 3).
 - **Vorschau**: die nächste Woche zeigt, wer dann dran ist — ohne Häkchen, denn abgehakt wird ab Montag.
 - **Rückblick**: die letzte Woche als Bilanz je Person.
@@ -36,14 +38,14 @@ Oben die Woche mit einem Schritt zurück und einem nach vorn, darunter der Forts
 
 1. Instanz **SymDo - Ämtchenplan** anlegen und in der Kachel-Visualisierung einbinden. Die Konsole schlägt beim Anlegen ein vorhandenes Gateway als übergeordnete Instanz vor
 2. **Teilnehmer** eintragen, in der Reihenfolge, in der rotiert werden soll. *Last* 2 heißt doppelt so viele Ämtchen, *Pause* lässt jemanden aussetzen
-3. **Ämtchen** eintragen: Symbol, Name, wie oft je Woche, und wer in Frage kommt — alle Teilnehmer, nur die Kinder, nur die Erwachsenen oder eine feste Person
+3. **Ämtchen** eintragen: Symbol, Name, **an welchen Wochentagen** (ein Haken je Tag), und wer in Frage kommt — alle Teilnehmer, nur die Kinder, nur die Erwachsenen oder eine feste Person
 4. Unter *Verhalten* den ersten Wochentag und die **Uhrzeit des Wochenwechsels** wählen (Vorgabe Montag 3:00). Der Sonntagabend gehört noch zur alten Woche
 5. Optional **Punkte** einschalten und die Routinen-Instanz wählen
 
 | Einstellung | Bedeutung |
 |---|---|
 | Teilnehmer | Reihenfolge = Reihenfolge der Rotation. *Pause* verschiebt die Reihe der anderen **nicht**, eine Zeile zu löschen schon |
-| Ämtchen | Reihenfolge entscheidet, wer welches Ämtchen zuerst bekommt. Umsortieren wirkt ab der nächsten Woche |
+| Ämtchen | Reihenfolge entscheidet, wer welches Ämtchen zuerst bekommt. Umsortieren wirkt ab der nächsten Woche. **Die sieben Haken sagen, an welchen Tagen es dran ist** — wie oft in der Woche ergibt sich daraus |
 | Woche beginnt am | Montag bis Sonntag |
 | Wochenwechsel um | Uhrzeit, zu der die neue Woche beginnt |
 | Übertrag | Nicht erledigte Ämtchen wandern als zusätzliche Plätze in die neue Woche, beim **alten** Zuständigen. Höchstens eine Woche tief |

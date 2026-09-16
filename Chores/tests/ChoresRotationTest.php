@@ -149,6 +149,8 @@ class ChoresHarness extends IPSModuleStrict
     public function pVorschau(int $t, int $n): array { return $this->Vorschau($t, $n); }
     public function pPlaetze(array $w, array $a): array { return $this->PlaetzeFuer($w, $a); }
     public function pAemtchen(): array { return $this->AemtchenLesen(); }
+    public function pZukunft(string $w, int $sp, int $t): bool { return $this->InDerZukunft($w, $sp, $t); }
+    public function pHeuteSpalte(string $w, int $t): int { return $this->SpalteHeute($w, $t); }
 }
 
 // ── Prüfgerüst ──────────────────────────────────────────────────────────────
@@ -486,6 +488,57 @@ $hNeu = harness($drei, $aemtchen3);
 $hNeu->attr['Shift'] = 1;
 pruefe('Handkurbel verschiebt die naechste Woche',
     $hNeu->pZuweisung(100) !== harness($drei, $aemtchen3)->pZuweisung(100), true);
+
+// ── 26. Tagesspalten ────────────────────────────────────────────────────────
+// Der 16.09.2026 ist ein Mittwoch; die Woche beginnt am Montag, also Spalte 2.
+$mi = $T('2026-09-16 12:00');
+
+/* Zeilen aus der Zeit VOR den Tagesspalten tragen keinen Haken. Fuer sie gilt
+   die alte Angabe „n-mal pro Woche": sie bekommen die ersten n Tage. Ohne
+   diesen Rueckfall saehe ein bestehender Plan nach dem Update anders aus. */
+$altModus = [
+    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'points' => 5, 'perWeek' => 2, 'circle' => 'all'],
+];
+$h = harness($drei, $altModus);
+pruefe('alte Zeile ohne Tage: die ersten n Tage', $h->pAemtchen()[0]['days'], [1, 2]);
+
+/* Mit Haken zaehlen die Haken — und „pro Woche" ist dann nur noch ihre Anzahl. */
+$mitTagen = [
+    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'points' => 5, 'perWeek' => 9,
+     'circle' => 'all', 'd1' => true, 'd4' => true, 'd7' => true],
+];
+$h = harness($drei, $mitTagen);
+pruefe('gehakte Tage schlagen die alte Zahl', $h->pAemtchen()[0]['days'], [1, 4, 7]);
+pruefe('… und bestimmen, wie oft', $h->pAemtchen()[0]['perWeek'], 3);
+
+/* Die Spalte ist der Abstand zum Wochenstart. Beginnt die Woche am SONNTAG,
+   steht der Sonntag links und der Montag daneben — die Reihenfolge der Tage
+   folgt der Anzeige, nicht der ISO-Nummer. */
+$h = harness($drei, $mitTagen, ['WeekStart' => 7]);
+pruefe('Woche ab Sonntag: Sonntag zuerst', $h->pAemtchen()[0]['days'], [7, 1, 4]);
+$plaetze = $h->pPlaetze($h->pWoche($mi), $h->pAemtchen()[0]);
+pruefe('… und die Spalten zaehlen ab Sonntag',
+    array_column($plaetze, 'col'), [0, 1, 4]);
+
+/* Was noch nicht dran war, kann nicht erledigt sein. */
+$h = harness($drei, $mitTagen);
+pruefe('Montag ist vorbei', $h->pZukunft('2026-09-14', 0, $mi), false);
+pruefe('Mittwoch ist heute', $h->pZukunft('2026-09-14', 2, $mi), false);
+pruefe('Donnerstag steht aus', $h->pZukunft('2026-09-14', 3, $mi), true);
+pruefe('heute steht in Spalte 2', $h->pHeuteSpalte('2026-09-14', $mi), 2);
+/* Vergangene Wochen sind ganz frei — dort wird nachgetragen. Kuenftige ganz zu. */
+pruefe('vergangene Woche: alles nachtragbar', $h->pZukunft('2026-09-07', 6, $mi), false);
+pruefe('kuenftige Woche: nichts abhakbar', $h->pZukunft('2026-09-21', 0, $mi), true);
+
+/* Und die Sperre gilt auch, wenn die Anfrage am Hahn vorbei kommt: Platz „1"
+   ist der Donnerstag, der steht am Mittwoch noch aus. */
+$h = harness($drei, $mitTagen);
+$w = $h->pWoche($mi);
+pruefe('Abhaken am Montag geht', $h->pAbhaken($w['week'], 'a1', '0', true, $mi), true);
+pruefe('Abhaken am Donnerstag wird abgewiesen',
+    $h->pAbhaken($w['week'], 'a1', '1', true, $mi), false);
+pruefe('… und nichts wurde gebucht',
+    count(array_filter($GLOBALS['buchungen'], fn ($b) => $b[1] > 0)) >= 1, true);
 
 // ── Ergebnis ────────────────────────────────────────────────────────────────
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
