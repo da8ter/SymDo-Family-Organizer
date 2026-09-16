@@ -208,10 +208,10 @@ body {
 .tl-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .tl-kopf .seite { min-width: 0; }
 .tl-kopf .seite.rechts { text-align: right; }
-.tl-kopf .was { font-size: 11px; color: var(--dezent); line-height: 1.2; }
-.tl-kopf .uhr { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; }
-.tl-kopf .gleich { font-size: 12px; font-weight: 700; color: var(--akzent); }
-.tl-kopf .gesamt { font-size: 12px; color: var(--dezent); }
+.tl-kopf .was { font-size: 13px; color: var(--dezent); line-height: 1.2; }
+.tl-kopf .uhr { font-size: 34px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; }
+.tl-kopf .gleich { font-size: 14px; font-weight: 700; color: var(--akzent); }
+.tl-kopf .gesamt { font-size: 14px; color: var(--dezent); }
 
 .tl-spur {
   display: grid; grid-auto-flow: column;
@@ -250,17 +250,6 @@ body {
 }
 .tl-halt.m::before { left: 0; }
 .tl-halt.m::after  { right: 0; background: var(--r, transparent); }
-/* Zum Umstieg hin ist die Schiene gepunktet — dort laeuft man selbst. */
-.tl-halt.m.r-um::after {
-  background: none;
-  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
-  background-size: 9px 9px; background-position: center;
-}
-.tl-halt.m.l-um::before {
-  background: none;
-  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
-  background-size: 9px 9px; background-position: center;
-}
 /* Luft zwischen den Beschriftungen. Ohne sie stossen „6 min zu Fuss" und der
    Haltestellenname aneinander und lesen sich als EIN Text — in der laufenden
    Kachel stand da „6 min D-Rosmarinstrasse". Die Polsterung sitzt nur an den
@@ -273,16 +262,12 @@ body {
   width: 13px; height: 13px; border-radius: 50%; margin: 0 auto;
   background: var(--text); box-sizing: border-box; flex: 0 0 auto;
 }
-/* Der Umstieg bleibt ein Punkt, nur kleiner: die Unterscheidung traegt jetzt
-   die Groesse und nicht mehr die Farbe. */
-.tl-halt.um .pkt { width: 11px; height: 11px; }
 /* Die Spalte eines Halts ist `max-content` — ihre Breite haengt also an diesem
    Deckel. Ohne ihn nahm „D-Unterbacher See / Strandbad Sued" 200 Pixel, und
    fuer die Schiene blieb ein Stummel (im Prueflauf gemessen). Zwei Zeilen,
    danach abgeschnitten; den Deckel zieht die Behaelterabfrage weiter unten
    enger, wenn die Kachel schmal wird. */
 .tl-halt.u, .tl-halt.o { max-width: 108px; }
-.tl-halt.um.o { max-width: 92px; }
 /* Zwei Klassen im Selektor, nicht eine: `.tl-spur .u b` setzt weiter oben
    `display:block` und gewinnt sonst — die Klammer blieb wirkungslos, und
    „D-Unterbacher See / Strandbad Sued" stand ueber drei Zeilen (gemessen). */
@@ -302,7 +287,11 @@ body {
 .tl-fahrt .bahn { height: 9px; border-radius: 0; background: var(--akzent); }
 .tl-spur .m:nth-child(2) .bahn { border-radius: 4px 0 0 4px; }
 .tl-spur .m:nth-last-child(2) .bahn { border-radius: 0 4px 4px 0; }
-.tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
+/* Die zweite Fahrt wird ABGEDUNKELT, nicht aufgehellt. Mit Weiss gemischt kam
+   ein blasses Mintgruen heraus, auf dem die weisse Liniennummer kaum noch zu
+   lesen war (vom Nutzer gemeldet). Gegen Schwarz gemischt bleibt der Kontrast
+   zur Schrift in jedem Visu-Design erhalten. */
+.tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 68%, #000); }
 .tl-fahrt .marke {
   display: inline-flex; align-items: center; gap: 9px;
   padding: 4px 11px; border-radius: 10px; background: var(--akzent);
@@ -315,33 +304,43 @@ body {
 .tl-fahrt .marke, .tl-fahrt .marke i, .tl-fahrt .marke svg {
   color: #fff; fill: #fff; opacity: 1;
 }
-/* Und der Strich dazu. Symcon liefert NUR den Light-Schnitt — gemessen: ein
-   `fa-solid` wird gar nicht erst ersetzt, das Zeichen waere schlicht weg.
-   Dessen Haarlinien wirken auf der Akzentflaeche grau und durchscheinend, egal
-   welche Farbe man ihnen gibt. Ein Kontur-Strich in derselben Farbe macht sie
-   so dick, dass das Zeichen deckt (Zeichenfeld 512 Einheiten, Strich 26 davon
-   sind bei 15 Pixeln rund ein Dreiviertelpixel auf jeder Seite). */
+/* Symcon liefert NUR den Light-Schnitt — gemessen: ein `fa-solid` wird gar
+   nicht erst ersetzt, das Zeichen waere schlicht weg. Es bleibt also bei den
+   duennen Linien. Ein Kontur-Strich, der sie dicker macht, stand hier und ist
+   auf Ansage wieder raus. */
 /* Hoehe vorgeben, Breite mitlaufen lassen: die Zeichen sind NICHT quadratisch
    (der Bus misst 576 zu 512), und eine feste Breite quetscht sie. */
 .tl-fahrt .marke svg { height: 1em; width: auto; }
-.tl-fahrt .marke b { font-weight: 800; }
+.tl-fahrt .marke b { font-weight: 800; color: #fff; }
 /* Der Abstand haengt NICHT am `gap` des Schilds: gemessen stand die Nummer
    trotz `column-gap: 9px` genau an der Kante des Zeichens (Abstand 0). Was
    Font Awesome beim Austausch von <i> gegen <svg> im Einzelnen anstellt, muss
    man dafuer gar nicht wissen — ein eigener Rand am Zeichen wirkt in jedem
    Fall. */
 .tl-fahrt .marke svg, .tl-fahrt .marke i { margin-right: 9px; }
-.tl-fahrt .marke svg path { fill: #fff; stroke: #fff; stroke-width: 26; }
-.tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
+.tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 68%, #000); }
 
-/* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft. */
+/* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft.
+   Aussteigen und einsteigen sind zwei Punkte — und beide sitzen in DERSELBEN
+   Zelle wie die Strichelung. Aus drei Stuecken zusammengesetzt setzte das
+   Punktmuster an jeder Naht neu an; das war als Versatz zu sehen. */
 .tl-um b, .tl-weg b { white-space: nowrap; }
-.tl-um .bahn {
-  height: 9px; min-width: 30px;
-  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
-  background-size: 9px 9px; background-position: center;
+.tl-um.m { display: flex; align-items: center; padding: 0; }
+.tl-um .pkt {
+  flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--text);
 }
-.tl-um b { white-space: nowrap; }
+.tl-um .bahn {
+  flex: 1 1 auto; height: 9px; min-width: 26px;
+  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
+  background-size: 9px 9px; background-position: left center;
+}
+/* Der Name des Umstiegs darf nicht die ganze Kachel fuellen. */
+.tl-um.o { max-width: 132px; }
+.tl-um.o em, .tl-um.o span {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+}
 
 /* Anlauf und Auslauf: der Fussweg vor der ersten und nach der letzten Fahrt. */
 .tl-weg .bahn {
@@ -383,11 +382,11 @@ body {
    Kompromiss fuer die schmale Kachel, nicht das Ziel. */
 @container (min-width: 520px) {
   .tl-halt.u, .tl-halt.o { max-width: 150px; }
-  .tl-halt.um.o { max-width: 126px; }
+  .tl-um.o { max-width: 168px; }
 }
 @container (max-width: 380px) {
   .tl-halt.u, .tl-halt.o { max-width: 86px; }
-  .tl-halt.um.o { max-width: 76px; }
+  .tl-um.o { max-width: 96px; }
   /* Das Symbol im Linienschild faellt zuerst — die Nummer traegt die Auskunft. */
   .tl-spur .marke { font-size: 12px; padding: 3px 6px; gap: 4px; min-width: 0; }
   .tl-spur .marke i, .tl-spur .marke svg { display: none; }
@@ -395,7 +394,7 @@ body {
      span in der oberen Zeile, und ohne die Ausnahme verschwand sie hier mit —
      gemessen 0 Pixel breit, die Kachel zeigte Schienen ohne Linien. */
   .tl-spur .u span:not(.marke), .tl-spur .o span:not(.marke) { display: none; }
-  .tl-kopf .uhr { font-size: 22px; }
+  .tl-kopf .uhr { font-size: 26px; }
 }
 @container (max-width: 330px) {
   .tl-wert .sinn { display: none; }
@@ -649,9 +648,19 @@ function zeitachseHtml(v, jetzt) {
     teile.push({ typ: 'fahrt', leg: legs[idx], k: k });
     if (k < fahrten.length - 1) {
       const naechste = fahrten[k + 1];
-      teile.push({ typ: 'halt', rolle: 'um', name: legs[idx].to, zeit: legs[idx].arrText });
-      const pause = sek(idx + 1, naechste);
-      teile.push({ typ: 'um', s: pause });
+      /* Der Umstieg ist EIN Teil mit zwei Punkten: aussteigen und einsteigen.
+         Vorher stand nur ein Punkt da und die zweite Fahrt begann im Nichts —
+         und die Strichelung war aus drei Stuecken zusammengesetzt, deren Muster
+         an jeder Naht neu ansetzte (in der Kachel als Versatz zu sehen). In
+         einer Zelle laeuft sie in einem Stueck durch, und die Beschriftung
+         steht mittig darunter.
+         Der zweite Name steht nur da, wenn man die Haltestelle wirklich
+         wechselt — sonst stuende er zweimal nebeneinander. */
+      teile.push({
+        typ: 'um', s: sek(idx + 1, naechste),
+        name: legs[idx].to, zeit: legs[idx].arrText,
+        name2: legs[naechste].from === legs[idx].to ? '' : legs[naechste].from,
+      });
     }
   });
   teile.push({ typ: 'halt', rolle: 'ziel', name: letzte.to, steig: letzte.platformTo });
@@ -664,10 +673,9 @@ function zeitachseHtml(v, jetzt) {
      ueber eine Klasse geloest, weil ein Punktmuster keine Farbe ist. */
   const farbeVon = function (t) {
     if (!t) { return 'transparent'; }
-    if (t.typ === 'um') { return null; }
     if (t.typ === 'weg') { return 'color-mix(in srgb, var(--akzent) 22%, transparent)'; }
     return t.k % 2 === 1
-      ? 'color-mix(in srgb, var(--akzent) 45%, var(--content-color))'
+      ? 'color-mix(in srgb, var(--akzent) 68%, #000)'
       : 'var(--akzent)';
   };
 
@@ -677,13 +685,8 @@ function zeitachseHtml(v, jetzt) {
     let klasse = '', oben = '', mitte = '', unten = '', stilM = '';
     if (t.typ === 'halt') {
       klasse = 'tl-halt' + (t.rolle === 'um' ? ' um' : '');
-      const l = farbeVon(teile[i - 1]);
-      const r = farbeVon(teile[i + 1]);
-      klasse += (l === null ? ' l-um' : '') + (r === null ? ' r-um' : '');
-      const stil = [];
-      if (l !== null) { stil.push('--l:' + l); }
-      if (r !== null) { stil.push('--r:' + r); }
-      stilM = stil.length ? ' style="' + stil.join(';') + '"' : '';
+      stilM = ' style="--l:' + farbeVon(teile[i - 1])
+            + ';--r:' + farbeVon(teile[i + 1]) + '"';
       /* max-content, nicht min-content: min-content bricht jeden Namen auf das
          laengste Wort herunter („D- / Eller / S" ueber drei Zeilen). Wie breit
          es hoechstens wird, deckelt das Stilblatt. */
@@ -693,7 +696,9 @@ function zeitachseHtml(v, jetzt) {
         /* Am Umstieg stehen Uhrzeit und Name OBEN — unten waere zwischen zwei
            Dauerangaben kein Platz, und die beiden Endpunkte brauchen die
            untere Zeile fuer Name und Steig. */
-        oben = '<em>' + esc(t.zeit || '') + '</em><span>' + esc(t.name || '') + '</span>';
+        oben = t.name
+          ? '<em>' + esc(t.zeit || '') + '</em><span>' + esc(t.name) + '</span>'
+          : '';
       } else {
         unten = '<b>' + esc(t.name || '') + '</b>'
               + (t.steig ? '<span>' + esc(translate('Pl.')) + ' ' + esc(t.steig) + '</span>' : '');
@@ -723,8 +728,10 @@ function zeitachseHtml(v, jetzt) {
                 : '');
     } else if (t.typ === 'um') {
       klasse = 'tl-um';
-      spalten.push('min-content');
-      mitte = '<div class="bahn"></div>';
+      spalten.push('max-content');
+      oben = '<em>' + esc(t.zeit || '') + '</em><span>' + esc(t.name || '')
+           + (t.name2 ? ' → ' + esc(t.name2) : '') + '</span>';
+      mitte = '<div class="pkt"></div><div class="bahn"></div><div class="pkt"></div>';
       unten = '<b>' + symbol('fa-person-walking') + ' ' + esc(min(t.s))
             + '</b><span>' + esc(translate('change')) + '</span>';
     } else {
