@@ -235,14 +235,41 @@ body {
 .tl-spur .u span, .tl-spur .o span { display: block; color: var(--dezent); }
 .tl-spur .o em { display: block; font-style: normal; font-weight: 700; color: var(--text); }
 
-/* Der Halt: ein Punkt auf der Schiene. Anfang und Ende gefuellt, der Umstieg
-   hohl — so sieht man ohne Beschriftung, wo man ein- und aussteigt. */
-.tl-halt { padding: 0 3px; }
-.tl-halt .pkt {
-  width: 11px; height: 11px; border-radius: 50%; margin: 0 auto;
-  background: var(--akzent); box-sizing: border-box; flex: 0 0 auto;
+/* Der Halt: ein weisser Punkt AUF der Schiene.
+   Die Schiene laeuft durch die Haltespalte hindurch — und das muss sie, denn
+   die Spalte ist so breit wie der Haltestellenname (rund 92 Pixel), nicht so
+   breit wie der Punkt. Vorher hoerte die Schiene an der Spaltengrenze auf und
+   der Punkt schwebte vierzig Pixel daneben in der Luft.
+   Womit die beiden Haelften gemalt werden, sagt das Markup je Halt
+   (`--l` und `--r`): auf der Seite einer Fahrt deren Farbe, auf der Seite eines
+   Fusswegs die blasse, nach draussen nichts. */
+.tl-halt.m { position: relative; padding: 0; }
+.tl-halt.m::before, .tl-halt.m::after {
+  content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+  width: 50%; height: 7px; background: var(--l, transparent);
 }
-.tl-halt.um .pkt { background: var(--bg); border: 3px solid var(--text); }
+.tl-halt.m::before { left: 0; }
+.tl-halt.m::after  { right: 0; background: var(--r, transparent); }
+/* Zum Umstieg hin ist die Schiene gepunktet — dort laeuft man selbst. */
+.tl-halt.m.r-um::after {
+  background: none;
+  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
+  background-size: 7px 7px; background-position: center;
+}
+.tl-halt.m.l-um::before {
+  background: none;
+  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
+  background-size: 7px 7px; background-position: center;
+}
+.tl-halt.o, .tl-halt.u { padding: 0 3px; }
+.tl-halt .pkt {
+  position: relative; z-index: 1;
+  width: 11px; height: 11px; border-radius: 50%; margin: 0 auto;
+  background: var(--text); box-sizing: border-box; flex: 0 0 auto;
+}
+/* Der Umstieg bleibt ein Punkt, nur kleiner: die Unterscheidung traegt jetzt
+   die Groesse und nicht mehr die Farbe. */
+.tl-halt.um .pkt { width: 9px; height: 9px; }
 /* Die Spalte eines Halts ist `max-content` — ihre Breite haengt also an diesem
    Deckel. Ohne ihn nahm „D-Unterbacher See / Strandbad Sued" 200 Pixel, und
    fuer die Schiene blieb ein Stummel (im Prueflauf gemessen). Zwei Zeilen,
@@ -271,6 +298,7 @@ body {
 .tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
 
 /* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft. */
+.tl-um b, .tl-weg b { white-space: nowrap; }
 .tl-um .bahn {
   height: 7px; min-width: 26px;
   background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
@@ -577,12 +605,32 @@ function zeitachseHtml(v, jetzt) {
   const auslauf = sek(fahrten[fahrten.length - 1] + 1, legs.length);
   if (auslauf > 0) { teile.push({ typ: 'weg', s: auslauf }); }
 
+  /* Womit ein Teil die Schiene malt. Der Halt braucht das von seinen beiden
+     Nachbarn, damit die Schiene durch ihn HINDURCH laeuft statt an der
+     Spaltengrenze aufzuhoeren. `null` heisst „gepunktet" (Umstieg) und wird
+     ueber eine Klasse geloest, weil ein Punktmuster keine Farbe ist. */
+  const farbeVon = function (t) {
+    if (!t) { return 'transparent'; }
+    if (t.typ === 'um') { return null; }
+    if (t.typ === 'weg') { return 'color-mix(in srgb, var(--akzent) 22%, transparent)'; }
+    return t.k % 2 === 1
+      ? 'color-mix(in srgb, var(--akzent) 45%, var(--content-color))'
+      : 'var(--akzent)';
+  };
+
   const spalten = [];
   let zellen = '';
-  teile.forEach(function (t) {
-    let klasse = '', oben = '', mitte = '', unten = '';
+  teile.forEach(function (t, i) {
+    let klasse = '', oben = '', mitte = '', unten = '', stilM = '';
     if (t.typ === 'halt') {
       klasse = 'tl-halt' + (t.rolle === 'um' ? ' um' : '');
+      const l = farbeVon(teile[i - 1]);
+      const r = farbeVon(teile[i + 1]);
+      klasse += (l === null ? ' l-um' : '') + (r === null ? ' r-um' : '');
+      const stil = [];
+      if (l !== null) { stil.push('--l:' + l); }
+      if (r !== null) { stil.push('--r:' + r); }
+      stilM = stil.length ? ' style="' + stil.join(';') + '"' : '';
       /* max-content, nicht min-content: min-content bricht jeden Namen auf das
          laengste Wort herunter („D- / Eller / S" ueber drei Zeilen). Wie breit
          es hoechstens wird, deckelt das Stilblatt. */
@@ -630,7 +678,7 @@ function zeitachseHtml(v, jetzt) {
             + '</b><span>' + esc(translate('on foot')) + '</span>';
     }
     zellen += '<div class="o ' + klasse + '">' + oben + '</div>'
-            + '<div class="m ' + klasse + '">' + mitte + '</div>'
+            + '<div class="m ' + klasse + '"' + stilM + '>' + mitte + '</div>'
             + '<div class="u ' + klasse + '">' + unten + '</div>';
   });
 
