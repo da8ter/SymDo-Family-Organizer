@@ -7,23 +7,30 @@ declare(strict_types=1);
  *
  * Die Rheinbahn hat keine eigene öffentliche Schnittstelle; die Fahrplanauskunft
  * des Verbunds (EFA, Mentz) liefert Abfahrten und Verbindungen mit Echtzeit.
- * Angefragt wird der **offene Zugang** `openservice.vrr.de` — dieselbe Auskunft,
- * die der VRR über <https://www.opendata-oepnv.de> als offene Daten anbietet
- * (CC BY 4.0). Daher die Quellenangabe in Kachel, Formular und Handbuch.
+ * Angefragt wird der **offene Zugang** `openservice-test.vrr.de` — dieselbe
+ * Auskunft, die der VRR über <https://www.opendata-oepnv.de/ht/de/api> als
+ * offene Schnittstelle anbietet; die Daten stehen unter CC BY 4.0. Daher die
+ * Quellenangabe in Kachel, Formular und Handbuch.
  *
  * Am 11.09.2026 gemessen: Haltestellensuche 0,6 s, Abfahrten 0,3–0,6 s,
- * Verbindungen 1,2 s. Am 16.09.2026 beide Gegenstellen nebeneinander gemessen:
- * alle sieben Abrufe dieses Moduls — Haltestellensuche, Umkreis, Abfahrten,
- * Strecke, Strecke ohne Umsteigen, Strecke ab Koordinate, „Ankommen bis" —
- * antworten auf `openservice.vrr.de` und `efa.vrr.de` gleich, samt Echtzeit.
+ * Verbindungen 1,2 s. Am 16.09.2026 alle Gegenstellen nebeneinander gemessen:
+ * `efa.vrr.de`, `openservice.vrr.de` und `openservice-test.vrr.de` antworten
+ * auf alle sieben Abrufe dieses Moduls gleich — Haltestellensuche, Umkreis,
+ * Abfahrten, Strecke, Strecke ohne Umsteigen, Strecke ab Koordinate,
+ * „Ankommen bis" —, mit derselben EFA-Fassung 11.0.6.72 und mit Echtzeit.
+ * Sie unterscheiden sich also nicht in dem, was sie können, sondern nur darin,
+ * welchen man benutzen DARF.
  *
  * Zwei Dinge, die man hier wissen muss:
  *
  * 1. **Eine unbekannte Haltestelle antwortet mit HTTP 200 und einer leeren
  *    Liste**, nicht mit einem Fehlercode. Der Status taugt deshalb nicht als
  *    einzige Prüfung — der Aufrufer muss den Inhalt ansehen.
- * 2. **Der Zugang ist nicht zugesichert.** Ohne Registrierung gilt er als
- *    Testzugang; wer dauerhaft und in Menge abruft, meldet sich beim VRR
+ * 2. **Der Zugang ist nicht zugesichert.** Der VRR schreibt dazu selbst, er
+ *    behalte sich vor, diesen Server auch für eigene Tests zu benutzen — es
+ *    kann also zeitweise Unplausibles kommen. Ohne Anmeldung deckt er
+ *    Forschung, Test, Entwicklung und Hobby ab; wer eine Anwendung öffentlich
+ *    anbietet, holt sich beim VRR einen Produktivzugang
  *    (opendata-oepnv@vrr.de). Deshalb kurze Fristen, ein eigener User-Agent,
  *    mit dem man uns erkennen und ansprechen kann, und ein Takt, der sich
  *    zurückhält (siehe den Fehlerriegel im Modul).
@@ -34,8 +41,15 @@ declare(strict_types=1);
  */
 final class Efa
 {
-    /** Der offene Zugang zur EFA des VRR. Ohne Schrägstrich am Ende. */
-    public const BASIS = 'https://openservice.vrr.de/vrr';
+    /**
+     * Der offene Zugang zur EFA des VRR. Ohne Schrägstrich am Ende.
+     *
+     * Genau diese Adresse nennt der VRR auf opendata-oepnv.de/ht/de/api als
+     * offenen Zugang — nicht `efa.vrr.de` (das ist der Server hinter der
+     * VRR-Website) und nicht `openservice.vrr.de` ohne `-test` (dafür ist eine
+     * Anmeldung nötig). Wer den Produktivzugang bekommt, trägt ihn hier ein.
+     */
+    public const BASIS = 'https://openservice-test.vrr.de/openservice';
 
     /**
      * Frist je Abruf. Zwanzig Sekunden, wie bei WebUntis — lang genug für eine

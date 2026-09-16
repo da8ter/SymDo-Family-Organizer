@@ -165,8 +165,12 @@ Kachel und im Formular:
 > Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR)
 
 Die Lizenz ist Creative Commons Namensnennung 4.0 (CC BY 4.0). Für zu Hause ist
-damit alles getan. Wer dauerhaft darauf baut, meldet sich einmal kurz beim VRR
-unter `opendata-oepnv@vrr.de` — ohne Anmeldung gilt der Zugang als Testzugang.
+damit alles getan: Der VRR stellt seinen offenen Zugang ausdrücklich für
+Forschung, Test, Entwicklung und Hobby bereit, ohne Anmeldung und ohne Kosten.
+Er behält sich dabei vor, denselben Server auch für eigene Tests zu benutzen —
+sehr selten kann deshalb Ungereimtes dabei sein. Wer darauf eine Anwendung baut
+und sie anderen öffentlich anbietet, holt sich vorher einen Produktivzugang:
+eine kurze Mail mit Projektbeschreibung an `opendata-oepnv@vrr.de` genügt.
 
 ## 10. PHP-Befehlsreferenz
 
