@@ -64,8 +64,7 @@ bleibt dann leer.
 1. Instanz **SymDo - VRR Transit** anlegen; als übergeordnete Instanz das
    vorhandene SymDo Gateway wählen (die Konsole schlägt es vor).
 2. **Haltestelle suchen** aufklappen, den Ort mit eingeben — das grenzt die
-   Treffer stark ein — und **Als Haltestelle übernehmen**. Um die Kennung der
-   Haltestelle muss man sich nicht kümmern, die kommt aus der Suche.
+   Treffer stark ein — und **Als Haltestelle übernehmen**.
 3. In der Liste **Haltestellen** je Zeile einstellen:
 
 | Spalte | Bedeutung |
@@ -84,7 +83,7 @@ bleibt dann leer.
    nennt; bei einer Koordinate ist das die Adresse.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
-**Linien und Richtungen muss niemand abtippen.** Beim Übernehmen einer
+**Linien und Richtungen.** Beim Übernehmen einer
 Haltestelle schaut die Kachel selbst nach, was dort fährt, und legt es als
 kleine Liste in die Zeile: je Linie und Ziel eine Reihe mit einem Haken. Man
 nimmt die Haken weg, die man nicht sehen will — fertig. Für Haltestellen, die
@@ -103,7 +102,7 @@ dann.
 dabei waren. Die Wahl merkt sich jedes Gerät für sich; gibt es auf einer
 Strecke wirklich keine durchgehende Fahrt, sagt die Karte das.
 
-Auf der **Übersicht** gibt es keinen Schalter, dort soll ohne Zutun das
+Auf der **Webapp Dashboard** gibt es keinen Schalter, dort soll ohne Zutun das
 Richtige stehen. Was die Schulweg-Karte dort zeigt, bestimmt der Haken
 **Übersicht ohne Umsteigen** an der Strecke.
 
@@ -153,8 +152,7 @@ Abruf zwischen 5 und 9 Uhr läuft trotzdem weiter.
 
 ## 8. Auch in der App
 
-Dieselben Abfahrten und Verbindungen stehen auch in der SymDo-App und in der
-Web-App — eingerichtet wird aber nur hier.
+Dieselben Abfahrten und Verbindungen stehen auch in der SymDo-Web-App.
 
 ## 9. PHP-Befehlsreferenz
 

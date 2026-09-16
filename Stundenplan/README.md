@@ -18,17 +18,17 @@ Zwei Darstellungen aus denselben Daten:
   aus. Jede Stunde sitzt **auf ihrer Uhrzeit**, nicht auf der
   vorigen — sie steht damit genau auf ihrer Marke in der Zeitachse. Alle Tage
   sind **gleich breit** und teilen sich die Breite neben der Zeitachse; ihre
-  Mindestbreite ist „das Wort *Mathematik* passt neben den Symbolkreis",
-  gemessen an der tatsächlich verwendeten Schrift. Ist die Kachel breiter,
+  Mindestbreite ist „das Wort *Mathematik* passt neben den Symbolkreis".
+  Ist die Kachel breiter,
   werden die Spalten breiter; ist sie schmaler, scrollt das Raster waagerecht.
   Fachnamen, die trotzdem nicht hineinpassen, enden mit „…".
 - **Timeline** — ein Balken je Kind, anteilig zur Wochenspanne, darunter ein
   15-Minuten-Raster. An Tagen ohne Schule wird der Balken **ganz grau** und
   trägt mittig den Hinweis — mit dem Namen aus der Ferienquelle und dem
   Enddatum („Sommerferien bis 05.09."), bei einem Feiertag nur dessen Namen, denn
-  der dauert einen Tag. Ein Band über dem Plan gibt es dort nicht: es wäre
-  dieselbe Auskunft ein zweites Mal. Gerechnet wird **je Wochentag**, nicht für
-  heute — sonst wäre der Donnerstag grau, nur weil heute ein Feiertag ist. Ein Strich in der Akzentfarbe markiert die **aktuelle
+  der dauert einen Tag. Ein Band über dem Plan gibt es dort nicht. Frei ist
+  immer **je Wochentag** gerechnet: der Donnerstag bleibt normal, auch wenn
+  heute ein Feiertag ist. Ein Strich in der Akzentfarbe markiert die **aktuelle
   Zeit** — nur am heutigen Tag und nur, solange sie in der Wochenspanne liegt;
   danach verschwindet er, statt am Rand zu kleben. Er läuft alle 30 Sekunden
   weiter, gerechnet ab der Uhrzeit des Servers, nicht der des Betrachters.
@@ -45,10 +45,8 @@ Zwei Darstellungen aus denselben Daten:
   Dieselbe Legende, derselbe Umschalter, derselbe Jetzt-Strich **und derselbe
   graue Ferienbalken** stecken in der Karte der SymDo-App; dort deckt das Blatt
   die Karte ab statt den ganzen Schirm. Beim **Betreten des Dashboards** steht
-  die Karte wieder auf heute — die Tageswahl bliebe sonst stehen, wo man sie
-  zuletzt gelassen hat, und wer abends bis Freitag geblättert hatte, sähe am
-  nächsten Morgen den Freitag. Das Blättern selbst bleibt erhalten, solange man
-  auf dem Dashboard ist.
+  die Karte wieder auf heute. Das Blättern bleibt erhalten, solange man auf dem
+  Dashboard ist.
 
 Beide Ansichten halten sich an die **Ränder, die für die Kachel eingestellt
 sind** (oben, seitlich, unten) — sie werden aus der Adresse gelesen und selbst
@@ -213,12 +211,10 @@ Schultag zum Ferientag machen und umgekehrt.
 
 > **Zum Jahreskalender:** Gemeint ist das Modul **Jahreskalender (Almanac)** von Wilkware (@Pitti) — im **Symcon Module Store** unter „Jahreskalender" zu finden, Quelltext und Dokumentation unter [github.com/Wilkware/Almanac](https://github.com/Wilkware/Almanac) (Bibliothekskennung `de.wilkware.ips.modul.almanac`).
 >
-> Das Modul kennt nur eine Auskunft je **Tag**
-> (`ALMANAC_DateInfo`), keine Zeiträume. Der Stundenplan fragt deshalb Tag für Tag
-> und setzt die Abschnitte selbst zusammen. Gemessen rund 21 ms je Tag, für die
-> **vier Monate** Vorausschau also etwa drei Sekunden — einmal täglich und einmal
-> auf Knopfdruck. Ein Block, der am Fensterende noch läuft, wird zu Ende gefragt;
-> sonst stünde am Weihnachtsferien-Balken das Fensterende statt des 6. Januar.
+> Gefragt wird Tag für Tag, über **vier Monate** voraus — einmal täglich und
+> einmal auf Knopfdruck. Ferien, die über das Ende dieses Fensters hinausgehen,
+> werden zu Ende gelesen; am Balken steht deshalb der 6. Januar und nicht das
+> Fensterende.
 >
 > Im Jahreskalender müssen die **Schulferien eingerichtet** sein (Bundesland, bei
 > Bedarf die Schule). Ob dort der Zeitraum im Namen steht, ist gleichgültig — der
@@ -228,17 +224,16 @@ Schultag zum Ferientag machen und umgekehrt.
 
 Sind im Haus Hausaufgaben eingetragen (Bestand im **SymDo - Gateway**, siehe
 dessen Anleitung), zeigt die Kachel an der Stunde, ob dafür etwas zu tun ist:
-im Wochenraster ein Abzeichen mit der Zahl, in der Zeitachse ein Punkt am
-Balken. Die Notiz steht im Tipp, die Fachfarbe bleibt unberührt.
+im Wochenraster eine rote Zahl an der Stunde, in der Zeitachse ein Punkt am
+Balken. Die Notiz steht im Tipp, die Fachfarbe bleibt unberührt. Dieselbe Zahl
+steht auch im Stundenplan der Web-App und der App.
 
 Die Zahl fällt an die **erste** Stunde des Fachs an diesem Tag — zwei Stunden
 desselben Fachs verdoppeln sie nicht. Was zu keiner Stunde passt, weil das Fach
-an dem Tag keine hat, steht als Fußzeile unter der Spalte: eine Hausaufgabe,
-die nirgends erscheint, wäre schlimmer als eine an ungenauer Stelle.
+an dem Tag keine hat, steht als Fußzeile unter der Spalte.
 
-Angehängt wird das nur für die Kachel. `STPL_GetPlan()` bleibt unberührt, damit
-die Web-App und das Gateway denselben Plan wie bisher sehen; wer den Plan mit
-den Hausaufgaben braucht, nimmt `STPL_GetTilePlan()`.
+Wer den Plan samt Hausaufgaben per Skript braucht, nimmt `STPL_GetTilePlan()`;
+`STPL_GetPlan()` liefert ihn ohne.
 
 ## Grenzen
 
