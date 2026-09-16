@@ -3758,6 +3758,34 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .wp-stunde.entfall { opacity: .55; }
 .wp-stunde.entfall .wp-fach { text-decoration: line-through; }
 .wp-stunde.vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
+/* Offene Hausaufgaben an der Stunde — uebernommen aus der Stundenplan-Kachel,
+   samt der Masse, die dort gemessen sind. Das Symbol steht links unten in der
+   Spalte des Fachsymbols, so weit von der unteren Kante wie jenes von der
+   oberen (der Innenabstand, 8px). */
+.wp-stunde .wp-hw {
+  position: absolute; left: 10px; bottom: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; font-size: 11px; line-height: 1;
+}
+/* Die Zahl als rotes Abzeichen am Symbol — wie eine Mitteilung am App-Zeichen.
+   Rot ist eine eigene Farbe und keine Fachfarbe: es soll sich von der Karte
+   abheben, und die kann jede Farbe haben. */
+.wp-stunde .wp-hw b {
+  position: absolute; top: -7px; right: 0;
+  min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 999px; background: #E53935; color: #fff;
+  font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
+}
+/* Enge Karte (unter 57px — eine 45-Minuten-Stunde misst hier 54px, das ist der
+   Normalfall): kein Platz, das Abzeichen ueber das Symbol zu heben. Es sitzt
+   in der oberen rechten ECKE und ein Stueck darueber hinaus und ist etwas
+   kleiner, damit die linke Haelfte des Buches frei bleibt. In der Kachel
+   gemessen: so deckt es acht der sechzehn Pixel statt zwoelf. */
+.wp-stunde.wp-hw-eng .wp-hw { bottom: 2px; }
+.wp-stunde.wp-hw-eng .wp-hw b {
+  top: -4px; bottom: auto; right: -5px;
+  min-width: 12px; height: 12px; line-height: 12px; font-size: 8px;
+}
 
 /* ── Hausaufgaben ──────────────────────────────────────────────────────────
    Eine Zeile ist Haken, Fachsymbol, Text und Faelligkeit — dieselbe Ordnung
@@ -9405,7 +9433,18 @@ function renderWochenplan() {
         '<span>' + escapeHtml(stundenplanFreiGrund(t)) + '</span></div>';
     } else {
       let vorher = von;
-      for (const sl of slots) {
+      /* Die Zuordnung faellt an die ERSTE Stunde des Fachs an diesem Tag —
+         zwei Stunden desselben Fachs sollen die Zahl nicht verdoppeln. Sie
+         steht hier und nicht im Modul: die App rechnet sie selbst, damit ein
+         Abhaken nicht die Signatur des ganzen Plans aendert (so steht es auch
+         in GetTilePlan des Stundenplan-Moduls). */
+      const ersteProFach = {};
+      slots.forEach((s2, i2) => {
+        const n2 = String((s2 && s2.name) || '');
+        if (ersteProFach[n2] === undefined) { ersteProFach[n2] = i2; }
+      });
+      for (let idx = 0; idx < slots.length; idx++) {
+        const sl = slots[idx];
         spalten += luecke(vorher, sl.from);
         const h = Math.max(y(sl.to) - y(sl.from), proViertel * 3);
         const wo = [sl.room, sl.teacher].filter(x => x).join(' · ');
@@ -9418,7 +9457,10 @@ function renderWochenplan() {
         // Derselbe Text im title: in schmalen Spalten wird gekuerzt.
         const hinweis = sl.name + ', ' + sl.start + ' – ' + sl.end +
           (wo ? ', ' + wo : '') + (marke ? ' — ' + marke : '');
-        spalten += '<div class="wp-stunde' + lage + '" title="' + escapeHtml(hinweis) + '"' +
+        const hw = hwFuerSlot(hausaufgaben.items, kind.id, t.date, sl.name,
+          ersteProFach[String(sl.name || '')], idx);
+        spalten += '<div class="wp-stunde' + lage + (hw && h < 57 ? ' wp-hw-eng' : '')
+          + '" title="' + escapeHtml(hinweis) + '"' +
           ' style="background:' + escapeHtml(sl.color || '#607D8B') + ';top:' + y(sl.from) +
           'px;height:' + h + 'px">' +
           (sl.icon ? '<span class="wp-sym"><i class="fa-light ' + escapeHtml(sl.icon) + '"></i></span>' : '') +
@@ -9426,7 +9468,11 @@ function renderWochenplan() {
           '<div class="wp-zeit">' + escapeHtml(sl.start || '') + ' – ' + escapeHtml(sl.end || '') + '</div>' +
           (marke ? '<div class="wp-wo wp-zustand">' + escapeHtml(marke) + '</div>' : '') +
           (wo ? '<div class="wp-wo">' + escapeHtml(wo) + '</div>' : '') +
-          '</div></div>';
+          '</div>' +
+          (hw ? '<span class="wp-hw" title="' + escapeHtml(
+                  hw + ' ' + translate('Homework')) + '">' +
+                '<i class="fa-light fa-book-open-cover"></i><b>' + hw + '</b></span>' : '') +
+          '</div>';
         vorher = Math.max(vorher, sl.to);
       }
       spalten += luecke(vorher, bis);
