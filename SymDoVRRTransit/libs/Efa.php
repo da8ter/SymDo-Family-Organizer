@@ -6,19 +6,27 @@ declare(strict_types=1);
  * Der Transport zur EFA des VRR — mehr nicht.
  *
  * Die Rheinbahn hat keine eigene öffentliche Schnittstelle; die Fahrplanauskunft
- * des Verbunds (EFA, Mentz) liefert Abfahrten und Verbindungen mit Echtzeit,
- * ohne Schlüssel und ohne Anmeldung. Am 11.09.2026 gemessen: Haltestellensuche
- * 0,6 s, Abfahrten 0,3–0,6 s, Verbindungen 1,2 s.
+ * des Verbunds (EFA, Mentz) liefert Abfahrten und Verbindungen mit Echtzeit.
+ * Angefragt wird der **offene Zugang** `openservice.vrr.de` — dieselbe Auskunft,
+ * die der VRR über <https://www.opendata-oepnv.de> als offene Daten anbietet
+ * (CC BY 4.0). Daher die Quellenangabe in Kachel, Formular und Handbuch.
+ *
+ * Am 11.09.2026 gemessen: Haltestellensuche 0,6 s, Abfahrten 0,3–0,6 s,
+ * Verbindungen 1,2 s. Am 16.09.2026 beide Gegenstellen nebeneinander gemessen:
+ * alle sieben Abrufe dieses Moduls — Haltestellensuche, Umkreis, Abfahrten,
+ * Strecke, Strecke ohne Umsteigen, Strecke ab Koordinate, „Ankommen bis" —
+ * antworten auf `openservice.vrr.de` und `efa.vrr.de` gleich, samt Echtzeit.
  *
  * Zwei Dinge, die man hier wissen muss:
  *
  * 1. **Eine unbekannte Haltestelle antwortet mit HTTP 200 und einer leeren
  *    Liste**, nicht mit einem Fehlercode. Der Status taugt deshalb nicht als
  *    einzige Prüfung — der Aufrufer muss den Inhalt ansehen.
- * 2. **Es ist keine zugesicherte Schnittstelle.** Kein Schlüssel heißt auch
- *    kein Vertrag. Deshalb kurze Fristen, ein eigener User-Agent, mit dem man
- *    uns erkennen und ansprechen kann, und ein Takt, der sich zurückhält
- *    (siehe den Fehlerriegel im Modul).
+ * 2. **Der Zugang ist nicht zugesichert.** Ohne Registrierung gilt er als
+ *    Testzugang; wer dauerhaft und in Menge abruft, meldet sich beim VRR
+ *    (opendata-oepnv@vrr.de). Deshalb kurze Fristen, ein eigener User-Agent,
+ *    mit dem man uns erkennen und ansprechen kann, und ein Takt, der sich
+ *    zurückhält (siehe den Fehlerriegel im Modul).
  *
  * Getrennt vom Rechenwerk (TransitCalc) und von Symcon: diese Klasse spricht
  * HTTP, sonst nichts. Deshalb steht sie auch nicht unter Prüfstand — geprüft
@@ -26,8 +34,8 @@ declare(strict_types=1);
  */
 final class Efa
 {
-    /** Die EFA des VRR. Ohne Schrägstrich am Ende. */
-    public const BASIS = 'https://efa.vrr.de/vrr';
+    /** Der offene Zugang zur EFA des VRR. Ohne Schrägstrich am Ende. */
+    public const BASIS = 'https://openservice.vrr.de/vrr';
 
     /**
      * Frist je Abruf. Zwanzig Sekunden, wie bei WebUntis — lang genug für eine

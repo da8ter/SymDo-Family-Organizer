@@ -24,7 +24,8 @@ die erste Stunde aus, darf länger geschlafen werden.
 - **6. Wann abgerufen wird**
 - **7. Wenn die Auskunft nicht antwortet**
 - **8. Auch in der App**
-- **9. PHP-Befehlsreferenz**
+- **9. Woher die Daten kommen**
+- **10. PHP-Befehlsreferenz**
 
 ## 1. Was die Kachel zeigt
 
@@ -154,7 +155,20 @@ Abruf zwischen 5 und 9 Uhr läuft trotzdem weiter.
 
 Dieselben Abfahrten und Verbindungen stehen auch in der SymDo-Web-App.
 
-## 9. PHP-Befehlsreferenz
+## 9. Woher die Daten kommen
+
+Alle Zeiten kommen aus der Fahrplanauskunft des **Verkehrsverbunds Rhein-Ruhr
+(VRR)**. Der Verbund gibt sie als offene Daten heraus: nutzen darf sie jeder,
+solange er sagt, woher sie stammen. Genau das steht deshalb klein unter der
+Kachel und im Formular:
+
+> Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR)
+
+Die Lizenz ist Creative Commons Namensnennung 4.0 (CC BY 4.0). Für zu Hause ist
+damit alles getan. Wer dauerhaft darauf baut, meldet sich einmal kurz beim VRR
+unter `opendata-oepnv@vrr.de` — ohne Anmeldung gilt der Zugang als Testzugang.
+
+## 10. PHP-Befehlsreferenz
 
 ```php
 // Jetzt abrufen — auch der Knopf im Formular tut genau das

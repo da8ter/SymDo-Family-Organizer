@@ -218,8 +218,15 @@ class SymDoVRRTransit extends IPSModuleStrict
             'elements' => [
                 ['type' => 'Label', 'caption' =>
                     $this->Translate('Departures and journeys from the VRR journey planner (EFA). ')
-                    . $this->Translate('It covers Rheinbahn and every other operator in the network, ')
-                    . $this->Translate('needs no key and delivers real-time data.')],
+                    . $this->Translate('It covers Rheinbahn and every other operator in the network ')
+                    . $this->Translate('and delivers real-time data.')],
+
+                /* Die Quellenangabe. Der VRR gibt die Fahrplanauskunft als offene
+                   Daten heraus (CC BY 4.0) — Namensnennung gehört dazu, und zwar
+                   dort, wo die Daten zu sehen sind: hier, in der Kachel und im
+                   Handbuch. */
+                ['type' => 'Label', 'caption' =>
+                    $this->Translate('Timetable data: Verkehrsverbund Rhein-Ruhr (VRR), open data under CC BY 4.0.')],
 
                 ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Find a stop'), 'expanded' => false,
                  'items' => [

@@ -193,6 +193,14 @@ body {
    verschiebt ein zu langes Wort die ganze Reihe. */
 .fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
 .leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
+
+/* Die Quellenangabe. Die Fahrplandaten des VRR stehen unter CC BY 4.0 — der
+   Verbund gehört genannt, wo seine Daten zu sehen sind. Klein und dezent, aber
+   fest unter der Liste: sie scrollt nicht mit weg. */
+.quelle {
+  flex: 0 0 auto; font-size: 10px; color: var(--dezent);
+  text-align: right; padding-top: 4px;
+}
 </style>
 </head>
 <body>
@@ -457,7 +465,9 @@ function zeichne() {
   document.getElementById('wurzel').innerHTML =
       kopfHtml(jetzt) + '<div class="liste">'
     + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
-    + '</div>';
+    + '</div>'
+    + '<div class="quelle">'
+    + esc(translate('Timetable data: Verkehrsverbund Rhein-Ruhr (VRR)')) + '</div>';
 
   engePruefen();
   messungLiveHalten();

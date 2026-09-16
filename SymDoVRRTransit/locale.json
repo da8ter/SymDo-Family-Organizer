@@ -5,8 +5,9 @@
         },
         "de": {
             "Departures and journeys from the VRR journey planner (EFA). ": "Abfahrten und Verbindungen aus der Fahrplanauskunft des VRR (EFA). ",
-            "It covers Rheinbahn and every other operator in the network, ": "Sie umfasst die Rheinbahn und alle anderen Verkehrsunternehmen im Verbund, ",
-            "needs no key and delivers real-time data.": "braucht keinen Schlüssel und liefert Echtzeitdaten.",
+            "It covers Rheinbahn and every other operator in the network ": "Sie umfasst die Rheinbahn und alle anderen Verkehrsunternehmen im Verbund ",
+            "and delivers real-time data.": "und liefert Echtzeitdaten.",
+            "Timetable data: Verkehrsverbund Rhein-Ruhr (VRR), open data under CC BY 4.0.": "Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR), offene Daten unter CC BY 4.0.",
             "Find a stop": "Haltestelle suchen",
             "Include the town — it narrows the hits a lot: \"Düsseldorf Benrath\" ": "Ortsname mit angeben, das grenzt die Treffer stark ein — „Düsseldorf Benrath\" ",
             "instead of just \"Benrath\".": "statt nur „Benrath\".",
@@ -108,7 +109,8 @@
             "no journey without changes": "keine umsteigefreie Verbindung",
             "All": "Alle",
             "Direct": "Ohne Umsteigen",
-            "Overview without changes": "Übersicht ohne Umsteigen"
+            "Overview without changes": "Übersicht ohne Umsteigen",
+            "Timetable data: Verkehrsverbund Rhein-Ruhr (VRR)": "Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR)"
         }
     }
 }
