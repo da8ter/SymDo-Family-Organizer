@@ -69,6 +69,11 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
   Ausschlag, weil Linie und Knopf hineinpassen müssen. Am schönsten auf einer
   hohen Kachel.
 
+**Farben nach Verkehrsmittel.** In beiden ausführlichen Ansichten trägt jede
+Fahrt die Farbe ihrer Gattung — S-Bahn grün, U-Bahn blau, Straßenbahn rot, Bus
+violett, Regionalzug schiefergrau, Fernzug dunkelrot. So sieht man auf einen
+Blick, worin man sitzt.
+
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
 *Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung
 man sich gerade ansieht und welche Haltestellenliste offen steht, bleibt

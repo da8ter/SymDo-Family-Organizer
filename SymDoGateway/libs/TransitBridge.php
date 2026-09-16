@@ -173,6 +173,9 @@ trait TransitBridge
                     'line'     => (string)($l['line'] ?? ''),
                     'product'  => (string)($l['product'] ?? ''),
                     'icon'     => (string)($l['icon'] ?? ''),
+                    /* Die Gattung als Zahl — daran haengt die Farbe des
+                       Verkehrsmittels. Der VRR liefert keine Farben mit. */
+                    'class'    => (int)($l['class'] ?? -1),
                     'from'     => (string)($l['from'] ?? ''),
                     'to'       => (string)($l['to'] ?? ''),
                     'depText'  => (string)($l['depText'] ?? ''),
