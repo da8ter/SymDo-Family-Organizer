@@ -178,6 +178,8 @@ body {
 /* Das Fahrzeug traegt die Akzentfarbe: es ist das einzige Zeichen in der Zeile,
    das die Art der Fahrt nennt — Bus, Bahn, S-Bahn —, und in Grau ging es neben
    der fetten Liniennummer unter. */
+/* Die Farbe setzt das Markup je Zeile (Verkehrsmittel); hier steht nur der
+   Rueckfall und die Ausrichtung. */
 .abfahrt .sym { color: var(--akzent); text-align: center; }
 .abfahrt .linie { font-weight: 800; font-size: 12px; }
 .abfahrt .ziel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -744,7 +746,11 @@ function abfahrtenHtml() {
         : (min <= 0 ? esc(translate('now')) : min + '&nbsp;' + esc(translate('min')));
       return '<div class="' + klassen + '" title="' + esc(d.product + ' ' + d.line + ' → ' + d.destination
              + ', ' + translate('scheduled') + ' ' + d.planned) + '">'
-        + '<span class="sym">' + symbol(d.icon) + '</span>'
+        /* Das Zeichen traegt die Farbe seines Verkehrsmittels — dieselbe, die
+           auch das Linienschild in den Streckenansichten hat. Sie kommt fertig
+           aus dem Modul; fehlt sie (alte Nutzlast), bleibt es beim Akzent. */
+        + '<span class="sym" style="color:' + verkehrsmittelFarbe(d) + '">'
+        + symbol(d.icon) + '</span>'
         + '<span class="linie">' + esc(d.line) + '</span>'
         + '<span class="ziel"><span class="pfeil">' + symbol('fa-arrow-right') + '</span>'
         + esc(d.destination) + '</span>'
