@@ -40,7 +40,7 @@ unter dessen Foto und Namen — man sieht auf einen Blick, wessen Bus da fährt.
 und das Ziel, rechts die Minuten. Und zwar die Minuten, auf die es ankommt: Ist
 ein Fußweg eingetragen, zählt die Kachel herunter, bis man **losgehen** muss,
 sonst bis zur Abfahrt. Eine Verspätung steht als `+3` daneben, das Gleis als
-`Gl. 3`. Was ausfällt, ist durchgestrichen, was man ohnehin nicht mehr
+`Steig 3`. Was ausfällt, ist durchgestrichen, was man ohnehin nicht mehr
 erwischt, tritt blass zurück.
 
 **Strecken** — je Strecke eine Karte mit den nächsten Fahrten nebeneinander;
