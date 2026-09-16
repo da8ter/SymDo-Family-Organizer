@@ -8,10 +8,9 @@ Verkehrsunternehmen im Verbund, braucht keinen Schlüssel und liefert
 Echtzeitdaten. Zwei Ansichten in einer Kachel: die Abfahrtstafel einer
 Haltestelle und die Zeitachse einer Verbindung.
 
-Das Stück, das eine Fahrplan-App nicht kann: **SymDo kennt den Stundenplan.**
-Eine Strecke im Modus *Schulweg* fragt ihn nach Beginn und Ende des Schultags
-und dreht die Richtung selbst um — morgens die Verbindung, mit der das Kind
-pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
+Eine Strecke im Modus *Schulweg* nimmt Beginn und Ende des Schultags aus dem
+Stundenplan und dreht die Richtung selbst um: morgens die Verbindung, mit der
+das Kind pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
 
 ## Inhalt
 
@@ -27,28 +26,24 @@ pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
 
 ## 1. Was die Kachel zeigt
 
-Oben nur der Umschalter zwischen **Abfahrten** und **Strecken**. Ist nur eine
-der beiden Sorten eingerichtet, fällt er weg — er wäre dann Lärm. Die Wahl
-bleibt im Browser gemerkt.
+Oben der Umschalter zwischen **Abfahrten** und **Strecken**. Ist nur eine der
+beiden Sorten eingerichtet, fällt er weg. Die Wahl bleibt im Browser gemerkt.
 
 Gehören Haltestellen oder Strecken einem Familienmitglied, stehen sie unter
-einer Überschrift mit Foto und Namen. Wem eine Verbindung gehört, sagt also die
-Überschrift; Filterknöpfe gibt es bewusst keine, denn die Kachel zeigt ohnehin
-nur, was eingerichtet ist.
+einer Überschrift mit Foto und Namen.
 
-**Abfahrten** — je Haltestelle eine Karte: Symbol und Liniennummer, das Ziel,
-und rechts die Zahl, auf die man wirklich schaut. Ist ein Fußweg gepflegt, ist
-das **„wann muss ich los"**, sonst **„wann fährt es"**. Dahinter eine
-Verspätung als `+3`, dazu das Gleis (`Gl. 3`), wenn die Auskunft eines nennt.
+**Abfahrten** — je Haltestelle eine Karte: Symbol und Liniennummer, Pfeil und
+Ziel, rechts die Minuten. Ist ein Fußweg gepflegt, sind das die Minuten bis zum
+Losgehen, sonst bis zur Abfahrt. Dahinter eine Verspätung als `+3`, dazu das
+Gleis (`Gl. 3`), wenn die Auskunft eines nennt.
 Was entfällt, steht durchgestrichen als *entfällt*; was mit dem eingetragenen
 Fußweg nicht mehr zu schaffen ist, steht blass.
 
 **Strecken** — je Strecke eine Karte mit den nächsten Fahrten **nebeneinander**;
 gewischt wird seitwärts, die Punkte darunter sagen, wo man ist. Je Fahrt:
 Abfahrt → Ankunft, die Dauer, und *direkt* oder *n Umstiege*. Darunter die
-Zeitachse — ein Balken je Abschnitt, breit nach Dauer, im Balken nur die
-Liniennummer. Wie viel Zeit wohin geht, sagt die Zeile darunter; sie bleibt
-lesbar, auch wenn ein Fußweg nur ein schmales Stück bekommt.
+Zeitachse — ein Balken je Abschnitt, breit nach Dauer, im Balken die
+Liniennummer. Wie viel Zeit wohin geht, sagt die Zeile darunter.
 
 ## 2. Voraussetzungen
 
@@ -67,16 +62,15 @@ dann allerdings keine Zeiten und bleibt leer.
 1. Instanz **SymDo - VRR Transit** anlegen; als Eltern das vorhandene SymDo
    Gateway wählen (die Konsole schlägt es vor).
 2. **Haltestelle suchen** aufklappen, den Ort mit eingeben — das grenzt die
-   Treffer stark ein — und **Als Haltestelle übernehmen**. Die Kennungen der
-   EFA (`de:05111:18235`) tippt niemand ab; was in den Listen steht, ist
-   eingerichtet.
+   Treffer stark ein — und **Als Haltestelle übernehmen**. Die Kennung der
+   Haltestelle (`de:05111:18235`) kommt aus der Suche.
 3. In der Liste **Haltestellen** je Zeile einstellen:
 
 | Spalte | Bedeutung |
 |---|---|
 | Name | wie die Karte überschrieben wird |
 | Haltestellen-Kennung | kommt aus der Suche |
-| Zeigen | ohne Haken erscheint sie nicht auf der Tafel — **und kostet keinen Abruf**; genau richtig für eine Haltestelle, die nur Start oder Ziel einer Strecke ist |
+| Zeigen | ohne Haken erscheint sie nicht auf der Tafel und wird nicht abgerufen |
 | Für wen | leer = die ganze Familie |
 | Linien und Richtungen | je Linie und Ziel ein Haken — ohne Haken erscheint diese Tour nicht auf der Tafel |
 | Fußweg (min) | Zeit bis zur Haltestelle; schaltet die Anzeige auf „wann muss ich los" |
@@ -85,61 +79,34 @@ dann allerdings keine Zeiten und bleibt leer.
 4. In der Liste **Strecken** Start und Ziel wählen. Jede eingerichtete
    Haltestelle steht dort zur Auswahl; für die eigene Haustür stattdessen
    **Von (Karte)** bzw. **Nach (Karte)** nehmen und den Marker setzen. **Von
-   (Name)** / **Nach (Name)** überschreiben, was die Auskunft nennt — bei einer
-   Koordinate ist das die Adresse, und „Zuhause" liest sich besser.
+   (Name)** / **Nach (Name)** überschreiben, was die Auskunft nennt; bei einer
+   Koordinate ist das die Adresse.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
-**Linien und Richtungen muss man nicht tippen.** Jede Haltestellenzeile trägt
-eine eigene kleine Liste **Linien und Richtungen**: je Linie und Ziel eine Zeile
-mit einem Haken. Sie wird beim **Übernehmen einer Haltestelle** gleich gefüllt
-— mit dem, was dort wirklich fährt, in der Reihenfolge der nächsten Abfahrten.
-Übrig bleibt das Entfernen der Haken, die man nicht sehen will. Für
-Haltestellen, die schon in der Liste stehen, tut der Knopf **Linien und
-Richtungen holen** darunter dasselbe. Gefüllt werden nur **leere** Listen; eine
-gepflegte Liste ist eine Entscheidung und bleibt stehen (wer neu holen will,
-löscht ihre Zeilen). Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
+**Linien und Richtungen** werden nicht getippt. Jede Haltestellenzeile trägt
+eine eigene kleine Liste: je Linie und Ziel eine Zeile mit einem Haken. Sie
+wird beim **Übernehmen einer Haltestelle** gefüllt — mit dem, was dort fährt,
+in der Reihenfolge der nächsten Abfahrten. Zu tun bleibt das Entfernen der
+Haken, die nicht auf die Tafel sollen. Für Haltestellen, die schon in der Liste
+stehen, tut der Knopf **Linien und Richtungen holen** dasselbe; gefüllt werden
+nur **leere** Listen. Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
 
-Die beiden Textfelder **Nur diese Linien** und **Richtung** sind damit
-entfallen. Sie nahmen die häufigste Falle nicht: ein getippter Text, der die
-Schreibweise der Auskunft nicht trifft, lässt die Tafel leer — und das sieht
-aus wie ein kaputter Abruf, nicht wie ein Tippfehler. Und sie wurden
-**und**-verknüpft: „789 nach Monheim" zusammen mit „834 zum Hbf" ergab dort
-vier Kombinationen statt der zwei gemeinten. Ein Haken meint genau ein Paar.
-
-Die Liste ist eine **Sperre, keine Freigabe**: versteckt wird nur, was dasteht
-und keinen Haken hat. Eine Linie, die neu an die Haltestelle kommt, fährt also
-weiter auf der Tafel, statt still zu verschwinden, weil eine Liste von
-vorgestern sie nicht kennt. An einer großen Station wird bei vierzig Einträgen
-gekürzt; die Statuszeile sagt es dann ausdrücklich.
+Die Liste ist eine Sperre: versteckt wird nur, was dasteht und keinen Haken
+hat. Eine Linie, die neu an die Haltestelle kommt, erscheint weiter auf der
+Tafel. An einer großen Station wird bei vierzig Einträgen gekürzt; die
+Statuszeile sagt es dann.
 
 **Mit oder ohne Umsteigen** — bei den Strecken steht in der Kachel ein zweiter
-kleiner Schalter neben *Abfahrten / Strecken*: **Alle** oder **Ohne
-Umsteigen**. Er schaltet sofort um, weil das Modul jede Strecke **zweimal**
-abfragt: einmal normal und einmal mit `maxChanges=0`. Das ist kein Luxus,
-sondern nötig — die Auskunft findet mit dem Parameter *andere* Verbindungen,
-nicht bloß eine Teilmenge. Gemessen Benrath → Düsseldorf Hbf:
+Schalter neben *Abfahrten / Strecken*: **Alle** oder **Ohne Umsteigen**. Beide
+Listen werden vorab geholt, der Schalter wechselt ohne Wartezeit. Unter *Ohne
+Umsteigen* stehen dabei auch Verbindungen, die unter *Alle* nicht vorkommen.
+Die Stellung wird im Browser gemerkt und gilt nur an diesem Gerät. Gibt es auf
+einer Strecke keine umsteigefreie Verbindung, sagt die Karte „keine
+umsteigefreie Verbindung".
 
-| Schalter | Abfahrten |
-|---|---|
-| Alle | 19:28 (1 Umstieg), 20:02, 20:20 (1 Umstieg) |
-| Ohne Umsteigen | **19:27**, 20:02, **20:37** — alle direkt |
-
-19:27 und 20:37 kommen in der ungefilterten Antwort gar nicht vor. Aus ihr
-heraus zu sieben hätte also nur 20:02 übrig gelassen.
-
-Die Schalterstellung gehört dem Betrachter und wird im Browser gemerkt: zwei
-Leute vor zwei Kacheln sehen Verschiedenes, und niemand verstellt dem anderen
-die Anzeige. Gibt es auf einer Strecke keine umsteigefreie Verbindung, sagt die
-Karte „keine umsteigefreie Verbindung" statt „keine Verbindung gefunden".
-
-**Auf der Übersicht** gibt es keinen Schalter — dort soll die Schulweg-Karte
-ohne Bedienung das Richtige zeigen. Was sie zeigt, entscheidet der Haken
-**Übersicht ohne Umsteigen** an der Strecke. Er steuert nur diese eine Karte;
-im Bereich wählt weiter der Betrachter, und am Abruf ändert er nichts — geholt
-wird ohnehin beides.
-
-Der Richtungsfilter bleibt bewusst unsichtbar im Kopf der Tafel: er gehört zur
-Einrichtung, nicht zur Bedienung.
+**Auf der Übersicht** gibt es keinen Schalter. Was die Schulweg-Karte dort
+zeigt, entscheidet der Haken **Übersicht ohne Umsteigen** an der Strecke. Er
+steuert nur diese Karte.
 
 ## 4. Der Schulweg
 
@@ -148,8 +115,8 @@ Stundenplan des Kindes. Vor Unterrichtsbeginn zeigt die Karte die Fahrt **zur
 Schule**, danach die **nach Hause**; Start und Ziel tauschen dabei die Plätze,
 und die Kopfzeile sagt, welche Richtung gerade zu sehen ist.
 
-Gezählt wird nur, was wirklich stattfindet: **fällt die erste Stunde aus, darf
-es später losgehen; fällt die letzte aus, geht es früher heim.**
+Gezählt wird nur, was stattfindet: fällt die erste Stunde aus, geht es später
+los; fällt die letzte aus, früher heim.
 
 Der **Puffer** heißt auf dem Hinweg „so viele Minuten vor Unterrichtsbeginn da
 sein", auf dem Rückweg „so viele Minuten vom Klassenraum bis zur Haltestelle".
@@ -167,7 +134,7 @@ Stundenplan-Instanzen gibt.
 | in einer Streckenkarte seitwärts wischen | zur nächsten Fahrt |
 | auf eine Abfahrt zeigen | Verkehrsmittel, Linie, Ziel und die **planmäßige** Zeit als Tooltip |
 
-Die Kachel ist eine Anzeige — es gibt nichts zu ändern, nur zu lesen.
+Die Kachel ist eine Anzeige; geändert wird nichts.
 
 ## 6. Wann abgerufen wird
 
@@ -177,26 +144,21 @@ Minuten. Liegt niemands Blick darauf, fragt das Modul nicht bei der Auskunft
 nach.
 
 Eine Ausnahme: gibt es einen Schulweg, läuft **zwischen 5 und 9 Uhr** ein
-langsamer Schlag alle zehn Minuten mit — die Auskunft soll am Frühstückstisch
-schon dastehen und nicht erst auf den ersten Blick warten.
+langsamer Schlag alle zehn Minuten mit; die Auskunft steht dann am
+Frühstückstisch schon bereit.
 
-**Geholt wird in dieser Instanz, nicht im Gateway.** Symcon führt je Instanz
-genau eine Sache zur Zeit aus; ein Abruf von ein bis anderthalb Sekunden im
-Gateway ließe jede Anfrage der App so lange warten. Gemessen am 11.09.2026:
-während das Modul 1,30 s lang holt, bleibt der Hook des Gateways bei 10 ms.
+Geholt wird in dieser Instanz, nicht im Gateway.
 
 ## 7. Wenn die Auskunft nicht antwortet
 
 Nach **drei Fehlschlägen in Folge** legt das Modul eine Stunde Pause ein. Der
-zuletzt geholte Stand bleibt stehen und trägt dann ein **veraltet** an der
-Karte — eine leere Tafel wäre die schlechtere Auskunft. Während der Pause läuft
-der langsame Schlag weiter, sonst öffnete sie sich nie wieder.
+zuletzt geholte Stand bleibt stehen und trägt ein **veraltet** an der Karte.
+Während der Pause läuft der langsame Schlag weiter.
 
 ## 8. Auch in der App
 
-Das Gateway holt sich die fertige Auskunft aus allen VRR-Instanzen und reicht
-sie an App und Web-App weiter (`/v1/transit`). Eingerichtet wird trotzdem nur
-hier; das Gateway pflegt nichts eigenes.
+Das Gateway holt die fertige Auskunft aus allen VRR-Instanzen und reicht sie an
+App und Web-App weiter (`/v1/transit`). Eingerichtet wird nur hier.
 
 ## 9. PHP-Befehlsreferenz
 
@@ -204,8 +166,7 @@ hier; das Gateway pflegt nichts eigenes.
 // Jetzt abrufen — auch der Knopf im Formular tut genau das
 SDVT_Refresh(<InstanzID>);
 
-// Der fertige Zustand als JSON (Haltestellen, Strecken, Sperre).
-// Rein lesend: läuft auch im Hook einer beschäftigten Instanz vollständig durch.
+// Der fertige Zustand als JSON (Haltestellen, Strecken, Sperre)
 echo SDVT_GetBoard(<InstanzID>);
 
 // Die Kachel neu zeichnen lassen und „jemand sieht hin" melden
