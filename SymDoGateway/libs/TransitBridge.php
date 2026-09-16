@@ -78,6 +78,7 @@ trait TransitBridge
                 'line'        => (string)($d['line'] ?? ''),
                 'product'     => (string)($d['product'] ?? ''),
                 'icon'        => (string)($d['icon'] ?? ''),
+                'color'       => (string)($d['color'] ?? ''),
                 'destination' => (string)($d['destination'] ?? ''),
                 'planned'     => (string)($d['planned'] ?? ''),
                 'estimated'   => (string)($d['estimated'] ?? ''),
@@ -173,9 +174,11 @@ trait TransitBridge
                     'line'     => (string)($l['line'] ?? ''),
                     'product'  => (string)($l['product'] ?? ''),
                     'icon'     => (string)($l['icon'] ?? ''),
-                    /* Die Gattung als Zahl — daran haengt die Farbe des
-                       Verkehrsmittels. Der VRR liefert keine Farben mit. */
+                    /* Die Gattung als Zahl und die Farbe, die das Modul ihr
+                       zugeordnet hat. Der VRR liefert keine Farben mit; die
+                       Tabelle dahinter pflegt der Nutzer im Formular. */
                     'class'    => (int)($l['class'] ?? -1),
+                    'color'    => (string)($l['color'] ?? ''),
                     'from'     => (string)($l['from'] ?? ''),
                     'to'       => (string)($l['to'] ?? ''),
                     'depText'  => (string)($l['depText'] ?? ''),

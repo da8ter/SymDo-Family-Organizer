@@ -56,6 +56,10 @@ trait TransitStore
         $this->RegisterPropertyInteger('SchoolBuffer', 10);
         $this->RegisterPropertyString('DefaultView', 'departures');
         $this->RegisterPropertyString('RouteStyle', 'bars');
+        /* Das Aussehen je Verkehrsmittel. Die Vorgabe steht in TransitCalc und
+           wird hier einmal als Liste eingetragen, damit der Nutzer im Formular
+           gleich alle Gattungen vor sich hat statt einer leeren Tabelle. */
+        $this->RegisterPropertyString('Modes', $this->TransitVmVorgabeJson());
         // 0 = die erste Stundenplan-Instanz mit eigenen Daten nehmen.
         $this->RegisterPropertyInteger('TimetableInstanceID', 0);
 
@@ -83,6 +87,24 @@ trait TransitStore
      *
      * @return array<string,mixed>
      */
+    /**
+     * Die Vorgabetabelle als JSON fuer die Property — eine Zeile je Gattung,
+     * mit Schluessel, Namen, Symbol und Farbe.
+     */
+    private function TransitVmVorgabeJson(): string
+    {
+        $zeilen = [];
+        foreach (TransitCalc::VM_VORGABE as $v) {
+            $zeilen[] = [
+                'key'   => $v['key'],
+                'name'  => $this->Translate($v['name']),
+                'icon'  => $v['icon'],
+                'color' => $v['color'],
+            ];
+        }
+        return json_encode($zeilen, JSON_UNESCAPED_UNICODE) ?: '[]';
+    }
+
     private function TransitKonfiguration(): array
     {
         $roh = json_decode((string)@IPS_GetConfiguration($this->InstanceID), true);
@@ -737,6 +759,12 @@ trait TransitStore
         }
         $mitHalten = $stil === 'vertical';
 
+        /* Farbe und Symbol je Verkehrsmittel — einmal nachgeschlagen, dann an
+           jede Abfahrt und jeden Fahrabschnitt geschrieben. Die Kachel muss die
+           Tabelle damit nicht kennen, und die App bekommt sie ueber die
+           Bruecke genauso. */
+        $aussehen = TransitCalc::VmAussehen($this->TransitZeilen('Modes'));
+
         $haltestellen = [];
         foreach ($this->TransitZeilen('Stops') as $z) {
             if (!$this->TransitStopSichtbar($z)) {
@@ -760,9 +788,11 @@ trait TransitStore
                    „Richtung" sind am 15.09.2026 entfallen: sie wurden
                    UND-verknuepft und konnten „diese Linie in DIESE Richtung"
                    nie ausdruecken. */
-                'departures' => TransitCalc::Abfahrten($roh, $jetzt,
-                    max(0, (int)($z['walk'] ?? 0)), [], max(1, (int)($z['limit'] ?? 8)), [],
-                    is_array($z['tours'] ?? null) ? $z['tours'] : []),
+                'departures' => TransitCalc::VmAnmalen(
+                    TransitCalc::Abfahrten($roh, $jetzt,
+                        max(0, (int)($z['walk'] ?? 0)), [], max(1, (int)($z['limit'] ?? 8)), [],
+                        is_array($z['tours'] ?? null) ? $z['tours'] : []),
+                    $aussehen),
             ];
         }
 
@@ -796,18 +826,22 @@ trait TransitStore
                 'fetchedAt'  => (int)($e['at'] ?? 0),
                 /* Fuer die Uebersichtskarte, die keinen Schalter hat. */
                 'directOnly' => ($z['direct'] ?? false) === true,
-                'journeys'   => TransitCalc::EndenBenennen(
-                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
-                                              false, $mitHalten),
-                    $vonName, $nachName),
+                'journeys'   => TransitCalc::VmAnmalenVerbindungen(
+                    TransitCalc::EndenBenennen(
+                        TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
+                                                  false, $mitHalten),
+                        $vonName, $nachName),
+                    $aussehen),
                 /* Die zweite Liste fuer den Schalter „Ohne Umsteigen". Fehlt
                    die eigene Antwort, wird aus der gemischten gesiebt — dann
                    sind es weniger, aber keine falschen. */
-                'journeysDirect' => TransitCalc::EndenBenennen(
-                    TransitCalc::Verbindungen(
-                        is_array($e['rawDirect'] ?? null) ? $e['rawDirect'] : $roh,
-                        max(1, (int)($z['count'] ?? 4)), $nichtNach, true, $mitHalten),
-                    $vonName, $nachName),
+                'journeysDirect' => TransitCalc::VmAnmalenVerbindungen(
+                    TransitCalc::EndenBenennen(
+                        TransitCalc::Verbindungen(
+                            is_array($e['rawDirect'] ?? null) ? $e['rawDirect'] : $roh,
+                            max(1, (int)($z['count'] ?? 4)), $nichtNach, true, $mitHalten),
+                        $vonName, $nachName),
+                    $aussehen),
             ];
         }
 

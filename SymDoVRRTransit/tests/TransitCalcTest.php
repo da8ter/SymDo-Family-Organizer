@@ -600,5 +600,43 @@ pruefe('doppelter Halt steht einmal in der Liste',
 pruefe('Liste und Zaehlung sagen dasselbe',
     count($doppelt['halte']) - 1, $doppelt['stops']);
 
+/* ── Farbe und Symbol je Verkehrsmittel ───────────────────────────────────── */
+
+$vorgabe = TransitCalc::VmAussehen([]);
+pruefe('ohne Konfiguration gilt die Vorgabe',
+    [$vorgabe['bus']['icon'], $vorgabe['bus']['color']], ['fa-bus', '#8C2F8C']);
+/* Jede Zeile der Vorgabe muss da sein — eine fehlende hiesse: Fahrt ohne Farbe. */
+pruefe('jede Gattung hat ein Aussehen', count($vorgabe), count(TransitCalc::VM_VORGABE));
+
+/* Der Waehler von Symcon speichert den Symbolnamen OHNE „fa-" — beide
+   Schreibweisen muessen ankommen. */
+$eigen = TransitCalc::VmAussehen([
+    ['key' => 'bus', 'icon' => 'van-shuttle', 'color' => 0x112233],
+    ['key' => 'tram', 'icon' => 'fa-cable-car', 'color' => -1],
+    ['key' => 'gibtsnicht', 'icon' => 'ghost', 'color' => 0x000000],
+]);
+pruefe('eigenes Symbol bekommt sein fa-', $eigen['bus']['icon'], 'fa-van-shuttle');
+pruefe('mit fa- getippt bleibt es dabei', $eigen['tram']['icon'], 'fa-cable-car');
+pruefe('eigene Farbe als Hex', $eigen['bus']['color'], '#112233');
+/* -1 ist „keine Farbe" — dann bleibt die Vorgabe stehen statt Schwarz. */
+pruefe('keine Farbe gewaehlt: Vorgabe bleibt', $eigen['tram']['color'], '#C1152B');
+pruefe('unbekannter Schluessel aendert nichts',
+    isset($eigen['gibtsnicht']), false);
+
+/* Die EFA-Klasse zeigt auf die richtige Zeile; was nirgends steht, wird grau. */
+pruefe('Klasse 2 ist die U-Bahn', TransitCalc::VmSchluessel(2), 'ubahn');
+pruefe('Klasse 4 ist die Strassenbahn', TransitCalc::VmSchluessel(4), 'tram');
+pruefe('unbekannte Klasse wird Sonstige', TransitCalc::VmSchluessel(77), 'sonst');
+
+/* Angemalt wird nur, was faehrt. */
+$gemalt = TransitCalc::VmAnmalen([
+    ['kind' => 'ride', 'class' => 5, 'icon' => 'fa-bus'],
+    ['kind' => 'walk', 'class' => 99, 'icon' => 'fa-person-walking'],
+], $eigen);
+pruefe('Fahrt bekommt Farbe und Symbol',
+    [$gemalt[0]['icon'], $gemalt[0]['color']], ['fa-van-shuttle', '#112233']);
+pruefe('Fussweg bleibt unberuehrt',
+    [$gemalt[1]['icon'], isset($gemalt[1]['color'])], ['fa-person-walking', false]);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

@@ -133,7 +133,24 @@
             "Vertical, with stops": "Senkrecht, mit Haltestellen",
             "and the transfer — it needs more room and suits a wide tile. ": "und den Umstieg — sie braucht mehr Platz und passt zu einer breiten Kachel. ",
             "The vertical one lists every stop of the journey and suits a tall tile.": "Die senkrechte listet jede Haltestelle der Fahrt auf und passt zu einer hohen Kachel.",
-            "towards %s": "Richtung %s"
+            "towards %s": "Richtung %s",
+            "Colours and icons": "Farben und Symbole",
+            "Mode": "Verkehrsmittel",
+            "Icon": "Symbol",
+            "Colour": "Farbe",
+            "Restore default colours": "Vorgaben wiederherstellen",
+            "The VRR does not supply any colours — this is our own ": "Der VRR liefert keine Farben mit — das ist unsere eigene ",
+            "assignment, the one common in German public transport.": "Zuordnung, die im deutschen Nahverkehr übliche.",
+            "S-Bahn": "S-Bahn",
+            "U-Bahn": "U-Bahn",
+            "Straßenbahn": "Straßenbahn",
+            "Bus": "Bus",
+            "Rufbus und Sammeltaxi": "Rufbus und Sammeltaxi",
+            "Regionalzug": "Regionalzug",
+            "Fernzug": "Fernzug",
+            "Fähre": "Fähre",
+            "Seilbahn": "Seilbahn",
+            "Sonstige": "Sonstige"
         }
     }
 }

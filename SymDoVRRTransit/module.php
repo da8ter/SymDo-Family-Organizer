@@ -113,6 +113,13 @@ class SymDoVRRTransit extends IPSModuleStrict
                 $this->PushState();
                 return;
 
+            case 'ModesReset':
+                /* Nur ins FORMULAR geschrieben, nicht in die Property: so
+                   entscheidet weiter „Uebernehmen", ob es gilt — wie bei jeder
+                   anderen Aenderung an der Tabelle auch. */
+                $this->UpdateFormField('Modes', 'values', $this->TransitVmVorgabeJson());
+                return;
+
             case 'StopSearch':
                 $this->HaltestellenSuchen((string)$Value);
                 return;
@@ -296,6 +303,27 @@ class SymDoVRRTransit extends IPSModuleStrict
                          ['caption' => $this->Translate('Detailed timeline'), 'value' => 'timeline'],
                          ['caption' => $this->Translate('Vertical, with stops'), 'value' => 'vertical'],
                      ]],
+                    ['type' => 'List', 'name' => 'Modes', 'caption' => $this->Translate('Colours and icons'),
+                     'rowCount' => 10, 'add' => false, 'delete' => false,
+                     'columns' => [
+                         /* Der Schluessel verbindet die Zeile mit den EFA-Klassen.
+                            Unsichtbar, aber `save`: eine Spalte ohne `edit` wird
+                            sonst beim Uebernehmen gar nicht zurueckgeschickt. */
+                         ['caption' => 'key', 'name' => 'key', 'width' => '1px',
+                          'visible' => false, 'save' => true],
+                         ['caption' => $this->Translate('Mode'), 'name' => 'name', 'width' => 'auto',
+                          'save' => true],
+                         ['caption' => $this->Translate('Icon'), 'name' => 'icon', 'width' => '120px',
+                          'edit' => ['type' => 'SelectIcon']],
+                         ['caption' => $this->Translate('Colour'), 'name' => 'color', 'width' => '120px',
+                          'edit' => ['type' => 'SelectColor']],
+                     ]],
+                    ['type' => 'Button', 'caption' => $this->Translate('Restore default colours'),
+                     'onClick' => 'IPS_RequestAction($id, "ModesReset", "");'],
+                    ['type' => 'Label', 'caption' =>
+                        $this->Translate('The VRR does not supply any colours — this is our own ')
+                        . $this->Translate('assignment, the one common in German public transport.')],
+
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('The detailed timeline shows times, platforms, number of stops ')
                         . $this->Translate('and the transfer — it needs more room and suits a wide tile. ')

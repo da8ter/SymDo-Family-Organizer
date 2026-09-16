@@ -24,21 +24,6 @@
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
   --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
   --warn: #E53935;
-  /* Farben je Verkehrsmittel — die im deutschen Nahverkehr uebliche Zuordnung:
-     S-Bahn gruen, U-Bahn blau, Strassenbahn rot, Bus violett, Zug schiefer.
-     Der VRR selbst liefert KEINE Farben mit (gemessen an 80 Abfahrten in drei
-     Staedten: kein Feld, das nach Farbe aussieht) — was er liefert, ist die
-     Gattung als Zahl, und daran haengt diese Tabelle.
-     Alle dunkel genug fuer weisse Schrift; wer sie anders will, ueberschreibt
-     die Variablen. */
-  --vm-sbahn: #1a8a3c;
-  --vm-ubahn: #0a63b0;
-  --vm-tram:  #c1152b;
-  --vm-bus:   #8c2f8c;
-  --vm-regio: #4f5b66;
-  --vm-fern:  #9c1620;
-  --vm-schiff:#127a8a;
-  --vm-sev:   #b35c00;
   /* Die Ränder, die Symcon der Kachel mitgibt — siehe den Leser unten. */
   --sym-mt: 0px;
   --sym-ms: 0px;
@@ -472,15 +457,22 @@ body {
    aufklappen. Aufgebaut ist jede Zeile als Raster aus Schiene und Inhalt; die
    Schiene malt jede Zeile SELBST, damit die Linie ohne Naht durchlaeuft. */
 /* Die Verbindungen stehen untereinander — keine Wisch-Schiene, kein
-   Seitwaerts. Getrennt werden sie durch eine feine Linie statt durch Abstand:
-   so sieht man, wo eine Fahrt aufhoert und die naechste anfaengt. */
-.vt-stapel { display: flex; flex-direction: column; gap: 12px; }
+   Seitwaerts. JEDE bekommt ihren eigenen Kasten; ein Trennstrich waere dann
+   doppelt gemoppelt.
+   Dafuer tritt die Streckenkarte selbst zurueck: sie traegt nur noch die
+   Ueberschrift, das Kastenaussehen wandert nach innen. Sonst saesse Kasten in
+   Kasten. */
+.karte:has(.vt-stapel) { background: transparent; padding: 0; overflow: visible; }
+.karte:has(.vt-stapel) > .titel { padding: 0 2px; }
+.vt-stapel { display: flex; flex-direction: column; gap: 10px; }
+.vt-stapel > .fahrt {
+  background: var(--zeile); border-radius: 12px; padding: 10px 12px;
+}
 /* `.fahrt` ist fuer die Wisch-Schiene gemacht: `flex: 0 0 100%` heisst dort
    „eine Kachelbreite". Im senkrechten Stapel heisst dasselbe „eine Kachel-
    HOEHE" — vier Verbindungen passten dann nicht mehr in die Karte, und drei
    davon waren abgeschnitten (gemessen: nur die erste war zu sehen). */
 .vt-stapel > .fahrt { flex: 0 0 auto; }
-.vt-stapel > .fahrt + .fahrt { border-top: 1px solid var(--rand); padding-top: 12px; }
 .vt { display: flex; flex-direction: column; }
 .vt-zeile { display: grid; grid-template-columns: 26px 1fr; align-items: start; }
 .vt-schiene { position: relative; align-self: stretch; min-height: 14px; }
@@ -589,31 +581,16 @@ function esc(s) {
 function symbol(klasse) { return klasse ? '<i class="fa-light ' + esc(klasse) + '"></i>' : ''; }
 
 /**
- * Die Farbe eines Fahrabschnitts, nach seiner Gattung.
+ * Die Farbe eines Fahrabschnitts.
  *
- * Die EFA nennt sie als Zahl in `product.class`. Gemessen an drei grossen
- * Bahnhoefen kommen vor: 0 Ersatzverkehr, 1 S-Bahn, 2 U-Bahn, 4 Strassenbahn,
- * 5 Bus, 7 Schnellbus, 13 Regionalzug, 16 Zug. Die uebrigen Nummern stehen der
- * Vollstaendigkeit halber dabei — sie kosten nichts und fehlen sonst genau
- * dann, wenn jemand am Wasser oder am Berg wohnt.
- *
- * Kennt die Tabelle eine Gattung nicht, gilt die Akzentfarbe der Visu: lieber
- * unauffaellig richtig als bunt geraten.
+ * Sie kommt FERTIG aus dem Modul: dort steht die Tabelle, die der Nutzer im
+ * Formular bearbeitet (Symbol und Farbe je Verkehrsmittel). Die Kachel schlaegt
+ * also nichts mehr nach — sie nimmt, was dasteht, und faellt auf die
+ * Akzentfarbe der Visu zurueck, wenn nichts dasteht (alte Nutzlast).
  */
-const VM_FARBEN = {
-  0: 'var(--vm-sev)',                                   // Ersatzverkehr
-  1: 'var(--vm-sbahn)',                                 // S-Bahn
-  2: 'var(--vm-ubahn)',                                 // U-Bahn
-  3: 'var(--vm-tram)', 4: 'var(--vm-tram)',             // Stadt- und Strassenbahn
-  5: 'var(--vm-bus)', 6: 'var(--vm-bus)', 7: 'var(--vm-bus)',
-  10: 'var(--vm-bus)', 11: 'var(--vm-bus)', 19: 'var(--vm-bus)',
-  8: 'var(--vm-schiff)', 9: 'var(--vm-schiff)',         // Seilbahn, Schiff
-  13: 'var(--vm-regio)', 14: 'var(--vm-regio)', 15: 'var(--vm-regio)',
-  16: 'var(--vm-fern)', 17: 'var(--vm-fern)', 18: 'var(--vm-fern)',
-};
-
 function verkehrsmittelFarbe(leg) {
-  return VM_FARBEN[Number(leg && leg.class)] || 'var(--akzent)';
+  const f = leg && leg.color;
+  return (typeof f === 'string' && f !== '') ? f : 'var(--akzent)';
 }
 
 function merker(name, wert) {

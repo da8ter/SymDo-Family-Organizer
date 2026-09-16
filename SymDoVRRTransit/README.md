@@ -69,10 +69,14 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
   Ausschlag, weil Linie und Knopf hineinpassen müssen. Am schönsten auf einer
   hohen Kachel.
 
-**Farben nach Verkehrsmittel.** In beiden ausführlichen Ansichten trägt jede
-Fahrt die Farbe ihrer Gattung — S-Bahn grün, U-Bahn blau, Straßenbahn rot, Bus
-violett, Regionalzug schiefergrau, Fernzug dunkelrot. So sieht man auf einen
-Blick, worin man sitzt.
+**Farben und Symbole nach Verkehrsmittel.** Jede Fahrt trägt die Farbe ihrer
+Gattung — S-Bahn grün, U-Bahn blau, Straßenbahn rot, Bus violett, Regionalzug
+schiefergrau, Fernzug dunkelrot. So sieht man auf einen Blick, worin man sitzt.
+
+Unter *Darstellung* steht dafür eine Tabelle: je Verkehrsmittel ein Symbol und
+eine Farbe, beides frei wählbar. **Vorgaben wiederherstellen** holt die
+Ausgangswerte zurück. Der VRR selbst liefert keine Farben mit — das ist unsere
+Zuordnung, die im deutschen Nahverkehr übliche.
 
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
 *Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung

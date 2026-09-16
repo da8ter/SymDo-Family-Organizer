@@ -38,6 +38,133 @@ final class TransitCalc
      * Die Zahl ist der verlässlichere Schlüssel als der Name — „Niederflurbus"
      * und „Bus" meinen dasselbe, und der Verbund darf den Text jederzeit ändern.
      */
+    /**
+     * Die Verkehrsmittel, die der Nutzer im Formular gestalten kann.
+     *
+     * Eine Zeile je Gattung, die jemand wiedererkennt — nicht je EFA-Nummer:
+     * die Auskunft unterscheidet achtzehn Klassen, aber „Straßenbahn" und
+     * „Stadtbahn" will niemand getrennt einfärben. `klassen` sagt, welche
+     * Nummern zu einer Zeile gehören.
+     *
+     * Symbolnamen stehen OHNE `fa-` davor — genau so speichert es der Wähler
+     * von Symcon (dieselbe Schreibweise wie in der Einkaufsliste). Farben sind
+     * Ganzzahlen wie von SelectColor.
+     *
+     * Die Farben sind UNSERE Zuordnung: der VRR liefert keine mit (gemessen an
+     * 80 Abfahrten in drei Städten — kein Feld, das nach Farbe aussieht).
+     * Gewählt ist, was im deutschen Nahverkehr üblich ist.
+     */
+    public const VM_VORGABE = [
+        ['key' => 'sbahn',  'name' => 'S-Bahn',              'icon' => 'train-subway', 'color' => 0x1A8A3C, 'klassen' => [1]],
+        ['key' => 'ubahn',  'name' => 'U-Bahn',              'icon' => 'train-subway', 'color' => 0x0A63B0, 'klassen' => [2]],
+        ['key' => 'tram',   'name' => 'Straßenbahn',         'icon' => 'train-tram',   'color' => 0xC1152B, 'klassen' => [3, 4]],
+        ['key' => 'bus',    'name' => 'Bus',                 'icon' => 'bus',          'color' => 0x8C2F8C, 'klassen' => [5, 6, 7]],
+        ['key' => 'ruf',    'name' => 'Rufbus und Sammeltaxi','icon' => 'taxi',        'color' => 0x7A3E9D, 'klassen' => [10, 11, 19]],
+        ['key' => 'regio',  'name' => 'Regionalzug',         'icon' => 'train',        'color' => 0x4F5B66, 'klassen' => [13, 14]],
+        ['key' => 'fern',   'name' => 'Fernzug',             'icon' => 'train',        'color' => 0x9C1620, 'klassen' => [15, 16, 17, 18]],
+        ['key' => 'faehre', 'name' => 'Fähre',               'icon' => 'ship',         'color' => 0x127A8A, 'klassen' => [9]],
+        ['key' => 'seil',   'name' => 'Seilbahn',            'icon' => 'cable-car',    'color' => 0x1E7A5A, 'klassen' => [8]],
+        ['key' => 'sonst',  'name' => 'Sonstige',            'icon' => 'route',        'color' => 0x6E7781, 'klassen' => [0]],
+    ];
+
+    /**
+     * Welche Zeile der Tabelle gilt für diese EFA-Klasse?
+     *
+     * Was nirgends steht, landet bei „Sonstige" — lieber einheitlich grau als
+     * bunt geraten.
+     */
+    public static function VmSchluessel(int $klasse): string
+    {
+        foreach (self::VM_VORGABE as $zeile) {
+            if (in_array($klasse, $zeile['klassen'], true)) {
+                return $zeile['key'];
+            }
+        }
+        return 'sonst';
+    }
+
+    /**
+     * Die Gestaltungstabelle aus dem Formular in eine Nachschlagetabelle.
+     *
+     * Was der Nutzer nicht gesetzt hat, kommt aus der Vorgabe — und eine Zeile,
+     * die er gelöscht hat, ebenfalls: das Aussehen darf nie leer sein, sonst
+     * stünde in der Kachel eine Fahrt ohne Farbe und ohne Symbol.
+     *
+     * @param list<array<string,mixed>> $zeilen
+     * @return array<string,array{icon:string,color:string}>
+     */
+    public static function VmAussehen(array $zeilen): array
+    {
+        $raus = [];
+        foreach (self::VM_VORGABE as $vorgabe) {
+            $raus[$vorgabe['key']] = [
+                'icon'  => 'fa-' . $vorgabe['icon'],
+                'color' => sprintf('#%06X', $vorgabe['color'] & 0xFFFFFF),
+            ];
+        }
+        foreach ($zeilen as $z) {
+            $key = (string)($z['key'] ?? '');
+            if ($key === '' || !isset($raus[$key])) {
+                continue;
+            }
+            $icon = trim((string)($z['icon'] ?? ''));
+            if ($icon !== '') {
+                $raus[$key]['icon'] = str_starts_with($icon, 'fa-') ? $icon : 'fa-' . $icon;
+            }
+            /* -1 ist der Wert von SelectColor fuer „keine Farbe" — dann bleibt
+               es bei der Vorgabe statt bei Schwarz. */
+            $farbe = (int)($z['color'] ?? -1);
+            if ($farbe >= 0) {
+                $raus[$key]['color'] = sprintf('#%06X', $farbe & 0xFFFFFF);
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Farbe und Symbol an jeden Fahrabschnitt schreiben.
+     *
+     * Gilt für Abfahrten wie für Verbindungsabschnitte — beide tragen `class`.
+     * Fußwege und Wartezeiten bleiben unangetastet: sie sind kein
+     * Verkehrsmittel, und ihr Symbol steht schon fest.
+     *
+     * @param list<array<string,mixed>>                      $eintraege
+     * @param array<string,array{icon:string,color:string}>  $aussehen
+     * @return list<array<string,mixed>>
+     */
+    public static function VmAnmalen(array $eintraege, array $aussehen): array
+    {
+        foreach ($eintraege as $i => $e) {
+            if (!is_array($e) || ($e['kind'] ?? 'ride') !== 'ride') {
+                continue;
+            }
+            $stil = $aussehen[self::VmSchluessel((int)($e['class'] ?? -1))] ?? null;
+            if ($stil === null) {
+                continue;
+            }
+            $eintraege[$i]['icon']  = $stil['icon'];
+            $eintraege[$i]['color'] = $stil['color'];
+        }
+        return $eintraege;
+    }
+
+    /**
+     * Dasselbe fuer ganze Verbindungen — sie tragen ihre Abschnitte verschachtelt.
+     *
+     * @param list<array<string,mixed>>                      $verbindungen
+     * @param array<string,array{icon:string,color:string}>  $aussehen
+     * @return list<array<string,mixed>>
+     */
+    public static function VmAnmalenVerbindungen(array $verbindungen, array $aussehen): array
+    {
+        foreach ($verbindungen as $i => $v) {
+            if (is_array($v) && is_array($v['legs'] ?? null)) {
+                $verbindungen[$i]['legs'] = self::VmAnmalen($v['legs'], $aussehen);
+            }
+        }
+        return $verbindungen;
+    }
+
     private const SYMBOL_JE_KLASSE = [
         0  => 'fa-train',            // Zug (Fern)
         1  => 'fa-train-subway',     // S-Bahn
