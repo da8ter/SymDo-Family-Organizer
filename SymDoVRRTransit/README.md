@@ -3,12 +3,12 @@
 **Abfahrtstafel und Verbindungen aus der Fahrplanauskunft des VRR — und der
 Schulweg, der von selbst weiß, in welche Richtung er heute geht.**
 
-Die Fahrplanauskunft des VRR (EFA) umfasst die Rheinbahn und alle anderen
+Die Fahrplanauskunft des VRR umfasst die Rheinbahn und alle anderen
 Verkehrsunternehmen im Verbund, braucht keinen Schlüssel und liefert
 Echtzeitdaten. Zwei Ansichten in einer Kachel: die Abfahrtstafel einer
 Haltestelle und die Zeitachse einer Verbindung.
 
-Eine Strecke im Modus *Schulweg* nimmt Beginn und Ende des Schultags aus dem
+Eine Strecke mit *Schulweg* nimmt Beginn und Ende des Schultags aus dem
 Stundenplan und dreht die Richtung selbst um: morgens die Verbindung, mit der
 das Kind pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
 
@@ -33,7 +33,7 @@ Gehören Haltestellen oder Strecken einem Familienmitglied, stehen sie unter
 einer Überschrift mit Foto und Namen.
 
 **Abfahrten** — je Haltestelle eine Karte: Symbol und Liniennummer, Pfeil und
-Ziel, rechts die Minuten. Ist ein Fußweg gepflegt, sind das die Minuten bis zum
+Ziel, rechts die Minuten. Ist ein Fußweg eingetragen, sind das die Minuten bis zum
 Losgehen, sonst bis zur Abfahrt. Dahinter eine Verspätung als `+3`, dazu das
 Gleis (`Gl. 3`), wenn die Auskunft eines nennt.
 Was entfällt, steht durchgestrichen als *entfällt*; was mit dem eingetragenen
@@ -52,15 +52,15 @@ Liniennummer. Wie viel Zeit wohin geht, sagt die Zeile darunter.
 | Symcon | ab 8.1 |
 | **SymDo Gateway** | Pflicht — von dort kommen die Familienmitglieder |
 | **SymDo Stundenplan** | nur für den Schulweg; ohne ihn bleiben die übrigen Modi |
-| Schlüssel, Konto, Registrierung | **nichts davon** — die EFA ist offen |
+| Schlüssel, Konto, Registrierung | **nichts davon** — die Auskunft ist offen |
 
-Die Kachel läuft auch ohne Stundenplan. Eine Strecke im Modus *Schulweg* findet
+Die Kachel läuft auch ohne Stundenplan. Eine Strecke mit *Schulweg* findet
 dann allerdings keine Zeiten und bleibt leer.
 
 ## 3. Einrichtung
 
-1. Instanz **SymDo - VRR Transit** anlegen; als Eltern das vorhandene SymDo
-   Gateway wählen (die Konsole schlägt es vor).
+1. Instanz **SymDo - VRR Transit** anlegen; als übergeordnete Instanz das
+   vorhandene SymDo Gateway wählen (die Konsole schlägt es vor).
 2. **Haltestelle suchen** aufklappen, den Ort mit eingeben — das grenzt die
    Treffer stark ein — und **Als Haltestelle übernehmen**. Die Kennung der
    Haltestelle (`de:05111:18235`) kommt aus der Suche.
@@ -78,9 +78,9 @@ dann allerdings keine Zeiten und bleibt leer.
 
 4. In der Liste **Strecken** Start und Ziel wählen. Jede eingerichtete
    Haltestelle steht dort zur Auswahl; für die eigene Haustür stattdessen
-   **Von (Karte)** bzw. **Nach (Karte)** nehmen und den Marker setzen. **Von
-   (Name)** / **Nach (Name)** überschreiben, was die Auskunft nennt; bei einer
-   Koordinate ist das die Adresse.
+   **Von (Karte)** bzw. **Nach (Karte)** nehmen und die Stelle auf der Karte
+   setzen. **Von (Name)** / **Nach (Name)** überschreiben, was die Auskunft
+   nennt; bei einer Koordinate ist das die Adresse.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
 **Linien und Richtungen** werden nicht getippt. Jede Haltestellenzeile trägt
@@ -91,9 +91,8 @@ Haken, die nicht auf die Tafel sollen. Für Haltestellen, die schon in der Liste
 stehen, tut der Knopf **Linien und Richtungen holen** dasselbe; gefüllt werden
 nur **leere** Listen. Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
 
-Die Liste ist eine Sperre: versteckt wird nur, was dasteht und keinen Haken
-hat. Eine Linie, die neu an die Haltestelle kommt, erscheint weiter auf der
-Tafel. An einer großen Station wird bei vierzig Einträgen gekürzt; die
+Versteckt wird nur, was in der Liste steht und keinen Haken hat. Eine Linie,
+die neu an die Haltestelle kommt, erscheint weiter auf der Tafel. An einer großen Station wird bei vierzig Einträgen gekürzt; die
 Statuszeile sagt es dann.
 
 **Mit oder ohne Umsteigen** — bei den Strecken steht in der Kachel ein zweiter
@@ -110,7 +109,7 @@ steuert nur diese Karte.
 
 ## 4. Der Schulweg
 
-Eine Strecke im Modus **Schulweg** braucht keine Zeit — sie kommt aus dem
+Eine Strecke mit **Schulweg** braucht keine Zeit — sie kommt aus dem
 Stundenplan des Kindes. Vor Unterrichtsbeginn zeigt die Karte die Fahrt **zur
 Schule**, danach die **nach Hause**; Start und Ziel tauschen dabei die Plätze,
 und die Kopfzeile sagt, welche Richtung gerade zu sehen ist.
@@ -132,19 +131,18 @@ Stundenplan-Instanzen gibt.
 |---|---|
 | **Abfahrten** / **Strecken** antippen | Ansicht wechseln, die Wahl bleibt gemerkt |
 | in einer Streckenkarte seitwärts wischen | zur nächsten Fahrt |
-| auf eine Abfahrt zeigen | Verkehrsmittel, Linie, Ziel und die **planmäßige** Zeit als Tooltip |
+| auf eine Abfahrt zeigen | Verkehrsmittel, Linie, Ziel und die **planmäßige** Zeit erscheinen als Hinweis |
 
 Die Kachel ist eine Anzeige; geändert wird nichts.
 
 ## 6. Wann abgerufen wird
 
-**Im Minutentakt, aber nur, solange jemand hinsieht.** Kachel und App melden
-sich beim Öffnen und danach jede Minute; der Stempel verfällt nach drei
-Minuten. Liegt niemands Blick darauf, fragt das Modul nicht bei der Auskunft
-nach.
+**Jede Minute, aber nur, solange jemand hinsieht.** Kachel und App melden sich
+beim Öffnen und danach jede Minute. Bleibt eine solche Meldung länger als drei
+Minuten aus, hört das Abrufen auf.
 
-Eine Ausnahme: gibt es einen Schulweg, läuft **zwischen 5 und 9 Uhr** ein
-langsamer Schlag alle zehn Minuten mit; die Auskunft steht dann am
+Eine Ausnahme: gibt es einen Schulweg, wird **zwischen 5 und 9 Uhr** auch ohne
+Zuschauer abgerufen, alle zehn Minuten. Die Auskunft steht dann am
 Frühstückstisch schon bereit.
 
 Geholt wird in dieser Instanz, nicht im Gateway.
@@ -153,7 +151,7 @@ Geholt wird in dieser Instanz, nicht im Gateway.
 
 Nach **drei Fehlschlägen in Folge** legt das Modul eine Stunde Pause ein. Der
 zuletzt geholte Stand bleibt stehen und trägt ein **veraltet** an der Karte.
-Während der Pause läuft der langsame Schlag weiter.
+Der Abruf zwischen 5 und 9 Uhr läuft auch während der Pause weiter.
 
 ## 8. Auch in der App
 
@@ -166,7 +164,7 @@ App und Web-App weiter (`/v1/transit`). Eingerichtet wird nur hier.
 // Jetzt abrufen — auch der Knopf im Formular tut genau das
 SDVT_Refresh(<InstanzID>);
 
-// Der fertige Zustand als JSON (Haltestellen, Strecken, Sperre)
+// Alles, was die Kachel anzeigt, als JSON-Text
 echo SDVT_GetBoard(<InstanzID>);
 
 // Die Kachel neu zeichnen lassen und „jemand sieht hin" melden
