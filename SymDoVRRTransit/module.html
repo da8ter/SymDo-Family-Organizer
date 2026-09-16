@@ -539,10 +539,22 @@ body {
   background-size: 9px 9px; background-position: center top;
 }
 
-.vt-halt .vt-inhalt { padding: 0 0 10px 10px; }
-.vt-halt .zeit { font-size: 17px; font-weight: 800; line-height: 1.15; }
-.vt-halt .name { font-size: 13px; font-weight: 700; }
-.vt-halt .steig { font-size: 11px; color: var(--dezent); }
+/* Der Halt steht in EINER Zeile — Uhrzeit, Name, Steig nebeneinander.
+   Das ist keine Geschmacksfrage, sondern der Massstab: uebereinander war die
+   Zeile 59 Pixel hoch, und davon liegen 50 UNTER ihrem Punkt. Ein Fussweg von
+   sechs Minuten darf aber nur 48 Pixel lang sein — er konnte also gar nicht
+   kurz genug werden, und 14 Minuten sahen nicht doppelt so lang aus wie 6.
+   Einzeilig sind es 22 Pixel, und der Massstab greift ab gut vier Minuten. */
+.vt-halt .vt-inhalt {
+  padding: 0 0 4px 10px;
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+}
+.vt-halt .zeit { font-size: 16px; font-weight: 800; flex: 0 0 auto; }
+.vt-halt .name {
+  font-size: 13px; font-weight: 700; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vt-halt .steig { font-size: 11px; color: var(--dezent); flex: 0 0 auto; }
 
 .vt-fahrt .vt-inhalt, .vt-zeile.um .vt-inhalt, .vt-zeile.weg .vt-inhalt {
   padding: 0 0 10px 10px;
@@ -1057,22 +1069,33 @@ function senkrechtHtml(v, schluessel) {
   const farbe = function (k) { return verkehrsmittelFarbe(legs[fahrten[k]]); };
   const blass = 'color-mix(in srgb, var(--akzent) 22%, transparent)';
 
-  /* Wie lang ist ein Abschnitt? Vier Pixel je Minute, hoechstens 200.
-     Das ist eine UNTERGRENZE, keine feste Hoehe: der Inhalt einer Fahrtzeile
-     (Linienschild und Ausklapp-Knopf) braucht rund 67 Pixel, und darunter geht
-     es nicht. Unterhalb von etwa siebzehn Minuten bestimmt deshalb weiter der
-     Inhalt die Hoehe, darueber die Fahrzeit — eine halbe Stunde ist dann
-     sichtbar laenger als eine Viertelstunde.
-     Die Halte selbst bekommen nichts: sie sind Zeitpunkte, keine Dauer, und
-     ihre Hoehe haengt am Namen, der lesbar bleiben muss. */
-  const laenge = function (sekunden) {
-    return Math.min(200, Math.round((sekunden || 0) / 60 * 4));
+  /* Wie lang ist ein Abschnitt?
+     Acht Pixel je Minute, hoechstens 280 — gemessen wird dabei der Abstand von
+     PUNKT zu PUNKT, nicht die Hoehe der Zeile. Das ist der Unterschied, an dem
+     der erste Versuch gescheitert ist: zwischen zwei Abschnitten liegt immer
+     eine Haltestellenzeile, und die ist 22 Pixel hoch — 9 davon oberhalb
+     ihres Punktes, 13 unterhalb. Diese Pixel gehoeren zu den benachbarten
+     Abschnitten, und zwar ungleich verteilt. Gemessen an einer echten
+     Verbindung: 14 Minuten zu Fuss ergaben 65 sichtbare Pixel, 6 Minuten
+     ergaben 75 — der kuerzere Weg sah laenger aus.
+     Deshalb zieht jede Zeile ab, was ihre Nachbarn beisteuern. Was bleibt, ist
+     eine UNTERGRENZE: eine Fahrtzeile braucht fuer Linienschild und Knopf rund
+     67 Pixel, eine Fusswegzeile 15. Unterhalb davon bestimmt weiter der Inhalt
+     — bei acht Pixeln je Minute betrifft das Fusswege unter gut fuenf Minuten
+     und Fahrten unter einer Viertelstunde.
+     Die Halte selbst bekommen nichts: sie sind Zeitpunkte, keine Dauer. */
+  /* Beide an der gerenderten Kachel gemessen: die einzeilige Haltestellenzeile
+     ist 22 Pixel hoch, ihr Punkt sitzt 9 Pixel unter der Oberkante. */
+  const HALT_OBEN = 9;      // vom Zeilenanfang bis zum Punkt
+  const HALT_UNTEN = 13;    // vom Punkt bis zum Zeilenende
+  const laenge = function (sekunden, abzug) {
+    return Math.max(0, Math.min(280, Math.round((sekunden || 0) / 60 * 8)) - (abzug || 0));
   };
 
   /* Eine Zeile des Rasters. `knick` sagt, auf welcher Hoehe die Schiene die
      Farbe wechselt — an einem Halt genau am Punkt, sonst gar nicht. */
   const zeile = function (klasse, oben, unten, inhalt, knick, punkt, dauer) {
-    const hoch = dauer ? ' style="min-height:' + laenge(dauer) + 'px"' : '';
+    const hoch = dauer ? ' style="min-height:' + dauer + 'px"' : '';
     /* „punkte" ist keine Farbe, sondern ein Muster — es haengt an einer Klasse.
        Nur so laesst sich die Strichelung des Umstiegs ueber die Zeilengrenzen
        hinweg fortsetzen: sie beginnt unter dem Aussteige-Punkt und endet am
@@ -1095,7 +1118,7 @@ function senkrechtHtml(v, schluessel) {
        Verbindung ueber dem Strich statt an ihm. */
     html += zeile('weg', blass, blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(anlauf)) + '</b> '
-      + esc(translate('on foot')), '0px', false, anlauf);
+      + esc(translate('on foot')), '0px', false, laenge(anlauf, HALT_OBEN));
   }
 
   fahrten.forEach(function (idx, k) {
@@ -1138,7 +1161,8 @@ function senkrechtHtml(v, schluessel) {
               }).join('') + '</div>'
             : '')
       : '<div class="vt-knopf" style="cursor:default">' + text + '</div>';
-    html += zeile('vt-fahrt', farbe(k), farbe(k), inhalt, '0px', false, l.seconds);
+    html += zeile('vt-fahrt', farbe(k), farbe(k), inhalt, '0px', false,
+                  laenge(l.seconds, HALT_OBEN + HALT_UNTEN));
 
     /* Aussteigen und, wenn noch eine Fahrt folgt, der Umstieg */
     const letzteFahrt = k === fahrten.length - 1;
@@ -1155,7 +1179,8 @@ function senkrechtHtml(v, schluessel) {
       const pause = sek(idx + 1, fahrten[k + 1]);
       html += zeile('um', 'transparent', 'transparent',
         '<b>' + symbol('fa-person-walking') + ' ' + esc(min(pause)) + '</b> '
-        + esc(translate('change')), '0px', false, pause);
+        + esc(translate('change')), '0px', false,
+        laenge(pause, HALT_OBEN + HALT_UNTEN));
     }
   });
 
@@ -1168,7 +1193,7 @@ function senkrechtHtml(v, schluessel) {
        der Abstand unter der Achse. */
     html += zeile('weg', blass, blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(auslauf)) + '</b> '
-      + esc(translate('on foot')), '0px', false, auslauf);
+      + esc(translate('on foot')), '0px', false, laenge(auslauf, HALT_UNTEN));
   }
 
   return '<div class="vt">' + html + '</div>' + werteHtml(v);
