@@ -55,6 +55,7 @@ trait TransitStore
         $this->RegisterPropertyString('Routes', '[]');
         $this->RegisterPropertyInteger('SchoolBuffer', 10);
         $this->RegisterPropertyString('DefaultView', 'departures');
+        $this->RegisterPropertyString('RouteStyle', 'bars');
         // 0 = die erste Stundenplan-Instanz mit eigenen Daten nehmen.
         $this->RegisterPropertyInteger('TimetableInstanceID', 0);
 
@@ -804,6 +805,11 @@ trait TransitStore
             'v'        => 1,
             'now'      => $jetzt,
             'view'     => (string)($cfg['DefaultView'] ?? 'departures') === 'routes' ? 'routes' : 'departures',
+            /* Die Streckenansicht ist eine Einstellung der INSTANZ, keine des
+               Betrachters: anders als „mit/ohne Umsteigen" gibt es dafür keinen
+               Schalter in der Kachel, sondern nur das Formular. Wer beides
+               sehen will, ändert es dort — die Kachel zeichnet danach neu. */
+            'routeStyle' => (string)($cfg['RouteStyle'] ?? 'bars') === 'timeline' ? 'timeline' : 'bars',
             'stops'    => $haltestellen,
             'routes'   => $strecken,
             'blocked'  => $this->TransitGesperrt($jetzt),

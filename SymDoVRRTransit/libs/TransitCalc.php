@@ -297,6 +297,58 @@ final class TransitCalc
     }
 
     /**
+     * Wie viele Haltestellen der Wagen nach dem Einsteigen noch anfährt.
+     *
+     * Die EFA hängt an jeden Fahrabschnitt die ganze Haltestellenfolge — Start
+     * und Ziel eingeschlossen. Gezählt wird deshalb eins weniger als die Folge
+     * lang ist: das ist die Zahl der Halte, die man absitzt, die Ausstiegs-
+     * haltestelle mitgerechnet.
+     *
+     * **Aufeinanderfolgende Gleiche zählen einmal.** Gemessen am 16.09.2026
+     * stand „D-Eller S" zweimal hintereinander in der Folge (ein Halt, zwei
+     * Steige) — ungefiltert hätte die Kachel einen Halt zu viel gemeldet.
+     *
+     * @param mixed $folge
+     */
+    private static function Zwischenhalte(mixed $folge): int
+    {
+        if (!is_array($folge)) {
+            return 0;
+        }
+        $namen = [];
+        foreach ($folge as $halt) {
+            $name = is_array($halt) ? trim((string)($halt['name'] ?? '')) : '';
+            if ($name === '' || $name === ($namen[count($namen) - 1] ?? null)) {
+                continue;
+            }
+            $namen[] = $name;
+        }
+        return max(0, count($namen) - 1);
+    }
+
+    /**
+     * Die Auslastung, wie die Verkehrsunternehmen sie melden.
+     *
+     * Sie steht NICHT an jedem Abschnitt — am 16.09.2026 gemessen: an einem von
+     * zwei Fahrabschnitten. Fehlt sie, bleibt es beim leeren Text, und die
+     * Kachel lässt die Angabe dann ganz weg; „unbekannt" anzuzeigen wäre eine
+     * Auskunft, die keine ist.
+     *
+     * @param mixed $roh
+     */
+    private static function Auslastung(mixed $roh): string
+    {
+        $stufen = [
+            'MANY_SEATS'                   => 'many',
+            'FEW_SEATS'                    => 'few',
+            'STANDING_ONLY'                => 'standing',
+            'CRUSHED_STANDING_ROOM_ONLY'   => 'full',
+            'FULL'                         => 'full',
+        ];
+        return $stufen[strtoupper(trim((string)(is_scalar($roh) ? $roh : '')))] ?? '';
+    }
+
+    /**
      * Ein EFA-Abschnitt wird zu einem eigenen — die Fußwege kommen später dazu.
      *
      * @param array<string,mixed> $leg
@@ -336,6 +388,9 @@ final class TransitCalc
             'seconds'     => (int)($leg['duration'] ?? max(0, $anIst - $abIst)),
             'realtime'    => ($leg['isRealtimeControlled'] ?? false) === true,
             'platform'    => (string)($o['properties']['platformName'] ?? ''),
+            'platformTo'  => (string)($z['properties']['platformName'] ?? ''),
+            'stops'       => $istFuss ? 0 : self::Zwischenhalte($leg['stopSequence'] ?? null),
+            'occupancy'   => self::Auslastung($o['properties']['occupancy'] ?? null),
         ];
 
         /* Die Fußwege stehen NICHT als eigener Abschnitt in der Antwort, sondern
@@ -425,6 +480,9 @@ final class TransitCalc
                     'seconds'     => $dauer,
                     'realtime'    => false,
                     'platform'    => '',
+                    'platformTo'  => '',
+                    'stops'       => 0,
+                    'occupancy'   => '',
                 ];
                 if ($vorher) {
                     $vor[] = $weg;
@@ -484,6 +542,9 @@ final class TransitCalc
                         'seconds'     => $luecke,
                         'realtime'    => false,
                         'platform'    => '',
+                        'platformTo'  => '',
+                        'stops'       => 0,
+                        'occupancy'   => '',
                     ];
                 }
             }

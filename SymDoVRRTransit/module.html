@@ -192,6 +192,137 @@ body {
    so sitzt jede Zahl unter ihrem Stück. Abgeschnitten statt umgebrochen, sonst
    verschiebt ein zu langes Wort die ganze Reihe. */
 .fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
+/* ── Ausfuehrliche Streckenansicht (Zeitachse) ──────────────────────────
+   Umschaltbar im Formular: „Kompakt (Balken)" oder „Ausfuehrliche Zeitachse".
+
+   Der Aufbau ist ein GITTER mit drei Zeilen — oben Linie und Umstieg, in der
+   Mitte die Schiene, unten Dauer, Haltestellen und Namen. Jeder Teil der Fahrt
+   liefert genau drei Kinder, und `grid-auto-flow: column` legt sie
+   untereinander in EINE Spalte. Deshalb sitzt jede Beschriftung ueber ihrem
+   Stueck, ohne dass irgendetwas gemessen oder nachgerechnet werden muesste —
+   drei getrennte Zeilen waeren bei jedem Umbruch verrutscht.
+   Die Spaltenbreiten setzt das Markup (`grid-template-columns`): Halte und
+   Umstiege so breit wie ihr Inhalt, die Fahrten im Verhaeltnis ihrer Dauer. */
+.tl { display: flex; flex-direction: column; gap: 6px; container-type: inline-size; }
+
+.tl-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.tl-kopf .seite { min-width: 0; }
+.tl-kopf .seite.rechts { text-align: right; }
+.tl-kopf .was { font-size: 10px; color: var(--dezent); line-height: 1.2; }
+.tl-kopf .uhr { font-size: 21px; font-weight: 800; line-height: 1.15; letter-spacing: -0.5px; }
+.tl-kopf .gleich { font-size: 11px; font-weight: 700; color: var(--akzent); }
+.tl-kopf .gesamt { font-size: 11px; color: var(--dezent); }
+
+.tl-spur {
+  display: grid; grid-auto-flow: column;
+  grid-template-rows: auto 16px auto;
+  align-items: center; column-gap: 0;
+}
+.tl-spur > * { min-width: 0; }
+/* Jede Zelle richtet ihren Inhalt selbst aus — auf das Schrumpfen eines
+   inline-flex zu bauen ist eine Wette, ein flex-Behaelter ist eine Ansage.
+   Im ersten Prueflauf lief die Liniennummer ueber die ganze Spaltenbreite. */
+.tl-spur .m { display: flex; align-items: center; }
+.tl-spur .o.tl-fahrt { display: flex; justify-content: center; }
+.tl-spur .bahn { flex: 1 1 auto; }
+/* Die Liniennummer darf schrumpfen, aber nicht verschwinden: mit `min-width:0`
+   schrumpfte sie in der schmalen Kachel auf NULL Pixel (gemessen) — genau die
+   Angabe, auf die es ankommt, war weg. Untergrenze und Auslassungszeichen. */
+.tl-spur .marke { flex: 0 1 auto; min-width: 2.8em; text-overflow: ellipsis; }
+/* Zeile 1 und 3 duerfen leer sein — dann traegt die Spalte dort nichts bei. */
+.tl-spur .o, .tl-spur .u { font-size: 10px; line-height: 1.25; text-align: center; }
+.tl-spur .u b { display: block; font-size: 11px; font-weight: 700; color: var(--text); }
+.tl-spur .u span, .tl-spur .o span { display: block; color: var(--dezent); }
+.tl-spur .o em { display: block; font-style: normal; font-weight: 700; color: var(--text); }
+
+/* Der Halt: ein Punkt auf der Schiene. Anfang und Ende gefuellt, der Umstieg
+   hohl — so sieht man ohne Beschriftung, wo man ein- und aussteigt. */
+.tl-halt { padding: 0 3px; }
+.tl-halt .pkt {
+  width: 11px; height: 11px; border-radius: 50%; margin: 0 auto;
+  background: var(--akzent); box-sizing: border-box; flex: 0 0 auto;
+}
+.tl-halt.um .pkt { background: var(--bg); border: 3px solid var(--text); }
+/* Die Spalte eines Halts ist `max-content` — ihre Breite haengt also an diesem
+   Deckel. Ohne ihn nahm „D-Unterbacher See / Strandbad Sued" 200 Pixel, und
+   fuer die Schiene blieb ein Stummel (im Prueflauf gemessen). Zwei Zeilen,
+   danach abgeschnitten; den Deckel zieht die Behaelterabfrage weiter unten
+   enger, wenn die Kachel schmal wird. */
+.tl-halt.u, .tl-halt.o { max-width: 92px; }
+.tl-halt.um.o { max-width: 78px; }
+/* Zwei Klassen im Selektor, nicht eine: `.tl-spur .u b` setzt weiter oben
+   `display:block` und gewinnt sonst — die Klammer blieb wirkungslos, und
+   „D-Unterbacher See / Strandbad Sued" stand ueber drei Zeilen (gemessen). */
+.tl-spur .tl-halt b, .tl-spur .tl-halt span, .tl-spur .tl-halt em {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+}
+
+/* Das Fahrstueck. Es waechst im Verhaeltnis seiner Dauer; die Farbe wechselt
+   je Fahrt, damit zwei Linien nebeneinander auseinanderzuhalten sind. */
+.tl-fahrt .bahn { height: 7px; border-radius: 4px; background: var(--akzent); }
+.tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
+.tl-fahrt .marke {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 7px; background: var(--akzent);
+  color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap;
+  max-width: 100%; overflow: hidden;
+}
+.tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
+
+/* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft. */
+.tl-um .bahn {
+  height: 7px; min-width: 26px;
+  background-image: radial-gradient(circle, var(--dezent) 1.4px, transparent 1.5px);
+  background-size: 7px 7px; background-position: center;
+}
+.tl-um b { white-space: nowrap; }
+
+/* Anlauf und Auslauf: der Fussweg vor der ersten und nach der letzten Fahrt. */
+.tl-weg .bahn {
+  height: 7px; min-width: 20px; border-radius: 4px;
+  background: color-mix(in srgb, var(--akzent) 22%, transparent);
+}
+
+/* Die Kennzahlen unter der Achse. Auslastung nur, wenn das Verkehrsunternehmen
+   sie meldet — „unbekannt" anzuzeigen waere eine Auskunft, die keine ist. */
+.tl-werte { display: flex; gap: 6px; }
+.tl-wert {
+  flex: 1 1 0; min-width: 0;
+  background: color-mix(in srgb, var(--content-color) 6%, transparent);
+  border-radius: 8px; padding: 5px 7px;
+}
+.tl-wert .was { font-size: 9px; color: var(--dezent); white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+.tl-wert .zahl { font-size: 12px; font-weight: 800; white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; }
+.tl-wert.voll .zahl { color: var(--warn); }
+
+/* Wird die Kachel schmal, faellt zuerst die Zahl der Haltestellen, dann der
+   Steig und zuletzt die Kennzahlenzeile. Die Uhrzeiten und die Linien bleiben:
+   das ist die Auskunft, alles andere ist Beiwerk. */
+/* Ist Platz da, darf der Haltestellenname mehr davon haben — 92 Pixel sind der
+   Kompromiss fuer die schmale Kachel, nicht das Ziel. */
+@container (min-width: 520px) {
+  .tl-halt.u, .tl-halt.o { max-width: 124px; }
+  .tl-halt.um.o { max-width: 104px; }
+}
+@container (max-width: 380px) {
+  .tl-halt.u, .tl-halt.o { max-width: 72px; }
+  .tl-halt.um.o { max-width: 64px; }
+  /* Das Symbol im Linienschild faellt zuerst — die Nummer traegt die Auskunft. */
+  .tl-spur .marke { font-size: 10px; padding: 2px 5px; gap: 0; min-width: 0; }
+  .tl-spur .marke i, .tl-spur .marke svg { display: none; }
+  /* `:not(.marke)` ist kein Zierrat: die Liniennummer steckt ebenfalls in einem
+     span in der oberen Zeile, und ohne die Ausnahme verschwand sie hier mit —
+     gemessen 0 Pixel breit, die Kachel zeigte Schienen ohne Linien. */
+  .tl-spur .u span:not(.marke), .tl-spur .o span:not(.marke) { display: none; }
+  .tl-kopf .uhr { font-size: 18px; }
+}
+@container (max-width: 250px) {
+  .tl-werte { display: none; }
+}
+
 .leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
 
 /* Die Quellenangabe. Die Fahrplandaten des VRR stehen unter CC BY 4.0 — der
@@ -397,6 +528,160 @@ function balkenHtml(v) {
 }
 
 
+/**
+ * Die ausfuehrliche Zeitachse einer Verbindung — Bild 1:1 wie im Formular
+ * gewaehlt („Ausfuehrliche Zeitachse").
+ *
+ * Gezeigt wird die Fahrt so, wie man sie erlebt: links wann es losgeht, rechts
+ * wann man da ist, dazwischen je Fahrt ein Stueck mit Linie, Dauer und der Zahl
+ * der Haltestellen, und an jedem Umstieg der Name mit der Uhrzeit.
+ *
+ * Gebaut wird ein GITTER, kein Nebeneinander von drei Zeilen: jeder Teil der
+ * Fahrt liefert genau drei Zellen (oben, Schiene, unten), und
+ * `grid-auto-flow: column` stapelt sie in EINE Spalte. So kann keine
+ * Beschriftung von ihrem Stueck wegrutschen. Die Breiten stehen im
+ * `grid-template-columns`, das hier mitgerechnet wird.
+ */
+function zeitachseHtml(v, jetzt) {
+  const legs = v.legs || [];
+  const fahrten = [];
+  legs.forEach(function (l, i) { if (l.kind === 'ride') { fahrten.push(i); } });
+  /* Ohne eine einzige Fahrt gibt es nichts aufzureihen — reine Fusswege
+     (kommt bei sehr kurzen Strecken vor) zeigt der Balken besser. */
+  if (fahrten.length === 0) { return balkenHtml(v); }
+
+  const sek = function (von, bis) {
+    let n = 0;
+    for (let i = von; i < bis; i++) { n += legs[i].seconds || 0; }
+    return n;
+  };
+  const min = function (s) { return Math.round(s / 60) + ' ' + translate('min'); };
+
+  const erste = legs[fahrten[0]];
+  const letzte = legs[fahrten[fahrten.length - 1]];
+  const teile = [];
+
+  const anlauf = sek(0, fahrten[0]);
+  if (anlauf > 0) { teile.push({ typ: 'weg', s: anlauf }); }
+  teile.push({ typ: 'halt', rolle: 'start', name: erste.from, steig: erste.platform });
+  fahrten.forEach(function (idx, k) {
+    teile.push({ typ: 'fahrt', leg: legs[idx], k: k });
+    if (k < fahrten.length - 1) {
+      const naechste = fahrten[k + 1];
+      teile.push({ typ: 'halt', rolle: 'um', name: legs[idx].to, zeit: legs[idx].arrText });
+      const pause = sek(idx + 1, naechste);
+      teile.push({ typ: 'um', s: pause });
+    }
+  });
+  teile.push({ typ: 'halt', rolle: 'ziel', name: letzte.to, steig: letzte.platformTo });
+  const auslauf = sek(fahrten[fahrten.length - 1] + 1, legs.length);
+  if (auslauf > 0) { teile.push({ typ: 'weg', s: auslauf }); }
+
+  const spalten = [];
+  let zellen = '';
+  teile.forEach(function (t) {
+    let klasse = '', oben = '', mitte = '', unten = '';
+    if (t.typ === 'halt') {
+      klasse = 'tl-halt' + (t.rolle === 'um' ? ' um' : '');
+      /* max-content, nicht min-content: min-content bricht jeden Namen auf das
+         laengste Wort herunter („D- / Eller / S" ueber drei Zeilen). Wie breit
+         es hoechstens wird, deckelt das Stilblatt. */
+      spalten.push('max-content');
+      mitte = '<div class="pkt"></div>';
+      if (t.rolle === 'um') {
+        /* Am Umstieg stehen Uhrzeit und Name OBEN — unten waere zwischen zwei
+           Dauerangaben kein Platz, und die beiden Endpunkte brauchen die
+           untere Zeile fuer Name und Steig. */
+        oben = '<em>' + esc(t.zeit || '') + '</em><span>' + esc(t.name || '') + '</span>';
+      } else {
+        unten = '<b>' + esc(t.name || '') + '</b>'
+              + (t.steig ? '<span>' + esc(translate('Pl.')) + ' ' + esc(t.steig) + '</span>' : '');
+      }
+    } else if (t.typ === 'fahrt') {
+      const l = t.leg;
+      klasse = 'tl-fahrt' + (t.k % 2 === 1 ? ' zweit' : '');
+      /* Im Verhaeltnis der Fahrzeit, wie schon beim Balken — nur dass hier
+         Halte und Umstiege ihre eigene Breite behalten.
+         `minmax(min-content, Nfr)` und nicht `Nfr`: ein blosses `fr` heisst
+         `minmax(auto, Nfr)`, und `auto` zieht die GANZE Zelle heran — mit der
+         Haltestellenzahl darunter waere das Stueck breiter als noetig. Die
+         untere Grenze bleibt aber min-content und nicht 0: mit 0 schrumpfte das
+         kurze Stueck auf 27 Pixel und die Liniennummer stand als „…" da
+         (gemessen bei 320 Pixeln Kachelbreite). Lieber eine Zeitachse, die
+         nicht ganz massstaeblich ist, als eine ohne Liniennummer. */
+      spalten.push('minmax(min-content, ' + Math.max(1, l.seconds || 1) + 'fr)');
+      oben = '<span class="marke">' + symbol(l.icon) + esc(l.line || l.product) + '</span>';
+      mitte = '<div class="bahn"></div>';
+      unten = '<b>' + esc(min(l.seconds || 0)) + '</b>'
+            + (l.stops > 0
+                ? '<span>' + esc(l.stops + ' ' + translate(l.stops === 1 ? 'stop' : 'stops')) + '</span>'
+                : '');
+    } else if (t.typ === 'um') {
+      klasse = 'tl-um';
+      spalten.push('min-content');
+      mitte = '<div class="bahn"></div>';
+      unten = '<b>' + symbol('fa-person-walking') + ' ' + esc(min(t.s))
+            + '</b><span>' + esc(translate('change')) + '</span>';
+    } else {
+      klasse = 'tl-weg';
+      spalten.push('min-content');
+      mitte = '<div class="bahn"></div>';
+      unten = '<b>' + symbol('fa-person-walking') + ' ' + esc(min(t.s))
+            + '</b><span>' + esc(translate('on foot')) + '</span>';
+    }
+    zellen += '<div class="o ' + klasse + '">' + oben + '</div>'
+            + '<div class="m ' + klasse + '">' + mitte + '</div>'
+            + '<div class="u ' + klasse + '">' + unten + '</div>';
+  });
+
+  /* „in 9 min" zaehlt gegen die Uhr des MODULS, nicht gegen die des Browsers —
+     dieselbe Zeitbasis, aus der auch die Abfahrtstafel ihre Minuten nimmt. */
+  const bisAb = erste.depAt > 0 && jetzt > 0 ? Math.round((erste.depAt - jetzt) / 60) : null;
+  const gleich = bisAb === null ? ''
+    : (bisAb <= 0 ? translate('now') : translate('in %s').replace('%s', bisAb + ' ' + translate('min')));
+
+  /* Die Auslastung gilt der Fahrt, in der man am laengsten sitzt — die
+     kuerzeste Anschlussfahrt saegt sonst die Aussage der Hauptfahrt ab. */
+  let voll = '';
+  let laengste = 0;
+  fahrten.forEach(function (i) {
+    if ((legs[i].seconds || 0) > laengste && legs[i].occupancy) {
+      laengste = legs[i].seconds || 0; voll = legs[i].occupancy;
+    }
+  });
+  const auslastung = {
+    many: translate('plenty of room'), few: translate('filling up'),
+    standing: translate('standing only'), full: translate('very full'),
+  }[voll] || '';
+
+  const wert = function (was, zahl, klasse) {
+    return '<div class="tl-wert' + (klasse ? ' ' + klasse : '') + '">'
+      + '<div class="was">' + esc(was) + '</div>'
+      + '<div class="zahl">' + esc(zahl) + '</div></div>';
+  };
+
+  return '<div class="tl">'
+    + '<div class="tl-kopf">'
+    +   '<div class="seite"><div class="was">' + esc(translate('Departure')) + '</div>'
+    +     '<div class="uhr">' + esc(v.departureText) + '</div>'
+    +     (gleich ? '<div class="gleich">' + esc(gleich) + '</div>' : '') + '</div>'
+    +   '<div class="seite rechts"><div class="was">' + esc(translate('Arrival')) + '</div>'
+    +     '<div class="uhr">' + esc(v.arrivalText) + '</div>'
+    +     '<div class="gesamt">' + esc(min(v.seconds) + ' ' + translate('in total')) + '</div></div>'
+    + '</div>'
+    + '<div class="tl-spur" style="grid-template-columns:' + spalten.join(' ') + '">' + zellen + '</div>'
+    + '<div class="tl-werte">'
+    +   wert(translate('Total time'), min(v.seconds))
+    +   wert(translate('Changes'), v.interchanges > 0
+            ? v.interchanges + ' ' + translate(v.interchanges === 1 ? 'change' : 'changes')
+            : translate('direct'))
+    +   (auslastung ? wert(translate('Occupancy'), auslastung,
+            (voll === 'full' || voll === 'standing') ? 'voll' : '') : '')
+    + '</div>'
+    + '</div>';
+}
+
+
 function streckenHtml() {
   const routen = zustand.routes || [];
   if (routen.length === 0) { return '<div class="leer">' + esc(translate('No route set up')) + '</div>'; }
@@ -419,6 +704,13 @@ function streckenHtml() {
        zutage foerdert. */
     const alle = (nurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
     const fahrten = alle.map(function (v) {
+      /* Zwei Ansichten, eine Wahl im Formular: der Balken fasst die Fahrt in
+         einer Zeile zusammen, die Zeitachse legt sie auseinander. Gemeinsam ist
+         ihnen nur die Karte drumherum — deshalb hier die Weiche und nicht im
+         Balken selbst. */
+      if ((zustand.routeStyle || 'bars') === 'timeline') {
+        return '<div class="fahrt">' + zeitachseHtml(v, zustand.now || 0) + '</div>';
+      }
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
         + '<span class="grund">→</span><span class="stark">' + esc(v.arrivalText) + '</span>'

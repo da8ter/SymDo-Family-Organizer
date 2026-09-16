@@ -511,5 +511,61 @@ pruefe('Reihenfolge: Breite vor Laenge',
 pruefe('von Hand getippte Koordinate bleibt unveraendert',
     TransitCalc::Punkt(['from' => '51.2217,6.7763'], 'from'), '51.2217,6.7763');
 
+/* ── Haltestellen, Steige, Auslastung ──────────────────────────────────────
+   Die drei Angaben traegt nur die ausfuehrliche Zeitachse — und alle drei
+   kommen aus Ecken der EFA-Antwort, die man leicht falsch liest. */
+
+$abschnitte = TransitCalc::Verbindungen(fixture('strecke-umstieg'))[0]['legs'];
+$fahrt = [];
+foreach ($abschnitte as $a) {
+    if ($a['kind'] === 'ride') { $fahrt[] = $a; }
+}
+/* Die Haltestellenfolge im Prueffall ist drei Eintraege lang — Einstieg,
+   ein Halt dazwischen, Ausstieg. Gezaehlt werden die Halte NACH dem
+   Einsteigen, also zwei. */
+pruefe('Haltestellenfolge: eins weniger als Eintraege', $fahrt[0]['stops'], 2);
+/* Der zweite Abschnitt hat gar keine Folge: dann steht dort 0 und nicht etwa
+   eine geratene Zahl — die Kachel laesst die Angabe dann weg. */
+pruefe('ohne Haltestellenfolge: keine Zahl', $fahrt[1]['stops'], 0);
+pruefe('Steig beim Einsteigen', $fahrt[0]['platform'], '19');
+/* Der Steig am ZIEL stand vorher nirgends — die Zeitachse zeigt ihn an, und er
+   kommt aus `destination`, nicht aus `origin`. */
+pruefe('Steig beim Aussteigen', $fahrt[0]['platformTo'], '3');
+pruefe('keine Auslastung gemeldet: leer', $fahrt[0]['occupancy'], '');
+/* Fusswege haben die Felder ebenfalls, sonst liefe die Kachel auf ein
+   fehlendes Feld. */
+$fuss = null;
+foreach ($abschnitte as $a) {
+    if ($a['kind'] === 'walk') { $fuss = $a; break; }
+}
+pruefe('Fussweg hat die Felder auch', $fuss === null ? 'kein Fussweg'
+    : [$fuss['stops'], $fuss['platformTo'], $fuss['occupancy']], [0, '', '']);
+
+/* Zwei Steige derselben Haltestelle stehen in der EFA-Folge zweimal
+   hintereinander — gemessen am 16.09.2026 an einer echten Antwort. Ungefiltert
+   meldete die Kachel einen Halt zu viel. */
+$roh = json_decode(json_encode(fixture('strecke-umstieg')), true);
+$roh['journeys'][0]['legs'][0]['stopSequence'] = [
+    ['name' => 'A'], ['name' => 'B'], ['name' => 'B'], ['name' => 'C'],
+];
+$roh['journeys'][0]['legs'][0]['origin']['properties']['occupancy'] = 'MANY_SEATS';
+$mitDoppel = TransitCalc::Verbindungen($roh)[0]['legs'];
+foreach ($mitDoppel as $a) {
+    if ($a['kind'] === 'ride') {
+        pruefe('doppelter Halt zaehlt einmal', $a['stops'], 2);
+        pruefe('Auslastung wird uebersetzt', $a['occupancy'], 'many');
+        break;
+    }
+}
+/* Eine Stufe, die wir nicht kennen, wird NICHT durchgereicht: die Kachel hat
+   fuer sie keinen Text, und ein roher Schluessel stuende dann in der Anzeige. */
+$roh['journeys'][0]['legs'][0]['origin']['properties']['occupancy'] = 'SEHR_VOLL_VIELLEICHT';
+foreach (TransitCalc::Verbindungen($roh)[0]['legs'] as $a) {
+    if ($a['kind'] === 'ride') {
+        pruefe('unbekannte Stufe faellt weg', $a['occupancy'], '');
+        break;
+    }
+}
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

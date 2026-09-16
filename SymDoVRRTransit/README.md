@@ -49,6 +49,21 @@ Je Fahrt: Abfahrt → Ankunft, die Dauer und *direkt* oder *n Umstiege*. Darunte
 die Zeitachse, ein Balken je Abschnitt — so sieht man sofort, wo die Zeit
 hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
 
+**Zwei Ansichten für die Strecken.** Unter *Darstellung* im Formular wählt man:
+
+- **Kompakt (Balken)** — eine Zeile je Fahrt, mehrere Fahrten passen
+  untereinander. Gut für eine schmale Kachel.
+- **Ausführliche Zeitachse** — die Fahrt ausgebreitet: links die Abfahrt und
+  „in 9 min", rechts die Ankunft und die Gesamtdauer. Dazwischen die Strecke mit
+  einem Punkt je Halt, dem Liniennummernschild über jedem Abschnitt, Fahrzeit
+  und Zahl der Haltestellen darunter, und am Umstieg der Name mit der Uhrzeit.
+  Ganz unten Gesamtdauer, Umstiege und — wenn das Verkehrsunternehmen sie meldet
+  — die Auslastung. Am schönsten auf einer breiten Kachel; wird es eng, fallen
+  Steig und Haltestellenzahl weg, Uhrzeiten und Linien bleiben.
+
+Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
+*Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt.
+
 ## 2. Voraussetzungen
 
 | | |

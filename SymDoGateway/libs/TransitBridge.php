@@ -179,6 +179,15 @@ trait TransitBridge
                     'arrText'  => (string)($l['arrText'] ?? ''),
                     'depDelay' => (int)($l['depDelay'] ?? 0),
                     'seconds'  => (int)($l['seconds'] ?? 0),
+                    /* Die drei fuer die ausfuehrliche Zeitachse. Sie stehen
+                       HIER, weil diese Liste eine weisse Liste ist: was nicht
+                       aufgezaehlt ist, erreicht die App nie — genau daran fehlte
+                       schon einmal `journeysDirect`, und der Schalter in der
+                       Web-App zeigte leere Listen. */
+                    'platform'   => (string)($l['platform'] ?? ''),
+                    'platformTo' => (string)($l['platformTo'] ?? ''),
+                    'stops'      => (int)($l['stops'] ?? 0),
+                    'occupancy'  => (string)($l['occupancy'] ?? ''),
                 ];
             }
             $raus[] = [

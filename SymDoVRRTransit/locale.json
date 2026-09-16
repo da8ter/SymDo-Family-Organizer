@@ -110,7 +110,27 @@
             "All": "Alle",
             "Direct": "Ohne Umsteigen",
             "Overview without changes": "Übersicht ohne Umsteigen",
-            "Timetable data: Verkehrsverbund Rhein-Ruhr (VRR)": "Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR)"
+            "Timetable data: Verkehrsverbund Rhein-Ruhr (VRR)": "Fahrplandaten: Verkehrsverbund Rhein-Ruhr (VRR)",
+            "Route display": "Streckenansicht",
+            "Compact (bar)": "Kompakt (Balken)",
+            "Detailed timeline": "Ausführliche Zeitachse",
+            "The detailed timeline shows times, platforms, number of stops ": "Die ausführliche Zeitachse zeigt Uhrzeiten, Steige, die Zahl der Haltestellen ",
+            "and the transfer — it needs more room and suits a wide tile.": "und den Umstieg — sie braucht mehr Platz und passt zu einer breiten Kachel.",
+            "Departure": "Abfahrt",
+            "Arrival": "Ankunft",
+            "in %s": "in %s",
+            "in total": "gesamt",
+            "stop": "Haltestelle",
+            "stops": "Haltestellen",
+            "change": "Umstieg",
+            "on foot": "zu Fuß",
+            "Total time": "Gesamtdauer",
+            "Changes": "Umstiege",
+            "Occupancy": "Auslastung",
+            "plenty of room": "Viele Plätze frei",
+            "filling up": "Wenige Plätze frei",
+            "standing only": "Nur Stehplätze",
+            "very full": "Sehr voll"
         }
     }
 }
