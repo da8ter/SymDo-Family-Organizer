@@ -316,7 +316,15 @@ body {
    Angabe, auf die es ankommt, war weg. Untergrenze und Auslassungszeichen. */
 .tl-spur .marke { flex: 0 1 auto; min-width: 2.8em; text-overflow: ellipsis; }
 /* Zeile 1 und 3 duerfen leer sein — dann traegt die Spalte dort nichts bei. */
-.tl-spur .o, .tl-spur .u { font-size: 11px; line-height: 1.25; text-align: center; }
+/* `overflow: hidden` an JEDER Beschriftungszelle, nicht nur am Text darin.
+   Was breiter ist als seine Spalte, lief sonst darueber hinaus und legte sich
+   ueber die Nachbarzelle — in der Kachel als uebereinanderliegende Schrift zu
+   sehen („6 min zu Fuss" mitten in „D-Schellbergweg"). Eine Zelle, die nicht
+   ueberlaeuft, kann nichts verdecken. */
+.tl-spur .o, .tl-spur .u {
+  font-size: 11px; line-height: 1.25; text-align: center;
+  overflow: hidden;
+}
 .tl-spur .u b { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
 .tl-spur .u span, .tl-spur .o span { display: block; color: var(--dezent); }
 .tl-spur .o em { display: block; font-style: normal; font-weight: 700; color: var(--text); }
@@ -354,12 +362,15 @@ body {
    danach abgeschnitten; den Deckel zieht die Behaelterabfrage weiter unten
    enger, wenn die Kachel schmal wird. */
 .tl-halt.u, .tl-halt.o { max-width: 108px; }
-/* Zwei Klassen im Selektor, nicht eine: `.tl-spur .u b` setzt weiter oben
-   `display:block` und gewinnt sonst — die Klammer blieb wirkungslos, und
-   „D-Unterbacher See / Strandbad Sued" stand ueber drei Zeilen (gemessen). */
-.tl-spur .tl-halt b, .tl-spur .tl-halt span, .tl-spur .tl-halt em {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+/* EINE Zeile, und was nicht passt, wird hinten gekuerzt. Vorher standen hier
+   zwei Zeilen mit Klammer — „D-Rosmarinstrasse" brach dabei mitten im Wort um
+   („D-" / "Rosmarinstrasse"), und die Zeitachse wurde ungleich hoch.
+   Zwei Klassen im Selektor, nicht eine: `.tl-spur .u b` setzt weiter oben
+   `display:block` und gewinnt sonst. */
+.tl-spur .tl-halt b, .tl-spur .tl-halt span, .tl-spur .tl-halt em,
+.tl-spur .tl-um b, .tl-spur .tl-um span, .tl-spur .tl-um em {
+  display: block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Das Fahrstueck. Es waechst im Verhaeltnis seiner Dauer; die Farbe wechselt
@@ -408,7 +419,10 @@ body {
    Aussteigen und einsteigen sind zwei Punkte — und beide sitzen in DERSELBEN
    Zelle wie die Strichelung. Aus drei Stuecken zusammengesetzt setzte das
    Punktmuster an jeder Naht neu an; das war als Versatz zu sehen. */
-.tl-um b, .tl-weg b { white-space: nowrap; }
+.tl-um b, .tl-weg b, .tl-um span, .tl-weg span {
+  display: block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .tl-um.m { display: flex; align-items: center; padding: 0; }
 .tl-um .pkt {
   flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%;
@@ -421,10 +435,6 @@ body {
 }
 /* Der Name des Umstiegs darf nicht die ganze Kachel fuellen. */
 .tl-um.o { max-width: 132px; }
-.tl-um.o em, .tl-um.o span {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; white-space: normal; overflow-wrap: anywhere;
-}
 
 /* Anlauf und Auslauf: der Fussweg vor der ersten und nach der letzten Fahrt. */
 .tl-weg .bahn {
@@ -897,10 +907,13 @@ function zeitachseHtml(v, jetzt) {
       klasse = 'tl-halt' + (t.rolle === 'um' ? ' um' : '');
       stilM = ' style="--l:' + farbeVon(teile[i - 1])
             + ';--r:' + farbeVon(teile[i + 1]) + '"';
-      /* max-content, nicht min-content: min-content bricht jeden Namen auf das
-         laengste Wort herunter („D- / Eller / S" ueber drei Zeilen). Wie breit
-         es hoechstens wird, deckelt das Stilblatt. */
-      spalten.push('max-content');
+      /* `minmax(0, max-content)`: so breit wie der Name, hoechstens so breit wie
+         der Deckel im Stilblatt — und wenn der Platz nicht reicht, AUCH
+         schmaler. Das blosse `max-content` konnte nicht schrumpfen; seit die
+         Namen nicht mehr umbrechen, schob es die Zeitachse ueber den Rand der
+         Karte hinaus und der letzte Halt war abgeschnitten (gemessen). Kuerzen
+         tut dann das Auslassungszeichen. */
+      spalten.push('minmax(0, max-content)');
       mitte = '<div class="pkt"></div>';
       if (t.rolle === 'um') {
         /* Am Umstieg stehen Uhrzeit und Name OBEN — unten waere zwischen zwei
@@ -940,7 +953,7 @@ function zeitachseHtml(v, jetzt) {
                 : '');
     } else if (t.typ === 'um') {
       klasse = 'tl-um';
-      spalten.push('max-content');
+      spalten.push('minmax(0, max-content)');
       oben = '<em>' + esc(t.zeit || '') + '</em><span>' + esc(t.name || '')
            + (t.name2 ? ' → ' + esc(t.name2) : '') + '</span>';
       mitte = '<div class="pkt"></div><div class="bahn"></div><div class="pkt"></div>';
