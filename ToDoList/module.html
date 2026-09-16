@@ -3758,34 +3758,24 @@ html.web-app #ladeschirm.geht { opacity: 0; }
 .wp-stunde.entfall { opacity: .55; }
 .wp-stunde.entfall .wp-fach { text-decoration: line-through; }
 .wp-stunde.vertretung { box-shadow: inset 4px 0 0 0 rgba(255,255,255,.85); }
-/* Offene Hausaufgaben an der Stunde — uebernommen aus der Stundenplan-Kachel,
-   samt der Masse, die dort gemessen sind. Das Symbol steht links unten in der
-   Spalte des Fachsymbols, so weit von der unteren Kante wie jenes von der
-   oberen (der Innenabstand, 8px). */
+/* Offene Hausaufgaben an der Stunde — dieselbe Marke wie in der
+   Stundenplan-Kachel: nur die Zahl, links unten in der Spalte des
+   Fachsymbols. Ein Buchsymbol darunter stand dort bis zum 16.09.2026 und
+   wurde von der Zahl zu acht bis zwoelf seiner sechzehn Pixel verdeckt — auf
+   einer 54px hohen Karte ist fuer beides kein Platz. */
 .wp-stunde .wp-hw {
   position: absolute; left: 10px; bottom: 8px;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; font-size: 11px; line-height: 1;
 }
-/* Die Zahl als rotes Abzeichen am Symbol — wie eine Mitteilung am App-Zeichen.
-   Rot ist eine eigene Farbe und keine Fachfarbe: es soll sich von der Karte
+/* Rot ist eine eigene Farbe und keine Fachfarbe: es soll sich von der Karte
    abheben, und die kann jede Farbe haben. */
 .wp-stunde .wp-hw b {
-  position: absolute; top: -7px; right: 0;
   min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box;
   border-radius: 999px; background: #E53935; color: #fff;
   font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
 }
-/* Enge Karte (unter 57px — eine 45-Minuten-Stunde misst hier 54px, das ist der
-   Normalfall): kein Platz, das Abzeichen ueber das Symbol zu heben. Es sitzt
-   in der oberen rechten ECKE und ein Stueck darueber hinaus und ist etwas
-   kleiner, damit die linke Haelfte des Buches frei bleibt. In der Kachel
-   gemessen: so deckt es acht der sechzehn Pixel statt zwoelf. */
-.wp-stunde.wp-hw-eng .wp-hw { bottom: 2px; }
-.wp-stunde.wp-hw-eng .wp-hw b {
-  top: -4px; bottom: auto; right: -5px;
-  min-width: 12px; height: 12px; line-height: 12px; font-size: 8px;
-}
+/* Enge Karte: die Zahl rueckt an die Kante. */
+.wp-stunde.wp-hw-eng .wp-hw { bottom: 3px; }
 
 /* ── Hausaufgaben ──────────────────────────────────────────────────────────
    Eine Zeile ist Haken, Fachsymbol, Text und Faelligkeit — dieselbe Ordnung
@@ -9523,7 +9513,7 @@ function renderWochenplan() {
           '</div>' +
           (hw ? '<span class="wp-hw" title="' + escapeHtml(
                   hw + ' ' + translate('Homework')) + '">' +
-                '<i class="fa-light fa-book-open-cover"></i><b>' + hw + '</b></span>' : '') +
+                '<b>' + hw + '</b></span>' : '') +
           '</div>';
         vorher = Math.max(vorher, sl.to);
       }
