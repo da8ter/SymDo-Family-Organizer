@@ -500,7 +500,12 @@ body {
    HOEHE" — vier Verbindungen passten dann nicht mehr in die Karte, und drei
    davon waren abgeschnitten (gemessen: nur die erste war zu sehen). */
 .vt-stapel > .fahrt { flex: 0 0 auto; }
-.vt { display: flex; flex-direction: column; }
+.vt { display: flex; flex-direction: column; margin-bottom: 10px; }
+/* Fussweg und Umstieg tragen nur EINE Zeile Text. Ihre Polsterung nach unten
+   war so gross wie die einer Haltestelle — damit lag die Untergrenze ihrer
+   Hoehe bei 25 Pixeln, und alles unter gut sechs Minuten sah gleich lang aus.
+   Mit weniger Polsterung greift der Massstab (vier Pixel je Minute) frueher. */
+.vt-zeile.weg .vt-inhalt, .vt-zeile.um .vt-inhalt { padding-bottom: 3px; }
 .vt-zeile { display: grid; grid-template-columns: 26px 1fr; align-items: start; }
 .vt-schiene { position: relative; align-self: stretch; min-height: 14px; }
 /* Ober- und Unterkante getrennt: an einem Halt wechselt die Farbe genau am
@@ -1085,12 +1090,9 @@ function senkrechtHtml(v, schluessel) {
   let html = '';
   const anlauf = sek(0, fahrten[0]);
   if (anlauf > 0) {
-    /* Der erste Fussweg bekommt seine Schiene ueber die GANZE Zeile: sie soll
-       neben dem Text anfangen, nicht erst darunter — sonst steht die erste
-       Angabe der Verbindung ueber dem Strich statt an ihm.
-       Am ENDE ist es anders: dort hoert die Schiene nach zwei Dritteln auf,
-       weil direkt darunter die Kennzahlenzeile beginnt und der Strich sonst an
-       deren Kante stiess. */
+    /* Die Schiene des Fusswegs laeuft ueber die GANZE Zeile: sie soll neben dem
+       Text anfangen, nicht erst darunter — sonst steht die erste Angabe der
+       Verbindung ueber dem Strich statt an ihm. */
     html += zeile('weg', blass, blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(anlauf)) + '</b> '
       + esc(translate('on foot')), '0px', false, anlauf);
@@ -1159,9 +1161,14 @@ function senkrechtHtml(v, schluessel) {
 
   const auslauf = sek(fahrten[fahrten.length - 1] + 1, legs.length);
   if (auslauf > 0) {
-    html += zeile('weg', blass, 'transparent',
+    /* Genau wie der Fussweg am Anfang: Schiene ueber die ganze Zeile. Vorher
+       hoerte sie hier nach zwei Dritteln auf — zwei Fusswege von sechs Minuten
+       waren damit verschieden lang gezeichnet, obwohl sie gleich lang dauern.
+       Dass die Schiene nicht mehr an die Kennzahlenzeile stoesst, macht jetzt
+       der Abstand unter der Achse. */
+    html += zeile('weg', blass, blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(auslauf)) + '</b> '
-      + esc(translate('on foot')), '66%', false, auslauf);
+      + esc(translate('on foot')), '0px', false, auslauf);
   }
 
   return '<div class="vt">' + html + '</div>' + werteHtml(v);
