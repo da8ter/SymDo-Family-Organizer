@@ -29,10 +29,16 @@
   --sym-ms: 0px;
   --sym-mb: 0px;
 }
-html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* Die Kachel haelt das Rad bei sich. Ohne das reicht der Browser eine
+   Radbewegung, die hier nichts mehr zu scrollen findet, an die Seite darueber
+   weiter — und die ganze Visualisierung rutscht weg, obwohl der Zeiger ueber
+   der Kachel steht. `overscroll-behavior` ist genau dafuer da. */
+html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column;
+       overscroll-behavior: none; }
 body {
   margin: 0 !important; padding: 0 !important;
   flex: 1; min-height: 0; display: flex; flex-direction: column;
+  overscroll-behavior: none;
   background: transparent; color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
@@ -82,7 +88,13 @@ body {
 }
 .umschalter button.an { background: var(--akzent); color: #fff; }
 
-.liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.liste {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  /* Am Ende der Liste hoert es auf — die Bewegung wandert nicht weiter nach
+     draussen in die Visualisierung. */
+  overscroll-behavior: contain;
+}
 /* Hausrezept für Scrollleisten: schmal, Griff in der Akzentfarbe. */
 .liste::-webkit-scrollbar { width: 6px; }
 .liste::-webkit-scrollbar-thumb { background: var(--akzent); border-radius: 3px; }
@@ -126,6 +138,7 @@ body {
 
 /* ── Streckenachse ─────────────────────────────────────────────────────── */
 /* Die Schiene: eine Verbindung je Bildbreite, mit Einrasten. */
+.fahrten { overscroll-behavior: contain; }
 .fahrten {
   display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden;
   scroll-snap-type: x mandatory; scrollbar-width: none;
@@ -795,6 +808,45 @@ function zeitachseHtml(v, jetzt) {
 }
 
 
+/* Welche Verbindung steht gerade vorn? Das ist die Wahl des BETRACHTERS und
+   ueberlebt deshalb das Neuzeichnen.
+   Gezeichnet wird bei jedem Abruf neu — also jede Minute —, und dabei entsteht
+   die Schiene als neues Element mit scrollLeft 0. Wer sich gerade die dritte
+   Fahrt ansah, stand danach wieder bei der ersten. Gemerkt wird je Strecke,
+   nicht je Stelle in der Liste: eine Strecke, die dazukommt oder wegfaellt,
+   soll den anderen ihre Stelle nicht verschieben. */
+let schienenStand = {};
+
+function streckenSchluessel(r) {
+  return (r.member || '') + '|' + (r.name || r.memberName || '');
+}
+
+function schienenMerken() {
+  document.querySelectorAll('[data-schiene]').forEach(function (schiene) {
+    const breite = schiene.clientWidth || 1;
+    schienenStand[schiene.getAttribute('data-schiene')] =
+      Math.round(schiene.scrollLeft / breite);
+  });
+}
+
+function schienenHerstellen() {
+  document.querySelectorAll('[data-schiene]').forEach(function (schiene) {
+    const n = schienenStand[schiene.getAttribute('data-schiene')] || 0;
+    const karten = schiene.children;
+    if (n <= 0 || karten.length === 0) { return; }
+    /* Ist die gemerkte Fahrt inzwischen abgefahren, gibt es sie nicht mehr —
+       dann so weit wie moeglich, statt ins Leere zu springen. */
+    const i = Math.min(karten.length - 1, n);
+    schiene.scrollLeft = karten[i].offsetLeft;
+    const punkte = schiene.nextElementSibling;
+    if (punkte && punkte.classList.contains('punkte')) {
+      punkte.querySelectorAll('span').forEach(function (p, k) {
+        p.classList.toggle('an', k === i);
+      });
+    }
+  });
+}
+
 function streckenHtml() {
   const routen = zustand.routes || [];
   if (routen.length === 0) { return '<div class="leer">' + esc(translate('No route set up')) + '</div>'; }
@@ -850,7 +902,8 @@ function streckenHtml() {
       + (r.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
       + '</div>'
       + (fahrten
-          ? '<div class="fahrten" data-schiene>' + fahrten + '</div>' + punkte
+          ? '<div class="fahrten" data-schiene="' + esc(streckenSchluessel(r)) + '">'
+            + fahrten + '</div>' + punkte
           : '<div class="leer">' + esc(translate(nurDirekt
               ? 'no journey without changes' : 'no journey found')) + '</div>')
       + '</div>';
@@ -867,6 +920,7 @@ function zeichne() {
   if ((zustand.routes || []).length === 0) { jetzt = 'departures'; }
   if ((zustand.stops || []).length === 0 && (zustand.routes || []).length > 0) { jetzt = 'routes'; }
 
+  schienenMerken();
   document.getElementById('wurzel').innerHTML =
       kopfHtml(jetzt) + '<div class="liste">'
     + (jetzt === 'routes' ? streckenHtml() : abfahrtenHtml())
@@ -874,6 +928,7 @@ function zeichne() {
     + '<div class="quelle">'
     + esc(translate('Timetable data: Verkehrsverbund Rhein-Ruhr (VRR)')) + '</div>';
 
+  schienenHerstellen();
   engePruefen();
   messungLiveHalten();
 
