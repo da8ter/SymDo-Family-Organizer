@@ -1,16 +1,18 @@
 # SymDo - VRR Transit
 
-**Abfahrtstafel und Verbindungen aus der Fahrplanauskunft des VRR — und der
-Schulweg, der von selbst weiß, in welche Richtung er heute geht.**
+**Die Abfahrtstafel für zu Hause — und ein Schulweg, der von selbst weiß, in
+welche Richtung er heute geht.**
 
-Die Fahrplanauskunft des VRR umfasst die Rheinbahn und alle anderen
-Verkehrsunternehmen im Verbund, braucht keinen Schlüssel und liefert
-Echtzeitdaten. Zwei Ansichten in einer Kachel: die Abfahrtstafel einer
-Haltestelle und die Zeitachse einer Verbindung.
+Ein Blick an die Wand genügt: Wann fährt der nächste Bus? Reicht die Zeit noch
+für einen Kaffee? Und wie kommt das Kind heute zur Schule? Die Kachel zeigt
+beides — die Abfahrten an euren Haltestellen und ganze Verbindungen von Tür zu
+Tür, live aus der Fahrplanauskunft des VRR, mit Rheinbahn und allen anderen im
+Verbund.
 
-Eine Strecke mit *Schulweg* nimmt Beginn und Ende des Schultags aus dem
-Stundenplan und dreht die Richtung selbst um: morgens die Verbindung, mit der
-das Kind pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
+Das Beste daran: Der **Schulweg** richtet sich selbst ein. Er holt sich Beginn
+und Ende des Schultags aus dem Stundenplan und dreht morgens wie mittags die
+Richtung um — hin, solange Unterricht ist, zurück, sobald Schluss ist. Fällt
+die erste Stunde aus, darf länger geschlafen werden.
 
 ## Inhalt
 
@@ -26,24 +28,25 @@ das Kind pünktlich ankommt, ab Unterrichtsbeginn die für den Rückweg.
 
 ## 1. Was die Kachel zeigt
 
-Oben der Umschalter zwischen **Abfahrten** und **Strecken**. Ist nur eine der
-beiden Sorten eingerichtet, fällt er weg. Die Wahl bleibt im Browser gemerkt.
+Ganz oben wechselt man zwischen **Abfahrten** und **Strecken**. Wer nur eines
+von beidem eingerichtet hat, sieht den Umschalter gar nicht erst. Die Wahl
+bleibt gemerkt.
 
-Gehören Haltestellen oder Strecken einem Familienmitglied, stehen sie unter
-einer Überschrift mit Foto und Namen.
+Gehört eine Haltestelle oder eine Strecke zu einem Familienmitglied, steht sie
+unter dessen Foto und Namen — man sieht auf einen Blick, wessen Bus da fährt.
 
-**Abfahrten** — je Haltestelle eine Karte: Symbol und Liniennummer, Pfeil und
-Ziel, rechts die Minuten. Ist ein Fußweg eingetragen, sind das die Minuten bis zum
-Losgehen, sonst bis zur Abfahrt. Dahinter eine Verspätung als `+3`, dazu das
-Gleis (`Gl. 3`), wenn die Auskunft eines nennt.
-Was entfällt, steht durchgestrichen als *entfällt*; was mit dem eingetragenen
-Fußweg nicht mehr zu schaffen ist, steht blass.
+**Abfahrten** — je Haltestelle eine Karte: Symbol und Liniennummer, ein Pfeil
+und das Ziel, rechts die Minuten. Und zwar die Minuten, auf die es ankommt: Ist
+ein Fußweg eingetragen, zählt die Kachel herunter, bis man **losgehen** muss,
+sonst bis zur Abfahrt. Eine Verspätung steht als `+3` daneben, das Gleis als
+`Gl. 3`. Was ausfällt, ist durchgestrichen, was man ohnehin nicht mehr
+erwischt, tritt blass zurück.
 
-**Strecken** — je Strecke eine Karte mit den nächsten Fahrten **nebeneinander**;
-gewischt wird seitwärts, die Punkte darunter sagen, wo man ist. Je Fahrt:
-Abfahrt → Ankunft, die Dauer, und *direkt* oder *n Umstiege*. Darunter die
-Zeitachse — ein Balken je Abschnitt, breit nach Dauer, im Balken die
-Liniennummer. Wie viel Zeit wohin geht, sagt die Zeile darunter.
+**Strecken** — je Strecke eine Karte mit den nächsten Fahrten nebeneinander;
+zur übernächsten wischt man seitwärts, die Punkte darunter zeigen, wo man ist.
+Je Fahrt: Abfahrt → Ankunft, die Dauer und *direkt* oder *n Umstiege*. Darunter
+die Zeitachse, ein Balken je Abschnitt — so sieht man sofort, wo die Zeit
+hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
 
 ## 2. Voraussetzungen
 
@@ -51,11 +54,11 @@ Liniennummer. Wie viel Zeit wohin geht, sagt die Zeile darunter.
 |---|---|
 | Symcon | ab 8.1 |
 | **SymDo Gateway** | Pflicht — von dort kommen die Familienmitglieder |
-| **SymDo Stundenplan** | nur für den Schulweg; ohne ihn bleiben die übrigen Modi |
-| Schlüssel, Konto, Registrierung | **nichts davon** — die Auskunft ist offen |
+| **SymDo Stundenplan** | nur für den Schulweg |
+| Anmelden, registrieren, bezahlen | nichts davon |
 
-Die Kachel läuft auch ohne Stundenplan. Eine Strecke mit *Schulweg* findet
-dann allerdings keine Zeiten und bleibt leer.
+Ohne Stundenplan läuft die Kachel genauso; nur eine Strecke mit *Schulweg*
+bleibt dann leer.
 
 ## 3. Einrichtung
 
@@ -83,44 +86,43 @@ dann allerdings keine Zeiten und bleibt leer.
    nennt; bei einer Koordinate ist das die Adresse.
 5. **Wann**: *Schulweg*, *Jetzt losfahren* oder *Ankommen bis …*.
 
-**Linien und Richtungen** werden nicht getippt. Jede Haltestellenzeile trägt
-eine eigene kleine Liste: je Linie und Ziel eine Zeile mit einem Haken. Sie
-wird beim **Übernehmen einer Haltestelle** gefüllt — mit dem, was dort fährt,
-in der Reihenfolge der nächsten Abfahrten. Zu tun bleibt das Entfernen der
-Haken, die nicht auf die Tafel sollen. Für Haltestellen, die schon in der Liste
-stehen, tut der Knopf **Linien und Richtungen holen** dasselbe; gefüllt werden
-nur **leere** Listen. Gespeichert wird nichts, bis *Übernehmen* gedrückt ist.
+**Linien und Richtungen muss niemand abtippen.** Beim Übernehmen einer
+Haltestelle schaut die Kachel selbst nach, was dort fährt, und legt es als
+kleine Liste in die Zeile: je Linie und Ziel eine Reihe mit einem Haken. Man
+nimmt die Haken weg, die man nicht sehen will — fertig. Für Haltestellen, die
+schon in der Liste stehen, holt der Knopf **Linien und Richtungen holen** das
+nach; er füllt nur leere Listen, eine gepflegte bleibt in Ruhe. Gespeichert
+wird erst mit *Übernehmen*.
 
-Versteckt wird nur, was in der Liste steht und keinen Haken hat. Eine Linie,
-die neu an die Haltestelle kommt, erscheint weiter auf der Tafel. An einer großen Station wird bei vierzig Einträgen gekürzt; die
-Statuszeile sagt es dann.
+Weg ist nur, was in der Liste steht und keinen Haken hat. Kommt später eine
+neue Linie an die Haltestelle, fährt sie einfach mit auf der Tafel. An einem
+großen Bahnhof wird bei vierzig Einträgen Schluss gemacht; die Kachel sagt es
+dann.
 
-**Mit oder ohne Umsteigen** — bei den Strecken steht in der Kachel ein zweiter
-Schalter neben *Abfahrten / Strecken*: **Alle** oder **Ohne Umsteigen**. Beide
-Listen werden vorab geholt, der Schalter wechselt ohne Wartezeit. Unter *Ohne
-Umsteigen* stehen dabei auch Verbindungen, die unter *Alle* nicht vorkommen.
-Die Stellung wird im Browser gemerkt und gilt nur an diesem Gerät. Gibt es auf
-einer Strecke keine umsteigefreie Verbindung, sagt die Karte „keine
-umsteigefreie Verbindung".
+**Lieber ohne Umsteigen?** Bei den Strecken steht ein zweiter kleiner Schalter:
+**Alle** oder **Ohne Umsteigen**. Er wechselt sofort, ohne Warten — und unter
+*Ohne Umsteigen* tauchen dabei Verbindungen auf, die unter *Alle* gar nicht
+dabei waren. Die Wahl merkt sich jedes Gerät für sich; gibt es auf einer
+Strecke wirklich keine durchgehende Fahrt, sagt die Karte das.
 
-**Auf der Übersicht** gibt es keinen Schalter. Was die Schulweg-Karte dort
-zeigt, entscheidet der Haken **Übersicht ohne Umsteigen** an der Strecke. Er
-steuert nur diese Karte.
+Auf der **Übersicht** gibt es keinen Schalter, dort soll ohne Zutun das
+Richtige stehen. Was die Schulweg-Karte dort zeigt, bestimmt der Haken
+**Übersicht ohne Umsteigen** an der Strecke.
 
 ## 4. Der Schulweg
 
-Eine Strecke mit **Schulweg** braucht keine Zeit — sie kommt aus dem
-Stundenplan des Kindes. Vor Unterrichtsbeginn zeigt die Karte die Fahrt **zur
-Schule**, danach die **nach Hause**; Start und Ziel tauschen dabei die Plätze,
-und die Kopfzeile sagt, welche Richtung gerade zu sehen ist.
+Hier muss keine Uhrzeit eingetragen werden — die kommt aus dem Stundenplan des
+Kindes. Morgens zeigt die Karte die Fahrt **zur Schule**, nach Unterrichtsbeginn
+die **nach Hause**; Start und Ziel tauschen dabei die Plätze, und die Kopfzeile
+sagt, welche Richtung gerade dran ist.
 
-Gezählt wird nur, was stattfindet: fällt die erste Stunde aus, geht es später
-los; fällt die letzte aus, früher heim.
+Und zwar nach dem echten Tag: Fällt die erste Stunde aus, geht es später los.
+Fällt die letzte aus, früher heim.
 
-Der **Puffer** heißt auf dem Hinweg „so viele Minuten vor Unterrichtsbeginn da
-sein", auf dem Rückweg „so viele Minuten vom Klassenraum bis zur Haltestelle".
-Der Wert unter *Schulweg* gilt für alle Strecken; jede Zeile darf davon
-abweichen.
+Der **Puffer** ist die Luft, die man haben will — auf dem Hinweg „so viele
+Minuten vor Unterrichtsbeginn da sein", auf dem Rückweg „so viele Minuten vom
+Klassenraum bis zur Haltestelle". Der Wert unter *Schulweg* gilt für alle
+Strecken, jede Zeile darf davon abweichen.
 
 **Stundenplan (leer = automatisch)** muss nur gesetzt werden, wenn es mehrere
 Stundenplan-Instanzen gibt.
@@ -133,30 +135,28 @@ Stundenplan-Instanzen gibt.
 | in einer Streckenkarte seitwärts wischen | zur nächsten Fahrt |
 | auf eine Abfahrt zeigen | Verkehrsmittel, Linie, Ziel und die **planmäßige** Zeit erscheinen als Hinweis |
 
-Die Kachel ist eine Anzeige; geändert wird nichts.
+Mehr gibt es nicht zu tun — die Kachel zeigt, man liest.
 
 ## 6. Wann abgerufen wird
 
-**Jede Minute, aber nur, solange jemand hinsieht.** Kachel und App melden sich
-beim Öffnen und danach jede Minute. Bleibt eine solche Meldung länger als drei
-Minuten aus, hört das Abrufen auf.
+**Jede Minute — aber nur, solange jemand hinschaut.** Ist die Kachel zu und die
+App aus, fragt auch niemand nach; nach drei Minuten ohne Zuschauer ist Ruhe.
 
-Eine Ausnahme: gibt es einen Schulweg, wird **zwischen 5 und 9 Uhr** auch ohne
-Zuschauer abgerufen, alle zehn Minuten. Die Auskunft steht dann am
-Frühstückstisch schon bereit.
-
-Geholt wird in dieser Instanz, nicht im Gateway.
+Eine Ausnahme gibt es für den Schulweg: **zwischen 5 und 9 Uhr** wird alle zehn
+Minuten auch dann abgerufen, wenn keiner hinsieht. So steht die Auskunft schon
+da, wenn morgens der Erste in die Küche kommt.
 
 ## 7. Wenn die Auskunft nicht antwortet
 
-Nach **drei Fehlschlägen in Folge** legt das Modul eine Stunde Pause ein. Der
-zuletzt geholte Stand bleibt stehen und trägt ein **veraltet** an der Karte.
-Der Abruf zwischen 5 und 9 Uhr läuft auch während der Pause weiter.
+Schweigt die Auskunft **dreimal hintereinander**, wird eine Stunde lang nicht
+mehr gefragt. Die letzten geholten Zeiten bleiben stehen und bekommen ein
+**veraltet** an die Karte — lieber die von vorhin als gar keine. Der morgendliche
+Abruf zwischen 5 und 9 Uhr läuft trotzdem weiter.
 
 ## 8. Auch in der App
 
-Das Gateway holt die fertige Auskunft aus allen VRR-Instanzen und reicht sie an
-App und Web-App weiter (`/v1/transit`). Eingerichtet wird nur hier.
+Dieselben Abfahrten und Verbindungen stehen auch in der SymDo-App und in der
+Web-App — eingerichtet wird aber nur hier.
 
 ## 9. PHP-Befehlsreferenz
 
@@ -167,6 +167,6 @@ SDVT_Refresh(<InstanzID>);
 // Alles, was die Kachel anzeigt, als JSON-Text
 echo SDVT_GetBoard(<InstanzID>);
 
-// Die Kachel neu zeichnen lassen und „jemand sieht hin" melden
+// Die Kachel neu zeichnen lassen und melden, dass jemand hinsieht
 IPS_RequestAction(<InstanzID>, 'GetState', 0);
 ```
