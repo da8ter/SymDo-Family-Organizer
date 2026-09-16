@@ -188,6 +188,16 @@ trait TransitBridge
                     'platformTo' => (string)($l['platformTo'] ?? ''),
                     'stops'      => (int)($l['stops'] ?? 0),
                     'occupancy'  => (string)($l['occupancy'] ?? ''),
+                    /* Die Haltestellenfolge der senkrechten Ansicht. Sie ist
+                       meist leer — das Modul schickt sie nur, wenn eine Ansicht
+                       sie auch zeigt. */
+                    'halte'      => array_values(array_map(
+                        static fn (array $h): array => [
+                            'n' => (string)($h['n'] ?? ''),
+                            't' => (string)($h['t'] ?? ''),
+                        ],
+                        array_filter((array)($l['halte'] ?? []), 'is_array')
+                    )),
                 ];
             }
             $raus[] = [

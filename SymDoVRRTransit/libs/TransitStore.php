@@ -728,6 +728,15 @@ trait TransitStore
         $cfg     = $this->TransitKonfiguration();
         $namen   = (array)$bestand['members'];
 
+        /* Welche Streckenansicht gilt — und ob dafuer die Haltestellenfolge
+           mitgeschickt werden muss. Nur die senkrechte Ansicht klappt sie auf;
+           fuer die beiden anderen waere sie totes Gewicht in jeder Nutzlast. */
+        $stil = (string)($cfg['RouteStyle'] ?? 'bars');
+        if (!in_array($stil, ['bars', 'timeline', 'vertical'], true)) {
+            $stil = 'bars';
+        }
+        $mitHalten = $stil === 'vertical';
+
         $haltestellen = [];
         foreach ($this->TransitZeilen('Stops') as $z) {
             if (!$this->TransitStopSichtbar($z)) {
@@ -788,7 +797,8 @@ trait TransitStore
                 /* Fuer die Uebersichtskarte, die keinen Schalter hat. */
                 'directOnly' => ($z['direct'] ?? false) === true,
                 'journeys'   => TransitCalc::EndenBenennen(
-                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach),
+                    TransitCalc::Verbindungen($roh, max(1, (int)($z['count'] ?? 4)), $nichtNach,
+                                              false, $mitHalten),
                     $vonName, $nachName),
                 /* Die zweite Liste fuer den Schalter „Ohne Umsteigen". Fehlt
                    die eigene Antwort, wird aus der gemischten gesiebt — dann
@@ -796,7 +806,7 @@ trait TransitStore
                 'journeysDirect' => TransitCalc::EndenBenennen(
                     TransitCalc::Verbindungen(
                         is_array($e['rawDirect'] ?? null) ? $e['rawDirect'] : $roh,
-                        max(1, (int)($z['count'] ?? 4)), $nichtNach, true),
+                        max(1, (int)($z['count'] ?? 4)), $nichtNach, true, $mitHalten),
                     $vonName, $nachName),
             ];
         }
@@ -809,7 +819,7 @@ trait TransitStore
                Betrachters: anders als „mit/ohne Umsteigen" gibt es dafür keinen
                Schalter in der Kachel, sondern nur das Formular. Wer beides
                sehen will, ändert es dort — die Kachel zeichnet danach neu. */
-            'routeStyle' => (string)($cfg['RouteStyle'] ?? 'bars') === 'timeline' ? 'timeline' : 'bars',
+            'routeStyle' => $stil,
             'stops'    => $haltestellen,
             'routes'   => $strecken,
             'blocked'  => $this->TransitGesperrt($jetzt),

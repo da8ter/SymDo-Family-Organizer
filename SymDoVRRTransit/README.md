@@ -61,8 +61,15 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
   — die Auslastung. Am schönsten auf einer breiten Kachel; wird es eng, fallen
   Steig und Haltestellenzahl weg, Uhrzeiten und Linien bleiben.
 
+- **Senkrecht, mit Haltestellen** — die Fahrt von oben nach unten gelesen: je
+  Halt die Uhrzeit, der Name und der Steig, dazwischen die Linie mit ihrer
+  Richtung. Und je Fahrt lässt sich aufklappen, wo der Wagen überall hält —
+  mit Uhrzeit für jede Haltestelle. Am schönsten auf einer hohen Kachel.
+
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
-*Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt.
+*Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung
+man sich gerade ansieht und welche Haltestellenliste offen steht, bleibt
+dagegen erhalten, auch wenn im Hintergrund neue Zeiten hereinkommen.
 
 ## 2. Voraussetzungen
 

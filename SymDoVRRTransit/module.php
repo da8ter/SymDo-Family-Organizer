@@ -294,10 +294,12 @@ class SymDoVRRTransit extends IPSModuleStrict
                      'options' => [
                          ['caption' => $this->Translate('Compact (bar)'), 'value' => 'bars'],
                          ['caption' => $this->Translate('Detailed timeline'), 'value' => 'timeline'],
+                         ['caption' => $this->Translate('Vertical, with stops'), 'value' => 'vertical'],
                      ]],
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('The detailed timeline shows times, platforms, number of stops ')
-                        . $this->Translate('and the transfer — it needs more room and suits a wide tile.')],
+                        . $this->Translate('and the transfer — it needs more room and suits a wide tile. ')
+                        . $this->Translate('The vertical one lists every stop of the journey and suits a tall tile.')],
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('Fetched once a minute, but only while the tile or the app is ')
                         . $this->Translate('open. The school run is also fetched in the morning without anyone watching, so ')

@@ -567,5 +567,38 @@ foreach (TransitCalc::Verbindungen($roh)[0]['legs'] as $a) {
     }
 }
 
+/* ── Haltestellenfolge fuer die senkrechte Ansicht ────────────────────────── */
+
+$ohne = TransitCalc::Verbindungen(fixture('strecke-umstieg'))[0]['legs'];
+$mit  = TransitCalc::Verbindungen(fixture('strecke-umstieg'), 3, 0, false, true)[0]['legs'];
+$ersteFahrt = static function (array $abschnitte): array {
+    foreach ($abschnitte as $a) {
+        if ($a['kind'] === 'ride') { return $a; }
+    }
+    return [];
+};
+/* Ohne Anforderung bleibt sie leer — sie waere in jeder Nutzlast totes
+   Gewicht, und die Kachel bekommt die Nutzlast jede Minute neu. */
+pruefe('Haltestellenfolge nur auf Anforderung', $ersteFahrt($ohne)['halte'], []);
+pruefe('angefordert kommt sie mit', count($ersteFahrt($mit)['halte']), 3);
+pruefe('je Halt Name und Zeit',
+    array_keys($ersteFahrt($mit)['halte'][0]), ['n', 't']);
+pruefe('erster Halt ist der Einstieg',
+    $ersteFahrt($mit)['halte'][0]['n'], $ersteFahrt($mit)['from']);
+/* Derselbe Halt zweimal hintereinander (zwei Steige) zaehlt einmal — wie beim
+   Zaehlen auch, sonst stuende er doppelt in der Liste. */
+$roh = json_decode(json_encode(fixture('strecke-umstieg')), true);
+$roh['journeys'][0]['legs'][0]['stopSequence'] = [
+    ['name' => 'A', 'departureTimePlanned' => '2026-09-11T07:00:00Z'],
+    ['name' => 'B', 'departureTimePlanned' => '2026-09-11T07:05:00Z'],
+    ['name' => 'B', 'departureTimePlanned' => '2026-09-11T07:06:00Z'],
+    ['name' => 'C', 'departureTimePlanned' => '2026-09-11T07:10:00Z'],
+];
+$doppelt = $ersteFahrt(TransitCalc::Verbindungen($roh, 3, 0, false, true)[0]['legs']);
+pruefe('doppelter Halt steht einmal in der Liste',
+    array_column($doppelt['halte'], 'n'), ['A', 'B', 'C']);
+pruefe('Liste und Zaehlung sagen dasselbe',
+    count($doppelt['halte']) - 1, $doppelt['stops']);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

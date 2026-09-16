@@ -115,7 +115,6 @@
             "Compact (bar)": "Kompakt (Balken)",
             "Detailed timeline": "Ausführliche Zeitachse",
             "The detailed timeline shows times, platforms, number of stops ": "Die ausführliche Zeitachse zeigt Uhrzeiten, Steige, die Zahl der Haltestellen ",
-            "and the transfer — it needs more room and suits a wide tile.": "und den Umstieg — sie braucht mehr Platz und passt zu einer breiten Kachel.",
             "Departure": "Abfahrt",
             "Arrival": "Ankunft",
             "in %s": "in %s",
@@ -130,7 +129,11 @@
             "plenty of room": "Viele Plätze frei",
             "filling up": "Wenige Plätze frei",
             "standing only": "Nur Stehplätze",
-            "very full": "Sehr voll"
+            "very full": "Sehr voll",
+            "Vertical, with stops": "Senkrecht, mit Haltestellen",
+            "and the transfer — it needs more room and suits a wide tile. ": "und den Umstieg — sie braucht mehr Platz und passt zu einer breiten Kachel. ",
+            "The vertical one lists every stop of the journey and suits a tall tile.": "Die senkrechte listet jede Haltestelle der Fahrt auf und passt zu einer hohen Kachel.",
+            "towards %s": "Richtung %s"
         }
     }
 }

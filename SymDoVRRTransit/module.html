@@ -305,7 +305,7 @@ body {
    lesen war (vom Nutzer gemeldet). Gegen Schwarz gemischt bleibt der Kontrast
    zur Schrift in jedem Visu-Design erhalten. */
 .tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 68%, #000); }
-.tl-fahrt .marke {
+.tl-fahrt .marke, .vt-fahrt .marke {
   display: inline-flex; align-items: center; gap: 9px;
   padding: 4px 11px; border-radius: 10px; background: var(--akzent);
   color: #fff; font-size: 15px; font-weight: 800; white-space: nowrap;
@@ -314,7 +314,8 @@ body {
 /* Zeichen und Zahl in vollem Weiss. Font Awesome setzt die Farbe des Zeichens
    aus `currentColor` — aber die duennen Striche der Light-Schnitte wirken auf
    der Akzentflaeche grau. Deshalb ausdruecklich, und die Deckung dazu. */
-.tl-fahrt .marke, .tl-fahrt .marke i, .tl-fahrt .marke svg {
+.tl-fahrt .marke, .tl-fahrt .marke i, .tl-fahrt .marke svg,
+.vt-fahrt .marke, .vt-fahrt .marke i, .vt-fahrt .marke svg {
   color: #fff; fill: #fff; opacity: 1;
 }
 /* Symcon liefert NUR den Light-Schnitt — gemessen: ein `fa-solid` wird gar
@@ -323,15 +324,18 @@ body {
    auf Ansage wieder raus. */
 /* Hoehe vorgeben, Breite mitlaufen lassen: die Zeichen sind NICHT quadratisch
    (der Bus misst 576 zu 512), und eine feste Breite quetscht sie. */
-.tl-fahrt .marke svg { height: 1em; width: auto; }
-.tl-fahrt .marke b { font-weight: 800; color: #fff; }
+.tl-fahrt .marke svg, .vt-fahrt .marke svg { height: 1em; width: auto; }
+.tl-fahrt .marke b, .vt-fahrt .marke b { font-weight: 800; color: #fff; }
 /* Der Abstand haengt NICHT am `gap` des Schilds: gemessen stand die Nummer
    trotz `column-gap: 9px` genau an der Kante des Zeichens (Abstand 0). Was
    Font Awesome beim Austausch von <i> gegen <svg> im Einzelnen anstellt, muss
    man dafuer gar nicht wissen — ein eigener Rand am Zeichen wirkt in jedem
    Fall. */
-.tl-fahrt .marke svg, .tl-fahrt .marke i { margin-right: 9px; }
-.tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 68%, #000); }
+.tl-fahrt .marke svg, .tl-fahrt .marke i,
+.vt-fahrt .marke svg, .vt-fahrt .marke i { margin-right: 9px; }
+.tl-fahrt.zweit .marke, .vt-fahrt.zweit .marke {
+  background: color-mix(in srgb, var(--akzent) 68%, #000);
+}
 
 /* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft.
    Aussteigen und einsteigen sind zwei Punkte — und beide sitzen in DERSELBEN
@@ -415,6 +419,64 @@ body {
 @container (max-width: 250px) {
   .tl-werte { display: none; }
 }
+
+/* ── Senkrechte Streckenansicht ────────────────────────────────────────────
+   Die dritte Wahl im Formular. Sie liest sich wie ein Fahrschein von oben nach
+   unten: Halt, Fahrt, Halt — und je Fahrt laesst sich die Haltestellenfolge
+   aufklappen. Aufgebaut ist jede Zeile als Raster aus Schiene und Inhalt; die
+   Schiene malt jede Zeile SELBST, damit die Linie ohne Naht durchlaeuft. */
+.vt { display: flex; flex-direction: column; }
+.vt-zeile { display: grid; grid-template-columns: 26px 1fr; align-items: start; }
+.vt-schiene { position: relative; align-self: stretch; min-height: 14px; }
+/* Ober- und Unterkante getrennt: an einem Halt wechselt die Farbe genau am
+   Punkt, nicht in der Mitte der Zeile. */
+.vt-schiene::before, .vt-schiene::after {
+  content: ''; position: absolute; left: 50%; transform: translateX(-50%); width: 4px;
+}
+.vt-schiene::before { top: 0; height: var(--knick, 50%); background: var(--o, transparent); }
+.vt-schiene::after  { top: var(--knick, 50%); bottom: 0; background: var(--u, transparent); }
+.vt-schiene .pkt {
+  position: absolute; left: 50%; top: var(--knick, 50%);
+  transform: translate(-50%, -50%); z-index: 1;
+  width: 13px; height: 13px; border-radius: 50%; background: var(--text);
+}
+/* Der Umstieg: gepunktet, wie in der waagerechten Ansicht. */
+.vt-zeile.um .vt-schiene::before, .vt-zeile.um .vt-schiene::after {
+  background: none;
+  background-image: radial-gradient(circle, var(--dezent) 1.8px, transparent 1.9px);
+  background-size: 9px 9px; background-position: center top;
+}
+
+.vt-halt .vt-inhalt { padding: 0 0 10px 10px; }
+.vt-halt .zeit { font-size: 17px; font-weight: 800; line-height: 1.15; }
+.vt-halt .name { font-size: 13px; font-weight: 700; }
+.vt-halt .steig { font-size: 11px; color: var(--dezent); }
+
+.vt-fahrt .vt-inhalt, .vt-zeile.um .vt-inhalt, .vt-zeile.weg .vt-inhalt {
+  padding: 0 0 10px 10px;
+}
+.vt-fahrt .kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vt-fahrt .richtung { font-size: 12px; color: var(--dezent); min-width: 0; }
+/* Der Knopf zum Aufklappen. Randlos und flaechig wie in der Web-App. */
+.vt-knopf {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 6px;
+  padding: 5px 9px; border: 0; border-radius: 9px; cursor: pointer;
+  background: color-mix(in srgb, var(--content-color) 7%, transparent);
+  color: var(--text); font: inherit; font-size: 11px;
+}
+.vt-knopf .zahl { font-weight: 800; font-size: 12px; }
+.vt-knopf .pfeil { color: var(--akzent); transition: transform .15s ease; }
+.vt-knopf[aria-expanded="true"] .pfeil { transform: rotate(180deg); }
+
+.vt-halte { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.vt-halte .h { display: flex; align-items: baseline; gap: 8px; font-size: 11px; }
+.vt-halte .h .t { color: var(--dezent); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.vt-halte .h .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ein- und Ausstieg kraeftiger als die Halte dazwischen. */
+.vt-halte .h.rand .t, .vt-halte .h.rand .n { color: var(--text); font-weight: 700; }
+
+.vt-zeile.um .vt-inhalt, .vt-zeile.weg .vt-inhalt { font-size: 11px; color: var(--dezent); }
+.vt-zeile.um b, .vt-zeile.weg b { color: var(--text); font-size: 12px; }
 
 .leer { color: var(--dezent); font-size: 12px; text-align: center; padding: 14px 0; }
 
@@ -765,13 +827,34 @@ function zeitachseHtml(v, jetzt) {
   const gleich = bisAb === null ? ''
     : (bisAb <= 0 ? translate('now') : translate('in %s').replace('%s', bisAb + ' ' + translate('min')));
 
+
+  return '<div class="tl">'
+    + '<div class="tl-kopf">'
+    +   '<div class="seite"><div class="was">' + esc(translate('Departure')) + '</div>'
+    +     '<div class="uhr">' + esc(v.departureText) + '</div>'
+    +     (gleich ? '<div class="gleich">' + esc(gleich) + '</div>' : '') + '</div>'
+    +   '<div class="seite rechts"><div class="was">' + esc(translate('Arrival')) + '</div>'
+    +     '<div class="uhr">' + esc(v.arrivalText) + '</div>'
+    +     '<div class="gesamt">' + esc(min(v.seconds) + ' ' + translate('in total')) + '</div></div>'
+    + '</div>'
+    + '<div class="tl-spur" style="grid-template-columns:' + spalten.join(' ') + '">' + zellen + '</div>'
+    + werteHtml(v)
+    + '</div>';
+}
+
+/**
+ * Die Kennzahlen unter einer Verbindung — Gesamtdauer, Umstiege, Auslastung.
+ * Beide ausfuehrlichen Ansichten zeigen dieselbe Zeile, deshalb steht sie hier
+ * und nicht zweimal.
+ */
+function werteHtml(v) {
+  const min = Math.round((v.seconds || 0) / 60) + ' ' + translate('min');
   /* Die Auslastung gilt der Fahrt, in der man am laengsten sitzt — die
      kuerzeste Anschlussfahrt saegt sonst die Aussage der Hauptfahrt ab. */
-  let voll = '';
-  let laengste = 0;
-  fahrten.forEach(function (i) {
-    if ((legs[i].seconds || 0) > laengste && legs[i].occupancy) {
-      laengste = legs[i].seconds || 0; voll = legs[i].occupancy;
+  let voll = '', laengste = 0;
+  (v.legs || []).forEach(function (l) {
+    if (l.kind === 'ride' && l.occupancy && (l.seconds || 0) > laengste) {
+      laengste = l.seconds || 0; voll = l.occupancy;
     }
   });
   const auslastung = {
@@ -786,24 +869,13 @@ function zeitachseHtml(v, jetzt) {
       + '<div class="zahl">' + esc(zahl) + '</div></div></div>';
   };
 
-  return '<div class="tl">'
-    + '<div class="tl-kopf">'
-    +   '<div class="seite"><div class="was">' + esc(translate('Departure')) + '</div>'
-    +     '<div class="uhr">' + esc(v.departureText) + '</div>'
-    +     (gleich ? '<div class="gleich">' + esc(gleich) + '</div>' : '') + '</div>'
-    +   '<div class="seite rechts"><div class="was">' + esc(translate('Arrival')) + '</div>'
-    +     '<div class="uhr">' + esc(v.arrivalText) + '</div>'
-    +     '<div class="gesamt">' + esc(min(v.seconds) + ' ' + translate('in total')) + '</div></div>'
-    + '</div>'
-    + '<div class="tl-spur" style="grid-template-columns:' + spalten.join(' ') + '">' + zellen + '</div>'
-    + '<div class="tl-werte">'
-    +   wert(translate('Total time'), min(v.seconds), 'fa-stopwatch')
-    +   wert(translate('Changes'), v.interchanges > 0
-            ? v.interchanges + ' ' + translate(v.interchanges === 1 ? 'change' : 'changes')
-            : translate('direct'), 'fa-arrow-right-arrow-left')
-    +   (auslastung ? wert(translate('Occupancy'), auslastung, 'fa-users',
-            (voll === 'full' || voll === 'standing') ? 'voll' : '') : '')
-    + '</div>'
+  return '<div class="tl-werte">'
+    + wert(translate('Total time'), min, 'fa-stopwatch')
+    + wert(translate('Changes'), v.interchanges > 0
+        ? v.interchanges + ' ' + translate(v.interchanges === 1 ? 'change' : 'changes')
+        : translate('direct'), 'fa-arrow-right-arrow-left')
+    + (auslastung ? wert(translate('Occupancy'), auslastung, 'fa-users',
+        (voll === 'full' || voll === 'standing') ? 'voll' : '') : '')
     + '</div>';
 }
 
@@ -847,6 +919,124 @@ function schienenHerstellen() {
   });
 }
 
+/**
+ * Die senkrechte Ansicht: die Fahrt von oben nach unten, mit ausklappbaren
+ * Haltestellenlisten.
+ *
+ * Aufgebaut aus denselben Teilen wie die waagerechte Zeitachse — nur dass hier
+ * jeder Teil eine ZEILE ist und die Schiene senkrecht laeuft. Welche Liste
+ * offen steht, merkt sich die Kachel ueber das Neuzeichnen hinweg (`halteOffen`),
+ * sonst klappte sie bei jedem Abruf wieder zu.
+ */
+let halteOffen = {};
+
+function senkrechtHtml(v, schluessel) {
+  const legs = v.legs || [];
+  const fahrten = [];
+  legs.forEach(function (l, i) { if (l.kind === 'ride') { fahrten.push(i); } });
+  if (fahrten.length === 0) { return zeitachseHtml(v, zustand.now || 0); }
+
+  const sek = function (von, bis) {
+    let n = 0;
+    for (let i = von; i < bis; i++) { n += legs[i].seconds || 0; }
+    return n;
+  };
+  const min = function (s) { return Math.round(s / 60) + ' ' + translate('min'); };
+  const farbe = function (k) {
+    return k % 2 === 1 ? 'color-mix(in srgb, var(--akzent) 68%, #000)' : 'var(--akzent)';
+  };
+  const blass = 'color-mix(in srgb, var(--akzent) 22%, transparent)';
+
+  /* Eine Zeile des Rasters. `knick` sagt, auf welcher Hoehe die Schiene die
+     Farbe wechselt — an einem Halt genau am Punkt, sonst gar nicht. */
+  const zeile = function (klasse, oben, unten, inhalt, knick, punkt) {
+    return '<div class="vt-zeile ' + klasse + '">'
+      + '<div class="vt-schiene" style="--o:' + oben + ';--u:' + unten
+      +   (knick ? ';--knick:' + knick : '') + '">'
+      +   (punkt ? '<div class="pkt"></div>' : '') + '</div>'
+      + '<div class="vt-inhalt">' + inhalt + '</div></div>';
+  };
+
+  let html = '';
+  const anlauf = sek(0, fahrten[0]);
+  if (anlauf > 0) {
+    html += zeile('weg', 'transparent', blass,
+      '<b>' + symbol('fa-person-walking') + ' ' + esc(min(anlauf)) + '</b> '
+      + esc(translate('on foot')), '0px', false);
+  }
+
+  fahrten.forEach(function (idx, k) {
+    const l = legs[idx];
+    const vorher = k === 0 ? (anlauf > 0 ? blass : 'transparent') : farbe(k - 1);
+
+    /* Einsteigen */
+    html += zeile('vt-halt', vorher, farbe(k),
+      '<div class="zeit">' + esc(l.depText) + '</div>'
+      + '<div class="name">' + esc(l.from) + '</div>'
+      + (l.platform ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platform) + '</div>' : ''),
+      '9px', true);
+
+    /* Die Fahrt selbst */
+    const id = schluessel + '#' + idx;
+    const offen = halteOffen[id] === true;
+    const halte = l.halte || [];
+    let inhalt = '<div class="kopf"><span class="marke">' + symbol(l.icon)
+      + '<b>' + esc(l.line || l.product) + '</b></span>'
+      + (l.destination
+          ? '<span class="richtung">' + esc(translate('towards %s').replace('%s', l.destination)) + '</span>'
+          : '') + '</div>';
+    /* Ohne Haltestellenfolge waere der Knopf ein Versprechen ohne Deckung —
+       dann steht die Angabe nur da. */
+    const text = '<span class="zahl">' + esc(min(l.seconds || 0)) + '</span>'
+      + (l.stops > 0
+          ? '<span>· ' + esc(l.stops + ' ' + translate(l.stops === 1 ? 'stop' : 'stops')) + '</span>'
+          : '');
+    inhalt += halte.length > 1
+      ? '<button type="button" class="vt-knopf" data-halte="' + esc(id) + '"'
+        + ' aria-expanded="' + (offen ? 'true' : 'false') + '">'
+        + text + '<span class="pfeil">' + symbol('fa-chevron-down') + '</span></button>'
+        + (offen
+            ? '<div class="vt-halte">' + halte.map(function (h, i) {
+                const rand = i === 0 || i === halte.length - 1;
+                return '<div class="h' + (rand ? ' rand' : '') + '">'
+                  + '<span class="t">' + esc(h.t || '') + '</span>'
+                  + '<span class="n">' + esc(h.n || '') + '</span></div>';
+              }).join('') + '</div>'
+            : '')
+      : '<div class="vt-knopf" style="cursor:default">' + text + '</div>';
+    html += zeile('vt-fahrt' + (k % 2 === 1 ? ' zweit' : ''),
+                  farbe(k), farbe(k), inhalt, '0px', false);
+
+    /* Aussteigen und, wenn noch eine Fahrt folgt, der Umstieg */
+    const letzteFahrt = k === fahrten.length - 1;
+    const danach = letzteFahrt
+      ? (sek(idx + 1, legs.length) > 0 ? blass : 'transparent')
+      : 'transparent';
+    html += zeile('vt-halt', farbe(k), letzteFahrt ? danach : 'transparent',
+      '<div class="zeit">' + esc(l.arrText) + '</div>'
+      + '<div class="name">' + esc(l.to) + '</div>'
+      + (l.platformTo ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platformTo) + '</div>' : ''),
+      '9px', true);
+
+    if (!letzteFahrt) {
+      const pause = sek(idx + 1, fahrten[k + 1]);
+      html += zeile('um', 'transparent', 'transparent',
+        '<b>' + symbol('fa-person-walking') + ' ' + esc(min(pause)) + '</b> '
+        + esc(translate('change')), '0px', false);
+    }
+  });
+
+  const auslauf = sek(fahrten[fahrten.length - 1] + 1, legs.length);
+  if (auslauf > 0) {
+    html += zeile('weg', blass, 'transparent',
+      '<b>' + symbol('fa-person-walking') + ' ' + esc(min(auslauf)) + '</b> '
+      + esc(translate('on foot')), '100%', false);
+  }
+
+  return '<div class="vt">' + html + '</div>' + werteHtml(v);
+}
+
+
 function streckenHtml() {
   const routen = zustand.routes || [];
   if (routen.length === 0) { return '<div class="leer">' + esc(translate('No route set up')) + '</div>'; }
@@ -868,13 +1058,18 @@ function streckenHtml() {
        die umsteigefreien Verbindungen nicht, die erst die zweite Anfrage
        zutage foerdert. */
     const alle = (nurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
-    const fahrten = alle.map(function (v) {
+    const fahrten = alle.map(function (v, vi) {
       /* Zwei Ansichten, eine Wahl im Formular: der Balken fasst die Fahrt in
          einer Zeile zusammen, die Zeitachse legt sie auseinander. Gemeinsam ist
          ihnen nur die Karte drumherum — deshalb hier die Weiche und nicht im
          Balken selbst. */
-      if ((zustand.routeStyle || 'bars') === 'timeline') {
+      const stil = zustand.routeStyle || 'bars';
+      if (stil === 'timeline') {
         return '<div class="fahrt">' + zeitachseHtml(v, zustand.now || 0) + '</div>';
+      }
+      if (stil === 'vertical') {
+        return '<div class="fahrt">'
+          + senkrechtHtml(v, streckenSchluessel(r) + '#' + vi) + '</div>';
       }
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
@@ -985,6 +1180,16 @@ function zeichne() {
        Stelle schon an, ohne dass man ihn benutzen konnte. */
     punkte.querySelectorAll('span').forEach(function (p, i) {
       p.addEventListener('click', function () { zurKarte(i); });
+    });
+  });
+
+  /* Aufklappen und zuklappen. Der Stand ueberlebt das Neuzeichnen — sonst
+     klappte die Liste bei jedem Abruf, also jede Minute, wieder zu. */
+  document.querySelectorAll('[data-halte]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const id = b.getAttribute('data-halte');
+      halteOffen[id] = !halteOffen[id];
+      zeichne();
     });
   });
 

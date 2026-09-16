@@ -232,7 +232,7 @@ final class TransitCalc
      * @return list<array<string,mixed>>
      */
     public static function Verbindungen(array $roh, int $hoechstens = 3, int $nichtNach = 0,
-                                       bool $nurDirekt = false): array
+                                       bool $nurDirekt = false, bool $mitHalten = false): array
     {
         $raus = [];
         foreach ((array)($roh['journeys'] ?? []) as $v) {
@@ -253,7 +253,7 @@ final class TransitCalc
             $roh_abschnitte = [];
             foreach ($v['legs'] as $leg) {
                 if (is_array($leg)) {
-                    $roh_abschnitte[] = self::Hauptabschnitt($leg);
+                    $roh_abschnitte[] = self::Hauptabschnitt($leg, $mitHalten);
                 }
             }
             $abschnitte = self::MitFusswegen($roh_abschnitte);
@@ -327,6 +327,43 @@ final class TransitCalc
     }
 
     /**
+     * Die Haltestellenfolge eines Abschnitts, zum Ausklappen in der Kachel.
+     *
+     * Je Halt nur, was angezeigt wird: Name und Uhrzeit. Die EFA liefert an den
+     * Zwischenhalten in aller Regel nur die PLANzeit — eine Echtzeit steht dort
+     * nur, wenn das Verkehrsunternehmen sie meldet; dann gilt sie.
+     *
+     * Aufeinanderfolgende Gleiche fallen zusammen, wie beim Zaehlen auch: „D-
+     * Eller S" stand in einer echten Antwort zweimal hintereinander, einmal je
+     * Steig.
+     *
+     * @param mixed $folge
+     * @return list<array{n:string,t:string}>
+     */
+    private static function Haltefolge(mixed $folge): array
+    {
+        if (!is_array($folge)) {
+            return [];
+        }
+        $raus = [];
+        foreach ($folge as $halt) {
+            if (!is_array($halt)) {
+                continue;
+            }
+            $name = trim((string)($halt['name'] ?? ''));
+            if ($name === '' || $name === ($raus[count($raus) - 1]['n'] ?? null)) {
+                continue;
+            }
+            $zeit = self::Zeitstempel($halt['departureTimeEstimated'] ?? null)
+                 ?: self::Zeitstempel($halt['departureTimePlanned'] ?? null)
+                 ?: self::Zeitstempel($halt['arrivalTimeEstimated'] ?? null)
+                 ?: self::Zeitstempel($halt['arrivalTimePlanned'] ?? null);
+            $raus[] = ['n' => $name, 't' => $zeit > 0 ? date('H:i', $zeit) : ''];
+        }
+        return $raus;
+    }
+
+    /**
      * Die Auslastung, wie die Verkehrsunternehmen sie melden.
      *
      * Sie steht NICHT an jedem Abschnitt — am 16.09.2026 gemessen: an einem von
@@ -354,7 +391,7 @@ final class TransitCalc
      * @param array<string,mixed> $leg
      * @return array{seg:array<string,mixed>,fuss:list<array{pos:string,dauer:int,drin:bool}>}
      */
-    private static function Hauptabschnitt(array $leg): array
+    private static function Hauptabschnitt(array $leg, bool $mitHalten = false): array
     {
         $t = is_array($leg['transportation'] ?? null) ? $leg['transportation'] : [];
         $p = is_array($t['product'] ?? null) ? $t['product'] : [];
@@ -391,6 +428,12 @@ final class TransitCalc
             'platformTo'  => (string)($z['properties']['platformName'] ?? ''),
             'stops'       => $istFuss ? 0 : self::Zwischenhalte($leg['stopSequence'] ?? null),
             'occupancy'   => self::Auslastung($o['properties']['occupancy'] ?? null),
+            /* Die Haltestellenfolge kommt NUR mit, wenn eine Ansicht sie zeigt:
+               vierzehn Halte je Abschnitt sind rund 600 Byte, und die Kachel
+               bekommt ihre Nutzlast bei jedem Abruf neu. */
+            'halte'       => ($mitHalten && !$istFuss)
+                ? self::Haltefolge($leg['stopSequence'] ?? null)
+                : [],
         ];
 
         /* Die Fußwege stehen NICHT als eigener Abschnitt in der Antwort, sondern
@@ -483,6 +526,7 @@ final class TransitCalc
                     'platformTo'  => '',
                     'stops'       => 0,
                     'occupancy'   => '',
+                    'halte'       => [],
                 ];
                 if ($vorher) {
                     $vor[] = $weg;
@@ -545,6 +589,7 @@ final class TransitCalc
                         'platformTo'  => '',
                         'stops'       => 0,
                         'occupancy'   => '',
+                        'halte'       => [],
                     ];
                 }
             }
