@@ -1,7 +1,7 @@
 # SymDo - VRR Transit
 
-**Die Abfahrtstafel für zu Hause — und ein Schulweg, der von selbst weiß, in
-welche Richtung er heute geht.**
+**Die Abfahrtstafel für zu Hause — und ein Schulweg, der von selbst weiß, wann und in
+welche Richtung er geht.**
 
 Ein Blick an die Wand genügt: Wann fährt der nächste Bus? Reicht die Zeit noch
 für einen Kaffee? Und wie kommt das Kind heute zur Schule? Die Kachel zeigt
@@ -55,7 +55,6 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
 | Symcon | ab 8.1 |
 | **SymDo Gateway** | Pflicht — von dort kommen die Familienmitglieder |
 | **SymDo Stundenplan** | nur für den Schulweg |
-| Anmelden, registrieren, bezahlen | nichts davon |
 
 Ohne Stundenplan läuft die Kachel genauso; nur eine Strecke mit *Schulweg*
 bleibt dann leer.
@@ -65,14 +64,13 @@ bleibt dann leer.
 1. Instanz **SymDo - VRR Transit** anlegen; als übergeordnete Instanz das
    vorhandene SymDo Gateway wählen (die Konsole schlägt es vor).
 2. **Haltestelle suchen** aufklappen, den Ort mit eingeben — das grenzt die
-   Treffer stark ein — und **Als Haltestelle übernehmen**. Die Kennung der
-   Haltestelle (`de:05111:18235`) kommt aus der Suche.
+   Treffer stark ein — und **Als Haltestelle übernehmen**. Um die Kennung der
+   Haltestelle muss man sich nicht kümmern, die kommt aus der Suche.
 3. In der Liste **Haltestellen** je Zeile einstellen:
 
 | Spalte | Bedeutung |
 |---|---|
 | Name | wie die Karte überschrieben wird |
-| Haltestellen-Kennung | kommt aus der Suche |
 | Zeigen | ohne Haken erscheint sie nicht auf der Tafel und wird nicht abgerufen |
 | Für wen | leer = die ganze Familie |
 | Linien und Richtungen | je Linie und Ziel ein Haken — ohne Haken erscheint diese Tour nicht auf der Tafel |

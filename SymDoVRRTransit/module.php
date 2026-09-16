@@ -333,7 +333,15 @@ class SymDoVRRTransit extends IPSModuleStrict
         return [
                 ['caption' => $this->Translate('Name'), 'name' => 'name', 'width' => '180px',
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+                /* Die Kennung der Auskunft (`de:05111:18235`) braucht niemand zu
+                   sehen — sie kommt aus der Suche und wird nie getippt.
+                   `save` MUSS dabei stehen: es gilt von Haus aus nur fuer
+                   sichtbare, bearbeitbare Spalten, und ohne den Eintrag faellt
+                   der Wert beim Uebernehmen lautlos weg. Dann stuende die
+                   Haltestelle ohne Kennung in der Liste und wuerde nie wieder
+                   abgerufen. */
                 ['caption' => $this->Translate('Stop id'), 'name' => 'stopId', 'width' => '200px',
+                 'visible' => false, 'save' => true,
                  'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
                 /* Der Haken entscheidet ueber die Abfahrtstafel UND ueber den
                    Abruf: eine Haltestelle, die nur als Start oder Ziel einer
@@ -523,7 +531,7 @@ class SymDoVRRTransit extends IPSModuleStrict
             // Die Entfernung nur bei der Umkreissuche — sonst gibt es keine.
             $weite = isset($t['distance']) && (int)$t['distance'] > 0
                 ? '  (' . (int)$t['distance'] . ' m)' : '';
-            $optionen[] = ['caption' => $t['name'] . $weite . '  (' . $t['id'] . ')', 'value' => $t['id']];
+            $optionen[] = ['caption' => $t['name'] . $weite, 'value' => $t['id']];
         }
         $this->UpdateFormField('StopHit', 'options', json_encode($optionen));
         $this->UpdateFormField('StopHit', 'value', $treffer[0]['id']);
