@@ -155,7 +155,7 @@ body {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto repeat(7, var(--tagbreite));
   align-items: center; gap: 0;
-  padding: 0 10px 3px 10px;
+  padding: 2px 10px 3px 10px;
   font-size: 10px; font-weight: 700; color: var(--dezent);
 }
 .tagekopf .tag { text-align: center; }
@@ -462,7 +462,13 @@ function zeichnen() {
     else { ohne.push(a); }
   });
 
-  let html = tagekopfHtml();
+  /* Die Wochentage stehen unter dem ERSTEN Namen, nicht ueber allen Bloecken:
+     dort haben sie einen Bezug — sie gehoeren zu den Aemtchen, die gleich
+     darunter kommen. Ganz oben schwebten sie ueber der Kachel. Gezeigt werden
+     sie nur einmal; die Spalten sind fest breit und stehen deshalb auch in den
+     folgenden Bloecken an derselben Stelle. */
+  let kopfOffen = true;
+  let html = '';
   gruppen.forEach((liste2, id) => {
     const p = (zustand.members || {})[id] || {};
     /* Wer nichts hat, faellt weg — AUSSER er setzt aus: dass jemand Pause hat,
@@ -487,12 +493,19 @@ function zeichnen() {
       (aktiv ? '<div class="zahl">' + fuellen(txt('of', '%1$d of %2$d'), fertig, gesamt) + '</div>' : '') +
       (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined)
         ? '<div class="muenzen"><span>🪙</span>' + (beutel !== undefined ? beutel : verdient) + '</div>' : '') +
-      '</div>' + liste2.map((a) => aemtchenHtml(a, aktiv)).join('') + '</div>';
+      '</div>' +
+      (kopfOffen ? tagekopfHtml() : '') +
+      liste2.map((a) => aemtchenHtml(a, aktiv)).join('') + '</div>';
+    kopfOffen = false;
   });
   if (ohne.length > 0) {
+    /* Hat niemand ein Aemtchen, steht der Tageskopf hier — sonst gaebe es ihn
+       gar nicht, und die Spalten waeren unbeschriftet. */
     html += '<div class="person niemand"><div class="kopf">' +
       '<div class="bild">–</div><div class="name">' + txt('nobody', '—') + '</div></div>' +
+      (kopfOffen ? tagekopfHtml() : '') +
       ohne.map((a) => aemtchenHtml(a, false)).join('') + '</div>';
+    kopfOffen = false;
   }
   liste.innerHTML = html;
   binden();
