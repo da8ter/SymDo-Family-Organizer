@@ -425,6 +425,16 @@ body {
    unten: Halt, Fahrt, Halt — und je Fahrt laesst sich die Haltestellenfolge
    aufklappen. Aufgebaut ist jede Zeile als Raster aus Schiene und Inhalt; die
    Schiene malt jede Zeile SELBST, damit die Linie ohne Naht durchlaeuft. */
+/* Die Verbindungen stehen untereinander — keine Wisch-Schiene, kein
+   Seitwaerts. Getrennt werden sie durch eine feine Linie statt durch Abstand:
+   so sieht man, wo eine Fahrt aufhoert und die naechste anfaengt. */
+.vt-stapel { display: flex; flex-direction: column; gap: 12px; }
+/* `.fahrt` ist fuer die Wisch-Schiene gemacht: `flex: 0 0 100%` heisst dort
+   „eine Kachelbreite". Im senkrechten Stapel heisst dasselbe „eine Kachel-
+   HOEHE" — vier Verbindungen passten dann nicht mehr in die Karte, und drei
+   davon waren abgeschnitten (gemessen: nur die erste war zu sehen). */
+.vt-stapel > .fahrt { flex: 0 0 auto; }
+.vt-stapel > .fahrt + .fahrt { border-top: 1px solid var(--rand); padding-top: 12px; }
 .vt { display: flex; flex-direction: column; }
 .vt-zeile { display: grid; grid-template-columns: 26px 1fr; align-items: start; }
 .vt-schiene { position: relative; align-self: stretch; min-height: 14px; }
@@ -1058,8 +1068,9 @@ function streckenHtml() {
        die umsteigefreien Verbindungen nicht, die erst die zweite Anfrage
        zutage foerdert. */
     const alle = (nurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
+    const senkrecht = (zustand.routeStyle || 'bars') === 'vertical';
     const fahrten = alle.map(function (v, vi) {
-      /* Zwei Ansichten, eine Wahl im Formular: der Balken fasst die Fahrt in
+      /* Drei Ansichten, eine Wahl im Formular: der Balken fasst die Fahrt in
          einer Zeile zusammen, die Zeitachse legt sie auseinander. Gemeinsam ist
          ihnen nur die Karte drumherum — deshalb hier die Weiche und nicht im
          Balken selbst. */
@@ -1086,7 +1097,7 @@ function streckenHtml() {
     /* Die Verbindungen liegen NEBENEINANDER und werden gewischt — untereinander
        füllten fünf Stück die ganze Kachel, und die nächste Haltestelle wäre
        niemals ins Bild gekommen. Die Punkte darunter sagen, wo man ist. */
-    const punkte = alle.length > 1
+    const punkte = (alle.length > 1 && !senkrecht)
       ? '<div class="punkte">' + alle.map(function (_, i) {
           return '<span class="' + (i === 0 ? 'an' : '') + '"></span>';
         }).join('') + '</div>'
@@ -1096,9 +1107,15 @@ function streckenHtml() {
       + (hinweis ? '<span class="neben">' + esc(hinweis) + '</span>' : '')
       + (r.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
       + '</div>'
+      /* Die senkrechte Ansicht steht UNTEREINANDER, nicht in der Wisch-Schiene:
+         dort wischt man seitwaerts von Fahrt zu Fahrt, und genau das will man
+         hier nicht — man liest von oben nach unten und scrollt senkrecht. Die
+         Punkte darunter gehoeren zur Schiene und entfallen deshalb mit ihr. */
       + (fahrten
-          ? '<div class="fahrten" data-schiene="' + esc(streckenSchluessel(r)) + '">'
-            + fahrten + '</div>' + punkte
+          ? (senkrecht
+              ? '<div class="vt-stapel">' + fahrten + '</div>'
+              : '<div class="fahrten" data-schiene="' + esc(streckenSchluessel(r)) + '">'
+                + fahrten + '</div>' + punkte)
           : '<div class="leer">' + esc(translate(nurDirekt
               ? 'no journey without changes' : 'no journey found')) + '</div>')
       + '</div>';
