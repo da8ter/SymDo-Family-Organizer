@@ -304,7 +304,7 @@ body {
 .tl-spur .m:nth-last-child(2) .bahn { border-radius: 0 4px 4px 0; }
 .tl-fahrt.zweit .bahn { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
 .tl-fahrt .marke {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 9px;
   padding: 4px 11px; border-radius: 10px; background: var(--akzent);
   color: #fff; font-size: 15px; font-weight: 800; white-space: nowrap;
   max-width: 100%; overflow: hidden;
@@ -315,7 +315,23 @@ body {
 .tl-fahrt .marke, .tl-fahrt .marke i, .tl-fahrt .marke svg {
   color: #fff; fill: #fff; opacity: 1;
 }
-.tl-fahrt .marke svg { width: 1em; height: 1em; }
+/* Und der Strich dazu. Symcon liefert NUR den Light-Schnitt — gemessen: ein
+   `fa-solid` wird gar nicht erst ersetzt, das Zeichen waere schlicht weg.
+   Dessen Haarlinien wirken auf der Akzentflaeche grau und durchscheinend, egal
+   welche Farbe man ihnen gibt. Ein Kontur-Strich in derselben Farbe macht sie
+   so dick, dass das Zeichen deckt (Zeichenfeld 512 Einheiten, Strich 26 davon
+   sind bei 15 Pixeln rund ein Dreiviertelpixel auf jeder Seite). */
+/* Hoehe vorgeben, Breite mitlaufen lassen: die Zeichen sind NICHT quadratisch
+   (der Bus misst 576 zu 512), und eine feste Breite quetscht sie. */
+.tl-fahrt .marke svg { height: 1em; width: auto; }
+.tl-fahrt .marke b { font-weight: 800; }
+/* Der Abstand haengt NICHT am `gap` des Schilds: gemessen stand die Nummer
+   trotz `column-gap: 9px` genau an der Kante des Zeichens (Abstand 0). Was
+   Font Awesome beim Austausch von <i> gegen <svg> im Einzelnen anstellt, muss
+   man dafuer gar nicht wissen — ein eigener Rand am Zeichen wirkt in jedem
+   Fall. */
+.tl-fahrt .marke svg, .tl-fahrt .marke i { margin-right: 9px; }
+.tl-fahrt .marke svg path { fill: #fff; stroke: #fff; stroke-width: 26; }
 .tl-fahrt.zweit .marke { background: color-mix(in srgb, var(--akzent) 45%, var(--content-color)); }
 
 /* Der Umstieg: gepunktet statt durchgezogen, weil man dort selbst laeuft. */
@@ -373,7 +389,7 @@ body {
   .tl-halt.u, .tl-halt.o { max-width: 86px; }
   .tl-halt.um.o { max-width: 76px; }
   /* Das Symbol im Linienschild faellt zuerst — die Nummer traegt die Auskunft. */
-  .tl-spur .marke { font-size: 12px; padding: 3px 6px; gap: 0; min-width: 0; }
+  .tl-spur .marke { font-size: 12px; padding: 3px 6px; gap: 4px; min-width: 0; }
   .tl-spur .marke i, .tl-spur .marke svg { display: none; }
   /* `:not(.marke)` ist kein Zierrat: die Liniennummer steckt ebenfalls in einem
      span in der oberen Zeile, und ohne die Ausnahme verschwand sie hier mit —
@@ -695,7 +711,11 @@ function zeitachseHtml(v, jetzt) {
          (gemessen bei 320 Pixeln Kachelbreite). Lieber eine Zeitachse, die
          nicht ganz massstaeblich ist, als eine ohne Liniennummer. */
       spalten.push('minmax(min-content, ' + Math.max(1, l.seconds || 1) + 'fr)');
-      oben = '<span class="marke">' + symbol(l.icon) + esc(l.line || l.product) + '</span>';
+      /* Die Nummer bekommt ein eigenes Element. Als blosser Text waere sie ein
+         anonymes Kind des Flex-Behaelters, und darauf ist beim Abstand kein
+         Verlass — im Prueflauf klebte sie am Zeichen, obwohl `gap` gesetzt war. */
+      oben = '<span class="marke">' + symbol(l.icon)
+           + '<b>' + esc(l.line || l.product) + '</b></span>';
       mitte = '<div class="bahn"></div>';
       unten = '<b>' + esc(min(l.seconds || 0)) + '</b>'
             + (l.stops > 0
