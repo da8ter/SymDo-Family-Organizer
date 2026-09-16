@@ -319,16 +319,31 @@
   .stunde .hw b {
     /* Sitzt AUF dem Symbol, nicht daneben: rechts buendig mit seinem Kasten,
        damit die Ecke links unten nicht breiter wird als das Fachsymbol oben.
-       Ohne Saum — auf der Fachfarbe traegt das Rot allein. */
-    position: absolute; top: -3px; right: 0;
+       Ohne Saum — auf der Fachfarbe traegt das Rot allein.
+       Weiter oben als frueher (-3px): so deckte die Zahl elf der sechzehn
+       Pixel des Buchsymbols zu, und man sah nur noch den roten Punkt. Jetzt
+       ueberlappt sie nur die obere Kante. Weiter hinauf geht nicht — bei der
+       niedrigsten Karte, die diesen Zweig noch benutzt (57px), stiesse sie
+       sonst an das Fachsymbol darueber. */
+    position: absolute; top: -7px; right: 0;
     min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box;
     border-radius: 999px; background: #E53935; color: #fff;
     font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
   }
-  /* Enge Karte: Symbol und Zaehler ruecken an die Kante, sonst stiesse der rote
-     Punkt an das Fachsymbol darueber. */
+  /* Enge Karte (unter 57px, im Betrieb der Normalfall: eine 45-Minuten-Stunde
+     misst dort 54px). Hier ist kein Platz, das Abzeichen ueber das Symbol zu
+     heben — gemessen bleiben zwischen Fachsymbol und Hausaufgabensymbol genau
+     6px. Frueher hing es UNTER dem Symbol und deckte zwoelf seiner sechzehn
+     Pixel zu; vom Buch war nichts mehr zu sehen, nur noch der rote Punkt.
+     Jetzt sitzt es in der oberen rechten ECKE und ein Stueck darueber hinaus:
+     es ueberlappt nur noch die Ecke, die linke Haelfte des Buches bleibt frei.
+     Kleiner ist es dort ausserdem — 12px statt 14px, damit es in die Ecke
+     passt, ohne an das Fachsymbol zu stossen. */
   .stunde.hw-eng .hw { bottom: 2px; }
-  .stunde.hw-eng .hw b { top: auto; bottom: -2px; }
+  .stunde.hw-eng .hw b {
+    top: -4px; bottom: auto; right: -5px;
+    min-width: 12px; height: 12px; line-height: 12px; font-size: 8px;
+  }
   /* Was sich keiner Stunde zuordnen liess, steht als Fusszeile unter der
      Spalte — eine Hausaufgabe, die nirgends erscheint, waere schlimmer als
      eine an ungenauer Stelle. */
