@@ -445,6 +445,10 @@ body {
 }
 .vt-schiene::before { top: 0; height: var(--knick, 50%); background: var(--o, transparent); }
 .vt-schiene::after  { top: var(--knick, 50%); bottom: 0; background: var(--u, transparent); }
+/* Der Fussweg endet im Freien, nicht an der Kante: runde Enden sagen „hier
+   hoert es auf", eine glatte Kante sieht abgeschnitten aus. */
+.vt-zeile.weg .vt-schiene::before { border-radius: 2px 2px 0 0; }
+.vt-zeile.weg .vt-schiene::after  { border-radius: 0 0 2px 2px; }
 .vt-schiene .pkt {
   position: absolute; left: 50%; top: var(--knick, 50%);
   transform: translate(-50%, -50%); z-index: 1;
@@ -970,9 +974,13 @@ function senkrechtHtml(v, schluessel) {
   let html = '';
   const anlauf = sek(0, fahrten[0]);
   if (anlauf > 0) {
+    /* Der Fussweg laeuft nicht bis an den Rand seiner Zeile: oben faengt seine
+       Schiene erst nach einem Drittel an, unten hoert sie nach zwei Dritteln
+       auf. Sonst stiess sie glatt an das, was daneben steht — unten an die
+       Kennzahlenzeile, und es sah aus, als liefe der Strich dahinter weiter. */
     html += zeile('weg', 'transparent', blass,
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(anlauf)) + '</b> '
-      + esc(translate('on foot')), '0px', false);
+      + esc(translate('on foot')), '34%', false);
   }
 
   fahrten.forEach(function (idx, k) {
@@ -1040,7 +1048,7 @@ function senkrechtHtml(v, schluessel) {
   if (auslauf > 0) {
     html += zeile('weg', blass, 'transparent',
       '<b>' + symbol('fa-person-walking') + ' ' + esc(min(auslauf)) + '</b> '
-      + esc(translate('on foot')), '100%', false);
+      + esc(translate('on foot')), '66%', false);
   }
 
   return '<div class="vt">' + html + '</div>' + werteHtml(v);
