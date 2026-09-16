@@ -280,7 +280,18 @@ body {
 /* Die Minutenzeile spiegelt den Balken: gleiche Anteile, gleiche Polsterung —
    so sitzt jede Zahl unter ihrem Stück. Abgeschnitten statt umgebrochen, sonst
    verschiebt ein zu langes Wort die ganze Reihe. */
-.fahrt .fuss { display: flex; justify-content: space-between; font-size: 10px; color: var(--dezent); margin-top: 2px; }
+/* Start links, Ziel rechts — und jedes in seiner Haelfte. Ohne die halbe
+   Breite und das Auslassungszeichen schob ein langer Startname das Ziel aus
+   der Kante, und „rechtsbuendig" galt dann nur noch fuer kurze Namen. */
+.fahrt .fuss {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 10px; color: var(--dezent); margin-top: 2px;
+}
+.fahrt .fuss span {
+  min-width: 0; max-width: 50%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fahrt .fuss span + span { text-align: right; }
 /* ── Ausfuehrliche Streckenansicht (Zeitachse) ──────────────────────────
    Umschaltbar im Formular: „Kompakt (Balken)" oder „Ausfuehrliche Zeitachse".
 
