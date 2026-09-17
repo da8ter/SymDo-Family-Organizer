@@ -30,6 +30,10 @@ trait TransitBridge
         }
         $haltestellen = [];
         $strecken     = [];
+        /* Der Steig-Schalter gilt der ANZEIGE, nicht der einzelnen Haltestelle.
+           Gibt es mehrere VRR-Instanzen, gewinnt die erste, die ihn abschaltet:
+           wer ihn irgendwo nicht sehen will, will ihn nirgends sehen. */
+        $steigZeigen = true;
         foreach ((array)@IPS_GetInstanceListByModuleID(self::TRANSIT_MODULE_GUID) as $id) {
             try {
                 $roh = json_decode((string)@SDVT_GetBoard((int)$id), true);
@@ -39,6 +43,9 @@ trait TransitBridge
             }
             if (!is_array($roh)) {
                 continue;
+            }
+            if (($roh['showPlatform'] ?? true) === false) {
+                $steigZeigen = false;
             }
             foreach ((array)($roh['stops'] ?? []) as $s) {
                 if (is_array($s)) {
@@ -54,7 +61,9 @@ trait TransitBridge
         if ($haltestellen === [] && $strecken === []) {
             return ['ok' => true, 'transit' => null];
         }
-        return ['ok' => true, 'transit' => ['stops' => $haltestellen, 'routes' => $strecken]];
+        return ['ok' => true, 'transit' => [
+            'stops' => $haltestellen, 'routes' => $strecken, 'showPlatform' => $steigZeigen,
+        ]];
     }
 
     /**

@@ -303,6 +303,8 @@ class SymDoVRRTransit extends IPSModuleStrict
                          ['caption' => $this->Translate('Detailed timeline'), 'value' => 'timeline'],
                          ['caption' => $this->Translate('Vertical, with stops'), 'value' => 'vertical'],
                      ]],
+                    ['type' => 'CheckBox', 'name' => 'ShowPlatform',
+                     'caption' => $this->Translate('Show platform')],
                     ['type' => 'List', 'name' => 'Modes', 'caption' => $this->Translate('Colours and icons'),
                      'rowCount' => 10, 'add' => false, 'delete' => false,
                      'columns' => [

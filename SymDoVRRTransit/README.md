@@ -69,6 +69,11 @@ hingeht: lange im Bus, kurz umsteigen, zehn Minuten zu Fuß.
   Ausschlag, weil Linie und Knopf hineinpassen müssen. Am schönsten auf einer
   hohen Kachel.
 
+**Steig anzeigen?** Unter *Darstellung* lässt sich die Spalte mit dem Steig
+abschalten — an Haltestellen mit nur einem Steig ist sie nur Breite. Der Haken
+gilt überall: Abfahrtstafel, beide ausführlichen Streckenansichten und die
+Web-App.
+
 **Farben und Symbole nach Verkehrsmittel.** Jede Fahrt trägt die Farbe ihrer
 Gattung — S-Bahn grün, U-Bahn blau, Straßenbahn rot, Bus violett, Regionalzug
 schiefergrau, Fernzug dunkelrot. So sieht man auf einen Blick, worin man sitzt.

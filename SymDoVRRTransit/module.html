@@ -161,6 +161,9 @@ body {
   grid-template-columns: 26px 54px minmax(0, 1fr) auto auto auto;
   align-items: center; column-gap: 8px;
 }
+/* Ohne Steig sind es fuenf Spalten. Die Zeilen spannen ueber `1 / -1` und
+   folgen von selbst. */
+.abfahrten.ohne-steig { grid-template-columns: 26px 54px minmax(0, 1fr) auto auto; }
 .abfahrt {
   display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;
   align-items: center; padding: 4px 0; border-top: 1px solid var(--rand);
@@ -764,7 +767,14 @@ function gruppiert(eintraege, karteBauen) {
   }).join('');
 }
 
+/* Ob der Steig angezeigt wird, entscheidet das Formular. Fehlt die Angabe
+   (alte Nutzlast), bleibt es beim Anzeigen — so war es vorher. */
+function steigZeigen() {
+  return zustand.showPlatform !== false;
+}
+
 function abfahrtenHtml() {
+  const steigAn = steigZeigen();
   const stops = zustand.stops || [];
   if (stops.length === 0) { return '<div class="leer">' + esc(translate('No stop set up')) + '</div>'; }
   return gruppiert(stops, function (s) {
@@ -790,9 +800,12 @@ function abfahrtenHtml() {
            folgenden Spalten nach und nichts steht mehr untereinander. */
         + '<span class="wann">' + wann + '</span>'
         + '<span class="spaet">' + (d.delay > 0 ? '+' + d.delay : '') + '</span>'
-        + '<span class="steig">'
-        + (d.platform ? esc(translate('Pl.')) + ' ' + esc(d.platform) : '')
-        + '</span></div>';
+        + (steigAn
+            ? '<span class="steig">'
+              + (d.platform ? esc(translate('Pl.')) + ' ' + esc(d.platform) : '')
+              + '</span>'
+            : '')
+        + '</div>';
     }).join('');
     return '<div class="karte">'
       + '<div class="titel"><span>' + esc(s.name) + '</span>'
@@ -800,7 +813,7 @@ function abfahrtenHtml() {
       + (s.stale ? '<span class="veraltet">' + esc(translate('outdated')) + '</span>' : '')
       + '</div>'
       + (zeilen
-          ? '<div class="abfahrten">' + zeilen + '</div>'
+          ? '<div class="abfahrten' + (steigAn ? '' : ' ohne-steig') + '">' + zeilen + '</div>'
           : '<div class="leer">' + esc(translate('no departures')) + '</div>')
       + '</div>';
   });
@@ -952,7 +965,8 @@ function zeitachseHtml(v, jetzt) {
           : '';
       } else {
         unten = '<b>' + esc(t.name || '') + '</b>'
-              + (t.steig ? '<span>' + esc(translate('Pl.')) + ' ' + esc(t.steig) + '</span>' : '');
+              + (t.steig && steigZeigen()
+                  ? '<span>' + esc(translate('Pl.')) + ' ' + esc(t.steig) + '</span>' : '');
       }
     } else if (t.typ === 'fahrt') {
       const l = t.leg;
@@ -1184,7 +1198,8 @@ function senkrechtHtml(v, schluessel) {
     html += zeile('vt-halt', vorher, farbe(k),
       '<div class="zeit">' + esc(l.depText) + '</div>'
       + '<div class="name">' + esc(l.from) + '</div>'
-      + (l.platform ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platform) + '</div>' : ''),
+      + (l.platform && steigZeigen()
+          ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platform) + '</div>' : ''),
       '9px', true);
 
     /* Die Fahrt selbst */
@@ -1227,7 +1242,8 @@ function senkrechtHtml(v, schluessel) {
     html += zeile('vt-halt', farbe(k), letzteFahrt ? danach : 'punkte',
       '<div class="zeit">' + esc(l.arrText) + '</div>'
       + '<div class="name">' + esc(l.to) + '</div>'
-      + (l.platformTo ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platformTo) + '</div>' : ''),
+      + (l.platformTo && steigZeigen()
+          ? '<div class="steig">' + esc(translate('Pl.')) + ' ' + esc(l.platformTo) + '</div>' : ''),
       '9px', true);
 
     if (!letzteFahrt) {

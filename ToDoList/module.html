@@ -723,6 +723,9 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
   grid-template-columns: 22px 60px minmax(0, 1fr) auto auto auto;
   align-items: center; column-gap: 10px;
 }
+/* Ohne Steig sind es fuenf Spalten. Die Zeilen spannen ueber `1 / -1` und
+   folgen von selbst. */
+.nv-tafel.nv-ohne-gleis { grid-template-columns: 22px 60px minmax(0, 1fr) auto auto; }
 .nv-zeile {
   display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;
   align-items: center; padding: 6px 0; border-top: 1px solid var(--border);
@@ -8766,6 +8769,9 @@ function renderTransit() {
   if (titel) { titel.textContent = translate('Transit'); }
   const nv = transitEintraege();
 
+  /* Ob der Steig angezeigt wird, entscheidet das VRR-Modul im Formular. Fehlt
+     die Angabe (alte Nutzlast), bleibt es beim Anzeigen — so war es vorher. */
+  const steigAn = nv.showPlatform !== false;
   const tafeln = nv.stops.map(st => {
     const zeilen = (st.departures || []).map(d => {
       // Mit gepflegtem Fussweg zaehlt „wann muss ich los", sonst „wann faehrt es".
@@ -8782,14 +8788,16 @@ function renderTransit() {
            folgenden Spalten nach und nichts steht mehr untereinander. */
         + `<span class="nv-wann">${wann}</span>`
         + `<span class="nv-spaet">${d.delay > 0 ? '+' + d.delay : ''}</span>`
-        + `<span class="nv-gleis">${d.platform ? translate('Pl.') + ' ' + escapeHtml(d.platform) : ''}</span>`
+        + (steigAn
+            ? `<span class="nv-gleis">${d.platform ? translate('Pl.') + ' ' + escapeHtml(d.platform) : ''}</span>`
+            : '')
         + `</div>`;
     }).join('');
     return `<div class="card nv-karte"><div class="nv-kopf"><h3>${escapeHtml(st.name)}</h3>`
       + (st.walk > 0 ? `<span class="nv-neben">${escapeHtml(translate('incl. %s min walk').replace('%s', st.walk))}</span>` : '')
       + (st.stale ? `<span class="nv-alt">${translate('outdated')}</span>` : '')
       + `</div>${zeilen
-          ? `<div class="nv-tafel">${zeilen}</div>`
+          ? `<div class="nv-tafel${steigAn ? '' : ' nv-ohne-gleis'}">${zeilen}</div>`
           : `<div class="empty-state">${translate('no departures')}</div>`}</div>`;
   }).join('');
 

@@ -56,6 +56,7 @@ trait TransitStore
         $this->RegisterPropertyInteger('SchoolBuffer', 10);
         $this->RegisterPropertyString('DefaultView', 'departures');
         $this->RegisterPropertyString('RouteStyle', 'bars');
+        $this->RegisterPropertyBoolean('ShowPlatform', true);
         /* Das Aussehen je Verkehrsmittel. Die Vorgabe steht in TransitCalc und
            wird hier einmal als Liste eingetragen, damit der Nutzer im Formular
            gleich alle Gattungen vor sich hat statt einer leeren Tabelle. */
@@ -854,6 +855,9 @@ trait TransitStore
                Schalter in der Kachel, sondern nur das Formular. Wer beides
                sehen will, ändert es dort — die Kachel zeichnet danach neu. */
             'routeStyle' => $stil,
+            /* Ob der Steig ueberhaupt angezeigt wird. An kleinen Haltestellen
+               gibt es nur einen, dann ist die Angabe nur Breite. */
+            'showPlatform' => ($cfg['ShowPlatform'] ?? true) !== false,
             'stops'    => $haltestellen,
             'routes'   => $strecken,
             'blocked'  => $this->TransitGesperrt($jetzt),

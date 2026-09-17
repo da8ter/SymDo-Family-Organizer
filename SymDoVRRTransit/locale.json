@@ -151,7 +151,8 @@
             "Fähre": "Fähre",
             "Seilbahn": "Seilbahn",
             "Sonstige": "Sonstige",
-            "Fußweg": "Fußweg"
+            "Fußweg": "Fußweg",
+            "Show platform": "Steig anzeigen"
         }
     }
 }
