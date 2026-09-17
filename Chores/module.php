@@ -11,16 +11,12 @@ require_once __DIR__ . '/libs/ChoreStore.php';
  * wer diese Woche den Müll rausbringt, wer den Tisch abräumt. Die Routinen
  * sind das Gegenstück für den Tag (Häkchenlisten, die sich abends
  * zurücksetzen); hier geht es um die Woche und um die Reihe, wer dran ist.
- *
- * Punkte für erledigte Ämtchen landen im Münzbeutel der Routinen — ein Konto,
- * ein Guthaben, aus dem die Eltern auszahlen.
  */
 class SymDoChores extends IPSModuleStrict
 {
     use ChoreStore;
 
     private const GATEWAY_GUID  = '{E677FE7B-28C9-4124-8B58-8A1FE2657E8D}';
-    private const ROUTINES_GUID = '{B1DF065E-80F5-49DF-B2B8-3CE657ED23BB}';
 
     /**
      * „connect" statt „require": an EINEM Gateway hängen mehrere Kacheln.
@@ -50,8 +46,13 @@ class SymDoChores extends IPSModuleStrict
         // SelectTime trägt seinen Wert als JSON, wie im Briefing und in den Routinen.
         $this->RegisterPropertyString('ResetTime', '{"hour":3,"minute":0,"second":0}');
         $this->RegisterPropertyBoolean('CarryOver', false);
-        $this->RegisterPropertyBoolean('PointsEnabled', false);
-        $this->RegisterPropertyInteger('RoutinesInstanceID', 0);
+        /* Was die Kachel zeigt. Alles an — wer etwas nicht braucht, schaltet es
+           ab; die Tabelle selbst bleibt immer. */
+        $this->RegisterPropertyBoolean('ShowMembers', true);
+        $this->RegisterPropertyBoolean('ShowProgress', true);
+        $this->RegisterPropertyBoolean('ShowUpNext', true);
+        $this->RegisterPropertyBoolean('ShowBanner', true);
+
         /* Bleiben REGISTRIERT, obwohl die Kachel keine andere Woche mehr zeigt:
            eine Eigenschaft zu entfernen hiesse, sie aus jedem bestehenden
            Bestand zu werfen, und gewonnen waere nichts. Aus dem Formular sind
@@ -64,7 +65,6 @@ class SymDoChores extends IPSModuleStrict
         $this->RegisterAttributeString('LastWeek', '{}');
         // Handkurbel: verschiebt die Rotation um Personen, ab nächster Woche.
         $this->RegisterAttributeInteger('Shift', 0);
-        $this->RegisterAttributeString('PurseMirror', '{}');
         $this->RegisterAttributeString('KnownVarIdents', '[]');
         $this->RegisterAttributeBoolean('ParentMigrated', false);
 
@@ -163,8 +163,8 @@ class SymDoChores extends IPSModuleStrict
 
     /**
      * Die Rotation um Personen weiterdrehen. Wirkt AB DER NÄCHSTEN WOCHE — die
-     * laufende steht eingefroren, damit gesetzte Häkchen und gebuchte Punkte
-     * nicht plötzlich an einer anderen Person hängen.
+     * laufende steht eingefroren, damit gesetzte Häkchen nicht plötzlich an
+     * einer anderen Person hängen.
      */
     public function Rotate(int $Personen): string
     {
@@ -195,16 +195,6 @@ class SymDoChores extends IPSModuleStrict
             $zeilen[] = $w['week'] . '  ' . implode(' · ', $teile);
         }
         return $zeilen === [] ? '—' : implode("\n", $zeilen);
-    }
-
-    /**
-     * Der Münzstand eines Mitglieds, wie ihn die Kachel zeigt. Für Skripte und
-     * den Sprachdialog.
-     */
-    public function GetPoints(string $MemberID): int
-    {
-        $stand = $this->Muenzstaende();
-        return (int)($stand[trim($MemberID)] ?? 0);
     }
 
     // ------------------------------------------------------------------
@@ -240,7 +230,6 @@ class SymDoChores extends IPSModuleStrict
     public function GetConfigurationForm(): string
     {
         $mitglieder = $this->MitgliederOptionen();
-        $punkteAn = $this->EinstellungJa('PointsEnabled');
 
         // Wer-Spalte: Gruppen zuerst, dann jedes Mitglied einzeln (festes Ämtchen).
         $wer = [
@@ -265,6 +254,11 @@ class SymDoChores extends IPSModuleStrict
                Symbole der Visu sind ueberall dieselben. */
             ['caption' => $this->Translate('Icon'), 'name' => 'icon', 'width' => '90px',
              'add' => '', 'edit' => ['type' => 'SelectIcon']],
+            /* Die Farbe des Symbolkreises. -1 heisst „keine gewaehlt"; dann
+               nimmt die Kachel ihre eigene Leiter, damit zwei Aemtchen nie
+               gleich aussehen. */
+            ['caption' => $this->Translate('Colour'), 'name' => 'color', 'width' => '100px',
+             'add' => -1, 'edit' => ['type' => 'SelectColor']],
             ['caption' => $this->Translate('Chore'), 'name' => 'name', 'width' => 'auto',
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
             // Die Wochentage als sieben Haken, in der Reihenfolge der Anzeige.
@@ -283,11 +277,6 @@ class SymDoChores extends IPSModuleStrict
                  ['caption' => $this->Translate('daily'), 'value' => 'day'],
              ]]],
         ];
-        if ($punkteAn) {
-            $aemtchenSpalten[] = ['caption' => $this->Translate('Points'), 'name' => 'points', 'width' => '90px',
-                'add' => 5, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0]];
-        }
-
         $tage = [
             ['caption' => $this->Translate('Monday'), 'value' => 1],
             ['caption' => $this->Translate('Tuesday'), 'value' => 2],
@@ -339,11 +328,12 @@ class SymDoChores extends IPSModuleStrict
                         ['type' => 'SelectTime', 'name' => 'ResetTime', 'caption' => $this->Translate('Week changes at')],
                         ['type' => 'Label', 'caption' => $this->Translate('Sunday evening still belongs to the old week — the change happens at the set time.')],
                         ['type' => 'CheckBox', 'name' => 'CarryOver', 'caption' => $this->Translate('Carry unfinished chores into the new week')],
-                        ['type' => 'CheckBox', 'name' => 'PointsEnabled', 'caption' => $this->Translate('Book points into the coin purse of the routines')],
-                        ['type' => 'Select', 'name' => 'RoutinesInstanceID', 'caption' => $this->Translate('Routines instance'),
-                         'options' => $this->RoutinenOptionen()],
-                        ['type' => 'Label', 'caption' => $this->Translate('Points land in the coin purse of the chosen routines instance — the same account the parents pay out from. Without a routines instance the chores work, just without points.')],
                         ['type' => 'Label', 'caption' => $this->Translate('The gateway provides the family members with photos. Which gateway is used is decided by the parent instance, to be set in the console.')],
+                        ['type' => 'Label', 'caption' => $this->Translate('Display')],
+                        ['type' => 'CheckBox', 'name' => 'ShowMembers', 'caption' => $this->Translate('Show the overview cards per family member')],
+                        ['type' => 'CheckBox', 'name' => 'ShowProgress', 'caption' => $this->Translate('Show overall progress')],
+                        ['type' => 'CheckBox', 'name' => 'ShowUpNext', 'caption' => $this->Translate('Show the next chores')],
+                        ['type' => 'CheckBox', 'name' => 'ShowBanner', 'caption' => $this->Translate('Show the closing note')],
                     ],
                 ],
             ],
@@ -403,21 +393,6 @@ class SymDoChores extends IPSModuleStrict
         return $raus;
     }
 
-    private function RoutinenOptionen(): array
-    {
-        $optionen = [['caption' => $this->Translate('— please select —'), 'value' => 0]];
-        $ids = (array)@IPS_GetInstanceListByModuleID(self::ROUTINES_GUID);
-        foreach ($ids as $id) {
-            $optionen[] = ['caption' => sprintf('%s (#%d)', (string)@IPS_GetName((int)$id), (int)$id), 'value' => (int)$id];
-        }
-        usort($optionen, static fn(array $a, array $b): int => ((int)$a['value'] === 0 ? -1 : strcmp((string)$a['caption'], (string)$b['caption'])));
-        $gewaehlt = $this->EinstellungZahl('RoutinesInstanceID');
-        if ($gewaehlt > 0 && !in_array($gewaehlt, array_map('intval', array_column($optionen, 'value')), true)) {
-            $optionen[] = ['caption' => sprintf($this->Translate('%s (not found)'), '#' . $gewaehlt), 'value' => $gewaehlt];
-        }
-        return $optionen;
-    }
-
     /**
      * Der Spenden-Block, wie ihn die anderen Module zeigen. Er steht EINMAL in
      * ToDoOverview/form.json und wird von dort ab „DonationHeader" übernommen —
@@ -448,12 +423,11 @@ class SymDoChores extends IPSModuleStrict
     // ------------------------------------------------------------------
 
     /**
-     * Je Ämtchen „erledigt" und „ist dran", je Mitglied die Punkte dieser
-     * Woche, dazu der Fortschritt der Woche.
+     * Je Ämtchen „erledigt" und „ist dran", dazu der Fortschritt der Woche.
      *
      * Nur MaintainVariable, KEINE Variablenprofile (nur Presentation-Arrays),
-     * und kein EnableAction: abgehakt wird über die Kachel. Ein zweiter
-     * Schreibweg über die Variable würde die Punktebuchung umgehen.
+     * und kein EnableAction: abgehakt wird über die Kachel — dort haengt die
+     * Sperre fuer kuenftige Tage.
      */
     private function VariablenPflegen(): void
     {
@@ -494,19 +468,6 @@ class SymDoChores extends IPSModuleStrict
             $gewollt[] = $identD;
             $gewollt[] = $identW;
             $pos += 10;
-        }
-
-        if ($this->EinstellungJa('PointsEnabled')) {
-            foreach ($this->TeilnehmerLesen() as $z) {
-                $ident = 'POINTS_' . $z['memberId'];
-                $this->MaintainVariable($ident, $this->Translate('Points this week'), VARIABLETYPE_INTEGER, [
-                    'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
-                    'ICON'         => 'coins',
-                    'DIGITS'       => 0,
-                ], $pos, true);
-                $gewollt[] = $ident;
-                $pos += 10;
-            }
         }
 
         /* Was nicht mehr gewollt ist, wird gelöscht. Der Typ ist dabei
@@ -552,11 +513,6 @@ class SymDoChores extends IPSModuleStrict
             @$this->SetValue('WHO_' . $a['id'], $wer === ''
                 ? $this->Translate('— none —')
                 : (string)($mitglieder[$wer]['name'] ?? $wer));
-        }
-        if ($this->EinstellungJa('PointsEnabled')) {
-            foreach ($this->TeilnehmerLesen() as $z) {
-                @$this->SetValue('POINTS_' . $z['memberId'], (int)($stand['earned'][$z['memberId']] ?? 0));
-            }
         }
     }
 

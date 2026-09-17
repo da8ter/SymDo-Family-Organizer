@@ -15,7 +15,7 @@ declare(strict_types=1);
  * gespeicherter Zeiger driftet (ein verpasster Timer überspringt eine Woche,
  * eine Rücksicherung springt zurück); eine rein berechnete Zuweisung würde
  * dagegen die laufende Woche mitten in der Woche neu verteilen, sobald jemand
- * eine Zeile ändert — Häkchen und gebuchte Punkte hingen dann an der falschen
+ * eine Zeile ändert — die Häkchen hingen dann an der falschen
  * Person. Also: die Formel ist die Wahrheit für jede Woche, die laufende steht
  * eingefroren im Attribut und wird beim Wechsel verworfen.
  */
@@ -98,7 +98,7 @@ trait ChoreStore
      * Versatz innerhalb des Kreises: das erste Ämtchen geht an den ersten
      * Teilnehmer der Woche, das zweite an den nächsten.
      *
-     * @return list<array{id:string,icon:string,name:string,points:int,perWeek:int,circle:string,rotate:string}>
+     * @return list<array{id:string,icon:string,name:string,perWeek:int,circle:string,rotate:string,color:string}>
      */
     private function AemtchenLesen(): array
     {
@@ -122,8 +122,9 @@ trait ChoreStore
                 /* Wie oft der Kreis weiterrückt: einmal je WOCHE (Vorgabe, wie
                    bisher) oder an jedem TAG, an dem das Ämtchen ansteht. */
                 'rotate'  => (string)($z['rotate'] ?? 'week') === 'day' ? 'day' : 'week',
+                /* Die gewählte Farbe als '#rrggbb' — oder leer. */
+                'color'   => $this->Farbe($z['color'] ?? -1),
                 'name'    => $name,
-                'points'  => max(0, (int)($z['points'] ?? 5)),
                 /* Wie oft in der Woche — das sagen jetzt die TAGE. Die alte
                    Spalte bleibt nur als Rückfall für Zeilen, die noch keine
                    Tage tragen. */
@@ -151,6 +152,19 @@ trait ChoreStore
      * @param array<string,mixed> $zeile
      * @return list<int>
      */
+    /**
+     * Eine gewählte Farbe als Hexwert für die Kachel.
+     *
+     * `SelectColor` legt eine Zahl ab (0xRRGGBB); -1 heißt „keine gewählt",
+     * und ältere Listen haben das Feld gar nicht. Beides ergibt einen leeren
+     * String — die Kachel nimmt dann ihre eigene Leiter.
+     */
+    private function Farbe(mixed $roh): string
+    {
+        $wert = is_numeric($roh) ? (int)$roh : -1;
+        return ($wert < 0 || $wert > 0xFFFFFF) ? '' : sprintf('#%06x', $wert);
+    }
+
     private function TageEinesAemtchens(array $zeile): array
     {
         $start = $this->WochenStartTag();
@@ -653,7 +667,7 @@ trait ChoreStore
      * Die Plätze eines Ämtchens in dieser Woche: die regulären und die
      * Überträge der Vorwoche.
      *
-     * @return list<array{key:string,done:bool,points:int,memberId:string,carried:bool}>
+     * @return list<array{key:string,done:bool,memberId:string,carried:bool}>
      */
     /**
      * Die sieben Wochentage als Kuerzel, beginnend beim eingestellten ersten
@@ -734,7 +748,7 @@ trait ChoreStore
            i-te Platz gehört also zum i-ten Tag — und die Spalte ist der
            Abstand dieses Tages zum Wochenstart. Die Platz-SCHLÜSSEL bleiben
            „0", „1", … : an ihnen hängen die gespeicherten Häkchen und die
-           gebuchten Punkte vergangener Wochen, die darf ein Umbau nicht
+           Haken vergangener Wochen, die darf ein Umbau nicht
            anfassen. */
         $tage = is_array($a['days'] ?? null) && $a['days'] !== [] ? $a['days'] : [$start];
         /* Taeglicher Wechsel: der Kreis rueckt an JEDEM Tag weiter, an dem das
@@ -763,7 +777,6 @@ trait ChoreStore
             $raus[] = [
                 'key'      => $k,
                 'done'     => $satz !== null,
-                'points'   => $satz !== null ? (int)($satz['p'] ?? 0) : $a['points'],
                 'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $dran,
                 'carried'  => false,
                 'day'      => (int)$iso,
@@ -795,7 +808,6 @@ trait ChoreStore
                 $raus[] = [
                     'key'      => $k,
                     'done'     => $satz !== null,
-                    'points'   => $satz !== null ? (int)($satz['p'] ?? 0) : $a['points'],
                     'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $halter,
                     'carried'  => true,
                     'day'      => 0,
@@ -838,7 +850,6 @@ trait ChoreStore
         }
         $platzDa = false;
         $halter = '';
-        $wert = $treffer['points'];
         $spalte = -1;
         $uebertrag = false;
         foreach ($this->PlaetzeFuer($woche, $treffer) as $p) {
@@ -847,9 +858,6 @@ trait ChoreStore
                 $halter = $p['memberId'];
                 $spalte = (int)($p['col'] ?? -1);
                 $uebertrag = ($p['carried'] ?? false) === true;
-                if (!$ziel) {
-                    $wert = $p['points'];
-                }
                 break;
             }
         }
@@ -859,7 +867,7 @@ trait ChoreStore
         /* Was noch nicht dran war, kann auch nicht erledigt sein. Die Kachel
            sperrt die kuenftigen Tage schon, aber darauf allein ist kein
            Verlass: eine nachgereichte oder wiederholte Anfrage muss hier
-           scheitern, sonst haengen Punkte an einem Tag, der noch aussteht.
+           scheitern, sonst haengt ein Haken an einem Tag, der noch aussteht.
            Der Uebertrag ist ausgenommen — er gehoert zu keinem Tag. */
         if (!$uebertrag && $this->InDerZukunft((string)($woche['week'] ?? ''), $spalte, $jetzt)) {
             return false;
@@ -870,11 +878,11 @@ trait ChoreStore
             return true;
         }
         if ($ziel) {
-            $erledigt[$platz] = ['p' => $wert, 'm' => $halter];
-            $this->PunkteBuchen($halter, $wert);
+            /* Gespeichert wird, WER es getan hat — mehr braucht der Plan nicht.
+               Das alte Feld „p" (Punkte) steht noch in Wochen von vor dem
+               17.09.2026; gelesen wird es nirgends mehr. */
+            $erledigt[$platz] = ['m' => $halter];
         } else {
-            $alt = is_array($erledigt[$platz]) ? $erledigt[$platz] : [];
-            $this->PunkteBuchen((string)($alt['m'] ?? $halter), -(int)($alt['p'] ?? $wert));
             unset($erledigt[$platz]);
         }
         if ($erledigt === []) {
@@ -884,111 +892,6 @@ trait ChoreStore
         }
         $this->WocheSchreiben($woche);
         return true;
-    }
-
-    // ------------------------------------------------------------------
-    // Punkte
-    // ------------------------------------------------------------------
-
-    /**
-     * Wie es um die Punkte steht: aus, keine Routinen-Instanz, mehrere
-     * (unklar) oder buchbar. Der Modus reist in die Kachel, damit sie schweigt
-     * statt zu lügen.
-     */
-    private function PunkteModus(): string
-    {
-        if (!$this->EinstellungJa('PointsEnabled')) {
-            return 'off';
-        }
-        $gewaehlt = $this->EinstellungZahl('RoutinesInstanceID');
-        if ($gewaehlt > 0) {
-            return $this->RoutinenInstanz() > 0 ? 'routines' : 'unavailable';
-        }
-        $ids = (array)@IPS_GetInstanceListByModuleID(self::ROUTINES_GUID);
-        if ($ids === []) {
-            return 'unavailable';
-        }
-        return count($ids) === 1 ? 'routines' : 'ambiguous';
-    }
-
-    /**
-     * Die Routinen-Instanz, in deren Münzbeutel gebucht wird.
-     *
-     * Automatisch nur bei GENAU EINER. Beim Gateway wählt GatewayInstanz() die
-     * niedrigste ID, dort ist eine falsche Wahl kosmetisch (ein falscher
-     * Avatar); hier schriebe sie Punkte in den falschen Beutel.
-     */
-    private function RoutinenInstanz(): int
-    {
-        $gewaehlt = $this->EinstellungZahl('RoutinesInstanceID');
-        if ($gewaehlt > 0 && @IPS_InstanceExists($gewaehlt)
-            && (@IPS_GetInstance($gewaehlt)['ModuleInfo']['ModuleID'] ?? '') === self::ROUTINES_GUID) {
-            return $gewaehlt;
-        }
-        $ids = (array)@IPS_GetInstanceListByModuleID(self::ROUTINES_GUID);
-        return count($ids) === 1 ? (int)$ids[0] : 0;
-    }
-
-    /**
-     * Punkte in den Münzbeutel der Routinen buchen.
-     *
-     * Präfix-Funktion mit function_exists und try/catch — die Bibliothek kennt
-     * keine Datenflüsse, und ein fehlendes Routinen-Modul darf nichts werfen.
-     *
-     * Fehlt die Instanz, wird NICHTS für später vorgemerkt: eine Warteschlange
-     * würde nach einer Rücksicherung doppelt buchen, und eine stille
-     * Doppelgutschrift ist schlimmer als eine ausgefallene.
-     */
-    private function PunkteBuchen(string $memberId, int $delta): void
-    {
-        if ($memberId === '' || $delta === 0 || $this->PunkteModus() !== 'routines') {
-            return;
-        }
-        $inst = $this->RoutinenInstanz();
-        if ($inst <= 0 || !function_exists('RTN_AdjustCoins')) {
-            return;
-        }
-        try {
-            $neu = (int)RTN_AdjustCoins($inst, $memberId, $delta);
-            $spiegel = json_decode((string)@$this->ReadAttributeString('PurseMirror'), true);
-            $spiegel = is_array($spiegel) ? $spiegel : [];
-            $spiegel[$memberId] = $neu;
-            @$this->WriteAttributeString('PurseMirror', (string)json_encode($spiegel));
-        } catch (\Throwable $e) {
-            $this->SendDebug('PunkteBuchen', $e->getMessage(), 0);
-        }
-    }
-
-    /**
-     * Der Münzstand je Mitglied. Der Spiegel ist die Rückfalllösung; existiert
-     * die Variable in der Routinen-Instanz, gilt sie — die Eltern können
-     * zwischendurch von Hand eingelöst haben.
-     *
-     * COINS_<Kennung> gibt es nur für Kinder, die auch in einer Routine
-     * vorkommen; für die anderen bleibt nur der Spiegel.
-     */
-    private function Muenzstaende(): array
-    {
-        $spiegel = json_decode((string)@$this->ReadAttributeString('PurseMirror'), true);
-        $raus = is_array($spiegel) ? $spiegel : [];
-        $inst = $this->PunkteModus() === 'routines' ? $this->RoutinenInstanz() : 0;
-        if ($inst > 0) {
-            foreach ($this->TeilnehmerLesen() as $z) {
-                /* try/catch und nicht nur @: fehlt die Variable, WIRFT Symcon
-                   hier (nicht nur eine Warnung), und eine Ausnahme mitten im
-                   Aufbau der Nutzlast liesse die Kachel leer. Ein Kind ohne
-                   Routine hat kein COINS_ — der Spiegel genuegt dann. */
-                try {
-                    $varID = @IPS_GetObjectIDByIdent('COINS_' . $z['memberId'], $inst);
-                    if (is_int($varID) && $varID > 0) {
-                        $raus[$z['memberId']] = (int)@GetValue($varID);
-                    }
-                } catch (\Throwable $e) {
-                    // kein Konto sichtbar — der Spiegel bleibt
-                }
-            }
-        }
-        return $raus;
     }
 
     // ------------------------------------------------------------------
@@ -1128,7 +1031,6 @@ trait ChoreStore
         $woche = $this->WocheSicherstellen($jetzt);
         $aemtchen = $this->AemtchenLesen();
         $mitglieder = $this->Mitglieder();
-        $modus = $this->PunkteModus();
         $pausiert = $this->Pausierte();
 
         $reihenfolge = [];
@@ -1147,7 +1049,6 @@ trait ChoreStore
         }
 
         $liste = [];
-        $verdient = [];
         $gesamt = 0;
         $fertig = 0;
         $heuteSpalte = $this->SpalteHeute((string)($woche['week'] ?? ''), $jetzt);
@@ -1167,16 +1068,13 @@ trait ChoreStore
                 if ($p['done']) {
                     $erledigt++;
                     $fertig++;
-                    if ($p['memberId'] !== '') {
-                        $verdient[$p['memberId']] = ($verdient[$p['memberId']] ?? 0) + $p['points'];
-                    }
                 }
             }
             $liste[] = [
                 'id'        => $a['id'],
                 'name'      => $a['name'],
                 'icon'      => $a['icon'],
-                'points'    => $a['points'],
+                'color'     => $a['color'],
                 'memberId'  => (string)($woche['assign'][$a['id']] ?? ''),
                 'doneCount' => $erledigt,
                 'total'     => count($plaetze),
@@ -1197,16 +1095,21 @@ trait ChoreStore
                die laufende ist). */
             'dayNames'   => $this->WochentagKuerzel(),
             'todayCol'   => $heuteSpalte,
-            'pointsMode' => $modus,
             'carryOver'  => $this->EinstellungJa('CarryOver'),
+            /* Welche Kaesten die Kachel zeigt. Die Tabelle steht nicht darin —
+               sie ist der Grund, warum jemand hinsieht. */
+            'show'       => [
+                'members'  => $this->EinstellungJa('ShowMembers', true),
+                'progress' => $this->EinstellungJa('ShowProgress', true),
+                'upNext'   => $this->EinstellungJa('ShowUpNext', true),
+                'banner'   => $this->EinstellungJa('ShowBanner', true),
+            ],
             'order'      => $reihenfolge,
             'members'    => $leute,
             'chores'     => $liste,
             'progress'   => $gesamt > 0 ? (int)round($fertig * 100 / $gesamt) : 0,
             'doneCount'  => $fertig,
             'totalCount' => $gesamt,
-            'earned'     => $verdient,
-            'purse'      => $modus === 'routines' ? $this->Muenzstaende() : [],
             'texts'      => $this->KachelTexte(),
         ];
     }
@@ -1221,7 +1124,6 @@ trait ChoreStore
             'family'   => $this->Translate('All participants'),
             'carried'  => $this->Translate('from last week'),
             'later'    => $this->Translate('not due yet'),
-            'points'   => $this->Translate('Points'),
             'empty'    => $this->Translate('No chores configured yet — add participants and chores in the instance settings.'),
             'carriedHint' => $this->Translate('Dashed circle: carried over from last week'),
             /* Die Tabellenansicht (17.09.2026): Kopf, Seitenspalte und Banner.

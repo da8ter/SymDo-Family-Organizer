@@ -98,10 +98,6 @@ body {
   font-size: 11px; color: var(--dezent); margin-top: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.person .muenzen {
-  display: inline-flex; align-items: center; gap: 3px; margin-left: 6px;
-  font-weight: 800; color: #f6b73c;
-}
 /* Der kleine Ring je Person: Fortschritt als Kreisausschnitt. */
 .ring {
   flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
@@ -156,6 +152,9 @@ body {
 #inhalt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; }
 @media (min-width: 820px) {
   #inhalt { grid-template-columns: minmax(0, 1fr) 270px; align-items: stretch; }
+  /* Sind BEIDE Kaesten der Seitenspalte abgeschaltet, gibt es keine zweite
+     Spalte — sonst bliebe rechts ein leerer Streifen von 270 px. */
+  #inhalt.ohne-seite { grid-template-columns: minmax(0, 1fr); }
 }
 #hinweis { padding: 0 6px 2px; font-size: 12px; color: var(--dezent); }
 #hinweis:empty { display: none; }
@@ -200,7 +199,6 @@ body {
 }
 .sym i, .sym svg { width: 16px; height: 16px; }
 #banner .pokal i, #banner .pokal svg { width: 24px; height: 24px; }
-.person .muenzen i, .person .muenzen svg { width: 12px; height: 12px; }
 .titel {
   min-width: 0; font-size: clamp(12px, 3.6vmin, 14px); font-weight: 700; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -463,6 +461,15 @@ function farbeVon(kennung) {
   return FARBEN[h % FARBEN.length];
 }
 /**
+ * Die Farbe eines Aemtchens: die im Formular gewaehlte, sonst die aus der
+ * Leiter. So sehen zwei Aemtchen nie gleich aus, auch wenn niemand eine Farbe
+ * vergeben hat.
+ */
+function aemtchenFarbe(a) {
+  const roh = (a && typeof a.color === 'string') ? a.color : '';
+  return /^#[0-9a-f]{6}$/i.test(roh) ? roh : farbeVon(a ? a.id : '');
+}
+/**
  * Die Farbe eines Mitglieds: die im Gateway gewaehlte, sonst die aus der
  * Leiter. So bleibt jedes Gesicht unterscheidbar, auch wenn niemand im
  * Formular eine Farbe vergeben hat.
@@ -557,10 +564,16 @@ function zeichnen() {
   }
   el('leer').textContent = '';
 
-  el('leute').innerHTML = leuteHtml(aemtchen);
+  /* Was gezeigt wird, entscheidet das Formular. Fehlt die Angabe (aeltere
+     Nutzlast), bleibt alles an — so war es vorher. */
+  const zeige = (zustand.show && typeof zustand.show === 'object') ? zustand.show : {};
+  const an = (schluessel) => zeige[schluessel] !== false;
+
+  el('leute').innerHTML = an('members') ? leuteHtml(aemtchen) : '';
   el('tafel').innerHTML = tafelHtml(aemtchen);
-  el('seite').innerHTML = seiteHtml(aemtchen);
-  el('banner').innerHTML = bannerHtml();
+  el('seite').innerHTML = seiteHtml(aemtchen, an);
+  el('banner').innerHTML = an('banner') ? bannerHtml() : '';
+  el('inhalt').classList.toggle('ohne-seite', !an('progress') && !an('upNext'));
   binden();
 }
 
@@ -598,18 +611,13 @@ function leuteHtml(aemtchen) {
        verstecken liesse die Verteilung willkuerlich aussehen. */
     if (s.total === 0 && !p.paused) { return ''; }
     const anteil = s.total > 0 ? Math.round(s.done * 100 / s.total) : 0;
-    const verdient = (zustand.earned || {})[id] || 0;
-    const beutel = (zustand.purse || {})[id];
-    const muenzen = (zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
-      ? '<span class="muenzen"><i class="fa-light fa-coins"></i>' +
-        (beutel !== undefined ? beutel : verdient) + '</span>' : '';
     return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + mitgliedFarbe(id) + '">' +
       '<div class="bild">' + bildHtml(p) + '</div>' +
       '<div class="text">' +
         '<div class="name">' + escHtml(p.name || id) + '</div>' +
         '<div class="stand">' + (p.paused && s.total === 0
           ? escHtml(txt('paused', 'Pause'))
-          : s.done + '/' + s.total + ' ' + escHtml(txt('done', 'done')) + muenzen) + '</div>' +
+          : s.done + '/' + s.total + ' ' + escHtml(txt('done', 'done'))) + '</div>' +
       '</div>' +
       (s.total > 0 ? '<div class="ring" style="--p:' + anteil + '"></div>' : '') +
       '</div>';
@@ -640,7 +648,7 @@ function zeileHtml(a, heute) {
   });
   return '<div class="zeile' + (alle ? ' fertig' : '') + '">' +
     '<div class="aufgabe">' +
-      '<div class="sym" style="--afarbe:' + farbeVon(a.id) + '">' + symbolHtml(a) + '</div>' +
+      '<div class="sym" style="--afarbe:' + aemtchenFarbe(a) + '">' + symbolHtml(a) + '</div>' +
       '<div class="titel">' + escHtml(a.name) + '</div>' +
     '</div>' +
     zellen.map((z, i) => '<div class="zelle' + (i === heute ? ' heute' : '') + '">' +
@@ -673,8 +681,8 @@ function platzHtml(a, s) {
     '<span class="haken">✓</span></button>';
 }
 
-/** Gesamtfortschritt und die naechsten offenen Aemtchen. */
-function seiteHtml(aemtchen) {
+/** Gesamtfortschritt und die naechsten offenen Aemtchen — je nach Schalter. */
+function seiteHtml(aemtchen, an) {
   const anteil = zustand.progress || 0;
   const lob = anteil >= 100 ? txt('praiseAll', '') : (anteil >= 70 ? txt('praiseHigh', '')
     : (anteil >= 40 ? txt('praiseMid', '') : txt('praiseLow', '')));
@@ -686,8 +694,9 @@ function seiteHtml(aemtchen) {
       '</div><div class="lob">' + escHtml(lob) + '</div></div>' +
     '</div></div>';
 
-  return gesamt + '<div class="seitenkarte"><h3>' + escHtml(txt('upNext', 'Up next')) + '</h3>' +
+  const naechste = '<div class="seitenkarte"><h3>' + escHtml(txt('upNext', 'Up next')) + '</h3>' +
     '<div class="naechste">' + naechsteHtml(aemtchen) + '</div></div>';
+  return (an('progress') ? gesamt : '') + (an('upNext') ? naechste : '');
 }
 
 /**
@@ -722,7 +731,7 @@ function naechsteHtml(aemtchen) {
       else if (o.col < heute) { wann = wann + ' · ' + txt('overdue', ''); klasse += ' faellig'; }
     }
     return '<div class="eintrag">' +
-      '<div class="sym" style="--afarbe:' + farbeVon(o.a.id) + '">' + symbolHtml(o.a) + '</div>' +
+      '<div class="sym" style="--afarbe:' + aemtchenFarbe(o.a) + '">' + symbolHtml(o.a) + '</div>' +
       '<div class="text"><div class="was">' + escHtml(o.a.name) + '</div>' +
       '<div class="' + klasse + '">' + escHtml(wann) + '</div></div>' +
       (p ? '<div class="bild">' + bildHtml(p) + '</div>' : '') +

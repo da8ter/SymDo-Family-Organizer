@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Offline-Prüfstand für den Ämtchenplan: Wochenrechnung, Rotation,
- * Wochenwechsel, Übertrag, Häkchen und Punktebuchung.
+ * Wochenwechsel, Übertrag und Häkchen.
  *
  * Läuft ohne Symcon gegen die Symcon-Stubs (symcon/module-tests), die im
  * Nachbar-Repo unter TileVisu-Raum-Titel-Kachel/tests/stubs liegen — anderer
@@ -29,22 +29,6 @@ require_once __DIR__ . '/../libs/ChoreStore.php';
 IPS\Kernel::reset();
 date_default_timezone_set('Europe/Berlin');
 
-/** Die Münzbuchung der Routinen als Attrappe — sie schreibt nur mit. */
-$GLOBALS['buchungen'] = [];
-if (!function_exists('RTN_AdjustCoins')) {
-    function RTN_AdjustCoins(int $InstanceID, string $PurseID, int $Delta): int
-    {
-        $GLOBALS['buchungen'][] = [$PurseID, $Delta];
-        $stand = 0;
-        foreach ($GLOBALS['buchungen'] as $b) {
-            if ($b[0] === $PurseID) {
-                $stand += $b[1];
-            }
-        }
-        return max(0, $stand);
-    }
-}
-
 /** Die Mitgliederauskunft des Gateways als Attrappe. */
 $GLOBALS['gatewayUsers'] = [];
 if (!function_exists('TGW_GetUsers')) {
@@ -67,8 +51,6 @@ class ChoresHarness extends IPSModuleStrict
     public array $attr = ['Week' => '{}', 'LastWeek' => '{}', 'PurseMirror' => '{}', 'Shift' => 0];
     public array $rollen = [];
     public array $namen = [];
-    public string $modus = 'routines';
-    public int $routinenInstanz = 1;
     public array $log = [];
 
     private function Konfiguration(): array
@@ -128,16 +110,6 @@ class ChoresHarness extends IPSModuleStrict
         return $raus;
     }
 
-    private function PunkteModus(): string
-    {
-        return $this->modus;
-    }
-
-    private function RoutinenInstanz(): int
-    {
-        return $this->routinenInstanz;
-    }
-
     private function UebernehmenNachtragen(): void
     {
     }
@@ -195,8 +167,6 @@ function harness(array $teilnehmer, array $aemtchen, array $rest = []): ChoresHa
         'WeekStart' => 1,
         'ResetTime' => '{"hour":3,"minute":0,"second":0}',
         'CarryOver' => false,
-        'PointsEnabled' => true,
-        'RoutinesInstanceID' => 1,
         'ShowNextWeek' => true,
         'ShowLastWeek' => true,
     ], $rest);
@@ -258,9 +228,9 @@ $drei = [
     ['memberId' => 'c', 'share' => 1, 'pause' => false],
 ];
 $aemtchen3 = [
-    ['id' => 'm1', 'name' => 'Muell', 'perWeek' => 1, 'circle' => 'all', 'points' => 5],
-    ['id' => 'm2', 'name' => 'Tisch', 'perWeek' => 1, 'circle' => 'all', 'points' => 5],
-    ['id' => 'm3', 'name' => 'Staub', 'perWeek' => 1, 'circle' => 'all', 'points' => 5],
+    ['id' => 'm1', 'name' => 'Muell', 'perWeek' => 1, 'circle' => 'all'],
+    ['id' => 'm2', 'name' => 'Tisch', 'perWeek' => 1, 'circle' => 'all'],
+    ['id' => 'm3', 'name' => 'Staub', 'perWeek' => 1, 'circle' => 'all'],
 ];
 $h = harness($drei, $aemtchen3);
 $w0 = $h->pZuweisung(0);
@@ -346,9 +316,9 @@ $h = harness([
     ['memberId' => 'c', 'share' => 1, 'pause' => false],
     ['memberId' => 'd', 'share' => 1, 'pause' => false],
 ], [
-    ['id' => 'k1', 'name' => 'Spuelmaschine', 'perWeek' => 1, 'circle' => 'child', 'points' => 5],
-    ['id' => 'e1', 'name' => 'Rasen', 'perWeek' => 1, 'circle' => 'adult', 'points' => 5],
-    ['id' => 'f1', 'name' => 'Muell', 'perWeek' => 1, 'circle' => 'd', 'points' => 5],
+    ['id' => 'k1', 'name' => 'Spuelmaschine', 'perWeek' => 1, 'circle' => 'child'],
+    ['id' => 'e1', 'name' => 'Rasen', 'perWeek' => 1, 'circle' => 'adult'],
+    ['id' => 'f1', 'name' => 'Muell', 'perWeek' => 1, 'circle' => 'd'],
 ]);
 $kinderTreffer = [];
 $erwTreffer = [];
@@ -384,7 +354,7 @@ foreach ($h->pVorschau($jetzt, 4) as $w) {
 pruefe('naechste Wochen kennen den Neuen', isset($vorschauNamen['d']), true);
 // Ämtchen mitten in der Woche angelegt
 $h->cfg['Chores'] = json_encode(array_merge($aemtchen3,
-    [['id' => 'm4', 'name' => 'Katze', 'perWeek' => 1, 'circle' => 'all', 'points' => 5]]));
+    [['id' => 'm4', 'name' => 'Katze', 'perWeek' => 1, 'circle' => 'all']]));
 $nach = $h->pWoche($jetzt);
 pruefe('neues Aemtchen bekommt sofort einen Zustaendigen', $nach['assign']['m4'] !== '', true);
 pruefe('alte Zuweisungen bleiben stehen', $nach['assign']['m1'], $eingefroren['m1']);
@@ -393,19 +363,16 @@ $h->cfg['Chores'] = json_encode($aemtchen3);
 pruefe('Waise verschwindet aus der Zuweisung',
     array_key_exists('m4', $h->pWoche($jetzt)['assign']), false);
 
-// ── 14. Wochenwechsel bucht nichts ──────────────────────────────────────────
-$GLOBALS['buchungen'] = [];
+// ── 14. Wochenwechsel ───────────────────────────────────────────────────────
 $h = harness($drei, $aemtchen3);
 $h->pWoche($T('2026-09-09 12:00'));
 $h->pAbhaken('2026-09-07', 'm1', '0', true, $T('2026-09-09 12:00'));
-$vorher = count($GLOBALS['buchungen']);
 $neu = $h->pWoche($T('2026-09-16 12:00'));
 pruefe('nach dem Wechsel sind die Haekchen weg', $neu['done'], []);
-pruefe('der Wechsel bucht nichts', count($GLOBALS['buchungen']), $vorher);
 pruefe('die Vorwoche ist gemerkt', json_decode($h->attr['LastWeek'], true)['week'], '2026-09-07');
 
 // ── 15. Übertrag ────────────────────────────────────────────────────────────
-$h = harness($drei, [['id' => 'm1', 'name' => 'Muell', 'perWeek' => 2, 'circle' => 'all', 'points' => 5]],
+$h = harness($drei, [['id' => 'm1', 'name' => 'Muell', 'perWeek' => 2, 'circle' => 'all']],
     ['CarryOver' => true]);
 $w1 = $h->pWoche($T('2026-09-09 12:00'));
 $halter = $w1['assign']['m1'];
@@ -415,7 +382,7 @@ pruefe('ein offener Platz wandert als Uebertrag mit', $w2['carry']['m1']['count'
 pruefe('der Uebertrag bleibt beim ALTEN Halter', $w2['carry']['m1']['memberId'], $halter);
 $w3 = $h->pWoche($T('2026-09-23 12:00'));
 pruefe('Uebertraege stapeln sich nicht', $w3['carry']['m1']['count'], 2);
-$hOhne = harness($drei, [['id' => 'm1', 'name' => 'Muell', 'perWeek' => 2, 'circle' => 'all', 'points' => 5]]);
+$hOhne = harness($drei, [['id' => 'm1', 'name' => 'Muell', 'perWeek' => 2, 'circle' => 'all']]);
 $hOhne->pWoche($T('2026-09-09 12:00'));
 pruefe('ohne Uebertrag bleibt nichts stehen', $hOhne->pWoche($T('2026-09-16 12:00'))['carry'], []);
 
@@ -435,65 +402,38 @@ $h->cfg['CarryOver'] = true;
 pruefe('wieder eingeschaltet: die Uebertraege sind zurueck',
     count(array_filter($h->pPlaetze($w3, $a1), fn ($p) => ($p['carried'] ?? false) === true)), 2);
 
-// ── 16.–19. Häkchen und Punkte ──────────────────────────────────────────────
-$GLOBALS['buchungen'] = [];
+// ── 16.–19. Häkchen ─────────────────────────────────────────────────────────
 $h = harness($drei, $aemtchen3);
 $jetzt = $T('2026-09-09 12:00');
 $w = $h->pWoche($jetzt);
 $wer = $w['assign']['m1'];
 pruefe('Abhaken meldet Erfolg', $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt), true);
-pruefe('einmal gebucht', $GLOBALS['buchungen'], [[$wer, 5]]);
-$h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
-pruefe('doppeltes Abhaken bucht nicht erneut', count($GLOBALS['buchungen']), 1);
-// Punktzahl im Formular geändert, dann zurückgenommen → netto null
-$h->cfg['Chores'] = json_encode([
-    ['id' => 'm1', 'name' => 'Muell', 'perWeek' => 1, 'circle' => 'all', 'points' => 99],
-    ['id' => 'm2', 'name' => 'Tisch', 'perWeek' => 1, 'circle' => 'all', 'points' => 5],
-    ['id' => 'm3', 'name' => 'Staub', 'perWeek' => 1, 'circle' => 'all', 'points' => 5],
-]);
-$h->pAbhaken('2026-09-07', 'm1', '0', false, $jetzt);
-$summe = 0;
-foreach ($GLOBALS['buchungen'] as $b) {
-    $summe += $b[1];
-}
-pruefe('Ruecknahme nach Wertaenderung ergibt netto null', $summe, 0);
-// Halterwechsel per Handkurbel: erstattet wird dem GEMERKTEN Halter
-$GLOBALS['buchungen'] = [];
+/* Gespeichert wird, WER es getan hat — seit dem 17.09.2026 nichts sonst. */
+$erledigt = json_decode($h->attr['Week'], true)['done']['m1']['0'];
+pruefe('der Haken merkt sich den Halter', $erledigt['m'], $wer);
+pruefe('… und sonst nichts', array_keys($erledigt), ['m']);
+pruefe('doppeltes Abhaken bleibt erfolgreich',
+    $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt), true);
+/* Halterwechsel per Handkurbel: der Haken bleibt beim GEMERKTEN Halter. */
 $h = harness($drei, $aemtchen3);
 $w = $h->pWoche($jetzt);
 $alterHalter = $w['assign']['m1'];
 $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
 $h->attr['Week'] = json_encode(array_merge($h->pWoche($jetzt), ['assign' => array_merge($w['assign'], ['m1' => 'c'])]));
-$h->pAbhaken('2026-09-07', 'm1', '0', false, $jetzt);
-pruefe('Erstattung geht an den gemerkten Halter',
-    $GLOBALS['buchungen'], [[$alterHalter, 5], [$alterHalter, -5]]);
+$plaetze = $h->pPlaetze($h->pWoche($jetzt), $h->pAemtchen()[0]);
+pruefe('der abgehakte Platz behaelt seinen Halter', $plaetze[0]['memberId'], $alterHalter);
+pruefe('Zuruecknehmen geht', $h->pAbhaken('2026-09-07', 'm1', '0', false, $jetzt), true);
 // Veraltete Wochenkennung
-$GLOBALS['buchungen'] = [];
 $h = harness($drei, $aemtchen3);
 $h->pWoche($jetzt);
 pruefe('Haekchen mit alter Wochenkennung wird verworfen',
     $h->pAbhaken('2026-08-31', 'm1', '0', true, $jetzt), false);
-pruefe('… und bucht nichts', $GLOBALS['buchungen'], []);
+pruefe('… und setzt auch nichts', $h->pWoche($jetzt)['done'], []);
 // ── 20. Unbekanntes Ämtchen, unbekannter Platz
 pruefe('unbekanntes Aemtchen bleibt wirkungslos',
     $h->pAbhaken('2026-09-07', 'gibtsnicht', '0', true, $jetzt), false);
 pruefe('unbekannter Platz bleibt wirkungslos',
     $h->pAbhaken('2026-09-07', 'm1', '9', true, $jetzt), false);
-
-// ── 23. Punktemodus ─────────────────────────────────────────────────────────
-$GLOBALS['buchungen'] = [];
-$h = harness($drei, $aemtchen3);
-$h->modus = 'ambiguous';
-$h->pWoche($jetzt);
-$h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
-pruefe('bei mehreren Routinen-Instanzen wird nicht gebucht', $GLOBALS['buchungen'], []);
-$h2 = harness($drei, $aemtchen3);
-$h2->modus = 'unavailable';
-$h2->pWoche($jetzt);
-$h2->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
-pruefe('ohne Routinen-Instanz wird nicht gebucht', $GLOBALS['buchungen'], []);
-pruefe('… das Haekchen sitzt trotzdem',
-    isset(json_decode($h2->attr['Week'], true)['done']['m1']['0']), true);
 
 // ── 24. Nutzlast ────────────────────────────────────────────────────────────
 $h = harness($drei, $aemtchen3);
@@ -534,14 +474,14 @@ $mi = $T('2026-09-16 12:00');
    die alte Angabe „n-mal pro Woche": sie bekommen die ersten n Tage. Ohne
    diesen Rueckfall saehe ein bestehender Plan nach dem Update anders aus. */
 $altModus = [
-    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'points' => 5, 'perWeek' => 2, 'circle' => 'all'],
+    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'perWeek' => 2, 'circle' => 'all'],
 ];
 $h = harness($drei, $altModus);
 pruefe('alte Zeile ohne Tage: die ersten n Tage', $h->pAemtchen()[0]['days'], [1, 2]);
 
 /* Mit Haken zaehlen die Haken — und „pro Woche" ist dann nur noch ihre Anzahl. */
 $mitTagen = [
-    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'points' => 5, 'perWeek' => 9,
+    ['id' => 'a1', 'name' => 'Muell', 'emoji' => '', 'perWeek' => 9,
      'circle' => 'all', 'd1' => true, 'd4' => true, 'd7' => true],
 ];
 $h = harness($drei, $mitTagen);
@@ -574,8 +514,8 @@ $w = $h->pWoche($mi);
 pruefe('Abhaken am Montag geht', $h->pAbhaken($w['week'], 'a1', '0', true, $mi), true);
 pruefe('Abhaken am Donnerstag wird abgewiesen',
     $h->pAbhaken($w['week'], 'a1', '1', true, $mi), false);
-pruefe('… und nichts wurde gebucht',
-    count(array_filter($GLOBALS['buchungen'], fn ($b) => $b[1] > 0)) >= 1, true);
+pruefe('… und der Donnerstag bleibt offen',
+    $h->pPlaetze($h->pWoche($mi), $h->pAemtchen()[0])[1]['done'], false);
 
 /* Eine Kennung aus lauter Ziffern darf die Auswahl nicht zerlegen.
    PHP macht aus einem solchen ARRAY-SCHLUESSEL eine Zahl; ohne Ruecknahme in
@@ -622,9 +562,9 @@ $vier = [
 ];
 $vierTage = ['d1' => true, 'd2' => true, 'd3' => true, 'd4' => true];
 $woechentlich = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
-    'points' => 5, 'rotate' => 'week'], $vierTage)];
+    'rotate' => 'week'], $vierTage)];
 $taeglich = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
-    'points' => 5, 'rotate' => 'day'], $vierTage)];
+    'rotate' => 'day'], $vierTage)];
 
 $h = harness($vier, $woechentlich);
 $w = $h->pWoche($mi);
@@ -648,7 +588,7 @@ pruefe('taeglich: die Reihe folgt dem Kreis', $traeger, $erwartet);
 
 /* Nur Kinder: die Reihe bleibt IM Kreis, sie faellt nicht auf die Eltern. */
 $nurKinder = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'child',
-    'points' => 5, 'rotate' => 'day'], ['d1' => true, 'd2' => true, 'd3' => true,
+    'rotate' => 'day'], ['d1' => true, 'd2' => true, 'd3' => true,
     'd4' => true, 'd5' => true, 'd6' => true, 'd7' => true])];
 $h = harness($vier, $nurKinder);
 $w = $h->pWoche($mi);
@@ -670,12 +610,12 @@ pruefe('… also viermal das eine, dreimal das andere Kind',
    die Regel nicht mehr gilt. Wird „Wer" mitten in der Woche auf „Nur Kinder"
    gestellt, darf die Mutter das Aemtchen nicht bis Sonntag behalten. */
 $offen = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
-    'points' => 5, 'rotate' => 'week'], $vierTage)];
+    'rotate' => 'week'], $vierTage)];
 $h = harness($vier, $offen);
 $w = $h->pWoche($mi);
 $h->attr['Week'] = json_encode(array_merge($w, ['assign' => ['t1' => 'c']]));   // Clara, die Mutter
 $h->cfg['Chores'] = json_encode([array_merge(['id' => 't1', 'name' => 'Tisch',
-    'circle' => 'child', 'points' => 5, 'rotate' => 'week'], $vierTage)]);
+    'circle' => 'child', 'rotate' => 'week'], $vierTage)]);
 $w2 = $h->pWoche($mi);
 pruefe('Mutter verliert ein Aemtchen, das nur Kindern gehoert',
     in_array($w2['assign']['t1'], ['a', 'b'], true), true);
@@ -686,6 +626,18 @@ $w = $h->pWoche($mi);
 $h->attr['Week'] = json_encode(array_merge($w, ['assign' => ['t1' => 'd']]));
 $w2 = $h->pWoche($mi);
 pruefe('wer im Kreis bleibt, behaelt sein Aemtchen', $w2['assign']['t1'], 'd');
+
+// ── Schalter der Anzeige ────────────────────────────────────────────────────
+/* Alles an, solange nichts anderes dasteht — und jeder Kasten einzeln aus. */
+$h = harness($drei, $aemtchen3);
+$show = $h->pPayload($jetzt)['show'];
+pruefe('ohne Angabe ist alles an', $show, ['members' => true, 'progress' => true,
+    'upNext' => true, 'banner' => true]);
+$h = harness($drei, $aemtchen3, ['ShowMembers' => false, 'ShowUpNext' => false]);
+$show = $h->pPayload($jetzt)['show'];
+pruefe('abgeschaltete Kaesten stehen als false in der Nutzlast',
+    [$show['members'], $show['upNext']], [false, false]);
+pruefe('… und die uebrigen bleiben an', [$show['progress'], $show['banner']], [true, true]);
 
 // ── Ergebnis ────────────────────────────────────────────────────────────────
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
