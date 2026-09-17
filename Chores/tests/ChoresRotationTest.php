@@ -419,6 +419,22 @@ $hOhne = harness($drei, [['id' => 'm1', 'name' => 'Muell', 'perWeek' => 2, 'circ
 $hOhne->pWoche($T('2026-09-09 12:00'));
 pruefe('ohne Uebertrag bleibt nichts stehen', $hOhne->pWoche($T('2026-09-16 12:00'))['carry'], []);
 
+/* Der Schalter wirkt SOFORT, auch auf eine Woche, die den Uebertrag schon
+   eingefroren traegt: wer ihn ausschaltet, will die alten Kreise nicht mehr
+   sehen. Geloescht wird dabei nichts — wieder eingeschaltet, sind sie zurueck. */
+$a1 = $h->pAemtchen()[0];
+$plaetze = $h->pPlaetze($w3, $a1);
+$mitUebertrag = count(array_filter($plaetze, fn ($p) => ($p['carried'] ?? false) === true));
+pruefe('mit Schalter: die Uebertraege stehen in der Woche', $mitUebertrag, 2);
+$h->cfg['CarryOver'] = false;
+$plaetze = $h->pPlaetze($w3, $a1);
+pruefe('ohne Schalter: kein einziger Uebertrag mehr',
+    count(array_filter($plaetze, fn ($p) => ($p['carried'] ?? false) === true)), 0);
+pruefe('… die regulaeren Plaetze bleiben', count($plaetze), 2);
+$h->cfg['CarryOver'] = true;
+pruefe('wieder eingeschaltet: die Uebertraege sind zurueck',
+    count(array_filter($h->pPlaetze($w3, $a1), fn ($p) => ($p['carried'] ?? false) === true)), 2);
+
 // ── 16.–19. Häkchen und Punkte ──────────────────────────────────────────────
 $GLOBALS['buchungen'] = [];
 $h = harness($drei, $aemtchen3);

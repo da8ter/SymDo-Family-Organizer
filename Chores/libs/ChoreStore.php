@@ -775,7 +775,14 @@ trait ChoreStore
             $vorbei = (string)($woche['week'] ?? '') < $this->WochenKennung(time());
             $heuteSpalte = $vorbei ? 6 : 0;
         }
-        $uebertrag = is_array($woche['carry'][$a['id']] ?? null) ? $woche['carry'][$a['id']] : null;
+        /* Der Uebertrag steht in der eingefrorenen Woche — geschrieben wurde er
+           beim Wochenwechsel, als der Schalter noch AN war. Wer ihn danach
+           ausschaltet, will die alten Kreise nicht mehr sehen (gemeldet am
+           17.09.2026); die Zeile hier fragt deshalb bei JEDEM Blick nach der
+           Einstellung und nicht nur beim Wochenwechsel. Geloescht wird nichts:
+           schaltet man den Schalter wieder ein, ist der Uebertrag wieder da. */
+        $uebertrag = $this->EinstellungJa('CarryOver')
+            && is_array($woche['carry'][$a['id']] ?? null) ? $woche['carry'][$a['id']] : null;
         if ($uebertrag !== null) {
             $halter = trim((string)($uebertrag['memberId'] ?? ''));
             for ($i = 0; $i < max(0, (int)($uebertrag['count'] ?? 0)); $i++) {
