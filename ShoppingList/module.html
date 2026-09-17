@@ -8718,12 +8718,17 @@ function nahverkehrNachfassen(frisch) {
 
 /** Die Haltestellen und Strecken, die zur aktuellen Mitgliedswahl passen. */
 function transitEintraege() {
-  if (!nahverkehr) { return { stops: [], routes: [] }; }
+  if (!nahverkehr) { return { stops: [], routes: [], showPlatform: true }; }
   const kind = kindGewaehlt();
   const passt = e => !kind || (e.member || '') === kind || (e.member || '') === '';
   return {
     stops:  (nahverkehr.stops  || []).filter(passt),
-    routes: (nahverkehr.routes || []).filter(passt)
+    routes: (nahverkehr.routes || []).filter(passt),
+    /* MUSS mit durch: renderTransit fragt diese Auskunft nach dem Steig, nicht
+       die Nutzlast. Ohne die Zeile war `showPlatform` dort immer `undefined`,
+       und `undefined !== false` heisst „anzeigen" — der Schalter im Formular
+       blieb also wirkungslos (gemeldet am 17.09.2026). */
+    showPlatform: nahverkehr.showPlatform !== false
   };
 }
 
