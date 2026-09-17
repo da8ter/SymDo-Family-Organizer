@@ -147,9 +147,15 @@ body {
 /* Tabelle und Seitenspalte nebeneinander — aber erst, wenn die Kachel breit
    genug ist. Darunter stapeln sie sich, die Tabelle zuerst: sie ist der
    Grund, warum jemand hinsieht. */
+/* Untereinander gestapelt richtet sich jeder Kasten nach seinem Inhalt.
+   NEBENEINANDER nicht: dort reichen beide Spalten gleich tief (`stretch`, die
+   Vorgabe des Rasters). Die Tabelle ist die Hauptsache — sie darf nicht kuerzer
+   enden als Gesamtfortschritt und „Naechste Aemtchen" daneben, sonst steht die
+   Kachel schief (auf Wunsch, 17.09.2026). Der Platz, der der Tabelle dabei
+   zuwaechst, bleibt unter der letzten Zeile leer. */
 #inhalt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; }
 @media (min-width: 820px) {
-  #inhalt { grid-template-columns: minmax(0, 1fr) 270px; }
+  #inhalt { grid-template-columns: minmax(0, 1fr) 270px; align-items: stretch; }
 }
 #hinweis { padding: 0 6px 2px; font-size: 12px; color: var(--dezent); }
 #hinweis:empty { display: none; }
