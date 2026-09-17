@@ -2,26 +2,34 @@
 /* Symcon injiziert --card-color, --content-color und --accent-color je nach
    Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets.
    Gerüst, Scrollrezept und Randmechanik sind wörtlich aus der Routinen-Kachel
-   übernommen: dieselben Fallen, dieselbe Lösung. */
+   übernommen: dieselben Fallen, dieselbe Lösung.
+
+   Aufbau seit dem 17.09.2026 (Vorlage des Nutzers): eine TABELLE aus Ämtchen
+   (Zeilen) und Wochentagen (Spalten), darüber eine Karte je Familienmitglied,
+   daneben Gesamtfortschritt und die nächsten Ämtchen. Vorher war es nach
+   Person gruppiert — wer diese Woche was hat, sah man gut, aber „an welchem
+   Tag steht was an" musste man sich zusammensuchen. */
 :root {
   --bg: var(--card-color, #2b2c30);
   --text: var(--content-color, #ffffff);
   --akzent: var(--accent-color, #00cdab);
   --zeile: color-mix(in srgb, var(--card-color) 92%, var(--content-color) 8%);
+  --karte: color-mix(in srgb, var(--card-color) 94%, var(--content-color) 6%);
   --zeile-fertig: color-mix(in srgb, var(--card-color) 96%, var(--content-color) 4%);
   --dezent: color-mix(in srgb, var(--content-color) 55%, transparent);
   --rand: color-mix(in srgb, var(--content-color) 12%, transparent);
+  --spur: color-mix(in srgb, var(--content-color) 14%, transparent);
   --sym-mt: 0px;
   --sym-ms: 0px;
   --sym-mb: 0px;
   --sbw: 6px;
-  /* Breite einer Tagesspalte. Schmal genug, dass sieben davon neben Name und
-     Punkten Platz finden. */
-  --tagbreite: 28px;
+  /* Breite einer Tagesspalte: ein Avatar von 26 px plus Luft. */
+  --tagbreite: 38px;
   --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 html[data-symdo-theme="light"] {
   --zeile: color-mix(in srgb, var(--card-color) 95%, var(--content-color) 5%);
+  --karte: color-mix(in srgb, var(--card-color) 97%, var(--content-color) 3%);
   --zeile-fertig: color-mix(in srgb, var(--card-color) 98%, var(--content-color) 2%);
 }
 html { height: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -42,46 +50,96 @@ body {
 /* Alles, was NICHT scrollt, traegt den Rest des rechten Randes selbst. */
 .randrest { margin-right: calc(var(--sb-pad) + var(--sbw)); }
 
-/* ── Kopf: Titel und Wochenwahl ──────────────────────────────────────────── */
-#kopf { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
+/* ── Kopf: Haus, Titel, Wochenwahl ───────────────────────────────────────── */
+#kopf { display: flex; align-items: center; gap: 10px; padding: 2px 6px 10px; flex-wrap: wrap; }
+.haus {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center; font-size: 19px;
+  background: color-mix(in srgb, var(--akzent) 20%, var(--bg));
+  color: var(--akzent);
+}
+#titelblock { flex: 1 1 140px; min-width: 0; }
 #titel {
-  flex: 1 1 auto; min-width: 0;
-  font-size: clamp(16px, 5vmin, 22px); font-weight: 800;
+  font-size: clamp(17px, 5vmin, 25px); font-weight: 800; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#untertitel {
+  font-size: clamp(10px, 2.6vmin, 12px); color: var(--dezent); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #wochenwahl {
   flex: 0 0 auto; display: flex; align-items: center; gap: 2px;
-  border: 1px solid var(--rand); border-radius: 999px; padding: 2px;
+  border: 1px solid var(--rand); border-radius: 14px; padding: 2px; background: var(--karte);
 }
-#wochenwahl button {
+#wochenwahl button, #heute {
   border: 0; background: transparent; color: inherit; cursor: pointer;
-  font: inherit; line-height: 1; padding: 4px 9px; border-radius: 999px;
+  font: inherit; line-height: 1; padding: 6px 9px; border-radius: 11px;
 }
-#wochenwahl button:disabled { opacity: .35; cursor: default; }
+#wochenwahl button:disabled, #heute:disabled { opacity: .35; cursor: default; }
 /* Feste Mindestbreite mit Ziffern gleicher Breite: sonst wandern die Pfeile
-   beim Umschalten, weil „Diese Woche" und ein Datum verschieden breit sind. */
+   beim Umschalten, weil die Wochen verschieden breit sind. */
 #wochenname {
-  min-width: 11ch; text-align: center; font-size: 12px; font-weight: 700;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
+  min-width: 13ch; text-align: center; font-variant-numeric: tabular-nums;
+  white-space: nowrap; padding: 0 4px;
+}
+#wochenkw { display: block; font-size: 12px; font-weight: 800; }
+#wochenspanne { display: block; font-size: 10px; font-style: normal; color: var(--dezent); }
+#heute {
+  flex: 0 0 auto; border: 1px solid var(--rand); background: var(--karte);
+  font-size: 12px; font-weight: 700; padding: 9px 12px; border-radius: 14px;
 }
 
-/* ── Fortschritt der Woche ───────────────────────────────────────────────── */
-#fortschritt { display: flex; align-items: center; gap: 10px; padding: 0 6px 10px; }
-#balken { flex: 1 1 auto; height: 12px; border-radius: 999px; background: var(--zeile); overflow: hidden; }
-#balkenfuellung {
-  height: 100%; width: 0%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--akzent), color-mix(in srgb, var(--akzent) 55%, #ffffff));
-  transition: width .45s cubic-bezier(.22,1.2,.36,1);
+/* ── Karten der Familienmitglieder ───────────────────────────────────────── */
+#leute { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 6px 10px; }
+#leute:empty { display: none; }
+.person {
+  flex: 1 1 150px; max-width: 260px; min-width: 0;
+  display: flex; align-items: center; gap: 9px;
+  background: var(--karte); border: 1px solid var(--rand); border-radius: 16px;
+  padding: 8px 10px; box-sizing: border-box;
 }
-#zaehler { flex: 0 0 auto; font-weight: 700; font-size: clamp(11px, 3.4vmin, 14px); color: var(--dezent); }
-#hinweis { padding: 0 6px 8px; font-size: 12px; color: var(--dezent); }
-#hinweis:empty { display: none; }
+.person.pausiert { opacity: .55; }
+.person .bild {
+  width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  border: 2px solid var(--mfarbe, var(--akzent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; box-sizing: border-box;
+}
+.person .bild img { width: 100%; height: 100%; object-fit: cover; }
+.person .text { flex: 1 1 auto; min-width: 0; }
+.person .name {
+  font-size: 14px; font-weight: 800;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.person .stand {
+  font-size: 11px; color: var(--dezent); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.person .muenzen {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 6px;
+  font-weight: 800; color: #f6b73c;
+}
+/* Der kleine Ring je Person: Fortschritt als Kreisausschnitt. */
+.ring {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  background: conic-gradient(var(--mfarbe, var(--akzent)) calc(var(--p, 0) * 1%), var(--spur) 0);
+  display: flex; align-items: center; justify-content: center;
+}
+.ring::after {
+  content: ''; width: 18px; height: 18px; border-radius: 50%; background: var(--karte);
+}
 
-/* ── Liste, nach Person gruppiert ────────────────────────────────────────── */
+/* ── Scrollbereich: Tabelle, Seitenspalte, Banner ────────────────────────── */
 /* Unten KEIN Polster: ein padding-bottom am Scrollbereich zaehlt zu
    scrollHeight und laesst den Griff erscheinen, obwohl optisch nichts fehlt. */
-#liste { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; padding: 0 var(--sb-pad) 0 0; }
-
+#liste {
+  flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 0 var(--sb-pad) 0 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
 /* ── Scrollleisten: Hausrezept der grossen Kacheln ────────────────────────
    overflow-y: scroll statt auto — der 6px-Streifen ist IMMER reserviert, der
    rechte Abstand bleibt also gleich, ob der Balken gerade sichtbar ist oder
@@ -92,11 +150,6 @@ body {
    WebKit die Pseudoelemente, der Standard gilt nur, wo es sie nicht gibt.
    Jeder Selektor braucht sein EIGENES Pseudoelement — in einer Liste haengt es
    sonst nur am letzten. */
-#liste {
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  overscroll-behavior: contain;
-}
 #liste::-webkit-scrollbar { width: 6px; height: 6px; }
 #liste::-webkit-scrollbar-track { background: transparent; }
 #liste::-webkit-scrollbar-thumb {
@@ -109,133 +162,183 @@ body {
     scrollbar-color: color-mix(in srgb, var(--akzent) 70%, transparent) transparent;
   }
 }
+/* Tabelle und Seitenspalte nebeneinander — aber erst, wenn die Kachel breit
+   genug ist. Darunter stapeln sie sich, die Tabelle zuerst: sie ist der
+   Grund, warum jemand hinsieht. */
+#inhalt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; }
+@media (min-width: 820px) {
+  #inhalt { grid-template-columns: minmax(0, 1fr) 270px; }
+}
+#hinweis { padding: 0 6px 2px; font-size: 12px; color: var(--dezent); }
+#hinweis:empty { display: none; }
 
-.person { display: flex; flex-direction: column; gap: 6px; }
-.person .kopf { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
-.person .bild {
-  width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
-  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
-  border: 2px solid var(--akzent);
-  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;
+/* ── Die Tabelle ─────────────────────────────────────────────────────────── */
+.tafel {
+  background: var(--karte); border: 1px solid var(--rand); border-radius: 18px;
+  padding: 4px 2px 6px; min-width: 0; overflow: hidden;
 }
-.person .bild img { width: 100%; height: 100%; object-fit: cover; }
-.person .name {
-  flex: 1 1 auto; min-width: 0; font-size: clamp(13px, 4vmin, 16px); font-weight: 800;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.person .zahl { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--dezent); }
-.person .muenzen {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
-  background: color-mix(in srgb, #f6b73c 22%, var(--bg));
-  border: 1px solid color-mix(in srgb, #f6b73c 70%, var(--bg));
-  border-radius: 999px; padding: 2px 8px; font-weight: 800; font-size: 12px;
-}
-.person.pausiert { opacity: .55; }
-.person.niemand .bild { border-color: var(--rand); background: var(--zeile); }
-
-/* Ein Aemtchen ist eine Rasterzeile: Bild, Name, Punkte — und dann sieben
-   Tagesspalten. Feste Breiten, KEIN `auto`: nur so stehen die Haken aller
-   Zeilen und die Ueberschrift darueber wirklich untereinander, auch ueber die
-   Bloecke der einzelnen Familienmitglieder hinweg. Ein gemeinsames Raster
-   waere dafuer noetig gewesen, und das gibt es hier nicht — die Zeilen liegen
-   in verschiedenen Kaesten. */
-.aemtchen {
+/* Ein gemeinsames Raster fuer Kopf und Zeilen: nur so stehen die Tage wirklich
+   untereinander. Feste Spaltenbreiten, KEIN `auto` — sonst richtet sich jede
+   Zeile nach ihrem eigenen Inhalt. */
+.kopfzeile, .zeile {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto repeat(7, var(--tagbreite));
-  align-items: center;
-  /* KEIN Spaltenabstand: die Tagesspalten werden durch Linien getrennt, und
-     eine Linie mit zehn Pixeln Luft daneben trennt nichts, sie schwebt. Den
-     Abstand vor den Spalten tragen Bild, Name und Punkte selbst. */
-  gap: 0;
-  background: var(--zeile); border-radius: 16px; padding: 8px 10px;
-  min-height: 46px; box-sizing: border-box;
-}
-/* Die Ueberschrift mit den Wochentagen — dasselbe Raster, nur ohne Kasten. */
-.tagekopf {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto repeat(7, var(--tagbreite));
+  grid-template-columns: minmax(90px, 1fr) repeat(7, var(--tagbreite));
   align-items: center; gap: 0;
-  padding: 2px 10px 3px 10px;
-  font-size: 10px; font-weight: 700; color: var(--dezent);
 }
-.tagekopf .tag { text-align: center; }
-/* Der heutige Tag wird hervorgehoben — in der Ueberschrift kraeftig, in den
-   Zeilen als schwacher Streifen, damit er die Spalte durchzieht. */
-.tagekopf .tag.heute { color: var(--akzent); }
-.aemtchen .zelle.heute, .tagekopf .tag.heute {
+.kopfzeile {
+  padding: 8px 8px 8px 10px; font-size: 10px; font-weight: 700; color: var(--dezent);
+  border-bottom: 1px solid var(--rand);
+}
+.kopfzeile .tag { text-align: center; line-height: 1.25; }
+.kopfzeile .tag b { display: block; font-size: 11px; font-weight: 800; color: var(--text); }
+.kopfzeile .tag.heute b, .kopfzeile .tag.heute { color: var(--akzent); }
+.zeile { padding: 5px 8px 5px 10px; border-bottom: 1px solid var(--rand); }
+.zeile:last-child { border-bottom: 0; }
+.zeile.fertig .titel { color: var(--dezent); }
+/* Der heutige Tag zieht sich als schwacher Streifen durch alle Zeilen. */
+.zeile .zelle.heute, .kopfzeile .tag.heute {
   background: color-mix(in srgb, var(--akzent) 12%, transparent);
 }
-.tagekopf .tag.heute { border-radius: 8px 8px 0 0; }
-/* Mehrere Haken an EINEM Tag stehen uebereinander, nicht nebeneinander: zwei
-   Kreise von 26 Pixeln passen nicht in eine Spalte von 28. Nebeneinander liefen
-   sie in den Nachbartag hinein (in der Kachel gesehen, beim Uebertrag). */
-.aemtchen .zelle {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; align-self: stretch;
-  /* Die duenne Linie zwischen den Tagen. Sie sitzt LINKS an jeder Spalte —
-     auch an der ersten, die damit die Tage vom Namen trennt. */
-  border-left: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent);
+.kopfzeile .tag.heute { border-radius: 9px 9px 0 0; }
+.aufgabe { display: flex; align-items: center; gap: 9px; min-width: 0; padding-right: 8px; }
+.sym {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  background: var(--afarbe, var(--akzent));
 }
-.tagekopf .tag {
-  border-left: 1px solid color-mix(in srgb, var(--content-color) 12%, transparent);
-}
-.aemtchen .bild {
-  width: 36px; height: 36px; border-radius: 12px; flex: 0 0 auto;
-  background: color-mix(in srgb, var(--akzent) 14%, var(--bg));
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
-}
-/* Der Abstand zum Bild sitzt am TEXT, nicht am Bild: das Bild fuellt seine
-   Spalte genau aus, ein Rand daran schiebt es aus der Spur und unter den
-   Namen (in der Kachel gesehen). */
-.aemtchen .titel {
-  min-width: 0; padding: 0 8px 0 10px;
-  font-size: clamp(13px, 4.2vmin, 17px); font-weight: 700;
+.titel {
+  min-width: 0; font-size: clamp(12px, 3.6vmin, 14px); font-weight: 700; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.aemtchen .punkte { font-size: 11px; font-weight: 700; color: var(--dezent); padding-right: 8px; }
-/* Der Haken sitzt jetzt in seiner Tagesspalte; etwas kleiner, damit sieben
-   davon nebeneinander passen. */
-.haken {
-  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
-  border: 3px solid color-mix(in srgb, var(--content-color) 30%, transparent);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px; font-weight: 900; color: #fff; box-sizing: border-box;
-  background: transparent; cursor: pointer; padding: 0;
+.zelle {
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  align-self: stretch; min-height: 44px; padding: 3px 0; box-sizing: border-box;
+  /* Die duenne Linie zwischen den Tagen. Sie sitzt LINKS an jeder Spalte —
+     auch an der ersten, die damit die Tage von der Aufgabe trennt. */
+  border-left: 1px solid var(--rand);
+  flex-wrap: wrap;
 }
-.haken span { transform: scale(0); transition: transform .25s cubic-bezier(.22,1.6,.36,1); }
-.haken.fertig { background: var(--akzent); border-color: var(--akzent); }
-.haken.fertig span { transform: scale(1); }
-.haken.uebertrag { border-style: dashed; }
-/* Gesperrt heisst hier zweierlei: eine vergangene Woche (nur ansehen) und ein
-   Tag, der noch nicht dran war. Der kuenftige Tag bleibt sichtbar, aber blass
-   und ohne Rand — er ist ein Platzhalter, kein Angebot. */
-.haken:disabled { cursor: default; opacity: .5; }
-.haken.spaeter { opacity: .45; border-style: dotted; }
-.aemtchen.fertig { background: var(--zeile-fertig); }
-.aemtchen.fertig .titel { color: var(--dezent); }
+.zelle .nix { color: var(--dezent); font-size: 12px; }
+/* Ein Platz: der Avatar dessen, der dran ist. Erledigt heisst voll und mit
+   Haekchen, offen heisst blass — so sieht man den Stand der Woche im Raster,
+   ohne eine Zahl zu lesen. */
+.platz {
+  position: relative; border: 0; padding: 0; background: transparent; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+}
+.platz .bild {
+  width: 26px; height: 26px; border-radius: 50%; overflow: hidden; box-sizing: border-box;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  border: 2px solid var(--mfarbe, var(--akzent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: var(--text);
+}
+.platz .bild img { width: 100%; height: 100%; object-fit: cover; }
+.platz.offen .bild { opacity: .45; filter: grayscale(.5); }
+.platz.uebertrag .bild { border-style: dashed; }
+/* Gesperrt heisst hier zweierlei: eine fremde Woche (nur ansehen) und ein Tag,
+   der noch nicht dran war. Der kuenftige Tag bleibt sichtbar, aber blass — er
+   ist ein Platzhalter, kein Angebot. */
+.platz:disabled { cursor: default; }
+.platz.spaeter .bild { opacity: .28; }
+.platz .haken {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--akzent); color: var(--bg);
+  font-size: 9px; font-weight: 900; line-height: 13px; text-align: center;
+  transform: scale(0); transition: transform .22s cubic-bezier(.22,1.6,.36,1);
+}
+.platz.fertig .haken { transform: scale(1); }
+
+/* ── Seitenspalte ────────────────────────────────────────────────────────── */
+.seite { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.seitenkarte {
+  background: var(--karte); border: 1px solid var(--rand); border-radius: 18px;
+  padding: 12px 14px;
+}
+.seitenkarte h3 { margin: 0 0 10px; font-size: 14px; font-weight: 800; }
+.gesamt { display: flex; align-items: center; gap: 14px; }
+.donut {
+  flex: 0 0 auto; width: 84px; height: 84px; border-radius: 50%;
+  background: conic-gradient(var(--akzent) calc(var(--p, 0) * 1%), var(--spur) 0);
+  display: flex; align-items: center; justify-content: center;
+}
+.donut .loch {
+  width: 64px; height: 64px; border-radius: 50%; background: var(--karte);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 800;
+}
+.gesamt .zahlen { min-width: 0; }
+.gesamt .gross { font-size: 15px; font-weight: 800; line-height: 1.25; }
+.gesamt .lob { margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--akzent); }
+.naechste { display: flex; flex-direction: column; gap: 8px; }
+.naechste .eintrag { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.naechste .text { flex: 1 1 auto; min-width: 0; }
+.naechste .was {
+  font-size: 13px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.naechste .wann { font-size: 11px; color: var(--dezent); }
+.naechste .wann.faellig { color: #f87171; font-weight: 700; }
+.naechste .bild {
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
+  border: 2px solid var(--mfarbe, var(--akzent)); box-sizing: border-box;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+}
+.naechste .bild img { width: 100%; height: 100%; object-fit: cover; }
+.leerzeile { font-size: 12px; color: var(--dezent); }
+
+/* ── Banner ──────────────────────────────────────────────────────────────── */
+#banner {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--karte); border: 1px solid var(--rand); border-radius: 18px;
+  padding: 12px 14px; margin-right: 0;
+}
+#banner:empty { display: none; }
+#banner .pokal { font-size: 24px; flex: 0 0 auto; }
+#banner .btitel { font-size: 14px; font-weight: 800; }
+#banner .btext { font-size: 12px; color: var(--dezent); margin-top: 2px; }
 
 #leer { padding: 18px 8px; text-align: center; color: var(--dezent); font-size: 13px; }
 #leer:empty { display: none; }
+
+/* Schmale Kacheln: die Tagesspalten schrumpfen, damit sieben davon neben dem
+   Namen bleiben. Sie zu verstecken waere falsch — sie sind der Inhalt. */
+@media (max-width: 460px) {
+  :root { --tagbreite: 30px; }
+  .platz, .platz .bild { width: 22px; height: 22px; }
+  .sym { width: 26px; height: 26px; font-size: 13px; }
+  .kopfzeile, .zeile { grid-template-columns: minmax(64px, 1fr) repeat(7, var(--tagbreite)); }
+}
 </style>
 
 <div id="wrap">
   <div id="kopf" class="randrest">
-    <div id="titel"></div>
-    <div id="wochenwahl">
-      <button type="button" data-schritt="-1" aria-label="Vorige Woche">&lsaquo;</button>
-      <span id="wochenname"></span>
-      <button type="button" data-schritt="1" aria-label="Nächste Woche">&rsaquo;</button>
+    <div class="haus"><i class="fa-light fa-house"></i></div>
+    <div id="titelblock">
+      <div id="titel"></div>
+      <div id="untertitel"></div>
     </div>
+    <div id="wochenwahl">
+      <button type="button" data-schritt="-1" aria-label="&lsaquo;">&lsaquo;</button>
+      <span id="wochenname"><b id="wochenkw"></b><i id="wochenspanne"></i></span>
+      <button type="button" data-schritt="1" aria-label="&rsaquo;">&rsaquo;</button>
+    </div>
+    <button id="heute" type="button"></button>
   </div>
-  <div id="fortschritt" class="randrest">
-    <div id="balken"><div id="balkenfuellung"></div></div>
-    <div id="zaehler"></div>
+  <div id="leute" class="randrest"></div>
+  <div id="liste">
+    <div id="hinweis"></div>
+    <div id="inhalt">
+      <div id="tafel" class="tafel"></div>
+      <div id="seite" class="seite"></div>
+    </div>
+    <div id="banner"></div>
+    <div id="leer"></div>
   </div>
-  <div id="hinweis" class="randrest"></div>
-  <div id="liste"></div>
-  <div id="leer" class="randrest"></div>
 </div>
-
 <script>
 /* In einer IIFE gekapselt: die Tile-Visu injiziert selbst globale Bindungen
    (const translate, const requestAction, openObject) — gleichnamige Top-Level-
@@ -360,6 +463,22 @@ let zustand = null;          // letzter Payload vom Modul
 let blick = 0;               // -1 Vorwoche, 0 laufende, +1 Vorschau
 let unterwegs = {};          // "chore:slot" => true, solange die Aktion laeuft
 
+/* Eine feste Farbleiter fuer Personen und Aemtchen.
+
+   Sonst leitet diese Kachel jede Farbe aus dem Visu-Design ab. Hier nicht: die
+   Vorlage lebt davon, dass jede Aufgabe ihr eigenes farbiges Symbol hat und
+   jedes Familienmitglied seinen Ring wiedererkennt. Die Zuordnung haengt an der
+   Kennung, nicht an der Reihenfolge — eine neue Aufgabe faerbt also keine
+   andere um. */
+const FARBEN = ['#ef4444', '#f97316', '#f6b73c', '#22c55e', '#14b8a6',
+                '#38bdf8', '#6366f1', '#a855f7', '#ec4899', '#84cc16'];
+function farbeVon(kennung) {
+  const s = String(kennung || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return FARBEN[h % FARBEN.length];
+}
+
 function el(id) { return document.getElementById(id); }
 function txt(schluessel, vorgabe) {
   const t = (zustand && zustand.texts) || {};
@@ -368,25 +487,91 @@ function txt(schluessel, vorgabe) {
 function fuellen(vorlage, a, b) {
   return String(vorlage).replace('%1$d', String(a)).replace('%2$d', String(b));
 }
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 /** Der Anfangsbuchstabe als Ersatz, wenn kein Foto hinterlegt ist. */
 function bildHtml(person) {
   if (person && person.avatar) {
-    return '<img src="' + person.avatar + '" alt="">';
+    return '<img src="' + escHtml(person.avatar) + '" alt="">';
   }
   const name = (person && person.name) || '';
-  return name ? name.slice(0, 1).toUpperCase() : '?';
+  return name ? escHtml(name.slice(0, 1).toUpperCase()) : '?';
+}
+
+/* ── Wochenrechnung in der Kachel ───────────────────────────────────────────
+   Die Wochenkennung IST das Startdatum („2026-09-15"). Datum und Kalenderwoche
+   rechnet die Kachel daraus selbst und ueberlaesst das FORMAT dem Browser
+   (toLocaleDateString) — genau wie die Web-App. Uebersetzt wird trotzdem
+   nichts hier: Wochentagsnamen und alle Woerter kommen fertig aus dem Modul. */
+function wochenStart() {
+  const k = blick === 0 ? (zustand.week || '')
+    : (blick === 1 ? ((zustand.next || {}).week || '') : ((zustand.last || {}).week || ''));
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k));
+  if (!m) { return null; }
+  return new Date(+m[1], +m[2] - 1, +m[3]);
+}
+function tagIn(datum, i) {
+  const d = new Date(datum.getTime());
+  d.setDate(d.getDate() + i);
+  return d;
+}
+/** Kalenderwoche nach ISO 8601 — gezaehlt am Donnerstag der gezeigten Spanne. */
+function kalenderwoche(start) {
+  const d = new Date(start.getTime());
+  /* Der Wochenstart ist einstellbar; die ISO-Woche haengt am Donnerstag. Wir
+     nehmen deshalb den Donnerstag INNERHALB der gezeigten sieben Tage. */
+  const bis = tagIn(start, 6);
+  let don = null;
+  for (let i = 0; i < 7; i++) {
+    const t = tagIn(start, i);
+    if (t.getDay() === 4) { don = t; break; }
+  }
+  if (!don) { don = bis; }
+  const anfang = new Date(don.getFullYear(), 0, 1);
+  return Math.ceil((((don - anfang) / 86400000) + anfang.getDay() + 1) / 7);
+}
+function kurzDatum(d) {
+  try { return d.toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' }); }
+  catch (e) { return (d.getDate()) + '.' + (d.getMonth() + 1) + '.'; }
+}
+function spanne(start) {
+  const ende = tagIn(start, 6);
+  try {
+    const a = start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    const b = ende.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return a + ' – ' + b;
+  } catch (e) { return kurzDatum(start) + ' – ' + kurzDatum(ende); }
+}
+
+/** Die Spalte, in der heute steht — nur in der laufenden Woche. */
+function heuteSpalte() {
+  return blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
 }
 
 /**
- * Die Kachel zeigt die Woche, um die es geht — und beantwortet die eine Frage:
- * wer ist diese Woche fuer was dran. Deshalb nach PERSON gruppiert und nicht
- * nach Aemtchen: eine Liste von Aemtchen mit Namen dahinter muss man lesen,
- * eine Liste von Personen mit ihren Aemtchen sieht man.
+ * Wer ist in der gezeigten Woche fuer dieses Aemtchen zustaendig?
+ *
+ * In der laufenden Woche steht es am Platz selbst (ein abgehaktes Aemtchen
+ * behaelt den, der es getan hat). In der Vorschau gibt es nur die Zuteilung.
+ */
+function halterVon(a, platz) {
+  if (blick === 1) { return ((zustand.next || {}).assign || {})[a.id] || ''; }
+  return (platz && platz.memberId) || a.memberId || '';
+}
+
+function mitglied(id) {
+  return ((zustand.members || {})[id]) || null;
+}
+
+/**
+ * Die Kachel zeigt die Woche als TABELLE: Aemtchen in den Zeilen, Wochentage
+ * in den Spalten, in jeder Zelle das Gesicht dessen, der dran ist. Damit
+ * beantwortet ein Blick beide Fragen — wer macht was, und an welchem Tag.
  */
 function zeichnen() {
-  const liste = el('liste');
-  const leer = el('leer');
   if (!zustand) { return; }
 
   // Vorwoche und Vorschau nur, wenn das Modul sie mitgeschickt hat.
@@ -396,118 +581,53 @@ function zeichnen() {
   if (blick === 1 && !hatNaechste) { blick = 0; }
 
   el('titel').textContent = txt('title', 'Chores');
-  el('wochenname').textContent = blick === 0 ? txt('thisWeek', 'This week')
-    : (blick === -1 ? txt('lastWeek', 'Last week') : txt('nextWeek', 'Next week'));
+  el('untertitel').textContent = txt('subtitle', '');
+
+  const start = wochenStart();
+  el('wochenkw').textContent = start ? (txt('cw', 'CW') + ' ' + kalenderwoche(start)) : '';
+  el('wochenspanne').textContent = start ? spanne(start) : '';
   const knoepfe = el('wochenwahl').querySelectorAll('button');
   knoepfe[0].disabled = blick === -1 || (blick === 0 && !hatLetzte);
   knoepfe[1].disabled = blick === 1 || (blick === 0 && !hatNaechste);
+  const heuteKnopf = el('heute');
+  heuteKnopf.textContent = txt('today', 'Today');
+  heuteKnopf.disabled = blick === 0;
 
-  /* Fortschritt und Haken gibt es nur fuer die laufende Woche: in der Vorschau
-     waere ein Haken eine Behauptung ueber die Zukunft, im Rueckblick eine
-     Einladung, Vergangenes zu aendern. */
+  /* Haken gibt es nur fuer die laufende Woche: in der Vorschau waere ein Haken
+     eine Behauptung ueber die Zukunft, im Rueckblick eine Einladung,
+     Vergangenes zu aendern. */
   const aktiv = blick === 0;
-  el('fortschritt').style.display = aktiv ? '' : 'none';
-  /* Der gestrichelte Kreis braucht auf einer Tippflaeche eine Erklaerung: ein
-     title-Text erscheint nur unter der Maus. */
-  const hatUebertrag = aemtchenMitUebertrag();
-  el('hinweis').textContent = aktiv
-    ? (hatUebertrag ? txt('carriedHint', '') : '')
-    : (blick === 1 ? txt('preview', '') : txt('review', ''));
-  if (aktiv) {
-    el('balkenfuellung').style.width = (zustand.progress || 0) + '%';
-    el('zaehler').textContent = fuellen(txt('of', '%1$d of %2$d'),
-      zustand.doneCount || 0, zustand.totalCount || 0);
-  }
-
   const aemtchen = Array.isArray(zustand.chores) ? zustand.chores : [];
+
+  el('hinweis').textContent = aktiv
+    ? (aemtchenMitUebertrag() ? txt('carriedHint', '') : '')
+    : (blick === 1 ? txt('preview', '') : txt('review', ''));
+
   if (aemtchen.length === 0) {
-    liste.innerHTML = '';
-    leer.textContent = txt('empty', '');
+    el('leute').innerHTML = '';
+    el('tafel').innerHTML = '';
+    el('seite').innerHTML = '';
+    el('banner').innerHTML = '';
+    el('leer').textContent = txt('empty', '');
     return;
   }
-  leer.textContent = '';
+  el('leer').textContent = '';
 
-  // Zuweisung der gezeigten Woche: laufende aus den Aemtchen selbst, sonst aus
-  // der mitgeschickten Vorschau bzw. dem Rueckblick.
-  const zuweisung = {};
-  aemtchen.forEach((a) => {
-    if (blick === 0) { zuweisung[a.id] = a.memberId || ''; }
-    else if (blick === 1) { zuweisung[a.id] = (zustand.next.assign || {})[a.id] || ''; }
-    else { zuweisung[a.id] = ''; }
-  });
+  el('leute').innerHTML = leuteHtml(aemtchen, aktiv);
 
-  /* Im Rueckblick gibt es keine Aemtchen-Zuordnung mehr (nur die Summe je
-     Person) — dort zeigt die Kachel eine schlichte Bilanz. */
+  /* Im Rueckblick gibt es keine Tageszuordnung mehr — nur die Summe je Person.
+     Die Tabelle bliebe also leer; statt sie mit Strichen zu fuellen, zeigt die
+     Kachel dort die Bilanz aus den Karten oben und sonst nichts. */
   if (blick === -1) {
-    const je = (zustand.last && zustand.last.perMember) || {};
-    liste.innerHTML = (zustand.order || []).map((id) => {
-      const p = (zustand.members || {})[id] || {};
-      const stand = je[id] || { done: 0, total: 0 };
-      return '<div class="person"><div class="kopf">' +
-        '<div class="bild">' + bildHtml(p) + '</div>' +
-        '<div class="name">' + (p.name || id) + '</div>' +
-        '<div class="zahl">' + fuellen(txt('of', '%1$d of %2$d'), stand.done, stand.total) + '</div>' +
-        '</div></div>';
-    }).join('');
+    el('tafel').innerHTML = '';
+    el('seite').innerHTML = '';
+    el('banner').innerHTML = '';
     return;
   }
 
-  // Nach Person gruppieren; wer diese Woche nichts hat, faellt weg.
-  const gruppen = new Map();
-  (zustand.order || []).forEach((id) => gruppen.set(id, []));
-  const ohne = [];
-  aemtchen.forEach((a) => {
-    const wer = zuweisung[a.id];
-    if (wer && gruppen.has(wer)) { gruppen.get(wer).push(a); }
-    else { ohne.push(a); }
-  });
-
-  /* Die Wochentage stehen unter dem ERSTEN Namen, nicht ueber allen Bloecken:
-     dort haben sie einen Bezug — sie gehoeren zu den Aemtchen, die gleich
-     darunter kommen. Ganz oben schwebten sie ueber der Kachel. Gezeigt werden
-     sie nur einmal; die Spalten sind fest breit und stehen deshalb auch in den
-     folgenden Bloecken an derselben Stelle. */
-  let kopfOffen = true;
-  let html = '';
-  gruppen.forEach((liste2, id) => {
-    const p = (zustand.members || {})[id] || {};
-    /* Wer nichts hat, faellt weg — AUSSER er setzt aus: dass jemand Pause hat,
-       erklaert, warum ein anderer zwei Aemtchen traegt. Das zu verstecken
-       liesse die Verteilung willkuerlich aussehen. */
-    if (liste2.length === 0) {
-      if (p.paused) {
-        html += '<div class="person pausiert"><div class="kopf">' +
-          '<div class="bild">' + bildHtml(p) + '</div>' +
-          '<div class="name">' + (p.name || id) + ' · ' + txt('paused', 'Pause') + '</div>' +
-          '</div></div>';
-      }
-      return;
-    }
-    const fertig = liste2.reduce((s, a) => s + (aktiv ? a.doneCount : 0), 0);
-    const gesamt = liste2.reduce((s, a) => s + a.total, 0);
-    const verdient = (zustand.earned || {})[id] || 0;
-    const beutel = (zustand.purse || {})[id];
-    html += '<div class="person' + (p.paused ? ' pausiert' : '') + '"><div class="kopf">' +
-      '<div class="bild">' + bildHtml(p) + '</div>' +
-      '<div class="name">' + (p.name || id) + (p.paused ? ' · ' + txt('paused', 'Pause') : '') + '</div>' +
-      (aktiv ? '<div class="zahl">' + fuellen(txt('of', '%1$d of %2$d'), fertig, gesamt) + '</div>' : '') +
-      (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined)
-        ? '<div class="muenzen"><span>🪙</span>' + (beutel !== undefined ? beutel : verdient) + '</div>' : '') +
-      '</div>' +
-      (kopfOffen ? tagekopfHtml() : '') +
-      liste2.map((a) => aemtchenHtml(a, aktiv)).join('') + '</div>';
-    kopfOffen = false;
-  });
-  if (ohne.length > 0) {
-    /* Hat niemand ein Aemtchen, steht der Tageskopf hier — sonst gaebe es ihn
-       gar nicht, und die Spalten waeren unbeschriftet. */
-    html += '<div class="person niemand"><div class="kopf">' +
-      '<div class="bild">–</div><div class="name">' + txt('nobody', '—') + '</div></div>' +
-      (kopfOffen ? tagekopfHtml() : '') +
-      ohne.map((a) => aemtchenHtml(a, false)).join('') + '</div>';
-    kopfOffen = false;
-  }
-  liste.innerHTML = html;
+  el('tafel').innerHTML = tafelHtml(aemtchen, aktiv);
+  el('seite').innerHTML = aktiv ? seiteHtml(aemtchen) : '';
+  el('banner').innerHTML = aktiv ? bannerHtml() : '';
   binden();
 }
 
@@ -518,57 +638,179 @@ function aemtchenMitUebertrag() {
 }
 
 /**
- * Die Ueberschrift ueber den Tagesspalten.
+ * Die Karten der Familienmitglieder.
  *
- * Sie steht EINMAL ueber allen Bloecken — die Spalten sind fest breit, deshalb
- * stehen die Haken aller Familienmitglieder darunter buendig. Die Kuerzel und
- * die Reihenfolge kommen fertig aus dem Modul: welcher Tag die Woche beginnt,
- * ist eine Einstellung, und die kennt die Kachel nicht.
+ * Gezaehlt wird ueber die PLAETZE, nicht ueber die Aemtchen: ein Aemtchen kann
+ * mehrmals in der Woche anstehen, und abgehakt wird jeder Tag einzeln.
  */
-function tagekopfHtml() {
-  const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
-  if (namen.length !== 7) { return ''; }
-  /* Der heutige Tag wird nur in der LAUFENDEN Woche hervorgehoben. Im
-     Rueckblick und in der Vorschau gehoert „heute" nicht dazu. */
-  const heute = blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
-  return '<div class="tagekopf"><div></div><div></div><div></div>' +
-    namen.map((n, i) => '<div class="tag' + (i === heute ? ' heute' : '') + '">' + n + '</div>').join('') +
-    '</div>';
+function leuteHtml(aemtchen, aktiv) {
+  const stand = {};
+  const zaehle = (id, fertig) => {
+    if (!id) { return; }
+    if (!stand[id]) { stand[id] = { done: 0, total: 0 }; }
+    stand[id].total++;
+    if (fertig) { stand[id].done++; }
+  };
+  if (blick === -1) {
+    const je = (zustand.last && zustand.last.perMember) || {};
+    Object.keys(je).forEach((id) => { stand[id] = { done: je[id].done || 0, total: je[id].total || 0 }; });
+  } else {
+    aemtchen.forEach((a) => {
+      (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
+        zaehle(halterVon(a, s), aktiv && s.done === true);
+      });
+    });
+  }
+
+  return (zustand.order || []).map((id) => {
+    const p = mitglied(id) || { name: id };
+    const s = stand[id] || { done: 0, total: 0 };
+    /* Wer diese Woche nichts hat, faellt weg — AUSSER er setzt aus: dass jemand
+       Pause hat, erklaert, warum ein anderer zwei Aemtchen traegt. Das zu
+       verstecken liesse die Verteilung willkuerlich aussehen. */
+    if (s.total === 0 && !p.paused) { return ''; }
+    const anteil = s.total > 0 ? Math.round(s.done * 100 / s.total) : 0;
+    const verdient = (zustand.earned || {})[id] || 0;
+    const beutel = (zustand.purse || {})[id];
+    const muenzen = (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
+      ? '<span class="muenzen">🪙' + (beutel !== undefined ? beutel : verdient) + '</span>' : '';
+    return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + farbeVon(id) + '">' +
+      '<div class="bild">' + bildHtml(p) + '</div>' +
+      '<div class="text">' +
+        '<div class="name">' + escHtml(p.name || id) + '</div>' +
+        '<div class="stand">' + (p.paused && s.total === 0
+          ? escHtml(txt('paused', 'Pause'))
+          : s.done + '/' + s.total + ' ' + escHtml(txt('done', 'done')) + muenzen) + '</div>' +
+      '</div>' +
+      (s.total > 0 ? '<div class="ring" style="--p:' + anteil + '"></div>' : '') +
+      '</div>';
+  }).join('');
 }
 
-function aemtchenHtml(a, aktiv) {
+/** Kopfzeile und eine Zeile je Aemtchen. */
+function tafelHtml(aemtchen, aktiv) {
+  const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
+  const start = wochenStart();
+  const heute = heuteSpalte();
+  const kopf = '<div class="kopfzeile"><div>' + escHtml(txt('task', 'Chore')) + '</div>' +
+    namen.map((n, i) => '<div class="tag' + (i === heute ? ' heute' : '') + '">' +
+      '<b>' + escHtml(n) + '</b>' + (start ? escHtml(kurzDatum(tagIn(start, i))) : '') + '</div>').join('') +
+    '</div>';
+  return kopf + aemtchen.map((a) => zeileHtml(a, aktiv, heute)).join('');
+}
+
+function zeileHtml(a, aktiv, heute) {
   const alle = a.total > 0 && a.doneCount >= a.total;
-  const heute = blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
-  /* Ein Platz je Tag — und die uebrigen Tage bleiben LEER. Genau dafuer sind
-     die Spalten da: man sieht auf einen Blick, an welchen Tagen ein Aemtchen
-     dran ist und an welchen nicht. */
+  /* Ein Platz je Tag — die uebrigen Tage bleiben LEER. Genau dafuer sind die
+     Spalten da: man sieht auf einen Blick, an welchen Tagen ein Aemtchen dran
+     ist und an welchen nicht. */
   const zellen = [];
   for (let i = 0; i < 7; i++) { zellen[i] = ''; }
   (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
     const spalte = Math.max(0, Math.min(6, Number(s.col) || 0));
-    const marke = a.id + ':' + s.key;
-    /* Zwei Gruende, warum nicht getippt werden darf, und sie sehen anders aus:
-       eine fremde Woche (alles blass) und ein Tag, der noch nicht dran war
-       (nur dieser Haken blass und gepunktet). */
-    const spaeter = s.locked === true;
-    zellen[spalte] += '<button type="button" class="haken' + (s.done ? ' fertig' : '') +
-      (s.carried ? ' uebertrag' : '') + (spaeter ? ' spaeter' : '') + '" data-marke="' + marke + '"' +
-      ' data-chore="' + a.id + '" data-slot="' + s.key + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
-      (aktiv && !spaeter ? '' : ' disabled') +
-      ' title="' + (s.carried ? txt('carried', '') : (spaeter ? txt('later', '') : '')) +
-      '"><span>✓</span></button>';
+    zellen[spalte] += platzHtml(a, s, aktiv);
   });
-  return '<div class="aemtchen' + (aktiv && alle ? ' fertig' : '') + '">' +
-    '<div class="bild">' + (a.emoji || '🧹') + '</div>' +
-    '<div class="titel">' + a.name + '</div>' +
-    (zustand.pointsMode === 'routines' && a.points > 0
-      ? '<div class="punkte">+' + a.points + '</div>' : '<div></div>') +
-    zellen.map((z, i) => '<div class="zelle' + (i === heute ? ' heute' : '') + '">' + z + '</div>').join('') +
+  return '<div class="zeile' + (aktiv && alle ? ' fertig' : '') + '">' +
+    '<div class="aufgabe">' +
+      '<div class="sym" style="--afarbe:' + farbeVon(a.id) + '">' + escHtml(a.emoji || '🧹') + '</div>' +
+      '<div class="titel">' + escHtml(a.name) + '</div>' +
+    '</div>' +
+    zellen.map((z, i) => '<div class="zelle' + (i === heute ? ' heute' : '') + '">' +
+      (z || '<span class="nix">–</span>') + '</div>').join('') +
     '</div>';
 }
 
+/**
+ * Ein Platz in der Tabelle: das Gesicht dessen, der dran ist.
+ *
+ * Zwei Gruende, warum nicht getippt werden darf, und sie sehen anders aus:
+ * eine fremde Woche (alles blass) und ein Tag, der noch nicht dran war (nur
+ * dieser Platz blass).
+ */
+function platzHtml(a, s, aktiv) {
+  const id = halterVon(a, s);
+  const p = mitglied(id);
+  const spaeter = s.locked === true;
+  const marke = a.id + ':' + s.key;
+  const titel = s.carried ? txt('carried', '') : (spaeter ? txt('later', '') : (p ? (p.name || '') : ''));
+  return '<button type="button" class="platz ' + (s.done ? 'fertig' : 'offen') +
+    (s.carried ? ' uebertrag' : '') + (spaeter ? ' spaeter' : '') + '"' +
+    ' style="--mfarbe:' + farbeVon(id) + '"' +
+    ' data-marke="' + escHtml(marke) + '" data-chore="' + escHtml(a.id) + '"' +
+    ' data-slot="' + escHtml(s.key) + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
+    (aktiv && !spaeter ? '' : ' disabled') +
+    ' title="' + escHtml(titel) + '">' +
+    '<span class="bild">' + (p ? bildHtml(p) : '?') + '</span>' +
+    '<span class="haken">✓</span></button>';
+}
+
+/** Gesamtfortschritt und die naechsten offenen Aemtchen. */
+function seiteHtml(aemtchen) {
+  const anteil = zustand.progress || 0;
+  const lob = anteil >= 100 ? txt('praiseAll', '') : (anteil >= 70 ? txt('praiseHigh', '')
+    : (anteil >= 40 ? txt('praiseMid', '') : txt('praiseLow', '')));
+  const gesamt = '<div class="seitenkarte"><h3>' + escHtml(txt('overall', 'Overall progress')) + '</h3>' +
+    '<div class="gesamt">' +
+      '<div class="donut" style="--p:' + anteil + '"><div class="loch">' + anteil + '%</div></div>' +
+      '<div class="zahlen"><div class="gross">' +
+        escHtml(fuellen(txt('doneOf', '%1$d of %2$d'), zustand.doneCount || 0, zustand.totalCount || 0)) +
+      '</div><div class="lob">' + escHtml(lob) + '</div></div>' +
+    '</div></div>';
+
+  return gesamt + '<div class="seitenkarte"><h3>' + escHtml(txt('upNext', 'Up next')) + '</h3>' +
+    '<div class="naechste">' + naechsteHtml(aemtchen) + '</div></div>';
+}
+
+/**
+ * Die naechsten offenen Plaetze, nach Tag sortiert.
+ *
+ * Uhrzeiten gibt es im Modell nicht — ein Aemtchen gehoert zu einem TAG.
+ * Deshalb steht dort „heute", „morgen" oder der Wochentag mit Datum. Was schon
+ * vorbei und offen ist, steht oben und traegt den Vermerk „ueberfaellig": es
+ * wartet ja weiter.
+ */
+function naechsteHtml(aemtchen) {
+  const heute = heuteSpalte();
+  const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
+  const start = wochenStart();
+  const offen = [];
+  aemtchen.forEach((a) => {
+    (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
+      if (s.done === true) { return; }
+      offen.push({ a: a, s: s, col: Math.max(0, Math.min(6, Number(s.col) || 0)) });
+    });
+  });
+  if (offen.length === 0) {
+    return '<div class="leerzeile">' + escHtml(txt('nothingOpen', '')) + '</div>';
+  }
+  offen.sort((x, y) => x.col - y.col);
+  return offen.slice(0, 5).map((o) => {
+    const p = mitglied(halterVon(o.a, o.s));
+    let wann = namen[o.col] || '';
+    if (start) { wann += ' ' + kurzDatum(tagIn(start, o.col)); }
+    let klasse = 'wann';
+    if (heute >= 0) {
+      if (o.col === heute) { wann = txt('today', 'Today'); }
+      else if (o.col === heute + 1) { wann = txt('tomorrow', 'Tomorrow'); }
+      else if (o.col < heute) { wann = wann + ' · ' + txt('overdue', ''); klasse += ' faellig'; }
+    }
+    return '<div class="eintrag">' +
+      '<div class="sym" style="--afarbe:' + farbeVon(o.a.id) + '">' + escHtml(o.a.emoji || '🧹') + '</div>' +
+      '<div class="text"><div class="was">' + escHtml(o.a.name) + '</div>' +
+      '<div class="' + klasse + '">' + escHtml(wann) + '</div></div>' +
+      (p ? '<div class="bild" style="--mfarbe:' + farbeVon(halterVon(o.a, o.s)) + '">' + bildHtml(p) + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function bannerHtml() {
+  return '<div class="pokal">🏆</div><div><div class="btitel">' +
+    escHtml(txt('teamTitle', '')) + '</div><div class="btext">' +
+    escHtml(txt('teamText', '')) + '</div></div>';
+}
+
 function binden() {
-  el('liste').querySelectorAll('.haken:not([disabled])').forEach((b) => {
+  el('tafel').querySelectorAll('.platz:not([disabled])').forEach((b) => {
     b.addEventListener('click', () => tippen(b));
   });
 }
@@ -585,6 +827,7 @@ function tippen(knopf) {
   setTimeout(() => { delete unterwegs[marke]; }, 1500);
   const ziel = knopf.dataset.ziel === '1';
   knopf.classList.toggle('fertig', ziel);
+  knopf.classList.toggle('offen', !ziel);
   knopf.dataset.ziel = ziel ? '0' : '1';
   if (typeof requestAction === 'function') {
     requestAction('Check', JSON.stringify({
@@ -602,6 +845,7 @@ el('wochenwahl').addEventListener('click', (ev) => {
   blick = Math.max(-1, Math.min(1, blick + (parseInt(b.dataset.schritt, 10) || 0)));
   zeichnen();
 });
+el('heute').addEventListener('click', () => { blick = 0; zeichnen(); });
 
 // ── Anbindung an die Visu ───────────────────────────────────────────────────
 function handleMessage(daten) {

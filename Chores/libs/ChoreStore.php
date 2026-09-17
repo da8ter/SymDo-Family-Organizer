@@ -1132,6 +1132,25 @@ trait ChoreStore
             'preview'  => $this->Translate('Preview — ticking starts on Monday'),
             'review'   => $this->Translate('Done and gone — this week is over'),
             'carriedHint' => $this->Translate('Dashed circle: carried over from last week'),
+            /* Die Tabellenansicht (17.09.2026): Kopf, Seitenspalte und Banner.
+               Die Kachel uebersetzt nichts selbst — auch nicht „heute". */
+            'subtitle'    => $this->Translate("Together it's easier"),
+            'task'        => $this->Translate('Chore'),
+            'today'       => $this->Translate('Today'),
+            'tomorrow'    => $this->Translate('Tomorrow'),
+            'cw'          => $this->Translate('CW'),
+            'overall'     => $this->Translate('Overall progress'),
+            'doneOf'      => $this->Translate('%1$d of %2$d chores done'),
+            'upNext'      => $this->Translate('Up next'),
+            'nothingOpen' => $this->Translate('Nothing open — everything is done'),
+            'done'        => $this->Translate('done'),
+            'overdue'     => $this->Translate('overdue'),
+            'teamTitle'   => $this->Translate('A strong team!'),
+            'teamText'    => $this->Translate('You keep your home in order together.'),
+            'praiseAll'   => $this->Translate('All done! 🎉'),
+            'praiseHigh'  => $this->Translate('Well done! 🎉'),
+            'praiseMid'   => $this->Translate('Keep it up!'),
+            'praiseLow'   => $this->Translate("Let's get started!"),
         ];
     }
 }
