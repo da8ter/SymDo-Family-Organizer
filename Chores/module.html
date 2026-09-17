@@ -1,3 +1,18 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<!-- Der Icon-Satz von Symcon. OHNE ihn bleiben alle <i> leere Kästen — die
+     Ämtchen hätten kein Symbol, der Pokal keins und das Haus im Kopf auch
+     nicht.
+
+     Und es MUSS ein vollständiges Dokument sein, kein Fragment: wo ein Fragment
+     eingehängt wird, entscheidet der Wirt, und ein über innerHTML eingesetzter
+     script-Verweis läuft gar nicht. Genau daran hing es hier — die Kachel war
+     ein Fragment und blieb deshalb ohne jedes Symbol (17.09.2026, gemeldet vom
+     Nutzer). Dieselbe Falle wie zuvor in der VRR-Kachel; die übrigen Kacheln
+     sind seit jeher ganze Dokumente mit dem Verweis im Kopf. -->
+<script src="/icons.js"></script>
 <style>
 /* Symcon injiziert --card-color, --content-color und --accent-color je nach
    Visu-Design. Alles hier leitet sich daraus ab — keine Fremd-Assets.
@@ -322,6 +337,8 @@ body {
   .kopfzeile, .zeile { grid-template-columns: minmax(64px, 1fr) repeat(7, var(--tagbreite)); }
 }
 </style>
+</head>
+<body>
 
 <div id="wrap">
   <div id="kopf" class="randrest">
@@ -897,3 +914,5 @@ window.addEventListener('message', (event) => { if (event) { handleMessage(event
 setInterval(() => { if (zustand) { zeichnen(); } }, 60000);
 })();
 </script>
+</body>
+</html>
