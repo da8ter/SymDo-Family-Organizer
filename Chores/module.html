@@ -204,9 +204,16 @@ body {
 .aufgabe { display: flex; align-items: center; gap: 9px; min-width: 0; padding-right: 8px; }
 .sym {
   flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
   background: var(--afarbe, var(--akzent));
+  /* Die Symbole der Visu sind Umrisse: auf der farbigen Flaeche gehoeren sie
+     in Weiss, sonst verschwinden sie darin. Beide Formen bemessen — /icons.js
+     ersetzt das <i> nachtraeglich durch ein <svg>. */
+  color: #fff;
 }
+.sym i, .sym svg { width: 16px; height: 16px; }
+#banner .pokal i, #banner .pokal svg { width: 24px; height: 24px; }
+.person .muenzen i, .person .muenzen svg { width: 12px; height: 12px; }
 .titel {
   min-width: 0; font-size: clamp(12px, 3.6vmin, 14px); font-weight: 700; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -299,7 +306,7 @@ body {
   padding: 12px 14px; margin-right: 0;
 }
 #banner:empty { display: none; }
-#banner .pokal { font-size: 24px; flex: 0 0 auto; }
+#banner .pokal { font-size: 22px; flex: 0 0 auto; color: var(--akzent); }
 #banner .btitel { font-size: 14px; font-weight: 800; }
 #banner .btext { font-size: 12px; color: var(--dezent); margin-top: 2px; }
 
@@ -489,6 +496,19 @@ function mitgliedFarbe(id) {
   const p = mitglied(id);
   const roh = (p && typeof p.color === 'string') ? p.color : '';
   return /^#[0-9a-f]{6}$/i.test(roh) ? roh : farbeVon(id);
+}
+
+/**
+ * Das Symbol eines Aemtchens.
+ *
+ * Es kommt als Font-Awesome-Name OHNE Praefix aus dem Formular (`SelectIcon`);
+ * die Visu liefert die Symbolschrift nach. Fehlt die Wahl, nimmt die Kachel
+ * den Besen — irgendein Bild ist besser als ein Loch in der Zeile.
+ */
+function symbolHtml(a) {
+  const roh = String((a && a.icon) || '').trim().replace(/^fa-/, '');
+  const name = /^[a-z0-9-]+$/i.test(roh) ? roh : 'broom';
+  return '<i class="fa-light fa-' + name + '"></i>';
 }
 
 function el(id) { return document.getElementById(id); }
@@ -685,7 +705,8 @@ function leuteHtml(aemtchen, aktiv) {
     const verdient = (zustand.earned || {})[id] || 0;
     const beutel = (zustand.purse || {})[id];
     const muenzen = (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
-      ? '<span class="muenzen">🪙' + (beutel !== undefined ? beutel : verdient) + '</span>' : '';
+      ? '<span class="muenzen"><i class="fa-light fa-coins"></i>' +
+        (beutel !== undefined ? beutel : verdient) + '</span>' : '';
     return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + mitgliedFarbe(id) + '">' +
       '<div class="bild">' + bildHtml(p) + '</div>' +
       '<div class="text">' +
@@ -724,7 +745,7 @@ function zeileHtml(a, aktiv, heute) {
   });
   return '<div class="zeile' + (aktiv && alle ? ' fertig' : '') + '">' +
     '<div class="aufgabe">' +
-      '<div class="sym" style="--afarbe:' + farbeVon(a.id) + '">' + escHtml(a.emoji || '🧹') + '</div>' +
+      '<div class="sym" style="--afarbe:' + farbeVon(a.id) + '">' + symbolHtml(a) + '</div>' +
       '<div class="titel">' + escHtml(a.name) + '</div>' +
     '</div>' +
     zellen.map((z, i) => '<div class="zelle' + (i === heute ? ' heute' : '') + '">' +
@@ -807,7 +828,7 @@ function naechsteHtml(aemtchen) {
       else if (o.col < heute) { wann = wann + ' · ' + txt('overdue', ''); klasse += ' faellig'; }
     }
     return '<div class="eintrag">' +
-      '<div class="sym" style="--afarbe:' + farbeVon(o.a.id) + '">' + escHtml(o.a.emoji || '🧹') + '</div>' +
+      '<div class="sym" style="--afarbe:' + farbeVon(o.a.id) + '">' + symbolHtml(o.a) + '</div>' +
       '<div class="text"><div class="was">' + escHtml(o.a.name) + '</div>' +
       '<div class="' + klasse + '">' + escHtml(wann) + '</div></div>' +
       (p ? '<div class="bild">' + bildHtml(p) + '</div>' : '') +
@@ -816,7 +837,7 @@ function naechsteHtml(aemtchen) {
 }
 
 function bannerHtml() {
-  return '<div class="pokal">🏆</div><div><div class="btitel">' +
+  return '<div class="pokal"><i class="fa-light fa-trophy"></i></div><div><div class="btitel">' +
     escHtml(txt('teamTitle', '')) + '</div><div class="btext">' +
     escHtml(txt('teamText', '')) + '</div></div>';
 }

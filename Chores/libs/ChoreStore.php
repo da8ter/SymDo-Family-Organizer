@@ -98,7 +98,7 @@ trait ChoreStore
      * Versatz innerhalb des Kreises: das erste Ämtchen geht an den ersten
      * Teilnehmer der Woche, das zweite an den nächsten.
      *
-     * @return list<array{id:string,emoji:string,name:string,points:int,perWeek:int,circle:string}>
+     * @return list<array{id:string,icon:string,name:string,points:int,perWeek:int,circle:string}>
      */
     private function AemtchenLesen(): array
     {
@@ -116,7 +116,9 @@ trait ChoreStore
             $tage = $this->TageEinesAemtchens($z);
             $raus[] = [
                 'id'      => $id,
-                'emoji'   => trim((string)($z['emoji'] ?? '')),
+                /* Der Font-Awesome-Name ohne „fa-" (so legt SelectIcon ab).
+                   Leer heisst: die Kachel nimmt ihr Standardsymbol. */
+                'icon'    => trim((string)($z['icon'] ?? '')),
                 'name'    => $name,
                 'points'  => max(0, (int)($z['points'] ?? 5)),
                 /* Wie oft in der Woche — das sagen jetzt die TAGE. Die alte
@@ -197,6 +199,68 @@ trait ChoreStore
         }
         unset($z);
         if (!$ergaenzt) {
+            return;
+        }
+        @IPS_SetProperty($this->InstanceID, 'Chores', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
+        $this->UebernehmenNachtragen();
+    }
+
+    /**
+     * Einmalig: aus dem alten Emoji ein Symbol machen.
+     *
+     * Bis zum 17.09.2026 stand in der Ämtchen-Liste ein Emoji als Text. Die
+     * Spalte ist jetzt eine Symbolauswahl (`SelectIcon`, Font-Awesome-Name ohne
+     * „fa-"). Ohne diesen Nachtrag stünde in jedem bestehenden Plan derselbe
+     * Besen, bis jemand alle Zeilen von Hand anfasst.
+     *
+     * Die Tabelle deckt ab, was in Haushaltslisten vorkommt; alles andere
+     * bleibt leer und bekommt in der Kachel den Besen. Ein Symbol, das die
+     * Visu nicht kennt, wäre schlimmer als keins — deshalb stehen hier nur
+     * Namen, die in der mitgelieferten Symbolschrift wirklich vorhanden sind
+     * (gegen icons.js geprüft, 17.09.2026).
+     */
+    private function AemtchenSymboleWandern(): void
+    {
+        $cfg = $this->Konfiguration();
+        if (!array_key_exists('Chores', $cfg)) {
+            return;
+        }
+        $zeilen = json_decode((string)$cfg['Chores'], true);
+        if (!is_array($zeilen) || $zeilen === []) {
+            return;
+        }
+        $tabelle = [
+            '🗑' => 'trash-can', '♻' => 'recycle',
+            '🍽' => 'utensils', '🍴' => 'utensils', '🥄' => 'utensils', '🍳' => 'utensils',
+            '🧽' => 'soap', '🧼' => 'soap', '🧴' => 'soap',
+            '🧹' => 'broom', '🧺' => 'shirt', '👕' => 'shirt', '👚' => 'shirt',
+            '🛁' => 'bath', '🚿' => 'shower', '🚽' => 'bath',
+            '🌱' => 'seedling', '🌿' => 'seedling', '🪴' => 'seedling', '🌸' => 'seedling',
+            '💐' => 'seedling', '🌺' => 'seedling',
+            '🐾' => 'paw', '🐶' => 'dog', '🐱' => 'cat', '🐟' => 'fish', '🐠' => 'fish',
+            '🛏' => 'bed', '📚' => 'book', '📖' => 'book', '🚗' => 'car', '🪟' => 'window-frame',
+            '✨' => 'sparkles', '☕' => 'mug-hot', '🍷' => 'wine-glass',
+        ];
+        $geaendert = false;
+        foreach ($zeilen as &$z) {
+            if (!is_array($z) || trim((string)($z['icon'] ?? '')) !== '') {
+                continue;
+            }
+            /* Emojis reisen oft mit einer Variantenwahl (U+FE0F) oder als
+               Tastenfolge — verglichen wird deshalb der erste Bildpunkt. */
+            $emoji = trim((string)($z['emoji'] ?? ''));
+            if ($emoji === '') {
+                continue;
+            }
+            $zeichen = mb_substr($emoji, 0, 1, 'UTF-8');
+            if (!isset($tabelle[$zeichen])) {
+                continue;
+            }
+            $z['icon'] = $tabelle[$zeichen];
+            $geaendert = true;
+        }
+        unset($z);
+        if (!$geaendert) {
             return;
         }
         @IPS_SetProperty($this->InstanceID, 'Chores', (string)json_encode($zeilen, JSON_UNESCAPED_UNICODE));
@@ -1059,7 +1123,7 @@ trait ChoreStore
             $liste[] = [
                 'id'        => $a['id'],
                 'name'      => $a['name'],
-                'emoji'     => $a['emoji'],
+                'icon'      => $a['icon'],
                 'points'    => $a['points'],
                 'memberId'  => (string)($woche['assign'][$a['id']] ?? ''),
                 'doneCount' => $erledigt,
@@ -1152,8 +1216,8 @@ trait ChoreStore
             'overdue'     => $this->Translate('overdue'),
             'teamTitle'   => $this->Translate('A strong team!'),
             'teamText'    => $this->Translate('You keep your home in order together.'),
-            'praiseAll'   => $this->Translate('All done! 🎉'),
-            'praiseHigh'  => $this->Translate('Well done! 🎉'),
+            'praiseAll'   => $this->Translate('All done!'),
+            'praiseHigh'  => $this->Translate('Well done!'),
             'praiseMid'   => $this->Translate('Keep it up!'),
             'praiseLow'   => $this->Translate("Let's get started!"),
         ];

@@ -81,6 +81,7 @@ class SymDoChores extends IPSModuleStrict
 
         // Neuen Zeilen ihre Kennung geben; schreibt zurück und wendet danach erneut an.
         $this->AemtchenNachtragen();
+        $this->AemtchenSymboleWandern();
 
         // Woche einfrieren bzw. umrollen, dann Variablen und Timer nachziehen.
         $this->WocheSicherstellen(time());
@@ -254,8 +255,12 @@ class SymDoChores extends IPSModuleStrict
             // sonst verwirft die Konsole sie beim Übernehmen.
             ['caption' => 'ID', 'name' => 'id', 'width' => '0px',
              'visible' => false, 'save' => true, 'add' => ''],
-            ['caption' => $this->Translate('Emoji'), 'name' => 'emoji', 'width' => '80px',
-             'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
+            /* Symbol statt Emoji (auf Wunsch, 17.09.2026): `SelectIcon` legt den
+               Font-Awesome-Namen OHNE das Praefix „fa-" ab, die Kachel setzt es
+               wieder davor. Emojis sahen auf jedem Geraet anders aus; die
+               Symbole der Visu sind ueberall dieselben. */
+            ['caption' => $this->Translate('Icon'), 'name' => 'icon', 'width' => '90px',
+             'add' => '', 'edit' => ['type' => 'SelectIcon']],
             ['caption' => $this->Translate('Chore'), 'name' => 'name', 'width' => 'auto',
              'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
             // Die Wochentage als sieben Haken, in der Reihenfolge der Anzeige.

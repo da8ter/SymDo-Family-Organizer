@@ -13,7 +13,6 @@
             "Pause": "Pause",
             "Chores": "Ämtchen",
             "Chore": "Ämtchen",
-            "Emoji": "Emoji",
             "Per week": "Je Woche",
             "Who": "Wer",
             "Points": "Punkte",
@@ -84,10 +83,11 @@
             "overdue": "überfällig",
             "A strong team!": "Ein starkes Team!",
             "You keep your home in order together.": "Ihr haltet das Zuhause gemeinsam in Ordnung.",
-            "All done! 🎉": "Alles erledigt! 🎉",
-            "Well done! 🎉": "Stark gemacht! 🎉",
+            "All done!": "Alles erledigt!",
+            "Well done!": "Stark gemacht!",
             "Keep it up!": "Weiter so!",
-            "Let's get started!": "Auf geht's!"
+            "Let's get started!": "Auf geht's!",
+            "Icon": "Symbol"
         }
     }
 }
