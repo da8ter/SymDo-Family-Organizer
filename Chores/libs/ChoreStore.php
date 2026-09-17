@@ -1213,7 +1213,6 @@ trait ChoreStore
             'task'        => $this->Translate('Chore'),
             'today'       => $this->Translate('Today'),
             'tomorrow'    => $this->Translate('Tomorrow'),
-            'cw'          => $this->Translate('CW'),
             'overall'     => $this->Translate('Overall progress'),
             'doneOf'      => $this->Translate('%1$d of %2$d chores done'),
             'upNext'      => $this->Translate('Up next'),

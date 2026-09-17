@@ -86,22 +86,16 @@ body {
   flex: 0 0 auto; display: flex; align-items: center; gap: 2px;
   border: 1px solid var(--rand); border-radius: 14px; padding: 2px; background: var(--karte);
 }
-#wochenwahl button, #heute {
+#wochenwahl button {
   border: 0; background: transparent; color: inherit; cursor: pointer;
   font: inherit; line-height: 1; padding: 6px 9px; border-radius: 11px;
 }
-#wochenwahl button:disabled, #heute:disabled { opacity: .35; cursor: default; }
-/* Feste Mindestbreite mit Ziffern gleicher Breite: sonst wandern die Pfeile
-   beim Umschalten, weil die Wochen verschieden breit sind. */
+#wochenwahl button:disabled { opacity: .35; cursor: default; }
+/* Feste Mindestbreite: sonst wandern die Pfeile beim Umschalten, weil
+   „Diese Woche" und „Nächste Woche" verschieden breit sind. */
 #wochenname {
-  min-width: 13ch; text-align: center; font-variant-numeric: tabular-nums;
-  white-space: nowrap; padding: 0 4px;
-}
-#wochenkw { display: block; font-size: 12px; font-weight: 800; }
-#wochenspanne { display: block; font-size: 10px; font-style: normal; color: var(--dezent); }
-#heute {
-  flex: 0 0 auto; border: 1px solid var(--rand); background: var(--karte);
-  font-size: 12px; font-weight: 700; padding: 9px 12px; border-radius: 14px;
+  min-width: 12ch; text-align: center; padding: 0 4px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
 }
 
 /* ── Karten der Familienmitglieder ───────────────────────────────────────── */
@@ -349,10 +343,9 @@ body {
     </div>
     <div id="wochenwahl">
       <button type="button" data-schritt="-1" aria-label="&lsaquo;">&lsaquo;</button>
-      <span id="wochenname"><b id="wochenkw"></b><i id="wochenspanne"></i></span>
+      <span id="wochenname"></span>
       <button type="button" data-schritt="1" aria-label="&rsaquo;">&rsaquo;</button>
     </div>
-    <button id="heute" type="button"></button>
   </div>
   <div id="leute" class="randrest"></div>
   <div id="liste">
@@ -550,50 +543,14 @@ function bildHtml(person) {
   return name ? escHtml(name.slice(0, 1).toUpperCase()) : '?';
 }
 
-/* ── Wochenrechnung in der Kachel ───────────────────────────────────────────
-   Die Wochenkennung IST das Startdatum („2026-09-15"). Datum und Kalenderwoche
-   rechnet die Kachel daraus selbst und ueberlaesst das FORMAT dem Browser
-   (toLocaleDateString) — genau wie die Web-App. Uebersetzt wird trotzdem
-   nichts hier: Wochentagsnamen und alle Woerter kommen fertig aus dem Modul. */
-function wochenStart() {
-  const k = blick === 0 ? (zustand.week || '')
-    : (blick === 1 ? ((zustand.next || {}).week || '') : ((zustand.last || {}).week || ''));
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k));
-  if (!m) { return null; }
-  return new Date(+m[1], +m[2] - 1, +m[3]);
-}
-function tagIn(datum, i) {
-  const d = new Date(datum.getTime());
-  d.setDate(d.getDate() + i);
-  return d;
-}
-/** Kalenderwoche nach ISO 8601 — gezaehlt am Donnerstag der gezeigten Spanne. */
-function kalenderwoche(start) {
-  const d = new Date(start.getTime());
-  /* Der Wochenstart ist einstellbar; die ISO-Woche haengt am Donnerstag. Wir
-     nehmen deshalb den Donnerstag INNERHALB der gezeigten sieben Tage. */
-  const bis = tagIn(start, 6);
-  let don = null;
-  for (let i = 0; i < 7; i++) {
-    const t = tagIn(start, i);
-    if (t.getDay() === 4) { don = t; break; }
-  }
-  if (!don) { don = bis; }
-  const anfang = new Date(don.getFullYear(), 0, 1);
-  return Math.ceil((((don - anfang) / 86400000) + anfang.getDay() + 1) / 7);
-}
-function kurzDatum(d) {
-  try { return d.toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' }); }
-  catch (e) { return (d.getDate()) + '.' + (d.getMonth() + 1) + '.'; }
-}
-function spanne(start) {
-  const ende = tagIn(start, 6);
-  try {
-    const a = start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-    const b = ende.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-    return a + ' – ' + b;
-  } catch (e) { return kurzDatum(start) + ' – ' + kurzDatum(ende); }
-}
+/* Die Kachel zeigt KEIN Datum.
+
+   Der Plan ist eine Woche, die sich wiederholt — „Müll rausbringen am
+   Dienstag" gilt jede Woche. Ein Datum daneben behauptet mehr, als der Plan
+   weiß, und die drei Ansichten heißen deshalb schlicht „Letzte Woche",
+   „Diese Woche" und „Nächste Woche" (Entscheidung des Nutzers, 17.09.2026).
+   Die Wochenkennung reist weiter mit — sie hängt an jedem Häkchen —, sie wird
+   nur nicht mehr angezeigt. */
 
 /** Die Spalte, in der heute steht — nur in der laufenden Woche. */
 function heuteSpalte() {
@@ -632,15 +589,11 @@ function zeichnen() {
   el('titel').textContent = txt('title', 'Chores');
   el('untertitel').textContent = txt('subtitle', '');
 
-  const start = wochenStart();
-  el('wochenkw').textContent = start ? (txt('cw', 'CW') + ' ' + kalenderwoche(start)) : '';
-  el('wochenspanne').textContent = start ? spanne(start) : '';
+  el('wochenname').textContent = blick === 0 ? txt('thisWeek', 'This week')
+    : (blick === -1 ? txt('lastWeek', 'Last week') : txt('nextWeek', 'Next week'));
   const knoepfe = el('wochenwahl').querySelectorAll('button');
   knoepfe[0].disabled = blick === -1 || (blick === 0 && !hatLetzte);
   knoepfe[1].disabled = blick === 1 || (blick === 0 && !hatNaechste);
-  const heuteKnopf = el('heute');
-  heuteKnopf.textContent = txt('today', 'Today');
-  heuteKnopf.disabled = blick === 0;
 
   /* Haken gibt es nur fuer die laufende Woche: in der Vorschau waere ein Haken
      eine Behauptung ueber die Zukunft, im Rueckblick eine Einladung,
@@ -740,11 +693,10 @@ function leuteHtml(aemtchen, aktiv) {
 /** Kopfzeile und eine Zeile je Aemtchen. */
 function tafelHtml(aemtchen, aktiv) {
   const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
-  const start = wochenStart();
   const heute = heuteSpalte();
   const kopf = '<div class="kopfzeile"><div>' + escHtml(txt('task', 'Chore')) + '</div>' +
     namen.map((n, i) => '<div class="tag' + (i === heute ? ' heute' : '') + '">' +
-      '<b>' + escHtml(n) + '</b>' + (start ? escHtml(kurzDatum(tagIn(start, i))) : '') + '</div>').join('') +
+      '<b>' + escHtml(n) + '</b></div>').join('') +
     '</div>';
   return kopf + aemtchen.map((a) => zeileHtml(a, aktiv, heute)).join('');
 }
@@ -822,7 +774,6 @@ function seiteHtml(aemtchen) {
 function naechsteHtml(aemtchen) {
   const heute = heuteSpalte();
   const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
-  const start = wochenStart();
   const offen = [];
   aemtchen.forEach((a) => {
     (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
@@ -837,7 +788,6 @@ function naechsteHtml(aemtchen) {
   return offen.slice(0, 5).map((o) => {
     const p = mitglied(halterVon(o.a, o.s));
     let wann = namen[o.col] || '';
-    if (start) { wann += ' ' + kurzDatum(tagIn(start, o.col)); }
     let klasse = 'wann';
     if (heute >= 0) {
       if (o.col === heute) { wann = txt('today', 'Today'); }
@@ -895,7 +845,6 @@ el('wochenwahl').addEventListener('click', (ev) => {
   blick = Math.max(-1, Math.min(1, blick + (parseInt(b.dataset.schritt, 10) || 0)));
   zeichnen();
 });
-el('heute').addEventListener('click', () => { blick = 0; zeichnen(); });
 
 // ── Anbindung an die Visu ───────────────────────────────────────────────────
 function handleMessage(daten) {
