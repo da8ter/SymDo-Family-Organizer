@@ -30,6 +30,10 @@ trait TransitBridge
         }
         $haltestellen = [];
         $strecken     = [];
+        /* Die Uhr des Servers. Die App vergleicht `fetchedAt` damit und NICHT
+           mit ihrer eigenen Uhr: ein Telefon, das zwei Minuten vorgeht, hielte
+           sonst jeden frischen Stand fuer alt und fragte endlos nach. */
+        $jetzt        = 0;
         /* Der Steig-Schalter gilt der ANZEIGE, nicht der einzelnen Haltestelle.
            Gibt es mehrere VRR-Instanzen, gewinnt die erste, die ihn abschaltet:
            wer ihn irgendwo nicht sehen will, will ihn nirgends sehen. */
@@ -47,6 +51,7 @@ trait TransitBridge
             if (($roh['showPlatform'] ?? true) === false) {
                 $steigZeigen = false;
             }
+            $jetzt = max($jetzt, (int)($roh['now'] ?? 0));
             foreach ((array)($roh['stops'] ?? []) as $s) {
                 if (is_array($s)) {
                     $haltestellen[] = $this->TransitHaltestelle($s);
@@ -63,6 +68,7 @@ trait TransitBridge
         }
         return ['ok' => true, 'transit' => [
             'stops' => $haltestellen, 'routes' => $strecken, 'showPlatform' => $steigZeigen,
+            'now'   => $jetzt > 0 ? $jetzt : time(),
         ]];
     }
 
@@ -106,6 +112,11 @@ trait TransitBridge
             'member'     => (string)($s['member'] ?? ''),
             'walk'       => (int)($s['walk'] ?? 0),
             'stale'      => ($s['stale'] ?? false) === true,
+            /* Wann dieser Stand geholt wurde. Ohne die Zeile kann die App den
+               Unterschied zwischen „gerade geholt" und „von heute frueh" nicht
+               sehen — und genau der entscheidet, ob sie gleich noch einmal
+               fragt, statt eine Minute lang eine leere Tafel zu zeigen. */
+            'fetchedAt'  => (int)($s['fetchedAt'] ?? 0),
             'departures' => $abfahrten,
         ];
     }
@@ -147,6 +158,8 @@ trait TransitBridge
             'mode'     => (string)($r['mode'] ?? 'dep'),
             'school'   => $schule,
             'stale'    => ($r['stale'] ?? false) === true,
+            // Siehe TransitHaltestelle: das Alter des Standes.
+            'fetchedAt' => (int)($r['fetchedAt'] ?? 0),
             /* Auch dieses Feld MUSS durch die Weissliste — ohne es zeigte die
                Uebersichtskarte wieder die gemischte Liste, und niemand saehe,
                warum der Haken nichts tut. */

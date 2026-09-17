@@ -8085,6 +8085,12 @@ let nahverkehr = null;
 let nvNurDirekt = ls.get('symdo.nv.direkt') === '1';
 let nahverkehrLaeuft = false;
 let nahverkehrSignatur = '';
+/* Die Nachfrage nach einer Pause — siehe nahverkehrNachfassen(). */
+let nahverkehrNachfrage = 0;
+let nahverkehrVersuche  = 0;
+const NV_ALT_S          = 90;    // aelter als das ist ein Stand aus der Pause
+const NV_NACHFRAGE_MS   = 5000;
+const NV_NACHFRAGEN_MAX = 3;
 let stundenplanLegende = false;
 let stundenplanTag = 0;   // gewaehlter Wochentag, 0 = noch keiner
 /* In WELCHER Woche der gewaehlte Tag liegt: 0 = laufende, 1 = die kommende.
@@ -8638,13 +8644,18 @@ function loadTimetable() {
  * zu fragen: die Fahrplanauskunft ist offen und ohne Zusicherung, ein
  * Dauerpoller waere unhoeflich.
  */
-function loadTransit() {
+function loadTransit(nachgefasst) {
   if (nahverkehrLaeuft || !briefingAvailable()) { return; }
+  /* Jeder Abruf aus dem Takt (oder vom Zurueckkommen) beginnt eine neue Runde
+     Nachfragen. Sonst waere nach einer laengeren Stoerung das Kontingent fuer
+     immer aufgebraucht, und genau dann braucht man es wieder. */
+  if (!nachgefasst) { nahverkehrVersuche = 0; }
   nahverkehrLaeuft = true;
   return aiPost('/transit', {}).then(r => {
     nahverkehrLaeuft = false;
     const j = r && r.json;
     const frisch = (j && j.ok === true && j.transit) ? j.transit : null;
+    nahverkehrNachfassen(frisch);
     if (frisch === null && nahverkehr === null) { return; }
     const signatur = frisch === null ? '' : JSON.stringify(frisch);
     if (signatur === nahverkehrSignatur) { return; }
@@ -8656,6 +8667,45 @@ function loadTransit() {
     applyTabVisibility();
     renderAll();
   }).catch(() => { nahverkehrLaeuft = false; });
+}
+
+/**
+ * Nach einer Pause ist die Tafel kalt — dann gleich noch einmal fragen.
+ *
+ * Das VRR-Modul holt nur, solange jemand hinsieht (Takt 60 s), ausserhalb des
+ * Morgenlaufs gar nicht. Der ERSTE Blick nach einer Pause bekommt deshalb den
+ * letzten gespeicherten Stand: Abfahrten, die laengst vorbei sind, werden
+ * weggesiebt — die Tafel ist leer, die Karte traegt „veraltet". Das Modul
+ * schlaegt bei diesem Blick sofort an (Timer 1 s), nur fragte die App bisher
+ * erst eine Minute spaeter wieder. Gemessen am 17.09.2026: Stand von 08:29,
+ * Blick um 10:11, leere Tafel.
+ *
+ * Also: ist irgendein Stand als `stale` markiert oder aelter als NV_ALT_S,
+ * fragen wir nach fuenf Sekunden noch einmal — hoechstens dreimal je Runde.
+ * Im Normalbetrieb passiert nichts davon; dort ist jeder Stand Sekunden alt.
+ *
+ * Verglichen wird gegen die Uhr des SERVERS (`transit.now`), nicht gegen die
+ * eigene: ein Geraet mit falsch gehender Uhr fragte sonst endlos nach.
+ */
+function nahverkehrNachfassen(frisch) {
+  if (nahverkehrNachfrage) { clearTimeout(nahverkehrNachfrage); nahverkehrNachfrage = 0; }
+  if (!frisch) { return; }
+  const jetzt = Number(frisch.now) || 0;
+  const alt = (e) => {
+    if (!e) { return false; }
+    if (e.stale === true) { return true; }
+    const geholt = Number(e.fetchedAt) || 0;
+    return jetzt > 0 && geholt > 0 && (jetzt - geholt) > NV_ALT_S;
+  };
+  const kalt = (frisch.stops || []).some(alt) || (frisch.routes || []).some(alt);
+  if (!kalt) { nahverkehrVersuche = 0; return; }
+  if (nahverkehrVersuche >= NV_NACHFRAGEN_MAX) { return; }
+  nahverkehrVersuche++;
+  nahverkehrNachfrage = setTimeout(() => {
+    nahverkehrNachfrage = 0;
+    if (document.visibilityState !== 'visible') { return; }
+    loadTransit(true);
+  }, NV_NACHFRAGE_MS);
 }
 
 /** Die Haltestellen und Strecken, die zur aktuellen Mitgliedswahl passen. */
