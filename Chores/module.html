@@ -334,12 +334,33 @@ body {
 #leer { padding: 18px 8px; text-align: center; color: var(--dezent); font-size: 13px; }
 #leer:empty { display: none; }
 
-/* Schmale Kacheln: die Tagesspalten schrumpfen, damit sieben davon neben dem
-   Namen bleiben. Sie zu verstecken waere falsch — sie sind der Inhalt. */
-@media (max-width: 460px) {
-  :root { --tagbreite: 42px; }
+/* Schmale Kacheln: Gesichter, Haken und Tagesspalten schrumpfen, damit vom
+   Aemtchen-Namen mehr uebrig bleibt als ein Buchstabe (gemeldet 17.09.2026 mit
+   Bild: „M…", „T…", „S…"). Die Spalten zu verstecken waere falsch — sie sind
+   der Inhalt; also wird an den Bildern gespart.
+
+   ZWEI Stufen, weil eine nicht reicht: die Kachel in der Visu ist oft 500 bis
+   700 Pixel breit, das Telefon im Hochformat knapp 400. */
+@media (max-width: 760px) {
+  :root { --tagbreite: 40px; }
   .platz, .platz .bild { width: 32px; height: 32px; }
-  .sym { width: 26px; height: 26px; font-size: 13px; }
+  .platz .haken {
+    width: 17px; height: 17px; font-size: 11px; line-height: 17px;
+    right: -2px; bottom: -2px;
+  }
+  .platz .bild { font-size: 13px; }
+  .sym { width: 28px; height: 28px; font-size: 13px; }
+  .zelle { min-height: 48px; }
+  .kopfzeile, .zeile { grid-template-columns: minmax(84px, 1fr) repeat(7, var(--tagbreite)); }
+}
+@media (max-width: 460px) {
+  :root { --tagbreite: 34px; }
+  .platz, .platz .bild { width: 28px; height: 28px; }
+  .platz .haken {
+    width: 15px; height: 15px; font-size: 10px; line-height: 15px;
+  }
+  .sym { width: 26px; height: 26px; font-size: 12px; }
+  .zelle { min-height: 42px; }
   .kopfzeile, .zeile { grid-template-columns: minmax(64px, 1fr) repeat(7, var(--tagbreite)); }
 }
 </style>
