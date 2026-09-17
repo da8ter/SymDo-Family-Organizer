@@ -977,7 +977,13 @@
             "Reply needed:": "Rückmeldung:",
             "%d reply/replies with a deadline": "%d Rückmeldung(en) mit Frist",
             "LOGINEO": "LOGINEO",
-            "Colour": "Farbe"
+            "Colour": "Farbe",
+            "There is no chore plan here.": "Einen Ämtchenplan gibt es hier nicht.",
+            "%1$s is on %2$s": "%1$s ist dran mit %2$s",
+            "already done": "schon erledigt",
+            "Nothing is due there.": "Da steht nichts an.",
+            "I do not know anyone called \"%1$s\" in the chore plan. Known are: %2$s.": "Im Ämtchenplan kenne ich niemanden namens „%1$s\". Bekannt sind: %2$s.",
+            "%1$d chores, %2$d of them still open.": "%1$d Ämtchen, davon %2$d noch offen."
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

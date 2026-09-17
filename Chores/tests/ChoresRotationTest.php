@@ -627,6 +627,29 @@ $h->attr['Week'] = json_encode(array_merge($w, ['assign' => ['t1' => 'd']]));
 $w2 = $h->pWoche($mi);
 pruefe('wer im Kreis bleibt, behaelt sein Aemtchen', $w2['assign']['t1'], 'd');
 
+// ── Ein leerer Kreis darf die Woche nicht leeren ────────────────────────────
+/* Faellt die Mitgliederauskunft aus (das Gateway ist beschaeftigt), kennt das
+   Modul keine Rollen mehr — „Nur Kinder" ergibt dann einen LEEREN Kreis. Das
+   heisst „ich kann es gerade nicht sagen" und nicht „hier gehoert niemand hin".
+   Vorher loeschte genau dieser Fall die Zuweisung der ganzen Woche. */
+$nurKind = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'child',
+    'rotate' => 'week'], $vierTage)];
+$h = harness($vier, $nurKind);
+$w = $h->pWoche($mi);
+$halterVorher = $w['assign']['t1'];
+pruefe('mit Rollen ist ein Kind zustaendig', in_array($halterVorher, ['a', 'b'], true), true);
+$h->rollen = [];                       // Gateway antwortet nicht mehr
+$h->namen  = [];
+$w2 = $h->pWoche($mi);
+pruefe('ohne Auskunft bleibt die Zuweisung stehen', $w2['assign']['t1'], $halterVorher);
+/* Und eine Zuweisung, die schon leer IST, wird repariert, sobald die Auskunft
+   wieder da ist — sonst bliebe der Schaden fuer den Rest der Woche. */
+$h2 = harness($vier, $nurKind);
+$w3 = $h2->pWoche($mi);
+$h2->attr['Week'] = json_encode(array_merge($w3, ['assign' => ['t1' => '']]));
+pruefe('eine leere Zuweisung wird wieder gefuellt',
+    in_array($h2->pWoche($mi)['assign']['t1'], ['a', 'b'], true), true);
+
 // ── Schalter der Anzeige ────────────────────────────────────────────────────
 /* Alles an, solange nichts anderes dasteht — und jeder Kasten einzeln aus. */
 $h = harness($drei, $aemtchen3);

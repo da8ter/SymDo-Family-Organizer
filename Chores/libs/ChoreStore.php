@@ -575,11 +575,19 @@ trait ChoreStore
                    umgestellt wurde. Schon Abgehaktes bleibt unberuehrt: dort
                    steht am Platz, wer es wirklich getan hat. */
                 $halter = trim((string)$zuweisung[$a['id']]);
-                if ($halter === '') {
+                $kreis = $this->KreisFuer($a['circle'], $rollen);
+                /* Ein LEERER Kreis heisst „ich kann es gerade nicht sagen",
+                   nicht „hier gehoert niemand hin". Genau das passiert, wenn die
+                   Mitgliederauskunft ausfaellt: `Rollen()` fragt das Gateway, und
+                   ein Ruf zurueck in eine gerade beschaeftigte Gateway-Instanz
+                   kommt nicht durch (gemessen am 17.09.2026, als der
+                   Sprachassistent CHR_GetState aus dem Gateway-Hook heraus rief).
+                   Ohne diese Zeile leerte dieser eine Lesezugriff die Zuweisung
+                   der ganzen Woche — ein Lesen, das schreibt. */
+                if ($kreis === []) {
                     continue;
                 }
-                $kreis = $this->KreisFuer($a['circle'], $rollen);
-                if (!in_array($halter, $kreis, true)) {
+                if ($halter === '' || !in_array($halter, $kreis, true)) {
                     $zuweisung[$a['id']] = $frisch[$a['id']] ?? '';
                     $geaendert = true;
                 }

@@ -25,6 +25,7 @@ trait VoiceTools
        Instanzliste an, nicht ueber eine Property -- es koennen mehrere sein
        (eine je Kind), und alle sind gleichberechtigt. */
     private const VOICE_ROUTINES_GUID = '{B1DF065E-80F5-49DF-B2B8-3CE657ED23BB}';
+    private const VOICE_CHORES_GUID   = '{EE6DEDE0-C67E-42A7-A797-3B155611B8DB}';
 
     /** Obergrenze je Werkzeugantwort in Zeichen (json_encode-Länge). */
     private static int $VOICE_CAP = 2000;
@@ -93,6 +94,24 @@ trait VoiceTools
                                    'description' => '"heute", "morgen", ein Wochentag wie "Dienstag" oder ein Datum JJJJ-MM-TT'],
                     ],
                     'required' => ['kind', 'tag'],
+                ],
+            ],
+            'aemtchen_lesen' => [
+                'art' => 'lesen',
+                'beschreibung' => 'Der Ämtchenplan der Familie: wer an einem Tag oder in dieser Woche '
+                    . 'für welches Ämtchen zuständig ist und ob es schon erledigt ist. Für Fragen wie '
+                    . '„Wer bringt heute den Müll raus?", „Was muss Tim heute machen?", '
+                    . '„Wer räumt morgen den Tisch ab?" oder „Was steht diese Woche an?".',
+                'schema' => [
+                    'type' => 'object', 'additionalProperties' => false,
+                    'properties' => [
+                        'person' => ['type' => ['string', 'null'],
+                                     'description' => 'Name des Familienmitglieds; null = alle'],
+                        'tag'    => ['type' => 'string',
+                                     'description' => '"heute", "morgen", ein Wochentag wie "Dienstag", '
+                                         . 'ein Datum JJJJ-MM-TT oder "Woche" für die ganze Woche'],
+                    ],
+                    'required' => ['person', 'tag'],
                 ],
             ],
             'hausaufgaben_lesen' => [
@@ -563,6 +582,7 @@ trait VoiceTools
                 'einkaufsliste_lesen' => $this->VoiceToolEinkauf($args, $ctx),
                 'aufgaben_lesen'      => $this->VoiceToolAufgaben($args, $ctx),
                 'stundenplan_lesen'   => $this->VoiceToolStundenplan($args, $ctx),
+                'aemtchen_lesen'      => $this->VoiceToolAemtchen($args, $ctx),
                 'hausaufgaben_lesen'  => $this->VoiceToolHausaufgabenLesen($args, $ctx),
                 'hausaufgabe_anlegen' => $this->VoiceToolHausaufgabeAnlegen($args, $ctx),
                 'hausaufgabe_abhaken' => $this->VoiceToolHausaufgabeAbhaken($args, $ctx),
@@ -1784,6 +1804,165 @@ trait VoiceTools
      *
      * @return string JJJJ-MM-TT, oder '' wenn unverständlich
      */
+    /**
+     * Der Ämtchenplan: wer an einem Tag (oder in der ganzen Woche) für was
+     * zuständig ist — und ob es schon erledigt ist.
+     *
+     * Gelesen wird die Kachel-Nutzlast des Ämtchenplan-Moduls (`CHR_GetState`).
+     * Sie trägt alles Nötige fertig gerechnet: die Plätze je Ämtchen mit ihrem
+     * Wochentag, wer dran ist, und ob der Haken sitzt. Die Rotation ein zweites
+     * Mal zu rechnen wäre eine zweite Wahrheit.
+     *
+     * @param array<string,mixed> $args
+     * @param array<string,mixed> $ctx
+     * @return array<string,mixed>
+     */
+    private function VoiceToolAemtchen(array $args, array $ctx): array
+    {
+        if (!function_exists('CHR_GetState')) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no chore plan here.'));
+        }
+        $ids = (array)@IPS_GetInstanceListByModuleID(self::VOICE_CHORES_GUID);
+        if ($ids === []) {
+            return $this->VoiceErr('nicht_erlaubt', $this->Translate('There is no chore plan here.'));
+        }
+
+        $wunschTag = trim((string)($args['tag'] ?? 'heute'));
+        $ganzeWoche = $this->VoiceNorm($wunschTag) === 'woche'
+            || $this->VoiceNorm($wunschTag) === 'diese woche';
+        $datum = $ganzeWoche ? '' : $this->VoicePlanTag($wunschTag);
+        if (!$ganzeWoche && $datum === '') {
+            return $this->VoiceErr('ungueltige_eingabe', $this->Translate('I did not understand the day.'));
+        }
+        $wunschWer = $this->VoiceNorm((string)($args['person'] ?? ''));
+
+        /* Die NAMEN kommen aus dem Gateway selbst, nicht aus der Kachel-Nutzlast.
+           Grund: der Ämtchenplan holt sie seinerseits mit TGW_GetUsersForTile —
+           also mit einem Ruf zurück in genau die Instanz, die hier gerade
+           arbeitet. Symcon führt je Instanz eine Sache zur Zeit aus; der Rückruf
+           kommt nicht durch, und der Plan fällt auf die Kennung zurück. Gemessen
+           am 17.09.2026: „fa0ad897 ist dran mit Müll rausbringen". Hier liegen
+           die Stammdaten ohnehin. */
+        $namenKarte = [];
+        foreach ($this->LoadUsers() as $u) {
+            $namenKarte[(string)($u['id'] ?? '')] = trim((string)($u['name'] ?? ''));
+        }
+
+        $zeilen = [];
+        $namen  = [];
+        $offen  = 0;
+        $fertig = 0;
+        foreach ($ids as $id) {
+            $stand = json_decode((string)@CHR_GetState((int)$id), true);
+            if (!is_array($stand) || !is_array($stand['chores'] ?? null)) {
+                continue;
+            }
+            $mitglieder = is_array($stand['members'] ?? null) ? $stand['members'] : [];
+            $tage = is_array($stand['dayNames'] ?? null) ? $stand['dayNames'] : [];
+            /* Die Wochenkennung IST das Startdatum der Woche. Damit wird aus
+               einem Datum die Spalte — und aus einer Spalte wieder ein Tag. */
+            $start = (string)($stand['week'] ?? '');
+            $spalte = -1;
+            if (!$ganzeWoche && $start !== '') {
+                $abstand = (int)floor((strtotime($datum . ' 12:00') - strtotime($start . ' 12:00')) / 86400);
+                if ($abstand < 0 || $abstand > 6) {
+                    // Der Tag liegt nicht in der Woche, die der Plan gerade zeigt.
+                    continue;
+                }
+                $spalte = $abstand;
+            }
+            foreach ($stand['chores'] as $a) {
+                if (!is_array($a)) {
+                    continue;
+                }
+                foreach ((array)($a['slots'] ?? []) as $platz) {
+                    if (!is_array($platz)) {
+                        continue;
+                    }
+                    $wer = (string)($platz['memberId'] ?? '');
+                    $name = $namenKarte[$wer] ?? '';
+                    if ($name === '') {
+                        $name = trim((string)($mitglieder[$wer]['name'] ?? ''));
+                    }
+                    if ($name === $wer) {
+                        // Der Plan konnte den Namen selbst nicht aufloesen.
+                        $name = '';
+                    }
+                    if ($name !== '') {
+                        /* Die bekannten Namen sammelt die GANZE Woche ein, nicht
+                           nur der gefragte Tag: sonst hiesse „hat Tim heute was?"
+                           an einem freien Tag „den kenne ich nicht". */
+                        $namen[$name] = true;
+                    }
+                    if ($spalte >= 0 && (int)($platz['col'] ?? -1) !== $spalte) {
+                        continue;
+                    }
+                    if ($wunschWer !== '') {
+                        $k = $this->VoiceNorm($name);
+                        // Teilwort in BEIDE Richtungen — wie beim Stundenplan.
+                        if ($k === '' || (!str_contains($k, $wunschWer) && !str_contains($wunschWer, $k))) {
+                            continue;
+                        }
+                    }
+                    $erledigt = ($platz['done'] ?? false) === true;
+                    $erledigt ? $fertig++ : $offen++;
+                    $tagName = $ganzeWoche
+                        ? (string)($tage[max(0, min(6, (int)($platz['col'] ?? 0)))] ?? '')
+                        : '';
+                    $zeilen[] = trim(($tagName !== '' ? $tagName . ': ' : '')
+                        . sprintf($this->Translate('%1$s is on %2$s'), $name !== '' ? $name : '—',
+                                  (string)($a['name'] ?? ''))
+                        . ($erledigt ? ' (' . $this->Translate('already done') . ')' : ''));
+                }
+            }
+        }
+
+        if ($namen === [] && $zeilen === []) {
+            return ['ok' => true, 'aemtchen' => [], 'offen' => 0, 'erledigt' => 0,
+                    'sag' => $this->Translate('Nothing is due there.')];
+        }
+        if ($zeilen === []) {
+            /* Zwei sehr verschiedene Faelle, und frueher klangen sie gleich:
+               den Namen gibt es nicht — oder es gibt ihn, er hat nur an diesem
+               Tag nichts. */
+            $bekannt = false;
+            foreach (array_keys($namen) as $name) {
+                $k = $this->VoiceNorm($name);
+                if ($wunschWer !== '' && $k !== ''
+                    && (str_contains($k, $wunschWer) || str_contains($wunschWer, $k))) {
+                    $bekannt = true;
+                    break;
+                }
+            }
+            if ($wunschWer === '' || $bekannt) {
+                return ['ok' => true, 'aemtchen' => [], 'offen' => 0, 'erledigt' => 0,
+                        'sag' => $this->Translate('Nothing is due there.')];
+            }
+            return $this->VoiceErr('nicht_gefunden', sprintf(
+                $this->Translate('I do not know anyone called "%1$s" in the chore plan. Known are: %2$s.'),
+                trim((string)($args['person'] ?? '')), implode(', ', array_keys($namen))));
+        }
+        /* Hoechstens 25 Zeilen: eine ganze Woche mit fuenf Aemtchen an sieben
+           Tagen waere sonst eine Vorlesung. */
+        $gekuerzt = count($zeilen) > 25;
+        if ($gekuerzt) {
+            $zeilen = array_slice($zeilen, 0, 25);
+        }
+        return [
+            'ok'       => true,
+            'aemtchen' => $zeilen,
+            'offen'    => $offen,
+            'erledigt' => $fertig,
+            'gekuerzt' => $gekuerzt,
+            /* Eine einzelne Zeile IST die Antwort; bei mehreren formuliert das
+               Modell aus den Zeilen oben besser, als eine Aufzaehlung klingt. */
+            'sag'      => count($zeilen) === 1
+                ? $zeilen[0]
+                : sprintf($this->Translate('%1$d chores, %2$d of them still open.'),
+                          $fertig + $offen, $offen),
+        ];
+    }
+
     private function VoicePlanTag(string $tag): string
     {
         $t = $this->VoiceNorm($tag);
@@ -3108,7 +3287,7 @@ trait VoiceTools
             'Heute ist ' . $this->VoiceDatumZeile() . '.',
             // Feste Grenzen: was das Modell kann, steht in genau diesen Werkzeugen.
             // Alles andere lehnt es freundlich ab, statt eine Faehigkeit zu erfinden.
-            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
+            'Deine Aufgabe ist eng umrissen. Du kannst NUR: Einkaufslisten und Aufgaben lesen, ergänzen, abhaken und löschen; Schritte in den Routinen der Kinder abhaken; Termine im Kalender lesen, eintragen, ändern und löschen (auch Serien); Notizen lesen, anlegen, ändern und löschen und dabei einem Haushaltsmitglied zuordnen; Rezepte abfragen und ihre Zutaten auf die Einkaufsliste setzen; den Essensplan lesen und Gerichte für Tage festlegen; den Stundenplan der Kinder abfragen (welche Fächer an einem Tag anstehen, wann Schule aus ist, was entfällt oder vertreten wird); die Hausaufgaben der Kinder abfragen, eintragen und abhaken (welches Fach, bis wann, mit Notiz); den Ämtchenplan abfragen (wer an einem Tag oder in dieser Woche für welches Ämtchen zuständig ist und ob es schon erledigt ist); einen Tagesüberblick geben; eine kurze Mitteilung auf die Geräte des Haushalts oder einer Person schicken; '
             . ($geraete ? 'freigegebene Geräte im Haus lesen und steuern — Licht samt Farbe und Farbtemperatur, Rollläden, Heizung, Steckdosen, Szenen und Skripte — sofort (geraete_lesen, geraet_steuern, szene_starten) oder zeitgesteuert, einmalig („in 55 Minuten", „um 22 Uhr") wie dauerhaft („jeden Tag um 11 Uhr", „werktags um 6:30"), mit zeitplan_anlegen, zeitplaene_lesen und zeitplan_loeschen; ' : '')
             . 'Fragen zu Symcon selbst mit dem Werkzeug symcon_handbuch aus dem offiziellen Handbuch beantworten. Mehr nicht, und ausschließlich über deine Werkzeuge.',
             $geraete
