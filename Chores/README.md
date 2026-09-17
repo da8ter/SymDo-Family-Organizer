@@ -17,15 +17,16 @@ Das Gegenstück für den Tag ist **SymDo - Routinen**: Häkchenlisten, die sich 
 
 ## 1. Was die Kachel zeigt
 
-Oben die Woche mit einem Schritt zurück und einem nach vorn, darunter der Fortschritt der Woche. Dann je Person ein Block: Foto, Name, „2 von 3" und das Guthaben, darunter ihre Ämtchen mit Symbol, Punktwert und den Häkchen.
+Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein Fortschrittsring. Darunter die **Tabelle**: eine Zeile je Ämtchen, eine Spalte je Wochentag, und in jeder Zelle das Gesicht dessen, der an diesem Tag dran ist. Daneben der Gesamtfortschritt als Ring und die nächsten offenen Ämtchen, darunter ein Schlusswort.
 
-- **Eine Spalte je Wochentag.** Oben stehen die Wochentage als Überschrift, und jedes Häkchen sitzt in der Spalte des Tages, an dem das Ämtchen dran ist. Der heutige Tag ist hervorgehoben.
-- **Was noch nicht dran war, lässt sich nicht abhaken.** Ein Tag, der noch aussteht, zeigt seinen Kreis blass und gepunktet. Nachtragen geht: vergangene Tage dieser Woche bleiben offen.
-- **Ein Häkchen je Erledigung.** Ein Ämtchen, das zweimal in der Woche dran ist, hat zwei Kreise — an zwei Tagen.
+- **Eine Spalte je Wochentag.** Jeder Platz sitzt in der Spalte des Tages, an dem das Ämtchen dran ist; Tage ohne Platz zeigen einen Strich. Der heutige Tag ist hervorgehoben.
+- **Antippen hakt ab.** Erledigt heißt: Gesicht voll und mit Häkchen. Offen heißt: blass.
+- **Was noch nicht dran war, lässt sich nicht abhaken.** Ein Tag, der noch aussteht, bleibt sehr blass und ist nicht tippbar. Nachtragen geht: vergangene Tage dieser Woche bleiben offen.
 - **Gestrichelter Kreis**: ein Platz, der aus der Vorwoche übrig ist (nur mit *Übertrag*, Kapitel 3).
-- **Vorschau**: die nächste Woche zeigt, wer dann dran ist — ohne Häkchen, denn abgehakt wird ab Montag.
-- **Rückblick**: die letzte Woche als Bilanz je Person.
 - **Pause**: wer aussetzt, steht blass mit dem Hinweis da. Das erklärt, warum jemand anders zwei Ämtchen trägt.
+- Die Kachel zeigt **nur die laufende Woche** — der Plan wiederholt sich ja. Wer wissen will, wer nächste Woche dran ist, fragt `CHR_Preview()`.
+- **Symbole und Farben** kommen aus dem Formular: je Ämtchen ein Symbol (Font Awesome) und eine Farbe, je Familienmitglied eine Farbe aus der Mitgliederliste des Gateways. Ohne Wahl nimmt die Kachel eine eingebaute Farbleiter, damit zwei Zeilen nie gleich aussehen.
+- **Was zu sehen ist, entscheidest du**: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen und Schlusswort lassen sich einzeln abschalten (Kapitel 3). Die Tabelle bleibt immer.
 
 ## 2. Voraussetzungen
 
@@ -36,7 +37,7 @@ Oben die Woche mit einem Schritt zurück und einem nach vorn, darunter der Forts
 
 1. Instanz **SymDo - Ämtchenplan** anlegen und in der Kachel-Visualisierung einbinden. Die Konsole schlägt beim Anlegen ein vorhandenes Gateway als übergeordnete Instanz vor
 2. **Teilnehmer** eintragen, in der Reihenfolge, in der rotiert werden soll. *Last* 2 heißt doppelt so viele Ämtchen, *Pause* lässt jemanden aussetzen
-3. **Ämtchen** eintragen: Symbol, Name, **an welchen Wochentagen** (ein Haken je Tag), und wer in Frage kommt — alle Teilnehmer, nur die Kinder, nur die Erwachsenen oder eine feste Person
+3. **Ämtchen** eintragen: Symbol, Farbe, Name, **an welchen Wochentagen** (ein Haken je Tag), wer in Frage kommt — alle Teilnehmer, nur die Kinder, nur die Erwachsenen oder eine feste Person — und ob der Kreis **wöchentlich oder täglich** weiterrückt
 4. Unter *Verhalten* den ersten Wochentag und die **Uhrzeit des Wochenwechsels** wählen (Vorgabe Montag 3:00). Der Sonntagabend gehört noch zur alten Woche
 5. Unter *Anzeige* wählen, welche Kästen die Kachel zeigt
 
@@ -44,9 +45,11 @@ Oben die Woche mit einem Schritt zurück und einem nach vorn, darunter der Forts
 |---|---|
 | Teilnehmer | Reihenfolge = Reihenfolge der Rotation. *Pause* verschiebt die Reihe der anderen **nicht**, eine Zeile zu löschen schon |
 | Ämtchen | Reihenfolge entscheidet, wer welches Ämtchen zuerst bekommt. Umsortieren wirkt ab der nächsten Woche. **Die sieben Haken sagen, an welchen Tagen es dran ist** — wie oft in der Woche ergibt sich daraus |
+| Symbol / Farbe | Font-Awesome-Symbol und Farbe des Kreises. Ohne Wahl: Besen und die eingebaute Farbleiter |
+| Wechsel | *wöchentlich*: eine Person trägt das Ämtchen die ganze Woche. *täglich*: der Kreis rückt an jedem Tag weiter, an dem es ansteht |
 | Woche beginnt am | Montag bis Sonntag |
 | Wochenwechsel um | Uhrzeit, zu der die neue Woche beginnt |
-| Übertrag | Nicht erledigte Ämtchen wandern als zusätzliche Plätze in die neue Woche, beim **alten** Zuständigen. Höchstens eine Woche tief |
+| Übertrag | Nicht erledigte Ämtchen wandern als zusätzliche Plätze in die neue Woche, beim **alten** Zuständigen. Höchstens eine Woche tief. Der Schalter wirkt sofort: ausgeschaltet verschwinden auch die Überträge der laufenden Woche, eingeschaltet sind sie wieder da |
 | Anzeige | Welche Kästen die Kachel zeigt: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort |
 
 ## 4. Wie die Rotation rechnet
@@ -62,6 +65,8 @@ Eingefroren heißt: die Zuweisung der laufenden Woche steht fest, sobald sie ein
 **Last** verteilt ungleich, und zwar verzahnt: bei Last 2 für Anna und je 1 für Ben und Clara lautet der Kreis Anna, Ben, Clara, Anna. So bekommt Anna in einer Woche nicht beide Ämtchen, sondern ist über die Wochen doppelt so oft dran.
 
 Über einen vollen Umlauf des Kreises geht die Verteilung genau auf. Innerhalb eines angebrochenen Umlaufs kann sie um bis zu die Zahl der Ämtchen abweichen — das ist Arithmetik und kein Fehler.
+
+**Täglicher Wechsel** setzt an der Person an, die diese Woche ohnehin dran wäre: sie macht den ersten Tag, der nächste im Kreis den zweiten und so fort. Die Woche bleibt damit eingefroren, und der Wochenwechsel schiebt die ganze Reihe weiter wie bisher. Steht in *Wer* eine feste Person, ändert *täglich* nichts — ein Kreis aus einer Person hat nichts zum Weiterrücken.
 
 Wer die Reihe von Hand verschieben will, nimmt den Knopf **Eine Person weiterdrehen**. Er wirkt ab der nächsten Woche.
 
