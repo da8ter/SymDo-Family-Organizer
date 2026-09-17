@@ -316,6 +316,18 @@ body {
 #banner .btitel { font-size: 14px; font-weight: 800; }
 #banner .btext { font-size: 12px; color: var(--dezent); margin-top: 2px; }
 
+/* ── Konfetti ────────────────────────────────────────────────────────────
+   Wie in der Routinen-Kachel, nur ohne den Feier-Kasten davor: hier wird
+   nicht EINMAL am Ende gefeiert, sondern bei jedem Haken eines Kindes — ein
+   Kasten, der die Kachel vier Sekunden zuhaelt, waere da im Weg. Die Leinwand
+   nimmt keine Tipps an, man kann waehrend des Regens weiter abhaken. */
+#konfetti {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 30; display: none;
+}
+#konfetti.an { display: block; }
+@media (prefers-reduced-motion: reduce) { #konfetti { display: none !important; } }
+
 #leer { padding: 18px 8px; text-align: center; color: var(--dezent); font-size: 13px; }
 #leer:empty { display: none; }
 
@@ -342,6 +354,7 @@ body {
     <div id="banner"></div>
     <div id="leer"></div>
   </div>
+  <canvas id="konfetti"></canvas>
 </div>
 <script>
 /* In einer IIFE gekapselt: die Tile-Visu injiziert selbst globale Bindungen
@@ -708,7 +721,8 @@ function platzHtml(a, s) {
   const spaeter = s.locked === true;
   const marke = a.id + ':' + s.key;
   const titel = s.carried ? txt('carried', '') : (spaeter ? txt('later', '') : (p ? (p.name || '') : ''));
-  return '<button type="button" class="platz ' + (s.done ? 'fertig' : 'offen') +
+  const kind = (p && String(p.persona || '').toLowerCase() === 'child') ? ' data-kind="1"' : '';
+  return '<button type="button"' + kind + ' class="platz ' + (s.done ? 'fertig' : 'offen') +
     (s.carried ? ' uebertrag' : '') + (spaeter ? ' spaeter' : '') + '"' +
     ' style="--mfarbe:' + mitgliedFarbe(id) + '"' +
     ' data-marke="' + escHtml(marke) + '" data-chore="' + escHtml(a.id) + '"' +
@@ -783,6 +797,64 @@ function bannerHtml() {
     escHtml(txt('teamText', '')) + '</div></div>';
 }
 
+/**
+ * Konfetti — wortgleich aus der Routinen-Kachel uebernommen (dieselben Farben,
+ * dieselbe Physik), nur kuerzer und ohne Feier-Kasten.
+ *
+ * Wer es nicht sehen will, sieht es nicht: `prefers-reduced-motion` blendet
+ * die Leinwand per CSS aus, und die Schleife bricht dann gleich ab.
+ */
+let konfettiLaeuft = false;
+function konfettiRegen() {
+  const leinwand = el('konfetti');
+  if (!leinwand || konfettiLaeuft) { return; }
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+  } catch (e) { /* ohne matchMedia wird gefeiert */ }
+  const ctx = leinwand.getContext('2d');
+  if (!ctx) { return; }
+  konfettiLaeuft = true;
+  leinwand.classList.add('an');
+  leinwand.width = leinwand.clientWidth;
+  leinwand.height = leinwand.clientHeight;
+  const farben = ['#f6b73c', '#ff5f8f', '#4fc3f7', '#81c784', '#ba68c8',
+    getComputedStyle(document.documentElement).getPropertyValue('--akzent').trim() || '#00cdab'];
+  const teile = [];
+  for (let i = 0; i < 90; i++) {
+    teile.push({
+      x: Math.random() * leinwand.width,
+      y: -20 - Math.random() * leinwand.height * 0.5,
+      w: 6 + Math.random() * 6,
+      h: 8 + Math.random() * 8,
+      farbe: farben[i % farben.length],
+      vy: 2 + Math.random() * 3,
+      vx: -1 + Math.random() * 2,
+      dreh: Math.random() * Math.PI,
+      vdreh: -0.1 + Math.random() * 0.2
+    });
+  }
+  const start = Date.now();
+  (function malen() {
+    ctx.clearRect(0, 0, leinwand.width, leinwand.height);
+    teile.forEach((t) => {
+      t.x += t.vx; t.y += t.vy; t.dreh += t.vdreh;
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.dreh);
+      ctx.fillStyle = t.farbe;
+      ctx.fillRect(-t.w / 2, -t.h / 2, t.w, t.h);
+      ctx.restore();
+    });
+    if (Date.now() - start < 1800) {
+      requestAnimationFrame(malen);
+    } else {
+      ctx.clearRect(0, 0, leinwand.width, leinwand.height);
+      leinwand.classList.remove('an');
+      konfettiLaeuft = false;
+    }
+  })();
+}
+
 function binden() {
   el('tafel').querySelectorAll('.platz:not([disabled])').forEach((b) => {
     b.addEventListener('click', () => tippen(b));
@@ -803,6 +875,9 @@ function tippen(knopf) {
   knopf.classList.toggle('fertig', ziel);
   knopf.classList.toggle('offen', !ziel);
   knopf.dataset.ziel = ziel ? '0' : '1';
+  /* Gefeiert wird nur das ABHAKEN, und nur bei einem Kind: fuer die Eltern
+     waere es Konfetti fuers Muellrausbringen. */
+  if (ziel && knopf.dataset.kind === '1') { konfettiRegen(); }
   if (typeof requestAction === 'function') {
     requestAction('Check', JSON.stringify({
       week: zustand ? zustand.week : '',
