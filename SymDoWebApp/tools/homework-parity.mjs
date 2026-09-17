@@ -31,8 +31,16 @@ function schneide(name) {
     return html.slice(start, i + 1);
 }
 const NAMEN = ['hwFachTreffer', 'hwFachInfo', 'hwAusSchule', 'hwWartetAufSchule',
-    'hwOffene', 'hwErledigte', 'hwGruppen', 'hwFuerSlot', 'hwFaecherFuerKind'];
-const F = new Function(NAMEN.map(schneide).join('\n') + '\nreturn {' + NAMEN.join(', ') + '};')();
+    'hwOffene', 'hwErledigte', 'hwGruppen', 'hwFuerSlot', 'hwFaecherFuerKind',
+    'hwErledigtText'];
+/* hwErledigtText greift nach zwei Nachbarn: der Uebersetzung und dem
+   Faelligkeitstext. Beide werden hier ersetzt — geprueft wird diese Funktion,
+   nicht ihre Umgebung. */
+const UMGEBUNG = `
+function translate(k) { return k === 'done %s' ? 'erledigt %s' : k; }
+function hwFaelligText(d) { return 'faellig:' + String(d || ''); }
+`;
+const F = new Function(UMGEBUNG + NAMEN.map(schneide).join('\n') + '\nreturn {' + NAMEN.join(', ') + '};')();
 
 let fehler = 0, anzahl = 0;
 function pruefe(name, ist, soll) {
@@ -188,6 +196,24 @@ pruefe('offene und wartende zusammen bleiben der Bestand',
     F.hwOffene(warten, 'k1').length + F.hwErledigte(warten, 'k1').length, warten.length);
 pruefe('offene und erledigte ergeben zusammen den Bestand des Kindes',
     F.hwOffene(fertig, 'k1').length + F.hwErledigte(fertig, 'k1').length, 6);
+
+
+// ── Wann wurde es erledigt? ────────────────────────────────────────────────
+/* Gezeigt wird das Datum aus `doneAt`. Bei Aufgaben aus der Schule zieht das
+   Gateway es auf den Zeitpunkt der Bestaetigung nach — hier zaehlt nur, dass
+   die Zeile es formatiert und ohne Zeitpunkt auf die Faelligkeit zurueckfaellt. */
+const AM_17_09 = Math.floor(new Date('2026-09-17T15:40:00+02:00').getTime() / 1000);
+/* Das FORMAT gehoert dem Browser (toLocaleDateString) — auf Deutsch „17.9.",
+   unter Node in der Standardsprache „9/17". Geprueft wird deshalb gegen
+   dieselbe Formatierung, nicht gegen eine feste Schreibweise. */
+const ERWARTET = 'erledigt ' + new Date(AM_17_09 * 1000)
+    .toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' });
+pruefe('erledigt mit Datum',
+    F.hwErledigtText({ done: true, doneAt: AM_17_09, due: '2026-09-11' }), ERWARTET);
+pruefe('ohne Zeitpunkt bleibt die Faelligkeit',
+    F.hwErledigtText({ done: true, doneAt: 0, due: '2026-09-11' }), 'faellig:2026-09-11');
+pruefe('kaputter Zeitpunkt faellt ebenfalls zurueck',
+    F.hwErledigtText({ done: true, doneAt: 'morgen', due: '2026-09-11' }), 'faellig:2026-09-11');
 
 console.log(`\n${anzahl} Zusicherungen, ${fehler} Abweichung(en).`);
 process.exit(fehler === 0 ? 0 : 1);

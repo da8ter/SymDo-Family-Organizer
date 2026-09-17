@@ -721,7 +721,8 @@
             "Homework to do": "Offene Hausaufgaben",
             "Waiting in line (%d ahead)…": "Wartet in der Schlange (%d davor)…",
             "Being analyzed…": "Wird ausgewertet…",
-            "The AI is taking unusually long. Please try again.": "Die KI braucht ungewöhnlich lange. Bitte noch einmal versuchen."
+            "The AI is taking unusually long. Please try again.": "Die KI braucht ungewöhnlich lange. Bitte noch einmal versuchen.",
+            "done %s": "erledigt %s"
         },
         "en": {
             "SymDo ToDo List": "SymDo - ToDo List",

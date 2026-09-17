@@ -12032,6 +12032,24 @@ function hwFaelligText(due) {
 }
 
 /**
+ * „erledigt 17.9." — das Datum, an dem die Aufgabe erledigt wurde.
+ *
+ * Bei Aufgaben aus der Schule ist das der Zeitpunkt, an dem WebUntis sie als
+ * abgeschlossen gemeldet hat, nicht der, an dem hier der Haken gesetzt wurde
+ * (das Gateway zieht `doneAt` bei der Bestaetigung nach). Ohne Zeitpunkt —
+ * alte Eintraege — bleibt es bei der Faelligkeit.
+ */
+function hwErledigtText(i) {
+  const ts = Number(i && i.doneAt) || 0;
+  if (!ts) { return hwFaelligText(i ? i.due : ''); }
+  const d = new Date(ts * 1000);
+  let datum;
+  try { datum = d.toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' }); }
+  catch (e) { datum = d.getDate() + '.' + (d.getMonth() + 1) + '.'; }
+  return String(translate('done %s')).replace('%s', datum);
+}
+
+/**
  * Die Hausaufgaben des gezeigten Kindes, als Abschnitt unter dem Wochenraster.
  *
  * Bewusst KEIN eigener Bereich in der Leiste: der Stundenplan-Bereich hängt
@@ -12310,7 +12328,11 @@ function hwZeileHtml(i, subjects, mitAvatar, wischbar) {
       `</span>` +
       (i.note ? `<span class="hw-notiz">${escapeHtml(i.note)}</span>` : '') +
     `</span>` +
-    `<span class="hw-faellig">${escapeHtml(hwFaelligText(i.due))}</span>` +
+    /* Bei einer erledigten Aufgabe zaehlt, WANN sie erledigt wurde — die
+       Faelligkeit ist dann Vergangenheit. Sie bleibt im Titel erreichbar;
+       zwei Daten passen in die schmale Spalte nicht. */
+    `<span class="hw-faellig"${fertig ? ` title="${escapeHtml(hwFaelligText(i.due))}"` : ''}>` +
+      `${escapeHtml(fertig ? hwErledigtText(i) : hwFaelligText(i.due))}</span>` +
     (mitAvatar ? `<span class="cal-side"><span class="cal-chips">` +
       `${renderAvatarStack([String(i.childId)])}</span></span>` : '') +
   `</div>` + (mitGeste ? '</div>' : '');

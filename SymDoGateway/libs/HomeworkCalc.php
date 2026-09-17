@@ -363,6 +363,12 @@ class HomeworkCalc
             if (($n['done'] ?? false) === true && ($satz['done'] ?? false) === true
                 && (string)($satz['doneBy'] ?? '') !== self::BY_UNTIS) {
                 $satz['doneBy'] = self::BY_UNTIS;
+                /* Und mit dem Urheber wandert das DATUM: gefragt ist, wann die
+                   Schule die Aufgabe abgeschlossen hat, nicht wann das Kind den
+                   Haken gesetzt hat (Wunsch des Nutzers, 17.09.2026). Genauer
+                   als „bei diesem Abruf gesehen" geht es nicht — WebUntis
+                   liefert zur Aufgabe nur `completed`, keinen Zeitpunkt. */
+                $satz['doneAt'] = $jetzt;
             }
             // Sperrklinke: erledigt bleibt erledigt.
             if (($n['done'] ?? false) === true && ($satz['done'] ?? false) !== true) {

@@ -333,7 +333,9 @@ $eC = HomeworkCalc::Zusammenfuehren($alt, [
 ], 'k1', '2026-09-11', '2026-09-11', $jetzt);
 pruefe('altes Haekchen bekommt WebUntis nachgetragen', $eC['items'][0]['doneBy'], 'untis');
 pruefe('und zaehlt als Aenderung', $eC['geaendert'], 1);
-pruefe('der Zeitpunkt bleibt, wie er war', $eC['items'][0]['doneAt'], $jetzt - 900);
+/* Mit dem Urheber wandert das DATUM: gezeigt werden soll, wann die Schule
+   abgeschlossen hat — nicht, wann hier der Haken gesetzt wurde (17.09.2026). */
+pruefe('der Zeitpunkt wandert auf die Bestaetigung', $eC['items'][0]['doneAt'], $jetzt);
 // Sagt WebUntis dagegen „offen", bleibt das eigene Haekchen ohne Urheber
 // stehen — dann hat es hier jemand gesetzt, nur vor der Umstellung.
 $eD = HomeworkCalc::Zusammenfuehren($alt, [
@@ -364,7 +366,22 @@ $eE = HomeworkCalc::Zusammenfuehren($selbst, [
 ], 'k1', '2026-09-11', '2026-09-11', $jetzt);
 pruefe('die Bestaetigung macht die Schule zum Urheber', $eE['items'][0]['doneBy'], 'untis');
 pruefe('sie zaehlt als Aenderung', $eE['geaendert'], 1);
-pruefe('der Zeitpunkt des Abhakens bleibt der eigene', $eE['items'][0]['doneAt'], $jetzt - 900);
+pruefe('und auch hier zaehlt der Zeitpunkt der Bestaetigung',
+    $eE['items'][0]['doneAt'], $jetzt);
+/* Gegenprobe: ein Haken, den die Schule schon gesetzt HATTE, wird nicht bei
+   jedem Abruf neu datiert — sonst stuende dort immer „heute". */
+$schon = [
+    ['id' => 'h9', 'srcId' => 7002, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => $jetzt - 900, 'doneBy' => 'untis', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+];
+$eF = HomeworkCalc::Zusammenfuehren($schon, [
+    ['srcId' => 7002, 'childId' => 'k1', 'subject' => 'Deutsch', 'due' => '2026-09-11',
+     'done' => true, 'doneAt' => 0, 'doneBy' => 'untis', 'note' => '', 'source' => 'untis',
+     'createdAt' => 0, 'updatedAt' => 0],
+], 'k1', '2026-09-11', '2026-09-11', $jetzt);
+pruefe('ein laengst bestaetigter Haken behaelt sein Datum',
+    $eF['items'][0]['doneAt'], $jetzt - 900);
 pruefe('erledigt bleibt erledigt', $eE['items'][0]['done'], true);
 // Solange die Schule „offen" meldet, bleibt es das eigene Haekchen.
 $eF = HomeworkCalc::Zusammenfuehren($selbst, [
