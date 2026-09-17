@@ -594,6 +594,83 @@ $optionen = $h->pMitgliederOptionen();
 pruefe('unbekannte Kennung wird ehrlich gezeigt',
     count(array_filter($optionen, fn ($o) => str_contains((string)$o['caption'], 'nicht gefunden'))), 1);
 
+// ── Wechsel innerhalb der Woche ─────────────────────────────────────────────
+/* „Woechentlich" heisst: eine Person traegt das Aemtchen an allen ihren Tagen.
+   „Taeglich" heisst: der Kreis rueckt an jedem dieser Tage weiter — angesetzt
+   an der Person, die diese Woche ohnehin dran waere. */
+$vier = [
+    ['memberId' => 'a', 'share' => 1, 'pause' => false],
+    ['memberId' => 'b', 'share' => 1, 'pause' => false],
+    ['memberId' => 'c', 'share' => 1, 'pause' => false],
+    ['memberId' => 'd', 'share' => 1, 'pause' => false],
+];
+$vierTage = ['d1' => true, 'd2' => true, 'd3' => true, 'd4' => true];
+$woechentlich = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
+    'points' => 5, 'rotate' => 'week'], $vierTage)];
+$taeglich = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
+    'points' => 5, 'rotate' => 'day'], $vierTage)];
+
+$h = harness($vier, $woechentlich);
+$w = $h->pWoche($mi);
+$traeger = array_column($h->pPlaetze($w, $h->pAemtchen()[0]), 'memberId');
+pruefe('woechentlich: vier Tage, eine Person', count(array_unique($traeger)), 1);
+
+$h = harness($vier, $taeglich);
+$w = $h->pWoche($mi);
+$a = $h->pAemtchen()[0];
+$traeger = array_column($h->pPlaetze($w, $a), 'memberId');
+pruefe('taeglich: vier Tage, vier verschiedene Personen', count(array_unique($traeger)), 4);
+pruefe('taeglich: der erste Tag gehoert dem, der die Woche traegt',
+    $traeger[0], $w['assign']['t1']);
+/* Die Reihe folgt dem Kreis a,b,c,d — angesetzt an der Person dieser Woche.
+   Welche das ist, sagt der Wochenindex; die Probe rechnet deshalb relativ. */
+$kreis = ['a', 'b', 'c', 'd'];
+$ab = array_search($w['assign']['t1'], $kreis, true);
+$erwartet = [];
+for ($i = 0; $i < 4; $i++) { $erwartet[] = $kreis[($ab + $i) % 4]; }
+pruefe('taeglich: die Reihe folgt dem Kreis', $traeger, $erwartet);
+
+/* Nur Kinder: die Reihe bleibt IM Kreis, sie faellt nicht auf die Eltern. */
+$nurKinder = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'child',
+    'points' => 5, 'rotate' => 'day'], ['d1' => true, 'd2' => true, 'd3' => true,
+    'd4' => true, 'd5' => true, 'd6' => true, 'd7' => true])];
+$h = harness($vier, $nurKinder);
+$w = $h->pWoche($mi);
+$traeger = array_column($h->pPlaetze($w, $h->pAemtchen()[0]), 'memberId');
+pruefe('taeglich, nur Kinder: sieben Tage', count($traeger), 7);
+pruefe('… und darin nur die beiden Kinder',
+    array_values(array_diff(array_unique($traeger), ['a', 'b'])), []);
+$wechselt = true;
+for ($i = 1; $i < count($traeger); $i++) {
+    if ($traeger[$i] === $traeger[$i - 1]) { $wechselt = false; }
+}
+pruefe('… und jeden Tag ein anderes', $wechselt, true);
+pruefe('… also viermal das eine, dreimal das andere Kind',
+    [count(array_keys($traeger, $traeger[0], true)),
+     count(array_keys($traeger, $traeger[1], true))], [4, 3]);
+
+// ── Wer nicht mehr in den Kreis gehoert, wird ersetzt ───────────────────────
+/* Die laufende Woche ist eingefroren — aber „eingefroren" heisst nicht, dass
+   die Regel nicht mehr gilt. Wird „Wer" mitten in der Woche auf „Nur Kinder"
+   gestellt, darf die Mutter das Aemtchen nicht bis Sonntag behalten. */
+$offen = [array_merge(['id' => 't1', 'name' => 'Tisch', 'circle' => 'all',
+    'points' => 5, 'rotate' => 'week'], $vierTage)];
+$h = harness($vier, $offen);
+$w = $h->pWoche($mi);
+$h->attr['Week'] = json_encode(array_merge($w, ['assign' => ['t1' => 'c']]));   // Clara, die Mutter
+$h->cfg['Chores'] = json_encode([array_merge(['id' => 't1', 'name' => 'Tisch',
+    'circle' => 'child', 'points' => 5, 'rotate' => 'week'], $vierTage)]);
+$w2 = $h->pWoche($mi);
+pruefe('Mutter verliert ein Aemtchen, das nur Kindern gehoert',
+    in_array($w2['assign']['t1'], ['a', 'b'], true), true);
+/* Gegenprobe: wer weiter in den Kreis gehoert, BLEIBT — sonst waere die Woche
+   nicht mehr eingefroren. */
+$h = harness($vier, $offen);
+$w = $h->pWoche($mi);
+$h->attr['Week'] = json_encode(array_merge($w, ['assign' => ['t1' => 'd']]));
+$w2 = $h->pWoche($mi);
+pruefe('wer im Kreis bleibt, behaelt sein Aemtchen', $w2['assign']['t1'], 'd');
+
 // ── Ergebnis ────────────────────────────────────────────────────────────────
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

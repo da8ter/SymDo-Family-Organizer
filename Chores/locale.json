@@ -85,7 +85,10 @@
             "Well done!": "Stark gemacht!",
             "Keep it up!": "Weiter so!",
             "Let's get started!": "Auf geht's!",
-            "Icon": "Symbol"
+            "Icon": "Symbol",
+            "Change": "Wechsel",
+            "weekly": "wöchentlich",
+            "daily": "täglich"
         }
     }
 }

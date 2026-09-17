@@ -275,6 +275,13 @@ class SymDoChores extends IPSModuleStrict
             ...$this->TagesSpalten(),
             ['caption' => $this->Translate('Who'), 'name' => 'circle', 'width' => '180px',
              'add' => 'all', 'edit' => ['type' => 'Select', 'options' => $wer]],
+            /* Wie oft der Kreis weiterrueckt. Vorgabe „woechentlich" — so war
+               es immer, und bestehende Plaene aendern sich dadurch nicht. */
+            ['caption' => $this->Translate('Change'), 'name' => 'rotate', 'width' => '140px',
+             'add' => 'week', 'edit' => ['type' => 'Select', 'options' => [
+                 ['caption' => $this->Translate('weekly'), 'value' => 'week'],
+                 ['caption' => $this->Translate('daily'), 'value' => 'day'],
+             ]]],
         ];
         if ($punkteAn) {
             $aemtchenSpalten[] = ['caption' => $this->Translate('Points'), 'name' => 'points', 'width' => '90px',

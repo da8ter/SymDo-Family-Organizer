@@ -98,7 +98,7 @@ trait ChoreStore
      * Versatz innerhalb des Kreises: das erste Ämtchen geht an den ersten
      * Teilnehmer der Woche, das zweite an den nächsten.
      *
-     * @return list<array{id:string,icon:string,name:string,points:int,perWeek:int,circle:string}>
+     * @return list<array{id:string,icon:string,name:string,points:int,perWeek:int,circle:string,rotate:string}>
      */
     private function AemtchenLesen(): array
     {
@@ -119,6 +119,9 @@ trait ChoreStore
                 /* Der Font-Awesome-Name ohne „fa-" (so legt SelectIcon ab).
                    Leer heisst: die Kachel nimmt ihr Standardsymbol. */
                 'icon'    => trim((string)($z['icon'] ?? '')),
+                /* Wie oft der Kreis weiterrückt: einmal je WOCHE (Vorgabe, wie
+                   bisher) oder an jedem TAG, an dem das Ämtchen ansteht. */
+                'rotate'  => (string)($z['rotate'] ?? 'week') === 'day' ? 'day' : 'week',
                 'name'    => $name,
                 'points'  => max(0, (int)($z['points'] ?? 5)),
                 /* Wie oft in der Woche — das sagen jetzt die TAGE. Die alte
@@ -548,6 +551,23 @@ trait ChoreStore
                 if (!array_key_exists($a['id'], $zuweisung)) {
                     $zuweisung[$a['id']] = $frisch[$a['id']] ?? '';
                     $geaendert = true;
+                    continue;
+                }
+                /* Eingefroren heisst „die Reihe steht", nicht „die Regel gilt
+                   nicht mehr": wer nicht mehr in den Kreis dieses Aemtchens
+                   gehoert, wird ersetzt. Sonst traegt eine Mutter bis Sonntag
+                   ein Aemtchen, das auf „Nur Kinder" steht — genau so gemeldet
+                   am 17.09.2026, nachdem die Spalte „Wer" mitten in der Woche
+                   umgestellt wurde. Schon Abgehaktes bleibt unberuehrt: dort
+                   steht am Platz, wer es wirklich getan hat. */
+                $halter = trim((string)$zuweisung[$a['id']]);
+                if ($halter === '') {
+                    continue;
+                }
+                $kreis = $this->KreisFuer($a['circle'], $rollen);
+                if (!in_array($halter, $kreis, true)) {
+                    $zuweisung[$a['id']] = $frisch[$a['id']] ?? '';
+                    $geaendert = true;
                 }
             }
             // Waisen gelöschter Ämtchen wegräumen, sonst wächst das Attribut.
@@ -717,15 +737,34 @@ trait ChoreStore
            gebuchten Punkte vergangener Wochen, die darf ein Umbau nicht
            anfassen. */
         $tage = is_array($a['days'] ?? null) && $a['days'] !== [] ? $a['days'] : [$start];
+        /* Taeglicher Wechsel: der Kreis rueckt an JEDEM Tag weiter, an dem das
+           Aemtchen ansteht — sonst traegt eine Person den Tischdienst die ganze
+           Woche (gemeldet am 17.09.2026).
+
+           Angesetzt wird an der EINGEFRORENEN Person dieser Woche: sie steht
+           irgendwo im Kreis, und der i-te Tag gehoert dem i-ten danach. Damit
+           bleibt die Woche eingefroren (nichts wird neu gewuerfelt), und der
+           Wochenwechsel schiebt die ganze Reihe wie bisher um eins weiter. */
+        $folge = null;
+        if (($a['rotate'] ?? 'week') === 'day') {
+            $kreis = $this->KreisFuer((string)($a['circle'] ?? 'all'), $this->Rollen());
+            $ab = array_search($zustaendig, $kreis, true);
+            if ($kreis !== [] && $ab !== false) {
+                $folge = ['kreis' => $kreis, 'ab' => (int)$ab, 'pausiert' => $this->Pausierte()];
+            }
+        }
         $raus = [];
         foreach (array_values($tage) as $i => $iso) {
             $k = (string)$i;
             $satz = is_array($erledigt[$k] ?? null) ? $erledigt[$k] : null;
+            $dran = $folge === null
+                ? $zustaendig
+                : $this->NaechsterAktive($folge['kreis'], $folge['ab'] + $i, $folge['pausiert']);
             $raus[] = [
                 'key'      => $k,
                 'done'     => $satz !== null,
                 'points'   => $satz !== null ? (int)($satz['p'] ?? 0) : $a['points'],
-                'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $zustaendig,
+                'memberId' => $satz !== null ? (string)($satz['m'] ?? '') : $dran,
                 'carried'  => false,
                 'day'      => (int)$iso,
                 'col'      => ((int)$iso - $start + 7) % 7,
