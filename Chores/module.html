@@ -39,7 +39,10 @@
   --sym-mb: 0px;
   --sbw: 6px;
   /* Breite einer Tagesspalte: ein Avatar von 26 px plus Luft. */
-  --tagbreite: 44px;
+  /* 52 px: das Foto misst 38, links und rechts bleiben sieben Pixel Luft (auf
+     Wunsch, 17.09.2026). In einer sehr schmalen Kachel kuerzt der Aemtchen-Name
+     dafuer eher — deshalb greift unter 460 px die schmale Spur. */
+  --tagbreite: 52px;
   --sb-pad: max(0px, calc((var(--sym-ms) - var(--sbw)) / 2));
 }
 html[data-symdo-theme="light"] {
@@ -223,7 +226,7 @@ body {
 }
 .zelle {
   display: flex; align-items: center; justify-content: center; gap: 3px;
-  align-self: stretch; min-height: 50px; padding: 3px 0; box-sizing: border-box;
+  align-self: stretch; min-height: 58px; padding: 3px 0; box-sizing: border-box;
   /* Die duenne Linie zwischen den Tagen. Sie sitzt LINKS an jeder Spalte —
      auch an der ersten, die damit die Tage von der Aufgabe trennt. */
   border-left: 1px solid var(--rand);
@@ -235,14 +238,14 @@ body {
    ohne eine Zahl zu lesen. */
 .platz {
   position: relative; border: 0; padding: 0; background: transparent; cursor: pointer;
-  width: 31px; height: 31px; border-radius: 50%; flex: 0 0 auto;
+  width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
 }
 .platz .bild {
-  width: 31px; height: 31px; border-radius: 50%; overflow: hidden; box-sizing: border-box;
+  width: 38px; height: 38px; border-radius: 50%; overflow: hidden; box-sizing: border-box;
   background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 800; color: var(--text);
+  font-size: 15px; font-weight: 800; color: var(--text);
 }
 .platz .bild img { width: 100%; height: 100%; object-fit: cover; }
 /* Ein offener Platz wird NICHT abgedunkelt (auf Wunsch, 17.09.2026): das
@@ -259,9 +262,9 @@ body {
 .platz.spaeter .bild { opacity: .5; }
 .platz .haken {
   position: absolute; right: -3px; bottom: -3px;
-  width: 16px; height: 16px; border-radius: 50%;
+  width: 20px; height: 20px; border-radius: 50%;
   background: var(--akzent); color: var(--bg);
-  font-size: 11px; font-weight: 900; line-height: 16px; text-align: center;
+  font-size: 13px; font-weight: 900; line-height: 20px; text-align: center;
   transform: scale(0); transition: transform .22s cubic-bezier(.22,1.6,.36,1);
 }
 .platz.fertig .haken { transform: scale(1); }
@@ -334,8 +337,8 @@ body {
 /* Schmale Kacheln: die Tagesspalten schrumpfen, damit sieben davon neben dem
    Namen bleiben. Sie zu verstecken waere falsch — sie sind der Inhalt. */
 @media (max-width: 460px) {
-  :root { --tagbreite: 36px; }
-  .platz, .platz .bild { width: 26px; height: 26px; }
+  :root { --tagbreite: 42px; }
+  .platz, .platz .bild { width: 32px; height: 32px; }
   .sym { width: 26px; height: 26px; font-size: 13px; }
   .kopfzeile, .zeile { grid-template-columns: minmax(64px, 1fr) repeat(7, var(--tagbreite)); }
 }
@@ -766,7 +769,13 @@ function naechsteHtml(aemtchen) {
   aemtchen.forEach((a) => {
     (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
       if (s.done === true) { return; }
-      offen.push({ a: a, s: s, col: Math.max(0, Math.min(6, Number(s.col) || 0)) });
+      const col = Math.max(0, Math.min(6, Number(s.col) || 0));
+      /* NUR was noch kommt (auf Wunsch, 17.09.2026). Was vorbei und offen ist,
+         steht weiter in der Tabelle — dort gehoert es hin, dort kann man es
+         nachtragen. In einer Liste namens „Naechste Aemtchen" hat es nichts
+         verloren; sie fuellte sich sonst mit Montag, bis jemand aufraeumt. */
+      if (heute >= 0 && col < heute) { return; }
+      offen.push({ a: a, s: s, col: col });
     });
   });
   if (offen.length === 0) {
@@ -780,7 +789,6 @@ function naechsteHtml(aemtchen) {
     if (heute >= 0) {
       if (o.col === heute) { wann = txt('today', 'Today'); }
       else if (o.col === heute + 1) { wann = txt('tomorrow', 'Tomorrow'); }
-      else if (o.col < heute) { wann = wann + ' · ' + txt('overdue', ''); klasse += ' faellig'; }
     }
     return '<div class="eintrag">' +
       '<div class="sym" style="--afarbe:' + aemtchenFarbe(o.a) + '">' + symbolHtml(o.a) + '</div>' +
@@ -845,7 +853,7 @@ function konfettiRegen() {
       ctx.fillRect(-t.w / 2, -t.h / 2, t.w, t.h);
       ctx.restore();
     });
-    if (Date.now() - start < 1800) {
+    if (Date.now() - start < 3600) {
       requestAnimationFrame(malen);
     } else {
       ctx.clearRect(0, 0, leinwand.width, leinwand.height);

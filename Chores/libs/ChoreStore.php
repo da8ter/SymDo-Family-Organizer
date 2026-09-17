@@ -1136,7 +1136,6 @@ trait ChoreStore
             'upNext'      => $this->Translate('Up next'),
             'nothingOpen' => $this->Translate('Nothing open — everything is done'),
             'done'        => $this->Translate('done'),
-            'overdue'     => $this->Translate('overdue'),
             'teamTitle'   => $this->Translate('A strong team!'),
             'teamText'    => $this->Translate('You keep your home in order together.'),
             'praiseAll'   => $this->Translate('All done!'),
