@@ -1138,30 +1138,9 @@ trait ChoreStore
             ];
         }
 
-        $letzte = json_decode((string)@$this->ReadAttributeString('LastWeek'), true);
-        $letzteZusammen = null;
-        if (is_array($letzte) && ($letzte['week'] ?? '') !== '' && $this->EinstellungJa('ShowLastWeek', true)) {
-            $je = [];
-            foreach ($aemtchen as $a) {
-                $halter = trim((string)($letzte['assign'][$a['id']] ?? ''));
-                if ($halter === '') {
-                    continue;
-                }
-                $erledigt = is_array($letzte['done'][$a['id']] ?? null) ? count($letzte['done'][$a['id']]) : 0;
-                $je[$halter] = [
-                    'done'  => ($je[$halter]['done'] ?? 0) + $erledigt,
-                    'total' => ($je[$halter]['total'] ?? 0) + $a['perWeek'],
-                ];
-            }
-            $letzteZusammen = ['week' => (string)$letzte['week'], 'perMember' => $je];
-        }
-
-        $naechste = null;
-        if ($this->EinstellungJa('ShowNextWeek', true)) {
-            $vor = $this->Vorschau($jetzt, 1);
-            $naechste = $vor === [] ? null : $vor[0];
-        }
-
+        /* Rueckblick und Vorschau reisen NICHT mehr mit: die Kachel zeigt nur
+           noch die laufende Woche (Entscheidung des Nutzers, 17.09.2026). Wer
+           in die Zukunft sehen will, fragt CHR_Preview(). */
         return [
             'type'       => 'state',
             'week'       => (string)($woche['week'] ?? ''),
@@ -1182,8 +1161,6 @@ trait ChoreStore
             'totalCount' => $gesamt,
             'earned'     => $verdient,
             'purse'      => $modus === 'routines' ? $this->Muenzstaende() : [],
-            'next'       => $naechste,
-            'last'       => $letzteZusammen,
             'texts'      => $this->KachelTexte(),
         ];
     }
@@ -1199,13 +1176,8 @@ trait ChoreStore
             'family'   => $this->Translate('All participants'),
             'carried'  => $this->Translate('from last week'),
             'later'    => $this->Translate('not due yet'),
-            'lastWeek' => $this->Translate('Last week'),
-            'nextWeek' => $this->Translate('Next week'),
-            'thisWeek' => $this->Translate('This week'),
             'points'   => $this->Translate('Points'),
             'empty'    => $this->Translate('No chores configured yet — add participants and chores in the instance settings.'),
-            'preview'  => $this->Translate('Preview — ticking starts on Monday'),
-            'review'   => $this->Translate('Done and gone — this week is over'),
             'carriedHint' => $this->Translate('Dashed circle: carried over from last week'),
             /* Die Tabellenansicht (17.09.2026): Kopf, Seitenspalte und Banner.
                Die Kachel uebersetzt nichts selbst — auch nicht „heute". */

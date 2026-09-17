@@ -82,21 +82,6 @@ body {
   font-size: clamp(10px, 2.6vmin, 12px); color: var(--dezent); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#wochenwahl {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 2px;
-  border: 1px solid var(--rand); border-radius: 14px; padding: 2px; background: var(--karte);
-}
-#wochenwahl button {
-  border: 0; background: transparent; color: inherit; cursor: pointer;
-  font: inherit; line-height: 1; padding: 6px 9px; border-radius: 11px;
-}
-#wochenwahl button:disabled { opacity: .35; cursor: default; }
-/* Feste Mindestbreite: sonst wandern die Pfeile beim Umschalten, weil
-   „Diese Woche" und „Nächste Woche" verschieden breit sind. */
-#wochenname {
-  min-width: 12ch; text-align: center; padding: 0 4px;
-  font-size: 12px; font-weight: 700; white-space: nowrap;
-}
 
 /* ── Karten der Familienmitglieder ───────────────────────────────────────── */
 #leute { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 6px 10px; }
@@ -341,11 +326,6 @@ body {
       <div id="titel"></div>
       <div id="untertitel"></div>
     </div>
-    <div id="wochenwahl">
-      <button type="button" data-schritt="-1" aria-label="&lsaquo;">&lsaquo;</button>
-      <span id="wochenname"></span>
-      <button type="button" data-schritt="1" aria-label="&rsaquo;">&rsaquo;</button>
-    </div>
   </div>
   <div id="leute" class="randrest"></div>
   <div id="liste">
@@ -479,7 +459,6 @@ body {
 })();
 
 let zustand = null;          // letzter Payload vom Modul
-let blick = 0;               // -1 Vorwoche, 0 laufende, +1 Vorschau
 let unterwegs = {};          // "chore:slot" => true, solange die Aktion laeuft
 
 /* Eine feste Farbleiter fuer Personen und Aemtchen.
@@ -552,19 +531,18 @@ function bildHtml(person) {
    Die Wochenkennung reist weiter mit — sie hängt an jedem Häkchen —, sie wird
    nur nicht mehr angezeigt. */
 
-/** Die Spalte, in der heute steht — nur in der laufenden Woche. */
+/** Die Spalte, in der heute steht. */
 function heuteSpalte() {
-  return blick === 0 ? (typeof zustand.todayCol === 'number' ? zustand.todayCol : -1) : -1;
+  return typeof zustand.todayCol === 'number' ? zustand.todayCol : -1;
 }
 
 /**
- * Wer ist in der gezeigten Woche fuer dieses Aemtchen zustaendig?
+ * Wer ist fuer dieses Aemtchen zustaendig?
  *
- * In der laufenden Woche steht es am Platz selbst (ein abgehaktes Aemtchen
- * behaelt den, der es getan hat). In der Vorschau gibt es nur die Zuteilung.
+ * Am PLATZ steht es genauer als am Aemtchen: ein abgehaktes behaelt den, der
+ * es wirklich getan hat, auch wenn der Kreis inzwischen weitergerueckt ist.
  */
 function halterVon(a, platz) {
-  if (blick === 1) { return ((zustand.next || {}).assign || {})[a.id] || ''; }
   return (platz && platz.memberId) || a.memberId || '';
 }
 
@@ -580,30 +558,11 @@ function mitglied(id) {
 function zeichnen() {
   if (!zustand) { return; }
 
-  // Vorwoche und Vorschau nur, wenn das Modul sie mitgeschickt hat.
-  const hatLetzte = !!(zustand.last && zustand.last.week);
-  const hatNaechste = !!(zustand.next && zustand.next.week);
-  if (blick === -1 && !hatLetzte) { blick = 0; }
-  if (blick === 1 && !hatNaechste) { blick = 0; }
-
   el('titel').textContent = txt('title', 'Chores');
   el('untertitel').textContent = txt('subtitle', '');
 
-  el('wochenname').textContent = blick === 0 ? txt('thisWeek', 'This week')
-    : (blick === -1 ? txt('lastWeek', 'Last week') : txt('nextWeek', 'Next week'));
-  const knoepfe = el('wochenwahl').querySelectorAll('button');
-  knoepfe[0].disabled = blick === -1 || (blick === 0 && !hatLetzte);
-  knoepfe[1].disabled = blick === 1 || (blick === 0 && !hatNaechste);
-
-  /* Haken gibt es nur fuer die laufende Woche: in der Vorschau waere ein Haken
-     eine Behauptung ueber die Zukunft, im Rueckblick eine Einladung,
-     Vergangenes zu aendern. */
-  const aktiv = blick === 0;
   const aemtchen = Array.isArray(zustand.chores) ? zustand.chores : [];
-
-  el('hinweis').textContent = aktiv
-    ? (aemtchenMitUebertrag() ? txt('carriedHint', '') : '')
-    : (blick === 1 ? txt('preview', '') : txt('review', ''));
+  el('hinweis').textContent = aemtchenMitUebertrag() ? txt('carriedHint', '') : '';
 
   if (aemtchen.length === 0) {
     el('leute').innerHTML = '';
@@ -615,21 +574,10 @@ function zeichnen() {
   }
   el('leer').textContent = '';
 
-  el('leute').innerHTML = leuteHtml(aemtchen, aktiv);
-
-  /* Im Rueckblick gibt es keine Tageszuordnung mehr — nur die Summe je Person.
-     Die Tabelle bliebe also leer; statt sie mit Strichen zu fuellen, zeigt die
-     Kachel dort die Bilanz aus den Karten oben und sonst nichts. */
-  if (blick === -1) {
-    el('tafel').innerHTML = '';
-    el('seite').innerHTML = '';
-    el('banner').innerHTML = '';
-    return;
-  }
-
-  el('tafel').innerHTML = tafelHtml(aemtchen, aktiv);
-  el('seite').innerHTML = aktiv ? seiteHtml(aemtchen) : '';
-  el('banner').innerHTML = aktiv ? bannerHtml() : '';
+  el('leute').innerHTML = leuteHtml(aemtchen);
+  el('tafel').innerHTML = tafelHtml(aemtchen);
+  el('seite').innerHTML = seiteHtml(aemtchen);
+  el('banner').innerHTML = bannerHtml();
   binden();
 }
 
@@ -645,7 +593,7 @@ function aemtchenMitUebertrag() {
  * Gezaehlt wird ueber die PLAETZE, nicht ueber die Aemtchen: ein Aemtchen kann
  * mehrmals in der Woche anstehen, und abgehakt wird jeder Tag einzeln.
  */
-function leuteHtml(aemtchen, aktiv) {
+function leuteHtml(aemtchen) {
   const stand = {};
   const zaehle = (id, fertig) => {
     if (!id) { return; }
@@ -653,16 +601,11 @@ function leuteHtml(aemtchen, aktiv) {
     stand[id].total++;
     if (fertig) { stand[id].done++; }
   };
-  if (blick === -1) {
-    const je = (zustand.last && zustand.last.perMember) || {};
-    Object.keys(je).forEach((id) => { stand[id] = { done: je[id].done || 0, total: je[id].total || 0 }; });
-  } else {
-    aemtchen.forEach((a) => {
-      (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
-        zaehle(halterVon(a, s), aktiv && s.done === true);
-      });
+  aemtchen.forEach((a) => {
+    (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
+      zaehle(halterVon(a, s), s.done === true);
     });
-  }
+  });
 
   return (zustand.order || []).map((id) => {
     const p = mitglied(id) || { name: id };
@@ -674,7 +617,7 @@ function leuteHtml(aemtchen, aktiv) {
     const anteil = s.total > 0 ? Math.round(s.done * 100 / s.total) : 0;
     const verdient = (zustand.earned || {})[id] || 0;
     const beutel = (zustand.purse || {})[id];
-    const muenzen = (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
+    const muenzen = (zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
       ? '<span class="muenzen"><i class="fa-light fa-coins"></i>' +
         (beutel !== undefined ? beutel : verdient) + '</span>' : '';
     return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + mitgliedFarbe(id) + '">' +
@@ -691,17 +634,17 @@ function leuteHtml(aemtchen, aktiv) {
 }
 
 /** Kopfzeile und eine Zeile je Aemtchen. */
-function tafelHtml(aemtchen, aktiv) {
+function tafelHtml(aemtchen) {
   const namen = Array.isArray(zustand.dayNames) ? zustand.dayNames : [];
   const heute = heuteSpalte();
   const kopf = '<div class="kopfzeile"><div>' + escHtml(txt('task', 'Chore')) + '</div>' +
     namen.map((n, i) => '<div class="tag' + (i === heute ? ' heute' : '') + '">' +
       '<b>' + escHtml(n) + '</b></div>').join('') +
     '</div>';
-  return kopf + aemtchen.map((a) => zeileHtml(a, aktiv, heute)).join('');
+  return kopf + aemtchen.map((a) => zeileHtml(a, heute)).join('');
 }
 
-function zeileHtml(a, aktiv, heute) {
+function zeileHtml(a, heute) {
   const alle = a.total > 0 && a.doneCount >= a.total;
   /* Ein Platz je Tag — die uebrigen Tage bleiben LEER. Genau dafuer sind die
      Spalten da: man sieht auf einen Blick, an welchen Tagen ein Aemtchen dran
@@ -710,9 +653,9 @@ function zeileHtml(a, aktiv, heute) {
   for (let i = 0; i < 7; i++) { zellen[i] = ''; }
   (Array.isArray(a.slots) ? a.slots : []).forEach((s) => {
     const spalte = Math.max(0, Math.min(6, Number(s.col) || 0));
-    zellen[spalte] += platzHtml(a, s, aktiv);
+    zellen[spalte] += platzHtml(a, s);
   });
-  return '<div class="zeile' + (aktiv && alle ? ' fertig' : '') + '">' +
+  return '<div class="zeile' + (alle ? ' fertig' : '') + '">' +
     '<div class="aufgabe">' +
       '<div class="sym" style="--afarbe:' + farbeVon(a.id) + '">' + symbolHtml(a) + '</div>' +
       '<div class="titel">' + escHtml(a.name) + '</div>' +
@@ -725,11 +668,12 @@ function zeileHtml(a, aktiv, heute) {
 /**
  * Ein Platz in der Tabelle: das Gesicht dessen, der dran ist.
  *
- * Zwei Gruende, warum nicht getippt werden darf, und sie sehen anders aus:
- * eine fremde Woche (alles blass) und ein Tag, der noch nicht dran war (nur
- * dieser Platz blass).
+ * Ein Tag, der noch nicht dran war, bleibt sichtbar, aber blass und nicht
+ * tippbar — er ist ein Platzhalter, kein Angebot. Was das Modul als `locked`
+ * meldet, entscheidet es selbst: Wechselzeit und erster Wochentag sind
+ * Einstellungen, und die kennt die Kachel nicht.
  */
-function platzHtml(a, s, aktiv) {
+function platzHtml(a, s) {
   const id = halterVon(a, s);
   const p = mitglied(id);
   const spaeter = s.locked === true;
@@ -740,7 +684,7 @@ function platzHtml(a, s, aktiv) {
     ' style="--mfarbe:' + mitgliedFarbe(id) + '"' +
     ' data-marke="' + escHtml(marke) + '" data-chore="' + escHtml(a.id) + '"' +
     ' data-slot="' + escHtml(s.key) + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
-    (aktiv && !spaeter ? '' : ' disabled') +
+    (spaeter ? ' disabled' : '') +
     ' title="' + escHtml(titel) + '">' +
     '<span class="bild">' + (p ? bildHtml(p) : '?') + '</span>' +
     '<span class="haken">✓</span></button>';
@@ -838,13 +782,6 @@ function tippen(knopf) {
     }));
   }
 }
-
-el('wochenwahl').addEventListener('click', (ev) => {
-  const b = ev.target.closest('button[data-schritt]');
-  if (!b || b.disabled) { return; }
-  blick = Math.max(-1, Math.min(1, blick + (parseInt(b.dataset.schritt, 10) || 0)));
-  zeichnen();
-});
 
 // ── Anbindung an die Visu ───────────────────────────────────────────────────
 function handleMessage(daten) {

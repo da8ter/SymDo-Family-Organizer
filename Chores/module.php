@@ -52,6 +52,10 @@ class SymDoChores extends IPSModuleStrict
         $this->RegisterPropertyBoolean('CarryOver', false);
         $this->RegisterPropertyBoolean('PointsEnabled', false);
         $this->RegisterPropertyInteger('RoutinesInstanceID', 0);
+        /* Bleiben REGISTRIERT, obwohl die Kachel keine andere Woche mehr zeigt:
+           eine Eigenschaft zu entfernen hiesse, sie aus jedem bestehenden
+           Bestand zu werfen, und gewonnen waere nichts. Aus dem Formular sind
+           sie raus — ein Schalter ohne Wirkung ist schlimmer als keiner. */
         $this->RegisterPropertyBoolean('ShowNextWeek', true);
         $this->RegisterPropertyBoolean('ShowLastWeek', true);
 
@@ -332,8 +336,6 @@ class SymDoChores extends IPSModuleStrict
                         ['type' => 'Select', 'name' => 'RoutinesInstanceID', 'caption' => $this->Translate('Routines instance'),
                          'options' => $this->RoutinenOptionen()],
                         ['type' => 'Label', 'caption' => $this->Translate('Points land in the coin purse of the chosen routines instance — the same account the parents pay out from. Without a routines instance the chores work, just without points.')],
-                        ['type' => 'CheckBox', 'name' => 'ShowNextWeek', 'caption' => $this->Translate('Show next week as a preview')],
-                        ['type' => 'CheckBox', 'name' => 'ShowLastWeek', 'caption' => $this->Translate('Show last week')],
                         ['type' => 'Label', 'caption' => $this->Translate('The gateway provides the family members with photos. Which gateway is used is decided by the parent instance, to be set in the console.')],
                     ],
                 ],

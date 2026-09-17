@@ -489,7 +489,11 @@ pruefe('Nutzlast hat die Teilnehmer in Reihenfolge', $p['order'], ['a', 'b', 'c'
 pruefe('Fortschritt beginnt bei null', $p['progress'], 0);
 $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
 pruefe('Fortschritt nach einem von drei', $h->pPayload($jetzt)['progress'], 33);
-pruefe('Vorschau auf die naechste Woche ist da', isset($p['next']['week']), true);
+/* Rueckblick und Vorschau reisen NICHT mehr mit — die Kachel zeigt nur die
+   laufende Woche. Wer in die Zukunft sehen will, fragt CHR_Preview(), und das
+   kann sie weiterhin (siehe Abschnitt Vorschau weiter oben). */
+pruefe('Nutzlast traegt keine Vorschau mehr', isset($p['next']), false);
+pruefe('Nutzlast traegt keinen Rueckblick mehr', isset($p['last']), false);
 // Träger Nachhol-Pfad: eine Woche später zeichnet die Kachel und rollt dabei um
 $spaeter = $h->pPayload($T('2026-09-16 12:00'));
 pruefe('Zeichnen holt den Wochenwechsel nach', $spaeter['week'], '2026-09-14');
