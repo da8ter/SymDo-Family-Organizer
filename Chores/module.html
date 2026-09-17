@@ -342,15 +342,15 @@ body {
    ZWEI Stufen, weil eine nicht reicht: die Kachel in der Visu ist oft 500 bis
    700 Pixel breit, das Telefon im Hochformat knapp 400. */
 @media (max-width: 760px) {
-  :root { --tagbreite: 40px; }
-  .platz, .platz .bild { width: 32px; height: 32px; }
+  :root { --tagbreite: 36px; }
+  .platz, .platz .bild { width: 28px; height: 28px; }
   .platz .haken {
-    width: 17px; height: 17px; font-size: 11px; line-height: 17px;
+    width: 15px; height: 15px; font-size: 10px; line-height: 15px;
     right: -2px; bottom: -2px;
   }
-  .platz .bild { font-size: 13px; }
-  .sym { width: 28px; height: 28px; font-size: 13px; }
-  .zelle { min-height: 48px; }
+  .platz .bild { font-size: 12px; }
+  .sym { width: 26px; height: 26px; font-size: 12px; }
+  .zelle { min-height: 44px; }
   .kopfzeile, .zeile { grid-template-columns: minmax(84px, 1fr) repeat(7, var(--tagbreite)); }
   /* „Spuelmaschine ausraeumen" passt in KEINE einzeilige Spalte, neben der
      noch sieben Tage stehen. Statt abzuschneiden bricht der Name hier auf zwei
@@ -361,17 +361,17 @@ body {
   }
 }
 @media (max-width: 460px) {
-  :root { --tagbreite: 28px; }
-  .platz, .platz .bild { width: 24px; height: 24px; }
-  .platz .bild { font-size: 11px; }
+  :root { --tagbreite: 25px; }
+  .platz, .platz .bild { width: 21px; height: 21px; }
+  .platz .bild { font-size: 10px; }
   .platz .haken {
-    width: 13px; height: 13px; font-size: 9px; line-height: 13px;
-    right: -2px; bottom: -2px;
+    width: 12px; height: 12px; font-size: 8px; line-height: 12px;
+    right: -1px; bottom: -1px;
   }
-  .sym { width: 24px; height: 24px; font-size: 11px; }
-  .sym i, .sym svg { width: 13px; height: 13px; }
-  .aufgabe { gap: 7px; padding-right: 5px; }
-  .zelle { min-height: 40px; }
+  .sym { width: 22px; height: 22px; font-size: 10px; }
+  .sym i, .sym svg { width: 12px; height: 12px; }
+  .aufgabe { gap: 6px; padding-right: 4px; }
+  .zelle { min-height: 36px; }
   .kopfzeile, .zeile { grid-template-columns: minmax(64px, 1fr) repeat(7, var(--tagbreite)); }
   .zeile .titel { font-size: 12px; }
 }
