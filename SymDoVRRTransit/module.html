@@ -236,7 +236,7 @@ body {
    auf seinen Anfangswert zurueck, und aus dem Punkt wuerde die ganze
    Trefferflaeche — ein Klecks von fuenfzehn Pixeln. Genau so gesehen. */
 .punkte span.an { background-color: var(--akzent); }
-.fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 3px; }
+.fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 9px; }
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
 /* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer.
@@ -288,7 +288,9 @@ body {
    der Kante, und „rechtsbuendig" galt dann nur noch fuer kurze Namen. */
 .fahrt .fuss {
   display: flex; justify-content: space-between; gap: 10px;
-  font-size: 10px; color: var(--dezent); margin-top: 2px;
+  /* Luft ueber und unter dem Balken (auf Wunsch, 17.09.2026): er stand
+     zwischen Uhrzeit und Haltestellennamen wie eingeklemmt. */
+  font-size: 10px; color: var(--dezent); margin-top: 8px;
 }
 .fahrt .fuss span {
   min-width: 0; max-width: 50%;
