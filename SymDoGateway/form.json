@@ -402,6 +402,15 @@
                             }
                         },
                         {
+                            "caption": "Colour",
+                            "name": "color",
+                            "width": "110px",
+                            "add": -1,
+                            "edit": {
+                                "type": "SelectColor"
+                            }
+                        },
+                        {
                             "caption": "Push visualization",
                             "name": "visu",
                             "width": "220px",

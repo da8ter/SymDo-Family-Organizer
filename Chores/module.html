@@ -99,10 +99,11 @@ body {
   padding: 8px 10px; box-sizing: border-box;
 }
 .person.pausiert { opacity: .55; }
+/* Die Fotos stehen ohne Ring (auf Wunsch, 17.09.2026) — die Farbe eines
+   Mitglieds zeigt der Fortschrittsring daneben, nicht ein Rand ums Gesicht. */
 .person .bild {
   width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
   background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
-  border: 2px solid var(--mfarbe, var(--akzent));
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; font-weight: 800; box-sizing: border-box;
 }
@@ -230,13 +231,14 @@ body {
 .platz .bild {
   width: 26px; height: 26px; border-radius: 50%; overflow: hidden; box-sizing: border-box;
   background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
-  border: 2px solid var(--mfarbe, var(--akzent));
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 800; color: var(--text);
 }
 .platz .bild img { width: 100%; height: 100%; object-fit: cover; }
 .platz.offen .bild { opacity: .45; filter: grayscale(.5); }
-.platz.uebertrag .bild { border-style: dashed; }
+.platz.uebertrag .bild {
+  border: 2px dashed color-mix(in srgb, var(--content-color) 45%, transparent);
+}
 /* Gesperrt heisst hier zweierlei: eine fremde Woche (nur ansehen) und ein Tag,
    der noch nicht dran war. Der kuenftige Tag bleibt sichtbar, aber blass — er
    ist ein Platzhalter, kein Angebot. */
@@ -283,7 +285,7 @@ body {
 .naechste .wann.faellig { color: #f87171; font-weight: 700; }
 .naechste .bild {
   width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; overflow: hidden;
-  border: 2px solid var(--mfarbe, var(--akzent)); box-sizing: border-box;
+  box-sizing: border-box;
   background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
   display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
 }
@@ -477,6 +479,16 @@ function farbeVon(kennung) {
   let h = 0;
   for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
   return FARBEN[h % FARBEN.length];
+}
+/**
+ * Die Farbe eines Mitglieds: die im Gateway gewaehlte, sonst die aus der
+ * Leiter. So bleibt jedes Gesicht unterscheidbar, auch wenn niemand im
+ * Formular eine Farbe vergeben hat.
+ */
+function mitgliedFarbe(id) {
+  const p = mitglied(id);
+  const roh = (p && typeof p.color === 'string') ? p.color : '';
+  return /^#[0-9a-f]{6}$/i.test(roh) ? roh : farbeVon(id);
 }
 
 function el(id) { return document.getElementById(id); }
@@ -674,7 +686,7 @@ function leuteHtml(aemtchen, aktiv) {
     const beutel = (zustand.purse || {})[id];
     const muenzen = (aktiv && zustand.pointsMode === 'routines' && (verdient > 0 || beutel !== undefined))
       ? '<span class="muenzen">🪙' + (beutel !== undefined ? beutel : verdient) + '</span>' : '';
-    return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + farbeVon(id) + '">' +
+    return '<div class="person' + (p.paused ? ' pausiert' : '') + '" style="--mfarbe:' + mitgliedFarbe(id) + '">' +
       '<div class="bild">' + bildHtml(p) + '</div>' +
       '<div class="text">' +
         '<div class="name">' + escHtml(p.name || id) + '</div>' +
@@ -735,7 +747,7 @@ function platzHtml(a, s, aktiv) {
   const titel = s.carried ? txt('carried', '') : (spaeter ? txt('later', '') : (p ? (p.name || '') : ''));
   return '<button type="button" class="platz ' + (s.done ? 'fertig' : 'offen') +
     (s.carried ? ' uebertrag' : '') + (spaeter ? ' spaeter' : '') + '"' +
-    ' style="--mfarbe:' + farbeVon(id) + '"' +
+    ' style="--mfarbe:' + mitgliedFarbe(id) + '"' +
     ' data-marke="' + escHtml(marke) + '" data-chore="' + escHtml(a.id) + '"' +
     ' data-slot="' + escHtml(s.key) + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
     (aktiv && !spaeter ? '' : ' disabled') +
@@ -798,7 +810,7 @@ function naechsteHtml(aemtchen) {
       '<div class="sym" style="--afarbe:' + farbeVon(o.a.id) + '">' + escHtml(o.a.emoji || '🧹') + '</div>' +
       '<div class="text"><div class="was">' + escHtml(o.a.name) + '</div>' +
       '<div class="' + klasse + '">' + escHtml(wann) + '</div></div>' +
-      (p ? '<div class="bild" style="--mfarbe:' + farbeVon(halterVon(o.a, o.s)) + '">' + bildHtml(p) + '</div>' : '') +
+      (p ? '<div class="bild">' + bildHtml(p) + '</div>' : '') +
       '</div>';
   }).join('');
 }

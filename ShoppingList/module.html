@@ -1375,7 +1375,8 @@ html[data-symdo-theme="dark"] .member-bar {
   content: '';
   position: absolute;
   inset: -3px;
-  border: 2px solid var(--accent);
+  /* Die im Backend gewaehlte Farbe des Mitglieds, sonst der Akzent. */
+  border: 2px solid var(--mfarbe, var(--accent));
   border-radius: 999px;
 }
 /* Das Haus: die Familie. Kein Foto, deshalb ein eigener Grund und das Symbol
@@ -7548,6 +7549,22 @@ function familieKnopfHtml() {
   return `<button class="avatar-btn familie-btn${familieAktiv() ? ' selected' : ''}" data-familie="1"` +
     ` title="${escapeHtml(t)}" aria-label="${escapeHtml(t)}"><i class="fa-light fa-house"></i></button>`;
 }
+/**
+ * Ein Mitglied in der Leiste.
+ *
+ * Die Farbe des Mitglieds steht in der Mitgliederliste des Gateways (Spalte
+ * „Farbe"). Ist eine gewaehlt, traegt der Ring der AUSWAHL sie — sonst bleibt
+ * es beim Akzent des Designs. Gemalt wird nur der gewaehlte Zustand: ein
+ * farbiger Rand um jedes Gesicht waere eine Leiste voller Ringe, und die
+ * Auswahl ginge darin unter.
+ */
+function mitgliedKnopfHtml(u) {
+  const roh = (u && typeof u.color === 'string') ? u.color : '';
+  const farbe = /^#[0-9a-f]{6}$/i.test(roh) ? roh : '';
+  return `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}"` +
+    (farbe ? ` style="--mfarbe:${farbe}"` : '') +
+    ` data-member="${escapeHtml(u.id)}">` + avatarHtml(u, '') + '</button>';
+}
 /** Das Haus antippbar machen. `nach` ist das Zeichnen der jeweiligen Leiste. */
 function familieKnopfBinden(el, nach) {
   if (!el) return;
@@ -10092,8 +10109,7 @@ function renderDashboard() {
     // Das Haus ganz links: der Zustand „alles zeigen" bekommt einen Knopf.
     html += familieKnopfHtml();
     for (const u of store.users) {
-      html += `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
-        avatarHtml(u, '') + '</button>';
+      html += mitgliedKnopfHtml(u);
     }
     html += '</div>';
   }
@@ -11059,10 +11075,7 @@ function renderTodoMembers() {
     el.style.display = 'none'; renderInto(el, ''); return;
   }
   el.style.display = '';
-  const membersHtml = familieKnopfHtml() + store.users.map(u =>
-    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
-    avatarHtml(u, '') + '</button>'
-  ).join('');
+  const membersHtml = familieKnopfHtml() + store.users.map(mitgliedKnopfHtml).join('');
   if (!renderInto(el, membersHtml)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -11093,10 +11106,7 @@ function renderCalMembers() {
     return;
   }
   el.style.display = '';
-  const html = familieKnopfHtml() + store.users.map(u =>
-    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
-    avatarHtml(u, '') + '</button>'
-  ).join('');
+  const html = familieKnopfHtml() + store.users.map(mitgliedKnopfHtml).join('');
   if (!renderInto(el, html)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -12273,9 +12283,7 @@ function hwBereichMitglieder() {
   }
   el.style.display = '';
   // Hier heisst das Haus „alle Kinder" — dasselbe leere Auswahlfeld.
-  const html = familieKnopfHtml() + kinder.map(u =>
-    `<button class="avatar-btn${memberFilterIds.has(u.id) ? ' selected' : ''}" data-member="${escapeHtml(u.id)}">` +
-    avatarHtml(u, '') + '</button>').join('');
+  const html = familieKnopfHtml() + kinder.map(mitgliedKnopfHtml).join('');
   if (!renderInto(el, html)) return;
   el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();

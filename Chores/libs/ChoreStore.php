@@ -927,6 +927,10 @@ trait ChoreStore
                 'name'    => trim((string)($u['name'] ?? '')),
                 'avatar'  => (string)($u['avatar'] ?? ''),
                 'persona' => strtolower(trim((string)($u['persona'] ?? ''))),
+                /* Die im Gateway gewaehlte Farbe ('#rrggbb' oder leer). Die
+                   Kachel faerbt damit den Fortschrittsring; ohne Wahl nimmt
+                   sie ihre eigene Leiter. */
+                'color'   => (string)($u['color'] ?? ''),
             ];
         }
         return $karte;
@@ -1020,6 +1024,7 @@ trait ChoreStore
                 'name'    => $m !== null ? (string)$m['name'] : $z['memberId'],
                 'avatar'  => $m !== null ? (string)$m['avatar'] : '',
                 'persona' => $m !== null ? (string)$m['persona'] : '',
+                'color'   => $m !== null ? (string)($m['color'] ?? '') : '',
                 'paused'  => isset($pausiert[$z['memberId']]),
                 'known'   => $m !== null,
             ];

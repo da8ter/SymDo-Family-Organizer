@@ -348,6 +348,10 @@ trait AppCore
                 'persona'   => trim((string)($user['persona'] ?? '')),
                 'mediaID'   => $mediaID,
                 'visuID'    => (int)($user['visu'] ?? 0),
+                /* Die Farbe des Mitglieds als '#rrggbb' — oder leer, wenn keine
+                   gewaehlt ist. SelectColor speichert eine Zahl, -1 heisst
+                   „keine Farbe"; die Oberflaechen rechnen nicht, sie malen. */
+                'color'     => $this->UserColor($user['color'] ?? -1),
                 'hasAvatar' => $mediaID > 0 && IPS_MediaExists($mediaID),
             ];
         }
@@ -382,6 +386,22 @@ trait AppCore
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Die gewaehlte Farbe eines Mitglieds als Hexwert fuer die Oberflaechen.
+     *
+     * `SelectColor` legt eine Zahl ab (0xRRGGBB); -1 heisst „keine gewaehlt".
+     * Aeltere Listen haben das Feld gar nicht — beides ergibt einen leeren
+     * String, und die Oberflaeche bleibt beim Akzent des Designs.
+     */
+    private function UserColor(mixed $roh): string
+    {
+        $wert = is_numeric($roh) ? (int)$roh : -1;
+        if ($wert < 0 || $wert > 0xFFFFFF) {
+            return '';
+        }
+        return sprintf('#%06x', $wert);
+    }
+
     /** Users as JSON for other modules (e.g. the tile visualization). */
     public function GetUsers(): string
     {
@@ -390,6 +410,7 @@ trait AppCore
                 'id'        => $u['id'],
                 'name'      => $u['name'],
                 'persona'   => $u['persona'],
+                'color'     => $u['color'],
                 'hasAvatar' => $u['hasAvatar'],
             ],
             $this->LoadUsers()
@@ -415,7 +436,7 @@ trait AppCore
                Stundenplan). Ohne diese Zeile kaeme das Feld nie in der Kachel
                an — die Projektion hier ist eine Weissliste. */
             $entry = ['id' => $u['id'], 'name' => $u['name'],
-                      'persona' => $u['persona'], 'avatar' => ''];
+                      'persona' => $u['persona'], 'color' => $u['color'], 'avatar' => ''];
             if ($u['hasAvatar']) {
                 $media = IPS_GetMedia($u['mediaID']);
                 $key   = $u['mediaID'] . ':' . (string)($media['MediaUpdated'] ?? 0);

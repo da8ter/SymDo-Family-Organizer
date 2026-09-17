@@ -976,7 +976,8 @@
             "%d date(s) suggested": "%d Termin(e) vorgeschlagen",
             "Reply needed:": "Rückmeldung:",
             "%d reply/replies with a deadline": "%d Rückmeldung(en) mit Frist",
-            "LOGINEO": "LOGINEO"
+            "LOGINEO": "LOGINEO",
+            "Colour": "Farbe"
         },
         "en": {
             "SymDo Gateway": "SymDo - Gateway",

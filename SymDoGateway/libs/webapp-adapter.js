@@ -557,6 +557,10 @@
         // gewaehltes Kind blendet Einkauf und KI aus und bekommt seinen
         // Stundenplan. Ohne diese Zeile kaeme sie in der Web-App nie an.
         persona: u.persona || '',
+        /* Die im Backend gewaehlte Farbe des Mitglieds. Auch das ist eine
+           WEISSLISTE: ohne diese Zeile kommt sie in der Web-App nie an, und
+           der Ring um das gewaehlte Gesicht bliebe beim Akzent. */
+        color: u.color || '',
         avatar: u.hasAvatar
           ? (API + '/users/' + encodeURIComponent(u.id) + '/avatar?t=' + encodeURIComponent(token()))
           : ''
