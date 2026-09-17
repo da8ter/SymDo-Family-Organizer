@@ -1169,7 +1169,6 @@ trait ChoreStore
     private function KachelTexte(): array
     {
         return [
-            'title'    => $this->Translate('Chores'),
             'of'       => $this->Translate('%1$d of %2$d'),
             'nobody'   => $this->Translate('— none —'),
             'paused'   => $this->Translate('Pause'),
@@ -1181,7 +1180,6 @@ trait ChoreStore
             'carriedHint' => $this->Translate('Dashed circle: carried over from last week'),
             /* Die Tabellenansicht (17.09.2026): Kopf, Seitenspalte und Banner.
                Die Kachel uebersetzt nichts selbst — auch nicht „heute". */
-            'subtitle'    => $this->Translate("Together it's easier"),
             'task'        => $this->Translate('Chore'),
             'today'       => $this->Translate('Today'),
             'tomorrow'    => $this->Translate('Tomorrow'),

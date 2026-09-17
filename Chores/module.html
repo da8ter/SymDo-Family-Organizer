@@ -65,23 +65,10 @@ body {
 /* Alles, was NICHT scrollt, traegt den Rest des rechten Randes selbst. */
 .randrest { margin-right: calc(var(--sb-pad) + var(--sbw)); }
 
-/* ── Kopf: Haus, Titel, Wochenwahl ───────────────────────────────────────── */
-#kopf { display: flex; align-items: center; gap: 10px; padding: 2px 6px 10px; flex-wrap: wrap; }
-.haus {
-  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px;
-  display: flex; align-items: center; justify-content: center; font-size: 19px;
-  background: color-mix(in srgb, var(--akzent) 20%, var(--bg));
-  color: var(--akzent);
-}
-#titelblock { flex: 1 1 140px; min-width: 0; }
-#titel {
-  font-size: clamp(17px, 5vmin, 25px); font-weight: 800; line-height: 1.1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#untertitel {
-  font-size: clamp(10px, 2.6vmin, 12px); color: var(--dezent); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+/* Kopfzeile: keine. Titel und Haus sind am 17.09.2026 entfallen — die Visu
+   schreibt den Namen der Instanz ohnehin ueber die Kachel, und zwei
+   Ueberschriften uebereinander sind eine zu viel. Mit dem Titel ging der
+   Untertitel: allein stehend war er ein Satz ohne Bezug. */
 
 /* ── Karten der Familienmitglieder ───────────────────────────────────────── */
 #leute { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 6px 10px; }
@@ -320,13 +307,6 @@ body {
 <body>
 
 <div id="wrap">
-  <div id="kopf" class="randrest">
-    <div class="haus"><i class="fa-light fa-house"></i></div>
-    <div id="titelblock">
-      <div id="titel"></div>
-      <div id="untertitel"></div>
-    </div>
-  </div>
   <div id="leute" class="randrest"></div>
   <div id="liste">
     <div id="hinweis"></div>
@@ -557,9 +537,6 @@ function mitglied(id) {
  */
 function zeichnen() {
   if (!zustand) { return; }
-
-  el('titel').textContent = txt('title', 'Chores');
-  el('untertitel').textContent = txt('subtitle', '');
 
   const aemtchen = Array.isArray(zustand.chores) ? zustand.chores : [];
   el('hinweis').textContent = aemtchenMitUebertrag() ? txt('carriedHint', '') : '';
