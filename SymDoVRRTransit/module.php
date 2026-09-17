@@ -358,8 +358,10 @@ class SymDoVRRTransit extends IPSModuleStrict
     private function MitgliederOptionen(): array
     {
         $raus = [['caption' => $this->Translate('Whole family'), 'value' => '']];
+        /* (string): eine Kennung aus lauter Ziffern wird als Array-Schlüssel
+           sonst zur Zahl — siehe Ämtchenplan, 17.09.2026. */
         foreach ($this->TransitMitglieder() as $id => $m) {
-            $raus[] = ['caption' => (string)$m['name'], 'value' => $id];
+            $raus[] = ['caption' => (string)$m['name'], 'value' => (string)$id];
         }
         return $raus;
     }

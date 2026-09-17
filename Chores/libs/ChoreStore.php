@@ -1045,8 +1045,14 @@ trait ChoreStore
                 $andere[$id] = $name;
             }
         }
+        /* (string) ist PFLICHT: PHP macht aus einem Schlüssel, der nur aus
+           Ziffern besteht, stillschweigend eine ZAHL — und die Kennungen sind
+           acht Hexzeichen, „57648139" ist eine davon. Ohne die Umwandlung trägt
+           die Auswahl für dieses eine Mitglied eine Zahl als Wert, der strenge
+           Vergleich unten greift nicht, und das Formular hängt eine zweite
+           Zeile „57648139 (nicht gefunden)" an (gemeldet am 17.09.2026). */
         foreach ($kinder + $andere as $id => $name) {
-            $optionen[] = ['caption' => $name, 'value' => $id];
+            $optionen[] = ['caption' => $name, 'value' => (string)$id];
         }
         /* Eine gespeicherte, im Gateway nicht mehr vorhandene Kennung ehrlich
            anzeigen statt still auf „keins" zu fallen (Muster aus dem

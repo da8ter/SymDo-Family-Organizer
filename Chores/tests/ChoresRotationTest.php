@@ -45,6 +45,15 @@ if (!function_exists('RTN_AdjustCoins')) {
     }
 }
 
+/** Die Mitgliederauskunft des Gateways als Attrappe. */
+$GLOBALS['gatewayUsers'] = [];
+if (!function_exists('TGW_GetUsers')) {
+    function TGW_GetUsers(int $InstanceID): string
+    {
+        return (string)json_encode($GLOBALS['gatewayUsers']);
+    }
+}
+
 /**
  * Der Ämtchenplan auf das Rechenwerk reduziert. Konfiguration, Attribute und
  * die Gateway-Auskunft kommen aus Feldern; Klassenmethoden schlagen
@@ -133,6 +142,13 @@ class ChoresHarness extends IPSModuleStrict
     {
     }
 
+    /* Die Auswahl „Wer" fragt das Gateway ueber die Praefix-Funktion; im
+       Pruefstand steht die Instanz fest und die Auskunft kommt aus $namen. */
+    private function GatewayInstanz(): int
+    {
+        return 1;
+    }
+
     // Zugänge für den Prüflauf
     public function pWochenStart(string $d, int $tag): string { return $this->WochenStart($d, $tag); }
     public function pWochenKennung(int $t): string { return $this->WochenKennung($t); }
@@ -151,6 +167,7 @@ class ChoresHarness extends IPSModuleStrict
     public function pAemtchen(): array { return $this->AemtchenLesen(); }
     public function pZukunft(string $w, int $sp, int $t): bool { return $this->InDerZukunft($w, $sp, $t); }
     public function pHeuteSpalte(string $w, int $t): int { return $this->SpalteHeute($w, $t); }
+    public function pMitgliederOptionen(): array { return $this->MitgliederOptionen(); }
 }
 
 // ── Prüfgerüst ──────────────────────────────────────────────────────────────
@@ -539,6 +556,39 @@ pruefe('Abhaken am Donnerstag wird abgewiesen',
     $h->pAbhaken($w['week'], 'a1', '1', true, $mi), false);
 pruefe('… und nichts wurde gebucht',
     count(array_filter($GLOBALS['buchungen'], fn ($b) => $b[1] > 0)) >= 1, true);
+
+/* Eine Kennung aus lauter Ziffern darf die Auswahl nicht zerlegen.
+   PHP macht aus einem solchen ARRAY-SCHLUESSEL eine Zahl; ohne Ruecknahme in
+   eine Zeichenkette trug die Auswahl eine Zahl, der strenge Vergleich griff
+   nicht, und das Formular haengte eine zweite Zeile „57648139 (nicht
+   gefunden)" an — obwohl genau dieses Mitglied eine Zeile darueber stand. */
+$GLOBALS['gatewayUsers'] = [
+    ['id' => '57648139', 'name' => 'Tim',  'persona' => 'child'],
+    ['id' => 'fa0ad897', 'name' => 'Mia',  'persona' => 'child'],
+    ['id' => '1e4e8bac', 'name' => 'Anna', 'persona' => 'mother'],
+];
+$h = harness($drei, $mitTagen);
+$h->cfg['Members'] = json_encode([
+    ['memberId' => '57648139'], ['memberId' => 'fa0ad897'], ['memberId' => '1e4e8bac'],
+]);
+$optionen = $h->pMitgliederOptionen();
+$werte = array_column($optionen, 'value');
+pruefe('Auswahl hat vier Zeilen (— keins — und drei Mitglieder)', count($optionen), 4);
+pruefe('die Ziffern-Kennung steht genau einmal drin',
+    count(array_filter($werte, fn ($v) => $v === '57648139')), 1);
+pruefe('… und zwar als Zeichenkette',
+    array_sum(array_map(fn ($v) => is_string($v) ? 0 : 1, $werte)), 0);
+pruefe('keine Zeile „(nicht gefunden)"',
+    count(array_filter($optionen, fn ($o) => str_contains((string)$o['caption'], 'nicht gefunden'))), 0);
+/* Gegenprobe: eine Kennung, die das Gateway wirklich nicht kennt, MUSS
+   auftauchen — sonst verschwaende eine Zuordnung unbemerkt. */
+$h->cfg['Members'] = json_encode([
+    ['memberId' => '57648139'], ['memberId' => 'fa0ad897'],
+    ['memberId' => '1e4e8bac'], ['memberId' => 'abgemeldet'],
+]);
+$optionen = $h->pMitgliederOptionen();
+pruefe('unbekannte Kennung wird ehrlich gezeigt',
+    count(array_filter($optionen, fn ($o) => str_contains((string)$o['caption'], 'nicht gefunden'))), 1);
 
 // ── Ergebnis ────────────────────────────────────────────────────────────────
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);

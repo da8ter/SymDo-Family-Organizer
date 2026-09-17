@@ -402,8 +402,10 @@ trait RoutineStore
                 $kinder[$id] = $name;
             }
         }
+        /* (string): eine Kennung aus lauter Ziffern wird als Array-Schlüssel
+           sonst zur Zahl — siehe Ämtchenplan, 17.09.2026. */
         foreach ($kinder !== [] ? $kinder : $alle as $id => $name) {
-            $optionen[] = ['caption' => $name, 'value' => $id];
+            $optionen[] = ['caption' => $name, 'value' => (string)$id];
         }
         return $optionen;
     }

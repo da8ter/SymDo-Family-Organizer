@@ -1811,8 +1811,10 @@ class SymDoTimetable extends IPSModuleStrict
         // gegen sie abgeglichen, ein gewaehlter Vater verschwaende nur einen Klick.
         $kinder = $this->GatewayKinder();
         $optionen = [['caption' => $this->Translate('— none —'), 'value' => '']];
+        /* (string): eine Kennung aus lauter Ziffern wird als Array-Schlüssel
+           sonst zur Zahl — siehe Ämtchenplan, 17.09.2026. */
         foreach ($kinder !== [] ? $kinder : $this->GatewayMitglieder() as $id => $name) {
-            $optionen[] = ['caption' => $name, 'value' => $id];
+            $optionen[] = ['caption' => $name, 'value' => (string)$id];
         }
         return $optionen;
     }
