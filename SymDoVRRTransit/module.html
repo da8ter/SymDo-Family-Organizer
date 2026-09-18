@@ -1542,13 +1542,53 @@ function symboleErsetzen() {
   setTimeout(engePruefen, 1200);
 }
 
+/* Gesetzt wird sie erst unten, wenn es die Visu-Bruecke gibt — deklariert
+   steht sie hier, weil nachfassen() sie braucht. */
+let melden = null;
+
 function handleMessage(daten) {
   if (typeof daten === 'string') { try { daten = JSON.parse(daten); } catch (e) { return; } }
   if (!daten || typeof daten !== 'object') { return; }
   zustand = daten;
   zeichne();
+  nachfassen();
 }
 window.handleMessage = handleMessage;
+
+/* Nach einer Pause ist der Bestand kalt — dann gleich noch einmal fragen.
+   Das Modul holt nur, solange jemand hinsieht; kommt die Kachel aus dem
+   Hintergrund zurueck, meldet sie sich sofort und bekommt den ZULETZT
+   gespeicherten Stand geschoben. Den frischen holt das Modul erst eine Sekunde
+   spaeter — und schob ihn bisher niemandem zu, weil die naechste Meldung erst
+   in einer Minute kam. Auf dem Telefon stand die Tafel damit nach dem
+   Entsperren minutenlang auf der alten Fahrt (gemeldet 18.09.2026, 06:39 statt
+   07:03).
+
+   Verglichen wird gegen die Uhr des MODULS (`now`), nicht gegen die eigene:
+   ein Geraet mit falsch gehender Uhr fragte sonst endlos nach. */
+const NACH_ALT_S = 90;
+const NACH_MAX = 3;
+let nachVersuche = 0;
+let nachUhr = 0;
+function nachfassen() {
+  if (nachUhr) { clearTimeout(nachUhr); nachUhr = 0; }
+  if (!zustand || typeof melden !== 'function') { return; }
+  const jetzt = Number(zustand.now) || 0;
+  const alt = (e) => {
+    if (!e) { return false; }
+    if (e.stale === true) { return true; }
+    const geholt = Number(e.fetchedAt) || 0;
+    return jetzt > 0 && geholt > 0 && (jetzt - geholt) > NACH_ALT_S;
+  };
+  const kalt = (zustand.stops || []).some(alt) || (zustand.routes || []).some(alt);
+  if (!kalt) { nachVersuche = 0; return; }
+  if (nachVersuche >= NACH_MAX) { return; }
+  nachVersuche++;
+  nachUhr = setTimeout(() => {
+    nachUhr = 0;
+    if (document.visibilityState === 'visible') { melden(); }
+  }, 5000);
+}
 
 /* Melden, dass jemand hinsieht — beim Öffnen und dann weiter im Minutentakt.
    Der Stempel drüben verfällt nach drei Minuten, und ohne ihn hört das Modul
@@ -1561,11 +1601,16 @@ window.handleMessage = handleMessage;
    keine fremde Schnittstelle beschäftigen. Und die Antwort auf jede Meldung
    zeichnet mit, was ohnehin nötig ist — die Minuten laufen weiter. */
 if (typeof requestAction === 'function') {
-  const melden = () => { try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ } };
+  melden = () => { try { requestAction('GetState', ''); } catch (e) { /* außerhalb der Visu */ } };
   melden();
-  setInterval(() => { if (document.visibilityState === 'visible') melden(); }, 60000);
+  /* Jede Meldung aus dem Takt oder vom Zurueckkommen beginnt eine neue Runde
+     Nachfragen — sonst waere das Kontingent nach einer Stoerung fuer immer
+     aufgebraucht, und gerade dann braucht man es wieder. */
+  setInterval(() => {
+    if (document.visibilityState === 'visible') { nachVersuche = 0; melden(); }
+  }, 60000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') melden();
+    if (document.visibilityState === 'visible') { nachVersuche = 0; melden(); }
   });
 }
 </script>
