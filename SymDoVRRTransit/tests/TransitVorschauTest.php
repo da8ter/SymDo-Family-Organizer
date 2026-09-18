@@ -73,9 +73,11 @@ foreach ($varianten as $name => $roh) {
             [true, true, true]);
     }
 }
-pruefe('Die senkrechte Ansicht bekommt ein hoeheres Bild',
+pruefe('Senkrechte Ansicht und Zeitachse bekommen ein hoeheres Bild, die Tafel die Grundhoehe',
     [(bool)preg_match('/height="' . TransitVorschau::HOEHE_SENKRECHT . '"/', bild(['view' => 'routes', 'style' => 'vertical'])),
-     (bool)preg_match('/height="' . TransitVorschau::HOEHE . '"/', bild(['view' => 'departures']))], [true, true]);
+     (bool)preg_match('/height="' . TransitVorschau::HOEHE_ZEITACHSE . '"/', bild(['view' => 'routes', 'style' => 'timeline'])),
+     (bool)preg_match('/height="' . TransitVorschau::HOEHE . '"/', bild(['view' => 'departures'])),
+     TransitVorschau::HOEHE_ZEITACHSE], [true, true, true, 350]);
 $uri = TransitVorschau::DataUri(TransitVorschau::Einstellungen([]), $css, []);
 pruefe('Die Data-URI traegt den SVG-Kopf und kommt unversehrt zurueck',
     [str_starts_with($uri, 'data:image/svg+xml;base64,'),

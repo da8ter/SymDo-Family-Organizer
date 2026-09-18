@@ -48,6 +48,8 @@ final class TransitVorschau
     public const BREITE = 630;
     /** Abfahrten, Balken, Zeitachse. */
     public const HOEHE = 250;
+    /** Die ausfuehrliche Zeitachse: 40 % mehr als die Grundhoehe (Wunsch des Nutzers). */
+    public const HOEHE_ZEITACHSE = 350;
     /** Die senkrechte Ansicht reiht Halte — sie braucht Hoehe statt Breite. */
     public const HOEHE_SENKRECHT = 380;
 
@@ -136,8 +138,14 @@ final class TransitVorschau
     public static function Svg(array $e, string $css, array $texte = []): string
     {
         $t = $texte + self::Vorgabetexte();
-        $senkrecht = $e['view'] === 'routes' && $e['style'] === 'vertical';
-        $hoehe = $senkrecht ? self::HOEHE_SENKRECHT : self::HOEHE;
+        $hoehe = self::HOEHE;
+        if ($e['view'] === 'routes') {
+            $hoehe = match ($e['style']) {
+                'vertical' => self::HOEHE_SENKRECHT,
+                'timeline' => self::HOEHE_ZEITACHSE,
+                default    => self::HOEHE,
+            };
+        }
 
         $inhalt = $e['view'] === 'departures'
             ? self::Abfahrten($e, $t)
