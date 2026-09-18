@@ -644,7 +644,12 @@ function handleMessage(daten) {
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;
-window.addEventListener('message', (event) => { if (event) { handleMessage(event.data); } });
+/* Nur Nachrichten vom eigenen Fenster oder dem einbettenden Parent: ohne die
+   Pruefung koennte ein fremder Frame einen kompletten Zustand injizieren. */
+window.addEventListener('message', (event) => {
+  if (!event || (event.source !== window && event.source !== window.parent)) { return; }
+  handleMessage(event.data);
+});
 
 // Minuten-Tick: Fenstergrenzen ohne Server-Hilfe nachziehen
 setInterval(zeichnen, 30000);

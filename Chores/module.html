@@ -938,7 +938,12 @@ function handleMessage(daten) {
 }
 window.handleMessage = handleMessage;
 window.updateState = handleMessage;
-window.addEventListener('message', (event) => { if (event) { handleMessage(event.data); } });
+/* Nur Nachrichten vom eigenen Fenster oder dem einbettenden Parent: ohne die
+   Pruefung koennte ein fremder Frame einen kompletten Zustand injizieren. */
+window.addEventListener('message', (event) => {
+  if (!event || (event.source !== window && event.source !== window.parent)) { return; }
+  handleMessage(event.data);
+});
 
 /* Minuten-Tick: die Wochengrenze ohne Serverhilfe nachziehen. Der Server
    liefert beim naechsten Push die neue Woche; bis dahin bleibt die Anzeige
