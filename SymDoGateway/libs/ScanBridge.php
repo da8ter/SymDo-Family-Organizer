@@ -508,7 +508,6 @@ trait ScanBridge
                         $haben = $s['quellen'];
                         unset($da[$sid]);   // nicht zweimal uebernehmen
                         @IPS_SetName($id, $this->ScannerName((string)$rolle));
-                        @IPS_SetHidden($id, true);
                         $this->ScanMelden(sprintf('Scanner #%d als „%s" uebernommen.',
                             $id, $this->ScannerName((string)$rolle)), KL_NOTIFY);
                         break;
