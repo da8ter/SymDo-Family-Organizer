@@ -423,7 +423,8 @@ $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt);
 $h->attr['Week'] = json_encode(array_merge($h->pWoche($jetzt), ['assign' => array_merge($w['assign'], ['m1' => 'c'])]));
 $plaetze = $h->pPlaetze($h->pWoche($jetzt), $h->pAemtchen()[0]);
 pruefe('der abgehakte Platz behaelt seinen Halter', $plaetze[0]['memberId'], $alterHalter);
-pruefe('Zuruecknehmen geht', $h->pAbhaken('2026-09-07', 'm1', '0', false, $jetzt), true);
+/* Seit dem 18.09.2026 bleibt ein Haken: die Ruecknahme wird abgewiesen. */
+pruefe('Zuruecknehmen geht NICHT mehr', $h->pAbhaken('2026-09-07', 'm1', '0', false, $jetzt), false);
 // Veraltete Wochenkennung
 $h = harness($drei, $aemtchen3);
 $h->pWoche($jetzt);

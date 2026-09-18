@@ -110,7 +110,8 @@
             "not enough coins": "zu wenig Münzen",
             "No child has enough coins.": "Kein Kind hat genug Münzen.",
             "Everything has been rolled today.": "Heute ist schon alles gewürfelt.",
-            "%s pays": "%s bezahlt"
+            "%s pays": "%s bezahlt",
+            "1 × spin =": "1 × drehen ="
         }
     }
 }

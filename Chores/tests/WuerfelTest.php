@@ -204,7 +204,6 @@ pruefe('Heute hat der Muell einen Platz', $platzMuell !== null, true);
 // Das Los legt fest, wer den Platz hat — so wissen wir, wem der Haken gehoert.
 $m->pWuerfeln($km, 'muell', $jetzt, static fn(int $n): int => 3);          // Dirk (Erwachsener)
 pruefe('Dirk (Vater) hakt ab — keine Muenzen', [$m->pAbhaken($km, 'muell', $platzMuell['key'], true, $jetzt), $m->pMuenzen('d')], [true, 0]);
-$m->pAbhaken($km, 'muell', $platzMuell['key'], false, $jetzt);
 $m2 = harness($alle);
 $w2 = $m2->pWoche($jetzt);
 $k2 = (string)$w2['week'];
@@ -212,10 +211,14 @@ $m2->pWuerfeln($k2, 'muell', $jetzt, static fn(int $n): int => 0);        // Ann
 pruefe('Anna (Kind) hakt ab — fuenf Muenzen', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], true, $jetzt), $m2->pMuenzen('a')], [true, 5]);
 pruefe('… gespeichert am Haken', json_decode($m2->attr['Week'], true)['done']['muell'][$platzMuell['key']], ['m' => 'a', 'p' => 5]);
 pruefe('Doppeltes Abhaken bucht nicht doppelt', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], true, $jetzt), $m2->pMuenzen('a')], [true, 5]);
-pruefe('Haken weg — Muenzen weg', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], false, $jetzt), $m2->pMuenzen('a')], [true, 0]);
+/* Ein Haken bleibt (Regel des Nutzers): die Ruecknahme wird abgewiesen, die
+   Muenzen bleiben — und damit kann derselbe Platz auch nie zweimal zahlen. */
+pruefe('Den Haken wegnehmen geht nicht — die Muenzen bleiben',
+    [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], false, $jetzt), $m2->pMuenzen('a'),
+     json_decode($m2->attr['Week'], true)['done']['muell'][$platzMuell['key']]['m']], [false, 5, 'a']);
 pruefe('Die Nutzlast zeigt den Beutel nur bei Kindern',
     [$m2->pPayload($jetzt)['members']['a']['coins'], $m2->pPayload($jetzt)['members']['d']['coins'],
-     array_values(array_filter($m2->pPayload($jetzt)['chores'], static fn(array $c): bool => $c['id'] === 'muell'))[0]['coins']], [0, 0, 5]);
+     array_values(array_filter($m2->pPayload($jetzt)['chores'], static fn(array $c): bool => $c['id'] === 'muell'))[0]['coins']], [5, 0, 5]);
 
 /* Drehen kostet: nur ein Kind mit genug im Beutel darf zahlen, abgebucht wird
    erst, wenn das Los steht. */
@@ -251,6 +254,8 @@ pruefe('Wenige Mitspieler stehen mehrmals auf dem Rad',
     [str_contains($html, 'function radFelder'),
      str_contains($html, 'const mal = n <= 1 ? 4 : (n === 2 ? 3 : (n <= 4 ? 2 : 1));'),
      str_contains($html, 'rad.felder.forEach((id, i) =>')], [true, true, true]);
+pruefe('Die Kachel bietet einen gesetzten Haken nicht mehr an',
+    str_contains($html, "(spaeter || s.done ? ' disabled' : '')"), true);
 pruefe('Vor der Wahl fragt das Blatt, wer bezahlt — und der LOS!-Knopf kennt seine Gruende',
     [str_contains($html, 'function zahlerZeigen'), str_contains($html, "payer: zahler"),
      str_contains($html, 'function drehGrund'), str_contains($html, "'wheelNoPayer'"), str_contains($html, "'wheelAllSpun'")],

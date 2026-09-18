@@ -999,12 +999,11 @@ trait ChoreStore
     }
 
     /**
-     * Ein Häkchen setzen oder zurücknehmen.
+     * Ein Häkchen setzen. Zurücknehmen gibt es nicht mehr (18.09.2026).
      *
      * Immer mit ZIELZUSTAND und nie als Umschalter: eine doppelt zugestellte
-     * Anfrage darf das Häkchen nicht zurücknehmen (Lehre aus der
-     * Einkaufs-Übersichtskachel). Idempotent, damit ein Doppeltipp nicht
-     * zweimal bucht.
+     * Anfrage darf nichts anderes bewirken als die erste. Idempotent, damit
+     * ein Doppeltipp nicht zweimal bucht.
      *
      * Punktwert UND Halter werden beim Abhaken gemerkt. Die Routinen merken
      * nur den Wert — dort kann der Beutel nicht wechseln, hier schon (Handkurbel,
@@ -1057,24 +1056,19 @@ trait ChoreStore
         if ($war === $ziel) {
             return true;
         }
-        if ($ziel) {
-            /* Gespeichert wird, WER es getan hat — und was es ihm gebracht hat:
-               nur ein KIND verdient Muenzen (Regel des Nutzers), und
-               zurueckgeholt wird beim Loeschen des Hakens genau der Betrag von
-               damals, nicht der heutige Preis des Aemtchens. */
-            $muenzen = $this->IstKind($halter) ? (int)($treffer['coins'] ?? 0) : 0;
-            $erledigt[$platz] = ['m' => $halter, 'p' => $muenzen];
-            $this->MuenzenBuchen($halter, $muenzen);
-        } else {
-            $alt = is_array($erledigt[$platz] ?? null) ? $erledigt[$platz] : [];
-            $this->MuenzenBuchen((string)($alt['m'] ?? ''), -(int)($alt['p'] ?? 0));
-            unset($erledigt[$platz]);
+        /* Ein Haken bleibt (Regel des Nutzers, 18.09.2026): zuruecknehmen geht
+           nicht, damit ist derselbe Platz auch nie zweimal abzuhaken — und die
+           Muenzen dafuer fliessen genau einmal. Die Kachel bietet den Haken
+           gar nicht an; hier wird es fuer nachgereichte Anfragen abgewiesen. */
+        if (!$ziel) {
+            return false;
         }
-        if ($erledigt === []) {
-            unset($woche['done'][$choreId]);
-        } else {
-            $woche['done'][$choreId] = $erledigt;
-        }
+        /* Gespeichert wird, WER es getan hat — und was es ihm gebracht hat:
+           nur ein KIND verdient Muenzen (Regel des Nutzers). */
+        $muenzen = $this->IstKind($halter) ? (int)($treffer['coins'] ?? 0) : 0;
+        $erledigt[$platz] = ['m' => $halter, 'p' => $muenzen];
+        $this->MuenzenBuchen($halter, $muenzen);
+        $woche['done'][$choreId] = $erledigt;
         $this->WocheSchreiben($woche);
         return true;
     }
@@ -1361,6 +1355,7 @@ trait ChoreStore
             'wheelNoPayer' => $this->Translate('No child has enough coins.'),
             'wheelAllSpun' => $this->Translate('Everything has been rolled today.'),
             'wheelPays'   => $this->Translate('%s pays'),
+            'wheelOnce'   => $this->Translate('1 × spin ='),
         ];
     }
 }

@@ -331,6 +331,9 @@ body {
 #wuerfel .wtext { flex: 1 1 auto; min-width: 0; }
 #wuerfel .wtitel { font-size: 14px; font-weight: 800; }
 #wuerfel .whint { font-size: 12px; color: var(--dezent); margin-top: 2px; }
+#wuerfel .wknopf { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }
+#wuerfel .wpreis { font-size: 11px; color: var(--dezent); white-space: nowrap; }
+#wuerfel .wpreis i, #wuerfel .wpreis svg { width: 12px; height: 12px; vertical-align: -1px; }
 /* Knoepfe nach dem Muster der Web-App: randlos, Radius 12, Akzent als Flaeche. */
 .knopf {
   border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer;
@@ -873,7 +876,9 @@ function platzHtml(a, s) {
     ' style="--mfarbe:' + mitgliedFarbe(id) + '"' +
     ' data-marke="' + escHtml(marke) + '" data-chore="' + escHtml(a.id) + '"' +
     ' data-slot="' + escHtml(s.key) + '" data-ziel="' + (s.done ? '0' : '1') + '"' +
-    (spaeter ? ' disabled' : '') +
+    /* Ein gesetzter Haken bleibt (Regel des Nutzers, 18.09.2026): erledigte
+       Plaetze sind nicht mehr tippbar, das Modul weist eine Ruecknahme ab. */
+    (spaeter || s.done ? ' disabled' : '') +
     ' title="' + escHtml(titel) + '">' +
     '<span class="bild">' + (p ? bildHtml(p) : '?') + '</span>' +
     '<span class="haken">✓</span></button>';
@@ -957,11 +962,16 @@ function bannerHtml() {
    schon gelosten Aemtchen nur den Gewinner. (Wunsch des Nutzers, 18.09.2026.) */
 function wuerfelHtml() {
   const grund = drehGrund();
-  const hinweis = grund === '' ? preisText() : grund;
+  const hinweis = grund === '' ? txt('wheelHint', '') : grund;
+  /* Unter dem Knopf klein der Preis: „1 × drehen = 3 <Muenze>" (auf Wunsch,
+     18.09.2026) — nur wenn ein Dreh etwas kostet. */
+  const preisZeile = preis() > 0
+    ? '<div class="wpreis">' + escHtml(txt('wheelOnce', '1 × spin =')) + ' ' + preis() + ' <i class="fa-light fa-coins"></i></div>'
+    : '';
   return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</div>' +
     '<div class="whint">' + escHtml(hinweis) + '</div></div>' +
-    '<button type="button" class="knopf" id="wuerfel-knopf"' + (grund === '' ? '' : ' disabled') + '>' +
-    '<i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>';
+    '<div class="wknopf"><button type="button" class="knopf" id="wuerfel-knopf"' + (grund === '' ? '' : ' disabled') + '>' +
+    '<i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>' + preisZeile + '</div>';
 }
 
 function preis() { return Math.max(0, Number(zustand && zustand.spinPrice) || 0); }
