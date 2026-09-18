@@ -149,6 +149,10 @@ trait TransitBridge
             // Ohne diese Zeile wüsste die App nicht, dass die planmäßige
             // Abfahrt schon vorbei war und ab jetzt gesucht wurde.
             'fromNow'     => ($r['school']['fromNow'] ?? false) === true,
+            /* Ab wann es zu spaet ist. Ohne diese Zeile koennte die App die
+               Ankunft nicht rot faerben — sie weiss sonst nicht, wann der
+               Unterricht beginnt. */
+            'lateAfter'   => (int)($r['school']['lateAfter'] ?? 0),
         ] : null;
 
         return [

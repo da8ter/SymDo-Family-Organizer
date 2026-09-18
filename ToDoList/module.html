@@ -791,6 +791,16 @@ html .toast { bottom: calc(var(--tab-clear) + 14px); }
 .nv-zeiten { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .nv-zeiten .nv-stark { font-weight: 800; font-size: 14px; }
 .nv-zeiten .nv-grund { color: var(--muted); }
+/* Zu spaet an der Schule: rot, und es blinkt, damit man es im Vorbeigehen
+   sieht. Ruhig genug, dass man daneben noch lesen kann — zwei Sekunden je
+   Takt und nur bis 35 Prozent herunter. Wer keine Bewegung will, bekommt
+   keine; das Rot bleibt. */
+.nv-spaet { color: #f87171 !important; animation: nvSpaetBlinken 2s ease-in-out infinite; }
+@keyframes nvSpaetBlinken {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+@media (prefers-reduced-motion: reduce) { .nv-spaet { animation: none; } }
 /* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer. Vorher waren die
    Stuecke breit nach Minuten — dabei blieben dem Fussweg 54 Pixel, von denen
    Symbol und Polsterung 39 frassen, und „4 min" wurde abgeschnitten. Jetzt
@@ -8782,14 +8792,28 @@ function nvBalken(v) {
 }
 
 
+/**
+ * Kommt dieser Schulweg zu spaet?
+ *
+ * Die Frist steht an der Strecke (`school.lateAfter`, der Beginn des
+ * Unterrichts) — nicht die Zielzeit, die traegt schon den Puffer. Ohne
+ * Schulweg und auf dem Rueckweg gibt es keine Frist.
+ */
+function nvZuSpaet(r, v) {
+  const frist = Number((r && r.school && r.school.lateAfter) || 0);
+  const an = Number((v && v.arrival) || 0);
+  return frist > 0 && an > 0 && an > frist;
+}
+
 /** Eine Verbindung mit Zeiten, Balken und den beiden Enden. */
-function nvFahrt(v) {
+function nvFahrt(v, spaet) {
   const dauer = Math.round(v.seconds / 60);
   const umstieg = v.interchanges > 0
     ? `${v.interchanges} ${translate('changes')}` : translate('direct');
   return `<div class="nv-fahrt">`
     + `<div class="nv-zeiten"><span class="nv-stark">${escapeHtml(v.departureText)}</span>`
-    + `<span class="nv-grund">→</span><span class="nv-stark">${escapeHtml(v.arrivalText)}</span>`
+    + `<span class="nv-grund">→</span>`
+    + `<span class="nv-stark${spaet ? ' nv-spaet' : ''}">${escapeHtml(v.arrivalText)}</span>`
     + `<span class="nv-grund">${dauer} ${translate('min')} · ${escapeHtml(umstieg)}</span></div>`
     + nvBalken(v)
     + `<div class="nv-enden"><span>${escapeHtml((v.legs[0] || {}).from || '')}</span>`
@@ -8879,7 +8903,7 @@ function renderTransit() {
        Teilmenge (gemessen Benrath → Duesseldorf Hbf: 19:27 und 20:37 kommen
        ungefiltert gar nicht vor). */
     const alle = (nvNurDirekt ? (r.journeysDirect || []) : (r.journeys || []));
-    const fahrten = alle.map(nvFahrt).join('');
+    const fahrten = alle.map((v) => nvFahrt(v, nvZuSpaet(r, v))).join('');
     const hinweis = nvSchulzeile(r);
     /* Die Verbindungen liegen NEBENEINANDER und werden gewischt — untereinander
        fuellten fuenf Stueck den ganzen Bildschirm. Die Punkte darunter sagen,

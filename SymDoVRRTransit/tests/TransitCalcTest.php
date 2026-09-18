@@ -224,6 +224,16 @@ pruefe('ohne Angabe siebt nichts',
 pruefe('kuenftige Verbindung bleibt',
     count(TransitCalc::Verbindungen($direkt, 4, 0, false, false, $ab - 3600)), 1);
 
+/* Ab wann ist es zu spaet? Die Frist ist der Beginn des Unterrichts, nicht die
+   Zielzeit — die traegt schon den Puffer. Auf dem Rueckweg gibt es keine. */
+$planHin = ['slots' => [['start' => '08:00', 'end' => '13:00']]];
+$hin = TransitCalc::Schulweg($planHin, '2026-09-11', strtotime('2026-09-11 07:00'), 10);
+pruefe('Hinweg: Frist ist der Unterrichtsbeginn',
+    $hin['lateAfter'], strtotime('2026-09-11 08:00'));
+pruefe('Hinweg: Zielzeit liegt davor', $hin['targetAt'] < $hin['lateAfter'], true);
+$rueck = TransitCalc::Schulweg($planHin, '2026-09-11', strtotime('2026-09-11 13:05'), 10);
+pruefe('Rueckweg: keine Frist', $rueck['lateAfter'], 0);
+
 // ── Uhrzeit aus der Formularzelle ──────────────────────────────────────────
 pruefe('Zeitwaehler-Objekt', TransitCalc::ZeitText(['hour' => 7, 'minute' => 50, 'second' => 0]), '07:50');
 pruefe('Zeitwaehler als JSON-Text', TransitCalc::ZeitText('{"hour":16,"minute":5,"second":0}'), '16:05');

@@ -845,6 +845,11 @@ final class TransitCalc
             'targetTime'  => date('H:i', $ziel),
             'targetAt'    => $ziel,
             'bufferUsed'  => $puffer,
+            /* Ab WANN ist es zu spaet? Auf dem Weg zur Schule der Beginn des
+               Unterrichts — nicht die Zielzeit, die traegt schon den Puffer.
+               Auf dem Rueckweg gibt es keine Frist. `targetAt` taugt dafuer
+               nicht: es wird beim Nachfragen ab jetzt ueberschrieben. */
+            'lateAfter'   => $richtung === 'to' ? $beginn : 0,
             /* Wahr, wenn der planmäßige Zeitpunkt schon vorbei war und statt
                dessen ab jetzt gesucht wurde — die Oberfläche sagt das dann
                auch, sonst wundert man sich über die Zeiten. */

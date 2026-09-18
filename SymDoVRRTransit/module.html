@@ -239,6 +239,20 @@ body {
 .fahrt .zeilen { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-bottom: 9px; }
 .fahrt .zeilen .stark { font-weight: 800; font-size: 12px; }
 .fahrt .zeilen .grund { color: var(--dezent); }
+/* Zu spaet an der Schule. Rot, weil es genau eine Bedeutung hat: dieser
+   Schulweg kommt nach Unterrichtsbeginn an — und es blinkt, damit man es im
+   Vorbeigehen sieht. Ruhig genug, dass man daneben noch lesen kann: zwei
+   Sekunden je Takt und nur bis 35 Prozent herunter. */
+.spaet { color: #f87171; animation: spaetblinken 2s ease-in-out infinite; }
+.tl-wert.spaet .zahl, .tl-wert.spaet .sinn { color: #f87171; }
+@keyframes spaetblinken {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+/* Wer keine Bewegung will, bekommt keine — das Rot bleibt. */
+@media (prefers-reduced-motion: reduce) {
+  .spaet { animation: none; }
+}
 /* Der Balken bildet die Tour SCHEMATISCH ab, nicht nach Dauer.
    Vorher waren die Stücke breit nach Minuten — dabei blieben dem Fußweg 54
    Pixel, von denen Symbol und Polsterung 39 fraßen, und „4 min" wurde
@@ -831,6 +845,19 @@ function abfahrtenHtml() {
  * fraßen. Wie viel Zeit wohin geht, sagt jetzt die Zeile darunter — die ist
  * immer lesbar, egal wie schmal das Stück ist.
  */
+/**
+ * Kommt dieser Schulweg zu spaet?
+ *
+ * Die Frist steht am Schulweg (`school.lateAfter`, der Beginn des Unterrichts)
+ * — nicht die Zielzeit, die traegt schon den Puffer. Ohne Schulweg und auf dem
+ * Rueckweg gibt es keine Frist.
+ */
+function zuSpaet(r, v) {
+  const frist = Number((r && r.school && r.school.lateAfter) || 0);
+  const an = Number((v && v.arrival) || 0);
+  return frist > 0 && an > 0 && an > frist;
+}
+
 function balkenHtml(v) {
   return '<div class="balken">' + (v.legs || []).map(function (l) {
     const min = Math.round(l.seconds / 60) + ' ' + translate('min');
@@ -881,7 +908,7 @@ function balkenHtml(v) {
  * Beschriftung von ihrem Stueck wegrutschen. Die Breiten stehen im
  * `grid-template-columns`, das hier mitgerechnet wird.
  */
-function zeitachseHtml(v, jetzt) {
+function zeitachseHtml(v, jetzt, spaet) {
   const legs = v.legs || [];
   const fahrten = [];
   legs.forEach(function (l, i) { if (l.kind === 'ride') { fahrten.push(i); } });
@@ -1028,7 +1055,7 @@ function zeitachseHtml(v, jetzt) {
     +     '<div class="uhr">' + esc(v.departureText) + '</div>'
     +     (gleich ? '<div class="gleich">' + esc(gleich) + '</div>' : '') + '</div>'
     +   '<div class="seite rechts"><div class="was">' + esc(translate('Arrival')) + '</div>'
-    +     '<div class="uhr">' + esc(v.arrivalText) + '</div>'
+    +     '<div class="uhr' + (spaet ? ' spaet' : '') + '">' + esc(v.arrivalText) + '</div>'
     +     '<div class="gesamt">' + esc(min(v.seconds) + ' ' + translate('in total')) + '</div></div>'
     + '</div>'
     + '<div class="tl-spur" style="grid-template-columns:' + spalten.join(' ') + '">' + zellen + '</div>'
@@ -1041,7 +1068,7 @@ function zeitachseHtml(v, jetzt) {
  * Beide ausfuehrlichen Ansichten zeigen dieselbe Zeile, deshalb steht sie hier
  * und nicht zweimal.
  */
-function werteHtml(v) {
+function werteHtml(v, spaet) {
   const min = Math.round((v.seconds || 0) / 60) + ' ' + translate('min');
   /* Die Auslastung gilt der Fahrt, in der man am laengsten sitzt — die
      kuerzeste Anschlussfahrt saegt sonst die Aussage der Hauptfahrt ab. */
@@ -1064,6 +1091,10 @@ function werteHtml(v) {
   };
 
   return '<div class="tl-werte">'
+    /* Die senkrechte Ansicht zeigt nirgends eine Gesamtankunft — sie reiht
+       Haltestellen. Kommt der Schulweg zu spaet, gehoert die Ankunft deshalb
+       HIER hin, in Rot; in den anderen Ansichten steht sie schon oben. */
+    + (spaet ? wert(translate('Arrival'), v.arrivalText, 'fa-triangle-exclamation', 'spaet') : '')
     + wert(translate('Total time'), min, 'fa-stopwatch')
     + wert(translate('Changes'), v.interchanges > 0
         ? v.interchanges + ' ' + translate(v.interchanges === 1 ? 'change' : 'changes')
@@ -1124,11 +1155,11 @@ function schienenHerstellen() {
  */
 let halteOffen = {};
 
-function senkrechtHtml(v, schluessel) {
+function senkrechtHtml(v, schluessel, spaet) {
   const legs = v.legs || [];
   const fahrten = [];
   legs.forEach(function (l, i) { if (l.kind === 'ride') { fahrten.push(i); } });
-  if (fahrten.length === 0) { return zeitachseHtml(v, zustand.now || 0); }
+  if (fahrten.length === 0) { return zeitachseHtml(v, zustand.now || 0, spaet); }
 
   const sek = function (von, bis) {
     let n = 0;
@@ -1269,7 +1300,7 @@ function senkrechtHtml(v, schluessel) {
       + esc(translate('on foot')), '0px', false, laenge(auslauf, HALT_UNTEN));
   }
 
-  return '<div class="vt">' + html + '</div>' + werteHtml(v);
+  return '<div class="vt">' + html + '</div>' + werteHtml(v, spaet);
 }
 
 
@@ -1301,16 +1332,18 @@ function streckenHtml() {
          ihnen nur die Karte drumherum — deshalb hier die Weiche und nicht im
          Balken selbst. */
       const stil = zustand.routeStyle || 'bars';
+      const spaet = zuSpaet(r, v);
       if (stil === 'timeline') {
-        return '<div class="fahrt">' + zeitachseHtml(v, zustand.now || 0) + '</div>';
+        return '<div class="fahrt">' + zeitachseHtml(v, zustand.now || 0, spaet) + '</div>';
       }
       if (stil === 'vertical') {
         return '<div class="fahrt">'
-          + senkrechtHtml(v, streckenSchluessel(r) + '#' + vi) + '</div>';
+          + senkrechtHtml(v, streckenSchluessel(r) + '#' + vi, spaet) + '</div>';
       }
       return '<div class="fahrt">'
         + '<div class="zeilen"><span class="stark">' + esc(v.departureText) + '</span>'
-        + '<span class="grund">→</span><span class="stark">' + esc(v.arrivalText) + '</span>'
+        + '<span class="grund">→</span><span class="stark' + (spaet ? ' spaet' : '') + '">'
+        + esc(v.arrivalText) + '</span>'
         + '<span class="grund">' + Math.round(v.seconds / 60) + ' ' + esc(translate('min'))
         + (v.interchanges > 0
             ? ' · ' + v.interchanges + ' ' + esc(translate('changes'))
