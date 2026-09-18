@@ -56,6 +56,7 @@ final class WuerfelHarness extends IPSModuleStrict
     public function pWuerfeln(string $w, string $c, int $t, ?callable $z = null, string $zahler = ''): array { return $this->Wuerfeln($w, $c, $t, $z, $zahler); }
     public function pMuenzen(string $id): int { return $this->MuenzenVon($id); }
     public function pBeutel(array $b): void { $this->BeutelSchreiben($b); }
+    public function pSchenken(string $id, int $d): ?int { return $this->MuenzenSchenken($id, $d); }
     public function pWoche(int $t): array { return $this->WocheSicherstellen($t); }
     public function pPlaetze(array $w, array $a): array { return $this->PlaetzeFuer($w, $a); }
     public function pAemtchen(): array { return $this->AemtchenLesen(); }
@@ -262,6 +263,16 @@ pruefe('Vor der Wahl fragt das Blatt, wer bezahlt — und der LOS!-Knopf kennt s
     [true, true, true, true, true]);
 pruefe('Das Rad dreht erst, wenn das Los des MODULS da ist',
     [str_contains($html, 'function radNachziehen'), str_contains($html, 'a.wheel && a.wheel.memberId')], [true, true]);
+
+/* Muenzen von Hand: Startguthaben fuer ein Kind, Korrektur nach unten nie
+   unter null, und Erwachsene haben keinen Beutel — da aendert sich nichts. */
+$m = new WuerfelHarness(1);
+pruefe('Ein Kind bekommt Muenzen geschenkt und der neue Stand kommt zurueck',
+    [$m->pSchenken('a', 5), $m->pMuenzen('a')], [5, 5]);
+pruefe('Herausnehmen geht nie unter null',
+    [$m->pSchenken('a', -9), $m->pMuenzen('a')], [0, 0]);
+pruefe('Erwachsene haben keinen Beutel — null, und nichts gebucht',
+    [$m->pSchenken('c', 5), $m->pMuenzen('c'), $m->pSchenken('', 5)], [null, 0, null]);
 
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

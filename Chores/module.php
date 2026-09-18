@@ -198,6 +198,21 @@ class SymDoChores extends IPSModuleStrict
         return sprintf('%s (%+d): %s', $vor[0]['week'] ?? '', $neu, implode(' · ', $namen));
     }
 
+    /**
+     * Münzen in den Beutel eines Kindes legen (oder mit negativem Wert
+     * herausnehmen; unter null geht es nie). Zurück kommt der neue Stand —
+     * oder -1, wenn die Kennung kein Kind ist: Erwachsene haben keinen Beutel.
+     */
+    public function GiveCoins(string $MemberId, int $Coins): int
+    {
+        $stand = $this->MuenzenSchenken(trim($MemberId), $Coins);
+        if ($stand === null) {
+            return -1;
+        }
+        $this->PushState();
+        return $stand;
+    }
+
     /** Vorschau als Text, für den Knopf im Formular. */
     public function Preview(int $Wochen): string
     {

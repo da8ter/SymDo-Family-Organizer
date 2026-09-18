@@ -879,6 +879,20 @@ trait ChoreStore
         $this->BeutelSchreiben($beutel);
     }
 
+    /**
+     * Muenzen von Hand buchen — Startguthaben, Belohnung ausserhalb des Plans
+     * oder eine Korrektur. Nur fuer Kinder, wie alles am Beutel; fuer andere
+     * kommt null zurueck und nichts aendert sich. Ergebnis: der neue Stand.
+     */
+    private function MuenzenSchenken(string $id, int $delta): ?int
+    {
+        if ($id === '' || !$this->IstKind($id)) {
+            return null;
+        }
+        $this->MuenzenBuchen($id, $delta);
+        return $this->MuenzenVon($id);
+    }
+
     /** Nur Kinder verdienen und zahlen (Regel des Nutzers). */
     private function IstKind(string $id): bool
     {

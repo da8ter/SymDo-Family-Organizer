@@ -90,6 +90,7 @@ Die Variablen sind zum **Lesen** da, etwa für eine Ansage oder eine Automation.
 CHR_GetState(int $InstanzID): string          // der Zustand der Kachel als JSON
 CHR_Rotate(int $InstanzID, int $Personen): string   // Reihe verschieben, ab nächster Woche
 CHR_Preview(int $InstanzID, int $Wochen): string    // Vorschau als Text
+CHR_GiveCoins(int $InstanzID, string $MitgliedID, int $Muenzen): int   // Münzen in den Beutel eines Kindes legen (negativ = herausnehmen); neuer Stand, -1 wenn kein Kind
 ```
 
 ## Prüflauf
