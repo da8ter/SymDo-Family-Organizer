@@ -335,8 +335,12 @@ body {
 .knopf {
   border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer;
   font: inherit; font-size: 13px; font-weight: 800;
-  background: var(--akzent); color: var(--bg);
+  background: var(--akzent); color: #fff;
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
 }
+/* Das Symbol vor dem Text, in Weiss wie die Schrift (auf Wunsch, 18.09.2026).
+   Beide Formen bemessen — /icons.js ersetzt das <i> nachtraeglich durch <svg>. */
+.knopf i, .knopf svg { width: 16px; height: 16px; color: #fff; }
 .knopf:disabled { opacity: .45; cursor: default; }
 .knopf.leise {
   background: color-mix(in srgb, var(--content-color) 7%, transparent); color: var(--text);
@@ -944,7 +948,7 @@ function bannerHtml() {
 function wuerfelHtml() {
   return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</div>' +
     '<div class="whint">' + escHtml(txt('wheelHint', '')) + '</div></div>' +
-    '<button type="button" class="knopf" id="wuerfel-knopf">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</button>';
+    '<button type="button" class="knopf" id="wuerfel-knopf"><i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>';
 }
 
 /** Welche Aemtchen heute einen offenen Platz haben (Uebertraege zaehlen nicht). */

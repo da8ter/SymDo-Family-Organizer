@@ -1267,6 +1267,7 @@ trait ChoreStore
             'wheelHint'   => $this->Translate('Let the wheel decide who does a chore today.'),
             'wheelPick'   => $this->Translate('Pick a chore'),
             'wheelSpin'   => $this->Translate('Spin'),
+            'wheelGo'     => $this->Translate('Go!'),
             'wheelSpun'   => $this->Translate('already rolled today'),
             'wheelNone'   => $this->Translate('Nothing is due today.'),
             'wheelResult' => $this->Translate('%s does it today!'),
