@@ -52,6 +52,7 @@ class SymDoChores extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowProgress', true);
         $this->RegisterPropertyBoolean('ShowUpNext', true);
         $this->RegisterPropertyBoolean('ShowBanner', true);
+        $this->RegisterPropertyBoolean('ShowWheel', true);
 
         /* Bleiben REGISTRIERT, obwohl die Kachel keine andere Woche mehr zeigt:
            eine Eigenschaft zu entfernen hiesse, sie aus jedem bestehenden
@@ -121,6 +122,16 @@ class SymDoChores extends IPSModuleStrict
                         time()
                     );
                     $this->VariablenNachziehen();
+                    $this->PushState();
+                }
+                return;
+
+            case 'Spin':
+                /* Das Gluecksrad. Gelost wird im Modul, die Kachel erfaehrt den
+                   Gewinner mit dem naechsten Zustand und dreht dann hin. */
+                $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
+                if (is_array($daten)) {
+                    $this->Wuerfeln(trim((string)($daten['week'] ?? '')), trim((string)($daten['chore'] ?? '')), time());
                     $this->PushState();
                 }
                 return;
@@ -334,6 +345,7 @@ class SymDoChores extends IPSModuleStrict
                         ['type' => 'CheckBox', 'name' => 'ShowProgress', 'caption' => $this->Translate('Show overall progress')],
                         ['type' => 'CheckBox', 'name' => 'ShowUpNext', 'caption' => $this->Translate('Show the next chores')],
                         ['type' => 'CheckBox', 'name' => 'ShowBanner', 'caption' => $this->Translate('Show the closing note')],
+                        ['type' => 'CheckBox', 'name' => 'ShowWheel', 'caption' => $this->Translate('Show the dice box (wheel of fortune)')],
                     ],
                 ],
             ],

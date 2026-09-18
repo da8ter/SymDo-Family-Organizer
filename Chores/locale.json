@@ -87,7 +87,19 @@
             "Show overall progress": "Gesamtfortschritt zeigen",
             "Show the next chores": "Nächste Ämtchen zeigen",
             "Show the closing note": "Schlusswort zeigen",
-            "Colour": "Farbe"
+            "Colour": "Farbe",
+            "Show the dice box (wheel of fortune)": "Den Würfel-Kasten zeigen (Glücksrad)",
+            "Roll the dice": "Aufgabe würfeln",
+            "Let the wheel decide who does a chore today.": "Das Glücksrad bestimmt, wer ein Ämtchen heute übernimmt.",
+            "Pick a chore": "Ämtchen wählen",
+            "Spin": "Drehen",
+            "already rolled today": "heute schon gewürfelt",
+            "Nothing is due today.": "Heute steht nichts an.",
+            "%s does it today!": "%s ist heute dran!",
+            "The wheel is spinning…": "Das Rad dreht sich …",
+            "No answer — please try again.": "Keine Antwort — bitte noch einmal.",
+            "Nobody is available for this chore.": "Für dieses Ämtchen ist niemand da.",
+            "Close": "Schließen"
         }
     }
 }

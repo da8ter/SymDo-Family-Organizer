@@ -792,6 +792,19 @@ trait ChoreStore
             ];
         }
         $heuteSpalte = $this->SpalteHeute((string)($woche['week'] ?? ''), time());
+        /* Das Gluecksrad: hat es HEUTE fuer dieses Aemtchen jemanden bestimmt,
+           steht der am heutigen Platz — solange der nicht abgehakt ist (am
+           abgehakten Platz steht, wer es wirklich getan hat). Nur der heutige
+           Tag: ein Los von gestern gilt nicht fuer morgen. */
+        $los = is_array($woche['wheel'][$a['id']] ?? null) ? $woche['wheel'][$a['id']] : null;
+        if ($los !== null && (string)($los['day'] ?? '') === $this->TagKennung(time())) {
+            foreach ($raus as $i => $p) {
+                if ($p['key'] === (string)($los['slot'] ?? '') && !$p['done']) {
+                    $raus[$i]['memberId'] = trim((string)($los['memberId'] ?? ''));
+                    $raus[$i]['wheel'] = true;
+                }
+            }
+        }
         if ($heuteSpalte < 0) {
             $vorbei = (string)($woche['week'] ?? '') < $this->WochenKennung(time());
             $heuteSpalte = $vorbei ? 6 : 0;
@@ -824,6 +837,96 @@ trait ChoreStore
             }
         }
         return $raus;
+    }
+
+    /**
+     * Der Tag, auf dem „heute" steht — auf derselben verschobenen Uhr wie die
+     * Wochenkennung (Montag 02:59 bei Wechsel um 03:00 ist noch Sonntag).
+     */
+    private function TagKennung(int $jetzt): string
+    {
+        [$std, $min] = $this->WechselZeit();
+        return date('Y-m-d', $jetzt - ($std * 3600 + $min * 60));
+    }
+
+    /**
+     * Wer beim Gluecksrad fuer dieses Aemtchen mitspielt: der Kreis des
+     * Aemtchens ohne die, die aussetzen. Bei einer festen Person ist das
+     * genau sie — dann gibt es nichts zu losen, aber auch nichts Falsches.
+     *
+     * @return list<string>
+     */
+    private function WuerfelKandidaten(array $a): array
+    {
+        $pausiert = $this->Pausierte();
+        $raus = [];
+        foreach ($this->KreisFuer((string)($a['circle'] ?? 'all'), $this->Rollen()) as $id) {
+            if (!isset($pausiert[$id]) && !in_array($id, $raus, true)) {
+                $raus[] = $id;
+            }
+        }
+        return $raus;
+    }
+
+    /**
+     * Das Gluecksrad drehen: ein Aemtchen, das HEUTE ansteht, bekommt fuer heute
+     * eine ausgeloste Person.
+     *
+     * Gelost wird HIER, nicht in der Kachel: die Kachel zeigt das Rad, das Modul
+     * entscheidet — sonst koennte ein zweites Geraet ein anderes Los zeigen,
+     * und ein Tipp auf „nochmal" wuerde zaehlen. Einmal am Tag je Aemtchen
+     * (Regel des Nutzers, 18.09.2026): das Los steht in der eingefrorenen
+     * Woche unter `wheel`, mit dem Tag; ein zweiter Ruf am selben Tag wird
+     * abgewiesen. Der Zufall ist austauschbar (Pruefstand).
+     *
+     * @param ?callable(int $n): int $zufall liefert einen Index 0..n-1
+     * @return array{ok:bool,memberId:string,slot:string,reason:string}
+     */
+    private function Wuerfeln(string $wochenKennung, string $choreId, int $jetzt, ?callable $zufall = null): array
+    {
+        $nein = static fn(string $grund): array => ['ok' => false, 'memberId' => '', 'slot' => '', 'reason' => $grund];
+        $woche = $this->WocheSicherstellen($jetzt);
+        if ($wochenKennung !== '' && $wochenKennung !== (string)($woche['week'] ?? '')) {
+            return $nein('week');
+        }
+        $treffer = null;
+        foreach ($this->AemtchenLesen() as $a) {
+            if ($a['id'] === $choreId) {
+                $treffer = $a;
+                break;
+            }
+        }
+        if ($treffer === null) {
+            return $nein('chore');
+        }
+        $heute = $this->TagKennung($jetzt);
+        $los = is_array($woche['wheel'][$choreId] ?? null) ? $woche['wheel'][$choreId] : null;
+        if ($los !== null && (string)($los['day'] ?? '') === $heute) {
+            return $nein('spun');
+        }
+        // Der heutige, noch offene Platz — ohne ihn gibt es nichts zu verlosen.
+        $spalte = $this->SpalteHeute((string)($woche['week'] ?? ''), $jetzt);
+        $platz = '';
+        foreach ($this->PlaetzeFuer($woche, $treffer) as $p) {
+            if (($p['carried'] ?? false) !== true && (int)$p['col'] === $spalte && !$p['done']) {
+                $platz = (string)$p['key'];
+                break;
+            }
+        }
+        if ($spalte < 0 || $platz === '') {
+            return $nein('no_slot');
+        }
+        $kandidaten = $this->WuerfelKandidaten($treffer);
+        $n = count($kandidaten);
+        if ($n === 0) {
+            return $nein('nobody');
+        }
+        $index = $zufall !== null ? (int)$zufall($n) : random_int(0, $n - 1);
+        $gewinner = $kandidaten[(($index % $n) + $n) % $n];
+        $woche['wheel'] = is_array($woche['wheel'] ?? null) ? $woche['wheel'] : [];
+        $woche['wheel'][$choreId] = ['day' => $heute, 'memberId' => $gewinner, 'slot' => $platz];
+        $this->WocheSchreiben($woche);
+        return ['ok' => true, 'memberId' => $gewinner, 'slot' => $platz, 'reason' => ''];
     }
 
     /**
@@ -1078,6 +1181,7 @@ trait ChoreStore
                     $fertig++;
                 }
             }
+            $los = is_array($woche['wheel'][$a['id']] ?? null) ? $woche['wheel'][$a['id']] : null;
             $liste[] = [
                 'id'        => $a['id'],
                 'name'      => $a['name'],
@@ -1087,6 +1191,12 @@ trait ChoreStore
                 'doneCount' => $erledigt,
                 'total'     => count($plaetze),
                 'slots'     => $plaetze,
+                /* Fuers Gluecksrad: wer mitspielt, und ob heute schon gelost
+                   wurde (dann steht der Gewinner da und das Rad bleibt aus). */
+                'candidates' => $this->WuerfelKandidaten($a),
+                'wheel'      => ($los !== null && (string)($los['day'] ?? '') === $this->TagKennung($jetzt))
+                    ? ['memberId' => (string)($los['memberId'] ?? ''), 'slot' => (string)($los['slot'] ?? '')]
+                    : null,
             ];
         }
 
@@ -1111,7 +1221,9 @@ trait ChoreStore
                 'progress' => $this->EinstellungJa('ShowProgress', true),
                 'upNext'   => $this->EinstellungJa('ShowUpNext', true),
                 'banner'   => $this->EinstellungJa('ShowBanner', true),
+                'wheel'    => $this->EinstellungJa('ShowWheel', true),
             ],
+            'day'        => $this->TagKennung($jetzt),
             'order'      => $reihenfolge,
             'members'    => $leute,
             'chores'     => $liste,
@@ -1150,6 +1262,18 @@ trait ChoreStore
             'praiseHigh'  => $this->Translate('Well done!'),
             'praiseMid'   => $this->Translate('Keep it up!'),
             'praiseLow'   => $this->Translate("Let's get started!"),
+            /* Das Gluecksrad (18.09.2026). */
+            'wheelTitle'  => $this->Translate('Roll the dice'),
+            'wheelHint'   => $this->Translate('Let the wheel decide who does a chore today.'),
+            'wheelPick'   => $this->Translate('Pick a chore'),
+            'wheelSpin'   => $this->Translate('Spin'),
+            'wheelSpun'   => $this->Translate('already rolled today'),
+            'wheelNone'   => $this->Translate('Nothing is due today.'),
+            'wheelResult' => $this->Translate('%s does it today!'),
+            'wheelWait'   => $this->Translate('The wheel is spinning…'),
+            'wheelNoAnswer' => $this->Translate('No answer — please try again.'),
+            'wheelNobody' => $this->Translate('Nobody is available for this chore.'),
+            'close'       => $this->Translate('Close'),
         ];
     }
 }

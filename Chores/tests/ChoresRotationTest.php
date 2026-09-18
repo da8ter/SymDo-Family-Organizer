@@ -655,7 +655,7 @@ pruefe('eine leere Zuweisung wird wieder gefuellt',
 $h = harness($drei, $aemtchen3);
 $show = $h->pPayload($jetzt)['show'];
 pruefe('ohne Angabe ist alles an', $show, ['members' => true, 'progress' => true,
-    'upNext' => true, 'banner' => true]);
+    'upNext' => true, 'banner' => true, 'wheel' => true]);
 $h = harness($drei, $aemtchen3, ['ShowMembers' => false, 'ShowUpNext' => false]);
 $show = $h->pPayload($jetzt)['show'];
 pruefe('abgeschaltete Kaesten stehen als false in der Nutzlast',

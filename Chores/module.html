@@ -319,6 +319,85 @@ body {
 #banner .btitel { font-size: 14px; font-weight: 800; }
 #banner .btext { font-size: 12px; color: var(--dezent); margin-top: 2px; }
 
+/* ── Schlusswort und Wuerfel nebeneinander ──────────────────────────────── */
+#unten { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+#unten:empty { display: none; }
+#banner { flex: 1 1 260px; }
+#wuerfel {
+  flex: 1 1 220px; display: flex; align-items: center; gap: 12px;
+  background: var(--karte); border-radius: 18px; padding: 12px 14px;
+}
+#wuerfel:empty { display: none; }
+#wuerfel .wtext { flex: 1 1 auto; min-width: 0; }
+#wuerfel .wtitel { font-size: 14px; font-weight: 800; }
+#wuerfel .whint { font-size: 12px; color: var(--dezent); margin-top: 2px; }
+/* Knoepfe nach dem Muster der Web-App: randlos, Radius 12, Akzent als Flaeche. */
+.knopf {
+  border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 800;
+  background: var(--akzent); color: var(--bg);
+}
+.knopf:disabled { opacity: .45; cursor: default; }
+.knopf.leise {
+  background: color-mix(in srgb, var(--content-color) 7%, transparent); color: var(--text);
+}
+
+/* ── Das Blatt ─────────────────────────────────────────────────────────────
+   Ein Overlay ueber der ganzen Kachel; die Karte darin ist so breit wie das
+   Rad braucht. Zwei Schritte in derselben Karte: Aemtchen waehlen, Rad. */
+#blatt {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, .5);
+  display: flex; align-items: center; justify-content: center; padding: 12px;
+}
+#blatt[hidden] { display: none; }
+.blatt-karte {
+  width: min(440px, 100%); max-height: 100%; overflow: auto;
+  background: var(--bg); border: 1px solid var(--rand); border-radius: 20px;
+  padding: 14px 16px 16px; box-sizing: border-box;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+}
+.blatt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.blatt-kopf h3 { margin: 0; font-size: 16px; font-weight: 800; }
+.blatt-zu {
+  border: 0; background: color-mix(in srgb, var(--content-color) 7%, transparent); color: var(--text);
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px;
+}
+.wahl { display: flex; flex-direction: column; gap: 8px; }
+.wahl .eintrag {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  border: 0; border-radius: 14px; padding: 8px 10px; cursor: pointer; font: inherit; color: var(--text);
+  background: color-mix(in srgb, var(--content-color) 7%, transparent);
+}
+.wahl .eintrag:disabled { cursor: default; opacity: .6; }
+.wahl .eintrag .was { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wahl .eintrag .wer { font-size: 12px; color: var(--dezent); display: flex; align-items: center; gap: 6px; }
+.wahl .eintrag .bild, .rad-ergebnis .bild {
+  width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--akzent) 18%, var(--bg));
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+}
+.wahl .eintrag .bild img, .rad-ergebnis .bild img { width: 100%; height: 100%; object-fit: cover; }
+.rad-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.rad-aemtchen { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; align-self: stretch; }
+.rad-buehne { position: relative; width: 280px; height: 280px; max-width: 100%; }
+.rad-buehne canvas { width: 100%; height: 100%; display: block; border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--content-color) 10%, transparent); }
+/* Der Zeiger: ein Dreieck oben, zeigt nach unten in das Rad. */
+.rad-zeiger {
+  position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent;
+  border-top: 22px solid var(--akzent); filter: drop-shadow(0 2px 3px rgba(0,0,0,.4));
+}
+.rad-nabe {
+  position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--bg); box-shadow: 0 0 0 3px var(--akzent);
+}
+.rad-ergebnis { min-height: 34px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; }
+.rad-ergebnis .bild { width: 34px; height: 34px; font-size: 14px; }
+.rad-ergebnis .leise { color: var(--dezent); font-weight: 600; font-size: 13px; }
+
 /* ── Konfetti ────────────────────────────────────────────────────────────
    Wie in der Routinen-Kachel, nur ohne den Feier-Kasten davor: hier wird
    nicht EINMAL am Ende gefeiert, sondern bei jedem Haken eines Kindes — ein
@@ -387,10 +466,24 @@ body {
       <div id="tafel" class="tafel"></div>
       <div id="seite" class="seite"></div>
     </div>
-    <div id="banner"></div>
+    <!-- Schlusswort und Wuerfel-Kasten nebeneinander (auf Wunsch, 18.09.2026). -->
+    <div id="unten">
+      <div id="banner"></div>
+      <div id="wuerfel"></div>
+    </div>
     <div id="leer"></div>
   </div>
   <canvas id="konfetti"></canvas>
+  <!-- Das Blatt: erst ein Aemtchen waehlen, dann das Gluecksrad. -->
+  <div id="blatt" hidden>
+    <div class="blatt-karte" role="dialog" aria-modal="true">
+      <div class="blatt-kopf">
+        <h3 id="blatt-titel"></h3>
+        <button type="button" class="blatt-zu" id="blatt-zu" aria-label="close">&#x2715;</button>
+      </div>
+      <div id="blatt-inhalt"></div>
+    </div>
+  </div>
 </div>
 <script>
 /* In einer IIFE gekapselt: die Tile-Visu injiziert selbst globale Bindungen
@@ -646,6 +739,7 @@ function zeichnen() {
     el('tafel').innerHTML = '';
     el('seite').innerHTML = '';
     el('banner').innerHTML = '';
+    el('wuerfel').innerHTML = '';
     el('leer').textContent = txt('empty', '');
     return;
   }
@@ -660,8 +754,10 @@ function zeichnen() {
   el('tafel').innerHTML = tafelHtml(aemtchen);
   el('seite').innerHTML = seiteHtml(aemtchen, an);
   el('banner').innerHTML = an('banner') ? bannerHtml() : '';
+  el('wuerfel').innerHTML = an('wheel') ? wuerfelHtml() : '';
   el('inhalt').classList.toggle('ohne-seite', !an('progress') && !an('upNext'));
   binden();
+  radNachziehen();
 }
 
 /** Gibt es in dieser Woche einen Uebertrag aus der Vorwoche? */
@@ -838,6 +934,220 @@ function bannerHtml() {
     escHtml(txt('teamText', '')) + '</div></div>';
 }
 
+/* ── Aufgabe wuerfeln ─────────────────────────────────────────────────────
+   Ein Kasten neben dem Schlusswort mit einem Knopf. Er oeffnet das Blatt: erst
+   ein Aemtchen, das HEUTE ansteht, dann das Gluecksrad mit den Gesichtern
+   derer, die mitspielen. Gelost wird im MODUL (Aktion `Spin`); die Kachel
+   erfaehrt den Gewinner mit dem naechsten Zustand und dreht das Rad dorthin.
+   Je Aemtchen einmal am Tag — das haelt das Modul, die Kachel zeigt bei einem
+   schon gelosten Aemtchen nur den Gewinner. (Wunsch des Nutzers, 18.09.2026.) */
+function wuerfelHtml() {
+  return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</div>' +
+    '<div class="whint">' + escHtml(txt('wheelHint', '')) + '</div></div>' +
+    '<button type="button" class="knopf" id="wuerfel-knopf">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</button>';
+}
+
+/** Welche Aemtchen heute einen offenen Platz haben (Uebertraege zaehlen nicht). */
+function aemtchenHeute() {
+  const heute = heuteSpalte();
+  if (heute < 0) { return []; }
+  return (Array.isArray(zustand.chores) ? zustand.chores : []).filter((a) =>
+    (Array.isArray(a.slots) ? a.slots : []).some((s) => s.carried !== true && Number(s.col) === heute && s.done !== true));
+}
+
+let rad = null;   // { chore, kandidaten, winkel, laeuft, ziel, start, timer }
+
+function blattOeffnen() {
+  el('blatt').hidden = false;
+  wahlZeigen();
+}
+function blattSchliessen() {
+  el('blatt').hidden = true;
+  if (rad && rad.timer) { clearTimeout(rad.timer); }
+  rad = null;
+  el('blatt-inhalt').innerHTML = '';
+}
+
+/** Schritt 1: die Aemtchen von heute — schon gewuerfelte zeigen ihren Gewinner. */
+function wahlZeigen() {
+  el('blatt-titel').textContent = txt('wheelPick', 'Pick a chore');
+  const heute = aemtchenHeute();
+  if (heute.length === 0) {
+    el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(txt('wheelNone', '')) + '</div>';
+    return;
+  }
+  el('blatt-inhalt').innerHTML = '<div class="wahl">' + heute.map((a) => {
+    const los = a.wheel && a.wheel.memberId ? mitglied(a.wheel.memberId) : null;
+    const wer = los
+      ? '<span class="wer">' + escHtml(txt('wheelSpun', '')) + ' <span class="bild">' + bildHtml(los) + '</span></span>'
+      : '';
+    return '<button type="button" class="eintrag" data-chore="' + escHtml(a.id) + '"' + (los ? ' disabled' : '') + '>' +
+      '<div class="sym" style="--afarbe:' + aemtchenFarbe(a) + '">' + symbolHtml(a) + '</div>' +
+      '<span class="was">' + escHtml(a.name) + '</span>' + wer + '</button>';
+  }).join('') + '</div>';
+  el('blatt-inhalt').querySelectorAll('.eintrag:not([disabled])').forEach((b) => {
+    b.addEventListener('click', () => radZeigen(b.dataset.chore));
+  });
+}
+
+/** Schritt 2: das Rad fuer ein Aemtchen. */
+function radZeigen(choreId) {
+  const a = (zustand.chores || []).find((x) => x.id === choreId);
+  if (!a) { return; }
+  const kandidaten = (Array.isArray(a.candidates) ? a.candidates : []).filter((id) => mitglied(id));
+  el('blatt-titel').textContent = txt('wheelTitle', 'Roll the dice');
+  if (kandidaten.length === 0) {
+    el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(txt('wheelNobody', '')) + '</div>';
+    return;
+  }
+  el('blatt-inhalt').innerHTML = '<div class="rad-wrap">' +
+    '<div class="rad-aemtchen"><div class="sym" style="--afarbe:' + aemtchenFarbe(a) + '">' + symbolHtml(a) + '</div>' +
+      '<span>' + escHtml(a.name) + '</span></div>' +
+    '<div class="rad-buehne"><canvas id="rad-leinwand" width="560" height="560"></canvas>' +
+      '<div class="rad-nabe"></div><div class="rad-zeiger"></div></div>' +
+    '<div class="rad-ergebnis" id="rad-ergebnis"></div>' +
+    '<button type="button" class="knopf" id="rad-drehen">' + escHtml(txt('wheelSpin', 'Spin')) + '</button>' +
+    '</div>';
+  rad = { chore: choreId, kandidaten: kandidaten, winkel: 0, laeuft: false, ziel: null, bilder: {}, timer: null };
+  bilderLaden(kandidaten).then(() => radMalen());
+  radMalen();
+  el('rad-drehen').addEventListener('click', radDrehen);
+}
+
+/** Die Fotos vorab laden — die Leinwand kann nur malen, was da ist. */
+function bilderLaden(ids) {
+  return Promise.all(ids.map((id) => new Promise((fertig) => {
+    const p = mitglied(id);
+    if (!p || !p.avatar) { fertig(); return; }
+    const img = new Image();
+    img.onload = () => { if (rad) { rad.bilder[id] = img; } fertig(); };
+    img.onerror = () => fertig();
+    img.src = p.avatar;
+    setTimeout(fertig, 2500);
+  })));
+}
+
+/**
+ * Das Rad malen: ein Feld je Kandidat, in dessen Farbe, mit Foto (oder
+ * Anfangsbuchstabe) auf halber Hoehe. Gedreht wird die ganze Leinwand um
+ * `rad.winkel`; Feld 0 beginnt bei 3 Uhr, der Zeiger steht auf 12 Uhr.
+ */
+function radMalen() {
+  const leinwand = el('rad-leinwand');
+  if (!leinwand || !rad) { return; }
+  const ctx = leinwand.getContext('2d');
+  const W = leinwand.width, R = W / 2, n = rad.kandidaten.length, teil = 2 * Math.PI / n;
+  ctx.clearRect(0, 0, W, W);
+  ctx.save();
+  ctx.translate(R, R);
+  ctx.rotate(rad.winkel);
+  rad.kandidaten.forEach((id, i) => {
+    const von = i * teil, bis = von + teil;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R - 4, von, bis); ctx.closePath();
+    ctx.fillStyle = mitgliedFarbe(id);
+    ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 3; ctx.stroke();
+    // Das Gesicht auf halber Hoehe des Feldes, aufrecht zum Feld gedreht.
+    const mitte = von + teil / 2, abstand = R * 0.62, groesse = Math.min(96, Math.max(44, R * 0.9 * teil));
+    ctx.save();
+    ctx.translate(Math.cos(mitte) * abstand, Math.sin(mitte) * abstand);
+    ctx.rotate(mitte + Math.PI / 2);
+    ctx.beginPath(); ctx.arc(0, 0, groesse / 2, 0, 2 * Math.PI); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fill();
+    ctx.clip();
+    const img = rad.bilder[id];
+    if (img) {
+      ctx.drawImage(img, -groesse / 2, -groesse / 2, groesse, groesse);
+    } else {
+      const p = mitglied(id) || {};
+      ctx.fillStyle = '#333'; ctx.font = '800 ' + Math.round(groesse * 0.5) + 'px -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(((p.name || '?').slice(0, 1)).toUpperCase(), 0, 2);
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+/** Der Knopf: anfragen, dann drehen bis die Antwort da ist, dann hinlaufen. */
+function radDrehen() {
+  if (!rad || rad.laeuft) { return; }
+  rad.laeuft = true;
+  rad.ziel = null;
+  rad.start = performance.now();
+  el('rad-drehen').disabled = true;
+  el('rad-ergebnis').innerHTML = '<span class="leise">' + escHtml(txt('wheelWait', '')) + '</span>';
+  if (typeof requestAction === 'function') {
+    requestAction('Spin', JSON.stringify({ week: zustand ? zustand.week : '', chore: rad.chore }));
+  }
+  // Ohne Antwort dreht das Rad nicht ewig: nach zehn Sekunden aufgeben.
+  rad.timer = setTimeout(() => {
+    if (rad && rad.laeuft && rad.ziel === null) {
+      rad.laeuft = false;
+      el('rad-drehen').disabled = false;
+      el('rad-ergebnis').innerHTML = '<span class="leise">' + escHtml(txt('wheelNoAnswer', '')) + '</span>';
+    }
+  }, 10000);
+  radSchwung();
+}
+
+/** Die Animation: freier Lauf, bis das Ziel bekannt ist — dann ausrollen. */
+function radSchwung() {
+  if (!rad || !rad.laeuft) { return; }
+  const jetzt = performance.now();
+  if (rad.ziel === null) {
+    rad.winkel += 0.22;                                  // freier Lauf
+    radMalen();
+    requestAnimationFrame(radSchwung);
+    return;
+  }
+  if (rad.ausrollen === undefined) {
+    // Ziel: das Feld des Gewinners unter den Zeiger (12 Uhr = -90 Grad),
+    // mindestens zwei weitere Umdrehungen, dann sanft ausrollen.
+    const n = rad.kandidaten.length, teil = 2 * Math.PI / n;
+    const i = Math.max(0, rad.kandidaten.indexOf(rad.ziel));
+    const feldMitte = i * teil + teil / 2;
+    let zielWinkel = -Math.PI / 2 - feldMitte;
+    while (zielWinkel < rad.winkel + 4 * Math.PI) { zielWinkel += 2 * Math.PI; }
+    rad.ausrollen = { von: rad.winkel, bis: zielWinkel, ab: jetzt, dauer: 3200 };
+  }
+  const a = rad.ausrollen, t = Math.min(1, (jetzt - a.ab) / a.dauer);
+  const eased = 1 - Math.pow(1 - t, 3);
+  rad.winkel = a.von + (a.bis - a.von) * eased;
+  radMalen();
+  if (t < 1) { requestAnimationFrame(radSchwung); return; }
+  radFertig();
+}
+
+function radFertig() {
+  if (!rad) { return; }
+  rad.laeuft = false;
+  const p = mitglied(rad.ziel) || { name: rad.ziel };
+  el('rad-ergebnis').innerHTML = '<span class="bild">' + bildHtml(p) + '</span><span>' +
+    escHtml(String(txt('wheelResult', '%s does it today!')).replace('%s', p.name || rad.ziel)) + '</span>';
+  if ((p.persona || '') === 'child') { konfettiRegen(); }
+  // Der Knopf bleibt aus: einmal am Tag. Zurueck zur Wahl zeigt den Gewinner.
+  const knopf = el('rad-drehen');
+  if (knopf) {
+    knopf.textContent = txt('close', 'Close');
+    knopf.disabled = false;
+    knopf.classList.add('leise');
+    knopf.removeEventListener('click', radDrehen);
+    knopf.addEventListener('click', blattSchliessen);
+  }
+}
+
+/** Nach jedem Zustand: ist das Los fuer das laufende Rad da, dorthin drehen. */
+function radNachziehen() {
+  if (!rad || !rad.laeuft || rad.ziel !== null || !zustand) { return; }
+  const a = (zustand.chores || []).find((x) => x.id === rad.chore);
+  if (a && a.wheel && a.wheel.memberId) {
+    if (rad.timer) { clearTimeout(rad.timer); rad.timer = null; }
+    rad.ziel = a.wheel.memberId;
+    if (rad.kandidaten.indexOf(rad.ziel) < 0) { rad.kandidaten.push(rad.ziel); }
+  }
+}
+
 /**
  * Konfetti — wortgleich aus der Routinen-Kachel uebernommen (dieselben Farben,
  * dieselbe Physik), nur kuerzer und ohne Feier-Kasten.
@@ -900,7 +1210,13 @@ function binden() {
   el('tafel').querySelectorAll('.platz:not([disabled])').forEach((b) => {
     b.addEventListener('click', () => tippen(b));
   });
+  const w = el('wuerfel-knopf');
+  if (w) { w.addEventListener('click', blattOeffnen); }
 }
+/* Das Blatt schliesst am Kreuz und am dunklen Rand — nicht waehrend das Rad
+   laeuft, sonst geht das Los verloren, bevor man es gesehen hat. */
+el('blatt-zu').addEventListener('click', () => { if (!rad || !rad.laeuft) { blattSchliessen(); } });
+el('blatt').addEventListener('click', (e) => { if (e.target === el('blatt') && (!rad || !rad.laeuft)) { blattSchliessen(); } });
 
 /**
  * Ein Haken. Optimistisch zeichnen, dann melden — mit ZIELZUSTAND und einer
