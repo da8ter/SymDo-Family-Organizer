@@ -17,7 +17,7 @@ Das Gegenstück für den Tag ist **SymDo - Routinen**: Häkchenlisten, die sich 
 
 ## 1. Was die Kachel zeigt
 
-Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein Fortschrittsring. Darunter die **Tabelle**: eine Zeile je Ämtchen, eine Spalte je Wochentag, und in jeder Zelle das Gesicht dessen, der an diesem Tag dran ist. Daneben der Gesamtfortschritt als Ring und die nächsten offenen Ämtchen, darunter ein Schlusswort und der Kasten **Aufgabe würfeln**.
+Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein Fortschrittsring. Darunter die **Tabelle**: eine Zeile je Ämtchen, eine Spalte je Wochentag, und in jeder Zelle das Gesicht dessen, der an diesem Tag dran ist. Daneben der Gesamtfortschritt als Ring und die nächsten offenen Ämtchen, darunter ein Schlusswort und der Kasten **Ämtchen würfeln**.
 
 - **Eine Spalte je Wochentag.** Jeder Platz sitzt in der Spalte des Tages, an dem das Ämtchen dran ist; Tage ohne Platz zeigen einen Strich. Der heutige Tag ist hervorgehoben.
 - **Antippen hakt ab.** Erledigt heißt: Gesicht voll und mit Häkchen. Offen heißt: blass.
@@ -26,7 +26,7 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 - **Pause**: wer aussetzt, steht blass mit dem Hinweis da. Das erklärt, warum jemand anders zwei Ämtchen trägt.
 - Die Kachel zeigt **nur die laufende Woche** — der Plan wiederholt sich ja. Wer wissen will, wer nächste Woche dran ist, fragt `CHR_Preview()`.
 - **Symbole und Farben** kommen aus dem Formular: je Ämtchen ein Symbol (Font Awesome) und eine Farbe, je Familienmitglied eine Farbe aus der Mitgliederliste des Gateways. Ohne Wahl nimmt die Kachel eine eingebaute Farbleiter, damit zwei Zeilen nie gleich aussehen.
-- **Aufgabe würfeln.** Der Knopf öffnet ein Blatt: erst ein Ämtchen wählen, das heute ansteht, dann dreht sich ein Glücksrad mit den Gesichtern aller, die dafür in Frage kommen — und wer unter dem Zeiger landet, ist heute dran. Der Platz in der Tabelle wechselt zu dieser Person. Gelost wird im Modul, nicht im Browser: zwei Geräte sehen dasselbe Los. **Je Ämtchen einmal am Tag**; danach zeigt das Blatt nur noch, wer gezogen wurde. Wer aussetzt, ist nicht im Rad. Bei wenigen Mitspielern steht jeder mehrmals auf dem Rad (einer viermal, zwei dreimal, drei und vier zweimal), damit es nach Glücksrad aussieht — an den Chancen ändert das nichts.
+- **Ämtchen würfeln.** Der Knopf öffnet ein Blatt: erst ein Ämtchen wählen, das heute ansteht, dann dreht sich ein Glücksrad mit den Gesichtern aller, die dafür in Frage kommen — und wer unter dem Zeiger landet, ist heute dran. Der Platz in der Tabelle wechselt zu dieser Person. Gelost wird im Modul, nicht im Browser: zwei Geräte sehen dasselbe Los. **Je Ämtchen einmal am Tag**; danach zeigt das Blatt nur noch, wer gezogen wurde. Wer aussetzt, ist nicht im Rad. Bei wenigen Mitspielern steht jeder mehrmals auf dem Rad (einer viermal, zwei dreimal, drei und vier zweimal), damit es nach Glücksrad aussieht — an den Chancen ändert das nichts.
 - **Was zu sehen ist, entscheidest du**: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort und Würfel-Kasten lassen sich einzeln abschalten (Kapitel 3). Die Tabelle bleibt immer.
 
 ## 2. Voraussetzungen
