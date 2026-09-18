@@ -236,5 +236,56 @@ pruefe('Ein Fehlschlag fuellt kein Fach und zaehlt einmal',
     [isset($b2->faecher[0]), (int)($b2->bestand['fails'] ?? 0)], [false, 1]);
 pruefe('… der Auftrag steht auf gescheitert', $b2->pKopf($id2)['state'], AiJobStore::GESCHEITERT);
 
+// ── F14: die Mail faellt erst, wenn der Vorschlag steht ───────────────────
+/* Bis zum 18.09.2026 loeschte der Fertigmelder die Mail, SOBALD der Anbieter
+   geantwortet hatte — und las nicht, ob das Speichern gelang. Ein
+   fehlgeschlagenes Ablegen hiess: Original weg, Vorschlag nie entstanden.
+   Das Loeschen ist die einzige Handlung dieses Weges, die sich nicht
+   zurueckdrehen laesst; sie muss die letzte sein. */
+$notiz = json_encode([['kind' => 'note', 'title' => 'Ausflug', 'info' => 'Freitag 5 Euro']]);
+$nurHandlungen = static fn(array $e): array => array_values(array_filter($e,
+    static fn(string $x): bool => str_starts_with($x, 'gespeichert') || str_starts_with($x, 'geloescht')));
+
+$m1 = new HintergrundProbe();
+register_shutdown_function(static fn() => $m1->pAufraeumen());
+pruefe('Die Mail wird als Auftrag eingereiht', $m1->pMail(), true);
+$m1->pAntwort($m1->pKennung(), ['ok' => true, 'text' => $notiz, 'debug' => []]);
+pruefe('Gespeichert — und ERST DANN geloescht',
+    $nurHandlungen($m1->ereignisse), ['gespeichert:ja', 'geloescht:42']);
+
+$m2 = new HintergrundProbe();
+register_shutdown_function(static fn() => $m2->pAufraeumen());
+$m2->speichern = false;
+$m2->pMail();
+$m2->pAntwort($m2->pKennung(), ['ok' => true, 'text' => $notiz, 'debug' => []]);
+pruefe('Nicht gespeichert: die Mail bleibt im Postfach',
+    $nurHandlungen($m2->ereignisse), ['gespeichert:nein']);
+/* … und sie kommt wieder dran: der Merker geht zurueck, der Fehlversuch
+   zaehlt — dieselbe Politik wie ein gescheiterter Anbieteraufruf. */
+$karte = json_decode($m2->attrs['MailSeenUIDs'] ?? '{}', true);
+pruefe('… und zaehlt als Fehlversuch, damit sie wiederkommt',
+    (int)($karte['#fehl']['77:42'] ?? 0), 1);
+pruefe('… das Protokoll sagt, warum',
+    (bool)array_filter($m2->protokoll, static fn(string $z): bool =>
+        str_contains($z, 'konnte nicht gespeichert werden')), true);
+
+/* Nichts gefunden ist trotzdem abgeschlossen: dann darf die Post fallen. */
+$m3 = new HintergrundProbe();
+register_shutdown_function(static fn() => $m3->pAufraeumen());
+$m3->pMail();
+$m3->pAntwort($m3->pKennung(), ['ok' => true, 'text' => '[]', 'debug' => []]);
+pruefe('Sauber ausgewertet ohne Fund: die Mail wird geloescht',
+    $nurHandlungen($m3->ereignisse), ['geloescht:42']);
+
+/* Und ein gescheiterter Anbieteraufruf loescht NIE. */
+$m4 = new HintergrundProbe();
+register_shutdown_function(static fn() => $m4->pAufraeumen());
+$m4->pMail();
+$m4->pAntwort($m4->pKennung(), ['ok' => false, 'code' => 'ai_unreachable', 'grund' => '', 'detail' => '']);
+pruefe('Anbieter-Fehlschlag: nichts gespeichert, nichts geloescht', $nurHandlungen($m4->ereignisse), []);
+pruefe('… und das Protokoll nennt den Grund des Anbieters',
+    (bool)array_filter($m4->protokoll, static fn(string $z): bool =>
+        str_contains($z, 'Fehler ai_unreachable')), true);
+
 printf("\n%d Zusicherungen, %d Abweichung(en).\n", $anzahl, $fehler);
 exit($fehler === 0 ? 0 : 1);

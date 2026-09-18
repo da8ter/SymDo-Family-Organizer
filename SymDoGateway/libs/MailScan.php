@@ -1127,19 +1127,15 @@ trait MailScan
                fragt nach, keine Kachel. „Die Meldung steht schon im Auftrag"
                hiesse hier: sie steht nirgends. Also ins Protokoll, wie auf dem
                synchronen Weg, und den Merker zuruecknehmen, damit die Karte
-               beim naechsten Lauf wieder drankommt. */
+               beim naechsten Lauf wieder drankommt.
+               Die Fehlerform ist die von AiErrorMessage: flach, `message`
+               neben `code` — nicht unter `error` wie in einer Hook-Antwort. */
             $this->LogMessage('SymDo: Auswertung fehlgeschlagen — '
-                . (string)((($kopf['result'] ?? [])['body']['error']['message'] ?? '')
-                    ?: ($kopf['result']['body']['error']['code'] ?? '?')), KL_ERROR);
+                . (string)(($rumpf['message'] ?? '') ?: ($rumpf['code'] ?? '?')), KL_ERROR);
             if (is_array($h['merker'] ?? null)) {
                 $this->MailMerkerZuruecknehmen($h['merker']);
             }
             return;
-        }
-        /* Durch. Was jetzt noch zu tun ist, haengt an der Quelle — die Post
-           loescht die Mail im Postfach, wenn der Nutzer das so eingestellt hat. */
-        if (is_array($h['merker'] ?? null)) {
-            $this->MailMerkerAbschliessen($h['merker']);
         }
         $aufgaben = is_array($rumpf['todos'] ?? null) ? $rumpf['todos'] : [];
         $mkopf    = is_array($h['kopf'] ?? null) ? $h['kopf'] : [];
@@ -1150,7 +1146,10 @@ trait MailScan
             (string)($mkopf['SenderAddress'] ?? '?'), $quelle, (array)($h['anhaenge'] ?? []),
             $zahlen), KL_NOTIFY);
         if ($aufgaben === []) {
-            return;   // sauber ausgewertet, nur nichts zu tun gefunden
+            /* Sauber ausgewertet, nur nichts zu tun gefunden: DAS ist ein
+               abgeschlossener Auftrag — jetzt darf die Post fallen. */
+            $this->MailAuftragAbschliessen($h, true);
+            return;
         }
 
         /* Die Anhaenge erst JETZT holen, und nur wenn eine Notiz dabei ist: die
@@ -1158,9 +1157,10 @@ trait MailScan
            oder einen Termin braucht niemand die Datei. Der synchrone Weg holt
            sie frueher — dafuer bei JEDER Karte. */
         if ($zahlen['notizen'] <= 0) {
-            $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
+            $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
                 (string)($h['text'] ?? ''), [], (string)($h['userId'] ?? ''), $quelle,
                 ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
+            $this->MailAuftragAbschliessen($h, $gespeichert);
             return;
         }
 
@@ -1173,9 +1173,10 @@ trait MailScan
            auf der Platte, der Vorschlag waere nie entstanden. */
         $speicherVorher = (string)@ini_get('memory_limit');
         @ini_set('memory_limit', '192M');
+        $gespeichert = false;
         try {
             $anhaenge = $this->MailAnhaengeNachladen((array)($h['anhaenge'] ?? []));
-            $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
+            $gespeichert = $this->MailVorschlagEinpflegen((string)($h['vorschlag'] ?? ''), $mkopf,
                 (string)($h['text'] ?? ''), $anhaenge, (string)($h['userId'] ?? ''), $quelle,
                 ['aufgaben' => $aufgaben, 'zahlen' => $zahlen]);
         } finally {
@@ -1183,6 +1184,37 @@ trait MailScan
                 @ini_set('memory_limit', $speicherVorher);
             }
         }
+        $this->MailAuftragAbschliessen($h, $gespeichert);
+    }
+
+    /**
+     * Der Schlusspunkt eines Auftrags — und die EINE Stelle, an der ueber den
+     * Merker entschieden wird.
+     *
+     * Gespeichert: der Merker wird abgeschlossen; bei der Post heisst das
+     * „Mail loeschen", wenn der Nutzer das so eingestellt hat. Nicht
+     * gespeichert: der Merker geht zurueck, die Karte oder Mail kommt beim
+     * naechsten Lauf wieder dran — dieselbe Regel wie auf dem synchronen Weg
+     * („nicht gespeichert heisst NICHT erledigt", MailVorschlagEinpflegen).
+     *
+     * Bis zum 18.09.2026 fiel die Mail schon VOR dem Speichern, und der
+     * Rueckgabewert des Speicherns wurde nicht gelesen: schlug das Ablegen
+     * fehl, war das Original weg und der Vorschlag nie entstanden. Gefunden vom
+     * externen Codereview (F14). Das Loeschen ist die einzige Handlung dieses
+     * Weges, die sich nicht zurueckdrehen laesst — deshalb kommt sie zuletzt.
+     *
+     * @param array<string,mixed> $h die Herkunft des Auftrags
+     */
+    private function MailAuftragAbschliessen(array $h, bool $gespeichert): void
+    {
+        if (!is_array($h['merker'] ?? null)) {
+            return;
+        }
+        if ($gespeichert) {
+            $this->MailMerkerAbschliessen($h['merker']);
+            return;
+        }
+        $this->MailMerkerZuruecknehmen($h['merker']);
     }
 
     /**
