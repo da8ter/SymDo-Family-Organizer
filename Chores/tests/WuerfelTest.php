@@ -191,6 +191,13 @@ $html = (string)file_get_contents(__DIR__ . '/../module.html');
 pruefe('Der Kasten steht neben dem Schlusswort und oeffnet das Blatt',
     [str_contains($html, '<div id="unten">'), str_contains($html, 'id="wuerfel"'), str_contains($html, 'id="blatt"'),
      str_contains($html, "requestAction('Spin'")], [true, true, true, true]);
+/* Wenige Mitspieler stehen mehrmals auf dem Rad: einer 4x, zwei 3x, drei und
+   vier 2x, ab fuenf 1x — abwechselnd, nie zwei gleiche nebeneinander. Die
+   Regel steht im Skript; hier wird sie am Quelltext festgehalten. */
+pruefe('Wenige Mitspieler stehen mehrmals auf dem Rad',
+    [str_contains($html, 'function radFelder'),
+     str_contains($html, 'const mal = n <= 1 ? 4 : (n === 2 ? 3 : (n <= 4 ? 2 : 1));'),
+     str_contains($html, 'rad.felder.forEach((id, i) =>')], [true, true, true]);
 pruefe('Das Rad dreht erst, wenn das Los des MODULS da ist',
     [str_contains($html, 'function radNachziehen'), str_contains($html, 'a.wheel && a.wheel.memberId')], [true, true]);
 

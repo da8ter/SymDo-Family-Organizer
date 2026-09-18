@@ -1008,10 +1008,26 @@ function radZeigen(choreId) {
     '<div class="rad-ergebnis" id="rad-ergebnis"></div>' +
     '<button type="button" class="knopf" id="rad-drehen">' + escHtml(txt('wheelSpin', 'Spin')) + '</button>' +
     '</div>';
-  rad = { chore: choreId, kandidaten: kandidaten, winkel: 0, laeuft: false, ziel: null, bilder: {}, timer: null };
+  rad = { chore: choreId, kandidaten: kandidaten, felder: radFelder(kandidaten), winkel: 0, laeuft: false, ziel: null, bilder: {}, timer: null };
   bilderLaden(kandidaten).then(() => radMalen());
   radMalen();
   el('rad-drehen').addEventListener('click', radDrehen);
+}
+
+/**
+ * Die Felder des Rads: bei wenigen Mitspielern kommt jeder mehrmals vor —
+ * ein Rad aus zwei Haelften sieht nicht nach Gluecksrad aus (Wunsch des
+ * Nutzers, 18.09.2026): einer 4x, zwei 3x, drei und vier 2x, ab fuenf 1x.
+ * Die Reihenfolge wechselt sich ab (a b c a b c), damit nie zwei gleiche
+ * Gesichter nebeneinander liegen. Am Los aendert das nichts — jedes Feld
+ * eines Mitspielers ist gleich wahrscheinlich, und gelost wird im Modul.
+ */
+function radFelder(kandidaten) {
+  const n = kandidaten.length;
+  const mal = n <= 1 ? 4 : (n === 2 ? 3 : (n <= 4 ? 2 : 1));
+  const raus = [];
+  for (let r = 0; r < mal; r++) { kandidaten.forEach((id) => raus.push(id)); }
+  return raus;
 }
 
 /** Die Fotos vorab laden — die Leinwand kann nur malen, was da ist. */
@@ -1036,12 +1052,12 @@ function radMalen() {
   const leinwand = el('rad-leinwand');
   if (!leinwand || !rad) { return; }
   const ctx = leinwand.getContext('2d');
-  const W = leinwand.width, R = W / 2, n = rad.kandidaten.length, teil = 2 * Math.PI / n;
+  const W = leinwand.width, R = W / 2, n = rad.felder.length, teil = 2 * Math.PI / n;
   ctx.clearRect(0, 0, W, W);
   ctx.save();
   ctx.translate(R, R);
   ctx.rotate(rad.winkel);
-  rad.kandidaten.forEach((id, i) => {
+  rad.felder.forEach((id, i) => {
     const von = i * teil, bis = von + teil;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R - 4, von, bis); ctx.closePath();
     ctx.fillStyle = mitgliedFarbe(id);
@@ -1102,10 +1118,13 @@ function radSchwung() {
     return;
   }
   if (rad.ausrollen === undefined) {
-    // Ziel: das Feld des Gewinners unter den Zeiger (12 Uhr = -90 Grad),
-    // mindestens zwei weitere Umdrehungen, dann sanft ausrollen.
-    const n = rad.kandidaten.length, teil = 2 * Math.PI / n;
-    const i = Math.max(0, rad.kandidaten.indexOf(rad.ziel));
+    // Ziel: EIN Feld des Gewinners unter den Zeiger (12 Uhr = -90 Grad) —
+    // kommt er mehrmals vor, ein zufaelliges davon —, mindestens zwei weitere
+    // Umdrehungen, dann sanft ausrollen.
+    const n = rad.felder.length, teil = 2 * Math.PI / n;
+    const treffer = [];
+    rad.felder.forEach((id, k) => { if (id === rad.ziel) { treffer.push(k); } });
+    const i = treffer.length ? treffer[Math.floor(Math.random() * treffer.length)] : 0;
     const feldMitte = i * teil + teil / 2;
     let zielWinkel = -Math.PI / 2 - feldMitte;
     while (zielWinkel < rad.winkel + 4 * Math.PI) { zielWinkel += 2 * Math.PI; }
@@ -1144,7 +1163,9 @@ function radNachziehen() {
   if (a && a.wheel && a.wheel.memberId) {
     if (rad.timer) { clearTimeout(rad.timer); rad.timer = null; }
     rad.ziel = a.wheel.memberId;
-    if (rad.kandidaten.indexOf(rad.ziel) < 0) { rad.kandidaten.push(rad.ziel); }
+    /* Ein Gewinner, der nicht auf dem Rad steht (Kreis inzwischen geaendert),
+       bekommt ein Feld — sonst gaebe es kein Ziel zum Ausrollen. */
+    if (rad.felder.indexOf(rad.ziel) < 0) { rad.kandidaten.push(rad.ziel); rad.felder = radFelder(rad.kandidaten); }
   }
 }
 
