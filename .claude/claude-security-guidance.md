@@ -1,96 +1,122 @@
 # SymDo (List) — Regeln für den Sicherheits-Review
 
-Kontext: Symcon-PHP-Module (`IPSModuleStrict`, Traits unter `SymDoGateway/libs`)
-plus Web-App und Kacheln (`module.html`, Vanilla JS). Läuft als root auf dem
-Hausserver; die Hooks unter `/hook/lists/…` sind aus dem LAN und über Symcon
-Connect erreichbar. Deutsche Kommentare sind Hausstil; ein Kommentar an der
-Zeile, der erklärt, warum etwas sicher ist, gilt als Ausnahme.
+Symcon-PHP-Module (`IPSModuleStrict`; Traits in `SymDoGateway/libs`, IPS-freie
+Kerne in `libs/`) plus Web-App/Kacheln (`module.html`, Vanilla JS). Läuft als
+root; Hooks `/hook/lists/…` sind aus LAN und Symcon Connect erreichbar. Ein
+Kommentar an der Zeile, warum etwas sicher ist, gilt als Ausnahme.
 
 ## Vertrauensgrenzen
-- Authentifiziert: `/hook/lists/app/v1/*` (Bearer-Token je Gerät, `ApiRouter.php`).
-  Jede neue Route muss durch denselben Router und dieselbe Geräteprüfung.
-  Auftragsabholung (`ai/jobs/{id}`) ist gerätegebunden: fremdes Gerät → 404
-  `job_not_found`, nie ein Hinweis, dass die Kennung existiert.
-- Tokenlos: `lists/webapp` (nur die Seite), `lists/ws` (nur `{"t":"dirty"}` /
-  `{"t":"job","id"}`), `lists/pwa`. Dort dürfen NIE Bestandsdaten, Namen oder
-  Kennungen außer Zufalls-IDs hinaus.
-- Mail-Webhook `/mail/hook/<geheimnis>`: HMAC-Signatur über `timestamp.token`
-  prüfen UND Empfänger muss in `MailAddresses` stehen (sonst 406). Nichts
-  verarbeiten, wenn eines fehlt.
-- Kachel-Relay (`AiRelayBody`): nur Instanzen, die `IsSymDoWebAppInstance`
-  bestätigt, dürfen `AiResult` bekommen — bei jeder Antwort erneut prüfen.
+- `/hook/lists/app/v1/*` läuft durch `ApiRouter::AuthenticateRequest` (Token je
+  Gerät: `Authorization: Bearer`, `X-Symdo-Token` oder `?t=` für Assets/Medien).
+  Vor der Prüfung liegen NUR `POST v1/pair`, `GET v1/ping`, Mail-Webhook
+  `v1/mail/hook/<geheimnis>` — jede weitere Route davor → HIGH.
+- `ai/jobs/{id}`: 404 `job_not_found` für fremdes Gerät. Bekannt: Aufträge ohne
+  Gerät (Kachel, Post, Briefing, `device = ''`) bekommt jedes gepaarte Gerät,
+  das die 24-Hex-Kennung kennt.
+- Tokenlos: `lists/webapp` (Seite + `window.__SYMDO__`: Schalter, eigene
+  Adressen wie `localBase`, VAPID-Key, Weckwort — keine Mitglieder-, Bestands-
+  oder Instanzdaten), `lists/ws` (nur `{"t":"dirty"}`/`{"t":"job","id"}`),
+  `lists/pwa`, OAuth-Rückrufe `todogateway_google/_microsoft` (nur `state`),
+  `shoppinglist/assets/<id>` (eigener `WebHookToken` in `?t=`).
+- Mail-Webhook: Pfadgeheimnis (`hash_equals`) UND HMAC über `timestamp.token`
+  UND Empfänger in `MailAddresses` (406) — vorher wird nichts gespeichert.
+- Kachel-Relay (`AiRelayBody`): `AiResult` nur an Instanzen, die
+  `IsSymDoWebAppInstance` bestätigt — bei jeder Antwort erneut prüfen.
 
 ## HTML / XSS
 - `EduHtml()` ist die EINZIGE Weißliste für HTML im Klassenseiten-Bestand
-  (Feld `html`). Jeder Schreibweg, der `html` setzt, ohne durch `EduHtml` zu
-  gehen, liefert fremden Code (Schulseiten, Moodle, Mail) ins `innerHTML` der
-  App → HIGH.
-- Nutzer- und Fremdtext kommt nur über `escapeHtml()` (SymDoWebApp) bzw.
-  `escHtml()` (Kacheln) in Markup. `innerHTML` mit Template-Strings ist
-  Hausstil, solange JEDE Variable darin durch den Escaper geht.
-- Payloads aus dem eigenen Gateway (`handleMessage`) sind vertrauenswürdig;
-  Inhalte aus Klassenseiten, Moodle, Mails und KI-Antworten sind es NICHT.
+  (Feld `html`; Erzeuger `EduLesen`, `MoodleLesen`, `EduEinpflegen`). Ein neuer
+  Schreibweg daran vorbei → HIGH. Kopien geprüfter Karten in `EduStoreCalc`
+  zählen nicht.
+- Fremd-/Nutzertext nur über den Escaper der Datei: `escapeHtml()` (SymDoWebApp,
+  ToDoList, ShoppingList, Notes, Homework, Edumaps, ShoppingListOverview),
+  `esc()` (Stundenplan, VRR), `escHtml()` (Chores); MealPlan, Routines,
+  ToDoOverview setzen `textContent`. `innerHTML` mit Template-Strings ist
+  Hausstil, solange JEDE Variable durch den Escaper geht.
+- `handleMessage`-Payloads sind STRUKTURELL vertrauenswürdig (eigenes Gateway),
+  ihr Inhalt nicht (WebUntis, Moodle, Mail, KI): escapen, nur `html` aus
+  `EduHtml` roh. `message`-Listener müssen `event.source` gegen `window`/
+  `window.parent` prüfen (SDWA-Familie ja; Chores, Voice, MealPlan, Routines,
+  ToDoOverview noch nicht).
 
 ## Ausgehende Anfragen (SSRF)
-- Jede URL aus Formular, App, Mail, Klassenseite oder KI-Antwort geht nur über
-  `AiRecipePage::istOeffentlich()` / `AiRecipePage::holen()` /
-  `AiFetchPublicPage()` hinaus (private Netze, Loopback, Redirects,
-  Größendeckel). Push-Endpunkte zusätzlich mit `CURLOPT_RESOLVE` gegen
-  DNS-Rebinding. `curl_init($url)` mit fremder URL ohne diese Prüfung → HIGH.
-- Traits aus `SymDoGateway/libs` laufen AUCH in `SymDoScanner`-Instanzen; dort
-  gibt es Gateway-Hilfen wie `AiIsPublicUrl` nicht. Prüfung statisch aus
-  `AiRecipePage` nehmen, sonst stirbt der Scanner still an einem Fatal.
-- `MoodleDatei` hängt den Token an die URL — diese URL nie protokollieren.
+- **Empfangene** URLs (App, Mail, Klassenseite, Moodle-Karte, Produkt-API,
+  KI-Antwort) nur über `AiRecipePage::istOeffentlich()`/`::holen()` bzw.
+  `AiFetchPublicPage()` (private Netze, Loopback, Redirects von Hand, 2-MB-
+  Deckel, `CURLOPT_RESOLVE`). `curl_init($url)` mit empfangener URL ohne
+  Prüfung oder mit `CURLOPT_FOLLOWLOCATION` → HIGH. **Vom Admin eingestellte
+  Ziele** (`LocalUrl`, `AiLocalBaseUrl` = LM Studio im LAN via `AiHttp::post`,
+  `UntisServer`, `CalDAVServerURL`, OAuth-Token-URLs) dürfen privat sein —
+  kein Finding.
+- Push: `PushZiel::pruefen()/erlaubt()` (`libs/PushZiel.php`: https, 443, keine
+  IP-Literale) ist der Riegel. Mailgun-Anhänge: Host-Allowlist
+  `*.mailgun.net/.org` + https — akzeptierte Alternative.
+- Traits aus `SymDoGateway/libs` laufen AUCH in `SymDoScanner`; Gateway-Hilfen
+  wie `AiIsPublicUrl` fehlen dort → statisch `AiRecipePage::istOeffentlich`.
+- Moodle-Datei-URLs tragen den Token (`MoodleCalc::MitToken`) — nie protokollieren.
 
 ## Geheimnisse
-- `settings.json` ist weltlesbar und Klartext, Properties UND Attribute;
-  `PasswordTextBox` maskiert nur die Anzeige. NEUE Zugangsdaten oder Tokens in
-  Property/Attribut → Finding. Bekannt und nicht erneut melden: `MoodleTokens`,
-  KI-Anbieterschlüssel, IMAP über das Kernmodul.
-- Kennwörter laufen einmalig durch ein Formularfeld und werden sofort geleert
-  (Muster `MoodleTokenHolen`). Nie in `SendDebug`/`LogMessage`: Kennwörter,
-  Tokens, Bearer, Mailinhalte, Klassenseiten-URLs — das Protokoll ist weltlesbar.
-- KI-Schlüssel werden zur Laufzeit per `IPS_GetConfiguration(KonfigID())`
-  gelesen und nie in einen Spool geschrieben (`symdo_aijobs`, `symdo_scankanal`).
-  Spool: Verzeichnisse 0700, Dateien 0600, `tmp` + `rename()`; Nutzlast nach
-  dem Anbieteraufruf löschen.
+- `settings.json` ist weltlesbar, Klartext, Properties UND Attribute;
+  `PasswordTextBox` maskiert nur die Anzeige. **Bestand, nicht erneut melden:**
+  `UntisPassword`, `CalDAVPassword`, `MoodlePassword` (Property; geleert nach
+  dem Tokenholen, gespeichert falls vorher „Übernehmen"), `MoodleTokens`,
+  KI-Anbieterschlüssel, `Tts*Key/Secret`, `Google/MicrosoftClientSecret`,
+  `MailHookSecret/SigningKey/ApiKey`, OAuth-Attribute `*AccessToken`/
+  `*RefreshToken` (XOR mit vorhersagbarem `TDL_<Instanz>_<Prefix>` = Klartext).
+  IMAP-Zugang aus dem Kernmodul. **Jedes NEUE** Geheimnis in Property/Attribut
+  → Finding; ebenso eine Kopie eines bestehenden an eine weitere Stelle.
+- Nie in `SendDebug`/`LogMessage`: Kennwörter, Tokens, Bearer, Antwortkörper
+  von Token-Tauschen, Mailinhalte, Klassenseiten-/Moodle-Datei-URLs.
+- KI-Schlüssel nur zur Laufzeit per `AiProp()`, nie in einer Spool-Datei.
+  Spools `symdo_aijobs`, `symdo_scankanal`, `symdo_mailhook`: 0700/0600,
+  `tmp` + `rename()`. Akzeptiert: Moodle-Token in Datei-URLs der Karten im
+  Scan-Kanal. KI-Nutzlast fällt nach dem ENDGÜLTIGEN Ergebnis; bei Vertagung
+  (`ai_busy`, `ai_rate_limited`, `ai_unreachable`) bleibt sie absichtlich.
 
 ## Fremde Systeme — nur lesend
-- Moodle/LOGINEO: nur Funktionen aus `MoodleCalc::ERLAUBT` dürfen gerufen
-  werden; `MoodleRest` weist alles andere ab. Neue Funktionen müssen lesend
-  sein und auf die Liste. `MoodleRest` umgehen → HIGH (Schreibzugriff auf ein
-  Schulkonto).
-- WebUntis: drei Fehlanmeldungen sperren das Schulkonto. Keine Login-Wieder-
-  holung in Schleifen; Fehlerzähler `UntisFails` respektieren.
-- IMAP (`MailFetch`): nur `EXAMINE`, nie `SELECT`/`STORE`; CRLF in
-  Zugangsdaten abweisen (Befehlsinjektion); kein Login ohne SSL.
-- Anhänge: die BYTES bestimmen den Typ (`%PDF-`, JPEG/PNG-Magic), nie die
-  deklarierte MIME; Deckel `MAIL_ATTACH_TOTAL_B64` und `OutputLimit()`.
+- Moodle: nur `MoodleCalc::ERLAUBT`, `MoodleRest` weist Rest ab; neue Funktionen
+  lesend und auf die Liste. `MoodleRest` umgehen → HIGH.
+- WebUntis: drei Fehlanmeldungen sperren das Schulkonto — keine Login-Schleifen,
+  `UntisFails`/`UntisGesperrt()` respektieren.
+- Eigener IMAP-Zugriff (`MailFetch`): nur `EXAMINE` + `UID FETCH`, nie
+  `SELECT`/`STORE`; CRLF in Zugangsdaten abweisen; kein LOGIN ohne SSL.
+  Gelöscht wird nur über das Kernmodul `IMAP_DeleteMail` (`MailDeleteAfter`).
+- Anhänge: `kind` aus dem deklarierten Typ, die BYTES müssen passen (`%PDF-`,
+  JPEG/PNG-Magic), sonst verworfen. Deckel `MAIL_ATTACH_TOTAL_B64`, `OutputLimit()`.
 
 ## Datenverlust zählt wie eine Schwachstelle
-- Eine ausgebliebene Antwort ist keine leere Liste: Abgleiche
-  (`HomeworkImportieren`, `EduArchivAbgleichen`, CalDAV-Multistatus,
-  Quellwechsel Alexa/Bring) dürfen nur bei BESTÄTIGT leerer Antwort löschen
-  (`null` ≠ `[]`; Statuscode am `response`, nicht am `propstat`).
-- Unumkehrbares zuletzt: Mail löschen, Merker setzen, Medien freigeben erst
-  NACH erfolgreichem Speichern — und den Rückgabewert lesen.
-- Netz-Rückfall wiederholt nur Lesen und Aktionen mit `clientActionId`; alles
-  andere meldet den Fehler nach oben (sonst doppelte Notizen, zweiter KI-Auftrag).
-- Widerruf der KI-Einwilligung: Wächter sitzt in `AiProvider::post()`, der
-  einzigen Transportstelle — ein neuer Anbieterweg daran vorbei → HIGH.
+- Ausgebliebene Antwort ≠ leere Liste. Die Unterscheidung liegt bei den LESERN
+  (`null`/`false`: `UntisLesen`, `MoodleLesen` `?array`, `ListSource::Read():
+  array|false`, `EduSeitenLesen` lässt Unlesbares weg). `HomeworkImportieren`,
+  `EduArchivAbgleichen`, `ExternalListSync` räumen bei `[]` legitim auf — wer
+  einen Fehler VOR dem Aufruf in `[]` verwandelt, löscht Bestand → HIGH.
+- CalDAV-Multistatus: am `response` heißt 404/410 „fort"; ab 400 am `propstat`
+  bricht der Abruf ab und ist NIE eine Löschung.
+- Merker (`MailSeenUIDs`, `EduSeen`, `MoodleSeen`) werden ABSICHTLICH beim
+  Einreihen gesetzt und bei Fehlschlag via `MailMerkerZuruecknehmen` zurück-
+  genommen (nach `MAIL_FAIL_MAX` bleibt er). Unumkehrbares ZULETZT, nach
+  geprüftem Speichern: Mail löschen (`MailAuftragAbschliessen`), Medien freigeben.
+- Netz-Rückfall wiederholt nur Lesen und Aktionen mit `clientActionId`.
+- KI-Widerruf: der Transport-Wächter (`AiProvider::post` wirft `AiWiderrufen`)
+  ist nur in der Auftragsspur scharf (`AiJobRunner` → `abbruchWaechter`);
+  synchrone Wege prüfen vor dem Aufruf. Direkte `AiHttp::post`/`AiHttpPost`-Wege
+  (TTS, Voice, Gerichtsbilder, Doku-Einbettung) sind Bestand; ein NEUER
+  Anbieterweg ohne Einwilligungsprüfung → Finding.
 
 ## Symcon-Eigenheiten — KEINE Findings
-- `@` vor `IPS_*`-Aufrufen ist Hausstil: Symcon WARNT statt zu werfen, und
-  eine Warnung im Hook zerlegt die HTTP-Antwort. Nicht als Fehlerunter-
-  drückung melden.
-- `IPS_SemaphoreEnter($name, 0)` ist Absicht: eine Instanz ist serialisiert,
-  Warten liefe ins Leere.
-- `exec()` ist erlaubt (`proc_open` hängt in Symcon); Argumente immer mit
-  `escapeshellarg`. Auf Docker/SymBox gibt es keine externen Werkzeuge.
-- Symcon läuft als root: Dateirechte schützen nichts. Pfade unter
-  `IPS_GetKernelDir()` nur aus Kennungen und Zufall bauen, nie aus
-  Nutzereingaben (Path Traversal).
+- `@` ist Hausstil bei `IPS_*`, `$this->Read/WriteAttribute*`, `SetTimerInterval`,
+  `RegisterOnceTimer`, `PREFIX_*`-Aufrufen: Symcon WARNT statt zu werfen, eine
+  Warnung im Hook zerlegt die HTTP-Antwort. `@` an Netz-, `openssl_*`- und
+  Datei-Aufrufen bleibt prüfbar, wenn der Rückgabewert nicht gelesen wird.
+- `IPS_SemaphoreEnter($name, 0)` ist Absicht bei Sperren mit `InstanceID` im
+  Namen (eine Instanz ist serialisiert). Instanzübergreifende Sperren
+  (`SDSC_AiJob_<gateway>`, ShoppingList 500 ms) warten — ein neues 0-Warten
+  auf einer geteilten Sperre wäre ein still übersprungener Schreibvorgang.
+- `exec()` ist erlaubt (`proc_open` hängt); Argumente mit `escapeshellarg`.
+- root: Dateirechte schützen nichts. Pfade unter `IPS_GetKernelDir()` nur aus
+  Kennungen/Zufall, nie aus Nutzereingaben.
 - Richtungsregel: die Gateway-Spur ruft nie synchron in einen Scanner
   (`SDSC_*`, `IPS_RequestAction(<Scanner>)`) — Deadlock. Umgekehrt erlaubt.
-- Zahlenartige Kennungen werden als PHP-Array-Schlüssel zu `int`: vor
-  `in_array(..., true)` immer `(string)` casten (Mitglieder-IDs wie `57648139`).
+- Zahlenartige Kennungen werden als Array-SCHLÜSSEL zu `int`: Schlüssel aus
+  `array_keys()`/`foreach ($a as $k => …)` mit `(string)`/`array_map('strval', …)`
+  zurückwandeln — den Needle zu casten reicht nicht (`in_array(…, true)`).

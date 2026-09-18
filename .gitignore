@@ -12,3 +12,7 @@ keys.txt
 
 # Python-Zwischenstand der Übernahme-Skripte.
 __pycache__/
+
+# Claude-Code: lokale Einstellungen und lokale Review-Regeln bleiben auf dem Rechner.
+.claude/settings.local.json
+.claude/*.local.*
