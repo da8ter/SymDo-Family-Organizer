@@ -9,6 +9,7 @@ require_once __DIR__ . '/libs/PurchaseStore.php';
 require_once __DIR__ . '/libs/StoreOrder.php';
 require_once __DIR__ . '/../libs/ListSource.php';
 require_once __DIR__ . '/../libs/ExternalListSync.php';
+require_once __DIR__ . '/../libs/AiRecipePage.php';
 require_once __DIR__ . '/libs/ExtListHooksShopping.php';
 
 class SymDoShoppingList extends IPSModuleStrict
@@ -1826,24 +1827,19 @@ class SymDoShoppingList extends IPSModuleStrict
 
     private function FetchBarcodeLookupUrl(string $url, string $source): ?string
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_USERAGENT, 'ShoppingList IP-Symcon Barcode Lookup');
-
-        $body = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($body === false || $httpCode >= 400) {
-            $this->SendDebug('ExternalScanner', $source . ' lookup failed: ' . ($error !== '' ? $error : 'HTTP ' . $httpCode), 0);
+        /* Ueber den gepruefen Abruf, nicht ueber rohes cURL: der folgt
+           Weiterleitungen nur von Hand und nur zu oeffentlichen Zielen. Die
+           Datenbanken sind zwar feste Adressen — aber wohin sie umleiten,
+           entscheiden sie, nicht wir. Gefunden vom Sicherheits-Review am
+           18.09.2026. */
+        $antwort = AiRecipePage::holen($url, 10);
+        if (($antwort['ok'] ?? false) !== true) {
+            $this->SendDebug('ExternalScanner', $source . ' lookup failed: '
+                . (string)($antwort['code'] ?? '?')
+                . ((string)($antwort['detail'] ?? '') !== '' ? ' ' . (string)$antwort['detail'] : ''), 0);
             return null;
         }
-
-        return $this->AsUtf8((string)$body);
+        return $this->AsUtf8((string)($antwort['body'] ?? ''));
     }
 
     /**
@@ -2419,25 +2415,25 @@ class SymDoShoppingList extends IPSModuleStrict
             );
         }
 
-        $this->SendDebug('ExtAPI', 'Downloading image from: ' . $imageUrl, 0);
+        /* Nur den Host ins Protokoll: die Adresse kommt aus der Antwort der
+           Haendler-API und kann Abfragezeichenketten tragen. */
+        $this->SendDebug('ExtAPI', 'Downloading image from host: '
+            . (string)(parse_url($imageUrl, PHP_URL_HOST) ?: '?'), 0);
 
-        $ch = curl_init($imageUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-
-        $data = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($data !== false && $httpCode === 200 && strlen($data) > 0) {
+        /* Die Adresse stammt aus einer FREMDEN Antwort. Rohes cURL mit
+           FOLLOWLOCATION haette jeder Umleitung gefolgt — auch ins eigene Netz
+           (SSRF). AiRecipePage::holen prueft jedes Ziel, folgt von Hand und
+           deckelt bei 2 MB. Gefunden vom Sicherheits-Review am 18.09.2026. */
+        $antwort = AiRecipePage::holen($imageUrl, 10);
+        $data = (string)($antwort['body'] ?? '');
+        if (($antwort['ok'] ?? false) === true && $data !== '') {
             file_put_contents($localPath, $data);
             $this->SendDebug('ExtAPI', 'Image downloaded and cached: api-images/' . $filename, 0);
             return 'api-images/' . $filename;
         }
 
-        $this->SendDebug('ExtAPI', 'Image download failed: ' . ($error ?: 'HTTP ' . $httpCode), 0);
+        $this->SendDebug('ExtAPI', 'Image download failed: ' . (string)($antwort['code'] ?? '?')
+            . ((string)($antwort['detail'] ?? '') !== '' ? ' ' . (string)$antwort['detail'] : ''), 0);
         return '';
     }
 
