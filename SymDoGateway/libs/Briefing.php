@@ -724,9 +724,22 @@ trait Briefing
             return;
         }
         try {
-            $roh = is_array($kopf['raw'] ?? null) ? $kopf['raw'] : [];
+            /* Gelesen wird die GEDEUTETE Antwort (`result.body`), nicht die rohe:
+               `AiJobFinish` wirft `raw` weg, BEVOR es hierher ruft — die
+               Anbieterantwort kann lang sein, und gedeutet ist sie schon. Bis
+               zum 18.09.2026 wurde hier `raw` gelesen, also immer leer: jedes
+               fertige Hintergrund-Briefing zaehlte als Fehlschlag, der Auftrag
+               stand trotzdem auf „fertig", und das Fach blieb leer. Der
+               Pruefstand hatte den Kopf von Hand gebaut, mit `raw` drin — und
+               genau den Weg, den der echte Kopf nimmt, nie gefahren.
+               Fuer `parse.type = text` ist der Rumpf `{ok:true,text}`, bei einem
+               Fehlschlag `{ok:false,code,message,status}` (AiErrorMessage). */
+            $rumpf = is_array(($kopf['result'] ?? [])['body'] ?? null) ? $kopf['result']['body'] : [];
+            $antwort = (($rumpf['ok'] ?? false) === true)
+                ? ['ok' => true, 'text' => (string)($rumpf['text'] ?? '')]
+                : ['ok' => false, 'code' => (string)(($rumpf['code'] ?? '') ?: 'ai_error')];
             $erg = $this->BriefingErgebnisAblegen($tage, $zielTag,
-                (string)($herkunft['userId'] ?? ''), $roh);
+                (string)($herkunft['userId'] ?? ''), $antwort);
             $this->SendDebug('Briefing', 'Auftrag fertig: ' . (string)$erg['message'], 0);
         } finally {
             IPS_SemaphoreLeave($riegel);

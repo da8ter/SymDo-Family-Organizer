@@ -136,9 +136,12 @@ final class JobProbe extends IPSModuleStrict
     /* Das Briefing teilt sich den Hintergrund-Topf mit der Auswertung, landet
        aber in einem anderen Bestand. */
     public array $briefing = [];
+    /** @var list<array<string,mixed>> die Koepfe, so wie sie hier ankommen */
+    public array $briefingKoepfe = [];
     private function BriefingAuftragEinpflegen(array $kopf): void
     {
         $this->briefing[] = (string)$kopf['id'];
+        $this->briefingKoepfe[] = $kopf;
     }
 
     // ── Tueren fuer den Pruefstand ────────────────────────────────────────
@@ -547,6 +550,12 @@ $br->pLaden()->schreiben($kopfBr);
 $br->pFertig((string)$eins['id']);
 pruefe('Es landet im Briefing-Bestand', $br->briefing, [(string)$eins['id']]);
 pruefe('… und NICHT in der Vorschlagsliste', $br->hintergrund, []);
+/* WAS dort ankommt, ist die gedeutete Antwort — `raw` ist zu diesem Zeitpunkt
+   schon weg. Der Empfaenger hat sie bis zum 18.09.2026 trotzdem gelesen und
+   jedes fertige Briefing als Fehlschlag verbucht. Der Vertrag steht hier. */
+pruefe('Der Empfaenger bekommt die gedeutete Antwort, nicht die rohe',
+    [$br->briefingKoepfe[0]['result']['body'] ?? null, isset($br->briefingKoepfe[0]['raw'])],
+    [['ok' => true, 'text' => 'Guten Morgen.'], false]);
 
 /* Umgekehrt ebenso: eine Auswertung darf nicht im Briefing landen. */
 $br->briefing = [];

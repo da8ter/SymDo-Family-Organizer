@@ -87,7 +87,14 @@ final class BriefingProbe
     private function WsPushDirty(): void { $this->geklingelt++; }
     private function BriefingTextVariable(): void {}
     private function BriefingAudioObjekt(): void {}
-    private function SendDebug(string $a, string $b, int $c): void {}
+    /** @var list<string> welche Anbieter-Fehlercodes gemeldet wurden */
+    public array $gemeldet = [];
+    private function SendDebug(string $a, string $b, int $c): void
+    {
+        if (str_starts_with($b, 'Anbieter meldet ')) {
+            $this->gemeldet[] = substr($b, strlen('Anbieter meldet '));
+        }
+    }
     private function AiJobMoeglich(): bool { return $this->laeuferDa; }
     private function AiJobEnqueue(string $kind, array $job, array $parse, array $origin,
         string $nutzlast = '', string $geraet = ''): array
@@ -159,9 +166,16 @@ pruefe('Ein abgelehnter Auftrag meldet den Fehlschlag',
 pruefe('… und hinterlaesst KEINEN Merker', isset($p3->bestand['pending']), false);
 
 // ── Das Ergebnis ─────────────────────────────────────────────────────────
+/* Der Kopf kommt hier so an, wie `AiJobFinish` ihn UEBERGIBT: die Antwort
+   steht gedeutet in `result.body`, `raw` ist schon weg. Bis zum 18.09.2026
+   trug der Kopf in diesem Pruefstand noch `raw` — und der Empfaenger las
+   genau das. Beides passte zueinander und beides war falsch: im echten Lauf
+   war jedes fertige Briefing ein Fehlschlag mit leerem Fach. Ein externer
+   Codereview fand es. Deshalb hier ausdruecklich OHNE `raw`. */
 $p4 = new BriefingProbe();
 $p4->bestand = ['pending' => ['d' => '2026-09-16', 'at' => time(), 'id' => 'j1']];
-$p4->Fertig(['id' => 'j1', 'raw' => ['ok' => true, 'text' => "Guten Morgen.\n\n* Punkt"],
+$p4->Fertig(['id' => 'j1', 'state' => AiJobStore::FERTIG,
+             'result' => ['status' => 200, 'body' => ['ok' => true, 'text' => "Guten Morgen.\n\n* Punkt"]],
              'origin' => ['type' => AiJobStore::HERKUNFT_HINTERGRUND, 'art' => 'briefing',
                           'tage' => 0, 'zielTag' => '2026-09-16', 'userId' => 'u1']]);
 pruefe('Das Fach ist gefuellt', $p4->faecher[0]['d'] ?? null, '2026-09-16');
@@ -174,9 +188,13 @@ pruefe('… und der Merker ist weg', isset($p4->bestand['pending']), false);
 // ── Ein Fehlschlag ───────────────────────────────────────────────────────
 $p5 = new BriefingProbe();
 $p5->bestand = ['pending' => ['d' => '2026-09-16', 'at' => time(), 'id' => 'j1']];
-$p5->Fertig(['id' => 'j1', 'raw' => ['ok' => false, 'code' => 'ai_unreachable'],
+/* Die Fehlerform ist die von AiErrorMessage: flach, `code` neben `message`. */
+$p5->Fertig(['id' => 'j1', 'state' => AiJobStore::GESCHEITERT,
+             'result' => ['status' => 502, 'body' => ['ok' => false, 'code' => 'ai_unreachable',
+                          'message' => 'Could not reach the AI service.', 'status' => 502]],
              'origin' => ['art' => 'briefing', 'tage' => 0, 'zielTag' => '2026-09-16']]);
 pruefe('Ein Fehlschlag zaehlt mit', (int)($p5->bestand['fails'] ?? 0), 1);
+pruefe('… und nennt den Grund des Anbieters', $p5->gemeldet, ['ai_unreachable']);
 pruefe('… fuellt kein Fach', isset($p5->faecher[0]), false);
 /* Auch bei einem Fehlschlag MUSS der Merker weg — sonst bliebe das Briefing
    bis zum Fristablauf blockiert. */
@@ -184,8 +202,17 @@ pruefe('… und raeumt den Merker weg', isset($p5->bestand['pending']), false);
 
 /* Ein Umschlag ohne Zieltag gehoert niemandem. */
 $p6 = new BriefingProbe();
-$p6->Fertig(['id' => 'j9', 'raw' => ['ok' => true, 'text' => 'X'], 'origin' => ['art' => 'briefing']]);
+$p6->Fertig(['id' => 'j9', 'result' => ['status' => 200, 'body' => ['ok' => true, 'text' => 'X']],
+             'origin' => ['art' => 'briefing']]);
 pruefe('Ohne Zieltag passiert nichts', [$p6->faecher, $p6->gesprochen], [[], []]);
+
+/* Ein Kopf, der NUR `raw` traegt, ist der alte Irrtum — er darf kein Fach
+   fuellen, sonst gaebe es wieder zwei Lesarten. */
+$p7 = new BriefingProbe();
+$p7->bestand = ['pending' => ['d' => '2026-09-16', 'at' => time(), 'id' => 'j1']];
+$p7->Fertig(['id' => 'j1', 'raw' => ['ok' => true, 'text' => 'Guten Morgen.'],
+             'origin' => ['art' => 'briefing', 'tage' => 0, 'zielTag' => '2026-09-16']]);
+pruefe('Die rohe Antwort allein wird NICHT mehr gelesen', isset($p7->faecher[0]), false);
 
 // ── Beide Wege gehen durch DIESELBE Tuer ─────────────────────────────────
 $quelle = (string)file_get_contents(__DIR__ . '/../libs/Briefing.php');
@@ -193,6 +220,9 @@ pruefe('Der synchrone Weg legt ueber dieselbe Stelle ab',
     str_contains($quelle, 'return $this->BriefingErgebnisAblegen($tage, $zielTag, (string)$daten[\'userId\'], $antwort);'), true);
 pruefe('Der Auftrags-Weg auch',
     str_contains($quelle, '$erg = $this->BriefingErgebnisAblegen($tage, $zielTag,'), true);
+/* Und nur EINE Lesart der Antwort: `result.body`. Wer `raw` liest, liest
+   nach `AiJobFinish` ins Leere. */
+pruefe('Kein Griff nach der rohen Antwort', str_contains($quelle, "['raw']"), false);
 /* Nur EINE Stelle darf ein Fach schreiben — sonst waeren es zwei Politiken. */
 pruefe('Nur eine Stelle schreibt ein Fach',
     substr_count($quelle, '$this->BriefingWriteSlot('), 1);
