@@ -27,6 +27,8 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 - Die Kachel zeigt **nur die laufende Woche** — der Plan wiederholt sich ja. Wer wissen will, wer nächste Woche dran ist, fragt `CHR_Preview()`.
 - **Symbole und Farben** kommen aus dem Formular: je Ämtchen ein Symbol (Font Awesome) und eine Farbe, je Familienmitglied eine Farbe aus der Mitgliederliste des Gateways. Ohne Wahl nimmt die Kachel eine eingebaute Farbleiter, damit zwei Zeilen nie gleich aussehen.
 - **Ämtchen würfeln.** Der Knopf öffnet ein Blatt: erst ein Ämtchen wählen, das heute ansteht, dann dreht sich ein Glücksrad mit den Gesichtern aller, die dafür in Frage kommen — und wer unter dem Zeiger landet, ist heute dran. Der Platz in der Tabelle wechselt zu dieser Person. Gelost wird im Modul, nicht im Browser: zwei Geräte sehen dasselbe Los. **Je Ämtchen einmal am Tag**; danach zeigt das Blatt nur noch, wer gezogen wurde. Wer aussetzt, ist nicht im Rad. Bei wenigen Mitspielern steht jeder mehrmals auf dem Rad (einer viermal, zwei dreimal, drei und vier zweimal), damit es nach Glücksrad aussieht — an den Chancen ändert das nichts.
+- **Münzen.** Jedes Ämtchen hat einen Münzwert (Spalte *Münzen* in der Tabelle). Hakt ein **Kind** ab, wandern die Münzen in seinen Beutel — Erwachsene verdienen nichts. Nimmt man den Haken zurück, geht genau der Betrag von damals wieder weg. Der Beutel steht auf der Karte des Kindes.
+- **Drehen kostet.** Ein Dreh am Glücksrad kostet Münzen (*Preis für einmal Drehen*, 0 = kostenlos). Vor der Wahl des Ämtchens fragt das Blatt, **wer bezahlt** — nur Kinder, und nur die mit genug im Beutel. Der Knopf *LOS!* lässt sich nur drücken, wenn mindestens ein Kind zahlen kann und heute noch nicht für alle Ämtchen gedreht wurde; darunter steht, warum nicht. Abgebucht wird erst, wenn das Los steht — ein abgewiesener Dreh kostet nichts.
 - **Was zu sehen ist, entscheidest du**: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort und Würfel-Kasten lassen sich einzeln abschalten (Kapitel 3). Die Tabelle bleibt immer.
 
 ## 2. Voraussetzungen
@@ -50,6 +52,7 @@ Oben eine Karte je Familienmitglied — Foto, Name, „2/3 erledigt" und ein For
 | Wechsel | *wöchentlich*: eine Person trägt das Ämtchen die ganze Woche. *täglich*: der Kreis rückt an jedem Tag weiter, an dem es ansteht |
 | Woche beginnt am | Montag bis Sonntag |
 | Wochenwechsel um | Uhrzeit, zu der die neue Woche beginnt |
+| Preis für einmal Drehen | Was ein Dreh am Glücksrad kostet, in Münzen; 0 = kostenlos, dann fragt das Blatt nicht, wer bezahlt |
 | Übertrag | Nicht erledigte Ämtchen wandern als zusätzliche Plätze in die neue Woche, beim **alten** Zuständigen. Höchstens eine Woche tief. Der Schalter wirkt sofort: ausgeschaltet verschwinden auch die Überträge der laufenden Woche, eingeschaltet sind sie wieder da |
 | Anzeige | Welche Kästen die Kachel zeigt: Übersichtskarten, Gesamtfortschritt, nächste Ämtchen, Schlusswort, Würfel-Kasten |
 

@@ -53,6 +53,9 @@ class SymDoChores extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowUpNext', true);
         $this->RegisterPropertyBoolean('ShowBanner', true);
         $this->RegisterPropertyBoolean('ShowWheel', true);
+        /* Die Muenzbelohnung, eigener Beutel (18.09.2026): was ein Dreh am
+           Gluecksrad kostet; die Muenzen je Aemtchen stehen in der Tabelle. */
+        $this->RegisterPropertyInteger('SpinPrice', 3);
 
         /* Bleiben REGISTRIERT, obwohl die Kachel keine andere Woche mehr zeigt:
            eine Eigenschaft zu entfernen hiesse, sie aus jedem bestehenden
@@ -64,6 +67,8 @@ class SymDoChores extends IPSModuleStrict
         // Die laufende Woche steht eingefroren hier, genau eine Vorwoche daneben.
         $this->RegisterAttributeString('Week', '{}');
         $this->RegisterAttributeString('LastWeek', '{}');
+        // Der Muenzbeutel: Mitglied → Muenzen. Nur Kinder verdienen und zahlen.
+        $this->RegisterAttributeString('Purse', '{}');
         // Handkurbel: verschiebt die Rotation um Personen, ab nächster Woche.
         $this->RegisterAttributeInteger('Shift', 0);
         $this->RegisterAttributeString('KnownVarIdents', '[]');
@@ -131,7 +136,8 @@ class SymDoChores extends IPSModuleStrict
                    Gewinner mit dem naechsten Zustand und dreht dann hin. */
                 $daten = is_array($Value) ? $Value : json_decode((string)$Value, true);
                 if (is_array($daten)) {
-                    $this->Wuerfeln(trim((string)($daten['week'] ?? '')), trim((string)($daten['chore'] ?? '')), time());
+                    $this->Wuerfeln(trim((string)($daten['week'] ?? '')), trim((string)($daten['chore'] ?? '')), time(),
+                        null, trim((string)($daten['payer'] ?? '')));
                     $this->PushState();
                 }
                 return;
@@ -287,6 +293,9 @@ class SymDoChores extends IPSModuleStrict
                  ['caption' => $this->Translate('weekly'), 'value' => 'week'],
                  ['caption' => $this->Translate('daily'), 'value' => 'day'],
              ]]],
+            // Was ein Kind fuers Abhaken bekommt.
+            ['caption' => $this->Translate('Coins'), 'name' => 'coins', 'width' => '90px',
+             'add' => 1, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 999]],
         ];
         $tage = [
             ['caption' => $this->Translate('Monday'), 'value' => 1],
@@ -339,6 +348,9 @@ class SymDoChores extends IPSModuleStrict
                         ['type' => 'SelectTime', 'name' => 'ResetTime', 'caption' => $this->Translate('Week changes at')],
                         ['type' => 'Label', 'caption' => $this->Translate('Sunday evening still belongs to the old week — the change happens at the set time.')],
                         ['type' => 'CheckBox', 'name' => 'CarryOver', 'caption' => $this->Translate('Carry unfinished chores into the new week')],
+                        ['type' => 'NumberSpinner', 'name' => 'SpinPrice', 'minimum' => 0, 'maximum' => 999,
+                         'caption' => $this->Translate('Price for one spin of the wheel (coins, 0 = free)')],
+                        ['type' => 'Label', 'caption' => $this->Translate('Only children earn coins — for every chore they tick off — and only children can pay for a spin.')],
                         ['type' => 'Label', 'caption' => $this->Translate('The gateway provides the family members with photos. Which gateway is used is decided by the parent instance, to be set in the console.')],
                         ['type' => 'Label', 'caption' => $this->Translate('Display')],
                         ['type' => 'CheckBox', 'name' => 'ShowMembers', 'caption' => $this->Translate('Show the overview cards per family member')],

@@ -100,7 +100,17 @@
             "No answer — please try again.": "Keine Antwort — bitte noch einmal.",
             "Nobody is available for this chore.": "Für dieses Ämtchen ist niemand da.",
             "Close": "Schließen",
-            "Go!": "LOS!"
+            "Go!": "LOS!",
+            "Coins": "Münzen",
+            "coins": "Münzen",
+            "Price for one spin of the wheel (coins, 0 = free)": "Preis für einmal Drehen am Glücksrad (Münzen, 0 = kostenlos)",
+            "Only children earn coins — for every chore they tick off — and only children can pay for a spin.": "Münzen verdienen nur Kinder — für jedes abgehakte Ämtchen —, und nur Kinder können einen Dreh bezahlen.",
+            "Who pays?": "Wer bezahlt?",
+            "One spin costs %d coins": "Ein Dreh kostet %d Münzen",
+            "not enough coins": "zu wenig Münzen",
+            "No child has enough coins.": "Kein Kind hat genug Münzen.",
+            "Everything has been rolled today.": "Heute ist schon alles gewürfelt.",
+            "%s pays": "%s bezahlt"
         }
     }
 }

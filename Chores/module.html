@@ -350,6 +350,9 @@ body {
   background: color-mix(in srgb, var(--content-color) 7%, transparent); color: var(--text);
 }
 
+.person .muenzen { color: var(--akzent); font-weight: 800; white-space: nowrap; margin-left: 4px; }
+.person .muenzen i, .person .muenzen svg, .wahl .wer i, .wahl .wer svg { width: 12px; height: 12px; vertical-align: -1px; }
+
 /* ── Das Blatt ─────────────────────────────────────────────────────────────
    Ein Overlay ueber der ganzen Kachel; die Karte darin ist so breit wie das
    Rad braucht. Zwei Schritte in derselben Karte: Aemtchen waehlen, Rad. */
@@ -808,7 +811,10 @@ function leuteHtml(aemtchen) {
         '<div class="name">' + escHtml(p.name || id) + '</div>' +
         '<div class="stand">' + (p.paused && s.total === 0
           ? escHtml(txt('paused', 'Pause'))
-          : s.done + '/' + s.total + ' ' + escHtml(txt('done', 'done'))) + '</div>' +
+          : s.done + '/' + s.total + ' ' + escHtml(txt('done', 'done'))) +
+        (String(p.persona || '').toLowerCase() === 'child'
+          ? ' <span class="muenzen"><i class="fa-light fa-coins"></i> ' + (p.coins || 0) + '</span>' : '') +
+        '</div>' +
       '</div>' +
       (s.total > 0 ? '<div class="ring" style="--p:' + anteil + '"></div>' : '') +
       '</div>';
@@ -950,9 +956,38 @@ function bannerHtml() {
    Je Aemtchen einmal am Tag — das haelt das Modul, die Kachel zeigt bei einem
    schon gelosten Aemtchen nur den Gewinner. (Wunsch des Nutzers, 18.09.2026.) */
 function wuerfelHtml() {
+  const grund = drehGrund();
+  const hinweis = grund === '' ? preisText() : grund;
   return '<div class="wtext"><div class="wtitel">' + escHtml(txt('wheelTitle', 'Roll the dice')) + '</div>' +
-    '<div class="whint">' + escHtml(txt('wheelHint', '')) + '</div></div>' +
-    '<button type="button" class="knopf" id="wuerfel-knopf"><i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>';
+    '<div class="whint">' + escHtml(hinweis) + '</div></div>' +
+    '<button type="button" class="knopf" id="wuerfel-knopf"' + (grund === '' ? '' : ' disabled') + '>' +
+    '<i class="fa-light fa-dice"></i>' + escHtml(txt('wheelGo', 'Go!')) + '</button>';
+}
+
+function preis() { return Math.max(0, Number(zustand && zustand.spinPrice) || 0); }
+function preisText() {
+  return preis() > 0 ? String(txt('wheelCost', 'One spin costs %d coins')).replace('%d', String(preis())) : txt('wheelHint', '');
+}
+/** Die Kinder, die zahlen koennten (mit Beutel), in der Reihenfolge der Karten. */
+function kinder() {
+  return (zustand.order || []).filter((id) => {
+    const p = mitglied(id);
+    return p && String(p.persona || '').toLowerCase() === 'child';
+  });
+}
+/**
+ * Warum der LOS!-Knopf gerade nicht geht — oder '' wenn er geht. Zwei Gruende
+ * (Regel des Nutzers): kein Kind hat genug Muenzen, oder es ist heute schon
+ * fuer alle Aemtchen gedreht. Das Modul prueft beides noch einmal.
+ */
+function drehGrund() {
+  if (aemtchenHeute().every((a) => a.wheel && a.wheel.memberId)) {
+    return txt(aemtchenHeute().length === 0 ? 'wheelNone' : 'wheelAllSpun', '');
+  }
+  if (preis() > 0 && !kinder().some((id) => (mitglied(id).coins || 0) >= preis())) {
+    return txt('wheelNoPayer', '');
+  }
+  return '';
 }
 
 /** Welche Aemtchen heute einen offenen Platz haben (Uebertraege zaehlen nicht). */
@@ -965,9 +1000,35 @@ function aemtchenHeute() {
 
 let rad = null;   // { chore, kandidaten, winkel, laeuft, ziel, start, timer }
 
+let zahler = '';   // das Kind, das den naechsten Dreh bezahlt
+
 function blattOeffnen() {
   el('blatt').hidden = false;
-  wahlZeigen();
+  zahler = '';
+  if (preis() > 0) { zahlerZeigen(); } else { wahlZeigen(); }
+}
+
+/** Schritt 0: wer bezahlt? Nur Kinder, und nur mit genug im Beutel. */
+function zahlerZeigen() {
+  el('blatt-titel').textContent = txt('wheelWho', 'Who pays?');
+  const liste = kinder();
+  if (liste.length === 0) {
+    el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(txt('wheelNoPayer', '')) + '</div>';
+    return;
+  }
+  el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(preisText()) + '</div><div class="wahl">' +
+    liste.map((id) => {
+      const p = mitglied(id);
+      const kann = (p.coins || 0) >= preis();
+      return '<button type="button" class="eintrag" data-zahler="' + escHtml(id) + '"' + (kann ? '' : ' disabled') + '>' +
+        '<span class="bild">' + bildHtml(p) + '</span>' +
+        '<span class="was">' + escHtml(p.name || id) + '</span>' +
+        '<span class="wer"><i class="fa-light fa-coins"></i> ' + (p.coins || 0) +
+        (kann ? '' : ' · ' + escHtml(txt('wheelPoor', ''))) + '</span></button>';
+    }).join('') + '</div>';
+  el('blatt-inhalt').querySelectorAll('.eintrag:not([disabled])').forEach((b) => {
+    b.addEventListener('click', () => { zahler = b.dataset.zahler; wahlZeigen(); });
+  });
 }
 function blattSchliessen() {
   el('blatt').hidden = true;
@@ -978,7 +1039,9 @@ function blattSchliessen() {
 
 /** Schritt 1: die Aemtchen von heute — schon gewuerfelte zeigen ihren Gewinner. */
 function wahlZeigen() {
-  el('blatt-titel').textContent = txt('wheelPick', 'Pick a chore');
+  const z = zahler ? mitglied(zahler) : null;
+  el('blatt-titel').textContent = txt('wheelPick', 'Pick a chore') +
+    (z ? ' — ' + String(txt('wheelPays', '%s pays')).replace('%s', z.name || zahler) : '');
   const heute = aemtchenHeute();
   if (heute.length === 0) {
     el('blatt-inhalt').innerHTML = '<div class="leerzeile">' + escHtml(txt('wheelNone', '')) + '</div>';
@@ -1102,7 +1165,7 @@ function radDrehen() {
   el('rad-drehen').disabled = true;
   el('rad-ergebnis').innerHTML = '<span class="leise">' + escHtml(txt('wheelWait', '')) + '</span>';
   if (typeof requestAction === 'function') {
-    requestAction('Spin', JSON.stringify({ week: zustand ? zustand.week : '', chore: rad.chore }));
+    requestAction('Spin', JSON.stringify({ week: zustand ? zustand.week : '', chore: rad.chore, payer: zahler }));
   }
   // Ohne Antwort dreht das Rad nicht ewig: nach zehn Sekunden aufgeben.
   rad.timer = setTimeout(() => {

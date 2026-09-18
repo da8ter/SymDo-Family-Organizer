@@ -408,10 +408,11 @@ $jetzt = $T('2026-09-09 12:00');
 $w = $h->pWoche($jetzt);
 $wer = $w['assign']['m1'];
 pruefe('Abhaken meldet Erfolg', $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt), true);
-/* Gespeichert wird, WER es getan hat — seit dem 17.09.2026 nichts sonst. */
+/* Gespeichert wird, WER es getan hat — und seit dem 18.09.2026 wieder, was es
+   ihm an Muenzen gebracht hat (nur Kinder; sonst 0). */
 $erledigt = json_decode($h->attr['Week'], true)['done']['m1']['0'];
 pruefe('der Haken merkt sich den Halter', $erledigt['m'], $wer);
-pruefe('… und sonst nichts', array_keys($erledigt), ['m']);
+pruefe('… und die Muenzen, sonst nichts', array_keys($erledigt), ['m', 'p']);
 pruefe('doppeltes Abhaken bleibt erfolgreich',
     $h->pAbhaken('2026-09-07', 'm1', '0', true, $jetzt), true);
 /* Halterwechsel per Handkurbel: der Haken bleibt beim GEMERKTEN Halter. */

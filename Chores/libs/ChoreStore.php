@@ -131,6 +131,10 @@ trait ChoreStore
                 'perWeek' => count($tage),
                 'days'    => $tage,
                 'circle'  => trim((string)($z['circle'] ?? 'all')) ?: 'all',
+                /* Die Muenzbelohnung (zurueck seit dem 18.09.2026, jetzt mit
+                   eigenem Beutel statt ueber die Routinen): so viele Muenzen
+                   bekommt ein KIND, wenn es diesen Platz abhakt. */
+                'coins'   => max(0, min(999, (int)($z['coins'] ?? 1))),
             ];
         }
         return $raus;
@@ -839,6 +843,54 @@ trait ChoreStore
         return $raus;
     }
 
+    // ------------------------------------------------------------------
+    // Der Muenzbeutel — Kinder verdienen, Kinder zahlen
+    // ------------------------------------------------------------------
+
+    /** @return array<string,int> Mitglied → Muenzen */
+    private function BeutelLesen(): array
+    {
+        $roh = json_decode((string)@$this->ReadAttributeString('Purse'), true);
+        $raus = [];
+        foreach (is_array($roh) ? $roh : [] as $id => $n) {
+            $raus[(string)$id] = max(0, (int)$n);
+        }
+        return $raus;
+    }
+
+    private function BeutelSchreiben(array $beutel): void
+    {
+        @$this->WriteAttributeString('Purse', (string)json_encode($beutel, JSON_UNESCAPED_UNICODE));
+    }
+
+    private function MuenzenVon(string $id): int
+    {
+        return (int)($this->BeutelLesen()[$id] ?? 0);
+    }
+
+    /** Muenzen gutschreiben oder abziehen — nie unter null. */
+    private function MuenzenBuchen(string $id, int $delta): void
+    {
+        if ($id === '' || $delta === 0) {
+            return;
+        }
+        $beutel = $this->BeutelLesen();
+        $beutel[$id] = max(0, (int)($beutel[$id] ?? 0) + $delta);
+        $this->BeutelSchreiben($beutel);
+    }
+
+    /** Nur Kinder verdienen und zahlen (Regel des Nutzers). */
+    private function IstKind(string $id): bool
+    {
+        return ($this->Rollen()[$id] ?? '') === 'child';
+    }
+
+    /** Was ein Dreh am Gluecksrad kostet; 0 = frei. */
+    private function DrehPreis(): int
+    {
+        return max(0, min(999, $this->EinstellungZahl('SpinPrice', 3)));
+    }
+
     /**
      * Der Tag, auf dem „heute" steht — auf derselben verschobenen Uhr wie die
      * Wochenkennung (Montag 02:59 bei Wechsel um 03:00 ist noch Sonntag).
@@ -882,9 +934,22 @@ trait ChoreStore
      * @param ?callable(int $n): int $zufall liefert einen Index 0..n-1
      * @return array{ok:bool,memberId:string,slot:string,reason:string}
      */
-    private function Wuerfeln(string $wochenKennung, string $choreId, int $jetzt, ?callable $zufall = null): array
+    private function Wuerfeln(string $wochenKennung, string $choreId, int $jetzt, ?callable $zufall = null,
+        string $zahler = ''): array
     {
         $nein = static fn(string $grund): array => ['ok' => false, 'memberId' => '', 'slot' => '', 'reason' => $grund];
+        /* Ein Dreh kostet Muenzen, und zahlen kann nur ein Kind mit genug im
+           Beutel. Geprueft wird VOR allem anderen — und abgebucht erst, wenn
+           das Los steht: ein abgewiesener Dreh darf nichts kosten. */
+        $preis = $this->DrehPreis();
+        if ($preis > 0) {
+            if ($zahler === '' || !$this->IstKind($zahler)) {
+                return $nein('payer');
+            }
+            if ($this->MuenzenVon($zahler) < $preis) {
+                return $nein('coins');
+            }
+        }
         $woche = $this->WocheSicherstellen($jetzt);
         if ($wochenKennung !== '' && $wochenKennung !== (string)($woche['week'] ?? '')) {
             return $nein('week');
@@ -924,8 +989,12 @@ trait ChoreStore
         $index = $zufall !== null ? (int)$zufall($n) : random_int(0, $n - 1);
         $gewinner = $kandidaten[(($index % $n) + $n) % $n];
         $woche['wheel'] = is_array($woche['wheel'] ?? null) ? $woche['wheel'] : [];
-        $woche['wheel'][$choreId] = ['day' => $heute, 'memberId' => $gewinner, 'slot' => $platz];
+        $woche['wheel'][$choreId] = ['day' => $heute, 'memberId' => $gewinner, 'slot' => $platz,
+                                     'paidBy' => $preis > 0 ? $zahler : '', 'price' => $preis];
         $this->WocheSchreiben($woche);
+        if ($preis > 0) {
+            $this->MuenzenBuchen($zahler, -$preis);
+        }
         return ['ok' => true, 'memberId' => $gewinner, 'slot' => $platz, 'reason' => ''];
     }
 
@@ -989,11 +1058,16 @@ trait ChoreStore
             return true;
         }
         if ($ziel) {
-            /* Gespeichert wird, WER es getan hat — mehr braucht der Plan nicht.
-               Das alte Feld „p" (Punkte) steht noch in Wochen von vor dem
-               17.09.2026; gelesen wird es nirgends mehr. */
-            $erledigt[$platz] = ['m' => $halter];
+            /* Gespeichert wird, WER es getan hat — und was es ihm gebracht hat:
+               nur ein KIND verdient Muenzen (Regel des Nutzers), und
+               zurueckgeholt wird beim Loeschen des Hakens genau der Betrag von
+               damals, nicht der heutige Preis des Aemtchens. */
+            $muenzen = $this->IstKind($halter) ? (int)($treffer['coins'] ?? 0) : 0;
+            $erledigt[$platz] = ['m' => $halter, 'p' => $muenzen];
+            $this->MuenzenBuchen($halter, $muenzen);
         } else {
+            $alt = is_array($erledigt[$platz] ?? null) ? $erledigt[$platz] : [];
+            $this->MuenzenBuchen((string)($alt['m'] ?? ''), -(int)($alt['p'] ?? 0));
             unset($erledigt[$platz]);
         }
         if ($erledigt === []) {
@@ -1156,6 +1230,8 @@ trait ChoreStore
                 'color'   => $m !== null ? (string)($m['color'] ?? '') : '',
                 'paused'  => isset($pausiert[$z['memberId']]),
                 'known'   => $m !== null,
+                // Der Beutel — nur Kinder haben einen, alle anderen stehen bei null.
+                'coins'   => $this->IstKind($z['memberId']) ? $this->MuenzenVon($z['memberId']) : 0,
             ];
         }
 
@@ -1187,6 +1263,7 @@ trait ChoreStore
                 'name'      => $a['name'],
                 'icon'      => $a['icon'],
                 'color'     => $a['color'],
+                'coins'     => (int)($a['coins'] ?? 0),
                 'memberId'  => (string)($woche['assign'][$a['id']] ?? ''),
                 'doneCount' => $erledigt,
                 'total'     => count($plaetze),
@@ -1224,6 +1301,7 @@ trait ChoreStore
                 'wheel'    => $this->EinstellungJa('ShowWheel', true),
             ],
             'day'        => $this->TagKennung($jetzt),
+            'spinPrice'  => $this->DrehPreis(),
             'order'      => $reihenfolge,
             'members'    => $leute,
             'chores'     => $liste,
@@ -1275,6 +1353,14 @@ trait ChoreStore
             'wheelNoAnswer' => $this->Translate('No answer — please try again.'),
             'wheelNobody' => $this->Translate('Nobody is available for this chore.'),
             'close'       => $this->Translate('Close'),
+            /* Die Muenzen (18.09.2026). */
+            'coins'       => $this->Translate('coins'),
+            'wheelWho'    => $this->Translate('Who pays?'),
+            'wheelCost'   => $this->Translate('One spin costs %d coins'),
+            'wheelPoor'   => $this->Translate('not enough coins'),
+            'wheelNoPayer' => $this->Translate('No child has enough coins.'),
+            'wheelAllSpun' => $this->Translate('Everything has been rolled today.'),
+            'wheelPays'   => $this->Translate('%s pays'),
         ];
     }
 }

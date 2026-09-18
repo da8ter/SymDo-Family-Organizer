@@ -30,7 +30,7 @@ final class WuerfelHarness extends IPSModuleStrict
     use ChoreStore;
 
     public array $cfg = [];
-    public array $attr = ['Week' => '{}', 'LastWeek' => '{}', 'Shift' => 0];
+    public array $attr = ['Week' => '{}', 'LastWeek' => '{}', 'Shift' => 0, 'Purse' => '{}'];
     public array $rollen = ['a' => 'child', 'b' => 'child', 'c' => 'mother', 'd' => 'father'];
     public array $namen  = ['a' => 'Anna', 'b' => 'Ben', 'c' => 'Clara', 'd' => 'Dirk'];
 
@@ -53,7 +53,9 @@ final class WuerfelHarness extends IPSModuleStrict
     private function UebernehmenNachtragen(): void {}
     private function GatewayInstanz(): int { return 1; }
 
-    public function pWuerfeln(string $w, string $c, int $t, ?callable $z = null): array { return $this->Wuerfeln($w, $c, $t, $z); }
+    public function pWuerfeln(string $w, string $c, int $t, ?callable $z = null, string $zahler = ''): array { return $this->Wuerfeln($w, $c, $t, $z, $zahler); }
+    public function pMuenzen(string $id): int { return $this->MuenzenVon($id); }
+    public function pBeutel(array $b): void { $this->BeutelSchreiben($b); }
     public function pWoche(int $t): array { return $this->WocheSicherstellen($t); }
     public function pPlaetze(array $w, array $a): array { return $this->PlaetzeFuer($w, $a); }
     public function pAemtchen(): array { return $this->AemtchenLesen(); }
@@ -61,6 +63,7 @@ final class WuerfelHarness extends IPSModuleStrict
     public function pPayload(int $t): array { return $this->PayloadBauen($t); }
     public function pKandidaten(array $a): array { return $this->WuerfelKandidaten($a); }
     public function pTag(int $t): string { return $this->TagKennung($t); }
+    public function pHeute(string $w, int $t): int { return $this->SpalteHeute($w, $t); }
 }
 
 $fehler = 0;
@@ -87,13 +90,15 @@ function harness(array $teilnehmer): WuerfelHarness
     $h->cfg = [
         'Members'   => json_encode($teilnehmer),
         'Chores'    => json_encode([
-            ['id' => 'tisch', 'name' => 'Tischdienst', 'circle' => 'child', 'rotate' => 'day'] + $alleTage,
-            ['id' => 'muell', 'name' => 'Muell', 'circle' => 'all'] + $alleTage,
+            ['id' => 'tisch', 'name' => 'Tischdienst', 'circle' => 'child', 'rotate' => 'day', 'coins' => 2] + $alleTage,
+            ['id' => 'muell', 'name' => 'Muell', 'circle' => 'all', 'coins' => 5] + $alleTage,
             ['id' => 'garten', 'name' => 'Garten', 'circle' => 'all', 'perWeek' => 0],
         ]),
         'WeekStart' => 1,
         'ResetTime' => '{"hour":3,"minute":0,"second":0}',
         'CarryOver' => false,
+        // Die Dreh-Faelle oben laufen ohne Preis; die Muenzen haben ihren eigenen Abschnitt.
+        'SpinPrice' => 0,
     ];
     return $h;
 }
@@ -186,6 +191,54 @@ pruefe('… den Schalter fuer den Kasten und die Texte',
     [$nutz['show']['wheel'], isset($nutz['texts']['wheelTitle']), isset($nutz['texts']['wheelSpun']), $nutz['day']],
     [true, true, true, $heute]);
 
+// ── Die Muenzen ────────────────────────────────────────────────────────────
+/* Nur Kinder verdienen: ein Haken eines Kindes bringt die Muenzen des
+   Aemtchens, der eines Erwachsenen nichts; das Loeschen des Hakens holt genau
+   den Betrag von damals zurueck. */
+$m = harness($alle);
+$wm = $m->pWoche($jetzt);
+$km = (string)$wm['week'];
+foreach ($m->pAemtchen() as $a) { if ($a['id'] === 'muell') { $mu = $a; } if ($a['id'] === 'tisch') { $ti = $a; } }
+$platzMuell = array_values(array_filter($m->pPlaetze($wm, $mu), static fn(array $p): bool => (int)$p['col'] === $m->pHeute($km, $jetzt)))[0] ?? null;
+pruefe('Heute hat der Muell einen Platz', $platzMuell !== null, true);
+// Das Los legt fest, wer den Platz hat — so wissen wir, wem der Haken gehoert.
+$m->pWuerfeln($km, 'muell', $jetzt, static fn(int $n): int => 3);          // Dirk (Erwachsener)
+pruefe('Dirk (Vater) hakt ab — keine Muenzen', [$m->pAbhaken($km, 'muell', $platzMuell['key'], true, $jetzt), $m->pMuenzen('d')], [true, 0]);
+$m->pAbhaken($km, 'muell', $platzMuell['key'], false, $jetzt);
+$m2 = harness($alle);
+$w2 = $m2->pWoche($jetzt);
+$k2 = (string)$w2['week'];
+$m2->pWuerfeln($k2, 'muell', $jetzt, static fn(int $n): int => 0);        // Anna (Kind)
+pruefe('Anna (Kind) hakt ab — fuenf Muenzen', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], true, $jetzt), $m2->pMuenzen('a')], [true, 5]);
+pruefe('… gespeichert am Haken', json_decode($m2->attr['Week'], true)['done']['muell'][$platzMuell['key']], ['m' => 'a', 'p' => 5]);
+pruefe('Doppeltes Abhaken bucht nicht doppelt', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], true, $jetzt), $m2->pMuenzen('a')], [true, 5]);
+pruefe('Haken weg — Muenzen weg', [$m2->pAbhaken($k2, 'muell', $platzMuell['key'], false, $jetzt), $m2->pMuenzen('a')], [true, 0]);
+pruefe('Die Nutzlast zeigt den Beutel nur bei Kindern',
+    [$m2->pPayload($jetzt)['members']['a']['coins'], $m2->pPayload($jetzt)['members']['d']['coins'],
+     array_values(array_filter($m2->pPayload($jetzt)['chores'], static fn(array $c): bool => $c['id'] === 'muell'))[0]['coins']], [0, 0, 5]);
+
+/* Drehen kostet: nur ein Kind mit genug im Beutel darf zahlen, abgebucht wird
+   erst, wenn das Los steht. */
+$z = harness($alle);
+$z->cfg['SpinPrice'] = 3;
+$wz = $z->pWoche($jetzt);
+$kz = (string)$wz['week'];
+$z->pBeutel(['a' => 8, 'b' => 2]);
+pruefe('Ohne Zahler kein Dreh', $z->pWuerfeln($kz, 'muell', $jetzt, null, '')['reason'], 'payer');
+pruefe('Ein Erwachsener darf nicht zahlen', $z->pWuerfeln($kz, 'muell', $jetzt, null, 'c')['reason'], 'payer');
+pruefe('Zu wenig Muenzen — kein Dreh, nichts abgebucht',
+    [$z->pWuerfeln($kz, 'muell', $jetzt, null, 'b')['reason'], $z->pMuenzen('b')], ['coins', 2]);
+$los = $z->pWuerfeln($kz, 'muell', $jetzt, static fn(int $n): int => 1, 'a');
+pruefe('Anna zahlt drei — das Los steht, der Beutel ist um drei leichter',
+    [$los['ok'], $los['memberId'], $z->pMuenzen('a')], [true, 'b', 5]);
+pruefe('… der Zahler steht am Los', [json_decode($z->attr['Week'], true)['wheel']['muell']['paidBy'], json_decode($z->attr['Week'], true)['wheel']['muell']['price']], ['a', 3]);
+pruefe('Ein abgewiesener zweiter Dreh kostet nichts',
+    [$z->pWuerfeln($kz, 'muell', $jetzt, null, 'a')['reason'], $z->pMuenzen('a')], ['spun', 5]);
+pruefe('Ohne heutigen Platz wird auch nichts abgebucht',
+    [$z->pWuerfeln($kz, 'garten', $jetzt, null, 'a')['reason'], $z->pMuenzen('a')], ['no_slot', 5]);
+pruefe('Die Nutzlast nennt den Preis', $z->pPayload($jetzt)['spinPrice'], 3);
+pruefe('Preis 0 heisst: kein Zahler noetig', $h->pPayload($jetzt)['spinPrice'], 0);
+
 // ── Die Kachel ─────────────────────────────────────────────────────────────
 $html = (string)file_get_contents(__DIR__ . '/../module.html');
 pruefe('Der Kasten steht neben dem Schlusswort und oeffnet das Blatt',
@@ -198,6 +251,10 @@ pruefe('Wenige Mitspieler stehen mehrmals auf dem Rad',
     [str_contains($html, 'function radFelder'),
      str_contains($html, 'const mal = n <= 1 ? 4 : (n === 2 ? 3 : (n <= 4 ? 2 : 1));'),
      str_contains($html, 'rad.felder.forEach((id, i) =>')], [true, true, true]);
+pruefe('Vor der Wahl fragt das Blatt, wer bezahlt — und der LOS!-Knopf kennt seine Gruende',
+    [str_contains($html, 'function zahlerZeigen'), str_contains($html, "payer: zahler"),
+     str_contains($html, 'function drehGrund'), str_contains($html, "'wheelNoPayer'"), str_contains($html, "'wheelAllSpun'")],
+    [true, true, true, true, true]);
 pruefe('Das Rad dreht erst, wenn das Los des MODULS da ist',
     [str_contains($html, 'function radNachziehen'), str_contains($html, 'a.wheel && a.wheel.memberId')], [true, true]);
 
