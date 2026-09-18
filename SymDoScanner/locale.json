@@ -17,7 +17,23 @@
             "%d AI jobs answered": "%d KI-Aufträge beantwortet",
             "nothing readable": "nichts lesbar",
             "%1$d course(s), %2$d card(s) read": "%1$d Kurs(e), %2$d Karte(n) gelesen",
-            "%d student(s) read": "%d Schüler gelesen"
+            "%d student(s) read": "%d Schüler gelesen",
+            "This instance does the long-running work for the gateway: fetching, reading and AI jobs. ": "Diese Instanz erledigt für das Gateway, was lange dauert: abrufen, lesen und die KI befragen. ",
+            "The app stays responsive while it runs.": "Die App bleibt währenddessen bedienbar.",
+            "There is nothing to set up here — the gateway assigns role and sources.": "Hier ist nichts einzurichten — Rolle und Quellen trägt das Gateway ein.",
+            "Role: %s": "Rolle: %s",
+            "Sources: %s": "Quellen: %s",
+            "Gateway: none found — this instance stays idle": "Gateway: keines gefunden — diese Instanz ruht",
+            "Waiting jobs: %d": "Wartende Aufträge: %d",
+            "not assigned yet": "noch nicht vergeben",
+            "Refresh": "Aktualisieren",
+            "Jobs": "Aufträge",
+            "School": "Schule",
+            "Self-test": "Selbsttest",
+            "Handbook": "Handbuch",
+            "Class pages": "Klassenseiten",
+            "Mailbox": "Postfach",
+            "AI jobs": "KI-Aufträge"
         }
     }
 }

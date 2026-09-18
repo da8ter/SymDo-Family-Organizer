@@ -129,6 +129,108 @@ class SymDoScanner extends IPSModuleStrict
         return json_encode(['type' => 'connect', 'moduleIDs' => [self::GATEWAY_GUID]]);
     }
 
+    /**
+     * Das Formular dieser Instanz: nur ein Blick auf ihren Zustand.
+     *
+     * Eingestellt wird hier nichts — Rolle und Quellen traegt das Gateway ein,
+     * wenn es seine Scanner anlegt. Was fehlte, war der Blick: eine Instanz,
+     * die stumm dasteht, sah bisher genauso aus wie eine, die arbeitet.
+     *
+     * Bewusst nur Billiges: zwei Eigenschaften, ein Kernel-Blick auf den
+     * Elternknoten, ein Verzeichnis-Blick in den Kanal. Symcon baut das
+     * Formular in der Spur DIESER Instanz — laeuft gerade ein Scan, erscheint
+     * es erst danach. Etwas, das hier selbst arbeitete, liesse die Konsole
+     * jedes Mal warten.
+     */
+    public function GetConfigurationForm(): string
+    {
+        $stand = $this->StandZeilen();
+
+        $form = [
+            'elements' => [
+                ['type' => 'Label', 'caption' =>
+                    $this->Translate('This instance does the long-running work for the gateway: fetching, reading and AI jobs. ')
+                    . $this->Translate('The app stays responsive while it runs.')],
+                ['type' => 'Label', 'caption' =>
+                    $this->Translate('There is nothing to set up here — the gateway assigns role and sources.')],
+
+                ['type' => 'Label', 'name' => 'StandRolle',   'caption' => $stand['rolle']],
+                ['type' => 'Label', 'name' => 'StandQuellen', 'caption' => $stand['quellen']],
+                ['type' => 'Label', 'name' => 'StandGateway', 'caption' => $stand['gateway']],
+                ['type' => 'Label', 'name' => 'StandWartend', 'caption' => $stand['wartend']],
+            ],
+            'actions' => [
+                ['type' => 'Button', 'caption' => $this->Translate('Refresh'),
+                 'onClick' => 'IPS_RequestAction($id, "StandZeigen", 0);'],
+            ],
+            'status' => [],
+        ];
+
+        return (string)json_encode($form, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Die vier Zeilen des Formulars — eine Quelle fuer den Aufbau und fuer den
+     * Knopf. Zwei getrennte Stellen zeigten frueher oder spaeter Verschiedenes.
+     *
+     * @return array{rolle:string,quellen:string,gateway:string,wartend:string}
+     */
+    private function StandZeilen(): array
+    {
+        $rolle   = (string)@$this->ReadPropertyString('Rolle');
+        $quellen = $this->Quellen();
+        $gateway = $this->GatewayID();
+
+        return [
+            'rolle' => sprintf($this->Translate('Role: %s'),
+                $rolle === '' ? $this->Translate('not assigned yet') : $this->RollenName($rolle)),
+            'quellen' => sprintf($this->Translate('Sources: %s'),
+                implode(', ', array_map(fn(string $q): string => $this->QuellenName($q), $quellen))),
+            'gateway' => ($gateway > 0 && @IPS_InstanceExists($gateway))
+                ? sprintf($this->Translate('Gateway: %1$s (#%2$d)'), (string)@IPS_GetName($gateway), $gateway)
+                : $this->Translate('Gateway: none found — this instance stays idle'),
+            'wartend' => sprintf($this->Translate('Waiting jobs: %d'),
+                $this->ScanAuftraegeOffen($quellen)),
+        ];
+    }
+
+    /** Den Formularkopf auffrischen, ohne das Formular neu zu bauen. */
+    private function StandAnzeigen(): void
+    {
+        $stand = $this->StandZeilen();
+        $this->UpdateFormField('StandRolle',   'caption', $stand['rolle']);
+        $this->UpdateFormField('StandQuellen', 'caption', $stand['quellen']);
+        $this->UpdateFormField('StandGateway', 'caption', $stand['gateway']);
+        $this->UpdateFormField('StandWartend', 'caption', $stand['wartend']);
+    }
+
+    /** Die Rolle in Worten. Unbekannte Rollen zeigen ihren Schluessel. */
+    private function RollenName(string $rolle): string
+    {
+        $namen = [
+            'jobs'     => $this->Translate('Jobs'),
+            'schule'   => $this->Translate('School'),
+            'briefing' => $this->Translate('Briefing'),
+        ];
+        return $namen[$rolle] ?? $rolle;
+    }
+
+    /** Eine Quelle in Worten. */
+    private function QuellenName(string $quelle): string
+    {
+        $namen = [
+            'probe'    => $this->Translate('Self-test'),
+            'doku'     => $this->Translate('Handbook'),
+            'edu'      => $this->Translate('Class pages'),
+            'moodle'   => $this->Translate('LOGINEO'),
+            'mail'     => $this->Translate('Mailbox'),
+            'briefing' => $this->Translate('Briefing'),
+            'untis'    => $this->Translate('WebUntis'),
+            'auftrag'  => $this->Translate('AI jobs'),
+        ];
+        return $namen[$quelle] ?? $quelle;
+    }
+
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -216,6 +318,11 @@ class SymDoScanner extends IPSModuleStrict
                     return;
                 case 'Verbinden':
                     $this->GatewayEinmaligVerbinden();
+                    return;
+                case 'StandZeigen':
+                    // Der Knopf im Formular. Er laeuft im Skript-Thread der
+                    // Konsole, nicht in der Gateway-Spur.
+                    $this->StandAnzeigen();
                     return;
             }
             parent::RequestAction($Ident, $Value);

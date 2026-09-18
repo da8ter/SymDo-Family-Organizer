@@ -76,6 +76,15 @@ final class ScannerProbe extends SymDoScanner
             ->invoke($this, $seiten);
     }
 
+    /** @var list<array{0:string,1:string,2:mixed}> was der Knopf am Formular aendert */
+    public array $felder = [];
+
+    protected function UpdateFormField(string $Field, string $Parameter, mixed $Value): bool
+    {
+        $this->felder[] = [$Field, $Parameter, $Value];
+        return true;
+    }
+
     protected function getTime(): int
     {
         return time();
@@ -142,9 +151,13 @@ $schnitt  = '{5A13BDF9-E069-4AA9-9D9B-35C1BDC785B8}';
 pruefe('Der Klassenname folgt aus name ohne Leerzeichen',
     [str_replace(' ', '', (string)$json['name']), class_exists('SymDoScanner')],
     ['SymDoScanner', true]);
+/* Typ 2 = Splitter, nicht 3 = Geraet (17.09.2026). Ein Scanner bedient keine
+   Hardware — er sitzt zwischen dem Gateway und der Arbeit. Als Geraet stand er
+   ausserdem zwischen den echten Geraeten des Nutzers und musste versteckt
+   werden; das ist seither unnoetig. */
 pruefe('Typ, Praefix, Hersteller, keine Aliase',
     [$json['type'], $json['prefix'], $json['vendor'], $json['aliases']],
-    [3, 'SDSC', 'Stephan Sprick', []]);
+    [2, 'SDSC', 'Stephan Sprick', []]);
 /* Beides zusammen, sonst meldet Symcon „inkompatibel": der Scanner VERLANGT
    die Schnittstelle des Gateways und meldet sie selbst — wie das VRR-Modul. */
 pruefe('Er verlangt die Gateway-Schnittstelle und meldet sie',
@@ -343,6 +356,45 @@ $gateway->gWeg($liste[0]);
 // Ein Takt ohne Auftrag darf NICHTS schreiben — sonst liefe der Kanal voll.
 IPS_RequestAction($sc, 'Takt', 0);
 pruefe('Ein Leertakt schreibt nichts', count($gateway->gListe()), 0);
+
+// ── Das Formular ──────────────────────────────────────────────────────────
+/* Bis zum 18.09.2026 hatte eine Scanner-Instanz gar kein Formular: sie stand
+   in der Konsole leer da, und ob sie ihr Gateway ueberhaupt gefunden hatte,
+   war nur ueber SDSC_Stand zu erfahren. Genau das war die Nutzermeldung. */
+$form   = json_decode($scanner->GetConfigurationForm(), true);
+$zeilen = [];
+foreach ((array)($form['elements'] ?? []) as $e) {
+    if (isset($e['name'])) {
+        $zeilen[(string)$e['name']] = (string)($e['caption'] ?? '');
+    }
+}
+pruefe('Das Formular zeigt Rolle, Quellen, Gateway und Wartende',
+    array_keys($zeilen), ['StandRolle', 'StandQuellen', 'StandGateway', 'StandWartend']);
+/* In Worten, nicht in Schluesseln: „probe" sagt einem Nutzer nichts. */
+pruefe('Rolle und Quellen stehen in Worten da',
+    [$zeilen['StandRolle'], $zeilen['StandQuellen']],
+    ['Role: not assigned yet', 'Sources: Self-test']);
+pruefe('Das gefundene Gateway steht mit seiner Kennung da',
+    str_ends_with($zeilen['StandGateway'], '(#' . $gw . ')'), true);
+pruefe('Und ohne Auftrag wartet nichts', $zeilen['StandWartend'], 'Waiting jobs: 0');
+
+/* Der Knopf muss die Zahlen wirklich neu holen — sonst zeigte er bis zum
+   naechsten Oeffnen den Stand von vorhin. */
+$gateway->gAblegen('probe', ['anlass' => 'timer']);
+$scanner->felder = [];
+IPS_RequestAction($sc, 'StandZeigen', 0);
+$neu = [];
+foreach ($scanner->felder as [$feld, $was, $wert]) {
+    $neu[(string)$feld] = [$was, $wert];
+}
+pruefe('Der Knopf frischt alle vier Zeilen auf', count($neu), 4);
+pruefe('… und zaehlt den wartenden Auftrag mit',
+    $neu['StandWartend'] ?? null, ['caption', 'Waiting jobs: 1']);
+
+IPS_RequestAction($sc, 'Takt', 0);   // den Auftrag wieder abarbeiten
+foreach ($gateway->gListe() as $p) {
+    $gateway->gWeg($p);
+}
 
 // ── Die Richtungsregel ─────────────────────────────────────────────────────
 // Das Gateway darf nie synchron in den Scanner rufen: es wuerde auf dessen

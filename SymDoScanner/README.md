@@ -31,10 +31,9 @@ Aufgaben, Termine, Anhänge und Vorschläge stehen dort, wo sie immer standen.
 
 ## Wenn etwas klemmt
 
-- **Nichts passiert.** `SDSC_Stand(<id>)` zeigt, was die Instanz sieht: ihre
-  Rolle, ihre Quellen, das gefundene Gateway und wie viele Aufträge warten.
-- **Eine Quelle soll zurück ans Gateway.** Die Zeile unter *Aufgaben*
-  abschalten und übernehmen — das Gateway macht die Arbeit dann wieder selbst.
+- **Nichts passiert.** Die Instanz öffnen: sie zeigt ihre Rolle, ihre Quellen,
+  das gefundene Gateway und wie viele Aufträge warten. *Aktualisieren* holt die
+  Zahlen neu.
 - **Eine Instanz gelöscht?** Kein Verlust: das Gateway übernimmt die Arbeit
   wieder und legt beim nächsten Übernehmen eine neue an.
 
