@@ -23,9 +23,10 @@ class SetupPlan
      * Die Bausteine — Schlüssel, Modul-GUID, Vorgabename und Querverweise.
      *
      * DIE REIHENFOLGE DIESES FELDES IST DIE REIHENFOLGE DES LAUFS, und sie ist
-     * nicht Geschmack: `meal` braucht `shopping`, `chores` braucht `routines`,
-     * `voice` braucht beide Listen, und `webapp` steht zuletzt, damit ihr
-     * erster Lauf alles schon sieht.
+     * nicht Geschmack: `meal` braucht `shopping`, `transit` zeigt auf
+     * `timetable`, `voice` braucht beide Listen, und `webapp` steht zuletzt,
+     * damit ihr erster Lauf alles schon sieht. (`chores` brauchte bis zum
+     * 17.09.2026 die Routinen — die Muenzbelohnung ist weg, der Verweis mit.)
      *
      * Bei Listen darf es MEHRERE geben (ein Satz je Konto). Für den Assistenten
      * genügt trotzdem eine: er legt nur an, was FEHLT. Eine Erkennung am Namen
@@ -54,13 +55,20 @@ class SetupPlan
             'verweise' => ['ShoppingListInstanceID' => 'shopping'],
         ],
         'chores' => [
-            'guid'     => '{EE6DEDE0-C67E-42A7-A797-3B155611B8DB}',
-            'name'     => 'SymDo - Ämtchenplan',
-            'verweise' => ['RoutinesInstanceID' => 'routines'],
+            'guid' => '{EE6DEDE0-C67E-42A7-A797-3B155611B8DB}',
+            'name' => 'SymDo - Ämtchenplan',
         ],
         'timetable' => [
             'guid' => '{C22E0A96-1BC7-4029-B8C5-7E94E4F2A9D9}',
             'name' => 'SymDo - Stundenplan',
+        ],
+        'transit' => [
+            'guid'     => '{A444346D-D473-4F50-AAB6-38A482E458E2}',
+            'name'     => 'SymDo - VRR Nahverkehr',
+            /* Der Schulweg liest den Unterrichtsbeginn aus dem Stundenplan —
+               wenn es einen gibt. Ohne ihn zeigt die Kachel Abfahrten; der
+               Verweis ist deshalb ein Angebot, keine Voraussetzung. */
+            'verweise' => ['TimetableInstanceID' => 'timetable'],
         ],
         'notes' => [
             'guid'   => '{061491BA-F95D-425A-95FA-C3D0D1CFFB7B}',
@@ -97,8 +105,8 @@ class SetupPlan
      * Keine Geschmacksfragen, sondern harte Abhängigkeiten im Bestand:
      *  - Hausaufgaben holen Fach und Farbe aus dem Stundenplan, und der Abruf
      *    aus WebUntis legt seine Stunden in eine Stundenplan-Instanz.
-     *  - Essensplan und Ämtchenplan tragen die Kennung ihrer Quelle als
-     *    Eigenschaft (Einkaufsliste bzw. Routinen).
+     *  - Der Essensplan traegt die Kennung seiner Einkaufsliste als
+     *    Eigenschaft.
      *  - Der Sprachassistent braucht die beiden Listen als Vorgabe.
      *  - Klassenseiten zeigen, was die Schulanbindung spiegelt.
      *
@@ -107,7 +115,6 @@ class SetupPlan
     public const ABHAENGIG = [
         'homework' => ['timetable'],
         'meal'     => ['shopping'],
-        'chores'   => ['routines'],
         'voice'    => ['todo', 'shopping'],
     ];
 
@@ -416,7 +423,7 @@ class SetupPlan
         $gateways = self::Zahlen($bestand['gateways'] ?? []);
         if ($gateways === []) {
             $schritte[] = ['art' => 'gateway', 'aktion' => 'anlegen',
-                           'guid' => self::GATEWAY_GUID, 'name' => 'SymDo Gateway'];
+                           'guid' => self::GATEWAY_GUID, 'name' => 'SymDo - Gateway'];
         } else {
             $schritte[] = ['art' => 'gateway', 'aktion' => 'vorhanden', 'id' => min($gateways)];
         }

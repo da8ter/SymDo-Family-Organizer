@@ -43,7 +43,6 @@ Wer einen Baustein wählt, bekommt seine Voraussetzungen mit:
 |---|---|
 | Hausaufgaben | Stundenplan |
 | Essensplan | Einkaufsliste |
-| Ämtchenplan | Routinen |
 | Sprachassistent | ToDo-Liste und Einkaufsliste |
 | WebUntis | Stundenplan, Hausaufgaben |
 | LOGINEO | Klassenseiten, Hausaufgaben (und über sie den Stundenplan) |
@@ -55,6 +54,9 @@ Wer einen Baustein wählt, bekommt seine Voraussetzungen mit:
   und Symcon vergibt IDs zufällig.
 - **Nichts löschen.** Mitglieder werden nur ergänzt, Instanzen nur angelegt.
   Eine Wahl, die schon getroffen ist, wird nie überschrieben.
+- **Keine Zweitkacheln.** Die Übersichten für ToDo-Liste und Einkaufsliste
+  sind Beiwerk für eine bestimmte Liste und Visualisierung — die legt man
+  dort an, wo man sie braucht.
 
 Bei **WebUntis** bleibt genau ein Schritt beim Nutzer: im Gateway die Schüler
 abrufen und das Kind auswählen — diese Wahl verlangt WebUntis. Bei **LOGINEO**
@@ -69,11 +71,15 @@ Sie ist nicht Geschmack, sondern erzwungen:
 1. **Gateway** — anlegen oder übernehmen. Scheitert es, bricht der ganze Zug
    ab: eine Kachel, die ihr erstes *Übernehmen* ohne Gateway durchläuft,
    verbrennt dabei ihr einmaliges Verbindungsrecht und bleibt elternlos.
+   Seine beiden **Scanner** (Aufträge, Schule) legt das Gateway danach selbst
+   an — sie sind kein Baustein.
 2. **Mitglieder** und Stammdaten, dann **ein** Übernehmen am Gateway — in
    diesem Lauf vergibt das Gateway die Kennungen und legt die
    Mitglieder-Ordner an.
 3. **Kacheln**: Einkaufsliste → Aufgaben → Routinen → Essensplan → Ämtchen →
-   Stundenplan → Notizen, Hausaufgaben, Klassenseiten → Sprache → Web-App.
+   Stundenplan → Nahverkehr → Notizen, Hausaufgaben, Klassenseiten → Sprache →
+   Web-App. Der Nahverkehr bekommt den Stundenplan als Verweis mit, wenn es
+   einen gibt — er braucht ihn nicht.
    Jede wird selbst mit dem Gateway verbunden, dann bekommt sie ihre
    Querverweise, dann ihr Übernehmen.
 4. **Zugang** zuletzt: der Code gilt zehn Minuten und ersetzt eine offene

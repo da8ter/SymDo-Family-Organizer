@@ -55,7 +55,7 @@ const BEREIT = 10103;
 
 // ── Die Bausteintabelle ────────────────────────────────────────────────────
 $guids = array_column(SetupPlan::BAUSTEINE, 'guid');
-pruefe('elf Bausteine', count(SetupPlan::BAUSTEINE), 11);
+pruefe('zwoelf Bausteine', count(SetupPlan::BAUSTEINE), 12);
 pruefe('jede GUID nur einmal', count(array_unique($guids)), count($guids));
 pruefe('jede GUID hat die Form einer GUID',
     count(array_filter($guids, static fn(string $g): bool
@@ -64,7 +64,7 @@ pruefe('jede GUID hat die Form einer GUID',
 pruefe('das Gateway steht NICHT in der Tabelle',
     in_array(SetupPlan::GATEWAY_GUID, $guids, true), false);
 pruefe('jeder Baustein hat einen Namen',
-    count(array_filter(array_column(SetupPlan::BAUSTEINE, 'name'), static fn($n) => trim((string)$n) !== '')), 11);
+    count(array_filter(array_column(SetupPlan::BAUSTEINE, 'name'), static fn($n) => trim((string)$n) !== '')), 12);
 /* Die Reihenfolge ist der Vertrag: ein Verweisziel muss VOR dem Verweis
    stehen, sonst zeigt der Ausführer auf eine Instanz, die es noch nicht gibt. */
 $reihe = array_keys(SetupPlan::BAUSTEINE);
@@ -75,6 +75,42 @@ foreach (SetupPlan::BAUSTEINE as $key => $b) {
     }
 }
 pruefe('die Web-App ist die letzte', $reihe[count($reihe) - 1], 'webapp');
+
+/* JEDE Eigenschaft, auf die die Tabelle zeigt, muss es im Zielmodul GEBEN.
+   Der Ausfuehrer wirft sonst („property X not found") und raeumt die halb
+   angelegte Kachel wieder weg — der Baustein scheitert still im Bericht. Genau
+   so stand es bis zum 18.09.2026 um den Aemtchenplan: sein Verweis auf die
+   Routinen (RoutinesInstanceID) war mit der Muenzbelohnung verschwunden, die
+   Tabelle zeigte weiter darauf. Gemessen wird am QUELLTEXT der Module. */
+$module = [];
+foreach (glob(dirname(__DIR__, 2) . '/*/module.json') ?: [] as $mj) {
+    $j = json_decode((string)file_get_contents($mj), true);
+    if (is_array($j) && isset($j['id'])) {
+        $module[(string)$j['id']] = dirname($mj);
+    }
+}
+$fehlt = [];
+foreach (SetupPlan::BAUSTEINE as $key => $b) {
+    $ordner = $module[(string)$b['guid']] ?? '';
+    if ($ordner === '') {
+        $fehlt[] = $key . ': Modul nicht gefunden';
+        continue;
+    }
+    $quelle = '';
+    foreach (array_merge([$ordner . '/module.php'], glob($ordner . '/libs/*.php') ?: []) as $datei) {
+        $quelle .= (string)file_get_contents($datei);
+    }
+    $props = array_merge(array_keys((array)($b['verweise'] ?? [])), isset($b['nutzer']) ? [(string)$b['nutzer']] : []);
+    foreach ($props as $prop) {
+        if (!preg_match('/RegisterProperty[A-Za-z]+\(\s*[\'"]' . preg_quote((string)$prop, '/') . '[\'"]/', $quelle)) {
+            $fehlt[] = $key . '.' . $prop;
+        }
+    }
+}
+pruefe('jede Verweis- und Nutzer-Eigenschaft gibt es im Zielmodul', $fehlt, []);
+pruefe('… und die Probe beisst',
+    (bool)preg_match('/RegisterProperty[A-Za-z]+\(\s*[\'"]RoutinesInstanceID[\'"]/',
+        (string)file_get_contents($module['{EE6DEDE0-C67E-42A7-A797-3B155611B8DB}'] . '/module.php')), false);
 
 // ── Der Schlüssel der Mitglieder-Identität ─────────────────────────────────
 pruefe('Gross- und Kleinschreibung trennt nicht',
@@ -305,9 +341,14 @@ pruefe('… und sagen, was dazukam', $a['dazu'], ['timetable']);
 pruefe('der Essensplan zieht die Einkaufsliste mit',
     array_keys(SetupPlan::AbhaengigkeitenSchliessen(['meal' => true])['bausteine']),
     ['shopping', 'meal']);
-pruefe('der Ämtchenplan zieht die Routinen mit',
+/* Bis zum 17.09.2026 zog der Aemtchenplan die Routinen mit (Muenzbelohnung).
+   Die ist weg — er steht jetzt allein. */
+pruefe('der Ämtchenplan braucht nichts mehr',
     array_keys(SetupPlan::AbhaengigkeitenSchliessen(['chores' => true])['bausteine']),
-    ['routines', 'chores']);
+    ['chores']);
+pruefe('der Nahverkehr zieht den Stundenplan NICHT mit — der Verweis ist ein Angebot',
+    array_keys(SetupPlan::AbhaengigkeitenSchliessen(['transit' => true])['bausteine']),
+    ['transit']);
 pruefe('der Sprachassistent zieht beide Listen mit',
     array_keys(SetupPlan::AbhaengigkeitenSchliessen(['voice' => true])['bausteine']),
     ['shopping', 'todo', 'voice']);
