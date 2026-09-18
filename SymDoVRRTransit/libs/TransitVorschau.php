@@ -42,9 +42,10 @@ require_once __DIR__ . '/TransitIcons.php';
  */
 final class TransitVorschau
 {
-    /* 420 statt einer schmalen Kachelbreite: die Zeitachse faellt sonst in
-       ihre Engfassung (Container-Abfrage unter 380 px) und kuerzt die Namen. */
-    public const BREITE = 420;
+    /* 630 — anderthalbfache Kachelbreite (Wunsch des Nutzers, 18.09.2026): so
+       zeigt die Zeitachse ihre Namen ungekuerzt, und die Vorschau nutzt die
+       Breite des Formulars, statt in einer Ecke zu stehen. */
+    public const BREITE = 630;
     /** Abfahrten, Balken, Zeitachse. */
     public const HOEHE = 230;
     /** Die senkrechte Ansicht reiht Halte — sie braucht Hoehe statt Breite. */

@@ -323,7 +323,7 @@ class SymDoVRRTransit extends IPSModuleStrict
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('Preview — follows the settings before you apply them.')],
                     ['type' => 'Image', 'name' => 'Schema', 'image' => $this->TransitSchemaBild([]),
-                     'width' => '420px', 'center' => true],
+                     'width' => '630px', 'center' => true],
                     ['type' => 'Select', 'name' => 'DefaultView', 'caption' => $this->Translate('View when opening'),
                      'options' => [
                          ['caption' => $this->Translate('Departures'), 'value' => 'departures'],
