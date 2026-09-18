@@ -314,15 +314,16 @@ class SymDoVRRTransit extends IPSModuleStrict
                 ]],
 
                 ['type' => 'ExpansionPanel', 'caption' => $this->Translate('Appearance'), 'expanded' => false, 'items' => [
-                    /* Die Vorschau: ein SVG als Data-URI, das jede Aenderung
+                    /* Die Vorschau: die Kachel selbst als SVG (HTML und CSS im
+                       foreignObject, siehe TransitVorschau), die jede Aenderung
                        an den vier Feldern darunter sofort zeigt — vor dem
                        Uebernehmen. Jedes Feld meldet sich ueber onChange mit
                        ALLEN vier Werten; die Tabelle kommt als IPSList und
                        muss fuer json_encode aufgeloest werden. */
                     ['type' => 'Label', 'caption' =>
-                        $this->Translate('Preview — schematic; follows the settings before you apply them.')],
+                        $this->Translate('Preview — follows the settings before you apply them.')],
                     ['type' => 'Image', 'name' => 'Schema', 'image' => $this->TransitSchemaBild([]),
-                     'width' => '320px', 'center' => true],
+                     'width' => '420px', 'center' => true],
                     ['type' => 'Select', 'name' => 'DefaultView', 'caption' => $this->Translate('View when opening'),
                      'options' => [
                          ['caption' => $this->Translate('Departures'), 'value' => 'departures'],

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Efa.php';
 require_once __DIR__ . '/TransitCalc.php';
-require_once __DIR__ . '/TransitSchema.php';
+require_once __DIR__ . '/TransitVorschau.php';
 
 /**
  * Bestand und Takt der VRR-Auskunft.
@@ -114,11 +114,14 @@ trait TransitStore
     }
 
     /**
-     * Das Bild der Vorschau im Formular.
+     * Das Bild der Vorschau im Formular: die Kachel selbst, gebaut aus ihrem
+     * eigenen Stilblatt und dem Markup fuer Beispieldaten (TransitVorschau).
      *
-     * Was das Formular nicht mitgibt, kommt aus der Konfiguration — so
-     * liefert auch ein Aufruf ohne Nutzlast (Formularaufbau, Reset) ein Bild.
-     * Die Pruefung der Werte macht der Renderer; hier wird nur zusammengefuehrt.
+     * Was das Formular nicht mitgibt, kommt aus der Konfiguration — so liefert
+     * auch ein Aufruf ohne Nutzlast (Formularaufbau, Reset) ein Bild. Das CSS
+     * wird bei jedem Aufruf aus module.html gelesen: die Vorschau folgt damit
+     * jeder Gestaltungsaenderung der Kachel von selbst. Die Texte kommen
+     * uebersetzt von hier — der Renderer kennt kein Translate.
      *
      * @param array<string,mixed> $roh view|style|platform|modes aus dem Formular
      */
@@ -131,7 +134,18 @@ trait TransitStore
             'platform' => $cfg['ShowPlatform'] ?? true,
             'modes'    => $this->TransitZeilen('Modes'),
         ];
-        return TransitSchema::DataUri(TransitSchema::Einstellungen($roh));
+        $texte = [];
+        foreach (array_keys(TransitVorschau::Vorgabetexte()) as $schluessel) {
+            $texte[$schluessel] = $this->Translate($schluessel);
+        }
+        return TransitVorschau::DataUri(TransitVorschau::Einstellungen($roh), $this->TransitKachelCss(), $texte);
+    }
+
+    /** Das <style> der Kachel — leer, wenn module.html nicht lesbar ist. */
+    private function TransitKachelCss(): string
+    {
+        $html = (string)@file_get_contents(__DIR__ . '/../module.html');
+        return preg_match('#<style>(.*?)</style>#s', $html, $m) === 1 ? $m[1] : '';
     }
 
     /** @return list<array<string,mixed>> */

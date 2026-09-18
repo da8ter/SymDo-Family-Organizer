@@ -83,10 +83,12 @@ eine Farbe, beides frei wählbar — der Fußweg steht als eigene Zeile mit dabe
 Ausgangswerte zurück. Der VRR selbst liefert keine Farben mit — das ist unsere
 Zuordnung, die im deutschen Nahverkehr übliche.
 
-**Vorschau im Formular.** Oben unter *Darstellung* zeigt eine schematische
-Zeichnung die Kachel, wie sie mit den gewählten Einstellungen aussähe — Ansicht,
-Streckendarstellung, Steig-Spalte und Farben folgen sofort, noch vor dem
-Übernehmen. Graue Balken stehen für Text, farbig sind nur die Verkehrsmittel.
+**Vorschau im Formular.** Oben unter *Darstellung* steht die Kachel selbst,
+mit Beispieldaten und in ihrer echten Gestaltung — Ansicht, Streckendarstellung,
+Steig-Spalte, Farben und Symbole folgen sofort, noch vor dem Übernehmen. Die
+Symbole der Vorschau stammen aus Font Awesome Free (CC BY 4.0,
+fontawesome.com/license/free); in der Kachel selbst setzt Symcon seine eigenen
+ein, deshalb wirken sie dort etwas feiner.
 
 Die Wahl gilt für die Instanz, nicht je Betrachter — anders als der Schalter
 *Alle / Ohne Umsteigen*, den sich jedes Gerät für sich merkt. Welche Verbindung

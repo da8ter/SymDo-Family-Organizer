@@ -153,7 +153,15 @@
             "Sonstige": "Sonstige",
             "Fußweg": "Fußweg",
             "Show platform": "Steig anzeigen",
-            "Preview — schematic; follows the settings before you apply them.": "Vorschau — schematisch; folgt den Einstellungen schon vor dem Übernehmen."
+            "Preview — follows the settings before you apply them.": "Vorschau — folgt den Einstellungen schon vor dem Übernehmen.",
+            "Main station": "Hauptbahnhof",
+            "City hall": "Rathaus",
+            "School": "Schule",
+            "Airport": "Flughafen",
+            "Old town": "Altstadt",
+            "Park": "Stadtpark",
+            "Way to school": "Schulweg",
+            "%d changes": "%d Umstiege"
         }
     }
 }
