@@ -185,9 +185,15 @@ $panel  = substr($panel, 0, (int)strpos($panel, "'actions' =>"));
 pruefe('Das Formular traegt das Bild als Image-Element „Schema" vor dem ersten Feld',
     [(bool)preg_match("/'type' => 'Image',\s*'name' => 'Schema'/", $panel),
      strpos($panel, "'name' => 'Schema'") < strpos($panel, "'name' => 'DefaultView'")], [true, true]);
-pruefe('Alle vier Darstellungsfelder melden ihre Aenderung an SchemaZeigen',
-    [substr_count($panel, "'onChange' => \$schema"), str_contains($quelle, '"SchemaZeigen", json_encode('),
-     str_contains($quelle, 'iterator_to_array($Modes)'), str_contains($quelle, "case 'SchemaZeigen':")], [4, true, true, true]);
+/* Drei Felder per onChange — und die Tabelle per onEdit: eine Liste kennt
+   kein onChange (nur onAdd/onEdit/onDelete/onChangeOrder). Mit onChange an der
+   Tabelle feuerte nichts, und die Farben folgten erst nach dem Uebernehmen. */
+pruefe('Drei Felder melden per onChange, die Farbtabelle per onEdit — alle an SchemaZeigen',
+    [substr_count($panel, "'onChange' => \$schema"), substr_count($panel, "'onEdit' => \$schema"),
+     (bool)preg_match("/'name' => 'Modes'[^\]]*?'onEdit' => \\\$schema/s", $panel),
+     str_contains($quelle, '"SchemaZeigen", json_encode('), str_contains($quelle, 'iterator_to_array($Modes)'),
+     str_contains($quelle, "case 'SchemaZeigen':")], [3, 1, true, true, true, true]);
+pruefe('Kein onChange an der Liste — das feuert nie', (bool)preg_match("/'name' => 'Modes'[^\]]*?'onChange'/s", $panel), false);
 pruefe('Der Reset-Knopf reicht die Auswahl mit', (bool)preg_match('/"ModesReset", json_encode\(\["view" => \$DefaultView/', $quelle), true);
 $store = (string)file_get_contents(__DIR__ . '/../libs/TransitStore.php');
 pruefe('Der Bestand liest das Stilblatt aus module.html und uebersetzt die Texte',

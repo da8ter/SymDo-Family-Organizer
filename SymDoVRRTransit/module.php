@@ -317,9 +317,9 @@ class SymDoVRRTransit extends IPSModuleStrict
                     /* Die Vorschau: die Kachel selbst als SVG (HTML und CSS im
                        foreignObject, siehe TransitVorschau), die jede Aenderung
                        an den vier Feldern darunter sofort zeigt — vor dem
-                       Uebernehmen. Jedes Feld meldet sich ueber onChange mit
-                       ALLEN vier Werten; die Tabelle kommt als IPSList und
-                       muss fuer json_encode aufgeloest werden. */
+                       Uebernehmen. Jedes Feld meldet sich (onChange, die Tabelle
+                       per onEdit) mit ALLEN vier Werten; die Tabelle kommt als
+                       IPSList und muss fuer json_encode aufgeloest werden. */
                     ['type' => 'Label', 'caption' =>
                         $this->Translate('Preview — follows the settings before you apply them.')],
                     ['type' => 'Image', 'name' => 'Schema', 'image' => $this->TransitSchemaBild([]),
@@ -338,7 +338,12 @@ class SymDoVRRTransit extends IPSModuleStrict
                     ['type' => 'CheckBox', 'name' => 'ShowPlatform',
                      'caption' => $this->Translate('Show platform'), 'onChange' => $schema],
                     ['type' => 'List', 'name' => 'Modes', 'caption' => $this->Translate('Colours and icons'),
-                     'rowCount' => 10, 'add' => false, 'delete' => false, 'onChange' => $schema,
+                     /* Eine Liste kennt kein onChange — nur onAdd, onEdit, onDelete und
+                        onChangeOrder (Formular-Doku). Mit onChange feuerte die
+                        Farbtabelle nie, und die Vorschau folgte den Farben erst nach
+                        dem Uebernehmen. Hinzufuegen und Loeschen sind aus; bleibt die
+                        Bearbeitung einer Zeile. */
+                     'rowCount' => 10, 'add' => false, 'delete' => false, 'onEdit' => $schema,
                      'columns' => [
                          /* Der Schluessel verbindet die Zeile mit den EFA-Klassen.
                             Unsichtbar, aber `save`: eine Spalte ohne `edit` wird
