@@ -47,7 +47,7 @@ final class TransitVorschau
        Breite des Formulars, statt in einer Ecke zu stehen. */
     public const BREITE = 630;
     /** Abfahrten, Balken, Zeitachse. */
-    public const HOEHE = 230;
+    public const HOEHE = 250;
     /** Die senkrechte Ansicht reiht Halte — sie braucht Hoehe statt Breite. */
     public const HOEHE_SENKRECHT = 380;
 
@@ -175,13 +175,19 @@ final class TransitVorschau
         $css = (string)preg_replace('/\s+/', ' ', $css);
         // Das Ende einer CDATA-Sektion darf im CSS nicht vorkommen.
         $css = str_replace(']]>', ']]]]><![CDATA[>', $css);
+        /* Die drei Variablen der Visualisierung VORWEG, mit den Werten der
+           Fallbacks im Stilblatt: `--zeile`, `--dezent` und `--rand` mischen
+           sie per color-mix OHNE Fallback — in einem eigenen Dokument sind sie
+           sonst undefiniert, die Mischung ungueltig, und die Karte hat keinen
+           Kasten (im Prueflauf gesehen: alle Abfahrten schwebten frei). */
+        $visu = ':root{--card-color:#2b2c30;--content-color:#ffffff;--accent-color:#00cdab}';
         $eigen = '.vorschau{width:' . self::BREITE . 'px;height:' . $hoehe . 'px;box-sizing:border-box;'
             . 'overflow:hidden;display:flex;flex-direction:column;padding:10px;'
             . 'background:#2b2c30;color:var(--text,#fff);'
             . 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px}'
             . '.vorschau #wurzel{padding:0}'
             . '.vorschau svg.svg-inline--fa{height:1em;width:1.25em;overflow:visible;vertical-align:-0.125em}';
-        return trim($css) . $eigen;
+        return $visu . trim($css) . $eigen;
     }
 
     // ─────────────────────────────── Kopf ──────────────────────────────

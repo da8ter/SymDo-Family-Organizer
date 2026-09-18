@@ -167,6 +167,13 @@ pruefe('Ein Text mit Markup wird escaped', [wohlgeformt($text), str_contains($te
 $roh = TransitVorschau::Svg(TransitVorschau::Einstellungen([]), "/* weg */ .a{color:red} ]]> .b{}", []);
 pruefe('Kommentare fallen weg, ein CDATA-Ende im CSS wird entschaerft',
     [str_contains($roh, 'weg */'), wohlgeformt($roh), str_contains($roh, ']]]]><![CDATA[>')], [false, true, true]);
+/* Die Karte bekommt ihren Kasten aus `--zeile`, einer color-mix aus den
+   Visu-Variablen ohne Fallback. Ohne die Vorbelegung ist die Mischung im
+   eigenen Dokument ungueltig und die Karte unsichtbar. */
+$voll = bild(['view' => 'departures']);
+pruefe('Die Visu-Variablen sind vorbelegt, und zwar VOR dem Stilblatt der Kachel',
+    [str_contains($voll, ':root{--card-color:#2b2c30;--content-color:#ffffff;--accent-color:#00cdab}'),
+     strpos($voll, '--card-color:#2b2c30') < strpos($voll, '.karte')], [true, true]);
 pruefe('Ohne Stilblatt trotzdem wohlgeformt', wohlgeformt(TransitVorschau::Svg(TransitVorschau::Einstellungen([]), '', [])), true);
 
 // ── Verdrahtung im Modul ───────────────────────────────────────────────────
