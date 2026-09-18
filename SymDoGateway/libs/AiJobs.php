@@ -426,6 +426,13 @@ trait AiJobs
      * durch Protokolle und Adresszeilen. Wer sie hat, soll trotzdem nicht das
      * Ergebnis eines fremden Geraets sehen.
      *
+     * Abholbar ist NUR, was ein Geraet eingereiht hat. Auftraege ohne Geraet
+     * (Kachel-Relay, Post, Briefing) haben ihren eigenen Rueckweg — die Kachel
+     * bekommt ein zweites AiResult, der Rest geht in den Bestand. Bis zum
+     * 18.09.2026 gab dieser Weg sie jedem gepaarten Geraet heraus, das die
+     * Kennung kannte; die Antwort einer Elternmail waere so fuer jedes
+     * Mitglied des Haushalts lesbar gewesen. Gefunden vom Sicherheits-Review.
+     *
      * @param array<string,mixed> $device
      */
     private function HandleAiJobStatus(array $device, string $id): void
@@ -434,7 +441,9 @@ trait AiJobs
         $kopf  = $laden->lesen($id);
         $eigen = (string)($device['id'] ?? '');
         if ($kopf === null
-            || ((string)($kopf['device'] ?? '') !== '' && (string)$kopf['device'] !== $eigen)) {
+            || $eigen === ''
+            || (string)($kopf['device'] ?? '') === ''
+            || (string)$kopf['device'] !== $eigen) {
             $this->SendApiError('job_not_found', $this->Translate('This AI job is unknown or has expired.'), 404);
             return;
         }

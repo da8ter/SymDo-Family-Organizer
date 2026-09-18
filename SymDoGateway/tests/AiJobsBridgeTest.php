@@ -415,6 +415,23 @@ $kopf['raw'] = ['ok' => true, 'text' => '[]', 'debug' => []];
 $h->pLaden()->schreiben($kopf);
 $h->pFertig((string)$neu['id']);
 pruefe('Der fertige Auftrag erreicht das Einpflegen', $h->hintergrund, [(string)$neu['id']]);
+/* Und ueber den Abholschein ist er fuer NIEMANDEN zu haben: er hat kein
+   Geraet, also gibt es kein Geraet, dem er gehoert. Bis zum 18.09.2026 ging er
+   an jedes gepaarte Geraet heraus, das die Kennung kannte — die Antwort einer
+   Elternmail, lesbar fuer jedes Mitglied des Haushalts. */
+$h->pStatus(['id' => 'geraet-1'], (string)$neu['id']);
+pruefe('Ein Auftrag ohne Geraet ist ueber den Abholschein nicht zu haben',
+    [$h->gesendet['status'], $h->gesendet['body']['error']['code']], [404, 'job_not_found']);
+/* Dasselbe fuer einen Kachel-Auftrag (Geraet leer) — und fuer einen Anfrager
+   ohne Geraetekennung. */
+$ohne = (string)$h->pEinreihen('extract', ['system' => 's', 'user' => 'u'], ['type' => 'text'], 'X', '')['id'];
+$h->pStatus(['id' => 'geraet-1'], $ohne);
+pruefe('Ein Kachel-Auftrag ebenso', $h->gesendet['status'], 404);
+$mit = (string)$h->pEinreihen('extract', ['system' => 's', 'user' => 'u'], ['type' => 'text'], 'X', 'geraet-7')['id'];
+$h->pStatus(['id' => ''], $mit);
+pruefe('Ohne eigene Geraetekennung bekommt man nichts', $h->gesendet['status'], 404);
+$h->pStatus(['id' => 'geraet-7'], $mit);
+pruefe('Das eigene Geraet schon', $h->gesendet['status'], 202);
 
 // ── Das Tagesbudget wird bei der ANNAHME gebucht ──────────────────────────
 /* Der synchrone Weg prueft und bucht in derselben Runde — Karte zwei sieht
